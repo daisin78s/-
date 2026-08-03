@@ -161,7 +161,15 @@ h1, h2, h3 { margin: 0; }
   box-shadow: var(--shadow);
 }
 
-@media (max-width: 1100px) {
+/* Raised from 1100px to 1400px (2026-08-0X, per user feedback testing on a real iPad: "右側の所持
+   カードがすべて表示され左側のMAPがみにくいです") -- iPad landscape widths (iPad Pro 11" ~1194px, iPad
+   Pro 12.9" ~1366px) sit ABOVE the old 1100px threshold, so the board was still squeezed into
+   roughly half the width next to the fixed 680px sidebar (visibly cramped/scrolling), even though the
+   sidebar itself had plenty of room. 1400px comfortably covers every current iPad size (portrait and
+   landscape) so the board gets the full width once stacked; .card-group__list's existing flex-wrap
+   means the sidebar's cards just wrap into more rows per line instead of overflowing when it moves
+   below the board. */
+@media (max-width: 1400px) {
   #game-layout {
     grid-template-columns: 1fr;
   }
