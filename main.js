@@ -524,10 +524,9 @@ const ACTION_ICON_BUILDERS = {
   'CHANGE(K,A,ALL)': () => actionRow([actionDot('K'), actionArrow(), actionDot('A'), actionSuffix('ALL')]),
   'CHANGE(K,B,ALL)': () => actionRow([actionDot('K'), actionArrow(), actionDot('B'), actionSuffix('ALL')]),
   'CHANGE(K,C,ALL)': () => actionRow([actionDot('K'), actionArrow(), actionDot('C'), actionSuffix('ALL')]),
-  'CHANGE(K,Z,2)': () => actionRow([actionDot('K'), actionArrow(), actionDot('Z'), actionSuffix('×2')]),
-  'CHANGE(K,A,2)': () => actionRow([actionDot('K'), actionArrow(), actionDot('A'), actionSuffix('×2')]),
-  'CHANGE(K,B,2)': () => actionRow([actionDot('K'), actionArrow(), actionDot('B'), actionSuffix('×2')]),
-  'CHANGE(K,C,2)': () => actionRow([actionDot('K'), actionArrow(), actionDot('C'), actionSuffix('×2')]),
+  // CHANGE(K,Z,2)/(K,A,2)/(K,B,2)/(K,C,2) used to live here (the count-argument form) -- removed
+  // 2026-08-0X, no longer reachable: C001-3's TAP was changed to the quantity-prefixed CHANGE(2K,2A)
+  // form (per user request), which buildChangeQuantityIcon now handles generically.
   'CHANGE((A,B,C),D)': () => actionRow([actionDot('A'), actionDot('B'), actionDot('C'), actionArrow(), actionSuffix('色D')]),
   'CHANGE(4K,VP)': () => actionRow([actionDot('K'), actionCount(4), actionArrow(), actionSuffix('VP')]),
   'UNTAP()': () => actionRow([actionEmoji('⤴️')]),
@@ -644,6 +643,28 @@ function buildAddMultiResourceIcon(actionText, stacked) {
     resourceNodes.push(...resourceItemNodes(itemMatch[1], itemMatch[2]));
   }
   return gainIconRow(resourceNodes, stacked);
+}
+
+/** CHANGE(2K,2A) / CHANGE(K,Z) / CHANGE(2K,4Z) etc: a fixed-quantity conversion with no 3rd
+ * (execution-count) argument -- both sides just a plain resource token, optionally with a leading
+ * count (2026-08-0X, added when C001-3's TAP was changed from the old CHANGE(K,A,2) count-argument
+ * form to this quantity-prefixed form, per user request: "アイコンも変更お願いします"). Deliberately
+ * excludes VP on the get side (CHANGE(4K,VP) already has its own exact-match entry in
+ * ACTION_ICON_BUILDERS showing bare "VP" text, not "1VP" -- confirmed by the user previously; this
+ * generic pattern would otherwise silently override that with a slightly different look) and excludes
+ * a 3rd argument entirely (that's CHANGE(K,A,ALL) and the old count-argument form, both handled
+ * elsewhere/by their own exact entries). Reuses the same dot+count vocabulary ADD's icons use (see
+ * resourceItemNodes) for both sides, rather than the old single-dot-plus-"×N"-suffix look, since a
+ * quantity prefix on *both* sides doesn't reduce to a single "how many times" suffix. */
+function buildChangeQuantityIcon(actionText) {
+  const match = /^CHANGE\((\d*)(K|A|B|C|Z),(\d*)(K|A|B|C|Z)\)$/.exec(actionText || '');
+  if (!match) return null;
+  const [, payCount, payResource, getCount, getResource] = match;
+  return actionRow([
+    ...resourceItemNodes(payCount, payResource),
+    actionArrow(),
+    ...resourceItemNodes(getCount, getResource),
+  ]);
 }
 
 /** SET_DIE_VALUE(SELFx|y): player picks one of two fixed values -- shown as the two numbers, no arrow
@@ -877,6 +898,8 @@ function buildActionIcons(actionText, stacked) {
   if (addResourceIcon) return addResourceIcon;
   const addMultiResourceIcon = buildAddMultiResourceIcon(actionText, stacked);
   if (addMultiResourceIcon) return addMultiResourceIcon;
+  const changeQuantityIcon = buildChangeQuantityIcon(actionText);
+  if (changeQuantityIcon) return changeQuantityIcon;
   const countEmblemWdIcon = buildCountEmblemWdIcon(actionText);
   if (countEmblemWdIcon) return countEmblemWdIcon;
   const resourceLimitIcon = buildResourceLimitIcon(actionText);
