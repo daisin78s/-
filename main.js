@@ -448,7 +448,7 @@ function shopReqForSlotId(slotId) {
 const MAP_ORDER = ['MAP001', 'MAP002', 'MAP003', 'MAP004', 'MAP005', 'MAP006', 'MAP007', 'MAP008', 'MAP009', 'MAP010'];
 
 /** faceId/areaId/qstId -> INST text, across whichever sheet actually has one (CARD/QST/AREA -- see
- * showCardInstModal). Replaces the old `(CARD_FACTS[id] || QST_FACTS[id] || {}).inst` lookup now that
+ * showCardEnlargeModal). Replaces the old `(CARD_FACTS[id] || QST_FACTS[id] || {}).inst` lookup now that
  * there's no single hardcoded table covering every id. */
 function instForId(id) {
   if (/^Q\d/.test(id)) return factsForQstFaceId(id).inst;
@@ -930,6 +930,17 @@ function el(tag, className, text) {
   return node;
 }
 
+/** Instructional hint block for onboarding card rows (2026-08-0X, per user request) -- plain lines of
+ * text, with an optional trailing line rendered as a prominent, eye-catching callout (see
+ * .onboard-hint__line--emphasis). Appended as a flex sibling after a row of onboard-context cards (see
+ * renderConFacesRow/renderResourceChoice) so it lands to their right in the shared flex row. */
+function buildOnboardHint(lines, emphasizedLine) {
+  const hint = el('div', 'onboard-hint');
+  for (const line of lines) hint.appendChild(el('div', 'onboard-hint__line', line));
+  if (emphasizedLine) hint.appendChild(el('div', 'onboard-hint__line onboard-hint__line--emphasis', emphasizedLine));
+  return hint;
+}
+
 function renderDie(die) {
   const tpl = document.getElementById('tpl-die');
   const node = tpl.content.firstElementChild.cloneNode(true);
@@ -1171,32 +1182,29 @@ function buildCardVisual(faceId, options = {}) {
 
   // noInteraction (confirmed 2026-07-30): onboarding selection cards (JOB draft, CON face choice,
   // initial RESOURCE candidates -- see renderJobPool/renderConFacesRow/renderResourceChoice) reuse
-  // this same card visual for consistent styling, but "click" there means "pick this card", not
-  // "flip to sibling" -- so the caller attaches its own click listener instead of this default one.
+  // this same card visual for consistent styling, but "click" there means "pick this card" -- so the
+  // caller attaches its own click listener instead of this default one, and these cards get no
+  // enlarge-tap affordance at all (a minor, pre-existing gap: their INST also isn't reachable this
+  // way, same as when this used to be right-click-only -- not addressed here, out of scope of the
+  // touch-parity request that prompted this rewrite).
+  //
+  // Unified single-tap model (2026-08-0X, replaces the old 3-gesture split of click=flip/right-
+  // click=INST/dblclick=TAP -- iPad has no right-click or reliable dblclick, so mouse and touch now
+  // share this one gesture): a plain tap anywhere on the card opens the enlarge modal (bigger visual +
+  // INST text + a 裏側 button that flips *within* the modal, reusing the same --flipped class this
+  // card would have used for its own inline flip). Cards with a directly-usable TAP ability carve out
+  // their effect box as a separate, higher-priority tap zone that fires the ability instead -- see
+  // attachTapToggle, which attaches to `.shop-card__effect` and calls stopPropagation() so this
+  // card-wide listener doesn't also fire underneath it.
   if (!options.noInteraction) {
-    node.addEventListener('click', () => node.classList.add('shop-card--flipped'));
-    node.addEventListener('mouseleave', () => node.classList.remove('shop-card--flipped'));
-  }
-
-  // Right-click shows a description popup -- see showCardInstModal. Originally CON-only via
-  // dblclick (2026-07-30), then moved to right-click (collided with single-click's flip: a double-
-  // click's first click always flips the card before dblclick fires, so double-clicking the front
-  // face to read its own description showed the back's instead). dblclick is now reserved for TAP
-  // actions (attachTapToggle) uniformly, single-click flips, right-click describes. Extended
-  // 2026-07-30 to JOB, A/B/C, M, and RESOURCE cards too, not just CON -- CARD_FACTS[faceId].inst is
-  // absent for most of those right now, which is fine: showCardInstModal already falls back to
-  // "(説明は未設定です)" when inst is missing, so this just works as facts get filled in later.
-  // preventDefault suppresses the browser's native context menu. Still reads whichever face is
-  // currently visible (front/sibling) via the flipped class (noInteraction cards never get flipped,
-  // so this is always just faceId itself for those).
-  // Deliberately NOT gated on noInteraction (confirmed 2026-07-30, per user feedback): the onboarding
-  // selection cards above still need their INST readable via right-click even though a plain click is
-  // repurposed for "pick this card" -- the two gestures don't conflict.
-  if (isNormalDeckCard(faceId) || /^CON\d/.test(faceId) || /^JOB\d/.test(faceId) || /^M\d/.test(faceId) || /^R\d/.test(faceId)) {
-    node.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      const shownFaceId = (node.classList.contains('shop-card--flipped') && sibling) ? sibling : faceId;
-      showCardInstModal(shownFaceId);
+    const hasSiblingData = sibling && cardFaceExists(sibling);
+    node.addEventListener('click', () => {
+      const visualNode = buildCardVisual(faceId, {
+        showEffect: options.showEffect,
+        allowTextFallback: options.allowTextFallback,
+        noInteraction: true,
+      });
+      showCardEnlargeModal(faceId, visualNode, hasSiblingData ? sibling : null);
     });
   }
 
@@ -1261,7 +1269,7 @@ function mockEvalMetric(state, playerId, metricName, arg) {
  * reward is next" question is answered by that row's background color alone (confirmed 2026-07-30,
  * replacing an earlier separate "Next Reward" icon block) -- see .qst-card__reward--next. Distinct
  * DOM shape from buildCardVisual's shop-card (this layout doesn't fit that template), but still
- * reuses showCardInstModal for the right-click description. */
+ * reuses showCardEnlargeModal for the tap-to-enlarge description. */
 /** Static preview fill for QST's back face (the sibling face -- see siblingFaceId): id + GOAL +
  * plain REWARD1-3 labels, no claim status. There's no live quest state for a face that was never
  * actually revealed this game, so this is informational only (matches CON/A/B/C's click-to-flip
@@ -1276,7 +1284,7 @@ function fillQstBackFace(backEl, faceId) {
   });
 }
 
-function buildQstCardVisual(faceId, quest, state) {
+function buildQstCardVisual(faceId, quest, state, options = {}) {
   const tpl = document.getElementById('tpl-qst-card');
   const node = tpl.content.firstElementChild.cloneNode(true);
   const facts = factsForQstFaceId(faceId);
@@ -1300,48 +1308,54 @@ function buildQstCardVisual(faceId, quest, state) {
     rewardsEl.appendChild(row);
   });
 
-  // Click to flip and preview the sibling face (Q001A <-> Q001B), same mechanism as every other
-  // card type (confirmed 2026-07-30) -- see siblingFaceId/fillQstBackFace. Falls back to a plain
-  // blank back when there's no data for the sibling yet.
+  // Sibling-face preview (Q001A <-> Q001B) baked into the back element, same mechanism as every
+  // other card type -- see siblingFaceId/fillQstBackFace. Falls back to a plain blank back when
+  // there's no data for the sibling yet. Flipping to see it is now done from inside the enlarge
+  // modal (toggling qst-card--flipped there), not via a click on the inline card itself -- see below.
   const backEl = node.querySelector(':scope > .qst-card__back');
   const sibling = siblingFaceId(faceId);
-  if (sibling && qstFaceExists(sibling)) {
+  const hasSiblingData = sibling && qstFaceExists(sibling);
+  if (hasSiblingData) {
     backEl.classList.add('qst-card__back--face');
     fillQstBackFace(backEl, sibling);
   }
-  node.addEventListener('click', () => node.classList.add('qst-card--flipped'));
-  node.addEventListener('mouseleave', () => node.classList.remove('qst-card--flipped'));
 
-  // Right-click description (see showCardInstModal) -- same mechanism as every other card type.
-  // Shows whichever face is currently visible (front/sibling), matching buildCardVisual.
-  node.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-    const shownFaceId = (node.classList.contains('qst-card--flipped') && sibling) ? sibling : faceId;
-    showCardInstModal(shownFaceId);
-  });
+  // Unified single-tap model (2026-08-0X, replaces click=flip/right-click=INST/dblclick=claim --
+  // same rationale as buildCardVisual's rewrite: iPad has no right-click or reliable dblclick). A tap
+  // anywhere on the card opens the enlarge modal (bigger visual + INST + a 裏側 flip button). The
+  // REWARD1-3 checklist carves out its own higher-priority tap zone that claims the next reward
+  // instead, mirroring how a card's TAP effect box works in attachTapToggle -- stopPropagation() keeps
+  // this card-wide listener from also firing underneath it.
+  if (!options.noInteraction) {
+    node.addEventListener('click', () => {
+      const visualNode = buildQstCardVisual(faceId, quest, state, { noInteraction: true });
+      showCardEnlargeModal(faceId, visualNode, hasSiblingData ? sibling : null);
+    });
 
-  // Double-click claims the next reward as a free action, if GOAL is met (confirmed 2026-07-30).
-  // No TAP/UNTAP state -- claimedPlayers/qstRewardCount already make this a use-once action per
-  // (player, card), so unlike the 6 tap-based free actions there's nothing to reset each round.
-  // Always claims against the real (front) face -- the flipped-to sibling was never actually
-  // revealed this game and has no live quest state to claim from. Routed through qst.js's real
-  // engine (canClaim/claimQuestReward), same as every other real-turn action -- see
-  // renderBuildChoiceModal for the BUILD-reward half of this (a QST reward can itself be BUILD(...)).
-  node.addEventListener('dblclick', () => {
-    const next = turnFlowMod.getNextTurn(STATE, INDEX);
-    const activePlayer = next ? state.players.find((p) => p.id === next.playerId) : null;
-    if (!activePlayer || !hasFinishedOnboarding(activePlayer)) return; // matches other free-action gating
-    if (pendingBuildChoice) return; // a BUILD choice is already pending -- resolve that first
-    const result = qstMod.claimQuestReward(STATE, INDEX, { playerId: activePlayer.id }, faceId);
-    if (result.success && result.pendingBuild) {
-      pendingBuildChoice = { source: 'QST', playerId: activePlayer.id, ...result.pendingBuild };
-      buildColorPreference = {};
-      buildBzDiscount = {};
-    }
-    // Any other failure (GOAL_NOT_MET/COMPLETE/ALREADY_CLAIMED/PLAYER_LIMIT_REACHED/NO_BUILDABLE_CARD)
-    // is a silent no-op, same as the ineligibility checks this replaced.
-    render(STATE);
-  });
+    // Claims the next reward as a free action, if GOAL is met (confirmed 2026-07-30). No TAP/UNTAP
+    // state -- claimedPlayers/qstRewardCount already make this a use-once action per (player, card),
+    // so unlike the 6 tap-based free actions there's nothing to reset each round. Always claims
+    // against the real (front) face -- there's no live quest state for a sibling never actually
+    // revealed this game. Routed through qst.js's real engine (canClaim/claimQuestReward), same as
+    // every other real-turn action -- see renderBuildChoiceModal for the BUILD-reward half of this (a
+    // QST reward can itself be BUILD(...)).
+    rewardsEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const next = turnFlowMod.getNextTurn(STATE, INDEX);
+      const activePlayer = next ? state.players.find((p) => p.id === next.playerId) : null;
+      if (!activePlayer || !hasFinishedOnboarding(activePlayer)) return; // matches other free-action gating
+      if (pendingBuildChoice) return; // a BUILD choice is already pending -- resolve that first
+      const result = qstMod.claimQuestReward(STATE, INDEX, { playerId: activePlayer.id }, faceId);
+      if (result.success && result.pendingBuild) {
+        pendingBuildChoice = { source: 'QST', playerId: activePlayer.id, ...result.pendingBuild };
+        buildColorPreference = {};
+        buildBzDiscount = {};
+      }
+      // Any other failure (GOAL_NOT_MET/COMPLETE/ALREADY_CLAIMED/PLAYER_LIMIT_REACHED/NO_BUILDABLE_CARD)
+      // is a silent no-op, same as the ineligibility checks this replaced.
+      render(STATE);
+    });
+  }
 
   return node;
 }
@@ -1604,11 +1618,15 @@ function renderBoard(state, next) {
         feeEl.textContent = '';
       }
 
-      // Right-click shows a description popup, same mechanism as cards (confirmed 2026-07-30) --
-      // see showCardInstModal / instForId.
-      node.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        showCardInstModal(mapState.currentAreaId);
+      // Tapping the tile opens the same enlarge/INST modal cards use (2026-08-0X, replaces right-
+      // click -- see showCardEnlargeModal). AREA tiles have no "back" (there's no tier-flip preview
+      // concept for a board space, unlike a card), so visualNode/sibling are both null -- the modal
+      // just shows INST text with the flip button hidden. Excludes .slot clicks (dice placement) and
+      // .map-tile__fee (usage-fee collection, its own dblclick above) -- both bubble up from a child
+      // element of this same tile and would otherwise also pop this modal open underneath them.
+      node.addEventListener('click', (e) => {
+        if (e.target.closest('.slot, .map-tile__fee')) return;
+        showCardEnlargeModal(mapState.currentAreaId, null, null);
       });
 
       rowEl.appendChild(node);
@@ -2509,21 +2527,29 @@ function reactiveTapKind(faceId) {
 }
 
 /**
- * Double-click uses a card's own *direct* TAP ability via board.useBareTapAbility (2026-07-31 --
- * previously a local `cardState.tapped` toggle with no real effect, see git history/memory for the
- * mock this replaced). Restricted to the active player's own cards, only once they've actually
- * finished onboarding (canAct -- same gate as renderFreeActionButtons, since a bare TAP ability is
- * usable "any time during your own turn" exactly like a free action), and only cards with something to
- * directly use (bareTapKind non-null; ON(...)-only TAP fields get no dblclick handler at all here --
- * see renderTapReactions for those). SET_DICE_ANY/SET_DIE_VALUE/CHANGE_DIE_VALUE need a die+value
- * choice first (see renderTapChoiceModal); BUILD needs the same candidate-selection modal AREA/QST
- * BUILDs use (source:'TAP', see renderBuildChoiceModal); everything else runs immediately on click.
+ * Tapping a card's own *effect box* (the lower "⤵️..." zone, below the divider line -- see
+ * .shop-card__effect) uses its direct TAP ability via board.useBareTapAbility, instead of opening
+ * the card's enlarge modal like tapping the rest of the card does (2026-08-0X: previously this was a
+ * whole-card dblclick, replaced for touch parity -- iPad has no reliable dblclick, and splitting the
+ * card into an "upper = info, lower = use it" zone per user's own proposal reads naturally on a
+ * touchscreen without needing a second gesture at all). stopPropagation() keeps the card-wide
+ * click-to-enlarge listener (see buildCardVisual) from also firing underneath this one. Restricted to
+ * the active player's own cards, only once they've actually finished onboarding (canAct -- same gate
+ * as renderFreeActionButtons, since a bare TAP ability is usable "any time during your own turn"
+ * exactly like a free action), and only cards with something to directly use (bareTapKind non-null;
+ * ON(...)-only TAP fields get no listener at all here -- see renderTapReactions for those, unaffected
+ * by this change). SET_DICE_ANY/SET_DIE_VALUE/CHANGE_DIE_VALUE need a die+value choice first (see
+ * renderTapChoiceModal); BUILD needs the same candidate-selection modal AREA/QST BUILDs use
+ * (source:'TAP', see renderBuildChoiceModal); everything else runs immediately on tap.
  */
 function attachTapToggle(cardNode, cardState, faceId, canAct, physicalId) {
   if (!canAct) return;
   const bareTap = bareTapKind(faceId);
   if (!bareTap) return;
-  cardNode.addEventListener('dblclick', () => {
+  const effectEl = cardNode.querySelector(':scope > .shop-card__effect');
+  if (!effectEl) return;
+  effectEl.addEventListener('click', (e) => {
+    e.stopPropagation();
     if (cardState.tapped) return;
     if (bareTap.kind === 'IMMEDIATE') {
       const result = boardMod.useBareTapAbility(STATE, INDEX, { playerId: cardState.ownerId }, physicalId);
@@ -2725,6 +2751,19 @@ function renderConFacesRow(container, player, onPick) {
     if (onPick) cell.addEventListener('click', () => onPick(face));
     container.appendChild(cell);
   }
+  // Explanatory hint to the right of the two CON faces (2026-08-0X, per user request) -- shown in both
+  // the read-only pre-round-1 preview and the real round-1 choice, since the instructions are relevant
+  // either way (a player sees this row well before they can actually click it). The "tap the card for
+  // details" line is deliberately called out as its own emphasized line -- see .onboard-hint__line--
+  // emphasis -- since the enlarge-tap gesture it's pointing at (see showCardEnlargeModal) is otherwise
+  // not discoverable at all on a card a player hasn't picked yet.
+  container.appendChild(buildOnboardHint(
+    [
+      'JOB選択後　CONカードの表面か裏面を選んでください',
+      'CONカードは制約カードです。表面より裏面のほうが獲得資源が大きい代わりに制約が厳しくなります',
+    ],
+    '詳しくはカードをタップ（クリック）してください',
+  ));
 }
 
 /** Read-only CON preview (2026-07-30, per the user's feedback: "初期資源カードを2枚選ぶときCONが
@@ -2833,6 +2872,13 @@ function renderResourceChoice(container, state, player) {
     });
     container.appendChild(cell);
   }
+  // Explanatory hint to the right of the 4 candidates (2026-08-0X, per user request) -- explains both
+  // this choice itself and what happens right after it (turn order / JOB draft), since a first-time
+  // player lands here with zero context on what a "先着順" number even refers to.
+  container.appendChild(buildOnboardHint([
+    '← 初期資源カード4枚のうちから2枚を選んでください',
+    '先着順の数字の合計が少ないプレイヤーからJOBを選択しゲームが始まります',
+  ]));
 }
 
 /** Once every player has committed their 2 RESOURCE cards (no SELECT_RESOURCE_CARDS pendingChoice
@@ -3173,22 +3219,101 @@ function renderInstBody(container, text) {
   container.appendChild(document.createTextNode(text.slice(lastIndex)));
 }
 
-/** Popup for a card/AREA/QST's right-click description (see buildCardVisual/buildQstCardVisual/
- * renderBoard). Static markup in index.html (#card-inst-overlay), not re-rendered by render() -- just
- * shown/hidden and its text swapped. */
-function showCardInstModal(faceId) {
+/**
+ * Enlarge popup for a card/AREA/QST tile -- unifies what used to be three separate mouse-only
+ * gestures (single-click flip, right-click INST, dblclick TAP) into one tap target that works the
+ * same on touch and mouse (2026-08-0X, per user request: iPad has no right-click/dblclick
+ * equivalent). Static markup in index.html (#card-inst-overlay), not re-rendered by render() -- just
+ * shown/hidden and its content swapped.
+ *
+ * visualNode is a *fresh, noInteraction* card/QST visual (built by the caller so this function stays
+ * agnostic of buildCardVisual vs buildQstCardVisual) that already has its own baked-in front+back --
+ * see buildCardVisual's `.shop-card__back` / buildQstCardVisual's `.qst-card__back`. null for AREA
+ * tiles, which have no "back" and no card-shaped visual, just INST text. sibling is the *id* to show
+ * when flipped (null if there's no real sibling-face data, in which case the flip button stays
+ * hidden) -- the flip button just toggles visualNode's existing --flipped class, reusing the same
+ * absolute-overlay mechanism the inline shop-card/qst-card used to use for its own click-to-flip.
+ */
+function showCardEnlargeModal(faceId, visualNode, sibling) {
   const overlay = document.getElementById('card-inst-overlay');
-  overlay.querySelector('.card-inst-modal__title').textContent = faceId;
-  renderInstBody(overlay.querySelector('.card-inst-modal__body'), instForId(faceId));
+  const modal = overlay.querySelector('.card-inst-modal');
+  const visualContainer = overlay.querySelector('.card-inst-modal__visual');
+  const flipBtn = overlay.querySelector('.card-inst-modal__flip-button');
+
+  // Must come before measuring visualNode's size below -- getBoundingClientRect() on a subtree of a
+  // still-hidden (display:none) overlay always reports 0x0, since the browser never lays out
+  // display:none content.
   overlay.hidden = false;
+
+  visualContainer.innerHTML = '';
+  visualContainer.style.width = '';
+  visualContainer.style.height = '';
+  const isQst = !!visualNode && visualNode.classList.contains('qst-card');
+  modal.classList.toggle('card-inst-modal--wide', isQst);
+
+  if (visualNode) {
+    if (isQst) visualNode.style.width = '220px'; // QST has no intrinsic width of its own -- see CSS
+    visualContainer.appendChild(visualNode);
+    const rect = visualNode.getBoundingClientRect();
+    const scale = isQst ? 1.5 : 2;
+    visualNode.style.transform = `scale(${scale})`;
+    visualNode.style.transformOrigin = 'top center';
+    // transform doesn't participate in layout sizing -- without this the scaled visual would just
+    // spill outside its own box instead of the modal growing to fit it.
+    visualContainer.style.width = `${rect.width * scale}px`;
+    visualContainer.style.height = `${rect.height * scale}px`;
+  }
+
+  const flippedClass = isQst ? 'qst-card--flipped' : 'shop-card--flipped';
+  function shownId() {
+    return (visualNode && visualNode.classList.contains(flippedClass)) ? sibling : faceId;
+  }
+  function refreshText() {
+    const shown = shownId();
+    overlay.querySelector('.card-inst-modal__title').textContent = shown;
+    renderInstBody(overlay.querySelector('.card-inst-modal__body'), instForId(shown));
+  }
+  flipBtn.hidden = !sibling;
+  flipBtn.textContent = '裏側';
+  flipBtn.onclick = () => {
+    visualNode.classList.toggle(flippedClass);
+    flipBtn.textContent = visualNode.classList.contains(flippedClass) ? '表側' : '裏側';
+    refreshText();
+  };
+  refreshText();
 }
 
-function hideCardInstModal() {
+function hideCardEnlargeModal() {
   document.getElementById('card-inst-overlay').hidden = true;
+}
+
+/** Slowly auto-scrolls from the top to the very bottom of the page once, right after the initial
+ * render (2026-08-0X, per user request: "ゲーム開始時初期画面からゆっくり一番下までスクロール"). Acts
+ * as a quick guided tour of the board on load, and conveniently ends at the bottom, where the first
+ * thing a new game actually needs from the player -- the RESOURCE card choice, see renderResourceChoice
+ * -- lives (in the 所持カード sidebar). Deliberately not a CSS `scroll-behavior:smooth` (its duration is
+ * browser-controlled and typically much faster than "ゆっくり" asks for) -- a manual rAF loop with a
+ * fixed, generous duration gives control over the pacing. Only ever called once, from DOMContentLoaded
+ * (not from render(), which re-runs on every state change) -- a page reload is the only way this app
+ * ever "starts" a game, so DOMContentLoaded already means "game start" here. */
+function autoScrollToBottomOnStart() {
+  const startY = window.scrollY;
+  const endY = document.documentElement.scrollHeight - window.innerHeight;
+  if (endY <= startY) return; // page doesn't even overflow -- nothing to scroll
+  const durationMs = 3000;
+  const startTime = performance.now();
+  function step(now) {
+    const t = Math.min(1, (now - startTime) / durationMs);
+    const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; // ease-in-out
+    window.scrollTo(0, startY + (endY - startY) * eased);
+    if (t < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
   render(STATE);
+  autoScrollToBottomOnStart();
 
   // Clicking anywhere that isn't a die or a slot clears the current dice selection (2026-08-02, per
   // user feedback: "ダイス以外のところをクリックすれば解除"). Capture phase (true) so this runs
@@ -3206,9 +3331,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const overlay = document.getElementById('card-inst-overlay');
   overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) hideCardInstModal(); // backdrop click only, not the box itself
+    if (e.target === overlay) hideCardEnlargeModal(); // backdrop click only, not the box itself
   });
-  overlay.querySelector('.card-inst-modal__close').addEventListener('click', hideCardInstModal);
+  overlay.querySelector('.card-inst-modal__close').addEventListener('click', hideCardEnlargeModal);
 
   document.getElementById('undo-button').addEventListener('click', handleUndoClick);
   document.getElementById('undo-button-build').addEventListener('click', handleUndoClick);

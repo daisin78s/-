@@ -1357,6 +1357,31 @@ h1, h2, h3 { margin: 0; }
   display: none;
 }
 
+/* Instructional hint text next to the CON/RESOURCE onboarding card rows (2026-08-0X, per user
+   request -- see buildOnboardHint). A flex sibling of the card cells in the same row, so it sits to
+   their right when there's room and wraps below them on a narrow (e.g. iPad-portrait) screen. */
+.onboard-hint {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 200px;
+  min-width: 180px;
+  align-self: center;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.onboard-hint__line--emphasis {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  align-self: flex-start;
+}
+
 /* JOBカードプール (2026-07-30, per user feedback): a persistent shared area between the "所持カード"
    header and the player groups, not tucked inside any one player's card list -- see main.js's
    renderJobPool. Reuses the same owned-card-cell sizing as everywhere else. */
@@ -1442,10 +1467,15 @@ h1, h2, h3 { margin: 0; }
   align-items: center;
   justify-content: center;
   gap: 3px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 4px;
+  /* 2026-08-0X: dropped the boxed frame (border/background/radius/padding on all sides) per user
+     feedback -- a plain divider line against the cost row above gives more usable width/height for
+     the effect text than a full box did. User clarified the target shape is 日 (one line spanning
+     the card's full width, flush with its outer border) not 回 (a smaller inset box floating inside
+     the outer frame) -- so the negative side margin cancels .shop-card's 8px padding to let the
+     border-top line reach the card's left/right edges. */
+  border-top: 1px solid var(--border);
+  margin: 0 -8px;
+  padding: 4px 8px 0 8px;
   font-family: "SFMono-Regular", Consolas, monospace;
   font-size: 9.5px;
   color: var(--text-muted);
@@ -1654,9 +1684,45 @@ h1, h2, h3 { margin: 0; }
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   padding: 16px 18px;
-  width: 260px;
+  width: 280px;
   max-width: calc(100vw - 32px);
 }
+
+/* 2026-08-0X: QST's enlarged visual is inherently wider (its own grid layout, not a 112px shop-card)
+   -- widened by showCardEnlargeModal via this modifier class only when showing a QST card, so the
+   default card-inst-modal width (used for shop-card enlarges and AREA's plain text) stays compact. */
+.card-inst-modal--wide {
+  width: 400px;
+}
+
+/* Houses the enlarged (transform: scale()'d) card/QST visual -- see showCardEnlargeModal. Width/
+   height are set inline in JS to match the scaled visual's actual measured size (transform doesn't
+   affect layout sizing on its own, so the box has to be told explicitly or the scaled card would
+   visually spill outside it). Empty (AREA tiles have no card visual, just INST text) collapses away. */
+.card-inst-modal__visual {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start; /* the child's own top edge must match the container's top edge -- JS sets
+    transform-origin: top center on it, so any other cross-axis alignment here would offset where
+    "top" visually lands and let the scaled result spill past the container's bottom. */
+  margin: 0 auto 10px;
+}
+.card-inst-modal__visual:empty { display: none; }
+
+.card-inst-modal__flip-button {
+  display: block;
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.card-inst-modal__flip-button[hidden] { display: none; }
 
 .card-inst-modal__header {
   display: flex;
