@@ -1465,8 +1465,8 @@
   ],
   "JOB": [
     {
-      "ID": "JOB001A",
-      "NAME": "JOB001A",
+      "ID": "JOB001",
+      "NAME": "JOB001",
       "DICE": "",
       "COST": "",
       "EMBLEM_A": "",
@@ -1482,8 +1482,8 @@
       "INST": "TAPした時資源Zを得る"
     },
     {
-      "ID": "JOB002A",
-      "NAME": "JOB002A",
+      "ID": "JOB002",
+      "NAME": "JOB002",
       "DICE": "",
       "COST": "",
       "EMBLEM_A": "",
@@ -1499,8 +1499,8 @@
       "INST": ""
     },
     {
-      "ID": "JOB003A",
-      "NAME": "JOB003A",
+      "ID": "JOB003",
+      "NAME": "JOB003",
       "DICE": "",
       "COST": "",
       "EMBLEM_A": "",
@@ -1516,8 +1516,8 @@
       "INST": "このカードを取った時🎲を得る\nタップした時、自分のダイス1個を好きな目に変える\nそれはこのターンすでにダイスがおいてあるSLOTにも置ける"
     },
     {
-      "ID": "JOB004A",
-      "NAME": "JOB004A",
+      "ID": "JOB004",
+      "NAME": "JOB004",
       "DICE": "",
       "COST": "",
       "EMBLEM_A": "",
@@ -1533,8 +1533,8 @@
       "INST": "モニュメント以外の建築をした時◯を3個払う\nそうしたなら建築時好きな資源2個軽減する"
     },
     {
-      "ID": "JOB005A",
-      "NAME": "JOB005A",
+      "ID": "JOB005",
+      "NAME": "JOB005",
       "DICE": "",
       "COST": "",
       "EMBLEM_A": "",
@@ -1550,8 +1550,8 @@
       "INST": ""
     },
     {
-      "ID": "JOB006A",
-      "NAME": "JOB006A",
+      "ID": "JOB006",
+      "NAME": "JOB006",
       "DICE": "",
       "COST": "",
       "EMBLEM_A": "",
@@ -1567,8 +1567,8 @@
       "INST": ""
     },
     {
-      "ID": "JOB007A",
-      "NAME": "JOB007A",
+      "ID": "JOB007",
+      "NAME": "JOB007",
       "DICE": "",
       "COST": "",
       "EMBLEM_A": "",
@@ -1584,8 +1584,8 @@
       "INST": ""
     },
     {
-      "ID": "JOB008A",
-      "NAME": "JOB008A",
+      "ID": "JOB008",
+      "NAME": "JOB008",
       "DICE": "",
       "COST": "",
       "EMBLEM_A": "",

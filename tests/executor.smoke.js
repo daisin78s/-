@@ -88,32 +88,32 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 }
 
 // ---------------------------------------------------------------------------
-// 4. JOB005A: TAP=ON(GET(K),CHANGE(K,Z)), TURNEND=UNTAP()
+// 4. JOB005: TAP=ON(GET(K),CHANGE(K,Z)), TURNEND=UNTAP()
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
-  const physicalId = giveCard(state, 'JOB005A', 'P1');
+  const physicalId = giveCard(state, 'JOB005', 'P1');
   const player = getPlayerRef(state, 'P1');
   player.resources.K = 5;
 
   const { availableReactions } = executor.emit(state, index, 'P1', 'GET', 'K', { playerId: 'P1' });
-  check('JOB005A offers a reaction on GET(K) while untapped', availableReactions.length, 1);
+  check('JOB005 offers a reaction on GET(K) while untapped', availableReactions.length, 1);
 
   const result = executor.resolveTapReaction(state, index, { playerId: 'P1' }, physicalId, availableReactions[0].effect);
-  check('Tapping JOB005A runs CHANGE(K,Z): pays 1K', player.resources.K, 4);
-  check('Tapping JOB005A runs CHANGE(K,Z): gains 1Z', player.resources.Z, 1);
-  check('Tapping JOB005A taps the card', state.cards[physicalId].tapped, true);
+  check('Tapping JOB005 runs CHANGE(K,Z): pays 1K', player.resources.K, 4);
+  check('Tapping JOB005 runs CHANGE(K,Z): gains 1Z', player.resources.Z, 1);
+  check('Tapping JOB005 taps the card', state.cards[physicalId].tapped, true);
 
   const secondTry = executor.emit(state, index, 'P1', 'GET', 'K', { playerId: 'P1' });
-  check('JOB005A no longer offers a reaction once tapped', secondTry.availableReactions.length, 0);
+  check('JOB005 no longer offers a reaction once tapped', secondTry.availableReactions.length, 0);
 
   executor.applyTurnEnd(state, index, 'P1');
-  check('JOB005A TURNEND=UNTAP() untaps it again', state.cards[physicalId].tapped, false);
+  check('JOB005 TURNEND=UNTAP() untaps it again', state.cards[physicalId].tapped, false);
 }
 
 // ---------------------------------------------------------------------------
-// 5. (removed 2026-08-04) JOB008A used to be PASSIVE=MODIFY_CONVERT_VALUE(ANY,ANY,+1); the user
-// replaced JOB008A's own content with an unrelated EMBLEM-based VP effect ("以前のJOB008は問題がある
+// 5. (removed 2026-08-04) JOB008 used to be PASSIVE=MODIFY_CONVERT_VALUE(ANY,ANY,+1); the user
+// replaced JOB008's own content with an unrelated EMBLEM-based VP effect ("以前のJOB008は問題がある
 // ことがわかりました 以前のJOB008は抹消します"), so this card no longer exercises
 // MODIFY_CONVERT_VALUE at all. No other real card currently has a MODIFY_CONVERT_VALUE PASSIVE --
 // the engine mechanism itself (executor.js's runChange reading getPassiveRules(...,
@@ -214,8 +214,8 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
   executor.setFreeActionAutoMode(state, 'P1', 'A_K', true);
   check('Free action auto mode can be switched to auto', executor.isFreeActionAutoMode(state, 'P1', 'A_K'), true);
 
-  const jobPhysicalId = giveCard(state, 'JOB005A', 'P1'); // AUTO="A" in game.xlsx
-  check('JOB005A defaults to auto per its AUTO column', executor.isCardAutoMode(state, index, 'P1', jobPhysicalId), true);
+  const jobPhysicalId = giveCard(state, 'JOB005', 'P1'); // AUTO="A" in game.xlsx
+  check('JOB005 defaults to auto per its AUTO column', executor.isCardAutoMode(state, index, 'P1', jobPhysicalId), true);
 
   const cPhysicalId = giveCard(state, 'C001A', 'P1'); // AUTO="M" in game.xlsx
   check('C001A defaults to manual per its AUTO column', executor.isCardAutoMode(state, index, 'P1', cPhysicalId), false);
@@ -231,24 +231,24 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
-  const jobPhysicalId = giveCard(state, 'JOB005A', 'P1'); // TAP=ON(GET(K),CHANGE(K,Z)), AUTO="A"
+  const jobPhysicalId = giveCard(state, 'JOB005', 'P1'); // TAP=ON(GET(K),CHANGE(K,Z)), AUTO="A"
   const player = getPlayerRef(state, 'P1');
 
   // AREA001A.ACTION = ADD(3K) -- simulate resolving that AREA action directly via runCommand.
   executor.runCommand(state, index, { playerId: 'P1' }, { type: 'ADD', items: [{ resource: 'K', count: { kind: 'literal', value: 3 } }] });
-  check('Auto-mode JOB005A reacts to the ADD(3K)-triggered GET(K) without being told to', player.resources.Z, 1);
+  check('Auto-mode JOB005 reacts to the ADD(3K)-triggered GET(K) without being told to', player.resources.Z, 1);
   check('...paying 1K for it (3 gained - 1 paid = 2)', player.resources.K, 2);
   check('...and taps itself in the process', state.cards[jobPhysicalId].tapped, true);
   check('No leftover pendingChoice was created for an auto-resolved reaction', state.pendingChoices.length, 0);
 }
 {
   const state = freshState();
-  const jobPhysicalId = giveCard(state, 'JOB005A', 'P1');
+  const jobPhysicalId = giveCard(state, 'JOB005', 'P1');
   executor.setCardAutoMode(state, 'P1', jobPhysicalId, false); // force manual for this test
   const player = getPlayerRef(state, 'P1');
 
   executor.runCommand(state, index, { playerId: 'P1' }, { type: 'ADD', items: [{ resource: 'K', count: { kind: 'literal', value: 3 } }] });
-  check('Manual-mode JOB005A does NOT auto-fire', player.resources.Z, 0);
+  check('Manual-mode JOB005 does NOT auto-fire', player.resources.Z, 0);
   check('...and instead queues a TAP_REACTION_AVAILABLE pendingChoice', state.pendingChoices.length, 1);
   check('...for the right card/event', {
     kind: state.pendingChoices[0].kind,
@@ -265,13 +265,13 @@ console.log(`\n${passCount} passed, ${failCount} failed`);
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
-  giveCard(state, 'JOB003A', 'P1'); // TAP=SET_DICE_ANY()
+  giveCard(state, 'JOB003', 'P1'); // TAP=SET_DICE_ANY()
   const player = getPlayerRef(state, 'P1');
   const die = createDie('d1', 'COLOR');
   die.value = 4;
   player.dice.push(die);
 
-  const row = getCardRow(index, 'JOB003A');
+  const row = getCardRow(index, 'JOB003');
   const missingChoice = executor.runProgram(state, index, { playerId: 'P1' }, row.TAP);
   check('SET_DICE_ANY() without a choice fails with CHOICE_REQUIRED', missingChoice.reason, 'CHOICE_REQUIRED');
 

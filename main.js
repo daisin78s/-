@@ -529,7 +529,19 @@ const ACTION_ICON_BUILDERS = {
   // form (per user request), which buildChangeQuantityIcon now handles generically.
   'CHANGE((A,B,C),D)': () => actionRow([actionDot('A'), actionDot('B'), actionDot('C'), actionArrow(), actionSuffix('色D')]),
   'CHANGE(4K,VP)': () => actionRow([actionDot('K'), actionCount(4), actionArrow(), actionSuffix('VP')]),
-  'UNTAP()': () => actionRow([actionEmoji('⤴️')]),
+  // JOB003's TAP (2026-08-0X, per user request -- previously unmatched by buildSetDiceAnyIcon, which
+  // only matches bare SET_DICE_ANY() alone, not this compound with GRANT_PLACE_ANYWHERE chained after
+  // it, so JOB003 was showing no icon at all): "ダイス目を変える" reads more directly than reusing
+  // buildSetDiceAnyIcon's "🎲自由" wording, since this ability's real effect is the die's *value*
+  // changing, not really "free placement" (the GRANT_PLACE_ANYWHERE half isn't called out separately
+  // per the user's request -- just this one label for the whole TAP).
+  'SET_DICE_ANY();GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN)': () => actionRow([actionSuffix('ダイス目を変える')]),
+  // 2026-08-0X, per user request ("⤴️を消してそこに毎タームといれる"): bare UNTAP() only ever appears
+  // as a TURNEND effect (confirmed against data/game.json -- JOB004/005/007, all "usable once per turn"
+  // reactive/direct TAP abilities), so "毎ターン" (plain text) reads more clearly there than the ⤴️
+  // glyph alone did. UNTAP_ALL(SELF) is a different DSL shape (an ONCE effect on C-tier-B cards, not a
+  // per-turn reset) and keeps its own ⤴️×3 icon below, unaffected.
+  'UNTAP()': () => actionRow([actionSuffix('毎ターン')]),
   'UNTAP_ALL(SELF)': () => actionRow([actionEmoji('⚡'), actionEmoji('⤴️'), actionEmoji('⤴️'), actionEmoji('⤴️')]),
   // REPLACE_ADD(D,wD) (confirmed 2026-07-29): a passive that swaps "gain your own die" for "gain a
   // white die" instead -- shown as the source resource turning into the replacement.
@@ -665,6 +677,49 @@ function buildChangeQuantityIcon(actionText) {
     actionArrow(),
     ...resourceItemNodes(getCount, getResource),
   ]);
+}
+
+/** JOB004's bare CHANGE(3K,2BZ) TAP (2026-08-0X, per user request) -- shown as pay -> {n}BZ (BZ has
+ * no colored dot in this project's vocabulary, unlike buildChangeQuantityIcon's K/A/B/C/Z -- matches
+ * every other "{n}BZ"/"軽減{n}Z" label elsewhere, plain text rather than a dot+count), plus a second
+ * line noting this can't be used toward a monument build. **Caveat this label bakes in a JOB004-
+ * specific game-design fact (the engine itself does not currently enforce a monument exclusion on BZ
+ * discounts -- see board.resolveBuildNew/executor.applyBzDiscount, neither of which checks category) --
+ * flagged to the user; if that turns out to need real enforcement, this is a display-only fix.**
+ * Matches generically on shape (any bare CHANGE(nX,nBZ)), not just JOB004 by name, but since it's
+ * currently the only card with this shape, a future card reusing it would need this revisited if it
+ * *doesn't* share the same monument-exclusion rule. */
+function buildBzForBuildIcon(actionText) {
+  const match = /^CHANGE\((\d*)(K|A|B|C|Z),(\d*)BZ\)$/.exec(actionText || '');
+  if (!match) return null;
+  const [, payCount, payResource, bzCount] = match;
+  const stack = el('div', 'action-icons-stack');
+  stack.appendChild(actionRow([...resourceItemNodes(payCount, payResource), actionArrow(), actionSuffix(`${bzCount}BZ`)]));
+  stack.appendChild(actionRow([actionSuffix('モニュメント除く')]));
+  return stack;
+}
+
+/** JOB008's PASSIVE (2026-08-0X, per user request): N stacked IF(TOTAL_EMBLEM_COUNT>=k*step,
+ * VP_MODIFIER(vp)) statements at evenly-spaced thresholds, all granting the same VP -- collapsed into
+ * one compact "every {step} emblems -> +{vp}VP" icon (EMBLEM {step}個 / 🔽 / {vp}VP) instead of
+ * literally showing all N IF rows. Requires 2+ statements (a single IF is buildCardCountVpModifierIcon's
+ * territory, a different shape) and a perfectly even step; anything irregular falls through to the
+ * text fallback rather than showing a misleading simplified icon. */
+function buildEmblemStepVpModifierIcon(actionText) {
+  const stmts = (actionText || '').split(';').map((s) => s.trim());
+  if (stmts.length < 2) return null;
+  const parsed = stmts.map((s) => /^IF\(TOTAL_EMBLEM_COUNT>=(\d+),VP_MODIFIER\((\d+)\)\)$/.exec(s));
+  if (parsed.some((m) => !m)) return null;
+  const thresholds = parsed.map((m) => Number(m[1]));
+  const vps = parsed.map((m) => Number(m[2]));
+  const step = thresholds[0];
+  if (!vps.every((v) => v === vps[0])) return null;
+  if (!thresholds.every((t, i) => t === step * (i + 1))) return null;
+  const stack = el('div', 'action-icons-stack');
+  stack.appendChild(actionRow([actionSuffix(`EMBLEM ${step}個`)]));
+  stack.appendChild(actionRow([actionEmoji('🔽')]));
+  stack.appendChild(actionRow([actionSuffix(`${vps[0]}VP`)]));
+  return stack;
 }
 
 /** SET_DIE_VALUE(SELFx|y): player picks one of two fixed values -- shown as the two numbers, no arrow
@@ -900,6 +955,8 @@ function buildActionIcons(actionText, stacked) {
   if (addMultiResourceIcon) return addMultiResourceIcon;
   const changeQuantityIcon = buildChangeQuantityIcon(actionText);
   if (changeQuantityIcon) return changeQuantityIcon;
+  const bzForBuildIcon = buildBzForBuildIcon(actionText);
+  if (bzForBuildIcon) return bzForBuildIcon;
   const countEmblemWdIcon = buildCountEmblemWdIcon(actionText);
   if (countEmblemWdIcon) return countEmblemWdIcon;
   const resourceLimitIcon = buildResourceLimitIcon(actionText);
@@ -910,6 +967,8 @@ function buildActionIcons(actionText, stacked) {
   if (cardCountVpModifierIcon) return cardCountVpModifierIcon;
   const emblemSetVpModifierIcon = buildEmblemSetVpModifierIcon(actionText);
   if (emblemSetVpModifierIcon) return emblemSetVpModifierIcon;
+  const emblemStepVpModifierIcon = buildEmblemStepVpModifierIcon(actionText);
+  if (emblemStepVpModifierIcon) return emblemStepVpModifierIcon;
   const levelCountVpModifierIcon = buildLevelCountVpModifierIcon(actionText);
   if (levelCountVpModifierIcon) return levelCountVpModifierIcon;
   const forceConvertIcon = buildForceConvertIcon(actionText);

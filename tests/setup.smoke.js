@@ -118,7 +118,10 @@ check('turnOrder contains all 4 players exactly once', new Set(state.turnOrder).
 
   const jobResult = setup.chooseJob(state, index, p1, draftedJob);
   check('chooseJob succeeds for a card actually in the pool', jobResult.success, true);
-  check('Player now owns the drafted JOB card', state.players.find((p) => p.id === p1).ownedCardPhysicalIds.includes(draftedJob.slice(0, -1)), true);
+  // draftedJob IS the physicalId now (JOB ids dropped their trailing tier letter, 2026-08-0X -- see
+  // setup.js's JOB_FACE_IDS comment), no stripping needed (this used to be draftedJob.slice(0, -1)
+  // when JOB ids still carried a leftover "A").
+  check('Player now owns the drafted JOB card', state.players.find((p) => p.id === p1).ownedCardPhysicalIds.includes(draftedJob), true);
 
   const alreadyTaken = setup.chooseJob(state, index, state.turnOrder[1], draftedJob);
   check('A second player cannot draft the same already-taken JOB card', alreadyTaken, { success: false, reason: 'NOT_IN_JOB_POOL' });

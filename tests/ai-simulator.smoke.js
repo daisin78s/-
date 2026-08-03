@@ -155,13 +155,13 @@ function giveDie(state, playerId, value) {
 }
 
 // ---------------------------------------------------------------------------
-// TAP_REACTION: JOB005A.TAP=ON(GET(K),CHANGE(K,Z)), forced to manual mode so GET(K) queues a choice
+// TAP_REACTION: JOB005.TAP=ON(GET(K),CHANGE(K,Z)), forced to manual mode so GET(K) queues a choice
 // instead of auto-resolving.
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  const jobInst = createCardInstance('JOB005A');
+  const jobInst = createCardInstance('JOB005');
   jobInst.ownerId = 'P1';
   state.cards[jobInst.physicalId] = jobInst;
   p1.ownedCardPhysicalIds.push(jobInst.physicalId);

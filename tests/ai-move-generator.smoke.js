@@ -170,7 +170,7 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  const jobInst = createCardInstance('JOB005A');
+  const jobInst = createCardInstance('JOB005');
   jobInst.ownerId = 'P1';
   state.cards[jobInst.physicalId] = jobInst;
   p1.ownedCardPhysicalIds.push(jobInst.physicalId);
@@ -184,8 +184,8 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
 
 // ---------------------------------------------------------------------------
 // bzConversionTap / forcedBzConversionMove (2026-08-04, per user feedback: "JOB004の効果は使えるときは
-// 必ず使う") -- JOB004A's TAP="CHANGE(3K,2BZ)" is detected as a forced BZ conversion; a card with no
-// such ability, or JOB004A itself when unaffordable/already tapped, is not.
+// 必ず使う") -- JOB004's TAP="CHANGE(3K,2BZ)" is detected as a forced BZ conversion; a card with no
+// such ability, or JOB004 itself when unaffordable/already tapped, is not.
 //
 // 2026-08-0X update (per user feedback: "BZはターン終了時に無くなります...AIもBZを作る→無くなるという
 // ことをしないようにしてください"): forcing this conversion is now ALSO gated on there being a reachable
@@ -193,14 +193,14 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
 // just evaporate at TURNEND for nothing. context is now a required 4th argument.
 // ---------------------------------------------------------------------------
 {
-  check('bzConversionTap detects JOB004A ("CHANGE(3K,2BZ)")', !!bzConversionTap(index, 'JOB004A'), true);
+  check('bzConversionTap detects JOB004 ("CHANGE(3K,2BZ)")', !!bzConversionTap(index, 'JOB004'), true);
   check('bzConversionTap is null for a card with no TAP field at all (M001, printed VP only)', bzConversionTap(index, 'M001'), null);
   check('bzConversionTap is null for a bare TAP that does not produce BZ (C001A)', bzConversionTap(index, 'C001A'), null);
 }
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  const jobInst = createCardInstance('JOB004A');
+  const jobInst = createCardInstance('JOB004');
   jobInst.ownerId = 'P1';
   state.cards[jobInst.physicalId] = jobInst;
   p1.ownedCardPhysicalIds.push(jobInst.physicalId);

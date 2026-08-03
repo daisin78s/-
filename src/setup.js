@@ -40,7 +40,11 @@ const MONUMENT_SHOP_SLOT_IDS = ['SHOP001', 'SHOP002', 'SHOP003', 'SHOP004', 'SHO
 const NORMAL_SHOP_SLOT_IDS = ['SHOP101', 'SHOP102', 'SHOP103', 'SHOP104', 'SHOP105', 'SHOP106'];
 const SPECIAL_SHOP_SLOT_IDS = ['SHOP201', 'SHOP202', 'SHOP203'];
 const CON_PHYSICAL_IDS = ['CON001', 'CON002', 'CON003', 'CON004', 'CON005'];
-const JOB_FACE_IDS = ['JOB001A', 'JOB002A', 'JOB003A', 'JOB004A', 'JOB005A', 'JOB006A', 'JOB007A', 'JOB008A'];
+// JOB ids dropped their trailing tier letter (2026-08-0X, per user edit to game.xlsx -- JOB never had
+// a real B-tier sibling anyway, so the "A" was just a leftover from the {physicalId}{tier} pattern
+// every other tiered deck uses; JOB is now bare, same shape as M). See game-state.js's splitCardId,
+// which already treats a bare id (no trailing letter) as {tier: null} without any change needed here.
+const JOB_FACE_IDS = ['JOB001', 'JOB002', 'JOB003', 'JOB004', 'JOB005', 'JOB006', 'JOB007', 'JOB008'];
 
 // ---------------------------------------------------------------------------
 // Steps 1-2: players, board, shop

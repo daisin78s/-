@@ -76,11 +76,11 @@ function giveDie(state, playerId, value) {
 }
 
 // ---------------------------------------------------------------------------
-// PLACE_DICE on an ANY slot + JOB002A's ON(PLACE(MAP008/009),ADD(K)) reaction
+// PLACE_DICE on an ANY slot + JOB002's ON(PLACE(MAP008/009),ADD(K)) reaction
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
-  const jobInst = createCardInstance('JOB002A'); // PASSIVE=ON(PLACE(MAP008),ADD(K));ON(PLACE(MAP009),ADD(K))
+  const jobInst = createCardInstance('JOB002'); // PASSIVE=ON(PLACE(MAP008),ADD(K));ON(PLACE(MAP009),ADD(K))
   jobInst.ownerId = 'P1';
   state.cards[jobInst.physicalId] = jobInst;
   player(state, 'P1').ownedCardPhysicalIds.push(jobInst.physicalId);
@@ -89,9 +89,9 @@ function giveDie(state, playerId, value) {
   const before = player(state, 'P1').resources.K || 0;
   const result = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP008', 0);
   check('Placing on the castle (all-ANY slots) succeeds', result.success, true);
-  // PLACE fires (and JOB002A reacts) before AREA008's own ACTION=BUILD() is resolved,
+  // PLACE fires (and JOB002 reacts) before AREA008's own ACTION=BUILD() is resolved,
   // so the K grant happens regardless of what BUILD resolution below finds.
-  check('JOB002A auto-reacts to PLACE(MAP008) and grants 1K', player(state, 'P1').resources.K, before + 1);
+  check('JOB002 auto-reacts to PLACE(MAP008) and grants 1K', player(state, 'P1').resources.K, before + 1);
   // AREA008.ACTION = "BUILD()" -- can't complete synchronously, so placeDice hands back candidates instead.
   check('AREA008 (castle) ACTION=BUILD() comes back as a pending build decision, not an exception', result.actionResult.success, true);
   check('...with a non-empty candidate list (categories default to A,B,C,U,M)', result.actionResult.pendingBuild.candidates.length > 0, true);
@@ -310,7 +310,7 @@ function giveDie(state, playerId, value) {
 }
 
 // ---------------------------------------------------------------------------
-// JOB004A.TAP=CHANGE(3K,2BZ) (corrected 2026-08-03, per user feedback: "Kを3個持っている状態でAAやBB
+// JOB004.TAP=CHANGE(3K,2BZ) (corrected 2026-08-03, per user feedback: "Kを3個持っている状態でAAやBB
 // の資源のものを建築しようとしても建築できません 建築しようとしたときに3KをAAに変えて建築できるように
 // したい" -- this used to be ON(BUILD(A,B,C,U),CHANGE(3K,2BZ)), a reaction that only fired *after* a
 // build completed, too late to help pay for the build that triggered it, and mismatched its own INST
@@ -322,14 +322,14 @@ function giveDie(state, playerId, value) {
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  const jobInst = createCardInstance('JOB004A');
+  const jobInst = createCardInstance('JOB004');
   jobInst.ownerId = 'P1';
   state.cards[jobInst.physicalId] = jobInst;
   p1.ownedCardPhysicalIds.push(jobInst.physicalId);
   p1.resources.K = 3;
 
   const result = board.useBareTapAbility(state, index, { playerId: 'P1' }, jobInst.physicalId);
-  check('JOB004A.TAP=CHANGE(3K,2BZ) succeeds as a direct (non-reactive) TAP', result, { success: true });
+  check('JOB004.TAP=CHANGE(3K,2BZ) succeeds as a direct (non-reactive) TAP', result, { success: true });
   check('...paid 3K, gained 2BZ', { K: p1.resources.K, BZ: p1.resources.BZ }, { K: 0, BZ: 2 });
   check('...the card is now tapped', state.cards[jobInst.physicalId].tapped, true);
 
@@ -339,13 +339,13 @@ function giveDie(state, playerId, value) {
   p1.resources.B = 1; // existing BZ-discount test below.
   const candidate = { type: 'BUILD_NEW', faceId: 'A007A', shopKey: 'NORMAL', slotId: Object.keys(state.shops.NORMAL.slots).find((k) => state.shops.NORMAL.slots[k] === 'A007A') };
   const buildResult = board.resolveBuild(state, index, { playerId: 'P1', bzDiscount: { A: 1 } }, candidate);
-  check('The 2 BZ JOB004A just granted can pay for a build that would otherwise be unaffordable', buildResult.success, true);
+  check('The 2 BZ JOB004 just granted can pay for a build that would otherwise be unaffordable', buildResult.success, true);
 }
 {
-  // JOB007A.TAP=ON(BUILD(U,M),ADD(BZ)) -- the inverse: reacts to UPGRADE and Monument builds, not A/B/C.
+  // JOB007.TAP=ON(BUILD(U,M),ADD(BZ)) -- the inverse: reacts to UPGRADE and Monument builds, not A/B/C.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  const jobInst = createCardInstance('JOB007A');
+  const jobInst = createCardInstance('JOB007');
   jobInst.ownerId = 'P1';
   state.cards[jobInst.physicalId] = jobInst;
   p1.ownedCardPhysicalIds.push(jobInst.physicalId);
@@ -358,7 +358,7 @@ function giveDie(state, playerId, value) {
   const candidate = board.getBuildCandidates(state, index, 'P1', ['U'], 0).find((c) => c.physicalId === 'A001');
   const result = board.resolveBuild(state, index, { playerId: 'P1' }, candidate);
   check('UPGRADE succeeds', result.success, true);
-  check('JOB007A auto-reacted to BUILD(U): gained 1 BZ', p1.resources.BZ, 1);
+  check('JOB007 auto-reacted to BUILD(U): gained 1 BZ', p1.resources.BZ, 1);
 }
 
 // ---------------------------------------------------------------------------
