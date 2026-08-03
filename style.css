@@ -446,18 +446,6 @@ h1, h2, h3 { margin: 0; }
   font-size: 13px;
 }
 
-.map-tile__tier {
-  font-size: 10px;
-  font-weight: 700;
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: var(--border);
-  color: var(--text-muted);
-}
-
-.map-tile__tier[data-tier="B"] { background: #fde8cc; color: #9a5b00; }
-.map-tile__tier[data-tier="C"] { background: #fbd3d3; color: #a3221f; }
-
 /* Confirmed 2026-07-29: the whole tile's background shifts by tier, not just the small tier badge
    above -- tier A is left at the plain default (.map-tile's own background). */
 .map-tile[data-tier="B"] { background: var(--tier-b-bg); }
@@ -657,29 +645,39 @@ h1, h2, h3 { margin: 0; }
   font-size: 22px;
 }
 
-/* Confirmed 2026-07-29: the accumulated usage fee is its own colored space (the fee owner's player
-   color), not just plain text -- and double-clickable by the owner to collect it (see
-   .map-tile__fee--collectible). Empty (no fee yet) collapses away entirely. */
+/* 2026-08-0X (replaces the old header "tier A"/"tier B" text badge, per user request): a compact
+   2-line block in the tile header -- the flat per-tier rate on top (blank for tier A, which has no
+   fee at all -- see .map-tile__fee-rate:empty below) and the running accumulated total underneath,
+   always shown (even "0 K") rather than only appearing once something has accumulated. Colored with
+   the fee owner's player color once there's actually something to collect, and double-clickable by
+   the owner to collect it (see .map-tile__fee--collectible) -- both carried over unchanged from the
+   badge this replaced. Castle has no tier/fee concept at all, so its element is removed outright in
+   JS rather than left to collapse via CSS. */
 .map-tile__fee {
-  align-self: flex-start;
-  font-size: 11px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0;
+  font-size: 10px;
   font-weight: 700;
-  color: #fff;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--border-strong);
+  line-height: 1.3;
+  color: var(--text-muted);
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--border);
+  white-space: nowrap;
 }
 
-.map-tile__fee:empty { display: none; }
+.map-tile__fee-rate:empty { display: none; }
 
 .map-tile__fee--collectible {
   cursor: pointer;
 }
 
-.map-tile__fee[data-color="PINK"] { background: var(--player-pink); }
-.map-tile__fee[data-color="PURPLE"] { background: var(--player-purple); }
-.map-tile__fee[data-color="GREEN"] { background: var(--player-green); }
-.map-tile__fee[data-color="ORANGE"] { background: var(--player-orange); }
+.map-tile__fee[data-color="PINK"] { background: var(--player-pink); color: #fff; }
+.map-tile__fee[data-color="PURPLE"] { background: var(--player-purple); color: #fff; }
+.map-tile__fee[data-color="GREEN"] { background: var(--player-green); color: #fff; }
+.map-tile__fee[data-color="ORANGE"] { background: var(--player-orange); color: #fff; }
 
 /* ---------------------------------------------------------------------- */
 /* Dice                                                                    */

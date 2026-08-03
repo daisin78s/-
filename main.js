@@ -1524,15 +1524,12 @@ function renderBoard(state, next) {
       node.querySelector('.map-tile__id').textContent = areaName(mapState.currentAreaId);
 
       const tier = mapState.currentAreaId.match(/([ABC])$/);
-      const tierEl = node.querySelector('.map-tile__tier');
       if (tier) {
-        tierEl.textContent = `tier ${tier[1]}`;
-        tierEl.dataset.tier = tier[1];
         // Confirmed 2026-07-29: the whole tile's background follows the tier too (tier B/C = pink
-        // shades), not just the small badge -- see .map-tile[data-tier] in style.css.
+        // shades) -- see .map-tile[data-tier] in style.css. The "tier A"/"tier B" text badge that used
+        // to sit in the header was removed (2026-08-0X, per user request) in favor of the usage-fee
+        // display below, which now lives in that same spot.
         node.dataset.tier = tier[1];
-      } else {
-        tierEl.remove();
       }
 
       const slotsEl = node.querySelector('.map-tile__slots');
@@ -1598,24 +1595,34 @@ function renderBoard(state, next) {
         actionEl.textContent = action;
       }
 
-      // Confirmed 2026-07-29: the fee space is colored with its owner's player color, and the owner
-      // can double-click it to collect (a free action, real engine wiring pass 5: executor.
-      // collectUsageFee) -- restricted to whoever's real TURN it currently is (see realTurnPlayerId
-      // above), matching the other free actions.
+      // Usage-fee display (2026-08-0X, moved into the header, replacing the old "tier A"/"tier B" text
+      // badge -- per user request). Two lines: the flat per-tier rate (tier B = 1K, tier C = 2K, per
+      // [[project-dice-wp-flow-spec]] -- tier A has no usage fee at all, so no rate line) and the
+      // currently-accumulated amount, which -- unlike the old fee badge -- is now always shown, even at
+      // "0 K", rather than only appearing once something has actually accumulated. Castle (no tier at
+      // all) never has a fee concept, so its fee element is removed entirely rather than left empty.
+      // Confirmed 2026-07-29 (carried over from the old badge): colored with the owner's player color,
+      // and the owner can double-click it to collect (a free action, executor.collectUsageFee) --
+      // restricted to whoever's real TURN it currently is (see realTurnPlayerId above), matching the
+      // other free actions.
       const feeEl = node.querySelector('.map-tile__fee');
-      if (mapState.accumulatedFee > 0 && mapState.feeOwnerId) {
-        feeEl.textContent = `${mapState.accumulatedFee}K`;
-        feeEl.dataset.color = colorForPlayer(state, mapState.feeOwnerId);
-        if (mapState.feeOwnerId === realTurnPlayerId) {
-          feeEl.classList.add('map-tile__fee--collectible');
-          feeEl.addEventListener('dblclick', () => {
-            const result = executorMod.collectUsageFee(state, mapState.feeOwnerId, mapId);
-            placementMessage = result.success ? '' : `使用料を回収できません（${result.reason}）`;
-            render(STATE);
-          });
-        }
+      if (!tier) {
+        feeEl.remove();
       } else {
-        feeEl.textContent = '';
+        const feeRate = tier[1] === 'B' ? 1 : tier[1] === 'C' ? 2 : 0;
+        feeEl.querySelector('.map-tile__fee-rate').textContent = feeRate > 0 ? `使用料${feeRate}K` : '';
+        feeEl.querySelector('.map-tile__fee-amount').textContent = `${mapState.accumulatedFee} K`;
+        if (mapState.accumulatedFee > 0 && mapState.feeOwnerId) {
+          feeEl.dataset.color = colorForPlayer(state, mapState.feeOwnerId);
+          if (mapState.feeOwnerId === realTurnPlayerId) {
+            feeEl.classList.add('map-tile__fee--collectible');
+            feeEl.addEventListener('dblclick', () => {
+              const result = executorMod.collectUsageFee(state, mapState.feeOwnerId, mapId);
+              placementMessage = result.success ? '' : `使用料を回収できません（${result.reason}）`;
+              render(STATE);
+            });
+          }
+        }
       }
 
       // Tapping the tile opens the same enlarge/INST modal cards use (2026-08-0X, replaces right-
