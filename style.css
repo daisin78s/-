@@ -1,0 +1,1895 @@
+/* ==========================================================================
+   ダイスWP — clean, flat, "board game app" style.
+   Design tokens live at the top; component rules below reference them only
+   via var() so the palette can be retuned in one place.
+   ========================================================================== */
+
+:root {
+  --bg: #eef1f5;
+  --surface: #ffffff;
+  --surface-sunken: #f6f7f9;
+  --border: #dde1e7;
+  --border-strong: #c4cad3;
+  --text: #1f2933;
+  --text-muted: #6b7280;
+  --text-faint: #9aa3af;
+  --accent: #3454d1;
+  --accent-soft: #e8ecfd;
+  --shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.08);
+  --shadow-lg: 0 4px 10px rgba(16, 24, 40, 0.10), 0 2px 4px rgba(16, 24, 40, 0.06);
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  /* Player colors (confirmed 2026-07-29, provisional): P1=PINK, P2=PURPLE, P3=GREEN, P4=ORANGE --
+     deliberately distinct hues from the resource A/B/C colors below (which are the vivid
+     primary red/blue/yellow) so a player's dice/pieces never get mistaken for a resource token. */
+  --player-pink: #ec4899;
+  --player-purple: #8b5cf6;
+  --player-green: #16a34a;
+  --player-orange: #f2780c;
+
+  --resource-k: #93826c; /* used for K's text contexts (e.g. usage-fee label); the dot itself is white, see below */
+  --resource-k-dot: #ffffff; /* confirmed 2026-07-29: K's colored-dot token is white, with a border so it's visible on white surfaces */
+  --resource-k-dot-border: var(--border-strong);
+  --resource-a: #e02424; /* confirmed 2026-07-29: vivid red */
+  --resource-b: #1d5fe0; /* confirmed 2026-07-29: vivid blue */
+  --resource-c: #f2c200; /* confirmed 2026-07-29: vivid yellow */
+  --resource-z: #7c5cbf; /* fallback solid color, kept for any non-dot text use of Z's color */
+  /* Z's dot (confirmed 2026-07-29): a circle split into 3 wedges of A/B/C's colors, like a
+     Mercedes-Benz logo -- represents "any of A/B/C". Defined after --resource-a/b/c so it can
+     reference them. */
+  --resource-z-gradient: conic-gradient(var(--resource-a) 0deg 120deg, var(--resource-b) 120deg 240deg, var(--resource-c) 240deg 360deg);
+  --resource-vp: #c9971f;
+  --resource-bz: #8a94a3;
+  --resource-wd-bg: #fbfaf6;
+  --resource-wd-border: #c4cad3;
+
+  /* EMBLEM (confirmed 2026-07-29): 天=blue, 地=red, 人=yellow -- one fixed emblem per A/B/C deck. */
+  --emblem-ten: #1d5fe0;
+  --emblem-chi: #e02424;
+  --emblem-jin: #f2c200;
+
+  /* Plain/blank card-back fill (confirmed 2026-07-29: "無地" -- no pattern or text, just a flat
+     color) shown when a card is clicked and has no specific back art defined. */
+  --card-back-bg: #8b93a3;
+
+  /* AREA tile background by tier (confirmed 2026-07-29): tier A stays the plain default
+     --surface-sunken (no override below), tier B is light pink, tier C a bit more saturated pink. */
+  --tier-b-bg: #fbe1ec;
+  --tier-c-bg: #f6b8d4;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171c;
+    --surface: #1c2027;
+    --surface-sunken: #22262e;
+    --border: #2c3138;
+    --border-strong: #3a4048;
+    --text: #e6e9ee;
+    --text-muted: #9aa3af;
+    --text-faint: #6b7280;
+    --accent: #7590ff;
+    --accent-soft: #232a4a;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.35);
+    --shadow-lg: 0 6px 16px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.3);
+    --resource-wd-bg: #2a2e35;
+    --resource-wd-border: #454b54;
+    --card-back-bg: #454b54;
+    --tier-b-bg: #3a2431;
+    --tier-c-bg: #52223a;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Hiragino Sans", "Yu Gothic UI", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+h1, h2, h3 { margin: 0; }
+
+#app {
+  /* Confirmed 2026-07-29: wide enough for SHOP101-106 + SHOP201-203 (9 cards) on one row without
+     clipping, plus room for the widened owned-card sidebar (see #game-layout below). Left-aligned
+     (no auto centering) per instruction to keep the whole layout hugging the left edge instead of
+     wasting space on both sides. */
+  max-width: 1960px;
+  margin: 0;
+  padding: 20px 24px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Status chip (confirmed 2026-07-30: page title and the header bar it lived */
+/* in were removed; round-indicator now reuses this chip inside            */
+/* #player-cards' own header instead -- see .player-cards__header)         */
+/* ---------------------------------------------------------------------- */
+
+.status-chip {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 14px;
+  box-shadow: var(--shadow);
+}
+
+.status-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.status-value {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Layout sections                                                        */
+/* ---------------------------------------------------------------------- */
+
+#game-layout {
+  display: grid;
+  /* Confirmed 2026-07-29: widened so the owned-card sidebar can fit 4 tapped (150x150) cards
+     side by side in one row: 4*150 + 3*6(gap) + 16*2(panel padding) = 666px, plus a little room. */
+  grid-template-columns: 1fr 680px;
+  gap: 20px;
+  align-items: start;
+}
+
+#player-cards {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  box-shadow: var(--shadow);
+}
+
+@media (max-width: 1100px) {
+  #game-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Revised 2026-07-29: the "no gap" instruction meant no *large* gap, not zero -- restored to 3
+   separate panels (same treatment as #player-cards) with a small gap between them, roughly the
+   size used elsewhere for related-but-distinct groups (vs. the page-level 20px gap). */
+#board-area {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  /* Confirmed 2026-07-30: without this, a grid item's default min-width is its content's intrinsic
+     width, so a wide child (the QST row widened .shop-row__combined past the 1fr track) grows the
+     whole page instead of scrolling locally via .shop-row__combined's own overflow-x:auto. */
+  min-width: 0;
+}
+
+#board-area > section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 16px;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Shops                                                                   */
+/* ---------------------------------------------------------------------- */
+
+#shops {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.shop-row__slots {
+  display: flex;
+  gap: 8px;
+}
+
+/* QST's own vertical stack (confirmed 2026-07-30: 3 cards stacked top-to-bottom, not a horizontal
+   row) -- overrides .shop-row__slots' default row direction. */
+.shop-row__slots--vertical {
+  flex-direction: column;
+}
+
+.shop-row__combined {
+  display: flex;
+  align-items: stretch;
+  gap: 14px;
+  overflow-x: auto; /* safety net: graceful scroll instead of clipping on narrower windows */
+  padding-bottom: 2px;
+}
+
+.shop-row__divider {
+  width: 1px;
+  background: var(--border-strong);
+  flex: 0 0 auto;
+}
+
+/* Confirmed 2026-07-30: SHOP101-106 and SHOP201-203 share one 6-column grid (SHOP201-203 sit
+   directly under SHOP101/103/105, row 2, via explicit grid-column/grid-row set in JS -- see
+   renderShopGrid) instead of the old separate side-by-side layout. The "大型カード ラウンド2から"
+   heading that used to label the special column has been removed entirely (no replacement). */
+.shop-row__grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 10px 8px;
+  flex: 1 1 auto;
+}
+
+/* Confirmed 2026-07-29: a shop slot's dice-value requirement (e.g. "目 1-6") isn't part of the
+   card's effect, so it's shown as a caption below the card box, not inside it. */
+.shop-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.shop-slot__req {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-align: center;
+}
+.shop-slot__req:empty { display: none; }
+
+.shop-card {
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 72px;
+  width: 112px;
+  flex: 0 0 auto;
+  position: relative;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+/* Confirmed 2026-07-29: each A/B/C card shows its deck's EMBLEM (天/地/人) as a colored corner
+   badge, top-right (moved here from top-left 2026-07-29 -- the shop slot number that used to live
+   here was dropped as unnecessary). M/JOB/CON cards have no emblem. */
+.shop-card__emblem {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 10px;
+  font-weight: 700;
+}
+.shop-card__emblem:empty { display: none; }
+
+/* Confirmed 2026-07-29: LV{n} (from A/B/C decks' LEVEL field) sits right under the EMBLEM badge;
+   cards with no LEVEL (M/JOB/CON/RESOURCE) show nothing here. */
+.shop-card__level {
+  position: absolute;
+  top: 17px;
+  right: 6px;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-faint);
+}
+.shop-card__level:empty { display: none; }
+
+/* Confirmed 2026-07-30: monuments can show 2-3 emblem chars side by side (see fillCardFace) --
+   colored per-char via .shop-card__emblem-char rather than the old single-string .shop-card__emblem
+   coloring, since a multi-char string like "天地" needs each char in its own color. */
+.shop-card__emblem-char[data-emblem="天"], .action-emblem[data-emblem="天"] { color: var(--emblem-ten); }
+.shop-card__emblem-char[data-emblem="地"], .action-emblem[data-emblem="地"] { color: var(--emblem-chi); }
+.shop-card__emblem-char[data-emblem="人"], .action-emblem[data-emblem="人"] { color: var(--emblem-jin); }
+
+.shop-card:not(.shop-card--empty):hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-1px);
+  cursor: pointer;
+}
+
+.shop-card__id {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.shop-card__cost {
+  display: flex;
+  gap: 6px;
+  flex-wrap: nowrap; /* confirmed 2026-07-29: cost must fit on one line, e.g. M004's 2A,2B,2C */
+}
+
+/* Compact override: shop-card badges drop the chip border/background so 3 resources fit in one row. */
+.shop-card__cost .resource-badge {
+  border: none;
+  background: none;
+  padding: 0;
+  gap: 3px;
+  font-size: 10.5px;
+}
+
+.shop-card__cost .resource-badge__dot {
+  width: 7px;
+  height: 7px;
+}
+
+.shop-card__vp {
+  margin-top: auto;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--resource-vp);
+}
+
+/* Restored 2026-07-29: monuments' req is intrinsic to the card (each monument has its own dice-value
+   threshold), so it renders inside the card again -- unlike normal/special cards, whose req is a
+   slot property shown in .shop-slot__req instead (buildCardVisual only fills this in when passed). */
+.shop-card__req {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.shop-card__req:empty { display: none; }
+
+/* CON/RESOURCE cards' START_ORDER (2026-07-30, per user feedback -- relevant when choosing initial
+   RESOURCE cards / previewing CON, since it determines turn order alongside the other kept card's
+   own START_ORDER). Every other sheet leaves this blank, so it collapses away for them. */
+.shop-card__start-order {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.shop-card__start-order:empty { display: none; }
+
+/* Confirmed 2026-07-29 (revised): click a card to flip it and see its sibling tier face (e.g. C003A
+   -> C003B) -- it reverts when the cursor leaves. Cards with no sibling-tier data (M/JOB/CON, or
+   no CARD_FACTS entry for the sibling yet) just show a plain/blank back (--card-back-bg) instead. */
+.shop-card__back {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  border-radius: inherit;
+  background: var(--card-back-bg);
+}
+.shop-card--flipped .shop-card__back {
+  display: flex;
+}
+/* The sibling-face variant looks like a normal card front (padding, surface background) instead of
+   a blank fill. Deliberately does NOT set position (must stay absolute, inherited from
+   .shop-card__back above) -- .shop-card__back is already the containing block its nested
+   emblem/level badges need, so no extra positioning context is required here. */
+.shop-card__back--face {
+  padding: 8px;
+  background: var(--surface-sunken);
+}
+
+.shop-card--empty {
+  align-items: center;
+  justify-content: center;
+  color: var(--text-faint);
+  font-size: 12px;
+  border-style: dashed;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Board                                                                   */
+/* ---------------------------------------------------------------------- */
+
+#board {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Two independent flex rows (not one grid) so the bottom row can give the castle tile extra width
+   (flex: 2 below) while the other four tiles shrink to match, all still on a single line -- a grid
+   column-span would instead push a tile into an orphan third row. Confirmed 2026-07-29. */
+.board-row {
+  display: flex;
+  gap: 10px;
+}
+
+.board-row > .map-tile {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.map-tile {
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.map-tile--castle {
+  border-color: var(--resource-vp);
+  background: linear-gradient(180deg, var(--accent-soft), var(--surface-sunken));
+  /* Confirmed 2026-07-29: castle is allowed to be visibly wider than the other bottom-row tiles so
+     its 6 slots fit on one line instead of wrapping to 2 rows -- the other tiles shrink to compensate
+     (see .board-row above), which is fine since the castle is already a special-cased AREA. */
+  flex: 2 1 0;
+}
+
+.map-tile__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.map-tile__id {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.map-tile__tier {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--border);
+  color: var(--text-muted);
+}
+
+.map-tile__tier[data-tier="B"] { background: #fde8cc; color: #9a5b00; }
+.map-tile__tier[data-tier="C"] { background: #fbd3d3; color: #a3221f; }
+
+/* Confirmed 2026-07-29: the whole tile's background shifts by tier, not just the small tier badge
+   above -- tier A is left at the plain default (.map-tile's own background). */
+.map-tile[data-tier="B"] { background: var(--tier-b-bg); }
+.map-tile[data-tier="C"] { background: var(--tier-c-bg); }
+
+.map-tile__slots {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+/* Confirmed 2026-07-29: castle's 6 slots stay on one line (the extra tile width from
+   .map-tile--castle's flex:2 above makes room; nowrap is a safety net for narrow viewports). */
+.map-tile--castle .map-tile__slots {
+  flex-wrap: nowrap;
+}
+
+/* Turn-order rows, castle-only -- shows the round's current start-player order above the slots and
+   the recomputed next-round order below (see computeNextCastleTurnOrder in main.js). Empty on every
+   other tile, so it collapses away there. */
+.map-tile__turnorder {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 9px;
+  color: var(--text-muted);
+}
+
+.map-tile__turnorder:empty {
+  display: none;
+}
+
+.map-tile__turnorder-label {
+  margin-right: 1px;
+}
+
+.slot {
+  /* Confirmed 2026-07-29: enlarged from 26px to fit the bigger die-face glyphs without clipping. */
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  border: 1.5px dashed var(--border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--text-faint);
+  position: relative;
+  background: var(--surface);
+}
+
+.slot--filled {
+  border-style: solid;
+  padding: 0;
+}
+
+.slot__stack {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Dice placement (2026-07-30, real engine wiring pass 2): a slot is clickable while a die is
+   selected (see main.js's renderBoard/placeSelectedDie) -- legality itself is decided by
+   board.placeDice, not here, so this is purely a "you can try clicking here" affordance. */
+.slot--selectable {
+  cursor: pointer;
+  border-color: var(--accent);
+}
+
+/* Stronger than .slot--selectable: this SLOT specifically would work right now for the currently
+   selected die(s) -- both the basic placement rules AND the AREA's own effect would actually apply
+   (see main.js's renderBoard/board.previewPlaceDice -- 2026-08-0X, per user feedback: "配置可能SLOTが
+   光るようにして欲しい"). Plain .slot--selectable-only slots (selected but not lit) are still clickable
+   (attempting one just surfaces why it failed), they're just not being suggested. */
+.slot--highlight {
+  border-style: solid;
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 2px var(--accent-soft), 0 0 6px 1px var(--accent);
+  animation: slot-highlight-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes slot-highlight-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px var(--accent-soft), 0 0 6px 1px var(--accent); }
+  50% { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 10px 3px var(--accent); }
+}
+
+/* A short-lived feedback line for a rejected placement (e.g. "配置できません（VALUE_MISMATCH）") --
+   collapses away entirely when empty, same convention as the other :empty-hidden panels. */
+.board-message {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--danger, #c0392b);
+  padding: 2px 4px;
+}
+
+.board-message:empty {
+  display: none;
+}
+
+.map-tile__action {
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 10.5px;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 6px;
+  overflow-wrap: anywhere;
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+}
+
+/* Icon-based action display (confirmed 2026-07-29): known DSL patterns render as icons instead of
+   raw text -- see main.js's ACTION_ICON_BUILDERS. Falls back to the monospace text above when a
+   pattern has no icon mapping yet. */
+.action-icons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  flex-wrap: wrap;
+  width: 100%;
+  font-family: inherit;
+}
+
+/* A compound effect that needs >1 line within a single ONCE/TAP slot (e.g. BUILD icon + "軽減Z" text
+   for a trailing ADD(BZ)), confirmed 2026-07-29 -- kept separate from the multi-effect stacking on
+   .shop-card__effect itself, which is for a card having both a ONCE row and a TAP row. */
+.action-icons-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 100%;
+}
+
+.action-emoji {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.action-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  display: inline-block;
+}
+.action-dot[data-resource="K"] { background: var(--resource-k-dot); border: 1.5px solid var(--resource-k-dot-border); }
+.action-dot[data-resource="A"] { background: var(--resource-a); }
+.action-dot[data-resource="B"] { background: var(--resource-b); }
+.action-dot[data-resource="C"] { background: var(--resource-c); }
+.action-dot[data-resource="Z"] { background: var(--resource-z-gradient); }
+.action-dot[data-resource="VP"] { background: var(--resource-vp); }
+.action-dot[data-resource="BZ"] { background: var(--resource-bz); }
+
+.action-count {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+  margin-left: -1px;
+}
+
+.action-arrow {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-faint);
+}
+
+.action-emblem {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Confirmed 2026-07-29: plain text, no chip/box background -- the boxed look was hard to read. */
+.action-suffix {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+/* Confirmed 2026-07-29: die VALUES (as opposed to resource counts) use the ⚀-⚅ die-face glyphs
+   instead of numbered-circle emoji or plain digits, sized up for legibility. */
+.die-face {
+  font-size: 42px;
+  line-height: 1;
+  color: var(--text);
+}
+
+/* Confirmed 2026-07-30: the 42px board-slot size is too wide for a card's narrow TAP/effect row (e.g.
+   B001A's SET_DIE_VALUE(SELF2|3) icon wrapped onto two lines instead of staying on one) -- scoped
+   down within .action-icons rows specifically, leaving the board-slot usage untouched. */
+.action-icons .die-face {
+  font-size: 22px;
+}
+
+/* Confirmed 2026-07-29: the accumulated usage fee is its own colored space (the fee owner's player
+   color), not just plain text -- and double-clickable by the owner to collect it (see
+   .map-tile__fee--collectible). Empty (no fee yet) collapses away entirely. */
+.map-tile__fee {
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--border-strong);
+}
+
+.map-tile__fee:empty { display: none; }
+
+.map-tile__fee--collectible {
+  cursor: pointer;
+}
+
+.map-tile__fee[data-color="PINK"] { background: var(--player-pink); }
+.map-tile__fee[data-color="PURPLE"] { background: var(--player-purple); }
+.map-tile__fee[data-color="GREEN"] { background: var(--player-green); }
+.map-tile__fee[data-color="ORANGE"] { background: var(--player-orange); }
+
+/* ---------------------------------------------------------------------- */
+/* Dice                                                                    */
+/* ---------------------------------------------------------------------- */
+
+.die {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 12px;
+  color: #fff;
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.15);
+  flex: 0 0 auto;
+}
+
+.die--PINK { background: var(--player-pink); }
+.die--PURPLE { background: var(--player-purple); }
+.die--GREEN { background: var(--player-green); }
+.die--ORANGE { background: var(--player-orange); }
+.die--WHITE {
+  background: var(--resource-wd-bg);
+  color: var(--text);
+  border: 1.5px solid var(--resource-wd-border);
+  box-shadow: none;
+}
+
+/* Dice placement (2026-07-30, real engine wiring pass 2): an unplaced die belonging to the player
+   currently on TURN is clickable to select it for placement; the selected one gets an accent ring.
+   See main.js's renderPlayers (die click) / renderBoard+placeSelectedDie (slot click, the other half
+   of this interaction). */
+.die--selectable {
+  cursor: pointer;
+}
+
+.die--selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Passed (2026-08-03, see board.passDie) -- stays visible in-hand but greyed out and unclickable until
+   the next round's reset. */
+.die--passed {
+  opacity: 0.4;
+  filter: grayscale(60%);
+}
+
+/* 「パス」ボタン (2026-08-03) -- see main.js's renderPassDieButton. Same shape as .free-action-button,
+   collapses away (via the container's own :empty rule below) when not shown. */
+.pass-die-button {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.pass-die-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Resource badges                                                        */
+/* ---------------------------------------------------------------------- */
+
+.resource-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.resource-badge__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.resource-badge[data-resource="K"] .resource-badge__dot { background: var(--resource-k-dot); border: 1.5px solid var(--resource-k-dot-border); }
+.resource-badge[data-resource="A"] .resource-badge__dot { background: var(--resource-a); }
+.resource-badge[data-resource="B"] .resource-badge__dot { background: var(--resource-b); }
+.resource-badge[data-resource="C"] .resource-badge__dot { background: var(--resource-c); }
+.resource-badge[data-resource="Z"] .resource-badge__dot { background: var(--resource-z-gradient); }
+.resource-badge[data-resource="BZ"] .resource-badge__dot { background: var(--resource-bz); }
+.resource-badge[data-resource="VP"] .resource-badge__dot { background: var(--resource-vp); }
+
+/* ---------------------------------------------------------------------- */
+/* Players                                                                 */
+/* ---------------------------------------------------------------------- */
+
+#players {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.player-panel {
+  flex: 1 1 240px;
+  min-width: 220px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.player-panel--active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.player-panel__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.player-panel__swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+/* Reused (not duplicated) for the castle's turn-order dots (.map-tile__turnorder) -- same
+   data-color rules below apply, just smaller. */
+.player-panel__swatch--tiny {
+  width: 8px;
+  height: 8px;
+}
+.player-panel__swatch[data-color="PINK"] { background: var(--player-pink); }
+.player-panel__swatch[data-color="PURPLE"] { background: var(--player-purple); }
+.player-panel__swatch[data-color="GREEN"] { background: var(--player-green); }
+.player-panel__swatch[data-color="ORANGE"] { background: var(--player-orange); }
+
+.player-panel__name {
+  font-weight: 700;
+  font-size: 14px;
+  flex: 1;
+}
+
+.player-panel__score {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--resource-vp);
+}
+
+.player-panel__resources {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+/* Confirmed 2026-07-30: player panel's own resource badges only (not the shared .resource-badge
+   used for shop-card costs, which stays at its original size) -- roughly 2x taller / 1.5x wider than
+   the base .resource-badge, per instruction ("崩れそうならそれ以下で" -- scaled back slightly from a
+   literal 2x/1.5x where the numbers didn't divide cleanly, to keep proportions sane). */
+.player-panel__resources .resource-badge {
+  font-size: 20px;
+  padding: 4px 9px;
+  gap: 5px;
+  border-radius: 8px;
+}
+
+.player-panel__resources .resource-badge__dot {
+  width: 14px;
+  height: 14px;
+}
+
+.player-panel__dice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Free actions (2026-07-30, real engine wiring pass 5) -- small pill buttons, only populated for
+   whoever's real TURN it currently is (see main.js's renderFreeActionButtons). Collapses away
+   entirely when empty (nobody's turn, or every free action already tapped this round). */
+.player-panel__free-actions,
+.player-panel__pass-die {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.player-panel__free-actions:empty,
+.player-panel__pass-die:empty {
+  display: none;
+}
+
+.free-action-button {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.free-action-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* "ターン終了" button (2026-08-01) -- see main.js's renderTurnEndButton/turnActionTaken. Same
+   container convention as .player-panel__free-actions (collapses away when not shown). */
+.player-panel__turn-end:empty {
+  display: none;
+}
+
+.player-panel__turn-end {
+  margin-top: 6px;
+}
+
+.turn-end-button {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.turn-end-button:hover {
+  background: var(--accent-soft);
+}
+
+/* Pending TAP reactions (2026-07-30, real engine wiring pass 6) -- one row per pending choice, card
+   on the left + use/skip buttons on the right. Collapses away entirely when there's nothing pending
+   (same :empty convention as the free-actions row above). */
+.player-panel__tap-reactions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.player-panel__tap-reactions:empty {
+  display: none;
+}
+
+/* 建築候補選択モーダル内の「BZ付与TAPアクションを使いますか」プロンプト (2026-08-03, per user
+   feedback) -- see main.js's renderBuildChoiceBzTapPrompt. Same visual family as .tap-reaction-row. */
+.build-choice-bz-tap-prompt__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--accent-soft);
+  border-radius: var(--radius-md);
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.build-choice-bz-tap-prompt__button {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+/* 建築候補選択モーダル内の「追加のダイスを置く」(城のゾロ目スタッキング, 2026-08-04, per user
+   feedback: "ダイス目12を出そうとして複数のダイスを選択するやり方がわからない") -- see main.js's
+   renderBuildChoiceAddDieSection. Same visual family as the BZ TAP prompt above. */
+#build-choice-add-die:not(:empty) {
+  background: var(--accent-soft);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  margin-bottom: 8px;
+}
+
+.build-choice-add-die__label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.build-choice-add-die__row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tap-reaction-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--accent-soft);
+  border-radius: var(--radius-md);
+  padding: 6px;
+}
+
+.tap-reaction-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tap-reaction-button {
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tap-reaction-button--use {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: #fff;
+}
+
+.tap-reaction-button--skip {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+/* Confirmed 2026-07-30: color dice and wD are shown as two separate rows instead of one mixed row
+   (--color / --white). A row with nothing in it (e.g. a player with no wD yet) collapses away. */
+.player-panel__dice-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.player-panel__dice-row:empty { display: none; }
+
+/* Player panel's own dice only (not the shared .die used for board-slot occupants, which stays at
+   its original size) -- 1.5x both dimensions (confirmed 2026-07-30: dialed back from an initial 2x,
+   which read as too big once seen). */
+.player-panel__dice-row .die {
+  width: 33px;
+  height: 33px;
+  border-radius: 8px;
+  font-size: 18px;
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.15);
+}
+
+.player-panel__dice-row .die--WHITE {
+  border-width: 2px;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Player cards sidebar                                                    */
+/* ---------------------------------------------------------------------- */
+
+/* Confirmed 2026-07-30: round indicator moved here (from the now-removed page header) -- title on
+   the left, round chip pinned to the right end of the same row. */
+.player-cards__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+/* Round chip + undo button grouped together at the header's right end (2026-07-30, per user feedback:
+   "ラウンド0/4をもう少し左に寄せてその右に作る") -- a nested flex group so .player-cards__header's
+   own space-between still just has 2 items (title | this group), rather than spreading 3 items apart. */
+.player-cards__header-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  min-width: 0; /* let the column shrink to the panel's actual width instead of the width row2 wants */
+  max-width: 100%;
+}
+
+/* Round indicator + AI進行 + undo + round-pass, pinned above player-role-control (2026-08-02, per user
+   feedback -- see index.html's own comment). flex-wrap/justify-content (2026-08-02, per user feedback:
+   "スクロール消してください") -- wraps onto a 2nd line rather than ever overflowing/scrolling if a
+   narrow panel can't fit all 4 items on one line; right-aligned so a wrapped 2nd line still hugs the
+   same edge as row2 below it. */
+.player-cards__header-buttons {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: 100%;
+}
+
+/* 2026-08-02, per user feedback: "このボタンはみ出ないようにもう少し左に" -- row2 (round chip + 4
+   player role toggles) is wide enough to overflow the sidebar on its own, which was dragging
+   .player-cards__header-buttons (align-items: flex-end above) out past the panel's right edge right
+   along with it. Capping row2 to the panel's own width keeps header-right's actual box within the
+   panel, so the button row above correctly right-aligns to the panel's real edge instead of row2's
+   overflowing one. Wraps onto a 2nd line instead of scrolling (2026-08-02, per user feedback:
+   "スクロールするくらいならAI進行のボタンももう1行上にしてください" then "スクロール消してください" --
+   moving AI進行 up to row1 alone wasn't quite enough room at every width, so this wraps the remaining
+   overflow instead of ever showing a scrollbar). */
+.player-cards__header-row2 {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 100%;
+}
+
+/* 人間/AI切り替え (2026-08-03, per user feedback) -- see main.js's renderPlayerRoleControl. One pill
+   per player seat, same shape family as .ai-pacing-control/.undo-button. */
+.player-role-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* 2026-08-04, per user feedback: "人間 AILV1 AILV2 が横に長過ぎるので2行にしてください" -- name+swatch
+   on one line, the 3 role buttons on the line below, instead of all 5 elements in a single wide row. */
+.player-role-control__row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 5px 8px;
+  font-size: 12px;
+  box-shadow: var(--shadow);
+}
+
+.player-role-control__name-line,
+.player-role-control__options-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.player-role-control__swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+.player-role-control__swatch[data-color="PINK"] { background: var(--player-pink); }
+.player-role-control__swatch[data-color="PURPLE"] { background: var(--player-purple); }
+.player-role-control__swatch[data-color="GREEN"] { background: var(--player-green); }
+.player-role-control__swatch[data-color="ORANGE"] { background: var(--player-orange); }
+
+.player-role-control__name {
+  font-weight: 700;
+  color: var(--text);
+  margin-right: 2px;
+}
+
+.player-role-control__option {
+  border: none;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.player-role-control__option--active {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* AI進行モード (2026-08-03, per user feedback) -- see main.js's renderAiPacingControl. Same pill shape
+   as .status-chip/.undo-button for visual consistency. */
+.ai-pacing-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  box-shadow: var(--shadow);
+}
+
+.ai-pacing-control select {
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+}
+
+#ai-manual-step-button {
+  background: var(--accent);
+  border: none;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+}
+
+#ai-manual-step-button:hover {
+  filter: brightness(1.1);
+}
+
+/* Reverts to the current player's TURN start (2026-07-30, per user feedback) -- see
+   main.js's handleUndoClick/renderUndoButtons. Same pill shape as .status-chip for visual
+   consistency, disabled/dimmed when there's nothing to undo. */
+.undo-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+
+.undo-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.undo-button:not(:disabled):hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.player-cards__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+#player-cards-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.card-group {
+  padding: 8px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+}
+
+.card-group--active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.card-group__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.card-group__swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+.card-group__swatch[data-color="PINK"] { background: var(--player-pink); }
+.card-group__swatch[data-color="PURPLE"] { background: var(--player-purple); }
+.card-group__swatch[data-color="GREEN"] { background: var(--player-green); }
+.card-group__swatch[data-color="ORANGE"] { background: var(--player-orange); }
+
+.card-group__name {
+  font-weight: 700;
+  font-size: 13px;
+  flex: 1;
+}
+
+/* Confirmed 2026-07-30: replaces the removed header "手番 {name}" chip -- shown only for the top
+   (turn-order-first) group's own name row, at its far right, since that group already is the
+   current turn player (see turnOrderedPlayers/isSelf in renderPlayerCards). Empty for every other
+   player's row. */
+.card-group__turn {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.card-group__turn:empty { display: none; }
+
+/* Built-card breakdown next to the player name (confirmed 2026-07-30, see main.js's
+   computePlayerBuildStats/renderPlayerStats): 建築数/LV1/LV2/モニュメント/天/地/人. A stat with
+   count 0 is omitted by the JS, so a player with nothing built yet collapses this row away
+   entirely via :empty, same convention as the other count-driven rows (map-tile fee, turnorder). */
+.card-group__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.card-group__stats:empty { display: none; }
+
+.card-group__stat {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.card-group__stat-value {
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* JOB/CON are always exactly 1 each (confirmed 2026-07-29) -- a fixed side-by-side pair. */
+.card-group__jobcon {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.card-group__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.card-group__jobcon:empty,
+.card-group__list:empty {
+  display: none;
+}
+
+/* Round-1 onboarding: CON面選択(表裏を横に並べる)/初期資源カード選択(次の行に4枚横に並べる)
+   (confirmed 2026-07-30, mock-only pass -- see [[project-dice-wp-ui-requirements]]). Shown in the
+   owned-cards sidebar space of a player who hasn't finished onboarding yet, in place of/alongside the
+   normal jobcon+list rows (which stay empty for whatever hasn't been chosen). */
+.card-group__onboard-con,
+.card-group__onboard-resources {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.card-group__onboard-con:empty,
+.card-group__onboard-resources:empty {
+  display: none;
+}
+
+/* JOBカードプール (2026-07-30, per user feedback): a persistent shared area between the "所持カード"
+   header and the player groups, not tucked inside any one player's card list -- see main.js's
+   renderJobPool. Reuses the same owned-card-cell sizing as everywhere else. */
+.job-pool {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.job-pool:empty {
+  display: none;
+}
+
+/* Highlights whichever onboarding-choice panel the player should actually act in right now
+   (2026-07-30, per user feedback: "今やるべきことの背景色を変えて") -- applied via main.js's
+   classList (not e.g. a plain :not(:empty) selector), since some of these panels are populated in
+   both an actionable state and a read-only preview state (see renderConFacesRow's own comment). */
+.onboard-panel--active {
+  background: var(--accent-soft);
+  border-radius: var(--radius-md);
+  padding: 6px;
+  /* Negative margin offsets the padding (2026-07-30 fix): without this, the added padding shrank the
+     RESOURCE row's available width just enough to wrap 4 cards onto 2 lines. This keeps the same
+     available width for the flex children while still showing the highlight as a slightly bled-out
+     background. */
+  margin: -6px;
+}
+
+.owned-card-cell--selectable {
+  cursor: pointer;
+}
+
+.owned-card-cell--selected .shop-card {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+/* Fixed-size cell so a tapped (rotated) card's swapped width/height never overlaps its neighbors. */
+.owned-card-cell {
+  width: 122px;
+  height: 122px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+/* A/B/C cards show their effect text, so they run taller (confirmed 2026-07-29) -- the cell is
+   sized to the tall card's own footprint (works rotated or not, since it's roughly square-ish). */
+.owned-card-cell--tall {
+  width: 150px;
+  height: 150px;
+}
+
+.owned-card-cell .shop-card {
+  width: 108px;
+}
+
+.owned-card-cell--tall .shop-card {
+  /* 2026-07-30: widened from 118px -- JOB004A/007A's ON(BUILD(...),...) effect icons (⤵️⚒️ + cost +
+     ▶ + "軽減nZ") didn't fit on one line even at 118px with minimal gaps, per user feedback ("◯3→軽減
+     2Zにしてください", not wrapped across 2 lines). Still comfortably under the 150px
+     .owned-card-cell--tall cell size (incl. rotated/TAP orientation). */
+  width: 128px;
+}
+
+/* Confirmed 2026-07-29: TAP turns a card sideways; UNTAP returns it to normal. */
+.shop-card--tapped {
+  transform: rotate(90deg);
+  transition: transform 0.2s ease;
+}
+
+.shop-card--tall {
+  min-height: 118px;
+}
+
+.shop-card__effect {
+  flex: 1;
+  display: flex;
+  flex-direction: column; /* confirmed 2026-07-29: a card can show >1 effect row (e.g. ONCE + TAP) */
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 9.5px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.shop-card__effect:empty { display: none; }
+.shop-card__effect .action-icons { justify-content: center; }
+
+/* ---------------------------------------------------------------------- */
+/* QST (Quest) cards (confirmed 2026-07-30) -- own layout, not a shop-card    */
+/* variant (GOAL / next-reward / REWARD1-3 checklist doesn't fit that shape). */
+/* ---------------------------------------------------------------------- */
+
+/* Vertical stack of 3 (confirmed 2026-07-30, revised from an earlier horizontal-row layout that
+   overflowed the page width) -- see #shops' JS-driven grid restructure for why there's room here
+   now (SHOP201-203 moved into the SHOP101-106 grid instead of sharing this column). */
+#qst-slots {
+  gap: 10px;
+  width: 300px;
+  flex: 0 0 auto;
+}
+
+/* Landscape layout (confirmed 2026-07-30: "少し横長"): id spans the top, GOAL/Next Reward sit in a
+   left column and the REWARD1-3 checklist in a right column, side by side rather than all stacked
+   vertically -- makes the card wider than tall. */
+.qst-card {
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  /* Confirmed 2026-07-30: id sits on the same row as REWARD1 (rewards spans both rows, top-aligned --
+     see .qst-card__rewards) instead of id having its own full-width row above everything. */
+  grid-template-areas:
+    "id       rewards"
+    "goal     rewards";
+  column-gap: 12px;
+  row-gap: 4px;
+  cursor: pointer;
+  position: relative; /* containing block for .qst-card__back's inset:0 */
+}
+
+/* Click to flip and preview the sibling face (Q001A <-> Q001B), same mechanism as shop-card
+   (confirmed 2026-07-30) -- see siblingFaceId/fillQstBackFace in main.js. Reverts on mouseleave. */
+.qst-card__back {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: inherit;
+  background: var(--card-back-bg);
+}
+.qst-card--flipped .qst-card__back {
+  display: flex;
+}
+/* Sibling-face variant looks like a normal card (surface background) instead of a blank fill --
+   only applied when QST_FACTS actually has data for the sibling. */
+.qst-card__back--face {
+  background: var(--surface-sunken);
+}
+
+.qst-card__back-goal {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.qst-card__back-rewards {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 2px;
+  padding-top: 5px;
+  border-top: 1px solid var(--border);
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+
+.qst-card--complete {
+  border-color: var(--resource-vp);
+  background: var(--accent-soft);
+}
+
+.qst-card__id {
+  grid-area: id;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.qst-card__row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.qst-card__row--goal { grid-area: goal; }
+
+.qst-card__label {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.qst-card__goal {
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 10.5px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.qst-card--complete .qst-card__row { display: none; }
+
+/* Complete replaces the goal column (left side) when active (confirmed 2026-07-30: only spans the
+   one remaining "goal" row now that the separate Next Reward row is gone). */
+.qst-card__complete {
+  display: none;
+  grid-area: goal;
+  align-self: center;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: var(--resource-vp);
+}
+.qst-card--complete .qst-card__complete { display: block; }
+
+.qst-card__rewards {
+  grid-area: rewards;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 2px;
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
+}
+
+/* Column, not row (confirmed 2026-07-30 fix): the "次に取得される報酬" mark is too long to sit next
+   to its REWARDn label on one line without overflowing the card -- stacking avoids that regardless
+   of card width. */
+.qst-card__reward {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+
+.qst-card__reward--claimed {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+/* Confirmed 2026-07-30: the separate "Next Reward" icon block was removed -- this row's own
+   background color is now what tells you it's next, instead of (or in addition to) its text mark. */
+.qst-card__reward--next {
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: none;
+  background: var(--accent-soft);
+  border-radius: 4px;
+  padding: 2px 5px;
+  margin: -2px -5px;
+}
+
+.qst-card__reward-mark {
+  font-size: 10px;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Utility                                                                 */
+/* ---------------------------------------------------------------------- */
+
+.visually-hidden {
+  position: absolute;
+  width: 1px; height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------- */
+/* CON card description popup (confirmed 2026-07-30, see main.js's         */
+/* showCardInstModal / buildCardVisual's dblclick handler)                 */
+/* ---------------------------------------------------------------------- */
+
+.card-inst-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(16, 24, 40, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.card-inst-overlay[hidden] { display: none; }
+
+.card-inst-modal {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 16px 18px;
+  width: 260px;
+  max-width: calc(100vw - 32px);
+}
+
+.card-inst-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.card-inst-modal__title {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.card-inst-modal__close {
+  border: none;
+  background: none;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.card-inst-modal__body {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+  white-space: pre-line;
+}
+
+/* BUILD/UPGRADE candidate selection (2026-07-30, real engine wiring pass 3) -- reuses the card-inst
+   overlay/modal shell, but needs to be wide enough for a row of card-sized candidates rather than a
+   narrow paragraph of text. */
+.build-choice-modal {
+  width: auto;
+  max-width: calc(100vw - 32px);
+}
+
+#build-choice-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  white-space: normal;
+}
+
+.build-choice-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.build-choice-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+/* Shown when candidateAffordable's filter (2026-07-31) leaves nothing buildable right now. */
+.build-choice-empty {
+  padding: 24px;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* RESOURCE_LIMIT/FORCE_CONVERT TURNEND confirmation (2026-08-01) -- see main.js's
+   renderTurnEndWarningModal. #turn-end-warning-body itself already has .card-inst-modal__body's
+   white-space:pre-line, so the data's own \n line breaks render as-is. */
+.turn-end-warning__text {
+  padding: 16px;
+}
+
+.turn-end-warning__text + .turn-end-warning__text {
+  padding-top: 0;
+  border-top: 1px solid var(--border);
+}
+
+/* CON002B's "real or Z" payment-preference toggle (2026-07-31) -- see main.js's
+   renderBuildChoicePaymentControls. Hidden (empty) for everyone else. */
+#build-choice-payment:not(:empty),
+#build-choice-bz:not(:empty) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.build-choice-bz__count {
+  font-size: 12px;
+  font-weight: 700;
+  min-width: 14px;
+  text-align: center;
+}
+
+.build-choice-payment__label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.build-choice-payment__group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.build-choice-payment__resource {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.build-choice-payment__option {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.build-choice-payment__option--active {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.build-choice-payment__option:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* CON002B's pre-placement payment choice (2026-07-31) -- see main.js's renderPlacementChoiceModal. */
+.placement-choice-modal .card-inst-modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+}
+
+.placement-choice-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 16px 16px;
+}
+
+.placement-choice-actions button {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+}
+
+#placement-choice-confirm {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Bare TAP ability's die+value choice (2026-07-31) -- see main.js's renderTapChoiceModal. */
+.tap-choice-dice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+#tap-choice-confirm {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+#tap-choice-confirm:disabled {
+  opacity: 0.4;
+  cursor: default;
+  border-color: var(--border);
+  color: var(--text);
+}
+
+#turn-end-warning-yes {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* GAME_END final results (2026-07-31) -- see main.js's renderGameEndOverlay. */
+.game-end-modal {
+  width: 360px;
+}
+
+#game-end-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 16px;
+}
+
+.game-end-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: var(--surface-soft, var(--surface));
+}
+
+.game-end-row--winner {
+  background: var(--accent-soft);
+  font-weight: 700;
+}
+
+.game-end-rank {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+  width: 32px;
+  flex: 0 0 auto;
+}
+
+.game-end-name {
+  flex: 1;
+  font-size: 14px;
+}
+
+.game-end-score {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--resource-vp);
+}
+
+/* Confirmed 2026-07-30: resource mentions inside INST text (e.g. "資源Z") are rendered as inline
+   .action-dot elements (see renderInstBody) -- nudge them to sit on the text baseline instead of
+   .action-dot's usual flex-row alignment. */
+.card-inst-modal__body .action-dot {
+  vertical-align: -1px;
+  margin: 0 1px;
+}

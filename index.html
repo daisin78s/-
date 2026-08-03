@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ダイスWP</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <main id="game-layout">
+      <div id="board-area">
+        <section id="shops" aria-label="ショップ">
+          <div class="shop-row">
+            <div class="shop-row__combined">
+              <div class="shop-row__grid" id="shop-combined-slots"></div>
+              <div class="shop-row__divider"></div>
+              <div class="shop-row__slots shop-row__slots--vertical" id="qst-slots"></div>
+            </div>
+          </div>
+        </section>
+
+        <div id="board-message" class="board-message"></div>
+        <section id="board" aria-label="盤面"></section>
+
+        <section id="players" aria-label="プレイヤー"></section>
+      </div>
+
+      <section id="player-cards" aria-label="所持カード">
+        <div class="player-cards__header">
+          <h2 class="player-cards__title">所持カード</h2>
+          <div class="player-cards__header-right">
+            <!-- Pinned above player-role-control (2026-08-02, per user feedback: "ターンの最初に戻す
+                 のボタンを...の上のあたりに常に表示して欲しい") -- always in the DOM (not hidden), just
+                 disabled/dimmed when unusable, same as before. See main.js's handleUndoClick /
+                 handleRoundPassClick / renderRoundPassButton. -->
+            <div class="player-cards__header-buttons">
+              <div class="status-chip" id="round-indicator">
+                <span class="status-label">ラウンド</span>
+                <span class="status-value"><span id="round-num">1</span> / 4</span>
+              </div>
+              <!-- AI進行モード (2026-08-03, per user feedback: "上記3をえらべるように") -- see main.js's
+                   aiPacingMode/renderAiPacingControl. "次のAI行動へ" only appears (and is enabled) in
+                   manual mode while some AI player actually has something pending. Moved up here
+                   2026-08-02 along with round-indicator above (per user feedback: "スクロールするくらい
+                   ならAI進行のボタンももう1行上にしてください" then "ラウンド0/4も1行上にして") -- row2
+                   now holds only the 4 player role toggles. -->
+              <div class="ai-pacing-control">
+                <label class="status-label" for="ai-pacing-select">AI進行</label>
+                <select id="ai-pacing-select">
+                  <option value="instant">即時</option>
+                  <option value="delayed">1手ずつ表示</option>
+                  <option value="manual">手動</option>
+                </select>
+                <button type="button" id="ai-manual-step-button" hidden>次のAI行動へ</button>
+              </div>
+              <button type="button" class="undo-button" id="undo-button" disabled>↩️ ターン開始に戻す</button>
+              <button type="button" class="undo-button" id="round-pass-button" disabled>⏭️ ラウンドパス</button>
+            </div>
+            <div class="player-cards__header-row2">
+              <!-- 人間/AI切り替え (2026-08-03, per user feedback: "4人のプレイヤー人間 AIをそれぞれ選べ
+                   るようにしてほしい") -- one toggle per player seat, populated by main.js's
+                   renderPlayerRoleControl (player names/colors are data-driven, not known statically
+                   here). -->
+              <div id="player-role-control" class="player-role-control"></div>
+            </div>
+          </div>
+        </div>
+        <div id="job-pool" class="job-pool"></div>
+        <div id="player-cards-groups"></div>
+      </section>
+    </main>
+  </div>
+
+  <div id="card-inst-overlay" class="card-inst-overlay" hidden>
+    <div class="card-inst-modal">
+      <div class="card-inst-modal__header">
+        <span class="card-inst-modal__title"></span>
+        <button type="button" class="card-inst-modal__close" aria-label="閉じる">&times;</button>
+      </div>
+      <div class="card-inst-modal__body"></div>
+    </div>
+  </div>
+
+  <!-- BUILD/UPGRADE candidate selection (2026-07-30, real engine wiring pass 3) -- no close button:
+       once a BUILD area is triggered with a legal candidate, choosing one is mandatory (see
+       main.js's renderBuildChoiceModal). -->
+  <div id="build-choice-overlay" class="card-inst-overlay" hidden>
+    <div class="card-inst-modal build-choice-modal">
+      <div class="card-inst-modal__header">
+        <span class="card-inst-modal__title">建築 / アップグレードを選択</span>
+        <!-- Duplicate of #undo-button (2026-07-30, per user feedback: "城にダイスをおいて建築を選ぶ
+             画面でも戻れるように") -- the sidebar one sits behind this modal's backdrop while it's
+             open, so a second copy lives here instead of fighting z-index/stacking-context rules to
+             surface the same button through the overlay. Same handler (main.js). -->
+        <button type="button" class="undo-button" id="undo-button-build" disabled>↩️ ターン開始に戻す</button>
+      </div>
+      <!-- BZ付与系の直接TAPアクション（例: JOB004A "3K→2BZ"）を、建築候補選択画面に入った瞬間に使える
+           ようにする案内 (2026-08-03, per user feedback: "建築が発生したときにすぐに発動 Y/Nでハイを
+           押すと3K→2BZその後建築対象を選べるようになる"). See main.js's renderBuildChoiceBzTapPrompt. -->
+      <div id="build-choice-bz-tap-prompt"></div>
+      <!-- 城でのゾロ目スタッキング (2026-08-04, per user feedback: "ダイス目12を出そうとして複数の
+           ダイスを選択するやり方がわからない...追加のダイスを置くという選択肢も表示させてください") --
+           see main.js's renderBuildChoiceAddDieSection. Only ever populated when pendingBuildChoice came
+           from the castle (MAP008), since that's the only place same-value stacking is legal/meaningful
+           (a single die never exceeds 6, but M001-M006 need up to 12). -->
+      <div id="build-choice-add-die"></div>
+      <div id="build-choice-payment"></div>
+      <div id="build-choice-bz"></div>
+      <div class="card-inst-modal__body" id="build-choice-list"></div>
+    </div>
+  </div>
+
+  <!-- CON002B's "real or Z" payment choice for an AREA that pays A/B/C directly, e.g. AREA007's
+       CHANGE((A,B,C),D) (2026-07-31) -- see main.js's attemptPlaceSelectedDie/renderPlacementChoiceModal.
+       Unlike the BUILD modal above, nothing has been committed yet at this point, so a cancel button
+       is offered. -->
+  <div id="placement-choice-overlay" class="card-inst-overlay" hidden>
+    <div class="card-inst-modal placement-choice-modal">
+      <div class="card-inst-modal__header">
+        <span class="card-inst-modal__title">CON002B: 支払いに使う資源を選択</span>
+      </div>
+      <div class="card-inst-modal__body" id="placement-choice-body"></div>
+      <div class="placement-choice-actions">
+        <button type="button" id="placement-choice-cancel">キャンセル</button>
+        <button type="button" id="placement-choice-confirm">この内容で配置</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bare (direct) TAP ability die+value choice, e.g. B001A's SET_DIE_VALUE(SELF2|3);
+       GRANT_PLACE_ANYWHERE(...) or JOB003A's SET_DICE_ANY() (2026-07-31) -- see main.js's
+       attachTapToggle/bareTapKind/renderTapChoiceModal. Nothing committed yet, so cancelable. -->
+  <div id="tap-choice-overlay" class="card-inst-overlay" hidden>
+    <div class="card-inst-modal placement-choice-modal">
+      <div class="card-inst-modal__header">
+        <span class="card-inst-modal__title">使うダイスと変更後の目を選択</span>
+      </div>
+      <div class="card-inst-modal__body">
+        <div id="tap-choice-dice" class="tap-choice-dice"></div>
+        <div id="tap-choice-values" class="build-choice-payment__group"></div>
+      </div>
+      <div class="placement-choice-actions">
+        <button type="button" id="tap-choice-cancel">キャンセル</button>
+        <button type="button" id="tap-choice-confirm">この内容で使う</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auto/manual mode choice for a reactive TAP ability, shown right after the card is acquired
+       (BUILD/UPGRADE, or JOB draft) (2026-07-31) -- see main.js's pendingAutoModeChoice/
+       renderAutoModeChoiceModal. Not blocking (the data's own AUTO default already applies), just a
+       close button. -->
+  <div id="auto-mode-choice-overlay" class="card-inst-overlay" hidden>
+    <div class="card-inst-modal placement-choice-modal">
+      <div class="card-inst-modal__header">
+        <span class="card-inst-modal__title">オート / マニュアルを選択</span>
+      </div>
+      <div class="card-inst-modal__body">
+        <div id="auto-mode-choice-card" class="tap-choice-dice"></div>
+        <div class="build-choice-payment__group">
+          <button type="button" id="auto-mode-choice-auto" class="build-choice-payment__option">オート</button>
+          <button type="button" id="auto-mode-choice-manual" class="build-choice-payment__option">マニュアル</button>
+        </div>
+      </div>
+      <div class="placement-choice-actions">
+        <button type="button" id="auto-mode-choice-close">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RESOURCE_LIMIT/FORCE_CONVERT's "はい/いいえ" TURNEND confirmation (2026-08-01) -- see main.js's
+       turnEndWarnings/attemptAdvanceTurn/renderTurnEndWarningModal. Previously always auto-confirmed
+       as "はい" with no real UI. "いいえ" just leaves the turn as-is (nothing has happened yet). -->
+  <div id="turn-end-warning-overlay" class="card-inst-overlay" hidden>
+    <div class="card-inst-modal placement-choice-modal">
+      <div class="card-inst-modal__header">
+        <span class="card-inst-modal__title">確認</span>
+      </div>
+      <div class="card-inst-modal__body" id="turn-end-warning-body"></div>
+      <div class="placement-choice-actions">
+        <button type="button" id="turn-end-warning-no">いいえ</button>
+        <button type="button" id="turn-end-warning-yes">はい</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- "ラウンドパス" confirmation (2026-08-02, per user feedback: "ラウンドパスを押すと このラウンドは
+       全てパスします本当に良いですか Y/N と警告があり Yでラウンドパスをします") -- see main.js's
+       handleRoundPassClick/renderRoundPassConfirmModal. -->
+  <div id="round-pass-confirm-overlay" class="card-inst-overlay" hidden>
+    <div class="card-inst-modal placement-choice-modal">
+      <div class="card-inst-modal__header">
+        <span class="card-inst-modal__title">確認</span>
+      </div>
+      <div class="card-inst-modal__body">
+        <p class="turn-end-warning__text">このラウンドは全てパスします。本当に良いですか？</p>
+      </div>
+      <div class="placement-choice-actions">
+        <button type="button" id="round-pass-confirm-no">いいえ</button>
+        <button type="button" id="round-pass-confirm-yes">はい</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- GAME_END final results (2026-07-31) -- see main.js's renderGameEndOverlay. No close button:
+       the game is genuinely over, there's nothing left to interact with underneath. -->
+  <div id="game-end-overlay" class="card-inst-overlay" hidden>
+    <div class="card-inst-modal game-end-modal">
+      <div class="card-inst-modal__header">
+        <span class="card-inst-modal__title">ゲーム終了 — 最終結果</span>
+      </div>
+      <div class="card-inst-modal__body" id="game-end-list"></div>
+    </div>
+  </div>
+
+  <template id="tpl-shop-card">
+    <div class="shop-card">
+      <div class="shop-card__back">
+        <div class="shop-card__emblem"></div>
+        <div class="shop-card__level"></div>
+        <div class="shop-card__id"></div>
+        <div class="shop-card__cost"></div>
+        <div class="shop-card__effect"></div>
+        <div class="shop-card__vp"></div>
+        <div class="shop-card__req"></div>
+        <div class="shop-card__start-order"></div>
+      </div>
+      <div class="shop-card__emblem"></div>
+      <div class="shop-card__level"></div>
+      <div class="shop-card__id"></div>
+      <div class="shop-card__cost"></div>
+      <div class="shop-card__effect"></div>
+      <div class="shop-card__vp"></div>
+      <div class="shop-card__req"></div>
+      <div class="shop-card__start-order"></div>
+    </div>
+  </template>
+
+  <template id="tpl-shop-slot">
+    <div class="shop-slot">
+      <div class="shop-slot__card"></div>
+      <div class="shop-slot__req"></div>
+    </div>
+  </template>
+
+  <template id="tpl-qst-card">
+    <div class="qst-card">
+      <div class="qst-card__back">
+        <div class="qst-card__id"></div>
+        <div class="qst-card__back-goal">
+          <span class="qst-card__label">GOAL</span>
+          <span class="qst-card__goal"></span>
+        </div>
+        <div class="qst-card__back-rewards"></div>
+      </div>
+      <div class="qst-card__id"></div>
+      <div class="qst-card__row qst-card__row--goal">
+        <span class="qst-card__label">GOAL</span>
+        <span class="qst-card__goal"></span>
+      </div>
+      <div class="qst-card__complete">COMPLETE</div>
+      <div class="qst-card__rewards"></div>
+    </div>
+  </template>
+
+  <template id="tpl-shop-card-empty">
+    <div class="shop-card shop-card--empty">
+      <span>空き</span>
+    </div>
+  </template>
+
+  <template id="tpl-map-tile">
+    <div class="map-tile">
+      <div class="map-tile__header">
+        <span class="map-tile__id"></span>
+        <span class="map-tile__tier"></span>
+        <div class="map-tile__turnorder map-tile__turnorder--current"></div>
+      </div>
+      <div class="map-tile__slots"></div>
+      <div class="map-tile__turnorder map-tile__turnorder--next"></div>
+      <div class="map-tile__action"></div>
+      <div class="map-tile__fee"></div>
+    </div>
+  </template>
+
+  <template id="tpl-die">
+    <div class="die">
+      <span class="die__value"></span>
+    </div>
+  </template>
+
+  <template id="tpl-player-panel">
+    <div class="player-panel">
+      <div class="player-panel__header">
+        <span class="player-panel__swatch"></span>
+        <span class="player-panel__name"></span>
+        <span class="player-panel__score"></span>
+      </div>
+      <div class="player-panel__resources"></div>
+      <div class="player-panel__dice">
+        <div class="player-panel__dice-row player-panel__dice-row--color"></div>
+        <div class="player-panel__dice-row player-panel__dice-row--white"></div>
+      </div>
+      <!-- 「パス」ボタン (2026-08-03, per user feedback: "色ダイスを置けない時、または起きたくない時
+           ラウンドをパスする手段がありません") -- shown once a die is selected, as an alternative to
+           clicking a board slot. See main.js's renderPassDieButton/passSelectedDie/board.passDie. -->
+      <div class="player-panel__pass-die"></div>
+      <!-- Free actions (2026-07-30, real engine wiring pass 5): A/B/C/Z->K, wD->2K, only shown/
+           populated for the player whose real TURN it currently is. See main.js's
+           renderFreeActionButtons. -->
+      <div class="player-panel__free-actions"></div>
+      <!-- TAP reactions (2026-07-30, real engine wiring pass 6): pending ON(GET(...),...) manual-mode
+           reactions this player can choose to use or skip. See main.js's renderTapReactions. -->
+      <div class="player-panel__tap-reactions"></div>
+      <!-- "ターン終了" button (2026-08-01, per user feedback: ending a turn is no longer automatic
+           right after a die placement -- the player gets a window to use free actions/bare TAP
+           abilities first, then explicitly ends via this button. See main.js's renderTurnEndButton/
+           turnActionTaken. -->
+      <div class="player-panel__turn-end"></div>
+    </div>
+  </template>
+
+  <template id="tpl-card-group">
+    <div class="card-group">
+      <div class="card-group__header">
+        <span class="card-group__swatch"></span>
+        <span class="card-group__name"></span>
+        <span class="card-group__turn"></span>
+      </div>
+      <div class="card-group__stats"></div>
+      <div class="card-group__jobcon"></div>
+      <div class="card-group__onboard-con"></div>
+      <div class="card-group__onboard-resources"></div>
+      <div class="card-group__list"></div>
+    </div>
+  </template>
+
+  <!--
+    Engine modules (src/*.js) are written as plain Node/CommonJS (require/module.exports) so they can
+    be unit-tested with `node tests/*.smoke.js`. Confirmed 2026-07-30: main.js must still be opened by
+    double-clicking index.html (file://), which blocks both `type="module"` (CORS-like restriction on
+    file://) and fetch()/XHR (also CORS-blocked) -- so neither real ES modules nor a bundler/loader
+    that reads file text at runtime will work here. Plain classic <script src="..."> tags DO work
+    under file://, so each src/*.js file is loaded as its own sibling script, with a tiny shim below
+    standing in for require()/module.exports. Order matters: each file must be loaded after every
+    module it requires (see the dependency comment above each block). Classic scripts share one global
+    `let`/`const` scope, which is also why board.js/turn-flow.js/qst.js don't all bind their import of
+    executor.js to the same name -- see those files' own comments.
+  -->
+  <script>
+    window.__modules = {};
+    window.module = { exports: {} };
+    window.require = function (name) {
+      // Strips any leading ./ or ../ segments (src/ai/*.js's requires reach up a directory, e.g.
+      // require('../board'), unlike every other src/*.js file's same-directory require('./board')) --
+      // both collapse to the same flat registry key, matching __captureModule's own flat naming below.
+      var key = name.replace(/^(\.\.\/|\.\/)+/, '').replace(/\.js$/, '');
+      if (key === 'fs') throw new Error('fs is not available in the browser build (see data-loader.js\'s loadGameData)');
+      if (!(key in window.__modules)) throw new Error('Module not loaded yet (check script order in index.html): ' + key);
+      return window.__modules[key];
+    };
+    // Called after each src/*.js <script> tag: files it. window.module.exports into the registry
+    // require() reads from, then resets window.module for the next file to fill in.
+    function __captureModule(name) {
+      window.__modules[name] = window.module.exports;
+      window.module = { exports: {} };
+    }
+  </script>
+
+  <!-- Leaf: no src/*.js dependencies. -->
+  <script src="src/rng.js"></script>
+  <script>__captureModule('rng');</script>
+
+  <!-- Depends on: rng -->
+  <script src="src/game-state.js"></script>
+  <script>__captureModule('game-state');</script>
+
+  <!-- Leaf: no src/*.js dependencies. -->
+  <script src="src/dsl-parser.js"></script>
+  <script>__captureModule('dsl-parser');</script>
+
+  <!-- Depends on: game-state (fs is only required lazily, on the Node path -- never called here). -->
+  <script src="src/data-loader.js"></script>
+  <script>__captureModule('data-loader');</script>
+
+  <!-- Depends on: dsl-parser -->
+  <script src="src/command-builder.js"></script>
+  <script>__captureModule('command-builder');</script>
+
+  <!-- Depends on: game-state -->
+  <script src="src/undo.js"></script>
+  <script>__captureModule('undo');</script>
+
+  <!-- Depends on: dsl-parser, command-builder, data-loader, game-state, rng, undo -->
+  <script src="src/executor.js"></script>
+  <script>__captureModule('executor');</script>
+
+  <!-- Depends on: data-loader, dsl-parser, command-builder, game-state, executor -->
+  <script src="src/board.js"></script>
+  <script>__captureModule('board');</script>
+
+  <!-- Depends on: rng, game-state, data-loader, executor, undo -->
+  <script src="src/setup.js"></script>
+  <script>__captureModule('setup');</script>
+
+  <!-- Depends on: data-loader, executor -->
+  <script src="src/scoring.js"></script>
+  <script>__captureModule('scoring');</script>
+
+  <!-- Depends on: rng, data-loader, board, undo, setup, executor -->
+  <script src="src/turn-flow.js"></script>
+  <script>__captureModule('turn-flow');</script>
+
+  <!-- Depends on: data-loader, dsl-parser, command-builder, rng, executor, board -->
+  <script src="src/qst.js"></script>
+  <script>__captureModule('qst');</script>
+
+  <!-- AI player (2026-08-03, per user feedback: "プレイヤー1は人間 プレイヤー2 3 4はAIの対戦を実装
+       して欲しい"). Same dual-environment src/*.js files node tests/ai-*.smoke.js already exercise --
+       loaded here so main.js can drive players 2-4 with the identical MoveGenerator/Evaluator/
+       Simulator/AIPlayer classes, no browser-only reimplementation. Order matches each file's own
+       "Depends on" comment (see src/ai/*.js). -->
+  <!-- Leaf: no src/*.js dependencies. -->
+  <script src="src/ai/eval-table.js"></script>
+  <script>__captureModule('eval-table');</script>
+
+  <!-- Depends on: board, executor, turn-flow, qst, game-state -->
+  <script src="src/ai/simulator.js"></script>
+  <script>__captureModule('simulator');</script>
+
+  <!-- Depends on: data-loader, dsl-parser, command-builder, game-state, board, executor, qst -->
+  <script src="src/ai/move-generator.js"></script>
+  <script>__captureModule('move-generator');</script>
+
+  <!-- Depends on: data-loader, executor, eval-table -->
+  <script src="src/ai/evaluator.js"></script>
+  <script>__captureModule('evaluator');</script>
+
+  <!-- Leaf: no src/*.js dependencies (takes the other 4 AI classes as constructor args instead). -->
+  <script src="src/ai/ai-player.js"></script>
+  <script>__captureModule('ai-player');</script>
+
+  <!-- Game master data, embedded as window.GAME_DATA by tools/xlsx_to_json.py (see that file's and
+       data-loader.js's comments -- file:// pages can't fetch() game.json, so this is a plain global
+       instead, loaded the same way as everything else here). -->
+  <script src="data/game.data.js"></script>
+
+  <script src="main.js"></script>
+</body>
+</html>

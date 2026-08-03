@@ -1,0 +1,347 @@
+(function () {
+/**
+ * GameState: the single mutable runtime state object for a game of Dice WP.
+ * No DOM dependency. Pure data + factory/clone helpers -- no game rules here.
+ * Game rules live in CommandBuilder/Executor (not yet implemented), which
+ * read static card definitions from the loaded data (data/game.json) by ID
+ * and only write into the *runtime* fields modeled here (location, tapped
+ * state, resource counts, dice, log, ...). Static card fields (COST, DSL
+ * strings, VP, DICE threshold, ...) are never copied into GameState.
+ *
+ * Design assumptions carried over from the "Undo/セーブ/ログ" spec:
+ *  - The whole GameState must be snapshot-able and restorable (undo checkpoints
+ *    are "just before rolling color dice" and "just before rolling white dice").
+ *  - The action log alone must be enough to replay/reconstruct a game.
+ *  - Every physical card in the game is unique (only one copy of e.g. "A001"
+ *    exists across all decks/shops/players), so a card's base ID can serve as
+ *    its stable identity even as it flips from tier A to tier B ("upgrade").
+ */
+
+'use strict';
+
+const { createRng } = require('./rng');
+
+// ---------------------------------------------------------------------------
+// Card identity helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Splits a data-sheet card ID into its physical identity and tier letter.
+ * Tiered cards (A/B/C/CON decks) are named e.g. "A001A" / "A001B" -- two rows
+ * in the data that represent the *same physical card*, face-up on tier A or
+ * flipped to tier B. Non-tiered cards (M, JOB, RESOURCE) have no trailing
+ * letter after the digits and are returned with tier: null.
+ *
+ * splitCardId('A001A') -> { physicalId: 'A001', tier: 'A' }
+ * splitCardId('CON002B') -> { physicalId: 'CON002', tier: 'B' }
+ * splitCardId('M001') -> { physicalId: 'M001', tier: null }
+ * splitCardId('JOB001A') -> { physicalId: 'JOB001', tier: 'A' } // never has a 'B' sibling
+ *
+ * @param {string} cardId
+ * @returns {{physicalId: string, tier: string|null}}
+ */
+function splitCardId(cardId) {
+  const m = /^(.*\d)([A-Z])$/.exec(cardId);
+  if (!m) return { physicalId: cardId, tier: null };
+  return { physicalId: m[1], tier: m[2] };
+}
+
+// ---------------------------------------------------------------------------
+// Factories
+// ---------------------------------------------------------------------------
+
+/**
+ * @typedef {Object} DieState
+ * @property {string} id            - stable within the current round only
+ * @property {'COLOR'|'WHITE'} kind
+ * @property {number|null} value    - null until rolled this round
+ * @property {string|null} placedMapId - MAP id this die currently occupies, or null if in hand
+ * @property {boolean} placeAnywhereThisTurn - set by GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN)
+ *   (e.g. B001A's TAP). Cleared at TURNEND. NOTE (2026-07-29): board.js's placeDice() does not yet
+ *   honor this flag to bypass the SLOT_OCCUPIED check -- doing so properly requires deciding whether
+ *   a slot can hold more than one die at once, which isn't settled (see [[project-dice-wp]]'s open
+ *   gaps). The flag is tracked so that decision doesn't also require a GameState shape change later.
+ * @property {boolean} passed - set by board.passDie (2026-08-03, per user feedback: "色ダイスを置けな
+ *   い時、または起きたくない時ラウンドをパスする手段がありません") when the player declines to place
+ *   this die at all this round, instead of being forced to keep facing "is there a legal slot" every
+ *   time turn-flow.getNextTurn cycles back to them. Excluded from turn-flow's "still needs an action"
+ *   checks the same way placedMapId!==null is, but NOT from endRound's "unused color die -> 3K" rule
+ *   (a passed die is exactly as unused as a genuinely-unplaceable one) -- see turn-flow.js's own
+ *   comments. Reset to false at round end, same lifetime as placedMapId.
+ */
+
+/**
+ * @param {string} id
+ * @param {'COLOR'|'WHITE'} kind
+ * @returns {DieState}
+ */
+function createDie(id, kind) {
+  return { id, kind, value: null, placedMapId: null, placeAnywhereThisTurn: false, passed: false };
+}
+
+/**
+ * @typedef {Object} PlayerState
+ * @property {string} id
+ * @property {string} name
+ * @property {string|null} jobCardId      - e.g. "JOB003A", chosen during round-1 onboarding
+ * @property {string|null} conPhysicalId  - e.g. "CON002", the CON card dealt to this player
+ * @property {'A'|'B'|null} conFace       - which face of the CON card was chosen (once, at onboarding)
+ * @property {Object<string, number>} resources - keys: K, A, B, C, Z, VP, BZ (only positive/zero counts; BZ is spent immediately so usually stays 0)
+ * @property {DieState[]} dice            - both COLOR and WHITE dice owned by this player this round
+ * @property {number} colorDiceCap        - 5, kept here in case a card ever modifies it
+ * @property {number} whiteDiceCap        - 5
+ * @property {string[]} ownedCardPhysicalIds - physicalIds of cards this player has built/acquired (see GameState.cards for face/tapped)
+ * @property {number} startOrderValue     - set during setup, used once to compute turn order
+ * @property {Object<string, boolean>} freeActionTaps - tap flags per FREE_ACTION_IDS entry (confirmed
+ *   2026-07-29, corrected 2026-08-02). Only FEE_COLLECT is actually gated by this -- once per round,
+ *   reset to untapped (false) at ROUND end only, NOT at each player's individual TURNEND. A/B/C/Z->K
+ *   and wD->2K have no usage limit at all (confirmed by the user: "回数制限ありません") and never set
+ *   their own entries here; those entries stay permanently false and are unused by executor.tryFreeAction.
+ * @property {Object<string, boolean>} freeActionAutoMode - per FREE_ACTION_IDS entry: true ("オート") =
+ *   auto-fire when usable, false ("マニュアル") = wait for the player. Defaults to false (manual) for
+ *   every entry (confirmed 2026-07-29 -- all 6 free actions default to manual); player-adjustable
+ *   during play. The auto-fire trigger condition itself is not yet designed (see
+ *   [[project-dice-wp-flow-spec]]) -- this only stores the current setting.
+ * @property {Object<string, boolean>} cardAutoModeOverrides - sparse map, physicalId -> true/false,
+ *   present only once the player has changed a card's TAP ability away from its data-sheet AUTO
+ *   column default ("A"/"M", see [[project-dice-wp-flow-spec]]). Absence means "use the card's
+ *   default" -- look it up via data, don't assume false. Player-adjustable during play (confirmed
+ *   2026-07-29).
+ * @property {string} color - one of PLAYER_COLORS, assigned by player order at game creation
+ *   (confirmed 2026-07-29, provisional per the user: "暫定です後で変わるかも"). Purely an identity
+ *   label (dice/pieces are this player's color) -- game logic keys everything off `id`, never color.
+ * @property {number} qstRewardCount - QST (Quest) card rewards claimed so far, game-wide (confirmed
+ *   2026-07-30: capped at 2 per player for the whole game). See src/qst.js.
+ */
+
+/** Fixed palette, assigned in player order (player 1 = PINK, ...). Provisional -- see PlayerState.color. */
+const PLAYER_COLORS = ['PINK', 'PURPLE', 'GREEN', 'ORANGE'];
+
+/** Free-action IDs, see PlayerState.freeActionTaps. */
+const FREE_ACTION_IDS = ['A_K', 'B_K', 'C_K', 'Z_K', 'wD_K', 'FEE_COLLECT'];
+
+/**
+ * @param {string} id
+ * @param {string} name
+ * @param {string|null} [color] - see PLAYER_COLORS; optional since most callers (tests, anything
+ *   not building a real game) don't care about display identity
+ * @returns {PlayerState}
+ */
+function createPlayer(id, name, color = null) {
+  const freeActionTaps = {};
+  const freeActionAutoMode = {};
+  for (const actionId of FREE_ACTION_IDS) {
+    freeActionTaps[actionId] = false;
+    freeActionAutoMode[actionId] = false;
+  }
+  return {
+    id,
+    name,
+    color,
+    jobCardId: null,
+    conPhysicalId: null,
+    conFace: null,
+    resources: { K: 0, A: 0, B: 0, C: 0, Z: 0, VP: 0, BZ: 0 },
+    dice: [],
+    colorDiceCap: 5,
+    whiteDiceCap: 5,
+    freeActionAutoMode,
+    cardAutoModeOverrides: {},
+    ownedCardPhysicalIds: [],
+    startOrderValue: 0,
+    freeActionTaps,
+    qstRewardCount: 0,
+  };
+}
+
+/**
+ * @typedef {Object} CardInstanceState
+ * @property {string} physicalId       - stable identity, e.g. "A001"
+ * @property {string} currentFaceId    - the data-sheet row currently active, e.g. "A001A" or "A001B"
+ * @property {string|null} ownerId     - null while sitting in a deck/shop, set once built/acquired
+ * @property {boolean} tapped
+ */
+
+/**
+ * @param {string} faceCardId - the card's starting face, e.g. "A001A" or "M001"
+ * @returns {CardInstanceState}
+ */
+function createCardInstance(faceCardId) {
+  const { physicalId } = splitCardId(faceCardId);
+  return { physicalId, currentFaceId: faceCardId, ownerId: null, tapped: false };
+}
+
+/**
+ * @typedef {Object} MapState
+ * @property {string} mapId            - e.g. "MAP003"
+ * @property {string} currentAreaId    - e.g. "AREA003A", flips via ONCE's "MAP{n}.CURRENT_AREA=..." assignment
+ * @property {SlotDie[][]} slots       - length matches the active AREA's SLOT1..SLOT6 (see notes below).
+ *   Each position holds an *array* of occupants, not a single one: normally 0 or 1, but confirmed
+ *   2026-07-29 that the castle (MAP008) lets same-value dice "stack" onto one slot instead of taking
+ *   a fresh one (so a slot can hold 2+), and GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN) lets its die
+ *   join *any* already-occupied slot anywhere, same-value or not. See board.js's placeDice().
+ * @property {number} accumulatedFee   - K owed to the tier-B/C owner, collected via the FEE_COLLECT free action
+ * @property {string|null} feeOwnerId  - the player who built/upgraded the card that last flipped this
+ *   map's tier (set whenever a "MAP{n}.CURRENT_AREA=..." assignment runs, in the context of whoever
+ *   triggered it) -- only this player may collect accumulatedFee. Tier-A maps have no owner (no fee).
+ */
+
+/**
+ * @typedef {Object} SlotDie
+ * @property {string} playerId
+ * @property {string} dieId
+ * @property {number} value
+ * @property {number} seq              - state.placementSeq at the moment this die was placed (global
+ *   monotonic order, used e.g. to find each player's *last* placement on the castle for next-round
+ *   turn-order -- see [[project-dice-wp-flow-spec]])
+ * @property {boolean} countsForTurnOrder - false if this placement only succeeded because of
+ *   GRANT_PLACE_ANYWHERE overriding an otherwise-illegal (occupied) slot (confirmed: such placements
+ *   are excluded from the castle's next-turn-order calculation). True for every other placement,
+ *   including normal castle same-value stacking (that's not "using the ability", it's the castle's
+ *   own baseline rule).
+ */
+
+/**
+ * @param {string} mapId
+ * @param {string} initialAreaId
+ * @returns {MapState}
+ */
+function createMapState(mapId, initialAreaId) {
+  return { mapId, currentAreaId: initialAreaId, slots: [], accumulatedFee: 0, feeOwnerId: null };
+}
+
+/**
+ * @typedef {Object} ShopDeckState
+ * @property {string[]} drawPile - faceIds waiting to be revealed, draw order fixed at shuffle time
+ * @property {Object<string, string|null>} slots - keyed by the SHOP-sheet position ID (e.g. "SHOP101"),
+ *   value is the faceId currently displayed there or null = empty, awaiting TURNEND restock.
+ *   Keying by SHOP-ID (rather than a plain array index) lets the position's own static build
+ *   requirements (SHOP sheet's DICE_MIN/DICE_MAX, ROUND_MIN/ROUND_MAX) be looked up directly by
+ *   the same key, independent of which card (any color, for the shared "normal card" shop) sits there.
+ */
+
+/**
+ * @param {string[]} drawPile
+ * @param {string[]} slotIds - SHOP-sheet position IDs this deck fills, e.g. ["SHOP101", ..., "SHOP106"]
+ * @returns {ShopDeckState}
+ */
+function createShopDeck(drawPile, slotIds) {
+  const slots = {};
+  for (const id of slotIds) slots[id] = null;
+  return { drawPile: drawPile.slice(), slots };
+}
+
+/**
+ * @typedef {Object} PendingChoice
+ * @property {string} id
+ * @property {string} playerId
+ * @property {string} kind        - e.g. "WARNING_CONFIRM", "SELECT_BUILD_TARGET", "SELECT_DIE_VALUE"
+ * @property {Object} context     - kind-specific payload (candidates, source command, ...)
+ */
+
+/**
+ * @typedef {Object} LogEntry
+ * @property {number} seq
+ * @property {string} playerId
+ * @property {string} event       - e.g. "PLACE_DICE", "BUILD", "GET", "TURNEND"
+ * @property {Object} detail      - event-specific payload, enough to replay this step
+ */
+
+/**
+ * @typedef {Object} GameState
+ * @property {{seed: string, state: number}} rng - the LIVE mulberry32 RNG state (see rng.js), not
+ *   just a record of the seed -- every random draw in the game (dice rolls, shuffles) mutates
+ *   `rng.state` in place via rng.js's next()/rollDie()/shuffle(state.rng, ...), so this must be part
+ *   of the save/undo snapshot for exact replay. `seed` is kept alongside only for reference/debugging.
+ * @property {'SETUP'|'ONBOARDING'|'ROUND'|'GAME_END'} phase
+ * @property {number} round              - 1..4
+ * @property {string[]} turnOrder        - player ids, current round's order
+ * @property {number} currentPlayerIndex - index into turnOrder
+ * @property {PlayerState[]} players
+ * @property {Object<string, MapState>} maps        - keyed by mapId ("MAP001".."MAP010")
+ * @property {Object<string, ShopDeckState>} shops   - keys:
+ *   "M" - drawPile of all 12 monuments, fills SHOP001-006
+ *   "NORMAL" - drawPile is a single shuffled pool of all 21 cards (A001-007 + B001-007 + C001-007
+ *     mixed together, confirmed 2026-07-29), fills SHOP101-106; any color can land in any slot
+ *   "SPECIAL" - fixed contents {A008A, B008A, C008A} in shuffled order, fills SHOP201-203,
+ *     revealed only from round 2 onward (SHOP sheet ROUND_MIN=2); no drawPile since each of the
+ *     3 cards is unique and there's nothing left to restock with once built
+ * @property {Object<string, CardInstanceState>} cards - keyed by physicalId, covers every card in the game (deck/shop/owned)
+ * @property {LogEntry[]} log
+ * @property {GameState|null} undoCheckpoint - a single deep-cloned snapshot, not a stack (confirmed
+ *   2026-07-29: undo is only ever meaningful back to the *most recent* pre-random-roll moment --
+ *   once a further roll happens, any earlier checkpoint's window has already closed, so there's
+ *   never a need for more than one). Recorded at exactly 2 kinds of moments (confirmed): just before
+ *   rolling color dice, and just before rolling white dice. See src/undo.js.
+ * @property {PendingChoice[]} pendingChoices
+ * @property {Object<string, number>} passiveCounters - cumulative counters for PASSIVE limits, e.g. "CON003B.CONVERT_LIMIT" -> times used, "CON004B.UPGRADE_LIMIT" -> times used
+ * @property {Object<string, QuestState>} quests - the 3 QST cards revealed at setup (confirmed
+ *   2026-07-30: fixed for the whole game, no restock), keyed by the specific face ID that was
+ *   revealed (e.g. "Q002B") -- QST has no in-game tier-flip the way CON/A/B/C do, the face is chosen
+ *   once at setup and stays that way, so there's no need to track physicalId/currentFaceId
+ *   separately the way GameState.cards does. See src/qst.js.
+ */
+
+/**
+ * @typedef {Object} QuestState
+ * @property {number} claimCount - 0 (untouched) .. 3 (REWARD3 claimed, card is COMPLETE, no more
+ *   claims possible). Also determines which REWARD field the *next* claimer gets (REWARD{claimCount+1}).
+ * @property {string[]} claimedPlayers - player ids who have already claimed from this specific card
+ *   (confirmed 2026-07-30: each player may claim from a given QST card at most once).
+ */
+
+/**
+ * Creates a structurally-complete but empty GameState: no players, no maps,
+ * no shop contents. This is the scaffolding SetupManager (not yet built) will
+ * populate; it exists so CommandBuilder/Executor and their tests have a
+ * concrete shape to work against.
+ *
+ * @param {string} seed
+ * @returns {GameState}
+ */
+function createEmptyGameState(seed) {
+  return {
+    rng: { seed, ...createRng(seed) },
+    phase: 'SETUP',
+    round: 0,
+    turnOrder: [],
+    currentPlayerIndex: 0,
+    placementSeq: 0, // global monotonic counter, bumped on every PLACE_DICE; see SlotDie.seq
+    jobPool: [], // JOB face ids currently draftable at round-1 onboarding, see setup.dealJobPool
+    players: [],
+    maps: {},
+    shops: {},
+    cards: {},
+    log: [],
+    undoCheckpoint: null,
+    pendingChoices: [],
+    passiveCounters: {},
+    quests: {},
+  };
+}
+
+/**
+ * Deep clone via structuredClone (Node >=17 / modern browsers). Used both for
+ * undo checkpoints and for save-data serialization (GameState contains only
+ * plain data -- no functions, no class instances -- by design).
+ * @param {GameState} state
+ * @returns {GameState}
+ */
+function cloneState(state) {
+  return structuredClone(state);
+}
+
+module.exports = {
+  FREE_ACTION_IDS,
+  PLAYER_COLORS,
+  splitCardId,
+  createDie,
+  createPlayer,
+  createCardInstance,
+  createMapState,
+  createShopDeck,
+  createEmptyGameState,
+  cloneState,
+};
+
+})();

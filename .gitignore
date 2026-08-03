@@ -1,0 +1,13 @@
+# Dev-only working files, not needed for the deployed web app
+AI.DATA.xlsx
+AIDATA*.xlsx
+AIDATA*.json
+~$*.xlsx
+output/
+*_stderr*.txt
+タイトルなし.jpg
+
+# Master design spreadsheets (source for data/game.json / data/game.data.js via tools/xlsx_to_json.py) --
+# kept local only; the compiled data/game.json + data/game.data.js the app actually loads stay tracked.
+data/game.xlsx
+MAP.xlsx
