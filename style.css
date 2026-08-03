@@ -1686,11 +1686,12 @@ h1, h2, h3 { margin: 0; }
   max-width: calc(100vw - 32px);
 }
 
-/* 2026-08-0X: QST's enlarged visual is inherently wider (its own grid layout, not a 112px shop-card)
-   -- widened by showCardEnlargeModal via this modifier class only when showing a QST card, so the
-   default card-inst-modal width (used for shop-card enlarges and AREA's plain text) stays compact. */
+/* 2026-08-0X: any card's enlarged visual (shop-card or QST) needs more room than a plain-text AREA
+   modal -- widened by showCardEnlargeModal via this modifier class whenever a visual is present, so
+   the default card-inst-modal width (used only for AREA's plain INST text, no visual at all) stays
+   compact. Sized for the larger of the two cases (QST) -- see showCardEnlargeModal's ENLARGE_SCALE. */
 .card-inst-modal--wide {
-  width: 400px;
+  width: 440px;
 }
 
 /* Houses the enlarged (transform: scale()'d) card/QST visual -- see showCardEnlargeModal. Width/
@@ -1721,6 +1722,26 @@ h1, h2, h3 { margin: 0; }
   cursor: pointer;
 }
 .card-inst-modal__flip-button[hidden] { display: none; }
+
+/* Prominent primary action (2026-08-0X, per user request): the enlarge modal's "pick this" button --
+   JOB draft / CON face choice / RESOURCE card choice all route their commit through here now instead
+   of a plain click on the card/cell (that plain-click gesture is taken by "open the enlarge modal",
+   see attachPickableEnlarge). Deliberately styled as a solid accent button, more prominent than the
+   neutral .card-inst-modal__flip-button above it, since this is the actual decision being made here. */
+.card-inst-modal__pick-button {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.card-inst-modal__pick-button[hidden] { display: none; }
 
 .card-inst-modal__header {
   display: flex;

@@ -2578,6 +2578,27 @@ function attachTapToggle(cardNode, cardState, faceId, canAct, physicalId) {
   });
 }
 
+/**
+ * Wires a *noInteraction* card built for a "pick one of these" context (JOB draft pool / CON face
+ * choice / initial RESOURCE choice) so tapping it opens the enlarge modal, with pickAction (see
+ * showCardEnlargeModal) wired in when this particular card is actually choosable right now (null
+ * otherwise -- e.g. a read-only CON preview shown before the player's actual turn to choose, which
+ * still opens the modal to read the card, just without a pick button in it). 2026-08-0X, replacing
+ * these contexts' old "click the cell = pick" gesture: that plain tap is now "open the enlarge modal
+ * (see pickAction's own doc)", and the actual commit happens via the modal's pick button instead --
+ * per the user's own original proposal for this ("シングルクリックで大きく表示...もう一度カードをタッ
+ * プで本選択"). cardNode itself must be built with noInteraction:true by the caller (so buildCardVisual
+ * doesn't *also* attach its own generic enlarge-on-tap listener underneath this one).
+ */
+function attachPickableEnlarge(cardNode, faceId, pickAction) {
+  cardNode.addEventListener('click', () => {
+    const sibling = siblingFaceId(faceId);
+    const hasSiblingData = sibling && cardFaceExists(sibling);
+    const visualNode = buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true });
+    showCardEnlargeModal(faceId, visualNode, hasSiblingData ? sibling : null, pickAction);
+  });
+}
+
 /** Built-card breakdown for the card-group header stats row (confirmed 2026-07-30): total built
  * (A/B/C + M -- JOB/CON/RESOURCE are all owned but never "built" via BUILD, so excluded, same
  * CARD_COUNT scope as the engine's own DSL semantics, see [[project-dice-wp-dsl-spec]] and
@@ -2722,9 +2743,13 @@ function renderJobPool(state, next) {
     const tall = cardNode.classList.contains('shop-card--tall');
     const cell = el('div', tall ? 'owned-card-cell owned-card-cell--tall' : 'owned-card-cell');
     cell.appendChild(cardNode);
-    if (draftingPlayerId) {
-      cell.classList.add('owned-card-cell--selectable');
-      cell.addEventListener('click', () => {
+    // 2026-08-0X, per user feedback (JOB cards weren't tappable to enlarge at all): tapping the card
+    // now always opens the enlarge modal; drafting it happens via the modal's pick button instead of
+    // a plain tap on the cell -- see attachPickableEnlarge's own doc.
+    if (draftingPlayerId) cell.classList.add('owned-card-cell--selectable');
+    attachPickableEnlarge(cardNode, faceId, draftingPlayerId ? {
+      label: 'このJOBを選ぶ',
+      onPick: () => {
         setupMod.chooseJob(state, INDEX, draftingPlayerId, faceId);
         // Auto/manual choice for the drafted JOB, if it has a reactive TAP ability (2026-07-31, per
         // user feedback -- see pendingAutoModeChoice's own comment).
@@ -2732,8 +2757,8 @@ function renderJobPool(state, next) {
           pendingAutoModeChoice = { physicalId: gameStateMod.splitCardId(faceId).physicalId, playerId: draftingPlayerId };
         }
         render(STATE);
-      });
-    }
+      },
+    } : null);
     container.appendChild(cell);
   }
 }
@@ -2755,7 +2780,10 @@ function renderConFacesRow(container, player, onPick) {
     const cellClass = tall ? 'owned-card-cell owned-card-cell--tall' : 'owned-card-cell';
     const cell = el('div', onPick ? `${cellClass} owned-card-cell--selectable` : cellClass);
     cell.appendChild(cardNode);
-    if (onPick) cell.addEventListener('click', () => onPick(face));
+    // 2026-08-0X, per user feedback (CON cards weren't tappable to enlarge at all, in either the
+    // read-only preview or the real choice): tapping the card now always opens the enlarge modal;
+    // committing the choice happens via the modal's pick button -- see attachPickableEnlarge's own doc.
+    attachPickableEnlarge(cardNode, faceId, onPick ? { label: `この面（${face}面）を選ぶ`, onPick: () => onPick(face) } : null);
     container.appendChild(cell);
   }
   // Explanatory hint to the right of the two CON faces (2026-08-0X, per user request) -- shown in both
@@ -2865,18 +2893,27 @@ function renderResourceChoice(container, state, player) {
     const cell = el('div', tall ? 'owned-card-cell owned-card-cell--tall owned-card-cell--selectable' : 'owned-card-cell owned-card-cell--selectable');
     if (isSelected) cell.classList.add('owned-card-cell--selected');
     cell.appendChild(cardNode);
-    cell.addEventListener('click', () => {
-      if (isSelected) {
-        choice.context.selected = selected.filter((id) => id !== faceId);
-      } else if (selected.length < 2) {
-        selected.push(faceId);
-        if (selected.length === 2) {
-          setupMod.chooseResourceCards(state, player.id, selected);
-          maybeStartRound1(state);
+    // 2026-08-0X, per user feedback (these cards weren't tappable to enlarge at all): tapping the card
+    // now always opens the enlarge modal; toggling this candidate in/out of the 2-picked set happens
+    // via the modal's pick button instead of a plain tap on the cell -- see attachPickableEnlarge's own
+    // doc. The button is skipped (pickAction: null) once 2 are already picked and this isn't one of
+    // them -- nothing to do with a 3rd candidate until one of the first 2 is deselected.
+    const canToggle = isSelected || selected.length < 2;
+    attachPickableEnlarge(cardNode, faceId, canToggle ? {
+      label: isSelected ? '選択を解除する' : '選ぶ',
+      onPick: () => {
+        if (isSelected) {
+          choice.context.selected = selected.filter((id) => id !== faceId);
+        } else {
+          selected.push(faceId);
+          if (selected.length === 2) {
+            setupMod.chooseResourceCards(state, player.id, selected);
+            maybeStartRound1(state);
+          }
         }
-      }
-      render(STATE);
-    });
+        render(STATE);
+      },
+    } : null);
     container.appendChild(cell);
   }
   // Explanatory hint to the right of the 4 candidates (2026-08-0X, per user request) -- explains both
@@ -3226,6 +3263,15 @@ function renderInstBody(container, text) {
   container.appendChild(document.createTextNode(text.slice(lastIndex)));
 }
 
+// How much bigger than real size the enlarge modal's card/QST visual renders (2026-08-0X: bumped
+// another x1.5 per user feedback "拡大表示　もう少し大きく　1.5倍", from the original 2x/1.5x this
+// replaced -- see showCardEnlargeModal). QST_PRE_SCALE_WIDTH is shrunk to compensate (QST has no
+// intrinsic width of its own, see CSS) so its *final* on-screen size stays close to what it was before
+// this bump, rather than growing by the same x1.5 a much-smaller shop-card can comfortably absorb.
+const ENLARGE_SCALE = 3;
+const ENLARGE_SCALE_QST = 2.25;
+const QST_PRE_SCALE_WIDTH = 170;
+
 /**
  * Enlarge popup for a card/AREA/QST tile -- unifies what used to be three separate mouse-only
  * gestures (single-click flip, right-click INST, dblclick TAP) into one tap target that works the
@@ -3240,12 +3286,20 @@ function renderInstBody(container, text) {
  * when flipped (null if there's no real sibling-face data, in which case the flip button stays
  * hidden) -- the flip button just toggles visualNode's existing --flipped class, reusing the same
  * absolute-overlay mechanism the inline shop-card/qst-card used to use for its own click-to-flip.
+ *
+ * pickAction (2026-08-0X, per user feedback -- CON/JOB/RESOURCE choice cards previously had no
+ * enlarge affordance at all, since a plain tap on them was already spoken for by "pick this card";
+ * see attachPickableEnlarge, the new home for that tap) is optional: `{label, onPick}`. When present,
+ * a prominent button is shown that runs onPick() and closes the modal -- the actual "commit this
+ * choice" gesture now lives here instead of on the card/cell itself, matching the user's own original
+ * proposal for this: tap to see it enlarged, tap again (here) to actually pick it.
  */
-function showCardEnlargeModal(faceId, visualNode, sibling) {
+function showCardEnlargeModal(faceId, visualNode, sibling, pickAction) {
   const overlay = document.getElementById('card-inst-overlay');
   const modal = overlay.querySelector('.card-inst-modal');
   const visualContainer = overlay.querySelector('.card-inst-modal__visual');
   const flipBtn = overlay.querySelector('.card-inst-modal__flip-button');
+  const pickBtn = overlay.querySelector('.card-inst-modal__pick-button');
 
   // Must come before measuring visualNode's size below -- getBoundingClientRect() on a subtree of a
   // still-hidden (display:none) overlay always reports 0x0, since the browser never lays out
@@ -3256,13 +3310,13 @@ function showCardEnlargeModal(faceId, visualNode, sibling) {
   visualContainer.style.width = '';
   visualContainer.style.height = '';
   const isQst = !!visualNode && visualNode.classList.contains('qst-card');
-  modal.classList.toggle('card-inst-modal--wide', isQst);
+  modal.classList.toggle('card-inst-modal--wide', !!visualNode);
 
   if (visualNode) {
-    if (isQst) visualNode.style.width = '220px'; // QST has no intrinsic width of its own -- see CSS
+    if (isQst) visualNode.style.width = `${QST_PRE_SCALE_WIDTH}px`;
     visualContainer.appendChild(visualNode);
     const rect = visualNode.getBoundingClientRect();
-    const scale = isQst ? 1.5 : 2;
+    const scale = isQst ? ENLARGE_SCALE_QST : ENLARGE_SCALE;
     visualNode.style.transform = `scale(${scale})`;
     visualNode.style.transformOrigin = 'top center';
     // transform doesn't participate in layout sizing -- without this the scaled visual would just
@@ -3287,6 +3341,14 @@ function showCardEnlargeModal(faceId, visualNode, sibling) {
     flipBtn.textContent = visualNode.classList.contains(flippedClass) ? '表側' : '裏側';
     refreshText();
   };
+  pickBtn.hidden = !pickAction;
+  if (pickAction) {
+    pickBtn.textContent = pickAction.label;
+    pickBtn.onclick = () => {
+      hideCardEnlargeModal();
+      pickAction.onPick();
+    };
+  }
   refreshText();
 }
 
