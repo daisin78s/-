@@ -215,12 +215,47 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
     null
   );
 
-  giveDie(state, 'P1', 3); // gives the castle's BUILD() a real outlet this turn (buildValue=3 matches some NORMAL/SPECIAL candidate)
+  giveDie(state, 'P1', 3); // castle's BUILD() at buildValue=3 includes A004A (COST="A,B", 2 units total) --
+  // genuinely affordable using only the 2 BZ this conversion grants, 0 real resources needed (confirmed
+  // via a one-off script against this exact seed).
   const forced = moveGenerator.forcedBzConversionMove(state, index, 'P1', context);
   check('forcedBzConversionMove returns the BARE_TAP move once affordable AND a build is reachable this turn', forced, { type: 'BARE_TAP', playerId: 'P1', physicalId: jobInst.physicalId });
 
   jobInst.tapped = true;
   check('forcedBzConversionMove is null once the card is already tapped', moveGenerator.forcedBzConversionMove(state, index, 'P1', context), null);
+}
+
+// ---------------------------------------------------------------------------
+// Regression (2026-08-04, per user feedback: "JOB004のAIの平均点が低すぎます 3K→2BZ 使えていますか？"):
+// "a build is reachable this turn" used to mean only dice/category-eligible (per #placeDieMoves' own
+// doc, getBuildCandidates doesn't check affordability), so this used to force the conversion even when
+// every reachable candidate was still unaffordable afterwards -- burning 3K and BLOCK_BUILD(M) for
+// nothing. die value 6 on the castle (this seed) only reaches candidates costing 3+ units total
+// (A005A=3, M007=9, M009=8, M012=13 -- confirmed via a one-off script), none of which 2 BZ alone (with
+// 0 real A/B/C/Z on hand) can fully cover -- forcedBzConversionMove must now correctly decline.
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const jobInst = createCardInstance('JOB004');
+  jobInst.ownerId = 'P1';
+  state.cards[jobInst.physicalId] = jobInst;
+  p1.ownedCardPhysicalIds.push(jobInst.physicalId);
+  p1.resources.K = 3; // covers JOB004's own CHANGE(3K,2BZ) cost
+  const context = { hasPlacedDieThisTurn: false };
+
+  giveDie(state, 'P1', 6); // castle BUILD() at buildValue=6 -- cheapest reachable candidate costs 3 units
+  check(
+    'forcedBzConversionMove declines when every dice-reachable candidate is still unaffordable after the conversion (0 real A/B/C/Z, cheapest candidate needs 3 units and 2 BZ alone falls 1 short)',
+    moveGenerator.forcedBzConversionMove(state, index, 'P1', context),
+    null
+  );
+
+  // A005A COST="2A,B" -- maxBzDiscount assigns BZ to cost items in listed order, so both BZ land on the
+  // 2A (first item) and leave the B unit real-paid; 1 real B (not A) is what makes it affordable.
+  p1.resources.B = 1;
+  const forced = moveGenerator.forcedBzConversionMove(state, index, 'P1', context);
+  check('...but forces it once that same candidate becomes genuinely affordable (2 BZ + the 1 real B now on hand)', forced, { type: 'BARE_TAP', playerId: 'P1', physicalId: jobInst.physicalId });
 }
 
 console.log(`\n${passCount} passed, ${failCount} failed`);

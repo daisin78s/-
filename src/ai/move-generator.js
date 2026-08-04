@@ -37,6 +37,7 @@ const { cloneState } = require('../game-state');
 const board = require('../board');
 const executor = require('../executor');
 const qst = require('../qst');
+const { applyInPlace } = require('./simulator');
 
 /** Mirrors main.js's bareTapKind (2026-07-31) -- duplicated rather than shared because main.js is a
  * browser-only classic script, not a requireable CommonJS module like the rest of src/. Keep the two
@@ -266,7 +267,21 @@ class MoveGenerator {
    * Evaluator's raw resource weights should reject it on their own when there's truly nothing to spend it
    * on, without needing another special case here). See bzConversionTap for the detection rule and
    * simulator.js's own doc for the unrelated "always use *already-held* BZ on a BUILD's payment" half of
-   * this feature, which needed no change -- BZ still can't outlive the turn it's spent in either way. */
+   * this feature, which needed no change -- BZ still can't outlive the turn it's spent in either way.
+   *
+   * **Corrected 2026-08-04** (per user feedback: "JOB004のAIの平均点が低すぎます 3K→2BZ 使えていますか？"
+   * -- investigation found this was firing far more than intended): "reachable" here used to mean only
+   * "some buildCandidateIndex-carrying move exists", but #placeDieMoves/#bareTapMoves deliberately don't
+   * affordability-filter their buildCandidateIndex candidates (see #placeDieMoves' own doc -- that's
+   * left to Simulator, since getBuildCandidates only checks dice/category eligibility). That made this
+   * force JOB004's conversion any time *any* build was dice-reachable at all, whether or not the
+   * resulting build could actually be paid for -- confirmed via tests/ai-move-generator.smoke.js's own
+   * existing case, which asserted a forced fire with a player holding 0 A/B/C resources (nothing to
+   * build with regardless of BZ). Burning 3K and BLOCK_BUILD(M,THIS_TURN) for a build that then fails
+   * outright is a pure loss with no offsetting upside -- exactly the kind of AI misplay that would drag
+   * down JOB004's measured average score in tools/ai_data_report.js. Now actually simulates each
+   * candidate via applyInPlace (the same payment pipeline, incl. maxBzDiscount, the real move commits
+   * with later) and only forces the conversion if at least one of them would actually succeed. */
   forcedBzConversionMove(state, index, playerId, context) {
     const player = state.players.find((p) => p.id === playerId);
     if (!player) return null;
@@ -277,9 +292,10 @@ class MoveGenerator {
       const clone = cloneState(state);
       const result = board.useBareTapAbility(clone, index, { playerId }, physicalId);
       if (!result.success) continue;
-      const hasBuildOutlet = this.generateMoves(clone, index, playerId, context)
-        .some((m) => m.buildCandidateIndex !== undefined);
-      if (hasBuildOutlet) return { type: 'BARE_TAP', playerId, physicalId };
+      const buildMoves = this.generateMoves(clone, index, playerId, context)
+        .filter((m) => m.buildCandidateIndex !== undefined);
+      const hasAffordableBuildOutlet = buildMoves.some((m) => applyInPlace(cloneState(clone), index, m).success);
+      if (hasAffordableBuildOutlet) return { type: 'BARE_TAP', playerId, physicalId };
     }
     return null;
   }

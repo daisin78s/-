@@ -8,21 +8,6 @@
 </head>
 <body>
   <div id="app">
-    <!-- デバッグ履歴タイムライン (2026-08-04, 開発・検証用機能、通常のUndoとは別物) -- 常にDOMには存在する
-         が、デバッグモードOFFの間は#debug-history-controls自体をhiddenにする（main.jsのrenderDebugPanel）。 -->
-    <section id="debug-panel" class="debug-panel" aria-label="デバッグ">
-      <button type="button" id="debug-mode-toggle" class="debug-panel__toggle">デバッグモード: OFF</button>
-      <div id="debug-history-controls" class="debug-history-controls" hidden>
-        <div class="debug-history-controls__nav">
-          <button type="button" id="debug-turn-back">◀ TURN</button>
-          <button type="button" id="debug-turn-forward">TURN ▶</button>
-          <button type="button" id="debug-round-back">◀ ROUND</button>
-          <button type="button" id="debug-round-forward">ROUND ▶</button>
-        </div>
-        <div id="debug-history-position" class="debug-history-controls__position"></div>
-        <div id="debug-history-list" class="debug-history-controls__list"></div>
-      </div>
-    </section>
     <main id="game-layout">
       <div id="board-area">
         <section id="shops" aria-label="ショップ">
@@ -85,6 +70,23 @@
         <div id="player-cards-groups"></div>
       </section>
     </main>
+
+    <!-- デバッグ履歴タイムライン (2026-08-04, 開発・検証用機能、通常のUndoとは別物) -- 常にDOMには存在する
+         が、デバッグモードOFFの間は#debug-history-controls自体をhiddenにする（main.jsのrenderDebugPanel）。
+         2026-08-04: 表示位置を#appの一番下に移動（本人指示「デバッグモードの表示位置 一番したにして」）。 -->
+    <section id="debug-panel" class="debug-panel" aria-label="デバッグ">
+      <button type="button" id="debug-mode-toggle" class="debug-panel__toggle">デバッグモード: OFF</button>
+      <div id="debug-history-controls" class="debug-history-controls" hidden>
+        <div class="debug-history-controls__nav">
+          <button type="button" id="debug-turn-back">◀ TURN</button>
+          <button type="button" id="debug-turn-forward">TURN ▶</button>
+          <button type="button" id="debug-round-back">◀ ROUND</button>
+          <button type="button" id="debug-round-forward">ROUND ▶</button>
+        </div>
+        <div id="debug-history-position" class="debug-history-controls__position"></div>
+        <div id="debug-history-list" class="debug-history-controls__list"></div>
+      </div>
+    </section>
   </div>
 
   <div id="card-inst-overlay" class="card-inst-overlay" hidden>
