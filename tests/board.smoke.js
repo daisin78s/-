@@ -560,7 +560,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   check('...which landed on the map as accumulatedFee', state.maps['MAP001'].accumulatedFee, 1);
   check('...and pendingFee is cleared', player(state, 'P2').pendingFee, null);
 
-  const collectResult = executor.collectUsageFee(state, 'P1', 'MAP001');
+  const collectResult = executor.collectUsageFee(state, index, { playerId: 'P1' }, 'MAP001');
   check('The owner (P1) can now collect the accumulated fee', collectResult, { success: true, amount: 1 });
   check('...map.accumulatedFee is back to 0', state.maps['MAP001'].accumulatedFee, 0);
 }

@@ -732,17 +732,23 @@ function tryFreeAction(state, index, playerId, freeActionId) {
   return { success: true };
 }
 
-/** Collects a map's accumulated K fee for its owner, as the FEE_COLLECT free action. */
-function collectUsageFee(state, playerId, mapId) {
-  const player = getPlayer(state, playerId);
+/** Collects a map's accumulated K fee for its owner, as the FEE_COLLECT free action. Unlike the other 5
+ * free actions (tryFreeAction, deliberately silent -- see FREE_ACTION_DEFS' comment on JOB005A), fee
+ * collection DOES emit GET(K) (corrected 2026-08-04, per user feedback: "使用料回収のフリーアクションで
+ * JOB005が反応しなくなりました...これはフリーアクションですが反応するように" -- the user wants this one
+ * free action, specifically, to still trigger ON(GET(K),...) reactions like JOB005A's K->Z). Needs index/
+ * context (not just playerId) purely to reach grantResourceAndEmitGet/emitAndResolve's event-chain
+ * machinery -- context only needs playerId, same shape as every other engine entry point. */
+function collectUsageFee(state, index, context, mapId) {
+  const player = getPlayer(state, context.playerId);
   const map = state.maps[mapId];
   if (!map) throw new ExecutionError(`Unknown map: ${mapId}`);
   if (player.freeActionTaps.FEE_COLLECT) return { success: false, reason: 'ALREADY_TAPPED' };
-  if (map.feeOwnerId !== playerId) return { success: false, reason: 'NOT_FEE_OWNER' };
+  if (map.feeOwnerId !== context.playerId) return { success: false, reason: 'NOT_FEE_OWNER' };
   if (map.accumulatedFee <= 0) return { success: false, reason: 'NO_FEE_TO_COLLECT' };
   const amount = map.accumulatedFee;
   map.accumulatedFee = 0;
-  player.resources.K += amount;
+  grantResourceAndEmitGet(state, index, context, 'K', amount);
   player.freeActionTaps.FEE_COLLECT = true;
   return { success: true, amount };
 }

@@ -101,7 +101,8 @@ function aiPlayerFor(playerId) { return playerRoles.get(playerId) === 'AI_LV1' ?
 // 'instant' (AI plays out immediately, no visible pause) | 'delayed' (one Move every AI_STEP_DELAY_MS,
 // so the board visibly updates step by step) | 'manual' (only advances on the "次のAI行動へ" button
 // click) -- all 3 selectable per user feedback ("上記3をえらべるように"), see renderAiPacingControl.
-let aiPacingMode = 'instant';
+// Defaults to 'delayed' (2026-08-04, per user feedback: "AI進行のデフォルトを1手ずつにして").
+let aiPacingMode = 'delayed';
 const AI_STEP_DELAY_MS = 600;
 // setTimeout handle for 'delayed' mode -- tracked so switching pacing modes mid-flight (or a render
 // triggered by something else while a step is already scheduled) never stacks up duplicate timers.
@@ -368,7 +369,8 @@ function noteActiveTurnPlayerForJobPool(state, playerId) {
 // point. Only active while debugMode is on (see toggleDebugMode) -- recording a full GameState clone
 // every turn boundary isn't free, and this feature is opt-in by design.
 // ---------------------------------------------------------------------------
-let debugMode = false;
+// Defaults to on (2026-08-04, per user feedback: "デバッグモードのデフォルトもONにして").
+let debugMode = true;
 /** @type {{round:number, playerId:string, snapshot:Object}[]} */
 let turnHistory = [];
 /** Index into turnHistory currently being viewed. -1 means "no history recorded yet". */
@@ -466,13 +468,19 @@ function handleDebugRoundForward() { jumpToAdjacentRound(1); }
  * waiting for the next turn boundary (recordTurnHistorySnapshot only fires going forward from here).
  * Turning it off again does not clear turnHistory -- toggling back on later still has the full timeline
  * (recording just pauses while off, per debugMode's own gate in recordTurnHistorySnapshot). */
+/** Shared by toggleDebugMode and the startup path (now that debugMode defaults to true, 2026-08-04, per
+ * user feedback: "デバッグモードのデフォルトもONにして" -- the panel needs the same "something to show
+ * immediately" seeding either way, not just when toggled on by hand mid-game). */
+function seedDebugHistoryIfNeeded() {
+  if (!debugMode || turnHistory.length > 0) return;
+  const next = STATE.round >= 1 ? turnFlowMod.getNextTurn(STATE) : null;
+  turnHistory.push({ round: STATE.round, playerId: next ? next.playerId : null, snapshot: structuredClone(STATE) });
+  historyCursor = 0;
+}
+
 function toggleDebugMode() {
   debugMode = !debugMode;
-  if (debugMode && turnHistory.length === 0) {
-    const next = STATE.round >= 1 ? turnFlowMod.getNextTurn(STATE) : null;
-    turnHistory.push({ round: STATE.round, playerId: next ? next.playerId : null, snapshot: structuredClone(STATE) });
-    historyCursor = 0;
-  }
+  seedDebugHistoryIfNeeded();
   render(STATE);
 }
 
@@ -1215,9 +1223,19 @@ function renderResourceBadge(resource, count) {
   return badge;
 }
 
-function renderCostBadges(container, costString) {
+/** Renders costString's resource dots, with the card's own deck color (faceId's leading A/B/C letter)
+ * sorted first (2026-08-04, per user feedback: "C系のカードの資源表示の順番 ACではなくCAの順番にして
+ * ください"). A/B decks' COST data already lists their own color first (A004A "A,B", B004A "1B,1C"), so
+ * this sort is a no-op for them -- C004-008's data lists it second ("1A,1C"), inconsistent with that
+ * established convention purely as a data-authoring quirk, not an intentional exception. Sorting by
+ * "matches the card's own color" fixes C without a C-only special case. faceId is optional (M/JOB/CON/
+ * QST callers pass none, and see no reordering -- they have no "own color" to prioritize anyway). */
+function renderCostBadges(container, costString, faceId) {
   if (!costString) return;
-  for (const part of costString.split(',')) {
+  const ownColor = faceId && /^[ABC]/.test(faceId) ? faceId[0] : null;
+  const parts = costString.split(',');
+  if (ownColor) parts.sort((a, b) => (b.trim().endsWith(ownColor) ? 1 : 0) - (a.trim().endsWith(ownColor) ? 1 : 0));
+  for (const part of parts) {
     const match = /^(\d*)([A-Z]+)$/.exec(part.trim());
     if (!match) continue;
     const [, countStr, resource] = match;
@@ -1366,7 +1384,7 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
   // the effect area instead (it *is* this card's effect, not a replacement for its identity).
   q('.shop-card__id').textContent = faceId;
 
-  renderCostBadges(q('.shop-card__cost'), facts.cost);
+  renderCostBadges(q('.shop-card__cost'), facts.cost, faceId);
   q('.shop-card__vp').textContent = facts.vp ? `${facts.vp} VP` : '';
   // Corrected 2026-07-29: a monument's req (e.g. "目 >=12") IS part of that specific card (each
   // monument has its own threshold), unlike normal/special cards' req which is a slot property --
@@ -1854,9 +1872,11 @@ function renderBoard(state, next) {
       // "0 K", rather than only appearing once something has actually accumulated. Castle (no tier at
       // all) never has a fee concept, so its fee element is removed entirely rather than left empty.
       // Confirmed 2026-07-29 (carried over from the old badge): colored with the owner's player color,
-      // and the owner can double-click it to collect (a free action, executor.collectUsageFee) --
-      // restricted to whoever's real TURN it currently is (see realTurnPlayerId above), matching the
-      // other free actions.
+      // and the owner can tap it to collect (a free action, executor.collectUsageFee) -- restricted to
+      // whoever's real TURN it currently is (see realTurnPlayerId above), matching the other free
+      // actions. Single-tap, not double-tap (2026-08-04, per user feedback: "使用料回収のフリーアクショ
+      // ンのシングルクリック（タップ）で回収できるようにしてください" -- brings this in line with the
+      // rest of the app's tap-gesture unification, this was the one interaction still left on dblclick).
       const feeEl = node.querySelector('.map-tile__fee');
       if (!tier) {
         feeEl.remove();
@@ -1868,8 +1888,8 @@ function renderBoard(state, next) {
           feeEl.dataset.color = colorForPlayer(state, mapState.feeOwnerId);
           if (mapState.feeOwnerId === realTurnPlayerId) {
             feeEl.classList.add('map-tile__fee--collectible');
-            feeEl.addEventListener('dblclick', () => {
-              const result = executorMod.collectUsageFee(state, mapState.feeOwnerId, mapId);
+            feeEl.addEventListener('click', () => {
+              const result = executorMod.collectUsageFee(state, INDEX, { playerId: mapState.feeOwnerId }, mapId);
               placementMessage = result.success ? '' : `使用料を回収できません（${result.reason}）`;
               render(STATE);
             });
@@ -3670,6 +3690,7 @@ function autoScrollToBottomOnStart() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  seedDebugHistoryIfNeeded();
   render(STATE);
   autoScrollToBottomOnStart();
 

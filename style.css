@@ -757,8 +757,13 @@ h1, h2, h3 { margin: 0; }
 
 .map-tile__fee-rate:empty { display: none; }
 
+/* Enlarged hit target (2026-08-04, per user feedback: "使用料回収のフリーアクションの当たり判定の場所
+   が小さすぎてやりにくいので大きくしてください") -- the badge itself grows a bit (padding), rather than
+   an invisible-only expansion, since a bigger tap target is also easier to *see* as tappable. */
 .map-tile__fee--collectible {
   cursor: pointer;
+  padding: 6px 10px;
+  font-size: 12px;
 }
 
 .map-tile__fee[data-color="PINK"] { background: var(--player-pink); color: #fff; }

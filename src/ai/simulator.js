@@ -114,7 +114,7 @@ function applyInPlace(state, index, move) {
     case 'FREE_ACTION':
       return executor.tryFreeAction(state, index, move.playerId, move.freeActionId);
     case 'COLLECT_FEE':
-      return executor.collectUsageFee(state, move.playerId, move.mapId);
+      return executor.collectUsageFee(state, index, { playerId: move.playerId }, move.mapId);
     case 'TAP_REACTION': {
       const choice = state.pendingChoices.find((c) => c.id === move.choiceId);
       if (!choice) return { success: false, reason: 'CHOICE_NOT_FOUND' };

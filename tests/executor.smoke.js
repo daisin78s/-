@@ -192,16 +192,16 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
   getPlayerRef(state, 'P1');
   state.players.push(require('../src/game-state').createPlayer('P2', 'Bob'));
 
-  const wrongOwner = executor.collectUsageFee(state, 'P2', 'MAP001');
+  const wrongOwner = executor.collectUsageFee(state, index, { playerId: 'P2' }, 'MAP001');
   check('P2 (not the fee owner) cannot collect', wrongOwner.success, false);
 
-  const collected = executor.collectUsageFee(state, 'P1', 'MAP001');
+  const collected = executor.collectUsageFee(state, index, { playerId: 'P1' }, 'MAP001');
   check('P1 (the fee owner) collects the accumulated 3K', collected, { success: true, amount: 3 });
   check('Fee is cleared from the map after collection', state.maps['MAP001'].accumulatedFee, 0);
   check('P1 gained the 3K', getPlayerRef(state, 'P1').resources.K, 3);
 
   state.maps['MAP001'].accumulatedFee = 2; // more fee accrues later the same round
-  check('FEE_COLLECT is tapped for the rest of the round', executor.collectUsageFee(state, 'P1', 'MAP001').success, false);
+  check('FEE_COLLECT is tapped for the rest of the round', executor.collectUsageFee(state, index, { playerId: 'P1' }, 'MAP001').success, false);
 }
 
 // ---------------------------------------------------------------------------
@@ -574,6 +574,24 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   const result = executor.tryFreeAction(state, index, 'P1', 'A_K');
   check('The A->K free action still succeeds', result.success, true);
   check('...but does NOT trigger JOB005\'s GET(K) reaction (free actions stay silent, unlike CHANGE)', player.resources.Z, 0);
+}
+
+// ---------------------------------------------------------------------------
+// FEE_COLLECT (unlike the other 5 free actions above) DOES fire GET(K) (2026-08-04, per user feedback:
+// "使用料回収のフリーアクションでJOB005が反応しなくなりました...これはフリーアクションですが反応する
+// ように") -- singled out from tryFreeAction's silence deliberately, see collectUsageFee's own comment.
+// ---------------------------------------------------------------------------
+{
+  const state = freshState();
+  state.maps['MAP001'] = createMapState('MAP001', 'AREA001B');
+  state.maps['MAP001'].feeOwnerId = 'P1';
+  state.maps['MAP001'].accumulatedFee = 3;
+  giveCard(state, 'JOB005', 'P1'); // TAP=ON(GET(K),CHANGE(K,Z)), AUTO="A"
+  const player = getPlayerRef(state, 'P1');
+  const result = executor.collectUsageFee(state, index, { playerId: 'P1' }, 'MAP001');
+  check('Fee collection still succeeds', result, { success: true, amount: 3 });
+  check('...and JOB005 auto-reacts to the fee-collection-triggered GET(K), converting 1K into 1Z', player.resources.Z, 1);
+  check('...leaving the other 2K from the fee alone', player.resources.K, 2);
 }
 
 console.log(`\n${passCount} passed, ${failCount} failed`);

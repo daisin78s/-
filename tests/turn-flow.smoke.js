@@ -119,7 +119,7 @@ for (let i = 0; i < state.turnOrder.length; i++) {
   const executor = require('../src/executor');
   state.maps['MAP001'].feeOwnerId = p0;
   state.maps['MAP001'].accumulatedFee = 2;
-  executor.collectUsageFee(state, p0, 'MAP001');
+  executor.collectUsageFee(state, index, { playerId: p0 }, 'MAP001');
   check('FEE_COLLECT is tapped', player.freeActionTaps.FEE_COLLECT, true);
   const placement = placeFirstLegalDie(state, p0);
   assertTrue(`${p0} found a legal placement on their 2nd turn`, placement !== null);
