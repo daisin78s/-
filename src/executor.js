@@ -272,6 +272,61 @@ function applyBzDiscount(items, bzDiscount) {
   return { items: discounted, bzUsed };
 }
 
+/**
+ * Auto-BZ (2026-08-04, per user feedback: "デフォルトでBZを使って建築するようにして" -- the old flow
+ * made the player manually dial in a per-resource BZ stepper *before* any candidate even showed up as
+ * affordable, which was confusing enough that a real bug report turned out to just be this). Since BZ
+ * has no use outside discounting a BUILD's COST ([[project-dice-wp-dsl-spec]]), always spending the max
+ * usable amount (min(bzAvailable, the cost's total unit count)) is strictly at least as good as spending
+ * less -- so there's no reason to ever offer "spend fewer BZ" as a choice (confirmed).
+ *
+ * What *can* still need a real choice: with 2+ distinct resource types in the cost, there's often more
+ * than one way to distribute that fixed BZ total across them (e.g. cost 2A+1B, 2 BZ available: cover
+ * both A's and pay the B for real, or cover one A + the B and pay the other A for real). This function
+ * enumerates every such distribution, resolves payment for each (real-first-then-Z, exactly like a
+ * normal cost), and keeps only the ones that actually succeed. It then dedupes by the *resolved* payment
+ * (the real {resource,count} list actually spent), not by the raw BZ distribution -- two distributions
+ * that end up spending identical resources (e.g. both fall back to 1 Z because the player has neither
+ * real A nor real B on hand) are not a meaningful choice to a player, only ones that actually spend
+ * different real resources are. That's what turns the user's worked example ("1A・1Bどちらか片方しか持っ
+ * ていなければ自動でそのまま建築、両方持っていれば選ばせる") into a general rule instead of a special
+ * case for exactly-one-remaining-unit costs.
+ * @returns {{bzDiscount:Object<string,number>, resolvedItems:{resource:string,count:number}[]}[]}
+ *   One entry per distinct affordable outcome. Empty array means unaffordable (no valid distribution
+ *   the player can actually pay for) -- same meaning as candidateAffordable's old false.
+ */
+function enumerateBzOutcomes(state, playerId, items, bzAvailable, colorPreference) {
+  const total = items.reduce((sum, item) => sum + item.count, 0);
+  const maxBz = Math.max(0, Math.min(bzAvailable, total));
+  const distributions = [];
+  const current = {};
+  (function backtrack(idx, remaining) {
+    if (idx === items.length) {
+      if (remaining === 0) distributions.push({ ...current });
+      return;
+    }
+    const item = items[idx];
+    const maxHere = Math.min(item.count, remaining);
+    for (let n = 0; n <= maxHere; n += 1) {
+      if (n > 0) current[item.resource] = n;
+      backtrack(idx + 1, remaining - n);
+    }
+    delete current[item.resource];
+  })(0, maxBz);
+
+  const seen = new Map();
+  for (const bzDiscount of distributions) {
+    const discount = applyBzDiscount(items, bzDiscount);
+    if (!discount) continue; // pragma: shouldn't happen, distributions are already capped per-item
+    const payItems = discount.bzUsed > 0 ? [...discount.items, { resource: 'BZ', count: discount.bzUsed }] : discount.items;
+    const resolution = resolvePayment(state, playerId, payItems, colorPreference);
+    if (!resolution.ok) continue;
+    const key = resolution.items.map((i) => `${i.resource}:${i.count}`).sort().join(',');
+    if (!seen.has(key)) seen.set(key, { bzDiscount, resolvedItems: resolution.items });
+  }
+  return [...seen.values()];
+}
+
 // ---------------------------------------------------------------------------
 // Dynamic count expressions (e.g. "COUNT(天)*wD")
 // ---------------------------------------------------------------------------
@@ -988,6 +1043,7 @@ module.exports = {
   grantResourceAndEmitGet,
   payCostList,
   applyBzDiscount,
+  enumerateBzOutcomes,
   resolvePayment,
   hasPaymentChoiceAbility,
   ownedCardRows,

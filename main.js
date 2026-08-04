@@ -295,11 +295,15 @@ let pendingBuildChoice = null;
 // pendingBuildChoice changes; irrelevant (never read) for players without the ability, since
 // executor.resolvePayment ignores colorPreference unless hasPaymentChoiceAbility is true anyway.
 let buildColorPreference = {};
-// {A:n, B:n, ...} -- units of each resource to skip paying via BZ, for whichever BUILD_NEW candidate
-// ends up picked (see renderBuildChoiceBzControls/executor.applyBzDiscount). Shared across candidates,
-// same as buildColorPreference -- reset alongside it. Never applies to UPGRADE (see applyBzDiscount's
-// own comment on "改築には使用不可"); resolveUpgrade never reads context.bzDiscount at all.
-let buildBzDiscount = {};
+// { candidate, outcomes } | null -- BZ is spent automatically now (2026-08-04, per user feedback:
+// "デフォルトでBZを使って建築するようにして"; see executor.enumerateBzOutcomes for the full rationale).
+// Clicking a BUILD_NEW candidate computes every distinct affordable way to spend the max usable BZ; if
+// there's only one, the build commits immediately with no extra step. If there's more than one (2+
+// resource types in the cost, and the player holds enough of more than one to actually change which
+// real resource gets spent), this holds the pending choice while renderBzOutcomeChoice asks which
+// outcome to commit. Never applies to UPGRADE (BZ can't discount it at all, same as before). Reset
+// alongside buildColorPreference wherever a fresh pendingBuildChoice is set.
+let pendingBzOutcomeChoice = null;
 // { mapId, slotIndex, colors, colorPreference } | null -- CON002B's payment choice for an AREA whose
 // own ACTION pays A/B/C directly (see attemptPlaceSelectedDie/areaColorPayResources/
 // renderPlacementChoiceModal). Set instead of placing immediately; the die isn't placed yet at this
@@ -1597,7 +1601,7 @@ function buildQstCardVisual(faceId, quest, state, options = {}) {
       if (result.success && result.pendingBuild) {
         pendingBuildChoice = { source: 'QST', playerId: activePlayer.id, ...result.pendingBuild };
         buildColorPreference = {};
-        buildBzDiscount = {};
+        pendingBzOutcomeChoice = null;
       }
       // Any other failure (GOAL_NOT_MET/COMPLETE/ALREADY_CLAIMED/PLAYER_LIMIT_REACHED/NO_BUILDABLE_CARD)
       // is a silent no-op, same as the ineligibility checks this replaced.
@@ -1961,7 +1965,7 @@ function applyPlaceDiceResult(result, playerId, mapId, slotIndex, extra) {
     // (dice may be spread across several slots -- see extra.groupPlaced, which suppresses that widget).
     pendingBuildChoice = { source: 'AREA', playerId, mapId, slotIndex, ...result.actionResult.pendingBuild, ...extra };
     buildColorPreference = {};
-    buildBzDiscount = {};
+    pendingBzOutcomeChoice = null;
     return;
   }
   // Either the AREA action fully resolved, or it failed with no candidate build to fall back on
@@ -2141,24 +2145,32 @@ function candidateColorResources(candidate) {
     .filter((resource) => resource === 'A' || resource === 'B' || resource === 'C');
 }
 
-/** Whether playerId can currently pay candidate's COST (real + Z combined, per
- * executor.resolvePayment -- ignores any specific color preference, since AUTO can always afford
- * whatever a chosen preference could) after applying buildBzDiscount, if any (BUILD_NEW only -- BZ
- * never discounts UPGRADE, see executor.applyBzDiscount). Used to filter the BUILD/UPGRADE candidate
- * list down to only what's actually buildable right now (2026-07-31, per user feedback: "建築時、ダイ
- * ス目の合っているものだけカードを表示になっていますが、今建築できるもの（ダイス目+資源）だけ表示し
- * てください" -- board.getBuildCandidates itself stays unfiltered/dice-only, since other callers (AREA/
- * QST/bare-TAP pendingBuild detection, and their own NO_BUILDABLE_CARD check) rely on the *rule*-
- * eligible list; this is purely a display-layer filter on top of that). */
-function candidateAffordable(candidate, playerId) {
-  const costFaceId = candidate.type === 'UPGRADE' ? candidate.fromFaceId : candidate.faceId;
-  const row = dataLoaderMod.getCardRow(INDEX, costFaceId);
+/** Every distinct affordable way to auto-spend BZ on candidate's COST, per executor.enumerateBzOutcomes
+ * (2026-08-04 -- replaces the old manual per-resource stepper; BZ itself is always maxed out
+ * automatically now, this only ever enumerates *which real resource* ends up spent when that's a real
+ * fork). BUILD_NEW only; callers must not call this for an UPGRADE candidate. */
+function bzOutcomesForCandidate(candidate, playerId) {
+  const row = dataLoaderMod.getCardRow(INDEX, candidate.faceId);
   const items = commandBuilderMod.lowerCostList(row.COST);
-  if (candidate.type !== 'BUILD_NEW') return executorMod.resolvePayment(STATE, playerId, items).ok;
-  const discount = executorMod.applyBzDiscount(items, buildBzDiscount);
-  if (!discount) return false;
-  const payItems = discount.bzUsed > 0 ? [...discount.items, { resource: 'BZ', count: discount.bzUsed }] : discount.items;
-  return executorMod.resolvePayment(STATE, playerId, payItems).ok;
+  const player = STATE.players.find((p) => p.id === playerId);
+  const bzAvailable = player.resources.BZ || 0;
+  return executorMod.enumerateBzOutcomes(STATE, playerId, items, bzAvailable, buildColorPreference);
+}
+
+/** Whether playerId can currently pay candidate's COST (real + Z + auto-maxed BZ combined). Used to
+ * filter the BUILD/UPGRADE candidate list down to only what's actually buildable right now (2026-07-31,
+ * per user feedback: "建築時、ダイス目の合っているものだけカードを表示になっていますが、今建築できる
+ * もの（ダイス目+資源）だけ表示してください" -- board.getBuildCandidates itself stays unfiltered/
+ * dice-only, since other callers (AREA/QST/bare-TAP pendingBuild detection, and their own
+ * NO_BUILDABLE_CARD check) rely on the *rule*-eligible list; this is purely a display-layer filter on
+ * top of that). */
+function candidateAffordable(candidate, playerId) {
+  if (candidate.type !== 'BUILD_NEW') {
+    const row = dataLoaderMod.getCardRow(INDEX, candidate.fromFaceId);
+    const items = commandBuilderMod.lowerCostList(row.COST);
+    return executorMod.resolvePayment(STATE, playerId, items).ok;
+  }
+  return bzOutcomesForCandidate(candidate, playerId).length > 0;
 }
 
 /** CON002B's "real or Z" payment-preference toggle (2026-07-31, see [[project-dice-wp-dsl-spec]]'s
@@ -2197,56 +2209,34 @@ function renderBuildChoicePaymentControls() {
   }
 }
 
-/** BZ discount stepper (2026-07-31, "BZは建築コストの踏み倒し専用（改築/CHANGEには使用不可）") -- one
- * -/+/count control per resource used by *any* BUILD_NEW candidate currently on offer (UPGRADE
- * candidates never get one, see executor.applyBzDiscount). buildBzDiscount is shared across
- * candidates, same reasoning as buildColorPreference. Hidden entirely if the player holds no BZ, or
- * every candidate on offer is an UPGRADE. Each resource's + is capped by both the remaining BZ pool
- * and the largest cost that resource actually has among the on-offer BUILD_NEW candidates (discounting
- * further than any candidate needs would just be wasted BZ with no effect, per applyBzDiscount's "not
- * present in items" rule -- capping here keeps the control from implying it does something it doesn't). */
-function renderBuildChoiceBzControls() {
+/** Ambiguous-BZ-outcome chooser (2026-08-04, per user feedback: "デフォルトでBZを使って建築するように
+ * して" -- replaces the old manual per-resource stepper entirely). Only ever rendered once a BUILD_NEW
+ * candidate has already been clicked and executor.enumerateBzOutcomes found 2+ distinct affordable ways
+ * to spend the (always-maxed) BZ discount -- e.g. cost 2A+1B with 2 BZ held and the player holding both
+ * a real A and a real B (see enumerateBzOutcomes's own doc for the general rule this implements).
+ * Nothing has been committed yet, so "戻る" just clears pendingBzOutcomeChoice back to the candidate
+ * list. Each option button shows the real resource(s) that specific outcome would actually spend
+ * (resource-dot badges, same visual language as the rest of the app) and commits on click. */
+function renderBzOutcomeChoice() {
   const container = document.getElementById('build-choice-bz');
   container.innerHTML = '';
-  const playerId = pendingBuildChoice.playerId;
-  const player = STATE.players.find((p) => p.id === playerId);
-  const bzHeld = player.resources.BZ || 0;
-  if (bzHeld <= 0) return;
-  const buildNewCandidates = pendingBuildChoice.candidates.filter((c) => c.type === 'BUILD_NEW');
-  if (buildNewCandidates.length === 0) return;
-  const resourceCounts = {};
-  for (const candidate of buildNewCandidates) {
-    const row = dataLoaderMod.getCardRow(INDEX, candidate.faceId);
-    for (const item of commandBuilderMod.lowerCostList(row.COST)) {
-      resourceCounts[item.resource] = Math.max(resourceCounts[item.resource] || 0, item.count);
+  if (!pendingBzOutcomeChoice) return;
+  const { candidate, outcomes } = pendingBzOutcomeChoice;
+  container.appendChild(el('span', 'build-choice-payment__label', 'どちらの資源で支払いますか？'));
+  for (const outcome of outcomes) {
+    const btn = el('button', 'build-choice-payment__option');
+    btn.type = 'button';
+    for (const item of outcome.resolvedItems) {
+      if (item.resource === 'BZ') continue; // BZ is spent in every outcome alike -- not the differentiator
+      btn.appendChild(renderResourceBadge(item.resource, item.count));
     }
+    btn.addEventListener('click', () => commitBuildCandidate(candidate, outcome.bzDiscount));
+    container.appendChild(btn);
   }
-  const resources = Object.keys(resourceCounts);
-  if (resources.length === 0) return;
-  const totalUsed = Object.values(buildBzDiscount).reduce((sum, n) => sum + n, 0);
-  container.appendChild(el('span', 'build-choice-payment__label', `BZ割引（残り${bzHeld - totalUsed}個）`));
-  for (const resource of resources) {
-    const group = el('div', 'build-choice-payment__group');
-    group.appendChild(el('span', 'build-choice-payment__resource', resource));
-    const current = buildBzDiscount[resource] || 0;
-    const minusBtn = el('button', 'build-choice-payment__option', '−');
-    const countEl = el('span', 'build-choice-bz__count', String(current));
-    const plusBtn = el('button', 'build-choice-payment__option', '+');
-    minusBtn.type = 'button';
-    plusBtn.type = 'button';
-    minusBtn.disabled = current <= 0;
-    plusBtn.disabled = current >= resourceCounts[resource] || totalUsed >= bzHeld;
-    minusBtn.addEventListener('click', () => {
-      buildBzDiscount[resource] = current - 1;
-      if (buildBzDiscount[resource] <= 0) delete buildBzDiscount[resource];
-      renderBuildChoiceModal();
-    });
-    plusBtn.addEventListener('click', () => { buildBzDiscount[resource] = current + 1; renderBuildChoiceModal(); });
-    group.appendChild(minusBtn);
-    group.appendChild(countEl);
-    group.appendChild(plusBtn);
-    container.appendChild(group);
-  }
+  const backBtn = el('button', 'build-choice-payment__option', '戻る');
+  backBtn.type = 'button';
+  backBtn.addEventListener('click', () => { pendingBzOutcomeChoice = null; render(STATE); });
+  container.appendChild(backBtn);
 }
 
 /** Untapped bare-IMMEDIATE-kind cards (see bareTapKind) whose TAP program grants BZ -- e.g. JOB004A's
@@ -2307,9 +2297,9 @@ function renderBuildChoiceBzTapPrompt() {
  * same as anywhere else). Clicking one places it via the exact same board.placeDice call as a normal
  * placement (onto the SAME slotIndex, so it stacks), which returns a fresh pendingBuild computed from
  * the new (higher) accumulated buildValue -- see board.js's own stacking doc -- and replaces
- * pendingBuildChoice's candidates/buildValue with it in place. buildColorPreference/buildBzDiscount are
- * deliberately NOT reset here (unlike a fresh AREA placement) since the player may have already set them
- * for this same build decision. */
+ * pendingBuildChoice's candidates/buildValue with it in place. buildColorPreference is deliberately NOT
+ * reset here (unlike a fresh AREA placement) since the player may have already set it for this same
+ * build decision. */
 function renderBuildChoiceAddDieSection() {
   const container = document.getElementById('build-choice-add-die');
   container.innerHTML = '';
@@ -2352,6 +2342,47 @@ function renderBuildChoiceAddDieSection() {
   container.appendChild(row);
 }
 
+/** Commits a BUILD_NEW/UPGRADE candidate once its bzDiscount is settled -- either auto-picked
+ * (bzOutcomesForCandidate found exactly one affordable outcome) or player-picked via
+ * renderBzOutcomeChoice. Shared by both paths in the click handler below since everything past that
+ * point (QST vs AREA/TAP commit, success/failure bookkeeping) is identical either way. */
+function commitBuildCandidate(candidate, bzDiscount) {
+  const playerId = pendingBuildChoice.playerId;
+  const context = { playerId, colorPreference: buildColorPreference, bzDiscount };
+  // QST rewards and a card's own bare TAP=BUILD(...) (see attachTapToggle/bareTapKind) both reuse
+  // this same modal but commit via qst.completeQuestClaim / a plain completeAreaBuild + manual
+  // tap respectively, and never advance the turn -- both are free-action-timed, not a die
+  // placement (only an AREA-triggered BUILD, from an actual die placement, ends the turn).
+  const result = pendingBuildChoice.source === 'QST'
+    ? qstMod.completeQuestClaim(STATE, INDEX, context, pendingBuildChoice, candidate)
+    : boardMod.completeAreaBuild(STATE, INDEX, context, candidate, pendingBuildChoice.remainingCommands);
+  // Only close the modal on success -- e.g. INSUFFICIENT_RESOURCES (can't afford this candidate's
+  // COST) must NOT silently dismiss the choice, since the die/build trigger already happened and
+  // is not undoable from here; the player needs to try an affordable candidate instead.
+  if (result.success) {
+    const source = pendingBuildChoice.source;
+    if (source === 'TAP') STATE.cards[pendingBuildChoice.physicalId].tapped = true;
+    pendingBuildChoice = null;
+    pendingBzOutcomeChoice = null;
+    placementMessage = '';
+    // Auto/manual choice for the card that was just built/upgraded, if it has a reactive TAP
+    // ability (see pendingAutoModeChoice's own comment).
+    const newFaceId = candidate.type === 'UPGRADE' ? candidate.toFaceId : candidate.faceId;
+    if (reactiveTapKind(newFaceId)) {
+      const newPhysicalId = candidate.type === 'UPGRADE' ? candidate.physicalId : result.buildResult.physicalId;
+      pendingAutoModeChoice = { physicalId: newPhysicalId, playerId };
+    }
+    if (source === 'AREA') turnActionTaken = true; // this placement's die is spent, but the turn itself waits for the "ターン終了" button (2026-08-01)
+  } else {
+    // Payment somehow failed even after bzOutcomesForCandidate said it would succeed (stale state
+    // between render and click) -- drop back to the plain candidate list rather than leaving the
+    // player stuck looking at a chooser for a payment that just failed.
+    pendingBzOutcomeChoice = null;
+    placementMessage = `建築できません（${result.reason}）`;
+  }
+  render(STATE);
+}
+
 function renderBuildChoiceModal() {
   const overlay = document.getElementById('build-choice-overlay');
   if (!pendingBuildChoice) {
@@ -2359,10 +2390,30 @@ function renderBuildChoiceModal() {
     return;
   }
   overlay.hidden = false;
+  // Ambiguous-BZ-outcome step (2026-08-04): a candidate was already clicked and there's more than one
+  // distinct affordable way to spend BZ on it -- show only the chooser (plus a preview of the candidate
+  // being built) and hold off on re-rendering the full candidate list/other controls until it's
+  // resolved, so the player can't accidentally click a *different* candidate mid-choice.
+  if (pendingBzOutcomeChoice) {
+    document.getElementById('build-choice-bz-tap-prompt').innerHTML = '';
+    document.getElementById('build-choice-add-die').innerHTML = '';
+    document.getElementById('build-choice-payment').innerHTML = '';
+    renderBzOutcomeChoice();
+    const list = document.getElementById('build-choice-list');
+    list.innerHTML = '';
+    const { candidate } = pendingBzOutcomeChoice;
+    const faceId = candidate.type === 'UPGRADE' ? candidate.toFaceId : candidate.faceId;
+    const cardNode = buildCardVisual(faceId, { showEffect: true, noInteraction: true });
+    const tall = cardNode.classList.contains('shop-card--tall');
+    const cell = el('div', tall ? 'owned-card-cell owned-card-cell--tall' : 'owned-card-cell');
+    cell.appendChild(cardNode);
+    list.appendChild(cell);
+    return;
+  }
   renderBuildChoiceBzTapPrompt();
   renderBuildChoiceAddDieSection();
   renderBuildChoicePaymentControls();
-  renderBuildChoiceBzControls();
+  document.getElementById('build-choice-bz').innerHTML = '';
   const list = document.getElementById('build-choice-list');
   list.innerHTML = '';
   const affordableCandidates = pendingBuildChoice.candidates.filter((c) => candidateAffordable(c, pendingBuildChoice.playerId));
@@ -2378,35 +2429,17 @@ function renderBuildChoiceModal() {
     const cell = el('div', tall ? 'owned-card-cell owned-card-cell--tall owned-card-cell--selectable' : 'owned-card-cell owned-card-cell--selectable');
     cell.appendChild(cardNode);
     cell.addEventListener('click', () => {
-      const playerId = pendingBuildChoice.playerId;
-      const context = { playerId, colorPreference: buildColorPreference, bzDiscount: buildBzDiscount };
-      // QST rewards and a card's own bare TAP=BUILD(...) (see attachTapToggle/bareTapKind) both reuse
-      // this same modal but commit via qst.completeQuestClaim / a plain completeAreaBuild + manual
-      // tap respectively, and never advance the turn -- both are free-action-timed, not a die
-      // placement (only an AREA-triggered BUILD, from an actual die placement, ends the turn).
-      const result = pendingBuildChoice.source === 'QST'
-        ? qstMod.completeQuestClaim(STATE, INDEX, context, pendingBuildChoice, candidate)
-        : boardMod.completeAreaBuild(STATE, INDEX, context, candidate, pendingBuildChoice.remainingCommands);
-      // Only close the modal on success -- e.g. INSUFFICIENT_RESOURCES (can't afford this candidate's
-      // COST) must NOT silently dismiss the choice, since the die/build trigger already happened and
-      // is not undoable from here; the player needs to try an affordable candidate instead.
-      if (result.success) {
-        const source = pendingBuildChoice.source;
-        if (source === 'TAP') STATE.cards[pendingBuildChoice.physicalId].tapped = true;
-        pendingBuildChoice = null;
-        placementMessage = '';
-        // Auto/manual choice for the card that was just built/upgraded, if it has a reactive TAP
-        // ability (see pendingAutoModeChoice's own comment).
-        const newFaceId = candidate.type === 'UPGRADE' ? candidate.toFaceId : candidate.faceId;
-        if (reactiveTapKind(newFaceId)) {
-          const newPhysicalId = candidate.type === 'UPGRADE' ? candidate.physicalId : result.buildResult.physicalId;
-          pendingAutoModeChoice = { physicalId: newPhysicalId, playerId };
-        }
-        if (source === 'AREA') turnActionTaken = true; // this placement's die is spent, but the turn itself waits for the "ターン終了" button (2026-08-01)
-      } else {
-        placementMessage = `建築できません（${result.reason}）`;
+      if (candidate.type !== 'BUILD_NEW') {
+        commitBuildCandidate(candidate, {});
+        return;
       }
-      render(STATE);
+      const outcomes = bzOutcomesForCandidate(candidate, pendingBuildChoice.playerId);
+      if (outcomes.length > 1) {
+        pendingBzOutcomeChoice = { candidate, outcomes };
+        render(STATE);
+        return;
+      }
+      commitBuildCandidate(candidate, outcomes.length === 1 ? outcomes[0].bzDiscount : {});
     });
     wrapper.appendChild(cell);
     list.appendChild(wrapper);
@@ -2821,7 +2854,7 @@ function attachTapToggle(cardNode, cardState, faceId, canAct, physicalId) {
       if (result.success && result.pendingBuild) {
         pendingBuildChoice = { source: 'TAP', playerId: cardState.ownerId, ...result.pendingBuild };
         buildColorPreference = {};
-        buildBzDiscount = {};
+        pendingBzOutcomeChoice = null;
         placementMessage = '';
       } else {
         placementMessage = `カードを使用できません（${result.reason}）`;
