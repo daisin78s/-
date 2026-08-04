@@ -50,6 +50,25 @@ const AREA009_MAP_ID = 'MAP009';
 /** CONVERT_LIMIT(ALL,n) (confirmed 2026-07-29) applies only to ALL-based CHANGEs from these 3 AREAs. */
 const CONVERT_LIMIT_ELIGIBLE_MAP_IDS = ['MAP003', 'MAP004', 'MAP005'];
 
+/** Usage fee owed by a non-owner who uses a tier-B/C AREA (confirmed: "tier Bは一律1K...tier Cは一律2K",
+ * a flat system rule, not per-AREA data). Tier A has no fee. */
+const USAGE_FEE_BY_TIER = { B: 1, C: 2 };
+
+/** Sets player.pendingFee (see its own doc in game-state.js) if placing on mapId right now means using
+ * someone else's tiered-up AREA -- a no-op (leaves pendingFee untouched) for the map's own owner, a
+ * tier-A map (feeOwnerId null), or an AREA with no tier suffix at all (castle/AREA007, confirmed to have
+ * no tier concept). Called once per placement action (placeDice, or once for the whole group in
+ * placeDiceGroup) -- "using the area" is what's billed, not per-die, matching how this is always exactly
+ * one turn's worth of action even when placeDiceGroup lets multiple dice land in it. */
+function chargeUsageFeeIfOwed(state, map, playerId) {
+  if (!map.feeOwnerId || map.feeOwnerId === playerId) return;
+  const { tier } = splitCardId(map.currentAreaId);
+  const amount = USAGE_FEE_BY_TIER[tier];
+  if (!amount) return;
+  const player = state.players.find((p) => p.id === playerId);
+  player.pendingFee = { mapId: map.mapId, amount };
+}
+
 /**
  * Places one of the player's own, not-yet-placed dice onto AREA slot
  * `slotIndex` of `mapId`, then resolves that AREA's ACTION. Enforces the
@@ -160,6 +179,7 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
     seq: state.placementSeq,
     countsForTurnOrder: !(bypass && wouldBeBlocked),
   });
+  chargeUsageFeeIfOwed(state, map, context.playerId);
 
   executor.emitAndResolve(state, index, actionContext, 'PLACE', mapId);
   const actionResult = resolveAreaAction(state, index, actionContext, areaRow, buildValue);
@@ -344,6 +364,7 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
     touchedSlots.add(slotIndex);
     executor.emitAndResolve(state, index, actionContext, 'PLACE', mapId);
   }
+  chargeUsageFeeIfOwed(state, map, playerId);
 
   // Sum each touched slot's *full* occupancy (2026-08-02 fix, caught in headless verification) -- not
   // just this group's own dice. A slot this group joined via the doubles-stacking rule (see
@@ -492,7 +513,11 @@ function nextTierLetter(tier) {
  */
 function getBuildCandidates(state, index, playerId, categories, buildValue) {
   const candidates = [];
-  const normalCategories = categories.filter((c) => c === 'A' || c === 'B' || c === 'C');
+  const player = state.players.find((p) => p.id === playerId);
+  const blocked = player.blockedBuildCategoriesThisTurn;
+  const normalCategories = categories
+    .filter((c) => c === 'A' || c === 'B' || c === 'C')
+    .filter((c) => !blocked.includes(c));
 
   if (normalCategories.length > 0) {
     for (const shopKey of ['NORMAL', 'SPECIAL']) {
@@ -507,7 +532,7 @@ function getBuildCandidates(state, index, playerId, categories, buildValue) {
     }
   }
 
-  if (categories.includes('M')) {
+  if (categories.includes('M') && !blocked.includes('M')) {
     for (const [slotId, faceId] of Object.entries(state.shops.M.slots)) {
       if (!faceId) continue;
       const threshold = parseMonumentThreshold(getCardRow(index, faceId).DICE);
@@ -517,8 +542,7 @@ function getBuildCandidates(state, index, playerId, categories, buildValue) {
     }
   }
 
-  if (categories.includes('U')) {
-    const player = state.players.find((p) => p.id === playerId);
+  if (categories.includes('U') && !blocked.includes('U')) {
     for (const physicalId of player.ownedCardPhysicalIds) {
       // UPGRADE only applies to actually-built cards (A/B/C) -- JOB/CON are drafted/dealt during
       // onboarding, never built via BUILD, so neither is upgrade-eligible even though CON happens to

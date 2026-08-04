@@ -148,6 +148,27 @@ function giveDie(state, playerId, value) {
 }
 
 // ---------------------------------------------------------------------------
+// getBuildCandidates respects BLOCK_BUILD (2026-08-04, per user feedback: using JOB004's TAP blocks
+// monument building for the rest of that turn) -- the single choke point every BUILD(M) path shares.
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  // buildValue=12 clears every monument's threshold (max DICE is ">=12"), so at least one M candidate
+  // is guaranteed regardless of this seed's shop shuffle.
+  const unblocked = board.getBuildCandidates(state, index, 'P1', ['M'], 12);
+  check('Without a block, at least one monument candidate is reachable at buildValue=12', unblocked.length > 0, true);
+
+  p1.blockedBuildCategoriesThisTurn = ['M'];
+  const blocked = board.getBuildCandidates(state, index, 'P1', ['M'], 12);
+  check('With M blocked, no monument candidates are offered even at buildValue=12', blocked.length, 0);
+
+  // Blocking is per-player, not global -- P2 (unaffected) still sees the same candidates P1 did before.
+  const p2Candidates = board.getBuildCandidates(state, index, 'P2', ['M'], 12);
+  check('...and does not affect other players', p2Candidates.length, unblocked.length);
+}
+
+// ---------------------------------------------------------------------------
 // resolveBuild(UPGRADE)
 // ---------------------------------------------------------------------------
 {
@@ -485,6 +506,63 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   // from a *different*, non-EX slot -- there is none left to test here (SLOT1 already used), so instead
   // confirm a fresh SLOT1-value die is rejected as SLOT_OCCUPIED (SLOT1 itself, unrelated to EX) --
   // the real "EX blocks others" case is covered by the next block using a still-open ANY-valued slot.
+}
+
+// ---------------------------------------------------------------------------
+// Usage fee charging (2026-08-04, bug fix -- board.js set nothing toward map.accumulatedFee before this;
+// only executor.collectUsageFee existed, so there was never anything to collect). AREA001B/C are real
+// tier-B/C data rows (1K/2K respectively, confirmed flat-rate, see board.js's USAGE_FEE_BY_TIER).
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  state.maps['MAP001'] = mapWithArea('MAP001', 'AREA001B', 3, 'P1'); // P1 owns (tiered this up)
+  const die = giveDie(state, 'P2', 1); // SLOT1=1
+  const result = board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP001', 0);
+  check('A non-owner (P2) placing on a tier-B AREA succeeds', result.success, true);
+  check('...and owes the tier-B flat fee (1K) to the map', player(state, 'P2').pendingFee, { mapId: 'MAP001', amount: 1 });
+}
+{
+  const state = freshStateWithShops();
+  state.maps['MAP001'] = mapWithArea('MAP001', 'AREA001C', 3, 'P1');
+  const die = giveDie(state, 'P2', 1);
+  board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP001', 0);
+  check('A non-owner placing on a tier-C AREA owes the tier-C flat fee (2K)', player(state, 'P2').pendingFee, { mapId: 'MAP001', amount: 2 });
+}
+{
+  const state = freshStateWithShops();
+  state.maps['MAP001'] = mapWithArea('MAP001', 'AREA001B', 3, 'P1');
+  const die = giveDie(state, 'P1', 1); // the owner uses their own tiered-up AREA
+  board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP001', 0);
+  check('The owner using their own AREA owes no fee (pendingFee stays null)', player(state, 'P1').pendingFee, null);
+}
+{
+  // Full cycle: fee owed -> TURNEND gate blocks if unpayable -> paying it moves K into accumulatedFee
+  // -> the owner can then collect it via the existing FEE_COLLECT free action.
+  const executor = require('../src/executor');
+  const turnFlow = require('../src/turn-flow');
+  const state = freshStateWithShops();
+  state.turnOrder = ['P1', 'P2'];
+  state.maps['MAP001'] = mapWithArea('MAP001', 'AREA001B', 3, 'P1');
+  const die = giveDie(state, 'P2', 1);
+  board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP001', 0);
+  // AREA001B's own ACTION (ADD(5K)) just handed P2 5K -- zero it back out so this block actually tests
+  // "can't afford the fee" rather than accidentally already being solvent from the area's own effect.
+  player(state, 'P2').resources.K = 0;
+
+  check('canEndTurn blocks P2 while unable to afford the 1K fee (K=0)', executor.canEndTurn(state, index, 'P2').ok, false);
+  const violations = executor.canEndTurn(state, index, 'P2').violations;
+  check('...citing a USAGE_FEE violation for the right map/amount', violations.some((v) => v.type === 'USAGE_FEE' && v.mapId === 'MAP001' && v.amount === 1), true);
+
+  player(state, 'P2').resources.K = 1;
+  const endResult = turnFlow.endTurn(state, index, 'P2');
+  check('Once affordable, endTurn succeeds', endResult.success, true);
+  check('...P2 paid the 1K', player(state, 'P2').resources.K, 0);
+  check('...which landed on the map as accumulatedFee', state.maps['MAP001'].accumulatedFee, 1);
+  check('...and pendingFee is cleared', player(state, 'P2').pendingFee, null);
+
+  const collectResult = executor.collectUsageFee(state, 'P1', 'MAP001');
+  check('The owner (P1) can now collect the accumulated fee', collectResult, { success: true, amount: 1 });
+  check('...map.accumulatedFee is back to 0', state.maps['MAP001'].accumulatedFee, 0);
 }
 {
   const state = freshStateWithShops();

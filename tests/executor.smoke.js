@@ -523,5 +523,58 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   check('BZ already at 0 stays 0 at TURNEND (no-op case)', getPlayerRef(state, 'P1').resources.BZ, 0);
 }
 
+// ---------------------------------------------------------------------------
+// BLOCK_BUILD(category,THIS_TURN) (2026-08-04, per user feedback: using JOB004's TAP
+// "CHANGE(3K,2BZ);BLOCK_BUILD(M,THIS_TURN)" blocks that player from building a monument for the rest of
+// the turn). Turn-scoped like GRANT_PLACE_ANYWHERE's THIS_TURN flag -- reset at TURNEND.
+// ---------------------------------------------------------------------------
+{
+  const state = freshState();
+  const result = executor.runProgram(state, index, { playerId: 'P1' }, 'BLOCK_BUILD(M,THIS_TURN)');
+  check('BLOCK_BUILD(M,THIS_TURN) succeeds', result.success, true);
+  check('...and records M in blockedBuildCategoriesThisTurn', getPlayerRef(state, 'P1').blockedBuildCategoriesThisTurn, ['M']);
+}
+{
+  const state = freshState();
+  getPlayerRef(state, 'P1').blockedBuildCategoriesThisTurn = ['M'];
+  executor.applyTurnEnd(state, index, 'P1');
+  check('blockedBuildCategoriesThisTurn is cleared at TURNEND', getPlayerRef(state, 'P1').blockedBuildCategoriesThisTurn, []);
+}
+{
+  const state = freshState();
+  const row = getCardRow(index, 'JOB004');
+  const player = getPlayerRef(state, 'P1');
+  player.resources.K = 3;
+  const result = executor.runProgram(state, index, { playerId: 'P1' }, row.TAP);
+  check('JOB004\'s TAP (CHANGE(3K,2BZ);BLOCK_BUILD(M,THIS_TURN)) succeeds and pays/grants correctly', { success: result.success, K: player.resources.K, BZ: player.resources.BZ }, { success: true, K: 0, BZ: 2 });
+  check('...and blocks M for this player this turn', player.blockedBuildCategoriesThisTurn, ['M']);
+}
+
+// ---------------------------------------------------------------------------
+// runChange's gain side fires GET again (2026-08-04, per user feedback: "JOB006はCHANGEで色Dを手に入れ
+// ても発動するようにしてください"), reverting the part of the 2026-08-03 fix that went further than the
+// actual complaint. tryFreeAction (the 6 built-in free actions) stays silent -- that's the narrower
+// scope this was meant to have all along, since no CHANGE(...) DSL command anywhere in the data grants K
+// (the resource JOB005's reaction is keyed on), so only the free actions could ever trigger it.
+// ---------------------------------------------------------------------------
+{
+  const state = freshState();
+  giveCard(state, 'JOB006', 'P1'); // PASSIVE=ON(GET(D),ADD(Z));ON(GET(wD),ADD(K))
+  const player = getPlayerRef(state, 'P1');
+  const before = player.dice.filter((d) => d.kind === 'COLOR').length;
+  const result = executor.runCommand(state, index, { playerId: 'P1' }, { type: 'CHANGE', pay: [], gain: [{ resource: 'D', count: { kind: 'literal', value: 1 } }], times: { kind: 'literal', value: 1 } });
+  check('A bare CHANGE(...,D) succeeds and grants the color die', { success: result.success, diceGained: player.dice.filter((d) => d.kind === 'COLOR').length - before }, { success: true, diceGained: 1 });
+  check('...and JOB006 auto-reacts to the CHANGE-triggered GET(D), granting Z', player.resources.Z, 1);
+}
+{
+  const state = freshState();
+  giveCard(state, 'JOB005', 'P1'); // TAP=ON(GET(K),CHANGE(K,Z)), AUTO="A"
+  const player = getPlayerRef(state, 'P1');
+  player.resources.A = 1;
+  const result = executor.tryFreeAction(state, index, 'P1', 'A_K');
+  check('The A->K free action still succeeds', result.success, true);
+  check('...but does NOT trigger JOB005\'s GET(K) reaction (free actions stay silent, unlike CHANGE)', player.resources.Z, 0);
+}
+
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);

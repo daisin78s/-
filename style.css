@@ -119,6 +119,93 @@ h1, h2, h3 { margin: 0; }
 /* #player-cards' own header instead -- see .player-cards__header)         */
 /* ---------------------------------------------------------------------- */
 
+/* ---------------------------------------------------------------------- */
+/* Debug turn-history timeline (2026-08-04, dev/verification tool, separate  */
+/* from the normal in-game Undo button) -- see main.js's renderDebugPanel.  */
+/* ---------------------------------------------------------------------- */
+
+.debug-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.debug-panel__toggle {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-sunken);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.debug-panel__toggle--on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.debug-history-controls {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.debug-history-controls__nav {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.debug-history-controls__nav button {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-sunken);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.debug-history-controls__nav button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.debug-history-controls__position {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.debug-history-controls__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.debug-history-list__item {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-sunken);
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.debug-history-list__item--current {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 .status-chip {
   display: flex;
   align-items: baseline;

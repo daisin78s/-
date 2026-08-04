@@ -501,14 +501,15 @@ function runChange(state, index, context, cmd) {
     if (!ok) throw new ExecutionError('Payment failed after affordability check passed (bug)');
   }
   for (const item of gain) {
-    // grantResource, not grantResourceAndEmitGet (corrected 2026-08-03, per user feedback: "JOB
-    // ON(GET(K),CHANGE(K,Z)) フリーアクションのA→K等に反応してしまいます...ON(GET(K),CHANGE(K,Z))は
-    // ADD(K)やADD(K,A)などにのみ反応するように") -- ON(GET(...),...) reactions are meant to fire only
-    // from a genuine ADD, not from a CHANGE's pay-X-get-Y conversion (free actions are the same kind of
-    // conversion, see tryFreeAction's matching fix below) -- otherwise e.g. JOB005A's K->Z reaction
-    // fired every time a player used the A->K free action, which the user judged far too strong (an
-    // effectively-free extra Z on top of every ordinary K conversion).
-    grantResource(state, index, context.playerId, item.resource, item.count * times);
+    // grantResourceAndEmitGet, same as runAdd (reverted 2026-08-04, per user feedback: JOB006's
+    // ON(GET(D),ADD(Z)) should fire when AREA007's CHANGE((A,B,C),D) grants D). The 2026-08-03 fix that
+    // made this a plain grantResource was scoped too broadly -- the actual complaint was specifically
+    // about the 6 built-in free actions (A->K etc., see tryFreeAction below) firing GET via their own
+    // conversion, not about genuine CHANGE(...) DSL commands on cards/AREAs. Confirmed safe to revert
+    // here: no CHANGE(...) anywhere in the data grants K (the resource JOB005A's ON(GET(K),CHANGE(K,Z))
+    // reacts to), so this can't reintroduce that bug -- only tryFreeAction's own K grants can, and that
+    // fix (below) is untouched.
+    grantResourceAndEmitGet(state, index, context, item.resource, item.count * times);
   }
   if (cmd.times.kind === 'all' && context.convertLimitEligible) {
     for (const rule of getPassiveRules(state, index, context.playerId, 'CONVERT_LIMIT')) {
@@ -625,6 +626,18 @@ function runGrantPlaceAnywhere(state, context, cmd) {
   return { success: true };
 }
 
+/** BLOCK_BUILD(category,THIS_TURN) -- confirmed 2026-08-04: using JOB004's TAP (CHANGE(3K,2BZ)) blocks
+ * that player from building a monument for the rest of the turn. Only THIS_TURN scope exists today;
+ * board.getBuildCandidates is the single choke point that reads this list, so every BUILD(M) path
+ * (AREA action, bare TAP, QST reward) is blocked uniformly with no per-path special-casing. */
+function runBlockBuild(state, context, cmd) {
+  const player = getPlayer(state, context.playerId);
+  if (!player.blockedBuildCategoriesThisTurn.includes(cmd.category)) {
+    player.blockedBuildCategoriesThisTurn.push(cmd.category);
+  }
+  return { success: true };
+}
+
 // ---------------------------------------------------------------------------
 // Free actions (confirmed 2026-07-29, corrected 2026-08-02, [[project-dice-wp-dsl-spec]]): A/B/C/Z->K,
 // wD->2K, and usage-fee collection are NOT DSL/card effects -- they're a fixed mechanic every player
@@ -633,9 +646,14 @@ function runGrantPlaceAnywhere(state, context, cmd) {
 // during the player's own turn, limited only by having the resource to pay each time. Usage-fee
 // collection is the one exception: it keeps its own tap flag (player.freeActionTaps.FEE_COLLECT),
 // separate from card taps, reset only at round end (see resetFreeActionsForNewRound) -- once per round.
-// Their gain side uses grantResource, not grantResourceAndEmitGet (corrected 2026-08-03): a free action
-// is a pay-X-get-Y conversion, same category as CHANGE, so it doesn't trigger ON(GET(...),...)
-// reactions -- see tryFreeAction's own comment.
+// Their gain side uses grantResource, not grantResourceAndEmitGet (corrected 2026-08-03, per user
+// feedback: "JOB ON(GET(K),CHANGE(K,Z)) フリーアクションのA→K等に反応してしまいます...ADD(K)やADD(K,A)
+// などにのみ反応するように") -- these 6 free actions specifically don't trigger ON(GET(...),...)
+// reactions (otherwise JOB005A's K->Z reaction fired every time a player used the A->K free action, an
+// effectively-free extra Z the user judged far too strong). NOTE this narrower scope (2026-08-04): this
+// used to also apply to every CHANGE(...) DSL command (see runChange), but that was reverted -- genuine
+// CHANGE commands on cards/AREAs (e.g. AREA007's CHANGE((A,B,C),D)) DO fire GET again, only these 6
+// built-in free actions stay silent.
 // ---------------------------------------------------------------------------
 
 const FREE_ACTION_DEFS = {
@@ -742,6 +760,7 @@ function runCommand(state, index, context, cmd) {
     case 'SET_DIE_VALUE': return runSetDieValue(state, context, cmd);
     case 'CHANGE_DIE_VALUE': return runChangeDieValue(state, context, cmd);
     case 'GRANT_PLACE_ANYWHERE': return runGrantPlaceAnywhere(state, context, cmd);
+    case 'BLOCK_BUILD': return runBlockBuild(state, context, cmd);
     case 'IF':
       return evalCondition(state, index, context.playerId, cmd.condition)
         ? runCommand(state, index, context, cmd.effect)
@@ -788,7 +807,8 @@ function runProgram(state, index, context, dslText) {
 // TURNEND
 // ---------------------------------------------------------------------------
 
-/** Pre-check: RESOURCE_TOTAL_LIMIT rules block TURNEND entirely until satisfied. */
+/** Pre-check: RESOURCE_TOTAL_LIMIT rules, and an unpaid usage fee (see PlayerState.pendingFee in
+ * game-state.js), block TURNEND entirely until satisfied. */
 function canEndTurn(state, index, playerId) {
   const player = getPlayer(state, playerId);
   const violations = [];
@@ -799,6 +819,9 @@ function canEndTurn(state, index, playerId) {
       const total = cmd.resources.reduce((sum, r) => sum + (player.resources[r] || 0), 0);
       if (total > cmd.limit) violations.push(cmd);
     }
+  }
+  if (player.pendingFee && (player.resources.K || 0) < player.pendingFee.amount) {
+    violations.push({ type: 'USAGE_FEE', ...player.pendingFee });
   }
   return { ok: violations.length === 0, violations };
 }
@@ -836,6 +859,17 @@ function applyTurnEnd(state, index, playerId) {
   // TURNEND says this), so this is a standing rule enforced here directly, same as the
   // GRANT_PLACE_ANYWHERE reset just above.
   player.resources.BZ = 0;
+  // BLOCK_BUILD(category,THIS_TURN) is turn-scoped too (see runBlockBuild).
+  player.blockedBuildCategoriesThisTurn = [];
+  // Usage fee (2026-08-04, fixing a gap where board.js set PlayerState.pendingFee but nothing ever
+  // collected it -- see pendingFee's own doc). canEndTurn() already guaranteed affordability above, so
+  // this is just the mutation half of that same gate-then-mutate pair (same contract as
+  // RESOURCE_TOTAL_LIMIT).
+  if (player.pendingFee) {
+    player.resources.K -= player.pendingFee.amount;
+    state.maps[player.pendingFee.mapId].accumulatedFee += player.pendingFee.amount;
+    player.pendingFee = null;
+  }
 }
 
 // ---------------------------------------------------------------------------

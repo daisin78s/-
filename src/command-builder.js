@@ -168,6 +168,12 @@ function lowerCall(node) {
         target: identLikeName(node.args[0]),
         duration: identLikeName(node.args[1]),
       };
+    case 'BLOCK_BUILD':
+      return {
+        type: 'BLOCK_BUILD',
+        category: identLikeName(node.args[0]),
+        duration: identLikeName(node.args[1]),
+      };
     default:
       throw new CommandBuildError(`Unknown DSL function: ${node.name}`);
   }

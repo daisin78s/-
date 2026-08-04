@@ -112,6 +112,19 @@ function createDie(id, kind) {
  *   label (dice/pieces are this player's color) -- game logic keys everything off `id`, never color.
  * @property {number} qstRewardCount - QST (Quest) card rewards claimed so far, game-wide (confirmed
  *   2026-07-30: capped at 2 per player for the whole game). See src/qst.js.
+ * @property {string[]} blockedBuildCategoriesThisTurn - BUILD categories (e.g. "M") this player may not
+ *   build this turn, set by DSL's BLOCK_BUILD(category,THIS_TURN) (confirmed 2026-08-04: using JOB004's
+ *   TAP CHANGE(3K,2BZ) blocks building a monument for the rest of that turn). Turn-scoped like
+ *   GRANT_PLACE_ANYWHERE's THIS_TURN flag -- reset in executor.applyTurnEnd.
+ * @property {{mapId:string, amount:number}|null} pendingFee - set by board.placeDice/placeDiceGroup
+ *   (2026-08-04, fixing a gap where accumulatedFee was never actually charged -- see executor.js's
+ *   USAGE_FEE_BY_TIER) when this player places on a MAP whose feeOwnerId is someone else (tier B=1K,
+ *   C=2K, confirmed: "持ち主自身が使う場合は使用料なし"). Resolved at this same TURNEND (confirmed:
+ *   "使用料はTURNEND時に支払い（払えなければフリーアクションで変換 or 巻き戻し）") -- same
+ *   gate-then-mutate pattern as RESOURCE_TOTAL_LIMIT: executor.canEndTurn blocks TURNEND while unpayable,
+ *   executor.applyTurnEnd deducts K from the player and adds it to the map's accumulatedFee, then clears
+ *   this back to null. At most one is ever pending at a time ("1ターン=ダイス1個の配置" means at most one
+ *   placement per turn); Undo clears it for free since it's plain GameState.
  */
 
 /** Fixed palette, assigned in player order (player 1 = PINK, ...). Provisional -- see PlayerState.color. */
@@ -151,6 +164,8 @@ function createPlayer(id, name, color = null) {
     startOrderValue: 0,
     freeActionTaps,
     qstRewardCount: 0,
+    blockedBuildCategoriesThisTurn: [],
+    pendingFee: null,
   };
 }
 

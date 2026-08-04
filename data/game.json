@@ -1525,12 +1525,12 @@
       "EMBLEM_C": "",
       "VP": "",
       "ONCE": "",
-      "TAP": "CHANGE(3K,2BZ)",
+      "TAP": "CHANGE(3K,2BZ);BLOCK_BUILD(M,THIS_TURN)",
       "PASSIVE": "",
       "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "モニュメント以外の建築をした時◯を3個払う\nそうしたなら建築時好きな資源2個軽減する"
+      "INST": "TAPした時、3◯を2BZに変える\nこのターンモニュメントを建築できない"
     },
     {
       "ID": "JOB005",

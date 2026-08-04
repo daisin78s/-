@@ -348,6 +348,168 @@ function noteActiveTurnPlayerForJobPool(state, playerId) {
   lastNotedActiveTurnPlayerId = playerId;
   if (round1FirstPlayerId === null && state.turnOrder && state.turnOrder.length > 0) round1FirstPlayerId = state.turnOrder[0];
   if (playerId === round1FirstPlayerId) round1FirstPlayerTurnStartCount++;
+  // Debug turn-history timeline (2026-08-04, dev/verification feature, separate from the normal Undo
+  // button -- see recordTurnHistorySnapshot's own doc). Reuses this exact "fires once per genuine turn
+  // boundary, from both the AI path (driveOneAiStep) and the human path (render())" signal rather than
+  // inventing a third copy of the same dedup machinery lastNotedActiveTurnPlayerId's own comment
+  // describes -- it's already exactly the "start of a real TURN" moment this needs.
+  recordTurnHistorySnapshot(state, playerId);
+}
+
+// ---------------------------------------------------------------------------
+// Debug turn-history timeline (2026-08-04, per user request) -- a developer/verification tool, fully
+// separate from the normal in-game Undo (undo.js's single "start of this turn" checkpoint, used during
+// real play). This instead keeps a full timeline of every turn boundary crossed so far this session, and
+// lets the debug panel jump freely to any of them (or step by TURN/ROUND) to re-test from that exact
+// point. Only active while debugMode is on (see toggleDebugMode) -- recording a full GameState clone
+// every turn boundary isn't free, and this feature is opt-in by design.
+// ---------------------------------------------------------------------------
+let debugMode = false;
+/** @type {{round:number, playerId:string, snapshot:Object}[]} */
+let turnHistory = [];
+/** Index into turnHistory currently being viewed. -1 means "no history recorded yet". */
+let historyCursor = -1;
+
+/** Records a full GameState snapshot as "the state at the start of playerId's turn" (called only from
+ * noteActiveTurnPlayerForJobPool, which already fires exactly once per genuine turn boundary -- see its
+ * own doc). structuredClone (already used the same way in board.js's wouldAreaActionHaveEffect) gives an
+ * independent deep copy, so later play can never mutate an already-recorded snapshot out from under it
+ * (spec item 11). If historyCursor isn't already at the end -- i.e. the player jumped back to an earlier
+ * point and then took a genuinely new action that led to a new turn boundary -- the old "future" beyond
+ * that point is discarded first (spec item 9: a new branch replaces it, it doesn't get appended after). */
+function recordTurnHistorySnapshot(state, playerId) {
+  // GAME_END guard (found via headless testing): turnFlow.getNextTurn keeps returning a normal
+  // {type:'TURN', playerId} even once state.phase is 'GAME_END' (nothing about "whose turn is next"
+  // stops making sense just because the game is over), and render()'s own call into
+  // noteActiveTurnPlayerForJobPool doesn't gate on phase either -- so without this check, the very
+  // next render() after reaching GAME_END would record one bogus trailing "turn" that doesn't
+  // correspond to any real, replayable action. Left alone, jumping back to an earlier point and letting
+  // play run back up to GAME_END again would append a *different* bogus tail each time (whichever
+  // player getNextTurn happened to name that pass), making the timeline drift on repeated round-trips.
+  if (!debugMode || state.phase === 'GAME_END') return;
+  if (historyCursor < turnHistory.length - 1) turnHistory = turnHistory.slice(0, historyCursor + 1);
+  turnHistory.push({ round: state.round, playerId, snapshot: structuredClone(state) });
+  historyCursor = turnHistory.length - 1;
+}
+
+/** Restores turnHistory[idx]'s snapshot as the live STATE (spec items 11 & 13: a fresh deep copy, no
+ * game logic/triggers re-run -- just the raw GameState swapped in, then a normal render() to rebuild the
+ * UI from it, same "mutate STATE's own keys in place" idiom executor.runProgram's own rollback uses,
+ * since STATE is a `const` reference the rest of this file already closes over). UI-only scratch state
+ * (not part of GameState -- selectedDieIds, pendingBuildChoice, etc.) is cleared the same way
+ * handleUndoClick already does, since none of it survives a jump to a different point in time. Also
+ * re-arms the normal Undo checkpoint from this new position, so Undo behaves normally if play resumes
+ * from here (matching handleUndoClick's own post-undo re-arm). */
+function jumpToHistoryIndex(idx) {
+  if (idx < 0 || idx >= turnHistory.length) return;
+  historyCursor = idx;
+  const restored = structuredClone(turnHistory[idx].snapshot);
+  Object.keys(STATE).forEach((k) => delete STATE[k]);
+  Object.assign(STATE, restored);
+  selectedDieIds = [];
+  pendingBuildChoice = null;
+  pendingPlacementChoice = null;
+  pendingTapChoice = null;
+  pendingAutoModeChoice = null;
+  pendingTurnEndPlayerId = null;
+  pendingTurnEndWarning = null;
+  pendingRoundPassConfirm = null;
+  turnActionTaken = false;
+  placementMessage = '';
+  // aiOpenTurnPlayerId/aiOpenTurnHasPlacedDie (found via headless testing): also not part of GameState,
+  // but unlike the UI-only vars above they directly feed driveOneAiStep's hasPlacedDieThisTurn decision
+  // -- leaving them stale after a jump could make an AI think it already placed this "turn" when the
+  // restored GameState says otherwise (or vice versa), corrupting the very next AI move it picks. A
+  // debug jump always lands exactly at a turn's start, so "no AI has an open turn right now" is always
+  // the correct reset, same as a fresh game load's own initial values.
+  aiOpenTurnPlayerId = null;
+  aiOpenTurnHasPlacedDie = false;
+  // lastNotedActiveTurnPlayerId/lastTurnPlayerId (found via headless testing): render()'s own top-level
+  // "a new turn just started" detection compares next.playerId against these two dedup vars completely
+  // independently of historyCursor -- left stale after a jump, the very render() call below would see
+  // "a different player is active now" (true, but only because we jumped, not because a genuine new turn
+  // began) and treat it as a fresh boundary: noteActiveTurnPlayerForJobPool would fire again, calling
+  // recordTurnHistorySnapshot a second time for the *same* turn this jump just landed on, which -- since
+  // historyCursor already sits before the end of turnHistory whenever jumping backward -- would truncate
+  // and immediately re-append an entry, silently overwriting whatever was really there. Pre-seeding both
+  // with this entry's own playerId makes render() correctly recognize "already noted" and skip that.
+  lastNotedActiveTurnPlayerId = turnHistory[idx].playerId;
+  lastTurnPlayerId = turnHistory[idx].playerId;
+  undoMod.recordCheckpoint(STATE);
+  render(STATE);
+}
+
+function handleDebugTurnBack() { jumpToHistoryIndex(historyCursor - 1); }
+function handleDebugTurnForward() { jumpToHistoryIndex(historyCursor + 1); }
+/** ROUND back/forward (spec items 7-8): jump to the *first* recorded entry of the previous/next round
+ * relative to the currently-viewed entry -- i.e. that round's own start, not just "one round-number
+ * away" from wherever mid-round the cursor happens to sit. findIndex's own first-match semantics give
+ * this "the start of" meaning for free in either direction; a target round not yet reached in the
+ * recorded history (e.g. stepping forward past the latest turn played) simply no-ops. */
+function jumpToAdjacentRound(direction) {
+  if (historyCursor < 0) return;
+  const targetRound = turnHistory[historyCursor].round + direction;
+  const idx = turnHistory.findIndex((e) => e.round === targetRound);
+  if (idx === -1) return;
+  jumpToHistoryIndex(idx);
+}
+function handleDebugRoundBack() { jumpToAdjacentRound(-1); }
+function handleDebugRoundForward() { jumpToAdjacentRound(1); }
+
+/** Turns debugMode on/off (spec item 14: the history UI itself is hidden while off, see
+ * renderDebugPanel). Turning it on for the first time this session seeds turnHistory with the *current*
+ * live state as history entry 0, so the panel has something to show/navigate immediately rather than
+ * waiting for the next turn boundary (recordTurnHistorySnapshot only fires going forward from here).
+ * Turning it off again does not clear turnHistory -- toggling back on later still has the full timeline
+ * (recording just pauses while off, per debugMode's own gate in recordTurnHistorySnapshot). */
+function toggleDebugMode() {
+  debugMode = !debugMode;
+  if (debugMode && turnHistory.length === 0) {
+    const next = STATE.round >= 1 ? turnFlowMod.getNextTurn(STATE) : null;
+    turnHistory.push({ round: STATE.round, playerId: next ? next.playerId : null, snapshot: structuredClone(STATE) });
+    historyCursor = 0;
+  }
+  render(STATE);
+}
+
+/** Updates the debug panel: toggle button label, nav button disabled states, current-position readout,
+ * and the clickable history list (spec items 3-4 & 10). Hidden entirely while debugMode is off (spec
+ * item 14). Called from render() like every other render*() helper, so it always reflects whatever
+ * STATE/historyCursor currently are (including right after a jump, since jumpToHistoryIndex ends with
+ * its own render(STATE) call). */
+function renderDebugPanel(state) {
+  const toggleBtn = document.getElementById('debug-mode-toggle');
+  toggleBtn.textContent = `デバッグモード: ${debugMode ? 'ON' : 'OFF'}`;
+  toggleBtn.classList.toggle('debug-panel__toggle--on', debugMode);
+  const controls = document.getElementById('debug-history-controls');
+  controls.hidden = !debugMode;
+  if (!debugMode) return;
+
+  document.getElementById('debug-turn-back').disabled = historyCursor <= 0;
+  document.getElementById('debug-turn-forward').disabled = historyCursor >= turnHistory.length - 1;
+  const currentRound = historyCursor >= 0 ? turnHistory[historyCursor].round : null;
+  document.getElementById('debug-round-back').disabled = currentRound === null || !turnHistory.some((e) => e.round === currentRound - 1);
+  document.getElementById('debug-round-forward').disabled = currentRound === null || !turnHistory.some((e) => e.round === currentRound + 1);
+
+  const positionEl = document.getElementById('debug-history-position');
+  if (historyCursor < 0) {
+    positionEl.textContent = '(履歴なし)';
+  } else {
+    const entry = turnHistory[historyCursor];
+    const activePlayer = entry.playerId ? state.players.find((p) => p.id === entry.playerId) : null;
+    positionEl.textContent = `Round ${entry.round} / Turn ${historyCursor + 1} / Active Player ${activePlayer ? activePlayer.name : '-'}`;
+  }
+
+  const listEl = document.getElementById('debug-history-list');
+  listEl.innerHTML = '';
+  turnHistory.forEach((entry, i) => {
+    const activePlayer = entry.playerId ? state.players.find((p) => p.id === entry.playerId) : null;
+    const item = el('button', 'debug-history-list__item', `R${entry.round} / ${activePlayer ? activePlayer.name : '-'} / Turn${i + 1}`);
+    item.type = 'button';
+    item.classList.toggle('debug-history-list__item--current', i === historyCursor);
+    item.addEventListener('click', () => jumpToHistoryIndex(i));
+    listEl.appendChild(item);
+  });
 }
 // Whether the active player has already resolved this turn's die placement (2026-08-01, per user
 // feedback: "建築後、ターンエンド前にTAPのフリーアクションが可能です...未使用のTAPアクションが残って
@@ -679,23 +841,27 @@ function buildChangeQuantityIcon(actionText) {
   ]);
 }
 
-/** JOB004's bare CHANGE(3K,2BZ) TAP (2026-08-0X, per user request) -- shown as pay -> {n}BZ (BZ has
- * no colored dot in this project's vocabulary, unlike buildChangeQuantityIcon's K/A/B/C/Z -- matches
- * every other "{n}BZ"/"軽減{n}Z" label elsewhere, plain text rather than a dot+count), plus a second
- * line noting this can't be used toward a monument build. **Caveat this label bakes in a JOB004-
- * specific game-design fact (the engine itself does not currently enforce a monument exclusion on BZ
- * discounts -- see board.resolveBuildNew/executor.applyBzDiscount, neither of which checks category) --
- * flagged to the user; if that turns out to need real enforcement, this is a display-only fix.**
- * Matches generically on shape (any bare CHANGE(nX,nBZ)), not just JOB004 by name, but since it's
- * currently the only card with this shape, a future card reusing it would need this revisited if it
- * *doesn't* share the same monument-exclusion rule. */
+/** JOB004's bare CHANGE(3K,2BZ);BLOCK_BUILD(M,THIS_TURN) TAP (2026-08-0X, per user request) -- shown as
+ * pay -> {n}BZ (BZ has no colored dot in this project's vocabulary, unlike buildChangeQuantityIcon's
+ * K/A/B/C/Z -- matches every other "{n}BZ"/"軽減{n}Z" label elsewhere, plain text rather than a
+ * dot+count), plus a second line noting this can't be used toward a monument build this turn. **2026-
+ * 08-04 update: the "モニュメント除く" label used to be display-only (the engine didn't actually enforce
+ * it, see board.resolveBuildNew/executor.applyBzDiscount) -- confirmed with the user this needed real
+ * enforcement, so it's now a genuine rule (BLOCK_BUILD(M,THIS_TURN), see board.getBuildCandidates); this
+ * label just reflects that.** Matches generically on shape (a bare CHANGE(nX,nBZ), optionally with a
+ * trailing BLOCK_BUILD(M,THIS_TURN)), not just JOB004 by name -- a future card with the CHANGE alone
+ * (no BLOCK_BUILD) still matches and simply skips the "モニュメント除く" row. */
 function buildBzForBuildIcon(actionText) {
-  const match = /^CHANGE\((\d*)(K|A|B|C|Z),(\d*)BZ\)$/.exec(actionText || '');
+  const stmts = (actionText || '').split(';').map((s) => s.trim());
+  const match = /^CHANGE\((\d*)(K|A|B|C|Z),(\d*)BZ\)$/.exec(stmts[0]);
   if (!match) return null;
+  const hasMonumentBlock = stmts[1] === 'BLOCK_BUILD(M,THIS_TURN)';
+  if (stmts.length > 1 && !hasMonumentBlock) return null; // unrecognized extra statement, don't guess
+  if (stmts.length > 2) return null;
   const [, payCount, payResource, bzCount] = match;
   const stack = el('div', 'action-icons-stack');
   stack.appendChild(actionRow([...resourceItemNodes(payCount, payResource), actionArrow(), actionSuffix(`${bzCount}BZ`)]));
-  stack.appendChild(actionRow([actionSuffix('モニュメント除く')]));
+  if (hasMonumentBlock) stack.appendChild(actionRow([actionSuffix('モニュメント除く')]));
   return stack;
 }
 
@@ -1936,7 +2102,14 @@ function attemptAdvanceTurn(state, playerId) {
 function advanceTurnIfPossible(state, playerId) {
   const result = turnFlowMod.endTurn(state, INDEX, playerId);
   if (!result.success) {
-    placementMessage = 'ターンを終了できません（資源の合計が上限を超えています。フリーアクションで資源を減らしてください）';
+    // result.violations mixes RESOURCE_TOTAL_LIMIT entries (executor.canEndTurn) with at most one
+    // USAGE_FEE entry (2026-08-04, see PlayerState.pendingFee) -- message picks whichever is actually
+    // blocking, favoring the fee (rarer, more specific) since a player who owes a fee wants to be told
+    // that, not a generic "resources over the limit" line that doesn't mention K at all.
+    const feeViolation = result.violations.find((v) => v.type === 'USAGE_FEE');
+    placementMessage = feeViolation
+      ? `ターンを終了できません（使用料${feeViolation.amount}Kを支払えません。フリーアクションで資源を増やしてください）`
+      : 'ターンを終了できません（資源の合計が上限を超えています。フリーアクションで資源を減らしてください）';
     pendingTurnEndPlayerId = playerId;
     return;
   }
@@ -3188,6 +3361,7 @@ function render(state) {
   renderPlayerRoleControl(state);
   renderAiPacingControl(state);
   renderGameEndOverlay(state);
+  renderDebugPanel(state);
 }
 
 /** Reverts to the start of the current player's turn (2026-07-30, per user feedback -- see the
@@ -3488,6 +3662,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('undo-button').addEventListener('click', handleUndoClick);
   document.getElementById('undo-button-build').addEventListener('click', handleUndoClick);
+
+  document.getElementById('debug-mode-toggle').addEventListener('click', toggleDebugMode);
+  document.getElementById('debug-turn-back').addEventListener('click', handleDebugTurnBack);
+  document.getElementById('debug-turn-forward').addEventListener('click', handleDebugTurnForward);
+  document.getElementById('debug-round-back').addEventListener('click', handleDebugRoundBack);
+  document.getElementById('debug-round-forward').addEventListener('click', handleDebugRoundForward);
 
   document.getElementById('round-pass-button').addEventListener('click', handleRoundPassClick);
   document.getElementById('round-pass-confirm-no').addEventListener('click', () => {
