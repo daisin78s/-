@@ -1109,6 +1109,24 @@ function buildOnBuildAddBzIcon(actionText) {
   return actionRow(children);
 }
 
+/** ON(BUILD(cats),ADD(nX)) for a plain resource X (K/A/B/C/Z -- BZ has its own separate "軽減NZ" text
+ * convention, see buildOnBuildAddBzIcon above, so it's excluded here) -- e.g. JOB002's new TAP=
+ * "ON(BUILD(),ADD(K))" (2026-08-04, per user feedback: "JOB002 TAP で ON(BUILD(),ADD(K))に変更しました"
+ * with an explicit icon spec: "⚒️ ▶️ ⤵️K"). Same ⚒️+categories+▶ shape as buildOnBuildAddBzIcon, just
+ * ending in a normal resource-dot instead of the BZ text label. Empty cats (BUILD() with no args, per
+ * executor.js's eventArgsMatch: "match any category") shows no category suffix at all -- same omission
+ * buildOnBuildAddBzIcon already does. The user's own "⤵️K" is the ⚒️▶️-then-dot row shown here PLUS the
+ * ⤵️ TAP-source prefix buildEffectRow already prepends automatically (not duplicated here). */
+function buildOnBuildAddResourceIcon(actionText) {
+  const match = /^ON\(BUILD\(([^)]*)\),ADD\((\d*)(K|A|B|C|Z)\)\)$/.exec(actionText || '');
+  if (!match) return null;
+  const categories = (match[1].match(/[ABCMU]/g) || []).join('');
+  const children = [actionEmoji('⚒️')];
+  if (categories) children.push(actionSuffix(categories));
+  children.push(actionTrigger(), ...resourceItemNodes(match[2], match[3]));
+  return actionRow(children);
+}
+
 /** MODIFY_CONVERT_VALUE(ANY,ANY,+n): a passive that adds n to every CHANGE's execution count
  * (2026-07-30, added for JOB008A) -- 🔄 (matching buildConvertLimitIcon's own "conversion" glyph) +
  * the signed delta. */
@@ -1169,6 +1187,8 @@ function buildActionIcons(actionText, stacked) {
   if (onGetAddMultiIcon) return onGetAddMultiIcon;
   const onBuildAddBzIcon = buildOnBuildAddBzIcon(actionText);
   if (onBuildAddBzIcon) return onBuildAddBzIcon;
+  const onBuildAddResourceIcon = buildOnBuildAddResourceIcon(actionText);
+  if (onBuildAddResourceIcon) return onBuildAddResourceIcon;
   const modifyConvertValueIcon = buildModifyConvertValueIcon(actionText);
   if (modifyConvertValueIcon) return modifyConvertValueIcon;
   const setDieValueIcon = buildSetDieValueIcon(actionText);

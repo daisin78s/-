@@ -937,6 +937,17 @@ function applyTurnEnd(state, index, playerId) {
 // Event bus (ON handlers)
 // ---------------------------------------------------------------------------
 
+/** Whether an emitted event's actualValue satisfies an ON(EVENT(args),...)'s own args list. Empty args
+ * (e.g. ON(BUILD(),ADD(K)), 2026-08-04 -- JOB002's new TAP, the only card using this so far) means
+ * "match any value", the same "categories omitted = all of them" convention BUILD() itself already uses
+ * for its own first argument ([[project-dice-wp-dsl-spec]]'s "BUILD()（カテゴリ省略時、確定）") --
+ * extended here to event *matching* rather than requiring every card to spell out every category
+ * (ON(BUILD(A,B,C,U,M),...)) just to mean "any build". A non-empty args list still requires an exact
+ * membership match, unchanged (e.g. ON(BUILD(A,B,C,U),...) still only matches those 4 categories). */
+function eventArgsMatch(eventArgs, actualValue) {
+  return eventArgs.length === 0 || eventArgs.includes(actualValue);
+}
+
 /** Handlers found on a card's TAP/PASSIVE field whose ON(event,...) matches eventName. */
 function findOnHandlers(row, fieldName, eventName) {
   const field = row[fieldName];
@@ -963,13 +974,13 @@ function emit(state, index, playerId, eventName, actualValue, context) {
   const availableReactions = [];
   for (const { physicalId, inst, row } of ownedCardRows(state, index, playerId)) {
     for (const cmd of findOnHandlers(row, 'PASSIVE', eventName)) {
-      if (!cmd.event.args.includes(actualValue)) continue;
+      if (!eventArgsMatch(cmd.event.args, actualValue)) continue;
       const result = runCommand(state, index, context, cmd.effect);
       fired.push({ physicalId, cmd, result });
     }
     if (!inst.tapped) {
       for (const cmd of findOnHandlers(row, 'TAP', eventName)) {
-        if (!cmd.event.args.includes(actualValue)) continue;
+        if (!eventArgsMatch(cmd.event.args, actualValue)) continue;
         availableReactions.push({ physicalId, effect: cmd.effect });
       }
     }

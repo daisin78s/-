@@ -79,10 +79,15 @@ function giveDie(state, playerId, value) {
 
 // ---------------------------------------------------------------------------
 // PLACE_DIE with a BUILD-triggering AREA but NO buildCandidateIndex: die still gets placed (matches a
-// player declining every candidate, e.g. because none are affordable), nothing else happens.
+// player declining every candidate out of choice), nothing else happens. Needs BZ (2026-08-04, per user
+// feedback: "AREA008 009は建築完了出来ないときはダイスが置けません" -- board.js's
+// wouldAreaActionHaveEffect now refuses the placement itself unless at least one candidate is genuinely
+// AFFORDABLE, so "declining because nothing is affordable" is no longer a reachable state here -- this
+// now models a player choosing not to build even though they could).
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
+  player(state, 'P1').resources.BZ = 20;
   const die = giveDie(state, 'P1', 5);
   const move = { type: 'PLACE_DIE', playerId: 'P1', dieId: die.id, mapId: 'MAP008', slotIndex: 0 };
   const { state: resultState, result } = simulator.apply(state, index, move);
@@ -93,10 +98,13 @@ function giveDie(state, playerId, value) {
 
 // ---------------------------------------------------------------------------
 // An out-of-range buildCandidateIndex is a programming error (MoveGenerator should never produce one),
-// not a normal failure -- applyInPlace throws rather than silently returning success:false.
+// not a normal failure -- applyInPlace throws rather than silently returning success:false. Needs BZ
+// too (see the previous block's comment) so the placement itself succeeds far enough to reach the
+// buildCandidateIndex validation at all.
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
+  player(state, 'P1').resources.BZ = 20;
   const die = giveDie(state, 'P1', 5);
   let threw = false;
   try {

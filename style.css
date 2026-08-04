@@ -1447,6 +1447,23 @@ h1, h2, h3 { margin: 0; }
   display: none;
 }
 
+/* Enlarged effect icons, scoped (2026-08-04, per user feedback: "初期資源カードアイコン 小さくて見にく
+   いのでもっと大きく"、"JOB CONのアイコン もう少しだけ大きく") -- same scoping pattern as
+   .player-panel__resources .resource-badge above (overriding the shared .action-* classes only inside
+   these specific containers, not globally). Initial-resource cards get the bigger bump (小さくて見にく
+   い = explicitly hard to read), JOB/CON a smaller one (もう少しだけ = "just a bit"). */
+.card-group__onboard-resources .action-emoji { font-size: 22px; }
+.card-group__onboard-resources .action-dot { width: 18px; height: 18px; }
+.card-group__onboard-resources .action-count { font-size: 16px; }
+.card-group__onboard-resources .action-arrow { font-size: 18px; }
+.card-group__onboard-resources .action-suffix { font-size: 14px; }
+
+.card-group__jobcon .action-emoji { font-size: 17px; }
+.card-group__jobcon .action-dot { width: 13px; height: 13px; }
+.card-group__jobcon .action-count { font-size: 13px; }
+.card-group__jobcon .action-arrow { font-size: 14px; }
+.card-group__jobcon .action-suffix { font-size: 12px; }
+
 /* Instructional hint text next to the CON/RESOURCE onboarding card rows (2026-08-0X, per user
    request -- see buildOnboardHint). A flex sibling of the card cells in the same row, so it sits to
    their right when there's room and wraps below them on a narrow (e.g. iPad-portrait) screen. */

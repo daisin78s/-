@@ -1491,9 +1491,9 @@
       "EMBLEM_C": "",
       "VP": "",
       "ONCE": "",
-      "TAP": "",
-      "PASSIVE": "ON(PLACE(MAP008),ADD(K));ON(PLACE(MAP009),ADD(K))",
-      "TURNEND": "",
+      "TAP": "ON(BUILD(),ADD(K))",
+      "PASSIVE": "",
+      "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "",
       "INST": ""

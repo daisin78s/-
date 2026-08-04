@@ -170,6 +170,12 @@ check('startRound(2) itself does not touch dice (already rerolled at the previou
   setup.prepareMaps(s, index);
   setup.prepareShops(s, index); // AREA008's ACTION=BUILD() needs shop state to resolve
   s.turnOrder = ['P1', 'P2', 'P3', 'P4']; // this round's (soon-to-be "previous round's") order
+  // BZ (2026-08-04, per user feedback: "AREA008 009は建築完了出来ないときはダイスが置けません" --
+  // castle placement now requires at least one AFFORDABLE candidate; a generous grant for both players
+  // who place here covers whatever the cheapest candidate turns out to be, unrelated to what this test
+  // is actually checking (turn-order recency).
+  s.players.find((p) => p.id === 'P1').resources.BZ = 20;
+  s.players.find((p) => p.id === 'P4').resources.BZ = 20;
 
   const giveCastleDie = (playerId, value) => {
     const die = require('../src/game-state').createDie(`${playerId}-${value}-${Math.random()}`, 'COLOR');
@@ -197,6 +203,9 @@ check('startRound(2) itself does not touch dice (already rerolled at the previou
   setup.prepareMaps(s, index);
   setup.prepareShops(s, index);
   s.turnOrder = ['P1', 'P2', 'P3', 'P4'];
+  // BZ (see the previous block's comment on the new castle affordability gate).
+  s.players.find((p) => p.id === 'P1').resources.BZ = 20;
+  s.players.find((p) => p.id === 'P2').resources.BZ = 20;
 
   const gs = require('../src/game-state');
   const redDie = gs.createDie('red-1', 'COLOR');

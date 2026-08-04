@@ -76,25 +76,77 @@ function giveDie(state, playerId, value) {
 }
 
 // ---------------------------------------------------------------------------
-// PLACE_DICE on an ANY slot + JOB002's ON(PLACE(MAP008/009),ADD(K)) reaction
+// AREA008/009's placement gate now requires an AFFORDABLE candidate, not just a dice-eligible one
+// (2026-08-04, per user feedback: "AREA008 009は建築完了出来ないときはダイスが置けません" -- reverses
+// the earlier 2026-08-0X "候補さえあれば置ける" policy, see board.js's isCandidateAffordable/
+// wouldAreaActionHaveEffect). With 0 real resources and 0 BZ, every dice-eligible castle candidate at
+// this buildValue/seed is unaffordable, so placement itself must fail with NO_BUILDABLE_CARD -- not
+// succeed and hand back an empty-of-affordable-options pendingBuild the way it used to.
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
-  const jobInst = createCardInstance('JOB002'); // PASSIVE=ON(PLACE(MAP008),ADD(K));ON(PLACE(MAP009),ADD(K))
-  jobInst.ownerId = 'P1';
-  state.cards[jobInst.physicalId] = jobInst;
-  player(state, 'P1').ownedCardPhysicalIds.push(jobInst.physicalId);
+  const die = giveDie(state, 'P1', 5); // same die value as the JOB002 test below, deliberately 0 resources
+  const result = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP008', 0);
+  check('Placing on the castle with nothing affordable is refused outright', result, { success: false, reason: 'NO_BUILDABLE_CARD' });
+  check('...the die was never actually placed', die.placedMapId, null);
+}
 
+// ---------------------------------------------------------------------------
+// PLACE_DICE on an ANY slot + AREA008's own BUILD() pending-decision shape.
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  player(state, 'P1').resources.BZ = 20; // see the earlier castle blocks' comment on the affordability gate
   const die = giveDie(state, 'P1', 5); // MAP008 (castle) is all-ANY slots
-  const before = player(state, 'P1').resources.K || 0;
   const result = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP008', 0);
   check('Placing on the castle (all-ANY slots) succeeds', result.success, true);
-  // PLACE fires (and JOB002 reacts) before AREA008's own ACTION=BUILD() is resolved,
-  // so the K grant happens regardless of what BUILD resolution below finds.
-  check('JOB002 auto-reacts to PLACE(MAP008) and grants 1K', player(state, 'P1').resources.K, before + 1);
   // AREA008.ACTION = "BUILD()" -- can't complete synchronously, so placeDice hands back candidates instead.
   check('AREA008 (castle) ACTION=BUILD() comes back as a pending build decision, not an exception', result.actionResult.success, true);
   check('...with a non-empty candidate list (categories default to A,B,C,U,M)', result.actionResult.pendingBuild.candidates.length > 0, true);
+}
+
+// ---------------------------------------------------------------------------
+// JOB002's new TAP=ON(BUILD(),ADD(K)) (2026-08-04, per user feedback: "JOB002 TAP で
+// ON(BUILD(),ADD(K))に変更しました" -- replaces its old PASSIVE=ON(PLACE(MAP008/009),ADD(K))). Empty
+// BUILD() args means "react to a build of ANY category" (see executor.js's eventArgsMatch, added
+// specifically because this is the only card using an empty ON(...) event so far). Unlike the old
+// PASSIVE, this is now a TAP-gated *offer*, not an automatic grant -- exercised here through a real
+// placeDice -> completeAreaBuild flow (not a synthetic runCommand/emit call) so the actual BUILD event
+// wiring gets covered end-to-end, complementing the more isolated ON(...)-reaction tests in
+// executor.smoke.js.
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  const executor = require('../src/executor');
+  const { lowerCostList } = require('../src/command-builder');
+  const jobInst = createCardInstance('JOB002');
+  jobInst.ownerId = 'P1';
+  state.cards[jobInst.physicalId] = jobInst;
+  player(state, 'P1').ownedCardPhysicalIds.push(jobInst.physicalId);
+  player(state, 'P1').resources.BZ = 20; // covers whichever candidate ends up picked below
+
+  const die = giveDie(state, 'P1', 1);
+  const placeResult = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP008', 0);
+  const candidate = placeResult.actionResult.pendingBuild.candidates.find((c) => c.type === 'BUILD_NEW');
+  const row = getCardRow(index, candidate.faceId);
+  const bzDiscount = {};
+  let remaining = 20;
+  for (const item of lowerCostList(row.COST)) {
+    const use = Math.min(item.count, remaining);
+    if (use > 0) { bzDiscount[item.resource] = use; remaining -= use; }
+  }
+  const buildResult = board.completeAreaBuild(state, index, { playerId: 'P1', bzDiscount }, candidate, placeResult.actionResult.pendingBuild.remainingCommands);
+  check('The build itself succeeds (fully BZ-funded)', buildResult.success, true);
+
+  const reaction = state.pendingChoices.find((c) => c.kind === 'TAP_REACTION_AVAILABLE' && c.context.physicalId === jobInst.physicalId);
+  check('JOB002 is offered as a TAP reaction to the BUILD event (not auto-fired)', !!reaction, true);
+  check('...keyed on the BUILD event with the built category as actualValue', reaction && reaction.context.eventName, 'BUILD');
+
+  const beforeK = player(state, 'P1').resources.K || 0;
+  const resolveResult = executor.resolveTapReaction(state, index, { playerId: 'P1' }, jobInst.physicalId, reaction.context.effect);
+  check('Resolving the reaction succeeds', resolveResult.success, true);
+  check('...and grants 1K', player(state, 'P1').resources.K, beforeK + 1);
+  check('...and taps JOB002', state.cards[jobInst.physicalId].tapped, true);
 }
 
 // ---------------------------------------------------------------------------
@@ -105,6 +157,7 @@ function giveDie(state, playerId, value) {
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
+  player(state, 'P1').resources.BZ = 20; // see the previous block's comment on the new castle affordability gate
   const die1 = giveDie(state, 'P1', 5);
   const first = board.placeDice(state, index, { playerId: 'P1' }, die1.id, 'MAP008', 0);
   check('First 5 on the castle succeeds', first.success, true);
@@ -566,6 +619,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
 }
 {
   const state = freshStateWithShops();
+  player(state, 'P1').resources.BZ = 20; // AREA009B's ACTION is also BUILD-first -- see the castle blocks' comment above
   state.maps['MAP009'] = mapWithArea('MAP009', 'AREA009B', 6, 'P1'); // SLOT1-5=ANY, SLOT6=EX
   const exDie = giveDie(state, 'P1', 3);
   const exResult = board.placeDice(state, index, { playerId: 'P1' }, exDie.id, 'MAP009', 5); // SLOT6=EX
@@ -579,6 +633,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   // AREA009's EX supports unconditional same-value stacking (no GRANT_PLACE_ANYWHERE needed), and
   // buildValue sums, same as the castle (confirmed: "合計判定でお願いします").
   const state = freshStateWithShops();
+  player(state, 'P1').resources.BZ = 20; // see the earlier castle blocks' comment on the affordability gate
   state.maps['MAP009'] = mapWithArea('MAP009', 'AREA009B', 6, 'P1');
   const die1 = giveDie(state, 'P1', 5);
   const first = board.placeDice(state, index, { playerId: 'P1' }, die1.id, 'MAP009', 5); // SLOT6=EX
@@ -633,6 +688,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
+  player(state, 'P1').resources.BZ = 20; // see the earlier castle blocks' comment on the affordability gate (max monument COST is M012's 13 units)
   const d1 = giveDie(state, 'P1', 6);
   const d2 = giveDie(state, 'P1', 3);
   const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
@@ -644,6 +700,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
 }
 {
   const state = freshStateWithShops();
+  player(state, 'P1').resources.BZ = 20; // see the earlier castle blocks' comment on the affordability gate
   const d1 = giveDie(state, 'P1', 6);
   const d2 = giveDie(state, 'P1', 6);
   const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
@@ -673,6 +730,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   // sitting on the castle, followed later by a placeDiceGroup([6,6]) that joins the same slot via the
   // doubles-stacking rule: true combined value is 6+6+6=18, not just 12.
   const state = freshStateWithShops();
+  player(state, 'P1').resources.BZ = 20; // see the earlier castle blocks' comment on the affordability gate
   const earlierDie = giveDie(state, 'P1', 6);
   board.placeDice(state, index, { playerId: 'P1' }, earlierDie.id, board.CASTLE_MAP_ID, 0);
   const d1 = giveDie(state, 'P1', 6);
@@ -731,6 +789,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   // and buildValue too low for any normal card either), placement must be refused, not just the BUILD
   // step failing after the die is already stuck on the board.
   const state = freshStateWithShops();
+  player(state, 'P1').resources.BZ = 20; // see the earlier castle blocks' comment on the affordability gate
   for (const slotId of Object.keys(state.shops.M.slots)) state.shops.M.slots[slotId] = null;
   state.shops.M.drawPile = [];
   const die = giveDie(state, 'P1', 1); // buildValue=1 also can't reach any NORMAL/SPECIAL shop card here either... see below
@@ -782,6 +841,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
 {
   // previewPlaceDiceGroup: reports which slots the auto-assignment would use, without mutating.
   const state = freshStateWithShops();
+  player(state, 'P1').resources.BZ = 20; // see the earlier castle blocks' comment on the affordability gate
   const d1 = giveDie(state, 'P1', 6);
   const d2 = giveDie(state, 'P1', 6); // combined buildValue=12, reaches every monument threshold
   const preview = board.previewPlaceDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);

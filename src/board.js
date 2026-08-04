@@ -197,17 +197,34 @@ function predictedBuildValueForPlacement(mapId, isExSlot, occupants, dieValue) {
   return wouldStack ? occupants.reduce((sum, o) => sum + o.value, 0) + dieValue : dieValue;
 }
 
+/** Whether playerId can currently pay candidate's COST -- BUILD_NEW auto-maxes any BZ they hold (see
+ * executor.enumerateBzOutcomes' own doc), UPGRADE never gets BZ (per [[project-dice-wp-dsl-spec]]'s
+ * "BZは建築コストの踏み倒し専用（改築には使用不可）"). Used by wouldAreaActionHaveEffect's BUILD branch.
+ * Mirrors main.js's own candidateAffordable (UI-side) -- can't be shared, that file is a browser-only
+ * classic script, not a requireable module (same reasoning as move-generator.js's bareTapKind). */
+function isCandidateAffordable(state, index, playerId, candidate) {
+  if (candidate.type !== 'BUILD_NEW') {
+    const row = getCardRow(index, candidate.fromFaceId);
+    return executor.resolvePayment(state, playerId, lowerCostList(row.COST)).ok;
+  }
+  const row = getCardRow(index, candidate.faceId);
+  const player = state.players.find((p) => p.id === playerId);
+  const bzAvailable = (player && player.resources.BZ) || 0;
+  return executor.enumerateBzOutcomes(state, playerId, lowerCostList(row.COST), bzAvailable).length > 0;
+}
+
 /** Pure (no mutation) prediction of whether resolving areaRow's ACTION would actually produce any
  * benefit for the player, given `buildValue` as the die value that's about to be placed. Mirrors
  * resolveAreaAction/resolveProgramOrBuild's own dispatch (BUILD-first fields vs. everything else) so
  * the two can never quietly diverge:
  *
  *  - BUILD-first fields (AREA008/009's bare "BUILD()"/"BUILD();ADD(...)"): "effect" means "at least one
- *    buildable candidate exists" (confirmed 2026-08-0X: "建築するのはマストなので建築候補が無い場合置け
- *    ません") -- matches getBuildCandidates() exactly, deliberately NOT filtered by whether the player
- *    can currently afford any of them (that affordability filter already exists one step later, in the
- *    build-choice modal itself, once a candidate is on offer -- this earlier gate is only about there
- *    being a legal candidate at all).
+ *    AFFORDABLE buildable candidate exists" (corrected 2026-08-04, per user feedback: "AREA008 009は
+ *    建築完了出来ないときはダイスが置けません" -- reverses the 2026-08-0X policy this replaced, which
+ *    deliberately only checked getBuildCandidates() dice/category eligibility and left affordability to
+ *    the build-choice modal one step later; the user now wants placement itself blocked unless a build
+ *    can actually be completed, not just attempted). Uses isCandidateAffordable, same auto-max-BZ
+ *    affordability rule the build-choice modal itself uses.
  *  - Everything else (ADD/CHANGE fields): runs the field on a throwaway clone (never mutates the real
  *    state) and compares the acting player's resources/dice before vs. after. A field can technically
  *    "succeed" while changing nothing at all -- e.g. CHANGE(K,A,ALL) with 0 K on hand runs 0 times and
@@ -221,7 +238,8 @@ function wouldAreaActionHaveEffect(state, index, context, areaRow, buildValue) {
     const buildCmd = commands[0];
     const resolvedBuildValue = buildCmd.buildValue !== null ? buildCmd.buildValue : buildValue;
     const candidates = getBuildCandidates(state, index, context.playerId, buildCmd.categories, resolvedBuildValue);
-    return candidates.length > 0 ? { ok: true } : { ok: false, reason: 'NO_BUILDABLE_CARD' };
+    const affordable = candidates.some((c) => isCandidateAffordable(state, index, context.playerId, c));
+    return affordable ? { ok: true } : { ok: false, reason: 'NO_BUILDABLE_CARD' };
   }
   const clone = structuredClone(state);
   const result = executor.runProgram(clone, index, context, areaRow.ACTION);
@@ -344,12 +362,15 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   // now instead of after pushing) -- lets this whole group placement be refused outright if it couldn't
   // possibly reach any monument (2026-08-0X, per user feedback: "建築するのはマストなので建築候補が無い
   // 場合置けません", same principle placeDice's own wouldAreaActionHaveEffect applies to a single die).
+  // Affordability-checked too (corrected 2026-08-04, same policy change as wouldAreaActionHaveEffect's
+  // BUILD branch -- see isCandidateAffordable's own doc).
   let predictedBuildValue = 0;
   for (const [value, slotIndex] of slotOfValue) {
     const existing = map.slots[slotIndex].reduce((sum, o) => sum + o.value, 0);
     predictedBuildValue += existing + value * dieIdsByValue.get(value).length;
   }
-  if (getBuildCandidates(state, index, playerId, ['M'], predictedBuildValue).length === 0) {
+  const predictedCandidates = getBuildCandidates(state, index, playerId, ['M'], predictedBuildValue);
+  if (!predictedCandidates.some((c) => isCandidateAffordable(state, index, playerId, c))) {
     return { success: false, reason: 'NO_BUILDABLE_CARD' };
   }
 

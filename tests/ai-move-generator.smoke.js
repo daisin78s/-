@@ -73,10 +73,14 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
 // ---------------------------------------------------------------------------
 // A BUILD-triggering placement (castle) offers one move per candidate PLUS a "leave it unresolved"
 // fallback (buildCandidateIndex omitted) -- since the die genuinely gets placed either way, unlike the
-// BARE_TAP/CLAIM_QUEST cases below.
+// BARE_TAP/CLAIM_QUEST cases below. Requires BZ (2026-08-04, per user feedback: "AREA008 009は建築完了
+// 出来ないときはダイスが置けません" -- board.js's wouldAreaActionHaveEffect now gates the placement
+// itself on at least one AFFORDABLE candidate existing, not just a dice-eligible one; a generous BZ
+// grant covers whatever the cheapest candidate at this seed/buildValue turns out to be).
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
+  player(state, 'P1').resources.BZ = 20;
   const die = giveDie(state, 'P1', 5);
   const moves = moveGenerator.generateMoves(state, index, 'P1', { hasPlacedDieThisTurn: false });
   const castleMoves = moves.filter((m) => m.type === 'PLACE_DIE' && m.mapId === 'MAP008' && m.dieId === die.id && m.slotIndex === 0);
