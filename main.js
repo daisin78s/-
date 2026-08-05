@@ -2026,15 +2026,14 @@ function renderBoard(state, next) {
         }
       }
 
-      // Tapping the tile opens the same enlarge/INST modal cards use (2026-08-0X, replaces right-
-      // click -- see showCardEnlargeModal). AREA tiles have no "back" (there's no tier-flip preview
-      // concept for a board space, unlike a card), so visualNode/sibling are both null -- the modal
-      // just shows INST text with the flip button hidden. Excludes .slot clicks (dice placement) and
-      // .map-tile__fee (usage-fee collection, its own dblclick above) -- both bubble up from a child
-      // element of this same tile and would otherwise also pop this modal open underneath them.
+      // Tapping the tile opens the AREA enlarge modal (2026-08-0X, replaces right-click; 2026-08-05,
+      // now shows tile-shaped previews of this tier plus every remaining higher tier instead of just
+      // INST text -- see showAreaEnlargeModal). Excludes .slot clicks (dice placement) and
+      // .map-tile__fee (usage-fee collection, its own click handler above) -- both bubble up from a
+      // child element of this same tile and would otherwise also pop this modal open underneath them.
       node.addEventListener('click', (e) => {
         if (e.target.closest('.slot, .map-tile__fee')) return;
-        showCardEnlargeModal(mapState.currentAreaId, null, null);
+        showAreaEnlargeModal(mapState.currentAreaId);
       });
 
       rowEl.appendChild(node);
@@ -3807,6 +3806,109 @@ function showCardEnlargeModal(faceId, visualNode, sibling, pickAction) {
 
 function hideCardEnlargeModal() {
   document.getElementById('card-inst-overlay').hidden = true;
+}
+
+/** Whether areaId exists in the AREA sheet at all (mirrors cardFaceExists' own try/catch pattern). */
+function areaFaceExists(areaId) {
+  try {
+    dataLoaderMod.getAreaRow(INDEX, areaId);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+/** areaId plus every remaining higher tier that actually exists in the data, in order (2026-08-05, per
+ * user feedback: "AREA001Aなど AREA001B AREA001Cというようにレベルアップ後があるカード拡大時に右側に
+ * レベルアップ後のカードの拡大画像を表示してください" -- tapping AREA001A shows [A,B,C], tapping
+ * AREA001B shows [B,C], tapping AREA001C shows just [C]). AREAs with no tier concept at all (AREA007/
+ * AREA008, bare ids with no trailing A/B/C) just return themselves -- there's no "higher tier" to chain
+ * to. Not every tiered AREA group actually goes up to C in the data, so each candidate is checked with
+ * areaFaceExists rather than assuming A/B/C always all three exist. */
+function areaTierChain(areaId) {
+  const match = /^(AREA\d+)([ABC])$/.exec(areaId);
+  if (!match) return [areaId];
+  const [, base, tier] = match;
+  const tiers = ['A', 'B', 'C'];
+  const chain = [];
+  for (let i = tiers.indexOf(tier); i < tiers.length; i++) {
+    const candidateId = base + tiers[i];
+    if (areaFaceExists(candidateId)) chain.push(candidateId);
+  }
+  return chain;
+}
+
+/** Static, non-interactive preview of areaId's tile appearance (2026-08-05, added for the AREA
+ * enlarge-modal tier chain above) -- unlike renderBoard's real tiles, there's no live map to read
+ * occupants/accumulated-fee/turn-order from for a *hypothetical* tier that may not even be the AREA's
+ * current one, so this only ever shows what's intrinsic to the AREA row itself: name, slot
+ * requirements (all empty, no dice), the ACTION icon, and the flat fee rate (no accumulated amount --
+ * there's nothing real to accumulate for a tier that isn't actually in play). */
+function buildAreaTilePreviewNode(areaId) {
+  const areaRow = dataLoaderMod.getAreaRow(INDEX, areaId);
+  const tpl = document.getElementById('tpl-map-tile');
+  const node = tpl.content.firstElementChild.cloneNode(true);
+  node.classList.add('map-tile--preview');
+  node.querySelector('.map-tile__id').textContent = areaName(areaId);
+
+  const tier = areaId.match(/([ABC])$/);
+  if (tier) node.dataset.tier = tier[1];
+
+  const slotsEl = node.querySelector('.map-tile__slots');
+  for (const requirement of boardMod.getSlotRequirements(areaRow)) {
+    const slotEl = el('div', 'slot');
+    if (typeof requirement === 'number') slotEl.appendChild(dieFace(requirement));
+    else slotEl.textContent = requirement; // 'ANY' / 'EX' / 'NONE' (getSlotRequirements already trims NONE)
+    slotsEl.appendChild(slotEl);
+  }
+
+  const actionEl = node.querySelector('.map-tile__action');
+  const icons = buildActionIcons(areaRow.ACTION);
+  if (icons) actionEl.appendChild(icons);
+  else actionEl.textContent = areaRow.ACTION;
+
+  const feeEl = node.querySelector('.map-tile__fee');
+  if (!tier) {
+    feeEl.remove();
+  } else {
+    const feeRate = tier[1] === 'B' ? 1 : tier[1] === 'C' ? 2 : 0;
+    feeEl.querySelector('.map-tile__fee-rate').textContent = feeRate > 0 ? `使用料${feeRate}K` : '';
+    feeEl.querySelector('.map-tile__fee-amount').remove();
+  }
+  return node;
+}
+
+/** AREA tap-to-enlarge (2026-08-05, replaces the old plain-INST-text-only modal for AREA tiles -- see
+ * this function's own doc above on the tier chain). Reuses the same overlay chrome as
+ * showCardEnlargeModal (title/INST body/close button) but not its single-visualNode transform-scale
+ * mechanism (built for one card at a time) -- multiple tile previews are laid out side by side directly
+ * at a fixed enlarged CSS size instead (see .area-enlarge-row in style.css). Title/INST always describe
+ * the tapped tier specifically (not the chain's first entry, which is the same thing unless a card's
+ * own tier differs from what's currently on the board -- not possible today, but keeps this correct if
+ * that ever changes). No flip/pick button -- neither concept applies here. */
+function showAreaEnlargeModal(areaId) {
+  const overlay = document.getElementById('card-inst-overlay');
+  const modal = overlay.querySelector('.card-inst-modal');
+  const visualContainer = overlay.querySelector('.card-inst-modal__visual');
+  const flipBtn = overlay.querySelector('.card-inst-modal__flip-button');
+  const pickBtn = overlay.querySelector('.card-inst-modal__pick-button');
+
+  overlay.hidden = false;
+  modal.classList.add('card-inst-modal--wide');
+  flipBtn.hidden = true;
+  pickBtn.hidden = true;
+
+  visualContainer.innerHTML = '';
+  visualContainer.style.width = '';
+  visualContainer.style.height = '';
+  const row = el('div', 'area-enlarge-row');
+  for (const id of areaTierChain(areaId)) {
+    row.appendChild(buildAreaTilePreviewNode(id));
+  }
+  visualContainer.appendChild(row);
+
+  overlay.querySelector('.card-inst-modal__title').textContent = areaName(areaId);
+  renderInstBody(overlay.querySelector('.card-inst-modal__body'), instForId(areaId));
 }
 
 /** Slowly auto-scrolls from the top to the very bottom of the page once, right after the initial

@@ -1861,6 +1861,22 @@ h1, h2, h3 { margin: 0; }
 }
 .card-inst-modal__visual:empty { display: none; }
 
+/* AREA tier-chain preview row (2026-08-05, per user feedback: "AREA001Aなど...拡大時に右側にレベルアップ
+   後のカードの拡大画像を表示してください") -- see showAreaEnlargeModal/buildAreaTilePreviewNode. Falls
+   back to horizontal scroll rather than shrinking further if 3 tiles + gaps would exceed the modal's own
+   max-width, same safety-net pattern used elsewhere (e.g. .shop-row__combined). */
+.area-enlarge-row {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.map-tile--preview {
+  width: 130px;
+  flex: 0 0 auto;
+}
+
 .card-inst-modal__flip-button {
   display: block;
   width: 100%;
