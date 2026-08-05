@@ -1550,7 +1550,13 @@ h1, h2, h3 { margin: 0; }
 /* Highlights whichever onboarding-choice panel the player should actually act in right now
    (2026-07-30, per user feedback: "今やるべきことの背景色を変えて") -- applied via main.js's
    classList (not e.g. a plain :not(:empty) selector), since some of these panels are populated in
-   both an actionable state and a read-only preview state (see renderConFacesRow's own comment). */
+   both an actionable state and a read-only preview state (see renderConFacesRow's own comment).
+   Pulses until the choice is made (2026-08-05, per user feedback: "初期資源カード 選ぶまで光って点滅
+   JOBカード選ぶ段階になったら 光って点滅 CONカードも選ぶ段階で 光って点滅" -- all three share this one
+   class already, so a single animation here covers all of them). Same box-shadow pulse language as
+   .slot--highlight's own "配置可能SLOTが光るようにして欲しい" glow, reused rather than inventing a new
+   animation style, just tuned slower (2s vs 1.4s) since this needs to stay noticeable, not urgent, for
+   however long the player takes to actually choose. */
 .onboard-panel--active {
   background: var(--accent-soft);
   border-radius: var(--radius-md);
@@ -1560,6 +1566,12 @@ h1, h2, h3 { margin: 0; }
      available width for the flex children while still showing the highlight as a slightly bled-out
      background. */
   margin: -6px;
+  animation: onboard-panel-pulse 2s ease-in-out infinite;
+}
+
+@keyframes onboard-panel-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent); }
+  50% { box-shadow: 0 0 14px 4px var(--accent); }
 }
 
 .owned-card-cell--selectable {
