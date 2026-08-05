@@ -109,15 +109,15 @@ function giveDie(state, playerId, value) {
 // JOB002's new TAP=ON(BUILD(),ADD(K)) (2026-08-04, per user feedback: "JOB002 TAP で
 // ON(BUILD(),ADD(K))に変更しました" -- replaces its old PASSIVE=ON(PLACE(MAP008/009),ADD(K))). Empty
 // BUILD() args means "react to a build of ANY category" (see executor.js's eventArgsMatch, added
-// specifically because this is the only card using an empty ON(...) event so far). Unlike the old
-// PASSIVE, this is now a TAP-gated *offer*, not an automatic grant -- exercised here through a real
-// placeDice -> completeAreaBuild flow (not a synthetic runCommand/emit call) so the actual BUILD event
-// wiring gets covered end-to-end, complementing the more isolated ON(...)-reaction tests in
+// specifically because this is the only card using an empty ON(...) event so far). Auto-fires rather
+// than queueing a manual choice (2026-08-05: game.xlsx's AUTO column for JOB002 was filled in as "A",
+// closing the data-quality gap flagged when this ability was first added) -- exercised here through a
+// real placeDice -> completeAreaBuild flow (not a synthetic runCommand/emit call) so the actual BUILD
+// event wiring gets covered end-to-end, complementing the more isolated ON(...)-reaction tests in
 // executor.smoke.js.
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
-  const executor = require('../src/executor');
   const { lowerCostList } = require('../src/command-builder');
   const jobInst = createCardInstance('JOB002');
   jobInst.ownerId = 'P1';
@@ -135,17 +135,12 @@ function giveDie(state, playerId, value) {
     const use = Math.min(item.count, remaining);
     if (use > 0) { bzDiscount[item.resource] = use; remaining -= use; }
   }
+  const beforeK = player(state, 'P1').resources.K || 0;
   const buildResult = board.completeAreaBuild(state, index, { playerId: 'P1', bzDiscount }, candidate, placeResult.actionResult.pendingBuild.remainingCommands);
   check('The build itself succeeds (fully BZ-funded)', buildResult.success, true);
 
-  const reaction = state.pendingChoices.find((c) => c.kind === 'TAP_REACTION_AVAILABLE' && c.context.physicalId === jobInst.physicalId);
-  check('JOB002 is offered as a TAP reaction to the BUILD event (not auto-fired)', !!reaction, true);
-  check('...keyed on the BUILD event with the built category as actualValue', reaction && reaction.context.eventName, 'BUILD');
-
-  const beforeK = player(state, 'P1').resources.K || 0;
-  const resolveResult = executor.resolveTapReaction(state, index, { playerId: 'P1' }, jobInst.physicalId, reaction.context.effect);
-  check('Resolving the reaction succeeds', resolveResult.success, true);
-  check('...and grants 1K', player(state, 'P1').resources.K, beforeK + 1);
+  check('JOB002 auto-fires on the BUILD event (AUTO="A"), no manual choice queued', state.pendingChoices.some((c) => c.kind === 'TAP_REACTION_AVAILABLE' && c.context.physicalId === jobInst.physicalId), false);
+  check('...and grants 1K immediately', player(state, 'P1').resources.K, beforeK + 1);
   check('...and taps JOB002', state.cards[jobInst.physicalId].tapped, true);
 }
 

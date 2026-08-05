@@ -1473,6 +1473,27 @@ h1, h2, h3 { margin: 0; }
 .card-group__jobcon .action-arrow { font-size: 14px; }
 .card-group__jobcon .action-suffix { font-size: 12px; }
 
+/* A/B/C card icons, a bit bigger without breaking the layout (2026-08-05, per user feedback:
+   "ABCカードのアイコン 崩れない程度でもう少し大きくして") -- same modest bump as JOB/CON above (both
+   share the same 128px .owned-card-cell--tall card width, so the same increase is safe), applied
+   everywhere A/B/C cards render with their effect shown: the owned-card sidebar, the shop grid, and the
+   BUILD/UPGRADE candidate-choice modal. */
+.card-group__list .action-emoji,
+#shop-combined-slots .action-emoji,
+#build-choice-list .action-emoji { font-size: 17px; }
+.card-group__list .action-dot,
+#shop-combined-slots .action-dot,
+#build-choice-list .action-dot { width: 13px; height: 13px; }
+.card-group__list .action-count,
+#shop-combined-slots .action-count,
+#build-choice-list .action-count { font-size: 13px; }
+.card-group__list .action-arrow,
+#shop-combined-slots .action-arrow,
+#build-choice-list .action-arrow { font-size: 14px; }
+.card-group__list .action-suffix,
+#shop-combined-slots .action-suffix,
+#build-choice-list .action-suffix { font-size: 12px; }
+
 /* Instructional hint text next to the CON/RESOURCE onboarding card rows (2026-08-0X, per user
    request -- see buildOnboardHint). A flex sibling of the card cells in the same row, so it sits to
    their right when there's room and wraps below them on a narrow (e.g. iPad-portrait) screen. */

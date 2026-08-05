@@ -1357,15 +1357,22 @@ function renderShops(state) {
  */
 /**
  * Cards whose whole effect is "MAP{n}.CURRENT_AREA=AREA{n}{tier}" (e.g. A001A, A006A) exist purely
- * to claim ownership of that AREA -- confirmed 2026-07-29: show "{tier-A name}の所有" instead of the
- * raw card id, always referencing the tier-A ("base place") name even when the assignment's actual
- * target is a higher tier (e.g. A001A targets AREA003B, but the label still says "AREA003Aの所有" --
- * the place is the same regardless of which tier owning it unlocked).
+ * to claim ownership of that AREA -- confirmed 2026-07-29: show a label instead of the raw card id.
+ * **2026-08-05 update, per user feedback ("A系のNAME変えました...小麦畑の支配のように全部変えてくださ
+ * い"):** now shows the card's own NAME column value directly, once the user has filled it in with a
+ * complete thematic phrase (e.g. A001A's NAME is now "城下町の支配", not just "城下町") -- data/game.xlsx
+ * confirmed to hold exactly that, so no template composition is needed on this side, just display it as-
+ * is. Falls back to the old auto-generated "{tier-A AREA name}の所有" (always the tier-A/"base place"
+ * name even when the assignment's actual target is a higher tier, since the place is the same regardless
+ * of which tier owning it unlocked) for any card whose NAME hasn't been customized yet (still equals its
+ * own faceId) -- keeps working for B/C decks or future A cards before their NAME is filled in.
  */
-function areaOwnershipLabel(effects) {
+function areaOwnershipLabel(faceId, effects) {
   if (!effects || effects.length !== 1) return null;
   const match = /^MAP(\d+)\.CURRENT_AREA=AREA\d+[ABC]?$/.exec(effects[0].text);
   if (!match) return null;
+  const row = dataLoaderMod.getCardRow(INDEX, faceId);
+  if (row.NAME && row.NAME !== faceId) return row.NAME;
   return `${areaName(`AREA${match[1]}A`)}の所有`;
 }
 
@@ -1489,7 +1496,7 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
   q('.shop-card__start-order').textContent = facts.startOrder !== null && facts.startOrder !== undefined ? `先攻順 ${facts.startOrder}` : '';
 
   let tall = false;
-  const ownershipLabel = areaOwnershipLabel(facts.effects);
+  const ownershipLabel = areaOwnershipLabel(faceId, facts.effects);
   if (options.showEffect && ownershipLabel) {
     tall = true;
     q('.shop-card__effect').appendChild(document.createTextNode(ownershipLabel));
