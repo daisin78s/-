@@ -1516,10 +1516,15 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
   const isAreaOwnershipCard = facts.effects && facts.effects.length === 1
     && /^MAP\d+\.CURRENT_AREA=AREA\d+[ABC]?$/.test(facts.effects[0].text);
   if (isAreaOwnershipCard) {
-    const ownershipLabel = areaOwnershipLabel(faceId, facts.effects);
-    if (options.showEffect && ownershipLabel) {
+    // Prefer the card's own INST text once filled in (2026-08-05, per user feedback: "A系のカードアイ
+    // コンに書いてほしい文言をINSTに書きました" -- e.g. A001A's INST is "城下町LV1の支配", distinguishing
+    // it from A001B's "城下町LV2の支配" even though both share the same top-of-card NAME "城下町の支配").
+    // Falls back to the auto-generated "{AREA}の所有" (areaOwnershipLabel) for any card whose INST
+    // hasn't been filled in yet, same graceful-degradation reasoning as NAME's own fallback.
+    const effectText = facts.inst || areaOwnershipLabel(faceId, facts.effects);
+    if (options.showEffect && effectText) {
       tall = true;
-      q('.shop-card__effect').appendChild(document.createTextNode(ownershipLabel));
+      q('.shop-card__effect').appendChild(document.createTextNode(effectText));
     }
   } else if (options.showEffect && facts.effects && facts.effects.length) {
     // allowTextFallback (confirmed 2026-07-30): A/B/C cards fall back to raw DSL text for any

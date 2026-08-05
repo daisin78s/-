@@ -613,6 +613,48 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   check('...map.accumulatedFee is back to 0', state.maps['MAP001'].accumulatedFee, 0);
 }
 {
+  // Placement itself is refused if the resulting usage fee would be entirely unpayable, checked AFTER
+  // the AREA's own action resolves (2026-08-05, per user diagnosis: "AREA010を使うときはAIが使用料が
+  // 払えることを確認してからダイスを置く用に直せますか" -- AREA010's own actions never grant K to a
+  // non-owner: CHANGE(2K,2VP) costs K outright, ADD(VP)/ADD(2VP) grants none at all -- see
+  // canAffordFee's own doc).
+  const state = freshStateWithShops();
+  state.maps['MAP010'] = mapWithArea('MAP010', 'AREA010C', 3, 'P1'); // SLOT1=1, ACTION=CHANGE(2K,2VP)
+  player(state, 'P2').resources.K = 2; // just enough to trigger the AREA's own CHANGE(2K,2VP) once
+  const die = giveDie(state, 'P2', 1);
+  const result = board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP010', 0);
+  check('Placement is refused when the resulting 2K fee would be entirely unpayable', result, { success: false, reason: 'UNAFFORDABLE_USAGE_FEE', amount: 2 });
+  // Re-fetched by id (not the pre-call `die` reference), since a rollback replaces state.players'
+  // contents wholesale -- see runProgram's own doc on this exact trap, which the rollback here mirrors.
+  check('...the die was never actually placed', player(state, 'P2').dice.find((d) => d.id === die.id).placedMapId, null);
+  check('...and no fee/state change leaked through', player(state, 'P2').pendingFee, null);
+  check('...and the whole placement (incl. the CHANGE(2K,2VP) that just ran) was rolled back, K restored', player(state, 'P2').resources.K, 2);
+}
+{
+  // ...but succeeds once enough convertible resources are on hand -- not necessarily raw K (see
+  // canAffordFee's own doc: A/B/C/Z->K free actions have no usage cap). P2 spends their 2K on the
+  // AREA's own CHANGE(2K,2VP) first, same as above, but has 2 extra A left over to cover the fee with.
+  const state = freshStateWithShops();
+  state.maps['MAP010'] = mapWithArea('MAP010', 'AREA010C', 3, 'P1');
+  player(state, 'P2').resources.K = 2;
+  player(state, 'P2').resources.A = 2;
+  const die = giveDie(state, 'P2', 1);
+  const result = board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP010', 0);
+  check('Placement succeeds once enough convertible resources are on hand', result.success, true);
+  check('...the AREA action still ran (K spent on CHANGE(2K,2VP), 2VP gained)', { k: player(state, 'P2').resources.K, vp: player(state, 'P2').resources.VP }, { k: 0, vp: 2 });
+}
+{
+  // AREA001B's own ACTION (ADD(5K)) trivially covers its own 1K fee -- confirms the check happens
+  // AFTER the area's own action resolves, not before (a pre-resolution-only check would have wrongly
+  // refused this very common, perfectly safe case -- caught by this exact test while developing the fix).
+  const state = freshStateWithShops();
+  state.maps['MAP001'] = mapWithArea('MAP001', 'AREA001B', 3, 'P1');
+  const die = giveDie(state, 'P2', 1);
+  const result = board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP001', 0);
+  check('Placement succeeds when the AREA\'s own action grants enough to cover the fee, even from 0 starting K', result.success, true);
+  check('...P2 actually has the 5K from ADD(5K)', player(state, 'P2').resources.K, 5);
+}
+{
   // BARE_TAP is blocked while a usage fee is owed (2026-08-05, per user diagnosis of an AI softlock:
   // "SLOTにダイスを置く→解決する→使用料を払う...おそらく...TAPアクションで資源を使い果たしてしまった
   // ことが原因" -- the fee itself isn't deducted until TURNEND, so without this a player could spend

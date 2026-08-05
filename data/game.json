@@ -220,7 +220,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": ""
+      "INST": "城下町LV1の支配"
     },
     {
       "ID": "A002A",
@@ -236,7 +236,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": ""
+      "INST": "大聖堂LV1の支配"
     },
     {
       "ID": "A003A",
@@ -252,7 +252,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": ""
+      "INST": "ギルドLV1の支配"
     },
     {
       "ID": "A004A",
@@ -268,7 +268,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": ""
+      "INST": "スラム街LV1の支配"
     },
     {
       "ID": "A005A",
@@ -284,7 +284,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": ""
+      "INST": "大農園LV1の支配"
     },
     {
       "ID": "A006A",
@@ -300,7 +300,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": ""
+      "INST": "大農場LV1の支配"
     },
     {
       "ID": "A007A",
@@ -316,7 +316,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": ""
+      "INST": "歓楽街LV1の支配"
     },
     {
       "ID": "A008A",
@@ -332,7 +332,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": ""
+      "INST": "元老院LV1の支配"
     },
     {
       "ID": "A001B",
@@ -348,7 +348,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": ""
+      "INST": "城下町LV2の支配"
     },
     {
       "ID": "A002B",
@@ -364,7 +364,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": ""
+      "INST": "大聖堂LV2の支配"
     },
     {
       "ID": "A003B",
@@ -380,7 +380,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": ""
+      "INST": "ギルドLV2の支配"
     },
     {
       "ID": "A004B",
@@ -396,7 +396,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": ""
+      "INST": "スラム街LV2の支配"
     },
     {
       "ID": "A005B",
@@ -412,7 +412,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": ""
+      "INST": "大農園LV2の支配"
     },
     {
       "ID": "A006B",
@@ -428,7 +428,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": ""
+      "INST": "大農場LV2の支配"
     },
     {
       "ID": "A007B",
@@ -444,7 +444,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": ""
+      "INST": "歓楽街LV2の支配"
     },
     {
       "ID": "A008B",
@@ -460,7 +460,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": ""
+      "INST": "元老院LV2の支配"
     }
   ],
   "B": [
@@ -708,7 +708,7 @@
   "C": [
     {
       "ID": "C001A",
-      "NAME": "C001A",
+      "NAME": "代官",
       "DICE": "",
       "COST": "2C",
       "EMBLEM_C": 1,
@@ -724,7 +724,7 @@
     },
     {
       "ID": "C002A",
-      "NAME": "C002A",
+      "NAME": "修道士",
       "DICE": "",
       "COST": "2C",
       "EMBLEM_C": 1,
@@ -740,7 +740,7 @@
     },
     {
       "ID": "C003A",
-      "NAME": "C003A",
+      "NAME": "商人",
       "DICE": "",
       "COST": "2C",
       "EMBLEM_C": 1,
@@ -756,7 +756,7 @@
     },
     {
       "ID": "C004A",
-      "NAME": "C004A",
+      "NAME": "農夫",
       "DICE": "",
       "COST": "1A,1C",
       "EMBLEM_C": 1,
@@ -772,7 +772,7 @@
     },
     {
       "ID": "C005A",
-      "NAME": "C005A",
+      "NAME": "貴族",
       "DICE": "",
       "COST": "1A,2C",
       "EMBLEM_C": 1,
@@ -788,7 +788,7 @@
     },
     {
       "ID": "C006A",
-      "NAME": "C006A",
+      "NAME": "司教",
       "DICE": "",
       "COST": "1A,2C",
       "EMBLEM_C": 1,
@@ -804,7 +804,7 @@
     },
     {
       "ID": "C007A",
-      "NAME": "C007A",
+      "NAME": "金貸し",
       "DICE": "",
       "COST": "1A,2C",
       "EMBLEM_C": 1,
@@ -820,7 +820,7 @@
     },
     {
       "ID": "C008A",
-      "NAME": "C008A",
+      "NAME": "軍師",
       "DICE": "",
       "COST": "1A,3C",
       "EMBLEM_C": 1,
@@ -836,14 +836,14 @@
     },
     {
       "ID": "C001B",
-      "NAME": "C001B",
+      "NAME": "代官",
       "DICE": "",
       "COST": "2C",
       "EMBLEM_C": 2,
       "VP": 1,
       "LEVEL": 2,
       "ONCE": "",
-      "TAP": "CHANGE(2K,2Z)",
+      "TAP": "CHANGE(K,A,ALL)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
@@ -852,14 +852,14 @@
     },
     {
       "ID": "C002B",
-      "NAME": "C002B",
+      "NAME": "修道士",
       "DICE": "",
       "COST": "2C",
       "EMBLEM_C": 2,
       "VP": 1,
       "LEVEL": 2,
       "ONCE": "",
-      "TAP": "CHANGE(2K,2Z)",
+      "TAP": "CHANGE(K,B,ALL)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
@@ -868,14 +868,14 @@
     },
     {
       "ID": "C003B",
-      "NAME": "C003B",
+      "NAME": "商人",
       "DICE": "",
       "COST": "2C",
       "EMBLEM_C": 2,
       "VP": 1,
       "LEVEL": 2,
       "ONCE": "",
-      "TAP": "CHANGE(2K,2Z)",
+      "TAP": "CHANGE(K,C,ALL)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
@@ -884,7 +884,7 @@
     },
     {
       "ID": "C004B",
-      "NAME": "C004B",
+      "NAME": "農夫",
       "DICE": "",
       "COST": "1A,1C",
       "EMBLEM_C": 2,
@@ -900,7 +900,7 @@
     },
     {
       "ID": "C005B",
-      "NAME": "C005B",
+      "NAME": "貴族",
       "DICE": "",
       "COST": "1A,2C",
       "EMBLEM_C": 2,
@@ -916,7 +916,7 @@
     },
     {
       "ID": "C006B",
-      "NAME": "C006B",
+      "NAME": "司教",
       "DICE": "",
       "COST": "1A,2C",
       "EMBLEM_C": 2,
@@ -932,7 +932,7 @@
     },
     {
       "ID": "C007B",
-      "NAME": "C007B",
+      "NAME": "金貸し",
       "DICE": "",
       "COST": "1A,2C",
       "EMBLEM_C": 2,
@@ -948,7 +948,7 @@
     },
     {
       "ID": "C008B",
-      "NAME": "C008B",
+      "NAME": "軍師",
       "DICE": "",
       "COST": "1A,3C",
       "EMBLEM_C": 2,
@@ -1850,7 +1850,7 @@
     },
     {
       "ID": "AREA001B",
-      "NAME": "大農園",
+      "NAME": "大農園LV1",
       "SLOT1": 1,
       "SLOT2": "ANY",
       "SLOT3": "EX",
@@ -1862,7 +1862,7 @@
     },
     {
       "ID": "AREA002B",
-      "NAME": "大農場",
+      "NAME": "大農場LV1",
       "SLOT1": 4,
       "SLOT2": "ANY",
       "SLOT3": "EX",
@@ -1874,7 +1874,7 @@
     },
     {
       "ID": "AREA003B",
-      "NAME": "城下町",
+      "NAME": "城下町LV1",
       "SLOT1": "ANY",
       "SLOT2": "EX",
       "SLOT3": "NONE",
@@ -1886,7 +1886,7 @@
     },
     {
       "ID": "AREA004B",
-      "NAME": "大聖堂",
+      "NAME": "大聖堂LV1",
       "SLOT1": "ANY",
       "SLOT2": "EX",
       "SLOT3": "NONE",
@@ -1898,7 +1898,7 @@
     },
     {
       "ID": "AREA005B",
-      "NAME": "ギルド",
+      "NAME": "ギルドLV1",
       "SLOT1": "ANY",
       "SLOT2": "EX",
       "SLOT3": "NONE",
@@ -1910,7 +1910,7 @@
     },
     {
       "ID": "AREA006B",
-      "NAME": "歓楽街",
+      "NAME": "歓楽街LV1",
       "SLOT1": 3,
       "SLOT2": 5,
       "SLOT3": "EX",
@@ -1922,7 +1922,7 @@
     },
     {
       "ID": "AREA009B",
-      "NAME": "元老院",
+      "NAME": "元老院LV1",
       "SLOT1": "ANY",
       "SLOT2": "ANY",
       "SLOT3": "ANY",
@@ -1934,7 +1934,7 @@
     },
     {
       "ID": "AREA010B",
-      "NAME": "スラム街",
+      "NAME": "スラム街LV1",
       "SLOT1": 1,
       "SLOT2": 3,
       "SLOT3": "EX",
@@ -1946,7 +1946,7 @@
     },
     {
       "ID": "AREA001C",
-      "NAME": "大農園",
+      "NAME": "大農園LV2",
       "SLOT1": 1,
       "SLOT2": 2,
       "SLOT3": "EX",
@@ -1958,7 +1958,7 @@
     },
     {
       "ID": "AREA002C",
-      "NAME": "大農場",
+      "NAME": "大農場LV2",
       "SLOT1": 4,
       "SLOT2": 5,
       "SLOT3": "EX",
@@ -1970,7 +1970,7 @@
     },
     {
       "ID": "AREA003C",
-      "NAME": "城下町",
+      "NAME": "城下町LV2",
       "SLOT1": "ANY",
       "SLOT2": "EX",
       "SLOT3": "NONE",
@@ -1982,7 +1982,7 @@
     },
     {
       "ID": "AREA004C",
-      "NAME": "大聖堂",
+      "NAME": "大聖堂LV2",
       "SLOT1": "ANY",
       "SLOT2": "EX",
       "SLOT3": "NONE",
@@ -1994,7 +1994,7 @@
     },
     {
       "ID": "AREA005C",
-      "NAME": "ギルド",
+      "NAME": "ギルドLV2",
       "SLOT1": "ANY",
       "SLOT2": "EX",
       "SLOT3": "NONE",
@@ -2006,7 +2006,7 @@
     },
     {
       "ID": "AREA006C",
-      "NAME": "歓楽街",
+      "NAME": "歓楽街LV2",
       "SLOT1": 3,
       "SLOT2": "ANY",
       "SLOT3": "EX",
@@ -2018,7 +2018,7 @@
     },
     {
       "ID": "AREA009C",
-      "NAME": "元老院",
+      "NAME": "元老院LV2",
       "SLOT1": "ANY",
       "SLOT2": "ANY",
       "SLOT3": "ANY",
@@ -2030,7 +2030,7 @@
     },
     {
       "ID": "AREA010C",
-      "NAME": "スラム街",
+      "NAME": "スラム街LV2",
       "SLOT1": 1,
       "SLOT2": "EX",
       "SLOT3": "EX",

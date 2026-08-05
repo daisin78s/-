@@ -54,6 +54,17 @@ const CONVERT_LIMIT_ELIGIBLE_MAP_IDS = ['MAP003', 'MAP004', 'MAP005'];
  * a flat system rule, not per-AREA data). Tier A has no fee. */
 const USAGE_FEE_BY_TIER = { B: 1, C: 2 };
 
+/** Pure: the usage fee placing on map would incur for playerId right now, or null if none applies (the
+ * map's own owner, a tier-A map with no feeOwnerId, or an AREA with no tier suffix at all -- castle/
+ * AREA007, confirmed to have no tier concept). Factored out of chargeUsageFeeIfOwed (2026-08-05) so
+ * wouldOweUnaffordableFee below can ask "how much, if any" without mutating anything. */
+function wouldOweFee(map, playerId) {
+  if (!map.feeOwnerId || map.feeOwnerId === playerId) return null;
+  const { tier } = splitCardId(map.currentAreaId);
+  const amount = USAGE_FEE_BY_TIER[tier];
+  return amount ? { mapId: map.mapId, amount } : null;
+}
+
 /** Sets player.pendingFee (see its own doc in game-state.js) if placing on mapId right now means using
  * someone else's tiered-up AREA -- a no-op (leaves pendingFee untouched) for the map's own owner, a
  * tier-A map (feeOwnerId null), or an AREA with no tier suffix at all (castle/AREA007, confirmed to have
@@ -61,12 +72,30 @@ const USAGE_FEE_BY_TIER = { B: 1, C: 2 };
  * placeDiceGroup) -- "using the area" is what's billed, not per-die, matching how this is always exactly
  * one turn's worth of action even when placeDiceGroup lets multiple dice land in it. */
 function chargeUsageFeeIfOwed(state, map, playerId) {
-  if (!map.feeOwnerId || map.feeOwnerId === playerId) return;
-  const { tier } = splitCardId(map.currentAreaId);
-  const amount = USAGE_FEE_BY_TIER[tier];
-  if (!amount) return;
+  const fee = wouldOweFee(map, playerId);
+  if (!fee) return;
   const player = state.players.find((p) => p.id === playerId);
-  player.pendingFee = { mapId: map.mapId, amount };
+  player.pendingFee = fee;
+}
+
+/** Pure: could playerId ever actually pay a fee of `amount` K, counting not just K on hand but every
+ * resource a free action could turn into K (2026-08-05, per user diagnosis of the residual usage-fee
+ * softlock after the BARE_TAP block above: "AREA010を使うときはAIが使用料が払えることを確認してから
+ * ダイスを置く用に直せますか" -- AREA010's own AREA action never grants K to a non-owner (it either
+ * costs K outright via CHANGE(2K,...) or grants only VP via ADD(VP)/ADD(2VP)), so a non-owner placing
+ * there gets nothing back that could help pay the fee they just incurred). A/B/C/Z->K free actions have
+ * no per-round usage cap ("回数制限ありません", confirmed [[project-dice-wp-dsl-spec]]), so every unit of
+ * those four resources genuinely converts 1:1 -- only wD->2K is capped (once per round via
+ * freeActionTaps.wD_K), and only counts if there's actually an unplaced wD to spend. Deliberately
+ * ignores whatever the AREA action about to resolve might itself grant -- checking affordability with
+ * *current* resources alone is conservative (a placement that would only become affordable *after* its
+ * own ADD/CHANGE effect stays blocked), but never risks the reverse (never allows an actually-impossible
+ * placement through) -- matching the same "affordability gates legality" precedent AREA008/009's own
+ * isCandidateAffordable already established. */
+function canAffordFee(player, amount) {
+  const convertible = (player.resources.A || 0) + (player.resources.B || 0) + (player.resources.C || 0) + (player.resources.Z || 0);
+  const wdBonus = !player.freeActionTaps.wD_K && player.dice.some((d) => d.kind === 'WHITE' && d.placedMapId === null) ? 2 : 0;
+  return (player.resources.K || 0) + convertible + wdBonus >= amount;
 }
 
 /**
@@ -170,6 +199,20 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
   const prediction = wouldAreaActionHaveEffect(state, index, actionContext, areaRow, buildValue);
   if (!prediction.ok) return { success: false, reason: prediction.reason };
 
+  // Would this placement owe a usage fee at all? If so, snapshot state now so the whole placement can be
+  // rolled back if it turns out unpayable (2026-08-05, per user diagnosis: "AREA010を使うときはAIが使用
+  // 料が払えることを確認してからダイスを置く用に直せますか"). Checked *after* the area's own ACTION
+  // resolves below, not before -- e.g. AREA001B's ACTION is ADD(5K), which trivially covers its own 1K
+  // fee, so checking with only pre-resolution resources would incorrectly block that common, perfectly
+  // safe case (confirmed via a failing test this exact change caught: freshly-placed non-owners with 0
+  // K starting resources routinely gain plenty from the AREA itself). AREA010's own actions never grant
+  // K to a non-owner (CHANGE(2K,...) costs K outright, ADD(n)VP grants none at all) -- that's the actual
+  // gap this closes, without over-restricting AREAs whose own effect already covers their fee. See
+  // canAffordFee's own doc for what "payable" means (current K + every free-action-convertible
+  // resource, not just raw K).
+  const owedFee = wouldOweFee(map, context.playerId);
+  const preFeeSnapshot = owedFee ? structuredClone(state) : null;
+
   state.placementSeq += 1;
   die.placedMapId = mapId;
   targetOccupants.push({
@@ -183,6 +226,16 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
 
   executor.emitAndResolve(state, index, actionContext, 'PLACE', mapId);
   const actionResult = resolveAreaAction(state, index, actionContext, areaRow, buildValue);
+
+  if (preFeeSnapshot) {
+    const updatedPlayer = state.players.find((p) => p.id === context.playerId);
+    if (!canAffordFee(updatedPlayer, owedFee.amount)) {
+      Object.keys(state).forEach((k) => delete state[k]);
+      Object.assign(state, preFeeSnapshot);
+      return { success: false, reason: 'UNAFFORDABLE_USAGE_FEE', amount: owedFee.amount };
+    }
+  }
+
   return { success: true, actionResult };
 }
 
@@ -372,6 +425,12 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   const predictedCandidates = getBuildCandidates(state, index, playerId, ['M'], predictedBuildValue);
   if (!predictedCandidates.some((c) => isCandidateAffordable(state, index, playerId, c))) {
     return { success: false, reason: 'NO_BUILDABLE_CARD' };
+  }
+  // Same usage-fee affordability gate as placeDice's own (2026-08-05) -- AREA009 can carry a tier (A008A
+  // tiers it up), so a group placement here can owe a fee too, not just the single-die path.
+  const owedFee = wouldOweFee(map, playerId);
+  if (owedFee && !canAffordFee(player, owedFee.amount)) {
+    return { success: false, reason: 'UNAFFORDABLE_USAGE_FEE', amount: owedFee.amount };
   }
 
   // Everything fits and can lead somewhere -- commit for real.
