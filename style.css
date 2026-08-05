@@ -648,6 +648,15 @@ h1, h2, h3 { margin: 0; }
   align-items: center;
 }
 
+/* Enlarged to roughly match the initial-resource-card icon size (2026-08-05, per user feedback: "AREA
+   のアイコン の大きさ 資源カードくらいのアイコンの大きさにしてください") -- same scoped-override
+   pattern as .card-group__onboard-resources above. */
+.map-tile__action .action-emoji { font-size: 22px; }
+.map-tile__action .action-dot { width: 18px; height: 18px; }
+.map-tile__action .action-count { font-size: 16px; }
+.map-tile__action .action-arrow { font-size: 18px; }
+.map-tile__action .action-suffix { font-size: 14px; }
+
 /* Icon-based action display (confirmed 2026-07-29): known DSL patterns render as icons instead of
    raw text -- see main.js's ACTION_ICON_BUILDERS. Falls back to the monospace text above when a
    pattern has no icon mapping yet. */
