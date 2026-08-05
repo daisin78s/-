@@ -587,6 +587,12 @@ function factsForFaceId(faceId) {
     req: row.DICE ? `目 ${row.DICE}` : '',
     effects,
     inst: row.INST || '',
+    // '' unless the user has actually filled in a real thematic title (NAME still equal to the card's
+    // own ID means "not customized yet", same "===faceId means unset" convention areaOwnershipLabel
+    // already used before this -- 2026-08-05, generalized to every card type, not just the A-series
+    // ONCE=MAP-assignment shape, per user feedback: "AC系のカード NAMEをカード上部に反映させてくださ
+    // い" -- C-series cards want this too, and they don't have that DSL shape at all).
+    name: row.NAME && row.NAME !== row.ID ? row.NAME : '',
     // Only CON/RESOURCE rows ever have this (confirmed 2026-07-30, per user feedback -- relevant when
     // choosing initial RESOURCE cards / previewing CON, since START_ORDER determines turn order).
     // 0 is a real, meaningful value (lowest = goes first) so this must stay null rather than falsy
@@ -1358,21 +1364,22 @@ function renderShops(state) {
 /**
  * Cards whose whole effect is "MAP{n}.CURRENT_AREA=AREA{n}{tier}" (e.g. A001A, A006A) exist purely
  * to claim ownership of that AREA -- confirmed 2026-07-29: show a label instead of the raw card id.
- * **2026-08-05 update, per user feedback ("A系のNAME変えました...小麦畑の支配のように全部変えてくださ
- * い"):** now shows the card's own NAME column value directly, once the user has filled it in with a
- * complete thematic phrase (e.g. A001A's NAME is now "城下町の支配", not just "城下町") -- data/game.xlsx
- * confirmed to hold exactly that, so no template composition is needed on this side, just display it as-
- * is. Falls back to the old auto-generated "{tier-A AREA name}の所有" (always the tier-A/"base place"
- * name even when the assignment's actual target is a higher tier, since the place is the same regardless
- * of which tier owning it unlocked) for any card whose NAME hasn't been customized yet (still equals its
- * own faceId) -- keeps working for B/C decks or future A cards before their NAME is filled in.
+ * **2026-08-05 update, per user feedback ("AC系のカード NAMEをカード上部に反映させてください"):** a
+ * customized NAME is now shown at the top of the card instead (see fillCardFace's own
+ * q('.shop-card__name') line, and factsForFaceId's `name` field) -- this function now only ever
+ * produces the older auto-generated "{tier-A AREA name}の所有" fallback (always the tier-A/"base
+ * place" name even when the assignment's actual target is a higher tier, since the place is the same
+ * regardless of which tier owning it unlocked), and only for a card whose NAME hasn't been customized
+ * yet (still equals its own faceId) -- keeps the effect area from just showing raw DSL text for B/C
+ * decks or future A cards before their NAME is filled in, without duplicating an already-customized
+ * name in two places on the same card.
  */
 function areaOwnershipLabel(faceId, effects) {
   if (!effects || effects.length !== 1) return null;
   const match = /^MAP(\d+)\.CURRENT_AREA=AREA\d+[ABC]?$/.exec(effects[0].text);
   if (!match) return null;
   const row = dataLoaderMod.getCardRow(INDEX, faceId);
-  if (row.NAME && row.NAME !== faceId) return row.NAME;
+  if (row.NAME && row.NAME !== faceId) return null;
   return `${areaName(`AREA${match[1]}A`)}の所有`;
 }
 
@@ -1486,6 +1493,10 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
   // Corrected 2026-07-29: the card id always stays in the id spot -- the ownership label goes in
   // the effect area instead (it *is* this card's effect, not a replacement for its identity).
   q('.shop-card__id').textContent = faceId;
+  // Thematic title, at the top of the card, above the id (2026-08-05, per user feedback: "AC系のカード
+  // NAMEをカード上部に反映させてください"). Empty (and :empty{display:none}-hidden) for any card whose
+  // NAME hasn't been customized yet -- see factsForFaceId's own doc.
+  q('.shop-card__name').textContent = facts.name;
 
   renderCostBadges(q('.shop-card__cost'), facts.cost, faceId);
   q('.shop-card__vp').textContent = facts.vp ? `${facts.vp} VP` : '';
@@ -1496,10 +1507,20 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
   q('.shop-card__start-order').textContent = facts.startOrder !== null && facts.startOrder !== undefined ? `先攻順 ${facts.startOrder}` : '';
 
   let tall = false;
-  const ownershipLabel = areaOwnershipLabel(faceId, facts.effects);
-  if (options.showEffect && ownershipLabel) {
-    tall = true;
-    q('.shop-card__effect').appendChild(document.createTextNode(ownershipLabel));
+  // A pure MAP-assignment card (see areaOwnershipLabel's own doc) never falls through to the generic
+  // icon/raw-text branch below, even once its NAME is customized and areaOwnershipLabel itself starts
+  // returning null (2026-08-05 fix: without this check, that null was falling through to the generic
+  // branch, which has no icon mapping for "MAP004.CURRENT_AREA=AREA004C" and showed it as raw DSL text
+  // in the effect area right underneath the new top-of-card name -- this DSL shape was never meant to
+  // be shown as raw text either way).
+  const isAreaOwnershipCard = facts.effects && facts.effects.length === 1
+    && /^MAP\d+\.CURRENT_AREA=AREA\d+[ABC]?$/.test(facts.effects[0].text);
+  if (isAreaOwnershipCard) {
+    const ownershipLabel = areaOwnershipLabel(faceId, facts.effects);
+    if (options.showEffect && ownershipLabel) {
+      tall = true;
+      q('.shop-card__effect').appendChild(document.createTextNode(ownershipLabel));
+    }
   } else if (options.showEffect && facts.effects && facts.effects.length) {
     // allowTextFallback (confirmed 2026-07-30): A/B/C cards fall back to raw DSL text for any
     // pattern buildActionIcons doesn't recognize yet (established 2026-07-29). JOB/CON are new to

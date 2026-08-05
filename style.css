@@ -397,6 +397,20 @@ h1, h2, h3 { margin: 0; }
   cursor: pointer;
 }
 
+/* Thematic title, above the id (2026-08-05, per user feedback: "AC系のカード NAMEをカード上部に反映
+   させてください") -- empty (and hidden) for any card whose NAME hasn't been customized yet, see
+   fillCardFace's own q('.shop-card__name') line. */
+.shop-card__name {
+  font-weight: 700;
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--accent);
+}
+
+.shop-card__name:empty {
+  display: none;
+}
+
 .shop-card__id {
   font-weight: 700;
   font-size: 13px;
