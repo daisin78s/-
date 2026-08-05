@@ -441,6 +441,26 @@ function jumpToHistoryIndex(idx) {
   // with this entry's own playerId makes render() correctly recognize "already noted" and skip that.
   lastNotedActiveTurnPlayerId = turnHistory[idx].playerId;
   lastTurnPlayerId = turnHistory[idx].playerId;
+  // round1FirstPlayerId/round1FirstPlayerTurnStartCount (found 2026-08-05, per user bug report: "デバッ
+  // グモードで初期状態まで戻るとJOB選択をする時JOBが非表示でえらべない") -- same class of bug as
+  // aiOpenTurnPlayerId/lastNotedActiveTurnPlayerId above (a UI-only var outside GameState, left stale by
+  // a jump): renderJobPool permanently hides the pool once this count reaches 2, and jumping back to
+  // round 0 left it at whatever forward-progressed value it last reached, so the pool stayed hidden even
+  // though nobody had drafted yet in the restored state. Recomputed by replaying the exact same rule
+  // noteActiveTurnPlayerForJobPool applies (turnHistory only ever contains genuine TURN-start entries,
+  // one per real turn boundary -- see its own doc -- so this reproduces exactly what live play would
+  // have counted by this point) rather than just zeroing it, since a jump *forward* past round 1's 2nd
+  // turn must still correctly keep the pool hidden.
+  round1FirstPlayerId = null;
+  round1FirstPlayerTurnStartCount = 0;
+  for (let i = 0; i <= idx; i++) {
+    const entry = turnHistory[i];
+    if (!entry.playerId) continue; // the pre-onboarding seed entry (turnHistory[0] before round 1 starts)
+    if (round1FirstPlayerId === null && entry.snapshot.turnOrder && entry.snapshot.turnOrder.length > 0) {
+      round1FirstPlayerId = entry.snapshot.turnOrder[0];
+    }
+    if (entry.playerId === round1FirstPlayerId) round1FirstPlayerTurnStartCount++;
+  }
   undoMod.recordCheckpoint(STATE);
   render(STATE);
 }
@@ -2620,7 +2640,12 @@ function renderPlayers(state, next) {
   container.innerHTML = '';
   const activePlayerId = next ? next.playerId : null;
   const canPlaceDiceFor = actingHumanPlayerId(state, next);
-  state.players.forEach((player) => {
+  // Ordered by this round's turn order, active player first (2026-08-05, per user feedback: "アリス
+  // ボブ キャロル ダン の資源置き場の順番を このラウンドの手番順にして") -- reuses turnOrderedPlayers,
+  // the exact same rotate-to-whoever's-up-now scheme the owned-cards sidebar already uses (confirmed
+  // 2026-07-29 there), so the two player lists stay visually consistent instead of one being fixed
+  // creation order and the other rotating.
+  turnOrderedPlayers(state, activePlayerId).forEach((player) => {
     const tpl = document.getElementById('tpl-player-panel');
     const node = tpl.content.firstElementChild.cloneNode(true);
     if (player.id === activePlayerId) node.classList.add('player-panel--active');
