@@ -2974,6 +2974,16 @@ function attachTapToggle(cardNode, cardState, faceId, canAct, physicalId) {
   effectEl.addEventListener('click', (e) => {
     e.stopPropagation();
     if (cardState.tapped) return;
+    // Blocked while a usage fee is owed (2026-08-05, see board.useBareTapAbility's own doc on the
+    // softlock this prevents) -- checked here too (not just left to useBareTapAbility's own rejection
+    // once confirmed) so the SET_DICE_ANY/SET_DIE_VALUE/CHANGE_DIE_VALUE kind's die/value picker modal
+    // doesn't even open for something that's just going to fail anyway.
+    const owner = STATE.players.find((p) => p.id === cardState.ownerId);
+    if (owner && owner.pendingFee) {
+      placementMessage = 'カードを使用できません（PENDING_FEE）';
+      render(STATE);
+      return;
+    }
     if (bareTap.kind === 'IMMEDIATE') {
       const result = boardMod.useBareTapAbility(STATE, INDEX, { playerId: cardState.ownerId }, physicalId);
       placementMessage = result.success ? '' : `カードを使用できません（${result.reason}）`;

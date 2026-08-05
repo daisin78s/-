@@ -498,6 +498,17 @@ function completeAreaBuild(state, index, context, candidate, remainingCommands) 
 function useBareTapAbility(state, index, context, physicalId) {
   const inst = state.cards[physicalId];
   if (inst.tapped) return { success: false, reason: 'ALREADY_TAPPED' };
+  // Blocked while a usage fee is still owed (2026-08-05, per user diagnosis of the AI softlock bug:
+  // "SLOTにダイスを置く→解決する→使用料を払う...おそらく...TAPアクションで資源を使い果たしてしまった
+  // ことが原因" -- the fee itself isn't actually deducted until TURNEND (see board.chargeUsageFeeIfOwed/
+  // executor.canEndTurn's own docs), so without this gate a player could spend away the very resources
+  // (or the A/B/C/Z/wD a free action would've converted into K) needed to pay it, via a TAP ability, in
+  // the window between owing the fee and TURNEND actually collecting it -- occasionally leaving them
+  // with truly nothing to pay with or convert, a permanent deadlock. FREE_ACTION/COLLECT_FEE are
+  // deliberately NOT gated here (the user explicitly wants those to stay usable in this same window,
+  // since they're the way OUT of the debt, not a way to dig deeper into it).
+  const player = state.players.find((p) => p.id === context.playerId);
+  if (player && player.pendingFee) return { success: false, reason: 'PENDING_FEE' };
   const row = getCardRow(index, inst.currentFaceId);
   const tapContext = { ...context, sourcePhysicalId: physicalId };
   const result = resolveProgramOrBuild(state, index, tapContext, row.TAP, Infinity);

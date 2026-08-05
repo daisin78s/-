@@ -613,6 +613,32 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   check('...map.accumulatedFee is back to 0', state.maps['MAP001'].accumulatedFee, 0);
 }
 {
+  // BARE_TAP is blocked while a usage fee is owed (2026-08-05, per user diagnosis of an AI softlock:
+  // "SLOTにダイスを置く→解決する→使用料を払う...おそらく...TAPアクションで資源を使い果たしてしまった
+  // ことが原因" -- the fee itself isn't deducted until TURNEND, so without this a player could spend
+  // away the very resources (or the A/B/C/Z/wD a free action would convert into K) needed to pay it via
+  // a TAP ability first, occasionally leaving nothing to pay/convert with -- a permanent deadlock).
+  const state = freshStateWithShops();
+  state.maps['MAP001'] = mapWithArea('MAP001', 'AREA001B', 3, 'P1');
+  const die = giveDie(state, 'P2', 1);
+  board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP001', 0); // P2 now owes 1K to P1
+  check('P2 owes a pending fee after placing on P1\'s tiered-up AREA', !!player(state, 'P2').pendingFee, true);
+
+  const tapInst = createCardInstance('C001A'); // TAP=CHANGE(2K,2A), IMMEDIATE kind
+  tapInst.ownerId = 'P2';
+  state.cards[tapInst.physicalId] = tapInst;
+  player(state, 'P2').ownedCardPhysicalIds.push(tapInst.physicalId);
+  player(state, 'P2').resources.K = 10; // plenty to normally afford the TAP's own CHANGE(2K,2A) cost
+
+  const blockedResult = board.useBareTapAbility(state, index, { playerId: 'P2' }, tapInst.physicalId);
+  check('BARE_TAP is refused while the fee is still pending', blockedResult, { success: false, reason: 'PENDING_FEE' });
+  check('...the card was never actually tapped', state.cards[tapInst.physicalId].tapped, false);
+
+  player(state, 'P2').pendingFee = null; // simulate the fee having already been paid off (endTurn's own job)
+  const allowedResult = board.useBareTapAbility(state, index, { playerId: 'P2' }, tapInst.physicalId);
+  check('...but succeeds normally once the fee is cleared', allowedResult.success, true);
+}
+{
   const state = freshStateWithShops();
   player(state, 'P1').resources.BZ = 20; // AREA009B's ACTION is also BUILD-first -- see the castle blocks' comment above
   state.maps['MAP009'] = mapWithArea('MAP009', 'AREA009B', 6, 'P1'); // SLOT1-5=ANY, SLOT6=EX

@@ -49,7 +49,11 @@ check('A full game reaches GAME_END, not stuck at MAX_ITERATIONS', state1.phase,
     // JOB ids dropped their trailing tier letter (2026-08-0X) -- unlike CON/firstRound1BuildFaceId
     // below (still real A/B-tiered decks), a JOB id is now always bare, e.g. "JOB005".
     assertTrue(`${playerId}: jobFaceId looks like a JOB face ID`, /^JOB\d+$/.test(h.jobFaceId));
-    assertTrue(`${playerId}: firstRound1BuildFaceId is NONE or a card face ID`, h.firstRound1BuildFaceId === 'NONE' || /^[A-Z]+\d+[AB]$/.test(h.firstRound1BuildFaceId));
+    // Tier suffix is optional (2026-08-05, fix: this regex never actually allowed a Monument build --
+    // M-series cards have no A/B tier at all, e.g. "M002", unlike A/B/C decks which always have one --
+    // this just hadn't been exercised by this seed's history until the usage-fee softlock fix below let
+    // the game actually run this far).
+    assertTrue(`${playerId}: firstRound1BuildFaceId is NONE or a card face ID`, h.firstRound1BuildFaceId === 'NONE' || /^[A-Z]+\d+[AB]?$/.test(h.firstRound1BuildFaceId));
     assertTrue(`${playerId}: round1DDiceGained is a non-negative integer`, Number.isInteger(h.round1DDiceGained) && h.round1DDiceGained >= 0);
     assertTrue(`${playerId}: finalScore is a finite number`, Number.isFinite(h.finalScore));
   }
