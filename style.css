@@ -1847,6 +1847,15 @@ h1, h2, h3 { margin: 0; }
   width: 440px;
 }
 
+/* AREA tier-chain preview (2026-08-05, per user feedback: "拡大画像３枚だと狭いんでスクロールがいらない
+   ように 表示範囲広げれますか") -- 3 tiles at .map-tile--preview's 130px + 2×10px gaps = 410px of
+   content, which only just barely overflowed .card-inst-modal--wide's 440px (404px after padding) --
+   wide enough headroom here that 3 tiles fit without the .area-enlarge-row scrollbar on any reasonably
+   sized screen; still capped by .card-inst-modal's own max-width safety net on narrow ones. */
+.card-inst-modal--area-wide {
+  width: 500px;
+}
+
 /* Houses the enlarged (transform: scale()'d) card/QST visual -- see showCardEnlargeModal. Width/
    height are set inline in JS to match the scaled visual's actual measured size (transform doesn't
    affect layout sizing on its own, so the box has to be told explicitly or the scaled card would

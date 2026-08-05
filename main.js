@@ -3763,6 +3763,9 @@ function showCardEnlargeModal(faceId, visualNode, sibling, pickAction) {
   visualContainer.style.height = '';
   const isQst = !!visualNode && visualNode.classList.contains('qst-card');
   modal.classList.toggle('card-inst-modal--wide', !!visualNode);
+  // The overlay/modal DOM is shared and reused across calls, so a leftover --area-wide from a previous
+  // showAreaEnlargeModal call must be cleared here too, or it'd stick around on every later card modal.
+  modal.classList.remove('card-inst-modal--area-wide');
 
   if (visualNode) {
     if (isQst) visualNode.style.width = `${QST_PRE_SCALE_WIDTH}px`;
@@ -3894,7 +3897,13 @@ function showAreaEnlargeModal(areaId) {
   const pickBtn = overlay.querySelector('.card-inst-modal__pick-button');
 
   overlay.hidden = false;
-  modal.classList.add('card-inst-modal--wide');
+  // Wider than the card/QST modal (2026-08-05, per user feedback: "拡大画像３枚だと狭いんでスクロールが
+  // いらないように 表示範囲広げれますか") -- .card-inst-modal--wide's 440px only just barely overflowed
+  // with 3 tiles, forcing .area-enlarge-row's scroll fallback to kick in even on comfortably wide
+  // screens; --area-wide's own 500px gives enough headroom that 3 tiles fit without it. Removes --wide
+  // too, in case a previous showCardEnlargeModal call left it on this same shared modal element.
+  modal.classList.remove('card-inst-modal--wide');
+  modal.classList.add('card-inst-modal--area-wide');
   flipBtn.hidden = true;
   pickBtn.hidden = true;
 
