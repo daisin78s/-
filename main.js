@@ -722,7 +722,9 @@ const ACTION_ICON_BUILDERS = {
   // 2026-08-0X, no longer reachable: C001-3's TAP was changed to the quantity-prefixed CHANGE(2K,2A)
   // form (per user request), which buildChangeQuantityIcon now handles generically.
   'CHANGE((A,B,C),D)': () => actionRow([actionDot('A'), actionDot('B'), actionDot('C'), actionArrow(), actionSuffix('色D')]),
-  'CHANGE(4K,VP)': () => actionRow([actionDot('K'), actionCount(4), actionArrow(), actionSuffix('VP')]),
+  // CHANGE(4K,VP) used to live here as an exact-match entry -- removed 2026-08-05, no longer reachable
+  // (no card/AREA in the current data uses that literal count) and superseded by the general
+  // buildChangeToVpIcon below, added per user feedback covering AREA010A/C's own K->VP counts.
   // JOB003's TAP (2026-08-0X, per user request -- previously unmatched by buildSetDiceAnyIcon, which
   // only matches bare SET_DICE_ANY() alone, not this compound with GRANT_PLACE_ANYWHERE chained after
   // it, so JOB003 was showing no icon at all): "ダイス目を変える" reads more directly than reusing
@@ -892,6 +894,20 @@ function buildChangeQuantityIcon(actionText) {
     actionArrow(),
     ...resourceItemNodes(getCount, getResource),
   ]);
+}
+
+/** CHANGE(nK,mVP) -- K->VP conversions with any counts on either side, e.g. AREA010A's "CHANGE(2K,VP)"
+ * or AREA010C's "CHANGE(2K,2VP)" (2026-08-05, per user feedback: "AREA010A B C も 2K → VP のようにお願
+ * い"). Generalizes the old ACTION_ICON_BUILDERS['CHANGE(4K,VP)'] exact-match entry (which only covered
+ * that one literal count and is no longer reachable by any current data) into a proper pattern. VP still
+ * has no dot (per buildAddResourceIcon's own VP convention elsewhere), shown as plain "{n}VP" text with
+ * the count omitted when the DSL's own count is implicit 1 -- same "only show a number when the DSL has
+ * one" rule used throughout. */
+function buildChangeToVpIcon(actionText) {
+  const match = /^CHANGE\((\d*)K,(\d*)VP\)$/.exec(actionText || '');
+  if (!match) return null;
+  const [, payCount, gainCount] = match;
+  return actionRow([...resourceItemNodes(payCount, 'K'), actionArrow(), actionSuffix(gainCount ? `${gainCount}VP` : 'VP')]);
 }
 
 /** CHANGE(X,Y,ALL);ADD(nZ) -- e.g. AREA003B's "CHANGE(K,A,ALL);ADD(2B)" (2026-08-05, per user feedback
@@ -1207,6 +1223,8 @@ function buildActionIcons(actionText, stacked) {
   if (addMultiResourceIcon) return addMultiResourceIcon;
   const changeQuantityIcon = buildChangeQuantityIcon(actionText);
   if (changeQuantityIcon) return changeQuantityIcon;
+  const changeToVpIcon = buildChangeToVpIcon(actionText);
+  if (changeToVpIcon) return changeToVpIcon;
   const changeAllThenAddIcon = buildChangeAllThenAddIcon(actionText);
   if (changeAllThenAddIcon) return changeAllThenAddIcon;
   const bzForBuildIcon = buildBzForBuildIcon(actionText);
