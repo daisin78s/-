@@ -1833,13 +1833,14 @@ function colorForPlayer(state, playerId) {
 /**
  * AREA sheet's NAME column, looked up by whichever face is currently active (confirmed 2026-07-29:
  * the tile shows the *current* AREA's name, not the MAP id -- so this must track tier flips, not
- * just the map's starting tier). Every AREA row's NAME currently equals its own ID except AREA008
- * ("城") -- true across all tiers (AREA003A/B/C are each literally "AREA003A"/"AREA003B"/"AREA003C"),
- * so this stays correct once real flavor names replace the ID placeholders too, as long as that
- * data-driven convention holds.
+ * just the map's starting tier). Reads the AREA sheet's own NAME column directly (2026-08-06, fixing a
+ * bug: this used to be hardcoded to areaId itself, a leftover from when every AREA row's NAME was still
+ * a placeholder equal to its own ID -- so once the user started filling in real flavor names, e.g.
+ * AREA001A="大農園" or renaming AREA008 from "城" to "王宮", this kept showing the raw ID/old name
+ * instead of picking the change up).
  */
 function areaName(areaId) {
-  return areaId === 'AREA008' ? '城' : areaId;
+  return dataLoaderMod.getAreaRow(INDEX, areaId).NAME;
 }
 
 /**
@@ -3463,7 +3464,28 @@ function render(state) {
   // turn-flow.getNextTurn needs a real turnOrder, which only exists once maybeStartRound1 has run
   // (round>0) -- before that, nobody is "the active player" yet (see renderResourceChoice/
   // turnOrderedPlayers/renderPlayers, which all treat next===null as "no one highlighted").
-  const next = state.round >= 1 ? turnFlowMod.getNextTurn(state) : null;
+  let next = state.round >= 1 ? turnFlowMod.getNextTurn(state) : null;
+  // Keep the still-mid-turn player as "next" even once they run out of dice to place (2026-08-06, per
+  // user report: "ラウンド最後のダイスを置くと即次のプレイヤーのターンになりTAPアクションを使うタイミ
+  // ングがありません"). getNextTurn's own skip-ahead ("does this player have any unplaced die left?")
+  // is exactly right for finding who a *just-ended* turn should pass to (state.currentPlayerIndex just
+  // advanced by turnFlow.endTurn, and may now point at someone with nothing left at all) -- but it has
+  // no way to tell that apart from "the player who's STILL mid-turn just placed their own last die and
+  // hasn't clicked ターン終了 yet", since both look identical from state alone (currentPlayerIndex
+  // unchanged, that player now has 0 unplaced dice). turnActionTaken already tracks "this turn's
+  // placement is done, awaiting an explicit end" -- checking it against lastTurnPlayerId (only updated
+  // by a REAL turn transition, below) distinguishes the two: if the literal state.turnOrder[
+  // currentPlayerIndex] is still the player lastTurnPlayerId already noted as active, nothing has
+  // actually ended their turn yet, so raw getNextTurn's skip-ahead here is premature and gets
+  // overridden back to them. Once they really do end their turn (turnFlow.endTurn moves
+  // currentPlayerIndex for real), that index's player no longer matches lastTurnPlayerId and this
+  // no-ops, letting the normal "fresh turn started" transition below fire as usual.
+  if (turnActionTaken && state.turnOrder.length) {
+    const currentIndexPlayerId = state.turnOrder[state.currentPlayerIndex];
+    if (currentIndexPlayerId === lastTurnPlayerId && (!next || next.playerId !== currentIndexPlayerId)) {
+      next = { type: 'TURN', playerId: currentIndexPlayerId, playerIndex: state.currentPlayerIndex };
+    }
+  }
   // Auto-records an undo checkpoint at the start of each player's TURN (2026-07-30, per user
   // feedback: development/tuning phase, so undo should always get back to "start of this turn"
   // regardless of whether anything rolled a die -- see handleUndoClick, which re-arms this same
