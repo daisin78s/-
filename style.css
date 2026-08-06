@@ -1078,29 +1078,6 @@ h1, h2, h3 { margin: 0; }
   flex: 0 0 auto;
 }
 
-/* 建築候補選択モーダル内の「追加のダイスを置く」(城のゾロ目スタッキング, 2026-08-04, per user
-   feedback: "ダイス目12を出そうとして複数のダイスを選択するやり方がわからない") -- see main.js's
-   renderBuildChoiceAddDieSection. Same visual family as the BZ TAP prompt above. */
-#build-choice-add-die:not(:empty) {
-  background: var(--accent-soft);
-  border-radius: var(--radius-md);
-  padding: 8px 10px;
-  margin-bottom: 8px;
-}
-
-.build-choice-add-die__label {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text);
-  margin-bottom: 6px;
-}
-
-.build-choice-add-die__row {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
 .tap-reaction-row {
   display: flex;
   align-items: center;

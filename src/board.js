@@ -250,17 +250,15 @@ function predictedBuildValueForPlacement(mapId, isExSlot, occupants, dieValue) {
   return wouldStack ? occupants.reduce((sum, o) => sum + o.value, 0) + dieValue : dieValue;
 }
 
-/** Whether playerId can currently pay candidate's COST -- BUILD_NEW auto-maxes any BZ they hold (see
- * executor.enumerateBzOutcomes' own doc), UPGRADE never gets BZ (per [[project-dice-wp-dsl-spec]]'s
- * "BZは建築コストの踏み倒し専用（改築には使用不可）"). Used by wouldAreaActionHaveEffect's BUILD branch.
- * Mirrors main.js's own candidateAffordable (UI-side) -- can't be shared, that file is a browser-only
- * classic script, not a requireable module (same reasoning as move-generator.js's bareTapKind). */
+/** Whether playerId can currently pay candidate's COST -- both BUILD_NEW and UPGRADE auto-max any BZ
+ * they hold (2026-08-06, per user feedback: BZ discounts an UPGRADE's COST exactly like a BUILD_NEW's --
+ * see executor.enumerateBzOutcomes' own doc and resolveUpgrade below). UPGRADE pays against fromFaceId's
+ * COST (the original tier's, confirmed identical to the tier-B row's). Used by wouldAreaActionHaveEffect's
+ * BUILD branch. Mirrors main.js's own candidateAffordable (UI-side) -- can't be shared, that file is a
+ * browser-only classic script, not a requireable module (same reasoning as move-generator.js's bareTapKind). */
 function isCandidateAffordable(state, index, playerId, candidate) {
-  if (candidate.type !== 'BUILD_NEW') {
-    const row = getCardRow(index, candidate.fromFaceId);
-    return executor.resolvePayment(state, playerId, lowerCostList(row.COST)).ok;
-  }
-  const row = getCardRow(index, candidate.faceId);
+  const costFaceId = candidate.type === 'UPGRADE' ? candidate.fromFaceId : candidate.faceId;
+  const row = getCardRow(index, costFaceId);
   const player = state.players.find((p) => p.id === playerId);
   const bzAvailable = (player && player.resources.BZ) || 0;
   return executor.enumerateBzOutcomes(state, playerId, lowerCostList(row.COST), bzAvailable).length > 0;
@@ -658,10 +656,10 @@ function getBuildCandidates(state, index, playerId, categories, buildValue) {
 // ---------------------------------------------------------------------------
 
 /** Commits a BUILD_NEW candidate from getBuildCandidates(): pay (after context.bzDiscount, if any --
- * see executor.applyBzDiscount; BUILD-only, never applied for UPGRADE), remove from shop, own it, run
- * its ONCE, then emits BUILD(category) (2026-07-31 -- previously never emitted at all, so ON(BUILD(...
- * ),...) reactions like JOB004A/JOB007A's were structurally unreachable; category is the built card's
- * own sheet letter, A/B/C/M). */
+ * see executor.applyBzDiscount; resolveUpgrade below applies the same discount to UPGRADE's COST since
+ * 2026-08-06), remove from shop, own it, run its ONCE, then emits BUILD(category) (2026-07-31 --
+ * previously never emitted at all, so ON(BUILD(...),...) reactions like JOB004A/JOB007A's were
+ * structurally unreachable; category is the built card's own sheet letter, A/B/C/M). */
 function resolveBuildNew(state, index, context, candidate) {
   const row = getCardRow(index, candidate.faceId);
   const discount = executor.applyBzDiscount(lowerCostList(row.COST), context.bzDiscount);
@@ -684,13 +682,18 @@ function resolveBuildNew(state, index, context, candidate) {
 
 /**
  * Commits an UPGRADE candidate: pay the original (tier-A) card's COST
- * (confirmed identical to the tier-B row's COST in the data), flip the face,
- * reset tap state (UPGRADE always un-taps -- [[project-dice-wp-dsl-spec]]),
+ * (confirmed identical to the tier-B row's COST in the data), after
+ * context.bzDiscount if any (2026-08-06, per user feedback -- BZ discounts an
+ * UPGRADE's COST exactly like a BUILD_NEW's, see resolveBuildNew above), flip
+ * the face, reset tap state (UPGRADE always un-taps -- [[project-dice-wp-dsl-spec]]),
  * run the new face's ONCE, then emit BUILD('U') (see resolveBuildNew's matching comment).
  */
 function resolveUpgrade(state, index, context, candidate) {
   const fromRow = getCardRow(index, candidate.fromFaceId);
-  const payResult = executor.payCostList(state, context.playerId, lowerCostList(fromRow.COST), context.colorPreference);
+  const discount = executor.applyBzDiscount(lowerCostList(fromRow.COST), context.bzDiscount);
+  if (!discount) return { success: false, reason: 'INVALID_BZ_DISCOUNT' };
+  const payItems = discount.bzUsed > 0 ? [...discount.items, { resource: 'BZ', count: discount.bzUsed }] : discount.items;
+  const payResult = executor.payCostList(state, context.playerId, payItems, context.colorPreference);
   if (!payResult.success) return payResult;
 
   const inst = state.cards[candidate.physicalId];

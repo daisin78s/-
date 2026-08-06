@@ -247,9 +247,9 @@ function payCostList(state, playerId, items, colorPreference) {
 /**
  * Reduces a flat {resource,count} cost list by a BZ discount -- 1 BZ token skips paying 1 unit of any
  * resource in the list, the player's choice of which (bzDiscount: {resource: n}, units to skip per
- * resource; undefined/omitted entries mean 0). BUILD-only per [[project-dice-wp-dsl-spec]] ("BZは建築
- * コストの踏み倒し専用（改築/CHANGEには使用不可）") -- board.js's resolveBuildNew calls this,
- * resolveUpgrade never does. Pure data transform, no state access: the caller folds the returned
+ * resource; undefined/omitted entries mean 0). BUILD and UPGRADE alike (2026-08-06, per user feedback)
+ * -- board.js's resolveBuildNew and resolveUpgrade both call this against their own candidate's COST.
+ * Pure data transform, no state access: the caller folds the returned
  * bzUsed into a plain {resource:'BZ', count:bzUsed} item appended to the *same* payCostList call, so
  * the discounted cost and the BZ spend succeed or fail together atomically (payCostList's own
  * affordability check covers whether the player actually has that much BZ). A bzDiscount entry for a

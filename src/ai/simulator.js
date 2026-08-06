@@ -21,12 +21,12 @@
  *    the engine's pre-WARNING-UI default. An AI that specifically wants to preserve resources across a
  *    TURNEND by staying put isn't modeled yet -- see main.js's turnEndWarnings for the real rule set.
  *
- * BUILD (never UPGRADE -- board.resolveUpgrade ignores bzDiscount entirely, matching the confirmed rule
- * that BZ only ever shirks a NEW build's cost) payments always use as much of the player's currently-held
- * BZ as the candidate's own COST can absorb (2026-08-04, per user feedback: "3K→2BZその2BZも必ず使う" --
- * see maxBzDiscount). This *replaces* the earlier "no bzDiscount, ever" simplification rather than
- * adding a second candidate alongside it, so it costs nothing extra in AIPlayer's search -- every
- * BUILD_NEW candidate simply pays with whatever BZ is on hand instead of always paying full price.
+ * BUILD and UPGRADE alike (2026-08-06, per user feedback -- board.resolveUpgrade now applies bzDiscount
+ * exactly like resolveBuildNew) payments always use as much of the player's currently-held BZ as the
+ * candidate's own COST can absorb (2026-08-04, per user feedback: "3K→2BZその2BZも必ず使う" -- see
+ * maxBzDiscount). This *replaces* the earlier "no bzDiscount, ever" simplification rather than adding a
+ * second candidate alongside it, so it costs nothing extra in AIPlayer's search -- every BUILD_NEW/
+ * UPGRADE candidate simply pays with whatever BZ is on hand instead of always paying full price.
  */
 
 const { getCardRow } = require('../data-loader');
@@ -37,17 +37,18 @@ const turnFlow = require('../turn-flow');
 const qst = require('../qst');
 const { cloneState } = require('../game-state');
 
-/** Greedily spreads playerId's currently-held BZ across candidate's own COST items, up to what each
- * item needs and what's held -- e.g. holding 3 BZ against a "2A,4B" cost discounts 2A fully and 1 of the
- * 4B. Returns undefined (not an empty object) when there's no BZ to spend or candidate isn't a BUILD_NEW,
- * so executor.applyBzDiscount's own `if (!bzDiscount) return {items, bzUsed:0}` short-circuit applies
- * cleanly the same as it always did for a player with no BZ. */
+/** Greedily spreads playerId's currently-held BZ across candidate's own COST items (BUILD_NEW's faceId,
+ * or UPGRADE's fromFaceId -- the original tier's, per board.resolveUpgrade), up to what each item needs
+ * and what's held -- e.g. holding 3 BZ against a "2A,4B" cost discounts 2A fully and 1 of the 4B. Returns
+ * undefined (not an empty object) when there's no BZ to spend, so executor.applyBzDiscount's own
+ * `if (!bzDiscount) return {items, bzUsed:0}` short-circuit applies cleanly the same as it always did
+ * for a player with no BZ. */
 function maxBzDiscount(state, index, playerId, candidate) {
-  if (candidate.type !== 'BUILD_NEW') return undefined;
   const player = state.players.find((p) => p.id === playerId);
   let remaining = (player && player.resources.BZ) || 0;
   if (remaining <= 0) return undefined;
-  const row = getCardRow(index, candidate.faceId);
+  const costFaceId = candidate.type === 'UPGRADE' ? candidate.fromFaceId : candidate.faceId;
+  const row = getCardRow(index, costFaceId);
   const discount = {};
   for (const item of lowerCostList(row.COST)) {
     if (remaining <= 0) break;

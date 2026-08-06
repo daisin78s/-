@@ -119,12 +119,6 @@
            ようにする案内 (2026-08-03, per user feedback: "建築が発生したときにすぐに発動 Y/Nでハイを
            押すと3K→2BZその後建築対象を選べるようになる"). See main.js's renderBuildChoiceBzTapPrompt. -->
       <div id="build-choice-bz-tap-prompt"></div>
-      <!-- 城でのゾロ目スタッキング (2026-08-04, per user feedback: "ダイス目12を出そうとして複数の
-           ダイスを選択するやり方がわからない...追加のダイスを置くという選択肢も表示させてください") --
-           see main.js's renderBuildChoiceAddDieSection. Only ever populated when pendingBuildChoice came
-           from the castle (MAP008), since that's the only place same-value stacking is legal/meaningful
-           (a single die never exceeds 6, but M001-M006 need up to 12). -->
-      <div id="build-choice-add-die"></div>
       <div id="build-choice-payment"></div>
       <div id="build-choice-bz"></div>
       <div class="card-inst-modal__body" id="build-choice-list"></div>

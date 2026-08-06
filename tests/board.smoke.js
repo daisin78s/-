@@ -471,21 +471,21 @@ function giveDie(state, playerId, value) {
   check('Discounting more A than the cost requires (3 > 2) is rejected', result, { success: false, reason: 'INVALID_BZ_DISCOUNT' });
 }
 {
-  // UPGRADE never applies a BZ discount, even if context.bzDiscount is (harmlessly) present.
+  // UPGRADE applies a BZ discount to its COST too, same as BUILD_NEW (2026-08-06, per user feedback).
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   const inst = createCardInstance('A001A');
   inst.ownerId = 'P1';
   state.cards[inst.physicalId] = inst;
   p1.ownedCardPhysicalIds.push(inst.physicalId);
-  p1.resources.A = 2; // A001A's full COST, no discount applied
+  p1.resources.A = 2; // A001A's full COST
   p1.resources.BZ = 5;
   const candidates = board.getBuildCandidates(state, index, 'P1', ['U'], 0);
   const upgradeCandidate = candidates.find((c) => c.physicalId === 'A001');
   const result = board.resolveBuild(state, index, { playerId: 'P1', bzDiscount: { A: 1 } }, upgradeCandidate);
-  check('UPGRADE succeeds paying the full cost, ignoring bzDiscount entirely', result.success, true);
-  check('...BZ was NOT touched', p1.resources.BZ, 5);
-  check('...full 2A was paid (no discount applied)', p1.resources.A, 0);
+  check('UPGRADE succeeds, spending the BZ discount', result.success, true);
+  check('...1 BZ was spent', p1.resources.BZ, 4);
+  check('...only the remaining 1A was paid for real', p1.resources.A, 1);
 }
 
 // ---------------------------------------------------------------------------

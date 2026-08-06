@@ -302,7 +302,8 @@ let buildColorPreference = {};
 // there's only one, the build commits immediately with no extra step. If there's more than one (2+
 // resource types in the cost, and the player holds enough of more than one to actually change which
 // real resource gets spent), this holds the pending choice while renderBzOutcomeChoice asks which
-// outcome to commit. Never applies to UPGRADE (BZ can't discount it at all, same as before). Reset
+// outcome to commit. Applies to UPGRADE too (2026-08-06, per user feedback -- BZ discounts an UPGRADE's
+// COST exactly like a BUILD_NEW's, against the *original* tier's COST; see board.resolveUpgrade). Reset
 // alongside buildColorPreference wherever a fresh pendingBuildChoice is set.
 let pendingBzOutcomeChoice = null;
 // { mapId, slotIndex, colors, colorPreference } | null -- CON002B's payment choice for an AREA whose
@@ -2096,9 +2097,8 @@ function attemptPlaceSelectedDie(state, mapId, slotIndex) {
  * factored out of placeSelectedDie so placeSelectedDiceGroup's group result can reuse the exact same
  * logic instead of drifting from it). If the AREA's ACTION turns out to be a BUILD (e.g. the castle),
  * the die/dice are already placed but the resulting pendingBuild is left for the player to choose from
- * (see renderBuildChoiceModal/board.completeAreaBuild). extra (e.g. {groupPlaced:true}) is merged onto
- * pendingBuildChoice when present -- see renderBuildChoiceAddDieSection's own use of groupPlaced. */
-function applyPlaceDiceResult(result, playerId, mapId, slotIndex, extra) {
+ * (see renderBuildChoiceModal/board.completeAreaBuild). */
+function applyPlaceDiceResult(result, playerId) {
   if (!result.success) {
     // Placement itself was illegal (value mismatch / slot occupied / no legal slot for the whole
     // group / etc.) -- see board.placeDice/placeDiceGroup.
@@ -2107,11 +2107,7 @@ function applyPlaceDiceResult(result, playerId, mapId, slotIndex, extra) {
   }
   if (result.actionResult && result.actionResult.pendingBuild) {
     placementMessage = '';
-    // mapId/slotIndex (2026-08-04) are only needed for the castle "追加のダイスを置く" flow below (see
-    // renderBuildChoiceAddDieSection) -- kept on pendingBuildChoice itself rather than threaded through
-    // separately since this is the one place that knows both. slotIndex is null for a group placement
-    // (dice may be spread across several slots -- see extra.groupPlaced, which suppresses that widget).
-    pendingBuildChoice = { source: 'AREA', playerId, mapId, slotIndex, ...result.actionResult.pendingBuild, ...extra };
+    pendingBuildChoice = { source: 'AREA', playerId, ...result.actionResult.pendingBuild };
     buildColorPreference = {};
     pendingBzOutcomeChoice = null;
     return;
@@ -2146,7 +2142,7 @@ function placeSelectedDie(state, dieId, mapId, slotIndex, colorPreference) {
   const player = state.players.find((p) => p.dice.some((d) => d.id === dieId));
   const result = boardMod.placeDice(state, INDEX, { playerId: player.id, colorPreference }, dieId, mapId, slotIndex);
   selectedDieIds = [];
-  applyPlaceDiceResult(result, player.id, mapId, slotIndex);
+  applyPlaceDiceResult(result, player.id);
   render(STATE);
 }
 
@@ -2160,7 +2156,7 @@ function placeSelectedDiceGroup(state, mapId) {
   selectedDieIds = [];
   const player = state.players.find((p) => p.dice.some((d) => d.id === dieIds[0]));
   const result = boardMod.placeDiceGroup(state, INDEX, { playerId: player.id }, dieIds, mapId);
-  applyPlaceDiceResult(result, player.id, mapId, null, { groupPlaced: true });
+  applyPlaceDiceResult(result, player.id);
   render(STATE);
 }
 
@@ -2296,9 +2292,12 @@ function candidateColorResources(candidate) {
 /** Every distinct affordable way to auto-spend BZ on candidate's COST, per executor.enumerateBzOutcomes
  * (2026-08-04 -- replaces the old manual per-resource stepper; BZ itself is always maxed out
  * automatically now, this only ever enumerates *which real resource* ends up spent when that's a real
- * fork). BUILD_NEW only; callers must not call this for an UPGRADE candidate. */
+ * fork). Works for UPGRADE too (2026-08-06, per user feedback) -- costFaceId mirrors
+ * candidateColorResources' own BUILD_NEW-vs-UPGRADE split (UPGRADE pays fromFaceId's COST, the original
+ * tier's, per board.resolveUpgrade). */
 function bzOutcomesForCandidate(candidate, playerId) {
-  const row = dataLoaderMod.getCardRow(INDEX, candidate.faceId);
+  const costFaceId = candidate.type === 'UPGRADE' ? candidate.fromFaceId : candidate.faceId;
+  const row = dataLoaderMod.getCardRow(INDEX, costFaceId);
   const items = commandBuilderMod.lowerCostList(row.COST);
   const player = STATE.players.find((p) => p.id === playerId);
   const bzAvailable = player.resources.BZ || 0;
@@ -2311,13 +2310,9 @@ function bzOutcomesForCandidate(candidate, playerId) {
  * もの（ダイス目+資源）だけ表示してください" -- board.getBuildCandidates itself stays unfiltered/
  * dice-only, since other callers (AREA/QST/bare-TAP pendingBuild detection, and their own
  * NO_BUILDABLE_CARD check) rely on the *rule*-eligible list; this is purely a display-layer filter on
- * top of that). */
+ * top of that). BUILD_NEW and UPGRADE share the same BZ-aware path (2026-08-06) since bzOutcomesForCandidate
+ * now handles both. */
 function candidateAffordable(candidate, playerId) {
-  if (candidate.type !== 'BUILD_NEW') {
-    const row = dataLoaderMod.getCardRow(INDEX, candidate.fromFaceId);
-    const items = commandBuilderMod.lowerCostList(row.COST);
-    return executorMod.resolvePayment(STATE, playerId, items).ok;
-  }
   return bzOutcomesForCandidate(candidate, playerId).length > 0;
 }
 
@@ -2359,9 +2354,10 @@ function renderBuildChoicePaymentControls() {
 
 /** Ambiguous-BZ-outcome chooser (2026-08-04, per user feedback: "デフォルトでBZを使って建築するように
  * して" -- replaces the old manual per-resource stepper entirely). Only ever rendered once a BUILD_NEW
- * candidate has already been clicked and executor.enumerateBzOutcomes found 2+ distinct affordable ways
- * to spend the (always-maxed) BZ discount -- e.g. cost 2A+1B with 2 BZ held and the player holding both
- * a real A and a real B (see enumerateBzOutcomes's own doc for the general rule this implements).
+ * or UPGRADE candidate has already been clicked and executor.enumerateBzOutcomes found 2+ distinct
+ * affordable ways to spend the (always-maxed) BZ discount -- e.g. cost 2A+1B with 2 BZ held and the
+ * player holding both a real A and a real B (see enumerateBzOutcomes's own doc for the general rule this
+ * implements).
  * Nothing has been committed yet, so "戻る" just clears pendingBzOutcomeChoice back to the candidate
  * list. Each option button shows the real resource(s) that specific outcome would actually spend
  * (resource-dot badges, same visual language as the rest of the app) and commits on click. */
@@ -2433,63 +2429,6 @@ function renderBuildChoiceBzTapPrompt() {
   }
 }
 
-/** "追加のダイスを置く" -- castle-only ゾロ目 (doubles) stacking (2026-08-04, per user feedback: "ダイス
- * 目12を出そうとして複数のダイスを選択するやり方がわからない...追加のダイスを置くという選択肢も表示さ
- * せてください　そのときゾロ目も置けるようにしてください"). Only rendered when pendingBuildChoice came
- * from the castle (MAP008) -- the only place same-value stacking is legal (board.placeDice's own
- * isCastleStack rule) or useful (a single die never exceeds 6, but M001-M006 need up to 12, e.g. two 6s
- * stacked = buildValue 12). The build-choice overlay is a full-screen modal that blocks the board/dice
- * underneath, so without this there was literally no way to place a second die once the modal opened.
- * Lists the player's own remaining unplaced dice whose value matches the slot's existing occupant(s) --
- * the only value board.placeDice will actually accept there (a different value would hit SLOT_OCCUPIED,
- * same as anywhere else). Clicking one places it via the exact same board.placeDice call as a normal
- * placement (onto the SAME slotIndex, so it stacks), which returns a fresh pendingBuild computed from
- * the new (higher) accumulated buildValue -- see board.js's own stacking doc -- and replaces
- * pendingBuildChoice's candidates/buildValue with it in place. buildColorPreference is deliberately NOT
- * reset here (unlike a fresh AREA placement) since the player may have already set it for this same
- * build decision. */
-function renderBuildChoiceAddDieSection() {
-  const container = document.getElementById('build-choice-add-die');
-  container.innerHTML = '';
-  // groupPlaced (2026-08-02): a placeSelectedDiceGroup result has no single slotIndex to stack more
-  // dice onto (they may be spread across several slots) -- the multi-select UI (see selectedDieIds)
-  // already let the player combine as many dice as they wanted *before* this modal ever opened, so
-  // there's nothing more for this widget to offer here.
-  if (!pendingBuildChoice || pendingBuildChoice.source !== 'AREA' || pendingBuildChoice.mapId !== boardMod.CASTLE_MAP_ID || pendingBuildChoice.groupPlaced) return;
-  const { playerId, mapId, slotIndex } = pendingBuildChoice;
-  const player = STATE.players.find((p) => p.id === playerId);
-  const occupants = STATE.maps[mapId].slots[slotIndex];
-  const stackValue = occupants[0].value;
-  const qualifyingDice = player.dice.filter((d) => d.placedMapId === null && !d.passed && d.value === stackValue);
-  if (qualifyingDice.length === 0) return;
-  container.appendChild(el('div', 'build-choice-add-die__label', `追加のダイスを置く（ゾロ目のみ・現在 ${stackValue}×${occupants.length} = ${pendingBuildChoice.buildValue}）`));
-  const row = el('div', 'build-choice-add-die__row');
-  for (const die of qualifyingDice) {
-    const dieNode = renderDie({ ...die, color: player.color });
-    dieNode.classList.add('die--selectable');
-    dieNode.addEventListener('click', () => {
-      const result = boardMod.placeDice(STATE, INDEX, { playerId, colorPreference: buildColorPreference }, die.id, mapId, slotIndex);
-      if (result.success && result.actionResult && result.actionResult.pendingBuild) {
-        const pb = result.actionResult.pendingBuild;
-        // 2+ dice on one slot is monument-only (2026-08-02, confirmed: "ダイスを2個選択するのはモニュ
-        // メントのみの特殊操作です") -- board.placeDice itself just re-parses the AREA's own normal
-        // BUILD categories every time regardless of stack size, so once this widget has fired at all
-        // (it only ever appears once 2+ dice already share a slot), filter its resulting candidates
-        // down to monuments client-side, same principle as placeDiceGroup's own hardcoded ['M']
-        // categories, just applied after the fact here since board.placeDice has no "monument-only"
-        // param of its own.
-        const monumentOnly = pb.candidates.filter((c) => c.type === 'BUILD_NEW' && c.faceId.startsWith('M'));
-        pendingBuildChoice = { source: 'AREA', playerId, mapId, slotIndex, ...pb, candidates: monumentOnly };
-      } else if (!result.success) {
-        placementMessage = `配置できません（${result.reason}）`;
-      }
-      render(STATE);
-    });
-    row.appendChild(dieNode);
-  }
-  container.appendChild(row);
-}
-
 /** Commits a BUILD_NEW/UPGRADE candidate once its bzDiscount is settled -- either auto-picked
  * (bzOutcomesForCandidate found exactly one affordable outcome) or player-picked via
  * renderBzOutcomeChoice. Shared by both paths in the click handler below since everything past that
@@ -2544,7 +2483,6 @@ function renderBuildChoiceModal() {
   // resolved, so the player can't accidentally click a *different* candidate mid-choice.
   if (pendingBzOutcomeChoice) {
     document.getElementById('build-choice-bz-tap-prompt').innerHTML = '';
-    document.getElementById('build-choice-add-die').innerHTML = '';
     document.getElementById('build-choice-payment').innerHTML = '';
     renderBzOutcomeChoice();
     const list = document.getElementById('build-choice-list');
@@ -2559,7 +2497,6 @@ function renderBuildChoiceModal() {
     return;
   }
   renderBuildChoiceBzTapPrompt();
-  renderBuildChoiceAddDieSection();
   renderBuildChoicePaymentControls();
   document.getElementById('build-choice-bz').innerHTML = '';
   const list = document.getElementById('build-choice-list');
@@ -2577,10 +2514,6 @@ function renderBuildChoiceModal() {
     const cell = el('div', tall ? 'owned-card-cell owned-card-cell--tall owned-card-cell--selectable' : 'owned-card-cell owned-card-cell--selectable');
     cell.appendChild(cardNode);
     cell.addEventListener('click', () => {
-      if (candidate.type !== 'BUILD_NEW') {
-        commitBuildCandidate(candidate, {});
-        return;
-      }
       const outcomes = bzOutcomesForCandidate(candidate, pendingBuildChoice.playerId);
       if (outcomes.length > 1) {
         pendingBzOutcomeChoice = { candidate, outcomes };
@@ -2777,10 +2710,6 @@ function renderPlayers(state, next) {
       // this gate was missing entirely: once turnActionTaken became true (2026-08-01's "don't auto-end
       // the turn" change), a *different* remaining die was still shown as die--selectable with a click
       // listener, letting the player select and place a second die before ever clicking "ターン終了".
-      // The castle/AREA009 monument doubles-stacking flow (renderBuildChoiceAddDieSection) is unaffected
-      // -- it deliberately runs while pendingBuildChoice is still open and turnActionTaken is still
-      // false (only set true once that whole build decision resolves, see its own comment), and uses a
-      // separate die list inside the modal, not this one.
       if (player.id === canPlaceDiceFor && !die.passed && !turnActionTaken) {
         dieNode.classList.add('die--selectable');
         if (selectedDieIds.includes(die.id)) dieNode.classList.add('die--selected');

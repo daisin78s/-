@@ -255,16 +255,16 @@ function giveDie(state, playerId, value) {
   check('Without any held BZ, 10 C alone is not enough for M012 (13C)', result.success, false);
 }
 {
-  // UPGRADE never receives a discount, even with BZ on hand (confirmed rule: BZ only ever shirks a NEW
-  // build's cost, never an UPGRADE's -- board.resolveUpgrade ignores context.bzDiscount entirely).
+  // UPGRADE now receives the same auto-maxed BZ discount as BUILD_NEW (2026-08-06, per user feedback --
+  // board.resolveUpgrade applies context.bzDiscount just like resolveBuildNew does).
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   const inst = createCardInstance('A001A'); // A001B exists; UPGRADE cost is "2A" (see board.smoke.js)
   inst.ownerId = 'P1';
   state.cards[inst.physicalId] = inst;
   p1.ownedCardPhysicalIds.push(inst.physicalId);
-  p1.resources.A = 2; // exactly the UPGRADE cost
-  p1.resources.BZ = 5; // plenty on hand -- must be left untouched
+  p1.resources.A = 2; // exactly the UPGRADE cost -- but the auto-maxed BZ discount below covers it instead
+  p1.resources.BZ = 5; // plenty on hand -- the sim always maxes out usable BZ (see maxBzDiscount)
   const die = giveDie(state, 'P1', 1);
 
   const probe = applyInPlace(require('../src/game-state').cloneState(state), index, { type: 'PLACE_DIE', playerId: 'P1', dieId: die.id, mapId: 'MAP008', slotIndex: 0 });
@@ -275,8 +275,8 @@ function giveDie(state, playerId, value) {
   const { state: resultState, result } = simulator.apply(state, index, move);
   check('The upgrade succeeds', result.success, true);
   const p1After = resultState.players.find((p) => p.id === 'P1');
-  check('The full 2A cost was paid in real resources', p1After.resources.A, 0);
-  check('BZ was left completely untouched (UPGRADE never gets a discount)', p1After.resources.BZ, 5);
+  check('The full 2A cost was covered by BZ, so real A was left untouched', p1After.resources.A, 2);
+  check('...and exactly 2 BZ (the full cost) was spent', p1After.resources.BZ, 3);
 }
 
 console.log(`\n${passCount} passed, ${failCount} failed`);
