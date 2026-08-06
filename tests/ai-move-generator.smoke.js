@@ -262,5 +262,38 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
   check('...but forces it once that same candidate becomes genuinely affordable (2 BZ + the 1 real B now on hand)', forced, { type: 'BARE_TAP', playerId: 'P1', physicalId: jobInst.physicalId });
 }
 
+// ---------------------------------------------------------------------------
+// Regression (2026-08-06, per user feedback: "AIは建築しないときはJOB004をTAPしない（できない）"):
+// forcedBzConversionMove already declined to *force* JOB004's tap with no build outlet (previous
+// block), but #bareTapMoves still offered the same tap as a normal generateMoves candidate regardless
+// -- letting the Evaluator's flat per-unit BZ weight (which doesn't know BZ evaporates at TURNEND) pick
+// it anyway and waste 3K. generateMoves must now omit it entirely with no outlet, and still include it
+// once one exists (so a human-equivalent "I could tap this AND spend it" option stays available even in
+// states forcedBzConversionMove itself never gets to check, e.g. a Simulator lookahead node).
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const jobInst = createCardInstance('JOB004');
+  jobInst.ownerId = 'P1';
+  state.cards[jobInst.physicalId] = jobInst;
+  p1.ownedCardPhysicalIds.push(jobInst.physicalId);
+  p1.resources.K = 3;
+  const context = { hasPlacedDieThisTurn: false };
+
+  const movesNoOutlet = moveGenerator.generateMoves(state, index, 'P1', context);
+  assertTrue(
+    'generateMoves omits the JOB004 BARE_TAP candidate entirely when no build outlet exists (no dice at all)',
+    !movesNoOutlet.some((m) => m.type === 'BARE_TAP' && m.physicalId === jobInst.physicalId)
+  );
+
+  giveDie(state, 'P1', 3); // same affordable-with-just-2-BZ setup as the earlier forced-conversion test.
+  const movesWithOutlet = moveGenerator.generateMoves(state, index, 'P1', context);
+  assertTrue(
+    'generateMoves still includes the JOB004 BARE_TAP candidate once a build outlet exists',
+    movesWithOutlet.some((m) => m.type === 'BARE_TAP' && m.physicalId === jobInst.physicalId)
+  );
+}
+
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);

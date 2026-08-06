@@ -81,7 +81,7 @@ class MoveGenerator {
       moves.push(...this.#freeActionMoves(state, index, playerId, player));
     }
     moves.push(...this.#feeCollectionMoves(state, playerId));
-    moves.push(...this.#bareTapMoves(state, index, playerId, player));
+    moves.push(...this.#bareTapMoves(state, index, playerId, player, context));
     moves.push(...this.#tapReactionMoves(state, playerId));
     moves.push(...this.#questMoves(state, index, playerId));
     if (context.hasPlacedDieThisTurn && executor.canEndTurn(state, index, playerId).ok) {
@@ -158,7 +158,7 @@ class MoveGenerator {
     return moves;
   }
 
-  #bareTapMoves(state, index, playerId, player) {
+  #bareTapMoves(state, index, playerId, player, context) {
     const moves = [];
     for (const physicalId of player.ownedCardPhysicalIds) {
       const cardState = state.cards[physicalId];
@@ -169,7 +169,21 @@ class MoveGenerator {
       if (bareTap.kind === 'IMMEDIATE') {
         const clone = cloneState(state);
         const result = board.useBareTapAbility(clone, index, { playerId }, physicalId);
-        if (result.success) moves.push({ type: 'BARE_TAP', playerId, physicalId });
+        if (!result.success) continue;
+        // A BZ-conversion tap (e.g. JOB004A's "CHANGE(3K,2BZ);BLOCK_BUILD(M,THIS_TURN)") is never
+        // offered as a normal scored candidate unless a build outlet actually exists for the BZ it
+        // would generate (2026-08-06, per user feedback: "AIは建築しないときはJOB004をTAPしない
+        // （できない）"). forcedBzConversionMove already *forces* this exact tap whenever an outlet
+        // DOES exist (see its own doc) -- that short-circuits AIPlayer.selectMove before
+        // generateMoves is even reached for that top-level decision, so this branch only matters
+        // when no outlet exists there *or* when generateMoves is called directly for a simulated
+        // lookahead node (Simulator's deeper search isn't gated by the top-level short-circuit).
+        // Either way: closes the loophole where the Evaluator could still pick this tap as a normal
+        // candidate purely because its flat per-unit BZ weight doesn't know BZ evaporates unused at
+        // TURNEND (see evaluator.js's own resource-weight loop) -- confirmed via
+        // tools/ai_batch_run.js that this was dragging down JOB004's measured average score.
+        if (bzConversionTap(index, cardState.currentFaceId) && !this.#hasAffordableBuildOutlet(clone, index, playerId, context)) continue;
+        moves.push({ type: 'BARE_TAP', playerId, physicalId });
       } else if (bareTap.kind === 'BUILD') {
         const clone = cloneState(state);
         const result = board.useBareTapAbility(clone, index, { playerId }, physicalId);
@@ -291,12 +305,19 @@ class MoveGenerator {
       const clone = cloneState(state);
       const result = board.useBareTapAbility(clone, index, { playerId }, physicalId);
       if (!result.success) continue;
-      const buildMoves = this.generateMoves(clone, index, playerId, context)
-        .filter((m) => m.buildCandidateIndex !== undefined);
-      const hasAffordableBuildOutlet = buildMoves.some((m) => applyInPlace(cloneState(clone), index, m).success);
-      if (hasAffordableBuildOutlet) return { type: 'BARE_TAP', playerId, physicalId };
+      if (this.#hasAffordableBuildOutlet(clone, index, playerId, context)) return { type: 'BARE_TAP', playerId, physicalId };
     }
     return null;
+  }
+
+  /** Whether some build-resolving move (PLACE_DIE/BARE_TAP/CLAIM_QUEST carrying a buildCandidateIndex)
+   * in clone would actually succeed if applied right now -- shared by forcedBzConversionMove (deciding
+   * whether to force a BZ-conversion tap) and #bareTapMoves' IMMEDIATE branch (deciding whether to even
+   * offer one as a normal candidate when it isn't forced -- see that branch's own comment). */
+  #hasAffordableBuildOutlet(clone, index, playerId, context) {
+    const buildMoves = this.generateMoves(clone, index, playerId, context)
+      .filter((m) => m.buildCandidateIndex !== undefined);
+    return buildMoves.some((m) => applyInPlace(cloneState(clone), index, m).success);
   }
 }
 
