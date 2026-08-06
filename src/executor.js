@@ -1035,10 +1035,25 @@ function emitAndResolve(state, index, context, eventName, actualValue) {
   return { fired, availableReactions };
 }
 
-/** grantResource() + automatically emits/resolves the resulting GET event (see emitAndResolve). */
+/** grantResource() + automatically emits/resolves the resulting GET event (see emitAndResolve). Dice
+ * (D/wD) emit one GET *per die* rather than once for the whole grant (2026-08-06, per user report:
+ * JOB006's ON(GET(D),ADD(Z));ON(GET(wD),ADD(K)) only fired once when e.g. B004A's ONCE=ADD(2wD) granted
+ * 2 dice at once, instead of twice -- "それぞれ発動...2回発動するようにしてください"). Each die is
+ * already its own discrete object internally (grantResource's own dice loop rolls each one separately),
+ * so this just extends that same "one per die" treatment to the event it triggers -- mirrors
+ * board.placeDiceGroup's own PLACE(mapId), which likewise emits once per die in a multi-die placement
+ * rather than once for the whole group. Plain resources (K/A/B/C/Z/VP/BZ) are unaffected -- still one
+ * GET regardless of count, matching every other card that reacts to those (e.g. JOB005A's
+ * ON(GET(K),CHANGE(K,Z))), which was never part of this report. */
 function grantResourceAndEmitGet(state, index, context, resource, count) {
   const effectiveResource = grantResource(state, index, context.playerId, resource, count);
-  if (count > 0) emitAndResolve(state, index, context, 'GET', effectiveResource);
+  if (count > 0) {
+    if (DICE_KIND_BY_RESOURCE[effectiveResource]) {
+      for (let i = 0; i < count; i++) emitAndResolve(state, index, context, 'GET', effectiveResource);
+    } else {
+      emitAndResolve(state, index, context, 'GET', effectiveResource);
+    }
+  }
   return effectiveResource;
 }
 

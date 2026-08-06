@@ -567,6 +567,18 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   check('...and JOB006 auto-reacts to the CHANGE-triggered GET(D), granting Z', player.resources.Z, 1);
 }
 {
+  // GET fires once *per die* for a multi-die grant, not once for the whole grant (2026-08-06, per user
+  // report: "B004AなどでダイスX2個手に入れた時それぞれ発動...2回発動するようにしてください" -- B004A's
+  // ONCE=ADD(2wD) only triggered JOB006's ON(GET(wD),ADD(K)) once instead of twice). Mirrors
+  // board.placeDiceGroup's own PLACE(mapId), which already emits once per die in a multi-die placement.
+  const state = freshState();
+  giveCard(state, 'JOB006', 'P1'); // PASSIVE=ON(GET(D),ADD(Z));ON(GET(wD),ADD(K))
+  const player = getPlayerRef(state, 'P1');
+  const result = executor.runProgram(state, index, { playerId: 'P1' }, 'ADD(2wD)'); // B004A's real ONCE
+  check('ADD(2wD) succeeds and grants both white dice', { success: result.success, wD: player.dice.filter((d) => d.kind === 'WHITE').length }, { success: true, wD: 2 });
+  check('...and JOB006 reacted to GET(wD) twice, once per die, granting 2K not 1', player.resources.K, 2);
+}
+{
   const state = freshState();
   giveCard(state, 'JOB005', 'P1'); // TAP=ON(GET(K),CHANGE(K,Z)), AUTO="A"
   const player = getPlayerRef(state, 'P1');
