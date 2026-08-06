@@ -1,9 +1,10 @@
 /**
- * Smoke test for src/qst.js (QST/Quest cards). data/game.xlsx's real QST sheet is still blank
- * (GOAL/REWARD1-3 not authored yet, per the user -- being written collaboratively later), so this
- * test injects synthetic QST rows into the loaded index rather than waiting on real content. That
- * only replaces the *data*; the engine code under test (qst.js, plus the CARD_COUNT(sheet) scoping
- * added to executor.js) is exactly what real cards will run through once they're written.
+ * Smoke test for src/qst.js (QST/Quest cards). Injects synthetic QST rows into the loaded index
+ * rather than relying on data/game.xlsx's real QST sheet content, so these cases stay fixed and
+ * readable regardless of what the real cards say. That only replaces the *data*; the engine code
+ * under test (qst.js, plus the CARD_COUNT(sheet) scoping added to executor.js) is exactly what real
+ * cards run through. REWARD1/REWARD2-3 (2026-08-06: REWARD2 and REWARD3 merged into one shared field,
+ * both the 2nd and 3rd claimer draw from it) -- see qst.js's own REWARD_FIELDS doc.
  * Run: node tests/qst.smoke.js
  */
 
@@ -19,14 +20,14 @@ const index = buildDataIndex(loadGameData(path.join(__dirname, '..', 'data', 'ga
 // Synthetic QST fixtures (see file header) -- 4 physical cards, A/B faces, covering: a
 // monument-ownership goal, an always-true goal, and a BUILD-type reward.
 index.raw.QST = [
-  { ID: 'Q001A', NAME: 'Q001A', GOAL: 'CARD_COUNT(M)>=1', REWARD1: 'ADD(3VP)', REWARD2: 'ADD(2VP)', REWARD3: 'ADD(1VP)', INST: '' },
-  { ID: 'Q001B', NAME: 'Q001B', GOAL: 'CARD_COUNT(M)>=1', REWARD1: 'ADD(3VP)', REWARD2: 'ADD(2VP)', REWARD3: 'ADD(1VP)', INST: '' },
-  { ID: 'Q002A', NAME: 'Q002A', GOAL: 'CARD_COUNT>=0', REWARD1: 'ADD(2K)', REWARD2: 'ADD(1K)', REWARD3: 'ADD(1K)', INST: '' },
-  { ID: 'Q002B', NAME: 'Q002B', GOAL: 'CARD_COUNT>=0', REWARD1: 'ADD(2K)', REWARD2: 'ADD(1K)', REWARD3: 'ADD(1K)', INST: '' },
-  { ID: 'Q003A', NAME: 'Q003A', GOAL: 'CARD_COUNT>=0', REWARD1: 'BUILD(M)', REWARD2: 'ADD(1VP)', REWARD3: 'ADD(1VP)', INST: '' },
-  { ID: 'Q003B', NAME: 'Q003B', GOAL: 'CARD_COUNT>=0', REWARD1: 'BUILD(M)', REWARD2: 'ADD(1VP)', REWARD3: 'ADD(1VP)', INST: '' },
-  { ID: 'Q004A', NAME: 'Q004A', GOAL: 'CARD_COUNT(M)>=99', REWARD1: 'ADD(1VP)', REWARD2: 'ADD(1VP)', REWARD3: 'ADD(1VP)', INST: '' },
-  { ID: 'Q004B', NAME: 'Q004B', GOAL: 'CARD_COUNT(M)>=99', REWARD1: 'ADD(1VP)', REWARD2: 'ADD(1VP)', REWARD3: 'ADD(1VP)', INST: '' },
+  { ID: 'Q001A', NAME: 'Q001A', GOAL: 'CARD_COUNT(M)>=1', REWARD1: 'ADD(3VP)', 'REWARD2-3': 'ADD(1VP)', INST: '' },
+  { ID: 'Q001B', NAME: 'Q001B', GOAL: 'CARD_COUNT(M)>=1', REWARD1: 'ADD(3VP)', 'REWARD2-3': 'ADD(1VP)', INST: '' },
+  { ID: 'Q002A', NAME: 'Q002A', GOAL: 'CARD_COUNT>=0', REWARD1: 'ADD(2K)', 'REWARD2-3': 'ADD(1K)', INST: '' },
+  { ID: 'Q002B', NAME: 'Q002B', GOAL: 'CARD_COUNT>=0', REWARD1: 'ADD(2K)', 'REWARD2-3': 'ADD(1K)', INST: '' },
+  { ID: 'Q003A', NAME: 'Q003A', GOAL: 'CARD_COUNT>=0', REWARD1: 'BUILD(M)', 'REWARD2-3': 'ADD(1VP)', INST: '' },
+  { ID: 'Q003B', NAME: 'Q003B', GOAL: 'CARD_COUNT>=0', REWARD1: 'BUILD(M)', 'REWARD2-3': 'ADD(1VP)', INST: '' },
+  { ID: 'Q004A', NAME: 'Q004A', GOAL: 'CARD_COUNT(M)>=99', REWARD1: 'ADD(1VP)', 'REWARD2-3': 'ADD(1VP)', INST: '' },
+  { ID: 'Q004B', NAME: 'Q004B', GOAL: 'CARD_COUNT(M)>=99', REWARD1: 'ADD(1VP)', 'REWARD2-3': 'ADD(1VP)', INST: '' },
 ];
 
 let passCount = 0;
@@ -87,7 +88,8 @@ function giveCard(state, faceCardId, ownerId) {
 }
 
 // ---------------------------------------------------------------------------
-// 3. Claim order (REWARD1/2/3), per-card one-claim-per-player, and COMPLETE after REWARD3
+// 3. Claim order (REWARD1, then REWARD2-3 shared by both the 2nd and 3rd claimer), per-card
+// one-claim-per-player, and COMPLETE after 3 claims (there's no REWARD4).
 // ---------------------------------------------------------------------------
 {
   const state = freshState('qst-order', ['Alice', 'Bob', 'Carol', 'Dan']);
@@ -103,15 +105,15 @@ function giveCard(state, faceCardId, ownerId) {
 
   const p2 = qst.claimQuestReward(state, index, { playerId: 'P2' }, 'Q002A');
   check('2nd claimer succeeds', p2.success, true);
-  check('2nd claimer got REWARD2 (1K)', player(state, 'P2').resources.K, 1);
+  check('2nd claimer got REWARD2-3 (1K)', player(state, 'P2').resources.K, 1);
 
   const p3 = qst.claimQuestReward(state, index, { playerId: 'P3' }, 'Q002A');
   check('3rd claimer succeeds', p3.success, true);
-  check('3rd claimer got REWARD3 (1K)', player(state, 'P3').resources.K, 1);
+  check('3rd claimer got the SAME REWARD2-3 (1K) as the 2nd claimer', player(state, 'P3').resources.K, 1);
   check('claimCount is now 3 (COMPLETE)', state.quests.Q002A.claimCount, 3);
 
   const p4 = qst.claimQuestReward(state, index, { playerId: 'P4' }, 'Q002A');
-  check('4th claimer (goal met, but card is COMPLETE) gets nothing', p4, { success: false, reason: 'COMPLETE' });
+  check('4th claimer (goal met, but card is COMPLETE -- no REWARD4) gets nothing', p4, { success: false, reason: 'COMPLETE' });
   check('4th claimer\'s K is untouched', player(state, 'P4').resources.K, 0);
 }
 
@@ -133,13 +135,13 @@ function giveCard(state, faceCardId, ownerId) {
   // Q004A's GOAL is unreachable (CARD_COUNT(M)>=99) -- swap it for a synthetic always-true card at
   // the same key so this step exercises the *cap*, not another GOAL failure.
   state.quests.Q004A = { claimCount: 0, claimedPlayers: [] };
-  index.raw.QST.push({ ID: '__TEST_ALWAYS_TRUE__', NAME: 'test', GOAL: 'CARD_COUNT>=0', REWARD1: 'ADD(1VP)', REWARD2: '', REWARD3: '', INST: '' });
+  index.raw.QST.push({ ID: '__TEST_ALWAYS_TRUE__', NAME: 'test', GOAL: 'CARD_COUNT>=0', REWARD1: 'ADD(1VP)', 'REWARD2-3': '', INST: '' });
   state.quests.__TEST_ALWAYS_TRUE__ = { claimCount: 0, claimedPlayers: [] };
   const second = qst.claimQuestReward(state, index, { playerId: 'P1' }, '__TEST_ALWAYS_TRUE__');
   check('2nd claim (different card) succeeds', second.success, true);
   check('qstRewardCount is now 2 (cap)', player(state, 'P1').qstRewardCount, 2);
 
-  index.raw.QST.push({ ID: '__TEST_ALWAYS_TRUE_2__', NAME: 'test2', GOAL: 'CARD_COUNT>=0', REWARD1: 'ADD(1VP)', REWARD2: '', REWARD3: '', INST: '' });
+  index.raw.QST.push({ ID: '__TEST_ALWAYS_TRUE_2__', NAME: 'test2', GOAL: 'CARD_COUNT>=0', REWARD1: 'ADD(1VP)', 'REWARD2-3': '', INST: '' });
   state.quests.__TEST_ALWAYS_TRUE_2__ = { claimCount: 0, claimedPlayers: [] };
   const third = qst.claimQuestReward(state, index, { playerId: 'P1' }, '__TEST_ALWAYS_TRUE_2__');
   check('3rd claim (goal met, different card) is blocked by the game-wide cap', third, { success: false, reason: 'PLAYER_LIMIT_REACHED' });

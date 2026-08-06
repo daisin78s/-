@@ -1665,48 +1665,81 @@ function mockEvalMetric(state, playerId, metricName, arg) {
   }
 }
 
-/** Builds one QST card's visual: id, GOAL, and the REWARD1-3 checklist / COMPLETE badge. The "which
- * reward is next" question is answered by that row's background color alone (confirmed 2026-07-30,
- * replacing an earlier separate "Next Reward" icon block) -- see .qst-card__reward--next. Distinct
- * DOM shape from buildCardVisual's shop-card (this layout doesn't fit that template), but still
- * reuses showCardEnlargeModal for the tap-to-enlarge description. */
+/** Which claim slot (0/1/2, matching qst.js's REWARD_FIELDS index -- claimCount at the time of
+ * claiming) belongs to which visual row (2026-08-06, per user feedback on the REWARD2/REWARD3 merge:
+ * "REWARD1 ←次に...は消す　①◯　②③2◯のように表記" -- slot 0 (REWARD1) gets its own row+mark, slots 1
+ * and 2 (both drawing from the shared REWARD2-3 field) sit in one row with 2 independent marks, since
+ * each is still claimed by a different player at a possibly different time even though the reward
+ * text is identical). */
+const QST_CLAIM_GROUPS = [
+  { label: '①', slotIndices: [0] },
+  { label: '②③', slotIndices: [1, 2] },
+];
+
+/** The "目標：..." line from a QST card's INST text, in place of GOAL's raw DSL (e.g. "CARD_COUNT>=7")
+ * -- 2026-08-06, per user feedback: "とりあえず今回はINSTに書かれていることを流用して" (reusing the
+ * human-readable line already written at the top of INST, rather than inventing a new icon per GOAL
+ * metric). Falls back to the raw DSL text if INST is missing/doesn't start with this convention, so
+ * nothing goes blank for data that hasn't adopted it. */
+function questGoalDisplayText(facts) {
+  const firstLine = (facts.inst || '').split('\n')[0];
+  return firstLine.startsWith('目標') ? firstLine : facts.goal;
+}
+
+/** One claim-group row: a circled-number label plus one ◯/● mark per slot in the group (2026-08-06,
+ * replacing the old "REWARDn label + ✓/← 次に取得される報酬" text -- see QST_CLAIM_GROUPS' own doc).
+ * ◯ = not yet claimed, ● = claimed; whichever single slot is currently claimable (quest.claimCount's
+ * own index, if the card isn't COMPLETE) gets the accent-highlighted variant instead of a plain ◯. */
+function buildQstRewardGroupRow(group, quest, complete) {
+  const row = el('div', 'qst-card__reward');
+  row.appendChild(el('span', 'qst-card__reward-label', group.label));
+  const marksEl = el('span', 'qst-card__reward-marks');
+  for (const slotIndex of group.slotIndices) {
+    const claimed = slotIndex < quest.claimCount;
+    const isNext = !complete && slotIndex === quest.claimCount;
+    const mark = el('span', 'qst-card__reward-mark', claimed ? '●' : '◯');
+    mark.classList.toggle('qst-card__reward-mark--claimed', claimed);
+    mark.classList.toggle('qst-card__reward-mark--next', isNext);
+    marksEl.appendChild(mark);
+  }
+  row.appendChild(marksEl);
+  return row;
+}
+
 /** Static preview fill for QST's back face (the sibling face -- see siblingFaceId): id + GOAL +
- * plain REWARD1-3 labels, no claim status. There's no live quest state for a face that was never
- * actually revealed this game, so this is informational only (matches CON/A/B/C's click-to-flip
- * preview, which is likewise just "what's on the other side", not live state). */
+ * plain REWARD1/REWARD2-3 labels, no claim status. There's no live quest state for a face that was
+ * never actually revealed this game, so this is informational only (matches CON/A/B/C's click-to-flip
+ * preview, which is likewise just "what's on the other side", not live state). Kept as the fuller
+ * REWARDn-label form (unlike the front face's ①/②③ marks below) since there's no claim progress to
+ * mark here anyway. */
 function fillQstBackFace(backEl, faceId) {
   const facts = factsForQstFaceId(faceId);
   backEl.querySelector('.qst-card__id').textContent = faceId;
   backEl.querySelector('.qst-card__goal').textContent = facts.goal;
   const rewardsEl = backEl.querySelector('.qst-card__back-rewards');
-  facts.rewards.forEach((_, i) => {
-    rewardsEl.appendChild(el('div', 'qst-card__reward', `REWARD${i + 1}`));
-  });
+  rewardsEl.appendChild(el('div', 'qst-card__reward', 'REWARD1'));
+  rewardsEl.appendChild(el('div', 'qst-card__reward', 'REWARD2-3'));
 }
 
+/** Builds one QST card's visual: GOAL (as its INST-derived plain-language line) and the ①/②③ claim
+ * marks / COMPLETE badge -- see questGoalDisplayText/buildQstRewardGroupRow for what replaced the old
+ * raw-DSL GOAL text and REWARDn-label checklist (2026-08-06, per user feedback: card ID and the "GOAL"/
+ * "REWARDn" labels themselves are dropped too, to keep this as large and legible as possible with only
+ * the essentials showing). Distinct DOM shape from buildCardVisual's shop-card (this layout doesn't
+ * fit that template), but still reuses showCardEnlargeModal for the tap-to-enlarge description. */
 function buildQstCardVisual(faceId, quest, state, options = {}) {
   const tpl = document.getElementById('tpl-qst-card');
   const node = tpl.content.firstElementChild.cloneNode(true);
   const facts = factsForQstFaceId(faceId);
   const complete = quest.claimCount >= facts.rewards.length;
 
-  node.querySelector(':scope > .qst-card__id').textContent = faceId;
-  node.querySelector(':scope > .qst-card__row > .qst-card__goal').textContent = facts.goal;
+  node.querySelector(':scope > .qst-card__row > .qst-card__goal').textContent = questGoalDisplayText(facts);
   node.classList.toggle('qst-card--complete', complete);
 
   const rewardsEl = node.querySelector(':scope > .qst-card__rewards');
-  facts.rewards.forEach((rewardText, i) => {
-    const row = el('div', 'qst-card__reward');
-    row.appendChild(el('span', 'qst-card__reward-label', `REWARD${i + 1}`));
-    if (i < quest.claimCount) {
-      row.classList.add('qst-card__reward--claimed');
-      row.appendChild(el('span', 'qst-card__reward-mark', '✓'));
-    } else if (i === quest.claimCount && !complete) {
-      row.classList.add('qst-card__reward--next');
-      row.appendChild(el('span', 'qst-card__reward-mark', '← 次に取得される報酬'));
-    }
-    rewardsEl.appendChild(row);
-  });
+  for (const group of QST_CLAIM_GROUPS) {
+    rewardsEl.appendChild(buildQstRewardGroupRow(group, quest, complete));
+  }
 
   // Sibling-face preview (Q001A <-> Q001B) baked into the back element, same mechanism as every
   // other card type -- see siblingFaceId/fillQstBackFace. Falls back to a plain blank back when
@@ -3728,12 +3761,17 @@ function renderInstBody(container, text) {
 
 // How much bigger than real size the enlarge modal's card/QST visual renders (2026-08-0X: bumped
 // another x1.5 per user feedback "拡大表示　もう少し大きく　1.5倍", from the original 2x/1.5x this
-// replaced -- see showCardEnlargeModal). QST_PRE_SCALE_WIDTH is shrunk to compensate (QST has no
-// intrinsic width of its own, see CSS) so its *final* on-screen size stays close to what it was before
-// this bump, rather than growing by the same x1.5 a much-smaller shop-card can comfortably absorb.
+// replaced -- see showCardEnlargeModal). QST has no intrinsic width of its own (see CSS), so
+// QST_PRE_SCALE_WIDTH sets it explicitly and ENLARGE_SCALE_QST is tuned against that pre-scale width
+// so the *final* on-screen size stays within .card-inst-modal--wide's ~404px content area.
+// QST_PRE_SCALE_WIDTH bumped 170->250 (2026-08-06, found via headless screenshot): the new GOAL text
+// (a full "目標：..." sentence, not a short DSL string -- see questGoalDisplayText) was wrapping one
+// character per line at 170px pre-scale once split across .qst-card's 2 columns, since the rewards
+// column's own fixed (mark-based) width left goal only ~40-50px to work with. ENLARGE_SCALE_QST lowered
+// from 2.25->1.5 to compensate, keeping 250*1.5=375px comfortably inside the modal's budget.
 const ENLARGE_SCALE = 3;
-const ENLARGE_SCALE_QST = 2.25;
-const QST_PRE_SCALE_WIDTH = 170;
+const ENLARGE_SCALE_QST = 1.5;
+const QST_PRE_SCALE_WIDTH = 250;
 
 /**
  * Enlarge popup for a card/AREA/QST tile -- unifies what used to be three separate mouse-only

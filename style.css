@@ -1640,23 +1640,25 @@ h1, h2, h3 { margin: 0; }
   flex: 0 0 auto;
 }
 
-/* Landscape layout (confirmed 2026-07-30: "少し横長"): id spans the top, GOAL/Next Reward sit in a
-   left column and the REWARD1-3 checklist in a right column, side by side rather than all stacked
-   vertically -- makes the card wider than tall. */
+/* Landscape layout (confirmed 2026-07-30: "少し横長"): GOAL sits in a left column and the claim marks
+   in a right column, side by side rather than stacked vertically -- makes the card wider than tall.
+   Down to a single row now (2026-08-06: card id and the "GOAL"/"REWARDn" labels were dropped from the
+   front face entirely, per user feedback, to keep this as large and legible as possible). */
 .qst-card {
   background: var(--surface-sunken);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 8px 10px;
+  padding: 10px 12px;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  /* Confirmed 2026-07-30: id sits on the same row as REWARD1 (rewards spans both rows, top-aligned --
-     see .qst-card__rewards) instead of id having its own full-width row above everything. */
-  grid-template-areas:
-    "id       rewards"
-    "goal     rewards";
+  /* rewards sizes to its own (fixed, mark-based) content; goal takes whatever's left. min-width:0 on
+     the goal cell below is required alongside this -- CSS grid items default to min-width:auto, which
+     for text would otherwise refuse to shrink the goal column below its *unwrapped* content width,
+     silently defeating overflow-wrap and collapsing this fix (found via headless screenshot: at the
+     enlarge modal's narrow pre-scale width, goal was wrapping one character per line). */
+  grid-template-columns: 1fr auto;
+  grid-template-areas: "goal rewards";
   column-gap: 12px;
-  row-gap: 4px;
+  align-items: center;
   cursor: pointer;
   position: relative; /* containing block for .qst-card__back's inset:0 */
 }
@@ -1705,16 +1707,17 @@ h1, h2, h3 { margin: 0; }
   background: var(--accent-soft);
 }
 
+/* .qst-card__id / .qst-card__label still used by the back (sibling-preview) face's template markup --
+   see .qst-card__back-goal below -- just no longer rendered on the front face (2026-08-06). */
 .qst-card__id {
-  grid-area: id;
   font-weight: 700;
   font-size: 12px;
 }
 
 .qst-card__row {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  min-width: 0; /* see .qst-card's own comment on grid-template-columns */
 }
 .qst-card__row--goal { grid-area: goal; }
 
@@ -1726,11 +1729,18 @@ h1, h2, h3 { margin: 0; }
   letter-spacing: 0.04em;
 }
 
+/* GOAL's raw DSL text is gone from the front face (2026-08-06, replaced by the INST-derived "目標：..."
+   line, see main.js's questGoalDisplayText) -- no more monospace/condition-syntax styling, this now
+   reads as plain, large Japanese text. */
 .qst-card__goal {
-  font-family: "SFMono-Regular", Consolas, monospace;
-  font-size: 10.5px;
-  color: var(--text-muted);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
   overflow-wrap: anywhere;
+  min-width: 0; /* flex items default to min-width:auto same as grid items -- without this the browser
+    still refuses to shrink this span below its unwrapped content width inside .qst-card__row's own
+    flex layout, defeating overflow-wrap the same way omitting it on the grid cell itself would (see
+    .qst-card's comment) -- found this was the *other* half of that same fix needed via screenshot. */
 }
 
 .qst-card--complete .qst-card__row { display: none; }
@@ -1740,9 +1750,8 @@ h1, h2, h3 { margin: 0; }
 .qst-card__complete {
   display: none;
   grid-area: goal;
-  align-self: center;
   font-weight: 700;
-  font-size: 13px;
+  font-size: 16px;
   letter-spacing: 0.04em;
   color: var(--resource-vp);
 }
@@ -1752,42 +1761,49 @@ h1, h2, h3 { margin: 0; }
   grid-area: rewards;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
-  gap: 2px;
+  justify-content: center;
+  gap: 8px;
   padding-left: 10px;
   border-left: 1px solid var(--border);
 }
 
-/* Column, not row (confirmed 2026-07-30 fix): the "次に取得される報酬" mark is too long to sit next
-   to its REWARDn label on one line without overflowing the card -- stacking avoids that regardless
-   of card width. */
+/* One row per claim group (①  /  ②③, see main.js's QST_CLAIM_GROUPS) -- a circled-number label plus
+   its own row of ◯/● marks (2026-08-06, replacing the old "REWARDn label + ✓/← 次に取得される報酬" text,
+   per user feedback: "REWARD1 ←次に...は消す　①◯　②③2◯のように表記"). */
 .qst-card__reward {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
-  font-size: 10.5px;
-  color: var(--text-faint);
+  align-items: center;
+  gap: 6px;
 }
 
-.qst-card__reward--claimed {
-  color: var(--text-muted);
-  text-decoration: line-through;
-}
-
-/* Confirmed 2026-07-30: the separate "Next Reward" icon block was removed -- this row's own
-   background color is now what tells you it's next, instead of (or in addition to) its text mark. */
-.qst-card__reward--next {
-  color: var(--accent);
+.qst-card__reward-label {
+  font-size: 16px;
   font-weight: 700;
-  text-decoration: none;
-  background: var(--accent-soft);
-  border-radius: 4px;
-  padding: 2px 5px;
-  margin: -2px -5px;
+  color: var(--text-muted);
+}
+
+.qst-card__reward-marks {
+  display: flex;
+  gap: 4px;
 }
 
 .qst-card__reward-mark {
-  font-size: 10px;
+  font-size: 24px;
+  line-height: 1;
+  color: var(--text-faint);
+}
+
+.qst-card__reward-mark--claimed {
+  color: var(--text-muted);
+}
+
+/* The currently-claimable mark stands out with the accent color + a soft circular backing (2026-07-30's
+   background-highlight convention, now applied per-mark instead of per-row since a single row -- ②③ --
+   can hold marks in different states at once). */
+.qst-card__reward-mark--next {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 50%;
 }
 
 /* ---------------------------------------------------------------------- */

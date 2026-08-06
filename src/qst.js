@@ -20,7 +20,10 @@
  *    no dice/turn cost" -- it does NOT use the TAP/UNTAP-per-round free-action mechanism
  *    (PlayerState.freeActionTaps), because a claim is permanent (claimedPlayers) and each player can
  *    only ever claim once per card, so no round-reset is meaningful here.
- *  - Reward order: 1st claimer on a card gets REWARD1, 2nd gets REWARD2, 3rd gets REWARD3, 4th+ gets
+ *  - Reward order: 1st claimer on a card gets REWARD1, 2nd AND 3rd both get REWARD2-3 -- the same
+ *    reward text, one shared field (2026-08-06, per user feedback: "REWARD2とREWARD3を統合して
+ *    REWARD2-3にしました...REWARD2とREWARD3は共通してREWARD2-3にかかれた報酬を得ます"; REWARD4 doesn't
+ *    exist, so the card is still COMPLETE after exactly 3 claims, same cap as before). 4th+ gets
  *    nothing (claimCount already 3 = COMPLETE, canClaim() rejects further claims). Each player is
  *    also capped at 2 QST rewards total across the whole game (PlayerState.qstRewardCount).
  */
@@ -37,7 +40,11 @@ const executorApi = require('./executor');
 const board = require('./board');
 
 const QST_PHYSICAL_IDS = ['Q001', 'Q002', 'Q003', 'Q004'];
-const REWARD_FIELDS = ['REWARD1', 'REWARD2', 'REWARD3'];
+// Index 0 (1st claimer) -> REWARD1; indices 1 and 2 (2nd/3rd claimer) both -> REWARD2-3, the same
+// shared field (2026-08-06). nextRewardField/canClaim below index into this by quest.claimCount and
+// only ever compare .length for the "3 claims total, then COMPLETE" cap, so this one-line change is
+// the only thing needed to move the whole module onto the new column layout.
+const REWARD_FIELDS = ['REWARD1', 'REWARD2-3', 'REWARD2-3'];
 const MAX_QST_REWARDS_PER_PLAYER = 2;
 
 // ---------------------------------------------------------------------------
