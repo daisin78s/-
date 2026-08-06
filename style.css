@@ -1766,18 +1766,35 @@ h1, h2, h3 { margin: 0; }
   letter-spacing: 0.04em;
 }
 
-/* GOAL's raw DSL text is gone from the front face (2026-08-06, replaced by the INST-derived "目標：..."
-   line, see main.js's questGoalDisplayText) -- no more monospace/condition-syntax styling, this now
-   reads as plain, large Japanese text. */
+/* GOAL's raw DSL text is gone from the front face (2026-08-06, replaced first by the INST-derived
+   "目標：..." single line, then split into 3 stacked rows the same day per user feedback: "目標／
+   建築数／6枚" -- see main.js's questGoalLines/questGoalDisplayText). */
 .qst-card__goal {
-  font-size: 15px;
-  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   color: var(--text);
   overflow-wrap: anywhere;
   min-width: 0; /* flex items default to min-width:auto same as grid items -- without this the browser
     still refuses to shrink this span below its unwrapped content width inside .qst-card__row's own
     flex layout, defeating overflow-wrap the same way omitting it on the grid cell itself would (see
     .qst-card's comment) -- found this was the *other* half of that same fix needed via screenshot. */
+}
+
+.qst-card__goal-header {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-faint);
+}
+
+.qst-card__goal-item {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.qst-card__goal-qty {
+  font-size: 20px;
+  font-weight: 700;
 }
 
 .qst-card--complete .qst-card__row { display: none; }
@@ -1799,48 +1816,28 @@ h1, h2, h3 { margin: 0; }
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 8px;
+  gap: 2px;
   padding-left: 10px;
   border-left: 1px solid var(--border);
 }
 
-/* One row per claim group (①  /  ②③, see main.js's QST_CLAIM_GROUPS) -- a circled-number label plus
-   its own row of ◯/● marks (2026-08-06, replacing the old "REWARDn label + ✓/← 次に取得される報酬" text,
-   per user feedback: "REWARD1 ←次に...は消す　①◯　②③2◯のように表記"). */
-.qst-card__reward {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.qst-card__reward-label {
-  font-size: 16px;
+/* Front face's REWARD block: a "報酬" header plus one line per rank showing the plain reward value
+   text (2026-08-06, per user feedback: "報酬／1位　2K／2〜3位　1K" 3-line layout -- replaces the same
+   day's earlier ①/②③ ◯/● claim-mark rows; confirmed via AskUserQuestion that value text alone, with
+   no claim-status marks, is what's wanted). See main.js's buildQstRewardLine/QST_REWARD_RANK_LABELS.
+   .qst-card__reward itself (a plain label div, no marks) is still used by the back face's
+   REWARD1/REWARD2-3 preview -- see fillQstBackFace. */
+.qst-card__reward-header {
+  font-size: 11px;
   font-weight: 700;
-  color: var(--text-muted);
-}
-
-.qst-card__reward-marks {
-  display: flex;
-  gap: 4px;
-}
-
-.qst-card__reward-mark {
-  font-size: 24px;
-  line-height: 1;
   color: var(--text-faint);
 }
 
-.qst-card__reward-mark--claimed {
-  color: var(--text-muted);
-}
-
-/* The currently-claimable mark stands out with the accent color + a soft circular backing (2026-07-30's
-   background-highlight convention, now applied per-mark instead of per-row since a single row -- ②③ --
-   can hold marks in different states at once). */
-.qst-card__reward-mark--next {
-  color: var(--accent);
-  background: var(--accent-soft);
-  border-radius: 50%;
+.qst-card__reward-line {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
 }
 
 /* ---------------------------------------------------------------------- */

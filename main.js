@@ -613,7 +613,9 @@ function cardFaceExists(faceId) {
   }
 }
 
-/** QST sheet counterpart of factsForFaceId -- {goal, rewards:[REWARD1,REWARD2,REWARD3], inst}. */
+/** QST sheet counterpart of factsForFaceId -- {goal, rewards:[REWARD1,REWARD2-3,REWARD2-3], inst}.
+ * REWARD2-3 (2026-08-06's REWARD2/REWARD3 merge) fills both the [1] and [2] slots, matching
+ * qst.js's own REWARD_FIELDS layout. */
 function factsForQstFaceId(faceId) {
   let row;
   try {
@@ -621,7 +623,17 @@ function factsForQstFaceId(faceId) {
   } catch (e) {
     return { goal: '', rewards: [] };
   }
-  return { goal: row.GOAL || '', rewards: [row.REWARD1, row.REWARD2, row.REWARD3], inst: row.INST || '' };
+  return { goal: row.GOAL || '', rewards: [row.REWARD1, row['REWARD2-3'], row['REWARD2-3']], inst: row.INST || '' };
+}
+
+/** Plain-text reward summary for QST's 3-line REWARD block (2026-08-06, per user feedback: "1位
+ * 2K"/"2〜3位 K" style, replacing the ◯/● claim marks added earlier the same day -- confirmed via
+ * AskUserQuestion: value text only, no marks). Every QST row's REWARD1/REWARD2-3 cell is a bare
+ * ADD(...), so no need for the full DSL parser here -- e.g. "ADD(2K)" -> "2K", "ADD(2K,BZ)" ->
+ * "2K+BZ". Falls back to the raw cell text for anything that isn't a bare ADD(...). */
+function questRewardValueText(rewardDsl) {
+  const match = /^ADD\((.*)\)$/.exec((rewardDsl || '').trim());
+  return match ? match[1].replace(/,/g, '+') : (rewardDsl || '');
 }
 
 /** Whether faceId exists in the QST data at all (sibling-flip check, mirrors cardFaceExists). */
@@ -1713,10 +1725,7 @@ function mockEvalMetric(state, playerId, metricName, arg) {
  * and 2 (both drawing from the shared REWARD2-3 field) sit in one row with 2 independent marks, since
  * each is still claimed by a different player at a possibly different time even though the reward
  * text is identical). */
-const QST_CLAIM_GROUPS = [
-  { label: '①', slotIndices: [0] },
-  { label: '②③', slotIndices: [1, 2] },
-];
+const QST_REWARD_RANK_LABELS = ['1位', '2〜3位'];
 
 /** The "目標：..." line from a QST card's INST text, in place of GOAL's raw DSL (e.g. "CARD_COUNT>=7")
  * -- 2026-08-06, per user feedback: "とりあえず今回はINSTに書かれていることを流用して" (reusing the
@@ -1728,24 +1737,33 @@ function questGoalDisplayText(facts) {
   return firstLine.startsWith('目標') ? firstLine : facts.goal;
 }
 
-/** One claim-group row: a circled-number label plus one ◯/● mark per slot in the group (2026-08-06,
- * replacing the old "REWARDn label + ✓/← 次に取得される報酬" text -- see QST_CLAIM_GROUPS' own doc).
- * ◯ = not yet claimed, ● = claimed; whichever single slot is currently claimable (quest.claimCount's
- * own index, if the card isn't COMPLETE) gets the accent-highlighted variant instead of a plain ◯. */
-function buildQstRewardGroupRow(group, quest, complete) {
-  const row = el('div', 'qst-card__reward');
-  row.appendChild(el('span', 'qst-card__reward-label', group.label));
-  const marksEl = el('span', 'qst-card__reward-marks');
-  for (const slotIndex of group.slotIndices) {
-    const claimed = slotIndex < quest.claimCount;
-    const isNext = !complete && slotIndex === quest.claimCount;
-    const mark = el('span', 'qst-card__reward-mark', claimed ? '●' : '◯');
-    mark.classList.toggle('qst-card__reward-mark--claimed', claimed);
-    mark.classList.toggle('qst-card__reward-mark--next', isNext);
-    marksEl.appendChild(mark);
-  }
-  row.appendChild(marksEl);
-  return row;
+/** Splits questGoalDisplayText's "目標：{item}　{qty}" line into the item/qty pair for the QST card's
+ * 3-line GOAL block (2026-08-06, per user feedback: "目標／建築数／6枚" 3-line layout) -- split at the
+ * LAST run of whitespace, which is where every real GOAL line's trailing quantity sits (e.g. "建築数
+ * 　7枚" -> item "建築数", qty "7枚"). A line with no whitespace at all (shouldn't happen in practice)
+ * just becomes the item with a blank qty line. */
+function questGoalLines(facts) {
+  const text = questGoalDisplayText(facts);
+  const body = text.startsWith('目標') ? text.replace(/^目標[：:]/, '') : text;
+  const match = /^(.*?)[ 　]+(\S+)$/.exec(body.trim());
+  return match ? { item: match[1], qty: match[2] } : { item: body.trim(), qty: '' };
+}
+
+/** Plain-text reward summary for QST's 3-line REWARD block (2026-08-06, per user feedback: "1位
+ * 2K"/"2〜3位 K" style, replacing the ◯/● claim marks added earlier the same day -- confirmed via
+ * AskUserQuestion: value text only, no marks). Every QST row's REWARD1/REWARD2-3 cell is a bare
+ * ADD(...), so no need for the full DSL parser here -- e.g. "ADD(2K)" -> "2K", "ADD(2K,BZ)" ->
+ * "2K+BZ". Falls back to the raw cell text for anything that isn't a bare ADD(...). */
+function questRewardValueText(rewardDsl) {
+  const match = /^ADD\((.*)\)$/.exec((rewardDsl || '').trim());
+  return match ? match[1].replace(/,/g, '+') : (rewardDsl || '');
+}
+
+/** One REWARD line: a rank label plus its plain-text reward value (2026-08-06, replacing the old
+ * ①/②③ ◯/● claim-mark rows -- per user feedback's "1位　2K" / "2〜3位　K" 3-line format). rewardDsl is
+ * facts.rewards[0] (REWARD1) for '1位' or facts.rewards[1] (the shared REWARD2-3) for '2〜3位'. */
+function buildQstRewardLine(label, rewardDsl) {
+  return el('div', 'qst-card__reward-line', `${label}　${questRewardValueText(rewardDsl)}`);
 }
 
 /** Static preview fill for QST's back face (the sibling face -- see siblingFaceId): id + GOAL +
@@ -1763,12 +1781,14 @@ function fillQstBackFace(backEl, faceId) {
   rewardsEl.appendChild(el('div', 'qst-card__reward', 'REWARD2-3'));
 }
 
-/** Builds one QST card's visual: GOAL (as its INST-derived plain-language line) and the ①/②③ claim
- * marks / COMPLETE badge -- see questGoalDisplayText/buildQstRewardGroupRow for what replaced the old
- * raw-DSL GOAL text and REWARDn-label checklist (2026-08-06, per user feedback: card ID and the "GOAL"/
- * "REWARDn" labels themselves are dropped too, to keep this as large and legible as possible with only
- * the essentials showing). Distinct DOM shape from buildCardVisual's shop-card (this layout doesn't
- * fit that template), but still reuses showCardEnlargeModal for the tap-to-enlarge description. */
+/** Builds one QST card's visual: a 3-line GOAL block ("目標" / item / qty) and a 3-line REWARD block
+ * ("報酬" / "1位 {value}" / "2〜3位 {value}") plus the COMPLETE badge (2026-08-06, per user feedback:
+ * "目標／建築数／6枚" and "報酬／1位　2K／2〜3位　1K" 3-line layouts, replacing the single-line GOAL text
+ * and the ①/②③ ◯/● claim-mark rows from earlier the same day -- confirmed via AskUserQuestion that the
+ * landscape goal|rewards column layout stays, just each column's *content* becomes 3 stacked lines, and
+ * that REWARD shows plain value text with no claim marks). See questGoalLines/buildQstRewardLine.
+ * Distinct DOM shape from buildCardVisual's shop-card (this layout doesn't fit that template), but
+ * still reuses showCardEnlargeModal for the tap-to-enlarge description. */
 function buildQstCardVisual(faceId, quest, state, options = {}) {
   const tpl = document.getElementById('tpl-qst-card');
   const node = tpl.content.firstElementChild.cloneNode(true);
@@ -1787,14 +1807,18 @@ function buildQstCardVisual(faceId, quest, state, options = {}) {
   const claimable = !!activePlayer && hasFinishedOnboarding(activePlayer)
     && qstMod.canClaim(state, INDEX, activePlayer.id, faceId).ok;
 
-  node.querySelector(':scope > .qst-card__row > .qst-card__goal').textContent = questGoalDisplayText(facts);
+  const goalEl = node.querySelector(':scope > .qst-card__row > .qst-card__goal');
+  const goalLines = questGoalLines(facts);
+  goalEl.appendChild(el('div', 'qst-card__goal-header', '目標'));
+  goalEl.appendChild(el('div', 'qst-card__goal-item', goalLines.item));
+  goalEl.appendChild(el('div', 'qst-card__goal-qty', goalLines.qty));
   node.classList.toggle('qst-card--complete', complete);
   node.classList.toggle('qst-card--claimable', claimable);
 
   const rewardsEl = node.querySelector(':scope > .qst-card__rewards');
-  for (const group of QST_CLAIM_GROUPS) {
-    rewardsEl.appendChild(buildQstRewardGroupRow(group, quest, complete));
-  }
+  rewardsEl.appendChild(el('div', 'qst-card__reward-header', '報酬'));
+  rewardsEl.appendChild(buildQstRewardLine(QST_REWARD_RANK_LABELS[0], facts.rewards[0]));
+  rewardsEl.appendChild(buildQstRewardLine(QST_REWARD_RANK_LABELS[1], facts.rewards[1]));
 
   // Sibling-face preview (Q001A <-> Q001B) baked into the back element, same mechanism as every
   // other card type -- see siblingFaceId/fillQstBackFace. Falls back to a plain blank back when
