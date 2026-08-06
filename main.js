@@ -3506,9 +3506,27 @@ function render(state) {
   // overridden back to them. Once they really do end their turn (turnFlow.endTurn moves
   // currentPlayerIndex for real), that index's player no longer matches lastTurnPlayerId and this
   // no-ops, letting the normal "fresh turn started" transition below fire as usual.
-  if (turnActionTaken && state.turnOrder.length) {
+  //
+  // pendingBuildChoice needs the SAME override for a narrower reason (2026-08-06 follow-up, per user
+  // report: "他のプレイヤーが未使用のダイスを持っていない時に自分がまだ未使用のダイスを持っている時
+  // ターン終了ボタンが押せません" -- traced to a placement that triggers the build-choice modal, e.g. at
+  // 王宮/AREA009): a die's placedMapId is set (so isRoundOver can already flip true if this was this
+  // player's own last die and everyone else was already done) *before* applyPlaceDiceResult even gets a
+  // chance to set turnActionTaken -- it deliberately returns early without touching that flag whenever
+  // the placement produced a pendingBuild, leaving turnActionTaken false until the player actually picks
+  // a candidate (commitBuildCandidate sets it then). Without this second clause, that gap left raw
+  // next as ROUND_OVER on the very next render, which the transition logic below reads as "nobody's
+  // turn" and wipes lastTurnPlayerId to null -- so by the time the candidate IS picked and
+  // turnActionTaken finally goes true, the *first* clause above no longer matches (lastTurnPlayerId is
+  // already null) and the turn-end button never reappears. Checking pendingBuildChoice.playerId
+  // directly sidesteps lastTurnPlayerId entirely: only the player who legitimately just placed a die
+  // can have one open (the modal is what's currently blocking everyone else from acting at all), so no
+  // extra equality guard is needed here the way turnActionTaken's own (global, not per-player) flag needs one.
+  if (state.turnOrder.length) {
     const currentIndexPlayerId = state.turnOrder[state.currentPlayerIndex];
-    if (currentIndexPlayerId === lastTurnPlayerId && (!next || next.playerId !== currentIndexPlayerId)) {
+    const stillMidTurn = (turnActionTaken && currentIndexPlayerId === lastTurnPlayerId)
+      || (pendingBuildChoice && pendingBuildChoice.playerId === currentIndexPlayerId);
+    if (stillMidTurn && (!next || next.playerId !== currentIndexPlayerId)) {
       next = { type: 'TURN', playerId: currentIndexPlayerId, playerIndex: state.currentPlayerIndex };
     }
   }
