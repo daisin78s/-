@@ -1775,8 +1775,21 @@ function buildQstCardVisual(faceId, quest, state, options = {}) {
   const facts = factsForQstFaceId(faceId);
   const complete = quest.claimCount >= facts.rewards.length;
 
+  // Glows/blinks once GOAL is achieved and actually claimable right now (2026-08-06, per user
+  // feedback: "GOAL達成している状態の時光って点滅するようにする") -- reuses the real engine's
+  // canClaim (not the UI's own mockEvalMetric preview stuff above) so this can never drift from
+  // whether tapping the ①/②③ marks below would really succeed. Evaluated for whoever's actually up
+  // (matches the reward click handler's own activePlayer, since claiming is a free action gated to
+  // the active player) -- no glow while it's an AI's turn or nobody's onboarded yet, same as that
+  // handler's own no-op guard.
+  const next = turnFlowMod.getNextTurn(state, INDEX);
+  const activePlayer = next ? state.players.find((p) => p.id === next.playerId) : null;
+  const claimable = !!activePlayer && hasFinishedOnboarding(activePlayer)
+    && qstMod.canClaim(state, INDEX, activePlayer.id, faceId).ok;
+
   node.querySelector(':scope > .qst-card__row > .qst-card__goal').textContent = questGoalDisplayText(facts);
   node.classList.toggle('qst-card--complete', complete);
+  node.classList.toggle('qst-card--claimable', claimable);
 
   const rewardsEl = node.querySelector(':scope > .qst-card__rewards');
   for (const group of QST_CLAIM_GROUPS) {

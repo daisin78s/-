@@ -1730,6 +1730,20 @@ h1, h2, h3 { margin: 0; }
   background: var(--accent-soft);
 }
 
+/* Glows/blinks once the active player's GOAL is achieved and claimable right now (2026-08-06, per
+   user feedback: "GOAL達成している状態の時光って点滅するようにする") -- see buildQstCardVisual in
+   main.js for the claimable check. Same pulsing-glow idiom as .slot--highlight, just on a card
+   border instead of a SLOT. */
+.qst-card--claimable {
+  border-color: var(--accent);
+  animation: qst-card-glow-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes qst-card-glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px var(--accent-soft), 0 0 6px 1px var(--accent); }
+  50% { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 14px 4px var(--accent); }
+}
+
 /* .qst-card__id / .qst-card__label still used by the back (sibling-preview) face's template markup --
    see .qst-card__back-goal below -- just no longer rendered on the front face (2026-08-06). */
 .qst-card__id {
