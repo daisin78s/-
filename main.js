@@ -754,13 +754,10 @@ const ACTION_ICON_BUILDERS = {
 /** Confirmed 2026-07-29: ⤵️ marks a TAP-column effect (tapping it is the cost to trigger it). */
 const TAP_COST_ICON = '⤵️';
 
-/**
- * BUILD is always ⚒️ (confirmed 2026-07-29), with any category letters (A/B/C/M/U) appended --
- * e.g. BUILD() -> ⚒️, BUILD(U) -> ⚒️U, BUILD((A,B,C,M),1) -> ⚒️ABCM. Handled generically (not a
- * per-string table entry) so every BUILD(...) variant gets an icon automatically, including ones
- * not explicitly listed yet.
- */
-function extractBuildCategories(actionText) {
+/** Raw text between BUILD( and its own matching close paren (tracking nested parens, e.g. the
+ * "(A,B,C,M)" category list), or null if actionText has no BUILD(...) at all. Shared by
+ * extractBuildCategories/extractBuildValue below so both stay in lockstep on how nesting is tracked. */
+function buildInnerText(actionText) {
   const startIdx = actionText.indexOf('BUILD(');
   if (startIdx === -1) return null;
   let i = startIdx + 'BUILD('.length;
@@ -773,7 +770,43 @@ function extractBuildCategories(actionText) {
     inner += ch;
     i += 1;
   }
+  return inner;
+}
+
+/**
+ * BUILD is always ⚒️ (confirmed 2026-07-29), with any category letters (A/B/C/M/U) appended --
+ * e.g. BUILD() -> ⚒️, BUILD(U) -> ⚒️U, BUILD((A,B,C,M),1) -> ⚒️ABCM. Handled generically (not a
+ * per-string table entry) so every BUILD(...) variant gets an icon automatically, including ones
+ * not explicitly listed yet.
+ */
+function extractBuildCategories(actionText) {
+  const inner = buildInnerText(actionText);
+  if (inner === null) return null;
   return (inner.match(/[ABCMU]/g) || []).join('');
+}
+
+/**
+ * The numeric buildValue argument -- BUILD(...)'s own last top-level-comma-separated segment, if it's
+ * a plain number -- e.g. BUILD((A,B,C,M),1) -> 1, BUILD(M,12) -> 12, BUILD()/BUILD(U) -> null (no such
+ * argument). 2026-08-06, per user feedback on B005A/B005B/B006A/B006B's own icons needing the die
+ * value(s) required to trigger them ("B005A/B005B...⚀...B006A...⚅...B006B...⚅⚅"). Splits on commas at
+ * paren-depth 0 only, so the "(A,B,C,M)" category list's own internal commas don't get mistaken for the
+ * separator before this trailing value.
+ */
+function extractBuildValue(actionText) {
+  const inner = buildInnerText(actionText);
+  if (inner === null) return null;
+  const parts = [];
+  let depth = 0;
+  let cur = '';
+  for (const ch of inner) {
+    if (ch === '(') depth++;
+    else if (ch === ')') depth--;
+    if (ch === ',' && depth === 0) { parts.push(cur); cur = ''; } else cur += ch;
+  }
+  parts.push(cur);
+  const last = parts[parts.length - 1].trim();
+  return /^\d+$/.test(last) ? Number(last) : null;
 }
 
 /**
@@ -793,8 +826,17 @@ function extractBuildCategories(actionText) {
 function buildBuildIcon(actionText) {
   if (!actionText || !actionText.startsWith('BUILD(')) return null;
   const categories = extractBuildCategories(actionText);
+  const buildValue = extractBuildValue(actionText);
   const children = [actionEmoji('⚒️')];
   if (categories) children.push(actionSuffix(categories));
+  if (buildValue !== null) {
+    // die-face glyph(s) for the buildValue itself (2026-08-06) -- values above 6 (only BUILD(M,12)
+    // today) can't come from one die, so this shows however many max-value (6) dice it'd take to
+    // reach it (12 -> ⚅⚅), which happens to be exact for every buildValue in the current data (all are
+    // either <=6 or an exact multiple of 6).
+    const dieCount = Math.max(1, Math.ceil(buildValue / 6));
+    for (let i = 0; i < dieCount; i++) children.push(dieFace(Math.min(buildValue, 6)));
+  }
   const buildRow = actionRow(children);
   if (/;ADD\(BZ\)$/.test(actionText)) {
     const stack = el('div', 'action-icons-stack');
