@@ -2013,6 +2013,10 @@ function renderBoard(state, next) {
       }
 
       const slotsEl = node.querySelector('.map-tile__slots');
+      // 6-slot AREAs (王宮/元老院) lay out as a fixed 3x2 grid instead of flex-wrap (2026-08-06, per
+      // user feedback: "AREAのSLOTもう少し大きく1.5倍くらいでSLOT6個は2行に分ける") -- flex-wrap's wrap
+      // point depends on tile width, which no longer reliably lands on 3+3 now that slots are bigger.
+      if (slots.length === 6) slotsEl.classList.add('map-tile__slots--grid3');
       slots.forEach((requirement, i) => {
         const occupants = (mapState.slots[i] || []);
         const slotEl = el('div', 'slot');

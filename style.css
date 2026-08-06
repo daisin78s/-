@@ -566,10 +566,14 @@ h1, h2, h3 { margin: 0; }
   flex-wrap: wrap;
 }
 
-/* Confirmed 2026-07-29: castle's 6 slots stay on one line (the extra tile width from
-   .map-tile--castle's flex:2 above makes room; nowrap is a safety net for narrow viewports). */
-.map-tile--castle .map-tile__slots {
-  flex-wrap: nowrap;
+/* 6-slot AREAs (王宮/元老院) -- fixed 2 rows of 3 regardless of tile width (2026-08-06, per user
+   feedback: "SLOT6個は2行に分ける"; replaces the old castle-only "keep all 6 on one line" hack, which
+   relied on the extra flex:2 tile width and stopped being reliable once slots got bigger). See
+   renderBoard in main.js for where this class gets added. */
+.map-tile__slots--grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  flex-wrap: initial;
 }
 
 /* Turn-order rows, castle-only -- shows the round's current start-player order above the slots and
@@ -592,15 +596,16 @@ h1, h2, h3 { margin: 0; }
 }
 
 .slot {
-  /* Confirmed 2026-07-29: enlarged from 26px to fit the bigger die-face glyphs without clipping. */
-  width: 34px;
-  height: 34px;
-  border-radius: 6px;
+  /* Confirmed 2026-07-29: enlarged from 26px to fit the bigger die-face glyphs without clipping.
+     Enlarged again 2026-08-06 (1.5x, per user feedback: "AREAのSLOTもう少し大きく1.5倍くらいで"). */
+  width: 51px;
+  height: 51px;
+  border-radius: 9px;
   border: 1.5px dashed var(--border-strong);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 17px;
   color: var(--text-faint);
   position: relative;
   background: var(--surface);
@@ -615,6 +620,15 @@ h1, h2, h3 { margin: 0; }
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* A placed die (the shared .die, otherwise 22px everywhere) scaled up to match the enlarged .slot
+   it sits in (2026-08-06, same 1.5x pass) -- left at the plain size it'd look adrift in the bigger
+   slot. */
+.slot__stack .die {
+  width: 33px;
+  height: 33px;
+  font-size: 18px;
 }
 
 /* Dice placement (2026-07-30, real engine wiring pass 2): a slot is clickable while a die is
@@ -1131,15 +1145,16 @@ h1, h2, h3 { margin: 0; }
 
 .player-panel__dice-row:empty { display: none; }
 
-/* Player panel's own dice only (not the shared .die used for board-slot occupants, which stays at
-   its original size) -- 1.5x both dimensions (confirmed 2026-07-30: dialed back from an initial 2x,
-   which read as too big once seen). */
+/* Player panel's own dice only (not the shared .die used for board-slot occupants, which is scaled
+   separately -- see .slot__stack .die) -- 1.5x both dimensions (confirmed 2026-07-30: dialed back from
+   an initial 2x, which read as too big once seen). Enlarged again 2026-08-06 (another 1.2x on top, per
+   user feedback: "資源置き場のダイスの大きさもう少し大きく1.2倍くらいで崩れないように"). */
 .player-panel__dice-row .die {
-  width: 33px;
-  height: 33px;
-  border-radius: 8px;
-  font-size: 18px;
-  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.15);
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  font-size: 22px;
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.15);
 }
 
 .player-panel__dice-row .die--WHITE {
