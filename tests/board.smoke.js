@@ -780,6 +780,38 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   check('...combined buildValue is 12', result.actionResult.pendingBuild.buildValue, 12);
 }
 {
+  // "他のプレイヤーの邪魔をするだけの行動はできない" (2026-08-06, per user feedback): a monument that
+  // either die alone would already have covered (M012 needs only >=1) must not be offered when both
+  // were spent to reach 12 -- "ダイスを減らしても建築できるモニュメントは表示しないでください". M001
+  // (needs >=12, the max) genuinely requires both and must stay offered.
+  const state = freshStateWithShops();
+  player(state, 'P1').resources.BZ = 20;
+  const d1 = giveDie(state, 'P1', 6);
+  const d2 = giveDie(state, 'P1', 6);
+  const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
+  check('M012 (needs only >=1, satisfiable by either die alone) is excluded from the 6+6 group\'s candidates', result.actionResult.pendingBuild.candidates.some((c) => c.faceId === 'M012'), false);
+  check('M001 (needs >=12, genuinely requires both dice) is still offered', result.actionResult.pendingBuild.candidates.some((c) => c.faceId === 'M001'), true);
+}
+{
+  // Same rule, but with a pre-existing occupant contributing to the base: earlierDie(5) + a solo new
+  // die(1) already reaches M012's threshold (>=1) on its own -- so a *second* new die alongside it would
+  // be wasted for M012, but the pre-existing occupant's value alone is fixed/un-reducible input, not
+  // itself treated as a "redundant new die" (a solo die never has a redundant partner).
+  const state = freshStateWithShops();
+  player(state, 'P1').resources.BZ = 20;
+  const earlierDie = giveDie(state, 'P1', 5);
+  board.placeDice(state, index, { playerId: 'P1' }, earlierDie.id, board.CASTLE_MAP_ID, 0);
+  const d1 = giveDie(state, 'P1', 1);
+  d1.placeAnywhereThisTurn = true;
+  const d2 = giveDie(state, 'P1', 6);
+  d2.placeAnywhereThisTurn = true;
+  const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
+  check('Placing 1+6 alongside an existing 5 (total 12) succeeds', result.success, true);
+  check('M012 (>=1, already covered by the existing 5 alone) is excluded even though this group never placed a redundant *new* die for it', result.actionResult.pendingBuild.candidates.some((c) => c.faceId === 'M012'), false);
+  check('M009 (>=4, already covered without needing both new dice) is excluded', result.actionResult.pendingBuild.candidates.some((c) => c.faceId === 'M009'), false);
+  check('M001 (>=12, genuinely needs the existing 5 AND both new dice) is still offered', result.actionResult.pendingBuild.candidates.some((c) => c.faceId === 'M001'), true);
+}
+{
   // No legal slot anywhere for one of the values -- must fail atomically (neither die touched), not
   // place one and strand the other.
   const state = freshStateWithShops();
@@ -800,17 +832,18 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   // A group joining a slot with a *pre-existing* occupant (2026-08-06: now needs GRANT_PLACE_ANYWHERE
   // on *every* die in the bucket, confirmed -- "仮に片方のダイスがGRANT_PLACE_ANYWHERE...を使っていても
   // もう片方のダイスが置けません") must count that pre-existing occupant's value too, not just this
-  // group's own dice (2026-08-02 bug caught in headless verification): true combined value is
-  // 6+6+6=18, not just the new pair's 12.
+  // group's own dice (2026-08-02 bug caught in headless verification): true combined value is 2+2+2=6,
+  // not just the new pair's 4. Uses value 2 (not 6) so the combined total (6) doesn't already max out
+  // every monument threshold on its own -- see the overfunded-monument block further down for that.
   const state = freshStateWithShops();
   player(state, 'P1').resources.BZ = 20; // see the earlier castle blocks' comment on the affordability gate
-  const earlierDie = giveDie(state, 'P1', 6);
+  const earlierDie = giveDie(state, 'P1', 2);
   board.placeDice(state, index, { playerId: 'P1' }, earlierDie.id, board.CASTLE_MAP_ID, 0);
 
-  const d1 = giveDie(state, 'P1', 6);
-  const d2 = giveDie(state, 'P1', 6);
+  const d1 = giveDie(state, 'P1', 2);
+  const d2 = giveDie(state, 'P1', 2);
   const onlyOneBypassed = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
-  check('Without GRANT_PLACE_ANYWHERE on both dice, the whole group is refused (value 6 already on board)', onlyOneBypassed, { success: false, reason: 'NO_LEGAL_SLOT_FOR_GROUP' });
+  check('Without GRANT_PLACE_ANYWHERE on both dice, the whole group is refused (value 2 already on board)', onlyOneBypassed, { success: false, reason: 'NO_LEGAL_SLOT_FOR_GROUP' });
   d1.placeAnywhereThisTurn = true; // only ONE of the two -- still not enough
   const stillBlocked = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
   check('...one bypass-holding die in the pair is still not enough -- the other one has none', stillBlocked, { success: false, reason: 'NO_LEGAL_SLOT_FOR_GROUP' });
@@ -818,7 +851,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   d2.placeAnywhereThisTurn = true; // now BOTH carry it
   const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
   check('Once both dice carry GRANT_PLACE_ANYWHERE, the group joins the pre-existing slot', result.success, true);
-  check('...buildValue sums all 3 dice (18), not just the new pair (12)', result.actionResult.pendingBuild.buildValue, 18);
+  check('...buildValue sums all 3 dice (6), not just the new pair (4)', result.actionResult.pendingBuild.buildValue, 6);
   check('...all 3 dice really do sit on the same slot', state.maps[board.CASTLE_MAP_ID].slots.filter((s) => s.length > 0).map((s) => s.length), [3]);
   check('...neither of the 2 new dice counts toward next round\'s turn order', state.maps[board.CASTLE_MAP_ID].slots.find((s) => s.length === 3).filter((o) => o.dieId === d1.id || o.dieId === d2.id).every((o) => o.countsForTurnOrder === false), true);
 }

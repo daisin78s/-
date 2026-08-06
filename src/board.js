@@ -348,6 +348,33 @@ function slotAcceptsValue(map, mapId, playerId, requirement, occupants, value, b
   return !map.slots.some((occ) => occ.some((o) => o.value === value));
 }
 
+/** True if some subset of newValues (possibly empty, but never the *whole* set) combined with baseSum
+ * already reaches threshold -- i.e. at least one of newValues is unnecessary for reaching threshold
+ * specifically (2026-08-06, per user feedback: "他のプレイヤーの邪魔をするだけの行動はできない" -- a
+ * group placement that spends more dice on a monument than that monument actually needed is exactly
+ * this, e.g. M012 needs only >=1, so placing 2 dice (6+6=12) to "build" it wastes one die for no reason
+ * a real player would ever have -- confirmed: "ダイスを減らしても建築できるモニュメントは表示しないでく
+ * ださい"). Brute-forces every subset via bitmask (newValues.length is always small -- a monument group
+ * placement never involves more than a handful of dice). */
+function hasSufficientProperSubset(newValues, threshold, baseSum) {
+  const n = newValues.length;
+  for (let mask = 0; mask < (1 << n) - 1; mask++) {
+    let sum = baseSum;
+    for (let i = 0; i < n; i++) if (mask & (1 << i)) sum += newValues[i];
+    if (sum >= threshold) return true;
+  }
+  return false;
+}
+
+/** Filters a monument BUILD_NEW candidate list down to only those that genuinely need every one of
+ * newValues (this group's own dice) -- on top of baseSum (the touched slots' pre-existing occupancy,
+ * fixed and un-reducible) -- to reach their own DICE threshold. See hasSufficientProperSubset. A solo
+ * die never has a "redundant" partner (there's only ever the one), so this is a no-op below 2 dice. */
+function excludeOverfundedMonuments(index, candidates, newValues, baseSum) {
+  if (newValues.length <= 1) return candidates;
+  return candidates.filter((c) => !hasSufficientProperSubset(newValues, parseMonumentThreshold(getCardRow(index, c.faceId).DICE), baseSum));
+}
+
 /**
  * Places several of the player's own dice at once onto mapId -- possibly *different* values, not just
  * doubles -- then resolves ONLY a monument ("M") BUILD candidate list against the combined buildValue
@@ -378,6 +405,12 @@ function slotAcceptsValue(map, mapId, playerId, requirement, occupants, value, b
  * ントのみ建築候補に表示です") -- multi-die is monument-only here regardless of what BUILD(...) in the
  * data would otherwise allow for a single die.
  *
+ * Monument candidates this group's own dice didn't actually need are excluded from the result
+ * (2026-08-06, per user feedback: "他のプレイヤーの邪魔をするだけの行動はできない...ダイスを減らしても
+ * 建築できるモニュメントは表示しないでください" -- e.g. M012 needs only >=1, so a 6+6 group placement
+ * that reaches 12 must not offer M012 back, since either die alone already covered it). See
+ * excludeOverfundedMonuments.
+ *
  * Emits a PLACE(mapId) event per die (not once for the whole group) -- matching what placing them one
  * at a time across separate turns would have triggered (e.g. JOB002A's "get 1K per castle placement").
  *
@@ -404,11 +437,14 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   // requires every die in the bucket to individually carry placeAnywhereThisTurn (see this function's
   // own doc) -- slotJoinedOccupied records, per targetSlot, whether that slot already had an occupant
   // before this action (i.e. bypass was actually needed to join it), so the commit pass below can set
-  // each die's countsForTurnOrder correctly without re-deriving this.
+  // each die's countsForTurnOrder correctly without re-deriving this. existingSumBySlot records that
+  // same pre-existing occupancy's *value* (not just whether it existed), fixed/un-reducible input to
+  // excludeOverfundedMonuments below.
   const usedSlots = new Set();
   const slotForDie = new Map();
   const slotOfValue = new Map(); // value -> targetSlot, kept for the buildValue prediction below
   const slotJoinedOccupied = new Map(); // targetSlot -> boolean
+  const existingSumBySlot = new Map(); // targetSlot -> sum of pre-existing occupants' values
   for (const [value, ids] of dieIdsByValue) {
     const bypass = ids.every((id) => dice.find((d) => d.id === id).placeAnywhereThisTurn);
     let targetSlot = null;
@@ -420,8 +456,11 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
     usedSlots.add(targetSlot);
     slotOfValue.set(value, targetSlot);
     slotJoinedOccupied.set(targetSlot, map.slots[targetSlot].length > 0);
+    existingSumBySlot.set(targetSlot, map.slots[targetSlot].reduce((sum, o) => sum + o.value, 0));
     for (const id of ids) slotForDie.set(id, targetSlot);
   }
+  const newValues = dice.map((d) => d.value);
+  const existingSumTotal = [...existingSumBySlot.values()].reduce((sum, v) => sum + v, 0);
 
   // Predict the resulting buildValue *before* touching anything (same "sum each touched slot's full
   // occupancy" math as the post-commit version below, just computed off map.slots as it stands right
@@ -429,13 +468,16 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   // possibly reach any monument (2026-08-0X, per user feedback: "建築するのはマストなので建築候補が無い
   // 場合置けません", same principle placeDice's own wouldAreaActionHaveEffect applies to a single die).
   // Affordability-checked too (corrected 2026-08-04, same policy change as wouldAreaActionHaveEffect's
-  // BUILD branch -- see isCandidateAffordable's own doc).
+  // BUILD branch -- see isCandidateAffordable's own doc). Overfunded-monument-excluded too (2026-08-06,
+  // per user feedback -- see excludeOverfundedMonuments' own doc): if the only "affordable" candidates
+  // are ones this group's dice overpay for, the whole placement is refused just like having none at all
+  // -- a smaller selection would need to be tried instead.
   let predictedBuildValue = 0;
   for (const [value, slotIndex] of slotOfValue) {
     const existing = map.slots[slotIndex].reduce((sum, o) => sum + o.value, 0);
     predictedBuildValue += existing + value * dieIdsByValue.get(value).length;
   }
-  const predictedCandidates = getBuildCandidates(state, index, playerId, ['M'], predictedBuildValue);
+  const predictedCandidates = excludeOverfundedMonuments(index, getBuildCandidates(state, index, playerId, ['M'], predictedBuildValue), newValues, existingSumTotal);
   if (!predictedCandidates.some((c) => isCandidateAffordable(state, index, playerId, c))) {
     return { success: false, reason: 'NO_BUILDABLE_CARD' };
   }
@@ -476,7 +518,7 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
     buildValue += map.slots[slotIndex].reduce((sum, o) => sum + o.value, 0);
   }
 
-  const candidates = getBuildCandidates(state, index, playerId, ['M'], buildValue);
+  const candidates = excludeOverfundedMonuments(index, getBuildCandidates(state, index, playerId, ['M'], buildValue), newValues, existingSumTotal);
   if (candidates.length === 0) {
     return { success: true, actionResult: { success: false, reason: 'NO_BUILDABLE_CARD', categories: ['M'], buildValue } };
   }
