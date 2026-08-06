@@ -53,11 +53,6 @@
   /* Plain/blank card-back fill (confirmed 2026-07-29: "無地" -- no pattern or text, just a flat
      color) shown when a card is clicked and has no specific back art defined. */
   --card-back-bg: #8b93a3;
-
-  /* AREA tile background by tier (confirmed 2026-07-29): tier A stays the plain default
-     --surface-sunken (no override below), tier B is light pink, tier C a bit more saturated pink. */
-  --tier-b-bg: #fbe1ec;
-  --tier-c-bg: #f6b8d4;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -77,8 +72,6 @@
     --resource-wd-bg: #2a2e35;
     --resource-wd-border: #454b54;
     --card-back-bg: #454b54;
-    --tier-b-bg: #3a2431;
-    --tier-c-bg: #52223a;
   }
 }
 
@@ -547,10 +540,25 @@ h1, h2, h3 { margin: 0; }
   font-size: 13px;
 }
 
-/* Confirmed 2026-07-29: the whole tile's background shifts by tier, not just the small tier badge
-   above -- tier A is left at the plain default (.map-tile's own background). */
-.map-tile[data-tier="B"] { background: var(--tier-b-bg); }
-.map-tile[data-tier="C"] { background: var(--tier-c-bg); }
+/* The whole tile's background shifts by tier, not just the small tier badge above -- tier A is left at
+   the plain default (.map-tile's own background). 2026-08-06 (per user feedback: "AREA001Bの背景色所有
+   者のカラーに変える(薄い色)...AREA001Cの背景色所有者のカラーに変える(Bより濃い色)...背景色所有者がいる
+   AREA全てに適用"): replaces the old fixed-pink-regardless-of-owner scheme -- the tint now follows
+   whichever player currently owns the tiered-up AREA (map.feeOwnerId's own color, set as
+   data-owner-color by main.js's renderBoard), tier B a light tint of their color, tier C a stronger one.
+   color-mix() against the existing --player-* tokens instead of 8 new hardcoded hex values. */
+.map-tile[data-tier="B"][data-owner-color="PINK"] { background: color-mix(in srgb, var(--player-pink) 22%, var(--surface-sunken)); }
+.map-tile[data-tier="C"][data-owner-color="PINK"] { background: color-mix(in srgb, var(--player-pink) 48%, var(--surface-sunken)); }
+.map-tile[data-tier="B"][data-owner-color="PURPLE"] { background: color-mix(in srgb, var(--player-purple) 22%, var(--surface-sunken)); }
+.map-tile[data-tier="C"][data-owner-color="PURPLE"] { background: color-mix(in srgb, var(--player-purple) 48%, var(--surface-sunken)); }
+.map-tile[data-tier="B"][data-owner-color="GREEN"] { background: color-mix(in srgb, var(--player-green) 22%, var(--surface-sunken)); }
+.map-tile[data-tier="C"][data-owner-color="GREEN"] { background: color-mix(in srgb, var(--player-green) 48%, var(--surface-sunken)); }
+.map-tile[data-tier="B"][data-owner-color="ORANGE"] { background: color-mix(in srgb, var(--player-orange) 22%, var(--surface-sunken)); }
+.map-tile[data-tier="C"][data-owner-color="ORANGE"] { background: color-mix(in srgb, var(--player-orange) 48%, var(--surface-sunken)); }
+/* No owner on record (shouldn't happen for a real tier B/C in play, per runSetCurrentArea's own doc --
+   defensive fallback only) -- stay at the plain default rather than showing no tint at all. */
+.map-tile[data-tier="B"]:not([data-owner-color]) { background: color-mix(in srgb, var(--text-faint) 22%, var(--surface-sunken)); }
+.map-tile[data-tier="C"]:not([data-owner-color]) { background: color-mix(in srgb, var(--text-faint) 48%, var(--surface-sunken)); }
 
 .map-tile__slots {
   display: flex;

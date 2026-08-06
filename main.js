@@ -2001,11 +2001,15 @@ function renderBoard(state, next) {
 
       const tier = mapState.currentAreaId.match(/([ABC])$/);
       if (tier) {
-        // Confirmed 2026-07-29: the whole tile's background follows the tier too (tier B/C = pink
-        // shades) -- see .map-tile[data-tier] in style.css. The "tier A"/"tier B" text badge that used
-        // to sit in the header was removed (2026-08-0X, per user request) in favor of the usage-fee
-        // display below, which now lives in that same spot.
+        // Confirmed 2026-07-29: the whole tile's background follows the tier too -- see
+        // .map-tile[data-tier] in style.css. The "tier A"/"tier B" text badge that used to sit in the
+        // header was removed (2026-08-0X, per user request) in favor of the usage-fee display below,
+        // which now lives in that same spot. The tint itself now follows the owner's own player color
+        // (2026-08-06, per user feedback: "AREA001Bの背景色所有者のカラーに変える...背景色所有者がいる
+        // AREA全てに適用") instead of a fixed pink regardless of who owns it -- see data-owner-color below.
         node.dataset.tier = tier[1];
+        const ownerColor = mapState.feeOwnerId ? colorForPlayer(state, mapState.feeOwnerId) : null;
+        if (ownerColor) node.dataset.ownerColor = ownerColor;
       }
 
       const slotsEl = node.querySelector('.map-tile__slots');
