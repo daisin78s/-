@@ -699,8 +699,8 @@ function runBlockBuild(state, context, cmd) {
 // can use, independent of CONVERT_LIMIT. A/B/C/Z->K and wD->2K have NO usage limit at all (confirmed by
 // the user 2026-08-02: "A→K B→K C→K Z→K wD→Kに回数制限ありません") -- repeatable any number of times
 // during the player's own turn, limited only by having the resource to pay each time. Usage-fee
-// collection is the one exception: it keeps its own tap flag (player.freeActionTaps.FEE_COLLECT),
-// separate from card taps, reset only at round end (see resetFreeActionsForNewRound) -- once per round.
+// collection has no limit either (2026-08-06, reversing its earlier once-per-round-shared-tap rule --
+// see collectUsageFee's own doc), gated purely by each map's own accumulatedFee instead.
 // Their gain side uses grantResource, not grantResourceAndEmitGet (corrected 2026-08-03, per user
 // feedback: "JOB ON(GET(K),CHANGE(K,Z)) フリーアクションのA→K等に反応してしまいます...ADD(K)やADD(K,A)
 // などにのみ反応するように") -- these 6 free actions specifically don't trigger ON(GET(...),...)
@@ -719,7 +719,7 @@ const FREE_ACTION_DEFS = {
   wD_K: { pay: 'wD', payCount: 1, gain: 'K', gainCount: 2 },
 };
 
-/** @param {string} freeActionId - one of game-state's FREE_ACTION_IDS (except FEE_COLLECT, see collectUsageFee) */
+/** @param {string} freeActionId - one of game-state's FREE_ACTION_IDS (fee collection is separate, see collectUsageFee below) */
 function tryFreeAction(state, index, playerId, freeActionId) {
   const def = FREE_ACTION_DEFS[freeActionId];
   if (!def) throw new ExecutionError(`Unknown free action: ${freeActionId}`);
@@ -736,20 +736,22 @@ function tryFreeAction(state, index, playerId, freeActionId) {
  * free actions (tryFreeAction, deliberately silent -- see FREE_ACTION_DEFS' comment on JOB005A), fee
  * collection DOES emit GET(K) (corrected 2026-08-04, per user feedback: "使用料回収のフリーアクションで
  * JOB005が反応しなくなりました...これはフリーアクションですが反応するように" -- the user wants this one
- * free action, specifically, to still trigger ON(GET(K),...) reactions like JOB005A's K->Z). Needs index/
- * context (not just playerId) purely to reach grantResourceAndEmitGet/emitAndResolve's event-chain
+ * free action, specifically, to still trigger ON(GET(K),...) reactions like JOB005A's K->Z). No tap/round
+ * limit at all (2026-08-06, per user feedback: "使用料回収は未回収の使用料がある限り何回でも使えるように
+ * かえてください" -- reverses the previous "once per round, shared across every map" rule; a player who
+ * owns 2+ tiered-up AREAs, or whose one AREA re-accrues fee from another placement later the same round,
+ * can now collect from each of those in turn). The map.accumulatedFee<=0 check below is what naturally
+ * prevents collecting the same not-yet-replenished fee twice, without any separate tap bookkeeping. Needs
+ * index/context (not just playerId) purely to reach grantResourceAndEmitGet/emitAndResolve's event-chain
  * machinery -- context only needs playerId, same shape as every other engine entry point. */
 function collectUsageFee(state, index, context, mapId) {
-  const player = getPlayer(state, context.playerId);
   const map = state.maps[mapId];
   if (!map) throw new ExecutionError(`Unknown map: ${mapId}`);
-  if (player.freeActionTaps.FEE_COLLECT) return { success: false, reason: 'ALREADY_TAPPED' };
   if (map.feeOwnerId !== context.playerId) return { success: false, reason: 'NOT_FEE_OWNER' };
   if (map.accumulatedFee <= 0) return { success: false, reason: 'NO_FEE_TO_COLLECT' };
   const amount = map.accumulatedFee;
   map.accumulatedFee = 0;
   grantResourceAndEmitGet(state, index, context, 'K', amount);
-  player.freeActionTaps.FEE_COLLECT = true;
   return { success: true, amount };
 }
 

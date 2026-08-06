@@ -80,7 +80,7 @@ class MoveGenerator {
     if (executor.canEndTurn(state, index, playerId).violations.length > 0) {
       moves.push(...this.#freeActionMoves(state, index, playerId, player));
     }
-    moves.push(...this.#feeCollectionMoves(state, playerId, player));
+    moves.push(...this.#feeCollectionMoves(state, playerId));
     moves.push(...this.#bareTapMoves(state, index, playerId, player));
     moves.push(...this.#tapReactionMoves(state, playerId));
     moves.push(...this.#questMoves(state, index, playerId));
@@ -148,9 +148,8 @@ class MoveGenerator {
     return moves;
   }
 
-  #feeCollectionMoves(state, playerId, player) {
+  #feeCollectionMoves(state, playerId) {
     const moves = [];
-    if (player.freeActionTaps.FEE_COLLECT) return moves;
     for (const [mapId, mapState] of Object.entries(state.maps)) {
       if (mapState.feeOwnerId === playerId && mapState.accumulatedFee > 0) {
         moves.push({ type: 'COLLECT_FEE', playerId, mapId });

@@ -109,9 +109,10 @@ for (let i = 0; i < state.turnOrder.length; i++) {
 }
 
 // ---------------------------------------------------------------------------
-// FEE_COLLECT's reset is round-scoped, not turn-scoped (confirmed rule): tapping it now should still
-// show tapped after an endTurn. (A/B/C/Z->K and wD->2K have no usage limit at all -- confirmed
-// 2026-08-02, "回数制限ありません" -- so FEE_COLLECT is the only free action still worth testing here.)
+// Usage-fee collection has no tap/round limit at all (2026-08-06, reversing the previous
+// once-per-round-shared-tap rule -- see executor.collectUsageFee's own doc): collecting it doesn't
+// block anything else, and it's immediately collectible again the instant more fee accrues, with no
+// need to wait for a round boundary.
 // ---------------------------------------------------------------------------
 {
   const p0 = state.turnOrder[0];
@@ -119,12 +120,14 @@ for (let i = 0; i < state.turnOrder.length; i++) {
   const executor = require('../src/executor');
   state.maps['MAP001'].feeOwnerId = p0;
   state.maps['MAP001'].accumulatedFee = 2;
-  executor.collectUsageFee(state, index, { playerId: p0 }, 'MAP001');
-  check('FEE_COLLECT is tapped', player.freeActionTaps.FEE_COLLECT, true);
+  const firstCollect = executor.collectUsageFee(state, index, { playerId: p0 }, 'MAP001');
+  check('First collection succeeds', firstCollect, { success: true, amount: 2 });
   const placement = placeFirstLegalDie(state, p0);
   assertTrue(`${p0} found a legal placement on their 2nd turn`, placement !== null);
   turnFlow.endTurn(state, index, p0);
-  check('FEE_COLLECT is STILL tapped after endTurn (round-scoped, not turn-scoped)', player.freeActionTaps.FEE_COLLECT, true);
+  state.maps['MAP001'].accumulatedFee = 1; // more fee accrues after that endTurn, same round
+  const secondCollect = executor.collectUsageFee(state, index, { playerId: p0 }, 'MAP001');
+  check('Collects again the same round, no tap left over from the first collection', secondCollect, { success: true, amount: 1 });
 }
 
 // ---------------------------------------------------------------------------

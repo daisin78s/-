@@ -93,10 +93,12 @@ function createDie(id, kind) {
  * @property {string[]} ownedCardPhysicalIds - physicalIds of cards this player has built/acquired (see GameState.cards for face/tapped)
  * @property {number} startOrderValue     - set during setup, used once to compute turn order
  * @property {Object<string, boolean>} freeActionTaps - tap flags per FREE_ACTION_IDS entry (confirmed
- *   2026-07-29, corrected 2026-08-02). Only FEE_COLLECT is actually gated by this -- once per round,
- *   reset to untapped (false) at ROUND end only, NOT at each player's individual TURNEND. A/B/C/Z->K
- *   and wD->2K have no usage limit at all (confirmed by the user: "回数制限ありません") and never set
- *   their own entries here; those entries stay permanently false and are unused by executor.tryFreeAction.
+ *   2026-07-29). A/B/C/Z->K and wD->2K have no usage limit at all (confirmed by the user: "回数制限あり
+ *   ません") and never set their own entries here; those entries stay permanently false and are unused
+ *   by executor.tryFreeAction. Usage-fee collection used to be the one exception gated by this (once per
+ *   round, shared across every map) but that was reversed 2026-08-06 (per user feedback: "使用料回収は
+ *   未回収の使用料がある限り何回でも使えるようにかえてください") -- collectUsageFee no longer reads or
+ *   writes freeActionTaps at all, gated purely by each map's own accumulatedFee instead (see its own doc).
  * @property {Object<string, boolean>} freeActionAutoMode - per FREE_ACTION_IDS entry: true ("オート") =
  *   auto-fire when usable, false ("マニュアル") = wait for the player. Defaults to false (manual) for
  *   every entry (confirmed 2026-07-29 -- all 6 free actions default to manual); player-adjustable
@@ -130,8 +132,9 @@ function createDie(id, kind) {
 /** Fixed palette, assigned in player order (player 1 = PINK, ...). Provisional -- see PlayerState.color. */
 const PLAYER_COLORS = ['PINK', 'PURPLE', 'GREEN', 'ORANGE'];
 
-/** Free-action IDs, see PlayerState.freeActionTaps. */
-const FREE_ACTION_IDS = ['A_K', 'B_K', 'C_K', 'Z_K', 'wD_K', 'FEE_COLLECT'];
+/** Free-action IDs, see PlayerState.freeActionTaps. FEE_COLLECT is no longer one of these (2026-08-06,
+ * see freeActionTaps' own doc) -- collectUsageFee never reads/writes freeActionTaps at all now. */
+const FREE_ACTION_IDS = ['A_K', 'B_K', 'C_K', 'Z_K', 'wD_K'];
 
 /**
  * @param {string} id

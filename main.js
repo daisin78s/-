@@ -2859,7 +2859,8 @@ function renderTapReactions(container, state, playerId) {
 
 /** A/B/C/Z->K and wD->2K (2026-07-30, real engine wiring pass 5; corrected 2026-08-02) -- confirmed via
  * [[project-dice-wp-dsl-spec]]: usable anytime during the player's own turn, with NO usage limit at
- * all ("回数制限ありません") -- unlike FEE_COLLECT, these never tap. Only rendered for the player whose
+ * all ("回数制限ありません") -- same as usage-fee collection since 2026-08-06 (see executor.collectUsageFee),
+ * though that one lives on the map tile itself, not this button row. Only rendered for the player whose
  * real TURN it currently is (canAct); unaffordable actions are still shown -- clicking one you can't
  * pay for just surfaces INSUFFICIENT_RESOURCES via placementMessage, same pattern as dice
  * placement/BUILD selection elsewhere in this file, rather than being pre-validated away. */

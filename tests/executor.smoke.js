@@ -182,7 +182,10 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 }
 
 // ---------------------------------------------------------------------------
-// 9. Usage fee collection: only the fee owner can collect, once per round.
+// 9. Usage fee collection: only the fee owner can collect, no per-round limit (2026-08-06, per user
+// feedback: "使用料回収は未回収の使用料がある限り何回でも使えるようにかえてください" -- reverses the
+// previous once-per-round-shared-tap rule; collectible again as soon as accumulatedFee is next >0,
+// whether that's the same map re-accruing or a different tiered-up map this same player owns).
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
@@ -200,8 +203,13 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
   check('Fee is cleared from the map after collection', state.maps['MAP001'].accumulatedFee, 0);
   check('P1 gained the 3K', getPlayerRef(state, 'P1').resources.K, 3);
 
+  const nothingLeft = executor.collectUsageFee(state, index, { playerId: 'P1' }, 'MAP001');
+  check('Collecting again with nothing accrued since fails (NO_FEE_TO_COLLECT, not a round-scoped tap)', nothingLeft, { success: false, reason: 'NO_FEE_TO_COLLECT' });
+
   state.maps['MAP001'].accumulatedFee = 2; // more fee accrues later the same round
-  check('FEE_COLLECT is tapped for the rest of the round', executor.collectUsageFee(state, index, { playerId: 'P1' }, 'MAP001').success, false);
+  const collectedAgain = executor.collectUsageFee(state, index, { playerId: 'P1' }, 'MAP001');
+  check('...but collects again once more fee has accrued, same round, no tap blocking it', collectedAgain, { success: true, amount: 2 });
+  check('P1 now has 5K total (3 + 2)', getPlayerRef(state, 'P1').resources.K, 5);
 }
 
 // ---------------------------------------------------------------------------
