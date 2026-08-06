@@ -2728,12 +2728,13 @@ function renderPlayers(state, next) {
   container.innerHTML = '';
   const activePlayerId = next ? next.playerId : null;
   const canPlaceDiceFor = actingHumanPlayerId(state, next);
-  // Ordered by this round's turn order, active player first (2026-08-05, per user feedback: "アリス
-  // ボブ キャロル ダン の資源置き場の順番を このラウンドの手番順にして") -- reuses turnOrderedPlayers,
-  // the exact same rotate-to-whoever's-up-now scheme the owned-cards sidebar already uses (confirmed
-  // 2026-07-29 there), so the two player lists stay visually consistent instead of one being fixed
-  // creation order and the other rotating.
-  turnOrderedPlayers(state, activePlayerId).forEach((player) => {
+  // Fixed seat order for the whole round (2026-08-06, supersedes the 2026-08-05 "rotates to whoever's
+  // turn it is" scheme -- per user feedback, the resource-area position should lock in as soon as this
+  // round's turnOrder is decided (setup.computeStartOrder, called before JOB selection even starts) and
+  // stay put until the next round's turnOrder is computed (turn-flow.endRound). roundOrderedPlayers
+  // below reads state.turnOrder directly instead of rotating it -- see its own comment for why that's
+  // already exactly "decided once per round, unchanged until the round boundary" with no extra state.
+  roundOrderedPlayers(state).forEach((player) => {
     const tpl = document.getElementById('tpl-player-panel');
     const node = tpl.content.firstElementChild.cloneNode(true);
     if (player.id === activePlayerId) node.classList.add('player-panel--active');
@@ -2926,6 +2927,21 @@ function turnOrderedPlayers(state, activePlayerId) {
   const startIdx = state.turnOrder.indexOf(activePlayerId);
   const orderedIds = Array.from({ length: n }, (_, i) => state.turnOrder[(startIdx + i) % n]);
   return orderedIds.map((id) => state.players.find((p) => p.id === id));
+}
+
+/**
+ * Player resource-area order (renderPlayers only, 2026-08-06): state.turnOrder's own order, un-rotated.
+ * Unlike turnOrderedPlayers (which re-sorts to whoever's turn it is right now, every render), this stays
+ * put all round -- and it can, for free: state.turnOrder itself is only ever (re)computed once per round
+ * (setup.computeStartOrder for round 1, before JOB selection even starts; turn-flow.computeNextRoundTurnOrder
+ * at each subsequent round's start) and is never touched mid-round. So reading it directly, instead of
+ * rotating it to the active player like turnOrderedPlayers does, already gives exactly the requested
+ * behavior with no separate snapshot to keep in sync (and nothing extra for debug-history jumps to restore).
+ * Same pre-round-1 fallback as turnOrderedPlayers (no turnOrder yet -> creation order).
+ */
+function roundOrderedPlayers(state) {
+  if (!state.turnOrder.length) return state.players;
+  return state.turnOrder.map((id) => state.players.find((p) => p.id === id));
 }
 
 /** Whether player has finished round-1 onboarding (JOB drafted AND CON face chosen). Needed because
