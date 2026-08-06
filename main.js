@@ -126,6 +126,16 @@ let aiOpenTurnHasPlacedDie = false;
  * a read-only peek, mirrors driveOneAiStep's own gating exactly but never mutates state. Used to decide
  * whether to keep pumping (any mode) and whether to show the manual-mode button at all. */
 function hasAiWorkPending(state) {
+  // A BUILD/UPGRADE candidate choice is always mid-resolution for the human (AI moves never go through
+  // this UI-only flow -- see pendingBuildChoice's own comment) -- found 2026-08-06, per user report:
+  // "最後の1個のダイスで建築するとき　どれを選ぶか考えてる間にAIプレイヤーが次のターンを始めました".
+  // Root cause: placing the die that triggers the modal already marks it placedMapId-wise, so
+  // turn-flow.getNextTurn (which pendingBuildChoice isn't part of) reports the *next* player's turn
+  // immediately -- if that's an AI, every pacing mode (instant/delayed/manual) would happily drive
+  // their whole turn while the human's modal was still open, silently racing ahead of the still-unmade
+  // choice. See driveOneAiStep's matching guard (the one that actually blocks the pump; this one just
+  // keeps hasAiWorkPending's own answer -- and therefore the manual-mode button's visibility -- honest).
+  if (pendingBuildChoice) return false;
   if (state.pendingChoices.some((c) => c.kind === 'SELECT_RESOURCE_CARDS' && isAiPlayer(c.playerId))) return true;
   if (state.round === 0) return false; // still waiting on the human's own resource choice
   if (state.phase === 'GAME_END') return false;
@@ -153,6 +163,11 @@ function hasAiWorkPending(state) {
  *   turn", which is not an error -- just nothing to pump).
  */
 function driveOneAiStep(state) {
+  // The real block -- see hasAiWorkPending's matching guard for the full story. pumpAiInstant's while
+  // loop calls this directly (not hasAiWorkPending) each iteration, so the guard has to live here too,
+  // not just in hasAiWorkPending, or 'instant' mode would still blow straight through the human's still-
+  // open BUILD/UPGRADE choice modal.
+  if (pendingBuildChoice) return false;
   const resourceChoice = state.pendingChoices.find((c) => c.kind === 'SELECT_RESOURCE_CARDS' && isAiPlayer(c.playerId));
   if (resourceChoice) {
     // Random, not simulate-and-score (2026-08-03, per user feedback: "初期資源、CON、JOBは現状は完全
