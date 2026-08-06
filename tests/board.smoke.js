@@ -145,10 +145,11 @@ function giveDie(state, playerId, value) {
 }
 
 // ---------------------------------------------------------------------------
-// Castle same-value stacking accumulates buildValue instead of using only the latest die
-// (2026-08-04, per user report: "ダイス目12を出そうとして複数のダイスを選択するやり方がわからない" --
-// a single die never exceeds 6, but M001-M006's DICE threshold goes up to 12, so reaching them requires
-// stacking 2+ same-value dice on one castle slot).
+// Castle stacking: the old unconditional same-value auto-stack is abolished (2026-08-06, per user
+// feedback: "ゾロ目は上におけるルールは廃止します") -- a second die can now only join an occupied castle
+// slot via GRANT_PLACE_ANYWHERE (any value, not just a match), and its value still sums into buildValue
+// (confirmed 2026-08-06: "新しいダイスの値も合計に加算される" -- a single die never exceeds 6, but
+// M001-M006's DICE threshold goes up to 12, so reaching them requires stacking 2+ dice on one slot).
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
@@ -159,9 +160,13 @@ function giveDie(state, playerId, value) {
   check('...buildValue is just this one die (5), M004 (DICE>=9) is not yet reachable', first.actionResult.pendingBuild.buildValue, 5);
   check('...M004 is absent from the candidate list at buildValue 5', first.actionResult.pendingBuild.candidates.some((c) => c.faceId === 'M004'), false);
 
-  const die2 = giveDie(state, 'P1', 5); // same value -- stacks onto the same slot instead of a new one
+  const die2 = giveDie(state, 'P1', 5); // same value, but NO GRANT_PLACE_ANYWHERE -- now blocked outright
+  const blocked = board.placeDice(state, index, { playerId: 'P1' }, die2.id, 'MAP008', 0);
+  check('A second matching-value die without GRANT_PLACE_ANYWHERE is blocked (no more free auto-stack)', blocked, { success: false, reason: 'SLOT_OCCUPIED' });
+
+  die2.placeAnywhereThisTurn = true; // GRANT_PLACE_ANYWHERE -- now it can join
   const second = board.placeDice(state, index, { playerId: 'P1' }, die2.id, 'MAP008', 0);
-  check('Stacking a second 5 onto the same castle slot succeeds', second.success, true);
+  check('...but succeeds once granted GRANT_PLACE_ANYWHERE', second.success, true);
   check('...buildValue is now the SUM of both stacked dice (5+5=10), not just the latest one', second.actionResult.pendingBuild.buildValue, 10);
   check('...M004 (DICE>=9, VP4, in this seed\'s shop) is now reachable', second.actionResult.pendingBuild.candidates.some((c) => c.faceId === 'M004'), true);
   check('Both dice are recorded as occupants of the same castle slot', state.maps['MAP008'].slots[0].map((o) => o.value), [5, 5]);
@@ -693,8 +698,8 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   check('A die already sitting on EX blocks a duplicate value on a different, non-EX slot', anyResult, { success: false, reason: 'DUPLICATE_VALUE_IN_AREA' });
 }
 {
-  // AREA009's EX supports unconditional same-value stacking (no GRANT_PLACE_ANYWHERE needed), and
-  // buildValue sums, same as the castle (confirmed: "合計判定でお願いします").
+  // AREA009's EX now behaves exactly like the castle (2026-08-06): a second die needs
+  // GRANT_PLACE_ANYWHERE to join, and buildValue sums either way (confirmed: "合計判定でお願いします").
   const state = freshStateWithShops();
   player(state, 'P1').resources.BZ = 20; // see the earlier castle blocks' comment on the affordability gate
   state.maps['MAP009'] = mapWithArea('MAP009', 'AREA009B', 6, 'P1');
@@ -704,13 +709,17 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   check('...buildValue is just this one die (5)', first.actionResult.pendingBuild.buildValue, 5);
 
   const die2 = giveDie(state, 'P1', 5); // matching value, no GRANT_PLACE_ANYWHERE
+  const blocked = board.placeDice(state, index, { playerId: 'P1' }, die2.id, 'MAP009', 5);
+  check('A second matching-value die without GRANT_PLACE_ANYWHERE is blocked on AREA009B EX too', blocked, { success: false, reason: 'SLOT_OCCUPIED' });
+
+  die2.placeAnywhereThisTurn = true;
   const second = board.placeDice(state, index, { playerId: 'P1' }, die2.id, 'MAP009', 5);
-  check('A second matching-value die stacks onto AREA009B EX without needing GRANT_PLACE_ANYWHERE', second.success, true);
+  check('...but succeeds with GRANT_PLACE_ANYWHERE', second.success, true);
   check('...buildValue is now the SUM of both stacked dice (5+5=10)', second.actionResult.pendingBuild.buildValue, 10);
 }
 {
-  // The SAME doubles-stacking does NOT apply to a non-AREA009 EX slot (AREA001B) -- a second
-  // matching-value die without GRANT_PLACE_ANYWHERE is blocked like any other occupied slot.
+  // A regular (non-AREA009) EX slot (AREA001B) -- a second matching-value die without
+  // GRANT_PLACE_ANYWHERE is blocked like any other occupied slot.
   const state = freshStateWithShops();
   state.maps['MAP001'] = mapWithArea('MAP001', 'AREA001B', 3, 'P1');
   const die1 = giveDie(state, 'P1', 4);
@@ -719,7 +728,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
 
   const die2 = giveDie(state, 'P1', 4); // matching value, no GRANT_PLACE_ANYWHERE
   const second = board.placeDice(state, index, { playerId: 'P1' }, die2.id, 'MAP001', 2);
-  check('A matching-value second die is blocked on a non-AREA009 EX slot (no doubles-stacking there)', second, { success: false, reason: 'SLOT_OCCUPIED' });
+  check('A matching-value second die is blocked on a non-AREA009 EX slot', second, { success: false, reason: 'SLOT_OCCUPIED' });
 }
 {
   // GRANT_PLACE_ANYWHERE lets the owner join ANY occupied EX slot regardless of value (not just at
@@ -767,7 +776,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   const d1 = giveDie(state, 'P1', 6);
   const d2 = giveDie(state, 'P1', 6);
   const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
-  check('Same-value group (6+6) still shares one slot (existing doubles-stacking rule)', state.maps[board.CASTLE_MAP_ID].slots.filter((s) => s.length > 0).length, 1);
+  check('Same-value group (6+6), claiming a fresh slot together, shares one slot', state.maps[board.CASTLE_MAP_ID].slots.filter((s) => s.length > 0).length, 1);
   check('...combined buildValue is 12', result.actionResult.pendingBuild.buildValue, 12);
 }
 {
@@ -788,19 +797,30 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   check('An unavailable die id fails cleanly', result, { success: false, reason: 'DIE_NOT_AVAILABLE' });
 }
 {
-  // buildValue must count a slot's *pre-existing* occupant too, not just this group's own dice (2026-08-02
-  // bug caught in headless verification) -- e.g. an earlier, unrelated single-die placeDice(6) already
-  // sitting on the castle, followed later by a placeDiceGroup([6,6]) that joins the same slot via the
-  // doubles-stacking rule: true combined value is 6+6+6=18, not just 12.
+  // A group joining a slot with a *pre-existing* occupant (2026-08-06: now needs GRANT_PLACE_ANYWHERE
+  // on *every* die in the bucket, confirmed -- "仮に片方のダイスがGRANT_PLACE_ANYWHERE...を使っていても
+  // もう片方のダイスが置けません") must count that pre-existing occupant's value too, not just this
+  // group's own dice (2026-08-02 bug caught in headless verification): true combined value is
+  // 6+6+6=18, not just the new pair's 12.
   const state = freshStateWithShops();
   player(state, 'P1').resources.BZ = 20; // see the earlier castle blocks' comment on the affordability gate
   const earlierDie = giveDie(state, 'P1', 6);
   board.placeDice(state, index, { playerId: 'P1' }, earlierDie.id, board.CASTLE_MAP_ID, 0);
+
   const d1 = giveDie(state, 'P1', 6);
   const d2 = giveDie(state, 'P1', 6);
+  const onlyOneBypassed = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
+  check('Without GRANT_PLACE_ANYWHERE on both dice, the whole group is refused (value 6 already on board)', onlyOneBypassed, { success: false, reason: 'NO_LEGAL_SLOT_FOR_GROUP' });
+  d1.placeAnywhereThisTurn = true; // only ONE of the two -- still not enough
+  const stillBlocked = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
+  check('...one bypass-holding die in the pair is still not enough -- the other one has none', stillBlocked, { success: false, reason: 'NO_LEGAL_SLOT_FOR_GROUP' });
+
+  d2.placeAnywhereThisTurn = true; // now BOTH carry it
   const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
-  check('Group joining a slot with a pre-existing occupant sums all 3 dice (18), not just the new 2 (12)', result.actionResult.pendingBuild.buildValue, 18);
+  check('Once both dice carry GRANT_PLACE_ANYWHERE, the group joins the pre-existing slot', result.success, true);
+  check('...buildValue sums all 3 dice (18), not just the new pair (12)', result.actionResult.pendingBuild.buildValue, 18);
   check('...all 3 dice really do sit on the same slot', state.maps[board.CASTLE_MAP_ID].slots.filter((s) => s.length > 0).map((s) => s.length), [3]);
+  check('...neither of the 2 new dice counts toward next round\'s turn order', state.maps[board.CASTLE_MAP_ID].slots.find((s) => s.length === 3).filter((o) => o.dieId === d1.id || o.dieId === d2.id).every((o) => o.countsForTurnOrder === false), true);
 }
 
 // ---------------------------------------------------------------------------

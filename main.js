@@ -1938,13 +1938,19 @@ function renderBoard(state, next) {
         const occupants = (mapState.slots[i] || []);
         const slotEl = el('div', 'slot');
         if (occupants.length > 0) {
-          // A slot can hold more than one die (the castle's same-value stacking, or
-          // GRANT_PLACE_ANYWHERE joining an occupied slot) -- confirmed 2026-07-30: for now, just
-          // show the topmost (most recently placed) one, no offset/stacked visual. Simpler and
-          // sufficient per the user; revisit if it turns out to hide something the player needs to see.
+          // A slot can hold more than one die -- now only ever via GRANT_PLACE_ANYWHERE joining an
+          // already-occupied slot (2026-08-06: the castle/AREA009's own same-value auto-stacking is
+          // abolished, see board.js's slotAcceptsValue). Which one displays depends on the AREA
+          // (2026-08-06, per user feedback): everywhere except 王宮 shows the newest (matches the
+          // pre-existing 2026-07-30 "just show the topmost, no offset" convention), but at 王宮
+          // specifically the display stays on the *original* die -- newly GRANT_PLACE_ANYWHERE'd dice
+          // join underneath without disturbing what's shown (confirmed: they don't count toward next
+          // round's turn order either, board.js's countsForTurnOrder). occupants[0] is always that
+          // original die at 王宮, since (per the same rule) nothing can join an occupied slot there
+          // without GRANT_PLACE_ANYWHERE in the first place.
           slotEl.classList.add('slot--filled');
           const stack = el('div', 'slot__stack');
-          const topOccupant = occupants[occupants.length - 1];
+          const topOccupant = isCastle ? occupants[0] : occupants[occupants.length - 1];
           // Look up the real die (2026-08-0X bug fix, per user report: "wDをSLOTにおいた後おいたダイス
           // が色Dになっています") -- this used to hardcode kind:'COLOR', so a placed white die (wD) was
           // drawn tinted in the player's own color instead of white. occupants only store
@@ -2657,6 +2663,22 @@ function actingHumanPlayerId(state, next) {
   return next.playerId;
 }
 
+/** True if some *proper* (non-empty, not-the-whole-set) subset of `values` already sums to >=cap --
+ * i.e. `values` contains at least one redundant/unnecessary element for reaching cap (2026-08-06, per
+ * user feedback on the castle/AREA009 monument dice-selection UI: "組み合わせで合計が12以上になる組み
+ * 合わせは選べない...1，6，6の順番で選んでもダメ"). Brute-forces every subset via bitmask -- values.length
+ * is always small (a player never holds more than a handful of unplaced dice at once), so this is cheap.
+ * Used to reject a die pick that would make the selection non-minimal, regardless of pick order. */
+function hasQualifyingProperSubset(values, cap) {
+  const n = values.length;
+  for (let mask = 1; mask < (1 << n) - 1; mask++) {
+    let sum = 0;
+    for (let i = 0; i < n; i++) if (mask & (1 << i)) sum += values[i];
+    if (sum >= cap) return true;
+  }
+  return false;
+}
+
 function renderPlayers(state, next) {
   const container = document.getElementById('players');
   container.innerHTML = '';
@@ -2717,10 +2739,14 @@ function renderPlayers(state, next) {
         // Multi-select toggle (2026-08-02, per user feedback: "1個目のダイスをクリック 2個目のダイスを
         // クリック...モニュメントを建築することは出来ます") -- clicking a die toggles its membership in
         // selectedDieIds rather than replacing a single value. Mixed values are allowed (the castle/
-        // AREA009 group-placement path, see placeSelectedDiceGroup, doesn't require doubles); the only
-        // cap is the combined face-value total reaching 12 (the highest monument threshold, confirmed
-        // 2026-08-02: "ダイス目の合計が12以上ならそれ以上選択できない") -- once at/over that, adding
-        // another die is silently ignored rather than erroring (there's nothing more it could unlock).
+        // AREA009 group-placement path, see placeSelectedDiceGroup, doesn't require doubles), capped at
+        // 12 (the highest monument threshold). **No redundant dice** (2026-08-06, per user feedback,
+        // replacing the old plain "running sum < 12" cap): a die can't be added if doing so would leave
+        // some *other* subset of the resulting selection already summing to >=12 on its own -- e.g.
+        // selecting 1,6,6 must be blocked the moment the 2nd 6 goes in (6+6 alone already reaches 12,
+        // making the 1 dead weight), and this has to hold regardless of pick order (confirmed: "1，6，6
+        // の順番で選んでもダメ"), not just "was the running total already >=12 before this click". See
+        // hasQualifyingProperSubset's own doc.
         dieNode.addEventListener('click', () => {
           const idx = selectedDieIds.indexOf(die.id);
           if (idx !== -1) {
@@ -2728,8 +2754,8 @@ function renderPlayers(state, next) {
           } else if (selectedDieIds.length === 0) {
             selectedDieIds.push(die.id);
           } else {
-            const currentSum = selectedDieIds.reduce((sum, id) => sum + player.dice.find((d) => d.id === id).value, 0);
-            if (currentSum < 12) selectedDieIds.push(die.id);
+            const prospectiveValues = [...selectedDieIds, die.id].map((id) => player.dice.find((d) => d.id === id).value);
+            if (!hasQualifyingProperSubset(prospectiveValues, 12)) selectedDieIds.push(die.id);
           }
           render(STATE);
         });
