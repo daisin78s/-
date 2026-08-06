@@ -162,7 +162,12 @@ function giveDie(state, playerId, value) {
 
   const die2 = giveDie(state, 'P1', 5); // same value, but NO GRANT_PLACE_ANYWHERE -- now blocked outright
   const blocked = board.placeDice(state, index, { playerId: 'P1' }, die2.id, 'MAP008', 0);
-  check('A second matching-value die without GRANT_PLACE_ANYWHERE is blocked (no more free auto-stack)', blocked, { success: false, reason: 'SLOT_OCCUPIED' });
+  // SLOT_NOT_PREFERRED (2026-08-06's new "leftmost available ANY slot only" rule -- see
+  // isAllowedSlotForValue's own doc) fires before the SLOT_OCCUPIED check even gets a chance to: slot1
+  // is a genuinely fresh, still-available ANY slot, so it -- not a second die crammed into slot0 -- is
+  // where this die is supposed to go. Both rules agree the placement is illegal; this just confirms
+  // which one actually catches it first when both would.
+  check('A second matching-value die without GRANT_PLACE_ANYWHERE is blocked (no more free auto-stack, and a fresh slot is preferred anyway)', blocked, { success: false, reason: 'SLOT_NOT_PREFERRED' });
 
   die2.placeAnywhereThisTurn = true; // GRANT_PLACE_ANYWHERE -- now it can join
   const second = board.placeDice(state, index, { playerId: 'P1' }, die2.id, 'MAP008', 0);
@@ -559,6 +564,51 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   // from a *different*, non-EX slot -- there is none left to test here (SLOT1 already used), so instead
   // confirm a fresh SLOT1-value die is rejected as SLOT_OCCUPIED (SLOT1 itself, unrelated to EX) --
   // the real "EX blocks others" case is covered by the next block using a still-open ANY-valued slot.
+}
+
+// ---------------------------------------------------------------------------
+// Numbered-slot-over-ANY / leftmost-ANY-only placement rule (2026-08-06, per user feedback: "SLOTが
+// 6とANYの時 ダイス6はANYではなく6に置かなければならない...ANY ANY ANYの時は1番左のANYしか選択できない"
+// -- see isAllowedSlotForValue's own doc). AREA005A (SLOT1=6, SLOT2=ANY) is the exact "6 and ANY"
+// example given; AREA007 (SLOT1-3=ANY, ANY, ANY) covers the leftmost-only rule with no numbered slot
+// to compete at all.
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  state.maps['MAP005'] = mapWithArea('MAP005', 'AREA005A', 2, null); // SLOT1=6, SLOT2=ANY
+  player(state, 'P1').resources.K = 5; // AREA005A's ACTION is CHANGE(K,C,ALL) -- fund it so a legal placement isn't also blocked by NO_EFFECT
+  const die = giveDie(state, 'P1', 6);
+  const onAny = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP005', 1); // SLOT2=ANY
+  check('A 6 may not use the ANY slot while SLOT1 (its own exact match) is still open', onAny, { success: false, reason: 'SLOT_NOT_PREFERRED' });
+  const onNumbered = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP005', 0); // SLOT1=6
+  check('...but placing it on SLOT1 (the exact numbered match) succeeds', onNumbered.success, true);
+}
+{
+  const state = freshStateWithShops();
+  state.maps['MAP007'] = mapWithArea('MAP007', 'AREA007', 3, null); // SLOT1-3 all ANY
+  const die = giveDie(state, 'P1', 4);
+  // AREA007's own ACTION (CHANGE((A,B,C),D)) pays 1 of *each* A/B/C together, not just one of them --
+  // fund all three so a legal placement isn't also blocked by NO_EFFECT.
+  Object.assign(player(state, 'P1').resources, { A: 5, B: 5, C: 5 });
+  const middle = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP007', 1); // SLOT2, not leftmost
+  check('Among several equally-empty ANY slots, only the leftmost (SLOT1) is selectable', middle, { success: false, reason: 'SLOT_NOT_PREFERRED' });
+  const leftmost = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP007', 0); // SLOT1
+  check('...SLOT1 itself succeeds', leftmost.success, true);
+}
+{
+  // placeDiceGroup respects the same rule for each of its own value-buckets (see the dry-run's
+  // isAllowedSlotForValue call, threaded through slotsForAllowedCheck so an earlier bucket in this same
+  // atomic group action correctly counts as "claimed" even though nothing's actually been pushed to
+  // map.slots yet).
+  const state = freshStateWithShops();
+  state.maps['MAP005'] = mapWithArea('MAP005', 'AREA005A', 2, null); // SLOT1=6, SLOT2=ANY
+  player(state, 'P1').resources.BZ = 20;
+  const d1 = giveDie(state, 'P1', 6);
+  const d2 = giveDie(state, 'P1', 3); // no numbered SLOT for 3 here -- must fall back to the ANY slot
+  const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], 'MAP005');
+  check('Group placement sends the 6 to its own numbered slot and the 3 to the remaining ANY slot', result.success, true);
+  check('...6 landed on SLOT1', d1.placedMapId === 'MAP005' && state.maps['MAP005'].slots[0].some((o) => o.dieId === d1.id), true);
+  check('...3 landed on SLOT2 (ANY)', d2.placedMapId === 'MAP005' && state.maps['MAP005'].slots[1].some((o) => o.dieId === d2.id), true);
 }
 
 // ---------------------------------------------------------------------------

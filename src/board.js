@@ -137,6 +137,30 @@ function canAffordFee(player, amount) {
  *
  * Emits a PLACE(mapId) event (e.g. for JOB002A) before resolving ACTION.
  */
+/**
+ * Whether slotIndex is the slot a `value`-die is allowed to land on, among slots that would otherwise
+ * (base value-match + occupancy) accept it (2026-08-06, per user feedback: "SLOTが6とANYの時 ダイス6は
+ * ANYではなく6に置かなければならない...ANY ANY ANYの時は1番左のANYしか選択できない"). Two priority
+ * rules, checked only when `requirements[slotIndex]` is "ANY" (a die on its own exact-numbered slot, or
+ * an EX slot, is never subject to either):
+ *  1. If some *other*, currently-unoccupied slot in this same area has a specific numbered requirement
+ *     equal to `value`, that slot is mandatory -- `value` may not use an "ANY" slot instead, even though
+ *     "ANY" would otherwise accept it.
+ *  2. Otherwise (no numbered slot claims this value), only the leftmost (lowest-index) currently-
+ *     unoccupied "ANY" slot is selectable -- several interchangeable empty "ANY" slots aren't a
+ *     meaningful choice.
+ * "EX" slots are invisible to both rules (never counted as the "numbered slot" in rule 1 -- their
+ * requirement string is "EX", never a number -- and never counted as an "ANY" slot in rule 2); they
+ * keep their own separate, pre-existing acceptance logic entirely. Pure -- does not mutate slots.
+ */
+function isAllowedSlotForValue(requirements, slots, slotIndex, value) {
+  if (requirements[slotIndex] !== 'ANY') return true; // caller's own base checks handle non-ANY slots
+  const numberedSlotAvailable = requirements.some((r, i) => r === value && slots[i].length === 0);
+  if (numberedSlotAvailable) return false;
+  const leftmostAnyIndex = requirements.findIndex((r, i) => r === 'ANY' && slots[i].length === 0);
+  return slotIndex === leftmostAnyIndex;
+}
+
 function placeDice(state, index, context, dieId, mapId, slotIndex) {
   const player = state.players.find((p) => p.id === context.playerId);
   const die = player.dice.find((d) => d.id === dieId && d.placedMapId === null && !d.passed);
@@ -152,15 +176,20 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
   }
   const requirement = requirements[slotIndex];
   const isExSlot = requirement === 'EX';
+  const bypass = die.placeAnywhereThisTurn;
   if (isExSlot) {
     if (map.feeOwnerId !== context.playerId) return { success: false, reason: 'EX_NOT_OWNER' };
     // Any die, any value -- no VALUE_MISMATCH check for EX.
   } else if (requirement !== 'ANY' && requirement !== die.value) {
     return { success: false, reason: 'VALUE_MISMATCH', requirement, dieValue: die.value };
+  } else if (!bypass && !isAllowedSlotForValue(requirements, map.slots, slotIndex, die.value)) {
+    // 2026-08-06, per user feedback: "SLOTが6とANYの時 ダイス6はANYではなく6に置かなければならない...
+    // ANY ANY ANYの時は1番左のANYしか選択できない" -- see isAllowedSlotForValue's own doc. GRANT_PLACE_
+    // ANYWHERE waives this the same way it waives everything else in this function.
+    return { success: false, reason: 'SLOT_NOT_PREFERRED' };
   }
 
   const targetOccupants = map.slots[slotIndex];
-  const bypass = die.placeAnywhereThisTurn;
   let wouldBeBlocked = false;
   if (targetOccupants.length > 0) {
     // Always blocked without GRANT_PLACE_ANYWHERE now (2026-08-06) -- see this function's own doc.
@@ -447,9 +476,16 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   const existingSumBySlot = new Map(); // targetSlot -> sum of pre-existing occupants' values
   for (const [value, ids] of dieIdsByValue) {
     const bypass = ids.every((id) => dice.find((d) => d.id === id).placeAnywhereThisTurn);
+    // isAllowedSlotForValue reads real occupancy (map.slots[i].length) to find "the leftmost still-
+    // available slot" -- but during this dry run, a slot claimed by an *earlier* value-bucket in this
+    // same group action (usedSlots) hasn't actually been pushed to map.slots yet, so it would still look
+    // "available" and wrongly win that comparison. This virtual view marks usedSlots members occupied
+    // for that check only, without touching the real (not-yet-committed) map.slots array itself.
+    const slotsForAllowedCheck = map.slots.map((occ, i) => (usedSlots.has(i) ? [{ virtual: true }] : occ));
     let targetSlot = null;
     for (let i = 0; i < requirements.length; i++) {
       if (usedSlots.has(i)) continue;
+      if (!bypass && !isAllowedSlotForValue(requirements, slotsForAllowedCheck, i, value)) continue;
       if (slotAcceptsValue(map, mapId, playerId, requirements[i], map.slots[i], value, bypass)) { targetSlot = i; break; }
     }
     if (targetSlot === null) return { success: false, reason: 'NO_LEGAL_SLOT_FOR_GROUP' };
