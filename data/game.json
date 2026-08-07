@@ -1581,7 +1581,7 @@
       "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": ""
+      "INST": "TAPした時、BZを得る\nこのターンA,B,Cカードを建築できない"
     },
     {
       "ID": "JOB008",
