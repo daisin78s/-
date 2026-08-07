@@ -33,7 +33,7 @@
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
-const { loadGameData, buildDataIndex } = require('../src/data-loader');
+const { loadGameData, buildDataIndex, getCardRow } = require('../src/data-loader');
 const { buildEvalTable } = require('../src/ai/eval-table');
 const { playGame, AREA_CARD_BY_MAP } = require('../src/ai/game-runner');
 
@@ -44,14 +44,40 @@ const XLSX_WRITE_SCRIPT = path.join(PROJECT_ROOT, 'tools', 'ai_data_write.py');
 const DEFAULT_XLSX_PATH = path.join(PROJECT_ROOT, 'AI.DATA.xlsx');
 const PLAYER_NAMES = ['Alice', 'Bob', 'Carol', 'Dan'];
 
-/** Which ABCM rows the new "使用回数" column (2026-08-07, per user spec) actually applies to: the 8
- * A-deck cards (usage = usage fee collected via their AREA, see AREA_CARD_BY_MAP) and B008A (usage = wD
- * granted at build time). Every other row (B/C decks besides B008A, M001-M012, "D") has no such concept
- * -- per user spec, those stay blank ("B008Bは空欄でOK", "Dも空欄でOK") rather than showing a misleading
- * 0. Checked at write time (see writeReport below), not during accumulation -- an entry's usageSum simply
- * never gets touched for an ineligible id, so this only decides whether a real (possibly zero) sum gets
- * reported as an average or suppressed as inapplicable. */
-const USAGE_ELIGIBLE_ABCM_FACES = new Set([...Object.values(AREA_CARD_BY_MAP), 'B008A']);
+/** The 8 A-deck AREA-ownership faces (see AREA_CARD_BY_MAP's own doc) -- usage = fee collected via their
+ * AREA, tracked separately from the generic TAP-count path below since it isn't TAP-driven at all. */
+const AREA_FEE_FACES = new Set(Object.values(AREA_CARD_BY_MAP));
+
+/** faceId's tier-A<->tier-B sibling (A/B/C decks only ever have these two tiers -- see main.js's own
+ * siblingFaceId, same A<->B swap-the-last-letter logic, duplicated here rather than shared since main.js
+ * is a browser-only classic script, not a requireable module). */
+function siblingFaceId(faceId) {
+  return faceId.replace(/[AB]$/, (m) => (m === 'A' ? 'B' : 'A'));
+}
+
+/** Which ABCM rows the new "使用回数" column (2026-08-07, per user spec) actually applies to, and what
+ * "usage" means for each:
+ *  - The 8 A-deck cards (AREA_FEE_FACES): usage fee collected via their AREA (accumulated separately,
+ *    see areaFeeByRoundAndCard's own doc in game-runner.js).
+ *  - B008A: wD granted at build time (b008aWhiteDiceGained).
+ *  - Every other B/C-deck face WITH a real TAP field (data-driven check below -- B004A/B/B008A/B all have
+ *    an empty TAP, confirmed via data/game.json, so this naturally excludes them without a hardcoded
+ *    list): TAP count, from activationCounts. A tier-A face's own count is a *cumulative* total including
+ *    whatever its tier-B sibling racked up after upgrading (2026-08-07, per user spec: "グレードアップ
+ *    するカードはグレードアップ後にTAPした回数も含みます" -- e.g. C001A taps 3 times before upgrading,
+ *    then (as C001B) 2 more times after -- C001A's row shows 5, C001B's row shows its own 2, not double-
+ *    counted). A/M cards have no TAP field at all, so they fall through to "not eligible" here regardless
+ *    (their own usage, if any, already came from the fee/B008A branches above).
+ * isUsageEligible/usageAmount are checked/computed at write time (see writeReport below) and at
+ * accumulation time (the build loop below) respectively -- an entry's usageSum simply never gets touched
+ * for an ineligible id, so eligibility only decides whether a real (possibly zero) sum gets reported as
+ * an average or suppressed as inapplicable (per user spec: "B008Bは空欄でOK", "Dも空欄でOK", and by the
+ * same logic every TAP-less B/C face too). */
+function isUsageEligible(index, id) {
+  if (AREA_FEE_FACES.has(id) || id === 'B008A') return true;
+  if (!/^[BC]\d{3}[AB]$/.test(id)) return false; // only B/C-deck faces can reach the TAP-field check
+  return !!getCardRow(index, id).TAP;
+}
 
 /** One row per player (all 4, not just whoever crossed the threshold -- per user feedback: "4人とも記録
  * それぞれの得点も") for a game that had at least one high score. Deliberately limited to "score-relevant
@@ -111,8 +137,8 @@ function main() {
   // conjob["CON001A\tJOB001"] = { count, scoreSum }
   const conjob = new Map();
   // abcm["A001A"][1] = { count, scoreSum, usageSum } -- 1-4 for rounds, plus the "D" row for colored-die
-  // gains. usageSum (2026-08-07) only ever gets added to for USAGE_ELIGIBLE_ABCM_FACES ids -- see that
-  // set's own doc.
+  // gains. usageSum (2026-08-07) only ever gets added to for isUsageEligible ids -- see that function's
+  // own doc.
   const abcm = new Map();
   function abcmEntry(id, round) {
     if (!abcm.has(id)) {
@@ -176,12 +202,17 @@ function main() {
           const e = abcmEntry(faceId, round);
           e.count++;
           e.scoreSum += detail.finalScore;
-          // "使用回数" (2026-08-07, per user spec) -- only meaningful for B008A (wD granted at build
-          // time) and the A-deck's 8 fee-generating cards (see USAGE_ELIGIBLE_ABCM_FACES's own doc); at
-          // most one of these two conditions can ever apply to a given faceId.
+          // "使用回数" (2026-08-07, per user spec) -- see isUsageEligible's own doc; exactly one of
+          // these three branches can ever apply to a given faceId (B008A / an A-deck fee card / a
+          // TAP-bearing B or C face are mutually exclusive sets).
           if (faceId === 'B008A' && detail.b008aWhiteDiceGained !== null) e.usageSum += detail.b008aWhiteDiceGained;
           const feeForThisCard = (detail.areaFeeByRoundAndCard[round] || {})[faceId];
           if (feeForThisCard !== undefined) e.usageSum += feeForThisCard;
+          if (!AREA_FEE_FACES.has(faceId) && faceId !== 'B008A' && /^[BC]\d{3}[AB]$/.test(faceId) && getCardRow(index, faceId).TAP) {
+            const ownTaps = activationCounts[faceId] || 0;
+            const upgradeBonus = faceId.endsWith('A') ? (activationCounts[siblingFaceId(faceId)] || 0) : 0;
+            e.usageSum += ownTaps + upgradeBonus;
+          }
         }
         if (detail.colorDiceGainedByRound[round] > 0) {
           const e = abcmEntry('D', round);
@@ -220,7 +251,7 @@ function main() {
     const abcmOut = {};
     for (const [id, byRound] of abcm) {
       abcmOut[id] = {};
-      const usageEligible = USAGE_ELIGIBLE_ABCM_FACES.has(id);
+      const usageEligible = isUsageEligible(index, id);
       for (const round of [1, 2, 3, 4]) {
         const e = byRound[round];
         abcmOut[id][round] = {
