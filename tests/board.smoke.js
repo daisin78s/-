@@ -176,6 +176,29 @@ function giveDie(state, playerId, value) {
   check('...M004 (DICE>=9, VP4, in this seed\'s shop) is now reachable', second.actionResult.pendingBuild.candidates.some((c) => c.faceId === 'M004'), true);
   check('Both dice are recorded as occupants of the same castle slot', state.maps['MAP008'].slots[0].map((o) => o.value), [5, 5]);
 }
+{
+  // 2026-08-07, per user report: using JOB003 (SET_DICE_ANY + GRANT_PLACE_ANYWHERE) to set a die to a
+  // value already sitting on the castle, then placing it into a DIFFERENT, empty slot instead of
+  // stacking onto the matching one -- this used to succeed (GRANT_PLACE_ANYWHERE wrongly waived the
+  // AREA-wide duplicate-value check for empty slots too, not just the occupied-slot check it's actually
+  // meant for), producing two independent same-value occupants in one AREA. Confirmed fix: a duplicate
+  // value's only legal home now is the slot(s) that already hold it -- an empty slot elsewhere in the
+  // AREA is refused even with GRANT_PLACE_ANYWHERE, while the matching occupied slot still succeeds.
+  const state = freshStateWithShops();
+  player(state, 'P1').resources.BZ = 20;
+  const die1 = giveDie(state, 'P1', 5);
+  board.placeDice(state, index, { playerId: 'P1' }, die1.id, 'MAP008', 0); // slot0 now holds a 5
+
+  const die2 = giveDie(state, 'P1', 5);
+  die2.placeAnywhereThisTurn = true; // GRANT_PLACE_ANYWHERE
+  const wrongSlot = board.placeDice(state, index, { playerId: 'P1' }, die2.id, 'MAP008', 1); // slot1, empty
+  check('Placing the duplicate value into a DIFFERENT empty slot is refused even with GRANT_PLACE_ANYWHERE', wrongSlot, { success: false, reason: 'DUPLICATE_VALUE_IN_AREA' });
+  check('...the die was never actually placed', player(state, 'P1').dice.find((d) => d.id === die2.id).placedMapId, null);
+
+  const rightSlot = board.placeDice(state, index, { playerId: 'P1' }, die2.id, 'MAP008', 0); // slot0, the matching one
+  check('...but placing it onto the SAME slot as the matching value still succeeds', rightSlot.success, true);
+  check('Both dice ended up stacked on slot0, not spread across two slots', state.maps['MAP008'].slots[0].map((o) => o.value), [5, 5]);
+}
 
 // ---------------------------------------------------------------------------
 // BUILD candidates + resolveBuild(BUILD_NEW)

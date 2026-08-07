@@ -190,21 +190,29 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
   }
 
   const targetOccupants = map.slots[slotIndex];
-  let wouldBeBlocked = false;
   if (targetOccupants.length > 0) {
-    // Always blocked without GRANT_PLACE_ANYWHERE now (2026-08-06) -- see this function's own doc.
-    wouldBeBlocked = true;
+    // Occupied: blocked without GRANT_PLACE_ANYWHERE (2026-08-06) -- but bypass DOES waive this,
+    // value-independent ("値の一致は不問"), letting the die join whichever occupied slot the player
+    // targets. See this function's own doc.
+    if (!bypass) return { success: false, reason: 'SLOT_OCCUPIED' };
   } else if (!isExSlot) {
-    wouldBeBlocked = map.slots.some((occ, i) => i !== slotIndex && occ.some((o) => o.value === die.value));
+    // Empty target slot: blocked if this die's value duplicates one already sitting elsewhere in the
+    // AREA -- and, unlike the occupied-slot branch above, NEVER waived by GRANT_PLACE_ANYWHERE
+    // (2026-08-07, per user feedback: using JOB003 to set a die to a value already on the board, then
+    // placing it via GRANT_PLACE_ANYWHERE into a *different*, empty slot instead of stacking onto the
+    // matching one, produced two independent same-value occupants in one AREA -- not what the ability is
+    // for. GRANT_PLACE_ANYWHERE exists so a die can join the slot a conflicting value already occupies,
+    // not to spawn a second one elsewhere; a duplicate value's only legal home is the slot(s) that
+    // already hold it). previously this shared the same bypass flag as the occupied-slot branch, which
+    // is exactly what let this slip through.
+    const duplicateElsewhere = map.slots.some((occ, i) => i !== slotIndex && occ.some((o) => o.value === die.value));
+    if (duplicateElsewhere) return { success: false, reason: 'DUPLICATE_VALUE_IN_AREA' };
   }
-  // (isExSlot && targetOccupants.length === 0): wouldBeBlocked stays false -- placing onto an empty EX
-  // slot is never blocked by a duplicate value sitting elsewhere in the AREA (confirmed: "EXはどんな
-  // ダイスでも置けます すでに同AREA別SLOTに置かれているダイスと同じ目でも"). The reverse direction (an
-  // EX occupant blocking some *other* slot) still goes through the normal map.slots.some(...) check
-  // above whenever that OTHER slot is the one being placed into, so this asymmetry is deliberate.
-  if (wouldBeBlocked && !bypass) {
-    return { success: false, reason: targetOccupants.length > 0 ? 'SLOT_OCCUPIED' : 'DUPLICATE_VALUE_IN_AREA' };
-  }
+  // (isExSlot && targetOccupants.length === 0): never blocked by a duplicate value sitting elsewhere in
+  // the AREA (confirmed: "EXはどんなダイスでも置けます すでに同AREA別SLOTに置かれているダイスと同じ目
+  // でも"). The reverse direction (an EX occupant blocking some *other* slot) still goes through the
+  // normal map.slots.some(...) check above whenever that OTHER slot is the one being placed into, so
+  // this asymmetry is deliberate.
 
   // Stacking (now GRANT_PLACE_ANYWHERE-only, see this function's own doc) sums to a combined buildValue
   // -- a lone die only ever rolls 1-6, but M001-M006's DICE threshold goes up to 12, so reaching those
@@ -247,7 +255,12 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
     dieId,
     value: die.value,
     seq: state.placementSeq,
-    countsForTurnOrder: !(bypass && wouldBeBlocked),
+    // False only when this placement actually needed GRANT_PLACE_ANYWHERE to join an occupied slot
+    // (confirmed: dice placed that way don't count toward next round's turn order). By this point an
+    // empty target slot can no longer have needed the bypass at all -- the one thing bypass used to also
+    // waive for empty slots (a duplicate value elsewhere in the AREA) is now blocked outright above,
+    // never reaching here (2026-08-07) -- so occupancy is the only remaining bypass-relevant case.
+    countsForTurnOrder: !(bypass && targetOccupants.length > 0),
   });
   chargeUsageFeeIfOwed(state, map, context.playerId);
 
@@ -385,14 +398,19 @@ function previewPlaceDice(state, index, context, dieId, mapId, slotIndex) {
 /** Pure (no mutation) check: could `value` legally land on this slot right now, given mapId/playerId
  * and the slot's current requirement/occupants -- the same rules placeDice() enforces above, factored
  * out so placeDiceGroup's dry-run pass (below) can't drift from them. `bypass` (GRANT_PLACE_ANYWHERE,
- * default false) waives the occupied/duplicate-value checks exactly like placeDice's own `bypass` local
- * does -- still NOT the slot's base value/EX-ownership requirement, which always applies regardless
- * (added 2026-08-0X so the UI's slot-highlight preview can reuse this instead of re-deriving the rule a
- * third time). An occupied slot is always blocked without bypass now (2026-08-06, per user feedback --
- * the castle/AREA009's old same-value auto-stack exception is abolished, matching placeDice's own
- * removal above); placeDiceGroup passes bypass=true for a value-bucket only when *every* die in it
- * individually carries placeAnywhereThisTurn (confirmed: one die in a pair having the ability isn't
- * enough for the pair to join together -- the other die still can't get in). */
+ * default false) waives the occupied-slot check exactly like placeDice's own `bypass` local does -- still
+ * NOT the slot's base value/EX-ownership requirement, which always applies regardless (added 2026-08-0X
+ * so the UI's slot-highlight preview can reuse this instead of re-deriving the rule a third time). An
+ * occupied slot is always blocked without bypass now (2026-08-06, per user feedback -- the castle/
+ * AREA009's old same-value auto-stack exception is abolished, matching placeDice's own removal above);
+ * placeDiceGroup passes bypass=true for a value-bucket only when *every* die in it individually carries
+ * placeAnywhereThisTurn (confirmed: one die in a pair having the ability isn't enough for the pair to
+ * join together -- the other die still can't get in). An EMPTY slot's duplicate-value-elsewhere check is
+ * NEVER waived by bypass, even though it used to be (2026-08-07, per user feedback: using GRANT_PLACE_
+ * ANYWHERE to place a value already on the board into some *other*, empty slot instead of stacking onto
+ * the matching one produced two independent same-value occupants in one AREA -- see placeDice's own doc
+ * on this exact split for the full reasoning). A duplicate value's only legal home is the slot(s) that
+ * already hold it. */
 function slotAcceptsValue(map, mapId, playerId, requirement, occupants, value, bypass = false) {
   const isExSlot = requirement === 'EX';
   if (isExSlot) {
@@ -402,7 +420,6 @@ function slotAcceptsValue(map, mapId, playerId, requirement, occupants, value, b
   }
   if (occupants.length > 0) return bypass;
   if (isExSlot) return true; // empty EX slot: never blocked by a duplicate value elsewhere (see placeDice's doc)
-  if (bypass) return true;
   return !map.slots.some((occ) => occ.some((o) => o.value === value));
 }
 
