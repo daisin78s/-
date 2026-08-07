@@ -983,6 +983,7 @@ function emit(state, index, playerId, eventName, actualValue, context) {
       if (!eventArgsMatch(cmd.event.args, actualValue)) continue;
       const result = runCommand(state, index, context, cmd.effect);
       fired.push({ physicalId, cmd, result });
+      notifyActivation(state, playerId, physicalId, inst.currentFaceId, 'PASSIVE');
     }
     if (!inst.tapped) {
       for (const cmd of findOnHandlers(row, 'TAP', eventName)) {
@@ -994,12 +995,46 @@ function emit(state, index, playerId, eventName, actualValue, context) {
   return { fired, availableReactions };
 }
 
+// ---------------------------------------------------------------------------
+// Activation listener (2026-08-07, for tools/ai_data_report.js's "使用回数" stat only -- see the user's
+// spec: "使用回数はTAPがあるJOB ABCカードはTAPした回数です JOB006は発動した回数") -- an optional, opt-in
+// hook the AI batch-report tooling registers once per game to count how many times each card's
+// PASSIVE/TAP actually fired. Neither is otherwise observable from outside this module: a PASSIVE
+// reaction resolves silently inside emit() with no corresponding Move at all (see game-runner.js's
+// movesTaken, which only records player-chosen Moves), and a TAP reaction resolved in AUTO mode (see
+// emitAndResolve below) likewise produces no discrete Move -- only a player-driven BARE_TAP/TAP_REACTION
+// move does, which tools/ai_data_report.js can already read straight off movesTaken without this. Left
+// unset (null) by every other caller, including the live human game in main.js (a separate module
+// instance entirely, loaded browser-side -- see that file's own doc) -- zero cost, zero behavior change
+// when unused.
+//
+// `state` is passed through to the listener (2026-08-07, corrected after an initial version wildly
+// overcounted -- e.g. JOB005 showing 2000+ activations in a single 4-round game): AIPlayer/Simulator
+// evaluate candidate moves by running this exact same code against throwaway `cloneState(state)` clones
+// (see ai/move-generator.js, ai/simulator.js) purely to score them, then discard the clone -- every one
+// of those speculative, never-committed runs was firing this listener too, since emit()/
+// resolveTapReaction/useBareTapAbility have no notion of "real vs. simulated". The registered listener
+// is expected to compare `state` against the one real GameState object it captured at game start (never
+// replaced by reference across a whole game -- even placeDice's own fee-rollback mutates the same object
+// in place rather than swapping it, see that function's own doc) and ignore any other. */
+let activationListener = null;
+function setActivationListener(fn) {
+  activationListener = fn;
+}
+/** @param {'PASSIVE'|'TAP'} kind */
+function notifyActivation(state, playerId, physicalId, faceId, kind) {
+  if (activationListener) activationListener(state, playerId, physicalId, faceId, kind);
+}
+
 /** Player elects to tap physicalId to resolve a previously-offered TAP reaction (see emit()). */
 function resolveTapReaction(state, index, context, physicalId, effect) {
   const inst = state.cards[physicalId];
   if (inst.tapped) return { success: false, reason: 'ALREADY_TAPPED' };
   const result = runCommand(state, index, { ...context, sourcePhysicalId: physicalId }, effect);
-  if (result.success) inst.tapped = true;
+  if (result.success) {
+    inst.tapped = true;
+    notifyActivation(state, context.playerId, physicalId, inst.currentFaceId, 'TAP');
+  }
   return result;
 }
 
@@ -1071,12 +1106,15 @@ module.exports = {
   evalCondition,
   evalMetric,
   getPassiveRules,
+  activePassiveCommands,
   collectVpModifiers,
   canEndTurn,
   applyTurnEnd,
   emit,
   emitAndResolve,
   resolveTapReaction,
+  setActivationListener,
+  notifyActivation,
   grantResource,
   grantResourceAndEmitGet,
   payCostList,

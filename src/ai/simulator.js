@@ -107,7 +107,10 @@ function applyInPlace(state, index, move) {
         if (!candidate) throw new SimulationError(`buildCandidateIndex ${move.buildCandidateIndex} out of range`);
         const bzDiscount = maxBzDiscount(state, index, move.playerId, candidate);
         const buildResult = board.completeAreaBuild(state, index, { playerId: move.playerId, bzDiscount }, candidate, result.pendingBuild.remainingCommands);
-        if (buildResult.success) state.cards[move.physicalId].tapped = true; // mirrors main.js's TAP-source commit
+        if (buildResult.success) {
+          state.cards[move.physicalId].tapped = true; // mirrors main.js's TAP-source commit
+          executor.notifyActivation(state, move.playerId, move.physicalId, state.cards[move.physicalId].currentFaceId, 'TAP');
+        }
         return { ...buildResult, candidate }; // see PLACE_DIE's own comment on why candidate is included
       }
       return result;

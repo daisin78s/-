@@ -1,15 +1,23 @@
 """
-Writes the JSON aggregate report from tools/ai_data_report.js into AI.DATA.xlsx's two existing sheets
+Writes the JSON aggregate report from tools/ai_data_report.js into AI.DATA.xlsx's existing sheets
 (CONJOB, ABCM) -- fills in cells by matching existing row/column headers, never touches the sheet
 layout/formatting itself.
 
 CONJOB sheet: two 8x9 tables sharing the same layout (CON001A/002A/003A/004A/001B/002B/003B/004B rows x
 JOB001..JOB008 columns) -- one for "試行回数" (trial count), one for "平均得点" (average score). The
 JOB column headers have no tier suffix (JOB cards only ever have an 'A' face -- see game-state.js's
-splitCardId), so a jobFaceId like "JOB005A" is matched by stripping the trailing letter.
+splitCardId), so a jobFaceId like "JOB005A" is matched by stripping the trailing letter. A third,
+single-row table (2026-08-07, per user spec) lives at row 30 ("使用回数" in column A, JOB001..JOB008 in
+B:I, the user's own pre-existing layout -- found by inspection, same as the two tables above): one
+aggregate "usage" value per JOB (not per-round) -- see report['job']'s own meaning, set by
+tools/ai_data_report.js's jobEntry doc.
 
 ABCM sheet: one table, ID column (every A/B/C tier-A and tier-B face, M001-M012, plus "D" for "gained a
-new colored die") x 試行回数1R-4R / 平均得点1R-4R columns.
+new colored die") x 試行回数1R-4R / 平均得点1R-4R / 使用回数1-4 columns. The 使用回数 columns
+(2026-08-07, per user spec, also the user's own pre-existing layout addition) only ever get a value for
+rows report['abcm'][id][round]['avgUsage'] is non-null for (B008A and the 8 A-deck fee-generating
+cards -- see tools/ai_data_report.js's USAGE_ELIGIBLE_ABCM_FACES) -- every other row's cells are cleared
+to blank, not written as 0, so a card with no "usage" concept at all never shows a misleading number.
 
 Usage: python tools/ai_data_write.py [jsonPath] [xlsxPath]
 """
@@ -83,6 +91,26 @@ for entry in report['conjob']:
 
 print(f'CONJOB: wrote {written} combinations, skipped {len(skipped)}: {skipped}')
 
+# Third table: a single "使用回数" row (2026-08-07, per user spec, at the user's own pre-existing row --
+# see this file's own top-of-file doc) reusing the same JOB001..JOB008 column positions as the two tables
+# above (count_cols) rather than re-deriving them, since there's no separate header row of its own.
+job_usage_row = find_header_row('使用回数')
+for c in range(2, ws.max_column + 1):
+    ws.cell(row=job_usage_row, column=c).value = None
+
+job_written = 0
+job_skipped = []
+for job_face_id, entry in report.get('job', {}).items():
+    job_physical_id = re.sub(r'[A-Z]$', '', job_face_id)
+    if job_physical_id not in count_cols:
+        job_skipped.append(job_face_id)
+        continue
+    if entry['avgUsage'] is not None:
+        ws.cell(row=job_usage_row, column=count_cols[job_physical_id], value=round(entry['avgUsage'], 2))
+    job_written += 1
+
+print(f'CONJOB row {job_usage_row} (JOB使用回数): wrote {job_written} JOBs, skipped {len(job_skipped)}: {job_skipped}')
+
 # ---------------------------------------------------------------------------
 # ABCM sheet
 # ---------------------------------------------------------------------------
@@ -93,13 +121,16 @@ while ws2.cell(row=r, column=1).value:
     id_rows[ws2.cell(row=r, column=1).value] = r
     r += 1
 
-# Column layout confirmed via inspection: A=ID, B-E=試行回数1R-4R, F=blank spacer, G-J=平均得点1R-4R.
+# Column layout confirmed via inspection: A=ID, B-E=試行回数1R-4R, F=blank spacer, G-J=平均得点1R-4R,
+# K=blank spacer, L-O=使用回数1-4 (2026-08-07, per user spec -- the user's own pre-existing column
+# addition, only meaningful for B008A/A-deck rows, see this file's own top-of-file doc).
 COUNT_COLS = {1: 2, 2: 3, 3: 4, 4: 5}
 AVG_COLS = {1: 7, 2: 8, 3: 9, 4: 10}
+USAGE_COLS = {1: 12, 2: 13, 3: 14, 4: 15}
 
 # Same clear-before-write as the CONJOB sheet above, same reason.
 for r in id_rows.values():
-    for c in list(COUNT_COLS.values()) + list(AVG_COLS.values()):
+    for c in list(COUNT_COLS.values()) + list(AVG_COLS.values()) + list(USAGE_COLS.values()):
         ws2.cell(row=r, column=c).value = None
 
 abcm_written = 0
@@ -114,6 +145,8 @@ for card_id, by_round in report['abcm'].items():
         ws2.cell(row=row, column=COUNT_COLS[round_num], value=cell['count'])
         if cell['avgScore'] is not None:
             ws2.cell(row=row, column=AVG_COLS[round_num], value=round(cell['avgScore'], 2))
+        if cell.get('avgUsage') is not None:
+            ws2.cell(row=row, column=USAGE_COLS[round_num], value=round(cell['avgUsage'], 2))
     abcm_written += 1
 
 print(f'ABCM: wrote {abcm_written} card rows, skipped {len(abcm_skipped)}: {abcm_skipped}')

@@ -35,7 +35,7 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 const { loadGameData, buildDataIndex } = require('../src/data-loader');
 const { buildEvalTable } = require('../src/ai/eval-table');
-const { playGame } = require('../src/ai/game-runner');
+const { playGame, AREA_CARD_BY_MAP } = require('../src/ai/game-runner');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const DATA_PATH = path.join(PROJECT_ROOT, 'data', 'game.json');
@@ -43,6 +43,15 @@ const DEFAULT_OUTPUT_PATH = path.join(PROJECT_ROOT, 'output', 'ai_data_report.js
 const XLSX_WRITE_SCRIPT = path.join(PROJECT_ROOT, 'tools', 'ai_data_write.py');
 const DEFAULT_XLSX_PATH = path.join(PROJECT_ROOT, 'AI.DATA.xlsx');
 const PLAYER_NAMES = ['Alice', 'Bob', 'Carol', 'Dan'];
+
+/** Which ABCM rows the new "使用回数" column (2026-08-07, per user spec) actually applies to: the 8
+ * A-deck cards (usage = usage fee collected via their AREA, see AREA_CARD_BY_MAP) and B008A (usage = wD
+ * granted at build time). Every other row (B/C decks besides B008A, M001-M012, "D") has no such concept
+ * -- per user spec, those stay blank ("B008Bは空欄でOK", "Dも空欄でOK") rather than showing a misleading
+ * 0. Checked at write time (see writeReport below), not during accumulation -- an entry's usageSum simply
+ * never gets touched for an ineligible id, so this only decides whether a real (possibly zero) sum gets
+ * reported as an average or suppressed as inapplicable. */
+const USAGE_ELIGIBLE_ABCM_FACES = new Set([...Object.values(AREA_CARD_BY_MAP), 'B008A']);
 
 /** One row per player (all 4, not just whoever crossed the threshold -- per user feedback: "4人とも記録
  * それぞれの得点も") for a game that had at least one high score. Deliberately limited to "score-relevant
@@ -101,11 +110,33 @@ function main() {
 
   // conjob["CON001A\tJOB001"] = { count, scoreSum }
   const conjob = new Map();
-  // abcm["A001A"][1] = { count, scoreSum } -- 1-4 for rounds, plus the "D" row for colored-die gains.
+  // abcm["A001A"][1] = { count, scoreSum, usageSum } -- 1-4 for rounds, plus the "D" row for colored-die
+  // gains. usageSum (2026-08-07) only ever gets added to for USAGE_ELIGIBLE_ABCM_FACES ids -- see that
+  // set's own doc.
   const abcm = new Map();
   function abcmEntry(id, round) {
-    if (!abcm.has(id)) abcm.set(id, { 1: { count: 0, scoreSum: 0 }, 2: { count: 0, scoreSum: 0 }, 3: { count: 0, scoreSum: 0 }, 4: { count: 0, scoreSum: 0 } });
+    if (!abcm.has(id)) {
+      abcm.set(id, {
+        1: { count: 0, scoreSum: 0, usageSum: 0 },
+        2: { count: 0, scoreSum: 0, usageSum: 0 },
+        3: { count: 0, scoreSum: 0, usageSum: 0 },
+        4: { count: 0, scoreSum: 0, usageSum: 0 },
+      });
+    }
     return abcm.get(id)[round];
+  }
+  // job["JOB001"] = { count, usageSum } -- one row per JOB face, no per-round breakdown (2026-08-07, per
+  // user spec: written as a single aggregate into CONJOB row30, B30:I30, not ABCM-style per-round
+  // columns). "usage" means different things per JOB: TAP count for JOB001/002/003/004/005/007 (all from
+  // activationCounts -- the listener doesn't distinguish AUTO/MANUAL/bare, it only cares the TAP fired
+  // for real), PASSIVE-fire count for JOB006 (same activationCounts, since ON(GET(...),...) firings are
+  // tracked identically to TAP firings there), and JOB008's own bonus VP (roundDetailByPlayerId's
+  // job008BonusVp, NOT activationCounts -- JOB008's IF(...)-based PASSIVE has no ON(...) wrapper at all,
+  // so the listener never fires for it, see executor.emit's own findOnHandlers filter).
+  const job = new Map();
+  function jobEntry(jobFaceId) {
+    if (!job.has(jobFaceId)) job.set(jobFaceId, { count: 0, usageSum: 0 });
+    return job.get(jobFaceId);
   }
   // One row per player in any game where at least one player's score reached highScoreThreshold (see
   // collectHighScoreRows's own doc).
@@ -118,8 +149,9 @@ function main() {
     let state;
     let historyByPlayerId;
     let roundDetailByPlayerId;
+    let activationCounts;
     try {
-      ({ state, historyByPlayerId, roundDetailByPlayerId } = playGame(seed, PLAYER_NAMES, index, evalTable, aiOptions));
+      ({ state, historyByPlayerId, roundDetailByPlayerId, activationCounts } = playGame(seed, PLAYER_NAMES, index, evalTable, aiOptions));
     } catch (e) {
       console.error(`Game ${i + 1}/${n} (seed=${seed}) crashed: ${e.message}`);
       console.error(e.stack);
@@ -144,6 +176,12 @@ function main() {
           const e = abcmEntry(faceId, round);
           e.count++;
           e.scoreSum += detail.finalScore;
+          // "使用回数" (2026-08-07, per user spec) -- only meaningful for B008A (wD granted at build
+          // time) and the A-deck's 8 fee-generating cards (see USAGE_ELIGIBLE_ABCM_FACES's own doc); at
+          // most one of these two conditions can ever apply to a given faceId.
+          if (faceId === 'B008A' && detail.b008aWhiteDiceGained !== null) e.usageSum += detail.b008aWhiteDiceGained;
+          const feeForThisCard = (detail.areaFeeByRoundAndCard[round] || {})[faceId];
+          if (feeForThisCard !== undefined) e.usageSum += feeForThisCard;
         }
         if (detail.colorDiceGainedByRound[round] > 0) {
           const e = abcmEntry('D', round);
@@ -151,6 +189,14 @@ function main() {
           e.scoreSum += detail.finalScore;
         }
       }
+
+      // JOB "使用回数" (2026-08-07, per user spec) -- see jobEntry's own doc on what "usage" means per
+      // JOB face.
+      const jobFaceId = h.jobFaceId;
+      const usage = jobFaceId === 'JOB008' ? (detail.job008BonusVp || 0) : (activationCounts[jobFaceId] || 0);
+      const je = jobEntry(jobFaceId);
+      je.count++;
+      je.usageSum += usage;
     }
 
     if ((i + 1) % 10 === 0 || i + 1 === n) {
@@ -174,13 +220,24 @@ function main() {
     const abcmOut = {};
     for (const [id, byRound] of abcm) {
       abcmOut[id] = {};
+      const usageEligible = USAGE_ELIGIBLE_ABCM_FACES.has(id);
       for (const round of [1, 2, 3, 4]) {
         const e = byRound[round];
-        abcmOut[id][round] = { count: e.count, avgScore: e.count > 0 ? e.scoreSum / e.count : null };
+        abcmOut[id][round] = {
+          count: e.count,
+          avgScore: e.count > 0 ? e.scoreSum / e.count : null,
+          avgUsage: usageEligible && e.count > 0 ? e.usageSum / e.count : null,
+        };
       }
     }
-    fs.writeFileSync(outputPath, JSON.stringify({ gamesRun, aiLevel, conjob: conjobOut, abcm: abcmOut, highScoreThreshold, highScoreRows }, null, 1));
-    console.log(`Wrote aggregate report (${gamesRun} games at ${aiLevel}, ${conjobOut.length} CON x JOB combos, ${abcm.size} ABCM rows with data, ${highScoreRows.length} high-score (>=${highScoreThreshold}) player-rows) to ${outputPath}`);
+    // job["JOB001"] = {count, avgUsage} -- see jobEntry's own doc. Written into CONJOB row30 (B30:I30) by
+    // ai_data_write.py, one aggregate value per JOB, not per-round.
+    const jobOut = {};
+    for (const [jobFaceId, e] of job) {
+      jobOut[jobFaceId] = { count: e.count, avgUsage: e.count > 0 ? e.usageSum / e.count : null };
+    }
+    fs.writeFileSync(outputPath, JSON.stringify({ gamesRun, aiLevel, conjob: conjobOut, abcm: abcmOut, job: jobOut, highScoreThreshold, highScoreRows }, null, 1));
+    console.log(`Wrote aggregate report (${gamesRun} games at ${aiLevel}, ${conjobOut.length} CON x JOB combos, ${abcm.size} ABCM rows with data, ${job.size} JOB rows with data, ${highScoreRows.length} high-score (>=${highScoreThreshold}) player-rows) to ${outputPath}`);
     // Also pushes straight into AI.DATA.xlsx itself at every checkpoint (2026-08-04, per user feedback:
     // "10戦ごとにAIDATAに上書きしていってください"), not just this intermediate JSON -- same
     // tools/ai_data_write.py this project already used for the final write, just invoked automatically

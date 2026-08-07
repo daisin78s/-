@@ -725,10 +725,15 @@ function useBareTapAbility(state, index, context, physicalId) {
   const tapContext = { ...context, sourcePhysicalId: physicalId };
   const result = resolveProgramOrBuild(state, index, tapContext, row.TAP, Infinity);
   if (result.pendingBuild) {
+    // Not tapped yet -- and no activation notified yet either (see executor.notifyActivation's own
+    // doc) -- a bare TAP=BUILD(...) ability (e.g. B005A) only actually commits once a candidate is
+    // chosen and the build resolves; that happens later, in ai/simulator.js's BARE_TAP case (mirroring
+    // main.js's own TAP-source commit), which fires the matching notifyActivation call itself.
     return { success: true, pendingBuild: { physicalId, ...result.pendingBuild } };
   }
   if (!result.success) return result;
   inst.tapped = true;
+  executor.notifyActivation(state, context.playerId, physicalId, inst.currentFaceId, 'TAP');
   return { success: true };
 }
 
