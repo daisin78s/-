@@ -1576,7 +1576,7 @@
       "EMBLEM_C": "",
       "VP": "",
       "ONCE": "",
-      "TAP": "ON(BUILD(U,M),ADD(BZ))",
+      "TAP": "ADD(BZ);BLOCK_BUILD(A,THIS_TURN);BLOCK_BUILD(B,THIS_TURN);BLOCK_BUILD(C,THIS_TURN)",
       "PASSIVE": "",
       "TURNEND": "UNTAP()",
       "START_ORDER": "",

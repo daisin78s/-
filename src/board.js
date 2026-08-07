@@ -756,8 +756,8 @@ function getBuildCandidates(state, index, playerId, categories, buildValue) {
 /** Commits a BUILD_NEW candidate from getBuildCandidates(): pay (after context.bzDiscount, if any --
  * see executor.applyBzDiscount; resolveUpgrade below applies the same discount to UPGRADE's COST since
  * 2026-08-06), remove from shop, own it, run its ONCE, then emits BUILD(category) (2026-07-31 --
- * previously never emitted at all, so ON(BUILD(...),...) reactions like JOB004A/JOB007A's were
- * structurally unreachable; category is the built card's own sheet letter, A/B/C/M). */
+ * previously never emitted at all, so ON(BUILD(...),...) reactions like JOB002's were structurally
+ * unreachable; category is the built card's own sheet letter, A/B/C/M). */
 function resolveBuildNew(state, index, context, candidate) {
   const row = getCardRow(index, candidate.faceId);
   const discount = executor.applyBzDiscount(lowerCostList(row.COST), context.bzDiscount);

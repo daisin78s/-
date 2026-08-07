@@ -321,24 +321,26 @@ class MoveGenerator {
   }
 }
 
-/** A bare (direct, non-ON-wrapped) TAP ability built from a CHANGE(...) command whose gain side includes
- * BZ -- e.g. JOB004's "CHANGE(3K,2BZ);BLOCK_BUILD(M,THIS_TURN)" (2026-08-04: the BLOCK_BUILD half is a
- * side-effect restriction, not a second thing this ability "does", so it doesn't disqualify the shape).
- * Returns the lowered CHANGE command, or null if faceId has no TAP field, the CHANGE-to-BZ isn't there,
- * or the field has some other statement besides CHANGE/BLOCK_BUILD. See MoveGenerator#
- * forcedBzConversionMove's own doc for why this is treated as forced rather than a normal candidate.
- * Deliberately not scoped to JOB004 specifically -- any future card with the same shape (a bare
- * CHANGE-to-BZ ability, optionally paired with a BLOCK_BUILD) gets the same forced treatment
- * automatically. */
+/** A bare (direct, non-ON-wrapped) TAP ability built from a CHANGE(...) or ADD(...) command that grants
+ * BZ -- e.g. JOB004's "CHANGE(3K,2BZ);BLOCK_BUILD(M,THIS_TURN)" or JOB007's "ADD(BZ);BLOCK_BUILD(A,
+ * THIS_TURN);BLOCK_BUILD(B,THIS_TURN);BLOCK_BUILD(C,THIS_TURN)" (2026-08-07: generalized from CHANGE-only
+ * to also cover ADD, since JOB007 grants BZ for free rather than converting another resource into it; the
+ * BLOCK_BUILD half is a side-effect restriction, not a second thing this ability "does", so it doesn't
+ * disqualify the shape). Returns the lowered CHANGE/ADD command, or null if faceId has no TAP field, no
+ * BZ grant is there, or the field has some other statement besides CHANGE/ADD/BLOCK_BUILD. See
+ * MoveGenerator#forcedBzConversionMove's own doc for why this is treated as forced rather than a normal
+ * candidate. Deliberately not scoped to any one card: any future card with the same shape (a bare BZ
+ * grant, optionally paired with BLOCK_BUILD) gets the same forced treatment automatically. */
 function bzConversionTap(index, faceId) {
   let row;
   try { row = getCardRow(index, faceId); } catch (e) { return null; }
   if (!row.TAP) return null;
   const commands = lowerProgram(parse(row.TAP));
-  const changeCmd = commands.find((c) => c.type === 'CHANGE' && c.gain.some((g) => g.resource === 'BZ'));
-  if (!changeCmd) return null;
-  const onlyChangeAndBlockBuild = commands.every((c) => c === changeCmd || c.type === 'BLOCK_BUILD');
-  return onlyChangeAndBlockBuild ? changeCmd : null;
+  const bzCmd = commands.find((c) => (c.type === 'CHANGE' && c.gain.some((g) => g.resource === 'BZ'))
+    || (c.type === 'ADD' && c.items.some((i) => i.resource === 'BZ')));
+  if (!bzCmd) return null;
+  const onlyBzGrantAndBlockBuild = commands.every((c) => c === bzCmd || c.type === 'BLOCK_BUILD');
+  return onlyBzGrantAndBlockBuild ? bzCmd : null;
 }
 
 module.exports = { MoveGenerator, bareTapKind, bzConversionTap };

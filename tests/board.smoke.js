@@ -421,23 +421,40 @@ function giveDie(state, playerId, value) {
   check('The 2 BZ JOB004 just granted can pay for a build that would otherwise be unaffordable', buildResult.success, true);
 }
 {
-  // JOB007.TAP=ON(BUILD(U,M),ADD(BZ)) -- the inverse: reacts to UPGRADE and Monument builds, not A/B/C.
+  // JOB007.TAP=ADD(BZ);BLOCK_BUILD(A,THIS_TURN);BLOCK_BUILD(B,THIS_TURN);BLOCK_BUILD(C,THIS_TURN) --
+  // 2026-08-07, replacing the old ON(BUILD(U,M),ADD(BZ)) reaction (per user feedback: reacting *after*
+  // an UPGRADE/Monument build meant the granted BZ arrived too late to help pay for the very build that
+  // triggered it, and evaporated unspent at TURNEND since a turn normally has no second build left to
+  // spend it on -- "BZを使うタイミングがなく必ずBZが余って消失します"). Now a bare (non-reactive) TAP,
+  // usable any time during the player's own turn like JOB004 above, so a player can tap it *before* an
+  // UPGRADE/Monument build to actually use the BZ; blocking A/B/C builds this turn keeps the discount
+  // scoped to U/M as originally intended (and, being a bare TAP rather than an ON(...) reaction, it has
+  // no auto/manual concept at all -- see main.js's reactiveTapKind/bareTapKind split -- so this also
+  // settles the user's request to make it manual-only).
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   const jobInst = createCardInstance('JOB007');
   jobInst.ownerId = 'P1';
   state.cards[jobInst.physicalId] = jobInst;
   p1.ownedCardPhysicalIds.push(jobInst.physicalId);
+
+  const result = board.useBareTapAbility(state, index, { playerId: 'P1' }, jobInst.physicalId);
+  check('JOB007.TAP=ADD(BZ);BLOCK_BUILD(...) succeeds as a direct (non-reactive) TAP', result, { success: true });
+  check('...gained 1 BZ for free', p1.resources.BZ, 1);
+  check('...the card is now tapped', state.cards[jobInst.physicalId].tapped, true);
+  check('...A/B/C builds are blocked this turn', p1.blockedBuildCategoriesThisTurn.slice().sort(), ['A', 'B', 'C']);
+  check('...A/B/C builds are excluded from candidates this turn', board.getBuildCandidates(state, index, 'P1', ['A', 'B', 'C'], 6).length, 0);
+
+  // The BZ gained this way is usable for an UPGRADE attempted right afterward, in the same turn.
   const upgradeInst = createCardInstance('A001A'); // A001B exists
   upgradeInst.ownerId = 'P1';
   state.cards[upgradeInst.physicalId] = upgradeInst;
   p1.ownedCardPhysicalIds.push(upgradeInst.physicalId);
-  p1.resources.A = 2; // A001A's COST
+  p1.resources.A = 1; // A001A's COST is "2A" -- 1 short, made up by the 1 BZ just granted.
 
   const candidate = board.getBuildCandidates(state, index, 'P1', ['U'], 0).find((c) => c.physicalId === 'A001');
-  const result = board.resolveBuild(state, index, { playerId: 'P1' }, candidate);
-  check('UPGRADE succeeds', result.success, true);
-  check('JOB007 auto-reacted to BUILD(U): gained 1 BZ', p1.resources.BZ, 1);
+  const upgradeResult = board.resolveBuild(state, index, { playerId: 'P1', bzDiscount: { A: 1 } }, candidate);
+  check('The 1 BZ JOB007 just granted can pay for the UPGRADE that would otherwise be unaffordable', upgradeResult.success, true);
 }
 
 // ---------------------------------------------------------------------------

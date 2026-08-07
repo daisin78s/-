@@ -1001,27 +1001,43 @@ function buildChangeAllThenAddIcon(actionText) {
   return stack;
 }
 
-/** JOB004's bare CHANGE(3K,2BZ);BLOCK_BUILD(M,THIS_TURN) TAP (2026-08-0X, per user request) -- shown as
- * pay -> {n}BZ (BZ has no colored dot in this project's vocabulary, unlike buildChangeQuantityIcon's
- * K/A/B/C/Z -- matches every other "{n}BZ"/"軽減{n}Z" label elsewhere, plain text rather than a
- * dot+count), plus a second line noting this can't be used toward a monument build this turn. **2026-
- * 08-04 update: the "モニュメント除く" label used to be display-only (the engine didn't actually enforce
- * it, see board.resolveBuildNew/executor.applyBzDiscount) -- confirmed with the user this needed real
- * enforcement, so it's now a genuine rule (BLOCK_BUILD(M,THIS_TURN), see board.getBuildCandidates); this
- * label just reflects that.** Matches generically on shape (a bare CHANGE(nX,nBZ), optionally with a
- * trailing BLOCK_BUILD(M,THIS_TURN)), not just JOB004 by name -- a future card with the CHANGE alone
- * (no BLOCK_BUILD) still matches and simply skips the "モニュメント除く" row. */
+/** A bare BZ-granting TAP, optionally paired with BLOCK_BUILD(category,THIS_TURN) restrictions -- e.g.
+ * JOB004's CHANGE(3K,2BZ);BLOCK_BUILD(M,THIS_TURN) (2026-08-0X, per user request) or JOB007's ADD(BZ);
+ * BLOCK_BUILD(A,THIS_TURN);BLOCK_BUILD(B,THIS_TURN);BLOCK_BUILD(C,THIS_TURN) (2026-08-07, replacing
+ * JOB007's old ON(BUILD(U,M),ADD(BZ)) reaction -- see buildOnBuildAddResourceIcon's own doc and
+ * [[project-dice-wp]] for why: reacting *after* an UPGRADE/Monument build meant the BZ always arrived too
+ * late to help pay for the build that triggered it, and evaporated unspent at TURNEND. Now a bare TAP
+ * the player fires *before* an UPGRADE/Monument build, so the BZ is actually usable). First line: either
+ * pay -> {n}BZ (CHANGE form; BZ has no colored dot in this project's vocabulary, unlike
+ * buildChangeQuantityIcon's K/A/B/C/Z -- matches every other "{n}BZ"/"軽減{n}Z" label elsewhere, plain
+ * text rather than a dot+count) or ⚡BZ (ADD form, ⚡ prefix matching buildAddResourceIcon's "just gain
+ * this, no cost" convention). Second line (only if any BLOCK_BUILD present): the blocked categories'
+ * letters + "除く", except the single-M case which keeps the pre-existing "モニュメント除く" wording
+ * users have already seen. **2026-08-04: the block used to be display-only text -- confirmed with the
+ * user this needed real enforcement, so it's backed by a genuine rule (BLOCK_BUILD(...,THIS_TURN), see
+ * board.getBuildCandidates); this label just reflects that.** Matches generically on shape (a bare
+ * CHANGE(nX,nBZ) or ADD(nBZ), optionally followed by one or more BLOCK_BUILD(cat,THIS_TURN)), not any one
+ * card by name -- the BZ grant alone, with no BLOCK_BUILD at all, still matches and simply skips the
+ * second row. */
 function buildBzForBuildIcon(actionText) {
   const stmts = (actionText || '').split(';').map((s) => s.trim());
-  const match = /^CHANGE\((\d*)(K|A|B|C|Z),(\d*)BZ\)$/.exec(stmts[0]);
-  if (!match) return null;
-  const hasMonumentBlock = stmts[1] === 'BLOCK_BUILD(M,THIS_TURN)';
-  if (stmts.length > 1 && !hasMonumentBlock) return null; // unrecognized extra statement, don't guess
-  if (stmts.length > 2) return null;
-  const [, payCount, payResource, bzCount] = match;
+  const changeMatch = /^CHANGE\((\d*)(K|A|B|C|Z),(\d*)BZ\)$/.exec(stmts[0]);
+  const addMatch = /^ADD\((\d*)BZ\)$/.exec(stmts[0]);
+  if (!changeMatch && !addMatch) return null;
+  const blockMatches = stmts.slice(1).map((s) => /^BLOCK_BUILD\(([ABCMU]),THIS_TURN\)$/.exec(s));
+  if (blockMatches.some((m) => !m)) return null; // unrecognized extra statement, don't guess
+  const blockedCats = blockMatches.map((m) => m[1]);
   const stack = el('div', 'action-icons-stack');
-  stack.appendChild(actionRow([...resourceItemNodes(payCount, payResource), actionArrow(), actionSuffix(`${bzCount}BZ`)]));
-  if (hasMonumentBlock) stack.appendChild(actionRow([actionSuffix('モニュメント除く')]));
+  if (changeMatch) {
+    const [, payCount, payResource, bzCount] = changeMatch;
+    stack.appendChild(actionRow([...resourceItemNodes(payCount, payResource), actionArrow(), actionSuffix(`${bzCount}BZ`)]));
+  } else {
+    stack.appendChild(actionRow([actionEmoji('⚡'), actionSuffix(`${addMatch[1]}BZ`)]));
+  }
+  if (blockedCats.length > 0) {
+    const label = blockedCats.length === 1 && blockedCats[0] === 'M' ? 'モニュメント除く' : `${blockedCats.join('')}除く`;
+    stack.appendChild(actionRow([actionSuffix(label)]));
+  }
   return stack;
 }
 
@@ -1244,27 +1260,17 @@ function buildOnGetAddMultiIcon(actionText) {
   return stack;
 }
 
-/** ON(BUILD(cats),ADD(nBZ)): "building/upgrading one of these categories grants a BZ discount token"
- * (2026-07-30, added for JOB007A) -- ⚒️ + the trigger categories (same letter-extraction as
- * buildBuildIcon), an arrow, then "軽減{n}Z" (matching buildOnBuildChangeDiscountIcon above). */
-function buildOnBuildAddBzIcon(actionText) {
-  const match = /^ON\(BUILD\(([^)]*)\),ADD\((\d*)BZ\)\)$/.exec(actionText || '');
-  if (!match) return null;
-  const categories = (match[1].match(/[ABCMU]/g) || []).join('');
-  const children = [actionEmoji('⚒️')];
-  if (categories) children.push(actionSuffix(categories));
-  children.push(actionTrigger(), actionSuffix(`軽減${match[2]}Z`));
-  return actionRow(children);
-}
-
-/** ON(BUILD(cats),ADD(nX)) for a plain resource X (K/A/B/C/Z -- BZ has its own separate "軽減NZ" text
- * convention, see buildOnBuildAddBzIcon above, so it's excluded here) -- e.g. JOB002's new TAP=
+/** ON(BUILD(cats),ADD(nX)) for a plain resource X (K/A/B/C/Z) -- e.g. JOB002's TAP=
  * "ON(BUILD(),ADD(K))" (2026-08-04, per user feedback: "JOB002 TAP で ON(BUILD(),ADD(K))に変更しました"
- * with an explicit icon spec: "⚒️ ▶️ ⤵️K"). Same ⚒️+categories+▶ shape as buildOnBuildAddBzIcon, just
- * ending in a normal resource-dot instead of the BZ text label. Empty cats (BUILD() with no args, per
- * executor.js's eventArgsMatch: "match any category") shows no category suffix at all -- same omission
- * buildOnBuildAddBzIcon already does. The user's own "⤵️K" is the ⚒️▶️-then-dot row shown here PLUS the
- * ⤵️ TAP-source prefix buildEffectRow already prepends automatically (not duplicated here). */
+ * with an explicit icon spec: "⚒️ ▶️ ⤵️K"). ⚒️ + the trigger categories (same letter-extraction as
+ * buildBuildIcon) + ▶, ending in a normal resource-dot. Empty cats (BUILD() with no args, per
+ * executor.js's eventArgsMatch: "match any category") shows no category suffix at all. The user's own
+ * "⤵️K" is the ⚒️▶️-then-dot row shown here PLUS the ⤵️ TAP-source prefix buildEffectRow already prepends
+ * automatically (not duplicated here). (2026-08-07: this used to exclude BZ, deferring to a sibling
+ * buildOnBuildAddBzIcon for ON(BUILD(...),ADD(nBZ)) -- that was JOB007's old shape specifically; JOB007
+ * was redesigned to a bare TAP=ADD(BZ);BLOCK_BUILD(...) instead, see buildBzForBuildIcon, so no card uses
+ * the ON(BUILD(...),ADD(nBZ)) shape anymore and the sibling function was removed as dead code. This
+ * function's own K/A/B/C/Z match already never covered BZ, so it needs no change.) */
 function buildOnBuildAddResourceIcon(actionText) {
   const match = /^ON\(BUILD\(([^)]*)\),ADD\((\d*)(K|A|B|C|Z)\)\)$/.exec(actionText || '');
   if (!match) return null;
@@ -1337,8 +1343,6 @@ function buildActionIcons(actionText, stacked) {
   if (onGetChangeIcon) return onGetChangeIcon;
   const onGetAddMultiIcon = buildOnGetAddMultiIcon(actionText);
   if (onGetAddMultiIcon) return onGetAddMultiIcon;
-  const onBuildAddBzIcon = buildOnBuildAddBzIcon(actionText);
-  if (onBuildAddBzIcon) return onBuildAddBzIcon;
   const onBuildAddResourceIcon = buildOnBuildAddResourceIcon(actionText);
   if (onBuildAddResourceIcon) return onBuildAddResourceIcon;
   const modifyConvertValueIcon = buildModifyConvertValueIcon(actionText);

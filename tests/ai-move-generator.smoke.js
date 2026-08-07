@@ -198,6 +198,7 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
 // ---------------------------------------------------------------------------
 {
   check('bzConversionTap detects JOB004 ("CHANGE(3K,2BZ)")', !!bzConversionTap(index, 'JOB004'), true);
+  check('bzConversionTap detects JOB007 ("ADD(BZ);BLOCK_BUILD(A/B/C,THIS_TURN)", 2026-08-07)', !!bzConversionTap(index, 'JOB007'), true);
   check('bzConversionTap is null for a card with no TAP field at all (M001, printed VP only)', bzConversionTap(index, 'M001'), null);
   check('bzConversionTap is null for a bare TAP that does not produce BZ (C001A)', bzConversionTap(index, 'C001A'), null);
 }
