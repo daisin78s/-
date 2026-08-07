@@ -101,7 +101,9 @@ function getNextTurn(state) {
  * mutating anything if RESOURCE_TOTAL_LIMIT blocks TURNEND (see
  * executorApi.canEndTurn) -- the caller must fix that first (e.g. via a free
  * action, per the confirmed insertion-timing rule) and call this again.
- * Restocks the M/NORMAL shops (confirmed: restocking happens at TURNEND).
+ * Compacts (and, for M/NORMAL, restocks) every shop row (confirmed: still only at TURNEND, see
+ * restockShop's own doc -- 2026-08-07 added SPECIAL here too, since it now also compacts/shifts left on
+ * a build even though it still never refills).
  */
 function endTurn(state, index, playerId) {
   const gate = executorApi.canEndTurn(state, index, playerId);
@@ -110,6 +112,7 @@ function endTurn(state, index, playerId) {
   executorApi.applyTurnEnd(state, index, playerId);
   restockShop(state, 'M');
   restockShop(state, 'NORMAL');
+  restockShop(state, 'SPECIAL');
 
   const idx = state.turnOrder.indexOf(playerId);
   state.currentPlayerIndex = (idx + 1) % state.turnOrder.length;

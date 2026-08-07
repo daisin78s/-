@@ -84,18 +84,18 @@ function chargeUsageFeeIfOwed(state, map, playerId) {
  * ダイスを置く用に直せますか" -- AREA010's own AREA action never grants K to a non-owner (it either
  * costs K outright via CHANGE(2K,...) or grants only VP via ADD(VP)/ADD(2VP)), so a non-owner placing
  * there gets nothing back that could help pay the fee they just incurred). A/B/C/Z->K free actions have
- * no per-round usage cap ("回数制限ありません", confirmed [[project-dice-wp-dsl-spec]]), so every unit of
- * those four resources genuinely converts 1:1 -- only wD->2K is capped (once per round via
- * freeActionTaps.wD_K), and only counts if there's actually an unplaced wD to spend. Deliberately
- * ignores whatever the AREA action about to resolve might itself grant -- checking affordability with
- * *current* resources alone is conservative (a placement that would only become affordable *after* its
- * own ADD/CHANGE effect stays blocked), but never risks the reverse (never allows an actually-impossible
- * placement through) -- matching the same "affordability gates legality" precedent AREA008/009's own
- * isCandidateAffordable already established. */
+ * no usage cap at all ("回数制限ありません", confirmed [[project-dice-wp-dsl-spec]]), so every unit of
+ * those four resources genuinely converts 1:1. Deliberately ignores whatever the AREA action about to
+ * resolve might itself grant -- checking affordability with *current* resources alone is conservative (a
+ * placement that would only become affordable *after* its own ADD/CHANGE effect stays blocked), but never
+ * risks the reverse (never allows an actually-impossible placement through) -- matching the same
+ * "affordability gates legality" precedent AREA008/009's own isCandidateAffordable already established.
+ * (2026-08-07: used to also count an unplaced wD as +2, since wD->2K was a free action too -- removed
+ * along with that free action, see FREE_ACTION_IDS' own doc; wD no longer converts to K on demand at
+ * all.) */
 function canAffordFee(player, amount) {
   const convertible = (player.resources.A || 0) + (player.resources.B || 0) + (player.resources.C || 0) + (player.resources.Z || 0);
-  const wdBonus = !player.freeActionTaps.wD_K && player.dice.some((d) => d.kind === 'WHITE' && d.placedMapId === null) ? 2 : 0;
-  return (player.resources.K || 0) + convertible + wdBonus >= amount;
+  return (player.resources.K || 0) + convertible >= amount;
 }
 
 /**
@@ -295,6 +295,27 @@ function isCandidateAffordable(state, index, playerId, candidate) {
   return executor.enumerateBzOutcomes(state, playerId, lowerCostList(row.COST), bzAvailable).length > 0;
 }
 
+/** If commands (whose [0] is already known to be a BUILD) is followed by nothing but ADD statements --
+ * e.g. AREA009B/C's "BUILD();ADD(2K)"/"BUILD();ADD(2K,BZ)" or B005B/B007B's "BUILD(...);ADD(BZ)" -- returns
+ * that trailing array, else null. Shared by wouldAreaActionHaveEffect (preview) and resolveProgramOrBuild
+ * (real resolution) so a BUILD();ADD(...) field's ADD half is always resolved *before* build-candidate
+ * affordability is judged in both places (2026-08-07, per user feedback on 元老院LV2: "BZをもらえるので
+ * 本来建築できるものが表示されません まずBZと2Kを得るその後建築候補が表示される" -- getBuildCandidates
+ * itself doesn't filter by affordability at all, but both callers of it here do (isCandidateAffordable /
+ * main.js's candidateAffordable filtering the build-choice modal), always against the player's resources
+ * *before* this grant under the old order, since the ADD was deferred to remainingCommands and only ran
+ * *after* a candidate got committed -- too late to ever help pay for the very build it was attached to,
+ * and too late for the affordability-filtered modal to ever show it as an option). Confirmed the same fix
+ * should apply to all 4 existing cards with this shape, not just 元老院. Safe to run for real (not just
+ * preview) ahead of the candidates.length===0 check in resolveProgramOrBuild: getBuildCandidates' own
+ * output depends only on category/buildValue/shop contents/block-list/ownership, never on resources, so
+ * running the ADD earlier can't change whether a NO_BUILDABLE_CARD failure happens -- nothing new to roll
+ * back. */
+function buildTrailingAdds(commands) {
+  const trailing = commands.slice(1);
+  return trailing.length > 0 && trailing.every((c) => c.type === 'ADD') ? trailing : null;
+}
+
 /** Pure (no mutation) prediction of whether resolving areaRow's ACTION would actually produce any
  * benefit for the player, given `buildValue` as the die value that's about to be placed. Mirrors
  * resolveAreaAction/resolveProgramOrBuild's own dispatch (BUILD-first fields vs. everything else) so
@@ -306,7 +327,9 @@ function isCandidateAffordable(state, index, playerId, candidate) {
  *    deliberately only checked getBuildCandidates() dice/category eligibility and left affordability to
  *    the build-choice modal one step later; the user now wants placement itself blocked unless a build
  *    can actually be completed, not just attempted). Uses isCandidateAffordable, same auto-max-BZ
- *    affordability rule the build-choice modal itself uses.
+ *    affordability rule the build-choice modal itself uses. Any trailing ADD statements (see
+ *    buildTrailingAdds) are applied to a throwaway clone first, so a grant like AREA009C's "ADD(2K,BZ)"
+ *    is reflected in the affordability check that decides placement legality (2026-08-07).
  *  - Everything else (ADD/CHANGE fields): runs the field on a throwaway clone (never mutates the real
  *    state) and compares the acting player's resources/dice before vs. after. A field can technically
  *    "succeed" while changing nothing at all -- e.g. CHANGE(K,A,ALL) with 0 K on hand runs 0 times and
@@ -318,9 +341,15 @@ function wouldAreaActionHaveEffect(state, index, context, areaRow, buildValue) {
   const commands = lowerProgram(parse(areaRow.ACTION));
   if (commands.length > 0 && commands[0].type === 'BUILD') {
     const buildCmd = commands[0];
+    const trailingAdds = buildTrailingAdds(commands);
+    let evalState = state;
+    if (trailingAdds) {
+      evalState = structuredClone(state);
+      for (const cmd of trailingAdds) executor.runCommand(evalState, index, context, cmd);
+    }
     const resolvedBuildValue = buildCmd.buildValue !== null ? buildCmd.buildValue : buildValue;
-    const candidates = getBuildCandidates(state, index, context.playerId, buildCmd.categories, resolvedBuildValue);
-    const affordable = candidates.some((c) => isCandidateAffordable(state, index, context.playerId, c));
+    const candidates = getBuildCandidates(evalState, index, context.playerId, buildCmd.categories, resolvedBuildValue);
+    const affordable = candidates.some((c) => isCandidateAffordable(evalState, index, context.playerId, c));
     return affordable ? { ok: true } : { ok: false, reason: 'NO_BUILDABLE_CARD' };
   }
   const clone = structuredClone(state);
@@ -603,21 +632,32 @@ function passDie(state, index, context, dieId) {
  * "BUILD((A,B,C,M),1)") -- that can't complete synchronously, so instead of throwing
  * executor.NotImplementedError this returns the build candidates for the caller to choose from via
  * completeAreaBuild(). Any commands *after* the BUILD in the same field are deferred until the build
- * is completed (see remainingCommands). dieValueForBuild is only used when the BUILD command itself
- * omits an explicit buildValue -- an AREA-triggered BUILD falls back to the placed die's value; a
- * QST/TAP-triggered one has no die to fall back on, so its caller passes Infinity ("unconditional",
- * confirmed 2026-07-30 for QST -- no current data actually omits buildValue outside AREA anyway).
+ * is completed (see remainingCommands) -- EXCEPT a trailing run of pure ADD statements (see
+ * buildTrailingAdds), which is run right here, *before* candidates are even computed (2026-08-07: see
+ * buildTrailingAdds' own doc for why -- a grant like AREA009C's "ADD(2K,BZ)" needs to already be in the
+ * player's resources by the time the build-choice modal filters candidates by affordability, not applied
+ * only after a candidate is already committed). remainingCommands is empty in that case since there's
+ * nothing left to defer. dieValueForBuild is only used when the BUILD command itself omits an explicit
+ * buildValue -- an AREA-triggered BUILD falls back to the placed die's value; a QST/TAP-triggered one has
+ * no die to fall back on, so its caller passes Infinity ("unconditional", confirmed 2026-07-30 for QST --
+ * no current data actually omits buildValue outside AREA anyway).
  */
 function resolveProgramOrBuild(state, index, context, dslText, dieValueForBuild) {
   const commands = lowerProgram(parse(dslText));
   if (commands.length > 0 && commands[0].type === 'BUILD') {
     const buildCmd = commands[0];
+    const trailingAdds = buildTrailingAdds(commands);
+    let remainingCommands = commands.slice(1);
+    if (trailingAdds) {
+      for (const cmd of trailingAdds) executor.runCommand(state, index, context, cmd);
+      remainingCommands = [];
+    }
     const buildValue = buildCmd.buildValue !== null ? buildCmd.buildValue : dieValueForBuild;
     const candidates = getBuildCandidates(state, index, context.playerId, buildCmd.categories, buildValue);
     if (candidates.length === 0) {
       return { success: false, reason: 'NO_BUILDABLE_CARD', categories: buildCmd.categories, buildValue };
     }
-    return { success: true, pendingBuild: { categories: buildCmd.categories, buildValue, candidates, remainingCommands: commands.slice(1) } };
+    return { success: true, pendingBuild: { categories: buildCmd.categories, buildValue, candidates, remainingCommands } };
   }
   return executor.runProgram(state, index, context, dslText);
 }
@@ -815,12 +855,29 @@ function resolveBuild(state, index, context, candidate) {
 // Shop restock (confirmed: restocking happens at TURNEND, not immediately)
 // ---------------------------------------------------------------------------
 
-/** Refills every empty slot in shopKey ("M" or "NORMAL"; "SPECIAL" never restocks) from its drawPile. */
+/** Compacts shopKey's row -- slides remaining cards left to close any gaps left by builds since the last
+ * call, so empty slots always end up trailing at the row's right end -- then, for restockable shops
+ * (M/NORMAL; SPECIAL never restocks, see below), refills those trailing empties from the draw pile in
+ * position order (2026-08-07, per user request: "SHOP101のカードが建築された時、102のカードが101に
+ * ズレ、103のカードが102にズレ、のような形で全部左にずれていき、カードの補充は必ずSHOP106にされるよう
+ * に...SHOP001も同様に SHOP201も同じようにずれていくが、補充はなし" -- previously each empty slot
+ * refilled independently, in place, with no shifting at all). Both the shift and the refill still only
+ * happen at TURNEND, unchanged from the pre-existing timing (confirmed with the user). SPECIAL is
+ * deliberately excluded from the refill loop rather than relying on its drawPile happening to be empty --
+ * during round 1, before revealSpecialShop() runs, its 3 cards already sit in drawPile with all slots
+ * null, so without this explicit exclusion the very first TURNEND would prematurely reveal them ahead of
+ * the SHOP sheet's ROUND_MIN=2. shop.slots' key order is assumed to already be the row's left-to-right
+ * order (SHOP101, SHOP102, ... -- see setup.js's *_SHOP_SLOT_IDS, and game-state.createShopDeck which
+ * seeds `slots` by iterating that same array, so plain key insertion order already matches it). */
 function restockShop(state, shopKey) {
   const shop = state.shops[shopKey];
-  for (const slotId of Object.keys(shop.slots)) {
-    if (shop.slots[slotId] === null && shop.drawPile.length > 0) {
-      shop.slots[slotId] = shop.drawPile.shift();
+  const slotIds = Object.keys(shop.slots);
+  const remaining = slotIds.map((id) => shop.slots[id]).filter((faceId) => faceId !== null);
+  slotIds.forEach((id, i) => { shop.slots[id] = i < remaining.length ? remaining[i] : null; });
+  if (shopKey === 'SPECIAL') return;
+  for (const id of slotIds) {
+    if (shop.slots[id] === null && shop.drawPile.length > 0) {
+      shop.slots[id] = shop.drawPile.shift();
     }
   }
 }
@@ -841,6 +898,7 @@ module.exports = {
   completeAreaBuild,
   useBareTapAbility,
   getBuildCandidates,
+  isCandidateAffordable,
   resolveBuild,
   restockShop,
 };

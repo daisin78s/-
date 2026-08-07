@@ -71,12 +71,13 @@ class MoveGenerator {
     // per user feedback: "AIが無駄にA→K B→K C→K Z→K wD→2Kをやっています この行動には意味がないため
     // AIは上記のフリーアクションを基本的にはやらないようにしてください"). A simple linear-weighted
     // Evaluator has no notion of "do I actually need K right now" -- any conversion whose target weighs
-    // even marginally more than its source (e.g. round-independent K=3 vs A=5 usually loses, but Z/wD's
-    // own weights aren't always higher) reads as "an improvement" and gets taken, even though it just
-    // trades a typed resource for K with no real plan for it. Restricting generation to the one case
-    // where it's genuinely necessary (not "usually good") keeps the resource-limit-unblock behavior
-    // that was specifically fixed earlier (CON005B could otherwise deadlock the AI) without the
-    // otherwise-constant pointless conversions.
+    // even marginally more than its source (e.g. round-independent K=3 vs A=5 usually loses) reads as
+    // "an improvement" and gets taken, even though it just trades a typed resource for K with no real
+    // plan for it. Restricting generation to the one case where it's genuinely necessary (not "usually
+    // good") keeps the resource-limit-unblock behavior that was specifically fixed earlier (CON005B
+    // could otherwise deadlock the AI) without the otherwise-constant pointless conversions. (2026-08-07:
+    // wD->2K, one of the free actions this comment originally listed, was abolished per user request --
+    // see game-state.js's FREE_ACTION_IDS.)
     if (executor.canEndTurn(state, index, playerId).violations.length > 0) {
       moves.push(...this.#freeActionMoves(state, index, playerId, player));
     }
@@ -139,7 +140,7 @@ class MoveGenerator {
 
   #freeActionMoves(state, index, playerId, player) {
     const moves = [];
-    for (const freeActionId of ['A_K', 'B_K', 'C_K', 'Z_K', 'wD_K']) {
+    for (const freeActionId of ['A_K', 'B_K', 'C_K', 'Z_K']) {
       if (player.freeActionTaps[freeActionId]) continue;
       const clone = cloneState(state);
       const result = executor.tryFreeAction(clone, index, playerId, freeActionId);

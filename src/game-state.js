@@ -93,15 +93,17 @@ function createDie(id, kind) {
  * @property {string[]} ownedCardPhysicalIds - physicalIds of cards this player has built/acquired (see GameState.cards for face/tapped)
  * @property {number} startOrderValue     - set during setup, used once to compute turn order
  * @property {Object<string, boolean>} freeActionTaps - tap flags per FREE_ACTION_IDS entry (confirmed
- *   2026-07-29). A/B/C/Z->K and wD->2K have no usage limit at all (confirmed by the user: "回数制限あり
- *   ません") and never set their own entries here; those entries stay permanently false and are unused
- *   by executor.tryFreeAction. Usage-fee collection used to be the one exception gated by this (once per
+ *   2026-07-29). A/B/C/Z->K have no usage limit at all (confirmed by the user: "回数制限ありません") and
+ *   never set their own entries here; those entries stay permanently false and are unused by
+ *   executor.tryFreeAction. Usage-fee collection used to be the one exception gated by this (once per
  *   round, shared across every map) but that was reversed 2026-08-06 (per user feedback: "使用料回収は
  *   未回収の使用料がある限り何回でも使えるようにかえてください") -- collectUsageFee no longer reads or
  *   writes freeActionTaps at all, gated purely by each map's own accumulatedFee instead (see its own doc).
+ *   (2026-08-07: wD->2K, formerly a 6th entry here, was abolished per user request -- see
+ *   FREE_ACTION_IDS' own doc.)
  * @property {Object<string, boolean>} freeActionAutoMode - per FREE_ACTION_IDS entry: true ("オート") =
  *   auto-fire when usable, false ("マニュアル") = wait for the player. Defaults to false (manual) for
- *   every entry (confirmed 2026-07-29 -- all 6 free actions default to manual); player-adjustable
+ *   every entry (confirmed 2026-07-29 -- all free actions default to manual); player-adjustable
  *   during play. The auto-fire trigger condition itself is not yet designed (see
  *   [[project-dice-wp-flow-spec]]) -- this only stores the current setting.
  * @property {Object<string, boolean>} cardAutoModeOverrides - sparse map, physicalId -> true/false,
@@ -133,8 +135,12 @@ function createDie(id, kind) {
 const PLAYER_COLORS = ['PINK', 'PURPLE', 'GREEN', 'ORANGE'];
 
 /** Free-action IDs, see PlayerState.freeActionTaps. FEE_COLLECT is no longer one of these (2026-08-06,
- * see freeActionTaps' own doc) -- collectUsageFee never reads/writes freeActionTaps at all now. */
-const FREE_ACTION_IDS = ['A_K', 'B_K', 'C_K', 'Z_K', 'wD_K'];
+ * see freeActionTaps' own doc) -- collectUsageFee never reads/writes freeActionTaps at all now. wD_K
+ * (wD->2K) was removed (2026-08-07, per user request: "wD→２Kのフリーアクション廃止します") -- white dice
+ * no longer have any free-action conversion to K at all; they're still spent via card/AREA effects and
+ * still auto-overflow to 2K past the 5-die cap (an unrelated, always-on rule -- see executor.js's
+ * grantOneDie, not a free action and not touched by this removal). */
+const FREE_ACTION_IDS = ['A_K', 'B_K', 'C_K', 'Z_K'];
 
 /**
  * @param {string} id

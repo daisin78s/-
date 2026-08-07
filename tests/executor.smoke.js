@@ -157,8 +157,9 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 }
 
 // ---------------------------------------------------------------------------
-// 8. Free actions: A/B/C/Z->K and wD->2K have no usage limit at all (confirmed 2026-08-02:
-//    "回数制限ありません") -- repeatable any number of times, limited only by having the resource.
+// 8. Free actions: A/B/C/Z->K have no usage limit at all (confirmed 2026-08-02: "回数制限ありません")
+//    -- repeatable any number of times, limited only by having the resource. (wD->2K, a 5th free action
+//    here at the time, was abolished 2026-08-07 per user request -- see game-state.js's FREE_ACTION_IDS.)
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
@@ -179,6 +180,12 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 
   const bAction = executor.tryFreeAction(state, index, 'P1', 'B_K');
   check('B->K works independently of A->K', bAction, { success: true });
+
+  // wD_K (wD->2K) was abolished 2026-08-07, per user request -- no longer a recognized free action at all.
+  let wdKThrew = false;
+  try { executor.tryFreeAction(state, index, 'P1', 'wD_K'); } catch (e) { wdKThrew = true; }
+  check('wD_K is no longer a recognized free action (throws, not INSUFFICIENT_RESOURCES)', wdKThrew, true);
+  check('...FREE_ACTION_IDS no longer lists it', require('../src/game-state').FREE_ACTION_IDS.includes('wD_K'), false);
 }
 
 // ---------------------------------------------------------------------------

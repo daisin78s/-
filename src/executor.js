@@ -694,21 +694,26 @@ function runBlockBuild(state, context, cmd) {
 }
 
 // ---------------------------------------------------------------------------
-// Free actions (confirmed 2026-07-29, corrected 2026-08-02, [[project-dice-wp-dsl-spec]]): A/B/C/Z->K,
-// wD->2K, and usage-fee collection are NOT DSL/card effects -- they're a fixed mechanic every player
-// can use, independent of CONVERT_LIMIT. A/B/C/Z->K and wD->2K have NO usage limit at all (confirmed by
-// the user 2026-08-02: "A→K B→K C→K Z→K wD→Kに回数制限ありません") -- repeatable any number of times
-// during the player's own turn, limited only by having the resource to pay each time. Usage-fee
-// collection has no limit either (2026-08-06, reversing its earlier once-per-round-shared-tap rule --
-// see collectUsageFee's own doc), gated purely by each map's own accumulatedFee instead.
+// Free actions (confirmed 2026-07-29, corrected 2026-08-02, [[project-dice-wp-dsl-spec]]): A/B/C/Z->K
+// and usage-fee collection are NOT DSL/card effects -- they're a fixed mechanic every player can use,
+// independent of CONVERT_LIMIT. A/B/C/Z->K have NO usage limit at all (confirmed by the user 2026-08-02:
+// "A→K B→K C→K Z→K wD→Kに回数制限ありません", back when wD->2K still existed as a 5th one of these --
+// see below) -- repeatable any number of times during the player's own turn, limited only by having the
+// resource to pay each time. Usage-fee collection has no limit either (2026-08-06, reversing its earlier
+// once-per-round-shared-tap rule -- see collectUsageFee's own doc), gated purely by each map's own
+// accumulatedFee instead.
 // Their gain side uses grantResource, not grantResourceAndEmitGet (corrected 2026-08-03, per user
 // feedback: "JOB ON(GET(K),CHANGE(K,Z)) フリーアクションのA→K等に反応してしまいます...ADD(K)やADD(K,A)
-// などにのみ反応するように") -- these 6 free actions specifically don't trigger ON(GET(...),...)
+// などにのみ反応するように") -- these free actions specifically don't trigger ON(GET(...),...)
 // reactions (otherwise JOB005A's K->Z reaction fired every time a player used the A->K free action, an
 // effectively-free extra Z the user judged far too strong). NOTE this narrower scope (2026-08-04): this
 // used to also apply to every CHANGE(...) DSL command (see runChange), but that was reverted -- genuine
-// CHANGE commands on cards/AREAs (e.g. AREA007's CHANGE((A,B,C),D)) DO fire GET again, only these 6
+// CHANGE commands on cards/AREAs (e.g. AREA007's CHANGE((A,B,C),D)) DO fire GET again, only these
 // built-in free actions stay silent.
+// wD->2K was abolished (2026-08-07, per user request: "wD→２Kのフリーアクション廃止します コードも削除
+// してください") -- white dice have no free-action conversion to K anymore (they're still spent via
+// card/AREA effects, and still auto-overflow to 2K past the 5-die cap via grantOneDie, an unrelated
+// always-on rule this removal doesn't touch).
 // ---------------------------------------------------------------------------
 
 const FREE_ACTION_DEFS = {
@@ -716,7 +721,6 @@ const FREE_ACTION_DEFS = {
   B_K: { pay: 'B', payCount: 1, gain: 'K', gainCount: 1 },
   C_K: { pay: 'C', payCount: 1, gain: 'K', gainCount: 1 },
   Z_K: { pay: 'Z', payCount: 1, gain: 'K', gainCount: 1 },
-  wD_K: { pay: 'wD', payCount: 1, gain: 'K', gainCount: 2 },
 };
 
 /** @param {string} freeActionId - one of game-state's FREE_ACTION_IDS (fee collection is separate, see collectUsageFee below) */

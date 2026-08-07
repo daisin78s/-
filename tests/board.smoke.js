@@ -271,16 +271,50 @@ function giveDie(state, playerId, value) {
 }
 
 // ---------------------------------------------------------------------------
-// restockShop
+// restockShop (2026-08-07, per user request: "SHOP101のカードが建築された時、102のカードが101にズレ、
+// 103のカードが102にズレ...カードの補充は必ずSHOP106にされるように...SHOP001も同様に SHOP201も同じよう
+// にずれていくが、補充はなし" -- the row now compacts left before refilling, instead of each slot
+// refilling independently in place).
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
-  const [slotId] = Object.keys(state.shops.M.slots);
+  const [slot1, slot2, slot3, slot4, slot5, slot6] = Object.keys(state.shops.M.slots);
+  const before = { s1: state.shops.M.slots[slot1], s2: state.shops.M.slots[slot2], s3: state.shops.M.slots[slot3] };
   const drawPileBefore = state.shops.M.drawPile.length;
-  state.shops.M.slots[slotId] = null; // simulate "was just built"
+  state.shops.M.slots[slot1] = null; // simulate "was just built" -- a hole in the MIDDLE-left of the row
   board.restockShop(state, 'M');
-  check('restockShop refills the empty slot', state.shops.M.slots[slotId] !== null, true);
-  check('...and shrinks the draw pile by 1', state.shops.M.drawPile.length, drawPileBefore - 1);
+  check('The hole at slot1 is closed by shifting slot2 left into it', state.shops.M.slots[slot1], before.s2);
+  check('...slot3 shifts left into slot2', state.shops.M.slots[slot2], before.s3);
+  check('...slot4/5/6 are untouched other than the final one', state.shops.M.slots[slot5] !== null, true);
+  check('...the new card is drawn into the trailing slot6, not back into slot1', state.shops.M.slots[slot6] !== null, true);
+  check('...the draw pile shrank by exactly 1', state.shops.M.drawPile.length, drawPileBefore - 1);
+}
+{
+  // SPECIAL compacts (shifts left) exactly like M/NORMAL, but never refills -- confirmed explicitly by
+  // the user ("SHOP201も同じようにずれていくが、補充はなし"), and structurally necessary too: during
+  // round 1 (before revealSpecialShop), its 3 cards already sit in drawPile with all slots null, so a
+  // refill here would prematurely reveal them ahead of SHOP sheet's ROUND_MIN=2.
+  const state = freshStateWithShops();
+  const [slot1, slot2, slot3] = Object.keys(state.shops.SPECIAL.slots);
+  state.shops.SPECIAL.slots[slot1] = 'A008A';
+  state.shops.SPECIAL.slots[slot2] = null; // a hole in the middle
+  state.shops.SPECIAL.slots[slot3] = 'C008A';
+  const drawPileBefore = state.shops.SPECIAL.drawPile.length; // 3, still un-revealed
+  board.restockShop(state, 'SPECIAL');
+  check('SPECIAL compacts: slot3\'s card shifts left into the gap at slot2', state.shops.SPECIAL.slots, { [slot1]: 'A008A', [slot2]: 'C008A', [slot3]: null });
+  check('...but never refills from its drawPile (still un-revealed, no premature reveal)', state.shops.SPECIAL.drawPile.length, drawPileBefore);
+}
+{
+  // A hole at the far right (the common case: the rightmost occupied card is the one built) needs no
+  // shifting at all, and still refills into that same slot.
+  const state = freshStateWithShops();
+  const slotIds = Object.keys(state.shops.NORMAL.slots);
+  const lastSlot = slotIds[slotIds.length - 1];
+  const otherSlotsBefore = Object.fromEntries(slotIds.slice(0, -1).map((id) => [id, state.shops.NORMAL.slots[id]]));
+  state.shops.NORMAL.slots[lastSlot] = null;
+  board.restockShop(state, 'NORMAL');
+  check('The other slots are untouched when only the last one was empty', Object.fromEntries(slotIds.slice(0, -1).map((id) => [id, state.shops.NORMAL.slots[id]])), otherSlotsBefore);
+  check('...and the last slot itself is refilled', state.shops.NORMAL.slots[lastSlot] !== null, true);
 }
 
 // ---------------------------------------------------------------------------
@@ -716,6 +750,19 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   check('...the AREA action still ran (K spent on CHANGE(2K,2VP), 2VP gained)', { k: player(state, 'P2').resources.K, vp: player(state, 'P2').resources.VP }, { k: 0, vp: 2 });
 }
 {
+  // 2026-08-07, per user request ("wD→２Kのフリーアクション廃止します コードも削除してください"): an
+  // unplaced wD no longer counts toward canAffordFee at all -- before this removal it added +2 (modeling
+  // "the player could still use the now-abolished wD->2K free action"). Same AREA010C setup as the two
+  // blocks above, but P2's only non-K resource is an unplaced wD instead of 2 extra A.
+  const state = freshStateWithShops();
+  state.maps['MAP010'] = mapWithArea('MAP010', 'AREA010C', 3, 'P1');
+  player(state, 'P2').resources.K = 2;
+  player(state, 'P2').dice.push(require('../src/game-state').createDie('test-wd', 'WHITE'));
+  const die = giveDie(state, 'P2', 1);
+  const result = board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP010', 0);
+  check('An unplaced wD no longer helps cover the fee -- placement is still refused as unaffordable', result, { success: false, reason: 'UNAFFORDABLE_USAGE_FEE', amount: 2 });
+}
+{
   // AREA001B's own ACTION (ADD(5K)) trivially covers its own 1K fee -- confirms the check happens
   // AFTER the area's own action resolves, not before (a pre-resolution-only check would have wrongly
   // refused this very common, perfectly safe case -- caught by this exact test while developing the fix).
@@ -783,6 +830,28 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   const second = board.placeDice(state, index, { playerId: 'P1' }, die2.id, 'MAP009', 5);
   check('...but succeeds with GRANT_PLACE_ANYWHERE', second.success, true);
   check('...buildValue is now the SUM of both stacked dice (5+5=10)', second.actionResult.pendingBuild.buildValue, 10);
+}
+{
+  // AREA009C (元老院LV2, "BUILD();ADD(2K,BZ)") -- 2026-08-07, per user feedback: "BZをもらえるので本来
+  // 建築できるものが表示されません まずBZと2Kを得るその後建築候補が表示される にしてください". A001A
+  // costs 2A; P1 starts with only 1A (unaffordable on its own), but AREA009C's own grant includes 1 BZ,
+  // which auto-covers the missing 1A -- so placement should succeed (SLOT lights up / isn't refused) and
+  // the resulting pendingBuild should already list A001A as affordable, with the BZ/K already in hand.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.resources.A = 1;
+  const slotId = Object.keys(state.shops.NORMAL.slots).find((k) => k === 'SHOP101');
+  state.shops.NORMAL.slots[slotId] = 'A001A'; // SHOP101 = dice 1-6, most permissive
+  state.maps['MAP009'] = mapWithArea('MAP009', 'AREA009C', 6, 'P1'); // SLOT1-4=ANY, SLOT5-6=EX
+  const die = giveDie(state, 'P1', 1);
+
+  const result = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP009', 0); // SLOT1=ANY
+  check('Placing on AREA009C succeeds (the BZ it grants covers the otherwise-unaffordable A001A)', result.success, true);
+  check('...the 2K/1BZ grant already landed before the candidate list was built', { K: p1.resources.K, BZ: p1.resources.BZ }, { K: 2, BZ: 1 });
+  check('...remainingCommands is now empty (the ADD ran eagerly, nothing deferred)', result.actionResult.pendingBuild.remainingCommands, []);
+  const a001Candidate = result.actionResult.pendingBuild.candidates.find((c) => c.faceId === 'A001A');
+  check('...A001A is present among the candidates', !!a001Candidate, true);
+  check('...and is affordable using the real 1A plus the newly-granted BZ', board.isCandidateAffordable(state, index, 'P1', a001Candidate), true);
 }
 {
   // A regular (non-AREA009) EX slot (AREA001B) -- a second matching-value die without
