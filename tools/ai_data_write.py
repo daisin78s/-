@@ -68,13 +68,19 @@ def find_header_row(label):
 count_rows, count_cols = find_table(find_header_row('試行回数'))
 avg_rows, avg_cols = find_table(find_header_row('平均得点'))
 
-# Clears every existing data cell in both tables before writing (2026-08-03, per user feedback: "すでに
-# ある数字を上書きして大丈夫です" for a fresh N-game run) -- without this, a combination that simply
-# didn't occur in *this* run would silently keep whatever number an earlier (possibly pre-bugfix) run
-# left behind, mixing two different AI behaviors/seed counts in the same sheet.
+# Clears only the JOB001..JOB008 data cells this script actually writes (2026-08-03, per user feedback:
+# "すでにある数字を上書きして大丈夫です" for a fresh N-game run) -- without this, a combination that
+# simply didn't occur in *this* run would silently keep whatever number an earlier (possibly pre-bugfix)
+# run left behind, mixing two different AI behaviors/seed counts in the same sheet.
+# Bounded to max(count_cols.values()) (2026-08-07, fixing a bug reported by the user: "CONJOBシートの
+# セルL16からM25までもコピペされるようにしてください") -- this used to sweep all the way to
+# ws.max_column, which also wiped columns L/M (rows 16-25, alongside the 平均得点 table): the user's own
+# hand-maintained reference notes (each CON face's own ONCE-effect DSL + INST description text, e.g. row
+# 16 = CON001A's "ADD(6K)" / "資源◯の上限7個..."), unrelated to anything this script computes or writes.
+last_job_col = max(count_cols.values())
 for row_map in (count_rows, avg_rows):
     for r in row_map.values():
-        for c in range(2, ws.max_column + 1):
+        for c in range(2, last_job_col + 1):
             ws.cell(row=r, column=c).value = None
 
 written = 0
@@ -95,7 +101,7 @@ print(f'CONJOB: wrote {written} combinations, skipped {len(skipped)}: {skipped}'
 # see this file's own top-of-file doc) reusing the same JOB001..JOB008 column positions as the two tables
 # above (count_cols) rather than re-deriving them, since there's no separate header row of its own.
 job_usage_row = find_header_row('使用回数')
-for c in range(2, ws.max_column + 1):
+for c in range(2, last_job_col + 1):
     ws.cell(row=job_usage_row, column=c).value = None
 
 job_written = 0
