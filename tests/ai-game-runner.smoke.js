@@ -93,5 +93,28 @@ check('A full game reaches GAME_END, not stuck at MAX_ITERATIONS', state1.phase,
   check('A second seed also reaches GAME_END', state2.phase, 'GAME_END');
 }
 
+// ---------------------------------------------------------------------------
+// levelByPlayerId (2026-08-10, for tools/ai_level_comparison.js's random level-mix battles -- see
+// game-runner.js's playGame doc): every player gets src/ai/levels.js's per-level AIPlayer instead of
+// one uniform config shared by all 4 seats.
+// ---------------------------------------------------------------------------
+{
+  // All 4 seats assigned "LV1" (levels.js's entry: every option undefined, same as the default uniform
+  // path's own defaults) must behave IDENTICALLY to the plain no-options call for the same seed --
+  // proves levelByPlayerId's per-distinct-level AIPlayer construction doesn't itself change behavior,
+  // only which config gets used.
+  const seed = 'ai-integration-smoke-level-mix-uniform';
+  const plain = playGame(seed, PLAYER_NAMES, index, evalTable);
+  const allLv1 = playGame(seed, PLAYER_NAMES, index, evalTable, undefined, undefined, undefined, { P1: 'LV1', P2: 'LV1', P3: 'LV1', P4: 'LV1' });
+  check('levelByPlayerId with every seat on "LV1" matches the plain uniform call exactly (same seed)', allLv1.historyByPlayerId, plain.historyByPlayerId);
+}
+{
+  // Genuinely mixed levels (LV1/LV2/LV3 all present in one game) still reaches GAME_END cleanly -- the
+  // main regression this test guards against (mirrors the "reaches GAME_END" tests above, but for the
+  // mixed-construction path specifically).
+  const { state } = playGame('ai-integration-smoke-level-mix', PLAYER_NAMES, index, evalTable, undefined, undefined, undefined, { P1: 'LV1', P2: 'LV2', P3: 'LV3', P4: 'LV1' });
+  check('A mixed-level game (LV1/LV2/LV3 in one game) also reaches GAME_END', state.phase, 'GAME_END');
+}
+
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);

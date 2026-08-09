@@ -164,8 +164,19 @@ function driveTurn(state, index, playerId, aiPlayer, initialHasPlacedDieThisTurn
  * Evaluator instance every seat's AIPlayer shares, e.g. {qstAware:true} for "LV3" (main.js's
  * aiEvaluatorLv3 uses the exact same option -- see Evaluator's own doc). Left undefined by every
  * existing caller so this stays policy-free (LV1/LV2-equivalent) unless a caller opts in.
+ *
+ * levelByPlayerId (2026-08-10, optional, default undefined, for tools/ai_level_comparison.js's random
+ * level-mix battles): {playerId: levelName} (levelName from src/ai/levels.js's LEVELS). When present,
+ * OVERRIDES aiOptions/moveGeneratorOptions/evaluatorOptions entirely -- each player gets the AIPlayer
+ * that levels.js's own entry for their assigned level describes, instead of every seat uniformly
+ * sharing one. One (MoveGenerator, Evaluator) pair is built per DISTINCT level actually assigned this
+ * game (not one per player), same sharing main.js does between its own LV1/LV2 (one policy-free
+ * instance) and LV3 (its own). setupGame/driveOnboarding still just take the base, policy-free
+ * `evaluator` regardless -- onboarding (JOB/CON/RESOURCE) is pure RNG (see this file's own doc), so
+ * which Evaluator instance reaches it has never mattered. Every existing caller leaves this undefined,
+ * so the uniform single-evaluator/moveGenerator behavior below is completely unaffected.
  */
-function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorOptions, evaluatorOptions) {
+function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorOptions, evaluatorOptions, levelByPlayerId) {
   const { Evaluator } = require('./evaluator');
   const { MoveGenerator } = require('./move-generator');
   const { Simulator } = require('./simulator');
@@ -177,8 +188,26 @@ function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorO
   const aiPlayersByPlayerId = {};
 
   const state = setupGame(seed, playerNames, index, evaluator);
-  for (const player of state.players) {
-    aiPlayersByPlayerId[player.id] = new AIPlayer(index, moveGenerator, evaluator, simulator, aiOptions);
+  if (levelByPlayerId) {
+    const { getLevel } = require('./levels');
+    const instancesByLevelName = new Map();
+    for (const player of state.players) {
+      const levelName = levelByPlayerId[player.id];
+      if (!instancesByLevelName.has(levelName)) {
+        const level = getLevel(levelName);
+        instancesByLevelName.set(levelName, {
+          evaluator: new Evaluator(index, evalTable, level.evaluatorOptions),
+          moveGenerator: new MoveGenerator(level.moveGeneratorOptions),
+          aiOptions: level.aiOptions,
+        });
+      }
+      const lv = instancesByLevelName.get(levelName);
+      aiPlayersByPlayerId[player.id] = new AIPlayer(index, lv.moveGenerator, lv.evaluator, simulator, lv.aiOptions);
+    }
+  } else {
+    for (const player of state.players) {
+      aiPlayersByPlayerId[player.id] = new AIPlayer(index, moveGenerator, evaluator, simulator, aiOptions);
+    }
   }
 
   const round1ColorDiceBefore = {};

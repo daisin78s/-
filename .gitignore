@@ -2,6 +2,7 @@
 AI.DATA.xlsx
 AIDATA*.xlsx
 AIDATA*.json
+LVCOMPARE*.json
 ~$*.xlsx
 output/
 *_stderr*.txt

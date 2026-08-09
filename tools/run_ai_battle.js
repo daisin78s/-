@@ -13,6 +13,11 @@
  * "完全一致でなくても判断できればOK" (doesn't need to match exactly, just needs to be readable) --
  * copying the existing template is actually the simplest way to satisfy that, not a compromise.
  *
+ * "0: レベル混合" (2026-08-10, per user request: "LV1 2 3をランダムで入れる対戦ができるようにしたい") is
+ * a completely different mode, handed off to tools/ai_level_comparison.js instead -- no AI.DATA.xlsx
+ * template copy (that report shape doesn't apply), just an "LVCOMPARE<YYYYMMDD>-<n>.json" summary file
+ * (same auto-incrementing convention, see nextDatedFilePath).
+ *
  * Double-click run_ai_battle.bat in the project root to launch this (it just runs `node
  * tools/run_ai_battle.js` and pauses on exit so the console window doesn't vanish).
  */
@@ -27,6 +32,7 @@ const { spawnSync } = require('child_process');
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const AI_DATA_TEMPLATE = path.join(PROJECT_ROOT, 'AI.DATA.xlsx');
 const AI_DATA_REPORT_SCRIPT = path.join(__dirname, 'ai_data_report.js');
+const AI_LEVEL_COMPARISON_SCRIPT = path.join(__dirname, 'ai_level_comparison.js');
 
 /** Reads one answer line via rl's own async-iterator interface rather than rl.question() -- found
  * (2026-08-04) that question()'s ephemeral per-call listener can silently miss the answer to a SECOND
@@ -42,13 +48,13 @@ async function ask(lineIterator, question) {
 
 /** "AIDATA20260804-1.xlsx", "-2" etc. -- increments past whatever already exists today so a second run
  * on the same day never overwrites an earlier one. */
-function nextBattleFilePath() {
+function nextDatedFilePath(prefix, extension) {
   const now = new Date();
   const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
   let n = 1;
   let candidate;
   do {
-    candidate = path.join(PROJECT_ROOT, `AIDATA${dateStr}-${n}.xlsx`);
+    candidate = path.join(PROJECT_ROOT, `${prefix}${dateStr}-${n}.${extension}`);
     n++;
   } while (fs.existsSync(candidate));
   return candidate;
@@ -74,11 +80,35 @@ async function main() {
 
   let aiLevel;
   while (true) {
-    const answer = (await ask(lineIterator, 'AIレベルを選んでください（1: LV1 速い / 2: LV2 先読みあり・遅い / 3: LV3 先読み+モニュメント重視・遅い）: ')).trim();
+    const answer = (await ask(lineIterator, 'AIレベルを選んでください（0: レベル混合(比較用) / 1: LV1 速い / 2: LV2 先読みあり・遅い / 3: LV3 先読み+AREA007回避+QST対応・遅い）: ')).trim();
+    if (answer === '0') { aiLevel = 'MIX'; break; }
     if (answer === '1') { aiLevel = 'LV1'; break; }
     if (answer === '2') { aiLevel = 'LV2'; break; }
     if (answer === '3') { aiLevel = 'LV3'; break; }
-    console.log('1 か 2 か 3 を入力してください。');
+    console.log('0 か 1 か 2 か 3 を入力してください。');
+  }
+
+  // "0: レベル混合" (2026-08-10, per user request: "LV1 2 3をランダムで入れる対戦ができるようにしたい"):
+  // a completely different report shape (per-level score comparison, not the CONJOB/ABCM grid) via
+  // tools/ai_level_comparison.js -- no AI.DATA.xlsx template copy, no HighScores threshold question
+  // (that concept doesn't apply here), just N and an output path.
+  if (aiLevel === 'MIX') {
+    rl.close();
+    const jsonPath = nextDatedFilePath('LVCOMPARE', 'json');
+    console.log('');
+    console.log(`${n}戦（レベル混合）を開始します。4人それぞれ独立にランダムでAIレベルが割り当てられます。結果は ${path.basename(jsonPath)} に保存されます。`);
+    console.log('途中で止めたい場合はこのウィンドウを閉じてください。');
+    console.log('');
+    const result = spawnSync(process.execPath, [AI_LEVEL_COMPARISON_SCRIPT, String(n), jsonPath], { stdio: 'inherit' });
+    if (result.status !== 0) {
+      console.error('');
+      console.error('途中でエラーが発生しました。上のログを確認してください。');
+      process.exitCode = result.status || 1;
+      return;
+    }
+    console.log('');
+    console.log(`完了しました: ${jsonPath}`);
+    return;
   }
 
   // High-score logging threshold (2026-08-04, per user feedback: "記録するゲームの得点を記入してください
@@ -95,7 +125,7 @@ async function main() {
 
   rl.close();
 
-  const xlsxPath = nextBattleFilePath();
+  const xlsxPath = nextDatedFilePath('AIDATA', 'xlsx');
   fs.copyFileSync(AI_DATA_TEMPLATE, xlsxPath);
   const jsonPath = xlsxPath.replace(/\.xlsx$/, '.json');
 

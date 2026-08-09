@@ -20,10 +20,12 @@
  * tools/xlsx_to_json.py already uses in the other direction).
  *
  * Usage: node tools/ai_data_report.js <N> [outputJsonPath] [aiLevel] [xlsxOutputPath] [highScoreThreshold]
- *   aiLevel: "LV1" (default, no lookahead -- fast, ~10s/game), "LV2" (1-turn lookahead, same as main.js's
- *   AI LV2 -- measurably slower, ~60-70s/game per 2026-08-03's measurement, budget accordingly for a
- *   large N), or "LV3" (2026-08-09, same lookahead as LV2 plus main.js's aiMoveGeneratorLv3 monument-
- *   focus policy from round 3 onward -- same speed budget as LV2).
+ *   aiLevel: one of src/ai/levels.js's LEVELS (2026-08-10, that file is the single source of truth for
+ *   what each level actually means -- see its own doc). "LV1" (default, no lookahead -- fast,
+ *   ~10s/game), "LV2" (1-turn lookahead, same as main.js's AI LV2 -- measurably slower, ~60-70s/game per
+ *   2026-08-03's measurement, budget accordingly for a large N), or "LV3" (same lookahead as LV2 in
+ *   rounds 1-3, plus AREA007-avoidance/QST-awareness/a much deeper round-4-only lookahead -- notably
+ *   slower again just in round 4, budget accordingly).
  *   xlsxOutputPath: which .xlsx the every-10-games checkpoint (see writeReport) writes into -- defaults
  *   to AI.DATA.xlsx itself (the original behavior), but tools/run_ai_battle.js passes a fresh dated copy
  *   instead (2026-08-04, per user feedback: "同じフォルダにAIDATA20260802-1のような名前でエクセルを生成
@@ -44,6 +46,7 @@ const { execFileSync } = require('child_process');
 const { loadGameData, buildDataIndex, getCardRow } = require('../src/data-loader');
 const { buildEvalTable } = require('../src/ai/eval-table');
 const { playGame, AREA_CARD_BY_MAP } = require('../src/ai/game-runner');
+const { LEVELS, getLevel } = require('../src/ai/levels');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const DATA_PATH = path.join(PROJECT_ROOT, 'data', 'game.json');
@@ -126,8 +129,8 @@ function main() {
   const outputPath = process.argv[3] ? path.resolve(process.argv[3]) : DEFAULT_OUTPUT_PATH;
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   const aiLevel = (process.argv[4] || 'LV1').toUpperCase();
-  if (aiLevel !== 'LV1' && aiLevel !== 'LV2' && aiLevel !== 'LV3') {
-    console.error(`Unknown aiLevel "${aiLevel}" -- expected LV1, LV2, or LV3`);
+  if (!LEVELS.some((l) => l.name === aiLevel)) {
+    console.error(`Unknown aiLevel "${aiLevel}" -- expected one of: ${LEVELS.map((l) => l.name).join(', ')}`);
     process.exit(1);
   }
   const XLSX_PATH = process.argv[5] ? path.resolve(process.argv[5]) : DEFAULT_XLSX_PATH;
@@ -136,17 +139,10 @@ function main() {
     console.error(`Invalid highScoreThreshold "${process.argv[6]}" -- expected a number`);
     process.exit(1);
   }
-  // LV3 shares LV2's lookahead and additionally gets main.js's aiMoveGeneratorLv3 AREA007-avoidance
-  // policy, aiEvaluatorLv3's QST-awareness, and aiPlayerLv3's round-4-only deep lookahead/wider beam
-  // (see game-runner.js's playGame doc for moveGeneratorOptions/evaluatorOptions, and AIPlayer's own
-  // roundOverrides doc).
-  const aiOptions = aiLevel === 'LV2' ? { lookaheadExtraTurns: 1 }
-    : aiLevel === 'LV3' ? { lookaheadExtraTurns: 1, roundOverrides: { 4: { lookaheadExtraTurns: 20, beamWidth: 10, maxRolloutMoves: 200 } } }
-    : undefined;
-  const moveGeneratorOptions = aiLevel === 'LV3'
-    ? { avoidMapIdFromRound: { mapId: 'MAP007', round: 3 } }
-    : undefined;
-  const evaluatorOptions = aiLevel === 'LV3' ? { qstAware: true } : undefined;
+  // Sourced from src/ai/levels.js (2026-08-10) rather than an inline per-level if/else, so it and
+  // tools/ai_level_comparison.js's random mix always agree on what each level actually means, and a
+  // future level added there is usable here immediately too.
+  const { aiOptions, moveGeneratorOptions, evaluatorOptions } = getLevel(aiLevel);
 
   const raw = loadGameData(DATA_PATH);
   const index = buildDataIndex(raw);
