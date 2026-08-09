@@ -196,5 +196,46 @@ function stateWithM012InShop(round) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Turn-end lockout penalty (2026-08-10, per user report: a greedy AI holding CON005B
+// (TURNEND=RESOURCE_TOTAL_LIMIT((A,B,C),7)) converted huge piles of K into A/B/C, then got stuck unable
+// to end its turn for the rest of the round -- see Evaluator's own comment on this block).
+// ---------------------------------------------------------------------------
+{
+  const state = freshState(1);
+  const p1 = state.players[0];
+  giveCard(state, 'CON005B', 'P1');
+  p1.resources.A = 3;
+  p1.resources.B = 2;
+  p1.resources.C = 2; // total 7 -- exactly at CON005B's limit, not over it
+  const expected = 3 * 5 + 2 * 5 + 2 * 5; // CON005B itself contributes 0 (eval=0, no printed VP)
+  check('At exactly the RESOURCE_TOTAL_LIMIT (7), no lockout penalty applies', evaluator.score(state, 'P1'), expected);
+}
+{
+  const state = freshState(1);
+  const p1 = state.players[0];
+  giveCard(state, 'CON005B', 'P1');
+  p1.resources.A = 4;
+  p1.resources.B = 2;
+  p1.resources.C = 2; // total 8 -- 1 over CON005B's limit of 7
+  const expected = 4 * 5 + 2 * 5 + 2 * 5 - 1000; // same holdings, minus the flat lockout penalty
+  check('One unit over the RESOURCE_TOTAL_LIMIT, the 1000-point lockout penalty applies', evaluator.score(state, 'P1'), expected);
+}
+{
+  const state = freshState(1);
+  const p1 = state.players[0];
+  p1.resources.A = 40; // huge pile, but no RESOURCE_TOTAL_LIMIT-granting card owned at all
+  check('Large resource totals alone (no RESOURCE_TOTAL_LIMIT card owned) never trigger the lockout penalty', evaluator.score(state, 'P1'), 40 * 5);
+}
+{
+  // Unpaid, currently-unaffordable USAGE_FEE also blocks canEndTurn (executor.canEndTurn checks both) --
+  // confirms the penalty isn't hardcoded to RESOURCE_TOTAL_LIMIT specifically.
+  const state = freshState(1);
+  const p1 = state.players[0];
+  p1.pendingFee = { mapId: 'MAP001', amount: 2 };
+  p1.resources.K = 0; // can't cover the 2K fee
+  check('An unpayable pending USAGE_FEE also triggers the lockout penalty', evaluator.score(state, 'P1'), -1000);
+}
+
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);

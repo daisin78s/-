@@ -101,6 +101,25 @@ class Evaluator {
 
     total += executor.collectVpModifiers(state, this.index, playerId) * v('VP');
 
+    // Turn-end lockout risk (2026-08-10, per user report: a greedy AI holding CON005B
+    // (TURNEND=RESOURCE_TOTAL_LIMIT((A,B,C),7)) would convert a big pile of K into A/B/C -- A/B/C's
+    // higher per-unit eval-table weight than K (5 vs 3, constant across rounds) makes this look like a
+    // straightforward gain -- with no notion that free actions can only claw back 1 unit of A/B/C EACH,
+    // once per round (game-state's per-freeActionId once-per-round tap), so overshooting the limit by
+    // more than a couple of units effectively strands the player unable to end their turn for the rest
+    // of the round: real repeated AI-battle behavior was "convert a huge pile, get stuck, keep
+    // re-evaluating the same trap every subsequent move". Reuses the exact same executor.canEndTurn(...)
+    // check MoveGenerator already calls to decide whether free actions need offering at all, so this
+    // stays in sync with whatever TURNEND rules actually block ending a turn (any RESOURCE_TOTAL_LIMIT
+    // card, not hardcoded to CON005B, plus the same unpaid-USAGE_FEE case) rather than re-deriving that
+    // logic here. LOCKOUT_PENALTY is a deliberately large flat constant, not scaled to how far over the
+    // limit -- a resulting state that currently can't end its turn is simply worth much less than one
+    // that can, hard enough to always dominate the marginal per-unit resource-weight gain that led into
+    // it. Start big and tune down via AI battle results if this turns out overcautious, same workflow as
+    // eval-table's own weight tuning (e.g. BZ's 5->4).
+    const LOCKOUT_PENALTY = 1000;
+    if (!executor.canEndTurn(state, this.index, playerId).ok) total -= LOCKOUT_PENALTY;
+
     // Monument-sniping risk (2026-08-04, per user feedback -- see monumentAtRiskFromOpponents' own
     // doc): for each monument still sitting in the M shop, if it's "at risk" (some opponent already has
     // what it takes to grab it right now), subtract the value it *would* have contributed if owned
