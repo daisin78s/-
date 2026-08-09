@@ -1741,11 +1741,11 @@ function isBuiltCardPhysicalId(physicalId) {
 // real-engine call main.js makes, rather than approximating it.
 // ---------------------------------------------------------------------------
 
-/** The "目標：..." title line from a QST card's INST text (a short human-readable label, e.g.
- * "建築数") -- falls back to the raw GOAL DSL text (e.g. "CARD_COUNT(A,B,C)") if INST is missing, so
- * nothing goes blank for data that hasn't been filled in yet. */
+/** The title line from a QST card's INST text (a short human-readable label, e.g. "建築数") -- falls
+ * back to the raw GOAL DSL text (e.g. "CARD_COUNT(A,B,C)") if INST is missing, so nothing goes blank
+ * for data that hasn't been filled in yet. No "目標：" prefix (removed 2026-08-10, per user request). */
 function questGoalDisplayText(facts) {
-  return `目標：${facts.inst || facts.goal}`;
+  return facts.inst || facts.goal;
 }
 
 /** Plain-text reward summary (e.g. "ADD(3VP)" -> "3VP", "ADD(2K,BZ)" -> "2K+BZ"). Every QST row's
@@ -1796,10 +1796,17 @@ function buildQstCardVisual(faceId, state, options = {}) {
   const colEls = node.querySelectorAll(':scope > .qst-card__ranks > .qst-card__rank-col');
   colEls.forEach((colEl, i) => {
     const rank = i + 1;
+    const holders = ranking.filter((r) => r.rank === rank);
+    // GOALメトリクスの現在値 (2026-08-10, per user request: "1位 4VP...の上にそれぞれの建築数を数字で
+    // 書く 例 8 7 5") -- every holder of a given rank shares the same value (that's what ties them),
+    // so just read the first one; blank when nobody currently sits at this rank at all (only possible
+    // when 4+ players are tied at a higher rank, same "no swatches" case .qst-card__rank-players
+    // already handles).
+    colEl.querySelector('.qst-card__rank-value').textContent = holders.length ? holders[0].value : '';
     colEl.querySelector('.qst-card__rank-header').textContent = `${rank}位　${questRewardValueText(facts.rewards[i])}`;
     const playersEl = colEl.querySelector('.qst-card__rank-players');
     playersEl.innerHTML = '';
-    for (const entry of ranking.filter((r) => r.rank === rank)) {
+    for (const entry of holders) {
       const rankedPlayer = state.players.find((p) => p.id === entry.playerId);
       const swatch = el('span', 'qst-card__rank-player');
       swatch.dataset.color = rankedPlayer.color;

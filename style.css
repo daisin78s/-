@@ -1740,11 +1740,13 @@ h1, h2, h3 { margin: 0; }
   overflow-wrap: anywhere;
 }
 
-/* Front face's title line: "目標：{INST}" (main.js's questGoalDisplayText). */
+/* Front face's title line: "{INST}" (main.js's questGoalDisplayText -- "目標：" prefix removed
+   2026-08-10, per user request). Centered (2026-08-10, per user request: "建築数など中央そろえ"). */
 .qst-card__goal-line {
   font-size: 14px;
   font-weight: 700;
   color: var(--text);
+  text-align: center;
   overflow-wrap: anywhere;
 }
 
@@ -1758,10 +1760,23 @@ h1, h2, h3 { margin: 0; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   min-width: 0; /* grid items default to min-width:auto, which would otherwise refuse to shrink text
     below its unwrapped width -- same fix rationale documented elsewhere in this file for flex/grid
     text children. */
+}
+
+/* Current GOAL-metric value for whoever holds this rank right now (2026-08-10, per user request: "1位
+   4VP...の上にそれぞれの建築数を数字で書く 例 8 7 5") -- e.g. "8" above "1位　4VP". Kept compact (small
+   line-height, no extra margin) so adding this line doesn't push the QST column taller than the SHOP
+   grid beside it (per user request: "SHOPより縦幅が大きくなりすぎないように") -- .qst-card__rank-col's
+   own gap was trimmed 6px->4px for the same reason. Blank (renders as an empty, zero-height line) when
+   nobody currently holds this rank at all (see main.js's own comment on that edge case). */
+.qst-card__rank-value {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--accent);
 }
 
 .qst-card__rank-header {
