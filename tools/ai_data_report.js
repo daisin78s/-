@@ -20,9 +20,10 @@
  * tools/xlsx_to_json.py already uses in the other direction).
  *
  * Usage: node tools/ai_data_report.js <N> [outputJsonPath] [aiLevel] [xlsxOutputPath] [highScoreThreshold]
- *   aiLevel: "LV1" (default, no lookahead -- fast, ~10s/game) or "LV2" (1-turn lookahead, same as
- *   main.js's AI LV2 -- measurably slower, ~60-70s/game per 2026-08-03's measurement, budget accordingly
- *   for a large N).
+ *   aiLevel: "LV1" (default, no lookahead -- fast, ~10s/game), "LV2" (1-turn lookahead, same as main.js's
+ *   AI LV2 -- measurably slower, ~60-70s/game per 2026-08-03's measurement, budget accordingly for a
+ *   large N), or "LV3" (2026-08-09, same lookahead as LV2 plus main.js's aiMoveGeneratorLv3 monument-
+ *   focus policy from round 3 onward -- same speed budget as LV2).
  *   xlsxOutputPath: which .xlsx the every-10-games checkpoint (see writeReport) writes into -- defaults
  *   to AI.DATA.xlsx itself (the original behavior), but tools/run_ai_battle.js passes a fresh dated copy
  *   instead (2026-08-04, per user feedback: "同じフォルダにAIDATA20260802-1のような名前でエクセルを生成
@@ -125,8 +126,8 @@ function main() {
   const outputPath = process.argv[3] ? path.resolve(process.argv[3]) : DEFAULT_OUTPUT_PATH;
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   const aiLevel = (process.argv[4] || 'LV1').toUpperCase();
-  if (aiLevel !== 'LV1' && aiLevel !== 'LV2') {
-    console.error(`Unknown aiLevel "${aiLevel}" -- expected LV1 or LV2`);
+  if (aiLevel !== 'LV1' && aiLevel !== 'LV2' && aiLevel !== 'LV3') {
+    console.error(`Unknown aiLevel "${aiLevel}" -- expected LV1, LV2, or LV3`);
     process.exit(1);
   }
   const XLSX_PATH = process.argv[5] ? path.resolve(process.argv[5]) : DEFAULT_XLSX_PATH;
@@ -135,7 +136,10 @@ function main() {
     console.error(`Invalid highScoreThreshold "${process.argv[6]}" -- expected a number`);
     process.exit(1);
   }
-  const aiOptions = aiLevel === 'LV2' ? { lookaheadExtraTurns: 1 } : undefined;
+  // LV3 shares LV2's lookahead and additionally gets main.js's aiMoveGeneratorLv3 monument-focus
+  // policy (see game-runner.js's playGame doc for moveGeneratorOptions).
+  const aiOptions = (aiLevel === 'LV2' || aiLevel === 'LV3') ? { lookaheadExtraTurns: 1 } : undefined;
+  const moveGeneratorOptions = aiLevel === 'LV3' ? { monumentFocusFromRound: 3 } : undefined;
 
   const raw = loadGameData(DATA_PATH);
   const index = buildDataIndex(raw);
@@ -188,7 +192,7 @@ function main() {
     let roundDetailByPlayerId;
     let activationCounts;
     try {
-      ({ state, historyByPlayerId, roundDetailByPlayerId, activationCounts } = playGame(seed, PLAYER_NAMES, index, evalTable, aiOptions));
+      ({ state, historyByPlayerId, roundDetailByPlayerId, activationCounts } = playGame(seed, PLAYER_NAMES, index, evalTable, aiOptions, moveGeneratorOptions));
     } catch (e) {
       console.error(`Game ${i + 1}/${n} (seed=${seed}) crashed: ${e.message}`);
       console.error(e.stack);

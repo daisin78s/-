@@ -74,10 +74,11 @@ async function main() {
 
   let aiLevel;
   while (true) {
-    const answer = (await ask(lineIterator, 'AIレベルを選んでください（1: LV1 速い / 2: LV2 先読みあり・遅い）: ')).trim();
+    const answer = (await ask(lineIterator, 'AIレベルを選んでください（1: LV1 速い / 2: LV2 先読みあり・遅い / 3: LV3 先読み+モニュメント重視・遅い）: ')).trim();
     if (answer === '1') { aiLevel = 'LV1'; break; }
     if (answer === '2') { aiLevel = 'LV2'; break; }
-    console.log('1 か 2 を入力してください。');
+    if (answer === '3') { aiLevel = 'LV3'; break; }
+    console.log('1 か 2 か 3 を入力してください。');
   }
 
   // High-score logging threshold (2026-08-04, per user feedback: "記録するゲームの得点を記入してください

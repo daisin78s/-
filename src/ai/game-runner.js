@@ -153,15 +153,21 @@ function driveTurn(state, index, playerId, aiPlayer, initialHasPlacedDieThisTurn
  * by every existing caller (tools/ai_batch_run.js's default CLI usage) so this stays the fast LV1-
  * equivalent behavior unless a caller opts in -- see ai-player.js's own doc for why the *class* default
  * stays cheap.
+ *
+ * moveGeneratorOptions (2026-08-09, optional, default undefined): passed straight through to the
+ * single MoveGenerator instance every seat's AIPlayer shares, e.g. {monumentFocusFromRound:3} for
+ * "LV3" (main.js's aiMoveGeneratorLv3 uses the exact same option -- see MoveGenerator's own doc). Left
+ * undefined by every existing caller so this stays policy-free (LV1/LV2-equivalent) unless a caller
+ * opts in.
  */
-function playGame(seed, playerNames, index, evalTable, aiOptions) {
+function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorOptions) {
   const { Evaluator } = require('./evaluator');
   const { MoveGenerator } = require('./move-generator');
   const { Simulator } = require('./simulator');
   const { AIPlayer } = require('./ai-player');
 
   const evaluator = new Evaluator(index, evalTable);
-  const moveGenerator = new MoveGenerator();
+  const moveGenerator = new MoveGenerator(moveGeneratorOptions);
   const simulator = new Simulator();
   const aiPlayersByPlayerId = {};
 
