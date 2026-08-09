@@ -7,6 +7,13 @@
  *     player-games where that face was built (or, for "D", where the player gained at least one new
  *     colored die) in that round, and the average final score across those player-games.
  *
+ * QST split (2026-08-09, per user request): since QST's rank-based rewards (src/qst.js) now grant VP
+ * automatically at GAME_END, the "average score" above is computed with that VP *excluded*
+ * ("QSTカードなしの今までの得点で平均を出してください" -- i.e. it keeps its original, pre-QST-reward
+ * meaning) and QST's own contribution is reported separately as a parallel "avgQstScore"/"QST平均得点"
+ * value everywhere avgScore appears (both sheets) -- see game-runner.js's roundDetailByPlayerId.qstScore
+ * for where the split itself comes from.
+ *
  * Writes one JSON file (default output/ai_data_report.json) that tools/ai_data_write.py then loads and
  * writes into AI.DATA.xlsx's existing cell layout -- kept as two steps (Node aggregates, Python writes
  * xlsx) since this project has no xlsx-writing library in Node, only openpyxl in Python (same split
@@ -134,19 +141,23 @@ function main() {
   const index = buildDataIndex(raw);
   const evalTable = buildEvalTable(raw);
 
-  // conjob["CON001A\tJOB001"] = { count, scoreSum }
+  // conjob["CON001A\tJOB001"] = { count, scoreSum, qstScoreSum }. scoreSum (2026-08-09, per user
+  // request: "AIDATA 平均得点は QSTカードなしの今までの得点で平均を出してください") now excludes QST's
+  // rank-based reward VP -- i.e. it's finalScore minus qstScore, matching the metric's original,
+  // pre-QST-auto-reward meaning -- while qstScoreSum tracks QST's own contribution separately, for the
+  // new "QST平均得点" table (see writeReport's avgQstScore below).
   const conjob = new Map();
-  // abcm["A001A"][1] = { count, scoreSum, usageSum } -- 1-4 for rounds, plus the "D" row for colored-die
-  // gains. usageSum (2026-08-07) only ever gets added to for isUsageEligible ids -- see that function's
-  // own doc.
+  // abcm["A001A"][1] = { count, scoreSum, qstScoreSum, usageSum } -- 1-4 for rounds, plus the "D" row
+  // for colored-die gains. usageSum (2026-08-07) only ever gets added to for isUsageEligible ids -- see
+  // that function's own doc. scoreSum/qstScoreSum split the same way as conjob's own, above.
   const abcm = new Map();
   function abcmEntry(id, round) {
     if (!abcm.has(id)) {
       abcm.set(id, {
-        1: { count: 0, scoreSum: 0, usageSum: 0 },
-        2: { count: 0, scoreSum: 0, usageSum: 0 },
-        3: { count: 0, scoreSum: 0, usageSum: 0 },
-        4: { count: 0, scoreSum: 0, usageSum: 0 },
+        1: { count: 0, scoreSum: 0, qstScoreSum: 0, usageSum: 0 },
+        2: { count: 0, scoreSum: 0, qstScoreSum: 0, usageSum: 0 },
+        3: { count: 0, scoreSum: 0, qstScoreSum: 0, usageSum: 0 },
+        4: { count: 0, scoreSum: 0, qstScoreSum: 0, usageSum: 0 },
       });
     }
     return abcm.get(id)[round];
@@ -190,18 +201,20 @@ function main() {
 
     for (const playerId of Object.keys(historyByPlayerId)) {
       const h = historyByPlayerId[playerId];
+      const detail = roundDetailByPlayerId[playerId];
       const key = `${h.conFaceId}\t${h.jobFaceId}`;
-      if (!conjob.has(key)) conjob.set(key, { con: h.conFaceId, job: h.jobFaceId, count: 0, scoreSum: 0 });
+      if (!conjob.has(key)) conjob.set(key, { con: h.conFaceId, job: h.jobFaceId, count: 0, scoreSum: 0, qstScoreSum: 0 });
       const entry = conjob.get(key);
       entry.count++;
-      entry.scoreSum += h.finalScore;
+      entry.scoreSum += detail.finalScore - detail.qstScore;
+      entry.qstScoreSum += detail.qstScore;
 
-      const detail = roundDetailByPlayerId[playerId];
       for (const round of [1, 2, 3, 4]) {
         for (const faceId of detail.buildsByRound[round]) {
           const e = abcmEntry(faceId, round);
           e.count++;
-          e.scoreSum += detail.finalScore;
+          e.scoreSum += detail.finalScore - detail.qstScore;
+          e.qstScoreSum += detail.qstScore;
           // "使用回数" (2026-08-07, per user spec) -- see isUsageEligible's own doc; exactly one of
           // these three branches can ever apply to a given faceId (B008A / an A-deck fee card / a
           // TAP-bearing B or C face are mutually exclusive sets).
@@ -217,7 +230,8 @@ function main() {
         if (detail.colorDiceGainedByRound[round] > 0) {
           const e = abcmEntry('D', round);
           e.count++;
-          e.scoreSum += detail.finalScore;
+          e.scoreSum += detail.finalScore - detail.qstScore;
+          e.qstScoreSum += detail.qstScore;
         }
       }
 
@@ -247,7 +261,7 @@ function main() {
   writeReport(n);
 
   function writeReport(gamesRun) {
-    const conjobOut = [...conjob.values()].map((e) => ({ con: e.con, job: e.job, count: e.count, avgScore: e.scoreSum / e.count }));
+    const conjobOut = [...conjob.values()].map((e) => ({ con: e.con, job: e.job, count: e.count, avgScore: e.scoreSum / e.count, avgQstScore: e.qstScoreSum / e.count }));
     const abcmOut = {};
     for (const [id, byRound] of abcm) {
       abcmOut[id] = {};
@@ -257,6 +271,7 @@ function main() {
         abcmOut[id][round] = {
           count: e.count,
           avgScore: e.count > 0 ? e.scoreSum / e.count : null,
+          avgQstScore: e.count > 0 ? e.qstScoreSum / e.count : null,
           avgUsage: usageEligible && e.count > 0 ? e.usageSum / e.count : null,
         };
       }

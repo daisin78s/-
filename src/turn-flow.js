@@ -216,8 +216,11 @@ function endRound(state, index) {
     // QST's rank-based rewards (2026-08-09, see qst.js's own doc) settle exactly here, exactly once --
     // nothing after this point can trigger another round-4 endRound (the game loop stops advancing
     // turns once phase is GAME_END, both in main.js's UI and src/ai/game-runner.js), so this needs no
-    // idempotency guard.
-    qst.resolveEndGameRewards(state, index);
+    // idempotency guard. Return value (playerId -> VP actually gained from QST) is stashed on state
+    // rather than just discarded -- src/ai/game-runner.js reads it back afterward to report a
+    // QST-specific average score in AI.DATA.xlsx (2026-08-09, see tools/ai_data_report.js) separately
+    // from the existing (now QST-excluded, per the same user request) overall average score.
+    state.qstRewardsGranted = qst.resolveEndGameRewards(state, index);
   }
 }
 

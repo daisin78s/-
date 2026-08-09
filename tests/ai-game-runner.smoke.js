@@ -32,8 +32,23 @@ function assertTrue(label, cond) { check(label, !!cond, true); }
 // safety valve) -- this is the exact regression this integration test exists to catch: 2026-08-02's
 // stuck-AI bugs (see [[project-dice-wp]]) all manifested as state.phase staying 'ROUND' forever.
 // ---------------------------------------------------------------------------
-const { state: state1, historyByPlayerId: history1 } = playGame('ai-integration-smoke-1', PLAYER_NAMES, index, evalTable);
+const { state: state1, historyByPlayerId: history1, roundDetailByPlayerId: roundDetail1 } = playGame('ai-integration-smoke-1', PLAYER_NAMES, index, evalTable);
 check('A full game reaches GAME_END, not stuck at MAX_ITERATIONS', state1.phase, 'GAME_END');
+
+// ---------------------------------------------------------------------------
+// QST's rank-based rewards (2026-08-09) settle automatically by GAME_END -- state.qstRewardsGranted is
+// populated (turn-flow.js's endRound), and roundDetailByPlayerId[playerId].qstScore (tools/
+// ai_data_report.js's own source for the new "QST平均得点" columns) matches it exactly, one entry per
+// player, every value a non-negative integer (VP only ever goes up from a reward, never down).
+// ---------------------------------------------------------------------------
+{
+  assertTrue('state.qstRewardsGranted is populated at GAME_END', !!state1.qstRewardsGranted);
+  check('qstRewardsGranted has one entry per player', Object.keys(state1.qstRewardsGranted).sort(), ['P1', 'P2', 'P3', 'P4']);
+  for (const playerId of Object.keys(state1.qstRewardsGranted)) {
+    assertTrue(`${playerId}: qstRewardsGranted value is a non-negative integer`, Number.isInteger(state1.qstRewardsGranted[playerId]) && state1.qstRewardsGranted[playerId] >= 0);
+    check(`${playerId}: roundDetailByPlayerId.qstScore matches state.qstRewardsGranted`, roundDetail1[playerId].qstScore, state1.qstRewardsGranted[playerId]);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // historyByPlayerId has exactly the 5 fields the user specified (2026-08-01: "IDでCON JOB 1R目に建築

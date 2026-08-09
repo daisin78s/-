@@ -3,21 +3,28 @@ Writes the JSON aggregate report from tools/ai_data_report.js into AI.DATA.xlsx'
 (CONJOB, ABCM) -- fills in cells by matching existing row/column headers, never touches the sheet
 layout/formatting itself.
 
-CONJOB sheet: two 8x9 tables sharing the same layout (CON001A/002A/003A/004A/001B/002B/003B/004B rows x
-JOB001..JOB008 columns) -- one for "試行回数" (trial count), one for "平均得点" (average score). The
-JOB column headers have no tier suffix (JOB cards only ever have an 'A' face -- see game-state.js's
-splitCardId), so a jobFaceId like "JOB005A" is matched by stripping the trailing letter. A third,
-single-row table (2026-08-07, per user spec) lives at row 30 ("使用回数" in column A, JOB001..JOB008 in
-B:I, the user's own pre-existing layout -- found by inspection, same as the two tables above): one
-aggregate "usage" value per JOB (not per-round) -- see report['job']'s own meaning, set by
-tools/ai_data_report.js's jobEntry doc.
+CONJOB sheet: two pairs of 8x9 tables sharing the same layout (CON001A/002A/003A/004A/001B/002B/003B/
+004B rows x JOB001..JOB008 columns) -- "試行回数" (trial count), "平均得点" (average score, QST VP
+excluded -- see report['conjob'][].avgScore's own doc in ai_data_report.js), and (2026-08-09, per user
+request) "QST平均得点" (QST's own average VP contribution, same row/col layout, a separate table further
+down the sheet -- report['conjob'][].avgQstScore). The JOB column headers have no tier suffix (JOB cards
+only ever have an 'A' face -- see game-state.js's splitCardId), so a jobFaceId like "JOB005A" is matched
+by stripping the trailing letter. A fifth, single-row table (2026-08-07, per user spec) lives at row 30
+("使用回数" in column A, JOB001..JOB008 in B:I, the user's own pre-existing layout -- found by
+inspection, same as the tables above): one aggregate "usage" value per JOB (not per-round) -- see
+report['job']'s own meaning, set by tools/ai_data_report.js's jobEntry doc.
 
 ABCM sheet: one table, ID column (every A/B/C tier-A and tier-B face, M001-M012, plus "D" for "gained a
-new colored die") x 試行回数1R-4R / 平均得点1R-4R / 使用回数1-4 columns. The 使用回数 columns
-(2026-08-07, per user spec, also the user's own pre-existing layout addition) only ever get a value for
-rows report['abcm'][id][round]['avgUsage'] is non-null for (B008A and the 8 A-deck fee-generating
-cards -- see tools/ai_data_report.js's USAGE_ELIGIBLE_ABCM_FACES) -- every other row's cells are cleared
-to blank, not written as 0, so a card with no "usage" concept at all never shows a misleading number.
+new colored die") x 試行回数1R-4R / 平均得点1R-4R / QST平均得点1R-4R / 使用回数1-4 columns. Column
+positions are looked up by their own header text (find_col, below), not hardcoded -- the exact same
+"never desync from the sheet's actual current layout" reasoning as CONJOB's find_table/find_header_row
+(2026-08-09: this sheet's columns were reshuffled to interleave the new QST平均得点{r}R columns between
+each existing 平均得点{r}R one, which would have silently written into the wrong columns had the old
+hardcoded indices been kept). The 使用回数 columns (2026-08-07, per user spec, also the user's own
+pre-existing layout addition) only ever get a value for rows report['abcm'][id][round]['avgUsage'] is
+non-null for (B008A and the 8 A-deck fee-generating cards -- see tools/ai_data_report.js's
+USAGE_ELIGIBLE_ABCM_FACES) -- every other row's cells are cleared to blank, not written as 0, so a card
+with no "usage" concept at all never shows a misleading number.
 
 Usage: python tools/ai_data_write.py [jsonPath] [xlsxPath]
 """
@@ -68,6 +75,9 @@ def find_header_row(label):
 
 count_rows, count_cols = find_table(find_header_row('試行回数'))
 avg_rows, avg_cols = find_table(find_header_row('平均得点'))
+# QST平均得点 (2026-08-09, per user request) -- a third table, same row/col layout as the two above,
+# further down the sheet (the user's own pre-existing addition, found the same dynamic way).
+qst_avg_rows, qst_avg_cols = find_table(find_header_row('QST平均得点'))
 
 # Clears only the JOB001..JOB008 data cells this script actually writes (2026-08-03, per user feedback:
 # "すでにある数字を上書きして大丈夫です" for a fresh N-game run) -- without this, a combination that
@@ -79,7 +89,7 @@ avg_rows, avg_cols = find_table(find_header_row('平均得点'))
 # hand-maintained reference notes (each CON face's own ONCE-effect DSL + INST description text, e.g. row
 # 16 = CON001A's "ADD(6K)" / "資源◯の上限7個..."), unrelated to anything this script computes or writes.
 last_job_col = max(count_cols.values())
-for row_map in (count_rows, avg_rows):
+for row_map in (count_rows, avg_rows, qst_avg_rows):
     for r in row_map.values():
         for c in range(2, last_job_col + 1):
             ws.cell(row=r, column=c).value = None
@@ -94,6 +104,7 @@ for entry in report['conjob']:
         continue
     ws.cell(row=count_rows[con_face_id], column=count_cols[job_physical_id], value=entry['count'])
     ws.cell(row=avg_rows[con_face_id], column=avg_cols[job_physical_id], value=round(entry['avgScore'], 2))
+    ws.cell(row=qst_avg_rows[con_face_id], column=qst_avg_cols[job_physical_id], value=round(entry['avgQstScore'], 2))
     written += 1
 
 print(f'CONJOB: wrote {written} combinations, skipped {len(skipped)}: {skipped}')
@@ -105,18 +116,21 @@ print(f'CONJOB: wrote {written} combinations, skipped {len(skipped)}: {skipped}'
 # formulas, same style as row26/27, rather than pre-computed Python values, so they keep recalculating
 # automatically whenever this script rewrites the underlying B:I cells on a later run. Written for every
 # CON row unconditionally (not just ones report['conjob'] had data for this run), matching row26/27's own
-# always-present formulas.
+# always-present formulas. Written for the QST平均得点 table's own rows too (2026-08-09) -- same J/K
+# columns (a per-CON-*row* marginal, and every table shares the same CON row set), just at that table's
+# own row positions.
 j_col = last_job_col + 1
 k_col = last_job_col + 2
 first_col_letter = get_column_letter(min(avg_cols.values()))
 last_col_letter = get_column_letter(max(avg_cols.values()))
 j_col_letter = get_column_letter(j_col)
 num_jobs = len(avg_cols)
-for con_face_id, r in avg_rows.items():
-    ws.cell(row=r, column=j_col, value=f'=SUM({first_col_letter}{r}:{last_col_letter}{r})')
-    ws.cell(row=r, column=k_col, value=f'={j_col_letter}{r}/{num_jobs}')
+for row_map in (avg_rows, qst_avg_rows):
+    for con_face_id, r in row_map.items():
+        ws.cell(row=r, column=j_col, value=f'=SUM({first_col_letter}{r}:{last_col_letter}{r})')
+        ws.cell(row=r, column=k_col, value=f'={j_col_letter}{r}/{num_jobs}')
 
-print(f'CONJOB J/K: wrote per-CON marginal sum/avg formulas for {len(avg_rows)} rows')
+print(f'CONJOB J/K: wrote per-CON marginal sum/avg formulas for {len(avg_rows)} + {len(qst_avg_rows)} rows')
 
 # Third table: a single "使用回数" row (2026-08-07, per user spec, at the user's own pre-existing row --
 # see this file's own top-of-file doc) reusing the same JOB001..JOB008 column positions as the two tables
@@ -148,16 +162,23 @@ while ws2.cell(row=r, column=1).value:
     id_rows[ws2.cell(row=r, column=1).value] = r
     r += 1
 
-# Column layout confirmed via inspection: A=ID, B-E=試行回数1R-4R, F=blank spacer, G-J=平均得点1R-4R,
-# K=blank spacer, L-O=使用回数1-4 (2026-08-07, per user spec -- the user's own pre-existing column
-# addition, only meaningful for B008A/A-deck rows, see this file's own top-of-file doc).
-COUNT_COLS = {1: 2, 2: 3, 3: 4, 4: 5}
-AVG_COLS = {1: 7, 2: 8, 3: 9, 4: 10}
-USAGE_COLS = {1: 12, 2: 13, 3: 14, 4: 15}
+# Column positions looked up by their own row-1 header text, not hardcoded (2026-08-09 -- see this
+# file's own top-of-file doc for why: this sheet's columns were reshuffled once already to interleave
+# the new QST平均得点{r}R columns, which would have silently desynced a hardcoded layout).
+def find_col(label):
+    for c in range(1, ws2.max_column + 1):
+        if ws2.cell(row=1, column=c).value == label:
+            return c
+    raise ValueError(f'Could not find column "{label}" in row 1 of the ABCM sheet')
+
+COUNT_COLS = {r: find_col(f'試行回数{r}R') for r in (1, 2, 3, 4)}
+AVG_COLS = {r: find_col(f'平均得点{r}R') for r in (1, 2, 3, 4)}
+QST_AVG_COLS = {r: find_col(f'QST平均得点{r}R') for r in (1, 2, 3, 4)}
+USAGE_COLS = {r: find_col(f'使用回数{r}') for r in (1, 2, 3, 4)}
 
 # Same clear-before-write as the CONJOB sheet above, same reason.
 for r in id_rows.values():
-    for c in list(COUNT_COLS.values()) + list(AVG_COLS.values()) + list(USAGE_COLS.values()):
+    for c in list(COUNT_COLS.values()) + list(AVG_COLS.values()) + list(QST_AVG_COLS.values()) + list(USAGE_COLS.values()):
         ws2.cell(row=r, column=c).value = None
 
 abcm_written = 0
@@ -172,6 +193,8 @@ for card_id, by_round in report['abcm'].items():
         ws2.cell(row=row, column=COUNT_COLS[round_num], value=cell['count'])
         if cell['avgScore'] is not None:
             ws2.cell(row=row, column=AVG_COLS[round_num], value=round(cell['avgScore'], 2))
+        if cell.get('avgQstScore') is not None:
+            ws2.cell(row=row, column=QST_AVG_COLS[round_num], value=round(cell['avgQstScore'], 2))
         if cell.get('avgUsage') is not None:
             ws2.cell(row=row, column=USAGE_COLS[round_num], value=round(cell['avgUsage'], 2))
     abcm_written += 1

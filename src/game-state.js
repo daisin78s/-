@@ -304,6 +304,10 @@ function createShopDeck(drawPile, slotIds) {
  *   always computed fresh from current game state (see src/qst.js's rankPlayersForQuest), and rewards
  *   are granted automatically, once, at GAME_END (see src/qst.js's resolveEndGameRewards) rather than
  *   claimed by players during play, so this is purely a "which 3 cards are in play" record.
+ * @property {Object<string, number>|null} qstRewardsGranted - playerId -> total VP gained from QST
+ *   rewards, set exactly once by turn-flow.js's endRound right when the game reaches GAME_END (see
+ *   that function's own comment); null until then. Read back by src/ai/game-runner.js to report a
+ *   QST-specific average score in AI.DATA.xlsx separately from the overall (now QST-excluded) one.
  */
 
 /**
@@ -333,6 +337,7 @@ function createEmptyGameState(seed) {
     pendingChoices: [],
     passiveCounters: {},
     quests: {},
+    qstRewardsGranted: null,
   };
 }
 

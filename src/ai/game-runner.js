@@ -126,10 +126,14 @@ function driveTurn(state, index, playerId, aiPlayer, initialHasPlacedDieThisTurn
  *
  * roundDetailByPlayerId[playerId] = {buildsByRound: {1:[faceId,...], 2:[...], 3:[...], 4:[...]},
  * colorDiceGainedByRound: {1:n, 2:n, 3:n, 4:n}, areaFeeByRoundAndCard: {1:{faceId:amount,...}, ...},
- * b008aWhiteDiceGained: n|null, job008BonusVp: n|null} -- AI-side data the human log doesn't need but
- * tools/ai_data_report.js does, to fill in AI.DATA.xlsx's ABCM/CONJOB sheets (2026-08-07, per user spec
- * for the new "使用回数" columns -- see the fields' own inline docs below for what each one means and
- * how it's derived).
+ * b008aWhiteDiceGained: n|null, job008BonusVp: n|null, finalScore: n, qstScore: n} -- AI-side data the
+ * human log doesn't need but tools/ai_data_report.js does, to fill in AI.DATA.xlsx's ABCM/CONJOB sheets
+ * (2026-08-07, per user spec for the "使用回数" columns; 2026-08-09, qstScore added for the new "QST
+ * 平均得点" columns -- VP gained from QST's rank-based rewards this game, see turn-flow.js's own
+ * comment on state.qstRewardsGranted -- so tools/ai_data_report.js can report both the existing
+ * "平均得点" metric with QST *excluded* (finalScore - qstScore, per user request) and QST's own average
+ * separately, without re-deriving the split itself. See the fields' own inline docs below for what
+ * each one means and how it's derived).
  *
  * activationCounts (2026-08-07, game-wide -- not per-player, since at most one player ever owns/builds
  * any single card face in one game, see AREA_CARD_BY_MAP's own doc for the same reasoning) = {faceId:
@@ -302,6 +306,14 @@ function playGame(seed, playerNames, index, evalTable, aiOptions) {
   const rankings = scoring.rankPlayers(state, index);
   const scoreByPlayerId = {};
   for (const r of rankings) scoreByPlayerId[r.playerId] = r.score;
+  // VP actually gained from QST's rank-based rewards, per player (2026-08-09, see turn-flow.js's own
+  // comment on where this gets set -- always populated by now, since this function only reaches here
+  // once state.phase is GAME_END, which is exactly when endRound sets it). Exposed alongside finalScore
+  // (which already includes it) so tools/ai_data_report.js can report both the existing "平均得点"
+  // metric with QST *excluded* (per user request: "QSTカードなしの今までの得点で平均を出してください",
+  // i.e. finalScore - qstScore) and a new QST-only "QST平均得点" metric, without either one needing to
+  // re-derive the split itself.
+  const qstScoreByPlayerId = state.qstRewardsGranted || {};
 
   const historyByPlayerId = {};
   const roundDetailByPlayerId = {};
@@ -338,6 +350,7 @@ function playGame(seed, playerNames, index, evalTable, aiOptions) {
       b008aWhiteDiceGained: b008aWhiteDiceGained[player.id],
       job008BonusVp,
       finalScore: scoreByPlayerId[player.id],
+      qstScore: qstScoreByPlayerId[player.id] || 0,
     };
   }
 

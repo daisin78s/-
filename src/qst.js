@@ -117,17 +117,29 @@ function rankPlayersForQuest(state, index, questFaceId) {
  * DSL needs a further choice (e.g. BUILD(...)) is deliberately out of scope for this data set (see
  * [[project-dice-wp-qst-spec]]'s own history) -- runProgram runs each reward to completion with no
  * pending-choice handling, matching every other REWARD row actually in play today (plain ADD(nVP)).
+ * @returns {Object<string, number>} playerId -> total VP actually gained from QST rewards this call
+ *   (every REWARD cell today is a plain ADD(nVP), but this reads the real before/after
+ *   player.resources.VP delta rather than assuming that shape, so it stays correct even if a future
+ *   reward grants VP alongside something else). 2026-08-09, per user request for AI.DATA.xlsx's new
+ *   "QST平均得点" columns (see tools/ai_data_report.js) -- turn-flow.js's endRound stashes this return
+ *   value on state.qstRewardsGranted for game-runner.js to read back after the game ends.
  */
 function resolveEndGameRewards(state, index) {
+  const vpGranted = {};
+  for (const player of state.players) vpGranted[player.id] = 0;
   for (const questFaceId of Object.keys(state.quests)) {
     const row = getQstRow(index, questFaceId);
     for (const entry of rankPlayersForQuest(state, index, questFaceId)) {
       if (entry.rank > REWARD_FIELDS.length) continue;
       const rewardText = row[REWARD_FIELDS[entry.rank - 1]];
       if (!rewardText) continue;
+      const player = state.players.find((p) => p.id === entry.playerId);
+      const vpBefore = player.resources.VP || 0;
       executorApi.runProgram(state, index, { playerId: entry.playerId, sourcePhysicalId: questFaceId }, rewardText);
+      vpGranted[entry.playerId] += (player.resources.VP || 0) - vpBefore;
     }
   }
+  return vpGranted;
 }
 
 module.exports = {

@@ -146,11 +146,12 @@ function giveNCards(state, ownerId, n, offset) {
   giveNCards(state, 'P4', 1, 9); // 1 -> rank 4 -> nothing (only 3 REWARD fields)
   state.quests = { Q003A: true }; // GOAL='CARD_COUNT', REWARD1/2/3 = 3VP/2VP/1VP
 
-  qst.resolveEndGameRewards(state, index);
+  const granted = qst.resolveEndGameRewards(state, index);
   check('Rank 1 (P1) gets REWARD1 (3VP)', player(state, 'P1').resources.VP, 3);
   check('Rank 2 (P2) gets REWARD2 (2VP)', player(state, 'P2').resources.VP, 2);
   check('Rank 3 (P3) gets REWARD3 (1VP)', player(state, 'P3').resources.VP, 1);
   check('Rank 4 (P4) gets nothing', player(state, 'P4').resources.VP, 0);
+  check('resolveEndGameRewards return value matches the actual VP granted, per player (used by tools/ai_data_report.js)', granted, { P1: 3, P2: 2, P3: 1, P4: 0 });
 }
 {
   const state = freshState('qst-end-game-ties', ['Alice', 'Bob', 'Carol', 'Dan']);
