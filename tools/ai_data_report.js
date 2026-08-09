@@ -137,9 +137,12 @@ function main() {
     process.exit(1);
   }
   // LV3 shares LV2's lookahead and additionally gets main.js's aiMoveGeneratorLv3 AREA007-avoidance
-  // policy and aiEvaluatorLv3's QST-awareness (see game-runner.js's playGame doc for
-  // moveGeneratorOptions/evaluatorOptions).
-  const aiOptions = (aiLevel === 'LV2' || aiLevel === 'LV3') ? { lookaheadExtraTurns: 1 } : undefined;
+  // policy, aiEvaluatorLv3's QST-awareness, and aiPlayerLv3's round-4-only deep lookahead/wider beam
+  // (see game-runner.js's playGame doc for moveGeneratorOptions/evaluatorOptions, and AIPlayer's own
+  // roundOverrides doc).
+  const aiOptions = aiLevel === 'LV2' ? { lookaheadExtraTurns: 1 }
+    : aiLevel === 'LV3' ? { lookaheadExtraTurns: 1, roundOverrides: { 4: { lookaheadExtraTurns: 20, beamWidth: 10, maxRolloutMoves: 200 } } }
+    : undefined;
   const moveGeneratorOptions = aiLevel === 'LV3'
     ? { avoidMapIdFromRound: { mapId: 'MAP007', round: 3 } }
     : undefined;

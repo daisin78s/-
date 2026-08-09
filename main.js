@@ -112,7 +112,15 @@ const aiMoveGeneratorLv3 = new moveGeneratorMod.MoveGenerator({
 // したい") -- qstAware:true (see Evaluator's own doc), sharing aiEvalTable with the LV1/LV2-shared
 // aiEvaluator above, which stays policy-free and therefore completely unaffected.
 const aiEvaluatorLv3 = new evaluatorMod.Evaluator(INDEX, aiEvalTable, { qstAware: true });
-const aiPlayerLv3 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGeneratorLv3, aiEvaluatorLv3, aiSimulator, { lookaheadExtraTurns: 1 });
+// Round-4-only deep lookahead + wider beam (2026-08-10, per user request: "4Rのみ最後まで深堀させます" +
+// "R4だけビーム幅も広げるでいきます") -- see AIPlayer's own roundOverrides doc for the full mechanics.
+// Round 4 is the last round, so the own-turns-only rollout naturally stops once this player's own dice
+// for the round run out (no artificial early cutoff from a small lookaheadExtraTurns/maxRolloutMoves),
+// and the extra beamWidth cost is bounded since there's no round 5 left to also pay it in.
+const aiPlayerLv3 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGeneratorLv3, aiEvaluatorLv3, aiSimulator, {
+  lookaheadExtraTurns: 1,
+  roundOverrides: { 4: { lookaheadExtraTurns: 20, beamWidth: 10, maxRolloutMoves: 200 } },
+});
 /** Which AIPlayer instance drives playerId's own TURN moves -- see playerRoles' own comment. */
 function aiPlayerFor(playerId) {
   const role = playerRoles.get(playerId);

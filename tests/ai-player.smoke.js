@@ -152,5 +152,52 @@ function makeLookaheadStubs() {
   check('selectMove returns the forced move directly, bypassing generateMoves/Evaluator/Simulator entirely', ai.selectMove({}, 'P1', {}), forcedMove);
 }
 
+// ---------------------------------------------------------------------------
+// roundOverrides (2026-08-10, "AI LV3": per user request "4Rのみ最後まで深堀させます" +
+// "R4だけビーム幅も広げるでいきます"): base lookaheadExtraTurns/beamWidth/maxRolloutMoves apply as
+// normal for any round with no matching entry in roundOverrides; for a round that DOES have one, only
+// the fields actually present in that entry replace the base value -- reuses the same X/Y/BUILD
+// lookahead stub game as the plain lookahead tests above, since "does lookahead actually kick in"
+// (X vs Y) is exactly what distinguishes an effective lookaheadExtraTurns of 0 from 1+.
+// ---------------------------------------------------------------------------
+{
+  const { moveGenerator, evaluator, simulator } = makeLookaheadStubs();
+  const ai = new AIPlayer(null, moveGenerator, evaluator, simulator, {
+    lookaheadExtraTurns: 0,
+    roundOverrides: { 4: { lookaheadExtraTurns: 1 } },
+  });
+  check(
+    'A round with no roundOverrides entry (round 1) uses the base lookaheadExtraTurns (0 -> picks Y)',
+    ai.selectMove({ round: 1 }, 'P1', { hasPlacedDieThisTurn: false }).id,
+    'Y',
+  );
+}
+{
+  const { moveGenerator, evaluator, simulator } = makeLookaheadStubs();
+  const ai = new AIPlayer(null, moveGenerator, evaluator, simulator, {
+    lookaheadExtraTurns: 0,
+    roundOverrides: { 4: { lookaheadExtraTurns: 1 } },
+  });
+  check(
+    "A round WITH a roundOverrides entry (round 4) uses the override's lookaheadExtraTurns (1 -> picks X), not the base 0",
+    ai.selectMove({ round: 4 }, 'P1', { hasPlacedDieThisTurn: false }).id,
+    'X',
+  );
+}
+{
+  // Partial override -- roundOverrides[4] only sets beamWidth, not lookaheadExtraTurns -- must still
+  // fall back to the base lookaheadExtraTurns (1, not 0/undefined) for the fields it didn't mention.
+  const { moveGenerator, evaluator, simulator } = makeLookaheadStubs();
+  const ai = new AIPlayer(null, moveGenerator, evaluator, simulator, {
+    lookaheadExtraTurns: 1,
+    roundOverrides: { 4: { beamWidth: 99 } },
+  });
+  check(
+    "A roundOverrides entry that omits lookaheadExtraTurns falls back to the base value (1 -> still picks X), not 0",
+    ai.selectMove({ round: 4 }, 'P1', { hasPlacedDieThisTurn: false }).id,
+    'X',
+  );
+}
+
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);
