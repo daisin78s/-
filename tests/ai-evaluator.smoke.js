@@ -237,5 +237,41 @@ function stateWithM012InShop(round) {
   check('An unpayable pending USAGE_FEE also triggers the lockout penalty', evaluator.score(state, 'P1'), -1000);
 }
 
+// ---------------------------------------------------------------------------
+// RESOURCE_LIMIT-aware resource scoring (2026-08-10, per user request: "K MAX7の時 1K+7Kで8Kになるのは
+// 減らして7Kとして評価"): a resource held past an owned card's RESOURCE_LIMIT cap scores at its true
+// post-TURNEND-clamp amount, not its raw current count -- the excess is worthless (auto-discarded, see
+// executor.applyTurnEnd), so scoring it at face value overstates the gain.
+// ---------------------------------------------------------------------------
+{
+  const state = freshState(1);
+  giveCard(state, 'CON001A', 'P1'); // TURNEND=RESOURCE_LIMIT(K,7), eval-table value 0, no printed VP
+  const p1 = state.players[0];
+  p1.resources.K = 8; // 1 over CON001A's limit of 7
+  check('K clamped to CON001A\'s RESOURCE_LIMIT(K,7) cap (8 -> 7) when scoring', evaluator.score(state, 'P1'), 7 * 3);
+}
+{
+  const state = freshState(1);
+  const p1 = state.players[0];
+  p1.resources.K = 8; // same 8K, but no RESOURCE_LIMIT-granting card owned at all
+  check('Without a RESOURCE_LIMIT card owned, the same 8K scores at its raw, uncapped value', evaluator.score(state, 'P1'), 8 * 3);
+}
+{
+  // The illustrative comparison itself: +7K (1->8, clamped to 7) should still outscore +3K (1->4, no
+  // clamp needed) -- clamping to the true post-TURNEND value doesn't flip which option is better, it
+  // just stops overstating the wasted excess.
+  const withPlus7 = freshState(1);
+  giveCard(withPlus7, 'CON001A', 'P1');
+  withPlus7.players[0].resources.K = 8;
+  const withPlus3 = freshState(1);
+  giveCard(withPlus3, 'CON001A', 'P1');
+  withPlus3.players[0].resources.K = 4;
+  check(
+    '+7K (clamped to 7) still scores higher than +3K (4), just not overstated as if it kept all 8',
+    evaluator.score(withPlus7, 'P1') > evaluator.score(withPlus3, 'P1'),
+    true,
+  );
+}
+
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);

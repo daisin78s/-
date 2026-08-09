@@ -69,8 +69,18 @@ class Evaluator {
 
     let total = 0;
 
+    // RESOURCE_LIMIT-aware resource scoring (2026-08-10, per user request: "K MAX7の時 1K+7Kで8Kになる
+    // のは 減らして7Kとして評価" -- a resource held past an owned card's RESOURCE_LIMIT cap (e.g.
+    // CON001A's K MAX7) is worth exactly its post-TURNEND-clamp amount, not its raw current count, since
+    // the excess is auto-discarded at TURNEND and never actually kept (see executor.applyTurnEnd). Using
+    // the clamped amount still correctly favors a bigger-but-overshooting gain over a smaller-but-safe
+    // one whenever the clamped amount is itself larger (e.g. 1K+7K clamped to 7 still beats 1K+3K's 4),
+    // it just no longer overstates the overshooting gain by the wasted excess.
+    const resourceLimits = executor.activeResourceLimits(state, this.index, playerId);
     for (const resource of ['K', 'A', 'B', 'C', 'Z', 'BZ']) {
-      total += (player.resources[resource] || 0) * v(resource);
+      const have = player.resources[resource] || 0;
+      const limit = resourceLimits[resource];
+      total += (limit !== undefined ? Math.min(have, limit) : have) * v(resource);
     }
     total += (player.resources.VP || 0) * v('VP');
 

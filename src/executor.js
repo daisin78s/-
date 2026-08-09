@@ -906,6 +906,26 @@ function runProgram(state, index, context, dslText) {
 // TURNEND
 // ---------------------------------------------------------------------------
 
+/** Every currently-active RESOURCE_LIMIT cap this player is under, from their owned cards' TURNEND
+ * rules -- {resource: limit}, the MINIMUM limit per resource if more than one owned card caps the same
+ * resource (matches applyTurnEnd's own sequential clamping below: applying several RESOURCE_LIMIT rules
+ * to the same resource leaves it at whichever limit is smallest, regardless of application order).
+ * Read-only, no mutation -- added 2026-08-10 for the AI Evaluator (per user request: "K MAX7の時 1K+7K
+ * で8Kになるのは 減らして7Kとして評価" -- score a RESOURCE_LIMIT-capped resource at its true
+ * post-TURNEND value, not its raw current count, since the excess is worthless -- it'll just get
+ * auto-discarded before the player ever "keeps" it). */
+function activeResourceLimits(state, index, playerId) {
+  const limits = {};
+  for (const { row } of ownedCardRows(state, index, playerId)) {
+    if (!row.TURNEND) continue;
+    for (const cmd of lowerProgram(parse(row.TURNEND))) {
+      if (cmd.type !== 'RESOURCE_LIMIT') continue;
+      if (limits[cmd.resource] === undefined || cmd.limit < limits[cmd.resource]) limits[cmd.resource] = cmd.limit;
+    }
+  }
+  return limits;
+}
+
 /** Pre-check: RESOURCE_TOTAL_LIMIT rules, and an unpaid usage fee (see PlayerState.pendingFee in
  * game-state.js), block TURNEND entirely until satisfied. */
 function canEndTurn(state, index, playerId) {
@@ -1140,6 +1160,7 @@ module.exports = {
   getPassiveRules,
   activePassiveCommands,
   collectVpModifiers,
+  activeResourceLimits,
   canEndTurn,
   applyTurnEnd,
   emit,
