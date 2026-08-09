@@ -137,11 +137,13 @@ function main() {
     process.exit(1);
   }
   // LV3 shares LV2's lookahead and additionally gets main.js's aiMoveGeneratorLv3 AREA007-avoidance
-  // policy (see game-runner.js's playGame doc for moveGeneratorOptions).
+  // policy and aiEvaluatorLv3's QST-awareness (see game-runner.js's playGame doc for
+  // moveGeneratorOptions/evaluatorOptions).
   const aiOptions = (aiLevel === 'LV2' || aiLevel === 'LV3') ? { lookaheadExtraTurns: 1 } : undefined;
   const moveGeneratorOptions = aiLevel === 'LV3'
     ? { avoidMapIdFromRound: { mapId: 'MAP007', round: 3 } }
     : undefined;
+  const evaluatorOptions = aiLevel === 'LV3' ? { qstAware: true } : undefined;
 
   const raw = loadGameData(DATA_PATH);
   const index = buildDataIndex(raw);
@@ -194,7 +196,7 @@ function main() {
     let roundDetailByPlayerId;
     let activationCounts;
     try {
-      ({ state, historyByPlayerId, roundDetailByPlayerId, activationCounts } = playGame(seed, PLAYER_NAMES, index, evalTable, aiOptions, moveGeneratorOptions));
+      ({ state, historyByPlayerId, roundDetailByPlayerId, activationCounts } = playGame(seed, PLAYER_NAMES, index, evalTable, aiOptions, moveGeneratorOptions, evaluatorOptions));
     } catch (e) {
       console.error(`Game ${i + 1}/${n} (seed=${seed}) crashed: ${e.message}`);
       console.error(e.stack);

@@ -18,9 +18,11 @@
  * (PASSIVE/TAP ongoing worth, emblem synergy, a board-altering ONCE like a MAP tier flip).
  */
 
-const { getCardRow } = require('../data-loader');
-const { lowerCostList } = require('../command-builder');
+const { getCardRow, getQstRow } = require('../data-loader');
+const { lowerCostList, lowerProgram } = require('../command-builder');
+const { parse } = require('../dsl-parser');
 const executor = require('../executor');
+const qst = require('../qst');
 const { evalValue } = require('./eval-table');
 
 /** Same regex board.js's own (unexported) parseMonumentThreshold uses, e.g. ">=12" -> 12. Duplicated
@@ -28,6 +30,24 @@ const { evalValue } = require('./eval-table');
 function parseMonumentThreshold(diceString) {
   const match = /^>=(\d+)$/.exec(diceString);
   return match ? Number(match[1]) : null;
+}
+
+/** How much VP rewardText would grant, read via the real DSL parser rather than executed (2026-08-10,
+ * QST awareness -- see Evaluator's own qstAware policy doc). Every QST REWARD field today is a plain
+ * ADD(nVP) (see qst.js's own doc on resolveEndGameRewards), so this sums every literal-count VP item
+ * across any ADD commands in rewardText and ignores everything else (a dynamic-count VP grant, or a
+ * reward that doesn't touch VP at all, contributes 0 -- a safe, non-crashing estimate rather than an
+ * error, since this is a heuristic nudge, not a source of truth). */
+function estimateRewardVp(rewardText) {
+  if (!rewardText) return 0;
+  let vp = 0;
+  for (const cmd of lowerProgram(parse(rewardText))) {
+    if (cmd.type !== 'ADD') continue;
+    for (const item of cmd.items) {
+      if (item.resource === 'VP' && item.count.kind === 'literal') vp += item.count.value;
+    }
+  }
+  return vp;
 }
 
 /** Whether some OTHER player already has, right now, both a qualifying unplaced color die and enough
@@ -54,10 +74,16 @@ function monumentAtRiskFromOpponents(state, index, playerId, monumentFaceId) {
 }
 
 class Evaluator {
-  /** @param {DataIndex} index @param {Object} evalTable - see eval-table.js's buildEvalTable() */
-  constructor(index, evalTable) {
+  /** @param {DataIndex} index @param {Object} evalTable - see eval-table.js's buildEvalTable()
+   *  @param {{qstAware?: boolean}} [policy] - optional strategy knob (2026-08-10, "AI LV3": per user
+   *   request "AI LV3はQSTカードに対応してVPを稼ぐようにしたい"). Default {} (qstAware unset/falsy) --
+   *   LV1/LV2 keep using an Evaluator built with no policy, so their behavior is byte-for-byte unchanged;
+   *   LV3 gets its own instance constructed with qstAware:true (see main.js's aiEvaluatorLv3). See
+   *   score()'s own QST block for what this actually adds. */
+  constructor(index, evalTable, policy) {
     this.index = index;
     this.evalTable = evalTable;
+    this.policy = policy || {};
   }
 
   /** @returns {number} playerId's position score in state, at state's current round. */
@@ -129,6 +155,28 @@ class Evaluator {
     // eval-table's own weight tuning (e.g. BZ's 5->4).
     const LOCKOUT_PENALTY = 1000;
     if (!executor.canEndTurn(state, this.index, playerId).ok) total -= LOCKOUT_PENALTY;
+
+    // QST awareness (2026-08-10, opt-in via policy.qstAware -- "AI LV3" only, per user request "AI LV3
+    // はQSTカードに対応してVPを稼ぐようにしたい"): for each currently-revealed QST card, if this player
+    // is CURRENTLY ranked to earn a reward (rank 1-3, competition ranking -- see
+    // qst.rankPlayersForQuest), credit the VP that reward would grant if the game ended right now.
+    // rankPlayersForQuest is a pure/read-only function safe to call on any state (the exact same one
+    // main.js's QST card UI uses for its own live standings preview), so this needs no new persistent
+    // tracking and naturally reflects whichever move actually improved (or didn't) this player's
+    // standing on the resulting state being scored -- no separate "is this move good for my QST rank"
+    // logic anywhere else, the normal 1-ply-score-the-resulting-state pattern already covers it. A tie
+    // for a reward rank credits every tied player in full (matches resolveEndGameRewards' own real
+    // behavior, not a split). Deliberately a plain current-snapshot estimate, no discount for how many
+    // rounds remain or how likely the ranking is to hold -- same risk-tolerance as the existing
+    // monument-sniping-risk heuristic just below, not a probabilistic forecast.
+    if (this.policy.qstAware && state.quests) {
+      for (const questFaceId of Object.keys(state.quests)) {
+        const entry = qst.rankPlayersForQuest(state, this.index, questFaceId).find((e) => e.playerId === playerId);
+        if (!entry || entry.rank > qst.REWARD_FIELDS.length) continue;
+        const row = getQstRow(this.index, questFaceId);
+        total += estimateRewardVp(row[qst.REWARD_FIELDS[entry.rank - 1]]) * v('VP');
+      }
+    }
 
     // Monument-sniping risk (2026-08-04, per user feedback -- see monumentAtRiskFromOpponents' own
     // doc): for each monument still sitting in the M shop, if it's "at risk" (some opponent already has

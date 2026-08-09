@@ -97,9 +97,8 @@ const aiPlayerLv1 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGenerator, aiEvaluator
 const aiPlayerLv2 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGenerator, aiEvaluator, aiSimulator, { lookaheadExtraTurns: 1 });
 // AI LV3 (2026-08-09). Gets its OWN MoveGenerator instance built with an avoidMapIdFromRound policy
 // (see that class's own doc) -- LV1/LV2's shared aiMoveGenerator above stays policy-free and therefore
-// completely unaffected. Reuses the same aiEvaluator/aiSimulator (policy-agnostic) and LV2's
-// lookaheadExtraTurns:1 (not asked about specifically; matched to LV2 rather than LV1's 0, since LV3 is
-// meant to be the stronger/smarter option, not a speed tier).
+// completely unaffected. Reuses LV2's lookaheadExtraTurns:1 (not asked about specifically; matched to
+// LV2 rather than LV1's 0, since LV3 is meant to be the stronger/smarter option, not a speed tier).
 // avoidMapIdFromRound (2026-08-10, per user request: "R3からAREA007にダイスを置かないようにかえたい") --
 // AREA007 (訓練場, always MAP007's CURRENT_AREA -- it has no B/C tier) stops being a legal placement for
 // LV3 from round 3 onward. See MoveGenerator's own doc for why this is a soft removal, not a hard block.
@@ -109,7 +108,11 @@ const aiPlayerLv2 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGenerator, aiEvaluator
 const aiMoveGeneratorLv3 = new moveGeneratorMod.MoveGenerator({
   avoidMapIdFromRound: { mapId: 'MAP007', round: 3 },
 });
-const aiPlayerLv3 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGeneratorLv3, aiEvaluator, aiSimulator, { lookaheadExtraTurns: 1 });
+// Own Evaluator instance too (2026-08-10, per user request: "AI LV3はQSTカードに対応してVPを稼ぐように
+// したい") -- qstAware:true (see Evaluator's own doc), sharing aiEvalTable with the LV1/LV2-shared
+// aiEvaluator above, which stays policy-free and therefore completely unaffected.
+const aiEvaluatorLv3 = new evaluatorMod.Evaluator(INDEX, aiEvalTable, { qstAware: true });
+const aiPlayerLv3 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGeneratorLv3, aiEvaluatorLv3, aiSimulator, { lookaheadExtraTurns: 1 });
 /** Which AIPlayer instance drives playerId's own TURN moves -- see playerRoles' own comment. */
 function aiPlayerFor(playerId) {
   const role = playerRoles.get(playerId);

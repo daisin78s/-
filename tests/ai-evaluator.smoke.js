@@ -18,6 +18,7 @@ const raw = loadGameData(path.join(__dirname, '..', 'data', 'game.json'));
 const index = buildDataIndex(raw);
 const evalTable = buildEvalTable(raw);
 const evaluator = new Evaluator(index, evalTable);
+const evaluatorQstAware = new Evaluator(index, evalTable, { qstAware: true }); // see AI LV3's own doc in main.js
 
 let passCount = 0;
 let failCount = 0;
@@ -272,6 +273,53 @@ function stateWithM012InShop(round) {
     true,
   );
 }
+
+// ---------------------------------------------------------------------------
+// QST awareness (2026-08-10, opt-in via policy.qstAware -- "AI LV3" only, per user request "AI LV3は
+// QSTカードに対応してVPを稼ぐようにしたい"). Synthetic QST data injected into index.raw.QST (same
+// pattern as tests/qst.smoke.js) so this stays fixed regardless of what the real QST sheet says.
+// ---------------------------------------------------------------------------
+index.raw.QST = [
+  { ID: 'Q001A', NAME: 'Q001A', GOAL: 'CARD_COUNT', REWARD1: 'ADD(4VP)', REWARD2: 'ADD(2VP)', REWARD3: 'ADD(VP)', INST: '' },
+];
+{
+  const state = freshState(1);
+  const p2 = createPlayer('P2', 'Bob');
+  state.players.push(p2);
+  state.quests = { Q001A: true };
+  giveCard(state, 'A001A', 'P1'); // eval=30, VP=0 -- CARD_COUNT=1, ahead of P2's 0
+  const plainScore = evaluator.score(state, 'P1');
+  check('The plain (non-qstAware) Evaluator ignores QST entirely (control)', plainScore, 30);
+  check('qstAware credits the rank-1 REWARD1 (ADD(4VP)) on top of the normal score', evaluatorQstAware.score(state, 'P1'), 30 + 4 * 10);
+}
+{
+  // Rank 4+ (only reachable with 4 players at 4 distinct values) earns nothing -- REWARD_FIELDS only
+  // has 3 slots (see qst.js's own doc).
+  const state = freshState(1);
+  const p2 = createPlayer('P2', 'Bob');
+  const p3 = createPlayer('P3', 'Carol');
+  const p4 = createPlayer('P4', 'Dan');
+  state.players.push(p2, p3, p4);
+  state.quests = { Q001A: true };
+  // createCardInstance derives physicalId deterministically from faceId (see game-state.js's
+  // splitCardId) -- giving the SAME faceId to two players in one state would collide (the 2nd giveCard
+  // call just reassigns the 1st's ownerId, silently "moving" it rather than creating a 2nd copy), so
+  // every card below is a distinct faceId even though several are otherwise-identical-shaped A cards.
+  giveCard(state, 'A001A', 'P1'); // 1 card -- fewest of the four, so last place
+  giveCard(state, 'A002A', 'P2');
+  giveCard(state, 'A003A', 'P2'); // 2 cards
+  giveCard(state, 'A004A', 'P3');
+  giveCard(state, 'A005A', 'P3');
+  giveCard(state, 'A006A', 'P3'); // 3 cards
+  giveCard(state, 'A007A', 'P4');
+  giveCard(state, 'A008A', 'P4');
+  giveCard(state, 'B001A', 'P4');
+  giveCard(state, 'M001', 'P4'); // 4 cards (CARD_COUNT includes M) -- clear 1st
+  check('P1, ranked last (4th) among 4 distinct CARD_COUNT values, gets no QST credit', evaluatorQstAware.score(state, 'P1'), evaluator.score(state, 'P1'));
+}
+// index.raw === raw (buildDataIndex wraps the same object, doesn't copy it), and nothing below this
+// point needs real QST data -- no restoration necessary (each tests/*.smoke.js file also runs in its
+// own separate `node` process, so this mutation can't leak into any other test file either).
 
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);

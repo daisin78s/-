@@ -159,14 +159,19 @@ function driveTurn(state, index, playerId, aiPlayer, initialHasPlacedDieThisTurn
  * "LV3" (main.js's aiMoveGeneratorLv3 uses the exact same option -- see MoveGenerator's own doc). Left
  * undefined by every existing caller so this stays policy-free (LV1/LV2-equivalent) unless a caller
  * opts in.
+ *
+ * evaluatorOptions (2026-08-10, optional, default undefined): passed straight through to the single
+ * Evaluator instance every seat's AIPlayer shares, e.g. {qstAware:true} for "LV3" (main.js's
+ * aiEvaluatorLv3 uses the exact same option -- see Evaluator's own doc). Left undefined by every
+ * existing caller so this stays policy-free (LV1/LV2-equivalent) unless a caller opts in.
  */
-function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorOptions) {
+function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorOptions, evaluatorOptions) {
   const { Evaluator } = require('./evaluator');
   const { MoveGenerator } = require('./move-generator');
   const { Simulator } = require('./simulator');
   const { AIPlayer } = require('./ai-player');
 
-  const evaluator = new Evaluator(index, evalTable);
+  const evaluator = new Evaluator(index, evalTable, evaluatorOptions);
   const moveGenerator = new MoveGenerator(moveGeneratorOptions);
   const simulator = new Simulator();
   const aiPlayersByPlayerId = {};
