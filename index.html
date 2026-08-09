@@ -15,7 +15,28 @@
             <div class="shop-row__combined">
               <div class="shop-row__grid" id="shop-combined-slots"></div>
               <div class="shop-row__divider"></div>
-              <div class="shop-row__slots shop-row__slots--vertical" id="qst-slots"></div>
+              <!-- QST欄 (2026-08-10, per user request): 3枚のカードを1つのパネルに収め、1位/2位/3位の
+                   縦帯をパネルの上端から下端まで途切れず通す。各カードに「1位 4VP」等を3回書くのをやめ、
+                   最下部に共通の凡例を1回だけ出す（帯があるのでどの列がどの順位かは辿れる）。凡例の中身は
+                   ハードコードせず、実際に公開されているQSTカードのREWARD1-3から組み立てる -- main.js の
+                   renderQsts / renderQstLegend 参照。 -->
+              <div class="qst-panel">
+                <div class="qst-panel__bands" aria-hidden="true">
+                  <div class="qst-panel__band"></div>
+                  <div class="qst-panel__band"></div>
+                  <div class="qst-panel__band"></div>
+                </div>
+                <div class="qst-panel__content">
+                  <div id="qst-slots"></div>
+                  <div class="qst-legend" id="qst-legend" hidden>
+                    <div class="qst-legend__ranks">
+                      <div class="qst-legend__cell"></div>
+                      <div class="qst-legend__cell"></div>
+                      <div class="qst-legend__cell"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </section>

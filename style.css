@@ -53,6 +53,12 @@
   /* Plain/blank card-back fill (confirmed 2026-07-29: "無地" -- no pattern or text, just a flat
      color) shown when a card is clicked and has no specific back art defined. */
   --card-back-bg: #8b93a3;
+
+  /* QST欄の順位別の縦帯 (2026-08-10, per user request: "背景色は３色で左のほうが目立つように") --
+     1位が一番濃く、右へ薄くなる。アクセント色1色の濃淡なので既存の配色から浮かない。 */
+  --qst-band-1: rgba(52, 84, 209, 0.22);
+  --qst-band-2: rgba(52, 84, 209, 0.12);
+  --qst-band-3: rgba(52, 84, 209, 0.05);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -72,6 +78,11 @@
     --resource-wd-bg: #2a2e35;
     --resource-wd-border: #454b54;
     --card-back-bg: #454b54;
+    /* ダークモードでは --accent が明るい青 (#7590ff) になるので、帯もそちら基準に置き換える。
+       暗い背景に暗い青を重ねても差が出ないため、不透明度は明るいモードよりわずかに上げている。 */
+    --qst-band-1: rgba(117, 144, 255, 0.28);
+    --qst-band-2: rgba(117, 144, 255, 0.15);
+    --qst-band-3: rgba(117, 144, 255, 0.07);
   }
 }
 
@@ -284,17 +295,6 @@ h1, h2, h3 { margin: 0; }
   display: flex;
   flex-direction: column;
   gap: 16px;
-}
-
-.shop-row__slots {
-  display: flex;
-  gap: 8px;
-}
-
-/* QST's own vertical stack (confirmed 2026-07-30: 3 cards stacked top-to-bottom, not a horizontal
-   row) -- overrides .shop-row__slots' default row direction. */
-.shop-row__slots--vertical {
-  flex-direction: column;
 }
 
 .shop-row__combined {
@@ -1654,13 +1654,70 @@ h1, h2, h3 { margin: 0; }
 /* variant (GOAL / next-reward / REWARD1-3 checklist doesn't fit that shape). */
 /* ---------------------------------------------------------------------- */
 
-/* Vertical stack of 3 (confirmed 2026-07-30, revised from an earlier horizontal-row layout that
-   overflowed the page width) -- see #shops' JS-driven grid restructure for why there's room here
-   now (SHOP201-203 moved into the SHOP101-106 grid instead of sharing this column). */
-#qst-slots {
-  gap: 10px;
+/* One bordered panel holding all 3 QST cards plus the shared reward legend (2026-08-10, per user
+   request -- replaces the previous 3 separately-bordered cards in a plain flex column). The panel is
+   the flex child of .shop-row__combined now, so it carries the column's width/flex; #qst-slots inside
+   is just the vertical stack of card rows. */
+.qst-panel {
   width: 300px;
   flex: 0 0 auto;
+  position: relative;
+  overflow: hidden; /* clips the bands to the panel's own rounded corners */
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+/* The 3 rank bands, drawn behind every row so "which column is which rank" reads straight down the
+   whole panel to the legend (per user request: "リアルボードゲームを意識"). inset's top/bottom are 0
+   so the colour reaches the panel's very edges -- an earlier draft inset them by the panel padding,
+   which left a visible unpainted strip at the top ("背景色が上で途切れている"). Left/right stay inset
+   by the content padding so each band lines up with its own column of numbers below. */
+.qst-panel__bands {
+  position: absolute;
+  inset: 0 12px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  column-gap: 8px;
+  pointer-events: none;
+}
+.qst-panel__band:nth-child(1) { background: var(--qst-band-1); }
+.qst-panel__band:nth-child(2) { background: var(--qst-band-2); }
+.qst-panel__band:nth-child(3) { background: var(--qst-band-3); }
+
+.qst-panel__content {
+  position: relative; /* lifts the rows above the absolutely-positioned bands */
+  z-index: 1;
+  padding: 10px 12px;
+}
+
+#qst-slots {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The shared "1位 4VP / 2位 2VP / 3位 1VP" legend, shown once at the bottom instead of repeating the
+   same three reward values on every card (per user request: "３つも書く意味ありませんでした"). Same
+   3-column grid as .qst-card__ranks so its cells sit directly under the matching bands. Hidden
+   entirely (via the `hidden` attribute, see main.js's renderQstLegend) when the revealed cards don't
+   all share one reward set -- a single legend can't honestly describe differing rewards, so those
+   cards fall back to their own per-rank headers instead. */
+.qst-legend {
+  padding: 7px 0 1px;
+}
+
+.qst-legend__ranks {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  column-gap: 8px;
+}
+
+.qst-legend__cell {
+  text-align: center;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
 }
 
 /* Rank-based standings card (2026-08-09, replacing the earlier landscape claim-progress layout -- see
@@ -1678,6 +1735,21 @@ h1, h2, h3 { margin: 0; }
   gap: 8px;
   cursor: pointer;
   position: relative; /* containing block for .qst-card__back's inset:0 */
+}
+
+/* Inside the panel, each card is a flush row rather than its own bordered card -- the panel supplies
+   the frame and the bands, and a bottom rule separates the rows (the last one separating the 3rd card
+   from the legend). Scoped to .qst-panel on purpose: the standalone styling above still applies in the
+   enlarge modal, where a QST card really is on its own with no panel/bands/legend around it. Padding is
+   tighter than the standalone card's to buy back the height the larger text below costs, keeping the
+   whole column inside the SHOP grid's own height. */
+.qst-panel .qst-card {
+  background: none;
+  border: none;
+  border-radius: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 5px 0;
+  gap: 5px;
 }
 
 /* Click to flip and preview the sibling face (Q001A <-> Q001B), same mechanism as shop-card
@@ -1743,7 +1815,7 @@ h1, h2, h3 { margin: 0; }
 /* Front face's title line: "{INST}" (main.js's questGoalDisplayText -- "目標：" prefix removed
    2026-08-10, per user request). Centered (2026-08-10, per user request: "建築数など中央そろえ"). */
 .qst-card__goal-line {
-  font-size: 14px;
+  font-size: 17px; /* 14->17px, 2026-08-10: "可能な限り文字やアイコンを大き目で" */
   font-weight: 700;
   color: var(--text);
   text-align: center;
@@ -1767,20 +1839,24 @@ h1, h2, h3 { margin: 0; }
 }
 
 /* Current GOAL-metric value for whoever holds this rank right now (2026-08-10, per user request: "1位
-   4VP...の上にそれぞれの建築数を数字で書く 例 8 7 5") -- e.g. "8" above "1位　4VP". Kept compact (small
-   line-height, no extra margin) so adding this line doesn't push the QST column taller than the SHOP
-   grid beside it (per user request: "SHOPより縦幅が大きくなりすぎないように") -- .qst-card__rank-col's
-   own gap was trimmed 6px->4px for the same reason. Blank (renders as an empty, zero-height line) when
-   nobody currently holds this rank at all (see main.js's own comment on that edge case). */
+   4VP...の上にそれぞれの建築数を数字で書く 例 8 7 5") -- the headline number of each column, so it gets
+   the largest type here (15->24px, per "可能な限り文字やアイコンを大き目で"). Tight line-height keeps
+   that size from pushing the column past the SHOP grid's height. Uses --text rather than --accent now:
+   the bands behind it are themselves accent-tinted, and accent-on-accent lost contrast. Blank (an
+   empty, zero-height line) when nobody currently holds this rank at all -- see main.js's own comment. */
 .qst-card__rank-value {
-  font-size: 15px;
+  font-size: 24px;
   font-weight: 700;
-  line-height: 1.1;
-  color: var(--accent);
+  line-height: 1.05;
+  color: var(--text);
 }
 
+/* Per-card "1位　4VP" label. No longer drawn in the panel (the shared .qst-legend at the bottom says it
+   once instead) -- main.js removes the element there. Still used in the enlarge modal, where a single
+   card is shown with no legend or bands to identify its columns, and as the fallback when revealed
+   cards don't share one reward set. See buildQstCardVisual's showRankHeaders option. */
 .qst-card__rank-header {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text);
   text-align: center;
@@ -1792,7 +1868,7 @@ h1, h2, h3 { margin: 0; }
   flex-wrap: wrap;
   justify-content: center;
   gap: 3px;
-  min-height: 18px; /* keeps column height stable even when nobody currently holds this rank */
+  min-height: 20px; /* keeps column height stable even when nobody currently holds this rank */
 }
 
 /* One player's color swatch under whichever rank they currently hold (2026-08-09, per user request:
@@ -1800,9 +1876,13 @@ h1, h2, h3 { margin: 0; }
    .card-group__swatch/.player-role-control__swatch elsewhere, sized for this denser context. Player
    name is available via the title attribute (hover) rather than printed text, to keep 2+ tied players
    fitting comfortably in one ~90px-wide column. */
+/* 16->18px (2026-08-10: "可能な限り文字やアイコンを大き目で"). Capped at 18, not larger: all 4 players
+   share rank 1 whenever they're tied -- which is every game's opening position, everyone on 0 -- so all
+   4 swatches must fit on ONE line of a ~86px column (4*18 + 3*3 gaps = 81px). At 22px they wrapped to a
+   second line, and that extra line on all 3 cards pushed the panel well past the SHOP grid's height. */
 .qst-card__rank-player {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   border: 1px solid var(--border);
   flex: 0 0 auto;

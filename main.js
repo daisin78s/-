@@ -1839,7 +1839,14 @@ function buildQstCardVisual(faceId, state, options = {}) {
     // when 4+ players are tied at a higher rank, same "no swatches" case .qst-card__rank-players
     // already handles).
     colEl.querySelector('.qst-card__rank-value').textContent = holders.length ? holders[0].value : '';
-    colEl.querySelector('.qst-card__rank-header').textContent = `${rank}位　${questRewardValueText(facts.rewards[i])}`;
+    // "1位　4VP" per column: dropped from the in-panel cards (2026-08-10, per user request "３つも書く
+    // 意味ありませんでした" -- the shared legend at the bottom of the panel says it once, and the rank
+    // bands behind each column are what tie a column to its rank). Still drawn when there's no legend to
+    // lean on: the enlarge modal shows one card alone, and a mixed-reward data set can't be summarised by
+    // a single legend at all (see renderQsts). Removed rather than left empty so it doesn't leave a gap.
+    const headerEl = colEl.querySelector('.qst-card__rank-header');
+    if (options.showRankHeaders) headerEl.textContent = `${rank}位　${questRewardValueText(facts.rewards[i])}`;
+    else headerEl.remove();
     const playersEl = colEl.querySelector('.qst-card__rank-players');
     playersEl.innerHTML = '';
     for (const entry of holders) {
@@ -1867,7 +1874,9 @@ function buildQstCardVisual(faceId, state, options = {}) {
   // (bigger visual + INST + a 裏側 flip button). No other interaction to wire -- QST is pure display.
   if (!options.noInteraction) {
     node.addEventListener('click', () => {
-      const visualNode = buildQstCardVisual(faceId, state, { noInteraction: true });
+      // showRankHeaders: the modal shows this one card outside the panel, with neither the shared
+      // legend nor the rank bands to say which column is which -- so it prints "1位　4VP" itself.
+      const visualNode = buildQstCardVisual(faceId, state, { noInteraction: true, showRankHeaders: true });
       showCardEnlargeModal(faceId, visualNode, hasSiblingData ? sibling : null);
     });
   }
@@ -1875,12 +1884,41 @@ function buildQstCardVisual(faceId, state, options = {}) {
   return node;
 }
 
+/** The one reward set every revealed QST card shares, as display strings (e.g. ['4VP','2VP','1VP']), or
+ * null if they don't all agree. Data-driven rather than hardcoded (2026-08-10): today every QST row's
+ * REWARD1/2/3 really is the same 4VP/2VP/1VP, which is exactly why the user asked to stop repeating it on
+ * all three cards -- but if a future card ever differs, one shared legend would be actively misleading, so
+ * that case returns null and each card prints its own per-rank headers again instead (see renderQsts). */
+function sharedQuestRewardTexts(faceIds) {
+  if (faceIds.length === 0) return null;
+  const perCard = faceIds.map((faceId) => factsForQstFaceId(faceId).rewards.map(questRewardValueText));
+  const first = perCard[0];
+  const allAgree = perCard.every((texts) => texts.every((text, i) => text === first[i]));
+  return allAgree ? first : null;
+}
+
+/** Fills the shared "1位 4VP / 2位 2VP / 3位 1VP" legend under the QST panel, or hides it outright when
+ * the revealed cards don't share one reward set (see sharedQuestRewardTexts). */
+function renderQstLegend(sharedRewards) {
+  const legend = document.getElementById('qst-legend');
+  legend.hidden = !sharedRewards;
+  if (!sharedRewards) return;
+  legend.querySelectorAll('.qst-legend__cell').forEach((cell, i) => {
+    cell.textContent = `${i + 1}位　${sharedRewards[i]}`;
+  });
+}
+
 function renderQsts(state) {
   const container = document.getElementById('qst-slots');
   container.innerHTML = '';
-  for (const faceId of Object.keys(state.quests)) {
-    container.appendChild(buildQstCardVisual(faceId, state));
+  const faceIds = Object.keys(state.quests);
+  // Either the legend says the rewards once for all 3 cards, or (mixed data) each card says its own --
+  // never both, and never neither.
+  const sharedRewards = sharedQuestRewardTexts(faceIds);
+  for (const faceId of faceIds) {
+    container.appendChild(buildQstCardVisual(faceId, state, { showRankHeaders: !sharedRewards }));
   }
+  renderQstLegend(sharedRewards);
 }
 
 /**
