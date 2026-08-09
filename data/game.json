@@ -2150,7 +2150,7 @@
       "ID": "SHOP202",
       "NAME": "SHOP202",
       "DICE_MIN": 1,
-      "DICE_MAX": 4,
+      "DICE_MAX": 5,
       "ROUND_MIN": 2,
       "ROUND_MAX": 4
     },
@@ -2158,7 +2158,7 @@
       "ID": "SHOP203",
       "NAME": "SHOP203",
       "DICE_MIN": 1,
-      "DICE_MAX": 2,
+      "DICE_MAX": 4,
       "ROUND_MIN": 2,
       "ROUND_MAX": 4
     }

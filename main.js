@@ -1961,10 +1961,25 @@ function buildShopSlotNode(slotId, faceId, showReqCaption) {
 // SHOP001-006 (monuments), SHOP101-106 (normal), and SHOP201-203 (special) all share one 6-column
 // grid now (confirmed 2026-07-30, revised from separate rows): row1=monuments, row2=normal cards
 // (both auto-placed, 6 items fill 6 columns exactly, no explicit placement needed), row3=special --
-// SHOP201/202/203 sit directly under SHOP101/103/105 (same DICE_MIN/MAX pair -- SHOP101/SHOP201 are
-// both "目1-6", SHOP103/SHOP202 both "目1-4", SHOP105/SHOP203 both "目1-2", see data/game.json's
-// SHOP sheet), so those 3 get an explicit grid-column/grid-row; the other 3 cells in row3 stay empty.
-const SPECIAL_SLOT_GRID_COLUMN = { SHOP201: 1, SHOP202: 3, SHOP203: 5 };
+// each SHOP201-203 sits directly under whichever SHOP101-106 slot has the SAME dice range, so those
+// get an explicit grid-column/grid-row and the remaining row-3 cells stay empty.
+//
+// Derived from the SHOP sheet rather than hardcoded (2026-08-11): the pairing IS "same dice range", so
+// reading it from the data keeps the layout correct by construction. This started as a literal
+// {SHOP201:1, SHOP202:3, SHOP203:5} map, which silently encoded the old 目1-6/1-4/1-2 ranges -- when the
+// user changed SHOP202/203 to 目1-5/1-4 ("SHOPの位置を左にずらして", i.e. columns 1/2/3 now), that map
+// would have had to be hand-edited in lockstep or the special row would have pointed at the wrong
+// columns. Returns null if a special slot's range matches no normal slot at all, which renderShopGrid
+// falls back on rather than dropping the cell.
+function specialSlotGridColumn(state, slotId) {
+  const special = dataLoaderMod.getShopRow(INDEX, slotId);
+  const normalSlotIds = Object.keys(state.shops.NORMAL.slots); // insertion order == grid order
+  const matchIndex = normalSlotIds.findIndex((normalSlotId) => {
+    const normal = dataLoaderMod.getShopRow(INDEX, normalSlotId);
+    return normal.DICE_MIN === special.DICE_MIN && normal.DICE_MAX === special.DICE_MAX;
+  });
+  return matchIndex >= 0 ? matchIndex + 1 : null; // grid-column is 1-based
+}
 
 function renderShopGrid(state) {
   const container = document.getElementById('shop-combined-slots');
@@ -1975,12 +1990,14 @@ function renderShopGrid(state) {
   for (const [slotId, faceId] of Object.entries(state.shops.NORMAL.slots)) {
     container.appendChild(buildShopSlotNode(slotId, faceId, true));
   }
-  for (const [slotId, faceId] of Object.entries(state.shops.SPECIAL.slots)) {
+  Object.entries(state.shops.SPECIAL.slots).forEach(([slotId, faceId], i) => {
     const node = buildShopSlotNode(slotId, faceId, false); // no req caption -- see buildShopSlotNode
-    node.style.gridColumn = String(SPECIAL_SLOT_GRID_COLUMN[slotId]);
+    // Falls back to left-to-right order if the dice ranges don't line up, so a data change can never
+    // make a special slot vanish -- it just sits somewhere less meaningful until the data is fixed.
+    node.style.gridColumn = String(specialSlotGridColumn(state, slotId) || (i + 1));
     node.style.gridRow = '3';
     container.appendChild(node);
-  }
+  });
 }
 
 function colorForPlayer(state, playerId) {
