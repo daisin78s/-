@@ -140,6 +140,13 @@ const PLAYER_COLORS = ['PINK', 'PURPLE', 'GREEN', 'ORANGE'];
  * grantOneDie, not a free action and not touched by this removal). */
 const FREE_ACTION_IDS = ['A_K', 'B_K', 'C_K', 'Z_K'];
 
+/** How many color dice every player starts the game holding (setup step 3, see setup.rollInitialColorDice).
+ * Extracted as a shared constant 2026-08-11 because executor.js's EXTRA_D_PLUS_ABC_COUNT metric ("追加色
+ * ダイス" = however many color dice a player has gained BEYOND their starting hand) has to subtract exactly
+ * this number -- with colorDiceCap at 5, that metric's range is 0..2. Two copies of "3" that must agree is
+ * the kind of thing that silently drifts, so both read this one. */
+const INITIAL_COLOR_DICE = 3;
+
 /**
  * @param {string} id
  * @param {string} name
@@ -354,6 +361,7 @@ function cloneState(state) {
 
 module.exports = {
   FREE_ACTION_IDS,
+  INITIAL_COLOR_DICE,
   PLAYER_COLORS,
   splitCardId,
   createDie,

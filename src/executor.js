@@ -38,7 +38,7 @@
 const { parse } = require('./dsl-parser');
 const { lowerProgram, lowerCall, lowerCostList } = require('./command-builder');
 const { getCardRow, getAreaRow, findCardFace, getCardAutoDefault } = require('./data-loader');
-const { splitCardId, createDie } = require('./game-state');
+const { splitCardId, createDie, INITIAL_COLOR_DICE } = require('./game-state');
 const { rollDie } = require('./rng');
 
 class NotImplementedError extends Error {}
@@ -457,15 +457,23 @@ function evalMetric(state, index, playerId, metric) {
     // that looks at PlayerState.resources instead of ownedCardRows.
     case 'RESOURCE':
       return getPlayer(state, playerId).resources[metric.args[0]] || 0;
-    // "色D+ABC建築数" (Q001B GOAL, 2026-08-10): every colored (D) die this player currently has, plus
-    // CARD_COUNT(A,B,C). "色D" counts ALL of the player's colored dice regardless of placedMapId/passed
-    // (confirmed with the user: placed dice count too) -- a colored die stays in player.dice all round
-    // once gained (only WHITE dice get removed on placement, see turn-flow.js's endRound), and the
-    // per-player 5-die cap (excess auto-converts to wD) already bounds this naturally. Delegates to
-    // CARD_COUNT(A,B,C) rather than re-deriving its filter, so the two stay in sync automatically.
-    case 'D_PLUS_ABC_COUNT': {
+    // "ABC建築数+追加色ダイス" (Q001B GOAL, 2026-08-11): CARD_COUNT(A,B,C) plus the player's *additional*
+    // color dice -- how many they've gained BEYOND their starting hand, i.e. colorDiceCount minus
+    // INITIAL_COLOR_DICE, floored at 0. Range 0..2 (starting 3, colorDiceCap 5).
+    //
+    // Replaces 2026-08-10's D_PLUS_ABC_COUNT, which counted ALL color dice and so started every game at 3
+    // while every other QST goal started at 0 (per user: "QSTの初期状態をすべて０にするため"). Floored
+    // rather than allowed negative because a QST goal is a "how much have you achieved" count, and nothing
+    // in the game removes a color die anyway (only WHITE dice are disposable -- see turn-flow's endRound),
+    // so the floor is purely defensive.
+    //
+    // Counts placed/passed dice too, not just unplaced ones (confirmed with the user when this metric was
+    // first added): a color die stays in player.dice for the whole round wherever it sits. Delegates the
+    // ABC half to CARD_COUNT(A,B,C) rather than re-deriving its filter, so the two can't drift.
+    case 'EXTRA_D_PLUS_ABC_COUNT': {
       const colorDiceCount = getPlayer(state, playerId).dice.filter((d) => d.kind === 'COLOR').length;
-      return colorDiceCount + evalMetric(state, index, playerId, { name: 'CARD_COUNT', args: ['A', 'B', 'C'] });
+      const extraColorDice = Math.max(0, colorDiceCount - INITIAL_COLOR_DICE);
+      return extraColorDice + evalMetric(state, index, playerId, { name: 'CARD_COUNT', args: ['A', 'B', 'C'] });
     }
     default:
       throw new NotImplementedError(`Unknown condition metric: ${metric.name}`);

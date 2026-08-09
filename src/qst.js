@@ -85,12 +85,28 @@ function evalGoalMetric(state, index, playerId, goalText) {
 // Ranking
 // ---------------------------------------------------------------------------
 
+/** The rank a player gets when they have no claim on any reward at all. One past the last REWARD field,
+ * so resolveEndGameRewards' own `rank > REWARD_FIELDS.length` check skips them and main.js's 1位/2位/3位
+ * columns simply don't list them. With 3 REWARD fields this is "4位", matching how the user stated the
+ * rule ("QSTカードの目標が０の時は４位になる"). */
+const NO_REWARD_RANK = REWARD_FIELDS.length + 1;
+
 /**
  * Ranks every player by questFaceId's GOAL metric (highest value first), competition-style: rank =
  * 1 + (how many players scored strictly higher). Pure/read-only -- safe to call at any point during
  * the game for a live standings preview (see main.js's QST card UI), not just at GAME_END.
- * @returns {{playerId:string, value:number, rank:number}[]} one entry per player, unsorted-by-rank
- *   guarantee not implied by callers -- sorted by value descending, so equal-rank entries sit together.
+ *
+ * A GOAL value of 0 is always NO_REWARD_RANK, never 1st/2nd/3rd (2026-08-11, per user rule: "QSTカードの
+ * 目標が０の時は４位になる（２人プレイなどでも）" -- e.g. on an 所有AREA数 quest, a player owning no AREA
+ * places 4th even in a 2-player game where competition ranking alone would have handed them 1st or 2nd).
+ * Without this, every quest would pay out its full 1位/2位/3位 rewards at game start, when nobody has
+ * achieved anything yet and all four players are tied on 0 -- the whole point of also re-basing Q001B's
+ * metric to start at 0 (see executor.js's EXTRA_D_PLUS_ABC_COUNT). Note this is deliberately NOT the same
+ * as "exclude zeros and rank the rest": players with a positive value keep the rank their own value earns
+ * them, since a zero was never above them anyway.
+ *
+ * @returns {{playerId:string, value:number, rank:number}[]} one entry per player, sorted by value
+ *   descending, so equal-rank entries sit together.
  */
 function rankPlayersForQuest(state, index, questFaceId) {
   const row = getQstRow(index, questFaceId);
@@ -98,7 +114,9 @@ function rankPlayersForQuest(state, index, questFaceId) {
   scored.sort((a, b) => b.value - a.value);
   return scored.map((entry) => ({
     ...entry,
-    rank: 1 + scored.filter((other) => other.value > entry.value).length,
+    rank: entry.value === 0
+      ? NO_REWARD_RANK
+      : 1 + scored.filter((other) => other.value > entry.value).length,
   }));
 }
 
@@ -145,6 +163,7 @@ function resolveEndGameRewards(state, index) {
 module.exports = {
   QST_PHYSICAL_IDS,
   REWARD_FIELDS,
+  NO_REWARD_RANK,
   setupQuests,
   evalGoalMetric,
   rankPlayersForQuest,

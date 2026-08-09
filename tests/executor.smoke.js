@@ -9,7 +9,7 @@
 
 const path = require('path');
 const { loadGameData, buildDataIndex, getCardRow } = require('../src/data-loader');
-const { createEmptyGameState, createPlayer, createMapState, createCardInstance, createDie, splitCardId } = require('../src/game-state');
+const { createEmptyGameState, createPlayer, createMapState, createCardInstance, createDie, splitCardId, INITIAL_COLOR_DICE } = require('../src/game-state');
 const executor = require('../src/executor');
 
 const index = buildDataIndex(loadGameData(path.join(__dirname, '..', 'data', 'game.json')));
@@ -622,25 +622,40 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 }
 
 // ---------------------------------------------------------------------------
-// 22. D_PLUS_ABC_COUNT (2026-08-10, Q001B's new GOAL "色D+ABC建築数"): every colored die the player
-// currently has (any placedMapId/passed state) plus CARD_COUNT(A,B,C).
+// 22. EXTRA_D_PLUS_ABC_COUNT (2026-08-11, Q001B's GOAL "ABC建築数+追加色ダイス"): CARD_COUNT(A,B,C) plus
+// however many color dice the player holds BEYOND the starting INITIAL_COLOR_DICE, floored at 0. Replaces
+// the earlier D_PLUS_ABC_COUNT (which counted all color dice, so it started at 3 rather than 0).
 // ---------------------------------------------------------------------------
+const EXTRA_D = { name: 'EXTRA_D_PLUS_ABC_COUNT', args: [] };
 {
   const state = freshState();
-  check('0 colored dice + 0 A/B/C cards = 0', executor.evalMetric(state, index, 'P1', { name: 'D_PLUS_ABC_COUNT', args: [] }), 0);
-
   const player = getPlayerRef(state, 'P1');
-  player.dice.push(createDie('d1', 'COLOR'));
-  const placedDie = createDie('d2', 'COLOR');
-  placedDie.placedMapId = 'MAP001';
-  player.dice.push(placedDie);
-  player.dice.push(createDie('d3', 'WHITE')); // white dice don't count toward "色D"
-  check('Counts both an unplaced AND a placed colored die (2), ignores the white one', executor.evalMetric(state, index, 'P1', { name: 'D_PLUS_ABC_COUNT', args: [] }), 2);
+  check('No dice, no cards = 0', executor.evalMetric(state, index, 'P1', EXTRA_D), 0);
+
+  for (let i = 0; i < INITIAL_COLOR_DICE; i++) player.dice.push(createDie(`start-${i}`, 'COLOR'));
+  check('Exactly the starting color dice still counts 0 (the game-start state every QST goal now shares)', executor.evalMetric(state, index, 'P1', EXTRA_D), 0);
+
+  const extraPlaced = createDie('extra-placed', 'COLOR');
+  extraPlaced.placedMapId = 'MAP001'; // placed dice count too -- a color die stays in hand all round
+  player.dice.push(extraPlaced);
+  check('One die past the starting hand counts 1, even though it is already placed', executor.evalMetric(state, index, 'P1', EXTRA_D), 1);
+
+  player.dice.push(createDie('white', 'WHITE')); // white dice are not color dice
+  check('A white die does not count as an additional color die', executor.evalMetric(state, index, 'P1', EXTRA_D), 1);
+
+  player.dice.push(createDie('extra-2', 'COLOR'));
+  check('At the 5-die color cap the metric maxes out at 2 additional dice', executor.evalMetric(state, index, 'P1', EXTRA_D), 2);
 
   giveCard(state, 'A001A', 'P1');
   giveCard(state, 'B001A', 'P1');
   giveCard(state, 'M001', 'P1'); // M (monument) is excluded from CARD_COUNT(A,B,C)
-  check('Adds CARD_COUNT(A,B,C) (2 -- A001A+B001A, M001 excluded) to the 2 colored dice', executor.evalMetric(state, index, 'P1', { name: 'D_PLUS_ABC_COUNT', args: [] }), 4);
+  check('Adds CARD_COUNT(A,B,C) (2 -- A001A+B001A, M001 excluded) on top of the 2 additional dice', executor.evalMetric(state, index, 'P1', EXTRA_D), 4);
+}
+{
+  // Floored at 0, never negative -- defensive only (nothing in the game removes a color die).
+  const state = freshState();
+  getPlayerRef(state, 'P1').dice.push(createDie('lonely', 'COLOR'));
+  check('Fewer color dice than the starting count floors at 0 rather than going negative', executor.evalMetric(state, index, 'P1', EXTRA_D), 0);
 }
 
 console.log(`\n${passCount} passed, ${failCount} failed`);

@@ -1641,11 +1641,11 @@
     {
       "ID": "Q001B",
       "NAME": "Q001B",
-      "GOAL": "D_PLUS_ABC_COUNT",
+      "GOAL": "EXTRA_D_PLUS_ABC_COUNT",
       "REWARD1": "ADD(4VP)",
       "REWARD2": "ADD(2VP)",
       "REWARD3": "ADD(VP)",
-      "INST": "色D+ABC建築数"
+      "INST": "ABC建築数+追加色ダイス"
     },
     {
       "ID": "Q002B",

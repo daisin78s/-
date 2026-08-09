@@ -135,6 +135,35 @@ function giveNCards(state, ownerId, n, offset) {
 }
 
 // ---------------------------------------------------------------------------
+// 3b. A GOAL value of 0 is always NO_REWARD_RANK, never 1st/2nd/3rd (2026-08-11, per user rule:
+// "QSTカードの目標が０の時は４位になる（２人プレイなどでも）").
+// ---------------------------------------------------------------------------
+{
+  const state = freshState('qst-rank-zero-is-last', ['Alice', 'Bob', 'Carol', 'Dan']);
+  giveNCards(state, 'P1', 3, 0); // 3 -> rank 1
+  giveNCards(state, 'P2', 1, 3); // 1 -> rank 2
+  // P3/P4 own nothing -> 0
+  state.quests = { Q002A: true }; // GOAL='CARD_COUNT'
+
+  const byPlayer = Object.fromEntries(qst.rankPlayersForQuest(state, index, 'Q002A').map((r) => [r.playerId, r.rank]));
+  check('P1 (3) still ranks 1st', byPlayer.P1, 1);
+  check('P2 (1) still ranks 2nd -- a positive value keeps the rank it earns', byPlayer.P2, 2);
+  check('P3 (0) is pushed to NO_REWARD_RANK instead of 3rd', byPlayer.P3, qst.NO_REWARD_RANK);
+  check('P4 (0) likewise', byPlayer.P4, qst.NO_REWARD_RANK);
+  check('NO_REWARD_RANK is past the last REWARD field, i.e. 4位', qst.NO_REWARD_RANK, qst.REWARD_FIELDS.length + 1);
+}
+{
+  // The user's own example: a 2-player game, where competition ranking alone would have made the
+  // zero-value player 2nd (and paid them REWARD2).
+  const state = freshState('qst-rank-zero-two-players', ['Alice', 'Bob']);
+  giveCard(state, 'M001', 'P1');
+  state.quests = { Q001A: true }; // GOAL='CARD_COUNT(M)'
+  const byPlayer = Object.fromEntries(qst.rankPlayersForQuest(state, index, 'Q001A').map((r) => [r.playerId, r.rank]));
+  check('2 players: the one with 1 monument ranks 1st', byPlayer.P1, 1);
+  check('2 players: the one with 0 is 4位, not 2nd', byPlayer.P2, qst.NO_REWARD_RANK);
+}
+
+// ---------------------------------------------------------------------------
 // 4. resolveEndGameRewards: rank 1/2/3 get REWARD1/2/3 respectively; ties share the same reward in
 // full (not split); rank 4+ (only reachable with 4 distinct values) gets nothing.
 // ---------------------------------------------------------------------------
@@ -166,22 +195,25 @@ function giveNCards(state, ownerId, n, offset) {
   check('Both rank-3-tied players get the FULL REWARD3 (1VP each) -- REWARD2 goes unawarded', [player(state, 'P3').resources.VP, player(state, 'P4').resources.VP], [1, 1]);
 }
 {
-  // Everyone tied at 0 (nobody built anything relevant) -- degenerate but should still resolve
-  // cleanly: all 4 tie for rank 1 and all receive REWARD1 in full.
+  // Everyone on 0 (nobody built anything relevant) -- nobody is rewarded at all, since a GOAL value of 0
+  // is always NO_REWARD_RANK (2026-08-11 rule, see rankPlayersForQuest's own doc). Before that rule this
+  // degenerate case paid every player a full REWARD1.
   const state = freshState('qst-end-game-all-zero', ['Alice', 'Bob', 'Carol', 'Dan']);
   state.quests = { Q003A: true };
   qst.resolveEndGameRewards(state, index);
-  check('All 4 players tied at 0 all get REWARD1', state.players.map((p) => p.resources.VP), [3, 3, 3, 3]);
+  check('All 4 players on 0 get NOTHING (0 is never a rewarded rank)', state.players.map((p) => p.resources.VP), [0, 0, 0, 0]);
 }
 {
   // Multiple revealed cards each resolve independently.
   const state = freshState('qst-end-game-multi-card', ['Alice', 'Bob']);
-  giveCard(state, 'M001', 'P1'); // Q001A GOAL=CARD_COUNT(M): P1=1, P2=0 -> P1 rank1(3VP), P2 rank2(2VP)
+  giveCard(state, 'M001', 'P1'); // Q001A GOAL=CARD_COUNT(M): P1=1 -> rank1(3VP); P2=0 -> no reward at all
   giveCard(state, 'A001A', 'P2'); // Q002A GOAL=CARD_COUNT: P1=1(the M001 above also counts), P2=1 -> tied rank1(2K each)
   state.quests = { Q001A: true, Q002A: true };
   qst.resolveEndGameRewards(state, index);
   check('Q001A: P1 (1 monument) ranks 1st, gets 3VP', player(state, 'P1').resources.VP, 3);
-  check('Q001A: P2 (0 monuments) ranks 2nd, gets 2VP', player(state, 'P2').resources.VP, 2);
+  // 2-player game, so plain competition ranking would have made P2 2nd and paid them REWARD2 -- the
+  // 2026-08-11 rule overrides that because their GOAL value is 0 (per user: "２人プレイなどでも").
+  check('Q001A: P2 (0 monuments) gets nothing even though they are 2nd of only 2 players', player(state, 'P2').resources.VP, 0);
   check('Q002A: P1 and P2 tie at 1 card each -> both get REWARD1 (2K)', [player(state, 'P1').resources.K, player(state, 'P2').resources.K], [2, 2]);
 }
 

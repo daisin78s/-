@@ -827,7 +827,12 @@ const ACTION_ICON_BUILDERS = {
   // CHANGE(K,Z,2)/(K,A,2)/(K,B,2)/(K,C,2) used to live here (the count-argument form) -- removed
   // 2026-08-0X, no longer reachable: C001-3's TAP was changed to the quantity-prefixed CHANGE(2K,2A)
   // form (per user request), which buildChangeQuantityIcon now handles generically.
-  'CHANGE((A,B,C),D)': () => actionRow([actionDot('A'), actionDot('B'), actionDot('C'), actionArrow(), actionSuffix('色D')]),
+  // 訓練場 (AREA007, the only user of this exact DSL) -- labelled 追加色ダイス, not 色D (2026-08-11, per
+  // user request). Any die gained mid-game is by definition one beyond the starting 3, so this wording
+  // matches Q001B's own "追加色ダイス" goal (executor.js's EXTRA_D_PLUS_ABC_COUNT) and reads as "this is
+  // how you get one". Deliberately scoped to this entry: ADD(D) elsewhere keeps saying 色D (see
+  // buildAddResourceIcon), since those cards are about the die itself, not about growing past the start.
+  'CHANGE((A,B,C),D)': () => actionRow([actionDot('A'), actionDot('B'), actionDot('C'), actionArrow(), actionSuffix('追加色ダイス')]),
   // CHANGE(4K,VP) used to live here as an exact-match entry -- removed 2026-08-05, no longer reachable
   // (no card/AREA in the current data uses that literal count) and superseded by the general
   // buildChangeToVpIcon below, added per user feedback covering AREA010A/C's own K->VP counts.

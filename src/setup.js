@@ -31,6 +31,7 @@ const {
   createDie,
   splitCardId,
   PLAYER_COLORS,
+  INITIAL_COLOR_DICE,
 } = require('./game-state');
 const { getAreaRow, getCardRow } = require('./data-loader');
 const { runProgram } = require('./executor');
@@ -137,11 +138,13 @@ function nextSetupDieId() {
   return `setup-d${diceCounter}`;
 }
 
-/** Rolls 3 color dice for every player (confirmed initial count). Records the pre-roll undo checkpoint. */
+/** Rolls each player's starting color dice (INITIAL_COLOR_DICE, confirmed count -- shared with
+ * executor.js's EXTRA_D_PLUS_ABC_COUNT metric, see that constant's own doc). Records the pre-roll undo
+ * checkpoint. */
 function rollInitialColorDice(state) {
   recordCheckpoint(state);
   for (const player of state.players) {
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < INITIAL_COLOR_DICE; i++) {
       const die = createDie(nextSetupDieId(), 'COLOR');
       die.value = rollDie(state.rng);
       player.dice.push(die);
