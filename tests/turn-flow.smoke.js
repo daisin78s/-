@@ -278,6 +278,41 @@ check('startRound(2) itself does not touch dice (already rerolled at the previou
 }
 
 // ---------------------------------------------------------------------------
+// A placed WHITE die is disposable (confirmed 2026-08-09, per user feedback: "wDは一度SLOTに置かれた
+// ら回収されない使い捨てのダイスに変更してください"): once actually placed this round it is discarded
+// for good at endRound rather than returned to hand -- unlike a COLOR die (still returned/rerolled,
+// see above) or a WHITE die merely passed on / never placed this round (untouched, stays in hand).
+// ---------------------------------------------------------------------------
+{
+  const { createEmptyGameState: freshEmptyState, createDie: freshDie } = require('../src/game-state');
+  const s = freshEmptyState('disposable-white-die-smoke');
+  setup.createPlayers(s, ['Alice']);
+  setup.prepareMaps(s, index);
+  setup.prepareShops(s, index);
+  s.turnOrder = ['P1'];
+  s.round = 1;
+
+  const placedWhite = freshDie('placed-white-1', 'WHITE');
+  placedWhite.value = 4;
+  placedWhite.placedMapId = 'MAP001'; // simulate having actually been placed this round
+  const untouchedWhite = freshDie('untouched-white-1', 'WHITE');
+  untouchedWhite.value = 6; // never placed, still in hand
+  const passedWhite = freshDie('passed-white-1', 'WHITE');
+  passedWhite.value = 2;
+  passedWhite.passed = true; // opted out this round without ever occupying a SLOT
+  s.players[0].dice.push(placedWhite, untouchedWhite, passedWhite);
+
+  turnFlow.endRound(s, index);
+  const remaining = s.players[0].dice;
+  check('The placed white die is gone for good (not returned to hand)', remaining.some((d) => d.id === 'placed-white-1'), false);
+  check('Only the 2 non-placed white dice remain', remaining.length, 2);
+  assertTrue('The untouched white die kept its un-rerolled value (6)', remaining.find((d) => d.id === 'untouched-white-1').value === 6);
+  const passedAfter = remaining.find((d) => d.id === 'passed-white-1');
+  check('The merely-passed white die stayed in hand', !!passedAfter, true);
+  check('...and is no longer marked passed (placeable again next round)', passedAfter.passed, false);
+}
+
+// ---------------------------------------------------------------------------
 // endRound untaps every card, not just free actions (2026-08-01 fix, per user feedback: "ラウンド終了
 // 時ダイスを回収するときに全てのカードはUNTAPします" -- previously only free actions were untapped
 // here, so a card with no TURNEND=UNTAP() of its own, e.g. C004A's bare TAP=ADD(K), stayed tapped

@@ -155,8 +155,13 @@ function computeNextRoundTurnOrder(state) {
  * Recomputes turnOrder from the castle (see computeNextRoundTurnOrder, only
  * meaningful for rounds 1-3 -- there's no "round 5" to prepare, so this is
  * skipped once state.round hits 4, leaving state.turnOrder as the actual
- * final-round order for scoring.js's tie-break), returns all placed dice to
- * hand, clears every map's slots (recomputed from each map's *current*
+ * final-round order for scoring.js's tie-break), returns all placed COLOR
+ * dice to hand -- but a placed WHITE die is disposable (confirmed
+ * 2026-08-09): once actually placed on a SLOT it is discarded for good
+ * (removed from player.dice entirely) rather than returned, so it never
+ * comes back next round even unrolled. A WHITE die merely *passed* on (never
+ * placed this round) is untouched, same as before, and remains available
+ * next round. Also clears every map's slots (recomputed from each map's *current*
  * AREA, in case a tier flip changed the slot layout since last round),
  * grants 3K for every still-unplaced COLOR die (confirmed 2026-07-29: a
  * color die a player chose not to place this round auto-resolves to 3K,
@@ -164,7 +169,7 @@ function computeNextRoundTurnOrder(state) {
  * rerolled the same way by round's end, whether it was actually placed or
  * fell back to this), re-rolls every COLOR die in bulk (skipped after round
  * 4, the one confirmed exception, since there's no next round to prepare
- * for; white dice are never touched here at all, see the module doc), and
+ * for; white dice are never re-rolled here at all, see the module doc), and
  * untaps every free action *and every card* (confirmed 2026-08-01: "ラウンド
  * 終了時ダイスを回収するときに全てのカードはUNTAPします" -- previously only
  * free actions were untapped here, leaving any card with no TURNEND=UNTAP()
@@ -187,7 +192,15 @@ function endRound(state, index) {
     }
   }
   for (const player of state.players) {
-    for (const die of player.dice) { die.placedMapId = null; die.passed = false; }
+    player.dice = player.dice.filter((die) => {
+      // A placed WHITE die is disposable (confirmed 2026-08-09): it's discarded here rather than
+      // returned to hand, unlike a placed COLOR die (still returned/rerolled below) or a WHITE die
+      // that was merely passed on -- placedMapId===null -- which is untouched and stays available.
+      if (die.kind === 'WHITE' && die.placedMapId !== null) return false;
+      die.placedMapId = null;
+      die.passed = false;
+      return true;
+    });
   }
   for (const map of Object.values(state.maps)) {
     const areaRow = getAreaRow(index, map.currentAreaId);
