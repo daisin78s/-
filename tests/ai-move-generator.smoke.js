@@ -7,13 +7,15 @@
 
 const path = require('path');
 const { loadGameData, buildDataIndex } = require('../src/data-loader');
-const { createEmptyGameState, createDie, createCardInstance } = require('../src/game-state');
+const { createEmptyGameState, createDie, createCardInstance, cloneState } = require('../src/game-state');
 const setup = require('../src/setup');
 const executor = require('../src/executor');
+const board = require('../src/board');
 const { MoveGenerator, bzConversionTap } = require('../src/ai/move-generator');
 
 const index = buildDataIndex(loadGameData(path.join(__dirname, '..', 'data', 'game.json')));
 const moveGenerator = new MoveGenerator();
+const moveGeneratorLv3 = new MoveGenerator({ monumentFocusFromRound: 3 }); // see AI LV3's own doc in main.js
 
 let passCount = 0;
 let failCount = 0;
@@ -73,7 +75,7 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
 // ---------------------------------------------------------------------------
 // A BUILD-triggering placement (castle) offers one move per candidate PLUS a "leave it unresolved"
 // fallback (buildCandidateIndex omitted) -- since the die genuinely gets placed either way, unlike the
-// BARE_TAP/CLAIM_QUEST cases below. Requires BZ (2026-08-04, per user feedback: "AREA008 009は建築完了
+// BARE_TAP case below. Requires BZ (2026-08-04, per user feedback: "AREA008 009は建築完了
 // 出来ないときはダイスが置けません" -- board.js's wouldAreaActionHaveEffect now gates the placement
 // itself on at least one AFFORDABLE candidate existing, not just a dice-eligible one; a generous BZ
 // grant covers whatever the cheapest candidate at this seed/buildValue turns out to be).
@@ -294,6 +296,95 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
     'generateMoves still includes the JOB004 BARE_TAP candidate once a build outlet exists',
     movesWithOutlet.some((m) => m.type === 'BARE_TAP' && m.physicalId === jobInst.physicalId)
   );
+}
+
+// ---------------------------------------------------------------------------
+// AI LV3 policy (2026-08-09, monumentFocusFromRound -- see MoveGenerator's own doc): from the
+// configured round onward, BUILD_NEW candidates for A/B/C are dropped from every build-resolving
+// decision point entirely (UPGRADE stays offered), and whenever 2+ monuments are simultaneously offered
+// from one decision point, only the highest-printed-VP one(s) survive. The shared, policy-free
+// `moveGenerator` (LV1/LV2) is used as a same-state control in each case to confirm the policy is
+// opt-in, not a global behavior change.
+// ---------------------------------------------------------------------------
+{
+  // B006A's TAP offers A/B/C *and* M candidates together (BUILD((A,B,C,M),6)), so this also doubles as
+  // confirmation that filtering one category out of a mixed candidate list doesn't disturb the others.
+  const state = freshStateWithShops();
+  state.shops.NORMAL.slots.SHOP101 = 'C002A'; // deterministic regardless of shuffle -- SHOP101's DICE range is 1-6
+  const b006a = createCardInstance('B006A'); // TAP=BUILD((A,B,C,M),6)
+  b006a.ownerId = 'P1';
+  state.cards[b006a.physicalId] = b006a;
+  player(state, 'P1').ownedCardPhysicalIds.push(b006a.physicalId);
+  const context = { hasPlacedDieThisTurn: false };
+  const offersC002A = (moves) => moves
+    .filter((m) => m.type === 'BARE_TAP' && m.physicalId === b006a.physicalId && m.buildCandidateIndex !== undefined)
+    .some((m) => board.useBareTapAbility(cloneState(state), index, { playerId: 'P1' }, b006a.physicalId).pendingBuild.candidates[m.buildCandidateIndex].faceId === 'C002A');
+
+  state.round = 1;
+  assertTrue(
+    'Before monumentFocusFromRound, LV3 still offers a new A/B/C build (C002A via B006A\'s TAP)',
+    offersC002A(moveGeneratorLv3.generateMoves(state, index, 'P1', context))
+  );
+
+  state.round = 3;
+  assertTrue(
+    'At/after monumentFocusFromRound, LV3 no longer offers that same new A/B/C build',
+    !offersC002A(moveGeneratorLv3.generateMoves(state, index, 'P1', context))
+  );
+  assertTrue(
+    'The unpoliced MoveGenerator (LV1/LV2) still offers it at the very same round (control)',
+    offersC002A(moveGenerator.generateMoves(state, index, 'P1', context))
+  );
+}
+{
+  // UPGRADE is unaffected by the block (confirmed with the user: only *new* A/B/C purchases are meant
+  // to stop) -- an UPGRADE candidate for an already-owned card must still be offered past the threshold.
+  const state = freshStateWithShops();
+  const a001 = createCardInstance('A001A'); // A001B exists -- upgrade-eligible
+  a001.ownerId = 'P1';
+  state.cards[a001.physicalId] = a001;
+  player(state, 'P1').ownedCardPhysicalIds.push(a001.physicalId);
+  player(state, 'P1').resources.A = 2; // A001A/B's UPGRADE cost is "2A" -- AREA008's own placement
+  // gate (2026-08-04, "建築完了できない時は配置不可") requires *some* affordable candidate to exist
+  // before it'll even let the die land there at all, regardless of what MoveGenerator itself does.
+  giveDie(state, 'P1', 3); // castle SLOTs are all ANY; UPGRADE ignores dice value entirely
+  state.round = 3;
+
+  const moves = moveGeneratorLv3.generateMoves(state, index, 'P1', { hasPlacedDieThisTurn: false });
+  assertTrue(
+    'Past the threshold, LV3 still offers the A001A->A001B UPGRADE from the castle',
+    moves.some((m) => m.type === 'PLACE_DIE' && m.mapId === 'MAP008' && m.buildCandidateIndex !== undefined)
+  );
+}
+{
+  // Multiple monuments reachable from one placement (routine at the castle -- several DICE thresholds
+  // can all be satisfied at once) -- only the highest-printed-VP one(s) should survive past the
+  // threshold. M009(die>=4,VP4)/M010(>=3,VP3)/M011(>=2,VP4)/M012(>=1,VP5) are all reachable at die
+  // value 4; M012's VP=5 is the clear single highest among them.
+  const state = freshStateWithShops();
+  state.shops.M.slots = { SHOP001: 'M009', SHOP002: 'M010', SHOP003: 'M011', SHOP004: 'M012', SHOP005: null, SHOP006: null };
+  player(state, 'P1').resources.C = 13; // affords M012 outright -- satisfies AREA008's own placement
+  // gate (see the UPGRADE test above); the OTHER 3 monuments stay unaffordable, but MoveGenerator
+  // itself never affordability-filters (see its own doc), so they still appear as raw candidates here.
+  const die = giveDie(state, 'P1', 4);
+  state.round = 3;
+
+  const moves = moveGeneratorLv3.generateMoves(state, index, 'P1', { hasPlacedDieThisTurn: false });
+  const rawCandidates = board.getBuildCandidates(state, index, 'P1', ['A', 'B', 'C', 'U', 'M'], 4);
+  const monumentFaceIds = moves
+    .filter((m) => m.type === 'PLACE_DIE' && m.mapId === 'MAP008' && m.dieId === die.id && m.buildCandidateIndex !== undefined)
+    .map((m) => rawCandidates[m.buildCandidateIndex].faceId)
+    .filter((faceId) => faceId.startsWith('M'));
+  const uniqueMonumentFaceIds = [...new Set(monumentFaceIds)];
+  check('Only M012 (VP=5, the highest among the 4 simultaneously-reachable monuments) survives', uniqueMonumentFaceIds, ['M012']);
+
+  const plainMonumentFaceIds = [...new Set(
+    moveGenerator.generateMoves(state, index, 'P1', { hasPlacedDieThisTurn: false })
+      .filter((m) => m.type === 'PLACE_DIE' && m.mapId === 'MAP008' && m.dieId === die.id && m.buildCandidateIndex !== undefined)
+      .map((m) => rawCandidates[m.buildCandidateIndex].faceId)
+      .filter((faceId) => faceId.startsWith('M'))
+  )].sort();
+  check('The unpoliced MoveGenerator (LV1/LV2) still offers all 4 monuments (control)', plainMonumentFaceIds, ['M009', 'M010', 'M011', 'M012']);
 }
 
 console.log(`\n${passCount} passed, ${failCount} failed`);

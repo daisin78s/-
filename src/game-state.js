@@ -114,8 +114,6 @@ function createDie(id, kind) {
  * @property {string} color - one of PLAYER_COLORS, assigned by player order at game creation
  *   (confirmed 2026-07-29, provisional per the user: "暫定です後で変わるかも"). Purely an identity
  *   label (dice/pieces are this player's color) -- game logic keys everything off `id`, never color.
- * @property {number} qstRewardCount - QST (Quest) card rewards claimed so far, game-wide (confirmed
- *   2026-07-30: capped at 2 per player for the whole game). See src/qst.js.
  * @property {string[]} blockedBuildCategoriesThisTurn - BUILD categories (e.g. "M") this player may not
  *   build this turn, set by DSL's BLOCK_BUILD(category,THIS_TURN) (confirmed 2026-08-04: using JOB004's
  *   TAP CHANGE(3K,2BZ) blocks building a monument for the rest of that turn). Turn-scoped like
@@ -172,7 +170,6 @@ function createPlayer(id, name, color = null) {
     ownedCardPhysicalIds: [],
     startOrderValue: 0,
     freeActionTaps,
-    qstRewardCount: 0,
     blockedBuildCategoriesThisTurn: [],
     pendingFee: null,
   };
@@ -299,19 +296,14 @@ function createShopDeck(drawPile, slotIds) {
  *   rolling color dice, and just before rolling white dice. See src/undo.js.
  * @property {PendingChoice[]} pendingChoices
  * @property {Object<string, number>} passiveCounters - cumulative counters for PASSIVE limits, e.g. "CON003B.CONVERT_LIMIT" -> times used, "CON004B.UPGRADE_LIMIT" -> times used
- * @property {Object<string, QuestState>} quests - the 3 QST cards revealed at setup (confirmed
- *   2026-07-30: fixed for the whole game, no restock), keyed by the specific face ID that was
- *   revealed (e.g. "Q002B") -- QST has no in-game tier-flip the way CON/A/B/C do, the face is chosen
- *   once at setup and stays that way, so there's no need to track physicalId/currentFaceId
- *   separately the way GameState.cards does. See src/qst.js.
- */
-
-/**
- * @typedef {Object} QuestState
- * @property {number} claimCount - 0 (untouched) .. 3 (REWARD3 claimed, card is COMPLETE, no more
- *   claims possible). Also determines which REWARD field the *next* claimer gets (REWARD{claimCount+1}).
- * @property {string[]} claimedPlayers - player ids who have already claimed from this specific card
- *   (confirmed 2026-07-30: each player may claim from a given QST card at most once).
+ * @property {Object<string, true>} quests - the 3 QST cards revealed at setup (confirmed 2026-07-30:
+ *   fixed for the whole game, no restock), keyed by the specific face ID that was revealed (e.g.
+ *   "Q002B") -> true. QST has no in-game tier-flip the way CON/A/B/C do, so there's no need to track
+ *   physicalId/currentFaceId separately the way GameState.cards does -- and (2026-08-09, rank-based
+ *   rewards replacing the original claim-based design) no other per-card state either: standings are
+ *   always computed fresh from current game state (see src/qst.js's rankPlayersForQuest), and rewards
+ *   are granted automatically, once, at GAME_END (see src/qst.js's resolveEndGameRewards) rather than
+ *   claimed by players during play, so this is purely a "which 3 cards are in play" record.
  */
 
 /**

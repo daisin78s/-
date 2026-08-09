@@ -1,10 +1,15 @@
 /**
- * Smoke test for src/qst.js (QST/Quest cards). Injects synthetic QST rows into the loaded index
- * rather than relying on data/game.xlsx's real QST sheet content, so these cases stay fixed and
- * readable regardless of what the real cards say. That only replaces the *data*; the engine code
- * under test (qst.js, plus the CARD_COUNT(sheet) scoping added to executor.js) is exactly what real
- * cards run through. REWARD1/REWARD2-3 (2026-08-06: REWARD2 and REWARD3 merged into one shared field,
- * both the 2nd and 3rd claimer draw from it) -- see qst.js's own REWARD_FIELDS doc.
+ * Smoke test for src/qst.js (QST/Quest cards) and the evalMetric extensions in executor.js added
+ * alongside it. Injects synthetic QST rows into the loaded index rather than relying on
+ * data/game.xlsx's real QST sheet content, so these cases stay fixed and readable regardless of what
+ * the real cards say. That only replaces the *data*; the engine code under test (qst.js, plus the
+ * CARD_COUNT/AREA_COUNT/EMBLEM_COUNT extensions in executor.js) is exactly what real cards run
+ * through.
+ *
+ * Rank-based rewards (2026-08-09, replacing the original claim-based design -- see qst.js's own doc
+ * for the full story): GOAL is now a bare metric expression evaluated as a number per player; REWARD1/
+ * REWARD2/REWARD3 go automatically to whoever ranks 1st/2nd/3rd (competition ranking, ties share a
+ * rank) once the game actually ends -- there is no more player-facing claim action to test.
  * Run: node tests/qst.smoke.js
  */
 
@@ -15,19 +20,20 @@ const { loadGameData, buildDataIndex } = require('../src/data-loader');
 const { createEmptyGameState, createCardInstance } = require('../src/game-state');
 const setup = require('../src/setup');
 const qst = require('../src/qst');
+const turnFlow = require('../src/turn-flow');
 
 const index = buildDataIndex(loadGameData(path.join(__dirname, '..', 'data', 'game.json')));
-// Synthetic QST fixtures (see file header) -- 4 physical cards, A/B faces, covering: a
-// monument-ownership goal, an always-true goal, and a BUILD-type reward.
+// Synthetic QST fixtures (see file header) -- 4 physical cards, A/B faces, covering a monument-
+// ownership goal and a couple of always-computable ones.
 index.raw.QST = [
-  { ID: 'Q001A', NAME: 'Q001A', GOAL: 'CARD_COUNT(M)>=1', REWARD1: 'ADD(3VP)', 'REWARD2-3': 'ADD(1VP)', INST: '' },
-  { ID: 'Q001B', NAME: 'Q001B', GOAL: 'CARD_COUNT(M)>=1', REWARD1: 'ADD(3VP)', 'REWARD2-3': 'ADD(1VP)', INST: '' },
-  { ID: 'Q002A', NAME: 'Q002A', GOAL: 'CARD_COUNT>=0', REWARD1: 'ADD(2K)', 'REWARD2-3': 'ADD(1K)', INST: '' },
-  { ID: 'Q002B', NAME: 'Q002B', GOAL: 'CARD_COUNT>=0', REWARD1: 'ADD(2K)', 'REWARD2-3': 'ADD(1K)', INST: '' },
-  { ID: 'Q003A', NAME: 'Q003A', GOAL: 'CARD_COUNT>=0', REWARD1: 'BUILD(M)', 'REWARD2-3': 'ADD(1VP)', INST: '' },
-  { ID: 'Q003B', NAME: 'Q003B', GOAL: 'CARD_COUNT>=0', REWARD1: 'BUILD(M)', 'REWARD2-3': 'ADD(1VP)', INST: '' },
-  { ID: 'Q004A', NAME: 'Q004A', GOAL: 'CARD_COUNT(M)>=99', REWARD1: 'ADD(1VP)', 'REWARD2-3': 'ADD(1VP)', INST: '' },
-  { ID: 'Q004B', NAME: 'Q004B', GOAL: 'CARD_COUNT(M)>=99', REWARD1: 'ADD(1VP)', 'REWARD2-3': 'ADD(1VP)', INST: '' },
+  { ID: 'Q001A', NAME: 'Q001A', GOAL: 'CARD_COUNT(M)', REWARD1: 'ADD(3VP)', REWARD2: 'ADD(2VP)', REWARD3: 'ADD(VP)', INST: '' },
+  { ID: 'Q001B', NAME: 'Q001B', GOAL: 'CARD_COUNT(M)', REWARD1: 'ADD(3VP)', REWARD2: 'ADD(2VP)', REWARD3: 'ADD(VP)', INST: '' },
+  { ID: 'Q002A', NAME: 'Q002A', GOAL: 'CARD_COUNT', REWARD1: 'ADD(2K)', REWARD2: 'ADD(K)', REWARD3: 'ADD(K)', INST: '' },
+  { ID: 'Q002B', NAME: 'Q002B', GOAL: 'CARD_COUNT', REWARD1: 'ADD(2K)', REWARD2: 'ADD(K)', REWARD3: 'ADD(K)', INST: '' },
+  { ID: 'Q003A', NAME: 'Q003A', GOAL: 'CARD_COUNT', REWARD1: 'ADD(3VP)', REWARD2: 'ADD(2VP)', REWARD3: 'ADD(VP)', INST: '' },
+  { ID: 'Q003B', NAME: 'Q003B', GOAL: 'CARD_COUNT', REWARD1: 'ADD(3VP)', REWARD2: 'ADD(2VP)', REWARD3: 'ADD(VP)', INST: '' },
+  { ID: 'Q004A', NAME: 'Q004A', GOAL: 'AREA_COUNT', REWARD1: 'ADD(3VP)', REWARD2: 'ADD(2VP)', REWARD3: 'ADD(VP)', INST: '' },
+  { ID: 'Q004B', NAME: 'Q004B', GOAL: 'AREA_COUNT(2)', REWARD1: 'ADD(3VP)', REWARD2: 'ADD(2VP)', REWARD3: 'ADD(VP)', INST: '' },
 ];
 
 let passCount = 0;
@@ -37,6 +43,7 @@ function check(label, actual, expected) {
   console.log(`${ok ? 'PASS' : 'FAIL'} ${label}`, ok ? '' : `expected=${JSON.stringify(expected)} actual=${JSON.stringify(actual)}`);
   if (ok) passCount++; else failCount++;
 }
+function assertTrue(label, cond) { check(label, !!cond, true); }
 
 function freshState(seed, playerNames) {
   const state = createEmptyGameState(seed);
@@ -53,9 +60,28 @@ function giveCard(state, faceCardId, ownerId) {
   player(state, ownerId).ownedCardPhysicalIds.push(inst.physicalId);
   return inst.physicalId;
 }
+// CARD_COUNT-family metrics count DISTINCT owned physicalIds (ownedCardRows scans state.cards' keys,
+// and a physicalId is derived from its faceId with the tier letter stripped -- see splitCardId) --
+// giving the same faceId N times collapses onto one physicalId, not N cards, and giving two different
+// players cards from the same faceId pool at the same offsets collides for the same reason. Tests
+// needing "N owned cards" (possibly for several players in the same state) must draw from a shared
+// pool of genuinely distinct physical ids, each used at most once per state. 36 across A/B/C/M decks.
+const DISTINCT_FACE_ID_POOL = [
+  ...['A001A', 'A002A', 'A003A', 'A004A', 'A005A', 'A006A', 'A007A', 'A008A'],
+  ...['B001A', 'B002A', 'B003A', 'B004A', 'B005A', 'B006A', 'B007A', 'B008A'],
+  ...['C001A', 'C002A', 'C003A', 'C004A', 'C005A', 'C006A', 'C007A', 'C008A'],
+  ...['M001', 'M002', 'M003', 'M004', 'M005', 'M006', 'M007', 'M008', 'M009', 'M010', 'M011', 'M012'],
+];
+/** Gives ownerId n cards drawn from DISTINCT_FACE_ID_POOL starting at `offset` -- caller is
+ * responsible for keeping offsets non-overlapping across every giveNCards call in the same state. */
+function giveNCards(state, ownerId, n, offset) {
+  if (offset + n > DISTINCT_FACE_ID_POOL.length) throw new Error(`giveNCards: offset+n=${offset + n} exceeds the ${DISTINCT_FACE_ID_POOL.length}-card distinct pool`);
+  for (let i = 0; i < n; i++) giveCard(state, DISTINCT_FACE_ID_POOL[offset + i], ownerId);
+}
 
 // ---------------------------------------------------------------------------
-// 1. setupQuests: 3 of 4 physical cards revealed, never both faces of one physical card
+// 1. setupQuests: 3 of 4 physical cards revealed, never both faces of one physical card, each
+// revealed face is just a `true` marker now (no more claimCount/claimedPlayers).
 // ---------------------------------------------------------------------------
 {
   const state = freshState('qst-setup-1', ['Alice']);
@@ -67,7 +93,7 @@ function giveCard(state, faceCardId, ownerId) {
   const uniquePhysicalIds = new Set(physicalIds);
   check('All 3 are distinct physical cards (no sibling faces revealed together)', uniquePhysicalIds.size, 3);
   check('Every revealed physical id is one of Q001-Q004', physicalIds.every((id) => qst.QST_PHYSICAL_IDS.includes(id)), true);
-  check('Every revealed face starts at claimCount 0', Object.values(state.quests).every((q) => q.claimCount === 0), true);
+  check('Every revealed face is just `true` (no per-card claim state anymore)', Object.values(state.quests).every((v) => v === true), true);
 
   // Different seed -> re-running setup is allowed to reveal a different combination (just checking
   // it doesn't crash / still obeys the same invariants, not asserting a specific different result).
@@ -77,100 +103,127 @@ function giveCard(state, faceCardId, ownerId) {
 }
 
 // ---------------------------------------------------------------------------
-// 2. goalMet: CARD_COUNT(M)>=1 -- false before owning a monument, true after
+// 2. evalGoalMetric: a bare metric expression evaluated as a NUMBER, not a boolean condition.
 // ---------------------------------------------------------------------------
 {
-  const state = freshState('qst-goal', ['Alice']);
-  check('GOAL not met with no monuments owned', qst.goalMet(state, index, 'P1', 'CARD_COUNT(M)>=1'), false);
+  const state = freshState('qst-goal-metric', ['Alice']);
+  check('CARD_COUNT(M) is 0 with no monuments owned', qst.evalGoalMetric(state, index, 'P1', 'CARD_COUNT(M)'), 0);
   giveCard(state, 'M001', 'P1');
-  check('GOAL met once a monument is owned', qst.goalMet(state, index, 'P1', 'CARD_COUNT(M)>=1'), true);
-  check('goalMet is false for missing/blank GOAL text', qst.goalMet(state, index, 'P1', ''), false);
+  giveCard(state, 'M002', 'P1');
+  check('CARD_COUNT(M) counts owned monuments', qst.evalGoalMetric(state, index, 'P1', 'CARD_COUNT(M)'), 2);
+  check('evalGoalMetric is 0 for missing/blank GOAL text', qst.evalGoalMetric(state, index, 'P1', ''), 0);
 }
 
 // ---------------------------------------------------------------------------
-// 3. Claim order (REWARD1, then REWARD2-3 shared by both the 2nd and 3rd claimer), per-card
-// one-claim-per-player, and COMPLETE after 3 claims (there's no REWARD4).
+// 3. rankPlayersForQuest: competition ranking with ties, per the user's own worked example
+// (build counts 8/8/7/7 -> ranks 1/1/3/3 -- nobody is "2nd").
 // ---------------------------------------------------------------------------
 {
-  const state = freshState('qst-order', ['Alice', 'Bob', 'Carol', 'Dan']);
-  state.quests = { Q002A: { claimCount: 0, claimedPlayers: [] } }; // GOAL='CARD_COUNT>=0', always met
+  const state = freshState('qst-rank-ties', ['Alice', 'Bob', 'Carol', 'Dan']);
+  giveNCards(state, 'P1', 8, 0);
+  giveNCards(state, 'P2', 8, 8);
+  giveNCards(state, 'P3', 7, 16);
+  giveNCards(state, 'P4', 7, 23);
+  state.quests = { Q002A: true }; // GOAL='CARD_COUNT'
 
-  const p1 = qst.claimQuestReward(state, index, { playerId: 'P1' }, 'Q002A');
-  check('1st claimer succeeds', p1.success, true);
-  check('1st claimer got REWARD1 (2K)', player(state, 'P1').resources.K, 2);
-  check('claimCount is now 1', state.quests.Q002A.claimCount, 1);
-
-  const p1Again = qst.claimQuestReward(state, index, { playerId: 'P1' }, 'Q002A');
-  check('Same player claiming the same card again is rejected', p1Again, { success: false, reason: 'ALREADY_CLAIMED' });
-
-  const p2 = qst.claimQuestReward(state, index, { playerId: 'P2' }, 'Q002A');
-  check('2nd claimer succeeds', p2.success, true);
-  check('2nd claimer got REWARD2-3 (1K)', player(state, 'P2').resources.K, 1);
-
-  const p3 = qst.claimQuestReward(state, index, { playerId: 'P3' }, 'Q002A');
-  check('3rd claimer succeeds', p3.success, true);
-  check('3rd claimer got the SAME REWARD2-3 (1K) as the 2nd claimer', player(state, 'P3').resources.K, 1);
-  check('claimCount is now 3 (COMPLETE)', state.quests.Q002A.claimCount, 3);
-
-  const p4 = qst.claimQuestReward(state, index, { playerId: 'P4' }, 'Q002A');
-  check('4th claimer (goal met, but card is COMPLETE -- no REWARD4) gets nothing', p4, { success: false, reason: 'COMPLETE' });
-  check('4th claimer\'s K is untouched', player(state, 'P4').resources.K, 0);
+  const ranking = qst.rankPlayersForQuest(state, index, 'Q002A');
+  const byPlayer = Object.fromEntries(ranking.map((r) => [r.playerId, r.rank]));
+  check('P1 (8) ranks 1st', byPlayer.P1, 1);
+  check('P2 (8) also ranks 1st (tied)', byPlayer.P2, 1);
+  check('P3 (7) ranks 3rd (rank 2 is skipped -- 2 players tied ahead)', byPlayer.P3, 3);
+  check('P4 (7) also ranks 3rd (tied)', byPlayer.P4, 3);
 }
 
 // ---------------------------------------------------------------------------
-// 4. Per-player game-wide cap: 2 rewards total, even across different cards
+// 4. resolveEndGameRewards: rank 1/2/3 get REWARD1/2/3 respectively; ties share the same reward in
+// full (not split); rank 4+ (only reachable with 4 distinct values) gets nothing.
 // ---------------------------------------------------------------------------
 {
-  const state = freshState('qst-cap', ['Alice']);
-  state.quests = {
-    Q002A: { claimCount: 0, claimedPlayers: [] },
-    Q004A: { claimCount: 0, claimedPlayers: [] }, // GOAL='CARD_COUNT(M)>=99', never met on its own
-  };
-  giveCard(state, 'M001', 'P1'); // so Q001A-style goals would pass; irrelevant to Q002A/Q004A here
+  const state = freshState('qst-end-game-distinct', ['Alice', 'Bob', 'Carol', 'Dan']);
+  giveNCards(state, 'P1', 4, 0); // 4 -> rank 1 -> REWARD1 (3VP)
+  giveNCards(state, 'P2', 3, 4); // 3 -> rank 2 -> REWARD2 (2VP)
+  giveNCards(state, 'P3', 2, 7); // 2 -> rank 3 -> REWARD3 (1VP)
+  giveNCards(state, 'P4', 1, 9); // 1 -> rank 4 -> nothing (only 3 REWARD fields)
+  state.quests = { Q003A: true }; // GOAL='CARD_COUNT', REWARD1/2/3 = 3VP/2VP/1VP
 
-  const first = qst.claimQuestReward(state, index, { playerId: 'P1' }, 'Q002A');
-  check('1st claim (of this player\'s 2 lifetime) succeeds', first.success, true);
-  check('qstRewardCount is now 1', player(state, 'P1').qstRewardCount, 1);
+  qst.resolveEndGameRewards(state, index);
+  check('Rank 1 (P1) gets REWARD1 (3VP)', player(state, 'P1').resources.VP, 3);
+  check('Rank 2 (P2) gets REWARD2 (2VP)', player(state, 'P2').resources.VP, 2);
+  check('Rank 3 (P3) gets REWARD3 (1VP)', player(state, 'P3').resources.VP, 1);
+  check('Rank 4 (P4) gets nothing', player(state, 'P4').resources.VP, 0);
+}
+{
+  const state = freshState('qst-end-game-ties', ['Alice', 'Bob', 'Carol', 'Dan']);
+  giveNCards(state, 'P1', 8, 0); // tied rank 1
+  giveNCards(state, 'P2', 8, 8); // tied rank 1
+  giveNCards(state, 'P3', 7, 16); // tied rank 3
+  giveNCards(state, 'P4', 7, 23); // tied rank 3
+  state.quests = { Q003A: true };
 
-  // Q004A's GOAL is unreachable (CARD_COUNT(M)>=99) -- swap it for a synthetic always-true card at
-  // the same key so this step exercises the *cap*, not another GOAL failure.
-  state.quests.Q004A = { claimCount: 0, claimedPlayers: [] };
-  index.raw.QST.push({ ID: '__TEST_ALWAYS_TRUE__', NAME: 'test', GOAL: 'CARD_COUNT>=0', REWARD1: 'ADD(1VP)', 'REWARD2-3': '', INST: '' });
-  state.quests.__TEST_ALWAYS_TRUE__ = { claimCount: 0, claimedPlayers: [] };
-  const second = qst.claimQuestReward(state, index, { playerId: 'P1' }, '__TEST_ALWAYS_TRUE__');
-  check('2nd claim (different card) succeeds', second.success, true);
-  check('qstRewardCount is now 2 (cap)', player(state, 'P1').qstRewardCount, 2);
-
-  index.raw.QST.push({ ID: '__TEST_ALWAYS_TRUE_2__', NAME: 'test2', GOAL: 'CARD_COUNT>=0', REWARD1: 'ADD(1VP)', 'REWARD2-3': '', INST: '' });
-  state.quests.__TEST_ALWAYS_TRUE_2__ = { claimCount: 0, claimedPlayers: [] };
-  const third = qst.claimQuestReward(state, index, { playerId: 'P1' }, '__TEST_ALWAYS_TRUE_2__');
-  check('3rd claim (goal met, different card) is blocked by the game-wide cap', third, { success: false, reason: 'PLAYER_LIMIT_REACHED' });
+  qst.resolveEndGameRewards(state, index);
+  check('Both rank-1-tied players get the FULL REWARD1 (3VP each, not split)', [player(state, 'P1').resources.VP, player(state, 'P2').resources.VP], [3, 3]);
+  check('Both rank-3-tied players get the FULL REWARD3 (1VP each) -- REWARD2 goes unawarded', [player(state, 'P3').resources.VP, player(state, 'P4').resources.VP], [1, 1]);
+}
+{
+  // Everyone tied at 0 (nobody built anything relevant) -- degenerate but should still resolve
+  // cleanly: all 4 tie for rank 1 and all receive REWARD1 in full.
+  const state = freshState('qst-end-game-all-zero', ['Alice', 'Bob', 'Carol', 'Dan']);
+  state.quests = { Q003A: true };
+  qst.resolveEndGameRewards(state, index);
+  check('All 4 players tied at 0 all get REWARD1', state.players.map((p) => p.resources.VP), [3, 3, 3, 3]);
+}
+{
+  // Multiple revealed cards each resolve independently.
+  const state = freshState('qst-end-game-multi-card', ['Alice', 'Bob']);
+  giveCard(state, 'M001', 'P1'); // Q001A GOAL=CARD_COUNT(M): P1=1, P2=0 -> P1 rank1(3VP), P2 rank2(2VP)
+  giveCard(state, 'A001A', 'P2'); // Q002A GOAL=CARD_COUNT: P1=1(the M001 above also counts), P2=1 -> tied rank1(2K each)
+  state.quests = { Q001A: true, Q002A: true };
+  qst.resolveEndGameRewards(state, index);
+  check('Q001A: P1 (1 monument) ranks 1st, gets 3VP', player(state, 'P1').resources.VP, 3);
+  check('Q001A: P2 (0 monuments) ranks 2nd, gets 2VP', player(state, 'P2').resources.VP, 2);
+  check('Q002A: P1 and P2 tie at 1 card each -> both get REWARD1 (2K)', [player(state, 'P1').resources.K, player(state, 'P2').resources.K], [2, 2]);
 }
 
 // ---------------------------------------------------------------------------
-// 5. BUILD-type reward: two-phase claim via candidates + completeQuestClaim
+// 5. Integration: turn-flow.endRound resolves QST rewards automatically exactly when the game
+// actually ends (round 4 -> GAME_END), not before.
 // ---------------------------------------------------------------------------
 {
-  const state = freshState('qst-build', ['Alice']);
-  state.quests = { Q003A: { claimCount: 0, claimedPlayers: [] } }; // REWARD1='BUILD(M)'
+  const state = freshState('qst-turnflow-integration', ['Alice', 'Bob']);
+  giveCard(state, 'A001A', 'P1');
+  state.quests = { Q003A: true }; // GOAL='CARD_COUNT', REWARD1=3VP -- P1 (1 card) outranks P2 (0)
+  state.turnOrder = ['P1', 'P2'];
 
-  // Building still costs its normal resource price (confirmed 2026-07-30: a QST reward's BUILD
-  // isn't free, same "no QST-specific special-casing" principle as everything else here) -- fund
-  // the player generously so this step exercises completeQuestClaim, not an unrelated payment failure.
-  Object.assign(player(state, 'P1').resources, { K: 99, A: 99, B: 99, C: 99, Z: 99 });
+  state.round = 1;
+  turnFlow.endRound(state, index);
+  check('endRound before round 4 does NOT resolve QST rewards yet', player(state, 'P1').resources.VP, 0);
 
-  const before = qst.claimQuestReward(state, index, { playerId: 'P1' }, 'Q003A');
-  check('BUILD-type reward returns a pendingBuild instead of completing synchronously', before.success && !!before.pendingBuild, true);
-  check('No claim was committed yet (still claimCount 0)', state.quests.Q003A.claimCount, 0);
-  check('Candidates were found (real shop, unconditional buildValue since none was specified)', before.pendingBuild.candidates.length > 0, true);
+  state.round = 4;
+  turnFlow.endRound(state, index);
+  check('endRound AT round 4 (-> GAME_END) resolves QST rewards', player(state, 'P1').resources.VP, 3);
+  check('phase is now GAME_END', state.phase, 'GAME_END');
+}
 
-  const kBefore = player(state, 'P1').resources.K;
-  const candidate = before.pendingBuild.candidates[0];
-  const completed = qst.completeQuestClaim(state, index, { playerId: 'P1' }, before.pendingBuild, candidate);
-  check('completeQuestClaim succeeds', completed.success, true);
-  check('Claim is now committed (claimCount 1)', state.quests.Q003A.claimCount, 1);
-  check('Player now owns the built card', player(state, 'P1').ownedCardPhysicalIds.length > 0, true);
-  check('Building actually cost resources (K went down, or at least did not go up)', player(state, 'P1').resources.K <= kBefore, true);
+// ---------------------------------------------------------------------------
+// 6. New GOAL metrics added for the rank-based redesign (executor.js's evalMetric): multi-sheet
+// CARD_COUNT, AREA_COUNT (+ optional LEVEL filter), and bare EMBLEM_COUNT.
+// ---------------------------------------------------------------------------
+{
+  const state = freshState('qst-new-metrics', ['Alice']);
+  giveCard(state, 'A001A', 'P1');
+  giveCard(state, 'A002B', 'P1'); // LEVEL 2 (tier B)
+  giveCard(state, 'B001A', 'P1');
+  giveCard(state, 'C001A', 'P1');
+  giveCard(state, 'M001', 'P1');
+
+  check('CARD_COUNT(A,B,C) counts A+B+C but excludes M', qst.evalGoalMetric(state, index, 'P1', 'CARD_COUNT(A,B,C)'), 4);
+  check('Bare CARD_COUNT includes M too', qst.evalGoalMetric(state, index, 'P1', 'CARD_COUNT'), 5);
+  check('AREA_COUNT counts owned A-series cards at any tier', qst.evalGoalMetric(state, index, 'P1', 'AREA_COUNT'), 2);
+  check('AREA_COUNT(2) counts only LEVEL-2 (tier B) A-series cards', qst.evalGoalMetric(state, index, 'P1', 'AREA_COUNT(2)'), 1);
+
+  const totalEmblems = qst.evalGoalMetric(state, index, 'P1', 'TOTAL_EMBLEM_COUNT');
+  check('Bare EMBLEM_COUNT (no args) equals TOTAL_EMBLEM_COUNT', qst.evalGoalMetric(state, index, 'P1', 'EMBLEM_COUNT'), totalEmblems);
+  assertTrue('...and that total is actually positive (sanity, not vacuously equal)', totalEmblems > 0);
 }
 
 console.log(`\n${passCount} passed, ${failCount} failed`);

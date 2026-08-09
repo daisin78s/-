@@ -14,8 +14,10 @@
  *   { type:'FREE_ACTION', playerId, freeActionId }
  *   { type:'COLLECT_FEE', playerId, mapId }
  *   { type:'TAP_REACTION', playerId, choiceId, use }
- *   { type:'CLAIM_QUEST', playerId, questFaceId, buildCandidateIndex? }
  *   { type:'END_TURN', playerId }
+ *
+ * (2026-08-09: CLAIM_QUEST removed -- QST no longer has any player-facing action at all, see
+ * src/qst.js's own doc. Rewards are granted automatically at GAME_END based on final ranking.)
  *
  * context.hasPlacedDieThisTurn (supplied by AIPlayer, which tracks it the same way main.js's UI-only
  * turnActionTaken flag does -- GameState has no such field, since a "turn" isn't its own state, just
@@ -23,11 +25,11 @@
  * false (fulfilling the mandatory once-per-turn placement-or-pass decision, see board.passDie's own
  * doc); END_TURN only appears once true (matches main.js's 2026-08-01 "建築後、ターンエンド前にTAPの
  * フリーアクションが可能です" fix -- ending a turn is a separate, explicit choice, not automatic).
- * Everything else (free actions/bare TAP/TAP reactions/QST) is available either way, same as the real
- * UI's own gating.
+ * Everything else (free actions/bare TAP/TAP reactions) is available either way, same as the real UI's
+ * own gating.
  *
- * Simplification confirmed for this first pass (see simulator.js's matching note): PLACE_DIE/BARE_TAP/
- * CLAIM_QUEST candidates never vary colorPreference/bzDiscount -- payment always resolves AUTO.
+ * Simplification confirmed for this first pass (see simulator.js's matching note): PLACE_DIE/BARE_TAP
+ * candidates never vary colorPreference/bzDiscount -- payment always resolves AUTO.
  */
 
 const { getAreaRow, getCardRow } = require('../data-loader');
@@ -36,7 +38,6 @@ const { lowerProgram } = require('../command-builder');
 const { cloneState } = require('../game-state');
 const board = require('../board');
 const executor = require('../executor');
-const qst = require('../qst');
 const { applyInPlace } = require('./simulator');
 
 /** Mirrors main.js's bareTapKind (2026-07-31) -- duplicated rather than shared because main.js is a
@@ -58,6 +59,51 @@ function bareTapKind(index, faceId) {
 }
 
 class MoveGenerator {
+  /**
+   * @param {{monumentFocusFromRound?: number}} [policy] - optional strategy knob (2026-08-09, "AI LV3":
+   *   per user request, an AI that stops buying new A/B/C cards once the game's later rounds arrive and
+   *   banks resources toward monuments instead, since LV1/LV2 were routinely ending games with large
+   *   unspent resource piles). Default {} (no restriction at all) -- LV1/LV2 keep using a MoveGenerator
+   *   built with no policy, so their behavior is byte-for-byte unchanged; LV3 gets its own instance
+   *   constructed with monumentFocusFromRound set (see main.js's aiMoveGeneratorLv3).
+   *   monumentFocusFromRound: once state.round reaches this value, every BUILD_NEW candidate for A/B/C
+   *   is dropped from every build-resolving decision point (PLACE_DIE/BARE_TAP) -- UPGRADE
+   *   candidates are unaffected (confirmed with the user: upgrading an already-owned card isn't "a new
+   *   card"), and whenever a single decision point still offers 2+ buildable monuments at once (e.g. the
+   *   castle routinely does, since several monuments can share a satisfied DICE threshold), only the
+   *   highest-printed-VP one(s) survive (confirmed with the user: "その都度「今実際に建てられる中で一番
+   *   VPが高いもの」を選ぶ" -- reachability/cost-efficiency aren't weighed, just whichever's VP is
+   *   highest among what's *actually* offered right now).
+   */
+  constructor(policy) {
+    this.policy = policy || {};
+  }
+
+  /** Applies this.policy.monumentFocusFromRound to a pendingBuild.candidates array, returning only the
+   * ORIGINAL indices (into `candidates`, unchanged) that survive -- callers must keep using these as
+   * buildCandidateIndex directly (board.completeAreaBuild and friends look up by index into the full,
+   * un-filtered array later), never a re-numbered/compacted list. No-op (every index passes through) when
+   * the policy isn't set or state.round hasn't reached it yet, so LV1/LV2 (and LV3 before its own
+   * threshold round) see identical candidate lists to before this existed. */
+  #allowedBuildCandidateIndices(state, index, candidates) {
+    const threshold = this.policy.monumentFocusFromRound;
+    if (!threshold || state.round < threshold) return candidates.map((c, i) => i);
+    let entries = candidates
+      .map((c, i) => ({ c, i }))
+      .filter(({ c }) => !(c.type === 'BUILD_NEW' && /^[ABC]/.test(c.faceId)));
+    const monumentEntries = entries.filter(({ c }) => c.type === 'BUILD_NEW' && c.faceId[0] === 'M');
+    if (monumentEntries.length > 1) {
+      const vpOf = (faceId) => {
+        const vp = getCardRow(index, faceId).VP;
+        return typeof vp === 'number' ? vp : 0;
+      };
+      const maxVp = Math.max(...monumentEntries.map(({ c }) => vpOf(c.faceId)));
+      const loseByVp = new Set(monumentEntries.filter(({ c }) => vpOf(c.faceId) < maxVp).map(({ i }) => i));
+      entries = entries.filter(({ i }) => !loseByVp.has(i));
+    }
+    return entries.map(({ i }) => i);
+  }
+
   /** @returns {Object[]} every legal Move for playerId right now. */
   generateMoves(state, index, playerId, context) {
     const moves = [];
@@ -84,7 +130,6 @@ class MoveGenerator {
     moves.push(...this.#feeCollectionMoves(state, playerId));
     moves.push(...this.#bareTapMoves(state, index, playerId, player, context));
     moves.push(...this.#tapReactionMoves(state, playerId));
-    moves.push(...this.#questMoves(state, index, playerId));
     if (context.hasPlacedDieThisTurn && executor.canEndTurn(state, index, playerId).ok) {
       moves.push({ type: 'END_TURN', playerId });
     }
@@ -105,9 +150,10 @@ class MoveGenerator {
           if (!result.success) continue;
           diceWithAPlacement.add(die.id);
           if (result.actionResult && result.actionResult.pendingBuild) {
-            result.actionResult.pendingBuild.candidates.forEach((candidate, buildCandidateIndex) => {
+            const candidates = result.actionResult.pendingBuild.candidates;
+            for (const buildCandidateIndex of this.#allowedBuildCandidateIndices(state, index, candidates)) {
               moves.push({ type: 'PLACE_DIE', playerId, dieId: die.id, mapId, slotIndex, buildCandidateIndex });
-            });
+            }
             // Always also offer "place the die, leave the build unresolved" -- getBuildCandidates only
             // checks dice/category eligibility, not affordability, so every candidate above can turn out
             // unaffordable once Simulator actually tries to pay for it. Without this fallback, a player
@@ -195,9 +241,9 @@ class MoveGenerator {
           // it as a Move let AIPlayer's first-max-wins tie-break pick it forever (found 2026-08-02:
           // ai-batch-5 looped on B006A's BUILD-kind TAP indefinitely, since a no-op move ties every
           // other move's score and this one sorted before END_TURN).
-          result.pendingBuild.candidates.forEach((candidate, buildCandidateIndex) => {
+          for (const buildCandidateIndex of this.#allowedBuildCandidateIndices(state, index, result.pendingBuild.candidates)) {
             moves.push({ type: 'BARE_TAP', playerId, physicalId, buildCandidateIndex });
-          });
+          }
         }
       } else {
         // SET_DICE_ANY / SET_DIE_VALUE / CHANGE_DIE_VALUE -- needs a die + a value/delta up front
@@ -233,29 +279,6 @@ class MoveGenerator {
     return moves;
   }
 
-  #questMoves(state, index, playerId) {
-    const moves = [];
-    for (const questFaceId of Object.keys(state.quests)) {
-      const check = qst.canClaim(state, index, playerId, questFaceId);
-      if (!check.ok) continue;
-      const clone = cloneState(state);
-      const result = qst.claimQuestReward(clone, index, { playerId }, questFaceId);
-      if (!result.success) continue;
-      if (result.pendingBuild) {
-        // No "leave unresolved" fallback here either -- same no-op reasoning as #bareTapMoves above:
-        // qst.claimQuestReward only calls commitClaim() *after* the pendingBuild branch, so declining
-        // every candidate wouldn't even mark the quest claimed. (Currently dormant in practice since
-        // all QST REWARD fields are blank per the user's 2026-08-01 QST deferral, but kept consistent.)
-        result.pendingBuild.candidates.forEach((candidate, buildCandidateIndex) => {
-          moves.push({ type: 'CLAIM_QUEST', playerId, questFaceId, buildCandidateIndex });
-        });
-      } else {
-        moves.push({ type: 'CLAIM_QUEST', playerId, questFaceId });
-      }
-    }
-    return moves;
-  }
-
   /** Finds playerId's forced BZ-conversion bare TAP (e.g. JOB004A's "CHANGE(3K,2BZ)"), if one is
    * currently legal AND would actually get spent on a build before this turn ends, and returns it as a
    * ready-to-apply Move -- or null if none applies. Unlike every other move category above, this is NOT
@@ -275,7 +298,7 @@ class MoveGenerator {
    * this conversion whenever legal -- regardless of whether anything this turn could actually spend it --
    * would just as often waste it as use it (e.g. a turn where the die already went on a non-BUILD AREA
    * and no BUILD-kind bare TAP is available). Gated on there being at least one build-resolving move
-   * (PLACE_DIE/BARE_TAP/CLAIM_QUEST carrying a buildCandidateIndex) reachable in the state *after* this
+   * (PLACE_DIE/BARE_TAP carrying a buildCandidateIndex) reachable in the state *after* this
    * conversion -- if none exists, this returns null and falls through to the normal scored candidates
    * instead (the plain CHANGE(3K,2BZ) is still offered there via #bareTapMoves' IMMEDIATE case; the
    * Evaluator's raw resource weights should reject it on their own when there's truly nothing to spend it
@@ -311,7 +334,7 @@ class MoveGenerator {
     return null;
   }
 
-  /** Whether some build-resolving move (PLACE_DIE/BARE_TAP/CLAIM_QUEST carrying a buildCandidateIndex)
+  /** Whether some build-resolving move (PLACE_DIE/BARE_TAP carrying a buildCandidateIndex)
    * in clone would actually succeed if applied right now -- shared by forcedBzConversionMove (deciding
    * whether to force a BZ-conversion tap) and #bareTapMoves' IMMEDIATE branch (deciding whether to even
    * offer one as a normal candidate when it isn't forced -- see that branch's own comment). */

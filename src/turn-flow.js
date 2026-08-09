@@ -38,6 +38,7 @@ const setup = require('./setup');
 // the browser build via its own IIFE wrapper -- see index.html's comment -- so this no longer
 // affects correctness, only readability.)
 const executorApi = require('./executor');
+const qst = require('./qst');
 
 // ---------------------------------------------------------------------------
 // Round lifecycle
@@ -210,7 +211,14 @@ function endRound(state, index) {
   for (const cardState of Object.values(state.cards)) cardState.tapped = false;
   state.currentPlayerIndex = 0;
   if (state.round < 4) rerollColorDice(state);
-  if (state.round >= 4) state.phase = 'GAME_END';
+  if (state.round >= 4) {
+    state.phase = 'GAME_END';
+    // QST's rank-based rewards (2026-08-09, see qst.js's own doc) settle exactly here, exactly once --
+    // nothing after this point can trigger another round-4 endRound (the game loop stops advancing
+    // turns once phase is GAME_END, both in main.js's UI and src/ai/game-runner.js), so this needs no
+    // idempotency guard.
+    qst.resolveEndGameRewards(state, index);
+  }
 }
 
 module.exports = {

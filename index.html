@@ -260,6 +260,11 @@
     </div>
   </template>
 
+  <!-- Rank-based QST display (2026-08-09, replacing the old claim-progress card -- see src/qst.js's
+       own doc): a live-updating standings preview, no player action at all. Top line is the GOAL label
+       ("目標：{...}"); below it, one column per reward tier (1位/2位/3位) showing that tier's reward
+       text and the color swatch of whichever player(s) currently hold that rank (see main.js's
+       buildQstCardVisual/renderQsts). Actual VP is granted automatically, once, at GAME_END. -->
   <template id="tpl-qst-card">
     <div class="qst-card">
       <div class="qst-card__back">
@@ -270,11 +275,21 @@
         </div>
         <div class="qst-card__back-rewards"></div>
       </div>
-      <div class="qst-card__row qst-card__row--goal">
-        <div class="qst-card__goal"></div>
+      <div class="qst-card__goal-line"></div>
+      <div class="qst-card__ranks">
+        <div class="qst-card__rank-col">
+          <div class="qst-card__rank-header"></div>
+          <div class="qst-card__rank-players"></div>
+        </div>
+        <div class="qst-card__rank-col">
+          <div class="qst-card__rank-header"></div>
+          <div class="qst-card__rank-players"></div>
+        </div>
+        <div class="qst-card__rank-col">
+          <div class="qst-card__rank-header"></div>
+          <div class="qst-card__rank-players"></div>
+        </div>
       </div>
-      <div class="qst-card__complete">COMPLETE</div>
-      <div class="qst-card__rewards"></div>
     </div>
   </template>
 
@@ -412,6 +427,12 @@
   <script src="src/executor.js"></script>
   <script>__captureModule('executor');</script>
 
+  <!-- Depends on: data-loader, dsl-parser, command-builder, rng, executor. Loaded here (before
+       board/turn-flow), not after turn-flow like before 2026-08-09 -- turn-flow.js's endRound now
+       calls qst.resolveEndGameRewards (see that function's own doc), so qst must load first. -->
+  <script src="src/qst.js"></script>
+  <script>__captureModule('qst');</script>
+
   <!-- Depends on: data-loader, dsl-parser, command-builder, game-state, executor -->
   <script src="src/board.js"></script>
   <script>__captureModule('board');</script>
@@ -424,13 +445,9 @@
   <script src="src/scoring.js"></script>
   <script>__captureModule('scoring');</script>
 
-  <!-- Depends on: rng, data-loader, board, undo, setup, executor -->
+  <!-- Depends on: rng, data-loader, board, undo, setup, executor, qst -->
   <script src="src/turn-flow.js"></script>
   <script>__captureModule('turn-flow');</script>
-
-  <!-- Depends on: data-loader, dsl-parser, command-builder, rng, executor, board -->
-  <script src="src/qst.js"></script>
-  <script>__captureModule('qst');</script>
 
   <!-- AI player (2026-08-03, per user feedback: "プレイヤー1は人間 プレイヤー2 3 4はAIの対戦を実装
        して欲しい"). Same dual-environment src/*.js files node tests/ai-*.smoke.js already exercise --
@@ -441,11 +458,11 @@
   <script src="src/ai/eval-table.js"></script>
   <script>__captureModule('eval-table');</script>
 
-  <!-- Depends on: board, executor, turn-flow, qst, game-state -->
+  <!-- Depends on: board, executor, turn-flow, game-state -->
   <script src="src/ai/simulator.js"></script>
   <script>__captureModule('simulator');</script>
 
-  <!-- Depends on: data-loader, dsl-parser, command-builder, game-state, board, executor, qst -->
+  <!-- Depends on: data-loader, dsl-parser, command-builder, game-state, board, executor -->
   <script src="src/ai/move-generator.js"></script>
   <script>__captureModule('move-generator');</script>
 

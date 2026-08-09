@@ -1,51 +1,50 @@
 (function () {
 /**
- * QST (Quest) cards: a small side-objective system layered on top of the existing engine, per the
- * user's spec (2026-07-30). Deliberately data-driven -- no QST-card-specific branching anywhere
- * here. GOAL is evaluated by the same IF-condition pipeline PASSIVE effects already use
- * (evalCondition/evalMetric), and REWARD1-3 are plain DSL programs run through the normal
- * executor/board pipeline (ADD/CHANGE/BUILD/... all "just work", including BUILD's two-phase
- * candidate-selection when a reward needs it). Adding or changing a QST card is purely an
- * data/game.xlsx edit; nothing here needs to change for that.
+ * QST (Quest) cards: a small side-objective system layered on top of the existing engine.
+ * Deliberately data-driven -- no QST-card-specific branching anywhere here.
  *
- * Confirmed design decisions (see chat, 2026-07-30):
+ * **Rank-based rewards (2026-08-09, replacing the original claim-based design -- see below for what
+ * changed and why):** GOAL is now a bare metric expression (e.g. "CARD_COUNT" or "LEVEL_COUNT(A,2)"),
+ * evaluated as a NUMBER for every player rather than a yes/no condition. At GAME_END (and, for live
+ * display purposes, at any point during the game -- see rankPlayersForQuest), players are ranked by
+ * that number using competition ranking ("1224": ties share a rank, and the rank right after a tie is
+ * skipped by the tie's size -- e.g. build counts 8/8/7/7 -> ranks 1/1/3/3, nobody is "2nd"). Whoever
+ * lands in rank 1/2/3 receives REWARD1/REWARD2/REWARD3 respectively (a plain DSL program, same
+ * ADD/CHANGE/BUILD pipeline as any other effect); rank 4+ (only possible in a game with 4+ distinct
+ * values) gets nothing. Rewards are granted automatically, exactly once, when the game actually ends
+ * -- see resolveEndGameRewards, called from turn-flow.js's endRound.
+ *
+ * **What this replaced (2026-07-30 original design, per user feedback 2026-08-09: "QSTカードの仕様を
+ * 変更します GOALはすべてゲーム終了後に[付与]" + confirming the old claim mechanic should be fully
+ * removed, not kept alongside):** GOAL used to be a boolean IF-style condition (e.g. "CARD_COUNT>=7"),
+ * and REWARD1/REWARD2-3 were claimed manually, one at a time, by whichever player reached the GOAL
+ * first/second/third -- a "free action" claim button, capped at 2 claims per player for the whole
+ * game (PlayerState.qstRewardCount, now removed). That whole claim/eligibility layer (canClaim,
+ * claimQuestReward, completeQuestClaim, commitClaim, nextRewardField, REWARD_FIELDS,
+ * MAX_QST_REWARDS_PER_PLAYER) is gone -- there is no player-facing QST action left at all; a QST card
+ * is now pure information (a live-updating ranking preview) until GAME_END settles it automatically.
+ * QuestState (GameState.quests[faceId]) shrank accordingly: it used to track claimCount/claimedPlayers
+ * per card; now it's just a revealed-marker (see setupQuests) since ranking is always computed fresh
+ * from current game state, never accumulated.
+ *
  *  - QST has 4 physical cards (Q001-Q004), each with an A and B face, like CON/A/B/C. Setup reveals
  *    3 of the 4 physical cards, picking one face (A or B) at random for each -- so the two faces of
  *    the same physical card can never both be revealed in the same game (only one face is ever
- *    chosen per physical id). Fixed for the whole game; no restock when a card COMPLETEs.
- *  - GOAL is a single bare comparison in the *existing* IF-condition grammar (e.g. "CARD_COUNT(M)>=1"),
- *    not a new mini-language -- reuses dsl-parser's parseArgList + command-builder's lowerCondition +
- *    executor's evalCondition/evalMetric exactly as PASSIVE's IF(...) does internally.
- *  - Claiming a reward is a "free action" only in the sense of "usable anytime during your own turn,
- *    no dice/turn cost" -- it does NOT use the TAP/UNTAP-per-round free-action mechanism
- *    (PlayerState.freeActionTaps), because a claim is permanent (claimedPlayers) and each player can
- *    only ever claim once per card, so no round-reset is meaningful here.
- *  - Reward order: 1st claimer on a card gets REWARD1, 2nd AND 3rd both get REWARD2-3 -- the same
- *    reward text, one shared field (2026-08-06, per user feedback: "REWARD2とREWARD3を統合して
- *    REWARD2-3にしました...REWARD2とREWARD3は共通してREWARD2-3にかかれた報酬を得ます"; REWARD4 doesn't
- *    exist, so the card is still COMPLETE after exactly 3 claims, same cap as before). 4th+ gets
- *    nothing (claimCount already 3 = COMPLETE, canClaim() rejects further claims). Each player is
- *    also capped at 2 QST rewards total across the whole game (PlayerState.qstRewardCount).
+ *    chosen per physical id). Fixed for the whole game; no restock.
  */
 
 'use strict';
 
 const { getQstRow } = require('./data-loader');
 const { parseArgList } = require('./dsl-parser');
-const { lowerCondition } = require('./command-builder');
+const { lowerMetric } = require('./command-builder');
 const { shuffle, next } = require('./rng');
 // Named executorApi, not executor (see turn-flow.js's matching comment) -- purely to disambiguate
 // from board.js's own `const executor` at a glance; module.exports is unaffected.
 const executorApi = require('./executor');
-const board = require('./board');
 
 const QST_PHYSICAL_IDS = ['Q001', 'Q002', 'Q003', 'Q004'];
-// Index 0 (1st claimer) -> REWARD1; indices 1 and 2 (2nd/3rd claimer) both -> REWARD2-3, the same
-// shared field (2026-08-06). nextRewardField/canClaim below index into this by quest.claimCount and
-// only ever compare .length for the "3 claims total, then COMPLETE" cap, so this one-line change is
-// the only thing needed to move the whole module onto the new column layout.
-const REWARD_FIELDS = ['REWARD1', 'REWARD2-3', 'REWARD2-3'];
-const MAX_QST_REWARDS_PER_PLAYER = 2;
+const REWARD_FIELDS = ['REWARD1', 'REWARD2', 'REWARD3'];
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -53,14 +52,15 @@ const MAX_QST_REWARDS_PER_PLAYER = 2;
 
 /**
  * Reveals 3 of the 4 QST cards, one random face each. See the file-level comment for why this
- * structurally rules out both faces of one physical card appearing together.
+ * structurally rules out both faces of one physical card appearing together. Each revealed face maps
+ * to `true` -- there's no other per-card state to track anymore (see file-level comment).
  */
 function setupQuests(state) {
   const chosen = shuffle(state.rng, QST_PHYSICAL_IDS).slice(0, 3);
   state.quests = {};
   for (const physicalId of chosen) {
     const tier = next(state.rng) < 0.5 ? 'A' : 'B';
-    state.quests[`${physicalId}${tier}`] = { claimCount: 0, claimedPlayers: [] };
+    state.quests[`${physicalId}${tier}`] = true;
   }
 }
 
@@ -69,113 +69,74 @@ function setupQuests(state) {
 // ---------------------------------------------------------------------------
 
 /**
- * GOAL text is a single bare comparison, e.g. "CARD_COUNT(M)>=1" -- the same grammar as the
- * left-hand side of PASSIVE's IF(condition, effect), just without the IF(...) wrapper (since a QST
- * GOAL has no attached effect of its own; the effect is the separate REWARD field). Empty/missing
- * GOAL is never met (a QST card without a GOAL can't be claimed).
+ * Evaluates GOAL text (a single bare metric expression, e.g. "CARD_COUNT" or "LEVEL_COUNT(A,2)" --
+ * same grammar as a COST list, reused via parseArgList/lowerMetric) as a number for playerId. Empty/
+ * missing GOAL evaluates to 0 for everyone (so a QST card with no GOAL data yet just ties everyone at
+ * rank 1, rather than crashing -- keeps this safe to call from the live-preview UI at any time).
  */
-function goalMet(state, index, playerId, goalText) {
-  if (!goalText) return false;
-  const [conditionNode] = parseArgList(goalText);
-  return executorApi.evalCondition(state, index, playerId, lowerCondition(conditionNode));
+function evalGoalMetric(state, index, playerId, goalText) {
+  if (!goalText) return 0;
+  const [metricNode] = parseArgList(goalText);
+  const metric = lowerMetric(metricNode);
+  return executorApi.evalMetric(state, index, playerId, metric);
 }
 
 // ---------------------------------------------------------------------------
-// Claim eligibility
+// Ranking
 // ---------------------------------------------------------------------------
-
-/** REWARD field this player would receive by claiming now, or null if no slot is available to them
- * (already COMPLETE, or they already claimed from this specific card). */
-function nextRewardField(quest, playerId) {
-  if (quest.claimCount >= REWARD_FIELDS.length) return null;
-  if (quest.claimedPlayers.includes(playerId)) return null;
-  return REWARD_FIELDS[quest.claimCount];
-}
 
 /**
- * Checks every claim precondition without mutating anything: quest exists, player hasn't hit the
- * game-wide 2-reward cap, a reward slot is available to this player on this card, and GOAL is met.
- * @returns {{ok:true, rewardField:string}|{ok:false, reason:string}}
+ * Ranks every player by questFaceId's GOAL metric (highest value first), competition-style: rank =
+ * 1 + (how many players scored strictly higher). Pure/read-only -- safe to call at any point during
+ * the game for a live standings preview (see main.js's QST card UI), not just at GAME_END.
+ * @returns {{playerId:string, value:number, rank:number}[]} one entry per player, unsorted-by-rank
+ *   guarantee not implied by callers -- sorted by value descending, so equal-rank entries sit together.
  */
-function canClaim(state, index, playerId, questFaceId) {
-  const quest = state.quests[questFaceId];
-  if (!quest) return { ok: false, reason: 'UNKNOWN_QUEST' };
-  const player = state.players.find((p) => p.id === playerId);
-  if (player.qstRewardCount >= MAX_QST_REWARDS_PER_PLAYER) return { ok: false, reason: 'PLAYER_LIMIT_REACHED' };
-  const rewardField = nextRewardField(quest, playerId);
-  if (!rewardField) return { ok: false, reason: quest.claimCount >= REWARD_FIELDS.length ? 'COMPLETE' : 'ALREADY_CLAIMED' };
+function rankPlayersForQuest(state, index, questFaceId) {
   const row = getQstRow(index, questFaceId);
-  if (!goalMet(state, index, playerId, row.GOAL)) return { ok: false, reason: 'GOAL_NOT_MET' };
-  return { ok: true, rewardField };
+  const scored = state.players.map((p) => ({ playerId: p.id, value: evalGoalMetric(state, index, p.id, row.GOAL) }));
+  scored.sort((a, b) => b.value - a.value);
+  return scored.map((entry) => ({
+    ...entry,
+    rank: 1 + scored.filter((other) => other.value > entry.value).length,
+  }));
 }
 
 // ---------------------------------------------------------------------------
-// Claiming
+// End-of-game reward resolution
 // ---------------------------------------------------------------------------
-
-/** Commits a successful claim: bumps the card's claimCount, records the player, bumps their
- * game-wide qstRewardCount. Called only after the reward's DSL has actually run successfully, so a
- * failed/rolled-back reward never counts as a claim. */
-function commitClaim(state, questFaceId, playerId) {
-  const quest = state.quests[questFaceId];
-  quest.claimCount += 1;
-  quest.claimedPlayers.push(playerId);
-  state.players.find((p) => p.id === playerId).qstRewardCount += 1;
-}
 
 /**
- * Claims questFaceId's next available reward for context.playerId, as a free action (see file-level
- * comment -- no TAP state, just the permanent claimedPlayers/qstRewardCount bookkeeping).
- *
- * If the reward's DSL starts with BUILD (candidate selection needed), this can't complete
- * synchronously -- board.resolveProgramOrBuild returns pendingBuild for the caller to resolve via
- * completeQuestClaim(), instead of committing the claim yet (no die value to fall back on here, unlike
- * an AREA-triggered BUILD -- a QST reward's BUILD either states its own threshold explicitly, e.g.
- * "BUILD(M,12)", or, if omitted, is treated as unconditional via Infinity, confirmed 2026-07-30 as the
- * sensible reading of "no threshold specified" when there's no die to derive one from). Otherwise runs
- * the full reward program immediately and commits the claim right away.
+ * Grants REWARD1/REWARD2/REWARD3 to whoever ranks 1st/2nd/3rd (see rankPlayersForQuest) on each
+ * currently-revealed QST card, running each reward's DSL through the normal executor pipeline exactly
+ * once. Called from turn-flow.js's endRound right when state.phase becomes 'GAME_END' -- nothing
+ * after that point can trigger another round-4 endRound, so this is safe to run unconditionally with
+ * no idempotency guard (see that call site's own comment). Ties share the same reward (e.g. two
+ * players tied for rank 1 both get REWARD1 in full, not split); rank 4+ (only reachable with 4+
+ * distinct values among the 4 players) gets nothing, since only 3 REWARD fields exist. A reward whose
+ * DSL needs a further choice (e.g. BUILD(...)) is deliberately out of scope for this data set (see
+ * [[project-dice-wp-qst-spec]]'s own history) -- runProgram runs each reward to completion with no
+ * pending-choice handling, matching every other REWARD row actually in play today (plain ADD(nVP)).
  */
-function claimQuestReward(state, index, context, questFaceId) {
-  const check = canClaim(state, index, context.playerId, questFaceId);
-  if (!check.ok) return { success: false, reason: check.reason };
-
-  const row = getQstRow(index, questFaceId);
-  const rewardText = row[check.rewardField];
-  const result = board.resolveProgramOrBuild(state, index, context, rewardText, Infinity);
-
-  if (result.pendingBuild) {
-    return { success: true, pendingBuild: { questFaceId, rewardField: check.rewardField, ...result.pendingBuild } };
+function resolveEndGameRewards(state, index) {
+  for (const questFaceId of Object.keys(state.quests)) {
+    const row = getQstRow(index, questFaceId);
+    for (const entry of rankPlayersForQuest(state, index, questFaceId)) {
+      if (entry.rank > REWARD_FIELDS.length) continue;
+      const rewardText = row[REWARD_FIELDS[entry.rank - 1]];
+      if (!rewardText) continue;
+      executorApi.runProgram(state, index, { playerId: entry.playerId, sourcePhysicalId: questFaceId }, rewardText);
+    }
   }
-  if (!result.success) return result;
-  commitClaim(state, questFaceId, context.playerId);
-  return { success: true, result };
-}
-
-/** Completes a pendingBuild from claimQuestReward(): commits the chosen candidate, runs any DSL that
- * followed BUILD(...) in the reward field, then commits the claim. Mirrors board.js's
- * completeAreaBuild exactly (same non-atomicity trade-off: a failure partway through the "remaining
- * commands" doesn't unwind the BUILD itself, matching how AREA builds already behave). */
-function completeQuestClaim(state, index, context, pendingBuild, candidate) {
-  const buildResult = board.resolveBuild(state, index, context, candidate);
-  if (!buildResult.success) return buildResult;
-  for (const cmd of pendingBuild.remainingCommands || []) {
-    executorApi.runCommand(state, index, context, cmd);
-  }
-  commitClaim(state, pendingBuild.questFaceId, context.playerId);
-  return { success: true, buildResult };
 }
 
 module.exports = {
   QST_PHYSICAL_IDS,
   REWARD_FIELDS,
-  MAX_QST_REWARDS_PER_PLAYER,
   setupQuests,
-  goalMet,
-  nextRewardField,
-  canClaim,
-  claimQuestReward,
-  completeQuestClaim,
-  commitClaim,
+  evalGoalMetric,
+  rankPlayersForQuest,
+  resolveEndGameRewards,
 };
 
 })();

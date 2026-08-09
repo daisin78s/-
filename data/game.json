@@ -1605,66 +1605,74 @@
     {
       "ID": "Q001A",
       "NAME": "Q001A",
-      "GOAL": "CARD_COUNT>=7",
-      "REWARD1": "ADD(2K)",
-      "REWARD2-3": "ADD(K)",
-      "INST": "目標：建築数　7枚\n報酬1：アップデート　軽減2Z\n報酬2：アップデート　軽減Z\n報酬3：アップデート"
+      "GOAL": "CARD_COUNT",
+      "REWARD1": "ADD(3VP)",
+      "REWARD2": "ADD(2VP)",
+      "REWARD3": "ADD(VP)",
+      "INST": "建築数"
     },
     {
       "ID": "Q002A",
       "NAME": "Q002A",
-      "GOAL": "MAX_EMBLEM_COUNT>=4",
-      "REWARD1": "ADD(2K)",
-      "REWARD2-3": "ADD(K)",
-      "INST": "目標：同じEMBLEM　4個\n報酬1：K\n報酬2：K\n報酬3：K"
+      "GOAL": "MAX_EMBLEM_COUNT",
+      "REWARD1": "ADD(3VP)",
+      "REWARD2": "ADD(2VP)",
+      "REWARD3": "ADD(VP)",
+      "INST": "最多EMBLEM数"
     },
     {
       "ID": "Q003A",
       "NAME": "Q003A",
-      "GOAL": "LEVEL_COUNT(2)>=4",
-      "REWARD1": "ADD(2K)",
-      "REWARD2-3": "ADD(K)",
-      "INST": "目標：LV2のカードの枚数　4枚\n報酬1：K\n報酬2：K\n報酬3：K"
+      "GOAL": "LEVEL_COUNT(2)",
+      "REWARD1": "ADD(3VP)",
+      "REWARD2": "ADD(2VP)",
+      "REWARD3": "ADD(VP)",
+      "INST": "アップグレード数"
     },
     {
       "ID": "Q004A",
       "NAME": "Q004A",
-      "GOAL": "TOTAL_EMBLEM_COUNT>=6",
-      "REWARD1": "ADD(2K)",
-      "REWARD2-3": "ADD(K)",
-      "INST": "目標：EMBLEMの合計数　6個\n報酬1：K\n報酬2：K\n報酬3：K"
+      "GOAL": "AREA_COUNT",
+      "REWARD1": "ADD(3VP)",
+      "REWARD2": "ADD(2VP)",
+      "REWARD3": "ADD(VP)",
+      "INST": "所有AREA数"
     },
     {
       "ID": "Q001B",
       "NAME": "Q001B",
-      "GOAL": "RESOURCE(VP)>=8",
-      "REWARD1": "ADD(2K)",
-      "REWARD2-3": "ADD(K)",
-      "INST": "目標：VP　　8\n報酬1：通常カードの建築　軽減2Z\n報酬2：通常カードの建築　軽減Z\n報酬3：通常カードの建築"
+      "GOAL": "CARD_COUNT(A,B,C)",
+      "REWARD1": "ADD(3VP)",
+      "REWARD2": "ADD(2VP)",
+      "REWARD3": "ADD(VP)",
+      "INST": "ABC建築数"
     },
     {
       "ID": "Q002B",
       "NAME": "Q002B",
-      "GOAL": "EMBLEM_SET_COUNT>=3",
-      "REWARD1": "ADD(2K)",
-      "REWARD2-3": "ADD(K)",
-      "INST": "目標：天天天　地地地　人人人\n報酬1：K\n報酬2：K\n報酬3：K"
+      "GOAL": "EMBLEM_SET_COUNT",
+      "REWARD1": "ADD(3VP)",
+      "REWARD2": "ADD(2VP)",
+      "REWARD3": "ADD(VP)",
+      "INST": "天地人セット数"
     },
     {
       "ID": "Q003B",
       "NAME": "Q003B",
-      "GOAL": "COST_TOTAL>=12",
-      "REWARD1": "ADD(2K)",
-      "REWARD2-3": "ADD(K)",
-      "INST": "目標：所持しているカードの資源合計　12個\n報酬1：K\n報酬2：K\n報酬3：K"
+      "GOAL": "EMBLEM_COUNT",
+      "REWARD1": "ADD(3VP)",
+      "REWARD2": "ADD(2VP)",
+      "REWARD3": "ADD(VP)",
+      "INST": "EMBLEM総数"
     },
     {
       "ID": "Q004B",
       "NAME": "Q004B",
-      "GOAL": "EMBLEM_SET_COUNT>=2",
-      "REWARD1": "ADD(2K)",
-      "REWARD2-3": "ADD(K)",
-      "INST": "目標：天天　地地　人人\n報酬1：K\n報酬2：K\n報酬3：K"
+      "GOAL": "AREA_COUNT(2)",
+      "REWARD1": "ADD(3VP)",
+      "REWARD2": "ADD(2VP)",
+      "REWARD3": "ADD(VP)",
+      "INST": "所有LV2AREA数"
     }
   ],
   "MAP": [

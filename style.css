@@ -1663,25 +1663,19 @@ h1, h2, h3 { margin: 0; }
   flex: 0 0 auto;
 }
 
-/* Landscape layout (confirmed 2026-07-30: "少し横長"): GOAL sits in a left column and the claim marks
-   in a right column, side by side rather than stacked vertically -- makes the card wider than tall.
-   Down to a single row now (2026-08-06: card id and the "GOAL"/"REWARDn" labels were dropped from the
-   front face entirely, per user feedback, to keep this as large and legible as possible). */
+/* Rank-based standings card (2026-08-09, replacing the earlier landscape claim-progress layout -- see
+   src/qst.js's own doc for the redesign). Vertical stack: a "目標：..." title line on top, then a
+   3-column row below it, one column per reward tier, each showing that tier's reward text and the
+   color swatches of whoever currently holds that rank. Pure live display -- no claim action, so no
+   cursor:pointer beyond the existing card-wide tap-to-enlarge (see buildQstCardVisual in main.js). */
 .qst-card {
   background: var(--surface-sunken);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 10px 12px;
-  display: grid;
-  /* rewards sizes to its own (fixed, mark-based) content; goal takes whatever's left. min-width:0 on
-     the goal cell below is required alongside this -- CSS grid items default to min-width:auto, which
-     for text would otherwise refuse to shrink the goal column below its *unwrapped* content width,
-     silently defeating overflow-wrap and collapsing this fix (found via headless screenshot: at the
-     enlarge modal's narrow pre-scale width, goal was wrapping one character per line). */
-  grid-template-columns: 1fr auto;
-  grid-template-areas: "goal rewards";
-  column-gap: 12px;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   cursor: pointer;
   position: relative; /* containing block for .qst-card__back's inset:0 */
 }
@@ -1703,7 +1697,7 @@ h1, h2, h3 { margin: 0; }
   display: flex;
 }
 /* Sibling-face variant looks like a normal card (surface background) instead of a blank fill --
-   only applied when QST_FACTS actually has data for the sibling. */
+   only applied when the sibling face actually has data. */
 .qst-card__back--face {
   background: var(--surface-sunken);
 }
@@ -1725,38 +1719,12 @@ h1, h2, h3 { margin: 0; }
   color: var(--text-faint);
 }
 
-.qst-card--complete {
-  border-color: var(--resource-vp);
-  background: var(--accent-soft);
-}
-
-/* Glows/blinks once the active player's GOAL is achieved and claimable right now (2026-08-06, per
-   user feedback: "GOAL達成している状態の時光って点滅するようにする") -- see buildQstCardVisual in
-   main.js for the claimable check. Same pulsing-glow idiom as .slot--highlight, just on a card
-   border instead of a SLOT. */
-.qst-card--claimable {
-  border-color: var(--accent);
-  animation: qst-card-glow-pulse 1.4s ease-in-out infinite;
-}
-
-@keyframes qst-card-glow-pulse {
-  0%, 100% { box-shadow: 0 0 0 2px var(--accent-soft), 0 0 6px 1px var(--accent); }
-  50% { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 14px 4px var(--accent); }
-}
-
 /* .qst-card__id / .qst-card__label still used by the back (sibling-preview) face's template markup --
-   see .qst-card__back-goal below -- just no longer rendered on the front face (2026-08-06). */
+   see .qst-card__back-goal above -- just not rendered on the front face. */
 .qst-card__id {
   font-weight: 700;
   font-size: 12px;
 }
-
-.qst-card__row {
-  display: flex;
-  align-items: center;
-  min-width: 0; /* see .qst-card's own comment on grid-template-columns */
-}
-.qst-card__row--goal { grid-area: goal; }
 
 .qst-card__label {
   font-size: 9px;
@@ -1766,79 +1734,68 @@ h1, h2, h3 { margin: 0; }
   letter-spacing: 0.04em;
 }
 
-/* GOAL's raw DSL text is gone from the front face (2026-08-06, replaced first by the INST-derived
-   "目標：..." single line, then split into 3 stacked rows the same day per user feedback: "目標／
-   建築数／6枚" -- see main.js's questGoalLines/questGoalDisplayText). */
+/* Back face's GOAL text (front face shows it as .qst-card__goal-line instead, see below). */
 .qst-card__goal {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
   color: var(--text);
   overflow-wrap: anywhere;
-  min-width: 0; /* flex items default to min-width:auto same as grid items -- without this the browser
-    still refuses to shrink this span below its unwrapped content width inside .qst-card__row's own
-    flex layout, defeating overflow-wrap the same way omitting it on the grid cell itself would (see
-    .qst-card's comment) -- found this was the *other* half of that same fix needed via screenshot. */
 }
 
-.qst-card__goal-header {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-faint);
-}
-
-.qst-card__goal-item {
+/* Front face's title line: "目標：{INST}" (main.js's questGoalDisplayText). */
+.qst-card__goal-line {
   font-size: 14px;
-  font-weight: 600;
-}
-
-.qst-card__goal-qty {
-  font-size: 20px;
-  font-weight: 700;
-}
-
-.qst-card--complete .qst-card__row { display: none; }
-
-/* Complete replaces the goal column (left side) when active (confirmed 2026-07-30: only spans the
-   one remaining "goal" row now that the separate Next Reward row is gone). */
-.qst-card__complete {
-  display: none;
-  grid-area: goal;
-  font-weight: 700;
-  font-size: 16px;
-  letter-spacing: 0.04em;
-  color: var(--resource-vp);
-}
-.qst-card--complete .qst-card__complete { display: block; }
-
-.qst-card__rewards {
-  grid-area: rewards;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 2px;
-  padding-left: 10px;
-  border-left: 1px solid var(--border);
-}
-
-/* Front face's REWARD block: a "報酬" header plus one line per rank showing the plain reward value
-   text (2026-08-06, per user feedback: "報酬／1位　2K／2〜3位　1K" 3-line layout -- replaces the same
-   day's earlier ①/②③ ◯/● claim-mark rows; confirmed via AskUserQuestion that value text alone, with
-   no claim-status marks, is what's wanted). See main.js's buildQstRewardLine/QST_REWARD_RANK_LABELS.
-   .qst-card__reward itself (a plain label div, no marks) is still used by the back face's
-   REWARD1/REWARD2-3 preview -- see fillQstBackFace. */
-.qst-card__reward-header {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-faint);
-}
-
-.qst-card__reward-line {
-  font-size: 15px;
   font-weight: 700;
   color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.qst-card__ranks {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  column-gap: 8px;
+}
+
+.qst-card__rank-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0; /* grid items default to min-width:auto, which would otherwise refuse to shrink text
+    below its unwrapped width -- same fix rationale documented elsewhere in this file for flex/grid
+    text children. */
+}
+
+.qst-card__rank-header {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  text-align: center;
   white-space: nowrap;
 }
+
+.qst-card__rank-players {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 3px;
+  min-height: 18px; /* keeps column height stable even when nobody currently holds this rank */
+}
+
+/* One player's color swatch under whichever rank they currently hold (2026-08-09, per user request:
+   "プレイヤーネームはそれぞれのカラーのアイコンで表示") -- reuses the same colored-circle idiom as
+   .card-group__swatch/.player-role-control__swatch elsewhere, sized for this denser context. Player
+   name is available via the title attribute (hover) rather than printed text, to keep 2+ tied players
+   fitting comfortably in one ~90px-wide column. */
+.qst-card__rank-player {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+.qst-card__rank-player[data-color="PINK"] { background: var(--player-pink); }
+.qst-card__rank-player[data-color="PURPLE"] { background: var(--player-purple); }
+.qst-card__rank-player[data-color="GREEN"] { background: var(--player-green); }
+.qst-card__rank-player[data-color="ORANGE"] { background: var(--player-orange); }
 
 /* ---------------------------------------------------------------------- */
 /* Utility                                                                 */

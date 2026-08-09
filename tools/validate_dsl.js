@@ -16,7 +16,7 @@ const PROJECT_ROOT = path.resolve(__dirname, '..');
 const DATA_PATH = path.join(PROJECT_ROOT, 'data', 'game.json');
 
 // Sheet -> DSL-bearing column names. These are all "program" fields (parsed via parseSafe/parse),
-// i.e. semicolon-separated statements like ONCE/TAP/ACTION/QST's REWARD1/REWARD2-3.
+// i.e. semicolon-separated statements like ONCE/TAP/ACTION/QST's REWARD1-3.
 const DSL_FIELDS_BY_SHEET = {
   A: ['ONCE', 'TAP', 'PASSIVE', 'TURNEND'],
   B: ['ONCE', 'TAP', 'PASSIVE', 'TURNEND'],
@@ -26,12 +26,14 @@ const DSL_FIELDS_BY_SHEET = {
   M: ['ONCE', 'TAP', 'PASSIVE', 'TURNEND'],
   RESOURCE: ['ONCE', 'TAP', 'PASSIVE', 'TURNEND'],
   AREA: ['ACTION'],
-  QST: ['REWARD1', 'REWARD2-3'],
+  // REWARD1/2/3 (2026-08-09, back to 3 separate columns -- rank-based rewards, see src/qst.js).
+  QST: ['REWARD1', 'REWARD2', 'REWARD3'],
 };
 
-// QST's GOAL is a bare comparison (e.g. "CARD_COUNT>=7"), not a program -- same grammar as a COST
-// column, parsed via parseArgList rather than parseSafe/parse (see src/qst.js's goalMet). Validated
-// separately below since it needs a different entry point into the parser.
+// QST's GOAL is a bare metric expression (e.g. "CARD_COUNT" or "LEVEL_COUNT(A,2)"), not a program --
+// same grammar as a COST column, parsed via parseArgList rather than parseSafe/parse (see
+// src/qst.js's evalGoalMetric). Validated separately below since it needs a different entry point
+// into the parser.
 const GOAL_FIELDS_BY_SHEET = {
   QST: ['GOAL'],
 };

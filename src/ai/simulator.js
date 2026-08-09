@@ -34,7 +34,6 @@ const { lowerCostList } = require('../command-builder');
 const board = require('../board');
 const executor = require('../executor');
 const turnFlow = require('../turn-flow');
-const qst = require('../qst');
 const { cloneState } = require('../game-state');
 
 /** Greedily spreads playerId's currently-held BZ across candidate's own COST items (BUILD_NEW's faceId,
@@ -137,18 +136,6 @@ function applyInPlace(state, index, move) {
       }
       state.pendingChoices = state.pendingChoices.filter((c) => c.id !== move.choiceId);
       return { success: true, declined: true };
-    }
-    case 'CLAIM_QUEST': {
-      const result = qst.claimQuestReward(state, index, { playerId: move.playerId }, move.questFaceId);
-      if (result.success && result.pendingBuild) {
-        if (move.buildCandidateIndex === undefined || move.buildCandidateIndex === null) return result;
-        const candidate = result.pendingBuild.candidates[move.buildCandidateIndex];
-        if (!candidate) throw new SimulationError(`buildCandidateIndex ${move.buildCandidateIndex} out of range`);
-        const bzDiscount = maxBzDiscount(state, index, move.playerId, candidate);
-        const claimResult = qst.completeQuestClaim(state, index, { playerId: move.playerId, bzDiscount }, result.pendingBuild, candidate);
-        return { ...claimResult, candidate }; // see PLACE_DIE's own comment on why candidate is included
-      }
-      return result;
     }
     case 'END_TURN': {
       const result = turnFlow.endTurn(state, index, move.playerId);

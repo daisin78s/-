@@ -391,13 +391,26 @@ function evalMetric(state, index, playerId, metric) {
     case 'CARD_COUNT': {
       // Bare CARD_COUNT (no args) keeps its original meaning: every buildable-category card
       // (A/B/C/M). CARD_COUNT(M) etc. (confirmed 2026-07-30, added for QST GOAL conditions -- see
-      // src/qst.js) scopes to one sheet only; still bounded by CARD_COUNT_SHEETS so e.g.
+      // src/qst.js) scopes to one or more sheets; still bounded by CARD_COUNT_SHEETS so e.g.
       // CARD_COUNT(JOB) can't be used to sidestep "JOB/CON don't count" via this path.
-      const scopeSheet = metric.args[0];
+      // Multi-sheet form (2026-08-09, QST's new rank-based GOAL: "CARD_COUNT(A,B,C)" = every A/B/C
+      // card, i.e. everything CARD_COUNT already counts *except* M) -- any number of sheet args is a
+      // union, not just the original single-sheet case.
+      const scopeSheets = metric.args.length > 0 ? new Set(metric.args) : null;
       return owned.filter((c) => {
         const sheet = index.byId.get(c.row.ID).sheet;
-        return scopeSheet ? sheet === scopeSheet && CARD_COUNT_SHEETS.has(sheet) : CARD_COUNT_SHEETS.has(sheet);
+        return scopeSheets ? scopeSheets.has(sheet) && CARD_COUNT_SHEETS.has(sheet) : CARD_COUNT_SHEETS.has(sheet);
       }).length;
+    }
+    // "所有AREA数"/"所有LV2AREA数" (2026-08-09, QST's new rank-based GOAL): how many of the 8
+    // AREA-ownership cards (A001-A008) this player owns -- each A-deck card ties to exactly one
+    // AREA/MAP (see its own ONCE, "MAP{n}.CURRENT_AREA=..."), so owning the card IS owning that area.
+    // Bare AREA_COUNT = any tier; AREA_COUNT(2) = LEVEL 2 only (i.e. tier-B A-cards like A001B/A005B,
+    // "所有LV2AREA数" -- an optional level filter on the same metric, not a separate LEVEL_COUNT
+    // variant, since both questions are really "how many AREAs", just filtered differently).
+    case 'AREA_COUNT': {
+      const level = metric.args[0];
+      return owned.filter((c) => index.byId.get(c.row.ID).sheet === 'A' && (level === undefined || c.row.LEVEL === level)).length;
     }
     case 'LEVEL_COUNT': {
       const level = metric.args[0];
@@ -406,6 +419,15 @@ function evalMetric(state, index, playerId, metric) {
     case 'EMBLEM_COUNT':
     case 'COUNT': {
       const emblem = metric.args[0];
+      // Bare EMBLEM_COUNT (2026-08-09, QST's new rank-based GOAL "EMBLEM_COUNT" with no argument --
+      // confirmed with the user: "EMBLEM総数です　天地人すべてのEMBLEMの足した数です") -- same
+      // computation as TOTAL_EMBLEM_COUNT below, kept as a separate case (rather than aliasing the
+      // switch label itself) since EMBLEM_COUNT(x)/COUNT(x) with an argument is a completely different,
+      // already-established metric (a single emblem type's count).
+      if (!emblem) {
+        const totals = emblemTotalsByType(owned);
+        return totals.天 + totals.地 + totals.人;
+      }
       return owned.reduce((sum, c) => sum + (emblemCountsForRow(c.row)[emblem] || 0), 0);
     }
     case 'EMBLEM_SET_COUNT': {

@@ -3,13 +3,13 @@
  * registry -- see that file's comments). `STATE` is a real GameState built once via setup.js's setup
  * pipeline (see createInitialState()) and mutated in place by the same setup.js/turn-flow.js/board.js/
  * executor.js/qst.js functions the engine's own tests use -- this file only renders `STATE` to the DOM
- * and translates clicks into those engine calls, no game logic of its own (beyond a few read-only
- * display helpers like mockEvalMetric, explicitly still local -- see their own doc comments for why).
+ * and translates clicks into those engine calls, no game logic of its own.
  *
  * As of 2026-07-30, everything is wired to the real engine end-to-end: round-1 onboarding, dice
- * placement, BUILD/UPGRADE candidate selection, TAP reactions, free actions, TURNEND/round-end, and
- * QST reward claiming (including BUILD-type rewards, via the same candidate-selection modal AREA
- * builds use).
+ * placement, BUILD/UPGRADE candidate selection, TAP reactions, free actions, and TURNEND/round-end.
+ * QST (2026-08-09) is pure display -- a live standings preview computed via qst.js's real
+ * evalGoalMetric/rankPlayersForQuest -- with no player action at all; rewards are granted
+ * automatically at GAME_END (qst.resolveEndGameRewards, called from turn-flow.js).
  */
 
 'use strict';
@@ -95,8 +95,22 @@ const aiMoveGenerator = new moveGeneratorMod.MoveGenerator();
 const aiSimulator = new simulatorMod.Simulator();
 const aiPlayerLv1 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGenerator, aiEvaluator, aiSimulator, { lookaheadExtraTurns: 0 });
 const aiPlayerLv2 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGenerator, aiEvaluator, aiSimulator, { lookaheadExtraTurns: 1 });
+// AI LV3 (2026-08-09, per user feedback: LV2 routinely ends a game with large unspent resource piles --
+// wants an AI that instead stops buying new A/B/C cards once the later rounds arrive and banks toward
+// monuments). Gets its OWN MoveGenerator instance built with a monumentFocusFromRound policy (see that
+// class's own doc) -- LV1/LV2's shared aiMoveGenerator above stays policy-free and therefore completely
+// unaffected. Reuses the same aiEvaluator/aiSimulator (policy-agnostic) and LV2's lookaheadExtraTurns:1
+// (not asked about specifically; matched to LV2 rather than LV1's 0, since LV3 is meant to be the
+// stronger/smarter option, not a speed tier).
+const aiMoveGeneratorLv3 = new moveGeneratorMod.MoveGenerator({ monumentFocusFromRound: 3 });
+const aiPlayerLv3 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGeneratorLv3, aiEvaluator, aiSimulator, { lookaheadExtraTurns: 1 });
 /** Which AIPlayer instance drives playerId's own TURN moves -- see playerRoles' own comment. */
-function aiPlayerFor(playerId) { return playerRoles.get(playerId) === 'AI_LV1' ? aiPlayerLv1 : aiPlayerLv2; }
+function aiPlayerFor(playerId) {
+  const role = playerRoles.get(playerId);
+  if (role === 'AI_LV1') return aiPlayerLv1;
+  if (role === 'AI_LV3') return aiPlayerLv3;
+  return aiPlayerLv2;
+}
 
 // 'instant' (AI plays out immediately, no visible pause) | 'delayed' (one Move every AI_STEP_DELAY_MS,
 // so the board visibly updates step by step) | 'manual' (only advances on the "次のAI行動へ" button
@@ -643,9 +657,9 @@ function cardFaceExists(faceId) {
   }
 }
 
-/** QST sheet counterpart of factsForFaceId -- {goal, rewards:[REWARD1,REWARD2-3,REWARD2-3], inst}.
- * REWARD2-3 (2026-08-06's REWARD2/REWARD3 merge) fills both the [1] and [2] slots, matching
- * qst.js's own REWARD_FIELDS layout. */
+/** QST sheet counterpart of factsForFaceId -- {goal, rewards:[REWARD1,REWARD2,REWARD3], inst}.
+ * 2026-08-09: back to 3 separate REWARD columns (rank-based rewards, one distinct tier each -- see
+ * src/qst.js's own doc), replacing 2026-08-06's REWARD2-3 shared-field merge. */
 function factsForQstFaceId(faceId) {
   let row;
   try {
@@ -653,17 +667,7 @@ function factsForQstFaceId(faceId) {
   } catch (e) {
     return { goal: '', rewards: [] };
   }
-  return { goal: row.GOAL || '', rewards: [row.REWARD1, row['REWARD2-3'], row['REWARD2-3']], inst: row.INST || '' };
-}
-
-/** Plain-text reward summary for QST's 3-line REWARD block (2026-08-06, per user feedback: "1位
- * 2K"/"2〜3位 K" style, replacing the ◯/● claim marks added earlier the same day -- confirmed via
- * AskUserQuestion: value text only, no marks). Every QST row's REWARD1/REWARD2-3 cell is a bare
- * ADD(...), so no need for the full DSL parser here -- e.g. "ADD(2K)" -> "2K", "ADD(2K,BZ)" ->
- * "2K+BZ". Falls back to the raw cell text for anything that isn't a bare ADD(...). */
-function questRewardValueText(rewardDsl) {
-  const match = /^ADD\((.*)\)$/.exec((rewardDsl || '').trim());
-  return match ? match[1].replace(/,/g, '+') : (rewardDsl || '');
+  return { goal: row.GOAL || '', rewards: [row.REWARD1, row.REWARD2, row.REWARD3], inst: row.INST || '' };
 }
 
 /** Whether faceId exists in the QST data at all (sibling-flip check, mirrors cardFaceExists). */
@@ -1707,157 +1711,90 @@ function isNormalDeckCard(physicalId) {
 /** A/B/C/M only -- same scope as the real engine's CARD_COUNT_SHEETS (src/executor.js), i.e. cards
  * actually placed via BUILD/UPGRADE. JOB/CON (drafted/dealt) and RESOURCE (received, not built) are
  * all excluded (confirmed 2026-07-30: "初期資源カード CON JOBは建築数にはいりません") -- used by
- * computePlayerBuildStats/mockCostTotal/mockCardCount below, anywhere "built" cards are counted or
- * summed. */
+ * computePlayerBuildStats below, anywhere "built" cards are counted. */
 function isBuiltCardPhysicalId(physicalId) {
   return isNormalDeckCard(physicalId) || physicalId.startsWith('M');
 }
 
 // ---------------------------------------------------------------------------
-// QST (Quest) cards (confirmed 2026-07-30, see [[project-dice-wp-ui-requirements]] and src/qst.js
-// for the real engine-side implementation -- claiming is wired to qst.js's claimQuestReward, see the
-// dblclick handler in buildQstCardVisual below).
+// QST (Quest) cards -- see src/qst.js for the real engine-side implementation. 2026-08-09: rank-based
+// rewards replaced the original claim-based design (no more player action at all; see that file's own
+// doc), so every mock/preview evaluator that used to live here (mockCardCount/mockEvalMetric) is gone
+// -- the UI now calls qst.js's real evalGoalMetric/rankPlayersForQuest directly, same as any other
+// real-engine call main.js makes, rather than approximating it.
 // ---------------------------------------------------------------------------
 
-/** Cards counted for a mock "CARD_COUNT" / "CARD_COUNT(sheet)" GOAL check -- same A/B/C/M scope as
- * the real engine's CARD_COUNT_SHEETS (see isBuiltCardPhysicalId). sheet=null/undefined = no filter
- * (bare CARD_COUNT). Deliberately a small parallel implementation (like computeNextCastleTurnOrder
- * above), not the real DSL parser -- good enough for the mock's demo GOAL text, not a general
- * evaluator. */
-function mockCardCount(state, playerId, sheet) {
-  const player = state.players.find((p) => p.id === playerId);
-  return player.ownedCardPhysicalIds.filter((physicalId) => {
-    if (!isBuiltCardPhysicalId(physicalId)) return false;
-    return !sheet || physicalId.startsWith(sheet);
-  }).length;
-}
-
-/** Mock counterpart of executor.js's evalMetric -- covers every metric currently used by a real GOAL
- * cell (confirmed 2026-07-30), reusing computePlayerBuildStats' already-aggregated emblemCounts/lv1/
- * lv2 where possible rather than re-scanning owned cards per metric. Returns null for an unknown
- * metric name (goalMet then treats the GOAL as never met, same as missing/blank GOAL text). */
-function mockEvalMetric(state, playerId, metricName, arg) {
-  const player = state.players.find((p) => p.id === playerId);
-  const buildStats = computePlayerBuildStats(player, state);
-  switch (metricName) {
-    case 'CARD_COUNT': return mockCardCount(state, playerId, arg);
-    case 'LEVEL_COUNT': return arg === '1' ? buildStats.lv1 : arg === '2' ? buildStats.lv2 : 0;
-    case 'EMBLEM_COUNT':
-    case 'COUNT': return buildStats.emblemCounts[arg] || 0;
-    case 'EMBLEM_SET_COUNT': return Math.min(buildStats.emblemCounts.天, buildStats.emblemCounts.地, buildStats.emblemCounts.人);
-    case 'MAX_EMBLEM_COUNT': return Math.max(buildStats.emblemCounts.天, buildStats.emblemCounts.地, buildStats.emblemCounts.人);
-    case 'TOTAL_EMBLEM_COUNT': return buildStats.emblemCounts.天 + buildStats.emblemCounts.地 + buildStats.emblemCounts.人;
-    case 'COST_TOTAL': return mockCostTotal(state, player);
-    case 'RESOURCE': return player.resources[arg] || 0;
-    default: return null;
-  }
-}
-
-/** Which claim slot (0/1/2, matching qst.js's REWARD_FIELDS index -- claimCount at the time of
- * claiming) belongs to which visual row (2026-08-06, per user feedback on the REWARD2/REWARD3 merge:
- * "REWARD1 ←次に...は消す　①◯　②③2◯のように表記" -- slot 0 (REWARD1) gets its own row+mark, slots 1
- * and 2 (both drawing from the shared REWARD2-3 field) sit in one row with 2 independent marks, since
- * each is still claimed by a different player at a possibly different time even though the reward
- * text is identical). */
-const QST_REWARD_RANK_LABELS = ['1位', '2〜3位'];
-
-/** The "目標：..." line from a QST card's INST text, in place of GOAL's raw DSL (e.g. "CARD_COUNT>=7")
- * -- 2026-08-06, per user feedback: "とりあえず今回はINSTに書かれていることを流用して" (reusing the
- * human-readable line already written at the top of INST, rather than inventing a new icon per GOAL
- * metric). Falls back to the raw DSL text if INST is missing/doesn't start with this convention, so
- * nothing goes blank for data that hasn't adopted it. */
+/** The "目標：..." title line from a QST card's INST text (a short human-readable label, e.g.
+ * "建築数") -- falls back to the raw GOAL DSL text (e.g. "CARD_COUNT(A,B,C)") if INST is missing, so
+ * nothing goes blank for data that hasn't been filled in yet. */
 function questGoalDisplayText(facts) {
-  const firstLine = (facts.inst || '').split('\n')[0];
-  return firstLine.startsWith('目標') ? firstLine : facts.goal;
+  return `目標：${facts.inst || facts.goal}`;
 }
 
-/** Splits questGoalDisplayText's "目標：{item}　{qty}" line into the item/qty pair for the QST card's
- * 3-line GOAL block (2026-08-06, per user feedback: "目標／建築数／6枚" 3-line layout) -- split at the
- * LAST run of whitespace, which is where every real GOAL line's trailing quantity sits (e.g. "建築数
- * 　7枚" -> item "建築数", qty "7枚"). A line with no whitespace at all (shouldn't happen in practice)
- * just becomes the item with a blank qty line. */
-function questGoalLines(facts) {
-  const text = questGoalDisplayText(facts);
-  const body = text.startsWith('目標') ? text.replace(/^目標[：:]/, '') : text;
-  const match = /^(.*?)[ 　]+(\S+)$/.exec(body.trim());
-  return match ? { item: match[1], qty: match[2] } : { item: body.trim(), qty: '' };
-}
-
-/** Plain-text reward summary for QST's 3-line REWARD block (2026-08-06, per user feedback: "1位
- * 2K"/"2〜3位 K" style, replacing the ◯/● claim marks added earlier the same day -- confirmed via
- * AskUserQuestion: value text only, no marks). Every QST row's REWARD1/REWARD2-3 cell is a bare
- * ADD(...), so no need for the full DSL parser here -- e.g. "ADD(2K)" -> "2K", "ADD(2K,BZ)" ->
- * "2K+BZ". Falls back to the raw cell text for anything that isn't a bare ADD(...). */
+/** Plain-text reward summary (e.g. "ADD(3VP)" -> "3VP", "ADD(2K,BZ)" -> "2K+BZ"). Every QST row's
+ * REWARD1/2/3 cell is a bare ADD(...), so no need for the full DSL parser here. An implicit count of 1
+ * (e.g. "ADD(VP)") is displayed with an explicit "1" (e.g. "1VP") -- the DSL itself omits it by
+ * convention, but the user's own worked example for this UI wrote it out ("3位1VP"), so the display
+ * spells it out even though the underlying cell doesn't. Falls back to the raw cell text for anything
+ * that isn't a bare ADD(...). */
 function questRewardValueText(rewardDsl) {
   const match = /^ADD\((.*)\)$/.exec((rewardDsl || '').trim());
-  return match ? match[1].replace(/,/g, '+') : (rewardDsl || '');
-}
-
-/** One REWARD line: a rank label plus its plain-text reward value (2026-08-06, replacing the old
- * ①/②③ ◯/● claim-mark rows -- per user feedback's "1位　2K" / "2〜3位　K" 3-line format). rewardDsl is
- * facts.rewards[0] (REWARD1) for '1位' or facts.rewards[1] (the shared REWARD2-3) for '2〜3位'. */
-function buildQstRewardLine(label, rewardDsl) {
-  return el('div', 'qst-card__reward-line', `${label}　${questRewardValueText(rewardDsl)}`);
+  if (!match) return rewardDsl || '';
+  return match[1].split(',').map((part) => (/^[A-Z]/.test(part.trim()) ? `1${part.trim()}` : part.trim())).join('+');
 }
 
 /** Static preview fill for QST's back face (the sibling face -- see siblingFaceId): id + GOAL +
- * plain REWARD1/REWARD2-3 labels, no claim status. There's no live quest state for a face that was
- * never actually revealed this game, so this is informational only (matches CON/A/B/C's click-to-flip
- * preview, which is likewise just "what's on the other side", not live state). Kept as the fuller
- * REWARDn-label form (unlike the front face's ①/②③ marks below) since there's no claim progress to
- * mark here anyway. */
+ * plain REWARD1/2/3 value labels. There's no live quest state for a face that was never actually
+ * revealed this game, so this is informational only (matches CON/A/B/C's click-to-flip preview, which
+ * is likewise just "what's on the other side", not live state). */
 function fillQstBackFace(backEl, faceId) {
   const facts = factsForQstFaceId(faceId);
   backEl.querySelector('.qst-card__id').textContent = faceId;
   backEl.querySelector('.qst-card__goal').textContent = facts.goal;
   const rewardsEl = backEl.querySelector('.qst-card__back-rewards');
-  rewardsEl.appendChild(el('div', 'qst-card__reward', 'REWARD1'));
-  rewardsEl.appendChild(el('div', 'qst-card__reward', 'REWARD2-3'));
+  ['1位', '2位', '3位'].forEach((label, i) => {
+    rewardsEl.appendChild(el('div', 'qst-card__reward', `${label}　${questRewardValueText(facts.rewards[i])}`));
+  });
 }
 
-/** Builds one QST card's visual: a 3-line GOAL block ("目標" / item / qty) and a 3-line REWARD block
- * ("報酬" / "1位 {value}" / "2〜3位 {value}") plus the COMPLETE badge (2026-08-06, per user feedback:
- * "目標／建築数／6枚" and "報酬／1位　2K／2〜3位　1K" 3-line layouts, replacing the single-line GOAL text
- * and the ①/②③ ◯/● claim-mark rows from earlier the same day -- confirmed via AskUserQuestion that the
- * landscape goal|rewards column layout stays, just each column's *content* becomes 3 stacked lines, and
- * that REWARD shows plain value text with no claim marks). See questGoalLines/buildQstRewardLine.
+/**
+ * Builds one QST card's visual: a live, always-current standings preview (2026-08-09, replacing the
+ * earlier claim-progress design -- see src/qst.js's own doc for the full redesign). Title line is
+ * "目標：{INST}"; below it, one column per reward tier (1位/2位/3位) shows that tier's reward text and
+ * the color swatch of whoever currently holds that rank (qstMod.rankPlayersForQuest -- always
+ * recomputed fresh from current game state, since there's no per-card claim state left to read). No
+ * player interaction beyond the shared tap-to-enlarge -- QST has no player-facing action at all
+ * anymore; rewards are granted automatically, once, at GAME_END (qst.resolveEndGameRewards).
  * Distinct DOM shape from buildCardVisual's shop-card (this layout doesn't fit that template), but
- * still reuses showCardEnlargeModal for the tap-to-enlarge description. */
-function buildQstCardVisual(faceId, quest, state, options = {}) {
+ * still reuses showCardEnlargeModal for the tap-to-enlarge description.
+ */
+function buildQstCardVisual(faceId, state, options = {}) {
   const tpl = document.getElementById('tpl-qst-card');
   const node = tpl.content.firstElementChild.cloneNode(true);
   const facts = factsForQstFaceId(faceId);
-  const complete = quest.claimCount >= facts.rewards.length;
 
-  // Glows/blinks once GOAL is achieved and actually claimable right now (2026-08-06, per user
-  // feedback: "GOAL達成している状態の時光って点滅するようにする") -- reuses the real engine's
-  // canClaim (not the UI's own mockEvalMetric preview stuff above) so this can never drift from
-  // whether tapping the ①/②③ marks below would really succeed. Evaluated for whoever's actually up
-  // (matches the reward click handler's own activePlayer, since claiming is a free action gated to
-  // the active player) -- no glow while it's an AI's turn or nobody's onboarded yet, same as that
-  // handler's own no-op guard.
-  const next = turnFlowMod.getNextTurn(state, INDEX);
-  const activePlayer = next ? state.players.find((p) => p.id === next.playerId) : null;
-  const claimable = !!activePlayer && hasFinishedOnboarding(activePlayer)
-    && qstMod.canClaim(state, INDEX, activePlayer.id, faceId).ok;
+  node.querySelector(':scope > .qst-card__goal-line').textContent = questGoalDisplayText(facts);
 
-  const goalEl = node.querySelector(':scope > .qst-card__row > .qst-card__goal');
-  const goalLines = questGoalLines(facts);
-  goalEl.appendChild(el('div', 'qst-card__goal-header', '目標'));
-  goalEl.appendChild(el('div', 'qst-card__goal-item', goalLines.item));
-  goalEl.appendChild(el('div', 'qst-card__goal-qty', goalLines.qty));
-  node.classList.toggle('qst-card--complete', complete);
-  node.classList.toggle('qst-card--claimable', claimable);
-
-  const rewardsEl = node.querySelector(':scope > .qst-card__rewards');
-  rewardsEl.appendChild(el('div', 'qst-card__reward-header', '報酬'));
-  rewardsEl.appendChild(buildQstRewardLine(QST_REWARD_RANK_LABELS[0], facts.rewards[0]));
-  rewardsEl.appendChild(buildQstRewardLine(QST_REWARD_RANK_LABELS[1], facts.rewards[1]));
+  const ranking = qstMod.rankPlayersForQuest(state, INDEX, faceId);
+  const colEls = node.querySelectorAll(':scope > .qst-card__ranks > .qst-card__rank-col');
+  colEls.forEach((colEl, i) => {
+    const rank = i + 1;
+    colEl.querySelector('.qst-card__rank-header').textContent = `${rank}位　${questRewardValueText(facts.rewards[i])}`;
+    const playersEl = colEl.querySelector('.qst-card__rank-players');
+    playersEl.innerHTML = '';
+    for (const entry of ranking.filter((r) => r.rank === rank)) {
+      const rankedPlayer = state.players.find((p) => p.id === entry.playerId);
+      const swatch = el('span', 'qst-card__rank-player');
+      swatch.dataset.color = rankedPlayer.color;
+      swatch.title = rankedPlayer.name;
+      playersEl.appendChild(swatch);
+    }
+  });
 
   // Sibling-face preview (Q001A <-> Q001B) baked into the back element, same mechanism as every
   // other card type -- see siblingFaceId/fillQstBackFace. Falls back to a plain blank back when
-  // there's no data for the sibling yet. Flipping to see it is now done from inside the enlarge
-  // modal (toggling qst-card--flipped there), not via a click on the inline card itself -- see below.
+  // there's no data for the sibling yet. Flipping to see it is done from inside the enlarge modal
+  // (toggling qst-card--flipped there), not via a click on the inline card itself -- see below.
   const backEl = node.querySelector(':scope > .qst-card__back');
   const sibling = siblingFaceId(faceId);
   const hasSiblingData = sibling && qstFaceExists(sibling);
@@ -1866,40 +1803,12 @@ function buildQstCardVisual(faceId, quest, state, options = {}) {
     fillQstBackFace(backEl, sibling);
   }
 
-  // Unified single-tap model (2026-08-0X, replaces click=flip/right-click=INST/dblclick=claim --
-  // same rationale as buildCardVisual's rewrite: iPad has no right-click or reliable dblclick). A tap
-  // anywhere on the card opens the enlarge modal (bigger visual + INST + a 裏側 flip button). The
-  // REWARD1-3 checklist carves out its own higher-priority tap zone that claims the next reward
-  // instead, mirroring how a card's TAP effect box works in attachTapToggle -- stopPropagation() keeps
-  // this card-wide listener from also firing underneath it.
+  // Unified single-tap model, same as every other card type: a tap anywhere opens the enlarge modal
+  // (bigger visual + INST + a 裏側 flip button). No other interaction to wire -- QST is pure display.
   if (!options.noInteraction) {
     node.addEventListener('click', () => {
-      const visualNode = buildQstCardVisual(faceId, quest, state, { noInteraction: true });
+      const visualNode = buildQstCardVisual(faceId, state, { noInteraction: true });
       showCardEnlargeModal(faceId, visualNode, hasSiblingData ? sibling : null);
-    });
-
-    // Claims the next reward as a free action, if GOAL is met (confirmed 2026-07-30). No TAP/UNTAP
-    // state -- claimedPlayers/qstRewardCount already make this a use-once action per (player, card),
-    // so unlike the 6 tap-based free actions there's nothing to reset each round. Always claims
-    // against the real (front) face -- there's no live quest state for a sibling never actually
-    // revealed this game. Routed through qst.js's real engine (canClaim/claimQuestReward), same as
-    // every other real-turn action -- see renderBuildChoiceModal for the BUILD-reward half of this (a
-    // QST reward can itself be BUILD(...)).
-    rewardsEl.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const next = turnFlowMod.getNextTurn(STATE, INDEX);
-      const activePlayer = next ? state.players.find((p) => p.id === next.playerId) : null;
-      if (!activePlayer || !hasFinishedOnboarding(activePlayer)) return; // matches other free-action gating
-      if (pendingBuildChoice) return; // a BUILD choice is already pending -- resolve that first
-      const result = qstMod.claimQuestReward(STATE, INDEX, { playerId: activePlayer.id }, faceId);
-      if (result.success && result.pendingBuild) {
-        pendingBuildChoice = { source: 'QST', playerId: activePlayer.id, ...result.pendingBuild };
-        buildColorPreference = {};
-        pendingBzOutcomeChoice = null;
-      }
-      // Any other failure (GOAL_NOT_MET/COMPLETE/ALREADY_CLAIMED/PLAYER_LIMIT_REACHED/NO_BUILDABLE_CARD)
-      // is a silent no-op, same as the ineligibility checks this replaced.
-      render(STATE);
     });
   }
 
@@ -1909,8 +1818,8 @@ function buildQstCardVisual(faceId, quest, state, options = {}) {
 function renderQsts(state) {
   const container = document.getElementById('qst-slots');
   container.innerHTML = '';
-  for (const [faceId, quest] of Object.entries(state.quests)) {
-    container.appendChild(buildQstCardVisual(faceId, quest, state));
+  for (const faceId of Object.keys(state.quests)) {
+    container.appendChild(buildQstCardVisual(faceId, state));
   }
 }
 
@@ -2607,13 +2516,12 @@ function commitBuildCandidate(candidate, bzDiscount) {
   // mutation (see board.js's own code), so it's safe to speculatively tap first and simply revert if the
   // build then fails -- nothing else needs undoing, and the TAP is correctly left unspent for a retry.
   if (source === 'TAP') STATE.cards[pendingBuildChoice.physicalId].tapped = true;
-  // QST rewards and a card's own bare TAP=BUILD(...) (see attachTapToggle/bareTapKind) both reuse
-  // this same modal but commit via qst.completeQuestClaim / a plain completeAreaBuild + manual
-  // tap respectively, and never advance the turn -- both are free-action-timed, not a die
-  // placement (only an AREA-triggered BUILD, from an actual die placement, ends the turn).
-  const result = source === 'QST'
-    ? qstMod.completeQuestClaim(STATE, INDEX, context, pendingBuildChoice, candidate)
-    : boardMod.completeAreaBuild(STATE, INDEX, context, candidate, pendingBuildChoice.remainingCommands);
+  // A card's own bare TAP=BUILD(...) (see attachTapToggle/bareTapKind) reuses this same modal but
+  // never advances the turn -- it's free-action-timed, not a die placement (only an AREA-triggered
+  // BUILD, from an actual die placement, ends the turn). (2026-08-09: QST no longer has any
+  // player-facing action at all, so this modal is now only ever reached via TAP or AREA -- see
+  // src/qst.js's own doc.)
+  const result = boardMod.completeAreaBuild(STATE, INDEX, context, candidate, pendingBuildChoice.remainingCommands);
   // Only close the modal on success -- e.g. INSUFFICIENT_RESOURCES (can't afford this candidate's
   // COST) must NOT silently dismiss the choice, since the die/build trigger already happened and
   // is not undoable from here; the player needs to try an affordable candidate instead.
@@ -3223,56 +3131,27 @@ function computePlayerBuildStats(player, state) {
   return { built, lv1, lv2, monuments, emblemCounts };
 }
 
-/** Sum of every owned *built* card's printed COST, across resource types (mock counterpart of
- * executor.js's COST_TOTAL metric, confirmed 2026-07-30 -- "今建築されているカードの資源合計"; the
- * real engine doesn't need an explicit isBuiltCardPhysicalId filter here since JOB/CON/RESOURCE rows
- * always have a blank COST anyway, but this mirrors it explicitly for clarity). Reuses the same
- * cost-string parsing as renderCostBadges for consistency. */
-function mockCostTotal(state, player) {
-  let total = 0;
-  for (const physicalId of player.ownedCardPhysicalIds) {
-    if (!isBuiltCardPhysicalId(physicalId)) continue;
-    const cardState = state.cards[physicalId];
-    if (!cardState) continue;
-    const costString = factsForFaceId(cardState.currentFaceId).cost || '';
-    for (const part of costString.split(',')) {
-      const match = /^(\d*)([A-Z]+)$/.exec(part.trim());
-      if (match) total += match[1] ? Number(match[1]) : 1;
-    }
-  }
-  return total;
-}
-
 /** Extra stats shown alongside the defaults only when a currently-revealed QST card's GOAL actually
- * references that metric (confirmed 2026-07-30) -- 建築数/LV1/LV2/天/地/人 already cover CARD_COUNT/
- * LEVEL_COUNT/EMBLEM_COUNT/EMBLEM_SET_COUNT implicitly (a QST needing those doesn't need a new stat),
- * so only the 3 metrics with no existing on-screen equivalent get one here. Mirrors the engine's own
- * MAX_EMBLEM_COUNT/TOTAL_EMBLEM_COUNT/COST_TOTAL metrics (src/executor.js), computed here from the
- * same buildStats.emblemCounts computePlayerBuildStats already produces. */
-const QST_EXTRA_STAT_DEFS = {
-  MAX_EMBLEM_COUNT: { label: '最大EMBLEM数', compute: (state, player, buildStats) => Math.max(buildStats.emblemCounts.天, buildStats.emblemCounts.地, buildStats.emblemCounts.人) },
-  TOTAL_EMBLEM_COUNT: { label: 'EMBLEM合計', compute: (state, player, buildStats) => buildStats.emblemCounts.天 + buildStats.emblemCounts.地 + buildStats.emblemCounts.人 },
-  COST_TOTAL: { label: '資源合計', compute: (state, player) => mockCostTotal(state, player) },
-};
-
-/** The leading metric name of every currently-revealed QST card's GOAL text (e.g. "CARD_COUNT" out
- * of "CARD_COUNT>=7") -- same bare-comparison shape confirmed for real GOAL data, see
- * [[project-dice-wp-qst-spec]]. Cards with no GOAL yet or no data contribute nothing. */
-function activeQstMetricNames(state) {
-  const names = new Set();
-  for (const faceId of Object.keys(state.quests)) {
-    const goal = factsForQstFaceId(faceId).goal || '';
-    const m = /^([A-Z_]+)/.exec(goal);
-    if (m) names.add(m[1]);
-  }
-  return names;
-}
-
-function computeQstExtraStats(state, player, buildStats) {
-  const active = activeQstMetricNames(state);
+ * needs one -- 建築数/LV1/LV2/天/地/人 already cover CARD_COUNT/LEVEL_COUNT/EMBLEM_COUNT(x)/
+ * EMBLEM_SET_COUNT implicitly (a QST needing those doesn't need a new stat), so metrics already in
+ * that set are skipped here; everything else gets a stat labeled with that QST card's own INST text.
+ * 2026-08-09: computed via qst.js's real evalGoalMetric directly (no more mock re-implementation --
+ * see this section's own header comment), so this can never drift from what the QST cards themselves
+ * display or from what actually gets granted at GAME_END. */
+const QST_EXTRA_STAT_SKIP_METRICS = new Set(['CARD_COUNT', 'LEVEL_COUNT', 'EMBLEM_COUNT', 'COUNT', 'EMBLEM_SET_COUNT']);
+function computeQstExtraStats(state, player) {
   const extras = [];
-  for (const [metricName, def] of Object.entries(QST_EXTRA_STAT_DEFS)) {
-    if (active.has(metricName)) extras.push({ label: def.label, value: def.compute(state, player, buildStats) });
+  const seenGoals = new Set();
+  for (const faceId of Object.keys(state.quests)) {
+    const facts = factsForQstFaceId(faceId);
+    const goalText = facts.goal;
+    if (!goalText || seenGoals.has(goalText)) continue;
+    seenGoals.add(goalText);
+    const m = /^([A-Z_]+)/.exec(goalText);
+    if (m && QST_EXTRA_STAT_SKIP_METRICS.has(m[1])) continue;
+    try {
+      extras.push({ label: facts.inst || goalText, value: qstMod.evalGoalMetric(state, INDEX, player.id, goalText) });
+    } catch (e) { /* unparseable/unknown metric -- skip rather than crash the whole player panel */ }
   }
   return extras;
 }
@@ -3548,7 +3427,7 @@ function renderPlayerCards(state, next) {
     // name row says the same thing in place.
     node.querySelector('.card-group__turn').textContent = isSelf ? '手番' : '';
     const buildStats = computePlayerBuildStats(player, state);
-    renderPlayerStats(node.querySelector('.card-group__stats'), buildStats, computeQstExtraStats(state, player, buildStats));
+    renderPlayerStats(node.querySelector('.card-group__stats'), buildStats, computeQstExtraStats(state, player));
 
     // JOB and CON are always exactly 1 each (confirmed 2026-07-29) -- shown as their own fixed
     // side-by-side pair, separate from the variable-length list of built/kept cards below.
@@ -3812,9 +3691,10 @@ function handleRoundPassConfirmed(state, playerId) {
   attemptAdvanceTurn(state, playerId);
 }
 
-/** 人間/AI LV1/AI LV2切り替え (2026-08-03, per user feedback: "4人のプレイヤー人間 AIをそれぞれ選べる
- * ようにしてほしい", then "先程のAIをLV1 新しく作ったAIをLV2として...選べるようにしてください") --
- * one 3-state toggle per player seat (色スウォッチ+名前+人間/AI LV1/AI LV2ボタン), reusing
+/** 人間/AI LV1/AI LV2/AI LV3切り替え (2026-08-03, per user feedback: "4人のプレイヤー人間 AIをそれぞれ
+ * 選べるようにしてほしい", then "先程のAIをLV1 新しく作ったAIをLV2として...選べるようにしてください",
+ * then 2026-08-09 "AI LV３を作りたい") -- one 4-state toggle per player seat (色スウォッチ+名前+人間/AI
+ * LV1/AI LV2/AI LV3ボタン), reusing
  * turnOrderedPlayers' own iteration order isn't needed here since this doesn't depend on whose turn it
  * is -- always shows all 4 players in state.players' fixed creation order. Toggling calls render(STATE)
  * immediately; since isAiPlayer/aiPlayerFor are consulted fresh on every render (nothing caches "is
@@ -3835,7 +3715,7 @@ function renderPlayerRoleControl(state) {
 
     const optionsLine = el('div', 'player-role-control__options-line');
     const currentRole = playerRoles.get(player.id);
-    for (const [role, label] of [['HUMAN', '人間'], ['AI_LV1', 'AI LV1'], ['AI_LV2', 'AI LV2']]) {
+    for (const [role, label] of [['HUMAN', '人間'], ['AI_LV1', 'AI LV1'], ['AI_LV2', 'AI LV2'], ['AI_LV3', 'AI LV3']]) {
       const btn = el('button', 'player-role-control__option', label);
       btn.type = 'button';
       btn.classList.toggle('player-role-control__option--active', currentRole === role);

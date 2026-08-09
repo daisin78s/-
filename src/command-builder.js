@@ -219,6 +219,7 @@ module.exports = {
   lowerStatement,
   lowerCall,
   lowerCondition,
+  lowerMetric,
   lowerCostList,
 };
 
