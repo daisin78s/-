@@ -106,10 +106,18 @@ function applyInPlace(state, index, move) {
         const candidate = result.pendingBuild.candidates[move.buildCandidateIndex];
         if (!candidate) throw new SimulationError(`buildCandidateIndex ${move.buildCandidateIndex} out of range`);
         const bzDiscount = maxBzDiscount(state, index, move.playerId, candidate);
+        // Tap BEFORE resolving the build, not after (2026-08-09 fix, mirrors main.js's matching fix --
+        // see its own comment for the full story: a built card's own ONCE, e.g. C008A's
+        // UNTAP_ALL(SELF), runs *inside* completeAreaBuild, so tapping this card only afterward meant
+        // that effect could never actually reach it). resolveBuildNew/resolveUpgrade both check
+        // affordability and fail atomically *before* any state mutation (see their own code), so it's
+        // safe to speculatively tap first and simply revert on failure -- nothing else needs undoing.
+        state.cards[move.physicalId].tapped = true;
         const buildResult = board.completeAreaBuild(state, index, { playerId: move.playerId, bzDiscount }, candidate, result.pendingBuild.remainingCommands);
         if (buildResult.success) {
-          state.cards[move.physicalId].tapped = true; // mirrors main.js's TAP-source commit
           executor.notifyActivation(state, move.playerId, move.physicalId, state.cards[move.physicalId].currentFaceId, 'TAP');
+        } else {
+          state.cards[move.physicalId].tapped = false; // build never actually happened -- the TAP wasn't spent
         }
         return { ...buildResult, candidate }; // see PLACE_DIE's own comment on why candidate is included
       }

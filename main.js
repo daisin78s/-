@@ -2597,19 +2597,27 @@ function renderBuildChoiceBzTapPrompt() {
 function commitBuildCandidate(candidate, bzDiscount) {
   const playerId = pendingBuildChoice.playerId;
   const context = { playerId, colorPreference: buildColorPreference, bzDiscount };
+  const source = pendingBuildChoice.source;
+  // Tap the TAP-source card BEFORE resolving the build, not after (2026-08-09 fix, per user report:
+  // "B006AをTAPしてその効果でC008Aを建築したときB006Aがアンタップしない"). The built card's own ONCE --
+  // e.g. C008A's UNTAP_ALL(SELF) -- runs *inside* completeAreaBuild/completeQuestClaim below, so tapping
+  // this card only afterward (the old order) meant that effect could never actually reach it: B006A
+  // stayed permanently tapped even though UNTAP_ALL(SELF) should have untapped it right back.
+  // resolveBuildNew/resolveUpgrade both check affordability and fail atomically *before* any state
+  // mutation (see board.js's own code), so it's safe to speculatively tap first and simply revert if the
+  // build then fails -- nothing else needs undoing, and the TAP is correctly left unspent for a retry.
+  if (source === 'TAP') STATE.cards[pendingBuildChoice.physicalId].tapped = true;
   // QST rewards and a card's own bare TAP=BUILD(...) (see attachTapToggle/bareTapKind) both reuse
   // this same modal but commit via qst.completeQuestClaim / a plain completeAreaBuild + manual
   // tap respectively, and never advance the turn -- both are free-action-timed, not a die
   // placement (only an AREA-triggered BUILD, from an actual die placement, ends the turn).
-  const result = pendingBuildChoice.source === 'QST'
+  const result = source === 'QST'
     ? qstMod.completeQuestClaim(STATE, INDEX, context, pendingBuildChoice, candidate)
     : boardMod.completeAreaBuild(STATE, INDEX, context, candidate, pendingBuildChoice.remainingCommands);
   // Only close the modal on success -- e.g. INSUFFICIENT_RESOURCES (can't afford this candidate's
   // COST) must NOT silently dismiss the choice, since the die/build trigger already happened and
   // is not undoable from here; the player needs to try an affordable candidate instead.
   if (result.success) {
-    const source = pendingBuildChoice.source;
-    if (source === 'TAP') STATE.cards[pendingBuildChoice.physicalId].tapped = true;
     pendingBuildChoice = null;
     pendingBzOutcomeChoice = null;
     placementMessage = '';
@@ -2625,6 +2633,7 @@ function commitBuildCandidate(candidate, bzDiscount) {
     // Payment somehow failed even after bzOutcomesForCandidate said it would succeed (stale state
     // between render and click) -- drop back to the plain candidate list rather than leaving the
     // player stuck looking at a chooser for a payment that just failed.
+    if (source === 'TAP') STATE.cards[pendingBuildChoice.physicalId].tapped = false; // build never actually happened -- the TAP wasn't spent
     pendingBzOutcomeChoice = null;
     placementMessage = `建築できません（${result.reason}）`;
   }

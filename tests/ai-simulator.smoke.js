@@ -279,5 +279,53 @@ function giveDie(state, playerId, value) {
   check('...and exactly 2 BZ (the full cost) was spent', p1After.resources.BZ, 3);
 }
 
+{
+  // A TAP-sourced BUILD (B006A.TAP=BUILD((A,B,C,M),6)) that builds a card whose own ONCE untaps the
+  // source card back (C008A.ONCE=UNTAP_ALL(SELF)) must end up untapped, not stuck tapped (2026-08-09
+  // fix, per user report: "B006AをTAPしてその効果でC008Aを建築したときB006Aがアンタップしない"). The
+  // built card's ONCE runs *inside* completeAreaBuild, so the source card must already be marked tapped
+  // *before* that call for UNTAP_ALL(SELF) to have any chance of reaching it back.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const b006a = createCardInstance('B006A');
+  b006a.ownerId = 'P1';
+  state.cards[b006a.physicalId] = b006a;
+  p1.ownedCardPhysicalIds.push(b006a.physicalId);
+  // C008 is reserved for the SPECIAL shop (see [[project-dice-wp-flow-spec]]) -- SHOP201 shares
+  // SHOP101's dice range (1-6), matching B006A's fixed buildValue=6.
+  state.shops.SPECIAL.slots.SHOP201 = 'C008A';
+  p1.resources.A = 1; // C008A's COST is "1A,3C"
+  p1.resources.C = 3;
+
+  const probe = applyInPlace(require('../src/game-state').cloneState(state), index, { type: 'BARE_TAP', playerId: 'P1', physicalId: b006a.physicalId });
+  const c008Index = probe.pendingBuild.candidates.findIndex((c) => c.faceId === 'C008A');
+  assertTrue('C008A is offered as a build candidate via B006A\'s bare TAP', c008Index >= 0);
+
+  const move = { type: 'BARE_TAP', playerId: 'P1', physicalId: b006a.physicalId, buildCandidateIndex: c008Index };
+  const { state: resultState, result } = simulator.apply(state, index, move);
+  check('Building C008A via B006A\'s TAP succeeds', result.success, true);
+  check('C008A was actually built', resultState.players.find((p) => p.id === 'P1').ownedCardPhysicalIds.includes(b006a.physicalId) && resultState.players.find((p) => p.id === 'P1').ownedCardPhysicalIds.length === 2, true);
+  check('B006A ends up untapped (C008A\'s UNTAP_ALL(SELF) reached it back)', resultState.cards[b006a.physicalId].tapped, false);
+}
+{
+  // Failure case: if the chosen candidate turns out unaffordable, the speculative tap must be reverted
+  // (the TAP wasn't actually spent) so the player can retry with a different, affordable candidate.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const b006a = createCardInstance('B006A');
+  b006a.ownerId = 'P1';
+  state.cards[b006a.physicalId] = b006a;
+  p1.ownedCardPhysicalIds.push(b006a.physicalId);
+  state.shops.SPECIAL.slots.SHOP201 = 'C008A';
+  // No resources granted -- C008A's "1A,3C" cost can't be paid.
+
+  const probe = applyInPlace(require('../src/game-state').cloneState(state), index, { type: 'BARE_TAP', playerId: 'P1', physicalId: b006a.physicalId });
+  const c008Index = probe.pendingBuild.candidates.findIndex((c) => c.faceId === 'C008A');
+  const move = { type: 'BARE_TAP', playerId: 'P1', physicalId: b006a.physicalId, buildCandidateIndex: c008Index };
+  const result = applyInPlace(state, index, move);
+  check('Building C008A fails with no resources to pay for it', result.success, false);
+  check('B006A is NOT left tapped -- the speculative tap was reverted', state.cards[b006a.physicalId].tapped, false);
+}
+
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);
