@@ -60,63 +60,29 @@ function bareTapKind(index, faceId) {
 
 class MoveGenerator {
   /**
-   * @param {{monumentFocusFromRound?: number, avoidMapIdFromRound?: {mapId: string, round: number}}}
-   *   [policy] - optional strategy knob (2026-08-09, "AI LV3": per user request, an AI that stops buying
-   *   new A/B/C cards once the game's later rounds arrive and banks resources toward monuments instead,
-   *   since LV1/LV2 were routinely ending games with large unspent resource piles). Default {} (no
-   *   restriction at all) -- LV1/LV2 keep using a MoveGenerator built with no policy, so their behavior
-   *   is byte-for-byte unchanged; LV3 gets its own instance constructed with these set (see main.js's
-   *   aiMoveGeneratorLv3).
-   *   monumentFocusFromRound: once state.round reaches this value, every BUILD_NEW candidate for A/B/C
-   *   is dropped from every build-resolving decision point (PLACE_DIE/BARE_TAP) -- UPGRADE
-   *   candidates are unaffected (confirmed with the user: upgrading an already-owned card isn't "a new
-   *   card"), and whenever a single decision point still offers 2+ buildable monuments at once (e.g. the
-   *   castle routinely does, since several monuments can share a satisfied DICE threshold), only the
-   *   highest-printed-VP one(s) survive (confirmed with the user: "その都度「今実際に建てられる中で一番
-   *   VPが高いもの」を選ぶ" -- reachability/cost-efficiency aren't weighed, just whichever's VP is
-   *   highest among what's *actually* offered right now).
+   * @param {{avoidMapIdFromRound?: {mapId: string, round: number}}} [policy] - optional strategy knob
+   *   (2026-08-09, "AI LV3"). Default {} (no restriction at all) -- LV1/LV2 keep using a MoveGenerator
+   *   built with no policy, so their behavior is byte-for-byte unchanged; LV3 gets its own instance
+   *   constructed with this set (see main.js's aiMoveGeneratorLv3).
    *   avoidMapIdFromRound (2026-08-10, per user request: "AILV3について R3からAREA007にダイスを置かない
    *   ようにかえたい"): once state.round reaches .round, #placeDieMoves stops offering ANY placement
    *   (any slot, any die) on .mapId at all -- not a preference the Evaluator weighs, an outright removal
-   *   from the candidate list, same "soft" style as monumentFocusFromRound's BUILD_NEW filtering (a die
-   *   left with no other legal slot still falls back to PASS_DIE, same escape hatch as always -- this
-   *   can't deadlock the AI).
+   *   from the candidate list (a die left with no other legal slot still falls back to PASS_DIE, same
+   *   escape hatch as always -- this can't deadlock the AI).
+   *   (2026-08-10: this policy previously also had a monumentFocusFromRound field -- an AI that stopped
+   *   buying new A/B/C cards from a given round on and banked toward monuments instead, meant to stop
+   *   LV1/LV2 from routinely ending games with large unspent resource piles. Removed per user request
+   *   once QST's rank-based rewards rework made the round 3/4 build restriction unnecessary.)
    */
   constructor(policy) {
     this.policy = policy || {};
   }
 
   /** True once state.round has reached the policy's avoidMapIdFromRound.round threshold for this exact
-   * mapId -- no-op (always false) when the policy isn't set, matching monumentFocusFromRound's own
-   * "unset/before-threshold leaves everything unchanged" convention. */
+   * mapId -- no-op (always false) when the policy isn't set. */
   #isMapIdAvoided(state, mapId) {
     const avoid = this.policy.avoidMapIdFromRound;
     return !!avoid && mapId === avoid.mapId && state.round >= avoid.round;
-  }
-
-  /** Applies this.policy.monumentFocusFromRound to a pendingBuild.candidates array, returning only the
-   * ORIGINAL indices (into `candidates`, unchanged) that survive -- callers must keep using these as
-   * buildCandidateIndex directly (board.completeAreaBuild and friends look up by index into the full,
-   * un-filtered array later), never a re-numbered/compacted list. No-op (every index passes through) when
-   * the policy isn't set or state.round hasn't reached it yet, so LV1/LV2 (and LV3 before its own
-   * threshold round) see identical candidate lists to before this existed. */
-  #allowedBuildCandidateIndices(state, index, candidates) {
-    const threshold = this.policy.monumentFocusFromRound;
-    if (!threshold || state.round < threshold) return candidates.map((c, i) => i);
-    let entries = candidates
-      .map((c, i) => ({ c, i }))
-      .filter(({ c }) => !(c.type === 'BUILD_NEW' && /^[ABC]/.test(c.faceId)));
-    const monumentEntries = entries.filter(({ c }) => c.type === 'BUILD_NEW' && c.faceId[0] === 'M');
-    if (monumentEntries.length > 1) {
-      const vpOf = (faceId) => {
-        const vp = getCardRow(index, faceId).VP;
-        return typeof vp === 'number' ? vp : 0;
-      };
-      const maxVp = Math.max(...monumentEntries.map(({ c }) => vpOf(c.faceId)));
-      const loseByVp = new Set(monumentEntries.filter(({ c }) => vpOf(c.faceId) < maxVp).map(({ i }) => i));
-      entries = entries.filter(({ i }) => !loseByVp.has(i));
-    }
-    return entries.map(({ i }) => i);
   }
 
   /** @returns {Object[]} every legal Move for playerId right now. */
@@ -167,7 +133,7 @@ class MoveGenerator {
           diceWithAPlacement.add(die.id);
           if (result.actionResult && result.actionResult.pendingBuild) {
             const candidates = result.actionResult.pendingBuild.candidates;
-            for (const buildCandidateIndex of this.#allowedBuildCandidateIndices(state, index, candidates)) {
+            for (let buildCandidateIndex = 0; buildCandidateIndex < candidates.length; buildCandidateIndex++) {
               moves.push({ type: 'PLACE_DIE', playerId, dieId: die.id, mapId, slotIndex, buildCandidateIndex });
             }
             // Always also offer "place the die, leave the build unresolved" -- getBuildCandidates only
@@ -257,7 +223,7 @@ class MoveGenerator {
           // it as a Move let AIPlayer's first-max-wins tie-break pick it forever (found 2026-08-02:
           // ai-batch-5 looped on B006A's BUILD-kind TAP indefinitely, since a no-op move ties every
           // other move's score and this one sorted before END_TURN).
-          for (const buildCandidateIndex of this.#allowedBuildCandidateIndices(state, index, result.pendingBuild.candidates)) {
+          for (let buildCandidateIndex = 0; buildCandidateIndex < result.pendingBuild.candidates.length; buildCandidateIndex++) {
             moves.push({ type: 'BARE_TAP', playerId, physicalId, buildCandidateIndex });
           }
         }

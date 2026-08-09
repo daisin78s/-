@@ -136,11 +136,11 @@ function main() {
     console.error(`Invalid highScoreThreshold "${process.argv[6]}" -- expected a number`);
     process.exit(1);
   }
-  // LV3 shares LV2's lookahead and additionally gets main.js's aiMoveGeneratorLv3 monument-focus +
-  // AREA007-avoidance policy (see game-runner.js's playGame doc for moveGeneratorOptions).
+  // LV3 shares LV2's lookahead and additionally gets main.js's aiMoveGeneratorLv3 AREA007-avoidance
+  // policy (see game-runner.js's playGame doc for moveGeneratorOptions).
   const aiOptions = (aiLevel === 'LV2' || aiLevel === 'LV3') ? { lookaheadExtraTurns: 1 } : undefined;
   const moveGeneratorOptions = aiLevel === 'LV3'
-    ? { monumentFocusFromRound: 3, avoidMapIdFromRound: { mapId: 'MAP007', round: 3 } }
+    ? { avoidMapIdFromRound: { mapId: 'MAP007', round: 3 } }
     : undefined;
 
   const raw = loadGameData(DATA_PATH);

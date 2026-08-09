@@ -95,18 +95,18 @@ const aiMoveGenerator = new moveGeneratorMod.MoveGenerator();
 const aiSimulator = new simulatorMod.Simulator();
 const aiPlayerLv1 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGenerator, aiEvaluator, aiSimulator, { lookaheadExtraTurns: 0 });
 const aiPlayerLv2 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGenerator, aiEvaluator, aiSimulator, { lookaheadExtraTurns: 1 });
-// AI LV3 (2026-08-09, per user feedback: LV2 routinely ends a game with large unspent resource piles --
-// wants an AI that instead stops buying new A/B/C cards once the later rounds arrive and banks toward
-// monuments). Gets its OWN MoveGenerator instance built with a monumentFocusFromRound policy (see that
-// class's own doc) -- LV1/LV2's shared aiMoveGenerator above stays policy-free and therefore completely
-// unaffected. Reuses the same aiEvaluator/aiSimulator (policy-agnostic) and LV2's lookaheadExtraTurns:1
-// (not asked about specifically; matched to LV2 rather than LV1's 0, since LV3 is meant to be the
-// stronger/smarter option, not a speed tier).
+// AI LV3 (2026-08-09). Gets its OWN MoveGenerator instance built with an avoidMapIdFromRound policy
+// (see that class's own doc) -- LV1/LV2's shared aiMoveGenerator above stays policy-free and therefore
+// completely unaffected. Reuses the same aiEvaluator/aiSimulator (policy-agnostic) and LV2's
+// lookaheadExtraTurns:1 (not asked about specifically; matched to LV2 rather than LV1's 0, since LV3 is
+// meant to be the stronger/smarter option, not a speed tier).
 // avoidMapIdFromRound (2026-08-10, per user request: "R3からAREA007にダイスを置かないようにかえたい") --
 // AREA007 (訓練場, always MAP007's CURRENT_AREA -- it has no B/C tier) stops being a legal placement for
 // LV3 from round 3 onward. See MoveGenerator's own doc for why this is a soft removal, not a hard block.
+// (2026-08-10: this used to also carry a monumentFocusFromRound policy -- removed per user request once
+// QST's rank-based rewards rework made the round 3/4 new-A/B/C-build restriction it existed for
+// unnecessary. See MoveGenerator's own doc.)
 const aiMoveGeneratorLv3 = new moveGeneratorMod.MoveGenerator({
-  monumentFocusFromRound: 3,
   avoidMapIdFromRound: { mapId: 'MAP007', round: 3 },
 });
 const aiPlayerLv3 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGeneratorLv3, aiEvaluator, aiSimulator, { lookaheadExtraTurns: 1 });

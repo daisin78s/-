@@ -155,7 +155,7 @@ function driveTurn(state, index, playerId, aiPlayer, initialHasPlacedDieThisTurn
  * stays cheap.
  *
  * moveGeneratorOptions (2026-08-09, optional, default undefined): passed straight through to the
- * single MoveGenerator instance every seat's AIPlayer shares, e.g. {monumentFocusFromRound:3} for
+ * single MoveGenerator instance every seat's AIPlayer shares, e.g. {avoidMapIdFromRound:{...}} for
  * "LV3" (main.js's aiMoveGeneratorLv3 uses the exact same option -- see MoveGenerator's own doc). Left
  * undefined by every existing caller so this stays policy-free (LV1/LV2-equivalent) unless a caller
  * opts in.
