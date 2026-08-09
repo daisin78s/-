@@ -60,12 +60,13 @@ function bareTapKind(index, faceId) {
 
 class MoveGenerator {
   /**
-   * @param {{monumentFocusFromRound?: number}} [policy] - optional strategy knob (2026-08-09, "AI LV3":
-   *   per user request, an AI that stops buying new A/B/C cards once the game's later rounds arrive and
-   *   banks resources toward monuments instead, since LV1/LV2 were routinely ending games with large
-   *   unspent resource piles). Default {} (no restriction at all) -- LV1/LV2 keep using a MoveGenerator
-   *   built with no policy, so their behavior is byte-for-byte unchanged; LV3 gets its own instance
-   *   constructed with monumentFocusFromRound set (see main.js's aiMoveGeneratorLv3).
+   * @param {{monumentFocusFromRound?: number, avoidMapIdFromRound?: {mapId: string, round: number}}}
+   *   [policy] - optional strategy knob (2026-08-09, "AI LV3": per user request, an AI that stops buying
+   *   new A/B/C cards once the game's later rounds arrive and banks resources toward monuments instead,
+   *   since LV1/LV2 were routinely ending games with large unspent resource piles). Default {} (no
+   *   restriction at all) -- LV1/LV2 keep using a MoveGenerator built with no policy, so their behavior
+   *   is byte-for-byte unchanged; LV3 gets its own instance constructed with these set (see main.js's
+   *   aiMoveGeneratorLv3).
    *   monumentFocusFromRound: once state.round reaches this value, every BUILD_NEW candidate for A/B/C
    *   is dropped from every build-resolving decision point (PLACE_DIE/BARE_TAP) -- UPGRADE
    *   candidates are unaffected (confirmed with the user: upgrading an already-owned card isn't "a new
@@ -74,9 +75,23 @@ class MoveGenerator {
    *   highest-printed-VP one(s) survive (confirmed with the user: "その都度「今実際に建てられる中で一番
    *   VPが高いもの」を選ぶ" -- reachability/cost-efficiency aren't weighed, just whichever's VP is
    *   highest among what's *actually* offered right now).
+   *   avoidMapIdFromRound (2026-08-10, per user request: "AILV3について R3からAREA007にダイスを置かない
+   *   ようにかえたい"): once state.round reaches .round, #placeDieMoves stops offering ANY placement
+   *   (any slot, any die) on .mapId at all -- not a preference the Evaluator weighs, an outright removal
+   *   from the candidate list, same "soft" style as monumentFocusFromRound's BUILD_NEW filtering (a die
+   *   left with no other legal slot still falls back to PASS_DIE, same escape hatch as always -- this
+   *   can't deadlock the AI).
    */
   constructor(policy) {
     this.policy = policy || {};
+  }
+
+  /** True once state.round has reached the policy's avoidMapIdFromRound.round threshold for this exact
+   * mapId -- no-op (always false) when the policy isn't set, matching monumentFocusFromRound's own
+   * "unset/before-threshold leaves everything unchanged" convention. */
+  #isMapIdAvoided(state, mapId) {
+    const avoid = this.policy.avoidMapIdFromRound;
+    return !!avoid && mapId === avoid.mapId && state.round >= avoid.round;
   }
 
   /** Applies this.policy.monumentFocusFromRound to a pendingBuild.candidates array, returning only the
@@ -142,6 +157,7 @@ class MoveGenerator {
     const diceWithAPlacement = new Set();
     for (const die of unplacedDice) {
       for (const mapId of Object.keys(state.maps)) {
+        if (this.#isMapIdAvoided(state, mapId)) continue;
         const areaRow = getAreaRow(index, state.maps[mapId].currentAreaId);
         const slotCount = board.getSlotRequirements(areaRow).length;
         for (let slotIndex = 0; slotIndex < slotCount; slotIndex++) {

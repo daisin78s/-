@@ -102,7 +102,13 @@ const aiPlayerLv2 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGenerator, aiEvaluator
 // unaffected. Reuses the same aiEvaluator/aiSimulator (policy-agnostic) and LV2's lookaheadExtraTurns:1
 // (not asked about specifically; matched to LV2 rather than LV1's 0, since LV3 is meant to be the
 // stronger/smarter option, not a speed tier).
-const aiMoveGeneratorLv3 = new moveGeneratorMod.MoveGenerator({ monumentFocusFromRound: 3 });
+// avoidMapIdFromRound (2026-08-10, per user request: "R3からAREA007にダイスを置かないようにかえたい") --
+// AREA007 (訓練場, always MAP007's CURRENT_AREA -- it has no B/C tier) stops being a legal placement for
+// LV3 from round 3 onward. See MoveGenerator's own doc for why this is a soft removal, not a hard block.
+const aiMoveGeneratorLv3 = new moveGeneratorMod.MoveGenerator({
+  monumentFocusFromRound: 3,
+  avoidMapIdFromRound: { mapId: 'MAP007', round: 3 },
+});
 const aiPlayerLv3 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGeneratorLv3, aiEvaluator, aiSimulator, { lookaheadExtraTurns: 1 });
 /** Which AIPlayer instance drives playerId's own TURN moves -- see playerRoles' own comment. */
 function aiPlayerFor(playerId) {

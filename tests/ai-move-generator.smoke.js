@@ -15,7 +15,11 @@ const { MoveGenerator, bzConversionTap } = require('../src/ai/move-generator');
 
 const index = buildDataIndex(loadGameData(path.join(__dirname, '..', 'data', 'game.json')));
 const moveGenerator = new MoveGenerator();
-const moveGeneratorLv3 = new MoveGenerator({ monumentFocusFromRound: 3 }); // see AI LV3's own doc in main.js
+// see AI LV3's own doc in main.js
+const moveGeneratorLv3 = new MoveGenerator({
+  monumentFocusFromRound: 3,
+  avoidMapIdFromRound: { mapId: 'MAP007', round: 3 },
+});
 
 let passCount = 0;
 let failCount = 0;
@@ -385,6 +389,38 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
       .filter((faceId) => faceId.startsWith('M'))
   )].sort();
   check('The unpoliced MoveGenerator (LV1/LV2) still offers all 4 monuments (control)', plainMonumentFaceIds, ['M009', 'M010', 'M011', 'M012']);
+}
+{
+  // AREA007 avoidance (2026-08-10, avoidMapIdFromRound -- see MoveGenerator's own doc): from the
+  // configured round onward, MAP007 (AREA007, ACTION=CHANGE((A,B,C),D)) is dropped from PLACE_DIE
+  // candidates entirely, for every die/slot -- not just build-resolving decision points.
+  const state = freshStateWithShops();
+  // AREA007's CHANGE((A,B,C),D) pays the whole A+B+C bundle at once (double-parens = bundle, not a
+  // choice of one -- see project-dice-wp-dsl-spec's own doc), so all three are needed to afford it and
+  // avoid a separate "no-op placement" rejection (board.wouldAreaActionHaveEffect) that would otherwise
+  // block this test's die regardless of the avoidMapIdFromRound policy under test.
+  player(state, 'P1').resources.A = 1;
+  player(state, 'P1').resources.B = 1;
+  player(state, 'P1').resources.C = 1;
+  const die = giveDie(state, 'P1', 1); // AREA007's 3 SLOTs are all ANY
+  const context = { hasPlacedDieThisTurn: false };
+  const offersMap007 = (moves) => moves.some((m) => m.type === 'PLACE_DIE' && m.dieId === die.id && m.mapId === 'MAP007');
+
+  state.round = 2;
+  assertTrue(
+    'Before avoidMapIdFromRound\'s threshold, LV3 still offers a placement on MAP007 (AREA007)',
+    offersMap007(moveGeneratorLv3.generateMoves(state, index, 'P1', context))
+  );
+
+  state.round = 3;
+  assertTrue(
+    'At/after avoidMapIdFromRound\'s threshold, LV3 no longer offers MAP007 at all',
+    !offersMap007(moveGeneratorLv3.generateMoves(state, index, 'P1', context))
+  );
+  assertTrue(
+    'The unpoliced MoveGenerator (LV1/LV2) still offers MAP007 at the very same round (control)',
+    offersMap007(moveGenerator.generateMoves(state, index, 'P1', context))
+  );
 }
 
 console.log(`\n${passCount} passed, ${failCount} failed`);
