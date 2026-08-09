@@ -621,5 +621,27 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   check('...leaving the other 2K from the fee alone', player.resources.K, 2);
 }
 
+// ---------------------------------------------------------------------------
+// 22. D_PLUS_ABC_COUNT (2026-08-10, Q001B's new GOAL "色D+ABC建築数"): every colored die the player
+// currently has (any placedMapId/passed state) plus CARD_COUNT(A,B,C).
+// ---------------------------------------------------------------------------
+{
+  const state = freshState();
+  check('0 colored dice + 0 A/B/C cards = 0', executor.evalMetric(state, index, 'P1', { name: 'D_PLUS_ABC_COUNT', args: [] }), 0);
+
+  const player = getPlayerRef(state, 'P1');
+  player.dice.push(createDie('d1', 'COLOR'));
+  const placedDie = createDie('d2', 'COLOR');
+  placedDie.placedMapId = 'MAP001';
+  player.dice.push(placedDie);
+  player.dice.push(createDie('d3', 'WHITE')); // white dice don't count toward "色D"
+  check('Counts both an unplaced AND a placed colored die (2), ignores the white one', executor.evalMetric(state, index, 'P1', { name: 'D_PLUS_ABC_COUNT', args: [] }), 2);
+
+  giveCard(state, 'A001A', 'P1');
+  giveCard(state, 'B001A', 'P1');
+  giveCard(state, 'M001', 'P1'); // M (monument) is excluded from CARD_COUNT(A,B,C)
+  check('Adds CARD_COUNT(A,B,C) (2 -- A001A+B001A, M001 excluded) to the 2 colored dice', executor.evalMetric(state, index, 'P1', { name: 'D_PLUS_ABC_COUNT', args: [] }), 4);
+}
+
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);

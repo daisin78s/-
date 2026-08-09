@@ -457,6 +457,16 @@ function evalMetric(state, index, playerId, metric) {
     // that looks at PlayerState.resources instead of ownedCardRows.
     case 'RESOURCE':
       return getPlayer(state, playerId).resources[metric.args[0]] || 0;
+    // "色D+ABC建築数" (Q001B GOAL, 2026-08-10): every colored (D) die this player currently has, plus
+    // CARD_COUNT(A,B,C). "色D" counts ALL of the player's colored dice regardless of placedMapId/passed
+    // (confirmed with the user: placed dice count too) -- a colored die stays in player.dice all round
+    // once gained (only WHITE dice get removed on placement, see turn-flow.js's endRound), and the
+    // per-player 5-die cap (excess auto-converts to wD) already bounds this naturally. Delegates to
+    // CARD_COUNT(A,B,C) rather than re-deriving its filter, so the two stay in sync automatically.
+    case 'D_PLUS_ABC_COUNT': {
+      const colorDiceCount = getPlayer(state, playerId).dice.filter((d) => d.kind === 'COLOR').length;
+      return colorDiceCount + evalMetric(state, index, playerId, { name: 'CARD_COUNT', args: ['A', 'B', 'C'] });
+    }
     default:
       throw new NotImplementedError(`Unknown condition metric: ${metric.name}`);
   }

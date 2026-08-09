@@ -1606,7 +1606,7 @@
       "ID": "Q001A",
       "NAME": "Q001A",
       "GOAL": "CARD_COUNT",
-      "REWARD1": "ADD(3VP)",
+      "REWARD1": "ADD(4VP)",
       "REWARD2": "ADD(2VP)",
       "REWARD3": "ADD(VP)",
       "INST": "建築数"
@@ -1615,7 +1615,7 @@
       "ID": "Q002A",
       "NAME": "Q002A",
       "GOAL": "MAX_EMBLEM_COUNT",
-      "REWARD1": "ADD(3VP)",
+      "REWARD1": "ADD(4VP)",
       "REWARD2": "ADD(2VP)",
       "REWARD3": "ADD(VP)",
       "INST": "最多EMBLEM数"
@@ -1624,7 +1624,7 @@
       "ID": "Q003A",
       "NAME": "Q003A",
       "GOAL": "LEVEL_COUNT(2)",
-      "REWARD1": "ADD(3VP)",
+      "REWARD1": "ADD(4VP)",
       "REWARD2": "ADD(2VP)",
       "REWARD3": "ADD(VP)",
       "INST": "アップグレード数"
@@ -1633,7 +1633,7 @@
       "ID": "Q004A",
       "NAME": "Q004A",
       "GOAL": "AREA_COUNT",
-      "REWARD1": "ADD(3VP)",
+      "REWARD1": "ADD(4VP)",
       "REWARD2": "ADD(2VP)",
       "REWARD3": "ADD(VP)",
       "INST": "所有AREA数"
@@ -1641,17 +1641,17 @@
     {
       "ID": "Q001B",
       "NAME": "Q001B",
-      "GOAL": "CARD_COUNT(A,B,C)",
-      "REWARD1": "ADD(3VP)",
+      "GOAL": "D_PLUS_ABC_COUNT",
+      "REWARD1": "ADD(4VP)",
       "REWARD2": "ADD(2VP)",
       "REWARD3": "ADD(VP)",
-      "INST": "ABC建築数"
+      "INST": "色D+ABC建築数"
     },
     {
       "ID": "Q002B",
       "NAME": "Q002B",
       "GOAL": "EMBLEM_SET_COUNT",
-      "REWARD1": "ADD(3VP)",
+      "REWARD1": "ADD(4VP)",
       "REWARD2": "ADD(2VP)",
       "REWARD3": "ADD(VP)",
       "INST": "天地人セット数"
@@ -1660,7 +1660,7 @@
       "ID": "Q003B",
       "NAME": "Q003B",
       "GOAL": "EMBLEM_COUNT",
-      "REWARD1": "ADD(3VP)",
+      "REWARD1": "ADD(4VP)",
       "REWARD2": "ADD(2VP)",
       "REWARD3": "ADD(VP)",
       "INST": "EMBLEM総数"
@@ -1669,7 +1669,7 @@
       "ID": "Q004B",
       "NAME": "Q004B",
       "GOAL": "AREA_COUNT(2)",
-      "REWARD1": "ADD(3VP)",
+      "REWARD1": "ADD(4VP)",
       "REWARD2": "ADD(2VP)",
       "REWARD3": "ADD(VP)",
       "INST": "所有LV2AREA数"
