@@ -140,13 +140,18 @@ function hasAiWorkPending(state) {
   if (state.round === 0) return false; // still waiting on the human's own resource choice
   if (state.phase === 'GAME_END') return false;
   const next = turnFlowMod.getNextTurn(state);
-  // ROUND_OVER should never actually be observed here in practice -- whoever's own endTurn call makes
-  // isRoundOver(state) true already cascades into endRound/startRound itself -- but if it somehow is,
-  // report "work pending" so pumpAiDelayed's timer still resolves it via driveOneAiStep's own defensive
-  // ROUND_OVER branch, rather than silently stalling forever (next.playerId is undefined here, so this
-  // must be checked before isAiPlayer(next.playerId), which is true for undefined and would otherwise
-  // give the right answer for the wrong reason).
-  if (next.type === 'ROUND_OVER') return true;
+  // getNextTurn's raw ROUND_OVER can fire purely because every die is placed-or-passed, even while
+  // whoever placed/passed the very last one hasn't actually ended their turn yet -- see
+  // driveOneAiStep's matching override (2026-08-09 fix, per user report: "ラウンド最後のダイスを置くと
+  // その瞬間強制的にラウンド終了してしまいます") for the full story, including why this can't be
+  // answered from state.turnOrder[state.currentPlayerIndex] (that's just a rotating next-slot cursor,
+  // not "who's mid-turn" -- it lags whenever per-player die counts diverge this round). aiOpenTurnPlayerId
+  // is the reliable answer instead: driveOneAiStep itself sets it the moment it starts driving an AI's
+  // real turn, and clears it only once that same AI's own END_TURN move actually succeeds -- so
+  // non-null here means an AI genuinely still has an open turn; null means either the human is the one
+  // mid-turn (nothing for the AI pump to do until they click ターン終了) or nobody is (also nothing to
+  // do, and reporting true here would just make pumpAiDelayed re-arm forever for no reason).
+  if (next.type === 'ROUND_OVER') return aiOpenTurnPlayerId !== null;
   return (next.type === 'ONBOARDING_NEEDED' || next.type === 'TURN') && isAiPlayer(next.playerId);
 }
 
@@ -188,17 +193,27 @@ function driveOneAiStep(state) {
   // Previously unreachable because there was always at least one human player to naturally stop the
   // pump before/at GAME_END.
   if (state.phase === 'GAME_END') return false;
-  const next = turnFlowMod.getNextTurn(state);
-  // Defensive fallback (not expected to fire in practice, same as src/ai/game-runner.js's playGame own
-  // ROUND_OVER branch): whoever's own endTurn call makes isRoundOver(state) true already cascades into
-  // endRound/startRound itself, both below and in advanceTurnIfPossible for the human. next.playerId is
-  // undefined for ROUND_OVER, and isAiPlayer(undefined) is true (playerRoles.get(undefined) is
-  // undefined, not 'HUMAN'), so this must be handled before the isAiPlayer(next.playerId) check below or it crashes
-  // trying to look up a player by an undefined id.
+  let next = turnFlowMod.getNextTurn(state);
+  // getNextTurn's raw ROUND_OVER only means "every die is placed-or-passed" -- it does NOT mean every
+  // player has actually clicked/decided ターン終了 yet (2026-08-09 fix, per user report: "ラウンド最後
+  // のダイスを置くと　その瞬間強制的にラウンド終了してしまいます" + "AIがダイスを使い切ると人間がターン
+  // エンドできなくなります"). This function used to treat raw ROUND_OVER as "call endRound right now",
+  // which fired the instant the very last die anywhere on the board got placed -- even if that placer
+  // (human OR AI) hadn't ended their own turn yet, skipping their final TAP/free-action window and their
+  // own TURNEND processing entirely, and stranding the human's ターン終了 button (whose state assumed
+  // their turn was still open) once the round silently rolled out from under them.
+  // endRound must ONLY ever run immediately after a REAL END_TURN move -- see advanceTurnIfPossible
+  // (human, "ターン終了" button) and simulator.applyInPlace's own END_TURN case (AI's own selectMove
+  // choosing to end its turn), both of which already call it correctly, right there, the instant
+  // isRoundOver flips true from an actual end-of-turn. So: if aiOpenTurnPlayerId is set, an AI genuinely
+  // still has an open turn -- let it keep acting below (its own eventual END_TURN move is what
+  // legitimately advances the round). If it's null, either the human is the one mid-turn or genuinely
+  // nobody is -- either way there's nothing for THIS function to do; wait for the human's own click.
+  // (aiOpenTurnPlayerId, not state.turnOrder[state.currentPlayerIndex] -- see hasAiWorkPending's matching
+  // comment for why that index can't answer "who's mid-turn" reliably here.)
   if (next.type === 'ROUND_OVER') {
-    turnFlowMod.endRound(state, INDEX);
-    if (state.phase !== 'GAME_END') turnFlowMod.startRound(state);
-    return true;
+    if (aiOpenTurnPlayerId === null) return false;
+    next = { type: 'TURN', playerId: aiOpenTurnPlayerId };
   }
   if (!isAiPlayer(next.playerId)) return false;
   const player = state.players.find((p) => p.id === next.playerId);
@@ -3635,41 +3650,36 @@ function render(state) {
   let next = state.round >= 1 ? turnFlowMod.getNextTurn(state) : null;
   // Keep the still-mid-turn player as "next" even once they run out of dice to place (2026-08-06, per
   // user report: "ラウンド最後のダイスを置くと即次のプレイヤーのターンになりTAPアクションを使うタイミ
-  // ングがありません"). getNextTurn's own skip-ahead ("does this player have any unplaced die left?")
-  // is exactly right for finding who a *just-ended* turn should pass to (state.currentPlayerIndex just
-  // advanced by turnFlow.endTurn, and may now point at someone with nothing left at all) -- but it has
-  // no way to tell that apart from "the player who's STILL mid-turn just placed their own last die and
-  // hasn't clicked ターン終了 yet", since both look identical from state alone (currentPlayerIndex
-  // unchanged, that player now has 0 unplaced dice). turnActionTaken already tracks "this turn's
-  // placement is done, awaiting an explicit end" -- checking it against lastTurnPlayerId (only updated
-  // by a REAL turn transition, below) distinguishes the two: if the literal state.turnOrder[
-  // currentPlayerIndex] is still the player lastTurnPlayerId already noted as active, nothing has
-  // actually ended their turn yet, so raw getNextTurn's skip-ahead here is premature and gets
-  // overridden back to them. Once they really do end their turn (turnFlow.endTurn moves
-  // currentPlayerIndex for real), that index's player no longer matches lastTurnPlayerId and this
-  // no-ops, letting the normal "fresh turn started" transition below fire as usual.
+  // ングがありません"; broadened 2026-08-09, per follow-up report: "ラウンド最後のダイスを置くと　その
+  // 瞬間強制的にラウンド終了してしまいます" + "AIがダイスを使い切ると人間がターンエンドできなくなりま
+  // す"). getNextTurn's own skip-ahead ("does this player have any unplaced die left?") is exactly
+  // right for finding who a *just-ended* turn should pass to -- but it has no way to tell that apart
+  // from "the player who's STILL mid-turn just placed their own final die and hasn't clicked ターン終了
+  // yet" (both look identical from raw state alone: isRoundOver()/getNextTurn() only look at whether
+  // every die is placed-or-passed, never at whether anyone has actually clicked/decided to end their
+  // turn). turnActionTaken tracks exactly "lastTurnPlayerId's placement this turn is done, awaiting an
+  // explicit end" -- since it's ONLY ever set true while it's genuinely lastTurnPlayerId's own open turn
+  // (reset to false the instant any *different* player's turn starts, see the transition block below),
+  // turnActionTaken===true is already sufficient on its own to know lastTurnPlayerId is still open;
+  // pendingBuildChoice.playerId is equally self-sufficient (only the player who legitimately just placed
+  // a die -- the modal is what's currently blocking everyone else -- can have one open at all).
   //
-  // pendingBuildChoice needs the SAME override for a narrower reason (2026-08-06 follow-up, per user
-  // report: "他のプレイヤーが未使用のダイスを持っていない時に自分がまだ未使用のダイスを持っている時
-  // ターン終了ボタンが押せません" -- traced to a placement that triggers the build-choice modal, e.g. at
-  // 王宮/AREA009): a die's placedMapId is set (so isRoundOver can already flip true if this was this
-  // player's own last die and everyone else was already done) *before* applyPlaceDiceResult even gets a
-  // chance to set turnActionTaken -- it deliberately returns early without touching that flag whenever
-  // the placement produced a pendingBuild, leaving turnActionTaken false until the player actually picks
-  // a candidate (commitBuildCandidate sets it then). Without this second clause, that gap left raw
-  // next as ROUND_OVER on the very next render, which the transition logic below reads as "nobody's
-  // turn" and wipes lastTurnPlayerId to null -- so by the time the candidate IS picked and
-  // turnActionTaken finally goes true, the *first* clause above no longer matches (lastTurnPlayerId is
-  // already null) and the turn-end button never reappears. Checking pendingBuildChoice.playerId
-  // directly sidesteps lastTurnPlayerId entirely: only the player who legitimately just placed a die
-  // can have one open (the modal is what's currently blocking everyone else from acting at all), so no
-  // extra equality guard is needed here the way turnActionTaken's own (global, not per-player) flag needs one.
-  if (state.turnOrder.length) {
-    const currentIndexPlayerId = state.turnOrder[state.currentPlayerIndex];
-    const stillMidTurn = (turnActionTaken && currentIndexPlayerId === lastTurnPlayerId)
-      || (pendingBuildChoice && pendingBuildChoice.playerId === currentIndexPlayerId);
-    if (stillMidTurn && (!next || next.playerId !== currentIndexPlayerId)) {
-      next = { type: 'TURN', playerId: currentIndexPlayerId, playerIndex: state.currentPlayerIndex };
+  // 2026-08-09 fix: this used to ALSO require state.turnOrder[state.currentPlayerIndex] to match before
+  // trusting either of those -- but currentPlayerIndex is only a rotating "next slot to check" cursor
+  // (turnFlow.endTurn advances it by exactly one slot, to whoever ended their turn's immediate
+  // successor), NOT "whoever is currently mid-turn": once players' per-round die counts diverge (e.g. one
+  // player picked up an extra wD mid-round -- common), the *last* player to act in a round is routinely
+  // found via getNextTurn's skip-ahead from a currentPlayerIndex that's still sitting on someone else
+  // entirely who'd already used up their own dice earlier. In that case the old currentPlayerIndex check
+  // wrongly failed to match, so the override never fired, next stayed ROUND_OVER, and the transition
+  // block below (its `else` branch) wiped lastTurnPlayerId to null outright -- destroying the very
+  // tracking this override exists to use, and reproducing both symptoms above (round force-ends, and/or
+  // the real mid-turn player's ターン終了 button never reappears since lastTurnPlayerId no longer points
+  // at them). Dropping the currentPlayerIndex cross-check entirely removes that failure mode.
+  if (turnActionTaken || pendingBuildChoice) {
+    const playerId = pendingBuildChoice ? pendingBuildChoice.playerId : lastTurnPlayerId;
+    if (playerId && (!next || next.playerId !== playerId)) {
+      next = { type: 'TURN', playerId, playerIndex: state.turnOrder.indexOf(playerId) };
     }
   }
   // Auto-records an undo checkpoint at the start of each player's TURN (2026-07-30, per user
