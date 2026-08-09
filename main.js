@@ -152,6 +152,31 @@ let aiPumpTimer = null;
 let aiOpenTurnPlayerId = null;
 let aiOpenTurnHasPlacedDie = false;
 
+/** Whoever's own turn is genuinely still open right now -- they've already resolved this turn's die
+ * (placed or passed it) but haven't ended the turn yet -- or null if nobody is mid-turn.
+ *
+ * GameState itself has no such field: turn-flow.getNextTurn only ever answers "who has an unplaced die",
+ * which is a DIFFERENT question. Once a player resolves their last die of the round, getNextTurn skips
+ * straight past them to whoever still holds one -- correct for finding a *just-ended* turn's successor,
+ * but indistinguishable from "this player is still mid-turn and hasn't clicked ターン終了". That's what
+ * turnActionTaken/lastTurnPlayerId track (see turnActionTaken's own comment), and pendingBuildChoice is
+ * the same thing one step earlier (the die is placed, but a BUILD/UPGRADE candidate choice is still open,
+ * and applyPlaceDiceResult deliberately leaves turnActionTaken false until it's committed).
+ *
+ * Single source of truth for all three callers (2026-08-10, per user report: "1R最後のダイスを置いたとき
+ * ターン終了を押していないのに強制的にターン終了し次のラウンドダイスが選択できませんでした") -- render()
+ * for what the board displays, and hasAiWorkPending/driveOneAiStep for whether the AI pump may act at
+ * all. Before this, only render() applied the correction, from its own inline copy; both pump functions
+ * asked raw getNextTurn directly, so they read that skip-ahead as "it's the AI's turn now" and drove a
+ * whole AI turn out from under the still-open human one -- whose eventual END_TURN then advanced
+ * currentPlayerIndex past the human entirely (they never got to end their own turn), leaving
+ * turnActionTaken stuck true forever, which is what made every later round's dice unselectable (see
+ * renderPlayers' own `!turnActionTaken` gate). */
+function openTurnPlayerId() {
+  if (pendingBuildChoice) return pendingBuildChoice.playerId;
+  return turnActionTaken ? lastTurnPlayerId : null;
+}
+
 /** True if some AI-controlled player has an immediately-actionable decision pending right now (a
  * SELECT_RESOURCE_CARDS choice, or turn-flow.getNextTurn reporting ONBOARDING_NEEDED/TURN for them) --
  * a read-only peek, mirrors driveOneAiStep's own gating exactly but never mutates state. Used to decide
@@ -170,6 +195,12 @@ function hasAiWorkPending(state) {
   if (state.pendingChoices.some((c) => c.kind === 'SELECT_RESOURCE_CARDS' && isAiPlayer(c.playerId))) return true;
   if (state.round === 0) return false; // still waiting on the human's own resource choice
   if (state.phase === 'GAME_END') return false;
+  // A human who's resolved this turn's die but hasn't clicked ターン終了 still owns the turn -- see
+  // openTurnPlayerId's own doc (and driveOneAiStep's matching guard, the one that actually blocks the
+  // pump; this one keeps hasAiWorkPending's answer, and therefore the manual-mode button's visibility,
+  // honest). Checked BEFORE getNextTurn below precisely because getNextTurn is what skips past them.
+  const openTurn = openTurnPlayerId();
+  if (openTurn && !isAiPlayer(openTurn)) return false;
   const next = turnFlowMod.getNextTurn(state);
   // getNextTurn's raw ROUND_OVER can fire purely because every die is placed-or-passed, even while
   // whoever placed/passed the very last one hasn't actually ended their turn yet -- see
@@ -224,6 +255,11 @@ function driveOneAiStep(state) {
   // Previously unreachable because there was always at least one human player to naturally stop the
   // pump before/at GAME_END.
   if (state.phase === 'GAME_END') return false;
+  // The real block for a still-open HUMAN turn (2026-08-10) -- see openTurnPlayerId's own doc for the
+  // full story. Must be checked before getNextTurn below: that call is exactly what skips past a human
+  // who has no unplaced die left, handing their still-open turn to the next AI.
+  const openTurn = openTurnPlayerId();
+  if (openTurn && !isAiPlayer(openTurn)) return false;
   let next = turnFlowMod.getNextTurn(state);
   // getNextTurn's raw ROUND_OVER only means "every die is placed-or-passed" -- it does NOT mean every
   // player has actually clicked/decided ターン終了 yet (2026-08-09 fix, per user report: "ラウンド最後
@@ -3601,11 +3637,14 @@ function render(state) {
   // tracking this override exists to use, and reproducing both symptoms above (round force-ends, and/or
   // the real mid-turn player's ターン終了 button never reappears since lastTurnPlayerId no longer points
   // at them). Dropping the currentPlayerIndex cross-check entirely removes that failure mode.
-  if (turnActionTaken || pendingBuildChoice) {
-    const playerId = pendingBuildChoice ? pendingBuildChoice.playerId : lastTurnPlayerId;
-    if (playerId && (!next || next.playerId !== playerId)) {
-      next = { type: 'TURN', playerId, playerIndex: state.turnOrder.indexOf(playerId) };
-    }
+  //
+  // 2026-08-10: the logic itself moved to openTurnPlayerId (see its own doc) so hasAiWorkPending/
+  // driveOneAiStep can consult the exact same answer -- those two used to ask raw getNextTurn directly
+  // and therefore drove an AI turn straight over the top of a still-open human one, which this display-
+  // only correction could never prevent on its own.
+  const stillMidTurnPlayerId = openTurnPlayerId();
+  if (stillMidTurnPlayerId && (!next || next.playerId !== stillMidTurnPlayerId)) {
+    next = { type: 'TURN', playerId: stillMidTurnPlayerId, playerIndex: state.turnOrder.indexOf(stillMidTurnPlayerId) };
   }
   // Auto-records an undo checkpoint at the start of each player's TURN (2026-07-30, per user
   // feedback: development/tuning phase, so undo should always get back to "start of this turn"
