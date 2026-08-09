@@ -109,28 +109,34 @@ for entry in report['conjob']:
 
 print(f'CONJOB: wrote {written} combinations, skipped {len(skipped)}: {skipped}')
 
-# J/K: per-CON marginal sum/average across the 8 JOB columns (2026-08-07, per user request: "JOBCONシート
-# のJ、K列も出力できるようにしてください" -- confirmed by inspecting the user's own manually-entered
-# example values, e.g. row16's K = J/8 exactly). Mirrors row 26/27's own JOB-column marginal SUM/AVERAGE
-# (e.g. row26 = "=SUM(B16:B25)"), just transposed to a per-CON-row marginal instead. Written as live Excel
-# formulas, same style as row26/27, rather than pre-computed Python values, so they keep recalculating
-# automatically whenever this script rewrites the underlying B:I cells on a later run. Written for every
-# CON row unconditionally (not just ones report['conjob'] had data for this run), matching row26/27's own
-# always-present formulas. Written for the QST平均得点 table's own rows too (2026-08-09) -- same J/K
-# columns (a per-CON-*row* marginal, and every table shares the same CON row set), just at that table's
-# own row positions.
+# K: per-CON marginal average across the 8 JOB columns (2026-08-07, per user request: "JOBCONシートの
+# J、K列も出力できるようにしてください"; J column abolished and K's formula corrected 2026-08-10, per
+# user report: "試行回数が0のものがあると平均値が著しくずれてしまいます" -- the original K=J/8 divided
+# by a FIXED 8 regardless of how many of those 8 JOB columns actually had any games this run. A blank
+# (0-trial) 平均得点 cell contributes nothing to J's SUM, but still counted toward the /8 divisor, so
+# every 0-trial JOB column dragged K down even though it has no data at all. Excel's own AVERAGE()
+# already ignores blank cells when computing its average (only counts actual numeric cells), which is
+# exactly "the same marginal average, but over however many JOB columns actually have data" -- so K now
+# calls AVERAGE(...) directly on the B:I row instead of dividing a separately-computed SUM, and J (which
+# only ever existed to feed that division) is no longer written. Still a live Excel formula, not a
+# pre-computed Python value, so it keeps recalculating whenever this script rewrites the underlying B:I
+# cells on a later run. Written for every CON row unconditionally (not just ones report['conjob'] had
+# data for this run) and for the QST平均得点 table's own rows too (2026-08-09) -- same per-CON-row
+# marginal, just at that table's own row positions.
 j_col = last_job_col + 1
 k_col = last_job_col + 2
 first_col_letter = get_column_letter(min(avg_cols.values()))
 last_col_letter = get_column_letter(max(avg_cols.values()))
-j_col_letter = get_column_letter(j_col)
-num_jobs = len(avg_cols)
 for row_map in (avg_rows, qst_avg_rows):
     for con_face_id, r in row_map.items():
-        ws.cell(row=r, column=j_col, value=f'=SUM({first_col_letter}{r}:{last_col_letter}{r})')
-        ws.cell(row=r, column=k_col, value=f'={j_col_letter}{r}/{num_jobs}')
+        ws.cell(row=r, column=j_col, value=None)  # abolished -- see this block's own comment
+        # IFERROR-wrapped (found while verifying this change): AVERAGE() of an all-blank row (a CON with
+        # zero games across all 8 JOBs this run) is #DIV/0!, not 0 -- surfacing a spreadsheet full of
+        # error cells for every untested CON would be its own kind of misleading "wrong average" this
+        # fix is meant to get away from, so those rows blank out instead.
+        ws.cell(row=r, column=k_col, value=f'=IFERROR(AVERAGE({first_col_letter}{r}:{last_col_letter}{r}),"")')
 
-print(f'CONJOB J/K: wrote per-CON marginal sum/avg formulas for {len(avg_rows)} + {len(qst_avg_rows)} rows')
+print(f'CONJOB K: wrote per-CON marginal average formulas for {len(avg_rows)} + {len(qst_avg_rows)} rows (J column abolished)')
 
 # Third table: a single "使用回数" row (2026-08-07, per user spec, at the user's own pre-existing row --
 # see this file's own top-of-file doc) reusing the same JOB001..JOB008 column positions as the two tables
