@@ -2332,6 +2332,19 @@ function advanceTurnIfPossible(state, playerId) {
     return;
   }
   pendingTurnEndPlayerId = null;
+  // Reset turnActionTaken here, synchronously with the real END_TURN, not just via render()'s bottom
+  // "transition block" (2026-08-09 regression fix, per user report: "1Rの2ターン目にダイスを置けなくなる
+  // "). That transition block only clears turnActionTaken once next.playerId's hasFinishedOnboarding is
+  // true -- during round 1, the very next player is mid-ONBOARDING, so it stays true. The very next
+  // render() call still sees the stale turnActionTaken===true (leftover from playerId's own turn) and,
+  // since 5ea2c81 dropped the state.turnOrder[state.currentPlayerIndex] cross-check that used to catch
+  // this, render()'s "keep the mid-turn player visible" override wrongly re-targets playerId again even
+  // though their turn genuinely just ended -- and since lastTurnPlayerId still equals playerId too, the
+  // transition block's own `next.playerId !== lastTurnPlayerId` guard never fires either, permanently
+  // freezing the game on playerId. This is the one choke point every real human END_TURN passes through
+  // (see this function's own doc), so clearing the flag right here is sufficient and unconditional --
+  // no dependency on what the next player still needs to finish onboarding-wise.
+  turnActionTaken = false;
   if (turnFlowMod.isRoundOver(state)) {
     turnFlowMod.endRound(state, INDEX);
     if (state.phase !== 'GAME_END') turnFlowMod.startRound(state);
