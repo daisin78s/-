@@ -1744,6 +1744,11 @@ h1, h2, h3 { margin: 0; }
   background: var(--surface-sunken);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
+  /* Flex so .qst-panel__content can stretch to the panel's full height, which is what gives the 3 rows
+     a height to divide equally between them (2026-08-11, per user request "1段目 2段目 3段目の縦幅同じ
+     にする" -- see .qst-panel .qst-card's flex below). The panel's own height still comes from the shop
+     row it shares, so this doesn't change how tall it is. */
+  display: flex;
 }
 
 /* The 3 rank bands, drawn behind every row so "which column is which rank" reads straight down the
@@ -1767,11 +1772,18 @@ h1, h2, h3 { margin: 0; }
   position: relative; /* lifts the rows above the absolutely-positioned bands */
   z-index: 1;
   padding: 10px 12px;
+  flex: 1; /* fill the panel's height -- see .qst-panel's own note */
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
+/* Takes whatever height is left after the legend, and hands it to the 3 rows to split evenly. */
 #qst-slots {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 /* The shared "1位 4VP / 2位 2VP / 3位 1VP" legend, shown once at the bottom instead of repeating the
@@ -1780,8 +1792,13 @@ h1, h2, h3 { margin: 0; }
    entirely (via the `hidden` attribute, see main.js's renderQstLegend) when the revealed cards don't
    all share one reward set -- a single legend can't honestly describe differing rewards, so those
    cards fall back to their own per-rank headers instead. */
+/* Framed like the rows above it, and butted straight up against the last one (screenshot ② draws a box
+   round the legend too). Not part of their equal-height split though -- it keeps its natural height, so
+   the three QST rows share whatever is left. */
 .qst-legend {
-  padding: 7px 0 1px;
+  border: 1px solid var(--text);
+  padding: 6px 4px;
+  flex: 0 0 auto;
 }
 
 .qst-legend__ranks {
@@ -1821,23 +1838,28 @@ h1, h2, h3 { margin: 0; }
    enlarge modal, where a QST card really is on its own with no panel/bands/legend around it. Padding is
    tighter than the standalone card's to buy back the height the larger text below costs, keeping the
    whole column inside the SHOP grid's own height. */
-/* border-bottom cuts the rank bands between rows (2026-08-11, per user request + annotated screenshot:
-   "赤線部分に少しだけ隙間が欲しい　間隔を空けるのではなく色の隙間　3行あるということがわかりやすいように").
-   The bands run behind the whole panel as one continuous stripe each, which made the 3 QST rows blend
-   into a single block -- the hairline var(--border) rule this replaces was far too faint against the tint
-   to read as a row divider. A 5px strip in the panel's OWN background colour paints over the bands at
-   each row's bottom edge instead, so the COLOUR is what's interrupted (a gap in the stripe) rather than
-   the rows being pushed apart. There are 3 cards, so this lands on exactly the 3 internal boundaries the
-   screenshot marks: after rows 1 and 2, and between row 3 and the legend. Padding was trimmed 5px -> 3px
-   to pay for the added height, keeping the panel the same size. The panel's outer top/bottom edges are
-   deliberately left alone -- the bands reaching those was itself an explicit earlier request. */
+/* Each row is a bordered box of its own, all three exactly the same height, with no space between them
+   (2026-08-11, per user request + annotated screenshot ②: "黒枠付ける　1段目 2段目 3段目の縦幅同じにする
+   　1段目 2段目 3段目の隙間はいらない"). This replaces the previous approach of cutting a 5px gap in the
+   rank bands to separate the rows -- the frame does that job now, so the gap is gone and the bands run
+   continuously behind the boxes again.
+   - flex: 1 1 0 + min-height: 0 makes the three rows split #qst-slots' height evenly regardless of how
+     much text each one holds (a 2-line goal label used to make its row taller than the others).
+   - justify-content centers the content now that a row is usually taller than the text inside it.
+   - margin-bottom: -1px overlaps each box's bottom border with the next box's top border, so touching
+     rows show ONE line rather than a doubled 2px one.
+   - var(--text), not literal black: it's the near-black ink colour in light mode and near-white in dark,
+     so the frame keeps the same strong contrast either way instead of vanishing on the dark panel. */
 .qst-panel .qst-card {
   background: none;
-  border: none;
+  border: 1px solid var(--text);
   border-radius: 0;
-  border-bottom: 5px solid var(--surface-sunken);
-  padding: 3px 0;
-  gap: 5px;
+  flex: 1 1 0;
+  min-height: 0;
+  justify-content: center;
+  padding: 3px 4px;
+  gap: 4px;
+  margin-bottom: -1px;
 }
 
 /* Click to flip and preview the sibling face (Q001A <-> Q001B), same mechanism as shop-card
