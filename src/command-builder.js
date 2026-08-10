@@ -77,7 +77,11 @@ function lowerChange(args) {
   let times;
   if (!timesNode) times = { kind: 'literal', value: 1 };
   else if (isAllIdent(timesNode)) times = { kind: 'all' };
-  else times = { kind: 'literal', value: numberValue(timesNode) };
+  // An explicit numeric third argument (e.g. CHANGE(K,A,2), C001A's TAP) is 'capped', not 'literal'
+  // (2026-08-11, see executor.js's runChange for the full rationale): it executes up to that many times,
+  // scaled down to whatever's affordable, rather than requiring the full amount or doing nothing at all.
+  // 'literal' (value always 1) is reserved for CHANGE's implicit no-third-argument default.
+  else times = { kind: 'capped', value: numberValue(timesNode) };
   return { type: 'CHANGE', pay, gain, times };
 }
 

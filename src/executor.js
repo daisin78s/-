@@ -553,26 +553,43 @@ function runChange(state, index, context, cmd) {
   const pay = cmd.pay.map((item) => ({ resource: item.resource, count: evalCountNode(state, index, context.playerId, item.count) }));
   const gain = cmd.gain.map((item) => ({ resource: item.resource, count: evalCountNode(state, index, context.playerId, item.count) }));
 
+  // Deliberately not Z-aware for A/B/C pay items in the 'all'/'capped' branches below (unlike the
+  // 'literal' one-shot case, whose exact fixed amount goes through resolvePayment's own Z substitution
+  // further down) -- no current data combines ALL/capped-mode with colored pay (the only such CHANGEs pay
+  // K), and estimating a shared Z pool's contribution across multiple simultaneous items here would need
+  // real combinatorial care to avoid over-counting the same Z twice.
+  const maxAffordable = () => Math.min(
+    ...pay.map((item) => {
+      const dieKind = DICE_KIND_BY_RESOURCE[item.resource];
+      const have = dieKind
+        ? player.dice.filter((d) => d.kind === dieKind).length
+        : player.resources[item.resource] || 0;
+      return Math.floor(have / item.count);
+    })
+  );
+
   let times;
   if (cmd.times.kind === 'literal') {
+    // The true "exactly N, all-or-nothing" case -- always N=1 in practice (command-builder.js's
+    // lowerChange only ever produces this kind for CHANGE's implicit default, i.e. no third argument at
+    // all, e.g. JOB004's CHANGE(3K,2BZ)); resolvePayment further down fails the whole command if that
+    // exact amount isn't affordable, no partial execution.
     const limitRules = getPassiveRules(state, index, context.playerId, 'MODIFY_CONVERT_VALUE');
     times = cmd.times.value + limitRules.reduce((sum, r) => sum + r.delta, 0);
+  } else if (cmd.times.kind === 'capped') {
+    // An explicit numeric third argument, e.g. C001A's TAP=CHANGE(K,A,2) (2026-08-11, per user request:
+    // "1Kしか持ってないときにTAPしたら1K→1Aになるように" -- C001A/002A/003A used to be a flat
+    // CHANGE(2K,2A), which needed the full 2K or did nothing at all). Unlike 'literal' above, this
+    // executes as many times as affordable UP TO the given number, so a player short of the full amount
+    // still gets a scaled-down conversion instead of none. Deliberately NOT subject to CONVERT_LIMIT (see
+    // the 'all' branch below) -- that PASSIVE only reads 'all'-kind CHANGEs, and this cap is already
+    // explicit and self-contained in the DSL string itself, so there's no gap for CONVERT_LIMIT to close.
+    const limitRules = getPassiveRules(state, index, context.playerId, 'MODIFY_CONVERT_VALUE');
+    const requested = cmd.times.value + limitRules.reduce((sum, r) => sum + r.delta, 0);
+    times = Math.min(Math.max(0, requested), maxAffordable());
   } else {
     // 'all': max executions the player can currently afford, capped by context.chosenTimes if given.
-    // Deliberately not Z-aware for A/B/C pay items (unlike the fixed-count path below) -- no current
-    // data combines ALL-mode with colored pay (the only ALL-mode CHANGEs, MAP003/004/005, pay K), and
-    // estimating a shared Z pool's contribution across multiple simultaneous items here would need
-    // real combinatorial care to avoid over-counting the same Z twice.
-    const maxAffordable = Math.min(
-      ...pay.map((item) => {
-        const dieKind = DICE_KIND_BY_RESOURCE[item.resource];
-        const have = dieKind
-          ? player.dice.filter((d) => d.kind === dieKind).length
-          : player.resources[item.resource] || 0;
-        return Math.floor(have / item.count);
-      })
-    );
-    times = context.chosenTimes !== undefined ? Math.min(context.chosenTimes, maxAffordable) : maxAffordable;
+    times = context.chosenTimes !== undefined ? Math.min(context.chosenTimes, maxAffordable()) : maxAffordable();
 
     // CONVERT_LIMIT(ALL,n) (CON003B: "資源を交換するときの上限4個"): a PASSIVE cap on how many times a
     // single ALL-based CHANGE may execute -- PER CHANGE, with nothing carried between them.
@@ -587,8 +604,8 @@ function runChange(state, index, context, cmd) {
     //     That scoping dates from when those AREAs held the only ALL-CHANGEs in the data; C001B/C002B/
     //     C003B's TAPs became CHANGE(K,x,ALL) on 2026-08-05 and were therefore uncapped, contradicting
     //     the same example. The flag is gone entirely -- every ALL-based CHANGE is capped now.
-    // Fixed-count CHANGEs (CHANGE(K,A,2) etc.) and the built-in free actions remain unaffected: the
-    // former take the 'literal' branch above, the latter never reach runChange at all.
+    // 'literal'/'capped'-kind CHANGEs and the built-in free actions remain unaffected: this PASSIVE only
+    // ever reads the 'all' branch (see this rule's own loop, right here), never runs for the other two.
     for (const rule of getPassiveRules(state, index, context.playerId, 'CONVERT_LIMIT')) {
       times = Math.min(times, Math.max(0, rule.limit));
     }
