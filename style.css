@@ -311,10 +311,88 @@ h1, h2, h3 { margin: 0; }
   flex: 0 0 auto;
 }
 
+/* Live standings table (2026-08-11, per user request: "空いたスペースに順位表を作りたい") -- fills the
+   leftover cells of the shop grid's special row, beside SHOP201-203. Exactly 4 equal quarters, 2x2:
+   fixed 1fr tracks with each cell's text clipped rather than allowed to size it, so the dividing lines
+   never move with the content ("4分割は　中の内容で分割位置をかえない").
+
+   Height is taken entirely from the grid row it shares with SHOP201-203 (grid items stretch by default),
+   so once the round-2 cards are revealed the panel is exactly as tall as they are ("縦幅は　2Rのカードが
+   置かれたときの縦幅とたいたい同じに"). Deliberately NO min-height: an earlier 150px one was 8px taller
+   than those cards' natural 142px and so quietly grew the whole shop block by 7px. Its own content
+   (2 text rows) is far shorter than any card, so the panel can never be what sets the row height --
+   align-content centers it in whatever space the row gives. See main.js's buildStandingsPanelNode. */
+.standings-panel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto auto;
+  gap: 6px 8px;
+  align-content: center;
+  padding: 8px 10px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+/* 12px / 4px gaps rather than something roomier: a quarter of this space is only ~160px wide, and one
+   line has to hold 位/swatch/name/VP/(+QST) at once -- at 13px with 5px gaps the trailing "（+0）" was
+   already clipping on the right-hand column for a name as ordinary as "Carol". */
+.standings-panel__cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0; /* lets the name below actually clip instead of widening the track */
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.standings-panel__place {
+  font-weight: 700;
+  color: var(--text);
+  flex: 0 0 auto;
+}
+
+.standings-panel__swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+.standings-panel__swatch[data-color="PINK"] { background: var(--player-pink); }
+.standings-panel__swatch[data-color="PURPLE"] { background: var(--player-purple); }
+.standings-panel__swatch[data-color="GREEN"] { background: var(--player-green); }
+.standings-panel__swatch[data-color="ORANGE"] { background: var(--player-orange); }
+
+/* The one flexible part of the cell: a long name gives up space (and ellipsises) rather than pushing the
+   score out of view or stretching the quarter. */
+.standings-panel__name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+
+.standings-panel__vp {
+  font-weight: 700;
+  color: var(--text);
+  flex: 0 0 auto;
+}
+
+/* QST projection, deliberately quieter than the real score beside it -- it's "what you'd also get if the
+   game ended now", not points already banked. */
+.standings-panel__qst {
+  color: var(--text-muted);
+  font-size: 11px;
+  flex: 0 0 auto;
+}
+
 /* Confirmed 2026-07-30: SHOP101-106 and SHOP201-203 share one 6-column grid (SHOP201-203 sit
-   directly under SHOP101/103/105, row 2, via explicit grid-column/grid-row set in JS -- see
-   renderShopGrid) instead of the old separate side-by-side layout. The "大型カード ラウンド2から"
-   heading that used to label the special column has been removed entirely (no replacement). */
+   directly under whichever SHOP10x shares their dice range, row 3, via explicit grid-column/grid-row
+   set in JS -- see renderShopGrid) instead of the old separate side-by-side layout. The "大型カード
+   ラウンド2から" heading that used to label the special column has been removed entirely. */
 .shop-row__grid {
   display: grid;
   grid-template-columns: repeat(6, 1fr);

@@ -1801,6 +1801,41 @@ function questRewardValueText(rewardDsl) {
   return match[1].split(',').map((part) => (/^[A-Z]/.test(part.trim()) ? `1${part.trim()}` : part.trim())).join('+');
 }
 
+/** How much VP a REWARD cell actually grants, as a number (questRewardValueText's numeric counterpart --
+ * that one formats "ADD(4VP)" for display, this one answers "4"). Parsed through the real DSL pipeline
+ * rather than by regex so an unusual reward shape can't silently mis-total; anything that isn't a
+ * literal-count VP grant contributes 0. Used by the standings panel's QST projection below. */
+function questRewardVpAmount(rewardDsl) {
+  if (!rewardDsl) return 0;
+  let vp = 0;
+  for (const cmd of commandBuilderMod.lowerProgram(dslParserMod.parse(rewardDsl))) {
+    if (cmd.type !== 'ADD') continue;
+    for (const item of cmd.items) {
+      if (item.resource === 'VP' && item.count.kind === 'literal') vp += item.count.value;
+    }
+  }
+  return vp;
+}
+
+/** VP this player would collect from QST cards if the game ended right now -- the parenthesised "(+8)"
+ * figure in the standings panel (2026-08-11, per user request: "カッコ内はQSTカードのVP").
+ *
+ * A projection, not a balance: QST rewards are only actually granted at GAME_END
+ * (qst.resolveEndGameRewards), so a "current QST VP" reading would sit at 0 for the entire game and tell
+ * the player nothing. Recomputed from the live standings each render via the same
+ * qst.rankPlayersForQuest every other QST display uses, so it moves as the rankings do -- and once the
+ * game really does end, state.qstRewardsGranted holds the settled amount and standingsRows uses that
+ * instead (see its own comment), so the number never contradicts what was actually awarded. */
+function projectedQstVpForPlayer(state, playerId) {
+  let total = 0;
+  for (const faceId of Object.keys(state.quests || {})) {
+    const entry = qstMod.rankPlayersForQuest(state, INDEX, faceId).find((r) => r.playerId === playerId);
+    if (!entry || entry.rank > qstMod.REWARD_FIELDS.length) continue;
+    total += questRewardVpAmount(dataLoaderMod.getQstRow(INDEX, faceId)[qstMod.REWARD_FIELDS[entry.rank - 1]]);
+  }
+  return total;
+}
+
 /** Static preview fill for QST's back face (the sibling face -- see siblingFaceId): id + GOAL +
  * plain REWARD1/2/3 value labels. There's no live quest state for a face that was never actually
  * revealed this game, so this is informational only (matches CON/A/B/C's click-to-flip preview, which
@@ -1990,14 +2025,82 @@ function renderShopGrid(state) {
   for (const [slotId, faceId] of Object.entries(state.shops.NORMAL.slots)) {
     container.appendChild(buildShopSlotNode(slotId, faceId, true));
   }
+  const specialColumns = [];
   Object.entries(state.shops.SPECIAL.slots).forEach(([slotId, faceId], i) => {
     const node = buildShopSlotNode(slotId, faceId, false); // no req caption -- see buildShopSlotNode
     // Falls back to left-to-right order if the dice ranges don't line up, so a data change can never
     // make a special slot vanish -- it just sits somewhere less meaningful until the data is fixed.
     node.style.gridColumn = String(specialSlotGridColumn(state, slotId) || (i + 1));
     node.style.gridRow = '3';
+    specialColumns.push(Number(node.style.gridColumn));
     container.appendChild(node);
   });
+
+  // Standings panel fills whatever's left of row 3 (2026-08-11, per user request: "空いたスペースに順位表
+  // を作りたい") -- the special cards moved to columns 1-3 when their dice ranges changed, leaving 4-6
+  // free. Spanned from one past the rightmost special cell to the grid's end rather than a literal
+  // "4 / -1", so it keeps filling exactly the leftover space if those cards ever shift again (same
+  // reasoning as specialSlotGridColumn itself). Skipped entirely before round 1 actually starts, when
+  // every score is 0 and there's no turnOrder to break the ties with, so the table would be noise.
+  if (state.round >= 1) {
+    const firstFreeColumn = (specialColumns.length ? Math.max(...specialColumns) : 0) + 1;
+    const panel = buildStandingsPanelNode(state);
+    panel.style.gridColumn = `${firstFreeColumn} / -1`;
+    panel.style.gridRow = '3';
+    container.appendChild(panel);
+  }
+}
+
+/** Live standings, ordered exactly the way the game's own final scoring orders players: current score
+ * descending, ties broken by position in the CURRENT round's turnOrder (2026-08-11, per user: "現在のVP
+ * で表示　同じときは今のラウンドのスタプレ順" -- which is also the real tie-break rule from
+ * [[project-dice-wp-flow-spec]], so scoring.rankPlayers already does precisely this and is reused rather
+ * than re-sorted here). Tied players still get distinct sequential places (1位/2位, not "both 1位"),
+ * matching the user's own worked example of two players on 3VP.
+ *
+ * The `vp` field deliberately EXCLUDES QST rewards so it never double-counts the parenthesised qstVp
+ * beside it. During play that's automatic (QST VP isn't granted until GAME_END, so computeFinalScore
+ * can't include it yet); once the game ends, resolveEndGameRewards has folded the real award into
+ * player.resources.VP, so it's subtracted back out here -- the same split tools/ai_data_report.js uses
+ * for its own QST-excluded averages.
+ * @returns {{playerId, name, color, place, vp, qstVp}[]}
+ */
+function standingsRows(state) {
+  const granted = state.qstRewardsGranted || {};
+  return scoringMod.rankPlayers(state, INDEX).map((entry, i) => {
+    const player = state.players.find((p) => p.id === entry.playerId);
+    const grantedQstVp = granted[entry.playerId] || 0;
+    return {
+      playerId: entry.playerId,
+      name: player.name,
+      color: player.color,
+      place: i + 1,
+      vp: entry.score - grantedQstVp,
+      qstVp: state.phase === 'GAME_END' ? grantedQstVp : projectedQstVpForPlayer(state, entry.playerId),
+    };
+  });
+}
+
+/** The standings panel: one fixed quarter per player, 2x2 (per user: "空いたスペースを4分割して表示",
+ * and "4分割は　中の内容で分割位置をかえない" -- the quarters are equal fr units with their text clipped
+ * rather than content-sized, so a longer name or a 2-digit score can never move the dividing lines). */
+function buildStandingsPanelNode(state) {
+  const panel = el('div', 'standings-panel');
+  for (const row of standingsRows(state)) {
+    const cell = el('div', 'standings-panel__cell');
+    cell.appendChild(el('span', 'standings-panel__place', `${row.place}位`));
+    const swatch = el('span', 'standings-panel__swatch');
+    swatch.dataset.color = row.color;
+    cell.appendChild(swatch);
+    cell.appendChild(el('span', 'standings-panel__name', row.name));
+    cell.appendChild(el('span', 'standings-panel__vp', `${row.vp}VP`));
+    // Parenthesised QST projection -- see projectedQstVpForPlayer. Rendered even at 0 so the four cells
+    // stay identical in shape (a cell that sometimes drops a element is exactly what would shift the
+    // fixed quarters' contents around).
+    cell.appendChild(el('span', 'standings-panel__qst', `（+${row.qstVp}）`));
+    panel.appendChild(cell);
+  }
+  return panel;
 }
 
 function colorForPlayer(state, playerId) {
