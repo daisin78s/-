@@ -27,10 +27,10 @@
  *    case but not the exact ratio, so this is an assumption to revisit.
  *  - CHANGE(...,ALL) picks the max affordable execution count unless the
  *    caller passes context.chosenTimes, further capped by any active
- *    CONVERT_LIMIT(ALL,n) PASSIVE rule when context.convertLimitEligible is
- *    set (board.js's placeDice sets this only for AREA003/004/005, per the
- *    confirmed AREA-specific scoping) -- a whole-game cumulative counter
- *    lives in state.passiveCounters, keyed "playerId:CONVERT_LIMIT:scope".
+ *    CONVERT_LIMIT(ALL,n) PASSIVE rule. That cap is PER CHANGE and applies to
+ *    every ALL-based CHANGE (corrected 2026-08-11 -- see runChange's own doc
+ *    for the two things this replaced: a whole-game cumulative counter, and
+ *    an AREA003/004/005-only scope).
  */
 
 'use strict';
@@ -571,17 +571,23 @@ function runChange(state, index, context, cmd) {
     );
     times = context.chosenTimes !== undefined ? Math.min(context.chosenTimes, maxAffordable) : maxAffordable;
 
-    // CONVERT_LIMIT(ALL,n) (confirmed 2026-07-29): a PASSIVE, whole-game cumulative cap on ALL-based
-    // CHANGEs, but ONLY for the ones triggered by AREA003/004/005 (board.js flags this via
-    // context.convertLimitEligible -- it's the only thing that knows which AREA fired this CHANGE).
-    // Fixed-count CHANGEs and free actions are unaffected regardless of this flag.
-    if (context.convertLimitEligible) {
-      const convertLimitRules = getPassiveRules(state, index, context.playerId, 'CONVERT_LIMIT');
-      for (const rule of convertLimitRules) {
-        const counterKey = `${context.playerId}:CONVERT_LIMIT:${rule.scope}`;
-        const used = state.passiveCounters[counterKey] || 0;
-        times = Math.min(times, Math.max(0, rule.limit - used));
-      }
+    // CONVERT_LIMIT(ALL,n) (CON003B: "資源を交換するときの上限4個"): a PASSIVE cap on how many times a
+    // single ALL-based CHANGE may execute -- PER CHANGE, with nothing carried between them.
+    //
+    // Corrected 2026-08-11, per the user restating the intended rule ("意図した制限は一回のCHANGEでMAX4個
+    // までしか交換できない"): this used to subtract a whole-game cumulative counter
+    // (state.passiveCounters), so a player's FIRST ALL-CHANGE spent the entire allowance and every later
+    // one in the game was capped at 0. Two separate changes fixed it:
+    //  1. No counter at all -- each CHANGE is measured on its own, so the user's own example works:
+    //     10K, same turn, C001B's TAP and a die on AREA003A -> 4 each (8 K converted overall).
+    //  2. No longer gated on context.convertLimitEligible, which board.js only set for MAP003/004/005.
+    //     That scoping dates from when those AREAs held the only ALL-CHANGEs in the data; C001B/C002B/
+    //     C003B's TAPs became CHANGE(K,x,ALL) on 2026-08-05 and were therefore uncapped, contradicting
+    //     the same example. The flag is gone entirely -- every ALL-based CHANGE is capped now.
+    // Fixed-count CHANGEs (CHANGE(K,A,2) etc.) and the built-in free actions remain unaffected: the
+    // former take the 'literal' branch above, the latter never reach runChange at all.
+    for (const rule of getPassiveRules(state, index, context.playerId, 'CONVERT_LIMIT')) {
+      times = Math.min(times, Math.max(0, rule.limit));
     }
   }
 
@@ -606,12 +612,8 @@ function runChange(state, index, context, cmd) {
     // fix (below) is untouched.
     grantResourceAndEmitGet(state, index, context, item.resource, item.count * times);
   }
-  if (cmd.times.kind === 'all' && context.convertLimitEligible) {
-    for (const rule of getPassiveRules(state, index, context.playerId, 'CONVERT_LIMIT')) {
-      const counterKey = `${context.playerId}:CONVERT_LIMIT:${rule.scope}`;
-      state.passiveCounters[counterKey] = (state.passiveCounters[counterKey] || 0) + times;
-    }
-  }
+  // (No CONVERT_LIMIT bookkeeping here any more -- the cap is per-CHANGE, so there's nothing to carry
+  // forward. See the cap itself above.)
   return { success: true, timesExecuted: times };
 }
 

@@ -343,8 +343,10 @@ function giveDie(state, playerId, value) {
 // ---------------------------------------------------------------------------
 // CONVERT_LIMIT(ALL,n) actually gets applied end-to-end through placeDice:
 // AREA003A.ACTION=CHANGE(K,A,ALL), CON003B.PASSIVE=CONVERT_LIMIT(ALL,4).
-// (Executor-level capping logic itself is covered in executor.smoke.js;
-// this only checks board.js correctly flags MAP003 as eligible.)
+// (The capping logic itself is covered in executor.smoke.js; this checks it
+// really reaches a CHANGE fired by a die placement.) The cap is per-CHANGE as
+// of 2026-08-11, so a SECOND placement gets its own fresh 4 -- which is the
+// user's own worked example, spread across two AREAs.
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
@@ -359,7 +361,14 @@ function giveDie(state, playerId, value) {
   const result = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP003', 0);
   check('Placing on MAP003 (CHANGE(K,A,ALL) + CONVERT_LIMIT(4)) succeeds', result.success, true);
   check('Only 4 conversions happened despite 20K on hand (CONVERT_LIMIT applied via placeDice)', p1.resources.A, 4);
-  check('Cumulative counter was updated', state.passiveCounters['P1:CONVERT_LIMIT:ALL'], 4);
+  check('Nothing accumulated into passiveCounters (the cap is per-CHANGE now)', state.passiveCounters['P1:CONVERT_LIMIT:ALL'], undefined);
+
+  // A second, separate ALL-CHANGE placement -- MAP004 is AREA004A's CHANGE(K,B,ALL), whose SLOT1 wants a 4.
+  const die2 = giveDie(state, 'P1', 4);
+  const result2 = board.placeDice(state, index, { playerId: 'P1' }, die2.id, 'MAP004', 0);
+  check('A second ALL-CHANGE placement also succeeds', result2.success, true);
+  check('...and gets its own full 4 conversions, not 0 (per-CHANGE cap)', p1.resources.B, 4);
+  check('8K total spent across the two placements', p1.resources.K, 12);
 }
 
 // ---------------------------------------------------------------------------

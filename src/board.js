@@ -47,8 +47,11 @@ const CASTLE_MAP_ID = 'MAP008';
 /** The one other map with its own same-value stacking exception, scoped to its EX slot(s) only
  * (2026-08-04, per user feedback -- see the EX handling in placeDice's own doc). */
 const AREA009_MAP_ID = 'MAP009';
-/** CONVERT_LIMIT(ALL,n) (confirmed 2026-07-29) applies only to ALL-based CHANGEs from these 3 AREAs. */
-const CONVERT_LIMIT_ELIGIBLE_MAP_IDS = ['MAP003', 'MAP004', 'MAP005'];
+// (CONVERT_LIMIT_ELIGIBLE_MAP_IDS lived here until 2026-08-11 -- it restricted CONVERT_LIMIT(ALL,n) to
+// AREA003/004/005's own CHANGEs. That scope was written when those AREAs held the only ALL-based CHANGEs
+// in the data; C001B/C002B/C003B's TAPs became ALL-based later and were left uncapped, which contradicted
+// the rule's actual intent. The cap now applies to every ALL-based CHANGE, so board.js no longer has to
+// tell executor.js which AREA fired one -- see executor.js's runChange.)
 
 /** Usage fee owed by a non-owner who uses a tier-B/C AREA (confirmed: "tier Bは一律1K...tier Cは一律2K",
  * a flat system rule, not per-AREA data). Tier A has no fee. */
@@ -221,10 +224,7 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
   // in lockstep with the post-commit math it replaced).
   const buildValue = predictedBuildValueForPlacement(mapId, isExSlot, targetOccupants, die.value);
 
-  // CONVERT_LIMIT(ALL,n) (confirmed 2026-07-29) only applies to ALL-based CHANGEs triggered from
-  // these 3 AREAs -- only placeDice knows which AREA is being resolved, so it's the one place that
-  // can set this; executor.js's runChange reads it back off context.
-  const actionContext = { ...context, convertLimitEligible: CONVERT_LIMIT_ELIGIBLE_MAP_IDS.includes(mapId) };
+  const actionContext = context;
 
   // Refuse the placement outright if it wouldn't actually do anything (2026-08-0X, per user feedback:
   // "効果を得られない時ダイスの配置不可にして" -- e.g. AREA003A's CHANGE(K,A,ALL) with 0 K on hand, or
@@ -572,7 +572,7 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
 
   // Everything fits and can lead somewhere -- commit for real.
   const touchedSlots = new Set();
-  const actionContext = { ...context, convertLimitEligible: CONVERT_LIMIT_ELIGIBLE_MAP_IDS.includes(mapId) };
+  const actionContext = context;
   for (const die of dice) {
     const slotIndex = slotForDie.get(die.id);
     state.placementSeq += 1;
@@ -907,7 +907,6 @@ function restockShop(state, shopKey) {
 module.exports = {
   CASTLE_MAP_ID,
   AREA009_MAP_ID,
-  CONVERT_LIMIT_ELIGIBLE_MAP_IDS,
   getSlotRequirements,
   slotAcceptsValue,
   placeDice,

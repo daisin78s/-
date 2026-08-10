@@ -357,10 +357,11 @@ console.log(`\n${passCount} passed, ${failCount} failed`);
 function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 
 // ---------------------------------------------------------------------------
-// 14. CONVERT_LIMIT(ALL,n): whole-game cumulative cap on ALL-based CHANGEs,
-//     only when context.convertLimitEligible is set (board.js's job to set
-//     this for AREA003/004/005 -- see tests/board.smoke.js for that half).
-//     Not round-scoped: the cap persists across separate calls.
+// 14. CONVERT_LIMIT(ALL,n): a PER-CHANGE cap on ALL-based CHANGEs -- each one is measured on its own,
+//     with nothing carried between them, and it applies to EVERY ALL-based CHANGE regardless of what
+//     triggered it (corrected 2026-08-11, per the user: "意図した制限は一回のCHANGEでMAX4個までしか交換
+//     できない" -- it used to subtract a whole-game cumulative counter, and only applied to
+//     AREA003/004/005). Fixed-count CHANGEs stay unaffected.
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
@@ -370,16 +371,40 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 
   const changeAllK2A = { type: 'CHANGE', pay: [{ resource: 'K', count: { kind: 'literal', value: 1 } }], gain: [{ resource: 'A', count: { kind: 'literal', value: 1 } }], times: { kind: 'all' } };
 
-  const first = executor.runCommand(state, index, { playerId: 'P1', convertLimitEligible: true }, changeAllK2A);
-  check('First eligible ALL-conversion is capped at the CONVERT_LIMIT(4) even though 20K is affordable', first.timesExecuted, 4);
-  check('Cumulative counter now reads 4', state.passiveCounters['P1:CONVERT_LIMIT:ALL'], 4);
+  const first = executor.runCommand(state, index, { playerId: 'P1' }, changeAllK2A);
+  check('An ALL-conversion is capped at CONVERT_LIMIT(4) even though 20K is affordable', first.timesExecuted, 4);
+  check('...spending exactly 4K', player.resources.K, 16);
 
-  const second = executor.runCommand(state, index, { playerId: 'P1', convertLimitEligible: true }, changeAllK2A);
-  check('A second eligible call, after the limit is already used up, executes 0 times', second.timesExecuted, 0);
+  // The user's own worked example: 10K, same turn, two separate ALL-CHANGEs (C001B's TAP and a die on
+  // AREA003A) -> 4 each, NOT 4 total.
+  const second = executor.runCommand(state, index, { playerId: 'P1' }, changeAllK2A);
+  check('A SECOND ALL-conversion gets its own full 4 (no cumulative carry-over)', second.timesExecuted, 4);
+  const third = executor.runCommand(state, index, { playerId: 'P1' }, changeAllK2A);
+  check('...and so does a third', third.timesExecuted, 4);
+  check('12K spent across the three, 8 left', player.resources.K, 8);
+  check('Nothing is accumulated into passiveCounters any more', state.passiveCounters['P1:CONVERT_LIMIT:ALL'], undefined);
 
-  const remainingK = player.resources.K; // 16 (20 - 4 spent in the first call)
-  const notEligible = executor.runCommand(state, index, { playerId: 'P1' }, changeAllK2A); // no convertLimitEligible flag
-  check('The SAME command WITHOUT the eligibility flag ignores CONVERT_LIMIT entirely (e.g. ONCE/TAP context)', notEligible.timesExecuted, remainingK);
+  // Still capped by affordability when that is the smaller of the two.
+  player.resources.K = 3;
+  const short = executor.runCommand(state, index, { playerId: 'P1' }, changeAllK2A);
+  check('Below the cap, affordability still decides (3K -> 3 executions)', short.timesExecuted, 3);
+}
+{
+  // A fixed-count CHANGE takes the 'literal' branch and is never touched by CONVERT_LIMIT.
+  const state = freshState();
+  giveCard(state, 'CON003B', 'P1');
+  getPlayerRef(state, 'P1').resources.K = 20;
+  const changeSixTimes = { type: 'CHANGE', pay: [{ resource: 'K', count: { kind: 'literal', value: 1 } }], gain: [{ resource: 'A', count: { kind: 'literal', value: 1 } }], times: { kind: 'literal', value: 6 } };
+  const result = executor.runCommand(state, index, { playerId: 'P1' }, changeSixTimes);
+  check('A fixed-count CHANGE(K,A,6) is NOT capped by CONVERT_LIMIT(ALL,4)', result.timesExecuted, 6);
+}
+{
+  // Without the CON003B PASSIVE there's no cap at all -- the whole 20K converts.
+  const state = freshState();
+  getPlayerRef(state, 'P1').resources.K = 20;
+  const changeAllK2A = { type: 'CHANGE', pay: [{ resource: 'K', count: { kind: 'literal', value: 1 } }], gain: [{ resource: 'A', count: { kind: 'literal', value: 1 } }], times: { kind: 'all' } };
+  const result = executor.runCommand(state, index, { playerId: 'P1' }, changeAllK2A);
+  check('With no CONVERT_LIMIT PASSIVE owned, an ALL-conversion is limited only by affordability', result.timesExecuted, 20);
 }
 
 // ---------------------------------------------------------------------------
