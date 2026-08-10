@@ -79,14 +79,27 @@ const STATE = createInitialState();
 // planning), or 'AI_LV2' (lookaheadExtraTurns:1, see ai-player.js's own doc for what that buys and
 // costs: a real game now takes on the order of a minute instead of ~10s). Both AI levels share the same
 // stateless MoveGenerator/Evaluator/Simulator instances (only the AIPlayer wrapper differs), same as
-// game-runner.js's own pattern for AI-vs-AI batch games. Defaults to P1-human, everyone else AI_LV2
-// (matching AIPlayer's own default before this split existed); renderPlayerRoleControl lets the human
-// change any seat's role at any time, including mid-game -- this is purely a UI-driving concern (which
-// player's turn gets a click-through vs an automatic driveOneAiStep), not part of GameState itself, so
-// there's nothing structurally stopping a mid-game switch.
+// game-runner.js's own pattern for AI-vs-AI batch games. Defaults to P1-human, everyone else the
+// strongest AI level currently defined (DEFAULT_AI_ROLE below -- was a flat AI_LV2 default until
+// 2026-08-11, per user request: "デフォルトのAILVを3にして　今後デフォルトは一番高いAILVを選択して
+// ください"); renderPlayerRoleControl lets the human change any seat's role at any time, including
+// mid-game -- this is purely a UI-driving concern (which player's turn gets a click-through vs an
+// automatic driveOneAiStep), not part of GameState itself, so there's nothing structurally stopping a
+// mid-game switch.
 // ---------------------------------------------------------------------------
 
-const playerRoles = new Map([['P1', 'HUMAN'], ['P2', 'AI_LV2'], ['P3', 'AI_LV2'], ['P4', 'AI_LV2']]);
+// Ascending strength order (HUMAN first, then every AI level weakest-to-strongest) -- shared by
+// renderPlayerRoleControl's toggle buttons and DEFAULT_AI_ROLE below, so the two can never drift apart
+// the way two separately-hardcoded copies eventually would. Adding a future AI_LV4/5/... only ever means
+// appending one more [id, label] entry here, in order -- everything that cares "which level is strongest"
+// (right now, just the default below) then already sees it with no further edits.
+const PLAYER_ROLE_OPTIONS = [['HUMAN', '人間'], ['AI_LV1', 'AI LV1'], ['AI_LV2', 'AI LV2'], ['AI_LV3', 'AI LV3']];
+// The strongest AI level currently defined -- the last entry in PLAYER_ROLE_OPTIONS (2026-08-11, per user
+// request: "デフォルトのAILVを3にして　今後デフォルトは一番高いAILVを選択してください"). Was a hardcoded
+// 'AI_LV2' before LV3 existed; now derived so it keeps pointing at whichever level is actually strongest
+// without needing to be hand-updated again the next time one is added.
+const DEFAULT_AI_ROLE = PLAYER_ROLE_OPTIONS[PLAYER_ROLE_OPTIONS.length - 1][0];
+const playerRoles = new Map([['P1', 'HUMAN'], ['P2', DEFAULT_AI_ROLE], ['P3', DEFAULT_AI_ROLE], ['P4', DEFAULT_AI_ROLE]]);
 function isAiPlayer(playerId) { return playerRoles.get(playerId) !== 'HUMAN'; }
 
 const aiEvalTable = evalTableMod.buildEvalTable(INDEX.raw);
@@ -4008,7 +4021,7 @@ function renderPlayerRoleControl(state) {
 
     const optionsLine = el('div', 'player-role-control__options-line');
     const currentRole = playerRoles.get(player.id);
-    for (const [role, label] of [['HUMAN', '人間'], ['AI_LV1', 'AI LV1'], ['AI_LV2', 'AI LV2'], ['AI_LV3', 'AI LV3']]) {
+    for (const [role, label] of PLAYER_ROLE_OPTIONS) {
       const btn = el('button', 'player-role-control__option', label);
       btn.type = 'button';
       btn.classList.toggle('player-role-control__option--active', currentRole === role);
