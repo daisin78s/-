@@ -60,6 +60,26 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 }
 
 // ---------------------------------------------------------------------------
+// 1b. Usage fee is paid BEFORE RESOURCE_LIMIT's auto-discard (2026-08-11, per user report on CON001A:
+//     "現在　上限7K→使用料を払う　になっています　使用料を払う→上限7K　に直してください" -- it used to
+//     be the other way round, which wasted K to the discard that should have gone toward the fee
+//     instead). 10K, CON001A's cap-7, and a 2K pending fee: paying first (10-2=8K) then capping (8-1=7K)
+//     ends higher than capping first (10-3=7K) then paying (7-2=5K) would have.
+// ---------------------------------------------------------------------------
+{
+  const state = freshState();
+  state.maps['MAP001'] = createMapState('MAP001', 'AREA001A');
+  giveCard(state, 'CON001A', 'P1');
+  const player = getPlayerRef(state, 'P1');
+  player.resources.K = 10;
+  player.pendingFee = { mapId: 'MAP001', amount: 2 };
+  executor.applyTurnEnd(state, index, 'P1');
+  check('Usage fee paid first, THEN capped to 7 (10-2=8, capped to 7) -- not capped-then-paid (would be 5)', getPlayerRef(state, 'P1').resources.K, 7);
+  check('...and the fee itself was actually collected (pendingFee cleared)', getPlayerRef(state, 'P1').pendingFee, null);
+  check('...landing on the map as accumulatedFee', state.maps['MAP001'].accumulatedFee, 2);
+}
+
+// ---------------------------------------------------------------------------
 // 2. CON002A: PASSIVE=REPLACE_ADD(D,wD) forces ADD(D) -> ADD(wD)
 // ---------------------------------------------------------------------------
 {

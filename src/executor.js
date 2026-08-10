@@ -961,6 +961,20 @@ function canEndTurn(state, index, playerId) {
 /** Applies RESOURCE_LIMIT (auto-discard) and FORCE_CONVERT rules. Call after canEndTurn().ok is true. */
 function applyTurnEnd(state, index, playerId) {
   const player = getPlayer(state, playerId);
+  // Usage fee first, before RESOURCE_LIMIT/FORCE_CONVERT below (2026-08-11, per user report on CON001A:
+  // "現在　上限7K→使用料を払う　になっています　使用料を払う→上限7K　に直してください"). Paying the fee
+  // out of K before RESOURCE_LIMIT auto-discards down to a cap spends that K productively; discarding
+  // first (the old order) wasted it instead -- e.g. 10K with CON001A's cap-7 and a 2K fee owed used to
+  // discard 3K down to the cap first, then pay the fee out of what was left (7-2=5K final); paying first
+  // instead spends 2K toward the fee (10-2=8K), and only then discards down to the cap (8-1=7K final) --
+  // 2K less needlessly lost to the discard. canEndTurn() already guaranteed affordability before this
+  // ever runs, so this is just the mutation half of that gate-then-mutate pair (same contract as
+  // RESOURCE_TOTAL_LIMIT/RESOURCE_LIMIT below).
+  if (player.pendingFee) {
+    player.resources.K -= player.pendingFee.amount;
+    state.maps[player.pendingFee.mapId].accumulatedFee += player.pendingFee.amount;
+    player.pendingFee = null;
+  }
   for (const { row } of ownedCardRows(state, index, playerId)) {
     if (!row.TURNEND) continue;
     for (const cmd of lowerProgram(parse(row.TURNEND))) {
@@ -993,15 +1007,6 @@ function applyTurnEnd(state, index, playerId) {
   player.resources.BZ = 0;
   // BLOCK_BUILD(category,THIS_TURN) is turn-scoped too (see runBlockBuild).
   player.blockedBuildCategoriesThisTurn = [];
-  // Usage fee (2026-08-04, fixing a gap where board.js set PlayerState.pendingFee but nothing ever
-  // collected it -- see pendingFee's own doc). canEndTurn() already guaranteed affordability above, so
-  // this is just the mutation half of that same gate-then-mutate pair (same contract as
-  // RESOURCE_TOTAL_LIMIT).
-  if (player.pendingFee) {
-    player.resources.K -= player.pendingFee.amount;
-    state.maps[player.pendingFee.mapId].accumulatedFee += player.pendingFee.amount;
-    player.pendingFee = null;
-  }
 }
 
 // ---------------------------------------------------------------------------
