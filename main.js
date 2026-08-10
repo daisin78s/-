@@ -385,6 +385,9 @@ function pumpAiDelayed() {
 // length-1 case of the same array -- no separate code path.
 let selectedDieIds = [];
 let placementMessage = '';
+// Static text for GameState.whiteOverflowEvents (2026-08-11, per user request) -- see render()'s own
+// drain of that array, right below this declaration's use site.
+const WHITE_OVERFLOW_WARNING_TEXT = '白ダイスの所有上限は5個です。それを超えたものは2Kに変換されます。';
 // playerId | null -- set by advanceTurnIfPossible when RESOURCE_TOTAL_LIMIT blocks ending that
 // player's turn (their die is already placed; only their resource total is in the way), cleared once
 // it actually succeeds. Lets the free-action click handler below retry ending the turn immediately
@@ -3851,6 +3854,17 @@ function render(state) {
   renderPlayers(state, next);
   renderJobPool(state, next);
   renderPlayerCards(state, next);
+  // Drains GameState.whiteOverflowEvents into whatever placementMessage this render's own action
+  // already produced (2026-08-11, per user request) -- appended, not replacing, so a placement that
+  // both fails/succeeds AND happens to overflow a white die (e.g. a CHANGE granting several wD at once,
+  // one of which overflows) still shows both. Reuses placementMessage's own display slot/lifecycle
+  // rather than a separate one: it already persists across unrelated re-renders (nothing here clears it
+  // early) and naturally gets replaced the next time any action sets a new message -- exactly the
+  // "shown until something else happens" behaviour this warning wants, for free.
+  if (state.whiteOverflowEvents.length > 0) {
+    placementMessage = placementMessage ? `${placementMessage}　${WHITE_OVERFLOW_WARNING_TEXT}` : WHITE_OVERFLOW_WARNING_TEXT;
+    state.whiteOverflowEvents = [];
+  }
   document.getElementById('board-message').textContent = placementMessage;
   renderBuildChoiceModal();
   renderPlacementChoiceModal();

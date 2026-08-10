@@ -357,6 +357,30 @@ console.log(`\n${passCount} passed, ${failCount} failed`);
 function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 
 // ---------------------------------------------------------------------------
+// 13b. A white die granted past whiteDiceCap (5) converts to 2K instead (unrelated to the ADD-rolls-
+//     immediately rule above -- this is the always-on overflow rule, see FREE_ACTION_IDS' own comment)
+//     and records the event on GameState.whiteOverflowEvents for main.js's warning banner (2026-08-11,
+//     per user request: "白Dを得たとき上限の5個を超えて得たとき...という警告文が表示されるようにして
+//     ほしい"). The array starts empty and is otherwise untouched by ordinary play.
+// ---------------------------------------------------------------------------
+{
+  const state = freshState();
+  check('whiteOverflowEvents starts empty', state.whiteOverflowEvents, []);
+  const player = getPlayerRef(state, 'P1');
+  for (let i = 0; i < 5; i++) player.dice.push(createDie(`preexisting-w${i}`, 'WHITE'));
+  const kBefore = player.resources.K;
+  executor.runCommand(state, index, { playerId: 'P1' }, { type: 'ADD', items: [{ resource: 'wD', count: { kind: 'literal', value: 1 } }] });
+  check('At the 5-die cap, a 6th wD grant does not add a 6th die', getPlayerRef(state, 'P1').dice.filter((d) => d.kind === 'WHITE').length, 5);
+  check('...it converts to 2K instead', getPlayerRef(state, 'P1').resources.K, kBefore + 2);
+  check('...and is recorded on whiteOverflowEvents', state.whiteOverflowEvents, ['P1']);
+
+  // Below the cap, granting a wD normally does NOT touch whiteOverflowEvents.
+  const state2 = freshState();
+  executor.runCommand(state2, index, { playerId: 'P1' }, { type: 'ADD', items: [{ resource: 'wD', count: { kind: 'literal', value: 1 } }] });
+  check('A normal (non-overflow) wD grant leaves whiteOverflowEvents empty', state2.whiteOverflowEvents, []);
+}
+
+// ---------------------------------------------------------------------------
 // 14. CONVERT_LIMIT(ALL,n): a PER-CHANGE cap on ALL-based CHANGEs -- each one is measured on its own,
 //     with nothing carried between them, and it applies to EVERY ALL-based CHANGE regardless of what
 //     triggered it (corrected 2026-08-11, per the user: "意図した制限は一回のCHANGEでMAX4個までしか交換

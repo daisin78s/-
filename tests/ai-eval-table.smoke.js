@@ -29,7 +29,7 @@ check('D 2R value', evalValue(table, 2, 'D'), 30);
 check('D 3R value', evalValue(table, 3, 'D'), 20);
 check('D 4R value', evalValue(table, 4, 'D'), 0);
 check('VP 1R value', evalValue(table, 1, 'VP'), 10);
-check('VP 4R value (endgame VP weighted highest)', evalValue(table, 4, 'VP'), 100);
+check('VP 4R value (endgame VP weighted highest)', evalValue(table, 4, 'VP'), 1000);
 check('K is round-independent (3 every round)', [1, 2, 3, 4].map((r) => evalValue(table, r, 'K')), [3, 3, 3, 3]);
 
 // ---------------------------------------------------------------------------

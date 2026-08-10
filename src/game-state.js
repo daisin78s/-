@@ -320,6 +320,14 @@ function createShopDeck(drawPile, slotIds) {
  *   rewards, set exactly once by turn-flow.js's endRound right when the game reaches GAME_END (see
  *   that function's own comment); null until then. Read back by src/ai/game-runner.js to report a
  *   QST-specific average score in AI.DATA.xlsx separately from the overall (now QST-excluded) one.
+ * @property {string[]} whiteOverflowEvents - playerIds, one entry per white-die overflow-to-2K
+ *   conversion (executor.js's grantOneDie, whiteDiceCap=5 -- see FREE_ACTION_IDS' own comment for the
+ *   underlying always-on rule) since this array was last drained. UI-only signal, not game data proper:
+ *   main.js's render() drains it into a one-time warning message (2026-08-11, per user request: "白D
+ *   を得たとき上限の5個を超えて得たとき...という警告文が表示されるようにしてほしい") and clears it right
+ *   back to empty, the same way it reads and clears every other transient per-render notice. Nothing
+ *   else in the engine reads this -- AI play (src/ai/game-runner.js) never looks at it, so leaving
+ *   entries undrained between AI turns has no effect on anything but the display.
  */
 
 /**
@@ -350,6 +358,7 @@ function createEmptyGameState(seed) {
     passiveCounters: {},
     quests: {},
     qstRewardsGranted: null,
+    whiteOverflowEvents: [],
   };
 }
 
