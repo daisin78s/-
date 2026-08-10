@@ -1740,10 +1740,13 @@ h1, h2, h3 { margin: 0; }
   width: 300px;
   flex: 0 0 auto;
   position: relative;
-  overflow: hidden; /* clips the bands to the panel's own rounded corners */
+  overflow: hidden; /* clips the bands to the panel's own corners */
   background: var(--surface-sunken);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  /* No border/radius of its own anymore (2026-08-11, per user request "黒枠の外側のはみ出ている部分を
+     削除して"): each row already draws its own black frame (see .qst-panel .qst-card below), so this
+     outer border was a second, redundant frame poking out around/past the row boxes -- most visible at
+     the rounded corners, where the outer border's curve stuck out beyond the rows' square ones. Removed
+     it and gave the freed space (this border plus the padding trim below) to the rows instead. */
   /* Flex so .qst-panel__content can stretch to the panel's full height, which is what gives the 3 rows
      a height to divide equally between them (2026-08-11, per user request "1段目 2段目 3段目の縦幅同じ
      にする" -- see .qst-panel .qst-card's flex below). The panel's own height still comes from the shop
@@ -1758,7 +1761,7 @@ h1, h2, h3 { margin: 0; }
    by the content padding so each band lines up with its own column of numbers below. */
 .qst-panel__bands {
   position: absolute;
-  inset: 0 12px;
+  inset: 0 6px; /* matches .qst-panel__content's trimmed horizontal padding below */
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   column-gap: 8px;
@@ -1771,7 +1774,10 @@ h1, h2, h3 { margin: 0; }
 .qst-panel__content {
   position: relative; /* lifts the rows above the absolutely-positioned bands */
   z-index: 1;
-  padding: 10px 12px;
+  /* Trimmed from 10px 12px (2026-08-11, per user request "その分少し大きくして"): with the outer panel
+     border gone, this padding was the only thing left holding the rows away from the panel's edge, so
+     shrinking it hands that space straight to the 3 rows (taller boxes) instead of sitting empty. */
+  padding: 0 6px;
   flex: 1; /* fill the panel's height -- see .qst-panel's own note */
   display: flex;
   flex-direction: column;
@@ -1845,7 +1851,10 @@ h1, h2, h3 { margin: 0; }
    continuously behind the boxes again.
    - flex: 1 1 0 + min-height: 0 makes the three rows split #qst-slots' height evenly regardless of how
      much text each one holds (a 2-line goal label used to make its row taller than the others).
-   - justify-content centers the content now that a row is usually taller than the text inside it.
+   - justify-content: flex-start, not center (2026-08-11, per user request "アップグレード数　建築数
+     などを少し上に") -- now that removing the outer panel border/padding leaves the rows a bit taller,
+     centering left the goal label sitting noticeably low; anchoring to the top instead keeps it close to
+     the row's own border regardless of how tall the row ends up.
    - margin-bottom: -1px overlaps each box's bottom border with the next box's top border, so touching
      rows show ONE line rather than a doubled 2px one.
    - var(--text), not literal black: it's the near-black ink colour in light mode and near-white in dark,
@@ -1856,8 +1865,8 @@ h1, h2, h3 { margin: 0; }
   border-radius: 0;
   flex: 1 1 0;
   min-height: 0;
-  justify-content: center;
-  padding: 3px 4px;
+  justify-content: flex-start;
+  padding: 6px 4px;
   gap: 4px;
   margin-bottom: -1px;
 }
