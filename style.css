@@ -189,7 +189,10 @@ h1, h2, h3 { margin: 0; }
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  max-height: 120px;
+  /* 2026-08-1X, per user report ("デバッグモードのセーブ数が多いと途中から表示されない"): bumped from
+     120px alongside main.js's renderDebugPanel scrollIntoView fix -- more of the list visible at once
+     means less scrolling is ever needed to find the current entry in the first place. */
+  max-height: 220px;
   overflow-y: auto;
 }
 
@@ -2380,6 +2383,77 @@ h1, h2, h3 { margin: 0; }
   font-size: 14px;
   font-weight: 700;
   color: var(--resource-vp);
+}
+
+/* Replay mode (2026-08-1X, per user request: "リプレイモード...進む 戻る で1手づつ確認できるモード") --
+   see main.js's renderReplayFrame/renderReplayControls. */
+
+/* Freezes the live board/players/cards while replayMode's own read-only snapshot is shown on top of
+   them (main.js's renderReplayFrame calls the exact same renderBoard/renderPlayers/... functions the
+   live game uses, just fed a historical snapshot instead of STATE) -- this is what actually guarantees
+   none of the die/slot/TAP/free-action click handlers those attach can ever fire during replay, rather
+   than relying on every one of them to individually know to stay inert. #replay-controls lives outside
+   #game-layout specifically so this rule never reaches it. */
+.replay-locked {
+  pointer-events: none;
+}
+
+.replay-controls {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: var(--shadow-lg);
+  padding: 8px 14px;
+}
+
+.replay-controls[hidden] { display: none; }
+
+.replay-controls__label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.replay-controls__position {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 72px;
+  text-align: center;
+}
+
+.replay-controls button {
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-sunken);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.replay-controls button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.replay-controls button:not(:disabled):hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+#replay-exit {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
 }
 
 /* Confirmed 2026-07-30: resource mentions inside INST text (e.g. "資源Z") are rendered as inline

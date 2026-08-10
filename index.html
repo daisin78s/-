@@ -76,6 +76,12 @@
                 <button type="button" id="ai-manual-step-button" hidden>次のAI行動へ</button>
               </div>
               <button type="button" class="undo-button" id="undo-button" disabled>↩️ ターン開始に戻す</button>
+              <!-- ダイスキャンセル (2026-08-10, per user request: "ダイスをSLOTに置いたときにやり直したい
+                   時のために...ダイスをキャンセルボタンが欲しい これを押すとダイスを置くのをキャンセル
+                   する") -- unlike #undo-button (which reverts everything since the turn began, including
+                   any free actions/bare TAPs taken before this die was placed), this only undoes the most
+                   recent die placement itself. See main.js's handleDiceCancelClick. -->
+              <button type="button" class="undo-button" id="dice-cancel-button" disabled>🎲↩️ ダイスをキャンセル</button>
               <button type="button" class="undo-button" id="round-pass-button" disabled>⏭️ ラウンドパス</button>
             </div>
             <div class="player-cards__header-row2">
@@ -135,6 +141,10 @@
              open, so a second copy lives here instead of fighting z-index/stacking-context rules to
              surface the same button through the overlay. Same handler (main.js). -->
         <button type="button" class="undo-button" id="undo-button-build" disabled>↩️ ターン開始に戻す</button>
+        <!-- Duplicate of #dice-cancel-button, same reasoning -- this modal appears exactly when a die
+             placement's AREA action turned out to be a BUILD, one of the most useful moments to cancel
+             just that placement instead of the whole turn. -->
+        <button type="button" class="undo-button" id="dice-cancel-button-build" disabled>🎲↩️ ダイスをキャンセル</button>
       </div>
       <!-- BZ付与系の直接TAPアクション（例: JOB004A "3K→2BZ"）を、建築候補選択画面に入った瞬間に使える
            ようにする案内 (2026-08-03, per user feedback: "建築が発生したときにすぐに発動 Y/Nでハイを
@@ -244,9 +254,25 @@
     <div class="card-inst-modal game-end-modal">
       <div class="card-inst-modal__header">
         <span class="card-inst-modal__title">ゲーム終了 — 最終結果</span>
+        <!-- 2026-08-1X, per user request: "ゲーム終了 最終結果 が表示されたときにリプレイボタンを押すと
+             リプレイモード...がほしい" -- opens a read-only, move-by-move playback of the whole game just
+             played. See main.js's enterReplayMode/renderReplayFrame. -->
+        <button type="button" class="undo-button" id="game-end-replay-button" disabled>▶ リプレイ</button>
       </div>
       <div class="card-inst-modal__body" id="game-end-list"></div>
     </div>
+  </div>
+
+  <!-- Replay mode's own control bar (2026-08-1X) -- always in the DOM (like #debug-panel), shown only
+       while main.js's replayMode is true. Lives outside #app so .replay-locked's pointer-events:none
+       (see style.css) never applies to it -- these buttons must stay clickable even though the whole
+       board/players/debug-panel underneath are frozen read-only. -->
+  <div id="replay-controls" class="replay-controls" hidden>
+    <span class="replay-controls__label">🔁 リプレイモード</span>
+    <button type="button" id="replay-back">◀ 戻る</button>
+    <span id="replay-position" class="replay-controls__position"></span>
+    <button type="button" id="replay-forward">進む ▶</button>
+    <button type="button" id="replay-exit">リプレイ終了</button>
   </div>
 
   <template id="tpl-shop-card">

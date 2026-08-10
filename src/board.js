@@ -710,17 +710,17 @@ function completeAreaBuild(state, index, context, candidate, remainingCommands) 
 function useBareTapAbility(state, index, context, physicalId) {
   const inst = state.cards[physicalId];
   if (inst.tapped) return { success: false, reason: 'ALREADY_TAPPED' };
-  // Blocked while a usage fee is still owed (2026-08-05, per user diagnosis of the AI softlock bug:
-  // "SLOTにダイスを置く→解決する→使用料を払う...おそらく...TAPアクションで資源を使い果たしてしまった
-  // ことが原因" -- the fee itself isn't actually deducted until TURNEND (see board.chargeUsageFeeIfOwed/
-  // executor.canEndTurn's own docs), so without this gate a player could spend away the very resources
-  // (or the A/B/C/Z/wD a free action would've converted into K) needed to pay it, via a TAP ability, in
-  // the window between owing the fee and TURNEND actually collecting it -- occasionally leaving them
-  // with truly nothing to pay with or convert, a permanent deadlock. FREE_ACTION/COLLECT_FEE are
-  // deliberately NOT gated here (the user explicitly wants those to stay usable in this same window,
-  // since they're the way OUT of the debt, not a way to dig deeper into it).
-  const player = state.players.find((p) => p.id === context.playerId);
-  if (player && player.pendingFee) return { success: false, reason: 'PENDING_FEE' };
+  // No longer blocked while a usage fee is owed (2026-08-10, per user request: "使用料の支払いが
+  // ターン終了時にある時でもTAPアクションが使えるようにしたい" -- reverses the 2026-08-05 PENDING_FEE
+  // gate this used to have here). That gate existed to stop a TAP ability from spending away the very
+  // resources (or the A/B/C/Z a free action would've converted into K) needed to pay the fee at TURNEND,
+  // which could permanently deadlock the AI. Since then, evaluator.js's LOCKOUT_PENALTY was generalized
+  // to cover ANY executor.canEndTurn violation, not just RESOURCE_TOTAL_LIMIT -- a state left unable to
+  // afford its pendingFee already scores -1000 there, so the AI now avoids digging that hole on its own
+  // instead of being flatly forbidden from ever tapping in this window (matching the user's own spec:
+  // "AIは使用料があるときはそれを把握しターン終了時に使用料分Kをあまらせるようにしたい"). A human player
+  // remains free to overspend here same as anywhere else -- executor.canEndTurn still blocks TURNEND
+  // itself until the fee is actually payable.
   const row = getCardRow(index, inst.currentFaceId);
   const tapContext = { ...context, sourcePhysicalId: physicalId };
   const result = resolveProgramOrBuild(state, index, tapContext, row.TAP, Infinity);

@@ -806,11 +806,11 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   check('...P2 actually has the 5K from ADD(5K)', player(state, 'P2').resources.K, 5);
 }
 {
-  // BARE_TAP is blocked while a usage fee is owed (2026-08-05, per user diagnosis of an AI softlock:
-  // "SLOTにダイスを置く→解決する→使用料を払う...おそらく...TAPアクションで資源を使い果たしてしまった
-  // ことが原因" -- the fee itself isn't deducted until TURNEND, so without this a player could spend
-  // away the very resources (or the A/B/C/Z/wD a free action would convert into K) needed to pay it via
-  // a TAP ability first, occasionally leaving nothing to pay/convert with -- a permanent deadlock).
+  // BARE_TAP is allowed even while a usage fee is owed (2026-08-10, per user request: "使用料の支払いが
+  // ターン終了時にある時でもTAPアクションが使えるようにしたい" -- reverses the 2026-08-05 PENDING_FEE
+  // gate this used to have; see board.useBareTapAbility's own doc for why removing it is now safe:
+  // evaluator.js's LOCKOUT_PENALTY already scores a state that can't afford its pendingFee at -1000,
+  // so the AI is steered away from spending the fee out of existence without a hard legality gate).
   const state = freshStateWithShops();
   state.maps['MAP001'] = mapWithArea('MAP001', 'AREA001B', 3, 'P1');
   const die = giveDie(state, 'P2', 1);
@@ -823,13 +823,10 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   player(state, 'P2').ownedCardPhysicalIds.push(tapInst.physicalId);
   player(state, 'P2').resources.K = 10; // plenty to normally afford the TAP's own CHANGE(2K,2A) cost
 
-  const blockedResult = board.useBareTapAbility(state, index, { playerId: 'P2' }, tapInst.physicalId);
-  check('BARE_TAP is refused while the fee is still pending', blockedResult, { success: false, reason: 'PENDING_FEE' });
-  check('...the card was never actually tapped', state.cards[tapInst.physicalId].tapped, false);
-
-  player(state, 'P2').pendingFee = null; // simulate the fee having already been paid off (endTurn's own job)
   const allowedResult = board.useBareTapAbility(state, index, { playerId: 'P2' }, tapInst.physicalId);
-  check('...but succeeds normally once the fee is cleared', allowedResult.success, true);
+  check('BARE_TAP succeeds even while the fee is still pending', allowedResult.success, true);
+  check('...the card was actually tapped', state.cards[tapInst.physicalId].tapped, true);
+  check('...and the pending fee is untouched (still owed, unresolved until TURNEND)', player(state, 'P2').pendingFee, { mapId: 'MAP001', amount: 1 });
 }
 {
   const state = freshStateWithShops();

@@ -247,7 +247,20 @@ function hasAiWorkPending(state) {
  *   delayed); false if there's nothing for an AI player to do right now (including "it's the human's
  *   turn", which is not an error -- just nothing to pump).
  */
+/** Thin wrapper around #driveOneAiStepInner (2026-08-1X) -- records one replay entry per individual AI
+ * decision, the single choke point every AI move funnels through regardless of aiPacingMode. Needed
+ * because pumpAiInstant's while loop calls this directly, in a tight synchronous loop with no render()
+ * in between (see pumpAiInstant's own doc) -- without a hook right here, 'instant' pacing would resolve
+ * an entire AI backlog before render()'s own recordReplaySnapshotIfChanged ever got a chance to run,
+ * collapsing many real moves into a single replay entry instead of one each. See this file's "Move-by-
+ * move game replay" section for the full picture. */
 function driveOneAiStep(state) {
+  const did = driveOneAiStepInner(state);
+  if (did) recordReplaySnapshotIfChanged(state);
+  return did;
+}
+
+function driveOneAiStepInner(state) {
   // The real block -- see hasAiWorkPending's matching guard for the full story. pumpAiInstant's while
   // loop calls this directly (not hasAiWorkPending) each iteration, so the guard has to live here too,
   // not just in hasAiWorkPending, or 'instant' mode would still blow straight through the human's still-
@@ -398,6 +411,20 @@ function pumpAiDelayed() {
 // length-1 case of the same array -- no separate code path.
 let selectedDieIds = [];
 let placementMessage = '';
+// Snapshot taken immediately before a die placement is attempted (2026-08-10, per user request:
+// "ダイスをSLOTに置いたときにやり直したい時のために...ダイスをキャンセルボタンが欲しい これを押すと
+// ダイスを置くのをキャンセルする"). Unlike undoMod's own once-per-turn checkpoint (state.undoCheckpoint,
+// which reverts everything done since the turn began, including any free actions/bare TAPs taken
+// *before* this die was placed), this is scoped to just the placement itself -- captured right before
+// board.placeDice/placeDiceGroup runs (see placeSelectedDie/placeSelectedDiceGroup), committed only once
+// that call actually succeeds (a failed attempt never touched state, so there's nothing to arm), and
+// cleared again once used (handleDiceCancelClick) or once a new turn begins (see render()'s turn-start
+// checkpoint block) or a full ターン開始に戻す fires (handleUndoClick -- that already reverts past this
+// point, so a stale die-cancel checkpoint pointing at a since-undone placement would be wrong to keep).
+// Kept as plain UI-only state (like selectedDieIds), not GameState, since nothing outside this file
+// (tests, AI, save data) needs to know about it. Stores turnActionTaken alongside the state clone since
+// that flag also lives outside GameState and placing a die is exactly what sets it true.
+let dicePlacementCheckpoint = null; // { state: GameState, turnActionTaken: boolean } | null
 // Static text for GameState.whiteOverflowEvents (2026-08-11, per user request) -- see render()'s own
 // drain of that array, right below this declaration's use site.
 const WHITE_OVERFLOW_WARNING_TEXT = '白ダイスの所有上限は5個です。それを超えたものは2Kに変換されます。';
@@ -612,6 +639,110 @@ function jumpToAdjacentRound(direction) {
 function handleDebugRoundBack() { jumpToAdjacentRound(-1); }
 function handleDebugRoundForward() { jumpToAdjacentRound(1); }
 
+// ---------------------------------------------------------------------------
+// Move-by-move game replay (2026-08-1X, per user request: game-end's final results screen gets a
+// "リプレイ" button that opens a read-only mode -- "結果は固定で 進む 戻る で1手づつ確認できる". Unlike
+// turnHistory above (TURN-boundary granularity, gated behind debugMode, purpose-built for the debug
+// panel's own "jump back and replay the live game" workflow -- see jumpToHistoryIndex, which actually
+// restores STATE itself), this is: (1) always recording, regardless of debugMode, since it needs the
+// WHOLE game available once GAME_END is reached, not just whatever happened to be recorded after the
+// user toggled debug mode on; (2) one entry per individual Move, not per turn, since "1手づつ" means
+// stepping through a BUILD/TAP/free-action/PLACE_DIE/END_TURN one at a time, not turn-at-a-time; (3)
+// purely read-only when browsing -- replayCursor never touches the live STATE object at all, it's
+// rendered straight from replayHistory's own snapshots by renderReplayFrame (a stripped-down parallel to
+// render() that reuses the same renderHeader/renderShops/renderBoard/renderPlayers/renderJobPool/
+// renderPlayerCards building blocks, but skips every side-effecting/live-only piece of render() itself --
+// AI pumping, checkpoint recording, turnActionTaken/lastTurnPlayerId bookkeeping, all the *-choice modals
+// -- and neutralizes whatever interactivity those shared builders still attach via the
+// .replay-locked/pointer-events:none wrapper in style.css, so a stray click during replay can never
+// mutate a recorded snapshot or the live game).
+//
+// Recording hooks into exactly the two places a Move can ever actually apply: render()'s own top (every
+// human action handler mutates STATE then calls render(STATE), so this catches all of them in one place)
+// and driveOneAiStep's wrapper below (the single choke point for every individual AI decision -- without
+// this, 'instant' AI pacing's pumpAiInstant would resolve an entire multi-move AI backlog inside one
+// render() call, collapsing it to a single replay entry instead of one per move). Both funnel into
+// recordReplaySnapshotIfChanged, which dedupes against the last-recorded snapshot so pure UI-only
+// re-renders (selecting a die, opening a modal -- STATE itself unchanged) never add a spurious entry.
+// ---------------------------------------------------------------------------
+let replayHistory = [];
+let replayCursor = -1;
+let lastReplaySnapshotJson = null;
+let replayMode = false;
+
+function recordReplaySnapshotIfChanged(state) {
+  const json = JSON.stringify(state);
+  if (json === lastReplaySnapshotJson) return;
+  lastReplaySnapshotJson = json;
+  replayHistory.push(structuredClone(state));
+}
+
+function enterReplayMode() {
+  if (replayHistory.length === 0) return;
+  // Defensively force every other overlay closed (2026-08-1X) -- GAME_END is only ever reached right
+  // after a real END_TURN resolves (see renderGameEndOverlay's own doc), so in practice none of these
+  // should ever be open at this point, but renderReplayFrame doesn't render (or re-hide) any of them
+  // itself, and .replay-locked's pointer-events:none never reaches these -- they live outside #app (see
+  // index.html's own comment) same as #replay-controls does on purpose.
+  for (const id of ['card-inst-overlay', 'build-choice-overlay', 'placement-choice-overlay',
+    'tap-choice-overlay', 'auto-mode-choice-overlay', 'turn-end-warning-overlay', 'round-pass-confirm-overlay']) {
+    document.getElementById(id).hidden = true;
+  }
+  replayMode = true;
+  replayCursor = replayHistory.length - 1; // start at the final result already on screen
+  render(STATE);
+}
+
+function exitReplayMode() {
+  replayMode = false;
+  render(STATE);
+}
+
+function handleReplayBack() { if (replayCursor > 0) { replayCursor--; render(STATE); } }
+function handleReplayForward() { if (replayCursor < replayHistory.length - 1) { replayCursor++; render(STATE); } }
+
+/** The replay-mode counterpart of render() (see this section's own doc for why it's a separate,
+ * side-effect-free function rather than branching deep inside render() itself). Computes `next` the same
+ * way render() does (minus the live-only stillMidTurnPlayerId/aiOpenTurnPlayerId override, which reads
+ * module state that has no meaning against a frozen historical snapshot) purely so the board visually
+ * matches what was actually clickable at that point in history -- .replay-locked's pointer-events:none
+ * (see style.css) is what actually guarantees none of it responds to a click. */
+function renderReplayFrame() {
+  const snapshot = replayHistory[replayCursor];
+  const next = snapshot.round >= 1 ? turnFlowMod.getNextTurn(snapshot) : null;
+  document.getElementById('app').classList.add('replay-locked');
+  document.getElementById('game-end-overlay').hidden = true;
+  renderHeader(snapshot);
+  renderShops(snapshot);
+  renderBoard(snapshot, next);
+  renderPlayers(snapshot, next);
+  renderJobPool(snapshot, next);
+  renderPlayerCards(snapshot, next);
+  document.getElementById('board-message').textContent = '';
+  renderReplayControls();
+}
+
+function renderReplayControls() {
+  const controls = document.getElementById('replay-controls');
+  controls.hidden = !replayMode;
+  const appEl = document.getElementById('app');
+  if (!replayMode) {
+    appEl.style.paddingTop = ''; // back to the plain CSS default (see #app's own rule)
+    return;
+  }
+  document.getElementById('replay-back').disabled = replayCursor <= 0;
+  document.getElementById('replay-forward').disabled = replayCursor >= replayHistory.length - 1;
+  document.getElementById('replay-position').textContent = `手 ${replayCursor + 1} / ${replayHistory.length}`;
+  // Reserves enough top space that .replay-controls' own fixed position (see style.css) never covers
+  // the board underneath (2026-08-1X, found via tablet-width testing -- iPad portrait's narrower
+  // #game-layout stack has shop cards right at the top, and the bar sat directly on top of them,
+  // obscuring/blocking a couple of SHOP slots entirely). Measured live rather than a fixed guess: the
+  // bar's own width/wrapping (and therefore height) already varies by viewport and by how long
+  // replayHistory's move count gets ("手 205 / 205" vs "手 12 / 12"), so a hardcoded padding would drift
+  // out of sync on some width instead of tracking it. +16px breathing room below the bar.
+  appEl.style.paddingTop = `${controls.getBoundingClientRect().bottom + 16}px`;
+}
+
 /** Turns debugMode on/off (spec item 14: the history UI itself is hidden while off, see
  * renderDebugPanel). Turning it on for the first time this session seeds turnHistory with the *current*
  * live state as history entry 0, so the panel has something to show/navigate immediately rather than
@@ -664,14 +795,38 @@ function renderDebugPanel(state) {
 
   const listEl = document.getElementById('debug-history-list');
   listEl.innerHTML = '';
+  let currentItem = null;
   turnHistory.forEach((entry, i) => {
     const activePlayer = entry.playerId ? state.players.find((p) => p.id === entry.playerId) : null;
     const item = el('button', 'debug-history-list__item', `R${entry.round} / ${activePlayer ? activePlayer.name : '-'} / Turn${i + 1}`);
     item.type = 'button';
-    item.classList.toggle('debug-history-list__item--current', i === historyCursor);
+    const isCurrent = i === historyCursor;
+    item.classList.toggle('debug-history-list__item--current', isCurrent);
+    if (isCurrent) currentItem = item;
     item.addEventListener('click', () => jumpToHistoryIndex(i));
     listEl.appendChild(item);
   });
+  // Keeps the current entry actually visible once there are enough saves to overflow the list's own
+  // max-height/scroll (2026-08-1X, per user report: "デバッグモードのセーブ数が多いと途中から表示され
+  // ない" -- the list itself was never truncated, entries just scrolled out of the fixed-height,
+  // scroll-but-never-auto-scrolled box as new ones piled up below/after whatever the user last happened
+  // to have scrolled to, reading as "stopped showing" once there were enough of them to need scrolling
+  // at all). listEl.innerHTML='' above destroys any previous scroll position along with the old nodes,
+  // so this must re-establish it every render, not just once.
+  //
+  // Deliberately NOT currentItem.scrollIntoView() (found via headless testing, 2026-08-1X): that scrolls
+  // every scrollable ancestor as needed, including the whole page/document itself since #debug-panel
+  // sits at the very bottom of it -- every render (e.g. just switching a player's role up in the header)
+  // was yanking the entire viewport down to the debug panel at the page's bottom, shoving #ai-pacing-
+  // select and everything else above it off-screen. Comparing/adjusting listEl.scrollTop directly instead
+  // touches only this one scroll container, exactly like 'nearest' was meant to (a no-op once the current
+  // item is already within listEl's own visible range).
+  if (currentItem) {
+    const listRect = listEl.getBoundingClientRect();
+    const itemRect = currentItem.getBoundingClientRect();
+    if (itemRect.top < listRect.top) listEl.scrollTop -= (listRect.top - itemRect.top);
+    else if (itemRect.bottom > listRect.bottom) listEl.scrollTop += (itemRect.bottom - listRect.bottom);
+  }
 }
 // Whether the active player has already resolved this turn's die placement (2026-08-01, per user
 // feedback: "建築後、ターンエンド前にTAPのフリーアクションが可能です...未使用のTAPアクションが残って
@@ -2480,8 +2635,11 @@ function applyPlaceDiceResult(result, playerId) {
  * 2026-08-02, see attemptPlaceSelectedDie's own comment). */
 function placeSelectedDie(state, dieId, mapId, slotIndex, colorPreference) {
   const player = state.players.find((p) => p.dice.some((d) => d.id === dieId));
+  const preSnapshot = gameStateMod.cloneState(state);
+  const preTurnActionTaken = turnActionTaken;
   const result = boardMod.placeDice(state, INDEX, { playerId: player.id, colorPreference }, dieId, mapId, slotIndex);
   selectedDieIds = [];
+  if (result.success) dicePlacementCheckpoint = { state: preSnapshot, turnActionTaken: preTurnActionTaken };
   applyPlaceDiceResult(result, player.id);
   render(STATE);
 }
@@ -2495,7 +2653,10 @@ function placeSelectedDiceGroup(state, mapId) {
   const dieIds = selectedDieIds;
   selectedDieIds = [];
   const player = state.players.find((p) => p.dice.some((d) => d.id === dieIds[0]));
+  const preSnapshot = gameStateMod.cloneState(state);
+  const preTurnActionTaken = turnActionTaken;
   const result = boardMod.placeDiceGroup(state, INDEX, { playerId: player.id }, dieIds, mapId);
+  if (result.success) dicePlacementCheckpoint = { state: preSnapshot, turnActionTaken: preTurnActionTaken };
   applyPlaceDiceResult(result, player.id);
   render(STATE);
 }
@@ -3332,16 +3493,9 @@ function attachTapToggle(cardNode, cardState, faceId, canAct, physicalId) {
   effectEl.addEventListener('click', (e) => {
     e.stopPropagation();
     if (cardState.tapped) return;
-    // Blocked while a usage fee is owed (2026-08-05, see board.useBareTapAbility's own doc on the
-    // softlock this prevents) -- checked here too (not just left to useBareTapAbility's own rejection
-    // once confirmed) so the SET_DICE_ANY/SET_DIE_VALUE/CHANGE_DIE_VALUE kind's die/value picker modal
-    // doesn't even open for something that's just going to fail anyway.
-    const owner = STATE.players.find((p) => p.id === cardState.ownerId);
-    if (owner && owner.pendingFee) {
-      placementMessage = 'カードを使用できません（PENDING_FEE）';
-      render(STATE);
-      return;
-    }
+    // No longer blocked while a usage fee is owed (2026-08-10 -- see board.useBareTapAbility's own doc
+    // on why that gate was removed there; mirrored here since this used to pre-empt it before the picker
+    // modal even opened).
     if (bareTap.kind === 'IMMEDIATE') {
       const result = boardMod.useBareTapAbility(STATE, INDEX, { playerId: cardState.ownerId }, physicalId);
       placementMessage = result.success ? '' : `カードを使用できません（${result.reason}）`;
@@ -3807,9 +3961,24 @@ function renderGameEndOverlay(state) {
     row.appendChild(el('span', 'game-end-score', `${entry.score} VP`));
     list.appendChild(row);
   });
+  document.getElementById('game-end-replay-button').disabled = replayHistory.length === 0;
 }
 
 function render(state) {
+  // Replay mode takes over the whole screen with its own render path -- see this file's "Move-by-move
+  // game replay" section for why that's a separate function rather than a branch further down (render()
+  // itself is full of live-play-only side effects -- AI pumping, checkpoint recording, turn bookkeeping
+  // -- none of which make sense, or are even safe, against a frozen historical snapshot).
+  if (replayMode) { renderReplayFrame(); return; }
+  document.getElementById('app').classList.remove('replay-locked');
+  // Records this render's starting state as one replay entry before anything else runs (2026-08-1X) --
+  // see recordReplaySnapshotIfChanged's own doc. Every human action handler mutates STATE then calls
+  // render(STATE), so by the time control reaches here `state` already reflects that one move; the
+  // dedup against the previous entry is what keeps a pure UI-only re-render (nothing in STATE actually
+  // changed) from adding a spurious one. Must run BEFORE pumpAiInstant below, or a human's own move would
+  // never get its own entry -- it'd only show up bundled together with whatever AI moves follow it.
+  recordReplaySnapshotIfChanged(state);
+
   // Plays out every AI-controlled player's backlog before painting anything (2026-08-03) -- 'instant'
   // resolves it all synchronously right here so the rest of render() sees the post-AI state already;
   // 'delayed' just arms a timer (see pumpAiDelayed's own doc) and lets this render paint the
@@ -3881,6 +4050,7 @@ function render(state) {
       lastTurnPlayerId = next.playerId;
       turnActionTaken = false; // a fresh turn started -- see turnActionTaken's own comment
       turnJustEnded = false;
+      dicePlacementCheckpoint = null; // a new turn started -- any prior placement is out of scope now
     }
   } else {
     lastTurnPlayerId = null;
@@ -3915,6 +4085,12 @@ function render(state) {
   renderAiPacingControl(state);
   renderGameEndOverlay(state);
   renderDebugPanel(state);
+  // Hides #replay-controls again once back on the normal live path (found via headless testing,
+  // 2026-08-1X: renderReplayControls is otherwise only ever called from renderReplayFrame, so exiting
+  // replay via exitReplayMode -- which just flips replayMode off and calls this render(state) -- left
+  // the control bar's `hidden` attribute exactly as replay last set it, showing it stacked right on top
+  // of the game-end overlay it's supposed to have been replaced by).
+  renderReplayControls();
 }
 
 /** Reverts to the start of the current player's turn (2026-07-30, per user feedback -- see the
@@ -3936,18 +4112,47 @@ function handleUndoClick() {
   pendingRoundPassConfirm = null;
   turnActionTaken = false;
   placementMessage = '';
+  dicePlacementCheckpoint = null; // stale now -- this already reverted past whatever it pointed at
   undoMod.recordCheckpoint(STATE);
+  render(STATE);
+}
+
+/** Undoes just the most recent die placement (2026-08-10, per user request -- see
+ * dicePlacementCheckpoint's own doc for why this is scoped narrower than handleUndoClick). No-op if
+ * nothing is armed (button is disabled in that case anyway, but guard here too since both buttons share
+ * this handler). Clears the same UI-only scratch state handleUndoClick does, restores turnActionTaken
+ * from the snapshot pair rather than always forcing it to false (placing this die is what set it true;
+ * canceling that placement puts it back to whatever it was right before), and does NOT re-record
+ * undoMod's own turn-start checkpoint -- that one still points further back (start of turn), which
+ * remains exactly correct after this narrower rollback. Single-shot: the checkpoint is consumed here,
+ * not re-armed, until the player places a die again. */
+function handleDiceCancelClick() {
+  if (!dicePlacementCheckpoint) return;
+  undoMod.restoreSnapshot(STATE, dicePlacementCheckpoint.state);
+  turnActionTaken = dicePlacementCheckpoint.turnActionTaken;
+  dicePlacementCheckpoint = null;
+  selectedDieIds = [];
+  pendingBuildChoice = null;
+  pendingPlacementChoice = null;
+  pendingTapChoice = null;
+  pendingAutoModeChoice = null;
+  placementMessage = '';
   render(STATE);
 }
 
 /** Enables/disables both undo buttons (the persistent one in the sidebar header, and the duplicate
  * inside #build-choice-overlay so it's reachable even while that modal covers the screen -- confirmed
  * 2026-07-30, per user feedback: "城にダイスをおいて建築を選ぶ画面でも戻れるように") based on whether
- * there's actually a checkpoint to revert to. */
+ * there's actually a checkpoint to revert to. Also drives the dice-cancel buttons' own enabled state the
+ * same way, off dicePlacementCheckpoint instead of state.undoCheckpoint (2026-08-10). */
 function renderUndoButtons(state) {
   const disabled = !state.undoCheckpoint;
   for (const id of ['undo-button', 'undo-button-build']) {
     document.getElementById(id).disabled = disabled;
+  }
+  const diceCancelDisabled = !dicePlacementCheckpoint;
+  for (const id of ['dice-cancel-button', 'dice-cancel-button-build']) {
+    document.getElementById(id).disabled = diceCancelDisabled;
   }
 }
 
@@ -4334,6 +4539,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('undo-button').addEventListener('click', handleUndoClick);
   document.getElementById('undo-button-build').addEventListener('click', handleUndoClick);
+  document.getElementById('dice-cancel-button').addEventListener('click', handleDiceCancelClick);
+  document.getElementById('dice-cancel-button-build').addEventListener('click', handleDiceCancelClick);
+
+  document.getElementById('game-end-replay-button').addEventListener('click', enterReplayMode);
+  document.getElementById('replay-back').addEventListener('click', handleReplayBack);
+  document.getElementById('replay-forward').addEventListener('click', handleReplayForward);
+  document.getElementById('replay-exit').addEventListener('click', exitReplayMode);
 
   document.getElementById('debug-mode-toggle').addEventListener('click', toggleDebugMode);
   document.getElementById('debug-turn-back').addEventListener('click', handleDebugTurnBack);

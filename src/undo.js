@@ -24,19 +24,28 @@ function recordCheckpoint(state) {
 }
 
 /**
- * Restores state to the last recorded checkpoint, in place (mutates the
- * live `state` object's contents -- same caveat as executor.runProgram's
- * rollback: any reference into state's nested objects grabbed before this
- * call is stale afterward; re-fetch by id from `state`).
+ * Overwrites every key of the live `state` object with snapshot's, in place (mutates `state` directly
+ * -- same caveat as executor.runProgram's rollback: any reference into state's nested objects grabbed
+ * before this call is stale afterward; re-fetch by id from `state`). Factored out of undo() (2026-08-10)
+ * so main.js's dice-placement-cancel button (a *second*, narrower checkpoint scoped to just the most
+ * recent die placement, kept entirely as UI-only state alongside selectedDieIds -- not GameState.
+ * undoCheckpoint, which stays reserved for its own pre-roll/turn-start moments) can restore from an
+ * arbitrary snapshot the same way undo() restores from state.undoCheckpoint specifically.
+ */
+function restoreSnapshot(state, snapshot) {
+  Object.keys(state).forEach((k) => delete state[k]);
+  Object.assign(state, snapshot);
+}
+
+/**
+ * Restores state to the last recorded checkpoint, in place.
  */
 function undo(state) {
   if (!state.undoCheckpoint) return { success: false, reason: 'NO_CHECKPOINT' };
-  const checkpoint = state.undoCheckpoint;
-  Object.keys(state).forEach((k) => delete state[k]);
-  Object.assign(state, checkpoint);
+  restoreSnapshot(state, state.undoCheckpoint);
   return { success: true };
 }
 
-module.exports = { recordCheckpoint, undo };
+module.exports = { recordCheckpoint, undo, restoreSnapshot };
 
 })();
