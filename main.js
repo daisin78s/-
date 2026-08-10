@@ -674,6 +674,21 @@ function renderDebugPanel(state) {
 // lastTurnPlayerId transition, the same "new turn started" signal the undo checkpoint uses) and by
 // handleUndoClick.
 let turnActionTaken = false;
+// Set by advanceTurnIfPossible the instant a human's real END_TURN succeeds; consumed and cleared by
+// render()'s checkpoint block (2026-08-11, per user report: "AIがダイスを使い切り　人間がまだ複数ダイスを
+// 持っているとき　ダイスを置いてターン終了ボタンを押しても　セーブポイントが作られません　そのためターン
+// 開始時に戻るを押すと　何手も戻ってしまいます"). Needed because that block's own trigger --
+// `next.playerId !== lastTurnPlayerId` -- only fires when the ACTIVE PLAYER changes, which silently
+// merges every turn after the first whenever the same player takes several turns in a row with nobody
+// else's turn in between (exactly what happens once every other player has run out of dice for the
+// round: getNextTurn keeps naming the same one player, so lastTurnPlayerId never stops matching). Without
+// this flag those later turns got no checkpoint of their own at all, so "ターン開始時に戻る" jumped back
+// to whatever much earlier turn last happened to change lastTurnPlayerId. This flag instead tracks "a
+// real END_TURN just happened" directly, independent of who's next -- true "fresh turn" detection rather
+// than a same-vs-different-player proxy for it. AI turns don't need to set this: AI's own END_TURN runs
+// through simulator.applyInPlace, not advanceTurnIfPossible (see driveOneAiStep's own comment), and the
+// only player who ever presses "ターン開始時に戻る" is the human, so only the human path needs to feed it.
+let turnJustEnded = false;
 
 // ---------------------------------------------------------------------------
 // Card/area facts, derived live from INDEX (2026-07-30: replaces the former hand-transcribed
@@ -2587,6 +2602,10 @@ function advanceTurnIfPossible(state, playerId) {
   // (see this function's own doc), so clearing the flag right here is sufficient and unconditional --
   // no dependency on what the next player still needs to finish onboarding-wise.
   turnActionTaken = false;
+  // Same choke-point argument as turnActionTaken just above, for the checkpoint side of the same bug
+  // class -- see turnJustEnded's own doc (2026-08-11, per user report). render()'s transition block
+  // consumes and clears this.
+  turnJustEnded = true;
   if (turnFlowMod.isRoundOver(state)) {
     turnFlowMod.endRound(state, INDEX);
     if (state.phase !== 'GAME_END') turnFlowMod.startRound(state);
@@ -3836,14 +3855,19 @@ function render(state) {
   // as JOB is drafted, before CON is chosen (same quirk documented on hasFinishedOnboarding/
   // canPlaceDiceFor), so checking next.type alone would checkpoint too early (before CON's ONCE/
   // receiveInitialResources have run) and undo would strand the player mid-onboarding. Guarded by
-  // lastTurnPlayerId so this only fires once per turn, not on every re-render while mid-turn.
+  // lastTurnPlayerId so this only fires once per turn, not on every re-render while mid-turn -- OR by
+  // turnJustEnded (2026-08-11, per user report -- see its own doc), which catches the case
+  // lastTurnPlayerId can't: the same player taking several turns in a row with nobody else's turn in
+  // between (once every other player is out of dice for the round), where next.playerId never actually
+  // changes across those later turns.
   const activePlayer = next ? state.players.find((p) => p.id === next.playerId) : null;
   if (activePlayer && hasFinishedOnboarding(activePlayer)) {
     noteActiveTurnPlayerForJobPool(state, next.playerId);
-    if (next.playerId !== lastTurnPlayerId) {
+    if (next.playerId !== lastTurnPlayerId || turnJustEnded) {
       undoMod.recordCheckpoint(state);
       lastTurnPlayerId = next.playerId;
       turnActionTaken = false; // a fresh turn started -- see turnActionTaken's own comment
+      turnJustEnded = false;
     }
   } else {
     lastTurnPlayerId = null;
