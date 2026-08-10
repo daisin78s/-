@@ -1941,6 +1941,28 @@ h1, h2, h3 { margin: 0; }
   overflow-wrap: anywhere;
 }
 
+/* Full-width divider under the goal label, in-panel only (2026-08-11, per user request: "建築数
+   EMBLEM総数　などの下にはしからはしまで黒線", refined per follow-up: "黒線の太さは外枠と同じで
+   アップグレード数　などをかこっている横に長細い四角部分の背景色を白に"). Scoped to .qst-panel the
+   same way .qst-panel .qst-card itself is: the standalone enlarge-modal card keeps its plain text-only
+   title, since there's no row frame there for the line to span between anyway.
+   - margin: -6px -4px 0 cancels the row's own padding (6px top, 4px sides) on all 3 sides but the
+     bottom, so this element's box reaches the row's own top/left/right border edges ("はしからはしまで")
+     instead of stopping at the row's inner content area; padding puts that same 6px/4px back as
+     *padding* so the text itself still sits exactly where it did before -- only the box (and therefore
+     the background below) got bigger, not the text's own position.
+   - background: var(--surface) is what makes that now-edge-to-edge box read as a distinct "header
+     strip" rather than just a line -- var(--surface), not a literal white, so it's the same plain
+     surface every other card uses and still inverts correctly in dark mode (white in light mode, which
+     is what "白に" asked for).
+   - border-bottom: 1px, matching .qst-panel .qst-card's own outer frame width just below (was 2px). */
+.qst-panel .qst-card__goal-line {
+  margin: -6px -4px 0;
+  padding: 6px 4px 4px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--text);
+}
+
 .qst-card__ranks {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
