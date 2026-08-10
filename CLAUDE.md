@@ -22,7 +22,7 @@ of that constraint:
 
 ## Repo location — read this first
 
-This repo lives at `C:\Users\miwa\Desktop\game` and has a GitHub remote (`origin` →
+This repo lives at `C:\Users\miwa\Desktop\ダイスWPの続き\game` and has a GitHub remote (`origin` →
 `https://github.com/daisin78s/-.git`, branch `main`). **The user plays the live game on an iPad**,
 which reads whatever is currently pushed to `origin/main` (not this local working copy) — so a code
 change is not "live" for the user until it's committed and pushed. Don't assume "update the tablet /
@@ -34,7 +34,13 @@ There is a **separate, unrelated, older `game` folder** at
 `C:\Users\miwa\OneDrive\デスクトップ\game` — it only contains a handful of data/test files, not the
 real app, and a fresh session's default working directory sometimes starts there instead of here. If
 `index.html`/`main.js`/`style.css` aren't in your current directory, you're very likely in that other
-folder — switch to `C:\Users\miwa\Desktop\game` instead of building anything from scratch.
+folder — switch to `C:\Users\miwa\Desktop\ダイスWPの続き\game` instead of building anything from
+scratch.
+
+The `claude_memory_dice_wp` folder one level up (`C:\Users\miwa\Desktop\ダイスWPの続き\claude_memory_dice_wp`)
+holds memory files carried over from another PC (dev log, DSL/flow/QST/UI-requirement specs,
+collaboration-style feedback) — read these at the start of a session to pick up prior context, since
+this machine's own autonomous memory doesn't carry over from that other PC.
 
 ## Commands
 
