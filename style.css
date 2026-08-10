@@ -1821,12 +1821,22 @@ h1, h2, h3 { margin: 0; }
    enlarge modal, where a QST card really is on its own with no panel/bands/legend around it. Padding is
    tighter than the standalone card's to buy back the height the larger text below costs, keeping the
    whole column inside the SHOP grid's own height. */
+/* border-bottom cuts the rank bands between rows (2026-08-11, per user request + annotated screenshot:
+   "赤線部分に少しだけ隙間が欲しい　間隔を空けるのではなく色の隙間　3行あるということがわかりやすいように").
+   The bands run behind the whole panel as one continuous stripe each, which made the 3 QST rows blend
+   into a single block -- the hairline var(--border) rule this replaces was far too faint against the tint
+   to read as a row divider. A 5px strip in the panel's OWN background colour paints over the bands at
+   each row's bottom edge instead, so the COLOUR is what's interrupted (a gap in the stripe) rather than
+   the rows being pushed apart. There are 3 cards, so this lands on exactly the 3 internal boundaries the
+   screenshot marks: after rows 1 and 2, and between row 3 and the legend. Padding was trimmed 5px -> 3px
+   to pay for the added height, keeping the panel the same size. The panel's outer top/bottom edges are
+   deliberately left alone -- the bands reaching those was itself an explicit earlier request. */
 .qst-panel .qst-card {
   background: none;
   border: none;
   border-radius: 0;
-  border-bottom: 1px solid var(--border);
-  padding: 5px 0;
+  border-bottom: 5px solid var(--surface-sunken);
+  padding: 3px 0;
   gap: 5px;
 }
 

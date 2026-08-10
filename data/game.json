@@ -1618,7 +1618,7 @@
       "REWARD1": "ADD(4VP)",
       "REWARD2": "ADD(2VP)",
       "REWARD3": "ADD(VP)",
-      "INST": "最多EMBLEM数"
+      "INST": "最多EMBLEMの数"
     },
     {
       "ID": "Q003A",

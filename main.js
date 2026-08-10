@@ -201,6 +201,11 @@ function hasAiWorkPending(state) {
   // honest). Checked BEFORE getNextTurn below precisely because getNextTurn is what skips past them.
   const openTurn = openTurnPlayerId();
   if (openTurn && !isAiPlayer(openTurn)) return false;
+  // An AI that's already acted but hasn't ended its turn still owes an END_TURN, and getNextTurn has
+  // no way to say so -- it skips straight past a player with no dice left. See driveOneAiStep's matching
+  // guard (2026-08-11) for why that matters: without this, the pump reports "nothing to do" and the AI's
+  // TURNEND (which is what restocks the shops) silently never happens.
+  if (aiOpenTurnPlayerId !== null) return true;
   const next = turnFlowMod.getNextTurn(state);
   // getNextTurn's raw ROUND_OVER can fire purely because every die is placed-or-passed, even while
   // whoever placed/passed the very last one hasn't actually ended their turn yet -- see
@@ -278,9 +283,20 @@ function driveOneAiStep(state) {
   // nobody is -- either way there's nothing for THIS function to do; wait for the human's own click.
   // (aiOpenTurnPlayerId, not state.turnOrder[state.currentPlayerIndex] -- see hasAiWorkPending's matching
   // comment for why that index can't answer "who's mid-turn" reliably here.)
-  if (next.type === 'ROUND_OVER') {
-    if (aiOpenTurnPlayerId === null) return false;
+  //
+  // Generalised 2026-08-11 (per user report: "AIが最後のダイスを使って建築したあとにんげんのターンになって
+  // もSHOPが空いたまま"). ROUND_OVER was only the case where getNextTurn's skip-ahead ran out of players
+  // entirely; the same blind spot bites whenever it skips a still-open AI to report SOMEONE ELSE's turn --
+  // which is what happens the moment an AI resolves its last die of the round. The pump would then drive
+  // that other player and abandon the first AI's turn without ever running its END_TURN, so its TURNEND
+  // never fired -- and TURNEND is what restocks the shops (turn-flow.endTurn -> restockShop). If the
+  // abandoned AI was the last one before the human, nothing else came along to restock either, leaving the
+  // human staring at the gap the AI's own build had just made. So: whenever an AI still owes an END_TURN,
+  // it keeps the turn regardless of who getNextTurn would rather hand it to.
+  if (aiOpenTurnPlayerId !== null && next.playerId !== aiOpenTurnPlayerId) {
     next = { type: 'TURN', playerId: aiOpenTurnPlayerId };
+  } else if (next.type === 'ROUND_OVER') {
+    return false; // nobody mid-turn and no dice left -- wait for the human's own ターン終了
   }
   if (!isAiPlayer(next.playerId)) return false;
   const player = state.players.find((p) => p.id === next.playerId);
