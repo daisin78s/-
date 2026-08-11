@@ -24,8 +24,13 @@ of that constraint:
 
 This repo lives at `C:\Users\miwa\Desktop\ダイスWPの続き\game` and has a GitHub remote (`origin` →
 `https://github.com/daisin78s/-.git`, branch `main`). **The user plays the live game on an iPad**,
-which reads whatever is currently pushed to `origin/main` (not this local working copy) — so a code
-change is not "live" for the user until it's committed and pushed. Don't assume "update the tablet /
+via GitHub Pages at `https://daisin78s.github.io/-/` (confirmed live 2026-08-11 — serves `main`'s
+`index.html`/`main.js`/`style.css` directly, no build step or `.github/workflows` involved), which
+reads whatever is currently pushed to `origin/main` (not this local working copy) — so a code change
+is not "live" for the user until it's committed and pushed. **After any change gets committed, push
+to `origin main`** so the iPad picks it up — GitHub Pages typically takes **up to ~10 minutes** to
+reflect a new push, so don't be surprised if the iPad still shows the old version immediately after
+pushing; that's expected propagation delay, not a failed deploy. Don't assume "update the tablet /
 iPad version" means a CSS/responsive-layout task; confirm with the user whether they mean pushing to
 GitHub vs. an actual layout bug at tablet viewport widths (these are two very different tasks and have
 been confused before).
@@ -41,6 +46,49 @@ The `claude_memory_dice_wp` folder one level up (`C:\Users\miwa\Desktop\ダイ�
 holds memory files carried over from another PC (dev log, DSL/flow/QST/UI-requirement specs,
 collaboration-style feedback) — read these at the start of a session to pick up prior context, since
 this machine's own autonomous memory doesn't carry over from that other PC.
+
+## Collaboration style — ask before guessing
+
+When a card/rule text, DSL semantics, or an architecture-level design choice has more than one
+reasonable reading, **ask before implementing** rather than guessing — this is a data-driven DSL
+system where a wrong guess about intent tends to cause expensive rework once more cards depend on
+the same assumption. This applies to genuine open questions (e.g. "how should the player pick a
+dice-placement target in the UI" — multiple defensible designs) — not routine implementation
+details (variable names, which existing helper to reuse, etc.), and it doesn't mean asking
+step-by-step permission ("can I do X next?") once a plan is already unambiguous. See
+`claude_memory_dice_wp/feedback_dice_wp_collaboration_style.md` (one level up from this repo) for
+the fuller history behind this and related norms (push cadence, headless-screenshot UI-verification
+workflow).
+
+**Don't make unrequested changes alongside a requested one — ask first.** When told to change one
+thing (a card's effect, a number, a condition), change only that thing; don't also touch adjacent
+details (icon, wording, unrelated formatting) that weren't part of the instruction, and don't
+over-implement a simple rule change into something more complex than asked. Past mistakes cited by
+the user: changing C001A's effect also changed its icon, when the icon should have stayed as-is;
+and a "2K→2A" change should have been expressed as a plain rule addition ("if the player only has
+1K, it becomes 1A") rather than a more complex implementation. If a requested change seems to imply
+a side-effect elsewhere, ask whether that side-effect is wanted instead of just doing it.
+
+**Speak up when free, even if a background task is still running.** Some tools here run long
+in the background — e.g. `node tools/ai_batch_run.js 200` for a 200-game AI battle, or
+`ai_data_report.js` regenerating `AI.DATA.xlsx` — and it's tempting to treat the whole task as
+"not done yet" until that finishes. Instead, as soon as there's no more foreground work to do,
+tell the user the background job is still running and that you're ready for the next task in the
+meantime, rather than going quiet until the background result lands.
+
+**A question is not an implementation instruction.** When the user phrases something as a question
+— "○○はできますか / can XX be done?", "○○はどうですか / what about XX?" — rather than a direct
+instruction, don't start implementing from that alone. Answer the question first (e.g. "here's how
+that could be done"), and if it needs more clarity before building, say so explicitly ("before
+that, can I ask a few things?") rather than guessing and building. Only move to implementation once
+the user has actually asked for it.
+
+**Flag predictable downsides before implementing, not after.** If you can foresee that a requested
+change will cause a problem elsewhere — breaks another card/rule interaction, degrades existing
+behavior, conflicts with a documented decision — say so before writing the code, not as a surprise
+once it's already built. This is a specific case of the "ask before guessing" rule above: a
+foreseeable downside is itself a form of ambiguity worth surfacing (does the user still want this,
+knowing the tradeoff, or is there a better way?).
 
 ## Commands
 
