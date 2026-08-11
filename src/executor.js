@@ -159,7 +159,9 @@ function grantResource(state, index, playerId, resource, count) {
   return effectiveResource;
 }
 
-/** Returns true and pays if affordable; returns false and leaves state untouched otherwise. */
+/** Returns true and pays if affordable; returns false and leaves state untouched otherwise. K spending
+ * is capped below player.lockedK (see its own doc in game-state.js -- K reserved for an AREA009 usage
+ * fee, off-limits to every other payment). */
 function tryPay(state, playerId, resource, count) {
   const player = getPlayer(state, playerId);
   const dieKind = DICE_KIND_BY_RESOURCE[resource];
@@ -176,7 +178,8 @@ function tryPay(state, playerId, resource, count) {
     });
     return true;
   }
-  if ((player.resources[resource] || 0) < count) return false;
+  const available = resource === 'K' ? (player.resources.K || 0) - (player.lockedK || 0) : (player.resources[resource] || 0);
+  if (available < count) return false;
   player.resources[resource] -= count;
   return true;
 }
@@ -226,7 +229,9 @@ function resolvePayment(state, playerId, items, colorPreference) {
     const dieKind = DICE_KIND_BY_RESOURCE[item.resource];
     const have = dieKind
       ? player.dice.filter((d) => d.kind === dieKind).length
-      : item.resource === 'Z' ? zPool : (player.resources[item.resource] || 0);
+      : item.resource === 'Z' ? zPool
+      : item.resource === 'K' ? (player.resources.K || 0) - (player.lockedK || 0) // see tryPay's own doc
+      : (player.resources[item.resource] || 0);
     if (have < item.count) return { ok: false, resource: item.resource };
     if (item.resource === 'Z') zPool -= item.count;
     resolved.push(item);
@@ -991,6 +996,7 @@ function applyTurnEnd(state, index, playerId) {
     player.resources.K -= player.pendingFee.amount;
     state.maps[player.pendingFee.mapId].accumulatedFee += player.pendingFee.amount;
     player.pendingFee = null;
+    player.lockedK = 0;
   }
   for (const { row } of ownedCardRows(state, index, playerId)) {
     if (!row.TURNEND) continue;

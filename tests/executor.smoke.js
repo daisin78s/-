@@ -499,7 +499,7 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 // 15. EMBLEM_COUNT/EMBLEM_SET_COUNT with multi-emblem monuments (2026-07-30: game.xlsx's M sheet
 // split EMBLEM into per-type EMBLEM_A/EMBLEM_B/EMBLEM_C counts, so a single monument can now count
 // toward more than one emblem -- e.g. M004 has EMBLEM_A=1,EMBLEM_B=1,EMBLEM_C=1, i.e. one each of
-// 地/天/人; M012 has EMBLEM_C=2, i.e. two 人). Regression test for the emblemCountsForRow fix.
+// 地/天/人; M012 has EMBLEM_C=3, i.e. three 人). Regression test for the emblemCountsForRow fix.
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
@@ -509,14 +509,14 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   check('COUNT(人) (EMBLEM_COUNT alias) counts M004\'s 人 emblem', executor.evalMetric(state, index, 'P1', { name: 'COUNT', args: ['人'] }), 1);
   check('EMBLEM_SET_COUNT is 1 with exactly one of each emblem', executor.evalMetric(state, index, 'P1', { name: 'EMBLEM_SET_COUNT', args: [] }), 1);
 
-  giveCard(state, 'M012', 'P1'); // EMBLEM_C=2 (two 人), no 天/地
-  check('EMBLEM_COUNT(人) sums across cards: M004\'s 1 + M012\'s 2', executor.evalMetric(state, index, 'P1', { name: 'EMBLEM_COUNT', args: ['人'] }), 3);
+  giveCard(state, 'M012', 'P1'); // EMBLEM_C=3 (three 人), no 天/地
+  check('EMBLEM_COUNT(人) sums across cards: M004\'s 1 + M012\'s 3', executor.evalMetric(state, index, 'P1', { name: 'EMBLEM_COUNT', args: ['人'] }), 4);
   check('EMBLEM_SET_COUNT stays capped by the scarcest emblem (天=1, 地=1) despite 人=3', executor.evalMetric(state, index, 'P1', { name: 'EMBLEM_SET_COUNT', args: [] }), 1);
 }
 
 // ---------------------------------------------------------------------------
 // 16. MAX_EMBLEM_COUNT/TOTAL_EMBLEM_COUNT/COST_TOTAL (2026-07-30, added for QST GOAL conditions --
-// see [[project-dice-wp-qst-spec]]). Reuses the same M004(地1,天1,人1)/M012(人2) fixtures as #15.
+// see [[project-dice-wp-qst-spec]]). Reuses the same M004(地1,天1,人1)/M012(人3) fixtures as #15.
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
@@ -525,9 +525,9 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   check('TOTAL_EMBLEM_COUNT sums all three types: 1+1+1', executor.evalMetric(state, index, 'P1', { name: 'TOTAL_EMBLEM_COUNT', args: [] }), 3);
   check('COST_TOTAL reads M004\'s printed COST (2A+2B+2C)', executor.evalMetric(state, index, 'P1', { name: 'COST_TOTAL', args: [] }), 6);
 
-  giveCard(state, 'M012', 'P1'); // COST=13C (total 13); EMBLEM 人2 (no 天/地)
-  check('MAX_EMBLEM_COUNT now follows 人 (1+2=3), ahead of 天/地 (1 each)', executor.evalMetric(state, index, 'P1', { name: 'MAX_EMBLEM_COUNT', args: [] }), 3);
-  check('TOTAL_EMBLEM_COUNT sums across cards too: (1+1+1) + 2', executor.evalMetric(state, index, 'P1', { name: 'TOTAL_EMBLEM_COUNT', args: [] }), 5);
+  giveCard(state, 'M012', 'P1'); // COST=13C (total 13); EMBLEM 人3 (no 天/地)
+  check('MAX_EMBLEM_COUNT now follows 人 (1+3=4), ahead of 天/地 (1 each)', executor.evalMetric(state, index, 'P1', { name: 'MAX_EMBLEM_COUNT', args: [] }), 4);
+  check('TOTAL_EMBLEM_COUNT sums across cards too: (1+1+1) + 3', executor.evalMetric(state, index, 'P1', { name: 'TOTAL_EMBLEM_COUNT', args: [] }), 6);
   check('COST_TOTAL sums across cards: M004\'s 6 + M012\'s 13', executor.evalMetric(state, index, 'P1', { name: 'COST_TOTAL', args: [] }), 19);
 
   giveCard(state, 'A001A', 'P1'); // COST=2A (total 2)

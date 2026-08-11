@@ -34,13 +34,13 @@ function giveCard(state, faceCardId, ownerId) {
   state.players.push(createPlayer('P1', 'Alice'));
   state.turnOrder = ['P1'];
 
-  giveCard(state, 'M001', 'P1'); // VP=3
+  giveCard(state, 'M001', 'P1'); // VP=4
   giveCard(state, 'A001A', 'P1'); // A sheet VP -- check actual value below
   const a001Vp = getCardRow(index, 'A001A').VP;
   state.players[0].resources.VP = 5;
   giveCard(state, 'CON003A', 'P1'); // PASSIVE=IF(CARD_COUNT<=6,VP_MODIFIER(-2)) -- CARD_COUNT is 2 (M001+A001), so active
 
-  const expected = 3 + a001Vp + 5 + -2;
+  const expected = 4 + a001Vp + 5 + -2;
   check('computeFinalScore sums card VP + resource VP + active VP_MODIFIER', scoring.computeFinalScore(state, index, 'P1'), expected);
 }
 

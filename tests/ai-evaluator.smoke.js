@@ -95,7 +95,7 @@ function freshState(round) {
 
 // ---------------------------------------------------------------------------
 // Owned cards: A001A has eval-table value 30 (round 1) and printed VP 0 -- contributes exactly 30.
-// M001 has eval-table value 0 (all rounds) and printed VP 3 -- contributes 3 * VP-weight(round 1) = 30.
+// M001 has eval-table value 0 (all rounds) and printed VP 4 -- contributes 4 * VP-weight(round 1) = 40.
 // ---------------------------------------------------------------------------
 function giveCard(state, faceId, playerId) {
   const inst = createCardInstance(faceId);
@@ -112,7 +112,7 @@ function giveCard(state, faceId, playerId) {
 {
   const state = freshState(1);
   giveCard(state, 'M001', 'P1');
-  check('Owned M001 (eval=0, VP=3) contributes 3 * VP-weight, not the raw VP count', evaluator.score(state, 'P1'), 30);
+  check('Owned M001 (eval=0, VP=4) contributes 4 * VP-weight, not the raw VP count', evaluator.score(state, 'P1'), 40);
 }
 
 // ---------------------------------------------------------------------------
@@ -139,7 +139,7 @@ function giveCard(state, faceId, playerId) {
 // Monument-sniping risk (2026-08-04, per user feedback: "そのモニュメントとられるかもは相手のダイス
 // と資源が今足りているかで判断するようにしてください"): a monument still in the M shop that an
 // opponent can already build right now (die value >= its DICE threshold, resources >= its COST)
-// subtracts its would-be-owned value from this player's score. M012 (DICE=">=1", COST="13C", VP=5) is
+// subtracts its would-be-owned value from this player's score. M012 (DICE=">=1", COST="13C", VP=6) is
 // used since its threshold-1 requirement is satisfiable by any real die value (1-6) without needing the
 // castle's multi-die accumulation this simple check doesn't model.
 // ---------------------------------------------------------------------------
@@ -159,7 +159,7 @@ function stateWithM012InShop(round) {
   p2.resources.C = 13; // M012's full COST
   const withoutM012Risk = evaluator.score(freshState(1), 'P1'); // 0, no cards/resources/dice at all
   const withM012Risk = evaluator.score(state, 'P1');
-  check('An opponent who can already afford M012 right now subtracts its would-be value from the score', withM012Risk, withoutM012Risk - (0 /* M012's own eval-table value */ + 5 * 10 /* VP=5 * round-1 VP weight */));
+  check('An opponent who can already afford M012 right now subtracts its would-be value from the score', withM012Risk, withoutM012Risk - (0 /* M012's own eval-table value */ + 6 * 10 /* VP=6 * round-1 VP weight */));
 }
 {
   const state = stateWithM012InShop(1);

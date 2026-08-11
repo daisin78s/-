@@ -79,6 +79,10 @@ function chargeUsageFeeIfOwed(state, map, playerId) {
   if (!fee) return;
   const player = state.players.find((p) => p.id === playerId);
   player.pendingFee = fee;
+  // Reserve this much K for the fee itself, AREA009 only (2026-08-11, per user decision -- see
+  // PlayerState.lockedK's own doc in game-state.js for the deadlock this closes). Other tier B/C AREAs
+  // deliberately keep the older, unreserved behavior.
+  if (map.mapId === AREA009_MAP_ID) player.lockedK = fee.amount;
 }
 
 /** Pure: could playerId ever actually pay a fee of `amount` K, counting not just K on hand but every

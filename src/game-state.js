@@ -127,6 +127,14 @@ function createDie(id, kind) {
  *   executor.applyTurnEnd deducts K from the player and adds it to the map's accumulatedFee, then clears
  *   this back to null. At most one is ever pending at a time ("1ターン=ダイス1個の配置" means at most one
  *   placement per turn); Undo clears it for free since it's plain GameState.
+ * @property {number} lockedK - K set aside for a pendingFee incurred specifically at 元老院/AREA009
+ *   (board.AREA009_MAP_ID) -- executor.tryPay/resolvePayment refuse to spend below this floor on
+ *   anything else (2026-08-11, per user report: with monument VP raised, a seeded AI game got JOB005's
+ *   automatic ON(GET(K),CHANGE(K,Z)) reaction converting 1 of AREA009C's ADD(2K,BZ) reward into Z, which
+ *   then paid for a monument build, leaving the AREA009 fee permanently unpayable -- see board.js's
+ *   chargeUsageFeeIfOwed for where this gets set). Scoped to AREA009 only, per user decision (other
+ *   tier B/C AREAs' fees keep the pre-existing, unreserved canAffordFee-at-placement-time behavior).
+ *   Cleared back to 0 in lockstep with pendingFee, in executor.applyTurnEnd.
  */
 
 /** Fixed palette, assigned in player order (player 1 = PINK, ...). Provisional -- see PlayerState.color. */
@@ -179,6 +187,7 @@ function createPlayer(id, name, color = null) {
     freeActionTaps,
     blockedBuildCategoriesThisTurn: [],
     pendingFee: null,
+    lockedK: 0,
   };
 }
 
