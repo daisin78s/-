@@ -56,14 +56,11 @@ function check(label, actual, expected) {
 function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 
 // ---------------------------------------------------------------------------
-// Round 2+: rerollColorDice/rerollWhiteDice each record their own checkpoint
-// (confirmed 2026-07-29: color dice bulk-reroll at ROUND END, not round
-// start, except after round 4; white dice are rolled once on acquisition
-// and never bulk-rerolled at all -- see turn-flow.js/executor.js). This
-// checks the *checkpoint* fires at the right moment (endRound's color
-// reroll) and correctly excludes the white die from what gets restored
-// (since the white die's value never changes here, there's nothing to
-// checkpoint/undo about it in the first place).
+// Round 2+: rerollDiceForNextRound records its own checkpoint (confirmed
+// 2026-08-12, per the INST rulebook sheet: both COLOR and still-in-hand
+// WHITE dice bulk-reroll at ROUND END, not round start, except after round
+// 4 -- see turn-flow.js/executor.js). This checks the checkpoint fires at
+// the right moment (endRound's reroll) and undo restores both dice kinds.
 // ---------------------------------------------------------------------------
 {
   const state = createEmptyGameState('undo-smoke-3');
@@ -78,13 +75,14 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 
   const colorDie = state.players[0].dice.find((d) => d.kind === 'COLOR');
   const colorValueBeforeRoundEnd = colorDie.value;
-  turnFlow.endRound(state, index); // round 1 < 4 -> rerolls COLOR dice only, records a fresh checkpoint
+  turnFlow.endRound(state, index); // round 1 < 4 -> rerolls COLOR + in-hand WHITE dice, records a fresh checkpoint
 
-  check('White die is untouched by endRound (never bulk-rerolled)', die.value, whiteValueBeforeRoundEnd);
   const result = undoMod.undo(state);
   check('undo() after endRound succeeds', result.success, true);
   const restoredColorDie = state.players[0].dice.find((d) => d.kind === 'COLOR');
+  const restoredWhiteDie = state.players[0].dice.find((d) => d.kind === 'WHITE');
   check('Undo restores the color die to its value from just before the round-end reroll', restoredColorDie.value, colorValueBeforeRoundEnd);
+  check('Undo restores the white die to its value from just before the round-end reroll', restoredWhiteDie.value, whiteValueBeforeRoundEnd);
 }
 
 // ---------------------------------------------------------------------------

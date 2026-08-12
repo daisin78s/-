@@ -1392,6 +1392,18 @@ function buildVpModifierIcon(actionText) {
   return actionRow([actionSuffix(`${match[1]}VP`)]);
 }
 
+/** VP_MODIFIER(COUNT(emblem)): a persistent (re-evaluated live, not a one-time snapshot -- confirmed
+ * 2026-08-12, see executor.collectVpModifiers) VP bonus equal to however many of that emblem the
+ * player currently owns -- shown as {emblem, in its emblem color}×VP, matching
+ * buildCountEmblemWdIcon's "🎲×{emblem}" convention for the same COUNT(emblem) dynamic-count idiom. */
+function buildCountEmblemVpModifierIcon(actionText) {
+  const match = /^VP_MODIFIER\(COUNT\(([天地人])\)\)$/.exec(actionText || '');
+  if (!match) return null;
+  const emblemSpan = el('span', 'action-emblem', match[1]);
+  emblemSpan.dataset.emblem = match[1];
+  return actionRow([emblemSpan, actionTimes(), actionSuffix('VP')]);
+}
+
 /** IF(CARD_COUNT<=n,VP_MODIFIER(m)): a scoring penalty/bonus if the player's total card count is at
  * most n -- shown as 🃏<=n on one row, the VP modifier on the row below (confirmed 2026-07-29). */
 function buildCardCountVpModifierIcon(actionText) {
@@ -1596,6 +1608,8 @@ function buildActionIcons(actionText, stacked) {
   if (resourceLimitIcon) return resourceLimitIcon;
   const vpModifierIcon = buildVpModifierIcon(actionText);
   if (vpModifierIcon) return vpModifierIcon;
+  const countEmblemVpModifierIcon = buildCountEmblemVpModifierIcon(actionText);
+  if (countEmblemVpModifierIcon) return countEmblemVpModifierIcon;
   const cardCountVpModifierIcon = buildCardCountVpModifierIcon(actionText);
   if (cardCountVpModifierIcon) return cardCountVpModifierIcon;
   const emblemSetVpModifierIcon = buildEmblemSetVpModifierIcon(actionText);

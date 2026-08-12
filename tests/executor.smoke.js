@@ -108,6 +108,21 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 }
 
 // ---------------------------------------------------------------------------
+// 3b. B008B: PASSIVE=VP_MODIFIER(COUNT(天)) -- persistent, not a one-time ONCE snapshot (2026-08-12,
+//     per user request: "即時ではなく永続効果にしたい" -- moved off ONCE precisely so it keeps
+//     recomputing). Recomputed live from currently-owned 天-emblem cards every time
+//     collectVpModifiers is called, same as computeFinalScore recomputes card VP live.
+// ---------------------------------------------------------------------------
+{
+  const state = freshState();
+  giveCard(state, 'B008B', 'P1'); // EMBLEM_B=2 -> already contributes 2 to COUNT(天) on its own
+  check('B008B: VP_MODIFIER(COUNT(天)) starts at 2 (from B008B\'s own 2 EMBLEM_B)', executor.collectVpModifiers(state, index, 'P1'), 2);
+
+  giveCard(state, 'B001A', 'P1'); // EMBLEM_B=1 -> +1 天
+  check('B008B: VP_MODIFIER(COUNT(天)) rises to 3 as soon as another 天-emblem card is owned (live, not frozen at LVUP time)', executor.collectVpModifiers(state, index, 'P1'), 3);
+}
+
+// ---------------------------------------------------------------------------
 // 4. JOB005: TAP=ON(GET(K),CHANGE(K,Z)), TURNEND=UNTAP()
 // ---------------------------------------------------------------------------
 {

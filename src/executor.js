@@ -86,15 +86,20 @@ function ownedCardRows(state, index, playerId) {
 function colorDiceCount(player) {
   return player.dice.filter((d) => d.kind === 'COLOR').length;
 }
+/** In-hand WHITE dice only (excludes ones already placed on a map SLOT) -- confirmed 2026-08-12 per the
+ * INST rulebook sheet: the 5-die cap is a "how many can you hold" limit, not a "how many can exist at
+ * once" limit, so a placed white die shouldn't count against it. */
 function whiteDiceCount(player) {
-  return player.dice.filter((d) => d.kind === 'WHITE').length;
+  return player.dice.filter((d) => d.kind === 'WHITE' && d.placedMapId === null).length;
 }
 
 /**
  * Grants one die, applying the overflow-conversion chain (color -> white -> 2K).
- * Confirmed 2026-07-29: a die is rolled exactly once, immediately when gained
- * -- white dice are never rerolled again after that; color dice are (in bulk,
- * separately) at round end.
+ * A die is rolled once, immediately when gained. If still unplaced in hand at
+ * round end it's rerolled in bulk along with every other unplaced die of
+ * either kind (confirmed 2026-08-12, see turn-flow.js's rerollDiceForNextRound) --
+ * a WHITE die that was actually placed this round is discarded instead (see
+ * turn-flow.js's endRound doc).
  *
  * Does NOT record its own undo checkpoint (corrected 2026-08-02: it used to, but that call was
  * superseded by main.js's render()-driven "checkpoint once at the start of each player's TURN"
@@ -536,9 +541,14 @@ function getPassiveRules(state, index, playerId, type) {
   return out;
 }
 
-/** Sum of every active VP_MODIFIER, for final scoring. */
+/** Sum of every active VP_MODIFIER, for final scoring. Each rule's count is resolved live via
+ * evalCountNode (2026-08-12) -- a literal (e.g. VP_MODIFIER(-2)) is a fixed number as before, but a
+ * dynamic one (e.g. VP_MODIFIER(COUNT(天))) is recomputed from current game state on every call, same
+ * as computeFinalScore recomputing owned cards' VP live -- so it's a genuinely persistent/ongoing
+ * effect, not a one-time snapshot. */
 function collectVpModifiers(state, index, playerId) {
-  return getPassiveRules(state, index, playerId, 'VP_MODIFIER').reduce((sum, r) => sum + r.amount, 0);
+  return getPassiveRules(state, index, playerId, 'VP_MODIFIER')
+    .reduce((sum, r) => sum + evalCountNode(state, index, playerId, r.count), 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -1198,6 +1208,7 @@ module.exports = {
   runProgram,
   evalCondition,
   evalMetric,
+  evalCountNode,
   getPassiveRules,
   activePassiveCommands,
   collectVpModifiers,

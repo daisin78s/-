@@ -144,7 +144,10 @@ function lowerCall(node) {
         count: numberValue(node.args[2]),
       };
     case 'VP_MODIFIER':
-      return { type: 'VP_MODIFIER', amount: numberValue(node.args[0]) };
+      // count supports a dynamic expression (e.g. VP_MODIFIER(COUNT(天)), confirmed 2026-08-12) same
+      // as ADD's item counts -- see lowerCount's own doc. A literal like VP_MODIFIER(-2) still lowers
+      // to {kind:'literal', value:-2} exactly as before.
+      return { type: 'VP_MODIFIER', count: lowerCount(node.args[0]) };
     case 'CONVERT_LIMIT':
       return { type: 'CONVERT_LIMIT', scope: identLikeName(node.args[0]), limit: numberValue(node.args[1]) };
     case 'UPGRADE_LIMIT':

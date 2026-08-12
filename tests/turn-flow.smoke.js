@@ -143,7 +143,7 @@ for (const player of state.players) {
 }
 check('isRoundOver() is true once every die is placed', turnFlow.isRoundOver(state), true);
 
-turnFlow.endRound(state, index); // round 1 < 4 -> also bulk-rerolls every COLOR die (confirmed rule)
+turnFlow.endRound(state, index); // round 1 < 4 -> also bulk-rerolls every COLOR + in-hand WHITE die (confirmed rule)
 assertTrue('endRound() returns every die to hand', state.players.every((p) => p.dice.every((d) => d.placedMapId === null)));
 assertTrue('endRound() clears every map slot', Object.values(state.maps).every((m) => m.slots.every((occ) => occ.length === 0)));
 {
@@ -306,7 +306,8 @@ check('startRound(2) itself does not touch dice (already rerolled at the previou
   const remaining = s.players[0].dice;
   check('The placed white die is gone for good (not returned to hand)', remaining.some((d) => d.id === 'placed-white-1'), false);
   check('Only the 2 non-placed white dice remain', remaining.length, 2);
-  assertTrue('The untouched white die kept its un-rerolled value (6)', remaining.find((d) => d.id === 'untouched-white-1').value === 6);
+  const untouchedAfter = remaining.find((d) => d.id === 'untouched-white-1').value;
+  assertTrue('The untouched white die was rerolled to a valid die value (round 1 < 4, per the INST rule)', untouchedAfter >= 1 && untouchedAfter <= 6);
   const passedAfter = remaining.find((d) => d.id === 'passed-white-1');
   check('The merely-passed white die stayed in hand', !!passedAfter, true);
   check('...and is no longer marked passed (placeable again next round)', passedAfter.passed, false);

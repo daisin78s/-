@@ -17,12 +17,16 @@
  * from the castle (MAP008)'s dice at endRound() via
  * computeNextRoundTurnOrder() -- see that function for the algorithm.
  *
- * Dice rolling (confirmed 2026-07-29): white dice are rolled exactly once,
- * the instant they're gained, and never rerolled again -- carried over
- * unchanged round to round (see executor.js's grantOneDie, which handles
- * this at the point of grant, not here). Color dice, by contrast, are ALL
- * rerolled in bulk at the end of every round -- EXCEPT round 4 (no round 5
- * to prepare dice for). See rerollColorDice()/endRound() below.
+ * Dice rolling: a newly-granted die (COLOR or WHITE) is rolled once
+ * immediately at grant time (see executor.js's grantOneDie). Any die still
+ * unplaced in a player's hand at round end -- COLOR or WHITE alike -- is
+ * bulk-rerolled there (confirmed 2026-08-12: white dice were previously
+ * exempt from this and carried their value forward unchanged, but the
+ * intended rule, per the INST rulebook sheet, is that an unplaced white die
+ * gets rolled again too) -- EXCEPT round 4 (no round 5 to prepare dice for).
+ * See rerollDiceForNextRound()/endRound() below. A WHITE die that was
+ * actually *placed* this round is discarded outright at round end (see
+ * endRound()'s own doc) rather than being rerolled, same as before.
  */
 
 'use strict';
@@ -44,22 +48,23 @@ const qst = require('./qst');
 // Round lifecycle
 // ---------------------------------------------------------------------------
 
-/** Re-rolls every COLOR die a player currently owns, in place. Records the pre-roll undo checkpoint. */
-function rerollColorDice(state) {
+/** Re-rolls every COLOR die a player currently owns, plus every WHITE die still in hand (i.e. not
+ * discarded as "placed" by endRound()'s filter above this call), in place. Records the pre-roll undo
+ * checkpoint. */
+function rerollDiceForNextRound(state) {
   recordCheckpoint(state);
   for (const player of state.players) {
-    for (const die of player.dice) if (die.kind === 'COLOR') die.value = rollDie(state.rng);
+    for (const die of player.dice) if (die.kind === 'COLOR' || die.kind === 'WHITE') die.value = rollDie(state.rng);
   }
 }
 
 /**
  * Advances state.round and prepares that round's board: reveals the special
- * shop at round 2 (SHOP sheet's ROUND_MIN=2). Does NOT roll dice -- color
- * dice are rerolled at the *end* of the previous round (see endRound()),
- * and white dice are never bulk-rerolled at all (rolled once on grant, see
- * executor.js's grantOneDie). Does not touch turnOrder or
- * currentPlayerIndex -- call this once, then drive play via
- * getNextTurn()/endTurn()/endRound().
+ * shop at round 2 (SHOP sheet's ROUND_MIN=2). Does NOT roll dice -- both
+ * unplaced COLOR and unplaced WHITE dice are bulk-rerolled at the *end* of
+ * the previous round instead (see endRound()/rerollDiceForNextRound()).
+ * Does not touch turnOrder or currentPlayerIndex -- call this once, then
+ * drive play via getNextTurn()/endTurn()/endRound().
  */
 function startRound(state) {
   state.round += 1;
@@ -162,16 +167,18 @@ function computeNextRoundTurnOrder(state) {
  * (removed from player.dice entirely) rather than returned, so it never
  * comes back next round even unrolled. A WHITE die merely *passed* on (never
  * placed this round) is untouched, same as before, and remains available
- * next round. Also clears every map's slots (recomputed from each map's *current*
- * AREA, in case a tier flip changed the slot layout since last round),
- * grants 3K for every still-unplaced COLOR die (confirmed 2026-07-29: a
- * color die a player chose not to place this round auto-resolves to 3K,
- * which is what makes it "used" -- every color die is collected and
- * rerolled the same way by round's end, whether it was actually placed or
- * fell back to this), re-rolls every COLOR die in bulk (skipped after round
- * 4, the one confirmed exception, since there's no next round to prepare
- * for; white dice are never re-rolled here at all, see the module doc), and
- * untaps every free action *and every card* (confirmed 2026-08-01: "ラウンド
+ * next round -- and gets rerolled below along with it (confirmed
+ * 2026-08-12, per the INST rulebook sheet). Also clears every map's slots
+ * (recomputed from each map's *current* AREA, in case a tier flip changed
+ * the slot layout since last round), grants 3K for every still-unplaced
+ * COLOR die (confirmed 2026-07-29: a color die a player chose not to place
+ * this round auto-resolves to 3K, which is what makes it "used" -- every
+ * color die is collected and rerolled the same way by round's end, whether
+ * it was actually placed or fell back to this), re-rolls every COLOR die
+ * AND every still-in-hand WHITE die in bulk via rerollDiceForNextRound
+ * (skipped after round 4, the one confirmed exception, since there's no
+ * next round to prepare for), and untaps every free action *and every
+ * card* (confirmed 2026-08-01: "ラウンド
  * 終了時ダイスを回収するときに全てのカードはUNTAPします" -- previously only
  * free actions were untapped here, leaving any card with no TURNEND=UNTAP()
  * of its own, e.g. C004A's bare TAP=ADD(K), stuck tapped forever after a
@@ -210,7 +217,7 @@ function endRound(state, index) {
   executorApi.resetFreeActionsForNewRound(state);
   for (const cardState of Object.values(state.cards)) cardState.tapped = false;
   state.currentPlayerIndex = 0;
-  if (state.round < 4) rerollColorDice(state);
+  if (state.round < 4) rerollDiceForNextRound(state);
   if (state.round >= 4) {
     state.phase = 'GAME_END';
     // QST's rank-based rewards (2026-08-09, see qst.js's own doc) settle exactly here, exactly once --
@@ -225,7 +232,7 @@ function endRound(state, index) {
 }
 
 module.exports = {
-  rerollColorDice,
+  rerollDiceForNextRound,
   startRound,
   isRoundOver,
   getNextTurn,

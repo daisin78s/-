@@ -381,7 +381,7 @@ function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorO
     // Data-driven off JOB008's actual PASSIVE field (IF(TOTAL_EMBLEM_COUNT>=3/6/9,VP_MODIFIER(1)) today)
     // rather than hardcoding "divide by 3, cap 3", so this keeps working if the thresholds ever change.
     const job008BonusVp = player.jobCardId === 'JOB008'
-      ? executor.activePassiveCommands(state, index, player.id, job008Row).filter((c) => c.type === 'VP_MODIFIER').reduce((sum, c) => sum + c.amount, 0)
+      ? executor.activePassiveCommands(state, index, player.id, job008Row).filter((c) => c.type === 'VP_MODIFIER').reduce((sum, c) => sum + executor.evalCountNode(state, index, player.id, c.count), 0)
       : null;
     roundDetailByPlayerId[player.id] = {
       buildsByRound: buildsByRound[player.id],
