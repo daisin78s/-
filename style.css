@@ -2186,6 +2186,22 @@ h1, h2, h3 { margin: 0; }
   cursor: pointer;
 }
 
+/* テストゲーム開始 picker's card grid (2026-08-13, per user feedback: the plain stacked-block layout
+   .card-inst-modal__body gives by default put every card on its own row, tall and hard to scan/select --
+   "縦に並んでいて選びにくいうえに一部しか見えない"). Fixed 8-wide grid (wraps to a 2nd/3rd row once past
+   8, not a width-dependent flex-wrap) -- own horizontal scrollbar on a narrower viewport rather than
+   shrinking the modal or dropping to fewer columns, since 8-per-row was requested specifically. Capped
+   vertical height with its own scrollbar so a long list (RESOURCE=18, ABC=21) can't push the END button
+   off-screen the way an unbounded modal did before. */
+#debug-setup-list {
+  display: grid;
+  grid-template-columns: repeat(8, 122px);
+  gap: 8px;
+  justify-content: center;
+  max-height: 60vh;
+  overflow: auto;
+}
+
 /* Numbered pick-order badge (2026-08-13) -- only shown for the ABCカード step, where the order clicked
    determines SHOP101/102/... (see main.js's renderDebugSetupOverlay). Absolutely positioned against
    .owned-card-cell's own position:relative (see that rule's own doc, updated for this). */
