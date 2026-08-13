@@ -2205,14 +2205,23 @@ h1, h2, h3 { margin: 0; }
    the modal or dropping columns. grid-template-columns itself is set per step by main.js's
    renderDebugSetupOverlay (see DEBUG_SETUP_STEPS' own columns field -- each step uses a column count
    that exactly fits its own card total with no partial last row: CON 5x2, JOB 4x2, RESOURCE 6x3,
-   ABC 7x3), not one shared value here. Capped vertical height with its own scrollbar so a long list
-   (RESOURCE=18, ABC=21) can't push the END button off-screen the way an unbounded modal did before. */
+   ABC 7x3), not one shared value here. No height cap of its own (2026-08-13, per user feedback: a 60vh
+   cap here left even a normal-size window's 3-row steps a little short, forcing an inner scrollbar --
+   "選択画面が微妙に足りなくてスクロールするようになっています" -- swapped for a single, much larger cap
+   on the whole modal below instead, so ordinary viewports need no scrolling anywhere). */
 #debug-setup-list {
   display: grid;
   gap: 8px;
   justify-content: center;
-  max-height: 60vh;
-  overflow: auto;
+}
+
+/* Whole-modal cap (2026-08-13, see #debug-setup-list's own doc above) -- only a genuinely short
+   viewport ever reaches this; a normal one fits every step's content (title + grid + END button) with
+   room to spare. One scroll region for the whole modal (not just the card grid) so the END button
+   always scrolls into view together with the cards, never separately cut off. */
+#debug-setup-overlay .card-inst-modal {
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
 /* Numbered pick-order badge (2026-08-13) -- only shown for the ABCカード step, where the order clicked
