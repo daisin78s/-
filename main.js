@@ -806,12 +806,15 @@ function toggleDebugMode() {
 // ---------------------------------------------------------------------------
 
 /** One entry per picker screen, in the order shown. max=1 for CON reads the same as the others --
- * "pick at most one", not mandatory; pressing END with nothing picked is always valid everywhere. */
+ * "pick at most one", not mandatory; pressing END with nothing picked is always valid everywhere.
+ * columns (2026-08-13, per user request) sets #debug-setup-list's grid width for that step -- chosen
+ * per step to exactly fit its own card count with no partial last row (CON 5x2=10, JOB 4x2=8,
+ * RESOURCE 6x3=18, ABC 7x3=21), not a single shared column count across every step. */
 const DEBUG_SETUP_STEPS = [
-  { key: 'con', label: 'CON（最大1枚）', max: 1, faceIds: () => INDEX.raw.CON.map((r) => r.ID) },
-  { key: 'job', label: 'JOB（最大6枚）', max: 6, faceIds: () => INDEX.raw.JOB.map((r) => r.ID) },
-  { key: 'resource', label: '初期資源（最大2枚）', max: 2, faceIds: () => INDEX.raw.RESOURCE.map((r) => r.ID) },
-  { key: 'abc', label: 'ABCカード（最大6枚、選んだ順にSHOP101→106）', max: 6, faceIds: () => setupMod.collectNormalShopFaceIds(INDEX) },
+  { key: 'con', label: 'CON（最大1枚）', max: 1, columns: 5, faceIds: () => INDEX.raw.CON.map((r) => r.ID) },
+  { key: 'job', label: 'JOB（最大6枚）', max: 6, columns: 4, faceIds: () => INDEX.raw.JOB.map((r) => r.ID) },
+  { key: 'resource', label: '初期資源（最大2枚）', max: 2, columns: 6, faceIds: () => INDEX.raw.RESOURCE.map((r) => r.ID) },
+  { key: 'abc', label: 'ABCカード（最大6枚、選んだ順にSHOP101→106）', max: 6, columns: 7, faceIds: () => setupMod.collectNormalShopFaceIds(INDEX) },
 ];
 
 /** null while the picker is closed; otherwise {stepIndex, selections: {con:[], job:[], resource:[], abc:[]}}
@@ -881,6 +884,7 @@ function renderDebugSetupOverlay() {
   const selected = debugSetupFlow.selections[step.key];
   const list = document.getElementById('debug-setup-list');
   list.innerHTML = '';
+  list.style.gridTemplateColumns = `repeat(${step.columns}, 122px)`;
   for (const faceId of step.faceIds()) {
     const cardNode = buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true });
     const tall = cardNode.classList.contains('shop-card--tall');

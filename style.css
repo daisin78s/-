@@ -2200,14 +2200,15 @@ h1, h2, h3 { margin: 0; }
 
 /* テストゲーム開始 picker's card grid (2026-08-13, per user feedback: the plain stacked-block layout
    .card-inst-modal__body gives by default put every card on its own row, tall and hard to scan/select --
-   "縦に並んでいて選びにくいうえに一部しか見えない"). Fixed 8-wide grid (wraps to a 2nd/3rd row once past
-   8, not a width-dependent flex-wrap) -- own horizontal scrollbar on a narrower viewport rather than
-   shrinking the modal or dropping to fewer columns, since 8-per-row was requested specifically. Capped
-   vertical height with its own scrollbar so a long list (RESOURCE=18, ABC=21) can't push the END button
-   off-screen the way an unbounded modal did before. */
+   "縦に並んでいて選びにくいうえに一部しか見えない"). Fixed-width grid (wraps to further rows, not a
+   width-dependent flex-wrap) -- own horizontal scrollbar on a narrower viewport rather than shrinking
+   the modal or dropping columns. grid-template-columns itself is set per step by main.js's
+   renderDebugSetupOverlay (see DEBUG_SETUP_STEPS' own columns field -- each step uses a column count
+   that exactly fits its own card total with no partial last row: CON 5x2, JOB 4x2, RESOURCE 6x3,
+   ABC 7x3), not one shared value here. Capped vertical height with its own scrollbar so a long list
+   (RESOURCE=18, ABC=21) can't push the END button off-screen the way an unbounded modal did before. */
 #debug-setup-list {
   display: grid;
-  grid-template-columns: repeat(8, 122px);
   gap: 8px;
   justify-content: center;
   max-height: 60vh;
