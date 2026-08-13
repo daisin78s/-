@@ -1717,6 +1717,18 @@ h1, h2, h3 { margin: 0; }
   min-height: 118px;
 }
 
+/* Fixed (not min-) height, CON cards only (2026-08-13, per user request: "CONのカードの縦幅すべて同じ
+   高さにそろえる") -- every CON face has exactly 2 effect rows, but which of those rows renders as a
+   2-sub-row icon stack varies card to card, so .shop-card--tall's min-height alone still let real CON
+   card heights vary. 140px comfortably fits the tallest current CON face while staying under
+   .owned-card-cell--tall's 150px box (see that rule) that every CON card renders inside, wherever it's
+   shown (CON face choice, the debug test-game picker, ...). .shop-card__effect's own
+   justify-content:center (see that rule) vertically centers a shorter card's content within the extra
+   fixed space instead of leaving it stuck at the top. */
+.shop-card--con {
+  height: 140px;
+}
+
 .shop-card__effect {
   flex: 1;
   display: flex;

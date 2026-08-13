@@ -1319,16 +1319,11 @@ function resourceItemNodes(countStr, resource) {
   return nodes;
 }
 
-/** Wraps a "⚡ + resource node(s)" row into a 2-row stack (⚡ alone on top, the resource node(s) on
- * their own row below) when stacked is true -- confirmed 2026-07-30, per user feedback ("CONカードの
- * 効果をアイコンで上に、その下にもらえる資源というふうにして"), used for CON cards' effect display
- * (see fillCardFace). Plain single-row otherwise (every other card type, and AREA action displays). */
-function gainIconRow(resourceNodes, stacked) {
-  if (!stacked) return actionRow([actionEmoji('⚡'), ...resourceNodes]);
-  const stack = el('div', 'action-icons-stack');
-  stack.appendChild(actionRow([actionEmoji('⚡')]));
-  stack.appendChild(actionRow(resourceNodes));
-  return stack;
+/** Wraps a resource node list into a single "⚡ + resource(s)" row (2026-08-13, per user request:
+ * reverts the 2026-07-30 CON-only 2-row stack -- ⚡ alone on top, the resource(s) below -- back to the
+ * same combined single-row look every other card type/AREA action display already uses). */
+function gainIconRow(resourceNodes) {
+  return actionRow([actionEmoji('⚡'), ...resourceNodes]);
 }
 
 /**
@@ -1337,11 +1332,11 @@ function gainIconRow(resourceNodes, stacked) {
  * VP has no dot (confirmed 2026-07-29: VP is always plain text, never an icon/dot) so it's shown as
  * "{count}VP" text instead, e.g. ADD(2VP) -> ⚡2VP (confirmed 2026-07-29).
  */
-function buildAddResourceIcon(actionText, stacked) {
+function buildAddResourceIcon(actionText) {
   const match = /^ADD\((\d*)(K|A|B|C|Z|VP|D)\)$/.exec(actionText || '');
   if (!match) return null;
   const [, countStr, resource] = match;
-  return gainIconRow(resourceItemNodes(countStr, resource), stacked);
+  return gainIconRow(resourceItemNodes(countStr, resource));
 }
 
 /** ADD(A,K) / ADD(2C,4K) / ADD(A,B,C) etc: a bundled multi-resource grant (confirmed in
@@ -1349,7 +1344,7 @@ function buildAddResourceIcon(actionText, stacked) {
  * -- ⚡ once, then each item's dot/count in sequence (2026-07-30, fixes R010/R011/R012 and
  * CON002A/CON003B/CON004B/CON005B showing no icon at all). Falls back to null (letting the raw-text
  * fallback handle it, where allowed) if any comma-separated part isn't a recognized shape. */
-function buildAddMultiResourceIcon(actionText, stacked) {
+function buildAddMultiResourceIcon(actionText) {
   const match = /^ADD\(([^()]+,[^()]+)\)$/.exec(actionText || '');
   if (!match) return null;
   const parts = match[1].split(',');
@@ -1359,7 +1354,7 @@ function buildAddMultiResourceIcon(actionText, stacked) {
     if (!itemMatch) return null;
     resourceNodes.push(...resourceItemNodes(itemMatch[1], itemMatch[2]));
   }
-  return gainIconRow(resourceNodes, stacked);
+  return gainIconRow(resourceNodes);
 }
 
 /** CHANGE(2K,2A) / CHANGE(K,Z) / CHANGE(2K,4Z) etc: a fixed-quantity conversion with no 3rd
@@ -1732,18 +1727,15 @@ function buildModifyConvertValueIcon(actionText) {
   return actionRow([actionEmoji('🔄'), actionSuffix(match[1])]);
 }
 
-/** @param {boolean} [stacked] - CON cards only (confirmed 2026-07-30, see gainIconRow): splits a
- * resource-granting ADD(...) icon into ⚡ on its own row, the resource(s) below it, instead of one
- * combined row. Has no effect on any other icon pattern (BUILD, dice-value, VP modifiers, etc.).
- * @returns {HTMLElement|null} an icon row, or null if actionText has no icon mapping yet */
-function buildActionIcons(actionText, stacked) {
+/** @returns {HTMLElement|null} an icon row, or null if actionText has no icon mapping yet */
+function buildActionIcons(actionText) {
   const buildIcon = buildBuildIcon(actionText);
   if (buildIcon) return buildIcon;
   const addWdIcon = buildAddWdIcon(actionText);
   if (addWdIcon) return addWdIcon;
-  const addResourceIcon = buildAddResourceIcon(actionText, stacked);
+  const addResourceIcon = buildAddResourceIcon(actionText);
   if (addResourceIcon) return addResourceIcon;
-  const addMultiResourceIcon = buildAddMultiResourceIcon(actionText, stacked);
+  const addMultiResourceIcon = buildAddMultiResourceIcon(actionText);
   if (addMultiResourceIcon) return addMultiResourceIcon;
   const changeQuantityIcon = buildChangeQuantityIcon(actionText);
   if (changeQuantityIcon) return changeQuantityIcon;
@@ -1910,10 +1902,9 @@ function areaOwnershipLabel(faceId, effects) {
  * the effect's icons sit in a single flex row together.
  */
 /** allowTextFallback=false (JOB/CON, confirmed 2026-07-30): returns null instead of a raw-DSL-text
- * row when no icon mapping exists, so the caller can omit that effect entirely (see fillCardFace).
- * stackGainIcon (CON only, confirmed 2026-07-30): see buildActionIcons/gainIconRow. */
-function buildEffectRow(effect, allowTextFallback = true, stackGainIcon = false) {
-  const icons = buildActionIcons(effect.text, stackGainIcon);
+ * row when no icon mapping exists, so the caller can omit that effect entirely (see fillCardFace). */
+function buildEffectRow(effect, allowTextFallback = true) {
+  const icons = buildActionIcons(effect.text);
   if (!icons && !allowTextFallback) return null;
   // A stack (e.g. BUILD + the ADD(BZ) "軽減Z" line below it) keeps its rows separate instead of
   // being flattened into one -- the TAP-cost prefix only goes on the stack's first row.
@@ -2052,12 +2043,8 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     // icon display and don't get that fallback -- an unmapped effect is just omitted (blank) rather
     // than showing raw DSL text, per instruction. See [[project-dice-wp-ui-requirements]].
     const allowTextFallback = options.allowTextFallback !== false;
-    // stackGainIcon (confirmed 2026-07-30, per user feedback: "CONカードの効果をアイコンで上に、その
-    // 下にもらえる資源というふうにして") -- CON cards only; every other card type keeps the combined
-    // single-row "⚡ + resource" display (see gainIconRow).
-    const stackGainIcon = /^CON\d/.test(faceId);
     const rows = facts.effects
-      .map((effect) => buildEffectRow(effect, allowTextFallback, stackGainIcon))
+      .map((effect) => buildEffectRow(effect, allowTextFallback))
       .filter(Boolean);
     if (rows.length) {
       tall = true;
@@ -2098,6 +2085,13 @@ function buildCardVisual(faceId, options = {}) {
     backTall = fillCardFace(backEl, sibling, { showEffect: options.showEffect, allowTextFallback: options.allowTextFallback }, false).tall;
   }
   if (front.tall || backTall) node.classList.add('shop-card--tall');
+  // Fixed (not just min-) height for CON cards specifically (2026-08-13, per user request: "CONの
+  // カードの縦幅すべて同じ高さにそろえる") -- every CON face has exactly 2 effect rows (see
+  // data/game.json's CON sheet), but one of those rows can itself render as a 2-sub-row icon stack
+  // (e.g. IF(CARD_COUNT<=6,VP_MODIFIER(-2))) while another card's 2 rows are both single-line, so
+  // .shop-card--tall's min-height alone still left real height variance between CON faces. See
+  // .shop-card--con in style.css for the actual fixed value.
+  if (faceId.startsWith('CON')) node.classList.add('shop-card--con');
 
   // noInteraction (confirmed 2026-07-30): onboarding selection cards (JOB draft, CON face choice,
   // initial RESOURCE candidates -- see renderJobPool/renderConFacesRow/renderResourceChoice) reuse
