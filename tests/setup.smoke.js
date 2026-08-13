@@ -137,6 +137,55 @@ check('turnOrder contains all 4 players exactly once', new Set(state.turnOrder).
 }
 
 // ---------------------------------------------------------------------------
+// Debug-setup overrides (2026-08-13, per user request: a debug-mode UI lets P1 pre-choose which CON/
+// JOB-pool/initial-RESOURCE/ABC-shop cards show up, everyone else staying fully random). Each function
+// keeps its normal-call (no extra argument) behavior unchanged -- already covered by every check above,
+// which all call these with no override argument at all.
+// ---------------------------------------------------------------------------
+{
+  const state = createEmptyGameState('debug-setup-con');
+  setup.createPlayers(state, ['Alice', 'Bob', 'Carol', 'Dan']);
+  setup.dealConCards(state, { P1: 'CON003' });
+  check('dealConCards forces P1 to the requested physical CON card', state.players[0].conPhysicalId, 'CON003');
+  const rest = state.players.slice(1).map((p) => p.conPhysicalId);
+  check('...the other 3 players split the remaining 4 physical cards with no duplicates/no CON003', new Set(rest).size === 3 && !rest.includes('CON003'), true);
+}
+{
+  const state = createEmptyGameState('debug-setup-job');
+  setup.dealJobPool(state, ['JOB002', 'JOB005']);
+  check('dealJobPool includes both preferred JOB faces', ['JOB002', 'JOB005'].every((id) => state.jobPool.includes(id)), true);
+  check('...and still reveals exactly 6 total (4 more filled randomly)', state.jobPool.length, 6);
+}
+{
+  // Over-long/duplicate preferred lists are capped/deduped rather than breaking the pool size.
+  const state = createEmptyGameState('debug-setup-job-overlong');
+  setup.dealJobPool(state, ['JOB001', 'JOB001', 'JOB002', 'JOB003', 'JOB004', 'JOB005', 'JOB006', 'JOB007', 'JOB008']);
+  check('dealJobPool caps an over-long/duplicate preferred list at 6, still exactly 6 total', state.jobPool.length, 6);
+}
+{
+  const state = createEmptyGameState('debug-setup-resource');
+  setup.createPlayers(state, ['Alice', 'Bob', 'Carol', 'Dan']);
+  setup.dealResourceCandidates(state, index, ['P1']); // P1 skipped -- grantResourceCards settles them directly instead
+  check('dealResourceCandidates(skipPlayerIds) leaves P1 with no pending choice', state.pendingChoices.some((c) => c.playerId === 'P1'), false);
+  check('...but P2-P4 still get their normal pending choice', state.pendingChoices.filter((c) => c.kind === 'SELECT_RESOURCE_CARDS').length, 3);
+  setup.grantResourceCards(state, index, 'P1', ['R001', 'R002']);
+  check('grantResourceCards gives P1 exactly the 2 preferred cards (no random fill needed)', state.players[0].ownedCardPhysicalIds.filter((id) => id.startsWith('R')).sort(), ['R001', 'R002']);
+}
+{
+  const state = createEmptyGameState('debug-setup-resource-partial');
+  setup.createPlayers(state, ['Alice', 'Bob', 'Carol', 'Dan']);
+  setup.grantResourceCards(state, index, 'P1', ['R001']); // only 1 preferred -- 1 more filled randomly
+  check('grantResourceCards fills up to exactly 2 even with only 1 preferred', state.players[0].ownedCardPhysicalIds.filter((id) => id.startsWith('R')).length, 2);
+  check('...and the preferred one is among them', state.players[0].ownedCardPhysicalIds.includes('R001'), true);
+}
+{
+  const state = createEmptyGameState('debug-setup-shop');
+  setup.prepareShops(state, index, ['A001A', 'B002A']);
+  check('prepareShops seeds SHOP101/102 with the preferred faces in order', [state.shops.NORMAL.slots.SHOP101, state.shops.NORMAL.slots.SHOP102], ['A001A', 'B002A']);
+  check('...remaining slots still filled (not left null)', Object.values(state.shops.NORMAL.slots).every((v) => v !== null), true);
+}
+
+// ---------------------------------------------------------------------------
 // Determinism: same seed -> identical outcome
 // ---------------------------------------------------------------------------
 {

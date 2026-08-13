@@ -39,6 +39,11 @@ const aiPlayerMod = window.__modules['ai-player'];
 
 const INDEX = dataLoaderMod.buildDataIndex(dataLoaderMod.loadGameData(window.GAME_DATA));
 
+// sessionStorage key for the debug test-game picker's pending plan (2026-08-13) -- declared up here,
+// not down near the rest of that feature's code, since createInitialState()/STATE below already need
+// to read it at page-load time (see consumeDebugSetupPlan/openDebugSetupFlow/advanceDebugSetupFlow).
+const DEBUG_SETUP_PLAN_KEY = 'diceWpDebugSetupPlan';
+
 /**
  * Builds one fresh GameState via setup.js's real setup pipeline (steps 1-5 + JOB pool reveal + QST
  * reveal -- mirrors tests/setup.smoke.js's runFullSetup up through dealResourceCandidates). Steps 6-8
@@ -55,20 +60,45 @@ function randomSeed() {
   return `game-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function createInitialState() {
+/** Reads and clears a pending debug test-game plan from sessionStorage (see openDebugSetupFlow/
+ * advanceDebugSetupFlow further below) -- set right before location.reload() once the "テストゲーム
+ *開始" picker flow's last step finishes, so createInitialState() below can pick it up on the resulting
+ * fresh page load. Consumed exactly once (removed immediately) so a later plain refresh/reopen doesn't
+ * replay the same selections into every subsequent game. null if no debug plan is pending (the normal,
+ * fully-random case). */
+function consumeDebugSetupPlan() {
+  const raw = sessionStorage.getItem(DEBUG_SETUP_PLAN_KEY);
+  if (!raw) return null;
+  sessionStorage.removeItem(DEBUG_SETUP_PLAN_KEY);
+  try {
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
+}
+
+/** plan (2026-08-13, debug test-game feature -- see consumeDebugSetupPlan) applies P1-only overrides on
+ * top of the normal random setup pipeline: P1's physical CON card (still picks their own face normally
+ * at onboarding, see setup.dealConCards' own doc), P1's exact 2 initial RESOURCE cards (granted
+ * directly, no candidate/choose-2 step for P1 -- see setup.grantResourceCards), which faces are
+ * guaranteed in the JOB draft pool, and which faces seed SHOP101/102/... in the NORMAL shop. P2-P4 are
+ * completely unaffected either way. */
+function createInitialState(plan) {
   const state = gameStateMod.createEmptyGameState(randomSeed());
   setupMod.createPlayers(state, ['Alice', 'Bob', 'Carol', 'Dan']);
   setupMod.prepareMaps(state, INDEX);
-  setupMod.prepareShops(state, INDEX);
+  setupMod.prepareShops(state, INDEX, plan ? plan.abc : undefined);
   setupMod.rollInitialColorDice(state);
-  setupMod.dealConCards(state);
-  setupMod.dealResourceCandidates(state, INDEX);
-  setupMod.dealJobPool(state);
+  const forcedCon = plan && plan.con.length > 0 ? { P1: gameStateMod.splitCardId(plan.con[0]).physicalId } : undefined;
+  setupMod.dealConCards(state, forcedCon);
+  setupMod.dealResourceCandidates(state, INDEX, plan ? ['P1'] : undefined);
+  if (plan) setupMod.grantResourceCards(state, INDEX, 'P1', plan.resource);
+  setupMod.dealJobPool(state, plan ? plan.job : undefined);
   qstMod.setupQuests(state);
   return state;
 }
 
-const STATE = createInitialState();
+const STATE = createInitialState(consumeDebugSetupPlan());
 
 // ---------------------------------------------------------------------------
 // AI players (2026-08-03, per user feedback: "プレイヤー1は人間 プレイヤー2 3 4はAIの対戦を実装して
@@ -763,6 +793,109 @@ function toggleDebugMode() {
   debugMode = !debugMode;
   seedDebugHistoryIfNeeded();
   render(STATE);
+}
+
+// ---------------------------------------------------------------------------
+// Debug test-game setup (2026-08-13, per user request): a "テストゲーム開始" button opens an image
+// picker, one category at a time (CON -> JOB -> 初期資源 -> ABCカード), that lets P1 pre-decide which
+// cards show up in a fresh game; P2-P4 stay fully random regardless (see createInitialState's own doc
+// for exactly what each category controls). Reaching a category's own max count auto-advances to the
+// next one immediately; the END button also advances at any time, with fewer (including zero) picked.
+// Unrelated to debugMode/turnHistory above -- this is "configure the next game's setup", not "replay
+// the current one".
+// ---------------------------------------------------------------------------
+
+/** One entry per picker screen, in the order shown. max=1 for CON reads the same as the others --
+ * "pick at most one", not mandatory; pressing END with nothing picked is always valid everywhere. */
+const DEBUG_SETUP_STEPS = [
+  { key: 'con', label: 'CON（最大1枚）', max: 1, faceIds: () => INDEX.raw.CON.map((r) => r.ID) },
+  { key: 'job', label: 'JOB（最大6枚）', max: 6, faceIds: () => INDEX.raw.JOB.map((r) => r.ID) },
+  { key: 'resource', label: '初期資源（最大2枚）', max: 2, faceIds: () => INDEX.raw.RESOURCE.map((r) => r.ID) },
+  { key: 'abc', label: 'ABCカード（最大6枚、選んだ順にSHOP101→106）', max: 6, faceIds: () => setupMod.collectNormalShopFaceIds(INDEX) },
+];
+
+/** null while the picker is closed; otherwise {stepIndex, selections: {con:[], job:[], resource:[], abc:[]}}
+ * (each an array of faceIds, in the order clicked -- order matters for 'abc', see DEBUG_SETUP_STEPS'
+ * own doc; 'con' holds at most one specific face, e.g. "CON003B", even though only its physical id
+ * ends up used -- see createInitialState). Purely UI-scratch, never touches STATE/GameState. */
+let debugSetupFlow = null;
+
+function openDebugSetupFlow() {
+  debugSetupFlow = { stepIndex: 0, selections: { con: [], job: [], resource: [], abc: [] } };
+  render(STATE);
+}
+
+function cancelDebugSetupFlow() {
+  debugSetupFlow = null;
+  render(STATE);
+}
+
+/** Toggles faceId in/out of the current step's selection (click a picked one again to deselect it).
+ * Auto-advances the instant the step's own max is reached -- see this section's own doc. */
+function toggleDebugSetupSelection(faceId) {
+  const step = DEBUG_SETUP_STEPS[debugSetupFlow.stepIndex];
+  const list = debugSetupFlow.selections[step.key];
+  const i = list.indexOf(faceId);
+  if (i >= 0) {
+    list.splice(i, 1);
+  } else if (list.length < step.max) {
+    list.push(faceId);
+  }
+  if (list.length >= step.max) {
+    advanceDebugSetupFlow();
+    return;
+  }
+  render(STATE);
+}
+
+/** Moves to the next picker step (from an END click or toggleDebugSetupSelection hitting max). Once the
+ * last step (ABC) is done, stashes the finished plan into sessionStorage and reloads the page --
+ * createInitialState() picks it up on the resulting fresh load (see consumeDebugSetupPlan) the same way
+ * it would for a normal new game, just with these overrides applied. Reload (rather than rebuilding
+ * STATE in place) sidesteps every other piece of module-scope UI scratch state this file accumulates
+ * during play (selectedDieIds, turnHistory, replayMode, ...) that would otherwise need resetting by
+ * hand one at a time. */
+function advanceDebugSetupFlow() {
+  if (debugSetupFlow.stepIndex + 1 < DEBUG_SETUP_STEPS.length) {
+    debugSetupFlow.stepIndex += 1;
+    render(STATE);
+    return;
+  }
+  sessionStorage.setItem(DEBUG_SETUP_PLAN_KEY, JSON.stringify(debugSetupFlow.selections));
+  location.reload();
+}
+
+/** Renders the current picker step into #debug-setup-overlay -- hidden entirely while debugSetupFlow is
+ * null. Reuses buildCardVisual/the owned-card-cell grid vocabulary already used by
+ * renderResourceChoice's candidate picker, plus a small numbered badge on 'abc' picks (the only step
+ * where pick ORDER itself is meaningful -- see DEBUG_SETUP_STEPS). */
+function renderDebugSetupOverlay() {
+  const overlay = document.getElementById('debug-setup-overlay');
+  if (!debugSetupFlow) {
+    overlay.hidden = true;
+    return;
+  }
+  overlay.hidden = false;
+  const step = DEBUG_SETUP_STEPS[debugSetupFlow.stepIndex];
+  document.getElementById('debug-setup-title').textContent = step.label;
+  const selected = debugSetupFlow.selections[step.key];
+  const list = document.getElementById('debug-setup-list');
+  list.innerHTML = '';
+  for (const faceId of step.faceIds()) {
+    const cardNode = buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true });
+    const tall = cardNode.classList.contains('shop-card--tall');
+    const cell = el('div', tall ? 'owned-card-cell owned-card-cell--tall owned-card-cell--selectable' : 'owned-card-cell owned-card-cell--selectable');
+    const pickIndex = selected.indexOf(faceId);
+    if (pickIndex >= 0) {
+      cell.classList.add('owned-card-cell--selected');
+      cell.appendChild(cardNode);
+      if (step.max > 1) cell.appendChild(el('span', 'debug-setup-pick-badge', String(pickIndex + 1)));
+    } else {
+      cell.appendChild(cardNode);
+    }
+    cell.addEventListener('click', () => toggleDebugSetupSelection(faceId));
+    list.appendChild(cell);
+  }
 }
 
 /** Updates the debug panel: toggle button label, nav button disabled states, current-position readout,
@@ -4136,6 +4269,7 @@ function render(state) {
   renderAiPacingControl(state);
   renderGameEndOverlay(state);
   renderDebugPanel(state);
+  renderDebugSetupOverlay();
   // Hides #replay-controls again once back on the normal live path (found via headless testing,
   // 2026-08-1X: renderReplayControls is otherwise only ever called from renderReplayFrame, so exiting
   // replay via exitReplayMode -- which just flips replayMode off and calls this render(state) -- left
@@ -4603,6 +4737,10 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('debug-turn-forward').addEventListener('click', handleDebugTurnForward);
   document.getElementById('debug-round-back').addEventListener('click', handleDebugRoundBack);
   document.getElementById('debug-round-forward').addEventListener('click', handleDebugRoundForward);
+
+  document.getElementById('debug-setup-start-button').addEventListener('click', openDebugSetupFlow);
+  document.getElementById('debug-setup-end-button').addEventListener('click', advanceDebugSetupFlow);
+  document.getElementById('debug-setup-cancel-button').addEventListener('click', cancelDebugSetupFlow);
 
   document.getElementById('round-pass-button').addEventListener('click', handleRoundPassClick);
   document.getElementById('round-pass-confirm-no').addEventListener('click', () => {

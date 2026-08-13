@@ -1675,7 +1675,9 @@ h1, h2, h3 { margin: 0; }
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
-/* Fixed-size cell so a tapped (rotated) card's swapped width/height never overlaps its neighbors. */
+/* Fixed-size cell so a tapped (rotated) card's swapped width/height never overlaps its neighbors.
+   position:relative (2026-08-13) anchors .debug-setup-pick-badge's absolute positioning -- harmless
+   everywhere else this cell type is used, since nothing else inside it is itself absolutely positioned. */
 .owned-card-cell {
   width: 122px;
   height: 122px;
@@ -1683,6 +1685,7 @@ h1, h2, h3 { margin: 0; }
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
+  position: relative;
 }
 
 /* A/B/C cards show their effect text, so they run taller (confirmed 2026-07-29) -- the cell is
@@ -2165,6 +2168,44 @@ h1, h2, h3 { margin: 0; }
   cursor: pointer;
 }
 .card-inst-modal__pick-button[hidden] { display: none; }
+
+/* テストゲーム開始 picker's END button (2026-08-13) -- same prominent-accent treatment as
+   .card-inst-modal__pick-button above, since it's the same "commit this step" action, just always
+   available (not gated on 2 picks like RESOURCE choice) rather than tucked inside a per-card modal. */
+.debug-setup-end-button {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* Numbered pick-order badge (2026-08-13) -- only shown for the ABCカード step, where the order clicked
+   determines SHOP101/102/... (see main.js's renderDebugSetupOverlay). Absolutely positioned against
+   .owned-card-cell's own position:relative (see that rule's own doc, updated for this). */
+.debug-setup-pick-badge {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  pointer-events: none;
+  z-index: 1;
+}
 
 .card-inst-modal__header {
   display: flex;

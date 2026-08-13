@@ -105,8 +105,14 @@ function fillShopSlots(shopDeck) {
  * shops immediately (confirmed 2026-07-29: SHOP sheet's ROUND_MIN=1 for
  * both). Also shuffles the special shop's draw order but leaves its slots
  * empty -- see revealSpecialShop().
+ *
+ * preferredNormalFaceIds (optional, up to 6, 2026-08-13 debug-setup feature): those faces fill
+ * SHOP101/102/... in that order first (deduped, and only ones actually in the normal pool), any
+ * remaining slots filled by the usual random shuffle of whatever's left -- see fillShopSlots, which
+ * always fills in slotId order from the front of the draw pile. Every other caller passes no 3rd
+ * argument and sees identical behavior to before.
  */
-function prepareShops(state, index) {
+function prepareShops(state, index, preferredNormalFaceIds) {
   const monumentIds = index.raw.M.map((r) => r.ID);
   registerCardPool(state, monumentIds);
   state.shops.M = createShopDeck(shuffle(state.rng, monumentIds), MONUMENT_SHOP_SLOT_IDS);
@@ -114,7 +120,13 @@ function prepareShops(state, index) {
 
   const normalIds = collectNormalShopFaceIds(index);
   registerCardPool(state, normalIds);
-  state.shops.NORMAL = createShopDeck(shuffle(state.rng, normalIds), NORMAL_SHOP_SLOT_IDS);
+  const preferred = [...new Set(preferredNormalFaceIds || [])]
+    .filter((id) => normalIds.includes(id))
+    .slice(0, NORMAL_SHOP_SLOT_IDS.length);
+  const normalOrder = preferred.length > 0
+    ? [...preferred, ...shuffle(state.rng, normalIds.filter((id) => !preferred.includes(id)))]
+    : shuffle(state.rng, normalIds);
+  state.shops.NORMAL = createShopDeck(normalOrder, NORMAL_SHOP_SLOT_IDS);
   fillShopSlots(state.shops.NORMAL);
 
   const specialIds = ['A008A', 'B008A', 'C008A'];
@@ -160,11 +172,20 @@ function rollInitialColorDice(state) {
  * Deals one CON physicalId to each player (records the assignment only --
  * no GameState.cards entry yet, no tier chosen; see chooseConFace() for the
  * round-1 onboarding step that actually commits it).
+ *
+ * forcedAssignments (optional, {playerId: physicalId}, 2026-08-13 debug-setup feature): those players
+ * get exactly that physical CON card instead of a random one; the remaining physical cards are shuffled
+ * among everyone else as usual. Which FACE (A/B) they end up with is untouched by this -- that's still
+ * chooseConFace()'s own normal onboarding-time player choice, same as any other player. Every other
+ * caller passes no 2nd argument and sees identical behavior to before.
  */
-function dealConCards(state) {
-  const shuffled = shuffle(state.rng, CON_PHYSICAL_IDS);
-  state.players.forEach((player, i) => {
-    player.conPhysicalId = shuffled[i];
+function dealConCards(state, forcedAssignments) {
+  const forced = forcedAssignments || {};
+  const forcedIds = new Set(Object.values(forced));
+  const shuffledRemaining = shuffle(state.rng, CON_PHYSICAL_IDS.filter((id) => !forcedIds.has(id)));
+  let cursor = 0;
+  state.players.forEach((player) => {
+    player.conPhysicalId = forced[player.id] || shuffledRemaining[cursor++];
   });
 }
 
@@ -178,12 +199,18 @@ function nextChoiceId() {
   return `choice${choiceCounter}`;
 }
 
-/** Deals 4 RESOURCE candidates to each player as a pending SELECT_RESOURCE_CARDS choice. */
-function dealResourceCandidates(state, index) {
+/** Deals 4 RESOURCE candidates to each player as a pending SELECT_RESOURCE_CARDS choice.
+ * skipPlayerIds (optional array, 2026-08-13 debug-setup feature): those players get no candidates/
+ * pendingChoice at all here -- used when grantResourceCards() below has already directly settled their
+ * 2 RESOURCE cards, so there's nothing left for them to choose. Every other caller passes no 3rd
+ * argument and sees identical behavior to before. */
+function dealResourceCandidates(state, index, skipPlayerIds) {
+  const skip = new Set(skipPlayerIds || []);
   const allIds = index.raw.RESOURCE.map((r) => r.ID);
   const shuffled = shuffle(state.rng, allIds);
   let cursor = 0;
   for (const player of state.players) {
+    if (skip.has(player.id)) continue;
     const candidates = shuffled.slice(cursor, cursor + 4);
     cursor += 4;
     state.pendingChoices.push({
@@ -219,6 +246,30 @@ function chooseResourceCards(state, playerId, chosenIds) {
   }
   state.pendingChoices.splice(choiceIndex, 1);
   return { success: true };
+}
+
+/**
+ * Directly grants playerId exactly 2 owned RESOURCE cards, bypassing the normal deal-4-candidates/
+ * choose-2 SELECT_RESOURCE_CARDS flow entirely (2026-08-13 debug-setup feature -- see the matching
+ * dealResourceCandidates skipPlayerIds param, which must be used for the same playerId so no leftover
+ * pendingChoice asks them to pick 2 more on top of these). preferredFaceIds (up to 2, deduped, only
+ * ones that are actually valid RESOURCE ids) are used first; any remaining slot is filled by a random
+ * draw from whatever's left, so this always leaves the player with exactly 2, same as the normal path.
+ * Does NOT run their ONCE effects -- same as chooseResourceCards, that's still deferred to the normal
+ * onboarding-time receiveInitialResources() call.
+ */
+function grantResourceCards(state, index, playerId, preferredFaceIds) {
+  const allIds = index.raw.RESOURCE.map((r) => r.ID);
+  const preferred = [...new Set(preferredFaceIds || [])].filter((id) => allIds.includes(id)).slice(0, 2);
+  const needed = 2 - preferred.length;
+  const fill = needed > 0 ? shuffle(state.rng, allIds.filter((id) => !preferred.includes(id))).slice(0, needed) : [];
+  const player = state.players.find((p) => p.id === playerId);
+  for (const faceId of [...preferred, ...fill]) {
+    const inst = createCardInstance(faceId);
+    inst.ownerId = playerId;
+    state.cards[inst.physicalId] = inst;
+    player.ownedCardPhysicalIds.push(inst.physicalId);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -257,9 +308,16 @@ function computeStartOrder(state, index) {
  * round-1 onboarding (see chooseJob()); after all 4 have drafted, the 2
  * left in the pool plus the original 2 never-revealed ones (4 total) go
  * unused. Call once, before the first player's onboarding.
+ *
+ * preferredFaceIds (optional, up to 6, deduped, 2026-08-13 debug-setup feature): those are guaranteed
+ * in the revealed pool, the remaining slots filled by the usual random draw from whatever's left. Who
+ * actually drafts which one out of the pool is still each player's own normal chooseJob() pick, exactly
+ * as before. Every other caller passes no 2nd argument and sees identical behavior to before.
  */
-function dealJobPool(state) {
-  state.jobPool = shuffle(state.rng, JOB_FACE_IDS).slice(0, 6);
+function dealJobPool(state, preferredFaceIds) {
+  const preferred = [...new Set(preferredFaceIds || [])].filter((id) => JOB_FACE_IDS.includes(id)).slice(0, 6);
+  const rest = shuffle(state.rng, JOB_FACE_IDS.filter((id) => !preferred.includes(id)));
+  state.jobPool = [...preferred, ...rest].slice(0, 6);
 }
 
 /** Drafts jobFaceId out of state.jobPool for playerId (must currently be in the pool). */
@@ -307,11 +365,13 @@ module.exports = {
   createPlayers,
   prepareMaps,
   prepareShops,
+  collectNormalShopFaceIds,
   revealSpecialShop,
   rollInitialColorDice,
   dealConCards,
   dealResourceCandidates,
   chooseResourceCards,
+  grantResourceCards,
   computeStartOrder,
   dealJobPool,
   chooseJob,
