@@ -1251,6 +1251,24 @@ function buildChangeQuantityIcon(actionText) {
   ]);
 }
 
+/** CHANGE(X,Y,n) -- the count-argument form (command-builder.js's lowerChange: pay X get Y, up to n
+ * times, scaled down to whatever's affordable -- e.g. C001A/002A/003A's TAP="CHANGE(K,A,2)", back to
+ * this shape as of the 2026-08-11 A/B/C data edit, superseding the quantity-prefixed
+ * "CHANGE(2K,2A)" form buildChangeQuantityIcon above was written for). 2026-08-13, per user report the
+ * icon regressed to raw DSL text once the data moved back to this shape: visually identical to a
+ * literal CHANGE(nX,nY) conversion -- "pay up to n, gain up to n" -- so shown the exact same
+ * "{n}X -> {n}Y" way via the same resourceItemNodes vocabulary, just reading n once instead of twice. */
+function buildCappedChangeIcon(actionText) {
+  const match = /^CHANGE\((K|A|B|C|Z),(K|A|B|C|Z),(\d+)\)$/.exec(actionText || '');
+  if (!match) return null;
+  const [, payResource, getResource, count] = match;
+  return actionRow([
+    ...resourceItemNodes(count, payResource),
+    actionArrow(),
+    ...resourceItemNodes(count, getResource),
+  ]);
+}
+
 /** CHANGE(nK,mVP) -- K->VP conversions with any counts on either side, e.g. AREA010A's "CHANGE(2K,VP)"
  * or AREA010C's "CHANGE(2K,2VP)" (2026-08-05, per user feedback: "AREA010A B C も 2K → VP のようにお願
  * い"). Generalizes the old ACTION_ICON_BUILDERS['CHANGE(4K,VP)'] exact-match entry (which only covered
@@ -1596,6 +1614,8 @@ function buildActionIcons(actionText, stacked) {
   if (addMultiResourceIcon) return addMultiResourceIcon;
   const changeQuantityIcon = buildChangeQuantityIcon(actionText);
   if (changeQuantityIcon) return changeQuantityIcon;
+  const cappedChangeIcon = buildCappedChangeIcon(actionText);
+  if (cappedChangeIcon) return cappedChangeIcon;
   const changeToVpIcon = buildChangeToVpIcon(actionText);
   if (changeToVpIcon) return changeToVpIcon;
   const changeAllThenAddIcon = buildChangeAllThenAddIcon(actionText);
