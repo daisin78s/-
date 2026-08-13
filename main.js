@@ -2302,6 +2302,11 @@ function standingsRows(state) {
  * rather than content-sized, so a longer name or a 2-digit score can never move the dividing lines). */
 function buildStandingsPanelNode(state) {
   const panel = el('div', 'standings-panel');
+  // Round indicator (2026-08-13, per user request: standings panel gets its own "ラウンド {n}/4" line,
+  // same text as the header's #round-indicator -- see renderHeader) so the round is visible right next
+  // to the ranking without having to look elsewhere. Spans both columns, sitting above the 2x2 player
+  // cells (see the matching grid-template-rows change in style.css).
+  panel.appendChild(el('div', 'standings-panel__round', `ラウンド ${state.round}/4`));
   for (const row of standingsRows(state)) {
     const cell = el('div', 'standings-panel__cell');
     cell.appendChild(el('span', 'standings-panel__place', `${row.place}位`));

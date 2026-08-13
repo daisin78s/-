@@ -328,13 +328,23 @@ h1, h2, h3 { margin: 0; }
 .standings-panel {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  grid-template-rows: auto auto;
+  grid-template-rows: auto auto auto;
   gap: 6px 8px;
   align-content: center;
   padding: 8px 10px;
   background: var(--surface-sunken);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
+}
+
+/* Round indicator (2026-08-13): its own row, spanning both columns above the 2x2 player cells --
+   see main.js's buildStandingsPanelNode. */
+.standings-panel__round {
+  grid-column: 1 / -1;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
 }
 
 /* 12px / 4px gaps rather than something roomier: a quarter of this space is only ~160px wide, and one
