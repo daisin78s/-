@@ -1106,6 +1106,33 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   check('...neither die was actually placed', [d1.placedMapId, d2.placedMapId], [null, null]);
 }
 {
+  // placeDiceGroup must get the SAME AREA009C trailing-ADD treatment as the single-die path above
+  // (2026-08-12, per user report: "元老院LV2でモニュメントを建築しようとしたら ダイス目10 AA B ZZの資源で
+  // M004が建築候補にでませんでした" -- M004 needs DICE>=9/COST 2A,2B,2C; reaching buildValue=10 requires
+  // combining 2 dice, since a lone die maxes at 6, so only placeDiceGroup could ever have hit this).
+  // With A=2,B=1,Z=2 alone, M004 (2A+2B+2C = 6 units) is short by 1 (2+1+2=5 available) -- but AREA009C's
+  // own "BUILD();ADD(2K,BZ)" grant supplies exactly the missing 1-unit substitute (Z=2 + the granted
+  // BZ=1 covers B's shortfall (1) and C's shortfall (2) exactly), so M004 should be both offered AND
+  // affordable once that grant is applied before the candidate list is built -- same as it already was
+  // for a single die.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.resources.A = 2;
+  p1.resources.B = 1;
+  p1.resources.Z = 2;
+  const m004Slot = Object.keys(state.shops.M.slots).find((k) => state.shops.M.slots[k] === 'M004') || Object.keys(state.shops.M.slots)[0];
+  state.shops.M.slots[m004Slot] = 'M004';
+  state.maps['MAP009'] = mapWithArea('MAP009', 'AREA009C', 6, 'P1'); // SLOT1-4=ANY, SLOT5-6=EX
+  const d1 = giveDie(state, 'P1', 6);
+  const d2 = giveDie(state, 'P1', 4);
+  const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], 'MAP009');
+  check('Group placement (6+4=10) on AREA009C succeeds', result.success, true);
+  check('...the 2K/1BZ grant already landed before the candidate list was built', { K: p1.resources.K, BZ: p1.resources.BZ }, { K: 2, BZ: 1 });
+  const m004Candidate = result.actionResult.pendingBuild.candidates.find((c) => c.faceId === 'M004');
+  check('...M004 is present among the candidates', !!m004Candidate, true);
+  check('...and is affordable using the real 2A+1B+2Z plus the newly-granted BZ', board.isCandidateAffordable(state, index, 'P1', m004Candidate), true);
+}
+{
   // previewPlaceDice: mirrors the real outcome without mutating anything.
   const state = freshStateWithShops();
   const die = giveDie(state, 'P1', 2); // AREA003A.SLOT1, 0 K on hand

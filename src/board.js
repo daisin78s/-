@@ -548,6 +548,18 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   const newValues = dice.map((d) => d.value);
   const existingSumTotal = [...existingSumBySlot.values()].reduce((sum, v) => sum + v, 0);
 
+  // AREA009C/B's own ACTION grants a trailing bonus after BUILD() (e.g. "BUILD();ADD(2K,BZ)" at LV2) --
+  // same shape resolveProgramOrBuild/wouldAreaActionHaveEffect already special-case for the single-die
+  // path (2026-08-07, per user feedback on 元老院LV2: "BZをもらえるので本来建築できるものが表示されません
+  // まずBZと2Kを得るその後建築候補が表示される"). placeDiceGroup never ran areaRow.ACTION at all until now
+  // (2026-08-12, same bug reported again but for a multi-die group placement reaching a monument threshold
+  // >6 -- unreachable by a single die, so only this path could have shown it): the LV2 BZ bonus never
+  // landed before affordability was judged, silently hiding an otherwise-affordable monument. Mirrors the
+  // single-die split exactly -- applied to a throwaway clone for the predicted-affordability gate below
+  // (never mutates real state on a placement that might still be refused), then for real, once, right
+  // before the final post-commit candidate list further down.
+  const areaTrailingAdds = buildTrailingAdds(lowerProgram(parse(areaRow.ACTION)));
+
   // Predict the resulting buildValue *before* touching anything (same "sum each touched slot's full
   // occupancy" math as the post-commit version below, just computed off map.slots as it stands right
   // now instead of after pushing) -- lets this whole group placement be refused outright if it couldn't
@@ -563,8 +575,13 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
     const existing = map.slots[slotIndex].reduce((sum, o) => sum + o.value, 0);
     predictedBuildValue += existing + value * dieIdsByValue.get(value).length;
   }
-  const predictedCandidates = excludeOverfundedMonuments(index, getBuildCandidates(state, index, playerId, ['M'], predictedBuildValue), newValues, existingSumTotal);
-  if (!predictedCandidates.some((c) => isCandidateAffordable(state, index, playerId, c))) {
+  let affordabilityCheckState = state;
+  if (areaTrailingAdds) {
+    affordabilityCheckState = structuredClone(state);
+    for (const cmd of areaTrailingAdds) executor.runCommand(affordabilityCheckState, index, context, cmd);
+  }
+  const predictedCandidates = excludeOverfundedMonuments(index, getBuildCandidates(affordabilityCheckState, index, playerId, ['M'], predictedBuildValue), newValues, existingSumTotal);
+  if (!predictedCandidates.some((c) => isCandidateAffordable(affordabilityCheckState, index, playerId, c))) {
     return { success: false, reason: 'NO_BUILDABLE_CARD' };
   }
   // Same usage-fee affordability gate as placeDice's own (2026-08-05) -- AREA009 can carry a tier (A008A
@@ -592,6 +609,11 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
     executor.emitAndResolve(state, index, actionContext, 'PLACE', mapId);
   }
   chargeUsageFeeIfOwed(state, map, playerId);
+  // Real grant now (see areaTrailingAdds' own doc above) -- must land before the final candidates list
+  // below is computed, same ordering resolveProgramOrBuild uses for the single-die path.
+  if (areaTrailingAdds) {
+    for (const cmd of areaTrailingAdds) executor.runCommand(state, index, context, cmd);
+  }
 
   // Sum each touched slot's *full* occupancy (2026-08-02 fix, caught in headless verification) -- not
   // just this group's own dice. A slot this group joined via GRANT_PLACE_ANYWHERE bypass (see
