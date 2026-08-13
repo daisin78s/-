@@ -2731,8 +2731,20 @@ function turnEndWarnings(state, playerId) {
     const row = dataLoaderMod.getCardRow(INDEX, cardState.currentFaceId);
     if (!row.TURNEND) continue;
     for (const cmd of commandBuilderMod.lowerProgram(dslParserMod.parse(row.TURNEND))) {
-      if (cmd.type === 'RESOURCE_LIMIT' && (player.resources[cmd.resource] || 0) > cmd.limit) {
-        warnings.push({ physicalId, warningText: row.WARNING, kind: 'RESOURCE_LIMIT' });
+      if (cmd.type === 'RESOURCE_LIMIT') {
+        // A pending usage fee is paid out of K BEFORE this limit check actually runs at TURNEND (see
+        // executor.applyTurnEnd's own comment, 2026-08-11) -- so this preview must subtract it too
+        // (2026-08-12, per user report: 8K with a K-MAX7 limit and a 2K pending fee owed showed this
+        // warning even though paying the fee first drops K to 6, under the limit, so nothing would
+        // actually get auto-discarded). Only when the fee is actually affordable, matching
+        // applyTurnEnd's own precondition (canEndTurn already guarantees that before it ever runs) --
+        // an unpayable fee blocks TURNEND entirely via a separate USAGE_FEE gate instead, so this
+        // warning becomes moot in that case regardless of what it shows here.
+        let amount = player.resources[cmd.resource] || 0;
+        if (cmd.resource === 'K' && player.pendingFee && amount >= player.pendingFee.amount) {
+          amount -= player.pendingFee.amount;
+        }
+        if (amount > cmd.limit) warnings.push({ physicalId, warningText: row.WARNING, kind: 'RESOURCE_LIMIT' });
       } else if (cmd.type === 'FORCE_CONVERT' && (player.resources[cmd.from] || 0) > 0) {
         warnings.push({ physicalId, warningText: row.WARNING, kind: 'FORCE_CONVERT' });
       }
