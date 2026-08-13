@@ -47,6 +47,7 @@ const { loadGameData, buildDataIndex, getCardRow } = require('../src/data-loader
 const { buildEvalTable } = require('../src/ai/eval-table');
 const { playGame, AREA_CARD_BY_MAP } = require('../src/ai/game-runner');
 const { LEVELS, getLevel } = require('../src/ai/levels');
+const executor = require('../src/executor');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const DATA_PATH = path.join(PROJECT_ROOT, 'data', 'game.json');
@@ -66,11 +67,18 @@ function siblingFaceId(faceId) {
   return faceId.replace(/[AB]$/, (m) => (m === 'A' ? 'B' : 'A'));
 }
 
-/** Which ABCM rows the new "使用回数" column (2026-08-07, per user spec) actually applies to, and what
+/** Which ABCM rows the "使用回数" column (2026-08-07, per user spec) actually applies to, and what
  * "usage" means for each:
  *  - The 8 A-deck cards (AREA_FEE_FACES): usage fee collected via their AREA (accumulated separately,
  *    see areaFeeByRoundAndCard's own doc in game-runner.js).
- *  - B008A: wD granted at build time (b008aWhiteDiceGained).
+ *  - B008A: LVUP success rate -- fraction of B008A-build games where that player's card actually got
+ *    upgraded into B008B by GAME_END (2026-08-12, per user spec: "B008AはLVUPできたときの割合 10回中8回
+ *    LVUPで0.8" -- supersedes the old "wD granted at build time" meaning from when B008A's ONCE still
+ *    scaled with 天 emblems; that scaling moved to B008B's PASSIVE, see the commit that made it a
+ *    persistent effect).
+ *  - B008B: 天 emblem count at GAME_END, for whichever player owns it (2026-08-12, per user spec:
+ *    "B008Bはゲーム終了時のエンブレム天の数" -- supersedes the old "空欄でOK"/not-tracked state, now that
+ *    B008B's own PASSIVE=VP_MODIFIER(COUNT(天)) makes that count directly meaningful).
  *  - Every other B/C-deck face WITH a real TAP field (data-driven check below -- B004A/B/B008A/B all have
  *    an empty TAP, confirmed via data/game.json, so this naturally excludes them without a hardcoded
  *    list): TAP count, from activationCounts. A tier-A face's own count is a *cumulative* total including
@@ -78,14 +86,14 @@ function siblingFaceId(faceId) {
  *    するカードはグレードアップ後にTAPした回数も含みます" -- e.g. C001A taps 3 times before upgrading,
  *    then (as C001B) 2 more times after -- C001A's row shows 5, C001B's row shows its own 2, not double-
  *    counted). A/M cards have no TAP field at all, so they fall through to "not eligible" here regardless
- *    (their own usage, if any, already came from the fee/B008A branches above).
+ *    (their own usage, if any, already came from the fee/B008A/B008B branches above).
  * isUsageEligible/usageAmount are checked/computed at write time (see writeReport below) and at
  * accumulation time (the build loop below) respectively -- an entry's usageSum simply never gets touched
  * for an ineligible id, so eligibility only decides whether a real (possibly zero) sum gets reported as
- * an average or suppressed as inapplicable (per user spec: "B008Bは空欄でOK", "Dも空欄でOK", and by the
- * same logic every TAP-less B/C face too). */
+ * an average or suppressed as inapplicable (per user spec: "Dも空欄でOK", and by the same logic every
+ * TAP-less B/C face too). */
 function isUsageEligible(index, id) {
-  if (AREA_FEE_FACES.has(id) || id === 'B008A') return true;
+  if (AREA_FEE_FACES.has(id) || id === 'B008A' || id === 'B008B') return true;
   if (!/^[BC]\d{3}[AB]$/.test(id)) return false; // only B/C-deck faces can reach the TAP-field check
   return !!getCardRow(index, id).TAP;
 }
@@ -223,12 +231,24 @@ function main() {
           e.scoreSum += detail.finalScore - detail.qstScore;
           e.qstScoreSum += detail.qstScore;
           // "使用回数" (2026-08-07, per user spec) -- see isUsageEligible's own doc; exactly one of
-          // these three branches can ever apply to a given faceId (B008A / an A-deck fee card / a
-          // TAP-bearing B or C face are mutually exclusive sets).
-          if (faceId === 'B008A' && detail.b008aWhiteDiceGained !== null) e.usageSum += detail.b008aWhiteDiceGained;
+          // these four branches can ever apply to a given faceId (B008A / B008B / an A-deck fee card /
+          // a TAP-bearing B or C face are mutually exclusive sets).
+          // B008A (2026-08-12): LVUP success rate -- a physical B008 card can only ever reach B008B by
+          // upgrading from B008A, and only once, so "did 'B008B' ever appear anywhere in this player's
+          // buildsByRound" is exactly "did this B008A LVUP succeed" -- no separate tracking needed.
+          if (faceId === 'B008A') {
+            const lvupSucceeded = Object.values(detail.buildsByRound).some((facesThisRound) => facesThisRound.includes('B008B'));
+            e.usageSum += lvupSucceeded ? 1 : 0;
+          }
+          // B008B (2026-08-12): 天 emblem count at GAME_END for the player who owns it -- read straight
+          // off the final `state` rather than anything game-runner.js tracks, since it's just a live
+          // metric query (same COUNT(天) B008B's own PASSIVE uses, see executor.collectVpModifiers).
+          if (faceId === 'B008B') {
+            e.usageSum += executor.evalMetric(state, index, playerId, { name: 'COUNT', args: ['天'] });
+          }
           const feeForThisCard = (detail.areaFeeByRoundAndCard[round] || {})[faceId];
           if (feeForThisCard !== undefined) e.usageSum += feeForThisCard;
-          if (!AREA_FEE_FACES.has(faceId) && faceId !== 'B008A' && /^[BC]\d{3}[AB]$/.test(faceId) && getCardRow(index, faceId).TAP) {
+          if (!AREA_FEE_FACES.has(faceId) && faceId !== 'B008A' && faceId !== 'B008B' && /^[BC]\d{3}[AB]$/.test(faceId) && getCardRow(index, faceId).TAP) {
             const ownTaps = activationCounts[faceId] || 0;
             const upgradeBonus = faceId.endsWith('A') ? (activationCounts[siblingFaceId(faceId)] || 0) : 0;
             e.usageSum += ownTaps + upgradeBonus;

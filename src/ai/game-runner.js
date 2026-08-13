@@ -79,11 +79,6 @@ function driveOnboarding(state, index, playerId, evaluator) {
  * END_TURN or no legal moves) -- mutates `state` in place, one real move at a time, same as a human
  * clicking through the UI. Returns the moves actually taken (for history logging -- e.g. the caller
  * can scan for the first successful PLACE_DIE-with-a-BUILD_NEW-result to log "first card built").
- * Each entry also carries whiteDiceGained (this one move's own white-die count delta for playerId, 0 for
- * most moves) -- 2026-08-07, for tools/ai_data_report.js's B008A "使用回数" stat ("建築時に得たwDの数",
- * i.e. B008A's own dynamic ONCE="ADD((COUNT(天)-1)*wD)" result): computed generically here (every move,
- * not just BUILD_NEW ones) rather than special-cased to B008A, so the caller can attribute it to whatever
- * single move actually caused it without re-deriving per-move before/after dice counts a second time.
  *
  * initialHasPlacedDieThisTurn lets a caller resume a turn that's still open (turnFlow.getNextTurn keeps
  * returning the same playerId because turnFlow.endTurn hasn't succeeded yet -- e.g. blocked by
@@ -99,14 +94,9 @@ function driveTurn(state, index, playerId, aiPlayer, initialHasPlacedDieThisTurn
   while (movesTaken.length < MAX_MOVES) {
     const move = aiPlayer.selectMove(state, playerId, { hasPlacedDieThisTurn });
     if (!move) break;
-    // Re-fetched fresh each iteration, not cached across the loop -- a rollback (e.g. placeDice's
-    // UNAFFORDABLE_USAGE_FEE snapshot-restore) replaces state.players' contents wholesale, same trap
-    // documented elsewhere in this project (see board.js's own comments on this).
-    const whiteDiceCountBefore = state.players.find((p) => p.id === playerId).dice.filter((d) => d.kind === 'WHITE').length;
     const result = applyInPlace(state, index, move);
     if (!result.success) break; // defensive -- selectMove only offers moves MoveGenerator pre-validated
-    const whiteDiceCountAfter = state.players.find((p) => p.id === playerId).dice.filter((d) => d.kind === 'WHITE').length;
-    movesTaken.push({ move, result, whiteDiceGained: whiteDiceCountAfter - whiteDiceCountBefore });
+    movesTaken.push({ move, result });
     if (move.type === 'PLACE_DIE' || move.type === 'PASS_DIE') hasPlacedDieThisTurn = true;
     if (move.type === 'END_TURN') break;
   }
@@ -126,14 +116,18 @@ function driveTurn(state, index, playerId, aiPlayer, initialHasPlacedDieThisTurn
  *
  * roundDetailByPlayerId[playerId] = {buildsByRound: {1:[faceId,...], 2:[...], 3:[...], 4:[...]},
  * colorDiceGainedByRound: {1:n, 2:n, 3:n, 4:n}, areaFeeByRoundAndCard: {1:{faceId:amount,...}, ...},
- * b008aWhiteDiceGained: n|null, job008BonusVp: n|null, finalScore: n, qstScore: n} -- AI-side data the
- * human log doesn't need but tools/ai_data_report.js does, to fill in AI.DATA.xlsx's ABCM/CONJOB sheets
- * (2026-08-07, per user spec for the "使用回数" columns; 2026-08-09, qstScore added for the new "QST
- * 平均得点" columns -- VP gained from QST's rank-based rewards this game, see turn-flow.js's own
- * comment on state.qstRewardsGranted -- so tools/ai_data_report.js can report both the existing
- * "平均得点" metric with QST *excluded* (finalScore - qstScore, per user request) and QST's own average
- * separately, without re-deriving the split itself. See the fields' own inline docs below for what
- * each one means and how it's derived).
+ * job008BonusVp: n|null, finalScore: n, qstScore: n} -- AI-side data the human log doesn't need but
+ * tools/ai_data_report.js does, to fill in AI.DATA.xlsx's ABCM/CONJOB sheets (2026-08-07, per user spec
+ * for the "使用回数" columns; 2026-08-09, qstScore added for the new "QST平均得点" columns -- VP gained
+ * from QST's rank-based rewards this game, see turn-flow.js's own comment on state.qstRewardsGranted --
+ * so tools/ai_data_report.js can report both the existing "平均得点" metric with QST *excluded*
+ * (finalScore - qstScore, per user request) and QST's own average separately, without re-deriving the
+ * split itself. See the fields' own inline docs below for what each one means and how it's derived).
+ * B008A's "使用回数" (LVUP success rate) and B008B's (天 emblem count at GAME_END) are NOT separate
+ * fields here (2026-08-12, per user spec: "B008AはLVUPできたときの割合", "B008Bはゲーム終了時のエンブレム
+ * 天の数") -- tools/ai_data_report.js derives both directly from the returned `state` and
+ * buildsByRound/historyByPlayerId it already gets back from this function, so no new tracking was
+ * needed here.
  *
  * activationCounts (2026-08-07, game-wide -- not per-player, since at most one player ever owns/builds
  * any single card face in one game, see AREA_CARD_BY_MAP's own doc for the same reasoning) = {faceId:
@@ -215,14 +209,12 @@ function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorO
   const colorDiceCountAtRoundStart = {};
   const colorDiceGainedByRound = {};
   const areaFeeByPlayerAndCard = {}; // playerId -> {faceId: totalAmountThisGame}, see AREA_CARD_BY_MAP
-  const b008aWhiteDiceGained = {}; // playerId -> n|null (null until/unless that player builds B008A)
   for (const player of state.players) {
     round1ColorDiceBefore[player.id] = player.dice.filter((d) => d.kind === 'COLOR').length;
     buildsByRound[player.id] = { 1: [], 2: [], 3: [], 4: [] };
     colorDiceGainedByRound[player.id] = { 1: 0, 2: 0, 3: 0, 4: 0 };
     colorDiceCountAtRoundStart[player.id] = round1ColorDiceBefore[player.id];
     areaFeeByPlayerAndCard[player.id] = {};
-    b008aWhiteDiceGained[player.id] = null;
   }
   const round1ColorDiceAfter = {};
   const firstRound1BuildFaceId = {};
@@ -301,11 +293,6 @@ function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorO
       const c = m.result.candidate;
       const faceId = c.type === 'BUILD_NEW' ? c.faceId : c.toFaceId;
       buildsByRound[next.playerId][roundBeforeTurn].push(faceId);
-      // B008A's ONCE dynamically grants wD based on 天 emblem count at build time (2026-08-07, per user
-      // spec: "B008Aは建築時に得たｗDの数です") -- driveTurn already computed this move's own
-      // whiteDiceGained generically; just attribute it here since this is where BUILD_NEW faces are
-      // already being identified. B008B is explicitly NOT tracked (per user spec: "空欄でOK").
-      if (faceId === 'B008A') b008aWhiteDiceGained[next.playerId] = m.whiteDiceGained;
     }
     // Usage-fee collection, attributed to the A-deck card that made this player the fee owner in the
     // first place (2026-08-07, per user spec: "Aカードは該当AREAで得た使用料の合計です アップグレード
@@ -387,7 +374,6 @@ function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorO
       buildsByRound: buildsByRound[player.id],
       colorDiceGainedByRound: colorDiceGainedByRound[player.id],
       areaFeeByRoundAndCard,
-      b008aWhiteDiceGained: b008aWhiteDiceGained[player.id],
       job008BonusVp,
       finalScore: scoreByPlayerId[player.id],
       qstScore: qstScoreByPlayerId[player.id] || 0,
