@@ -1064,6 +1064,13 @@ function factsForFaceId(faceId) {
     // CON sheet's own hand-authored アイコン column (2026-08-15, per user request -- see fillCardFace's
     // own doc). '' for every other sheet, which has no such column at all.
     iconText: row['アイコン'] || '',
+    // CON's own raw ONCE text (2026-08-16, per user request: "CONカードIDが書かれている部分を消して
+    // その場所に得られる初期資源を書いて" -- see fillCardFace's own doc, which passes this through
+    // buildActionIcons to reuse the exact same ADD(...)/ADD(wD)-aware icon rendering every other card's
+    // ONCE/TAP/PASSIVE already uses, rather than a narrower one-off resource-list parser that would miss
+    // shapes like CON001B's ADD(4wD) -- COST-column parsing (renderCostBadges) only ever handles
+    // K/A/B/C/Z/VP/BZ, never dice, so that path isn't a fit here).
+    once: row.ONCE || '',
   };
 }
 
@@ -2039,7 +2046,17 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
 
   // Corrected 2026-07-29: the card id always stays in the id spot -- the ownership label goes in
   // the effect area instead (it *is* this card's effect, not a replacement for its identity).
-  q('.shop-card__id').textContent = faceId;
+  // CON cards are the one exception (2026-08-16, per user request: "CONカードIDが書かれている部分を
+  // 消してその場所に得られる初期資源を書いて") -- the id spot shows the resources its ONCE grants
+  // instead, via the same buildActionIcons pipeline every other card's ONCE/TAP/PASSIVE effect already
+  // renders through (see .shop-card--con .shop-card__id's badge-compaction CSS for the layout side).
+  const idEl = q('.shop-card__id');
+  const onceIcon = faceId.startsWith('CON') ? buildActionIcons(facts.once) : null;
+  if (onceIcon) {
+    idEl.appendChild(onceIcon);
+  } else {
+    idEl.textContent = faceId;
+  }
   // Thematic title, at the top of the card, above the id (2026-08-05, per user feedback: "AC系のカード
   // NAMEをカード上部に反映させてください"). Empty (and :empty{display:none}-hidden) for any card whose
   // NAME hasn't been customized yet -- see factsForFaceId's own doc.

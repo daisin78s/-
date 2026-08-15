@@ -1197,7 +1197,7 @@
       "TAP": "",
       "PASSIVE": "",
       "TURNEND": "",
-      "START_ORDER": "",
+      "START_ORDER": 5,
       "WARNING": "",
       "NOTE": "",
       "AUTO": "",

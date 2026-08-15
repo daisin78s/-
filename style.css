@@ -500,6 +500,18 @@ h1, h2, h3 { margin: 0; }
   font-size: 13px;
 }
 
+/* CON cards show their ONCE's resource grant here instead of the plain id text (2026-08-16, per user
+   request: "CONカードIDが書かれている部分を消してその場所に得られる初期資源を書いて" -- see main.js's
+   fillCardFace, which renders it via the same buildActionIcons()/.action-icons pipeline every card's
+   ONCE/TAP/PASSIVE effect already uses). Scaled down to fit the id row's own small size (13px bold
+   text otherwise) -- .action-icons' own defaults (14px emoji, 11px dot) are sized for the taller
+   .shop-card__effect row below, not this compact single-line spot. */
+.shop-card--con .shop-card__id .action-emoji { font-size: 11px; }
+.shop-card--con .shop-card__id .action-dot { width: 8px; height: 8px; }
+.shop-card--con .shop-card__id .action-count { font-size: 10px; }
+.shop-card--con .shop-card__id .action-arrow { font-size: 9px; }
+.shop-card--con .shop-card__id .action-suffix { font-size: 9px; }
+
 .shop-card__cost {
   display: flex;
   gap: 6px;
