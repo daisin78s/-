@@ -40,7 +40,7 @@ const { recordCheckpoint } = require('./undo');
 const MONUMENT_SHOP_SLOT_IDS = ['SHOP001', 'SHOP002', 'SHOP003', 'SHOP004', 'SHOP005', 'SHOP006'];
 const NORMAL_SHOP_SLOT_IDS = ['SHOP101', 'SHOP102', 'SHOP103', 'SHOP104', 'SHOP105', 'SHOP106'];
 const SPECIAL_SHOP_SLOT_IDS = ['SHOP201', 'SHOP202', 'SHOP203'];
-const CON_PHYSICAL_IDS = ['CON001', 'CON002', 'CON003', 'CON004', 'CON005'];
+const CON_PHYSICAL_IDS = ['CON001', 'CON002', 'CON003', 'CON004', 'CON005', 'CON006'];
 // JOB ids dropped their trailing tier letter (2026-08-0X, per user edit to game.xlsx -- JOB never had
 // a real B-tier sibling anyway, so the "A" was just a leftover from the {physicalId}{tier} pattern
 // every other tiered deck uses; JOB is now bare, same shape as M). See game-state.js's splitCardId,

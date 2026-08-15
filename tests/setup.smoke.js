@@ -80,7 +80,7 @@ for (const player of state.players) {
 // ---------------------------------------------------------------------------
 const dealtCon = state.players.map((p) => p.conPhysicalId);
 check('Every player got a distinct CON card', new Set(dealtCon).size, 4);
-assertTrue('All dealt CON ids are valid CON physicalIds', dealtCon.every((id) => /^CON00[1-5]$/.test(id)));
+assertTrue('All dealt CON ids are valid CON physicalIds', dealtCon.every((id) => /^CON00[1-6]$/.test(id)));
 
 for (const player of state.players) {
   const resourceIds = player.ownedCardPhysicalIds.filter((id) => id.startsWith('R'));
