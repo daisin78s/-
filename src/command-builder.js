@@ -193,16 +193,20 @@ function lowerCall(node) {
     // confirmed distinct from that rule on purpose. No args -- always evaluated against "this player's own
     // COLOR dice on this map", nothing to parameterize. CON006A's original second restriction
     // ("自発的なパスができない", can't voluntarily pass) was deferred and has since been replaced entirely
-    // by BLOCK_PASS_COLOR_DIE_BONUS below (2026-08-15 card-text revision) -- not implemented at all now.
+    // by PASS_COLOR_DIE_BONUS below (2026-08-15 card-text revision) -- not implemented at all now.
     case 'BLOCK_COLOR_DIE_REUSE':
       return { type: 'BLOCK_COLOR_DIE_REUSE' };
-    // BLOCK_PASS_COLOR_DIE_BONUS() -- CON006A's revised second restriction (2026-08-15, per user spec:
-    // "パスをしたとき色Dから3K得られない"): turn-flow.endRound's own "unused color die -> 3K" grant
-    // (every still-unplaced COLOR die at round end, whether truly untouched or explicitly passed --
-    // see board.passDie's own doc for why those two cases are already unified under placedMapId===null)
-    // is skipped entirely for this player. No args -- always SELF-scoped, nothing to parameterize.
-    case 'BLOCK_PASS_COLOR_DIE_BONUS':
-      return { type: 'BLOCK_PASS_COLOR_DIE_BONUS' };
+    // PASS_COLOR_DIE_BONUS(amount) -- CON006A's revised second restriction. Originally a flat block
+    // (2026-08-15: "パスをしたとき色Dから3K得られない", 0 instead of the normal 3), corrected after
+    // playtesting to a reduced amount instead of a full block (2026-08-16: "パスをしたとき色Dから2Kしか
+    // 得られない" -- "ラウンドパスでもらえるKを0→2に変更"): turn-flow.endRound's own "unused color die ->
+    // 3K" grant (every still-unplaced COLOR die at round end, whether truly untouched or explicitly
+    // passed -- see board.passDie's own doc for why those two cases are already unified under
+    // placedMapId===null) uses `amount` instead of 3 for this player. Takes the override amount as an
+    // explicit arg (rather than a bare on/off flag) precisely because this number has already been
+    // retuned once after real play -- 0 still works the same way (amount=0), no special-casing needed.
+    case 'PASS_COLOR_DIE_BONUS':
+      return { type: 'PASS_COLOR_DIE_BONUS', amount: numberValue(node.args[0]) };
     case 'MODIFY_CONVERT_VALUE':
       return {
         type: 'MODIFY_CONVERT_VALUE',

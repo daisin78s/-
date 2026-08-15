@@ -277,10 +277,12 @@ check('startRound(2) itself does not touch dice (already rerolled at the previou
   check('Round 4: but the die itself is NOT rerolled (confirmed exception)', unusedDie.value, valueBefore);
 }
 {
-  // CON006A (2026-08-15, per user spec: "パスをしたとき色Dから3K得られない") blocks this player's own
-  // unused-color-die 3K grant entirely, but doesn't otherwise change collection/rerolling.
+  // CON006A (2026-08-16, per user spec after playtesting: "パスをしたとき色Dから2Kしか得られない" --
+  // corrected down from an earlier flat 0K block, "ラウンドパスでもらえるKを0→2に変更") overrides this
+  // player's own unused-color-die grant to 2K instead of the normal 3K, but doesn't otherwise change
+  // collection/rerolling.
   const { createEmptyGameState: freshEmptyState, createDie: freshDie, createCardInstance } = require('../src/game-state');
-  const s = freshEmptyState('con006a-no-3k-smoke');
+  const s = freshEmptyState('con006a-2k-smoke');
   setup.createPlayers(s, ['Alice']);
   setup.prepareMaps(s, index);
   setup.prepareShops(s, index);
@@ -298,7 +300,7 @@ check('startRound(2) itself does not touch dice (already rerolled at the previou
 
   const beforeK = p1.resources.K;
   turnFlow.endRound(s, index);
-  check('CON006A owner gets no 3K for their unused color die', p1.resources.K, beforeK);
+  check('CON006A owner gets 2K (not the normal 3K) for their unused color die', p1.resources.K, beforeK + 2);
   check('...but the die is still collected (back in hand) as usual', unusedDie.placedMapId, null);
 }
 
