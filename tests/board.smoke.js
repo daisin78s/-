@@ -332,6 +332,80 @@ function giveDie(state, playerId, value) {
 }
 
 // ---------------------------------------------------------------------------
+// CON006A: BLOCK_COLOR_DIE_REUSE() (2026-08-15, per user spec: "自分のカラーDが置かれているAREAには
+// 別のカラーDを配置できない") -- blocks placing a 2nd own COLOR die on a map from a SEPARATE, later
+// action, but a single group-placement action stacking 2+ own COLOR dice together (confirmed with the
+// user: "スタッキングは許可") is exempt, and GRANT_PLACE_ANYWHERE waives it entirely (confirmed:
+// "バイパスされる", unlike DUPLICATE_VALUE_IN_AREA).
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const con6 = createCardInstance('CON006A');
+  con6.ownerId = 'P1';
+  state.cards[con6.physicalId] = con6;
+  p1.ownedCardPhysicalIds.push(con6.physicalId);
+  check('isColorDieReuseBlocked reports true once CON006A is owned', board.isColorDieReuseBlocked(state, index, 'P1'), true);
+
+  // AREA001A: SLOT1=1, SLOT2=2, SLOT3=3 -- placing values 1 then 2 avoids DUPLICATE_VALUE_IN_AREA
+  // interference, isolating this test to the new own-COLOR-die-reuse rule alone.
+  const d1 = giveDie(state, 'P1', 1);
+  const first = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
+  check('First own COLOR die onto AREA001A succeeds', first.success, true);
+
+  const d2 = giveDie(state, 'P1', 2);
+  const second = board.placeDice(state, index, { playerId: 'P1' }, d2.id, 'MAP001', 1);
+  check('A 2nd own COLOR die onto the same AREA, in a later separate action, is blocked', second, { success: false, reason: 'OWN_COLOR_DIE_ALREADY_IN_AREA' });
+
+  // GRANT_PLACE_ANYWHERE waives the rule (confirmed distinct from DUPLICATE_VALUE_IN_AREA's own bypass policy).
+  d2.placeAnywhereThisTurn = true;
+  const bypassed = board.placeDice(state, index, { playerId: 'P1' }, d2.id, 'MAP001', 1);
+  check('...but GRANT_PLACE_ANYWHERE (placeAnywhereThisTurn) waives it', bypassed.success, true);
+}
+{
+  // A player without CON006A is never restricted this way.
+  const state = freshStateWithShops();
+  const d1 = giveDie(state, 'P1', 1);
+  board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
+  const d2 = giveDie(state, 'P1', 2);
+  const second = board.placeDice(state, index, { playerId: 'P1' }, d2.id, 'MAP001', 1);
+  check('Without CON006A, a 2nd own COLOR die onto the same AREA in a separate action is unaffected', second.success, true);
+}
+{
+  // Stacking exemption: placeDiceGroup placing 2 of this player's own COLOR dice together, in ONE
+  // action, onto the castle -- must NOT be blocked even though CON006A is owned, since neither die was
+  // "already there" before this action started.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.resources.BZ = 20;
+  const con6 = createCardInstance('CON006A');
+  con6.ownerId = 'P1';
+  state.cards[con6.physicalId] = con6;
+  p1.ownedCardPhysicalIds.push(con6.physicalId);
+  const d1 = giveDie(state, 'P1', 6);
+  const d2 = giveDie(state, 'P1', 3);
+  const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
+  check('CON006A does not block a single group action stacking 2 own COLOR dice together', result.success, true);
+}
+{
+  // But a group placement reusing a map this player already placed a COLOR die on in an EARLIER,
+  // separate action is blocked, same as the single-die path.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.resources.BZ = 20;
+  const con6 = createCardInstance('CON006A');
+  con6.ownerId = 'P1';
+  state.cards[con6.physicalId] = con6;
+  p1.ownedCardPhysicalIds.push(con6.physicalId);
+  const earlierDie = giveDie(state, 'P1', 5);
+  board.placeDice(state, index, { playerId: 'P1' }, earlierDie.id, board.CASTLE_MAP_ID, 0);
+  const d1 = giveDie(state, 'P1', 1);
+  const d2 = giveDie(state, 'P1', 6);
+  const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
+  check('A group placement reusing a map with an earlier own COLOR die is blocked', result, { success: false, reason: 'OWN_COLOR_DIE_ALREADY_IN_AREA' });
+}
+
+// ---------------------------------------------------------------------------
 // restockShop (2026-08-07, per user request: "SHOP101のカードが建築された時、102のカードが101にズレ、
 // 103のカードが102にズレ...カードの補充は必ずSHOP106にされるように...SHOP001も同様に SHOP201も同じよう
 // にずれていくが、補充はなし" -- the row now compacts left before refilling, instead of each slot

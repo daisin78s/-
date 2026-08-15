@@ -1075,13 +1075,13 @@
       "VP": "",
       "ONCE": "ADD(2wD)",
       "TAP": "",
-      "PASSIVE": "",
+      "PASSIVE": "BLOCK_COLOR_DIE_REUSE()",
       "TURNEND": "",
       "START_ORDER": 5,
       "WARNING": "",
       "NOTE": "",
       "AUTO": "",
-      "INST": "自分のカラーDが置かれているAREAには\n別のカラーDを配置できない。\n自発的なパスができない。",
+      "INST": "自分のカラーDが置かれているAREAには\n別のカラーDを配置できない。",
       "アイコン": ""
     },
     {

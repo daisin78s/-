@@ -172,6 +172,19 @@ function lowerCall(node) {
     // carries the raw face id + required rank -- no state-dependent branching belongs at lowering time.
     case 'BLOCK_UPGRADE_UNLESS_QST_RANK':
       return { type: 'BLOCK_UPGRADE_UNLESS_QST_RANK', questFaceId: identLikeName(node.args[0]), rank: numberValue(node.args[1]) };
+    // BLOCK_COLOR_DIE_REUSE() -- CON006A (2026-08-15, per user spec: "自分のカラーDが置かれているAREAには
+    // 別のカラーDを配置できない"): once this player already has one of their own COLOR dice (not wD) sitting
+    // on a map/AREA from an earlier placement action, they can't place another COLOR die there. Confirmed
+    // scope: a single group-placement action (board.placeDiceGroup, e.g. stacking multiple own COLOR dice
+    // at 王宮/AREA009 to sum values) is exempt -- the rule only looks at what was already on the map
+    // *before* the current action started, never at dice this same action is placing. Also waived by
+    // GRANT_PLACE_ANYWHERE (placeAnywhereThisTurn), unlike DUPLICATE_VALUE_IN_AREA which is never waived --
+    // confirmed distinct from that rule on purpose. No args -- always evaluated against "this player's own
+    // COLOR dice on this map", nothing to parameterize. The player's own "自発的なパスができない" half of
+    // CON006A's text is a separate, not-yet-implemented restriction (deferred by user request) -- do not
+    // conflate the two.
+    case 'BLOCK_COLOR_DIE_REUSE':
+      return { type: 'BLOCK_COLOR_DIE_REUSE' };
     case 'MODIFY_CONVERT_VALUE':
       return {
         type: 'MODIFY_CONVERT_VALUE',

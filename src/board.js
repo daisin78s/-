@@ -218,6 +218,17 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
     const duplicateElsewhere = map.slots.some((occ, i) => i !== slotIndex && occ.some((o) => o.value === die.value));
     if (duplicateElsewhere) return { success: false, reason: 'DUPLICATE_VALUE_IN_AREA' };
   }
+
+  // CON006A (2026-08-15): a COLOR die can't join a map this player already has one of their own COLOR
+  // dice on, from an *earlier* placement action -- see isColorDieReuseBlocked's own doc. Checked against
+  // live state, so a die placed earlier THIS SAME action (placeDiceGroup) never trips this; only prior,
+  // already-committed placements do. Waived by GRANT_PLACE_ANYWHERE (bypass), unlike DUPLICATE_VALUE_IN_
+  // AREA above -- confirmed distinct on purpose. wD (kind WHITE) is never restricted by this rule.
+  if (die.kind === 'COLOR' && !bypass && isColorDieReuseBlocked(state, index, context.playerId)) {
+    if (player.dice.some((d) => d.kind === 'COLOR' && d.placedMapId === mapId)) {
+      return { success: false, reason: 'OWN_COLOR_DIE_ALREADY_IN_AREA' };
+    }
+  }
   // (isExSlot && targetOccupants.length === 0): never blocked by a duplicate value sitting elsewhere in
   // the AREA (confirmed: "EXはどんなダイスでも置けます すでに同AREA別SLOTに置かれているダイスと同じ目
   // でも"). The reverse direction (an EX occupant blocking some *other* slot) still goes through the
@@ -509,6 +520,18 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   const areaRow = getAreaRow(index, map.currentAreaId);
   const requirements = getSlotRequirements(areaRow);
 
+  // CON006A (2026-08-15): same rule as placeDice's own (see isColorDieReuseBlocked's doc), but checked
+  // ONCE for the whole group against pre-existing map.slots occupancy (i.e. only earlier, already-
+  // committed placements -- confirmed with the user this rule should NOT block a single group action
+  // from placing 2+ of this player's own COLOR dice together, e.g. stacking at 王宮/AREA009 to sum
+  // values: "スタッキングは許可"). A die in this group carrying GRANT_PLACE_ANYWHERE still waives it,
+  // same as placeDice.
+  if (isColorDieReuseBlocked(state, index, playerId) && player.dice.some((d) => d.kind === 'COLOR' && d.placedMapId === mapId)) {
+    if (dice.some((d) => d.kind === 'COLOR' && !d.placeAnywhereThisTurn)) {
+      return { success: false, reason: 'OWN_COLOR_DIE_ALREADY_IN_AREA' };
+    }
+  }
+
   const dieIdsByValue = new Map();
   for (const die of dice) {
     if (!dieIdsByValue.has(die.value)) dieIdsByValue.set(die.value, []);
@@ -795,6 +818,14 @@ function isUpgradeBlockedByQstRank(state, index, playerId) {
   });
 }
 
+/** True if any of playerId's owned cards carries an active BLOCK_COLOR_DIE_REUSE PASSIVE rule (CON006A,
+ * 2026-08-15, per user spec: "自分のカラーDが置かれているAREAには別のカラーDを配置できない"). Just an
+ * on/off flag -- the actual "does this player already have a COLOR die on mapId" check is each caller's
+ * own job (placeDice/placeDiceGroup), since it needs the specific mapId being targeted. */
+function isColorDieReuseBlocked(state, index, playerId) {
+  return executor.getPassiveRules(state, index, playerId, 'BLOCK_COLOR_DIE_REUSE').length > 0;
+}
+
 /**
  * Lists every legal choice for a BUILD command (already lowered by
  * command-builder: {categories, buildValue}). Does not mutate state or pay
@@ -964,6 +995,7 @@ module.exports = {
   useBareTapAbility,
   getBuildCandidates,
   isUpgradeBlockedByQstRank,
+  isColorDieReuseBlocked,
   isCandidateAffordable,
   resolveBuild,
   restockShop,
