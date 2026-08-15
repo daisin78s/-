@@ -966,7 +966,7 @@
   "CON": [
     {
       "ID": "CON001A",
-      "NAME": "CON001A",
+      "NAME": "暴食",
       "DICE": "",
       "COST": "",
       "EMBLEM_A": "",
@@ -978,14 +978,15 @@
       "PASSIVE": "",
       "TURNEND": "RESOURCE_LIMIT(K,7)",
       "START_ORDER": 0,
-      "WARNING": "Kが7個を超えています。\n7個を超えるKは捨てられます。\nよろしいですか？",
+      "WARNING": "食料が7個を超えています。\nターン終了時に1個消費します。\nよろしいですか？",
       "NOTE": "TURNEND時にRESOURCE_LIMIT(K,7)が適用される場合のみWARNINGを表示する。\n「はい」で処理を続行する。\n「いいえ」でTURNENDを取り消す。",
       "AUTO": "",
-      "INST": "資源◯の上限7個\nターンエンド時に捨てられます"
+      "INST": "資源◯の上限7個\nターンエンド時に1個消費します",
+      "アイコン": "〇MAX7\nターン終了時"
     },
     {
       "ID": "CON002A",
-      "NAME": "CON002A",
+      "NAME": "怠惰",
       "DICE": "",
       "COST": "",
       "EMBLEM_A": "",
@@ -1000,11 +1001,12 @@
       "WARNING": "自色ダイスではなく白ダイスを得ます。\nよろしいですか？",
       "NOTE": "REPLACE_ADD(D,wD)が適用される場合のみWARNINGを表示する。\n「はい」で処理を続行する。\n「いいえ」でADD(D)を発生させる行動を取り消し、行動前の状態に戻す。",
       "AUTO": "",
-      "INST": "色ダイスを得たとき、\nそれは🎲に変わる"
+      "INST": "色ダイスの上限３個、\nそれを超えたものは🎲に変わる",
+      "アイコン": "色D　MAX3"
     },
     {
       "ID": "CON003A",
-      "NAME": "CON003A",
+      "NAME": "狂信",
       "DICE": "",
       "COST": "",
       "EMBLEM_A": "",
@@ -1013,17 +1015,18 @@
       "VP": "",
       "ONCE": "ADD(3B)",
       "TAP": "",
-      "PASSIVE": "IF(CARD_COUNT<=6,VP_MODIFIER(-2))",
+      "PASSIVE": "IF(CARD_COUNT<=6,VP_MODIFIER(-2));VP_PENALTY_IF_BELOW(EMBLEM_COUNT(天,M),2)",
       "TURNEND": "",
       "START_ORDER": 2,
       "WARNING": "",
       "NOTE": "",
       "AUTO": "",
-      "INST": "建築数が6以下の時-2VP"
+      "INST": "M天が２個必要",
+      "アイコン": "モニュメント天\nが２個必要"
     },
     {
       "ID": "CON004A",
-      "NAME": "CON004A",
+      "NAME": "傲慢",
       "DICE": "",
       "COST": "",
       "EMBLEM_A": "",
@@ -1032,17 +1035,18 @@
       "VP": "",
       "ONCE": "ADD(3A)",
       "TAP": "",
-      "PASSIVE": "IF(EMBLEM_SET_COUNT<=3,VP_MODIFIER(-2))",
+      "PASSIVE": "BLOCK_UPGRADE_UNLESS_QST_RANK(Q004A,1)",
       "TURNEND": "",
       "START_ORDER": 3,
       "WARNING": "",
       "NOTE": "",
       "AUTO": "",
-      "INST": "天地人揃っていなければ-2VP"
+      "INST": "自分よりAREA数の多いプレイヤーがいると\nLVUPできない",
+      "アイコン": "最多AREA✖\n　　▽\nLVUP✖"
     },
     {
       "ID": "CON005A",
-      "NAME": "CON005A",
+      "NAME": "潔癖",
       "DICE": "",
       "COST": "",
       "EMBLEM_A": "",
@@ -1051,17 +1055,38 @@
       "VP": "",
       "ONCE": "ADD(3C)",
       "TAP": "",
-      "PASSIVE": "IF(LEVEL_COUNT(1)>=1,VP_MODIFIER(-2))",
+      "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": 4,
       "WARNING": "",
       "NOTE": "",
       "AUTO": "",
-      "INST": "アップグレードしていないカードがあれば-2VP"
+      "INST": "アップグレードしていないカードがあれば-2VP",
+      "アイコン": "LV1が不要"
+    },
+    {
+      "ID": "CON006A",
+      "NAME": "憤怒",
+      "DICE": "",
+      "COST": "",
+      "EMBLEM_A": "",
+      "EMBLEM_B": "",
+      "EMBLEM_C": "",
+      "VP": "",
+      "ONCE": "ADD(2wD)",
+      "TAP": "",
+      "PASSIVE": "",
+      "TURNEND": "",
+      "START_ORDER": 5,
+      "WARNING": "",
+      "NOTE": "",
+      "AUTO": "",
+      "INST": "自分のカラーDが置かれているAREAには\n別のカラーDを配置できない。\n自発的なパスができない。",
+      "アイコン": ""
     },
     {
       "ID": "CON001B",
-      "NAME": "CON001B",
+      "NAME": "裏切",
       "DICE": "",
       "COST": "",
       "EMBLEM_A": "",
@@ -1070,17 +1095,18 @@
       "VP": "",
       "ONCE": "ADD(D)",
       "TAP": "",
-      "PASSIVE": "VP_MODIFIER(-2)",
+      "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": 0,
       "WARNING": "",
       "NOTE": "",
       "AUTO": "",
-      "INST": "-2VP"
+      "INST": "QSTカードから得るVPのうち、\n最も大きいVP1つを失う",
+      "アイコン": "QST失う"
     },
     {
       "ID": "CON002B",
-      "NAME": "CON002B",
+      "NAME": "色欲",
       "DICE": "",
       "COST": "",
       "EMBLEM_A": "",
@@ -1095,11 +1121,12 @@
       "WARNING": "Zを1個Kに変換します。\nよろしいですか？",
       "NOTE": "TURNEND時にFORCE_CONVERT(Z,K,1)が適用される場合のみWARNINGを表示する。\n「はい」で処理を続行する。\n「いいえ」でTURNENDを取り消す。",
       "AUTO": "",
-      "INST": "ターンエンド時資源Z1個が資源◯1個に変わる"
+      "INST": "ターンエンド時資源Z1個が資源◯1個に変わる",
+      "アイコン": "Z→K\nターン終了時"
     },
     {
       "ID": "CON003B",
-      "NAME": "CON003B",
+      "NAME": "憂鬱",
       "DICE": "",
       "COST": "",
       "EMBLEM_A": "",
@@ -1114,11 +1141,12 @@
       "WARNING": "",
       "NOTE": "",
       "AUTO": "",
-      "INST": "資源を交換するときの上限4個"
+      "INST": "資源を交換するときの上限4個",
+      "アイコン": ""
     },
     {
       "ID": "CON004B",
-      "NAME": "CON004B",
+      "NAME": "嫉妬",
       "DICE": "",
       "COST": "",
       "EMBLEM_A": "",
@@ -1127,17 +1155,18 @@
       "VP": "",
       "ONCE": "ADD(2Z,3K)",
       "TAP": "",
-      "PASSIVE": "UPGRADE_LIMIT(3)",
+      "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": 3,
       "WARNING": "",
       "NOTE": "",
       "AUTO": "",
-      "INST": "アップグレードは3回までしか出来ない"
+      "INST": "ゲーム終了時一番上のQSTカードの順位に応じて\n（順位-1）VP失う\n１位→0VP　２位→-1VP　３位→-2VP　４位→-3VP",
+      "アイコン": ""
     },
     {
       "ID": "CON005B",
-      "NAME": "CON005B",
+      "NAME": "強欲",
       "DICE": "",
       "COST": "",
       "EMBLEM_A": "",
@@ -1146,13 +1175,34 @@
       "VP": "",
       "ONCE": "ADD(2A,2B)",
       "TAP": "",
-      "PASSIVE": "",
-      "TURNEND": "RESOURCE_TOTAL_LIMIT((A,B,C),7)",
+      "PASSIVE": "VP_PENALTY_IF_BELOW(RESOURCE(A,B,C,Z),3)",
+      "TURNEND": "",
       "START_ORDER": 4,
-      "WARNING": "A・B・Cの合計が7個を超えています。\n7個以下になるまでTURNENDできません。",
-      "NOTE": "TURNEND時にRESOURCE_TOTAL_LIMIT((A,B,C),7)が適用される場合のみWARNINGを表示する。\n「はい」でTURNENDを取り消す。",
+      "WARNING": "",
+      "NOTE": "",
       "AUTO": "",
-      "INST": "資源A,B,Cの合計値の上限7個\nターンエンド時に資源◯に選んで変える"
+      "INST": "ゲーム終了時３資源が必要\n足りない１個につき-1VP\n資源とはA,B,C,Zのこと",
+      "アイコン": "３資源が必要"
+    },
+    {
+      "ID": "CON006B",
+      "NAME": "祝福",
+      "DICE": "",
+      "COST": "",
+      "EMBLEM_A": 1,
+      "EMBLEM_B": 1,
+      "EMBLEM_C": 1,
+      "VP": "",
+      "ONCE": "ADD(2VP)",
+      "TAP": "",
+      "PASSIVE": "",
+      "TURNEND": "",
+      "START_ORDER": "",
+      "WARNING": "",
+      "NOTE": "",
+      "AUTO": "",
+      "INST": "制約なし",
+      "アイコン": "制約なし"
     }
   ],
   "RESOURCE": [
