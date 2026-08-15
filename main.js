@@ -250,6 +250,7 @@ function hasAiWorkPending(state) {
   // keeps hasAiWorkPending's own answer -- and therefore the manual-mode button's visibility -- honest).
   if (pendingBuildChoice) return false;
   if (state.pendingChoices.some((c) => c.kind === 'SELECT_RESOURCE_CARDS' && isAiPlayer(c.playerId))) return true;
+  if (state.pendingChoices.some((c) => c.kind === 'UNTAP_CHOICE' && isAiPlayer(c.playerId))) return true;
   if (state.round === 0) return false; // still waiting on the human's own resource choice
   if (state.phase === 'GAME_END') return false;
   // A human who's resolved this turn's die but hasn't clicked ターン終了 still owns the turn -- see
@@ -318,6 +319,16 @@ function driveOneAiStepInner(state) {
     const pair = rngMod.shuffle(state.rng, resourceChoice.context.candidates).slice(0, 2);
     setupMod.chooseResourceCards(state, resourceChoice.playerId, pair);
     maybeStartRound1(state);
+    return true;
+  }
+
+  // UNTAP_CHOICE (2026-08-15, see executor.runUntapChoice's own doc): same "random, not simulate-and-
+  // score" placeholder policy as the RESOURCE choice just above -- which of the player's own tapped
+  // cards is most worth keeping tapped has no eval-table weight to judge it by yet.
+  const untapChoice = state.pendingChoices.find((c) => c.kind === 'UNTAP_CHOICE' && isAiPlayer(c.playerId));
+  if (untapChoice) {
+    const picked = rngMod.shuffle(state.rng, untapChoice.context.candidates).slice(0, untapChoice.context.count);
+    executorMod.resolveUntapChoice(state, untapChoice.playerId, picked);
     return true;
   }
 
@@ -1200,10 +1211,13 @@ const ACTION_ICON_BUILDERS = {
   // 2026-08-0X, per user request ("⤴️を消してそこに毎タームといれる"): bare UNTAP() only ever appears
   // as a TURNEND effect (confirmed against data/game.json -- JOB004/005/007, all "usable once per turn"
   // reactive/direct TAP abilities), so "毎ターン" (plain text) reads more clearly there than the ⤴️
-  // glyph alone did. UNTAP_ALL(SELF) is a different DSL shape (an ONCE effect on C-tier-B cards, not a
-  // per-turn reset) and keeps its own ⤴️×3 icon below, unaffected.
+  // glyph alone did. UNTAP_CHOICE(SELF,3) is a different DSL shape (an ONCE effect on C004B/C005B/
+  // C006B/C007B/C008A/C008B, not a per-turn reset) and keeps its own ⤴️×3 icon below, unaffected --
+  // still shown the same way even though it now caps at 3 cards instead of untapping everything
+  // (2026-08-15, per user request: "すべてをアンタップにするを、自分のカード3枚をアンタップにするに
+  // 変更"), since the icon already happened to show exactly 3 arrows.
   'UNTAP()': () => actionRow([actionSuffix('毎ターン')]),
-  'UNTAP_ALL(SELF)': () => actionRow([actionEmoji('⚡'), actionEmoji('⤴️'), actionEmoji('⤴️'), actionEmoji('⤴️')]),
+  'UNTAP_CHOICE(SELF,3)': () => actionRow([actionEmoji('⚡'), actionEmoji('⤴️'), actionEmoji('⤴️'), actionEmoji('⤴️')]),
   // REPLACE_ADD(D,wD) (confirmed 2026-07-29): a passive that swaps "gain your own die" for "gain a
   // white die" instead -- shown as the source resource turning into the replacement.
   'REPLACE_ADD(D,wD)': () => actionRow([actionSuffix('色D'), actionArrow(), actionEmoji('🎲')]),
@@ -3172,9 +3186,10 @@ function commitBuildCandidate(candidate, bzDiscount) {
   const source = pendingBuildChoice.source;
   // Tap the TAP-source card BEFORE resolving the build, not after (2026-08-09 fix, per user report:
   // "B006AをTAPしてその効果でC008Aを建築したときB006Aがアンタップしない"). The built card's own ONCE --
-  // e.g. C008A's UNTAP_ALL(SELF) -- runs *inside* completeAreaBuild/completeQuestClaim below, so tapping
-  // this card only afterward (the old order) meant that effect could never actually reach it: B006A
-  // stayed permanently tapped even though UNTAP_ALL(SELF) should have untapped it right back.
+  // e.g. C008A's UNTAP_CHOICE(SELF,3) (2026-08-15, formerly UNTAP_ALL(SELF)) -- runs *inside*
+  // completeAreaBuild/completeQuestClaim below, so tapping this card only afterward (the old order)
+  // meant that effect could never actually reach it: B006A stayed permanently tapped even though the
+  // untap effect should have caught it right back.
   // resolveBuildNew/resolveUpgrade both check affordability and fail atomically *before* any state
   // mutation (see board.js's own code), so it's safe to speculatively tap first and simply revert if the
   // build then fails -- nothing else needs undoing, and the TAP is correctly left unspent for a retry.
@@ -3507,6 +3522,7 @@ function renderPlayers(state, next) {
     renderPassDieButton(node.querySelector('.player-panel__pass-die'), state, player, player.id === canPlaceDiceFor);
     renderFreeActionButtons(node.querySelector('.player-panel__free-actions'), state, player, player.id === canPlaceDiceFor);
     renderTapReactions(node.querySelector('.player-panel__tap-reactions'), state, player.id);
+    renderUntapChoice(node.querySelector('.player-panel__untap-choice'), state, player.id);
     renderTurnEndButton(node.querySelector('.player-panel__turn-end'), state, player, player.id === canPlaceDiceFor);
 
     container.appendChild(node);
@@ -3562,6 +3578,49 @@ function renderTapReactions(container, state, playerId) {
     buttons.appendChild(skipBtn);
     row.appendChild(buttons);
     container.appendChild(row);
+  }
+}
+
+/** Pending UNTAP_CHOICE pick (2026-08-15, see executor.runUntapChoice's own doc): only ever shown when
+ * that player has more than 3 tapped cards to choose from (3-or-fewer already auto-resolved with no
+ * choice at all, so there's nothing to render here in that case). Click-to-toggle candidates, same
+ * "auto-commits once the required count is reached" pattern as renderResourceChoice's own
+ * choice.context.selected scratch field -- committed via executor.resolveUntapChoice once exactly
+ * choice.context.count are selected. AI-controlled players resolve this via driveOneAiStepInner instead
+ * (random pick), never by clicks -- nothing to show here for them. */
+function renderUntapChoice(container, state, playerId) {
+  container.innerHTML = '';
+  if (isAiPlayer(playerId)) return;
+  const choice = state.pendingChoices.find((c) => c.playerId === playerId && c.kind === 'UNTAP_CHOICE');
+  if (!choice) return;
+  if (!choice.context.selected) choice.context.selected = [];
+  const selected = choice.context.selected;
+  container.appendChild(el('div', 'onboard-hint__line', `アンタップするカードを${choice.context.count}枚選んでください（${selected.length}/${choice.context.count}）`));
+  for (const physicalId of choice.context.candidates) {
+    const cardState = state.cards[physicalId];
+    if (!cardState) continue;
+    const isSelected = selected.includes(physicalId);
+    const cardNode = buildCardVisual(cardState.currentFaceId, { showEffect: true, allowTextFallback: false, noInteraction: true });
+    const tall = cardNode.classList.contains('shop-card--tall');
+    const cell = el('div', tall ? 'owned-card-cell owned-card-cell--tall owned-card-cell--selectable' : 'owned-card-cell owned-card-cell--selectable');
+    if (isSelected) cell.classList.add('owned-card-cell--selected');
+    cell.appendChild(cardNode);
+    const canToggle = isSelected || selected.length < choice.context.count;
+    attachPickableEnlarge(cardNode, cardState.currentFaceId, canToggle ? {
+      label: isSelected ? '選択を解除する' : '選ぶ',
+      onPick: () => {
+        if (isSelected) {
+          choice.context.selected = selected.filter((id) => id !== physicalId);
+        } else {
+          selected.push(physicalId);
+          if (selected.length === choice.context.count) {
+            executorMod.resolveUntapChoice(state, playerId, selected);
+          }
+        }
+        render(STATE);
+      },
+    } : null);
+    container.appendChild(cell);
   }
 }
 

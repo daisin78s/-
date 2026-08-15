@@ -257,7 +257,7 @@ function giveDie(state, playerId, value) {
   const p1 = player(state, 'P1');
   const inst = createCardInstance('A001A'); // A001B exists (has a back side) per data
   inst.ownerId = 'P1';
-  inst.tapped = true; // to prove UPGRADE resets tap state
+  inst.tapped = true; // 2026-08-15, per user request: LVUP must NOT reset tap state any more
   state.cards[inst.physicalId] = inst;
   p1.ownedCardPhysicalIds.push(inst.physicalId);
 
@@ -270,7 +270,7 @@ function giveDie(state, playerId, value) {
   const result = board.resolveBuild(state, index, { playerId: 'P1' }, upgradeCandidate);
   check('resolveBuild(UPGRADE) succeeds', result.success, true);
   check('Card face flipped to A001B', state.cards['A001'].currentFaceId, 'A001B');
-  check('Card is untapped after upgrading', state.cards['A001'].tapped, false);
+  check('Card keeps its prior TAP state after upgrading (no more auto-untap)', state.cards['A001'].tapped, true);
   check('Paid the 2A cost', p1.resources.A, 0);
   // A001B.ONCE = 'MAP003.CURRENT_AREA=AREA003C' -- confirms the new face's ONCE ran.
   check('A001B.ONCE ran: MAP003 flipped to tier C', state.maps['MAP003'].currentAreaId, 'AREA003C');

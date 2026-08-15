@@ -683,6 +683,44 @@ function runUntapAll(state, context, cmd) {
   return { success: true };
 }
 
+/** UNTAP_CHOICE(SELF,3) (2026-08-15, see command-builder.js's own doc): if the player has cmd.count or
+ * fewer of their own cards currently tapped, all of them untap immediately, same as UNTAP_ALL -- no
+ * choice needed since picking "all of them" isn't a real decision. Otherwise queues an UNTAP_CHOICE
+ * pendingChoice (candidates = every one of the player's own tapped physicalIds) for the player/UI to
+ * resolve later via resolveUntapChoice(), same "queue now, commit later" shape as emitAndResolve's own
+ * TAP_REACTION_AVAILABLE pendingChoice. */
+function runUntapChoice(state, context, cmd) {
+  const tappedOwned = Object.keys(state.cards).filter(
+    (id) => state.cards[id].ownerId === context.playerId && state.cards[id].tapped
+  );
+  if (tappedOwned.length <= cmd.count) {
+    for (const id of tappedOwned) state.cards[id].tapped = false;
+    return { success: true };
+  }
+  state.pendingChoices.push({
+    id: nextPendingChoiceId(),
+    playerId: context.playerId,
+    kind: 'UNTAP_CHOICE',
+    context: { candidates: tappedOwned, count: cmd.count },
+  });
+  return { success: true };
+}
+
+/** Resolves a player's UNTAP_CHOICE pendingChoice (see runUntapChoice's own doc): chosenPhysicalIds must
+ * be exactly choice.context.count of choice.context.candidates -- untaps just those, leaving every other
+ * tapped card (the ones NOT picked) tapped. */
+function resolveUntapChoice(state, playerId, chosenPhysicalIds) {
+  const choiceIndex = state.pendingChoices.findIndex((c) => c.playerId === playerId && c.kind === 'UNTAP_CHOICE');
+  if (choiceIndex === -1) return { success: false, reason: 'NO_PENDING_CHOICE' };
+  const choice = state.pendingChoices[choiceIndex];
+  if (chosenPhysicalIds.length !== choice.context.count || chosenPhysicalIds.some((id) => !choice.context.candidates.includes(id))) {
+    return { success: false, reason: 'INVALID_SELECTION' };
+  }
+  for (const id of chosenPhysicalIds) state.cards[id].tapped = false;
+  state.pendingChoices.splice(choiceIndex, 1);
+  return { success: true };
+}
+
 /** SLOT1-6 columns that aren't "NONE" for areaRow, in order -- the same filter setup.js's prepareMaps
  * uses to size a fresh MapState.slots at game start. Duplicated here (not imported from board.js) to
  * avoid a require cycle, same rationale as evaluator.js's own duplicated parseMonumentThreshold. */
@@ -921,6 +959,7 @@ function runCommand(state, index, context, cmd) {
     case 'CHANGE': return runChange(state, index, context, cmd);
     case 'UNTAP': return runUntap(state, context, cmd);
     case 'UNTAP_ALL': return runUntapAll(state, context, cmd);
+    case 'UNTAP_CHOICE': return runUntapChoice(state, context, cmd);
     case 'SET_CURRENT_AREA': return runSetCurrentArea(state, index, context, cmd);
     case 'SET_DICE_ANY': return runSetDiceAny(state, context);
     case 'SET_DIE_VALUE': return runSetDieValue(state, context, cmd);
@@ -1240,6 +1279,7 @@ module.exports = {
   emit,
   emitAndResolve,
   resolveTapReaction,
+  resolveUntapChoice,
   setActivationListener,
   notifyActivation,
   grantResource,

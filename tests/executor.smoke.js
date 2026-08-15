@@ -816,5 +816,52 @@ const EXTRA_D = { name: 'EXTRA_D_PLUS_ABC_COUNT', args: [] };
   check('Fewer color dice than the starting count floors at 0 rather than going negative', executor.evalMetric(state, index, 'P1', EXTRA_D), 0);
 }
 
+// ---------------------------------------------------------------------------
+// 23. UNTAP_CHOICE(SELF,3) (2026-08-15, replacing C004B/C005B/C006B/C007B/C008A/C008B's old
+// UNTAP_ALL(SELF): "自分のカード3枚をアンタップにする") -- 3-or-fewer tapped cards auto-untap
+// immediately with no choice; 4+ tapped cards queue an UNTAP_CHOICE pendingChoice instead.
+// ---------------------------------------------------------------------------
+const UNTAP_CHOICE_3 = { type: 'UNTAP_CHOICE', scope: 'SELF', count: 3 };
+{
+  const state = freshState();
+  const a = giveCard(state, 'A001A', 'P1');
+  const b = giveCard(state, 'B001A', 'P1');
+  const c = giveCard(state, 'C001A', 'P1');
+  state.cards[a].tapped = true;
+  state.cards[b].tapped = true;
+  state.cards[c].tapped = false;
+  const result = executor.runCommand(state, index, { playerId: 'P1' }, UNTAP_CHOICE_3);
+  check('runCommand succeeds with 2 tapped cards (<=3)', result.success, true);
+  check('Both tapped cards auto-untap immediately', [state.cards[a].tapped, state.cards[b].tapped], [false, false]);
+  check('No pendingChoice was created', state.pendingChoices.length, 0);
+}
+{
+  const state = freshState();
+  const ids = ['A001A', 'B001A', 'C001A', 'A002A'].map((faceId) => giveCard(state, faceId, 'P1'));
+  for (const id of ids) state.cards[id].tapped = true; // 4 tapped cards -- exceeds count=3
+  const result = executor.runCommand(state, index, { playerId: 'P1' }, UNTAP_CHOICE_3);
+  check('runCommand succeeds with 4 tapped cards (>3)', result.success, true);
+  check('None untap yet -- a choice is required first', ids.every((id) => state.cards[id].tapped === true), true);
+  check('Exactly one UNTAP_CHOICE pendingChoice was queued', state.pendingChoices.filter((c) => c.kind === 'UNTAP_CHOICE').length, 1);
+  const choice = state.pendingChoices.find((c) => c.kind === 'UNTAP_CHOICE');
+  check('...candidates are exactly the 4 tapped physicalIds', [...choice.context.candidates].sort(), [...ids].sort());
+  check('...count is 3', choice.context.count, 3);
+
+  const badCount = executor.resolveUntapChoice(state, 'P1', ids.slice(0, 2));
+  check('resolveUntapChoice fails with the wrong number of picks', badCount, { success: false, reason: 'INVALID_SELECTION' });
+  const badId = executor.resolveUntapChoice(state, 'P1', [ids[0], ids[1], 'not-a-real-card']);
+  check('resolveUntapChoice fails with an id not among the candidates', badId, { success: false, reason: 'INVALID_SELECTION' });
+
+  const picked = ids.slice(0, 3);
+  const ok = executor.resolveUntapChoice(state, 'P1', picked);
+  check('resolveUntapChoice succeeds with exactly 3 valid picks', ok.success, true);
+  check('...those 3 are now untapped', picked.every((id) => state.cards[id].tapped === false), true);
+  check('...the 4th (not picked) stays tapped', state.cards[ids[3]].tapped, true);
+  check('...the pendingChoice is gone', state.pendingChoices.filter((c) => c.kind === 'UNTAP_CHOICE').length, 0);
+
+  const stale = executor.resolveUntapChoice(state, 'P1', picked);
+  check('A second resolve attempt fails -- nothing left pending', stale, { success: false, reason: 'NO_PENDING_CHOICE' });
+}
+
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);

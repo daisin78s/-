@@ -920,8 +920,10 @@ function resolveBuildNew(state, index, context, candidate) {
  * (confirmed identical to the tier-B row's COST in the data), after
  * context.bzDiscount if any (2026-08-06, per user feedback -- BZ discounts an
  * UPGRADE's COST exactly like a BUILD_NEW's, see resolveBuildNew above), flip
- * the face, reset tap state (UPGRADE always un-taps -- [[project-dice-wp-dsl-spec]]),
- * run the new face's ONCE, then emit BUILD('U') (see resolveBuildNew's matching comment).
+ * the face (2026-08-15, per user request: LVUP no longer resets tap state --
+ * the upgraded card keeps whatever TAP/untapped state it already had, instead
+ * of always un-tapping), run the new face's ONCE, then emit BUILD('U') (see
+ * resolveBuildNew's matching comment).
  */
 function resolveUpgrade(state, index, context, candidate) {
   const fromRow = getCardRow(index, candidate.fromFaceId);
@@ -933,7 +935,6 @@ function resolveUpgrade(state, index, context, candidate) {
 
   const inst = state.cards[candidate.physicalId];
   inst.currentFaceId = candidate.toFaceId;
-  inst.tapped = false;
 
   const toRow = getCardRow(index, candidate.toFaceId);
   const onceResult = executor.runProgram(state, index, { ...context, sourcePhysicalId: inst.physicalId }, toRow.ONCE);

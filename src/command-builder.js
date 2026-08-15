@@ -126,6 +126,17 @@ function lowerCall(node) {
       return { type: 'UNTAP' };
     case 'UNTAP_ALL':
       return { type: 'UNTAP_ALL', scope: identLikeName(node.args[0]) };
+    // UNTAP_CHOICE(SELF,3) -- C004B/C005B/C006B/C007B/C008A/C008B (2026-08-15, per user spec, replacing
+    // their old UNTAP_ALL(SELF) -- "すべてをアンタップにするを、自分のカード3枚をアンタップにするに変
+    // 更"): untaps up to `count` of the player's own currently-tapped cards. If they have `count` or
+    // fewer tapped cards, all of them untap automatically (see executor.runUntapChoice) -- no choice to
+    // make. If they have more than `count`, the player manually picks exactly `count` of them (a new
+    // UNTAP_CHOICE pendingChoice, resolved via executor.resolveUntapChoice, same shape as setup.
+    // chooseResourceCards' SELECT_RESOURCE_CARDS choice). scope is always SELF in the current data but
+    // kept as an explicit arg (matching UNTAP_ALL's own shape) rather than hardcoded, in case a future
+    // card ever wants this to reach beyond the player's own cards.
+    case 'UNTAP_CHOICE':
+      return { type: 'UNTAP_CHOICE', scope: identLikeName(node.args[0]), count: numberValue(node.args[1]) };
     case 'REPLACE_ADD':
       return { type: 'REPLACE_ADD', from: identLikeName(node.args[0]), to: identLikeName(node.args[1]) };
     case 'RESOURCE_LIMIT':

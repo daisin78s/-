@@ -413,6 +413,11 @@
       <!-- TAP reactions (2026-07-30, real engine wiring pass 6): pending ON(GET(...),...) manual-mode
            reactions this player can choose to use or skip. See main.js's renderTapReactions. -->
       <div class="player-panel__tap-reactions"></div>
+      <!-- UNTAP_CHOICE pending pick (2026-08-15, per user request: C004B/C005B/C006B/C007B/C008A/
+           C008B's old "untap everything" ONCE effect became "pick 3 of your own tapped cards to untap"
+           -- shown only when that card has more than 3 tapped cards to choose from; 3-or-fewer resolves
+           automatically with no choice to show here. See main.js's renderUntapChoice. -->
+      <div class="player-panel__untap-choice"></div>
       <!-- "ターン終了" button (2026-08-01, per user feedback: ending a turn is no longer automatic
            right after a die placement -- the player gets a window to use free actions/bare TAP
            abilities first, then explicitly ends via this button. See main.js's renderTurnEndButton/

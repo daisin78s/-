@@ -97,6 +97,18 @@ function driveTurn(state, index, playerId, aiPlayer, initialHasPlacedDieThisTurn
     const result = applyInPlace(state, index, move);
     if (!result.success) break; // defensive -- selectMove only offers moves MoveGenerator pre-validated
     movesTaken.push({ move, result });
+    // UNTAP_CHOICE (2026-08-15, see executor.runUntapChoice's own doc): C004B/C005B/C006B/C007B/
+    // C008A/C008B's ONCE effect queues this pendingChoice instead of resolving immediately whenever the
+    // player has more than 3 tapped cards to pick from -- nothing else in this loop (or MoveGenerator's
+    // own move list) ever surfaces or gates on it, so it must be resolved right here or it would sit in
+    // state.pendingChoices forever, silently never granting its own benefit. Random pick, matching this
+    // whole module's existing policy for choices with no eval-table weight yet (see setupGame's own
+    // RESOURCE-choice pick, same reasoning).
+    const untapChoice = state.pendingChoices.find((c) => c.playerId === playerId && c.kind === 'UNTAP_CHOICE');
+    if (untapChoice) {
+      const picked = rng.shuffle(state.rng, untapChoice.context.candidates).slice(0, untapChoice.context.count);
+      executor.resolveUntapChoice(state, playerId, picked);
+    }
     if (move.type === 'PLACE_DIE' || move.type === 'PASS_DIE') hasPlacedDieThisTurn = true;
     if (move.type === 'END_TURN') break;
   }
