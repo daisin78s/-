@@ -117,6 +117,26 @@ function giveCard(state, faceCardId, ownerId) {
 }
 
 // ---------------------------------------------------------------------------
+// conCardOwnVpEffect: isolates ONE card's own PASSIVE-driven VP effect out of a player who owns
+// SEVERAL such cards at once (2026-08-15, for AI.DATA.xlsx's per-CON "VPペナルティ平均" column) --
+// collectVpModifiers/computeFinalScore would report only the combined total; this must split it back
+// apart per face without double- or under-counting either one.
+// ---------------------------------------------------------------------------
+{
+  const state = createEmptyGameState('scoring-smoke-own-vp-effect');
+  state.players.push(createPlayer('P1', 'Alice'));
+  giveCard(state, 'CON003A', 'P1'); // -2 (CARD_COUNT<=6) + -2 (no monuments) = -4 on its own
+  giveCard(state, 'CON005B', 'P1'); // A+B+C+Z total 0, short 3 -> -3 on its own
+  const p1 = state.players[0];
+  p1.resources.A = 0; p1.resources.B = 0; p1.resources.C = 0; p1.resources.Z = 0;
+
+  check('conCardOwnVpEffect(CON003A) reports only its own -4, not CON005B\'s share', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON003A'), -4);
+  check('conCardOwnVpEffect(CON005B) reports only its own -3, not CON003A\'s share', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON005B'), -3);
+  check('...and the two sum to the same combined total collectVpModifiers reports', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON003A') + scoring.conCardOwnVpEffect(state, index, 'P1', 'CON005B'), executor.collectVpModifiers(state, index, 'P1'));
+  check('conCardOwnVpEffect returns 0 for a card this player does not actually own', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON001A'), 0);
+}
+
+// ---------------------------------------------------------------------------
 // conCardVpAdjustment: CON004B (嫉妬, 2026-08-13, per user spec: "一番上のQSTカードの順位に応じて
 // (順位-1)VP失う" -- "一番上" confirmed as Object.keys(state.quests)[0], i.e. reveal-shuffle order).
 // Q001A's GOAL=CARD_COUNT drives 4 distinct ranks via 4 distinct built-card counts.

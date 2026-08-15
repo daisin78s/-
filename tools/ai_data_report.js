@@ -48,6 +48,15 @@ const { buildEvalTable } = require('../src/ai/eval-table');
 const { playGame, AREA_CARD_BY_MAP } = require('../src/ai/game-runner');
 const { LEVELS, getLevel } = require('../src/ai/levels');
 const executor = require('../src/executor');
+const scoring = require('../src/scoring');
+
+/** CON faces whose own PASSIVE (real or bespoke) applies a VP penalty (2026-08-15, per user request:
+ * "VPペナルティがあるものは、その平均も出るようにしてください") -- CON003A/CON005B via the generic
+ * VP_PENALTY_IF_BELOW command, CON001B/CON004B via scoring.js's bespoke QST-rank logic (see that
+ * module's own doc on why those two can't be real PASSIVE data). Tracked as a simple average over every
+ * game where that CON face was actually held, via scoring.conCardOwnVpEffect -- isolated to just that
+ * one face's own contribution, not the player's combined total. */
+const CON_VP_PENALTY_FACES = new Set(['CON001B', 'CON003A', 'CON004B', 'CON005B']);
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const DATA_PATH = path.join(PROJECT_ROOT, 'data', 'game.json');
@@ -190,6 +199,14 @@ function main() {
     if (!job.has(jobFaceId)) job.set(jobFaceId, { count: 0, usageSum: 0 });
     return job.get(jobFaceId);
   }
+  // conVpPenalty["CON003A"] = { count, sum } -- see CON_VP_PENALTY_FACES' own doc. count is how many
+  // player-games actually held that face (not every game, since not every player draws every CON), sum
+  // is the total of conCardOwnVpEffect across those.
+  const conVpPenalty = new Map();
+  function conVpPenaltyEntry(faceId) {
+    if (!conVpPenalty.has(faceId)) conVpPenalty.set(faceId, { count: 0, sum: 0 });
+    return conVpPenalty.get(faceId);
+  }
   // One row per player in any game where at least one player's score reached highScoreThreshold (see
   // collectHighScoreRows's own doc).
   const highScoreRows = [];
@@ -223,6 +240,12 @@ function main() {
       entry.count++;
       entry.scoreSum += detail.finalScore - detail.qstScore;
       entry.qstScoreSum += detail.qstScore;
+
+      if (CON_VP_PENALTY_FACES.has(h.conFaceId)) {
+        const vpEntry = conVpPenaltyEntry(h.conFaceId);
+        vpEntry.count++;
+        vpEntry.sum += scoring.conCardOwnVpEffect(state, index, playerId, h.conFaceId);
+      }
 
       for (const round of [1, 2, 3, 4]) {
         for (const faceId of detail.buildsByRound[round]) {
@@ -309,8 +332,15 @@ function main() {
     for (const [jobFaceId, e] of job) {
       jobOut[jobFaceId] = { count: e.count, avgUsage: e.count > 0 ? e.usageSum / e.count : null };
     }
-    fs.writeFileSync(outputPath, JSON.stringify({ gamesRun, aiLevel, conjob: conjobOut, abcm: abcmOut, job: jobOut, highScoreThreshold, highScoreRows }, null, 1));
-    console.log(`Wrote aggregate report (${gamesRun} games at ${aiLevel}, ${conjobOut.length} CON x JOB combos, ${abcm.size} ABCM rows with data, ${job.size} JOB rows with data, ${highScoreRows.length} high-score (>=${highScoreThreshold}) player-rows) to ${outputPath}`);
+    // conVpPenalty["CON003A"] = {count, avgVpPenalty} -- see CON_VP_PENALTY_FACES' own doc. Written into
+    // CONJOB's own "VPペナルティ平均" column by ai_data_write.py, alongside the existing per-CON marginal
+    // average column -- one value per CON face, independent of which JOB it was paired with.
+    const conVpPenaltyOut = {};
+    for (const [faceId, e] of conVpPenalty) {
+      conVpPenaltyOut[faceId] = { count: e.count, avgVpPenalty: e.count > 0 ? e.sum / e.count : null };
+    }
+    fs.writeFileSync(outputPath, JSON.stringify({ gamesRun, aiLevel, conjob: conjobOut, abcm: abcmOut, job: jobOut, conVpPenalty: conVpPenaltyOut, highScoreThreshold, highScoreRows }, null, 1));
+    console.log(`Wrote aggregate report (${gamesRun} games at ${aiLevel}, ${conjobOut.length} CON x JOB combos, ${abcm.size} ABCM rows with data, ${job.size} JOB rows with data, ${conVpPenalty.size} CON VP-penalty rows with data, ${highScoreRows.length} high-score (>=${highScoreThreshold}) player-rows) to ${outputPath}`);
     // Also pushes straight into AI.DATA.xlsx itself at every checkpoint (2026-08-04, per user feedback:
     // "10戦ごとにAIDATAに上書きしていってください"), not just this intermediate JSON -- same
     // tools/ai_data_write.py this project already used for the final write, just invoked automatically

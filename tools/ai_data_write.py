@@ -75,10 +75,19 @@ def find_header_row(label):
     raise ValueError(f'Could not find a "{label}" header in column A of the CONJOB sheet')
 
 count_rows, count_cols = find_table(find_header_row('試行回数'))
-avg_rows, avg_cols = find_table(find_header_row('平均得点'))
+avg_header_row = find_header_row('平均得点')
+avg_rows, avg_cols = find_table(avg_header_row)
 # QST平均得点 (2026-08-09, per user request) -- a third table, same row/col layout as the two above,
 # further down the sheet (the user's own pre-existing addition, found the same dynamic way).
 qst_avg_rows, qst_avg_cols = find_table(find_header_row('QST平均得点'))
+
+def find_col_in_row(row, label):
+    """Same idea as find_col (below, ABCM sheet) but for a given CONJOB header row rather than always
+    row 1 -- used for the 平均得点 table's own extra columns (K/N) that live past its JOB008 column."""
+    for c in range(1, ws.max_column + 1):
+        if ws.cell(row=row, column=c).value == label:
+            return c
+    raise ValueError(f'Could not find column "{label}" in CONJOB row {row}')
 
 # Clears only the JOB001..JOB008 data cells this script actually writes (2026-08-03, per user feedback:
 # "すでにある数字を上書きして大丈夫です" for a fresh N-game run) -- without this, a combination that
@@ -138,6 +147,30 @@ for row_map in (avg_rows, qst_avg_rows):
         ws.cell(row=r, column=k_col, value=f'=IFERROR(AVERAGE({first_col_letter}{r}:{last_col_letter}{r}),"")')
 
 print(f'CONJOB K: wrote per-CON marginal average formulas for {len(avg_rows)} + {len(qst_avg_rows)} rows (J column abolished)')
+
+# N (平均得点 table only, 2026-08-15, per user request: "VPペナルティがあるものは　その平均も出るように
+# してください") -- one value per CON face, independent of JOB, so it doesn't fit the (CON,JOB) grid
+# these tables are otherwise shaped around; found by its own header text like every other column here
+# rather than a hardcoded position (see this file's own top-of-file doc on why). Only ever written for
+# the 4 CON faces report['conVpPenalty'] actually has data for (CON001B/CON003A/CON004B/CON005B as of
+# this writing, but driven entirely by whatever tools/ai_data_report.js's CON_VP_PENALTY_FACES contains
+# -- never hardcoded here) -- every other row's cell is cleared to blank, same "no misleading number for
+# a card with no such concept" policy the 使用回数 columns already use.
+vp_penalty_col = find_col_in_row(avg_header_row, 'VPペナルティ平均')
+for r in avg_rows.values():
+    ws.cell(row=r, column=vp_penalty_col).value = None
+
+vp_penalty_written = 0
+vp_penalty_skipped = []
+for con_face_id, entry in report.get('conVpPenalty', {}).items():
+    if con_face_id not in avg_rows:
+        vp_penalty_skipped.append(con_face_id)
+        continue
+    if entry['avgVpPenalty'] is not None:
+        ws.cell(row=avg_rows[con_face_id], column=vp_penalty_col, value=round(entry['avgVpPenalty'], 2))
+    vp_penalty_written += 1
+
+print(f'CONJOB N (VPペナルティ平均): wrote {vp_penalty_written} CON faces, skipped {len(vp_penalty_skipped)}: {vp_penalty_skipped}')
 
 # Third table: a single "使用回数" row (2026-08-07, per user spec, at the user's own pre-existing row --
 # see this file's own top-of-file doc) reusing the same JOB001..JOB008 column positions as the two tables

@@ -24,50 +24,84 @@
 'use strict';
 
 const { getCardRow } = require('./data-loader');
-const { ownedCardRows, collectVpModifiers } = require('./executor');
+const { ownedCardRows, collectVpModifiers, activePassiveCommands, evalCountNode, evalMetric } = require('./executor');
 const qst = require('./qst');
 
-/**
- * CON001B/CON004B (2026-08-13, per user spec): 2 CON cards whose penalty depends on cross-player QST
- * ranking -- doesn't fit the generic VP_MODIFIER/PASSIVE metric vocabulary (executor.evalMetric
- * deliberately doesn't know about qst.js -- executor.js sits BELOW qst.js in the layering, see qst.js's
- * own file doc), so these are recognized by exact owned face id instead, same precedent as
- * executor.js's PAYMENT_CHOICE_CON_FACE_ID. (CON005B used to live here too -- see the 2026-08-15
- * VP_PENALTY_IF_BELOW command, the general "○○が必要" shortfall rule, which now covers it as real
- * PASSIVE data instead, via collectVpModifiers.) Called from computeFinalScore below, which runs live
- * every render (not just at GAME_END), so the running score already previews what each would apply at
- * the real game end -- same as QST's own live rank preview elsewhere.
- * @returns {number} a VP delta (0 or negative -- neither of these ever grants VP)
- */
-function conCardVpAdjustment(state, index, playerId) {
+/** CON face ids whose PASSIVE-driven VP effect isn't attributable to a single card via the generic
+ * collectVpModifiers sum alone -- see conCardOwnVpEffect's own doc for why each needs its own bespoke
+ * branch here rather than a real DSL command. */
+const BESPOKE_QST_RANK_CON_FACES = new Set(['CON001B', 'CON004B']);
+
+/** CON001B's own VP effect (裏切, 2026-08-13, per user spec): "QSTで1位がある→-4VP、1位がなく2位がある
+ * →-2VP、1-2位がなく3位がある→-1VP、1-2-3位がない→0VP" -- best (lowest-numbered) rank across every
+ * currently-revealed quest. 0 if playerId doesn't actually own CON001B. */
+function con001bVpEffect(state, index, playerId) {
   const player = state.players.find((p) => p.id === playerId);
-  const owned = new Set(player.ownedCardPhysicalIds.map((id) => state.cards[id].currentFaceId));
+  const owned = player.ownedCardPhysicalIds.some((id) => state.cards[id].currentFaceId === 'CON001B');
+  if (!owned) return 0;
+  const ranks = Object.keys(state.quests).map((faceId) => {
+    const entry = qst.rankPlayersForQuest(state, index, faceId).find((e) => e.playerId === playerId);
+    return entry.rank;
+  });
+  const bestRank = ranks.length ? Math.min(...ranks) : Infinity;
+  if (bestRank === 1) return -4;
+  if (bestRank === 2) return -2;
+  if (bestRank === 3) return -1;
+  return 0;
+}
+
+/** CON004B's own VP effect (嫉妬, 2026-08-13, per user spec): "一番上のQSTカードの順位に応じて
+ * (順位-1)VP失う" -- "一番上" confirmed 2026-08-13 as whichever quest is first in state.quests' own key
+ * order (画面表示順で一番左 -- currently reveal-shuffle order, so this is a different quest each game,
+ * by design). 0 if playerId doesn't actually own CON004B. */
+function con004bVpEffect(state, index, playerId) {
+  const player = state.players.find((p) => p.id === playerId);
+  const owned = player.ownedCardPhysicalIds.some((id) => state.cards[id].currentFaceId === 'CON004B');
+  if (!owned) return 0;
+  const firstFaceId = Object.keys(state.quests)[0];
+  if (!firstFaceId) return 0;
+  const entry = qst.rankPlayersForQuest(state, index, firstFaceId).find((e) => e.playerId === playerId);
+  return -(entry.rank - 1);
+}
+
+/**
+ * The VP effect a single owned card FACE contributes on its own, independent of what else the player
+ * owns (2026-08-15, for AI.DATA.xlsx's per-CON "VPペナルティ平均" column -- see tools/ai_data_report.js).
+ * CON001B/CON004B (bespoke, see their own doc above -- neither fits the generic VP_MODIFIER/PASSIVE
+ * metric vocabulary since executor.evalMetric deliberately doesn't know about qst.js, which sits ABOVE
+ * it in the layering) delegate to their own named functions. Everything else with a real PASSIVE
+ * (VP_MODIFIER and/or VP_PENALTY_IF_BELOW clauses -- e.g. CON003A/CON005B) evaluates just THAT row's
+ * own PASSIVE text via activePassiveCommands, the same per-row primitive collectVpModifiers itself
+ * loops over every owned card with -- so this stays in sync automatically if either command's own
+ * semantics ever change. 0 for a card with no such clause, or one playerId doesn't own at all.
+ * @returns {number} a VP delta (0 or negative for every currently-defined case)
+ */
+function conCardOwnVpEffect(state, index, playerId, faceId) {
+  if (faceId === 'CON001B') return con001bVpEffect(state, index, playerId);
+  if (faceId === 'CON004B') return con004bVpEffect(state, index, playerId);
+  const player = state.players.find((p) => p.id === playerId);
+  const owned = player.ownedCardPhysicalIds.some((id) => state.cards[id].currentFaceId === faceId);
+  if (!owned) return 0;
+  const row = getCardRow(index, faceId);
+  if (!row.PASSIVE) return 0;
+  let sum = 0;
+  for (const cmd of activePassiveCommands(state, index, playerId, row)) {
+    if (cmd.type === 'VP_MODIFIER') sum += evalCountNode(state, index, playerId, cmd.count);
+    else if (cmd.type === 'VP_PENALTY_IF_BELOW') sum -= Math.max(0, cmd.threshold - evalMetric(state, index, playerId, cmd.metric));
+  }
+  return sum;
+}
+
+/** Sum of conCardOwnVpEffect across every currently-known bespoke-or-PASSIVE-driven CON face the player
+ * owns (2026-08-13/15). Folded into computeFinalScore below. Deliberately only sums the BESPOKE
+ * (qst-dependent) faces here plus nothing else -- a PASSIVE-driven card's own VP_MODIFIER/
+ * VP_PENALTY_IF_BELOW clauses are already counted once by collectVpModifiers' own sweep across every
+ * owned card, so re-adding them via conCardOwnVpEffect here would double-count them. Only
+ * BESPOKE_QST_RANK_CON_FACES needs this separate top-up, since those two never had real PASSIVE data
+ * for collectVpModifiers to find in the first place. */
+function conCardVpAdjustment(state, index, playerId) {
   let adjustment = 0;
-
-  // CON001B (裏切): "QSTで1位がある→-4VP、1位がなく2位がある→-2VP、1-2位がなく3位がある→-1VP、
-  // 1-2-3位がない→0VP" -- best (lowest-numbered) rank across every currently-revealed quest.
-  if (owned.has('CON001B')) {
-    const ranks = Object.keys(state.quests).map((faceId) => {
-      const entry = qst.rankPlayersForQuest(state, index, faceId).find((e) => e.playerId === playerId);
-      return entry.rank;
-    });
-    const bestRank = ranks.length ? Math.min(...ranks) : Infinity;
-    if (bestRank === 1) adjustment -= 4;
-    else if (bestRank === 2) adjustment -= 2;
-    else if (bestRank === 3) adjustment -= 1;
-  }
-
-  // CON004B (嫉妬): "一番上のQSTカードの順位に応じて(順位-1)VP失う" -- "一番上" confirmed 2026-08-13 as
-  // whichever quest is first in state.quests' own key order (画面表示順で一番左 -- currently reveal-
-  // shuffle order, so this is a different quest each game, by design).
-  if (owned.has('CON004B')) {
-    const firstFaceId = Object.keys(state.quests)[0];
-    if (firstFaceId) {
-      const entry = qst.rankPlayersForQuest(state, index, firstFaceId).find((e) => e.playerId === playerId);
-      adjustment -= entry.rank - 1;
-    }
-  }
-
+  for (const faceId of BESPOKE_QST_RANK_CON_FACES) adjustment += conCardOwnVpEffect(state, index, playerId, faceId);
   return adjustment;
 }
 
@@ -98,6 +132,6 @@ function rankPlayers(state, index) {
   return scored.map(({ playerId, score }) => ({ playerId, score }));
 }
 
-module.exports = { computeFinalScore, rankPlayers, conCardVpAdjustment };
+module.exports = { computeFinalScore, rankPlayers, conCardVpAdjustment, conCardOwnVpEffect };
 
 })();
