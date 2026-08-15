@@ -155,6 +155,13 @@ function lowerCall(node) {
     // (RESOURCE(A,B,C,Z), EMBLEM_COUNT(天,M), ...) works here with no extra plumbing.
     case 'VP_PENALTY_IF_BELOW':
       return { type: 'VP_PENALTY_IF_BELOW', metric: lowerMetric(node.args[0]), threshold: numberValue(node.args[1]) };
+    // VP_PENALTY_PER(metric) -- a flat per-unit penalty (2026-08-15, per user spec on CON005A: "LV1の
+    // カード１枚につき-1VP", correcting the card's original flat IF(LEVEL_COUNT(1)>=1,VP_MODIFIER(-2))
+    // "any at all -> -2" threshold shape to scale with the count instead): -1VP for every unit of
+    // metric, 0 if metric is 0. No threshold arg, unlike VP_PENALTY_IF_BELOW -- every unit counts, not
+    // just the ones short of some minimum.
+    case 'VP_PENALTY_PER':
+      return { type: 'VP_PENALTY_PER', metric: lowerMetric(node.args[0]) };
     case 'CONVERT_LIMIT':
       return { type: 'CONVERT_LIMIT', scope: identLikeName(node.args[0]), limit: numberValue(node.args[1]) };
     case 'UPGRADE_LIMIT':

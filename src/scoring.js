@@ -70,10 +70,11 @@ function con004bVpEffect(state, index, playerId) {
  * CON001B/CON004B (bespoke, see their own doc above -- neither fits the generic VP_MODIFIER/PASSIVE
  * metric vocabulary since executor.evalMetric deliberately doesn't know about qst.js, which sits ABOVE
  * it in the layering) delegate to their own named functions. Everything else with a real PASSIVE
- * (VP_MODIFIER and/or VP_PENALTY_IF_BELOW clauses -- e.g. CON003A/CON005B) evaluates just THAT row's
- * own PASSIVE text via activePassiveCommands, the same per-row primitive collectVpModifiers itself
- * loops over every owned card with -- so this stays in sync automatically if either command's own
- * semantics ever change. 0 for a card with no such clause, or one playerId doesn't own at all.
+ * (VP_MODIFIER/VP_PENALTY_IF_BELOW/VP_PENALTY_PER clauses -- e.g. CON003A/CON005A/CON005B) evaluates
+ * just THAT row's own PASSIVE text via activePassiveCommands, the same per-row primitive
+ * collectVpModifiers itself loops over every owned card with -- so this stays in sync automatically if
+ * any of those commands' own semantics ever change. 0 for a card with no such clause, or one playerId
+ * doesn't own at all.
  * @returns {number} a VP delta (0 or negative for every currently-defined case)
  */
 function conCardOwnVpEffect(state, index, playerId, faceId) {
@@ -88,6 +89,7 @@ function conCardOwnVpEffect(state, index, playerId, faceId) {
   for (const cmd of activePassiveCommands(state, index, playerId, row)) {
     if (cmd.type === 'VP_MODIFIER') sum += evalCountNode(state, index, playerId, cmd.count);
     else if (cmd.type === 'VP_PENALTY_IF_BELOW') sum -= Math.max(0, cmd.threshold - evalMetric(state, index, playerId, cmd.metric));
+    else if (cmd.type === 'VP_PENALTY_PER') sum -= evalMetric(state, index, playerId, cmd.metric);
   }
   return sum;
 }

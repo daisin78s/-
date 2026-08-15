@@ -120,6 +120,24 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 }
 
 // ---------------------------------------------------------------------------
+// 3a. CON005A: PASSIVE=VP_PENALTY_PER(LEVEL_COUNT(1)) (2026-08-15, per user spec: "LV1のカード１枚に
+// つき-1VP", correcting the card's original flat IF(LEVEL_COUNT(1)>=1,VP_MODIFIER(-2)) "any LV1 card at
+// all -> flat -2" shape into a genuine per-card scale instead -- 0 LV1 cards -> 0VP, not still -2).
+// ---------------------------------------------------------------------------
+{
+  const state = freshState();
+  giveCard(state, 'CON005A', 'P1');
+  check('CON005A: no LV1 cards at all -> 0VP (not a flat -2)', executor.collectVpModifiers(state, index, 'P1'), 0);
+
+  giveCard(state, 'A001A', 'P1'); // LEVEL=1
+  check('CON005A: 1 LV1 card -> -1VP', executor.collectVpModifiers(state, index, 'P1'), -1);
+
+  giveCard(state, 'A002A', 'P1');
+  giveCard(state, 'A003A', 'P1'); // 3 LV1 cards total now
+  check('CON005A: 3 LV1 cards -> -3VP (scales per card, not a flat threshold)', executor.collectVpModifiers(state, index, 'P1'), -3);
+}
+
+// ---------------------------------------------------------------------------
 // 3b. B008B: PASSIVE=VP_MODIFIER(COUNT(天)) -- persistent, not a one-time ONCE snapshot (2026-08-12,
 //     per user request: "即時ではなく永続効果にしたい" -- moved off ONCE precisely so it keeps
 //     recomputing). Recomputed live from currently-owned 天-emblem cards every time

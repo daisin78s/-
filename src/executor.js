@@ -550,19 +550,23 @@ function getPassiveRules(state, index, playerId, type) {
   return out;
 }
 
-/** Sum of every active VP_MODIFIER PLUS every active VP_PENALTY_IF_BELOW, for final scoring. Each
- * VP_MODIFIER's count is resolved live via evalCountNode (2026-08-12) -- a literal (e.g.
- * VP_MODIFIER(-2)) is a fixed number as before, but a dynamic one (e.g. VP_MODIFIER(COUNT(天))) is
- * recomputed from current game state on every call, same as computeFinalScore recomputing owned
- * cards' VP live -- so it's a genuinely persistent/ongoing effect, not a one-time snapshot.
- * VP_PENALTY_IF_BELOW (2026-08-15, the general "○○が必要" shortfall rule -- see command-builder.js's
- * own doc) contributes -1 per unit its metric falls short of its threshold, 0 once at/above it. */
+/** Sum of every active VP_MODIFIER PLUS every active VP_PENALTY_IF_BELOW PLUS every active
+ * VP_PENALTY_PER, for final scoring. Each VP_MODIFIER's count is resolved live via evalCountNode
+ * (2026-08-12) -- a literal (e.g. VP_MODIFIER(-2)) is a fixed number as before, but a dynamic one (e.g.
+ * VP_MODIFIER(COUNT(天))) is recomputed from current game state on every call, same as
+ * computeFinalScore recomputing owned cards' VP live -- so it's a genuinely persistent/ongoing effect,
+ * not a one-time snapshot. VP_PENALTY_IF_BELOW (2026-08-15, the general "○○が必要" shortfall rule --
+ * see command-builder.js's own doc) contributes -1 per unit its metric falls short of its threshold, 0
+ * once at/above it. VP_PENALTY_PER (2026-08-15, see command-builder.js's own doc) contributes -1 per
+ * unit of its metric, no threshold. */
 function collectVpModifiers(state, index, playerId) {
   const modifierSum = getPassiveRules(state, index, playerId, 'VP_MODIFIER')
     .reduce((sum, r) => sum + evalCountNode(state, index, playerId, r.count), 0);
   const shortfallSum = getPassiveRules(state, index, playerId, 'VP_PENALTY_IF_BELOW')
     .reduce((sum, r) => sum - Math.max(0, r.threshold - evalMetric(state, index, playerId, r.metric)), 0);
-  return modifierSum + shortfallSum;
+  const perUnitPenaltySum = getPassiveRules(state, index, playerId, 'VP_PENALTY_PER')
+    .reduce((sum, r) => sum - evalMetric(state, index, playerId, r.metric), 0);
+  return modifierSum + shortfallSum + perUnitPenaltySum;
 }
 
 // ---------------------------------------------------------------------------
@@ -900,6 +904,7 @@ const RULE_ONLY_TYPES = new Set([
   'FORCE_CONVERT',
   'BLOCK_UPGRADE_UNLESS_QST_RANK',
   'VP_PENALTY_IF_BELOW',
+  'VP_PENALTY_PER',
   'ON',
 ]);
 
