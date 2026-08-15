@@ -385,6 +385,14 @@ function buildTrailingAdds(commands) {
  * every other in-hand die), so without excluding it, a player with exactly 4 OTHER color dice plus this
  * one (5 total, genuinely still under the cap for the purposes of "would this placement exceed it")
  * would be wrongly blocked -- found via this fix's own test coverage.
+ *
+ * A second, unconditional form of this same block (2026-08-15, per user follow-up: "CONで上限3個を持つ
+ * プレイヤーはダイスを3個持つ限り訓練場にダイス候補が出ないように...現状絶対置けないはずです"): CON002A
+ * (怠惰)'s PASSIVE=REPLACE_ADD(D,wD) forces every gained D into a wD instead, unconditionally -- not a
+ * literal colorDiceCap change (that field stays 5 for everyone; CON002A's own INST text "色ダイスの上限
+ * ３個" is just flavor text for this substitution's practical effect, never spending past their starting
+ * 3-die hand since they can never gain a real 4th). A CON002A owner can NEVER get a genuine D from this
+ * AREA, at any dice count, so this is checked independently of (and before) the cap count above.
  */
 function grantsColorDie(commands) {
   return commands.some((cmd) => {
@@ -397,6 +405,8 @@ function grantsColorDie(commands) {
 function wouldAreaActionHaveEffect(state, index, context, areaRow, buildValue, placingDieId) {
   const commands = lowerProgram(parse(areaRow.ACTION));
   if (grantsColorDie(commands)) {
+    const replaceAddRules = executor.getPassiveRules(state, index, context.playerId, 'REPLACE_ADD');
+    if (replaceAddRules.some((r) => r.from === 'D')) return { ok: false, reason: 'COLOR_DIE_REPLACED' };
     const player = state.players.find((p) => p.id === context.playerId);
     const otherColorDiceCount = player.dice.filter((d) => d.kind === 'COLOR' && d.id !== placingDieId).length;
     if (otherColorDiceCount >= player.colorDiceCap) return { ok: false, reason: 'COLOR_DICE_CAP' };

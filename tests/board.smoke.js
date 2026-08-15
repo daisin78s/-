@@ -1206,6 +1206,24 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   check('...a genuine COLOR die (not wD) was gained', p.dice.filter((d) => d.kind === 'COLOR').length, 6);
 }
 {
+  // CON002A (怠惰, PASSIVE=REPLACE_ADD(D,wD)) (2026-08-15, per user follow-up: "CONで上限3個を持つプレ
+  // イヤーはダイスを3個持つ限り訓練場にダイス候補が出ないように...現状絶対置けないはずです") -- blocked
+  // unconditionally, even with just 1 color die (nowhere near the normal 5-die cap), since REPLACE_ADD
+  // means they can never get a genuine D from this AREA at any dice count.
+  const state = freshStateWithShops();
+  const p = player(state, 'P1');
+  const con2 = createCardInstance('CON002A');
+  con2.ownerId = 'P1';
+  state.cards[con2.physicalId] = con2;
+  p.ownedCardPhysicalIds.push(con2.physicalId);
+  p.resources.A = 1; p.resources.B = 1; p.resources.C = 1;
+  const die = giveDie(state, 'P1', 3); // just 1 color die on hand, far below the normal cap
+  const result = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP007', 0);
+  check('AREA007 is refused for a CON002A owner even at just 1 color die', result, { success: false, reason: 'COLOR_DIE_REPLACED' });
+  check('...the die was never actually placed', die.placedMapId, null);
+  check('...A/B/C was never spent', [p.resources.A, p.resources.B, p.resources.C], [1, 1, 1]);
+}
+{
   // AREA008 (castle).ACTION=BUILD() -- with the M shop emptied out (no monument buildable at all,
   // and buildValue too low for any normal card either), placement must be refused, not just the BUILD
   // step failing after the die is already stuck on the board.
