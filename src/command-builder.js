@@ -191,11 +191,18 @@ function lowerCall(node) {
     // *before* the current action started, never at dice this same action is placing. Also waived by
     // GRANT_PLACE_ANYWHERE (placeAnywhereThisTurn), unlike DUPLICATE_VALUE_IN_AREA which is never waived --
     // confirmed distinct from that rule on purpose. No args -- always evaluated against "this player's own
-    // COLOR dice on this map", nothing to parameterize. The player's own "自発的なパスができない" half of
-    // CON006A's text is a separate, not-yet-implemented restriction (deferred by user request) -- do not
-    // conflate the two.
+    // COLOR dice on this map", nothing to parameterize. CON006A's original second restriction
+    // ("自発的なパスができない", can't voluntarily pass) was deferred and has since been replaced entirely
+    // by BLOCK_PASS_COLOR_DIE_BONUS below (2026-08-15 card-text revision) -- not implemented at all now.
     case 'BLOCK_COLOR_DIE_REUSE':
       return { type: 'BLOCK_COLOR_DIE_REUSE' };
+    // BLOCK_PASS_COLOR_DIE_BONUS() -- CON006A's revised second restriction (2026-08-15, per user spec:
+    // "パスをしたとき色Dから3K得られない"): turn-flow.endRound's own "unused color die -> 3K" grant
+    // (every still-unplaced COLOR die at round end, whether truly untouched or explicitly passed --
+    // see board.passDie's own doc for why those two cases are already unified under placedMapId===null)
+    // is skipped entirely for this player. No args -- always SELF-scoped, nothing to parameterize.
+    case 'BLOCK_PASS_COLOR_DIE_BONUS':
+      return { type: 'BLOCK_PASS_COLOR_DIE_BONUS' };
     case 'MODIFY_CONVERT_VALUE':
       return {
         type: 'MODIFY_CONVERT_VALUE',

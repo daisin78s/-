@@ -1075,14 +1075,14 @@
       "VP": "",
       "ONCE": "ADD(D)",
       "TAP": "",
-      "PASSIVE": "BLOCK_COLOR_DIE_REUSE()",
+      "PASSIVE": "BLOCK_COLOR_DIE_REUSE();BLOCK_PASS_COLOR_DIE_BONUS()",
       "TURNEND": "",
       "START_ORDER": 5,
       "WARNING": "",
       "NOTE": "",
       "AUTO": "",
-      "INST": "自分のカラーDが置かれているAREAには\n別のカラーDを配置できない。",
-      "アイコン": "自分の色DがあるAREA\n色D配置不可"
+      "INST": "自分のカラーDが置かれているAREAには\n別のカラーDを配置できない。\nパスをしたとき色Dから3K得られない",
+      "アイコン": "自分の色DがあるAREA\n色D配置不可\nパスをしたとき色Dから3K得られない"
     },
     {
       "ID": "CON001B",

@@ -2916,11 +2916,13 @@ function renderPassDieButton(container, state, player, canAct) {
  * auto-confirmed as "はい" -- see attemptAdvanceTurn, the gate this feeds). Each owned card's TURNEND
  * is checked the same way executor.applyTurnEnd itself would apply it, just without mutating anything
  * yet. REPLACE_ADD (CON002A) has the same WARNING pattern but is NOT covered here -- it fires the
- * moment a would-be ADD(D) is about to run (mid-action, not at TURNEND), and the only DSL cell in the
- * whole dataset that grants a bare D is CON001B's ONCE=ADD(D); since each player has exactly one CON
- * card, no player can ever own both CON001B and CON002A at once, so REPLACE_ADD's WARNING is
- * structurally unreachable with the current data and isn't wired up (would need a real trigger point
- * to test against).
+ * moment a would-be ADD(D) is about to run (mid-action, not at TURNEND). The only card ONCE that grants
+ * a bare D is CON006A's (2026-08-15, was CON001B's before that card's own ONCE changed); since each
+ * player has exactly one CON card, no player can ever own both CON006A and CON002A at once. AREA007's
+ * CHANGE((A,B,C),D) also grants D, but is unconditionally blocked as a placement candidate for a
+ * REPLACE_ADD(D,...) owner (board.wouldAreaActionHaveEffect's COLOR_DIE_REPLACED check, 2026-08-16) --
+ * so REPLACE_ADD's WARNING stays structurally unreachable with the current data either way, and isn't
+ * wired up (would need a real trigger point to test against).
  * @returns {{physicalId:string, warningText:string, kind:'RESOURCE_LIMIT'|'FORCE_CONVERT'}[]}
  */
 function turnEndWarnings(state, playerId) {

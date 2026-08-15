@@ -276,6 +276,31 @@ check('startRound(2) itself does not touch dice (already rerolled at the previou
   check('Round 4: unused color die still grants 3K', s.players[0].resources.K, beforeK + 3);
   check('Round 4: but the die itself is NOT rerolled (confirmed exception)', unusedDie.value, valueBefore);
 }
+{
+  // CON006A (2026-08-15, per user spec: "パスをしたとき色Dから3K得られない") blocks this player's own
+  // unused-color-die 3K grant entirely, but doesn't otherwise change collection/rerolling.
+  const { createEmptyGameState: freshEmptyState, createDie: freshDie, createCardInstance } = require('../src/game-state');
+  const s = freshEmptyState('con006a-no-3k-smoke');
+  setup.createPlayers(s, ['Alice']);
+  setup.prepareMaps(s, index);
+  setup.prepareShops(s, index);
+  s.turnOrder = ['P1'];
+  s.round = 1;
+  const p1 = s.players[0];
+  const con6 = createCardInstance('CON006A');
+  con6.ownerId = 'P1';
+  s.cards[con6.physicalId] = con6;
+  p1.ownedCardPhysicalIds.push(con6.physicalId);
+
+  const unusedDie = freshDie('con006a-unused', 'COLOR');
+  unusedDie.value = 4;
+  p1.dice.push(unusedDie);
+
+  const beforeK = p1.resources.K;
+  turnFlow.endRound(s, index);
+  check('CON006A owner gets no 3K for their unused color die', p1.resources.K, beforeK);
+  check('...but the die is still collected (back in hand) as usual', unusedDie.placedMapId, null);
+}
 
 // ---------------------------------------------------------------------------
 // A placed WHITE die is disposable (confirmed 2026-08-09, per user feedback: "wDは一度SLOTに置かれた

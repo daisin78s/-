@@ -174,7 +174,11 @@ function computeNextRoundTurnOrder(state) {
  * COLOR die (confirmed 2026-07-29: a color die a player chose not to place
  * this round auto-resolves to 3K, which is what makes it "used" -- every
  * color die is collected and rerolled the same way by round's end, whether
- * it was actually placed or fell back to this), re-rolls every COLOR die
+ * it was actually placed or fell back to this) -- EXCEPT for a player with
+ * an active BLOCK_PASS_COLOR_DIE_BONUS PASSIVE rule (CON006A, 2026-08-15,
+ * per user spec: "パスをしたとき色Dから3K得られない"), whose still-unplaced
+ * COLOR dice are collected and rerolled the same as anyone else's, just
+ * without this 3K grant -- re-rolls every COLOR die
  * AND every still-in-hand WHITE die in bulk via rerollDiceForNextRound
  * (skipped after round 4, the one confirmed exception, since there's no
  * next round to prepare for), and untaps every free action *and every
@@ -190,11 +194,14 @@ function endRound(state, index) {
   if (state.round < 4) state.turnOrder = computeNextRoundTurnOrder(state);
 
   for (const player of state.players) {
+    // CON006A (2026-08-15): blocks this player's own 3K grant below entirely, checked once per player
+    // rather than per die since it's a flat SELF-scoped flag with nothing to evaluate per-die.
+    const blocksPassBonus = executorApi.getPassiveRules(state, index, player.id, 'BLOCK_PASS_COLOR_DIE_BONUS').length > 0;
     for (const die of player.dice) {
       // placedMapId===null covers both a genuinely-unplaced die and a passed one (2026-08-03, see
       // board.passDie) -- passing never sets placedMapId, only the separate `passed` flag, so this
       // check (and thus the 3K grant) already applies to both without any change needed here.
-      if (die.kind === 'COLOR' && die.placedMapId === null) {
+      if (die.kind === 'COLOR' && die.placedMapId === null && !blocksPassBonus) {
         executorApi.grantResourceAndEmitGet(state, index, { playerId: player.id }, 'K', 3);
       }
     }
