@@ -1055,7 +1055,7 @@
       "VP": "",
       "ONCE": "ADD(3C)",
       "TAP": "",
-      "PASSIVE": "",
+      "PASSIVE": "IF(LEVEL_COUNT(1)>=1,VP_MODIFIER(-2))",
       "TURNEND": "",
       "START_ORDER": 4,
       "WARNING": "",
