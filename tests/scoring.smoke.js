@@ -39,13 +39,14 @@ function giveCard(state, faceCardId, ownerId) {
   giveCard(state, 'A001A', 'P1'); // A sheet VP -- check actual value below
   const a001Vp = getCardRow(index, 'A001A').VP;
   state.players[0].resources.VP = 5;
-  // PASSIVE=IF(CARD_COUNT<=6,VP_MODIFIER(-2));VP_PENALTY_IF_BELOW(EMBLEM_COUNT(天,M),2) -- CARD_COUNT is
-  // 2 (M001+A001) so the VP_MODIFIER(-2) is active; EMBLEM_COUNT(天,M) is 0 (M001 has no 天 emblem) vs a
-  // threshold of 2, so VP_PENALTY_IF_BELOW adds its own separate -2.
+  // PASSIVE=VP_PENALTY_IF_BELOW(EMBLEM_COUNT(天,M),2) (2026-08-15: CON003A's old IF(CARD_COUNT<=6,
+  // VP_MODIFIER(-2)) clause was retired, not kept alongside this one -- see executor.smoke.js's own
+  // updated doc on CON003A) -- EMBLEM_COUNT(天,M) is 0 (M001 has no 天 emblem) vs a threshold of 2, so
+  // this contributes -2.
   giveCard(state, 'CON003A', 'P1');
 
-  const expected = 4 + a001Vp + 5 + -2 + -2;
-  check('computeFinalScore sums card VP + resource VP + active VP_MODIFIER + VP_PENALTY_IF_BELOW', scoring.computeFinalScore(state, index, 'P1'), expected);
+  const expected = 4 + a001Vp + 5 + -2;
+  check('computeFinalScore sums card VP + resource VP + active VP_PENALTY_IF_BELOW', scoring.computeFinalScore(state, index, 'P1'), expected);
 }
 
 // ---------------------------------------------------------------------------
@@ -101,18 +102,15 @@ function giveCard(state, faceCardId, ownerId) {
   state.players.push(createPlayer('P1', 'Alice'));
   giveCard(state, 'CON003A', 'P1');
   const p1 = state.players[0];
-  // CON003A's OTHER clause, IF(CARD_COUNT<=6,VP_MODIFIER(-2)), is also active throughout this block
-  // (CARD_COUNT never reaches 7 here) -- every expected value below includes that constant -2 on top
-  // of the EMBLEM_COUNT(天,M) shortfall being tested.
 
-  check('CON003A: no monuments at all -> EMBLEM_COUNT(天,M)=0, short 2 -> -2 (CARD_COUNT<=6) + -2 (shortfall) = -4', executor.collectVpModifiers(state, index, 'P1'), -4);
+  check('CON003A: no monuments at all -> EMBLEM_COUNT(天,M)=0, short 2 -> -2VP', executor.collectVpModifiers(state, index, 'P1'), -2);
 
   giveCard(state, 'B001A', 'P1'); // B-sheet card, EMBLEM_B(天)=1 -- does NOT count (wrong sheet)
-  check('CON003A: a B-sheet 天 emblem does not count toward the M-only threshold, still -4', executor.collectVpModifiers(state, index, 'P1'), -4);
+  check('CON003A: a B-sheet 天 emblem does not count toward the M-only threshold, still -2VP', executor.collectVpModifiers(state, index, 'P1'), -2);
 
   const m002Ten = getCardRow(index, 'M002').EMBLEM_B; // whatever M002's own 天 count actually is
   giveCard(state, 'M002', 'P1');
-  const expectedAfterM002 = -2 - Math.max(0, 2 - (m002Ten || 0));
+  const expectedAfterM002 = -Math.max(0, 2 - (m002Ten || 0));
   check('CON003A: owning an M-sheet card with its own 天 emblem(s) reduces (or clears) the shortfall', executor.collectVpModifiers(state, index, 'P1'), expectedAfterM002);
 }
 
@@ -125,12 +123,12 @@ function giveCard(state, faceCardId, ownerId) {
 {
   const state = createEmptyGameState('scoring-smoke-own-vp-effect');
   state.players.push(createPlayer('P1', 'Alice'));
-  giveCard(state, 'CON003A', 'P1'); // -2 (CARD_COUNT<=6) + -2 (no monuments) = -4 on its own
+  giveCard(state, 'CON003A', 'P1'); // no monuments -> -2 on its own
   giveCard(state, 'CON005B', 'P1'); // A+B+C+Z total 0, short 3 -> -3 on its own
   const p1 = state.players[0];
   p1.resources.A = 0; p1.resources.B = 0; p1.resources.C = 0; p1.resources.Z = 0;
 
-  check('conCardOwnVpEffect(CON003A) reports only its own -4, not CON005B\'s share', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON003A'), -4);
+  check('conCardOwnVpEffect(CON003A) reports only its own -2, not CON005B\'s share', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON003A'), -2);
   check('conCardOwnVpEffect(CON005B) reports only its own -3, not CON003A\'s share', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON005B'), -3);
   check('...and the two sum to the same combined total collectVpModifiers reports', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON003A') + scoring.conCardOwnVpEffect(state, index, 'P1', 'CON005B'), executor.collectVpModifiers(state, index, 'P1'));
   check('conCardOwnVpEffect returns 0 for a card this player does not actually own', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON001A'), 0);

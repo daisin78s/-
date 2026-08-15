@@ -103,19 +103,20 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 }
 
 // ---------------------------------------------------------------------------
-// 3. CON003A: PASSIVE=IF(CARD_COUNT<=6,VP_MODIFIER(-2));VP_PENALTY_IF_BELOW(EMBLEM_COUNT(天,M),2)
-// (2026-08-15: the 2nd clause added for "モニュメント天が2個必要" -- see command-builder.js's own doc
-// on the general "○○が必要" shortfall rule). No M-sheet card is ever owned in this block, so
-// EMBLEM_COUNT(天,M) stays 0 throughout -- VP_PENALTY_IF_BELOW's own -2 is present in BOTH checks
-// below, independent of whichever CARD_COUNT crosses the VP_MODIFIER clause's own threshold.
+// 3. CON003A: PASSIVE=VP_PENALTY_IF_BELOW(EMBLEM_COUNT(天,M),2) (2026-08-15, per user spec: the card's
+// original IF(CARD_COUNT<=6,VP_MODIFIER(-2)) clause is retired entirely -- "建築数が6以下で-2VPは廃止
+// して" -- replaced outright by this monument-emblem shortfall rule, "モニュメント天エンブレムが2個
+// 未満だと、不足1個につき-1VP" -- not added alongside the old clause). No M-sheet card is ever owned in
+// this block, so EMBLEM_COUNT(天,M) stays 0 -> short 2 -> -2, regardless of how many other (non-M)
+// cards this player owns.
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
-  giveCard(state, 'CON003A', 'P1'); // CON doesn't count toward CARD_COUNT itself
-  check('CON003A: VP_MODIFIER(-2) active while CARD_COUNT (0) <= 6, plus VP_PENALTY_IF_BELOW(-2)', executor.collectVpModifiers(state, index, 'P1'), -4);
+  giveCard(state, 'CON003A', 'P1');
+  check('CON003A: no monuments -> EMBLEM_COUNT(天,M)=0, short 2 -> -2VP', executor.collectVpModifiers(state, index, 'P1'), -2);
 
-  for (let i = 1; i <= 8; i++) giveCard(state, `A00${i}A`, 'P1'); // now CARD_COUNT = 8 > 6
-  check('CON003A: VP_MODIFIER inactive once CARD_COUNT (8) > 6, but VP_PENALTY_IF_BELOW(-2) still applies', executor.collectVpModifiers(state, index, 'P1'), -2);
+  for (let i = 1; i <= 8; i++) giveCard(state, `A00${i}A`, 'P1'); // owning lots of non-M cards changes nothing
+  check('CON003A: owning 8 more (non-M) cards does not affect the monument-only shortfall, still -2VP', executor.collectVpModifiers(state, index, 'P1'), -2);
 }
 
 // ---------------------------------------------------------------------------

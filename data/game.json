@@ -1015,7 +1015,7 @@
       "VP": "",
       "ONCE": "ADD(3B)",
       "TAP": "",
-      "PASSIVE": "IF(CARD_COUNT<=6,VP_MODIFIER(-2));VP_PENALTY_IF_BELOW(EMBLEM_COUNT(天,M),2)",
+      "PASSIVE": "VP_PENALTY_IF_BELOW(EMBLEM_COUNT(天,M),2)",
       "TURNEND": "",
       "START_ORDER": 2,
       "WARNING": "",
