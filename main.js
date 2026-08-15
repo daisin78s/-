@@ -91,8 +91,22 @@ function createInitialState(plan) {
   setupMod.rollInitialColorDice(state);
   const forcedCon = plan && plan.con.length > 0 ? { P1: gameStateMod.splitCardId(plan.con[0]).physicalId } : undefined;
   setupMod.dealConCards(state, forcedCon);
-  setupMod.dealResourceCandidates(state, INDEX, plan ? ['P1'] : undefined);
-  if (plan) setupMod.grantResourceCards(state, INDEX, 'P1', plan.resource);
+  // Resource step (2026-08-15, per user feedback: choosing 0 preferred resources used to still bypass
+  // P1's normal choice and hand them 2 fully random cards -- P1 should instead see the exact same
+  // 4-candidates/pick-2 flow as P2-4 whenever nothing was preselected. Choosing exactly 1 locks that
+  // card in and lets P1 pick the 2nd from 3 more candidates (setup.grantOneResourceCardAndDealRest),
+  // rather than the 2nd being auto-filled randomly with no choice at all. Choosing 2 keeps the original
+  // full-bypass behavior unchanged.
+  const resourceCount = plan ? plan.resource.length : 0;
+  if (resourceCount === 2) {
+    setupMod.dealResourceCandidates(state, INDEX, ['P1']);
+    setupMod.grantResourceCards(state, INDEX, 'P1', plan.resource);
+  } else if (resourceCount === 1) {
+    setupMod.dealResourceCandidates(state, INDEX, ['P1']);
+    setupMod.grantOneResourceCardAndDealRest(state, INDEX, 'P1', plan.resource[0]);
+  } else {
+    setupMod.dealResourceCandidates(state, INDEX);
+  }
   setupMod.dealJobPool(state, plan ? plan.job : undefined);
   qstMod.setupQuests(state);
   return state;
@@ -808,10 +822,11 @@ function toggleDebugMode() {
 /** One entry per picker screen, in the order shown. max=1 for CON reads the same as the others --
  * "pick at most one", not mandatory; pressing END with nothing picked is always valid everywhere.
  * columns (2026-08-13, per user request) sets #debug-setup-list's grid width for that step -- chosen
- * per step to exactly fit its own card count with no partial last row (CON 5x2=10, JOB 4x2=8,
- * RESOURCE 6x3=18, ABC 7x3=21), not a single shared column count across every step. */
+ * per step to exactly fit its own card count with no partial last row (CON 6x2=12 (2026-08-15, updated
+ * after CON006A/B brought the CON sheet from 10 faces to 12), JOB 4x2=8, RESOURCE 6x3=18, ABC 7x3=21),
+ * not a single shared column count across every step. */
 const DEBUG_SETUP_STEPS = [
-  { key: 'con', label: 'CON（最大1枚）', max: 1, columns: 5, faceIds: () => INDEX.raw.CON.map((r) => r.ID) },
+  { key: 'con', label: 'CON（最大1枚）', max: 1, columns: 6, faceIds: () => INDEX.raw.CON.map((r) => r.ID) },
   { key: 'job', label: 'JOB（最大6枚）', max: 6, columns: 4, faceIds: () => INDEX.raw.JOB.map((r) => r.ID) },
   { key: 'resource', label: '初期資源（最大2枚）', max: 2, columns: 6, faceIds: () => INDEX.raw.RESOURCE.map((r) => r.ID) },
   { key: 'abc', label: 'ABCカード（最大6枚、選んだ順にSHOP101→106）', max: 6, columns: 7, faceIds: () => setupMod.collectNormalShopFaceIds(INDEX) },
@@ -4002,6 +4017,10 @@ function renderResourceChoice(container, state, player) {
   container.classList.add('onboard-panel--active');
   if (!choice.context.selected) choice.context.selected = [];
   const selected = choice.context.selected;
+  // requiredCount (2026-08-15, debug-setup feature): normally 2 (4 candidates), but a debug-setup game
+  // where P1 preselected exactly 1 RESOURCE card only needs 1 more, from 3 candidates -- see
+  // setup.grantOneResourceCardAndDealRest and chooseResourceCards' own context.count doc.
+  const requiredCount = choice.context.count || 2;
   for (const faceId of choice.context.candidates) {
     const cardNode = buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true });
     const isSelected = selected.includes(faceId);
@@ -4014,7 +4033,7 @@ function renderResourceChoice(container, state, player) {
     // via the modal's pick button instead of a plain tap on the cell -- see attachPickableEnlarge's own
     // doc. The button is skipped (pickAction: null) once 2 are already picked and this isn't one of
     // them -- nothing to do with a 3rd candidate until one of the first 2 is deselected.
-    const canToggle = isSelected || selected.length < 2;
+    const canToggle = isSelected || selected.length < requiredCount;
     attachPickableEnlarge(cardNode, faceId, canToggle ? {
       label: isSelected ? '選択を解除する' : '選ぶ',
       onPick: () => {
@@ -4022,7 +4041,7 @@ function renderResourceChoice(container, state, player) {
           choice.context.selected = selected.filter((id) => id !== faceId);
         } else {
           selected.push(faceId);
-          if (selected.length === 2) {
+          if (selected.length === requiredCount) {
             setupMod.chooseResourceCards(state, player.id, selected);
             maybeStartRound1(state);
           }
@@ -4036,7 +4055,7 @@ function renderResourceChoice(container, state, player) {
   // this choice itself and what happens right after it (turn order / JOB draft), since a first-time
   // player lands here with zero context on what a "先着順" number even refers to.
   container.appendChild(buildOnboardHint([
-    '← 初期資源カード4枚のうちから2枚を選んでください',
+    `← 初期資源カード${choice.context.candidates.length}枚のうちから${requiredCount}枚を選んでください`,
     '先着順の数字の合計が少ないプレイヤーからJOBを選択しゲームが始まります',
   ]));
 }

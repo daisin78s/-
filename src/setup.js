@@ -235,7 +235,11 @@ function chooseResourceCards(state, playerId, chosenIds) {
   );
   if (choiceIndex === -1) return { success: false, reason: 'NO_PENDING_CHOICE' };
   const choice = state.pendingChoices[choiceIndex];
-  if (chosenIds.length !== 2 || chosenIds.some((id) => !choice.context.candidates.includes(id))) {
+  // context.count (2026-08-15 debug-setup feature, see grantOneResourceCardAndDealRest): how many of
+  // candidates must be picked to complete this choice. Defaults to 2 -- the normal, non-debug path's
+  // pendingChoices never set this field at all, so every existing caller sees identical behavior.
+  const requiredCount = choice.context.count || 2;
+  if (chosenIds.length !== requiredCount || chosenIds.some((id) => !choice.context.candidates.includes(id))) {
     return { success: false, reason: 'INVALID_SELECTION' };
   }
   for (const faceId of chosenIds) {
@@ -270,6 +274,31 @@ function grantResourceCards(state, index, playerId, preferredFaceIds) {
     state.cards[inst.physicalId] = inst;
     player.ownedCardPhysicalIds.push(inst.physicalId);
   }
+}
+
+/**
+ * Directly grants playerId one owned RESOURCE card (preferredFaceId), then deals 3 more random
+ * candidates (excluding it) as a pending SELECT_RESOURCE_CARDS choice needing exactly 1 more pick to
+ * reach the normal total of 2 (2026-08-15 debug-setup feature, for when only 1 of the 2 initial
+ * RESOURCE cards was preselected -- see createInitialState's own doc for the 0/1/2-preselected split).
+ * Mirrors grantResourceCards' direct-grant style for the locked-in card, and dealResourceCandidates'
+ * pending-choice style for the rest -- see chooseResourceCards' context.count for how the "pick 1, not
+ * 2" requirement is carried through to resolution.
+ */
+function grantOneResourceCardAndDealRest(state, index, playerId, preferredFaceId) {
+  const allIds = index.raw.RESOURCE.map((r) => r.ID);
+  const inst = createCardInstance(preferredFaceId);
+  inst.ownerId = playerId;
+  state.cards[inst.physicalId] = inst;
+  const player = state.players.find((p) => p.id === playerId);
+  player.ownedCardPhysicalIds.push(inst.physicalId);
+  const candidates = shuffle(state.rng, allIds.filter((id) => id !== preferredFaceId)).slice(0, 3);
+  state.pendingChoices.push({
+    id: nextChoiceId(),
+    playerId,
+    kind: 'SELECT_RESOURCE_CARDS',
+    context: { candidates, count: 1 },
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -372,6 +401,7 @@ module.exports = {
   dealResourceCandidates,
   chooseResourceCards,
   grantResourceCards,
+  grantOneResourceCardAndDealRest,
   computeStartOrder,
   dealJobPool,
   chooseJob,
