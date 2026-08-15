@@ -1061,6 +1061,9 @@ function factsForFaceId(faceId) {
     // 0 is a real, meaningful value (lowest = goes first) so this must stay null rather than falsy
     // when absent -- fillCardFace checks for null explicitly, not truthiness.
     startOrder: row.START_ORDER === '' ? null : row.START_ORDER,
+    // CON sheet's own hand-authored アイコン column (2026-08-15, per user request -- see fillCardFace's
+    // own doc). '' for every other sheet, which has no such column at all.
+    iconText: row['アイコン'] || '',
   };
 }
 
@@ -2070,10 +2073,23 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
       tall = true;
       q('.shop-card__effect').appendChild(document.createTextNode(effectText));
     }
+  } else if (faceId.startsWith('CON')) {
+    // CON cards (2026-08-15, per user request: "CONのアイコン表示をCONシートのアイコン欄を参考にして
+    // 表示してほしい...アイコン欄に文章で書いてあるものはそのまま文章で...改行もそのままかいて") --
+    // shown verbatim from the CON sheet's own hand-authored アイコン column instead of the DSL-icon-
+    // lookup system every other card type below uses. That system had no icon builder for several CON
+    // abilities (CON003A/CON005B used to each get their own ad-hoc .card-note patch for exactly this
+    // gap -- superseded by this single, general mechanism now that the user has written a complete,
+    // authoritative summary line for all 12 CON faces instead of patching gaps one at a time).
+    // .card-note's white-space:pre-line preserves the column's own \n line breaks as-is.
+    if (options.showEffect && facts.iconText) {
+      tall = true;
+      q('.shop-card__effect').appendChild(el('div', 'card-note', facts.iconText));
+    }
   } else if (options.showEffect && facts.effects && facts.effects.length) {
     // allowTextFallback (confirmed 2026-07-30): A/B/C cards fall back to raw DSL text for any
-    // pattern buildActionIcons doesn't recognize yet (established 2026-07-29). JOB/CON are new to
-    // icon display and don't get that fallback -- an unmapped effect is just omitted (blank) rather
+    // pattern buildActionIcons doesn't recognize yet (established 2026-07-29). JOB is new to icon
+    // display and doesn't get that fallback -- an unmapped effect is just omitted (blank) rather
     // than showing raw DSL text, per instruction. See [[project-dice-wp-ui-requirements]].
     const allowTextFallback = options.allowTextFallback !== false;
     const rows = facts.effects
@@ -2083,24 +2099,6 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
       tall = true;
       const effectEl = q('.shop-card__effect');
       rows.forEach((row) => effectEl.appendChild(row));
-    }
-    // CON003A (2026-08-15, per user request): "モニュメント天が2個必要" is now a genuinely enforced
-    // rule (PASSIVE's 2nd clause, VP_PENALTY_IF_BELOW(EMBLEM_COUNT(天,M),2) -- see command-builder.js's
-    // own doc on the general "○○が必要" shortfall convention this established), but that command has
-    // no icon builder of its own yet, so this plain-text caption fills in for it -- shown alongside
-    // CON003A's other PASSIVE clause's real icon (IF(CARD_COUNT<=6,VP_MODIFIER(-2))) rather than
-    // replacing it, since the two are unrelated effects that both apply to this one card.
-    if (faceId === 'CON003A') {
-      tall = true;
-      q('.shop-card__effect').appendChild(el('div', 'card-note', 'モニュメント天が2個必要'));
-    }
-    // CON005B (強欲, same 2026-08-15 shortfall convention): PASSIVE=VP_PENALTY_IF_BELOW(RESOURCE(A,B,C,Z),3)
-    // has no icon builder either -- same plain-text-caption treatment as CON003A above, using the
-    // wording from the card's own design note ("３資源が必要"). CON005B's PASSIVE has only this one
-    // clause (no other icon it'd need to sit alongside).
-    if (faceId === 'CON005B') {
-      tall = true;
-      q('.shop-card__effect').appendChild(el('div', 'card-note', '３資源が必要'));
     }
   }
   return { tall };

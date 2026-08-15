@@ -853,14 +853,20 @@ h1, h2, h3 { margin: 0; }
   color: var(--text-muted);
 }
 
-/* Plain-text card caption (2026-08-15) -- CON003A's "モニュメント天が2個必要" reminder note, shown
-   alongside (not instead of) its real DSL-driven effect icon. Same small/muted look as .action-suffix,
-   its own class since it's a full text line, not an inline resource-row fragment. */
+/* Plain-text card caption. Originally added for CON003A/CON005B's own one-off reminder notes; now also
+   the whole CON-card effect display (2026-08-15, per user request: "CONのアイコン表示をCONシートのアイ
+   コン欄を参考にして表示してほしい...改行もそのままかいて" -- see main.js's fillCardFace), shown verbatim
+   from the CON sheet's own アイコン column instead of the DSL-icon-lookup system every other card type
+   uses. white-space:pre-line (2026-08-15) preserves that column's own \n line breaks as-is, same
+   convention as .turn-end-warning__text's own (inherited from .card-inst-modal__body). Same small/muted
+   look as .action-suffix, its own class since it's a full text block, not an inline resource-row
+   fragment. */
 .card-note {
   font-size: 10px;
   font-weight: 700;
   color: var(--text-muted);
   text-align: center;
+  white-space: pre-line;
 }
 
 /* Confirmed 2026-07-29: die VALUES (as opposed to resource counts) use the ⚀-⚅ die-face glyphs
