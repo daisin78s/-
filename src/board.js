@@ -249,7 +249,7 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
   // AREA007's CHANGE((A,B,C),D) when A/B/C can't be paid, or AREA008/009's BUILD() with no buildable
   // candidate at all) -- see wouldAreaActionHaveEffect's own doc for exactly what "no effect" means.
   // Deliberately checked *before* any mutation below so a doomed placement never burns the die.
-  const prediction = wouldAreaActionHaveEffect(state, index, actionContext, areaRow, buildValue);
+  const prediction = wouldAreaActionHaveEffect(state, index, actionContext, areaRow, buildValue, die.id);
   if (!prediction.ok) return { success: false, reason: prediction.reason };
 
   // Would this placement owe a usage fee at all? If so, snapshot state now so the whole placement can be
@@ -367,9 +367,40 @@ function buildTrailingAdds(commands) {
  *    returns success -- so success alone isn't enough; only an observed change counts as "an effect".
  *    This diffing approach is deliberately DSL-type-agnostic (no per-command-type special-casing) so it
  *    keeps working if AREA ACTION ever grows a new command shape.
+ *
+ * A third, earlier check (2026-08-15, per user request: "色Dの上限を超えるときは訓練場にダイス候補が出
+ * ないようにしてほしい") blocks outright, before either branch above even runs, whenever the ACTION would
+ * grant a plain color die (resource 'D') while the player is already at their color-die cap -- currently
+ * only AREA007 (訓練場)'s CHANGE((A,B,C),D), but written against the lowered command shape generically
+ * (see grantsColorDie) rather than hardcoded to that one mapId, so it keeps working if a future AREA ever
+ * grants D the same way. Without this, the diffing check above would still say "changed" (grantOneDie's
+ * own overflow-conversion chain still silently turns the D into a wD, a real, detectable dice.length
+ * change) and let the placement through -- exactly the "spend A/B/C, get a wD instead of the D you came
+ * here for" outcome the user wants hidden from the candidate list entirely, not just left to happen
+ * silently. The overflow-conversion chain itself (D->wD->2K) is untouched everywhere else (ADD(D)-style
+ * grants, e.g. CON001B's ONCE, aren't a placement candidate at all, so they're unaffected).
+ *
+ * placingDieId excludes that one die from the color-dice count for this check -- at the point this runs
+ * the die about to be placed here is still sitting in player.dice with placedMapId===null (the same as
+ * every other in-hand die), so without excluding it, a player with exactly 4 OTHER color dice plus this
+ * one (5 total, genuinely still under the cap for the purposes of "would this placement exceed it")
+ * would be wrongly blocked -- found via this fix's own test coverage.
  */
-function wouldAreaActionHaveEffect(state, index, context, areaRow, buildValue) {
+function grantsColorDie(commands) {
+  return commands.some((cmd) => {
+    if (cmd.type === 'CHANGE') return cmd.gain.some((item) => item.resource === 'D');
+    if (cmd.type === 'ADD') return cmd.items.some((item) => item.resource === 'D');
+    return false;
+  });
+}
+
+function wouldAreaActionHaveEffect(state, index, context, areaRow, buildValue, placingDieId) {
   const commands = lowerProgram(parse(areaRow.ACTION));
+  if (grantsColorDie(commands)) {
+    const player = state.players.find((p) => p.id === context.playerId);
+    const otherColorDiceCount = player.dice.filter((d) => d.kind === 'COLOR' && d.id !== placingDieId).length;
+    if (otherColorDiceCount >= player.colorDiceCap) return { ok: false, reason: 'COLOR_DICE_CAP' };
+  }
   if (commands.length > 0 && commands[0].type === 'BUILD') {
     const buildCmd = commands[0];
     const trailingAdds = buildTrailingAdds(commands);

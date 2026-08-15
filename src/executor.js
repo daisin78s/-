@@ -83,8 +83,14 @@ function ownedCardRows(state, index, playerId) {
 // Dice / resource grant + payment primitives
 // ---------------------------------------------------------------------------
 
+/** In-hand COLOR dice only (excludes ones already placed on a map SLOT) -- same "how many can you hold"
+ * reasoning as whiteDiceCount's own doc just below (2026-08-15: colorDiceCount previously counted placed
+ * dice too, unlike whiteDiceCount's already-fixed 2026-08-12 version -- found while wiring up AREA007's
+ * (訓練場) new color-die-cap placement check, whose own test coverage caught grantOneDie's cap gate
+ * still redirecting a genuine D grant to wD even one below the cap, because the just-placed die (still
+ * sitting in player.dice with placedMapId set) was counted against it). */
 function colorDiceCount(player) {
-  return player.dice.filter((d) => d.kind === 'COLOR').length;
+  return player.dice.filter((d) => d.kind === 'COLOR' && d.placedMapId === null).length;
 }
 /** In-hand WHITE dice only (excludes ones already placed on a map SLOT) -- confirmed 2026-08-12 per the
  * INST rulebook sheet: the 5-die cap is a "how many can you hold" limit, not a "how many can exist at

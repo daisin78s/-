@@ -1178,6 +1178,34 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   check('...a D (color die) was actually gained', player(state, 'P1').dice.some((d) => d.id !== die.id), true);
 }
 {
+  // AREA007 at the color-die cap (2026-08-15, per user request: "色Dの上限を超えるときは訓練場にダイス
+  // 候補が出ないようにしてほしい") -- placement is refused outright instead of silently downgrading the
+  // grant to a wD (the overflow-conversion chain grantOneDie still uses everywhere else).
+  const state = freshStateWithShops();
+  const p = player(state, 'P1');
+  p.resources.A = 1; p.resources.B = 1; p.resources.C = 1;
+  // freshStateWithShops() gives P1 no starting dice at all -- fill up to the 5-color-die cap by hand.
+  while (p.dice.filter((d) => d.kind === 'COLOR').length < 5) giveDie(state, 'P1', 3);
+  const diceBefore = p.dice.length;
+  const die = giveDie(state, 'P1', 3); // the die actually being placed, on top of the cap-filling ones
+  const result = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP007', 0);
+  check('AREA007 at the 5-color-die cap is refused', result, { success: false, reason: 'COLOR_DICE_CAP' });
+  check('...the die was never actually placed', die.placedMapId, null);
+  check('...A/B/C was never spent', [p.resources.A, p.resources.B, p.resources.C], [1, 1, 1]);
+  check('...no new die was granted', p.dice.length, diceBefore + 1); // +1 only for `die` itself, pushed above
+}
+{
+  // One below the cap (4 color dice) must still work normally -- only exactly-at-cap is blocked.
+  const state = freshStateWithShops();
+  const p = player(state, 'P1');
+  p.resources.A = 1; p.resources.B = 1; p.resources.C = 1;
+  while (p.dice.filter((d) => d.kind === 'COLOR').length < 4) giveDie(state, 'P1', 3);
+  const die = giveDie(state, 'P1', 3);
+  const result = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP007', 0);
+  check('AREA007 at 4 color dice (one below the cap) still succeeds', result.success, true);
+  check('...a genuine COLOR die (not wD) was gained', p.dice.filter((d) => d.kind === 'COLOR').length, 6);
+}
+{
   // AREA008 (castle).ACTION=BUILD() -- with the M shop emptied out (no monument buildable at all,
   // and buildValue too low for any normal card either), placement must be refused, not just the BUILD
   // step failing after the die is already stuck on the board.
