@@ -14,6 +14,13 @@ const executor = require('../src/executor');
 
 const index = buildDataIndex(loadGameData(path.join(__dirname, '..', 'data', 'game.json')));
 
+// CON005B used to carry TURNEND=RESOURCE_TOTAL_LIMIT((A,B,C),7) before the 2026-08-13 CON rewrite (all
+// new sin-themed names/abilities); no real card in the current dataset has RESOURCE_TOTAL_LIMIT at all
+// anymore, so this patches a synthetic copy of it back onto CON005B's row (every other field left
+// as-is) purely so the tests below can keep exercising that still-real, still-used generic engine
+// mechanism (canEndTurn's TOTAL_LIMIT gate) against an actual ownable card id.
+index.byId.set('CON005B', { sheet: 'CON', row: { ...index.byId.get('CON005B').row, TURNEND: 'RESOURCE_TOTAL_LIMIT((A,B,C),7)' } });
+
 let passCount = 0;
 let failCount = 0;
 function check(label, actual, expected) {
@@ -96,15 +103,19 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 }
 
 // ---------------------------------------------------------------------------
-// 3. CON003A: PASSIVE=IF(CARD_COUNT<=6,VP_MODIFIER(-2))
+// 3. CON003A: PASSIVE=IF(CARD_COUNT<=6,VP_MODIFIER(-2));VP_PENALTY_IF_BELOW(EMBLEM_COUNT(天,M),2)
+// (2026-08-15: the 2nd clause added for "モニュメント天が2個必要" -- see command-builder.js's own doc
+// on the general "○○が必要" shortfall rule). No M-sheet card is ever owned in this block, so
+// EMBLEM_COUNT(天,M) stays 0 throughout -- VP_PENALTY_IF_BELOW's own -2 is present in BOTH checks
+// below, independent of whichever CARD_COUNT crosses the VP_MODIFIER clause's own threshold.
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
   giveCard(state, 'CON003A', 'P1'); // CON doesn't count toward CARD_COUNT itself
-  check('CON003A: VP_MODIFIER active while CARD_COUNT (0) <= 6', executor.collectVpModifiers(state, index, 'P1'), -2);
+  check('CON003A: VP_MODIFIER(-2) active while CARD_COUNT (0) <= 6, plus VP_PENALTY_IF_BELOW(-2)', executor.collectVpModifiers(state, index, 'P1'), -4);
 
   for (let i = 1; i <= 8; i++) giveCard(state, `A00${i}A`, 'P1'); // now CARD_COUNT = 8 > 6
-  check('CON003A: VP_MODIFIER inactive once CARD_COUNT (8) > 6', executor.collectVpModifiers(state, index, 'P1'), 0);
+  check('CON003A: VP_MODIFIER inactive once CARD_COUNT (8) > 6, but VP_PENALTY_IF_BELOW(-2) still applies', executor.collectVpModifiers(state, index, 'P1'), -2);
 }
 
 // ---------------------------------------------------------------------------

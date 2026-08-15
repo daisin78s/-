@@ -14,6 +14,12 @@ const board = require('../src/board');
 const { MoveGenerator, bzConversionTap } = require('../src/ai/move-generator');
 
 const index = buildDataIndex(loadGameData(path.join(__dirname, '..', 'data', 'game.json')));
+// CON005B used to carry TURNEND=RESOURCE_TOTAL_LIMIT((A,B,C),7) before the 2026-08-13 CON rewrite (all
+// new sin-themed names/abilities); no real card in the current dataset has RESOURCE_TOTAL_LIMIT at all
+// anymore, so this patches a synthetic copy of it back onto CON005B's row (every other field left
+// as-is) purely so the tests below can keep exercising that still-real, still-used generic engine
+// mechanism (END_TURN/FREE_ACTION gating) against an actual ownable card id.
+index.byId.set('CON005B', { sheet: 'CON', row: { ...index.byId.get('CON005B').row, TURNEND: 'RESOURCE_TOTAL_LIMIT((A,B,C),7)' } });
 const moveGenerator = new MoveGenerator();
 // see AI LV3's own doc in main.js
 const moveGeneratorLv3 = new MoveGenerator({

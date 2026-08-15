@@ -294,6 +294,44 @@ function giveDie(state, playerId, value) {
 }
 
 // ---------------------------------------------------------------------------
+// CON004A: BLOCK_UPGRADE_UNLESS_QST_RANK(Q004A,1) (2026-08-13, per user spec: "QSTカードQ004Aで1位で
+// なければLVUPできない") -- checked against Q004A's own GOAL (AREA_COUNT) regardless of whether Q004A
+// is actually one of this game's 3 revealed QST cards (confirmed with the user: "見えないところで
+// Q004Aをチェックする"), so no state.quests setup is needed here at all.
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const p2 = player(state, 'P2');
+  const con4 = createCardInstance('CON004A');
+  con4.ownerId = 'P1';
+  state.cards[con4.physicalId] = con4;
+  p1.ownedCardPhysicalIds.push(con4.physicalId);
+  const upgradeable = createCardInstance('A001A'); // A001B exists per data
+  upgradeable.ownerId = 'P1';
+  state.cards[upgradeable.physicalId] = upgradeable;
+  p1.ownedCardPhysicalIds.push(upgradeable.physicalId);
+  // P1's own A001A already counts 1 toward AREA_COUNT; give P2 more so P1 is NOT rank 1.
+  for (const faceId of ['A002A', 'A003A']) {
+    const inst = createCardInstance(faceId);
+    inst.ownerId = 'P2';
+    state.cards[inst.physicalId] = inst;
+    p2.ownedCardPhysicalIds.push(inst.physicalId);
+  }
+  const blocked = board.getBuildCandidates(state, index, 'P1', ['U'], 0);
+  check('CON004A blocks every UPGRADE candidate while P1 is not rank 1 in Q004A (AREA_COUNT)', blocked, []);
+  check('isUpgradeBlockedByQstRank reports true in this state', board.isUpgradeBlockedByQstRank(state, index, 'P1'), true);
+
+  // P1 catches up to rank 1 (ties count as rank 1 too, competition ranking).
+  const inst2 = createCardInstance('A004A');
+  inst2.ownerId = 'P1';
+  state.cards[inst2.physicalId] = inst2;
+  p1.ownedCardPhysicalIds.push(inst2.physicalId);
+  const allowed = board.getBuildCandidates(state, index, 'P1', ['U'], 0);
+  check('...but the same UPGRADE is offered again once P1 reaches rank 1 (tied at AREA_COUNT=2)', allowed.some((c) => c.physicalId === 'A001'), true);
+}
+
+// ---------------------------------------------------------------------------
 // restockShop (2026-08-07, per user request: "SHOP101のカードが建築された時、102のカードが101にズレ、
 // 103のカードが102にズレ...カードの補充は必ずSHOP106にされるように...SHOP001も同様に SHOP201も同じよう
 // にずれていくが、補充はなし" -- the row now compacts left before refilling, instead of each slot

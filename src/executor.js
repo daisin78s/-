@@ -441,7 +441,12 @@ function evalMetric(state, index, playerId, metric) {
         const totals = emblemTotalsByType(owned);
         return totals.天 + totals.地 + totals.人;
       }
-      return owned.reduce((sum, c) => sum + (emblemCountsForRow(c.row)[emblem] || 0), 0);
+      // Optional 2nd arg (2026-08-15, per user's "○○が必要" shortfall-penalty rule, e.g. CON003A's
+      // "モニュメント天が2個必要" -> EMBLEM_COUNT(天,M)): scopes the count to one sheet only, same
+      // union-of-sheets convention CARD_COUNT(M) etc. already uses above.
+      const sheetScope = metric.args[1];
+      const scopedOwned = sheetScope ? owned.filter((c) => index.byId.get(c.row.ID).sheet === sheetScope) : owned;
+      return scopedOwned.reduce((sum, c) => sum + (emblemCountsForRow(c.row)[emblem] || 0), 0);
     }
     case 'EMBLEM_SET_COUNT': {
       const totals = emblemTotalsByType(owned);
@@ -467,9 +472,13 @@ function evalMetric(state, index, playerId, metric) {
       return owned.reduce((sum, c) => sum + lowerCostList(c.row.COST).reduce((s, item) => s + item.count, 0), 0);
     // Confirmed 2026-07-30 for QST GOAL conditions: reads a raw player resource (e.g. RESOURCE(VP))
     // directly, rather than counting owned cards like every other metric above -- the only metric
-    // that looks at PlayerState.resources instead of ownedCardRows.
-    case 'RESOURCE':
-      return getPlayer(state, playerId).resources[metric.args[0]] || 0;
+    // that looks at PlayerState.resources instead of ownedCardRows. Multi-arg form (2026-08-15, per
+    // user's "○○が必要" shortfall-penalty rule, e.g. CON005B's RESOURCE(A,B,C,Z)) sums across every
+    // listed resource, same union convention as CARD_COUNT(A,B,C) above.
+    case 'RESOURCE': {
+      const player = getPlayer(state, playerId);
+      return metric.args.reduce((sum, resource) => sum + (player.resources[resource] || 0), 0);
+    }
     // "ABC建築数+追加色ダイス" (Q001B GOAL, 2026-08-11): CARD_COUNT(A,B,C) plus the player's *additional*
     // color dice -- how many they've gained BEYOND their starting hand, i.e. colorDiceCount minus
     // INITIAL_COLOR_DICE, floored at 0. Range 0..2 (starting 3, colorDiceCap 5).
@@ -541,14 +550,19 @@ function getPassiveRules(state, index, playerId, type) {
   return out;
 }
 
-/** Sum of every active VP_MODIFIER, for final scoring. Each rule's count is resolved live via
- * evalCountNode (2026-08-12) -- a literal (e.g. VP_MODIFIER(-2)) is a fixed number as before, but a
- * dynamic one (e.g. VP_MODIFIER(COUNT(天))) is recomputed from current game state on every call, same
- * as computeFinalScore recomputing owned cards' VP live -- so it's a genuinely persistent/ongoing
- * effect, not a one-time snapshot. */
+/** Sum of every active VP_MODIFIER PLUS every active VP_PENALTY_IF_BELOW, for final scoring. Each
+ * VP_MODIFIER's count is resolved live via evalCountNode (2026-08-12) -- a literal (e.g.
+ * VP_MODIFIER(-2)) is a fixed number as before, but a dynamic one (e.g. VP_MODIFIER(COUNT(天))) is
+ * recomputed from current game state on every call, same as computeFinalScore recomputing owned
+ * cards' VP live -- so it's a genuinely persistent/ongoing effect, not a one-time snapshot.
+ * VP_PENALTY_IF_BELOW (2026-08-15, the general "○○が必要" shortfall rule -- see command-builder.js's
+ * own doc) contributes -1 per unit its metric falls short of its threshold, 0 once at/above it. */
 function collectVpModifiers(state, index, playerId) {
-  return getPassiveRules(state, index, playerId, 'VP_MODIFIER')
+  const modifierSum = getPassiveRules(state, index, playerId, 'VP_MODIFIER')
     .reduce((sum, r) => sum + evalCountNode(state, index, playerId, r.count), 0);
+  const shortfallSum = getPassiveRules(state, index, playerId, 'VP_PENALTY_IF_BELOW')
+    .reduce((sum, r) => sum - Math.max(0, r.threshold - evalMetric(state, index, playerId, r.metric)), 0);
+  return modifierSum + shortfallSum;
 }
 
 // ---------------------------------------------------------------------------
@@ -884,6 +898,8 @@ const RULE_ONLY_TYPES = new Set([
   'RESOURCE_LIMIT',
   'RESOURCE_TOTAL_LIMIT',
   'FORCE_CONVERT',
+  'BLOCK_UPGRADE_UNLESS_QST_RANK',
+  'VP_PENALTY_IF_BELOW',
   'ON',
 ]);
 

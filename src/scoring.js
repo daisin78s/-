@@ -25,6 +25,51 @@
 
 const { getCardRow } = require('./data-loader');
 const { ownedCardRows, collectVpModifiers } = require('./executor');
+const qst = require('./qst');
+
+/**
+ * CON001B/CON004B (2026-08-13, per user spec): 2 CON cards whose penalty depends on cross-player QST
+ * ranking -- doesn't fit the generic VP_MODIFIER/PASSIVE metric vocabulary (executor.evalMetric
+ * deliberately doesn't know about qst.js -- executor.js sits BELOW qst.js in the layering, see qst.js's
+ * own file doc), so these are recognized by exact owned face id instead, same precedent as
+ * executor.js's PAYMENT_CHOICE_CON_FACE_ID. (CON005B used to live here too -- see the 2026-08-15
+ * VP_PENALTY_IF_BELOW command, the general "○○が必要" shortfall rule, which now covers it as real
+ * PASSIVE data instead, via collectVpModifiers.) Called from computeFinalScore below, which runs live
+ * every render (not just at GAME_END), so the running score already previews what each would apply at
+ * the real game end -- same as QST's own live rank preview elsewhere.
+ * @returns {number} a VP delta (0 or negative -- neither of these ever grants VP)
+ */
+function conCardVpAdjustment(state, index, playerId) {
+  const player = state.players.find((p) => p.id === playerId);
+  const owned = new Set(player.ownedCardPhysicalIds.map((id) => state.cards[id].currentFaceId));
+  let adjustment = 0;
+
+  // CON001B (裏切): "QSTで1位がある→-4VP、1位がなく2位がある→-2VP、1-2位がなく3位がある→-1VP、
+  // 1-2-3位がない→0VP" -- best (lowest-numbered) rank across every currently-revealed quest.
+  if (owned.has('CON001B')) {
+    const ranks = Object.keys(state.quests).map((faceId) => {
+      const entry = qst.rankPlayersForQuest(state, index, faceId).find((e) => e.playerId === playerId);
+      return entry.rank;
+    });
+    const bestRank = ranks.length ? Math.min(...ranks) : Infinity;
+    if (bestRank === 1) adjustment -= 4;
+    else if (bestRank === 2) adjustment -= 2;
+    else if (bestRank === 3) adjustment -= 1;
+  }
+
+  // CON004B (嫉妬): "一番上のQSTカードの順位に応じて(順位-1)VP失う" -- "一番上" confirmed 2026-08-13 as
+  // whichever quest is first in state.quests' own key order (画面表示順で一番左 -- currently reveal-
+  // shuffle order, so this is a different quest each game, by design).
+  if (owned.has('CON004B')) {
+    const firstFaceId = Object.keys(state.quests)[0];
+    if (firstFaceId) {
+      const entry = qst.rankPlayersForQuest(state, index, firstFaceId).find((e) => e.playerId === playerId);
+      adjustment -= entry.rank - 1;
+    }
+  }
+
+  return adjustment;
+}
 
 /** @returns {number} */
 function computeFinalScore(state, index, playerId) {
@@ -35,7 +80,8 @@ function computeFinalScore(state, index, playerId) {
   }, 0);
   const resourceVp = player.resources.VP || 0;
   const modifierVp = collectVpModifiers(state, index, playerId);
-  return cardVp + resourceVp + modifierVp;
+  const conAdjustment = conCardVpAdjustment(state, index, playerId);
+  return cardVp + resourceVp + modifierVp + conAdjustment;
 }
 
 /**
@@ -52,6 +98,6 @@ function rankPlayers(state, index) {
   return scored.map(({ playerId, score }) => ({ playerId, score }));
 }
 
-module.exports = { computeFinalScore, rankPlayers };
+module.exports = { computeFinalScore, rankPlayers, conCardVpAdjustment };
 
 })();

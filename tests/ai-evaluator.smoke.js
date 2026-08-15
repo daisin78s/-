@@ -16,6 +16,12 @@ const { Evaluator } = require('../src/ai/evaluator');
 
 const raw = loadGameData(path.join(__dirname, '..', 'data', 'game.json'));
 const index = buildDataIndex(raw);
+// CON005B used to carry TURNEND=RESOURCE_TOTAL_LIMIT((A,B,C),7) before the 2026-08-13 CON rewrite (all
+// new sin-themed names/abilities); no real card in the current dataset has RESOURCE_TOTAL_LIMIT at all
+// anymore, so this patches a synthetic copy of it back onto CON005B's row (every other field left
+// as-is) purely so the lockout-penalty tests below can keep exercising that still-real, still-used
+// generic engine mechanism against an actual ownable card id.
+index.byId.set('CON005B', { sheet: 'CON', row: { ...index.byId.get('CON005B').row, TURNEND: 'RESOURCE_TOTAL_LIMIT((A,B,C),7)' } });
 const evalTable = buildEvalTable(raw);
 const evaluator = new Evaluator(index, evalTable);
 const evaluatorQstAware = new Evaluator(index, evalTable, { qstAware: true }); // see AI LV3's own doc in main.js

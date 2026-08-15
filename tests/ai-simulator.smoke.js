@@ -14,6 +14,12 @@ const executor = require('../src/executor');
 const { Simulator, SimulationError, applyInPlace } = require('../src/ai/simulator');
 
 const index = buildDataIndex(loadGameData(path.join(__dirname, '..', 'data', 'game.json')));
+// CON005B used to carry TURNEND=RESOURCE_TOTAL_LIMIT((A,B,C),7) before the 2026-08-13 CON rewrite (all
+// new sin-themed names/abilities); no real card in the current dataset has RESOURCE_TOTAL_LIMIT at all
+// anymore, so this patches a synthetic copy of it back onto CON005B's row (every other field left
+// as-is) purely so the END_TURN test below can keep exercising that still-real, still-used generic
+// engine mechanism against an actual ownable card id.
+index.byId.set('CON005B', { sheet: 'CON', row: { ...index.byId.get('CON005B').row, TURNEND: 'RESOURCE_TOTAL_LIMIT((A,B,C),7)' } });
 const simulator = new Simulator();
 
 let passCount = 0;

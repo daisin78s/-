@@ -853,6 +853,16 @@ h1, h2, h3 { margin: 0; }
   color: var(--text-muted);
 }
 
+/* Plain-text card caption (2026-08-15) -- CON003A's "モニュメント天が2個必要" reminder note, shown
+   alongside (not instead of) its real DSL-driven effect icon. Same small/muted look as .action-suffix,
+   its own class since it's a full text line, not an inline resource-row fragment. */
+.card-note {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-align: center;
+}
+
 /* Confirmed 2026-07-29: die VALUES (as opposed to resource counts) use the ⚀-⚅ die-face glyphs
    instead of numbered-circle emoji or plain digits, sized up for legibility. */
 .die-face {
@@ -2308,6 +2318,16 @@ h1, h2, h3 { margin: 0; }
   padding: 24px;
   font-size: 13px;
   color: var(--text-muted);
+  text-align: center;
+}
+
+/* CON004A's LVUP-blocked notice (2026-08-15) -- an active restriction, not just "nothing affordable
+   right now" (.build-choice-empty above), so it gets the warning/danger color instead of muted text. */
+.build-choice-warning {
+  padding: 12px 24px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--danger, #c0392b);
   text-align: center;
 }
 

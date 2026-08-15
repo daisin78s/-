@@ -2055,6 +2055,24 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
       const effectEl = q('.shop-card__effect');
       rows.forEach((row) => effectEl.appendChild(row));
     }
+    // CON003A (2026-08-15, per user request): "モニュメント天が2個必要" is now a genuinely enforced
+    // rule (PASSIVE's 2nd clause, VP_PENALTY_IF_BELOW(EMBLEM_COUNT(天,M),2) -- see command-builder.js's
+    // own doc on the general "○○が必要" shortfall convention this established), but that command has
+    // no icon builder of its own yet, so this plain-text caption fills in for it -- shown alongside
+    // CON003A's other PASSIVE clause's real icon (IF(CARD_COUNT<=6,VP_MODIFIER(-2))) rather than
+    // replacing it, since the two are unrelated effects that both apply to this one card.
+    if (faceId === 'CON003A') {
+      tall = true;
+      q('.shop-card__effect').appendChild(el('div', 'card-note', 'モニュメント天が2個必要'));
+    }
+    // CON005B (強欲, same 2026-08-15 shortfall convention): PASSIVE=VP_PENALTY_IF_BELOW(RESOURCE(A,B,C,Z),3)
+    // has no icon builder either -- same plain-text-caption treatment as CON003A above, using the
+    // wording from the card's own design note ("３資源が必要"). CON005B's PASSIVE has only this one
+    // clause (no other icon it'd need to sit alongside).
+    if (faceId === 'CON005B') {
+      tall = true;
+      q('.shop-card__effect').appendChild(el('div', 'card-note', '３資源が必要'));
+    }
   }
   return { tall };
 }
@@ -3209,6 +3227,13 @@ function renderBuildChoiceModal() {
   document.getElementById('build-choice-bz').innerHTML = '';
   const list = document.getElementById('build-choice-list');
   list.innerHTML = '';
+  // CON004A's BLOCK_UPGRADE_UNLESS_QST_RANK (2026-08-15, per user request): shown whenever it's actively
+  // suppressing every UPGRADE candidate this player would otherwise see here, regardless of whether
+  // other (A/B/C/M) candidates are still on offer alongside it -- without this, an UPGRADE a player
+  // expects to see would just silently be missing from the list with no explanation.
+  if (boardMod.isUpgradeBlockedByQstRank(STATE, INDEX, pendingBuildChoice.playerId)) {
+    list.appendChild(el('div', 'build-choice-warning', '自分よりAREA数が多いプレイヤーがいるためLVUPできません'));
+  }
   const affordableCandidates = pendingBuildChoice.candidates.filter((c) => candidateAffordable(c, pendingBuildChoice.playerId));
   if (affordableCandidates.length === 0) {
     list.appendChild(el('div', 'build-choice-empty', '今支払える資源では建築できるカードがありません'));

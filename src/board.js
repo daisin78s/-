@@ -31,6 +31,9 @@ const { parse } = require('./dsl-parser');
 const { lowerProgram, lowerCostList } = require('./command-builder');
 const { createCardInstance } = require('./game-state');
 const executor = require('./executor');
+// Only for BLOCK_UPGRADE_UNLESS_QST_RANK (CON004A, see isUpgradeBlockedByQstRank) -- qst.js sits above
+// executor.js in the layering and never requires board.js, so this direction is safe.
+const qst = require('./qst');
 
 // ---------------------------------------------------------------------------
 // PLACE_DICE
@@ -777,6 +780,21 @@ function nextTierLetter(tier) {
   return String.fromCharCode(tier.charCodeAt(0) + 1);
 }
 
+/** True if any of playerId's owned cards carries an active BLOCK_UPGRADE_UNLESS_QST_RANK PASSIVE rule
+ * whose required rank isn't currently met (CON004A, 2026-08-13, per user spec: "QSTカードQ004Aで1位で
+ * なければLVUPできない"). Deliberately evaluates questFaceId's GOAL via qst.rankPlayersForQuest
+ * regardless of whether that exact face is one of this game's 3 actually-revealed QST cards (confirmed
+ * with the user: "見えないところでQ004Aをチェックする" -- Q004A's ranking is checked as a hidden
+ * yardstick either way, not gated on state.quests) -- rankPlayersForQuest only reads the QST sheet's
+ * static GOAL text via getQstRow, never state.quests, so this already works unconditionally. */
+function isUpgradeBlockedByQstRank(state, index, playerId) {
+  const rules = executor.getPassiveRules(state, index, playerId, 'BLOCK_UPGRADE_UNLESS_QST_RANK');
+  return rules.some((rule) => {
+    const entry = qst.rankPlayersForQuest(state, index, rule.questFaceId).find((e) => e.playerId === playerId);
+    return entry.rank !== rule.rank;
+  });
+}
+
 /**
  * Lists every legal choice for a BUILD command (already lowered by
  * command-builder: {categories, buildValue}). Does not mutate state or pay
@@ -817,7 +835,7 @@ function getBuildCandidates(state, index, playerId, categories, buildValue) {
     }
   }
 
-  if (categories.includes('U') && !blocked.includes('U')) {
+  if (categories.includes('U') && !blocked.includes('U') && !isUpgradeBlockedByQstRank(state, index, playerId)) {
     for (const physicalId of player.ownedCardPhysicalIds) {
       // UPGRADE only applies to actually-built cards (A/B/C) -- JOB/CON are drafted/dealt during
       // onboarding, never built via BUILD, so neither is upgrade-eligible even though CON happens to
@@ -945,6 +963,7 @@ module.exports = {
   completeAreaBuild,
   useBareTapAbility,
   getBuildCandidates,
+  isUpgradeBlockedByQstRank,
   isCandidateAffordable,
   resolveBuild,
   restockShop,

@@ -148,10 +148,23 @@ function lowerCall(node) {
       // as ADD's item counts -- see lowerCount's own doc. A literal like VP_MODIFIER(-2) still lowers
       // to {kind:'literal', value:-2} exactly as before.
       return { type: 'VP_MODIFIER', count: lowerCount(node.args[0]) };
+    // VP_PENALTY_IF_BELOW(metric,threshold) -- the general "○○が必要" shortfall rule (2026-08-15, per
+    // user spec: "ゲーム終了時○○が必要　足りない１個につき-1VP"): -1VP per unit metric falls short of
+    // threshold, 0 once at/above it (see executor.collectVpModifiers). metric reuses the same bare-
+    // metric grammar IF's own condition uses (see lowerMetric), so any existing/future evalMetric case
+    // (RESOURCE(A,B,C,Z), EMBLEM_COUNT(天,M), ...) works here with no extra plumbing.
+    case 'VP_PENALTY_IF_BELOW':
+      return { type: 'VP_PENALTY_IF_BELOW', metric: lowerMetric(node.args[0]), threshold: numberValue(node.args[1]) };
     case 'CONVERT_LIMIT':
       return { type: 'CONVERT_LIMIT', scope: identLikeName(node.args[0]), limit: numberValue(node.args[1]) };
     case 'UPGRADE_LIMIT':
       return { type: 'UPGRADE_LIMIT', limit: numberValue(node.args[0]) };
+    // BLOCK_UPGRADE_UNLESS_QST_RANK(questFaceId,rank) -- CON004A (2026-08-13, per user spec: "QSTカード
+    // Q004Aで1位でなければLVUPできない"): always checked against questFaceId's GOAL, whether or not that
+    // exact face is actually revealed this game (see board.isUpgradeBlockedByQstRank), so PASSIVE just
+    // carries the raw face id + required rank -- no state-dependent branching belongs at lowering time.
+    case 'BLOCK_UPGRADE_UNLESS_QST_RANK':
+      return { type: 'BLOCK_UPGRADE_UNLESS_QST_RANK', questFaceId: identLikeName(node.args[0]), rank: numberValue(node.args[1]) };
     case 'MODIFY_CONVERT_VALUE':
       return {
         type: 'MODIFY_CONVERT_VALUE',
