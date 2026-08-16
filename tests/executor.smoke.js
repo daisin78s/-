@@ -188,6 +188,24 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
+// 5a. JOB008: EMBLEM-based VP_MODIFIER, extended from 3 tiers (MAX3VP) to 10 tiers (2026-08-16, per
+// user request: "現在上限3VPになっていますが、表記上上限をなくします" -- the DSL is still a finite
+// IF(TOTAL_EMBLEM_COUNT>=n,VP_MODIFIER(1)) chain (n=3,6,...,30), not a truly uncapped formula (this
+// project's DSL has no division/floor operator to express "floor(count/3)" directly), but 30 total
+// EMBLEMs is far beyond what any single player could realistically accumulate (34 EMBLEM-bearing slots
+// exist across the *entire* dataset, shared among all 4 players) -- effectively uncapped in practice,
+// per the user's own fallback ("上限をなくすことに問題がありそうであれば内部的には上限10VPで").
+// ---------------------------------------------------------------------------
+{
+  const state = freshState();
+  for (const faceId of ['A001A', 'A002A', 'A003A', 'A004A', 'A005A', 'A006A', 'A007A', 'A008A', 'B001A', 'B002A', 'B003A', 'B004A']) {
+    giveCard(state, faceId, 'P1');
+  }
+  giveCard(state, 'JOB008', 'P1');
+  check('12 EMBLEMs (4 tiers of 3) now grants +4VP, beyond the old MAX3VP cap', executor.collectVpModifiers(state, index, 'P1'), 4);
+}
+
+// ---------------------------------------------------------------------------
 // 6. MAP.CURRENT_AREA assignment (A005A.ONCE = 'MAP001.CURRENT_AREA=AREA001B')
 // ---------------------------------------------------------------------------
 {
