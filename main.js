@@ -488,8 +488,10 @@ function driveOneAiStepInner(state) {
 
   // ctx.type === 'TURN'. noteActiveTurnPlayerForJobPool here (not just render()'s copy) so a turn-start
   // is caught even when pumpAiInstant blows straight through this AI's whole turn without render() ever
-  // pausing on it -- see lastNotedActiveTurnPlayerId's own comment.
-  noteActiveTurnPlayerForJobPool(state, ctx.playerId);
+  // pausing on it -- see lastNotedActiveTurnPlayerId's own comment. forceNewTurn: ctx.playerId not
+  // currently owning an open turn (aiOpenTurnPlayerId) means this is a fresh turn even if they were also
+  // the last-noted player (see noteActiveTurnPlayerForJobPool's own doc).
+  noteActiveTurnPlayerForJobPool(state, ctx.playerId, ctx.playerId !== aiOpenTurnPlayerId);
   const move = aiPlayerFor(ctx.playerId).selectMove(state, ctx.playerId, { hasPlacedDieThisTurn: ctx.hasPlacedDieThisTurn });
   if (!move) return false; // defensive -- canEndTurn should always eventually free this up
   const result = simulatorMod.applyInPlace(state, INDEX, move);
@@ -663,10 +665,22 @@ let round1FirstPlayerTurnStartCount = 0;
 // (AI-blown-through-in-a-pump, or human-paced-by-clicks) actually crossed it.
 let lastNotedActiveTurnPlayerId = null;
 /** Call once per confirmed "this playerId's TURN is now active" observation (idempotent -- a repeat call
- * with the same playerId no-ops), from both driveOneAiStep (AI path) and render() (human path). See
- * lastNotedActiveTurnPlayerId's own comment for why two call sites are needed. */
-function noteActiveTurnPlayerForJobPool(state, playerId) {
-  if (playerId === lastNotedActiveTurnPlayerId) return;
+ * with the same playerId no-ops, UNLESS forceNewTurn is true), from both driveOneAiStep (AI path) and
+ * render() (human path). See lastNotedActiveTurnPlayerId's own comment for why two call sites are needed.
+ *
+ * forceNewTurn (2026-08-17, per user report: "デバッグモードで戻ったときSHOP101が空のままで詰めていかな
+ * かった") -- the playerId-only dedup above missed exactly the same edge case turnJustEnded was already
+ * invented to fix for the undo-checkpoint transition block (see its own doc): the SAME player taking
+ * several turns in a row once everyone else is out of dice for the round. Each caller passes true only
+ * when IT already knows this is a genuinely new turn boundary despite playerId being unchanged --
+ * render() passes turnJustEnded itself; driveOneAiStepInner passes `ctx.playerId !== aiOpenTurnPlayerId`
+ * (an AI whose own turn isn't currently open is, by definition, starting a fresh one). Without this, a
+ * later turn in that same run-of-consecutive-turns silently got no turnHistory entry at all -- so
+ * stepping through the debug TURN timeline could skip straight over a shop restock that happened on one
+ * of those un-recorded turns, landing on a snapshot from before it with an empty SHOP101 that never
+ * "catches up". */
+function noteActiveTurnPlayerForJobPool(state, playerId, forceNewTurn) {
+  if (playerId === lastNotedActiveTurnPlayerId && !forceNewTurn) return;
   lastNotedActiveTurnPlayerId = playerId;
   if (round1FirstPlayerId === null && state.turnOrder && state.turnOrder.length > 0) round1FirstPlayerId = state.turnOrder[0];
   if (playerId === round1FirstPlayerId) round1FirstPlayerTurnStartCount++;
@@ -4706,7 +4720,7 @@ function render(state) {
   // changes across those later turns.
   const activePlayer = next ? state.players.find((p) => p.id === next.playerId) : null;
   if (activePlayer && hasFinishedOnboarding(activePlayer)) {
-    noteActiveTurnPlayerForJobPool(state, next.playerId);
+    noteActiveTurnPlayerForJobPool(state, next.playerId, turnJustEnded);
     if (next.playerId !== lastTurnPlayerId || turnJustEnded) {
       undoMod.recordCheckpoint(state);
       // 変化ハイライトの計算 (2026-08-16): 人間のターンが始まる、まさにこの瞬間だけ、直前の人間ターン
