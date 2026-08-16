@@ -219,13 +219,17 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
     if (duplicateElsewhere) return { success: false, reason: 'DUPLICATE_VALUE_IN_AREA' };
   }
 
-  // CON006A (2026-08-15): a COLOR die can't join a map this player already has one of their own COLOR
-  // dice on, from an *earlier* placement action -- see isColorDieReuseBlocked's own doc. Checked against
-  // live state, so a die placed earlier THIS SAME action (placeDiceGroup) never trips this; only prior,
+  // CON006A (2026-08-15): a die can't join a map this player already has one of their own COLOR dice
+  // on, from an *earlier* placement action -- see isColorDieReuseBlocked's own doc. Checked against live
+  // state, so a die placed earlier THIS SAME action (placeDiceGroup) never trips this; only prior,
   // already-committed placements do. Waived by GRANT_PLACE_ANYWHERE (bypass), unlike DUPLICATE_VALUE_IN_
-  // AREA above -- confirmed distinct on purpose. wD (kind WHITE) is never restricted by this rule.
-  if (die.kind === 'COLOR' && !bypass && isColorDieReuseBlocked(state, index, context.playerId)) {
-    if (player.dice.some((d) => d.kind === 'COLOR' && d.placedMapId === mapId)) {
+  // AREA above -- confirmed distinct on purpose.
+  // TEST CHANGE (2026-08-16, per user: "自分のカラーダイスがおかれているAREAにカラーダイスもｗDも置け
+  // なくなります", explicitly flagged as trial/revertible): widened from COLOR-only to every die kind --
+  // wD (WHITE) used to be exempt (`die.kind === 'COLOR' &&` guarded this whole block). To revert to
+  // COLOR-only, restore that guard on the line below.
+  if (!bypass && isColorDieReuseBlocked(state, index, context.playerId)) {
+    if (playerHasOwnColorDieInMapSlots(state, map, context.playerId)) {
       return { success: false, reason: 'OWN_COLOR_DIE_ALREADY_IN_AREA' };
     }
   }
@@ -567,8 +571,10 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   // from placing 2+ of this player's own COLOR dice together, e.g. stacking at 王宮/AREA009 to sum
   // values: "スタッキングは許可"). A die in this group carrying GRANT_PLACE_ANYWHERE still waives it,
   // same as placeDice.
-  if (isColorDieReuseBlocked(state, index, playerId) && player.dice.some((d) => d.kind === 'COLOR' && d.placedMapId === mapId)) {
-    if (dice.some((d) => d.kind === 'COLOR' && !d.placeAnywhereThisTurn)) {
+  // TEST CHANGE (2026-08-16, see placeDice's matching comment -- revertible by restoring `d.kind ===
+  // 'COLOR' &&` below): widened from COLOR-only to every die kind, so a wD in the group trips this too.
+  if (isColorDieReuseBlocked(state, index, playerId) && playerHasOwnColorDieInMapSlots(state, map, playerId)) {
+    if (dice.some((d) => !d.placeAnywhereThisTurn)) {
       return { success: false, reason: 'OWN_COLOR_DIE_ALREADY_IN_AREA' };
     }
   }
@@ -865,6 +871,28 @@ function isUpgradeBlockedByQstRank(state, index, playerId) {
  * own job (placeDice/placeDiceGroup), since it needs the specific mapId being targeted. */
 function isColorDieReuseBlocked(state, index, playerId) {
   return executor.getPassiveRules(state, index, playerId, 'BLOCK_COLOR_DIE_REUSE').length > 0;
+}
+
+/** True if playerId currently has one of their own COLOR dice actually sitting in one of map's slots
+ * (2026-08-16, bug fix per user report: "CON憤怒 現在AREAがLVUPしても前の情報が残りダイスが置けません" --
+ * once the AREA LVUPs, the previously-placed die there should no longer block a new one). Deliberately
+ * checks live map.slots occupancy rather than die.placedMapId===mapId (what both callers used to check
+ * directly): runSetCurrentArea's own LVUP handling already resets map.slots to fresh empty arrays the
+ * instant the area's tier changes (see executor.js's own doc on that), but leaves every die's own
+ * placedMapId untouched on purpose -- it's still needed at round end (endRound's unused-color-die 3K
+ * bonus checks placedMapId===null, and clearing it early would wrongly grant that bonus to a die that
+ * WAS placed and used this round, just at an area that later leveled up). map.slots is therefore the
+ * only signal that already distinguishes "still actually occupying this area" from "used earlier this
+ * round, area since changed shape" without touching that round-end bookkeeping at all. */
+function playerHasOwnColorDieInMapSlots(state, map, playerId) {
+  const player = state.players.find((p) => p.id === playerId);
+  const ownDieIdsInSlots = new Set();
+  for (const occupants of map.slots) {
+    for (const o of occupants) {
+      if (o.playerId === playerId) ownDieIdsInSlots.add(o.dieId);
+    }
+  }
+  return player.dice.some((d) => d.kind === 'COLOR' && ownDieIdsInSlots.has(d.id));
 }
 
 /**

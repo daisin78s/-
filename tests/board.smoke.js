@@ -10,6 +10,7 @@ const { loadGameData, buildDataIndex, getCardRow } = require('../src/data-loader
 const { createEmptyGameState, createPlayer, createMapState, createDie, createCardInstance } = require('../src/game-state');
 const setup = require('../src/setup');
 const board = require('../src/board');
+const executor = require('../src/executor');
 
 const index = buildDataIndex(loadGameData(path.join(__dirname, '..', 'data', 'game.json')));
 
@@ -403,6 +404,56 @@ function giveDie(state, playerId, value) {
   const d2 = giveDie(state, 'P1', 6);
   const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
   check('A group placement reusing a map with an earlier own COLOR die is blocked', result, { success: false, reason: 'OWN_COLOR_DIE_ALREADY_IN_AREA' });
+}
+{
+  // Bug fix (2026-08-16, per user report: "CON憤怒 現在AREAがLVUPしても前の情報が残りダイスが置けません"):
+  // once the AREA a player's own COLOR die sat on LVUPs (map.slots resets, see executor.js's own doc on
+  // runSetCurrentArea), that die's old occupancy should no longer count against CON006A's own-color-die
+  // reuse block, even though die.placedMapId itself deliberately stays put (still needed for endRound's
+  // unused-color-die bonus, see playerHasOwnColorDieInMapSlots's own doc).
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const con6 = createCardInstance('CON006A');
+  con6.ownerId = 'P1';
+  state.cards[con6.physicalId] = con6;
+  p1.ownedCardPhysicalIds.push(con6.physicalId);
+
+  const d1 = giveDie(state, 'P1', 1); // AREA001A SLOT1=1
+  board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
+  const d2 = giveDie(state, 'P1', 2); // AREA001A SLOT2=2
+  const blockedBeforeUpgrade = board.placeDice(state, index, { playerId: 'P1' }, d2.id, 'MAP001', 1);
+  check('Still blocked before the AREA LVUPs', blockedBeforeUpgrade, { success: false, reason: 'OWN_COLOR_DIE_ALREADY_IN_AREA' });
+
+  // A005A.ONCE = 'MAP001.CURRENT_AREA=AREA001B' -- the real LVUP trigger (building/owning A005A).
+  executor.runProgram(state, index, { playerId: 'P1' }, getCardRow(index, 'A005A').ONCE);
+  check('MAP001 is now AREA001B', state.maps['MAP001'].currentAreaId, 'AREA001B');
+  check('...and die.placedMapId is untouched (still needed for endRound bookkeeping)', d1.placedMapId, 'MAP001');
+
+  const d3 = giveDie(state, 'P1', 1); // AREA001B SLOT1=1
+  const afterUpgrade = board.placeDice(state, index, { playerId: 'P1' }, d3.id, 'MAP001', 0);
+  check('No longer blocked once the AREA has LVUPed away the old occupancy', afterUpgrade.success, true);
+}
+{
+  // TEST CHANGE (2026-08-16, per user: "自分のカラーダイスがおかれているAREAにカラーダイスもｗDも置け
+  // なくなります", explicitly flagged as trial/revertible) -- wD (WHITE) used to be exempt from CON006A's
+  // own-color-die reuse block; now it's restricted the same as a 2nd COLOR die would be. To revert this
+  // test alongside the board.js change, delete this block and restore the old `die.kind === 'COLOR' &&'
+  // guards there.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const con6 = createCardInstance('CON006A');
+  con6.ownerId = 'P1';
+  state.cards[con6.physicalId] = con6;
+  p1.ownedCardPhysicalIds.push(con6.physicalId);
+
+  const d1 = giveDie(state, 'P1', 1); // AREA001A SLOT1=1
+  board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
+
+  const wDie = require('../src/game-state').createDie('test-wd-1', 'WHITE');
+  wDie.value = 2; // AREA001A SLOT2=2
+  p1.dice.push(wDie);
+  const wDBlocked = board.placeDice(state, index, { playerId: 'P1' }, wDie.id, 'MAP001', 1);
+  check('A wD is now also blocked from an AREA holding this player\'s own COLOR die', wDBlocked, { success: false, reason: 'OWN_COLOR_DIE_ALREADY_IN_AREA' });
 }
 
 // ---------------------------------------------------------------------------
