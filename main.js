@@ -209,6 +209,60 @@ let aiPumpTimer = null;
 let aiOpenTurnPlayerId = null;
 let aiOpenTurnHasPlacedDie = false;
 
+// ---------------------------------------------------------------------------
+// 変化ハイライト (2026-08-16, replacing a considered-but-rejected move animation -- see this app's
+// full-DOM-rebuild-every-render architecture, which has no element to animate a smooth move across).
+// Shows what changed on the board (dice newly placed, cards newly acquired -- any player's, not just
+// the viewer's) since a human player's own turn last ended, so a human doesn't have to watch every
+// individual AI move to know what happened -- especially under 'instant' pacing, which resolves an
+// entire AI backlog before ever painting anything.
+// ---------------------------------------------------------------------------
+// A structuredClone(state) taken the moment a human's own turn ends (advanceTurnIfPossible), i.e.
+// "the board as the human left it" -- the diff baseline. Consumed (set back to null) the next time
+// render()'s transition block detects control passing to a human, at which point changeHighlightDiff
+// is computed from it. Stays null the rest of the time (nothing to diff against).
+let changeHighlightBaseline = null;
+// {slotKeys:Set<"mapId|slotIndex">, cardKeys:Set<"playerId|physicalId">} once computed, or null.
+let changeHighlightDiff = null;
+// True once changeHighlightDiff has been painted by one render() call -- render()'s own top clears
+// changeHighlightDiff the NEXT time it's called while this is true, since nothing in this app ever
+// calls render() on its own (no polling/interval) -- the next call is always caused by the human doing
+// something, which is exactly when the highlight should disappear (see render()'s own comment).
+let changeHighlightPainted = false;
+// { playerId, dieId } | null -- 'delayed' pacing's own extra highlight (per user request, "1手ずつの
+// ときは、それに加えて、おかれる直前のダイスが光る"): which of an AI's own in-hand dice it's about to
+// place, shown during the same existing AI_STEP_DELAY_MS wait pumpAiDelayed already has (no added
+// delay) -- see pumpAiDelayed's own doc.
+let aiPreHighlightMove = null;
+
+/** Pure diff between a structuredClone(state) baseline and the current state (2026-08-16) -- see the
+ * change-highlight state block above. Only looks at the two things that matter for this feature: newly
+ * occupied AREA slots (a die placed there since baseline) and newly owned cards (any physicalId in
+ * ownedCardPhysicalIds now that wasn't there in baseline) -- both are simple presence diffs, nothing
+ * about VALUES that might have changed (a resource count, a card's tapped state, etc.) is tracked, since
+ * only "a die landed here" / "a card was acquired" were asked for.
+ * @returns {{slotKeys: Set<string>, cardKeys: Set<string>}}
+ */
+function computeChangeDiff(baseline, state) {
+  const slotKeys = new Set();
+  for (const mapId of Object.keys(state.maps)) {
+    const baselineSlots = baseline.maps[mapId] ? baseline.maps[mapId].slots : [];
+    state.maps[mapId].slots.forEach((occupants, i) => {
+      const baselineDieIds = new Set((baselineSlots[i] || []).map((o) => o.dieId));
+      if (occupants.some((o) => !baselineDieIds.has(o.dieId))) slotKeys.add(`${mapId}|${i}`);
+    });
+  }
+  const cardKeys = new Set();
+  for (const player of state.players) {
+    const baselinePlayer = baseline.players.find((p) => p.id === player.id);
+    const baselineIds = new Set(baselinePlayer ? baselinePlayer.ownedCardPhysicalIds : []);
+    for (const physicalId of player.ownedCardPhysicalIds) {
+      if (!baselineIds.has(physicalId)) cardKeys.add(`${player.id}|${physicalId}`);
+    }
+  }
+  return { slotKeys, cardKeys };
+}
+
 /** Whoever's own turn is genuinely still open right now -- they've already resolved this turn's die
  * (placed or passed it) but haven't ended the turn yet -- or null if nobody is mid-turn.
  *
@@ -305,34 +359,31 @@ function driveOneAiStep(state) {
   return did;
 }
 
-function driveOneAiStepInner(state) {
+/** Read-only "what would driveOneAiStepInner do right now" (2026-08-16) -- extracted verbatim from what
+ * used to be driveOneAiStepInner's own inline guard logic (same order, same conditions, no behavior
+ * change) so pumpAiDelayed can peek at an about-to-happen AI move -- for the 'delayed'-pacing
+ * pre-placement die highlight -- without duplicating or mutating anything. Never mutates state; the
+ * mutating branches all still live in driveOneAiStepInner below, which just switches on this result
+ * instead of inlining these checks itself.
+ * @returns {null | {type:'RESOURCE_CHOICE', resourceChoice} | {type:'UNTAP_CHOICE', untapChoice} |
+ *   {type:'ONBOARDING', playerId, player} | {type:'TURN', playerId, hasPlacedDieThisTurn}}
+ */
+function resolveAiTurnContext(state) {
   // The real block -- see hasAiWorkPending's matching guard for the full story. pumpAiInstant's while
-  // loop calls this directly (not hasAiWorkPending) each iteration, so the guard has to live here too,
-  // not just in hasAiWorkPending, or 'instant' mode would still blow straight through the human's still-
-  // open BUILD/UPGRADE choice modal.
-  if (pendingBuildChoice) return false;
+  // loop calls driveOneAiStepInner directly (not hasAiWorkPending) each iteration, so the guard has to
+  // live here too, not just in hasAiWorkPending, or 'instant' mode would still blow straight through the
+  // human's still-open BUILD/UPGRADE choice modal.
+  if (pendingBuildChoice) return null;
   const resourceChoice = state.pendingChoices.find((c) => c.kind === 'SELECT_RESOURCE_CARDS' && isAiPlayer(c.playerId));
-  if (resourceChoice) {
-    // Random, not simulate-and-score (2026-08-03, per user feedback: "初期資源、CON、JOBは現状は完全
-    // ランダムでお願いします そのうち評価値を入れます" -- see src/ai/game-runner.js's matching fix and
-    // its own doc for why: RESOURCE/CON/JOB have no real eval-table values yet).
-    const pair = rngMod.shuffle(state.rng, resourceChoice.context.candidates).slice(0, 2);
-    setupMod.chooseResourceCards(state, resourceChoice.playerId, pair);
-    maybeStartRound1(state);
-    return true;
-  }
+  if (resourceChoice) return { type: 'RESOURCE_CHOICE', resourceChoice };
 
   // UNTAP_CHOICE (2026-08-15, see executor.runUntapChoice's own doc): same "random, not simulate-and-
   // score" placeholder policy as the RESOURCE choice just above -- which of the player's own tapped
   // cards is most worth keeping tapped has no eval-table weight to judge it by yet.
   const untapChoice = state.pendingChoices.find((c) => c.kind === 'UNTAP_CHOICE' && isAiPlayer(c.playerId));
-  if (untapChoice) {
-    const picked = rngMod.shuffle(state.rng, untapChoice.context.candidates).slice(0, untapChoice.context.count);
-    executorMod.resolveUntapChoice(state, untapChoice.playerId, picked);
-    return true;
-  }
+  if (untapChoice) return { type: 'UNTAP_CHOICE', untapChoice };
 
-  if (state.round === 0) return false;
+  if (state.round === 0) return null;
   // Found 2026-08-03 (all-AI game): without this, a finished game's every round-4 die stays "placed",
   // so isRoundOver(state) (and therefore getNextTurn) keeps reporting ROUND_OVER forever after
   // GAME_END, and the ROUND_OVER branch below has no way to tell "just ended" from "already over" --
@@ -340,12 +391,12 @@ function driveOneAiStepInner(state) {
   // pumpAiInstant's MAX_STEPS safety valve, which is real (non-trivial) work repeated 20000 times.
   // Previously unreachable because there was always at least one human player to naturally stop the
   // pump before/at GAME_END.
-  if (state.phase === 'GAME_END') return false;
+  if (state.phase === 'GAME_END') return null;
   // The real block for a still-open HUMAN turn (2026-08-10) -- see openTurnPlayerId's own doc for the
   // full story. Must be checked before getNextTurn below: that call is exactly what skips past a human
   // who has no unplaced die left, handing their still-open turn to the next AI.
   const openTurn = openTurnPlayerId();
-  if (openTurn && !isAiPlayer(openTurn)) return false;
+  if (openTurn && !isAiPlayer(openTurn)) return null;
   let next = turnFlowMod.getNextTurn(state);
   // getNextTurn's raw ROUND_OVER only means "every die is placed-or-passed" -- it does NOT mean every
   // player has actually clicked/decided ターン終了 yet (2026-08-09 fix, per user report: "ラウンド最後
@@ -377,9 +428,9 @@ function driveOneAiStepInner(state) {
   if (aiOpenTurnPlayerId !== null && next.playerId !== aiOpenTurnPlayerId) {
     next = { type: 'TURN', playerId: aiOpenTurnPlayerId };
   } else if (next.type === 'ROUND_OVER') {
-    return false; // nobody mid-turn and no dice left -- wait for the human's own ターン終了
+    return null; // nobody mid-turn and no dice left -- wait for the human's own ターン終了
   }
-  if (!isAiPlayer(next.playerId)) return false;
+  if (!isAiPlayer(next.playerId)) return null;
   const player = state.players.find((p) => p.id === next.playerId);
 
   // turn-flow.getNextTurn reports 'TURN' as soon as JOB is drafted, even before CON is chosen (same
@@ -389,37 +440,64 @@ function driveOneAiStepInner(state) {
   // drafted JOB but not yet chosen CON fell into the TURN branch below and got stuck (selectMove trying
   // to place a die for a player who hasn't received their initial resources yet).
   if (next.type === 'ONBOARDING_NEEDED' || !hasFinishedOnboarding(player)) {
-    if (!player.jobCardId) {
+    return { type: 'ONBOARDING', playerId: next.playerId, player };
+  }
+
+  // next.type === 'TURN' && hasFinishedOnboarding(player), i.e. a genuine real turn. See
+  // aiOpenTurnPlayerId's own comment for why this can't just reuse turnActionTaken directly.
+  const hasPlacedDieThisTurn = next.playerId === aiOpenTurnPlayerId ? aiOpenTurnHasPlacedDie : false;
+  return { type: 'TURN', playerId: next.playerId, hasPlacedDieThisTurn };
+}
+
+function driveOneAiStepInner(state) {
+  const ctx = resolveAiTurnContext(state);
+  if (!ctx) return false;
+
+  if (ctx.type === 'RESOURCE_CHOICE') {
+    // Random, not simulate-and-score (2026-08-03, per user feedback: "初期資源、CON、JOBは現状は完全
+    // ランダムでお願いします そのうち評価値を入れます" -- see src/ai/game-runner.js's matching fix and
+    // its own doc for why: RESOURCE/CON/JOB have no real eval-table values yet).
+    const pair = rngMod.shuffle(state.rng, ctx.resourceChoice.context.candidates).slice(0, 2);
+    setupMod.chooseResourceCards(state, ctx.resourceChoice.playerId, pair);
+    maybeStartRound1(state);
+    return true;
+  }
+
+  if (ctx.type === 'UNTAP_CHOICE') {
+    const picked = rngMod.shuffle(state.rng, ctx.untapChoice.context.candidates).slice(0, ctx.untapChoice.context.count);
+    executorMod.resolveUntapChoice(state, ctx.untapChoice.playerId, picked);
+    return true;
+  }
+
+  if (ctx.type === 'ONBOARDING') {
+    if (!ctx.player.jobCardId) {
       // Random, not simulate-and-score (2026-08-03, per user feedback -- see the resource-choice
       // branch above, and src/ai/game-runner.js's matching fix and its own doc for why).
       const jobFaceId = state.jobPool[Math.floor(rngMod.next(state.rng) * state.jobPool.length)];
-      setupMod.chooseJob(state, INDEX, next.playerId, jobFaceId);
+      setupMod.chooseJob(state, INDEX, ctx.playerId, jobFaceId);
       // No auto/manual-mode prompt for AI (unlike the human path, e.g. renderJobPool's click handler)
       // -- pendingAutoModeChoice is a human-UI convenience only; MoveGenerator's own move generation
       // already accounts for whichever mode (auto/manual) is actually active, see its own doc.
     } else {
       const face = rngMod.next(state.rng) < 0.5 ? 'A' : 'B';
-      setupMod.chooseConFace(state, INDEX, next.playerId, face);
-      setupMod.receiveInitialResources(state, INDEX, next.playerId);
+      setupMod.chooseConFace(state, INDEX, ctx.playerId, face);
+      setupMod.receiveInitialResources(state, INDEX, ctx.playerId);
     }
     return true;
   }
 
-  // next.type === 'TURN' && hasFinishedOnboarding(player), i.e. a genuine real turn. See
-  // aiOpenTurnPlayerId's own comment for why this can't just reuse turnActionTaken directly.
-  // noteActiveTurnPlayerForJobPool here (not just render()'s copy) so a turn-start is caught even when
-  // pumpAiInstant blows straight through this AI's whole turn without render() ever pausing on it --
-  // see lastNotedActiveTurnPlayerId's own comment.
-  noteActiveTurnPlayerForJobPool(state, next.playerId);
-  const hasPlacedDieThisTurn = next.playerId === aiOpenTurnPlayerId ? aiOpenTurnHasPlacedDie : false;
-  const move = aiPlayerFor(next.playerId).selectMove(state, next.playerId, { hasPlacedDieThisTurn });
+  // ctx.type === 'TURN'. noteActiveTurnPlayerForJobPool here (not just render()'s copy) so a turn-start
+  // is caught even when pumpAiInstant blows straight through this AI's whole turn without render() ever
+  // pausing on it -- see lastNotedActiveTurnPlayerId's own comment.
+  noteActiveTurnPlayerForJobPool(state, ctx.playerId);
+  const move = aiPlayerFor(ctx.playerId).selectMove(state, ctx.playerId, { hasPlacedDieThisTurn: ctx.hasPlacedDieThisTurn });
   if (!move) return false; // defensive -- canEndTurn should always eventually free this up
   const result = simulatorMod.applyInPlace(state, INDEX, move);
   if (move.type === 'END_TURN' && result.success) {
     aiOpenTurnPlayerId = null;
   } else {
-    aiOpenTurnPlayerId = next.playerId;
-    aiOpenTurnHasPlacedDie = hasPlacedDieThisTurn || ((move.type === 'PLACE_DIE' || move.type === 'PASS_DIE') && result.success);
+    aiOpenTurnPlayerId = ctx.playerId;
+    aiOpenTurnHasPlacedDie = ctx.hasPlacedDieThisTurn || ((move.type === 'PLACE_DIE' || move.type === 'PASS_DIE') && result.success);
   }
   return true;
 }
@@ -444,15 +522,42 @@ function pumpAiInstant(state) {
 /** 'delayed' mode: schedules exactly one driveOneAiStep AI_STEP_DELAY_MS from now (re-render happens
  * inside the timeout so the board visibly updates one step at a time), then re-arms itself if more AI
  * work remains. Guarded by aiPumpTimer so overlapping calls (e.g. a render triggered by something else
- * while a step is already scheduled) never stack up duplicate timers. */
+ * while a step is already scheduled) never stack up duplicate timers.
+ *
+ * Pre-placement die highlight (2026-08-16, per user request: "1手ずつのときは、それに加えて、おかれる
+ * 直前のダイスが光る", explicitly required not to add any perceptible wait): peeks at what the AI is
+ * about to do via resolveAiTurnContext (read-only) + selectMove (pure, no state/rng side effects --
+ * confirmed no src/ai/*.js file besides the offline game-runner.js CLI tool touches state.rng) and, if
+ * it's a PLACE_DIE/PASS_DIE, renders once with that die highlighted in-hand. This doesn't add any delay:
+ * it just uses the existing AI_STEP_DELAY_MS wait that was already happening, instead of leaving the
+ * board static for it. At the end of that same wait, driveOneAiStep runs as before (re-deriving the same
+ * move the normal way) and clears the pre-highlight.
+ *
+ * The peek+render is deferred one tick via its own setTimeout(...,0) (2026-08-16) rather than called
+ * synchronously here -- pumpAiDelayed is itself invoked from render()'s own top, to arm the *next* step,
+ * before that in-progress render() has painted the *current* move's result yet. Rendering the next move's
+ * pre-highlight synchronously at that point would paint it before the current result ever appeared,
+ * showing them in the wrong order. Deferring to a fresh tick lets the in-progress render() finish first. */
 function pumpAiDelayed() {
   if (aiPumpTimer !== null) return;
   aiPumpTimer = setTimeout(() => {
     aiPumpTimer = null;
+    aiPreHighlightMove = null;
     if (!hasAiWorkPending(STATE)) return;
     driveOneAiStep(STATE);
     render(STATE);
   }, AI_STEP_DELAY_MS);
+  setTimeout(() => {
+    if (aiPumpTimer === null) return; // fired, or canceled by a mode switch, before this tick ran
+    const ctx = resolveAiTurnContext(STATE);
+    if (ctx && ctx.type === 'TURN') {
+      const move = aiPlayerFor(ctx.playerId).selectMove(STATE, ctx.playerId, { hasPlacedDieThisTurn: ctx.hasPlacedDieThisTurn });
+      if (move && (move.type === 'PLACE_DIE' || move.type === 'PASS_DIE')) {
+        aiPreHighlightMove = { playerId: ctx.playerId, dieId: move.dieId };
+        render(STATE);
+      }
+    }
+  }, 0);
 }
 
 // Dice-placement scratch state (2026-07-30, real engine wiring pass 2 -- not part of GameState, pure
@@ -732,24 +837,43 @@ function recordReplaySnapshotIfChanged(state) {
   replayHistory.push(structuredClone(state));
 }
 
-function enterReplayMode() {
-  if (replayHistory.length === 0) return;
+// Set only while viewing a saved ranking entry's replay (2026-08-16) -- see enterReplayMode's
+// historyOverride param. Holds the live game's own replayHistory/replayCursor so exitReplayMode can
+// restore them, since replayHistory is temporarily swapped to the ranking entry's saved history.
+let liveReplayBackup = null;
+
+/** @param {object[]} [historyOverride] - if given (a saved ranking entry's replay, see ranking.js),
+ *   views that history instead of the live game's own replayHistory, restoring the live one on
+ *   exitReplayMode (2026-08-16, for the ranking list's ▶ button). */
+function enterReplayMode(historyOverride) {
+  const history = historyOverride || replayHistory;
+  if (history.length === 0) return;
   // Defensively force every other overlay closed (2026-08-1X) -- GAME_END is only ever reached right
   // after a real END_TURN resolves (see renderGameEndOverlay's own doc), so in practice none of these
   // should ever be open at this point, but renderReplayFrame doesn't render (or re-hide) any of them
   // itself, and .replay-locked's pointer-events:none never reaches these -- they live outside #app (see
   // index.html's own comment) same as #replay-controls does on purpose.
   for (const id of ['card-inst-overlay', 'build-choice-overlay', 'placement-choice-overlay',
-    'tap-choice-overlay', 'auto-mode-choice-overlay', 'turn-end-warning-overlay', 'round-pass-confirm-overlay']) {
+    'tap-choice-overlay', 'auto-mode-choice-overlay', 'turn-end-warning-overlay', 'round-pass-confirm-overlay',
+    'ranking-overlay']) {
     document.getElementById(id).hidden = true;
   }
+  if (historyOverride) {
+    liveReplayBackup = { history: replayHistory, cursor: replayCursor };
+    replayHistory = historyOverride;
+  }
   replayMode = true;
-  replayCursor = replayHistory.length - 1; // start at the final result already on screen
+  replayCursor = history.length - 1; // start at the final result already on screen
   render(STATE);
 }
 
 function exitReplayMode() {
   replayMode = false;
+  if (liveReplayBackup) {
+    replayHistory = liveReplayBackup.history;
+    replayCursor = liveReplayBackup.cursor;
+    liveReplayBackup = null;
+  }
   render(STATE);
 }
 
@@ -2704,6 +2828,10 @@ function renderBoard(state, next) {
         // "you can try clicking here" .slot--selectable affordance every slot gets while any die is
         // selected, regardless of whether it would actually work.
         if (highlightedSlots && highlightedSlots.has(i)) slotEl.classList.add('slot--highlight');
+        // 変化ハイライト (2026-08-16) -- a die landed here since the viewing human's last turn ended.
+        // Separate class/color from .slot--highlight just above (that one means "you could place here
+        // right now"; this one means "something already happened here").
+        if (changeHighlightDiff && changeHighlightDiff.slotKeys.has(`${mapId}|${i}`)) slotEl.classList.add('change-highlight');
         slotsEl.appendChild(slotEl);
       });
 
@@ -3026,6 +3154,11 @@ function advanceTurnIfPossible(state, playerId) {
   // class -- see turnJustEnded's own doc (2026-08-11, per user report). render()'s transition block
   // consumes and clears this.
   turnJustEnded = true;
+  // Change-highlight baseline (2026-08-16, see changeHighlightBaseline's own doc): this choke point is
+  // also "the board as the human left it" -- the one moment guaranteed to run before any AI gets a
+  // chance to move. !isAiPlayer is defensive (this function is only ever reached via the human's own
+  // ターン終了 click today) rather than load-bearing.
+  if (!isAiPlayer(playerId)) changeHighlightBaseline = structuredClone(state);
   if (turnFlowMod.isRoundOver(state)) {
     turnFlowMod.endRound(state, INDEX);
     if (state.phase !== 'GAME_END') turnFlowMod.startRound(state);
@@ -3285,12 +3418,12 @@ function renderBuildChoiceModal() {
   if (affordableCandidates.length === 0) {
     list.appendChild(el('div', 'build-choice-empty', '今支払える資源では建築できるカードがありません'));
   }
-  for (const candidate of affordableCandidates) {
+  function buildCandidateCell(candidate) {
     const faceId = candidate.type === 'UPGRADE' ? candidate.toFaceId : candidate.faceId;
     const cardNode = buildCardVisual(faceId, { showEffect: true, noInteraction: true });
     const tall = cardNode.classList.contains('shop-card--tall');
     const wrapper = el('div', 'build-choice-item');
-    if (candidate.type === 'UPGRADE') wrapper.appendChild(el('div', 'build-choice-label', 'アップグレード'));
+    if (candidate.type === 'UPGRADE') wrapper.appendChild(el('div', 'build-choice-label', 'LVアップ'));
     const cell = el('div', tall ? 'owned-card-cell owned-card-cell--tall owned-card-cell--selectable' : 'owned-card-cell owned-card-cell--selectable');
     cell.appendChild(cardNode);
     cell.addEventListener('click', () => {
@@ -3303,7 +3436,24 @@ function renderBuildChoiceModal() {
       commitBuildCandidate(candidate, outcomes.length === 1 ? outcomes[0].bzDiscount : {});
     });
     wrapper.appendChild(cell);
-    list.appendChild(wrapper);
+    return wrapper;
+  }
+  // 建築とLVアップを上下2セクションに分ける (2026-08-16, per user request: "建築は建築 LVアップはLVアップで
+  // 上下に分ける" -- previously both types were mixed into one flat wrapping row, distinguished only by
+  // the small per-card "LVアップ" label).
+  const newBuildCandidates = affordableCandidates.filter((c) => c.type !== 'UPGRADE');
+  const upgradeCandidates = affordableCandidates.filter((c) => c.type === 'UPGRADE');
+  if (newBuildCandidates.length > 0) {
+    list.appendChild(el('div', 'build-choice-section-header', '建築'));
+    const group = el('div', 'build-choice-group');
+    for (const candidate of newBuildCandidates) group.appendChild(buildCandidateCell(candidate));
+    list.appendChild(group);
+  }
+  if (upgradeCandidates.length > 0) {
+    list.appendChild(el('div', 'build-choice-section-header', 'LVアップ'));
+    const group = el('div', 'build-choice-group');
+    for (const candidate of upgradeCandidates) group.appendChild(buildCandidateCell(candidate));
+    list.appendChild(group);
   }
 }
 
@@ -3499,6 +3649,11 @@ function renderPlayers(state, next) {
       // Passed (2026-08-03, see board.passDie) -- stays visible in hand so it's clear where it went,
       // but not selectable again until next round's reset.
       if (die.passed) dieNode.classList.add('die--passed');
+      // 1手ずつペースの事前ハイライト (2026-08-16) -- see pumpAiDelayed's own doc: this specific die is
+      // what the AI is about to place, shown during the existing pre-placement wait.
+      if (aiPreHighlightMove && aiPreHighlightMove.playerId === player.id && aiPreHighlightMove.dieId === die.id) {
+        dieNode.classList.add('change-highlight--pending');
+      }
       // Click to select a die for placement (2026-07-30, real engine wiring pass 2) -- see
       // placeSelectedDie/renderBoard's slot click handler, the other half of this interaction.
       // !turnActionTaken (2026-08-02 bug fix, per user report: "ダイスをおいた後もう一回ダイスを置こう
@@ -4192,6 +4347,8 @@ function renderPlayerCards(state, next) {
         tapped: cardState.tapped, showEffect: true, allowTextFallback: false,
       });
       const cell = el('div', cardNode.classList.contains('shop-card--tall') ? 'owned-card-cell owned-card-cell--tall' : 'owned-card-cell');
+      // 変化ハイライト (2026-08-16) -- this JOB/CON was drafted since the viewing human's last turn ended.
+      if (changeHighlightDiff && changeHighlightDiff.cardKeys.has(`${player.id}|${physicalId}`)) cell.classList.add('change-highlight');
       attachTapToggle(cardNode, cardState, cardState.currentFaceId, canUseTap, physicalId);
       cell.appendChild(cardNode);
       jobConEl.appendChild(cell);
@@ -4228,6 +4385,8 @@ function renderPlayerCards(state, next) {
       if (!cardState) continue;
       const tall = isNormalDeckCard(physicalId); // A/B/C decks: taller, with effect text (confirmed)
       const cell = el('div', tall ? 'owned-card-cell owned-card-cell--tall' : 'owned-card-cell');
+      // 変化ハイライト (2026-08-16) -- this card was built/acquired since the viewing human's last turn ended.
+      if (changeHighlightDiff && changeHighlightDiff.cardKeys.has(`${player.id}|${physicalId}`)) cell.classList.add('change-highlight');
       const cardNode = buildCardVisual(cardState.currentFaceId, { tapped: cardState.tapped, showEffect: tall });
       attachTapToggle(cardNode, cardState, cardState.currentFaceId, canUseTap, physicalId);
       cell.appendChild(cardNode);
@@ -4266,6 +4425,142 @@ function renderGameEndOverlay(state) {
   document.getElementById('game-end-replay-button').disabled = replayHistory.length === 0;
 }
 
+// Human seats already registered into the ranking THIS game (2026-08-16) -- a fresh page load (the
+// only way this app ever starts a new game, see autoScrollToBottomOnStart's own doc) gives a fresh
+// empty Set automatically, so this never needs an explicit reset.
+const registeredRankingPlayerIds = new Set();
+
+const ROLE_LABELS = new Map(PLAYER_ROLE_OPTIONS);
+
+/** @returns {string} a card face's own NAME column, falling back to the raw id if it has none (mirrors
+ * the `row.NAME && row.NAME !== row.ID ? row.NAME : ''` fallback pattern used elsewhere, e.g. line ~1058). */
+function rankingCardDisplayName(faceId) {
+  if (!faceId) return '—';
+  const row = dataLoaderMod.getCardRow(INDEX, faceId);
+  return row.NAME && row.NAME !== faceId ? row.NAME : faceId;
+}
+
+/** Every HUMAN seat's ranking-eligible result at GAME_END (2026-08-16, per user: "人間対AIで歴代の得点を
+ * 最高得点順に並べる" -- AI seats never appear here). Reuses scoringMod.rankPlayers/state.qstRewardsGranted
+ * the exact same way standingsRows already does (see its own doc, ~line 2497) so 素点/QST得点 here can
+ * never drift from what the live standings/GAME_END screen itself shows. */
+function rankingCandidatesForGameEnd(state) {
+  if (state.phase !== 'GAME_END') return [];
+  const granted = state.qstRewardsGranted || {};
+  return scoringMod.rankPlayers(state, INDEX)
+    .filter((entry) => !isAiPlayer(entry.playerId))
+    .map((entry) => {
+      const player = state.players.find((p) => p.id === entry.playerId);
+      const qstScore = granted[entry.playerId] || 0;
+      return {
+        playerId: entry.playerId,
+        defaultName: player.name,
+        playerColor: player.color,
+        totalScore: entry.score,
+        qstScore,
+        rawScore: entry.score - qstScore,
+        conFaceId: player.conPhysicalId && player.conFace ? `${player.conPhysicalId}${player.conFace}` : null,
+        jobCardId: player.jobCardId || null,
+        opponents: state.players.filter((p) => p.id !== entry.playerId)
+          .map((p) => ROLE_LABELS.get(playerRoles.get(p.id)) || playerRoles.get(p.id)),
+      };
+    });
+}
+
+/** Name-entry + register row for each HUMAN seat not yet saved into the ranking this game (2026-08-16,
+ * per user: name is "ランキングをとったプレイヤーが入力" -- typed by the player themselves, not
+ * auto-filled). This is the app's first real `<input>` element (see index.html's own comment on
+ * #ranking-overlay) -- everywhere else in the UI is click-only. */
+function renderRankingRegisterList(state) {
+  const container = document.getElementById('ranking-register-list');
+  container.innerHTML = '';
+  for (const c of rankingCandidatesForGameEnd(state)) {
+    if (registeredRankingPlayerIds.has(c.playerId)) continue;
+    const row = el('div', 'ranking-register-row');
+    const swatch = el('span', 'player-panel__swatch');
+    swatch.dataset.color = c.playerColor;
+    row.appendChild(swatch);
+    row.appendChild(el('span', 'ranking-register-row__score', `総合 ${c.totalScore}VP（素点${c.rawScore} + QST${c.qstScore}）`));
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'ranking-name-input';
+    input.placeholder = c.defaultName;
+    input.maxLength = 20;
+    row.appendChild(input);
+    const registerButton = el('button', 'undo-button', '登録');
+    registerButton.type = 'button';
+    registerButton.addEventListener('click', () => {
+      registerButton.disabled = true;
+      const name = input.value.trim() || c.defaultName;
+      RankingStorage.save({
+        name,
+        rawScore: c.rawScore,
+        qstScore: c.qstScore,
+        totalScore: c.totalScore,
+        conFaceId: c.conFaceId,
+        jobCardId: c.jobCardId,
+        opponents: c.opponents,
+        playerColor: c.playerColor,
+      }, replayHistory).then(() => {
+        registeredRankingPlayerIds.add(c.playerId);
+        renderRankingOverlay(STATE);
+      });
+    });
+    row.appendChild(registerButton);
+    container.appendChild(row);
+  }
+}
+
+/** All-time top-20 list (2026-08-16) -- see ranking.js's RankingStorage.list (already sorted
+ * totalScore descending, capped at 20 by save()). */
+function renderRankingList() {
+  const list = document.getElementById('ranking-list');
+  list.innerHTML = '';
+  const entries = RankingStorage.list();
+  if (entries.length === 0) {
+    list.appendChild(el('div', 'ranking-empty', 'まだ登録がありません'));
+    return;
+  }
+  entries.forEach((entry, i) => {
+    const row = el('div', i === 0 ? 'ranking-row ranking-row--top' : 'ranking-row');
+    row.appendChild(el('span', 'ranking-row__rank', `${i + 1}位`));
+    const swatch = el('span', 'player-panel__swatch');
+    swatch.dataset.color = entry.playerColor;
+    row.appendChild(swatch);
+    row.appendChild(el('span', 'ranking-row__name', entry.name));
+    row.appendChild(el('span', 'ranking-row__score', `総合 ${entry.totalScore}VP（素点${entry.rawScore} + QST${entry.qstScore}）`));
+    row.appendChild(el('span', 'ranking-row__con', `CON: ${rankingCardDisplayName(entry.conFaceId)}`));
+    row.appendChild(el('span', 'ranking-row__job', `JOB: ${rankingCardDisplayName(entry.jobCardId)}`));
+    row.appendChild(el('span', 'ranking-row__opponents', entry.opponents.join('　')));
+    const replayButton = el('button', 'undo-button', entry.hasReplay ? '▶ 再生' : '再生不可');
+    replayButton.type = 'button';
+    replayButton.disabled = !entry.hasReplay;
+    replayButton.addEventListener('click', () => {
+      replayButton.disabled = true;
+      RankingStorage.loadReplay(entry.id).then((history) => {
+        if (history && history.length) enterReplayMode(history);
+        else replayButton.disabled = false;
+      });
+    });
+    row.appendChild(replayButton);
+    list.appendChild(row);
+  });
+}
+
+function renderRankingOverlay(state) {
+  renderRankingRegisterList(state);
+  renderRankingList();
+}
+
+function openRankingOverlay() {
+  document.getElementById('ranking-overlay').hidden = false;
+  renderRankingOverlay(STATE);
+}
+
+function closeRankingOverlay() {
+  document.getElementById('ranking-overlay').hidden = true;
+}
+
 function render(state) {
   // Replay mode takes over the whole screen with its own render path -- see this file's "Move-by-move
   // game replay" section for why that's a separate function rather than a branch further down (render()
@@ -4273,6 +4568,12 @@ function render(state) {
   // -- none of which make sense, or are even safe, against a frozen historical snapshot).
   if (replayMode) { renderReplayFrame(); return; }
   document.getElementById('app').classList.remove('replay-locked');
+  // 変化ハイライトのクリア (2026-08-16, see changeHighlightDiff's own doc): nothing in this app ever
+  // calls render() on its own (no polling/interval) -- every call is caused by a human doing something,
+  // or by the AI pump's own timer. changeHighlightPainted marks "this diff has already been shown once";
+  // if that's still true when render() runs again, something happened since, so it's time to clear it.
+  if (changeHighlightDiff && changeHighlightPainted) changeHighlightDiff = null;
+  changeHighlightPainted = false;
   // Records this render's starting state as one replay entry before anything else runs (2026-08-1X) --
   // see recordReplaySnapshotIfChanged's own doc. Every human action handler mutates STATE then calls
   // render(STATE), so by the time control reaches here `state` already reflects that one move; the
@@ -4349,6 +4650,15 @@ function render(state) {
     noteActiveTurnPlayerForJobPool(state, next.playerId);
     if (next.playerId !== lastTurnPlayerId || turnJustEnded) {
       undoMod.recordCheckpoint(state);
+      // 変化ハイライトの計算 (2026-08-16): 人間のターンが始まる、まさにこの瞬間だけ、直前の人間ターン
+      // 終了時に取ったbaseline(changeHighlightBaseline)と今のstateを比較する。AIのターンが始まる瞬間は
+      // ここを素通りする(baselineは消費されず残ったまま)ので、複数のAIが連続で動いても、次に人間の番が
+      // 来たときに全部まとめて光る。
+      if (!isAiPlayer(next.playerId) && changeHighlightBaseline) {
+        changeHighlightDiff = computeChangeDiff(changeHighlightBaseline, state);
+        changeHighlightPainted = true;
+        changeHighlightBaseline = null;
+      }
       lastTurnPlayerId = next.playerId;
       turnActionTaken = false; // a fresh turn started -- see turnActionTaken's own comment
       turnJustEnded = false;
@@ -4845,10 +5155,17 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('dice-cancel-button').addEventListener('click', handleDiceCancelClick);
   document.getElementById('dice-cancel-button-build').addEventListener('click', handleDiceCancelClick);
 
-  document.getElementById('game-end-replay-button').addEventListener('click', enterReplayMode);
+  document.getElementById('game-end-replay-button').addEventListener('click', () => enterReplayMode());
   document.getElementById('replay-back').addEventListener('click', handleReplayBack);
   document.getElementById('replay-forward').addEventListener('click', handleReplayForward);
   document.getElementById('replay-exit').addEventListener('click', exitReplayMode);
+
+  document.getElementById('game-end-ranking-button').addEventListener('click', openRankingOverlay);
+  document.getElementById('ranking-close-button').addEventListener('click', closeRankingOverlay);
+  const rankingOverlayEl = document.getElementById('ranking-overlay');
+  rankingOverlayEl.addEventListener('click', (e) => {
+    if (e.target === rankingOverlayEl) closeRankingOverlay(); // backdrop click only, matching #card-inst-overlay
+  });
 
   document.getElementById('debug-mode-toggle').addEventListener('click', toggleDebugMode);
   document.getElementById('debug-turn-back').addEventListener('click', handleDebugTurnBack);

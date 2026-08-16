@@ -154,7 +154,7 @@
   <div id="build-choice-overlay" class="card-inst-overlay" hidden>
     <div class="card-inst-modal build-choice-modal">
       <div class="card-inst-modal__header">
-        <span class="card-inst-modal__title">建築 / アップグレードを選択</span>
+        <span class="card-inst-modal__title">建築 / LVアップを選択</span>
         <!-- Duplicate of #undo-button (2026-07-30, per user feedback: "城にダイスをおいて建築を選ぶ
              画面でも戻れるように") -- the sidebar one sits behind this modal's backdrop while it's
              open, so a second copy lives here instead of fighting z-index/stacking-context rules to
@@ -277,8 +277,26 @@
              リプレイモード...がほしい" -- opens a read-only, move-by-move playback of the whole game just
              played. See main.js's enterReplayMode/renderReplayFrame. -->
         <button type="button" class="undo-button" id="game-end-replay-button" disabled>▶ リプレイ</button>
+        <!-- 2026-08-16, per user request: "ランキングとは人間対AIで歴代の得点を最高得点順に並べる
+             もの" -- opens the all-time ranking overlay below. See main.js's renderRankingOverlay. -->
+        <button type="button" class="undo-button" id="game-end-ranking-button">🏆 ランキング</button>
       </div>
       <div class="card-inst-modal__body" id="game-end-list"></div>
+    </div>
+  </div>
+
+  <!-- 歴代ランキング (2026-08-16) -- see main.js's renderRankingOverlay. Opened from the GAME_END
+       screen's 🏆 button. If the just-finished game has HUMAN seats not yet registered this game, a
+       name-entry row is shown per seat above the list (see ranking.js's own doc for why the list
+       itself is localStorage but each row's full replay is IndexedDB). -->
+  <div id="ranking-overlay" class="card-inst-overlay" hidden>
+    <div class="card-inst-modal ranking-modal">
+      <div class="card-inst-modal__header">
+        <span class="card-inst-modal__title">🏆 歴代ランキング</span>
+        <button type="button" class="card-inst-modal__close" id="ranking-close-button" aria-label="閉じる">&times;</button>
+      </div>
+      <div id="ranking-register-list" class="ranking-register-list"></div>
+      <div class="card-inst-modal__body" id="ranking-list"></div>
     </div>
   </div>
 
@@ -553,6 +571,7 @@
        instead, loaded the same way as everything else here). -->
   <script src="data/game.data.js"></script>
 
+  <script src="ranking.js"></script>
   <script src="main.js"></script>
 </body>
 </html>

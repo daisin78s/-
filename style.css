@@ -59,6 +59,11 @@
   --qst-band-1: rgba(52, 84, 209, 0.22);
   --qst-band-2: rgba(52, 84, 209, 0.12);
   --qst-band-3: rgba(52, 84, 209, 0.05);
+
+  /* 変化ハイライト (2026-08-16) -- AIの手が速すぎて追えない問題への対策。既存の配置可能スロット演出
+     (--accentの青)とは別の色にして混同を防ぐ。暖色(アンバー)を採用。 */
+  --change-highlight: #d97706;
+  --change-highlight-soft: #fde68a;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -83,6 +88,8 @@
     --qst-band-1: rgba(117, 144, 255, 0.28);
     --qst-band-2: rgba(117, 144, 255, 0.15);
     --qst-band-3: rgba(117, 144, 255, 0.07);
+    --change-highlight: #f0a030;
+    --change-highlight-soft: #4a3a1a;
   }
 }
 
@@ -758,6 +765,28 @@ h1, h2, h3 { margin: 0; }
 @keyframes slot-highlight-pulse {
   0%, 100% { box-shadow: 0 0 0 2px var(--accent-soft), 0 0 6px 1px var(--accent); }
   50% { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 10px 3px var(--accent); }
+}
+
+/* 変化ハイライト (2026-08-16) -- AIの手番が速すぎて追えない問題への対策としてアニメーションの代わりに
+   採用。「自分の前のターンが終わってから今見ている時点までに起きた変化」(main.jsのchangeHighlightDiff)
+   に付く。.slot--highlight(上、配置可能プレビュー)とは意味も色も別 -- アンバー系(--change-highlight)。 */
+.change-highlight {
+  border-style: solid;
+  border-color: var(--change-highlight);
+  background: var(--change-highlight-soft);
+  box-shadow: 0 0 0 2px var(--change-highlight-soft), 0 0 6px 1px var(--change-highlight);
+  animation: change-highlight-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes change-highlight-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px var(--change-highlight-soft), 0 0 6px 1px var(--change-highlight); }
+  50% { box-shadow: 0 0 0 3px var(--change-highlight-soft), 0 0 12px 4px var(--change-highlight); }
+}
+
+/* 「1手ずつ」ペースの事前ハイライト (2026-08-16) -- AIが置こうとしている手札のダイス自体に付く。見た目は
+   .change-highlightと同じパルスを流用(box-shadowのみなのでダイスの丸い形を崩さない)。 */
+.change-highlight--pending {
+  animation: change-highlight-pulse 0.9s ease-in-out infinite;
 }
 
 /* A short-lived feedback line for a rejected placement (e.g. "配置できません（VALUE_MISMATCH）") --
@@ -2312,10 +2341,30 @@ h1, h2, h3 { margin: 0; }
 
 #build-choice-list {
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  white-space: normal;
+}
+
+/* 建築/LVアップの2セクション (2026-08-16) -- each candidate group still wraps like the old flat list did,
+   just confined to its own section under .build-choice-section-header instead of mixed together. */
+.build-choice-group {
+  display: flex;
   flex-wrap: wrap;
   gap: 10px;
   justify-content: center;
-  white-space: normal;
+  width: 100%;
+}
+
+.build-choice-section-header {
+  width: 100%;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
 }
 
 .build-choice-item {
@@ -2510,6 +2559,100 @@ h1, h2, h3 { margin: 0; }
   font-size: 14px;
   font-weight: 700;
   color: var(--resource-vp);
+}
+
+/* 歴代ランキング (2026-08-16) -- see main.js's renderRankingOverlay / ranking.js's RankingStorage. */
+.ranking-modal {
+  width: 420px;
+}
+
+.ranking-register-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px 0;
+}
+
+.ranking-register-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+}
+
+.ranking-register-row__score {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* First real <input> in the app (2026-08-16) -- everywhere else is click-only, see index.html's own
+   comment on #ranking-overlay. Styled to match the surrounding modal's tokens rather than the
+   browser default. */
+.ranking-name-input {
+  flex: 1 1 120px;
+  min-width: 100px;
+  font: inherit;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+}
+
+#ranking-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 16px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.ranking-empty {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 8px 0;
+}
+
+.ranking-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: var(--surface-soft, var(--surface));
+  font-size: 12px;
+}
+
+.ranking-row--top {
+  background: var(--accent-soft);
+  font-weight: 700;
+}
+
+.ranking-row__rank {
+  font-weight: 700;
+  color: var(--text-muted);
+  width: 32px;
+  flex: 0 0 auto;
+}
+
+.ranking-row__name {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ranking-row__score {
+  color: var(--resource-vp);
+}
+
+.ranking-row__con,
+.ranking-row__job,
+.ranking-row__opponents {
+  color: var(--text-muted);
 }
 
 /* Replay mode (2026-08-1X, per user request: "リプレイモード...進む 戻る で1手づつ確認できるモード") --
