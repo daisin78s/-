@@ -2178,6 +2178,11 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
   const onceIcon = faceId.startsWith('CON') ? buildActionIcons(facts.once) : null;
   if (onceIcon) {
     idEl.appendChild(onceIcon);
+  } else if ((faceId.startsWith('JOB') || faceId.startsWith('M')) && facts.name) {
+    // JOB/M(onument) cards (2026-08-16, per user request: both got real thematic NAMEs filled in --
+    // "IDの代わりにNAMEを表示して", scoped to just these two deck types, not A/B/C's own id spot) --
+    // shows the same facts.name as the title above instead of the raw "JOB008"/"M007" id.
+    idEl.textContent = facts.name;
   } else {
     idEl.textContent = faceId;
   }

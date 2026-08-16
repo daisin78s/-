@@ -460,6 +460,16 @@ h1, h2, h3 { margin: 0; }
   right: 6px;
   font-size: 10px;
   font-weight: 700;
+  /* 2026-08-16, per user request: monuments with many EMBLEM columns filled in (e.g. 2+2+2) produce a
+     long char string like "天天地地人人" that used to sit on one line and run past the card's edge --
+     wrapping into a fixed-width, right-aligned block (2 chars/row) turns that into 2-3 short lines
+     instead. */
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  justify-content: flex-end;
+  width: 22px;
+  line-height: 1.2;
 }
 .shop-card__emblem:empty { display: none; }
 
