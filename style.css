@@ -494,6 +494,15 @@ h1, h2, h3 { margin: 0; }
 }
 .shop-card__emblem:empty { display: none; }
 
+/* 2026-08-16, per user request (M011 聖域 "天天天"): up to 3 emblems stay on one line instead of
+   wrapping at 2/row -- width:auto lets the box grow leftward from its own right:6px anchor to fit
+   however many chars are on the (single) row, rather than guessing a fixed px value. Only applied when
+   main.js counts <=3 emblems for this card; 4+ still uses the fixed 22px/2-per-row wrap above. */
+.shop-card__emblem--single-row {
+  width: auto;
+  flex-wrap: nowrap;
+}
+
 /* Confirmed 2026-07-29: LV{n} (from A/B/C decks' LEVEL field) sits right under the EMBLEM badge;
    cards with no LEVEL (M/JOB/CON/RESOURCE) show nothing here. */
 .shop-card__level {
@@ -1068,24 +1077,6 @@ h1, h2, h3 { margin: 0; }
   filter: grayscale(60%);
 }
 
-/* 「パス」ボタン (2026-08-03) -- see main.js's renderPassDieButton. Same shape as .free-action-button,
-   collapses away (via the container's own :empty rule below) when not shown. */
-.pass-die-button {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 3px 9px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text);
-  cursor: pointer;
-}
-
-.pass-die-button:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
 /* ---------------------------------------------------------------------- */
 /* Resource badges                                                        */
 /* ---------------------------------------------------------------------- */
@@ -1214,15 +1205,7 @@ h1, h2, h3 { margin: 0; }
    whoever's real TURN it currently is (see main.js's renderFreeActionButtons). Collapses away
    entirely when empty (nobody's turn, or every free action already tapped this round). */
 .player-panel__free-actions,
-.player-panel__pass-die {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 6px;
-}
-
-.player-panel__free-actions:empty,
-.player-panel__pass-die:empty {
+.player-panel__free-actions:empty {
   display: none;
 }
 

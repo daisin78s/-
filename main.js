@@ -2222,7 +2222,13 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
   const emblem = emblemForFaceId(faceId);
   const emblemEl = q('.shop-card__emblem');
   if (emblem) {
-    for (const char of emblemChars(emblem)) {
+    const chars = emblemChars(emblem);
+    // 2026-08-16, per user request (M011 聖域 "天天天" -- 3 emblems): stay on one line up to 3, same as
+    // 1-2 already did; only 4+ (e.g. M007's 6-char "天天地地人人") still wraps at 2/row (see
+    // .shop-card__emblem--single-row in style.css). Keeps the previously-confirmed 2+2+2 (3-row) shape
+    // for 6-emblem cards, rather than widening the box for everyone and turning that into 3+3 (2 rows).
+    if (chars.length <= 3) emblemEl.classList.add('shop-card__emblem--single-row');
+    for (const char of chars) {
       const charEl = el('span', 'shop-card__emblem-char', char);
       charEl.dataset.emblem = char;
       emblemEl.appendChild(charEl);
@@ -3101,40 +3107,6 @@ function placeSelectedDiceGroup(state, mapId) {
   render(STATE);
 }
 
-/** Declines to place the currently-selected die at all this round (2026-08-03, per user feedback:
- * "色ダイスを置けない時、または起きたくない時ラウンドをパスする手段がありません") -- see
- * board.passDie's own doc for what this actually does to the die (excluded from turn-flow's "still
- * needs an action" checks, but still gets endRound's unused-color-die 3K same as a genuinely-unplaced
- * one). Mirrors placeSelectedDie's own turnActionTaken handling exactly (fulfils the same
- * once-per-turn placement-or-pass obligation). */
-function passSelectedDie(state) {
-  const dieId = selectedDieIds[0];
-  const player = state.players.find((p) => p.dice.some((d) => d.id === dieId));
-  const result = boardMod.passDie(state, INDEX, { playerId: player.id }, dieId);
-  selectedDieIds = [];
-  if (!result.success) {
-    placementMessage = `パスできません（${result.reason}）`;
-  } else {
-    placementMessage = '';
-    turnActionTaken = true;
-  }
-  render(STATE);
-}
-
-/** "パス" button (2026-08-03) -- shown only once EXACTLY one die is selected (mirrors the "select a
- * die, then either click a slot or pass" flow; 2026-08-02: passing doesn't make sense for a multi-die
- * monument selection, so this hides once a 2nd die joins it), and only for the player whose real TURN
- * it currently is (canAct, same gate as renderFreeActionButtons). */
-function renderPassDieButton(container, state, player, canAct) {
-  container.innerHTML = '';
-  if (!canAct || selectedDieIds.length !== 1) return;
-  if (!player.dice.some((d) => d.id === selectedDieIds[0])) return;
-  const btn = el('button', 'pass-die-button', 'このダイスをパス');
-  btn.type = 'button';
-  btn.addEventListener('click', () => passSelectedDie(state));
-  container.appendChild(btn);
-}
-
 /**
  * Whatever RESOURCE_LIMIT/FORCE_CONVERT TURNEND rules ending playerId's turn *right now* would
  * actually trigger (2026-08-01, per user feedback: the data's WARNING/"はい・いいえ" text was always
@@ -3771,7 +3743,6 @@ function renderPlayers(state, next) {
       rowEl.appendChild(dieNode);
     }
 
-    renderPassDieButton(node.querySelector('.player-panel__pass-die'), state, player, player.id === canPlaceDiceFor);
     renderFreeActionButtons(node.querySelector('.player-panel__free-actions'), state, player, player.id === canPlaceDiceFor);
     renderTapReactions(node.querySelector('.player-panel__tap-reactions'), state, player.id);
     renderUntapChoice(node.querySelector('.player-panel__untap-choice'), state, player.id);
@@ -4881,8 +4852,10 @@ function renderRoundPassConfirmModal() {
 
 /** Passes every remaining unplaced-and-unpassed die this player is holding in one shot (2026-08-02,
  * per user feedback: repeatedly selecting-then-passing each die individually was tedious with several
- * dice left) -- loops board.passDie exactly the way passSelectedDie calls it once, then runs the same
- * WARNING-gated attemptAdvanceTurn end-of-turn flow a manual pass+"ターン終了" would. Safe to run that
+ * dice left; the individual per-die "このダイスをパス" button this once mirrored was removed 2026-08-16,
+ * per user request, now that this round-pass covers the same need) -- loops board.passDie once per
+ * die, then runs the same WARNING-gated attemptAdvanceTurn end-of-turn flow a manual "ターン終了" would.
+ * Safe to run that
  * end-of-turn check just once for the whole batch rather than once per die: passing a die changes no
  * player resource, so RESOURCE_LIMIT/FORCE_CONVERT's own trigger conditions can't differ between the
  * dice in the loop. Once every die is marked passed, turn-flow.getNextTurn's own "skip players with
