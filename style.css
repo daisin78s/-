@@ -1200,7 +1200,13 @@ h1, h2, h3 { margin: 0; }
 /* Free actions (2026-07-30, real engine wiring pass 5) -- small pill buttons, only populated for
    whoever's real TURN it currently is (see main.js's renderFreeActionButtons). Collapses away
    entirely when empty (nobody's turn, or every free action already tapped this round). */
-.player-panel__free-actions,
+.player-panel__free-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
 .player-panel__free-actions:empty {
   display: none;
 }
