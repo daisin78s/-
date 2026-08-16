@@ -1178,8 +1178,12 @@ function diceThresholdFaces(diceString) {
  * rule. */
 function renderDiceThresholdReq(container, diceString) {
   container.innerHTML = '';
+  // Reuses dieFace() (2026-08-16, per user request: "AREAに表示されている⚅とおなじものを使ってくださ
+  // い　大きさや濃さも") -- the exact same .die-face-classed node the board's own AREA slots build for a
+  // numbered requirement (renderBoard's dieFace(requirement) call), so size/color can never drift
+  // between the two instead of maintaining a second, separately-tuned copy.
   for (const face of diceThresholdFaces(diceString)) {
-    container.appendChild(el('span', 'shop-card__req-die', DIE_FACES[face]));
+    container.appendChild(dieFace(face));
   }
   if (container.children.length) container.appendChild(document.createTextNode('以上'));
 }

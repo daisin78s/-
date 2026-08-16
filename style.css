@@ -596,26 +596,22 @@ h1, h2, h3 { margin: 0; }
 .shop-card__req {
   /* 2026-08-16, per user report: "ダイス目小さすぎて見えない" -- this only ever holds a monument's own
      dice-face glyph threshold (⚀-⚅, see main.js's diceThresholdFaces/renderDiceThresholdReq), never
-     plain digits, and the glyphs read smaller within their own em-box than regular text at the same
-     size -- bumped up from 11px so the "以上" suffix text is legible at this card's small scale (the
-     glyphs themselves are sized separately, see .shop-card__req-die below). Centered per user request
-     ("ダイス目は中央揃え") -- text-align here also centers the .shop-card__req-die spans, since they're
-     inline. */
+     plain digits. Bumped up from 11px so the "以上" suffix text is legible at this card's small scale
+     (the glyphs themselves are the board's own .die-face, sized separately below). Centered per user
+     request ("ダイス目は中央揃え") -- text-align here also centers the inline .die-face spans. */
   font-size: 15px;
   color: var(--text-muted);
   text-align: center;
 }
 .shop-card__req:empty { display: none; }
 
-/* 2026-08-16, per user request: "⚀ ⚅ を今の倍の大きさにして濃く" -- each die-face glyph in a monument's
-   threshold (see renderDiceThresholdReq) is twice .shop-card__req's own 15px and full-strength (not
-   muted) text color, while the "以上" suffix next to it stays at the parent's own 15px/muted color. */
-.shop-card__req-die {
-  font-size: 30px;
-  line-height: 1;
-  color: var(--text);
-  /* 2026-08-16, per user request: "⚅と以上の文字を上でなく下でそろえる" -- was vertical-align:middle,
-     which centered the much-taller glyph against the "以上" text's line, making it read as top-heavy. */
+/* 2026-08-16, per user request: "モニュメントの⚅ AREAに表示されている⚅とおなじものを使ってください
+   大きさや濃さも" -- renderDiceThresholdReq now builds these with the same dieFace()/.die-face the board
+   itself uses for a numbered AREA requirement (see that rule, further down), so size (42px) and color
+   (var(--text)) can never drift from the board's own. Only the alignment needs a scoped override here --
+   vertical-align:bottom keeps it level with the "以上" text next to it (middle made the much-taller
+   glyph read as top-heavy, per an earlier request). */
+.shop-card__req .die-face {
   vertical-align: bottom;
 }
 
