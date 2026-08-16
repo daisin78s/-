@@ -1152,6 +1152,38 @@ let turnJustEnded = false;
 // manually copied in here).
 // ---------------------------------------------------------------------------
 
+/** A monument's own DICE threshold (e.g. ">=12") as the die faces (1-6 each) whose glyphs should render
+ * (2026-08-16, per user request: "目＞＝1を ⚀ 以上" etc -- returns faces rather than a formatted string
+ * since the glyphs and the "以上" suffix need independent sizing/styling, see fillCardFace's own
+ * rendering). A single die only ever shows 1-6, so N<=6 is just that one face; N=7-12 needs 2 dice
+ * summed (the castle/AREA009 group-placement stacking, see board.js) to reach it, always the highest
+ * face (6) plus whatever the other die needs to show to sum to N -- confirmed by the user's own examples
+ * (">=7" -> [6,1], ">=12" -> [6,6]). Empty array for anything not matching ">=N" (shouldn't happen for
+ * M's own DICE column, but defensive).
+ * @returns {number[]}
+ */
+function diceThresholdFaces(diceString) {
+  const match = /^>=(\d+)$/.exec(diceString || '');
+  if (!match) return [];
+  const n = Number(match[1]);
+  return n <= 6 ? [n] : [6, n - 6];
+}
+
+/** Fills container (.shop-card__req) with a monument's dice-face threshold -- each needed face as its
+ * own larger/darker glyph span (.shop-card__req-die, styled in style.css) followed by plain "以上" text
+ * at the row's own base size (2026-08-16, per user request: dice faces "今の倍の大きさにして濃く"、
+ * "以上"の文字は今のまま、"ダイス目は中央揃え" -- the size/color split is why this builds real DOM nodes
+ * instead of the plain textContent assignment it used to be). Clears container first so an empty/
+ * unrecognized diceString correctly leaves it empty, matching .shop-card__req:empty's hide-when-blank
+ * rule. */
+function renderDiceThresholdReq(container, diceString) {
+  container.innerHTML = '';
+  for (const face of diceThresholdFaces(diceString)) {
+    container.appendChild(el('span', 'shop-card__req-die', DIE_FACES[face]));
+  }
+  if (container.children.length) container.appendChild(document.createTextNode('以上'));
+}
+
 /** {cost, vp, req, effects:[{text,source}], inst} for any A/B/C/CON/JOB/M/RESOURCE face id, read
  * straight from its data/game.json row (ONCE/TAP/PASSIVE/TURNEND columns become effects, in that
  * order; M's DICE column, e.g. ">=12", becomes req the same way the old hand-transcribed table did).
@@ -1171,7 +1203,7 @@ function factsForFaceId(faceId) {
   return {
     cost: row.COST || '',
     vp: row.VP || 0,
-    req: row.DICE ? `目 ${row.DICE}` : '',
+    req: row.DICE || '',
     effects,
     inst: row.INST || '',
     // '' unless the user has actually filled in a real thematic title (NAME still equal to the card's
@@ -1998,6 +2030,14 @@ function renderResourceBadge(resource, count) {
   const badge = el('span', 'resource-badge');
   badge.dataset.resource = resource;
   badge.title = resource; // still discoverable on hover/for accessibility, just not shown visually
+  // VP (2026-08-16, per user report: "VPアイコン資源Cと見分けがつきにくい" -- --resource-vp's gold and
+  // --resource-c's yellow read too similarly as a same-size dot) -- no dot at all, just "{count}VP" text,
+  // same convention resourceItemNodes already uses for the ADD(...) effect-icon display (VP has never
+  // had a dot there, confirmed 2026-07-29: "VPは常にプレーンテキスト").
+  if (resource === 'VP') {
+    badge.appendChild(document.createTextNode(`${count}VP`));
+    return badge;
+  }
   const dot = el('span', 'resource-badge__dot');
   badge.appendChild(dot);
   badge.appendChild(document.createTextNode(`${count}`));
@@ -2062,6 +2102,27 @@ function areaOwnershipLabel(faceId, effects) {
   return `${areaName(`AREA${match[1]}A`)}の所有`;
 }
 
+/** "{AREA名}LV{n}の支配" (e.g. "城下町LV1の支配", an area-ownership card's own INST text) -- split onto
+ * 2 lines with the area name shown a bit bigger than the rest (2026-08-16, per user request: "城下町
+ * LV1／　　の支配 という配置にして　城下町の文字をもう少し大きく"). .shop-card__effect is already a
+ * column flexbox (see its own doc), so appending 2 separate block-level children is enough to stack
+ * them -- no explicit line-break element needed. Falls back to plain unstyled text for anything not
+ * matching this exact shape (the auto-generated "{AREA}の所有" fallback text, or any future
+ * area-ownership INST that doesn't follow the "...LV{n}の支配" pattern). */
+function renderAreaOwnershipEffectText(container, text) {
+  const match = /^(.+?)(LV\d+)(の支配)$/.exec(text || '');
+  if (!match) {
+    container.appendChild(document.createTextNode(text || ''));
+    return;
+  }
+  const [, areaLabel, lv, suffix] = match;
+  const line1 = document.createElement('div');
+  line1.appendChild(el('span', 'area-ownership-name', areaLabel));
+  line1.appendChild(document.createTextNode(lv));
+  container.appendChild(line1);
+  container.appendChild(el('div', null, `　　${suffix}`));
+}
+
 /**
  * One row per effect (confirmed 2026-07-29: a card can have both an ONCE and a TAP effect, e.g.
  * B001A's ADD(wD) + SET_DIE_VALUE(SELF2|3), shown as two stacked rows). Flattens the icon builder's
@@ -2105,7 +2166,10 @@ const EMBLEM_BY_DECK = { A: '地', B: '天', C: '人' };
 const EMBLEM_ORDER = ['天', '地', '人'];
 function emblemForFaceId(faceId) {
   if (isNormalDeckCard(faceId)) return { [EMBLEM_BY_DECK[faceId[0]]]: 1 };
-  if (!/^M\d/.test(faceId)) return null;
+  // Not restricted to M any more (2026-08-16, per user report: CON006B「祝福」has real EMBLEM_A/B/C
+  // data (1,1,1) that wasn't showing up in the player stats panel) -- reads any row's own EMBLEM_A/B/C
+  // columns generically, same as src/executor.js's emblemCountsForRow (the real scoring engine) already
+  // does for TOTAL_EMBLEM_COUNT/QST goals, so this UI-only copy can't drift from what actually scores.
   let row;
   try {
     row = dataLoaderMod.getCardRow(INDEX, faceId);
@@ -2168,35 +2232,35 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
   const level = levelForFaceId(faceId);
   if (level) q('.shop-card__level').textContent = `LV${level}`;
 
-  // Corrected 2026-07-29: the card id always stays in the id spot -- the ownership label goes in
-  // the effect area instead (it *is* this card's effect, not a replacement for its identity).
   // CON cards are the one exception (2026-08-16, per user request: "CONカードIDが書かれている部分を
   // 消してその場所に得られる初期資源を書いて") -- the id spot shows the resources its ONCE grants
   // instead, via the same buildActionIcons pipeline every other card's ONCE/TAP/PASSIVE effect already
   // renders through (see .shop-card--con .shop-card__id's badge-compaction CSS for the layout side).
+  // Every other deck now prefers its own customized NAME here when it has one, falling back to the raw
+  // id otherwise (2026-08-16, per user request: originally JOB/M-only -- see the now-removed top title
+  // this replaced -- broadened to every deck once the separate title was removed, so a deck whose NAME
+  // isn't customized yet doesn't go from "shown once, up top" to "not shown anywhere").
   const idEl = q('.shop-card__id');
   const onceIcon = faceId.startsWith('CON') ? buildActionIcons(facts.once) : null;
   if (onceIcon) {
     idEl.appendChild(onceIcon);
-  } else if ((faceId.startsWith('JOB') || faceId.startsWith('M')) && facts.name) {
-    // JOB/M(onument) cards (2026-08-16, per user request: both got real thematic NAMEs filled in --
-    // "IDの代わりにNAMEを表示して", scoped to just these two deck types, not A/B/C's own id spot) --
-    // shows the same facts.name as the title above instead of the raw "JOB008"/"M007" id.
+  } else if (facts.name) {
     idEl.textContent = facts.name;
   } else {
     idEl.textContent = faceId;
   }
-  // Thematic title, at the top of the card, above the id (2026-08-05, per user feedback: "AC系のカード
-  // NAMEをカード上部に反映させてください"). Empty (and :empty{display:none}-hidden) for any card whose
-  // NAME hasn't been customized yet -- see factsForFaceId's own doc.
-  q('.shop-card__name').textContent = facts.name;
+  // Thematic title above the id, removed 2026-08-16 (per user report: "すべてのカードがNAMEが２回表示
+  // されています 青文字のほうのNAMEを削除して") -- every card's NAME now shows once, in the id spot
+  // itself (see the JOB/M branch above and factsForFaceId's own name field), not duplicated up here too.
+  // #tpl-shop-card's .shop-card__name node is simply left unpopulated -- its own :empty{display:none}
+  // rule already collapses it with no layout gap, so no template/CSS change is needed alongside this.
 
   renderCostBadges(q('.shop-card__cost'), facts.cost, faceId);
   q('.shop-card__vp').textContent = facts.vp ? `${facts.vp} VP` : '';
   // Corrected 2026-07-29: a monument's req (e.g. "目 >=12") IS part of that specific card (each
   // monument has its own threshold), unlike normal/special cards' req which is a slot property --
   // so only monuments pass req here; everything else's req lives in the slot caption instead.
-  q('.shop-card__req').textContent = options.req || '';
+  renderDiceThresholdReq(q('.shop-card__req'), options.req);
   q('.shop-card__start-order').textContent = facts.startOrder !== null && facts.startOrder !== undefined ? `先攻順 ${facts.startOrder}` : '';
 
   let tall = false;
@@ -2217,7 +2281,7 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     const effectText = facts.inst || areaOwnershipLabel(faceId, facts.effects);
     if (options.showEffect && effectText) {
       tall = true;
-      q('.shop-card__effect').appendChild(document.createTextNode(effectText));
+      renderAreaOwnershipEffectText(q('.shop-card__effect'), effectText);
     }
   } else if (faceId.startsWith('CON')) {
     // CON cards (2026-08-15, per user request: "CONのアイコン表示をCONシートのアイコン欄を参考にして
@@ -2262,9 +2326,20 @@ function siblingFaceId(faceId) {
   return null;
 }
 
+/** 'A'/'B'/'C'/'M' for a card that gets its own deck-color styling (see .shop-card[data-deck] in
+ * style.css, 2026-08-16 -- design confirmed via a mockup comparing background-tint/border-color/both,
+ * user picked "背景タイント+枠線カラー併用"), or null for JOB/CON/QST/RESOURCE (no deck color). */
+function deckForFaceId(faceId) {
+  if (/^[ABC]\d/.test(faceId)) return faceId[0];
+  if (/^M\d/.test(faceId)) return 'M';
+  return null;
+}
+
 function buildCardVisual(faceId, options = {}) {
   const tpl = document.getElementById('tpl-shop-card');
   const node = tpl.content.firstElementChild.cloneNode(true);
+  const deck = deckForFaceId(faceId);
+  if (deck) node.dataset.deck = deck;
 
   const front = fillCardFace(node, faceId, options, true);
   if (options.tapped) node.classList.add('shop-card--tapped');
@@ -3999,16 +4074,29 @@ function attachPickableEnlarge(cardNode, faceId, pickAction) {
  * (A/B/C + M -- JOB/CON/RESOURCE are all owned but never "built" via BUILD, so excluded, same
  * CARD_COUNT scope as the engine's own DSL semantics, see [[project-dice-wp-dsl-spec]] and
  * isBuiltCardPhysicalId), LV1/LV2 sub-counts (A/B/C only -- monuments have no LEVEL), monument count,
- * and EMBLEM_COUNT-style totals across both A/B/C (deck-level emblem) and monuments (each has its own
- * individual emblem). */
+ * and EMBLEM_COUNT-style totals across EVERY owned card (2026-08-16: not scoped to "built" like the
+ * others above -- a CON face can carry its own EMBLEM_A/B/C too, e.g. CON006B「祝福」's 1,1,1, and the
+ * real engine's own TOTAL_EMBLEM_COUNT/QST goal scoring never excluded those either). */
 function computePlayerBuildStats(player, state) {
   let built = 0, lv1 = 0, lv2 = 0, monuments = 0;
   const emblemCounts = { 天: 0, 地: 0, 人: 0 };
   for (const physicalId of player.ownedCardPhysicalIds) {
-    if (!isBuiltCardPhysicalId(physicalId)) continue;
     const cardState = state.cards[physicalId];
     if (!cardState) continue;
     const faceId = cardState.currentFaceId;
+    // Emblems count from every owned card, regardless of isBuiltCardPhysicalId (2026-08-16, per user
+    // report: CON006B「祝福」's own EMBLEM_A/B/C(1,1,1) wasn't showing up here even though it's a real
+    // owned card -- the actual scoring engine (executor.emblemCountsForRow, TOTAL_EMBLEM_COUNT/QST
+    // goals) never restricted this to "built" cards either, only this UI stat did). A monument/CON card
+    // can carry 0-3 emblems, each type possibly repeated (see emblemForFaceId) -- every one counts
+    // separately, same as if the card had that many individual emblems.
+    const emblem = emblemForFaceId(faceId);
+    if (emblem) {
+      for (const char of emblemChars(emblem)) {
+        if (char in emblemCounts) emblemCounts[char]++;
+      }
+    }
+    if (!isBuiltCardPhysicalId(physicalId)) continue;
     built++;
     if (isNormalDeckCard(physicalId)) {
       const level = levelForFaceId(faceId);
@@ -4016,15 +4104,6 @@ function computePlayerBuildStats(player, state) {
       else if (level === 2) lv2++;
     } else if (physicalId.startsWith('M')) {
       monuments++;
-    }
-    // A monument can carry 0-3 emblems, each type possibly repeated (confirmed 2026-07-30, see
-    // emblemForFaceId) -- every one counts separately, same as if the card had that many individual
-    // emblems (matches the engine's own EMBLEM_COUNT, see src/executor.js's emblemCountsForRow).
-    const emblem = emblemForFaceId(faceId);
-    if (emblem) {
-      for (const char of emblemChars(emblem)) {
-        if (char in emblemCounts) emblemCounts[char]++;
-      }
     }
   }
   return { built, lv1, lv2, monuments, emblemCounts };

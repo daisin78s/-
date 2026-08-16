@@ -64,6 +64,17 @@
      (--accentの青)とは別の色にして混同を防ぐ。暖色(アンバー)を採用。 */
   --change-highlight: #d97706;
   --change-highlight-soft: #fde68a;
+
+  /* デッキ識別カラー (2026-08-16) -- ABCカード/モニュメントがEMBLEMバッジだけでは判別しにくいという
+     フィードバックを受け、背景タイント+枠線カラーのモックアップ比較を経て採用。ABCの背景/枠線色は
+     既存のEMBLEM色を再利用(枠線はそのままだと主張が強すぎたため--border-strongと混ぜてトーンを
+     落とす)。モニュメントだけ新規に緑系を割り当てる。 */
+  --monument: #4d8a5e;
+  --monument-soft: #e3efe4;
+  --border-a: color-mix(in srgb, var(--emblem-chi) 55%, var(--border-strong));
+  --border-b: color-mix(in srgb, var(--emblem-ten) 55%, var(--border-strong));
+  --border-c: color-mix(in srgb, var(--emblem-jin) 55%, var(--border-strong));
+  --border-m: color-mix(in srgb, var(--monument) 55%, var(--border-strong));
 }
 
 @media (prefers-color-scheme: dark) {
@@ -90,6 +101,8 @@
     --qst-band-3: rgba(117, 144, 255, 0.07);
     --change-highlight: #f0a030;
     --change-highlight-soft: #4a3a1a;
+    --monument: #6fae80;
+    --monument-soft: #23342a;
   }
 }
 
@@ -451,6 +464,14 @@ h1, h2, h3 { margin: 0; }
   transition: box-shadow 0.15s ease, transform 0.15s ease;
 }
 
+/* デッキ識別カラー (2026-08-16, per user decision after comparing a mockup of 3 options -- see
+   --border-a/b/c/m and --monument's own doc at the top of this file): 背景タイント+枠線カラーの併用。
+   2pxぶん太くなる枠線の分、paddingを1px削って外寸(width:112px)を保つ。*/
+.shop-card[data-deck="A"] { background: color-mix(in srgb, var(--emblem-chi) 8%, var(--surface-sunken)); border-color: var(--border-a); border-width: 2px; padding: 7px; }
+.shop-card[data-deck="B"] { background: color-mix(in srgb, var(--emblem-ten) 8%, var(--surface-sunken)); border-color: var(--border-b); border-width: 2px; padding: 7px; }
+.shop-card[data-deck="C"] { background: color-mix(in srgb, var(--emblem-jin) 10%, var(--surface-sunken)); border-color: var(--border-c); border-width: 2px; padding: 7px; }
+.shop-card[data-deck="M"] { background: color-mix(in srgb, var(--monument) 12%, var(--surface-sunken)); border-color: var(--border-m); border-width: 2px; padding: 7px; }
+
 /* Confirmed 2026-07-29: each A/B/C card shows its deck's EMBLEM (天/地/人) as a colored corner
    badge, top-right (moved here from top-left 2026-07-29 -- the shop slot number that used to live
    here was dropped as unnecessary). M/JOB/CON cards have no emblem. */
@@ -551,19 +572,43 @@ h1, h2, h3 { margin: 0; }
 
 .shop-card__vp {
   margin-top: auto;
-  font-size: 11px;
+  /* 2026-08-16, per user request: "6 VP の文字を の支配 の文字くらいの大きさと濃さに" -- matches
+     .shop-card__effect's own 13px/700 (font-weight was already 700 here, only size changed). */
+  font-size: 13px;
   font-weight: 700;
-  color: var(--resource-vp);
+  /* 2026-08-16, per user request: "6 VP の文字の色 黒に統一" -- was var(--resource-vp) (gold), now
+     matches the card's other normal text instead of standing out as its own color. */
+  color: var(--text);
 }
 
 /* Restored 2026-07-29: monuments' req is intrinsic to the card (each monument has its own dice-value
    threshold), so it renders inside the card again -- unlike normal/special cards, whose req is a
    slot property shown in .shop-slot__req instead (buildCardVisual only fills this in when passed). */
 .shop-card__req {
-  font-size: 11px;
+  /* 2026-08-16, per user report: "ダイス目小さすぎて見えない" -- this only ever holds a monument's own
+     dice-face glyph threshold (⚀-⚅, see main.js's diceThresholdFaces/renderDiceThresholdReq), never
+     plain digits, and the glyphs read smaller within their own em-box than regular text at the same
+     size -- bumped up from 11px so the "以上" suffix text is legible at this card's small scale (the
+     glyphs themselves are sized separately, see .shop-card__req-die below). Centered per user request
+     ("ダイス目は中央揃え") -- text-align here also centers the .shop-card__req-die spans, since they're
+     inline. */
+  font-size: 15px;
   color: var(--text-muted);
+  text-align: center;
 }
 .shop-card__req:empty { display: none; }
+
+/* 2026-08-16, per user request: "⚀ ⚅ を今の倍の大きさにして濃く" -- each die-face glyph in a monument's
+   threshold (see renderDiceThresholdReq) is twice .shop-card__req's own 15px and full-strength (not
+   muted) text color, while the "以上" suffix next to it stays at the parent's own 15px/muted color. */
+.shop-card__req-die {
+  font-size: 30px;
+  line-height: 1;
+  color: var(--text);
+  /* 2026-08-16, per user request: "⚅と以上の文字を上でなく下でそろえる" -- was vertical-align:middle,
+     which centered the much-taller glyph against the "以上" text's line, making it read as top-heavy. */
+  vertical-align: bottom;
+}
 
 /* CON/RESOURCE cards' START_ORDER (2026-07-30, per user feedback -- relevant when choosing initial
    RESOURCE cards / previewing CON, since it determines turn order alongside the other kept card's
@@ -1813,14 +1858,29 @@ h1, h2, h3 { margin: 0; }
   margin: 0 -8px;
   padding: 4px 8px 0 8px;
   font-family: "SFMono-Regular", Consolas, monospace;
-  font-size: 9.5px;
-  color: var(--text-muted);
+  /* 2026-08-16, per user report (A001A "城下町LV1の支配" etc): "枠に収まる程度に大きく濃くして" --
+     bumped from 9.5px to as large as comfortably wraps within the card's own width (overflow-wrap:
+     anywhere below already lets it break onto a 2nd line rather than overflow past the border) and
+     bolded, since color was already at full --text strength (see below) with nothing left to darken.
+     Only affects bare text content here (the area-ownership INST line) -- every icon element inside
+     this row (.action-suffix/.card-note/etc) already sets its own explicit font-size/weight/color, so
+     none of those change. */
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
   overflow-wrap: anywhere;
   text-align: center;
 }
 
 .shop-card__effect:empty { display: none; }
 .shop-card__effect .action-icons { justify-content: center; }
+
+/* エリア所有カードの効果テキスト(2026-08-16、ユーザー指定: "城下町LV1／　　の支配 という配置にして
+   城下町の文字をもう少し大きく") -- main.jsのrenderAreaOwnershipEffectTextが2行に分けて組み立てる。
+   エリア名部分だけ親の13pxより一回り大きく。 */
+.area-ownership-name {
+  font-size: 15px;
+}
 
 /* ---------------------------------------------------------------------- */
 /* QST (Quest) cards (confirmed 2026-07-30) -- own layout, not a shop-card    */
