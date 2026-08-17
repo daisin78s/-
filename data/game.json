@@ -985,9 +985,9 @@
       "NAME": "祝福",
       "DICE": "",
       "COST": "",
-      "EMBLEM_A": 1,
-      "EMBLEM_B": 1,
-      "EMBLEM_C": 1,
+      "EMBLEM_A": 2,
+      "EMBLEM_B": 2,
+      "EMBLEM_C": 2,
       "VP": "",
       "ONCE": "ADD(3VP)",
       "TAP": "",
@@ -1065,9 +1065,9 @@
       "NAME": "怠惰",
       "DICE": "",
       "COST": "",
-      "EMBLEM_A": "",
-      "EMBLEM_B": "",
-      "EMBLEM_C": "",
+      "EMBLEM_A": 1,
+      "EMBLEM_B": 1,
+      "EMBLEM_C": 1,
       "VP": "",
       "ONCE": "ADD(A,B,C)",
       "TAP": "",
@@ -1545,7 +1545,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "TAPした時Zを得る\n⤴⤴⤴でアンタップできる"
+      "INST": "TAPした時Zを得る"
     },
     {
       "ID": "JOB002",
@@ -1562,7 +1562,7 @@
       "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "カードを獲得した時〇を得る\n毎ターンアンタップする\n⤴⤴⤴でアンタップできる"
+      "INST": "カードを獲得した時食料を得る\n毎ターンアンタップする"
     },
     {
       "ID": "JOB003",
@@ -1579,7 +1579,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "M",
-      "INST": "このカードを取った時🎲を得る\nタップした時、自分のダイス1個を好きな目に変える\nそれはこのターンすでにダイスがおいてあるSLOTにも置ける\n⤴⤴⤴でアンタップできる"
+      "INST": "このカードを取った時🎲を得る\nタップした時、自分のダイス1個を好きな目に変える\nそれはこのターンすでにダイスがおいてあるSLOTにも置ける"
     },
     {
       "ID": "JOB004",
@@ -1596,7 +1596,7 @@
       "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "TAPした時、3◯を消費して2資源軽減を得る\nこのターンモニュメントを建築できない\n毎ターンアンタップする\n⤴⤴⤴でアンタップできる"
+      "INST": "TAPした時、3食料を消費して2資源軽減を得る\nこのターンモニュメントを建築できない\n毎ターンアンタップする"
     },
     {
       "ID": "JOB005",
@@ -1613,7 +1613,7 @@
       "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "〇を得たときTAPすると\nそのうちの１個をZに変える\n初期資源含む\n毎ターンアンタップする\n⤴⤴⤴でアンタップできる"
+      "INST": "食料を得たときTAPすると\nそのうちの１個をZに変える\n初期資源含む\n毎ターンアンタップする"
     },
     {
       "ID": "JOB006",
@@ -1630,7 +1630,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "追加色Dを得たときZを得る\n🎲を得たときその数だけ〇を得る\n初期資源含む\n毎ターンアンタップする\n⤴⤴⤴でアンタップできる"
+      "INST": "追加色Dを得たときZを得る\n🎲を得たときその数だけ食料を得る\n初期資源含む\n毎ターンアンタップする"
     },
     {
       "ID": "JOB007",
@@ -1647,7 +1647,7 @@
       "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "TAPした時、１資源軽減を得る\nこのターンA,B,Cカードを建築できない\n⤴⤴⤴でアンタップできる"
+      "INST": "TAPした時、１資源軽減を得る\nこのターンA,B,Cカードを建築できない"
     },
     {
       "ID": "JOB008",
@@ -1660,11 +1660,11 @@
       "VP": "",
       "ONCE": "",
       "TAP": "",
-      "PASSIVE": "IF(TOTAL_EMBLEM_COUNT>=3,VP_MODIFIER(1));IF(TOTAL_EMBLEM_COUNT>=6,VP_MODIFIER(1));IF(TOTAL_EMBLEM_COUNT>=9,VP_MODIFIER(1));IF(TOTAL_EMBLEM_COUNT>=12,VP_MODIFIER(1));IF(TOTAL_EMBLEM_COUNT>=15,VP_MODIFIER(1));IF(TOTAL_EMBLEM_COUNT>=18,VP_MODIFIER(1));IF(TOTAL_EMBLEM_COUNT>=21,VP_MODIFIER(1));IF(TOTAL_EMBLEM_COUNT>=24,VP_MODIFIER(1));IF(TOTAL_EMBLEM_COUNT>=27,VP_MODIFIER(1));IF(TOTAL_EMBLEM_COUNT>=30,VP_MODIFIER(1))",
+      "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "今あるEMBLEM3個ごとに1VP"
+      "INST": "エンブレムが3個増えるごとにそのターン終了時1VPとZを得る"
     },
     {
       "ID": "JOB009",
@@ -1698,7 +1698,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "M",
-      "INST": "TAPして2〇を支払い、カードを１枚選んでLVアップする。\nLVアップに必要な資源は通常通り支払う"
+      "INST": "TAPして2食料を支払い、カードを１枚選んでLVアップする。\nLVアップに必要な資源は通常通り支払う"
     },
     {
       "ID": "JOB011",
