@@ -252,10 +252,10 @@ function stateWithM012InShop(round) {
 // ---------------------------------------------------------------------------
 {
   const state = freshState(1);
-  giveCard(state, 'CON001A', 'P1'); // TURNEND=RESOURCE_LIMIT(K,7), eval-table value 0, no printed VP
+  giveCard(state, 'CON006A', 'P1'); // 暴食: TURNEND=RESOURCE_LIMIT(K,7), eval-table value 0, no printed VP -- moved from CON001A to CON006A (2026-08-17 CON sheet renumbering)
   const p1 = state.players[0];
-  p1.resources.K = 8; // 1 over CON001A's limit of 7
-  check('K clamped to CON001A\'s RESOURCE_LIMIT(K,7) cap (8 -> 7) when scoring', evaluator.score(state, 'P1'), 7 * 3);
+  p1.resources.K = 8; // 1 over CON006A's limit of 7
+  check('K clamped to CON006A\'s RESOURCE_LIMIT(K,7) cap (8 -> 7) when scoring', evaluator.score(state, 'P1'), 7 * 3);
 }
 {
   const state = freshState(1);
@@ -268,10 +268,10 @@ function stateWithM012InShop(round) {
   // clamp needed) -- clamping to the true post-TURNEND value doesn't flip which option is better, it
   // just stops overstating the wasted excess.
   const withPlus7 = freshState(1);
-  giveCard(withPlus7, 'CON001A', 'P1');
+  giveCard(withPlus7, 'CON006A', 'P1');
   withPlus7.players[0].resources.K = 8;
   const withPlus3 = freshState(1);
-  giveCard(withPlus3, 'CON001A', 'P1');
+  giveCard(withPlus3, 'CON006A', 'P1');
   withPlus3.players[0].resources.K = 4;
   check(
     '+7K (clamped to 7) still scores higher than +3K (4), just not overstated as if it kept all 8',

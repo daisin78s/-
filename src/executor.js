@@ -49,14 +49,15 @@ const CARD_COUNT_SHEETS = new Set(['A', 'B', 'C', 'M']); // CARD_COUNT excludes 
 
 // Z is a universal substitute for any of A/B/C when paying a cost (confirmed 2026-07-31): by default
 // real A/B/C is always drained first and Z only covers a shortfall, automatically, for every player.
-// CON002B specifically grants the *choice* to prefer Z instead (e.g. to spend it down before its own
+// 色欲 specifically grants the *choice* to prefer Z instead (e.g. to spend it down before its own
 // TURNEND=FORCE_CONVERT(Z,K,1) claims it anyway) -- see resolvePayment/hasPaymentChoiceAbility below.
 const COLOR_RESOURCES = new Set(['A', 'B', 'C']);
 // Bespoke, explicitly-confirmed exception to "the engine only interprets DSL, never card IDs" --
-// same precedent as board.js's CASTLE_MAP_ID. CON002B's payment-choice ability has no DSL
-// representation of its own (its only real DSL is TURNEND=FORCE_CONVERT(Z,K,1); "you may choose to
-// pay with Z instead" is WARNING/INST flavor text, never parsed).
-const PAYMENT_CHOICE_CON_FACE_ID = 'CON002B';
+// same precedent as board.js's CASTLE_MAP_ID. 色欲's payment-choice ability has no DSL representation
+// of its own (its only real DSL is TURNEND=FORCE_CONVERT(Z,K,1); "you may choose to pay with Z
+// instead" is WARNING/INST flavor text, never parsed). 色欲 moved from CON002B to CON001B when the
+// user reorganized game.xlsx's CON sheet by START_ORDER (2026-08-17) -- updated to match.
+const PAYMENT_CHOICE_CON_FACE_ID = 'CON001B';
 
 // ---------------------------------------------------------------------------
 // Small state accessors
@@ -195,8 +196,8 @@ function tryPay(state, playerId, resource, count) {
   return true;
 }
 
-/** Whether playerId owns a card currently showing PAYMENT_CHOICE_CON_FACE_ID (CON002B) -- see the
- * const's own comment for why this is a deliberate card-ID exception. */
+/** Whether playerId owns a card currently showing PAYMENT_CHOICE_CON_FACE_ID (色欲, currently CON001B)
+ * -- see the const's own comment for why this is a deliberate card-ID exception. */
 function hasPaymentChoiceAbility(state, playerId) {
   const player = getPlayer(state, playerId);
   return player.ownedCardPhysicalIds.some((physicalId) => state.cards[physicalId].currentFaceId === PAYMENT_CHOICE_CON_FACE_ID);
@@ -210,7 +211,7 @@ function hasPaymentChoiceAbility(state, playerId) {
  * way affordability is identical (real+Z combined must cover the count) -- preference only changes
  * *which* is drained first, never whether the payment succeeds. colorPreference is silently ignored
  * (treated as all-default) unless the player actually has hasPaymentChoiceAbility, so a UI bug can't
- * grant the choice to a player who doesn't own CON002B.
+ * grant the choice to a player who doesn't own 色欲.
  * @returns {{ok:true, items:{resource:string,count:number}[]}|{ok:false, resource:string}}
  */
 function resolvePayment(state, playerId, items, colorPreference) {

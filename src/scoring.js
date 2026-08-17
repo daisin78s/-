@@ -29,15 +29,24 @@ const qst = require('./qst');
 
 /** CON face ids whose PASSIVE-driven VP effect isn't attributable to a single card via the generic
  * collectVpModifiers sum alone -- see conCardOwnVpEffect's own doc for why each needs its own bespoke
- * branch here rather than a real DSL command. */
-const BESPOKE_QST_RANK_CON_FACES = new Set(['CON001B', 'CON004B']);
+ * branch here rather than a real DSL command.
+ *
+ * 2026-08-17: the user reorganized game.xlsx's CON sheet so each physical slot's number matches its own
+ * START_ORDER (CON001x=0 ... CON006x=5) -- 裏切 moved from CON001B to CON006B; 嫉妬 happened to stay at
+ * CON004B. These two ids (and con001bVpEffect's own internal check below) were bumped to match; the
+ * function is still NAMED con001bVpEffect (historical, matching its ORIGINAL id, not its current one) to
+ * keep this diff small -- don't take the name as the live physical id, check BESPOKE_QST_RANK_CON_FACES
+ * or the id literal inside the function itself for that. */
+const BESPOKE_QST_RANK_CON_FACES = new Set(['CON006B', 'CON004B']);
 
-/** CON001B's own VP effect (裏切, 2026-08-13, per user spec): "QSTで1位がある→-4VP、1位がなく2位がある
- * →-2VP、1-2位がなく3位がある→-1VP、1-2-3位がない→0VP" -- best (lowest-numbered) rank across every
- * currently-revealed quest. 0 if playerId doesn't actually own CON001B. */
+/** 裏切's own VP effect (2026-08-13, per user spec): "QSTで1位がある→-4VP、1位がなく2位がある→-2VP、
+ * 1-2位がなく3位がある→-1VP、1-2-3位がない→0VP" -- best (lowest-numbered) rank across every currently-
+ * revealed quest. 0 if playerId doesn't actually own 裏切. Still named con001bVpEffect after 裏切's
+ * ORIGINAL physical id (CON001B) even though it now lives at CON006B -- see BESPOKE_QST_RANK_CON_FACES'
+ * own doc. */
 function con001bVpEffect(state, index, playerId) {
   const player = state.players.find((p) => p.id === playerId);
-  const owned = player.ownedCardPhysicalIds.some((id) => state.cards[id].currentFaceId === 'CON001B');
+  const owned = player.ownedCardPhysicalIds.some((id) => state.cards[id].currentFaceId === 'CON006B');
   if (!owned) return 0;
   const ranks = Object.keys(state.quests).map((faceId) => {
     const entry = qst.rankPlayersForQuest(state, index, faceId).find((e) => e.playerId === playerId);
@@ -67,10 +76,11 @@ function con004bVpEffect(state, index, playerId) {
 /**
  * The VP effect a single owned card FACE contributes on its own, independent of what else the player
  * owns (2026-08-15, for AI.DATA.xlsx's per-CON "VPペナルティ平均" column -- see tools/ai_data_report.js).
- * CON001B/CON004B (bespoke, see their own doc above -- neither fits the generic VP_MODIFIER/PASSIVE
- * metric vocabulary since executor.evalMetric deliberately doesn't know about qst.js, which sits ABOVE
- * it in the layering) delegate to their own named functions. Everything else with a real PASSIVE
- * (VP_MODIFIER/VP_PENALTY_IF_BELOW/VP_PENALTY_PER clauses -- e.g. CON003A/CON005A/CON005B) evaluates
+ * CON006B(裏切)/CON004B(嫉妬) (bespoke, see their own doc above -- neither fits the generic VP_MODIFIER/
+ * PASSIVE metric vocabulary since executor.evalMetric deliberately doesn't know about qst.js, which
+ * sits ABOVE it in the layering) delegate to their own named functions. Everything else with a real
+ * PASSIVE (VP_MODIFIER/VP_PENALTY_IF_BELOW/VP_PENALTY_PER clauses -- e.g. CON003A/CON002A/CON002B as of
+ * 2026-08-17's physical-slot reorg) evaluates
  * just THAT row's own PASSIVE text via activePassiveCommands, the same per-row primitive
  * collectVpModifiers itself loops over every owned card with -- so this stays in sync automatically if
  * any of those commands' own semantics ever change. 0 for a card with no such clause, or one playerId
@@ -78,7 +88,7 @@ function con004bVpEffect(state, index, playerId) {
  * @returns {number} a VP delta (0 or negative for every currently-defined case)
  */
 function conCardOwnVpEffect(state, index, playerId, faceId) {
-  if (faceId === 'CON001B') return con001bVpEffect(state, index, playerId);
+  if (faceId === 'CON006B') return con001bVpEffect(state, index, playerId);
   if (faceId === 'CON004B') return con004bVpEffect(state, index, playerId);
   const player = state.players.find((p) => p.id === playerId);
   const owned = player.ownedCardPhysicalIds.some((id) => state.cards[id].currentFaceId === faceId);

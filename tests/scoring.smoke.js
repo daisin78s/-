@@ -69,28 +69,29 @@ function giveCard(state, faceCardId, ownerId) {
 
 // ---------------------------------------------------------------------------
 // VP_PENALTY_IF_BELOW: the general "○○が必要" shortfall rule (2026-08-15, per user spec: "ゲーム終了時
-// ○○が必要　足りない１個につき-1VP"). CON005B (強欲) uses it as real PASSIVE data now --
+// ○○が必要　足りない１個につき-1VP"). 強欲 uses it as real PASSIVE data now --
 // "VP_PENALTY_IF_BELOW(RESOURCE(A,B,C,Z),3)" -- rather than the bespoke conCardVpAdjustment code this
 // used to be (see that function's own updated doc), so it's exercised here via the generic
-// executor.collectVpModifiers path, same as any other VP_MODIFIER-bearing card.
+// executor.collectVpModifiers path, same as any other VP_MODIFIER-bearing card. 強欲 lived at CON005B
+// until the user reorganized game.xlsx's CON sheet by START_ORDER (2026-08-17); it's CON002B now.
 // ---------------------------------------------------------------------------
 {
   const state = createEmptyGameState('scoring-smoke-con005b');
   state.players.push(createPlayer('P1', 'Alice'));
-  giveCard(state, 'CON005B', 'P1');
+  giveCard(state, 'CON002B', 'P1');
   const p1 = state.players[0];
 
   p1.resources.A = 1; p1.resources.B = 1; p1.resources.C = 0; p1.resources.Z = 0; // total 2, short 1
-  check('CON005B: total=2 (short 1 of 3) -> -1VP', executor.collectVpModifiers(state, index, 'P1'), -1);
+  check('CON002B: total=2 (short 1 of 3) -> -1VP', executor.collectVpModifiers(state, index, 'P1'), -1);
 
   p1.resources.A = 0; p1.resources.B = 0; p1.resources.C = 0; p1.resources.Z = 0; // total 0, short 3
-  check('CON005B: total=0 (short 3 of 3) -> -3VP', executor.collectVpModifiers(state, index, 'P1'), -3);
+  check('CON002B: total=0 (short 3 of 3) -> -3VP', executor.collectVpModifiers(state, index, 'P1'), -3);
 
   p1.resources.A = 2; p1.resources.B = 1; p1.resources.C = 1; p1.resources.Z = 0; // total 4, at/above 3
-  check('CON005B: total=4 (at/above 3) -> 0VP, no bonus for the surplus', executor.collectVpModifiers(state, index, 'P1'), 0);
+  check('CON002B: total=4 (at/above 3) -> 0VP, no bonus for the surplus', executor.collectVpModifiers(state, index, 'P1'), 0);
 
   p1.resources.K = 100; // K is deliberately excluded from the A/B/C/Z total ("資源とはA,B,C,Zのこと")
-  check('CON005B: K holdings never count toward the total', executor.collectVpModifiers(state, index, 'P1'), 0);
+  check('CON002B: K holdings never count toward the total', executor.collectVpModifiers(state, index, 'P1'), 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -121,16 +122,19 @@ function giveCard(state, faceCardId, ownerId) {
 // apart per face without double- or under-counting either one.
 // ---------------------------------------------------------------------------
 {
+  // 強欲 (VP_PENALTY_IF_BELOW(RESOURCE(A,B,C,Z),3)) lived at CON005B until the user reorganized
+  // game.xlsx's CON sheet by START_ORDER (2026-08-17, matching physical slot number to START_ORDER
+  // for both A/B tiers); it's CON002B now.
   const state = createEmptyGameState('scoring-smoke-own-vp-effect');
   state.players.push(createPlayer('P1', 'Alice'));
   giveCard(state, 'CON003A', 'P1'); // no monuments -> -2 on its own
-  giveCard(state, 'CON005B', 'P1'); // A+B+C+Z total 0, short 3 -> -3 on its own
+  giveCard(state, 'CON002B', 'P1'); // A+B+C+Z total 0, short 3 -> -3 on its own
   const p1 = state.players[0];
   p1.resources.A = 0; p1.resources.B = 0; p1.resources.C = 0; p1.resources.Z = 0;
 
-  check('conCardOwnVpEffect(CON003A) reports only its own -2, not CON005B\'s share', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON003A'), -2);
-  check('conCardOwnVpEffect(CON005B) reports only its own -3, not CON003A\'s share', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON005B'), -3);
-  check('...and the two sum to the same combined total collectVpModifiers reports', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON003A') + scoring.conCardOwnVpEffect(state, index, 'P1', 'CON005B'), executor.collectVpModifiers(state, index, 'P1'));
+  check('conCardOwnVpEffect(CON003A) reports only its own -2, not CON002B\'s share', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON003A'), -2);
+  check('conCardOwnVpEffect(CON002B) reports only its own -3, not CON003A\'s share', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON002B'), -3);
+  check('...and the two sum to the same combined total collectVpModifiers reports', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON003A') + scoring.conCardOwnVpEffect(state, index, 'P1', 'CON002B'), executor.collectVpModifiers(state, index, 'P1'));
   check('conCardOwnVpEffect returns 0 for a card this player does not actually own', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON001A'), 0);
 }
 
@@ -163,34 +167,35 @@ function giveCard(state, faceCardId, ownerId) {
 }
 
 // ---------------------------------------------------------------------------
-// conCardVpAdjustment: CON001B (裏切, 2026-08-13, per user spec: "QSTで1位がある→-4VP、1位がなく2位が
-// ある→-2VP、1-2位がなく3位がある→-1VP、1-2-3位がない→0VP") -- best rank across EVERY revealed quest,
-// not just the first one (unlike CON004B above).
+// conCardVpAdjustment: 裏切 (2026-08-13, per user spec: "QSTで1位がある→-4VP、1位がなく2位がある→-2VP、
+// 1-2位がなく3位がある→-1VP、1-2-3位がない→0VP") -- best rank across EVERY revealed quest, not just the
+// first one (unlike CON004B above). 裏切 lived at CON001B until the user reorganized game.xlsx's CON
+// sheet by START_ORDER (2026-08-17); it's CON006B now.
 // ---------------------------------------------------------------------------
 {
-  const state = createEmptyGameState('scoring-smoke-con001b');
+  const state = createEmptyGameState('scoring-smoke-con006b');
   state.players.push(createPlayer('P1', 'Alice'), createPlayer('P2', 'Bob'));
   // Q001A (GOAL=CARD_COUNT): P2 owns more cards, so P1 ranks 2nd. Q002B (GOAL=EMBLEM_SET_COUNT, the
   // min across 天/地/人): P1 owns one card of each emblem type (地+天+人 -> EMBLEM_SET_COUNT=1) while
   // P2's cards are all A-sheet (地 only -> EMBLEM_SET_COUNT=0), so P1 ranks 1st there. P1's BEST rank
-  // across both quests is 1st, so CON001B should apply the rank-1 penalty (-4), not the rank-2 one a
+  // across both quests is 1st, so 裏切 should apply the rank-1 penalty (-4), not the rank-2 one a
   // "just look at one quest" implementation would wrongly pick.
   state.quests = { Q001A: true, Q002B: true };
-  giveCard(state, 'CON001B', 'P1');
+  giveCard(state, 'CON006B', 'P1');
   giveCard(state, 'A001A', 'P1'); // 地
   giveCard(state, 'B001A', 'P1'); // 天
   giveCard(state, 'C001A', 'P1'); // 人 -- P1: CARD_COUNT=3, EMBLEM_SET_COUNT=1
   for (const faceId of ['A002A', 'A003A', 'A004A', 'A005A']) giveCard(state, faceId, 'P2'); // P2: CARD_COUNT=4, EMBLEM_SET_COUNT=0 (地 only)
 
   const result = scoring.conCardVpAdjustment(state, index, 'P1');
-  check('CON001B: best rank across all revealed quests (not just one) drives the penalty', result, -4);
+  check('裏切 (CON006B): best rank across all revealed quests (not just one) drives the penalty', result, -4);
 
   // No revealed quest at all (or none the player ranks well on) -> no penalty.
-  const stateNoQuests = createEmptyGameState('scoring-smoke-con001b-none');
+  const stateNoQuests = createEmptyGameState('scoring-smoke-con006b-none');
   stateNoQuests.players.push(createPlayer('P1', 'Alice'));
   stateNoQuests.quests = {};
-  giveCard(stateNoQuests, 'CON001B', 'P1');
-  check('CON001B: no revealed quests at all -> 0VP (nothing to rank against)', scoring.conCardVpAdjustment(stateNoQuests, index, 'P1'), 0);
+  giveCard(stateNoQuests, 'CON006B', 'P1');
+  check('裏切 (CON006B): no revealed quests at all -> 0VP (nothing to rank against)', scoring.conCardVpAdjustment(stateNoQuests, index, 'P1'), 0);
 }
 
 console.log(`\n${passCount} passed, ${failCount} failed`);

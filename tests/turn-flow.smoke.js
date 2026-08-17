@@ -277,30 +277,31 @@ check('startRound(2) itself does not touch dice (already rerolled at the previou
   check('Round 4: but the die itself is NOT rerolled (confirmed exception)', unusedDie.value, valueBefore);
 }
 {
-  // CON006A (2026-08-16, per user spec after playtesting: "パスをしたとき色Dから2Kしか得られない" --
+  // 憤怒 (2026-08-16, per user spec after playtesting: "パスをしたとき色Dから2Kしか得られない" --
   // corrected down from an earlier flat 0K block, "ラウンドパスでもらえるKを0→2に変更") overrides this
   // player's own unused-color-die grant to 2K instead of the normal 3K, but doesn't otherwise change
-  // collection/rerolling.
+  // collection/rerolling. 憤怒 lived at CON006A until the user reorganized game.xlsx's CON sheet by
+  // START_ORDER (2026-08-17); it's CON005B now.
   const { createEmptyGameState: freshEmptyState, createDie: freshDie, createCardInstance } = require('../src/game-state');
-  const s = freshEmptyState('con006a-2k-smoke');
+  const s = freshEmptyState('con005b-2k-smoke');
   setup.createPlayers(s, ['Alice']);
   setup.prepareMaps(s, index);
   setup.prepareShops(s, index);
   s.turnOrder = ['P1'];
   s.round = 1;
   const p1 = s.players[0];
-  const con6 = createCardInstance('CON006A');
+  const con6 = createCardInstance('CON005B');
   con6.ownerId = 'P1';
   s.cards[con6.physicalId] = con6;
   p1.ownedCardPhysicalIds.push(con6.physicalId);
 
-  const unusedDie = freshDie('con006a-unused', 'COLOR');
+  const unusedDie = freshDie('con005b-unused', 'COLOR');
   unusedDie.value = 4;
   p1.dice.push(unusedDie);
 
   const beforeK = p1.resources.K;
   turnFlow.endRound(s, index);
-  check('CON006A owner gets 2K (not the normal 3K) for their unused color die', p1.resources.K, beforeK + 2);
+  check('憤怒 (CON005B) owner gets 2K (not the normal 3K) for their unused color die', p1.resources.K, beforeK + 2);
   check('...but the die is still collected (back in hand) as usual', unusedDie.placedMapId, null);
 }
 

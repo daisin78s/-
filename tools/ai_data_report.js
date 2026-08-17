@@ -51,12 +51,15 @@ const executor = require('../src/executor');
 const scoring = require('../src/scoring');
 
 /** CON faces whose own PASSIVE (real or bespoke) applies a VP penalty (2026-08-15, per user request:
- * "VPペナルティがあるものは、その平均も出るようにしてください") -- CON003A/CON005B via the generic
- * VP_PENALTY_IF_BELOW command, CON005A via VP_PENALTY_PER, CON001B/CON004B via scoring.js's bespoke
- * QST-rank logic (see that module's own doc on why those two can't be real PASSIVE data). Tracked as a
- * simple average over every game where that CON face was actually held, via scoring.conCardOwnVpEffect
- * -- isolated to just that one face's own contribution, not the player's combined total. */
-const CON_VP_PENALTY_FACES = new Set(['CON001B', 'CON003A', 'CON004B', 'CON005A', 'CON005B']);
+ * "VPペナルティがあるものは、その平均も出るようにしてください") -- 狂信(CON003A)/強欲(CON002B) via the
+ * generic VP_PENALTY_IF_BELOW command, 潔癖(CON002A) via VP_PENALTY_PER, 裏切(CON006B)/嫉妬(CON004B) via
+ * scoring.js's bespoke QST-rank logic (see that module's own doc on why those two can't be real PASSIVE
+ * data). Tracked as a simple average over every game where that CON face was actually held, via
+ * scoring.conCardOwnVpEffect -- isolated to just that one face's own contribution, not the player's
+ * combined total. IDs updated 2026-08-17 when the user reorganized game.xlsx's CON sheet by
+ * START_ORDER -- 裏切 CON001B->CON006B, 潔癖 CON005A->CON002A, 強欲 CON005B->CON002B; 狂信(CON003A) and
+ * 嫉妬(CON004B) happened to stay put. */
+const CON_VP_PENALTY_FACES = new Set(['CON006B', 'CON003A', 'CON004B', 'CON002A', 'CON002B']);
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const DATA_PATH = path.join(PROJECT_ROOT, 'data', 'game.json');

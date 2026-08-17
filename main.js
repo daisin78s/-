@@ -627,7 +627,7 @@ let pendingRoundPassConfirm = null;
 // { playerId, categories, buildValue, candidates, remainingCommands } | null -- see placeSelectedDie
 // and renderBuildChoiceModal (real engine wiring pass 3, BUILD/UPGRADE candidate selection).
 let pendingBuildChoice = null;
-// {A:'AUTO'|'Z', B:..., C:...} -- CON002B's "real or Z" payment choice for whichever BUILD/UPGRADE
+// {A:'AUTO'|'Z', B:..., C:...} -- 色欲's "real or Z" payment choice for whichever BUILD/UPGRADE
 // candidate ends up picked in the modal above (see renderBuildChoicePaymentControls). Reset whenever
 // pendingBuildChoice changes; irrelevant (never read) for players without the ability, since
 // executor.resolvePayment ignores colorPreference unless hasPaymentChoiceAbility is true anyway.
@@ -642,7 +642,7 @@ let buildColorPreference = {};
 // COST exactly like a BUILD_NEW's, against the *original* tier's COST; see board.resolveUpgrade). Reset
 // alongside buildColorPreference wherever a fresh pendingBuildChoice is set.
 let pendingBzOutcomeChoice = null;
-// { mapId, slotIndex, colors, colorPreference } | null -- CON002B's payment choice for an AREA whose
+// { mapId, slotIndex, colors, colorPreference } | null -- 色欲's payment choice for an AREA whose
 // own ACTION pays A/B/C directly (see attemptPlaceSelectedDie/areaColorPayResources/
 // renderPlacementChoiceModal). Set instead of placing immediately; the die isn't placed yet at this
 // point, so unlike pendingBuildChoice this one has a real cancel affordance.
@@ -1837,7 +1837,7 @@ function buildLevelCountVpModifierIcon(actionText) {
 
 /** FORCE_CONVERT(from,to,n): a forced TURNEND conversion -- shown as {from dot} -> {to dot} (+ a
  * count suffix if n>1; n=1, the common case, shows no suffix, matching ADD's own "no number for 1"
- * convention elsewhere). Confirmed 2026-07-30, added for CON002B. */
+ * convention elsewhere). Confirmed 2026-07-30, added for 色欲. */
 function buildForceConvertIcon(actionText) {
   const match = /^FORCE_CONVERT\((K|A|B|C|Z),(K|A|B|C|Z),(\d+)\)$/.exec(actionText || '');
   if (!match) return null;
@@ -3069,7 +3069,7 @@ function renderBoard(state, next) {
 /** Colors (subset of A/B/C) that mapId's *current* AREA ACTION would actually pay -- e.g. AREA007's
  * CHANGE((A,B,C),D) ("ABC→色D", confirmed 2026-07-31 as the case [[project-dice-wp-dsl-spec]]'s Z
  * substitution rule needs to cover beyond plain BUILD/UPGRADE costs). Used only to decide whether
- * attemptPlaceSelectedDie needs to pause for CON002B's payment-choice prompt before placing. */
+ * attemptPlaceSelectedDie needs to pause for 色欲's payment-choice prompt before placing. */
 function areaColorPayResources(mapId) {
   const areaRow = dataLoaderMod.getAreaRow(INDEX, STATE.maps[mapId].currentAreaId);
   if (!areaRow.ACTION) return [];
@@ -3085,7 +3085,7 @@ function areaColorPayResources(mapId) {
 
 /** Entry point for a SLOT click (2026-07-31): if placing here would pay A/B/C (BUILD/UPGRADE
  * candidates are the far more common case, but the AREA's own ACTION can also pay colored resources
- * directly -- see areaColorPayResources) and the player has both CON002B and some Z on hand, pauses
+ * directly -- see areaColorPayResources) and the player has both 色欲 and some Z on hand, pauses
  * for the "real or Z" choice (see renderPlacementChoiceModal) instead of placing immediately. The
  * BUILD/UPGRADE side of this same choice happens later, in renderBuildChoicePaymentControls, once a
  * candidate is on offer -- this only covers the AREA-ACTION-pays-directly case. Otherwise places
@@ -3347,7 +3347,7 @@ function candidateAffordable(candidate, playerId) {
   return bzOutcomesForCandidate(candidate, playerId).length > 0;
 }
 
-/** CON002B's "real or Z" payment-preference toggle (2026-07-31, see [[project-dice-wp-dsl-spec]]'s
+/** 色欲's "real or Z" payment-preference toggle (2026-07-31, see [[project-dice-wp-dsl-spec]]'s
  * Z-substitution rule and executor.hasPaymentChoiceAbility) -- one toggle per colored resource used by
  * *any* candidate currently on offer (buildColorPreference is shared across candidates: it's a
  * per-resource-type preference, not per-candidate, since only one candidate ever actually gets built).
@@ -3363,7 +3363,7 @@ function renderBuildChoicePaymentControls() {
     for (const resource of candidateColorResources(candidate)) colors.add(resource);
   }
   if (colors.size === 0) return;
-  container.appendChild(el('span', 'build-choice-payment__label', 'CON002B: 支払いに使う資源を選択'));
+  container.appendChild(el('span', 'build-choice-payment__label', '色欲: 支払いに使う資源を選択'));
   for (const resource of ['A', 'B', 'C']) {
     if (!colors.has(resource)) continue;
     const group = el('div', 'build-choice-payment__group');
@@ -3594,7 +3594,7 @@ function renderBuildChoiceModal() {
   }
 }
 
-/** CON002B's payment-choice prompt for an AREA that pays A/B/C directly (see
+/** 色欲's payment-choice prompt for an AREA that pays A/B/C directly (see
  * attemptPlaceSelectedDie/areaColorPayResources) -- unlike renderBuildChoicePaymentControls (which
  * only ever adjusts a payment that's already been decided to happen), this pauses the placement
  * itself, so it needs its own confirm/cancel, wired once in the DOMContentLoaded handler below. */

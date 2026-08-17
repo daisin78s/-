@@ -152,10 +152,10 @@ print(f'CONJOB K: wrote per-CON marginal average formulas for {len(avg_rows)} + 
 # してください") -- one value per CON face, independent of JOB, so it doesn't fit the (CON,JOB) grid
 # these tables are otherwise shaped around; found by its own header text like every other column here
 # rather than a hardcoded position (see this file's own top-of-file doc on why). Only ever written for
-# the 4 CON faces report['conVpPenalty'] actually has data for (CON001B/CON003A/CON004B/CON005B as of
-# this writing, but driven entirely by whatever tools/ai_data_report.js's CON_VP_PENALTY_FACES contains
-# -- never hardcoded here) -- every other row's cell is cleared to blank, same "no misleading number for
-# a card with no such concept" policy the 使用回数 columns already use.
+# the CON faces report['conVpPenalty'] actually has data for (driven entirely by whatever
+# tools/ai_data_report.js's CON_VP_PENALTY_FACES contains -- never hardcoded here, so this list is not
+# duplicated/kept in sync here) -- every other row's cell is cleared to blank, same "no misleading number
+# for a card with no such concept" policy the 使用回数 columns already use.
 vp_penalty_col = find_col_in_row(avg_header_row, 'VPペナルティ平均')
 for r in avg_rows.values():
     ws.cell(row=r, column=vp_penalty_col).value = None

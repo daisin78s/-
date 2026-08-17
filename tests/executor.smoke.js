@@ -50,33 +50,33 @@ function getPlayerRef(state, id) { return state.players.find((p) => p.id === id)
 function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId).dice.find((d) => d.id === dieId); }
 
 // ---------------------------------------------------------------------------
-// 1. CON001A: ONCE=ADD(6K), TURNEND=RESOURCE_LIMIT(K,7)
+// 1. CON006A: ONCE=ADD(6K), TURNEND=RESOURCE_LIMIT(K,7)
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
-  const physicalId = giveCard(state, 'CON001A', 'P1');
-  const row = getCardRow(index, 'CON001A');
+  const physicalId = giveCard(state, 'CON006A', 'P1');
+  const row = getCardRow(index, 'CON006A');
   const context = { playerId: 'P1', sourcePhysicalId: physicalId };
 
   executor.runProgram(state, index, context, row.ONCE);
-  check('CON001A ONCE grants 6K', getPlayerRef(state, 'P1').resources.K, 6);
+  check('CON006A ONCE grants 6K', getPlayerRef(state, 'P1').resources.K, 6);
 
   getPlayerRef(state, 'P1').resources.K = 10; // simulate accumulating over the limit
   executor.applyTurnEnd(state, index, 'P1');
-  check('CON001A TURNEND caps K at 7', getPlayerRef(state, 'P1').resources.K, 7);
+  check('CON006A TURNEND caps K at 7', getPlayerRef(state, 'P1').resources.K, 7);
 }
 
 // ---------------------------------------------------------------------------
-// 1b. Usage fee is paid BEFORE RESOURCE_LIMIT's auto-discard (2026-08-11, per user report on CON001A:
+// 1b. Usage fee is paid BEFORE RESOURCE_LIMIT's auto-discard (2026-08-11, per user report on CON006A:
 //     "現在　上限7K→使用料を払う　になっています　使用料を払う→上限7K　に直してください" -- it used to
 //     be the other way round, which wasted K to the discard that should have gone toward the fee
-//     instead). 10K, CON001A's cap-7, and a 2K pending fee: paying first (10-2=8K) then capping (8-1=7K)
+//     instead). 10K, CON006A's cap-7, and a 2K pending fee: paying first (10-2=8K) then capping (8-1=7K)
 //     ends higher than capping first (10-3=7K) then paying (7-2=5K) would have.
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
   state.maps['MAP001'] = createMapState('MAP001', 'AREA001A');
-  giveCard(state, 'CON001A', 'P1');
+  giveCard(state, 'CON006A', 'P1');
   const player = getPlayerRef(state, 'P1');
   player.resources.K = 10;
   player.pendingFee = { mapId: 'MAP001', amount: 2 };
@@ -87,16 +87,16 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 }
 
 // ---------------------------------------------------------------------------
-// 2. CON002A: PASSIVE=REPLACE_ADD(D,wD) forces ADD(D) -> ADD(wD)
+// 2. CON005A: PASSIVE=REPLACE_ADD(D,wD) forces ADD(D) -> ADD(wD)
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
-  giveCard(state, 'CON002A', 'P1');
+  giveCard(state, 'CON005A', 'P1');
   const context = { playerId: 'P1' };
   executor.runCommand(state, index, context, { type: 'ADD', items: [{ resource: 'D', count: { kind: 'literal', value: 1 } }] });
   const player = getPlayerRef(state, 'P1');
   check(
-    'CON002A REPLACE_ADD(D,wD) turns ADD(D) into a white die',
+    'CON005A REPLACE_ADD(D,wD) turns ADD(D) into a white die',
     { color: player.dice.filter((d) => d.kind === 'COLOR').length, white: player.dice.filter((d) => d.kind === 'WHITE').length },
     { color: 0, white: 1 }
   );
@@ -120,21 +120,21 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 }
 
 // ---------------------------------------------------------------------------
-// 3a. CON005A: PASSIVE=VP_PENALTY_PER(LEVEL_COUNT(1)) (2026-08-15, per user spec: "LV1のカード１枚に
+// 3a. CON002A: PASSIVE=VP_PENALTY_PER(LEVEL_COUNT(1)) (2026-08-15, per user spec: "LV1のカード１枚に
 // つき-1VP", correcting the card's original flat IF(LEVEL_COUNT(1)>=1,VP_MODIFIER(-2)) "any LV1 card at
 // all -> flat -2" shape into a genuine per-card scale instead -- 0 LV1 cards -> 0VP, not still -2).
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
-  giveCard(state, 'CON005A', 'P1');
-  check('CON005A: no LV1 cards at all -> 0VP (not a flat -2)', executor.collectVpModifiers(state, index, 'P1'), 0);
+  giveCard(state, 'CON002A', 'P1');
+  check('CON002A: no LV1 cards at all -> 0VP (not a flat -2)', executor.collectVpModifiers(state, index, 'P1'), 0);
 
   giveCard(state, 'A001A', 'P1'); // LEVEL=1
-  check('CON005A: 1 LV1 card -> -1VP', executor.collectVpModifiers(state, index, 'P1'), -1);
+  check('CON002A: 1 LV1 card -> -1VP', executor.collectVpModifiers(state, index, 'P1'), -1);
 
   giveCard(state, 'A002A', 'P1');
   giveCard(state, 'A003A', 'P1'); // 3 LV1 cards total now
-  check('CON005A: 3 LV1 cards -> -3VP (scales per card, not a flat threshold)', executor.collectVpModifiers(state, index, 'P1'), -3);
+  check('CON002A: 3 LV1 cards -> -3VP (scales per card, not a flat threshold)', executor.collectVpModifiers(state, index, 'P1'), -3);
 }
 
 // ---------------------------------------------------------------------------
@@ -634,33 +634,34 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 }
 
 // ---------------------------------------------------------------------------
-// 19. hasPaymentChoiceAbility / colorPreference (CON002B's "real or Z, player's choice"): false/
-// ignored without the card, honored with it.
+// 19. hasPaymentChoiceAbility / colorPreference (色欲's "real or Z, player's choice"): false/
+// ignored without the card, honored with it. 色欲 lived at CON002B until the user reorganized
+// game.xlsx's CON sheet by START_ORDER (2026-08-17); it's CON001B now.
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
-  check('hasPaymentChoiceAbility is false without CON002B', executor.hasPaymentChoiceAbility(state, 'P1'), false);
-  giveCard(state, 'CON002B', 'P1');
-  check('hasPaymentChoiceAbility is true once CON002B is owned', executor.hasPaymentChoiceAbility(state, 'P1'), true);
+  check('hasPaymentChoiceAbility is false without 色欲', executor.hasPaymentChoiceAbility(state, 'P1'), false);
+  giveCard(state, 'CON001B', 'P1');
+  check('hasPaymentChoiceAbility is true once 色欲 (CON001B) is owned', executor.hasPaymentChoiceAbility(state, 'P1'), true);
 }
 {
-  // Without CON002B, a colorPreference of 'Z' must be silently ignored (defense in depth against a
+  // Without 色欲, a colorPreference of 'Z' must be silently ignored (defense in depth against a
   // UI bug granting the choice to someone who doesn't have it) -- real is still drained first.
   const state = freshState();
   getPlayerRef(state, 'P1').resources.B = 5;
   getPlayerRef(state, 'P1').resources.Z = 5;
   executor.payCostList(state, 'P1', [{ resource: 'B', count: 2 }], { B: 'Z' });
-  check('colorPreference is ignored without CON002B (real B still drained)', getPlayerRef(state, 'P1').resources, { K: 0, A: 0, B: 3, C: 0, Z: 5, VP: 0, BZ: 0 });
+  check('colorPreference is ignored without 色欲 (real B still drained)', getPlayerRef(state, 'P1').resources, { K: 0, A: 0, B: 3, C: 0, Z: 5, VP: 0, BZ: 0 });
 }
 {
-  // With CON002B, colorPreference:'Z' actually prefers Z even though real is fully affordable --
-  // e.g. to spend Z down before CON002B's own TURNEND=FORCE_CONVERT(Z,K,1) claims it anyway.
+  // With 色欲, colorPreference:'Z' actually prefers Z even though real is fully affordable --
+  // e.g. to spend Z down before 色欲's own TURNEND=FORCE_CONVERT(Z,K,1) claims it anyway.
   const state = freshState();
-  giveCard(state, 'CON002B', 'P1');
+  giveCard(state, 'CON001B', 'P1');
   getPlayerRef(state, 'P1').resources.B = 5;
   getPlayerRef(state, 'P1').resources.Z = 5;
   executor.payCostList(state, 'P1', [{ resource: 'B', count: 2 }], { B: 'Z' });
-  check('colorPreference:Z is honored with CON002B (Z drained instead of real B)', getPlayerRef(state, 'P1').resources, { K: 0, A: 0, B: 5, C: 0, Z: 3, VP: 0, BZ: 0 });
+  check('colorPreference:Z is honored with 色欲 (Z drained instead of real B)', getPlayerRef(state, 'P1').resources, { K: 0, A: 0, B: 5, C: 0, Z: 3, VP: 0, BZ: 0 });
 }
 
 // ---------------------------------------------------------------------------
