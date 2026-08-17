@@ -2252,6 +2252,17 @@ function levelForFaceId(faceId) {
  * = .shop-card__back itself, whose subtree only has one copy of each so no scoping is needed).
  * @returns {{tall: boolean}} whether this face needs the taller effect-row layout
  */
+// The one CON face whose own アイコン text (2026-08-17, per user request: "制約なし　LV１が不要　色D
+// MAX3　なども...同じ大きさと濃さに" -- enlarging .card-note to match .action-count, see style.css)
+// visibly overflows its card at the enlarged size ("憤怒など　文字数が多く　崩れてしまうものは今のまま
+// で") -- confirmed by measuring every CON face's own rendered .card-note against its card's bottom
+// edge; 憤怒 (currently CON005B) was the only one that actually overflowed (+9.6px), so it alone keeps
+// the smaller/muted .card-note--compact look instead. This is a physical-id literal, same fragility as
+// scoring.js's BESPOKE_QST_RANK_CON_FACES/executor.js's PAYMENT_CHOICE_CON_FACE_ID -- if game.xlsx's CON
+// sheet ever gets reorganized again (see the 2026-08-17 CON-sheet-reorg incident), re-measure and update
+// this to wherever 憤怒 ends up, rather than assuming CON005B forever.
+const CARD_NOTE_COMPACT_FACE_ID = 'CON005B';
+
 function fillCardFace(root, faceId, options, directChildrenOnly) {
   const q = (sel) => (directChildrenOnly ? root.querySelector(`:scope > ${sel}`) : root.querySelector(sel));
   const facts = factsForFaceId(faceId);
@@ -2352,7 +2363,8 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     // .card-note's white-space:pre-line preserves the column's own \n line breaks as-is.
     if (options.showEffect && facts.iconText) {
       tall = true;
-      q('.shop-card__effect').appendChild(el('div', 'card-note', facts.iconText));
+      const noteClass = faceId === CARD_NOTE_COMPACT_FACE_ID ? 'card-note card-note--compact' : 'card-note';
+      q('.shop-card__effect').appendChild(el('div', noteClass, facts.iconText));
     }
   } else if (options.showEffect && facts.effects && facts.effects.length) {
     // allowTextFallback (confirmed 2026-07-30): A/B/C cards fall back to raw DSL text for any

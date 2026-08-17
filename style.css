@@ -614,7 +614,10 @@ h1, h2, h3 { margin: 0; }
 .shop-card__name .action-dot { width: 14.4px; height: 14.4px; }
 .shop-card__name .action-count { font-size: 12px; }
 .shop-card__name .action-arrow { font-size: 9px; }
-.shop-card__name .action-suffix { font-size: 9px; }
+/* Matched to .shop-card__name .action-count's own 12px/var(--text) above (2026-08-17, per user request:
+   "色Dをほかの数字（〇6）などと同じ大きさと濃さに") -- action-suffix's own base rule is smaller/muted
+   (10px, var(--text-muted)) for its other uses elsewhere on the card; overridden back up only here. */
+.shop-card__name .action-suffix { font-size: 12px; color: var(--text); }
 
 .shop-card__cost {
   display: flex;
@@ -1019,12 +1022,22 @@ h1, h2, h3 { margin: 0; }
    convention as .turn-end-warning__text's own (inherited from .card-inst-modal__body). Same small/muted
    look as .action-suffix, its own class since it's a full text block, not an inline resource-row
    fragment. */
+/* Size/color matched to .shop-card__name .action-count's 12px/var(--text) (2026-08-17, per user
+   request: "制約なし　LV１が不要　色D　MAX3　なども...同じ大きさと濃さに"). Some CON cards' own アイコン
+   text is long enough that this larger size visibly overflows/wraps badly (per user: "憤怒など　文字数
+   が多く　崩れてしまうものは今のままで") -- those get .card-note--compact instead, reverting to the
+   original smaller/muted look (see fillCardFace's own doc for which faces and why). */
 .card-note {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
-  color: var(--text-muted);
+  color: var(--text);
   text-align: center;
   white-space: pre-line;
+}
+
+.card-note--compact {
+  font-size: 10px;
+  color: var(--text-muted);
 }
 
 /* Confirmed 2026-07-29: die VALUES (as opposed to resource counts) use the ⚀-⚅ die-face glyphs
