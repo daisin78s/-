@@ -208,6 +208,19 @@ let aiPumpTimer = null;
 // AI) simply misses and starts fresh.
 let aiOpenTurnPlayerId = null;
 let aiOpenTurnHasPlacedDie = false;
+// Set to playerId exactly when that AI's own END_TURN move succeeds (alongside aiOpenTurnPlayerId being
+// reset to null there), consumed by driveOneAiStepInner's very next call regardless of which player it's
+// for (2026-08-17 fix, replacing the `ctx.playerId !== aiOpenTurnPlayerId` forceNewTurn signal that
+// caused main.js's own "JOBが選べなくなりました" regression -- see noteActiveTurnPlayerForJobPool's own
+// doc for the full incident). aiOpenTurnPlayerId being null is ambiguous: it means EITHER "this player's
+// turn was never opened yet" (their first-ever move this turn -- NOT a repeat) OR "this player's own
+// turn just properly closed and they're straight back up" (a genuine repeat, once everyone else is out
+// of dice -- the actual SHOP101 case forceNewTurn exists for). `ctx.playerId !== aiOpenTurnPlayerId` is
+// true in BOTH cases, so it couldn't tell them apart -- and the first case is common (render() itself
+// already calls noteActiveTurnPlayerForJobPool the moment it notices a fresh next.playerId, well before
+// this AI's own first move ever runs), so treating it as "force" there double-counted a turn that had
+// already been counted once. This flag is only ever true in the second case.
+let lastEndedAiTurnPlayerId = null;
 
 // ---------------------------------------------------------------------------
 // 変化ハイライト (2026-08-16, replacing a considered-but-rejected move animation -- see this app's
@@ -488,15 +501,20 @@ function driveOneAiStepInner(state) {
 
   // ctx.type === 'TURN'. noteActiveTurnPlayerForJobPool here (not just render()'s copy) so a turn-start
   // is caught even when pumpAiInstant blows straight through this AI's whole turn without render() ever
-  // pausing on it -- see lastNotedActiveTurnPlayerId's own comment. forceNewTurn: ctx.playerId not
-  // currently owning an open turn (aiOpenTurnPlayerId) means this is a fresh turn even if they were also
-  // the last-noted player (see noteActiveTurnPlayerForJobPool's own doc).
-  noteActiveTurnPlayerForJobPool(state, ctx.playerId, ctx.playerId !== aiOpenTurnPlayerId);
+  // pausing on it -- see lastNotedActiveTurnPlayerId's own comment. forceNewTurn: true only when THIS
+  // player's own turn just properly closed via END_TURN and they're straight back up (the genuine
+  // same-player-repeat case, once everyone else is out of dice) -- see lastEndedAiTurnPlayerId's own doc
+  // for why this can't just be `ctx.playerId !== aiOpenTurnPlayerId` (that's also true for this player's
+  // ordinary first move of an already-render()-noted fresh turn, which isn't a repeat at all).
+  const forceNewTurn = ctx.playerId === lastEndedAiTurnPlayerId;
+  lastEndedAiTurnPlayerId = null;
+  noteActiveTurnPlayerForJobPool(state, ctx.playerId, forceNewTurn);
   const move = aiPlayerFor(ctx.playerId).selectMove(state, ctx.playerId, { hasPlacedDieThisTurn: ctx.hasPlacedDieThisTurn });
   if (!move) return false; // defensive -- canEndTurn should always eventually free this up
   const result = simulatorMod.applyInPlace(state, INDEX, move);
   if (move.type === 'END_TURN' && result.success) {
     aiOpenTurnPlayerId = null;
+    lastEndedAiTurnPlayerId = ctx.playerId;
   } else {
     aiOpenTurnPlayerId = ctx.playerId;
     aiOpenTurnHasPlacedDie = ctx.hasPlacedDieThisTurn || ((move.type === 'PLACE_DIE' || move.type === 'PASS_DIE') && result.success);
@@ -673,12 +691,16 @@ let lastNotedActiveTurnPlayerId = null;
  * invented to fix for the undo-checkpoint transition block (see its own doc): the SAME player taking
  * several turns in a row once everyone else is out of dice for the round. Each caller passes true only
  * when IT already knows this is a genuinely new turn boundary despite playerId being unchanged --
- * render() passes turnJustEnded itself; driveOneAiStepInner passes `ctx.playerId !== aiOpenTurnPlayerId`
- * (an AI whose own turn isn't currently open is, by definition, starting a fresh one). Without this, a
- * later turn in that same run-of-consecutive-turns silently got no turnHistory entry at all -- so
- * stepping through the debug TURN timeline could skip straight over a shop restock that happened on one
- * of those un-recorded turns, landing on a snapshot from before it with an empty SHOP101 that never
- * "catches up". */
+ * render() passes turnJustEnded itself; driveOneAiStepInner passes `ctx.playerId === lastEndedAiTurnPlayerId`
+ * (see that variable's own doc -- NOT simply "this AI's turn isn't currently open", which sounded
+ * equivalent but wasn't: that was also true for a player's ordinary first move of a turn render() had
+ * already noted moments earlier, over-forcing a double-count and regressing into the exact "JOBが選べな
+ * くなりました" symptom this whole mechanism exists to avoid -- found 2026-08-17, fixed by tracking the
+ * actual END_TURN transition explicitly instead of inferring it from aiOpenTurnPlayerId's mere nullness).
+ * Without correctly detecting the real repeat case, a later turn in that same run-of-consecutive-turns
+ * silently got no turnHistory entry at all -- so stepping through the debug TURN timeline could skip
+ * straight over a shop restock that happened on one of those un-recorded turns, landing on a snapshot
+ * from before it with an empty SHOP101 that never "catches up". */
 function noteActiveTurnPlayerForJobPool(state, playerId, forceNewTurn) {
   if (playerId === lastNotedActiveTurnPlayerId && !forceNewTurn) return;
   lastNotedActiveTurnPlayerId = playerId;
@@ -761,6 +783,7 @@ function jumpToHistoryIndex(idx) {
   // the correct reset, same as a fresh game load's own initial values.
   aiOpenTurnPlayerId = null;
   aiOpenTurnHasPlacedDie = false;
+  lastEndedAiTurnPlayerId = null; // same reasoning -- a jump always lands at a turn's start, never mid-repeat
   // lastNotedActiveTurnPlayerId/lastTurnPlayerId (found via headless testing): render()'s own top-level
   // "a new turn just started" detection compares next.playerId against these two dedup vars completely
   // independently of historyCursor -- left stale after a jump, the very render() call below would see
