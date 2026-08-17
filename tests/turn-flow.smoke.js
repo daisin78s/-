@@ -75,8 +75,8 @@ const state = setupGame();
 turnFlow.startRound(state);
 check('startRound(1) sets round=1', state.round, 1);
 
-setup.dealJobPool(state); // confirmed: 6 of 8 JOB cards revealed as a shared draft pool
-check('dealJobPool reveals exactly 6 of the 8 JOB cards', state.jobPool.length, 6);
+setup.dealJobPool(state, index); // confirmed: 6 JOB cards revealed as a shared draft pool
+check('dealJobPool reveals exactly 6 JOB cards', state.jobPool.length, 6);
 
 for (let i = 0; i < state.turnOrder.length; i++) {
   const expectedPlayerId = state.turnOrder[i];

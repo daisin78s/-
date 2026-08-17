@@ -248,7 +248,7 @@ function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorO
   try {
 
   turnFlow.startRound(state);
-  setup.dealJobPool(state);
+  setup.dealJobPool(state, index);
 
   // Round transitions actually happen *inside* driveTurn (applyInPlace's END_TURN case calls
   // turnFlow.endRound/startRound itself, same as main.js's UI does) -- getNextTurn() in this outer

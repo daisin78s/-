@@ -107,7 +107,7 @@ function createInitialState(plan) {
   } else {
     setupMod.dealResourceCandidates(state, INDEX);
   }
-  setupMod.dealJobPool(state, plan ? plan.job : undefined);
+  setupMod.dealJobPool(state, INDEX, plan ? plan.job : undefined);
   qstMod.setupQuests(state);
   return state;
 }

@@ -45,7 +45,8 @@ const CON_PHYSICAL_IDS = ['CON001', 'CON002', 'CON003', 'CON004', 'CON005', 'CON
 // a real B-tier sibling anyway, so the "A" was just a leftover from the {physicalId}{tier} pattern
 // every other tiered deck uses; JOB is now bare, same shape as M). See game-state.js's splitCardId,
 // which already treats a bare id (no trailing letter) as {tier: null} without any change needed here.
-const JOB_FACE_IDS = ['JOB001', 'JOB002', 'JOB003', 'JOB004', 'JOB005', 'JOB006', 'JOB007', 'JOB008'];
+// (No fixed JOB_FACE_IDS list here -- unlike CON_PHYSICAL_IDS above, the JOB sheet's own row count isn't
+// fixed by the game's rules; dealJobPool reads index.raw.JOB directly instead, see its own doc for why.)
 
 // ---------------------------------------------------------------------------
 // Steps 1-2: players, board, shop
@@ -341,11 +342,19 @@ function computeStartOrder(state, index) {
  * preferredFaceIds (optional, up to 6, deduped, 2026-08-13 debug-setup feature): those are guaranteed
  * in the revealed pool, the remaining slots filled by the usual random draw from whatever's left. Who
  * actually drafts which one out of the pool is still each player's own normal chooseJob() pick, exactly
- * as before. Every other caller passes no 2nd argument and sees identical behavior to before.
+ * as before. Every other caller passes no 3rd argument and sees identical behavior to before.
+ *
+ * Reads the live JOB sheet (index.raw.JOB) rather than the old hardcoded JOB_FACE_IDS list (2026-08-17
+ * fix, per user report: "開拓者出てきません テストゲームで選んでも出てきません") -- that list was
+ * defined before JOB009 existed, so both the random draw AND the debug picker's preferredFaceIds filter
+ * silently excluded it entirely, the same class of "stale hardcoded list" bug the CON-sheet-reorg
+ * incident already caught elsewhere. index is now a required 2nd argument -- see this function's 4 call
+ * sites (game-runner.js, main.js, tests) for the matching update.
  */
-function dealJobPool(state, preferredFaceIds) {
-  const preferred = [...new Set(preferredFaceIds || [])].filter((id) => JOB_FACE_IDS.includes(id)).slice(0, 6);
-  const rest = shuffle(state.rng, JOB_FACE_IDS.filter((id) => !preferred.includes(id)));
+function dealJobPool(state, index, preferredFaceIds) {
+  const allJobFaceIds = index.raw.JOB.map((r) => r.ID);
+  const preferred = [...new Set(preferredFaceIds || [])].filter((id) => allJobFaceIds.includes(id)).slice(0, 6);
+  const rest = shuffle(state.rng, allJobFaceIds.filter((id) => !preferred.includes(id)));
   state.jobPool = [...preferred, ...rest].slice(0, 6);
 }
 

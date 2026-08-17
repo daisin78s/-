@@ -112,8 +112,8 @@ check('turnOrder contains all 4 players exactly once', new Set(state.turnOrder).
   const p1 = state.turnOrder[0];
   const beforeK = state.players.find((p) => p.id === p1).resources.K;
 
-  setup.dealJobPool(state); // reveals 6 of 8 JOB cards; must run before chooseJob
-  check('dealJobPool reveals exactly 6 of the 8 JOB cards', state.jobPool.length, 6);
+  setup.dealJobPool(state, index); // reveals 6 of however many JOB faces exist; must run before chooseJob
+  check('dealJobPool reveals exactly 6 JOB cards', state.jobPool.length, 6);
   const draftedJob = state.jobPool[0];
 
   const jobResult = setup.chooseJob(state, index, p1, draftedJob);
@@ -152,15 +152,23 @@ check('turnOrder contains all 4 players exactly once', new Set(state.turnOrder).
 }
 {
   const state = createEmptyGameState('debug-setup-job');
-  setup.dealJobPool(state, ['JOB002', 'JOB005']);
+  setup.dealJobPool(state, index, ['JOB002', 'JOB005']);
   check('dealJobPool includes both preferred JOB faces', ['JOB002', 'JOB005'].every((id) => state.jobPool.includes(id)), true);
   check('...and still reveals exactly 6 total (4 more filled randomly)', state.jobPool.length, 6);
 }
 {
   // Over-long/duplicate preferred lists are capped/deduped rather than breaking the pool size.
   const state = createEmptyGameState('debug-setup-job-overlong');
-  setup.dealJobPool(state, ['JOB001', 'JOB001', 'JOB002', 'JOB003', 'JOB004', 'JOB005', 'JOB006', 'JOB007', 'JOB008']);
+  setup.dealJobPool(state, index, ['JOB001', 'JOB001', 'JOB002', 'JOB003', 'JOB004', 'JOB005', 'JOB006', 'JOB007', 'JOB008', 'JOB009']);
   check('dealJobPool caps an over-long/duplicate preferred list at 6, still exactly 6 total', state.jobPool.length, 6);
+}
+{
+  // JOB009 (2026-08-17 regression test, per user report: "開拓者出てきません テストゲームで選んでも出て
+  // きません" -- the old hardcoded JOB_FACE_IDS list silently dropped it from both the random draw AND
+  // the preferredFaceIds filter, since it was defined before JOB009 existed).
+  const state = createEmptyGameState('debug-setup-job009');
+  setup.dealJobPool(state, index, ['JOB009']);
+  check('dealJobPool includes a newly-added JOB face when explicitly preferred', state.jobPool.includes('JOB009'), true);
 }
 {
   const state = createEmptyGameState('debug-setup-resource');
