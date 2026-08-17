@@ -599,6 +599,12 @@ h1, h2, h3 { margin: 0; }
   font-size: 13px;
 }
 
+/* Only ever empty for RESOURCE cards (2026-08-17, see fillCardFace's own doc) -- every other deck still
+   always populates this with its NAME or a raw-id fallback. */
+.shop-card__id:empty {
+  display: none;
+}
+
 /* CON cards show their ONCE's resource grant next to their NAME, in .shop-card__name (2026-08-16, per
    user request: "CONカードIDが書かれている部分を消してその場所に得られる初期資源を書いて"; moved from
    .shop-card__id into .shop-card__name on 2026-08-17 alongside the NAME+icon one-row redesign -- see
@@ -1038,6 +1044,14 @@ h1, h2, h3 { margin: 0; }
 .card-note--compact {
   font-size: 10px;
   color: var(--text-muted);
+}
+
+/* 傲慢's own "✖" chars, enlarged on their own (2026-08-17, per user request: "✖の大きさだけ１.8倍にして")
+   -- em so it scales with whichever .card-note font-size is currently in effect (12px normally, 10px for
+   .card-note--compact) rather than a fixed px value. */
+.card-note__x {
+  font-size: 1.8em;
+  line-height: 1;
 }
 
 /* Confirmed 2026-07-29: die VALUES (as opposed to resource counts) use the ⚀-⚅ die-face glyphs
@@ -1925,6 +1939,15 @@ h1, h2, h3 { margin: 0; }
   color: var(--text);
   overflow-wrap: anywhere;
   text-align: center;
+}
+
+/* No id/cost header above it to divide from on a RESOURCE card (2026-08-17, per user request: "初期資源
+   カードにNAMEやIDの表示は不要...それに従い横線も不要です") -- drops the border-top line + the padding
+   that made room for it, so the effect icon isn't left with an odd gap where the (now invisible) line
+   used to be. */
+.shop-card--resource .shop-card__effect {
+  border-top: none;
+  padding-top: 0;
 }
 
 .shop-card__effect:empty { display: none; }

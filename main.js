@@ -2263,6 +2263,19 @@ function levelForFaceId(faceId) {
 // this to wherever 憤怒 ends up, rather than assuming CON005B forever.
 const CARD_NOTE_COMPACT_FACE_ID = 'CON005B';
 
+/** Fills container with iconText, wrapping every "✖" char in its own bigger span (2026-08-17, per user
+ * request: "✖の大きさだけ１.8倍にして" -- 傲慢's own "最多AREA　✖\n　▽\nLVUP　✖" is currently the only
+ * CON アイコン text containing this character, confirmed via a full sheet scan). Preserves the string's
+ * own \n line breaks via .card-note's white-space:pre-line, same as a plain textContent assignment would
+ * -- just split across several text nodes instead of one, plus the ✖ spans in between. */
+function fillCardNoteContent(container, iconText) {
+  const parts = iconText.split('✖');
+  parts.forEach((part, i) => {
+    if (part) container.appendChild(document.createTextNode(part));
+    if (i < parts.length - 1) container.appendChild(el('span', 'card-note__x', '✖'));
+  });
+}
+
 function fillCardFace(root, faceId, options, directChildrenOnly) {
   const q = (sel) => (directChildrenOnly ? root.querySelector(`:scope > ${sel}`) : root.querySelector(sel));
   const facts = factsForFaceId(faceId);
@@ -2312,6 +2325,10 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     if (facts.name) nameEl.appendChild(el('span', 'shop-card__name-text', facts.name));
     if (onceIcon) nameEl.appendChild(onceIcon);
     if (emblem) nameEl.appendChild(emblemEl);
+  } else if (/^R\d/.test(faceId)) {
+    // RESOURCE cards show neither NAME nor ID (2026-08-17, per user request -- see
+    // .shop-card--resource's own doc on the buildCardVisual side for the matching border-line removal).
+    // idEl is simply left empty; its own :empty{display:none} rule collapses it with no layout gap.
   } else if (facts.name) {
     idEl.textContent = facts.name;
   } else {
@@ -2364,7 +2381,9 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     if (options.showEffect && facts.iconText) {
       tall = true;
       const noteClass = faceId === CARD_NOTE_COMPACT_FACE_ID ? 'card-note card-note--compact' : 'card-note';
-      q('.shop-card__effect').appendChild(el('div', noteClass, facts.iconText));
+      const noteEl = el('div', noteClass);
+      fillCardNoteContent(noteEl, facts.iconText);
+      q('.shop-card__effect').appendChild(noteEl);
     }
   } else if (options.showEffect && facts.effects && facts.effects.length) {
     // allowTextFallback (confirmed 2026-07-30): A/B/C cards fall back to raw DSL text for any
@@ -2432,6 +2451,12 @@ function buildCardVisual(faceId, options = {}) {
   // .shop-card--tall's min-height alone still left real height variance between CON faces. See
   // .shop-card--con in style.css for the actual fixed value.
   if (faceId.startsWith('CON')) node.classList.add('shop-card--con');
+  // RESOURCE cards show neither NAME nor ID at all (2026-08-17, per user request: "初期資源カードにNAME
+  // やIDの表示は不要なので消してください...それに従い横線も不要です") -- see fillCardFace's own idEl
+  // branch for the text-suppression side; this class is what lets style.css also drop
+  // .shop-card__effect's border-top divider line, which only made sense as a "below the id/cost header"
+  // separator and now has nothing above it to separate from.
+  if (/^R\d/.test(faceId)) node.classList.add('shop-card--resource');
 
   // noInteraction (confirmed 2026-07-30): onboarding selection cards (JOB draft, CON face choice,
   // initial RESOURCE candidates -- see renderJobPool/renderConFacesRow/renderResourceChoice) reuse
