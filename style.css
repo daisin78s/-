@@ -600,8 +600,11 @@ h1, h2, h3 { margin: 0; }
    below, not here; without this the icon alone left too little room for the NAME text beside it and
    forced an ellipsis-truncated name even for a plain 2-character one (found via screenshot verification). */
 .shop-card__name .action-emoji { font-size: 11px; }
-.shop-card__name .action-dot { width: 8px; height: 8px; }
-.shop-card__name .action-count { font-size: 10px; }
+/* Dot 1.8x, count 1.2x of the base 8px/10px above (2026-08-17, per user request on 暴食's "⚡○6": applies
+   to every other CON card using the same dot+count pattern -- 怠惰/狂信/傲慢/潔癖/色欲/憂鬱/嫉妬/強欲 --
+   automatically, since they all share this one selector). */
+.shop-card__name .action-dot { width: 14.4px; height: 14.4px; }
+.shop-card__name .action-count { font-size: 12px; }
 .shop-card__name .action-arrow { font-size: 9px; }
 .shop-card__name .action-suffix { font-size: 9px; }
 
