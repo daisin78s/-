@@ -1553,7 +1553,7 @@ function buildAddWdIcon(actionText) {
  * buildAddResourceIcon (single item) and buildAddMultiResourceIcon (comma-separated list) below. */
 function resourceItemNodes(countStr, resource) {
   if (resource === 'VP') return [actionCount(`${countStr || '1'}VP`)];
-  if (resource === 'D') return [actionSuffix(`${countStr || ''}色D`)];
+  if (resource === 'D') return [actionSuffix(`${countStr || ''}追加色D`)];
   const nodes = [actionDot(resource)];
   if (countStr) nodes.push(actionCount(countStr));
   return nodes;
