@@ -50,7 +50,7 @@ function getPlayerRef(state, id) { return state.players.find((p) => p.id === id)
 function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId).dice.find((d) => d.id === dieId); }
 
 // ---------------------------------------------------------------------------
-// 1. CON006A: ONCE=ADD(6K), TURNEND=RESOURCE_LIMIT(K,7)
+// 1. CON006A: ONCE=ADD(7K), TURNEND=RESOURCE_LIMIT(K,7)
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
@@ -59,7 +59,7 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
   const context = { playerId: 'P1', sourcePhysicalId: physicalId };
 
   executor.runProgram(state, index, context, row.ONCE);
-  check('CON006A ONCE grants 6K', getPlayerRef(state, 'P1').resources.K, 6);
+  check('CON006A ONCE grants 7K', getPlayerRef(state, 'P1').resources.K, 7);
 
   getPlayerRef(state, 'P1').resources.K = 10; // simulate accumulating over the limit
   executor.applyTurnEnd(state, index, 'P1');
