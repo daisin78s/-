@@ -2418,8 +2418,15 @@ h1, h2, h3 { margin: 0; }
   font-weight: 700;
   color: var(--text-muted);
   text-align: center;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 4px;
+}
+
+/* Separator line between the 建築 and LVアップ sections, on the LVアップ header only, and only when
+   建築 also has candidates -- placed above the section that follows it rather than under every header's
+   own label (2026-08-17, per user request: line belongs between the two sections' card groups, not
+   between each label and its own cards). */
+.build-choice-section-header--divider {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
 }
 
 .build-choice-item {

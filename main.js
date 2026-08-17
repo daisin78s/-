@@ -2278,6 +2278,15 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
   // itself (see the JOB/M branch above and factsForFaceId's own name field), not duplicated up here too.
   // #tpl-shop-card's .shop-card__name node is simply left unpopulated -- its own :empty{display:none}
   // rule already collapses it with no layout gap, so no template/CSS change is needed alongside this.
+  //
+  // CON is the one exception (2026-08-17, per user clarification after reporting "CONカードのNAMEが消え
+  // ました": the original "CONカードIDが書かれている部分を消してその場所に得られる初期資源を書いて"
+  // request meant ID+NAME shouldn't both be shown -- not that NAME should be dropped in favor of the
+  // resource icons). CON's id spot is taken by its onceIcon above, so it alone still needs NAME shown
+  // somewhere -- reusing this otherwise-unpopulated top title slot rather than fighting the id spot for it.
+  if (faceId.startsWith('CON') && facts.name) {
+    q('.shop-card__name').textContent = facts.name;
+  }
 
   renderCostBadges(q('.shop-card__cost'), facts.cost, faceId);
   q('.shop-card__vp').textContent = facts.vp ? `${facts.vp} VP` : '';
@@ -3520,7 +3529,10 @@ function renderBuildChoiceModal() {
     list.appendChild(group);
   }
   if (upgradeCandidates.length > 0) {
-    list.appendChild(el('div', 'build-choice-section-header', 'LVアップ'));
+    const upgradeHeaderClass = newBuildCandidates.length > 0
+      ? 'build-choice-section-header build-choice-section-header--divider'
+      : 'build-choice-section-header';
+    list.appendChild(el('div', upgradeHeaderClass, 'LVアップ'));
     const group = el('div', 'build-choice-group');
     for (const candidate of upgradeCandidates) group.appendChild(buildCandidateCell(candidate));
     list.appendChild(group);
