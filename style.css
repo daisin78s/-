@@ -530,16 +530,47 @@ h1, h2, h3 { margin: 0; }
 
 /* Thematic title, above the id (2026-08-05, per user feedback: "AC系のカード NAMEをカード上部に反映
    させてください") -- empty (and hidden) for any card whose NAME hasn't been customized yet, see
-   fillCardFace's own q('.shop-card__name') line. */
+   fillCardFace's own q('.shop-card__name') line. Only CON ever populates this now (every other deck's
+   NAME shows via .shop-card__id instead) -- as of 2026-08-17, per user request ("青字→黒字 文字サイズを
+   JOBと同じ大きさに 得られる初期資源のアイコンを右寄せに NAMEと得られる初期資源１行になるように"), it's
+   a flex row holding both the NAME text (.shop-card__name-text) and the initial-resource onceIcon side by
+   side -- font-size/color now match .shop-card__id's own (13px, default text color) instead of the old
+   smaller blue title style. */
 .shop-card__name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-weight: 700;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.2;
-  color: var(--accent);
+  color: var(--text);
 }
 
 .shop-card__name:empty {
   display: none;
+}
+
+/* Without this, flexbox's default min-width:auto lets this shrink toward its min-content width -- which
+   for unbroken CJK text is as little as a single character (line-breaks are allowed between CJK
+   characters by default), so the name visibly wrapped one character per line once squeezed by the
+   onceIcon sibling taking its own share of the row (found via screenshot verification, 2026-08-17). */
+.shop-card__name-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Pushes the onceIcon (.action-icons) to the row's right edge regardless of the name text's own width
+   (2026-08-17, per user request: "得られる初期資源のアイコンを右寄せに"). Scoped to a direct child of
+   .shop-card__name specifically so it doesn't affect .action-icons used elsewhere on the card (effect
+   rows etc.). width:auto overrides .action-icons' own base width:100% (meant for a full-width effect
+   row) -- left as 100% here, it became this flex row's flex-basis, squeezing the NAME text down to a
+   sub-pixel-thin margin that ellipsis-truncated even a plain 2-character name (found via measurement:
+   name+icon summed to 93.9px inside a 94px row -- technically fit, but only by a hair, and did not
+   render reliably). auto lets it size to its own content instead of contesting the row's full width. */
+.shop-card__name > .action-icons {
+  width: auto;
+  margin-left: auto;
 }
 
 .shop-card__id {
@@ -547,17 +578,19 @@ h1, h2, h3 { margin: 0; }
   font-size: 13px;
 }
 
-/* CON cards show their ONCE's resource grant here instead of the plain id text (2026-08-16, per user
-   request: "CONカードIDが書かれている部分を消してその場所に得られる初期資源を書いて" -- see main.js's
-   fillCardFace, which renders it via the same buildActionIcons()/.action-icons pipeline every card's
-   ONCE/TAP/PASSIVE effect already uses). Scaled down to fit the id row's own small size (13px bold
-   text otherwise) -- .action-icons' own defaults (14px emoji, 11px dot) are sized for the taller
-   .shop-card__effect row below, not this compact single-line spot. */
-.shop-card--con .shop-card__id .action-emoji { font-size: 11px; }
-.shop-card--con .shop-card__id .action-dot { width: 8px; height: 8px; }
-.shop-card--con .shop-card__id .action-count { font-size: 10px; }
-.shop-card--con .shop-card__id .action-arrow { font-size: 9px; }
-.shop-card--con .shop-card__id .action-suffix { font-size: 9px; }
+/* CON cards show their ONCE's resource grant next to their NAME, in .shop-card__name (2026-08-16, per
+   user request: "CONカードIDが書かれている部分を消してその場所に得られる初期資源を書いて"; moved from
+   .shop-card__id into .shop-card__name on 2026-08-17 alongside the NAME+icon one-row redesign -- see
+   main.js's fillCardFace, which renders it via the same buildActionIcons()/.action-icons pipeline every
+   card's ONCE/TAP/PASSIVE effect already uses). Scaled down to fit this compact single-line row --
+   .action-icons' own defaults (14px emoji, 11px dot) are sized for the taller .shop-card__effect row
+   below, not here; without this the icon alone left too little room for the NAME text beside it and
+   forced an ellipsis-truncated name even for a plain 2-character one (found via screenshot verification). */
+.shop-card__name .action-emoji { font-size: 11px; }
+.shop-card__name .action-dot { width: 8px; height: 8px; }
+.shop-card__name .action-count { font-size: 10px; }
+.shop-card__name .action-arrow { font-size: 9px; }
+.shop-card__name .action-suffix { font-size: 9px; }
 
 .shop-card__cost {
   display: flex;

@@ -2289,27 +2289,21 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
   // isn't customized yet doesn't go from "shown once, up top" to "not shown anywhere").
   const idEl = q('.shop-card__id');
   const onceIcon = faceId.startsWith('CON') ? buildActionIcons(facts.once) : null;
-  if (onceIcon) {
-    idEl.appendChild(onceIcon);
+  if (faceId.startsWith('CON')) {
+    const nameEl = q('.shop-card__name');
+    if (facts.name) nameEl.appendChild(el('span', 'shop-card__name-text', facts.name));
+    if (onceIcon) nameEl.appendChild(onceIcon);
   } else if (facts.name) {
     idEl.textContent = facts.name;
   } else {
     idEl.textContent = faceId;
   }
   // Thematic title above the id, removed 2026-08-16 (per user report: "すべてのカードがNAMEが２回表示
-  // されています 青文字のほうのNAMEを削除して") -- every card's NAME now shows once, in the id spot
-  // itself (see the JOB/M branch above and factsForFaceId's own name field), not duplicated up here too.
-  // #tpl-shop-card's .shop-card__name node is simply left unpopulated -- its own :empty{display:none}
-  // rule already collapses it with no layout gap, so no template/CSS change is needed alongside this.
-  //
-  // CON is the one exception (2026-08-17, per user clarification after reporting "CONカードのNAMEが消え
-  // ました": the original "CONカードIDが書かれている部分を消してその場所に得られる初期資源を書いて"
-  // request meant ID+NAME shouldn't both be shown -- not that NAME should be dropped in favor of the
-  // resource icons). CON's id spot is taken by its onceIcon above, so it alone still needs NAME shown
-  // somewhere -- reusing this otherwise-unpopulated top title slot rather than fighting the id spot for it.
-  if (faceId.startsWith('CON') && facts.name) {
-    q('.shop-card__name').textContent = facts.name;
-  }
+  // されています 青文字のほうのNAMEを削除して") -- every non-CON card's NAME shows once, in the id spot
+  // itself (see the else-if branch above and factsForFaceId's own name field), not duplicated up here
+  // too. #tpl-shop-card's .shop-card__name node is left unpopulated for those decks -- its own
+  // :empty{display:none} rule collapses it with no layout gap. CON alone populates it (see above), now
+  // combined with its onceIcon on one row per 2026-08-17's redesign.
 
   renderCostBadges(q('.shop-card__cost'), facts.cost, faceId);
   q('.shop-card__vp').textContent = facts.vp ? `${facts.vp} VP` : '';
