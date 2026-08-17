@@ -2435,19 +2435,33 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
       fillCardNoteContent(noteEl, facts.iconText);
       q('.shop-card__effect').appendChild(noteEl);
     }
-  } else if (options.showEffect && facts.name === '開拓者') {
-    // 開拓者/JOB009 (2026-08-17, per user mockup: "無人AREAに色D / ▽ / ランダムABC", ABC shown as icons,
-    // somewhat large) -- has no DSL representation at all (empty ONCE/TAP/PASSIVE/TURNEND, see
-    // hasPioneerAbility's own doc in board.js), so this is a one-off hand-built display, the same class
-    // of exception CON003A/CON005B used to each get their own ad-hoc .card-note patch for before the
-    // general CON アイコン column existed. "▽" is plain text (matching CON004A's own literal "▽" in its
-    // card-note text), not actionTriggerDown()'s 🔽 emoji -- the user's own mockup used the plain
-    // triangle character specifically.
+  } else if (options.showEffect && (facts.name === '開拓者' || facts.name === '吟遊詩人' || facts.name === '地主')) {
+    // Bespoke JOB card-notes (開拓者/JOB009 2026-08-17, per user mockup: "無人AREAに色D / ▽ / ランダム
+    // ABC"; 吟遊詩人/JOB008 and 地主/JOB011 2026-08-17, per user mockups: "エンブレム３個 / ▽ / Z　1VP"
+    // and "LVアップAREA / ▽ / 〇/1VP", both "ABCZはアイコンで表記") -- none of these 3 abilities have any
+    // DSL representation at all (see hasPioneerAbility/hasLandlordAbility's own docs in board.js, and
+    // turn-flow.grantBardBonusIfEarned's for 吟遊詩人), so each is a one-off hand-built display, the same
+    // class of exception CON003A/CON005B used to each get their own ad-hoc .card-note patch for before
+    // the general CON アイコン column existed. "▽" is plain text (matching CON004A's own literal "▽" in
+    // its card-note text), not actionTriggerDown()'s 🔽 emoji -- 開拓者's own mockup used the plain
+    // triangle character specifically, reused here for the other two to stay visually consistent.
     tall = true;
-    const noteEl = el('div', 'card-note', '無人AREAに色D\n▽\n');
-    const abcRow = el('span', 'job009-abc-dots');
-    for (const resource of ['A', 'B', 'C']) abcRow.appendChild(actionDot(resource));
-    noteEl.appendChild(abcRow);
+    const noteEl = el('div', 'card-note');
+    const iconRow = el('span', 'job-note-icon-row');
+    if (facts.name === '開拓者') {
+      noteEl.appendChild(document.createTextNode('無人AREAに色D\n▽\n'));
+      for (const resource of ['A', 'B', 'C']) iconRow.appendChild(actionDot(resource));
+    } else if (facts.name === '吟遊詩人') {
+      noteEl.appendChild(document.createTextNode('エンブレム３個\n▽\n'));
+      iconRow.appendChild(actionDot('Z'));
+      iconRow.appendChild(actionCount('1VP'));
+    } else {
+      noteEl.appendChild(document.createTextNode('LVアップAREA\n▽\n'));
+      iconRow.appendChild(actionDot('K'));
+      iconRow.appendChild(actionSuffix('/'));
+      iconRow.appendChild(actionCount('1VP'));
+    }
+    noteEl.appendChild(iconRow);
     q('.shop-card__effect').appendChild(noteEl);
   } else if (options.showEffect && facts.effects && facts.effects.length) {
     // allowTextFallback (confirmed 2026-07-30): A/B/C cards fall back to raw DSL text for any

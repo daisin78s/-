@@ -993,15 +993,18 @@ h1, h2, h3 { margin: 0; }
   display: inline-block;
 }
 
-/* 開拓者/JOB009's own ABC row (2026-08-17, per user request: "ABCはアイコンで大きめに") -- larger than
-   .action-dot's 11px base, with some breathing room between them since they're the sole content of
-   their own line rather than squeezed alongside text/other icons. */
-.job009-abc-dots {
+/* Bespoke JOB card-note icon rows (開拓者/吟遊詩人/地主, 2026-08-17, per user request: "ABCはアイコンで
+   大きめに" / "ABCZはアイコンで表記") -- larger than .action-dot's 11px base, with some breathing room
+   between them since they're the sole content of their own line rather than squeezed alongside text/
+   other icons. Originally 開拓者-only (.job009-abc-dots); generalized once 吟遊詩人/地主 reused the same
+   "▽ then an icon row" card-note shape. */
+.job-note-icon-row {
   display: inline-flex;
+  align-items: center;
   gap: 6px;
   margin-top: 2px;
 }
-.job009-abc-dots .action-dot {
+.job-note-icon-row .action-dot {
   width: 18px;
   height: 18px;
 }
