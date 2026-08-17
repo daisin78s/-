@@ -4464,8 +4464,15 @@ function renderConPreview(container, player) {
  * -- their CON face is picked by driveOneAiStep, never by clicks, but there's no reason to hide it from
  * the human while it's still pending (e.g. mid-'delayed'/'manual' pacing). */
 function renderConChoice(container, state, player) {
-  if (!player.jobCardId || isAiPlayer(player.id)) { renderConPreview(container, player); return; }
+  // Checked first, before the AI/human branch below (2026-08-18 fix, per user report: "2Rの途中でAIが
+  // 急にCONの表裏を選ぶ画面になり" -- this player's own real TURN makes isSelf true in *every* round, not
+  // just round-1 onboarding, since this function's only caller doesn't distinguish the two; the AI branch
+  // used to unconditionally fall through to renderConPreview with no "already chosen" check at all, so an
+  // AI player's already-resolved CON choice kept re-showing this "please choose" hint on every one of
+  // their turns for the rest of the game. Once a CON face is actually owned, nothing renders here again,
+  // for AI and human alike -- matching the human branch's own pre-existing guard, just applied earlier).
   if (player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'))) return;
+  if (!player.jobCardId || isAiPlayer(player.id)) { renderConPreview(container, player); return; }
   renderConFacesRow(container, player, (face) => {
     setupMod.chooseConFace(state, INDEX, player.id, face);
     setupMod.receiveInitialResources(state, INDEX, player.id);
