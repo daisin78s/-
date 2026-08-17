@@ -422,6 +422,14 @@ h1, h2, h3 { margin: 0; }
   flex: 0 0 auto;
 }
 
+/* CON penalty, right next to QST above (2026-08-17) -- var(--danger) instead of --text-muted so it
+   reads as a cost weighing against the QST bonus beside it, not just more neutral trivia. */
+.standings-panel__con-penalty {
+  color: var(--danger, #c0392b);
+  font-size: 11px;
+  flex: 0 0 auto;
+}
+
 /* Confirmed 2026-07-30: SHOP101-106 and SHOP201-203 share one 6-column grid (SHOP201-203 sit
    directly under whichever SHOP10x shares their dice range, row 3, via explicit grid-column/grid-row
    set in JS -- see renderShopGrid) instead of the old separate side-by-side layout. The "大型カード

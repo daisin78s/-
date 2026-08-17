@@ -2527,6 +2527,21 @@ function projectedQstVpForPlayer(state, playerId) {
   return total;
 }
 
+/** playerId's own CON face's VP penalty, live-projected the same way projectedQstVpForPlayer is (a
+ * live standings preview, not the settled GAME_END amount) -- the parenthesised "(-4)" figure next to
+ * QST in the standings panel (2026-08-17, per user request: "マイナスのVPペナルティがあるCONは順位表示
+ * のところでQSTの右隣にそれを表示してほしい"). Reuses scoring.conCardOwnVpEffect, the exact same
+ * function GAME_END's real computeFinalScore calls, so this can never drift from what actually gets
+ * scored (e.g. CON001B/004B's own QST-rank-based penalties recompute live as rankings shift, same as
+ * projectedQstVpForPlayer's own bonus figure does). 0 (hidden, see buildStandingsPanelNode) for a
+ * player with no CON chosen yet, or whose CON face has no negative effect of its own. */
+function conPenaltyForPlayer(state, playerId) {
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player.conPhysicalId || !player.conFace) return 0;
+  const conFaceId = `${player.conPhysicalId}${player.conFace}`;
+  return scoringMod.conCardOwnVpEffect(state, INDEX, playerId, conFaceId);
+}
+
 /** Static preview fill for QST's back face (the sibling face -- see siblingFaceId): id + GOAL +
  * plain REWARD1/2/3 value labels. There's no live quest state for a face that was never actually
  * revealed this game, so this is informational only (matches CON/A/B/C's click-to-flip preview, which
@@ -2754,7 +2769,12 @@ function renderShopGrid(state) {
  * can't include it yet); once the game ends, resolveEndGameRewards has folded the real award into
  * player.resources.VP, so it's subtracted back out here -- the same split tools/ai_data_report.js uses
  * for its own QST-excluded averages.
- * @returns {{playerId, name, color, place, vp, qstVp}[]}
+ *
+ * `conPenalty` (2026-08-17, see conPenaltyForPlayer's own doc) is purely informational, shown next to
+ * qstVp -- unlike vp/qstVp it's never added or subtracted here, since computeFinalScore (and therefore
+ * `vp` above) already has it baked in via conCardVpAdjustment/collectVpModifiers; this field only exists
+ * so the panel can surface it as its own separate figure.
+ * @returns {{playerId, name, color, place, vp, qstVp, conPenalty}[]}
  */
 function standingsRows(state) {
   const granted = state.qstRewardsGranted || {};
@@ -2768,6 +2788,7 @@ function standingsRows(state) {
       place: i + 1,
       vp: entry.score - grantedQstVp,
       qstVp: state.phase === 'GAME_END' ? grantedQstVp : projectedQstVpForPlayer(state, entry.playerId),
+      conPenalty: conPenaltyForPlayer(state, entry.playerId),
     };
   });
 }
@@ -2794,6 +2815,15 @@ function buildStandingsPanelNode(state) {
     // stay identical in shape (a cell that sometimes drops a element is exactly what would shift the
     // fixed quarters' contents around).
     cell.appendChild(el('span', 'standings-panel__qst', `（+${row.qstVp}）`));
+    // CON penalty, right next to QST (2026-08-17, per user request: "マイナスのVPペナルティがあるCONは
+    // 順位表示のところでQSTの右隣にそれを表示してほしい") -- unlike qstVp above, only shown for a player
+    // who actually has one (conPenalty!==0), since most players never do; the fixed-quarter concern that
+    // keeps qstVp always rendered doesn't apply here the same way -- this cell's own contents are a plain
+    // flex row that clips its own name (see .standings-panel__cell's own CSS), not something the outer
+    // panel's quarter tracks depend on the exact element count of.
+    if (row.conPenalty !== 0) {
+      cell.appendChild(el('span', 'standings-panel__con-penalty', `（${row.conPenalty}）`));
+    }
     panel.appendChild(cell);
   }
   return panel;
