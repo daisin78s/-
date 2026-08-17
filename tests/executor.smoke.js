@@ -589,6 +589,24 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 }
 
 // ---------------------------------------------------------------------------
+// 15b. CON cards' own EMBLEM_A/B/C count too, same as M (2026-08-17: 5 more CON faces gained real
+// emblem values -- 傲慢/CON004A(地2), 狂信/CON003A(天2), 潔癖/CON002A(人2), 強欲/CON002B(地1,天1),
+// 憂鬱/CON003B(人1) -- alongside 祝福/CON001A's pre-existing 地1,天1,人1. Not a new code path (already
+// confirmed generic/sheet-agnostic in 2026-08-16's CON006B fix, see main.js's computePlayerBuildStats
+// doc), just a regression check that a second real CON-emblem card keeps working the same way.
+// ---------------------------------------------------------------------------
+{
+  const state = freshState();
+  giveCard(state, 'CON004A', 'P1'); // 傲慢: EMBLEM_A=2 (地2)
+  check('EMBLEM_COUNT(地) counts CON004A\'s own EMBLEM_A, not just M/A/B/C decks', executor.evalMetric(state, index, 'P1', { name: 'EMBLEM_COUNT', args: ['地'] }), 2);
+  check('MAX_EMBLEM_COUNT follows it too', executor.evalMetric(state, index, 'P1', { name: 'MAX_EMBLEM_COUNT', args: [] }), 2);
+
+  giveCard(state, 'CON002B', 'P1'); // 強欲: EMBLEM_A=1,EMBLEM_B=1 (地1,天1)
+  check('EMBLEM_COUNT(地) sums across CON cards too: CON004A\'s 2 + CON002B\'s 1', executor.evalMetric(state, index, 'P1', { name: 'EMBLEM_COUNT', args: ['地'] }), 3);
+  check('EMBLEM_COUNT(天) picks up CON002B\'s own 1', executor.evalMetric(state, index, 'P1', { name: 'EMBLEM_COUNT', args: ['天'] }), 1);
+}
+
+// ---------------------------------------------------------------------------
 // 16. MAX_EMBLEM_COUNT/TOTAL_EMBLEM_COUNT/COST_TOTAL (2026-07-30, added for QST GOAL conditions --
 // see [[project-dice-wp-qst-spec]]). Reuses the same M004(地1,天1,人1)/M012(人3) fixtures as #15.
 // ---------------------------------------------------------------------------

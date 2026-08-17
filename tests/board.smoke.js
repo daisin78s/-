@@ -14,13 +14,6 @@ const executor = require('../src/executor');
 
 const index = buildDataIndex(loadGameData(path.join(__dirname, '..', 'data', 'game.json')));
 
-// JOB010 (革命家)'s real TAP text ("PAY(2K);BUILD(U)", 2026-08-17 per user spec) hasn't been synced into
-// game.xlsx/game.json yet -- see this suite's own JOB010 test section further down for why this is
-// patched onto a synthetic copy of the row here (same rationale/pattern as executor.smoke.js's own
-// CON005B override): lets the new PAY command + BUILD-anywhere-in-the-field engine support be verified
-// against the real, still-unmodified data-loading pipeline ahead of that spreadsheet edit.
-index.byId.set('JOB010', { sheet: 'JOB', row: { ...index.byId.get('JOB010').row, TAP: 'PAY(2K);BUILD(U)' } });
-
 let passCount = 0;
 let failCount = 0;
 function check(label, actual, expected) {
@@ -1508,8 +1501,8 @@ function totalAbc(p) { return (p.resources.A || 0) + (p.resources.B || 0) + (p.r
 // ---------------------------------------------------------------------------
 // JOB010/革命家 (2026-08-17, per user spec: "TAPして2〇を支払い、カードを１枚選んでLVアップする。LVアップ
 // に必要な資源は通常通り支払う", confirmed 〇=K and the LVUP candidate scope = the normal BUILD(U) one) --
-// TAP="PAY(2K);BUILD(U)" (synthetic override at the top of this file, see its own doc: game.xlsx isn't
-// synced with this yet). Exercises 3 new/changed engine pieces at once: the new PAY command, BUILD being
+// real TAP="PAY(2K);BUILD(U)" as of game.xlsx's own sync. Exercises 3 new/changed engine pieces at once:
+// the new PAY command, BUILD being
 // found anywhere in a TAP field (not just commands[0]) by board.resolveProgramOrBuild, and candidate
 // existence being checked *before* a leading PAY runs (2026-08-17 fix -- otherwise a player with no
 // upgradeable card would lose the 2K for nothing).
