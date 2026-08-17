@@ -31,6 +31,10 @@ const { parse } = require('./dsl-parser');
 const { lowerProgram, lowerCostList } = require('./command-builder');
 const { createCardInstance } = require('./game-state');
 const executor = require('./executor');
+// Only for 開拓者/JOB009's random A/B/C pick (see grantPioneerBonusIfEarned) -- every other random
+// choice in board.js already goes through state.rng via executor's own grant helpers, this is the one
+// spot that needs the raw draw itself.
+const rngMod = require('./rng');
 // Only for BLOCK_UPGRADE_UNLESS_QST_RANK (CON004A, see isUpgradeBlockedByQstRank) -- qst.js sits above
 // executor.js in the layering and never requires board.js, so this direction is safe.
 const qst = require('./qst');
@@ -178,6 +182,9 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
 
   const map = state.maps[mapId];
   if (!map) throw new executor.ExecutionError(`Unknown map: ${mapId}`);
+  // 開拓者 (2026-08-17): must be read before anything below touches map.slots -- see
+  // isMapEmptyOfDice/grantPioneerBonusIfEarned's own doc.
+  const mapWasEmptyOfDice = isMapEmptyOfDice(map);
   const areaRow = getAreaRow(index, map.currentAreaId);
   const requirements = getSlotRequirements(areaRow);
 
@@ -297,6 +304,8 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
       return { success: false, reason: 'UNAFFORDABLE_USAGE_FEE', amount: owedFee.amount };
     }
   }
+
+  grantPioneerBonusIfEarned(state, index, actionContext, mapWasEmptyOfDice, die.kind === 'COLOR');
 
   return { success: true, actionResult };
 }
@@ -569,6 +578,9 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
 
   const map = state.maps[mapId];
   if (!map) throw new executor.ExecutionError(`Unknown map: ${mapId}`);
+  // 開拓者 (2026-08-17): must be read before anything below touches map.slots -- see
+  // isMapEmptyOfDice/grantPioneerBonusIfEarned's own doc.
+  const mapWasEmptyOfDice = isMapEmptyOfDice(map);
   const areaRow = getAreaRow(index, map.currentAreaId);
   const requirements = getSlotRequirements(areaRow);
 
@@ -689,6 +701,8 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
     executor.emitAndResolve(state, index, actionContext, 'PLACE', mapId);
   }
   chargeUsageFeeIfOwed(state, map, playerId);
+  // Once per group action, not once per die within it -- see grantPioneerBonusIfEarned's own doc.
+  grantPioneerBonusIfEarned(state, index, actionContext, mapWasEmptyOfDice, dice.some((d) => d.kind === 'COLOR'));
   // Real grant now (see areaTrailingAdds' own doc above) -- must land before the final candidates list
   // below is computed, same ordering resolveProgramOrBuild uses for the single-die path.
   if (areaTrailingAdds) {
@@ -900,6 +914,43 @@ function playerHasOwnColorDieInMapSlots(state, map, playerId) {
     }
   }
   return player.dice.some((d) => d.kind === 'COLOR' && ownDieIdsInSlots.has(d.id));
+}
+
+/** True if playerId's own JOB is 開拓者/JOB009 (2026-08-17, per user spec: "まだ１個もダイスが置かれてい
+ * ないAREAに色ダイスを置いたとき　資源ABCをランダムに１個得る"). Bespoke, no DSL representation -- same
+ * class of exception as isColorDieReuseBlocked above, or executor.js's PAYMENT_CHOICE_CON_FACE_ID.
+ * Matched by NAME rather than physical id, since JOB ids could in principle get reorganized the same way
+ * CON's own physical slots did (2026-08-17 CON-sheet reorg) -- see that incident's own memory. JOB has
+ * no A/B tier flip the way CON does, so player.jobCardId is already the live faceId directly, no
+ * ownedCardPhysicalIds scan needed. */
+function hasPioneerAbility(state, index, playerId) {
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player.jobCardId) return false;
+  return getCardRow(index, player.jobCardId).NAME === '開拓者';
+}
+
+/** True if none of map's slots currently hold any occupant, from any player (2026-08-17, for 開拓者's own
+ * "まだ１個もダイスが置かれていないAREA" trigger condition, confirmed with the user: whole-AREA/any-
+ * player basis, not "this player's own first placement"; also confirmed to re-trigger after an AREA
+ * LVUPs, which this naturally already does since runSetCurrentArea's own LVUP handling resets map.slots
+ * to fresh empty arrays -- same live-state read playerHasOwnColorDieInMapSlots above relies on for the
+ * same reason). Must be read BEFORE the current action's own die(s) get pushed into map.slots. */
+function isMapEmptyOfDice(map) {
+  return map.slots.every((occupants) => occupants.length === 0);
+}
+
+/** Grants 開拓者's bonus if earned by this placement (2026-08-17) -- 1 random A/B/C, via the same
+ * grantResourceAndEmitGet every other resource grant in the engine uses (so e.g. a player who also owns
+ * 育成者/JOB006 still sees its own GET-reactive PASSIVE fire correctly off this, same as any other
+ * source). Only ever called once per placement action (placeDice: once per die; placeDiceGroup: once for
+ * the whole group, not once per die within it -- confirmed with the user this is a "first move into this
+ * AREA" reward, not a per-die one, so stacking several dice into a single group action shouldn't multiply
+ * it). wasEmpty must be captured by the caller *before* this action's own die(s) are committed. */
+function grantPioneerBonusIfEarned(state, index, context, wasEmpty, hasColorDie) {
+  if (!wasEmpty || !hasColorDie) return;
+  if (!hasPioneerAbility(state, index, context.playerId)) return;
+  const resource = ['A', 'B', 'C'][Math.floor(rngMod.next(state.rng) * 3)];
+  executor.grantResourceAndEmitGet(state, index, context, resource, 1);
 }
 
 /**

@@ -1420,5 +1420,83 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   check('...and never mutates the real state', d1.placedMapId, null);
 }
 
+// ---------------------------------------------------------------------------
+// 開拓者/JOB009 (2026-08-17, per user spec: "まだ１個もダイスが置かれていないAREAに色ダイスを置いたとき
+// 資源ABCをランダムに１個得る", confirmed: whole-AREA/any-player basis, includes castle/monument slots,
+// re-triggers after an AREA LVUPs, does NOT trigger for wD, once per placement ACTION (not once per die
+// in a stacked group)).
+// ---------------------------------------------------------------------------
+function totalAbc(p) { return (p.resources.A || 0) + (p.resources.B || 0) + (p.resources.C || 0); }
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.jobCardId = 'JOB009';
+  const d1 = giveDie(state, 'P1', 1); // AREA001A SLOT1=1, a fresh map nobody has touched yet
+  const before = totalAbc(p1);
+  const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
+  check('開拓者: placement on a fresh AREA still succeeds normally', result.success, true);
+  check('...and grants exactly 1 A/B/C on top of whatever the AREA itself gave', totalAbc(p1) - before, 1);
+
+  const d2 = giveDie(state, 'P1', 2); // AREA001A SLOT2=2, same (now non-empty) map
+  const before2 = totalAbc(p1);
+  board.placeDice(state, index, { playerId: 'P1' }, d2.id, 'MAP001', 1);
+  check('開拓者: a 2nd placement on the same (no longer empty) AREA does not trigger again', totalAbc(p1) - before2, 0);
+}
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.jobCardId = 'JOB009';
+  const wDie = createDie('test-wd-pioneer', 'WHITE');
+  wDie.value = 1;
+  p1.dice.push(wDie);
+  const before = totalAbc(p1);
+  board.placeDice(state, index, { playerId: 'P1' }, wDie.id, 'MAP001', 0);
+  check('開拓者: a white die (wD) on a fresh AREA does not trigger the bonus', totalAbc(p1) - before, 0);
+}
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1'); // no jobCardId set at all
+  const d1 = giveDie(state, 'P1', 1);
+  const before = totalAbc(p1);
+  board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
+  check('A player without 開拓者 gets no bonus from a fresh-AREA placement', totalAbc(p1) - before, 0);
+}
+{
+  // Group placement on the castle (both slots are EX, always "fresh" per-die but this is ONE action) --
+  // must grant exactly once, not once per die.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.jobCardId = 'JOB009';
+  p1.resources.BZ = 20;
+  const d1 = giveDie(state, 'P1', 6);
+  const d2 = giveDie(state, 'P1', 6);
+  const before = totalAbc(p1);
+  const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
+  check('開拓者: group placement onto a fresh castle succeeds', result.success, true);
+  check('...and grants exactly 1 A/B/C total, not 1 per die in the group', totalAbc(p1) - before, 1);
+}
+{
+  // Re-triggers once the AREA LVUPs (map.slots resets), even though this player already placed there
+  // before the LVUP -- same live-state check playerHasOwnColorDieInMapSlots's own CON006A fix relies on.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.jobCardId = 'JOB009';
+  const d1 = giveDie(state, 'P1', 1); // AREA001A SLOT1=1
+  board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
+  const d2 = giveDie(state, 'P1', 2); // AREA001A SLOT2=2, same already-touched map -- no bonus this time
+  const beforeSecond = totalAbc(p1);
+  board.placeDice(state, index, { playerId: 'P1' }, d2.id, 'MAP001', 1);
+  check('開拓者: no bonus for the 2nd placement before the LVUP', totalAbc(p1) - beforeSecond, 0);
+
+  // A005A.ONCE = 'MAP001.CURRENT_AREA=AREA001B' -- the real LVUP trigger, resets map.slots for real.
+  executor.runProgram(state, index, { playerId: 'P1' }, getCardRow(index, 'A005A').ONCE);
+  check('MAP001 is now AREA001B (a fresh, empty tier)', state.maps['MAP001'].currentAreaId, 'AREA001B');
+
+  const d3 = giveDie(state, 'P1', 1); // AREA001B SLOT1=1
+  const beforeThird = totalAbc(p1);
+  board.placeDice(state, index, { playerId: 'P1' }, d3.id, 'MAP001', 0);
+  check('開拓者: bonus fires again after the LVUP, even though this player placed here before', totalAbc(p1) - beforeThird, 1);
+}
+
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);
