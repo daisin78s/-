@@ -917,6 +917,20 @@ function exitReplayMode() {
 function handleReplayBack() { if (replayCursor > 0) { replayCursor--; render(STATE); } }
 function handleReplayForward() { if (replayCursor < replayHistory.length - 1) { replayCursor++; render(STATE); } }
 
+/** Jumps straight to round N's own first recorded entry (2026-08-17, per user request: "リプレイモードに
+ * R1（ラウンド1　ゲーム開始時）R2　R3　R4に飛べるボタンが欲しい") -- R1's target is always index 0 (the
+ * very first entry recording ever starts at, necessarily round 1), the others wherever that round's own
+ * first move first got recorded. No-op if that round was never reached this game (see
+ * renderReplayControls, which disables the button in that case) -- shouldn't normally happen for a
+ * finished 4-round game, but stays safe rather than throwing if this is ever called against a shorter
+ * history (e.g. a saved ranking-entry replay from before round 4, if that's ever possible). */
+function jumpToReplayRound(round) {
+  const idx = replayHistory.findIndex((s) => s.round === round);
+  if (idx === -1) return;
+  replayCursor = idx;
+  render(STATE);
+}
+
 /** The replay-mode counterpart of render() (see this section's own doc for why it's a separate,
  * side-effect-free function rather than branching deep inside render() itself). Computes `next` the same
  * way render() does (minus the live-only stillMidTurnPlayerId/aiOpenTurnPlayerId override, which reads
@@ -949,6 +963,12 @@ function renderReplayControls() {
   document.getElementById('replay-back').disabled = replayCursor <= 0;
   document.getElementById('replay-forward').disabled = replayCursor >= replayHistory.length - 1;
   document.getElementById('replay-position').textContent = `手 ${replayCursor + 1} / ${replayHistory.length}`;
+  // R1-R4 jump buttons (see jumpToReplayRound's own doc) -- disabled for any round this particular
+  // history never actually reached, same "don't offer a jump with nowhere to land" reasoning as
+  // replay-back/forward's own disabled states above.
+  for (let round = 1; round <= 4; round++) {
+    document.getElementById(`replay-round-${round}`).disabled = !replayHistory.some((s) => s.round === round);
+  }
   // Reserves enough top space that .replay-controls' own fixed position (see style.css) never covers
   // the board underneath (2026-08-1X, found via tablet-width testing -- iPad portrait's narrower
   // #game-layout stack has shop cards right at the top, and the bar sat directly on top of them,
@@ -5349,6 +5369,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('game-end-replay-button').addEventListener('click', () => enterReplayMode());
   document.getElementById('replay-back').addEventListener('click', handleReplayBack);
   document.getElementById('replay-forward').addEventListener('click', handleReplayForward);
+  for (let round = 1; round <= 4; round++) {
+    document.getElementById(`replay-round-${round}`).addEventListener('click', () => jumpToReplayRound(round));
+  }
   document.getElementById('replay-exit').addEventListener('click', exitReplayMode);
 
   document.getElementById('game-end-ranking-button').addEventListener('click', openRankingOverlay);
