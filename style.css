@@ -532,14 +532,20 @@ h1, h2, h3 { margin: 0; }
    させてください") -- empty (and hidden) for any card whose NAME hasn't been customized yet, see
    fillCardFace's own q('.shop-card__name') line. Only CON ever populates this now (every other deck's
    NAME shows via .shop-card__id instead) -- as of 2026-08-17, per user request ("青字→黒字 文字サイズを
-   JOBと同じ大きさに 得られる初期資源のアイコンを右寄せに NAMEと得られる初期資源１行になるように"), it's
-   a flex row holding both the NAME text (.shop-card__name-text) and the initial-resource onceIcon side by
-   side -- font-size/color now match .shop-card__id's own (13px, default text color) instead of the old
-   smaller blue title style. */
+   JOBと同じ大きさに 得られる初期資源のアイコンを右寄せに NAMEと得られる初期資源１行になるように"), a
+   2-column grid: column 1 (auto width) holds the NAME text, pinned to row 1 only; column 2 (1fr, the
+   remaining width) holds the onceIcon, which wraps onto extra rows within that same column when it has
+   more than fits on one line (e.g. CON001B's 4 dice), and the emblem right after it in column 2/row 2
+   when there is one (2026-08-17 follow-up, per user mockup: "裏切　⚡🎲🎲 / 　　　　　🎲🎲",
+   "祝福　⚡3VP / 　　　　天地人" -- see fillCardFace's own doc for why the emblem is relocated here for
+   CON specifically). Grid (not flex) is what lets column 1 stay pinned to a single row while column 2's
+   content wraps freely under it -- font-size/color match .shop-card__id's own (13px, default text
+   color) instead of the old smaller blue title style. */
 .shop-card__name {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  column-gap: 6px;
   font-weight: 700;
   font-size: 13px;
   line-height: 1.2;
@@ -550,27 +556,34 @@ h1, h2, h3 { margin: 0; }
   display: none;
 }
 
-/* Without this, flexbox's default min-width:auto lets this shrink toward its min-content width -- which
-   for unbroken CJK text is as little as a single character (line-breaks are allowed between CJK
-   characters by default), so the name visibly wrapped one character per line once squeezed by the
-   onceIcon sibling taking its own share of the row (found via screenshot verification, 2026-08-17). */
 .shop-card__name-text {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  grid-column: 1;
+  grid-row: 1;
 }
 
-/* Pushes the onceIcon (.action-icons) to the row's right edge regardless of the name text's own width
-   (2026-08-17, per user request: "得られる初期資源のアイコンを右寄せに"). Scoped to a direct child of
-   .shop-card__name specifically so it doesn't affect .action-icons used elsewhere on the card (effect
-   rows etc.). width:auto overrides .action-icons' own base width:100% (meant for a full-width effect
-   row) -- left as 100% here, it became this flex row's flex-basis, squeezing the NAME text down to a
-   sub-pixel-thin margin that ellipsis-truncated even a plain 2-character name (found via measurement:
-   name+icon summed to 93.9px inside a 94px row -- technically fit, but only by a hair, and did not
-   render reliably). auto lets it size to its own content instead of contesting the row's full width. */
+/* Pushes the onceIcon (.action-icons) to column 2's right edge, wrapping within that column's own width
+   instead of overflowing the card (2026-08-17, per user request: "得られる初期資源のアイコンを右寄せに",
+   then the multi-row mockup above). Scoped to a direct child of .shop-card__name specifically so it
+   doesn't affect .action-icons used elsewhere on the card (effect rows etc.). width:auto overrides
+   .action-icons' own base width:100% (meant for a full-width effect row), which would otherwise force
+   this column itself to size to the icon's full unwrapped content instead of actually wrapping within
+   it. */
 .shop-card__name > .action-icons {
+  grid-column: 2;
+  grid-row: 1;
   width: auto;
-  margin-left: auto;
+  justify-content: flex-end;
+}
+
+/* The emblem, relocated here (2026-08-17, see fillCardFace's own doc) from its usual card-wide
+   position:absolute top-right corner (still used by every other deck -- see .shop-card__emblem's base
+   rule) into column 2/row 2, right under the icon. Overrides position back to static so it participates
+   in this grid normally instead of floating over row 1's content. */
+.shop-card__name > .shop-card__emblem {
+  position: static;
+  grid-column: 2;
+  grid-row: 2;
+  justify-content: flex-end;
 }
 
 .shop-card__id {

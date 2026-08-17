@@ -2290,9 +2290,17 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
   const idEl = q('.shop-card__id');
   const onceIcon = faceId.startsWith('CON') ? buildActionIcons(facts.once) : null;
   if (faceId.startsWith('CON')) {
+    // NAME + icon + emblem all share this one grid area now (2026-08-17, per user request/mockup:
+    // "裏切　⚡🎲🎲 / 　　　　　🎲🎲", "祝福　⚡3VP / 　　　　天地人") -- NAME pinned to column 1/row 1
+    // (see .shop-card__name's own CSS), icon wrapping onto its own extra line(s) within column 2 when it
+    // doesn't fit one row (4 dice for CON001B), and the emblem (normally the card-wide, absolutely-
+    // positioned top-right corner badge every other deck still uses) relocated into column 2/row 2 here,
+    // directly under the icon, instead of overlapping the corner. Moved (not cloned) so there's still
+    // only one emblemEl in the DOM.
     const nameEl = q('.shop-card__name');
     if (facts.name) nameEl.appendChild(el('span', 'shop-card__name-text', facts.name));
     if (onceIcon) nameEl.appendChild(onceIcon);
+    if (emblem) nameEl.appendChild(emblemEl);
   } else if (facts.name) {
     idEl.textContent = facts.name;
   } else {
