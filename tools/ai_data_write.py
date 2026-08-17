@@ -23,9 +23,10 @@ each existing 平均得点{r}R one, which would have silently written into the w
 hardcoded indices been kept). The 使用回数 columns (2026-08-07, per user spec, also the user's own
 pre-existing layout addition) only ever get a value for rows report['abcm'][id][round]['avgUsage'] is
 non-null for (B008A/B008B and the 8 A-deck fee-generating cards -- see tools/ai_data_report.js's
-isUsageEligible; B008A means "LVUP success rate", B008B means "天 emblem count at GAME_END", per
-user spec 2026-08-12) -- every other row's cells are cleared to blank, not written as 0, so a card
-with no "usage" concept at all never shows a misleading number.
+isUsageEligible; B008A means "LVUP success rate", B008B means "max(天,地,人) emblem count at
+GAME_END" (2026-08-17, following B008B's own PASSIVE metric change), per user spec 2026-08-12) --
+every other row's cells are cleared to blank, not written as 0, so a card with no "usage" concept
+at all never shows a misleading number.
 
 Usage: python tools/ai_data_write.py [jsonPath] [xlsxPath]
 """

@@ -699,7 +699,7 @@
       "LEVEL": 2,
       "ONCE": "",
       "TAP": "",
-      "PASSIVE": "VP_MODIFIER(COUNT(天))",
+      "PASSIVE": "VP_MODIFIER(MAX_EMBLEM_COUNT)",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": ""
@@ -720,7 +720,8 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "M",
-      "INST": ""
+      "INST": "カードを1枚選んでアンタップする\n兆しカードは選べない",
+      "アイコン": "2K→2A"
     },
     {
       "ID": "C002A",
@@ -736,7 +737,8 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "M",
-      "INST": ""
+      "INST": "カードを1枚選んでアンタップする\n兆しカードは選べない",
+      "アイコン": "2K→2B"
     },
     {
       "ID": "C003A",
@@ -752,7 +754,8 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "M",
-      "INST": ""
+      "INST": "カードを1枚選んでアンタップする\n兆しカードは選べない",
+      "アイコン": "2K→2C"
     },
     {
       "ID": "C004A",
@@ -762,13 +765,14 @@
       "EMBLEM_C": 1,
       "VP": 0,
       "LEVEL": 1,
-      "ONCE": "",
+      "ONCE": "UNTAP_CHOICE(SELF,1)",
       "TAP": "ADD(K)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": ""
+      "INST": "カードを1枚選んでアンタップする\n兆しカードは選べない",
+      "アイコン": "⚡⤴"
     },
     {
       "ID": "C005A",
@@ -778,13 +782,14 @@
       "EMBLEM_C": 1,
       "VP": 0,
       "LEVEL": 1,
-      "ONCE": "",
+      "ONCE": "UNTAP_CHOICE(SELF,1)",
       "TAP": "ADD(A)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": ""
+      "INST": "カードを1枚選んでアンタップする\n兆しカードは選べない",
+      "アイコン": "⚡⤴"
     },
     {
       "ID": "C006A",
@@ -794,13 +799,14 @@
       "EMBLEM_C": 1,
       "VP": 0,
       "LEVEL": 1,
-      "ONCE": "",
+      "ONCE": "UNTAP_CHOICE(SELF,1)",
       "TAP": "ADD(B)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": ""
+      "INST": "カードを1枚選んでアンタップする\n兆しカードは選べない",
+      "アイコン": "⚡⤴"
     },
     {
       "ID": "C007A",
@@ -810,13 +816,14 @@
       "EMBLEM_C": 1,
       "VP": 0,
       "LEVEL": 1,
-      "ONCE": "",
+      "ONCE": "UNTAP_CHOICE(SELF,1)",
       "TAP": "ADD(C)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": ""
+      "INST": "カードを1枚選んでアンタップする\n兆しカードは選べない",
+      "アイコン": "⚡⤴"
     },
     {
       "ID": "C008A",
@@ -832,7 +839,8 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": ""
+      "INST": "カードを３枚選んでアンタップする\n兆しカードをアンタップするときは3枚分としてカウントする",
+      "アイコン": "⚡⤴3"
     },
     {
       "ID": "C001B",
@@ -842,13 +850,14 @@
       "EMBLEM_C": 1,
       "VP": 1,
       "LEVEL": 2,
-      "ONCE": "",
+      "ONCE": "UNTAP_CHOICE(SELF,1)",
       "TAP": "CHANGE(K,A,ALL)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "M",
-      "INST": ""
+      "INST": "カードを1枚選んでアンタップする\n兆しカードは選べない",
+      "アイコン": "⚡⤴\nK→A（ALL)"
     },
     {
       "ID": "C002B",
@@ -858,13 +867,14 @@
       "EMBLEM_C": 1,
       "VP": 1,
       "LEVEL": 2,
-      "ONCE": "",
+      "ONCE": "UNTAP_CHOICE(SELF,1)",
       "TAP": "CHANGE(K,B,ALL)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "M",
-      "INST": ""
+      "INST": "カードを1枚選んでアンタップする\n兆しカードは選べない",
+      "アイコン": "⚡⤴\nK→B（ALL)"
     },
     {
       "ID": "C003B",
@@ -874,13 +884,14 @@
       "EMBLEM_C": 1,
       "VP": 1,
       "LEVEL": 2,
-      "ONCE": "",
+      "ONCE": "UNTAP_CHOICE(SELF,1)",
       "TAP": "CHANGE(K,C,ALL)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "M",
-      "INST": ""
+      "INST": "カードを1枚選んでアンタップする\n兆しカードは選べない",
+      "アイコン": "⚡⤴\nK→C（ALL)"
     },
     {
       "ID": "C004B",
@@ -896,7 +907,8 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": ""
+      "INST": "カードを３枚選んでアンタップする\n兆しカードをアンタップするときは3枚分としてカウントする",
+      "アイコン": "⚡⤴3"
     },
     {
       "ID": "C005B",
@@ -912,7 +924,8 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": ""
+      "INST": "カードを３枚選んでアンタップする\n兆しカードをアンタップするときは3枚分としてカウントする",
+      "アイコン": "⚡⤴3"
     },
     {
       "ID": "C006B",
@@ -928,7 +941,8 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": ""
+      "INST": "カードを３枚選んでアンタップする\n兆しカードをアンタップするときは3枚分としてカウントする",
+      "アイコン": "⚡⤴3"
     },
     {
       "ID": "C007B",
@@ -944,7 +958,8 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": ""
+      "INST": "カードを３枚選んでアンタップする\n兆しカードをアンタップするときは3枚分としてカウントする",
+      "アイコン": "⚡⤴3"
     },
     {
       "ID": "C008B",
@@ -954,13 +969,14 @@
       "EMBLEM_C": 2,
       "VP": 1,
       "LEVEL": 2,
-      "ONCE": "UNTAP_CHOICE(SELF,3)",
+      "ONCE": "UNTAP_CHOICE(SELF,6)",
       "TAP": "ADD(VP)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": ""
+      "INST": "カードを6枚選んでアンタップする\n兆しカードをアンタップするときは3枚分としてカウントする",
+      "アイコン": "⚡⤴6"
     }
   ],
   "CON": [
@@ -1529,7 +1545,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "TAPした時資源Zを得る\n⤴⤴⤴でアンタップできる"
+      "INST": "TAPした時Zを得る\n⤴⤴⤴でアンタップできる"
     },
     {
       "ID": "JOB002",
@@ -1546,7 +1562,7 @@
       "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "カードを獲得した時食料を得る\n毎ターンアンタップする\n⤴⤴⤴でアンタップできる"
+      "INST": "カードを獲得した時〇を得る\n毎ターンアンタップする\n⤴⤴⤴でアンタップできる"
     },
     {
       "ID": "JOB003",
@@ -1580,7 +1596,7 @@
       "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "TAPした時、3◯を2BZに変える\nこのターンモニュメントを建築できない\n毎ターンアンタップする\n⤴⤴⤴でアンタップできる"
+      "INST": "TAPした時、3◯を消費して2資源軽減を得る\nこのターンモニュメントを建築できない\n毎ターンアンタップする\n⤴⤴⤴でアンタップできる"
     },
     {
       "ID": "JOB005",
@@ -1597,7 +1613,7 @@
       "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "食料を得たときTAPすると\nそのうちの１個をZに変える\n初期資源含む\n毎ターンアンタップする\n⤴⤴⤴でアンタップできる"
+      "INST": "〇を得たときTAPすると\nそのうちの１個をZに変える\n初期資源含む\n毎ターンアンタップする\n⤴⤴⤴でアンタップできる"
     },
     {
       "ID": "JOB006",
@@ -1614,7 +1630,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "ｗDを得たときその数だけ食料を得る\n追加色Dを得たときZを得る\n初期資源含む\n毎ターンアンタップする\n⤴⤴⤴でアンタップできる"
+      "INST": "追加色Dを得たときZを得る\n🎲を得たときその数だけ〇を得る\n初期資源含む\n毎ターンアンタップする\n⤴⤴⤴でアンタップできる"
     },
     {
       "ID": "JOB007",
@@ -1631,7 +1647,7 @@
       "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "TAPした時、BZを得る\nこのターンA,B,Cカードを建築できない\n⤴⤴⤴でアンタップできる"
+      "INST": "TAPした時、１資源軽減を得る\nこのターンA,B,Cカードを建築できない\n⤴⤴⤴でアンタップできる"
     },
     {
       "ID": "JOB008",
@@ -1665,7 +1681,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "まだ１個もダイスが置かれていないAREAに色ダイスを置いたとき\n資源ABCをランダムに１個得る"
+      "INST": "まだダイスが１個も置かれていないAREAに色ダイスを配置したとき\n資源ABCをランダムに１個得る"
     }
   ],
   "QST": [

@@ -88,9 +88,11 @@ function siblingFaceId(faceId) {
  *    LVUPで0.8" -- supersedes the old "wD granted at build time" meaning from when B008A's ONCE still
  *    scaled with 天 emblems; that scaling moved to B008B's PASSIVE, see the commit that made it a
  *    persistent effect).
- *  - B008B: 天 emblem count at GAME_END, for whichever player owns it (2026-08-12, per user spec:
- *    "B008Bはゲーム終了時のエンブレム天の数" -- supersedes the old "空欄でOK"/not-tracked state, now that
- *    B008B's own PASSIVE=VP_MODIFIER(COUNT(天)) makes that count directly meaningful).
+ *  - B008B: max(天,地,人) emblem count at GAME_END, for whichever player owns it (2026-08-12, per user
+ *    spec: "B008Bはゲーム終了時のエンブレム天の数" -- supersedes the old "空欄でOK"/not-tracked state, now
+ *    that B008B's own PASSIVE makes that count directly meaningful; 2026-08-17, per user request
+ *    ("最多エンブレムの数*VPにしたい"), the PASSIVE itself changed from VP_MODIFIER(COUNT(天)) to
+ *    VP_MODIFIER(MAX_EMBLEM_COUNT), so this usage metric follows suit).
  *  - Every other B/C-deck face WITH a real TAP field (data-driven check below -- B004A/B/B008A/B all have
  *    an empty TAP, confirmed via data/game.json, so this naturally excludes them without a hardcoded
  *    list): TAP count, from activationCounts. A tier-A face's own count is a *cumulative* total including
@@ -266,11 +268,12 @@ function main() {
             const lvupSucceeded = Object.values(detail.buildsByRound).some((facesThisRound) => facesThisRound.includes('B008B'));
             e.usageSum += lvupSucceeded ? 1 : 0;
           }
-          // B008B (2026-08-12): 天 emblem count at GAME_END for the player who owns it -- read straight
-          // off the final `state` rather than anything game-runner.js tracks, since it's just a live
-          // metric query (same COUNT(天) B008B's own PASSIVE uses, see executor.collectVpModifiers).
+          // B008B (2026-08-12; metric changed 2026-08-17): max(天,地,人) emblem count at GAME_END for
+          // the player who owns it -- read straight off the final `state` rather than anything
+          // game-runner.js tracks, since it's just a live metric query (same MAX_EMBLEM_COUNT B008B's
+          // own PASSIVE uses, see executor.collectVpModifiers).
           if (faceId === 'B008B') {
-            e.usageSum += executor.evalMetric(state, index, playerId, { name: 'COUNT', args: ['天'] });
+            e.usageSum += executor.evalMetric(state, index, playerId, { name: 'MAX_EMBLEM_COUNT', args: [] });
           }
           const feeForThisCard = (detail.areaFeeByRoundAndCard[round] || {})[faceId];
           if (feeForThisCard !== undefined) e.usageSum += feeForThisCard;

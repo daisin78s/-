@@ -1452,13 +1452,16 @@ const ACTION_ICON_BUILDERS = {
   // 2026-08-0X, per user request ("⤴️を消してそこに毎タームといれる"): bare UNTAP() only ever appears
   // as a TURNEND effect (confirmed against data/game.json -- JOB004/005/007, all "usable once per turn"
   // reactive/direct TAP abilities), so "毎ターン" (plain text) reads more clearly there than the ⤴️
-  // glyph alone did. UNTAP_CHOICE(SELF,3) is a different DSL shape (an ONCE effect on C004B/C005B/
-  // C006B/C007B/C008A/C008B, not a per-turn reset) and keeps its own ⤴️×3 icon below, unaffected --
-  // still shown the same way even though it now caps at 3 cards instead of untapping everything
-  // (2026-08-15, per user request: "すべてをアンタップにするを、自分のカード3枚をアンタップにするに
-  // 変更"), since the icon already happened to show exactly 3 arrows.
+  // glyph alone did.
   'UNTAP()': () => actionRow([actionSuffix('毎ターン')]),
-  'UNTAP_CHOICE(SELF,3)': () => actionRow([actionEmoji('⚡'), actionEmoji('⤴️'), actionEmoji('⤴️'), actionEmoji('⤴️')]),
+  // UNTAP_CHOICE(SELF,n) (2026-08-17, per user request, replacing the old flat "⤴️×3" icon that used to
+  // be the only variant): the C sheet now has 3 different budgets across its cards (mostly n=1, C008A
+  // n=3, C008B n=6) -- one arrow plus the budget number, matching the spreadsheet's own hand-authored
+  // アイコン column text verbatim ("⚡⤴" / "⚡⤴3" / "⚡⤴6"). n=1 omits the number (a single arrow already
+  // reads as "untap one"), n=3/6 append it as plain text after the arrow.
+  'UNTAP_CHOICE(SELF,1)': () => actionRow([actionEmoji('⚡'), actionEmoji('⤴️')]),
+  'UNTAP_CHOICE(SELF,3)': () => actionRow([actionEmoji('⚡'), actionEmoji('⤴️'), actionSuffix('3')]),
+  'UNTAP_CHOICE(SELF,6)': () => actionRow([actionEmoji('⚡'), actionEmoji('⤴️'), actionSuffix('6')]),
   // REPLACE_ADD(D,wD) (confirmed 2026-07-29): a passive that swaps "gain your own die" for "gain a
   // white die" instead -- shown as the source resource turning into the replacement.
   'REPLACE_ADD(D,wD)': () => actionRow([actionSuffix('色D'), actionArrow(), actionEmoji('🎲')]),

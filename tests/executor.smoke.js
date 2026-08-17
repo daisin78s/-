@@ -138,18 +138,29 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 }
 
 // ---------------------------------------------------------------------------
-// 3b. B008B: PASSIVE=VP_MODIFIER(COUNT(天)) -- persistent, not a one-time ONCE snapshot (2026-08-12,
-//     per user request: "即時ではなく永続効果にしたい" -- moved off ONCE precisely so it keeps
-//     recomputing). Recomputed live from currently-owned 天-emblem cards every time
-//     collectVpModifiers is called, same as computeFinalScore recomputes card VP live.
+// 3b. B008B: PASSIVE=VP_MODIFIER(MAX_EMBLEM_COUNT) -- persistent, not a one-time ONCE snapshot
+//     (2026-08-12, per user request: "即時ではなく永続効果にしたい" -- moved off ONCE precisely so it
+//     keeps recomputing). Recomputed live from currently-owned emblem cards every time
+//     collectVpModifiers is called, same as computeFinalScore recomputes card VP live. Metric changed
+//     2026-08-17 from VP_MODIFIER(COUNT(天)) (天 emblems only) to VP_MODIFIER(MAX_EMBLEM_COUNT)
+//     (whichever of 天/地/人 the player has the most of), per user request
+//     ("エンブレム天の数*VPを最多エンブレムの数*VPにしたい").
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
-  giveCard(state, 'B008B', 'P1'); // EMBLEM_B=2 -> already contributes 2 to COUNT(天) on its own
-  check('B008B: VP_MODIFIER(COUNT(天)) starts at 2 (from B008B\'s own 2 EMBLEM_B)', executor.collectVpModifiers(state, index, 'P1'), 2);
+  giveCard(state, 'B008B', 'P1'); // EMBLEM_B=2 -> 天=2, the only emblem type owned so far
+  check('B008B: VP_MODIFIER(MAX_EMBLEM_COUNT) starts at 2 (from B008B\'s own 2 EMBLEM_B, 天 is the only/max type)', executor.collectVpModifiers(state, index, 'P1'), 2);
 
-  giveCard(state, 'B001A', 'P1'); // EMBLEM_B=1 -> +1 天
-  check('B008B: VP_MODIFIER(COUNT(天)) rises to 3 as soon as another 天-emblem card is owned (live, not frozen at LVUP time)', executor.collectVpModifiers(state, index, 'P1'), 3);
+  giveCard(state, 'B001A', 'P1'); // EMBLEM_B=1 -> 天 rises to 3, still the max
+  check('B008B: VP_MODIFIER(MAX_EMBLEM_COUNT) rises to 3 as soon as another 天-emblem card is owned (live, not frozen at LVUP time)', executor.collectVpModifiers(state, index, 'P1'), 3);
+
+  giveCard(state, 'A001A', 'P1'); // EMBLEM_A=1 -> 地=1 (still behind 天=3)
+  giveCard(state, 'A002A', 'P1'); // EMBLEM_A=1 -> 地=2 (still behind 天=3)
+  giveCard(state, 'A003A', 'P1'); // EMBLEM_A=1 -> 地=3 (ties 天=3)
+  check('...stays at 3 while 地 only ties 天, not yet exceeding it', executor.collectVpModifiers(state, index, 'P1'), 3);
+
+  giveCard(state, 'A004A', 'P1'); // EMBLEM_A=1 -> 地=4, now overtaking 天=3
+  check('...rises to 4 once 地 (not 天) becomes the highest emblem type -- confirms this tracks the max across all 3 types, not just 天', executor.collectVpModifiers(state, index, 'P1'), 4);
 }
 
 // ---------------------------------------------------------------------------

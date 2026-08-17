@@ -358,6 +358,11 @@ function evalCountExprNode(state, index, playerId, node) {
   if (node.type === 'Call') {
     return evalMetric(state, index, playerId, { name: node.name, args: node.args.map((a) => (a.type === 'Number' ? a.value : a.name)) });
   }
+  // A bare, no-args metric name (e.g. "VP_MODIFIER(MAX_EMBLEM_COUNT)", 2026-08-17) parses to a plain
+  // Ident rather than a Call -- same distinction lowerMetric already makes for IF conditions.
+  if (node.type === 'Ident') {
+    return evalMetric(state, index, playerId, { name: node.name, args: [] });
+  }
   if (node.type === 'Number') return node.value;
   if (node.type === 'Group' && node.items.length === 1) return evalCountExprNode(state, index, playerId, node.items[0]);
   if (node.type === 'BinaryOp') {
