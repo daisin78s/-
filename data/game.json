@@ -1042,7 +1042,7 @@
       "NOTE": "",
       "AUTO": "",
       "INST": "自分よりAREA数の多いプレイヤーがいると\nLVアップできない",
-      "アイコン": "最多AREA　✖\n　　▽\nLVUP　✖"
+      "アイコン": "最多AREA　✖\n　　▽\nLVアップ　✖"
     },
     {
       "ID": "CON005A",
@@ -1529,7 +1529,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "TAPした時資源Zを得る"
+      "INST": "TAPした時資源Zを得る\n⤴⤴⤴でアンタップできる"
     },
     {
       "ID": "JOB002",
@@ -1546,7 +1546,7 @@
       "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": ""
+      "INST": "カードを獲得した時食料を得る\n毎ターンアンタップする\n⤴⤴⤴でアンタップできる"
     },
     {
       "ID": "JOB003",
@@ -1563,7 +1563,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "M",
-      "INST": "このカードを取った時🎲を得る\nタップした時、自分のダイス1個を好きな目に変える\nそれはこのターンすでにダイスがおいてあるSLOTにも置ける"
+      "INST": "このカードを取った時🎲を得る\nタップした時、自分のダイス1個を好きな目に変える\nそれはこのターンすでにダイスがおいてあるSLOTにも置ける\n⤴⤴⤴でアンタップできる"
     },
     {
       "ID": "JOB004",
@@ -1580,7 +1580,7 @@
       "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "TAPした時、3◯を2BZに変える\nこのターンモニュメントを建築できない"
+      "INST": "TAPした時、3◯を2BZに変える\nこのターンモニュメントを建築できない\n毎ターンアンタップする\n⤴⤴⤴でアンタップできる"
     },
     {
       "ID": "JOB005",
@@ -1597,7 +1597,7 @@
       "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": ""
+      "INST": "食料を得たときTAPすると\nそのうちの１個をZに変える\n初期資源含む\n毎ターンアンタップする\n⤴⤴⤴でアンタップできる"
     },
     {
       "ID": "JOB006",
@@ -1614,7 +1614,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": ""
+      "INST": "ｗDを得たときその数だけ食料を得る\n追加色Dを得たときZを得る\n初期資源含む\n毎ターンアンタップする\n⤴⤴⤴でアンタップできる"
     },
     {
       "ID": "JOB007",
@@ -1631,7 +1631,7 @@
       "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "TAPした時、BZを得る\nこのターンA,B,Cカードを建築できない"
+      "INST": "TAPした時、BZを得る\nこのターンA,B,Cカードを建築できない\n⤴⤴⤴でアンタップできる"
     },
     {
       "ID": "JOB008",
@@ -1647,8 +1647,25 @@
       "PASSIVE": "IF(TOTAL_EMBLEM_COUNT>=3,VP_MODIFIER(1));IF(TOTAL_EMBLEM_COUNT>=6,VP_MODIFIER(1));IF(TOTAL_EMBLEM_COUNT>=9,VP_MODIFIER(1));IF(TOTAL_EMBLEM_COUNT>=12,VP_MODIFIER(1));IF(TOTAL_EMBLEM_COUNT>=15,VP_MODIFIER(1));IF(TOTAL_EMBLEM_COUNT>=18,VP_MODIFIER(1));IF(TOTAL_EMBLEM_COUNT>=21,VP_MODIFIER(1));IF(TOTAL_EMBLEM_COUNT>=24,VP_MODIFIER(1));IF(TOTAL_EMBLEM_COUNT>=27,VP_MODIFIER(1));IF(TOTAL_EMBLEM_COUNT>=30,VP_MODIFIER(1))",
       "TURNEND": "",
       "START_ORDER": "",
-      "AUTO": "A",
+      "AUTO": "",
       "INST": "今あるEMBLEM3個ごとに1VP"
+    },
+    {
+      "ID": "JOB009",
+      "NAME": "開拓者",
+      "DICE": "",
+      "COST": "",
+      "EMBLEM_A": "",
+      "EMBLEM_B": "",
+      "EMBLEM_C": "",
+      "VP": "",
+      "ONCE": "",
+      "TAP": "",
+      "PASSIVE": "",
+      "TURNEND": "",
+      "START_ORDER": "",
+      "AUTO": "",
+      "INST": "まだ１個もダイスが置かれていないAREAに色ダイスを置いたとき\n資源ABCをランダムに１個得る"
     }
   ],
   "QST": [
