@@ -1246,15 +1246,65 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   check('...no new die was granted', p.dice.length, diceBefore + 1); // +1 only for `die` itself, pushed above
 }
 {
-  // One below the cap (4 color dice) must still work normally -- only exactly-at-cap is blocked.
+  // One below the cap (4 total color dice, INCLUDING the one about to be placed) must still work normally
+  // -- only exactly-at-cap (5 total) is blocked. Revised 2026-08-17 alongside the COLOR_DICE_CAP fix below:
+  // the die being placed now counts toward the cap total too (it isn't leaving the player's ownership, just
+  // relocating), so this boundary case is 3 filler dice + the 1 placing die = 4 total, not 4 filler + 1
+  // placing = 5 (that 5-total case is now the same as the at-cap test above and is correctly refused).
   const state = freshStateWithShops();
   const p = player(state, 'P1');
   p.resources.A = 1; p.resources.B = 1; p.resources.C = 1;
-  while (p.dice.filter((d) => d.kind === 'COLOR').length < 4) giveDie(state, 'P1', 3);
+  while (p.dice.filter((d) => d.kind === 'COLOR').length < 3) giveDie(state, 'P1', 3);
   const die = giveDie(state, 'P1', 3);
   const result = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP007', 0);
-  check('AREA007 at 4 color dice (one below the cap) still succeeds', result.success, true);
-  check('...a genuine COLOR die (not wD) was gained', p.dice.filter((d) => d.kind === 'COLOR').length, 6);
+  check('AREA007 at 4 total color dice (one below the cap) still succeeds', result.success, true);
+  check('...a genuine COLOR die (not wD) was gained', p.dice.filter((d) => d.kind === 'COLOR').length, 5);
+}
+{
+  // Regression test for the actual reported bug (2026-08-17, per user report: "憤怒　6個目のカラーDを得る
+  // ことができます") -- a full round-by-round replay of the exploit: placing 1 of a CON006A (憤怒) owner's
+  // dice on AREA007 each round (freeing a "slot" the old otherColorDiceCount check counted as room),
+  // collecting a new D each time, then letting endRound() return every placed COLOR die to hand
+  // unconditionally. Before the fix above, round 2 could still gain a genuine 6th D (5 total going in,
+  // minus the 1 being placed = 4 "counted", under the cap) -- ending round 2 with 6 in hand. After the fix,
+  // round 2's placement is refused (5 total already, cap reached), keeping the player at exactly 5 forever.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const con6 = createCardInstance('CON006A');
+  con6.ownerId = 'P1';
+  state.cards[con6.physicalId] = con6;
+  p1.ownedCardPhysicalIds.push(con6.physicalId);
+  p1.resources.A = 100; p1.resources.B = 100; p1.resources.C = 100;
+  // 3 initial dice + CON006A's own ONCE=ADD(D) = 4 starting color dice (both run through the real grant
+  // path, same as actual onboarding: setup.rollInitialColorDice + chooseConFace's runProgram(ONCE)).
+  setup.rollInitialColorDice(state);
+  executor.runProgram(state, index, { playerId: 'P1', sourcePhysicalId: con6.physicalId }, 'ADD(D)');
+  check('Starting hand: 3 initial + CON006A ONCE=ADD(D) = 4 color dice', p1.dice.filter((d) => d.kind === 'COLOR').length, 4);
+
+  function placeOneOnAreaSeven() {
+    const die = p1.dice.find((d) => d.kind === 'COLOR' && d.placedMapId === null);
+    die.value = 1; // AREA007's slots are all ANY, any value works
+    return board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP007', 0);
+  }
+  function passRemainingDice() {
+    for (const p of state.players) {
+      for (const d of p.dice) if (d.placedMapId === null && !d.passed) board.passDie(state, index, { playerId: p.id }, d.id);
+    }
+  }
+
+  const round1 = placeOneOnAreaSeven();
+  check('Round 1: AREA007 placement succeeds (4 total, under cap)', round1.success, true);
+  passRemainingDice();
+  const turnFlow = require('../src/turn-flow');
+  turnFlow.endRound(state, index);
+  check('After round 1: back to 5 color dice in hand (at the cap, not over it)', p1.dice.filter((d) => d.kind === 'COLOR' && d.placedMapId === null).length, 5);
+
+  turnFlow.startRound(state);
+  const round2 = placeOneOnAreaSeven();
+  check('Round 2: AREA007 placement is now refused (5 total already at cap) -- the bug fix', round2, { success: false, reason: 'COLOR_DICE_CAP' });
+  passRemainingDice();
+  turnFlow.endRound(state, index);
+  check('After round 2: still exactly 5 color dice in hand, never 6', p1.dice.filter((d) => d.kind === 'COLOR' && d.placedMapId === null).length, 5);
 }
 {
   // CON002A (怠惰, PASSIVE=REPLACE_ADD(D,wD)) (2026-08-15, per user follow-up: "CONで上限3個を持つプレ

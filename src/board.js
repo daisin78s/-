@@ -253,7 +253,7 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
   // AREA007's CHANGE((A,B,C),D) when A/B/C can't be paid, or AREA008/009's BUILD() with no buildable
   // candidate at all) -- see wouldAreaActionHaveEffect's own doc for exactly what "no effect" means.
   // Deliberately checked *before* any mutation below so a doomed placement never burns the die.
-  const prediction = wouldAreaActionHaveEffect(state, index, actionContext, areaRow, buildValue, die.id);
+  const prediction = wouldAreaActionHaveEffect(state, index, actionContext, areaRow, buildValue);
   if (!prediction.ok) return { success: false, reason: prediction.reason };
 
   // Would this placement owe a usage fee at all? If so, snapshot state now so the whole placement can be
@@ -384,11 +384,18 @@ function buildTrailingAdds(commands) {
  * silently. The overflow-conversion chain itself (D->wD->2K) is untouched everywhere else (ADD(D)-style
  * grants, e.g. CON001B's ONCE, aren't a placement candidate at all, so they're unaffected).
  *
- * placingDieId excludes that one die from the color-dice count for this check -- at the point this runs
- * the die about to be placed here is still sitting in player.dice with placedMapId===null (the same as
- * every other in-hand die), so without excluding it, a player with exactly 4 OTHER color dice plus this
- * one (5 total, genuinely still under the cap for the purposes of "would this placement exceed it")
- * would be wrongly blocked -- found via this fix's own test coverage.
+ * Counts the player's TOTAL color dice (in hand AND currently placed on any map -- including the very
+ * die about to be placed here), not just in-hand ones (2026-08-17 fix, per user report: "憤怒　6個目の
+ * カラーDを得ることができます"). Placing this die relocates it, it doesn't remove it from the player's
+ * ownership, so excluding it (the old behavior) let a player with exactly 5 total color dice -- some
+ * merely parked on other maps -- "free up a slot" by placing one of them here and walk away with 6:
+ * round 1 they'd place 1 of their 4 starting dice (3 initial + CON006A's ONCE=ADD(D)) here, ending the
+ * round with 5 in hand once everything returns (endRound() returns every placed COLOR die unconditionally,
+ * with no cap re-check of its own); round 2 they'd do it again -- 5 total, excluding the one being placed
+ * left only 4 "counted", still under the cap of 5, so a 6th was granted. Counting the placing die too
+ * closes this: a player already holding 5 total (regardless of where any of them currently sit) can never
+ * gain a 6th through this AREA, confirmed via this fix's own regression test (a full round-by-round replay
+ * of the exact exploit above).
  *
  * A second, unconditional form of this same block (2026-08-15, per user follow-up: "CONで上限3個を持つ
  * プレイヤーはダイスを3個持つ限り訓練場にダイス候補が出ないように...現状絶対置けないはずです"): CON002A
@@ -406,14 +413,14 @@ function grantsColorDie(commands) {
   });
 }
 
-function wouldAreaActionHaveEffect(state, index, context, areaRow, buildValue, placingDieId) {
+function wouldAreaActionHaveEffect(state, index, context, areaRow, buildValue) {
   const commands = lowerProgram(parse(areaRow.ACTION));
   if (grantsColorDie(commands)) {
     const replaceAddRules = executor.getPassiveRules(state, index, context.playerId, 'REPLACE_ADD');
     if (replaceAddRules.some((r) => r.from === 'D')) return { ok: false, reason: 'COLOR_DIE_REPLACED' };
     const player = state.players.find((p) => p.id === context.playerId);
-    const otherColorDiceCount = player.dice.filter((d) => d.kind === 'COLOR' && d.id !== placingDieId).length;
-    if (otherColorDiceCount >= player.colorDiceCap) return { ok: false, reason: 'COLOR_DICE_CAP' };
+    const totalColorDiceCount = player.dice.filter((d) => d.kind === 'COLOR').length;
+    if (totalColorDiceCount >= player.colorDiceCap) return { ok: false, reason: 'COLOR_DICE_CAP' };
   }
   if (commands.length > 0 && commands[0].type === 'BUILD') {
     const buildCmd = commands[0];
