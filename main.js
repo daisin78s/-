@@ -477,7 +477,19 @@ function driveOneAiStepInner(state) {
   }
 
   if (ctx.type === 'UNTAP_CHOICE') {
-    const picked = rngMod.shuffle(state.rng, ctx.untapChoice.context.candidates).slice(0, ctx.untapChoice.context.count);
+    // Random, not simulate-and-score (same policy as the other bespoke choices in this function). Since
+    // 2026-08-17 this is a weighted budget (see executor.untapChoiceWeight's own doc), not a flat count,
+    // so candidates are shuffled and greedily added while they still fit the remaining budget, rather
+    // than just slicing the first `count` of them.
+    const { candidates, weights, count } = ctx.untapChoice.context;
+    const picked = [];
+    let usedWeight = 0;
+    for (const id of rngMod.shuffle(state.rng, candidates)) {
+      if (usedWeight + weights[id] <= count) {
+        picked.push(id);
+        usedWeight += weights[id];
+      }
+    }
     executorMod.resolveUntapChoice(state, ctx.untapChoice.playerId, picked);
     return true;
   }
@@ -3968,13 +3980,15 @@ function renderTapReactions(container, state, playerId) {
   }
 }
 
-/** Pending UNTAP_CHOICE pick (2026-08-15, see executor.runUntapChoice's own doc): only ever shown when
- * that player has more than 3 tapped cards to choose from (3-or-fewer already auto-resolved with no
- * choice at all, so there's nothing to render here in that case). Click-to-toggle candidates, same
- * "auto-commits once the required count is reached" pattern as renderResourceChoice's own
- * choice.context.selected scratch field -- committed via executor.resolveUntapChoice once exactly
- * choice.context.count are selected. AI-controlled players resolve this via driveOneAiStepInner instead
- * (random pick), never by clicks -- nothing to show here for them. */
+/** Pending UNTAP_CHOICE pick (2026-08-15; reworked 2026-08-17 into a weighted budget, see
+ * executor.untapChoiceWeight's own doc -- 兆しカード costs the whole budget by itself, everything else
+ * costs 1). Only ever shown when the player's tapped cards' combined weight exceeds the budget
+ * (otherwise already auto-resolved with no choice at all, so there's nothing to render here in that
+ * case). Click-to-toggle candidates whose cost still fits the remaining budget; per user decision
+ * (2026-08-17) the player is free to spend less than the full budget, so there is no auto-commit --
+ * an explicit confirm button commits whatever is currently selected via executor.resolveUntapChoice.
+ * AI-controlled players resolve this via driveOneAiStepInner instead (random pick), never by clicks --
+ * nothing to show here for them. */
 function renderUntapChoice(container, state, playerId) {
   container.innerHTML = '';
   if (isAiPlayer(playerId)) return;
@@ -3982,7 +3996,9 @@ function renderUntapChoice(container, state, playerId) {
   if (!choice) return;
   if (!choice.context.selected) choice.context.selected = [];
   const selected = choice.context.selected;
-  container.appendChild(el('div', 'onboard-hint__line', `アンタップするカードを${choice.context.count}枚選んでください（${selected.length}/${choice.context.count}）`));
+  const weights = choice.context.weights;
+  const selectedWeight = selected.reduce((sum, id) => sum + weights[id], 0);
+  container.appendChild(el('div', 'onboard-hint__line', `アンタップするカードを選んでください（使用予算 ${selectedWeight}/${choice.context.count}）`));
   for (const physicalId of choice.context.candidates) {
     const cardState = state.cards[physicalId];
     if (!cardState) continue;
@@ -3992,22 +4008,21 @@ function renderUntapChoice(container, state, playerId) {
     const cell = el('div', tall ? 'owned-card-cell owned-card-cell--tall owned-card-cell--selectable' : 'owned-card-cell owned-card-cell--selectable');
     if (isSelected) cell.classList.add('owned-card-cell--selected');
     cell.appendChild(cardNode);
-    const canToggle = isSelected || selected.length < choice.context.count;
+    const canToggle = isSelected || selectedWeight + weights[physicalId] <= choice.context.count;
     attachPickableEnlarge(cardNode, cardState.currentFaceId, canToggle ? {
       label: isSelected ? '選択を解除する' : '選ぶ',
       onPick: () => {
-        if (isSelected) {
-          choice.context.selected = selected.filter((id) => id !== physicalId);
-        } else {
-          selected.push(physicalId);
-          if (selected.length === choice.context.count) {
-            executorMod.resolveUntapChoice(state, playerId, selected);
-          }
-        }
+        choice.context.selected = isSelected ? selected.filter((id) => id !== physicalId) : [...selected, physicalId];
         render(STATE);
       },
     } : null);
     container.appendChild(cell);
+  }
+  if (selected.length > 0) {
+    const confirmBtn = el('button', 'build-choice-payment__option', `この内容でアンタップする（${selectedWeight}/${choice.context.count}）`);
+    confirmBtn.type = 'button';
+    confirmBtn.onclick = () => { executorMod.resolveUntapChoice(state, playerId, selected); render(STATE); };
+    container.appendChild(confirmBtn);
   }
 }
 

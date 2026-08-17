@@ -99,14 +99,25 @@ function driveTurn(state, index, playerId, aiPlayer, initialHasPlacedDieThisTurn
     movesTaken.push({ move, result });
     // UNTAP_CHOICE (2026-08-15, see executor.runUntapChoice's own doc): C004B/C005B/C006B/C007B/
     // C008A/C008B's ONCE effect queues this pendingChoice instead of resolving immediately whenever the
-    // player has more than 3 tapped cards to pick from -- nothing else in this loop (or MoveGenerator's
-    // own move list) ever surfaces or gates on it, so it must be resolved right here or it would sit in
-    // state.pendingChoices forever, silently never granting its own benefit. Random pick, matching this
-    // whole module's existing policy for choices with no eval-table weight yet (see setupGame's own
-    // RESOURCE-choice pick, same reasoning).
+    // player's tapped cards' combined weight exceeds the budget -- nothing else in this loop (or
+    // MoveGenerator's own move list) ever surfaces or gates on it, so it must be resolved right here or
+    // it would sit in state.pendingChoices forever, silently never granting its own benefit. Random
+    // pick, matching this whole module's existing policy for choices with no eval-table weight yet (see
+    // setupGame's own RESOURCE-choice pick, same reasoning). Since 2026-08-17 this is a weighted budget,
+    // not a flat count (see executor.untapChoiceWeight's own doc), so candidates are shuffled and
+    // greedily added while they still fit the remaining budget, rather than just slicing the first
+    // `count` of them.
     const untapChoice = state.pendingChoices.find((c) => c.playerId === playerId && c.kind === 'UNTAP_CHOICE');
     if (untapChoice) {
-      const picked = rng.shuffle(state.rng, untapChoice.context.candidates).slice(0, untapChoice.context.count);
+      const { candidates, weights, count } = untapChoice.context;
+      const picked = [];
+      let usedWeight = 0;
+      for (const id of rng.shuffle(state.rng, candidates)) {
+        if (usedWeight + weights[id] <= count) {
+          picked.push(id);
+          usedWeight += weights[id];
+        }
+      }
       executor.resolveUntapChoice(state, playerId, picked);
     }
     if (move.type === 'PLACE_DIE' || move.type === 'PASS_DIE') hasPlacedDieThisTurn = true;

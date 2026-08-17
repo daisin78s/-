@@ -690,17 +690,31 @@ function runUntapAll(state, context, cmd) {
   return { success: true };
 }
 
-/** UNTAP_CHOICE(SELF,3) (2026-08-15, see command-builder.js's own doc): if the player has cmd.count or
- * fewer of their own cards currently tapped, all of them untap immediately, same as UNTAP_ALL -- no
- * choice needed since picking "all of them" isn't a real decision. Otherwise queues an UNTAP_CHOICE
- * pendingChoice (candidates = every one of the player's own tapped physicalIds) for the player/UI to
- * resolve later via resolveUntapChoice(), same "queue now, commit later" shape as emitAndResolve's own
+/** UNTAP_CHOICE(SELF,3) weighted-budget rule (2026-08-17, per user request: "カードを３枚選んで
+ * アンタップする　兆しカードをアンタップするときは3枚分としてカウントする") -- 始まりの兆し/終わりの兆し/
+ * 成長の兆し (B005/B006/B007, both LV1 and LV2 faces) each cost the whole budget (3) by themselves;
+ * every other card costs 1. Matched by NAME containing "兆し" rather than a hardcoded physical-id list,
+ * per this session's own lesson about NAME-matching being more resilient to future data reorgs (see
+ * hasPioneerAbility in board.js for the same pattern). */
+function untapChoiceWeight(index, faceId) {
+  return getCardRow(index, faceId).NAME.includes('兆し') ? 3 : 1;
+}
+
+/** UNTAP_CHOICE(SELF,3) (2026-08-15; reworked 2026-08-17 into a weighted budget, see
+ * untapChoiceWeight's own doc): if the total weight of the player's own tapped cards is within
+ * cmd.count, all of them untap immediately, same as UNTAP_ALL -- no choice needed since there's only
+ * one possible outcome. Otherwise queues an UNTAP_CHOICE pendingChoice (candidates = every one of the
+ * player's own tapped physicalIds, plus a weight map) for the player/UI to resolve later via
+ * resolveUntapChoice(), same "queue now, commit later" shape as emitAndResolve's own
  * TAP_REACTION_AVAILABLE pendingChoice. */
-function runUntapChoice(state, context, cmd) {
+function runUntapChoice(state, index, context, cmd) {
   const tappedOwned = Object.keys(state.cards).filter(
     (id) => state.cards[id].ownerId === context.playerId && state.cards[id].tapped
   );
-  if (tappedOwned.length <= cmd.count) {
+  const weights = {};
+  for (const id of tappedOwned) weights[id] = untapChoiceWeight(index, state.cards[id].currentFaceId);
+  const totalWeight = tappedOwned.reduce((sum, id) => sum + weights[id], 0);
+  if (totalWeight <= cmd.count) {
     for (const id of tappedOwned) state.cards[id].tapped = false;
     return { success: true };
   }
@@ -708,19 +722,27 @@ function runUntapChoice(state, context, cmd) {
     id: nextPendingChoiceId(),
     playerId: context.playerId,
     kind: 'UNTAP_CHOICE',
-    context: { candidates: tappedOwned, count: cmd.count },
+    context: { candidates: tappedOwned, count: cmd.count, weights },
   });
   return { success: true };
 }
 
 /** Resolves a player's UNTAP_CHOICE pendingChoice (see runUntapChoice's own doc): chosenPhysicalIds must
- * be exactly choice.context.count of choice.context.candidates -- untaps just those, leaving every other
- * tapped card (the ones NOT picked) tapped. */
+ * all be among choice.context.candidates and their combined weight must not exceed choice.context.count
+ * -- per user decision (2026-08-17), the player is free to spend less than the full budget (e.g. picking
+ * one 1-weight card while leaving budget unused), not forced to maximize it. Untaps just the chosen
+ * cards, leaving every other tapped card (the ones NOT picked) tapped. */
 function resolveUntapChoice(state, playerId, chosenPhysicalIds) {
   const choiceIndex = state.pendingChoices.findIndex((c) => c.playerId === playerId && c.kind === 'UNTAP_CHOICE');
   if (choiceIndex === -1) return { success: false, reason: 'NO_PENDING_CHOICE' };
   const choice = state.pendingChoices[choiceIndex];
-  if (chosenPhysicalIds.length !== choice.context.count || chosenPhysicalIds.some((id) => !choice.context.candidates.includes(id))) {
+  const { candidates, weights, count } = choice.context;
+  const uniqueChosen = new Set(chosenPhysicalIds);
+  if (uniqueChosen.size !== chosenPhysicalIds.length || chosenPhysicalIds.length === 0 || chosenPhysicalIds.some((id) => !candidates.includes(id))) {
+    return { success: false, reason: 'INVALID_SELECTION' };
+  }
+  const chosenWeight = chosenPhysicalIds.reduce((sum, id) => sum + weights[id], 0);
+  if (chosenWeight > count) {
     return { success: false, reason: 'INVALID_SELECTION' };
   }
   for (const id of chosenPhysicalIds) state.cards[id].tapped = false;
@@ -967,7 +989,7 @@ function runCommand(state, index, context, cmd) {
     case 'CHANGE': return runChange(state, index, context, cmd);
     case 'UNTAP': return runUntap(state, context, cmd);
     case 'UNTAP_ALL': return runUntapAll(state, context, cmd);
-    case 'UNTAP_CHOICE': return runUntapChoice(state, context, cmd);
+    case 'UNTAP_CHOICE': return runUntapChoice(state, index, context, cmd);
     case 'SET_CURRENT_AREA': return runSetCurrentArea(state, index, context, cmd);
     case 'SET_DICE_ANY': return runSetDiceAny(state, context);
     case 'SET_DIE_VALUE': return runSetDieValue(state, context, cmd);

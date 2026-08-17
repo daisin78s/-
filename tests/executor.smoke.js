@@ -837,8 +837,12 @@ const EXTRA_D = { name: 'EXTRA_D_PLUS_ABC_COUNT', args: [] };
 
 // ---------------------------------------------------------------------------
 // 23. UNTAP_CHOICE(SELF,3) (2026-08-15, replacing C004B/C005B/C006B/C007B/C008A/C008B's old
-// UNTAP_ALL(SELF): "自分のカード3枚をアンタップにする") -- 3-or-fewer tapped cards auto-untap
-// immediately with no choice; 4+ tapped cards queue an UNTAP_CHOICE pendingChoice instead.
+// UNTAP_ALL(SELF): "自分のカード3枚をアンタップにする"; reworked 2026-08-17 into a weighted budget per
+// user request -- "カードを３枚選んでアンタップする　兆しカードをアンタップするときは3枚分としてカウン
+// トする": 始まりの兆し/終わりの兆し/成長の兆し (B005/B006/B007) each cost the whole budget (3) by
+// themselves, everything else costs 1. Tapped cards whose combined weight is within the budget
+// auto-untap immediately with no choice; otherwise an UNTAP_CHOICE pendingChoice is queued, and per
+// user decision the player may spend less than the full budget (not forced to maximize it).
 // ---------------------------------------------------------------------------
 const UNTAP_CHOICE_3 = { type: 'UNTAP_CHOICE', scope: 'SELF', count: 3 };
 {
@@ -850,36 +854,105 @@ const UNTAP_CHOICE_3 = { type: 'UNTAP_CHOICE', scope: 'SELF', count: 3 };
   state.cards[b].tapped = true;
   state.cards[c].tapped = false;
   const result = executor.runCommand(state, index, { playerId: 'P1' }, UNTAP_CHOICE_3);
-  check('runCommand succeeds with 2 tapped cards (<=3)', result.success, true);
+  check('runCommand succeeds with 2 tapped cards (weight 2 <= budget 3)', result.success, true);
   check('Both tapped cards auto-untap immediately', [state.cards[a].tapped, state.cards[b].tapped], [false, false]);
   check('No pendingChoice was created', state.pendingChoices.length, 0);
 }
 {
   const state = freshState();
   const ids = ['A001A', 'B001A', 'C001A', 'A002A'].map((faceId) => giveCard(state, faceId, 'P1'));
-  for (const id of ids) state.cards[id].tapped = true; // 4 tapped cards -- exceeds count=3
+  for (const id of ids) state.cards[id].tapped = true; // 4 tapped cards, weight 1 each -- exceeds budget 3
   const result = executor.runCommand(state, index, { playerId: 'P1' }, UNTAP_CHOICE_3);
-  check('runCommand succeeds with 4 tapped cards (>3)', result.success, true);
+  check('runCommand succeeds with 4 tapped cards (weight 4 > budget 3)', result.success, true);
   check('None untap yet -- a choice is required first', ids.every((id) => state.cards[id].tapped === true), true);
   check('Exactly one UNTAP_CHOICE pendingChoice was queued', state.pendingChoices.filter((c) => c.kind === 'UNTAP_CHOICE').length, 1);
   const choice = state.pendingChoices.find((c) => c.kind === 'UNTAP_CHOICE');
   check('...candidates are exactly the 4 tapped physicalIds', [...choice.context.candidates].sort(), [...ids].sort());
   check('...count is 3', choice.context.count, 3);
+  check('...every candidate weighs 1 (none are 兆しカード)', ids.map((id) => choice.context.weights[id]), [1, 1, 1, 1]);
 
-  const badCount = executor.resolveUntapChoice(state, 'P1', ids.slice(0, 2));
-  check('resolveUntapChoice fails with the wrong number of picks', badCount, { success: false, reason: 'INVALID_SELECTION' });
   const badId = executor.resolveUntapChoice(state, 'P1', [ids[0], ids[1], 'not-a-real-card']);
   check('resolveUntapChoice fails with an id not among the candidates', badId, { success: false, reason: 'INVALID_SELECTION' });
+  const overBudget = executor.resolveUntapChoice(state, 'P1', ids); // weight 4 > budget 3
+  check('resolveUntapChoice fails when the combined weight exceeds the budget', overBudget, { success: false, reason: 'INVALID_SELECTION' });
+  const empty = executor.resolveUntapChoice(state, 'P1', []);
+  check('resolveUntapChoice fails with an empty selection', empty, { success: false, reason: 'INVALID_SELECTION' });
+  const duplicate = executor.resolveUntapChoice(state, 'P1', [ids[0], ids[0]]);
+  check('resolveUntapChoice fails with a duplicated id', duplicate, { success: false, reason: 'INVALID_SELECTION' });
 
-  const picked = ids.slice(0, 3);
-  const ok = executor.resolveUntapChoice(state, 'P1', picked);
-  check('resolveUntapChoice succeeds with exactly 3 valid picks', ok.success, true);
-  check('...those 3 are now untapped', picked.every((id) => state.cards[id].tapped === false), true);
-  check('...the 4th (not picked) stays tapped', state.cards[ids[3]].tapped, true);
+  const partial = executor.resolveUntapChoice(state, 'P1', ids.slice(0, 2)); // weight 2 <= budget 3 -- under budget is fine
+  check('resolveUntapChoice succeeds with only 2 of the 4 (free choice, not forced to max out the budget)', partial.success, true);
+  check('...those 2 are now untapped', ids.slice(0, 2).every((id) => state.cards[id].tapped === false), true);
+  check('...the other 2 (not picked) stay tapped', [ids[2], ids[3]].every((id) => state.cards[id].tapped === true), true);
   check('...the pendingChoice is gone', state.pendingChoices.filter((c) => c.kind === 'UNTAP_CHOICE').length, 0);
 
-  const stale = executor.resolveUntapChoice(state, 'P1', picked);
+  const stale = executor.resolveUntapChoice(state, 'P1', ids.slice(0, 2));
   check('A second resolve attempt fails -- nothing left pending', stale, { success: false, reason: 'NO_PENDING_CHOICE' });
+}
+{
+  // A single 兆しカード (weight 3) alone still fits the budget exactly -- auto-untaps with no choice,
+  // even though it is the single highest-weight case possible.
+  const state = freshState();
+  const omen = giveCard(state, 'B005A', 'P1'); // 始まりの兆し
+  state.cards[omen].tapped = true;
+  const result = executor.runCommand(state, index, { playerId: 'P1' }, UNTAP_CHOICE_3);
+  check('runCommand succeeds with a single tapped 兆しカード (weight 3 <= budget 3)', result.success, true);
+  check('The 兆しカード auto-untaps immediately', state.cards[omen].tapped, false);
+  check('No pendingChoice was created', state.pendingChoices.length, 0);
+}
+{
+  // A 兆しカード (weight 3) plus one ordinary tapped card (weight 1) together exceed the budget (4 > 3)
+  // -- forces a real choice between them, since a 兆しカード can never be combined with anything else.
+  const state = freshState();
+  const omen = giveCard(state, 'B006A', 'P1'); // 終わりの兆し
+  const normal = giveCard(state, 'A001A', 'P1');
+  state.cards[omen].tapped = true;
+  state.cards[normal].tapped = true;
+  const result = executor.runCommand(state, index, { playerId: 'P1' }, UNTAP_CHOICE_3);
+  check('runCommand succeeds with 兆し+normal tapped (weight 3+1=4 > budget 3)', result.success, true);
+  const choice = state.pendingChoices.find((c) => c.kind === 'UNTAP_CHOICE');
+  check('A pendingChoice was queued', !!choice, true);
+  check('...the 兆しカード weighs 3', choice.context.weights[omen], 3);
+  check('...the ordinary card weighs 1', choice.context.weights[normal], 1);
+
+  const both = executor.resolveUntapChoice(state, 'P1', [omen, normal]);
+  check('Picking both together fails (3+1=4 exceeds the budget)', both, { success: false, reason: 'INVALID_SELECTION' });
+
+  const pickedOmen = executor.resolveUntapChoice(state, 'P1', [omen]);
+  check('Picking only the 兆しカード succeeds (uses the whole budget by itself)', pickedOmen.success, true);
+  check('...the 兆しカード is untapped', state.cards[omen].tapped, false);
+  check('...the ordinary card stays tapped (not picked)', state.cards[normal].tapped, true);
+}
+{
+  // Same setup, but this time the player picks the cheaper card instead -- demonstrating the free
+  // choice is real (not forced toward whichever combination spends the most budget).
+  const state = freshState();
+  const omen = giveCard(state, 'B007A', 'P1'); // 成長の兆し
+  const normal = giveCard(state, 'A001A', 'P1');
+  state.cards[omen].tapped = true;
+  state.cards[normal].tapped = true;
+  executor.runCommand(state, index, { playerId: 'P1' }, UNTAP_CHOICE_3);
+
+  const pickedNormal = executor.resolveUntapChoice(state, 'P1', [normal]);
+  check('Picking only the ordinary card succeeds too, leaving 2 of the 3 budget unused', pickedNormal.success, true);
+  check('...the ordinary card is untapped', state.cards[normal].tapped, false);
+  check('...the 兆しカード stays tapped (not picked)', state.cards[omen].tapped, true);
+}
+{
+  // Two tapped 兆しカード (weight 3 each, total 6) -- can never both be picked; only one at a time fits.
+  const state = freshState();
+  const omenA = giveCard(state, 'B005A', 'P1'); // 始まりの兆し
+  const omenB = giveCard(state, 'B006A', 'P1'); // 終わりの兆し
+  state.cards[omenA].tapped = true;
+  state.cards[omenB].tapped = true;
+  executor.runCommand(state, index, { playerId: 'P1' }, UNTAP_CHOICE_3);
+
+  const both = executor.resolveUntapChoice(state, 'P1', [omenA, omenB]);
+  check('Picking both 兆しカード together fails (3+3=6 exceeds the budget)', both, { success: false, reason: 'INVALID_SELECTION' });
+  const pickedOne = executor.resolveUntapChoice(state, 'P1', [omenB]);
+  check('Picking just one of the two 兆しカード succeeds', pickedOne.success, true);
+  check('...the picked one is untapped', state.cards[omenB].tapped, false);
+  check('...the unpicked one stays tapped', state.cards[omenA].tapped, true);
 }
 
 console.log(`\n${passCount} passed, ${failCount} failed`);
