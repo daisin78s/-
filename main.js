@@ -2285,17 +2285,23 @@ function levelForFaceId(faceId) {
 // this to wherever 憤怒 ends up, rather than assuming CON005B forever.
 const CARD_NOTE_COMPACT_FACE_ID = 'CON005B';
 
-/** Fills container with iconText, wrapping every "✖" char in its own bigger span (2026-08-17, per user
- * request: "✖の大きさだけ１.8倍にして" -- 傲慢's own "最多AREA　✖\n　▽\nLVUP　✖" is currently the only
- * CON アイコン text containing this character, confirmed via a full sheet scan). Preserves the string's
- * own \n line breaks via .card-note's white-space:pre-line, same as a plain textContent assignment would
- * -- just split across several text nodes instead of one, plus the ✖ spans in between. */
+/** Fills container with iconText, swapping in a real icon for two special characters instead of showing
+ * them as plain text: every "✖" becomes its own bigger span (2026-08-17, per user request: "✖の大きさ
+ * だけ１.8倍にして" -- 傲慢's own "最多AREA　✖\n　▽\nLVUP　✖" is currently the only CON アイコン text
+ * containing it, confirmed via a full sheet scan), and every bare "Z" becomes the actual Z resource dot
+ * (2026-08-17 follow-up, per user request: "INSTに書かれているZをアイコンに変えて下さい" -- 色欲's own
+ * "Z→K\nターン終了時" is currently the only CON アイコン text containing a bare Z, confirmed the same
+ * way). Preserves the string's own \n line breaks via .card-note's white-space:pre-line, same as a plain
+ * textContent assignment would -- just split across several text nodes instead of one, plus the icon
+ * elements in between. */
 function fillCardNoteContent(container, iconText) {
-  const parts = iconText.split('✖');
-  parts.forEach((part, i) => {
-    if (part) container.appendChild(document.createTextNode(part));
-    if (i < parts.length - 1) container.appendChild(el('span', 'card-note__x', '✖'));
-  });
+  const parts = iconText.split(/(✖|Z)/);
+  for (const part of parts) {
+    if (!part) continue;
+    if (part === '✖') container.appendChild(el('span', 'card-note__x', '✖'));
+    else if (part === 'Z') container.appendChild(actionDot('Z'));
+    else container.appendChild(document.createTextNode(part));
+  }
 }
 
 function fillCardFace(root, faceId, options, directChildrenOnly) {
