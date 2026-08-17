@@ -945,12 +945,23 @@ function isMapEmptyOfDice(map) {
  * source). Only ever called once per placement action (placeDice: once per die; placeDiceGroup: once for
  * the whole group, not once per die within it -- confirmed with the user this is a "first move into this
  * AREA" reward, not a per-die one, so stacking several dice into a single group action shouldn't multiply
- * it). wasEmpty must be captured by the caller *before* this action's own die(s) are committed. */
+ * it). wasEmpty must be captured by the caller *before* this action's own die(s) are committed.
+ *
+ * Also reports through executor.notifyActivation (2026-08-17, per user request: "AIDATAも変更お願い") --
+ * 開拓者 has no TAP/PASSIVE at all (no ON(...) wrapper for the usual activationCounts listener to ever
+ * see), so without this its own AI.DATA.xlsx "使用回数" column would always read 0 the same way JOB008's
+ * IF(...)-based PASSIVE needed its own bespoke job008BonusVp tracking in game-runner.js -- this is the
+ * lighter-weight equivalent for an event that fires live during play rather than one recomputable from
+ * final state alone. tools/ai_data_report.js's existing `activationCounts[jobFaceId]` fallback picks
+ * this up automatically, no changes needed there. player.jobCardId doubles as JOB009's own physicalId
+ * (JOB ids have no A/B tier the way CON does -- see game-state.splitCardId). */
 function grantPioneerBonusIfEarned(state, index, context, wasEmpty, hasColorDie) {
   if (!wasEmpty || !hasColorDie) return;
   if (!hasPioneerAbility(state, index, context.playerId)) return;
   const resource = ['A', 'B', 'C'][Math.floor(rngMod.next(state.rng) * 3)];
   executor.grantResourceAndEmitGet(state, index, context, resource, 1);
+  const player = state.players.find((p) => p.id === context.playerId);
+  executor.notifyActivation(state, context.playerId, player.jobCardId, player.jobCardId, 'PASSIVE');
 }
 
 /**

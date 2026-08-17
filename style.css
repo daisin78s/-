@@ -987,6 +987,19 @@ h1, h2, h3 { margin: 0; }
   flex: 0 0 auto;
   display: inline-block;
 }
+
+/* 開拓者/JOB009's own ABC row (2026-08-17, per user request: "ABCはアイコンで大きめに") -- larger than
+   .action-dot's 11px base, with some breathing room between them since they're the sole content of
+   their own line rather than squeezed alongside text/other icons. */
+.job009-abc-dots {
+  display: inline-flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+.job009-abc-dots .action-dot {
+  width: 18px;
+  height: 18px;
+}
 .action-dot[data-resource="K"] { background: var(--resource-k-dot); border: 1.5px solid var(--resource-k-dot-border); }
 .action-dot[data-resource="A"] { background: var(--resource-a); }
 .action-dot[data-resource="B"] { background: var(--resource-b); }

@@ -2405,6 +2405,20 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
       fillCardNoteContent(noteEl, facts.iconText);
       q('.shop-card__effect').appendChild(noteEl);
     }
+  } else if (options.showEffect && facts.name === '開拓者') {
+    // 開拓者/JOB009 (2026-08-17, per user mockup: "無人AREAに色D / ▽ / ランダムABC", ABC shown as icons,
+    // somewhat large) -- has no DSL representation at all (empty ONCE/TAP/PASSIVE/TURNEND, see
+    // hasPioneerAbility's own doc in board.js), so this is a one-off hand-built display, the same class
+    // of exception CON003A/CON005B used to each get their own ad-hoc .card-note patch for before the
+    // general CON アイコン column existed. "▽" is plain text (matching CON004A's own literal "▽" in its
+    // card-note text), not actionTriggerDown()'s 🔽 emoji -- the user's own mockup used the plain
+    // triangle character specifically.
+    tall = true;
+    const noteEl = el('div', 'card-note', '無人AREAに色D\n▽\n');
+    const abcRow = el('span', 'job009-abc-dots');
+    for (const resource of ['A', 'B', 'C']) abcRow.appendChild(actionDot(resource));
+    noteEl.appendChild(abcRow);
+    q('.shop-card__effect').appendChild(noteEl);
   } else if (options.showEffect && facts.effects && facts.effects.length) {
     // allowTextFallback (confirmed 2026-07-30): A/B/C cards fall back to raw DSL text for any
     // pattern buildActionIcons doesn't recognize yet (established 2026-07-29). JOB is new to icon
