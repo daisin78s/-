@@ -1572,5 +1572,89 @@ function totalAbc(p) { return (p.resources.A || 0) + (p.resources.B || 0) + (p.r
   check('...JOB010 stays untapped', state.cards[jobInst.physicalId].tapped, false);
 }
 
+// ---------------------------------------------------------------------------
+// 地主/JOB011 (2026-08-17, per user spec: "元老院以外のLVアップされたAREAにダイスを配置した時食料を得る
+// そのAREAに自分の色Dがすでにあるなら代わりに1VPを得る", confirmed with the user: 食料=K, and "すでに
+// ある" means a color die from an *earlier* placement action still sitting there). AREA001B ("小麦畑LV1")
+// is used as the "LVアップされた" (already-upgraded) test AREA -- its own ACTION is ADD(5K), always
+// added on top of whatever JOB011 itself grants, so every check below accounts for both sources.
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.jobCardId = 'JOB011';
+  state.maps['MAP001'].currentAreaId = 'AREA001B'; // "LVアップされた" (tier B, not the base tier A)
+
+  const d1 = giveDie(state, 'P1', 1); // AREA001B SLOT1=1
+  const beforeK = p1.resources.K || 0;
+  const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
+  check('地主: placement on an upgraded AREA succeeds normally', result.success, true);
+  check('...grants 5K (AREA001B\'s own ADD(5K)) + 1K (地主, no prior own color die here) = 6', p1.resources.K - beforeK, 6);
+  check('...no VP granted this time', p1.resources.VP || 0, 0);
+
+  const d2 = giveDie(state, 'P1', 3); // AREA001B SLOT2=ANY -- P1 already has d1 sitting in SLOT1
+  const beforeK2 = p1.resources.K;
+  board.placeDice(state, index, { playerId: 'P1' }, d2.id, 'MAP001', 1);
+  check('...2nd placement in the same AREA still grants the area\'s own 5K', p1.resources.K - beforeK2, 5);
+  check('...but grants 1VP instead of another 1K, since P1 already had a color die here', p1.resources.VP, 1);
+}
+{
+  // Base (not-yet-upgraded) tier: no 地主 bonus at all, only the AREA's own ADD(3K).
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.jobCardId = 'JOB011';
+  const d1 = giveDie(state, 'P1', 1); // AREA001A (base tier) SLOT1=1
+  board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
+  check('地主: no bonus on a not-yet-upgraded (base tier) AREA -- only the area\'s own 3K', p1.resources.K, 3);
+  check('...and no VP either', p1.resources.VP || 0, 0);
+}
+{
+  // 元老院 (AREA009) is excluded outright, even once upgraded. Its own ACTION is BUILD();ADD(2K), so
+  // placement there needs an affordable BUILD candidate to succeed at all -- generously funded so *some*
+  // A/B/C card is reachable regardless of this run's randomized shop contents.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.jobCardId = 'JOB011';
+  p1.resources.K = 20; p1.resources.A = 20; p1.resources.B = 20; p1.resources.C = 20;
+  state.maps['MAP009'].currentAreaId = 'AREA009B'; // 元老院LV1, ACTION=BUILD();ADD(2K)
+  const d1 = giveDie(state, 'P1', 1); // AREA009B SLOT1=ANY
+  const beforeK = p1.resources.K;
+  const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP009', 0);
+  check('地主: placement at 元老院 succeeds (needed an affordable BUILD candidate)', result.success, true);
+  check('地主: no bonus at 元老院 even when upgraded -- only its own ADD(2K), no extra 1K', p1.resources.K - beforeK, 2);
+  check('...and no VP either', p1.resources.VP || 0, 0);
+}
+{
+  // A player without 地主 gets no bonus (control).
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1'); // no jobCardId set at all
+  state.maps['MAP001'].currentAreaId = 'AREA001B';
+  const d1 = giveDie(state, 'P1', 1);
+  board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
+  check('A player without 地主 gets only the AREA\'s own 5K, no bonus on top', p1.resources.K, 5);
+}
+{
+  // A white die placement still triggers the bonus -- JOB011's own text has no wD exclusion, unlike
+  // JOB009's (confirmed with the user only for the "already there" check being color-die-specific, not
+  // for what kind of die newly triggers it).
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.jobCardId = 'JOB011';
+  state.maps['MAP001'].currentAreaId = 'AREA001B';
+  const wd = createDie('test-wd', 'WHITE');
+  wd.value = 1;
+  p1.dice.push(wd);
+  const beforeK = p1.resources.K || 0;
+  board.placeDice(state, index, { playerId: 'P1' }, wd.id, 'MAP001', 0);
+  check('地主: a white die placement still grants the bonus (5K area + 1K 地主)', p1.resources.K - beforeK, 6);
+}
+// No placeDiceGroup test for 地主: group placement only ever succeeds against a monument-buildable
+// candidate (confirmed empirically -- getBuildCandidates(['M'],...) gates it), and the only 2 maps that
+// support stacking multiple dice at all are the castle (MAP008/AREA008, which has no LVUP tier at all --
+// grantLandlordBonusIfEarned's own `!tier` check always excludes it) and 元老院 (MAP009/AREA009, excluded
+// by name outright). So group placement and 地主's bonus zone never actually overlap in the current data
+// -- grantLandlordBonusIfEarned is still wired into placeDiceGroup the same way grantPioneerBonusIfEarned
+// is (see its own call site), it just has no reachable trigger there today.
+
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);

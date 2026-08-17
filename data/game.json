@@ -1699,6 +1699,23 @@
       "START_ORDER": "",
       "AUTO": "M",
       "INST": "TAPして2〇を支払い、カードを１枚選んでLVアップする。\nLVアップに必要な資源は通常通り支払う"
+    },
+    {
+      "ID": "JOB011",
+      "NAME": "地主",
+      "DICE": "",
+      "COST": "",
+      "EMBLEM_A": "",
+      "EMBLEM_B": "",
+      "EMBLEM_C": "",
+      "VP": "",
+      "ONCE": "",
+      "TAP": "",
+      "PASSIVE": "",
+      "TURNEND": "",
+      "START_ORDER": "",
+      "AUTO": "",
+      "INST": "元老院以外のLVアップされたAREAにダイスを配置した時食料を得る\nそのAREAに自分の色Dがすでにあるなら代わりに1VPを得る"
     }
   ],
   "QST": [
