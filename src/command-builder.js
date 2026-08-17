@@ -118,6 +118,14 @@ function lowerCall(node) {
   switch (node.name) {
     case 'ADD':
       return { type: 'ADD', items: node.args.flatMap(lowerResourceList) };
+    // PAY(2K) (2026-08-17, per user spec, JOB010/革命家: "TAPして2〇を支払い、カードを１枚選んでLVアップ
+    // する") -- a flat cost with no gain side, unlike CHANGE which always pays into something. Added
+    // specifically so a TAP field can gate a BUILD(...) behind an extra flat cost (e.g.
+    // "PAY(2K);BUILD(U)") while leaving the built/upgraded card's own COST to be paid normally and
+    // separately -- see board.resolveProgramOrBuild's own doc for how a leading PAY is run immediately,
+    // before the BUILD candidate list is even computed.
+    case 'PAY':
+      return { type: 'PAY', items: node.args.flatMap(lowerResourceList) };
     case 'CHANGE':
       return lowerChange(node.args);
     case 'BUILD':

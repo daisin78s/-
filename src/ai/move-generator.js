@@ -43,7 +43,9 @@ const { applyInPlace } = require('./simulator');
 /** Mirrors main.js's bareTapKind (2026-07-31) -- duplicated rather than shared because main.js is a
  * browser-only classic script, not a requireable CommonJS module like the rest of src/. Keep the two
  * in sync if either changes. null = no TAP field, or purely ON(...)-wrapped (reactive-only, handled as
- * a TAP_REACTION choice instead, never generated as a BARE_TAP move here). */
+ * a TAP_REACTION choice instead, never generated as a BARE_TAP move here). BUILD is checked anywhere in
+ * the field, not just commands[0] (2026-08-17, see main.js's own bareTapKind doc -- JOB010's
+ * "PAY(2K);BUILD(U)" has a flat cost ahead of it; a no-op change for every other card). */
 function bareTapKind(index, faceId) {
   let row;
   try { row = getCardRow(index, faceId); } catch (e) { return null; }
@@ -54,7 +56,7 @@ function bareTapKind(index, faceId) {
   if (first.type === 'SET_DICE_ANY') return { kind: 'SET_DICE_ANY' };
   if (first.type === 'SET_DIE_VALUE') return { kind: 'SET_DIE_VALUE', choices: first.choices };
   if (first.type === 'CHANGE_DIE_VALUE') return { kind: 'CHANGE_DIE_VALUE', choices: first.choices };
-  if (first.type === 'BUILD') return { kind: 'BUILD' };
+  if (commands.some((c) => c.type === 'BUILD')) return { kind: 'BUILD' };
   return { kind: 'IMMEDIATE' };
 }
 

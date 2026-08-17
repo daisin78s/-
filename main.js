@@ -1462,6 +1462,13 @@ const ACTION_ICON_BUILDERS = {
   'UNTAP_CHOICE(SELF,1)': () => actionRow([actionEmoji('⚡'), actionEmoji('⤴️')]),
   'UNTAP_CHOICE(SELF,3)': () => actionRow([actionEmoji('⚡'), actionEmoji('⤴️'), actionSuffix('3')]),
   'UNTAP_CHOICE(SELF,6)': () => actionRow([actionEmoji('⚡'), actionEmoji('⤴️'), actionSuffix('6')]),
+  // JOB010/革命家 (2026-08-17, per user spec: "TAPして2〇を支払い、カードを1枚選んでLVアップする") -- pay
+  // the flat 2K cost, then the same ⚒️U upgrade icon every other BUILD(U) card already uses (see
+  // buildBuildIcon), reusing resourceItemNodes/actionArrow for the "spend this to get that" reading
+  // every CHANGE(...) icon already has (e.g. C001A's "○2→●2"). One-off exact-match entry rather than
+  // generalizing buildBuildIcon itself, since PAY(...) is 1-of-1 in the data today (see
+  // board.resolveProgramOrBuild's own doc on why the TAP text isn't just "BUILD(U)" alone).
+  'PAY(2K);BUILD(U)': () => actionRow([...resourceItemNodes('2', 'K'), actionArrow(), actionEmoji('⚒️'), actionSuffix('U')]),
   // REPLACE_ADD(D,wD) (confirmed 2026-07-29): a passive that swaps "gain your own die" for "gain a
   // white die" instead -- shown as the source resource turning into the replacement.
   'REPLACE_ADD(D,wD)': () => actionRow([actionSuffix('色D'), actionArrow(), actionEmoji('🎲')]),
@@ -4123,10 +4130,12 @@ function hasFinishedOnboarding(player) {
  * Classifies faceId's TAP field for the *direct*-use dblclick gesture below (2026-07-31) -- null if
  * there's nothing to directly use: no TAP field at all, or every top-level statement is ON(...) (a
  * purely event-triggered reaction, e.g. JOB005A's ON(GET(K),CHANGE(K,Z)) -- that's exclusively offered
- * via the TAP_REACTION_AVAILABLE pendingChoice rows/renderTapReactions, never this dblclick). Real
- * data currently only ever has a die-selecting command (SET_DICE_ANY/SET_DIE_VALUE/CHANGE_DIE_VALUE)
- * or a bare BUILD as the *first* statement, never mixed with something else first, so only the first
- * statement's type needs checking to pick the right UI path in attachTapToggle.
+ * via the TAP_REACTION_AVAILABLE pendingChoice rows/renderTapReactions, never this dblclick). A
+ * die-selecting command (SET_DICE_ANY/SET_DIE_VALUE/CHANGE_DIE_VALUE) only ever appears as the *first*
+ * statement, so only that needs checking for those 3 kinds. BUILD used to be first-only too, but
+ * JOB010's "PAY(2K);BUILD(U)" (2026-08-17) has a flat cost ahead of it -- see
+ * board.resolveProgramOrBuild's own doc -- so this checks for BUILD anywhere in the field, not just
+ * commands[0] (a no-op change for every other card, where BUILD when present has always been first).
  */
 function bareTapKind(faceId) {
   let row;
@@ -4138,7 +4147,7 @@ function bareTapKind(faceId) {
   if (first.type === 'SET_DICE_ANY') return { kind: 'SET_DICE_ANY' };
   if (first.type === 'SET_DIE_VALUE') return { kind: 'SET_DIE_VALUE', choices: first.choices };
   if (first.type === 'CHANGE_DIE_VALUE') return { kind: 'CHANGE_DIE_VALUE', choices: first.choices };
-  if (first.type === 'BUILD') return { kind: 'BUILD' };
+  if (commands.some((c) => c.type === 'BUILD')) return { kind: 'BUILD' };
   return { kind: 'IMMEDIATE' };
 }
 

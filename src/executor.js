@@ -593,6 +593,14 @@ function runAdd(state, index, context, cmd) {
   return { success: true };
 }
 
+/** PAY(2K) (2026-08-17, see command-builder.js's own doc): a flat cost with no gain side. Reuses
+ * payCostList (the same affordability-check+deduct logic BUILD/UPGRADE's own COST payment uses) rather
+ * than a bespoke check, so e.g. Z-substitution for K works identically here too. */
+function runPay(state, index, context, cmd) {
+  const items = cmd.items.map((item) => ({ resource: item.resource, count: evalCountNode(state, index, context.playerId, item.count) }));
+  return payCostList(state, context.playerId, items, context.colorPreference);
+}
+
 function runChange(state, index, context, cmd) {
   const player = getPlayer(state, context.playerId);
   const pay = cmd.pay.map((item) => ({ resource: item.resource, count: evalCountNode(state, index, context.playerId, item.count) }));
@@ -991,6 +999,7 @@ const RULE_ONLY_TYPES = new Set([
 function runCommand(state, index, context, cmd) {
   switch (cmd.type) {
     case 'ADD': return runAdd(state, index, context, cmd);
+    case 'PAY': return runPay(state, index, context, cmd);
     case 'CHANGE': return runChange(state, index, context, cmd);
     case 'UNTAP': return runUntap(state, context, cmd);
     case 'UNTAP_ALL': return runUntapAll(state, context, cmd);

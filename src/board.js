@@ -355,8 +355,12 @@ function isCandidateAffordable(state, index, playerId, candidate) {
  * output depends only on category/buildValue/shop contents/block-list/ownership, never on resources, so
  * running the ADD earlier can't change whether a NO_BUILDABLE_CARD failure happens -- nothing new to roll
  * back. */
-function buildTrailingAdds(commands) {
-  const trailing = commands.slice(1);
+/** buildIndex is the position of the BUILD command itself within `commands` -- always 0 for AREA
+ * fields (BUILD is always their first statement), but can be >0 for a card TAP field with a leading
+ * non-BUILD cost run first (e.g. JOB010's "PAY(2K);BUILD(U)", buildIndex=1) -- see
+ * resolveProgramOrBuild's own doc. */
+function buildTrailingAdds(commands, buildIndex) {
+  const trailing = commands.slice(buildIndex + 1);
   return trailing.length > 0 && trailing.every((c) => c.type === 'ADD') ? trailing : null;
 }
 
@@ -433,7 +437,7 @@ function wouldAreaActionHaveEffect(state, index, context, areaRow, buildValue) {
   }
   if (commands.length > 0 && commands[0].type === 'BUILD') {
     const buildCmd = commands[0];
-    const trailingAdds = buildTrailingAdds(commands);
+    const trailingAdds = buildTrailingAdds(commands, 0);
     let evalState = state;
     if (trailingAdds) {
       evalState = structuredClone(state);
@@ -650,7 +654,7 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   // single-die split exactly -- applied to a throwaway clone for the predicted-affordability gate below
   // (never mutates real state on a placement that might still be refused), then for real, once, right
   // before the final post-commit candidate list further down.
-  const areaTrailingAdds = buildTrailingAdds(lowerProgram(parse(areaRow.ACTION)));
+  const areaTrailingAdds = buildTrailingAdds(lowerProgram(parse(areaRow.ACTION)), 0);
 
   // Predict the resulting buildValue *before* touching anything (same "sum each touched slot's full
   // occupancy" math as the post-commit version below, just computed off map.slots as it stands right
@@ -764,35 +768,50 @@ function passDie(state, index, context, dieId) {
 }
 
 /**
- * Runs dslText normally, UNLESS it starts with BUILD(...) (AREA008/009's "BUILD()"/"BUILD();ADD(...)",
- * a QST reward's "BUILD((A,B,C),1);ADD(2BZ)", or a card's own bare TAP field like B005A's
- * "BUILD((A,B,C,M),1)") -- that can't complete synchronously, so instead of throwing
- * executor.NotImplementedError this returns the build candidates for the caller to choose from via
- * completeAreaBuild(). Any commands *after* the BUILD in the same field are deferred until the build
- * is completed (see remainingCommands) -- EXCEPT a trailing run of pure ADD statements (see
- * buildTrailingAdds), which is run right here, *before* candidates are even computed (2026-08-07: see
- * buildTrailingAdds' own doc for why -- a grant like AREA009C's "ADD(2K,BZ)" needs to already be in the
- * player's resources by the time the build-choice modal filters candidates by affordability, not applied
- * only after a candidate is already committed). remainingCommands is empty in that case since there's
- * nothing left to defer. dieValueForBuild is only used when the BUILD command itself omits an explicit
- * buildValue -- an AREA-triggered BUILD falls back to the placed die's value; a QST/TAP-triggered one has
- * no die to fall back on, so its caller passes Infinity ("unconditional", confirmed 2026-07-30 for QST --
- * no current data actually omits buildValue outside AREA anyway).
+ * Runs dslText normally, UNLESS it contains a BUILD(...) statement (AREA008/009's
+ * "BUILD()"/"BUILD();ADD(...)", a QST reward's "BUILD((A,B,C),1);ADD(2BZ)", a card's own bare TAP field
+ * like B005A's "BUILD((A,B,C,M),1)", or JOB010's "PAY(2K);BUILD(U)") -- that can't complete
+ * synchronously, so instead of throwing executor.NotImplementedError this returns the build candidates
+ * for the caller to choose from via completeAreaBuild(). Any commands *before* the BUILD (e.g. JOB010's
+ * leading PAY) are run immediately, right here -- real data never has more than a flat PAY/ADD there,
+ * nothing that itself needs a player choice, so running them synchronously is safe; if one of them fails
+ * (e.g. PAY's affordability check) that failure is returned immediately and the BUILD is never reached.
+ * Commands *after* the BUILD in the same field are deferred until the build is completed (see
+ * remainingCommands) -- EXCEPT a trailing run of pure ADD statements (see buildTrailingAdds), which is
+ * run right here too, *before* candidates are even computed (2026-08-07: see buildTrailingAdds' own doc
+ * for why -- a grant like AREA009C's "ADD(2K,BZ)" needs to already be in the player's resources by the
+ * time the build-choice modal filters candidates by affordability, not applied only after a candidate is
+ * already committed). remainingCommands is empty in that case since there's nothing left to defer.
+ * dieValueForBuild is only used when the BUILD command itself omits an explicit buildValue -- an
+ * AREA-triggered BUILD falls back to the placed die's value; a QST/TAP-triggered one has no die to fall
+ * back on, so its caller passes Infinity ("unconditional", confirmed 2026-07-30 for QST -- no current
+ * data omits buildValue outside AREA anyway).
  */
 function resolveProgramOrBuild(state, index, context, dslText, dieValueForBuild) {
   const commands = lowerProgram(parse(dslText));
-  if (commands.length > 0 && commands[0].type === 'BUILD') {
-    const buildCmd = commands[0];
-    const trailingAdds = buildTrailingAdds(commands);
-    let remainingCommands = commands.slice(1);
-    if (trailingAdds) {
-      for (const cmd of trailingAdds) executor.runCommand(state, index, context, cmd);
-      remainingCommands = [];
-    }
+  const buildIndex = commands.findIndex((c) => c.type === 'BUILD');
+  if (buildIndex !== -1) {
+    const buildCmd = commands[buildIndex];
     const buildValue = buildCmd.buildValue !== null ? buildCmd.buildValue : dieValueForBuild;
+    // Candidate existence is checked *before* running any leading command (e.g. JOB010's PAY(2K)) --
+    // 'U'/BUILD_NEW eligibility never depends on resources (it's about which cards/shop slots exist),
+    // so this ordering can't hide a candidate a later payment would have unlocked, and it avoids
+    // charging a flat leading cost for an ability that was never going to have anything to spend it on
+    // (2026-08-17 fix: a naive "pay first, then check" order would silently take JOB010's 2K even when
+    // the player has no upgradeable card at all).
     const candidates = getBuildCandidates(state, index, context.playerId, buildCmd.categories, buildValue);
     if (candidates.length === 0) {
       return { success: false, reason: 'NO_BUILDABLE_CARD', categories: buildCmd.categories, buildValue };
+    }
+    for (const cmd of commands.slice(0, buildIndex)) {
+      const result = executor.runCommand(state, index, context, cmd);
+      if (!result.success) return result;
+    }
+    const trailingAdds = buildTrailingAdds(commands, buildIndex);
+    let remainingCommands = commands.slice(buildIndex + 1);
+    if (trailingAdds) {
+      for (const cmd of trailingAdds) executor.runCommand(state, index, context, cmd);
+      remainingCommands = [];
     }
     return { success: true, pendingBuild: { categories: buildCmd.categories, buildValue, candidates, remainingCommands } };
   }
