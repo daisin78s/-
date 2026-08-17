@@ -640,9 +640,14 @@ h1, h2, h3 { margin: 0; }
   font-size: 10.5px;
 }
 
+/* 1.5x (2026-08-17, per user request: "赤〇青〇黄〇のアイコンだけ１.５倍の大きさに　数字はそのまま") --
+   ABCM's own COST field only ever uses A/B/C (confirmed via a full data scan, never K/Z/BZ/VP), so this
+   blanket dot-size rule is already equivalent to scoping it to just those three. .resource-badge__count
+   (the number beside it) is untouched, still governed by .shop-card__cost .resource-badge's own
+   font-size above. */
 .shop-card__cost .resource-badge__dot {
-  width: 7px;
-  height: 7px;
+  width: 10.5px;
+  height: 10.5px;
 }
 
 .shop-card__vp {

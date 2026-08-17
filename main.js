@@ -1015,11 +1015,13 @@ function toggleDebugMode() {
  * "pick at most one", not mandatory; pressing END with nothing picked is always valid everywhere.
  * columns (2026-08-13, per user request) sets #debug-setup-list's grid width for that step -- chosen
  * per step to exactly fit its own card count with no partial last row (CON 6x2=12 (2026-08-15, updated
- * after CON006A/B brought the CON sheet from 10 faces to 12), JOB 4x2=8, RESOURCE 6x3=18, ABC 7x3=21),
- * not a single shared column count across every step. */
+ * after CON006A/B brought the CON sheet from 10 faces to 12), RESOURCE 6x3=18, ABC 7x3=21), not a single
+ * shared column count across every step. JOB is the one exception (2026-08-17, per user request: "JOBは
+ * ５個で折り返すようにして") -- 9 faces (after JOB009's addition) has no clean same-size-every-row split,
+ * so this wraps 5+4 instead of chasing an exact rectangle. */
 const DEBUG_SETUP_STEPS = [
   { key: 'con', label: 'CON（最大1枚）', max: 1, columns: 6, faceIds: () => INDEX.raw.CON.map((r) => r.ID) },
-  { key: 'job', label: 'JOB（最大6枚）', max: 6, columns: 4, faceIds: () => INDEX.raw.JOB.map((r) => r.ID) },
+  { key: 'job', label: 'JOB（最大6枚）', max: 6, columns: 5, faceIds: () => INDEX.raw.JOB.map((r) => r.ID) },
   { key: 'resource', label: '初期資源（最大2枚）', max: 2, columns: 6, faceIds: () => INDEX.raw.RESOURCE.map((r) => r.ID) },
   { key: 'abc', label: 'ABCカード（最大6枚、選んだ順にSHOP101→106）', max: 6, columns: 7, faceIds: () => setupMod.collectNormalShopFaceIds(INDEX) },
 ];
