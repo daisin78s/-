@@ -4057,13 +4057,25 @@ function bareTapKind(faceId) {
   return { kind: 'IMMEDIATE' };
 }
 
+// 実業家/酒場の主人 (2026-08-17, per user request: "実業家と酒場の主人はオート マニュアルの選択なしで
+// オートのみにします") -- both are currently the only 2 cards in the whole dataset with a fully ON(...)-
+// wrapped TAP (confirmed via a full sheet scan), so reactiveTapKind below only ever fires the auto/
+// manual choice modal for these two today; excluded here so it never fires for them at all, always
+// resolving to their AUTO-column default ("A" for both) via executor.isCardAutoMode's own fallback --
+// no override is ever set for them, so there's nothing else to change. Matched by NAME rather than
+// faceId (JOB002/JOB005 today) so a future JOB-sheet reorg can't silently break this the way CON's own
+// physical-id reorg did (see feedback memory on that incident).
+const AUTO_ONLY_JOB_NAMES = new Set(['実業家', '酒場の主人']);
+
 /** Whether faceId's TAP field is purely ON(...)-wrapped -- a reactive ability with an auto/manual
  * setting worth choosing (see executor.isCardAutoMode/setCardAutoMode), the opposite case from
  * bareTapKind. false for no TAP field, or a bare (direct-use) one instead -- those have no auto/manual
- * concept at all (the player just uses them or doesn't, there's no "does this auto-fire" question). */
+ * concept at all (the player just uses them or doesn't, there's no "does this auto-fire" question).
+ * Also false for AUTO_ONLY_JOB_NAMES (see its own doc) even though their TAP does qualify. */
 function reactiveTapKind(faceId) {
   let row;
   try { row = dataLoaderMod.getCardRow(INDEX, faceId); } catch (e) { return false; }
+  if (AUTO_ONLY_JOB_NAMES.has(row.NAME)) return false;
   if (!row.TAP) return false;
   const commands = commandBuilderMod.lowerProgram(dslParserMod.parse(row.TAP));
   return commands.length > 0 && commands.every((c) => c.type === 'ON');
