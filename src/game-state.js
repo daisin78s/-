@@ -135,6 +135,12 @@ function createDie(id, kind) {
  *   chargeUsageFeeIfOwed for where this gets set). Scoped to AREA009 only, per user decision (other
  *   tier B/C AREAs' fees keep the pre-existing, unreserved canAffordFee-at-placement-time behavior).
  *   Cleared back to 0 in lockstep with pendingFee, in executor.applyTurnEnd.
+ * @property {number} bardEmblemUnitsGranted - 吟遊詩人/JOB008's own watermark (2026-08-17, replacing its
+ *   old live VP_MODIFIER(TOTAL_EMBLEM_COUNT) formula per user request: "エンブレムが3個増えるごとにターン
+ *   終了時1VPとZを得る"): how many complete 3-emblem groups this player has already been credited for.
+ *   Checked/incremented once per TURNEND (see turn-flow.grantBardBonusIfEarned) -- floor(current
+ *   TOTAL_EMBLEM_COUNT / 3) minus this value is how many new units to grant (1VP+1Z each) right now.
+ *   Irrelevant for a player without 吟遊詩人 (stays 0, never read).
  */
 
 /** Fixed palette, assigned in player order (player 1 = PINK, ...). Provisional -- see PlayerState.color. */
@@ -188,6 +194,7 @@ function createPlayer(id, name, color = null) {
     blockedBuildCategoriesThisTurn: [],
     pendingFee: null,
     lockedK: 0,
+    bardEmblemUnitsGranted: 0,
   };
 }
 

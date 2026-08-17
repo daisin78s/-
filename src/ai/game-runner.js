@@ -27,7 +27,6 @@ const turnFlow = require('../turn-flow');
 const qst = require('../qst');
 const scoring = require('../scoring');
 const executor = require('../executor');
-const { getCardRow } = require('../data-loader');
 
 /** Maps a MAP id to the one A-deck face whose ONCE assigns that MAP's CURRENT_AREA (confirmed via
  * data/game.json: only A001A-A008A do this -- B/C decks' tier-A ONCE effects are unrelated, e.g. wD
@@ -367,7 +366,6 @@ function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorO
 
   const historyByPlayerId = {};
   const roundDetailByPlayerId = {};
-  const job008Row = getCardRow(index, 'JOB008');
   for (const player of state.players) {
     historyByPlayerId[player.id] = {
       conFaceId: `${player.conPhysicalId}${player.conFace}`,
@@ -386,13 +384,13 @@ function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorO
       const round = [1, 2, 3, 4].find((r) => buildsByRound[player.id][r].includes(cardFaceId));
       if (round) areaFeeByRoundAndCard[round][cardFaceId] = amount;
     }
-    // JOB008's own PASSIVE bonus VP only (2026-08-07, per user spec: "JOB008は最終的に得たVP" ->
-    // clarified as "JOB008自体のVP_MODIFIER効果で加算された分だけ", not the player's overall finalScore).
-    // Data-driven off JOB008's actual PASSIVE field (IF(TOTAL_EMBLEM_COUNT>=3/6/9,VP_MODIFIER(1)) today)
-    // rather than hardcoding "divide by 3, cap 3", so this keeps working if the thresholds ever change.
-    const job008BonusVp = player.jobCardId === 'JOB008'
-      ? executor.activePassiveCommands(state, index, player.id, job008Row).filter((c) => c.type === 'VP_MODIFIER').reduce((sum, c) => sum + executor.evalCountNode(state, index, player.id, c.count), 0)
-      : null;
+    // JOB008's own bonus VP only (2026-08-07, per user spec: "JOB008は最終的に得たVP" -> clarified as
+    // "JOB008自体のVP_MODIFIER効果で加算された分だけ", not the player's overall finalScore). 2026-08-17:
+    // JOB008 switched from a live PASSIVE=VP_MODIFIER(TOTAL_EMBLEM_COUNT) formula to a real per-TURNEND
+    // grant (see turn-flow.grantBardBonusIfEarned) -- player.bardEmblemUnitsGranted (1 unit = 1 VP, by
+    // then fully caught up since every player's last turn has already gone through endTurn once GAME_END
+    // is reached) is now the exact same number this used to compute by summing VP_MODIFIER clauses.
+    const job008BonusVp = player.jobCardId === 'JOB008' ? player.bardEmblemUnitsGranted : null;
     roundDetailByPlayerId[player.id] = {
       buildsByRound: buildsByRound[player.id],
       colorDiceGainedByRound: colorDiceGainedByRound[player.id],

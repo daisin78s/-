@@ -197,8 +197,11 @@ function main() {
   // activationCounts -- the listener doesn't distinguish AUTO/MANUAL/bare, it only cares the TAP fired
   // for real), PASSIVE-fire count for JOB006 (same activationCounts, since ON(GET(...),...) firings are
   // tracked identically to TAP firings there), and JOB008's own bonus VP (roundDetailByPlayerId's
-  // job008BonusVp, NOT activationCounts -- JOB008's IF(...)-based PASSIVE has no ON(...) wrapper at all,
-  // so the listener never fires for it, see executor.emit's own findOnHandlers filter).
+  // job008BonusVp, NOT activationCounts -- this "使用回数" column means *how much bonus VP was earned*
+  // for JOB008 specifically, not *how many times the ability fired*, which activationCounts alone
+  // couldn't distinguish (2026-08-17: JOB008 does call notifyActivation too now, same as JOB009-011, but
+  // that only records a firing happened, not how many VP units it granted in one catch-up jump -- see
+  // turn-flow.grantBardBonusIfEarned's own doc).
   const job = new Map();
   function jobEntry(jobFaceId) {
     if (!job.has(jobFaceId)) job.set(jobFaceId, { count: 0, usageSum: 0 });

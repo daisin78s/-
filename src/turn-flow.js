@@ -32,7 +32,7 @@
 'use strict';
 
 const { rollDie } = require('./rng');
-const { getAreaRow } = require('./data-loader');
+const { getAreaRow, getCardRow } = require('./data-loader');
 const { getSlotRequirements, restockShop, CASTLE_MAP_ID } = require('./board');
 const { recordCheckpoint } = require('./undo');
 const setup = require('./setup');
@@ -111,11 +111,36 @@ function getNextTurn(state) {
  * restockShop's own doc -- 2026-08-07 added SPECIAL here too, since it now also compacts/shifts left on
  * a build even though it still never refills).
  */
+/** 吟遊詩人/JOB008 (2026-08-17, replacing its old live VP_MODIFIER(TOTAL_EMBLEM_COUNT) PASSIVE formula
+ * per user request: "エンブレムが3個増えるごとにターン終了時1VPとZを得る" -- confirmed with the user this
+ * is a full switch-over, not an additional/toggleable variant). Bespoke, no DSL representation (no
+ * existing primitive tracks "how much was already granted before" the way this needs to) -- same class
+ * of exception as board.js's hasPioneerAbility/hasLandlordAbility. Checked once per TURNEND rather than
+ * at every possible emblem-granting event (build/upgrade/JOB/CON/resource-card draw) specifically to
+ * keep this to one call site -- per user agreement, the cost is that the Z/VP arrive at this player's own
+ * turn end rather than the exact instant a new 3-emblem group completes; the eventual total is identical.
+ * Uses player.bardEmblemUnitsGranted as a watermark (see its own doc) so this is idempotent/catch-up-safe
+ * regardless of how many groups completed since the last check. */
+function grantBardBonusIfEarned(state, index, playerId) {
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player.jobCardId || getCardRow(index, player.jobCardId).NAME !== '吟遊詩人') return;
+  const totalEmblemCount = executorApi.evalMetric(state, index, playerId, { name: 'TOTAL_EMBLEM_COUNT', args: [] });
+  const earnedUnits = Math.floor(totalEmblemCount / 3);
+  const newUnits = earnedUnits - player.bardEmblemUnitsGranted;
+  if (newUnits <= 0) return;
+  const context = { playerId };
+  executorApi.grantResourceAndEmitGet(state, index, context, 'VP', newUnits);
+  executorApi.grantResourceAndEmitGet(state, index, context, 'Z', newUnits);
+  player.bardEmblemUnitsGranted = earnedUnits;
+  executorApi.notifyActivation(state, playerId, player.jobCardId, player.jobCardId, 'PASSIVE');
+}
+
 function endTurn(state, index, playerId) {
   const gate = executorApi.canEndTurn(state, index, playerId);
   if (!gate.ok) return { success: false, reason: 'BLOCKED_BY_RESOURCE_TOTAL_LIMIT', violations: gate.violations };
 
   executorApi.applyTurnEnd(state, index, playerId);
+  grantBardBonusIfEarned(state, index, playerId);
   restockShop(state, 'M');
   restockShop(state, 'NORMAL');
   restockShop(state, 'SPECIAL');
