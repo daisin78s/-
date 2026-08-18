@@ -1464,10 +1464,19 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
 // in a stacked group)).
 // ---------------------------------------------------------------------------
 function totalAbc(p) { return (p.resources.A || 0) + (p.resources.B || 0) + (p.resources.C || 0); }
+function giveJob009(state, playerId) {
+  const p = player(state, playerId);
+  const inst = createCardInstance('JOB009');
+  inst.ownerId = playerId;
+  state.cards[inst.physicalId] = inst;
+  p.ownedCardPhysicalIds.push(inst.physicalId);
+  p.jobCardId = 'JOB009';
+  return inst;
+}
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  p1.jobCardId = 'JOB009';
+  giveJob009(state, 'P1');
   const d1 = giveDie(state, 'P1', 1); // AREA001A SLOT1=1, a fresh map nobody has touched yet
   const before = totalAbc(p1);
   const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
@@ -1482,7 +1491,7 @@ function totalAbc(p) { return (p.resources.A || 0) + (p.resources.B || 0) + (p.r
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  p1.jobCardId = 'JOB009';
+  giveJob009(state, 'P1');
   const wDie = createDie('test-wd-pioneer', 'WHITE');
   wDie.value = 1;
   p1.dice.push(wDie);
@@ -1503,7 +1512,7 @@ function totalAbc(p) { return (p.resources.A || 0) + (p.resources.B || 0) + (p.r
   // must grant exactly once, not once per die.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  p1.jobCardId = 'JOB009';
+  giveJob009(state, 'P1');
   p1.resources.BZ = 20;
   const d1 = giveDie(state, 'P1', 6);
   const d2 = giveDie(state, 'P1', 6);
@@ -1517,7 +1526,7 @@ function totalAbc(p) { return (p.resources.A || 0) + (p.resources.B || 0) + (p.r
   // before the LVUP -- same live-state check playerHasOwnColorDieInMapSlots's own CON006A fix relies on.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  p1.jobCardId = 'JOB009';
+  giveJob009(state, 'P1');
   const d1 = giveDie(state, 'P1', 1); // AREA001A SLOT1=1
   board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
   const d2 = giveDie(state, 'P1', 2); // AREA001A SLOT2=2, same already-touched map -- no bonus this time
@@ -1529,10 +1538,23 @@ function totalAbc(p) { return (p.resources.A || 0) + (p.resources.B || 0) + (p.r
   executor.runProgram(state, index, { playerId: 'P1' }, getCardRow(index, 'A005A').ONCE);
   check('MAP001 is now AREA001B (a fresh, empty tier)', state.maps['MAP001'].currentAreaId, 'AREA001B');
 
+  // Trigger condition re-fires here (fresh empty AREA001B), but per the 2026-08-18 TAP mechanic the
+  // card is already tapped from d1's own trigger -- so this untaps it instead of granting again.
+  const jobInst = state.cards[p1.jobCardId];
+  check('開拓者 is tapped after its first trigger (d1)', jobInst.tapped, true);
   const d3 = giveDie(state, 'P1', 1); // AREA001B SLOT1=1
   const beforeThird = totalAbc(p1);
   board.placeDice(state, index, { playerId: 'P1' }, d3.id, 'MAP001', 0);
-  check('開拓者: bonus fires again after the LVUP, even though this player placed here before', totalAbc(p1) - beforeThird, 1);
+  check('開拓者: the trigger condition still re-fires after the LVUP...', totalAbc(p1) - beforeThird, 0);
+  check('...but grants nothing this time -- it just untaps itself since it was already tapped', jobInst.tapped, false);
+
+  // Now untapped again -- a 4th, unrelated fresh-empty-AREA placement (a different map entirely) grants
+  // normally once more, completing the full "grant+tap -> untap-only -> grant+tap -> ..." cycle.
+  const d4 = giveDie(state, 'P1', 4); // AREA002A (MAP002, still untouched) SLOT1=4
+  const beforeFourth = totalAbc(p1);
+  board.placeDice(state, index, { playerId: 'P1' }, d4.id, 'MAP002', 0);
+  check('開拓者: grants again on the next fresh-AREA trigger now that it\'s untapped', totalAbc(p1) - beforeFourth, 1);
+  check('...and taps itself again', jobInst.tapped, true);
 }
 
 // ---------------------------------------------------------------------------
