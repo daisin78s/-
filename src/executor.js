@@ -117,19 +117,24 @@ function whiteDiceCount(player) {
  * turn-start) each already take their own checkpoint one level up -- see setup.rollInitialColorDice,
  * turn-flow.startRound, and main.js's render() respectively -- so this leaf function doesn't need to.
  */
-function grantOneDie(state, player, kind, dieIdFactory) {
+function grantOneDie(state, index, player, kind, dieIdFactory) {
   if (kind === 'COLOR') {
     if (colorDiceCount(player) < player.colorDiceCap) {
       const die = createDie(dieIdFactory(), 'COLOR');
       die.value = rollDie(state.rng);
       player.dice.push(die);
     } else {
-      grantOneDie(state, player, 'WHITE', dieIdFactory);
+      grantOneDie(state, index, player, 'WHITE', dieIdFactory);
     }
     return;
   }
-  // kind === 'WHITE'
-  if (whiteDiceCount(player) < player.whiteDiceCap) {
+  // kind === 'WHITE'. whiteDiceCapFor: player.whiteDiceCap itself is never mutated (stays a fixed 5 for
+  // everyone, same as colorDiceCap -- see game-state.js's own doc), overridden per-call instead via an
+  // active WHITE_DICE_CAP PASSIVE rule if one exists (2026-08-18, CON005B/憤怒) -- same dynamically-
+  // queried-rule pattern as applyReplaceAdd just below, rather than a one-time field write.
+  const whiteDiceCapRule = getPassiveRules(state, index, player.id, 'WHITE_DICE_CAP')[0];
+  const whiteDiceCapFor = whiteDiceCapRule ? whiteDiceCapRule.amount : player.whiteDiceCap;
+  if (whiteDiceCount(player) < whiteDiceCapFor) {
     const die = createDie(dieIdFactory(), 'WHITE');
     die.value = rollDie(state.rng);
     player.dice.push(die);
@@ -164,7 +169,7 @@ function grantResource(state, index, playerId, resource, count) {
   const effectiveResource = applyReplaceAdd(state, index, playerId, resource);
   const dieKind = DICE_KIND_BY_RESOURCE[effectiveResource];
   if (dieKind) {
-    for (let i = 0; i < count; i++) grantOneDie(state, player, dieKind, nextDieId);
+    for (let i = 0; i < count; i++) grantOneDie(state, index, player, dieKind, nextDieId);
   } else {
     player.resources[effectiveResource] = (player.resources[effectiveResource] || 0) + count;
   }
@@ -987,6 +992,7 @@ const RULE_ONLY_TYPES = new Set([
   'VP_PENALTY_PER',
   'BLOCK_COLOR_DIE_REUSE',
   'PASS_COLOR_DIE_BONUS',
+  'WHITE_DICE_CAP',
   'ON',
 ]);
 

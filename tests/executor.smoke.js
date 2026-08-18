@@ -103,6 +103,25 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 }
 
 // ---------------------------------------------------------------------------
+// 2a. CON005B/憤怒: PASSIVE=BLOCK_COLOR_DIE_REUSE();WHITE_DICE_CAP(0) (2026-08-18, replacing the earlier
+// PASS_COLOR_DIE_BONUS(2) round-end-only reduction per user spec after further playtesting: "パスをした
+// ときカラーダイスから2Kしか得られない" -> "ｗDの上限0　上限を超えたｗDは2Kになる") -- every ADD(wD) this
+// player would ever gain, from any source, now converts straight to 2K instead (0 is never > an in-hand
+// count of >=0, so grantOneDie's overflow branch fires unconditionally), same overflow-conversion path a
+// normal player only hits once already at their real cap of 5.
+// ---------------------------------------------------------------------------
+{
+  const state = freshState();
+  giveCard(state, 'CON005B', 'P1');
+  const player = getPlayerRef(state, 'P1');
+  const beforeK = player.resources.K;
+  executor.runCommand(state, index, { playerId: 'P1' }, { type: 'ADD', items: [{ resource: 'wD', count: { kind: 'literal', value: 1 } }] });
+  check('CON005B WHITE_DICE_CAP(0): ADD(wD) grants no real white die', player.dice.filter((d) => d.kind === 'WHITE').length, 0);
+  check('...and instead grants 2K', player.resources.K, beforeK + 2);
+  check('...recorded on whiteOverflowEvents same as a real cap overflow', state.whiteOverflowEvents, ['P1']);
+}
+
+// ---------------------------------------------------------------------------
 // 3. CON003A: PASSIVE=VP_PENALTY_IF_BELOW(EMBLEM_COUNT(天,M),2) (2026-08-15, per user spec: the card's
 // original IF(CARD_COUNT<=6,VP_MODIFIER(-2)) clause is retired entirely -- "建築数が6以下で-2VPは廃止
 // して" -- replaced outright by this monument-emblem shortfall rule, "モニュメント天エンブレムが2個

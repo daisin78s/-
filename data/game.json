@@ -1191,14 +1191,14 @@
       "VP": "",
       "ONCE": "ADD(D)",
       "TAP": "",
-      "PASSIVE": "BLOCK_COLOR_DIE_REUSE();PASS_COLOR_DIE_BONUS(2)",
+      "PASSIVE": "BLOCK_COLOR_DIE_REUSE();WHITE_DICE_CAP(0)",
       "TURNEND": "",
       "START_ORDER": 4,
       "WARNING": "",
       "NOTE": "",
       "AUTO": "",
-      "INST": "自分のカラーダイスが置かれているAREAにはダイスを配置できない。\nパスをしたときカラーダイスから2Kしか得られない",
-      "アイコン": "自分の色DがあるAREA\nダイス配置不可\nパスをしたとき色Dから2Kしか得られない"
+      "INST": "自分のカラーダイスが置かれているAREAにはダイスを配置できない。\n🎲上限0　上限を超えた🎲は2Kになる",
+      "アイコン": "自分の色DがあるAREA\nダイス配置不可\n🎲上限0"
     },
     {
       "ID": "CON006B",

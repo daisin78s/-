@@ -215,6 +215,16 @@ function lowerCall(node) {
     // retuned once after real play -- 0 still works the same way (amount=0), no special-casing needed.
     case 'PASS_COLOR_DIE_BONUS':
       return { type: 'PASS_COLOR_DIE_BONUS', amount: numberValue(node.args[0]) };
+    // WHITE_DICE_CAP(n) (2026-08-18, CON005B/憤怒's revised second restriction, replacing
+    // PASS_COLOR_DIE_BONUS(2) after further playtesting: "パスをしたときカラーダイスから2Kしか得られない"
+    // -> "ｗDの上限0　上限を超えたｗDは2Kになる") -- overrides this player's own whiteDiceCap (normally a
+    // fixed 5 for everyone, see game-state.js's own doc on why that field is never literally mutated) for
+    // executor.grantOneDie's WHITE-kind overflow check ("count < cap ? real wD : +2K"), same dynamically-
+    // queried PASSIVE-rule pattern as REPLACE_ADD/PASS_COLOR_DIE_BONUS rather than a one-time field write.
+    // n=0 means every wD grant overflows to 2K unconditionally (0 is never > an in-hand count of >=0), but
+    // takes an explicit amount (not a bare flag) in case a future card needs a smaller-than-5, non-zero cap.
+    case 'WHITE_DICE_CAP':
+      return { type: 'WHITE_DICE_CAP', amount: numberValue(node.args[0]) };
     case 'MODIFY_CONVERT_VALUE':
       return {
         type: 'MODIFY_CONVERT_VALUE',
