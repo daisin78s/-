@@ -257,13 +257,31 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
 
   const actionContext = context;
 
+  // 地主 (2026-08-18, see grantLandlordBonusIfEarned's own doc): granted speculatively *before* the
+  // NO_EFFECT prediction and the usage-fee check below, so its K/VP is already in the player's resources
+  // by the time either one reads them -- e.g. affording 孤児院LV2's own CHANGE(2K,VP), or an otherwise-
+  // unaffordable usage fee on another player's map. Only snapshotted (real cloning cost) when this
+  // player actually has 地主 AND this AREA qualifies -- cheap to check first, so a normal placement by
+  // any other player never pays for a clone it doesn't need. If the placement still turns out illegal
+  // for some unrelated reason (prediction.ok===false below), this speculative grant is rolled back along
+  // with everything else -- it must never survive a refused placement.
+  const landlordEligible = hasLandlordAbility(state, index, context.playerId) && isLandlordEligibleArea(map.currentAreaId);
+  const preLandlordSnapshot = landlordEligible ? structuredClone(state) : null;
+  if (landlordEligible) grantLandlordBonusIfEarned(state, index, actionContext, mapId, hadOwnColorDieThereAlready);
+
   // Refuse the placement outright if it wouldn't actually do anything (2026-08-0X, per user feedback:
   // "効果を得られない時ダイスの配置不可にして" -- e.g. AREA003A's CHANGE(K,A,ALL) with 0 K on hand, or
   // AREA007's CHANGE((A,B,C),D) when A/B/C can't be paid, or AREA008/009's BUILD() with no buildable
   // candidate at all) -- see wouldAreaActionHaveEffect's own doc for exactly what "no effect" means.
   // Deliberately checked *before* any mutation below so a doomed placement never burns the die.
   const prediction = wouldAreaActionHaveEffect(state, index, actionContext, areaRow, buildValue);
-  if (!prediction.ok) return { success: false, reason: prediction.reason };
+  if (!prediction.ok) {
+    if (preLandlordSnapshot) {
+      Object.keys(state).forEach((k) => delete state[k]);
+      Object.assign(state, preLandlordSnapshot);
+    }
+    return { success: false, reason: prediction.reason };
+  }
 
   // Would this placement owe a usage fee at all? If so, snapshot state now so the whole placement can be
   // rolled back if it turns out unpayable (2026-08-05, per user diagnosis: "AREA010を使うときはAIが使用
@@ -277,7 +295,12 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
   // canAffordFee's own doc for what "payable" means (current K + every free-action-convertible
   // resource, not just raw K).
   const owedFee = wouldOweFee(map, context.playerId);
-  const preFeeSnapshot = owedFee ? structuredClone(state) : null;
+  // Reuses preLandlordSnapshot (already taken *before* the landlord grant, i.e. before this whole
+  // placement's own effects began) when one exists, rather than taking a fresh structuredClone here --
+  // a fresh one at this point would already include the landlord bonus, so rolling back to it below
+  // would incorrectly leave that bonus in place even though the point of this rollback is to undo the
+  // *entire* placement, landlord bonus included.
+  const preFeeSnapshot = owedFee ? (preLandlordSnapshot || structuredClone(state)) : null;
 
   state.placementSeq += 1;
   die.placedMapId = mapId;
@@ -307,8 +330,8 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
     }
   }
 
+  // 地主's own bonus already landed earlier (see preLandlordSnapshot above) -- not called again here.
   grantPioneerBonusIfEarned(state, index, actionContext, mapWasEmptyOfDice, die.kind === 'COLOR');
-  grantLandlordBonusIfEarned(state, index, actionContext, mapId, hadOwnColorDieThereAlready);
 
   return { success: true, actionResult };
 }
@@ -712,6 +735,13 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   chargeUsageFeeIfOwed(state, map, playerId);
   // Once per group action, not once per die within it -- see grantPioneerBonusIfEarned's own doc.
   grantPioneerBonusIfEarned(state, index, actionContext, mapWasEmptyOfDice, dice.some((d) => d.kind === 'COLOR'));
+  // Deliberately NOT moved earlier the way placeDice's own call was (2026-08-18) -- placeDiceGroup only
+  // ever succeeds for a monument/BUILD-category placement (confirmed empirically: getBuildCandidates(
+  // ['M'],...) gates it), and the only 2 maps that support a group placement at all are the castle
+  // (MAP008/AREA008, which has no LVUP tier at all -- isLandlordEligibleArea always excludes it) and
+  // 元老院 (MAP009/AREA009, excluded by name outright) -- so 地主's bonus never actually fires via this
+  // path today, and the extra pre-grant/rollback complexity placeDice needed isn't worth adding here for
+  // a currently-unreachable case. Revisit if a future group-placement target is ever added elsewhere.
   grantLandlordBonusIfEarned(state, index, actionContext, mapId, hadOwnColorDieThereAlready);
   // Real grant now (see areaTrailingAdds' own doc above) -- must land before the final candidates list
   // below is computed, same ordering resolveProgramOrBuild uses for the single-die path.
@@ -1020,25 +1050,40 @@ function hasLandlordAbility(state, index, playerId) {
   return getCardRow(index, player.jobCardId).NAME === '地主';
 }
 
+/** Whether mapId's *current* AREA face qualifies for 地主's bonus at all -- excluded entirely for
+ * AREA009 (元老院) and for a map still at its base (not-yet-upgraded) tier, "元老院以外のLVアップされた
+ * AREA". tier is null (not 'A') for AREA007/AREA008, which have no LVUP tiers at all (a single fixed
+ * face, per splitCardId's own doc) -- `!tier` excludes those too, not just the literal 'A' case, since a
+ * tier-less area can never have been "leveled up" in the first place. Split out from
+ * grantLandlordBonusIfEarned (2026-08-18) so placeDice can cheaply check eligibility *before* deciding
+ * whether the more expensive pre-grant snapshot below is even worth taking. */
+function isLandlordEligibleArea(mapCurrentAreaId) {
+  const { physicalId: areaPhysicalId, tier } = splitCardId(mapCurrentAreaId);
+  return areaPhysicalId !== 'AREA009' && !!tier && tier !== 'A';
+}
+
 /** Grants 地主's bonus if earned by this placement (2026-08-17): 1K normally, or 1VP instead if the
  * player already had one of their own COLOR dice sitting in this map from an earlier placement action
  * (alreadyHadOwnColorDieThere -- captured by the caller via playerHasOwnColorDieInMapSlots *before* this
  * action's own die(s) are committed, same "read before mutation" requirement as grantPioneerBonusIfEarned's
- * own wasEmpty). Excluded entirely for AREA009 (元老院) and for a map still at its base (not-yet-upgraded)
- * tier -- "元老院以外のLVアップされたAREA". tier is null (not 'A') for AREA007/AREA008, which have no
- * LVUP tiers at all (a single fixed face, per splitCardId's own doc) -- `tier &&` excludes those too, not
- * just the literal 'A' case, since a tier-less area can never have been "leveled up" in the first place.
- * No hasColorDie gate unlike grantPioneerBonusIfEarned above -- JOB011's own text has no "ｗDでは発動しな
- * い" carve-out the way JOB009's did, so a white-die placement triggers this too (only the *pre-existing*
- * die checked for the K-vs-VP branch must be a color one). Called once per placement action (placeDice:
- * once per die; placeDiceGroup: once for the whole group), same convention as grantPioneerBonusIfEarned.
- * Reports through executor.notifyActivation for the same AI.DATA "使用回数" reason documented on
- * grantPioneerBonusIfEarned. */
+ * own wasEmpty). No hasColorDie gate unlike grantPioneerBonusIfEarned above -- JOB011's own text has no
+ * "ｗDでは発動しない" carve-out the way JOB009's did, so a white-die placement triggers this too (only the
+ * *pre-existing* die checked for the K-vs-VP branch must be a color one). Called once per placement
+ * action (placeDice: once per die; placeDiceGroup: once for the whole group), same convention as
+ * grantPioneerBonusIfEarned. Reports through executor.notifyActivation for the same AI.DATA "使用回数"
+ * reason documented on grantPioneerBonusIfEarned.
+ *
+ * 2026-08-18 (per user request: "地主がLVアップされたAREAにダイスを置いてもらえるKをそのまますぐに使え
+ * るようにして欲しい", worked examples: paying 孤児院LV2's own CHANGE(2K,VP) with the just-granted K,
+ * and affording another player's 孤児院LV2 usage fee the same way, "この時配置候補にちゃんと出るよう
+ * に") -- placeDice now calls this *before* wouldAreaActionHaveEffect's prediction and the usage-fee
+ * check, not after, specifically so the granted K is already in state.players[...].resources by the time
+ * either one reads it. See placeDice's own preLandlordSnapshot for how a placement that turns out illegal
+ * anyway (for an unrelated reason) still gets this speculative grant rolled back cleanly. */
 function grantLandlordBonusIfEarned(state, index, context, mapId, alreadyHadOwnColorDieThere) {
   if (!hasLandlordAbility(state, index, context.playerId)) return;
   const map = state.maps[mapId];
-  const { physicalId: areaPhysicalId, tier } = splitCardId(map.currentAreaId);
-  if (areaPhysicalId === 'AREA009' || !tier || tier === 'A') return;
+  if (!isLandlordEligibleArea(map.currentAreaId)) return;
   executor.grantResourceAndEmitGet(state, index, context, alreadyHadOwnColorDieThere ? 'VP' : 'K', 1);
   const player = state.players.find((p) => p.id === context.playerId);
   executor.notifyActivation(state, context.playerId, player.jobCardId, player.jobCardId, 'PASSIVE');

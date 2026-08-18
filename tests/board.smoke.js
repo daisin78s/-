@@ -1685,6 +1685,72 @@ function totalAbc(p) { return (p.resources.A || 0) + (p.resources.B || 0) + (p.r
   board.placeDice(state, index, { playerId: 'P1' }, wd.id, 'MAP001', 0);
   check('地主: a white die placement still grants the bonus (5K area + 1K 地主)', p1.resources.K - beforeK, 6);
 }
+
+// ---------------------------------------------------------------------------
+// 地主's bonus is usable immediately by the *same* placement it comes from (2026-08-18, per user
+// worked examples): AREA010C (孤児院LV2)'s own ACTION is CHANGE(2K,2VP) -- with only 1K, the bonus's
+// +1K is what makes that conversion actually trigger. mapWithArea (see the EX-slot tests above) builds
+// the map fixture; AREA010C's SLOT1 is ANY.
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.jobCardId = 'JOB011';
+  p1.resources.K = 1; // 1 short of CHANGE(2K,2VP)'s own cost
+  state.maps['MAP001'] = mapWithArea('MAP001', 'AREA010C', 6, 'P1'); // P1 owns it -- no usage fee here
+  const d1 = giveDie(state, 'P1', 3); // SLOT1=ANY
+  const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
+  check('地主: placing at 孤児院LV2 with only 1K succeeds (the +1K bonus covers CHANGE(2K,2VP)\'s own cost)', result.success, true);
+  check('...the 2K (1 starting + 1 from 地主) was spent by CHANGE, leaving 0', p1.resources.K, 0);
+  check('...and CHANGE(2K,2VP) granted 2VP', p1.resources.VP, 2);
+}
+
+// ---------------------------------------------------------------------------
+// 地主's bonus also covers an otherwise-unaffordable usage fee (2026-08-18, per user worked example):
+// "3Kしかない時に他プレイヤーの孤児院LV2に置こうとすると本来使用料2K変換に2Kいるが、1Kもらえるので
+// 置ける。この時すでに自分の色Dが置いてあったならKがもらえないので置けない。" Placing on ANOTHER
+// player's 孤児院LV2 (tier C, usage fee 2K) needs the CHANGE(2K,2VP)'s own 2K *plus* 2K left over to
+// remain payable for the fee (canAffordFee, checked after CHANGE runs) -- 4K total. 3K alone falls 1
+// short; 地主's +1K bridges exactly that gap.
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.jobCardId = 'JOB011';
+  p1.resources.K = 3;
+  state.maps['MAP001'] = mapWithArea('MAP001', 'AREA010C', 6, 'P2'); // P2 owns it -- usage fee applies to P1
+  const d1 = giveDie(state, 'P1', 3);
+  const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
+  check('地主: 3K is enough on another player\'s 孤児院LV2 once the +1K bonus bridges the 1K shortfall', result.success, true);
+  check('...2K was spent by CHANGE (3+1-2=2 left, reserved for the pending fee)', p1.resources.K, 2);
+  check('...and CHANGE(2K,2VP) granted 2VP', p1.resources.VP, 2);
+  check('...the usage fee is now pending, not yet deducted', p1.pendingFee, { mapId: 'MAP001', amount: 2 });
+}
+{
+  // Same setup, but P1 already has a color die sitting in this map -- 地主 grants VP instead of K this
+  // time, so the K shortfall is never bridged and the whole placement (fee included) is refused.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.jobCardId = 'JOB011';
+  p1.resources.K = 3;
+  state.maps['MAP001'] = mapWithArea('MAP001', 'AREA010C', 6, 'P2');
+  const earlierDie = giveDie(state, 'P1', 5);
+  state.maps['MAP001'].slots[2].push({ playerId: 'P1', dieId: earlierDie.id, value: 5, seq: 1, countsForTurnOrder: true }); // SLOT3=EX
+  earlierDie.placedMapId = 'MAP001';
+  const beforeK = p1.resources.K;
+  const beforeVp = p1.resources.VP || 0;
+  const d1 = giveDie(state, 'P1', 3);
+  const d1Id = d1.id;
+  const result = board.placeDice(state, index, { playerId: 'P1' }, d1Id, 'MAP001', 0);
+  check('地主: with an existing own color die already there, the K shortfall is never bridged -- placement refused', result, { success: false, reason: 'UNAFFORDABLE_USAGE_FEE', amount: 2 });
+  // A full-state rollback (Object.assign(state, snapshot)) replaces state.players/state.cards wholesale
+  // with the snapshot's own (deep-cloned) objects -- re-fetch fresh references afterward rather than
+  // reusing p1/d1 from before the call, which now point at the stale, since-discarded pre-rollback copy.
+  const p1After = player(state, 'P1');
+  check('...everything rolled back cleanly: K unchanged', p1After.resources.K, beforeK);
+  check('...VP unchanged too (the speculative VP grant was undone along with everything else)', p1After.resources.VP || 0, beforeVp);
+  check('...the new die was never actually placed', p1After.dice.find((d) => d.id === d1Id).placedMapId, null);
+}
 // No placeDiceGroup test for 地主: group placement only ever succeeds against a monument-buildable
 // candidate (confirmed empirically -- getBuildCandidates(['M'],...) gates it), and the only 2 maps that
 // support stacking multiple dice at all are the castle (MAP008/AREA008, which has no LVUP tier at all --
