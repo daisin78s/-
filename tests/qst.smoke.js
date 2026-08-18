@@ -103,6 +103,39 @@ function giveNCards(state, ownerId, n, offset) {
 }
 
 // ---------------------------------------------------------------------------
+// 1b. setupQuests(state, forcedFaceIds) (2026-08-18, debug test-game feature: "テストゲームでQSTも選べる
+// ようにしてください 選んだ順に上からおかれる") -- forced faces come first, in the given order (insertion
+// order into state.quests, which Object.keys() preserves and main.js's renderQsts relies on for display
+// order), topped up with random ones for whatever's left.
+// ---------------------------------------------------------------------------
+{
+  const state = freshState('qst-forced-1', ['Alice']);
+  qst.setupQuests(state, ['Q003B', 'Q001A']);
+  check('The 2 forced faces are revealed, in the given order', Object.keys(state.quests).slice(0, 2), ['Q003B', 'Q001A']);
+  check('Exactly 3 total (1 more filled in randomly)', Object.keys(state.quests).length, 3);
+  const thirdPhysicalId = Object.keys(state.quests)[2].slice(0, -1);
+  check('The randomly-filled 3rd one is neither Q003 nor Q001 (no duplicate physical ids)', ['Q003', 'Q001'].includes(thirdPhysicalId), false);
+
+  const stateFull = freshState('qst-forced-2', ['Alice']);
+  qst.setupQuests(stateFull, ['Q002A', 'Q004B', 'Q001B']);
+  check('All 3 forced faces used as-is, in order, when exactly 3 are given', Object.keys(stateFull.quests), ['Q002A', 'Q004B', 'Q001B']);
+
+  const stateEmpty = freshState('qst-forced-3', ['Alice']);
+  qst.setupQuests(stateEmpty, []);
+  check('An empty forced list behaves exactly like omitting it -- still exactly 3, fully random', Object.keys(stateEmpty.quests).length, 3);
+
+  const stateDupe = freshState('qst-forced-4', ['Alice']);
+  qst.setupQuests(stateDupe, ['Q001A', 'Q001B', 'Q002A']);
+  check('A duplicate physical id (both Q001 tiers) drops the 2nd one, not silently allowed through', Object.keys(stateDupe.quests).includes('Q001B'), false);
+  check('...still exactly 3 total (topped up randomly for the dropped slot)', Object.keys(stateDupe.quests).length, 3);
+
+  const stateInvalid = freshState('qst-forced-5', ['Alice']);
+  qst.setupQuests(stateInvalid, ['NotARealFaceX', 'Q002B']);
+  check('An unrecognized entry is dropped silently, not thrown', Object.keys(stateInvalid.quests).includes('Q002B'), true);
+  check('...still exactly 3 total', Object.keys(stateInvalid.quests).length, 3);
+}
+
+// ---------------------------------------------------------------------------
 // 2. evalGoalMetric: a bare metric expression evaluated as a NUMBER, not a boolean condition.
 // ---------------------------------------------------------------------------
 {

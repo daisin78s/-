@@ -54,11 +54,32 @@ const REWARD_FIELDS = ['REWARD1', 'REWARD2', 'REWARD3'];
  * Reveals 3 of the 4 QST cards, one random face each. See the file-level comment for why this
  * structurally rules out both faces of one physical card appearing together. Each revealed face maps
  * to `true` -- there's no other per-card state to track anymore (see file-level comment).
+ *
+ * forcedFaceIds (2026-08-18, debug test-game feature: "テストゲームでQSTも選べるようにしてください
+ * 選んだ順に上からおかれる") -- an optional ordered list of specific faces (e.g. ["Q002B","Q001A"]) to
+ * reveal instead of random ones, in the given order (state.quests is a plain object, but
+ * Object.keys() preserves string-key insertion order, which is what main.js's renderQsts iterates --
+ * so insertion order here IS display order, "上から" top-to-bottom). Invalid entries (not a real QST
+ * physical id) or a duplicate physical id (both tiers of the same card can't be forced at once) are
+ * silently dropped rather than erroring, same permissive spirit as dealJobPool's own preferredFaceIds.
+ * Capped at 3 and topped up with random, still-available physical ids/tiers for whatever's left --
+ * omitting forcedFaceIds entirely (or passing an empty array) reproduces the original fully-random
+ * behavior exactly.
  */
-function setupQuests(state) {
-  const chosen = shuffle(state.rng, QST_PHYSICAL_IDS).slice(0, 3);
+function setupQuests(state, forcedFaceIds) {
+  const forced = [];
+  const usedPhysicalIds = new Set();
+  for (const faceId of forcedFaceIds || []) {
+    const physicalId = faceId.slice(0, -1);
+    if (!QST_PHYSICAL_IDS.includes(physicalId) || usedPhysicalIds.has(physicalId)) continue;
+    usedPhysicalIds.add(physicalId);
+    forced.push(faceId);
+    if (forced.length >= 3) break;
+  }
   state.quests = {};
-  for (const physicalId of chosen) {
+  for (const faceId of forced) state.quests[faceId] = true;
+  const remainingPhysicalIds = shuffle(state.rng, QST_PHYSICAL_IDS.filter((id) => !usedPhysicalIds.has(id)));
+  for (const physicalId of remainingPhysicalIds.slice(0, 3 - forced.length)) {
     const tier = next(state.rng) < 0.5 ? 'A' : 'B';
     state.quests[`${physicalId}${tier}`] = true;
   }

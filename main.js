@@ -82,7 +82,9 @@ function consumeDebugSetupPlan() {
  * at onboarding, see setup.dealConCards' own doc), P1's exact 2 initial RESOURCE cards (granted
  * directly, no candidate/choose-2 step for P1 -- see setup.grantResourceCards), which faces are
  * guaranteed in the JOB draft pool, and which faces seed SHOP101/102/... in the NORMAL shop. P2-P4 are
- * completely unaffected either way. */
+ * completely unaffected either way. plan.qst (2026-08-18, not P1-scoped at all -- QST reveals are
+ * whole-game, shared by every player) forces which QST faces get revealed, in pick order -- see
+ * qst.setupQuests' own doc. */
 function createInitialState(plan) {
   const state = gameStateMod.createEmptyGameState(randomSeed());
   setupMod.createPlayers(state, ['Alice', 'Bob', 'Carol', 'Dan']);
@@ -108,7 +110,7 @@ function createInitialState(plan) {
     setupMod.dealResourceCandidates(state, INDEX);
   }
   setupMod.dealJobPool(state, INDEX, plan ? plan.job : undefined);
-  qstMod.setupQuests(state);
+  qstMod.setupQuests(state, plan ? plan.qst : undefined);
   return state;
 }
 
@@ -1050,16 +1052,22 @@ const DEBUG_SETUP_STEPS = [
   { key: 'job', label: 'JOB（最大6枚）', max: 6, columns: 5, faceIds: () => INDEX.raw.JOB.map((r) => r.ID) },
   { key: 'resource', label: '初期資源（最大2枚）', max: 2, columns: 6, faceIds: () => INDEX.raw.RESOURCE.map((r) => r.ID) },
   { key: 'abc', label: 'ABCカード（最大6枚、選んだ順にSHOP101→106）', max: 6, columns: 7, faceIds: () => setupMod.collectNormalShopFaceIds(INDEX) },
+  // QST (2026-08-18, per user request: "テストゲームでQSTも選べるようにしてください 選んだ順に上から
+  // おかれる") -- unlike the 3 steps above, not P1-scoped at all (QST reveals are shared by the whole
+  // game, see qst.setupQuests). Both tiers (A/B) of the same physical QST card can never be picked
+  // together -- see toggleDebugSetupSelection's own doc for the swap-in-place handling.
+  { key: 'qst', label: 'QST（最大3枚、選んだ順に上から表示）', max: 3, columns: 4, faceIds: () => INDEX.raw.QST.map((r) => r.ID) },
 ];
 
-/** null while the picker is closed; otherwise {stepIndex, selections: {con:[], job:[], resource:[], abc:[]}}
- * (each an array of faceIds, in the order clicked -- order matters for 'abc', see DEBUG_SETUP_STEPS'
- * own doc; 'con' holds at most one specific face, e.g. "CON003B", even though only its physical id
- * ends up used -- see createInitialState). Purely UI-scratch, never touches STATE/GameState. */
+/** null while the picker is closed; otherwise {stepIndex, selections: {con:[], job:[], resource:[],
+ * abc:[], qst:[]}} (each an array of faceIds, in the order clicked -- order matters for 'abc' and
+ * 'qst', see DEBUG_SETUP_STEPS' own doc; 'con' holds at most one specific face, e.g. "CON003B", even
+ * though only its physical id ends up used -- see createInitialState). Purely UI-scratch, never touches
+ * STATE/GameState. */
 let debugSetupFlow = null;
 
 function openDebugSetupFlow() {
-  debugSetupFlow = { stepIndex: 0, selections: { con: [], job: [], resource: [], abc: [] } };
+  debugSetupFlow = { stepIndex: 0, selections: { con: [], job: [], resource: [], abc: [], qst: [] } };
   render(STATE);
 }
 
@@ -1069,15 +1077,25 @@ function cancelDebugSetupFlow() {
 }
 
 /** Toggles faceId in/out of the current step's selection (click a picked one again to deselect it).
- * Auto-advances the instant the step's own max is reached -- see this section's own doc. */
+ * Auto-advances the instant the step's own max is reached -- see this section's own doc.
+ *
+ * QST (2026-08-18): both tiers (A/B) of the same physical QST card can never be revealed together (see
+ * qst.setupQuests' own doc), so picking one while its sibling tier is already selected swaps it in
+ * place -- removes the sibling first (freeing a slot even if the list was already at max), rather than
+ * silently doing nothing the way clicking an unrelated face at max would. */
 function toggleDebugSetupSelection(faceId) {
   const step = DEBUG_SETUP_STEPS[debugSetupFlow.stepIndex];
   const list = debugSetupFlow.selections[step.key];
   const i = list.indexOf(faceId);
   if (i >= 0) {
     list.splice(i, 1);
-  } else if (list.length < step.max) {
-    list.push(faceId);
+  } else {
+    if (step.key === 'qst') {
+      const physicalId = faceId.slice(0, -1);
+      const siblingIndex = list.findIndex((id) => id.slice(0, -1) === physicalId);
+      if (siblingIndex >= 0) list.splice(siblingIndex, 1);
+    }
+    if (list.length < step.max) list.push(faceId);
   }
   if (list.length >= step.max) {
     advanceDebugSetupFlow();
@@ -1105,8 +1123,11 @@ function advanceDebugSetupFlow() {
 
 /** Renders the current picker step into #debug-setup-overlay -- hidden entirely while debugSetupFlow is
  * null. Reuses buildCardVisual/the owned-card-cell grid vocabulary already used by
- * renderResourceChoice's candidate picker, plus a small numbered badge on 'abc' picks (the only step
- * where pick ORDER itself is meaningful -- see DEBUG_SETUP_STEPS). */
+ * renderResourceChoice's candidate picker, plus a small numbered badge on 'abc'/'qst' picks (the steps
+ * where pick ORDER itself is meaningful -- see DEBUG_SETUP_STEPS). QST (2026-08-18) uses
+ * buildQstCardVisual instead of buildCardVisual -- a completely different DOM shape/template (.qst-card,
+ * not .shop-card) that every other card type doesn't need, so it also gets its own wider column size
+ * (260px, vs. the 122px shop-card width every other step shares) rather than squeezing into that. */
 function renderDebugSetupOverlay() {
   const overlay = document.getElementById('debug-setup-overlay');
   if (!debugSetupFlow) {
@@ -1119,9 +1140,11 @@ function renderDebugSetupOverlay() {
   const selected = debugSetupFlow.selections[step.key];
   const list = document.getElementById('debug-setup-list');
   list.innerHTML = '';
-  list.style.gridTemplateColumns = `repeat(${step.columns}, 122px)`;
+  list.style.gridTemplateColumns = step.key === 'qst' ? `repeat(${step.columns}, 260px)` : `repeat(${step.columns}, 122px)`;
   for (const faceId of step.faceIds()) {
-    const cardNode = buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true });
+    const cardNode = step.key === 'qst'
+      ? buildQstCardVisual(faceId, STATE, { showRankHeaders: true, noInteraction: true })
+      : buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true });
     const tall = cardNode.classList.contains('shop-card--tall');
     const cell = el('div', tall ? 'owned-card-cell owned-card-cell--tall owned-card-cell--selectable' : 'owned-card-cell owned-card-cell--selectable');
     const pickIndex = selected.indexOf(faceId);
