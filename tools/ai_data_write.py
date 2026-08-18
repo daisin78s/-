@@ -29,6 +29,17 @@ every other row's cells are cleared to blank, not written as 0, so a card with n
 at all never shows a misleading number.
 
 Usage: python tools/ai_data_write.py [jsonPath] [xlsxPath]
+
+Row/column headers are matched by NAME, not by ID (2026-08-18, per the user's own edit to AI.DATA.xlsx:
+"NAMEや能力など直しました" -- both CONJOB's row labels (was "CON001A" etc, now "祝福" etc) and column
+labels (was "JOB001" etc, now "社交家" etc), plus ABCM's ID column (was "A001A" etc, now "小麦畑の支配"
+etc, except the literal "D" row, which isn't a real card and has no NAME to look up), switched from
+physical/face IDs to the card's actual Japanese name. report['conjob']/['job']/['abcm'] still key by ID
+(that's what the AI engine/data-loader deal in), so every ID this script looks up against the sheet is
+first translated to its NAME via data/game.json (loaded fresh here, independent of the JSON report) --
+see NAME_BY_* below. A missing lookup falls back to the raw ID unchanged (same effect as the old
+behavior: it just won't match anything in the NAME-keyed sheet either, so still ends up skipped/reported
+rather than silently mis-filed).
 """
 
 import json
@@ -42,6 +53,12 @@ XLSX_PATH = sys.argv[2] if len(sys.argv) > 2 else 'AI.DATA.xlsx'
 
 with open(JSON_PATH, 'r', encoding='utf-8') as f:
     report = json.load(f)
+
+with open('data/game.json', 'r', encoding='utf-8') as f:
+    game_data = json.load(f)
+NAME_BY_CON_FACE = {row['ID']: row['NAME'] for row in game_data['CON']}
+NAME_BY_JOB = {row['ID']: row['NAME'] for row in game_data['JOB']}
+NAME_BY_CARD_FACE = {row['ID']: row['NAME'] for sheet in ('A', 'B', 'C', 'M') for row in game_data[sheet]}
 
 wb = openpyxl.load_workbook(XLSX_PATH)
 
@@ -110,12 +127,14 @@ skipped = []
 for entry in report['conjob']:
     con_face_id = entry['con']
     job_physical_id = re.sub(r'[A-Z]$', '', entry['job'])  # "JOB005A" -> "JOB005"
-    if con_face_id not in count_rows or job_physical_id not in count_cols:
+    con_name = NAME_BY_CON_FACE.get(con_face_id, con_face_id)
+    job_name = NAME_BY_JOB.get(job_physical_id, job_physical_id)
+    if con_name not in count_rows or job_name not in count_cols:
         skipped.append((con_face_id, entry['job']))
         continue
-    ws.cell(row=count_rows[con_face_id], column=count_cols[job_physical_id], value=entry['count'])
-    ws.cell(row=avg_rows[con_face_id], column=avg_cols[job_physical_id], value=round(entry['avgScore'], 2))
-    ws.cell(row=qst_avg_rows[con_face_id], column=qst_avg_cols[job_physical_id], value=round(entry['avgQstScore'], 2))
+    ws.cell(row=count_rows[con_name], column=count_cols[job_name], value=entry['count'])
+    ws.cell(row=avg_rows[con_name], column=avg_cols[job_name], value=round(entry['avgScore'], 2))
+    ws.cell(row=qst_avg_rows[con_name], column=qst_avg_cols[job_name], value=round(entry['avgQstScore'], 2))
     written += 1
 
 print(f'CONJOB: wrote {written} combinations, skipped {len(skipped)}: {skipped}')
@@ -164,11 +183,12 @@ for r in avg_rows.values():
 vp_penalty_written = 0
 vp_penalty_skipped = []
 for con_face_id, entry in report.get('conVpPenalty', {}).items():
-    if con_face_id not in avg_rows:
+    con_name = NAME_BY_CON_FACE.get(con_face_id, con_face_id)
+    if con_name not in avg_rows:
         vp_penalty_skipped.append(con_face_id)
         continue
     if entry['avgVpPenalty'] is not None:
-        ws.cell(row=avg_rows[con_face_id], column=vp_penalty_col, value=round(entry['avgVpPenalty'], 2))
+        ws.cell(row=avg_rows[con_name], column=vp_penalty_col, value=round(entry['avgVpPenalty'], 2))
     vp_penalty_written += 1
 
 print(f'CONJOB N (VPペナルティ平均): wrote {vp_penalty_written} CON faces, skipped {len(vp_penalty_skipped)}: {vp_penalty_skipped}')
@@ -184,11 +204,12 @@ job_written = 0
 job_skipped = []
 for job_face_id, entry in report.get('job', {}).items():
     job_physical_id = re.sub(r'[A-Z]$', '', job_face_id)
-    if job_physical_id not in count_cols:
+    job_name = NAME_BY_JOB.get(job_physical_id, job_physical_id)
+    if job_name not in count_cols:
         job_skipped.append(job_face_id)
         continue
     if entry['avgUsage'] is not None:
-        ws.cell(row=job_usage_row, column=count_cols[job_physical_id], value=round(entry['avgUsage'], 2))
+        ws.cell(row=job_usage_row, column=count_cols[job_name], value=round(entry['avgUsage'], 2))
     job_written += 1
 
 print(f'CONJOB row {job_usage_row} (JOB使用回数): wrote {job_written} JOBs, skipped {len(job_skipped)}: {job_skipped}')
@@ -225,10 +246,11 @@ for r in id_rows.values():
 abcm_written = 0
 abcm_skipped = []
 for card_id, by_round in report['abcm'].items():
-    if card_id not in id_rows:
+    card_name = NAME_BY_CARD_FACE.get(card_id, card_id)  # 'D' has no card NAME, passes through unchanged
+    if card_name not in id_rows:
         abcm_skipped.append(card_id)
         continue
-    row = id_rows[card_id]
+    row = id_rows[card_name]
     for round_str, cell in by_round.items():
         round_num = int(round_str)
         ws2.cell(row=row, column=COUNT_COLS[round_num], value=cell['count'])
