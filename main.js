@@ -4869,13 +4869,26 @@ function closeRankingOverlay() {
   document.getElementById('ranking-overlay').hidden = true;
 }
 
-/** ランキングリセット (2026-08-18, per user request: "データが一新されたのでランキングを一度リセット
+/** ランキングリセット (2026-08-16, per user request: "データが一新されたのでランキングを一度リセット
  * してください" -- old ranking entries were saved before this session's various physical-id/card
  * changes, e.g. the CON sheet reorg, so their card ids no longer mean the same thing under the current
  * data.json; loadReplay-ing one of those shows garbled/wrong card info -- see renderReplayFrame's own
  * try/catch for the defensive side of the same root cause). Irreversible on this device (no server
- * backup), hence the confirm(). */
+ * backup), hence the confirm().
+ *
+ * Password gate added 2026-08-18 (per user request: "誰でも出来てしまうと困るので") -- this is a plain
+ * client-side check, not real security (the password sits in this file's own source, readable by anyone
+ * who opens it) -- it only stops a casual/accidental tap by someone else using the same device, not a
+ * determined attacker. Matches what was actually asked for; a real access-control layer isn't feasible
+ * for a build-step-free, server-free static page anyway. */
+const RANKING_RESET_PASSWORD = 'qedy94b4';
 function handleRankingResetClick() {
+  const entered = window.prompt('ランキングをリセットするにはパスワードを入力してください。');
+  if (entered === null) return; // canceled
+  if (entered !== RANKING_RESET_PASSWORD) {
+    window.alert('パスワードが違います。');
+    return;
+  }
   if (!window.confirm('歴代ランキングと保存されているリプレイをすべて削除します。よろしいですか？')) return;
   RankingStorage.clearAll().then(() => renderRankingList());
 }
