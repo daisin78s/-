@@ -293,6 +293,11 @@
     <div class="card-inst-modal ranking-modal">
       <div class="card-inst-modal__header">
         <span class="card-inst-modal__title">🏆 歴代ランキング</span>
+        <!-- リセット (2026-08-18, per user request: "データが一新されたのでランキングを一度リセット
+             してください") -- see main.js's handleRankingResetClick, which gates on a plain
+             window.confirm() (this is a rare, deliberate admin action, not a normal game move, so a
+             native confirm dialog is a reasonable fit here unlike this app's other destructive actions). -->
+        <button type="button" class="undo-button" id="ranking-reset-button">ランキングをリセット</button>
         <button type="button" class="card-inst-modal__close" id="ranking-close-button" aria-label="閉じる">&times;</button>
       </div>
       <div id="ranking-register-list" class="ranking-register-list"></div>

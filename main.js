@@ -950,18 +950,32 @@ function jumpToReplayRound(round) {
  * matches what was actually clickable at that point in history -- .replay-locked's pointer-events:none
  * (see style.css) is what actually guarantees none of it responds to a click. */
 function renderReplayFrame() {
-  const snapshot = replayHistory[replayCursor];
-  const next = snapshot.round >= 1 ? turnFlowMod.getNextTurn(snapshot) : null;
-  document.getElementById('app').classList.add('replay-locked');
-  document.getElementById('game-end-overlay').hidden = true;
-  renderHeader(snapshot);
-  renderShops(snapshot);
-  renderBoard(snapshot, next);
-  renderPlayers(snapshot, next);
-  renderJobPool(snapshot, next);
-  renderPlayerCards(snapshot, next);
-  document.getElementById('board-message').textContent = '';
-  renderReplayControls();
+  // Defensive try/catch (2026-08-18, per user report: "前のランキングのリプレイだったためIDがずれていて
+  // 変な挙動でした") -- a ranking entry's saved replay can predate a physical-id reorg (e.g. the CON
+  // sheet reshuffle) or a since-added card, so its snapshots' ids can mean something different, or
+  // nothing at all, under the *current* data.json. Rendering one of those can throw (e.g. getCardRow on
+  // an id that no longer exists) partway through this function, which -- without this guard -- would
+  // leave replayMode stuck true (it's set before this ever runs, see enterReplayMode) with no code path
+  // left to un-stick it, since nothing else calls exitReplayMode automatically. Falls back to exiting
+  // replay mode outright and telling the user, rather than a broken/half-drawn board staying on screen.
+  try {
+    const snapshot = replayHistory[replayCursor];
+    const next = snapshot.round >= 1 ? turnFlowMod.getNextTurn(snapshot) : null;
+    document.getElementById('app').classList.add('replay-locked');
+    document.getElementById('game-end-overlay').hidden = true;
+    renderHeader(snapshot);
+    renderShops(snapshot);
+    renderBoard(snapshot, next);
+    renderPlayers(snapshot, next);
+    renderJobPool(snapshot, next);
+    renderPlayerCards(snapshot, next);
+    document.getElementById('board-message').textContent = '';
+    renderReplayControls();
+  } catch (e) {
+    console.error('renderReplayFrame failed (likely a stale/incompatible saved replay):', e);
+    exitReplayMode();
+    window.alert('このリプレイは表示できませんでした（データの更新により古いリプレイと互換性がなくなった可能性があります）。ランキング画面からリセットできます。');
+  }
 }
 
 function renderReplayControls() {
@@ -2428,7 +2442,8 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     // gap -- superseded by this single, general mechanism now that the user has written a complete,
     // authoritative summary line for all 12 CON faces instead of patching gaps one at a time).
     // .card-note's white-space:pre-line preserves the column's own \n line breaks as-is.
-    if (options.showEffect && facts.iconText) {
+    // suppressConNote (2026-08-18): 傲慢/CON004A-only, see its own call-site doc in renderPlayerCards.
+    if (options.showEffect && facts.iconText && !options.suppressConNote) {
       tall = true;
       const noteClass = faceId === CARD_NOTE_COMPACT_FACE_ID ? 'card-note card-note--compact' : 'card-note';
       const noteEl = el('div', noteClass);
@@ -4618,12 +4633,22 @@ function renderPlayerCards(state, next) {
       if (!physicalId) continue;
       const cardState = state.cards[physicalId];
       if (!cardState) continue;
+      // 傲慢/CON004A's own card-note ("最多AREA✖/LVアップ✖", 2026-08-18, per user request) is suppressed
+      // here -- on this player's own OWNED-card view only, not the CON pool/preview/choice screens where
+      // it isn't owned yet -- while there's nothing it could actually be warning about: either the
+      // player has no upgrade-eligible card at all yet (e.g. right at game start), or they're already
+      // rank 1 in Q004A so the block wouldn't apply anyway. Both conditions must hold to show it (see
+      // board.hasAnyUpgradeEligibleCard's own doc for why getBuildCandidates alone can't tell these
+      // apart from being blocked).
+      const suppressConNote = physicalId === conId
+        && dataLoaderMod.getCardRow(INDEX, cardState.currentFaceId).NAME === '傲慢'
+        && !(boardMod.isUpgradeBlockedByQstRank(state, INDEX, player.id) && boardMod.hasAnyUpgradeEligibleCard(state, INDEX, player.id));
       // showEffect+allowTextFallback:false (confirmed 2026-07-30): JOB/CON now show effect icons
       // like A/B/C, but unmapped DSL stays blank instead of raw text (see buildEffectRow). Cell size
       // reacts to whether the card actually ended up tall (i.e. has anything to show), rather than
       // being fixed non-tall like before.
       const cardNode = buildCardVisual(cardState.currentFaceId, {
-        tapped: cardState.tapped, showEffect: true, allowTextFallback: false,
+        tapped: cardState.tapped, showEffect: true, allowTextFallback: false, suppressConNote,
       });
       const cell = el('div', cardNode.classList.contains('shop-card--tall') ? 'owned-card-cell owned-card-cell--tall' : 'owned-card-cell');
       // 変化ハイライト (2026-08-16) -- this JOB/CON was drafted since the viewing human's last turn ended.
@@ -4838,6 +4863,17 @@ function openRankingOverlay() {
 
 function closeRankingOverlay() {
   document.getElementById('ranking-overlay').hidden = true;
+}
+
+/** ランキングリセット (2026-08-18, per user request: "データが一新されたのでランキングを一度リセット
+ * してください" -- old ranking entries were saved before this session's various physical-id/card
+ * changes, e.g. the CON sheet reorg, so their card ids no longer mean the same thing under the current
+ * data.json; loadReplay-ing one of those shows garbled/wrong card info -- see renderReplayFrame's own
+ * try/catch for the defensive side of the same root cause). Irreversible on this device (no server
+ * backup), hence the confirm(). */
+function handleRankingResetClick() {
+  if (!window.confirm('歴代ランキングと保存されているリプレイをすべて削除します。よろしいですか？')) return;
+  RankingStorage.clearAll().then(() => renderRankingList());
 }
 
 function render(state) {
@@ -5446,6 +5482,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('game-end-ranking-button').addEventListener('click', openRankingOverlay);
   document.getElementById('ranking-close-button').addEventListener('click', closeRankingOverlay);
+  document.getElementById('ranking-reset-button').addEventListener('click', handleRankingResetClick);
   const rankingOverlayEl = document.getElementById('ranking-overlay');
   rankingOverlayEl.addEventListener('click', (e) => {
     if (e.target === rankingOverlayEl) closeRankingOverlay(); // backdrop click only, matching #card-inst-overlay

@@ -911,6 +911,24 @@ function isUpgradeBlockedByQstRank(state, index, playerId) {
   });
 }
 
+/** Whether playerId owns at least one A/B/C card with a valid next-tier face -- the same tier-
+ * eligibility check getBuildCandidates' own 'U' branch uses, but deliberately WITHOUT the
+ * isUpgradeBlockedByQstRank gate (2026-08-18, per user request for CON004A/傲慢's own card-note: "自分
+ * が最多AREAでない　かつ　LVアップするカードがある　場合のみ　警告文が出るようにして" -- the note
+ * should stay hidden if the player has nothing that could ever be upgraded, even while the QST-rank
+ * block is itself active, and getBuildCandidates(['U']) alone can't tell "blocked" apart from "nothing
+ * to upgrade in the first place" -- it returns [] either way). */
+function hasAnyUpgradeEligibleCard(state, index, playerId) {
+  const player = state.players.find((p) => p.id === playerId);
+  return player.ownedCardPhysicalIds.some((physicalId) => {
+    if (physicalId.startsWith('CON') || physicalId.startsWith('JOB')) return false;
+    const inst = state.cards[physicalId];
+    const { tier } = splitCardId(inst.currentFaceId);
+    if (!tier) return false;
+    return !!findCardFace(index, physicalId, nextTierLetter(tier));
+  });
+}
+
 /** True if any of playerId's owned cards carries an active BLOCK_COLOR_DIE_REUSE PASSIVE rule (CON006A,
  * 2026-08-15, per user spec: "自分のカラーDが置かれているAREAには別のカラーDを配置できない"). Just an
  * on/off flag -- the actual "does this player already have a COLOR die on mapId" check is each caller's
@@ -1196,6 +1214,7 @@ module.exports = {
   useBareTapAbility,
   getBuildCandidates,
   isUpgradeBlockedByQstRank,
+  hasAnyUpgradeEligibleCard,
   isColorDieReuseBlocked,
   isCandidateAffordable,
   resolveBuild,

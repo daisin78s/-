@@ -333,6 +333,43 @@ function giveDie(state, playerId, value) {
 }
 
 // ---------------------------------------------------------------------------
+// hasAnyUpgradeEligibleCard (2026-08-18, for CON004A/傲慢's own card-note display: only shown while the
+// player both has something upgrade-eligible AND is actually blocked -- see main.js's own doc). Unlike
+// getBuildCandidates(['U']), this ignores isUpgradeBlockedByQstRank entirely, so it can tell "blocked"
+// apart from "nothing to upgrade in the first place" (both read as [] from getBuildCandidates alone).
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const p2 = player(state, 'P2');
+  check('False with no owned cards at all', board.hasAnyUpgradeEligibleCard(state, index, 'P1'), false);
+
+  const con4 = createCardInstance('CON004A');
+  con4.ownerId = 'P1';
+  state.cards[con4.physicalId] = con4;
+  p1.ownedCardPhysicalIds.push(con4.physicalId);
+  check('False with only a CON card owned (CON/JOB never count)', board.hasAnyUpgradeEligibleCard(state, index, 'P1'), false);
+
+  const upgradeable = createCardInstance('A001A'); // A001B exists
+  upgradeable.ownerId = 'P1';
+  state.cards[upgradeable.physicalId] = upgradeable;
+  p1.ownedCardPhysicalIds.push(upgradeable.physicalId);
+  check('True once an upgrade-eligible A/B/C card is owned', board.hasAnyUpgradeEligibleCard(state, index, 'P1'), true);
+
+  // Make P1 QST-rank-blocked (same setup as the CON004A test above) -- hasAnyUpgradeEligibleCard must
+  // stay true even though getBuildCandidates(['U']) would now report [] for an unrelated reason.
+  for (const faceId of ['A002A', 'A003A']) {
+    const inst = createCardInstance(faceId);
+    inst.ownerId = 'P2';
+    state.cards[inst.physicalId] = inst;
+    p2.ownedCardPhysicalIds.push(inst.physicalId);
+  }
+  check('P1 is indeed QST-rank-blocked now', board.isUpgradeBlockedByQstRank(state, index, 'P1'), true);
+  check('...but hasAnyUpgradeEligibleCard stays true regardless (ignores the block)', board.hasAnyUpgradeEligibleCard(state, index, 'P1'), true);
+  check('...unlike getBuildCandidates, which reports none while blocked', board.getBuildCandidates(state, index, 'P1', ['U'], 0), []);
+}
+
+// ---------------------------------------------------------------------------
 // 憤怒: BLOCK_COLOR_DIE_REUSE() (2026-08-15, per user spec: "自分のカラーDが置かれているAREAには
 // 別のカラーDを配置できない") -- blocks placing a 2nd own COLOR die on a map from a SEPARATE, later
 // action, but a single group-placement action stacking 2+ own COLOR dice together (confirmed with the

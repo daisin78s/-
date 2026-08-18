@@ -112,5 +112,23 @@ function save(entryWithoutId, replayHistory) {
   });
 }
 
-window.RankingStorage = { list: list, save: save, loadReplay: loadReplay };
+/** Wipes every saved ranking entry and its replay (2026-08-18, per user request: "データが一新された
+ * のでランキングを一度リセットしてください" -- old entries saved before a physical-id reorg (e.g. the
+ * CON sheet reshuffle) reference card ids that mean something different, or nothing at all, under the
+ * current data.json, so their replays render garbled/broken -- see main.js's renderReplayFrame try/
+ * catch for the defensive side of the same issue). Clears the whole IndexedDB object store rather than
+ * deleting entries one at a time. */
+function clearAll() {
+  writeList([]);
+  return openDb().then(function (db) {
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).clear();
+      tx.oncomplete = function () { resolve(); };
+      tx.onerror = function () { reject(tx.error); };
+    });
+  });
+}
+
+window.RankingStorage = { list: list, save: save, loadReplay: loadReplay, clearAll: clearAll };
 })();
