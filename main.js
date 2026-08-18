@@ -1499,13 +1499,14 @@ const ACTION_ICON_BUILDERS = {
   'UNTAP_CHOICE(SELF,1)': () => actionRow([actionEmoji('⚡'), actionEmoji('⤴️')]),
   'UNTAP_CHOICE(SELF,3)': () => actionRow([actionEmoji('⚡'), actionEmoji('⤴️'), actionSuffix('3')]),
   'UNTAP_CHOICE(SELF,6)': () => actionRow([actionEmoji('⚡'), actionEmoji('⤴️'), actionSuffix('6')]),
-  // JOB010/革命家 (2026-08-17, per user spec: "TAPして2〇を支払い、カードを1枚選んでLVアップする") -- pay
-  // the flat 2K cost, then the same ⚒️U upgrade icon every other BUILD(U) card already uses (see
-  // buildBuildIcon), reusing resourceItemNodes/actionArrow for the "spend this to get that" reading
-  // every CHANGE(...) icon already has (e.g. C001A's "○2→●2"). One-off exact-match entry rather than
-  // generalizing buildBuildIcon itself, since PAY(...) is 1-of-1 in the data today (see
+  // JOB010/革命家 (2026-08-17, per user spec: "TAPして2〇を支払い、カードを1枚選んでLVアップする"; cost
+  // lowered from 2K to 1K on 2026-08-18, per user edit to game.xlsx) -- pay the flat K cost, then the
+  // same ⚒️U upgrade icon every other BUILD(U) card already uses (see buildBuildIcon), reusing
+  // resourceItemNodes/actionArrow for the "spend this to get that" reading every CHANGE(...) icon
+  // already has (e.g. C001A's "○2→●2"). One-off exact-match entry rather than generalizing
+  // buildBuildIcon itself, since PAY(...) is 1-of-1 in the data today (see
   // board.resolveProgramOrBuild's own doc on why the TAP text isn't just "BUILD(U)" alone).
-  'PAY(2K);BUILD(U)': () => actionRow([...resourceItemNodes('2', 'K'), actionArrow(), actionEmoji('⚒️'), actionSuffix('U')]),
+  'PAY(K);BUILD(U)': () => actionRow([...resourceItemNodes('1', 'K'), actionArrow(), actionEmoji('⚒️'), actionSuffix('U')]),
   // REPLACE_ADD(D,wD) (confirmed 2026-07-29): a passive that swaps "gain your own die" for "gain a
   // white die" instead -- shown as the source resource turning into the replacement.
   'REPLACE_ADD(D,wD)': () => actionRow([actionSuffix('色D'), actionArrow(), actionEmoji('🎲')]),

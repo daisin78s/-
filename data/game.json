@@ -268,7 +268,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "スラム街LV1の支配"
+      "INST": "孤児院LV1の支配"
     },
     {
       "ID": "A005A",
@@ -396,7 +396,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "スラム街LV2の支配"
+      "INST": "孤児院LV2の支配"
     },
     {
       "ID": "A005B",
@@ -1693,12 +1693,12 @@
       "EMBLEM_C": "",
       "VP": "",
       "ONCE": "",
-      "TAP": "PAY(2K);BUILD(U)",
+      "TAP": "PAY(K);BUILD(U)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "M",
-      "INST": "TAPして2食料を支払い、カードを１枚選んでLVアップする。\nLVアップに必要な資源は通常通り支払う"
+      "INST": "TAPして1食料を支払い、カードを１枚選んでLVアップする。\nLVアップに必要な資源は通常通り支払う"
     },
     {
       "ID": "JOB011",
