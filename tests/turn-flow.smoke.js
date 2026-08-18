@@ -371,7 +371,8 @@ check('startRound(2) itself does not touch dice (already rerolled at the previou
 
 // ---------------------------------------------------------------------------
 // 吟遊詩人/JOB008 (2026-08-17, replacing its old live VP_MODIFIER(TOTAL_EMBLEM_COUNT) PASSIVE formula
-// per user request: "エンブレムが3個増えるごとにターン終了時1VPとZを得る") -- checked once per TURNEND,
+// per user request: "エンブレムが3個増えるごとにターン終了時1VPとZを得る"; granted resource changed from
+// Z to C, 2026-08-18, per user request: "もらえる資源をZからCに変更したい") -- checked once per TURNEND,
 // catch-up-safe via player.bardEmblemUnitsGranted's watermark. M004 has EMBLEM_A=1,EMBLEM_B=1,EMBLEM_C=1
 // (3 total); M012 has EMBLEM_C=3 (3 total) -- both used purely as convenient emblem sources, not for any
 // monument-specific behavior.
@@ -392,18 +393,18 @@ check('startRound(2) itself does not touch dice (already rerolled at the previou
   p1.ownedCardPhysicalIds.push(m004.physicalId);
 
   const beforeVp = p1.resources.VP || 0;
-  const beforeZ = p1.resources.Z || 0;
+  const beforeC = p1.resources.C || 0;
   const result = turnFlow.endTurn(s, index, 'P1');
   check('endTurn succeeds', result.success, true);
   check('吟遊詩人: exactly 3 emblems -> 1 unit -> +1VP', p1.resources.VP - beforeVp, 1);
-  check('...and +1Z', p1.resources.Z - beforeZ, 1);
+  check('...and +1C', p1.resources.C - beforeC, 1);
   check('...watermark now at 1', p1.bardEmblemUnitsGranted, 1);
 
   const beforeVp2 = p1.resources.VP;
-  const beforeZ2 = p1.resources.Z;
+  const beforeC2 = p1.resources.C;
   turnFlow.endTurn(s, index, 'P1');
   check('A 2nd endTurn with no new emblems grants nothing more (idempotent)', p1.resources.VP - beforeVp2, 0);
-  check('...same for Z', p1.resources.Z - beforeZ2, 0);
+  check('...same for C', p1.resources.C - beforeC2, 0);
   check('...watermark stays at 1', p1.bardEmblemUnitsGranted, 1);
 
   const m012 = createCardInstance('M012'); // 人3 -- 3 more emblems (total now 6)
@@ -427,10 +428,10 @@ check('startRound(2) itself does not touch dice (already rerolled at the previou
     p1.ownedCardPhysicalIds.push(inst.physicalId);
   }
   const beforeVp4 = p1.resources.VP;
-  const beforeZ4 = p1.resources.Z;
+  const beforeC4 = p1.resources.C;
   turnFlow.endTurn(s, index, 'P1');
   check('吟遊詩人: jumping to 15 emblems (5 units) grants all 3 newly-earned units (5-2) at once', p1.resources.VP - beforeVp4, 3);
-  check('...same for Z', p1.resources.Z - beforeZ4, 3);
+  check('...same for C', p1.resources.C - beforeC4, 3);
   check('...watermark now at 5', p1.bardEmblemUnitsGranted, 5);
 }
 {
@@ -448,7 +449,7 @@ check('startRound(2) itself does not touch dice (already rerolled at the previou
   p1.ownedCardPhysicalIds.push(m004.physicalId);
 
   turnFlow.endTurn(s, index, 'P1');
-  check('No 吟遊詩人 -> no VP/Z bonus despite 3 emblems', [p1.resources.VP || 0, p1.resources.Z || 0], [0, 0]);
+  check('No 吟遊詩人 -> no VP/C bonus despite 3 emblems', [p1.resources.VP || 0, p1.resources.C || 0], [0, 0]);
 }
 
 console.log(`\n${passCount} passed, ${failCount} failed`);

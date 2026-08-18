@@ -1491,14 +1491,6 @@ const ACTION_ICON_BUILDERS = {
   // reactive/direct TAP abilities), so "毎ターン" (plain text) reads more clearly there than the ⤴️
   // glyph alone did.
   'UNTAP()': () => actionRow([actionSuffix('毎ターン')]),
-  // UNTAP_CHOICE(SELF,n) (2026-08-17, per user request, replacing the old flat "⤴️×3" icon that used to
-  // be the only variant): the C sheet now has 3 different budgets across its cards (mostly n=1, C008A
-  // n=3, C008B n=6) -- one arrow plus the budget number, matching the spreadsheet's own hand-authored
-  // アイコン column text verbatim ("⚡⤴" / "⚡⤴3" / "⚡⤴6"). n=1 omits the number (a single arrow already
-  // reads as "untap one"), n=3/6 append it as plain text after the arrow.
-  'UNTAP_CHOICE(SELF,1)': () => actionRow([actionEmoji('⚡'), actionEmoji('⤴️')]),
-  'UNTAP_CHOICE(SELF,3)': () => actionRow([actionEmoji('⚡'), actionEmoji('⤴️'), actionSuffix('3')]),
-  'UNTAP_CHOICE(SELF,6)': () => actionRow([actionEmoji('⚡'), actionEmoji('⤴️'), actionSuffix('6')]),
   // JOB010/革命家 (2026-08-17, per user spec: "TAPして2〇を支払い、カードを1枚選んでLVアップする"; cost
   // lowered from 2K to 1K on 2026-08-18, per user edit to game.xlsx) -- pay the flat K cost, then the
   // same ⚒️U upgrade icon every other BUILD(U) card already uses (see buildBuildIcon), reusing
@@ -1717,6 +1709,20 @@ function buildCappedChangeIcon(actionText) {
     actionArrow(),
     ...resourceItemNodes(count, getResource),
   ]);
+}
+
+/** UNTAP_CHOICE(SELF,n) -- any budget n (2026-08-17, per user request, replacing the old flat "⤴️×3" icon
+ * that used to be the only variant; generalized from 3 exact-match table entries into a proper pattern
+ * 2026-08-18 once a 4th budget (n=2, C001B/002B/003B) appeared, same "exact-match shape recurring with a
+ * new count -> generalize" evolution buildCappedChangeIcon went through above). One arrow plus the budget
+ * number, matching the C sheet's own hand-authored アイコン column text verbatim back when that column
+ * still existed for this sheet ("⚡⤴" / "⚡⤴3" / "⚡⤴6"). n=1 omits the number (a single arrow already
+ * reads as "untap one"), n>=2 appends it as plain text after the arrow. */
+function buildUntapChoiceIcon(actionText) {
+  const match = /^UNTAP_CHOICE\(SELF,(\d+)\)$/.exec(actionText || '');
+  if (!match) return null;
+  const [, count] = match;
+  return actionRow([actionEmoji('⚡'), actionEmoji('⤴️'), ...(count === '1' ? [] : [actionSuffix(count)])]);
 }
 
 /** CHANGE(nK,mVP) -- K->VP conversions with any counts on either side, e.g. AREA010A's "CHANGE(2K,VP)"
@@ -2063,6 +2069,8 @@ function buildActionIcons(actionText) {
   if (changeQuantityIcon) return changeQuantityIcon;
   const cappedChangeIcon = buildCappedChangeIcon(actionText);
   if (cappedChangeIcon) return cappedChangeIcon;
+  const untapChoiceIcon = buildUntapChoiceIcon(actionText);
+  if (untapChoiceIcon) return untapChoiceIcon;
   const changeToVpIcon = buildChangeToVpIcon(actionText);
   if (changeToVpIcon) return changeToVpIcon;
   const changeAllThenAddIcon = buildChangeAllThenAddIcon(actionText);
@@ -2491,7 +2499,7 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
       for (const resource of ['A', 'B', 'C']) iconRow.appendChild(actionDot(resource));
     } else if (facts.name === '吟遊詩人') {
       noteEl.appendChild(document.createTextNode('エンブレム３個\n▽\n'));
-      iconRow.appendChild(actionDot('Z'));
+      iconRow.appendChild(actionDot('C'));
       iconRow.appendChild(actionCount('1VP'));
     } else {
       noteEl.appendChild(document.createTextNode('LVアップAREA\n▽\n'));

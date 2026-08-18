@@ -113,11 +113,12 @@ function getNextTurn(state) {
  */
 /** 吟遊詩人/JOB008 (2026-08-17, replacing its old live VP_MODIFIER(TOTAL_EMBLEM_COUNT) PASSIVE formula
  * per user request: "エンブレムが3個増えるごとにターン終了時1VPとZを得る" -- confirmed with the user this
- * is a full switch-over, not an additional/toggleable variant). Bespoke, no DSL representation (no
+ * is a full switch-over, not an additional/toggleable variant; granted resource changed from Z to C,
+ * 2026-08-18, per user request: "もらえる資源をZからCに変更したい"). Bespoke, no DSL representation (no
  * existing primitive tracks "how much was already granted before" the way this needs to) -- same class
  * of exception as board.js's hasPioneerAbility/hasLandlordAbility. Checked once per TURNEND rather than
  * at every possible emblem-granting event (build/upgrade/JOB/CON/resource-card draw) specifically to
- * keep this to one call site -- per user agreement, the cost is that the Z/VP arrive at this player's own
+ * keep this to one call site -- per user agreement, the cost is that the C/VP arrive at this player's own
  * turn end rather than the exact instant a new 3-emblem group completes; the eventual total is identical.
  * Uses player.bardEmblemUnitsGranted as a watermark (see its own doc) so this is idempotent/catch-up-safe
  * regardless of how many groups completed since the last check. */
@@ -130,7 +131,7 @@ function grantBardBonusIfEarned(state, index, playerId) {
   if (newUnits <= 0) return;
   const context = { playerId };
   executorApi.grantResourceAndEmitGet(state, index, context, 'VP', newUnits);
-  executorApi.grantResourceAndEmitGet(state, index, context, 'Z', newUnits);
+  executorApi.grantResourceAndEmitGet(state, index, context, 'C', newUnits);
   player.bardEmblemUnitsGranted = earnedUnits;
   executorApi.notifyActivation(state, playerId, player.jobCardId, player.jobCardId, 'PASSIVE');
 }
