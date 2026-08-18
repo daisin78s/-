@@ -4050,11 +4050,23 @@ function renderTapReactions(container, state, playerId) {
  * executor.untapChoiceWeight's own doc -- 兆しカード costs the whole budget by itself, everything else
  * costs 1). Only ever shown when the player's tapped cards' combined weight exceeds the budget
  * (otherwise already auto-resolved with no choice at all, so there's nothing to render here in that
- * case). Click-to-toggle candidates whose cost still fits the remaining budget; per user decision
- * (2026-08-17) the player is free to spend less than the full budget, so there is no auto-commit --
- * an explicit confirm button commits whatever is currently selected via executor.resolveUntapChoice.
- * AI-controlled players resolve this via driveOneAiStepInner instead (random pick), never by clicks --
- * nothing to show here for them. */
+ * case). AI-controlled players resolve this via driveOneAiStepInner instead (random pick), never by
+ * clicks -- nothing to show here for them.
+ *
+ * 2026-08-18 UI rework, per user feedback the old "tap to enlarge -> tap 選ぶ in the modal -> repeat ->
+ * tap a separate confirm button" flow was too many steps ("使いにくい"): tapping a card now toggles its
+ * selection directly (color change via the existing .owned-card-cell--selected outline, same class the
+ * old flow already used) with no enlarge modal at all -- the grid already renders full effect text
+ * (showEffect:true), so there's nothing the modal added here. Once no further candidate can be added
+ * within the remaining weighted budget (confirmPending below -- this can trigger with budget left over,
+ * e.g. only a 兆しカード-weight candidate remains and it no longer fits, matching the user's own example),
+ * every card locks (no more individual toggling) and an explicit "これでいいですか？" はい/いいえ prompt
+ * appears in its place: はい commits the current selection (executor.resolveUntapChoice, same as
+ * before), いいえ clears the selection back to empty so the player can start over. Below that trigger,
+ * a lighter-weight "この内容で決定する" button is still offered whenever at least one card is selected --
+ * preserving the pre-existing 2026-08-17 rule that the player may voluntarily spend less than the full
+ * budget without maxing it out first.
+ */
 function renderUntapChoice(container, state, playerId) {
   container.innerHTML = '';
   if (isAiPlayer(playerId)) return;
@@ -4064,27 +4076,41 @@ function renderUntapChoice(container, state, playerId) {
   const selected = choice.context.selected;
   const weights = choice.context.weights;
   const selectedWeight = selected.reduce((sum, id) => sum + weights[id], 0);
+  const anySelectable = choice.context.candidates.some(
+    (id) => !selected.includes(id) && selectedWeight + weights[id] <= choice.context.count,
+  );
+  const confirmPending = selected.length > 0 && !anySelectable;
   container.appendChild(el('div', 'onboard-hint__line', `アンタップするカードを選んでください（使用予算 ${selectedWeight}/${choice.context.count}）`));
   for (const physicalId of choice.context.candidates) {
     const cardState = state.cards[physicalId];
     if (!cardState) continue;
     const isSelected = selected.includes(physicalId);
+    const canToggle = !confirmPending && (isSelected || selectedWeight + weights[physicalId] <= choice.context.count);
     const cardNode = buildCardVisual(cardState.currentFaceId, { showEffect: true, allowTextFallback: false, noInteraction: true });
     const tall = cardNode.classList.contains('shop-card--tall');
-    const cell = el('div', tall ? 'owned-card-cell owned-card-cell--tall owned-card-cell--selectable' : 'owned-card-cell owned-card-cell--selectable');
+    const cell = el('div', tall ? 'owned-card-cell owned-card-cell--tall' : 'owned-card-cell');
+    if (canToggle) cell.classList.add('owned-card-cell--selectable');
     if (isSelected) cell.classList.add('owned-card-cell--selected');
     cell.appendChild(cardNode);
-    const canToggle = isSelected || selectedWeight + weights[physicalId] <= choice.context.count;
-    attachPickableEnlarge(cardNode, cardState.currentFaceId, canToggle ? {
-      label: isSelected ? '選択を解除する' : '選ぶ',
-      onPick: () => {
+    if (canToggle) {
+      cell.addEventListener('click', () => {
         choice.context.selected = isSelected ? selected.filter((id) => id !== physicalId) : [...selected, physicalId];
         render(STATE);
-      },
-    } : null);
+      });
+    }
     container.appendChild(cell);
   }
-  if (selected.length > 0) {
+  if (confirmPending) {
+    container.appendChild(el('div', 'onboard-hint__line', `これでいいですか？（使用予算 ${selectedWeight}/${choice.context.count}）`));
+    const yesBtn = el('button', 'build-choice-payment__option', 'はい');
+    yesBtn.type = 'button';
+    yesBtn.onclick = () => { executorMod.resolveUntapChoice(state, playerId, selected); render(STATE); };
+    container.appendChild(yesBtn);
+    const noBtn = el('button', 'build-choice-payment__option', 'いいえ（選び直す）');
+    noBtn.type = 'button';
+    noBtn.onclick = () => { choice.context.selected = []; render(STATE); };
+    container.appendChild(noBtn);
+  } else if (selected.length > 0) {
     const confirmBtn = el('button', 'build-choice-payment__option', `この内容でアンタップする（${selectedWeight}/${choice.context.count}）`);
     confirmBtn.type = 'button';
     confirmBtn.onclick = () => { executorMod.resolveUntapChoice(state, playerId, selected); render(STATE); };
