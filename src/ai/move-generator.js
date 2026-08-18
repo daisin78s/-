@@ -330,15 +330,18 @@ class MoveGenerator {
 }
 
 /** A bare (direct, non-ON-wrapped) TAP ability built from a CHANGE(...) or ADD(...) command that grants
- * BZ -- e.g. JOB004's "CHANGE(3K,2BZ);BLOCK_BUILD(M,THIS_TURN)" or JOB007's "ADD(BZ);BLOCK_BUILD(A,
- * THIS_TURN);BLOCK_BUILD(B,THIS_TURN);BLOCK_BUILD(C,THIS_TURN)" (2026-08-07: generalized from CHANGE-only
- * to also cover ADD, since JOB007 grants BZ for free rather than converting another resource into it; the
- * BLOCK_BUILD half is a side-effect restriction, not a second thing this ability "does", so it doesn't
- * disqualify the shape). Returns the lowered CHANGE/ADD command, or null if faceId has no TAP field, no
- * BZ grant is there, or the field has some other statement besides CHANGE/ADD/BLOCK_BUILD. See
+ * BZ -- e.g. JOB004's "CHANGE(3K,2BZ);BLOCK_BUILD(M,THIS_TURN)" or JOB007's "ADD(BZ);MONUMENT_DICE_
+ * DISCOUNT(2,THIS_TURN);BLOCK_BUILD(A,THIS_TURN);BLOCK_BUILD(B,THIS_TURN);BLOCK_BUILD(C,THIS_TURN)"
+ * (2026-08-07: generalized from CHANGE-only to also cover ADD, since JOB007 grants BZ for free rather
+ * than converting another resource into it; the BLOCK_BUILD half is a side-effect restriction, not a
+ * second thing this ability "does", so it doesn't disqualify the shape; MONUMENT_DICE_DISCOUNT added to
+ * the same allowed-side-effects set 2026-08-18 when JOB007's TAP grew that clause, same reasoning).
+ * Returns the lowered CHANGE/ADD command, or null if faceId has no TAP field, no BZ grant is there, or
+ * the field has some other statement besides CHANGE/ADD/BLOCK_BUILD/MONUMENT_DICE_DISCOUNT. See
  * MoveGenerator#forcedBzConversionMove's own doc for why this is treated as forced rather than a normal
  * candidate. Deliberately not scoped to any one card: any future card with the same shape (a bare BZ
- * grant, optionally paired with BLOCK_BUILD) gets the same forced treatment automatically. */
+ * grant, optionally paired with BLOCK_BUILD/MONUMENT_DICE_DISCOUNT) gets the same forced treatment
+ * automatically. */
 function bzConversionTap(index, faceId) {
   let row;
   try { row = getCardRow(index, faceId); } catch (e) { return null; }
@@ -347,8 +350,9 @@ function bzConversionTap(index, faceId) {
   const bzCmd = commands.find((c) => (c.type === 'CHANGE' && c.gain.some((g) => g.resource === 'BZ'))
     || (c.type === 'ADD' && c.items.some((i) => i.resource === 'BZ')));
   if (!bzCmd) return null;
-  const onlyBzGrantAndBlockBuild = commands.every((c) => c === bzCmd || c.type === 'BLOCK_BUILD');
-  return onlyBzGrantAndBlockBuild ? bzCmd : null;
+  const SIDE_EFFECT_TYPES = new Set(['BLOCK_BUILD', 'MONUMENT_DICE_DISCOUNT']);
+  const onlyBzGrantAndSideEffects = commands.every((c) => c === bzCmd || SIDE_EFFECT_TYPES.has(c.type));
+  return onlyBzGrantAndSideEffects ? bzCmd : null;
 }
 
 module.exports = { MoveGenerator, bareTapKind, bzConversionTap };

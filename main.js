@@ -1754,30 +1754,36 @@ function buildChangeAllThenAddIcon(actionText) {
   return stack;
 }
 
-/** A bare BZ-granting TAP, optionally paired with BLOCK_BUILD(category,THIS_TURN) restrictions -- e.g.
- * JOB004's CHANGE(3K,2BZ);BLOCK_BUILD(M,THIS_TURN) (2026-08-0X, per user request) or JOB007's ADD(BZ);
- * BLOCK_BUILD(A,THIS_TURN);BLOCK_BUILD(B,THIS_TURN);BLOCK_BUILD(C,THIS_TURN) (2026-08-07, replacing
- * JOB007's old ON(BUILD(U,M),ADD(BZ)) reaction -- see buildOnBuildAddResourceIcon's own doc and
- * [[project-dice-wp]] for why: reacting *after* an UPGRADE/Monument build meant the BZ always arrived too
- * late to help pay for the build that triggered it, and evaporated unspent at TURNEND. Now a bare TAP
- * the player fires *before* an UPGRADE/Monument build, so the BZ is actually usable). First line: either
- * pay -> {n}BZ (CHANGE form; BZ has no colored dot in this project's vocabulary, unlike
- * buildChangeQuantityIcon's K/A/B/C/Z -- matches every other "{n}BZ"/"軽減{n}Z" label elsewhere, plain
- * text rather than a dot+count) or ⚡BZ (ADD form, ⚡ prefix matching buildAddResourceIcon's "just gain
- * this, no cost" convention). Second line (only if any BLOCK_BUILD present): the blocked categories'
- * letters + "除く", except the single-M case which keeps the pre-existing "モニュメント除く" wording
- * users have already seen. **2026-08-04: the block used to be display-only text -- confirmed with the
- * user this needed real enforcement, so it's backed by a genuine rule (BLOCK_BUILD(...,THIS_TURN), see
- * board.getBuildCandidates); this label just reflects that.** Matches generically on shape (a bare
- * CHANGE(nX,nBZ) or ADD(nBZ), optionally followed by one or more BLOCK_BUILD(cat,THIS_TURN)), not any one
- * card by name -- the BZ grant alone, with no BLOCK_BUILD at all, still matches and simply skips the
- * second row. */
+/** A bare BZ-granting TAP, optionally paired with BLOCK_BUILD(category,THIS_TURN) restrictions and/or a
+ * MONUMENT_DICE_DISCOUNT(n,THIS_TURN) -- e.g. JOB004's CHANGE(3K,2BZ);BLOCK_BUILD(M,THIS_TURN)
+ * (2026-08-0X, per user request) or JOB007's ADD(BZ);MONUMENT_DICE_DISCOUNT(2,THIS_TURN);BLOCK_BUILD(A,
+ * THIS_TURN);BLOCK_BUILD(B,THIS_TURN);BLOCK_BUILD(C,THIS_TURN) (2026-08-07, replacing JOB007's old
+ * ON(BUILD(U,M),ADD(BZ)) reaction -- see buildOnBuildAddResourceIcon's own doc and [[project-dice-wp]]
+ * for why: reacting *after* an UPGRADE/Monument build meant the BZ always arrived too late to help pay
+ * for the build that triggered it, and evaporated unspent at TURNEND. Now a bare TAP the player fires
+ * *before* an UPGRADE/Monument build, so the BZ is actually usable; MONUMENT_DICE_DISCOUNT added
+ * 2026-08-18, per user request: "モニュメントの必要ダイスを2下げる"). First line: either pay -> {n}BZ
+ * (CHANGE form; BZ has no colored dot in this project's vocabulary, unlike buildChangeQuantityIcon's
+ * K/A/B/C/Z -- matches every other "{n}BZ"/"軽減{n}Z" label elsewhere, plain text rather than a
+ * dot+count) or ⚡BZ (ADD form, ⚡ prefix matching buildAddResourceIcon's "just gain this, no cost"
+ * convention). Next line (only if MONUMENT_DICE_DISCOUNT present): 🎲-{n}, reusing the same dice glyph
+ * every wD-related icon already uses elsewhere. Final line (only if any BLOCK_BUILD present): the
+ * blocked categories' letters + "除く", except the single-M case which keeps the pre-existing
+ * "モニュメント除く" wording users have already seen. **2026-08-04: the block used to be display-only
+ * text -- confirmed with the user this needed real enforcement, so it's backed by a genuine rule
+ * (BLOCK_BUILD(...,THIS_TURN), see board.getBuildCandidates); this label just reflects that.** Matches
+ * generically on shape (a bare CHANGE(nX,nBZ) or ADD(nBZ), optionally followed by one
+ * MONUMENT_DICE_DISCOUNT(n,THIS_TURN) and/or one or more BLOCK_BUILD(cat,THIS_TURN)), not any one card by
+ * name -- the BZ grant alone, with neither of the other two, still matches and simply skips those rows. */
 function buildBzForBuildIcon(actionText) {
   const stmts = (actionText || '').split(';').map((s) => s.trim());
   const changeMatch = /^CHANGE\((\d*)(K|A|B|C|Z),(\d*)BZ\)$/.exec(stmts[0]);
   const addMatch = /^ADD\((\d*)BZ\)$/.exec(stmts[0]);
   if (!changeMatch && !addMatch) return null;
-  const blockMatches = stmts.slice(1).map((s) => /^BLOCK_BUILD\(([ABCMU]),THIS_TURN\)$/.exec(s));
+  const tail = stmts.slice(1);
+  const discountMatch = tail.find((s) => /^MONUMENT_DICE_DISCOUNT\(\d+,THIS_TURN\)$/.test(s));
+  const blockStmts = tail.filter((s) => s !== discountMatch);
+  const blockMatches = blockStmts.map((s) => /^BLOCK_BUILD\(([ABCMU]),THIS_TURN\)$/.exec(s));
   if (blockMatches.some((m) => !m)) return null; // unrecognized extra statement, don't guess
   const blockedCats = blockMatches.map((m) => m[1]);
   const stack = el('div', 'action-icons-stack');
@@ -1786,6 +1792,10 @@ function buildBzForBuildIcon(actionText) {
     stack.appendChild(actionRow([...resourceItemNodes(payCount, payResource), actionArrow(), actionSuffix(`${bzCount}BZ`)]));
   } else {
     stack.appendChild(actionRow([actionEmoji('⚡'), actionSuffix(`${addMatch[1]}BZ`)]));
+  }
+  if (discountMatch) {
+    const discountAmount = /^MONUMENT_DICE_DISCOUNT\((\d+),THIS_TURN\)$/.exec(discountMatch)[1];
+    stack.appendChild(actionRow([actionEmoji('🎲'), actionSuffix(`-${discountAmount}`)]));
   }
   if (blockedCats.length > 0) {
     const label = blockedCats.length === 1 && blockedCats[0] === 'M' ? 'モニュメント除く' : `${blockedCats.join('')}除く`;

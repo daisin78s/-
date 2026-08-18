@@ -873,6 +873,18 @@ function runBlockBuild(state, context, cmd) {
   return { success: true };
 }
 
+/** MONUMENT_DICE_DISCOUNT(n,THIS_TURN) -- 2026-08-18, JOB007/密使's revised TAP ("モニュメントの必要
+ * ダイスを2下げる"). Only THIS_TURN scope exists today, same as BLOCK_BUILD -- board.getBuildCandidates
+ * is the single choke point that reads this (subtracted from each monument's own DICE threshold, floored
+ * at 0 so a large enough discount just makes every monument buildable regardless of dice value), so every
+ * BUILD(M) path is discounted uniformly with no per-path special-casing. Sums across grants rather than
+ * BLOCK_BUILD's dedup-by-category (a discount is a magnitude, not a boolean flag). */
+function runMonumentDiceDiscount(state, context, cmd) {
+  const player = getPlayer(state, context.playerId);
+  player.monumentDiceDiscountThisTurn += cmd.amount;
+  return { success: true };
+}
+
 // ---------------------------------------------------------------------------
 // Free actions (confirmed 2026-07-29, corrected 2026-08-02, [[project-dice-wp-dsl-spec]]): A/B/C/Z->K
 // and usage-fee collection are NOT DSL/card effects -- they're a fixed mechanic every player can use,
@@ -1016,6 +1028,7 @@ function runCommand(state, index, context, cmd) {
     case 'CHANGE_DIE_VALUE': return runChangeDieValue(state, context, cmd);
     case 'GRANT_PLACE_ANYWHERE': return runGrantPlaceAnywhere(state, context, cmd);
     case 'BLOCK_BUILD': return runBlockBuild(state, context, cmd);
+    case 'MONUMENT_DICE_DISCOUNT': return runMonumentDiceDiscount(state, context, cmd);
     case 'IF':
       return evalCondition(state, index, context.playerId, cmd.condition)
         ? runCommand(state, index, context, cmd.effect)
@@ -1151,6 +1164,8 @@ function applyTurnEnd(state, index, playerId) {
   player.resources.BZ = 0;
   // BLOCK_BUILD(category,THIS_TURN) is turn-scoped too (see runBlockBuild).
   player.blockedBuildCategoriesThisTurn = [];
+  // MONUMENT_DICE_DISCOUNT(n,THIS_TURN) is turn-scoped too (see runMonumentDiceDiscount).
+  player.monumentDiceDiscountThisTurn = 0;
 }
 
 // ---------------------------------------------------------------------------

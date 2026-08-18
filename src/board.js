@@ -553,10 +553,14 @@ function hasSufficientProperSubset(newValues, threshold, baseSum) {
 /** Filters a monument BUILD_NEW candidate list down to only those that genuinely need every one of
  * newValues (this group's own dice) -- on top of baseSum (the touched slots' pre-existing occupancy,
  * fixed and un-reducible) -- to reach their own DICE threshold. See hasSufficientProperSubset. A solo
- * die never has a "redundant" partner (there's only ever the one), so this is a no-op below 2 dice. */
-function excludeOverfundedMonuments(index, candidates, newValues, baseSum) {
+ * die never has a "redundant" partner (there's only ever the one), so this is a no-op below 2 dice.
+ * discount (2026-08-18, JOB007/密使's MONUMENT_DICE_DISCOUNT) -- same floor-at-0 subtraction from each
+ * monument's own threshold that getBuildCandidates itself already applies, kept in sync here too since
+ * this re-derives the threshold independently rather than reading it back off the already-filtered
+ * candidates (both callers already have the placing player's own discount on hand). */
+function excludeOverfundedMonuments(index, candidates, newValues, baseSum, discount) {
   if (newValues.length <= 1) return candidates;
-  return candidates.filter((c) => !hasSufficientProperSubset(newValues, parseMonumentThreshold(getCardRow(index, c.faceId).DICE), baseSum));
+  return candidates.filter((c) => !hasSufficientProperSubset(newValues, Math.max(0, parseMonumentThreshold(getCardRow(index, c.faceId).DICE) - discount), baseSum));
 }
 
 /**
@@ -704,7 +708,7 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
     affordabilityCheckState = structuredClone(state);
     for (const cmd of areaTrailingAdds) executor.runCommand(affordabilityCheckState, index, context, cmd);
   }
-  const predictedCandidates = excludeOverfundedMonuments(index, getBuildCandidates(affordabilityCheckState, index, playerId, ['M'], predictedBuildValue), newValues, existingSumTotal);
+  const predictedCandidates = excludeOverfundedMonuments(index, getBuildCandidates(affordabilityCheckState, index, playerId, ['M'], predictedBuildValue), newValues, existingSumTotal, player.monumentDiceDiscountThisTurn);
   if (!predictedCandidates.some((c) => isCandidateAffordable(affordabilityCheckState, index, playerId, c))) {
     return { success: false, reason: 'NO_BUILDABLE_CARD' };
   }
@@ -760,7 +764,7 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
     buildValue += map.slots[slotIndex].reduce((sum, o) => sum + o.value, 0);
   }
 
-  const candidates = excludeOverfundedMonuments(index, getBuildCandidates(state, index, playerId, ['M'], buildValue), newValues, existingSumTotal);
+  const candidates = excludeOverfundedMonuments(index, getBuildCandidates(state, index, playerId, ['M'], buildValue), newValues, existingSumTotal, player.monumentDiceDiscountThisTurn);
   if (candidates.length === 0) {
     return { success: true, actionResult: { success: false, reason: 'NO_BUILDABLE_CARD', categories: ['M'], buildValue } };
   }
@@ -1136,9 +1140,13 @@ function getBuildCandidates(state, index, playerId, categories, buildValue) {
   }
 
   if (categories.includes('M') && !blocked.includes('M')) {
+    // Discounted by player.monumentDiceDiscountThisTurn if this player has an active MONUMENT_DICE_
+    // DISCOUNT(n,THIS_TURN) grant (2026-08-18, JOB007/密使) -- floored at 0 so a large enough discount
+    // just makes every monument buildable regardless of dice value, rather than going negative.
+    const discountedThreshold = (rawThreshold) => Math.max(0, rawThreshold - player.monumentDiceDiscountThisTurn);
     for (const [slotId, faceId] of Object.entries(state.shops.M.slots)) {
       if (!faceId) continue;
-      const threshold = parseMonumentThreshold(getCardRow(index, faceId).DICE);
+      const threshold = discountedThreshold(parseMonumentThreshold(getCardRow(index, faceId).DICE));
       if (buildValue >= threshold) {
         candidates.push({ type: 'BUILD_NEW', faceId, shopKey: 'M', slotId });
       }

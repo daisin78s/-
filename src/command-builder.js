@@ -254,6 +254,16 @@ function lowerCall(node) {
         category: identLikeName(node.args[0]),
         duration: identLikeName(node.args[1]),
       };
+    // MONUMENT_DICE_DISCOUNT(n,THIS_TURN) (2026-08-18, JOB007/密使's revised TAP, per user request: add
+    // "モニュメントの必要ダイスを2下げる" as a new middle line between the existing BZ grant and the
+    // A/B/C build block). Only THIS_TURN scope exists today, same as BLOCK_BUILD -- see
+    // executor.runMonumentDiceDiscount's own doc for how the amount is applied/cleared.
+    case 'MONUMENT_DICE_DISCOUNT':
+      return {
+        type: 'MONUMENT_DICE_DISCOUNT',
+        amount: numberValue(node.args[0]),
+        duration: identLikeName(node.args[1]),
+      };
     default:
       throw new CommandBuildError(`Unknown DSL function: ${node.name}`);
   }

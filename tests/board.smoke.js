@@ -251,6 +251,51 @@ function giveDie(state, playerId, value) {
 }
 
 // ---------------------------------------------------------------------------
+// getBuildCandidates respects MONUMENT_DICE_DISCOUNT (2026-08-18, JOB007/密使's revised TAP: "モニュメン
+// トの必要ダイスを2下げる") -- M001 has DICE=">=12" (the highest threshold in the data, confirmed via
+// data/game.json), so buildValue=10 is a clean below-every-other-monument's-threshold probe: unreachable
+// without the discount, reachable once a 2-point discount closes the gap.
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const withoutDiscount = board.getBuildCandidates(state, index, 'P1', ['M'], 10);
+  check('M001 (DICE>=12) is not reachable at buildValue=10 with no discount', withoutDiscount.some((c) => c.faceId === 'M001'), false);
+
+  p1.monumentDiceDiscountThisTurn = 2;
+  const withDiscount = board.getBuildCandidates(state, index, 'P1', ['M'], 10);
+  check('...but is reachable once a 2-point MONUMENT_DICE_DISCOUNT closes the gap (effective threshold 10)', withDiscount.some((c) => c.faceId === 'M001'), true);
+
+  // Per-player, not global -- P2 (unaffected) still doesn't see M001 at buildValue=10.
+  const p2Candidates = board.getBuildCandidates(state, index, 'P2', ['M'], 10);
+  check('...and does not affect other players', p2Candidates.some((c) => c.faceId === 'M001'), false);
+
+  // A discount large enough to floor the threshold below 0 just makes every monument reachable, rather
+  // than going negative (buildValue is always a positive die value/sum, so this only matters for the
+  // clamp itself, not for any real gameplay difference beyond "everything's now buildable").
+  p1.monumentDiceDiscountThisTurn = 99;
+  const flooredAtZero = board.getBuildCandidates(state, index, 'P1', ['M'], 1);
+  check('An extreme discount floors the threshold at 0, not negative (M001 reachable even at buildValue=1)', flooredAtZero.some((c) => c.faceId === 'M001'), true);
+}
+
+{
+  // executor.runCommand(MONUMENT_DICE_DISCOUNT) itself, plus TURNEND clearing (mirrors BLOCK_BUILD's own
+  // turn-scoped lifecycle -- see executor.applyTurnEnd).
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  check('monumentDiceDiscountThisTurn starts at 0', p1.monumentDiceDiscountThisTurn, 0);
+
+  executor.runCommand(state, index, { playerId: 'P1' }, { type: 'MONUMENT_DICE_DISCOUNT', amount: 2, duration: 'THIS_TURN' });
+  check('MONUMENT_DICE_DISCOUNT(2,THIS_TURN) sets the discount to 2', p1.monumentDiceDiscountThisTurn, 2);
+
+  executor.runCommand(state, index, { playerId: 'P1' }, { type: 'MONUMENT_DICE_DISCOUNT', amount: 3, duration: 'THIS_TURN' });
+  check('A second grant in the same turn sums (2+3=5), rather than overwriting', p1.monumentDiceDiscountThisTurn, 5);
+
+  executor.applyTurnEnd(state, index, 'P1');
+  check('...and resets to 0 at TURNEND, same as blockedBuildCategoriesThisTurn', p1.monumentDiceDiscountThisTurn, 0);
+}
+
+// ---------------------------------------------------------------------------
 // resolveBuild(UPGRADE)
 // ---------------------------------------------------------------------------
 {

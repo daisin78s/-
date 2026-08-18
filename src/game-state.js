@@ -118,6 +118,11 @@ function createDie(id, kind) {
  *   build this turn, set by DSL's BLOCK_BUILD(category,THIS_TURN) (confirmed 2026-08-04: using JOB004's
  *   TAP CHANGE(3K,2BZ) blocks building a monument for the rest of that turn). Turn-scoped like
  *   GRANT_PLACE_ANYWHERE's THIS_TURN flag -- reset in executor.applyTurnEnd.
+ * @property {number} monumentDiceDiscountThisTurn - lowers a monument's own DICE threshold (e.g. ">=12")
+ *   by this much when board.getBuildCandidates checks category "M", set by DSL's
+ *   MONUMENT_DICE_DISCOUNT(n,THIS_TURN) (2026-08-18, JOB007/密使's revised TAP). Sums if granted more
+ *   than once in the same turn (no card does today, but nothing stops a future one). Turn-scoped, same
+ *   reset point as blockedBuildCategoriesThisTurn above.
  * @property {{mapId:string, amount:number}|null} pendingFee - set by board.placeDice/placeDiceGroup
  *   (2026-08-04, fixing a gap where accumulatedFee was never actually charged -- see executor.js's
  *   USAGE_FEE_BY_TIER) when this player places on a MAP whose feeOwnerId is someone else (tier B=1K,
@@ -192,6 +197,7 @@ function createPlayer(id, name, color = null) {
     startOrderValue: 0,
     freeActionTaps,
     blockedBuildCategoriesThisTurn: [],
+    monumentDiceDiscountThisTurn: 0,
     pendingFee: null,
     lockedK: 0,
     bardEmblemUnitsGranted: 0,
