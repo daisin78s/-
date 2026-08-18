@@ -482,34 +482,26 @@ h1, h2, h3 { margin: 0; }
 
 /* Confirmed 2026-07-29: each A/B/C card shows its deck's EMBLEM (天/地/人) as a colored corner
    badge, top-right (moved here from top-left 2026-07-29 -- the shop slot number that used to live
-   here was dropped as unnecessary). M/JOB/CON cards have no emblem. */
+   here was dropped as unnecessary). M/JOB/CON cards have no emblem.
+   2026-08-16 - 2026-08-18: monuments/CON faces with many EMBLEM columns filled in (e.g. 祝福's 2+2+2)
+   produce a long char string like "天天地地人人". Originally wrapped into a fixed-width 2-per-row block
+   past 3 chars (see the old .shop-card__emblem--single-row split); per 2026-08-18 user request for 祝福
+   specifically ("縦に並べると見栄えが悪いので...横にして"), every count now stays on one line instead --
+   width:auto lets the box grow leftward from its own right:6px anchor to fit however many chars are on
+   the row, rather than a fixed px guess. */
 .shop-card__emblem {
   position: absolute;
   top: 4px;
   right: 6px;
   font-size: 10px;
   font-weight: 700;
-  /* 2026-08-16, per user request: monuments with many EMBLEM columns filled in (e.g. 2+2+2) produce a
-     long char string like "天天地地人人" that used to sit on one line and run past the card's edge --
-     wrapping into a fixed-width, right-aligned block (2 chars/row) turns that into 2-3 short lines
-     instead. */
   display: flex;
-  flex-wrap: wrap;
-  align-content: flex-start;
+  flex-wrap: nowrap;
   justify-content: flex-end;
-  width: 22px;
+  width: auto;
   line-height: 1.2;
 }
 .shop-card__emblem:empty { display: none; }
-
-/* 2026-08-16, per user request (M011 聖域 "天天天"): up to 3 emblems stay on one line instead of
-   wrapping at 2/row -- width:auto lets the box grow leftward from its own right:6px anchor to fit
-   however many chars are on the (single) row, rather than guessing a fixed px value. Only applied when
-   main.js counts <=3 emblems for this card; 4+ still uses the fixed 22px/2-per-row wrap above. */
-.shop-card__emblem--single-row {
-  width: auto;
-  flex-wrap: nowrap;
-}
 
 /* Confirmed 2026-07-29: LV{n} (from A/B/C decks' LEVEL field) sits right under the EMBLEM badge;
    cards with no LEVEL (M/JOB/CON/RESOURCE) show nothing here. */

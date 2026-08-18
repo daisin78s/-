@@ -2352,11 +2352,10 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
   const emblemEl = q('.shop-card__emblem');
   if (emblem) {
     const chars = emblemChars(emblem);
-    // 2026-08-16, per user request (M011 聖域 "天天天" -- 3 emblems): stay on one line up to 3, same as
-    // 1-2 already did; only 4+ (e.g. M007's 6-char "天天地地人人") still wraps at 2/row (see
-    // .shop-card__emblem--single-row in style.css). Keeps the previously-confirmed 2+2+2 (3-row) shape
-    // for 6-emblem cards, rather than widening the box for everyone and turning that into 3+3 (2 rows).
-    if (chars.length <= 3) emblemEl.classList.add('shop-card__emblem--single-row');
+    // Always one line regardless of count (2026-08-16 for up to 3, widened 2026-08-18 per user request
+    // for 祝福 specifically -- "縦に並べると見栄えが悪いので...横にして" -- to every count; see
+    // .shop-card__emblem's own doc in style.css, which also affects M007 (identical 2,2,2 shape) and
+    // M008/M009 (4-emblem) the same way).
     for (const char of chars) {
       const charEl = el('span', 'shop-card__emblem-char', char);
       charEl.dataset.emblem = char;
