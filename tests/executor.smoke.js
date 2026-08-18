@@ -791,12 +791,13 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
-  giveCard(state, 'JOB006', 'P1'); // PASSIVE=ON(GET(D),ADD(Z));ON(GET(wD),ADD(K))
+  giveCard(state, 'JOB006', 'P1'); // PASSIVE=ON(GET(D),ADD(Z,VP));ON(GET(wD),ADD(K))
   const player = getPlayerRef(state, 'P1');
   const before = player.dice.filter((d) => d.kind === 'COLOR').length;
   const result = executor.runCommand(state, index, { playerId: 'P1' }, { type: 'CHANGE', pay: [], gain: [{ resource: 'D', count: { kind: 'literal', value: 1 } }], times: { kind: 'literal', value: 1 } });
   check('A bare CHANGE(...,D) succeeds and grants the color die', { success: result.success, diceGained: player.dice.filter((d) => d.kind === 'COLOR').length - before }, { success: true, diceGained: 1 });
   check('...and JOB006 auto-reacts to the CHANGE-triggered GET(D), granting Z', player.resources.Z, 1);
+  check('...and 1VP (2026-08-18, per user request: "Zと1VPを得る")', player.resources.VP, 1);
 }
 {
   // GET fires once *per die* for a multi-die grant, not once for the whole grant (2026-08-06, per user
@@ -804,7 +805,7 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   // ONCE=ADD(2wD) only triggered JOB006's ON(GET(wD),ADD(K)) once instead of twice). Mirrors
   // board.placeDiceGroup's own PLACE(mapId), which already emits once per die in a multi-die placement.
   const state = freshState();
-  giveCard(state, 'JOB006', 'P1'); // PASSIVE=ON(GET(D),ADD(Z));ON(GET(wD),ADD(K))
+  giveCard(state, 'JOB006', 'P1'); // PASSIVE=ON(GET(D),ADD(Z,VP));ON(GET(wD),ADD(K))
   const player = getPlayerRef(state, 'P1');
   const result = executor.runProgram(state, index, { playerId: 'P1' }, 'ADD(2wD)'); // B004A's real ONCE
   check('ADD(2wD) succeeds and grants both white dice', { success: result.success, wD: player.dice.filter((d) => d.kind === 'WHITE').length }, { success: true, wD: 2 });

@@ -1610,11 +1610,11 @@
       "VP": "",
       "ONCE": "",
       "TAP": "",
-      "PASSIVE": "ON(GET(D),ADD(Z));ON(GET(wD),ADD(K))",
+      "PASSIVE": "ON(GET(D),ADD(Z,VP));ON(GET(wD),ADD(K))",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "追加色Dを得たときZを得る\n🎲を得たときその数だけ食料を得る\n初期資源含む\n毎ターンアンタップする"
+      "INST": "追加色Dを得たときZと1VPを得る\n🎲を得たときその数だけ食料を得る\n初期資源含む\n毎ターンアンタップする"
     },
     {
       "ID": "JOB007",

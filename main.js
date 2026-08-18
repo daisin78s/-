@@ -2020,17 +2020,26 @@ function buildOnGetChangeIcon(actionText) {
  * trigger/resource pairs (2026-07-30, added for JOB006A -- a single-statement version would collide
  * with buildAddResourceIcon-style patterns, but this project doesn't have one of those yet, so this
  * only handles the 2+ compound case). Each pair gets its own row (trigger icon/dot -> gained
- * resource); D/wD triggers show as 色D/🎲 (matching buildAddResourceIcon/buildAddWdIcon's own
- * conventions) since they're dice, not resource dots. */
+ * resource(s)); D/wD triggers show as 色D/🎲 (matching buildAddResourceIcon/buildAddWdIcon's own
+ * conventions) since they're dice, not resource dots. The ADD(...) side can itself be a bundled
+ * multi-resource grant (e.g. "ADD(Z,VP)", 2026-08-18, JOB006A's revised PASSIVE: "追加色Dを得たときZと
+ * 1VPを得る") -- parsed the same comma-split way buildAddMultiResourceIcon does, rendering every item
+ * in sequence on that pair's own row. */
 function buildOnGetAddMultiIcon(actionText) {
   const stmts = (actionText || '').split(';').map((s) => s.trim());
-  const parsed = stmts.map((s) => /^ON\(GET\((K|A|B|C|Z|D|wD)\),ADD\((\d*)(K|A|B|C|Z|D|wD)\)\)$/.exec(s));
+  const parsed = stmts.map((s) => /^ON\(GET\((K|A|B|C|Z|D|wD)\),ADD\(([^()]+)\)\)$/.exec(s));
   if (parsed.length < 2 || parsed.some((m) => !m)) return null;
   const stack = el('div', 'action-icons-stack');
   for (const m of parsed) {
-    const [, trigger, count, gained] = m;
+    const [, trigger, addContent] = m;
+    const gainedNodes = [];
+    for (const part of addContent.split(',')) {
+      const itemMatch = /^(\d*)(K|A|B|C|Z|VP|D|wD)$/.exec(part.trim());
+      if (!itemMatch) return null;
+      gainedNodes.push(...resourceItemNodes(itemMatch[1], itemMatch[2]));
+    }
     const triggerNode = trigger === 'D' ? actionSuffix('色D') : trigger === 'wD' ? actionEmoji('🎲') : actionDot(trigger);
-    stack.appendChild(actionRow([triggerNode, actionTrigger(), ...resourceItemNodes(count, gained)]));
+    stack.appendChild(actionRow([triggerNode, actionTrigger(), ...gainedNodes]));
   }
   return stack;
 }
