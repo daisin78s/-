@@ -2549,6 +2549,11 @@ function buildCardVisual(faceId, options = {}) {
   // .shop-card__effect's border-top divider line, which only made sense as a "below the id/cost header"
   // separator and now has nothing above it to separate from.
   if (/^R\d/.test(faceId)) node.classList.add('shop-card--resource');
+  // Monuments (2026-08-18, per user report: "中央広場　円形闘技場　エンブレムとNAMEがかぶっています" --
+  // a side effect of the emblem badge no longer wrapping to multiple rows, see .shop-card__emblem's own
+  // doc) -- pushes NAME/cost/VP down slightly to clear the (now potentially wide) emblem row. See
+  // .shop-card--monument in style.css for the actual offset.
+  if (/^M\d/.test(faceId)) node.classList.add('shop-card--monument');
 
   // noInteraction (confirmed 2026-07-30): onboarding selection cards (JOB draft, CON face choice,
   // initial RESOURCE candidates -- see renderJobPool/renderConFacesRow/renderResourceChoice) reuse

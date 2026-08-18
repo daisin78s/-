@@ -556,6 +556,15 @@ h1, h2, h3 { margin: 0; }
   display: none;
 }
 
+/* Monuments (2026-08-18, per user report: "中央広場　円形闘技場　エンブレムとNAMEがかぶっています" --
+   the emblem badge no longer wraps to multiple rows, see .shop-card__emblem's own doc, so a wide one
+   (e.g. 中央広場's "天天地地人人") can now overlap NAME). NAME/cost/effect/VP/req/start-order are all
+   normal document flow below the absolutely-positioned emblem, so pushing NAME down is enough -- every
+   sibling after it shifts down the same amount automatically. */
+.shop-card--monument .shop-card__name {
+  margin-top: 12px;
+}
+
 .shop-card__name-text {
   grid-column: 1;
   grid-row: 1;
