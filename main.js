@@ -1486,6 +1486,13 @@ const ACTION_ICON_BUILDERS = {
   // changing, not really "free placement" (the GRANT_PLACE_ANYWHERE half isn't called out separately
   // per the user's request -- just this one label for the whole TAP).
   'SET_DICE_ANY();GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN)': () => actionRow([actionSuffix('ダイス目を変える')]),
+  // 2026-08-18, per user request ("道化の能力をTAPではなく何回でも使える能力にしたい") -- JOB003's TAP
+  // grew a trailing UNTAP() (see board.useBareTapAbility's own doc: a self-untapping TAP field never
+  // actually ends up tapped, so it's usable any number of times per turn, no cost). Same label as the
+  // plain form above -- the ability itself is unchanged, only its usability -- since this game's icon
+  // vocabulary has no existing "unlimited uses" glyph to append and the TAP/no-tap distinction isn't
+  // otherwise called out in any other card's icon either.
+  'SET_DICE_ANY();GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN);UNTAP()': () => actionRow([actionSuffix('ダイス目を変える')]),
   // 2026-08-0X, per user request ("⤴️を消してそこに毎タームといれる"): bare UNTAP() only ever appears
   // as a TURNEND effect (confirmed against data/game.json -- JOB004/005/007, all "usable once per turn"
   // reactive/direct TAP abilities), so "毎ターン" (plain text) reads more clearly there than the ⤴️

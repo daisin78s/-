@@ -771,6 +771,48 @@ function giveDie(state, playerId, value) {
 }
 
 // ---------------------------------------------------------------------------
+// Self-untapping TAP fields (2026-08-18, 道化/JOB003, per user request: "TAPではなく何回でも使える能力に
+// したい", no per-use cost -- confirmed with the user) -- a bare UNTAP() anywhere in the TAP field means
+// useBareTapAbility never actually leaves the card tapped, so it stays immediately re-usable. Patches a
+// synthetic copy of JOB003's own row (real data doesn't have this yet -- see this session's own history)
+// purely to exercise the new mechanism end-to-end; every other field is untouched.
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  index.byId.set('JOB003', { sheet: 'JOB', row: { ...index.byId.get('JOB003').row, TAP: 'ADD(K);UNTAP()' } });
+  const jobInst = createCardInstance('JOB003');
+  jobInst.ownerId = 'P1';
+  state.cards[jobInst.physicalId] = jobInst;
+  p1.ownedCardPhysicalIds.push(jobInst.physicalId);
+
+  const first = board.useBareTapAbility(state, index, { playerId: 'P1' }, jobInst.physicalId);
+  check('Self-untapping TAP (ADD(K);UNTAP()) succeeds', first, { success: true });
+  check('...gained 1K', p1.resources.K, 1);
+  check('...but the card is NOT left tapped', state.cards[jobInst.physicalId].tapped, false);
+
+  const second = board.useBareTapAbility(state, index, { playerId: 'P1' }, jobInst.physicalId);
+  check('...so a 2nd use in the same turn succeeds too, with no untap/re-tap in between', second, { success: true });
+  check('...granting another 1K (2 total)', p1.resources.K, 2);
+  check('...still not tapped after the 2nd use either', state.cards[jobInst.physicalId].tapped, false);
+}
+{
+  // Control: an ordinary TAP field (no UNTAP()) still taps normally and blocks re-entry, same as before
+  // this feature existed -- confirms the new check doesn't affect the common case.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const jobInst = createCardInstance('JOB007'); // real TAP has no UNTAP()
+  jobInst.ownerId = 'P1';
+  state.cards[jobInst.physicalId] = jobInst;
+  p1.ownedCardPhysicalIds.push(jobInst.physicalId);
+
+  board.useBareTapAbility(state, index, { playerId: 'P1' }, jobInst.physicalId);
+  check('An ordinary (non-self-untapping) TAP ability still ends up tapped', state.cards[jobInst.physicalId].tapped, true);
+  const second = board.useBareTapAbility(state, index, { playerId: 'P1' }, jobInst.physicalId);
+  check('...and a 2nd use in the same turn is blocked as before', second, { success: false, reason: 'ALREADY_TAPPED' });
+}
+
+// ---------------------------------------------------------------------------
 // BZ discount (2026-07-31, "BZは建築コストの踏み倒し専用（改築/CHANGEには使用不可）"): 1 BZ skips
 // paying 1 unit of any resource in a BUILD_NEW's cost, player's choice of which. A007A costs "2A,B".
 // ---------------------------------------------------------------------------

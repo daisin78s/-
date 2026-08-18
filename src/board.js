@@ -884,6 +884,15 @@ function completeAreaBuild(state, index, context, candidate, remainingCommands) 
  * chosenDieId/chosenValue/chosenDelta a SET_DIE_VALUE/SET_DICE_ANY/CHANGE_DIE_VALUE statement in the
  * TAP field needs (see executor.runSetDieValue et al) -- the caller collects that from the player
  * *before* calling this, since the whole field runs as one atomic program.
+ *
+ * Self-untapping TAP fields (2026-08-18, 道化/JOB003, per user request: "TAPではなく何回でも使える能力に
+ * したい", no per-use cost -- confirmed with the user) -- a bare UNTAP() anywhere in the TAP field means
+ * this ability never actually ends up tapped from using it, so it stays usable indefinitely, reusing the
+ * existing tap/untap machinery (and its ALREADY_TAPPED re-entrancy gate, still fully in effect) rather
+ * than inventing a new "doesn't tap" DSL concept. Classified by DSL *shape*, not by re-reading
+ * inst.tapped afterward -- that field is false both before and after a self-untapping run (nothing else
+ * sets it true mid-program to tell the two cases apart), same "inspect the TAP text's own shape" pattern
+ * main.js's bareTapKind already uses for a different classification.
  * @returns {{success:true}|{success:true,pendingBuild:{physicalId,...}}|{success:false,reason:string}}
  */
 function useBareTapAbility(state, index, context, physicalId) {
@@ -911,7 +920,8 @@ function useBareTapAbility(state, index, context, physicalId) {
     return { success: true, pendingBuild: { physicalId, ...result.pendingBuild } };
   }
   if (!result.success) return result;
-  inst.tapped = true;
+  const selfUntaps = lowerProgram(parse(row.TAP)).some((cmd) => cmd.type === 'UNTAP');
+  if (!selfUntaps) inst.tapped = true;
   executor.notifyActivation(state, context.playerId, physicalId, inst.currentFaceId, 'TAP');
   return { success: true };
 }
