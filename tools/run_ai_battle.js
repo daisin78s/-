@@ -112,15 +112,15 @@ async function main() {
   }
 
   // High-score logging threshold (2026-08-04, per user feedback: "記録するゲームの得点を記入してください
-  // 20 以上（デフォルト値は20変更できるように）") -- blank input keeps the suggested default (20) rather
-  // than forcing the user to retype it every run.
+  // 20 以上（デフォルト値は20変更できるように）"; raised to 30, 2026-08-18) -- blank input keeps the
+  // suggested default (30) rather than forcing the user to retype it every run.
   let highScoreThreshold;
   while (true) {
-    const answer = (await ask(lineIterator, '記録するゲームの得点を入力してください（未入力で既定値20）: ')).trim();
-    if (answer === '') { highScoreThreshold = 20; break; }
+    const answer = (await ask(lineIterator, '記録するゲームの得点を入力してください（未入力で既定値30）: ')).trim();
+    if (answer === '') { highScoreThreshold = 30; break; }
     const num = Number(answer);
     if (Number.isFinite(num)) { highScoreThreshold = num; break; }
-    console.log('数値を入力するか、何も入力せず既定値20を使ってください。');
+    console.log('数値を入力するか、何も入力せず既定値30を使ってください。');
   }
 
   rl.close();

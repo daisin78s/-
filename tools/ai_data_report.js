@@ -30,7 +30,7 @@
  *   to AI.DATA.xlsx itself (the original behavior), but tools/run_ai_battle.js passes a fresh dated copy
  *   instead (2026-08-04, per user feedback: "同じフォルダにAIDATA20260802-1のような名前でエクセルを生成
  *   して") so a self-service battle run never touches the main AI.DATA.xlsx.
- *   highScoreThreshold: default 20 (2026-08-04, per user feedback: "20点以上の点数があった時 その得点を
+ *   highScoreThreshold: default 30 (2026-08-04, per user feedback: "20点以上の点数があった時 その得点を
  *   取ったAIが何をしたのか確認できるように"). Any game where at least one player's finalScore reaches
  *   this records all 4 players' score/CON/JOB/initial-RESOURCE/builds-by-round as rows in a "HighScores"
  *   sheet inside the SAME xlsxOutputPath workbook (per user feedback: "ログは一つのエクセルファイルに
@@ -156,7 +156,7 @@ function main() {
     process.exit(1);
   }
   const XLSX_PATH = process.argv[5] ? path.resolve(process.argv[5]) : DEFAULT_XLSX_PATH;
-  const highScoreThreshold = process.argv[6] !== undefined ? Number(process.argv[6]) : 20;
+  const highScoreThreshold = process.argv[6] !== undefined ? Number(process.argv[6]) : 30;
   if (!Number.isFinite(highScoreThreshold)) {
     console.error(`Invalid highScoreThreshold "${process.argv[6]}" -- expected a number`);
     process.exit(1);
