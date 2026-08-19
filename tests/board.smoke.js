@@ -225,7 +225,11 @@ function giveDie(state, playerId, value) {
   const result = board.resolveBuild(state, index, { playerId: 'P1' }, candidate);
   check('resolveBuild(BUILD_NEW) succeeds when affordable', result.success, true);
   check('Player now owns the built card', p1.ownedCardPhysicalIds.includes(candidate.faceId.slice(0, -1)), true);
-  check('The shop slot is now empty', state.shops.NORMAL.slots[slotId], null);
+  // 2026-08-18: resolveBuildNew now compacts the row immediately (see compactShop's own doc), so this
+  // slot no longer sits empty -- it shows whatever card shifted in from later in the row (or null only
+  // if this was the last remaining card). What actually matters here is that the built card itself is
+  // gone from the shop entirely, not which slot key it used to occupy.
+  check('The built card no longer appears anywhere in the shop row', Object.values(state.shops.NORMAL.slots).includes(faceId), false);
   check('Player paid the full cost (resources back to 0)', Object.values(p1.resources).filter((v) => v > 0 && v !== p1.resources.VP).length >= 0, true);
 }
 
@@ -585,6 +589,36 @@ function giveDie(state, playerId, value) {
   board.restockShop(state, 'NORMAL');
   check('The other slots are untouched when only the last one was empty', Object.fromEntries(slotIds.slice(0, -1).map((id) => [id, state.shops.NORMAL.slots[id]])), otherSlotsBefore);
   check('...and the last slot itself is refilled', state.shops.NORMAL.slots[lastSlot] !== null, true);
+}
+{
+  // compactShop alone: shift only, no refill, no matter how many draw pile cards are available -- the
+  // half restockShop still defers to TURNEND on its own.
+  const state = freshStateWithShops();
+  const [slot1, slot2] = Object.keys(state.shops.NORMAL.slots);
+  const slot2Before = state.shops.NORMAL.slots[slot2];
+  const drawPileBefore = state.shops.NORMAL.drawPile.length;
+  state.shops.NORMAL.slots[slot1] = null;
+  board.compactShop(state, 'NORMAL');
+  check('compactShop shifts slot2 into the slot1 gap', state.shops.NORMAL.slots[slot1], slot2Before);
+  check('...but does NOT refill the newly-trailing gap from the draw pile', state.shops.NORMAL.drawPile.length, drawPileBefore);
+}
+{
+  // The actual bug report this fixes (2026-08-18): "デバッグモードで戻ったときSHOP101が空のままで詰め
+  // ていかなかった" -- a build used to leave its own slot genuinely empty until TURNEND, which any
+  // snapshot taken in between (including the debug turn-history timeline) faithfully reproduced.
+  // resolveBuildNew now compacts immediately, so this never happens even before TURNEND.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const slotIds = Object.keys(state.shops.NORMAL.slots);
+  const [slotId, faceId] = [slotIds[0], state.shops.NORMAL.slots[slotIds[0]]];
+  const nextSlotFaceIdBefore = state.shops.NORMAL.slots[slotIds[1]];
+  const row = getCardRow(index, faceId);
+  for (const item of require('../src/command-builder').lowerCostList(row.COST)) {
+    p1.resources[item.resource] = (p1.resources[item.resource] || 0) + item.count;
+  }
+  const candidate = board.getBuildCandidates(state, index, 'P1', ['A', 'B', 'C'], require('../src/data-loader').getShopRow(index, slotId).DICE_MIN).find((c) => c.faceId === faceId);
+  board.resolveBuild(state, index, { playerId: 'P1' }, candidate);
+  check('The built slot is NOT left empty -- it already shows the next slot\'s card, well before TURNEND', state.shops.NORMAL.slots[slotId], nextSlotFaceIdBefore);
 }
 
 // ---------------------------------------------------------------------------

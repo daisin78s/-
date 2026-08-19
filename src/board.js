@@ -1240,6 +1240,10 @@ function resolveBuildNew(state, index, context, candidate) {
   if (!payResult.success) return payResult;
 
   state.shops[candidate.shopKey].slots[candidate.slotId] = null;
+  // 2026-08-18: shift the row's remaining cards left immediately, so this slot never sits visibly empty
+  // for the rest of the turn -- see compactShop's own doc. The actual refill (a new card from the draw
+  // pile) still waits for TURNEND, unchanged.
+  compactShop(state, candidate.shopKey);
 
   const inst = createCardInstance(candidate.faceId);
   inst.ownerId = context.playerId;
@@ -1289,27 +1293,40 @@ function resolveBuild(state, index, context, candidate) {
 // Shop restock (confirmed: restocking happens at TURNEND, not immediately)
 // ---------------------------------------------------------------------------
 
-/** Compacts shopKey's row -- slides remaining cards left to close any gaps left by builds since the last
- * call, so empty slots always end up trailing at the row's right end -- then, for restockable shops
- * (M/NORMAL; SPECIAL never restocks, see below), refills those trailing empties from the draw pile in
- * position order (2026-08-07, per user request: "SHOP101のカードが建築された時、102のカードが101に
- * ズレ、103のカードが102にズレ、のような形で全部左にずれていき、カードの補充は必ずSHOP106にされるよう
- * に...SHOP001も同様に SHOP201も同じようにずれていくが、補充はなし" -- previously each empty slot
- * refilled independently, in place, with no shifting at all). Both the shift and the refill still only
- * happen at TURNEND, unchanged from the pre-existing timing (confirmed with the user). SPECIAL is
- * deliberately excluded from the refill loop rather than relying on its drawPile happening to be empty --
- * during round 1, before revealSpecialShop() runs, its 3 cards already sit in drawPile with all slots
- * null, so without this explicit exclusion the very first TURNEND would prematurely reveal them ahead of
- * the SHOP sheet's ROUND_MIN=2. shop.slots' key order is assumed to already be the row's left-to-right
- * order (SHOP101, SHOP102, ... -- see setup.js's *_SHOP_SLOT_IDS, and game-state.createShopDeck which
- * seeds `slots` by iterating that same array, so plain key insertion order already matches it). */
-function restockShop(state, shopKey) {
+/** Slides shopKey's row's remaining cards left to close any gap left by a build, so empty slots always
+ * end up trailing at the row's right end (2026-08-07, per user request: "SHOP101のカードが建築された時、
+ * 102のカードが101にズレ、103のカードが102にズレ、のような形で全部左にずれていき、カードの補充は必ず
+ * SHOP106にされるように...SHOP001も同様に SHOP201も同じようにずれていくが、補充はなし" -- previously
+ * each empty slot refilled independently, in place, with no shifting at all). Idempotent -- safe to call
+ * on an already-compacted row, which is exactly what happens once restockShop (below) also calls this at
+ * TURNEND. Split out from restockShop 2026-08-18, per user report: leaving the shift itself deferred to
+ * TURNEND (its original bundled timing) meant a build left its own slot looking genuinely empty for the
+ * rest of that turn -- including in the debug turn-history timeline, which snapshots real GameState and
+ * so faithfully reproduced that same gap ("SHOP101が空のまま"). Now also called immediately after every
+ * BUILD_NEW nulls out its own slot (resolveBuildNew), so a build's slot always shows *some* existing
+ * card, shifted in, well before TURNEND -- while the refill half (a genuinely new card from the draw
+ * pile) still only happens at TURNEND, unchanged, since that's the part that actually reveals new
+ * information rather than just reordering what's already visible. */
+function compactShop(state, shopKey) {
   const shop = state.shops[shopKey];
   const slotIds = Object.keys(shop.slots);
   const remaining = slotIds.map((id) => shop.slots[id]).filter((faceId) => faceId !== null);
   slotIds.forEach((id, i) => { shop.slots[id] = i < remaining.length ? remaining[i] : null; });
+}
+
+/** Compacts shopKey's row (see compactShop's own doc for why the shift half also now runs immediately
+ * after every build, ahead of this), then, for restockable shops (M/NORMAL; SPECIAL never restocks),
+ * refills those trailing empties from the draw pile in position order. Still only called at TURNEND,
+ * unchanged -- the compactShop call here is harmless/idempotent even when nothing moved since the last
+ * build. SPECIAL is deliberately excluded from the refill loop rather than relying on its drawPile
+ * happening to be empty -- during round 1, before revealSpecialShop() runs, its 3 cards already sit in
+ * drawPile with all slots null, so without this explicit exclusion the very first TURNEND would
+ * prematurely reveal them ahead of the SHOP sheet's ROUND_MIN=2. */
+function restockShop(state, shopKey) {
+  compactShop(state, shopKey);
   if (shopKey === 'SPECIAL') return;
-  for (const id of slotIds) {
+  const shop = state.shops[shopKey];
+  for (const id of Object.keys(shop.slots)) {
     if (shop.slots[id] === null && shop.drawPile.length > 0) {
       shop.slots[id] = shop.drawPile.shift();
     }
@@ -1337,6 +1354,7 @@ module.exports = {
   isCandidateAffordable,
   resolveBuild,
   restockShop,
+  compactShop,
 };
 
 })();
