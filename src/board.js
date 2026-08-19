@@ -175,6 +175,32 @@ function isAllowedSlotForValue(requirements, slots, slotIndex, value) {
   return slotIndex === leftmostAnyIndex;
 }
 
+// 王宮 (CASTLE_MAP_ID) and 元老院 (AREA009_MAP_ID) -- the only 2 maps that support multi-die/stacked
+// buildValue at all (see placeDiceGroup's own doc), and so the only 2 where this exploit is reachable.
+const CHANGED_DIE_SELF_STACK_BLOCKED_MAPS = new Set([CASTLE_MAP_ID, AREA009_MAP_ID]);
+
+/** True if `die` may NOT join targetOccupants here -- 2026-08-18, per user report: 道化/JOB003's "ダイス
+ * 目を変える" (SET_DICE_ANY, also usable via SET_DIE_VALUE/CHANGE_DIE_VALUE on other cards) combined with
+ * its own GRANT_PLACE_ANYWHERE let a player set a die to whatever value exactly completes a stack with
+ * their OWN already-placed die at 王宮/元老院, summing buildValue as if 2 genuinely-earned dice were
+ * involved when really only 1 fresh, naturally-rolled placement happened -- e.g. a real 3 already on the
+ * castle, then a JOB003-set 4 stacked onto it, reaching a DICE>=7 monument for what's really a single
+ * die's worth of investment. Especially severe once JOB003 became unlimited-use/no-tap (see
+ * board.useBareTapAbility's own doc) -- previously rate-limited by the tap itself.
+ *
+ * Deliberately narrow, confirmed with the user: only blocks a die whose value was JUST changed this same
+ * turn (die.valueChangedThisTurn) from joining a slot that already holds this SAME player's own die, and
+ * only at these 2 maps -- the legitimate multi-turn castle-investment pattern (a naturally-rolled die
+ * matching/joining an earlier one, via any GRANT_PLACE_ANYWHERE-granting card) is untouched, as is a
+ * value-changed die joining another PLAYER's slot, or an empty slot, or any placement anywhere else on
+ * the board. Applies to WHITE dice too, not just COLOR (confirmed with the user: "wDも含む") -- die.kind
+ * is never checked here on purpose. */
+function isChangedDieSelfStackBlocked(mapId, playerId, valueChanged, targetOccupants) {
+  if (!valueChanged) return false;
+  if (!CHANGED_DIE_SELF_STACK_BLOCKED_MAPS.has(mapId)) return false;
+  return targetOccupants.some((o) => o.playerId === playerId);
+}
+
 function placeDice(state, index, context, dieId, mapId, slotIndex) {
   const player = state.players.find((p) => p.id === context.playerId);
   const die = player.dice.find((d) => d.id === dieId && d.placedMapId === null && !d.passed);
@@ -214,6 +240,11 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
     // value-independent ("値の一致は不問"), letting the die join whichever occupied slot the player
     // targets. See this function's own doc.
     if (!bypass) return { success: false, reason: 'SLOT_OCCUPIED' };
+    // 2026-08-18: even with bypass, a die whose value was just conjured this same turn still can't stack
+    // onto this same player's own die at 王宮/元老院 -- see isChangedDieSelfStackBlocked's own doc.
+    if (isChangedDieSelfStackBlocked(mapId, context.playerId, die.valueChangedThisTurn, targetOccupants)) {
+      return { success: false, reason: 'CHANGED_DIE_CANNOT_SELF_STACK' };
+    }
   } else if (!isExSlot) {
     // Empty target slot: blocked if this die's value duplicates one already sitting elsewhere in the
     // AREA -- and, unlike the occupied-slot branch above, NEVER waived by GRANT_PLACE_ANYWHERE
@@ -660,11 +691,19 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
     // "available" and wrongly win that comparison. This virtual view marks usedSlots members occupied
     // for that check only, without touching the real (not-yet-committed) map.slots array itself.
     const slotsForAllowedCheck = map.slots.map((occ, i) => (usedSlots.has(i) ? [{ virtual: true }] : occ));
+    // 2026-08-18: same "conjured value can't stack onto this player's own die at 王宮/元老院" restriction
+    // placeDice enforces -- see isChangedDieSelfStackBlocked's own doc. Any die in this value-bucket
+    // having been value-changed this turn is enough to block the whole bucket from joining an occupied
+    // slot that already holds this player's own die (they all share one target slot).
+    const bucketValueChanged = ids.some((id) => dice.find((d) => d.id === id).valueChangedThisTurn);
     let targetSlot = null;
     for (let i = 0; i < requirements.length; i++) {
       if (usedSlots.has(i)) continue;
       if (!bypass && !isAllowedSlotForValue(requirements, slotsForAllowedCheck, i, value)) continue;
-      if (slotAcceptsValue(map, mapId, playerId, requirements[i], map.slots[i], value, bypass)) { targetSlot = i; break; }
+      if (!slotAcceptsValue(map, mapId, playerId, requirements[i], map.slots[i], value, bypass)) continue;
+      if (isChangedDieSelfStackBlocked(mapId, playerId, bucketValueChanged, map.slots[i])) continue;
+      targetSlot = i;
+      break;
     }
     if (targetSlot === null) return { success: false, reason: 'NO_LEGAL_SLOT_FOR_GROUP' };
     usedSlots.add(targetSlot);

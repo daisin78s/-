@@ -823,6 +823,7 @@ function runSetDiceAny(state, context) {
   }
   const die = requireOwnDie(state, context, context.chosenDieId);
   die.value = context.chosenValue;
+  die.valueChangedThisTurn = true;
   context.lastTargetedDieId = die.id;
   return { success: true };
 }
@@ -836,6 +837,7 @@ function runSetDieValue(state, context, cmd) {
   }
   const die = requireOwnDie(state, context, context.chosenDieId);
   die.value = context.chosenValue;
+  die.valueChangedThisTurn = true;
   context.lastTargetedDieId = die.id;
   return { success: true };
 }
@@ -849,6 +851,7 @@ function runChangeDieValue(state, context, cmd) {
   }
   const die = requireOwnDie(state, context, context.chosenDieId);
   die.value = (((die.value - 1 + context.chosenDelta) % 6) + 6) % 6 + 1; // wraps 1..6 (spec: dice values cycle)
+  die.valueChangedThisTurn = true;
   context.lastTargetedDieId = die.id;
   return { success: true };
 }
@@ -1156,6 +1159,9 @@ function applyTurnEnd(state, index, playerId) {
   }
   // GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN)'s flag is turn-scoped.
   for (const die of player.dice) die.placeAnywhereThisTurn = false;
+  // SET_DICE_ANY/SET_DIE_VALUE/CHANGE_DIE_VALUE's valueChangedThisTurn marker is turn-scoped too (see
+  // board.placeDice's own doc on why it exists).
+  for (const die of player.dice) die.valueChangedThisTurn = false;
   // BZ is turn-scoped too (confirmed: "BZはターン終了時に無くなります") -- any left unspent when this
   // turn ends (e.g. generated via JOB004A's CHANGE(3K,2BZ) but never put toward a BUILD before ending
   // the turn) is lost, not carried into the next turn/round. Not a card-DSL rule (no BZ-granting card's

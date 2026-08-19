@@ -780,21 +780,31 @@ function giveDie(state, playerId, value) {
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  index.byId.set('JOB003', { sheet: 'JOB', row: { ...index.byId.get('JOB003').row, TAP: 'ADD(K);UNTAP()' } });
-  const jobInst = createCardInstance('JOB003');
-  jobInst.ownerId = 'P1';
-  state.cards[jobInst.physicalId] = jobInst;
-  p1.ownedCardPhysicalIds.push(jobInst.physicalId);
+  // Patched only for this block, then restored immediately after (see the try/finally below) -- index
+  // is a module-level singleton shared by every test block in this file, so leaving JOB003's row
+  // permanently patched here would silently corrupt any LATER block that exercises the real card
+  // (confirmed the hard way: this exact leak broke the 道化 self-stack exploit tests further down,
+  // which need JOB003's real, un-patched TAP text).
+  const originalJob003 = index.byId.get('JOB003');
+  index.byId.set('JOB003', { sheet: 'JOB', row: { ...originalJob003.row, TAP: 'ADD(K);UNTAP()' } });
+  try {
+    const jobInst = createCardInstance('JOB003');
+    jobInst.ownerId = 'P1';
+    state.cards[jobInst.physicalId] = jobInst;
+    p1.ownedCardPhysicalIds.push(jobInst.physicalId);
 
-  const first = board.useBareTapAbility(state, index, { playerId: 'P1' }, jobInst.physicalId);
-  check('Self-untapping TAP (ADD(K);UNTAP()) succeeds', first, { success: true });
-  check('...gained 1K', p1.resources.K, 1);
-  check('...but the card is NOT left tapped', state.cards[jobInst.physicalId].tapped, false);
+    const first = board.useBareTapAbility(state, index, { playerId: 'P1' }, jobInst.physicalId);
+    check('Self-untapping TAP (ADD(K);UNTAP()) succeeds', first, { success: true });
+    check('...gained 1K', p1.resources.K, 1);
+    check('...but the card is NOT left tapped', state.cards[jobInst.physicalId].tapped, false);
 
-  const second = board.useBareTapAbility(state, index, { playerId: 'P1' }, jobInst.physicalId);
-  check('...so a 2nd use in the same turn succeeds too, with no untap/re-tap in between', second, { success: true });
-  check('...granting another 1K (2 total)', p1.resources.K, 2);
-  check('...still not tapped after the 2nd use either', state.cards[jobInst.physicalId].tapped, false);
+    const second = board.useBareTapAbility(state, index, { playerId: 'P1' }, jobInst.physicalId);
+    check('...so a 2nd use in the same turn succeeds too, with no untap/re-tap in between', second, { success: true });
+    check('...granting another 1K (2 total)', p1.resources.K, 2);
+    check('...still not tapped after the 2nd use either', state.cards[jobInst.physicalId].tapped, false);
+  } finally {
+    index.byId.set('JOB003', originalJob003);
+  }
 }
 {
   // Control: an ordinary TAP field (no UNTAP()) still taps normally and blocks re-entry, same as before
@@ -1308,6 +1318,98 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   check('...buildValue sums all 3 dice (6), not just the new pair (4)', result.actionResult.pendingBuild.buildValue, 6);
   check('...all 3 dice really do sit on the same slot', state.maps[board.CASTLE_MAP_ID].slots.filter((s) => s.length > 0).map((s) => s.length), [3]);
   check('...neither of the 2 new dice counts toward next round\'s turn order', state.maps[board.CASTLE_MAP_ID].slots.find((s) => s.length === 3).filter((o) => o.dieId === d1.id || o.dieId === d2.id).every((o) => o.countsForTurnOrder === false), true);
+}
+
+// ---------------------------------------------------------------------------
+// isChangedDieSelfStackBlocked (2026-08-18, per user report: 道化/JOB003's "ダイス目を変える"
+// (SET_DICE_ANY) plus its own GRANT_PLACE_ANYWHERE let a player set a die to whatever value exactly
+// completes a stack with their OWN already-placed die at 王宮/元老院, summing buildValue as if 2
+// genuinely-earned dice were involved -- e.g. a real 3 already on the castle, then a JOB003-set 4 stacked
+// onto it, reaching a DICE>=7 monument off what's really 1 fresh placement. Especially severe once
+// JOB003 became unlimited-use/no-tap. Confirmed with the user: block only a value-changed die stacking
+// onto the SAME player's own die, only at these 2 maps -- every other GRANT_PLACE_ANYWHERE use (another
+// player's die, an empty slot, a naturally-rolled die, anywhere else on the board) stays untouched.
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.resources = { K: 0, A: 20, B: 20, C: 20, Z: 20, VP: 0, BZ: 0 };
+  const d1 = giveDie(state, 'P1', 3);
+  const placed1 = board.placeDice(state, index, { playerId: 'P1' }, d1.id, board.CASTLE_MAP_ID, 0);
+  check('A real 3 placed on the castle succeeds', placed1.success, true);
+
+  const jobInst = createCardInstance('JOB003');
+  jobInst.ownerId = 'P1';
+  state.cards[jobInst.physicalId] = jobInst;
+  p1.ownedCardPhysicalIds.push(jobInst.physicalId);
+  const d2 = giveDie(state, 'P1', 1);
+  const tapResult = board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: d2.id, chosenValue: 4 }, jobInst.physicalId);
+  check('道化 (JOB003) sets d2 to 4', tapResult, { success: true });
+  check('...and grants d2 placeAnywhereThisTurn', d2.placeAnywhereThisTurn, true);
+
+  const exploit = board.placeDice(state, index, { playerId: 'P1' }, d2.id, board.CASTLE_MAP_ID, 0);
+  check('Stacking the JOB003-changed d2 onto P1\'s own d1 is blocked', exploit, { success: false, reason: 'CHANGED_DIE_CANNOT_SELF_STACK' });
+  check('...d1 is still the only occupant (nothing leaked through)', state.maps[board.CASTLE_MAP_ID].slots[0].length, 1);
+
+  // Control: the exact same change, but targeting an EMPTY slot instead -- never blocked by this rule.
+  const emptySlotResult = board.placeDice(state, index, { playerId: 'P1' }, d2.id, board.CASTLE_MAP_ID, 1);
+  check('...but placing the same changed die into an EMPTY slot still succeeds normally', emptySlotResult.success, true);
+}
+{
+  // Control: a value-changed die CAN still stack onto a DIFFERENT player's die (only same-player self-
+  // stacking is blocked).
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const p2 = player(state, 'P2');
+  p1.resources = { K: 0, A: 20, B: 20, C: 20, Z: 20, VP: 0, BZ: 0 };
+  p2.resources = { K: 0, A: 20, B: 20, C: 20, Z: 20, VP: 0, BZ: 0 };
+  const d1 = giveDie(state, 'P2', 3);
+  board.placeDice(state, index, { playerId: 'P2' }, d1.id, board.CASTLE_MAP_ID, 0);
+
+  const jobInst = createCardInstance('JOB003');
+  jobInst.ownerId = 'P1';
+  state.cards[jobInst.physicalId] = jobInst;
+  p1.ownedCardPhysicalIds.push(jobInst.physicalId);
+  const d2 = giveDie(state, 'P1', 1);
+  board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: d2.id, chosenValue: 4 }, jobInst.physicalId);
+  const result = board.placeDice(state, index, { playerId: 'P1' }, d2.id, board.CASTLE_MAP_ID, 0);
+  check('A JOB003-changed die CAN still join a DIFFERENT player\'s occupied slot (only self-stacking is blocked)', result.success, true);
+}
+{
+  // Control: a NATURALLY-rolled die (never value-changed) stacking onto the player's own die is the
+  // legitimate multi-turn castle-investment pattern -- must still work exactly as before this fix.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.resources = { K: 0, A: 20, B: 20, C: 20, Z: 20, VP: 0, BZ: 0 };
+  const d1 = giveDie(state, 'P1', 5);
+  board.placeDice(state, index, { playerId: 'P1' }, d1.id, board.CASTLE_MAP_ID, 0);
+  const d2 = giveDie(state, 'P1', 5);
+  d2.placeAnywhereThisTurn = true; // some other GRANT_PLACE_ANYWHERE source, value never touched
+  const result = board.placeDice(state, index, { playerId: 'P1' }, d2.id, board.CASTLE_MAP_ID, 0);
+  check('A naturally-rolled (never changed) die can still stack onto the player\'s own die', result.success, true);
+  check('...buildValue sums both (10)', result.actionResult.pendingBuild.buildValue, 10);
+}
+{
+  // Group-placement path (placeDiceGroup) needs the same protection -- same exploit, different entry
+  // point (e.g. stacking a changed die together with a 2nd die in one group action).
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.resources = { K: 0, A: 20, B: 20, C: 20, Z: 20, VP: 0, BZ: 0 };
+  const d1 = giveDie(state, 'P1', 3);
+  board.placeDice(state, index, { playerId: 'P1' }, d1.id, board.CASTLE_MAP_ID, 0);
+
+  const jobInst = createCardInstance('JOB003');
+  jobInst.ownerId = 'P1';
+  state.cards[jobInst.physicalId] = jobInst;
+  p1.ownedCardPhysicalIds.push(jobInst.physicalId);
+  const d2 = giveDie(state, 'P1', 1);
+  board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: d2.id, chosenValue: 4 }, jobInst.physicalId);
+
+  const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d2.id], board.CASTLE_MAP_ID);
+  // The castle has other empty slots too, so the group still finds a legal (fresh, non-stacking) home
+  // for d2 rather than failing outright -- what matters is it's NOT allowed to join d1's occupied slot.
+  check('placeDiceGroup succeeds by finding a different, empty slot', result.success, true);
+  check('...but d2 did NOT join d1\'s occupied slot 0 (self-stacking still blocked)', state.maps[board.CASTLE_MAP_ID].slots[0], [{ playerId: 'P1', dieId: d1.id, value: 3, seq: 1, countsForTurnOrder: true }]);
 }
 
 // ---------------------------------------------------------------------------

@@ -68,6 +68,16 @@ function splitCardId(cardId) {
  *   checks the same way placedMapId!==null is, but NOT from endRound's "unused color die -> 3K" rule
  *   (a passed die is exactly as unused as a genuinely-unplaceable one) -- see turn-flow.js's own
  *   comments. Reset to false at round end, same lifetime as placedMapId.
+ * @property {boolean} valueChangedThisTurn - set by executor.runSetDiceAny/runSetDieValue/
+ *   runChangeDieValue (2026-08-18, per user report: 道化/JOB003's "ダイス目を変える" combined with its
+ *   own GRANT_PLACE_ANYWHERE let a player freely conjure whatever value was needed to stack onto their
+ *   own already-placed die at 王宮/元老院, summing buildValue -- e.g. a real die showing 3 plus a
+ *   JOB003-set 4 reaching a monument's DICE>=7 threshold using what's really only 1 fresh placement.
+ *   Especially severe once JOB003 became unlimited-use/no-tap -- see board.useBareTapAbility's own doc.
+ *   board.placeDice reads this to block exactly that combo (changed value + stacking onto the SAME
+ *   player's own die, at those 2 maps specifically) while leaving every other GRANT_PLACE_ANYWHERE use
+ *   untouched, including the legitimate multi-turn castle-investment pattern with a naturally-rolled
+ *   die. Cleared at TURNEND, same lifetime as placeAnywhereThisTurn just above.
  */
 
 /**
@@ -76,7 +86,7 @@ function splitCardId(cardId) {
  * @returns {DieState}
  */
 function createDie(id, kind) {
-  return { id, kind, value: null, placedMapId: null, placeAnywhereThisTurn: false, passed: false };
+  return { id, kind, value: null, placedMapId: null, placeAnywhereThisTurn: false, passed: false, valueChangedThisTurn: false };
 }
 
 /**
