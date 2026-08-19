@@ -106,9 +106,10 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 // 2a. CON005B/憤怒: PASSIVE=BLOCK_COLOR_DIE_REUSE();WHITE_DICE_CAP(0) (2026-08-18, replacing the earlier
 // PASS_COLOR_DIE_BONUS(2) round-end-only reduction per user spec after further playtesting: "パスをした
 // ときカラーダイスから2Kしか得られない" -> "ｗDの上限0　上限を超えたｗDは2Kになる") -- every ADD(wD) this
-// player would ever gain, from any source, now converts straight to 2K instead (0 is never > an in-hand
+// player would ever gain, from any source, now converts straight to K instead (0 is never > an in-hand
 // count of >=0, so grantOneDie's overflow branch fires unconditionally), same overflow-conversion path a
-// normal player only hits once already at their real cap of 5.
+// normal player only hits once already at their real cap of 5. Overflow amount lowered from 2K to 1K,
+// 2026-08-19, per user request.
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
@@ -117,7 +118,7 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
   const beforeK = player.resources.K;
   executor.runCommand(state, index, { playerId: 'P1' }, { type: 'ADD', items: [{ resource: 'wD', count: { kind: 'literal', value: 1 } }] });
   check('CON005B WHITE_DICE_CAP(0): ADD(wD) grants no real white die', player.dice.filter((d) => d.kind === 'WHITE').length, 0);
-  check('...and instead grants 2K', player.resources.K, beforeK + 2);
+  check('...and instead grants 1K', player.resources.K, beforeK + 1);
   check('...recorded on whiteOverflowEvents same as a real cap overflow', state.whiteOverflowEvents, ['P1']);
 }
 
@@ -466,11 +467,12 @@ console.log(`\n${passCount} passed, ${failCount} failed`);
 function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 
 // ---------------------------------------------------------------------------
-// 13b. A white die granted past whiteDiceCap (5) converts to 2K instead (unrelated to the ADD-rolls-
+// 13b. A white die granted past whiteDiceCap (5) converts to 1K instead (unrelated to the ADD-rolls-
 //     immediately rule above -- this is the always-on overflow rule, see FREE_ACTION_IDS' own comment)
 //     and records the event on GameState.whiteOverflowEvents for main.js's warning banner (2026-08-11,
 //     per user request: "白Dを得たとき上限の5個を超えて得たとき...という警告文が表示されるようにして
-//     ほしい"). The array starts empty and is otherwise untouched by ordinary play.
+//     ほしい"). The array starts empty and is otherwise untouched by ordinary play. Overflow amount
+//     lowered from 2K to 1K, 2026-08-19, per user request.
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
@@ -480,7 +482,7 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   const kBefore = player.resources.K;
   executor.runCommand(state, index, { playerId: 'P1' }, { type: 'ADD', items: [{ resource: 'wD', count: { kind: 'literal', value: 1 } }] });
   check('At the 5-die cap, a 6th wD grant does not add a 6th die', getPlayerRef(state, 'P1').dice.filter((d) => d.kind === 'WHITE').length, 5);
-  check('...it converts to 2K instead', getPlayerRef(state, 'P1').resources.K, kBefore + 2);
+  check('...it converts to 1K instead', getPlayerRef(state, 'P1').resources.K, kBefore + 1);
   check('...and is recorded on whiteOverflowEvents', state.whiteOverflowEvents, ['P1']);
 
   // Below the cap, granting a wD normally does NOT touch whiteOverflowEvents.

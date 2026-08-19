@@ -139,7 +139,7 @@ function grantOneDie(state, index, player, kind, dieIdFactory) {
     die.value = rollDie(state.rng);
     player.dice.push(die);
   } else {
-    player.resources.K += 2;
+    player.resources.K += 1; // lowered from 2K, 2026-08-19, per user request
     // Recorded for main.js's warning banner (2026-08-11, per user request) -- see
     // GameState.whiteOverflowEvents' own doc. Not read anywhere else in the engine.
     state.whiteOverflowEvents.push(player.id);

@@ -620,8 +620,35 @@ let placementMessage = '';
 // that flag also lives outside GameState and placing a die is exactly what sets it true.
 let dicePlacementCheckpoint = null; // { state: GameState, turnActionTaken: boolean } | null
 // Static text for GameState.whiteOverflowEvents (2026-08-11, per user request) -- see render()'s own
-// drain of that array, right below this declaration's use site.
-const WHITE_OVERFLOW_WARNING_TEXT = '白ダイスの所有上限は5個です。それを超えたものは2Kに変換されます。';
+// drain of that array, right below this declaration's use site. This is the passive, after-the-fact
+// fallback notice -- still shown for any wD-granting path not explicitly wrapped by
+// pendingWhiteOverflowConfirm below (e.g. a TAP reaction), so an overflow the player had no chance to
+// confirm in advance is still at least explained afterward. Amount lowered from 2K to 1K, 2026-08-19.
+const WHITE_OVERFLOW_WARNING_TEXT = '白ダイスの所有上限は5個です。それを超えたものは1Kに変換されます。';
+// { onConfirm: () => void } | null -- set by placeSelectedDie/placeSelectedDiceGroup/
+// commitBuildCandidate/the JOB-draft pick handler (2026-08-19, per user request: "上限を超えた🎲はKに
+// なります よろしいですか" -- cancelable, unlike the passive WHITE_OVERFLOW_WARNING_TEXT notice above)
+// whenever wouldCauseWhiteOverflow predicts the real action about to run would trip a wD-cap overflow
+// for the acting player. "はい" runs onConfirm (the actual commit, deferred until now); "いいえ" just
+// clears this with no state change -- the real action was never attempted in the first place, matching
+// dicePlacementCheckpoint's own "nothing to undo" cases, not a rollback.
+let pendingWhiteOverflowConfirm = null;
+
+/** Predicts whether running `action` (a function taking a GameState and performing some real engine
+ * mutation on it) would trip a wD-cap overflow for anyone -- runs `action` against a disposable clone of
+ * `state` and compares GameState.whiteOverflowEvents' length before vs after, rather than assuming
+ * `state.whiteOverflowEvents` itself starts empty (an earlier action's events may not have been drained
+ * into placementMessage by render() yet). Never touches the real `state`. */
+function wouldCauseWhiteOverflow(state, action) {
+  const before = state.whiteOverflowEvents.length;
+  const clone = gameStateMod.cloneState(state);
+  action(clone);
+  return clone.whiteOverflowEvents.length > before;
+}
+
+function renderWhiteOverflowConfirmModal() {
+  document.getElementById('white-overflow-confirm-overlay').hidden = !pendingWhiteOverflowConfirm;
+}
 // playerId | null -- set by advanceTurnIfPossible when RESOURCE_TOTAL_LIMIT blocks ending that
 // player's turn (their die is already placed; only their resource total is in the way), cleared once
 // it actually succeeds. Lets the free-action click handler below retry ending the turn immediately
@@ -787,6 +814,7 @@ function jumpToHistoryIndex(idx) {
   pendingTurnEndPlayerId = null;
   pendingTurnEndWarning = null;
   pendingRoundPassConfirm = null;
+  pendingWhiteOverflowConfirm = null;
   turnActionTaken = false;
   placementMessage = '';
   // aiOpenTurnPlayerId/aiOpenTurnHasPlacedDie (found via headless testing): also not part of GameState,
@@ -906,7 +934,7 @@ function enterReplayMode(historyOverride) {
   // index.html's own comment) same as #replay-controls does on purpose.
   for (const id of ['card-inst-overlay', 'build-choice-overlay', 'placement-choice-overlay',
     'tap-choice-overlay', 'auto-mode-choice-overlay', 'turn-end-warning-overlay', 'round-pass-confirm-overlay',
-    'ranking-overlay']) {
+    'white-overflow-confirm-overlay', 'ranking-overlay']) {
     document.getElementById(id).hidden = true;
   }
   if (historyOverride) {
@@ -3358,6 +3386,18 @@ function applyPlaceDiceResult(result, playerId) {
  * 2026-08-02, see attemptPlaceSelectedDie's own comment). */
 function placeSelectedDie(state, dieId, mapId, slotIndex, colorPreference) {
   const player = state.players.find((p) => p.dice.some((d) => d.id === dieId));
+  // wD-overflow confirm (2026-08-19, per user request) -- checked BEFORE any real mutation, so a
+  // declined confirm leaves selectedDieIds/turnActionTaken/dicePlacementCheckpoint untouched, same as if
+  // the click never happened. See pendingWhiteOverflowConfirm's own doc.
+  if (wouldCauseWhiteOverflow(state, (clone) => boardMod.placeDice(clone, INDEX, { playerId: player.id, colorPreference }, dieId, mapId, slotIndex))) {
+    pendingWhiteOverflowConfirm = { onConfirm: () => placeSelectedDieCommit(state, player, dieId, mapId, slotIndex, colorPreference) };
+    render(STATE);
+    return;
+  }
+  placeSelectedDieCommit(state, player, dieId, mapId, slotIndex, colorPreference);
+}
+
+function placeSelectedDieCommit(state, player, dieId, mapId, slotIndex, colorPreference) {
   const preSnapshot = gameStateMod.cloneState(state);
   const preTurnActionTaken = turnActionTaken;
   const result = boardMod.placeDice(state, INDEX, { playerId: player.id, colorPreference }, dieId, mapId, slotIndex);
@@ -3374,8 +3414,18 @@ function placeSelectedDie(state, dieId, mapId, slotIndex, colorPreference) {
  * not, this turn's one main action is spent either way. */
 function placeSelectedDiceGroup(state, mapId) {
   const dieIds = selectedDieIds;
-  selectedDieIds = [];
   const player = state.players.find((p) => p.dice.some((d) => d.id === dieIds[0]));
+  // wD-overflow confirm -- see placeSelectedDie's own doc for the pattern.
+  if (wouldCauseWhiteOverflow(state, (clone) => boardMod.placeDiceGroup(clone, INDEX, { playerId: player.id }, dieIds, mapId))) {
+    pendingWhiteOverflowConfirm = { onConfirm: () => placeSelectedDiceGroupCommit(state, player, dieIds, mapId) };
+    render(STATE);
+    return;
+  }
+  placeSelectedDiceGroupCommit(state, player, dieIds, mapId);
+}
+
+function placeSelectedDiceGroupCommit(state, player, dieIds, mapId) {
+  selectedDieIds = [];
   const preSnapshot = gameStateMod.cloneState(state);
   const preTurnActionTaken = turnActionTaken;
   const result = boardMod.placeDiceGroup(state, INDEX, { playerId: player.id }, dieIds, mapId);
@@ -3658,8 +3708,24 @@ function renderBuildChoiceBzTapPrompt() {
 /** Commits a BUILD_NEW/UPGRADE candidate once its bzDiscount is settled -- either auto-picked
  * (bzOutcomesForCandidate found exactly one affordable outcome) or player-picked via
  * renderBzOutcomeChoice. Shared by both paths in the click handler below since everything past that
- * point (QST vs AREA/TAP commit, success/failure bookkeeping) is identical either way. */
+ * point (QST vs AREA/TAP commit, success/failure bookkeeping) is identical either way.
+ *
+ * wD-overflow confirm (2026-08-19, per user request) wraps this: predicted BEFORE any real mutation
+ * (including the TAP-source tapped=true flip commitBuildCandidateReal does first) via a clone running
+ * the same completeAreaBuild call this would -- see pendingWhiteOverflowConfirm's own doc. A built/
+ * upgraded card's own ONCE (e.g. B004A's ADD(2wD)) is exactly the kind of grant this catches. */
 function commitBuildCandidate(candidate, bzDiscount) {
+  const playerId = pendingBuildChoice.playerId;
+  const context = { playerId, colorPreference: buildColorPreference, bzDiscount };
+  if (wouldCauseWhiteOverflow(STATE, (clone) => boardMod.completeAreaBuild(clone, INDEX, context, candidate, pendingBuildChoice.remainingCommands))) {
+    pendingWhiteOverflowConfirm = { onConfirm: () => commitBuildCandidateReal(candidate, bzDiscount) };
+    render(STATE);
+    return;
+  }
+  commitBuildCandidateReal(candidate, bzDiscount);
+}
+
+function commitBuildCandidateReal(candidate, bzDiscount) {
   const playerId = pendingBuildChoice.playerId;
   const context = { playerId, colorPreference: buildColorPreference, bzDiscount };
   const source = pendingBuildChoice.source;
@@ -4490,13 +4556,24 @@ function renderJobPool(state, next) {
     attachPickableEnlarge(cardNode, faceId, draftingPlayerId ? {
       label: 'このJOBを選ぶ',
       onPick: () => {
-        setupMod.chooseJob(state, INDEX, draftingPlayerId, faceId);
-        // Auto/manual choice for the drafted JOB, if it has a reactive TAP ability (2026-07-31, per
-        // user feedback -- see pendingAutoModeChoice's own comment).
-        if (reactiveTapKind(faceId)) {
-          pendingAutoModeChoice = { physicalId: gameStateMod.splitCardId(faceId).physicalId, playerId: draftingPlayerId };
+        const commit = () => {
+          setupMod.chooseJob(state, INDEX, draftingPlayerId, faceId);
+          // Auto/manual choice for the drafted JOB, if it has a reactive TAP ability (2026-07-31, per
+          // user feedback -- see pendingAutoModeChoice's own comment).
+          if (reactiveTapKind(faceId)) {
+            pendingAutoModeChoice = { physicalId: gameStateMod.splitCardId(faceId).physicalId, playerId: draftingPlayerId };
+          }
+          render(STATE);
+        };
+        // wD-overflow confirm (2026-08-19, per user request) -- a JOB's own ONCE (e.g. JOB003/道化's
+        // ADD(wD)) can trip this just like a shop-card build's ONCE can, if this player is already at
+        // their wD cap (or already owns CON005B/憤怒's WHITE_DICE_CAP(0)) by the time they draft it.
+        if (wouldCauseWhiteOverflow(state, (clone) => setupMod.chooseJob(clone, INDEX, draftingPlayerId, faceId))) {
+          pendingWhiteOverflowConfirm = { onConfirm: commit };
+          render(STATE);
+          return;
         }
-        render(STATE);
+        commit();
       },
     } : null);
     container.appendChild(cell);
@@ -4524,6 +4601,14 @@ function renderConFacesRow(container, player, onPick) {
     // read-only preview or the real choice): tapping the card now always opens the enlarge modal;
     // committing the choice happens via the modal's pick button -- see attachPickableEnlarge's own doc.
     attachPickableEnlarge(cardNode, faceId, onPick ? { label: `この面（${face}面）を選ぶ`, onPick: () => onPick(face) } : null);
+    // 道化(JOB003)所有時、憤怒(CON005B)面への相性注意 (2026-08-19, per user request) -- purely
+    // informational, not blocking: 道化のONCE=ADD(wD)はJOB選択時に既に使用済みなので実害はないが、
+    // 憤怒のWHITE_DICE_CAP(0)を選ぶと以降道化と組み合わせる旨味がなくなることを知らせる。NAME一致で判定
+    // （物理IDの将来的な再編に強くするため、他の同種チェックと同じ方針 -- board.hasPioneerAbility等参照）。
+    if (dataLoaderMod.getCardRow(INDEX, faceId).NAME === '憤怒' && player.jobCardId
+      && dataLoaderMod.getCardRow(INDEX, player.jobCardId).NAME === '道化') {
+      cell.appendChild(el('div', 'onboard-hint__line onboard-hint__line--emphasis', '道化との相性が悪いカードです（wDが常にKになります）'));
+    }
     container.appendChild(cell);
   }
   // Explanatory hint to the right of the two CON faces (2026-08-0X, per user request) -- shown in both
@@ -5112,6 +5197,7 @@ function render(state) {
   renderUndoButtons(state);
   renderRoundPassButton(state, next);
   renderRoundPassConfirmModal();
+  renderWhiteOverflowConfirmModal();
   renderPlayerRoleControl(state);
   renderAiPacingControl(state);
   renderGameEndOverlay(state);
@@ -5142,6 +5228,7 @@ function handleUndoClick() {
   pendingTurnEndPlayerId = null;
   pendingTurnEndWarning = null;
   pendingRoundPassConfirm = null;
+  pendingWhiteOverflowConfirm = null;
   turnActionTaken = false;
   placementMessage = '';
   dicePlacementCheckpoint = null; // stale now -- this already reverted past whatever it pointed at
@@ -5612,6 +5699,16 @@ document.addEventListener('DOMContentLoaded', () => {
     pendingRoundPassConfirm = null;
     handleRoundPassConfirmed(STATE, playerId);
     render(STATE);
+  });
+
+  document.getElementById('white-overflow-confirm-no').addEventListener('click', () => {
+    pendingWhiteOverflowConfirm = null;
+    render(STATE);
+  });
+  document.getElementById('white-overflow-confirm-yes').addEventListener('click', () => {
+    const { onConfirm } = pendingWhiteOverflowConfirm;
+    pendingWhiteOverflowConfirm = null;
+    onConfirm();
   });
 
   document.getElementById('ai-pacing-select').addEventListener('change', (e) => {

@@ -267,6 +267,25 @@
     </div>
   </div>
 
+  <!-- wD上限超過の確認 (2026-08-19, per user request: "上限を超えた🎲はKになります　よろしいですか"、
+       いいえでキャンセル可能) -- see main.js's pendingWhiteOverflowConfirm/wouldCauseWhiteOverflow/
+       renderWhiteOverflowConfirmModal. Shared by every action that could trip a wD-cap overflow (die
+       placement, card build/draft) -- see each commit function's own doc for where this gets set. -->
+  <div id="white-overflow-confirm-overlay" class="card-inst-overlay" hidden>
+    <div class="card-inst-modal placement-choice-modal">
+      <div class="card-inst-modal__header">
+        <span class="card-inst-modal__title">確認</span>
+      </div>
+      <div class="card-inst-modal__body">
+        <p class="turn-end-warning__text">上限を超えた🎲はKになります。よろしいですか？</p>
+      </div>
+      <div class="placement-choice-actions">
+        <button type="button" id="white-overflow-confirm-no">いいえ</button>
+        <button type="button" id="white-overflow-confirm-yes">はい</button>
+      </div>
+    </div>
+  </div>
+
   <!-- GAME_END final results (2026-07-31) -- see main.js's renderGameEndOverlay. No close button:
        the game is genuinely over, there's nothing left to interact with underneath. -->
   <div id="game-end-overlay" class="card-inst-overlay" hidden>
