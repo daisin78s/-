@@ -1143,7 +1143,10 @@ function renderDebugSetupOverlay() {
   list.style.gridTemplateColumns = step.key === 'qst' ? `repeat(${step.columns}, 260px)` : `repeat(${step.columns}, 122px)`;
   for (const faceId of step.faceIds()) {
     const cardNode = step.key === 'qst'
-      ? buildQstCardVisual(faceId, STATE, { showRankHeaders: true, noInteraction: true })
+      // showRankHeaders:false (2026-08-18, per user report the picker's display was broken) -- this
+      // step is choosing which QST cards to include, before any game/ranking exists yet, so every
+      // player is tied at 0 and the "1位/2位/3位" rank headers/columns have nothing real to show.
+      ? buildQstCardVisual(faceId, STATE, { showRankHeaders: false, noInteraction: true })
       : buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true });
     const tall = cardNode.classList.contains('shop-card--tall');
     const cell = el('div', tall ? 'owned-card-cell owned-card-cell--tall owned-card-cell--selectable' : 'owned-card-cell owned-card-cell--selectable');
