@@ -383,18 +383,23 @@ console.log(`\n${passCount} passed, ${failCount} failed`);
 //     context.lastTargetedDieId across statements in the same field.
 // ---------------------------------------------------------------------------
 {
+  // Tests the bare SET_DICE_ANY() command in isolation, via a literal DSL string rather than reading
+  // JOB003's own real row.TAP -- that field has since grown a trailing UNTAP() (2026-08-18, see board.
+  // useBareTapAbility's own doc on self-untapping TAP fields), which needs context.sourcePhysicalId (only
+  // supplied by the real board.useBareTapAbility path, exercised separately in board.smoke.js) and would
+  // throw if run bare like this. Decoupling from JOB003's exact current text also means this unit test
+  // can't break again the next time that field's shape changes for an unrelated reason.
   const state = freshState();
-  giveCard(state, 'JOB003', 'P1'); // TAP=SET_DICE_ANY()
+  giveCard(state, 'JOB003', 'P1');
   const player = getPlayerRef(state, 'P1');
   const die = createDie('d1', 'COLOR');
   die.value = 4;
   player.dice.push(die);
 
-  const row = getCardRow(index, 'JOB003');
-  const missingChoice = executor.runProgram(state, index, { playerId: 'P1' }, row.TAP);
+  const missingChoice = executor.runProgram(state, index, { playerId: 'P1' }, 'SET_DICE_ANY()');
   check('SET_DICE_ANY() without a choice fails with CHOICE_REQUIRED', missingChoice.reason, 'CHOICE_REQUIRED');
 
-  const withChoice = executor.runProgram(state, index, { playerId: 'P1', chosenDieId: 'd1', chosenValue: 6 }, row.TAP);
+  const withChoice = executor.runProgram(state, index, { playerId: 'P1', chosenDieId: 'd1', chosenValue: 6 }, 'SET_DICE_ANY()');
   check('SET_DICE_ANY() with a choice succeeds', withChoice.success, true);
   check('...and sets the die to the chosen value', getDieRef(state, 'P1', 'd1').value, 6);
 }

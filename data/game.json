@@ -1115,14 +1115,14 @@
       "VP": "",
       "ONCE": "ADD(2A,2B)",
       "TAP": "",
-      "PASSIVE": "VP_PENALTY_IF_BELOW(RESOURCE(A,B,C,Z),3)",
+      "PASSIVE": "VP_PENALTY_IF_BELOW(RESOURCE(A,B,C,Z),5)",
       "TURNEND": "",
       "START_ORDER": 1,
       "WARNING": "",
       "NOTE": "",
       "AUTO": "",
-      "INST": "ゲーム終了時３資源が必要\n足りない１個につき-1VP\n資源とはA,B,C,Zのこと",
-      "アイコン": "３資源が必要"
+      "INST": "ゲーム終了時5資源が必要\n足りない１個につき-1VP\n資源とはA,B,C,Zのこと",
+      "アイコン": "5資源が必要"
     },
     {
       "ID": "CON003B",
@@ -1133,7 +1133,7 @@
       "EMBLEM_B": "",
       "EMBLEM_C": 1,
       "VP": "",
-      "ONCE": "ADD(2C,4K)",
+      "ONCE": "ADD(2C,3K)",
       "TAP": "",
       "PASSIVE": "CONVERT_LIMIT(ALL,4)",
       "TURNEND": "",
@@ -1181,7 +1181,7 @@
       "WARNING": "",
       "NOTE": "",
       "AUTO": "",
-      "INST": "自分のカラーダイスが置かれているAREAにはダイスを配置できない。\n🎲上限0　上限を超えた🎲は2Kになる",
+      "INST": "自分のカラーダイスが置かれているAREAにはダイスを配置できない。\n🎲上限0　上限を超えた🎲はKになる",
       "アイコン": "自分の色DがあるAREA\nダイス配置不可\n🎲上限0"
     },
     {
@@ -1558,7 +1558,7 @@
       "EMBLEM_C": "",
       "VP": "",
       "ONCE": "ADD(wD)",
-      "TAP": "SET_DICE_ANY();GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN)",
+      "TAP": "SET_DICE_ANY();GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN);UNTAP()",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
