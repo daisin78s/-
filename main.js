@@ -1516,14 +1516,12 @@ const ACTION_ICON_BUILDERS = {
   // buildSetDiceAnyIcon's "🎲自由" wording, since this ability's real effect is the die's *value*
   // changing, not really "free placement" (the GRANT_PLACE_ANYWHERE half isn't called out separately
   // per the user's request -- just this one label for the whole TAP).
-  'SET_DICE_ANY();GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN)': () => actionRow([actionSuffix('ダイス目を変える')]),
+  // JOB003/道化 (2026-08-19): SET_DICE_ANY no longer appears anywhere in the data -- both of this old
+  // TAP text's exact-match entries removed, replaced by a single WILDCARD_DICE() entry further below
+  // (see board.hasWildcardDice's own doc).
   // 2026-08-18, per user request ("道化の能力をTAPではなく何回でも使える能力にしたい") -- JOB003's TAP
   // grew a trailing UNTAP() (see board.useBareTapAbility's own doc: a self-untapping TAP field never
   // actually ends up tapped, so it's usable any number of times per turn, no cost). Same label as the
-  // plain form above -- the ability itself is unchanged, only its usability -- since this game's icon
-  // vocabulary has no existing "unlimited uses" glyph to append and the TAP/no-tap distinction isn't
-  // otherwise called out in any other card's icon either.
-  'SET_DICE_ANY();GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN);UNTAP()': () => actionRow([actionSuffix('ダイス目を変える')]),
   // 2026-08-0X, per user request ("⤴️を消してそこに毎タームといれる"): bare UNTAP() only ever appears
   // as a TURNEND effect (confirmed against data/game.json -- JOB004/005/007, all "usable once per turn"
   // reactive/direct TAP abilities), so "毎ターン" (plain text) reads more clearly there than the ⤴️
@@ -1540,6 +1538,9 @@ const ACTION_ICON_BUILDERS = {
   // REPLACE_ADD(D,wD) (confirmed 2026-07-29): a passive that swaps "gain your own die" for "gain a
   // white die" instead -- shown as the source resource turning into the replacement.
   'REPLACE_ADD(D,wD)': () => actionRow([actionSuffix('色D'), actionArrow(), actionEmoji('🎲')]),
+  // JOB003/道化 (2026-08-19, replacing its old SET_DICE_ANY-based TAP entirely -- see this object's own
+  // comment near the removed entries above): all owned dice become ☆, auto-placed by the engine.
+  'WILDCARD_DICE()': () => actionRow([actionEmoji('☆'), actionSuffix('自分のダイスが全て☆になる')]),
 };
 
 /** Confirmed 2026-07-29: ⤵️ marks a TAP-column effect (tapping it is the cost to trigger it). */
@@ -2202,14 +2203,19 @@ function buildOnboardHint(lines, emphasizedLine) {
   return hint;
 }
 
+// JOB003/道化 (2026-08-19, hasWildcardDice): a ☆ die shows a star instead of its real rolled digit --
+// confirmed with the user the real value is functionally meaningless once wildcard (never used for
+// slot-matching, always substituted to a fixed 1 or 6 for buildValue -- see occupantBuildContribution's
+// own doc), so display follows suit rather than showing a number that no longer means anything in play.
 function renderDie(die) {
   const tpl = document.getElementById('tpl-die');
   const node = tpl.content.firstElementChild.cloneNode(true);
   node.classList.add(`die--${die.kind === 'WHITE' ? 'WHITE' : die.color}`);
+  if (die.wildcard) node.classList.add('die--wildcard');
   // Reverted 2026-07-29: die-face glyphs made the small colored dice harder to read, not easier --
   // back to a plain digit (unlike the board slot requirements / SET_DIE_VALUE icons, which keep the
   // ⚀-⚅ glyphs; this revert is specific to the actual player dice).
-  node.querySelector('.die__value').textContent = die.value === null || die.value === undefined ? '' : die.value;
+  node.querySelector('.die__value').textContent = die.wildcard ? '☆' : (die.value === null || die.value === undefined ? '' : die.value);
   return node;
 }
 
@@ -3121,6 +3127,10 @@ function renderBoard(state, next) {
   const highlightOwner = selectedDieIds.length > 0
     ? state.players.find((p) => p.dice.some((d) => d.id === selectedDieIds[0]))
     : null;
+  // JOB003/道化 (2026-08-19): a single selected ☆ die never uses the per-slot preview loop below --
+  // board.placeWildcardDie auto-assigns its own slot, so there's nothing for the player to click among
+  // (see attemptPlaceSelectedWildcardDie's own doc for the whole-tile click wiring this drives).
+  const highlightOwnerIsWildcard = highlightOwner ? boardMod.hasWildcardDice(state, INDEX, highlightOwner.id) : false;
 
   // Two independent rows (see .board-row in style.css) so the castle tile can be wider than the
   // other bottom-row tiles without pushing anything into an orphan third row.
@@ -3135,7 +3145,12 @@ function renderBoard(state, next) {
       const action = areaRow.ACTION;
 
       let highlightedSlots = null;
-      if (highlightOwner && selectedDieIds.length === 1) {
+      const wildcardSingleSelection = highlightOwnerIsWildcard && selectedDieIds.length === 1;
+      if (wildcardSingleSelection) {
+        const context = { playerId: highlightOwner.id, colorPreference: {} };
+        const preview = boardMod.previewPlaceWildcardDie(state, INDEX, context, selectedDieIds[0], mapId);
+        if (preview.ok) highlightedSlots = new Set([preview.slotIndex]);
+      } else if (highlightOwner && selectedDieIds.length === 1) {
         highlightedSlots = new Set();
         for (let i = 0; i < slots.length; i++) {
           const context = { playerId: highlightOwner.id, colorPreference: {} };
@@ -3197,6 +3212,7 @@ function renderBoard(state, next) {
             kind: occupantDie ? occupantDie.kind : 'COLOR',
             value: topOccupant.value,
             color: colorForPlayer(state, topOccupant.playerId),
+            wildcard: !!topOccupant.isWildcard,
           }));
           slotEl.appendChild(stack);
         } else if (typeof requirement === 'number') {
@@ -3210,8 +3226,11 @@ function renderBoard(state, next) {
         // entirely by board.placeDice itself, not re-validated here -- clicking an ultimately-illegal
         // slot just surfaces that reason via placementMessage instead of silently doing nothing.
         // 2+ selected dice on the castle/AREA009 (2026-08-02) is a *group* placement instead --
-        // see attemptPlaceSelectedDie's own branch.
-        if (selectedDieIds.length > 0) {
+        // see attemptPlaceSelectedDie's own branch. A single selected ☆ die (2026-08-19) never gets its
+        // own per-slot click at all -- the whole tile is clickable instead (see the tile-level listener
+        // below), since board.placeWildcardDie auto-assigns the slot; individual .slot elements just
+        // show the highlighted preview.
+        if (selectedDieIds.length > 0 && !wildcardSingleSelection) {
           slotEl.classList.add('slot--selectable');
           slotEl.addEventListener('click', () => attemptPlaceSelectedDie(state, mapId, i));
         }
@@ -3271,6 +3290,20 @@ function renderBoard(state, next) {
             });
           }
         }
+      }
+
+      // JOB003/道化 (2026-08-19): a single selected ☆ die makes the whole tile clickable (including over
+      // a .slot, since there's no per-slot click wired for this case -- see the slot-loop's own comment
+      // above) -- clicking anywhere on the tile except the fee badge attempts board.placeWildcardDie at
+      // this mapId, matching "the player picks the AREA, the engine picks the slot" (per user spec).
+      if (wildcardSingleSelection) {
+        node.classList.add('map-tile--wildcard-target');
+        node.addEventListener('click', (e) => {
+          if (e.target.closest('.map-tile__fee')) return;
+          attemptPlaceSelectedWildcardDie(state, mapId);
+        });
+        rowEl.appendChild(node);
+        continue;
       }
 
       // Tapping the tile opens the AREA enlarge modal (2026-08-0X, replaces right-click; 2026-08-05,
@@ -3339,6 +3372,24 @@ function attemptPlaceSelectedDie(state, mapId, slotIndex) {
   placeSelectedDie(state, dieId, mapId, slotIndex, {});
 }
 
+/** Entry point for a whole-TILE click when a single ☆ wildcard die is selected (2026-08-19, JOB003/道化
+ * -- see renderBoard's own doc on why there's no per-slot click for this case at all). Mirrors
+ * attemptPlaceSelectedDie's single-die branch exactly (same 色欲 payment-choice pause), just without a
+ * slotIndex -- board.placeWildcardDie auto-assigns the slot itself. */
+function attemptPlaceSelectedWildcardDie(state, mapId) {
+  const dieId = selectedDieIds[selectedDieIds.length - 1];
+  const player = state.players.find((p) => p.dice.some((d) => d.id === dieId));
+  if (executorMod.hasPaymentChoiceAbility(state, player.id) && (player.resources.Z || 0) > 0) {
+    const colors = areaColorPayResources(mapId);
+    if (colors.length > 0) {
+      pendingPlacementChoice = { mapId, wildcard: true, colors, colorPreference: {}, dieId };
+      render(STATE);
+      return;
+    }
+  }
+  placeSelectedWildcardDie(state, dieId, mapId, {});
+}
+
 /** Shared result-handling for a successful call into board.placeDice/placeDiceGroup (2026-08-02,
  * factored out of placeSelectedDie so placeSelectedDiceGroup's group result can reuse the exact same
  * logic instead of drifting from it). If the AREA's ACTION turns out to be a BUILD (e.g. the castle),
@@ -3401,6 +3452,29 @@ function placeSelectedDieCommit(state, player, dieId, mapId, slotIndex, colorPre
   const preSnapshot = gameStateMod.cloneState(state);
   const preTurnActionTaken = turnActionTaken;
   const result = boardMod.placeDice(state, INDEX, { playerId: player.id, colorPreference }, dieId, mapId, slotIndex);
+  selectedDieIds = [];
+  if (result.success) dicePlacementCheckpoint = { state: preSnapshot, turnActionTaken: preTurnActionTaken };
+  applyPlaceDiceResult(result, player.id);
+  render(STATE);
+}
+
+/** Wildcard counterpart of placeSelectedDie/placeSelectedDieCommit (2026-08-19, JOB003/道化) -- same
+ * wD-overflow-confirm pattern, checkpoint bookkeeping, and result handling, just via
+ * board.placeWildcardDie (no slotIndex) instead of board.placeDice. */
+function placeSelectedWildcardDie(state, dieId, mapId, colorPreference) {
+  const player = state.players.find((p) => p.dice.some((d) => d.id === dieId));
+  if (wouldCauseWhiteOverflow(state, (clone) => boardMod.placeWildcardDie(clone, INDEX, { playerId: player.id, colorPreference }, dieId, mapId))) {
+    pendingWhiteOverflowConfirm = { onConfirm: () => placeSelectedWildcardDieCommit(state, player, dieId, mapId, colorPreference) };
+    render(STATE);
+    return;
+  }
+  placeSelectedWildcardDieCommit(state, player, dieId, mapId, colorPreference);
+}
+
+function placeSelectedWildcardDieCommit(state, player, dieId, mapId, colorPreference) {
+  const preSnapshot = gameStateMod.cloneState(state);
+  const preTurnActionTaken = turnActionTaken;
+  const result = boardMod.placeWildcardDie(state, INDEX, { playerId: player.id, colorPreference }, dieId, mapId);
   selectedDieIds = [];
   if (result.success) dicePlacementCheckpoint = { state: preSnapshot, turnActionTaken: preTurnActionTaken };
   applyPlaceDiceResult(result, player.id);
@@ -4040,10 +4114,13 @@ function renderPlayers(state, next) {
     // Split into two rows -- color dice and wD (confirmed 2026-07-30) -- rather than one mixed row.
     const colorDiceEl = node.querySelector('.player-panel__dice-row--color');
     const whiteDiceEl = node.querySelector('.player-panel__dice-row--white');
+    // JOB003/道化 (2026-08-19): checked once per player, applies to every one of their dice (COLOR and
+    // WHITE alike) uniformly -- see board.hasWildcardDice's own doc.
+    const playerIsWildcard = boardMod.hasWildcardDice(state, INDEX, player.id);
     for (const die of player.dice) {
       if (die.placedMapId) continue; // dice on the board are shown on the board, not in-hand
       const rowEl = die.kind === 'WHITE' ? whiteDiceEl : colorDiceEl;
-      const dieNode = renderDie({ ...die, color: player.color });
+      const dieNode = renderDie({ ...die, color: player.color, wildcard: playerIsWildcard });
       // Passed (2026-08-03, see board.passDie) -- stays visible in hand so it's clear where it went,
       // but not selectable again until next round's reset.
       if (die.passed) dieNode.classList.add('die--passed');
@@ -4080,7 +4157,11 @@ function renderPlayers(state, next) {
           } else if (selectedDieIds.length === 0) {
             selectedDieIds.push(die.id);
           } else {
-            const prospectiveValues = [...selectedDieIds, die.id].map((id) => player.dice.find((d) => d.id === id).value);
+            // JOB003/道化 (2026-08-19): a ☆ die always counts as 6 for this check, matching how a group
+            // placement's monument buildValue actually substitutes it -- see occupantBuildContribution's
+            // own doc. Keeps this client-side guard from drifting out of sync with board.placeDiceGroup's
+            // real math (e.g. wrongly permitting a redundant ☆ pick that the server would then refuse).
+            const prospectiveValues = [...selectedDieIds, die.id].map((id) => (playerIsWildcard ? 6 : player.dice.find((d) => d.id === id).value));
             if (!hasQualifyingProperSubset(prospectiveValues, 12)) selectedDieIds.push(die.id);
           }
           render(STATE);
@@ -5726,9 +5807,14 @@ document.addEventListener('DOMContentLoaded', () => {
     render(STATE);
   });
   document.getElementById('placement-choice-confirm').addEventListener('click', () => {
-    const { dieId, mapId, slotIndex, colorPreference } = pendingPlacementChoice;
+    const { dieId, mapId, slotIndex, colorPreference, wildcard } = pendingPlacementChoice;
     pendingPlacementChoice = null;
-    placeSelectedDie(STATE, dieId, mapId, slotIndex, colorPreference);
+    // JOB003/道化 (2026-08-19) -- see attemptPlaceSelectedWildcardDie's own doc.
+    if (wildcard) {
+      placeSelectedWildcardDie(STATE, dieId, mapId, colorPreference);
+    } else {
+      placeSelectedDie(STATE, dieId, mapId, slotIndex, colorPreference);
+    }
   });
 
   document.getElementById('tap-choice-cancel').addEventListener('click', () => {

@@ -906,6 +906,13 @@ h1, h2, h3 { margin: 0; }
   50% { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 10px 3px var(--accent); }
 }
 
+/* JOB003/道化 (2026-08-19): with a single ☆ die selected, the whole tile is clickable (the engine picks
+   the slot, not the player -- see main.js's attemptPlaceSelectedWildcardDie) -- .slot--highlight above
+   still marks the specific slot it would land on, this just gives the tile itself a pointer cursor. */
+.map-tile--wildcard-target {
+  cursor: pointer;
+}
+
 /* 変化ハイライト (2026-08-16) -- AIの手番が速すぎて追えない問題への対策としてアニメーションの代わりに
    採用。「自分の前のターンが終わってから今見ている時点までに起きた変化」(main.jsのchangeHighlightDiff)
    に付く。.slot--highlight(上、配置可能プレビュー)とは意味も色も別 -- アンバー系(--change-highlight)。 */
@@ -1184,6 +1191,20 @@ h1, h2, h3 { margin: 0; }
 .die--passed {
   opacity: 0.4;
   filter: grayscale(60%);
+}
+
+/* JOB003/道化's ☆ wildcard dice (2026-08-19) -- layered on top of the base .die--{color}/.die--WHITE
+   class the same way .die--passed/.die--selected are (never replaces it), so the die still reads as
+   "belongs to this player" while also showing it's wildcard. A gold ring + star-glyph feel, distinct
+   from the plain --accent blue used for selection/placement-preview elsewhere. */
+.die--wildcard {
+  outline: 1.5px solid #e0a721;
+  outline-offset: 1px;
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.15), 0 0 4px 1px rgba(224, 167, 33, 0.6);
+}
+.die--wildcard .die__value {
+  color: #e0a721;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
 }
 
 /* ---------------------------------------------------------------------- */

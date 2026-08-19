@@ -204,6 +204,15 @@ function lowerCall(node) {
     // by PASS_COLOR_DIE_BONUS below (2026-08-15 card-text revision) -- not implemented at all now.
     case 'BLOCK_COLOR_DIE_REUSE':
       return { type: 'BLOCK_COLOR_DIE_REUSE' };
+    // WILDCARD_DICE() -- JOB003 (2026-08-19, replacing its old SET_DICE_ANY TAP ability entirely, per
+    // user spec): while owned, ALL of this player's dice (COLOR and WHITE alike) become "☆" wildcard
+    // dice -- ignore a slot's numbered/ANY value requirement, auto-placed by the engine (left-packed
+    // into empty non-EX slots, falling back to stacking under the leftmost slot when all non-EX slots
+    // are full -- see board.placeWildcardDie), exempt from DUPLICATE_VALUE_IN_AREA and from
+    // BLOCK_COLOR_DIE_REUSE (CON005B/憤怒). No args -- purely an on/off flag, like BLOCK_COLOR_DIE_REUSE
+    // above.
+    case 'WILDCARD_DICE':
+      return { type: 'WILDCARD_DICE' };
     // PASS_COLOR_DIE_BONUS(amount) -- CON006A's revised second restriction. Originally a flat block
     // (2026-08-15: "パスをしたとき色Dから3K得られない", 0 instead of the normal 3), corrected after
     // playtesting to a reduced amount instead of a full block (2026-08-16: "パスをしたとき色Dから2Kしか

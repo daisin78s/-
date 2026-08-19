@@ -9,6 +9,7 @@
  *
  * Move shapes (a plain discriminated union, matching what simulator.js's applyInPlace expects):
  *   { type:'PLACE_DIE', playerId, dieId, mapId, slotIndex, buildCandidateIndex? }
+ *   { type:'PLACE_WILDCARD_DIE', playerId, dieId, mapId, buildCandidateIndex? }
  *   { type:'PASS_DIE', playerId, dieId }
  *   { type:'BARE_TAP', playerId, physicalId, chosenDieId?, chosenValue?, chosenDelta?, buildCandidateIndex? }
  *   { type:'FREE_ACTION', playerId, freeActionId }
@@ -30,6 +31,11 @@
  *
  * Simplification confirmed for this first pass (see simulator.js's matching note): PLACE_DIE/BARE_TAP
  * candidates never vary colorPreference/bzDiscount -- payment always resolves AUTO.
+ *
+ * PLACE_WILDCARD_DIE (2026-08-19, JOB003/hasWildcardDice): #placeDieMoves enumerates die x mapId only,
+ * no slotIndex loop, for a wildcard-owning player -- board.placeWildcardDie auto-assigns the slot itself
+ * (see its own doc), so there is nothing for MoveGenerator to search over per-slot the way PLACE_DIE
+ * does.
  */
 
 const { getAreaRow, getCardRow } = require('../data-loader');
@@ -123,9 +129,16 @@ class MoveGenerator {
     const moves = [];
     const unplacedDice = player.dice.filter((d) => d.placedMapId === null && !d.passed);
     const diceWithAPlacement = new Set();
+    // JOB003/道化 (2026-08-19): a wildcard-owning player never uses placeDice's own slotIndex-based path
+    // -- see #wildcardPlaceDieMoves' own doc.
+    const dieIsWildcard = board.hasWildcardDice(state, index, playerId);
     for (const die of unplacedDice) {
       for (const mapId of Object.keys(state.maps)) {
         if (this.#isMapIdAvoided(state, mapId)) continue;
+        if (dieIsWildcard) {
+          if (this.#wildcardPlaceDieMoves(state, index, playerId, die, mapId, moves)) diceWithAPlacement.add(die.id);
+          continue;
+        }
         const areaRow = getAreaRow(index, state.maps[mapId].currentAreaId);
         const slotCount = board.getSlotRequirements(areaRow).length;
         for (let slotIndex = 0; slotIndex < slotCount; slotIndex++) {
@@ -166,6 +179,27 @@ class MoveGenerator {
       if (!diceWithAPlacement.has(die.id)) moves.push({ type: 'PASS_DIE', playerId, dieId: die.id });
     }
     return moves;
+  }
+
+  /** #placeDieMoves' wildcard branch (JOB003/道化, 2026-08-19): board.placeWildcardDie auto-assigns the
+   * slot itself, so this only tries die x mapId, never a slotIndex loop -- mirrors the non-wildcard
+   * PLACE_DIE branch's pendingBuild/candidate handling exactly, just emitting PLACE_WILDCARD_DIE instead
+   * (no slotIndex field at all, since the caller never chose one). Returns true iff this mapId yielded a
+   * legal placement, so the caller can track diceWithAPlacement for the PASS_DIE fallback the same way. */
+  #wildcardPlaceDieMoves(state, index, playerId, die, mapId, moves) {
+    const clone = cloneState(state);
+    const result = board.placeWildcardDie(clone, index, { playerId }, die.id, mapId);
+    if (!result.success) return false;
+    if (result.actionResult && result.actionResult.pendingBuild) {
+      const candidates = result.actionResult.pendingBuild.candidates;
+      for (let buildCandidateIndex = 0; buildCandidateIndex < candidates.length; buildCandidateIndex++) {
+        moves.push({ type: 'PLACE_WILDCARD_DIE', playerId, dieId: die.id, mapId, buildCandidateIndex });
+      }
+      moves.push({ type: 'PLACE_WILDCARD_DIE', playerId, dieId: die.id, mapId });
+    } else {
+      moves.push({ type: 'PLACE_WILDCARD_DIE', playerId, dieId: die.id, mapId });
+    }
+    return true;
   }
 
   #freeActionMoves(state, index, playerId, player) {

@@ -62,17 +62,17 @@ function giveDie(state, playerId, value) {
 
 // ---------------------------------------------------------------------------
 // Duplicate-value-within-the-same-AREA rule, tested where two *different*
-// slots could otherwise both accept the same die value (AREA003A: SLOT1=2, SLOT2=ANY).
+// slots could otherwise both accept the same die value (AREA003A: SLOT1=ANY, SLOT2=2).
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
   player(state, 'P1').resources.K = 1; // AREA003A.ACTION=CHANGE(K,A,ALL) needs >=1 K to have any effect
   const dieA = giveDie(state, 'P1', 2);
-  const placeFirst = board.placeDice(state, index, { playerId: 'P1' }, dieA.id, 'MAP003', 0); // SLOT1=2
-  check('First 2 placed on AREA003A SLOT1 succeeds', placeFirst.success, true);
+  const placeFirst = board.placeDice(state, index, { playerId: 'P1' }, dieA.id, 'MAP003', 1); // SLOT2=2 (numbered slot preferred over ANY)
+  check('First 2 placed on AREA003A SLOT2 succeeds', placeFirst.success, true);
 
   const dieB = giveDie(state, 'P1', 2); // same value, different die
-  const placeSecond = board.placeDice(state, index, { playerId: 'P1' }, dieB.id, 'MAP003', 1); // SLOT2=ANY, would otherwise accept a 2
+  const placeSecond = board.placeDice(state, index, { playerId: 'P1' }, dieB.id, 'MAP003', 0); // SLOT1=ANY, would otherwise accept a 2
   check('A second die of the same value is rejected even on a different ANY slot', placeSecond, { success: false, reason: 'DUPLICATE_VALUE_IN_AREA' });
 }
 
@@ -517,8 +517,8 @@ function giveDie(state, playerId, value) {
   check('MAP001 is now AREA001B', state.maps['MAP001'].currentAreaId, 'AREA001B');
   check('...and die.placedMapId is untouched (still needed for endRound bookkeeping)', d1.placedMapId, 'MAP001');
 
-  const d3 = giveDie(state, 'P1', 1); // AREA001B SLOT1=1
-  const afterUpgrade = board.placeDice(state, index, { playerId: 'P1' }, d3.id, 'MAP001', 0);
+  const d3 = giveDie(state, 'P1', 1); // AREA001B SLOT2=1 (SLOT1 is ANY, but the numbered slot is preferred)
+  const afterUpgrade = board.placeDice(state, index, { playerId: 'P1' }, d3.id, 'MAP001', 1);
   check('No longer blocked once the AREA has LVUPed away the old occupancy', afterUpgrade.success, true);
 }
 {
@@ -638,15 +638,16 @@ function giveDie(state, playerId, value) {
   p1.ownedCardPhysicalIds.push(inst.physicalId);
   p1.resources.K = 20;
 
-  const die = giveDie(state, 'P1', 2); // AREA003A.SLOT1 requires value 2
-  const result = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP003', 0);
+  const die = giveDie(state, 'P1', 2); // AREA003A.SLOT2 requires value 2 (SLOT1 is ANY, but the numbered slot is preferred)
+  const result = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP003', 1);
   check('Placing on MAP003 (CHANGE(K,A,ALL) + CONVERT_LIMIT(4)) succeeds', result.success, true);
   check('Only 4 conversions happened despite 20K on hand (CONVERT_LIMIT applied via placeDice)', p1.resources.A, 4);
   check('Nothing accumulated into passiveCounters (the cap is per-CHANGE now)', state.passiveCounters['P1:CONVERT_LIMIT:ALL'], undefined);
 
-  // A second, separate ALL-CHANGE placement -- MAP004 is AREA004A's CHANGE(K,B,ALL), whose SLOT1 wants a 4.
+  // A second, separate ALL-CHANGE placement -- MAP004 is AREA004A's CHANGE(K,B,ALL), whose SLOT2 wants a 4
+  // (SLOT1 is ANY, but the numbered slot is preferred).
   const die2 = giveDie(state, 'P1', 4);
-  const result2 = board.placeDice(state, index, { playerId: 'P1' }, die2.id, 'MAP004', 0);
+  const result2 = board.placeDice(state, index, { playerId: 'P1' }, die2.id, 'MAP004', 1);
   check('A second ALL-CHANGE placement also succeeds', result2.success, true);
   check('...and gets its own full 4 conversions, not 0 (per-CHANGE cap)', p1.resources.B, 4);
   check('8K total spent across the two placements', p1.resources.K, 12);
@@ -941,7 +942,7 @@ function giveDie(state, playerId, value) {
 
 // ---------------------------------------------------------------------------
 // "EX" SLOT (2026-08-04, per user feedback: new AREA SLOT1-6 value gating placement to whoever
-// currently holds map.feeOwnerId). AREA001B (SLOT1=1,SLOT2=2,SLOT3=EX) is a plain, non-castle,
+// currently holds map.feeOwnerId). AREA001B (SLOT1=ANY,SLOT2=1,SLOT3=EX) is a plain, non-castle,
 // non-AREA009 EX slot; AREA009B (SLOT1-5=ANY,SLOT6=EX, moved here 2026-08-02 by the user's own data
 // edit -- was SLOT4 before) is used for the AREA009-specific doubles-stacking behavior.
 // ---------------------------------------------------------------------------
@@ -969,35 +970,35 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   const state = freshStateWithShops();
   state.maps['MAP001'] = mapWithArea('MAP001', 'AREA001B', 3, 'P1');
   const p1die = giveDie(state, 'P1', 1);
-  const ok1 = board.placeDice(state, index, { playerId: 'P1' }, p1die.id, 'MAP001', 0); // SLOT1=1 -> value 1 sits here
-  check('P1 (the owner) places a matching-value die on SLOT1 normally', ok1.success, true);
+  const ok1 = board.placeDice(state, index, { playerId: 'P1' }, p1die.id, 'MAP001', 1); // SLOT2=1 (numbered slot preferred over SLOT1's ANY) -> value 1 sits here
+  check('P1 (the owner) places a matching-value die on SLOT2 normally', ok1.success, true);
 
-  const exDie = giveDie(state, 'P1', 1); // same value (1) already used on SLOT1 in this AREA
+  const exDie = giveDie(state, 'P1', 1); // same value (1) already used on SLOT2 in this AREA
   const exResult = board.placeDice(state, index, { playerId: 'P1' }, exDie.id, 'MAP001', 2); // SLOT3=EX
   check('The owner can place on EX even with a value already used elsewhere in the AREA', exResult.success, true);
 
   // The reverse direction still applies: EX's own occupant (value 1) now blocks ANOTHER die of value 1
-  // from a *different*, non-EX slot -- there is none left to test here (SLOT1 already used), so instead
-  // confirm a fresh SLOT1-value die is rejected as SLOT_OCCUPIED (SLOT1 itself, unrelated to EX) --
+  // from a *different*, non-EX slot -- there is none left to test here (SLOT2 already used), so instead
+  // confirm a fresh SLOT2-value die is rejected as SLOT_OCCUPIED (SLOT2 itself, unrelated to EX) --
   // the real "EX blocks others" case is covered by the next block using a still-open ANY-valued slot.
 }
 
 // ---------------------------------------------------------------------------
 // Numbered-slot-over-ANY / leftmost-ANY-only placement rule (2026-08-06, per user feedback: "SLOTが
 // 6とANYの時 ダイス6はANYではなく6に置かなければならない...ANY ANY ANYの時は1番左のANYしか選択できない"
-// -- see isAllowedSlotForValue's own doc). AREA005A (SLOT1=6, SLOT2=ANY) is the exact "6 and ANY"
+// -- see isAllowedSlotForValue's own doc). AREA005A (SLOT1=ANY, SLOT2=6) is the exact "6 and ANY"
 // example given; AREA007 (SLOT1-3=ANY, ANY, ANY) covers the leftmost-only rule with no numbered slot
 // to compete at all.
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
-  state.maps['MAP005'] = mapWithArea('MAP005', 'AREA005A', 2, null); // SLOT1=6, SLOT2=ANY
+  state.maps['MAP005'] = mapWithArea('MAP005', 'AREA005A', 2, null); // SLOT1=ANY, SLOT2=6
   player(state, 'P1').resources.K = 5; // AREA005A's ACTION is CHANGE(K,C,ALL) -- fund it so a legal placement isn't also blocked by NO_EFFECT
   const die = giveDie(state, 'P1', 6);
-  const onAny = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP005', 1); // SLOT2=ANY
-  check('A 6 may not use the ANY slot while SLOT1 (its own exact match) is still open', onAny, { success: false, reason: 'SLOT_NOT_PREFERRED' });
-  const onNumbered = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP005', 0); // SLOT1=6
-  check('...but placing it on SLOT1 (the exact numbered match) succeeds', onNumbered.success, true);
+  const onAny = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP005', 0); // SLOT1=ANY
+  check('A 6 may not use the ANY slot while SLOT2 (its own exact match) is still open', onAny, { success: false, reason: 'SLOT_NOT_PREFERRED' });
+  const onNumbered = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP005', 1); // SLOT2=6
+  check('...but placing it on SLOT2 (the exact numbered match) succeeds', onNumbered.success, true);
 }
 {
   const state = freshStateWithShops();
@@ -1017,14 +1018,14 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   // atomic group action correctly counts as "claimed" even though nothing's actually been pushed to
   // map.slots yet).
   const state = freshStateWithShops();
-  state.maps['MAP005'] = mapWithArea('MAP005', 'AREA005A', 2, null); // SLOT1=6, SLOT2=ANY
+  state.maps['MAP005'] = mapWithArea('MAP005', 'AREA005A', 2, null); // SLOT1=ANY, SLOT2=6
   player(state, 'P1').resources.BZ = 20;
   const d1 = giveDie(state, 'P1', 6);
   const d2 = giveDie(state, 'P1', 3); // no numbered SLOT for 3 here -- must fall back to the ANY slot
   const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], 'MAP005');
   check('Group placement sends the 6 to its own numbered slot and the 3 to the remaining ANY slot', result.success, true);
-  check('...6 landed on SLOT1', d1.placedMapId === 'MAP005' && state.maps['MAP005'].slots[0].some((o) => o.dieId === d1.id), true);
-  check('...3 landed on SLOT2 (ANY)', d2.placedMapId === 'MAP005' && state.maps['MAP005'].slots[1].some((o) => o.dieId === d2.id), true);
+  check('...6 landed on SLOT2', d1.placedMapId === 'MAP005' && state.maps['MAP005'].slots[1].some((o) => o.dieId === d1.id), true);
+  check('...3 landed on SLOT1 (ANY)', d2.placedMapId === 'MAP005' && state.maps['MAP005'].slots[0].some((o) => o.dieId === d2.id), true);
 }
 
 // ---------------------------------------------------------------------------
@@ -1035,23 +1036,23 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
 {
   const state = freshStateWithShops();
   state.maps['MAP001'] = mapWithArea('MAP001', 'AREA001B', 3, 'P1'); // P1 owns (tiered this up)
-  const die = giveDie(state, 'P2', 1); // SLOT1=1
-  const result = board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP001', 0);
+  const die = giveDie(state, 'P2', 1); // SLOT2=1 (SLOT1 is ANY, but the numbered slot is preferred)
+  const result = board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP001', 1);
   check('A non-owner (P2) placing on a tier-B AREA succeeds', result.success, true);
   check('...and owes the tier-B flat fee (1K) to the map', player(state, 'P2').pendingFee, { mapId: 'MAP001', amount: 1 });
 }
 {
   const state = freshStateWithShops();
   state.maps['MAP001'] = mapWithArea('MAP001', 'AREA001C', 3, 'P1');
-  const die = giveDie(state, 'P2', 1);
-  board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP001', 0);
+  const die = giveDie(state, 'P2', 1); // SLOT2=1 (SLOT1 is ANY, but the numbered slot is preferred)
+  board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP001', 1);
   check('A non-owner placing on a tier-C AREA owes the tier-C flat fee (2K)', player(state, 'P2').pendingFee, { mapId: 'MAP001', amount: 2 });
 }
 {
   const state = freshStateWithShops();
   state.maps['MAP001'] = mapWithArea('MAP001', 'AREA001B', 3, 'P1');
-  const die = giveDie(state, 'P1', 1); // the owner uses their own tiered-up AREA
-  board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP001', 0);
+  const die = giveDie(state, 'P1', 1); // the owner uses their own tiered-up AREA; SLOT2=1 (numbered slot preferred over SLOT1's ANY)
+  board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP001', 1);
   check('The owner using their own AREA owes no fee (pendingFee stays null)', player(state, 'P1').pendingFee, null);
 }
 {
@@ -1062,8 +1063,8 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   const state = freshStateWithShops();
   state.turnOrder = ['P1', 'P2'];
   state.maps['MAP001'] = mapWithArea('MAP001', 'AREA001B', 3, 'P1');
-  const die = giveDie(state, 'P2', 1);
-  board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP001', 0);
+  const die = giveDie(state, 'P2', 1); // SLOT2=1 (SLOT1 is ANY, but the numbered slot is preferred)
+  board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP001', 1);
   // AREA001B's own ACTION (ADD(5K)) just handed P2 5K -- zero it back out so this block actually tests
   // "can't afford the fee" rather than accidentally already being solvent from the area's own effect.
   player(state, 'P2').resources.K = 0;
@@ -1133,8 +1134,8 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   // refused this very common, perfectly safe case -- caught by this exact test while developing the fix).
   const state = freshStateWithShops();
   state.maps['MAP001'] = mapWithArea('MAP001', 'AREA001B', 3, 'P1');
-  const die = giveDie(state, 'P2', 1);
-  const result = board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP001', 0);
+  const die = giveDie(state, 'P2', 1); // SLOT2=1 (SLOT1 is ANY, but the numbered slot is preferred)
+  const result = board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP001', 1);
   check('Placement succeeds when the AREA\'s own action grants enough to cover the fee, even from 0 starting K', result.success, true);
   check('...P2 actually has the 5K from ADD(5K)', player(state, 'P2').resources.K, 5);
 }
@@ -1146,8 +1147,8 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   // so the AI is steered away from spending the fee out of existence without a hard legality gate).
   const state = freshStateWithShops();
   state.maps['MAP001'] = mapWithArea('MAP001', 'AREA001B', 3, 'P1');
-  const die = giveDie(state, 'P2', 1);
-  board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP001', 0); // P2 now owes 1K to P1
+  const die = giveDie(state, 'P2', 1); // SLOT2=1 (SLOT1 is ANY, but the numbered slot is preferred)
+  board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP001', 1); // P2 now owes 1K to P1
   check('P2 owes a pending fee after placing on P1\'s tiered-up AREA', !!player(state, 'P2').pendingFee, true);
 
   const tapInst = createCardInstance('C001A'); // TAP=CHANGE(2K,2A), IMMEDIATE kind
@@ -1355,14 +1356,19 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
 }
 
 // ---------------------------------------------------------------------------
-// isChangedDieSelfStackBlocked (2026-08-18, per user report: 道化/JOB003's "ダイス目を変える"
-// (SET_DICE_ANY) plus its own GRANT_PLACE_ANYWHERE let a player set a die to whatever value exactly
-// completes a stack with their OWN already-placed die at 王宮/元老院, summing buildValue as if 2
-// genuinely-earned dice were involved -- e.g. a real 3 already on the castle, then a JOB003-set 4 stacked
-// onto it, reaching a DICE>=7 monument off what's really 1 fresh placement. Especially severe once
-// JOB003 became unlimited-use/no-tap. Confirmed with the user: block only a value-changed die stacking
-// onto the SAME player's own die, only at these 2 maps -- every other GRANT_PLACE_ANYWHERE use (another
-// player's die, an empty slot, a naturally-rolled die, anywhere else on the board) stays untouched.
+// isChangedDieSelfStackBlocked (2026-08-18, per user report: originally reported against 道化/JOB003's
+// then-current "ダイス目を変える" (SET_DICE_ANY) ability, plus its own GRANT_PLACE_ANYWHERE, which let a
+// player set a die to whatever value exactly completes a stack with their OWN already-placed die at
+// 王宮/元老院, summing buildValue as if 2 genuinely-earned dice were involved -- e.g. a real 3 already on
+// the castle, then a set-to-4 die stacked onto it, reaching a DICE>=7 monument off what's really 1 fresh
+// placement. JOB003 has since been redesigned (2026-08-18/19) into a PASSIVE wildcard-die ability with no
+// TAP at all, so this shared exploit-fix mechanism (which also still protects B001A/B001B, B002A/B002B,
+// B003A/B003B -- the "導き" family, each with its own SET_DIE_VALUE/CHANGE_DIE_VALUE + GRANT_PLACE_ANYWHERE
+// TAP) is now exercised below via B001A ("小さな導き", TAP="SET_DIE_VALUE(SELF2|3);
+// GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN)") instead. Confirmed with the user: block only a
+// value-changed die stacking onto the SAME player's own die, only at these 2 maps -- every other
+// GRANT_PLACE_ANYWHERE use (another player's die, an empty slot, a naturally-rolled die, anywhere else on
+// the board) stays untouched.
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
@@ -1372,17 +1378,17 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   const placed1 = board.placeDice(state, index, { playerId: 'P1' }, d1.id, board.CASTLE_MAP_ID, 0);
   check('A real 3 placed on the castle succeeds', placed1.success, true);
 
-  const jobInst = createCardInstance('JOB003');
-  jobInst.ownerId = 'P1';
-  state.cards[jobInst.physicalId] = jobInst;
-  p1.ownedCardPhysicalIds.push(jobInst.physicalId);
+  const b1Inst = createCardInstance('B001A');
+  b1Inst.ownerId = 'P1';
+  state.cards[b1Inst.physicalId] = b1Inst;
+  p1.ownedCardPhysicalIds.push(b1Inst.physicalId);
   const d2 = giveDie(state, 'P1', 1);
-  const tapResult = board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: d2.id, chosenValue: 4 }, jobInst.physicalId);
-  check('道化 (JOB003) sets d2 to 4', tapResult, { success: true });
+  const tapResult = board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: d2.id, chosenValue: 2 }, b1Inst.physicalId);
+  check('B001A (小さな導き) sets d2 to 2', tapResult, { success: true });
   check('...and grants d2 placeAnywhereThisTurn', d2.placeAnywhereThisTurn, true);
 
   const exploit = board.placeDice(state, index, { playerId: 'P1' }, d2.id, board.CASTLE_MAP_ID, 0);
-  check('Stacking the JOB003-changed d2 onto P1\'s own d1 is blocked', exploit, { success: false, reason: 'CHANGED_DIE_CANNOT_SELF_STACK' });
+  check('Stacking the B001A-changed d2 onto P1\'s own d1 is blocked', exploit, { success: false, reason: 'CHANGED_DIE_CANNOT_SELF_STACK' });
   check('...d1 is still the only occupant (nothing leaked through)', state.maps[board.CASTLE_MAP_ID].slots[0].length, 1);
 
   // Control: the exact same change, but targeting an EMPTY slot instead -- never blocked by this rule.
@@ -1400,14 +1406,14 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   const d1 = giveDie(state, 'P2', 3);
   board.placeDice(state, index, { playerId: 'P2' }, d1.id, board.CASTLE_MAP_ID, 0);
 
-  const jobInst = createCardInstance('JOB003');
-  jobInst.ownerId = 'P1';
-  state.cards[jobInst.physicalId] = jobInst;
-  p1.ownedCardPhysicalIds.push(jobInst.physicalId);
+  const b1Inst = createCardInstance('B001A');
+  b1Inst.ownerId = 'P1';
+  state.cards[b1Inst.physicalId] = b1Inst;
+  p1.ownedCardPhysicalIds.push(b1Inst.physicalId);
   const d2 = giveDie(state, 'P1', 1);
-  board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: d2.id, chosenValue: 4 }, jobInst.physicalId);
+  board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: d2.id, chosenValue: 2 }, b1Inst.physicalId);
   const result = board.placeDice(state, index, { playerId: 'P1' }, d2.id, board.CASTLE_MAP_ID, 0);
-  check('A JOB003-changed die CAN still join a DIFFERENT player\'s occupied slot (only self-stacking is blocked)', result.success, true);
+  check('A B001A-changed die CAN still join a DIFFERENT player\'s occupied slot (only self-stacking is blocked)', result.success, true);
 }
 {
   // Control: a NATURALLY-rolled die (never value-changed) stacking onto the player's own die is the
@@ -1432,12 +1438,12 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   const d1 = giveDie(state, 'P1', 3);
   board.placeDice(state, index, { playerId: 'P1' }, d1.id, board.CASTLE_MAP_ID, 0);
 
-  const jobInst = createCardInstance('JOB003');
-  jobInst.ownerId = 'P1';
-  state.cards[jobInst.physicalId] = jobInst;
-  p1.ownedCardPhysicalIds.push(jobInst.physicalId);
+  const b1Inst = createCardInstance('B001A');
+  b1Inst.ownerId = 'P1';
+  state.cards[b1Inst.physicalId] = b1Inst;
+  p1.ownedCardPhysicalIds.push(b1Inst.physicalId);
   const d2 = giveDie(state, 'P1', 1);
-  board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: d2.id, chosenValue: 4 }, jobInst.physicalId);
+  board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: d2.id, chosenValue: 2 }, b1Inst.physicalId);
 
   const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d2.id], board.CASTLE_MAP_ID);
   // The castle has other empty slots too, so the group still finds a legal (fresh, non-stacking) home
@@ -1455,11 +1461,11 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   // AREA003A.ACTION=CHANGE(K,A,ALL) -- with 0 K on hand this would run 0 times (a no-op "success"),
   // so placement itself must be refused instead of burning the die for nothing.
   const state = freshStateWithShops();
-  const die = giveDie(state, 'P1', 2); // AREA003A.SLOT1 requires value 2
-  const result = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP003', 0);
+  const die = giveDie(state, 'P1', 2); // AREA003A.SLOT2 requires value 2 (SLOT1 is ANY, but the numbered slot is preferred)
+  const result = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP003', 1);
   check('AREA003A with 0 K is refused outright (no effect to gain)', result, { success: false, reason: 'NO_EFFECT' });
   check('...the die was never actually placed', die.placedMapId, null);
-  check('...the slot is still empty', state.maps.MAP003.slots[0].length, 0);
+  check('...the slot is still empty', state.maps.MAP003.slots[1].length, 0);
 }
 {
   // AREA003B.ACTION=CHANGE(K,A,ALL);ADD(2B) -- even with 0 K (CHANGE runs 0 times), the trailing
@@ -1657,16 +1663,16 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
 {
   // previewPlaceDice: mirrors the real outcome without mutating anything.
   const state = freshStateWithShops();
-  const die = giveDie(state, 'P1', 2); // AREA003A.SLOT1, 0 K on hand
+  const die = giveDie(state, 'P1', 2); // AREA003A.SLOT2 (SLOT1 is ANY, but the numbered slot is preferred), 0 K on hand
   const before = JSON.stringify(state);
-  const preview = board.previewPlaceDice(state, index, { playerId: 'P1' }, die.id, 'MAP003', 0);
+  const preview = board.previewPlaceDice(state, index, { playerId: 'P1' }, die.id, 'MAP003', 1);
   check('previewPlaceDice reports false when the real placement would be refused', preview, false);
   check('...and never mutates the real state', JSON.stringify(state), before);
 
   player(state, 'P1').resources.K = 1;
-  const preview2 = board.previewPlaceDice(state, index, { playerId: 'P1' }, die.id, 'MAP003', 0);
+  const preview2 = board.previewPlaceDice(state, index, { playerId: 'P1' }, die.id, 'MAP003', 1);
   check('previewPlaceDice reports true once the placement would actually succeed', preview2, true);
-  check('...still hasn\'t mutated the real state', state.maps.MAP003.slots[0].length, 0);
+  check('...still hasn\'t mutated the real state', state.maps.MAP003.slots[1].length, 0);
 }
 {
   // previewPlaceDiceGroup: reports which slots the auto-assignment would use, without mutating.
@@ -1765,9 +1771,9 @@ function giveJob009(state, playerId) {
   // card is already tapped from d1's own trigger -- so this untaps it instead of granting again.
   const jobInst = state.cards[p1.jobCardId];
   check('開拓者 is tapped after its first trigger (d1)', jobInst.tapped, true);
-  const d3 = giveDie(state, 'P1', 1); // AREA001B SLOT1=1
+  const d3 = giveDie(state, 'P1', 1); // AREA001B SLOT2=1 (SLOT1 is ANY, but the numbered slot is preferred)
   const beforeThird = totalAbc(p1);
-  board.placeDice(state, index, { playerId: 'P1' }, d3.id, 'MAP001', 0);
+  board.placeDice(state, index, { playerId: 'P1' }, d3.id, 'MAP001', 1);
   check('開拓者: the trigger condition still re-fires after the LVUP...', totalAbc(p1) - beforeThird, 0);
   check('...but grants nothing this time -- it just untaps itself since it was already tapped', jobInst.tapped, false);
 
@@ -1868,16 +1874,16 @@ function giveJob009(state, playerId) {
   p1.jobCardId = 'JOB011';
   state.maps['MAP001'].currentAreaId = 'AREA001B'; // "LVアップされた" (tier B, not the base tier A)
 
-  const d1 = giveDie(state, 'P1', 1); // AREA001B SLOT1=1
+  const d1 = giveDie(state, 'P1', 1); // AREA001B SLOT2=1 (SLOT1 is ANY, but the numbered slot is preferred)
   const beforeK = p1.resources.K || 0;
-  const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
+  const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 1);
   check('地主: placement on an upgraded AREA succeeds normally', result.success, true);
   check('...grants 5K (AREA001B\'s own ADD(5K)) + 1K (地主, no prior own color die here) = 6', p1.resources.K - beforeK, 6);
   check('...no VP granted this time', p1.resources.VP || 0, 0);
 
-  const d2 = giveDie(state, 'P1', 3); // AREA001B SLOT2=ANY -- P1 already has d1 sitting in SLOT1
+  const d2 = giveDie(state, 'P1', 3); // AREA001B SLOT1=ANY -- P1 already has d1 sitting in SLOT2
   const beforeK2 = p1.resources.K;
-  board.placeDice(state, index, { playerId: 'P1' }, d2.id, 'MAP001', 1);
+  board.placeDice(state, index, { playerId: 'P1' }, d2.id, 'MAP001', 0);
   check('...2nd placement in the same AREA still grants the area\'s own 5K', p1.resources.K - beforeK2, 5);
   check('...but grants 1VP instead of another 1K, since P1 already had a color die here', p1.resources.VP, 1);
 }
@@ -1912,8 +1918,8 @@ function giveJob009(state, playerId) {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1'); // no jobCardId set at all
   state.maps['MAP001'].currentAreaId = 'AREA001B';
-  const d1 = giveDie(state, 'P1', 1);
-  board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
+  const d1 = giveDie(state, 'P1', 1); // AREA001B SLOT2=1 (SLOT1 is ANY, but the numbered slot is preferred)
+  board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 1);
   check('A player without 地主 gets only the AREA\'s own 5K, no bonus on top', p1.resources.K, 5);
 }
 {
@@ -1925,10 +1931,10 @@ function giveJob009(state, playerId) {
   p1.jobCardId = 'JOB011';
   state.maps['MAP001'].currentAreaId = 'AREA001B';
   const wd = createDie('test-wd', 'WHITE');
-  wd.value = 1;
+  wd.value = 1; // AREA001B SLOT2=1 (SLOT1 is ANY, but the numbered slot is preferred)
   p1.dice.push(wd);
   const beforeK = p1.resources.K || 0;
-  board.placeDice(state, index, { playerId: 'P1' }, wd.id, 'MAP001', 0);
+  board.placeDice(state, index, { playerId: 'P1' }, wd.id, 'MAP001', 1);
   check('地主: a white die placement still grants the bonus (5K area + 1K 地主)', p1.resources.K - beforeK, 6);
 }
 
@@ -2004,6 +2010,190 @@ function giveJob009(state, playerId) {
 // by name outright). So group placement and 地主's bonus zone never actually overlap in the current data
 // -- grantLandlordBonusIfEarned is still wired into placeDiceGroup the same way grantPioneerBonusIfEarned
 // is (see its own call site), it just has no reachable trigger there today.
+
+// ---------------------------------------------------------------------------
+// 道化/JOB003 ☆ワイルドカードダイス (2026-08-19) -- complete replacement of the old SET_DICE_ANY-based
+// TAP ability (which caused a real AI infinite-loop bug, see src/ai/game-runner.js's own history) with
+// PASSIVE=WILDCARD_DICE(): every die this player owns (COLOR and WHITE alike) ignores a slot's numbered/
+// ANY value requirement and DUPLICATE_VALUE_IN_AREA, is auto-placed by the engine (board.placeWildcardDie
+// -- left-packed into empty non-EX slots, falling back to stacking under the leftmost slot when full,
+// universally across every AREA per the user's own spec: "全AREA共通"), is exempt from 憤怒/CON005B's
+// BLOCK_COLOR_DIE_REUSE, and counts as value 1 for an A/B/C candidate's DICE_MIN/MAX check but value 6
+// for a monument's DICE>=threshold check (occupantBuildContribution). A solo forced-fallback stack does
+// NOT sum with whatever already occupies that slot (excludedFromBuildValue) -- only a deliberate
+// simultaneous placeDiceGroup of 2+ ☆ dice actually sums together -- closing a possible new exploit
+// where an automatic single-die fallback could otherwise combine unpredictably with an unrelated
+// pre-existing die to reach a high monument threshold.
+// ---------------------------------------------------------------------------
+function withWildcardOwner(state) {
+  const p1 = player(state, 'P1');
+  const jobInst = createCardInstance('JOB003');
+  jobInst.ownerId = 'P1';
+  state.cards[jobInst.physicalId] = jobInst;
+  p1.ownedCardPhysicalIds.push(jobInst.physicalId);
+  p1.jobCardId = 'JOB003';
+  return p1;
+}
+{
+  const state = freshStateWithShops();
+  check('hasWildcardDice is false before owning JOB003', board.hasWildcardDice(state, index, 'P1'), false);
+  withWildcardOwner(state);
+  check('hasWildcardDice is true once JOB003 (PASSIVE=WILDCARD_DICE()) is owned', board.hasWildcardDice(state, index, 'P1'), true);
+  check('A different, non-owning player is unaffected', board.hasWildcardDice(state, index, 'P2'), false);
+}
+{
+  // AREA001A: SLOT1=1,SLOT2=2,SLOT3=3 (all numbered, no ANY at all) -- a real value=3 die would
+  // normally have to use SLOT3 (its own exact match); ☆ ignores this entirely and left-packs instead.
+  const state = freshStateWithShops();
+  withWildcardOwner(state);
+  const d1 = giveDie(state, 'P1', 3);
+  const result = board.placeWildcardDie(state, index, { playerId: 'P1' }, d1.id, 'MAP001');
+  check('☆ ignores the numbered-slot value match and lands on the leftmost empty slot', result.success, true);
+  check('...specifically SLOT1 (index 0), not its own "matching" SLOT3', state.maps['MAP001'].slots.map((s) => s.length), [1, 0, 0]);
+  const occ = state.maps['MAP001'].slots[0][0];
+  check('...flagged isWildcard and NOT excludedFromBuildValue (a genuinely free slot)', [occ.isWildcard, occ.excludedFromBuildValue], [true, false]);
+  check('...counts toward next round\'s turn order', occ.countsForTurnOrder, true);
+
+  const d2 = giveDie(state, 'P1', 1);
+  board.placeWildcardDie(state, index, { playerId: 'P1' }, d2.id, 'MAP001');
+  check('A second ☆ left-packs into SLOT2 next, real value 1 notwithstanding', state.maps['MAP001'].slots.map((s) => s.length), [1, 1, 0]);
+}
+{
+  // Fallback stacking: fill every non-EX slot at the castle (王宮/AREA008, 6 ANY slots), then a 7th solo
+  // ☆ must force-stack under SLOT1 -- and that forced occupant must NOT contribute to buildValue.
+  const state = freshStateWithShops();
+  withWildcardOwner(state);
+  player(state, 'P1').resources.BZ = 20; // afford whatever candidate ends up offered (same pattern as the existing castle tests)
+  for (const slotId of Object.keys(state.shops.M.slots)) state.shops.M.slots[slotId] = null;
+  state.shops.M.slots.SHOP001 = 'M001'; // DICE>=12 -- must stay unreachable from a single 6-equivalent
+
+  const dice = [1, 2, 3, 4, 5, 6, 2].map((v) => giveDie(state, 'P1', v));
+  for (let i = 0; i < 6; i++) {
+    const r = board.placeWildcardDie(state, index, { playerId: 'P1' }, dice[i].id, board.CASTLE_MAP_ID);
+    check(`☆ #${i + 1} fills its own fresh empty castle slot`, r.success, true);
+  }
+  check('All 6 castle slots now hold exactly 1 ☆ die each', state.maps[board.CASTLE_MAP_ID].slots.map((s) => s.length), [1, 1, 1, 1, 1, 1]);
+
+  const seventh = board.placeWildcardDie(state, index, { playerId: 'P1' }, dice[6].id, board.CASTLE_MAP_ID);
+  check('A 7th solo ☆, with every slot full, still succeeds by force-stacking under the leftmost', seventh.success, true);
+  check('...SLOT1 now holds 2 occupants', state.maps[board.CASTLE_MAP_ID].slots[0].length, 2);
+  const forced = state.maps[board.CASTLE_MAP_ID].slots[0][1];
+  check('...the 2nd (forced-fallback) occupant is excludedFromBuildValue', forced.excludedFromBuildValue, true);
+  check('...and does NOT count toward next round\'s turn order', forced.countsForTurnOrder, false);
+  const seventhCandidates = (seventh.actionResult.pendingBuild && seventh.actionResult.pendingBuild.candidates) || [];
+  check('...M001 (DICE>=12) is NOT reachable from this forced-fallback placement (no silent 6+6 sum)', seventhCandidates.some((c) => c.faceId === 'M001'), false);
+}
+{
+  // Contrast: a DELIBERATE simultaneous group placement of 2 ☆ dice DOES sum (6+6=12), reaching M001.
+  const state = freshStateWithShops();
+  withWildcardOwner(state);
+  player(state, 'P1').resources.BZ = 20;
+  for (const slotId of Object.keys(state.shops.M.slots)) state.shops.M.slots[slotId] = null;
+  state.shops.M.slots.SHOP001 = 'M001'; // DICE>=12 -- genuinely needs both dice combined
+
+  const d1 = giveDie(state, 'P1', 4);
+  const d2 = giveDie(state, 'P1', 5);
+  const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
+  check('Group placement of 2 ☆ dice succeeds', result.success, true);
+  check('...buildValue is 12 (6+6, deliberately summed)', result.actionResult.pendingBuild.buildValue, 12);
+  check('...M001 (DICE>=12) IS reachable via the deliberate group placement', result.actionResult.pendingBuild.candidates.some((c) => c.faceId === 'M001'), true);
+}
+{
+  // A ☆ die can never target another player's EX slot, even as a forced fallback -- it stacks under the
+  // leftmost non-EX slot instead, leaving the EX slot empty.
+  const state = freshStateWithShops();
+  withWildcardOwner(state);
+  player(state, 'P1').resources.K = 50;
+  state.maps['MAP001'] = mapWithArea('MAP001', 'AREA001B', 3, 'P2'); // AREA001B: SLOT1=ANY,SLOT2=1,SLOT3=EX -- P2 owns the EX
+  state.maps['MAP001'].slots[0].push({ playerId: 'P2', dieId: 'x1', value: 9, seq: 1, countsForTurnOrder: true });
+  state.maps['MAP001'].slots[1].push({ playerId: 'P2', dieId: 'x2', value: 9, seq: 2, countsForTurnOrder: true });
+
+  const d1 = giveDie(state, 'P1', 3);
+  const result = board.placeWildcardDie(state, index, { playerId: 'P1' }, d1.id, 'MAP001');
+  check('☆ never targets another player\'s EX slot, even with every non-EX slot full', result.success, true);
+  check('...falls back to stacking under SLOT1 instead; the EX slot stays untouched', state.maps['MAP001'].slots.map((s) => s.length), [2, 1, 0]);
+}
+{
+  // But this player's OWN EX slot is a perfectly normal, genuinely-empty target.
+  const state = freshStateWithShops();
+  withWildcardOwner(state);
+  player(state, 'P1').resources.K = 50;
+  state.maps['MAP001'] = mapWithArea('MAP001', 'AREA001B', 3, 'P1'); // P1 owns this EX
+  state.maps['MAP001'].slots[0].push({ playerId: 'P2', dieId: 'x1', value: 9, seq: 1, countsForTurnOrder: true });
+  state.maps['MAP001'].slots[1].push({ playerId: 'P2', dieId: 'x2', value: 9, seq: 2, countsForTurnOrder: true });
+
+  const d1 = giveDie(state, 'P1', 3);
+  const result = board.placeWildcardDie(state, index, { playerId: 'P1' }, d1.id, 'MAP001');
+  check('...when P1 owns that EX slot, it IS used -- a genuinely free slot, not a fallback', result.success, true);
+  check('...lands in the EX slot (index 2), not stacked elsewhere', state.maps['MAP001'].slots.map((s) => s.length), [1, 1, 1]);
+  check('...not excludedFromBuildValue (a real empty-slot placement)', state.maps['MAP001'].slots[2][0].excludedFromBuildValue, false);
+}
+{
+  // Category-dependent substitution: the SAME placement counts as 1 for the A/B/C DICE_MIN/MAX check but
+  // 6 for the monument DICE>=threshold check (王宮's bare BUILD() defaults to every category at once).
+  const state = freshStateWithShops();
+  withWildcardOwner(state);
+  player(state, 'P1').resources.BZ = 20;
+  state.shops.M.slots.SHOP001 = 'M007'; // DICE>=6 -- reachable only if ☆ counts as 6 here
+  state.shops.M.slots.SHOP002 = 'M002'; // DICE>=11 -- must stay out of reach (6 is not enough)
+
+  const d1 = giveDie(state, 'P1', 4); // real rolled value is irrelevant -- ☆ substitutes per category
+  const result = board.placeWildcardDie(state, index, { playerId: 'P1' }, d1.id, board.CASTLE_MAP_ID);
+  check('Solo ☆ placement at the castle succeeds', result.success, true);
+  const candidates = result.actionResult.pendingBuild.candidates;
+  check('M007 (DICE>=6) IS offered -- ☆ counts as 6 for the monument check', candidates.some((c) => c.faceId === 'M007'), true);
+  check('M002 (DICE>=11) is NOT offered -- 6 is not enough', candidates.some((c) => c.faceId === 'M002'), false);
+  check('SHOP106 (DICE_MIN=1,MAX=1) IS offered -- ☆ counts as only 1 for the A/B/C check, not 6', candidates.some((c) => c.slotId === 'SHOP106'), true);
+}
+{
+  // 憤怒/CON005B's BLOCK_COLOR_DIE_REUSE (same-AREA restriction) is negated for a ☆-owning player.
+  const state = freshStateWithShops();
+  withWildcardOwner(state);
+  const con = createCardInstance('CON005B');
+  con.ownerId = 'P1';
+  state.cards[con.physicalId] = con;
+  player(state, 'P1').ownedCardPhysicalIds.push(con.physicalId);
+
+  const d1 = giveDie(state, 'P1', 1); // AREA001A SLOT1=1
+  board.placeWildcardDie(state, index, { playerId: 'P1' }, d1.id, 'MAP001');
+  const d2 = giveDie(state, 'P1', 2); // AREA001A SLOT2=2, same AREA again
+  const result = board.placeWildcardDie(state, index, { playerId: 'P1' }, d2.id, 'MAP001');
+  check('☆ (道化) is exempt from 憤怒\'s own-color-die-reuse block in the same AREA', result.success, true);
+  check('...both dice ended up on MAP001', state.maps['MAP001'].slots.reduce((sum, s) => sum + s.length, 0), 2);
+}
+{
+  // Control: a normal (non-wildcard) player with 憤怒 alone is still blocked exactly as before.
+  const state = freshStateWithShops();
+  const con = createCardInstance('CON005B');
+  con.ownerId = 'P1';
+  state.cards[con.physicalId] = con;
+  player(state, 'P1').ownedCardPhysicalIds.push(con.physicalId);
+
+  const d1 = giveDie(state, 'P1', 1);
+  board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
+  const d2 = giveDie(state, 'P1', 2);
+  const result = board.placeDice(state, index, { playerId: 'P1' }, d2.id, 'MAP001', 1);
+  check('Control: without ☆, 憤怒\'s own-color-die-reuse block still applies normally', result, { success: false, reason: 'OWN_COLOR_DIE_ALREADY_IN_AREA' });
+}
+{
+  // excludeOverfundedMonuments stays correct against the substituted (not real) dice values: a 2-☆-die
+  // group (6+6=12) must exclude a monument either die alone (as 6) already satisfies, while still
+  // offering one that genuinely needs both.
+  const state = freshStateWithShops();
+  withWildcardOwner(state);
+  player(state, 'P1').resources.BZ = 20;
+  for (const slotId of Object.keys(state.shops.M.slots)) state.shops.M.slots[slotId] = null;
+  state.shops.M.slots.SHOP001 = 'M012'; // DICE>=1 -- already satisfied by either ☆ die alone
+  state.shops.M.slots.SHOP002 = 'M001'; // DICE>=12 -- genuinely needs both dice combined
+
+  const d1 = giveDie(state, 'P1', 3);
+  const d2 = giveDie(state, 'P1', 4);
+  const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
+  check('Group placement succeeds (M001 alone keeps it non-empty)', result.success, true);
+  const candidates = result.actionResult.pendingBuild.candidates;
+  check('M012 (already satisfied by either ☆ die alone) is excluded as overfunded', candidates.some((c) => c.faceId === 'M012'), false);
+  check('M001 (genuinely needs both dice) is still offered', candidates.some((c) => c.faceId === 'M001'), true);
+}
 
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);

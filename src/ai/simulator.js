@@ -91,6 +91,23 @@ function applyInPlace(state, index, move) {
       }
       return result;
     }
+    // JOB003/道化 (2026-08-19, hasWildcardDice): mirrors PLACE_DIE exactly, just via board.placeWildcardDie
+    // (no slotIndex -- see move-generator.js's #wildcardPlaceDieMoves' own doc) instead of board.placeDice.
+    case 'PLACE_WILDCARD_DIE': {
+      const result = board.placeWildcardDie(state, index, { playerId: move.playerId, colorPreference: move.colorPreference }, move.dieId, move.mapId);
+      if (!result.success) return result;
+      if (result.actionResult && result.actionResult.pendingBuild) {
+        if (move.buildCandidateIndex === undefined || move.buildCandidateIndex === null) {
+          return { success: true, pendingBuild: result.actionResult.pendingBuild };
+        }
+        const candidate = result.actionResult.pendingBuild.candidates[move.buildCandidateIndex];
+        if (!candidate) throw new SimulationError(`buildCandidateIndex ${move.buildCandidateIndex} out of range`);
+        const bzDiscount = maxBzDiscount(state, index, move.playerId, candidate);
+        const buildResult = board.completeAreaBuild(state, index, { playerId: move.playerId, colorPreference: move.colorPreference, bzDiscount }, candidate, result.actionResult.pendingBuild.remainingCommands);
+        return { ...buildResult, candidate };
+      }
+      return result;
+    }
     case 'PASS_DIE':
       return board.passDie(state, index, { playerId: move.playerId }, move.dieId);
     case 'BARE_TAP': {

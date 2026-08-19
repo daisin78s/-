@@ -166,8 +166,13 @@ function canAffordFee(player, amount) {
  * "EX" slots are invisible to both rules (never counted as the "numbered slot" in rule 1 -- their
  * requirement string is "EX", never a number -- and never counted as an "ANY" slot in rule 2); they
  * keep their own separate, pre-existing acceptance logic entirely. Pure -- does not mutate slots.
+ *
+ * dieIsWildcard (2026-08-19, JOB003/hasWildcardDice): a ☆ die ignores this priority logic entirely --
+ * it has no numbered identity to prefer a matching slot over an ANY one, so every otherwise-eligible
+ * slot is equally allowed.
  */
-function isAllowedSlotForValue(requirements, slots, slotIndex, value) {
+function isAllowedSlotForValue(requirements, slots, slotIndex, value, dieIsWildcard = false) {
+  if (dieIsWildcard) return true;
   if (requirements[slotIndex] !== 'ANY') return true; // caller's own base checks handle non-ANY slots
   const numberedSlotAvailable = requirements.some((r, i) => r === value && slots[i].length === 0);
   if (numberedSlotAvailable) return false;
@@ -483,7 +488,13 @@ function grantsColorDie(commands) {
   });
 }
 
-function wouldAreaActionHaveEffect(state, index, context, areaRow, buildValue) {
+// monumentBuildValue (2026-08-19, JOB003/hasWildcardDice): defaults to buildValue, so every pre-existing
+// caller (never involving a ☆ die) is unaffected -- only placeWildcardDie ever passes a distinct value,
+// since a ☆ die's contribution is 1 for an A/B/C candidate's range check but 6 for a monument's
+// threshold check (see occupantBuildContribution's own doc) -- the same placement's buildValue can't be
+// a single shared number when both category families are evaluated together, which is exactly what
+// happens at 王宮/元老院's bare BUILD() (defaults to every category at once).
+function wouldAreaActionHaveEffect(state, index, context, areaRow, buildValue, monumentBuildValue = buildValue) {
   const commands = lowerProgram(parse(areaRow.ACTION));
   if (grantsColorDie(commands)) {
     const replaceAddRules = executor.getPassiveRules(state, index, context.playerId, 'REPLACE_ADD');
@@ -501,7 +512,8 @@ function wouldAreaActionHaveEffect(state, index, context, areaRow, buildValue) {
       for (const cmd of trailingAdds) executor.runCommand(evalState, index, context, cmd);
     }
     const resolvedBuildValue = buildCmd.buildValue !== null ? buildCmd.buildValue : buildValue;
-    const candidates = getBuildCandidates(evalState, index, context.playerId, buildCmd.categories, resolvedBuildValue);
+    const resolvedMonumentBuildValue = buildCmd.buildValue !== null ? buildCmd.buildValue : monumentBuildValue;
+    const candidates = getBuildCandidates(evalState, index, context.playerId, buildCmd.categories, resolvedBuildValue, resolvedMonumentBuildValue);
     const affordable = candidates.some((c) => isCandidateAffordable(evalState, index, context.playerId, c));
     return affordable ? { ok: true } : { ok: false, reason: 'NO_BUILDABLE_CARD' };
   }
@@ -550,17 +562,39 @@ function previewPlaceDice(state, index, context, dieId, mapId, slotIndex) {
  * ANYWHERE to place a value already on the board into some *other*, empty slot instead of stacking onto
  * the matching one produced two independent same-value occupants in one AREA -- see placeDice's own doc
  * on this exact split for the full reasoning). A duplicate value's only legal home is the slot(s) that
- * already hold it. */
-function slotAcceptsValue(map, mapId, playerId, requirement, occupants, value, bypass = false) {
+ * already hold it.
+ *
+ * dieIsWildcard (2026-08-19, JOB003/hasWildcardDice): a ☆ die ignores the numbered/ANY value-match
+ * requirement (EX ownership gating still applies unchanged -- confirmed with the user ☆ can't use
+ * another player's EX) and is never blocked by DUPLICATE_VALUE_IN_AREA (a valueless die can't duplicate
+ * a number). Occupied-slot joining still needs `bypass` even when dieIsWildcard -- placeDiceGroup forces
+ * bypass=true for a wildcard-owner's whole group (see its own doc), matching how a ☆ die "placeable
+ * anywhere" resolves to a deliberate simultaneous multi-die action here, never an implicit one. */
+function slotAcceptsValue(map, mapId, playerId, requirement, occupants, value, bypass = false, dieIsWildcard = false) {
   const isExSlot = requirement === 'EX';
   if (isExSlot) {
     if (map.feeOwnerId !== playerId) return false;
-  } else if (requirement !== 'ANY' && requirement !== value) {
+  } else if (!dieIsWildcard && requirement !== 'ANY' && requirement !== value) {
     return false;
   }
   if (occupants.length > 0) return bypass;
   if (isExSlot) return true; // empty EX slot: never blocked by a duplicate value elsewhere (see placeDice's doc)
+  if (dieIsWildcard) return true;
   return !map.slots.some((occ) => occ.some((o) => o.value === value));
+}
+
+/** How much a single stacked-slot occupant contributes toward buildValue -- `wildcardValue` is the
+ * caller-supplied substitution for a ☆ occupant (isWildcard, see hasWildcardDice's own doc): 1 when the
+ * caller is evaluating an A/B/C candidate's DICE_MIN/MAX range, 6 when evaluating a monument's
+ * DICE>=threshold (2026-08-19, per user spec: "ABCカード獲得時☆はダイス目1として扱う...モニュメント
+ * 獲得時☆はダイス目6として扱う"). excludedFromBuildValue occupants contribute 0 regardless -- set only
+ * on a ☆ die that had to fall back to stacking under an already-full row alone, outside a deliberate
+ * simultaneous placeDiceGroup (2026-08-19, per user spec: solo forced-fallback stacking must NOT
+ * silently combine with whatever die already happened to be there to inflate a monument threshold; only
+ * a deliberate multi-die group placement sums together) -- see placeWildcardDie's own doc. */
+function occupantBuildContribution(occupant, wildcardValue) {
+  if (occupant.excludedFromBuildValue) return 0;
+  return occupant.isWildcard ? wildcardValue : occupant.value;
 }
 
 /** True if some subset of newValues (possibly empty, but never the *whole* set) combined with baseSum
@@ -650,16 +684,21 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   const hadOwnColorDieThereAlready = playerHasOwnColorDieInMapSlots(state, map, playerId);
   const areaRow = getAreaRow(index, map.currentAreaId);
   const requirements = getSlotRequirements(areaRow);
+  // JOB003/道化 (2026-08-19): every die in this group is this player's own, so wildcard-ness is a single
+  // owner-level flag, not per-die -- see hasWildcardDice's own doc.
+  const dieIsWildcard = hasWildcardDice(state, index, playerId);
 
   // CON006A (2026-08-15): same rule as placeDice's own (see isColorDieReuseBlocked's doc), but checked
   // ONCE for the whole group against pre-existing map.slots occupancy (i.e. only earlier, already-
   // committed placements -- confirmed with the user this rule should NOT block a single group action
   // from placing 2+ of this player's own COLOR dice together, e.g. stacking at 王宮/AREA009 to sum
   // values: "スタッキングは許可"). A die in this group carrying GRANT_PLACE_ANYWHERE still waives it,
-  // same as placeDice.
+  // same as placeDice. Also waived unconditionally for a wildcard-owning player (2026-08-19, per user
+  // spec: 憤怒/CON005B's same-AREA block is specifically negated by 道化's ☆ -- "憤怒の効果を道化で
+  // 打ち消す" -- other restrictions, e.g. another player's EX slot, are untouched).
   // TEST CHANGE (2026-08-16, see placeDice's matching comment -- revertible by restoring `d.kind ===
   // 'COLOR' &&` below): widened from COLOR-only to every die kind, so a wD in the group trips this too.
-  if (isColorDieReuseBlocked(state, index, playerId) && playerHasOwnColorDieInMapSlots(state, map, playerId)) {
+  if (!dieIsWildcard && isColorDieReuseBlocked(state, index, playerId) && playerHasOwnColorDieInMapSlots(state, map, playerId)) {
     if (dice.some((d) => !d.placeAnywhereThisTurn)) {
       return { success: false, reason: 'OWN_COLOR_DIE_ALREADY_IN_AREA' };
     }
@@ -684,7 +723,11 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   const slotJoinedOccupied = new Map(); // targetSlot -> boolean
   const existingSumBySlot = new Map(); // targetSlot -> sum of pre-existing occupants' values
   for (const [value, ids] of dieIdsByValue) {
-    const bypass = ids.every((id) => dice.find((d) => d.id === id).placeAnywhereThisTurn);
+    // dieIsWildcard forces bypass unconditionally (2026-08-19) -- a ☆ die can always join an occupied
+    // slot as part of a deliberate group placement, same as if it always carried GRANT_PLACE_ANYWHERE
+    // (see slotAcceptsValue's own doc on why occupied-slot joining still goes through `bypass` even for
+    // wildcard dice, rather than being a separate unconditional branch).
+    const bypass = dieIsWildcard || ids.every((id) => dice.find((d) => d.id === id).placeAnywhereThisTurn);
     // isAllowedSlotForValue reads real occupancy (map.slots[i].length) to find "the leftmost still-
     // available slot" -- but during this dry run, a slot claimed by an *earlier* value-bucket in this
     // same group action (usedSlots) hasn't actually been pushed to map.slots yet, so it would still look
@@ -694,13 +737,14 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
     // 2026-08-18: same "conjured value can't stack onto this player's own die at 王宮/元老院" restriction
     // placeDice enforces -- see isChangedDieSelfStackBlocked's own doc. Any die in this value-bucket
     // having been value-changed this turn is enough to block the whole bucket from joining an occupied
-    // slot that already holds this player's own die (they all share one target slot).
+    // slot that already holds this player's own die (they all share one target slot). Never trips for a
+    // wildcard-owning player -- ☆ dice never run SET_DICE_ANY/valueChangedThisTurn at all.
     const bucketValueChanged = ids.some((id) => dice.find((d) => d.id === id).valueChangedThisTurn);
     let targetSlot = null;
     for (let i = 0; i < requirements.length; i++) {
       if (usedSlots.has(i)) continue;
-      if (!bypass && !isAllowedSlotForValue(requirements, slotsForAllowedCheck, i, value)) continue;
-      if (!slotAcceptsValue(map, mapId, playerId, requirements[i], map.slots[i], value, bypass)) continue;
+      if (!bypass && !isAllowedSlotForValue(requirements, slotsForAllowedCheck, i, value, dieIsWildcard)) continue;
+      if (!slotAcceptsValue(map, mapId, playerId, requirements[i], map.slots[i], value, bypass, dieIsWildcard)) continue;
       if (isChangedDieSelfStackBlocked(mapId, playerId, bucketValueChanged, map.slots[i])) continue;
       targetSlot = i;
       break;
@@ -709,10 +753,12 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
     usedSlots.add(targetSlot);
     slotOfValue.set(value, targetSlot);
     slotJoinedOccupied.set(targetSlot, map.slots[targetSlot].length > 0);
-    existingSumBySlot.set(targetSlot, map.slots[targetSlot].reduce((sum, o) => sum + o.value, 0));
+    // A group placement is monument-only (categories forced to ['M'] below), so 6 is always the right
+    // wildcard substitution here -- see occupantBuildContribution's own doc.
+    existingSumBySlot.set(targetSlot, map.slots[targetSlot].reduce((sum, o) => sum + occupantBuildContribution(o, 6), 0));
     for (const id of ids) slotForDie.set(id, targetSlot);
   }
-  const newValues = dice.map((d) => d.value);
+  const newValues = dice.map((d) => (dieIsWildcard ? 6 : d.value));
   const existingSumTotal = [...existingSumBySlot.values()].reduce((sum, v) => sum + v, 0);
 
   // AREA009C/B's own ACTION grants a trailing bonus after BUILD() (e.g. "BUILD();ADD(2K,BZ)" at LV2) --
@@ -739,8 +785,9 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   // -- a smaller selection would need to be tried instead.
   let predictedBuildValue = 0;
   for (const [value, slotIndex] of slotOfValue) {
-    const existing = map.slots[slotIndex].reduce((sum, o) => sum + o.value, 0);
-    predictedBuildValue += existing + value * dieIdsByValue.get(value).length;
+    const existing = map.slots[slotIndex].reduce((sum, o) => sum + occupantBuildContribution(o, 6), 0);
+    const perDieValue = dieIsWildcard ? 6 : value;
+    predictedBuildValue += existing + perDieValue * dieIdsByValue.get(value).length;
   }
   let affordabilityCheckState = state;
   if (areaTrailingAdds) {
@@ -769,6 +816,7 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
       playerId,
       dieId: die.id,
       value: die.value,
+      isWildcard: dieIsWildcard,
       seq: state.placementSeq,
       countsForTurnOrder: !slotJoinedOccupied.get(slotIndex),
     });
@@ -800,7 +848,7 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   // principle add dice to these same slots -- no current data does that, but this stays exact either way.)
   let buildValue = 0;
   for (const slotIndex of touchedSlots) {
-    buildValue += map.slots[slotIndex].reduce((sum, o) => sum + o.value, 0);
+    buildValue += map.slots[slotIndex].reduce((sum, o) => sum + occupantBuildContribution(o, 6), 0);
   }
 
   const candidates = excludeOverfundedMonuments(index, getBuildCandidates(state, index, playerId, ['M'], buildValue), newValues, existingSumTotal, player.monumentDiceDiscountThisTurn);
@@ -826,6 +874,136 @@ function previewPlaceDiceGroup(state, index, context, dieIds, mapId) {
     if (occupants.some((o) => dieIdSet.has(o.dieId))) touchedSlots.push(i);
   });
   return { ok: true, touchedSlots };
+}
+
+/**
+ * Auto-placement entrypoint for a single ☆ wildcard die (JOB003/hasWildcardDice, 2026-08-19) -- unlike
+ * placeDice, the caller never supplies a slotIndex: the engine picks it, per the user's own spec:
+ * "☆ダイスはSLOTが空いている限り左詰めで置く(左 SLOT1 2 3 4 5 6 右)。EX以外のSLOTがすべて埋まって
+ * いたら一番左のSLOTの下に重ねる。" Scans requirements left to right, skipping any EX slot that isn't
+ * this player's own (confirmed with the user: another player's EX is never a target, this player's own
+ * EX is fine -- same ownership gate slotAcceptsValue already enforces). The first empty eligible slot
+ * wins outright; if every eligible slot is already occupied, this instead force-stacks under the
+ * leftmost eligible slot (2026-08-19, confirmed with the user this fallback applies to every AREA, not
+ * just 王宮/元老院 -- "全AREA共通" -- even though it only ever has a buildValue consequence at those two,
+ * since no other AREA's ACTION ever contains BUILD).
+ *
+ * The forced-fallback occupant is flagged excludedFromBuildValue so it never silently inflates a
+ * monument threshold by combining with whatever die already happened to occupy that slot -- only a
+ * deliberate simultaneous placeDiceGroup of 2+ ☆ dice actually sums together (2026-08-19, per user spec,
+ * closing a possible new exploit: an automatic single-die fallback stack combining unpredictably with an
+ * unrelated pre-existing die to reach a high monument threshold without the player genuinely investing 2
+ * dice at once). See occupantBuildContribution's own doc.
+ *
+ * ☆ dice ignore VALUE_MISMATCH/SLOT_NOT_PREFERRED/DUPLICATE_VALUE_IN_AREA entirely, and are exempt from
+ * BLOCK_COLOR_DIE_REUSE (憤怒/CON005B's same-AREA restriction, confirmed with the user: "憤怒の効果を
+ * 道化で打ち消す") -- none of placeDice's matching checks are reproduced here on purpose; this is a
+ * wholly separate entrypoint, not a variant of placeDice.
+ */
+function placeWildcardDie(state, index, context, dieId, mapId) {
+  const player = state.players.find((p) => p.id === context.playerId);
+  const die = player.dice.find((d) => d.id === dieId && d.placedMapId === null && !d.passed);
+  if (!die) return { success: false, reason: 'DIE_NOT_AVAILABLE' };
+
+  const map = state.maps[mapId];
+  if (!map) throw new executor.ExecutionError(`Unknown map: ${mapId}`);
+  // 開拓者 (2026-08-17): must be read before anything below touches map.slots -- see
+  // isMapEmptyOfDice/grantPioneerBonusIfEarned's own doc.
+  const mapWasEmptyOfDice = isMapEmptyOfDice(map);
+  // 地主 (2026-08-17): same "read before mutation" requirement -- see grantLandlordBonusIfEarned's own doc.
+  const hadOwnColorDieThereAlready = playerHasOwnColorDieInMapSlots(state, map, context.playerId);
+  const areaRow = getAreaRow(index, map.currentAreaId);
+  const requirements = getSlotRequirements(areaRow);
+
+  const eligibleIndexes = [];
+  for (let i = 0; i < requirements.length; i++) {
+    if (requirements[i] === 'EX' && map.feeOwnerId !== context.playerId) continue; // 他人のEXには置けない
+    eligibleIndexes.push(i);
+  }
+  if (eligibleIndexes.length === 0) return { success: false, reason: 'NO_LEGAL_SLOT' };
+
+  let slotIndex = eligibleIndexes.find((i) => map.slots[i].length === 0);
+  let excludedFromBuildValue = false;
+  if (slotIndex === undefined) {
+    slotIndex = eligibleIndexes[0]; // leftmost eligible slot -- forced fallback stack
+    excludedFromBuildValue = true;
+  }
+  const targetOccupants = map.slots[slotIndex];
+
+  // Two separate sums, since a ☆ occupant's contribution differs by category (1 for A/B/C, 6 for
+  // monument -- see occupantBuildContribution's own doc); this placement's own contribution is 0 when
+  // excludedFromBuildValue, else the same 1-or-6 substitution.
+  const existingAbcSum = targetOccupants.reduce((sum, o) => sum + occupantBuildContribution(o, 1), 0);
+  const existingMonumentSum = targetOccupants.reduce((sum, o) => sum + occupantBuildContribution(o, 6), 0);
+  const abcBuildValue = existingAbcSum + (excludedFromBuildValue ? 0 : 1);
+  const monumentBuildValue = existingMonumentSum + (excludedFromBuildValue ? 0 : 6);
+
+  const actionContext = context;
+
+  // 地主 (2026-08-18, see placeDice's matching comment/grantLandlordBonusIfEarned's own doc): granted
+  // speculatively before the NO_EFFECT prediction/usage-fee check, rolled back below if the placement
+  // turns out illegal for some unrelated reason.
+  const landlordEligible = hasLandlordAbility(state, index, context.playerId) && isLandlordEligibleArea(map.currentAreaId);
+  const preLandlordSnapshot = landlordEligible ? structuredClone(state) : null;
+  if (landlordEligible) grantLandlordBonusIfEarned(state, index, actionContext, mapId, hadOwnColorDieThereAlready);
+
+  const prediction = wouldAreaActionHaveEffect(state, index, actionContext, areaRow, abcBuildValue, monumentBuildValue);
+  if (!prediction.ok) {
+    if (preLandlordSnapshot) {
+      Object.keys(state).forEach((k) => delete state[k]);
+      Object.assign(state, preLandlordSnapshot);
+    }
+    return { success: false, reason: prediction.reason };
+  }
+
+  const owedFee = wouldOweFee(map, context.playerId);
+  const preFeeSnapshot = owedFee ? (preLandlordSnapshot || structuredClone(state)) : null;
+
+  state.placementSeq += 1;
+  die.placedMapId = mapId;
+  targetOccupants.push({
+    playerId: context.playerId,
+    dieId,
+    value: die.value,
+    isWildcard: true,
+    excludedFromBuildValue,
+    seq: state.placementSeq,
+    // Same convention as placeDice's own countsForTurnOrder -- false only when this placement had to
+    // force its way onto an already-occupied slot rather than a genuinely free empty one, which for a ☆
+    // die is exactly the excludedFromBuildValue case.
+    countsForTurnOrder: !excludedFromBuildValue,
+  });
+  chargeUsageFeeIfOwed(state, map, context.playerId);
+
+  executor.emitAndResolve(state, index, actionContext, 'PLACE', mapId);
+  const actionResult = resolveAreaAction(state, index, actionContext, areaRow, abcBuildValue, monumentBuildValue);
+
+  if (preFeeSnapshot) {
+    const updatedPlayer = state.players.find((p) => p.id === context.playerId);
+    if (!canAffordFee(updatedPlayer, owedFee.amount)) {
+      Object.keys(state).forEach((k) => delete state[k]);
+      Object.assign(state, preFeeSnapshot);
+      return { success: false, reason: 'UNAFFORDABLE_USAGE_FEE', amount: owedFee.amount };
+    }
+  }
+
+  grantPioneerBonusIfEarned(state, index, actionContext, mapWasEmptyOfDice, die.kind === 'COLOR');
+
+  return { success: true, actionResult };
+}
+
+/** Non-mutating preview of placeWildcardDie (same purpose as previewPlaceDice/previewPlaceDiceGroup
+ * above): runs the real placeWildcardDie against a throwaway clone and, if it would succeed, reports
+ * which slot index it landed on (the caller doesn't get to pick one -- the engine auto-assigns, see
+ * placeWildcardDie's own doc -- so the UI needs this to know which slot to light up). Never touches the
+ * real state. */
+function previewPlaceWildcardDie(state, index, context, dieId, mapId) {
+  const clone = structuredClone(state);
+  const result = placeWildcardDie(clone, index, context, dieId, mapId);
+  if (!result.success) return { ok: false, slotIndex: null };
+  if (result.actionResult && result.actionResult.success === false) return { ok: false, slotIndex: null };
+  const slotIndex = clone.maps[mapId].slots.findIndex((occupants) => occupants.some((o) => o.dieId === dieId));
+  return { ok: true, slotIndex };
 }
 
 /**
@@ -864,21 +1042,24 @@ function passDie(state, index, context, dieId) {
  * dieValueForBuild is only used when the BUILD command itself omits an explicit buildValue -- an
  * AREA-triggered BUILD falls back to the placed die's value; a QST/TAP-triggered one has no die to fall
  * back on, so its caller passes Infinity ("unconditional", confirmed 2026-07-30 for QST -- no current
- * data omits buildValue outside AREA anyway).
+ * data omits buildValue outside AREA anyway). monumentBuildValueForBuild mirrors
+ * wouldAreaActionHaveEffect's own monumentBuildValue -- defaults to dieValueForBuild, only ever distinct
+ * when placeWildcardDie is the caller (see that function's own doc).
  */
-function resolveProgramOrBuild(state, index, context, dslText, dieValueForBuild) {
+function resolveProgramOrBuild(state, index, context, dslText, dieValueForBuild, monumentBuildValueForBuild = dieValueForBuild) {
   const commands = lowerProgram(parse(dslText));
   const buildIndex = commands.findIndex((c) => c.type === 'BUILD');
   if (buildIndex !== -1) {
     const buildCmd = commands[buildIndex];
     const buildValue = buildCmd.buildValue !== null ? buildCmd.buildValue : dieValueForBuild;
+    const monumentBuildValue = buildCmd.buildValue !== null ? buildCmd.buildValue : monumentBuildValueForBuild;
     // Candidate existence is checked *before* running any leading command (e.g. JOB010's PAY(2K)) --
     // 'U'/BUILD_NEW eligibility never depends on resources (it's about which cards/shop slots exist),
     // so this ordering can't hide a candidate a later payment would have unlocked, and it avoids
     // charging a flat leading cost for an ability that was never going to have anything to spend it on
     // (2026-08-17 fix: a naive "pay first, then check" order would silently take JOB010's 2K even when
     // the player has no upgradeable card at all).
-    const candidates = getBuildCandidates(state, index, context.playerId, buildCmd.categories, buildValue);
+    const candidates = getBuildCandidates(state, index, context.playerId, buildCmd.categories, buildValue, monumentBuildValue);
     if (candidates.length === 0) {
       return { success: false, reason: 'NO_BUILDABLE_CARD', categories: buildCmd.categories, buildValue };
     }
@@ -898,8 +1079,8 @@ function resolveProgramOrBuild(state, index, context, dslText, dieValueForBuild)
 }
 
 /** Resolves an AREA's ACTION field -- see resolveProgramOrBuild. */
-function resolveAreaAction(state, index, context, areaRow, dieValue) {
-  return resolveProgramOrBuild(state, index, context, areaRow.ACTION, dieValue);
+function resolveAreaAction(state, index, context, areaRow, dieValue, monumentBuildValue = dieValue) {
+  return resolveProgramOrBuild(state, index, context, areaRow.ACTION, dieValue, monumentBuildValue);
 }
 
 /** Completes a pendingBuild from resolveAreaAction()/resolveProgramOrBuild(): commits the chosen
@@ -1018,6 +1199,18 @@ function hasAnyUpgradeEligibleCard(state, index, playerId) {
  * own job (placeDice/placeDiceGroup), since it needs the specific mapId being targeted. */
 function isColorDieReuseBlocked(state, index, playerId) {
   return executor.getPassiveRules(state, index, playerId, 'BLOCK_COLOR_DIE_REUSE').length > 0;
+}
+
+/** True if any of playerId's owned cards carries an active WILDCARD_DICE PASSIVE rule (JOB003/道化,
+ * 2026-08-19, replacing its old SET_DICE_ANY TAP ability entirely). While true, ALL of this player's
+ * dice -- COLOR and WHITE alike -- are "☆" wildcard dice, placed via placeWildcardDie (never placeDice's
+ * player-chosen-slotIndex path) with their own separate value-matching/buildValue rules throughout this
+ * file, and exempt from BLOCK_COLOR_DIE_REUSE (憤怒/CON005B) -- confirmed with the user this exemption is
+ * specifically "憤怒's same-AREA restriction is negated", not "☆ can be placed anywhere unconditionally"
+ * (another player's EX slot etc. still block it the normal way). Just an on/off flag, same pattern as
+ * isColorDieReuseBlocked above. */
+function hasWildcardDice(state, index, playerId) {
+  return executor.getPassiveRules(state, index, playerId, 'WILDCARD_DICE').length > 0;
 }
 
 /** True if playerId currently has one of their own COLOR dice actually sitting in one of map's slots
@@ -1164,10 +1357,15 @@ function grantLandlordBonusIfEarned(state, index, context, mapId, alreadyHadOwnC
  * anything -- see resolveBuild() to commit one of these.
  *
  * @param {string[]} categories - e.g. ["A","B","C","U","M"]
- * @param {number} buildValue - resolved die value (BUILD's buildValue arg, or the die that triggered it)
+ * @param {number} buildValue - resolved die value (BUILD's buildValue arg, or the die that triggered it),
+ *   used for the A/B/C DICE_MIN/MAX range check
+ * @param {number} [monumentBuildValue] - the same, but for the M (monument) DICE>=threshold check;
+ *   defaults to buildValue (2026-08-19, JOB003/hasWildcardDice: a ☆ occupant's contribution differs by
+ *   category -- 1 for A/B/C, 6 for M -- so the two checks can't always share one number; see
+ *   occupantBuildContribution's own doc)
  * @returns {({type:'BUILD_NEW', faceId:string, shopKey:string, slotId:string}|{type:'UPGRADE', physicalId:string, fromFaceId:string, toFaceId:string})[]}
  */
-function getBuildCandidates(state, index, playerId, categories, buildValue) {
+function getBuildCandidates(state, index, playerId, categories, buildValue, monumentBuildValue = buildValue) {
   const candidates = [];
   const player = state.players.find((p) => p.id === playerId);
   const blocked = player.blockedBuildCategoriesThisTurn;
@@ -1196,7 +1394,7 @@ function getBuildCandidates(state, index, playerId, categories, buildValue) {
     for (const [slotId, faceId] of Object.entries(state.shops.M.slots)) {
       if (!faceId) continue;
       const threshold = discountedThreshold(parseMonumentThreshold(getCardRow(index, faceId).DICE));
-      if (buildValue >= threshold) {
+      if (monumentBuildValue >= threshold) {
         candidates.push({ type: 'BUILD_NEW', faceId, shopKey: 'M', slotId });
       }
     }
@@ -1340,8 +1538,10 @@ module.exports = {
   slotAcceptsValue,
   placeDice,
   placeDiceGroup,
+  placeWildcardDie,
   previewPlaceDice,
   previewPlaceDiceGroup,
+  previewPlaceWildcardDie,
   passDie,
   resolveAreaAction,
   resolveProgramOrBuild,
@@ -1351,6 +1551,7 @@ module.exports = {
   isUpgradeBlockedByQstRank,
   hasAnyUpgradeEligibleCard,
   isColorDieReuseBlocked,
+  hasWildcardDice,
   isCandidateAffordable,
   resolveBuild,
   restockShop,
