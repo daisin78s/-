@@ -167,20 +167,21 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 //     ("エンブレム天の数*VPを最多エンブレムの数*VPにしたい").
 // ---------------------------------------------------------------------------
 {
+  // B008B's own EMBLEM_B dropped 2->1 (2026-08-20, per user edit to game.xlsx, alongside A008B's
+  // EMBLEM_A and C008B's EMBLEM_C, all matching sibling LV2 faces) -- values below adjusted to match.
   const state = freshState();
-  giveCard(state, 'B008B', 'P1'); // EMBLEM_B=2 -> 天=2, the only emblem type owned so far
-  check('B008B: VP_MODIFIER(MAX_EMBLEM_COUNT) starts at 2 (from B008B\'s own 2 EMBLEM_B, 天 is the only/max type)', executor.collectVpModifiers(state, index, 'P1'), 2);
+  giveCard(state, 'B008B', 'P1'); // EMBLEM_B=1 -> 天=1, the only emblem type owned so far
+  check('B008B: VP_MODIFIER(MAX_EMBLEM_COUNT) starts at 1 (from B008B\'s own 1 EMBLEM_B, 天 is the only/max type)', executor.collectVpModifiers(state, index, 'P1'), 1);
 
-  giveCard(state, 'B001A', 'P1'); // EMBLEM_B=1 -> 天 rises to 3, still the max
-  check('B008B: VP_MODIFIER(MAX_EMBLEM_COUNT) rises to 3 as soon as another 天-emblem card is owned (live, not frozen at LVUP time)', executor.collectVpModifiers(state, index, 'P1'), 3);
+  giveCard(state, 'B001A', 'P1'); // EMBLEM_B=1 -> 天 rises to 2, still the max
+  check('B008B: VP_MODIFIER(MAX_EMBLEM_COUNT) rises to 2 as soon as another 天-emblem card is owned (live, not frozen at LVUP time)', executor.collectVpModifiers(state, index, 'P1'), 2);
 
-  giveCard(state, 'A001A', 'P1'); // EMBLEM_A=1 -> 地=1 (still behind 天=3)
-  giveCard(state, 'A002A', 'P1'); // EMBLEM_A=1 -> 地=2 (still behind 天=3)
-  giveCard(state, 'A003A', 'P1'); // EMBLEM_A=1 -> 地=3 (ties 天=3)
-  check('...stays at 3 while 地 only ties 天, not yet exceeding it', executor.collectVpModifiers(state, index, 'P1'), 3);
+  giveCard(state, 'A001A', 'P1'); // EMBLEM_A=1 -> 地=1 (still behind 天=2)
+  giveCard(state, 'A002A', 'P1'); // EMBLEM_A=1 -> 地=2 (ties 天=2)
+  check('...stays at 2 while 地 only ties 天, not yet exceeding it', executor.collectVpModifiers(state, index, 'P1'), 2);
 
-  giveCard(state, 'A004A', 'P1'); // EMBLEM_A=1 -> 地=4, now overtaking 天=3
-  check('...rises to 4 once 地 (not 天) becomes the highest emblem type -- confirms this tracks the max across all 3 types, not just 天', executor.collectVpModifiers(state, index, 'P1'), 4);
+  giveCard(state, 'A003A', 'P1'); // EMBLEM_A=1 -> 地=3, now overtaking 天=2
+  check('...rises to 3 once 地 (not 天) becomes the highest emblem type -- confirms this tracks the max across all 3 types, not just 天', executor.collectVpModifiers(state, index, 'P1'), 3);
 }
 
 // ---------------------------------------------------------------------------
