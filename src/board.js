@@ -31,10 +31,6 @@ const { parse } = require('./dsl-parser');
 const { lowerProgram, lowerCostList } = require('./command-builder');
 const { createCardInstance } = require('./game-state');
 const executor = require('./executor');
-// Only for 開拓者/JOB009's random A/B/C pick (see grantPioneerBonusIfEarned) -- every other random
-// choice in board.js already goes through state.rng via executor's own grant helpers, this is the one
-// spot that needs the raw draw itself.
-const rngMod = require('./rng');
 // Only for BLOCK_UPGRADE_UNLESS_QST_RANK (CON004A, see isUpgradeBlockedByQstRank) -- qst.js sits above
 // executor.js in the layering and never requires board.js, so this direction is safe.
 const qst = require('./qst');
@@ -293,17 +289,25 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
 
   const actionContext = context;
 
-  // 地主 (2026-08-18, see grantLandlordBonusIfEarned's own doc): granted speculatively *before* the
-  // NO_EFFECT prediction and the usage-fee check below, so its K/VP is already in the player's resources
-  // by the time either one reads them -- e.g. affording 孤児院LV2's own CHANGE(2K,VP), or an otherwise-
-  // unaffordable usage fee on another player's map. Only snapshotted (real cloning cost) when this
-  // player actually has 地主 AND this AREA qualifies -- cheap to check first, so a normal placement by
-  // any other player never pays for a clone it doesn't need. If the placement still turns out illegal
-  // for some unrelated reason (prediction.ok===false below), this speculative grant is rolled back along
-  // with everything else -- it must never survive a refused placement.
+  // 地主/開拓者 (2026-08-18/2026-08-20, see grantLandlordBonusIfEarned/grantPioneerBonusIfEarned's own
+  // docs): granted speculatively *before* the NO_EFFECT prediction and the usage-fee check below, so
+  // the resource is already in the player's resources by the time either one reads them -- e.g.
+  // affording 孤児院LV2's own CHANGE(2K,VP), an otherwise-unaffordable usage fee on another player's
+  // map, or (開拓者) making a previously-unaffordable AREA action like AREA007's CHANGE((A,B,C),D)
+  // viable. Only snapshotted (real cloning cost) when this player actually has one of these two JOBs AND
+  // qualifies -- cheap to check first, so a normal placement by any other player never pays for a clone
+  // it doesn't need. A player can only ever hold one JOB, so landlordEligible/pioneerEligible are never
+  // both true at once -- one shared snapshot variable covers either case. If the placement still turns
+  // out illegal for some unrelated reason (prediction.ok===false below), this speculative grant is
+  // rolled back along with everything else -- it must never survive a refused placement.
   const landlordEligible = hasLandlordAbility(state, index, context.playerId) && isLandlordEligibleArea(map.currentAreaId);
-  const preLandlordSnapshot = landlordEligible ? structuredClone(state) : null;
+  const pioneerEligible = hasPioneerAbility(state, index, context.playerId) && mapWasEmptyOfDice && die.kind === 'COLOR';
+  const preJobBonusSnapshot = (landlordEligible || pioneerEligible) ? structuredClone(state) : null;
   if (landlordEligible) grantLandlordBonusIfEarned(state, index, actionContext, mapId, hadOwnColorDieThereAlready);
+  if (pioneerEligible) {
+    grantPioneerBonusIfEarned(state, index, actionContext, mapWasEmptyOfDice, [die.value],
+      (candidateState) => wouldAreaActionHaveEffect(candidateState, index, actionContext, areaRow, buildValue));
+  }
 
   // Refuse the placement outright if it wouldn't actually do anything (2026-08-0X, per user feedback:
   // "効果を得られない時ダイスの配置不可にして" -- e.g. AREA003A's CHANGE(K,A,ALL) with 0 K on hand, or
@@ -312,9 +316,9 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
   // Deliberately checked *before* any mutation below so a doomed placement never burns the die.
   const prediction = wouldAreaActionHaveEffect(state, index, actionContext, areaRow, buildValue);
   if (!prediction.ok) {
-    if (preLandlordSnapshot) {
+    if (preJobBonusSnapshot) {
       Object.keys(state).forEach((k) => delete state[k]);
-      Object.assign(state, preLandlordSnapshot);
+      Object.assign(state, preJobBonusSnapshot);
     }
     return { success: false, reason: prediction.reason };
   }
@@ -331,12 +335,12 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
   // canAffordFee's own doc for what "payable" means (current K + every free-action-convertible
   // resource, not just raw K).
   const owedFee = wouldOweFee(map, context.playerId);
-  // Reuses preLandlordSnapshot (already taken *before* the landlord grant, i.e. before this whole
-  // placement's own effects began) when one exists, rather than taking a fresh structuredClone here --
-  // a fresh one at this point would already include the landlord bonus, so rolling back to it below
-  // would incorrectly leave that bonus in place even though the point of this rollback is to undo the
-  // *entire* placement, landlord bonus included.
-  const preFeeSnapshot = owedFee ? (preLandlordSnapshot || structuredClone(state)) : null;
+  // Reuses preJobBonusSnapshot (already taken *before* the landlord/pioneer grant, i.e. before this
+  // whole placement's own effects began) when one exists, rather than taking a fresh structuredClone
+  // here -- a fresh one at this point would already include that bonus, so rolling back to it below
+  // would incorrectly leave it in place even though the point of this rollback is to undo the *entire*
+  // placement, job bonus included.
+  const preFeeSnapshot = owedFee ? (preJobBonusSnapshot || structuredClone(state)) : null;
 
   state.placementSeq += 1;
   die.placedMapId = mapId;
@@ -366,8 +370,7 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
     }
   }
 
-  // 地主's own bonus already landed earlier (see preLandlordSnapshot above) -- not called again here.
-  grantPioneerBonusIfEarned(state, index, actionContext, mapWasEmptyOfDice, die.kind === 'COLOR');
+  // 地主/開拓者's own bonus already landed earlier (see preJobBonusSnapshot above) -- not called again here.
 
   return { success: true, actionResult };
 }
@@ -680,6 +683,23 @@ function excludeOverfundedMonuments(index, candidates, newValues, baseSum, disco
  *
  * @returns {{success:true, actionResult:{success:true,pendingBuild:object}|{success:false,reason:'NO_BUILDABLE_CARD',categories:['M'],buildValue:number}}|{success:false,reason:'DIE_NOT_AVAILABLE'|'NO_LEGAL_SLOT_FOR_GROUP'}}
  */
+/** placeDiceGroup's own "would this group placement actually be able to build something" predicate --
+ * factored out (2026-08-20) so 開拓者's speculative grant (see placeDiceGroup's own doc on why it needs
+ * to land before this check, unlike 地主) can reuse the EXACT same logic as the real gate, rather than
+ * re-deriving it and risking drift (same "can't diverge" motivation wouldAreaActionHaveEffect's own doc
+ * cites). Pure with respect to `candidateState` (only mutates the clone it takes internally when
+ * areaTrailingAdds exist) -- callers pass either the real `state` (for the real gate) or a throwaway
+ * clone (for a speculative "what if" check). */
+function groupBuildWouldBeAffordable(candidateState, index, context, playerId, areaTrailingAdds, predictedBuildValue, newValues, existingSumTotal, monumentDiscount) {
+  let checkState = candidateState;
+  if (areaTrailingAdds) {
+    checkState = structuredClone(candidateState);
+    for (const cmd of areaTrailingAdds) executor.runCommand(checkState, index, context, cmd);
+  }
+  const candidates = excludeOverfundedMonuments(index, getBuildCandidates(checkState, index, playerId, ['M'], predictedBuildValue), newValues, existingSumTotal, monumentDiscount);
+  return { ok: candidates.some((c) => isCandidateAffordable(checkState, index, playerId, c)) };
+}
+
 function placeDiceGroup(state, index, context, dieIds, mapId) {
   const { playerId } = context;
   const player = state.players.find((p) => p.id === playerId);
@@ -698,6 +718,9 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   // JOB003/道化 (2026-08-19): every die in this group is this player's own, so wildcard-ness is a single
   // owner-level flag, not per-die -- see hasWildcardDice's own doc.
   const dieIsWildcard = hasWildcardDice(state, index, playerId);
+  // Moved up from the commit section further down (2026-08-20) -- 開拓者's speculative grant below needs
+  // this in scope earlier than the commit phase did.
+  const actionContext = context;
 
   // CON006A (2026-08-15): same rule as placeDice's own (see isColorDieReuseBlocked's doc), but checked
   // ONCE for the whole group against pre-existing map.slots occupancy (i.e. only earlier, already-
@@ -800,25 +823,44 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
     const perDieValue = dieIsWildcard ? 6 : value;
     predictedBuildValue += existing + perDieValue * dieIdsByValue.get(value).length;
   }
-  let affordabilityCheckState = state;
-  if (areaTrailingAdds) {
-    affordabilityCheckState = structuredClone(state);
-    for (const cmd of areaTrailingAdds) executor.runCommand(affordabilityCheckState, index, context, cmd);
+
+  // 開拓者 (2026-08-20): granted speculatively here, before this function's own build-affordability gate
+  // just below -- unlike 地主 (deliberately kept post-commit further down, see its own comment there),
+  // 開拓者's grant genuinely needs to land early: placeDiceGroup has no separate wouldAreaActionHaveEffect
+  // call the way placeDice/placeWildcardDie do, so groupBuildWouldBeAffordable (below) IS the only gate a
+  // group placement goes through, and a grant landing after it could never actually help. Every COLOR die
+  // in the group grants its own resource separately (confirmed with the user: a 4 and a 5 placed together
+  // grant both 1C and 1Z) -- still only one tap/untap transition for the whole action, since
+  // grantPioneerBonusIfEarned's own loop runs every value inside a single grant-branch pass.
+  const pioneerEligible = hasPioneerAbility(state, index, playerId) && mapWasEmptyOfDice && dice.some((d) => d.kind === 'COLOR');
+  const preJobBonusSnapshot = pioneerEligible ? structuredClone(state) : null;
+  if (pioneerEligible) {
+    const colorDieValues = dice.filter((d) => d.kind === 'COLOR').map((d) => d.value);
+    grantPioneerBonusIfEarned(state, index, actionContext, mapWasEmptyOfDice, colorDieValues,
+      (candidateState) => groupBuildWouldBeAffordable(candidateState, index, actionContext, playerId, areaTrailingAdds, predictedBuildValue, newValues, existingSumTotal, player.monumentDiceDiscountThisTurn));
   }
-  const predictedCandidates = excludeOverfundedMonuments(index, getBuildCandidates(affordabilityCheckState, index, playerId, ['M'], predictedBuildValue), newValues, existingSumTotal, player.monumentDiceDiscountThisTurn);
-  if (!predictedCandidates.some((c) => isCandidateAffordable(affordabilityCheckState, index, playerId, c))) {
+
+  const affordability = groupBuildWouldBeAffordable(state, index, actionContext, playerId, areaTrailingAdds, predictedBuildValue, newValues, existingSumTotal, player.monumentDiceDiscountThisTurn);
+  if (!affordability.ok) {
+    if (preJobBonusSnapshot) {
+      Object.keys(state).forEach((k) => delete state[k]);
+      Object.assign(state, preJobBonusSnapshot);
+    }
     return { success: false, reason: 'NO_BUILDABLE_CARD' };
   }
   // Same usage-fee affordability gate as placeDice's own (2026-08-05) -- AREA009 can carry a tier (A008A
   // tiers it up), so a group placement here can owe a fee too, not just the single-die path.
   const owedFee = wouldOweFee(map, playerId);
   if (owedFee && !canAffordFee(player, owedFee.amount)) {
+    if (preJobBonusSnapshot) {
+      Object.keys(state).forEach((k) => delete state[k]);
+      Object.assign(state, preJobBonusSnapshot);
+    }
     return { success: false, reason: 'UNAFFORDABLE_USAGE_FEE', amount: owedFee.amount };
   }
 
   // Everything fits and can lead somewhere -- commit for real.
   const touchedSlots = new Set();
-  const actionContext = context;
   for (const die of dice) {
     const slotIndex = slotForDie.get(die.id);
     state.placementSeq += 1;
@@ -835,10 +877,11 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
     executor.emitAndResolve(state, index, actionContext, 'PLACE', mapId);
   }
   chargeUsageFeeIfOwed(state, map, playerId);
-  // Once per group action, not once per die within it -- see grantPioneerBonusIfEarned's own doc.
-  grantPioneerBonusIfEarned(state, index, actionContext, mapWasEmptyOfDice, dice.some((d) => d.kind === 'COLOR'));
-  // Deliberately NOT moved earlier the way placeDice's own call was (2026-08-18) -- placeDiceGroup only
-  // ever succeeds for a monument/BUILD-category placement (confirmed empirically: getBuildCandidates(
+  // 開拓者's own bonus already landed earlier (see preJobBonusSnapshot above) -- not called again here;
+  // it needed to be pre-commit (unlike 地主 just below) specifically because it must feed this function's
+  // own build-affordability gate, which 地主's bonus never needs to.
+  // 地主 deliberately stays post-commit and un-snapshotted here (2026-08-18) -- placeDiceGroup only ever
+  // succeeds for a monument/BUILD-category placement (confirmed empirically: getBuildCandidates(
   // ['M'],...) gates it), and the only 2 maps that support a group placement at all are the castle
   // (MAP008/AREA008, which has no LVUP tier at all -- isLandlordEligibleArea always excludes it) and
   // 元老院 (MAP009/AREA009, excluded by name outright) -- so 地主's bonus never actually fires via this
@@ -951,24 +994,30 @@ function placeWildcardDie(state, index, context, dieId, mapId) {
 
   const actionContext = context;
 
-  // 地主 (2026-08-18, see placeDice's matching comment/grantLandlordBonusIfEarned's own doc): granted
-  // speculatively before the NO_EFFECT prediction/usage-fee check, rolled back below if the placement
-  // turns out illegal for some unrelated reason.
+  // 地主/開拓者 (2026-08-18/2026-08-20, see placeDice's matching comment/grantLandlordBonusIfEarned/
+  // grantPioneerBonusIfEarned's own docs): granted speculatively before the NO_EFFECT prediction/usage-
+  // fee check, rolled back below if the placement turns out illegal for some unrelated reason. Never
+  // both eligible at once (a player holds only one JOB), so one shared snapshot variable covers either.
   const landlordEligible = hasLandlordAbility(state, index, context.playerId) && isLandlordEligibleArea(map.currentAreaId);
-  const preLandlordSnapshot = landlordEligible ? structuredClone(state) : null;
+  const pioneerEligible = hasPioneerAbility(state, index, context.playerId) && mapWasEmptyOfDice && die.kind === 'COLOR';
+  const preJobBonusSnapshot = (landlordEligible || pioneerEligible) ? structuredClone(state) : null;
   if (landlordEligible) grantLandlordBonusIfEarned(state, index, actionContext, mapId, hadOwnColorDieThereAlready);
+  if (pioneerEligible) {
+    grantPioneerBonusIfEarned(state, index, actionContext, mapWasEmptyOfDice, [die.value],
+      (candidateState) => wouldAreaActionHaveEffect(candidateState, index, actionContext, areaRow, abcBuildValue, monumentBuildValue));
+  }
 
   const prediction = wouldAreaActionHaveEffect(state, index, actionContext, areaRow, abcBuildValue, monumentBuildValue);
   if (!prediction.ok) {
-    if (preLandlordSnapshot) {
+    if (preJobBonusSnapshot) {
       Object.keys(state).forEach((k) => delete state[k]);
-      Object.assign(state, preLandlordSnapshot);
+      Object.assign(state, preJobBonusSnapshot);
     }
     return { success: false, reason: prediction.reason };
   }
 
   const owedFee = wouldOweFee(map, context.playerId);
-  const preFeeSnapshot = owedFee ? (preLandlordSnapshot || structuredClone(state)) : null;
+  const preFeeSnapshot = owedFee ? (preJobBonusSnapshot || structuredClone(state)) : null;
 
   state.placementSeq += 1;
   die.placedMapId = mapId;
@@ -997,8 +1046,6 @@ function placeWildcardDie(state, index, context, dieId, mapId) {
       return { success: false, reason: 'UNAFFORDABLE_USAGE_FEE', amount: owedFee.amount };
     }
   }
-
-  grantPioneerBonusIfEarned(state, index, actionContext, mapWasEmptyOfDice, die.kind === 'COLOR');
 
   return { success: true, actionResult };
 }
@@ -1246,17 +1293,64 @@ function playerHasOwnColorDieInMapSlots(state, map, playerId) {
   return player.dice.some((d) => d.kind === 'COLOR' && ownDieIdsInSlots.has(d.id));
 }
 
-/** True if playerId's own JOB is 開拓者/JOB009 (2026-08-17, per user spec: "まだ１個もダイスが置かれてい
- * ないAREAに色ダイスを置いたとき　資源ABCをランダムに１個得る"). Bespoke, no DSL representation -- same
- * class of exception as isColorDieReuseBlocked above, or executor.js's PAYMENT_CHOICE_CON_FACE_ID.
- * Matched by NAME rather than physical id, since JOB ids could in principle get reorganized the same way
- * CON's own physical slots did (2026-08-17 CON-sheet reorg) -- see that incident's own memory. JOB has
- * no A/B tier flip the way CON does, so player.jobCardId is already the live faceId directly, no
- * ownedCardPhysicalIds scan needed. */
+/** True if playerId's own JOB is 開拓者/JOB009. Bespoke, no DSL representation -- same class of exception
+ * as isColorDieReuseBlocked above, or executor.js's PAYMENT_CHOICE_CON_FACE_ID. Matched by NAME rather
+ * than physical id, since JOB ids could in principle get reorganized the same way CON's own physical
+ * slots did (2026-08-17 CON-sheet reorg) -- see that incident's own memory. JOB has no A/B tier flip the
+ * way CON does, so player.jobCardId is already the live faceId directly, no ownedCardPhysicalIds scan
+ * needed. */
 function hasPioneerAbility(state, index, playerId) {
   const player = state.players.find((p) => p.id === playerId);
   if (!player.jobCardId) return false;
   return getCardRow(index, player.jobCardId).NAME === '開拓者';
+}
+
+// 開拓者/JOB009 (2026-08-20, replacing the old "random A/B/C" grant, per user spec): the placed die's
+// own face value determines what's granted. K/VP have no matching free action (never converted); A/B/C/Z
+// each convert 1:1 to K via the same free action a player could otherwise trigger manually (executor.js's
+// FREE_ACTION_DEFS) -- see resolvePioneerGrantForDie's own doc for when that conversion actually fires.
+const PIONEER_RESOURCE_BY_DIE_VALUE = { 1: 'K', 2: 'A', 3: 'B', 4: 'C', 5: 'Z', 6: 'VP' };
+const PIONEER_FREE_ACTION_BY_RESOURCE = { A: 'A_K', B: 'B_K', C: 'C_K', Z: 'Z_K' };
+
+/** Resolves one die's worth of 開拓者's bonus (2026-08-20) -- looks up dieValue's mapped resource
+ * (PIONEER_RESOURCE_BY_DIE_VALUE) and decides whether to grant it raw or auto-convert it to K first,
+ * so the bonus is "immediately usable" for THIS SAME placement (per user spec) rather than just sitting
+ * unused: tries the raw resource first (speculatively, on a throwaway clone) against `wouldHelp` -- if
+ * that alone would make the placement's own AREA action viable (e.g. AREA007's CHANGE((A,B,C),D) missing
+ * exactly this color), grants it raw and stops, matching the user's own confirmed example (a die worth 4
+ * grants C directly, no conversion). Only if the raw form does NOT help does it also try the SAME
+ * resource converted to K via the matching free action (executor.tryFreeAction, the identical 1:1
+ * pay/gain a player could otherwise trigger manually) -- if THAT would help (e.g. 歓楽街's CHANGE(2K,2Z)
+ * needs K, not A), applies the conversion for real. Deliberately calls executor.tryFreeAction directly
+ * rather than routing through any usage-count bookkeeping: confirmed with the user this auto-conversion
+ * is unlimited and must never consume/interact with player.freeActionTaps (that flag, if anything reads
+ * it, is a UI/AI-caller-side convenience only -- tryFreeAction itself has no built-in cap). If neither
+ * form would help, the resource is still granted raw (the die's value always grants *something* per the
+ * table) -- observable only when the overall placement still succeeds for an unrelated reason (a
+ * different AREA whose own action doesn't need this resource at all), since if the WHOLE placement were
+ * about to fail, the caller's own rollback undoes this speculative grant along with everything else. */
+function resolvePioneerGrantForDie(state, index, context, dieValue, wouldHelp) {
+  const rawResource = PIONEER_RESOURCE_BY_DIE_VALUE[dieValue];
+  const freeActionId = PIONEER_FREE_ACTION_BY_RESOURCE[rawResource];
+  if (!freeActionId) {
+    executor.grantResourceAndEmitGet(state, index, context, rawResource, 1);
+    return;
+  }
+  const rawClone = structuredClone(state);
+  executor.grantResourceAndEmitGet(rawClone, index, context, rawResource, 1);
+  if (wouldHelp(rawClone).ok) {
+    executor.grantResourceAndEmitGet(state, index, context, rawResource, 1);
+    return;
+  }
+  const convertedClone = structuredClone(state);
+  executor.grantResourceAndEmitGet(convertedClone, index, context, rawResource, 1);
+  executor.tryFreeAction(convertedClone, index, context.playerId, freeActionId);
+  if (wouldHelp(convertedClone).ok) {
+    executor.grantResourceAndEmitGet(state, index, context, rawResource, 1);
+    executor.tryFreeAction(state, index, context.playerId, freeActionId);
+    return;
+  }
+  executor.grantResourceAndEmitGet(state, index, context, rawResource, 1);
 }
 
 /** True if none of map's slots currently hold any occupant, from any player (2026-08-17, for 開拓者's own
@@ -1294,17 +1388,28 @@ function isMapEmptyOfDice(map) {
  * always read 0 the same way JOB008's IF(...)-based PASSIVE needed its own bespoke job008BonusVp tracking
  * in game-runner.js -- this is the lighter-weight equivalent for an event that fires live during play
  * rather than one recomputable from final state alone. tools/ai_data_report.js's existing
- * `activationCounts[jobFaceId]` fallback picks this up automatically, no changes needed there. */
-function grantPioneerBonusIfEarned(state, index, context, wasEmpty, hasColorDie) {
-  if (!wasEmpty || !hasColorDie) return;
+ * `activationCounts[jobFaceId]` fallback picks this up automatically, no changes needed there.
+ *
+ * colorDieValues (2026-08-20, replacing the old single hasColorDie boolean): every COLOR die's own
+ * face value placed as part of THIS action -- placeDice/placeWildcardDie always pass a 0- or 1-element
+ * array (their own die is either COLOR or it isn't), placeDiceGroup passes one entry per COLOR die in
+ * the group, since the user confirmed each die in a simultaneous group placement grants its own resource
+ * separately (e.g. a 4 and a 5 placed together grant both 1C and 1Z). Still only ONE tap/untap
+ * transition per call regardless of how many values are in the array -- the TAP-alternation gates the
+ * whole grant-or-just-untap decision for this action, not each individual die within it. wouldHelp: see
+ * resolvePioneerGrantForDie's own doc -- a caller-supplied "would this placement's own AREA action
+ * succeed, given a hypothetical resulting state" predicate, reused (never re-derived) per call site. */
+function grantPioneerBonusIfEarned(state, index, context, wasEmpty, colorDieValues, wouldHelp) {
+  if (!wasEmpty || colorDieValues.length === 0) return;
   if (!hasPioneerAbility(state, index, context.playerId)) return;
   const player = state.players.find((p) => p.id === context.playerId);
   const cardInst = state.cards[player.jobCardId];
   if (cardInst.tapped) {
     cardInst.tapped = false;
   } else {
-    const resource = ['A', 'B', 'C'][Math.floor(rngMod.next(state.rng) * 3)];
-    executor.grantResourceAndEmitGet(state, index, context, resource, 1);
+    for (const value of colorDieValues) {
+      resolvePioneerGrantForDie(state, index, context, value, wouldHelp);
+    }
     cardInst.tapped = true;
   }
   executor.notifyActivation(state, context.playerId, player.jobCardId, player.jobCardId, 'PASSIVE');
