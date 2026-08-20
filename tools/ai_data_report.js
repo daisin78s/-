@@ -366,12 +366,16 @@ function main() {
           avgScore: e.count > 0 ? e.scoreSum / e.count : null,
           avgQstScore: e.count > 0 ? e.qstScoreSum / e.count : null,
           avgUsage: usageEligible && e.count > 0 ? e.usageSum / e.count : null,
+          // Per-round average rank (2026-08-20, per user request: "AI.DATA平均順位1R-4Rを追加しました" --
+          // added alongside the overall avgRank below, once the user added matching 平均順位{r}R columns
+          // to the sheet).
+          avgRank: e.count > 0 ? e.rankSum / e.count : null,
         };
         totalCount += e.count;
         totalRankSum += e.rankSum;
       }
-      // Overall (not per-round) average rank -- see this file's own top-of-file doc for why ABCM's
-      // "平均順位" column is a single column, unlike avgScore/avgUsage's per-round ones.
+      // Overall (not per-round) average rank, still kept alongside the per-round ones above -- see this
+      // file's own top-of-file doc for the original single "平均順位" column this feeds.
       abcmOut[id].avgRank = totalCount > 0 ? totalRankSum / totalCount : null;
     }
     // job["JOB001"] = {count, avgUsage, avgScore, avgQstScore, avgRank} -- see jobEntry's own doc.
