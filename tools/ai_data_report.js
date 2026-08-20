@@ -221,9 +221,16 @@ function main() {
   // couldn't distinguish (2026-08-17: JOB008 does call notifyActivation too now, same as JOB009-011, but
   // that only records a firing happened, not how many VP units it granted in one catch-up jump -- see
   // turn-flow.grantBardBonusIfEarned's own doc).
+  // scoreSum/qstScoreSum/rankSum (2026-08-20, per user request) -- a TRUE per-JOB weighted average
+  // (this sum divided by this same count), not the "average of the 12 per-CON averages"
+  // AI.DATA.xlsx's own CONJOB rows 31/51/69 used to compute via a plain =AVERAGE(...) of already-averaged
+  // cells. That unweighted approach silently over-weights a CON+JOB combo with very few trials (high
+  // variance) exactly as much as one with many -- the user's own question ("実際の平均とずれると思います")
+  // confirmed this is a real, not-always-negligible bias. ai_data_write.py now writes this value as a
+  // plain number directly into those rows instead of relying on the sheet's own AVERAGE formula.
   const job = new Map();
   function jobEntry(jobFaceId) {
-    if (!job.has(jobFaceId)) job.set(jobFaceId, { count: 0, usageSum: 0 });
+    if (!job.has(jobFaceId)) job.set(jobFaceId, { count: 0, usageSum: 0, scoreSum: 0, qstScoreSum: 0, rankSum: 0 });
     return job.get(jobFaceId);
   }
   // conVpPenalty["CON003A"] = { count, sum } -- see CON_VP_PENALTY_FACES' own doc. count is how many
@@ -323,6 +330,9 @@ function main() {
       const je = jobEntry(jobFaceId);
       je.count++;
       je.usageSum += usage;
+      je.scoreSum += detail.finalScore - detail.qstScore;
+      je.qstScoreSum += detail.qstScore;
+      je.rankSum += h.rank;
     }
 
     if ((i + 1) % 10 === 0 || i + 1 === n) {
@@ -364,11 +374,19 @@ function main() {
       // "平均順位" column is a single column, unlike avgScore/avgUsage's per-round ones.
       abcmOut[id].avgRank = totalCount > 0 ? totalRankSum / totalCount : null;
     }
-    // job["JOB001"] = {count, avgUsage} -- see jobEntry's own doc. Written into CONJOB row30 (B30:I30) by
-    // ai_data_write.py, one aggregate value per JOB, not per-round.
+    // job["JOB001"] = {count, avgUsage, avgScore, avgQstScore, avgRank} -- see jobEntry's own doc.
+    // avgUsage written into CONJOB row30 (B30:I30); avgScore/avgQstScore/avgRank (2026-08-20) written as
+    // plain values directly into rows 31/51/69, replacing the sheet's own unweighted
+    // =AVERAGE(already-averaged-per-CON-cells) formula there -- see jobEntry's own doc on why.
     const jobOut = {};
     for (const [jobFaceId, e] of job) {
-      jobOut[jobFaceId] = { count: e.count, avgUsage: e.count > 0 ? e.usageSum / e.count : null };
+      jobOut[jobFaceId] = {
+        count: e.count,
+        avgUsage: e.count > 0 ? e.usageSum / e.count : null,
+        avgScore: e.count > 0 ? e.scoreSum / e.count : null,
+        avgQstScore: e.count > 0 ? e.qstScoreSum / e.count : null,
+        avgRank: e.count > 0 ? e.rankSum / e.count : null,
+      };
     }
     // conVpPenalty["CON003A"] = {count, avgVpPenalty} -- see CON_VP_PENALTY_FACES' own doc. Written into
     // CONJOB's own "VPペナルティ平均" column by ai_data_write.py, alongside the existing per-CON marginal

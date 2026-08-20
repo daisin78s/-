@@ -222,6 +222,41 @@ for job_face_id, entry in report.get('job', {}).items():
 
 print(f'CONJOB row {job_usage_row} (JOB使用回数): wrote {job_written} JOBs, skipped {len(job_skipped)}: {job_skipped}')
 
+# Per-JOB TRUE weighted average score / QST平均得点 / 平均順位 (2026-08-20, per user request: "この計算式
+# で出る平均は実際の平均とずれると思います...実際の平均にしてもらうことはできますか") -- replaces the
+# sheet's own unweighted "=AVERAGE(12 already-averaged per-CON cells)" formula at these rows with the real
+# per-JOB weighted value computed in ai_data_report.js's jobEntry (see its own doc for why the unweighted
+# version can be a real, not-always-negligible bias). Each row sits 2 rows below its own table's last CON
+# row (a blank spacer row, then the marginal row) -- the same spacing the user's own sheet already uses
+# for every table here, so found the same dynamic way rather than hardcoded row numbers. Row 32 (JOB's own
+# QST平均得点, ="=B51" etc) and row 33 (JOB's own combined total, "=B31+B32") are left as formulas --
+# writing a correct value into row 51 (and 31) automatically flows through both, no need to touch them.
+job_score_row = max(avg_rows.values()) + 2
+job_qst_score_row = max(qst_avg_rows.values()) + 2
+job_rank_row = max(rank_avg_rows.values()) + 2
+for r in (job_score_row, job_qst_score_row, job_rank_row):
+    for c in range(2, last_job_col + 1):
+        ws.cell(row=r, column=c).value = None
+
+job_avg_written = 0
+job_avg_skipped = []
+for job_face_id, entry in report.get('job', {}).items():
+    job_physical_id = re.sub(r'[A-Z]$', '', job_face_id)
+    job_name = NAME_BY_JOB.get(job_physical_id, job_physical_id)
+    if job_name not in count_cols:
+        job_avg_skipped.append(job_face_id)
+        continue
+    col = count_cols[job_name]
+    if entry.get('avgScore') is not None:
+        ws.cell(row=job_score_row, column=col, value=round(entry['avgScore'], 2))
+    if entry.get('avgQstScore') is not None:
+        ws.cell(row=job_qst_score_row, column=col, value=round(entry['avgQstScore'], 2))
+    if entry.get('avgRank') is not None:
+        ws.cell(row=job_rank_row, column=col, value=round(entry['avgRank'], 2))
+    job_avg_written += 1
+
+print(f'CONJOB rows {job_score_row}/{job_qst_score_row}/{job_rank_row} (JOBの真の加重平均: 平均得点/QST平均得点/平均順位): wrote {job_avg_written} JOBs, skipped {len(job_avg_skipped)}: {job_avg_skipped}')
+
 # ---------------------------------------------------------------------------
 # ABCM sheet
 # ---------------------------------------------------------------------------
