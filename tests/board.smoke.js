@@ -2003,8 +2003,8 @@ function giveJob009(state, playerId) {
   const d2 = giveDie(state, 'P1', 3); // AREA001B SLOT1=ANY -- P1 already has d1 sitting in SLOT2
   const beforeK2 = p1.resources.K;
   board.placeDice(state, index, { playerId: 'P1' }, d2.id, 'MAP001', 0);
-  check('...2nd placement in the same AREA still grants the area\'s own 5K', p1.resources.K - beforeK2, 5);
-  check('...but grants 1VP instead of another 1K, since P1 already had a color die here', p1.resources.VP, 1);
+  check('...2nd placement still grants 5K (area) + 1K (地主, always) = 6', p1.resources.K - beforeK2, 6);
+  check('...and grants 1VP ADDITIONALLY (2026-08-20: changed from "instead of"), since P1 already had a color die here', p1.resources.VP, 1);
 }
 {
   // Base (not-yet-upgraded) tier: no 地主 bonus at all, only the AREA's own ADD(3K).
@@ -2098,8 +2098,9 @@ function giveJob009(state, playerId) {
   check('...the usage fee is now pending, not yet deducted', p1.pendingFee, { mapId: 'MAP001', amount: 2 });
 }
 {
-  // Same setup, but P1 already has a color die sitting in this map -- 地主 grants VP instead of K this
-  // time, so the K shortfall is never bridged and the whole placement (fee included) is refused.
+  // Same setup, but P1 already has a color die sitting in this map -- 地主 STILL grants 1K (unconditional
+  // now, 2026-08-20: changed from "1VP instead of K" to "1VP in addition to K"), which bridges the same
+  // 1K shortfall exactly as the no-prior-die case above, PLUS the extra 1VP on top this time.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   p1.jobCardId = 'JOB011';
@@ -2108,19 +2109,12 @@ function giveJob009(state, playerId) {
   const earlierDie = giveDie(state, 'P1', 5);
   state.maps['MAP001'].slots[2].push({ playerId: 'P1', dieId: earlierDie.id, value: 5, seq: 1, countsForTurnOrder: true }); // SLOT3=EX
   earlierDie.placedMapId = 'MAP001';
-  const beforeK = p1.resources.K;
-  const beforeVp = p1.resources.VP || 0;
   const d1 = giveDie(state, 'P1', 3);
-  const d1Id = d1.id;
-  const result = board.placeDice(state, index, { playerId: 'P1' }, d1Id, 'MAP001', 0);
-  check('地主: with an existing own color die already there, the K shortfall is never bridged -- placement refused', result, { success: false, reason: 'UNAFFORDABLE_USAGE_FEE', amount: 2 });
-  // A full-state rollback (Object.assign(state, snapshot)) replaces state.players/state.cards wholesale
-  // with the snapshot's own (deep-cloned) objects -- re-fetch fresh references afterward rather than
-  // reusing p1/d1 from before the call, which now point at the stale, since-discarded pre-rollback copy.
-  const p1After = player(state, 'P1');
-  check('...everything rolled back cleanly: K unchanged', p1After.resources.K, beforeK);
-  check('...VP unchanged too (the speculative VP grant was undone along with everything else)', p1After.resources.VP || 0, beforeVp);
-  check('...the new die was never actually placed', p1After.dice.find((d) => d.id === d1Id).placedMapId, null);
+  const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
+  check('地主: with an existing own color die already there, the K bonus still bridges the shortfall', result.success, true);
+  check('...2K was spent by CHANGE (3+1-2=2 left, reserved for the pending fee)', p1.resources.K, 2);
+  check('...CHANGE(2K,2VP) granted 2VP, plus 1 more from 地主\'s own bonus (already had a color die here) = 3', p1.resources.VP, 3);
+  check('...the usage fee is now pending, not yet deducted', p1.pendingFee, { mapId: 'MAP001', amount: 2 });
 }
 // No placeDiceGroup test for 地主: group placement only ever succeeds against a monument-buildable
 // candidate (confirmed empirically -- getBuildCandidates(['M'],...) gates it), and the only 2 maps that

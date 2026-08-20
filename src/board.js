@@ -1440,13 +1440,14 @@ function isLandlordEligibleArea(mapCurrentAreaId) {
   return areaPhysicalId !== 'AREA009' && !!tier && tier !== 'A';
 }
 
-/** Grants 地主's bonus if earned by this placement (2026-08-17): 1K normally, or 1VP instead if the
- * player already had one of their own COLOR dice sitting in this map from an earlier placement action
+/** Grants 地主's bonus if earned by this placement: 1K always, PLUS 1VP more (2026-08-20, changed from
+ * "1VP instead" to "1VP in addition to" the K, per user request) if the player already had one of their
+ * own COLOR dice sitting in this map from an earlier placement action
  * (alreadyHadOwnColorDieThere -- captured by the caller via playerHasOwnColorDieInMapSlots *before* this
  * action's own die(s) are committed, same "read before mutation" requirement as grantPioneerBonusIfEarned's
  * own wasEmpty). No hasColorDie gate unlike grantPioneerBonusIfEarned above -- JOB011's own text has no
  * "ｗDでは発動しない" carve-out the way JOB009's did, so a white-die placement triggers this too (only the
- * *pre-existing* die checked for the K-vs-VP branch must be a color one). Called once per placement
+ * *pre-existing* die checked for the bonus-VP branch must be a color one). Called once per placement
  * action (placeDice: once per die; placeDiceGroup: once for the whole group), same convention as
  * grantPioneerBonusIfEarned. Reports through executor.notifyActivation for the same AI.DATA "使用回数"
  * reason documented on grantPioneerBonusIfEarned.
@@ -1462,7 +1463,8 @@ function grantLandlordBonusIfEarned(state, index, context, mapId, alreadyHadOwnC
   if (!hasLandlordAbility(state, index, context.playerId)) return;
   const map = state.maps[mapId];
   if (!isLandlordEligibleArea(map.currentAreaId)) return;
-  executor.grantResourceAndEmitGet(state, index, context, alreadyHadOwnColorDieThere ? 'VP' : 'K', 1);
+  executor.grantResourceAndEmitGet(state, index, context, 'K', 1);
+  if (alreadyHadOwnColorDieThere) executor.grantResourceAndEmitGet(state, index, context, 'VP', 1);
   const player = state.players.find((p) => p.id === context.playerId);
   executor.notifyActivation(state, context.playerId, player.jobCardId, player.jobCardId, 'PASSIVE');
 }
