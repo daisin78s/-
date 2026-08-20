@@ -1551,7 +1551,8 @@ const ACTION_ICON_BUILDERS = {
   'REPLACE_ADD(D,wD)': () => actionRow([actionSuffix('色D'), actionArrow(), actionEmoji('🎲')]),
   // JOB003/道化 (2026-08-19, replacing its old SET_DICE_ANY-based TAP entirely -- see this object's own
   // comment near the removed entries above): all owned dice become ☆, auto-placed by the engine.
-  'WILDCARD_DICE()': () => actionRow([actionEmoji('☆'), actionSuffix('自分のダイスが全て☆になる')]),
+  // Icon updated 2026-08-20 per user spec: "⚡🎲" + "☆ダイス（オールマイティ）".
+  'WILDCARD_DICE()': () => actionRow([actionEmoji('⚡🎲'), actionSuffix('☆ダイス（オールマイティ）')]),
 };
 
 /** Confirmed 2026-07-29: ⤵️ marks a TAP-column effect (tapping it is the cost to trigger it). */
