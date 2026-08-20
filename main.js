@@ -1166,7 +1166,11 @@ function advanceDebugSetupFlow() {
  * where pick ORDER itself is meaningful -- see DEBUG_SETUP_STEPS). QST (2026-08-18) uses
  * buildQstCardVisual instead of buildCardVisual -- a completely different DOM shape/template (.qst-card,
  * not .shop-card) that every other card type doesn't need, so it also gets its own wider column size
- * (260px, vs. the 122px shop-card width every other step shares) rather than squeezing into that. */
+ * (244px, vs. the 122px shop-card width every other step shares) rather than squeezing into that -- the
+ * column width matches .owned-card-cell--qst's own fixed size exactly (2026-08-20 fix, per user report:
+ * before this the column was 260px against a still-122px cell, leaving a large unexplained gap beside
+ * every QST card -- see that CSS class's own doc), same pixel-perfect column-fill every other step's
+ * 122px cell/column pairing already has. */
 function renderDebugSetupOverlay() {
   const overlay = document.getElementById('debug-setup-overlay');
   if (!debugSetupFlow) {
@@ -1179,7 +1183,7 @@ function renderDebugSetupOverlay() {
   const selected = debugSetupFlow.selections[step.key];
   const list = document.getElementById('debug-setup-list');
   list.innerHTML = '';
-  list.style.gridTemplateColumns = step.key === 'qst' ? `repeat(${step.columns}, 260px)` : `repeat(${step.columns}, 122px)`;
+  list.style.gridTemplateColumns = step.key === 'qst' ? `repeat(${step.columns}, 244px)` : `repeat(${step.columns}, 122px)`;
   for (const faceId of step.faceIds()) {
     const cardNode = step.key === 'qst'
       // showRankHeaders:false (2026-08-18, per user report the picker's display was broken) -- this
@@ -1188,7 +1192,16 @@ function renderDebugSetupOverlay() {
       ? buildQstCardVisual(faceId, STATE, { showRankHeaders: false, noInteraction: true })
       : buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true });
     const tall = cardNode.classList.contains('shop-card--tall');
-    const cell = el('div', tall ? 'owned-card-cell owned-card-cell--tall owned-card-cell--selectable' : 'owned-card-cell owned-card-cell--selectable');
+    // QST (2026-08-20, per user report: "カードの大きさをそろえて...不自然に横に広がっている") -- gets
+    // its own fixed-size cell class (.owned-card-cell--qst, matching the 244px grid column this step
+    // already sets above) instead of falling through to the plain 122px default every non-A/B/C step
+    // used, which left QST's own wider card content unconstrained -- see that class's own CSS doc.
+    const cellClass = step.key === 'qst'
+      ? 'owned-card-cell owned-card-cell--qst owned-card-cell--selectable'
+      : tall
+        ? 'owned-card-cell owned-card-cell--tall owned-card-cell--selectable'
+        : 'owned-card-cell owned-card-cell--selectable';
+    const cell = el('div', cellClass);
     const pickIndex = selected.indexOf(faceId);
     if (pickIndex >= 0) {
       cell.classList.add('owned-card-cell--selected');
