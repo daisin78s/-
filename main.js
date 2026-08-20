@@ -1564,8 +1564,18 @@ const ACTION_ICON_BUILDERS = {
   'REPLACE_ADD(D,wD)': () => actionRow([actionSuffix('色D'), actionArrow(), actionEmoji('🎲')]),
   // JOB003/道化 (2026-08-19, replacing its old SET_DICE_ANY-based TAP entirely -- see this object's own
   // comment near the removed entries above): all owned dice become ☆, auto-placed by the engine.
-  // Icon updated 2026-08-20 per user spec: "⚡🎲" + "☆ダイス（オールマイティ）".
-  'WILDCARD_DICE()': () => actionRow([actionEmoji('⚡🎲'), actionSuffix('☆ダイス（オールマイティ）')]),
+  // Icon updated 2026-08-20 per user spec: "☆ダイス" / "（オールマイティ）" on two lines, ☆ at 2x size.
+  // No leading "⚡🎲" here (an earlier version of this icon had one) -- JOB003's own ONCE=ADD(wD) already
+  // renders its own "⚡🎲" row directly above this PASSIVE one (see buildAddWdIcon), so repeating it here
+  // just duplicated the same glyph pair twice in a row, per the user's own follow-up report.
+  'WILDCARD_DICE()': () => {
+    const star = actionEmoji('☆');
+    star.classList.add('action-emoji--large');
+    const stack = el('div', 'action-icons-stack');
+    stack.appendChild(actionRow([star, actionSuffix('ダイス')]));
+    stack.appendChild(actionRow([actionSuffix('（オールマイティ）')]));
+    return stack;
+  },
 };
 
 /** Confirmed 2026-07-29: ⤵️ marks a TAP-column effect (tapping it is the cost to trigger it). */

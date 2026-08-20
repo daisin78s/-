@@ -1000,6 +1000,21 @@ h1, h2, h3 { margin: 0; }
   line-height: 1;
 }
 
+/* JOB003/道化's ☆ (2026-08-20, per user request: "☆が小さいので☆の大きさだけ2倍に") -- an em-relative
+   size would resolve against the parent's font-size, not against whichever contextual .action-emoji
+   override (11px/14px/17px/22px, see those rules above/below) would otherwise apply to this same
+   element, so it can't actually double "however big it would have been here" the way those context rules
+   work. Matches this file's own existing convention for that instead (see .shop-card__name .action-dot's
+   "1.8x of the base" comment): an explicit literal doubling per context, base (14px -> 28px) plus
+   .card-group__jobcon specifically (17px -> 34px) -- the player's own live JOB/CON panel, where this
+   ability is actually seen during play. */
+.action-emoji--large {
+  font-size: 28px;
+}
+.card-group__jobcon .action-emoji--large {
+  font-size: 34px;
+}
+
 .action-dot {
   width: 11px;
   height: 11px;
