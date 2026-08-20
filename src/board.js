@@ -462,8 +462,9 @@ function buildTrailingAdds(commands, buildIndex) {
  * own overflow-conversion chain still silently turns the D into a wD, a real, detectable dice.length
  * change) and let the placement through -- exactly the "spend A/B/C, get a wD instead of the D you came
  * here for" outcome the user wants hidden from the candidate list entirely, not just left to happen
- * silently. The overflow-conversion chain itself (D->wD->2K) is untouched everywhere else (ADD(D)-style
- * grants, e.g. CON001B's ONCE, aren't a placement candidate at all, so they're unaffected).
+ * silently. The overflow-conversion chain itself (D->wD->lost, see executor.grantOneDie's own doc for
+ * its current behavior) is untouched everywhere else (ADD(D)-style grants, e.g. CON001B's ONCE, aren't a
+ * placement candidate at all, so they're unaffected).
  *
  * Counts the player's TOTAL color dice (in hand AND currently placed on any map -- including the very
  * die about to be placed here), not just in-hand ones (2026-08-17 fix, per user report: "憤怒　6個目の

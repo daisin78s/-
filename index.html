@@ -268,7 +268,9 @@
   </div>
 
   <!-- wD上限超過の確認 (2026-08-19, per user request: "上限を超えた🎲はKになります　よろしいですか"、
-       いいえでキャンセル可能) -- see main.js's pendingWhiteOverflowConfirm/wouldCauseWhiteOverflow/
+       いいえでキャンセル可能; text updated 2026-08-20, per user request: the overflow die is now lost
+       rather than converted to K -- see main.js's WHITE_OVERFLOW_WARNING_TEXT / executor.grantOneDie's
+       own doc) -- see main.js's pendingWhiteOverflowConfirm/wouldCauseWhiteOverflow/
        renderWhiteOverflowConfirmModal. Shared by every action that could trip a wD-cap overflow (die
        placement, card build/draft) -- see each commit function's own doc for where this gets set. -->
   <div id="white-overflow-confirm-overlay" class="card-inst-overlay" hidden>
@@ -277,7 +279,7 @@
         <span class="card-inst-modal__title">確認</span>
       </div>
       <div class="card-inst-modal__body">
-        <p class="turn-end-warning__text">上限を超えた🎲はKになります。よろしいですか？</p>
+        <p class="turn-end-warning__text">上限を超えた🎲は失われます。よろしいですか？</p>
       </div>
       <div class="placement-choice-actions">
         <button type="button" id="white-overflow-confirm-no">いいえ</button>

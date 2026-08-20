@@ -139,7 +139,10 @@ function grantOneDie(state, index, player, kind, dieIdFactory) {
     die.value = rollDie(state.rng);
     player.dice.push(die);
   } else {
-    player.resources.K += 1; // lowered from 2K, 2026-08-19, per user request
+    // The overflow die is simply lost -- no resource granted at all (2026-08-20, per user request,
+    // replacing the old "+1K" conversion this branch used to grant, which itself had been lowered from
+    // +2K on 2026-08-19). Applies universally: both CON005B/憤怒's own WHITE_DICE_CAP(0) override and the
+    // plain default cap of 5 every other player has share this exact branch.
     // Recorded for main.js's warning banner (2026-08-11, per user request) -- see
     // GameState.whiteOverflowEvents' own doc. Not read anywhere else in the engine.
     state.whiteOverflowEvents.push(player.id);

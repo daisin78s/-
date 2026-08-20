@@ -634,8 +634,10 @@ let dicePlacementCheckpoint = null; // { state: GameState, turnActionTaken: bool
 // drain of that array, right below this declaration's use site. This is the passive, after-the-fact
 // fallback notice -- still shown for any wD-granting path not explicitly wrapped by
 // pendingWhiteOverflowConfirm below (e.g. a TAP reaction), so an overflow the player had no chance to
-// confirm in advance is still at least explained afterward. Amount lowered from 2K to 1K, 2026-08-19.
-const WHITE_OVERFLOW_WARNING_TEXT = '白ダイスの所有上限は5個です。それを超えたものは1Kに変換されます。';
+// confirm in advance is still at least explained afterward. Was "1Kに変換されます" (itself lowered from
+// 2K, 2026-08-19) until 2026-08-20, per user request: the overflow die is now simply lost, no resource
+// granted at all -- see executor.grantOneDie's own doc.
+const WHITE_OVERFLOW_WARNING_TEXT = '白ダイスの所有上限は5個です。それを超えたものは失われます。';
 // { onConfirm: () => void } | null -- set by placeSelectedDie/placeSelectedDiceGroup/
 // commitBuildCandidate/the JOB-draft pick handler (2026-08-19, per user request: "上限を超えた🎲はKに
 // なります よろしいですか" -- cancelable, unlike the passive WHITE_OVERFLOW_WARNING_TEXT notice above)
@@ -4734,9 +4736,11 @@ function renderConFacesRow(container, player, onPick) {
     // informational, not blocking: 道化のONCE=ADD(wD)はJOB選択時に既に使用済みなので実害はないが、
     // 憤怒のWHITE_DICE_CAP(0)を選ぶと以降道化と組み合わせる旨味がなくなることを知らせる。NAME一致で判定
     // （物理IDの将来的な再編に強くするため、他の同種チェックと同じ方針 -- board.hasPioneerAbility等参照）。
+    // Text updated 2026-08-20, per user request: the wD overflow no longer becomes K -- it's simply lost
+    // now (see executor.grantOneDie's own doc).
     if (dataLoaderMod.getCardRow(INDEX, faceId).NAME === '憤怒' && player.jobCardId
       && dataLoaderMod.getCardRow(INDEX, player.jobCardId).NAME === '道化') {
-      cell.appendChild(el('div', 'onboard-hint__line onboard-hint__line--emphasis', '道化との相性が悪いカードです（wDが常にKになります）'));
+      cell.appendChild(el('div', 'onboard-hint__line onboard-hint__line--emphasis', '道化との相性が悪いカードです（wDが常に失われます）'));
     }
     container.appendChild(cell);
   }
