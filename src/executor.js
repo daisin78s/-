@@ -1099,8 +1099,15 @@ function activeResourceLimits(state, index, playerId) {
   return limits;
 }
 
-/** Pre-check: RESOURCE_TOTAL_LIMIT rules, and an unpaid usage fee (see PlayerState.pendingFee in
- * game-state.js), block TURNEND entirely until satisfied. */
+/** Pre-check: RESOURCE_TOTAL_LIMIT rules, an unpaid usage fee (see PlayerState.pendingFee in
+ * game-state.js), and an unresolved UNTAP_CHOICE (2026-08-20 bug fix, per user report: "農夫を獲得した時
+ * アンタップするカードを選ばなくても進めてしまう...他の操作（ダイス配置など）ができてしまう" -- this
+ * pendingChoice used to gate nothing at all here, so a player could freely end their turn -- and, per
+ * main.js's own matching fix, place dice/use free actions/bare-TAP -- while renderUntapChoice's own panel
+ * sat there unresolved. The AI driver already resolves UNTAP_CHOICE synchronously right after the move
+ * that creates it, before ever calling canEndTurn again -- see game-runner.js's driveTurn -- so this
+ * never actually blocks AI play, only a human player skipping the choice) block TURNEND entirely until
+ * satisfied. */
 function canEndTurn(state, index, playerId) {
   const player = getPlayer(state, playerId);
   const violations = [];
@@ -1114,6 +1121,9 @@ function canEndTurn(state, index, playerId) {
   }
   if (player.pendingFee && (player.resources.K || 0) < player.pendingFee.amount) {
     violations.push({ type: 'USAGE_FEE', ...player.pendingFee });
+  }
+  if (state.pendingChoices.some((c) => c.playerId === playerId && c.kind === 'UNTAP_CHOICE')) {
+    violations.push({ type: 'UNTAP_CHOICE' });
   }
   return { ok: violations.length === 0, violations };
 }

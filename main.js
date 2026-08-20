@@ -3614,13 +3614,19 @@ function advanceTurnIfPossible(state, playerId) {
   const result = turnFlowMod.endTurn(state, INDEX, playerId);
   if (!result.success) {
     // result.violations mixes RESOURCE_TOTAL_LIMIT entries (executor.canEndTurn) with at most one
-    // USAGE_FEE entry (2026-08-04, see PlayerState.pendingFee) -- message picks whichever is actually
+    // USAGE_FEE entry (2026-08-04, see PlayerState.pendingFee) and, since 2026-08-20, at most one
+    // UNTAP_CHOICE entry (see executor.canEndTurn's own doc) -- message picks whichever is actually
     // blocking, favoring the fee (rarer, more specific) since a player who owes a fee wants to be told
-    // that, not a generic "resources over the limit" line that doesn't mention K at all.
+    // that, not a generic "resources over the limit" line that doesn't mention K at all. In practice the
+    // turn-end button is already hidden while UNTAP_CHOICE is pending (see actingHumanPlayerId), so this
+    // branch is defense-in-depth rather than something a player normally sees.
     const feeViolation = result.violations.find((v) => v.type === 'USAGE_FEE');
+    const untapChoiceViolation = result.violations.find((v) => v.type === 'UNTAP_CHOICE');
     placementMessage = feeViolation
       ? `ターンを終了できません（使用料${feeViolation.amount}Kを支払えません。フリーアクションで資源を増やしてください）`
-      : 'ターンを終了できません（資源の合計が上限を超えています。フリーアクションで資源を減らしてください）';
+      : untapChoiceViolation
+        ? 'ターンを終了できません（アンタップするカードを選んでください）'
+        : 'ターンを終了できません（資源の合計が上限を超えています。フリーアクションで資源を減らしてください）';
     pendingTurnEndPlayerId = playerId;
     return;
   }
@@ -4090,6 +4096,13 @@ function actingHumanPlayerId(state, next) {
   if (!next) return null;
   const activePlayer = state.players.find((p) => p.id === next.playerId);
   if (!activePlayer || !hasFinishedOnboarding(activePlayer) || isAiPlayer(next.playerId)) return null;
+  // UNTAP_CHOICE (2026-08-20 bug fix, per user report: "農夫を獲得した時アンタップするカードを選ばなくても
+  // 進めてしまう...他の操作（ダイス配置など）ができてしまう") -- nothing gated pending choices at all
+  // (canEndTurn only ever checked RESOURCE_TOTAL_LIMIT/pendingFee), so a player could freely place dice/
+  // use free actions/end their turn while renderUntapChoice's own panel sat there unresolved. Blocking
+  // here (the one chokepoint every one of those actions is already gated through, see canPlaceDiceFor's
+  // callers) forces the choice to be resolved first, same as an unpayable usage fee already does.
+  if (state.pendingChoices.some((c) => c.playerId === next.playerId && c.kind === 'UNTAP_CHOICE')) return null;
   return next.playerId;
 }
 
@@ -4896,8 +4909,11 @@ function renderPlayerCards(state, next) {
     const isSelf = player.id === activePlayerId;
     // Bare (direct) TAP abilities are usable "any time during your own turn", same gate as
     // renderFreeActionButtons' canAct -- see attachTapToggle. !isAiPlayer (2026-08-03): an AI player's
-    // bare TAP usage is decided by driveOneAiStep (as a BARE_TAP Move), never by clicks.
-    const canUseTap = isSelf && hasFinishedOnboarding(player) && !isAiPlayer(player.id);
+    // bare TAP usage is decided by driveOneAiStep (as a BARE_TAP Move), never by clicks. Pending
+    // UNTAP_CHOICE (2026-08-20, same fix/reasoning as actingHumanPlayerId's own doc) blocks this too --
+    // "other operations" includes bare TAP, not just dice placement.
+    const canUseTap = isSelf && hasFinishedOnboarding(player) && !isAiPlayer(player.id)
+      && !state.pendingChoices.some((c) => c.playerId === player.id && c.kind === 'UNTAP_CHOICE');
     const tpl = document.getElementById('tpl-card-group');
     const node = tpl.content.firstElementChild.cloneNode(true);
     // Whole-group highlight only for the player's real TURN (dice placement), not during JOB/CON

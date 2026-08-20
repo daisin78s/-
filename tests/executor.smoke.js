@@ -1003,6 +1003,26 @@ const UNTAP_CHOICE_3 = { type: 'UNTAP_CHOICE', scope: 'SELF', count: 3 };
   check('...the picked one is untapped', state.cards[omenB].tapped, false);
   check('...the unpicked one stays tapped', state.cards[omenA].tapped, true);
 }
+{
+  // Regression (2026-08-20, per user bug report: "農夫を獲得した時アンタップするカードを選ばなくても進めて
+  // しまう...他の操作（ダイス配置など）ができてしまう") -- canEndTurn used to ignore pendingChoices
+  // entirely, so a player could end their turn (and, per main.js's matching UI fix, place dice/use free
+  // actions/bare-TAP) while an UNTAP_CHOICE sat unresolved. C004A/農夫's own ONCE=UNTAP_CHOICE(SELF,1) is
+  // the exact real-data vehicle from the report.
+  const state = freshState();
+  const ids = ['A001A', 'B001A', 'C001A', 'A002A'].map((faceId) => giveCard(state, faceId, 'P1'));
+  for (const id of ids) state.cards[id].tapped = true; // weight 4 > budget 1 -- forces a real choice
+  check('canEndTurn is fine with no pending choice yet (control)', executor.canEndTurn(state, index, 'P1').ok, true);
+  const c004aRow = getCardRow(index, 'C004A');
+  executor.runProgram(state, index, { playerId: 'P1' }, c004aRow.ONCE);
+  check('農夫\'s ONCE queued a real UNTAP_CHOICE (budget 1 < weight 4)', state.pendingChoices.some((c) => c.kind === 'UNTAP_CHOICE'), true);
+  const gate = executor.canEndTurn(state, index, 'P1');
+  check('canEndTurn now blocks TURNEND while the choice is unresolved', gate.ok, false);
+  check('...citing an UNTAP_CHOICE violation', gate.violations.some((v) => v.type === 'UNTAP_CHOICE'), true);
+  const resolved = executor.resolveUntapChoice(state, 'P1', [ids[0]]); // weight 1, within budget
+  check('Resolving the choice succeeds', resolved.success, true);
+  check('canEndTurn allows TURNEND again once resolved', executor.canEndTurn(state, index, 'P1').ok, true);
+}
 
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);
