@@ -780,13 +780,14 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   check('blockedBuildCategoriesThisTurn is cleared at TURNEND', getPlayerRef(state, 'P1').blockedBuildCategoriesThisTurn, []);
 }
 {
+  // 2026-08-20: JOB004/策士's own TAP dropped its BLOCK_BUILD(M,THIS_TURN) clause (per user edit), so
+  // this real-data vehicle moved to JOB007/宮廷人, whose TAP still carries BLOCK_BUILD (now A/B/C, not M).
   const state = freshState();
-  const row = getCardRow(index, 'JOB004');
+  const row = getCardRow(index, 'JOB007');
   const player = getPlayerRef(state, 'P1');
-  player.resources.K = 3;
   const result = executor.runProgram(state, index, { playerId: 'P1' }, row.TAP);
-  check('JOB004\'s TAP (CHANGE(3K,2BZ);BLOCK_BUILD(M,THIS_TURN)) succeeds and pays/grants correctly', { success: result.success, K: player.resources.K, BZ: player.resources.BZ }, { success: true, K: 0, BZ: 2 });
-  check('...and blocks M for this player this turn', player.blockedBuildCategoriesThisTurn, ['M']);
+  check('JOB007\'s TAP (ADD(BZ);MONUMENT_DICE_DISCOUNT(2,THIS_TURN);BLOCK_BUILD(A/B/C,THIS_TURN)) succeeds and grants BZ', { success: result.success, BZ: player.resources.BZ }, { success: true, BZ: 1 });
+  check('...and blocks A,B,C for this player this turn', player.blockedBuildCategoriesThisTurn, ['A', 'B', 'C']);
 }
 
 // ---------------------------------------------------------------------------

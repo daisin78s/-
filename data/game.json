@@ -1575,12 +1575,12 @@
       "EMBLEM_C": "",
       "VP": "",
       "ONCE": "",
-      "TAP": "CHANGE(3K,2BZ);BLOCK_BUILD(M,THIS_TURN)",
+      "TAP": "CHANGE(3K,2BZ)",
       "PASSIVE": "",
       "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "TAPした時、3食料を消費して2資源軽減を得る\nこのターンモニュメントを建築できない\n毎ターンアンタップする"
+      "INST": "TAPした時、3食料を消費して2資源軽減を得る\n毎ターンアンタップする"
     },
     {
       "ID": "JOB005",
