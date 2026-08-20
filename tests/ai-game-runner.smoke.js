@@ -11,7 +11,13 @@
 const path = require('path');
 const { loadGameData, buildDataIndex } = require('../src/data-loader');
 const { buildEvalTable } = require('../src/ai/eval-table');
-const { playGame } = require('../src/ai/game-runner');
+const { playGame, driveTurn } = require('../src/ai/game-runner');
+const { createEmptyGameState, createDie, createCardInstance } = require('../src/game-state');
+const setup = require('../src/setup');
+const { Evaluator } = require('../src/ai/evaluator');
+const { MoveGenerator } = require('../src/ai/move-generator');
+const { Simulator } = require('../src/ai/simulator');
+const { AIPlayer } = require('../src/ai/ai-player');
 
 const raw = loadGameData(path.join(__dirname, '..', 'data', 'game.json'));
 const index = buildDataIndex(raw);
@@ -120,6 +126,49 @@ check('A full game reaches GAME_END, not stuck at MAX_ITERATIONS', state1.phase,
   // mixed-construction path specifically).
   const { state } = playGame('ai-integration-smoke-level-mix', PLAYER_NAMES, index, evalTable, undefined, undefined, undefined, { P1: 'LV1', P2: 'LV2', P3: 'LV3', P4: 'LV1' });
   check('A mixed-level game (LV1/LV2/LV3 in one game) also reaches GAME_END', state.phase, 'GAME_END');
+}
+
+// ---------------------------------------------------------------------------
+// Regression (2026-08-20, per user bug report: "AIが道化を選んだ時 ラウンド1の1ターン目ですべてのダイス
+//4個をいきなり使ってスタートしました") -- PLACE_WILDCARD_DIE (JOB003/道化's own die-placement move) was
+// missing from every "did this move count as placing a die this turn" check in game-runner.js/
+// ai-player.js/main.js, so a ☆-owning AI kept seeing hasPlacedDieThisTurn:false forever and placed every
+// remaining die in one single driveTurn call instead of stopping after the first, exactly the reported
+// symptom. driveTurn itself (game-runner.js's own copy of this tracking) is exercised directly here
+// against a minimal hand-built state, rather than relying on a full game happening to draft JOB003.
+// ---------------------------------------------------------------------------
+{
+  function freshWildcardState() {
+    const state = createEmptyGameState('ai-wildcard-one-die-per-turn');
+    setup.createPlayers(state, ['Alice', 'Bob']);
+    setup.prepareMaps(state, index);
+    setup.prepareShops(state, index);
+    const p1 = state.players.find((p) => p.id === 'P1');
+    p1.jobCardId = 'JOB003';
+    const jobInst = createCardInstance('JOB003');
+    jobInst.ownerId = 'P1';
+    state.cards[jobInst.physicalId] = jobInst;
+    p1.ownedCardPhysicalIds.push(jobInst.physicalId);
+    p1.resources = { K: 50, A: 50, B: 50, C: 50, Z: 50, BZ: 50, VP: 0 };
+    p1.dice = [1, 2, 3, 4].map((v, i) => {
+      const die = createDie(`test-wildcard-turn-${i}`, 'COLOR');
+      die.value = v;
+      return die;
+    });
+    return state;
+  }
+  const evaluator = new Evaluator(index, evalTable);
+  const moveGenerator = new MoveGenerator();
+  const simulator = new Simulator();
+  const aiPlayer = new AIPlayer(index, moveGenerator, evaluator, simulator);
+
+  const state = freshWildcardState();
+  const moves = driveTurn(state, index, 'P1', aiPlayer, false);
+  const placedDiceCount = state.players.find((p) => p.id === 'P1').dice.filter((d) => d.placedMapId !== null).length;
+  check('A ☆-owning (JOB003) AI places exactly 1 die per driveTurn call, not all 4 at once', placedDiceCount, 1);
+  const placementMoves = moves.filter((m) => m.move.type === 'PLACE_DIE' || m.move.type === 'PLACE_WILDCARD_DIE');
+  check('...and driveTurn\'s own move log shows exactly 1 placement move', placementMoves.length, 1);
+  check('...specifically a PLACE_WILDCARD_DIE (JOB003\'s own move type)', placementMoves[0].move.type, 'PLACE_WILDCARD_DIE');
 }
 
 console.log(`\n${passCount} passed, ${failCount} failed`);

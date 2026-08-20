@@ -138,7 +138,9 @@ class AIPlayer {
    * maxRolloutMoves are passed in explicitly (2026-08-10, not read from `this`) since selectMove now
    * resolves them per-round via #effectiveOptions -- see roundOverrides' own doc. */
   #rolloutScore(state, playerId, firstMove, lookaheadExtraTurns, maxRolloutMoves) {
-    let hasPlacedDieThisTurn = firstMove.type === 'PLACE_DIE' || firstMove.type === 'PASS_DIE';
+    // JOB003/道化 (2026-08-20 fix, per user bug report -- see game-runner.js driveTurn's matching comment
+    // for the full story): PLACE_WILDCARD_DIE counts as "placed a die this turn" too, both here and below.
+    let hasPlacedDieThisTurn = firstMove.type === 'PLACE_DIE' || firstMove.type === 'PLACE_WILDCARD_DIE' || firstMove.type === 'PASS_DIE';
     let turnsLeft = lookaheadExtraTurns;
     let steps = 0;
     while (steps < maxRolloutMoves) {
@@ -148,7 +150,7 @@ class AIPlayer {
       const { state: nextState, result } = this.simulator.apply(state, this.index, move);
       if (!result.success) break; // defensive, same as selectMove's own loop
       state = nextState;
-      if (move.type === 'PLACE_DIE' || move.type === 'PASS_DIE') hasPlacedDieThisTurn = true;
+      if (move.type === 'PLACE_DIE' || move.type === 'PLACE_WILDCARD_DIE' || move.type === 'PASS_DIE') hasPlacedDieThisTurn = true;
       if (move.type === 'END_TURN') {
         if (turnsLeft <= 0) break; // rollout horizon reached right at a turn boundary
         turnsLeft--;

@@ -531,7 +531,15 @@ function driveOneAiStepInner(state) {
     lastEndedAiTurnPlayerId = ctx.playerId;
   } else {
     aiOpenTurnPlayerId = ctx.playerId;
-    aiOpenTurnHasPlacedDie = ctx.hasPlacedDieThisTurn || ((move.type === 'PLACE_DIE' || move.type === 'PASS_DIE') && result.success);
+    // JOB003/道化 (2026-08-20 fix, per user bug report: "AIが道化を選んだ時...すべてのダイス4個をいきな
+    // り使ってスタートしました") -- PLACE_WILDCARD_DIE is JOB003's own die-placement move type (see
+    // move-generator.js's #wildcardPlaceDieMoves) and counts as "placed a die this turn" exactly like
+    // PLACE_DIE does; omitting it here left this flag permanently false for a ☆-owning AI, so every
+    // later call back into this function kept seeing hasPlacedDieThisTurn:false and let it place another
+    // die immediately, round after round, no END_TURN in between (same root cause fixed in
+    // src/ai/game-runner.js's driveTurn/ai-player.js's #rolloutScore -- this is main.js's own separate
+    // copy of the same tracking, used when a human is actually watching the AI play live).
+    aiOpenTurnHasPlacedDie = ctx.hasPlacedDieThisTurn || ((move.type === 'PLACE_DIE' || move.type === 'PLACE_WILDCARD_DIE' || move.type === 'PASS_DIE') && result.success);
   }
   return true;
 }
@@ -586,7 +594,10 @@ function pumpAiDelayed() {
     const ctx = resolveAiTurnContext(STATE);
     if (ctx && ctx.type === 'TURN') {
       const move = aiPlayerFor(ctx.playerId).selectMove(STATE, ctx.playerId, { hasPlacedDieThisTurn: ctx.hasPlacedDieThisTurn });
-      if (move && (move.type === 'PLACE_DIE' || move.type === 'PASS_DIE')) {
+      // PLACE_WILDCARD_DIE (2026-08-20) included alongside PLACE_DIE -- see aiOpenTurnHasPlacedDie's own
+      // comment above for the main bug; this one is cosmetic only (which die glows before "1手ずつ"
+      // places it), but the same move type was missing here too.
+      if (move && (move.type === 'PLACE_DIE' || move.type === 'PLACE_WILDCARD_DIE' || move.type === 'PASS_DIE')) {
         aiPreHighlightMove = { playerId: ctx.playerId, dieId: move.dieId };
         render(STATE);
       }

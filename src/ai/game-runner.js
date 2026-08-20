@@ -119,7 +119,12 @@ function driveTurn(state, index, playerId, aiPlayer, initialHasPlacedDieThisTurn
       }
       executor.resolveUntapChoice(state, playerId, picked);
     }
-    if (move.type === 'PLACE_DIE' || move.type === 'PASS_DIE') hasPlacedDieThisTurn = true;
+    // JOB003/道化 (2026-08-20 fix, per user bug report: "AIが道化を選んだ時...すべてのダイス4個をいきな
+    // り使ってスタートしました"): PLACE_WILDCARD_DIE is JOB003's own die-placement move (see
+    // move-generator.js's #wildcardPlaceDieMoves), just as much "placed a die this turn" as a plain
+    // PLACE_DIE -- omitting it here left hasPlacedDieThisTurn permanently false for a ☆-owning AI, so
+    // MoveGenerator kept offering (and this loop kept taking) more placements in the same turn.
+    if (move.type === 'PLACE_DIE' || move.type === 'PLACE_WILDCARD_DIE' || move.type === 'PASS_DIE') hasPlacedDieThisTurn = true;
     if (move.type === 'END_TURN') break;
   }
   return movesTaken;
@@ -298,7 +303,9 @@ function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorO
       openTurnPlayerId = null;
     } else {
       openTurnPlayerId = next.playerId;
-      openTurnHasPlacedDie = initialHasPlacedDie || moves.some((m) => (m.move.type === 'PLACE_DIE' || m.move.type === 'PASS_DIE') && m.result.success);
+      // See driveTurn's own PLACE_WILDCARD_DIE comment above -- same fix, needed here too since this is
+      // a SEPARATE recomputation of the same "did this still-open turn place a die" fact.
+      openTurnHasPlacedDie = initialHasPlacedDie || moves.some((m) => (m.move.type === 'PLACE_DIE' || m.move.type === 'PLACE_WILDCARD_DIE' || m.move.type === 'PASS_DIE') && m.result.success);
     }
     // Re-checks every round-1 turn for this player (not just their first) until a build is actually
     // found -- a player typically gets *several* separate turns during round 1 (one per die, per
