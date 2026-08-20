@@ -301,7 +301,10 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
   // out illegal for some unrelated reason (prediction.ok===false below), this speculative grant is
   // rolled back along with everything else -- it must never survive a refused placement.
   const landlordEligible = hasLandlordAbility(state, index, context.playerId) && isLandlordEligibleArea(map.currentAreaId);
-  const pioneerEligible = hasPioneerAbility(state, index, context.playerId) && mapWasEmptyOfDice && die.kind === 'COLOR';
+  // 開拓者 now triggers off ANY die kind (2026-08-20, per user spec update: "開拓とはまだダイスが１個も
+  // 置かれていないAREAにダイスを配置すること" -- dropping the earlier "色ダイスを配置すること" wording,
+  // so wD now qualifies too, unlike landlordEligible just above which stays color-die-specific).
+  const pioneerEligible = hasPioneerAbility(state, index, context.playerId) && mapWasEmptyOfDice;
   const preJobBonusSnapshot = (landlordEligible || pioneerEligible) ? structuredClone(state) : null;
   if (landlordEligible) grantLandlordBonusIfEarned(state, index, actionContext, mapId, hadOwnColorDieThereAlready);
   if (pioneerEligible) {
@@ -828,15 +831,16 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   // just below -- unlike 地主 (deliberately kept post-commit further down, see its own comment there),
   // 開拓者's grant genuinely needs to land early: placeDiceGroup has no separate wouldAreaActionHaveEffect
   // call the way placeDice/placeWildcardDie do, so groupBuildWouldBeAffordable (below) IS the only gate a
-  // group placement goes through, and a grant landing after it could never actually help. Every COLOR die
-  // in the group grants its own resource separately (confirmed with the user: a 4 and a 5 placed together
-  // grant both 1C and 1Z) -- still only one tap/untap transition for the whole action, since
+  // group placement goes through, and a grant landing after it could never actually help. Every die in the
+  // group grants its own resource separately (confirmed with the user: a 4 and a 5 placed together grant
+  // both 1C and 1Z; 2026-08-20: now including wD, not just COLOR dice, per the trigger's own
+  // "ダイスを配置すること" wording) -- still only one tap/untap transition for the whole action, since
   // grantPioneerBonusIfEarned's own loop runs every value inside a single grant-branch pass.
-  const pioneerEligible = hasPioneerAbility(state, index, playerId) && mapWasEmptyOfDice && dice.some((d) => d.kind === 'COLOR');
+  const pioneerEligible = hasPioneerAbility(state, index, playerId) && mapWasEmptyOfDice;
   const preJobBonusSnapshot = pioneerEligible ? structuredClone(state) : null;
   if (pioneerEligible) {
-    const colorDieValues = dice.filter((d) => d.kind === 'COLOR').map((d) => d.value);
-    grantPioneerBonusIfEarned(state, index, actionContext, mapWasEmptyOfDice, colorDieValues,
+    const dieValues = dice.map((d) => d.value);
+    grantPioneerBonusIfEarned(state, index, actionContext, mapWasEmptyOfDice, dieValues,
       (candidateState) => groupBuildWouldBeAffordable(candidateState, index, actionContext, playerId, areaTrailingAdds, predictedBuildValue, newValues, existingSumTotal, player.monumentDiceDiscountThisTurn));
   }
 
@@ -999,7 +1003,10 @@ function placeWildcardDie(state, index, context, dieId, mapId) {
   // fee check, rolled back below if the placement turns out illegal for some unrelated reason. Never
   // both eligible at once (a player holds only one JOB), so one shared snapshot variable covers either.
   const landlordEligible = hasLandlordAbility(state, index, context.playerId) && isLandlordEligibleArea(map.currentAreaId);
-  const pioneerEligible = hasPioneerAbility(state, index, context.playerId) && mapWasEmptyOfDice && die.kind === 'COLOR';
+  // pioneerEligible in practice is always false here (a player can't hold both JOB003's ☆ ability and
+  // JOB009 at once), kept only for symmetry with placeDice -- see that function's own comment for why
+  // this no longer restricts to die.kind === 'COLOR' (2026-08-20 spec update, wD now qualifies too).
+  const pioneerEligible = hasPioneerAbility(state, index, context.playerId) && mapWasEmptyOfDice;
   const preJobBonusSnapshot = (landlordEligible || pioneerEligible) ? structuredClone(state) : null;
   if (landlordEligible) grantLandlordBonusIfEarned(state, index, actionContext, mapId, hadOwnColorDieThereAlready);
   if (pioneerEligible) {
@@ -1390,24 +1397,26 @@ function isMapEmptyOfDice(map) {
  * rather than one recomputable from final state alone. tools/ai_data_report.js's existing
  * `activationCounts[jobFaceId]` fallback picks this up automatically, no changes needed there.
  *
- * colorDieValues (2026-08-20, replacing the old single hasColorDie boolean): every COLOR die's own
- * face value placed as part of THIS action -- placeDice/placeWildcardDie always pass a 0- or 1-element
- * array (their own die is either COLOR or it isn't), placeDiceGroup passes one entry per COLOR die in
- * the group, since the user confirmed each die in a simultaneous group placement grants its own resource
- * separately (e.g. a 4 and a 5 placed together grant both 1C and 1Z). Still only ONE tap/untap
- * transition per call regardless of how many values are in the array -- the TAP-alternation gates the
- * whole grant-or-just-untap decision for this action, not each individual die within it. wouldHelp: see
- * resolvePioneerGrantForDie's own doc -- a caller-supplied "would this placement's own AREA action
- * succeed, given a hypothetical resulting state" predicate, reused (never re-derived) per call site. */
-function grantPioneerBonusIfEarned(state, index, context, wasEmpty, colorDieValues, wouldHelp) {
-  if (!wasEmpty || colorDieValues.length === 0) return;
+ * dieValues (2026-08-20, replacing the old single hasColorDie boolean; renamed from colorDieValues
+ * 2026-08-20 when the trigger's own wording dropped "色ダイス" for plain "ダイス", so wD now qualifies
+ * too): every die's own face value placed as part of THIS action, COLOR or WHITE alike --
+ * placeDice/placeWildcardDie always pass a 0- or 1-element array (their own single die), placeDiceGroup
+ * passes one entry per die in the group, since the user confirmed each die in a simultaneous group
+ * placement grants its own resource separately (e.g. a 4 and a 5 placed together grant both 1C and 1Z).
+ * Still only ONE tap/untap transition per call regardless of how many values are in the array -- the
+ * TAP-alternation gates the whole grant-or-just-untap decision for this action, not each individual die
+ * within it. wouldHelp: see resolvePioneerGrantForDie's own doc -- a caller-supplied "would this
+ * placement's own AREA action succeed, given a hypothetical resulting state" predicate, reused (never
+ * re-derived) per call site. */
+function grantPioneerBonusIfEarned(state, index, context, wasEmpty, dieValues, wouldHelp) {
+  if (!wasEmpty || dieValues.length === 0) return;
   if (!hasPioneerAbility(state, index, context.playerId)) return;
   const player = state.players.find((p) => p.id === context.playerId);
   const cardInst = state.cards[player.jobCardId];
   if (cardInst.tapped) {
     cardInst.tapped = false;
   } else {
-    for (const value of colorDieValues) {
+    for (const value of dieValues) {
       resolvePioneerGrantForDie(state, index, context, value, wouldHelp);
     }
     cardInst.tapped = true;

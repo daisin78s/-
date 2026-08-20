@@ -1694,10 +1694,12 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
 // wouldn't make the placement viable but converting it to K via the matching free action (A_K/B_K/C_K/
 // Z_K, same 1:1 rate a player could otherwise trigger manually) would, that conversion is applied
 // automatically -- see resolvePioneerGrantForDie's own doc. Everything else about the trigger condition
-// is unchanged: whole-AREA/any-player "nobody has placed here yet this round" basis, does NOT trigger for
-// wD, TAP-alternation (grants on one qualifying trigger, just untaps on the next), and -- confirmed with
-// the user -- a placeDiceGroup action grants ONCE PER COLOR DIE in the group (not once for the whole
-// action), still only one tap/untap transition regardless.
+// is unchanged: whole-AREA/any-player "nobody has placed here yet this round" basis, TAP-alternation
+// (grants on one qualifying trigger, just untaps on the next), and -- confirmed with the user -- a
+// placeDiceGroup action grants ONCE PER DIE in the group (not once for the whole action), still only one
+// tap/untap transition regardless. 2026-08-20 follow-up: the trigger's own wording dropped "色ダイスを
+// 配置すること" for plain "ダイスを配置すること" ("wDでもOKになります") -- wD now qualifies too, both
+// for the trigger itself and for its own per-die grant in a group placement (previously excluded).
 // ---------------------------------------------------------------------------
 function giveJob009(state, playerId) {
   const p = player(state, playerId);
@@ -1748,6 +1750,8 @@ function giveJob009(state, playerId) {
   check('開拓者: a 2nd placement on the same (no longer empty) AREA does not trigger again', p1.resources.K - beforeK2, 3);
 }
 {
+  // 2026-08-20 spec update: the trigger's own wording dropped "色ダイスを配置すること" for plain "ダイス
+  // を配置すること" ("wDでもOKになります") -- a wD placement on a fresh AREA now triggers the bonus too.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   giveJob009(state, 'P1');
@@ -1756,7 +1760,7 @@ function giveJob009(state, playerId) {
   p1.dice.push(wDie);
   const beforeK = p1.resources.K || 0;
   board.placeDice(state, index, { playerId: 'P1' }, wDie.id, 'MAP001', 0);
-  check('開拓者: a white die (wD) on a fresh AREA does not trigger the bonus', p1.resources.K - beforeK, 3);
+  check('開拓者: a white die (wD) on a fresh AREA now DOES trigger the bonus (3 AREA + 1 pioneer)', p1.resources.K - beforeK, 4);
 }
 {
   const state = freshStateWithShops();
@@ -1831,7 +1835,8 @@ function giveJob009(state, playerId) {
   check('...only ONE tap transition for the whole group action', jobInst.tapped, true);
 }
 {
-  // A wD mixed into a group placement contributes nothing of its own -- only the COLOR die(s) grant.
+  // 2026-08-20 spec update: a wD mixed into a group placement now grants its own resource too, same as
+  // any COLOR die in the group -- one entry per die regardless of kind.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   giveJob009(state, 'P1');
@@ -1846,8 +1851,8 @@ function giveJob009(state, playerId) {
   const beforeC = p1.resources.C || 0;
   const beforeVp = p1.resources.VP || 0;
   const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [wDie.id, d1.id], board.CASTLE_MAP_ID);
-  check('開拓者: wD in a group placement contributes nothing on its own', result.success, true);
-  check('...only the COLOR die (value 4) grants C; the wD (value 6) grants no VP', [p1.resources.C - beforeC, p1.resources.VP - beforeVp], [1, 0]);
+  check('開拓者: wD in a group placement now DOES grant its own resource too', result.success, true);
+  check('...the COLOR die (value 4) grants C AND the wD (value 6) grants VP', [p1.resources.C - beforeC, p1.resources.VP - beforeVp], [1, 1]);
 }
 {
   // The same die-value mapping applies via placeWildcardDie too (JOB003's ☆ mechanic) -- a synthetic
