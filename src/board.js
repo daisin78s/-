@@ -587,13 +587,24 @@ function slotAcceptsValue(map, mapId, playerId, requirement, occupants, value, b
  * caller-supplied substitution for a ☆ occupant (isWildcard, see hasWildcardDice's own doc): 1 when the
  * caller is evaluating an A/B/C candidate's DICE_MIN/MAX range, 6 when evaluating a monument's
  * DICE>=threshold (2026-08-19, per user spec: "ABCカード獲得時☆はダイス目1として扱う...モニュメント
- * 獲得時☆はダイス目6として扱う"). excludedFromBuildValue occupants contribute 0 regardless -- set only
- * on a ☆ die that had to fall back to stacking under an already-full row alone, outside a deliberate
- * simultaneous placeDiceGroup (2026-08-19, per user spec: solo forced-fallback stacking must NOT
- * silently combine with whatever die already happened to be there to inflate a monument threshold; only
- * a deliberate multi-die group placement sums together) -- see placeWildcardDie's own doc. */
+ * 獲得時☆はダイス目6として扱う").
+ *
+ * Deliberately does NOT look at excludedFromBuildValue -- that flag only ever suppresses a die's OWN
+ * contribution to the SAME placement action that just forced it into a full row (see placeWildcardDie's
+ * own ternary, applied separately at each call site below, never inside this function). Once an occupant
+ * is actually sitting in a slot, it contributes normally to every LATER placement's own buildValue
+ * computation, excluded-at-birth or not (2026-08-20 fix, per user bug report: without this, a slot that
+ * ever received one forced-fallback occupant became permanently stuck contributing 0 to every category
+ * for the rest of the round -- e.g. two separate solo ☆ placements, both forced onto the same already-
+ * full row because 元老院 was still full both times, left BOTH occupants excluded and buildValue at 0
+ * even though a real, non-excluded die was sitting right there the whole time -- ABC AND every monument
+ * both became unreachable, only UPGRADE (buildValue-independent) still showed). This matches how a REAL
+ * die's own multi-turn castle-investment pattern already works (placeDice's predictedBuildValueForPlacement
+ * always sums the FULL existing occupancy, not just this turn's increment) -- a repeatedly-forced ☆ die
+ * accumulating value the same way, across several separate placements, is the wildcard equivalent of that
+ * same legitimate pattern, not a new exploit; only ONE single placement's own forced landing is ever
+ * zeroed for ITS OWN check. */
 function occupantBuildContribution(occupant, wildcardValue) {
-  if (occupant.excludedFromBuildValue) return 0;
   return occupant.isWildcard ? wildcardValue : occupant.value;
 }
 

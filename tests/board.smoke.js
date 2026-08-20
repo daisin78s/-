@@ -2099,6 +2099,38 @@ function withWildcardOwner(state) {
   check('...M001 (DICE>=12) IS reachable via the deliberate group placement', result.actionResult.pendingBuild.candidates.some((c) => c.faceId === 'M001'), true);
 }
 {
+  // Regression (2026-08-20, per user bug report at 元老院): excludedFromBuildValue must NOT cascade --
+  // it only ever suppresses a die's OWN contribution to the SAME placement that forced it, never a
+  // LATER placement's read of that same occupant. Without this fix, two separate solo ☆ placements
+  // forced onto the same already-full row (e.g. 元老院 already occupied by another player) left BOTH
+  // occupants permanently contributing 0, so ABC AND every monument became unreachable from that slot
+  // for the rest of the round -- only UPGRADE (buildValue-independent) still showed.
+  const state = freshStateWithShops();
+  withWildcardOwner(state);
+  player(state, 'P1').resources.BZ = 20;
+  // Every non-EX slot at 元老院 (AREA009A, 6 ANY) already occupied by another player -- P1's own ☆ dice
+  // will have nowhere to go but a forced fallback onto SLOT1, twice in a row.
+  for (let i = 0; i < 6; i++) {
+    state.maps['MAP009'].slots[i].push({ playerId: 'P2', dieId: `p2-${i}`, value: (i % 6) + 1, seq: i + 1, countsForTurnOrder: true });
+  }
+
+  const d1 = giveDie(state, 'P1', 2);
+  const r1 = board.placeWildcardDie(state, index, { playerId: 'P1' }, d1.id, board.AREA009_MAP_ID);
+  check('Alice\'s 1st ☆, forced onto the already-full row, still succeeds', r1.success, true);
+  check('...that occupant is excludedFromBuildValue (its own placement)', state.maps[board.AREA009_MAP_ID].slots[0][1].excludedFromBuildValue, true);
+  const firstCandidates = r1.actionResult.pendingBuild.candidates;
+  check('...but ABC IS still offered here (existing real die\'s value=1 still counts)', firstCandidates.some((c) => c.faceId && c.faceId[0] !== 'M'), true);
+
+  const d2 = giveDie(state, 'P1', 4);
+  const r2 = board.placeWildcardDie(state, index, { playerId: 'P1' }, d2.id, board.AREA009_MAP_ID);
+  check('Alice\'s 2nd ☆, forced onto the SAME slot again, still succeeds', r2.success, true);
+  check('...pendingBuild exists (buildValue did NOT collapse to 0)', !!r2.actionResult.pendingBuild, true);
+  const secondCandidates = r2.actionResult.pendingBuild ? r2.actionResult.pendingBuild.candidates : [];
+  check('...ABC is STILL offered on the 2nd forced placement, not silently gone', secondCandidates.some((c) => c.faceId && c.faceId[0] !== 'M'), true);
+  check('...and at least one monument is offered too', secondCandidates.some((c) => c.faceId && c.faceId[0] === 'M'), true);
+  check('...the 1st ☆ occupant\'s own excludedFromBuildValue is untouched (still true) -- only how it\'s READ changed', state.maps[board.AREA009_MAP_ID].slots[0][1].excludedFromBuildValue, true);
+}
+{
   // A ☆ die can never target another player's EX slot, even as a forced fallback -- it stacks under the
   // leftmost non-EX slot instead, leaving the EX slot empty.
   const state = freshStateWithShops();
