@@ -355,6 +355,12 @@ function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorO
   const rankings = scoring.rankPlayers(state, index);
   const scoreByPlayerId = {};
   for (const r of rankings) scoreByPlayerId[r.playerId] = r.score;
+  // Final placement (1-4), same winner-first/turn-order-tie-break ordering rankPlayers itself defines --
+  // not re-derived, just read back as this player's own position in that already-sorted array (2026-08-20,
+  // for tools/ai_data_report.js's new "平均順位" metric; same rank-from-index pattern
+  // tools/ai_level_comparison.js already uses for its own avgRank).
+  const rankByPlayerId = {};
+  rankings.forEach((r, i) => { rankByPlayerId[r.playerId] = i + 1; });
   // VP actually gained from QST's rank-based rewards, per player (2026-08-09, see turn-flow.js's own
   // comment on where this gets set -- always populated by now, since this function only reaches here
   // once state.phase is GAME_END, which is exactly when endRound sets it). Exposed alongside finalScore
@@ -373,6 +379,7 @@ function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorO
       firstRound1BuildFaceId: firstRound1BuildFaceId[player.id] || 'NONE',
       round1DDiceGained: (round1ColorDiceAfter[player.id] || 0) - round1ColorDiceBefore[player.id],
       finalScore: scoreByPlayerId[player.id],
+      rank: rankByPlayerId[player.id],
     };
     // Which round each fee-generating A-card was built in (see AREA_CARD_BY_MAP's own doc) -- the same
     // buildsByRound this function already tracks for the ABCM sheet's own 試行回数/平均得点 columns, just
@@ -398,6 +405,7 @@ function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorO
       job008BonusVp,
       finalScore: scoreByPlayerId[player.id],
       qstScore: qstScoreByPlayerId[player.id] || 0,
+      rank: rankByPlayerId[player.id],
     };
   }
 

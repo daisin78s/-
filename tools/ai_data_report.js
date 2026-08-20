@@ -14,6 +14,22 @@
  * value everywhere avgScore appears (both sheets) -- see game-runner.js's roundDetailByPlayerId.qstScore
  * for where the split itself comes from.
  *
+ * Average rank (2026-08-20, per user request: "これを参考に平均順位を書き出すようにしてほしい") -- a
+ * third parallel value, "avgRank", alongside avgScore/avgQstScore in both sheets: the average final
+ * placement (1-4) of the player-games behind that row, using the exact same winner-first/turn-order-
+ * tie-break ranking rule the real in-game UI's own standings panel and GAME_END screen use (see
+ * game-runner.js's historyByPlayerId.rank, sourced from scoring.rankPlayers -- not a new tie-break rule).
+ *
+ * Requires re-running games -- rank was never captured by any previously-collected
+ * output/ai_data_report.json or output/ai_match_history.tsv, so this metric only appears from this
+ * change onward.
+ *
+ * ABCM's own AI.DATA.xlsx "平均順位" column (unlike its 平均得点/QST平均得点 columns) is a SINGLE column,
+ * not one per round 1R-4R -- confirmed against the user's own pre-added sheet layout. abcmOut[id] carries
+ * this as a sibling `avgRank` key alongside the per-round `1`/`2`/`3`/`4` keys: the overall average rank
+ * across every round that card was ever built in, not broken out per round the way avgScore/avgUsage are.
+ *
+
  * Writes one JSON file (default output/ai_data_report.json) that tools/ai_data_write.py then loads and
  * writes into AI.DATA.xlsx's existing cell layout -- kept as two steps (Node aggregates, Python writes
  * xlsx) since this project has no xlsx-writing library in Node, only openpyxl in Python (same split
@@ -170,23 +186,26 @@ function main() {
   const index = buildDataIndex(raw);
   const evalTable = buildEvalTable(raw);
 
-  // conjob["CON001A\tJOB001"] = { count, scoreSum, qstScoreSum }. scoreSum (2026-08-09, per user
+  // conjob["CON001A\tJOB001"] = { count, scoreSum, qstScoreSum, rankSum }. scoreSum (2026-08-09, per user
   // request: "AIDATA 平均得点は QSTカードなしの今までの得点で平均を出してください") now excludes QST's
   // rank-based reward VP -- i.e. it's finalScore minus qstScore, matching the metric's original,
   // pre-QST-auto-reward meaning -- while qstScoreSum tracks QST's own contribution separately, for the
-  // new "QST平均得点" table (see writeReport's avgQstScore below).
+  // new "QST平均得点" table (see writeReport's avgQstScore below). rankSum (2026-08-20, per user request:
+  // "これを参考に平均順位を書き出すようにしてほしい") sums each player-game's final placement (1-4, from
+  // game-runner.js's historyByPlayerId.rank -- see that field's own doc for the ranking rule reused, same
+  // one the real in-game UI's own standings/GAME_END screens use) for the new "平均順位" table.
   const conjob = new Map();
-  // abcm["A001A"][1] = { count, scoreSum, qstScoreSum, usageSum } -- 1-4 for rounds, plus the "D" row
-  // for colored-die gains. usageSum (2026-08-07) only ever gets added to for isUsageEligible ids -- see
-  // that function's own doc. scoreSum/qstScoreSum split the same way as conjob's own, above.
+  // abcm["A001A"][1] = { count, scoreSum, qstScoreSum, usageSum, rankSum } -- 1-4 for rounds, plus the "D"
+  // row for colored-die gains. usageSum (2026-08-07) only ever gets added to for isUsageEligible ids --
+  // see that function's own doc. scoreSum/qstScoreSum/rankSum split the same way as conjob's own, above.
   const abcm = new Map();
   function abcmEntry(id, round) {
     if (!abcm.has(id)) {
       abcm.set(id, {
-        1: { count: 0, scoreSum: 0, qstScoreSum: 0, usageSum: 0 },
-        2: { count: 0, scoreSum: 0, qstScoreSum: 0, usageSum: 0 },
-        3: { count: 0, scoreSum: 0, qstScoreSum: 0, usageSum: 0 },
-        4: { count: 0, scoreSum: 0, qstScoreSum: 0, usageSum: 0 },
+        1: { count: 0, scoreSum: 0, qstScoreSum: 0, usageSum: 0, rankSum: 0 },
+        2: { count: 0, scoreSum: 0, qstScoreSum: 0, usageSum: 0, rankSum: 0 },
+        3: { count: 0, scoreSum: 0, qstScoreSum: 0, usageSum: 0, rankSum: 0 },
+        4: { count: 0, scoreSum: 0, qstScoreSum: 0, usageSum: 0, rankSum: 0 },
       });
     }
     return abcm.get(id)[round];
@@ -243,11 +262,12 @@ function main() {
       const h = historyByPlayerId[playerId];
       const detail = roundDetailByPlayerId[playerId];
       const key = `${h.conFaceId}\t${h.jobFaceId}`;
-      if (!conjob.has(key)) conjob.set(key, { con: h.conFaceId, job: h.jobFaceId, count: 0, scoreSum: 0, qstScoreSum: 0 });
+      if (!conjob.has(key)) conjob.set(key, { con: h.conFaceId, job: h.jobFaceId, count: 0, scoreSum: 0, qstScoreSum: 0, rankSum: 0 });
       const entry = conjob.get(key);
       entry.count++;
       entry.scoreSum += detail.finalScore - detail.qstScore;
       entry.qstScoreSum += detail.qstScore;
+      entry.rankSum += h.rank;
 
       if (CON_VP_PENALTY_FACES.has(h.conFaceId)) {
         const vpEntry = conVpPenaltyEntry(h.conFaceId);
@@ -261,6 +281,7 @@ function main() {
           e.count++;
           e.scoreSum += detail.finalScore - detail.qstScore;
           e.qstScoreSum += detail.qstScore;
+          e.rankSum += h.rank;
           // "使用回数" (2026-08-07, per user spec) -- see isUsageEligible's own doc; exactly one of
           // these four branches can ever apply to a given faceId (B008A / B008B / an A-deck fee card /
           // a TAP-bearing B or C face are mutually exclusive sets).
@@ -291,6 +312,7 @@ function main() {
           e.count++;
           e.scoreSum += detail.finalScore - detail.qstScore;
           e.qstScoreSum += detail.qstScore;
+          e.rankSum += h.rank;
         }
       }
 
@@ -320,11 +342,13 @@ function main() {
   writeReport(n);
 
   function writeReport(gamesRun) {
-    const conjobOut = [...conjob.values()].map((e) => ({ con: e.con, job: e.job, count: e.count, avgScore: e.scoreSum / e.count, avgQstScore: e.qstScoreSum / e.count }));
+    const conjobOut = [...conjob.values()].map((e) => ({ con: e.con, job: e.job, count: e.count, avgScore: e.scoreSum / e.count, avgQstScore: e.qstScoreSum / e.count, avgRank: e.rankSum / e.count }));
     const abcmOut = {};
     for (const [id, byRound] of abcm) {
       abcmOut[id] = {};
       const usageEligible = isUsageEligible(index, id);
+      let totalCount = 0;
+      let totalRankSum = 0;
       for (const round of [1, 2, 3, 4]) {
         const e = byRound[round];
         abcmOut[id][round] = {
@@ -333,7 +357,12 @@ function main() {
           avgQstScore: e.count > 0 ? e.qstScoreSum / e.count : null,
           avgUsage: usageEligible && e.count > 0 ? e.usageSum / e.count : null,
         };
+        totalCount += e.count;
+        totalRankSum += e.rankSum;
       }
+      // Overall (not per-round) average rank -- see this file's own top-of-file doc for why ABCM's
+      // "平均順位" column is a single column, unlike avgScore/avgUsage's per-round ones.
+      abcmOut[id].avgRank = totalCount > 0 ? totalRankSum / totalCount : null;
     }
     // job["JOB001"] = {count, avgUsage} -- see jobEntry's own doc. Written into CONJOB row30 (B30:I30) by
     // ai_data_write.py, one aggregate value per JOB, not per-round.

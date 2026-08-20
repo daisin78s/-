@@ -5,9 +5,10 @@ layout/formatting itself.
 
 CONJOB sheet: two pairs of 8x9 tables sharing the same layout (CON001A/002A/003A/004A/001B/002B/003B/
 004B rows x JOB001..JOB008 columns) -- "試行回数" (trial count), "平均得点" (average score, QST VP
-excluded -- see report['conjob'][].avgScore's own doc in ai_data_report.js), and (2026-08-09, per user
+excluded -- see report['conjob'][].avgScore's own doc in ai_data_report.js), (2026-08-09, per user
 request) "QST平均得点" (QST's own average VP contribution, same row/col layout, a separate table further
-down the sheet -- report['conjob'][].avgQstScore). The JOB column headers have no tier suffix (JOB cards
+down the sheet -- report['conjob'][].avgQstScore), and (2026-08-20, per user request) "平均順位" (average
+final placement 1-4, same row/col layout again -- report['conjob'][].avgRank). The JOB column headers have no tier suffix (JOB cards
 only ever have an 'A' face -- see game-state.js's splitCardId), so a jobFaceId like "JOB005A" is matched
 by stripping the trailing letter. A fifth, single-row table (2026-08-07, per user spec) lives at row 30
 ("使用回数" in column A, JOB001..JOB008 in B:I, the user's own pre-existing layout -- found by
@@ -15,7 +16,9 @@ inspection, same as the tables above): one aggregate "usage" value per JOB (not 
 report['job']'s own meaning, set by tools/ai_data_report.js's jobEntry doc.
 
 ABCM sheet: one table, ID column (every A/B/C tier-A and tier-B face, M001-M012, plus "D" for "gained a
-new colored die") x 試行回数1R-4R / 平均得点1R-4R / QST平均得点1R-4R / 使用回数1-4 columns. Column
+new colored die") x 試行回数1R-4R / 平均得点1R-4R / QST平均得点1R-4R / 使用回数1-4 / 平均順位 columns
+(2026-08-20: 平均順位 is a SINGLE column, not per-round like the others -- the overall average final
+placement across every round that card was built in, see report['abcm'][id].avgRank). Column
 positions are looked up by their own header text (find_col, below), not hardcoded -- the exact same
 "never desync from the sheet's actual current layout" reasoning as CONJOB's find_table/find_header_row
 (2026-08-09: this sheet's columns were reshuffled to interleave the new QST平均得点{r}R columns between
@@ -98,6 +101,10 @@ avg_rows, avg_cols = find_table(avg_header_row)
 # QST平均得点 (2026-08-09, per user request) -- a third table, same row/col layout as the two above,
 # further down the sheet (the user's own pre-existing addition, found the same dynamic way).
 qst_avg_rows, qst_avg_cols = find_table(find_header_row('QST平均得点'))
+# 平均順位 (2026-08-20, per user request: "これを参考に平均順位を書き出すようにしてほしい") -- a fourth
+# table, same CON row / JOB column layout as the three above (no extra K/N-style columns, unlike 平均得点's
+# own VPペナルティ平均 -- confirmed by inspection), also the user's own pre-existing addition.
+rank_avg_rows, rank_avg_cols = find_table(find_header_row('平均順位'))
 
 def find_col_in_row(row, label):
     """Same idea as find_col (below, ABCM sheet) but for a given CONJOB header row rather than always
@@ -117,7 +124,7 @@ def find_col_in_row(row, label):
 # hand-maintained reference notes (each CON face's own ONCE-effect DSL + INST description text, e.g. row
 # 16 = CON001A's "ADD(6K)" / "資源◯の上限7個..."), unrelated to anything this script computes or writes.
 last_job_col = max(count_cols.values())
-for row_map in (count_rows, avg_rows, qst_avg_rows):
+for row_map in (count_rows, avg_rows, qst_avg_rows, rank_avg_rows):
     for r in row_map.values():
         for c in range(2, last_job_col + 1):
             ws.cell(row=r, column=c).value = None
@@ -135,6 +142,7 @@ for entry in report['conjob']:
     ws.cell(row=count_rows[con_name], column=count_cols[job_name], value=entry['count'])
     ws.cell(row=avg_rows[con_name], column=avg_cols[job_name], value=round(entry['avgScore'], 2))
     ws.cell(row=qst_avg_rows[con_name], column=qst_avg_cols[job_name], value=round(entry['avgQstScore'], 2))
+    ws.cell(row=rank_avg_rows[con_name], column=rank_avg_cols[job_name], value=round(entry['avgRank'], 2))
     written += 1
 
 print(f'CONJOB: wrote {written} combinations, skipped {len(skipped)}: {skipped}')
@@ -237,21 +245,27 @@ COUNT_COLS = {r: find_col(f'試行回数{r}R') for r in (1, 2, 3, 4)}
 AVG_COLS = {r: find_col(f'平均得点{r}R') for r in (1, 2, 3, 4)}
 QST_AVG_COLS = {r: find_col(f'QST平均得点{r}R') for r in (1, 2, 3, 4)}
 USAGE_COLS = {r: find_col(f'使用回数{r}') for r in (1, 2, 3, 4)}
+# 平均順位 (2026-08-20, per user request) -- unlike the per-round columns above, this is a SINGLE column
+# (confirmed by inspection of the user's own pre-added layout): the overall average rank across every
+# round that card was ever built in, not broken out per round -- see tools/ai_data_report.js's own doc on
+# why abcmOut[id].avgRank is a sibling of the per-round `1`/`2`/`3`/`4` keys rather than inside them.
+RANK_AVG_COL = find_col('平均順位')
 
 # Same clear-before-write as the CONJOB sheet above, same reason.
 for r in id_rows.values():
-    for c in list(COUNT_COLS.values()) + list(AVG_COLS.values()) + list(QST_AVG_COLS.values()) + list(USAGE_COLS.values()):
+    for c in list(COUNT_COLS.values()) + list(AVG_COLS.values()) + list(QST_AVG_COLS.values()) + list(USAGE_COLS.values()) + [RANK_AVG_COL]:
         ws2.cell(row=r, column=c).value = None
 
 abcm_written = 0
 abcm_skipped = []
-for card_id, by_round in report['abcm'].items():
+for card_id, entry in report['abcm'].items():
     card_name = NAME_BY_CARD_FACE.get(card_id, card_id)  # 'D' has no card NAME, passes through unchanged
     if card_name not in id_rows:
         abcm_skipped.append(card_id)
         continue
     row = id_rows[card_name]
-    for round_str, cell in by_round.items():
+    for round_str in ('1', '2', '3', '4'):  # skip the sibling 'avgRank' key -- handled separately below
+        cell = entry[round_str]
         round_num = int(round_str)
         ws2.cell(row=row, column=COUNT_COLS[round_num], value=cell['count'])
         if cell['avgScore'] is not None:
@@ -260,6 +274,8 @@ for card_id, by_round in report['abcm'].items():
             ws2.cell(row=row, column=QST_AVG_COLS[round_num], value=round(cell['avgQstScore'], 2))
         if cell.get('avgUsage') is not None:
             ws2.cell(row=row, column=USAGE_COLS[round_num], value=round(cell['avgUsage'], 2))
+    if entry.get('avgRank') is not None:
+        ws2.cell(row=row, column=RANK_AVG_COL, value=round(entry['avgRank'], 2))
     abcm_written += 1
 
 print(f'ABCM: wrote {abcm_written} card rows, skipped {len(abcm_skipped)}: {abcm_skipped}')

@@ -51,15 +51,17 @@ check('A full game reaches GAME_END, not stuck at MAX_ITERATIONS', state1.phase,
 }
 
 // ---------------------------------------------------------------------------
-// historyByPlayerId has exactly the 5 fields the user specified (2026-08-01: "IDでCON JOB 1R目に建築
-// したはじめのカード 1R目に手に入れた色D 最終得点"), one entry per player, well-formed values.
+// historyByPlayerId has exactly the 6 fields the user specified (2026-08-01: "IDでCON JOB 1R目に建築
+// したはじめのカード 1R目に手に入れた色D 最終得点"; rank added 2026-08-20 for tools/ai_data_report.js's
+// new "平均順位" metric), one entry per player, well-formed values.
 // ---------------------------------------------------------------------------
 {
   const playerIds = Object.keys(history1);
   check('One history entry per player', playerIds.sort(), ['P1', 'P2', 'P3', 'P4']);
+  const ranks = [];
   for (const playerId of playerIds) {
     const h = history1[playerId];
-    check(`${playerId}: history has exactly the 5 specified fields`, Object.keys(h).sort(), ['conFaceId', 'finalScore', 'firstRound1BuildFaceId', 'jobFaceId', 'round1DDiceGained'].sort());
+    check(`${playerId}: history has exactly the 6 specified fields`, Object.keys(h).sort(), ['conFaceId', 'finalScore', 'firstRound1BuildFaceId', 'jobFaceId', 'rank', 'round1DDiceGained'].sort());
     assertTrue(`${playerId}: conFaceId looks like a CON face ID`, /^CON\d+[AB]$/.test(h.conFaceId));
     // JOB ids dropped their trailing tier letter (2026-08-0X) -- unlike CON/firstRound1BuildFaceId
     // below (still real A/B-tiered decks), a JOB id is now always bare, e.g. "JOB005".
@@ -71,7 +73,11 @@ check('A full game reaches GAME_END, not stuck at MAX_ITERATIONS', state1.phase,
     assertTrue(`${playerId}: firstRound1BuildFaceId is NONE or a card face ID`, h.firstRound1BuildFaceId === 'NONE' || /^[A-Z]+\d+[AB]?$/.test(h.firstRound1BuildFaceId));
     assertTrue(`${playerId}: round1DDiceGained is a non-negative integer`, Number.isInteger(h.round1DDiceGained) && h.round1DDiceGained >= 0);
     assertTrue(`${playerId}: finalScore is a finite number`, Number.isFinite(h.finalScore));
+    assertTrue(`${playerId}: rank is an integer 1-4`, Number.isInteger(h.rank) && h.rank >= 1 && h.rank <= 4);
+    check(`${playerId}: roundDetailByPlayerId.rank matches history.rank`, roundDetail1[playerId].rank, h.rank);
+    ranks.push(h.rank);
   }
+  check('The 4 players\' ranks are exactly 1,2,3,4 (no ties -- turn-order tie-break always resolves them)', ranks.sort(), [1, 2, 3, 4]);
 }
 
 // ---------------------------------------------------------------------------
