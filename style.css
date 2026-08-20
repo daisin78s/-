@@ -1195,16 +1195,26 @@ h1, h2, h3 { margin: 0; }
 
 /* JOB003/道化's ☆ wildcard dice (2026-08-19) -- layered on top of the base .die--{color}/.die--WHITE
    class the same way .die--passed/.die--selected are (never replaces it), so the die still reads as
-   "belongs to this player" while also showing it's wildcard. A gold ring + star-glyph feel, distinct
-   from the plain --accent blue used for selection/placement-preview elsewhere. */
+   "belongs to this player" while also showing it's wildcard. A gold ring marks it as special; the star
+   glyph's own fill color is fixed (not theme-aware, not the gold ring color) so it always has strong
+   contrast against its background regardless of which player color it sits on. 2026-08-20 fix, per user
+   report: an earlier version colored the star the same gold as the ring, which on the ORANGE player's
+   own color die was nearly the same hue as the background -- "内側と外側が同じ色で見にくい". Now: white
+   fill on a COLOR die (any of the 4 player colors, all fully-saturated -- matches the base .die's own
+   default white digit color, see .die above), black fill on a WHITE (wD) die (its own background is a
+   light near-white -- see .die--WHITE -- so black is the one color guaranteed to read clearly there). */
 .die--wildcard {
   outline: 1.5px solid #e0a721;
   outline-offset: 1px;
   box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.15), 0 0 4px 1px rgba(224, 167, 33, 0.6);
 }
 .die--wildcard .die__value {
-  color: #e0a721;
-  text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+  color: #fff;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.6);
+}
+.die--wildcard.die--WHITE .die__value {
+  color: #000;
+  text-shadow: none;
 }
 
 /* ---------------------------------------------------------------------- */
