@@ -4592,6 +4592,18 @@ function attachTapToggle(cardNode, cardState, faceId, canAct, physicalId) {
         buildColorPreference = {};
         pendingBzOutcomeChoice = null;
         placementMessage = '';
+      } else if (
+        // 傲慢/CON004A (2026-08-21, per user report: 革命の兆しLV2のBUILD(U)がNO_BUILDABLE_CARDという
+        // 生の理由コードだけを表示していて分かりにくかった -- die-placement's own build-choice-modal
+        // already shows a friendly warning for this (isUpgradeBlockedByQstRank, see its own doc), but
+        // this direct-TAP path never checked it at all. categories.includes('U') scopes this to TAP
+        // fields that actually requested an upgrade (e.g. not B005A/B006A's BUILD((A,B,C,M),n)), so a
+        // genuinely-unrelated NO_BUILDABLE_CARD (no affordable A/B/C/M candidate) still shows the plain
+        // message.
+        result.reason === 'NO_BUILDABLE_CARD' && result.categories && result.categories.includes('U')
+        && boardMod.isUpgradeBlockedByQstRank(STATE, INDEX, cardState.ownerId)
+      ) {
+        placementMessage = '傲慢の効果でLVアップできません';
       } else {
         placementMessage = `カードを使用できません（${result.reason}）`;
       }
