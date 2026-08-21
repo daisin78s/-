@@ -914,7 +914,7 @@ function handleDebugRoundForward() { jumpToAdjacentRound(1); }
 // stepping through a BUILD/TAP/free-action/PLACE_DIE/END_TURN one at a time, not turn-at-a-time; (3)
 // purely read-only when browsing -- replayCursor never touches the live STATE object at all, it's
 // rendered straight from replayHistory's own snapshots by renderReplayFrame (a stripped-down parallel to
-// render() that reuses the same renderHeader/renderShops/renderBoard/renderPlayers/renderJobPool/
+// render() that reuses the same renderShops/renderBoard/renderPlayers/renderJobPool/
 // renderPlayerCards building blocks, but skips every side-effecting/live-only piece of render() itself --
 // AI pumping, checkpoint recording, turnActionTaken/lastTurnPlayerId bookkeeping, all the *-choice modals
 // -- and neutralizes whatever interactivity those shared builders still attach via the
@@ -1018,7 +1018,6 @@ function renderReplayFrame() {
     const next = snapshot.round >= 1 ? turnFlowMod.getNextTurn(snapshot) : null;
     document.getElementById('app').classList.add('replay-locked');
     document.getElementById('game-end-overlay').hidden = true;
-    renderHeader(snapshot);
     renderShops(snapshot);
     renderBoard(snapshot, next);
     renderPlayers(snapshot, next);
@@ -2356,10 +2355,6 @@ function renderCostBadges(container, costString, faceId) {
   }
 }
 
-function renderHeader(state) {
-  document.getElementById('round-num').textContent = state.round;
-}
-
 function renderShops(state) {
   renderShopGrid(state);
   renderQsts(state);
@@ -3175,10 +3170,11 @@ function standingsRows(state) {
  * rather than content-sized, so a longer name or a 2-digit score can never move the dividing lines). */
 function buildStandingsPanelNode(state) {
   const panel = el('div', 'standings-panel');
-  // Round indicator (2026-08-13, per user request: standings panel gets its own "ラウンド {n}/4" line,
-  // same text as the header's #round-indicator -- see renderHeader) so the round is visible right next
-  // to the ranking without having to look elsewhere. Spans both columns, sitting above the 2x2 player
-  // cells (see the matching grid-template-rows change in style.css).
+  // Round indicator (2026-08-13, per user request: standings panel gets its own "ラウンド {n}/4" line)
+  // so the round is visible right next to the ranking without having to look elsewhere -- the
+  // player-cards header's own #round-indicator this originally matched was removed 2026-08-21, per user
+  // request, leaving this as the only ラウンド display left. Spans both columns, sitting above the 2x2
+  // player cells (see the matching grid-template-rows change in style.css).
   panel.appendChild(el('div', 'standings-panel__round', `ラウンド ${state.round}/4`));
   for (const row of standingsRows(state)) {
     const cell = el('div', 'standings-panel__cell');
@@ -3390,10 +3386,13 @@ function renderBoard(state, next) {
         slotsEl.appendChild(slotEl);
       });
 
-      // Castle-only: current round's turn order above the slots, recomputed next-round order below
-      // (see computeNextCastleTurnOrder -- it reacts to whatever's currently placed on the castle).
+      // Castle-only: next round's recomputed turn order below the slots (see computeNextCastleTurnOrder
+      // -- it reacts to whatever's currently placed on the castle). The current round's own turn order
+      // ("現在" + its 4 player icons) used to show above the slots too -- removed 2026-08-21 per user
+      // request; .map-tile__turnorder--current is left unpopulated (and therefore collapsed via
+      // .map-tile__turnorder:empty, same as it already was on every non-castle tile) rather than
+      // deleted from the template, so nothing else needs to change.
       if (isCastle) {
-        fillTurnOrderRow(node.querySelector('.map-tile__turnorder--current'), '現在', state.turnOrder, state);
         fillTurnOrderRow(node.querySelector('.map-tile__turnorder--next'), '次', computeNextCastleTurnOrder(state), state);
       }
 
@@ -5482,7 +5481,6 @@ function render(state) {
   } else {
     lastTurnPlayerId = null;
   }
-  renderHeader(state);
   renderShops(state);
   renderBoard(state, next);
   renderPlayers(state, next);
