@@ -1132,9 +1132,12 @@ h1, h2, h3 { margin: 0; }
 
 /* Confirmed 2026-07-30: the 42px board-slot size is too wide for a card's narrow TAP/effect row (e.g.
    B001A's SET_DIE_VALUE(SELF2|3) icon wrapped onto two lines instead of staying on one) -- scoped
-   down within .action-icons rows specifically, leaving the board-slot usage untouched. */
+   down within .action-icons rows specifically, leaving the board-slot usage untouched. Bumped 1.6x
+   (22px -> 35px, 2026-08-21, per user request covering both B001A/B002A's SET_DIE_VALUE icon and
+   B005A/B006A's own die-value row) -- same reasoning as before, this stays scoped to .action-icons
+   rows only, not the base 42px board-slot glyph. */
 .action-icons .die-face {
-  font-size: 22px;
+  font-size: 35px;
 }
 
 /* 2026-08-0X (replaces the old header "tier A"/"tier B" text badge, per user request): a compact

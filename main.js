@@ -1565,27 +1565,28 @@ const ACTION_ICON_BUILDERS = {
   // reactive/direct TAP abilities), so "毎ターン" (plain text) reads more clearly there than the ⤴️
   // glyph alone did.
   'UNTAP()': () => actionRow([actionSuffix('毎ターン')]),
-  // B005A/B006A/B007A (始まりの兆し/終わりの兆し/革命の兆し, 2026-08-21, per user spec: "⤵〇→🔨 / ダイス目
-  // ⚀"、"⤵〇→🔨 / ダイス目⚅"、"⤵〇→🔨U" -- ⤵ is buildEffectRow's own auto TAP-cost prefix, not repeated
-  // here; 〇 is the bare K-cost dot, no count shown, since the DSL's own PAY(K) has no explicit number
-  // either. The hammer itself is ⚒️, not the user's own literal 🔨 -- per their follow-up, matched to
-  // 王宮(AREA008)'s own BUILD() icon (buildBuildIcon's actionEmoji('⚒️')) for visual consistency; 🔨 was
-  // only what their PC could render while typing the spec, not the intended glyph). One-off exact-match
-  // entries rather than generalizing buildBuildIcon, same reasoning as before (PAY(...) prefixes aren't
-  // a handled shape there -- see board.resolveProgramOrBuild's own doc on why the TAP text isn't just
-  // "BUILD(...)" alone). B005A/B006A get a 2nd row spelling out the required die value via dieFace
-  // (already sized up for legibility, see .die-face in style.css) -- B007A/UPGRADE has no die-value
-  // threshold, so it stays a single row ending in "U".
+  // B005A/B006A/B007A (始まりの兆し/終わりの兆し/革命の兆し, 2026-08-21, per user spec: "⤵〇→🔨 / ⚀"、
+  // "⤵〇→🔨 / ⚅"、"⤵〇→🔨U" -- ⤵ is buildEffectRow's own auto TAP-cost prefix, not repeated here; 〇 is
+  // the bare K-cost dot, no count shown, since the DSL's own PAY(K) has no explicit number either. The
+  // hammer itself is ⚒️, not the user's own literal 🔨 -- per their follow-up, matched to 王宮(AREA008)'s
+  // own BUILD() icon (buildBuildIcon's actionEmoji('⚒️')) for visual consistency; 🔨 was only what their
+  // PC could render while typing the spec, not the intended glyph. "ダイス目" label text removed per a
+  // later follow-up -- the bare dieFace glyph alone (now 1.6x larger, see .action-icons .die-face in
+  // style.css) is enough on its own). One-off exact-match entries rather than generalizing buildBuildIcon,
+  // same reasoning as before (PAY(...) prefixes aren't a handled shape there -- see board.
+  // resolveProgramOrBuild's own doc on why the TAP text isn't just "BUILD(...)" alone). B005A/B006A get a
+  // 2nd row for the required die value -- B007A/UPGRADE has no die-value threshold, so it stays a single
+  // row ending in "U".
   'PAY(K);BUILD((A,B,C,M),1)': () => {
     const stack = el('div', 'action-icons-stack');
     stack.appendChild(actionRow([actionDot('K'), actionArrow(), actionEmoji('⚒️')]));
-    stack.appendChild(actionRow([actionSuffix('ダイス目'), dieFace(1)]));
+    stack.appendChild(actionRow([dieFace(1)]));
     return stack;
   },
   'PAY(K);BUILD((A,B,C,M),6)': () => {
     const stack = el('div', 'action-icons-stack');
     stack.appendChild(actionRow([actionDot('K'), actionArrow(), actionEmoji('⚒️')]));
-    stack.appendChild(actionRow([actionSuffix('ダイス目'), dieFace(6)]));
+    stack.appendChild(actionRow([dieFace(6)]));
     return stack;
   },
   'PAY(K);BUILD(U)': () => actionRow([actionDot('K'), actionArrow(), actionEmoji('⚒️'), actionSuffix('U')]),
