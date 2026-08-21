@@ -683,6 +683,16 @@ h1, h2, h3 { margin: 0; }
   color: var(--text);
 }
 
+/* Monuments (2026-08-21, per user request: "VPと⚅の間が空いているため少し詰めてその分縦幅を短くできます
+   か") -- margin-top:auto above bottom-anchors VP (+req/start-order after it) by absorbing whatever
+   spare height .shop-card's own box has beyond its actual content, which for a monument (no ONCE/TAP/
+   PASSIVE effect row at all) leaves a lot of spare height to absorb. Canceling it for monuments lets the
+   card shrink to fit its real content instead, closing the gap and the card's own height together. A/B/C
+   cards keep the auto push -- untouched, not what was reported. */
+.shop-card--monument .shop-card__vp {
+  margin-top: 0;
+}
+
 /* Restored 2026-07-29: monuments' req is intrinsic to the card (each monument has its own dice-value
    threshold), so it renders inside the card again -- unlike normal/special cards, whose req is a
    slot property shown in .shop-slot__req instead (buildCardVisual only fills this in when passed). */
