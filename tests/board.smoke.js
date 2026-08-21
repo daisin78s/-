@@ -179,7 +179,10 @@ function giveDie(state, playerId, value) {
   // slot had been empty. Reaching M004 (DICE>=9) now requires a genuine same-turn placeDiceGroup instead.
   check('...buildValue is just this 2nd die\'s own value (5), NOT summed with the 1st (no more multi-turn stacking)', second.actionResult.pendingBuild.buildValue, 5);
   check('...M004 (DICE>=9) is still NOT reachable -- these were 2 separate placements, not 1 combined action', second.actionResult.pendingBuild.candidates.some((c) => c.faceId === 'M004'), false);
-  check('Both dice are still recorded as occupants of the same castle slot', state.maps['MAP008'].slots[0].map((o) => o.value), [5, 5]);
+  // 2026-08-21, per user request ("GRANT_PLACE_ANYWHEREや☆の強制フォールバックのみです")：joining an
+  // occupied slot now EVICTS the earlier occupant instead of stacking onto it.
+  check('...die1 was EVICTED -- only die2 (the new occupant) sits in the slot now', state.maps['MAP008'].slots[0].map((o) => o.dieId), [die2.id]);
+  check('...die1\'s own placedMapId is untouched, so it still returns to hand normally at round end', die1.placedMapId, 'MAP008');
 }
 {
   // 2026-08-07, per user report: using JOB003 (SET_DICE_ANY + GRANT_PLACE_ANYWHERE) to set a die to a
@@ -202,7 +205,8 @@ function giveDie(state, playerId, value) {
 
   const rightSlot = board.placeDice(state, index, { playerId: 'P1' }, die2.id, 'MAP008', 0); // slot0, the matching one
   check('...but placing it onto the SAME slot as the matching value still succeeds', rightSlot.success, true);
-  check('Both dice ended up stacked on slot0, not spread across two slots', state.maps['MAP008'].slots[0].map((o) => o.value), [5, 5]);
+  // 2026-08-21, per user request: joining now EVICTS die1 rather than stacking both onto slot0.
+  check('die1 was evicted; only die2 occupies slot0 now, not spread across two slots', state.maps['MAP008'].slots[0].map((o) => o.dieId), [die2.id]);
 }
 
 // ---------------------------------------------------------------------------
@@ -1279,11 +1283,14 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
 {
   const state = freshStateWithShops();
   player(state, 'P1').resources.BZ = 20; // see the earlier castle blocks' comment on the affordability gate
+  // 2026-08-21, per user request ("一度に２個置くときにダイスを重ねない ぞろ目でも　ぞろ目でなくても"):
+  // same-valued dice no longer share a slot together -- each always claims its own, exactly like
+  // different-valued dice already do.
   const d1 = giveDie(state, 'P1', 6);
   const d2 = giveDie(state, 'P1', 6);
   const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
-  check('Same-value group (6+6), claiming a fresh slot together, shares one slot', state.maps[board.CASTLE_MAP_ID].slots.filter((s) => s.length > 0).length, 1);
-  check('...combined buildValue is 12', result.actionResult.pendingBuild.buildValue, 12);
+  check('Same-value group (6+6) claims 2 SEPARATE fresh slots, not one shared slot', state.maps[board.CASTLE_MAP_ID].slots.filter((s) => s.length > 0).length, 2);
+  check('...combined buildValue is still 12', result.actionResult.pendingBuild.buildValue, 12);
 }
 {
   // "他のプレイヤーの邪魔をするだけの行動はできない" (2026-08-06, per user feedback): a monument that
@@ -1343,17 +1350,14 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   check('An unavailable die id fails cleanly', result, { success: false, reason: 'DIE_NOT_AVAILABLE' });
 }
 {
-  // A group joining a slot with a *pre-existing* occupant (2026-08-06: now needs GRANT_PLACE_ANYWHERE
-  // on *every* die in the bucket, confirmed -- "仮に片方のダイスがGRANT_PLACE_ANYWHERE...を使っていても
-  // もう片方のダイスが置けません") no longer counts that pre-existing occupant's value at all (2026-08-20,
-  // per user request: "重ねたかどうかではなく1ターンに2個置いたかで合計するようにしてください") -- combined
-  // buildValue is just the new pair's own 2+2=4, never 2+2+2=6.
+  // Every castle slot filled first, so eviction is the only way in (2026-08-21 note below explains why).
   const state = freshStateWithShops();
   player(state, 'P1').resources.BZ = 20; // see the earlier castle blocks' comment on the affordability gate
   for (const slotId of Object.keys(state.shops.M.slots)) state.shops.M.slots[slotId] = null;
-  state.shops.M.slots.SHOP001 = 'M009'; // DICE>=4 -- genuinely needs both new dice combined (2+2), not the old die
-  const earlierDie = giveDie(state, 'P1', 2);
-  board.placeDice(state, index, { playerId: 'P1' }, earlierDie.id, board.CASTLE_MAP_ID, 0);
+  state.shops.M.slots.SHOP001 = 'M009'; // DICE>=4 -- genuinely needs both dice combined (2+2)
+  for (let i = 0; i < 6; i++) {
+    state.maps[board.CASTLE_MAP_ID].slots[i].push({ playerId: 'P2', dieId: `p2-${i}`, value: 3, seq: i + 1, countsForTurnOrder: true });
+  }
 
   const d1 = giveDie(state, 'P1', 2);
   const d2 = giveDie(state, 'P1', 2);
@@ -1365,10 +1369,12 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
 
   d2.placeAnywhereThisTurn = true; // now BOTH carry it
   const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
-  check('Once both dice carry GRANT_PLACE_ANYWHERE, the group joins the pre-existing slot', result.success, true);
-  check('...buildValue is just the new pair\'s own dice (4), NOT summed with the pre-existing occupant', result.actionResult.pendingBuild.buildValue, 4);
-  check('...all 3 dice really do sit on the same slot', state.maps[board.CASTLE_MAP_ID].slots.filter((s) => s.length > 0).map((s) => s.length), [3]);
-  check('...neither of the 2 new dice counts toward next round\'s turn order', state.maps[board.CASTLE_MAP_ID].slots.find((s) => s.length === 3).filter((o) => o.dieId === d1.id || o.dieId === d2.id).every((o) => o.countsForTurnOrder === false), true);
+  check('Once both dice carry GRANT_PLACE_ANYWHERE, each evicts its own separate slot', result.success, true);
+  check('...buildValue is just this pair\'s own dice (4), never counting an evicted occupant', result.actionResult.pendingBuild.buildValue, 4);
+  const p1Slots = state.maps[board.CASTLE_MAP_ID].slots.filter((s) => s.some((o) => o.playerId === 'P1'));
+  check('...2 DIFFERENT slots were evicted-and-replaced, not shared', p1Slots.length, 2);
+  check('...every castle slot still holds exactly 1 occupant (6 total, none doubled up)', state.maps[board.CASTLE_MAP_ID].slots.every((s) => s.length === 1), true);
+  check('...neither of the 2 new dice counts toward next round\'s turn order', p1Slots.every((s) => s.every((o) => o.countsForTurnOrder === false)), true);
 }
 
 // ---------------------------------------------------------------------------
@@ -1700,7 +1706,9 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   const d2 = giveDie(state, 'P1', 6); // combined buildValue=12, reaches every monument threshold
   const preview = board.previewPlaceDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
   check('previewPlaceDiceGroup reports ok:true when the group would succeed', preview.ok, true);
-  check('...both dice would share a single (doubles-stacked) slot', preview.touchedSlots.length, 1);
+  // 2026-08-21, per user request: same-valued dice no longer share one slot -- each of the 2 dice claims
+  // its own separate slot now.
+  check('...each of the 2 dice claims its own separate slot, none shared', preview.touchedSlots.length, 2);
   check('...and never mutates the real state', d1.placedMapId, null);
 }
 
@@ -2272,8 +2280,9 @@ function withWildcardOwner(state) {
   check('...still nothing placed', state.maps[board.AREA009_MAP_ID].slots[0].length, 1);
 }
 {
-  // A ☆ die can never target another player's EX slot, even as a forced fallback -- it stacks under the
-  // leftmost non-EX slot instead, leaving the EX slot empty.
+  // A ☆ die can never target another player's EX slot, even as a forced fallback -- it forces its way
+  // onto the leftmost non-EX slot instead (2026-08-21: evicting whoever was there, not stacking onto
+  // them -- see evictSlotOccupants' own doc), leaving the EX slot empty.
   const state = freshStateWithShops();
   withWildcardOwner(state);
   player(state, 'P1').resources.K = 50;
@@ -2284,7 +2293,8 @@ function withWildcardOwner(state) {
   const d1 = giveDie(state, 'P1', 3);
   const result = board.placeWildcardDie(state, index, { playerId: 'P1' }, d1.id, 'MAP001');
   check('☆ never targets another player\'s EX slot, even with every non-EX slot full', result.success, true);
-  check('...falls back to stacking under SLOT1 instead; the EX slot stays untouched', state.maps['MAP001'].slots.map((s) => s.length), [2, 1, 0]);
+  check('...evicts SLOT1\'s occupant instead of stacking; SLOT2/EX stay untouched', state.maps['MAP001'].slots.map((s) => s.length), [1, 1, 0]);
+  check('...SLOT1 now holds only P1\'s ☆, not P2\'s evicted x1', state.maps['MAP001'].slots[0].map((o) => o.dieId), [d1.id]);
 }
 {
   // But this player's OWN EX slot is a perfectly normal, genuinely-empty target.

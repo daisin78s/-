@@ -156,16 +156,24 @@ function endTurn(state, index, playerId) {
  * (confirmed 2026-07-29, "城への再配置"): for each player, find their
  * *last* (highest seq) castle placement that counts toward turn order
  * (countsForTurnOrder -- excludes GRANT_PLACE_ANYWHERE-forced placements
- * into an occupied slot). Players are ordered by recency of that last
- * placement, most recent first. Players who placed no counting die at the
- * castle this round keep their relative order from the *current*
- * state.turnOrder, appended after everyone who did place.
+ * into an occupied slot, and JOB003/道化's ☆ forced-fallback). Players are
+ * ordered by recency of that last placement, most recent first. Players who
+ * placed no counting die at the castle this round keep their relative order
+ * from the *current* state.turnOrder, appended after everyone who did place.
  *
  * Worked example (confirmed): castle placements in order Red, Green, Green,
  * Red (only those two colors ever placed there) -> new order is [Red,
  * Green, <Blue-or-Yellow in their old relative order>, <the other one>],
  * because Red's last placement (the 2nd Red) came after Green's last
  * placement (the 2nd Green).
+ *
+ * castle.discardedTurnOrderEntries (2026-08-21, per user request: "捨てられたダイスはスタプレ順に影響を
+ * 及ぼしたままで新しく置かれたダイスはスタプレ順に影響を及ぼさない") -- since GRANT_PLACE_ANYWHERE/☆
+ * joins now EVICT whoever occupied the slot instead of stacking onto them (see board.js's
+ * evictSlotOccupants), an evicted die's own {playerId, seq} is preserved here rather than staying
+ * scannable in castle.slots -- included in the same lastSeqByPlayer scan below so it still counts exactly
+ * as it would have if it were still physically sitting there. Only castle's own list is ever read (the
+ * field exists on every map for uniformity, but eviction elsewhere never affects turn order).
  */
 function computeNextRoundTurnOrder(state) {
   const castle = state.maps[CASTLE_MAP_ID];
@@ -176,6 +184,11 @@ function computeNextRoundTurnOrder(state) {
       if (!(occ.playerId in lastSeqByPlayer) || occ.seq > lastSeqByPlayer[occ.playerId]) {
         lastSeqByPlayer[occ.playerId] = occ.seq;
       }
+    }
+  }
+  for (const { playerId, seq } of castle.discardedTurnOrderEntries) {
+    if (!(playerId in lastSeqByPlayer) || seq > lastSeqByPlayer[playerId]) {
+      lastSeqByPlayer[playerId] = seq;
     }
   }
   const participants = Object.keys(lastSeqByPlayer).sort((a, b) => lastSeqByPlayer[b] - lastSeqByPlayer[a]);
@@ -249,6 +262,9 @@ function endRound(state, index) {
   for (const map of Object.values(state.maps)) {
     const areaRow = getAreaRow(index, map.currentAreaId);
     map.slots = Array.from({ length: getSlotRequirements(areaRow).length }, () => []);
+    // 2026-08-21: reset alongside slots, after computeNextRoundTurnOrder above has already read it for
+    // this round -- see MapState.discardedTurnOrderEntries' own doc.
+    map.discardedTurnOrderEntries = [];
   }
   executorApi.resetFreeActionsForNewRound(state);
   for (const cardState of Object.values(state.cards)) cardState.tapped = false;

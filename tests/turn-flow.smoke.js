@@ -200,32 +200,87 @@ check('startRound(2) itself does not touch dice (already rerolled at the previou
   check('Castle sequence Red,Green,Green,Red -> [Red, Green, Blue, Yellow] (Red/Green by recency, Blue/Yellow keep prior relative order)', nextOrder, ['P1', 'P4', 'P2', 'P3']);
 }
 {
+  // Eviction (2026-08-21, per user request, replacing the old "stacking" model): GRANT_PLACE_ANYWHERE
+  // joining an occupied slot now discards the earlier occupant instead of piling on top of it -- "捨て
+  // られたダイスはスタプレ順に影響を及ぼしたままで新しく置かれたダイスはスタプレ順に影響を及ぼさない".
+  // turnOrder starts with Red (the player about to get evicted) LAST, so if Red's discarded turn-order
+  // standing weren't preserved, Red would stay last -- proving this isn't just a coincidence of already
+  // being first. Yellow places a genuine (non-evicting) die too, so the test also confirms a live
+  // occupant and a discarded entry sort correctly against each other by seq.
   const { createEmptyGameState: freshEmptyState } = require('../src/game-state');
   const s = freshEmptyState('castle-grant-place-anywhere-smoke');
   setup.createPlayers(s, ['Red', 'Blue', 'Yellow', 'Green']);
   setup.prepareMaps(s, index);
   setup.prepareShops(s, index);
-  s.turnOrder = ['P1', 'P2', 'P3', 'P4'];
+  s.turnOrder = ['P2', 'P3', 'P4', 'P1']; // Red (P1) starts LAST
   // BZ (see the previous block's comment on the new castle affordability gate).
   s.players.find((p) => p.id === 'P1').resources.BZ = 20;
   s.players.find((p) => p.id === 'P2').resources.BZ = 20;
+  s.players.find((p) => p.id === 'P3').resources.BZ = 20;
 
   const gs = require('../src/game-state');
   const redDie = gs.createDie('red-1', 'COLOR');
   redDie.value = 1;
   s.players.find((p) => p.id === 'P1').dice.push(redDie);
-  board.placeDice(s, index, { playerId: 'P1' }, redDie.id, 'MAP008', 0);
+  board.placeDice(s, index, { playerId: 'P1' }, redDie.id, 'MAP008', 0); // seq 1, Red's slot0
+
+  const yellowDie = gs.createDie('yellow-1', 'COLOR');
+  yellowDie.value = 2;
+  s.players.find((p) => p.id === 'P3').dice.push(yellowDie);
+  board.placeDice(s, index, { playerId: 'P3' }, yellowDie.id, 'MAP008', 1); // seq 2, Yellow's own fresh slot1
 
   const blueDie = gs.createDie('blue-1', 'COLOR');
   blueDie.value = 5; // different value, would normally need a fresh (empty) slot
   blueDie.placeAnywhereThisTurn = true; // simulates having tapped B001A/etc. this turn
   s.players.find((p) => p.id === 'P2').dice.push(blueDie);
-  const forced = board.placeDice(s, index, { playerId: 'P2' }, blueDie.id, 'MAP008', 0); // forced into Red's occupied slot
-  check('GRANT_PLACE_ANYWHERE lets Blue force into Red\'s occupied castle slot', forced.success, true);
-  check('...both dice now occupy that one slot', s.maps['MAP008'].slots[0].length, 2);
+  const forced = board.placeDice(s, index, { playerId: 'P2' }, blueDie.id, 'MAP008', 0); // evicts Red from slot0
+  check('GRANT_PLACE_ANYWHERE lets Blue evict Red from Red\'s occupied castle slot', forced.success, true);
+  check('...only Blue (the new occupant) sits in slot0 now, not both', s.maps['MAP008'].slots[0].map((o) => o.dieId), [blueDie.id]);
+  check('...Red\'s own die still points at MAP008, so it returns to hand normally at round end', redDie.placedMapId, 'MAP008');
 
   const nextOrder = turnFlow.computeNextRoundTurnOrder(s);
-  check('Blue\'s forced placement does NOT count for turn order (only Red placed "for real")', nextOrder, ['P1', 'P2', 'P3', 'P4']);
+  // Yellow (seq 2, still a live occupant) outranks Red (seq 1, now only a discarded entry) -- Red still
+  // beats Blue/Green (seq -- neither ever counted), and Blue's forced placement does NOT count for turn
+  // order at all (only Red's ORIGINAL placement, now discarded but still credited, and Yellow's do).
+  check('Evicted Red keeps influencing next round\'s turn order (moves up from last to 2nd, behind Yellow)', nextOrder, ['P3', 'P1', 'P2', 'P4']);
+}
+{
+  // Eviction's other half (2026-08-21, per user request: "捨てられたダイスが色ダイスであればラウンドで
+  // 戻ってくる") -- endRound() is never told about an eviction directly; it just walks player.dice by
+  // placedMapId as it always has (see that function's own doc). This confirms evictSlotOccupants really
+  // does leave that field alone: an evicted COLOR die comes back to hand and gets rerolled exactly like
+  // any other placed color die, and an evicted WHITE die is discarded exactly like any other placed one.
+  const { createEmptyGameState: freshEmptyState, createDie } = require('../src/game-state');
+  const s = freshEmptyState('eviction-round-end-smoke');
+  setup.createPlayers(s, ['Red', 'Blue', 'Yellow', 'Green']);
+  setup.prepareMaps(s, index);
+  setup.prepareShops(s, index);
+  s.players.find((p) => p.id === 'P1').resources.BZ = 20;
+  s.players.find((p) => p.id === 'P2').resources.BZ = 20;
+
+  const redColorDie = createDie('red-color-1', 'COLOR');
+  redColorDie.value = 1;
+  s.players.find((p) => p.id === 'P1').dice.push(redColorDie);
+  board.placeDice(s, index, { playerId: 'P1' }, redColorDie.id, 'MAP008', 0);
+
+  const redWhiteDie = createDie('red-white-1', 'WHITE');
+  redWhiteDie.value = 2;
+  redWhiteDie.placeAnywhereThisTurn = true; // joins Red's own slot0, evicting redColorDie
+  s.players.find((p) => p.id === 'P1').dice.push(redWhiteDie);
+  board.placeDice(s, index, { playerId: 'P1' }, redWhiteDie.id, 'MAP008', 0);
+  check('Red\'s own wD evicts Red\'s own color die from slot0', s.maps['MAP008'].slots[0].map((o) => o.dieId), [redWhiteDie.id]);
+
+  const blueColorDie = createDie('blue-color-1', 'COLOR');
+  blueColorDie.value = 3;
+  blueColorDie.placeAnywhereThisTurn = true; // evicts redWhiteDie from slot0
+  s.players.find((p) => p.id === 'P2').dice.push(blueColorDie);
+  board.placeDice(s, index, { playerId: 'P2' }, blueColorDie.id, 'MAP008', 0);
+  check('Blue then evicts Red\'s wD from that same slot0', s.maps['MAP008'].slots[0].map((o) => o.dieId), [blueColorDie.id]);
+
+  turnFlow.endRound(s, index);
+  const redDiceAfter = s.players.find((p) => p.id === 'P1').dice;
+  check('Evicted COLOR die returns to Red\'s hand at round end, unplaced', redDiceAfter.some((d) => d.id === redColorDie.id && d.placedMapId === null), true);
+  check('Evicted WHITE die is discarded at round end, same as any other placed wD', redDiceAfter.some((d) => d.id === redWhiteDie.id), false);
 }
 
 // ---------------------------------------------------------------------------

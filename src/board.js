@@ -47,7 +47,7 @@ function getSlotRequirements(areaRow) {
 }
 
 const CASTLE_MAP_ID = 'MAP008';
-/** The one other map with its own same-value stacking exception, scoped to its EX slot(s) only
+/** The one other map with its own monument-buildValue-combining behavior, scoped to its EX slot(s) only
  * (2026-08-04, per user feedback -- see the EX handling in placeDice's own doc). */
 const AREA009_MAP_ID = 'MAP009';
 // (CONVERT_LIMIT_ELIGIBLE_MAP_IDS lived here until 2026-08-11 -- it restricted CONVERT_LIMIT(ALL,n) to
@@ -176,7 +176,7 @@ function isAllowedSlotForValue(requirements, slots, slotIndex, value, dieIsWildc
   return slotIndex === leftmostAnyIndex;
 }
 
-// 王宮 (CASTLE_MAP_ID) and 元老院 (AREA009_MAP_ID) -- the only 2 maps that support multi-die/stacked
+// 王宮 (CASTLE_MAP_ID) and 元老院 (AREA009_MAP_ID) -- the only 2 maps that support multi-die combined
 // buildValue at all (see placeDiceGroup's own doc), and so the only 2 where this exploit is reachable.
 const CHANGED_DIE_SELF_STACK_BLOCKED_MAPS = new Set([CASTLE_MAP_ID, AREA009_MAP_ID]);
 
@@ -191,15 +191,41 @@ const CHANGED_DIE_SELF_STACK_BLOCKED_MAPS = new Set([CASTLE_MAP_ID, AREA009_MAP_
  *
  * Deliberately narrow, confirmed with the user: only blocks a die whose value was JUST changed this same
  * turn (die.valueChangedThisTurn) from joining a slot that already holds this SAME player's own die, and
- * only at these 2 maps -- the legitimate multi-turn castle-investment pattern (a naturally-rolled die
- * matching/joining an earlier one, via any GRANT_PLACE_ANYWHERE-granting card) is untouched, as is a
- * value-changed die joining another PLAYER's slot, or an empty slot, or any placement anywhere else on
- * the board. Applies to WHITE dice too, not just COLOR (confirmed with the user: "wDも含む") -- die.kind
- * is never checked here on purpose. */
+ * only at these 2 maps -- a naturally-rolled die joining an earlier one (via any GRANT_PLACE_ANYWHERE-
+ * granting card) is untouched (2026-08-21: that join now EVICTS the earlier occupant rather than
+ * stacking onto it, see evictSlotOccupants -- still legitimate, still only 1 fresh die's worth of
+ * investment, just no longer literally sharing the slot), as is a value-changed die joining another
+ * PLAYER's slot, or an empty slot, or any placement anywhere else on the board. Applies to WHITE dice
+ * too, not just COLOR (confirmed with the user: "wDも含む") -- die.kind is never checked here on
+ * purpose. */
 function isChangedDieSelfStackBlocked(mapId, playerId, valueChanged, targetOccupants) {
   if (!valueChanged) return false;
   if (!CHANGED_DIE_SELF_STACK_BLOCKED_MAPS.has(mapId)) return false;
   return targetOccupants.some((o) => o.playerId === playerId);
+}
+
+/** Evicts every existing occupant of `occupants` (2026-08-21, per user request, replacing the old
+ * "stacking" model for GRANT_PLACE_ANYWHERE joins and JOB003/道化's ☆ forced-fallback: "GRANT_PLACE_
+ * ANYWHEREや☆の強制フォールバックのみです 通常のダイスはできません" -- ordinary placement, which never
+ * targets an occupied slot at all without one of those two, is untouched). Each evicted occupant's own
+ * {playerId, seq} is preserved onto map.discardedTurnOrderEntries -- but only if it was itself
+ * countsForTurnOrder (an occupant that never counted keeps not counting once evicted either) -- so
+ * turn-flow.computeNextRoundTurnOrder (the castle-only reader, see that field's own doc) still credits
+ * it, even though it no longer physically occupies a slot. The evicted die's own Die object is left
+ * completely untouched here -- specifically its placedMapId, which still points at this map -- so
+ * turn-flow.endRound()'s existing per-die COLOR-return/WHITE-discard logic (driven by player.dice/
+ * placedMapId, not by re-scanning map.slots) picks it up exactly as if it were still genuinely placed;
+ * nothing here needs to touch player.dice at all.
+ *
+ * Mutates `occupants` IN PLACE (occupants.length = 0) rather than reassigning map.slots[slotIndex] to a
+ * new array -- callers that already hold a direct reference to this same array (e.g. placeDice's
+ * targetOccupants) must keep pointing at the live map.slots[slotIndex] afterward, or their own
+ * subsequent .push() would land in a detached, orphaned array instead. */
+function evictSlotOccupants(map, occupants) {
+  for (const occ of occupants) {
+    if (occ.countsForTurnOrder) map.discardedTurnOrderEntries.push({ playerId: occ.playerId, seq: occ.seq });
+  }
+  occupants.length = 0;
 }
 
 function placeDice(state, index, context, dieId, mapId, slotIndex) {
@@ -350,17 +376,25 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
 
   state.placementSeq += 1;
   die.placedMapId = mapId;
+  // False only when this placement actually needed GRANT_PLACE_ANYWHERE to join an occupied slot
+  // (confirmed: dice placed that way don't count toward next round's turn order). By this point an
+  // empty target slot can no longer have needed the bypass at all -- the one thing bypass used to also
+  // waive for empty slots (a duplicate value elsewhere in the AREA) is now blocked outright above,
+  // never reaching here (2026-08-07) -- so occupancy is the only remaining bypass-relevant case.
+  // Captured BEFORE evictSlotOccupants below empties targetOccupants -- .length must be read first.
+  const joinedOccupiedSlot = bypass && targetOccupants.length > 0;
+  // 2026-08-21, per user request ("GRANT_PLACE_ANYWHEREや☆の強制フォールバックのみです 通常のダイスは
+  // できません"): joining an occupied slot now EVICTS whatever was there instead of stacking onto it --
+  // see evictSlotOccupants' own doc for what happens to the evicted die (nothing touches it directly;
+  // it still returns/discards normally via turn-flow.endRound, and its own turn-order standing carries
+  // over to map.discardedTurnOrderEntries).
+  if (joinedOccupiedSlot) evictSlotOccupants(map, targetOccupants);
   targetOccupants.push({
     playerId: context.playerId,
     dieId,
     value: die.value,
     seq: state.placementSeq,
-    // False only when this placement actually needed GRANT_PLACE_ANYWHERE to join an occupied slot
-    // (confirmed: dice placed that way don't count toward next round's turn order). By this point an
-    // empty target slot can no longer have needed the bypass at all -- the one thing bypass used to also
-    // waive for empty slots (a duplicate value elsewhere in the AREA) is now blocked outright above,
-    // never reaching here (2026-08-07) -- so occupancy is the only remaining bypass-relevant case.
-    countsForTurnOrder: !(bypass && targetOccupants.length > 0),
+    countsForTurnOrder: !joinedOccupiedSlot,
   });
   chargeUsageFeeIfOwed(state, map, context.playerId);
 
@@ -557,21 +591,20 @@ function previewPlaceDice(state, index, context, dieId, mapId, slotIndex) {
  * so the UI's slot-highlight preview can reuse this instead of re-deriving the rule a third time). An
  * occupied slot is always blocked without bypass now (2026-08-06, per user feedback -- the castle/
  * AREA009's old same-value auto-stack exception is abolished, matching placeDice's own removal above);
- * placeDiceGroup passes bypass=true for a value-bucket only when *every* die in it individually carries
- * placeAnywhereThisTurn (confirmed: one die in a pair having the ability isn't enough for the pair to
- * join together -- the other die still can't get in). An EMPTY slot's duplicate-value-elsewhere check is
- * NEVER waived by bypass, even though it used to be (2026-08-07, per user feedback: using GRANT_PLACE_
- * ANYWHERE to place a value already on the board into some *other*, empty slot instead of stacking onto
- * the matching one produced two independent same-value occupants in one AREA -- see placeDice's own doc
- * on this exact split for the full reasoning). A duplicate value's only legal home is the slot(s) that
- * already hold it.
+ * placeDiceGroup evaluates bypass per individual die (2026-08-21, no longer per value-bucket -- see its
+ * own doc), and joining an occupied slot this way now evicts whoever was there instead of stacking onto
+ * it (see evictSlotOccupants' own doc). An EMPTY slot's duplicate-value-elsewhere check is NEVER waived
+ * by bypass, even though it used to be (2026-08-07, per user feedback: using GRANT_PLACE_ANYWHERE to
+ * place a value already on the board into some *other*, empty slot instead of joining the matching one
+ * produced two independent same-value occupants in one AREA -- see placeDice's own doc on this exact
+ * split for the full reasoning). A duplicate value's only legal home is the slot(s) that already hold it.
  *
  * dieIsWildcard (2026-08-19, JOB003/hasWildcardDice): a ☆ die ignores the numbered/ANY value-match
  * requirement (EX ownership gating still applies unchanged -- confirmed with the user ☆ can't use
  * another player's EX) and is never blocked by DUPLICATE_VALUE_IN_AREA (a valueless die can't duplicate
- * a number). Occupied-slot joining still needs `bypass` even when dieIsWildcard -- placeDiceGroup forces
- * bypass=true for a wildcard-owner's whole group (see its own doc), matching how a ☆ die "placeable
- * anywhere" resolves to a deliberate simultaneous multi-die action here, never an implicit one. */
+ * a number). Occupied-slot joining still needs `bypass` even when dieIsWildcard -- placeDiceGroup itself
+ * refuses a wildcard-owning player's whole group outright now (2026-08-20, see its own doc), so this
+ * dieIsWildcard branch is only ever exercised via placeWildcardDie's own single-die path in practice. */
 function slotAcceptsValue(map, mapId, playerId, requirement, occupants, value, bypass = false, dieIsWildcard = false) {
   const isExSlot = requirement === 'EX';
   if (isExSlot) {
@@ -636,20 +669,21 @@ function excludeOverfundedMonuments(index, candidates, newValues, discount) {
  * is a bare BUILD() and where combining dice to reach a monument threshold is ever relevant; callers
  * shouldn't invoke this for any other mapId.
  *
- * Same-valued dice among dieIds share a single slot; different-valued dice each claim their own slot.
- * Fully atomic via a two-pass design: first a pure dry-run (slotAcceptsValue) that finds a legal slot
- * for every die without mutating anything; only if the *entire* group has somewhere to go does it
- * actually commit each die (confirmed 2026-08-02: "選べるだけ選ばせて、配置時に失敗メッセージ" -- let
- * the player select freely, only reject at commit time) -- a partial placement (some dice down, others
- * stranded) would have no clean way to undo just the failed ones, so this never happens; returns
- * NO_LEGAL_SLOT_FOR_GROUP instead, touching nothing.
+ * Every die in the group always claims its own separate slot (2026-08-21, per user request: "一度に２個
+ * 置くときにダイスを重ねない ぞろ目でも　ぞろ目でなくても" -- same-valued dice used to share one slot
+ * together; they no longer do, matching-value or not). Fully atomic via a two-pass design: first a pure
+ * dry-run (slotAcceptsValue) that finds a legal slot for every die without mutating anything; only if
+ * the *entire* group has somewhere to go does it actually commit each die (confirmed 2026-08-02: "選べ
+ * るだけ選ばせて、配置時に失敗メッセージ" -- let the player select freely, only reject at commit time)
+ * -- a partial placement (some dice down, others stranded) would have no clean way to undo just the
+ * failed ones, so this never happens; returns NO_LEGAL_SLOT_FOR_GROUP instead, touching nothing.
  *
- * A value-bucket that targets an already-occupied slot (2026-08-06, per user feedback -- the castle/
- * AREA009's old same-value auto-stack is abolished, see slotAcceptsValue's own doc) can only join if
- * *every* die in that bucket individually carries placeAnywhereThisTurn (confirmed: one bypass-holding
- * die in a pair of same-valued dice isn't enough for the pair to join together -- the other die still
- * can't get in, so the whole bucket -- and thus this atomic group placement -- fails). Dice that join
- * this way get countsForTurnOrder=false on their SlotDie, same meaning as placeDice's own bypass path.
+ * A die that targets an already-occupied slot (2026-08-06, per user feedback -- the castle/AREA009's old
+ * same-value auto-stack is abolished, see slotAcceptsValue's own doc) can only join if it individually
+ * carries placeAnywhereThisTurn -- and doing so now EVICTS whoever was there instead of stacking onto it
+ * (2026-08-21, per user request -- see evictSlotOccupants' own doc), same as placeDice's own
+ * GRANT_PLACE_ANYWHERE join. Dice that join this way get countsForTurnOrder=false on their SlotDie, same
+ * meaning as placeDice's own bypass path.
  *
  * Deliberately always forces categories to ["M"] rather than parsing the AREA's own ACTION categories
  * the way a normal single-die placement does (confirmed 2026-08-02: "ダイスを複数置いたときはモニュメ
@@ -707,10 +741,11 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   // が強かったので...☆ダイスは1個でしか使えない（ダイス目7以上は獲得できない）"): a 道化 player's every
   // die is ☆ (hasWildcardDice is a per-player flag, not per-die), so this refuses the WHOLE group-
   // placement path outright for them, rather than trying to special-case which dice in dieIds are/aren't
-  // wildcard. They can still stack multiple ☆ dice onto the same slot over separate single-die
-  // placeWildcardDie actions (its own force-stack-when-full fallback) -- only this "select 2+ and place
-  // as one atomic action" shortcut is gone, which is exactly what let a single group action reach a
-  // combined dice-value of 12 (two ☆ at 6 each) in one placement.
+  // wildcard -- this "select 2+ and place as one atomic action" shortcut is exactly what would otherwise
+  // have let a single group action reach a combined dice-value of 12 (two ☆ at 6 each) in one placement.
+  // (2026-08-20/21: separate single-die placeWildcardDie actions can no longer reach that either, even
+  // repeated onto the same slot -- see that function's own doc and evictSlotOccupants -- so this refusal
+  // is now more about keeping the atomic-2-dice-at-once shortcut closed than about a remaining loophole.)
   if (dieIsWildcard) return { success: false, reason: 'WILDCARD_GROUP_NOT_ALLOWED' };
   // Moved up from the commit section further down (2026-08-20) -- 開拓者's speculative grant below needs
   // this in scope earlier than the commit phase did.
@@ -719,8 +754,8 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   // CON006A (2026-08-15): same rule as placeDice's own (see isColorDieReuseBlocked's doc), but checked
   // ONCE for the whole group against pre-existing map.slots occupancy (i.e. only earlier, already-
   // committed placements -- confirmed with the user this rule should NOT block a single group action
-  // from placing 2+ of this player's own COLOR dice together, e.g. stacking at 王宮/AREA009 to sum
-  // values: "スタッキングは許可"). A die in this group carrying GRANT_PLACE_ANYWHERE still waives it,
+  // from placing 2+ of this player's own COLOR dice together, e.g. combining values at 王宮/AREA009 to
+  // reach a monument threshold: "スタッキングは許可"). A die in this group carrying GRANT_PLACE_ANYWHERE still waives it,
   // same as placeDice. Also waived unconditionally for a wildcard-owning player (2026-08-19, per user
   // spec: 憤怒/CON005B's same-AREA block is specifically negated by 道化's ☆ -- "憤怒の効果を道化で
   // 打ち消す" -- other restrictions, e.g. another player's EX slot, are untouched).
@@ -732,53 +767,48 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
     }
   }
 
-  const dieIdsByValue = new Map();
-  for (const die of dice) {
-    if (!dieIdsByValue.has(die.value)) dieIdsByValue.set(die.value, []);
-    dieIdsByValue.get(die.value).push(die.id);
-  }
-
-  // Dry-run pass: find one legal, not-yet-claimed-by-this-batch slot per distinct value. bypass
-  // requires every die in the bucket to individually carry placeAnywhereThisTurn (see this function's
-  // own doc) -- slotJoinedOccupied records, per targetSlot, whether that slot already had an occupant
-  // before this action (i.e. bypass was actually needed to join it), so the commit pass below can set
-  // each die's countsForTurnOrder correctly without re-deriving this. No more existingSumBySlot (2026-
-  // 08-20, per user request -- see excludeOverfundedMonuments' own doc): a group's buildValue is now only
-  // ever this group's own dice, so a slot's pre-existing occupancy no longer needs tracking here at all.
+  // Dry-run pass: find one legal, not-yet-claimed-by-this-batch slot for each INDIVIDUAL die (2026-08-21,
+  // per user request: "一度に２個置くときにダイスを重ねない ぞろ目でも　ぞろ目でなくても" -- same-valued
+  // dice no longer share a slot together; every die in the group always gets its own, matching-value or
+  // not). bypass is now purely per-die (that die's own placeAnywhereThisTurn) rather than requiring every
+  // die of a shared value to carry it -- a die without it simply looks for a different, still-available
+  // slot instead of failing the whole group the way sharing used to require. slotJoinedOccupied records,
+  // per targetSlot, whether that slot already had an occupant before this action (i.e. bypass was
+  // actually needed to join it -- and, since 2026-08-21, that join now EVICTS whoever was there rather
+  // than stacking onto it, see evictSlotOccupants), so the commit pass below can set each die's
+  // countsForTurnOrder correctly and know when to evict, without re-deriving this.
   const usedSlots = new Set();
   const slotForDie = new Map();
   const slotJoinedOccupied = new Map(); // targetSlot -> boolean
-  for (const [value, ids] of dieIdsByValue) {
+  for (const die of dice) {
+    const { value } = die;
     // dieIsWildcard forces bypass unconditionally (2026-08-19) -- a ☆ die can always join an occupied
     // slot as part of a deliberate group placement, same as if it always carried GRANT_PLACE_ANYWHERE
     // (see slotAcceptsValue's own doc on why occupied-slot joining still goes through `bypass` even for
     // wildcard dice, rather than being a separate unconditional branch).
-    const bypass = dieIsWildcard || ids.every((id) => dice.find((d) => d.id === id).placeAnywhereThisTurn);
+    const bypass = dieIsWildcard || die.placeAnywhereThisTurn;
     // isAllowedSlotForValue reads real occupancy (map.slots[i].length) to find "the leftmost still-
-    // available slot" -- but during this dry run, a slot claimed by an *earlier* value-bucket in this
-    // same group action (usedSlots) hasn't actually been pushed to map.slots yet, so it would still look
-    // "available" and wrongly win that comparison. This virtual view marks usedSlots members occupied
-    // for that check only, without touching the real (not-yet-committed) map.slots array itself.
+    // available slot" -- but during this dry run, a slot claimed by an *earlier* die in this same group
+    // action (usedSlots) hasn't actually been pushed to map.slots yet, so it would still look "available"
+    // and wrongly win that comparison. This virtual view marks usedSlots members occupied for that check
+    // only, without touching the real (not-yet-committed) map.slots array itself.
     const slotsForAllowedCheck = map.slots.map((occ, i) => (usedSlots.has(i) ? [{ virtual: true }] : occ));
     // 2026-08-18: same "conjured value can't stack onto this player's own die at 王宮/元老院" restriction
-    // placeDice enforces -- see isChangedDieSelfStackBlocked's own doc. Any die in this value-bucket
-    // having been value-changed this turn is enough to block the whole bucket from joining an occupied
-    // slot that already holds this player's own die (they all share one target slot). Never trips for a
-    // wildcard-owning player -- ☆ dice never run SET_DICE_ANY/valueChangedThisTurn at all.
-    const bucketValueChanged = ids.some((id) => dice.find((d) => d.id === id).valueChangedThisTurn);
+    // placeDice enforces -- see isChangedDieSelfStackBlocked's own doc. Never trips for a wildcard-owning
+    // player -- ☆ dice never run SET_DICE_ANY/valueChangedThisTurn at all.
     let targetSlot = null;
     for (let i = 0; i < requirements.length; i++) {
       if (usedSlots.has(i)) continue;
       if (!bypass && !isAllowedSlotForValue(requirements, slotsForAllowedCheck, i, value, dieIsWildcard)) continue;
       if (!slotAcceptsValue(map, mapId, playerId, requirements[i], map.slots[i], value, bypass, dieIsWildcard)) continue;
-      if (isChangedDieSelfStackBlocked(mapId, playerId, bucketValueChanged, map.slots[i])) continue;
+      if (isChangedDieSelfStackBlocked(mapId, playerId, die.valueChangedThisTurn, map.slots[i])) continue;
       targetSlot = i;
       break;
     }
     if (targetSlot === null) return { success: false, reason: 'NO_LEGAL_SLOT_FOR_GROUP' };
     usedSlots.add(targetSlot);
     slotJoinedOccupied.set(targetSlot, map.slots[targetSlot].length > 0);
-    for (const id of ids) slotForDie.set(id, targetSlot);
+    slotForDie.set(die.id, targetSlot);
   }
   const newValues = dice.map((d) => (dieIsWildcard ? 6 : d.value));
 
@@ -848,6 +878,9 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
     const slotIndex = slotForDie.get(die.id);
     state.placementSeq += 1;
     die.placedMapId = mapId;
+    // 2026-08-21, per user request: joining an already-occupied slot (tracked via slotJoinedOccupied
+    // above) now evicts whoever was there instead of stacking onto it -- see evictSlotOccupants' own doc.
+    if (slotJoinedOccupied.get(slotIndex)) evictSlotOccupants(map, map.slots[slotIndex]);
     map.slots[slotIndex].push({
       playerId,
       dieId: die.id,
@@ -916,10 +949,13 @@ function previewPlaceDiceGroup(state, index, context, dieIds, mapId) {
  * いたら一番左のSLOTの下に重ねる。" Scans requirements left to right, skipping any EX slot that isn't
  * this player's own (confirmed with the user: another player's EX is never a target, this player's own
  * EX is fine -- same ownership gate slotAcceptsValue already enforces). The first empty eligible slot
- * wins outright; if every eligible slot is already occupied, this instead force-stacks under the
+ * wins outright; if every eligible slot is already occupied, this instead forces its way onto the
  * leftmost eligible slot (2026-08-19, confirmed with the user this fallback applies to every AREA, not
  * just 王宮/元老院 -- "全AREA共通" -- even though it only ever has a buildValue consequence at those two,
- * since no other AREA's ACTION ever contains BUILD).
+ * since no other AREA's ACTION ever contains BUILD). That original 2026-08-19 spec described this as
+ * "重ねる" (stacking); as of 2026-08-21, per user request, it instead EVICTS whatever was already there
+ * (see evictSlotOccupants' own doc) -- the evicted die is unaffected otherwise (still returns/discards
+ * normally at round end, still keeps its own turn-order standing via map.discardedTurnOrderEntries).
  *
  * The forced-fallback occupant is flagged excludedFromBuildValue, so its own placement never contributes
  * anything toward triggering a build (0, not 1-or-6) -- landing there was forced, not chosen. This
@@ -960,7 +996,7 @@ function placeWildcardDie(state, index, context, dieId, mapId) {
   let slotIndex = eligibleIndexes.find((i) => map.slots[i].length === 0);
   let excludedFromBuildValue = false;
   if (slotIndex === undefined) {
-    slotIndex = eligibleIndexes[0]; // leftmost eligible slot -- forced fallback stack
+    slotIndex = eligibleIndexes[0]; // leftmost eligible slot -- forced fallback (evicts whoever's there)
     excludedFromBuildValue = true;
   }
   const targetOccupants = map.slots[slotIndex];
@@ -1005,6 +1041,11 @@ function placeWildcardDie(state, index, context, dieId, mapId) {
 
   state.placementSeq += 1;
   die.placedMapId = mapId;
+  // excludedFromBuildValue is exactly "this forced its way onto an already-occupied slot" (see its own
+  // earlier assignment) -- 2026-08-21, per user request: that eviction now discards whatever was there
+  // instead of stacking onto it, same as placeDice's own GRANT_PLACE_ANYWHERE join -- see
+  // evictSlotOccupants' own doc.
+  if (excludedFromBuildValue) evictSlotOccupants(map, targetOccupants);
   targetOccupants.push({
     playerId: context.playerId,
     dieId,

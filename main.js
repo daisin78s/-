@@ -1321,7 +1321,7 @@ let turnJustEnded = false;
  * (2026-08-16, per user request: "目＞＝1を ⚀ 以上" etc -- returns faces rather than a formatted string
  * since the glyphs and the "以上" suffix need independent sizing/styling, see fillCardFace's own
  * rendering). A single die only ever shows 1-6, so N<=6 is just that one face; N=7-12 needs 2 dice
- * summed (the castle/AREA009 group-placement stacking, see board.js) to reach it, always the highest
+ * combined (a genuine placeDiceGroup group placement, see board.js) to reach it, always the highest
  * face (6) plus whatever the other die needs to show to sum to N -- confirmed by the user's own examples
  * (">=7" -> [6,1], ">=12" -> [6,6]). Empty array for anything not matching ">=N" (shouldn't happen for
  * M's own DICE column, but defensive).
@@ -3226,19 +3226,16 @@ function renderBoard(state, next) {
         const occupants = (mapState.slots[i] || []);
         const slotEl = el('div', 'slot');
         if (occupants.length > 0) {
-          // A slot can hold more than one die -- now only ever via GRANT_PLACE_ANYWHERE joining an
-          // already-occupied slot (2026-08-06: the castle/AREA009's own same-value auto-stacking is
-          // abolished, see board.js's slotAcceptsValue). Which one displays depends on the AREA
-          // (2026-08-06, per user feedback): everywhere except 王宮 shows the newest (matches the
-          // pre-existing 2026-07-30 "just show the topmost, no offset" convention), but at 王宮
-          // specifically the display stays on the *original* die -- newly GRANT_PLACE_ANYWHERE'd dice
-          // join underneath without disturbing what's shown (confirmed: they don't count toward next
-          // round's turn order either, board.js's countsForTurnOrder). occupants[0] is always that
-          // original die at 王宮, since (per the same rule) nothing can join an occupied slot there
-          // without GRANT_PLACE_ANYWHERE in the first place.
+          // A slot never holds more than 1 real occupant (2026-08-21, per user request, replacing the
+          // earlier "stacking" model): GRANT_PLACE_ANYWHERE/JOB003's ☆ forced-fallback joining an already-
+          // occupied slot now EVICTS whoever was there instead of stacking onto them (see board.js's
+          // evictSlotOccupants) -- so occupants[occupants.length-1] (equivalently occupants[0], there's
+          // only ever the one) is simply the slot's current occupant, full stop. This used to special-
+          // case 王宮 to keep showing the *original* die under the old stacking model (2026-08-06); that
+          // distinction no longer applies now that "joining" always means "replacing".
           slotEl.classList.add('slot--filled');
           const stack = el('div', 'slot__stack');
-          const topOccupant = isCastle ? occupants[0] : occupants[occupants.length - 1];
+          const topOccupant = occupants[occupants.length - 1];
           // Look up the real die (2026-08-0X bug fix, per user report: "wDをSLOTにおいた後おいたダイス
           // が色Dになっています") -- this used to hardcode kind:'COLOR', so a placed white die (wD) was
           // drawn tinted in the player's own color instead of white. occupants only store

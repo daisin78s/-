@@ -236,14 +236,26 @@ function createCardInstance(faceCardId) {
  * @property {string} mapId            - e.g. "MAP003"
  * @property {string} currentAreaId    - e.g. "AREA003A", flips via ONCE's "MAP{n}.CURRENT_AREA=..." assignment
  * @property {SlotDie[][]} slots       - length matches the active AREA's SLOT1..SLOT6 (see notes below).
- *   Each position holds an *array* of occupants, not a single one: normally 0 or 1, but confirmed
- *   2026-07-29 that the castle (MAP008) lets same-value dice "stack" onto one slot instead of taking
- *   a fresh one (so a slot can hold 2+), and GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN) lets its die
- *   join *any* already-occupied slot anywhere, same-value or not. See board.js's placeDice().
+ *   Each position holds an *array* of occupants, but never more than 1 real one (2026-08-21, per user
+ *   request, replacing the earlier "stacking" model: a slot's array shape is kept only for a uniform
+ *   empty-vs-occupied check, not because 2+ dice can ever coexist there). GRANT_PLACE_ANYWHERE
+ *   (THIS_DICE,THIS_TURN) and JOB003/道化's ☆ forced-fallback are the only ways a die can join an
+ *   *already-occupied* slot -- doing so EVICTS whatever was there instead of stacking onto it (see
+ *   board.js's evictSlotOccupants/placeDice/placeWildcardDie/placeDiceGroup).
  * @property {number} accumulatedFee   - K owed to the tier-B/C owner, collected via the FEE_COLLECT free action
  * @property {string|null} feeOwnerId  - the player who built/upgraded the card that last flipped this
  *   map's tier (set whenever a "MAP{n}.CURRENT_AREA=..." assignment runs, in the context of whoever
  *   triggered it) -- only this player may collect accumulatedFee. Tier-A maps have no owner (no fee).
+ * @property {{playerId:string, seq:number}[]} discardedTurnOrderEntries - 2026-08-21, per user request:
+ *   when a die gets evicted here (see `slots` above), its own {playerId, seq} is preserved here (only if
+ *   it was itself countsForTurnOrder -- see SlotDie's own doc) so it keeps influencing next round's
+ *   turn order even though it no longer physically occupies a slot -- see board.js's
+ *   evictSlotOccupants and turn-flow.js's computeNextRoundTurnOrder, the only reader (and only for the
+ *   castle specifically, since that's the only map turn order is ever computed from). The evicted die's
+ *   own Die object is untouched (its placedMapId still points here), so turn-flow.endRound()'s normal
+ *   per-die COLOR-return/WHITE-discard logic picks it up exactly as if it were still genuinely placed --
+ *   nothing else needs to know this array exists. Reset to [] every round in endRound(), alongside
+ *   `slots`.
  */
 
 /**
@@ -255,10 +267,10 @@ function createCardInstance(faceCardId) {
  *   monotonic order, used e.g. to find each player's *last* placement on the castle for next-round
  *   turn-order -- see [[project-dice-wp-flow-spec]])
  * @property {boolean} countsForTurnOrder - false if this placement only succeeded because of
- *   GRANT_PLACE_ANYWHERE overriding an otherwise-illegal (occupied) slot (confirmed: such placements
- *   are excluded from the castle's next-turn-order calculation). True for every other placement,
- *   including normal castle same-value stacking (that's not "using the ability", it's the castle's
- *   own baseline rule).
+ *   GRANT_PLACE_ANYWHERE overriding an otherwise-illegal (occupied) slot, or JOB003/道化's ☆ forced-
+ *   fallback (confirmed: such placements are excluded from the castle's next-turn-order calculation).
+ *   True for every other placement. See MapState.discardedTurnOrderEntries' own doc for what happens to
+ *   this value once a die carrying it gets evicted by a later placement.
  */
 
 /**
@@ -267,7 +279,7 @@ function createCardInstance(faceCardId) {
  * @returns {MapState}
  */
 function createMapState(mapId, initialAreaId) {
-  return { mapId, currentAreaId: initialAreaId, slots: [], accumulatedFee: 0, feeOwnerId: null };
+  return { mapId, currentAreaId: initialAreaId, slots: [], accumulatedFee: 0, feeOwnerId: null, discardedTurnOrderEntries: [] };
 }
 
 /**
