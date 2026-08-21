@@ -715,13 +715,14 @@ function giveDie(state, playerId, value) {
 }
 
 // ---------------------------------------------------------------------------
-// B005A.TAP=BUILD((A,B,C,M),1) -- a bare TAP ability can itself be a BUILD, same two-phase pattern as
-// an AREA's ACTION or a QST reward (see resolveProgramOrBuild): can't complete synchronously, so
+// B005A.TAP=PAY(K);BUILD((A,B,C,M),1) -- a bare TAP ability can itself be a BUILD, same two-phase pattern
+// as an AREA's ACTION or a QST reward (see resolveProgramOrBuild): can't complete synchronously, so
 // useBareTapAbility returns pendingBuild (tagged with physicalId) instead of tapping immediately.
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
+  p1.resources.K = 1; // 2026-08-21 data edit: TAP now costs PAY(K) up front, before the BUILD half
   const inst = createCardInstance('B005A');
   inst.ownerId = 'P1';
   state.cards[inst.physicalId] = inst;
@@ -1937,78 +1938,87 @@ function giveJob009(state, playerId) {
 }
 
 // ---------------------------------------------------------------------------
-// JOB010/革命家 (2026-08-17, per user spec: "TAPして2〇を支払い、カードを１枚選んでLVアップする。LVアップ
-// に必要な資源は通常通り支払う", confirmed 〇=K and the LVUP candidate scope = the normal BUILD(U) one;
-// cost lowered from 2K to 1K on 2026-08-18, per user edit to game.xlsx: "PAY(2K);BUILD(U)を
-// PAY(K);BUILD(U)にかえました") -- real TAP="PAY(K);BUILD(U)" as of game.xlsx's own sync. Exercises 3
-// new/changed engine pieces at once: the new PAY command, BUILD being
-// found anywhere in a TAP field (not just commands[0]) by board.resolveProgramOrBuild, and candidate
-// existence being checked *before* a leading PAY runs (2026-08-17 fix -- otherwise a player with no
-// upgradeable card would lose the K for nothing).
+// PAY(K);BUILD(U) as a bare TAP ability (originally added 2026-08-17 for JOB010/革命家: "TAPして2〇を
+// 支払い、カードを１枚選んでLVアップする。LVアップに必要な資源は通常通り支払う", confirmed 〇=K and the
+// LVUP candidate scope = the normal BUILD(U) one; cost lowered from 2K to 1K on 2026-08-18). JOB010 was
+// redesigned into a wholly different, bespoke (no-DSL) ability on 2026-08-21 -- this real-data test
+// vehicle moved to B007A/革命の兆し, whose TAP is still exactly "PAY(K);BUILD(U)". Exercises 3
+// new/changed engine pieces at once: the PAY command, BUILD being found anywhere in a TAP field (not
+// just commands[0]) by board.resolveProgramOrBuild, and candidate existence being checked *before* a
+// leading PAY runs (2026-08-17 fix -- otherwise a player with no upgradeable card would lose the K for
+// nothing).
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  const jobInst = createCardInstance('JOB010');
-  jobInst.ownerId = 'P1';
-  state.cards[jobInst.physicalId] = jobInst;
-  p1.ownedCardPhysicalIds.push(jobInst.physicalId);
+  const tapInst = createCardInstance('B007A');
+  tapInst.ownerId = 'P1';
+  state.cards[tapInst.physicalId] = tapInst;
+  p1.ownedCardPhysicalIds.push(tapInst.physicalId);
   p1.resources.K = 5;
   const upgradeable = createCardInstance('A001A'); // A001B exists, COST "2A"
   upgradeable.ownerId = 'P1';
   state.cards[upgradeable.physicalId] = upgradeable;
   p1.ownedCardPhysicalIds.push(upgradeable.physicalId);
 
-  const result = board.useBareTapAbility(state, index, { playerId: 'P1' }, jobInst.physicalId);
-  check('JOB010.TAP=PAY(K);BUILD(U) succeeds and returns a pendingBuild', result.success && !!result.pendingBuild, true);
+  const result = board.useBareTapAbility(state, index, { playerId: 'P1' }, tapInst.physicalId);
+  check('B007A.TAP=PAY(K);BUILD(U) succeeds and returns a pendingBuild', result.success && !!result.pendingBuild, true);
   check('...the 1K cost was already paid, ahead of committing any candidate', p1.resources.K, 4);
-  check('...the JOB010 card itself is NOT tapped yet (only once a candidate is actually committed)', state.cards[jobInst.physicalId].tapped, false);
+  check('...the B007A card itself is NOT tapped yet (only once a candidate is actually committed)', state.cards[tapInst.physicalId].tapped, false);
   check('...candidates include the A001->A001B upgrade', result.pendingBuild.candidates.some((c) => c.physicalId === 'A001'), true);
 
   const candidate = result.pendingBuild.candidates.find((c) => c.physicalId === 'A001');
   p1.resources.A = 2; // A001A's own COST, paid normally/separately from the 1K above
-  state.cards[jobInst.physicalId].tapped = true; // caller's job to tap the source card on commit (see ai/simulator.js's BARE_TAP case)
+  state.cards[tapInst.physicalId].tapped = true; // caller's job to tap the source card on commit (see ai/simulator.js's BARE_TAP case)
   const buildResult = board.completeAreaBuild(state, index, { playerId: 'P1' }, candidate, result.pendingBuild.remainingCommands);
   check('Completing the chosen UPGRADE candidate succeeds', buildResult.success, true);
   check('A001 flipped to A001B', state.cards['A001'].currentFaceId, 'A001B');
   check('...paid via the upgraded card\'s own normal COST (2A), separate from the 1K already spent', p1.resources.A, 0);
-  check('...JOB010 ends up tapped', state.cards[jobInst.physicalId].tapped, true);
+  check('...B007A ends up tapped', state.cards[tapInst.physicalId].tapped, true);
 }
 {
   // Insufficient K: fails cleanly, nothing at all is mutated (no partial payment, no tap).
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  const jobInst = createCardInstance('JOB010');
-  jobInst.ownerId = 'P1';
-  state.cards[jobInst.physicalId] = jobInst;
-  p1.ownedCardPhysicalIds.push(jobInst.physicalId);
+  const tapInst = createCardInstance('B007A');
+  tapInst.ownerId = 'P1';
+  state.cards[tapInst.physicalId] = tapInst;
+  p1.ownedCardPhysicalIds.push(tapInst.physicalId);
   p1.resources.K = 0; // short of the 1K needed
   const upgradeable = createCardInstance('A001A');
   upgradeable.ownerId = 'P1';
   state.cards[upgradeable.physicalId] = upgradeable;
   p1.ownedCardPhysicalIds.push(upgradeable.physicalId);
 
-  const result = board.useBareTapAbility(state, index, { playerId: 'P1' }, jobInst.physicalId);
+  const result = board.useBareTapAbility(state, index, { playerId: 'P1' }, tapInst.physicalId);
   check('Fails with insufficient K', result, { success: false, reason: 'INSUFFICIENT_RESOURCES', resource: 'K' });
   check('...the 0K the player had is untouched', p1.resources.K, 0);
-  check('...JOB010 stays untapped', state.cards[jobInst.physicalId].tapped, false);
+  check('...B007A stays untapped', state.cards[tapInst.physicalId].tapped, false);
 }
 {
-  // No upgradeable card at all: fails with NO_BUILDABLE_CARD, and -- the 2026-08-17 fix under test --
-  // the 1K is never actually spent, since candidate existence is checked before the leading PAY runs.
+  // No candidate at all: fails with NO_BUILDABLE_CARD, and -- the 2026-08-17 fix under test -- the 1K is
+  // never actually spent, since candidate existence is checked before the leading PAY runs. Uses
+  // B005A/PAY(K);BUILD((A,B,C,M),1) rather than B007A/PAY(K);BUILD(U) here specifically: B007A's own
+  // categories are just "U", so it always offers itself (B007A->B007B) as a candidate once owned, no
+  // matter how poor the player is -- there's no way to make ITS candidate list genuinely empty. B005A's
+  // categories (A,B,C,M) instead depend entirely on shop contents, so clearing every shop slot really
+  // does leave zero candidates.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  const jobInst = createCardInstance('JOB010');
-  jobInst.ownerId = 'P1';
-  state.cards[jobInst.physicalId] = jobInst;
-  p1.ownedCardPhysicalIds.push(jobInst.physicalId);
+  for (const slotId of Object.keys(state.shops.M.slots)) state.shops.M.slots[slotId] = null;
+  for (const slotId of Object.keys(state.shops.NORMAL.slots)) state.shops.NORMAL.slots[slotId] = null;
+  for (const slotId of Object.keys(state.shops.SPECIAL.slots)) state.shops.SPECIAL.slots[slotId] = null;
+  const tapInst = createCardInstance('B005A');
+  tapInst.ownerId = 'P1';
+  state.cards[tapInst.physicalId] = tapInst;
+  p1.ownedCardPhysicalIds.push(tapInst.physicalId);
   p1.resources.K = 2; // enough to afford PAY(K) if it ran -- it must not, here
 
-  const result = board.useBareTapAbility(state, index, { playerId: 'P1' }, jobInst.physicalId);
-  check('Fails with NO_BUILDABLE_CARD when the player owns nothing upgradeable', result.success, false);
+  const result = board.useBareTapAbility(state, index, { playerId: 'P1' }, tapInst.physicalId);
+  check('Fails with NO_BUILDABLE_CARD when every shop slot is empty', result.success, false);
   check('...reason is NO_BUILDABLE_CARD', result.reason, 'NO_BUILDABLE_CARD');
   check('...the 2K was NOT spent (candidate check runs before the leading PAY)', p1.resources.K, 2);
-  check('...JOB010 stays untapped', state.cards[jobInst.physicalId].tapped, false);
+  check('...B005A stays untapped', state.cards[tapInst.physicalId].tapped, false);
 }
 
 // ---------------------------------------------------------------------------

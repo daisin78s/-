@@ -100,7 +100,7 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
 }
 
 // ---------------------------------------------------------------------------
-// A BUILD-kind BARE_TAP (B005A.TAP=BUILD((A,B,C,M),1)) offers one move per candidate and NO
+// A BUILD-kind BARE_TAP (B005A.TAP=PAY(K);BUILD((A,B,C,M),1)) offers one move per candidate and NO
 // "leave unresolved" fallback (fixed 2026-08-02: that fallback was a true no-op for BARE_TAP since
 // board.useBareTapAbility never taps the card or spends anything before returning pendingBuild --
 // offering it let AIPlayer's tie-break pick it forever, see [[project-dice-wp]]).
@@ -108,6 +108,7 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
+  p1.resources.K = 1; // 2026-08-21 data edit: TAP now costs PAY(K) up front, before the BUILD half
   const inst = createCardInstance('B005A');
   inst.ownerId = 'P1';
   state.cards[inst.physicalId] = inst;

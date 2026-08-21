@@ -286,8 +286,8 @@ function giveDie(state, playerId, value) {
 }
 
 {
-  // A TAP-sourced BUILD (B006A.TAP=BUILD((A,B,C,M),6)) that builds a card whose own ONCE untaps the
-  // source card back (C008A.ONCE=UNTAP_ALL(SELF)) must end up untapped, not stuck tapped (2026-08-09
+  // A TAP-sourced BUILD (B006A.TAP=PAY(K);BUILD((A,B,C,M),6)) that builds a card whose own ONCE untaps
+  // the source card back (C008A.ONCE=UNTAP_ALL(SELF)) must end up untapped, not stuck tapped (2026-08-09
   // fix, per user report: "B006AをTAPしてその効果でC008Aを建築したときB006Aがアンタップしない"). The
   // built card's ONCE runs *inside* completeAreaBuild, so the source card must already be marked tapped
   // *before* that call for UNTAP_ALL(SELF) to have any chance of reaching it back.
@@ -302,6 +302,7 @@ function giveDie(state, playerId, value) {
   state.shops.SPECIAL.slots.SHOP201 = 'C008A';
   p1.resources.A = 1; // C008A's COST is "1A,3C"
   p1.resources.C = 3;
+  p1.resources.K = 1; // 2026-08-21 data edit: B006A's TAP now costs PAY(K) up front, before the BUILD half
 
   const probe = applyInPlace(require('../src/game-state').cloneState(state), index, { type: 'BARE_TAP', playerId: 'P1', physicalId: b006a.physicalId });
   const c008Index = probe.pendingBuild.candidates.findIndex((c) => c.faceId === 'C008A');
@@ -323,7 +324,8 @@ function giveDie(state, playerId, value) {
   state.cards[b006a.physicalId] = b006a;
   p1.ownedCardPhysicalIds.push(b006a.physicalId);
   state.shops.SPECIAL.slots.SHOP201 = 'C008A';
-  // No resources granted -- C008A's "1A,3C" cost can't be paid.
+  p1.resources.K = 1; // 2026-08-21 data edit: B006A's TAP now costs PAY(K) up front -- must be affordable
+  // No A/C granted -- C008A's "1A,3C" cost still can't be paid.
 
   const probe = applyInPlace(require('../src/game-state').cloneState(state), index, { type: 'BARE_TAP', playerId: 'P1', physicalId: b006a.physicalId });
   const c008Index = probe.pendingBuild.candidates.findIndex((c) => c.faceId === 'C008A');
