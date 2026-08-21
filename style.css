@@ -1097,6 +1097,15 @@ h1, h2, h3 { margin: 0; }
   color: var(--text-muted);
 }
 
+/* JOB010/革命家's bespoke note (2026-08-21, per user request: "大き目の文字で濃く") -- bigger than the
+   base .card-note (12px) and pinned to the theme's strongest text color (--text is already what .card-note
+   itself uses, so this only needs to bump size, but stated explicitly here so this class stays correct
+   even if .card-note's own base color ever changes independently). */
+.card-note--large {
+  font-size: 16px;
+  color: var(--text);
+}
+
 /* 傲慢's own "✖" chars, enlarged on their own (2026-08-17, per user request: "✖の大きさだけ１.8倍にして")
    -- em so it scales with whichever .card-note font-size is currently in effect (12px normally, 10px for
    .card-note--compact) rather than a fixed px value. */

@@ -1565,14 +1565,27 @@ const ACTION_ICON_BUILDERS = {
   // reactive/direct TAP abilities), so "毎ターン" (plain text) reads more clearly there than the ⤴️
   // glyph alone did.
   'UNTAP()': () => actionRow([actionSuffix('毎ターン')]),
-  // JOB010/革命家 (2026-08-17, per user spec: "TAPして2〇を支払い、カードを1枚選んでLVアップする"; cost
-  // lowered from 2K to 1K on 2026-08-18, per user edit to game.xlsx) -- pay the flat K cost, then the
-  // same ⚒️U upgrade icon every other BUILD(U) card already uses (see buildBuildIcon), reusing
-  // resourceItemNodes/actionArrow for the "spend this to get that" reading every CHANGE(...) icon
-  // already has (e.g. C001A's "○2→●2"). One-off exact-match entry rather than generalizing
-  // buildBuildIcon itself, since PAY(...) is 1-of-1 in the data today (see
-  // board.resolveProgramOrBuild's own doc on why the TAP text isn't just "BUILD(U)" alone).
-  'PAY(K);BUILD(U)': () => actionRow([...resourceItemNodes('1', 'K'), actionArrow(), actionEmoji('⚒️'), actionSuffix('U')]),
+  // B005A/B006A/B007A (始まりの兆し/終わりの兆し/革命の兆し, 2026-08-21, per user spec: "⤵〇→🔨 / ダイス目
+  // ⚀"、"⤵〇→🔨 / ダイス目⚅"、"⤵〇→🔨U" -- ⤵ is buildEffectRow's own auto TAP-cost prefix, not repeated
+  // here; 〇 is the bare K-cost dot, no count shown, since the DSL's own PAY(K) has no explicit number
+  // either). One-off exact-match entries rather than generalizing buildBuildIcon, same reasoning as
+  // before (PAY(...) prefixes aren't a handled shape there -- see board.resolveProgramOrBuild's own doc
+  // on why the TAP text isn't just "BUILD(...)" alone). B005A/B006A get a 2nd row spelling out the
+  // required die value via dieFace (already sized up for legibility, see .die-face in style.css) --
+  // B007A/UPGRADE has no die-value threshold, so it stays a single row ending in "U".
+  'PAY(K);BUILD((A,B,C,M),1)': () => {
+    const stack = el('div', 'action-icons-stack');
+    stack.appendChild(actionRow([actionDot('K'), actionArrow(), actionEmoji('🔨')]));
+    stack.appendChild(actionRow([actionSuffix('ダイス目'), dieFace(1)]));
+    return stack;
+  },
+  'PAY(K);BUILD((A,B,C,M),6)': () => {
+    const stack = el('div', 'action-icons-stack');
+    stack.appendChild(actionRow([actionDot('K'), actionArrow(), actionEmoji('🔨')]));
+    stack.appendChild(actionRow([actionSuffix('ダイス目'), dieFace(6)]));
+    return stack;
+  },
+  'PAY(K);BUILD(U)': () => actionRow([actionDot('K'), actionArrow(), actionEmoji('🔨'), actionSuffix('U')]),
   // REPLACE_ADD(D,wD) (confirmed 2026-07-29): a passive that swaps "gain your own die" for "gain a
   // white die" instead -- shown as the source resource turning into the replacement.
   'REPLACE_ADD(D,wD)': () => actionRow([actionSuffix('色D'), actionArrow(), actionEmoji('🎲')]),
@@ -2619,6 +2632,16 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
       fillCardNoteContent(noteEl, facts.iconText);
       q('.shop-card__effect').appendChild(noteEl);
     }
+  } else if (options.showEffect && facts.name === '革命家') {
+    // JOB010/革命家 (2026-08-21, per user spec: "革命の兆しを / 獲得する" in larger, bolder text than the
+    // other bespoke JOB notes below -- this ability has no DSL representation at all either (see setup.
+    // grantRevolutionaryBonusIfEarned's own doc), same class of exception, but reusing plain .card-note
+    // read too small/light for what the user wanted here, hence .card-note--large instead of the base
+    // class the other 3 bespoke notes use.
+    tall = true;
+    const noteEl = el('div', 'card-note card-note--large');
+    noteEl.appendChild(document.createTextNode('革命の兆しを\n獲得する'));
+    q('.shop-card__effect').appendChild(noteEl);
   } else if (options.showEffect && (facts.name === '開拓者' || facts.name === '吟遊詩人' || facts.name === '地主')) {
     // Bespoke JOB card-notes (開拓者/JOB009 2026-08-17, per user mockup: "無人AREAに色D / ▽ / ランダム
     // ABC"; 吟遊詩人/JOB008 and 地主/JOB011 2026-08-17, per user mockups: "エンブレム３個 / ▽ / Z　1VP"
