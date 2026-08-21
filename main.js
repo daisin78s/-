@@ -1778,6 +1778,29 @@ function buildChangeQuantityIcon(actionText) {
   ]);
 }
 
+/** CHANGE(nX,(item1,item2,...)) -- pay a single resource, gain a fixed GROUP of resources all at once
+ * (2026-08-21, AREA006B/C/歓楽街's new ability: "CHANGE(2K,(A,B,C,Z))" / LV2's "CHANGE(2K,(A,B,C,3Z))" --
+ * per command-builder.lowerChange's own gain-list semantics this grants every item in the group
+ * unconditionally, not a player choice, so the icon simply lists them all after one arrow). Distinct
+ * from buildChangeQuantityIcon above (single resource on both sides) and the AREA007-only exact-match
+ * 'CHANGE((A,B,C),D)' entry in ACTION_ICON_BUILDERS (group on the PAY side instead, labelled 追加色ダイス
+ * rather than plain resource dots). */
+function buildChangeGroupGainIcon(actionText) {
+  const match = /^CHANGE\((\d*)(K|A|B|C|Z),\(([A-Z0-9,]+)\)\)$/.exec(actionText || '');
+  if (!match) return null;
+  const [, payCount, payResource, gainGroup] = match;
+  const gainNodes = gainGroup.split(',').flatMap((item) => {
+    const itemMatch = /^(\d*)(K|A|B|C|Z)$/.exec(item);
+    return itemMatch ? resourceItemNodes(itemMatch[1], itemMatch[2]) : [];
+  });
+  if (gainNodes.length === 0) return null;
+  return actionRow([
+    ...resourceItemNodes(payCount, payResource),
+    actionArrow(),
+    ...gainNodes,
+  ]);
+}
+
 /** CHANGE(X,Y,n) -- the count-argument form (command-builder.js's lowerChange: pay X get Y, up to n
  * times, scaled down to whatever's affordable -- e.g. C001A/002A/003A's TAP="CHANGE(K,A,2)", back to
  * this shape as of the 2026-08-11 A/B/C data edit, superseding the quantity-prefixed
@@ -2171,6 +2194,8 @@ function buildActionIcons(actionText) {
   if (addMultiResourceIcon) return addMultiResourceIcon;
   const changeQuantityIcon = buildChangeQuantityIcon(actionText);
   if (changeQuantityIcon) return changeQuantityIcon;
+  const changeGroupGainIcon = buildChangeGroupGainIcon(actionText);
+  if (changeGroupGainIcon) return changeGroupGainIcon;
   const cappedChangeIcon = buildCappedChangeIcon(actionText);
   if (cappedChangeIcon) return cappedChangeIcon;
   const untapChoiceIcon = buildUntapChoiceIcon(actionText);
