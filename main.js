@@ -1595,7 +1595,8 @@ const ACTION_ICON_BUILDERS = {
   'REPLACE_ADD(D,wD)': () => actionRow([actionSuffix('色D'), actionArrow(), actionEmoji('🎲')]),
   // JOB003/道化 (2026-08-19, replacing its old SET_DICE_ANY-based TAP entirely -- see this object's own
   // comment near the removed entries above): all owned dice become ☆, auto-placed by the engine.
-  // Icon updated 2026-08-20 per user spec: "☆ダイス" / "（オールマイティ）" on two lines, ☆ at 2x size.
+  // Icon updated 2026-08-20 per user spec: "☆ダイス" / "（オールマイティ）" on two lines, ☆ at 2x size;
+  // parens dropped 2026-08-21 per user follow-up ("（オールマイティ）を オールマイティ に").
   // No leading "⚡🎲" here (an earlier version of this icon had one) -- JOB003's own ONCE=ADD(wD) already
   // renders its own "⚡🎲" row directly above this PASSIVE one (see buildAddWdIcon), so repeating it here
   // just duplicated the same glyph pair twice in a row, per the user's own follow-up report.
@@ -1604,7 +1605,7 @@ const ACTION_ICON_BUILDERS = {
     star.classList.add('action-emoji--large');
     const stack = el('div', 'action-icons-stack');
     stack.appendChild(actionRow([star, actionSuffix('ダイス')]));
-    stack.appendChild(actionRow([actionSuffix('（オールマイティ）')]));
+    stack.appendChild(actionRow([actionSuffix('オールマイティ')]));
     return stack;
   },
 };
