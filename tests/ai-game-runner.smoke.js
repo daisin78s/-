@@ -11,7 +11,7 @@
 const path = require('path');
 const { loadGameData, buildDataIndex } = require('../src/data-loader');
 const { buildEvalTable } = require('../src/ai/eval-table');
-const { playGame, driveTurn } = require('../src/ai/game-runner');
+const { playGame, driveTurn, driveOnboarding } = require('../src/ai/game-runner');
 const { createEmptyGameState, createDie, createCardInstance } = require('../src/game-state');
 const setup = require('../src/setup');
 const { Evaluator } = require('../src/ai/evaluator');
@@ -54,6 +54,27 @@ check('A full game reaches GAME_END, not stuck at MAX_ITERATIONS', state1.phase,
     assertTrue(`${playerId}: qstRewardsGranted value is a non-negative integer`, Number.isInteger(state1.qstRewardsGranted[playerId]) && state1.qstRewardsGranted[playerId] >= 0);
     check(`${playerId}: roundDetailByPlayerId.qstScore matches state.qstRewardsGranted`, roundDetail1[playerId].qstScore, state1.qstRewardsGranted[playerId]);
   }
+}
+
+// ---------------------------------------------------------------------------
+// JOB010/革命家's PICK_JOB_REPLACEMENT (2026-08-21): driveOnboarding must resolve this synchronously
+// (random pick, same policy as its UNTAP_CHOICE handling in driveTurn) rather than leaving it dangling
+// in state.pendingChoices -- an AI player has no other code path that would ever surface/resolve it.
+// ---------------------------------------------------------------------------
+{
+  const state = createEmptyGameState('job010-ai-onboarding');
+  setup.createPlayers(state, PLAYER_NAMES);
+  setup.prepareMaps(state, index);
+  setup.prepareShops(state, index);
+  setup.rollInitialColorDice(state);
+  setup.dealConCards(state);
+  state.cards.B007.ownerId = 'P2'; // simulate 革命の兆し already taken, forcing the replacement-choice branch
+  state.jobPool = ['JOB010']; // force driveOnboarding's random JOB pick to land on JOB010
+  driveOnboarding(state, index, 'P1', evalTable);
+  check('driveOnboarding leaves no dangling PICK_JOB_REPLACEMENT choice for the AI player', state.pendingChoices.some((c) => c.kind === 'PICK_JOB_REPLACEMENT'), false);
+  const p1 = state.players.find((p) => p.id === 'P1');
+  assertTrue('P1 ends up with some job (the replacement, not JOB010)', !!p1.jobCardId && p1.jobCardId !== 'JOB010');
+  check('...and it is actually owned', p1.ownedCardPhysicalIds.includes(p1.jobCardId), true);
 }
 
 // ---------------------------------------------------------------------------

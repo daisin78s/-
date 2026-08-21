@@ -505,6 +505,15 @@ function driveOneAiStepInner(state) {
       // No auto/manual-mode prompt for AI (unlike the human path, e.g. renderJobPool's click handler)
       // -- pendingAutoModeChoice is a human-UI convenience only; MoveGenerator's own move generation
       // already accounts for whichever mode (auto/manual) is actually active, see its own doc.
+      // JOB010/革命家's PICK_JOB_REPLACEMENT (2026-08-21, see setup.grantRevolutionaryBonusIfEarned's
+      // own doc): same random-pick policy as src/ai/game-runner.js's matching driveOnboarding hook --
+      // must resolve synchronously here or it sits in state.pendingChoices forever (renderJobPool's own
+      // "still drafting" check only ever looks at jobCardId, which is already non-null by this point).
+      const jobReplacementChoice = state.pendingChoices.find((c) => c.playerId === ctx.playerId && c.kind === 'PICK_JOB_REPLACEMENT');
+      if (jobReplacementChoice) {
+        const picked = jobReplacementChoice.context.candidates[Math.floor(rngMod.next(state.rng) * jobReplacementChoice.context.candidates.length)];
+        setupMod.resolveJobReplacementChoice(state, INDEX, ctx.playerId, picked);
+      }
     } else {
       const face = rngMod.next(state.rng) < 0.5 ? 'A' : 'B';
       setupMod.chooseConFace(state, INDEX, ctx.playerId, face);
@@ -947,7 +956,7 @@ function enterReplayMode(historyOverride) {
   // index.html's own comment) same as #replay-controls does on purpose.
   for (const id of ['card-inst-overlay', 'build-choice-overlay', 'placement-choice-overlay',
     'tap-choice-overlay', 'auto-mode-choice-overlay', 'turn-end-warning-overlay', 'round-pass-confirm-overlay',
-    'white-overflow-confirm-overlay', 'ranking-overlay']) {
+    'white-overflow-confirm-overlay', 'job-replacement-choice-overlay', 'ranking-overlay']) {
     document.getElementById(id).hidden = true;
   }
   if (historyOverride) {
@@ -4712,6 +4721,57 @@ function renderJobPool(state, next) {
   }
 }
 
+/** JOB010/革命家's PICK_JOB_REPLACEMENT (2026-08-21, see setup.grantRevolutionaryBonusIfEarned/
+ * resolveJobReplacementChoice's own docs): only ever pending for at most one human player at a time
+ * (JOB010 can only be drafted once per game -- see setup.js's own doc), so this is a single full-screen
+ * overlay (#job-replacement-choice-overlay, same "card-inst-overlay" shape as build-choice-overlay,
+ * white-overflow-confirm-overlay, etc.) rather than a per-player panel like renderJobPool/renderConChoice
+ * -- its z-index blocks every other click, including the CON-choice screen underneath, which would
+ * otherwise let the player pick their CON face before this JOB decision is even final (turn-flow.
+ * getNextTurn/hasFinishedOnboarding only ever check player.jobCardId, which is already non-null --
+ * JOB010's own faceId -- the moment this choice is created). AI players never see this: driveOneAiStep's
+ * ONBOARDING branch resolves it synchronously right after chooseJob, before this ever renders. */
+function renderJobReplacementChoice(state) {
+  const overlay = document.getElementById('job-replacement-choice-overlay');
+  const choice = state.pendingChoices.find((c) => c.kind === 'PICK_JOB_REPLACEMENT' && !isAiPlayer(c.playerId));
+  if (!choice) {
+    overlay.hidden = true;
+    return;
+  }
+  overlay.hidden = false;
+  const list = document.getElementById('job-replacement-choice-list');
+  list.innerHTML = '';
+  // .build-choice-group (reused, not a new class): flex-wrap row, centered, matching how
+  // renderBuildChoiceModal lays out its own multi-candidate list.
+  const group = el('div', 'build-choice-group');
+  list.appendChild(group);
+  for (const faceId of choice.context.candidates) {
+    const cardNode = buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true });
+    const tall = cardNode.classList.contains('shop-card--tall');
+    const cell = el('div', tall ? 'owned-card-cell owned-card-cell--tall owned-card-cell--selectable' : 'owned-card-cell owned-card-cell--selectable');
+    cell.appendChild(cardNode);
+    attachPickableEnlarge(cardNode, faceId, {
+      label: 'このJOBを選ぶ',
+      onPick: () => {
+        const commit = () => {
+          setupMod.resolveJobReplacementChoice(state, INDEX, choice.playerId, faceId);
+          render(STATE);
+        };
+        // wD-overflow confirm (same reasoning as renderJobPool's own onPick, 2026-08-19) -- the newly
+        // picked JOB's own ONCE can grant wD (e.g. if JOB003/道化 itself is one of the 3 candidates)
+        // just as easily as a normal draft's ONCE can.
+        if (wouldCauseWhiteOverflow(state, (clone) => setupMod.resolveJobReplacementChoice(clone, INDEX, choice.playerId, faceId))) {
+          pendingWhiteOverflowConfirm = { onConfirm: commit };
+          render(STATE);
+          return;
+        }
+        commit();
+      },
+    });
+    group.appendChild(cell);
+  }
+}
+
 /** Both of player's CON faces side by side (2026-07-30, layout confirmed, see
  * [[project-dice-wp-ui-requirements]]) -- shared by renderConPreview (read-only, shown during
  * pre-round-1 RESOURCE selection) and renderConChoice (interactive, shown during round-1 onboarding).
@@ -5313,6 +5373,7 @@ function render(state) {
   renderBoard(state, next);
   renderPlayers(state, next);
   renderJobPool(state, next);
+  renderJobReplacementChoice(state);
   renderPlayerCards(state, next);
   // Drains GameState.whiteOverflowEvents into whatever placementMessage this render's own action
   // already produced (2026-08-11, per user request) -- appended, not replacing, so a placement that

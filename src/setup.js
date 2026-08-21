@@ -36,6 +36,7 @@ const {
 const { getAreaRow, getCardRow } = require('./data-loader');
 const { runProgram } = require('./executor');
 const { recordCheckpoint } = require('./undo');
+const board = require('./board');
 
 const MONUMENT_SHOP_SLOT_IDS = ['SHOP001', 'SHOP002', 'SHOP003', 'SHOP004', 'SHOP005', 'SHOP006'];
 const NORMAL_SHOP_SLOT_IDS = ['SHOP101', 'SHOP102', 'SHOP103', 'SHOP104', 'SHOP105', 'SHOP106'];
@@ -371,7 +372,79 @@ function chooseJob(state, index, playerId, jobFaceId) {
   player.ownedCardPhysicalIds.push(inst.physicalId);
   player.jobCardId = jobFaceId;
   const row = getCardRow(index, jobFaceId);
-  return runProgram(state, index, { playerId, sourcePhysicalId: inst.physicalId }, row.ONCE);
+  const onceResult = runProgram(state, index, { playerId, sourcePhysicalId: inst.physicalId }, row.ONCE);
+  if (row.NAME === '革命家') grantRevolutionaryBonusIfEarned(state, index, playerId);
+  return onceResult;
+}
+
+/** JOB010/革命家's bespoke ONCE-equivalent (2026-08-21, per user's new INST text -- no DSL, same
+ * "bespoke, NAME-matched" approach as board.hasWildcardDice/hasPioneerAbility/hasLandlordAbility):
+ * "Bカード革命の兆し(B007A)をSHOPか山札から探して獲得する。革命の兆しがいずれかのプレイヤーに先に獲得
+ * されていたならば、代わりに山札からJOBを3枚引きその中からJOBを選ぶ（選んだJOBが革命家を置き換える）"。
+ * Called from chooseJob right after JOB010's own (empty) ONCE, so every one of chooseJob's existing
+ * callers gets this for free without their own bookkeeping (confirmed via Explore agent: none of them
+ * inspect chooseJob's return value). No cost paid either way -- this is a drafted bonus, not a build. */
+function grantRevolutionaryBonusIfEarned(state, index, playerId) {
+  const player = state.players.find((p) => p.id === playerId);
+  if (state.cards.B007.ownerId === null) {
+    const shop = state.shops.NORMAL;
+    const slotId = Object.keys(shop.slots).find((id) => shop.slots[id] === 'B007A');
+    if (slotId) {
+      shop.slots[slotId] = null;
+      board.compactShop(state, 'NORMAL');
+    } else {
+      const drawIndex = shop.drawPile.indexOf('B007A');
+      if (drawIndex !== -1) shop.drawPile.splice(drawIndex, 1);
+      // If B007A is in neither the shop slots nor the draw pile, it must already be owned -- but that's
+      // exactly the state.cards.B007.ownerId check above, so this branch is unreachable in practice.
+    }
+    const inst = createCardInstance('B007A');
+    inst.ownerId = playerId;
+    state.cards[inst.physicalId] = inst;
+    player.ownedCardPhysicalIds.push(inst.physicalId);
+    return;
+  }
+
+  const takenJobFaceIds = new Set([...state.jobPool, ...state.players.map((p) => p.jobCardId).filter(Boolean)]);
+  const remaining = index.raw.JOB.map((r) => r.ID).filter((id) => !takenJobFaceIds.has(id));
+  const candidates = shuffle(state.rng, remaining).slice(0, 3);
+  state.pendingChoices.push({
+    id: nextChoiceId(),
+    playerId,
+    kind: 'PICK_JOB_REPLACEMENT',
+    context: { candidates },
+  });
+}
+
+/** Resolves a player's PICK_JOB_REPLACEMENT choice (see grantRevolutionaryBonusIfEarned's own doc):
+ * chosenFaceId must be one of choice.context.candidates. The pick REPLACES JOB010 entirely (2026-08-21,
+ * per user decision) -- JOB010 is removed from the player's owned cards and its state.cards entry
+ * released (ownerId: null, left in state rather than deleted, same convention as every other card-
+ * removal in this codebase), then the new JOB is drafted via the same steps chooseJob itself uses
+ * (own state.cards entry, ownedCardPhysicalIds, jobCardId, run its ONCE). Deliberately does not call
+ * chooseJob() itself, since chosenFaceId is never in state.jobPool (this is a private 3-card draw, not
+ * the shared pool -- see grantRevolutionaryBonusIfEarned's own doc) and chooseJob would reject that. */
+function resolveJobReplacementChoice(state, index, playerId, chosenFaceId) {
+  const choiceIndex = state.pendingChoices.findIndex((c) => c.playerId === playerId && c.kind === 'PICK_JOB_REPLACEMENT');
+  if (choiceIndex === -1) return { success: false, reason: 'NO_PENDING_CHOICE' };
+  const choice = state.pendingChoices[choiceIndex];
+  if (!choice.context.candidates.includes(chosenFaceId)) return { success: false, reason: 'INVALID_SELECTION' };
+
+  const player = state.players.find((p) => p.id === playerId);
+  const oldJobPhysicalId = player.jobCardId;
+  player.ownedCardPhysicalIds = player.ownedCardPhysicalIds.filter((id) => id !== oldJobPhysicalId);
+  state.cards[oldJobPhysicalId].ownerId = null;
+
+  const inst = createCardInstance(chosenFaceId);
+  inst.ownerId = playerId;
+  state.cards[inst.physicalId] = inst;
+  player.ownedCardPhysicalIds.push(inst.physicalId);
+  player.jobCardId = chosenFaceId;
+
+  state.pendingChoices.splice(choiceIndex, 1);
+  const row = getCardRow(index, chosenFaceId);
+  const onceResult = runProgram(state, index, { playerId, sourcePhysicalId: inst.physicalId }, row.ONCE);
+  return { success: true, onceResult };
 }
 
 /** @param {'A'|'B'} face */
@@ -414,6 +487,7 @@ module.exports = {
   computeStartOrder,
   dealJobPool,
   chooseJob,
+  resolveJobReplacementChoice,
   chooseConFace,
   receiveInitialResources,
 };

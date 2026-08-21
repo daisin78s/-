@@ -175,6 +175,19 @@
     </div>
   </div>
 
+  <!-- JOB010/革命家's PICK_JOB_REPLACEMENT (2026-08-21): B007A/革命の兆し was already taken by someone
+       else, so this player draws 3 JOBs from outside the shared pool and picks 1 to replace JOB010 with
+       -- see main.js's renderJobReplacementChoice/setup.resolveJobReplacementChoice. No close button,
+       same reasoning as build-choice-overlay: once offered, a pick is mandatory. -->
+  <div id="job-replacement-choice-overlay" class="card-inst-overlay" hidden>
+    <div class="card-inst-modal build-choice-modal">
+      <div class="card-inst-modal__header">
+        <span class="card-inst-modal__title">革命の兆しは既に獲得済みです。代わりのJOBを選んでください</span>
+      </div>
+      <div class="card-inst-modal__body" id="job-replacement-choice-list"></div>
+    </div>
+  </div>
+
   <!-- CON002B's "real or Z" payment choice for an AREA that pays A/B/C directly, e.g. AREA007's
        CHANGE((A,B,C),D) (2026-07-31) -- see main.js's attemptPlaceSelectedDie/renderPlacementChoiceModal.
        Unlike the BUILD modal above, nothing has been committed yet at this point, so a cancel button

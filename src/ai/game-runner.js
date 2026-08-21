@@ -68,6 +68,17 @@ function driveOnboarding(state, index, playerId, evaluator) {
   const jobFaceId = state.jobPool[Math.floor(rng.next(state.rng) * state.jobPool.length)];
   setup.chooseJob(state, index, playerId, jobFaceId);
 
+  // JOB010/革命家's PICK_JOB_REPLACEMENT (2026-08-21, see setup.grantRevolutionaryBonusIfEarned's own
+  // doc): only fires when B007A/革命の兆し was already owned by someone else, same "random, not
+  // simulate-and-score" policy as every other AI-facing pendingChoice in this module (untapChoice above,
+  // setupGame's own RESOURCE pick) -- must resolve synchronously here or it sits in state.pendingChoices
+  // forever, since nothing else in the onboarding loop surfaces or gates on it.
+  const jobReplacementChoice = state.pendingChoices.find((c) => c.playerId === playerId && c.kind === 'PICK_JOB_REPLACEMENT');
+  if (jobReplacementChoice) {
+    const picked = jobReplacementChoice.context.candidates[Math.floor(rng.next(state.rng) * jobReplacementChoice.context.candidates.length)];
+    setup.resolveJobReplacementChoice(state, index, playerId, picked);
+  }
+
   const face = rng.next(state.rng) < 0.5 ? 'A' : 'B';
   setup.chooseConFace(state, index, playerId, face);
 

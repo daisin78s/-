@@ -137,6 +137,72 @@ check('turnOrder contains all 4 players exactly once', new Set(state.turnOrder).
 }
 
 // ---------------------------------------------------------------------------
+// JOB010/革命家's bespoke ability (2026-08-21, no DSL behind it -- see setup.
+// grantRevolutionaryBonusIfEarned/resolveJobReplacementChoice's own docs): drafting JOB010 grants
+// B007A/革命の兆し directly (from wherever it currently sits -- SHOP slot or draw pile) if nobody's
+// claimed it yet, or offers a private 3-JOB replacement choice (outside the shared jobPool) if someone
+// already has, with the pick replacing JOB010 as the player's own job entirely.
+// ---------------------------------------------------------------------------
+function forceB007ALocation(state, location) {
+  const shop = state.shops.NORMAL;
+  for (const slotId of Object.keys(shop.slots)) if (shop.slots[slotId] === 'B007A') shop.slots[slotId] = null;
+  const drawIdx = shop.drawPile.indexOf('B007A');
+  if (drawIdx !== -1) shop.drawPile.splice(drawIdx, 1);
+  if (location === 'slot') shop.slots.SHOP101 = 'B007A';
+  else shop.drawPile.unshift('B007A');
+}
+{
+  const state = createEmptyGameState('job010-shop-grant');
+  setup.createPlayers(state, ['Alice', 'Bob', 'Carol', 'Dan']);
+  setup.prepareShops(state, index);
+  forceB007ALocation(state, 'slot');
+  setup.dealJobPool(state, index, ['JOB010']);
+  const beforeResources = state.players[0].resources;
+  setup.chooseJob(state, index, 'P1', 'JOB010');
+  check('JOB010 draft grants B007A directly when it is sitting in a SHOP slot', state.players[0].ownedCardPhysicalIds.includes('B007'), true);
+  check('...at no resource cost', state.players[0].resources, beforeResources);
+  check('...B007 is now owned by P1', state.cards.B007.ownerId, 'P1');
+  check('...its currentFaceId is B007A (base tier, not upgraded)', state.cards.B007.currentFaceId, 'B007A');
+  check('...the shop slot no longer holds B007A (compacted)', Object.values(state.shops.NORMAL.slots).includes('B007A'), false);
+}
+{
+  const state = createEmptyGameState('job010-drawpile-grant');
+  setup.createPlayers(state, ['Alice', 'Bob', 'Carol', 'Dan']);
+  setup.prepareShops(state, index);
+  forceB007ALocation(state, 'drawpile');
+  setup.dealJobPool(state, index, ['JOB010']);
+  setup.chooseJob(state, index, 'P1', 'JOB010');
+  check('JOB010 draft grants B007A directly when it is sitting in the draw pile', state.players[0].ownedCardPhysicalIds.includes('B007'), true);
+  check('...B007A is no longer in the draw pile', state.shops.NORMAL.drawPile.includes('B007A'), false);
+}
+{
+  const state = createEmptyGameState('job010-already-taken');
+  setup.createPlayers(state, ['Alice', 'Bob', 'Carol', 'Dan']);
+  setup.prepareShops(state, index);
+  state.cards.B007.ownerId = 'P2'; // simulate someone else already owning 革命の兆し
+  setup.dealJobPool(state, index, ['JOB010']);
+  setup.chooseJob(state, index, 'P1', 'JOB010');
+  const choice = state.pendingChoices.find((c) => c.playerId === 'P1' && c.kind === 'PICK_JOB_REPLACEMENT');
+  assertTrue('A PICK_JOB_REPLACEMENT choice is queued when B007A is already owned by someone else', !!choice);
+  check('...offering exactly 3 candidates', choice.context.candidates.length, 3);
+  check('...none of them are still sitting in the job pool', choice.context.candidates.some((id) => state.jobPool.includes(id)), false);
+  check('...none of them equal JOB010 itself', choice.context.candidates.includes('JOB010'), false);
+  check('...candidates are unique', new Set(choice.context.candidates).size, 3);
+
+  const bad = setup.resolveJobReplacementChoice(state, index, 'P1', 'JOB999');
+  check('resolveJobReplacementChoice rejects a candidate that was not on offer', bad, { success: false, reason: 'INVALID_SELECTION' });
+
+  const pickedFaceId = choice.context.candidates[0];
+  const result = setup.resolveJobReplacementChoice(state, index, 'P1', pickedFaceId);
+  check('resolveJobReplacementChoice succeeds for an offered candidate', result.success, true);
+  check('P1.jobCardId is now the picked replacement', state.players[0].jobCardId, pickedFaceId);
+  check('P1 owns the picked replacement job', state.players[0].ownedCardPhysicalIds.includes(pickedFaceId), true);
+  check("JOB010 is no longer among P1's owned cards", state.players[0].ownedCardPhysicalIds.includes('JOB010'), false);
+  check("JOB010's own card entry is released (ownerId null)", state.cards.JOB010.ownerId, null);
+  check('The pendingChoice is resolved/removed', state.pendingChoices.some((c) => c.kind === 'PICK_JOB_REPLACEMENT'), false);
+}
+
+// ---------------------------------------------------------------------------
 // Debug-setup overrides (2026-08-13, per user request: a debug-mode UI lets P1 pre-choose which CON/
 // JOB-pool/initial-RESOURCE/ABC-shop cards show up, everyone else staying fully random). Each function
 // keeps its normal-call (no extra argument) behavior unchanged -- already covered by every check above,
