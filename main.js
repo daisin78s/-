@@ -548,7 +548,7 @@ function driveOneAiStepInner(state) {
     // die immediately, round after round, no END_TURN in between (same root cause fixed in
     // src/ai/game-runner.js's driveTurn/ai-player.js's #rolloutScore -- this is main.js's own separate
     // copy of the same tracking, used when a human is actually watching the AI play live).
-    aiOpenTurnHasPlacedDie = ctx.hasPlacedDieThisTurn || ((move.type === 'PLACE_DIE' || move.type === 'PLACE_WILDCARD_DIE' || move.type === 'PASS_DIE') && result.success);
+    aiOpenTurnHasPlacedDie = ctx.hasPlacedDieThisTurn || ((move.type === 'PLACE_DIE' || move.type === 'PLACE_WILDCARD_DIE' || move.type === 'PLACE_DICE_GROUP' || move.type === 'PASS_DIE') && result.success);
   }
   return true;
 }
@@ -605,9 +605,12 @@ function pumpAiDelayed() {
       const move = aiPlayerFor(ctx.playerId).selectMove(STATE, ctx.playerId, { hasPlacedDieThisTurn: ctx.hasPlacedDieThisTurn });
       // PLACE_WILDCARD_DIE (2026-08-20) included alongside PLACE_DIE -- see aiOpenTurnHasPlacedDie's own
       // comment above for the main bug; this one is cosmetic only (which die glows before "1手ずつ"
-      // places it), but the same move type was missing here too.
-      if (move && (move.type === 'PLACE_DIE' || move.type === 'PLACE_WILDCARD_DIE' || move.type === 'PASS_DIE')) {
-        aiPreHighlightMove = { playerId: ctx.playerId, dieId: move.dieId };
+      // places it), but the same move type was missing here too. PLACE_DICE_GROUP (2026-08-21) has 2
+      // dieIds instead of a single dieId -- just glows the first of the pair (aiPreHighlightMove/its
+      // one consumer at renderPlayers only ever track a single die.id, not worth generalizing to a set
+      // for a cosmetic-only highlight).
+      if (move && (move.type === 'PLACE_DIE' || move.type === 'PLACE_WILDCARD_DIE' || move.type === 'PLACE_DICE_GROUP' || move.type === 'PASS_DIE')) {
+        aiPreHighlightMove = { playerId: ctx.playerId, dieId: move.dieId !== undefined ? move.dieId : move.dieIds[0] };
         render(STATE);
       }
     }

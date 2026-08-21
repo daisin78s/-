@@ -10,6 +10,7 @@
  * Move shapes (a plain discriminated union, matching what simulator.js's applyInPlace expects):
  *   { type:'PLACE_DIE', playerId, dieId, mapId, slotIndex, buildCandidateIndex? }
  *   { type:'PLACE_WILDCARD_DIE', playerId, dieId, mapId, buildCandidateIndex? }
+ *   { type:'PLACE_DICE_GROUP', playerId, dieIds:[id,id], mapId, buildCandidateIndex? }
  *   { type:'PASS_DIE', playerId, dieId }
  *   { type:'BARE_TAP', playerId, physicalId, chosenDieId?, chosenValue?, chosenDelta?, buildCandidateIndex? }
  *   { type:'FREE_ACTION', playerId, freeActionId }
@@ -36,6 +37,12 @@
  * no slotIndex loop, for a wildcard-owning player -- board.placeWildcardDie auto-assigns the slot itself
  * (see its own doc), so there is nothing for MoveGenerator to search over per-slot the way PLACE_DIE
  * does.
+ *
+ * PLACE_DICE_GROUP (2026-08-21, per user request "AIがダイスを２個使ってモニュメントを獲得できるように
+ * してほしい"): #placeDiceGroupMoves enumerates 2-die pairs (never 3+) at 王宮/元老院 only -- the only 2
+ * maps board.placeDiceGroup supports -- and only pairs summing to >6 (a single die already covers <=6 via
+ * #placeDieMoves). No multi-turn "hold a die back hoping for a better pair" strategy -- this only offers
+ * moves that are legal *right now*, same greedy-per-turn scope as every other Move here.
  */
 
 const { getAreaRow, getCardRow } = require('../data-loader');
@@ -101,6 +108,7 @@ class MoveGenerator {
 
     if (!context.hasPlacedDieThisTurn) {
       moves.push(...this.#placeDieMoves(state, index, playerId, player));
+      moves.push(...this.#placeDiceGroupMoves(state, index, playerId, player));
     }
     // Only offered while actually needed to unblock a RESOURCE_TOTAL_LIMIT-blocked turn end (2026-08-03,
     // per user feedback: "AIが無駄にA→K B→K C→K Z→K wD→2Kをやっています この行動には意味がないため
@@ -200,6 +208,49 @@ class MoveGenerator {
       moves.push({ type: 'PLACE_WILDCARD_DIE', playerId, dieId: die.id, mapId });
     }
     return true;
+  }
+
+  /** PLACE_DICE_GROUP (2026-08-21, per user request -- see board.placeDiceGroup's own doc): AI-side
+   * enumeration of 2-die monument-building placements at 王宮(CASTLE_MAP_ID)/元老院(AREA009_MAP_ID),
+   * the only 2 maps board.placeDiceGroup supports. Deliberately pairs-only (never 3+ dice, per user
+   * decision) and skips any pair whose combined value is <=6 (a single die could already reach that on
+   * its own via #placeDieMoves, so there is no reason to ever spend 2 dice on it) -- this is a
+   * MoveGenerator-side filter distinct from board.placeDiceGroup's own excludeOverfundedMonuments (which
+   * only filters which monuments are offered for a pair that DOES get dry-run, not whether the pair is
+   * tried at all). A 道化 (JOB003, hasWildcardDice) player can never use this path at all (see
+   * board.placeDiceGroup's own WILDCARD_GROUP_NOT_ALLOWED refusal), so this returns early for them
+   * rather than wasting dry-run clones that would always fail. Mirrors #placeDieMoves' own
+   * pendingBuild/buildCandidateIndex handling exactly, just for a die *pair* instead of a single die. */
+  #placeDiceGroupMoves(state, index, playerId, player) {
+    const moves = [];
+    if (board.hasWildcardDice(state, index, playerId)) return moves;
+    const unplacedDice = player.dice.filter((d) => d.placedMapId === null && !d.passed);
+    for (let i = 0; i < unplacedDice.length; i++) {
+      for (let j = i + 1; j < unplacedDice.length; j++) {
+        const dieA = unplacedDice[i];
+        const dieB = unplacedDice[j];
+        if (dieA.value + dieB.value <= 6) continue;
+        for (const mapId of [board.CASTLE_MAP_ID, board.AREA009_MAP_ID]) {
+          const clone = cloneState(state);
+          const result = board.placeDiceGroup(clone, index, { playerId }, [dieA.id, dieB.id], mapId);
+          if (!result.success) continue;
+          const dieIds = [dieA.id, dieB.id];
+          if (result.actionResult && result.actionResult.pendingBuild) {
+            const candidates = result.actionResult.pendingBuild.candidates;
+            for (let buildCandidateIndex = 0; buildCandidateIndex < candidates.length; buildCandidateIndex++) {
+              moves.push({ type: 'PLACE_DICE_GROUP', playerId, dieIds, mapId, buildCandidateIndex });
+            }
+            // Same "also offer the build left unresolved" fallback as #placeDieMoves -- see its own
+            // comment for why (candidates aren't affordability-filtered here, only category/dice-value
+            // eligible).
+            moves.push({ type: 'PLACE_DICE_GROUP', playerId, dieIds, mapId });
+          } else {
+            moves.push({ type: 'PLACE_DICE_GROUP', playerId, dieIds, mapId });
+          }
+        }
+      }
+    }
+    return moves;
   }
 
   #freeActionMoves(state, index, playerId, player) {

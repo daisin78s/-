@@ -108,6 +108,24 @@ function applyInPlace(state, index, move) {
       }
       return result;
     }
+    // PLACE_DICE_GROUP (2026-08-21, see move-generator.js's own doc): mirrors PLACE_DIE exactly, just
+    // via board.placeDiceGroup (2 dice, no slotIndex -- board.placeDiceGroup assigns each die its own
+    // slot itself) instead of board.placeDice.
+    case 'PLACE_DICE_GROUP': {
+      const result = board.placeDiceGroup(state, index, { playerId: move.playerId }, move.dieIds, move.mapId);
+      if (!result.success) return result;
+      if (result.actionResult && result.actionResult.pendingBuild) {
+        if (move.buildCandidateIndex === undefined || move.buildCandidateIndex === null) {
+          return { success: true, pendingBuild: result.actionResult.pendingBuild };
+        }
+        const candidate = result.actionResult.pendingBuild.candidates[move.buildCandidateIndex];
+        if (!candidate) throw new SimulationError(`buildCandidateIndex ${move.buildCandidateIndex} out of range`);
+        const bzDiscount = maxBzDiscount(state, index, move.playerId, candidate);
+        const buildResult = board.completeAreaBuild(state, index, { playerId: move.playerId, bzDiscount }, candidate, result.actionResult.pendingBuild.remainingCommands);
+        return { ...buildResult, candidate };
+      }
+      return result;
+    }
     case 'PASS_DIE':
       return board.passDie(state, index, { playerId: move.playerId }, move.dieId);
     case 'BARE_TAP': {

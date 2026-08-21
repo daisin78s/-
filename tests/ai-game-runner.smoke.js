@@ -192,5 +192,64 @@ check('A full game reaches GAME_END, not stuck at MAX_ITERATIONS', state1.phase,
   check('...specifically a PLACE_WILDCARD_DIE (JOB003\'s own move type)', placementMoves[0].move.type, 'PLACE_WILDCARD_DIE');
 }
 
+// ---------------------------------------------------------------------------
+// PLACE_DICE_GROUP (2026-08-21, per user request "AIがダイスを２個使ってモニュメントを獲得できるように
+// してほしい"): an AI whose only 2 unplaced dice sum to >6 actually builds a monument via driveTurn, not
+// just wastes them on 2 separate single-die placements -- exercised through the real engine/real data,
+// not just move-generator.js/simulator.js in isolation (see their own smoke tests for that).
+// ---------------------------------------------------------------------------
+{
+  const state = createEmptyGameState('ai-place-dice-group-integration');
+  setup.createPlayers(state, PLAYER_NAMES);
+  setup.prepareMaps(state, index);
+  setup.prepareShops(state, index);
+  const p1 = state.players.find((p) => p.id === 'P1');
+  p1.resources.BZ = 30; // affords whatever monument the combined buildValue reaches
+  p1.dice = [4, 5].map((v, i) => {
+    const die = createDie(`test-group-integration-${i}`, 'COLOR');
+    die.value = v;
+    return die;
+  });
+  // P2-P4 each need at least one still-unplaced die too (found via direct debugging) -- otherwise
+  // isRoundOver (every player's dice all placed-or-passed) is vacuously true the instant P1's own
+  // END_TURN runs (an empty dice array trivially satisfies "every die placed/passed"), triggering a real
+  // endRound() -- which correctly rerolls/un-places every COLOR die for the next round, including the
+  // ones P1 just placed -- purely a test-setup artifact of giving only P1 any dice at all, not a bug in
+  // PLACE_DICE_GROUP itself (the monument is already built and owned by then regardless).
+  for (const otherId of ['P2', 'P3', 'P4']) {
+    const other = state.players.find((p) => p.id === otherId);
+    other.dice.push(createDie(`test-group-integration-other-${otherId}`, 'COLOR'));
+  }
+  // Every M-sheet monument with DICE>=7 (M001-M006) has a printed VP comparable to (or higher than) the
+  // low-threshold ones a single die could otherwise always reach (M007-M012, DICE<=6 -- getBuildCandidates
+  // has no other gating for M, so a lone die trivially builds one of those too) -- so both A/B/C/SPECIAL
+  // shop slots AND every low-threshold monument are cleared here, leaving M001-M006 (DICE 12..7, all
+  // genuinely unreachable by either lone die (4 or 5) alone) as literally the only buildable candidates,
+  // forcing driveTurn to actually compare "spend both dice on one monument" against every alternative.
+  // round=4 (2026-08-21, found via direct debugging -- see move-generator.js's own PLACE_DICE_GROUP doc):
+  // evaluator.js's v('D') (the *option value* of an unplaced die) currently outweighs any single
+  // monument's VP payoff in round 1 (v('D')=50 forfeited per die vs. VP*v(VP)<=6*10=60 total for 2 dice,
+  // a net loss) -- round 4 makes committing both dice free (v('D')=0) while every VP is worth 1000, which
+  // is when this feature is actually meant to matter (per the user's own framing: dice too big to place
+  // singly, late enough that holding them has no value left).
+  state.round = 4;
+  state.shops.M.slots = { SHOP001: 'M001', SHOP002: 'M002', SHOP003: 'M003', SHOP004: 'M004', SHOP005: 'M005', SHOP006: 'M006' };
+  for (const slotId of Object.keys(state.shops.NORMAL.slots)) state.shops.NORMAL.slots[slotId] = null;
+  for (const slotId of Object.keys(state.shops.SPECIAL.slots)) state.shops.SPECIAL.slots[slotId] = null;
+
+  const evaluator = new Evaluator(index, evalTable);
+  const moveGenerator = new MoveGenerator();
+  const simulator = new Simulator();
+  const aiPlayer = new AIPlayer(index, moveGenerator, evaluator, simulator);
+
+  const moves = driveTurn(state, index, 'P1', aiPlayer, false);
+  const groupMove = moves.find((m) => m.move.type === 'PLACE_DICE_GROUP');
+  assertTrue('driveTurn actually takes a PLACE_DICE_GROUP move when it dominates the alternatives', !!groupMove);
+  check('...it succeeded', groupMove && groupMove.result.success, true);
+  const resultP1 = state.players.find((p) => p.id === 'P1');
+  check('Both dice ended up placed', resultP1.dice.every((d) => d.placedMapId !== null), true);
+  check('A monument was actually built', resultP1.ownedCardPhysicalIds.length, 1);
+}
+
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);

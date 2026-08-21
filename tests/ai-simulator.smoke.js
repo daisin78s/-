@@ -122,6 +122,56 @@ function giveDie(state, playerId, value) {
 }
 
 // ---------------------------------------------------------------------------
+// PLACE_DICE_GROUP (2026-08-21, see move-generator.js's own doc): mirrors the 3 PLACE_DIE/castle blocks
+// above, just with a die pair (dieIds) instead of a single die + slotIndex.
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  for (const r of ['K', 'A', 'B', 'C', 'Z']) p1.resources[r] = 20; // affords any candidate
+  const dieA = giveDie(state, 'P1', 4);
+  const dieB = giveDie(state, 'P1', 5); // combined buildValue 9
+
+  const probe = applyInPlace(require('../src/game-state').cloneState(state), index, { type: 'PLACE_DICE_GROUP', playerId: 'P1', dieIds: [dieA.id, dieB.id], mapId: 'MAP008' });
+  assertTrue('Probe: group-placing on the castle without a buildCandidateIndex returns pendingBuild', probe.pendingBuild && probe.pendingBuild.candidates.length > 0);
+
+  const move = { type: 'PLACE_DICE_GROUP', playerId: 'P1', dieIds: [dieA.id, dieB.id], mapId: 'MAP008', buildCandidateIndex: 0 };
+  const { state: resultState, result } = simulator.apply(state, index, move);
+  check('PLACE_DICE_GROUP with buildCandidateIndex completes the build', result.success, true);
+  const resultP1 = resultState.players.find((p) => p.id === 'P1');
+  check('Both dice are placed in the returned state', [dieA.id, dieB.id].every((id) => resultP1.dice.find((d) => d.id === id).placedMapId === 'MAP008'), true);
+  check('...on separate slots (not stacked together)', new Set(resultState.maps.MAP008.slots.flatMap((occ, i) => occ.length > 0 ? [i] : [])).size, 2);
+  check('The player owns one more card in the returned state', resultP1.ownedCardPhysicalIds.length, 1);
+  check('The ORIGINAL state owns no cards', p1.ownedCardPhysicalIds.length, 0);
+}
+{
+  // No buildCandidateIndex: both dice still get placed (declining the build out of choice), nothing built.
+  const state = freshStateWithShops();
+  player(state, 'P1').resources.BZ = 20;
+  const dieA = giveDie(state, 'P1', 4);
+  const dieB = giveDie(state, 'P1', 5);
+  const move = { type: 'PLACE_DICE_GROUP', playerId: 'P1', dieIds: [dieA.id, dieB.id], mapId: 'MAP008' };
+  const { state: resultState, result } = simulator.apply(state, index, move);
+  check('Declining the build still succeeds (both dice placed, build left unresolved)', result.success, true);
+  const resultP1 = resultState.players.find((p) => p.id === 'P1');
+  check('Both dice are placed', [dieA.id, dieB.id].every((id) => resultP1.dice.find((d) => d.id === id).placedMapId === 'MAP008'), true);
+  check('No card was built', resultP1.ownedCardPhysicalIds.length, 0);
+}
+{
+  const state = freshStateWithShops();
+  player(state, 'P1').resources.BZ = 20;
+  const dieA = giveDie(state, 'P1', 4);
+  const dieB = giveDie(state, 'P1', 5);
+  let threw = false;
+  try {
+    applyInPlace(state, index, { type: 'PLACE_DICE_GROUP', playerId: 'P1', dieIds: [dieA.id, dieB.id], mapId: 'MAP008', buildCandidateIndex: 9999 });
+  } catch (e) {
+    threw = e instanceof SimulationError;
+  }
+  check('An out-of-range buildCandidateIndex throws SimulationError (group placement too)', threw, true);
+}
+
+// ---------------------------------------------------------------------------
 // BARE_TAP (immediate): C001A.TAP=CHANGE(K,A,2).
 // ---------------------------------------------------------------------------
 {

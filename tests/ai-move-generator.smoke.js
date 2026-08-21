@@ -100,6 +100,51 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
 }
 
 // ---------------------------------------------------------------------------
+// PLACE_DICE_GROUP (2026-08-21, per user request "AIがダイスを２個使ってモニュメントを獲得できるように
+// してほしい" -- see move-generator.js's own doc): pairs summing >6 at 王宮/元老院 (MAP008/MAP009) only.
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  player(state, 'P1').resources.BZ = 20; // covers whatever monument candidate the combined value reaches
+  const dieA = giveDie(state, 'P1', 4);
+  const dieB = giveDie(state, 'P1', 5); // 4+5=9 > 6
+  const moves = moveGenerator.generateMoves(state, index, 'P1', { hasPlacedDieThisTurn: false });
+  const groupMoves = movesOfType(moves, 'PLACE_DICE_GROUP');
+  assertTrue('A 2-die pair summing to 9 (>6) yields at least one PLACE_DICE_GROUP move', groupMoves.length > 0);
+  check('...every PLACE_DICE_GROUP move is scoped to 王宮/元老院 only', groupMoves.every((m) => m.mapId === 'MAP008' || m.mapId === 'MAP009'), true);
+  check('...every PLACE_DICE_GROUP move carries exactly this pair\'s 2 dieIds', groupMoves.every((m) => [...m.dieIds].sort().join() === [dieA.id, dieB.id].sort().join()), true);
+  assertTrue('At least one per-candidate move exists (buildCandidateIndex set)', groupMoves.some((m) => m.buildCandidateIndex !== undefined));
+  assertTrue('A "leave unresolved" move also exists (buildCandidateIndex omitted)', groupMoves.some((m) => m.buildCandidateIndex === undefined));
+}
+{
+  // A pair summing to <=6 never yields a PLACE_DICE_GROUP move at all -- a single die already reaches
+  // that range via PLACE_DIE, so MoveGenerator doesn't even attempt the pair.
+  const state = freshStateWithShops();
+  player(state, 'P1').resources.BZ = 20;
+  giveDie(state, 'P1', 2);
+  giveDie(state, 'P1', 4); // 2+4=6, not >6
+  const moves = moveGenerator.generateMoves(state, index, 'P1', { hasPlacedDieThisTurn: false });
+  check('A pair summing to exactly 6 yields zero PLACE_DICE_GROUP moves', movesOfType(moves, 'PLACE_DICE_GROUP').length, 0);
+}
+{
+  // JOB003/道化 (hasWildcardDice): group placement is refused outright by board.placeDiceGroup itself
+  // (WILDCARD_GROUP_NOT_ALLOWED) -- MoveGenerator skips generating it entirely rather than dry-running
+  // pairs that would always fail.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.jobCardId = 'JOB003';
+  const jobInst = createCardInstance('JOB003');
+  jobInst.ownerId = 'P1';
+  state.cards[jobInst.physicalId] = jobInst;
+  p1.ownedCardPhysicalIds.push(jobInst.physicalId);
+  p1.resources.BZ = 20;
+  giveDie(state, 'P1', 5);
+  giveDie(state, 'P1', 6); // 5+6=11 > 6, would otherwise qualify
+  const moves = moveGenerator.generateMoves(state, index, 'P1', { hasPlacedDieThisTurn: false });
+  check('A 道化 (JOB003) player never gets a PLACE_DICE_GROUP move, even with a qualifying pair', movesOfType(moves, 'PLACE_DICE_GROUP').length, 0);
+}
+
+// ---------------------------------------------------------------------------
 // A BUILD-kind BARE_TAP (B005A.TAP=PAY(K);BUILD((A,B,C,M),1)) offers one move per candidate and NO
 // "leave unresolved" fallback (fixed 2026-08-02: that fallback was a true no-op for BARE_TAP since
 // board.useBareTapAbility never taps the card or spends anything before returning pendingBuild --
