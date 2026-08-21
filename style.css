@@ -1147,17 +1147,18 @@ h1, h2, h3 { margin: 0; }
 }
 
 /* Confirmed 2026-07-29: die VALUES (as opposed to resource counts) use the ⚀-⚅ die-face glyphs
-   instead of numbered-circle emoji or plain digits, sized up for legibility. font-family explicit here
-   (2026-08-21, per user report "Bカードのダイス目相変わらずフォントがおかしいです AREAや" then
-   "AREAやモニュメントと同じフォント同じサイズにして") -- the board's own .map-tile__action explicitly
-   sets a monospace stack (SFMono-Regular/Consolas), so declaring the identical stack directly on
-   .die-face itself (rather than relying on whatever font each context happens to inherit -- an earlier
-   attempt tried matching monuments via the *inherited* sans-serif body font instead, which the user
-   reported didn't fix it) guarantees .die-face renders identically in EVERY context: the board
-   (.map-tile__action), monuments (.shop-card__req, which never set its own font-family at all), and
-   B001-007's cards (.shop-card__effect, whose own monospace override this now matches anyway). */
+   instead of numbered-circle emoji or plain digits, sized up for legibility.
+   2026-08-21: two earlier attempts at a consistent font here both failed per user screenshots (one
+   matched the *inherited* sans-serif body font, one matched .map-tile__action's own declared monospace
+   stack) -- neither actually pins down which font Windows/Chrome substitutes for ⚀-⚅ when the declared
+   fonts don't contain the glyph (Consolas/SFMono-Regular/most sans-serif fonts don't), so the *same*
+   declared stack could still resolve to a *different* fallback font depending on context, rendering
+   inconsistently (compact black outline in one place, a bold colored die-face icon in another -- see
+   the user's own side-by-side screenshot). Naming a font that actually contains these glyphs directly,
+   instead of leaving it to fallback, removes that ambiguity: Segoe UI Symbol (Windows) is what the
+   board's own die-face glyphs were already effectively resolving to. */
 .die-face {
-  font-family: "SFMono-Regular", Consolas, monospace;
+  font-family: "Segoe UI Symbol", "Segoe UI Emoji", "Apple Symbols", sans-serif;
   font-size: 42px;
   line-height: 1;
   color: var(--text);
