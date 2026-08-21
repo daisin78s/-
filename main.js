@@ -2450,6 +2450,11 @@ function buildEffectRow(effect, allowTextFallback = true) {
  * -- emblemChars() below turns it into an ordered, one-char-per-emblem list for rendering/counting. */
 const EMBLEM_BY_DECK = { A: '地', B: '天', C: '人' };
 const EMBLEM_ORDER = ['天', '地', '人'];
+// 2026-08-21, per user request: M007/中央広場(2,2,2=6 chars -> 3 rows), M011/聖域(4,0,0=4 chars -> 2
+// rows), M012/大交易所(0,0,4=4 chars -> 2 rows) -- all 3 happen to want exactly "2 per row" (6/2=3,
+// 4/2=2), so one shared chunk size covers all of them. See fillCardFace's own emblem-rendering doc for
+// why every other multi-emblem card (祝福/M008/M009 included) is deliberately left alone.
+const EMBLEM_ROW_CHUNK_SIZE = { M007: 2, M011: 2, M012: 2 };
 function emblemForFaceId(faceId) {
   if (isNormalDeckCard(faceId)) return { [EMBLEM_BY_DECK[faceId[0]]]: 1 };
   // Not restricted to M any more (2026-08-16, per user report: CON006B「祝福」has real EMBLEM_A/B/C
@@ -2541,12 +2546,34 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     const chars = emblemChars(emblem);
     // Always one line regardless of count (2026-08-16 for up to 3, widened 2026-08-18 per user request
     // for 祝福 specifically -- "縦に並べると見栄えが悪いので...横にして" -- to every count; see
-    // .shop-card__emblem's own doc in style.css, which also affects M007 (identical 2,2,2 shape) and
-    // M008/M009 (4-emblem) the same way).
-    for (const char of chars) {
-      const charEl = el('span', 'shop-card__emblem-char', char);
-      charEl.dataset.emblem = char;
-      emblemEl.appendChild(charEl);
+    // .shop-card__emblem's own doc in style.css) -- EXCEPT 中央広場/聖域/大交易所 (2026-08-21, per user
+    // request: "大交易所のエンブレム２行に 中央広場のアイコン３行に 聖域のアイコン２行に"), which now
+    // wrap into fixed-size rows instead (see EMBLEM_ROW_CHUNK_SIZE below). 祝福/M008/M009 -- and every
+    // other multi-emblem card -- deliberately keep the single-line behavior unchanged; only these 3 were
+    // asked for.
+    const chunkSize = EMBLEM_ROW_CHUNK_SIZE[faceId];
+    if (chunkSize) {
+      emblemEl.classList.add('shop-card__emblem--multi-row');
+      // Extra vertical clearance for .shop-card__id below the now-taller badge (2026-08-21) -- see
+      // .shop-card--emblem-rows-N in style.css for the actual offset, derived from the same "~8px gap
+      // below the badge's own bottom edge" arithmetic .shop-card--monument's own 1-row margin-top:16px
+      // comment already documents, just scaled to N rows instead of 1.
+      root.classList.add(`shop-card--emblem-rows-${Math.ceil(chars.length / chunkSize)}`);
+      for (let i = 0; i < chars.length; i += chunkSize) {
+        const rowEl = el('div', 'shop-card__emblem-row');
+        for (const char of chars.slice(i, i + chunkSize)) {
+          const charEl = el('span', 'shop-card__emblem-char', char);
+          charEl.dataset.emblem = char;
+          rowEl.appendChild(charEl);
+        }
+        emblemEl.appendChild(rowEl);
+      }
+    } else {
+      for (const char of chars) {
+        const charEl = el('span', 'shop-card__emblem-char', char);
+        charEl.dataset.emblem = char;
+        emblemEl.appendChild(charEl);
+      }
     }
   }
 

@@ -503,6 +503,22 @@ h1, h2, h3 { margin: 0; }
 }
 .shop-card__emblem:empty { display: none; }
 
+/* 中央広場/聖域/大交易所 (2026-08-21, per user request: "大交易所のエンブレム２行に 中央広場のアイコン
+   ３行に 聖域のアイコン２行に") -- opted out of the single-line-regardless-of-count rule just above (see
+   main.js's EMBLEM_ROW_CHUNK_SIZE/fillCardFace), stacking fixed-size .shop-card__emblem-row groups
+   vertically instead. Every other multi-emblem card (祝福/M008/M009 included) keeps the flat single-row
+   .shop-card__emblem-char children untouched, so this only takes effect via the modifier class, never by
+   default. */
+.shop-card__emblem--multi-row {
+  flex-direction: column;
+  align-items: flex-end;
+}
+.shop-card__emblem-row {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+}
+
 /* Confirmed 2026-07-29: LV{n} (from A/B/C decks' LEVEL field) sits right under the EMBLEM badge;
    cards with no LEVEL (M/JOB/CON/RESOURCE) show nothing here. */
 .shop-card__level {
@@ -570,6 +586,20 @@ h1, h2, h3 { margin: 0; }
    document flow, so pushing it down is enough -- every sibling after it shifts the same amount too. */
 .shop-card--monument .shop-card__id {
   margin-top: 16px;
+}
+
+/* 2026-08-21, see .shop-card__emblem--multi-row's own doc in this file -- 中央広場(3 rows)/聖域・
+   大交易所(2 rows) need proportionally more clearance below their now-taller badge than the 1-row
+   16px above assumes. Same "~8px gap below the badge's bottom edge" arithmetic that comment already
+   works out (badge bottom ≈ 4px top offset + 12px per row; margin-top = that + 8px gap - .shop-card's
+   own 8px padding-top = 4 + 12*rows), just generalized to N rows: 2 rows -> 28px, 3 rows -> 40px.
+   Both combined-class selectors (2 classes on the same element) outrank the plain 1-row rule above
+   regardless of source order. */
+.shop-card--monument.shop-card--emblem-rows-2 .shop-card__id {
+  margin-top: 28px;
+}
+.shop-card--monument.shop-card--emblem-rows-3 .shop-card__id {
+  margin-top: 40px;
 }
 
 .shop-card__name-text {
