@@ -280,12 +280,15 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
   // normal map.slots.some(...) check above whenever that OTHER slot is the one being placed into, so
   // this asymmetry is deliberate.
 
-  // Stacking (now GRANT_PLACE_ANYWHERE-only, see this function's own doc) sums to a combined buildValue
-  // -- a lone die only ever rolls 1-6, but M001-M006's DICE threshold goes up to 12, so reaching those
-  // requires stacking 2+ dice on one slot. Computed here, *before* committing anything, so the NO_EFFECT
-  // guard right below can use it (see predictedBuildValueForPlacement's own doc for why this must stay
-  // in lockstep with the post-commit math it replaced).
-  const buildValue = predictedBuildValueForPlacement(mapId, isExSlot, targetOccupants, die.value);
+  // buildValue is just this one die's own value (2026-08-20, per user request: "重ねたかどうかではなく
+  // 1ターンに2個置いたかで合計するようにしてください" -- a single-die placement, by definition, only ever
+  // places ONE die THIS turn, so it can never combine with anything else. Reaching M001-M006's higher
+  // DICE thresholds (up to 12) now requires a genuine simultaneous placeDiceGroup of 2+ dice -- the only
+  // remaining way multiple dice ever combine into one buildValue. This used to sum in whatever a
+  // GRANT_PLACE_ANYWHERE join's target slot already held from an earlier, unrelated placement -- see
+  // this function's own git history (predictedBuildValueForPlacement, removed) if that old "multi-turn
+  // castle investment" behavior is ever needed again.
+  const buildValue = die.value;
 
   const actionContext = context;
 
@@ -378,20 +381,11 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
   return { success: true, actionResult };
 }
 
-/** Pure: what buildValue would result if a die of `dieValue` became the next occupant of a slot
- * currently holding `occupants` -- sums the castle/AREA009 EX slot's existing occupancy plus the new
- * die (see placeDice's own doc for the stacking rule itself), otherwise just dieValue alone. Occupants
- * only ever accumulate at these two spots (a normal placement can never join an occupied slot anywhere
- * -- see placeDice's own wouldBeBlocked -- so `occupants.length>0` here always means every prior
- * occupant got there via GRANT_PLACE_ANYWHERE); the new die's value is added regardless of whether it
- * matches an existing occupant's (2026-08-06, per user feedback: the combined buildValue counts every
- * stacked die's face, matching value or not, even though only the *display* stays pinned to the
- * original die at 王宮 -- see main.js's renderBoard). Factored out (2026-08-0X) so placeDice's own
- * pre-commit NO_EFFECT check and the UI's slot-highlight preview can't drift from each other. */
-function predictedBuildValueForPlacement(mapId, isExSlot, occupants, dieValue) {
-  const wouldStack = (mapId === CASTLE_MAP_ID || (isExSlot && mapId === AREA009_MAP_ID)) && occupants.length > 0;
-  return wouldStack ? occupants.reduce((sum, o) => sum + o.value, 0) + dieValue : dieValue;
-}
+// predictedBuildValueForPlacement (2026-08-0X - 2026-08-19) used to live here: it summed a
+// GRANT_PLACE_ANYWHERE join's target slot's pre-existing occupancy into the new die's own buildValue.
+// Removed 2026-08-20, per user request ("重ねたかどうかではなく1ターンに2個置いたかで合計するようにして
+// ください") -- a single-die placement's buildValue is now always just that one die's own value (see
+// placeDice's own call site, above where this used to be called).
 
 /** Whether playerId can currently pay candidate's COST -- both BUILD_NEW and UPGRADE auto-max any BZ
  * they hold (2026-08-06, per user feedback: BZ discounts an UPGRADE's COST exactly like a BUILD_NEW's --
@@ -498,9 +492,10 @@ function grantsColorDie(commands) {
 // monumentBuildValue (2026-08-19, JOB003/hasWildcardDice): defaults to buildValue, so every pre-existing
 // caller (never involving a ☆ die) is unaffected -- only placeWildcardDie ever passes a distinct value,
 // since a ☆ die's contribution is 1 for an A/B/C candidate's range check but 6 for a monument's
-// threshold check (see occupantBuildContribution's own doc) -- the same placement's buildValue can't be
-// a single shared number when both category families are evaluated together, which is exactly what
-// happens at 王宮/元老院's bare BUILD() (defaults to every category at once).
+// threshold check (see placeWildcardDie's own abcBuildValue/monumentBuildValue doc) -- the same
+// placement's buildValue can't be a single shared number when both category families are evaluated
+// together, which is exactly what happens at 王宮/元老院's bare BUILD() (defaults to every category at
+// once).
 function wouldAreaActionHaveEffect(state, index, context, areaRow, buildValue, monumentBuildValue = buildValue) {
   const commands = lowerProgram(parse(areaRow.ACTION));
   if (grantsColorDie(commands)) {
@@ -590,43 +585,27 @@ function slotAcceptsValue(map, mapId, playerId, requirement, occupants, value, b
   return !map.slots.some((occ) => occ.some((o) => o.value === value));
 }
 
-/** How much a single stacked-slot occupant contributes toward buildValue -- `wildcardValue` is the
- * caller-supplied substitution for a ☆ occupant (isWildcard, see hasWildcardDice's own doc): 1 when the
- * caller is evaluating an A/B/C candidate's DICE_MIN/MAX range, 6 when evaluating a monument's
- * DICE>=threshold (2026-08-19, per user spec: "ABCカード獲得時☆はダイス目1として扱う...モニュメント
- * 獲得時☆はダイス目6として扱う").
- *
- * Deliberately does NOT look at excludedFromBuildValue -- that flag only ever suppresses a die's OWN
- * contribution to the SAME placement action that just forced it into a full row (see placeWildcardDie's
- * own ternary, applied separately at each call site below, never inside this function). Once an occupant
- * is actually sitting in a slot, it contributes normally to every LATER placement's own buildValue
- * computation, excluded-at-birth or not (2026-08-20 fix, per user bug report: without this, a slot that
- * ever received one forced-fallback occupant became permanently stuck contributing 0 to every category
- * for the rest of the round -- e.g. two separate solo ☆ placements, both forced onto the same already-
- * full row because 元老院 was still full both times, left BOTH occupants excluded and buildValue at 0
- * even though a real, non-excluded die was sitting right there the whole time -- ABC AND every monument
- * both became unreachable, only UPGRADE (buildValue-independent) still showed). This matches how a REAL
- * die's own multi-turn castle-investment pattern already works (placeDice's predictedBuildValueForPlacement
- * always sums the FULL existing occupancy, not just this turn's increment) -- a repeatedly-forced ☆ die
- * accumulating value the same way, across several separate placements, is the wildcard equivalent of that
- * same legitimate pattern, not a new exploit; only ONE single placement's own forced landing is ever
- * zeroed for ITS OWN check. */
-function occupantBuildContribution(occupant, wildcardValue) {
-  return occupant.isWildcard ? wildcardValue : occupant.value;
-}
+// occupantBuildContribution (2026-08-19 - 2026-08-20) used to live here: it read a stacked-slot
+// occupant's own value (or a caller-supplied substitution for a ☆ occupant) so a LATER placement could
+// sum it into that later placement's own buildValue. Removed 2026-08-20, per user request ("重ねたかどう
+// かではなく1ターンに2個置いたかで合計するようにしてください") -- no placement ever reads another
+// placement's occupants for buildValue purposes anymore, wildcard or not, so nothing calls this any more.
 
-/** True if some subset of newValues (possibly empty, but never the *whole* set) combined with baseSum
- * already reaches threshold -- i.e. at least one of newValues is unnecessary for reaching threshold
+/** True if some subset of newValues (possibly empty, but never the *whole* set) alone already reaches
+ * threshold -- i.e. at least one of newValues is unnecessary for reaching threshold
  * specifically (2026-08-06, per user feedback: "他のプレイヤーの邪魔をするだけの行動はできない" -- a
  * group placement that spends more dice on a monument than that monument actually needed is exactly
  * this, e.g. M012 needs only >=1, so placing 2 dice (6+6=12) to "build" it wastes one die for no reason
  * a real player would ever have -- confirmed: "ダイスを減らしても建築できるモニュメントは表示しないでく
  * ださい"). Brute-forces every subset via bitmask (newValues.length is always small -- a monument group
- * placement never involves more than a handful of dice). */
-function hasSufficientProperSubset(newValues, threshold, baseSum) {
+ * placement never involves more than a handful of dice). No baseSum term (2026-08-20, per user request
+ * -- see excludeOverfundedMonuments' own doc): a group's own dice are the only thing that can ever
+ * contribute to its buildValue now, so a redundant subset is always measured against 0, never a
+ * pre-existing slot occupancy. */
+function hasSufficientProperSubset(newValues, threshold) {
   const n = newValues.length;
   for (let mask = 0; mask < (1 << n) - 1; mask++) {
-    let sum = baseSum;
+    let sum = 0;
     for (let i = 0; i < n; i++) if (mask & (1 << i)) sum += newValues[i];
     if (sum >= threshold) return true;
   }
@@ -634,16 +613,17 @@ function hasSufficientProperSubset(newValues, threshold, baseSum) {
 }
 
 /** Filters a monument BUILD_NEW candidate list down to only those that genuinely need every one of
- * newValues (this group's own dice) -- on top of baseSum (the touched slots' pre-existing occupancy,
- * fixed and un-reducible) -- to reach their own DICE threshold. See hasSufficientProperSubset. A solo
- * die never has a "redundant" partner (there's only ever the one), so this is a no-op below 2 dice.
- * discount (2026-08-18, JOB007/密使's MONUMENT_DICE_DISCOUNT) -- same floor-at-0 subtraction from each
- * monument's own threshold that getBuildCandidates itself already applies, kept in sync here too since
- * this re-derives the threshold independently rather than reading it back off the already-filtered
- * candidates (both callers already have the placing player's own discount on hand). */
-function excludeOverfundedMonuments(index, candidates, newValues, baseSum, discount) {
+ * newValues (this group's own dice, the only thing its buildValue is ever made of -- see
+ * hasSufficientProperSubset's own doc on why there's no more baseSum term) to reach their own DICE
+ * threshold. See hasSufficientProperSubset. A solo die never has a "redundant" partner (there's only
+ * ever the one), so this is a no-op below 2 dice. discount (2026-08-18, JOB007/密使's
+ * MONUMENT_DICE_DISCOUNT) -- same floor-at-0 subtraction from each monument's own threshold that
+ * getBuildCandidates itself already applies, kept in sync here too since this re-derives the threshold
+ * independently rather than reading it back off the already-filtered candidates (both callers already
+ * have the placing player's own discount on hand). */
+function excludeOverfundedMonuments(index, candidates, newValues, discount) {
   if (newValues.length <= 1) return candidates;
-  return candidates.filter((c) => !hasSufficientProperSubset(newValues, Math.max(0, parseMonumentThreshold(getCardRow(index, c.faceId).DICE) - discount), baseSum));
+  return candidates.filter((c) => !hasSufficientProperSubset(newValues, Math.max(0, parseMonumentThreshold(getCardRow(index, c.faceId).DICE) - discount)));
 }
 
 /**
@@ -694,13 +674,13 @@ function excludeOverfundedMonuments(index, candidates, newValues, baseSum, disco
  * cites). Pure with respect to `candidateState` (only mutates the clone it takes internally when
  * areaTrailingAdds exist) -- callers pass either the real `state` (for the real gate) or a throwaway
  * clone (for a speculative "what if" check). */
-function groupBuildWouldBeAffordable(candidateState, index, context, playerId, areaTrailingAdds, predictedBuildValue, newValues, existingSumTotal, monumentDiscount) {
+function groupBuildWouldBeAffordable(candidateState, index, context, playerId, areaTrailingAdds, predictedBuildValue, newValues, monumentDiscount) {
   let checkState = candidateState;
   if (areaTrailingAdds) {
     checkState = structuredClone(candidateState);
     for (const cmd of areaTrailingAdds) executor.runCommand(checkState, index, context, cmd);
   }
-  const candidates = excludeOverfundedMonuments(index, getBuildCandidates(checkState, index, playerId, ['M'], predictedBuildValue), newValues, existingSumTotal, monumentDiscount);
+  const candidates = excludeOverfundedMonuments(index, getBuildCandidates(checkState, index, playerId, ['M'], predictedBuildValue), newValues, monumentDiscount);
   return { ok: candidates.some((c) => isCandidateAffordable(checkState, index, playerId, c)) };
 }
 
@@ -762,14 +742,12 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   // requires every die in the bucket to individually carry placeAnywhereThisTurn (see this function's
   // own doc) -- slotJoinedOccupied records, per targetSlot, whether that slot already had an occupant
   // before this action (i.e. bypass was actually needed to join it), so the commit pass below can set
-  // each die's countsForTurnOrder correctly without re-deriving this. existingSumBySlot records that
-  // same pre-existing occupancy's *value* (not just whether it existed), fixed/un-reducible input to
-  // excludeOverfundedMonuments below.
+  // each die's countsForTurnOrder correctly without re-deriving this. No more existingSumBySlot (2026-
+  // 08-20, per user request -- see excludeOverfundedMonuments' own doc): a group's buildValue is now only
+  // ever this group's own dice, so a slot's pre-existing occupancy no longer needs tracking here at all.
   const usedSlots = new Set();
   const slotForDie = new Map();
-  const slotOfValue = new Map(); // value -> targetSlot, kept for the buildValue prediction below
   const slotJoinedOccupied = new Map(); // targetSlot -> boolean
-  const existingSumBySlot = new Map(); // targetSlot -> sum of pre-existing occupants' values
   for (const [value, ids] of dieIdsByValue) {
     // dieIsWildcard forces bypass unconditionally (2026-08-19) -- a ☆ die can always join an occupied
     // slot as part of a deliberate group placement, same as if it always carried GRANT_PLACE_ANYWHERE
@@ -799,15 +777,10 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
     }
     if (targetSlot === null) return { success: false, reason: 'NO_LEGAL_SLOT_FOR_GROUP' };
     usedSlots.add(targetSlot);
-    slotOfValue.set(value, targetSlot);
     slotJoinedOccupied.set(targetSlot, map.slots[targetSlot].length > 0);
-    // A group placement is monument-only (categories forced to ['M'] below), so 6 is always the right
-    // wildcard substitution here -- see occupantBuildContribution's own doc.
-    existingSumBySlot.set(targetSlot, map.slots[targetSlot].reduce((sum, o) => sum + occupantBuildContribution(o, 6), 0));
     for (const id of ids) slotForDie.set(id, targetSlot);
   }
   const newValues = dice.map((d) => (dieIsWildcard ? 6 : d.value));
-  const existingSumTotal = [...existingSumBySlot.values()].reduce((sum, v) => sum + v, 0);
 
   // AREA009C/B's own ACTION grants a trailing bonus after BUILD() (e.g. "BUILD();ADD(2K,BZ)" at LV2) --
   // same shape resolveProgramOrBuild/wouldAreaActionHaveEffect already special-case for the single-die
@@ -821,22 +794,18 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   // before the final post-commit candidate list further down.
   const areaTrailingAdds = buildTrailingAdds(lowerProgram(parse(areaRow.ACTION)), 0);
 
-  // Predict the resulting buildValue *before* touching anything (same "sum each touched slot's full
-  // occupancy" math as the post-commit version below, just computed off map.slots as it stands right
-  // now instead of after pushing) -- lets this whole group placement be refused outright if it couldn't
-  // possibly reach any monument (2026-08-0X, per user feedback: "建築するのはマストなので建築候補が無い
-  // 場合置けません", same principle placeDice's own wouldAreaActionHaveEffect applies to a single die).
-  // Affordability-checked too (corrected 2026-08-04, same policy change as wouldAreaActionHaveEffect's
-  // BUILD branch -- see isCandidateAffordable's own doc). Overfunded-monument-excluded too (2026-08-06,
-  // per user feedback -- see excludeOverfundedMonuments' own doc): if the only "affordable" candidates
-  // are ones this group's dice overpay for, the whole placement is refused just like having none at all
-  // -- a smaller selection would need to be tried instead.
-  let predictedBuildValue = 0;
-  for (const [value, slotIndex] of slotOfValue) {
-    const existing = map.slots[slotIndex].reduce((sum, o) => sum + occupantBuildContribution(o, 6), 0);
-    const perDieValue = dieIsWildcard ? 6 : value;
-    predictedBuildValue += existing + perDieValue * dieIdsByValue.get(value).length;
-  }
+  // Predict the resulting buildValue *before* touching anything -- lets this whole group placement be
+  // refused outright if it couldn't possibly reach any monument (2026-08-0X, per user feedback: "建築す
+  // るのはマストなので建築候補が無い場合置けません", same principle placeDice's own
+  // wouldAreaActionHaveEffect applies to a single die). Affordability-checked too (corrected 2026-08-04,
+  // same policy change as wouldAreaActionHaveEffect's BUILD branch -- see isCandidateAffordable's own
+  // doc). Overfunded-monument-excluded too (2026-08-06, per user feedback -- see
+  // excludeOverfundedMonuments' own doc): if the only "affordable" candidates are ones this group's dice
+  // overpay for, the whole placement is refused just like having none at all -- a smaller selection would
+  // need to be tried instead. No pre-existing occupancy added in (2026-08-20, per user request: "重ねた
+  // かどうかではなく1ターンに2個置いたかで合計するようにしてください") -- this group's own dice, placed
+  // together in this one action, are the whole of its buildValue.
+  const predictedBuildValue = newValues.reduce((sum, v) => sum + v, 0);
 
   // 開拓者 (2026-08-20): granted speculatively here, before this function's own build-affordability gate
   // just below -- unlike 地主 (deliberately kept post-commit further down, see its own comment there),
@@ -852,10 +821,10 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   if (pioneerEligible) {
     const dieValues = dice.map((d) => d.value);
     grantPioneerBonusIfEarned(state, index, actionContext, mapWasEmptyOfDice, dieValues,
-      (candidateState) => groupBuildWouldBeAffordable(candidateState, index, actionContext, playerId, areaTrailingAdds, predictedBuildValue, newValues, existingSumTotal, player.monumentDiceDiscountThisTurn));
+      (candidateState) => groupBuildWouldBeAffordable(candidateState, index, actionContext, playerId, areaTrailingAdds, predictedBuildValue, newValues, player.monumentDiceDiscountThisTurn));
   }
 
-  const affordability = groupBuildWouldBeAffordable(state, index, actionContext, playerId, areaTrailingAdds, predictedBuildValue, newValues, existingSumTotal, player.monumentDiceDiscountThisTurn);
+  const affordability = groupBuildWouldBeAffordable(state, index, actionContext, playerId, areaTrailingAdds, predictedBuildValue, newValues, player.monumentDiceDiscountThisTurn);
   if (!affordability.ok) {
     if (preJobBonusSnapshot) {
       Object.keys(state).forEach((k) => delete state[k]);
@@ -875,7 +844,6 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   }
 
   // Everything fits and can lead somewhere -- commit for real.
-  const touchedSlots = new Set();
   for (const die of dice) {
     const slotIndex = slotForDie.get(die.id);
     state.placementSeq += 1;
@@ -888,7 +856,6 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
       seq: state.placementSeq,
       countsForTurnOrder: !slotJoinedOccupied.get(slotIndex),
     });
-    touchedSlots.add(slotIndex);
     executor.emitAndResolve(state, index, actionContext, 'PLACE', mapId);
   }
   chargeUsageFeeIfOwed(state, map, playerId);
@@ -909,18 +876,15 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
     for (const cmd of areaTrailingAdds) executor.runCommand(state, index, context, cmd);
   }
 
-  // Sum each touched slot's *full* occupancy (2026-08-02 fix, caught in headless verification) -- not
-  // just this group's own dice. A slot this group joined via GRANT_PLACE_ANYWHERE bypass (see
-  // slotAcceptsValue) may already have held a die from an earlier, unrelated placement -- ignoring
-  // that pre-existing occupant would silently undercount buildValue. (Recomputed post-commit rather than
-  // reusing predictedBuildValue above on the theory that PLACE event reactions fired mid-loop could in
-  // principle add dice to these same slots -- no current data does that, but this stays exact either way.)
-  let buildValue = 0;
-  for (const slotIndex of touchedSlots) {
-    buildValue += map.slots[slotIndex].reduce((sum, o) => sum + occupantBuildContribution(o, 6), 0);
-  }
+  // buildValue is just this group's own dice (2026-08-20, per user request: "重ねたかどうかではなく1ター
+  // ンに2個置いたかで合計するようにしてください") -- a slot this group joined via GRANT_PLACE_ANYWHERE
+  // bypass (see slotAcceptsValue) may already have held a die from an earlier, unrelated placement, but
+  // that pre-existing occupant no longer contributes at all. Equal to predictedBuildValue above (no PLACE
+  // event reaction in the current data ever adds a die to one of these same slots mid-loop), reused
+  // directly rather than recomputed.
+  const buildValue = predictedBuildValue;
 
-  const candidates = excludeOverfundedMonuments(index, getBuildCandidates(state, index, playerId, ['M'], buildValue), newValues, existingSumTotal, player.monumentDiceDiscountThisTurn);
+  const candidates = excludeOverfundedMonuments(index, getBuildCandidates(state, index, playerId, ['M'], buildValue), newValues, player.monumentDiceDiscountThisTurn);
   if (candidates.length === 0) {
     return { success: true, actionResult: { success: false, reason: 'NO_BUILDABLE_CARD', categories: ['M'], buildValue } };
   }
@@ -957,12 +921,14 @@ function previewPlaceDiceGroup(state, index, context, dieIds, mapId) {
  * just 王宮/元老院 -- "全AREA共通" -- even though it only ever has a buildValue consequence at those two,
  * since no other AREA's ACTION ever contains BUILD).
  *
- * The forced-fallback occupant is flagged excludedFromBuildValue so it never silently inflates a
- * monument threshold by combining with whatever die already happened to occupy that slot -- only a
- * deliberate simultaneous placeDiceGroup of 2+ ☆ dice actually sums together (2026-08-19, per user spec,
- * closing a possible new exploit: an automatic single-die fallback stack combining unpredictably with an
- * unrelated pre-existing die to reach a high monument threshold without the player genuinely investing 2
- * dice at once). See occupantBuildContribution's own doc.
+ * The forced-fallback occupant is flagged excludedFromBuildValue, so its own placement never contributes
+ * anything toward triggering a build (0, not 1-or-6) -- landing there was forced, not chosen. This
+ * matters less than it once did (2026-08-20, per user request: "重ねたかどうかではなく1ターンに2個置い
+ * たかで合計するようにしてください") now that NO solo ☆ placement ever combines with whatever else is
+ * sitting in the slot regardless of excludedFromBuildValue -- a genuine simultaneous placeDiceGroup of
+ * 2+ dice is now the only way any dice ever combine into one buildValue, and board.placeDiceGroup refuses
+ * that outright for a wildcard-owning player anyway (see its own doc) -- so a ☆-owning player's solo
+ * placements, forced-fallback or not, only ever count their own single value.
  *
  * ☆ dice ignore VALUE_MISMATCH/SLOT_NOT_PREFERRED/DUPLICATE_VALUE_IN_AREA entirely, and are exempt from
  * BLOCK_COLOR_DIE_REUSE (憤怒/CON005B's same-AREA restriction, confirmed with the user: "憤怒の効果を
@@ -999,13 +965,13 @@ function placeWildcardDie(state, index, context, dieId, mapId) {
   }
   const targetOccupants = map.slots[slotIndex];
 
-  // Two separate sums, since a ☆ occupant's contribution differs by category (1 for A/B/C, 6 for
-  // monument -- see occupantBuildContribution's own doc); this placement's own contribution is 0 when
-  // excludedFromBuildValue, else the same 1-or-6 substitution.
-  const existingAbcSum = targetOccupants.reduce((sum, o) => sum + occupantBuildContribution(o, 1), 0);
-  const existingMonumentSum = targetOccupants.reduce((sum, o) => sum + occupantBuildContribution(o, 6), 0);
-  const abcBuildValue = existingAbcSum + (excludedFromBuildValue ? 0 : 1);
-  const monumentBuildValue = existingMonumentSum + (excludedFromBuildValue ? 0 : 6);
+  // This solo ☆ placement's own buildValue -- category-dependent (1 for A/B/C, 6 for monument), 0 when
+  // excludedFromBuildValue (a forced fallback onto an already-full row never gets to trigger a build on
+  // its own). No addition from targetOccupants (2026-08-20, per user request: "重ねたかどうかではなく1
+  // ターンに2個置いたかで合計するようにしてください") -- a solo placement, by definition, is only ever
+  // this one die THIS turn, so it can never combine with whatever else is sitting in the slot.
+  const abcBuildValue = excludedFromBuildValue ? 0 : 1;
+  const monumentBuildValue = excludedFromBuildValue ? 0 : 6;
 
   const actionContext = context;
 
@@ -1498,9 +1464,9 @@ function grantLandlordBonusIfEarned(state, index, context, mapId, alreadyHadOwnC
  * @param {number} buildValue - resolved die value (BUILD's buildValue arg, or the die that triggered it),
  *   used for the A/B/C DICE_MIN/MAX range check
  * @param {number} [monumentBuildValue] - the same, but for the M (monument) DICE>=threshold check;
- *   defaults to buildValue (2026-08-19, JOB003/hasWildcardDice: a ☆ occupant's contribution differs by
+ *   defaults to buildValue (2026-08-19, JOB003/hasWildcardDice: a ☆ die's own contribution differs by
  *   category -- 1 for A/B/C, 6 for M -- so the two checks can't always share one number; see
- *   occupantBuildContribution's own doc)
+ *   placeWildcardDie's own abcBuildValue/monumentBuildValue doc)
  * @returns {({type:'BUILD_NEW', faceId:string, shopKey:string, slotId:string}|{type:'UPGRADE', physicalId:string, fromFaceId:string, toFaceId:string})[]}
  */
 function getBuildCandidates(state, index, playerId, categories, buildValue, monumentBuildValue = buildValue) {

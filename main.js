@@ -2242,8 +2242,9 @@ function buildOnboardHint(lines, emphasizedLine) {
 
 // JOB003/道化 (2026-08-19, hasWildcardDice): a ☆ die shows a star instead of its real rolled digit --
 // confirmed with the user the real value is functionally meaningless once wildcard (never used for
-// slot-matching, always substituted to a fixed 1 or 6 for buildValue -- see occupantBuildContribution's
-// own doc), so display follows suit rather than showing a number that no longer means anything in play.
+// slot-matching, always substituted to a fixed 1 or 6 for buildValue -- see board.placeWildcardDie's own
+// abcBuildValue/monumentBuildValue doc), so display follows suit rather than showing a number that no
+// longer means anything in play.
 function renderDie(die) {
   const tpl = document.getElementById('tpl-die');
   const node = tpl.content.firstElementChild.cloneNode(true);

@@ -173,9 +173,13 @@ function giveDie(state, playerId, value) {
   die2.placeAnywhereThisTurn = true; // GRANT_PLACE_ANYWHERE -- now it can join
   const second = board.placeDice(state, index, { playerId: 'P1' }, die2.id, 'MAP008', 0);
   check('...but succeeds once granted GRANT_PLACE_ANYWHERE', second.success, true);
-  check('...buildValue is now the SUM of both stacked dice (5+5=10), not just the latest one', second.actionResult.pendingBuild.buildValue, 10);
-  check('...M004 (DICE>=9, VP4, in this seed\'s shop) is now reachable', second.actionResult.pendingBuild.candidates.some((c) => c.faceId === 'M004'), true);
-  check('Both dice are recorded as occupants of the same castle slot', state.maps['MAP008'].slots[0].map((o) => o.value), [5, 5]);
+  // 2026-08-20, per user request ("重ねたかどうかではなく1ターンに2個置いたかで合計するようにしてくだ
+  // さい"): buildValue no longer sums with whatever a GRANT_PLACE_ANYWHERE join's target slot already
+  // held from an earlier, separate placement -- it's just this 2nd die's own value (5), same as if the
+  // slot had been empty. Reaching M004 (DICE>=9) now requires a genuine same-turn placeDiceGroup instead.
+  check('...buildValue is just this 2nd die\'s own value (5), NOT summed with the 1st (no more multi-turn stacking)', second.actionResult.pendingBuild.buildValue, 5);
+  check('...M004 (DICE>=9) is still NOT reachable -- these were 2 separate placements, not 1 combined action', second.actionResult.pendingBuild.candidates.some((c) => c.faceId === 'M004'), false);
+  check('Both dice are still recorded as occupants of the same castle slot', state.maps['MAP008'].slots[0].map((o) => o.value), [5, 5]);
 }
 {
   // 2026-08-07, per user report: using JOB003 (SET_DICE_ANY + GRANT_PLACE_ANYWHERE) to set a die to a
@@ -1176,7 +1180,10 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
 }
 {
   // AREA009's EX now behaves exactly like the castle (2026-08-06): a second die needs
-  // GRANT_PLACE_ANYWHERE to join, and buildValue sums either way (confirmed: "合計判定でお願いします").
+  // GRANT_PLACE_ANYWHERE to join. buildValue no longer sums across separate placements though
+  // (2026-08-20, per user request: "重ねたかどうかではなく1ターンに2個置いたかで合計するようにしてくだ
+  // さい") -- each solo placement's buildValue is just that one die's own value, regardless of what else
+  // already occupies the slot.
   const state = freshStateWithShops();
   player(state, 'P1').resources.BZ = 20; // see the earlier castle blocks' comment on the affordability gate
   state.maps['MAP009'] = mapWithArea('MAP009', 'AREA009B', 6, 'P1');
@@ -1192,7 +1199,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   die2.placeAnywhereThisTurn = true;
   const second = board.placeDice(state, index, { playerId: 'P1' }, die2.id, 'MAP009', 5);
   check('...but succeeds with GRANT_PLACE_ANYWHERE', second.success, true);
-  check('...buildValue is now the SUM of both stacked dice (5+5=10)', second.actionResult.pendingBuild.buildValue, 10);
+  check('...buildValue is still just this 2nd die\'s own value (5), NOT summed with the 1st', second.actionResult.pendingBuild.buildValue, 5);
 }
 {
   // AREA009C (元老院LV2, "BUILD();ADD(2K,BZ)") -- 2026-08-07, per user feedback: "BZをもらえるので本来
@@ -1292,12 +1299,19 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   check('M001 (needs >=12, genuinely requires both dice) is still offered', result.actionResult.pendingBuild.candidates.some((c) => c.faceId === 'M001'), true);
 }
 {
-  // Same rule, but with a pre-existing occupant contributing to the base: earlierDie(5) + a solo new
-  // die(1) already reaches M012's threshold (>=1) on its own -- so a *second* new die alongside it would
-  // be wasted for M012, but the pre-existing occupant's value alone is fixed/un-reducible input, not
-  // itself treated as a "redundant new die" (a solo die never has a redundant partner).
+  // A pre-existing occupant from an EARLIER, separate placement no longer contributes at all (2026-08-20,
+  // per user request: "重ねたかどうかではなく1ターンに2個置いたかで合計するようにしてください") -- even
+  // though earlierDie(5) sits in the same slot this group's dice join via GRANT_PLACE_ANYWHERE, this
+  // group's own buildValue is just its own dice (1+6=7), never 5+1+6=12. M006 (>=7) is the exact
+  // threshold that genuinely needs both of THIS group's own dice combined (1 or 6 alone isn't enough);
+  // M012 (>=1) and M007 (>=6) are each already covered by one of this group's own dice alone, so both are
+  // excluded as overfunded -- the pre-existing 5 plays no part in any of this anymore.
   const state = freshStateWithShops();
   player(state, 'P1').resources.BZ = 20;
+  for (const slotId of Object.keys(state.shops.M.slots)) state.shops.M.slots[slotId] = null;
+  state.shops.M.slots.SHOP001 = 'M012'; // DICE>=1
+  state.shops.M.slots.SHOP002 = 'M007'; // DICE>=6
+  state.shops.M.slots.SHOP003 = 'M006'; // DICE>=7
   const earlierDie = giveDie(state, 'P1', 5);
   board.placeDice(state, index, { playerId: 'P1' }, earlierDie.id, board.CASTLE_MAP_ID, 0);
   const d1 = giveDie(state, 'P1', 1);
@@ -1305,10 +1319,11 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   const d2 = giveDie(state, 'P1', 6);
   d2.placeAnywhereThisTurn = true;
   const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
-  check('Placing 1+6 alongside an existing 5 (total 12) succeeds', result.success, true);
-  check('M012 (>=1, already covered by the existing 5 alone) is excluded even though this group never placed a redundant *new* die for it', result.actionResult.pendingBuild.candidates.some((c) => c.faceId === 'M012'), false);
-  check('M009 (>=4, already covered without needing both new dice) is excluded', result.actionResult.pendingBuild.candidates.some((c) => c.faceId === 'M009'), false);
-  check('M001 (>=12, genuinely needs the existing 5 AND both new dice) is still offered', result.actionResult.pendingBuild.candidates.some((c) => c.faceId === 'M001'), true);
+  check('Placing 1+6 alongside an existing 5 succeeds', result.success, true);
+  check('...buildValue is just this group\'s own dice (1+6=7), NOT summed with the existing 5', result.actionResult.pendingBuild.buildValue, 7);
+  check('M012 (>=1, already covered by this group\'s own 1 alone) is excluded as overfunded', result.actionResult.pendingBuild.candidates.some((c) => c.faceId === 'M012'), false);
+  check('M007 (>=6, already covered by this group\'s own 6 alone) is excluded as overfunded', result.actionResult.pendingBuild.candidates.some((c) => c.faceId === 'M007'), false);
+  check('M006 (>=7, genuinely needs both of this group\'s own dice combined) is still offered', result.actionResult.pendingBuild.candidates.some((c) => c.faceId === 'M006'), true);
 }
 {
   // No legal slot anywhere for one of the values -- must fail atomically (neither die touched), not
@@ -1330,12 +1345,13 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
 {
   // A group joining a slot with a *pre-existing* occupant (2026-08-06: now needs GRANT_PLACE_ANYWHERE
   // on *every* die in the bucket, confirmed -- "仮に片方のダイスがGRANT_PLACE_ANYWHERE...を使っていても
-  // もう片方のダイスが置けません") must count that pre-existing occupant's value too, not just this
-  // group's own dice (2026-08-02 bug caught in headless verification): true combined value is 2+2+2=6,
-  // not just the new pair's 4. Uses value 2 (not 6) so the combined total (6) doesn't already max out
-  // every monument threshold on its own -- see the overfunded-monument block further down for that.
+  // もう片方のダイスが置けません") no longer counts that pre-existing occupant's value at all (2026-08-20,
+  // per user request: "重ねたかどうかではなく1ターンに2個置いたかで合計するようにしてください") -- combined
+  // buildValue is just the new pair's own 2+2=4, never 2+2+2=6.
   const state = freshStateWithShops();
   player(state, 'P1').resources.BZ = 20; // see the earlier castle blocks' comment on the affordability gate
+  for (const slotId of Object.keys(state.shops.M.slots)) state.shops.M.slots[slotId] = null;
+  state.shops.M.slots.SHOP001 = 'M009'; // DICE>=4 -- genuinely needs both new dice combined (2+2), not the old die
   const earlierDie = giveDie(state, 'P1', 2);
   board.placeDice(state, index, { playerId: 'P1' }, earlierDie.id, board.CASTLE_MAP_ID, 0);
 
@@ -1350,7 +1366,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   d2.placeAnywhereThisTurn = true; // now BOTH carry it
   const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
   check('Once both dice carry GRANT_PLACE_ANYWHERE, the group joins the pre-existing slot', result.success, true);
-  check('...buildValue sums all 3 dice (6), not just the new pair (4)', result.actionResult.pendingBuild.buildValue, 6);
+  check('...buildValue is just the new pair\'s own dice (4), NOT summed with the pre-existing occupant', result.actionResult.pendingBuild.buildValue, 4);
   check('...all 3 dice really do sit on the same slot', state.maps[board.CASTLE_MAP_ID].slots.filter((s) => s.length > 0).map((s) => s.length), [3]);
   check('...neither of the 2 new dice counts toward next round\'s turn order', state.maps[board.CASTLE_MAP_ID].slots.find((s) => s.length === 3).filter((o) => o.dieId === d1.id || o.dieId === d2.id).every((o) => o.countsForTurnOrder === false), true);
 }
@@ -1416,8 +1432,10 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   check('A B001A-changed die CAN still join a DIFFERENT player\'s occupied slot (only self-stacking is blocked)', result.success, true);
 }
 {
-  // Control: a NATURALLY-rolled die (never value-changed) stacking onto the player's own die is the
-  // legitimate multi-turn castle-investment pattern -- must still work exactly as before this fix.
+  // Control: a NATURALLY-rolled die (never value-changed) stacking onto the player's own die is still
+  // legal (isChangedDieSelfStackBlocked only ever concerns value-CHANGED dice) -- must still work exactly
+  // as before this fix. buildValue itself no longer sums with the pre-existing occupant though (2026-08-
+  // 20, per user request: "重ねたかどうかではなく1ターンに2個置いたかで合計するようにしてください").
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   p1.resources = { K: 0, A: 20, B: 20, C: 20, Z: 20, VP: 0, BZ: 0 };
@@ -1427,7 +1445,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   d2.placeAnywhereThisTurn = true; // some other GRANT_PLACE_ANYWHERE source, value never touched
   const result = board.placeDice(state, index, { playerId: 'P1' }, d2.id, board.CASTLE_MAP_ID, 0);
   check('A naturally-rolled (never changed) die can still stack onto the player\'s own die', result.success, true);
-  check('...buildValue sums both (10)', result.actionResult.pendingBuild.buildValue, 10);
+  check('...buildValue is just this 2nd die\'s own value (5), NOT summed with the 1st', result.actionResult.pendingBuild.buildValue, 5);
 }
 {
   // Group-placement path (placeDiceGroup) needs the same protection -- same exploit, different entry
@@ -2177,8 +2195,16 @@ function withWildcardOwner(state) {
   check('A second ☆ left-packs into SLOT2 next, real value 1 notwithstanding', state.maps['MAP001'].slots.map((s) => s.length), [1, 1, 0]);
 }
 {
-  // Fallback stacking: fill every non-EX slot at the castle (王宮/AREA008, 6 ANY slots), then a 7th solo
-  // ☆ must force-stack under SLOT1 -- and that forced occupant must NOT contribute to buildValue.
+  // Fallback stacking at a BUILD-only AREA (castle/王宮): fill every non-EX slot, then a 7th solo ☆ has
+  // nowhere to go but a forced fallback under SLOT1 -- excludedFromBuildValue zeroes its own contribution
+  // (0, not 6), and since 2026-08-20 (per user request: "重ねたかどうかではなく1ターンに2個置いたかで合計
+  // するようにしてください") nothing else in the slot adds to that either, so this placement's buildValue
+  // is always exactly 0 here. Every SHOP DICE_MIN in the data is >=1 (never 0), so a forced-fallback ☆ can
+  // never actually find a buildable candidate at castle/元老院 specifically -- the whole placement is
+  // refused instead (NO_BUILDABLE_CARD), same as if there were nowhere legal to put it. This is a genuine
+  // behavioral consequence of the no-accumulation rule, not a bug: a forced ☆ never earns anything at a
+  // fully-occupied BUILD-only AREA any more, matching how a non-wildcard die can't even get INTO a full
+  // slot there at all without GRANT_PLACE_ANYWHERE.
   const state = freshStateWithShops();
   withWildcardOwner(state);
   player(state, 'P1').resources.BZ = 20; // afford whatever candidate ends up offered (same pattern as the existing castle tests)
@@ -2193,13 +2219,9 @@ function withWildcardOwner(state) {
   check('All 6 castle slots now hold exactly 1 ☆ die each', state.maps[board.CASTLE_MAP_ID].slots.map((s) => s.length), [1, 1, 1, 1, 1, 1]);
 
   const seventh = board.placeWildcardDie(state, index, { playerId: 'P1' }, dice[6].id, board.CASTLE_MAP_ID);
-  check('A 7th solo ☆, with every slot full, still succeeds by force-stacking under the leftmost', seventh.success, true);
-  check('...SLOT1 now holds 2 occupants', state.maps[board.CASTLE_MAP_ID].slots[0].length, 2);
-  const forced = state.maps[board.CASTLE_MAP_ID].slots[0][1];
-  check('...the 2nd (forced-fallback) occupant is excludedFromBuildValue', forced.excludedFromBuildValue, true);
-  check('...and does NOT count toward next round\'s turn order', forced.countsForTurnOrder, false);
-  const seventhCandidates = (seventh.actionResult.pendingBuild && seventh.actionResult.pendingBuild.candidates) || [];
-  check('...M001 (DICE>=12) is NOT reachable from this forced-fallback placement (no silent 6+6 sum)', seventhCandidates.some((c) => c.faceId === 'M001'), false);
+  check('A 7th solo ☆, with every slot full, is refused outright -- a forced fallback here can never build anything', seventh, { success: false, reason: 'NO_BUILDABLE_CARD' });
+  check('...SLOT1 still holds only the original occupant -- the 7th die was never actually placed', state.maps[board.CASTLE_MAP_ID].slots[0].length, 1);
+  check('...the 7th die itself is still unplaced, free to try a different, non-full AREA instead', dice[6].placedMapId, null);
 }
 {
   // Contrast: a DELIBERATE simultaneous group placement of 2 ☆ dice is now refused outright (2026-08-20,
@@ -2221,12 +2243,14 @@ function withWildcardOwner(state) {
   check('...neither die was actually placed', [d1.placedMapId, d2.placedMapId], [null, null]);
 }
 {
-  // Regression (2026-08-20, per user bug report at 元老院): excludedFromBuildValue must NOT cascade --
-  // it only ever suppresses a die's OWN contribution to the SAME placement that forced it, never a
-  // LATER placement's read of that same occupant. Without this fix, two separate solo ☆ placements
-  // forced onto the same already-full row (e.g. 元老院 already occupied by another player) left BOTH
-  // occupants permanently contributing 0, so ABC AND every monument became unreachable from that slot
-  // for the rest of the round -- only UPGRADE (buildValue-independent) still showed.
+  // Regression (2026-08-20, per user follow-up: "重ねたかどうかではなく1ターンに2個置いたかで合計する
+  // ようにしてください") -- superseding an earlier same-day fix that had specifically made a forced-
+  // fallback ☆ still succeed by reading whatever real die already occupied the slot (e.g. "existing real
+  // die's value=1 still counts"). That's exactly the multi-turn accumulation this later request asked to
+  // remove: a forced-fallback ☆'s buildValue is always 0 (excludedFromBuildValue), and nothing else in
+  // the slot adds to it any more either, so BOTH of these forced placements onto an already-full 元老院
+  // row must now be refused consistently -- neither succeeds, and repeating it a 2nd time doesn't change
+  // the outcome (confirming there's no lingering cascade/stuck-state bug either way).
   const state = freshStateWithShops();
   withWildcardOwner(state);
   player(state, 'P1').resources.BZ = 20;
@@ -2238,19 +2262,14 @@ function withWildcardOwner(state) {
 
   const d1 = giveDie(state, 'P1', 2);
   const r1 = board.placeWildcardDie(state, index, { playerId: 'P1' }, d1.id, board.AREA009_MAP_ID);
-  check('Alice\'s 1st ☆, forced onto the already-full row, still succeeds', r1.success, true);
-  check('...that occupant is excludedFromBuildValue (its own placement)', state.maps[board.AREA009_MAP_ID].slots[0][1].excludedFromBuildValue, true);
-  const firstCandidates = r1.actionResult.pendingBuild.candidates;
-  check('...but ABC IS still offered here (existing real die\'s value=1 still counts)', firstCandidates.some((c) => c.faceId && c.faceId[0] !== 'M'), true);
+  check('Alice\'s 1st ☆, forced onto the already-full row, is refused -- a forced fallback never builds anything', r1, { success: false, reason: 'NO_BUILDABLE_CARD' });
+  check('...nothing was actually placed (SLOT1 still holds only P2\'s own die)', state.maps[board.AREA009_MAP_ID].slots[0].length, 1);
+  check('...the die itself is still unplaced', d1.placedMapId, null);
 
   const d2 = giveDie(state, 'P1', 4);
   const r2 = board.placeWildcardDie(state, index, { playerId: 'P1' }, d2.id, board.AREA009_MAP_ID);
-  check('Alice\'s 2nd ☆, forced onto the SAME slot again, still succeeds', r2.success, true);
-  check('...pendingBuild exists (buildValue did NOT collapse to 0)', !!r2.actionResult.pendingBuild, true);
-  const secondCandidates = r2.actionResult.pendingBuild ? r2.actionResult.pendingBuild.candidates : [];
-  check('...ABC is STILL offered on the 2nd forced placement, not silently gone', secondCandidates.some((c) => c.faceId && c.faceId[0] !== 'M'), true);
-  check('...and at least one monument is offered too', secondCandidates.some((c) => c.faceId && c.faceId[0] === 'M'), true);
-  check('...the 1st ☆ occupant\'s own excludedFromBuildValue is untouched (still true) -- only how it\'s READ changed', state.maps[board.AREA009_MAP_ID].slots[0][1].excludedFromBuildValue, true);
+  check('...trying again with a 2nd die is refused the exact same way, not stuck in some worse state', r2, { success: false, reason: 'NO_BUILDABLE_CARD' });
+  check('...still nothing placed', state.maps[board.AREA009_MAP_ID].slots[0].length, 1);
 }
 {
   // A ☆ die can never target another player's EX slot, even as a forced fallback -- it stacks under the
