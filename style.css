@@ -621,17 +621,17 @@ h1, h2, h3 { margin: 0; }
    .action-icons' own defaults (14px emoji, 11px dot) are sized for the taller .shop-card__effect row
    below, not here; without this the icon alone left too little room for the NAME text beside it and
    forced an ellipsis-truncated name even for a plain 2-character one (found via screenshot verification). */
-.shop-card__name .action-emoji { font-size: 11px; }
-/* Dot 1.8x, count 1.2x of the base 8px/10px above (2026-08-17, per user request on 暴食's "⚡○6": applies
-   to every other CON card using the same dot+count pattern -- 怠惰/狂信/傲慢/潔癖/色欲/憂鬱/嫉妬/強欲 --
-   automatically, since they all share this one selector). */
-.shop-card__name .action-dot { width: 14.4px; height: 14.4px; }
-.shop-card__name .action-count { font-size: 12px; }
-.shop-card__name .action-arrow { font-size: 9px; }
-/* Matched to .shop-card__name .action-count's own 12px/var(--text) above (2026-08-17, per user request:
-   "色Dをほかの数字（〇6）などと同じ大きさと濃さに") -- action-suffix's own base rule is smaller/muted
-   (10px, var(--text-muted)) for its other uses elsewhere on the card; overridden back up only here. */
-.shop-card__name .action-suffix { font-size: 12px; color: var(--text); }
+/* 2026-08-21, per user request: every CON/JOB icon's resource dots (K/Z/etc) sized to match
+   吟遊詩人(JOB008)'s own C dot (.job-note-icon-row .action-dot, 18px) -- and, along with it, the arrow/
+   other text bumped up and darkened to var(--text) too (previously var(--text-faint)/var(--text-muted)).
+   This context (CON's own NAME+icon row) used to be deliberately scaled DOWN from the 14px/11px base to
+   fit a compact single-line row -- risk of the NAME text now getting squeezed/ellipsis-truncated at this
+   larger size is real and hasn't been visually verified (see fillCardFace's own doc), flagged to the user. */
+.shop-card__name .action-emoji { font-size: 22px; }
+.shop-card__name .action-dot { width: 18px; height: 18px; }
+.shop-card__name .action-count { font-size: 16px; }
+.shop-card__name .action-arrow { font-size: 18px; color: var(--text); }
+.shop-card__name .action-suffix { font-size: 14px; color: var(--text); }
 
 .shop-card__cost {
   display: flex;
@@ -1008,11 +1008,19 @@ h1, h2, h3 { margin: 0; }
    "1.8x of the base" comment): an explicit literal doubling per context, base (14px -> 28px) plus
    .card-group__jobcon specifically (17px -> 34px) -- the player's own live JOB/CON panel, where this
    ability is actually seen during play. */
-.action-emoji--large {
+/* .action-emoji.action-emoji--large (combined, not bare .action-emoji--large) so these keep winning by
+   specificity, not source order, against the newer/broader .card-group__jobcon .action-emoji and
+   .shop-card--job .action-emoji rules added below (2026-08-21) -- those are plain .action-emoji
+   selectors, which JOB003's star also matches (it carries both classes at once), and would otherwise
+   quietly shrink the star back down to 22px here. */
+.action-emoji.action-emoji--large {
   font-size: 28px;
 }
-.card-group__jobcon .action-emoji--large {
+.card-group__jobcon .action-emoji.action-emoji--large {
   font-size: 34px;
+}
+.shop-card--job .action-emoji.action-emoji--large {
+  font-size: 28px;
 }
 
 .action-dot {
@@ -1837,11 +1845,26 @@ h1, h2, h3 { margin: 0; }
 .card-group__onboard-resources .action-arrow { font-size: 18px; }
 .card-group__onboard-resources .action-suffix { font-size: 14px; }
 
-.card-group__jobcon .action-emoji { font-size: 17px; }
-.card-group__jobcon .action-dot { width: 13px; height: 13px; }
-.card-group__jobcon .action-count { font-size: 13px; }
-.card-group__jobcon .action-arrow { font-size: 14px; }
-.card-group__jobcon .action-suffix { font-size: 12px; }
+/* 2026-08-21, per user request -- see .shop-card__name's matching comment above (same target ensemble,
+   matched to 吟遊詩人's own 18px C dot): this is the main in-play view of a player's owned CON+JOB pair,
+   so it's the primary place this request is actually about. */
+.card-group__jobcon .action-emoji { font-size: 22px; }
+.card-group__jobcon .action-dot { width: 18px; height: 18px; }
+.card-group__jobcon .action-count { font-size: 16px; }
+.card-group__jobcon .action-arrow { font-size: 18px; color: var(--text); }
+.card-group__jobcon .action-suffix { font-size: 14px; color: var(--text); }
+
+/* Same target ensemble as .card-group__jobcon just above, for a JOB card shown anywhere OTHER than the
+   owned-card panel (2026-08-21) -- job-pool's draft view (#job-pool) has no icon-sizing context of its
+   own, so without this a not-yet-drafted JOB (e.g. JOB003's WILDCARD_DICE() icon) would still show at
+   the small 14px/11px base while every other CON/JOB display already got bumped up. CON needs no
+   equivalent rule here -- its icon always lives in .shop-card__name, already covered unconditionally
+   above regardless of container. */
+.shop-card--job .action-emoji { font-size: 22px; }
+.shop-card--job .action-dot { width: 18px; height: 18px; }
+.shop-card--job .action-count { font-size: 16px; }
+.shop-card--job .action-arrow { font-size: 18px; color: var(--text); }
+.shop-card--job .action-suffix { font-size: 14px; color: var(--text); }
 
 /* A/B/C card icons, a bit bigger without breaking the layout (2026-08-05, per user feedback:
    "ABCカードのアイコン 崩れない程度でもう少し大きくして") -- same modest bump as JOB/CON above (both

@@ -2739,6 +2739,10 @@ function buildCardVisual(faceId, options = {}) {
   // .shop-card--tall's min-height alone still left real height variance between CON faces. See
   // .shop-card--con in style.css for the actual fixed value.
   if (faceId.startsWith('CON')) node.classList.add('shop-card--con');
+  // 2026-08-21, mirroring .shop-card--con above, added so CON/JOB-specific icon sizing (see
+  // .shop-card--job in style.css) can scope to JOB cards even outside .card-group__jobcon (e.g. the
+  // job-pool draft view, which has no icon-sizing context of its own otherwise).
+  if (faceId.startsWith('JOB')) node.classList.add('shop-card--job');
   // RESOURCE cards show neither NAME nor ID at all (2026-08-17, per user request: "初期資源カードにNAME
   // やIDの表示は不要なので消してください...それに従い横線も不要です") -- see fillCardFace's own idEl
   // branch for the text-suppression side; this class is what lets style.css also drop
