@@ -1147,22 +1147,20 @@ h1, h2, h3 { margin: 0; }
 }
 
 /* Confirmed 2026-07-29: die VALUES (as opposed to resource counts) use the ⚀-⚅ die-face glyphs
-   instead of numbered-circle emoji or plain digits, sized up for legibility. */
+   instead of numbered-circle emoji or plain digits, sized up for legibility. font-family explicit here
+   (2026-08-21, per user report "Bカードのダイス目相変わらずフォントがおかしいです AREAや" then
+   "AREAやモニュメントと同じフォント同じサイズにして") -- the board's own .map-tile__action explicitly
+   sets a monospace stack (SFMono-Regular/Consolas), so declaring the identical stack directly on
+   .die-face itself (rather than relying on whatever font each context happens to inherit -- an earlier
+   attempt tried matching monuments via the *inherited* sans-serif body font instead, which the user
+   reported didn't fix it) guarantees .die-face renders identically in EVERY context: the board
+   (.map-tile__action), monuments (.shop-card__req, which never set its own font-family at all), and
+   B001-007's cards (.shop-card__effect, whose own monospace override this now matches anyway). */
 .die-face {
+  font-family: "SFMono-Regular", Consolas, monospace;
   font-size: 42px;
   line-height: 1;
   color: var(--text);
-}
-
-/* 2026-08-21, per user report ("PC版のダイス目がモニュメントとBカードで全く違います"): B001-007's own
-   die-face glyphs live inside .shop-card__effect, which sets a monospace font-family (SFMono-Regular/
-   Consolas) for its ONCE/TAP/PASSIVE text -- that monospace font renders ⚀-⚅ with a visibly different
-   glyph style than the sans-serif body font monuments' .shop-card__req (a sibling element, not a
-   .shop-card__effect descendant, so it never inherited the monospace override) happens to use. Explicit
-   font-family here restores the same body-default sans-serif stack for B-card die-face glyphs
-   specifically, matching the monument glyph exactly (same size, same font now, not just same size). */
-.shop-card__effect .die-face {
-  font-family: "Hiragino Sans", "Yu Gothic UI", "Segoe UI", system-ui, -apple-system, sans-serif;
 }
 
 /* 2026-08-21, per user request: 兆し/導きカード(B001-007)'s own die-face icons (variously小さな導き/
