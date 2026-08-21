@@ -4292,8 +4292,9 @@ function renderTapReactions(container, state, playerId) {
 }
 
 /** Pending UNTAP_CHOICE pick (2026-08-15; reworked 2026-08-17 into a weighted budget, see
- * executor.untapChoiceWeight's own doc -- 兆しカード costs the whole budget by itself, everything else
- * costs 1). Only ever shown when the player's tapped cards' combined weight exceeds the budget
+ * executor.untapChoiceWeight's own doc -- 兆しカード costs 2 of the budget (lowered from 3 on
+ * 2026-08-21), everything else costs 1). Only ever shown when the player's tapped cards' combined
+ * weight exceeds the budget
  * (otherwise already auto-resolved with no choice at all, so there's nothing to render here in that
  * case). AI-controlled players resolve this via driveOneAiStepInner instead (random pick), never by
  * clicks -- nothing to show here for them.

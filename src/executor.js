@@ -711,14 +711,14 @@ function runUntapAll(state, context, cmd) {
   return { success: true };
 }
 
-/** UNTAP_CHOICE(SELF,3) weighted-budget rule (2026-08-17, per user request: "カードを３枚選んで
- * アンタップする　兆しカードをアンタップするときは3枚分としてカウントする") -- 始まりの兆し/終わりの兆し/
- * 成長の兆し (B005/B006/B007, both LV1 and LV2 faces) each cost the whole budget (3) by themselves;
- * every other card costs 1. Matched by NAME containing "兆し" rather than a hardcoded physical-id list,
- * per this session's own lesson about NAME-matching being more resilient to future data reorgs (see
- * hasPioneerAbility in board.js for the same pattern). */
+/** UNTAP_CHOICE weighted-budget rule (2026-08-17, per user request: "カードを３枚選んでアンタップする
+ * 兆しカードをアンタップするときは3枚分としてカウントする"; weight lowered 3->2 on 2026-08-21, per user
+ * request) -- 始まりの兆し/終わりの兆し/革命の兆し (B005/B006/B007, both LV1 and LV2 faces) each cost 2
+ * of the budget; every other card costs 1. Matched by NAME containing "兆し" rather than a hardcoded
+ * physical-id list, per this session's own lesson about NAME-matching being more resilient to future
+ * data reorgs (see hasPioneerAbility in board.js for the same pattern). */
 function untapChoiceWeight(index, faceId) {
-  return getCardRow(index, faceId).NAME.includes('兆し') ? 3 : 1;
+  return getCardRow(index, faceId).NAME.includes('兆し') ? 2 : 1;
 }
 
 /** UNTAP_CHOICE(SELF,3) (2026-08-15; reworked 2026-08-17 into a weighted budget, see
