@@ -635,29 +635,17 @@ h1, h2, h3 { margin: 0; }
    .action-icons' own defaults (14px emoji, 11px dot) are sized for the taller .shop-card__effect row
    below, not here; without this the icon alone left too little room for the NAME text beside it and
    forced an ellipsis-truncated name even for a plain 2-character one (found via screenshot verification). */
-/* 2026-08-21, per user request: every CON/JOB icon's resource dots (K/Z/etc) sized to match
-   吟遊詩人(JOB008)'s own C dot (.job-note-icon-row .action-dot, 18px) -- and, along with it, the arrow/
-   other text bumped up and darkened to var(--text) too (previously var(--text-faint)/var(--text-muted)).
-   This context (CON's own NAME+icon row) used to be deliberately scaled DOWN from the 14px/11px base to
-   fit a compact single-line row -- risk of the NAME text now getting squeezed/ellipsis-truncated at this
-   larger size is real and hasn't been visually verified (see fillCardFace's own doc), flagged to the user. */
-.shop-card__name .action-emoji { font-size: 22px; }
-.shop-card__name .action-dot { width: 18px; height: 18px; }
-.shop-card__name .action-count { font-size: 16px; }
-.shop-card__name .action-arrow { font-size: 18px; color: var(--text); }
-.shop-card__name .action-suffix { font-size: 14px; color: var(--text); }
-
-/* 強欲/CON002B, 憂鬱/CON003B, 嫉妬/CON004B, 怠惰/CON005A (2026-08-21, per user report the icon-enlarging
-   change above broke these 4 specifically) -- reverted to the exact pre-enlarge sizes for just these 4
-   faces (see .shop-card--name-icon-compact in main.js's buildCardVisual): their ONCE grants 2+ separate
-   resource items (e.g. 強欲=ADD(2A,2B)), too wide for .shop-card__name's compact row at the larger size.
-   Combined-class selectors (2 classes) outrank the plain .shop-card__name rules above regardless of
-   source order. */
-.shop-card--name-icon-compact .shop-card__name .action-emoji { font-size: 11px; }
-.shop-card--name-icon-compact .shop-card__name .action-dot { width: 14.4px; height: 14.4px; }
-.shop-card--name-icon-compact .shop-card__name .action-count { font-size: 12px; }
-.shop-card--name-icon-compact .shop-card__name .action-arrow { font-size: 9px; color: var(--text-faint); }
-.shop-card--name-icon-compact .shop-card__name .action-suffix { font-size: 12px; color: var(--text); }
+/* 2026-08-21: briefly enlarged to match 吟遊詩人(JOB008)'s own 18px C dot, then reverted -- per user
+   report 4 faces with 2+ resource items broke at that size (too wide for this compact single-line row),
+   and per their explicit follow-up ("CONの必要資源の箇所は大きくする必要がないので...ひとつ前のバージョン
+   に戻せますか") this whole context stays at its original compact size for every CON face, not just
+   those 4. See git history for the brief enlarged version and the since-removed
+   .shop-card--name-icon-compact per-card exception it needed. */
+.shop-card__name .action-emoji { font-size: 11px; }
+.shop-card__name .action-dot { width: 14.4px; height: 14.4px; }
+.shop-card__name .action-count { font-size: 12px; }
+.shop-card__name .action-arrow { font-size: 9px; }
+.shop-card__name .action-suffix { font-size: 12px; color: var(--text); }
 
 .shop-card__cost {
   display: flex;

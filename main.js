@@ -2772,14 +2772,6 @@ function buildCardVisual(faceId, options = {}) {
   // .shop-card--job in style.css) can scope to JOB cards even outside .card-group__jobcon (e.g. the
   // job-pool draft view, which has no icon-sizing context of its own otherwise).
   if (faceId.startsWith('JOB')) node.classList.add('shop-card--job');
-  // 強欲/憂鬱/嫉妬/怠惰 (2026-08-21, per user report: the CON/JOB icon-enlarging change broke these 4
-  // specifically -- "崩れてしまったので...ひとつ前のバージョンに戻せますか") -- these are the only CON
-  // faces whose ONCE grants 2+ separate resource items (強欲=ADD(2A,2B), 憂鬱=ADD(2C,3K), 嫉妬=
-  // ADD(2Z,3K), 怠惰=ADD(A,B,C)), so their icon row is wide enough that the enlarged dot/count/emoji
-  // sizes no longer fit .shop-card__name's compact single-line layout. Reverted to the pre-enlarge sizes
-  // for just these 4 (see .shop-card--name-icon-compact in style.css) -- every other CON face (single
-  // resource item) keeps the larger size.
-  if (['CON002B', 'CON003B', 'CON004B', 'CON005A'].includes(faceId)) node.classList.add('shop-card--name-icon-compact');
   // RESOURCE cards show neither NAME nor ID at all (2026-08-17, per user request: "初期資源カードにNAME
   // やIDの表示は不要なので消してください...それに従い横線も不要です") -- see fillCardFace's own idEl
   // branch for the text-suppression side; this class is what lets style.css also drop
