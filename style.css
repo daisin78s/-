@@ -1154,15 +1154,16 @@ h1, h2, h3 { margin: 0; }
   color: var(--text);
 }
 
-/* Confirmed 2026-07-30: the 42px board-slot size is too wide for a card's narrow TAP/effect row (e.g.
-   B001A's SET_DIE_VALUE(SELF2|3) icon wrapped onto two lines instead of staying on one) -- scoped
-   down within .action-icons rows specifically, leaving the board-slot usage untouched. Bumped 1.6x
-   (22px -> 35px, 2026-08-21, per user request covering both B001A/B002A's SET_DIE_VALUE icon and
-   B005A/B006A's own die-value row) -- same reasoning as before, this stays scoped to .action-icons
-   rows only, not the base 42px board-slot glyph. */
-.action-icons .die-face {
-  font-size: 35px;
-}
+/* 2026-08-21, per user request: 兆し/導きカード(B001-007)'s own die-face icons (variously小さな導き/
+   大いなる導き/運命の導き/双星の加護/始まりの兆し/終わりの兆し/革命の兆し's SET_DIE_VALUE/dieFace icons)
+   looked wrong ("変な形をしている") at their previous scaled-down size (originally 22px, briefly 35px) --
+   now matches the monument's own dice-threshold glyph exactly (.shop-card__req's, unscoped base .die-face
+   at 42px) instead of a separate smaller size, so this rule is removed entirely rather than set to an
+   identical 42px value. Confirmed (2026-08-21) every .action-icons die-face usage in the current data is
+   one of these B001-007 faces (buildSetDieValueIcon/the B005A-007A exact-match entries/B006B's
+   BUILD(M,12) via buildBuildIcon), so nothing else is affected by this reverting to the base size. If a
+   future card needs a narrower .action-icons die-face again (the original 2026-07-30 wrapping problem
+   this rule was added for), re-add a scoped override then rather than reintroducing this one blindly. */
 
 /* 2026-08-0X (replaces the old header "tier A"/"tier B" text badge, per user request): a compact
    2-line block in the tile header -- the flat per-tier rate on top (blank for tier A, which has no
