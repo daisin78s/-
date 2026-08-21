@@ -253,6 +253,35 @@ function forceB007ALocation(state, location) {
   check('...and the preferred one is among them', state.players[0].ownedCardPhysicalIds.includes('R001'), true);
 }
 {
+  // redealResourceCandidates (2026-08-21, per user request: switching a player from AI to HUMAN
+  // mid-selection should cancel whatever the AI already auto-picked for them, not silently keep it).
+  const state = createEmptyGameState('debug-setup-redeal');
+  setup.createPlayers(state, ['Alice', 'Bob', 'Carol', 'Dan']);
+  setup.dealResourceCandidates(state, index);
+  const p2Choice = state.pendingChoices.find((c) => c.playerId === 'P2');
+  setup.chooseResourceCards(state, 'P2', p2Choice.context.candidates.slice(0, 2)); // simulate the AI's auto-pick
+
+  setup.redealResourceCandidates(state, index, 'P2');
+  check('redealResourceCandidates leaves P2 owning no RESOURCE cards', state.players[1].ownedCardPhysicalIds.filter((id) => id.startsWith('R')).length, 0);
+  const newChoice = state.pendingChoices.find((c) => c.playerId === 'P2' && c.kind === 'SELECT_RESOURCE_CARDS');
+  assertTrue('...and P2 has a fresh pending choice', !!newChoice);
+  check('...with exactly 4 new candidates', newChoice.context.candidates.length, 4);
+  const othersUsedIds = new Set();
+  for (const p of state.players) {
+    if (p.id === 'P2') continue;
+    for (const id of p.ownedCardPhysicalIds) if (id.startsWith('R')) othersUsedIds.add(id);
+  }
+  for (const c of state.pendingChoices) {
+    if (c.kind === 'SELECT_RESOURCE_CARDS' && c.playerId !== 'P2') for (const id of c.context.candidates) othersUsedIds.add(id);
+  }
+  check('...none of which collide with another player\'s already-owned/candidate RESOURCE cards', newChoice.context.candidates.some((id) => othersUsedIds.has(id)), false);
+
+  const beforeRound1 = structuredClone(state);
+  state.round = 1; // round 1 already started -- turn order is locked in, redealing would desync it
+  setup.redealResourceCandidates(state, index, 'P3');
+  check('redealResourceCandidates is a no-op once round 1 has started', state.pendingChoices, beforeRound1.pendingChoices);
+}
+{
   const state = createEmptyGameState('debug-setup-shop');
   setup.prepareShops(state, index, ['A001A', 'B002A']);
   check('prepareShops seeds SHOP101/102 with the preferred faces in order', [state.shops.NORMAL.slots.SHOP101, state.shops.NORMAL.slots.SHOP102], ['A001A', 'B002A']);

@@ -224,6 +224,42 @@ function dealResourceCandidates(state, index, skipPlayerIds) {
   }
 }
 
+/** Re-deals a fresh SELECT_RESOURCE_CARDS choice for playerId, undoing whatever RESOURCE cards they
+ * already own if any (2026-08-21, per user request: switching a player from AI to HUMAN mid-selection
+ * -- main.js's player-role control -- should cancel whatever the AI already auto-picked for them,
+ * letting the human choose for real instead of inheriting the AI's pick). No-op once state.round has
+ * actually started (round 1's turn order is already computed from the ORIGINAL picks' START_ORDER by
+ * then, so silently redealing would desync it) -- the caller should only invoke this during round 0.
+ * Chosen RESOURCE cards never run their ONCE at this stage (see chooseResourceCards' own doc -- that
+ * happens later, at CON-face onboarding), so there's no resource grant to reverse, only ownership
+ * bookkeeping. Candidates exclude every RESOURCE physicalId already owned by anyone, or already offered
+ * as another player's own still-pending candidate, so this can never hand out a card someone else has
+ * already spoken for. */
+function redealResourceCandidates(state, index, playerId) {
+  if (state.round !== 0) return;
+  const player = state.players.find((p) => p.id === playerId);
+  const ownedResourceIds = player.ownedCardPhysicalIds.filter((id) => id.startsWith('R'));
+  for (const id of ownedResourceIds) delete state.cards[id];
+  player.ownedCardPhysicalIds = player.ownedCardPhysicalIds.filter((id) => !id.startsWith('R'));
+  state.pendingChoices = state.pendingChoices.filter((c) => !(c.playerId === playerId && c.kind === 'SELECT_RESOURCE_CARDS'));
+
+  const usedIds = new Set();
+  for (const p of state.players) {
+    for (const id of p.ownedCardPhysicalIds) if (id.startsWith('R')) usedIds.add(id);
+  }
+  for (const choice of state.pendingChoices) {
+    if (choice.kind === 'SELECT_RESOURCE_CARDS') for (const id of choice.context.candidates) usedIds.add(id);
+  }
+  const available = index.raw.RESOURCE.map((r) => r.ID).filter((id) => !usedIds.has(id));
+  const candidates = shuffle(state.rng, available).slice(0, 4);
+  state.pendingChoices.push({
+    id: nextChoiceId(),
+    playerId,
+    kind: 'SELECT_RESOURCE_CARDS',
+    context: { candidates },
+  });
+}
+
 /**
  * Resolves a player's SELECT_RESOURCE_CARDS choice: the 2 chosenIds become
  * owned card instances (untapped, ownerId set); the other 2 are discarded
@@ -481,6 +517,7 @@ module.exports = {
   rollInitialColorDice,
   dealConCards,
   dealResourceCandidates,
+  redealResourceCandidates,
   chooseResourceCards,
   grantResourceCards,
   grantOneResourceCardAndDealRest,

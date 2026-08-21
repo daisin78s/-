@@ -5663,7 +5663,18 @@ function renderPlayerRoleControl(state) {
       const btn = el('button', 'player-role-control__option', label);
       btn.type = 'button';
       btn.classList.toggle('player-role-control__option--active', currentRole === role);
-      btn.addEventListener('click', () => { playerRoles.set(player.id, role); render(STATE); });
+      btn.addEventListener('click', () => {
+        // 2026-08-21, per user request: switching a player from AI to HUMAN mid-resource-selection
+        // (round 0) undoes whatever the AI already auto-picked for them (setup.redealResourceCandidates
+        // is itself a no-op once round 1 has actually started) -- otherwise the human silently inherits
+        // the AI's already-made pick with no real choice at all, since resource-choice resolution can
+        // fire within seconds of page load under this player's *default* AI role, well before anyone
+        // gets a chance to click these buttons.
+        const previousRole = playerRoles.get(player.id);
+        playerRoles.set(player.id, role);
+        if (role === 'HUMAN' && previousRole !== 'HUMAN') setupMod.redealResourceCandidates(STATE, INDEX, player.id);
+        render(STATE);
+      });
       optionsLine.appendChild(btn);
     }
     row.appendChild(optionsLine);
