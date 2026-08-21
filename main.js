@@ -2451,11 +2451,12 @@ function buildEffectRow(effect, allowTextFallback = true) {
  * -- emblemChars() below turns it into an ordered, one-char-per-emblem list for rendering/counting. */
 const EMBLEM_BY_DECK = { A: '地', B: '天', C: '人' };
 const EMBLEM_ORDER = ['天', '地', '人'];
-// 2026-08-21, per user request: M007/中央広場(2,2,2=6 chars -> 3 rows), M011/聖域(4,0,0=4 chars -> 2
-// rows), M012/大交易所(0,0,4=4 chars -> 2 rows) -- all 3 happen to want exactly "2 per row" (6/2=3,
-// 4/2=2), so one shared chunk size covers all of them. See fillCardFace's own emblem-rendering doc for
-// why every other multi-emblem card (祝福/M008/M009 included) is deliberately left alone.
-const EMBLEM_ROW_CHUNK_SIZE = { M007: 2, M011: 2, M012: 2 };
+// 2026-08-21, per user request: M007/中央広場(2,2,2=6 chars -> 3 rows), M008/聖王城(2,2,0=4 chars -> 2
+// rows), M009/円形闘技場(2,0,2=4 chars -> 2 rows), M011/聖域(4,0,0=4 chars -> 2 rows), M012/大交易所
+// (0,0,4=4 chars -> 2 rows) -- all happen to want exactly "2 per row", so one shared chunk size covers
+// all of them. See fillCardFace's own emblem-rendering doc for why 祝福 (the only other multi-emblem
+// card in the data) is deliberately left alone -- opted OUT of exactly this wrapping back on 2026-08-18.
+const EMBLEM_ROW_CHUNK_SIZE = { M007: 2, M008: 2, M009: 2, M011: 2, M012: 2 };
 function emblemForFaceId(faceId) {
   if (isNormalDeckCard(faceId)) return { [EMBLEM_BY_DECK[faceId[0]]]: 1 };
   // Not restricted to M any more (2026-08-16, per user report: CON006B「祝福」has real EMBLEM_A/B/C
@@ -2547,22 +2548,18 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     const chars = emblemChars(emblem);
     // Always one line regardless of count (2026-08-16 for up to 3, widened 2026-08-18 per user request
     // for 祝福 specifically -- "縦に並べると見栄えが悪いので...横にして" -- to every count; see
-    // .shop-card__emblem's own doc in style.css) -- EXCEPT 中央広場/聖域/大交易所 (2026-08-21, per user
-    // request: "大交易所のエンブレム２行に 中央広場のアイコン３行に 聖域のアイコン２行に"), which now
-    // wrap into fixed-size rows instead (see EMBLEM_ROW_CHUNK_SIZE below). 祝福/M008/M009 -- and every
-    // other multi-emblem card -- deliberately keep the single-line behavior unchanged; only these 3 were
-    // asked for.
+    // .shop-card__emblem's own doc in style.css) -- EXCEPT 中央広場/聖王城/円形闘技場/聖域/大交易所
+    // (2026-08-21, per user request), which now wrap into fixed-size rows instead (see
+    // EMBLEM_ROW_CHUNK_SIZE below). 祝福 -- and every other multi-emblem card -- deliberately keeps the
+    // single-line behavior unchanged; only these 5 were asked for. NAME/cost/VP/etc no longer shift down
+    // to avoid overlapping
+    // the emblem badge at all, for ANY monument (2026-08-21, per user follow-up: "すべてのモニュメントの
+    // NAMEなどを中央広場と同じ位置にして") -- see .shop-card--monument .shop-card__id's own doc in
+    // style.css, which now sits at margin-top:0 (the same position a monument with no emblem at all would
+    // use) unconditionally, superseding the old per-card override this used to need.
     const chunkSize = EMBLEM_ROW_CHUNK_SIZE[faceId];
     if (chunkSize) {
       emblemEl.classList.add('shop-card__emblem--multi-row');
-      // 2026-08-21, per user follow-up ("重なってもいいのでいったんNAME 必要資源 VPは通常位置...に直して"):
-      // an earlier attempt to push .shop-card__id further down to keep clearing the now-taller badge made
-      // the whole card stretch too tall (margin-top affects normal document flow, so every sibling after
-      // it -- cost/effect/VP/req/start-order -- shifted down too). Reverted: NAME/cost/VP stay exactly
-      // where a monument with NO emblem at all would put them (see .shop-card--emblem-multi-row in
-      // style.css, which cancels .shop-card--monument's own 16px push specifically for these 3 cards),
-      // even though the badge now visibly overlaps them -- an accepted tradeoff per the user's own words.
-      root.classList.add('shop-card--emblem-multi-row');
       for (let i = 0; i < chars.length; i += chunkSize) {
         const rowEl = el('div', 'shop-card__emblem-row');
         for (const char of chars.slice(i, i + chunkSize)) {

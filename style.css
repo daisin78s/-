@@ -574,28 +574,15 @@ h1, h2, h3 { margin: 0; }
 
 /* Monuments (2026-08-18, per user report: "中央広場　円形闘技場　エンブレムとNAMEがかぶっています" --
    the emblem badge no longer wraps to multiple rows, see .shop-card__emblem's own doc, so a wide one
-   (e.g. 中央広場's "天天地地人人") can now overlap NAME). Re-fixed 2026-08-18 (2nd report, "前も言いました
-   が" -- the first attempt targeted .shop-card__name, but monuments show their name via .shop-card__id
-   instead (see that class's own doc: "every other deck still always populates this with its NAME" --
-   .shop-card__name is CON-only and stays empty/hidden for M-deck cards), so the original margin-top
-   never actually rendered at all. .shop-card__id sits in normal flow right at .shop-card's own 8px
-   padding-top, while the emblem badge (position:absolute, top:4px, 10px font-size * 1.2 line-height ≈
-   12px tall) spans roughly 4px-16px -- a real ~8px vertical overlap with the id text's own natural top.
-   16px margin gives the id a clean ~8px gap below the emblem's bottom edge (previously requested as
-   "半文字分" extra clearance). COST/effect/VP/req/start-order all follow .shop-card__id in normal
-   document flow, so pushing it down is enough -- every sibling after it shifts the same amount too. */
+   (e.g. 中央広場's "天天地地人人") can now overlap NAME). This used to push .shop-card__id down by 16px to
+   clear the badge, but that made a multi-row monument's card stretch too tall (2026-08-21, per user
+   report: "余計に崩れました...縦に伸びすぎです" -- margin-top shifts every sibling in normal document flow,
+   including COST/effect/VP/req/start-order below it). Per the user's own explicit follow-up request
+   ("重なってもいいので" then "すべてのモニュメントのNAMEなどを中央広場と同じ位置にして"), every monument
+   now sits at margin-top:0 -- the same position one with no emblem at all would use -- uniformly,
+   accepting that the emblem badge (position:absolute, top:4px/right:6px) may visibly overlap NAME/id for
+   any monument with enough emblems, not just the multi-row ones. */
 .shop-card--monument .shop-card__id {
-  margin-top: 16px;
-}
-
-/* 中央広場/聖域/大交易所 (2026-08-21, see .shop-card__emblem--multi-row's own doc) -- an earlier attempt
-   to push .shop-card__id further down for these 3 cards' now-taller badge made the whole card stretch
-   too much (per user report: "余計に崩れました...縦に伸びすぎです"). Per the user's own explicit follow-up
-   ("重なってもいいので"), NAME/cost/VP/etc are put back at the position a monument with NO emblem at all
-   would use (margin-top:0, canceling the 16px above) -- accepting that the multi-row badge now visibly
-   overlaps them, rather than growing the card to avoid it. Combined-class selector (2 classes) outranks
-   the plain .shop-card--monument rule above regardless of source order. */
-.shop-card--monument.shop-card--emblem-multi-row .shop-card__id {
   margin-top: 0;
 }
 
