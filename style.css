@@ -1154,6 +1154,17 @@ h1, h2, h3 { margin: 0; }
   color: var(--text);
 }
 
+/* 2026-08-21, per user report ("PC版のダイス目がモニュメントとBカードで全く違います"): B001-007's own
+   die-face glyphs live inside .shop-card__effect, which sets a monospace font-family (SFMono-Regular/
+   Consolas) for its ONCE/TAP/PASSIVE text -- that monospace font renders ⚀-⚅ with a visibly different
+   glyph style than the sans-serif body font monuments' .shop-card__req (a sibling element, not a
+   .shop-card__effect descendant, so it never inherited the monospace override) happens to use. Explicit
+   font-family here restores the same body-default sans-serif stack for B-card die-face glyphs
+   specifically, matching the monument glyph exactly (same size, same font now, not just same size). */
+.shop-card__effect .die-face {
+  font-family: "Hiragino Sans", "Yu Gothic UI", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
 /* 2026-08-21, per user request: 兆し/導きカード(B001-007)'s own die-face icons (variously小さな導き/
    大いなる導き/運命の導き/双星の加護/始まりの兆し/終わりの兆し/革命の兆し's SET_DIE_VALUE/dieFace icons)
    looked wrong ("変な形をしている") at their previous scaled-down size (originally 22px, briefly 35px) --
