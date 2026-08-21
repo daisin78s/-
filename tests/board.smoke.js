@@ -2202,19 +2202,23 @@ function withWildcardOwner(state) {
   check('...M001 (DICE>=12) is NOT reachable from this forced-fallback placement (no silent 6+6 sum)', seventhCandidates.some((c) => c.faceId === 'M001'), false);
 }
 {
-  // Contrast: a DELIBERATE simultaneous group placement of 2 ☆ dice DOES sum (6+6=12), reaching M001.
+  // Contrast: a DELIBERATE simultaneous group placement of 2 ☆ dice is now refused outright (2026-08-20,
+  // per user request, formalizing a bug they'd found -- placing 2 ☆ together via this path never actually
+  // worked -- into an intentional nerf: "道化自体が強かったので...☆ダイスは1個でしか使えない（ダイス目7
+  // 以上は獲得できない）"). Was previously a summed 6+6=12 group placement reaching M001 -- see
+  // placeDiceGroup's own doc for why this refuses unconditionally for a wildcard-owning player, and the
+  // regression block right after this one for how solo placements onto the same slot still accumulate.
   const state = freshStateWithShops();
   withWildcardOwner(state);
   player(state, 'P1').resources.BZ = 20;
   for (const slotId of Object.keys(state.shops.M.slots)) state.shops.M.slots[slotId] = null;
-  state.shops.M.slots.SHOP001 = 'M001'; // DICE>=12 -- genuinely needs both dice combined
+  state.shops.M.slots.SHOP001 = 'M001'; // DICE>=12 -- would have genuinely needed both dice combined
 
   const d1 = giveDie(state, 'P1', 4);
   const d2 = giveDie(state, 'P1', 5);
   const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
-  check('Group placement of 2 ☆ dice succeeds', result.success, true);
-  check('...buildValue is 12 (6+6, deliberately summed)', result.actionResult.pendingBuild.buildValue, 12);
-  check('...M001 (DICE>=12) IS reachable via the deliberate group placement', result.actionResult.pendingBuild.candidates.some((c) => c.faceId === 'M001'), true);
+  check('Group placement of 2 ☆ dice is refused outright', result, { success: false, reason: 'WILDCARD_GROUP_NOT_ALLOWED' });
+  check('...neither die was actually placed', [d1.placedMapId, d2.placedMapId], [null, null]);
 }
 {
   // Regression (2026-08-20, per user bug report at 元老院): excludedFromBuildValue must NOT cascade --
@@ -2326,23 +2330,24 @@ function withWildcardOwner(state) {
   check('Control: without ☆, 憤怒\'s own-color-die-reuse block still applies normally', result, { success: false, reason: 'OWN_COLOR_DIE_ALREADY_IN_AREA' });
 }
 {
-  // excludeOverfundedMonuments stays correct against the substituted (not real) dice values: a 2-☆-die
-  // group (6+6=12) must exclude a monument either die alone (as 6) already satisfies, while still
-  // offering one that genuinely needs both.
+  // A 2-☆-die group placement is refused the same way regardless of what's in the shop (2026-08-20, same
+  // rule as the "Contrast" block above) -- this used to be excludeOverfundedMonuments's own wildcard-
+  // specific regression case (a 2-☆-die group correctly excluding an already-overfunded monument while
+  // still offering one that genuinely needed both dice combined); that scenario can no longer arise at
+  // all now that a wildcard-owning player's group placements are refused outright, so this just confirms
+  // the refusal holds regardless of shop contents. excludeOverfundedMonuments itself is still covered for
+  // real (non-☆) dice groups elsewhere in this file.
   const state = freshStateWithShops();
   withWildcardOwner(state);
   player(state, 'P1').resources.BZ = 20;
   for (const slotId of Object.keys(state.shops.M.slots)) state.shops.M.slots[slotId] = null;
-  state.shops.M.slots.SHOP001 = 'M012'; // DICE>=1 -- already satisfied by either ☆ die alone
-  state.shops.M.slots.SHOP002 = 'M001'; // DICE>=12 -- genuinely needs both dice combined
+  state.shops.M.slots.SHOP001 = 'M012'; // DICE>=1
+  state.shops.M.slots.SHOP002 = 'M001'; // DICE>=12
 
   const d1 = giveDie(state, 'P1', 3);
   const d2 = giveDie(state, 'P1', 4);
   const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
-  check('Group placement succeeds (M001 alone keeps it non-empty)', result.success, true);
-  const candidates = result.actionResult.pendingBuild.candidates;
-  check('M012 (already satisfied by either ☆ die alone) is excluded as overfunded', candidates.some((c) => c.faceId === 'M012'), false);
-  check('M001 (genuinely needs both dice) is still offered', candidates.some((c) => c.faceId === 'M001'), true);
+  check('Group placement of 2 ☆ dice is refused outright regardless of shop contents', result, { success: false, reason: 'WILDCARD_GROUP_NOT_ALLOWED' });
 }
 
 console.log(`\n${passCount} passed, ${failCount} failed`);

@@ -4204,14 +4204,17 @@ function renderPlayers(state, next) {
           const idx = selectedDieIds.indexOf(die.id);
           if (idx !== -1) {
             selectedDieIds.splice(idx, 1);
-          } else if (selectedDieIds.length === 0) {
-            selectedDieIds.push(die.id);
+          } else if (selectedDieIds.length === 0 || playerIsWildcard) {
+            // ☆ dice are solo-only (2026-08-20, per user request: "道化の☆ダイスは1個でしか使えない
+            // （ダイス目7以上は獲得できない）" -- board.placeDiceGroup now refuses outright for a
+            // wildcard-owning player, see that function's own doc). Clicking a different die while one is
+            // already selected REPLACES the selection instead of adding to it, so the UI never lets this
+            // player build toward a 2-die group placement that would only fail at commit time.
+            selectedDieIds = [die.id];
           } else {
-            // JOB003/道化 (2026-08-19): a ☆ die always counts as 6 for this check, matching how a group
-            // placement's monument buildValue actually substitutes it -- see occupantBuildContribution's
-            // own doc. Keeps this client-side guard from drifting out of sync with board.placeDiceGroup's
-            // real math (e.g. wrongly permitting a redundant ☆ pick that the server would then refuse).
-            const prospectiveValues = [...selectedDieIds, die.id].map((id) => (playerIsWildcard ? 6 : player.dice.find((d) => d.id === id).value));
+            // Never reached for a wildcard player (the branch above always replaces instead, so
+            // selectedDieIds can never exceed length 1 for them) -- real dice values only.
+            const prospectiveValues = [...selectedDieIds, die.id].map((id) => player.dice.find((d) => d.id === id).value);
             if (!hasQualifyingProperSubset(prospectiveValues, 12)) selectedDieIds.push(die.id);
           }
           render(STATE);

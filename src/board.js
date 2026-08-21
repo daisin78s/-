@@ -722,6 +722,16 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   // JOB003/道化 (2026-08-19): every die in this group is this player's own, so wildcard-ness is a single
   // owner-level flag, not per-die -- see hasWildcardDice's own doc.
   const dieIsWildcard = hasWildcardDice(state, index, playerId);
+  // ☆ dice are now solo-only (2026-08-20, per user request, formalizing a bug they'd found -- placing 2
+  // ☆ dice together via this group path had never actually worked -- into an intentional nerf: "道化自体
+  // が強かったので...☆ダイスは1個でしか使えない（ダイス目7以上は獲得できない）"): a 道化 player's every
+  // die is ☆ (hasWildcardDice is a per-player flag, not per-die), so this refuses the WHOLE group-
+  // placement path outright for them, rather than trying to special-case which dice in dieIds are/aren't
+  // wildcard. They can still stack multiple ☆ dice onto the same slot over separate single-die
+  // placeWildcardDie actions (its own force-stack-when-full fallback) -- only this "select 2+ and place
+  // as one atomic action" shortcut is gone, which is exactly what let a single group action reach a
+  // combined dice-value of 12 (two ☆ at 6 each) in one placement.
+  if (dieIsWildcard) return { success: false, reason: 'WILDCARD_GROUP_NOT_ALLOWED' };
   // Moved up from the commit section further down (2026-08-20) -- 開拓者's speculative grant below needs
   // this in scope earlier than the commit phase did.
   const actionContext = context;
