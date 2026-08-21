@@ -24,7 +24,7 @@ const table = buildEvalTable(raw);
 // ---------------------------------------------------------------------------
 // buildEvalTable: one entry per ID per round, straight from the "評価値" sheet's 1R/2R/3R/4R columns.
 // ---------------------------------------------------------------------------
-check('D (colored die) 1R value', evalValue(table, 1, 'D'), 40);
+check('D (colored die) 1R value', evalValue(table, 1, 'D'), 50);
 check('D 2R value', evalValue(table, 2, 'D'), 30);
 check('D 3R value', evalValue(table, 3, 'D'), 20);
 check('D 4R value', evalValue(table, 4, 'D'), 0);

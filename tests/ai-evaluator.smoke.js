@@ -43,7 +43,7 @@ function freshState(round) {
 }
 
 // ---------------------------------------------------------------------------
-// Base resources + unplaced dice, round 1: K=3, A=5, VP=10, D=40, wD=10 per the current sheet.
+// Base resources + unplaced dice, round 1: K=3, A=5, VP=10, D=50, wD=10 per the current sheet.
 // ---------------------------------------------------------------------------
 {
   const state = freshState(1);
@@ -55,18 +55,18 @@ function freshState(round) {
   const whiteDie = createDie('d2', 'WHITE');
   p1.dice.push(colorDie, whiteDie);
 
-  const expected = 2 * 3 + 1 * 5 + 1 * 10 + 1 * 40 + 1 * 10; // K + A + VP + unplaced D + unplaced wD
+  const expected = 2 * 3 + 1 * 5 + 1 * 10 + 1 * 50 + 1 * 10; // K + A + VP + unplaced D + unplaced wD
   check('Score sums resources + unplaced dice using round-1 eval-table weights', evaluator.score(state, 'P1'), expected);
 }
 
 // ---------------------------------------------------------------------------
 // A passed color die (2026-08-03, see board.passDie) scores at v('K')*3, not the full v('D') --
 // found via a real game trace (AI chose PASS_DIE 13 times vs PLACE_DIE once in one round): leaving a
-// passed die at the full round-1 'D' weight (40) made passing score *better* than almost any real
-// placement (turn-flow.endRound's actual guaranteed payout for an unused color die is only 3K, i.e.
-// v('K')*3 = 9), so the AI defaulted to passing instead of playing. White dice have no such guaranteed
-// round-end conversion (only color dice do, see endRound's own code), so a passed wD keeps the normal
-// 'wD' weight, unlike a passed color die.
+// passed die at the full round-1 'D' weight (originally 40, now 50) made passing score *better* than
+// almost any real placement (turn-flow.endRound's actual guaranteed payout for an unused color die is
+// only 3K, i.e. v('K')*3 = 9), so the AI defaulted to passing instead of playing. White dice have no
+// such guaranteed round-end conversion (only color dice do, see endRound's own code), so a passed wD
+// keeps the normal 'wD' weight, unlike a passed color die.
 // ---------------------------------------------------------------------------
 {
   const state = freshState(1);
@@ -75,7 +75,7 @@ function freshState(round) {
   const passedDie = createDie('d2', 'COLOR');
   passedDie.passed = true;
   p1.dice.push(unplacedDie, passedDie);
-  const expected = 1 * 40 + 1 * (3 * 3); // still-placeable D + passed die's guaranteed-3K-equivalent value
+  const expected = 1 * 50 + 1 * (3 * 3); // still-placeable D + passed die's guaranteed-3K-equivalent value
   check('A passed color die scores at its guaranteed round-end 3K value, not the full unplaced D weight', evaluator.score(state, 'P1'), expected);
 }
 {

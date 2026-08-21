@@ -112,13 +112,14 @@ class Evaluator {
 
     // A passed die (2026-08-03, see board.passDie) is scored separately from a genuinely-still-
     // placeable one -- found via a real game trace (AI chose PASS_DIE 13 times vs PLACE_DIE once in a
-    // single round 1): the full 'D' weight (40 in round 1) represents the *option value* of a die that
-    // can still be placed for whatever an AREA grants, but a passed die has already given that up for
-    // this round -- its only remaining guaranteed value is turn-flow.endRound's "unused color die ->
-    // 3K" rule (v('K')*3), which is far below 'D''s weight. Leaving passed dice at the full 'D' value
-    // made passing score *better* than almost any real placement (since most single-AREA gains are
-    // worth less than 40), so the AI passed by default instead of playing. White dice have no such
-    // guaranteed round-end conversion (only color dice do), so passed wD keeps the normal 'wD' weight.
+    // single round 1): the full 'D' weight (round-1 value, 40 originally/50 as of 2026-08-21) represents
+    // the *option value* of a die that can still be placed for whatever an AREA grants, but a passed die
+    // has already given that up for this round -- its only remaining guaranteed value is turn-flow.
+    // endRound's "unused color die -> 3K" rule (v('K')*3), which is far below 'D''s weight. Leaving
+    // passed dice at the full 'D' value made passing score *better* than almost any real placement
+    // (since most single-AREA gains are worth less than 'D'), so the AI passed by default instead of
+    // playing. White dice have no such guaranteed round-end conversion (only color dice do), so passed
+    // wD keeps the normal 'wD' weight.
     const unplacedColor = player.dice.filter((d) => d.kind === 'COLOR' && d.placedMapId === null && !d.passed).length;
     const passedColor = player.dice.filter((d) => d.kind === 'COLOR' && d.placedMapId === null && d.passed).length;
     const unplacedWhite = player.dice.filter((d) => d.kind === 'WHITE' && d.placedMapId === null).length;
