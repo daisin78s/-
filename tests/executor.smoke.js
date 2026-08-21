@@ -408,7 +408,7 @@ console.log(`\n${passCount} passed, ${failCount} failed`);
 }
 {
   const state = freshState();
-  giveCard(state, 'B001A', 'P1'); // TAP=SET_DIE_VALUE(SELF2|3);GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN)
+  giveCard(state, 'B001A', 'P1'); // TAP=SET_DIE_VALUE(SELF1|2);GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN)
   const player = getPlayerRef(state, 'P1');
   const die = createDie('d1', 'COLOR');
   die.value = 1;
@@ -416,12 +416,12 @@ console.log(`\n${passCount} passed, ${failCount} failed`);
 
   const row = getCardRow(index, 'B001A');
   const badChoice = executor.runProgram(state, index, { playerId: 'P1', chosenDieId: 'd1', chosenValue: 5 }, row.TAP);
-  check('SET_DIE_VALUE(SELF2|3) rejects a value outside {2,3}', badChoice.reason, 'INVALID_CHOICE');
+  check('SET_DIE_VALUE(SELF1|2) rejects a value outside {1,2}', badChoice.reason, 'INVALID_CHOICE');
 
-  const context = { playerId: 'P1', chosenDieId: 'd1', chosenValue: 3 };
+  const context = { playerId: 'P1', chosenDieId: 'd1', chosenValue: 2 };
   const result = executor.runProgram(state, index, context, row.TAP);
-  check('SET_DIE_VALUE(SELF2|3) with chosenValue=3 succeeds', result.success, true);
-  check('...sets the die to 3', getDieRef(state, 'P1', 'd1').value, 3);
+  check('SET_DIE_VALUE(SELF1|2) with chosenValue=2 succeeds', result.success, true);
+  check('...sets the die to 2', getDieRef(state, 'P1', 'd1').value, 2);
   check('...and GRANT_PLACE_ANYWHERE(THIS_DICE,...) found it via context.lastTargetedDieId', getDieRef(state, 'P1', 'd1').placeAnywhereThisTurn, true);
 
   executor.applyTurnEnd(state, index, 'P1');

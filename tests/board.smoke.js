@@ -685,7 +685,7 @@ function giveDie(state, playerId, value) {
 }
 
 // ---------------------------------------------------------------------------
-// B001A.TAP=SET_DIE_VALUE(SELF2|3);GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN) -- needs the caller to
+// B001A.TAP=SET_DIE_VALUE(SELF1|2);GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN) -- needs the caller to
 // supply context.chosenDieId/chosenValue *before* calling (the whole TAP field runs as one atomic
 // program, so there's no mid-run prompt). context.lastTargetedDieId propagates SET_DIE_VALUE's choice
 // of die into GRANT_PLACE_ANYWHERE(THIS_DICE,...) automatically (same context object throughout).
@@ -703,13 +703,13 @@ function giveDie(state, playerId, value) {
   check('Without chosenDieId/chosenValue, fails with CHOICE_REQUIRED (nothing mutated)', missingChoice.success, false);
   check('...and the card stays untapped after a failed attempt', state.cards[inst.physicalId].tapped, false);
 
-  const result = board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: die.id, chosenValue: 3 }, inst.physicalId);
-  check('With a valid choice (3, one of SELF2|3), succeeds', result, { success: true });
+  const result = board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: die.id, chosenValue: 2 }, inst.physicalId);
+  check('With a valid choice (2, one of SELF1|2), succeeds', result, { success: true });
   // The earlier failed CHOICE_REQUIRED attempt rolled back via runProgram's snapshot-replace, which
   // stales any player/die reference grabbed before it (see tests/executor.smoke.js's getDieRef
   // comment for the same trap) -- re-fetch fresh from state rather than reusing `p1`/`die`.
   const dieAfter = player(state, 'P1').dice.find((d) => d.id === die.id);
-  check('...the die\'s value is now 3', dieAfter.value, 3);
+  check('...the die\'s value is now 2', dieAfter.value, 2);
   check('...and it\'s flagged placeAnywhereThisTurn (GRANT_PLACE_ANYWHERE(THIS_DICE,...) followed it)', dieAfter.placeAnywhereThisTurn, true);
   check('...the card is now tapped', state.cards[inst.physicalId].tapped, true);
 }

@@ -2394,7 +2394,7 @@ function renderAreaOwnershipEffectText(container, text) {
 
 /**
  * One row per effect (confirmed 2026-07-29: a card can have both an ONCE and a TAP effect, e.g.
- * B001A's ADD(wD) + SET_DIE_VALUE(SELF2|3), shown as two stacked rows). Flattens the icon builder's
+ * B001A's ADD(wD) + SET_DIE_VALUE(SELF1|2), shown as two stacked rows). Flattens the icon builder's
  * own .action-icons wrapper into this row instead of nesting, so the TAP-cost prefix (if any) and
  * the effect's icons sit in a single flex row together.
  */
