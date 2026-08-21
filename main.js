@@ -5003,9 +5003,11 @@ function renderPickedResourcePreview(container, player) {
  * 2026-07-30, see [[project-dice-wp-ui-requirements]]): per [[project-dice-wp-flow-spec]] steps 5-6,
  * this is NOT part of round-1 onboarding (steps 9-12) -- every player picks 2 of their 4 dealt
  * RESOURCE candidates up front, in any order, before round 1 (and turn order itself) is even
- * determined. So unlike renderJobChoice/renderConChoice above, this is shown for ANY player who still
- * has a pending SELECT_RESOURCE_CARDS choice while state.round is still 0, regardless of
- * turn-flow.getNextTurn (there's no turn order yet to gate by). Clicking a 2nd candidate commits
+ * determined. The engine itself still lets any pending player resolve in any order (no turnOrder to
+ * gate by yet) -- but the CALLER only ever invokes this for state's currentResourceChooserId (2026-08-21,
+ * per user report: a shared-screen/hotseat game with 2+ humans used to show every still-pending player's
+ * own CON/candidates at once, leaking what's meant to stay private between them), so only one player's
+ * picker is ever actually on screen at a time, in state.players' own fixed order. Clicking a 2nd candidate commits
  * immediately via setup.chooseResourceCards, then calls maybeStartRound1 (once every player has
  * committed, that computes start order and starts round 1 for real). `choice.context.selected` is a
  * mock-only scratch field (the real engine's PendingChoice.context has no such field -- see
@@ -5068,6 +5070,23 @@ function renderResourceChoice(container, state, player) {
   ]));
 }
 
+/** Which player's CON preview + RESOURCE candidate picker should actually be visible during round 0
+ * (2026-08-21, per user report: with 2+ human players sharing one screen, a player still waiting their
+ * turn could already see every other still-choosing player's own CON card and candidates, which are
+ * meant to be private -- "２人目以降が初期資源を選ぼうとするとほかのプレイヤーのCONや初期資源が見えて
+ * しまいます"). Round 0 has no turnOrder yet (computeStartOrder itself depends on the RESOURCE choices
+ * still being made), so this just walks state.players in their fixed creation order (P1,P2,P3,P4) and
+ * returns the first one who still has a pending SELECT_RESOURCE_CARDS choice -- everyone before them
+ * has already finished (and, per the existing renderConPreview/renderResourceChoice gating, is already
+ * invisible here too, confirmed with the user), and everyone after them simply isn't rendered at all
+ * until it's their turn. AI players are never skipped specially -- they resolve near-instantly via the
+ * AI pump regardless of pacing mode, so their slot in this order clears on its own with nothing for a
+ * human to see. Returns null once nobody has a pending choice left (nothing to show either way). */
+function currentResourceChooserId(state) {
+  const player = state.players.find((p) => state.pendingChoices.some((c) => c.playerId === p.id && c.kind === 'SELECT_RESOURCE_CARDS'));
+  return player ? player.id : null;
+}
+
 /** Once every player has committed their 2 RESOURCE cards (no SELECT_RESOURCE_CARDS pendingChoice
  * left), computes start order and starts round 1 for real (setup.js steps 7-8, per
  * [[project-dice-wp-flow-spec]]) -- see renderResourceChoice above, the only caller. No-op if round 1
@@ -5083,6 +5102,9 @@ function renderPlayerCards(state, next) {
   const activePlayerId = next ? next.playerId : null;
   const container = document.getElementById('player-cards-groups');
   container.innerHTML = '';
+  // Computed once per render, outside the loop (2026-08-21, see currentResourceChooserId's own doc) --
+  // only meaningful while state.round === 0, but cheap to compute either way.
+  const activeResourceChooserId = currentResourceChooserId(state);
   for (const player of turnOrderedPlayers(state, activePlayerId)) {
     const isSelf = player.id === activePlayerId;
     // Bare (direct) TAP abilities are usable "any time during your own turn", same gate as
@@ -5151,12 +5173,14 @@ function renderPlayerCards(state, next) {
     if (isSelf) {
       renderConChoice(node.querySelector('.card-group__onboard-con'), state, player);
     }
-    if (state.round === 0) {
-      // CON preview (2026-07-30, per user feedback): shown only while this player's own RESOURCE
-      // choice is still pending, same lifetime as the RESOURCE row itself below -- see
-      // renderConPreview's comment for why.
-      const stillChoosingResources = state.pendingChoices.some((c) => c.playerId === player.id && c.kind === 'SELECT_RESOURCE_CARDS');
-      if (stillChoosingResources) renderConPreview(node.querySelector('.card-group__onboard-con'), player);
+    if (state.round === 0 && player.id === activeResourceChooserId) {
+      // CON preview (2026-07-30, per user feedback) + the RESOURCE candidate picker itself -- both
+      // scoped to just the one player currently up (2026-08-21, per user report: other still-waiting
+      // players' own CON/candidates used to be visible here too, at the same time, which are meant to
+      // stay private in a shared-screen/hotseat setting -- see currentResourceChooserId's own doc).
+      // Whoever already finished stays invisible too, same as before (renderResourceChoice's own "no
+      // pending choice, nothing to show" return covers that automatically).
+      renderConPreview(node.querySelector('.card-group__onboard-con'), player);
       renderResourceChoice(node.querySelector('.card-group__onboard-resources'), state, player);
     } else if (isSelf && !hasFinishedOnboarding(player)) {
       // Round 1's JOB draft / CON face choice (2026-08-02, per user feedback): keep showing the 2
