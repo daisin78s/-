@@ -637,7 +637,7 @@
       "EMBLEM_B": 1,
       "VP": 1,
       "LEVEL": 2,
-      "ONCE": "ADD(2wD)",
+      "ONCE": "ADD(wD)",
       "TAP": "",
       "PASSIVE": "",
       "TURNEND": "",
