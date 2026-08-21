@@ -588,18 +588,15 @@ h1, h2, h3 { margin: 0; }
   margin-top: 16px;
 }
 
-/* 2026-08-21, see .shop-card__emblem--multi-row's own doc in this file -- 中央広場(3 rows)/聖域・
-   大交易所(2 rows) need proportionally more clearance below their now-taller badge than the 1-row
-   16px above assumes. Same "~8px gap below the badge's bottom edge" arithmetic that comment already
-   works out (badge bottom ≈ 4px top offset + 12px per row; margin-top = that + 8px gap - .shop-card's
-   own 8px padding-top = 4 + 12*rows), just generalized to N rows: 2 rows -> 28px, 3 rows -> 40px.
-   Both combined-class selectors (2 classes on the same element) outrank the plain 1-row rule above
-   regardless of source order. */
-.shop-card--monument.shop-card--emblem-rows-2 .shop-card__id {
-  margin-top: 28px;
-}
-.shop-card--monument.shop-card--emblem-rows-3 .shop-card__id {
-  margin-top: 40px;
+/* 中央広場/聖域/大交易所 (2026-08-21, see .shop-card__emblem--multi-row's own doc) -- an earlier attempt
+   to push .shop-card__id further down for these 3 cards' now-taller badge made the whole card stretch
+   too much (per user report: "余計に崩れました...縦に伸びすぎです"). Per the user's own explicit follow-up
+   ("重なってもいいので"), NAME/cost/VP/etc are put back at the position a monument with NO emblem at all
+   would use (margin-top:0, canceling the 16px above) -- accepting that the multi-row badge now visibly
+   overlaps them, rather than growing the card to avoid it. Combined-class selector (2 classes) outranks
+   the plain .shop-card--monument rule above regardless of source order. */
+.shop-card--monument.shop-card--emblem-multi-row .shop-card__id {
+  margin-top: 0;
 }
 
 .shop-card__name-text {

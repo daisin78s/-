@@ -2554,11 +2554,14 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     const chunkSize = EMBLEM_ROW_CHUNK_SIZE[faceId];
     if (chunkSize) {
       emblemEl.classList.add('shop-card__emblem--multi-row');
-      // Extra vertical clearance for .shop-card__id below the now-taller badge (2026-08-21) -- see
-      // .shop-card--emblem-rows-N in style.css for the actual offset, derived from the same "~8px gap
-      // below the badge's own bottom edge" arithmetic .shop-card--monument's own 1-row margin-top:16px
-      // comment already documents, just scaled to N rows instead of 1.
-      root.classList.add(`shop-card--emblem-rows-${Math.ceil(chars.length / chunkSize)}`);
+      // 2026-08-21, per user follow-up ("重なってもいいのでいったんNAME 必要資源 VPは通常位置...に直して"):
+      // an earlier attempt to push .shop-card__id further down to keep clearing the now-taller badge made
+      // the whole card stretch too tall (margin-top affects normal document flow, so every sibling after
+      // it -- cost/effect/VP/req/start-order -- shifted down too). Reverted: NAME/cost/VP stay exactly
+      // where a monument with NO emblem at all would put them (see .shop-card--emblem-multi-row in
+      // style.css, which cancels .shop-card--monument's own 16px push specifically for these 3 cards),
+      // even though the badge now visibly overlaps them -- an accepted tradeoff per the user's own words.
+      root.classList.add('shop-card--emblem-multi-row');
       for (let i = 0; i < chars.length; i += chunkSize) {
         const rowEl = el('div', 'shop-card__emblem-row');
         for (const char of chars.slice(i, i + chunkSize)) {
