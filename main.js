@@ -1896,12 +1896,13 @@ function buildChangeAllThenAddIcon(actionText) {
  * K/A/B/C/Z -- matches every other "{n}BZ"/"軽減{n}Z" label elsewhere, plain text rather than a
  * dot+count) or ⚡BZ (ADD form, ⚡ prefix matching buildAddResourceIcon's "just gain this, no cost"
  * convention). Next line (only if MONUMENT_DICE_DISCOUNT present): 🎲-{n}, reusing the same dice glyph
- * every wD-related icon already uses elsewhere. Final line (only if any BLOCK_BUILD present): the
- * blocked categories' letters + "除く", except the single-M case which keeps the pre-existing
- * "モニュメント除く" wording users have already seen. **2026-08-04: the block used to be display-only
- * text -- confirmed with the user this needed real enforcement, so it's backed by a genuine rule
- * (BLOCK_BUILD(...,THIS_TURN), see board.getBuildCandidates); this label just reflects that.** Matches
- * generically on shape (a bare CHANGE(nX,nBZ) or ADD(nBZ), optionally followed by one
+ * every wD-related icon already uses elsewhere. Final line (only if any BLOCK_BUILD present, except
+ * JOB007/宮廷人's own A+B+C triple-block, which gets no label row at all -- removed 2026-08-21 per user
+ * request "ABC除くを削除"): the blocked categories' letters + "除く", except the single-M case which
+ * keeps the pre-existing "モニュメント除く" wording users have already seen. **2026-08-04: the block
+ * used to be display-only text -- confirmed with the user this needed real enforcement, so it's backed
+ * by a genuine rule (BLOCK_BUILD(...,THIS_TURN), see board.getBuildCandidates); this label just reflects
+ * that.** Matches generically on shape (a bare CHANGE(nX,nBZ) or ADD(nBZ), optionally followed by one
  * MONUMENT_DICE_DISCOUNT(n,THIS_TURN) and/or one or more BLOCK_BUILD(cat,THIS_TURN)), not any one card by
  * name -- the BZ grant alone, with neither of the other two, still matches and simply skips those rows. */
 function buildBzForBuildIcon(actionText) {
@@ -1926,7 +1927,11 @@ function buildBzForBuildIcon(actionText) {
     const discountAmount = /^MONUMENT_DICE_DISCOUNT\((\d+),THIS_TURN\)$/.exec(discountMatch)[1];
     stack.appendChild(actionRow([actionEmoji('🎲'), actionSuffix(`-${discountAmount}`)]));
   }
-  if (blockedCats.length > 0) {
+  // JOB007/宮廷人 (2026-08-21, per user request "ABC除くを削除"): the A,B,C triple-block no longer gets
+  // its own label row at all -- BZ/dice-discount rows above already say everything the icon needs to.
+  // JOB004's single-M block keeps its existing "モニュメント除く" label, untouched.
+  const isAbcBlock = blockedCats.length === 3 && ['A', 'B', 'C'].every((c) => blockedCats.includes(c));
+  if (blockedCats.length > 0 && !isAbcBlock) {
     const label = blockedCats.length === 1 && blockedCats[0] === 'M' ? 'モニュメント除く' : `${blockedCats.join('')}除く`;
     stack.appendChild(actionRow([actionSuffix(label)]));
   }
