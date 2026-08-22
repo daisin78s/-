@@ -1287,7 +1287,12 @@ const CARD_LIST_FLAT_CATEGORIES = {
 function buildCardListCell(faceId, isQst) {
   const cardNode = isQst
     ? buildQstCardVisual(faceId, STATE, { showRankHeaders: false, noInteraction: true })
-    : buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true });
+    // req (2026-08-22, per user report: "モニュメントカード一覧にダイス目がない") -- buildCardVisual
+    // doesn't derive a monument's DICE threshold on its own (see fillCardFace's own options.req use);
+    // every other caller passes req: factsForFaceId(faceId).req explicitly (e.g. buildShopSlotNode),
+    // which this had omitted. Harmless for non-monument sheets, where .req is just '' (row has no DICE
+    // column) and .shop-card__req collapses away via its own :empty rule.
+    : buildCardVisual(faceId, { req: factsForFaceId(faceId).req, showEffect: true, allowTextFallback: false, noInteraction: true });
   const tall = cardNode.classList.contains('shop-card--tall');
   const cellClass = isQst
     ? 'owned-card-cell owned-card-cell--qst'
