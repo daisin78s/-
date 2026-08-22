@@ -2999,6 +2999,13 @@ h1, h2, h3 { margin: 0; }
   font-weight: 700;
 }
 
+/* UNTAP_CHOICEのはいボタン2倍サイズ (2026-08-22, per user request) -- see renderUntapChoice's own doc.
+   ~2x .build-choice-payment__option's base 11px/3px 8px. */
+.untap-choice-yes {
+  font-size: 22px;
+  padding: 6px 16px;
+}
+
 .build-choice-payment__option:disabled {
   opacity: 0.4;
   cursor: default;

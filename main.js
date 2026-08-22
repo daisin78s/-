@@ -4764,7 +4764,15 @@ function renderUntapChoice(container, state, playerId) {
   }
   if (confirmPending) {
     container.appendChild(el('div', 'onboard-hint__line', `これでいいですか？（使用予算 ${selectedWeight}/${choice.context.count}）`));
-    const yesBtn = el('button', 'build-choice-payment__option', 'はい');
+    // はい2倍サイズ (2026-08-22, per user report: "小さくて押しにくい") -- .untap-choice-yes scopes the
+    // enlargement to just this button, since .build-choice-payment__option is shared with several
+    // unrelated payment-option contexts elsewhere that shouldn't grow along with it. Also gets
+    // .build-choice-payment__option--active (the same accent-highlight modifier already used for "this
+    // option is the one in effect" elsewhere) whenever the full budget was actually used -- per user
+    // request "所定の枚数を選んだら色が変わるように" -- so stopping short because nothing else fits
+    // still reads as neutral/plain, while hitting the budget exactly reads as a clear "ready" affirmation.
+    const yesBtn = el('button', 'build-choice-payment__option untap-choice-yes', 'はい');
+    if (selectedWeight === choice.context.count) yesBtn.classList.add('build-choice-payment__option--active');
     yesBtn.type = 'button';
     yesBtn.onclick = () => { executorMod.resolveUntapChoice(state, playerId, selected); render(STATE); };
     container.appendChild(yesBtn);
