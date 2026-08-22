@@ -2718,6 +2718,35 @@ h1, h2, h3 { margin: 0; }
   justify-content: center;
 }
 
+/* CON一覧 (2026-08-22, per user request: "上段左側に表 下段左側に裏と表記") -- tier-A(表)/tier-B(裏)
+   each get their own labeled row instead of one flat grid. Plain flex-wrap (not card-list-grid's fixed
+   pixel columns) since CON cards are shop-card--tall (150px), which card-list-grid's other users size
+   for at 122px -- flex-wrap just uses each card's own real width instead of needing a 2nd column-width
+   variant. */
+.card-list-con-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.card-list-con-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.card-list-con-row__label {
+  flex: 0 0 auto;
+  width: 24px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  text-align: center;
+}
+.card-list-con-row__cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 /* 領地(A)/天運(B)/人材(C)一覧 (2026-08-22, per user request): LV1(表)を上段・LV2(裏)を下段に並べた
    通常カードのグリッドと、008(特殊枠、2ラウンドから登場)を縦積みにした列を横並びにする -- 008を
    「一番右」に独立配置する、という要望をそのまま構造化したもの。card-list-grid側の行数はDOM順

@@ -1267,14 +1267,14 @@ const CARD_LIST_NAV = [
   { key: null, label: 'ゲームに戻る' },
 ];
 
-/** CON/JOB/初期資源(RESOURCE)/モニュメント(M)/QST -- each sheet's rows already ARE the individual
- * faces to show (unlike A/B/C, see collectNormalShopFaceIds's own doc), so a single flat grid per
- * category is enough; no 2-row/008 treatment needed here. columns chosen the same way
- * DEBUG_SETUP_STEPS' own columns field is (exact fit where possible, e.g. M=12->6x2, RESOURCE=18->6x3,
- * QST=8->4x2; JOB has no clean rectangle at its current 11 faces, so it wraps 5+4+2 like the debug
- * picker's own JOB step already accepts). */
+/** JOB/初期資源(RESOURCE)/モニュメント(M)/QST -- each sheet's rows already ARE the individual faces to
+ * show (unlike A/B/C, see collectNormalShopFaceIds's own doc), so a single flat grid per category is
+ * enough; no row-split treatment needed here. columns chosen the same way DEBUG_SETUP_STEPS' own
+ * columns field is (exact fit where possible, e.g. M=12->6x2, RESOURCE=18->6x3, QST=8->4x2; JOB has no
+ * clean rectangle at its current 11 faces, so it wraps 5+4+2 like the debug picker's own JOB step
+ * already accepts). CON gets its own dedicated renderCardListConCategory instead (表/裏 row split, per
+ * user request), so it's not listed here. */
 const CARD_LIST_FLAT_CATEGORIES = {
-  con: { label: 'CON一覧', columns: 6, isQst: false, faceIds: () => INDEX.raw.CON.map((r) => r.ID) },
   job: { label: 'JOB一覧', columns: 5, isQst: false, faceIds: () => INDEX.raw.JOB.map((r) => r.ID) },
   initialResource: { label: '初期資源一覧', columns: 6, isQst: false, faceIds: () => INDEX.raw.RESOURCE.map((r) => r.ID) },
   monument: { label: 'モニュメントカード一覧', columns: 6, isQst: false, faceIds: () => INDEX.raw.M.map((r) => r.ID) },
@@ -1313,6 +1313,34 @@ function renderCardListFlatCategory(key, container) {
     grid.appendChild(buildCardListCell(faceId, config.isQst));
   }
   container.appendChild(grid);
+}
+
+/** CON一覧, per user request ("上段左側に表 下段左側に裏と表記"): tier-A (表) faces on their own row,
+ * tier-B (裏) faces on their own row below, each row labeled at its left edge. data/game.json's CON
+ * sheet already lists every tier-A row before every tier-B row (confirmed 2026-08-22), so this is a
+ * straightforward tier split, not a same-numbered-pairing exercise like A/B/C's own row layout. Plain
+ * flex-wrap (not a fixed-column grid) so each row sizes to its cards' own real width instead of
+ * guessing a column pixel size independent of whether the card ends up shop-card--tall or not. */
+function renderCardListConCategory(container) {
+  const tierA = [];
+  const tierB = [];
+  for (const row of INDEX.raw.CON) {
+    const { tier } = gameStateMod.splitCardId(row.ID);
+    if (tier === 'A') tierA.push(row.ID); else if (tier === 'B') tierB.push(row.ID);
+  }
+  const wrap = el('div', 'card-list-con-wrap');
+  wrap.appendChild(buildCardListConRow('表', tierA));
+  wrap.appendChild(buildCardListConRow('裏', tierB));
+  container.appendChild(wrap);
+}
+
+function buildCardListConRow(label, faceIds) {
+  const row = el('div', 'card-list-con-row');
+  row.appendChild(el('div', 'card-list-con-row__label', label));
+  const cards = el('div', 'card-list-con-row__cards');
+  for (const faceId of faceIds) cards.appendChild(buildCardListCell(faceId, false));
+  row.appendChild(cards);
+  return row;
 }
 
 /** 領地(A)/天運(B)/人材(C)一覧, per user request: same-numbered LV1(表/A面) on top, LV2(裏/B面) on the
@@ -1407,6 +1435,9 @@ function renderCardListOverlay() {
   } else if (cardListView === 'A' || cardListView === 'B' || cardListView === 'C') {
     document.getElementById('card-list-title').textContent = CARD_LIST_NAV.find((n) => n.key === cardListView).label;
     renderCardListAbcCategory(cardListView, body);
+  } else if (cardListView === 'con') {
+    document.getElementById('card-list-title').textContent = 'CON一覧';
+    renderCardListConCategory(body);
   } else {
     const config = CARD_LIST_FLAT_CATEGORIES[cardListView];
     document.getElementById('card-list-title').textContent = config.label;
