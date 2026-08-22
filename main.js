@@ -1276,7 +1276,15 @@ const CARD_LIST_NAV = [
  * user request), so it's not listed here. */
 const CARD_LIST_FLAT_CATEGORIES = {
   job: { label: 'JOB一覧', columns: 5, isQst: false, faceIds: () => INDEX.raw.JOB.map((r) => r.ID) },
-  initialResource: { label: '初期資源一覧', columns: 6, isQst: false, faceIds: () => INDEX.raw.RESOURCE.map((r) => r.ID) },
+  // R003/R006 excluded (2026-08-22, per user request: "いったん欠番にして...初期資源一覧からも削除") --
+  // see setup.DISABLED_RESOURCE_IDS's own doc (src/setup.js), the single source of truth this and the
+  // real dealing logic both read from. 18 raw rows - 2 = 16, columns:8 -> a clean 8x2 grid.
+  initialResource: {
+    label: '初期資源一覧',
+    columns: 8,
+    isQst: false,
+    faceIds: () => INDEX.raw.RESOURCE.map((r) => r.ID).filter((id) => !setupMod.DISABLED_RESOURCE_IDS.includes(id)),
+  },
   monument: { label: 'モニュメントカード一覧', columns: 6, isQst: false, faceIds: () => INDEX.raw.M.map((r) => r.ID) },
   qst: { label: 'QSTカード一覧', columns: 4, isQst: true, faceIds: () => INDEX.raw.QST.map((r) => r.ID) },
 };

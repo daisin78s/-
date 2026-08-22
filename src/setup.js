@@ -201,6 +201,13 @@ function nextChoiceId() {
   return `choice${choiceCounter}`;
 }
 
+/** R003/R006 disabled ("いったん欠番", 2026-08-22 per user request) -- excluded from dealing (and from
+ * カードリストの初期資源一覧, see main.js's CARD_LIST_FLAT_CATEGORIES) without touching the underlying
+ * RESOURCE sheet/data.json rows or renumbering the rest. 18 real RESOURCE rows minus these 2 = 16,
+ * which divides evenly across 4 players x 4 candidates each -- previously 18 always left 2 undealt at
+ * random every game. */
+const DISABLED_RESOURCE_IDS = ['R003', 'R006'];
+
 /** Deals 4 RESOURCE candidates to each player as a pending SELECT_RESOURCE_CARDS choice.
  * skipPlayerIds (optional array, 2026-08-13 debug-setup feature): those players get no candidates/
  * pendingChoice at all here -- used when grantResourceCards() below has already directly settled their
@@ -208,7 +215,7 @@ function nextChoiceId() {
  * argument and sees identical behavior to before. */
 function dealResourceCandidates(state, index, skipPlayerIds) {
   const skip = new Set(skipPlayerIds || []);
-  const allIds = index.raw.RESOURCE.map((r) => r.ID);
+  const allIds = index.raw.RESOURCE.map((r) => r.ID).filter((id) => !DISABLED_RESOURCE_IDS.includes(id));
   const shuffled = shuffle(state.rng, allIds);
   let cursor = 0;
   for (const player of state.players) {
@@ -250,7 +257,7 @@ function redealResourceCandidates(state, index, playerId) {
   for (const choice of state.pendingChoices) {
     if (choice.kind === 'SELECT_RESOURCE_CARDS') for (const id of choice.context.candidates) usedIds.add(id);
   }
-  const available = index.raw.RESOURCE.map((r) => r.ID).filter((id) => !usedIds.has(id));
+  const available = index.raw.RESOURCE.map((r) => r.ID).filter((id) => !usedIds.has(id) && !DISABLED_RESOURCE_IDS.includes(id));
   const candidates = shuffle(state.rng, available).slice(0, 4);
   state.pendingChoices.push({
     id: nextChoiceId(),
@@ -513,6 +520,7 @@ module.exports = {
   prepareMaps,
   prepareShops,
   collectNormalShopFaceIds,
+  DISABLED_RESOURCE_IDS,
   revealSpecialShop,
   rollInitialColorDice,
   dealConCards,
