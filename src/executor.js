@@ -727,7 +727,17 @@ function untapChoiceWeight(index, faceId) {
  * one possible outcome. Otherwise queues an UNTAP_CHOICE pendingChoice (candidates = every one of the
  * player's own tapped physicalIds, plus a weight map) for the player/UI to resolve later via
  * resolveUntapChoice(), same "queue now, commit later" shape as emitAndResolve's own
- * TAP_REACTION_AVAILABLE pendingChoice. */
+ * TAP_REACTION_AVAILABLE pendingChoice.
+ *
+ * Also auto-resolves as "nothing untaps" (2026-08-22, found via tests/ai-game-runner.smoke.js going
+ * stuck forever after the RESOURCE sheet grew to 24 cards shifted this fixed-seed game's RNG sequence
+ * enough to finally trigger it) when even the single CHEAPEST candidate's weight exceeds cmd.count --
+ * e.g. a player's only tapped card is a weight-2 兆しカード but this particular UNTAP_CHOICE only has
+ * budget 1. Without this, the queued choice was mathematically unsatisfiable (no non-empty subset ever
+ * fits), yet both resolveUntapChoice (rejects an empty selection) and the human UI's own
+ * renderUntapChoice (only ever shows a confirm button once selected.length>0) require a non-empty pick
+ * to resolve it -- the choice would sit in state.pendingChoices forever, for a human and the AI driver
+ * alike. */
 function runUntapChoice(state, index, context, cmd) {
   const tappedOwned = Object.keys(state.cards).filter(
     (id) => state.cards[id].ownerId === context.playerId && state.cards[id].tapped
@@ -738,6 +748,10 @@ function runUntapChoice(state, index, context, cmd) {
   if (totalWeight <= cmd.count) {
     for (const id of tappedOwned) state.cards[id].tapped = false;
     return { success: true };
+  }
+  const cheapestWeight = Math.min(...tappedOwned.map((id) => weights[id]));
+  if (cheapestWeight > cmd.count) {
+    return { success: true }; // no candidate can ever fit the budget -- nothing untaps, no choice to offer
   }
   state.pendingChoices.push({
     id: nextPendingChoiceId(),

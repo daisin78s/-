@@ -1015,6 +1015,23 @@ const UNTAP_CHOICE_3 = { type: 'UNTAP_CHOICE', scope: 'SELF', count: 3 };
   check('...the unpicked one stays tapped', state.cards[omenA].tapped, true);
 }
 {
+  // Regression (2026-08-22, found via tests/ai-game-runner.smoke.js going stuck forever): a single
+  // tapped 兆しカード (weight 2) with a budget of only 1 -- no non-empty selection can ever fit (the
+  // cheapest, and only, candidate already exceeds the budget). Previously this still queued a
+  // pendingChoice that could never actually be resolved (resolveUntapChoice rejects an empty
+  // selection, and the human UI only ever offers a confirm button once at least 1 card is selected),
+  // leaving it stuck forever for both a human and the AI driver alike. Must instead auto-resolve as
+  // "nothing untaps", the same way an empty tappedOwned list already does.
+  const state = freshState();
+  const omen = giveCard(state, 'B007A', 'P1'); // 革命の兆し, weight 2
+  state.cards[omen].tapped = true;
+  const result = executor.runCommand(state, index, { playerId: 'P1' }, { type: 'UNTAP_CHOICE', scope: 'SELF', count: 1 });
+  check('runCommand still succeeds (budget 1 < the only candidate\'s weight 2)', result.success, true);
+  check('No pendingChoice is queued -- nothing could ever be picked', state.pendingChoices.length, 0);
+  check('The card stays tapped (nothing untaps)', state.cards[omen].tapped, true);
+  check('canEndTurn is unaffected -- no unresolved choice to block it', executor.canEndTurn(state, index, 'P1').ok, true);
+}
+{
   // Regression (2026-08-20, per user bug report: "農夫を獲得した時アンタップするカードを選ばなくても進めて
   // しまう...他の操作（ダイス配置など）ができてしまう") -- canEndTurn used to ignore pendingChoices
   // entirely, so a player could end their turn (and, per main.js's matching UI fix, place dice/use free

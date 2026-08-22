@@ -62,6 +62,32 @@ function setupGame(seed, playerNames, index, evaluator) {
   return state;
 }
 
+/** Resolves playerId's pending UNTAP_CHOICE, if any, by randomly filling as much of the weighted
+ * budget as fits (see executor.runUntapChoice's own doc) -- same "random, not simulate-and-score"
+ * policy as every other AI-facing pendingChoice in this module. Extracted (2026-08-22, found via
+ * tests/ai-game-runner.smoke.js going stuck at ROUND after the RESOURCE sheet grew to 24 cards, which
+ * shifted this fixed-seed game's RNG sequence enough to expose a pre-existing gap: driveTurn only ever
+ * resolved an UNTAP_CHOICE it just created via its OWN move loop below, but one could just as easily
+ * already be pending when driveTurn is first called for a player -- MoveGenerator refuses to offer any
+ * move at all while a pendingChoice is outstanding, so selectMove returned null on the very first
+ * iteration and driveTurn broke out immediately, before ever reaching that in-loop resolution code) --
+ * called both at driveTurn's own entry (this gap) and after every move it applies (the original case,
+ * a choice created mid-turn by the move just taken). */
+function resolveUntapChoiceIfPending(state, playerId) {
+  const untapChoice = state.pendingChoices.find((c) => c.playerId === playerId && c.kind === 'UNTAP_CHOICE');
+  if (!untapChoice) return;
+  const { candidates, weights, count } = untapChoice.context;
+  const picked = [];
+  let usedWeight = 0;
+  for (const id of rng.shuffle(state.rng, candidates)) {
+    if (usedWeight + weights[id] <= count) {
+      picked.push(id);
+      usedWeight += weights[id];
+    }
+  }
+  executor.resolveUntapChoice(state, playerId, picked);
+}
+
 /** Round-1-only: JOB draft (from state.jobPool) + CON face choice + receiveInitialResources for one
  * player, both picked uniformly at random (see this module's own doc). */
 function driveOnboarding(state, index, playerId, evaluator) {
@@ -83,6 +109,9 @@ function driveOnboarding(state, index, playerId, evaluator) {
   setup.chooseConFace(state, index, playerId, face);
 
   setup.receiveInitialResources(state, index, playerId);
+  // Defensive (see resolveUntapChoiceIfPending's own doc) -- no known onboarding-time effect queues
+  // this today, but nothing else in this function would ever resolve it if one did.
+  resolveUntapChoiceIfPending(state, playerId);
 }
 
 /** Drives playerId through their entire current turn (repeated AIPlayer.selectMove + apply, until
@@ -101,6 +130,11 @@ function driveTurn(state, index, playerId, aiPlayer, initialHasPlacedDieThisTurn
   let hasPlacedDieThisTurn = !!initialHasPlacedDieThisTurn;
   const movesTaken = [];
   const MAX_MOVES = 50; // safety valve against a runaway/looping bug, not a real game limit
+  // Resolves an UNTAP_CHOICE that was already pending *before* this call (see
+  // resolveUntapChoiceIfPending's own doc for how that can happen) -- without this, MoveGenerator
+  // refuses to offer any move while it's outstanding, so the loop below would break on its very first
+  // iteration (move === null) without ever reaching its own in-loop resolution a few lines down.
+  resolveUntapChoiceIfPending(state, playerId);
   while (movesTaken.length < MAX_MOVES) {
     const move = aiPlayer.selectMove(state, playerId, { hasPlacedDieThisTurn });
     if (!move) break;
@@ -111,25 +145,8 @@ function driveTurn(state, index, playerId, aiPlayer, initialHasPlacedDieThisTurn
     // C008A/C008B's ONCE effect queues this pendingChoice instead of resolving immediately whenever the
     // player's tapped cards' combined weight exceeds the budget -- nothing else in this loop (or
     // MoveGenerator's own move list) ever surfaces or gates on it, so it must be resolved right here or
-    // it would sit in state.pendingChoices forever, silently never granting its own benefit. Random
-    // pick, matching this whole module's existing policy for choices with no eval-table weight yet (see
-    // setupGame's own RESOURCE-choice pick, same reasoning). Since 2026-08-17 this is a weighted budget,
-    // not a flat count (see executor.untapChoiceWeight's own doc), so candidates are shuffled and
-    // greedily added while they still fit the remaining budget, rather than just slicing the first
-    // `count` of them.
-    const untapChoice = state.pendingChoices.find((c) => c.playerId === playerId && c.kind === 'UNTAP_CHOICE');
-    if (untapChoice) {
-      const { candidates, weights, count } = untapChoice.context;
-      const picked = [];
-      let usedWeight = 0;
-      for (const id of rng.shuffle(state.rng, candidates)) {
-        if (usedWeight + weights[id] <= count) {
-          picked.push(id);
-          usedWeight += weights[id];
-        }
-      }
-      executor.resolveUntapChoice(state, playerId, picked);
-    }
+    // it would sit in state.pendingChoices forever, silently never granting its own benefit.
+    resolveUntapChoiceIfPending(state, playerId);
     // JOB003/道化 (2026-08-20 fix, per user bug report: "AIが道化を選んだ時...すべてのダイス4個をいきな
     // り使ってスタートしました"): PLACE_WILDCARD_DIE is JOB003's own die-placement move (see
     // move-generator.js's #wildcardPlaceDieMoves), just as much "placed a die this turn" as a plain

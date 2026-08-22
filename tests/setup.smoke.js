@@ -95,13 +95,17 @@ check('No RESOURCE card kept by two players', new Set(allKeptResources).size, al
 check('turnOrder contains all 4 players exactly once', new Set(state.turnOrder).size, 4);
 {
   // Recompute expected order by hand from the same data to cross-check computeStartOrder's result.
+  // Ties on total break on CON's own START_ORDER, same secondary sort key computeStartOrder itself
+  // uses -- without this a tie (possible once enough RESOURCE cards exist to collide, confirmed
+  // 2026-08-22 after the RESOURCE sheet grew to 24 cards) left this manual recompute's order
+  // ambiguous/order-of-players-dependent instead of matching the real deterministic rule.
   const manual = state.players.map((player) => {
     const conRow = getCardRow(index, `${player.conPhysicalId}A`);
     const resourceIds = player.ownedCardPhysicalIds.filter((id) => id.startsWith('R'));
     const sum = resourceIds.reduce((s, id) => s + getCardRow(index, id).START_ORDER, 0);
-    return { id: player.id, total: conRow.START_ORDER + sum };
+    return { id: player.id, total: conRow.START_ORDER + sum, conStartOrder: conRow.START_ORDER };
   });
-  manual.sort((a, b) => a.total - b.total);
+  manual.sort((a, b) => a.total - b.total || a.conStartOrder - b.conStartOrder);
   check('turnOrder matches an independently-recomputed sort', state.turnOrder, manual.map((m) => m.id));
 }
 
@@ -265,7 +269,7 @@ function forceB007ALocation(state, location) {
   check('redealResourceCandidates leaves P2 owning no RESOURCE cards', state.players[1].ownedCardPhysicalIds.filter((id) => id.startsWith('R')).length, 0);
   const newChoice = state.pendingChoices.find((c) => c.playerId === 'P2' && c.kind === 'SELECT_RESOURCE_CARDS');
   assertTrue('...and P2 has a fresh pending choice', !!newChoice);
-  check('...with exactly 4 new candidates', newChoice.context.candidates.length, 4);
+  check('...with exactly 5 new candidates', newChoice.context.candidates.length, 5);
   const othersUsedIds = new Set();
   for (const p of state.players) {
     if (p.id === 'P2') continue;

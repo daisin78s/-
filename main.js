@@ -95,8 +95,8 @@ function createInitialState(plan) {
   setupMod.dealConCards(state, forcedCon);
   // Resource step (2026-08-15, per user feedback: choosing 0 preferred resources used to still bypass
   // P1's normal choice and hand them 2 fully random cards -- P1 should instead see the exact same
-  // 4-candidates/pick-2 flow as P2-4 whenever nothing was preselected. Choosing exactly 1 locks that
-  // card in and lets P1 pick the 2nd from 3 more candidates (setup.grantOneResourceCardAndDealRest),
+  // 5-candidates/pick-2 flow as P2-4 whenever nothing was preselected. Choosing exactly 1 locks that
+  // card in and lets P1 pick the 2nd from 4 more candidates (setup.grantOneResourceCardAndDealRest),
   // rather than the 2nd being auto-filled randomly with no choice at all. Choosing 2 keeps the original
   // full-bypass behavior unchanged.
   const resourceCount = plan ? plan.resource.length : 0;
@@ -1102,13 +1102,7 @@ function toggleDebugMode() {
 const DEBUG_SETUP_STEPS = [
   { key: 'con', label: 'CON（最大1枚）', max: 1, columns: 6, faceIds: () => INDEX.raw.CON.map((r) => r.ID) },
   { key: 'job', label: 'JOB（最大6枚）', max: 6, columns: 6, faceIds: () => INDEX.raw.JOB.map((r) => r.ID) },
-  {
-    key: 'resource',
-    label: '初期資源（最大2枚）',
-    max: 2,
-    columns: 6,
-    faceIds: () => INDEX.raw.RESOURCE.map((r) => r.ID).filter((id) => !setupMod.DISABLED_RESOURCE_IDS.includes(id)),
-  },
+  { key: 'resource', label: '初期資源（最大2枚）', max: 2, columns: 6, faceIds: () => INDEX.raw.RESOURCE.map((r) => r.ID) },
   { key: 'abc', label: 'ABCカード（最大6枚、選んだ順にSHOP101→106）', max: 6, columns: 7, faceIds: () => setupMod.collectNormalShopFaceIds(INDEX) },
   // QST (2026-08-18, per user request: "テストゲームでQSTも選べるようにしてください 選んだ順に上から
   // おかれる") -- unlike the 3 steps above, not P1-scoped at all (QST reveals are shared by the whole
@@ -1282,15 +1276,9 @@ const CARD_LIST_NAV = [
  * split, per user request), so it's not listed here. */
 const CARD_LIST_FLAT_CATEGORIES = {
   job: { label: 'JOB一覧', columns: 6, isQst: false, faceIds: () => INDEX.raw.JOB.map((r) => r.ID) },
-  // R003/R006 excluded (2026-08-22, per user request: "いったん欠番にして...初期資源一覧からも削除") --
-  // see setup.DISABLED_RESOURCE_IDS's own doc (src/setup.js), the single source of truth this and the
-  // real dealing logic both read from. 18 raw rows - 2 = 16, columns:8 -> a clean 8x2 grid.
-  initialResource: {
-    label: '初期資源一覧',
-    columns: 8,
-    isQst: false,
-    faceIds: () => INDEX.raw.RESOURCE.map((r) => r.ID).filter((id) => !setupMod.DISABLED_RESOURCE_IDS.includes(id)),
-  },
+  // 24 rows (2026-08-22, after R003/R006 were unfrozen and the RESOURCE sheet grew from 18) ->
+  // columns:8 gives a clean 8x3 grid.
+  initialResource: { label: '初期資源一覧', columns: 8, isQst: false, faceIds: () => INDEX.raw.RESOURCE.map((r) => r.ID) },
   monument: { label: 'モニュメントカード一覧', columns: 6, isQst: false, faceIds: () => INDEX.raw.M.map((r) => r.ID) },
   qst: { label: 'QSTカード一覧', columns: 4, isQst: true, faceIds: () => INDEX.raw.QST.map((r) => r.ID) },
 };

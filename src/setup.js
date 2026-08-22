@@ -192,7 +192,7 @@ function dealConCards(state, forcedAssignments) {
 }
 
 // ---------------------------------------------------------------------------
-// Steps 5-6: RESOURCE cards (deal 4, keep 2)
+// Steps 5-6: RESOURCE cards (deal 5, keep 2)
 // ---------------------------------------------------------------------------
 
 let choiceCounter = 0;
@@ -201,27 +201,22 @@ function nextChoiceId() {
   return `choice${choiceCounter}`;
 }
 
-/** R003/R006 disabled ("いったん欠番", 2026-08-22 per user request) -- excluded from dealing (and from
- * カードリストの初期資源一覧, see main.js's CARD_LIST_FLAT_CATEGORIES) without touching the underlying
- * RESOURCE sheet/data.json rows or renumbering the rest. 18 real RESOURCE rows minus these 2 = 16,
- * which divides evenly across 4 players x 4 candidates each -- previously 18 always left 2 undealt at
- * random every game. */
-const DISABLED_RESOURCE_IDS = ['R003', 'R006'];
-
-/** Deals 4 RESOURCE candidates to each player as a pending SELECT_RESOURCE_CARDS choice.
- * skipPlayerIds (optional array, 2026-08-13 debug-setup feature): those players get no candidates/
- * pendingChoice at all here -- used when grantResourceCards() below has already directly settled their
- * 2 RESOURCE cards, so there's nothing left for them to choose. Every other caller passes no 3rd
- * argument and sees identical behavior to before. */
+/** Deals 5 RESOURCE candidates to each player as a pending SELECT_RESOURCE_CARDS choice (raised from 4
+ * to 5 on 2026-08-22, per user request, alongside the RESOURCE sheet growing to 24 cards and R003/R006
+ * being unfrozen -- see this file's git history for the now-removed DISABLED_RESOURCE_IDS exclusion
+ * those two briefly had). skipPlayerIds (optional array, 2026-08-13 debug-setup feature): those players
+ * get no candidates/pendingChoice at all here -- used when grantResourceCards() below has already
+ * directly settled their 2 RESOURCE cards, so there's nothing left for them to choose. Every other
+ * caller passes no 3rd argument and sees identical behavior to before. */
 function dealResourceCandidates(state, index, skipPlayerIds) {
   const skip = new Set(skipPlayerIds || []);
-  const allIds = index.raw.RESOURCE.map((r) => r.ID).filter((id) => !DISABLED_RESOURCE_IDS.includes(id));
+  const allIds = index.raw.RESOURCE.map((r) => r.ID);
   const shuffled = shuffle(state.rng, allIds);
   let cursor = 0;
   for (const player of state.players) {
     if (skip.has(player.id)) continue;
-    const candidates = shuffled.slice(cursor, cursor + 4);
-    cursor += 4;
+    const candidates = shuffled.slice(cursor, cursor + 5);
+    cursor += 5;
     state.pendingChoices.push({
       id: nextChoiceId(),
       playerId: player.id,
@@ -257,8 +252,8 @@ function redealResourceCandidates(state, index, playerId) {
   for (const choice of state.pendingChoices) {
     if (choice.kind === 'SELECT_RESOURCE_CARDS') for (const id of choice.context.candidates) usedIds.add(id);
   }
-  const available = index.raw.RESOURCE.map((r) => r.ID).filter((id) => !usedIds.has(id) && !DISABLED_RESOURCE_IDS.includes(id));
-  const candidates = shuffle(state.rng, available).slice(0, 4);
+  const available = index.raw.RESOURCE.map((r) => r.ID).filter((id) => !usedIds.has(id));
+  const candidates = shuffle(state.rng, available).slice(0, 5);
   state.pendingChoices.push({
     id: nextChoiceId(),
     playerId,
@@ -322,13 +317,15 @@ function grantResourceCards(state, index, playerId, preferredFaceIds) {
 }
 
 /**
- * Directly grants playerId one owned RESOURCE card (preferredFaceId), then deals 3 more random
+ * Directly grants playerId one owned RESOURCE card (preferredFaceId), then deals 4 more random
  * candidates (excluding it) as a pending SELECT_RESOURCE_CARDS choice needing exactly 1 more pick to
  * reach the normal total of 2 (2026-08-15 debug-setup feature, for when only 1 of the 2 initial
- * RESOURCE cards was preselected -- see createInitialState's own doc for the 0/1/2-preselected split).
- * Mirrors grantResourceCards' direct-grant style for the locked-in card, and dealResourceCandidates'
- * pending-choice style for the rest -- see chooseResourceCards' context.count for how the "pick 1, not
- * 2" requirement is carried through to resolution.
+ * RESOURCE cards was preselected -- see createInitialState's own doc for the 0/1/2-preselected split;
+ * 3->4 on 2026-08-22 alongside dealResourceCandidates' own 4->5, so this still presents the same
+ * 5-candidates total the normal path does). Mirrors grantResourceCards' direct-grant style for the
+ * locked-in card, and dealResourceCandidates' pending-choice style for the rest -- see
+ * chooseResourceCards' context.count for how the "pick 1, not 2" requirement is carried through to
+ * resolution.
  */
 function grantOneResourceCardAndDealRest(state, index, playerId, preferredFaceId) {
   const allIds = index.raw.RESOURCE.map((r) => r.ID);
@@ -337,7 +334,7 @@ function grantOneResourceCardAndDealRest(state, index, playerId, preferredFaceId
   state.cards[inst.physicalId] = inst;
   const player = state.players.find((p) => p.id === playerId);
   player.ownedCardPhysicalIds.push(inst.physicalId);
-  const candidates = shuffle(state.rng, allIds.filter((id) => id !== preferredFaceId)).slice(0, 3);
+  const candidates = shuffle(state.rng, allIds.filter((id) => id !== preferredFaceId)).slice(0, 4);
   state.pendingChoices.push({
     id: nextChoiceId(),
     playerId,
@@ -520,7 +517,6 @@ module.exports = {
   prepareMaps,
   prepareShops,
   collectNormalShopFaceIds,
-  DISABLED_RESOURCE_IDS,
   revealSpecialShop,
   rollInitialColorDice,
   dealConCards,
