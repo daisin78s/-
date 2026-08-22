@@ -1284,7 +1284,10 @@ let activationListener = null;
 function setActivationListener(fn) {
   activationListener = fn;
 }
-/** @param {'PASSIVE'|'TAP'} kind */
+/** @param {'PASSIVE'|'TAP'|'UNTAP_ONLY'} kind -- 'UNTAP_ONLY' (2026-08-22) is JOB009/開拓者's own
+ * bespoke "just untapped itself, no resource granted this time" half of its alternating ability (see
+ * board.grantPioneerBonusIfEarned's own doc) -- distinct from 'PASSIVE' so listeners that only want to
+ * count real grants (e.g. src/ai/game-runner.js's activationCounts) can exclude it. */
 function notifyActivation(state, playerId, physicalId, faceId, kind) {
   if (activationListener) activationListener(state, playerId, physicalId, faceId, kind);
 }

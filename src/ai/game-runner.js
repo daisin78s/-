@@ -283,8 +283,13 @@ function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorO
   // overcounting (confirmed while testing: JOB005 showed 2000+ "activations" in one 4-round game before
   // this filter was added).
   const activationCounts = {};
-  executor.setActivationListener((receivedState, playerId, physicalId, faceId) => {
+  executor.setActivationListener((receivedState, playerId, physicalId, faceId, kind) => {
     if (receivedState !== state) return;
+    // 'UNTAP_ONLY' (2026-08-22, JOB009/開拓者's own bespoke "no resource granted this time" half of its
+    // alternating ability -- see notifyActivation's own doc) is deliberately excluded here: this counter
+    // feeds AI.DATA.xlsx's "使用回数" column, which for JOB009 specifically means "times a resource was
+    // actually gained", not "times the ability fired at all".
+    if (kind === 'UNTAP_ONLY') return;
     activationCounts[faceId] = (activationCounts[faceId] || 0) + 1;
   });
 

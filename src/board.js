@@ -1431,14 +1431,20 @@ function grantPioneerBonusIfEarned(state, index, context, wasEmpty, dieValues, w
   if (!hasPioneerAbility(state, index, context.playerId)) return;
   const player = state.players.find((p) => p.id === context.playerId);
   const cardInst = state.cards[player.jobCardId];
+  // 'UNTAP_ONLY' vs 'PASSIVE' (2026-08-22, per user request: "資源を得られた回数（アンタップは計算外）で
+  // お願い") -- AI.DATA.xlsx's JOB009 "使用回数" column should count only the branch below that actually
+  // granted a resource, not this alternating ability's other half (just untapping, nothing gained). Both
+  // branches used to report the same 'PASSIVE' kind, so game-runner.js's activationCounts couldn't tell
+  // them apart -- see that file's own listener for where the 'UNTAP_ONLY' kind gets excluded.
   if (cardInst.tapped) {
     cardInst.tapped = false;
-  } else {
-    for (const value of dieValues) {
-      resolvePioneerGrantForDie(state, index, context, value, wouldHelp);
-    }
-    cardInst.tapped = true;
+    executor.notifyActivation(state, context.playerId, player.jobCardId, player.jobCardId, 'UNTAP_ONLY');
+    return;
   }
+  for (const value of dieValues) {
+    resolvePioneerGrantForDie(state, index, context, value, wouldHelp);
+  }
+  cardInst.tapped = true;
   executor.notifyActivation(state, context.playerId, player.jobCardId, player.jobCardId, 'PASSIVE');
 }
 

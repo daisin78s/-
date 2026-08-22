@@ -221,6 +221,14 @@ function main() {
   // for JOB008 specifically, not *how many times the ability fired*, which activationCounts alone
   // couldn't distinguish (2026-08-17: JOB008 does call notifyActivation too now, same as JOB009-011, but
   // that only records a firing happened, not how many VP units it granted in one catch-up jump -- see
+  // JOB010 (2026-08-22, per user request: "K35のセル革命家の使用回数は革命の兆しの使用回数の平均を出して")
+  // is the same kind of exception as JOB008 -- JOB010 itself has no TAP/PASSIVE ability of its own
+  // (its only effect is the one-time onboarding "革命の兆しを獲得する" bonus, see
+  // setup.grantRevolutionaryBonusIfEarned), so activationCounts['JOB010'] would always be 0. This
+  // column instead reports B007(革命の兆し)'s own TAP usage -- both tiers combined (activationCounts
+  // is keyed per face, and a physical B007 card upgrades A->B over the course of a game, same
+  // ownTaps+upgradeBonus combining pattern the B/C TAP-usage branch above already uses) -- since the
+  // whole point of JOB010 is granting access to that card.
   // turn-flow.grantBardBonusIfEarned's own doc).
   // scoreSum/qstScoreSum/rankSum (2026-08-20, per user request) -- a TRUE per-JOB weighted average
   // (this sum divided by this same count), not the "average of the 12 per-CON averages"
@@ -327,7 +335,9 @@ function main() {
       // JOB "使用回数" (2026-08-07, per user spec) -- see jobEntry's own doc on what "usage" means per
       // JOB face.
       const jobFaceId = h.jobFaceId;
-      const usage = jobFaceId === 'JOB008' ? (detail.job008BonusVp || 0) : (activationCounts[jobFaceId] || 0);
+      const usage = jobFaceId === 'JOB008' ? (detail.job008BonusVp || 0)
+        : jobFaceId === 'JOB010' ? ((activationCounts['B007A'] || 0) + (activationCounts['B007B'] || 0))
+        : (activationCounts[jobFaceId] || 0);
       const je = jobEntry(jobFaceId);
       je.count++;
       je.usageSum += usage;
