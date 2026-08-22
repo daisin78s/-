@@ -1342,8 +1342,16 @@ const CARD_LIST_FLAT_CATEGORIES = {
 };
 
 /** Builds one read-only grid cell for カードリスト -- a fresh noInteraction card/QST visual, wired for
- * tap-to-enlarge only via attachPickableEnlarge(..., null) (no pick button, see that function's own
- * doc: pickAction:null is exactly the "read-only preview" case it already supports). */
+ * tap-to-enlarge only. Non-QST faces use attachPickableEnlarge(..., null) (no pick button, see that
+ * function's own doc: pickAction:null is exactly the "read-only preview" case it already supports) --
+ * but that function always builds its enlarge visual via buildCardVisual, which doesn't understand QST
+ * faceIds (2026-08-22, per user report: tapping a QST card here opened a broken enlarge modal showing
+ * just the raw id, e.g. "Q001A", instead of the real card -- buildCardVisual/getCardRow don't know
+ * QST's sheet at all, see data-loader.getQstRow's own doc on why QST has a separate lookup). QST faces
+ * get their own click handler instead, mirroring buildQstCardVisual's built-in one (used when
+ * noInteraction is false elsewhere, e.g. the real in-game QST panel) but explicitly carrying
+ * showLiveRanking:false through to the enlarged copy too -- otherwise the grid would hide real
+ * values/swatches while tapping through to enlarge would leak them right back. */
 function buildCardListCell(faceId, isQst) {
   const cardNode = isQst
     // showLiveRanking:false (2026-08-22, per user report: same leak as the テストゲーム開始 QST step's
@@ -1364,7 +1372,16 @@ function buildCardListCell(faceId, isQst) {
       : 'owned-card-cell';
   const cell = el('div', cellClass);
   cell.appendChild(cardNode);
-  attachPickableEnlarge(cell, faceId, null);
+  if (isQst) {
+    cell.addEventListener('click', () => {
+      const sibling = siblingFaceId(faceId);
+      const hasSiblingData = sibling && qstFaceExists(sibling);
+      const visualNode = buildQstCardVisual(faceId, STATE, { noInteraction: true, showRankHeaders: true, showLiveRanking: false });
+      showCardEnlargeModal(faceId, visualNode, hasSiblingData ? sibling : null);
+    });
+  } else {
+    attachPickableEnlarge(cell, faceId, null);
+  }
   return cell;
 }
 
