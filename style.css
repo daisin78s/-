@@ -1103,6 +1103,14 @@ h1, h2, h3 { margin: 0; }
   color: var(--text-muted);
 }
 
+/* B008B/栄光の証LV2's own "最多エンブレム / × VP" (2026-08-21, per user request: "文字は大きめ濃く") --
+   bigger than the base .action-suffix (10px, var(--text-muted)) and pinned to the theme's strongest text
+   color, same "large" naming convention as .action-emoji--large/.card-note--large elsewhere. */
+.action-suffix--large {
+  font-size: 14px;
+  color: var(--text);
+}
+
 /* Plain-text card caption. Originally added for CON003A/CON005B's own one-off reminder notes; now also
    the whole CON-card effect display (2026-08-15, per user request: "CONのアイコン表示をCONシートのアイ
    コン欄を参考にして表示してほしい...改行もそのままかいて" -- see main.js's fillCardFace), shown verbatim
@@ -1924,6 +1932,14 @@ h1, h2, h3 { margin: 0; }
 .card-group__list .action-suffix,
 #shop-combined-slots .action-suffix,
 #build-choice-list .action-suffix { font-size: 12px; }
+
+/* B008B's "最多エンブレム/×VP" (2026-08-21) needs to stay at its own larger size (see .action-suffix--
+   large's own doc) even inside these 3 contexts, which would otherwise win on specificity (same 2-class-
+   selector shape) purely by coming later in source order than the base .action-suffix--large rule --
+   matched here, defined after, so this wins instead. */
+.card-group__list .action-suffix--large,
+#shop-combined-slots .action-suffix--large,
+#build-choice-list .action-suffix--large { font-size: 14px; color: var(--text); }
 
 /* Instructional hint text next to the CON/RESOURCE onboarding card rows (2026-08-0X, per user
    request -- see buildOnboardHint). A flex sibling of the card cells in the same row, so it sits to

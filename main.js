@@ -2021,6 +2021,19 @@ function buildCountEmblemVpModifierIcon(actionText) {
   return actionRow([emblemSpan, actionTimes(), actionSuffix('VP')]);
 }
 
+/** VP_MODIFIER(MAX_EMBLEM_COUNT): B008B/栄光の証LV2's own PASSIVE -- a persistent VP bonus equal to
+ * however many of the player's single MOST-held emblem type they currently own (confirmed 2026-08-21,
+ * per user spec: "最多エンブレム / × VP", larger and darker than a normal .action-suffix -- see
+ * .action-suffix--large in style.css). Stacked 2 rows (label, then ×VP) rather than one wide row, per
+ * the user's own line break. */
+function buildMaxEmblemVpModifierIcon(actionText) {
+  if (actionText !== 'VP_MODIFIER(MAX_EMBLEM_COUNT)') return null;
+  const stack = el('div', 'action-icons-stack');
+  stack.appendChild(actionRow([el('span', 'action-suffix action-suffix--large', '最多エンブレム')]));
+  stack.appendChild(actionRow([actionTimes(), el('span', 'action-suffix action-suffix--large', 'VP')]));
+  return stack;
+}
+
 /** IF(CARD_COUNT<=n,VP_MODIFIER(m)): a scoring penalty/bonus if the player's total card count is at
  * most n -- shown as 🃏<=n on one row, the VP modifier on the row below (confirmed 2026-07-29). */
 function buildCardCountVpModifierIcon(actionText) {
@@ -2239,6 +2252,8 @@ function buildActionIcons(actionText) {
   if (vpModifierIcon) return vpModifierIcon;
   const countEmblemVpModifierIcon = buildCountEmblemVpModifierIcon(actionText);
   if (countEmblemVpModifierIcon) return countEmblemVpModifierIcon;
+  const maxEmblemVpModifierIcon = buildMaxEmblemVpModifierIcon(actionText);
+  if (maxEmblemVpModifierIcon) return maxEmblemVpModifierIcon;
   const cardCountVpModifierIcon = buildCardCountVpModifierIcon(actionText);
   if (cardCountVpModifierIcon) return cardCountVpModifierIcon;
   const emblemSetVpModifierIcon = buildEmblemSetVpModifierIcon(actionText);
