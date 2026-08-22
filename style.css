@@ -1607,8 +1607,22 @@ h1, h2, h3 { margin: 0; }
   align-items: center;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
   max-width: 100%;
+}
+
+/* AI進行/ターン開始に戻す/ダイスをキャンセル/ラウンドパスを1行に収める (2026-08-22, per user request:
+   "は同じ行に") -- these 4 items were wrapping onto 2 lines at the sidebar's fixed 680px width (see
+   #game-layout's own doc) whenever the AI進行 select's widest option ("1手ずつ表示") pushed the total
+   past it. Only .undo-button/.ai-pacing-control INSIDE this specific row get the tighter padding --
+   .undo-button is shared with several unrelated buttons elsewhere (build-choice-modal's duplicates,
+   ranking/replay buttons) that shouldn't shrink along with this row. */
+.player-cards__header-buttons .undo-button {
+  padding: 6px 8px;
+}
+.player-cards__header-buttons .ai-pacing-control {
+  padding: 4px 7px;
+  gap: 4px;
 }
 
 /* 2026-08-02, per user feedback: "このボタンはみ出ないようにもう少し左に" -- row2 (round chip + 4
