@@ -1095,14 +1095,20 @@ function toggleDebugMode() {
  * "pick at most one", not mandatory; pressing END with nothing picked is always valid everywhere.
  * columns (2026-08-13, per user request) sets #debug-setup-list's grid width for that step -- chosen
  * per step to exactly fit its own card count with no partial last row (CON 6x2=12 (2026-08-15, updated
- * after CON006A/B brought the CON sheet from 10 faces to 12), RESOURCE 6x3=18, ABC 7x3=21), not a single
- * shared column count across every step. JOB is the one exception (2026-08-17, per user request: "JOBは
- * ５個で折り返すようにして") -- 9 faces (after JOB009's addition) has no clean same-size-every-row split,
- * so this wraps 5+4 instead of chasing an exact rectangle. */
+ * after CON006A/B brought the CON sheet from 10 faces to 12), ABC 7x3=21), not a single shared
+ * column count across every step. JOB wraps 6+5 at its current 11 faces (2026-08-22, per user request
+ * "JOBカード６枚で折り返すようにして" -- supersedes the earlier 2026-08-17 "5個で折り返す" call, from
+ * back when there were only 9 JOB faces and no clean split existed either way). */
 const DEBUG_SETUP_STEPS = [
   { key: 'con', label: 'CON（最大1枚）', max: 1, columns: 6, faceIds: () => INDEX.raw.CON.map((r) => r.ID) },
-  { key: 'job', label: 'JOB（最大6枚）', max: 6, columns: 5, faceIds: () => INDEX.raw.JOB.map((r) => r.ID) },
-  { key: 'resource', label: '初期資源（最大2枚）', max: 2, columns: 6, faceIds: () => INDEX.raw.RESOURCE.map((r) => r.ID) },
+  { key: 'job', label: 'JOB（最大6枚）', max: 6, columns: 6, faceIds: () => INDEX.raw.JOB.map((r) => r.ID) },
+  {
+    key: 'resource',
+    label: '初期資源（最大2枚）',
+    max: 2,
+    columns: 6,
+    faceIds: () => INDEX.raw.RESOURCE.map((r) => r.ID).filter((id) => !setupMod.DISABLED_RESOURCE_IDS.includes(id)),
+  },
   { key: 'abc', label: 'ABCカード（最大6枚、選んだ順にSHOP101→106）', max: 6, columns: 7, faceIds: () => setupMod.collectNormalShopFaceIds(INDEX) },
   // QST (2026-08-18, per user request: "テストゲームでQSTも選べるようにしてください 選んだ順に上から
   // おかれる") -- unlike the 3 steps above, not P1-scoped at all (QST reveals are shared by the whole
@@ -1270,12 +1276,12 @@ const CARD_LIST_NAV = [
 /** JOB/初期資源(RESOURCE)/モニュメント(M)/QST -- each sheet's rows already ARE the individual faces to
  * show (unlike A/B/C, see collectNormalShopFaceIds's own doc), so a single flat grid per category is
  * enough; no row-split treatment needed here. columns chosen the same way DEBUG_SETUP_STEPS' own
- * columns field is (exact fit where possible, e.g. M=12->6x2, RESOURCE=18->6x3, QST=8->4x2; JOB has no
- * clean rectangle at its current 11 faces, so it wraps 5+4+2 like the debug picker's own JOB step
- * already accepts). CON gets its own dedicated renderCardListConCategory instead (表/裏 row split, per
- * user request), so it's not listed here. */
+ * columns field is (exact fit where possible, e.g. M=12->6x2, QST=8->4x2; JOB wraps 6+5 at its current
+ * 11 faces, matching the debug picker's own JOB step -- see that step's own doc for the "6枚で折り返
+ * す" 2026-08-22 request). CON gets its own dedicated renderCardListConCategory instead (表/裏 row
+ * split, per user request), so it's not listed here. */
 const CARD_LIST_FLAT_CATEGORIES = {
-  job: { label: 'JOB一覧', columns: 5, isQst: false, faceIds: () => INDEX.raw.JOB.map((r) => r.ID) },
+  job: { label: 'JOB一覧', columns: 6, isQst: false, faceIds: () => INDEX.raw.JOB.map((r) => r.ID) },
   // R003/R006 excluded (2026-08-22, per user request: "いったん欠番にして...初期資源一覧からも削除") --
   // see setup.DISABLED_RESOURCE_IDS's own doc (src/setup.js), the single source of truth this and the
   // real dealing logic both read from. 18 raw rows - 2 = 16, columns:8 -> a clean 8x2 grid.
