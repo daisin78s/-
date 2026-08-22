@@ -571,7 +571,7 @@
     },
     {
       "ID": "B008A",
-      "NAME": "天星の加護",
+      "NAME": "栄光の証",
       "DICE": "",
       "COST": "3B,1C",
       "EMBLEM_B": 1,
@@ -691,7 +691,7 @@
     },
     {
       "ID": "B008B",
-      "NAME": "天星の加護LV2",
+      "NAME": "栄光の証LV2",
       "DICE": "",
       "COST": "3B,1C",
       "EMBLEM_B": 1,
@@ -827,7 +827,7 @@
       "VP": 0,
       "LEVEL": 1,
       "ONCE": "UNTAP_CHOICE(SELF,6)",
-      "TAP": "ADD(VP)",
+      "TAP": "ADD(wD)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
