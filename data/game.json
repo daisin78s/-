@@ -891,7 +891,7 @@
       "VP": 1,
       "LEVEL": 2,
       "ONCE": "UNTAP_CHOICE(SELF,3)",
-      "TAP": "ADD(2K)",
+      "TAP": "ADD(3K)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
@@ -907,7 +907,7 @@
       "VP": 1,
       "LEVEL": 2,
       "ONCE": "UNTAP_CHOICE(SELF,3)",
-      "TAP": "ADD(2A)",
+      "TAP": "ADD(3A)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
@@ -923,7 +923,7 @@
       "VP": 1,
       "LEVEL": 2,
       "ONCE": "UNTAP_CHOICE(SELF,3)",
-      "TAP": "ADD(2B)",
+      "TAP": "ADD(3B)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
@@ -939,7 +939,7 @@
       "VP": 1,
       "LEVEL": 2,
       "ONCE": "UNTAP_CHOICE(SELF,3)",
-      "TAP": "ADD(2C)",
+      "TAP": "ADD(3C)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
@@ -1041,7 +1041,7 @@
       "WARNING": "",
       "NOTE": "",
       "AUTO": "",
-      "INST": "自分よりAREA数の多いプレイヤーがいると\nLVアップできない",
+      "INST": "自分よりAREA数の多いプレイヤーがいると\nLVアップできない\n最多AREAが必要　足りない１個につき-1VP",
       "アイコン": "最多AREA　✖\n　　▽\nLVアップ　✖"
     },
     {
@@ -1141,7 +1141,7 @@
       "WARNING": "",
       "NOTE": "",
       "AUTO": "",
-      "INST": "食料をすべて資源に交換するときの上限4個\n対象AREA　城下町　大聖堂　ギルド\n対象カード　代官LV2　修道士LV2　商人LV2",
+      "INST": "食料をすべて資源に交換するときの上限4個\n対象AREA　城下町　大聖堂　ギルド",
       "アイコン": "変換　MAX4"
     },
     {
