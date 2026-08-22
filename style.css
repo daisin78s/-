@@ -2491,6 +2491,18 @@ h1, h2, h3 { margin: 0; }
   z-index: 100;
 }
 
+/* #card-inst-overlay itself always wins the stack (2026-08-22, found while wiring up カードリスト's
+   資源や用語一覧 tap-to-detail): every other .card-inst-overlay-classed modal in the DOM comes AFTER it
+   (#debug-setup-overlay, #build-choice-overlay, #card-list-overlay, ...), so at equal z-index:100 they
+   paint on top of it by source order -- normally harmless since only one overlay is ever open at a
+   time, but カードリスト deliberately keeps #card-list-overlay open underneath while this shows a
+   term's detail on top of it, which made the later-wins tie-break actually matter: #card-inst-overlay
+   was rendering fully hidden behind #card-list-overlay. Explicit higher z-index makes source order
+   irrelevant here. */
+#card-inst-overlay {
+  z-index: 150;
+}
+
 .card-inst-overlay[hidden] { display: none; }
 
 .card-inst-modal {
@@ -2771,8 +2783,7 @@ h1, h2, h3 { margin: 0; }
 
 /* 領地/天運/人材一覧のINST説明文 (2026-08-22, per user request: "カード一覧とほかの一覧に飛ぶボタン
    との間にINSTシートのそれぞれの説明文を表示") -- instDescriptionText() reads INDEX.raw.INSTの
-   "Aカード"/"Bカード"/"Cカード"行。現状は説明列が空なので:emptyで消える(データ投入待ち、
-   card-list-inst-entry__textと同じ扱い)。 */
+   "Aカード"/"Bカード"/"Cカード"行。現状は説明列が空なので:emptyで消える(データ投入待ち)。 */
 .card-list-abc-inst {
   margin-top: 16px;
   padding-top: 12px;
@@ -2786,48 +2797,40 @@ h1, h2, h3 { margin: 0; }
   display: none;
 }
 
-/* 資源一覧 (2026-08-22) -- basic resource icon+code quick-reference, followed by INDEX.raw.INSTの
-   汎用列挙(現状は説明列が空なので見出しのみが並ぶ、データ投入待ち -- see main.js's
-   renderCardListResourceCategory). */
-.card-list-glossary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  justify-content: center;
-  margin-bottom: 16px;
-}
-.card-list-glossary__row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface-sunken);
-}
-.card-list-glossary__label {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text);
-}
-.card-list-inst-list {
+/* 資源や用語一覧 (2026-08-22, per user request: "横長ではなくほかのカードのように表示") -- each term
+   is its own square tile, same footprint as .owned-card-cell (122x122) so it sits consistently
+   alongside every other カードリスト grid. Tap opens showCardListTermModal's plain-text detail popup
+   (see main.js) -- cursor:pointer signals that even though there's no card visual underneath. */
+.card-list-term-cell {
+  width: 122px;
+  height: 122px;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: 6px;
-}
-.card-list-inst-entry {
-  padding: 6px 10px;
+  background: var(--surface-sunken);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
+  cursor: pointer;
 }
-.card-list-inst-entry__id {
-  font-size: 13px;
+.card-list-term-cell .action-dot {
+  width: 22px;
+  height: 22px;
+}
+.card-list-term-cell .action-emoji {
+  font-size: 24px;
+}
+.card-list-term-cell__name {
+  font-size: 14px;
   font-weight: 700;
   color: var(--text);
+  text-align: center;
 }
-.card-list-inst-entry__text {
-  font-size: 12px;
+.card-list-term-cell__code {
+  font-size: 11px;
   color: var(--text-muted);
+  text-align: center;
 }
 
 /* Persistent bottom nav (2026-08-22, per user request: "下にあるボタンはほかに飛んでも出しっぱなし") --

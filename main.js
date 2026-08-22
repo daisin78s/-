@@ -1261,7 +1261,7 @@ function setCardListView(key) {
 /** Bottom nav bar order, per user request. 'resource' is also the view opened by default. null key
  * marks "ゲームに戻る" (closes the overlay instead of switching view). */
 const CARD_LIST_NAV = [
-  { key: 'resource', label: '資源一覧' },
+  { key: 'resource', label: '資源や用語一覧' },
   { key: 'con', label: 'CON一覧' },
   { key: 'job', label: 'JOB一覧' },
   { key: 'initialResource', label: '初期資源一覧' },
@@ -1412,42 +1412,77 @@ function instDescriptionText(instId) {
     .join('\n');
 }
 
-/** Basic resource icon+label quick-reference the user described ("K/A/B/C/Z/BZ/wD/VPなどの基本資源の
- * アイコン+名前の早見表"). No real-world Japanese names exist anywhere in the data for these -- they're
- * just the resource codes -- so this deliberately shows the code itself as the label rather than
- * inventing one. Reuses actionDot/actionEmoji, the same icon vocabulary card effects already render
- * with (see actionDot's own CSS, main.js ~1485). */
-const CARD_LIST_RESOURCE_GLOSSARY = ['K', 'A', 'B', 'C', 'Z', 'BZ', 'wD', 'VP'];
+/** Basic resource/term quick-reference, names per user request (2026-08-22). Each id matches an
+ * INDEX.raw.INST row's own ID exactly (VP/K/A/B/C/Z/BZ/D/wD/TAP), so instDescriptionText(code) looks
+ * up its detail text directly, no id-mapping needed (unlike A/B/C's own "Aカード"-suffixed rows). */
+const CARD_LIST_RESOURCE_GLOSSARY = [
+  { code: 'VP', name: '名声' },
+  { code: 'K', name: '食料' },
+  { code: 'A', name: '権力' },
+  { code: 'B', name: '信心' },
+  { code: 'C', name: '金貨' },
+  { code: 'Z', name: 'コネ' },
+  { code: 'BZ', name: '口利き' },
+  { code: 'D', name: '行動力' },
+  { code: 'wD', name: '恩寵' },
+  { code: 'TAP', name: 'タップ' },
+];
 
+/** null (no icon) per user request ("アイコンがないものはなしでいい　VPのアイコンもなし") for
+ * VP/D -- D has no single color (it's the wildcard-color unplaced-die placeholder, shown as plain
+ * "色D" text elsewhere, see buildActionIcons), VP simply isn't wanted here despite having a real
+ * .action-dot color elsewhere in the app. TAP reuses TAP_COST_ICON (⤵️), the same marker every TAP
+ * ability already shows. */
 function cardListResourceIcon(code) {
-  return code === 'wD' ? actionEmoji('🎲') : actionDot(code);
+  if (code === 'wD') return actionEmoji('🎲');
+  if (code === 'TAP') return actionEmoji(TAP_COST_ICON);
+  if (code === 'VP' || code === 'D') return null;
+  return actionDot(code);
 }
 
-/** INSTシート(INDEX.raw.INST)を汎用的に列挙する。現状はID列しかないため、ID以外の非空フィールドを
- * 本文として並べる形にしてある(2026-08-22時点でINDEX.raw.INSTの他列はすべて空 -- 将来ユーザーが
- * 説明列を追加すれば、列名を決め打ちしていないので変更なしにそのまま拾える。tools/xlsx_to_json.py's
- * load_sheet reads sheet headers generically, no per-sheet special-casing). */
+/** 資源や用語一覧 (2026-08-22, per user request: "横長ではなくほかのカードのように表示 タップすると
+ * 詳細を表示") -- each term is its own square tile (not a flat icon+text row), tap opens the same
+ * plain-text detail modal AREA tiles use (see showAreaEnlargeModal), showing INST's description for
+ * that term via showCardListTermModal below. */
 function renderCardListResourceCategory(container) {
-  const glossary = el('div', 'card-list-glossary');
-  for (const code of CARD_LIST_RESOURCE_GLOSSARY) {
-    const row = el('div', 'card-list-glossary__row');
-    row.appendChild(cardListResourceIcon(code));
-    row.appendChild(el('span', 'card-list-glossary__label', code));
-    glossary.appendChild(row);
+  const grid = el('div', 'card-list-grid');
+  grid.style.gridTemplateColumns = `repeat(5, 122px)`;
+  for (const { code, name } of CARD_LIST_RESOURCE_GLOSSARY) {
+    grid.appendChild(buildCardListTermCell(code, name));
   }
-  container.appendChild(glossary);
+  container.appendChild(grid);
+}
 
-  const instList = el('div', 'card-list-inst-list');
-  for (const row of INDEX.raw.INST || []) {
-    const entry = el('div', 'card-list-inst-entry');
-    entry.appendChild(el('div', 'card-list-inst-entry__id', row.ID));
-    for (const [column, value] of Object.entries(row)) {
-      if (column === 'ID' || value === '' || value === undefined || value === null) continue;
-      entry.appendChild(el('div', 'card-list-inst-entry__text', String(value)));
-    }
-    instList.appendChild(entry);
-  }
-  container.appendChild(instList);
+function buildCardListTermCell(code, name) {
+  const cell = el('div', 'card-list-term-cell');
+  const icon = cardListResourceIcon(code);
+  if (icon) cell.appendChild(icon);
+  cell.appendChild(el('div', 'card-list-term-cell__name', name || code));
+  if (name) cell.appendChild(el('div', 'card-list-term-cell__code', `（${code}）`));
+  cell.addEventListener('click', () => showCardListTermModal(name ? `${name}（${code}）` : code, code));
+  return cell;
+}
+
+/** Plain-text detail popup for one 資源や用語一覧 tile -- same #card-inst-overlay chrome/renderInstBody
+ * showAreaEnlargeModal uses for AREA tiles (title + INST text, no card visual/flip/pick button), just
+ * without that function's multi-tile tier-chain row (a single term has no such chain). */
+function showCardListTermModal(title, instId) {
+  const overlay = document.getElementById('card-inst-overlay');
+  const modal = overlay.querySelector('.card-inst-modal');
+  const visualContainer = overlay.querySelector('.card-inst-modal__visual');
+  const flipBtn = overlay.querySelector('.card-inst-modal__flip-button');
+  const pickBtn = overlay.querySelector('.card-inst-modal__pick-button');
+
+  overlay.hidden = false;
+  modal.classList.remove('card-inst-modal--wide', 'card-inst-modal--area-wide');
+  flipBtn.hidden = true;
+  pickBtn.hidden = true;
+  visualContainer.innerHTML = '';
+  visualContainer.style.width = '';
+  visualContainer.style.height = '';
+
+  overlay.querySelector('.card-inst-modal__title').textContent = title;
+  renderInstBody(overlay.querySelector('.card-inst-modal__body'), instDescriptionText(instId));
 }
 
 /** Renders #card-list-overlay -- hidden entirely while cardListView is null. Dispatches to the flat
@@ -1464,7 +1499,7 @@ function renderCardListOverlay() {
   const body = document.getElementById('card-list-body');
   body.innerHTML = '';
   if (cardListView === 'resource') {
-    document.getElementById('card-list-title').textContent = '資源一覧';
+    document.getElementById('card-list-title').textContent = '資源や用語一覧';
     renderCardListResourceCategory(body);
   } else if (cardListView === 'A' || cardListView === 'B' || cardListView === 'C') {
     document.getElementById('card-list-title').textContent = CARD_LIST_NAV.find((n) => n.key === cardListView).label;
