@@ -36,8 +36,29 @@ const qst = require('./qst');
  * CON004B. These two ids (and con001bVpEffect's own internal check below) were bumped to match; the
  * function is still NAMED con001bVpEffect (historical, matching its ORIGINAL id, not its current one) to
  * keep this diff small -- don't take the name as the live physical id, check BESPOKE_QST_RANK_CON_FACES
- * or the id literal inside the function itself for that. */
-const BESPOKE_QST_RANK_CON_FACES = new Set(['CON006B', 'CON004B']);
+ * or the id literal inside the function itself for that.
+ *
+ * CON004A (傲慢) added 2026-08-22, per user request -- its existing PASSIVE=
+ * BLOCK_UPGRADE_UNLESS_QST_RANK(Q004A,1) already gates upgrades on being ranked 1st on Q004A's
+ * AREA_COUNT goal; the new rule adds an ONGOING VP cost for the same shortfall ("最多AREAが必要　足りない
+ * １個につき-1VP"), same qst.rankPlayersForQuest-driven shape as 裏切/嫉妬 below, so it belongs here too
+ * rather than as a new generic DSL command -- see con004aVpEffect's own doc. */
+const BESPOKE_QST_RANK_CON_FACES = new Set(['CON006B', 'CON004B', 'CON004A']);
+
+/** CON004A's own VP effect (傲慢, 2026-08-22, per user spec: "最多AREAが必要　足りない１個につき-1VP") --
+ * -1VP for every AREA the player is short of whoever currently ranks 1st on Q004A's AREA_COUNT goal
+ * (ties for 1st place have deficit 0, no penalty -- rankPlayersForQuest already gives every tied leader
+ * rank 1). Live/dynamic like every other VP_PENALTY_* clause (recomputed at final scoring, not a
+ * one-time snapshot). 0 if playerId doesn't actually own CON004A. */
+function con004aVpEffect(state, index, playerId) {
+  const player = state.players.find((p) => p.id === playerId);
+  const owned = player.ownedCardPhysicalIds.some((id) => state.cards[id].currentFaceId === 'CON004A');
+  if (!owned) return 0;
+  const ranked = qst.rankPlayersForQuest(state, index, 'Q004A');
+  const myValue = ranked.find((e) => e.playerId === playerId).value;
+  const leaderValue = Math.max(...ranked.map((e) => e.value));
+  return -Math.max(0, leaderValue - myValue);
+}
 
 /** 裏切's own VP effect (2026-08-13, per user spec): "QSTで1位がある→-4VP、1位がなく2位がある→-2VP、
  * 1-2位がなく3位がある→-1VP、1-2-3位がない→0VP" -- best (lowest-numbered) rank across every currently-
@@ -76,11 +97,11 @@ function con004bVpEffect(state, index, playerId) {
 /**
  * The VP effect a single owned card FACE contributes on its own, independent of what else the player
  * owns (2026-08-15, for AI.DATA.xlsx's per-CON "VPペナルティ平均" column -- see tools/ai_data_report.js).
- * CON006B(裏切)/CON004B(嫉妬) (bespoke, see their own doc above -- neither fits the generic VP_MODIFIER/
- * PASSIVE metric vocabulary since executor.evalMetric deliberately doesn't know about qst.js, which
- * sits ABOVE it in the layering) delegate to their own named functions. Everything else with a real
- * PASSIVE (VP_MODIFIER/VP_PENALTY_IF_BELOW/VP_PENALTY_PER clauses -- e.g. CON003A/CON002A/CON002B as of
- * 2026-08-17's physical-slot reorg) evaluates
+ * CON006B(裏切)/CON004B(嫉妬)/CON004A(傲慢) (bespoke, see their own doc above -- none fit the generic
+ * VP_MODIFIER/PASSIVE metric vocabulary since executor.evalMetric deliberately doesn't know about
+ * qst.js, which sits ABOVE it in the layering) delegate to their own named functions. Everything else
+ * with a real PASSIVE (VP_MODIFIER/VP_PENALTY_IF_BELOW/VP_PENALTY_PER clauses -- e.g. CON003A/CON002A/
+ * CON002B as of 2026-08-17's physical-slot reorg) evaluates
  * just THAT row's own PASSIVE text via activePassiveCommands, the same per-row primitive
  * collectVpModifiers itself loops over every owned card with -- so this stays in sync automatically if
  * any of those commands' own semantics ever change. 0 for a card with no such clause, or one playerId
@@ -90,6 +111,7 @@ function con004bVpEffect(state, index, playerId) {
 function conCardOwnVpEffect(state, index, playerId, faceId) {
   if (faceId === 'CON006B') return con001bVpEffect(state, index, playerId);
   if (faceId === 'CON004B') return con004bVpEffect(state, index, playerId);
+  if (faceId === 'CON004A') return con004aVpEffect(state, index, playerId);
   const player = state.players.find((p) => p.id === playerId);
   const owned = player.ownedCardPhysicalIds.some((id) => state.cards[id].currentFaceId === faceId);
   if (!owned) return 0;

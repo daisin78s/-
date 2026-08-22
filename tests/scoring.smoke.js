@@ -199,5 +199,31 @@ function giveCard(state, faceCardId, ownerId) {
   check('裏切 (CON006B): no revealed quests at all -> 0VP (nothing to rank against)', scoring.conCardVpAdjustment(stateNoQuests, index, 'P1'), 0);
 }
 
+// ---------------------------------------------------------------------------
+// conCardVpAdjustment: CON004A (傲慢, 2026-08-22, per user spec: "最多AREAが必要　足りない１個につき
+// -1VP") -- -1VP per AREA short of whoever owns the most, game-wide (Q004A's GOAL=AREA_COUNT), checked
+// as a hidden yardstick regardless of state.quests (same rule its existing
+// BLOCK_UPGRADE_UNLESS_QST_RANK PASSIVE already uses -- see board.isUpgradeBlockedByQstRank's own
+// doc), so this test never sets state.quests at all. The game-wide leader here is P4 (2 AREAs), who
+// doesn't even own CON004A -- demonstrating the deficit is measured against the actual leader, not just
+// the best among CON004A's own owners.
+// ---------------------------------------------------------------------------
+{
+  const state = createEmptyGameState('scoring-smoke-con004a');
+  state.players.push(createPlayer('P1', 'Alice'), createPlayer('P2', 'Bob'), createPlayer('P3', 'Carol'), createPlayer('P4', 'Dan'));
+  giveCard(state, 'CON004A', 'P1');
+  giveCard(state, 'CON004A', 'P2');
+  giveCard(state, 'CON004A', 'P3');
+  for (const faceId of ['A001A', 'A002A']) giveCard(state, faceId, 'P1'); // P1: 2 AREAs
+  giveCard(state, 'A004A', 'P2'); // P2: 1 AREA
+  // P3: 0 AREAs
+  for (const faceId of ['A005A', 'A006A']) giveCard(state, faceId, 'P4'); // P4: 2 AREAs, but doesn't own CON004A
+
+  check('CON004A: tied for the game-wide max (P1 and P4 both have 2) -> 0VP', scoring.conCardVpAdjustment(state, index, 'P1'), 0);
+  check('CON004A: 1 AREA short of the leader\'s 2 -> -1VP', scoring.conCardVpAdjustment(state, index, 'P2'), -1);
+  check('CON004A: owns no AREAs at all -> short by the leader\'s full count (2) -> -2VP', scoring.conCardVpAdjustment(state, index, 'P3'), -2);
+  check('CON004A: player who doesn\'t own CON004A at all -> 0VP regardless of their own AREA_COUNT', scoring.conCardVpAdjustment(state, index, 'P4'), 0);
+}
+
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);
