@@ -2760,6 +2760,23 @@ h1, h2, h3 { margin: 0; }
   max-width: 122px;
 }
 
+/* 領地/天運/人材一覧のINST説明文 (2026-08-22, per user request: "カード一覧とほかの一覧に飛ぶボタン
+   との間にINSTシートのそれぞれの説明文を表示") -- instDescriptionText() reads INDEX.raw.INSTの
+   "Aカード"/"Bカード"/"Cカード"行。現状は説明列が空なので:emptyで消える(データ投入待ち、
+   card-list-inst-entry__textと同じ扱い)。 */
+.card-list-abc-inst {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+  white-space: pre-line;
+}
+.card-list-abc-inst:empty {
+  display: none;
+}
+
 /* 資源一覧 (2026-08-22) -- basic resource icon+code quick-reference, followed by INDEX.raw.INSTの
    汎用列挙(現状は説明列が空なので見出しのみが並ぶ、データ投入待ち -- see main.js's
    renderCardListResourceCategory). */

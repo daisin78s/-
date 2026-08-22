@@ -1390,6 +1390,26 @@ function renderCardListAbcCategory(sheet, container) {
   wrap.appendChild(specialCol);
 
   container.appendChild(wrap);
+
+  // カード一覧とナビボタンの間にINSTシートの説明文を表示 (2026-08-22, per user request) -- INDEX.raw.INST
+  // has one row per sheet keyed "Aカード"/"Bカード"/"Cカード" for exactly this purpose (see
+  // instDescriptionText's own doc). Empty for now (no description column filled in yet) -- the element
+  // itself just collapses via :empty, same convention as .shop-card__req etc. elsewhere.
+  container.appendChild(el('div', 'card-list-abc-inst', instDescriptionText(`${sheet}カード`)));
+}
+
+/** Looks up one INDEX.raw.INST row by its ID (e.g. "Aカード") and joins every non-ID, non-empty field
+ * into display text -- same generic "don't assume a column name" approach as
+ * renderCardListResourceCategory's own INST loop, since the sheet currently only has an ID column
+ * populated; whatever description column the user adds later is picked up automatically. '' (renders
+ * nothing, collapses via :empty) if the row doesn't exist or has no other fields yet. */
+function instDescriptionText(instId) {
+  const row = (INDEX.raw.INST || []).find((r) => r.ID === instId);
+  if (!row) return '';
+  return Object.entries(row)
+    .filter(([column, value]) => column !== 'ID' && value !== '' && value !== undefined && value !== null)
+    .map(([, value]) => String(value))
+    .join('\n');
 }
 
 /** Basic resource icon+label quick-reference the user described ("K/A/B/C/Z/BZ/wD/VPなどの基本資源の
