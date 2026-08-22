@@ -2689,9 +2689,18 @@ h1, h2, h3 { margin: 0; }
    Same "whole-modal scroll cap" idea as #debug-setup-overlay .card-inst-modal (see that rule's own
    doc), but the bottom nav needs to stay visible while the body scrolls, so only .card-list-body
    scrolls here -- the modal itself is capped but not scrolled, so #card-list-nav (a normal flow
-   sibling after it, not position:sticky) never gets pushed out of view. */
+   sibling after it, not position:sticky) never gets pushed out of view.
+   2026-08-22, per user report (モニュメント一覧, after the dice-face req icons started actually
+   rendering -- see buildCardListCell's own doc -- made these cards tall enough to tip past the old
+   90vh budget): "縦幅増やしたため 画面の上下見切れています 広くして". Bumped to 95vh for more headroom,
+   plus a 95dvh override for browsers that support the dynamic-viewport unit (notably iOS Safari, where
+   the address/tab bar can cover part of a plain 100vh's own viewport -- 100vh there is the LARGEST
+   possible viewport, taller than what's actually visible whenever that chrome is on-screen, which is
+   exactly a "見切れる" symptom a plain vh can't self-correct for; dvh tracks the real visible area).
+   Unsupported browsers simply ignore the 2nd declaration and keep the vh one. */
 .card-list-modal {
-  max-height: 90vh;
+  max-height: 95vh;
+  max-height: 95dvh;
   display: flex;
   flex-direction: column;
 }
