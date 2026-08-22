@@ -1256,7 +1256,11 @@ function renderDebugSetupOverlay() {
       // showRankHeaders:false (2026-08-18, per user report the picker's display was broken) -- this
       // step is choosing which QST cards to include, before any game/ranking exists yet, so every
       // player is tied at 0 and the "1位/2位/3位" rank headers/columns have nothing real to show.
-      ? buildQstCardVisual(faceId, STATE, { showRankHeaders: false, noInteraction: true })
+      // showLiveRanking:false (2026-08-22, per user report: "最多エンブレムやエンブレム総数で１の
+      // キャラがいて持っているのが分かってしまう") -- this button reconfigures the *next* game using
+      // the *currently still-loaded* one's real STATE/players, so without this the value/swatches were
+      // leaking that in-progress game's real card ownership -- see buildQstCardVisual's own doc.
+      ? buildQstCardVisual(faceId, STATE, { showRankHeaders: false, showLiveRanking: false, noInteraction: true })
       : buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true });
     const tall = cardNode.classList.contains('shop-card--tall');
     // QST (2026-08-20, per user report: "カードの大きさをそろえて...不自然に横に広がっている") -- gets
@@ -1342,7 +1346,10 @@ const CARD_LIST_FLAT_CATEGORIES = {
  * doc: pickAction:null is exactly the "read-only preview" case it already supports). */
 function buildCardListCell(faceId, isQst) {
   const cardNode = isQst
-    ? buildQstCardVisual(faceId, STATE, { showRankHeaders: false, noInteraction: true })
+    // showLiveRanking:false (2026-08-22, per user report: same leak as the テストゲーム開始 QST step's
+    // own doc -- カードリスト is meant to be a neutral reference browser, not a leaderboard of the
+    // currently-loaded game's real progress. See buildQstCardVisual's own doc.
+    ? buildQstCardVisual(faceId, STATE, { showRankHeaders: false, showLiveRanking: false, noInteraction: true })
     // req (2026-08-22, per user report: "モニュメントカード一覧にダイス目がない") -- buildCardVisual
     // doesn't derive a monument's DICE threshold on its own (see fillCardFace's own options.req use);
     // every other caller passes req: factsForFaceId(faceId).req explicitly (e.g. buildShopSlotNode),
@@ -3307,6 +3314,18 @@ function buildQstCardVisual(faceId, state, options = {}) {
 
   node.querySelector(':scope > .qst-card__goal-line').textContent = questGoalDisplayText(facts);
 
+  // showLiveRanking (2026-08-22, per user report on the テストゲーム開始 QST picker/カードリストの
+  // QST一覧: "最多エンブレムやエンブレム総数で１のキャラがいて持っているのが分かってしまう") -- defaults
+  // true (every REAL in-game QST display: the standings panel, the enlarge modal) but both picker/
+  // browser contexts pass this false explicitly. Deliberately kept separate from showRankHeaders below,
+  // which only controls the "1位　4VP" text label (already false in those same 2 contexts, for an
+  // unrelated reason -- a shared legend elsewhere already says it once) -- conflating the two would have
+  // wrongly hidden the real standings panel's own values/swatches too whenever ITS showRankHeaders
+  // happens to be false (sharedRewards, see renderQsts). showLiveRanking instead governs the actual
+  // per-player VALUE and the colored ownership swatches below, which read the CURRENT live game's real
+  // state regardless of showRankHeaders -- exactly what leaked an in-progress/not-yet-started game's
+  // real card ownership in a context meant to be a neutral picker/reference, not a leaderboard.
+  const showLiveRanking = options.showLiveRanking !== false;
   const ranking = qstMod.rankPlayersForQuest(state, INDEX, faceId);
   const colEls = node.querySelectorAll(':scope > .qst-card__ranks > .qst-card__rank-col');
   colEls.forEach((colEl, i) => {
@@ -3316,8 +3335,8 @@ function buildQstCardVisual(faceId, state, options = {}) {
     // 書く 例 8 7 5") -- every holder of a given rank shares the same value (that's what ties them),
     // so just read the first one; blank when nobody currently sits at this rank at all (only possible
     // when 4+ players are tied at a higher rank, same "no swatches" case .qst-card__rank-players
-    // already handles).
-    colEl.querySelector('.qst-card__rank-value').textContent = holders.length ? holders[0].value : '';
+    // already handles) or when showLiveRanking is off.
+    colEl.querySelector('.qst-card__rank-value').textContent = showLiveRanking && holders.length ? holders[0].value : '';
     // "1位　4VP" per column: dropped from the in-panel cards (2026-08-10, per user request "３つも書く
     // 意味ありませんでした" -- the shared legend at the bottom of the panel says it once, and the rank
     // bands behind each column are what tie a column to its rank). Still drawn when there's no legend to
@@ -3328,12 +3347,14 @@ function buildQstCardVisual(faceId, state, options = {}) {
     else headerEl.remove();
     const playersEl = colEl.querySelector('.qst-card__rank-players');
     playersEl.innerHTML = '';
-    for (const entry of holders) {
-      const rankedPlayer = state.players.find((p) => p.id === entry.playerId);
-      const swatch = el('span', 'qst-card__rank-player');
-      swatch.dataset.color = rankedPlayer.color;
-      swatch.title = rankedPlayer.name;
-      playersEl.appendChild(swatch);
+    if (showLiveRanking) {
+      for (const entry of holders) {
+        const rankedPlayer = state.players.find((p) => p.id === entry.playerId);
+        const swatch = el('span', 'qst-card__rank-player');
+        swatch.dataset.color = rankedPlayer.color;
+        swatch.title = rankedPlayer.name;
+        playersEl.appendChild(swatch);
+      }
     }
   });
 
