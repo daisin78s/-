@@ -1428,15 +1428,23 @@ const CARD_LIST_RESOURCE_GLOSSARY = [
   { code: 'TAP', name: 'タップ' },
 ];
 
-/** null (no icon) per user request ("アイコンがないものはなしでいい　VPのアイコンもなし") for
- * VP/D -- D has no single color (it's the wildcard-color unplaced-die placeholder, shown as plain
- * "色D" text elsewhere, see buildActionIcons), VP simply isn't wanted here despite having a real
- * .action-dot color elsewhere in the app. TAP reuses TAP_COST_ICON (⤵️), the same marker every TAP
- * ability already shows. */
+/** VP (2026-08-22, per user request: "名声のアイコンはVP") -- plain "VP" text badge, matching how VP
+ * is shown everywhere else in the app (never a colored dot, see renderResourceBadge's own doc: "VPは
+ * 常にプレーンテキスト"). D (2026-08-22, per user request: "行動力のアイコンは色ダイスのピンク
+ * （ALICE）のダイスの1の目") -- a die-face glyph (dieFace(1), the same ⚀-⚅ vocabulary every other
+ * die icon here uses) recolored to Alice's player pink via .card-list-term-cell__die-pink, standing in
+ * for "D" (a player's own placeable colored die -- shown as plain "色D" text elsewhere, see
+ * buildActionIcons -- illustrated here with one concrete player's die rather than an abstract color).
+ * TAP reuses TAP_COST_ICON (⤵️), the same marker every TAP ability already shows. */
 function cardListResourceIcon(code) {
   if (code === 'wD') return actionEmoji('🎲');
   if (code === 'TAP') return actionEmoji(TAP_COST_ICON);
-  if (code === 'VP' || code === 'D') return null;
+  if (code === 'VP') return el('span', 'card-list-term-cell__vp-icon', 'VP');
+  if (code === 'D') {
+    const face = dieFace(1);
+    face.classList.add('card-list-term-cell__die-pink');
+    return face;
+  }
   return actionDot(code);
 }
 
