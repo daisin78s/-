@@ -315,6 +315,28 @@
     </div>
   </div>
 
+  <!-- JOB007/宮廷人 tap-first offer (2026-08-22, per user request) -- see main.js's
+       pendingJob007TapPrompt/withJob007TapPrompt/renderJob007TapPromptModal. Shown right before a die
+       placement that would offer an UPGRADE/monument candidate, while JOB007 is owned and untapped.
+       "いいえ" just proceeds without tapping -- unlike white-overflow-confirm-overlay above, declining
+       here never cancels the placement itself (same "optional tap-first offer" shape as
+       #build-choice-bz-tap-prompt, just needing its own confirm step since -- unlike that one -- it has
+       to run BEFORE the placement, not after). -->
+  <div id="job007-tap-prompt-overlay" class="card-inst-overlay" hidden>
+    <div class="card-inst-modal placement-choice-modal">
+      <div class="card-inst-modal__header">
+        <span class="card-inst-modal__title">確認</span>
+      </div>
+      <div class="card-inst-modal__body">
+        <p class="turn-end-warning__text">宮廷人をTAPしますか？</p>
+      </div>
+      <div class="placement-choice-actions">
+        <button type="button" id="job007-tap-prompt-no">いいえ</button>
+        <button type="button" id="job007-tap-prompt-yes">はい</button>
+      </div>
+    </div>
+  </div>
+
   <!-- GAME_END final results (2026-07-31) -- see main.js's renderGameEndOverlay. No close button:
        the game is genuinely over, there's nothing left to interact with underneath. -->
   <div id="game-end-overlay" class="card-inst-overlay" hidden>

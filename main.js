@@ -674,6 +674,59 @@ function wouldCauseWhiteOverflow(state, action) {
 function renderWhiteOverflowConfirmModal() {
   document.getElementById('white-overflow-confirm-overlay').hidden = !pendingWhiteOverflowConfirm;
 }
+
+// { playerId, onProceed } | null -- set by withJob007TapPrompt whenever a die placement about to run
+// would offer an UPGRADE/monument BUILD_NEW candidate while JOB007/宮廷人 is owned and untapped
+// (2026-08-22, per user request: "LVアップかモニュメント獲得しようとしたとき　宮廷人をタップしますか
+// はい　いいえ"). "はい" taps JOB007 for real (board.useBareTapAbility -- gains BZ, applies
+// MONUMENT_DICE_DISCOUNT(2,THIS_TURN), blocks A/B/C builds this turn) THEN runs onProceed (the
+// placement that was paused); "いいえ" just runs onProceed without tapping -- same "optional, not a
+// blocking warning" shape as renderBuildChoiceBzTapPrompt's own tap-first offer, not
+// pendingWhiteOverflowConfirm's "are you sure, this loses something" shape, so declining never cancels
+// the placement itself.
+let pendingJob007TapPrompt = null;
+
+/** True if playerId's own JOB is 宮廷人/JOB007 and it isn't currently tapped -- see
+ * pendingJob007TapPrompt's own doc. JOB has no A/B tier the way CON does, so 'JOB007' is a stable
+ * physical id (matching how it's already referenced literally elsewhere, e.g. scoring.js's Q004A/
+ * CON004A handling), no NAME-matching indirection needed the way board.js's CON-facing bespoke checks
+ * (hasPioneerAbility etc.) use. */
+function hasUntappedJob007(state, playerId) {
+  const player = state.players.find((p) => p.id === playerId);
+  return player.jobCardId === 'JOB007' && !state.cards.JOB007.tapped;
+}
+
+/** Predicts whether running `action` (a function taking a GameState and returning a placeDice-shaped
+ * result) would offer an UPGRADE or monument BUILD_NEW candidate -- runs `action` against a disposable
+ * clone of `state` and inspects the *returned* pendingBuild.candidates (unlike wouldCauseWhiteOverflow,
+ * which compares a GameState field before/after; here the relevant signal is the action's own return
+ * value). Never touches the real `state`. See board.getBuildCandidates' own doc for candidate shape:
+ * {type:'UPGRADE',...} or {type:'BUILD_NEW', shopKey:'M', ...} for a monument. */
+function wouldOfferUpgradeOrMonument(state, action) {
+  const clone = gameStateMod.cloneState(state);
+  const result = action(clone);
+  const candidates = result && result.actionResult && result.actionResult.pendingBuild && result.actionResult.pendingBuild.candidates;
+  if (!candidates) return false;
+  return candidates.some((c) => c.type === 'UPGRADE' || c.shopKey === 'M');
+}
+
+/** Shared entry point for all 3 die-placement paths (placeSelectedDie/placeSelectedWildcardDie/
+ * placeSelectedDiceGroup) -- see pendingJob007TapPrompt's own doc. dryRunAction mirrors the real
+ * placement call (board.placeDice/placeWildcardDie/placeDiceGroup) so wouldOfferUpgradeOrMonument can
+ * predict its outcome; proceed is the real (unmodified) continuation to run either way. */
+function withJob007TapPrompt(state, playerId, dryRunAction, proceed) {
+  if (hasUntappedJob007(state, playerId) && wouldOfferUpgradeOrMonument(state, dryRunAction)) {
+    pendingJob007TapPrompt = { playerId, onProceed: proceed };
+    render(STATE);
+    return;
+  }
+  proceed();
+}
+
+function renderJob007TapPromptModal() {
+  document.getElementById('job007-tap-prompt-overlay').hidden = !pendingJob007TapPrompt;
+}
+
 // playerId | null -- set by advanceTurnIfPossible when RESOURCE_TOTAL_LIMIT blocks ending that
 // player's turn (their die is already placed; only their resource total is in the way), cleared once
 // it actually succeeds. Lets the free-action click handler below retry ending the turn immediately
@@ -840,6 +893,7 @@ function jumpToHistoryIndex(idx) {
   pendingTurnEndWarning = null;
   pendingRoundPassConfirm = null;
   pendingWhiteOverflowConfirm = null;
+  pendingJob007TapPrompt = null;
   turnActionTaken = false;
   placementMessage = '';
   // aiOpenTurnPlayerId/aiOpenTurnHasPlacedDie (found via headless testing): also not part of GameState,
@@ -3888,6 +3942,17 @@ function applyPlaceDiceResult(result, playerId) {
  * 2026-08-02, see attemptPlaceSelectedDie's own comment). */
 function placeSelectedDie(state, dieId, mapId, slotIndex, colorPreference) {
   const player = state.players.find((p) => p.dice.some((d) => d.id === dieId));
+  // JOB007/宮廷人 tap-first offer (2026-08-22) -- checked before the wD-overflow confirm below, since
+  // accepting it can change what monument candidates this same placement offers (MONUMENT_DICE_
+  // DISCOUNT). See pendingJob007TapPrompt's own doc.
+  withJob007TapPrompt(
+    state, player.id,
+    (clone) => boardMod.placeDice(clone, INDEX, { playerId: player.id, colorPreference }, dieId, mapId, slotIndex),
+    () => placeSelectedDieAfterJob007Check(state, player, dieId, mapId, slotIndex, colorPreference),
+  );
+}
+
+function placeSelectedDieAfterJob007Check(state, player, dieId, mapId, slotIndex, colorPreference) {
   // wD-overflow confirm (2026-08-19, per user request) -- checked BEFORE any real mutation, so a
   // declined confirm leaves selectedDieIds/turnActionTaken/dicePlacementCheckpoint untouched, same as if
   // the click never happened. See pendingWhiteOverflowConfirm's own doc.
@@ -3914,6 +3979,15 @@ function placeSelectedDieCommit(state, player, dieId, mapId, slotIndex, colorPre
  * board.placeWildcardDie (no slotIndex) instead of board.placeDice. */
 function placeSelectedWildcardDie(state, dieId, mapId, colorPreference) {
   const player = state.players.find((p) => p.dice.some((d) => d.id === dieId));
+  // JOB007/宮廷人 tap-first offer -- see placeSelectedDie's own doc for the pattern.
+  withJob007TapPrompt(
+    state, player.id,
+    (clone) => boardMod.placeWildcardDie(clone, INDEX, { playerId: player.id, colorPreference }, dieId, mapId),
+    () => placeSelectedWildcardDieAfterJob007Check(state, player, dieId, mapId, colorPreference),
+  );
+}
+
+function placeSelectedWildcardDieAfterJob007Check(state, player, dieId, mapId, colorPreference) {
   if (wouldCauseWhiteOverflow(state, (clone) => boardMod.placeWildcardDie(clone, INDEX, { playerId: player.id, colorPreference }, dieId, mapId))) {
     pendingWhiteOverflowConfirm = { onConfirm: () => placeSelectedWildcardDieCommit(state, player, dieId, mapId, colorPreference) };
     render(STATE);
@@ -3940,6 +4014,17 @@ function placeSelectedWildcardDieCommit(state, player, dieId, mapId, colorPrefer
 function placeSelectedDiceGroup(state, mapId) {
   const dieIds = selectedDieIds;
   const player = state.players.find((p) => p.dice.some((d) => d.id === dieIds[0]));
+  // JOB007/宮廷人 tap-first offer -- see placeSelectedDie's own doc for the pattern. Especially relevant
+  // here: placeDiceGroup is monument-only (castle/元老院), so this is exactly where
+  // MONUMENT_DICE_DISCOUNT can turn an otherwise-unreachable monument into a real candidate.
+  withJob007TapPrompt(
+    state, player.id,
+    (clone) => boardMod.placeDiceGroup(clone, INDEX, { playerId: player.id }, dieIds, mapId),
+    () => placeSelectedDiceGroupAfterJob007Check(state, player, dieIds, mapId),
+  );
+}
+
+function placeSelectedDiceGroupAfterJob007Check(state, player, dieIds, mapId) {
   // wD-overflow confirm -- see placeSelectedDie's own doc for the pattern.
   if (wouldCauseWhiteOverflow(state, (clone) => boardMod.placeDiceGroup(clone, INDEX, { playerId: player.id }, dieIds, mapId))) {
     pendingWhiteOverflowConfirm = { onConfirm: () => placeSelectedDiceGroupCommit(state, player, dieIds, mapId) };
@@ -5847,6 +5932,7 @@ function render(state) {
   renderRoundPassButton(state, next);
   renderRoundPassConfirmModal();
   renderWhiteOverflowConfirmModal();
+  renderJob007TapPromptModal();
   renderPlayerRoleControl(state);
   renderAiPacingControl(state);
   renderGameEndOverlay(state);
@@ -5879,6 +5965,7 @@ function handleUndoClick() {
   pendingTurnEndWarning = null;
   pendingRoundPassConfirm = null;
   pendingWhiteOverflowConfirm = null;
+  pendingJob007TapPrompt = null;
   turnActionTaken = false;
   placementMessage = '';
   dicePlacementCheckpoint = null; // stale now -- this already reverted past whatever it pointed at
@@ -6374,6 +6461,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const { onConfirm } = pendingWhiteOverflowConfirm;
     pendingWhiteOverflowConfirm = null;
     onConfirm();
+  });
+
+  // 「いいえ」はTAPせずそのまま元のダイス配置を続行する -- pendingJob007TapPrompt自身の doc の通り、
+  // これは警告(キャンセル可)ではなく任意の"先にTAPしますか"提案なので。
+  document.getElementById('job007-tap-prompt-no').addEventListener('click', () => {
+    const { onProceed } = pendingJob007TapPrompt;
+    pendingJob007TapPrompt = null;
+    onProceed();
+  });
+  document.getElementById('job007-tap-prompt-yes').addEventListener('click', () => {
+    const { playerId, onProceed } = pendingJob007TapPrompt;
+    pendingJob007TapPrompt = null;
+    boardMod.useBareTapAbility(STATE, INDEX, { playerId }, 'JOB007');
+    onProceed();
   });
 
   document.getElementById('ai-pacing-select').addEventListener('change', (e) => {
