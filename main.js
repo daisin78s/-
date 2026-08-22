@@ -3024,15 +3024,12 @@ function buildCardVisual(faceId, options = {}) {
   // .shop-card--tall's min-height alone still left real height variance between CON faces. See
   // .shop-card--con in style.css for the actual fixed value.
   if (faceId.startsWith('CON')) node.classList.add('shop-card--con');
-  // 導き/兆しカード (B001-007, 2026-08-21, per user report: restoring the die-face glyph to its full
-  // 42px size -- see .die-face's own doc -- made these cards grow taller than every other card ("縦に
-  // 伸びてしまいました"). Per the user's own explicit follow-up ("文字が重なってもいいので同じ高さで"),
-  // capped back to a FIXED height (not just .shop-card--tall's own min-height, which lets a card grow
-  // past it) matching what every other tall card already comfortably uses, same "fixed, not min" idea
-  // .shop-card--con already applies for a different reason (see its own doc/CSS) -- content taller than
-  // that box now overlaps instead of growing it. B008 (special-shop, no die-face icon at all) is
-  // deliberately excluded by this exact ID range.
-  if (/^B00[1-7][AB]$/.test(faceId)) node.classList.add('shop-card--die-face-compact');
+  // 導き/兆しカード (B001-007): briefly capped to a fixed 118px height (2026-08-21, accepting content
+  // overlap so every tall card shared one height) after enlarging the die-face glyph to 42px made these
+  // grow taller than other cards. Reverted (2026-08-22, per user report -- カードリスト made the actual
+  // overlap visible: "1VPがはみ出ています...縦幅の設定を以前のものに戻せますか") back to plain
+  // .shop-card--tall's own min-height:118px, which lets the box grow to fit its real content instead of
+  // overlapping it -- see .shop-card--tall in style.css. No dedicated class needed here any more.
   // 2026-08-21, mirroring .shop-card--con above, added so CON/JOB-specific icon sizing (see
   // .shop-card--job in style.css) can scope to JOB cards even outside .card-group__jobcon (e.g. the
   // job-pool draft view, which has no icon-sizing context of its own otherwise).

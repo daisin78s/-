@@ -2108,17 +2108,6 @@ h1, h2, h3 { margin: 0; }
   height: 140px;
 }
 
-/* 導き/兆しカード (B001-007, 2026-08-21) -- fixed (not min-) height, same "content overlaps instead of
-   growing the box" idea as .shop-card--con just above, but for a different trigger: restoring the
-   die-face glyph's full 42px size (see .die-face's own doc) made these specific cards grow taller than
-   .shop-card--tall's 118px normally allows. Per user request ("文字が重なってもいいので同じ高さで
-   おさまりのいいように"), capped back to that same 118px every other tall card already fits within,
-   accepting overlap. overflow:visible (the default) is relied on here, not set explicitly -- nothing is
-   clipped away, content simply spills past the box edge where it doesn't fit. */
-.shop-card--die-face-compact {
-  height: 118px;
-}
-
 .shop-card__effect {
   flex: 1;
   display: flex;
