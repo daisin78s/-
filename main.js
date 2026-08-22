@@ -1430,21 +1430,18 @@ const CARD_LIST_RESOURCE_GLOSSARY = [
 
 /** VP (2026-08-22, per user request: "名声のアイコンはVP") -- plain "VP" text badge, matching how VP
  * is shown everywhere else in the app (never a colored dot, see renderResourceBadge's own doc: "VPは
- * 常にプレーンテキスト"). D (2026-08-22, per user request: "行動力のアイコンは色ダイスのピンク
- * （ALICE）のダイスの1の目") -- a die-face glyph (dieFace(1), the same ⚀-⚅ vocabulary every other
- * die icon here uses) recolored to Alice's player pink via .card-list-term-cell__die-pink, standing in
- * for "D" (a player's own placeable colored die -- shown as plain "色D" text elsewhere, see
- * buildActionIcons -- illustrated here with one concrete player's die rather than an abstract color).
+ * 常にプレーンテキスト"). D (2026-08-22, per user request + a circled screenshot of Alice's actual
+ * dice in the standings panel: "行動力のアイコンは色ダイスのピンク（ALICE）のダイスの1の目") -- reuses
+ * renderDie() directly (the real player-dice component, 22x22px .die--PINK with a plain digit "1"),
+ * not the ⚀-⚅ die-face glyph vocabulary used elsewhere here -- the screenshot made clear the user meant
+ * the actual round colored die TOKEN shown next to a player's name, not the monument/TAP-icon glyph
+ * style. Already sized to match this grid's other 22px icons (.action-dot), no extra scoping needed.
  * TAP reuses TAP_COST_ICON (⤵️), the same marker every TAP ability already shows. */
 function cardListResourceIcon(code) {
   if (code === 'wD') return actionEmoji('🎲');
   if (code === 'TAP') return actionEmoji(TAP_COST_ICON);
   if (code === 'VP') return el('span', 'card-list-term-cell__vp-icon', 'VP');
-  if (code === 'D') {
-    const face = dieFace(1);
-    face.classList.add('card-list-term-cell__die-pink');
-    return face;
-  }
+  if (code === 'D') return renderDie({ color: 'PINK', value: 1 });
   return actionDot(code);
 }
 

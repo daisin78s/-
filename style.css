@@ -2821,15 +2821,8 @@ h1, h2, h3 { margin: 0; }
 .card-list-term-cell .action-emoji {
   font-size: 24px;
 }
-/* VP/D icons (2026-08-22, per user request) -- see cardListResourceIcon's own doc. .die-face is scoped
-   down from its 42px base (tuned for a full-size card, see .die-face's own doc) to match this tile's
-   other icons' visual weight. */
-.card-list-term-cell .die-face {
-  font-size: 24px;
-}
-.card-list-term-cell__die-pink {
-  color: var(--player-pink);
-}
+/* VP icon (2026-08-22, per user request) -- see cardListResourceIcon's own doc. D reuses renderDie()
+   directly (already 22x22px, matching .action-dot's own size here), no extra CSS needed for it. */
 .card-list-term-cell__vp-icon {
   font-size: 18px;
   font-weight: 800;
