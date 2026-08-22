@@ -2676,6 +2676,124 @@ h1, h2, h3 { margin: 0; }
   max-width: calc(100vw - 32px);
 }
 
+/* カードリスト (2026-08-22) -- reuses .card-inst-overlay/.build-choice-modal's wide auto-width shell.
+   Same "whole-modal scroll cap" idea as #debug-setup-overlay .card-inst-modal (see that rule's own
+   doc), but the bottom nav needs to stay visible while the body scrolls, so only .card-list-body
+   scrolls here -- the modal itself is capped but not scrolled, so #card-list-nav (a normal flow
+   sibling after it, not position:sticky) never gets pushed out of view. */
+.card-list-modal {
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+.card-list-body {
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.card-list-grid {
+  display: grid;
+  gap: 8px;
+  justify-content: center;
+}
+
+/* 領地(A)/天運(B)/人材(C)一覧 (2026-08-22, per user request): LV1(表)を上段・LV2(裏)を下段に並べた
+   通常カードのグリッドと、008(特殊枠、2ラウンドから登場)を縦積みにした列を横並びにする -- 008を
+   「一番右」に独立配置する、という要望をそのまま構造化したもの。card-list-grid側の行数はDOM順
+   （tierA全部→tierB全部）とgrid-template-columnsの列数だけで自動的に2行に折り返す。 */
+.card-list-abc-wrap {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: center;
+}
+.card-list-abc-special {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+.card-list-abc-special__label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  text-align: center;
+  max-width: 122px;
+}
+
+/* 資源一覧 (2026-08-22) -- basic resource icon+code quick-reference, followed by INDEX.raw.INSTの
+   汎用列挙(現状は説明列が空なので見出しのみが並ぶ、データ投入待ち -- see main.js's
+   renderCardListResourceCategory). */
+.card-list-glossary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+.card-list-glossary__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+}
+.card-list-glossary__label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+.card-list-inst-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.card-list-inst-entry {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.card-list-inst-entry__id {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+.card-list-inst-entry__text {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Persistent bottom nav (2026-08-22, per user request: "下にあるボタンはほかに飛んでも出しっぱなし") --
+   a normal flex row below .card-list-body, not position:sticky -- see .card-list-modal's own doc for
+   why that's enough to keep it always visible without scrolling the whole modal. */
+.card-list-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.card-list-nav__button {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.card-list-nav__button--active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 #build-choice-list {
   display: flex;
   flex-direction: column;

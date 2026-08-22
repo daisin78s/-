@@ -1228,6 +1228,197 @@ function renderDebugSetupOverlay() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// カードリスト (2026-08-22, per user request): a read-only browser over every card/resource type in
+// the game, opened via the "カードリスト" button beside "テストゲーム開始" (unrelated to it -- this
+// doesn't touch STATE at all, purely a data viewer). See CARD_LIST_NAV for the persistent bottom-nav
+// category list and renderCardListOverlay for the dispatch.
+// ---------------------------------------------------------------------------
+
+/** null while closed; otherwise the currently shown category key (see CARD_LIST_NAV). Purely
+ * UI-scratch, like debugSetupFlow above. */
+let cardListView = null;
+
+function openCardListOverlay() {
+  cardListView = 'resource';
+  render(STATE);
+}
+function closeCardListOverlay() {
+  cardListView = null;
+  render(STATE);
+}
+function setCardListView(key) {
+  cardListView = key;
+  render(STATE);
+}
+
+/** Bottom nav bar order, per user request. 'resource' is also the view opened by default. null key
+ * marks "ゲームに戻る" (closes the overlay instead of switching view). */
+const CARD_LIST_NAV = [
+  { key: 'resource', label: '資源一覧' },
+  { key: 'con', label: 'CON一覧' },
+  { key: 'job', label: 'JOB一覧' },
+  { key: 'initialResource', label: '初期資源一覧' },
+  { key: 'A', label: '領地カード一覧' },
+  { key: 'B', label: '天運カード一覧' },
+  { key: 'C', label: '人材カード一覧' },
+  { key: 'monument', label: 'モニュメントカード一覧' },
+  { key: 'qst', label: 'QSTカード一覧' },
+  { key: null, label: 'ゲームに戻る' },
+];
+
+/** CON/JOB/初期資源(RESOURCE)/モニュメント(M)/QST -- each sheet's rows already ARE the individual
+ * faces to show (unlike A/B/C, see collectNormalShopFaceIds's own doc), so a single flat grid per
+ * category is enough; no 2-row/008 treatment needed here. columns chosen the same way
+ * DEBUG_SETUP_STEPS' own columns field is (exact fit where possible, e.g. M=12->6x2, RESOURCE=18->6x3,
+ * QST=8->4x2; JOB has no clean rectangle at its current 11 faces, so it wraps 5+4+2 like the debug
+ * picker's own JOB step already accepts). */
+const CARD_LIST_FLAT_CATEGORIES = {
+  con: { label: 'CON一覧', columns: 6, isQst: false, faceIds: () => INDEX.raw.CON.map((r) => r.ID) },
+  job: { label: 'JOB一覧', columns: 5, isQst: false, faceIds: () => INDEX.raw.JOB.map((r) => r.ID) },
+  initialResource: { label: '初期資源一覧', columns: 6, isQst: false, faceIds: () => INDEX.raw.RESOURCE.map((r) => r.ID) },
+  monument: { label: 'モニュメントカード一覧', columns: 6, isQst: false, faceIds: () => INDEX.raw.M.map((r) => r.ID) },
+  qst: { label: 'QSTカード一覧', columns: 4, isQst: true, faceIds: () => INDEX.raw.QST.map((r) => r.ID) },
+};
+
+/** Builds one read-only grid cell for カードリスト -- a fresh noInteraction card/QST visual, wired for
+ * tap-to-enlarge only via attachPickableEnlarge(..., null) (no pick button, see that function's own
+ * doc: pickAction:null is exactly the "read-only preview" case it already supports). */
+function buildCardListCell(faceId, isQst) {
+  const cardNode = isQst
+    ? buildQstCardVisual(faceId, STATE, { showRankHeaders: false, noInteraction: true })
+    : buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true });
+  const tall = cardNode.classList.contains('shop-card--tall');
+  const cellClass = isQst
+    ? 'owned-card-cell owned-card-cell--qst'
+    : tall
+      ? 'owned-card-cell owned-card-cell--tall'
+      : 'owned-card-cell';
+  const cell = el('div', cellClass);
+  cell.appendChild(cardNode);
+  attachPickableEnlarge(cell, faceId, null);
+  return cell;
+}
+
+function renderCardListFlatCategory(key, container) {
+  const config = CARD_LIST_FLAT_CATEGORIES[key];
+  const grid = el('div', 'card-list-grid');
+  grid.style.gridTemplateColumns = config.isQst ? `repeat(${config.columns}, 244px)` : `repeat(${config.columns}, 122px)`;
+  for (const faceId of config.faceIds()) {
+    grid.appendChild(buildCardListCell(faceId, config.isQst));
+  }
+  container.appendChild(grid);
+}
+
+/** 領地(A)/天運(B)/人材(C)一覧, per user request: same-numbered LV1(表/A面) on top, LV2(裏/B面) on the
+ * bottom, with the 008 pair (special-shop faces, ROUND_MIN=2 -- see setup.prepareShops) pulled out to
+ * their own column at the far right, labeled "2ラウンドから登場" above it. Sheet's NAME column confirms
+ * the A/B/C=領地/天運/人材 mapping (see plan file), not otherwise recorded anywhere in code. */
+function renderCardListAbcCategory(sheet, container) {
+  const tierA = [];
+  const tierB = [];
+  let specialA = null;
+  let specialB = null;
+  for (const row of INDEX.raw[sheet]) {
+    const { physicalId, tier } = gameStateMod.splitCardId(row.ID);
+    const num = Number(physicalId.slice(1));
+    if (num === 8) {
+      if (tier === 'A') specialA = row.ID; else if (tier === 'B') specialB = row.ID;
+    } else if (num <= 7) {
+      if (tier === 'A') tierA.push(row.ID); else if (tier === 'B') tierB.push(row.ID);
+    }
+  }
+  const wrap = el('div', 'card-list-abc-wrap');
+
+  const mainGrid = el('div', 'card-list-grid');
+  mainGrid.style.gridTemplateColumns = `repeat(${tierA.length}, 122px)`;
+  for (const faceId of tierA) mainGrid.appendChild(buildCardListCell(faceId, false));
+  for (const faceId of tierB) mainGrid.appendChild(buildCardListCell(faceId, false));
+  wrap.appendChild(mainGrid);
+
+  const specialCol = el('div', 'card-list-abc-special');
+  specialCol.appendChild(el('div', 'card-list-abc-special__label', '2ラウンドから登場'));
+  if (specialA) specialCol.appendChild(buildCardListCell(specialA, false));
+  if (specialB) specialCol.appendChild(buildCardListCell(specialB, false));
+  wrap.appendChild(specialCol);
+
+  container.appendChild(wrap);
+}
+
+/** Basic resource icon+label quick-reference the user described ("K/A/B/C/Z/BZ/wD/VPなどの基本資源の
+ * アイコン+名前の早見表"). No real-world Japanese names exist anywhere in the data for these -- they're
+ * just the resource codes -- so this deliberately shows the code itself as the label rather than
+ * inventing one. Reuses actionDot/actionEmoji, the same icon vocabulary card effects already render
+ * with (see actionDot's own CSS, main.js ~1485). */
+const CARD_LIST_RESOURCE_GLOSSARY = ['K', 'A', 'B', 'C', 'Z', 'BZ', 'wD', 'VP'];
+
+function cardListResourceIcon(code) {
+  return code === 'wD' ? actionEmoji('🎲') : actionDot(code);
+}
+
+/** INSTシート(INDEX.raw.INST)を汎用的に列挙する。現状はID列しかないため、ID以外の非空フィールドを
+ * 本文として並べる形にしてある(2026-08-22時点でINDEX.raw.INSTの他列はすべて空 -- 将来ユーザーが
+ * 説明列を追加すれば、列名を決め打ちしていないので変更なしにそのまま拾える。tools/xlsx_to_json.py's
+ * load_sheet reads sheet headers generically, no per-sheet special-casing). */
+function renderCardListResourceCategory(container) {
+  const glossary = el('div', 'card-list-glossary');
+  for (const code of CARD_LIST_RESOURCE_GLOSSARY) {
+    const row = el('div', 'card-list-glossary__row');
+    row.appendChild(cardListResourceIcon(code));
+    row.appendChild(el('span', 'card-list-glossary__label', code));
+    glossary.appendChild(row);
+  }
+  container.appendChild(glossary);
+
+  const instList = el('div', 'card-list-inst-list');
+  for (const row of INDEX.raw.INST || []) {
+    const entry = el('div', 'card-list-inst-entry');
+    entry.appendChild(el('div', 'card-list-inst-entry__id', row.ID));
+    for (const [column, value] of Object.entries(row)) {
+      if (column === 'ID' || value === '' || value === undefined || value === null) continue;
+      entry.appendChild(el('div', 'card-list-inst-entry__text', String(value)));
+    }
+    instList.appendChild(entry);
+  }
+  container.appendChild(instList);
+}
+
+/** Renders #card-list-overlay -- hidden entirely while cardListView is null. Dispatches to the flat
+ * grid / A-B-C / resource-glossary renderers above based on the current view, then rebuilds the
+ * persistent bottom nav (CARD_LIST_NAV) every time so its --active highlight always matches. */
+function renderCardListOverlay() {
+  const overlay = document.getElementById('card-list-overlay');
+  if (!cardListView) {
+    overlay.hidden = true;
+    return;
+  }
+  overlay.hidden = false;
+
+  const body = document.getElementById('card-list-body');
+  body.innerHTML = '';
+  if (cardListView === 'resource') {
+    document.getElementById('card-list-title').textContent = '資源一覧';
+    renderCardListResourceCategory(body);
+  } else if (cardListView === 'A' || cardListView === 'B' || cardListView === 'C') {
+    document.getElementById('card-list-title').textContent = CARD_LIST_NAV.find((n) => n.key === cardListView).label;
+    renderCardListAbcCategory(cardListView, body);
+  } else {
+    const config = CARD_LIST_FLAT_CATEGORIES[cardListView];
+    document.getElementById('card-list-title').textContent = config.label;
+    renderCardListFlatCategory(cardListView, body);
+  }
+
+  const nav = document.getElementById('card-list-nav');
+  nav.innerHTML = '';
+  for (const entry of CARD_LIST_NAV) {
+    const btn = el('button', 'card-list-nav__button', entry.label);
+    btn.type = 'button';
+    if (entry.key === cardListView) btn.classList.add('card-list-nav__button--active');
+    btn.addEventListener('click', () => (entry.key === null ? closeCardListOverlay() : setCardListView(entry.key)));
+    nav.appendChild(btn);
+  }
+}
+
 /** Updates the debug panel: toggle button label, nav button disabled states, current-position readout,
  * and the clickable history list (spec items 3-4 & 10). Hidden entirely while debugMode is off (spec
  * item 14). Called from render() like every other render*() helper, so it always reflects whatever
@@ -5552,6 +5743,7 @@ function render(state) {
   renderGameEndOverlay(state);
   renderDebugPanel(state);
   renderDebugSetupOverlay();
+  renderCardListOverlay();
   // Hides #replay-controls again once back on the normal live path (found via headless testing,
   // 2026-08-1X: renderReplayControls is otherwise only ever called from renderReplayFrame, so exiting
   // replay via exitReplayMode -- which just flips replayMode off and calls this render(state) -- left
@@ -6048,6 +6240,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('debug-setup-start-button').addEventListener('click', openDebugSetupFlow);
   document.getElementById('debug-setup-end-button').addEventListener('click', advanceDebugSetupFlow);
   document.getElementById('debug-setup-cancel-button').addEventListener('click', cancelDebugSetupFlow);
+
+  document.getElementById('card-list-open-button').addEventListener('click', openCardListOverlay);
 
   document.getElementById('round-pass-button').addEventListener('click', handleRoundPassClick);
   document.getElementById('round-pass-confirm-no').addEventListener('click', () => {
