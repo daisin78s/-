@@ -2213,6 +2213,25 @@ function withWildcardOwner(state) {
   check('A second ☆ left-packs into SLOT2 next, real value 1 notwithstanding', state.maps['MAP001'].slots.map((s) => s.length), [1, 1, 0]);
 }
 {
+  // Regression (2026-08-22, per user report: "道化の☆ダイス　星になる前のもともとのダイス目がほかの
+  // プレイヤーをロックしている") -- a ☆ occupant's own .value field still carries its pre-star roll
+  // (see placeWildcardDie's own doc), but that must never block a DIFFERENT player's real die of the
+  // same face value from the same AREA: the ☆ itself no longer represents that number at all.
+  const state = freshStateWithShops();
+  withWildcardOwner(state);
+  // P1's ☆ rolled a 3, left-packs into SLOT1 (AREA001A: SLOT1=1,SLOT2=2,SLOT3=3, all numbered).
+  const starDie = giveDie(state, 'P1', 3);
+  board.placeWildcardDie(state, index, { playerId: 'P1' }, starDie.id, 'MAP001');
+  check('P1\'s ☆ (real roll 3) landed on SLOT1, not its own matching SLOT3', state.maps['MAP001'].slots.map((s) => s.length), [1, 0, 0]);
+
+  // P2 (a normal, non-wildcard player) now places a real die showing 3 -- must succeed via SLOT3, not
+  // be refused as a duplicate of the ☆'s residual value=3.
+  const p2Die = giveDie(state, 'P2', 3);
+  const p2Result = board.placeDice(state, index, { playerId: 'P2' }, p2Die.id, 'MAP001', 2);
+  check('P2\'s real value-3 die is NOT blocked by P1\'s ☆ (which only LOOKS like a 3 internally)', p2Result.success, true);
+  check('...and actually landed on SLOT3 (index 2)', state.maps['MAP001'].slots.map((s) => s.length), [1, 0, 1]);
+}
+{
   // Fallback stacking at a BUILD-only AREA (castle/王宮): fill every non-EX slot, then a 7th solo ☆ has
   // nowhere to go but a forced fallback under SLOT1 -- excludedFromBuildValue zeroes its own contribution
   // (0, not 6), and since 2026-08-20 (per user request: "重ねたかどうかではなく1ターンに2個置いたかで合計

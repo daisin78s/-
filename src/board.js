@@ -282,7 +282,14 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
     // not to spawn a second one elsewhere; a duplicate value's only legal home is the slot(s) that
     // already hold it). previously this shared the same bypass flag as the occupied-slot branch, which
     // is exactly what let this slip through.
-    const duplicateElsewhere = map.slots.some((occ, i) => i !== slotIndex && occ.some((o) => o.value === die.value));
+    // !o.isWildcard (2026-08-22, per user report: "道化の☆ダイス　星になる前のもともとのダイス目が
+    // ほかのプレイヤーをロックしている") -- a ☆ occupant still carries its pre-star roll in its own
+    // .value field (see placeWildcardDie's own doc: "value: die.value, isWildcard: true"), purely so
+    // buildValue math elsewhere can still read a real number off it. That residual number was leaking
+    // into THIS check too, blocking a completely different player's real die of the same face value
+    // from the AREA even though the ☆ itself no longer represents that number at all. A wildcard
+    // occupant can never be "the duplicate" here.
+    const duplicateElsewhere = map.slots.some((occ, i) => i !== slotIndex && occ.some((o) => !o.isWildcard && o.value === die.value));
     if (duplicateElsewhere) return { success: false, reason: 'DUPLICATE_VALUE_IN_AREA' };
   }
 
@@ -615,7 +622,9 @@ function slotAcceptsValue(map, mapId, playerId, requirement, occupants, value, b
   if (occupants.length > 0) return bypass;
   if (isExSlot) return true; // empty EX slot: never blocked by a duplicate value elsewhere (see placeDice's doc)
   if (dieIsWildcard) return true;
-  return !map.slots.some((occ) => occ.some((o) => o.value === value));
+  // !o.isWildcard -- see placeDice's own matching doc on duplicateElsewhere. A ☆ occupant elsewhere in
+  // this AREA must not block a real die of the same face value it happened to roll before becoming a ☆.
+  return !map.slots.some((occ) => occ.some((o) => !o.isWildcard && o.value === value));
 }
 
 // occupantBuildContribution (2026-08-19 - 2026-08-20) used to live here: it read a stacked-slot
