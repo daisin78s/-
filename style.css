@@ -1170,6 +1170,12 @@ h1, h2, h3 { margin: 0; }
   font-size: 42px;
   line-height: 1;
   color: var(--text);
+  /* 2026-08-22, per user report (screenshot comparison): B001A/B002A's SET_DIE_VALUE TAP icon
+     (inside .action-icons, which sets font-weight:700 for its text) rendered visibly bolder/thicker
+     than the identical glyph in a monument's .shop-card__req (which doesn't bold its text) -- same
+     font-family/size, but the inherited font-weight differed by context. Pinned to normal here so
+     every .die-face renders identically regardless of which bold/non-bold ancestor it's inside. */
+  font-weight: normal;
 }
 
 /* 2026-08-21, per user request: 兆し/導きカード(B001-007)'s own die-face icons (variously小さな導き/
