@@ -788,7 +788,7 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   const row = getCardRow(index, 'JOB007');
   const player = getPlayerRef(state, 'P1');
   const result = executor.runProgram(state, index, { playerId: 'P1' }, row.TAP);
-  check('JOB007\'s TAP (ADD(BZ);MONUMENT_DICE_DISCOUNT(3,THIS_TURN);BLOCK_BUILD(A/B/C,THIS_TURN)) succeeds and grants BZ', { success: result.success, BZ: player.resources.BZ }, { success: true, BZ: 1 });
+  check('JOB007\'s TAP (ADD(BZ);MONUMENT_DICE_DISCOUNT(2,THIS_TURN);BLOCK_BUILD(A/B/C,THIS_TURN)) succeeds and grants BZ', { success: result.success, BZ: player.resources.BZ }, { success: true, BZ: 1 });
   check('...and blocks A,B,C for this player this turn', player.blockedBuildCategoriesThisTurn, ['A', 'B', 'C']);
 }
 

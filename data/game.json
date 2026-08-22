@@ -1728,12 +1728,12 @@
       "EMBLEM_C": "",
       "VP": "",
       "ONCE": "",
-      "TAP": "ADD(BZ);MONUMENT_DICE_DISCOUNT(3,THIS_TURN);BLOCK_BUILD(A,THIS_TURN);BLOCK_BUILD(B,THIS_TURN);BLOCK_BUILD(C,THIS_TURN)",
+      "TAP": "ADD(BZ);MONUMENT_DICE_DISCOUNT(2,THIS_TURN);BLOCK_BUILD(A,THIS_TURN);BLOCK_BUILD(B,THIS_TURN);BLOCK_BUILD(C,THIS_TURN)",
       "PASSIVE": "",
       "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "TAPした時、１資源軽減を得る\nこのターンモニュメントの必要ダイスを3下げる\nこのターンA,B,Cカードを建築できない"
+      "INST": "TAPした時、１資源軽減を得る\nこのターンモニュメントの必要ダイスを2下げる\nこのターンA,B,Cカードを建築できない"
     },
     {
       "ID": "JOB008",
