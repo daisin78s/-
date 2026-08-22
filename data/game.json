@@ -2124,7 +2124,7 @@
       "SLOT2": "ANY",
       "SLOT3": "ANY",
       "SLOT4": "ANY",
-      "SLOT5": "EX",
+      "SLOT5": "ANY",
       "SLOT6": "EX",
       "ACTION": "BUILD();ADD(2K,BZ)",
       "INST": ""
