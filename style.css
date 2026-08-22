@@ -2531,6 +2531,18 @@ h1, h2, h3 { margin: 0; }
   width: 500px;
 }
 
+/* 資源や用語一覧の詳細ポップアップ (2026-08-22, per user request: "文字の大きさを２倍にして　画面の横幅を
+   4倍にしてください") -- see showCardListTermModal's own doc. 280px base x4 = 1120px (still capped by
+   .card-inst-modal's own max-width:calc(100vw-32px) on narrow screens); .card-inst-modal__body's own
+   13px base x2 = 26px, scoped here so every OTHER use of that shared body element (card/AREA enlarge)
+   keeps its normal size. */
+.card-inst-modal--term {
+  width: 1120px;
+}
+.card-inst-modal--term .card-inst-modal__body {
+  font-size: 26px;
+}
+
 /* Houses the enlarged (transform: scale()'d) card/QST visual -- see showCardEnlargeModal. Width/
    height are set inline in JS to match the scaled visual's actual measured size (transform doesn't
    affect layout sizing on its own, so the box has to be told explicitly or the scaled card would

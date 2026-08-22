@@ -1470,7 +1470,12 @@ function buildCardListTermCell(code, name) {
 
 /** Plain-text detail popup for one 資源や用語一覧 tile -- same #card-inst-overlay chrome/renderInstBody
  * showAreaEnlargeModal uses for AREA tiles (title + INST text, no card visual/flip/pick button), just
- * without that function's multi-tile tier-chain row (a single term has no such chain). */
+ * without that function's multi-tile tier-chain row (a single term has no such chain).
+ * .card-inst-modal--term (2026-08-22, per user request: "文字の大きさを２倍にして　画面の横幅を4倍に")
+ * -- widens the modal to 4x its plain-text base (280px -> 1120px, still capped by .card-inst-modal's
+ * own max-width:calc(100vw-32px) safety net on narrow screens) and doubles .card-inst-modal__body's
+ * font-size, scoped to this popup only -- showCardEnlargeModal/showAreaEnlargeModal both remove this
+ * class themselves so a leftover --term doesn't widen/enlarge an unrelated card/AREA popup afterward. */
 function showCardListTermModal(title, instId) {
   const overlay = document.getElementById('card-inst-overlay');
   const modal = overlay.querySelector('.card-inst-modal');
@@ -1480,6 +1485,7 @@ function showCardListTermModal(title, instId) {
 
   overlay.hidden = false;
   modal.classList.remove('card-inst-modal--wide', 'card-inst-modal--area-wide');
+  modal.classList.add('card-inst-modal--term');
   flipBtn.hidden = true;
   pickBtn.hidden = true;
   visualContainer.innerHTML = '';
@@ -6119,9 +6125,10 @@ function showCardEnlargeModal(faceId, visualNode, sibling, pickAction) {
   visualContainer.style.height = '';
   const isQst = !!visualNode && visualNode.classList.contains('qst-card');
   modal.classList.toggle('card-inst-modal--wide', !!visualNode);
-  // The overlay/modal DOM is shared and reused across calls, so a leftover --area-wide from a previous
-  // showAreaEnlargeModal call must be cleared here too, or it'd stick around on every later card modal.
-  modal.classList.remove('card-inst-modal--area-wide');
+  // The overlay/modal DOM is shared and reused across calls, so leftover modifiers from a previous
+  // showAreaEnlargeModal/showCardListTermModal call must be cleared here too, or they'd stick around on
+  // every later card modal.
+  modal.classList.remove('card-inst-modal--area-wide', 'card-inst-modal--term');
 
   if (visualNode) {
     if (isQst) visualNode.style.width = `${QST_PRE_SCALE_WIDTH}px`;
@@ -6257,8 +6264,9 @@ function showAreaEnlargeModal(areaId) {
   // いらないように 表示範囲広げれますか") -- .card-inst-modal--wide's 440px only just barely overflowed
   // with 3 tiles, forcing .area-enlarge-row's scroll fallback to kick in even on comfortably wide
   // screens; --area-wide's own 500px gives enough headroom that 3 tiles fit without it. Removes --wide
-  // too, in case a previous showCardEnlargeModal call left it on this same shared modal element.
-  modal.classList.remove('card-inst-modal--wide');
+  // too, in case a previous showCardEnlargeModal/showCardListTermModal call left it (or --term) on
+  // this same shared modal element.
+  modal.classList.remove('card-inst-modal--wide', 'card-inst-modal--term');
   modal.classList.add('card-inst-modal--area-wide');
   flipBtn.hidden = true;
   pickBtn.hidden = true;
