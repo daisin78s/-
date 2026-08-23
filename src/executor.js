@@ -149,6 +149,28 @@ function grantOneDie(state, index, player, kind, dieIdFactory) {
   }
 }
 
+/** Discards playerId's already-held unplaced wD dice down to their current WHITE_DICE_CAP (or the
+ * default whiteDiceCap if no override is active) -- 2026-08-23, per user report: 憤怒/CON005B's
+ * WHITE_DICE_CAP(0) only ever blocked *new* wD grants (grantOneDie's own overflow branch above), never
+ * retroactively discarded a wD this player already held before the cap dropped. That specifically let
+ * 道化/JOB003 + 憤怒 slip through: JOB003 is always drafted before CON during onboarding (see
+ * setup.chooseJob/chooseConFace's own call order in ai/game-runner.js's driveOnboarding), so its own
+ * ONCE=ADD(wD) grants a real wD *before* WHITE_DICE_CAP(0) becomes active if this same player then picks
+ * CON005B -- that die used to just sit there forever, unaffected by the newly-active cap. Called once,
+ * right after CON is chosen (setup.chooseConFace), the only point in the game a player's WHITE_DICE_CAP
+ * passive can newly turn on. Reuses the same whiteOverflowEvents tracking as grantOneDie's own overflow
+ * branch so main.js's existing warning banner covers this path too. */
+function enforceWhiteDiceCap(state, index, playerId) {
+  const player = getPlayer(state, playerId);
+  const whiteDiceCapRule = getPassiveRules(state, index, playerId, 'WHITE_DICE_CAP')[0];
+  const cap = whiteDiceCapRule ? whiteDiceCapRule.amount : player.whiteDiceCap;
+  const unplacedWhite = player.dice.filter((d) => d.kind === 'WHITE' && d.placedMapId === null);
+  for (const die of unplacedWhite.slice(cap)) {
+    player.dice.splice(player.dice.indexOf(die), 1);
+    state.whiteOverflowEvents.push(playerId);
+  }
+}
+
 let dieIdCounter = 0;
 function nextDieId() {
   dieIdCounter += 1;
@@ -1386,6 +1408,7 @@ module.exports = {
   notifyActivation,
   grantResource,
   grantResourceAndEmitGet,
+  enforceWhiteDiceCap,
   payCostList,
   applyBzDiscount,
   enumerateBzOutcomes,

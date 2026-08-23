@@ -207,6 +207,42 @@ function forceB007ALocation(state, location) {
 }
 
 // ---------------------------------------------------------------------------
+// Regression (2026-08-23, per user report: 憤怒(CON005B)+道化(JOB003)でwDを獲得してもすぐに捨てて
+// しまうようにしてほしい) -- JOB is always drafted before CON during onboarding (see
+// ai/game-runner.js's driveOnboarding call order), so 道化's own ONCE=ADD(wD) grants a real wD *before*
+// CON005B's WHITE_DICE_CAP(0) passive can possibly be active. Without setup.chooseConFace's own
+// enforceWhiteDiceCap call, that wD just sat there forever, unaffected by the newly-active cap.
+// ---------------------------------------------------------------------------
+{
+  const state = createEmptyGameState('jester-wrath-combo');
+  setup.createPlayers(state, ['Alice', 'Bob', 'Carol', 'Dan']);
+  setup.prepareShops(state, index);
+  setup.dealConCards(state, { P1: 'CON005' });
+  setup.dealJobPool(state, index, ['JOB003']);
+
+  setup.chooseJob(state, index, 'P1', 'JOB003');
+  const p1 = state.players[0];
+  check('道化\'s own ONCE=ADD(wD) grants a real wD before CON is even chosen', p1.dice.filter((d) => d.kind === 'WHITE').length, 1);
+
+  setup.chooseConFace(state, index, 'P1', 'B'); // CON005B/憤怒 -- WHITE_DICE_CAP(0)
+  check('Choosing 憤怒 immediately discards the wD 道化 already granted, not just blocking future ones', p1.dice.filter((d) => d.kind === 'WHITE').length, 0);
+  check('...recorded as a whiteOverflowEvent for the UI warning banner', state.whiteOverflowEvents.includes('P1'), true);
+}
+{
+  // Contrast: choosing 怠惰 (CON005A, no WHITE_DICE_CAP) leaves 道化's granted wD untouched.
+  const state = createEmptyGameState('jester-sloth-combo');
+  setup.createPlayers(state, ['Alice', 'Bob', 'Carol', 'Dan']);
+  setup.prepareShops(state, index);
+  setup.dealConCards(state, { P1: 'CON005' });
+  setup.dealJobPool(state, index, ['JOB003']);
+
+  setup.chooseJob(state, index, 'P1', 'JOB003');
+  setup.chooseConFace(state, index, 'P1', 'A'); // CON005A/怠惰 -- no WHITE_DICE_CAP
+  const p1 = state.players[0];
+  check('Choosing the OTHER face (no WHITE_DICE_CAP) leaves the earlier wD untouched', p1.dice.filter((d) => d.kind === 'WHITE').length, 1);
+}
+
+// ---------------------------------------------------------------------------
 // Debug-setup overrides (2026-08-13, per user request: a debug-mode UI lets P1 pre-choose which CON/
 // JOB-pool/initial-RESOURCE/ABC-shop cards show up, everyone else staying fully random). Each function
 // keeps its normal-call (no extra argument) behavior unchanged -- already covered by every check above,

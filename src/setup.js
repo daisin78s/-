@@ -34,7 +34,7 @@ const {
   INITIAL_COLOR_DICE,
 } = require('./game-state');
 const { getAreaRow, getCardRow } = require('./data-loader');
-const { runProgram } = require('./executor');
+const { runProgram, enforceWhiteDiceCap } = require('./executor');
 const { recordCheckpoint } = require('./undo');
 const board = require('./board');
 
@@ -497,7 +497,13 @@ function chooseConFace(state, index, playerId, face) {
   player.ownedCardPhysicalIds.push(inst.physicalId);
   player.conFace = face;
   const row = getCardRow(index, faceId);
-  return runProgram(state, index, { playerId, sourcePhysicalId: inst.physicalId }, row.ONCE);
+  const result = runProgram(state, index, { playerId, sourcePhysicalId: inst.physicalId }, row.ONCE);
+  // 憤怒/CON005B (2026-08-23, see executor.enforceWhiteDiceCap's own doc): CON is always chosen after
+  // JOB during onboarding, so this is the only point a player's WHITE_DICE_CAP passive can newly turn on
+  // -- e.g. 道化/JOB003's own ONCE already granted a real wD before this, which must now be discarded if
+  // this pick was CON005B.
+  enforceWhiteDiceCap(state, index, playerId);
+  return result;
 }
 
 /** Runs the ONCE effect of both of the player's chosen RESOURCE cards (the "初期資源受取" step). */
