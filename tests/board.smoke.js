@@ -2233,15 +2233,15 @@ function withWildcardOwner(state) {
 }
 {
   // Fallback stacking at a BUILD-only AREA (castle/王宮): fill every non-EX slot, then a 7th solo ☆ has
-  // nowhere to go but a forced fallback under SLOT1 -- excludedFromBuildValue zeroes its own contribution
-  // (0, not 6), and since 2026-08-20 (per user request: "重ねたかどうかではなく1ターンに2個置いたかで合計
-  // するようにしてください") nothing else in the slot adds to that either, so this placement's buildValue
-  // is always exactly 0 here. Every SHOP DICE_MIN in the data is >=1 (never 0), so a forced-fallback ☆ can
-  // never actually find a buildable candidate at castle/元老院 specifically -- the whole placement is
-  // refused instead (NO_BUILDABLE_CARD), same as if there were nowhere legal to put it. This is a genuine
-  // behavioral consequence of the no-accumulation rule, not a bug: a forced ☆ never earns anything at a
-  // fully-occupied BUILD-only AREA any more, matching how a non-wildcard die can't even get INTO a full
-  // slot there at all without GRANT_PLACE_ANYWHERE.
+  // nowhere to go but a forced fallback under SLOT1, evicting whoever was there (evictSlotOccupants). As
+  // of 2026-08-23 (per user report: forced fallback at 元老院/王宮 could never acquire a card at all) this
+  // placement's own buildValue is its normal category value (1 for A/B/C) same as any other solo ☆
+  // placement -- no longer zeroed just for landing via the forced-fallback path -- so it CAN trigger
+  // BUILD() same as a genuinely-empty-slot placement would, matching how a normal die placed via
+  // GRANT_PLACE_ANYWHERE onto an occupied slot always contributes its own real value too. The monument
+  // threshold check still uses the same solo-die value (6, not 0) -- still short of M001's DICE>=12, so
+  // M001 in particular stays unreachable from a single ☆, same as before; only A/B/C shop candidates are
+  // reachable here.
   const state = freshStateWithShops();
   withWildcardOwner(state);
   player(state, 'P1').resources.BZ = 20; // afford whatever candidate ends up offered (same pattern as the existing castle tests)
@@ -2256,9 +2256,11 @@ function withWildcardOwner(state) {
   check('All 6 castle slots now hold exactly 1 ☆ die each', state.maps[board.CASTLE_MAP_ID].slots.map((s) => s.length), [1, 1, 1, 1, 1, 1]);
 
   const seventh = board.placeWildcardDie(state, index, { playerId: 'P1' }, dice[6].id, board.CASTLE_MAP_ID);
-  check('A 7th solo ☆, with every slot full, is refused outright -- a forced fallback here can never build anything', seventh, { success: false, reason: 'NO_BUILDABLE_CARD' });
-  check('...SLOT1 still holds only the original occupant -- the 7th die was never actually placed', state.maps[board.CASTLE_MAP_ID].slots[0].length, 1);
-  check('...the 7th die itself is still unplaced, free to try a different, non-full AREA instead', dice[6].placedMapId, null);
+  check('A 7th solo ☆, forced onto the already-full row, still succeeds and can trigger BUILD()', seventh.success, true);
+  check('...buildValue is 1 (this solo die\'s own A/B/C category value), not 0', seventh.actionResult.pendingBuild.buildValue, 1);
+  check('...M001 (DICE>=12) is NOT among the candidates -- a solo ☆ maxes out at monument value 6', seventh.actionResult.pendingBuild.candidates.some((c) => c.faceId === 'M001'), false);
+  check('...SLOT1 now holds only the 7th die -- the original occupant was evicted, not stacked under it', state.maps[board.CASTLE_MAP_ID].slots[0].map((o) => o.dieId), [dice[6].id]);
+  check('...the 7th die itself is now placed at the castle', dice[6].placedMapId, board.CASTLE_MAP_ID);
 }
 {
   // Contrast: a DELIBERATE simultaneous group placement of 2 ☆ dice is now refused outright (2026-08-20,
@@ -2280,14 +2282,14 @@ function withWildcardOwner(state) {
   check('...neither die was actually placed', [d1.placedMapId, d2.placedMapId], [null, null]);
 }
 {
-  // Regression (2026-08-20, per user follow-up: "重ねたかどうかではなく1ターンに2個置いたかで合計する
-  // ようにしてください") -- superseding an earlier same-day fix that had specifically made a forced-
-  // fallback ☆ still succeed by reading whatever real die already occupied the slot (e.g. "existing real
-  // die's value=1 still counts"). That's exactly the multi-turn accumulation this later request asked to
-  // remove: a forced-fallback ☆'s buildValue is always 0 (excludedFromBuildValue), and nothing else in
-  // the slot adds to it any more either, so BOTH of these forced placements onto an already-full 元老院
-  // row must now be refused consistently -- neither succeeds, and repeating it a 2nd time doesn't change
-  // the outcome (confirming there's no lingering cascade/stuck-state bug either way).
+  // Regression (2026-08-23, per user report: forced-fallback ☆ placements at 元老院/王宮 could never
+  // acquire a card, since excludedFromBuildValue used to zero their buildValue outright). Every non-EX
+  // slot at 元老院 (AREA009A, 6 ANY) already occupied by another player -- P1's own ☆ dice have nowhere to
+  // go but a forced fallback onto SLOT1, twice in a row -- each one now still succeeds via BUILD(), same
+  // as a genuinely-empty-slot placement (buildValue=1), evicting whoever was in SLOT1 (first P2's own die,
+  // then this same 2nd ☆ evicts the 1st ☆ in turn) rather than accumulating with it -- still no
+  // multi-turn/multi-die accumulation, per the 2026-08-20 "重ねたかどうかではなく1ターンに2個置いたかで
+  // 合計するようにしてください" rule this test block originally regression-tested.
   const state = freshStateWithShops();
   withWildcardOwner(state);
   player(state, 'P1').resources.BZ = 20;
@@ -2299,14 +2301,14 @@ function withWildcardOwner(state) {
 
   const d1 = giveDie(state, 'P1', 2);
   const r1 = board.placeWildcardDie(state, index, { playerId: 'P1' }, d1.id, board.AREA009_MAP_ID);
-  check('Alice\'s 1st ☆, forced onto the already-full row, is refused -- a forced fallback never builds anything', r1, { success: false, reason: 'NO_BUILDABLE_CARD' });
-  check('...nothing was actually placed (SLOT1 still holds only P2\'s own die)', state.maps[board.AREA009_MAP_ID].slots[0].length, 1);
-  check('...the die itself is still unplaced', d1.placedMapId, null);
+  check('Alice\'s 1st ☆, forced onto the already-full row, still succeeds and can trigger BUILD()', r1.success, true);
+  check('...buildValue is 1, not 0', r1.actionResult.pendingBuild.buildValue, 1);
+  check('...SLOT1 now holds only the 1st ☆ -- P2\'s own die was evicted, not stacked under it', state.maps[board.AREA009_MAP_ID].slots[0].map((o) => o.dieId), [d1.id]);
 
   const d2 = giveDie(state, 'P1', 4);
   const r2 = board.placeWildcardDie(state, index, { playerId: 'P1' }, d2.id, board.AREA009_MAP_ID);
-  check('...trying again with a 2nd die is refused the exact same way, not stuck in some worse state', r2, { success: false, reason: 'NO_BUILDABLE_CARD' });
-  check('...still nothing placed', state.maps[board.AREA009_MAP_ID].slots[0].length, 1);
+  check('...trying again with a 2nd die also succeeds the same way, not stuck in some worse state', r2.success, true);
+  check('...SLOT1 now holds only the 2nd ☆ -- the 1st ☆ was itself evicted in turn', state.maps[board.AREA009_MAP_ID].slots[0].map((o) => o.dieId), [d2.id]);
 }
 {
   // A ☆ die can never target another player's EX slot, even as a forced fallback -- it forces its way

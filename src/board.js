@@ -966,14 +966,18 @@ function previewPlaceDiceGroup(state, index, context, dieIds, mapId) {
  * (see evictSlotOccupants' own doc) -- the evicted die is unaffected otherwise (still returns/discards
  * normally at round end, still keeps its own turn-order standing via map.discardedTurnOrderEntries).
  *
- * The forced-fallback occupant is flagged excludedFromBuildValue, so its own placement never contributes
- * anything toward triggering a build (0, not 1-or-6) -- landing there was forced, not chosen. This
- * matters less than it once did (2026-08-20, per user request: "重ねたかどうかではなく1ターンに2個置い
- * たかで合計するようにしてください") now that NO solo ☆ placement ever combines with whatever else is
- * sitting in the slot regardless of excludedFromBuildValue -- a genuine simultaneous placeDiceGroup of
- * 2+ dice is now the only way any dice ever combine into one buildValue, and board.placeDiceGroup refuses
- * that outright for a wildcard-owning player anyway (see its own doc) -- so a ☆-owning player's solo
- * placements, forced-fallback or not, only ever count their own single value.
+ * The forced-fallback occupant is still flagged excludedFromBuildValue (used for countsForTurnOrder and
+ * to trigger evictSlotOccupants), but as of 2026-08-23, per user report, this no longer zeroes its own
+ * buildValue -- it counts its normal category value (1 for A/B/C, 6 for monument) exactly like a landing
+ * on an empty slot would, matching how a normal die placed via GRANT_PLACE_ANYWHERE onto an occupied slot
+ * (placeDice's own bypass branch) always contributes its own real die.value there too, never 0. Zeroing it
+ * was originally meant to prevent the same "1 die's worth of investment reaching a DICE>=7 monument via
+ * stacking" abuse this whole doc's 2026-08-18 CHANGED_DIE_SELF_STACK_BLOCKED_MAPS section describes, but
+ * that abuse is fully closed already by the 2026-08-20 "a solo placement is only ever this one die THIS
+ * turn, so it can never combine with whatever else is sitting in the slot" rule below -- so the extra
+ * zeroing was leftover redundancy that only had the effect of making a forced-fallback ☆ placement (a
+ * common, unavoidable outcome once 元老院/王宮 fill up) never able to trigger BUILD() at all, which is not
+ * what forcing the placement was ever meant to additionally punish.
  *
  * ☆ dice ignore VALUE_MISMATCH/SLOT_NOT_PREFERRED/DUPLICATE_VALUE_IN_AREA entirely, and are exempt from
  * BLOCK_COLOR_DIE_REUSE (憤怒/CON005B's same-AREA restriction, confirmed with the user: "憤怒の効果を
@@ -1010,13 +1014,14 @@ function placeWildcardDie(state, index, context, dieId, mapId) {
   }
   const targetOccupants = map.slots[slotIndex];
 
-  // This solo ☆ placement's own buildValue -- category-dependent (1 for A/B/C, 6 for monument), 0 when
-  // excludedFromBuildValue (a forced fallback onto an already-full row never gets to trigger a build on
-  // its own). No addition from targetOccupants (2026-08-20, per user request: "重ねたかどうかではなく1
-  // ターンに2個置いたかで合計するようにしてください") -- a solo placement, by definition, is only ever
-  // this one die THIS turn, so it can never combine with whatever else is sitting in the slot.
-  const abcBuildValue = excludedFromBuildValue ? 0 : 1;
-  const monumentBuildValue = excludedFromBuildValue ? 0 : 6;
+  // This solo ☆ placement's own buildValue -- category-dependent (1 for A/B/C, 6 for monument), the same
+  // whether or not this landed via the forced-fallback eviction path (2026-08-23, see this function's own
+  // doc on excludedFromBuildValue -- no longer zeroed on eviction). No addition from targetOccupants
+  // (2026-08-20, per user request: "重ねたかどうかではなく1ターンに2個置いたかで合計するようにしてくだ
+  // さい") -- a solo placement, by definition, is only ever this one die THIS turn, so it can never
+  // combine with whatever else is sitting in the slot.
+  const abcBuildValue = 1;
+  const monumentBuildValue = 6;
 
   const actionContext = context;
 
