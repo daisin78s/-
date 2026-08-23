@@ -477,7 +477,8 @@
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
-      "AUTO": ""
+      "AUTO": "",
+      "INST": "自分のダイス目１個を1か2に変える\nこのターンそれはどのAREAにも置ける"
     },
     {
       "ID": "B002A",
@@ -492,7 +493,8 @@
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
-      "AUTO": ""
+      "AUTO": "",
+      "INST": "自分のダイス目１個を5か6に変える\nこのターンそれはどのAREAにも置ける"
     },
     {
       "ID": "B003A",
@@ -507,7 +509,8 @@
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
-      "AUTO": ""
+      "AUTO": "",
+      "INST": "自分のダイス目１個を+1か-1する\nこのターンそれはどのAREAにも置ける"
     },
     {
       "ID": "B004A",
@@ -522,7 +525,8 @@
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
-      "AUTO": ""
+      "AUTO": "",
+      "INST": "即時ｗDを2個得る"
     },
     {
       "ID": "B005A",
@@ -537,7 +541,8 @@
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
-      "AUTO": "M"
+      "AUTO": "M",
+      "INST": "⤵1Kを払う　カード一枚を獲得する\nダイス目は1\n通常通り資源は必要"
     },
     {
       "ID": "B006A",
@@ -552,7 +557,8 @@
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
-      "AUTO": "M"
+      "AUTO": "M",
+      "INST": "⤵1Kを払う　カード一枚を獲得する\nダイス目は6\n通常通り資源は必要"
     },
     {
       "ID": "B007A",
@@ -567,7 +573,8 @@
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
-      "AUTO": "M"
+      "AUTO": "M",
+      "INST": "⤵1Kを払う　LVアップする\n通常通り資源は必要"
     },
     {
       "ID": "B008A",
@@ -582,7 +589,8 @@
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
-      "AUTO": ""
+      "AUTO": "",
+      "INST": "表面能力なし\n裏面　最多エンブレム　×　VP"
     },
     {
       "ID": "B001B",
@@ -597,7 +605,8 @@
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
-      "AUTO": ""
+      "AUTO": "",
+      "INST": "即時ｗDを１個得る\n自分のダイス目１個を1か2に変える\nこのターンそれはどのAREAにも置ける"
     },
     {
       "ID": "B002B",
@@ -612,7 +621,8 @@
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
-      "AUTO": ""
+      "AUTO": "",
+      "INST": "即時ｗDを１個得る\n自分のダイス目１個を5か6に変える\nこのターンそれはどのAREAにも置ける"
     },
     {
       "ID": "B003B",
@@ -627,7 +637,8 @@
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
-      "AUTO": ""
+      "AUTO": "",
+      "INST": "即時ｗDを１個得る\n自分のダイス目１個を+1か-1する\nこのターンそれはどのAREAにも置ける"
     },
     {
       "ID": "B004B",
@@ -642,7 +653,8 @@
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
-      "AUTO": ""
+      "AUTO": "",
+      "INST": "即時ｗDを１個得る"
     },
     {
       "ID": "B005B",
@@ -657,7 +669,8 @@
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
-      "AUTO": "M"
+      "AUTO": "M",
+      "INST": "⤵カード一枚を獲得する\nダイス目は1\n獲得に必要な１資源軽減する"
     },
     {
       "ID": "B006B",
@@ -672,7 +685,8 @@
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
-      "AUTO": "M"
+      "AUTO": "M",
+      "INST": "⤵カード一枚を獲得する\nダイス目は12\n通常通り資源は必要"
     },
     {
       "ID": "B007B",
@@ -687,7 +701,8 @@
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
-      "AUTO": "M"
+      "AUTO": "M",
+      "INST": "⤵LVアップする\n獲得に必要な１資源軽減する"
     },
     {
       "ID": "B008B",
@@ -702,7 +717,8 @@
       "PASSIVE": "VP_MODIFIER(MAX_EMBLEM_COUNT)",
       "TURNEND": "",
       "START_ORDER": "",
-      "AUTO": ""
+      "AUTO": "",
+      "INST": "最多エンブレム　×　VP"
     }
   ],
   "C": [
