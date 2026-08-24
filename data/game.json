@@ -206,7 +206,7 @@
     },
     {
       "ID": "M401",
-      "NAME": "",
+      "NAME": "晩餐会",
       "DICE": ">=1",
       "COST": "15K",
       "EMBLEM_A": "",
@@ -223,13 +223,13 @@
     },
     {
       "ID": "M402",
-      "NAME": "",
-      "DICE": ">=6",
-      "COST": "4A,4B,4C",
+      "NAME": "王都建設",
+      "DICE": ">=5",
+      "COST": "5A,5B,5C",
       "EMBLEM_A": 3,
       "EMBLEM_B": 3,
       "EMBLEM_C": 3,
-      "VP": 8,
+      "VP": 10,
       "ONCE": "",
       "TAP": "",
       "PASSIVE": "",
@@ -240,13 +240,13 @@
     },
     {
       "ID": "M403",
-      "NAME": "",
+      "NAME": "天空の塔",
       "DICE": ">=13",
       "COST": "1A1B1C",
       "EMBLEM_A": 1,
       "EMBLEM_B": 1,
       "EMBLEM_C": 1,
-      "VP": 8,
+      "VP": 7,
       "ONCE": "",
       "TAP": "",
       "PASSIVE": "",
@@ -588,12 +588,12 @@
       "VP": 0,
       "LEVEL": 1,
       "ONCE": "ADD(wD)",
-      "TAP": "CHANGE_DIE_VALUE(SELF±1);GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN)",
+      "TAP": "CHANGE_DIE_VALUE(SELF+2)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "自分のダイス目１個を+1か-1する\nこのターンそれはどのAREAにも置ける"
+      "INST": "自分のダイス目１個を+2する"
     },
     {
       "ID": "B004A",
@@ -629,7 +629,7 @@
     },
     {
       "ID": "B006A",
-      "NAME": "○○の兆し",
+      "NAME": "移ろいの兆し",
       "DICE": "",
       "COST": "2B,1C",
       "EMBLEM_B": 1,
@@ -732,12 +732,12 @@
       "VP": 1,
       "LEVEL": 2,
       "ONCE": "ADD(wD)",
-      "TAP": "CHANGE_DIE_VALUE(SELF±1)",
+      "TAP": "CHANGE_DIE_VALUE(SELF+3)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "即時ｗDを１個得る\n自分のダイス目１個を+1か-1する"
+      "INST": "即時ｗDを１個得る\n自分のダイス目１個を+3する"
     },
     {
       "ID": "B004B",
@@ -773,7 +773,7 @@
     },
     {
       "ID": "B006B",
-      "NAME": "○○の兆しLV2",
+      "NAME": "移ろいの兆しLV2",
       "DICE": "",
       "COST": "2B,1C",
       "EMBLEM_B": 1,
@@ -1857,12 +1857,12 @@
       "EMBLEM_C": "",
       "VP": "",
       "ONCE": "",
-      "TAP": "ON(GET(K),CHANGE(K,Z))",
+      "TAP": "ON(GET(K),CHANGE(K,A))",
       "PASSIVE": "",
       "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "食料を得たときTAPすると\nそのうちの１個をZに変える\n初期資源含む\n毎ターンアンタップする"
+      "INST": "食料を得たときTAPすると\nそのうちの１個をAに変える\n初期資源含む\n毎ターンアンタップする"
     },
     {
       "ID": "JOB006",
@@ -1891,12 +1891,12 @@
       "EMBLEM_C": "",
       "VP": "",
       "ONCE": "",
-      "TAP": "ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+2);BLOCK_BUILD(A,THIS_TURN);BLOCK_BUILD(B,THIS_TURN);BLOCK_BUILD(C,THIS_TURN)",
+      "TAP": "ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+1);BLOCK_BUILD(A,THIS_TURN);BLOCK_BUILD(B,THIS_TURN);BLOCK_BUILD(C,THIS_TURN)",
       "PASSIVE": "",
       "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "TAPした時、１資源軽減を得る\nこのターン自分のダイス目１個を+2する\nこのターンA,B,Cカードを建築できない"
+      "INST": "TAPした時、１資源軽減を得る\nこのターン自分のダイス目１個を+1する\nこのターンA,B,Cカードを建築できない"
     },
     {
       "ID": "JOB008",

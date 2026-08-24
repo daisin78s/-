@@ -107,11 +107,35 @@ function lowerSetDieValue(node) {
   return { type: 'SET_DIE_VALUE', scope: identLikeName(target), choices: target.choices || [] };
 }
 
+/** Extracts {scope, delta} from a bare 'SELF+N'/'SELF-N' argument node -- dsl-parser has no direct
+ * "IDENT+NUMBER" suffix grammar (only 'IDENT2|3' pipe-lists and 'IDENT±N', see ident_suffix in this
+ * file's own header doc), so this instead parses via the general arith_tail rule into a
+ * BinaryOp(op:'+'|'-', left:Ident, right:Number), same as e.g. "COUNT(天)-1" elsewhere. Shared by
+ * lowerChangeDieValue's own bare-delta branch (2026-08-25, per user edit to 運命の導き: dropped its old
+ * ±1 choice for a fixed +2) and lowerMonumentChangeDieValue (2026-08-24, JOB007/宮廷人's TAP). */
+function identPlusOffset(target, fnName) {
+  if (target.type !== 'BinaryOp' || target.left.type !== 'Ident') {
+    throw new CommandBuildError(`${fnName} expects SELF±N or SELF+N/SELF-N, got a ${target.type}`);
+  }
+  const magnitude = numberValue(target.right);
+  return { scope: identLikeName(target.left), delta: target.op === '-' ? -magnitude : magnitude };
+}
+
 function lowerChangeDieValue(node) {
   const target = node.args[0];
   // '±N' means the player picks one of +N or -N, same "player picks one of these" shape as
   // SET_DIE_VALUE's pipe-separated choices -- reuse the 'choices' field for that reason.
-  return { type: 'CHANGE_DIE_VALUE', scope: identLikeName(target), choices: [target.plusMinus, -target.plusMinus] };
+  if (target.plusMinus !== undefined) {
+    return { type: 'CHANGE_DIE_VALUE', scope: identLikeName(target), choices: [target.plusMinus, -target.plusMinus] };
+  }
+  // Bare 'SELF+N'/'SELF-N' (2026-08-25) -- a single FIXED delta, no player choice of sign/magnitude at
+  // all (unlike '±N', where it's genuinely a 2-way pick). Reuses the same 'choices' shape as the ±N case
+  // but with exactly one element, so every existing consumer (executor.runChangeDieValue/
+  // runChangeCardBuildValue's own cmd.choices.includes check, and main.js's value-picker UI, which
+  // already renders one button per choice) keeps working unchanged -- a "choice" of exactly one option
+  // is still a valid choice, just with nothing else to pick alongside it.
+  const { scope, delta } = identPlusOffset(target, 'CHANGE_DIE_VALUE');
+  return { type: 'CHANGE_DIE_VALUE', scope, choices: [delta] };
 }
 
 /** MONUMENT_CHANGE_DIE_VALUE(SELF+2) (2026-08-24, JOB007/宮廷人's revised TAP, replacing
@@ -119,21 +143,11 @@ function lowerChangeDieValue(node) {
  * CHANGE_DIE_VALUE (executor.runMonumentChangeDieValue reuses runChangeDieValue's own no-wrap math and
  * markDieValueChanged/applyTurnEnd revert-if-unplaced behavior, confirmed with the user), but the delta
  * is a single FIXED signed number, not a player-chosen ±N pair -- so unlike CHANGE_DIE_VALUE's `choices`
- * array, this only ever needs context.chosenDieId, never a chosenDelta choice. dsl-parser has no direct
- * "IDENT+NUMBER" suffix grammar (only 'IDENT2|3' pipe-lists and 'IDENT±N') -- "SELF+2" instead parses via
- * the general arith_tail rule into a BinaryOp(op:'+', left:Ident('SELF'), right:Number(2)), same as e.g.
- * "COUNT(天)-1" elsewhere, so this reads that shape directly rather than an Ident's own .plusMinus/.choices. */
+ * array, this only ever needs context.chosenDieId, never a chosenDelta choice. See identPlusOffset's own
+ * doc for how the bare "SELF+N" argument shape is parsed. */
 function lowerMonumentChangeDieValue(node) {
-  const target = node.args[0];
-  if (target.type !== 'BinaryOp' || target.left.type !== 'Ident') {
-    throw new CommandBuildError(`MONUMENT_CHANGE_DIE_VALUE expects SELF+N or SELF-N, got a ${target.type}`);
-  }
-  const magnitude = numberValue(target.right);
-  return {
-    type: 'MONUMENT_CHANGE_DIE_VALUE',
-    scope: identLikeName(target.left),
-    delta: target.op === '-' ? -magnitude : magnitude,
-  };
+  const { scope, delta } = identPlusOffset(node.args[0], 'MONUMENT_CHANGE_DIE_VALUE');
+  return { type: 'MONUMENT_CHANGE_DIE_VALUE', scope, delta };
 }
 
 function lowerCall(node) {

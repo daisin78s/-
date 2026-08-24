@@ -225,8 +225,8 @@ function giveDie(state, playerId, value) {
 }
 
 // ---------------------------------------------------------------------------
-// TAP_REACTION: JOB005.TAP=ON(GET(K),CHANGE(K,Z)), forced to manual mode so GET(K) queues a choice
-// instead of auto-resolving.
+// TAP_REACTION: JOB005.TAP=ON(GET(K),CHANGE(K,A)), forced to manual mode so GET(K) queues a choice
+// instead of auto-resolving. (2026-08-25 data edit: was CHANGE(K,Z).)
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
@@ -247,7 +247,7 @@ function giveDie(state, playerId, value) {
 
   const useResult = applyInPlace(state, index, { type: 'TAP_REACTION', playerId: 'P1', choiceId: choice.id, use: true });
   check('Using the TAP_REACTION succeeds', useResult.success, true);
-  check('CHANGE(K,Z) applied: K spent, Z gained', { K: player(state, 'P1').resources.K, Z: player(state, 'P1').resources.Z }, { K: 0, Z: 1 });
+  check('CHANGE(K,A) applied: K spent, A gained', { K: player(state, 'P1').resources.K, A: player(state, 'P1').resources.A }, { K: 0, A: 1 });
   check('The pendingChoice is consumed', state.pendingChoices.some((c) => c.id === choice.id), false);
 }
 

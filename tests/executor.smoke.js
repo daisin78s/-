@@ -184,7 +184,7 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 }
 
 // ---------------------------------------------------------------------------
-// 4. JOB005: TAP=ON(GET(K),CHANGE(K,Z)), TURNEND=UNTAP()
+// 4. JOB005: TAP=ON(GET(K),CHANGE(K,A)), TURNEND=UNTAP() (2026-08-25 data edit: was CHANGE(K,Z))
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
@@ -196,8 +196,8 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
   check('JOB005 offers a reaction on GET(K) while untapped', availableReactions.length, 1);
 
   const result = executor.resolveTapReaction(state, index, { playerId: 'P1' }, physicalId, availableReactions[0].effect);
-  check('Tapping JOB005 runs CHANGE(K,Z): pays 1K', player.resources.K, 4);
-  check('Tapping JOB005 runs CHANGE(K,Z): gains 1Z', player.resources.Z, 1);
+  check('Tapping JOB005 runs CHANGE(K,A): pays 1K', player.resources.K, 4);
+  check('Tapping JOB005 runs CHANGE(K,A): gains 1A', player.resources.A, 1);
   check('Tapping JOB005 taps the card', state.cards[physicalId].tapped, true);
 
   const secondTry = executor.emit(state, index, 'P1', 'GET', 'K', { playerId: 'P1' });
@@ -352,12 +352,12 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
-  const jobPhysicalId = giveCard(state, 'JOB005', 'P1'); // TAP=ON(GET(K),CHANGE(K,Z)), AUTO="A"
+  const jobPhysicalId = giveCard(state, 'JOB005', 'P1'); // TAP=ON(GET(K),CHANGE(K,A)), AUTO="A"
   const player = getPlayerRef(state, 'P1');
 
   // AREA001A.ACTION = ADD(3K) -- simulate resolving that AREA action directly via runCommand.
   executor.runCommand(state, index, { playerId: 'P1' }, { type: 'ADD', items: [{ resource: 'K', count: { kind: 'literal', value: 3 } }] });
-  check('Auto-mode JOB005 reacts to the ADD(3K)-triggered GET(K) without being told to', player.resources.Z, 1);
+  check('Auto-mode JOB005 reacts to the ADD(3K)-triggered GET(K) without being told to', player.resources.A, 1);
   check('...paying 1K for it (3 gained - 1 paid = 2)', player.resources.K, 2);
   check('...and taps itself in the process', state.cards[jobPhysicalId].tapped, true);
   check('No leftover pendingChoice was created for an auto-resolved reaction', state.pendingChoices.length, 0);
@@ -369,7 +369,7 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
   const player = getPlayerRef(state, 'P1');
 
   executor.runCommand(state, index, { playerId: 'P1' }, { type: 'ADD', items: [{ resource: 'K', count: { kind: 'literal', value: 3 } }] });
-  check('Manual-mode JOB005 does NOT auto-fire', player.resources.Z, 0);
+  check('Manual-mode JOB005 does NOT auto-fire', player.resources.A, 0);
   check('...and instead queues a TAP_REACTION_AVAILABLE pendingChoice', state.pendingChoices.length, 1);
   check('...for the right card/event', {
     kind: state.pendingChoices[0].kind,
@@ -434,39 +434,46 @@ console.log(`\n${passCount} passed, ${failCount} failed`);
   // Regression (2026-08-24, per user request: "ダイス目変更循環しない...1-1→0 6+1→7 6+2→8" and "すべての
   // ダイス目変更はターン終了時に変えた目が元に戻る") -- CHANGE_DIE_VALUE no longer wraps modulo 6, and an
   // unplaced die's value reverts at that player's own TURNEND, same as SET_DIE_VALUE above.
+  //
+  // B003A/運命の導き's own TAP dropped its player-chosen ±1 pair for a single FIXED +2 (2026-08-25 data
+  // edit, per user: "-1はなくしました 実装予定ありません" -- no ± choice is planned any more), so this
+  // now exercises B003A's real, current shape (chosenDelta must still equal the one fixed choice,
+  // cmd.choices=[2]) rather than a synthetic ±1. The "1-1->0" no-wrap direction is exercised separately
+  // below via a directly-constructed CHANGE_DIE_VALUE command instead, since no real card demonstrates a
+  // negative delta any more -- see command-builder.lowerChangeDieValue's own doc on the bare-delta
+  // 'choices' shape.
   const state = freshState();
-  giveCard(state, 'B003A', 'P1'); // TAP=CHANGE_DIE_VALUE(SELF±1);GRANT_PLACE_ANYWHERE(...)
+  giveCard(state, 'B003A', 'P1'); // TAP=CHANGE_DIE_VALUE(SELF+2)
   const player = getPlayerRef(state, 'P1');
   const die = createDie('d1', 'COLOR');
   die.value = 6;
   player.dice.push(die);
 
   const row = getCardRow(index, 'B003A');
-  const result = executor.runProgram(state, index, { playerId: 'P1', chosenDieId: 'd1', chosenDelta: 1 }, row.TAP);
-  check('CHANGE_DIE_VALUE(SELF±1) with +1 succeeds', result.success, true);
-  check('...6+1 -> 7, no longer wraps to 1', die.value, 7);
+  const result = executor.runProgram(state, index, { playerId: 'P1', chosenDieId: 'd1', chosenDelta: 2 }, row.TAP);
+  check('CHANGE_DIE_VALUE(SELF+2) with the fixed chosenDelta=2 succeeds', result.success, true);
+  check('...6+2 -> 8, no wrap', die.value, 8);
 
-  const badDelta = executor.runProgram(state, index, { playerId: 'P1', chosenDieId: 'd1', chosenDelta: 2 }, row.TAP);
-  check('CHANGE_DIE_VALUE(SELF±1) rejects a delta outside {+1,-1}', badDelta.reason, 'INVALID_CHOICE');
+  const badDelta = executor.runProgram(state, index, { playerId: 'P1', chosenDieId: 'd1', chosenDelta: 1 }, row.TAP);
+  check('CHANGE_DIE_VALUE(SELF+2) rejects any delta other than the one fixed choice', badDelta.reason, 'INVALID_CHOICE');
 
   // Re-fetched by id, not the pre-call `die`/`player` references -- a failed runProgram call rolls back
   // by replacing state.players wholesale (same trap documented elsewhere in this codebase), so both stale
   // references above would silently miss every mutation from here on.
   executor.applyTurnEnd(state, index, 'P1');
-  check('The still-unplaced die reverts from 7 back to its original 6 at TURNEND', getDieRef(state, 'P1', 'd1').value, 6);
+  check('The still-unplaced die reverts from 8 back to its original 6 at TURNEND', getDieRef(state, 'P1', 'd1').value, 6);
 }
 {
-  // 1-1 -> 0 (the other no-wrap direction).
+  // 1-1 -> 0 (the other no-wrap direction) -- directly-constructed command, no real card carries a
+  // negative delta any more (see the block above's own doc).
   const state = freshState();
-  giveCard(state, 'B003A', 'P1');
   const player = getPlayerRef(state, 'P1');
   const die = createDie('d1', 'COLOR');
   die.value = 1;
   player.dice.push(die);
 
-  const row = getCardRow(index, 'B003A');
-  const result = executor.runProgram(state, index, { playerId: 'P1', chosenDieId: 'd1', chosenDelta: -1 }, row.TAP);
-  check('CHANGE_DIE_VALUE(SELF±1) with -1 succeeds', result.success, true);
+  const result = executor.runCommand(state, index, { playerId: 'P1', chosenDieId: 'd1', chosenDelta: -1 }, { type: 'CHANGE_DIE_VALUE', scope: 'SELF', choices: [-1] });
+  check('CHANGE_DIE_VALUE with a -1 delta succeeds', result.success, true);
   check('...1-1 -> 0, no longer wraps to 6', die.value, 0);
 }
 {
@@ -475,19 +482,19 @@ console.log(`\n${passCount} passed, ${failCount} failed`);
   // so nothing downstream is affected either way, but reverting a placed die's own live value would be
   // confusing to display).
   const state = freshState();
-  giveCard(state, 'B003A', 'P1');
+  giveCard(state, 'B003A', 'P1'); // TAP=CHANGE_DIE_VALUE(SELF+2)
   const player = getPlayerRef(state, 'P1');
   const die = createDie('d1', 'COLOR');
   die.value = 6;
   player.dice.push(die);
 
   const row = getCardRow(index, 'B003A');
-  executor.runProgram(state, index, { playerId: 'P1', chosenDieId: 'd1', chosenDelta: 1 }, row.TAP);
-  check('Die is now 7 after the change', die.value, 7);
+  executor.runProgram(state, index, { playerId: 'P1', chosenDieId: 'd1', chosenDelta: 2 }, row.TAP);
+  check('Die is now 8 after the change', die.value, 8);
   die.placedMapId = 'MAP001'; // simulate the die having actually been placed this same turn
 
   executor.applyTurnEnd(state, index, 'P1');
-  check('A die placed this turn does NOT revert at TURNEND -- stays 7', die.value, 7);
+  check('A die placed this turn does NOT revert at TURNEND -- stays 8', die.value, 8);
 }
 
 // ---------------------------------------------------------------------------
@@ -508,22 +515,22 @@ console.log(`\n${passCount} passed, ${failCount} failed`);
 {
   const state = freshState();
   const target = giveCard(state, 'B004A', 'P1'); // own fixed buildValue=1
-  const row = getCardRow(index, 'B003A'); // TAP=CHANGE_DIE_VALUE(SELF±1);GRANT_PLACE_ANYWHERE(...)
-  const r1 = executor.runProgram(state, index, { playerId: 'P1', chosenCardPhysicalId: target, chosenDelta: 1 }, row.TAP);
-  check('CHANGE_DIE_VALUE targeting a card succeeds (base 1, +1 -> 2)', r1.success, true);
-  check('...buildValueOverride is 2', state.cards[target].buildValueOverride, 2);
+  const row = getCardRow(index, 'B003A'); // TAP=CHANGE_DIE_VALUE(SELF+2), fixed delta (2026-08-25 data edit)
+  const r1 = executor.runProgram(state, index, { playerId: 'P1', chosenCardPhysicalId: target, chosenDelta: 2 }, row.TAP);
+  check('CHANGE_DIE_VALUE targeting a card succeeds (base 1, +2 -> 3)', r1.success, true);
+  check('...buildValueOverride is 3', state.cards[target].buildValueOverride, 3);
 
-  const r2 = executor.runProgram(state, index, { playerId: 'P1', chosenCardPhysicalId: target, chosenDelta: 1 }, row.TAP);
-  check('A 2nd change chains off the CURRENT override, not the original base value (2+1=3, not 1+1=2)', r2.success, true);
-  check('...buildValueOverride is now 3', state.cards[target].buildValueOverride, 3);
+  const r2 = executor.runProgram(state, index, { playerId: 'P1', chosenCardPhysicalId: target, chosenDelta: 2 }, row.TAP);
+  check('A 2nd change chains off the CURRENT override, not the original base value (3+2=5, not 1+2=3)', r2.success, true);
+  check('...buildValueOverride is now 5', state.cards[target].buildValueOverride, 5);
 }
 {
   const state = freshState();
   const target = giveCard(state, 'B004A', 'P1');
-  const row = getCardRow(index, 'JOB007'); // TAP=ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+2);BLOCK_BUILD(...)
+  const row = getCardRow(index, 'JOB007'); // TAP=ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+1);BLOCK_BUILD(...) (2026-08-25: was +2)
   const result = executor.runProgram(state, index, { playerId: 'P1', chosenCardPhysicalId: target }, row.TAP);
   check('MONUMENT_CHANGE_DIE_VALUE targeting a card succeeds with no chosenValue/chosenDelta needed (delta is fixed)', result.success, true);
-  check('...buildValueOverride is 1+2=3', state.cards[target].buildValueOverride, 3);
+  check('...buildValueOverride is 1+1=2', state.cards[target].buildValueOverride, 2);
 }
 {
   // Ineligible targets: not owned by this player, or owned but not a "fixed BUILD value" card at all
@@ -532,11 +539,11 @@ console.log(`\n${passCount} passed, ${failCount} failed`);
   state.players.push(createPlayer('P2', 'Bob'));
   const notOwned = giveCard(state, 'B004A', 'P2'); // belongs to P2, not P1
   const row = getCardRow(index, 'B003A');
-  const r1 = executor.runProgram(state, index, { playerId: 'P1', chosenCardPhysicalId: notOwned, chosenDelta: 1 }, row.TAP);
+  const r1 = executor.runProgram(state, index, { playerId: 'P1', chosenCardPhysicalId: notOwned, chosenDelta: 2 }, row.TAP);
   check('Targeting a card the player does not own fails', r1, { success: false, reason: 'INVALID_BUILD_VALUE_CARD' });
 
   const notEligible = giveCard(state, 'C001A', 'P1'); // TAP=CHANGE(K,A,3), no BUILD command at all
-  const r2 = executor.runProgram(state, index, { playerId: 'P1', chosenCardPhysicalId: notEligible, chosenDelta: 1 }, row.TAP);
+  const r2 = executor.runProgram(state, index, { playerId: 'P1', chosenCardPhysicalId: notEligible, chosenDelta: 2 }, row.TAP);
   check('Targeting an owned card with no fixed BUILD value fails', r2, { success: false, reason: 'INVALID_BUILD_VALUE_CARD' });
 }
 {
@@ -908,8 +915,9 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 {
   // 2026-08-20: JOB004/策士's own TAP dropped its BLOCK_BUILD(M,THIS_TURN) clause (per user edit), so
   // this real-data vehicle moved to JOB007/宮廷人, whose TAP still carries BLOCK_BUILD (now A/B/C, not M).
-  // The middle line is now MONUMENT_CHANGE_DIE_VALUE(SELF+2) (2026-08-24 data edit, replacing
-  // MONUMENT_DICE_DISCOUNT(2,THIS_TURN)), which needs a chosenDieId same as CHANGE_DIE_VALUE.
+  // The middle line is now MONUMENT_CHANGE_DIE_VALUE(SELF+1) (2026-08-24 data edit, replacing
+  // MONUMENT_DICE_DISCOUNT(2,THIS_TURN); lowered from +2 to +1 on 2026-08-25), which needs a chosenDieId
+  // same as CHANGE_DIE_VALUE.
   const state = freshState();
   const row = getCardRow(index, 'JOB007');
   const player = getPlayerRef(state, 'P1');
@@ -917,8 +925,8 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   die.value = 4;
   player.dice.push(die);
   const result = executor.runProgram(state, index, { playerId: 'P1', chosenDieId: die.id }, row.TAP);
-  check('JOB007\'s TAP (ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+2);BLOCK_BUILD(A/B/C,THIS_TURN)) succeeds and grants BZ', { success: result.success, BZ: player.resources.BZ }, { success: true, BZ: 1 });
-  check('...and changes the chosen die by +2 (4 -> 6)', die.value, 6);
+  check('JOB007\'s TAP (ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+1);BLOCK_BUILD(A/B/C,THIS_TURN)) succeeds and grants BZ', { success: result.success, BZ: player.resources.BZ }, { success: true, BZ: 1 });
+  check('...and changes the chosen die by +1 (4 -> 5)', die.value, 5);
   check('...and blocks A,B,C for this player this turn', player.blockedBuildCategoriesThisTurn, ['A', 'B', 'C']);
 }
 
@@ -953,12 +961,15 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 }
 {
   const state = freshState();
-  giveCard(state, 'JOB005', 'P1'); // TAP=ON(GET(K),CHANGE(K,Z)), AUTO="A"
+  const jobPhysicalId = giveCard(state, 'JOB005', 'P1'); // TAP=ON(GET(K),CHANGE(K,A)), AUTO="A"
   const player = getPlayerRef(state, 'P1');
   player.resources.A = 1;
   const result = executor.tryFreeAction(state, index, 'P1', 'A_K');
   check('The A->K free action still succeeds', result.success, true);
-  check('...but does NOT trigger JOB005\'s GET(K) reaction (free actions stay silent, unlike CHANGE)', player.resources.Z, 0);
+  // Checked via .tapped rather than a resource count -- JOB005's own reaction now also converts A->K
+  // (2026-08-25 data edit), the same resource pair this free action itself converts, so a resource-count
+  // check alone couldn't cleanly tell "the reaction fired" apart from "the free action's own effect".
+  check('...but does NOT trigger JOB005\'s GET(K) reaction (free actions stay silent, unlike CHANGE) -- the card stays untapped', state.cards[jobPhysicalId].tapped, false);
 }
 
 // ---------------------------------------------------------------------------
@@ -971,11 +982,11 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   state.maps['MAP001'] = createMapState('MAP001', 'AREA001B');
   state.maps['MAP001'].feeOwnerId = 'P1';
   state.maps['MAP001'].accumulatedFee = 3;
-  giveCard(state, 'JOB005', 'P1'); // TAP=ON(GET(K),CHANGE(K,Z)), AUTO="A"
+  giveCard(state, 'JOB005', 'P1'); // TAP=ON(GET(K),CHANGE(K,A)), AUTO="A"
   const player = getPlayerRef(state, 'P1');
   const result = executor.collectUsageFee(state, index, { playerId: 'P1' }, 'MAP001');
   check('Fee collection still succeeds', result, { success: true, amount: 3 });
-  check('...and JOB005 auto-reacts to the fee-collection-triggered GET(K), converting 1K into 1Z', player.resources.Z, 1);
+  check('...and JOB005 auto-reacts to the fee-collection-triggered GET(K), converting 1K into 1A', player.resources.A, 1);
   check('...leaving the other 2K from the fee alone', player.resources.K, 2);
 }
 

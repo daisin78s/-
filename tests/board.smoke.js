@@ -815,7 +815,7 @@ function giveDie(state, playerId, value) {
   check('...1 of the 2 Z was spent covering the missing A, 1 left over', p1.resources.Z, 1);
 }
 {
-  // JOB007.TAP=ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+2);BLOCK_BUILD(A,THIS_TURN);BLOCK_BUILD(B,
+  // JOB007.TAP=ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+1);BLOCK_BUILD(A,THIS_TURN);BLOCK_BUILD(B,
   // THIS_TURN);BLOCK_BUILD(C,THIS_TURN) -- 2026-08-07, replacing the old ON(BUILD(U,M),ADD(BZ)) reaction
   // (per user feedback: reacting *after* an UPGRADE/Monument build meant the granted BZ arrived too late
   // to help pay for the very build that triggered it, and evaporated unspent at TURNEND since a turn
@@ -825,9 +825,10 @@ function giveDie(state, playerId, value) {
   // builds this turn keeps the discount scoped to U/M as originally intended (and, being a bare TAP
   // rather than an ON(...) reaction, it has no auto/manual concept at all -- see main.js's
   // reactiveTapKind/bareTapKind split -- so this also settles the user's request to make it manual-only).
-  // The middle MONUMENT_CHANGE_DIE_VALUE(SELF+2) line (2026-08-24 data edit, replacing the earlier
-  // MONUMENT_DICE_DISCOUNT(2,THIS_TURN)) reuses CHANGE_DIE_VALUE's own mechanic with a fixed +2 delta --
-  // see command-builder.lowerMonumentChangeDieValue/executor.runMonumentChangeDieValue's own docs.
+  // The middle MONUMENT_CHANGE_DIE_VALUE(SELF+1) line (2026-08-24 data edit, replacing the earlier
+  // MONUMENT_DICE_DISCOUNT(2,THIS_TURN); lowered from +2 to +1 on 2026-08-25) reuses CHANGE_DIE_VALUE's
+  // own mechanic with a fixed delta -- see command-builder.lowerMonumentChangeDieValue/executor.
+  // runMonumentChangeDieValue's own docs.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   const jobInst = createCardInstance('JOB007');
@@ -839,7 +840,7 @@ function giveDie(state, playerId, value) {
   const result = board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: die.id }, jobInst.physicalId);
   check('JOB007.TAP=ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(...);BLOCK_BUILD(...) succeeds as a direct (non-reactive) TAP', result, { success: true });
   check('...gained 1 BZ for free', p1.resources.BZ, 1);
-  check('...the chosen die is now +2 (5 -> 7, no wrap)', die.value, 7);
+  check('...the chosen die is now +1 (5 -> 6, no wrap)', die.value, 6);
   check('...the card is now tapped', state.cards[jobInst.physicalId].tapped, true);
   check('...A/B/C builds are blocked this turn', p1.blockedBuildCategoriesThisTurn.slice().sort(), ['A', 'B', 'C']);
   check('...A/B/C builds are excluded from candidates this turn', board.getBuildCandidates(state, index, 'P1', ['A', 'B', 'C'], 6).length, 0);
