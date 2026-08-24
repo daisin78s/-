@@ -952,8 +952,8 @@ function giveDie(state, playerId, value) {
 // ---------------------------------------------------------------------------
 // "EX" SLOT (2026-08-04, per user feedback: new AREA SLOT1-6 value gating placement to whoever
 // currently holds map.feeOwnerId). AREA001B (SLOT1=1,SLOT2=ANY,SLOT3=EX) is a plain, non-castle,
-// non-AREA009 EX slot; AREA009B (SLOT1-5=ANY,SLOT6=EX, moved here 2026-08-02 by the user's own data
-// edit -- was SLOT4 before) is used for the AREA009-specific doubles-stacking behavior.
+// non-AREA009 EX slot; AREA009B (SLOT1-3=ANY,SLOT4=EX,SLOT5-6=NONE as of a 2026-08-24 data edit that
+// shrank 元老院 from 6 slots to 4) is used for the AREA009-specific doubles-stacking behavior.
 // ---------------------------------------------------------------------------
 function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   const map = createMapState(mapId, areaId);
@@ -1174,9 +1174,9 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
 {
   const state = freshStateWithShops();
   player(state, 'P1').resources.BZ = 20; // AREA009B's ACTION is also BUILD-first -- see the castle blocks' comment above
-  state.maps['MAP009'] = mapWithArea('MAP009', 'AREA009B', 6, 'P1'); // SLOT1-5=ANY, SLOT6=EX
+  state.maps['MAP009'] = mapWithArea('MAP009', 'AREA009B', 4, 'P1'); // SLOT1-3=ANY, SLOT4=EX (2026-08-24 data edit shrank 元老院 to 4 slots)
   const exDie = giveDie(state, 'P1', 3);
-  const exResult = board.placeDice(state, index, { playerId: 'P1' }, exDie.id, 'MAP009', 5); // SLOT6=EX
+  const exResult = board.placeDice(state, index, { playerId: 'P1' }, exDie.id, 'MAP009', 3); // SLOT4=EX
   check('P1 places a 3 on AREA009B EX', exResult.success, true);
 
   const anyDie = giveDie(state, 'P1', 3); // same value 3, targeting a different (ANY) slot
@@ -1191,18 +1191,18 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   // already occupies the slot.
   const state = freshStateWithShops();
   player(state, 'P1').resources.BZ = 20; // see the earlier castle blocks' comment on the affordability gate
-  state.maps['MAP009'] = mapWithArea('MAP009', 'AREA009B', 6, 'P1');
+  state.maps['MAP009'] = mapWithArea('MAP009', 'AREA009B', 4, 'P1'); // SLOT1-3=ANY, SLOT4=EX
   const die1 = giveDie(state, 'P1', 5);
-  const first = board.placeDice(state, index, { playerId: 'P1' }, die1.id, 'MAP009', 5); // SLOT6=EX
+  const first = board.placeDice(state, index, { playerId: 'P1' }, die1.id, 'MAP009', 3); // SLOT4=EX
   check('First 5 on AREA009B EX succeeds', first.success, true);
   check('...buildValue is just this one die (5)', first.actionResult.pendingBuild.buildValue, 5);
 
   const die2 = giveDie(state, 'P1', 5); // matching value, no GRANT_PLACE_ANYWHERE
-  const blocked = board.placeDice(state, index, { playerId: 'P1' }, die2.id, 'MAP009', 5);
+  const blocked = board.placeDice(state, index, { playerId: 'P1' }, die2.id, 'MAP009', 3);
   check('A second matching-value die without GRANT_PLACE_ANYWHERE is blocked on AREA009B EX too', blocked, { success: false, reason: 'SLOT_OCCUPIED' });
 
   die2.placeAnywhereThisTurn = true;
-  const second = board.placeDice(state, index, { playerId: 'P1' }, die2.id, 'MAP009', 5);
+  const second = board.placeDice(state, index, { playerId: 'P1' }, die2.id, 'MAP009', 3);
   check('...but succeeds with GRANT_PLACE_ANYWHERE', second.success, true);
   check('...buildValue is still just this 2nd die\'s own value (5), NOT summed with the 1st', second.actionResult.pendingBuild.buildValue, 5);
 }
@@ -1217,7 +1217,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   p1.resources.A = 1;
   const slotId = Object.keys(state.shops.NORMAL.slots).find((k) => k === 'SHOP101');
   state.shops.NORMAL.slots[slotId] = 'A001A'; // SHOP101 = dice 1-6, most permissive
-  state.maps['MAP009'] = mapWithArea('MAP009', 'AREA009C', 6, 'P1'); // SLOT1-4=ANY, SLOT5-6=EX
+  state.maps['MAP009'] = mapWithArea('MAP009', 'AREA009C', 4, 'P1'); // SLOT1-3=ANY, SLOT4=EX (2026-08-24: 元老院 shrank to 4 slots)
   const die = giveDie(state, 'P1', 1);
 
   const result = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP009', 0); // SLOT1=ANY
@@ -1675,7 +1675,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   p1.resources.Z = 2;
   const m004Slot = Object.keys(state.shops.M.slots).find((k) => state.shops.M.slots[k] === 'M004') || Object.keys(state.shops.M.slots)[0];
   state.shops.M.slots[m004Slot] = 'M004';
-  state.maps['MAP009'] = mapWithArea('MAP009', 'AREA009C', 6, 'P1'); // SLOT1-4=ANY, SLOT5-6=EX
+  state.maps['MAP009'] = mapWithArea('MAP009', 'AREA009C', 4, 'P1'); // SLOT1-3=ANY, SLOT4=EX (2026-08-24: 元老院 shrank to 4 slots)
   const d1 = giveDie(state, 'P1', 6);
   const d2 = giveDie(state, 'P1', 4);
   const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], 'MAP009');
@@ -2283,19 +2283,20 @@ function withWildcardOwner(state) {
 }
 {
   // Regression (2026-08-23, per user report: forced-fallback ☆ placements at 元老院/王宮 could never
-  // acquire a card, since excludedFromBuildValue used to zero their buildValue outright). Every non-EX
-  // slot at 元老院 (AREA009A, 6 ANY) already occupied by another player -- P1's own ☆ dice have nowhere to
-  // go but a forced fallback onto SLOT1, twice in a row -- each one now still succeeds via BUILD(), same
-  // as a genuinely-empty-slot placement (buildValue=1), evicting whoever was in SLOT1 (first P2's own die,
-  // then this same 2nd ☆ evicts the 1st ☆ in turn) rather than accumulating with it -- still no
-  // multi-turn/multi-die accumulation, per the 2026-08-20 "重ねたかどうかではなく1ターンに2個置いたかで
-  // 合計するようにしてください" rule this test block originally regression-tested.
+  // acquire a card, since excludedFromBuildValue used to zero their buildValue outright). Every ANY slot
+  // at 元老院 (AREA009A, 4 ANY as of a 2026-08-24 data edit that shrank it from 6) already occupied by
+  // another player -- P1's own ☆ dice have nowhere to go but a forced fallback onto SLOT1, twice in a row
+  // -- each one now still succeeds via BUILD(), same as a genuinely-empty-slot placement (buildValue=1),
+  // evicting whoever was in SLOT1 (first P2's own die, then this same 2nd ☆ evicts the 1st ☆ in turn)
+  // rather than accumulating with it -- still no multi-turn/multi-die accumulation, per the 2026-08-20
+  // "重ねたかどうかではなく1ターンに2個置いたかで合計するようにしてください" rule this test block
+  // originally regression-tested.
   const state = freshStateWithShops();
   withWildcardOwner(state);
   player(state, 'P1').resources.BZ = 20;
-  // Every non-EX slot at 元老院 (AREA009A, 6 ANY) already occupied by another player -- P1's own ☆ dice
+  // Every ANY slot at 元老院 (AREA009A, 4 ANY) already occupied by another player -- P1's own ☆ dice
   // will have nowhere to go but a forced fallback onto SLOT1, twice in a row.
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 4; i++) {
     state.maps['MAP009'].slots[i].push({ playerId: 'P2', dieId: `p2-${i}`, value: (i % 6) + 1, seq: i + 1, countsForTurnOrder: true });
   }
 

@@ -778,13 +778,13 @@
       "EMBLEM_C": 1,
       "VP": 0,
       "LEVEL": 1,
-      "ONCE": "UNTAP_CHOICE(SELF,1)",
-      "TAP": "ADD(K)",
+      "ONCE": "",
+      "TAP": "ADD(2K)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "カードを1枚選んでアンタップする\n兆しカードは選べない"
+      "INST": ""
     },
     {
       "ID": "C005A",
@@ -794,13 +794,13 @@
       "EMBLEM_C": 1,
       "VP": 0,
       "LEVEL": 1,
-      "ONCE": "UNTAP_CHOICE(SELF,1)",
-      "TAP": "ADD(A)",
+      "ONCE": "",
+      "TAP": "ADD(2A)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "カードを1枚選んでアンタップする\n兆しカードは選べない"
+      "INST": ""
     },
     {
       "ID": "C006A",
@@ -810,13 +810,13 @@
       "EMBLEM_C": 1,
       "VP": 0,
       "LEVEL": 1,
-      "ONCE": "UNTAP_CHOICE(SELF,1)",
-      "TAP": "ADD(B)",
+      "ONCE": "",
+      "TAP": "ADD(2B)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "カードを1枚選んでアンタップする\n兆しカードは選べない"
+      "INST": ""
     },
     {
       "ID": "C007A",
@@ -826,13 +826,13 @@
       "EMBLEM_C": 1,
       "VP": 0,
       "LEVEL": 1,
-      "ONCE": "UNTAP_CHOICE(SELF,1)",
-      "TAP": "ADD(C)",
+      "ONCE": "",
+      "TAP": "ADD(2C)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "カードを1枚選んでアンタップする\n兆しカードは選べない"
+      "INST": ""
     },
     {
       "ID": "C008A",
@@ -842,13 +842,13 @@
       "EMBLEM_C": 1,
       "VP": 0,
       "LEVEL": 1,
-      "ONCE": "UNTAP_CHOICE(SELF,6)",
+      "ONCE": "UNTAP_CHOICE(SELF,3)",
       "TAP": "ADD(wD)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "カードを6枚選んでアンタップする\n兆しカードをアンタップするときは2枚分としてカウントする"
+      "INST": "カードを3枚選んでアンタップする"
     },
     {
       "ID": "C001B",
@@ -858,13 +858,13 @@
       "EMBLEM_C": 1,
       "VP": 1,
       "LEVEL": 2,
-      "ONCE": "UNTAP_CHOICE(SELF,1)",
+      "ONCE": "",
       "TAP": "CHANGE(K,Z,3)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "M",
-      "INST": "カードを1枚選んでアンタップする\n兆しカードは選べない"
+      "INST": ""
     },
     {
       "ID": "C002B",
@@ -874,13 +874,13 @@
       "EMBLEM_C": 1,
       "VP": 1,
       "LEVEL": 2,
-      "ONCE": "UNTAP_CHOICE(SELF,1)",
+      "ONCE": "",
       "TAP": "CHANGE(K,Z,3)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "M",
-      "INST": "カードを1枚選んでアンタップする\n兆しカードは選べない"
+      "INST": ""
     },
     {
       "ID": "C003B",
@@ -890,13 +890,13 @@
       "EMBLEM_C": 1,
       "VP": 1,
       "LEVEL": 2,
-      "ONCE": "UNTAP_CHOICE(SELF,1)",
+      "ONCE": "",
       "TAP": "CHANGE(K,Z,3)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "M",
-      "INST": "カードを1枚選んでアンタップする\n兆しカードは選べない"
+      "INST": ""
     },
     {
       "ID": "C004B",
@@ -906,13 +906,13 @@
       "EMBLEM_C": 1,
       "VP": 1,
       "LEVEL": 2,
-      "ONCE": "UNTAP_CHOICE(SELF,3)",
-      "TAP": "ADD(2K)",
+      "ONCE": "",
+      "TAP": "ADD(4K)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "カードを３枚選んでアンタップする\n兆しカードをアンタップするときは2枚分としてカウントする"
+      "INST": ""
     },
     {
       "ID": "C005B",
@@ -922,13 +922,13 @@
       "EMBLEM_C": 1,
       "VP": 1,
       "LEVEL": 2,
-      "ONCE": "UNTAP_CHOICE(SELF,3)",
-      "TAP": "ADD(2A)",
+      "ONCE": "",
+      "TAP": "ADD(4A)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "カードを３枚選んでアンタップする\n兆しカードをアンタップするときは2枚分としてカウントする"
+      "INST": ""
     },
     {
       "ID": "C006B",
@@ -938,13 +938,13 @@
       "EMBLEM_C": 1,
       "VP": 1,
       "LEVEL": 2,
-      "ONCE": "UNTAP_CHOICE(SELF,3)",
-      "TAP": "ADD(2B)",
+      "ONCE": "",
+      "TAP": "ADD(4B)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "カードを３枚選んでアンタップする\n兆しカードをアンタップするときは2枚分としてカウントする"
+      "INST": ""
     },
     {
       "ID": "C007B",
@@ -954,13 +954,13 @@
       "EMBLEM_C": 1,
       "VP": 1,
       "LEVEL": 2,
-      "ONCE": "UNTAP_CHOICE(SELF,3)",
-      "TAP": "ADD(2C)",
+      "ONCE": "",
+      "TAP": "ADD(4C)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "カードを３枚選んでアンタップする\n兆しカードをアンタップするときは2枚分としてカウントする"
+      "INST": ""
     },
     {
       "ID": "C008B",
@@ -970,13 +970,13 @@
       "EMBLEM_C": 1,
       "VP": 1,
       "LEVEL": 2,
-      "ONCE": "UNTAP_CHOICE(SELF,6)",
+      "ONCE": "UNTAP_CHOICE(SELF,3)",
       "TAP": "ADD(VP)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "カードを6枚選んでアンタップする\n兆しカードをアンタップするときは2枚分としてカウントする"
+      "INST": "カードを3枚選んでアンタップする"
     }
   ],
   "CON": [
@@ -2050,8 +2050,8 @@
       "SLOT2": "ANY",
       "SLOT3": "ANY",
       "SLOT4": "ANY",
-      "SLOT5": "ANY",
-      "SLOT6": "ANY",
+      "SLOT5": "NONE",
+      "SLOT6": "NONE",
       "ACTION": "BUILD()",
       "INST": ""
     },
@@ -2145,9 +2145,9 @@
       "SLOT1": "ANY",
       "SLOT2": "ANY",
       "SLOT3": "ANY",
-      "SLOT4": "ANY",
-      "SLOT5": "ANY",
-      "SLOT6": "EX",
+      "SLOT4": "EX",
+      "SLOT5": "NONE",
+      "SLOT6": "NONE",
       "ACTION": "BUILD();ADD(2K)",
       "INST": ""
     },
@@ -2241,9 +2241,9 @@
       "SLOT1": "ANY",
       "SLOT2": "ANY",
       "SLOT3": "ANY",
-      "SLOT4": "ANY",
-      "SLOT5": "ANY",
-      "SLOT6": "EX",
+      "SLOT4": "EX",
+      "SLOT5": "NONE",
+      "SLOT6": "NONE",
       "ACTION": "BUILD();ADD(2K,BZ)",
       "INST": ""
     },
