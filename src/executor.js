@@ -117,9 +117,13 @@ function whiteDiceCount(player) {
  * turn-start) each already take their own checkpoint one level up -- see setup.rollInitialColorDice,
  * turn-flow.startRound, and main.js's render() respectively -- so this leaf function doesn't need to.
  */
-function grantOneDie(state, index, player, kind, dieIdFactory) {
+function grantOneDie(state, index, player, kind, dieIdFactory, colorDiceCapOverride) {
   if (kind === 'COLOR') {
-    if (colorDiceCount(player) < player.colorDiceCap) {
+    // colorDiceCapOverride (2026-08-25, 訓練場LV1/LV2 -- see grantResource's own doc): only ever passed
+    // by that one call site, for that one grant; every other caller leaves it undefined and gets the
+    // player's own normal, never-mutated colorDiceCap (5 for everyone -- see game-state.js's own doc).
+    const capToUse = colorDiceCapOverride !== undefined ? colorDiceCapOverride : player.colorDiceCap;
+    if (colorDiceCount(player) < capToUse) {
       const die = createDie(dieIdFactory(), 'COLOR');
       die.value = rollDie(state.rng);
       player.dice.push(die);
@@ -188,9 +192,26 @@ function applyReplaceAdd(state, index, playerId, resource) {
  * Grants `count` of `resource` to playerId. Dice resources (D/wD) become new
  * Die objects (with overflow conversion); everything else is a resources[]
  * counter increment. REPLACE_ADD is applied before granting.
- */
-function grantResource(state, index, playerId, resource, count) {
+ *
+ * context (optional, only ever meaningfully set by grantResourceAndEmitGet's own caller -- board.
+ * placeDice/placeWildcardDie for 訓練場LV1/LV2, 2026-08-25, per user spec: "訓練場LV1のAREAにダイスを
+ * 置いたときダイス上限が5になるように（怠惰でもダイスが増える）訓練場LV2...上限が6になるように",
+ * confirmed as a one-shot bypass scoped to that AREA's own ADD(D), not a lasting change to the player's
+ * own colorDiceCap): if context.trainingGroundColorDieCapOnce is set AND this grant is for 'D'
+ * specifically, that D grant bypasses REPLACE_ADD (e.g. 怠惰/CON005A's unconditional D->wD redirect)
+ * entirely and uses the given raised cap instead of the player's normal colorDiceCap. Deliberately NOT
+ * cleared here -- board.wouldAreaActionHaveEffect's own prediction runs this same DSL (and so this same
+ * grant) once more, on a throwaway clone, using the *same* context object before the real run ever
+ * happens; clearing on first use would starve that real run of the override it still needs. Instead
+ * board.placeDice/placeWildcardDie set this field fresh (to this AREA's cap, or undefined for any other
+ * AREA) at the very start of every placement attempt, which is already the right "scoped to this one
+ * attempt" lifetime -- see their own comments. */
+function grantResource(state, index, playerId, resource, count, context) {
   const player = getPlayer(state, playerId);
+  if (context && context.trainingGroundColorDieCapOnce !== undefined && resource === 'D') {
+    for (let i = 0; i < count; i++) grantOneDie(state, index, player, 'COLOR', nextDieId, context.trainingGroundColorDieCapOnce);
+    return 'D';
+  }
   const effectiveResource = applyReplaceAdd(state, index, playerId, resource);
   const dieKind = DICE_KIND_BY_RESOURCE[effectiveResource];
   if (dieKind) {
@@ -1527,9 +1548,9 @@ function emitAndResolve(state, index, context, eventName, actualValue) {
  * board.placeDiceGroup's own PLACE(mapId), which likewise emits once per die in a multi-die placement
  * rather than once for the whole group. Plain resources (K/A/B/C/Z/VP/BZ) are unaffected -- still one
  * GET regardless of count, matching every other card that reacts to those (e.g. JOB005A's
- * ON(GET(K),CHANGE(K,Z))), which was never part of this report. */
+ * ON(GET(K),CHANGE(K,A))), which was never part of this report. */
 function grantResourceAndEmitGet(state, index, context, resource, count) {
-  const effectiveResource = grantResource(state, index, context.playerId, resource, count);
+  const effectiveResource = grantResource(state, index, context.playerId, resource, count, context);
   if (count > 0) {
     if (DICE_KIND_BY_RESOURCE[effectiveResource]) {
       for (let i = 0; i < count; i++) emitAndResolve(state, index, context, 'GET', effectiveResource);

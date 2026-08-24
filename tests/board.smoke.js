@@ -2237,6 +2237,96 @@ function withPatchedTap(physicalFaceId, tap, fn) {
 // is (see its own call site), it just has no reachable trigger there today.
 
 // ---------------------------------------------------------------------------
+// 訓練場LV1/LV2 (AREA007B/AREA007C) own dice grant (2026-08-25, per user spec: "訓練場LV1のAREAに
+// ダイスを置いたときダイス上限が5になるように（怠惰でもダイスが増える）訓練場LV2のAREAにダイスを置いた
+// ときダイス上限が６になるように") -- bypasses both the normal 5-color-dice cap and 怠惰/CON005A's
+// REPLACE_ADD(D,wD) redirect, for just this one grant. Confirmed with the user this is scoped to 訓練場's
+// own ADD(D) only, not a lasting change to the player's own cap. SLOT1/2 at both tiers are EX (owner-only).
+// ---------------------------------------------------------------------------
+{
+  // 怠惰 (CON005A) normally turns EVERY D grant into a wD instead, unconditionally, everywhere -- except
+  // now at 訓練場LV1, where it's bypassed entirely.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const con5a = createCardInstance('CON005A');
+  con5a.ownerId = 'P1';
+  state.cards[con5a.physicalId] = con5a;
+  p1.ownedCardPhysicalIds.push(con5a.physicalId);
+  state.maps['MAP007'] = mapWithArea('MAP007', 'AREA007B', 2, 'P1'); // SLOT1/2=EX, P1 owns it
+  const die = giveDie(state, 'P1', 3); // EX accepts any value
+  const beforeColor = p1.dice.filter((d) => d.kind === 'COLOR').length;
+  const result = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP007', 0);
+  check('怠惰 owner placing on 訓練場LV1 still succeeds (the bypass makes ADD(D) have a real effect)', result.success, true);
+  check('...gains a REAL color die, not a wD (怠惰\'s REPLACE_ADD(D,wD) is bypassed here)', p1.dice.filter((d) => d.kind === 'COLOR').length - beforeColor, 1);
+}
+{
+  // 訓練場LV1's own raised cap (5) matches the default colorDiceCap exactly -- so for a NORMAL player
+  // already at 5 color dice (no headroom to begin with), it's still blocked, same as anywhere else.
+  // (The cap check counts the die about to be placed too -- see wouldAreaActionHaveEffect's own doc on
+  // why -- so 4 pre-existing + the 1 being placed = 5 total already at the cap.)
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  for (let i = 0; i < 4; i++) giveDie(state, 'P1', 1);
+  state.maps['MAP007'] = mapWithArea('MAP007', 'AREA007B', 2, 'P1');
+  const die = giveDie(state, 'P1', 3); // 5th color die -- brings the pre-placement count to the cap
+  const result = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP007', 0);
+  check('A normal player already at 5 color dice is still blocked at 訓練場LV1 (its cap is 5, no extra headroom)', result, { success: false, reason: 'COLOR_DICE_CAP' });
+}
+{
+  // 訓練場LV2's own raised cap (6) is a genuine increase over the normal 5 -- even a normal player (no
+  // CON005A) already AT the usual cap can still gain a 6th real color die here.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  for (let i = 0; i < 4; i++) giveDie(state, 'P1', 1); // 4 pre-existing + the 1 about to be placed = 5
+  state.maps['MAP007'] = mapWithArea('MAP007', 'AREA007C', 2, 'P1');
+  const die = giveDie(state, 'P1', 3); // 5th color die -- at the usual cap, but LV2 allows one more
+  const beforeColor = p1.dice.filter((d) => d.kind === 'COLOR').length;
+  const result = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP007', 0);
+  check('A normal player at the usual 5-cap can still gain a 6th real color die at 訓練場LV2', result.success, true);
+  check('...total color dice is now 6', p1.dice.filter((d) => d.kind === 'COLOR').length, 6);
+}
+{
+  // But 訓練場LV2's raised cap is still a real ceiling -- once actually AT 6, it blocks like anywhere else.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  for (let i = 0; i < 5; i++) giveDie(state, 'P1', 1); // 5 pre-existing + the 1 about to be placed = 6
+  state.maps['MAP007'] = mapWithArea('MAP007', 'AREA007C', 2, 'P1');
+  const die = giveDie(state, 'P1', 3); // 6th color die -- already at 訓練場LV2's own raised cap
+  const result = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP007', 0);
+  check('At 6 color dice already, 訓練場LV2 is blocked too (its own raised cap is still a real ceiling)', result, { success: false, reason: 'COLOR_DICE_CAP' });
+}
+{
+  // Control: the BASE (untiered) 訓練場 (AREA007A) gets no bypass at all -- 怠惰 still blocks it entirely,
+  // confirming the bypass is genuinely LV1/LV2-specific, not "any 訓練場 tier".
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const con5a = createCardInstance('CON005A');
+  con5a.ownerId = 'P1';
+  state.cards[con5a.physicalId] = con5a;
+  p1.ownedCardPhysicalIds.push(con5a.physicalId);
+  player(state, 'P1').resources = { A: 5, B: 5, C: 5 }; // AREA007A's own ACTION is CHANGE((A,B,C),D)
+  state.maps['MAP007'] = mapWithArea('MAP007', 'AREA007A', 3, null); // SLOT1-3=ANY, base tier
+  const die = giveDie(state, 'P1', 4);
+  const result = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP007', 0);
+  check('怠惰 owner at the BASE (untiered) 訓練場 is still blocked outright -- no bypass at this tier', result, { success: false, reason: 'COLOR_DIE_REPLACED' });
+}
+{
+  // A ☆ die (JOB003/道化) can land on 訓練場LV1/LV2 too ("全AREA共通") -- same bypass applies.
+  const state = freshStateWithShops();
+  const p1 = withWildcardOwner(state);
+  const con5a = createCardInstance('CON005A');
+  con5a.ownerId = 'P1';
+  state.cards[con5a.physicalId] = con5a;
+  p1.ownedCardPhysicalIds.push(con5a.physicalId);
+  state.maps['MAP007'] = mapWithArea('MAP007', 'AREA007B', 2, 'P1');
+  const die = giveDie(state, 'P1', 3);
+  const beforeColor = p1.dice.filter((d) => d.kind === 'COLOR').length;
+  const result = board.placeWildcardDie(state, index, { playerId: 'P1' }, die.id, 'MAP007');
+  check('A ☆ die on 訓練場LV1 also gets the bypass -- 怠惰 owner still gains a real color die', result.success, true);
+  check('...total color dice increased by 1', p1.dice.filter((d) => d.kind === 'COLOR').length - beforeColor, 1);
+}
+
+// ---------------------------------------------------------------------------
 // 道化/JOB003 ☆ワイルドカードダイス (2026-08-19) -- complete replacement of the old SET_DICE_ANY-based
 // TAP ability (which caused a real AI infinite-loop bug, see src/ai/game-runner.js's own history) with
 // PASSIVE=WILDCARD_DICE(): every die this player owns (COLOR and WHITE alike) ignores a slot's numbered/

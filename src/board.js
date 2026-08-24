@@ -324,6 +324,13 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
   const buildValue = die.value;
 
   const actionContext = context;
+  // 訓練場LV1/LV2 (2026-08-25) -- see TRAINING_GROUND_COLOR_DIE_CAP's own doc. Set on actionContext (not
+  // a fresh object) so it reaches both wouldAreaActionHaveEffect's prediction below (which runs this
+  // AREA's own DSL once more, on a throwaway clone, before the real run) AND the real grant later via
+  // resolveAreaAction -- always assigned unconditionally here (undefined for any other AREA), so this is
+  // already scoped to exactly this one placement attempt; see executor.grantResource's own doc for why
+  // it's deliberately never cleared mid-flight.
+  actionContext.trainingGroundColorDieCapOnce = TRAINING_GROUND_COLOR_DIE_CAP[areaRow.ID];
 
   // 地主/開拓者 (2026-08-18/2026-08-20, see grantLandlordBonusIfEarned/grantPioneerBonusIfEarned's own
   // docs): granted speculatively *before* the NO_EFFECT prediction and the usage-fee check below, so
@@ -515,13 +522,27 @@ function buildTrailingAdds(commands, buildIndex) {
  * of the exact exploit above).
  *
  * A second, unconditional form of this same block (2026-08-15, per user follow-up: "CONで上限3個を持つ
- * プレイヤーはダイスを3個持つ限り訓練場にダイス候補が出ないように...現状絶対置けないはずです"): CON002A
+ * プレイヤーはダイスを3個持つ限り訓練場にダイス候補が出ないように...現状絶対置けないはずです"): CON005A
  * (怠惰)'s PASSIVE=REPLACE_ADD(D,wD) forces every gained D into a wD instead, unconditionally -- not a
- * literal colorDiceCap change (that field stays 5 for everyone; CON002A's own INST text "色ダイスの上限
+ * literal colorDiceCap change (that field stays 5 for everyone; CON005A's own INST text "色ダイスの上限
  * ３個" is just flavor text for this substitution's practical effect, never spending past their starting
- * 3-die hand since they can never gain a real 4th). A CON002A owner can NEVER get a genuine D from this
- * AREA, at any dice count, so this is checked independently of (and before) the cap count above.
+ * 3-die hand since they can never gain a real 4th). A CON005A owner can NEVER get a genuine D from this
+ * AREA, at any dice count, so this is checked independently of (and before) the cap count above -- EXCEPT
+ * at 訓練場LV1/LV2 (AREA007B/AREA007C) specifically, whose own dice grant now bypasses this entirely (see
+ * TRAINING_GROUND_COLOR_DIE_CAP's own doc).
  */
+// 訓練場LV1/LV2 (2026-08-25, per user spec: "訓練場LV1のAREAにダイスを置いたときダイス上限が5になるよう
+// に（怠惰でもダイスが増える）訓練場LV2のAREAにダイスを置いたときダイス上限が６になるように") -- their
+// own ADD(D) grant bypasses both the normal colorDiceCap (5) and 怠惰/CON005A's REPLACE_ADD(D,wD)
+// redirect, for just this one grant, using this raised cap instead. Confirmed with the user this is a
+// one-shot bypass scoped to 訓練場's own grant (not a lasting change to the player's own dice cap, and not
+// usable to "bank" extra capacity for dice gained some other way) -- see wouldAreaActionHaveEffect's own
+// use of this (the prediction gate) and executor.grantResource's own doc (the actual grant, via
+// context.trainingGroundColorDieCapOnce, set just below in placeDice/placeWildcardDie). LV1's own raised
+// cap (5) matches the default colorDiceCap exactly -- it's a no-op for a player without CON005A, and only
+// ever matters for undoing 怠惰's redirect; LV2's (6) is a genuine cap increase for everyone.
+const TRAINING_GROUND_COLOR_DIE_CAP = { AREA007B: 5, AREA007C: 6 };
+
 function grantsColorDie(commands) {
   return commands.some((cmd) => {
     if (cmd.type === 'CHANGE') return cmd.gain.some((item) => item.resource === 'D');
@@ -540,11 +561,18 @@ function grantsColorDie(commands) {
 function wouldAreaActionHaveEffect(state, index, context, areaRow, buildValue, monumentBuildValue = buildValue) {
   const commands = lowerProgram(parse(areaRow.ACTION));
   if (grantsColorDie(commands)) {
-    const replaceAddRules = executor.getPassiveRules(state, index, context.playerId, 'REPLACE_ADD');
-    if (replaceAddRules.some((r) => r.from === 'D')) return { ok: false, reason: 'COLOR_DIE_REPLACED' };
     const player = state.players.find((p) => p.id === context.playerId);
     const totalColorDiceCount = player.dice.filter((d) => d.kind === 'COLOR').length;
-    if (totalColorDiceCount >= player.colorDiceCap) return { ok: false, reason: 'COLOR_DICE_CAP' };
+    // 訓練場LV1/LV2 (2026-08-25) -- see TRAINING_GROUND_COLOR_DIE_CAP's own doc: this AREA's own dice
+    // grant bypasses both the REPLACE_ADD check and the normal cap below entirely.
+    const trainingGroundCap = TRAINING_GROUND_COLOR_DIE_CAP[areaRow.ID];
+    if (trainingGroundCap !== undefined) {
+      if (totalColorDiceCount >= trainingGroundCap) return { ok: false, reason: 'COLOR_DICE_CAP' };
+    } else {
+      const replaceAddRules = executor.getPassiveRules(state, index, context.playerId, 'REPLACE_ADD');
+      if (replaceAddRules.some((r) => r.from === 'D')) return { ok: false, reason: 'COLOR_DIE_REPLACED' };
+      if (totalColorDiceCount >= player.colorDiceCap) return { ok: false, reason: 'COLOR_DICE_CAP' };
+    }
   }
   if (commands.length > 0 && commands[0].type === 'BUILD') {
     const buildCmd = commands[0];
@@ -1024,6 +1052,10 @@ function placeWildcardDie(state, index, context, dieId, mapId) {
   const monumentBuildValue = 6;
 
   const actionContext = context;
+  // 訓練場LV1/LV2 (2026-08-25) -- see TRAINING_GROUND_COLOR_DIE_CAP's own doc and placeDice's matching
+  // comment; a ☆ die can land on 訓練場 same as any other AREA ("全AREA共通"), so this needs the same
+  // handling here.
+  actionContext.trainingGroundColorDieCapOnce = TRAINING_GROUND_COLOR_DIE_CAP[areaRow.ID];
 
   // 地主/開拓者 (2026-08-18/2026-08-20, see placeDice's matching comment/grantLandlordBonusIfEarned/
   // grantPioneerBonusIfEarned's own docs): granted speculatively before the NO_EFFECT prediction/usage-
