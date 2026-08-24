@@ -84,14 +84,22 @@ function ownedCardRows(state, index, playerId) {
 // Dice / resource grant + payment primitives
 // ---------------------------------------------------------------------------
 
-/** In-hand COLOR dice only (excludes ones already placed on a map SLOT) -- same "how many can you hold"
- * reasoning as whiteDiceCount's own doc just below (2026-08-15: colorDiceCount previously counted placed
- * dice too, unlike whiteDiceCount's already-fixed 2026-08-12 version -- found while wiring up AREA007's
- * (訓練場) new color-die-cap placement check, whose own test coverage caught grantOneDie's cap gate
- * still redirecting a genuine D grant to wD even one below the cap, because the just-placed die (still
- * sitting in player.dice with placedMapId set) was counted against it). */
+/** ALL color dice the player owns, in hand AND currently placed on any map alike -- confirmed 2026-08-25
+ * per user correction ("色ダイスの上限は所持上限ではなく総合での上限です"): the 5-die cap is a "how many
+ * can you own at once" limit, NOT a "how many can you hold in hand" one, unlike whiteDiceCap (see
+ * whiteDiceCount's own doc just below, an intentionally different rule specific to white dice). This
+ * matches board.wouldAreaActionHaveEffect's own already-total-based colorDiceCap prediction (2026-08-17,
+ * see its own doc) -- that prediction gate already blocked AREA007's own placement before grantOneDie's
+ * cap check below could ever run into a mismatch, which is why the two could silently disagree until now
+ * without any test catching it; this function's OWN cap check (used by every other D-granting source that
+ * doesn't go through that AREA007-specific prediction at all, e.g. CON001B's ONCE=ADD(D)) needs the same
+ * total-based rule to actually agree with it. (This reverses a 2026-08-15 change that made this function
+ * hand-only -- that fix targeted a different, now-obsolete bug: at the time, AREA007's own placement had
+ * no prediction gate of its own yet, so grantOneDie's cap check was the only thing blocking an over-cap
+ * grant, and it was double-counting the just-placed die against itself. board.js's 2026-08-17 prediction
+ * fix already supersedes that for AREA007 specifically; going hand-only broke the general case instead.) */
 function colorDiceCount(player) {
-  return player.dice.filter((d) => d.kind === 'COLOR' && d.placedMapId === null).length;
+  return player.dice.filter((d) => d.kind === 'COLOR').length;
 }
 /** In-hand WHITE dice only (excludes ones already placed on a map SLOT) -- confirmed 2026-08-12 per the
  * INST rulebook sheet: the 5-die cap is a "how many can you hold" limit, not a "how many can exist at
