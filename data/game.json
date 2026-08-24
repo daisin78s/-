@@ -842,13 +842,13 @@
       "EMBLEM_C": 1,
       "VP": 0,
       "LEVEL": 1,
-      "ONCE": "UNTAP_CHOICE(SELF,3)",
-      "TAP": "ADD(wD)",
+      "ONCE": "UNTAP_ALL(SELF)",
+      "TAP": "ADD(VP)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "カードを3枚選んでアンタップする"
+      "INST": "カードをすべてアンタップする"
     },
     {
       "ID": "C001B",
@@ -970,13 +970,13 @@
       "EMBLEM_C": 1,
       "VP": 1,
       "LEVEL": 2,
-      "ONCE": "UNTAP_CHOICE(SELF,3)",
-      "TAP": "ADD(VP)",
+      "ONCE": "UNTAP_ALL(SELF)",
+      "TAP": "ADD(2VP)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "カードを3枚選んでアンタップする"
+      "INST": "カードをすべてアンタップする"
     }
   ],
   "CON": [

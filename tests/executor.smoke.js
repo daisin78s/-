@@ -1036,16 +1036,16 @@ const UNTAP_CHOICE_3 = { type: 'UNTAP_CHOICE', scope: 'SELF', count: 3 };
   // しまう...他の操作（ダイス配置など）ができてしまう") -- canEndTurn used to ignore pendingChoices
   // entirely, so a player could end their turn (and, per main.js's matching UI fix, place dice/use free
   // actions/bare-TAP) while an UNTAP_CHOICE sat unresolved. C004A/農夫 was the original real-data vehicle
-  // for this report, but its own ONCE was later replaced entirely with a plain TAP buff (2026-08-24 data
-  // edit) -- C008A/聖女's own ONCE=UNTAP_CHOICE(SELF,3) is the current real-data card carrying this
-  // ability, used here instead.
+  // for this report; by 2026-08-24 no card in the data carries UNTAP_CHOICE at all any more (C004-C007/
+  // C008A/C008B were all reworked away from it across two data edits that same day), so this now
+  // constructs the command directly (same style as the runUntapChoice block above) rather than pinning
+  // the regression to whichever real card happens to still carry it.
   const state = freshState();
   const ids = ['A001A', 'B001A', 'C001A', 'A002A'].map((faceId) => giveCard(state, faceId, 'P1'));
   for (const id of ids) state.cards[id].tapped = true; // weight 4 > budget 3 -- forces a real choice
   check('canEndTurn is fine with no pending choice yet (control)', executor.canEndTurn(state, index, 'P1').ok, true);
-  const c008aRow = getCardRow(index, 'C008A');
-  executor.runProgram(state, index, { playerId: 'P1' }, c008aRow.ONCE);
-  check('聖女\'s ONCE queued a real UNTAP_CHOICE (budget 3 < weight 4)', state.pendingChoices.some((c) => c.kind === 'UNTAP_CHOICE'), true);
+  executor.runCommand(state, index, { playerId: 'P1' }, { type: 'UNTAP_CHOICE', scope: 'SELF', count: 3 });
+  check('UNTAP_CHOICE(SELF,3) queued a real pendingChoice (budget 3 < weight 4)', state.pendingChoices.some((c) => c.kind === 'UNTAP_CHOICE'), true);
   const gate = executor.canEndTurn(state, index, 'P1');
   check('canEndTurn now blocks TURNEND while the choice is unresolved', gate.ok, false);
   check('...citing an UNTAP_CHOICE violation', gate.violations.some((v) => v.type === 'UNTAP_CHOICE'), true);
