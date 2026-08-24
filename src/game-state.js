@@ -78,6 +78,13 @@ function splitCardId(cardId) {
  *   player's own die, at those 2 maps specifically) while leaving every other GRANT_PLACE_ANYWHERE use
  *   untouched, including the legitimate multi-turn castle-investment pattern with a naturally-rolled
  *   die. Cleared at TURNEND, same lifetime as placeAnywhereThisTurn just above.
+ * @property {number|null} valueBeforeChangeThisTurn - the die's own value right before the FIRST
+ *   SET_DICE_ANY/SET_DIE_VALUE/CHANGE_DIE_VALUE change this turn (2026-08-24, per user request: "すべ
+ *   てのダイス目変更はターン終了時に変えた目が元に戻る"). executor.applyTurnEnd restores die.value
+ *   from this if the die is still unplaced at that point -- a die actually placed this turn keeps
+ *   showing its changed value, since the slot's own occupant record already holds an independent copy
+ *   of it (see board.placeDice's own `value: die.value` snapshot), untouched by whatever this live Die
+ *   object does afterward. null whenever valueChangedThisTurn is false.
  */
 
 /**
@@ -86,7 +93,7 @@ function splitCardId(cardId) {
  * @returns {DieState}
  */
 function createDie(id, kind) {
-  return { id, kind, value: null, placedMapId: null, placeAnywhereThisTurn: false, passed: false, valueChangedThisTurn: false };
+  return { id, kind, value: null, placedMapId: null, placeAnywhereThisTurn: false, passed: false, valueChangedThisTurn: false, valueBeforeChangeThisTurn: null };
 }
 
 /**

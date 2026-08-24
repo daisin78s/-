@@ -856,13 +856,22 @@ function requireOwnDie(state, context, dieId) {
   return die;
 }
 
+/** Marks `die` as changed this turn, snapshotting its pre-change value the FIRST time this happens this
+ * turn (2026-08-24, per user request: "すべてのダイス目変更はターン終了時に変えた目が元に戻る") -- a
+ * 2nd change to the same die later this same turn must not overwrite the snapshot with an already-
+ * changed value, or applyTurnEnd's revert would land on the wrong number. Call BEFORE mutating die.value. */
+function markDieValueChanged(die) {
+  if (!die.valueChangedThisTurn) die.valueBeforeChangeThisTurn = die.value;
+  die.valueChangedThisTurn = true;
+}
+
 function runSetDiceAny(state, context) {
   if (context.chosenDieId === undefined || context.chosenValue === undefined) {
     return { success: false, reason: 'CHOICE_REQUIRED', need: ['chosenDieId', 'chosenValue (1-6)'] };
   }
   const die = requireOwnDie(state, context, context.chosenDieId);
+  markDieValueChanged(die);
   die.value = context.chosenValue;
-  die.valueChangedThisTurn = true;
   context.lastTargetedDieId = die.id;
   return { success: true };
 }
@@ -875,8 +884,8 @@ function runSetDieValue(state, context, cmd) {
     return { success: false, reason: 'INVALID_CHOICE', allowed: cmd.choices };
   }
   const die = requireOwnDie(state, context, context.chosenDieId);
+  markDieValueChanged(die);
   die.value = context.chosenValue;
-  die.valueChangedThisTurn = true;
   context.lastTargetedDieId = die.id;
   return { success: true };
 }
@@ -889,8 +898,11 @@ function runChangeDieValue(state, context, cmd) {
     return { success: false, reason: 'INVALID_CHOICE', allowed: cmd.choices };
   }
   const die = requireOwnDie(state, context, context.chosenDieId);
-  die.value = (((die.value - 1 + context.chosenDelta) % 6) + 6) % 6 + 1; // wraps 1..6 (spec: dice values cycle)
-  die.valueChangedThisTurn = true;
+  markDieValueChanged(die);
+  // No wrap (2026-08-24, per user request: "ダイス目変更循環しない" -- 1-1->0, 6+1->7, 6+2->8, replacing
+  // the old modulo-6 cycling). 7+ is displayed as a plain digit (confirmed with the user), same as
+  // dieFace()'s existing out-of-1..6 fallback already did for anything unexpected.
+  die.value = die.value + context.chosenDelta;
   context.lastTargetedDieId = die.id;
   return { success: true };
 }
@@ -1209,9 +1221,20 @@ function applyTurnEnd(state, index, playerId) {
   }
   // GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN)'s flag is turn-scoped.
   for (const die of player.dice) die.placeAnywhereThisTurn = false;
-  // SET_DICE_ANY/SET_DIE_VALUE/CHANGE_DIE_VALUE's valueChangedThisTurn marker is turn-scoped too (see
-  // board.placeDice's own doc on why it exists).
-  for (const die of player.dice) die.valueChangedThisTurn = false;
+  // SET_DICE_ANY/SET_DIE_VALUE/CHANGE_DIE_VALUE's own value change is turn-scoped too (2026-08-24, per
+  // user request: "すべてのダイス目変更はターン終了時に変えた目が元に戻る") -- but only for a die still
+  // UNPLACED at this point: one that was actually placed this turn already has its own independent value
+  // snapshot on the slot's occupant record (board.placeDice's own `value: die.value` copy), so reverting
+  // this live Die object never touches what's already resolved/displayed there. See
+  // markDieValueChanged's own doc for why valueBeforeChangeThisTurn is safe to trust here even if the die
+  // was changed more than once this same turn.
+  for (const die of player.dice) {
+    if (die.valueChangedThisTurn && die.placedMapId === null) die.value = die.valueBeforeChangeThisTurn;
+  }
+  for (const die of player.dice) {
+    die.valueChangedThisTurn = false;
+    die.valueBeforeChangeThisTurn = null;
+  }
   // BZ is turn-scoped too (confirmed: "BZはターン終了時に無くなります") -- any left unspent when this
   // turn ends (e.g. generated via JOB004A's CHANGE(3K,2BZ) but never put toward a BUILD before ending
   // the turn) is lost, not carried into the next turn/round. Not a card-DSL rule (no BZ-granting card's

@@ -381,9 +381,11 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 
 console.log(`\n${passCount} passed, ${failCount} failed`);
 // ---------------------------------------------------------------------------
-// 12. Dice-value DSLs: SET_DICE_ANY, SET_DIE_VALUE, CHANGE_DIE_VALUE (with
-//     wraparound), and GRANT_PLACE_ANYWHERE picking up THIS_DICE via
-//     context.lastTargetedDieId across statements in the same field.
+// 12. Dice-value DSLs: SET_DICE_ANY, SET_DIE_VALUE, CHANGE_DIE_VALUE (no
+//     wraparound, 2026-08-24), reverting an unplaced die's value at that
+//     player's own TURNEND (2026-08-24), and GRANT_PLACE_ANYWHERE picking up
+//     THIS_DICE via context.lastTargetedDieId across statements in the same
+//     field.
 // ---------------------------------------------------------------------------
 {
   // Tests the bare SET_DICE_ANY() command in isolation, via a literal DSL string rather than reading
@@ -426,8 +428,13 @@ console.log(`\n${passCount} passed, ${failCount} failed`);
 
   executor.applyTurnEnd(state, index, 'P1');
   check('placeAnywhereThisTurn is cleared at TURNEND (THIS_TURN scope)', getDieRef(state, 'P1', 'd1').placeAnywhereThisTurn, false);
+  check('The still-unplaced die\'s value reverts to 1 (its value before SET_DIE_VALUE) at TURNEND', getDieRef(state, 'P1', 'd1').value, 1);
+  check('valueChangedThisTurn is cleared too', getDieRef(state, 'P1', 'd1').valueChangedThisTurn, false);
 }
 {
+  // Regression (2026-08-24, per user request: "ダイス目変更循環しない...1-1→0 6+1→7 6+2→8" and "すべての
+  // ダイス目変更はターン終了時に変えた目が元に戻る") -- CHANGE_DIE_VALUE no longer wraps modulo 6, and an
+  // unplaced die's value reverts at that player's own TURNEND, same as SET_DIE_VALUE above.
   const state = freshState();
   giveCard(state, 'B003A', 'P1'); // TAP=CHANGE_DIE_VALUE(SELF±1);GRANT_PLACE_ANYWHERE(...)
   const player = getPlayerRef(state, 'P1');
@@ -438,10 +445,50 @@ console.log(`\n${passCount} passed, ${failCount} failed`);
   const row = getCardRow(index, 'B003A');
   const result = executor.runProgram(state, index, { playerId: 'P1', chosenDieId: 'd1', chosenDelta: 1 }, row.TAP);
   check('CHANGE_DIE_VALUE(SELF±1) with +1 succeeds', result.success, true);
-  check('...wraps 6 -> 1 rather than 7', die.value, 1);
+  check('...6+1 -> 7, no longer wraps to 1', die.value, 7);
 
   const badDelta = executor.runProgram(state, index, { playerId: 'P1', chosenDieId: 'd1', chosenDelta: 2 }, row.TAP);
   check('CHANGE_DIE_VALUE(SELF±1) rejects a delta outside {+1,-1}', badDelta.reason, 'INVALID_CHOICE');
+
+  // Re-fetched by id, not the pre-call `die`/`player` references -- a failed runProgram call rolls back
+  // by replacing state.players wholesale (same trap documented elsewhere in this codebase), so both stale
+  // references above would silently miss every mutation from here on.
+  executor.applyTurnEnd(state, index, 'P1');
+  check('The still-unplaced die reverts from 7 back to its original 6 at TURNEND', getDieRef(state, 'P1', 'd1').value, 6);
+}
+{
+  // 1-1 -> 0 (the other no-wrap direction).
+  const state = freshState();
+  giveCard(state, 'B003A', 'P1');
+  const player = getPlayerRef(state, 'P1');
+  const die = createDie('d1', 'COLOR');
+  die.value = 1;
+  player.dice.push(die);
+
+  const row = getCardRow(index, 'B003A');
+  const result = executor.runProgram(state, index, { playerId: 'P1', chosenDieId: 'd1', chosenDelta: -1 }, row.TAP);
+  check('CHANGE_DIE_VALUE(SELF±1) with -1 succeeds', result.success, true);
+  check('...1-1 -> 0, no longer wraps to 6', die.value, 0);
+}
+{
+  // A die actually PLACED this turn keeps its changed value forever -- only an unplaced die reverts
+  // (confirmed with the user: the slot's own occupant record already snapshots the value independently,
+  // so nothing downstream is affected either way, but reverting a placed die's own live value would be
+  // confusing to display).
+  const state = freshState();
+  giveCard(state, 'B003A', 'P1');
+  const player = getPlayerRef(state, 'P1');
+  const die = createDie('d1', 'COLOR');
+  die.value = 6;
+  player.dice.push(die);
+
+  const row = getCardRow(index, 'B003A');
+  executor.runProgram(state, index, { playerId: 'P1', chosenDieId: 'd1', chosenDelta: 1 }, row.TAP);
+  check('Die is now 7 after the change', die.value, 7);
+  die.placedMapId = 'MAP001'; // simulate the die having actually been placed this same turn
+
+  executor.applyTurnEnd(state, index, 'P1');
+  check('A die placed this turn does NOT revert at TURNEND -- stays 7', die.value, 7);
 }
 
 // ---------------------------------------------------------------------------
