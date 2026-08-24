@@ -1143,13 +1143,20 @@ function passDie(state, index, context, dieId) {
  * wouldAreaActionHaveEffect's own monumentBuildValue -- defaults to dieValueForBuild, only ever distinct
  * when placeWildcardDie is the caller (see that function's own doc).
  */
-function resolveProgramOrBuild(state, index, context, dslText, dieValueForBuild, monumentBuildValueForBuild = dieValueForBuild) {
+function resolveProgramOrBuild(state, index, context, dslText, dieValueForBuild, monumentBuildValueForBuild = dieValueForBuild, buildValueOverride = null) {
   const commands = lowerProgram(parse(dslText));
   const buildIndex = commands.findIndex((c) => c.type === 'BUILD');
   if (buildIndex !== -1) {
     const buildCmd = commands[buildIndex];
-    const buildValue = buildCmd.buildValue !== null ? buildCmd.buildValue : dieValueForBuild;
-    const monumentBuildValue = buildCmd.buildValue !== null ? buildCmd.buildValue : monumentBuildValueForBuild;
+    // buildValueOverride (2026-08-25, per user request: "カードのダイス目も変えられるようにしたい") takes
+    // priority over the DSL's own literal buildValue -- set by a SET_DIE_VALUE/CHANGE_DIE_VALUE/
+    // MONUMENT_CHANGE_DIE_VALUE targeting THIS card instead of a real die (see executor.
+    // requireOwnBuildValueCard's own doc). Only ever passed by useBareTapAbility, for a card whose own
+    // TAP carries a literal buildValue in the first place (AREA/QST resolution paths never pass this).
+    const buildValue = buildValueOverride !== null ? buildValueOverride
+      : buildCmd.buildValue !== null ? buildCmd.buildValue : dieValueForBuild;
+    const monumentBuildValue = buildValueOverride !== null ? buildValueOverride
+      : buildCmd.buildValue !== null ? buildCmd.buildValue : monumentBuildValueForBuild;
     // Candidate existence is checked *before* running any leading command (e.g. JOB010's PAY(2K)) --
     // 'U'/BUILD_NEW eligibility never depends on resources (it's about which cards/shop slots exist),
     // so this ordering can't hide a candidate a later payment would have unlocked, and it avoids
@@ -1228,7 +1235,7 @@ function useBareTapAbility(state, index, context, physicalId) {
   // itself until the fee is actually payable.
   const row = getCardRow(index, inst.currentFaceId);
   const tapContext = { ...context, sourcePhysicalId: physicalId };
-  const result = resolveProgramOrBuild(state, index, tapContext, row.TAP, Infinity);
+  const result = resolveProgramOrBuild(state, index, tapContext, row.TAP, Infinity, Infinity, inst.buildValueOverride);
   if (result.pendingBuild) {
     // Not tapped yet -- and no activation notified yet either (see executor.notifyActivation's own
     // doc) -- a bare TAP=BUILD(...) ability (e.g. B005A) only actually commits once a candidate is

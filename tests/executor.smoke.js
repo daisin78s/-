@@ -491,6 +491,84 @@ console.log(`\n${passCount} passed, ${failCount} failed`);
 }
 
 // ---------------------------------------------------------------------------
+// 12a. Dice-value DSLs (SET_DIE_VALUE/CHANGE_DIE_VALUE/MONUMENT_CHANGE_DIE_VALUE) can ALSO target one of
+//      the player's own eligible "fixed BUILD value" cards instead of a real die (2026-08-25, per user
+//      request: "カードのダイス目も変えられるようにしたい") -- context.chosenCardPhysicalId instead of
+//      chosenDieId. Uses B004A/始まりの兆し (TAP=BUILD((A,B,C,M),1), own fixed buildValue=1) as the
+//      real-data target throughout.
+// ---------------------------------------------------------------------------
+{
+  const state = freshState();
+  const target = giveCard(state, 'B004A', 'P1'); // 始まりの兆し, own fixed buildValue=1
+  const row = getCardRow(index, 'B001A'); // TAP=SET_DIE_VALUE(SELF1|2);GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN)
+  const result = executor.runProgram(state, index, { playerId: 'P1', chosenCardPhysicalId: target, chosenValue: 2 }, row.TAP);
+  check('SET_DIE_VALUE targeting a card succeeds -- including the chained GRANT_PLACE_ANYWHERE(THIS_DICE,...), which no-ops instead of failing', result.success, true);
+  check('...the card\'s own buildValueOverride is now 2 (replaced, not added, same as a die)', state.cards[target].buildValueOverride, 2);
+}
+{
+  const state = freshState();
+  const target = giveCard(state, 'B004A', 'P1'); // own fixed buildValue=1
+  const row = getCardRow(index, 'B003A'); // TAP=CHANGE_DIE_VALUE(SELF±1);GRANT_PLACE_ANYWHERE(...)
+  const r1 = executor.runProgram(state, index, { playerId: 'P1', chosenCardPhysicalId: target, chosenDelta: 1 }, row.TAP);
+  check('CHANGE_DIE_VALUE targeting a card succeeds (base 1, +1 -> 2)', r1.success, true);
+  check('...buildValueOverride is 2', state.cards[target].buildValueOverride, 2);
+
+  const r2 = executor.runProgram(state, index, { playerId: 'P1', chosenCardPhysicalId: target, chosenDelta: 1 }, row.TAP);
+  check('A 2nd change chains off the CURRENT override, not the original base value (2+1=3, not 1+1=2)', r2.success, true);
+  check('...buildValueOverride is now 3', state.cards[target].buildValueOverride, 3);
+}
+{
+  const state = freshState();
+  const target = giveCard(state, 'B004A', 'P1');
+  const row = getCardRow(index, 'JOB007'); // TAP=ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+2);BLOCK_BUILD(...)
+  const result = executor.runProgram(state, index, { playerId: 'P1', chosenCardPhysicalId: target }, row.TAP);
+  check('MONUMENT_CHANGE_DIE_VALUE targeting a card succeeds with no chosenValue/chosenDelta needed (delta is fixed)', result.success, true);
+  check('...buildValueOverride is 1+2=3', state.cards[target].buildValueOverride, 3);
+}
+{
+  // Ineligible targets: not owned by this player, or owned but not a "fixed BUILD value" card at all
+  // (e.g. C001A, whose TAP is a plain CHANGE with no BUILD command).
+  const state = freshState();
+  state.players.push(createPlayer('P2', 'Bob'));
+  const notOwned = giveCard(state, 'B004A', 'P2'); // belongs to P2, not P1
+  const row = getCardRow(index, 'B003A');
+  const r1 = executor.runProgram(state, index, { playerId: 'P1', chosenCardPhysicalId: notOwned, chosenDelta: 1 }, row.TAP);
+  check('Targeting a card the player does not own fails', r1, { success: false, reason: 'INVALID_BUILD_VALUE_CARD' });
+
+  const notEligible = giveCard(state, 'C001A', 'P1'); // TAP=CHANGE(K,A,3), no BUILD command at all
+  const r2 = executor.runProgram(state, index, { playerId: 'P1', chosenCardPhysicalId: notEligible, chosenDelta: 1 }, row.TAP);
+  check('Targeting an owned card with no fixed BUILD value fails', r2, { success: false, reason: 'INVALID_BUILD_VALUE_CARD' });
+}
+{
+  // applyTurnEnd clears every owned card's buildValueOverride unconditionally (2026-08-25, "ターン終了時
+  // に元に戻る(ダイスと同じ)").
+  const state = freshState();
+  const target = giveCard(state, 'B004A', 'P1');
+  state.cards[target].buildValueOverride = 5;
+  executor.applyTurnEnd(state, index, 'P1');
+  check('buildValueOverride is cleared at TURNEND', state.cards[target].buildValueOverride, null);
+}
+{
+  // A die's own occupant record (already placed in a SLOT) showing an out-of-1..6-range value clamps
+  // back to the nearest boundary at TURNEND too (2026-08-25, per user spec: "0は1に　7　8　9などは6に戻
+  // る") -- purely a display cleanup, independent of the "still-unplaced die reverts" rule tested above
+  // (that rule mutates the live Die object; this one mutates the SLOT's own independent occupant
+  // snapshot, which never reverts).
+  const state = freshState();
+  state.maps['MAP001'] = { slots: [
+    [{ playerId: 'P1', dieId: 'd1', value: 0, seq: 1, countsForTurnOrder: true }],
+    [{ playerId: 'P1', dieId: 'd2', value: 8, seq: 2, countsForTurnOrder: true }],
+    [{ playerId: 'P1', dieId: 'd3', value: 4, seq: 3, countsForTurnOrder: true }], // already in-range
+    [{ playerId: 'P2', dieId: 'd4', value: 9, seq: 4, countsForTurnOrder: true }], // a different player
+  ] };
+  executor.applyTurnEnd(state, index, 'P1');
+  check('0 clamps to 1', state.maps['MAP001'].slots[0][0].value, 1);
+  check('8 clamps to 6', state.maps['MAP001'].slots[1][0].value, 6);
+  check('An already-in-range value (4) is untouched', state.maps['MAP001'].slots[2][0].value, 4);
+  check('Another player\'s occupant is untouched at P1\'s own TURNEND', state.maps['MAP001'].slots[3][0].value, 9);
+}
+
+// ---------------------------------------------------------------------------
 // 13. Newly-granted dice (ADD(D)/ADD(wD)) are rolled immediately (confirmed
 //     2026-07-29: white dice roll once on acquisition, color dice need a
 //     value to be placeable this round too). grantOneDie itself does NOT record an undo checkpoint

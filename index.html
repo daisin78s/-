@@ -219,16 +219,21 @@
     </div>
   </div>
 
-  <!-- Bare (direct) TAP ability die+value choice, e.g. B001A's SET_DIE_VALUE(SELF2|3);
-       GRANT_PLACE_ANYWHERE(...) or JOB003A's SET_DICE_ANY() (2026-07-31) -- see main.js's
-       attachTapToggle/bareTapKind/renderTapChoiceModal. Nothing committed yet, so cancelable. -->
+  <!-- Bare (direct) TAP ability die+value choice, e.g. B001A's SET_DIE_VALUE(SELF1|2);
+       GRANT_PLACE_ANYWHERE(...), B003A's CHANGE_DIE_VALUE(SELF±1), or JOB007's
+       MONUMENT_CHANGE_DIE_VALUE(SELF+2) -- see main.js's attachTapToggle/bareTapKind/
+       renderTapChoiceModal. #tap-choice-cards (2026-08-25, per user request: "カードのダイス目も変え
+       られるようにしたい") offers the player's own eligible "fixed BUILD value" cards (始まりの兆し等)
+       as an alternative target to a real die -- see executor.cardOwnFixedBuildValue's own doc. Nothing
+       committed yet, so cancelable. -->
   <div id="tap-choice-overlay" class="card-inst-overlay" hidden>
     <div class="card-inst-modal placement-choice-modal">
       <div class="card-inst-modal__header">
-        <span class="card-inst-modal__title">使うダイスと変更後の目を選択</span>
+        <span class="card-inst-modal__title">対象(ダイスまたはカード)と変更後の値を選択</span>
       </div>
       <div class="card-inst-modal__body">
         <div id="tap-choice-dice" class="tap-choice-dice"></div>
+        <div id="tap-choice-cards" class="tap-choice-dice"></div>
         <div id="tap-choice-values" class="build-choice-payment__group"></div>
       </div>
       <div class="placement-choice-actions">

@@ -865,6 +865,72 @@ function markDieValueChanged(die) {
   die.valueChangedThisTurn = true;
 }
 
+/** The literal buildValue baked into faceId's own TAP field, if (and only if) that TAP resolves to a
+ * bare BUILD(categories,N) with an explicit N -- e.g. 始まりの兆し(B004A/B004B)=1, 終わりの兆し
+ * (B202A)=6/(B202B)=12, 移ろいの兆し(B006A)=4/(B006B)=9. null for anything else: no TAP field, no BUILD
+ * command at all, or a BUILD with no explicit N (e.g. 革命の兆し's bare "BUILD(U)", which always uses
+ * whatever the player's own owned-card upgrade set allows rather than a fixed dice-equivalent number).
+ * A leading/trailing command alongside the BUILD (e.g. B004B's "BUILD(...,1);ADD(BZ)") doesn't disqualify
+ * it -- only the BUILD command's own buildValue matters here. 2026-08-25, per user request: "カードの
+ * ダイス目も変えられるようにしたい" -- this is the generic, data-driven detection (not scoped to any one
+ * card id) that decides which owned cards are eligible targets for SET_DIE_VALUE/CHANGE_DIE_VALUE/
+ * MONUMENT_CHANGE_DIE_VALUE's own context.chosenCardPhysicalId targeting option, see
+ * requireOwnBuildValueCard's own doc. */
+function cardOwnFixedBuildValue(index, faceId) {
+  let row;
+  try { row = getCardRow(index, faceId); } catch (e) { return null; }
+  if (!row.TAP) return null;
+  const buildCmd = lowerProgram(parse(row.TAP)).find((c) => c.type === 'BUILD');
+  if (!buildCmd || buildCmd.buildValue === null) return null;
+  return buildCmd.buildValue;
+}
+
+/** Resolves physicalId into {inst, baseValue} if it's a card playerId actually owns AND is eligible for
+ * dice-value-changer targeting (cardOwnFixedBuildValue returns non-null for it) -- null otherwise (not
+ * owned, or not an eligible "fixed BUILD value" card). baseValue is the card's own printed/DSL-literal
+ * N, used by runChangeCardBuildValue as the starting point for a delta-based change when no override is
+ * active yet. */
+function requireOwnBuildValueCard(state, index, context, physicalId) {
+  const player = getPlayer(state, context.playerId);
+  if (!player.ownedCardPhysicalIds.includes(physicalId)) return null;
+  const inst = state.cards[physicalId];
+  const baseValue = cardOwnFixedBuildValue(index, inst.currentFaceId);
+  if (baseValue === null) return null;
+  return { inst, baseValue };
+}
+
+/** SET_DIE_VALUE/SET_DICE_ANY targeting a card instead of a die (context.chosenCardPhysicalId) --
+ * REPLACES the card's own effective build value outright with chosenValue, same "set to exactly this"
+ * semantics as the die version (not a delta). See requireOwnBuildValueCard's own doc for eligibility. */
+function runSetCardBuildValue(state, index, context, choices, physicalId) {
+  if (context.chosenValue === undefined) {
+    return { success: false, reason: 'CHOICE_REQUIRED', need: [`chosenValue (one of ${choices})`] };
+  }
+  if (choices && !choices.includes(context.chosenValue)) {
+    return { success: false, reason: 'INVALID_CHOICE', allowed: choices };
+  }
+  const target = requireOwnBuildValueCard(state, index, context, physicalId);
+  if (!target) return { success: false, reason: 'INVALID_BUILD_VALUE_CARD' };
+  target.inst.buildValueOverride = context.chosenValue;
+  context.lastTargetedCardPhysicalId = physicalId;
+  return { success: true };
+}
+
+/** CHANGE_DIE_VALUE/MONUMENT_CHANGE_DIE_VALUE targeting a card instead of a die -- ADDS delta to the
+ * card's CURRENT effective value (its own already-active override if one exists this turn, else its
+ * baked-in DSL literal), same "current value, offset by delta" semantics as the die version, and same
+ * no-wrap math (executor.runChangeDieValue's own doc) -- a card's own effective value can go out of
+ * 1..6 range too (e.g. 移ろいの兆し at 4, +2 twice reaching 8), simply meaning fewer/no BUILD candidates
+ * qualify when it's actually used, same as an out-of-range die naturally finds nothing at DICE_MIN=0. */
+function runChangeCardBuildValue(state, index, context, delta, physicalId) {
+  const target = requireOwnBuildValueCard(state, index, context, physicalId);
+  if (!target) return { success: false, reason: 'INVALID_BUILD_VALUE_CARD' };
+  const current = target.inst.buildValueOverride !== null ? target.inst.buildValueOverride : target.baseValue;
+  target.inst.buildValueOverride = current + delta;
+  context.lastTargetedCardPhysicalId = physicalId;
+  return { success: true };
+}
+
 function runSetDiceAny(state, context) {
   if (context.chosenDieId === undefined || context.chosenValue === undefined) {
     return { success: false, reason: 'CHOICE_REQUIRED', need: ['chosenDieId', 'chosenValue (1-6)'] };
@@ -876,9 +942,14 @@ function runSetDiceAny(state, context) {
   return { success: true };
 }
 
-function runSetDieValue(state, context, cmd) {
+function runSetDieValue(state, index, context, cmd) {
+  // 2026-08-25, per user request: this ability can target one of the player's own owned "fixed BUILD
+  // value" cards (始まりの兆し etc.) instead of a real die -- see requireOwnBuildValueCard's own doc.
+  if (context.chosenCardPhysicalId !== undefined) {
+    return runSetCardBuildValue(state, index, context, cmd.choices, context.chosenCardPhysicalId);
+  }
   if (context.chosenDieId === undefined || context.chosenValue === undefined) {
-    return { success: false, reason: 'CHOICE_REQUIRED', need: ['chosenDieId', `chosenValue (one of ${cmd.choices})`] };
+    return { success: false, reason: 'CHOICE_REQUIRED', need: ['chosenDieId or chosenCardPhysicalId', `chosenValue (one of ${cmd.choices})`] };
   }
   if (!cmd.choices.includes(context.chosenValue)) {
     return { success: false, reason: 'INVALID_CHOICE', allowed: cmd.choices };
@@ -890,9 +961,18 @@ function runSetDieValue(state, context, cmd) {
   return { success: true };
 }
 
-function runChangeDieValue(state, context, cmd) {
+function runChangeDieValue(state, index, context, cmd) {
+  if (context.chosenCardPhysicalId !== undefined) {
+    if (context.chosenDelta === undefined) {
+      return { success: false, reason: 'CHOICE_REQUIRED', need: [`chosenDelta (one of ${cmd.choices})`] };
+    }
+    if (!cmd.choices.includes(context.chosenDelta)) {
+      return { success: false, reason: 'INVALID_CHOICE', allowed: cmd.choices };
+    }
+    return runChangeCardBuildValue(state, index, context, context.chosenDelta, context.chosenCardPhysicalId);
+  }
   if (context.chosenDieId === undefined || context.chosenDelta === undefined) {
-    return { success: false, reason: 'CHOICE_REQUIRED', need: ['chosenDieId', `chosenDelta (one of ${cmd.choices})`] };
+    return { success: false, reason: 'CHOICE_REQUIRED', need: ['chosenDieId or chosenCardPhysicalId', `chosenDelta (one of ${cmd.choices})`] };
   }
   if (!cmd.choices.includes(context.chosenDelta)) {
     return { success: false, reason: 'INVALID_CHOICE', allowed: cmd.choices };
@@ -911,10 +991,13 @@ function runChangeDieValue(state, context, cmd) {
  * lowerMonumentChangeDieValue's own doc). Same mechanic as runChangeDieValue just above (no wrap,
  * markDieValueChanged snapshot for applyTurnEnd's revert-if-unplaced), but cmd.delta is a fixed number
  * baked in at DSL-lowering time rather than a player-chosen one of several choices -- only
- * context.chosenDieId is needed, never a chosenDelta. */
-function runMonumentChangeDieValue(state, context, cmd) {
+ * context.chosenDieId (or, 2026-08-25, context.chosenCardPhysicalId) is needed, never a chosenDelta. */
+function runMonumentChangeDieValue(state, index, context, cmd) {
+  if (context.chosenCardPhysicalId !== undefined) {
+    return runChangeCardBuildValue(state, index, context, cmd.delta, context.chosenCardPhysicalId);
+  }
   if (context.chosenDieId === undefined) {
-    return { success: false, reason: 'CHOICE_REQUIRED', need: ['chosenDieId'] };
+    return { success: false, reason: 'CHOICE_REQUIRED', need: ['chosenDieId or chosenCardPhysicalId'] };
   }
   const die = requireOwnDie(state, context, context.chosenDieId);
   markDieValueChanged(die);
@@ -924,6 +1007,13 @@ function runMonumentChangeDieValue(state, context, cmd) {
 }
 
 function runGrantPlaceAnywhere(state, context, cmd) {
+  if (cmd.target === 'THIS_DICE' && context.chosenCardPhysicalId !== undefined) {
+    // The preceding SET_DIE_VALUE/CHANGE_DIE_VALUE/MONUMENT_CHANGE_DIE_VALUE in this same TAP field
+    // targeted a card's own build value instead of a real die (2026-08-25) -- there's no die to grant
+    // this to, and that's fine: the perk simply doesn't apply this time, it doesn't block the rest of
+    // the TAP (a card was already successfully changed by the time this runs).
+    return { success: true };
+  }
   const dieId = cmd.target === 'THIS_DICE' ? context.lastTargetedDieId : undefined;
   if (!dieId) return { success: false, reason: 'NO_TARGET_DICE' };
   const die = requireOwnDie(state, context, dieId);
@@ -1095,9 +1185,9 @@ function runCommand(state, index, context, cmd) {
     case 'UNTAP_CHOICE': return runUntapChoice(state, index, context, cmd);
     case 'SET_CURRENT_AREA': return runSetCurrentArea(state, index, context, cmd);
     case 'SET_DICE_ANY': return runSetDiceAny(state, context);
-    case 'SET_DIE_VALUE': return runSetDieValue(state, context, cmd);
-    case 'CHANGE_DIE_VALUE': return runChangeDieValue(state, context, cmd);
-    case 'MONUMENT_CHANGE_DIE_VALUE': return runMonumentChangeDieValue(state, context, cmd);
+    case 'SET_DIE_VALUE': return runSetDieValue(state, index, context, cmd);
+    case 'CHANGE_DIE_VALUE': return runChangeDieValue(state, index, context, cmd);
+    case 'MONUMENT_CHANGE_DIE_VALUE': return runMonumentChangeDieValue(state, index, context, cmd);
     case 'GRANT_PLACE_ANYWHERE': return runGrantPlaceAnywhere(state, context, cmd);
     case 'BLOCK_BUILD': return runBlockBuild(state, context, cmd);
     case 'MONUMENT_DICE_DISCOUNT': return runMonumentDiceDiscount(state, context, cmd);
@@ -1251,6 +1341,30 @@ function applyTurnEnd(state, index, playerId) {
   for (const die of player.dice) {
     die.valueChangedThisTurn = false;
     die.valueBeforeChangeThisTurn = null;
+  }
+  // A die already sitting in a SLOT (its own occupant record, independent of the live Die object just
+  // above) that shows an out-of-1..6-range value clamps back to the nearest boundary at TURNEND too
+  // (2026-08-25, per user spec: "0は1に　7　8　9などは6に戻る") -- purely a display cleanup: whatever
+  // effect the placement already resolved with (buildValue, etc.) is untouched, this only changes what
+  // the slot shows for the rest of the round. isWildcard occupants are skipped -- their own .value is a
+  // pre-star residual roll, never actually reachable via CHANGE_DIE_VALUE/SET_DIE_VALUE (see placeDice's
+  // own duplicate-value-check doc on why that field means something different for a ☆ occupant).
+  for (const map of Object.values(state.maps)) {
+    for (const occupants of map.slots) {
+      for (const occ of occupants) {
+        if (occ.playerId !== playerId || occ.isWildcard) continue;
+        if (occ.value < 1) occ.value = 1;
+        else if (occ.value > 6) occ.value = 6;
+      }
+    }
+  }
+  // A card's own overridden build value (executor.runSetDieValue/runChangeDieValue/
+  // runMonumentChangeDieValue targeting context.chosenCardPhysicalId instead of a die) is turn-scoped
+  // too, same lifetime as a die's own value change -- see CardInstanceState's own buildValueOverride doc
+  // for why this clears unconditionally (whether the override was ever actually used this turn or not).
+  for (const physicalId of player.ownedCardPhysicalIds) {
+    const inst = state.cards[physicalId];
+    if (inst) inst.buildValueOverride = null;
   }
   // BZ is turn-scoped too (confirmed: "BZはターン終了時に無くなります") -- any left unspent when this
   // turn ends (e.g. generated via JOB004A's CHANGE(3K,2BZ) but never put toward a BUILD before ending
@@ -1449,6 +1563,7 @@ module.exports = {
   grantResource,
   grantResourceAndEmitGet,
   enforceWhiteDiceCap,
+  cardOwnFixedBuildValue,
   payCostList,
   applyBzDiscount,
   enumerateBzOutcomes,

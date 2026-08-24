@@ -675,13 +675,16 @@ function renderWhiteOverflowConfirmModal() {
   document.getElementById('white-overflow-confirm-overlay').hidden = !pendingWhiteOverflowConfirm;
 }
 
-// { playerId, onProceed } | null -- set by withJob007TapPrompt whenever a die placement about to run
-// would offer an UPGRADE/monument BUILD_NEW candidate while JOB007/宮廷人 is owned and untapped
+// { playerId, dieId, onProceed } | null -- set by withJob007TapPrompt whenever a die placement about to
+// run would offer an UPGRADE/monument BUILD_NEW candidate while JOB007/宮廷人 is owned and untapped
 // (2026-08-22, per user request: "LVアップかモニュメント獲得しようとしたとき　宮廷人をタップしますか
-// はい　いいえ"). "はい" taps JOB007 for real (board.useBareTapAbility -- gains BZ, applies
-// MONUMENT_DICE_DISCOUNT(2,THIS_TURN), blocks A/B/C builds this turn) THEN runs onProceed (the
-// placement that was paused); "いいえ" just runs onProceed without tapping -- same "optional, not a
-// blocking warning" shape as renderBuildChoiceBzTapPrompt's own tap-first offer, not
+// はい　いいえ"). dieId (2026-08-25, added when JOB007's own TAP changed to a die-boosting ability) is
+// the specific die JOB007's TAP will target if accepted -- the one about to be placed. "はい" taps
+// JOB007 for real (board.useBareTapAbility, targeting dieId -- gains BZ, applies
+// MONUMENT_CHANGE_DIE_VALUE(SELF+2) to that die, blocks A/B/C builds this turn) THEN runs onProceed (the
+// placement that was paused, which will now place that same die at its boosted value); "いいえ" just
+// runs onProceed without tapping -- same "optional, not a blocking warning" shape as
+// renderBuildChoiceBzTapPrompt's own tap-first offer, not
 // pendingWhiteOverflowConfirm's "are you sure, this loses something" shape, so declining never cancels
 // the placement itself.
 let pendingJob007TapPrompt = null;
@@ -701,9 +704,17 @@ function hasUntappedJob007(state, playerId) {
  * clone of `state` and inspects the *returned* pendingBuild.candidates (unlike wouldCauseWhiteOverflow,
  * which compares a GameState field before/after; here the relevant signal is the action's own return
  * value). Never touches the real `state`. See board.getBuildCandidates' own doc for candidate shape:
- * {type:'UPGRADE',...} or {type:'BUILD_NEW', shopKey:'M', ...} for a monument. */
-function wouldOfferUpgradeOrMonument(state, action) {
+ * {type:'UPGRADE',...} or {type:'BUILD_NEW', shopKey:'M', ...} for a monument.
+ *
+ * dieId (2026-08-25, updated for JOB007's revised TAP -- see pendingJob007TapPrompt's own doc): before
+ * running the dry-run placement, this first simulates tapping JOB007 against dieId on the SAME clone --
+ * JOB007's own MONUMENT_CHANGE_DIE_VALUE(SELF+2) only ever helps THIS specific die reach a higher
+ * threshold now (unlike the old MONUMENT_DICE_DISCOUNT, a global threshold reduction independent of any
+ * one die), so the prediction must boost the same die the real "はい" tap would boost, or it would
+ * under-predict (never offer the prompt in exactly the cases where the +2 is what unlocks a candidate). */
+function wouldOfferUpgradeOrMonument(state, playerId, dieId, action) {
   const clone = gameStateMod.cloneState(state);
+  if (dieId !== null) boardMod.useBareTapAbility(clone, INDEX, { playerId, chosenDieId: dieId }, 'JOB007');
   const result = action(clone);
   const candidates = result && result.actionResult && result.actionResult.pendingBuild && result.actionResult.pendingBuild.candidates;
   if (!candidates) return false;
@@ -711,12 +722,16 @@ function wouldOfferUpgradeOrMonument(state, action) {
 }
 
 /** Shared entry point for all 3 die-placement paths (placeSelectedDie/placeSelectedWildcardDie/
- * placeSelectedDiceGroup) -- see pendingJob007TapPrompt's own doc. dryRunAction mirrors the real
- * placement call (board.placeDice/placeWildcardDie/placeDiceGroup) so wouldOfferUpgradeOrMonument can
- * predict its outcome; proceed is the real (unmodified) continuation to run either way. */
-function withJob007TapPrompt(state, playerId, dryRunAction, proceed) {
-  if (hasUntappedJob007(state, playerId) && wouldOfferUpgradeOrMonument(state, dryRunAction)) {
-    pendingJob007TapPrompt = { playerId, onProceed: proceed };
+ * placeSelectedDiceGroup) -- see pendingJob007TapPrompt's own doc. dieId is the (single, representative)
+ * die JOB007's own TAP would target if accepted -- the die being placed for placeSelectedDie/
+ * placeSelectedWildcardDie, or the first die of the group for placeSelectedDiceGroup (2026-08-25,
+ * updated for JOB007's revised die-boosting TAP -- previously unused, since the old MONUMENT_DICE_
+ * DISCOUNT never targeted a specific die at all). dryRunAction mirrors the real placement call
+ * (board.placeDice/placeWildcardDie/placeDiceGroup) so wouldOfferUpgradeOrMonument can predict its
+ * outcome; proceed is the real (unmodified) continuation to run either way. */
+function withJob007TapPrompt(state, playerId, dieId, dryRunAction, proceed) {
+  if (hasUntappedJob007(state, playerId) && wouldOfferUpgradeOrMonument(state, playerId, dieId, dryRunAction)) {
+    pendingJob007TapPrompt = { playerId, dieId, onProceed: proceed };
     render(STATE);
     return;
   }
@@ -3991,7 +4006,7 @@ function placeSelectedDie(state, dieId, mapId, slotIndex, colorPreference) {
   // accepting it can change what monument candidates this same placement offers (MONUMENT_DICE_
   // DISCOUNT). See pendingJob007TapPrompt's own doc.
   withJob007TapPrompt(
-    state, player.id,
+    state, player.id, dieId,
     (clone) => boardMod.placeDice(clone, INDEX, { playerId: player.id, colorPreference }, dieId, mapId, slotIndex),
     () => placeSelectedDieAfterJob007Check(state, player, dieId, mapId, slotIndex, colorPreference),
   );
@@ -4026,7 +4041,7 @@ function placeSelectedWildcardDie(state, dieId, mapId, colorPreference) {
   const player = state.players.find((p) => p.dice.some((d) => d.id === dieId));
   // JOB007/宮廷人 tap-first offer -- see placeSelectedDie's own doc for the pattern.
   withJob007TapPrompt(
-    state, player.id,
+    state, player.id, dieId,
     (clone) => boardMod.placeWildcardDie(clone, INDEX, { playerId: player.id, colorPreference }, dieId, mapId),
     () => placeSelectedWildcardDieAfterJob007Check(state, player, dieId, mapId, colorPreference),
   );
@@ -4063,7 +4078,7 @@ function placeSelectedDiceGroup(state, mapId) {
   // here: placeDiceGroup is monument-only (castle/元老院), so this is exactly where
   // MONUMENT_DICE_DISCOUNT can turn an otherwise-unreachable monument into a real candidate.
   withJob007TapPrompt(
-    state, player.id,
+    state, player.id, dieIds[0],
     (clone) => boardMod.placeDiceGroup(clone, INDEX, { playerId: player.id }, dieIds, mapId),
     () => placeSelectedDiceGroupAfterJob007Check(state, player, dieIds, mapId),
   );
@@ -4547,11 +4562,25 @@ function renderPlacementChoiceModal() {
   }
 }
 
-/** Die+value choice for a bare TAP ability (SET_DICE_ANY/SET_DIE_VALUE/CHANGE_DIE_VALUE, see
- * attachTapToggle/bareTapKind) -- board.useBareTapAbility needs chosenDieId plus chosenValue (SET_*)
- * or chosenDelta (CHANGE_DIE_VALUE) supplied *before* it runs the TAP field (the whole field is one
- * atomic program, so there's no mid-run prompt). Confirm is disabled until both a die and a value are
- * picked. Cancelable -- nothing committed yet. */
+// Kinds that support targeting one of the player's own eligible cards instead of a real die (2026-08-25,
+// per user request: "カードのダイス目も変えられるようにしたい") -- SET_DICE_ANY is excluded on purpose:
+// no real card uses it any more (JOB003 switched to WILDCARD_DICE), and the user's own spec for this
+// feature only ever listed the SET_DIE_VALUE(1|2)/SET_DIE_VALUE(5|6)/CHANGE_DIE_VALUE(±1)/
+// MONUMENT_CHANGE_DIE_VALUE(+2) family.
+const CARD_TARGETABLE_TAP_KINDS = new Set(['SET_DIE_VALUE', 'CHANGE_DIE_VALUE', 'MONUMENT_CHANGE_DIE_VALUE']);
+
+/** Die (or, 2026-08-25, card) + value choice for a bare TAP ability (SET_DICE_ANY/SET_DIE_VALUE/
+ * CHANGE_DIE_VALUE/MONUMENT_CHANGE_DIE_VALUE, see attachTapToggle/bareTapKind) -- board.useBareTapAbility
+ * needs chosenDieId (or chosenCardPhysicalId) plus chosenValue (SET_*) or chosenDelta
+ * (CHANGE_DIE_VALUE) supplied *before* it runs the TAP field (the whole field is one atomic program, so
+ * there's no mid-run prompt); MONUMENT_CHANGE_DIE_VALUE needs neither -- its delta is a single fixed
+ * number baked into the DSL, so #tap-choice-values stays empty for that kind. Picking a die clears any
+ * card pick and vice versa (mutually exclusive targets, same underlying `context.chosenDieId` XOR
+ * `chosenCardPhysicalId` the engine expects). #tap-choice-cards only lists the player's own untapped
+ * cards whose own TAP resolves to a literal-N BUILD (executor.cardOwnFixedBuildValue's own doc) -- a
+ * tapped one has no near-term use for the override before it's cleared at TURNEND, and CARD_TARGETABLE_
+ * TAP_KINDS gates which bareTap kinds even offer this option at all. Confirm is disabled until a target
+ * is picked (and a value too, for the kinds that need one). Cancelable -- nothing committed yet. */
 function renderTapChoiceModal() {
   const overlay = document.getElementById('tap-choice-overlay');
   if (!pendingTapChoice) {
@@ -4559,7 +4588,7 @@ function renderTapChoiceModal() {
     return;
   }
   overlay.hidden = false;
-  const { playerId, dieId, value, bareTap } = pendingTapChoice;
+  const { playerId, dieId, cardPhysicalId, value, bareTap } = pendingTapChoice;
   const player = STATE.players.find((p) => p.id === playerId);
 
   const diceEl = document.getElementById('tap-choice-dice');
@@ -4568,23 +4597,44 @@ function renderTapChoiceModal() {
     const dieNode = renderDie({ ...die, color: player.color });
     dieNode.classList.add('die--selectable');
     dieNode.classList.toggle('die--selected', die.id === dieId);
-    dieNode.addEventListener('click', () => { pendingTapChoice.dieId = die.id; render(STATE); });
+    dieNode.addEventListener('click', () => { pendingTapChoice.dieId = die.id; pendingTapChoice.cardPhysicalId = null; render(STATE); });
     diceEl.appendChild(dieNode);
+  }
+
+  const cardsEl = document.getElementById('tap-choice-cards');
+  cardsEl.innerHTML = '';
+  if (CARD_TARGETABLE_TAP_KINDS.has(bareTap.kind)) {
+    const eligiblePhysicalIds = player.ownedCardPhysicalIds.filter((physicalId) => {
+      const inst = STATE.cards[physicalId];
+      return !inst.tapped && executorMod.cardOwnFixedBuildValue(INDEX, inst.currentFaceId) !== null;
+    });
+    for (const physicalId of eligiblePhysicalIds) {
+      const inst = STATE.cards[physicalId];
+      const cell = el('div', 'owned-card-cell owned-card-cell--tall owned-card-cell--selectable');
+      cell.classList.toggle('owned-card-cell--selected', physicalId === cardPhysicalId);
+      cell.appendChild(buildCardVisual(inst.currentFaceId, { showEffect: true, noInteraction: true }));
+      cell.addEventListener('click', () => { pendingTapChoice.cardPhysicalId = physicalId; pendingTapChoice.dieId = null; render(STATE); });
+      cardsEl.appendChild(cell);
+    }
   }
 
   const valuesEl = document.getElementById('tap-choice-values');
   valuesEl.innerHTML = '';
-  const valueOptions = bareTap.kind === 'SET_DICE_ANY' ? [1, 2, 3, 4, 5, 6] : bareTap.choices;
-  for (const option of valueOptions) {
-    const label = bareTap.kind === 'CHANGE_DIE_VALUE' ? (option > 0 ? `+${option}` : `${option}`) : `${option}`;
-    const btn = el('button', 'build-choice-payment__option', label);
-    btn.type = 'button';
-    btn.classList.toggle('build-choice-payment__option--active', option === value);
-    btn.addEventListener('click', () => { pendingTapChoice.value = option; render(STATE); });
-    valuesEl.appendChild(btn);
+  if (bareTap.kind !== 'MONUMENT_CHANGE_DIE_VALUE') {
+    const valueOptions = bareTap.kind === 'SET_DICE_ANY' ? [1, 2, 3, 4, 5, 6] : bareTap.choices;
+    for (const option of valueOptions) {
+      const label = bareTap.kind === 'CHANGE_DIE_VALUE' ? (option > 0 ? `+${option}` : `${option}`) : `${option}`;
+      const btn = el('button', 'build-choice-payment__option', label);
+      btn.type = 'button';
+      btn.classList.toggle('build-choice-payment__option--active', option === value);
+      btn.addEventListener('click', () => { pendingTapChoice.value = option; render(STATE); });
+      valuesEl.appendChild(btn);
+    }
   }
 
-  document.getElementById('tap-choice-confirm').disabled = dieId === null || value === null;
+  const hasTarget = dieId !== null || cardPhysicalId !== null;
+  const needsValue = bareTap.kind !== 'MONUMENT_CHANGE_DIE_VALUE';
+  document.getElementById('tap-choice-confirm').disabled = !hasTarget || (needsValue && value === null);
 }
 
 /** Auto/manual mode choice for a card's reactive TAP ability, right after it's acquired (see
@@ -5004,8 +5054,8 @@ function hasFinishedOnboarding(player) {
  * there's nothing to directly use: no TAP field at all, or every top-level statement is ON(...) (a
  * purely event-triggered reaction, e.g. JOB005A's ON(GET(K),CHANGE(K,Z)) -- that's exclusively offered
  * via the TAP_REACTION_AVAILABLE pendingChoice rows/renderTapReactions, never this dblclick). A
- * die-selecting command (SET_DICE_ANY/SET_DIE_VALUE/CHANGE_DIE_VALUE) only ever appears as the *first*
- * statement, so only that needs checking for those 3 kinds. BUILD used to be first-only too, but
+ * die-selecting command (SET_DICE_ANY/SET_DIE_VALUE/CHANGE_DIE_VALUE/MONUMENT_CHANGE_DIE_VALUE) only
+ * ever appears as the *first* statement, so only that needs checking for those 4 kinds. BUILD used to be first-only too, but
  * JOB010's "PAY(2K);BUILD(U)" (2026-08-17) has a flat cost ahead of it -- see
  * board.resolveProgramOrBuild's own doc -- so this checks for BUILD anywhere in the field, not just
  * commands[0] (a no-op change for every other card, where BUILD when present has always been first).
@@ -5020,6 +5070,11 @@ function bareTapKind(faceId) {
   if (first.type === 'SET_DICE_ANY') return { kind: 'SET_DICE_ANY' };
   if (first.type === 'SET_DIE_VALUE') return { kind: 'SET_DIE_VALUE', choices: first.choices };
   if (first.type === 'CHANGE_DIE_VALUE') return { kind: 'CHANGE_DIE_VALUE', choices: first.choices };
+  // MONUMENT_CHANGE_DIE_VALUE(SELF+2) (2026-08-24, JOB007/宮廷人's revised TAP) -- same die-choice
+  // modal as CHANGE_DIE_VALUE, but the delta is a single fixed number baked in at DSL-lowering time
+  // (cmd.delta), never a player-picked one of several choices, so renderTapChoiceModal skips the value
+  // picker for this kind entirely.
+  if (first.type === 'MONUMENT_CHANGE_DIE_VALUE') return { kind: 'MONUMENT_CHANGE_DIE_VALUE' };
   if (commands.some((c) => c.type === 'BUILD')) return { kind: 'BUILD' };
   return { kind: 'IMMEDIATE' };
 }
@@ -5102,7 +5157,7 @@ function attachTapToggle(cardNode, cardState, faceId, canAct, physicalId) {
         placementMessage = `カードを使用できません（${result.reason}）`;
       }
     } else {
-      pendingTapChoice = { physicalId, playerId: cardState.ownerId, bareTap, dieId: null, value: null };
+      pendingTapChoice = { physicalId, playerId: cardState.ownerId, bareTap, dieId: null, cardPhysicalId: null, value: null };
     }
     render(STATE);
   });
@@ -6516,9 +6571,9 @@ document.addEventListener('DOMContentLoaded', () => {
     onProceed();
   });
   document.getElementById('job007-tap-prompt-yes').addEventListener('click', () => {
-    const { playerId, onProceed } = pendingJob007TapPrompt;
+    const { playerId, dieId, onProceed } = pendingJob007TapPrompt;
     pendingJob007TapPrompt = null;
-    boardMod.useBareTapAbility(STATE, INDEX, { playerId }, 'JOB007');
+    boardMod.useBareTapAbility(STATE, INDEX, { playerId, chosenDieId: dieId }, 'JOB007');
     onProceed();
   });
 
@@ -6552,11 +6607,15 @@ document.addEventListener('DOMContentLoaded', () => {
     render(STATE);
   });
   document.getElementById('tap-choice-confirm').addEventListener('click', () => {
-    const { physicalId, playerId, bareTap, dieId, value } = pendingTapChoice;
+    const { physicalId, playerId, bareTap, dieId, cardPhysicalId, value } = pendingTapChoice;
     pendingTapChoice = null;
-    const context = { playerId, chosenDieId: dieId };
+    const context = { playerId };
+    // 2026-08-25: cardPhysicalId (targeting one of the player's own eligible cards) and dieId (a real
+    // die) are mutually exclusive -- see renderTapChoiceModal's own doc.
+    if (cardPhysicalId !== null) context.chosenCardPhysicalId = cardPhysicalId;
+    else context.chosenDieId = dieId;
     if (bareTap.kind === 'CHANGE_DIE_VALUE') context.chosenDelta = value;
-    else context.chosenValue = value;
+    else if (bareTap.kind !== 'MONUMENT_CHANGE_DIE_VALUE') context.chosenValue = value;
     const result = boardMod.useBareTapAbility(STATE, INDEX, context, physicalId);
     placementMessage = result.success ? '' : `カードを使用できません（${result.reason}）`;
     render(STATE);

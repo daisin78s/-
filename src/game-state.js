@@ -227,6 +227,19 @@ function createPlayer(id, name, color = null) {
  * @property {string} currentFaceId    - the data-sheet row currently active, e.g. "A001A" or "A001B"
  * @property {string|null} ownerId     - null while sitting in a deck/shop, set once built/acquired
  * @property {boolean} tapped
+ * @property {number|null} buildValueOverride - set by executor.runSetDieValue/runChangeDieValue/
+ *   runMonumentChangeDieValue when a player targets THIS card (context.chosenCardPhysicalId) instead of
+ *   a real die (2026-08-25, per user request: "カードのダイス目も変えられるようにしたい") -- only ever
+ *   meaningful for a card whose own TAP resolves to a bare BUILD(...,N) with a literal N baked into the
+ *   DSL text (見えるembedded example: 始まりの兆し=1, 終わりの兆し=6/12, 移ろいの兆し=4/9 -- see
+ *   executor.cardOwnFixedBuildValue's own doc for how that's detected generically, not by card id).
+ *   board.useBareTapAbility reads this (via resolveProgramOrBuild's own override param) in place of the
+ *   DSL's own literal N the next time this card's own TAP resolves a BUILD. Cleared unconditionally for
+ *   every card at TURNEND (executor.applyTurnEnd) -- same "use it this turn or lose it" lifetime as an
+ *   unplaced die's own value change, though unlike a die there's no "already resolved, keep forever"
+ *   case to preserve: nothing ever reads a card's override again after its own TAP actually runs (the
+ *   card is tapped by then), so clearing it unconditionally is simplest and has no observable difference
+ *   from a "keep it if used" rule.
  */
 
 /**
@@ -235,7 +248,7 @@ function createPlayer(id, name, color = null) {
  */
 function createCardInstance(faceCardId) {
   const { physicalId } = splitCardId(faceCardId);
-  return { physicalId, currentFaceId: faceCardId, ownerId: null, tapped: false };
+  return { physicalId, currentFaceId: faceCardId, ownerId: null, tapped: false, buildValueOverride: null };
 }
 
 /**
