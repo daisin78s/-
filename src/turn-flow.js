@@ -59,17 +59,16 @@ function rerollDiceForNextRound(state) {
 }
 
 /**
- * Advances state.round and prepares that round's board: reveals the special
- * shop at round 2 (SHOP sheet's ROUND_MIN=2). Does NOT roll dice -- both
- * unplaced COLOR and unplaced WHITE dice are bulk-rerolled at the *end* of
- * the previous round instead (see endRound()/rerollDiceForNextRound()).
- * Does not touch turnOrder or currentPlayerIndex -- call this once, then
- * drive play via getNextTurn()/endTurn()/endRound().
+ * Advances state.round and prepares that round's board. Does NOT roll dice -- both unplaced COLOR and
+ * unplaced WHITE dice are bulk-rerolled at the *end* of the previous round instead (see endRound()/
+ * rerollDiceForNextRound()). Does not touch turnOrder or currentPlayerIndex -- call this once, then
+ * drive play via getNextTurn()/endTurn()/endRound(). (2026-08-24: no longer reveals SHOP201-203 at round
+ * 2 -- setup.prepareShops now fills it from the very start, see its own doc; only *purchasing* from it
+ * stays round-gated, per board.specialShopMinRound, checked at build-candidate time instead.)
  */
 function startRound(state) {
   state.round += 1;
   state.phase = 'ROUND';
-  if (state.round === 2) setup.revealSpecialShop(state);
   return state.round;
 }
 

@@ -203,6 +203,57 @@
       "START_ORDER": "",
       "AUTO": "",
       "INST": ""
+    },
+    {
+      "ID": "M401",
+      "NAME": "",
+      "DICE": ">=1",
+      "COST": "15K",
+      "EMBLEM_A": "",
+      "EMBLEM_B": "",
+      "EMBLEM_C": "",
+      "VP": 8,
+      "ONCE": "",
+      "TAP": "",
+      "PASSIVE": "",
+      "TURNEND": "",
+      "START_ORDER": "",
+      "AUTO": "",
+      "INST": ""
+    },
+    {
+      "ID": "M402",
+      "NAME": "",
+      "DICE": ">=6",
+      "COST": "4A,4B,4C",
+      "EMBLEM_A": 3,
+      "EMBLEM_B": 3,
+      "EMBLEM_C": 3,
+      "VP": 8,
+      "ONCE": "",
+      "TAP": "",
+      "PASSIVE": "",
+      "TURNEND": "",
+      "START_ORDER": "",
+      "AUTO": "",
+      "INST": ""
+    },
+    {
+      "ID": "M403",
+      "NAME": "",
+      "DICE": ">=13",
+      "COST": "1A1B1C",
+      "EMBLEM_A": 1,
+      "EMBLEM_B": 1,
+      "EMBLEM_C": 1,
+      "VP": 8,
+      "ONCE": "",
+      "TAP": "",
+      "PASSIVE": "",
+      "TURNEND": "",
+      "START_ORDER": "",
+      "AUTO": "",
+      "INST": ""
     }
   ],
   "A": [
@@ -256,22 +307,6 @@
     },
     {
       "ID": "A004A",
-      "NAME": "孤児院の支配",
-      "DICE": "",
-      "COST": "A,B",
-      "EMBLEM_A": 1,
-      "VP": 0,
-      "LEVEL": 1,
-      "ONCE": "MAP010.CURRENT_AREA=AREA010B",
-      "TAP": "",
-      "PASSIVE": "",
-      "TURNEND": "",
-      "START_ORDER": "",
-      "AUTO": "",
-      "INST": "孤児院LV1の支配"
-    },
-    {
-      "ID": "A005A",
       "NAME": "小麦畑の支配",
       "DICE": "",
       "COST": "2A,B",
@@ -287,7 +322,7 @@
       "INST": "小麦畑LV1の支配"
     },
     {
-      "ID": "A006A",
+      "ID": "A005A",
       "NAME": "農園の支配",
       "DICE": "",
       "COST": "2A,B",
@@ -303,7 +338,7 @@
       "INST": "農園LV1の支配"
     },
     {
-      "ID": "A007A",
+      "ID": "A006A",
       "NAME": "歓楽街の支配",
       "DICE": "",
       "COST": "2A,B",
@@ -319,7 +354,39 @@
       "INST": "歓楽街LV1の支配"
     },
     {
-      "ID": "A008A",
+      "ID": "A201A",
+      "NAME": "孤児院の支配",
+      "DICE": "",
+      "COST": "A,B",
+      "EMBLEM_A": 1,
+      "VP": 0,
+      "LEVEL": 1,
+      "ONCE": "MAP010.CURRENT_AREA=AREA010B",
+      "TAP": "",
+      "PASSIVE": "",
+      "TURNEND": "",
+      "START_ORDER": "",
+      "AUTO": "",
+      "INST": "孤児院LV1の支配"
+    },
+    {
+      "ID": "A202A",
+      "NAME": "訓練場の支配",
+      "DICE": "",
+      "COST": "2A,B",
+      "EMBLEM_A": 1,
+      "VP": 0,
+      "LEVEL": 1,
+      "ONCE": "MAP007.CURRENT_AREA=AREA007B",
+      "TAP": "",
+      "PASSIVE": "",
+      "TURNEND": "",
+      "START_ORDER": "",
+      "AUTO": "",
+      "INST": "訓練場LV1の支配\nこのAREAにダイスが置かれたとき\n色D上限5になる"
+    },
+    {
+      "ID": "A301A",
       "NAME": "元老院の支配",
       "DICE": "",
       "COST": "3A,B",
@@ -384,29 +451,13 @@
     },
     {
       "ID": "A004B",
-      "NAME": "孤児院の支配LV2",
-      "DICE": "",
-      "COST": "A,B",
-      "EMBLEM_A": 1,
-      "VP": 1,
-      "LEVEL": 2,
-      "ONCE": "MAP010.CURRENT_AREA=AREA010C",
-      "TAP": "",
-      "PASSIVE": "",
-      "TURNEND": "",
-      "START_ORDER": "",
-      "AUTO": "",
-      "INST": "孤児院LV2の支配"
-    },
-    {
-      "ID": "A005B",
-      "NAME": "小麦畑の支配LV2",
+      "NAME": "小麦畑の支配",
       "DICE": "",
       "COST": "2A,B",
       "EMBLEM_A": 1,
-      "VP": 1,
-      "LEVEL": 2,
-      "ONCE": "MAP001.CURRENT_AREA=AREA001C",
+      "VP": 0,
+      "LEVEL": 1,
+      "ONCE": "MAP001.CURRENT_AREA=AREA001B",
       "TAP": "",
       "PASSIVE": "",
       "TURNEND": "",
@@ -415,13 +466,13 @@
       "INST": "小麦畑LV2の支配"
     },
     {
-      "ID": "A006B",
-      "NAME": "農園の支配LV2",
+      "ID": "A005B",
+      "NAME": "農園の支配",
       "DICE": "",
       "COST": "2A,B",
       "EMBLEM_A": 1,
-      "VP": 1,
-      "LEVEL": 2,
+      "VP": 0,
+      "LEVEL": 1,
       "ONCE": "MAP002.CURRENT_AREA=AREA002C",
       "TAP": "",
       "PASSIVE": "",
@@ -431,13 +482,13 @@
       "INST": "農園LV2の支配"
     },
     {
-      "ID": "A007B",
-      "NAME": "歓楽街の支配LV2",
+      "ID": "A006B",
+      "NAME": "歓楽街の支配",
       "DICE": "",
       "COST": "2A,B",
       "EMBLEM_A": 1,
-      "VP": 1,
-      "LEVEL": 2,
+      "VP": 0,
+      "LEVEL": 1,
       "ONCE": "MAP006.CURRENT_AREA=AREA006C",
       "TAP": "",
       "PASSIVE": "",
@@ -447,13 +498,45 @@
       "INST": "歓楽街LV2の支配"
     },
     {
-      "ID": "A008B",
-      "NAME": "元老院の支配LV2",
+      "ID": "A201B",
+      "NAME": "孤児院の支配",
+      "DICE": "",
+      "COST": "A,B",
+      "EMBLEM_A": 1,
+      "VP": 0,
+      "LEVEL": 1,
+      "ONCE": "MAP010.CURRENT_AREA=AREA010C",
+      "TAP": "",
+      "PASSIVE": "",
+      "TURNEND": "",
+      "START_ORDER": "",
+      "AUTO": "",
+      "INST": "孤児院LV2の支配"
+    },
+    {
+      "ID": "A202B",
+      "NAME": "訓練場の支配",
+      "DICE": "",
+      "COST": "A,B",
+      "EMBLEM_A": 1,
+      "VP": 0,
+      "LEVEL": 1,
+      "ONCE": "MAP007.CURRENT_AREA=AREA007C",
+      "TAP": "",
+      "PASSIVE": "",
+      "TURNEND": "",
+      "START_ORDER": "",
+      "AUTO": "",
+      "INST": "訓練場LV2の支配\nこのAREAにダイスが置かれたとき\n色D上限5になる"
+    },
+    {
+      "ID": "A301B",
+      "NAME": "元老院の支配",
       "DICE": "",
       "COST": "3A,B",
       "EMBLEM_A": 1,
-      "VP": 1,
-      "LEVEL": 2,
+      "VP": 0,
+      "LEVEL": 1,
       "ONCE": "MAP009.CURRENT_AREA=AREA009C",
       "TAP": "",
       "PASSIVE": "",
@@ -514,6 +597,54 @@
     },
     {
       "ID": "B004A",
+      "NAME": "始まりの兆し",
+      "DICE": "",
+      "COST": "2B,1C",
+      "EMBLEM_B": 1,
+      "VP": 0,
+      "LEVEL": 1,
+      "ONCE": "",
+      "TAP": "BUILD((A,B,C,M),1)",
+      "PASSIVE": "",
+      "TURNEND": "",
+      "START_ORDER": "",
+      "AUTO": "M",
+      "INST": "カード一枚を獲得する\nダイス目は1\n通常通り資源は必要"
+    },
+    {
+      "ID": "B005A",
+      "NAME": "革命の兆し",
+      "DICE": "",
+      "COST": "2B,1C",
+      "EMBLEM_B": 1,
+      "VP": 0,
+      "LEVEL": 1,
+      "ONCE": "",
+      "TAP": "BUILD(U)",
+      "PASSIVE": "",
+      "TURNEND": "",
+      "START_ORDER": "",
+      "AUTO": "M",
+      "INST": "LVアップする\n通常通り資源は必要"
+    },
+    {
+      "ID": "B006A",
+      "NAME": "○○の兆し",
+      "DICE": "",
+      "COST": "2B,1C",
+      "EMBLEM_B": 1,
+      "VP": 0,
+      "LEVEL": 1,
+      "ONCE": "",
+      "TAP": "BUILD((A,B,C,M),4)",
+      "PASSIVE": "",
+      "TURNEND": "",
+      "START_ORDER": "",
+      "AUTO": "",
+      "INST": "カード一枚を獲得する\nダイス目は4\n通常通り資源は必要"
+    },
+    {
+      "ID": "B201A",
       "NAME": "双星の加護",
       "DICE": "",
       "COST": "1B,1C",
@@ -529,23 +660,7 @@
       "INST": "即時ｗDを2個得る"
     },
     {
-      "ID": "B005A",
-      "NAME": "始まりの兆し",
-      "DICE": "",
-      "COST": "2B,1C",
-      "EMBLEM_B": 1,
-      "VP": 0,
-      "LEVEL": 1,
-      "ONCE": "",
-      "TAP": "PAY(K);BUILD((A,B,C,M),1)",
-      "PASSIVE": "",
-      "TURNEND": "",
-      "START_ORDER": "",
-      "AUTO": "M",
-      "INST": "⤵1Kを払う　カード一枚を獲得する\nダイス目は1\n通常通り資源は必要"
-    },
-    {
-      "ID": "B006A",
+      "ID": "B202A",
       "NAME": "終わりの兆し",
       "DICE": "",
       "COST": "2B,1C",
@@ -553,31 +668,15 @@
       "VP": 0,
       "LEVEL": 1,
       "ONCE": "",
-      "TAP": "PAY(K);BUILD((A,B,C,M),6)",
+      "TAP": "BUILD((A,B,C,M),6)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "M",
-      "INST": "⤵1Kを払う　カード一枚を獲得する\nダイス目は6\n通常通り資源は必要"
+      "INST": "カード一枚を獲得する\nダイス目は6\n通常通り資源は必要"
     },
     {
-      "ID": "B007A",
-      "NAME": "革命の兆し",
-      "DICE": "",
-      "COST": "2B,1C",
-      "EMBLEM_B": 1,
-      "VP": 0,
-      "LEVEL": 1,
-      "ONCE": "",
-      "TAP": "PAY(K);BUILD(U)",
-      "PASSIVE": "",
-      "TURNEND": "",
-      "START_ORDER": "",
-      "AUTO": "M",
-      "INST": "⤵1Kを払う　LVアップする\n通常通り資源は必要"
-    },
-    {
-      "ID": "B008A",
+      "ID": "B301A",
       "NAME": "栄光の証",
       "DICE": "",
       "COST": "3B,1C",
@@ -633,31 +732,15 @@
       "VP": 1,
       "LEVEL": 2,
       "ONCE": "ADD(wD)",
-      "TAP": "CHANGE_DIE_VALUE(SELF±1);GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN)",
+      "TAP": "CHANGE_DIE_VALUE(SELF±1)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "即時ｗDを１個得る\n自分のダイス目１個を+1か-1する\nこのターンそれはどのAREAにも置ける"
+      "INST": "即時ｗDを１個得る\n自分のダイス目１個を+1か-1する"
     },
     {
       "ID": "B004B",
-      "NAME": "双星の加護LV2",
-      "DICE": "",
-      "COST": "1B,1C",
-      "EMBLEM_B": 1,
-      "VP": 1,
-      "LEVEL": 2,
-      "ONCE": "ADD(wD)",
-      "TAP": "",
-      "PASSIVE": "",
-      "TURNEND": "",
-      "START_ORDER": "",
-      "AUTO": "",
-      "INST": "即時ｗDを１個得る"
-    },
-    {
-      "ID": "B005B",
       "NAME": "始まりの兆しLV2",
       "DICE": "",
       "COST": "2B,1C",
@@ -673,23 +756,7 @@
       "INST": "⤵カード一枚を獲得する\nダイス目は1\n獲得に必要な１資源軽減する"
     },
     {
-      "ID": "B006B",
-      "NAME": "終わりの兆しLV2",
-      "DICE": "",
-      "COST": "2B,1C",
-      "EMBLEM_B": 1,
-      "VP": 1,
-      "LEVEL": 2,
-      "ONCE": "",
-      "TAP": "BUILD(M,12)",
-      "PASSIVE": "",
-      "TURNEND": "",
-      "START_ORDER": "",
-      "AUTO": "M",
-      "INST": "⤵カード一枚を獲得する\nダイス目は12\n通常通り資源は必要"
-    },
-    {
-      "ID": "B007B",
+      "ID": "B005B",
       "NAME": "革命の兆しLV2",
       "DICE": "",
       "COST": "2B,1C",
@@ -705,7 +772,55 @@
       "INST": "⤵LVアップする\n獲得に必要な１資源軽減する"
     },
     {
-      "ID": "B008B",
+      "ID": "B006B",
+      "NAME": "○○の兆しLV2",
+      "DICE": "",
+      "COST": "2B,1C",
+      "EMBLEM_B": 1,
+      "VP": 1,
+      "LEVEL": 2,
+      "ONCE": "",
+      "TAP": "BUILD((M),9)",
+      "PASSIVE": "",
+      "TURNEND": "",
+      "START_ORDER": "",
+      "AUTO": "",
+      "INST": "カード一枚を獲得する\nダイス目は9\n通常通り資源は必要"
+    },
+    {
+      "ID": "B201B",
+      "NAME": "双星の加護LV2",
+      "DICE": "",
+      "COST": "1B,1C",
+      "EMBLEM_B": 1,
+      "VP": 1,
+      "LEVEL": 2,
+      "ONCE": "ADD(2wD)",
+      "TAP": "",
+      "PASSIVE": "",
+      "TURNEND": "",
+      "START_ORDER": "",
+      "AUTO": "",
+      "INST": "即時ｗDを2個得る"
+    },
+    {
+      "ID": "B202B",
+      "NAME": "終わりの兆しLV2",
+      "DICE": "",
+      "COST": "2B,1C",
+      "EMBLEM_B": 1,
+      "VP": 1,
+      "LEVEL": 2,
+      "ONCE": "",
+      "TAP": "BUILD(M,12)",
+      "PASSIVE": "",
+      "TURNEND": "",
+      "START_ORDER": "",
+      "AUTO": "M",
+      "INST": "⤵カード一枚を獲得する\nダイス目は12\n通常通り資源は必要"
+    },
+    {
+      "ID": "B301B",
       "NAME": "栄光の証LV2",
       "DICE": "",
       "COST": "3B,1C",
@@ -772,22 +887,6 @@
     },
     {
       "ID": "C004A",
-      "NAME": "農夫",
-      "DICE": "",
-      "COST": "1A,1C",
-      "EMBLEM_C": 1,
-      "VP": 0,
-      "LEVEL": 1,
-      "ONCE": "",
-      "TAP": "ADD(2K)",
-      "PASSIVE": "",
-      "TURNEND": "",
-      "START_ORDER": "",
-      "AUTO": "A",
-      "INST": ""
-    },
-    {
-      "ID": "C005A",
       "NAME": "貴族",
       "DICE": "",
       "COST": "1A,2C",
@@ -803,7 +902,7 @@
       "INST": ""
     },
     {
-      "ID": "C006A",
+      "ID": "C005A",
       "NAME": "司教",
       "DICE": "",
       "COST": "1A,2C",
@@ -819,7 +918,7 @@
       "INST": ""
     },
     {
-      "ID": "C007A",
+      "ID": "C006A",
       "NAME": "金貸し",
       "DICE": "",
       "COST": "1A,2C",
@@ -835,8 +934,40 @@
       "INST": ""
     },
     {
-      "ID": "C008A",
+      "ID": "C201A",
+      "NAME": "農夫",
+      "DICE": "",
+      "COST": "1A,1C",
+      "EMBLEM_C": 1,
+      "VP": 0,
+      "LEVEL": 1,
+      "ONCE": "",
+      "TAP": "ADD(3K)",
+      "PASSIVE": "",
+      "TURNEND": "",
+      "START_ORDER": "",
+      "AUTO": "A",
+      "INST": ""
+    },
+    {
+      "ID": "C202A",
       "NAME": "聖女",
+      "DICE": "",
+      "COST": "1A2C",
+      "EMBLEM_C": 1,
+      "VP": 0,
+      "LEVEL": 1,
+      "ONCE": "",
+      "TAP": "ADD(wD)",
+      "PASSIVE": "",
+      "TURNEND": "",
+      "START_ORDER": "",
+      "AUTO": "A",
+      "INST": ""
+    },
+    {
+      "ID": "C301A",
+      "NAME": "王女",
       "DICE": "",
       "COST": "1A,3C",
       "EMBLEM_C": 1,
@@ -848,7 +979,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "カードをすべてアンタップする"
+      "INST": "カードをすべてアンタップする\n兆しカード以外"
     },
     {
       "ID": "C001B",
@@ -900,22 +1031,6 @@
     },
     {
       "ID": "C004B",
-      "NAME": "農夫LV2",
-      "DICE": "",
-      "COST": "1A,1C",
-      "EMBLEM_C": 1,
-      "VP": 1,
-      "LEVEL": 2,
-      "ONCE": "",
-      "TAP": "ADD(4K)",
-      "PASSIVE": "",
-      "TURNEND": "",
-      "START_ORDER": "",
-      "AUTO": "A",
-      "INST": ""
-    },
-    {
-      "ID": "C005B",
       "NAME": "貴族LV2",
       "DICE": "",
       "COST": "1A,2C",
@@ -931,7 +1046,7 @@
       "INST": ""
     },
     {
-      "ID": "C006B",
+      "ID": "C005B",
       "NAME": "司教LV2",
       "DICE": "",
       "COST": "1A,2C",
@@ -947,7 +1062,7 @@
       "INST": ""
     },
     {
-      "ID": "C007B",
+      "ID": "C006B",
       "NAME": "金貸しLV2",
       "DICE": "",
       "COST": "1A,2C",
@@ -963,8 +1078,40 @@
       "INST": ""
     },
     {
-      "ID": "C008B",
+      "ID": "C201B",
+      "NAME": "農夫LV2",
+      "DICE": "",
+      "COST": "1A,1C",
+      "EMBLEM_C": 1,
+      "VP": 1,
+      "LEVEL": 2,
+      "ONCE": "",
+      "TAP": "ADD(6K)",
+      "PASSIVE": "",
+      "TURNEND": "",
+      "START_ORDER": "",
+      "AUTO": "A",
+      "INST": ""
+    },
+    {
+      "ID": "C202B",
       "NAME": "聖女LV2",
+      "DICE": "",
+      "COST": "1A2C",
+      "EMBLEM_C": 1,
+      "VP": 1,
+      "LEVEL": 2,
+      "ONCE": "UNTAP_ALL(SELF)",
+      "TAP": "ADD(wD)",
+      "PASSIVE": "",
+      "TURNEND": "",
+      "START_ORDER": "",
+      "AUTO": "A",
+      "INST": "カードをすべてアンタップする\n兆しカード以外"
+    },
+    {
+      "ID": "C301B",
+      "NAME": "王女LV2",
       "DICE": "",
       "COST": "1A,3C",
       "EMBLEM_C": 1,
@@ -976,7 +1123,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "カードをすべてアンタップする"
+      "INST": "カードをすべてアンタップする\n兆しカード以外"
     }
   ],
   "CON": [
@@ -1693,12 +1840,12 @@
       "EMBLEM_C": "",
       "VP": "",
       "ONCE": "",
-      "TAP": "CHANGE(3K,2BZ)",
+      "TAP": "CHANGE(3K,2Z)",
       "PASSIVE": "",
       "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "TAPした時、3食料を消費して2資源軽減を得る\n毎ターンアンタップする"
+      "INST": "TAPした時、3食料を消費して2Zを得る\n毎ターンアンタップする"
     },
     {
       "ID": "JOB005",
@@ -1744,12 +1891,12 @@
       "EMBLEM_C": "",
       "VP": "",
       "ONCE": "",
-      "TAP": "ADD(BZ);MONUMENT_DICE_DISCOUNT(2,THIS_TURN);BLOCK_BUILD(A,THIS_TURN);BLOCK_BUILD(B,THIS_TURN);BLOCK_BUILD(C,THIS_TURN)",
+      "TAP": "ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+2);BLOCK_BUILD(A,THIS_TURN);BLOCK_BUILD(B,THIS_TURN);BLOCK_BUILD(C,THIS_TURN)",
       "PASSIVE": "",
       "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "TAPした時、１資源軽減を得る\nこのターンモニュメントの必要ダイスを2下げる\nこのターンA,B,Cカードを建築できない"
+      "INST": "TAPした時、１資源軽減を得る\nこのターン自分のダイス目１個を+2する\nこのターンA,B,Cカードを建築できない"
     },
     {
       "ID": "JOB008",
@@ -1928,7 +2075,7 @@
     {
       "ID": "MAP007",
       "NAME": "MAP007",
-      "CURRENT_AREA": "AREA007"
+      "CURRENT_AREA": "AREA007A"
     },
     {
       "ID": "MAP008",
@@ -2020,7 +2167,7 @@
       "INST": ""
     },
     {
-      "ID": "AREA007",
+      "ID": "AREA007A",
       "NAME": "訓練場",
       "SLOT1": "ANY",
       "SLOT2": "ANY",
@@ -2140,14 +2287,26 @@
       "INST": ""
     },
     {
+      "ID": "AREA007B",
+      "NAME": "訓練場",
+      "SLOT1": "EX",
+      "SLOT2": "EX",
+      "SLOT3": "NONE",
+      "SLOT4": "NONE",
+      "SLOT5": "NONE",
+      "SLOT6": "NONE",
+      "ACTION": "ADD(D)",
+      "INST": ""
+    },
+    {
       "ID": "AREA009B",
       "NAME": "元老院LV1",
       "SLOT1": "ANY",
       "SLOT2": "ANY",
       "SLOT3": "ANY",
-      "SLOT4": "EX",
-      "SLOT5": "NONE",
-      "SLOT6": "NONE",
+      "SLOT4": "ANY",
+      "SLOT5": "EX",
+      "SLOT6": "EX",
       "ACTION": "BUILD();ADD(2K)",
       "INST": ""
     },
@@ -2160,7 +2319,7 @@
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
-      "ACTION": "CHANGE(4K,2VP)",
+      "ACTION": "CHANGE(3K,2VP)",
       "INST": ""
     },
     {
@@ -2236,14 +2395,26 @@
       "INST": ""
     },
     {
+      "ID": "AREA007C",
+      "NAME": "訓練場",
+      "SLOT1": "EX",
+      "SLOT2": "EX",
+      "SLOT3": "NONE",
+      "SLOT4": "NONE",
+      "SLOT5": "NONE",
+      "SLOT6": "NONE",
+      "ACTION": "ADD(D)",
+      "INST": ""
+    },
+    {
       "ID": "AREA009C",
       "NAME": "元老院LV2",
       "SLOT1": "ANY",
       "SLOT2": "ANY",
       "SLOT3": "ANY",
-      "SLOT4": "EX",
-      "SLOT5": "NONE",
-      "SLOT6": "NONE",
+      "SLOT4": "ANY",
+      "SLOT5": "EX",
+      "SLOT6": "EX",
       "ACTION": "BUILD();ADD(2K,BZ)",
       "INST": ""
     },
@@ -2256,7 +2427,7 @@
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
-      "ACTION": "CHANGE(2K,2VP)",
+      "ACTION": "CHANGE(1K,2VP)",
       "INST": ""
     }
   ],

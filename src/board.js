@@ -1516,6 +1516,20 @@ function grantLandlordBonusIfEarned(state, index, context, mapId, alreadyHadOwnC
   executor.notifyActivation(state, context.playerId, player.jobCardId, player.jobCardId, 'PASSIVE');
 }
 
+/** The minimum round a SHOP201-203 (SPECIAL) card becomes purchasable, derived from its own ID's number
+ * (2026-08-24 rework, per user spec): wave 1 (200-299, A201/A202 families) from round 2, wave 2 (300-399,
+ * A301 family, the former A008/B008/C008) from round 3, wave 3 (400+, M401-403) from round 4. This is
+ * separate from *visibility* -- a card can already be sitting in a slot (see setup.prepareShops' own doc
+ * on the concatenated-drawPile reveal) well before its own round arrives; getBuildCandidates uses this to
+ * keep it out of the buildable candidate list until then, and main.js uses the exported copy of this same
+ * function to show it with a locked overlay in the meantime. Exported for that reason. */
+function specialShopMinRound(faceId) {
+  const num = Number(splitCardId(faceId).physicalId.replace(/^[A-Z]+/, ''));
+  if (num < 300) return 2;
+  if (num < 400) return 3;
+  return 4;
+}
+
 /**
  * Lists every legal choice for a BUILD command (already lowered by
  * command-builder: {categories, buildValue}). Does not mutate state or pay
@@ -1543,6 +1557,7 @@ function getBuildCandidates(state, index, playerId, categories, buildValue, monu
       for (const [slotId, faceId] of Object.entries(state.shops[shopKey].slots)) {
         if (!faceId) continue;
         if (!normalCategories.includes(faceId[0])) continue;
+        if (shopKey === 'SPECIAL' && state.round < specialShopMinRound(faceId)) continue;
         const shopRow = getShopRow(index, slotId);
         if (buildValue >= shopRow.DICE_MIN && buildValue <= shopRow.DICE_MAX) {
           candidates.push({ type: 'BUILD_NEW', faceId, shopKey, slotId });
@@ -1556,11 +1571,19 @@ function getBuildCandidates(state, index, playerId, categories, buildValue, monu
     // DISCOUNT(n,THIS_TURN) grant (2026-08-18, JOB007/密使) -- floored at 0 so a large enough discount
     // just makes every monument buildable regardless of dice value, rather than going negative.
     const discountedThreshold = (rawThreshold) => Math.max(0, rawThreshold - player.monumentDiceDiscountThisTurn);
-    for (const [slotId, faceId] of Object.entries(state.shops.M.slots)) {
-      if (!faceId) continue;
+    // Monuments can sit in 2 different shops: the ordinary M deck (SHOP001-006) and SHOP201-203's own
+    // wave 3 (M401-403, 2026-08-24 SHOP201-203 rework -- see specialShopMinRound's own doc). SPECIAL's
+    // slots hold A/B/C-family cards during waves 1/2, so faceId[0]==='M' filters those out naturally.
+    const monumentSlotSources = [
+      ...Object.entries(state.shops.M.slots).map(([slotId, faceId]) => ({ slotId, faceId, shopKey: 'M' })),
+      ...Object.entries(state.shops.SPECIAL.slots).map(([slotId, faceId]) => ({ slotId, faceId, shopKey: 'SPECIAL' })),
+    ];
+    for (const { slotId, faceId, shopKey } of monumentSlotSources) {
+      if (!faceId || faceId[0] !== 'M') continue;
+      if (shopKey === 'SPECIAL' && state.round < specialShopMinRound(faceId)) continue;
       const threshold = discountedThreshold(parseMonumentThreshold(getCardRow(index, faceId).DICE));
       if (monumentBuildValue >= threshold) {
-        candidates.push({ type: 'BUILD_NEW', faceId, shopKey: 'M', slotId });
+        candidates.push({ type: 'BUILD_NEW', faceId, shopKey, slotId });
       }
     }
   }
@@ -1678,16 +1701,17 @@ function compactShop(state, shopKey) {
 }
 
 /** Compacts shopKey's row (see compactShop's own doc for why the shift half also now runs immediately
- * after every build, ahead of this), then, for restockable shops (M/NORMAL; SPECIAL never restocks),
- * refills those trailing empties from the draw pile in position order. Still only called at TURNEND,
- * unchanged -- the compactShop call here is harmless/idempotent even when nothing moved since the last
- * build. SPECIAL is deliberately excluded from the refill loop rather than relying on its drawPile
- * happening to be empty -- during round 1, before revealSpecialShop() runs, its 3 cards already sit in
- * drawPile with all slots null, so without this explicit exclusion the very first TURNEND would
- * prematurely reveal them ahead of the SHOP sheet's ROUND_MIN=2. */
+ * after every build, ahead of this), then refills those trailing empties from the draw pile in position
+ * order. Still only called at TURNEND, unchanged -- the compactShop call here is harmless/idempotent even
+ * when nothing moved since the last build.
+ *
+ * SPECIAL (SHOP201-203) uses this exact same refill loop, unmodified (2026-08-24 rework, replacing the
+ * old "SPECIAL never restocks" exclusion this function used to have) -- its own drawPile is 3 waves'
+ * worth of ids concatenated in order (see setup.prepareShops' own doc), so drawing FIFO from its front
+ * via this ordinary loop is precisely what makes wave 2 progressively appear as wave 1 sells out, with no
+ * dedicated wave-tracking logic needed here at all. */
 function restockShop(state, shopKey) {
   compactShop(state, shopKey);
-  if (shopKey === 'SPECIAL') return;
   const shop = state.shops[shopKey];
   for (const id of Object.keys(shop.slots)) {
     if (shop.slots[id] === null && shop.drawPile.length > 0) {
@@ -1713,6 +1737,7 @@ module.exports = {
   completeAreaBuild,
   useBareTapAbility,
   getBuildCandidates,
+  specialShopMinRound,
   isUpgradeBlockedByQstRank,
   hasAnyUpgradeEligibleCard,
   isColorDieReuseBlocked,

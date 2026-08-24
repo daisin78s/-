@@ -114,6 +114,28 @@ function lowerChangeDieValue(node) {
   return { type: 'CHANGE_DIE_VALUE', scope: identLikeName(target), choices: [target.plusMinus, -target.plusMinus] };
 }
 
+/** MONUMENT_CHANGE_DIE_VALUE(SELF+2) (2026-08-24, JOB007/宮廷人's revised TAP, replacing
+ * MONUMENT_DICE_DISCOUNT entirely: "このターン自分のダイス目1個を+2する"). Same underlying mechanic as
+ * CHANGE_DIE_VALUE (executor.runMonumentChangeDieValue reuses runChangeDieValue's own no-wrap math and
+ * markDieValueChanged/applyTurnEnd revert-if-unplaced behavior, confirmed with the user), but the delta
+ * is a single FIXED signed number, not a player-chosen ±N pair -- so unlike CHANGE_DIE_VALUE's `choices`
+ * array, this only ever needs context.chosenDieId, never a chosenDelta choice. dsl-parser has no direct
+ * "IDENT+NUMBER" suffix grammar (only 'IDENT2|3' pipe-lists and 'IDENT±N') -- "SELF+2" instead parses via
+ * the general arith_tail rule into a BinaryOp(op:'+', left:Ident('SELF'), right:Number(2)), same as e.g.
+ * "COUNT(天)-1" elsewhere, so this reads that shape directly rather than an Ident's own .plusMinus/.choices. */
+function lowerMonumentChangeDieValue(node) {
+  const target = node.args[0];
+  if (target.type !== 'BinaryOp' || target.left.type !== 'Ident') {
+    throw new CommandBuildError(`MONUMENT_CHANGE_DIE_VALUE expects SELF+N or SELF-N, got a ${target.type}`);
+  }
+  const magnitude = numberValue(target.right);
+  return {
+    type: 'MONUMENT_CHANGE_DIE_VALUE',
+    scope: identLikeName(target.left),
+    delta: target.op === '-' ? -magnitude : magnitude,
+  };
+}
+
 function lowerCall(node) {
   switch (node.name) {
     case 'ADD':
@@ -251,6 +273,8 @@ function lowerCall(node) {
       return lowerSetDieValue(node);
     case 'CHANGE_DIE_VALUE':
       return lowerChangeDieValue(node);
+    case 'MONUMENT_CHANGE_DIE_VALUE':
+      return lowerMonumentChangeDieValue(node);
     case 'GRANT_PLACE_ANYWHERE':
       return {
         type: 'GRANT_PLACE_ANYWHERE',

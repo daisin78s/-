@@ -3446,10 +3446,16 @@ function renderQsts(state) {
  * covers monuments (their req travels with the card, not a fixed per-slot lookup). See renderShopGrid
  * for why SPECIAL passes false (SHOP201-203 sit directly under a NORMAL column with the identical
  * requirement already shown there).
+ *
+ * locked (2026-08-24, SHOP201-203 rework, default false): true when this card is visible but not yet
+ * purchasable this round (board.specialShopMinRound > state.round) -- adds shop-slot--locked, which
+ * style.css renders as a red X overlay, so it reads as "coming soon", not just an ordinary unaffordable
+ * candidate. Only ever passed true by renderShopGrid's SPECIAL loop -- M/NORMAL never gate on round.
  */
-function buildShopSlotNode(slotId, faceId, showReqCaption) {
+function buildShopSlotNode(slotId, faceId, showReqCaption, locked) {
   const slotTpl = document.getElementById('tpl-shop-slot');
   const slotNode = slotTpl.content.firstElementChild.cloneNode(true);
+  if (locked) slotNode.classList.add('shop-slot--locked');
   if (!faceId) {
     slotNode.querySelector('.shop-slot__req').textContent = showReqCaption ? shopReqForSlotId(slotId) : '';
     const emptyTpl = document.getElementById('tpl-shop-card-empty');
@@ -3504,7 +3510,8 @@ function renderShopGrid(state) {
   }
   const specialColumns = [];
   Object.entries(state.shops.SPECIAL.slots).forEach(([slotId, faceId], i) => {
-    const node = buildShopSlotNode(slotId, faceId, false); // no req caption -- see buildShopSlotNode
+    const locked = !!faceId && boardMod.specialShopMinRound(faceId) > state.round;
+    const node = buildShopSlotNode(slotId, faceId, false, locked); // no req caption -- see buildShopSlotNode
     // Falls back to left-to-right order if the dice ranges don't line up, so a data change can never
     // make a special slot vanish -- it just sits somewhere less meaningful until the data is fixed.
     node.style.gridColumn = String(specialSlotGridColumn(state, slotId) || (i + 1));

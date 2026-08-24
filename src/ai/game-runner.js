@@ -29,15 +29,18 @@ const scoring = require('../scoring');
 const executor = require('../executor');
 
 /** Maps a MAP id to the one A-deck face whose ONCE assigns that MAP's CURRENT_AREA (confirmed via
- * data/game.json: only A001A-A008A do this -- B/C decks' tier-A ONCE effects are unrelated, e.g. wD
- * grants or nothing at all). Used by playGame's "使用回数" fee-tracking below (2026-08-07, per user
- * spec: "Aカードは該当AREAで得た使用料の合計です アップグレードしたあとに得た資源も含みます") to
- * attribute a COLLECT_FEE move's amount back to the specific A-card that made the player that MAP's
- * feeOwnerId in the first place -- static and tier-independent (upgrading to A00NB/C never changes which
- * MAP it governs or who owns it, only the tier), so this one table covers a card's whole game lifetime. */
+ * data/game.json: A001A-A006A plus A201A/A202A/A301A do this -- B/C decks' tier-A ONCE effects are
+ * unrelated, e.g. wD grants or nothing at all; re-derived 2026-08-24 after the SHOP201-203 rework
+ * renumbered A004A-A008A into A004A-A006A + new A201A/A202A/A301A). Used by playGame's "使用回数"
+ * fee-tracking below (2026-08-07, per user spec: "Aカードは該当AREAで得た使用料の合計です アップグレード
+ * したあとに得た資源も含みます") to attribute a COLLECT_FEE move's amount back to the specific A-card that
+ * made the player that MAP's feeOwnerId in the first place -- static and tier-independent (upgrading to
+ * A0NNB/C never changes which MAP it governs or who owns it, only the tier), so this one table covers a
+ * card's whole game lifetime. */
 const AREA_CARD_BY_MAP = {
-  MAP003: 'A001A', MAP004: 'A002A', MAP005: 'A003A', MAP010: 'A004A',
-  MAP001: 'A005A', MAP002: 'A006A', MAP006: 'A007A', MAP009: 'A008A',
+  MAP003: 'A001A', MAP004: 'A002A', MAP005: 'A003A',
+  MAP001: 'A004A', MAP002: 'A005A', MAP006: 'A006A',
+  MAP010: 'A201A', MAP007: 'A202A', MAP009: 'A301A',
 };
 
 /** Runs setup steps 1-7 (players/board/shops/dice/CON+RESOURCE dealing) through computeStartOrder,
@@ -95,7 +98,7 @@ function driveOnboarding(state, index, playerId, evaluator) {
   setup.chooseJob(state, index, playerId, jobFaceId);
 
   // JOB010/革命家's PICK_JOB_REPLACEMENT (2026-08-21, see setup.grantRevolutionaryBonusIfEarned's own
-  // doc): only fires when B007A/革命の兆し was already owned by someone else, same "random, not
+  // doc): only fires when B005A/革命の兆し was already owned by someone else, same "random, not
   // simulate-and-score" policy as every other AI-facing pendingChoice in this module (untapChoice above,
   // setupGame's own RESOURCE pick) -- must resolve synchronously here or it sits in state.pendingChoices
   // forever, since nothing else in the onboarding loop surfaces or gates on it.

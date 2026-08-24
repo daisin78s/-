@@ -907,6 +907,22 @@ function runChangeDieValue(state, context, cmd) {
   return { success: true };
 }
 
+/** MONUMENT_CHANGE_DIE_VALUE(SELF+2) -- 2026-08-24, JOB007/宮廷人's revised TAP (see command-builder.
+ * lowerMonumentChangeDieValue's own doc). Same mechanic as runChangeDieValue just above (no wrap,
+ * markDieValueChanged snapshot for applyTurnEnd's revert-if-unplaced), but cmd.delta is a fixed number
+ * baked in at DSL-lowering time rather than a player-chosen one of several choices -- only
+ * context.chosenDieId is needed, never a chosenDelta. */
+function runMonumentChangeDieValue(state, context, cmd) {
+  if (context.chosenDieId === undefined) {
+    return { success: false, reason: 'CHOICE_REQUIRED', need: ['chosenDieId'] };
+  }
+  const die = requireOwnDie(state, context, context.chosenDieId);
+  markDieValueChanged(die);
+  die.value = die.value + cmd.delta;
+  context.lastTargetedDieId = die.id;
+  return { success: true };
+}
+
 function runGrantPlaceAnywhere(state, context, cmd) {
   const dieId = cmd.target === 'THIS_DICE' ? context.lastTargetedDieId : undefined;
   if (!dieId) return { success: false, reason: 'NO_TARGET_DICE' };
@@ -1081,6 +1097,7 @@ function runCommand(state, index, context, cmd) {
     case 'SET_DICE_ANY': return runSetDiceAny(state, context);
     case 'SET_DIE_VALUE': return runSetDieValue(state, context, cmd);
     case 'CHANGE_DIE_VALUE': return runChangeDieValue(state, context, cmd);
+    case 'MONUMENT_CHANGE_DIE_VALUE': return runMonumentChangeDieValue(state, context, cmd);
     case 'GRANT_PLACE_ANYWHERE': return runGrantPlaceAnywhere(state, context, cmd);
     case 'BLOCK_BUILD': return runBlockBuild(state, context, cmd);
     case 'MONUMENT_DICE_DISCOUNT': return runMonumentDiceDiscount(state, context, cmd);

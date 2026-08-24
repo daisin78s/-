@@ -49,12 +49,13 @@ check('MAP003 starts at AREA003A (2 numbered + 1 ANY slot)', state.maps['MAP003'
 check('MAP008 (castle) starts with 6 ANY slots', state.maps['MAP008'].slots.length, 6);
 
 check('Monument shop has 6 slots filled', Object.values(state.shops.M.slots).filter(Boolean).length, 6);
-check('Monument shop draw pile has 6 left (12 - 6 shown)', state.shops.M.drawPile.length, 6);
+check('Monument shop draw pile has 6 left (12 base monuments - 6 shown, M401-403 excluded)', state.shops.M.drawPile.length, 6);
 check('Normal shop has 6 slots filled', Object.values(state.shops.NORMAL.slots).filter(Boolean).length, 6);
-check('Normal shop draw pile has 15 left (21 - 6 shown)', state.shops.NORMAL.drawPile.length, 15);
-check('Special shop is NOT revealed at setup', Object.values(state.shops.SPECIAL.slots).filter(Boolean).length, 0);
-setup.revealSpecialShop(state);
-check('Special shop reveals all 3 after revealSpecialShop()', Object.values(state.shops.SPECIAL.slots).filter(Boolean).length, 3);
+check('Normal shop draw pile has 12 left (18 - 6 shown)', state.shops.NORMAL.drawPile.length, 12);
+// SHOP201-203 (2026-08-24 rework): visible from setup itself, no round-2 reveal step any more -- see
+// setup.prepareShops' own doc on the 3-wave concatenated drawPile.
+check('Special shop IS already visible at setup (wave 1)', Object.values(state.shops.SPECIAL.slots).filter(Boolean).length, 3);
+check('...its drawPile holds the other 9 (3 wave-1 + 3 wave-2 + 3 wave-3, waiting behind wave 1)', state.shops.SPECIAL.drawPile.length, 9);
 
 const allShopFaceIds = [
   ...Object.values(state.shops.M.slots),
@@ -62,9 +63,10 @@ const allShopFaceIds = [
   ...Object.values(state.shops.NORMAL.slots),
   ...state.shops.NORMAL.drawPile,
   ...Object.values(state.shops.SPECIAL.slots),
+  ...state.shops.SPECIAL.drawPile,
 ];
 check('No duplicate cards across shop slots+drawPiles', new Set(allShopFaceIds).size, allShopFaceIds.length);
-check('Shop card pool size is 12 (M) + 21 (normal) + 3 (special) = 36', allShopFaceIds.length, 36);
+check('Shop card pool size is 12 (M) + 18 (normal) + 12 (special: 6+3+3 across 3 waves) = 42', allShopFaceIds.length, 42);
 
 // ---------------------------------------------------------------------------
 // Dice
@@ -143,51 +145,51 @@ check('turnOrder contains all 4 players exactly once', new Set(state.turnOrder).
 // ---------------------------------------------------------------------------
 // JOB010/革命家's bespoke ability (2026-08-21, no DSL behind it -- see setup.
 // grantRevolutionaryBonusIfEarned/resolveJobReplacementChoice's own docs): drafting JOB010 grants
-// B007A/革命の兆し directly (from wherever it currently sits -- SHOP slot or draw pile) if nobody's
+// B005A/革命の兆し directly (from wherever it currently sits -- SHOP slot or draw pile) if nobody's
 // claimed it yet, or offers a private 3-JOB replacement choice (outside the shared jobPool) if someone
 // already has, with the pick replacing JOB010 as the player's own job entirely.
 // ---------------------------------------------------------------------------
-function forceB007ALocation(state, location) {
+function forceB005ALocation(state, location) {
   const shop = state.shops.NORMAL;
-  for (const slotId of Object.keys(shop.slots)) if (shop.slots[slotId] === 'B007A') shop.slots[slotId] = null;
-  const drawIdx = shop.drawPile.indexOf('B007A');
+  for (const slotId of Object.keys(shop.slots)) if (shop.slots[slotId] === 'B005A') shop.slots[slotId] = null;
+  const drawIdx = shop.drawPile.indexOf('B005A');
   if (drawIdx !== -1) shop.drawPile.splice(drawIdx, 1);
-  if (location === 'slot') shop.slots.SHOP101 = 'B007A';
-  else shop.drawPile.unshift('B007A');
+  if (location === 'slot') shop.slots.SHOP101 = 'B005A';
+  else shop.drawPile.unshift('B005A');
 }
 {
   const state = createEmptyGameState('job010-shop-grant');
   setup.createPlayers(state, ['Alice', 'Bob', 'Carol', 'Dan']);
   setup.prepareShops(state, index);
-  forceB007ALocation(state, 'slot');
+  forceB005ALocation(state, 'slot');
   setup.dealJobPool(state, index, ['JOB010']);
   const beforeResources = state.players[0].resources;
   setup.chooseJob(state, index, 'P1', 'JOB010');
-  check('JOB010 draft grants B007A directly when it is sitting in a SHOP slot', state.players[0].ownedCardPhysicalIds.includes('B007'), true);
+  check('JOB010 draft grants B005A directly when it is sitting in a SHOP slot', state.players[0].ownedCardPhysicalIds.includes('B005'), true);
   check('...at no resource cost', state.players[0].resources, beforeResources);
-  check('...B007 is now owned by P1', state.cards.B007.ownerId, 'P1');
-  check('...its currentFaceId is B007A (base tier, not upgraded)', state.cards.B007.currentFaceId, 'B007A');
-  check('...the shop slot no longer holds B007A (compacted)', Object.values(state.shops.NORMAL.slots).includes('B007A'), false);
+  check('...B005 is now owned by P1', state.cards.B005.ownerId, 'P1');
+  check('...its currentFaceId is B005A (base tier, not upgraded)', state.cards.B005.currentFaceId, 'B005A');
+  check('...the shop slot no longer holds B005A (compacted)', Object.values(state.shops.NORMAL.slots).includes('B005A'), false);
 }
 {
   const state = createEmptyGameState('job010-drawpile-grant');
   setup.createPlayers(state, ['Alice', 'Bob', 'Carol', 'Dan']);
   setup.prepareShops(state, index);
-  forceB007ALocation(state, 'drawpile');
+  forceB005ALocation(state, 'drawpile');
   setup.dealJobPool(state, index, ['JOB010']);
   setup.chooseJob(state, index, 'P1', 'JOB010');
-  check('JOB010 draft grants B007A directly when it is sitting in the draw pile', state.players[0].ownedCardPhysicalIds.includes('B007'), true);
-  check('...B007A is no longer in the draw pile', state.shops.NORMAL.drawPile.includes('B007A'), false);
+  check('JOB010 draft grants B005A directly when it is sitting in the draw pile', state.players[0].ownedCardPhysicalIds.includes('B005'), true);
+  check('...B005A is no longer in the draw pile', state.shops.NORMAL.drawPile.includes('B005A'), false);
 }
 {
   const state = createEmptyGameState('job010-already-taken');
   setup.createPlayers(state, ['Alice', 'Bob', 'Carol', 'Dan']);
   setup.prepareShops(state, index);
-  state.cards.B007.ownerId = 'P2'; // simulate someone else already owning 革命の兆し
+  state.cards.B005.ownerId = 'P2'; // simulate someone else already owning 革命の兆し
   setup.dealJobPool(state, index, ['JOB010']);
   setup.chooseJob(state, index, 'P1', 'JOB010');
   const choice = state.pendingChoices.find((c) => c.playerId === 'P1' && c.kind === 'PICK_JOB_REPLACEMENT');
-  assertTrue('A PICK_JOB_REPLACEMENT choice is queued when B007A is already owned by someone else', !!choice);
+  assertTrue('A PICK_JOB_REPLACEMENT choice is queued when B005A is already owned by someone else', !!choice);
   check('...offering exactly 3 candidates', choice.context.candidates.length, 3);
   check('...none of them are still sitting in the job pool', choice.context.candidates.some((id) => state.jobPool.includes(id)), false);
   check('...none of them equal JOB010 itself', choice.context.candidates.includes('JOB010'), false);

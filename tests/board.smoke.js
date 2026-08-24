@@ -520,8 +520,9 @@ function giveDie(state, playerId, value) {
   const blockedBeforeUpgrade = board.placeDice(state, index, { playerId: 'P1' }, d2.id, 'MAP001', 1);
   check('Still blocked before the AREA LVUPs', blockedBeforeUpgrade, { success: false, reason: 'OWN_COLOR_DIE_ALREADY_IN_AREA' });
 
-  // A005A.ONCE = 'MAP001.CURRENT_AREA=AREA001B' -- the real LVUP trigger (building/owning A005A).
-  executor.runProgram(state, index, { playerId: 'P1' }, getCardRow(index, 'A005A').ONCE);
+  // A004A.ONCE = 'MAP001.CURRENT_AREA=AREA001B' -- the real LVUP trigger (building/owning A004A;
+  // 2026-08-24 SHOP201-203 rework renumbered the A-deck, so this used to be A005A).
+  executor.runProgram(state, index, { playerId: 'P1' }, getCardRow(index, 'A004A').ONCE);
   check('MAP001 is now AREA001B', state.maps['MAP001'].currentAreaId, 'AREA001B');
   check('...and die.placedMapId is untouched (still needed for endRound bookkeeping)', d1.placedMapId, 'MAP001');
 
@@ -572,19 +573,56 @@ function giveDie(state, playerId, value) {
   check('...the draw pile shrank by exactly 1', state.shops.M.drawPile.length, drawPileBefore - 1);
 }
 {
-  // SPECIAL compacts (shifts left) exactly like M/NORMAL, but never refills -- confirmed explicitly by
-  // the user ("SHOP201も同じようにずれていくが、補充はなし"), and structurally necessary too: during
-  // round 1 (before revealSpecialShop), its 3 cards already sit in drawPile with all slots null, so a
-  // refill here would prematurely reveal them ahead of SHOP sheet's ROUND_MIN=2.
+  // SPECIAL (2026-08-24 rework, replacing the old "compacts but never refills" behavior): compacts AND
+  // refills exactly like M/NORMAL now -- its drawPile is just 3 waves concatenated in order (see
+  // setup.prepareShops' own doc), and drawing FIFO from it is what makes wave 2/3 appear as earlier
+  // waves sell out. Bare mechanics check here; the actual reveal-curve regression is the block below.
   const state = freshStateWithShops();
   const [slot1, slot2, slot3] = Object.keys(state.shops.SPECIAL.slots);
-  state.shops.SPECIAL.slots[slot1] = 'A008A';
-  state.shops.SPECIAL.slots[slot2] = null; // a hole in the middle
-  state.shops.SPECIAL.slots[slot3] = 'C008A';
-  const drawPileBefore = state.shops.SPECIAL.drawPile.length; // 3, still un-revealed
+  const before3 = state.shops.SPECIAL.slots[slot3];
+  state.shops.SPECIAL.slots[slot2] = null; // a hole in the middle -- simulate "was just built"
+  const drawPileBefore = state.shops.SPECIAL.drawPile.length;
   board.restockShop(state, 'SPECIAL');
-  check('SPECIAL compacts: slot3\'s card shifts left into the gap at slot2', state.shops.SPECIAL.slots, { [slot1]: 'A008A', [slot2]: 'C008A', [slot3]: null });
-  check('...but never refills from its drawPile (still un-revealed, no premature reveal)', state.shops.SPECIAL.drawPile.length, drawPileBefore);
+  check('SPECIAL compacts: slot3\'s card shifts left into the gap at slot2', state.shops.SPECIAL.slots[slot2], before3);
+  check('...and refills the trailing slot3 from its own drawPile', state.shops.SPECIAL.slots[slot3] !== null, true);
+  check('...the draw pile shrank by exactly 1', state.shops.SPECIAL.drawPile.length, drawPileBefore - 1);
+}
+{
+  // Regression (2026-08-24, per user spec: "残り2枚になったら1枚見える 残り1枚になったら2枚見える
+  // 残り0枚まいですべて見える") -- wave 2 (A301/B301/C301) should progressively appear in SHOP201-203
+  // as wave 1 (the 6 A201/A202-family cards) sells out, purely from the concatenated-drawPile FIFO
+  // restock (no dedicated wave-tracking code). Buys every visible SLOT repeatedly (forcing a direct
+  // build via resolveBuildNew, bypassing cost/round gating entirely -- this test only cares about shop
+  // mechanics) and checks wave-1-remaining vs wave-2-visible at each step.
+  const state = freshStateWithShops();
+  const waveNum = (faceId) => Number(faceId.replace(/\D/g, ''));
+  const isWave1 = (faceId) => faceId && waveNum(faceId) < 300;
+  const isWave2 = (faceId) => faceId && waveNum(faceId) >= 300 && waveNum(faceId) < 400;
+  const countWave = (pred) => [
+    ...Object.values(state.shops.SPECIAL.slots),
+    ...state.shops.SPECIAL.drawPile,
+  ].filter(pred).length;
+  check('Starts with all 6 wave-1 cards somewhere (3 shown + 3 in the pile), 0 wave-2 visible', countWave(isWave1), 6);
+  check('...and no wave-2 card visible in a slot yet', Object.values(state.shops.SPECIAL.slots).some(isWave2), false);
+
+  const buyOneSlot = (slotId) => {
+    const faceId = state.shops.SPECIAL.slots[slotId];
+    state.shops.SPECIAL.slots[slotId] = null;
+    board.restockShop(state, 'SPECIAL');
+    return faceId;
+  };
+  // Always buys a wave-1 slot specifically (never an already-revealed wave-2 one) -- deliberately, so
+  // this proves the "残り N枚→ちょうどN'枚見える" relationship generically at every step, rather than
+  // depending on some particular buy order that happens to touch wave-1 and wave-2 slots in the right
+  // sequence. Expected wave-2-visible count at each step, indexed by wave-1-remaining count (6..0).
+  const expectedWave2VisibleByWave1Remaining = { 6: 0, 5: 0, 4: 0, 3: 0, 2: 1, 1: 2, 0: 3 };
+  while (countWave(isWave1) > 0) {
+    const wave1Slot = Object.keys(state.shops.SPECIAL.slots).find((id) => isWave1(state.shops.SPECIAL.slots[id]));
+    buyOneSlot(wave1Slot);
+    const wave1Remaining = countWave(isWave1);
+    const wave2Visible = Object.values(state.shops.SPECIAL.slots).filter(isWave2).length;
+    check(`After wave-1 remaining drops to ${wave1Remaining}, wave-2 visible is ${expectedWave2VisibleByWave1Remaining[wave1Remaining]}`, wave2Visible, expectedWave2VisibleByWave1Remaining[wave1Remaining]);
+  }
 }
 {
   // A hole at the far right (the common case: the rightmost occupied card is the one built) needs no
@@ -715,21 +753,21 @@ function giveDie(state, playerId, value) {
 }
 
 // ---------------------------------------------------------------------------
-// B005A.TAP=PAY(K);BUILD((A,B,C,M),1) -- a bare TAP ability can itself be a BUILD, same two-phase pattern
-// as an AREA's ACTION or a QST reward (see resolveProgramOrBuild): can't complete synchronously, so
-// useBareTapAbility returns pendingBuild (tagged with physicalId) instead of tapping immediately.
+// B202A/終わりの兆し's TAP=BUILD((A,B,C,M),6) -- a bare TAP ability can itself be a BUILD, same
+// two-phase pattern as an AREA's ACTION or a QST reward (see resolveProgramOrBuild): can't complete
+// synchronously, so useBareTapAbility returns pendingBuild (tagged with physicalId) instead of tapping
+// immediately. (2026-08-24 SHOP201-203 rework renumbered the B-deck -- this used to be B005A.)
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  p1.resources.K = 1; // 2026-08-21 data edit: TAP now costs PAY(K) up front, before the BUILD half
-  const inst = createCardInstance('B005A');
+  const inst = createCardInstance('B202A');
   inst.ownerId = 'P1';
   state.cards[inst.physicalId] = inst;
   p1.ownedCardPhysicalIds.push(inst.physicalId);
 
   const result = board.useBareTapAbility(state, index, { playerId: 'P1' }, inst.physicalId);
-  check('B005A.TAP=BUILD(...) comes back as a pending build decision, not tapped yet', result.success, true);
+  check('B202A.TAP=BUILD(...) comes back as a pending build decision, not tapped yet', result.success, true);
   check('...pendingBuild carries the source card\'s physicalId', result.pendingBuild.physicalId, inst.physicalId);
   check('...with a non-empty candidate list', result.pendingBuild.candidates.length > 0, true);
   check('The card is NOT tapped yet (nothing committed until the candidate is chosen)', state.cards[inst.physicalId].tapped, false);
@@ -746,14 +784,11 @@ function giveDie(state, playerId, value) {
 }
 
 // ---------------------------------------------------------------------------
-// JOB004.TAP=CHANGE(3K,2BZ) (corrected 2026-08-03, per user feedback: "Kを3個持っている状態でAAやBB
-// の資源のものを建築しようとしても建築できません 建築しようとしたときに3KをAAに変えて建築できるように
-// したい" -- this used to be ON(BUILD(A,B,C,U),CHANGE(3K,2BZ)), a reaction that only fired *after* a
-// build completed, too late to help pay for the build that triggered it, and mismatched its own INST
-// text ("建築時好きな資源2個軽減する" -- a discount usable *at* build time). Now a bare (non-reactive)
-// TAP ability, usable any time during the player's own turn, same as C001A's CHANGE(K,A,2) -- so a
-// player can tap it *before* choosing a build candidate to stock up 2 BZ, then apply that BZ via the
-// existing build-choice BZ discount UI to afford an otherwise out-of-reach build).
+// JOB004.TAP=CHANGE(3K,2Z) (2026-08-24 data edit: was CHANGE(3K,2BZ) -- Z is the general wildcard
+// resource payCostList already substitutes for any real-resource shortfall (persistent, unlike BZ's
+// turn-scoped build-only discount), so this is a genuine mechanic change, not just a rename). Still a
+// bare (non-reactive) TAP ability, usable any time during the player's own turn, same as C001A's
+// CHANGE(K,A,2).
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
@@ -765,39 +800,46 @@ function giveDie(state, playerId, value) {
   p1.resources.K = 3;
 
   const result = board.useBareTapAbility(state, index, { playerId: 'P1' }, jobInst.physicalId);
-  check('JOB004.TAP=CHANGE(3K,2BZ) succeeds as a direct (non-reactive) TAP', result, { success: true });
-  check('...paid 3K, gained 2BZ', { K: p1.resources.K, BZ: p1.resources.BZ }, { K: 0, BZ: 2 });
+  check('JOB004.TAP=CHANGE(3K,2Z) succeeds as a direct (non-reactive) TAP', result, { success: true });
+  check('...paid 3K, gained 2Z', { K: p1.resources.K, Z: p1.resources.Z }, { K: 0, Z: 2 });
   check('...the card is now tapped', state.cards[jobInst.physicalId].tapped, true);
 
-  // The BZ gained this way is usable for a build attempted right afterward, in the same turn --
-  // exactly the capability the old post-build-only reaction couldn't provide.
-  p1.resources.A = 1; // A007A costs "2A,B" -- 1 short of the 2A needed, same shortfall pattern as the
-  p1.resources.B = 1; // existing BZ-discount test below.
-  const candidate = { type: 'BUILD_NEW', faceId: 'A007A', shopKey: 'NORMAL', slotId: Object.keys(state.shops.NORMAL.slots).find((k) => state.shops.NORMAL.slots[k] === 'A007A') };
-  const buildResult = board.resolveBuild(state, index, { playerId: 'P1', bzDiscount: { A: 1 } }, candidate);
-  check('The 2 BZ JOB004 just granted can pay for a build that would otherwise be unaffordable', buildResult.success, true);
+  // The Z gained this way covers a real-resource shortfall via the ordinary payCostList substitution --
+  // no special bzDiscount plumbing needed, unlike the old BZ version of this same TAP.
+  p1.resources.A = 1; // A004A costs "2A,B" -- 1 short of the 2A needed
+  p1.resources.B = 1;
+  state.shops.NORMAL.slots.SHOP101 = 'A004A'; // force a known slot, regardless of this seed's shuffle
+  const candidate = { type: 'BUILD_NEW', faceId: 'A004A', shopKey: 'NORMAL', slotId: 'SHOP101' };
+  const buildResult = board.resolveBuild(state, index, { playerId: 'P1' }, candidate);
+  check('The 2 Z JOB004 just granted covers the build that would otherwise be unaffordable', buildResult.success, true);
+  check('...1 of the 2 Z was spent covering the missing A, 1 left over', p1.resources.Z, 1);
 }
 {
-  // JOB007.TAP=ADD(BZ);BLOCK_BUILD(A,THIS_TURN);BLOCK_BUILD(B,THIS_TURN);BLOCK_BUILD(C,THIS_TURN) --
-  // 2026-08-07, replacing the old ON(BUILD(U,M),ADD(BZ)) reaction (per user feedback: reacting *after*
-  // an UPGRADE/Monument build meant the granted BZ arrived too late to help pay for the very build that
-  // triggered it, and evaporated unspent at TURNEND since a turn normally has no second build left to
-  // spend it on -- "BZを使うタイミングがなく必ずBZが余って消失します"). Now a bare (non-reactive) TAP,
-  // usable any time during the player's own turn like JOB004 above, so a player can tap it *before* an
-  // UPGRADE/Monument build to actually use the BZ; blocking A/B/C builds this turn keeps the discount
-  // scoped to U/M as originally intended (and, being a bare TAP rather than an ON(...) reaction, it has
-  // no auto/manual concept at all -- see main.js's reactiveTapKind/bareTapKind split -- so this also
-  // settles the user's request to make it manual-only).
+  // JOB007.TAP=ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+2);BLOCK_BUILD(A,THIS_TURN);BLOCK_BUILD(B,
+  // THIS_TURN);BLOCK_BUILD(C,THIS_TURN) -- 2026-08-07, replacing the old ON(BUILD(U,M),ADD(BZ)) reaction
+  // (per user feedback: reacting *after* an UPGRADE/Monument build meant the granted BZ arrived too late
+  // to help pay for the very build that triggered it, and evaporated unspent at TURNEND since a turn
+  // normally has no second build left to spend it on -- "BZを使うタイミングがなく必ずBZが余って消失しま
+  // す"). Now a bare (non-reactive) TAP, usable any time during the player's own turn like JOB004 above,
+  // so a player can tap it *before* an UPGRADE/Monument build to actually use the BZ; blocking A/B/C
+  // builds this turn keeps the discount scoped to U/M as originally intended (and, being a bare TAP
+  // rather than an ON(...) reaction, it has no auto/manual concept at all -- see main.js's
+  // reactiveTapKind/bareTapKind split -- so this also settles the user's request to make it manual-only).
+  // The middle MONUMENT_CHANGE_DIE_VALUE(SELF+2) line (2026-08-24 data edit, replacing the earlier
+  // MONUMENT_DICE_DISCOUNT(2,THIS_TURN)) reuses CHANGE_DIE_VALUE's own mechanic with a fixed +2 delta --
+  // see command-builder.lowerMonumentChangeDieValue/executor.runMonumentChangeDieValue's own docs.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   const jobInst = createCardInstance('JOB007');
   jobInst.ownerId = 'P1';
   state.cards[jobInst.physicalId] = jobInst;
   p1.ownedCardPhysicalIds.push(jobInst.physicalId);
+  const die = giveDie(state, 'P1', 5);
 
-  const result = board.useBareTapAbility(state, index, { playerId: 'P1' }, jobInst.physicalId);
-  check('JOB007.TAP=ADD(BZ);BLOCK_BUILD(...) succeeds as a direct (non-reactive) TAP', result, { success: true });
+  const result = board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: die.id }, jobInst.physicalId);
+  check('JOB007.TAP=ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(...);BLOCK_BUILD(...) succeeds as a direct (non-reactive) TAP', result, { success: true });
   check('...gained 1 BZ for free', p1.resources.BZ, 1);
+  check('...the chosen die is now +2 (5 -> 7, no wrap)', die.value, 7);
   check('...the card is now tapped', state.cards[jobInst.physicalId].tapped, true);
   check('...A/B/C builds are blocked this turn', p1.blockedBuildCategoriesThisTurn.slice().sort(), ['A', 'B', 'C']);
   check('...A/B/C builds are excluded from candidates this turn', board.getBuildCandidates(state, index, 'P1', ['A', 'B', 'C'], 6).length, 0);
@@ -812,6 +854,11 @@ function giveDie(state, playerId, value) {
   const candidate = board.getBuildCandidates(state, index, 'P1', ['U'], 0).find((c) => c.physicalId === 'A001');
   const upgradeResult = board.resolveBuild(state, index, { playerId: 'P1', bzDiscount: { A: 1 } }, candidate);
   check('The 1 BZ JOB007 just granted can pay for the UPGRADE that would otherwise be unaffordable', upgradeResult.success, true);
+
+  // The die's own +2 change reverts at TURNEND since it's still unplaced (see executor.applyTurnEnd's
+  // own doc on this general dice-value-change rule).
+  executor.applyTurnEnd(state, index, 'P1');
+  check('...and the die reverts to 5 at TURNEND, still being unplaced', die.value, 5);
 }
 
 // ---------------------------------------------------------------------------
@@ -859,16 +906,18 @@ function giveDie(state, playerId, value) {
   jobInst.ownerId = 'P1';
   state.cards[jobInst.physicalId] = jobInst;
   p1.ownedCardPhysicalIds.push(jobInst.physicalId);
+  const die = giveDie(state, 'P1', 5); // JOB007's own TAP now needs a chosenDieId (MONUMENT_CHANGE_DIE_VALUE)
 
-  board.useBareTapAbility(state, index, { playerId: 'P1' }, jobInst.physicalId);
+  board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: die.id }, jobInst.physicalId);
   check('An ordinary (non-self-untapping) TAP ability still ends up tapped', state.cards[jobInst.physicalId].tapped, true);
-  const second = board.useBareTapAbility(state, index, { playerId: 'P1' }, jobInst.physicalId);
+  const second = board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: die.id }, jobInst.physicalId);
   check('...and a 2nd use in the same turn is blocked as before', second, { success: false, reason: 'ALREADY_TAPPED' });
 }
 
 // ---------------------------------------------------------------------------
 // BZ discount (2026-07-31, "BZは建築コストの踏み倒し専用（改築/CHANGEには使用不可）"): 1 BZ skips
-// paying 1 unit of any resource in a BUILD_NEW's cost, player's choice of which. A007A costs "2A,B".
+// paying 1 unit of any resource in a BUILD_NEW's cost, player's choice of which. A004A costs "2A,B"
+// (2026-08-24 SHOP201-203 rework renumbered the A-deck -- this used to be A007A).
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
@@ -876,11 +925,12 @@ function giveDie(state, playerId, value) {
   p1.resources.A = 1; // 1 short of the 2A the cost needs
   p1.resources.B = 1;
   p1.resources.BZ = 1;
-  const candidate = { type: 'BUILD_NEW', faceId: 'A007A', shopKey: 'NORMAL', slotId: Object.keys(state.shops.NORMAL.slots).find((k) => state.shops.NORMAL.slots[k] === 'A007A') };
+  state.shops.NORMAL.slots.SHOP101 = 'A004A'; // force a known slot, regardless of this seed's shuffle
+  const candidate = { type: 'BUILD_NEW', faceId: 'A004A', shopKey: 'NORMAL', slotId: 'SHOP101' };
   const result = board.resolveBuild(state, index, { playerId: 'P1', bzDiscount: { A: 1 } }, candidate);
   check('resolveBuild(BUILD_NEW) succeeds using 1 BZ to cover the missing A', result.success, true);
   check('...real A/B fully spent, 1 BZ consumed', { A: p1.resources.A, B: p1.resources.B, BZ: p1.resources.BZ }, { A: 0, B: 0, BZ: 0 });
-  check('Player owns the built card', p1.ownedCardPhysicalIds.includes('A007'), true);
+  check('Player owns the built card', p1.ownedCardPhysicalIds.includes('A004'), true);
 }
 {
   // Not enough BZ actually held -- the combined (discounted cost + BZ spend) payment fails atomically,
@@ -890,7 +940,8 @@ function giveDie(state, playerId, value) {
   p1.resources.A = 1;
   p1.resources.B = 1;
   p1.resources.BZ = 0; // configuring a discount they can't actually pay for
-  const candidate = { type: 'BUILD_NEW', faceId: 'A007A', shopKey: 'NORMAL', slotId: Object.keys(state.shops.NORMAL.slots).find((k) => state.shops.NORMAL.slots[k] === 'A007A') };
+  state.shops.NORMAL.slots.SHOP101 = 'A004A';
+  const candidate = { type: 'BUILD_NEW', faceId: 'A004A', shopKey: 'NORMAL', slotId: 'SHOP101' };
   const result = board.resolveBuild(state, index, { playerId: 'P1', bzDiscount: { A: 1 } }, candidate);
   check('resolveBuild fails when the player doesn\'t actually hold enough BZ', result, { success: false, reason: 'INSUFFICIENT_RESOURCES', resource: 'BZ' });
   check('...nothing was paid (atomic)', { A: p1.resources.A, B: p1.resources.B }, { A: 1, B: 1 });
@@ -902,7 +953,8 @@ function giveDie(state, playerId, value) {
   p1.resources.A = 2;
   p1.resources.B = 1;
   p1.resources.BZ = 5;
-  const candidate = { type: 'BUILD_NEW', faceId: 'A007A', shopKey: 'NORMAL', slotId: Object.keys(state.shops.NORMAL.slots).find((k) => state.shops.NORMAL.slots[k] === 'A007A') };
+  state.shops.NORMAL.slots.SHOP101 = 'A004A';
+  const candidate = { type: 'BUILD_NEW', faceId: 'A004A', shopKey: 'NORMAL', slotId: 'SHOP101' };
   const result = board.resolveBuild(state, index, { playerId: 'P1', bzDiscount: { A: 3 } }, candidate); // cost only has 2A
   check('Discounting more A than the cost requires (3 > 2) is rejected', result, { success: false, reason: 'INVALID_BZ_DISCOUNT' });
 }
@@ -1011,7 +1063,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
 }
 {
   const state = freshStateWithShops();
-  state.maps['MAP007'] = mapWithArea('MAP007', 'AREA007', 3, null); // SLOT1-3 all ANY
+  state.maps['MAP007'] = mapWithArea('MAP007', 'AREA007A', 3, null); // SLOT1-3 all ANY
   const die = giveDie(state, 'P1', 4);
   // AREA007's own ACTION (CHANGE((A,B,C),D)) pays 1 of *each* A/B/C together, not just one of them --
   // fund all three so a legal placement isn't also blocked by NO_EFFECT.
@@ -1097,11 +1149,11 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   // Placement itself is refused if the resulting usage fee would be entirely unpayable, checked AFTER
   // the AREA's own action resolves (2026-08-05, per user diagnosis: "AREA010を使うときはAIが使用料が
   // 払えることを確認してからダイスを置く用に直せますか" -- AREA010's own actions never grant K to a
-  // non-owner: CHANGE(2K,2VP) costs K outright, ADD(VP)/ADD(2VP) grants none at all -- see
+  // non-owner: CHANGE(1K,2VP) costs K outright, ADD(VP)/ADD(2VP) grants none at all -- see
   // canAffordFee's own doc).
   const state = freshStateWithShops();
-  state.maps['MAP010'] = mapWithArea('MAP010', 'AREA010C', 3, 'P1'); // SLOT1=1, ACTION=CHANGE(2K,2VP)
-  player(state, 'P2').resources.K = 2; // just enough to trigger the AREA's own CHANGE(2K,2VP) once
+  state.maps['MAP010'] = mapWithArea('MAP010', 'AREA010C', 3, 'P1'); // SLOT1=1, ACTION=CHANGE(1K,2VP)
+  player(state, 'P2').resources.K = 2; // just enough to trigger the AREA's own CHANGE(1K,2VP) once
   const die = giveDie(state, 'P2', 1);
   const result = board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP010', 0);
   check('Placement is refused when the resulting 2K fee would be entirely unpayable', result, { success: false, reason: 'UNAFFORDABLE_USAGE_FEE', amount: 2 });
@@ -1109,12 +1161,12 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   // contents wholesale -- see runProgram's own doc on this exact trap, which the rollback here mirrors.
   check('...the die was never actually placed', player(state, 'P2').dice.find((d) => d.id === die.id).placedMapId, null);
   check('...and no fee/state change leaked through', player(state, 'P2').pendingFee, null);
-  check('...and the whole placement (incl. the CHANGE(2K,2VP) that just ran) was rolled back, K restored', player(state, 'P2').resources.K, 2);
+  check('...and the whole placement (incl. the CHANGE(1K,2VP) that just ran) was rolled back, K restored', player(state, 'P2').resources.K, 2);
 }
 {
   // ...but succeeds once enough convertible resources are on hand -- not necessarily raw K (see
   // canAffordFee's own doc: A/B/C/Z->K free actions have no usage cap). P2 spends their 2K on the
-  // AREA's own CHANGE(2K,2VP) first, same as above, but has 2 extra A left over to cover the fee with.
+  // AREA's own CHANGE(1K,2VP) first, same as above, but has 2 extra A left over to cover the fee with.
   const state = freshStateWithShops();
   state.maps['MAP010'] = mapWithArea('MAP010', 'AREA010C', 3, 'P1');
   player(state, 'P2').resources.K = 2;
@@ -1122,7 +1174,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   const die = giveDie(state, 'P2', 1);
   const result = board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP010', 0);
   check('Placement succeeds once enough convertible resources are on hand', result.success, true);
-  check('...the AREA action still ran (K spent on CHANGE(2K,2VP), 2VP gained)', { k: player(state, 'P2').resources.K, vp: player(state, 'P2').resources.VP }, { k: 0, vp: 2 });
+  check('...the AREA action still ran (1K spent on CHANGE(1K,2VP), 2VP gained -- the fee itself is deferred to TURNEND, not charged yet)', { k: player(state, 'P2').resources.K, vp: player(state, 'P2').resources.VP }, { k: 1, vp: 2 });
 }
 {
   // 2026-08-07, per user request ("wD→２Kのフリーアクション廃止します コードも削除してください"): an
@@ -1174,9 +1226,9 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
 {
   const state = freshStateWithShops();
   player(state, 'P1').resources.BZ = 20; // AREA009B's ACTION is also BUILD-first -- see the castle blocks' comment above
-  state.maps['MAP009'] = mapWithArea('MAP009', 'AREA009B', 4, 'P1'); // SLOT1-3=ANY, SLOT4=EX (2026-08-24 data edit shrank 元老院 to 4 slots)
+  state.maps['MAP009'] = mapWithArea('MAP009', 'AREA009B', 6, 'P1'); // SLOT1-4=ANY, SLOT5/6=EX (2026-08-24 data edit: 元老院 LV1/LV2 grew a 2nd EX slot)
   const exDie = giveDie(state, 'P1', 3);
-  const exResult = board.placeDice(state, index, { playerId: 'P1' }, exDie.id, 'MAP009', 3); // SLOT4=EX
+  const exResult = board.placeDice(state, index, { playerId: 'P1' }, exDie.id, 'MAP009', 4); // SLOT5=EX
   check('P1 places a 3 on AREA009B EX', exResult.success, true);
 
   const anyDie = giveDie(state, 'P1', 3); // same value 3, targeting a different (ANY) slot
@@ -1191,18 +1243,18 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   // already occupies the slot.
   const state = freshStateWithShops();
   player(state, 'P1').resources.BZ = 20; // see the earlier castle blocks' comment on the affordability gate
-  state.maps['MAP009'] = mapWithArea('MAP009', 'AREA009B', 4, 'P1'); // SLOT1-3=ANY, SLOT4=EX
+  state.maps['MAP009'] = mapWithArea('MAP009', 'AREA009B', 6, 'P1'); // SLOT1-4=ANY, SLOT5/6=EX
   const die1 = giveDie(state, 'P1', 5);
-  const first = board.placeDice(state, index, { playerId: 'P1' }, die1.id, 'MAP009', 3); // SLOT4=EX
+  const first = board.placeDice(state, index, { playerId: 'P1' }, die1.id, 'MAP009', 4); // SLOT5=EX
   check('First 5 on AREA009B EX succeeds', first.success, true);
   check('...buildValue is just this one die (5)', first.actionResult.pendingBuild.buildValue, 5);
 
   const die2 = giveDie(state, 'P1', 5); // matching value, no GRANT_PLACE_ANYWHERE
-  const blocked = board.placeDice(state, index, { playerId: 'P1' }, die2.id, 'MAP009', 3);
+  const blocked = board.placeDice(state, index, { playerId: 'P1' }, die2.id, 'MAP009', 4);
   check('A second matching-value die without GRANT_PLACE_ANYWHERE is blocked on AREA009B EX too', blocked, { success: false, reason: 'SLOT_OCCUPIED' });
 
   die2.placeAnywhereThisTurn = true;
-  const second = board.placeDice(state, index, { playerId: 'P1' }, die2.id, 'MAP009', 3);
+  const second = board.placeDice(state, index, { playerId: 'P1' }, die2.id, 'MAP009', 4);
   check('...but succeeds with GRANT_PLACE_ANYWHERE', second.success, true);
   check('...buildValue is still just this 2nd die\'s own value (5), NOT summed with the 1st', second.actionResult.pendingBuild.buildValue, 5);
 }
@@ -1217,7 +1269,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   p1.resources.A = 1;
   const slotId = Object.keys(state.shops.NORMAL.slots).find((k) => k === 'SHOP101');
   state.shops.NORMAL.slots[slotId] = 'A001A'; // SHOP101 = dice 1-6, most permissive
-  state.maps['MAP009'] = mapWithArea('MAP009', 'AREA009C', 4, 'P1'); // SLOT1-3=ANY, SLOT4=EX (2026-08-24: 元老院 shrank to 4 slots)
+  state.maps['MAP009'] = mapWithArea('MAP009', 'AREA009C', 6, 'P1'); // SLOT1-4=ANY, SLOT5/6=EX (2026-08-24: 元老院 LV1/LV2 grew a 2nd EX slot)
   const die = giveDie(state, 'P1', 1);
 
   const result = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP009', 0); // SLOT1=ANY
@@ -1675,7 +1727,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   p1.resources.Z = 2;
   const m004Slot = Object.keys(state.shops.M.slots).find((k) => state.shops.M.slots[k] === 'M004') || Object.keys(state.shops.M.slots)[0];
   state.shops.M.slots[m004Slot] = 'M004';
-  state.maps['MAP009'] = mapWithArea('MAP009', 'AREA009C', 4, 'P1'); // SLOT1-3=ANY, SLOT4=EX (2026-08-24: 元老院 shrank to 4 slots)
+  state.maps['MAP009'] = mapWithArea('MAP009', 'AREA009C', 6, 'P1'); // SLOT1-4=ANY, SLOT5/6=EX (2026-08-24: 元老院 LV1/LV2 grew a 2nd EX slot)
   const d1 = giveDie(state, 'P1', 6);
   const d2 = giveDie(state, 'P1', 4);
   const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], 'MAP009');
@@ -1914,8 +1966,9 @@ function giveJob009(state, playerId) {
   check('開拓者: no bonus for the 2nd placement before the LVUP (K delta is just the AREA\'s own ADD(3K))', p1.resources.K - beforeSecondK, 3);
   check('...and no A granted either (die value 2 -> A, but the trigger never fired)', (p1.resources.A || 0) - beforeSecondA, 0);
 
-  // A005A.ONCE = 'MAP001.CURRENT_AREA=AREA001B' -- the real LVUP trigger, resets map.slots for real.
-  executor.runProgram(state, index, { playerId: 'P1' }, getCardRow(index, 'A005A').ONCE);
+  // A004A.ONCE = 'MAP001.CURRENT_AREA=AREA001B' -- the real LVUP trigger, resets map.slots for real
+  // (2026-08-24 SHOP201-203 rework renumbered the A-deck, so this used to be A005A).
+  executor.runProgram(state, index, { playerId: 'P1' }, getCardRow(index, 'A004A').ONCE);
   check('MAP001 is now AREA001B (a fresh, empty tier)', state.maps['MAP001'].currentAreaId, 'AREA001B');
 
   // Trigger condition re-fires here (fresh empty AREA001B), but per the 2026-08-18 TAP mechanic the
@@ -1941,84 +1994,102 @@ function giveJob009(state, playerId) {
 // PAY(K);BUILD(U) as a bare TAP ability (originally added 2026-08-17 for JOB010/革命家: "TAPして2〇を
 // 支払い、カードを１枚選んでLVアップする。LVアップに必要な資源は通常通り支払う", confirmed 〇=K and the
 // LVUP candidate scope = the normal BUILD(U) one; cost lowered from 2K to 1K on 2026-08-18). JOB010 was
-// redesigned into a wholly different, bespoke (no-DSL) ability on 2026-08-21 -- this real-data test
-// vehicle moved to B007A/革命の兆し, whose TAP is still exactly "PAY(K);BUILD(U)". Exercises 3
+// redesigned into a wholly different, bespoke (no-DSL) ability on 2026-08-21, and the real-data test
+// vehicle this moved to (B007A, then B005A/革命の兆し) has since dropped the PAY(K) prefix entirely too
+// (2026-08-24 data edit -- B005A's own TAP is now just "BUILD(U)") -- no card in the data carries
+// PAY(K);BUILD(...) any more, so this now patches a synthetic TAP field onto B001A's row for the
+// duration of each block (same "patch index.byId, restore in finally" pattern as the JOB003
+// self-untapping-TAP block above), same as if a real card still had this text. Exercises 3
 // new/changed engine pieces at once: the PAY command, BUILD being found anywhere in a TAP field (not
 // just commands[0]) by board.resolveProgramOrBuild, and candidate existence being checked *before* a
 // leading PAY runs (2026-08-17 fix -- otherwise a player with no upgradeable card would lose the K for
 // nothing).
 // ---------------------------------------------------------------------------
+function withPatchedTap(physicalFaceId, tap, fn) {
+  const original = index.byId.get(physicalFaceId);
+  index.byId.set(physicalFaceId, { sheet: original.sheet, row: { ...original.row, TAP: tap } });
+  try {
+    fn();
+  } finally {
+    index.byId.set(physicalFaceId, original);
+  }
+}
 {
-  const state = freshStateWithShops();
-  const p1 = player(state, 'P1');
-  const tapInst = createCardInstance('B007A');
-  tapInst.ownerId = 'P1';
-  state.cards[tapInst.physicalId] = tapInst;
-  p1.ownedCardPhysicalIds.push(tapInst.physicalId);
-  p1.resources.K = 5;
-  const upgradeable = createCardInstance('A001A'); // A001B exists, COST "2A"
-  upgradeable.ownerId = 'P1';
-  state.cards[upgradeable.physicalId] = upgradeable;
-  p1.ownedCardPhysicalIds.push(upgradeable.physicalId);
+  withPatchedTap('B001A', 'PAY(K);BUILD(U)', () => {
+    const state = freshStateWithShops();
+    const p1 = player(state, 'P1');
+    const tapInst = createCardInstance('B001A');
+    tapInst.ownerId = 'P1';
+    state.cards[tapInst.physicalId] = tapInst;
+    p1.ownedCardPhysicalIds.push(tapInst.physicalId);
+    p1.resources.K = 5;
+    const upgradeable = createCardInstance('A001A'); // A001B exists, COST "2A"
+    upgradeable.ownerId = 'P1';
+    state.cards[upgradeable.physicalId] = upgradeable;
+    p1.ownedCardPhysicalIds.push(upgradeable.physicalId);
 
-  const result = board.useBareTapAbility(state, index, { playerId: 'P1' }, tapInst.physicalId);
-  check('B007A.TAP=PAY(K);BUILD(U) succeeds and returns a pendingBuild', result.success && !!result.pendingBuild, true);
-  check('...the 1K cost was already paid, ahead of committing any candidate', p1.resources.K, 4);
-  check('...the B007A card itself is NOT tapped yet (only once a candidate is actually committed)', state.cards[tapInst.physicalId].tapped, false);
-  check('...candidates include the A001->A001B upgrade', result.pendingBuild.candidates.some((c) => c.physicalId === 'A001'), true);
+    const result = board.useBareTapAbility(state, index, { playerId: 'P1' }, tapInst.physicalId);
+    check('TAP=PAY(K);BUILD(U) succeeds and returns a pendingBuild', result.success && !!result.pendingBuild, true);
+    check('...the 1K cost was already paid, ahead of committing any candidate', p1.resources.K, 4);
+    check('...the source card itself is NOT tapped yet (only once a candidate is actually committed)', state.cards[tapInst.physicalId].tapped, false);
+    check('...candidates include the A001->A001B upgrade', result.pendingBuild.candidates.some((c) => c.physicalId === 'A001'), true);
 
-  const candidate = result.pendingBuild.candidates.find((c) => c.physicalId === 'A001');
-  p1.resources.A = 2; // A001A's own COST, paid normally/separately from the 1K above
-  state.cards[tapInst.physicalId].tapped = true; // caller's job to tap the source card on commit (see ai/simulator.js's BARE_TAP case)
-  const buildResult = board.completeAreaBuild(state, index, { playerId: 'P1' }, candidate, result.pendingBuild.remainingCommands);
-  check('Completing the chosen UPGRADE candidate succeeds', buildResult.success, true);
-  check('A001 flipped to A001B', state.cards['A001'].currentFaceId, 'A001B');
-  check('...paid via the upgraded card\'s own normal COST (2A), separate from the 1K already spent', p1.resources.A, 0);
-  check('...B007A ends up tapped', state.cards[tapInst.physicalId].tapped, true);
+    const candidate = result.pendingBuild.candidates.find((c) => c.physicalId === 'A001');
+    p1.resources.A = 2; // A001A's own COST, paid normally/separately from the 1K above
+    state.cards[tapInst.physicalId].tapped = true; // caller's job to tap the source card on commit (see ai/simulator.js's BARE_TAP case)
+    const buildResult = board.completeAreaBuild(state, index, { playerId: 'P1' }, candidate, result.pendingBuild.remainingCommands);
+    check('Completing the chosen UPGRADE candidate succeeds', buildResult.success, true);
+    check('A001 flipped to A001B', state.cards['A001'].currentFaceId, 'A001B');
+    check('...paid via the upgraded card\'s own normal COST (2A), separate from the 1K already spent', p1.resources.A, 0);
+    check('...source card ends up tapped', state.cards[tapInst.physicalId].tapped, true);
+  });
 }
 {
   // Insufficient K: fails cleanly, nothing at all is mutated (no partial payment, no tap).
-  const state = freshStateWithShops();
-  const p1 = player(state, 'P1');
-  const tapInst = createCardInstance('B007A');
-  tapInst.ownerId = 'P1';
-  state.cards[tapInst.physicalId] = tapInst;
-  p1.ownedCardPhysicalIds.push(tapInst.physicalId);
-  p1.resources.K = 0; // short of the 1K needed
-  const upgradeable = createCardInstance('A001A');
-  upgradeable.ownerId = 'P1';
-  state.cards[upgradeable.physicalId] = upgradeable;
-  p1.ownedCardPhysicalIds.push(upgradeable.physicalId);
+  withPatchedTap('B001A', 'PAY(K);BUILD(U)', () => {
+    const state = freshStateWithShops();
+    const p1 = player(state, 'P1');
+    const tapInst = createCardInstance('B001A');
+    tapInst.ownerId = 'P1';
+    state.cards[tapInst.physicalId] = tapInst;
+    p1.ownedCardPhysicalIds.push(tapInst.physicalId);
+    p1.resources.K = 0; // short of the 1K needed
+    const upgradeable = createCardInstance('A001A');
+    upgradeable.ownerId = 'P1';
+    state.cards[upgradeable.physicalId] = upgradeable;
+    p1.ownedCardPhysicalIds.push(upgradeable.physicalId);
 
-  const result = board.useBareTapAbility(state, index, { playerId: 'P1' }, tapInst.physicalId);
-  check('Fails with insufficient K', result, { success: false, reason: 'INSUFFICIENT_RESOURCES', resource: 'K' });
-  check('...the 0K the player had is untouched', p1.resources.K, 0);
-  check('...B007A stays untapped', state.cards[tapInst.physicalId].tapped, false);
+    const result = board.useBareTapAbility(state, index, { playerId: 'P1' }, tapInst.physicalId);
+    check('Fails with insufficient K', result, { success: false, reason: 'INSUFFICIENT_RESOURCES', resource: 'K' });
+    check('...the 0K the player had is untouched', p1.resources.K, 0);
+    check('...source card stays untapped', state.cards[tapInst.physicalId].tapped, false);
+  });
 }
 {
   // No candidate at all: fails with NO_BUILDABLE_CARD, and -- the 2026-08-17 fix under test -- the 1K is
   // never actually spent, since candidate existence is checked before the leading PAY runs. Uses
-  // B005A/PAY(K);BUILD((A,B,C,M),1) rather than B007A/PAY(K);BUILD(U) here specifically: B007A's own
-  // categories are just "U", so it always offers itself (B007A->B007B) as a candidate once owned, no
-  // matter how poor the player is -- there's no way to make ITS candidate list genuinely empty. B005A's
-  // categories (A,B,C,M) instead depend entirely on shop contents, so clearing every shop slot really
-  // does leave zero candidates.
-  const state = freshStateWithShops();
-  const p1 = player(state, 'P1');
-  for (const slotId of Object.keys(state.shops.M.slots)) state.shops.M.slots[slotId] = null;
-  for (const slotId of Object.keys(state.shops.NORMAL.slots)) state.shops.NORMAL.slots[slotId] = null;
-  for (const slotId of Object.keys(state.shops.SPECIAL.slots)) state.shops.SPECIAL.slots[slotId] = null;
-  const tapInst = createCardInstance('B005A');
-  tapInst.ownerId = 'P1';
-  state.cards[tapInst.physicalId] = tapInst;
-  p1.ownedCardPhysicalIds.push(tapInst.physicalId);
-  p1.resources.K = 2; // enough to afford PAY(K) if it ran -- it must not, here
+  // categories (A,B,C,M) rather than U specifically: U's own candidate scope always offers the source
+  // card's own next-tier upgrade once owned, no matter how poor the player is -- there's no way to make
+  // ITS candidate list genuinely empty. (A,B,C,M) instead depends entirely on shop contents, so clearing
+  // every shop slot really does leave zero candidates.
+  withPatchedTap('B001A', 'PAY(K);BUILD((A,B,C,M),1)', () => {
+    const state = freshStateWithShops();
+    const p1 = player(state, 'P1');
+    for (const slotId of Object.keys(state.shops.M.slots)) state.shops.M.slots[slotId] = null;
+    for (const slotId of Object.keys(state.shops.NORMAL.slots)) state.shops.NORMAL.slots[slotId] = null;
+    for (const slotId of Object.keys(state.shops.SPECIAL.slots)) state.shops.SPECIAL.slots[slotId] = null;
+    const tapInst = createCardInstance('B001A');
+    tapInst.ownerId = 'P1';
+    state.cards[tapInst.physicalId] = tapInst;
+    p1.ownedCardPhysicalIds.push(tapInst.physicalId);
+    p1.resources.K = 2; // enough to afford PAY(K) if it ran -- it must not, here
 
-  const result = board.useBareTapAbility(state, index, { playerId: 'P1' }, tapInst.physicalId);
-  check('Fails with NO_BUILDABLE_CARD when every shop slot is empty', result.success, false);
-  check('...reason is NO_BUILDABLE_CARD', result.reason, 'NO_BUILDABLE_CARD');
-  check('...the 2K was NOT spent (candidate check runs before the leading PAY)', p1.resources.K, 2);
-  check('...B005A stays untapped', state.cards[tapInst.physicalId].tapped, false);
+    const result = board.useBareTapAbility(state, index, { playerId: 'P1' }, tapInst.physicalId);
+    check('Fails with NO_BUILDABLE_CARD when every shop slot is empty', result.success, false);
+    check('...reason is NO_BUILDABLE_CARD', result.reason, 'NO_BUILDABLE_CARD');
+    check('...the 2K was NOT spent (candidate check runs before the leading PAY)', p1.resources.K, 2);
+    check('...source card stays untapped', state.cards[tapInst.physicalId].tapped, false);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -2100,42 +2171,41 @@ function giveJob009(state, playerId) {
 
 // ---------------------------------------------------------------------------
 // 地主's bonus is usable immediately by the *same* placement it comes from (2026-08-18, per user
-// worked examples): AREA010C (孤児院LV2)'s own ACTION is CHANGE(2K,2VP) -- with only 1K, the bonus's
-// +1K is what makes that conversion actually trigger. mapWithArea (see the EX-slot tests above) builds
-// the map fixture; AREA010C's SLOT1 is ANY.
+// worked examples): AREA010C (孤児院LV2)'s own ACTION is CHANGE(1K,2VP) (2026-08-24 data edit: was
+// CHANGE(2K,2VP)) -- with 0K, the bonus's +1K is what makes that conversion actually trigger.
+// mapWithArea (see the EX-slot tests above) builds the map fixture; AREA010C's SLOT1 is ANY.
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   p1.jobCardId = 'JOB011';
-  p1.resources.K = 1; // 1 short of CHANGE(2K,2VP)'s own cost
+  p1.resources.K = 0; // short of CHANGE(1K,2VP)'s own cost entirely
   state.maps['MAP001'] = mapWithArea('MAP001', 'AREA010C', 6, 'P1'); // P1 owns it -- no usage fee here
   const d1 = giveDie(state, 'P1', 3); // SLOT1=ANY
   const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
-  check('地主: placing at 孤児院LV2 with only 1K succeeds (the +1K bonus covers CHANGE(2K,2VP)\'s own cost)', result.success, true);
-  check('...the 2K (1 starting + 1 from 地主) was spent by CHANGE, leaving 0', p1.resources.K, 0);
-  check('...and CHANGE(2K,2VP) granted 2VP', p1.resources.VP, 2);
+  check('地主: placing at 孤児院LV2 with 0K succeeds (the +1K bonus covers CHANGE(1K,2VP)\'s own cost)', result.success, true);
+  check('...the 1K (0 starting + 1 from 地主) was spent by CHANGE, leaving 0', p1.resources.K, 0);
+  check('...and CHANGE(1K,2VP) granted 2VP', p1.resources.VP, 2);
 }
 
 // ---------------------------------------------------------------------------
-// 地主's bonus also covers an otherwise-unaffordable usage fee (2026-08-18, per user worked example):
-// "3Kしかない時に他プレイヤーの孤児院LV2に置こうとすると本来使用料2K変換に2Kいるが、1Kもらえるので
-// 置ける。この時すでに自分の色Dが置いてあったならKがもらえないので置けない。" Placing on ANOTHER
-// player's 孤児院LV2 (tier C, usage fee 2K) needs the CHANGE(2K,2VP)'s own 2K *plus* 2K left over to
-// remain payable for the fee (canAffordFee, checked after CHANGE runs) -- 4K total. 3K alone falls 1
-// short; 地主's +1K bridges exactly that gap.
+// 地主's bonus also covers an otherwise-unaffordable usage fee (2026-08-18, per user worked example,
+// renumbered for the 2026-08-24 CHANGE(2K,2VP)->CHANGE(1K,2VP) data edit): placing on ANOTHER player's
+// 孤児院LV2 (tier C, usage fee 2K, unrelated to and unaffected by the AREA's own action cost) needs the
+// CHANGE(1K,2VP)'s own 1K *plus* 2K left over to remain payable for the fee (canAffordFee, checked after
+// CHANGE runs) -- 3K total. 2K alone falls 1 short; 地主's +1K bridges exactly that gap.
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   p1.jobCardId = 'JOB011';
-  p1.resources.K = 3;
+  p1.resources.K = 2;
   state.maps['MAP001'] = mapWithArea('MAP001', 'AREA010C', 6, 'P2'); // P2 owns it -- usage fee applies to P1
   const d1 = giveDie(state, 'P1', 3);
   const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
-  check('地主: 3K is enough on another player\'s 孤児院LV2 once the +1K bonus bridges the 1K shortfall', result.success, true);
-  check('...2K was spent by CHANGE (3+1-2=2 left, reserved for the pending fee)', p1.resources.K, 2);
-  check('...and CHANGE(2K,2VP) granted 2VP', p1.resources.VP, 2);
+  check('地主: 2K is enough on another player\'s 孤児院LV2 once the +1K bonus bridges the 1K shortfall', result.success, true);
+  check('...1K was spent by CHANGE (2+1-1=2 left, reserved for the pending fee)', p1.resources.K, 2);
+  check('...and CHANGE(1K,2VP) granted 2VP', p1.resources.VP, 2);
   check('...the usage fee is now pending, not yet deducted', p1.pendingFee, { mapId: 'MAP001', amount: 2 });
 }
 {
@@ -2145,7 +2215,7 @@ function giveJob009(state, playerId) {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   p1.jobCardId = 'JOB011';
-  p1.resources.K = 3;
+  p1.resources.K = 2;
   state.maps['MAP001'] = mapWithArea('MAP001', 'AREA010C', 6, 'P2');
   const earlierDie = giveDie(state, 'P1', 5);
   state.maps['MAP001'].slots[2].push({ playerId: 'P1', dieId: earlierDie.id, value: 5, seq: 1, countsForTurnOrder: true }); // SLOT3=EX
@@ -2153,8 +2223,8 @@ function giveJob009(state, playerId) {
   const d1 = giveDie(state, 'P1', 3);
   const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
   check('地主: with an existing own color die already there, the K bonus still bridges the shortfall', result.success, true);
-  check('...2K was spent by CHANGE (3+1-2=2 left, reserved for the pending fee)', p1.resources.K, 2);
-  check('...CHANGE(2K,2VP) granted 2VP, plus 1 more from 地主\'s own bonus (already had a color die here) = 3', p1.resources.VP, 3);
+  check('...1K was spent by CHANGE (2+1-1=2 left, reserved for the pending fee)', p1.resources.K, 2);
+  check('...CHANGE(1K,2VP) granted 2VP, plus 1 more from 地主\'s own bonus (already had a color die here) = 3', p1.resources.VP, 3);
   check('...the usage fee is now pending, not yet deducted', p1.pendingFee, { mapId: 'MAP001', amount: 2 });
 }
 // No placeDiceGroup test for 地主: group placement only ever succeeds against a monument-buildable

@@ -472,6 +472,25 @@ h1, h2, h3 { margin: 0; }
   transition: box-shadow 0.15s ease, transform 0.15s ease;
 }
 
+/* SHOP201-203の「見えるが2R/3R/4Rまで買えない」カード用のロック表示 (2026-08-24, per user spec:
+   「赤線2本で獲得できないことを視覚的にもわかるように」) -- .shop-card自体はposition:relative済みなので
+   ::before/::afterで赤い斜線2本をX字に重ねる。main.jsのbuildShopSlotNode(locked引数)が.shop-slotに
+   .shop-slot--lockedを付与する。 */
+.shop-slot--locked .shop-card::before,
+.shop-slot--locked .shop-card::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 135%;
+  height: 3px;
+  background: var(--danger, #c0392b);
+  pointer-events: none;
+  z-index: 5;
+}
+.shop-slot--locked .shop-card::before { transform: translate(-50%, -50%) rotate(26deg); }
+.shop-slot--locked .shop-card::after { transform: translate(-50%, -50%) rotate(-26deg); }
+
 /* デッキ識別カラー (2026-08-16, per user decision after comparing a mockup of 3 options -- see
    --border-a/b/c/m and --monument's own doc at the top of this file): 背景タイント+枠線カラーの併用。
    2pxぶん太くなる枠線の分、paddingを1px削って外寸(width:112px)を保つ。*/

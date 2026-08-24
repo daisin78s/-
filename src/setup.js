@@ -94,6 +94,21 @@ function collectNormalShopFaceIds(index) {
   return ids;
 }
 
+/** Same pattern as collectNormalShopFaceIds, but for one SHOP201-203 wave's own ID-number range
+ * (2026-08-24, SHOP201-203 wave rework -- see prepareShops' own doc): 200-299 for wave 1
+ * (A201/A202 families), 300-399 for wave 2 (A301 family, the former A008/B008/C008). */
+function collectSpecialShopWaveIds(index, minNum, maxNum) {
+  const ids = [];
+  for (const sheet of ['A', 'B', 'C']) {
+    for (const row of index.raw[sheet]) {
+      const { physicalId, tier } = splitCardId(row.ID);
+      const num = Number(physicalId.slice(1));
+      if (tier === 'A' && num >= minNum && num <= maxNum) ids.push(row.ID);
+    }
+  }
+  return ids;
+}
+
 function fillShopSlots(shopDeck) {
   for (const slotId of Object.keys(shopDeck.slots)) {
     if (shopDeck.slots[slotId] === null && shopDeck.drawPile.length > 0) {
@@ -103,10 +118,9 @@ function fillShopSlots(shopDeck) {
 }
 
 /**
- * Shuffles and fills the monument (SHOP001-006) and normal-card (SHOP101-106)
- * shops immediately (confirmed 2026-07-29: SHOP sheet's ROUND_MIN=1 for
- * both). Also shuffles the special shop's draw order but leaves its slots
- * empty -- see revealSpecialShop().
+ * Shuffles and fills the monument (SHOP001-006), normal-card (SHOP101-106), and special-card
+ * (SHOP201-203) shops immediately (2026-08-24: SHOP201-203 no longer waits for round 2 -- see this
+ * function's own SPECIAL block for the 3-wave concatenated-drawPile design).
  *
  * preferredNormalFaceIds (optional, up to 6, 2026-08-13 debug-setup feature): those faces fill
  * SHOP101/102/... in that order first (deduped, and only ones actually in the normal pool), any
@@ -115,7 +129,9 @@ function fillShopSlots(shopDeck) {
  * argument and sees identical behavior to before.
  */
 function prepareShops(state, index, preferredNormalFaceIds) {
-  const monumentIds = index.raw.M.map((r) => r.ID);
+  // M401-403 (SHOP201-203's own wave-3 monuments, see the SPECIAL block below) are excluded from the
+  // regular SHOP001-006 pool -- they only ever surface via the SPECIAL shop's wave progression.
+  const monumentIds = index.raw.M.map((r) => r.ID).filter((id) => Number(id.slice(1)) < 400);
   registerCardPool(state, monumentIds);
   state.shops.M = createShopDeck(shuffle(state.rng, monumentIds), MONUMENT_SHOP_SLOT_IDS);
   fillShopSlots(state.shops.M);
@@ -131,14 +147,26 @@ function prepareShops(state, index, preferredNormalFaceIds) {
   state.shops.NORMAL = createShopDeck(normalOrder, NORMAL_SHOP_SLOT_IDS);
   fillShopSlots(state.shops.NORMAL);
 
-  const specialIds = ['A008A', 'B008A', 'C008A'];
-  registerCardPool(state, specialIds);
-  state.shops.SPECIAL = createShopDeck(shuffle(state.rng, specialIds), SPECIAL_SHOP_SLOT_IDS);
-  // Deliberately not filled yet -- SHOP sheet's ROUND_MIN=2 for SHOP201-203 (revealSpecialShop()).
-}
-
-/** Call when round 2 starts (SHOP sheet: SHOP201-203's ROUND_MIN=2). */
-function revealSpecialShop(state) {
+  // SHOP201-203 (2026-08-24 rework, per user spec): 3 waves, each visible only once the previous one's
+  // cards are gone -- but this needs no dedicated "wave" bookkeeping at all. Concatenating each wave's
+  // own independently-shuffled ids into ONE drawPile (wave 1 first, then wave 2, then wave 3) and letting
+  // the ordinary FIFO restock (fillShopSlots/board.restockShop, unchanged) draw from its front reproduces
+  // the exact desired reveal curve for free: with 3 slots and a 6-card wave 1, the pile's own front runs
+  // out of wave-1 ids right as wave 1's own last 3 unsold copies are sitting one in each slot, so the
+  // first wave-2 id gets drawn into a slot exactly when wave 1 has 2 left, the second when 1 is left, and
+  // the third once wave 1 is fully gone (confirmed by hand-simulating a full buyout sequence). Visible
+  // from the very start (fillShopSlots runs immediately, no ROUND_MIN gate any more) -- see
+  // board.specialShopMinRound for the separate purchase-round gate (2R/3R/4R) that still applies on top.
+  const wave1Ids = collectSpecialShopWaveIds(index, 200, 299);
+  const wave2Ids = collectSpecialShopWaveIds(index, 300, 399);
+  const wave3Ids = index.raw.M.map((r) => r.ID).filter((id) => Number(id.slice(1)) >= 400);
+  registerCardPool(state, [...wave1Ids, ...wave2Ids, ...wave3Ids]);
+  const specialDrawPile = [
+    ...shuffle(state.rng, wave1Ids),
+    ...shuffle(state.rng, wave2Ids),
+    ...shuffle(state.rng, wave3Ids),
+  ];
+  state.shops.SPECIAL = createShopDeck(specialDrawPile, SPECIAL_SHOP_SLOT_IDS);
   fillShopSlots(state.shops.SPECIAL);
 }
 
@@ -419,26 +447,28 @@ function chooseJob(state, index, playerId, jobFaceId) {
 
 /** JOB010/革命家's bespoke ONCE-equivalent (2026-08-21, per user's new INST text -- no DSL, same
  * "bespoke, NAME-matched" approach as board.hasWildcardDice/hasPioneerAbility/hasLandlordAbility):
- * "Bカード革命の兆し(B007A)をSHOPか山札から探して獲得する。革命の兆しがいずれかのプレイヤーに先に獲得
+ * "Bカード革命の兆し(B005A)をSHOPか山札から探して獲得する。革命の兆しがいずれかのプレイヤーに先に獲得
  * されていたならば、代わりに山札からJOBを3枚引きその中からJOBを選ぶ（選んだJOBが革命家を置き換える）"。
- * Called from chooseJob right after JOB010's own (empty) ONCE, so every one of chooseJob's existing
- * callers gets this for free without their own bookkeeping (confirmed via Explore agent: none of them
- * inspect chooseJob's return value). No cost paid either way -- this is a drafted bonus, not a build. */
+ * "革命の兆し" moved from B007A to B005A in the 2026-08-24 SHOP201-203 rework's card renumbering -- this
+ * function's own literal ids were updated to match. Called from chooseJob right after JOB010's own
+ * (empty) ONCE, so every one of chooseJob's existing callers gets this for free without their own
+ * bookkeeping (confirmed via Explore agent: none of them inspect chooseJob's return value). No cost paid
+ * either way -- this is a drafted bonus, not a build. */
 function grantRevolutionaryBonusIfEarned(state, index, playerId) {
   const player = state.players.find((p) => p.id === playerId);
-  if (state.cards.B007.ownerId === null) {
+  if (state.cards.B005.ownerId === null) {
     const shop = state.shops.NORMAL;
-    const slotId = Object.keys(shop.slots).find((id) => shop.slots[id] === 'B007A');
+    const slotId = Object.keys(shop.slots).find((id) => shop.slots[id] === 'B005A');
     if (slotId) {
       shop.slots[slotId] = null;
       board.compactShop(state, 'NORMAL');
     } else {
-      const drawIndex = shop.drawPile.indexOf('B007A');
+      const drawIndex = shop.drawPile.indexOf('B005A');
       if (drawIndex !== -1) shop.drawPile.splice(drawIndex, 1);
-      // If B007A is in neither the shop slots nor the draw pile, it must already be owned -- but that's
-      // exactly the state.cards.B007.ownerId check above, so this branch is unreachable in practice.
+      // If B005A is in neither the shop slots nor the draw pile, it must already be owned -- but that's
+      // exactly the state.cards.B005.ownerId check above, so this branch is unreachable in practice.
     }
-    const inst = createCardInstance('B007A');
+    const inst = createCardInstance('B005A');
     inst.ownerId = playerId;
     state.cards[inst.physicalId] = inst;
     player.ownedCardPhysicalIds.push(inst.physicalId);
@@ -523,7 +553,6 @@ module.exports = {
   prepareMaps,
   prepareShops,
   collectNormalShopFaceIds,
-  revealSpecialShop,
   rollInitialColorDice,
   dealConCards,
   dealResourceCandidates,

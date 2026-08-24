@@ -317,8 +317,8 @@ index.raw.QST = [
   giveCard(state, 'A004A', 'P3');
   giveCard(state, 'A005A', 'P3');
   giveCard(state, 'A006A', 'P3'); // 3 cards
-  giveCard(state, 'A007A', 'P4');
-  giveCard(state, 'A008A', 'P4');
+  giveCard(state, 'A201A', 'P4');
+  giveCard(state, 'A202A', 'P4');
   giveCard(state, 'B001A', 'P4');
   giveCard(state, 'M001', 'P4'); // 4 cards (CARD_COUNT includes M) -- clear 1st
   check('P1, ranked last (4th) among 4 distinct CARD_COUNT values, gets no QST credit', evaluatorQstAware.score(state, 'P1'), evaluator.score(state, 'P1'));

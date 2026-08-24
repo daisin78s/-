@@ -20,6 +20,14 @@ const index = buildDataIndex(loadGameData(path.join(__dirname, '..', 'data', 'ga
 // as-is) purely so the tests below can keep exercising that still-real, still-used generic engine
 // mechanism (END_TURN/FREE_ACTION gating) against an actual ownable card id.
 index.byId.set('CON005B', { sheet: 'CON', row: { ...index.byId.get('CON005B').row, TURNEND: 'RESOURCE_TOTAL_LIMIT((A,B,C),7)' } });
+// JOB004's own TAP used to be CHANGE(3K,2BZ);BLOCK_BUILD(M,THIS_TURN) -- the original real-data vehicle
+// for bzConversionTap's CHANGE-based (as opposed to ADD-based, like JOB007) detection branch -- until
+// the 2026-08-24 SHOP201-203 rework changed it to CHANGE(3K,2Z), a genuinely different resource/mechanic.
+// No card in the current dataset grants BZ via CHANGE any more, but bzConversionTap is meant to
+// recognize that *shape* generically (see its own doc), so this patches the old text back onto JOB004's
+// row (every other field left as-is) purely so the tests below can keep exercising that still-real,
+// still-used CHANGE branch against an actual ownable card id.
+index.byId.set('JOB004', { sheet: 'JOB', row: { ...index.byId.get('JOB004').row, TAP: 'CHANGE(3K,2BZ);BLOCK_BUILD(M,THIS_TURN)' } });
 const moveGenerator = new MoveGenerator();
 // see AI LV3's own doc in main.js
 const moveGeneratorLv3 = new MoveGenerator({
@@ -255,7 +263,7 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
 // ---------------------------------------------------------------------------
 {
   check('bzConversionTap detects JOB004 ("CHANGE(3K,2BZ)")', !!bzConversionTap(index, 'JOB004'), true);
-  check('bzConversionTap detects JOB007 ("ADD(BZ);BLOCK_BUILD(A/B/C,THIS_TURN)", 2026-08-07)', !!bzConversionTap(index, 'JOB007'), true);
+  check('bzConversionTap detects JOB007 ("ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+2);BLOCK_BUILD(A/B/C,THIS_TURN)", 2026-08-24)', !!bzConversionTap(index, 'JOB007'), true);
   check('bzConversionTap is null for a card with no TAP field at all (M001, printed VP only)', bzConversionTap(index, 'M001'), null);
   check('bzConversionTap is null for a bare TAP that does not produce BZ (C001A)', bzConversionTap(index, 'C001A'), null);
 }

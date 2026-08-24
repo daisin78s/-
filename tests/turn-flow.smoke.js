@@ -150,13 +150,15 @@ assertTrue('endRound() clears every map slot', Object.values(state.maps).every((
   const p0 = state.turnOrder[0];
   check('endRound() untaps free actions (round-scoped reset)', state.players.find((p) => p.id === p0).freeActionTaps.A_K, false);
 }
-check('Special shop is still hidden at the end of round 1', Object.values(state.shops.SPECIAL.slots).filter(Boolean).length, 0);
+// SPECIAL (SHOP201-203) is visible from game start now (2026-08-24 rework -- see setup.prepareShops'
+// own doc), so this just confirms endRound doesn't clear/hide it.
+check('Special shop is still visible at the end of round 1 (endRound does not hide it)', Object.values(state.shops.SPECIAL.slots).filter(Boolean).length, 3);
 const afterDiceValues = state.players.map((p) => p.dice.map((d) => d.value));
 assertTrue('endRound() re-rolled at least one color die (astronomically unlikely all stayed identical)', JSON.stringify(beforeDiceValues) !== JSON.stringify(afterDiceValues));
 
 turnFlow.startRound(state);
 check('startRound(2) sets round=2', state.round, 2);
-check('startRound(2) reveals the special shop', Object.values(state.shops.SPECIAL.slots).filter(Boolean).length, 3);
+check('startRound(2) leaves the (already-visible) special shop untouched', Object.values(state.shops.SPECIAL.slots).filter(Boolean).length, 3);
 check('startRound(2) itself does not touch dice (already rerolled at the previous endRound)', state.players.map((p) => p.dice.map((d) => d.value)), afterDiceValues);
 
 // ---------------------------------------------------------------------------
@@ -476,7 +478,7 @@ check('startRound(2) itself does not touch dice (already rerolled at the previou
   // takes 6 -> 15; distinct faceIds needed since createCardInstance's physicalId is derived from the
   // faceId prefix (see its own doc) -- re-using the same faceId would collide on the same state.cards
   // key and only count once, not once per instance.
-  for (const faceId of ['A001A', 'A002A', 'A003A', 'A004A', 'A005A', 'A006A', 'A007A', 'A008A', 'C001A']) {
+  for (const faceId of ['A001A', 'A002A', 'A003A', 'A004A', 'A005A', 'A006A', 'A201A', 'A202A', 'C001A']) {
     const inst = createCardInstance(faceId);
     inst.ownerId = 'P1';
     s.cards[inst.physicalId] = inst;

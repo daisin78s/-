@@ -136,7 +136,7 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
   giveCard(state, 'CON003A', 'P1');
   check('CON003A: no monuments -> EMBLEM_COUNT(天,M)=0, short 2 -> -2VP', executor.collectVpModifiers(state, index, 'P1'), -2);
 
-  for (let i = 1; i <= 8; i++) giveCard(state, `A00${i}A`, 'P1'); // owning lots of non-M cards changes nothing
+  for (let i = 1; i <= 6; i++) giveCard(state, `A00${i}A`, 'P1'); // owning lots of non-M cards changes nothing (2026-08-24: A-deck now only goes to A006A)
   check('CON003A: owning 8 more (non-M) cards does not affect the monument-only shortfall, still -2VP', executor.collectVpModifiers(state, index, 'P1'), -2);
 }
 
@@ -159,23 +159,21 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 }
 
 // ---------------------------------------------------------------------------
-// 3b. B008B: PASSIVE=VP_MODIFIER(MAX_EMBLEM_COUNT) -- persistent, not a one-time ONCE snapshot
-//     (2026-08-12, per user request: "即時ではなく永続効果にしたい" -- moved off ONCE precisely so it
-//     keeps recomputing). Recomputed live from currently-owned emblem cards every time
-//     collectVpModifiers is called, same as computeFinalScore recomputes card VP live. Metric changed
-//     2026-08-17 from VP_MODIFIER(COUNT(天)) (天 emblems only) to VP_MODIFIER(MAX_EMBLEM_COUNT)
-//     (whichever of 天/地/人 the player has the most of), per user request
-//     ("エンブレム天の数*VPを最多エンブレムの数*VPにしたい").
+// 3b. B301B/栄光の証LV2 (2026-08-24 SHOP201-203 rework renumbered the B-deck -- this used to be B008B):
+//     PASSIVE=VP_MODIFIER(MAX_EMBLEM_COUNT) -- persistent, not a one-time ONCE snapshot (2026-08-12, per
+//     user request: "即時ではなく永続効果にしたい" -- moved off ONCE precisely so it keeps recomputing).
+//     Recomputed live from currently-owned emblem cards every time collectVpModifiers is called, same as
+//     computeFinalScore recomputes card VP live. Metric changed 2026-08-17 from VP_MODIFIER(COUNT(天))
+//     (天 emblems only) to VP_MODIFIER(MAX_EMBLEM_COUNT) (whichever of 天/地/人 the player has the most
+//     of), per user request ("エンブレム天の数*VPを最多エンブレムの数*VPにしたい").
 // ---------------------------------------------------------------------------
 {
-  // B008B's own EMBLEM_B dropped 2->1 (2026-08-20, per user edit to game.xlsx, alongside A008B's
-  // EMBLEM_A and C008B's EMBLEM_C, all matching sibling LV2 faces) -- values below adjusted to match.
   const state = freshState();
-  giveCard(state, 'B008B', 'P1'); // EMBLEM_B=1 -> 天=1, the only emblem type owned so far
-  check('B008B: VP_MODIFIER(MAX_EMBLEM_COUNT) starts at 1 (from B008B\'s own 1 EMBLEM_B, 天 is the only/max type)', executor.collectVpModifiers(state, index, 'P1'), 1);
+  giveCard(state, 'B301B', 'P1'); // EMBLEM_B=1 -> 天=1, the only emblem type owned so far
+  check('B301B: VP_MODIFIER(MAX_EMBLEM_COUNT) starts at 1 (from B301B\'s own 1 EMBLEM_B, 天 is the only/max type)', executor.collectVpModifiers(state, index, 'P1'), 1);
 
   giveCard(state, 'B001A', 'P1'); // EMBLEM_B=1 -> 天 rises to 2, still the max
-  check('B008B: VP_MODIFIER(MAX_EMBLEM_COUNT) rises to 2 as soon as another 天-emblem card is owned (live, not frozen at LVUP time)', executor.collectVpModifiers(state, index, 'P1'), 2);
+  check('B301B: VP_MODIFIER(MAX_EMBLEM_COUNT) rises to 2 as soon as another 天-emblem card is owned (live, not frozen at LVUP time)', executor.collectVpModifiers(state, index, 'P1'), 2);
 
   giveCard(state, 'A001A', 'P1'); // EMBLEM_A=1 -> 地=1 (still behind 天=2)
   giveCard(state, 'A002A', 'P1'); // EMBLEM_A=1 -> 地=2 (ties 天=2)
@@ -230,7 +228,8 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// 6. MAP.CURRENT_AREA assignment (A005A.ONCE = 'MAP001.CURRENT_AREA=AREA001B')
+// 6. MAP.CURRENT_AREA assignment (A004A.ONCE = 'MAP001.CURRENT_AREA=AREA001B'; 2026-08-24 SHOP201-203
+//    rework renumbered the A-deck -- this used to be A005A)
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
@@ -240,11 +239,11 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
   // used to be left completely untouched by a CURRENT_AREA flip, so a stale occupant like this stuck
   // around forever, blocking/misrepresenting a slot position that now belongs to a different area.
   state.maps['MAP001'].slots = [[{ playerId: 'P1', dieId: 'stale-die', value: 1, seq: 1, countsForTurnOrder: true }], [], []];
-  const row = getCardRow(index, 'A005A');
+  const row = getCardRow(index, 'A004A');
   executor.runProgram(state, index, { playerId: 'P1' }, row.ONCE);
-  check('A005A.ONCE flips MAP001 to AREA001B', state.maps['MAP001'].currentAreaId, 'AREA001B');
-  check('A005A.ONCE makes P1 the fee owner of MAP001', state.maps['MAP001'].feeOwnerId, 'P1');
-  check('A005A.ONCE resets MAP001.slots to fresh empty slots matching AREA001B (3 active SLOT columns)', state.maps['MAP001'].slots, [[], [], []]);
+  check('A004A.ONCE flips MAP001 to AREA001B', state.maps['MAP001'].currentAreaId, 'AREA001B');
+  check('A004A.ONCE makes P1 the fee owner of MAP001', state.maps['MAP001'].feeOwnerId, 'P1');
+  check('A004A.ONCE resets MAP001.slots to fresh empty slots matching AREA001B (3 active SLOT columns)', state.maps['MAP001'].slots, [[], [], []]);
 }
 
 // ---------------------------------------------------------------------------
@@ -831,11 +830,17 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 {
   // 2026-08-20: JOB004/策士's own TAP dropped its BLOCK_BUILD(M,THIS_TURN) clause (per user edit), so
   // this real-data vehicle moved to JOB007/宮廷人, whose TAP still carries BLOCK_BUILD (now A/B/C, not M).
+  // The middle line is now MONUMENT_CHANGE_DIE_VALUE(SELF+2) (2026-08-24 data edit, replacing
+  // MONUMENT_DICE_DISCOUNT(2,THIS_TURN)), which needs a chosenDieId same as CHANGE_DIE_VALUE.
   const state = freshState();
   const row = getCardRow(index, 'JOB007');
   const player = getPlayerRef(state, 'P1');
-  const result = executor.runProgram(state, index, { playerId: 'P1' }, row.TAP);
-  check('JOB007\'s TAP (ADD(BZ);MONUMENT_DICE_DISCOUNT(2,THIS_TURN);BLOCK_BUILD(A/B/C,THIS_TURN)) succeeds and grants BZ', { success: result.success, BZ: player.resources.BZ }, { success: true, BZ: 1 });
+  const die = createDie('d1', 'COLOR');
+  die.value = 4;
+  player.dice.push(die);
+  const result = executor.runProgram(state, index, { playerId: 'P1', chosenDieId: die.id }, row.TAP);
+  check('JOB007\'s TAP (ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+2);BLOCK_BUILD(A/B/C,THIS_TURN)) succeeds and grants BZ', { success: result.success, BZ: player.resources.BZ }, { success: true, BZ: 1 });
+  check('...and changes the chosen die by +2 (4 -> 6)', die.value, 6);
   check('...and blocks A,B,C for this player this turn', player.blockedBuildCategoriesThisTurn, ['A', 'B', 'C']);
 }
 
@@ -1031,7 +1036,7 @@ const UNTAP_CHOICE_3 = { type: 'UNTAP_CHOICE', scope: 'SELF', count: 3 };
   // cards instead of the 兆しカード -- demonstrating the free choice is real (not forced toward
   // whichever combination spends the most budget, nor toward always favoring the 兆しカード).
   const state = freshState();
-  const omen = giveCard(state, 'B007A', 'P1'); // 革命の兆し
+  const omen = giveCard(state, 'B004A', 'P1'); // 始まりの兆し (2026-08-24 rework: this used to be B007A)
   const normal1 = giveCard(state, 'A001A', 'P1');
   const normal2 = giveCard(state, 'A002A', 'P1');
   state.cards[omen].tapped = true;
@@ -1048,8 +1053,8 @@ const UNTAP_CHOICE_3 = { type: 'UNTAP_CHOICE', scope: 'SELF', count: 3 };
   // Two tapped 兆しカード (weight 2 each, total 4) -- still exceeds the budget, so they can never both
   // be picked; only one at a time fits.
   const state = freshState();
-  const omenA = giveCard(state, 'B005A', 'P1'); // 始まりの兆し
-  const omenB = giveCard(state, 'B006A', 'P1'); // 終わりの兆し
+  const omenA = giveCard(state, 'B005A', 'P1'); // 革命の兆し
+  const omenB = giveCard(state, 'B202A', 'P1'); // 終わりの兆し
   state.cards[omenA].tapped = true;
   state.cards[omenB].tapped = true;
   executor.runCommand(state, index, { playerId: 'P1' }, UNTAP_CHOICE_3);
@@ -1070,7 +1075,7 @@ const UNTAP_CHOICE_3 = { type: 'UNTAP_CHOICE', scope: 'SELF', count: 3 };
   // leaving it stuck forever for both a human and the AI driver alike. Must instead auto-resolve as
   // "nothing untaps", the same way an empty tappedOwned list already does.
   const state = freshState();
-  const omen = giveCard(state, 'B007A', 'P1'); // 革命の兆し, weight 2
+  const omen = giveCard(state, 'B004A', 'P1'); // 始まりの兆し, weight 2 (2026-08-24 rework: this used to be B007A)
   state.cards[omen].tapped = true;
   const result = executor.runCommand(state, index, { playerId: 'P1' }, { type: 'UNTAP_CHOICE', scope: 'SELF', count: 1 });
   check('runCommand still succeeds (budget 1 < the only candidate\'s weight 2)', result.success, true);

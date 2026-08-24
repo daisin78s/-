@@ -339,12 +339,18 @@ function createShopDeck(drawPile, slotIds) {
  * @property {PlayerState[]} players
  * @property {Object<string, MapState>} maps        - keyed by mapId ("MAP001".."MAP010")
  * @property {Object<string, ShopDeckState>} shops   - keys:
- *   "M" - drawPile of all 12 monuments, fills SHOP001-006
- *   "NORMAL" - drawPile is a single shuffled pool of all 21 cards (A001-007 + B001-007 + C001-007
- *     mixed together, confirmed 2026-07-29), fills SHOP101-106; any color can land in any slot
- *   "SPECIAL" - fixed contents {A008A, B008A, C008A} in shuffled order, fills SHOP201-203,
- *     revealed only from round 2 onward (SHOP sheet ROUND_MIN=2); no drawPile since each of the
- *     3 cards is unique and there's nothing left to restock with once built
+ *   "M" - drawPile of the 12 base monuments (M001-012), fills SHOP001-006. M401-403 are excluded --
+ *     they only ever surface via "SPECIAL"'s own wave 3 (see below).
+ *   "NORMAL" - drawPile is a single shuffled pool of all 18 cards (A001-006 + B001-006 + C001-006
+ *     mixed together), fills SHOP101-106; any color can land in any slot
+ *   "SPECIAL" - fills SHOP201-203 (2026-08-24 rework, replacing the old fixed-3-card/round-2-gated
+ *     design): drawPile is 3 waves concatenated in order -- wave 1 (A201/A202 families, 6 cards),
+ *     wave 2 (A301 family, 3 cards, the former A008/B008/C008), wave 3 (M401-403, 3 monuments) -- each
+ *     wave independently shuffled before concatenation. Filled immediately at game start (no round
+ *     gate on visibility any more), and the ordinary FIFO restock naturally reveals each wave right as
+ *     the previous one sells out (see board.restockShop/setup.prepareShops' own docs). *Purchasing*
+ *     stays round-gated per-card via board.specialShopMinRound (2R/3R/4R for waves 1/2/3), independent
+ *     of when a card becomes visible.
  * @property {Object<string, CardInstanceState>} cards - keyed by physicalId, covers every card in the game (deck/shop/owned)
  * @property {LogEntry[]} log
  * @property {GameState|null} undoCheckpoint - a single deep-cloned snapshot, not a stack (confirmed

@@ -68,7 +68,7 @@ check('A full game reaches GAME_END, not stuck at MAX_ITERATIONS', state1.phase,
   setup.prepareShops(state, index);
   setup.rollInitialColorDice(state);
   setup.dealConCards(state);
-  state.cards.B007.ownerId = 'P2'; // simulate 革命の兆し already taken, forcing the replacement-choice branch
+  state.cards.B005.ownerId = 'P2'; // simulate 革命の兆し already taken, forcing the replacement-choice branch (2026-08-24 rework: this used to be B007)
   state.jobPool = ['JOB010']; // force driveOnboarding's random JOB pick to land on JOB010
   driveOnboarding(state, index, 'P1', evalTable);
   check('driveOnboarding leaves no dangling PICK_JOB_REPLACEMENT choice for the AI player', state.pendingChoices.some((c) => c.kind === 'PICK_JOB_REPLACEMENT'), false);

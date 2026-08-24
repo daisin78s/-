@@ -20,6 +20,12 @@ const index = buildDataIndex(loadGameData(path.join(__dirname, '..', 'data', 'ga
 // as-is) purely so the END_TURN test below can keep exercising that still-real, still-used generic
 // engine mechanism against an actual ownable card id.
 index.byId.set('CON005B', { sheet: 'CON', row: { ...index.byId.get('CON005B').row, TURNEND: 'RESOURCE_TOTAL_LIMIT((A,B,C),7)' } });
+// B006A's own TAP used to be PAY(K);BUILD((A,B,C,M),6) -- no card in the current dataset uses PAY(...)
+// in its TAP any more (2026-08-24 SHOP201-203 rework dropped it from every card that had it), but the
+// PAY-then-BUILD shape itself is still real, still-used engine behavior (board.resolveProgramOrBuild),
+// so this patches the old text back onto B006A's row (every other field left as-is) purely so the tests
+// below can keep exercising it against an actual ownable card id.
+index.byId.set('B006A', { sheet: 'B', row: { ...index.byId.get('B006A').row, TAP: 'PAY(K);BUILD((A,B,C,M),6)' } });
 const simulator = new Simulator();
 
 let passCount = 0;
@@ -337,51 +343,53 @@ function giveDie(state, playerId, value) {
 
 {
   // A TAP-sourced BUILD (B006A.TAP=PAY(K);BUILD((A,B,C,M),6)) that builds a card whose own ONCE untaps
-  // the source card back (C008A.ONCE=UNTAP_ALL(SELF)) must end up untapped, not stuck tapped (2026-08-09
-  // fix, per user report: "B006AをTAPしてその効果でC008Aを建築したときB006Aがアンタップしない"). The
+  // the source card back (C301A.ONCE=UNTAP_ALL(SELF)) must end up untapped, not stuck tapped (2026-08-09
+  // fix, per user report: "B006AをTAPしてその効果でC301Aを建築したときB006Aがアンタップしない"). The
   // built card's ONCE runs *inside* completeAreaBuild, so the source card must already be marked tapped
   // *before* that call for UNTAP_ALL(SELF) to have any chance of reaching it back.
   const state = freshStateWithShops();
+  state.round = 3; // C301A is a SHOP201-203 wave-2 card, purchasable only from round 3 (board.specialShopMinRound)
   const p1 = player(state, 'P1');
   const b006a = createCardInstance('B006A');
   b006a.ownerId = 'P1';
   state.cards[b006a.physicalId] = b006a;
   p1.ownedCardPhysicalIds.push(b006a.physicalId);
-  // C008 is reserved for the SPECIAL shop (see [[project-dice-wp-flow-spec]]) -- SHOP201 shares
-  // SHOP101's dice range (1-6), matching B006A's fixed buildValue=6.
-  state.shops.SPECIAL.slots.SHOP201 = 'C008A';
-  p1.resources.A = 1; // C008A's COST is "1A,3C"
+  // C301A is placed directly into a SPECIAL slot for this test -- SHOP201 shares SHOP101's dice range
+  // (1-6), matching B006A's fixed buildValue=6.
+  state.shops.SPECIAL.slots.SHOP201 = 'C301A';
+  p1.resources.A = 1; // C301A's COST is "1A,3C"
   p1.resources.C = 3;
   p1.resources.K = 1; // 2026-08-21 data edit: B006A's TAP now costs PAY(K) up front, before the BUILD half
 
   const probe = applyInPlace(require('../src/game-state').cloneState(state), index, { type: 'BARE_TAP', playerId: 'P1', physicalId: b006a.physicalId });
-  const c008Index = probe.pendingBuild.candidates.findIndex((c) => c.faceId === 'C008A');
-  assertTrue('C008A is offered as a build candidate via B006A\'s bare TAP', c008Index >= 0);
+  const c008Index = probe.pendingBuild.candidates.findIndex((c) => c.faceId === 'C301A');
+  assertTrue('C301A is offered as a build candidate via B006A\'s bare TAP', c008Index >= 0);
 
   const move = { type: 'BARE_TAP', playerId: 'P1', physicalId: b006a.physicalId, buildCandidateIndex: c008Index };
   const { state: resultState, result } = simulator.apply(state, index, move);
-  check('Building C008A via B006A\'s TAP succeeds', result.success, true);
-  check('C008A was actually built', resultState.players.find((p) => p.id === 'P1').ownedCardPhysicalIds.includes(b006a.physicalId) && resultState.players.find((p) => p.id === 'P1').ownedCardPhysicalIds.length === 2, true);
-  check('B006A ends up untapped (C008A\'s UNTAP_ALL(SELF) reached it back)', resultState.cards[b006a.physicalId].tapped, false);
+  check('Building C301A via B006A\'s TAP succeeds', result.success, true);
+  check('C301A was actually built', resultState.players.find((p) => p.id === 'P1').ownedCardPhysicalIds.includes(b006a.physicalId) && resultState.players.find((p) => p.id === 'P1').ownedCardPhysicalIds.length === 2, true);
+  check('B006A ends up untapped (C301A\'s UNTAP_ALL(SELF) reached it back)', resultState.cards[b006a.physicalId].tapped, false);
 }
 {
   // Failure case: if the chosen candidate turns out unaffordable, the speculative tap must be reverted
   // (the TAP wasn't actually spent) so the player can retry with a different, affordable candidate.
   const state = freshStateWithShops();
+  state.round = 3; // C301A is a SHOP201-203 wave-2 card, purchasable only from round 3 (board.specialShopMinRound)
   const p1 = player(state, 'P1');
   const b006a = createCardInstance('B006A');
   b006a.ownerId = 'P1';
   state.cards[b006a.physicalId] = b006a;
   p1.ownedCardPhysicalIds.push(b006a.physicalId);
-  state.shops.SPECIAL.slots.SHOP201 = 'C008A';
+  state.shops.SPECIAL.slots.SHOP201 = 'C301A';
   p1.resources.K = 1; // 2026-08-21 data edit: B006A's TAP now costs PAY(K) up front -- must be affordable
-  // No A/C granted -- C008A's "1A,3C" cost still can't be paid.
+  // No A/C granted -- C301A's "1A,3C" cost still can't be paid.
 
   const probe = applyInPlace(require('../src/game-state').cloneState(state), index, { type: 'BARE_TAP', playerId: 'P1', physicalId: b006a.physicalId });
-  const c008Index = probe.pendingBuild.candidates.findIndex((c) => c.faceId === 'C008A');
+  const c008Index = probe.pendingBuild.candidates.findIndex((c) => c.faceId === 'C301A');
   const move = { type: 'BARE_TAP', playerId: 'P1', physicalId: b006a.physicalId, buildCandidateIndex: c008Index };
   const result = applyInPlace(state, index, move);
-  check('Building C008A fails with no resources to pay for it', result.success, false);
+  check('Building C301A fails with no resources to pay for it', result.success, false);
   check('B006A is NOT left tapped -- the speculative tap was reverted', state.cards[b006a.physicalId].tapped, false);
 }
 

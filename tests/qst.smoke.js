@@ -65,12 +65,14 @@ function giveCard(state, faceCardId, ownerId) {
 // giving the same faceId N times collapses onto one physicalId, not N cards, and giving two different
 // players cards from the same faceId pool at the same offsets collides for the same reason. Tests
 // needing "N owned cards" (possibly for several players in the same state) must draw from a shared
-// pool of genuinely distinct physical ids, each used at most once per state. 36 across A/B/C/M decks.
+// pool of genuinely distinct physical ids, each used at most once per state. 42 across A/B/C/M decks
+// (2026-08-24 SHOP201-203 rework: A/B/C decks are now 001-006 + 201/202/301 = 9 each, not 8; M gained
+// 401-403 for SHOP201-203's own wave 3, on top of the 12 base monuments).
 const DISTINCT_FACE_ID_POOL = [
-  ...['A001A', 'A002A', 'A003A', 'A004A', 'A005A', 'A006A', 'A007A', 'A008A'],
-  ...['B001A', 'B002A', 'B003A', 'B004A', 'B005A', 'B006A', 'B007A', 'B008A'],
-  ...['C001A', 'C002A', 'C003A', 'C004A', 'C005A', 'C006A', 'C007A', 'C008A'],
-  ...['M001', 'M002', 'M003', 'M004', 'M005', 'M006', 'M007', 'M008', 'M009', 'M010', 'M011', 'M012'],
+  ...['A001A', 'A002A', 'A003A', 'A004A', 'A005A', 'A006A', 'A201A', 'A202A', 'A301A'],
+  ...['B001A', 'B002A', 'B003A', 'B004A', 'B005A', 'B006A', 'B201A', 'B202A', 'B301A'],
+  ...['C001A', 'C002A', 'C003A', 'C004A', 'C005A', 'C006A', 'C201A', 'C202A', 'C301A'],
+  ...['M001', 'M002', 'M003', 'M004', 'M005', 'M006', 'M007', 'M008', 'M009', 'M010', 'M011', 'M012', 'M401', 'M402', 'M403'],
 ];
 /** Gives ownerId n cards drawn from DISTINCT_FACE_ID_POOL starting at `offset` -- caller is
  * responsible for keeping offsets non-overlapping across every giveNCards call in the same state. */
