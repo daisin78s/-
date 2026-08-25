@@ -1393,7 +1393,10 @@ function buildCardListCell(faceId, isQst) {
       const sibling = siblingFaceId(faceId);
       const hasSiblingData = sibling && qstFaceExists(sibling);
       const visualNode = buildQstCardVisual(faceId, STATE, { noInteraction: true, showRankHeaders: true, showLiveRanking: false });
-      showCardEnlargeModal(faceId, visualNode, hasSiblingData ? sibling : null);
+      const siblingVisualNode = hasSiblingData
+        ? buildQstCardVisual(sibling, STATE, { noInteraction: true, showRankHeaders: true, showLiveRanking: false })
+        : null;
+      showCardEnlargeModal(faceId, visualNode, hasSiblingData ? sibling : null, siblingVisualNode);
     });
   } else {
     attachPickableEnlarge(cell, faceId, null);
@@ -3280,7 +3283,14 @@ function buildCardVisual(faceId, options = {}) {
         allowTextFallback: options.allowTextFallback,
         noInteraction: true,
       });
-      showCardEnlargeModal(faceId, visualNode, hasSiblingData ? sibling : null);
+      const siblingVisualNode = hasSiblingData
+        ? buildCardVisual(sibling, {
+          showEffect: options.showEffect,
+          allowTextFallback: options.allowTextFallback,
+          noInteraction: true,
+        })
+        : null;
+      showCardEnlargeModal(faceId, visualNode, hasSiblingData ? sibling : null, siblingVisualNode);
     });
   }
 
@@ -3472,7 +3482,10 @@ function buildQstCardVisual(faceId, state, options = {}) {
       // showRankHeaders: the modal shows this one card outside the panel, with neither the shared
       // legend nor the rank bands to say which column is which -- so it prints "1位　4VP" itself.
       const visualNode = buildQstCardVisual(faceId, state, { noInteraction: true, showRankHeaders: true });
-      showCardEnlargeModal(faceId, visualNode, hasSiblingData ? sibling : null);
+      const siblingVisualNode = hasSiblingData
+        ? buildQstCardVisual(sibling, state, { noInteraction: true, showRankHeaders: true })
+        : null;
+      showCardEnlargeModal(faceId, visualNode, hasSiblingData ? sibling : null, siblingVisualNode);
     });
   }
 
@@ -5275,7 +5288,10 @@ function attachPickableEnlarge(cardNode, faceId, pickAction) {
     const sibling = siblingFaceId(faceId);
     const hasSiblingData = sibling && cardFaceExists(sibling);
     const visualNode = buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true });
-    showCardEnlargeModal(faceId, visualNode, hasSiblingData ? sibling : null, pickAction);
+    const siblingVisualNode = hasSiblingData
+      ? buildCardVisual(sibling, { showEffect: true, allowTextFallback: false, noInteraction: true })
+      : null;
+    showCardEnlargeModal(faceId, visualNode, hasSiblingData ? sibling : null, siblingVisualNode, pickAction);
   });
 }
 
@@ -6376,12 +6392,16 @@ const QST_PRE_SCALE_WIDTH = 250;
  * shown/hidden and its content swapped.
  *
  * visualNode is a *fresh, noInteraction* card/QST visual (built by the caller so this function stays
- * agnostic of buildCardVisual vs buildQstCardVisual) that already has its own baked-in front+back --
- * see buildCardVisual's `.shop-card__back` / buildQstCardVisual's `.qst-card__back`. null for AREA
- * tiles, which have no "back" and no card-shaped visual, just INST text. sibling is the *id* to show
- * when flipped (null if there's no real sibling-face data, in which case the flip button stays
- * hidden) -- the flip button just toggles visualNode's existing --flipped class, reusing the same
- * absolute-overlay mechanism the inline shop-card/qst-card used to use for its own click-to-flip.
+ * agnostic of buildCardVisual vs buildQstCardVisual). null for AREA tiles, which have no "back" and no
+ * card-shaped visual, just INST text. sibling is the id of the other tier face (null if there's no real
+ * sibling-face data), and siblingVisualNode is that face's own independently-built visual (same shape as
+ * visualNode, built the same way by the caller) -- both faces are shown side by side at once (2026-08-25,
+ * per user request: "カードをタップして拡大した時 表裏両方表示するようにしてほしい"; "拡大の大きさは今
+ * のままで" -- each stays at its normal ENLARGE_SCALE/ENLARGE_SCALE_QST, the modal widens to fit both
+ * instead of either shrinking). Replaces the old single-visualNode-with-a-flip-button design (toggling
+ * visualNode's own baked-in `.shop-card__back`/`.qst-card__back` overlay via a --flipped class) --
+ * siblingVisualNode is a wholly separate, independently-built visual instead, laid out in a
+ * .card-enlarge-row exactly like showAreaEnlargeModal's own multi-tile row.
  *
  * pickAction (2026-08-0X, per user feedback -- CON/JOB/RESOURCE choice cards previously had no
  * enlarge affordance at all, since a plain tap on them was already spoken for by "pick this card";
@@ -6390,7 +6410,7 @@ const QST_PRE_SCALE_WIDTH = 250;
  * choice" gesture now lives here instead of on the card/cell itself, matching the user's own original
  * proposal for this: tap to see it enlarged, tap again (here) to actually pick it.
  */
-function showCardEnlargeModal(faceId, visualNode, sibling, pickAction) {
+function showCardEnlargeModal(faceId, visualNode, sibling, siblingVisualNode, pickAction) {
   const overlay = document.getElementById('card-inst-overlay');
   const modal = overlay.querySelector('.card-inst-modal');
   const visualContainer = overlay.querySelector('.card-inst-modal__visual');
@@ -6406,41 +6426,79 @@ function showCardEnlargeModal(faceId, visualNode, sibling, pickAction) {
   visualContainer.style.width = '';
   visualContainer.style.height = '';
   const isQst = !!visualNode && visualNode.classList.contains('qst-card');
-  modal.classList.toggle('card-inst-modal--wide', !!visualNode);
+  modal.classList.toggle('card-inst-modal--wide', !!visualNode && !siblingVisualNode);
+  modal.classList.toggle('card-inst-modal--dual', !!siblingVisualNode);
   // The overlay/modal DOM is shared and reused across calls, so leftover modifiers from a previous
   // showAreaEnlargeModal/showCardListTermModal call must be cleared here too, or they'd stick around on
   // every later card modal.
   modal.classList.remove('card-inst-modal--area-wide', 'card-inst-modal--term');
 
   if (visualNode) {
-    if (isQst) visualNode.style.width = `${QST_PRE_SCALE_WIDTH}px`;
-    visualContainer.appendChild(visualNode);
-    const rect = visualNode.getBoundingClientRect();
+    // transform:scale() only changes how a node PAINTS -- it reserves no extra LAYOUT space, so two
+    // scaled siblings placed a mere ~10px apart in *layout* terms (each face's own tiny natural width)
+    // would visually overlap once each independently balloons to 3x/1.5x that width. Each face gets its
+    // own "slot" wrapper explicitly sized to its POST-scale dimensions (mirroring what visualContainer
+    // alone used to do for the old single-visual design) so the flex row lays out correctly; the scaled
+    // node then exactly fills its slot corner-to-corner via transform-origin:top left (found via
+    // headless-browser screenshot: the original single-visual design's transform-origin:top center only
+    // ever worked because there was no sibling slot for it to need to align flush against).
+    const row = el('div', 'card-enlarge-row');
+    visualContainer.appendChild(row);
+    const frontSlot = el('div', 'card-enlarge-row__slot');
+    row.appendChild(frontSlot);
+    frontSlot.appendChild(visualNode);
+    let backSlot = null;
+    if (siblingVisualNode) {
+      backSlot = el('div', 'card-enlarge-row__slot');
+      row.appendChild(backSlot);
+      backSlot.appendChild(siblingVisualNode);
+    }
+    if (isQst) {
+      visualNode.style.width = `${QST_PRE_SCALE_WIDTH}px`;
+      if (siblingVisualNode) siblingVisualNode.style.width = `${QST_PRE_SCALE_WIDTH}px`;
+    }
     const scale = isQst ? ENLARGE_SCALE_QST : ENLARGE_SCALE;
+    // Measured (both faces' natural, pre-transform rects) before either is transformed -- getBoundingClientRect
+    // only reports real sizes for nodes already attached to the live document (overlay.hidden=false above
+    // put visualContainer itself there), and measuring face A before face B has joined the row risks a
+    // stale reading if adding B reflows A (row is a flex container).
+    const frontRect = visualNode.getBoundingClientRect();
+    const backRect = siblingVisualNode ? siblingVisualNode.getBoundingClientRect() : null;
     visualNode.style.transform = `scale(${scale})`;
-    visualNode.style.transformOrigin = 'top center';
-    // transform doesn't participate in layout sizing -- without this the scaled visual would just
-    // spill outside its own box instead of the modal growing to fit it.
-    visualContainer.style.width = `${rect.width * scale}px`;
-    visualContainer.style.height = `${rect.height * scale}px`;
+    visualNode.style.transformOrigin = 'top left';
+    frontSlot.style.width = `${frontRect.width * scale}px`;
+    frontSlot.style.height = `${frontRect.height * scale}px`;
+    let totalWidth = frontRect.width * scale;
+    let maxHeight = frontRect.height * scale;
+    if (backRect) {
+      siblingVisualNode.style.transform = `scale(${scale})`;
+      siblingVisualNode.style.transformOrigin = 'top left';
+      backSlot.style.width = `${backRect.width * scale}px`;
+      backSlot.style.height = `${backRect.height * scale}px`;
+      totalWidth += backRect.width * scale + 10; // .card-enlarge-row's own gap
+      maxHeight = Math.max(maxHeight, backRect.height * scale);
+    }
+    // visualContainer itself still needs this too, same reason the old single-visual design set it.
+    visualContainer.style.width = `${totalWidth}px`;
+    visualContainer.style.height = `${maxHeight}px`;
   }
 
-  const flippedClass = isQst ? 'qst-card--flipped' : 'shop-card--flipped';
-  function shownId() {
-    return (visualNode && visualNode.classList.contains(flippedClass)) ? sibling : faceId;
+  // Both faces' INST shown at once now, each under its own id label (2026-08-25, replacing the old
+  // single shownId()/flip-button toggle -- see this function's own top-of-file doc).
+  const body = overlay.querySelector('.card-inst-modal__body');
+  body.innerHTML = '';
+  overlay.querySelector('.card-inst-modal__title').textContent = faceId;
+  if (siblingVisualNode) {
+    for (const id of [faceId, sibling]) {
+      body.appendChild(el('div', 'card-inst-modal__face-label', id));
+      const section = el('div');
+      renderInstBody(section, instForId(id));
+      body.appendChild(section);
+    }
+  } else {
+    renderInstBody(body, instForId(faceId));
   }
-  function refreshText() {
-    const shown = shownId();
-    overlay.querySelector('.card-inst-modal__title').textContent = shown;
-    renderInstBody(overlay.querySelector('.card-inst-modal__body'), instForId(shown));
-  }
-  flipBtn.hidden = !sibling;
-  flipBtn.textContent = '裏側';
-  flipBtn.onclick = () => {
-    visualNode.classList.toggle(flippedClass);
-    flipBtn.textContent = visualNode.classList.contains(flippedClass) ? '表側' : '裏側';
-    refreshText();
-  };
+  flipBtn.hidden = true;
   pickBtn.hidden = !pickAction;
   if (pickAction) {
     pickBtn.textContent = pickAction.label;
@@ -6449,7 +6507,6 @@ function showCardEnlargeModal(faceId, visualNode, sibling, pickAction) {
       pickAction.onPick();
     };
   }
-  refreshText();
 }
 
 function hideCardEnlargeModal() {
