@@ -716,25 +716,22 @@ h1, h2, h3 { margin: 0; }
    threshold), so it renders inside the card again -- unlike normal/special cards, whose req is a
    slot property shown in .shop-slot__req instead (buildCardVisual only fills this in when passed). */
 .shop-card__req {
-  /* 2026-08-16, per user report: "ダイス目小さすぎて見えない" -- this only ever holds a monument's own
-     dice-face glyph threshold (⚀-⚅, see main.js's diceThresholdFaces/renderDiceThresholdReq), never
-     plain digits. Bumped up from 11px so the "以上" suffix text is legible at this card's small scale
-     (the glyphs themselves are the board's own .die-face, sized separately below). Centered per user
-     request ("ダイス目は中央揃え") -- text-align here also centers the inline .die-face spans. */
+  /* 2026-08-16, per user report: "ダイス目小さすぎて見えない" -- bumped up from 11px so the "以上" suffix
+     text is legible at this card's small scale (the threshold number itself is sized separately below).
+     Centered per user request ("ダイス目は中央揃え"). */
   font-size: 15px;
   color: var(--text-muted);
   text-align: center;
 }
 .shop-card__req:empty { display: none; }
 
-/* 2026-08-16, per user request: "モニュメントの⚅ AREAに表示されている⚅とおなじものを使ってください
-   大きさや濃さも" -- renderDiceThresholdReq now builds these with the same dieFace()/.die-face the board
-   itself uses for a numbered AREA requirement (see that rule, further down), so size (42px) and color
-   (var(--text)) can never drift from the board's own. Only the alignment needs a scoped override here --
-   vertical-align:bottom keeps it level with the "以上" text next to it (middle made the much-taller
-   glyph read as top-heavy, per an earlier request). */
-.shop-card__req .die-face {
-  vertical-align: bottom;
+/* The monument's own DICE threshold number (e.g. the "12" in "12以上"), 2026-08-25 per user spec:
+   "数字は大きく濃く" -- replaces the earlier ⚅⚅-style die-face-glyph rendering (see
+   main.js's renderDiceThresholdReq) with a plain but large/bold/dark digit instead. */
+.shop-card__req-number {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
 }
 
 /* CON/RESOURCE cards' START_ORDER (2026-07-30, per user feedback -- relevant when choosing initial

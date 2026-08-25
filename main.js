@@ -1349,9 +1349,10 @@ const CARD_LIST_NAV = [
  * split, per user request), so it's not listed here. */
 const CARD_LIST_FLAT_CATEGORIES = {
   job: { label: 'JOB一覧', columns: 6, isQst: false, faceIds: () => INDEX.raw.JOB.map((r) => r.ID) },
-  // 24 rows (2026-08-22, after R003/R006 were unfrozen and the RESOURCE sheet grew from 18) ->
-  // columns:8 gives a clean 8x3 grid.
-  initialResource: { label: '初期資源一覧', columns: 8, isQst: false, faceIds: () => INDEX.raw.RESOURCE.map((r) => r.ID) },
+  // 24 rows -> columns:6 gives a clean 6x4 grid (2026-08-25, per user spec: "初期資源カード一覧
+  // 横６枚　縦４枚の配置にして" -- was columns:8/8x3 since the RESOURCE sheet grew from 18 to 24
+  // on 2026-08-22).
+  initialResource: { label: '初期資源一覧', columns: 6, isQst: false, faceIds: () => INDEX.raw.RESOURCE.map((r) => r.ID) },
   monument: { label: 'モニュメントカード一覧', columns: 6, isQst: false, faceIds: () => INDEX.raw.M.map((r) => r.ID) },
   qst: { label: 'QSTカード一覧', columns: 4, isQst: true, faceIds: () => INDEX.raw.QST.map((r) => r.ID) },
 };
@@ -1716,40 +1717,22 @@ let turnJustEnded = false;
 // manually copied in here).
 // ---------------------------------------------------------------------------
 
-/** A monument's own DICE threshold (e.g. ">=12") as the die faces (1-6 each) whose glyphs should render
- * (2026-08-16, per user request: "目＞＝1を ⚀ 以上" etc -- returns faces rather than a formatted string
- * since the glyphs and the "以上" suffix need independent sizing/styling, see fillCardFace's own
- * rendering). A single die only ever shows 1-6, so N<=6 is just that one face; N=7-12 needs 2 dice
- * combined (a genuine placeDiceGroup group placement, see board.js) to reach it, always the highest
- * face (6) plus whatever the other die needs to show to sum to N -- confirmed by the user's own examples
- * (">=7" -> [6,1], ">=12" -> [6,6]). Empty array for anything not matching ">=N" (shouldn't happen for
- * M's own DICE column, but defensive).
- * @returns {number[]}
- */
-function diceThresholdFaces(diceString) {
-  const match = /^>=(\d+)$/.exec(diceString || '');
-  if (!match) return [];
-  const n = Number(match[1]);
-  return n <= 6 ? [n] : [6, n - 6];
-}
-
-/** Fills container (.shop-card__req) with a monument's dice-face threshold -- each needed face as its
- * own larger/darker glyph span (.shop-card__req-die, styled in style.css) followed by plain "以上" text
- * at the row's own base size (2026-08-16, per user request: dice faces "今の倍の大きさにして濃く"、
- * "以上"の文字は今のまま、"ダイス目は中央揃え" -- the size/color split is why this builds real DOM nodes
- * instead of the plain textContent assignment it used to be). Clears container first so an empty/
- * unrecognized diceString correctly leaves it empty, matching .shop-card__req:empty's hide-when-blank
- * rule. */
+/** Fills container (.shop-card__req) with a monument's own DICE threshold (e.g. ">=12") as plain text,
+ * 2 lines: "ダイス目" then "{n}以上", the number itself in a large/bold span (.shop-card__req-number)
+ * (2026-08-25, per user spec: "⚅⚅から ダイス目 12以上 にすべて変更 数字は大きく濃く" -- replaces the
+ * previous die-face-glyph rendering (⚅⚅ for ">=12" etc, 2026-08-16's diceThresholdFaces/dieFace-based
+ * version) across every monument, not just the >=12 case the user's own example used). Clears container
+ * first so an empty/unrecognized diceString correctly leaves it empty, matching .shop-card__req:empty's
+ * hide-when-blank rule. */
 function renderDiceThresholdReq(container, diceString) {
   container.innerHTML = '';
-  // Reuses dieFace() (2026-08-16, per user request: "AREAに表示されている⚅とおなじものを使ってくださ
-  // い　大きさや濃さも") -- the exact same .die-face-classed node the board's own AREA slots build for a
-  // numbered requirement (renderBoard's dieFace(requirement) call), so size/color can never drift
-  // between the two instead of maintaining a second, separately-tuned copy.
-  for (const face of diceThresholdFaces(diceString)) {
-    container.appendChild(dieFace(face));
-  }
-  if (container.children.length) container.appendChild(document.createTextNode('以上'));
+  const match = /^>=(\d+)$/.exec(diceString || '');
+  if (!match) return;
+  container.appendChild(el('div', null, 'ダイス目'));
+  const line2 = el('div');
+  line2.appendChild(el('span', 'shop-card__req-number', match[1]));
+  line2.appendChild(document.createTextNode('以上'));
+  container.appendChild(line2);
 }
 
 /** {cost, vp, req, effects:[{text,source}], inst} for any A/B/C/CON/JOB/M/RESOURCE face id, read
@@ -2880,7 +2863,10 @@ const EMBLEM_ORDER = ['天', '地', '人'];
 // (0,0,4=4 chars -> 2 rows) -- all happen to want exactly "2 per row", so one shared chunk size covers
 // all of them. See fillCardFace's own emblem-rendering doc for why 祝福 (the only other multi-emblem
 // card in the data) is deliberately left alone -- opted OUT of exactly this wrapping back on 2026-08-18.
-const EMBLEM_ROW_CHUNK_SIZE = { M007: 2, M008: 2, M009: 2, M011: 2, M012: 2 };
+// M402/王都建設 (2026-08-25, SHOP201-203 rework's own new monument, EMBLEM 3,3,3=9 chars): per user
+// spec "王都建設のエンブレム３行にして　重なってもいい" -- 3 per row (3 rows of 3), explicitly allowed
+// to overlap adjacent card content rather than needing extra vertical space reserved for it.
+const EMBLEM_ROW_CHUNK_SIZE = { M007: 2, M008: 2, M009: 2, M011: 2, M012: 2, M402: 3 };
 function emblemForFaceId(faceId) {
   if (isNormalDeckCard(faceId)) return { [EMBLEM_BY_DECK[faceId[0]]]: 1 };
   // Not restricted to M any more (2026-08-16, per user report: CON006B「祝福」has real EMBLEM_A/B/C
