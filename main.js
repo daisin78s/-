@@ -5092,12 +5092,12 @@ function hasFinishedOnboarding(player) {
  * Classifies faceId's TAP field for the *direct*-use dblclick gesture below (2026-07-31) -- null if
  * there's nothing to directly use: no TAP field at all, or every top-level statement is ON(...) (a
  * purely event-triggered reaction, e.g. JOB005A's ON(GET(K),CHANGE(K,Z)) -- that's exclusively offered
- * via the TAP_REACTION_AVAILABLE pendingChoice rows/renderTapReactions, never this dblclick). A
- * die-selecting command (SET_DICE_ANY/SET_DIE_VALUE/CHANGE_DIE_VALUE/MONUMENT_CHANGE_DIE_VALUE) only
- * ever appears as the *first* statement, so only that needs checking for those 4 kinds. BUILD used to be first-only too, but
- * JOB010's "PAY(2K);BUILD(U)" (2026-08-17) has a flat cost ahead of it -- see
- * board.resolveProgramOrBuild's own doc -- so this checks for BUILD anywhere in the field, not just
- * commands[0] (a no-op change for every other card, where BUILD when present has always been first).
+ * via the TAP_REACTION_AVAILABLE pendingChoice rows/renderTapReactions, never this dblclick). SET_DICE_ANY/
+ * SET_DIE_VALUE/CHANGE_DIE_VALUE only ever appear as the *first* statement in the current dataset, so only
+ * that needs checking for those 3 kinds. BUILD used to be first-only too, but JOB010's "PAY(2K);BUILD(U)"
+ * (2026-08-17) has a flat cost ahead of it -- see board.resolveProgramOrBuild's own doc -- so this checks
+ * for BUILD anywhere in the field, not just commands[0] (a no-op change for every other card, where BUILD
+ * when present has always been first).
  */
 function bareTapKind(faceId) {
   let row;
@@ -5112,8 +5112,15 @@ function bareTapKind(faceId) {
   // MONUMENT_CHANGE_DIE_VALUE(SELF+2) (2026-08-24, JOB007/宮廷人's revised TAP) -- same die-choice
   // modal as CHANGE_DIE_VALUE, but the delta is a single fixed number baked in at DSL-lowering time
   // (cmd.delta), never a player-picked one of several choices, so renderTapChoiceModal skips the value
-  // picker for this kind entirely.
-  if (first.type === 'MONUMENT_CHANGE_DIE_VALUE') return { kind: 'MONUMENT_CHANGE_DIE_VALUE' };
+  // picker for this kind entirely. Searched ANYWHERE in the field, not just commands[0] (2026-08-25 fix,
+  // per user report: "宮廷人を使おうとしてTAPしようとするとカードを使用できませんと出ます" -- JOB007's
+  // own TAP is "ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+1);BLOCK_BUILD(...)", so first.type was 'ADD',
+  // this branch never matched, and it fell all the way through to IMMEDIATE -- calling useBareTapAbility
+  // directly with no chosenDieId ever gathered, which the die-value-change command then had nothing to
+  // act on. ADD(BZ) is an unconditional grant with no choice of its own, same "flat leading effect ahead
+  // of the real interactive command" shape BUILD's own check just above already handles for JOB010.
+  const monumentChangeDieValue = commands.find((c) => c.type === 'MONUMENT_CHANGE_DIE_VALUE');
+  if (monumentChangeDieValue) return { kind: 'MONUMENT_CHANGE_DIE_VALUE' };
   if (commands.some((c) => c.type === 'BUILD')) return { kind: 'BUILD' };
   return { kind: 'IMMEDIATE' };
 }
