@@ -100,31 +100,31 @@ function siblingFaceId(faceId) {
  * "usage" means for each:
  *  - The 8 A-deck cards (AREA_FEE_FACES): usage fee collected via their AREA (accumulated separately,
  *    see areaFeeByRoundAndCard's own doc in game-runner.js).
- *  - B008A: LVUP success rate -- fraction of B008A-build games where that player's card actually got
- *    upgraded into B008B by GAME_END (2026-08-12, per user spec: "B008AはLVUPできたときの割合 10回中8回
- *    LVUPで0.8" -- supersedes the old "wD granted at build time" meaning from when B008A's ONCE still
- *    scaled with 天 emblems; that scaling moved to B008B's PASSIVE, see the commit that made it a
- *    persistent effect).
- *  - B008B: max(天,地,人) emblem count at GAME_END, for whichever player owns it (2026-08-12, per user
- *    spec: "B008Bはゲーム終了時のエンブレム天の数" -- supersedes the old "空欄でOK"/not-tracked state, now
- *    that B008B's own PASSIVE makes that count directly meaningful; 2026-08-17, per user request
- *    ("最多エンブレムの数*VPにしたい"), the PASSIVE itself changed from VP_MODIFIER(COUNT(天)) to
- *    VP_MODIFIER(MAX_EMBLEM_COUNT), so this usage metric follows suit).
- *  - Every other B/C-deck face WITH a real TAP field (data-driven check below -- B004A/B/B008A/B all have
+ *  - B301A (renamed from B008A by the 2026-08-24 SHOP201-203 rework's card renumbering; still 栄光の証):
+ *    LVUP success rate -- fraction of B301A-build games where that player's card actually got upgraded
+ *    into B301B by GAME_END (2026-08-12, per user spec: "B008AはLVUPできたときの割合 10回中8回LVUPで0.8"
+ *    -- supersedes the old "wD granted at build time" meaning from when B301A's ONCE still scaled with
+ *    天 emblems; that scaling moved to B301B's PASSIVE, see the commit that made it a persistent effect).
+ *  - B301B (renamed from B008B, still 栄光の証LV2): max(天,地,人) emblem count at GAME_END, for whichever
+ *    player owns it (2026-08-12, per user spec: "B008Bはゲーム終了時のエンブレム天の数" -- supersedes the
+ *    old "空欄でOK"/not-tracked state, now that B301B's own PASSIVE makes that count directly meaningful;
+ *    2026-08-17, per user request ("最多エンブレムの数*VPにしたい"), the PASSIVE itself changed from
+ *    VP_MODIFIER(COUNT(天)) to VP_MODIFIER(MAX_EMBLEM_COUNT), so this usage metric follows suit).
+ *  - Every other B/C-deck face WITH a real TAP field (data-driven check below -- B004A/B/B301A/B all have
  *    an empty TAP, confirmed via data/game.json, so this naturally excludes them without a hardcoded
  *    list): TAP count, from activationCounts. A tier-A face's own count is a *cumulative* total including
  *    whatever its tier-B sibling racked up after upgrading (2026-08-07, per user spec: "グレードアップ
  *    するカードはグレードアップ後にTAPした回数も含みます" -- e.g. C001A taps 3 times before upgrading,
  *    then (as C001B) 2 more times after -- C001A's row shows 5, C001B's row shows its own 2, not double-
  *    counted). A/M cards have no TAP field at all, so they fall through to "not eligible" here regardless
- *    (their own usage, if any, already came from the fee/B008A/B008B branches above).
+ *    (their own usage, if any, already came from the fee/B301A/B301B branches above).
  * isUsageEligible/usageAmount are checked/computed at write time (see writeReport below) and at
  * accumulation time (the build loop below) respectively -- an entry's usageSum simply never gets touched
  * for an ineligible id, so eligibility only decides whether a real (possibly zero) sum gets reported as
  * an average or suppressed as inapplicable (per user spec: "Dも空欄でOK", and by the same logic every
  * TAP-less B/C face too). */
 function isUsageEligible(index, id) {
-  if (AREA_FEE_FACES.has(id) || id === 'B008A' || id === 'B008B') return true;
+  if (AREA_FEE_FACES.has(id) || id === 'B301A' || id === 'B301B') return true;
   if (!/^[BC]\d{3}[AB]$/.test(id)) return false; // only B/C-deck faces can reach the TAP-field check
   return !!getCardRow(index, id).TAP;
 }
@@ -225,10 +225,11 @@ function main() {
   // is the same kind of exception as JOB008 -- JOB010 itself has no TAP/PASSIVE ability of its own
   // (its only effect is the one-time onboarding "革命の兆しを獲得する" bonus, see
   // setup.grantRevolutionaryBonusIfEarned), so activationCounts['JOB010'] would always be 0. This
-  // column instead reports B007(革命の兆し)'s own TAP usage -- both tiers combined (activationCounts
-  // is keyed per face, and a physical B007 card upgrades A->B over the course of a game, same
-  // ownTaps+upgradeBonus combining pattern the B/C TAP-usage branch above already uses) -- since the
-  // whole point of JOB010 is granting access to that card.
+  // column instead reports B005(革命の兆し; renamed from B007 by the 2026-08-24 SHOP201-203 rework's
+  // card renumbering)'s own TAP usage -- both tiers combined (activationCounts is keyed per face, and a
+  // physical B005 card upgrades A->B over the course of a game, same ownTaps+upgradeBonus combining
+  // pattern the B/C TAP-usage branch above already uses) -- since the whole point of JOB010 is granting
+  // access to that card.
   // turn-flow.grantBardBonusIfEarned's own doc).
   // scoreSum/qstScoreSum/rankSum (2026-08-20, per user request) -- a TRUE per-JOB weighted average
   // (this sum divided by this same count), not the "average of the 12 per-CON averages"
@@ -299,25 +300,26 @@ function main() {
           e.qstScoreSum += detail.qstScore;
           e.rankSum += h.rank;
           // "使用回数" (2026-08-07, per user spec) -- see isUsageEligible's own doc; exactly one of
-          // these four branches can ever apply to a given faceId (B008A / B008B / an A-deck fee card /
+          // these four branches can ever apply to a given faceId (B301A / B301B / an A-deck fee card /
           // a TAP-bearing B or C face are mutually exclusive sets).
-          // B008A (2026-08-12): LVUP success rate -- a physical B008 card can only ever reach B008B by
-          // upgrading from B008A, and only once, so "did 'B008B' ever appear anywhere in this player's
-          // buildsByRound" is exactly "did this B008A LVUP succeed" -- no separate tracking needed.
-          if (faceId === 'B008A') {
-            const lvupSucceeded = Object.values(detail.buildsByRound).some((facesThisRound) => facesThisRound.includes('B008B'));
+          // B301A (renamed from B008A by the 2026-08-24 SHOP201-203 rework's card renumbering; still
+          // 栄光の証) (2026-08-12): LVUP success rate -- a physical B301 card can only ever reach B301B by
+          // upgrading from B301A, and only once, so "did 'B301B' ever appear anywhere in this player's
+          // buildsByRound" is exactly "did this B301A LVUP succeed" -- no separate tracking needed.
+          if (faceId === 'B301A') {
+            const lvupSucceeded = Object.values(detail.buildsByRound).some((facesThisRound) => facesThisRound.includes('B301B'));
             e.usageSum += lvupSucceeded ? 1 : 0;
           }
-          // B008B (2026-08-12; metric changed 2026-08-17): max(天,地,人) emblem count at GAME_END for
-          // the player who owns it -- read straight off the final `state` rather than anything
-          // game-runner.js tracks, since it's just a live metric query (same MAX_EMBLEM_COUNT B008B's
-          // own PASSIVE uses, see executor.collectVpModifiers).
-          if (faceId === 'B008B') {
+          // B301B (renamed from B008B, still 栄光の証LV2) (2026-08-12; metric changed 2026-08-17):
+          // max(天,地,人) emblem count at GAME_END for the player who owns it -- read straight off the
+          // final `state` rather than anything game-runner.js tracks, since it's just a live metric query
+          // (same MAX_EMBLEM_COUNT B301B's own PASSIVE uses, see executor.collectVpModifiers).
+          if (faceId === 'B301B') {
             e.usageSum += executor.evalMetric(state, index, playerId, { name: 'MAX_EMBLEM_COUNT', args: [] });
           }
           const feeForThisCard = (detail.areaFeeByRoundAndCard[round] || {})[faceId];
           if (feeForThisCard !== undefined) e.usageSum += feeForThisCard;
-          if (!AREA_FEE_FACES.has(faceId) && faceId !== 'B008A' && faceId !== 'B008B' && /^[BC]\d{3}[AB]$/.test(faceId) && getCardRow(index, faceId).TAP) {
+          if (!AREA_FEE_FACES.has(faceId) && faceId !== 'B301A' && faceId !== 'B301B' && /^[BC]\d{3}[AB]$/.test(faceId) && getCardRow(index, faceId).TAP) {
             const ownTaps = activationCounts[faceId] || 0;
             const upgradeBonus = faceId.endsWith('A') ? (activationCounts[siblingFaceId(faceId)] || 0) : 0;
             e.usageSum += ownTaps + upgradeBonus;
@@ -336,7 +338,7 @@ function main() {
       // JOB face.
       const jobFaceId = h.jobFaceId;
       const usage = jobFaceId === 'JOB008' ? (detail.job008BonusVp || 0)
-        : jobFaceId === 'JOB010' ? ((activationCounts['B007A'] || 0) + (activationCounts['B007B'] || 0))
+        : jobFaceId === 'JOB010' ? ((activationCounts['B005A'] || 0) + (activationCounts['B005B'] || 0))
         : (activationCounts[jobFaceId] || 0);
       const je = jobEntry(jobFaceId);
       je.count++;

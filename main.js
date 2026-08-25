@@ -1935,7 +1935,8 @@ const ACTION_ICON_BUILDERS = {
   // reactive/direct TAP abilities), so "毎ターン" (plain text) reads more clearly there than the ⤴️
   // glyph alone did.
   'UNTAP()': () => actionRow([actionSuffix('毎ターン')]),
-  // B005A/B006A/B007A (始まりの兆し/終わりの兆し/革命の兆し, 2026-08-21, per user spec: "⤵〇→🔨 / ⚀"、
+  // B004A/B202A/B005A (renamed from B005A/B006A/B007A by the 2026-08-24 SHOP201-203 rework's card
+  // renumbering; 始まりの兆し/終わりの兆し/革命の兆し, 2026-08-21, per user spec: "⤵〇→🔨 / ⚀"、
   // "⤵〇→🔨 / ⚅"、"⤵〇→🔨U" -- ⤵ is buildEffectRow's own auto TAP-cost prefix, not repeated here; 〇 is
   // the bare K-cost dot, no count shown, since the DSL's own PAY(K) has no explicit number either. The
   // hammer itself is ⚒️, not the user's own literal 🔨 -- per their follow-up, matched to 王宮(AREA008)'s
@@ -1944,8 +1945,8 @@ const ACTION_ICON_BUILDERS = {
   // later follow-up -- the bare dieFace glyph alone (now 1.6x larger, see .action-icons .die-face in
   // style.css) is enough on its own). One-off exact-match entries rather than generalizing buildBuildIcon,
   // same reasoning as before (PAY(...) prefixes aren't a handled shape there -- see board.
-  // resolveProgramOrBuild's own doc on why the TAP text isn't just "BUILD(...)" alone). B005A/B006A get a
-  // 2nd row for the required die value -- B007A/UPGRADE has no die-value threshold, so it stays a single
+  // resolveProgramOrBuild's own doc on why the TAP text isn't just "BUILD(...)" alone). B004A/B202A get a
+  // 2nd row for the required die value -- B005A/UPGRADE has no die-value threshold, so it stays a single
   // row ending in "U".
   'PAY(K);BUILD((A,B,C,M),1)': () => {
     const stack = el('div', 'action-icons-stack');
@@ -2399,7 +2400,8 @@ function buildCountEmblemVpModifierIcon(actionText) {
   return actionRow([emblemSpan, actionTimes(), actionSuffix('VP')]);
 }
 
-/** VP_MODIFIER(MAX_EMBLEM_COUNT): B008B/栄光の証LV2's own PASSIVE -- a persistent VP bonus equal to
+/** VP_MODIFIER(MAX_EMBLEM_COUNT): B301B/栄光の証LV2's own PASSIVE (renamed from B008B by the 2026-08-24
+ * SHOP201-203 rework's card renumbering) -- a persistent VP bonus equal to
  * however many of the player's single MOST-held emblem type they currently own (confirmed 2026-08-21,
  * per user spec: "最多エンブレム / × VP", larger and darker than a normal .action-suffix -- see
  * .action-suffix--large in style.css). Stacked 2 rows (label, then ×VP) rather than one wide row, per
@@ -4430,12 +4432,14 @@ function commitBuildCandidateReal(candidate, bzDiscount) {
   const playerId = pendingBuildChoice.playerId;
   const context = { playerId, colorPreference: buildColorPreference, bzDiscount };
   const source = pendingBuildChoice.source;
-  // Tap the TAP-source card BEFORE resolving the build, not after (2026-08-09 fix, per user report:
-  // "B006AをTAPしてその効果でC008Aを建築したときB006Aがアンタップしない"). The built card's own ONCE --
-  // e.g. C008A's UNTAP_CHOICE(SELF,3) (2026-08-15, formerly UNTAP_ALL(SELF)) -- runs *inside*
-  // completeAreaBuild/completeQuestClaim below, so tapping this card only afterward (the old order)
-  // meant that effect could never actually reach it: B006A stayed permanently tapped even though the
-  // untap effect should have caught it right back.
+  // Tap the TAP-source card BEFORE resolving the build, not after (2026-08-09 fix, per user report on
+  // what were then B006A/C008A -- renamed to B202A/C301A by the 2026-08-24 SHOP201-203 rework's card
+  // renumbering: "B006AをTAPしてその効果でC008Aを建築したときB006Aがアンタップしない"). The built card's
+  // own ONCE -- e.g. C301A's UNTAP_ALL(SELF) (briefly UNTAP_CHOICE(SELF,3) 2026-08-15 through 2026-08-24,
+  // see command-builder.js's own UNTAP_CHOICE doc) -- runs *inside* completeAreaBuild/completeQuestClaim
+  // below, so tapping this card only afterward (the old order) meant that effect could never actually
+  // reach it: the TAP source stayed permanently tapped even though the untap effect should have caught
+  // it right back.
   // resolveBuildNew/resolveUpgrade both check affordability and fail atomically *before* any state
   // mutation (see board.js's own code), so it's safe to speculatively tap first and simply revert if the
   // build then fails -- nothing else needs undoing, and the TAP is correctly left unspent for a retry.
@@ -4763,7 +4767,10 @@ function renderPlayers(state, next) {
     node.querySelector('.player-panel__name').textContent = player.name;
     // Live running score (2026-08-04, per user feedback: "プレイ中もカードVP込みの合計得点をリアルタイ
     // ム表示するように") -- previously this header badge showed only player.resources.VP, the raw "VP
-    // as a resource" pool that ADD(VP) grants into (only B008B's ONCE does this in the current data), NOT
+    // as a resource" pool that ADD(VP) grants into (only C301A's TAP does this in the current data --
+    // was B008B's ONCE at the time of this fix, before both the 2026-08-24 SHOP201-203 card renumbering
+    // and B301B's own later PASSIVE=VP_MODIFIER(MAX_EMBLEM_COUNT) rework moved it off ADD(VP) entirely),
+    // NOT
     // a monument/card's own printed VP column (only tallied at GAME_END via scoring.computeFinalScore).
     // A player who'd just built a 5-VP monument saw this badge stuck at "0 VP" the whole game, which read
     // as broken even though it was working as originally scoped. computeFinalScore already sums exactly
@@ -4774,7 +4781,8 @@ function renderPlayers(state, next) {
     const resourcesEl = node.querySelector('.player-panel__resources');
     // VP itself still shows as an ordinary resource badge (2026-08-04) now that the header badge above
     // shows the combined score instead of the raw resource -- otherwise a player who actually held VP as
-    // a resource (via B008B) would have no way to see that raw count anymore.
+    // a resource (via C301A's TAP, see this function's own comment above) would have no way to see that
+    // raw count anymore.
     for (const resource of ['K', 'A', 'B', 'C', 'Z', 'BZ', 'VP']) {
       const count = player.resources[resource] || 0;
       if (count > 0) resourcesEl.appendChild(renderResourceBadge(resource, count));

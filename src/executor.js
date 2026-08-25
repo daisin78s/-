@@ -486,8 +486,10 @@ function evalMetric(state, index, playerId, metric) {
         return scopeSheets ? scopeSheets.has(sheet) && CARD_COUNT_SHEETS.has(sheet) : CARD_COUNT_SHEETS.has(sheet);
       }).length;
     }
-    // "所有AREA数"/"所有LV2AREA数" (2026-08-09, QST's new rank-based GOAL): how many of the 8
-    // AREA-ownership cards (A001-A008) this player owns -- each A-deck card ties to exactly one
+    // "所有AREA数"/"所有LV2AREA数" (2026-08-09, QST's new rank-based GOAL): how many of the 9
+    // AREA-ownership cards (A001-A006 + A201/A202/A301, renumbered/expanded from A001-A008 by the
+    // 2026-08-24 SHOP201-203 rework's card renumbering -- see game-runner.js's AREA_CARD_BY_MAP) this
+    // player owns -- each A-deck card ties to exactly one
     // AREA/MAP (see its own ONCE, "MAP{n}.CURRENT_AREA=..."), so owning the card IS owning that area.
     // Bare AREA_COUNT = any tier; AREA_COUNT(2) = LEVEL 2 only (i.e. tier-B A-cards like A001B/A005B,
     // "所有LV2AREA数" -- an optional level filter on the same metric, not a separate LEVEL_COUNT
@@ -764,7 +766,8 @@ function runUntapAll(state, context, cmd) {
 
 /** UNTAP_CHOICE weighted-budget rule (2026-08-17, per user request: "カードを３枚選んでアンタップする
  * 兆しカードをアンタップするときは3枚分としてカウントする"; weight lowered 3->2 on 2026-08-21, per user
- * request) -- 始まりの兆し/終わりの兆し/革命の兆し (B005/B006/B007, both LV1 and LV2 faces) each cost 2
+ * request) -- 始まりの兆し/終わりの兆し/革命の兆し (B004/B202/B005, renamed from B005/B006/B007 by the
+ * 2026-08-24 SHOP201-203 rework's card renumbering; both LV1 and LV2 faces) each cost 2
  * of the budget; every other card costs 1. Matched by NAME containing "兆し" rather than a hardcoded
  * physical-id list, per this session's own lesson about NAME-matching being more resilient to future
  * data reorgs (see hasPioneerAbility in board.js for the same pattern). */

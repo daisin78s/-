@@ -144,9 +144,11 @@ function driveTurn(state, index, playerId, aiPlayer, initialHasPlacedDieThisTurn
     const result = applyInPlace(state, index, move);
     if (!result.success) break; // defensive -- selectMove only offers moves MoveGenerator pre-validated
     movesTaken.push({ move, result });
-    // UNTAP_CHOICE (2026-08-15, see executor.runUntapChoice's own doc): C004B/C005B/C006B/C007B/
-    // C008A/C008B's ONCE effect queues this pendingChoice instead of resolving immediately whenever the
-    // player's tapped cards' combined weight exceeds the budget -- nothing else in this loop (or
+    // UNTAP_CHOICE (2026-08-15, see executor.runUntapChoice's own doc): a card whose ONCE uses this
+    // (what were then C004B/C005B/C006B/C007B/C008A/C008B -- no card in the current data carries it any
+    // more, see command-builder.js's own UNTAP_CHOICE doc) queues this pendingChoice instead of resolving
+    // immediately whenever the player's tapped cards' combined weight exceeds the budget -- nothing else
+    // in this loop (or
     // MoveGenerator's own move list) ever surfaces or gates on it, so it must be resolved right here or
     // it would sit in state.pendingChoices forever, silently never granting its own benefit.
     resolveUntapChoiceIfPending(state, playerId);
@@ -181,9 +183,10 @@ function driveTurn(state, index, playerId, aiPlayer, initialHasPlacedDieThisTurn
  * so tools/ai_data_report.js can report both the existing "平均得点" metric with QST *excluded*
  * (finalScore - qstScore, per user request) and QST's own average separately, without re-deriving the
  * split itself. See the fields' own inline docs below for what each one means and how it's derived).
- * B008A's "使用回数" (LVUP success rate) and B008B's (天 emblem count at GAME_END) are NOT separate
- * fields here (2026-08-12, per user spec: "B008AはLVUPできたときの割合", "B008Bはゲーム終了時のエンブレム
- * 天の数") -- tools/ai_data_report.js derives both directly from the returned `state` and
+ * B301A's "使用回数" (LVUP success rate) and B301B's (天 emblem count at GAME_END) -- renamed from
+ * B008A/B008B by the 2026-08-24 SHOP201-203 rework's card renumbering -- are NOT separate fields here
+ * (2026-08-12, per user spec: "B008AはLVUPできたときの割合", "B008Bはゲーム終了時のエンブレム天の数") --
+ * tools/ai_data_report.js derives both directly from the returned `state` and
  * buildsByRound/historyByPlayerId it already gets back from this function, so no new tracking was
  * needed here.
  *

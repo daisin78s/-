@@ -81,7 +81,8 @@ function registerCardPool(state, faceIds) {
   }
 }
 
-/** Every monument, base-tier-A face, e.g. "A001A".."A007A" (008 is reserved for the special shop). */
+/** Every base-tier-A face numbered 7 or below, e.g. "A001A".."A006A" (200+/300+ ids are reserved for
+ * the special shop's wave 1/wave 2 -- see collectSpecialShopWaveIds below). */
 function collectNormalShopFaceIds(index) {
   const ids = [];
   for (const sheet of ['A', 'B', 'C']) {

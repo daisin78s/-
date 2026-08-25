@@ -450,7 +450,8 @@ function isCandidateAffordable(state, index, playerId, candidate) {
 }
 
 /** If commands (whose [0] is already known to be a BUILD) is followed by nothing but ADD statements --
- * e.g. AREA009B/C's "BUILD();ADD(2K)"/"BUILD();ADD(2K,BZ)" or B005B/B007B's "BUILD(...);ADD(BZ)" -- returns
+ * e.g. AREA009B/C's "BUILD();ADD(2K)"/"BUILD();ADD(2K,BZ)" or B004B/B005B's "BUILD(...);ADD(BZ)" (renamed
+ * from B005B/B007B by the 2026-08-24 SHOP201-203 rework's card renumbering) -- returns
  * that trailing array, else null. Shared by wouldAreaActionHaveEffect (preview) and resolveProgramOrBuild
  * (real resolution) so a BUILD();ADD(...) field's ADD half is always resolved *before* build-candidate
  * affordability is judged in both places (2026-08-07, per user feedback on 元老院LV2: "BZをもらえるので
@@ -899,8 +900,9 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
     }
     return { success: false, reason: 'NO_BUILDABLE_CARD' };
   }
-  // Same usage-fee affordability gate as placeDice's own (2026-08-05) -- AREA009 can carry a tier (A008A
-  // tiers it up), so a group placement here can owe a fee too, not just the single-die path.
+  // Same usage-fee affordability gate as placeDice's own (2026-08-05) -- AREA009 can carry a tier (A301A,
+  // renamed from A008A by the 2026-08-24 SHOP201-203 rework's card renumbering, tiers it up), so a group
+  // placement here can owe a fee too, not just the single-die path.
   const owedFee = wouldOweFee(map, playerId);
   if (owedFee && !canAffordFee(player, owedFee.amount)) {
     if (preJobBonusSnapshot) {

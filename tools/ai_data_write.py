@@ -26,9 +26,10 @@ positions are looked up by their own header text (find_col, below), not hardcode
 each existing 平均得点{r}R one, which would have silently written into the wrong columns had the old
 hardcoded indices been kept). The 使用回数 columns (2026-08-07, per user spec, also the user's own
 pre-existing layout addition) only ever get a value for rows report['abcm'][id][round]['avgUsage'] is
-non-null for (B008A/B008B and the 8 A-deck fee-generating cards -- see tools/ai_data_report.js's
-isUsageEligible; B008A means "LVUP success rate", B008B means "max(天,地,人) emblem count at
-GAME_END" (2026-08-17, following B008B's own PASSIVE metric change), per user spec 2026-08-12) --
+non-null for (B301A/B301B, renamed from B008A/B008B by the 2026-08-24 SHOP201-203 rework's card
+renumbering, and the 8 A-deck fee-generating cards -- see tools/ai_data_report.js's isUsageEligible;
+B301A means "LVUP success rate", B301B means "max(天,地,人) emblem count at GAME_END" (2026-08-17,
+following B301B's own PASSIVE metric change), per user spec 2026-08-12) --
 every other row's cells are cleared to blank, not written as 0, so a card with no "usage" concept
 at all never shows a misleading number.
 

@@ -154,7 +154,7 @@ function giveCard(state, faceCardId, ownerId) {
   giveCard(state, 'CON004B', 'P4');
   // CARD_COUNT via distinct owned-card totals: P1=3 (rank1), P2=2 (rank2), P3=1 (rank3), P4=0 (rank4, a
   // 0 value is always NO_REWARD_RANK per rankPlayersForQuest's own rule). Disjoint physical A-card ids
-  // per player (A001-A007 exist) -- state.cards is keyed by physicalId, so reusing the same one across
+  // per player (A001-A006 exist) -- state.cards is keyed by physicalId, so reusing the same one across
   // players would silently overwrite each other's instance. CON004B itself doesn't count (CON isn't a
   // CARD_COUNT sheet).
   for (const faceId of ['A001A', 'A002A', 'A003A']) giveCard(state, faceId, 'P1');

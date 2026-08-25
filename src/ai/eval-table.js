@@ -18,9 +18,11 @@
  *  - Upgrade (B-face) card values are cumulative, not incremental (e.g. A001A=20, A001B=30, not 10).
  *  - JOB/CON rows currently exist but are all blank (0) -- combination-dependent value not modeled
  *    yet, confirmed out of scope for the first AI pass.
- *  - A008A/B008A/C008A/A008B/B008B/C008B have no 1R entry (blank/0) -- they're the special-shop-only
- *    cards (SHOP201-203, ROUND_MIN=2 -- see setup.js's SPECIAL_SHOP_SLOT_IDS), structurally unbuildable
- *    in round 1.
+ *  - The SHOP201-203 special-shop cards (A201/A202/B201/B202/C201/C202, both tiers, wave 1; A301/B301/
+ *    C301, both tiers, wave 2 -- renumbered from a single A008/B008/C008 wave by the 2026-08-24
+ *    SHOP201-203 rework's card renumbering) have no 1R entry (blank/0), and the wave-2 ids have no 2R
+ *    entry either -- see setup.js's SPECIAL_SHOP_SLOT_IDS/prepareShops for the round gating that makes
+ *    them structurally unbuildable that early.
  */
 function buildEvalTable(rawData) {
   const rows = rawData['評価値'] || [];

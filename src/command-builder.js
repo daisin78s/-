@@ -170,9 +170,13 @@ function lowerCall(node) {
       return { type: 'UNTAP' };
     case 'UNTAP_ALL':
       return { type: 'UNTAP_ALL', scope: identLikeName(node.args[0]) };
-    // UNTAP_CHOICE(SELF,3) -- C004B/C005B/C006B/C007B/C008A/C008B (2026-08-15, per user spec, replacing
-    // their old UNTAP_ALL(SELF) -- "すべてをアンタップにするを、自分のカード3枚をアンタップにするに変
-    // 更"): untaps up to `count` of the player's own currently-tapped cards. If they have `count` or
+    // UNTAP_CHOICE(SELF,3) (2026-08-15, per user spec, added to what were then C004B/C005B/C006B/C007B/
+    // C008A/C008B -- "すべてをアンタップにするを、自分のカード3枚をアンタップにするに変更"): untaps up to
+    // `count` of the player's own currently-tapped cards. No card in the current data carries this DSL
+    // any more -- the 2026-08-24 "C card ability rework" + "C008A/C008B revert to UNTAP_ALL(SELF)"
+    // commits moved every one of those cards off it (back to UNTAP_ALL(SELF) or a different ability
+    // entirely) -- but the parser support stays for whenever a future card wants it again. If they have
+    // `count` or
     // fewer tapped cards, all of them untap automatically (see executor.runUntapChoice) -- no choice to
     // make. If they have more than `count`, the player manually picks exactly `count` of them (a new
     // UNTAP_CHOICE pendingChoice, resolved via executor.resolveUntapChoice, same shape as setup.

@@ -141,7 +141,8 @@ function applyInPlace(state, index, move) {
         if (!candidate) throw new SimulationError(`buildCandidateIndex ${move.buildCandidateIndex} out of range`);
         const bzDiscount = maxBzDiscount(state, index, move.playerId, candidate);
         // Tap BEFORE resolving the build, not after (2026-08-09 fix, mirrors main.js's matching fix --
-        // see its own comment for the full story: a built card's own ONCE, e.g. C008A's
+        // see its own comment for the full story: a built card's own ONCE, e.g. C301A's (renamed from
+        // C008A by the 2026-08-24 SHOP201-203 rework's card renumbering)
         // UNTAP_ALL(SELF), runs *inside* completeAreaBuild, so tapping this card only afterward meant
         // that effect could never actually reach it). resolveBuildNew/resolveUpgrade both check
         // affordability and fail atomically *before* any state mutation (see their own code), so it's

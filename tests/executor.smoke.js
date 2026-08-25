@@ -860,8 +860,10 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   check('...a colored die (D) was granted', getPlayerRef(state, 'P1').dice.filter((d) => d.kind === 'COLOR').length, 1);
 }
 
-// 21. Arithmetic offset on a dynamic count expression (2026-08-02, added when the user nerfed B008A
-// from ADD(COUNT(天)*wD) to ADD((COUNT(天)-1)*wD)): the DSL grammar previously had no way to subtract
+// 21. Arithmetic offset on a dynamic count expression (2026-08-02, added when the user nerfed B008A --
+// renamed to B301A by the 2026-08-24 SHOP201-203 rework's card renumbering, and this formula has since
+// moved off B301A entirely too, see isUsageEligible's own doc in tools/ai_data_report.js -- from
+// ADD(COUNT(天)*wD) to ADD((COUNT(天)-1)*wD)): the DSL grammar previously had no way to subtract
 // from a Call's result, so this string failed to parse until dsl-parser.js/executor.js were extended
 // (see [[project-dice-wp-dsl-spec]]). A negative result must clamp to 0 (granting nothing), not throw
 // or go negative, since 0 天-emblem cards minus 1 is a perfectly normal "you get nothing" case, not an
@@ -1028,10 +1030,11 @@ const EXTRA_D = { name: 'EXTRA_D_PLUS_ABC_COUNT', args: [] };
 }
 
 // ---------------------------------------------------------------------------
-// 23. UNTAP_CHOICE(SELF,3) (2026-08-15, replacing C004B/C005B/C006B/C007B/C008A/C008B's old
-// UNTAP_ALL(SELF): "自分のカード3枚をアンタップにする"; reworked 2026-08-17 into a weighted budget per
+// 23. UNTAP_CHOICE(SELF,3) (2026-08-15, replacing what were then C004B/C005B/C006B/C007B/C008A/C008B's
+// old UNTAP_ALL(SELF): "自分のカード3枚をアンタップにする"; reworked 2026-08-17 into a weighted budget per
 // user request -- "カードを３枚選んでアンタップする　兆しカードをアンタップするときは3枚分としてカウン
-// トする": 始まりの兆し/終わりの兆し/革命の兆し (B005/B006/B007) each cost 2 of the budget (lowered from
+// トする": 始まりの兆し/終わりの兆し/革命の兆し (B004/B202/B005, renamed from B005/B006/B007 by the
+// 2026-08-24 SHOP201-203 rework's card renumbering) each cost 2 of the budget (lowered from
 // 3 on 2026-08-21, per user request), everything else costs 1. Tapped cards whose combined weight is
 // within the budget auto-untap immediately with no choice; otherwise an UNTAP_CHOICE pendingChoice is
 // queued, and per user decision the player may spend less than the full budget (not forced to maximize
