@@ -1184,11 +1184,11 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   // Placement itself is refused if the resulting usage fee would be entirely unpayable, checked AFTER
   // the AREA's own action resolves (2026-08-05, per user diagnosis: "AREA010を使うときはAIが使用料が
   // 払えることを確認してからダイスを置く用に直せますか" -- AREA010's own actions never grant K to a
-  // non-owner: CHANGE(1K,2VP) costs K outright, ADD(VP)/ADD(2VP) grants none at all -- see
+  // non-owner: ADD(2VP) (2026-08-25 data edit: was CHANGE(1K,2VP)) grants none at all -- see
   // canAffordFee's own doc).
   const state = freshStateWithShops();
-  state.maps['MAP010'] = mapWithArea('MAP010', 'AREA010C', 3, 'P1'); // SLOT1=1, ACTION=CHANGE(1K,2VP)
-  player(state, 'P2').resources.K = 2; // just enough to trigger the AREA's own CHANGE(1K,2VP) once
+  state.maps['MAP010'] = mapWithArea('MAP010', 'AREA010C', 3, 'P1'); // SLOT1=ANY, ACTION=ADD(2VP)
+  player(state, 'P2').resources.K = 1; // below the 2K fee, and ADD(2VP) never grants any more
   const die = giveDie(state, 'P2', 1);
   const result = board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP010', 0);
   check('Placement is refused when the resulting 2K fee would be entirely unpayable', result, { success: false, reason: 'UNAFFORDABLE_USAGE_FEE', amount: 2 });
@@ -1196,29 +1196,28 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   // contents wholesale -- see runProgram's own doc on this exact trap, which the rollback here mirrors.
   check('...the die was never actually placed', player(state, 'P2').dice.find((d) => d.id === die.id).placedMapId, null);
   check('...and no fee/state change leaked through', player(state, 'P2').pendingFee, null);
-  check('...and the whole placement (incl. the CHANGE(1K,2VP) that just ran) was rolled back, K restored', player(state, 'P2').resources.K, 2);
+  check('...and the whole placement (incl. the ADD(2VP) that just ran) was rolled back, K restored', player(state, 'P2').resources.K, 1);
 }
 {
   // ...but succeeds once enough convertible resources are on hand -- not necessarily raw K (see
-  // canAffordFee's own doc: A/B/C/Z->K free actions have no usage cap). P2 spends their 2K on the
-  // AREA's own CHANGE(1K,2VP) first, same as above, but has 2 extra A left over to cover the fee with.
+  // canAffordFee's own doc: A/B/C/Z->K free actions have no usage cap). ADD(2VP) never touches K at all,
+  // so P2's 2 extra A alone have to cover the whole 2K fee.
   const state = freshStateWithShops();
   state.maps['MAP010'] = mapWithArea('MAP010', 'AREA010C', 3, 'P1');
-  player(state, 'P2').resources.K = 2;
   player(state, 'P2').resources.A = 2;
   const die = giveDie(state, 'P2', 1);
   const result = board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP010', 0);
   check('Placement succeeds once enough convertible resources are on hand', result.success, true);
-  check('...the AREA action still ran (1K spent on CHANGE(1K,2VP), 2VP gained -- the fee itself is deferred to TURNEND, not charged yet)', { k: player(state, 'P2').resources.K, vp: player(state, 'P2').resources.VP }, { k: 1, vp: 2 });
+  check('...the AREA action still ran (ADD(2VP) grants 2VP, K untouched -- the fee itself is deferred to TURNEND, not charged yet)', { k: player(state, 'P2').resources.K, vp: player(state, 'P2').resources.VP }, { k: 0, vp: 2 });
 }
 {
   // 2026-08-07, per user request ("wD→２Kのフリーアクション廃止します コードも削除してください"): an
   // unplaced wD no longer counts toward canAffordFee at all -- before this removal it added +2 (modeling
   // "the player could still use the now-abolished wD->2K free action"). Same AREA010C setup as the two
-  // blocks above, but P2's only non-K resource is an unplaced wD instead of 2 extra A.
+  // blocks above, but P2's only resources are a K below the fee, plus an unplaced wD that doesn't help.
   const state = freshStateWithShops();
   state.maps['MAP010'] = mapWithArea('MAP010', 'AREA010C', 3, 'P1');
-  player(state, 'P2').resources.K = 2;
+  player(state, 'P2').resources.K = 1;
   player(state, 'P2').dice.push(require('../src/game-state').createDie('test-wd', 'WHITE'));
   const die = giveDie(state, 'P2', 1);
   const result = board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP010', 0);
@@ -2206,41 +2205,43 @@ function withPatchedTap(physicalFaceId, tap, fn) {
 
 // ---------------------------------------------------------------------------
 // 地主's bonus is usable immediately by the *same* placement it comes from (2026-08-18, per user
-// worked examples): AREA010C (孤児院LV2)'s own ACTION is CHANGE(1K,2VP) (2026-08-24 data edit: was
-// CHANGE(2K,2VP)) -- with 0K, the bonus's +1K is what makes that conversion actually trigger.
-// mapWithArea (see the EX-slot tests above) builds the map fixture; AREA010C's SLOT1 is ANY.
+// worked examples): AREA010B (孤児院LV1)'s own ACTION is CHANGE(2K,2VP) (2026-08-25 data edit: was
+// CHANGE(3K,2VP)) -- with 1K, the bonus's +1K is what bridges the shortfall to actually trigger it.
+// (AREA010C/孤児院LV2's own ACTION lost its K cost entirely in this same data edit -- ADD(2VP), no
+// longer a useful subject for "bonus covers the AREA's own cost" -- see the usage-fee-only block below
+// for what AREA010C is still used to test.) mapWithArea (see the EX-slot tests above) builds the map
+// fixture; AREA010B's SLOT1 requires value 2.
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   p1.jobCardId = 'JOB011';
-  p1.resources.K = 0; // short of CHANGE(1K,2VP)'s own cost entirely
-  state.maps['MAP001'] = mapWithArea('MAP001', 'AREA010C', 6, 'P1'); // P1 owns it -- no usage fee here
-  const d1 = giveDie(state, 'P1', 3); // SLOT1=ANY
+  p1.resources.K = 1; // short of CHANGE(2K,2VP)'s own cost by exactly 1
+  state.maps['MAP001'] = mapWithArea('MAP001', 'AREA010B', 6, 'P1'); // P1 owns it -- no usage fee here
+  const d1 = giveDie(state, 'P1', 2); // SLOT1=2
   const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
-  check('地主: placing at 孤児院LV2 with 0K succeeds (the +1K bonus covers CHANGE(1K,2VP)\'s own cost)', result.success, true);
-  check('...the 1K (0 starting + 1 from 地主) was spent by CHANGE, leaving 0', p1.resources.K, 0);
-  check('...and CHANGE(1K,2VP) granted 2VP', p1.resources.VP, 2);
+  check('地主: placing at 孤児院LV1 with 1K succeeds (the +1K bonus covers CHANGE(2K,2VP)\'s own cost)', result.success, true);
+  check('...the 2K (1 starting + 1 from 地主) was spent by CHANGE, leaving 0', p1.resources.K, 0);
+  check('...and CHANGE(2K,2VP) granted 2VP', p1.resources.VP, 2);
 }
 
 // ---------------------------------------------------------------------------
-// 地主's bonus also covers an otherwise-unaffordable usage fee (2026-08-18, per user worked example,
-// renumbered for the 2026-08-24 CHANGE(2K,2VP)->CHANGE(1K,2VP) data edit): placing on ANOTHER player's
-// 孤児院LV2 (tier C, usage fee 2K, unrelated to and unaffected by the AREA's own action cost) needs the
-// CHANGE(1K,2VP)'s own 1K *plus* 2K left over to remain payable for the fee (canAffordFee, checked after
-// CHANGE runs) -- 3K total. 2K alone falls 1 short; 地主's +1K bridges exactly that gap.
+// 地主's bonus also covers an otherwise-unaffordable usage fee (2026-08-18, per user worked example):
+// placing on ANOTHER player's 孤児院LV2 (tier C, usage fee 2K). AREA010C's own ACTION (ADD(2VP),
+// 2026-08-25 data edit: was CHANGE(1K,2VP)) no longer costs K at all, so this block now tests the fee
+// check in isolation -- 1K alone falls 1 short of the 2K fee; 地主's +1K bridges exactly that gap.
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   p1.jobCardId = 'JOB011';
-  p1.resources.K = 2;
+  p1.resources.K = 1; // 1 short of the 2K fee on its own
   state.maps['MAP001'] = mapWithArea('MAP001', 'AREA010C', 6, 'P2'); // P2 owns it -- usage fee applies to P1
-  const d1 = giveDie(state, 'P1', 3);
+  const d1 = giveDie(state, 'P1', 3); // SLOT1=ANY
   const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
-  check('地主: 2K is enough on another player\'s 孤児院LV2 once the +1K bonus bridges the 1K shortfall', result.success, true);
-  check('...1K was spent by CHANGE (2+1-1=2 left, reserved for the pending fee)', p1.resources.K, 2);
-  check('...and CHANGE(1K,2VP) granted 2VP', p1.resources.VP, 2);
+  check('地主: 1K is enough on another player\'s 孤児院LV2 once the +1K bonus bridges the 1K shortfall', result.success, true);
+  check('...the 1K from 地主 was granted, ADD(2VP) leaves K untouched (1+1=2, reserved for the pending fee)', p1.resources.K, 2);
+  check('...and ADD(2VP) granted 2VP', p1.resources.VP, 2);
   check('...the usage fee is now pending, not yet deducted', p1.pendingFee, { mapId: 'MAP001', amount: 2 });
 }
 {
@@ -2250,7 +2251,7 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   p1.jobCardId = 'JOB011';
-  p1.resources.K = 2;
+  p1.resources.K = 1;
   state.maps['MAP001'] = mapWithArea('MAP001', 'AREA010C', 6, 'P2');
   const earlierDie = giveDie(state, 'P1', 5);
   state.maps['MAP001'].slots[2].push({ playerId: 'P1', dieId: earlierDie.id, value: 5, seq: 1, countsForTurnOrder: true }); // SLOT3=EX
@@ -2258,8 +2259,8 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   const d1 = giveDie(state, 'P1', 3);
   const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
   check('地主: with an existing own color die already there, the K bonus still bridges the shortfall', result.success, true);
-  check('...1K was spent by CHANGE (2+1-1=2 left, reserved for the pending fee)', p1.resources.K, 2);
-  check('...CHANGE(1K,2VP) granted 2VP, plus 1 more from 地主\'s own bonus (already had a color die here) = 3', p1.resources.VP, 3);
+  check('...the 1K from 地主 was granted, ADD(2VP) leaves K untouched (1+1=2, reserved for the pending fee)', p1.resources.K, 2);
+  check('...ADD(2VP) granted 2VP, plus 1 more from 地主\'s own bonus (already had a color die here) = 3', p1.resources.VP, 3);
   check('...the usage fee is now pending, not yet deducted', p1.pendingFee, { mapId: 'MAP001', amount: 2 });
 }
 // No placeDiceGroup test for 地主: group placement only ever succeeds against a monument-buildable
