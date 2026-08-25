@@ -69,6 +69,21 @@ function bareTapKind(index, faceId) {
   if (first.type === 'SET_DICE_ANY') return { kind: 'SET_DICE_ANY' };
   if (first.type === 'SET_DIE_VALUE') return { kind: 'SET_DIE_VALUE', choices: first.choices };
   if (first.type === 'CHANGE_DIE_VALUE') return { kind: 'CHANGE_DIE_VALUE', choices: first.choices };
+  // MONUMENT_CHANGE_DIE_VALUE(SELF+2) (2026-08-24, JOB007/宮廷人's revised TAP) -- same die-choice
+  // requirement as CHANGE_DIE_VALUE, but the delta is a single fixed number baked in at DSL-lowering
+  // time (cmd.delta), never a player-picked one of several choices, so no `choices` value here.
+  // Searched ANYWHERE in the field, not just commands[0] (mirrors main.js's own bareTapKind, fixed
+  // there 2026-08-25 per user report: "宮廷人を使おうとしてTAPしようとするとカードを使用できません
+  // と出ます" -- JOB007's own TAP is "ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+1);BLOCK_BUILD(...)", so
+  // first.type was 'ADD', this branch never matched there either. This copy was never brought in sync
+  // with that fix -- see this function's own top-of-file doc on the two needing to stay in sync -- so
+  // the AI could never actually use JOB007's TAP at all (2026-08-25, per user report: "宮廷人 AIの使用
+  // 回数が0です"): #bareTapMoves/forcedBzConversionMove both called useBareTapAbility with no
+  // chosenDieId, which the die-value-change command then had nothing to act on and always failed.
+  // ADD(BZ) is an unconditional grant with no choice of its own, same "flat leading effect ahead of the
+  // real interactive command" shape BUILD's own check just below already handles for JOB010.
+  const monumentChangeDieValue = commands.find((c) => c.type === 'MONUMENT_CHANGE_DIE_VALUE');
+  if (monumentChangeDieValue) return { kind: 'MONUMENT_CHANGE_DIE_VALUE' };
   if (commands.some((c) => c.type === 'BUILD')) return { kind: 'BUILD' };
   return { kind: 'IMMEDIATE' };
 }
@@ -314,6 +329,21 @@ class MoveGenerator {
             moves.push({ type: 'BARE_TAP', playerId, physicalId, buildCandidateIndex });
           }
         }
+      } else if (bareTap.kind === 'MONUMENT_CHANGE_DIE_VALUE') {
+        // Needs a die but no value/delta (the delta is a single fixed number baked in at DSL-lowering
+        // time -- see bareTapKind's own doc). Same bzConversionTap gating as the IMMEDIATE branch above
+        // (JOB007's own TAP grants BZ, same shape) -- forcedBzConversionMove already forces this whenever
+        // a build outlet exists; this branch only matters when one doesn't (or for a simulated lookahead
+        // node the top-level short-circuit doesn't gate).
+        const isBz = bzConversionTap(index, cardState.currentFaceId);
+        for (const die of unplacedDice) {
+          const tapContext = { playerId, chosenDieId: die.id };
+          const clone = cloneState(state);
+          const result = board.useBareTapAbility(clone, index, tapContext, physicalId);
+          if (!result.success) continue;
+          if (isBz && !this.#hasAffordableBuildOutlet(clone, index, playerId, context)) continue;
+          moves.push({ type: 'BARE_TAP', playerId, physicalId, chosenDieId: die.id });
+        }
       } else {
         // SET_DICE_ANY / SET_DIE_VALUE / CHANGE_DIE_VALUE -- needs a die + a value/delta up front
         // (the whole TAP field runs as one atomic program, see board.useBareTapAbility's own doc).
@@ -387,7 +417,14 @@ class MoveGenerator {
    * outright is a pure loss with no offsetting upside -- exactly the kind of AI misplay that would drag
    * down JOB004's measured average score in tools/ai_data_report.js. Now actually simulates each
    * candidate via applyInPlace (the same payment pipeline, incl. maxBzDiscount, the real move commits
-   * with later) and only forces the conversion if at least one of them would actually succeed. */
+   * with later) and only forces the conversion if at least one of them would actually succeed.
+   *
+   * dieCandidates (2026-08-25, fixing the same bareTapKind gap described in that function's own doc --
+   * JOB007's own "ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+1);BLOCK_BUILD(...)" is a bzConversionTap shape
+   * that ALSO needs a chosenDieId; the single `{playerId}`-only attempt below always failed for it with
+   * no die ever supplied, so this force could never fire (per user report: "宮廷人 AIの使用回数が0です")):
+   * tries every unplaced die in turn for a MONUMENT_CHANGE_DIE_VALUE-shaped tap, `[null]` (a single
+   * no-choice attempt, unchanged) for every other bzConversionTap shape. */
   forcedBzConversionMove(state, index, playerId, context) {
     const player = state.players.find((p) => p.id === playerId);
     if (!player) return null;
@@ -395,10 +432,17 @@ class MoveGenerator {
       const cardState = state.cards[physicalId];
       if (!cardState || cardState.tapped) continue;
       if (!bzConversionTap(index, cardState.currentFaceId)) continue;
-      const clone = cloneState(state);
-      const result = board.useBareTapAbility(clone, index, { playerId }, physicalId);
-      if (!result.success) continue;
-      if (this.#hasAffordableBuildOutlet(clone, index, playerId, context)) return { type: 'BARE_TAP', playerId, physicalId };
+      const needsDieChoice = bareTapKind(index, cardState.currentFaceId).kind === 'MONUMENT_CHANGE_DIE_VALUE';
+      const dieCandidates = needsDieChoice ? player.dice.filter((d) => d.placedMapId === null) : [null];
+      for (const die of dieCandidates) {
+        const tapContext = die ? { playerId, chosenDieId: die.id } : { playerId };
+        const clone = cloneState(state);
+        const result = board.useBareTapAbility(clone, index, tapContext, physicalId);
+        if (!result.success) continue;
+        if (this.#hasAffordableBuildOutlet(clone, index, playerId, context)) {
+          return { type: 'BARE_TAP', playerId, physicalId, ...(die ? { chosenDieId: die.id } : {}) };
+        }
+      }
     }
     return null;
   }
