@@ -5080,14 +5080,15 @@ function bareTapKind(faceId) {
 }
 
 // 実業家/酒場の主人 (2026-08-17, per user request: "実業家と酒場の主人はオート マニュアルの選択なしで
-// オートのみにします") -- both are currently the only 2 cards in the whole dataset with a fully ON(...)-
+// オートのみにします"; 酒場の主人/JOB005 renamed to 権力者 2026-08-25, matched below by its current
+// NAME) -- both are currently the only 2 cards in the whole dataset with a fully ON(...)-
 // wrapped TAP (confirmed via a full sheet scan), so reactiveTapKind below only ever fires the auto/
 // manual choice modal for these two today; excluded here so it never fires for them at all, always
 // resolving to their AUTO-column default ("A" for both) via executor.isCardAutoMode's own fallback --
 // no override is ever set for them, so there's nothing else to change. Matched by NAME rather than
 // faceId (JOB002/JOB005 today) so a future JOB-sheet reorg can't silently break this the way CON's own
 // physical-id reorg did (see feedback memory on that incident).
-const AUTO_ONLY_JOB_NAMES = new Set(['実業家', '酒場の主人']);
+const AUTO_ONLY_JOB_NAMES = new Set(['実業家', '権力者']);
 
 /** Whether faceId's TAP field is purely ON(...)-wrapped -- a reactive ability with an auto/manual
  * setting worth choosing (see executor.isCardAutoMode/setCardAutoMode), the opposite case from
