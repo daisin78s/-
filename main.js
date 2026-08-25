@@ -2252,6 +2252,15 @@ function buildUntapChoiceIcon(actionText) {
   return actionRow([actionEmoji('⚡'), actionEmoji('⤴️'), ...(count === '1' ? [] : [actionSuffix(count)])]);
 }
 
+/** UNTAP_ALL(SELF) -- only 王女(C301A)/聖女LV2(C202B)/王女LV2(C301B)'s own ONCE currently, confirmed via
+ * data/game.json -- reads as plain text (2026-08-25, per user request: "聖女　王女の カードをすべてアン
+ * タップする"). Had no icon builder before this, so it fell through to buildEffectRow's raw-DSL-text
+ * fallback and showed the literal "UNTAP_ALL(SELF)" string on the card. */
+function buildUntapAllIcon(actionText) {
+  if (actionText !== 'UNTAP_ALL(SELF)') return null;
+  return actionRow([actionSuffix('カードをすべてアンタップする')]);
+}
+
 /** CHANGE(nK,mVP) -- K->VP conversions with any counts on either side, e.g. AREA010A's "CHANGE(2K,VP)"
  * or AREA010C's "CHANGE(2K,2VP)" (2026-08-05, per user feedback: "AREA010A B C も 2K → VP のようにお願
  * い"). Generalizes the old ACTION_ICON_BUILDERS['CHANGE(4K,VP)'] exact-match entry (which only covered
@@ -2663,6 +2672,8 @@ function buildActionIcons(actionText) {
   if (cappedChangeIcon) return cappedChangeIcon;
   const untapChoiceIcon = buildUntapChoiceIcon(actionText);
   if (untapChoiceIcon) return untapChoiceIcon;
+  const untapAllIcon = buildUntapAllIcon(actionText);
+  if (untapAllIcon) return untapAllIcon;
   const changeToVpIcon = buildChangeToVpIcon(actionText);
   if (changeToVpIcon) return changeToVpIcon;
   const changeAllThenAddIcon = buildChangeAllThenAddIcon(actionText);
