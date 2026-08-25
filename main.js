@@ -5978,15 +5978,27 @@ function closeRankingOverlay() {
  * backup), hence the confirm().
  *
  * Password gate added 2026-08-18 (per user request: "誰でも出来てしまうと困るので") -- this is a plain
- * client-side check, not real security (the password sits in this file's own source, readable by anyone
- * who opens it) -- it only stops a casual/accidental tap by someone else using the same device, not a
- * determined attacker. Matches what was actually asked for; a real access-control layer isn't feasible
- * for a build-step-free, server-free static page anyway. */
-const RANKING_RESET_PASSWORD = 'qedy94b4';
-function handleRankingResetClick() {
+ * client-side check, not real security -- it only stops a casual/accidental tap by someone else using
+ * the same device, not a determined attacker. Matches what was actually asked for; a real access-control
+ * layer isn't feasible for a build-step-free, server-free static page anyway.
+ *
+ * Password hashed, not stored in plaintext (2026-08-25, per user request: "ランキング用のパスワード暗号
+ * 化できますか"): only RANKING_RESET_PASSWORD_HASH (its SHA-256, via the browser's built-in
+ * crypto.subtle -- no new dependency, and confirmed working under file:// too, not just https) lives in
+ * this file's source, so a casual glance at it no longer reveals the actual password. Doesn't raise the
+ * bar against anyone willing to open devtools -- they can still brute-force a weak password from its hash
+ * offline, or just skip this whole function and call RankingStorage.clearAll() directly -- same
+ * "casual-tap prevention only" threat model as before, just closing the "read it straight off the
+ * source" gap specifically. */
+const RANKING_RESET_PASSWORD_HASH = 'f0f17d1b4817e88655064873f54b6d46d4bc071fcd2c6ee1cd04d7586852a2b5';
+async function sha256Hex(text) {
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(bytes)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+async function handleRankingResetClick() {
   const entered = window.prompt('ランキングをリセットするにはパスワードを入力してください。');
   if (entered === null) return; // canceled
-  if (entered !== RANKING_RESET_PASSWORD) {
+  if ((await sha256Hex(entered)) !== RANKING_RESET_PASSWORD_HASH) {
     window.alert('パスワードが違います。');
     return;
   }
