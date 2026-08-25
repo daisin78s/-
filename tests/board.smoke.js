@@ -625,6 +625,40 @@ function giveDie(state, playerId, value) {
   }
 }
 {
+  // forceSpecialShopMonumentsAtRound4 (2026-08-25, per user spec: "4R開始時にモニュメント以外のカードは
+  // すべて捨て札にしてモニュメント３枚が出てくるようにして") -- the common case: wave 1/2 haven't sold
+  // out yet, so all 3 slots (and the whole remaining drawPile) still hold a mix of wave1/2/3 ids.
+  const state = freshStateWithShops();
+  const waveNum = (faceId) => Number(faceId.replace(/\D/g, ''));
+  const isMonument = (faceId) => faceId && waveNum(faceId) >= 400;
+  check('Before: not yet all-monuments (wave 1/2 still dominates)', Object.values(state.shops.SPECIAL.slots).every(isMonument), false);
+  board.forceSpecialShopMonumentsAtRound4(state);
+  const slotFaceIds = Object.values(state.shops.SPECIAL.slots);
+  check('After: all 3 slots hold a monument', slotFaceIds.every(isMonument), true);
+  check('...specifically all 3 of M401/M402/M403, each exactly once', [...slotFaceIds].sort(), ['M401', 'M402', 'M403']);
+  check('...the draw pile is now empty (only ever had 3 monuments left to give)', state.shops.SPECIAL.drawPile.length, 0);
+}
+{
+  // Idempotent, and correct even when wave 1/2 already fully sold out early (monuments already visible,
+  // possibly still locked, before round 4 ever arrives) -- calling it again changes nothing.
+  const state = freshStateWithShops();
+  board.forceSpecialShopMonumentsAtRound4(state); // simulate "already all sold out by some earlier round"
+  const before = { ...state.shops.SPECIAL.slots };
+  board.forceSpecialShopMonumentsAtRound4(state);
+  check('Calling it again with the shop already all-monuments is a no-op', state.shops.SPECIAL.slots, before);
+}
+{
+  // turnFlow.startRound integration: reaching round 4 triggers this automatically, without the caller
+  // having to know about it.
+  const state = freshStateWithShops();
+  const turnFlow = require('../src/turn-flow');
+  state.round = 3;
+  turnFlow.startRound(state);
+  check('startRound landing on round 4 auto-clears SHOP201-203 down to just the 3 monuments', state.round, 4);
+  const waveNum = (faceId) => Number(faceId.replace(/\D/g, ''));
+  check('...all 3 SPECIAL slots hold a monument', Object.values(state.shops.SPECIAL.slots).every((id) => id && waveNum(id) >= 400), true);
+}
+{
   // A hole at the far right (the common case: the rightmost occupied card is the one built) needs no
   // shifting at all, and still refills into that same slot.
   const state = freshStateWithShops();

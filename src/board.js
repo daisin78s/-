@@ -1759,6 +1759,25 @@ function restockShop(state, shopKey) {
   }
 }
 
+/** Called once at the start of round 4 (from turn-flow.startRound), per user spec: "4R開始時に
+ * モニュメント以外のカードはすべて捨て札にしてモニュメント３枚が出てくるようにして". SHOP201-203's wave
+ * 3 is exactly the 3 monuments M401-403 (specialShopMinRound returns 4 only for those), so this discards
+ * any wave1/2 card still occupying a slot (there's no discard-pile bookkeeping for shop cards anywhere in
+ * this codebase -- see setup.js's own top-of-file doc -- so "discard" here just means clearing the slot,
+ * same as an ordinary purchase does) and purges the draw pile of any remaining wave1/2 ids the same way,
+ * then reuses restockShop's own compact+refill to pull the 3 now-unblocked monuments into the freshly-
+ * emptied slots. Idempotent -- harmless if the shop already happened to be all-monuments already (possible
+ * if every wave1/2 card sold out early: wave 3 would already be visible-but-locked in some slots by then). */
+function forceSpecialShopMonumentsAtRound4(state) {
+  const shop = state.shops.SPECIAL;
+  for (const slotId of Object.keys(shop.slots)) {
+    const faceId = shop.slots[slotId];
+    if (faceId !== null && specialShopMinRound(faceId) < 4) shop.slots[slotId] = null;
+  }
+  shop.drawPile = shop.drawPile.filter((faceId) => specialShopMinRound(faceId) === 4);
+  restockShop(state, 'SPECIAL');
+}
+
 module.exports = {
   CASTLE_MAP_ID,
   AREA009_MAP_ID,
@@ -1785,6 +1804,7 @@ module.exports = {
   resolveBuild,
   restockShop,
   compactShop,
+  forceSpecialShopMonumentsAtRound4,
 };
 
 })();

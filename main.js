@@ -3466,11 +3466,16 @@ function renderQsts(state) {
  * purchasable this round (board.specialShopMinRound > state.round) -- adds shop-slot--locked, which
  * style.css renders as a red X overlay, so it reads as "coming soon", not just an ordinary unaffordable
  * candidate. Only ever passed true by renderShopGrid's SPECIAL loop -- M/NORMAL never gate on round.
+ * When true, also fills the same .shop-slot__req caption slot with "2Rから"/"3Rから"/"4Rから" (2026-08-25,
+ * per user spec: "赤✖がついているカードの下に　2Rから　3Rから　4Rから　と書いて") -- takes priority over
+ * showReqCaption, which is always false for SPECIAL anyway (see this doc's own paragraph above), so
+ * there's no real conflict between the two captions in practice.
  */
 function buildShopSlotNode(slotId, faceId, showReqCaption, locked) {
   const slotTpl = document.getElementById('tpl-shop-slot');
   const slotNode = slotTpl.content.firstElementChild.cloneNode(true);
   if (locked) slotNode.classList.add('shop-slot--locked');
+  const reqCaption = () => (locked ? `${boardMod.specialShopMinRound(faceId)}Rから` : (showReqCaption ? shopReqForSlotId(slotId) : ''));
   if (!faceId) {
     slotNode.querySelector('.shop-slot__req').textContent = showReqCaption ? shopReqForSlotId(slotId) : '';
     const emptyTpl = document.getElementById('tpl-shop-card-empty');
@@ -3485,9 +3490,9 @@ function buildShopSlotNode(slotId, faceId, showReqCaption, locked) {
     // caption (corrected 2026-07-29).
     slotNode.querySelector('.shop-slot__card').appendChild(buildCardVisual(faceId, { req: facts.req, showEffect: true }));
   } else {
-    slotNode.querySelector('.shop-slot__req').textContent = showReqCaption ? shopReqForSlotId(slotId) : '';
     slotNode.querySelector('.shop-slot__card').appendChild(buildCardVisual(faceId, { showEffect: true }));
   }
+  slotNode.querySelector('.shop-slot__req').textContent = reqCaption();
   return slotNode;
 }
 
