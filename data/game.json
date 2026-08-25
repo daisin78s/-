@@ -457,7 +457,7 @@
       "EMBLEM_A": 1,
       "VP": 0,
       "LEVEL": 1,
-      "ONCE": "MAP001.CURRENT_AREA=AREA001B",
+      "ONCE": "MAP001.CURRENT_AREA=AREA001C",
       "TAP": "",
       "PASSIVE": "",
       "TURNEND": "",
@@ -953,7 +953,7 @@
       "ID": "C202A",
       "NAME": "聖女",
       "DICE": "",
-      "COST": "1A2C",
+      "COST": "1A,2C",
       "EMBLEM_C": 1,
       "VP": 0,
       "LEVEL": 1,
@@ -1097,7 +1097,7 @@
       "ID": "C202B",
       "NAME": "聖女LV2",
       "DICE": "",
-      "COST": "1A2C",
+      "COST": "1A,2C",
       "EMBLEM_C": 1,
       "VP": 1,
       "LEVEL": 2,
@@ -2829,9 +2829,9 @@
     },
     {
       "ID": "A004B",
-      "1R": 50,
-      "2R": 30,
-      "3R": 20,
+      "1R": 80,
+      "2R": 60,
+      "3R": 40,
       "4R": 10
     },
     {
@@ -2850,7 +2850,7 @@
     },
     {
       "ID": "A201B",
-      "1R": 70,
+      "1R": "",
       "2R": 60,
       "3R": 40,
       "4R": 10
