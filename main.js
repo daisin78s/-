@@ -2270,28 +2270,31 @@ function buildChangeAllThenAddIcon(actionText) {
   return stack;
 }
 
-/** A bare BZ-granting TAP, optionally paired with BLOCK_BUILD(category,THIS_TURN) restrictions and/or a
- * MONUMENT_DICE_DISCOUNT(n,THIS_TURN) -- e.g. JOB004's CHANGE(3K,2BZ);BLOCK_BUILD(M,THIS_TURN)
- * (2026-08-0X, per user request) or JOB007's ADD(BZ);MONUMENT_DICE_DISCOUNT(2,THIS_TURN);BLOCK_BUILD(A,
- * THIS_TURN);BLOCK_BUILD(B,THIS_TURN);BLOCK_BUILD(C,THIS_TURN) (2026-08-07, replacing JOB007's old
- * ON(BUILD(U,M),ADD(BZ)) reaction -- see buildOnBuildAddResourceIcon's own doc and [[project-dice-wp]]
- * for why: reacting *after* an UPGRADE/Monument build meant the BZ always arrived too late to help pay
- * for the build that triggered it, and evaporated unspent at TURNEND. Now a bare TAP the player fires
- * *before* an UPGRADE/Monument build, so the BZ is actually usable; MONUMENT_DICE_DISCOUNT added
- * 2026-08-18, per user request: "モニュメントの必要ダイスを2下げる"). First line: either pay -> {n}BZ
- * (CHANGE form; BZ has no colored dot in this project's vocabulary, unlike buildChangeQuantityIcon's
- * K/A/B/C/Z -- matches every other "{n}BZ"/"軽減{n}Z" label elsewhere, plain text rather than a
- * dot+count) or ⚡BZ (ADD form, ⚡ prefix matching buildAddResourceIcon's "just gain this, no cost"
- * convention). Next line (only if MONUMENT_DICE_DISCOUNT present): 🎲-{n}, reusing the same dice glyph
- * every wD-related icon already uses elsewhere. Final line (only if any BLOCK_BUILD present, except
- * JOB007/宮廷人's own A+B+C triple-block, which gets no label row at all -- removed 2026-08-21 per user
- * request "ABC除くを削除"): the blocked categories' letters + "除く", except the single-M case which
- * keeps the pre-existing "モニュメント除く" wording users have already seen. **2026-08-04: the block
- * used to be display-only text -- confirmed with the user this needed real enforcement, so it's backed
- * by a genuine rule (BLOCK_BUILD(...,THIS_TURN), see board.getBuildCandidates); this label just reflects
- * that.** Matches generically on shape (a bare CHANGE(nX,nBZ) or ADD(nBZ), optionally followed by one
- * MONUMENT_DICE_DISCOUNT(n,THIS_TURN) and/or one or more BLOCK_BUILD(cat,THIS_TURN)), not any one card by
- * name -- the BZ grant alone, with neither of the other two, still matches and simply skips those rows. */
+/** A bare BZ-granting TAP, optionally paired with a MONUMENT_DICE_DISCOUNT(n,THIS_TURN) or
+ * MONUMENT_CHANGE_DIE_VALUE(SELF±n), and/or BLOCK_BUILD(category,THIS_TURN) restrictions -- currently
+ * only JOB007/宮廷人's own ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+1);BLOCK_BUILD(A,THIS_TURN);
+ * BLOCK_BUILD(B,THIS_TURN);BLOCK_BUILD(C,THIS_TURN) matches this shape in the current dataset (2026-08-25,
+ * per user spec: "⤵１資源軽減 / ダイス目+1 / 🔨ABC不可" -- 毎ターン is a separate row, the existing
+ * generic UNTAP() icon for this card's own TURNEND, untouched here).
+ *
+ * First line: either pay -> {n}BZ (CHANGE form; BZ has no colored dot in this project's vocabulary,
+ * unlike buildChangeQuantityIcon's K/A/B/C/Z -- matches every other "{n}BZ"/"軽減{n}Z" label elsewhere,
+ * plain text rather than a dot+count) or "{n}資源軽減" (ADD form, matching JOB007's own INST wording
+ * "１資源軽減" -- 2026-08-25, replaced the earlier generic "⚡BZ" glyph+suffix once this became JOB007's
+ * only user). Next line (only if MONUMENT_DICE_DISCOUNT present -- no card currently uses this, kept for
+ * the shape): 🎲-{n}, reusing the same dice glyph every wD-related icon already uses elsewhere. Next line
+ * (only if MONUMENT_CHANGE_DIE_VALUE present, 2026-08-25, replacing MONUMENT_DICE_DISCOUNT as JOB007's
+ * own mechanic per its 2026-08-24 TAP redesign -- see board.useBareTapAbility's own doc): "ダイス目±n".
+ * Final line (only if any BLOCK_BUILD present): for the A+B+C triple-block specifically (JOB007's own
+ * case), ⚒️ + "ABC不可" (2026-08-25, per user spec -- reinstates a label here, reversing the 2026-08-21
+ * "ABC除くを削除" request that removed it entirely); any other combination keeps the pre-existing
+ * "{cats}除く" wording, or "モニュメント除く" for the single-M case (JOB004's own, untouched).
+ * **2026-08-04: the block used to be display-only text -- confirmed with the user this needed real
+ * enforcement, so it's backed by a genuine rule (BLOCK_BUILD(...,THIS_TURN), see board.getBuildCandidates);
+ * this label just reflects that.** Matches generically on shape (a bare CHANGE(nX,nBZ) or ADD(nBZ),
+ * optionally followed by one MONUMENT_DICE_DISCOUNT/MONUMENT_CHANGE_DIE_VALUE and/or one or more
+ * BLOCK_BUILD(cat,THIS_TURN)), not any one card by name -- the BZ grant alone, with none of the others,
+ * still matches and simply skips those rows. */
 function buildBzForBuildIcon(actionText) {
   const stmts = (actionText || '').split(';').map((s) => s.trim());
   const changeMatch = /^CHANGE\((\d*)(K|A|B|C|Z),(\d*)BZ\)$/.exec(stmts[0]);
@@ -2299,7 +2302,8 @@ function buildBzForBuildIcon(actionText) {
   if (!changeMatch && !addMatch) return null;
   const tail = stmts.slice(1);
   const discountMatch = tail.find((s) => /^MONUMENT_DICE_DISCOUNT\(\d+,THIS_TURN\)$/.test(s));
-  const blockStmts = tail.filter((s) => s !== discountMatch);
+  const dieValueMatch = tail.find((s) => /^MONUMENT_CHANGE_DIE_VALUE\(SELF[+-]\d+\)$/.test(s));
+  const blockStmts = tail.filter((s) => s !== discountMatch && s !== dieValueMatch);
   const blockMatches = blockStmts.map((s) => /^BLOCK_BUILD\(([ABCMU]),THIS_TURN\)$/.exec(s));
   if (blockMatches.some((m) => !m)) return null; // unrecognized extra statement, don't guess
   const blockedCats = blockMatches.map((m) => m[1]);
@@ -2308,17 +2312,20 @@ function buildBzForBuildIcon(actionText) {
     const [, payCount, payResource, bzCount] = changeMatch;
     stack.appendChild(actionRow([...resourceItemNodes(payCount, payResource), actionArrow(), actionSuffix(`${bzCount}BZ`)]));
   } else {
-    stack.appendChild(actionRow([actionEmoji('⚡'), actionSuffix(`${addMatch[1]}BZ`)]));
+    stack.appendChild(actionRow([actionSuffix(`${addMatch[1] || 1}資源軽減`)]));
   }
   if (discountMatch) {
     const discountAmount = /^MONUMENT_DICE_DISCOUNT\((\d+),THIS_TURN\)$/.exec(discountMatch)[1];
     stack.appendChild(actionRow([actionEmoji('🎲'), actionSuffix(`-${discountAmount}`)]));
   }
-  // JOB007/宮廷人 (2026-08-21, per user request "ABC除くを削除"): the A,B,C triple-block no longer gets
-  // its own label row at all -- BZ/dice-discount rows above already say everything the icon needs to.
-  // JOB004's single-M block keeps its existing "モニュメント除く" label, untouched.
+  if (dieValueMatch) {
+    const delta = /^MONUMENT_CHANGE_DIE_VALUE\(SELF([+-]\d+)\)$/.exec(dieValueMatch)[1];
+    stack.appendChild(actionRow([actionSuffix(`ダイス目${delta}`)]));
+  }
   const isAbcBlock = blockedCats.length === 3 && ['A', 'B', 'C'].every((c) => blockedCats.includes(c));
-  if (blockedCats.length > 0 && !isAbcBlock) {
+  if (isAbcBlock) {
+    stack.appendChild(actionRow([actionEmoji('⚒️'), actionSuffix('ABC不可')]));
+  } else if (blockedCats.length > 0) {
     const label = blockedCats.length === 1 && blockedCats[0] === 'M' ? 'モニュメント除く' : `${blockedCats.join('')}除く`;
     stack.appendChild(actionRow([actionSuffix(label)]));
   }
@@ -2578,13 +2585,19 @@ function buildOnGetAddMultiIcon(actionText) {
   return stack;
 }
 
-/** ON(BUILD(cats),ADD(nX)) for a plain resource X (K/A/B/C/Z) -- e.g. JOB002's TAP=
+/** ON(BUILD(cats),ADD(nX)) for a plain resource X (K/A/B/C/Z) -- e.g. JOB002/実業家's TAP=
  * "ON(BUILD(),ADD(K))" (2026-08-04, per user feedback: "JOB002 TAP で ON(BUILD(),ADD(K))に変更しました"
  * with an explicit icon spec: "⚒️ ▶️ ⤵️K"). ⚒️ + the trigger categories (same letter-extraction as
  * buildBuildIcon) + ▶, ending in a normal resource-dot. Empty cats (BUILD() with no args, per
- * executor.js's eventArgsMatch: "match any category") shows no category suffix at all. The user's own
- * "⤵️K" is the ⚒️▶️-then-dot row shown here PLUS the ⤵️ TAP-source prefix buildEffectRow already prepends
- * automatically (not duplicated here). (2026-08-07: this used to exclude BZ, deferring to a sibling
+ * executor.js's eventArgsMatch: "match any category") shows no category suffix at all.
+ *
+ * The TAP-cost marker (⤵) sits between ▶ and the resource dot here (2026-08-25, per user spec: "⤵🔨▷〇
+ * から 🔨▷⤵〇に変更 並び順は変えてもアイコンはそのままで" -- reorder only, same glyphs), embedded
+ * directly in this row instead of relying on buildEffectRow's own auto-prepended TAP prefix (which always
+ * lands at the very front) -- see this function's row.dataset.tapPrefixEmbedded, which tells
+ * buildEffectRow to skip its own prefix for this one row. JOB002's ON(BUILD(),ADD(K)) is currently the
+ * only TAP in the whole dataset matching this shape, so this reorder is effectively scoped to that one
+ * card without needing to name it directly. (2026-08-07: this used to exclude BZ, deferring to a sibling
  * buildOnBuildAddBzIcon for ON(BUILD(...),ADD(nBZ)) -- that was JOB007's old shape specifically; JOB007
  * was redesigned to a bare TAP=ADD(BZ);BLOCK_BUILD(...) instead, see buildBzForBuildIcon, so no card uses
  * the ON(BUILD(...),ADD(nBZ)) shape anymore and the sibling function was removed as dead code. This
@@ -2595,8 +2608,10 @@ function buildOnBuildAddResourceIcon(actionText) {
   const categories = (match[1].match(/[ABCMU]/g) || []).join('');
   const children = [actionEmoji('⚒️')];
   if (categories) children.push(actionSuffix(categories));
-  children.push(actionTrigger(), ...resourceItemNodes(match[2], match[3]));
-  return actionRow(children);
+  children.push(actionTrigger(), actionEmoji(TAP_COST_ICON), ...resourceItemNodes(match[2], match[3]));
+  const row = actionRow(children);
+  row.dataset.tapPrefixEmbedded = '1';
+  return row;
 }
 
 /** MODIFY_CONVERT_VALUE(ANY,ANY,+n): a passive that adds n to every CHANGE's execution count
@@ -2818,25 +2833,31 @@ function renderAreaOwnershipEffectText(container, text) {
  * B001A's ADD(wD) + SET_DIE_VALUE(SELF1|2), shown as two stacked rows). Flattens the icon builder's
  * own .action-icons wrapper into this row instead of nesting, so the TAP-cost prefix (if any) and
  * the effect's icons sit in a single flex row together.
+ *
+ * icons.dataset.tapPrefixEmbedded (2026-08-25, see buildOnBuildAddResourceIcon's own doc): an icon
+ * builder can embed the ⤵ TAP-cost marker itself, at a bespoke position other than the very front, by
+ * setting this and placing the marker in its own returned row -- skips the auto-prepend below so it
+ * isn't duplicated.
  */
 /** allowTextFallback=false (JOB/CON, confirmed 2026-07-30): returns null instead of a raw-DSL-text
  * row when no icon mapping exists, so the caller can omit that effect entirely (see fillCardFace). */
 function buildEffectRow(effect, allowTextFallback = true) {
   const icons = buildActionIcons(effect.text);
   if (!icons && !allowTextFallback) return null;
+  const tapPrefixEmbedded = !!(icons && icons.dataset && icons.dataset.tapPrefixEmbedded);
   // A stack (e.g. BUILD + the ADD(BZ) "軽減Z" line below it) keeps its rows separate instead of
   // being flattened into one -- the TAP-cost prefix only goes on the stack's first row.
   if (icons && icons.classList.contains('action-icons-stack')) {
     const rows = Array.from(icons.children);
     const firstRow = rows.shift();
-    if (effect.source === 'TAP') firstRow.insertBefore(actionEmoji(TAP_COST_ICON), firstRow.firstChild);
+    if (effect.source === 'TAP' && !tapPrefixEmbedded) firstRow.insertBefore(actionEmoji(TAP_COST_ICON), firstRow.firstChild);
     const wrapper = el('div', 'action-icons-stack');
     wrapper.appendChild(firstRow);
     rows.forEach((r) => wrapper.appendChild(r));
     return wrapper;
   }
   const row = el('div', 'action-icons');
-  if (effect.source === 'TAP') row.appendChild(actionEmoji(TAP_COST_ICON));
+  if (effect.source === 'TAP' && !tapPrefixEmbedded) row.appendChild(actionEmoji(TAP_COST_ICON));
   if (icons) {
     Array.from(icons.childNodes).forEach((child) => row.appendChild(child));
   } else {
