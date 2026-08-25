@@ -2076,25 +2076,23 @@ function buildBuildIcon(actionText) {
   const categories = extractBuildCategories(actionText);
   const buildValue = extractBuildValue(actionText);
   const children = [actionEmoji('⚒️')];
-  // 'U' alone (only 革命の兆し/B005A-B's BUILD(U)/BUILD(U);ADD(BZ) -- confirmed via data/game.json, no
-  // other card combines U with A/B/C/M) reads as "LVアップ" instead of the bare letter (2026-08-25, per
-  // user request: "革命の兆しのアイコン U と書いてあるところを LVアップ と書いて"). Any other combo
-  // (A/B/C/M, with or without U) keeps the plain letter-string suffix as before.
-  if (categories === 'U') children.push(actionSuffix('LVアップ'));
-  else if (categories) children.push(actionSuffix(categories));
+  // "ダイス目N" with N large/dark (2026-08-25, per user request: "ABCM1⃣を ダイス目　1に...ABCM4⃣も
+  // ダイス目4に...M6⃣6⃣も ダイス目9に...すべて数字は大きく濃く" -- replaces the old category-letters
+  // (A/B/C/M) + N white-die-icons display, same .action-count--large class/convention as 運命の導き's
+  // own "ダイス目　+n" (CHANGE_DIE_VALUE) icon). This also fixes a real display bug the old version had:
+  // its dieCount loop capped each die's shown value at 6, so 移ろいの兆しLV2's buildValue=9 (not a
+  // multiple of 6) rendered as "M"+two dice-of-6, visually implying 12 -- a plain number has no such
+  // rounding. Category letters are dropped entirely since every card with a buildValue in the current
+  // data always has them too (redundant with the number itself once the per-die icons are gone).
   if (buildValue !== null) {
-    // The actual white-die (wD) icon, plain digit inside (2026-08-25, per user request: "サイコロの中身
-    // を1⃣のように数字にしてください／1⃣はゲームで使う白ダイスのアイコンを使って" -- replaces the old
-    // ⚀-⚅ pip-dot dieFace() glyph with renderDie({kind:'WHITE',...}), the same real dice-tray component
-    // cardListResourceIcon's own 'D' case already reuses for this exact "show the real physical die, not
-    // a font glyph" reasoning, just WHITE here instead of a player color). Only the 兆し family (始まりの
-    // 兆し/終わりの兆し/移ろいの兆し, both tiers) ever has a numeric buildValue at all -- confirmed via
-    // data/game.json, so this only ever touches those cards' icons.
-    // Values above 6 (only BUILD(M,12) today) can't come from one die, so this shows however many
-    // max-value (6) dice it'd take to reach it (12 -> two "6" dice), which happens to be exact for every
-    // buildValue in the current data (all are either <=6 or an exact multiple of 6).
-    const dieCount = Math.max(1, Math.ceil(buildValue / 6));
-    for (let i = 0; i < dieCount; i++) children.push(renderDie({ kind: 'WHITE', value: Math.min(buildValue, 6) }));
+    children.push(actionSuffix('ダイス目　'), el('span', 'action-count action-count--large', String(buildValue)));
+  } else if (categories === 'U') {
+    // 'U' alone (only 革命の兆し/B005A-B's BUILD(U)/BUILD(U);ADD(BZ) -- confirmed via data/game.json, no
+    // other card combines U with A/B/C/M) reads as "LVアップ" instead of the bare letter (2026-08-25, per
+    // user request: "革命の兆しのアイコン U と書いてあるところを LVアップ と書いて").
+    children.push(actionSuffix('LVアップ'));
+  } else if (categories) {
+    children.push(actionSuffix(categories));
   }
   const buildRow = actionRow(children);
   if (/;ADD\(BZ\)$/.test(actionText)) {
