@@ -1471,15 +1471,23 @@ function renderCardListAbcCategory(sheet, container) {
   for (const faceId of tierB) mainGrid.appendChild(buildCardListCell(faceId, false));
   wrap.appendChild(mainGrid);
 
+  // Grouped in their own row (2026-08-25, per user request: "孤児院の支配と訓練場の支配と元老院の支配の
+  // 間が空きすぎなので詰めて") so a tighter gap can apply between the special columns themselves without
+  // touching the wider gap that separates them from mainGrid -- see .card-list-abc-special-group in
+  // style.css.
+  const specialGroup = el('div', 'card-list-abc-special-group');
   const sortedFamilies = [...specialFamilies.values()].sort((x, y) => x.num - y.num);
   for (const fam of sortedFamilies) {
-    const label = fam.num < 300 ? '2ラウンドから登場' : '3ラウンドから登場';
+    // "2Rから登場"/"3Rから登場" (2026-08-25, per user request, shortened from "2ラウンドから登場"/
+    // "3ラウンドから登場").
+    const label = fam.num < 300 ? '2Rから登場' : '3Rから登場';
     const specialCol = el('div', 'card-list-abc-special');
     specialCol.appendChild(el('div', 'card-list-abc-special__label', label));
     if (fam.a) specialCol.appendChild(buildCardListCell(fam.a, false));
     if (fam.b) specialCol.appendChild(buildCardListCell(fam.b, false));
-    wrap.appendChild(specialCol);
+    specialGroup.appendChild(specialCol);
   }
+  if (sortedFamilies.length > 0) wrap.appendChild(specialGroup);
 
   container.appendChild(wrap);
 

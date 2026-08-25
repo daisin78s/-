@@ -2803,6 +2803,15 @@ h1, h2, h3 { margin: 0; }
   align-items: flex-start;
   justify-content: center;
 }
+/* Wraps every SHOP201-203 special column (孤児院/訓練場/元老院 etc, one per family -- see
+   renderCardListAbcCategory) as a single flex child of .card-list-abc-wrap, so its own tighter gap
+   between those columns doesn't also apply to the wider mainGrid<->special-columns gap (2026-08-25, per
+   user request: "孤児院の支配と訓練場の支配と元老院の支配の間が空きすぎなので詰めて"). */
+.card-list-abc-special-group {
+  display: flex;
+  gap: 4px;
+  align-items: flex-start;
+}
 .card-list-abc-special {
   display: flex;
   flex-direction: column;
