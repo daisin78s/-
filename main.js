@@ -1936,6 +1936,11 @@ const ACTION_ICON_BUILDERS = {
   // how you get one". Deliberately scoped to this entry: ADD(D) elsewhere keeps saying 色D (see
   // buildAddResourceIcon), since those cards are about the die itself, not about growing past the start.
   'CHANGE((A,B,C),D)': () => actionRow([actionDot('A'), actionDot('B'), actionDot('C'), actionArrow(), actionSuffix('追加色ダイス')]),
+  // 訓練場LV1 (AREA007B)'s own ACTION -- same 追加色ダイス wording as the entry above, just a single K
+  // dot on the pay side instead of an A/B/C group (2026-08-25, per user request: "訓練場LV1のアイコン
+  // K→追加色ダイス Kはアイコンに直して" -- previously unhandled, falling through to the raw DSL text
+  // "CHANGE(K,D)" fallback).
+  'CHANGE(K,D)': () => actionRow([actionDot('K'), actionArrow(), actionSuffix('追加色ダイス')]),
   // CHANGE(4K,VP) used to live here as an exact-match entry -- removed 2026-08-05, no longer reachable
   // (no card/AREA in the current data uses that literal count) and superseded by the general
   // buildChangeToVpIcon below, added per user feedback covering AREA010A/C's own K->VP counts.
@@ -2257,13 +2262,16 @@ function buildUntapChoiceIcon(actionText) {
 
 /** UNTAP_ALL(SELF) -- only 王女(C301A)/聖女LV2(C202B)/王女LV2(C301B)'s own ONCE currently, confirmed via
  * data/game.json -- ⚡ (ONCE "gain" prefix, same convention as buildAddWdIcon etc) + ⤴️⤴️⤴️ (three untap
- * arrows -- "all", as opposed to UNTAP_CHOICE's single arrow + a budget number) + plain text (2026-08-25,
- * per user request: "聖女　王女の カードをすべてアンタップする...の効果があるところに ⚡⤴⤴⤴ をいれて").
- * Had no icon builder before the text-only version this replaces, so it fell through to buildEffectRow's
- * raw-DSL-text fallback and showed the literal "UNTAP_ALL(SELF)" string on the card. */
+ * arrows -- "all", as opposed to UNTAP_CHOICE's single arrow + a budget number). Had no icon builder
+ * before the text-only version this replaced, so it fell through to buildEffectRow's raw-DSL-text
+ * fallback and showed the literal "UNTAP_ALL(SELF)" string on the card (2026-08-25, per user request:
+ * "聖女　王女の カードをすべてアンタップする...の効果があるところに ⚡⤴⤴⤴ をいれて"). The trailing
+ * "カードをすべてアンタップする" text label was then dropped (2026-08-25 follow-up, per user request:
+ * "⚡⤴⤴⤴ をつけたので カードをすべてアンタップする の文言を消して") -- the icon alone is enough now
+ * that it's in place. */
 function buildUntapAllIcon(actionText) {
   if (actionText !== 'UNTAP_ALL(SELF)') return null;
-  return actionRow([actionEmoji('⚡'), actionEmoji('⤴️'), actionEmoji('⤴️'), actionEmoji('⤴️'), actionSuffix('カードをすべてアンタップする')]);
+  return actionRow([actionEmoji('⚡'), actionEmoji('⤴️'), actionEmoji('⤴️'), actionEmoji('⤴️')]);
 }
 
 /** CHANGE(nK,mVP) -- K->VP conversions with any counts on either side, e.g. AREA010A's "CHANGE(2K,VP)"

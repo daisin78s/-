@@ -2176,7 +2176,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "CHANGE((A,B,C),D)",
-      "INST": ""
+      "INST": "色ダイスの上限は5個"
     },
     {
       "ID": "AREA008",
@@ -2296,7 +2296,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "CHANGE(K,D)",
-      "INST": ""
+      "INST": "色ダイスの上限は5個\nこのAREAにダイスを置くと怠惰の制約は解除される"
     },
     {
       "ID": "AREA009B",
@@ -2404,7 +2404,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "ADD(D)",
-      "INST": ""
+      "INST": "このAREAにダイスを置くと\n色ダイスの上限6個になる"
     },
     {
       "ID": "AREA009C",
