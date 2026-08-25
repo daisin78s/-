@@ -2241,13 +2241,18 @@ function withPatchedTap(physicalFaceId, tap, fn) {
 // ダイスを置いたときダイス上限が5になるように（怠惰でもダイスが増える）訓練場LV2のAREAにダイスを置いた
 // ときダイス上限が６になるように") -- bypasses both the normal 5-color-dice cap and 怠惰/CON005A's
 // REPLACE_ADD(D,wD) redirect, for just this one grant. Confirmed with the user this is scoped to 訓練場's
-// own ADD(D) only, not a lasting change to the player's own cap. SLOT1/2 at both tiers are EX (owner-only).
+// own D grant only, not a lasting change to the player's own cap. SLOT1/2 at both tiers are EX
+// (owner-only). AREA007B's own ACTION changed 2026-08-25 from a free ADD(D) to CHANGE(K,D) (per user
+// data edit "訓練場LV1　能力変えました") -- the bypass logic (keyed off grantsColorDie's generic
+// CHANGE/ADD detection, not this AREA's specific formula) needed no code change for this, but tests
+// placing there now need to actually afford the K cost. AREA007C (LV2) is untouched, still ADD(D).
 // ---------------------------------------------------------------------------
 {
   // 怠惰 (CON005A) normally turns EVERY D grant into a wD instead, unconditionally, everywhere -- except
   // now at 訓練場LV1, where it's bypassed entirely.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
+  p1.resources.K = 1; // AREA007B's own ACTION is now CHANGE(K,D)
   const con5a = createCardInstance('CON005A');
   con5a.ownerId = 'P1';
   state.cards[con5a.physicalId] = con5a;
@@ -2314,6 +2319,7 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   // A ☆ die (JOB003/道化) can land on 訓練場LV1/LV2 too ("全AREA共通") -- same bypass applies.
   const state = freshStateWithShops();
   const p1 = withWildcardOwner(state);
+  p1.resources.K = 1; // AREA007B's own ACTION is now CHANGE(K,D)
   const con5a = createCardInstance('CON005A');
   con5a.ownerId = 'P1';
   state.cards[con5a.physicalId] = con5a;

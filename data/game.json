@@ -2295,7 +2295,7 @@
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
-      "ACTION": "ADD(D)",
+      "ACTION": "CHANGE(K,D)",
       "INST": ""
     },
     {
