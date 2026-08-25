@@ -1440,22 +1440,28 @@ function buildCardListConRow(label, faceIds) {
 }
 
 /** 領地(A)/天運(B)/人材(C)一覧, per user request: same-numbered LV1(表/A面) on top, LV2(裏/B面) on the
- * bottom, with the 008 pair (special-shop faces, ROUND_MIN=2 -- see setup.prepareShops) pulled out to
- * their own column at the far right, labeled "2ラウンドから登場" above it. Sheet's NAME column confirms
- * the A/B/C=領地/天運/人材 mapping (see plan file), not otherwise recorded anywhere in code. */
+ * bottom, with each SHOP201-203 special-shop family (200-299 = wave 1, ROUND_MIN=2; 300-399 = wave 2,
+ * round 3+ -- see setup.prepareShops/board.specialShopMinRound) pulled out to its own column at the far
+ * right, one column per family (e.g. A201/A202 each get their own wave-1 column, A301 its own wave-2
+ * column), labeled "2ラウンドから登場"/"3ラウンドから登場" above each (2026-08-25, per user request:
+ * "2R　3Rから出てくるカードも表示して可能な限り　今と同じ列で" -- this replaces the old single-008-pair
+ * column from before the SHOP201-203 rework, which silently showed nothing for any of these ids since
+ * none of them is literally numbered "008" any more). Sheet's NAME column confirms the A/B/C=領地/天運/
+ * 人材 mapping (see plan file), not otherwise recorded anywhere in code. */
 function renderCardListAbcCategory(sheet, container) {
   const tierA = [];
   const tierB = [];
-  let specialA = null;
-  let specialB = null;
+  const specialFamilies = new Map(); // physicalId -> {num, a, b}
   for (const row of INDEX.raw[sheet]) {
     const { physicalId, tier } = gameStateMod.splitCardId(row.ID);
     const num = Number(physicalId.slice(1));
-    if (num === 8) {
-      if (tier === 'A') specialA = row.ID; else if (tier === 'B') specialB = row.ID;
-    } else if (num <= 7) {
+    if (num <= 7) {
       if (tier === 'A') tierA.push(row.ID); else if (tier === 'B') tierB.push(row.ID);
+      continue;
     }
+    if (!specialFamilies.has(physicalId)) specialFamilies.set(physicalId, { num, a: null, b: null });
+    const fam = specialFamilies.get(physicalId);
+    if (tier === 'A') fam.a = row.ID; else if (tier === 'B') fam.b = row.ID;
   }
   const wrap = el('div', 'card-list-abc-wrap');
 
@@ -1465,11 +1471,15 @@ function renderCardListAbcCategory(sheet, container) {
   for (const faceId of tierB) mainGrid.appendChild(buildCardListCell(faceId, false));
   wrap.appendChild(mainGrid);
 
-  const specialCol = el('div', 'card-list-abc-special');
-  specialCol.appendChild(el('div', 'card-list-abc-special__label', '2ラウンドから登場'));
-  if (specialA) specialCol.appendChild(buildCardListCell(specialA, false));
-  if (specialB) specialCol.appendChild(buildCardListCell(specialB, false));
-  wrap.appendChild(specialCol);
+  const sortedFamilies = [...specialFamilies.values()].sort((x, y) => x.num - y.num);
+  for (const fam of sortedFamilies) {
+    const label = fam.num < 300 ? '2ラウンドから登場' : '3ラウンドから登場';
+    const specialCol = el('div', 'card-list-abc-special');
+    specialCol.appendChild(el('div', 'card-list-abc-special__label', label));
+    if (fam.a) specialCol.appendChild(buildCardListCell(fam.a, false));
+    if (fam.b) specialCol.appendChild(buildCardListCell(fam.b, false));
+    wrap.appendChild(specialCol);
+  }
 
   container.appendChild(wrap);
 
@@ -2058,7 +2068,12 @@ function buildBuildIcon(actionText) {
   const categories = extractBuildCategories(actionText);
   const buildValue = extractBuildValue(actionText);
   const children = [actionEmoji('⚒️')];
-  if (categories) children.push(actionSuffix(categories));
+  // 'U' alone (only 革命の兆し/B005A-B's BUILD(U)/BUILD(U);ADD(BZ) -- confirmed via data/game.json, no
+  // other card combines U with A/B/C/M) reads as "LVアップ" instead of the bare letter (2026-08-25, per
+  // user request: "革命の兆しのアイコン U と書いてあるところを LVアップ と書いて"). Any other combo
+  // (A/B/C/M, with or without U) keeps the plain letter-string suffix as before.
+  if (categories === 'U') children.push(actionSuffix('LVアップ'));
+  else if (categories) children.push(actionSuffix(categories));
   if (buildValue !== null) {
     // The actual white-die (wD) icon, plain digit inside (2026-08-25, per user request: "サイコロの中身
     // を1⃣のように数字にしてください／1⃣はゲームで使う白ダイスのアイコンを使って" -- replaces the old
