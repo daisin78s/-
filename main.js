@@ -3470,12 +3470,23 @@ function renderQsts(state) {
  * per user spec: "赤✖がついているカードの下に　2Rから　3Rから　4Rから　と書いて") -- takes priority over
  * showReqCaption, which is always false for SPECIAL anyway (see this doc's own paragraph above), so
  * there's no real conflict between the two captions in practice.
+ *
+ * discardWarning (2026-08-25, default false, only ever passed true by renderShopGrid's SPECIAL loop):
+ * once a non-monument SHOP201-203 card is actually purchasable (locked is false), fills the same caption
+ * slot with "4R捨札に" instead -- a warning that board.forceSpecialShopMonumentsAtRound4 discards it once
+ * round 4 begins. Never combined with the locked caption above (confirmed with the user: "２行には　なら
+ * ないはず", one caption line only) -- the caller is responsible for only ever passing discardWarning true
+ * when locked is false, and monuments (which never get discarded) never get it at all.
  */
-function buildShopSlotNode(slotId, faceId, showReqCaption, locked) {
+function buildShopSlotNode(slotId, faceId, showReqCaption, locked, discardWarning) {
   const slotTpl = document.getElementById('tpl-shop-slot');
   const slotNode = slotTpl.content.firstElementChild.cloneNode(true);
   if (locked) slotNode.classList.add('shop-slot--locked');
-  const reqCaption = () => (locked ? `${boardMod.specialShopMinRound(faceId)}Rから` : (showReqCaption ? shopReqForSlotId(slotId) : ''));
+  const reqCaption = () => {
+    if (locked) return `${boardMod.specialShopMinRound(faceId)}Rから`;
+    if (discardWarning) return '4R捨札に';
+    return showReqCaption ? shopReqForSlotId(slotId) : '';
+  };
   if (!faceId) {
     slotNode.querySelector('.shop-slot__req').textContent = showReqCaption ? shopReqForSlotId(slotId) : '';
     const emptyTpl = document.getElementById('tpl-shop-card-empty');
@@ -3531,7 +3542,9 @@ function renderShopGrid(state) {
   const specialColumns = [];
   Object.entries(state.shops.SPECIAL.slots).forEach(([slotId, faceId], i) => {
     const locked = !!faceId && boardMod.specialShopMinRound(faceId) > state.round;
-    const node = buildShopSlotNode(slotId, faceId, false, locked); // no req caption -- see buildShopSlotNode
+    // 2026-08-25, per user spec: "それ以外には　4R捨札に　を表記" -- see buildShopSlotNode's own doc.
+    const discardWarning = !locked && !!faceId && boardMod.specialShopMinRound(faceId) < 4;
+    const node = buildShopSlotNode(slotId, faceId, false, locked, discardWarning); // no req caption -- see buildShopSlotNode
     // Falls back to left-to-right order if the dice ranges don't line up, so a data change can never
     // make a special slot vanish -- it just sits somewhere less meaningful until the data is fixed.
     node.style.gridColumn = String(specialSlotGridColumn(state, slotId) || (i + 1));
