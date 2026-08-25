@@ -2060,12 +2060,18 @@ function buildBuildIcon(actionText) {
   const children = [actionEmoji('⚒️')];
   if (categories) children.push(actionSuffix(categories));
   if (buildValue !== null) {
-    // die-face glyph(s) for the buildValue itself (2026-08-06) -- values above 6 (only BUILD(M,12)
-    // today) can't come from one die, so this shows however many max-value (6) dice it'd take to
-    // reach it (12 -> ⚅⚅), which happens to be exact for every buildValue in the current data (all are
-    // either <=6 or an exact multiple of 6).
+    // The actual white-die (wD) icon, plain digit inside (2026-08-25, per user request: "サイコロの中身
+    // を1⃣のように数字にしてください／1⃣はゲームで使う白ダイスのアイコンを使って" -- replaces the old
+    // ⚀-⚅ pip-dot dieFace() glyph with renderDie({kind:'WHITE',...}), the same real dice-tray component
+    // cardListResourceIcon's own 'D' case already reuses for this exact "show the real physical die, not
+    // a font glyph" reasoning, just WHITE here instead of a player color). Only the 兆し family (始まりの
+    // 兆し/終わりの兆し/移ろいの兆し, both tiers) ever has a numeric buildValue at all -- confirmed via
+    // data/game.json, so this only ever touches those cards' icons.
+    // Values above 6 (only BUILD(M,12) today) can't come from one die, so this shows however many
+    // max-value (6) dice it'd take to reach it (12 -> two "6" dice), which happens to be exact for every
+    // buildValue in the current data (all are either <=6 or an exact multiple of 6).
     const dieCount = Math.max(1, Math.ceil(buildValue / 6));
-    for (let i = 0; i < dieCount; i++) children.push(dieFace(Math.min(buildValue, 6)));
+    for (let i = 0; i < dieCount; i++) children.push(renderDie({ kind: 'WHITE', value: Math.min(buildValue, 6) }));
   }
   const buildRow = actionRow(children);
   if (/;ADD\(BZ\)$/.test(actionText)) {
