@@ -2253,12 +2253,14 @@ function buildUntapChoiceIcon(actionText) {
 }
 
 /** UNTAP_ALL(SELF) -- only 王女(C301A)/聖女LV2(C202B)/王女LV2(C301B)'s own ONCE currently, confirmed via
- * data/game.json -- reads as plain text (2026-08-25, per user request: "聖女　王女の カードをすべてアン
- * タップする"). Had no icon builder before this, so it fell through to buildEffectRow's raw-DSL-text
- * fallback and showed the literal "UNTAP_ALL(SELF)" string on the card. */
+ * data/game.json -- ⚡ (ONCE "gain" prefix, same convention as buildAddWdIcon etc) + ⤴️⤴️⤴️ (three untap
+ * arrows -- "all", as opposed to UNTAP_CHOICE's single arrow + a budget number) + plain text (2026-08-25,
+ * per user request: "聖女　王女の カードをすべてアンタップする...の効果があるところに ⚡⤴⤴⤴ をいれて").
+ * Had no icon builder before the text-only version this replaces, so it fell through to buildEffectRow's
+ * raw-DSL-text fallback and showed the literal "UNTAP_ALL(SELF)" string on the card. */
 function buildUntapAllIcon(actionText) {
   if (actionText !== 'UNTAP_ALL(SELF)') return null;
-  return actionRow([actionSuffix('カードをすべてアンタップする')]);
+  return actionRow([actionEmoji('⚡'), actionEmoji('⤴️'), actionEmoji('⤴️'), actionEmoji('⤴️'), actionSuffix('カードをすべてアンタップする')]);
 }
 
 /** CHANGE(nK,mVP) -- K->VP conversions with any counts on either side, e.g. AREA010A's "CHANGE(2K,VP)"

@@ -708,8 +708,15 @@ h1, h2, h3 { margin: 0; }
    PASSIVE effect row at all) leaves a lot of spare height to absorb. Canceling it for monuments lets the
    card shrink to fit its real content instead, closing the gap and the card's own height together. A/B/C
    cards keep the auto push -- untouched, not what was reported. */
+/* -2px (2026-08-25, per user request: "必要資源とダイス目の間を...12以上とVPの間もギリギリくっつかない
+   程度に詰めて") -- pulls req/vp closer than .shop-card's own base 4px flex gap allows, scoped to
+   monuments only rather than touching the shared .shop-card gap value every other deck's row spacing
+   also depends on. */
 .shop-card--monument .shop-card__vp {
-  margin-top: 0;
+  margin-top: -2px;
+}
+.shop-card--monument .shop-card__req {
+  margin-top: -2px;
 }
 
 /* Restored 2026-07-29: monuments' req is intrinsic to the card (each monument has its own dice-value
@@ -722,6 +729,13 @@ h1, h2, h3 { margin: 0; }
   font-size: 15px;
   color: var(--text-muted);
   text-align: center;
+  /* Tightened from the global 1.5 default (2026-08-25, per user request: "必要資源とダイス目の間を...
+     ダイス目と12以上の間も...12以上とVPの間もギリギリくっつかない程度に詰めて") -- with 0 real margin
+     already between the "ダイス目"/"{n}以上" lines and the 4px flex gap to .shop-card__cost/__vp above/
+     below, all three of those "gaps" were actually just line-height whitespace inflated further by
+     .shop-card__req-number's own 28px font (28*1.5=42px line box) -- shrinking line-height here closes
+     all three at once without touching the real flex gap value. */
+  line-height: 1.1;
 }
 .shop-card__req:empty { display: none; }
 
