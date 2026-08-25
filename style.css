@@ -1101,6 +1101,14 @@ h1, h2, h3 { margin: 0; }
   margin-left: -1px;
 }
 
+/* 運命の導き/B003A-B's own "ダイス目　+2"/"+3" (2026-08-25, per user request: "数字は大きく濃く") --
+   bigger than the base .action-count (11px); color is already var(--text) (not muted) on the base
+   class, so only size needs bumping here, same "large" naming convention as .action-suffix--large/
+   .card-note--large elsewhere. */
+.action-count--large {
+  font-size: 16px;
+}
+
 .action-arrow {
   font-size: 12px;
   font-weight: 700;

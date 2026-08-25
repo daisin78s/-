@@ -2348,11 +2348,21 @@ function buildSetDieValueIcon(actionText) {
   return actionRow([dieFace(match[1]), dieFace(match[2])]);
 }
 
-/** CHANGE_DIE_VALUE(SELF±n): player adjusts the die by +-n -- shown as "±n" (confirmed 2026-07-29). */
+/** CHANGE_DIE_VALUE(SELF±n): player picks either +n or -n -- shown as "±n" (confirmed 2026-07-29). No
+ * card in the current data uses this choice form (only the fixed-delta form below, e.g. 運命の導き's own
+ * SELF+2/SELF+3) -- kept for whenever a future card does. */
 function buildChangeDieValueIcon(actionText) {
-  const match = /^CHANGE_DIE_VALUE\(SELF±(\d+)\)/.exec(actionText || '');
-  if (!match) return null;
-  return actionRow([actionCount(`±${match[1]}`)]);
+  const choiceMatch = /^CHANGE_DIE_VALUE\(SELF±(\d+)\)/.exec(actionText || '');
+  if (choiceMatch) return actionRow([actionCount(`±${choiceMatch[1]}`)]);
+  // CHANGE_DIE_VALUE(SELF+n)/(SELF-n): a single FIXED delta, no player choice at all (2026-08-25, added
+  // alongside 運命の導き/B003A-B's TAP switching to this shape -- see command-builder.js's own
+  // lowerChangeDieValue doc). Shown as "ダイス目　+n" with the signed number large/dark (2026-08-25, per
+  // user request: "ダイス目　+1と／数字は大きく濃く", confirmed to mean the DSL's own actual delta rather
+  // than a literal "+1" -- see .action-count--large in style.css, same "large/dark" convention as
+  // .action-suffix--large/.card-note--large elsewhere).
+  const fixedMatch = /^CHANGE_DIE_VALUE\(SELF([+-]\d+)\)/.exec(actionText || '');
+  if (!fixedMatch) return null;
+  return actionRow([actionSuffix('ダイス目　'), el('span', 'action-count action-count--large', fixedMatch[1])]);
 }
 
 /** ADD(COUNT(emblem)*wD): the die count is dynamic (however many of that emblem the player owns),
