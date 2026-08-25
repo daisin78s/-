@@ -3021,8 +3021,12 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     }
   }
 
-  const level = levelForFaceId(faceId);
-  if (level) q('.shop-card__level').textContent = `LV${level}`;
+  // .shop-card__level (the "LV1"/"LV2" badge under the emblem) is no longer populated here (2026-08-25,
+  // per user request: "ABCカード NAMEにLV1と入れました そのため 今 エンブレムの下に書かれている LV1
+  // LV2を消してください") -- every A/B/C face's own NAME column now already ends in "LV1"/"LV2" itself
+  // (e.g. A001A's NAME is "城下町の支配LV1"), so the separate badge became a duplicate. The element and
+  // its :empty{display:none} CSS rule stay (levelForFaceId itself is also still used elsewhere, e.g. the
+  // built-LV1/LV2-count stat above), so an empty .shop-card__level here just collapses away as normal.
 
   // CON cards are the one exception (2026-08-16, per user request: "CONカードIDが書かれている部分を
   // 消してその場所に得られる初期資源を書いて") -- the id spot shows the resources its ONCE grants
