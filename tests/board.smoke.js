@@ -2486,19 +2486,19 @@ function withWildcardOwner(state) {
 {
   // Regression (2026-08-23, per user report: forced-fallback ☆ placements at 元老院/王宮 could never
   // acquire a card, since excludedFromBuildValue used to zero their buildValue outright). Every ANY slot
-  // at 元老院 (AREA009A, 4 ANY as of a 2026-08-24 data edit that shrank it from 6) already occupied by
-  // another player -- P1's own ☆ dice have nowhere to go but a forced fallback onto SLOT1, twice in a row
-  // -- each one now still succeeds via BUILD(), same as a genuinely-empty-slot placement (buildValue=1),
-  // evicting whoever was in SLOT1 (first P2's own die, then this same 2nd ☆ evicts the 1st ☆ in turn)
-  // rather than accumulating with it -- still no multi-turn/multi-die accumulation, per the 2026-08-20
-  // "重ねたかどうかではなく1ターンに2個置いたかで合計するようにしてください" rule this test block
-  // originally regression-tested.
+  // at 元老院 (AREA009A, 6 ANY -- briefly shrunk to 4 by a 2026-08-24 data edit, reverted back to 6 by a
+  // 2026-08-25 one) already occupied by another player -- P1's own ☆ dice have nowhere to go but a
+  // forced fallback onto SLOT1, twice in a row -- each one now still succeeds via BUILD(), same as a
+  // genuinely-empty-slot placement (buildValue=1), evicting whoever was in SLOT1 (first P2's own die,
+  // then this same 2nd ☆ evicts the 1st ☆ in turn) rather than accumulating with it -- still no
+  // multi-turn/multi-die accumulation, per the 2026-08-20 "重ねたかどうかではなく1ターンに2個置いたかで
+  // 合計するようにしてください" rule this test block originally regression-tested.
   const state = freshStateWithShops();
   withWildcardOwner(state);
   player(state, 'P1').resources.BZ = 20;
-  // Every ANY slot at 元老院 (AREA009A, 4 ANY) already occupied by another player -- P1's own ☆ dice
+  // Every ANY slot at 元老院 (AREA009A, 6 ANY) already occupied by another player -- P1's own ☆ dice
   // will have nowhere to go but a forced fallback onto SLOT1, twice in a row.
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 6; i++) {
     state.maps['MAP009'].slots[i].push({ playerId: 'P2', dieId: `p2-${i}`, value: (i % 6) + 1, seq: i + 1, countsForTurnOrder: true });
   }
 

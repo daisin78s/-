@@ -2197,8 +2197,8 @@
       "SLOT2": "ANY",
       "SLOT3": "ANY",
       "SLOT4": "ANY",
-      "SLOT5": "NONE",
-      "SLOT6": "NONE",
+      "SLOT5": "ANY",
+      "SLOT6": "ANY",
       "ACTION": "BUILD()",
       "INST": ""
     },
