@@ -2288,6 +2288,17 @@ function buildChangeToVpIcon(actionText) {
   return actionRow([...resourceItemNodes(payCount, 'K'), actionArrow(), actionSuffix(gainCount ? `${gainCount}VP` : 'VP')]);
 }
 
+/** CHANGE(K,VP,n): a capped-repeat K->VP conversion, usable up to n times, e.g. AREA010C/孤児院LV2's
+ * "CHANGE(K,VP,5)" (2026-08-26, per user request: "孤児院LV2 能力変えました アイコンを K→1VP （MAX5）に
+ * 変えてください"). Distinct from buildCappedChangeIcon's shared "n X -> n Y" shape (K/A/B/C/Z pairs
+ * only, no VP) -- VP always shows as plain "1VP" text per-use here rather than scaling the shown count
+ * to the usage cap, plus a MAX badge (same convention as buildConvertLimitIcon/buildUpgradeLimitIcon). */
+function buildChangeToVpCappedIcon(actionText) {
+  const match = /^CHANGE\(K,VP,(\d+)\)$/.exec(actionText || '');
+  if (!match) return null;
+  return actionRow([actionDot('K'), actionArrow(), actionSuffix('1VP'), actionSuffix(`MAX${match[1]}`)]);
+}
+
 /** CHANGE(X,Y,ALL);ADD(nZ) -- e.g. AREA003B's "CHANGE(K,A,ALL);ADD(2B)" (2026-08-05, per user feedback
  * with a worked example: "〇→A ALL （雷のアイコン）2B"). Two-row stack: row1 is the CHANGE(...,ALL) part
  * alone, in the exact same dot->dot+"ALL" shape ACTION_ICON_BUILDERS' own CHANGE(K,A/B/C,ALL) entries
@@ -2689,6 +2700,8 @@ function buildActionIcons(actionText) {
   if (untapAllIcon) return untapAllIcon;
   const changeToVpIcon = buildChangeToVpIcon(actionText);
   if (changeToVpIcon) return changeToVpIcon;
+  const changeToVpCappedIcon = buildChangeToVpCappedIcon(actionText);
+  if (changeToVpCappedIcon) return changeToVpCappedIcon;
   const changeAllThenAddIcon = buildChangeAllThenAddIcon(actionText);
   if (changeAllThenAddIcon) return changeAllThenAddIcon;
   const bzForBuildIcon = buildBzForBuildIcon(actionText);

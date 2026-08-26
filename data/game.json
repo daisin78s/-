@@ -894,7 +894,7 @@
       "VP": 0,
       "LEVEL": 1,
       "ONCE": "",
-      "TAP": "ADD(2A)",
+      "TAP": "ADD(A,K)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
@@ -910,7 +910,7 @@
       "VP": 0,
       "LEVEL": 1,
       "ONCE": "",
-      "TAP": "ADD(2B)",
+      "TAP": "ADD(B,K)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
@@ -926,7 +926,7 @@
       "VP": 0,
       "LEVEL": 1,
       "ONCE": "",
-      "TAP": "ADD(2C)",
+      "TAP": "ADD(C,K)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
@@ -2421,14 +2421,14 @@
     {
       "ID": "AREA010C",
       "NAME": "孤児院LV2",
-      "SLOT1": "ANY",
-      "SLOT2": "EX",
-      "SLOT3": "EX",
+      "SLOT1": "EX",
+      "SLOT2": "NONE",
+      "SLOT3": "NONE",
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
-      "ACTION": "ADD(2VP)",
-      "INST": ""
+      "ACTION": "CHANGE(K,VP,5)",
+      "INST": "KをVPに変えるMAX5"
     }
   ],
   "SHOP": [
