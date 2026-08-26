@@ -3940,6 +3940,15 @@ function renderBoard(state, next) {
         actionEl.textContent = action;
       }
 
+      // 孤児院LV2(AREA010C) average VP-per-use display (2026-08-26, per user request: "孤児院LV2は獲得
+      // したVPを表示できるようにできますか" -> "後者の平均" -- the per-placement conversion count,
+      // averaged over every successful use so far this game, not a lifetime running total). mapState.
+      // changeVpUses/changeVpTotal are updated in board.placeDice -- see its own doc there.
+      if (areaRow.ID === 'AREA010C' && mapState.changeVpUses > 0) {
+        const avg = (mapState.changeVpTotal / mapState.changeVpUses).toFixed(1);
+        actionEl.appendChild(actionRow([actionSuffix(`平均${avg}VP`)]));
+      }
+
       // Usage-fee display (2026-08-0X, moved into the header, replacing the old "tier A"/"tier B" text
       // badge -- per user request). Two lines: the flat per-tier rate (tier B = 1K, tier C = 2K, per
       // [[project-dice-wp-flow-spec]] -- tier A has no usage fee at all, so no rate line) and the

@@ -412,6 +412,12 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
   });
   chargeUsageFeeIfOwed(state, map, context.playerId);
 
+  // 孤児院LV2(AREA010C)-only (2026-08-26, see game-state.js's MapState.changeVpUses/changeVpTotal doc):
+  // snapshotted before resolveAreaAction runs so the delta below reflects exactly what THIS placement's
+  // own CHANGE(K,VP,5) granted, diffed the same before/after style wouldAreaActionHaveEffect already uses
+  // elsewhere in this file, rather than special-casing CHANGE's own math here.
+  const vpBeforeAreaAction = areaRow.ID === 'AREA010C' ? (player.resources.VP || 0) : null;
+
   executor.emitAndResolve(state, index, actionContext, 'PLACE', mapId);
   const actionResult = resolveAreaAction(state, index, actionContext, areaRow, buildValue);
 
@@ -425,6 +431,14 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
   }
 
   // 地主/開拓者's own bonus already landed earlier (see preJobBonusSnapshot above) -- not called again here.
+
+  if (vpBeforeAreaAction !== null && actionResult.success) {
+    const vpGained = (player.resources.VP || 0) - vpBeforeAreaAction;
+    if (vpGained > 0) {
+      map.changeVpUses += 1;
+      map.changeVpTotal += vpGained;
+    }
+  }
 
   return { success: true, actionResult };
 }

@@ -276,6 +276,12 @@ function createCardInstance(faceCardId) {
  *   per-die COLOR-return/WHITE-discard logic picks it up exactly as if it were still genuinely placed --
  *   nothing else needs to know this array exists. Reset to [] every round in endRound(), alongside
  *   `slots`.
+ * @property {number} changeVpUses     - 孤児院LV2(AREA010C)-only (2026-08-26, per user request: "孤児院
+ *   LV2は獲得したVPを表示できるようにできますか" -> "後者の平均"): count of successful placements here
+ *   that granted at least 1 VP via its own CHANGE(K,VP,5) ACTION, game-lifetime (never reset by
+ *   endRound). See board.placeDice's own doc for where this is updated and main.js's map-tile render for
+ *   the "平均{changeVpTotal/changeVpUses}VP" display it drives.
+ * @property {number} changeVpTotal    - sum of VP actually granted across those same placements.
  */
 
 /**
@@ -299,7 +305,7 @@ function createCardInstance(faceCardId) {
  * @returns {MapState}
  */
 function createMapState(mapId, initialAreaId) {
-  return { mapId, currentAreaId: initialAreaId, slots: [], accumulatedFee: 0, feeOwnerId: null, discardedTurnOrderEntries: [] };
+  return { mapId, currentAreaId: initialAreaId, slots: [], accumulatedFee: 0, feeOwnerId: null, discardedTurnOrderEntries: [], changeVpUses: 0, changeVpTotal: 0 };
 }
 
 /**
