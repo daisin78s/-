@@ -127,6 +127,18 @@ class Evaluator {
     total += passedColor * v('K') * 3;
     total += unplacedWhite * v('wD');
 
+    // 訓練場の支配 (A202A/A202B) -- color-dice-count-conditioned valuation (2026-08-26, per user spec:
+    // "色ダイス3個（置いたのも含む）なら訓練場の支配を取りに行く+1000くらい 逆に色ダイス4個なら一切取り
+    // に行かない"): this card's main value is lifting CON005A(怠惰)'s "色ダイス上限3個" -- see
+    // board.js's TRAINING_GROUND_COLOR_DIE_CAP doc -- so it's a sharp, non-monotonic value curve (great
+    // exactly when stuck at 3, worthless once already past it) that the flat per-round 評価値 number
+    // can't express on its own; this state-dependent term lives here in code instead. Total color dice
+    // (in hand AND currently placed) matches board.js's own established "TOTAL color dice" counting
+    // convention, not just unplaced ones.
+    const TRAINING_GROUND_DOMINATION_BONUS = 1000;
+    const TRAINING_GROUND_DOMINATION_PENALTY = 1000;
+    const totalColorDiceCount = player.dice.filter((d) => d.kind === 'COLOR').length;
+
     for (const physicalId of player.ownedCardPhysicalIds) {
       const cardState = state.cards[physicalId];
       if (!cardState) continue;
@@ -134,6 +146,10 @@ class Evaluator {
       try { row = getCardRow(this.index, cardState.currentFaceId); } catch (e) { continue; }
       total += v(cardState.currentFaceId);
       if (typeof row.VP === 'number') total += row.VP * v('VP');
+      if (cardState.currentFaceId === 'A202A' || cardState.currentFaceId === 'A202B') {
+        if (totalColorDiceCount === 3) total += TRAINING_GROUND_DOMINATION_BONUS;
+        else if (totalColorDiceCount >= 4) total -= TRAINING_GROUND_DOMINATION_PENALTY;
+      }
     }
 
     total += executor.collectVpModifiers(state, this.index, playerId) * v('VP');
