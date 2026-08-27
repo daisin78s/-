@@ -433,12 +433,27 @@ h1, h2, h3 { margin: 0; }
 /* Confirmed 2026-07-30: SHOP101-106 and SHOP201-203 share one 6-column grid (SHOP201-203 sit
    directly under whichever SHOP10x shares their dice range, row 3, via explicit grid-column/grid-row
    set in JS -- see renderShopGrid) instead of the old separate side-by-side layout. The "大型カード
-   ラウンド2から" heading that used to label the special column has been removed entirely. */
+   ラウンド2から" heading that used to label the special column has been removed entirely.
+   A 7th, narrow column was added (2026-08-27, per user request: "SHOPとSHOPの横の隙間を少し詰めて右側に
+   スペースを作り 残りカード枚数を表示させてください") reserved for each shop row's own remaining-card-
+   count badge (see .shop-remaining-count below) -- the main gap shrank slightly (8px->6px) to make room
+   without shrinking the 6 card columns much. */
 .shop-row__grid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 10px 8px;
+  grid-template-columns: repeat(6, 1fr) auto;
+  gap: 10px 6px;
   flex: 1 1 auto;
+}
+
+/* Remaining-card-count badge, one per shop row (M/NORMAL/SPECIAL), sitting in the 7th grid column just
+   right of that row's last slot (SHOP006/SHOP106/SHOP203 -- see renderShopGrid). Small and muted, same
+   visual weight as .shop-slot__req's own caption text. */
+.shop-remaining-count {
+  align-self: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  padding-left: 2px;
 }
 
 /* Confirmed 2026-07-29: a shop slot's dice-value requirement (e.g. "目 1-6") isn't part of the

@@ -628,20 +628,25 @@ function pumpAiDelayed() {
 // length-1 case of the same array -- no separate code path.
 let selectedDieIds = [];
 let placementMessage = '';
-// Snapshot taken immediately before a die placement is attempted (2026-08-10, per user request:
+// Stack of snapshots, one per cancelable action taken so far THIS turn (2026-08-10, per user request:
 // "ダイスをSLOTに置いたときにやり直したい時のために...ダイスをキャンセルボタンが欲しい これを押すと
-// ダイスを置くのをキャンセルする"). Unlike undoMod's own once-per-turn checkpoint (state.undoCheckpoint,
-// which reverts everything done since the turn began, including any free actions/bare TAPs taken
-// *before* this die was placed), this is scoped to just the placement itself -- captured right before
-// board.placeDice/placeDiceGroup runs (see placeSelectedDie/placeSelectedDiceGroup), committed only once
-// that call actually succeeds (a failed attempt never touched state, so there's nothing to arm), and
-// cleared again once used (handleDiceCancelClick) or once a new turn begins (see render()'s turn-start
-// checkpoint block) or a full ターン開始に戻す fires (handleUndoClick -- that already reverts past this
-// point, so a stale die-cancel checkpoint pointing at a since-undone placement would be wrong to keep).
-// Kept as plain UI-only state (like selectedDieIds), not GameState, since nothing outside this file
-// (tests, AI, save data) needs to know about it. Stores turnActionTaken alongside the state clone since
-// that flag also lives outside GameState and placing a die is exactly what sets it true.
-let dicePlacementCheckpoint = null; // { state: GameState, turnActionTaken: boolean } | null
+// ダイスを置くのをキャンセルする"; generalized to a real multi-step stack 2026-08-27, per user request:
+// "ダイスをキャンセルを直前のアクションをキャンセルにして ダイスもキャンセルするし直前のフリーアクション
+// もキャンセルできるようにしてほしい 例 フリーアクション ダイス フリーアクションとした後 1回押すと1個
+// 2回押すと2個戻る" -- each click of the button pops and restores exactly one entry, so N clicks undo
+// the last N cancelable actions, oldest still further back). Unlike undoMod's own once-per-turn
+// checkpoint (state.undoCheckpoint, which reverts everything done since the turn began in one go), this
+// undoes one action at a time. Pushed right before board.placeDice/placeDiceGroup/placeWildcardDie or a
+// free action runs (see placeSelectedDie*Commit and renderFreeActionButtons), only once that call
+// actually succeeds (a failed attempt never touched state, so there's nothing to push), popped one entry
+// per click (handleCancelPreviousActionClick), and cleared entirely once a new turn begins (see
+// render()'s turn-start checkpoint block) or a full ターン開始に戻す fires (handleUndoClick -- that
+// already reverts past every one of these, so stale entries pointing at since-undone actions would be
+// wrong to keep). Kept as plain UI-only state (like selectedDieIds), not GameState, since nothing outside
+// this file (tests, AI, save data) needs to know about it. Stores turnActionTaken alongside each state
+// clone since that flag also lives outside GameState and both a die placement and (indirectly, via
+// unblocking TURNEND) a free action can affect it.
+let actionCheckpoints = []; // { state: GameState, turnActionTaken: boolean }[]
 // Static text for GameState.whiteOverflowEvents (2026-08-11, per user request) -- see render()'s own
 // drain of that array, right below this declaration's use site. This is the passive, after-the-fact
 // fallback notice -- still shown for any wD-granting path not explicitly wrapped by
@@ -656,7 +661,7 @@ const WHITE_OVERFLOW_WARNING_TEXT = '白ダイスの所有上限は5個です。
 // whenever wouldCauseWhiteOverflow predicts the real action about to run would trip a wD-cap overflow
 // for the acting player. "はい" runs onConfirm (the actual commit, deferred until now); "いいえ" just
 // clears this with no state change -- the real action was never attempted in the first place, matching
-// dicePlacementCheckpoint's own "nothing to undo" cases, not a rollback.
+// actionCheckpoints' own "nothing to undo" cases, not a rollback.
 let pendingWhiteOverflowConfirm = null;
 
 /** Predicts whether running `action` (a function taking a GameState and performing some real engine
@@ -3627,15 +3632,35 @@ function specialSlotGridColumn(state, slotId) {
   return matchIndex >= 0 ? matchIndex + 1 : null; // grid-column is 1-based
 }
 
+/** One shop row's own remaining-card-count badge (2026-08-27, per user request), placed in the grid's
+ * 7th column at `gridRow`, right of that row's own last slot. */
+function buildShopRemainingCountNode(count, gridRow) {
+  const node = el('div', 'shop-remaining-count', `残り${count}枚`);
+  node.style.gridColumn = '7';
+  node.style.gridRow = String(gridRow);
+  return node;
+}
+
 function renderShopGrid(state) {
   const container = document.getElementById('shop-combined-slots');
   container.innerHTML = '';
-  for (const [slotId, faceId] of Object.entries(state.shops.M.slots)) {
-    container.appendChild(buildShopSlotNode(slotId, faceId, true));
-  }
-  for (const [slotId, faceId] of Object.entries(state.shops.NORMAL.slots)) {
-    container.appendChild(buildShopSlotNode(slotId, faceId, true));
-  }
+  // M/NORMAL now get explicit gridRow/gridColumn too (2026-08-27, needed once a 7th grid column was
+  // added for the remaining-count badges below -- relying on implicit 6-wide auto-flow would otherwise
+  // let NORMAL's first item spill into row 1's now-available 7th cell instead of starting row 2).
+  Object.entries(state.shops.M.slots).forEach(([slotId, faceId], i) => {
+    const node = buildShopSlotNode(slotId, faceId, true);
+    node.style.gridRow = '1';
+    node.style.gridColumn = String(i + 1);
+    container.appendChild(node);
+  });
+  container.appendChild(buildShopRemainingCountNode(state.shops.M.drawPile.length, 1));
+  Object.entries(state.shops.NORMAL.slots).forEach(([slotId, faceId], i) => {
+    const node = buildShopSlotNode(slotId, faceId, true);
+    node.style.gridRow = '2';
+    node.style.gridColumn = String(i + 1);
+    container.appendChild(node);
+  });
+  container.appendChild(buildShopRemainingCountNode(state.shops.NORMAL.drawPile.length, 2));
   const specialColumns = [];
   Object.entries(state.shops.SPECIAL.slots).forEach(([slotId, faceId], i) => {
     const locked = !!faceId && boardMod.specialShopMinRound(faceId) > state.round;
@@ -3649,17 +3674,18 @@ function renderShopGrid(state) {
     specialColumns.push(Number(node.style.gridColumn));
     container.appendChild(node);
   });
+  container.appendChild(buildShopRemainingCountNode(state.shops.SPECIAL.drawPile.length, 3));
 
-  // Standings panel fills whatever's left of row 3 (2026-08-11, per user request: "空いたスペースに順位表
-  // を作りたい") -- the special cards moved to columns 1-3 when their dice ranges changed, leaving 4-6
-  // free. Spanned from one past the rightmost special cell to the grid's end rather than a literal
-  // "4 / -1", so it keeps filling exactly the leftover space if those cards ever shift again (same
-  // reasoning as specialSlotGridColumn itself). Skipped entirely before round 1 actually starts, when
-  // every score is 0 and there's no turnOrder to break the ties with, so the table would be noise.
+  // Standings panel fills whatever's left of row 3, up to (not including) the 7th column reserved for
+  // the remaining-count badge above (2026-08-27) -- previously spanned to the grid's own literal end
+  // (-1), back when that end WAS column 6 (2026-08-11, per user request: "空いたスペースに順位表を作り
+  // たい") -- the special cards moved to columns 1-3 when their dice ranges changed, leaving 4-6 free.
+  // Skipped entirely before round 1 actually starts, when every score is 0 and there's no turnOrder to
+  // break the ties with, so the table would be noise.
   if (state.round >= 1) {
     const firstFreeColumn = (specialColumns.length ? Math.max(...specialColumns) : 0) + 1;
     const panel = buildStandingsPanelNode(state);
-    panel.style.gridColumn = `${firstFreeColumn} / -1`;
+    panel.style.gridColumn = `${firstFreeColumn} / 7`;
     panel.style.gridRow = '3';
     container.appendChild(panel);
   }
@@ -4138,7 +4164,7 @@ function placeSelectedDie(state, dieId, mapId, slotIndex, colorPreference) {
 
 function placeSelectedDieAfterJob007Check(state, player, dieId, mapId, slotIndex, colorPreference) {
   // wD-overflow confirm (2026-08-19, per user request) -- checked BEFORE any real mutation, so a
-  // declined confirm leaves selectedDieIds/turnActionTaken/dicePlacementCheckpoint untouched, same as if
+  // declined confirm leaves selectedDieIds/turnActionTaken/actionCheckpoints untouched, same as if
   // the click never happened. See pendingWhiteOverflowConfirm's own doc.
   if (wouldCauseWhiteOverflow(state, (clone) => boardMod.placeDice(clone, INDEX, { playerId: player.id, colorPreference }, dieId, mapId, slotIndex))) {
     pendingWhiteOverflowConfirm = { onConfirm: () => placeSelectedDieCommit(state, player, dieId, mapId, slotIndex, colorPreference) };
@@ -4153,7 +4179,7 @@ function placeSelectedDieCommit(state, player, dieId, mapId, slotIndex, colorPre
   const preTurnActionTaken = turnActionTaken;
   const result = boardMod.placeDice(state, INDEX, { playerId: player.id, colorPreference }, dieId, mapId, slotIndex);
   selectedDieIds = [];
-  if (result.success) dicePlacementCheckpoint = { state: preSnapshot, turnActionTaken: preTurnActionTaken };
+  if (result.success) actionCheckpoints.push({ state: preSnapshot, turnActionTaken: preTurnActionTaken });
   applyPlaceDiceResult(result, player.id);
   render(STATE);
 }
@@ -4185,7 +4211,7 @@ function placeSelectedWildcardDieCommit(state, player, dieId, mapId, colorPrefer
   const preTurnActionTaken = turnActionTaken;
   const result = boardMod.placeWildcardDie(state, INDEX, { playerId: player.id, colorPreference }, dieId, mapId);
   selectedDieIds = [];
-  if (result.success) dicePlacementCheckpoint = { state: preSnapshot, turnActionTaken: preTurnActionTaken };
+  if (result.success) actionCheckpoints.push({ state: preSnapshot, turnActionTaken: preTurnActionTaken });
   applyPlaceDiceResult(result, player.id);
   render(STATE);
 }
@@ -4223,7 +4249,7 @@ function placeSelectedDiceGroupCommit(state, player, dieIds, mapId) {
   const preSnapshot = gameStateMod.cloneState(state);
   const preTurnActionTaken = turnActionTaken;
   const result = boardMod.placeDiceGroup(state, INDEX, { playerId: player.id }, dieIds, mapId);
-  if (result.success) dicePlacementCheckpoint = { state: preSnapshot, turnActionTaken: preTurnActionTaken };
+  if (result.success) actionCheckpoints.push({ state: preSnapshot, turnActionTaken: preTurnActionTaken });
   applyPlaceDiceResult(result, player.id);
   render(STATE);
 }
@@ -5106,8 +5132,13 @@ function renderFreeActionButtons(container, state, player, canAct) {
     const btn = el('button', 'free-action-button', FREE_ACTION_LABELS[freeActionId]);
     btn.type = 'button';
     btn.addEventListener('click', () => {
+      // Pushed onto actionCheckpoints (2026-08-27, see its own doc) only once tryFreeAction actually
+      // succeeds -- same "snapshot before, commit only on success" pattern as die placement.
+      const preSnapshot = gameStateMod.cloneState(state);
+      const preTurnActionTaken = turnActionTaken;
       const result = executorMod.tryFreeAction(state, INDEX, player.id, freeActionId);
       if (result.success) {
+        actionCheckpoints.push({ state: preSnapshot, turnActionTaken: preTurnActionTaken });
         placementMessage = '';
         // Retries a turn-end this same free action may have just unblocked (see
         // pendingTurnEndPlayerId's own comment) -- e.g. converting Z->K after RESOURCE_TOTAL_LIMIT
@@ -6153,7 +6184,7 @@ function render(state) {
       lastTurnPlayerId = next.playerId;
       turnActionTaken = false; // a fresh turn started -- see turnActionTaken's own comment
       turnJustEnded = false;
-      dicePlacementCheckpoint = null; // a new turn started -- any prior placement is out of scope now
+      actionCheckpoints = []; // a new turn started -- every prior action is out of scope now
     }
   } else {
     lastTurnPlayerId = null;
@@ -6221,25 +6252,26 @@ function handleUndoClick() {
   pendingJob007TapPrompt = null;
   turnActionTaken = false;
   placementMessage = '';
-  dicePlacementCheckpoint = null; // stale now -- this already reverted past whatever it pointed at
+  actionCheckpoints = []; // stale now -- this already reverted past everything they pointed at
   undoMod.recordCheckpoint(STATE);
   render(STATE);
 }
 
-/** Undoes just the most recent die placement (2026-08-10, per user request -- see
- * dicePlacementCheckpoint's own doc for why this is scoped narrower than handleUndoClick). No-op if
- * nothing is armed (button is disabled in that case anyway, but guard here too since both buttons share
- * this handler). Clears the same UI-only scratch state handleUndoClick does, restores turnActionTaken
- * from the snapshot pair rather than always forcing it to false (placing this die is what set it true;
- * canceling that placement puts it back to whatever it was right before), and does NOT re-record
- * undoMod's own turn-start checkpoint -- that one still points further back (start of turn), which
- * remains exactly correct after this narrower rollback. Single-shot: the checkpoint is consumed here,
- * not re-armed, until the player places a die again. */
-function handleDiceCancelClick() {
-  if (!dicePlacementCheckpoint) return;
-  undoMod.restoreSnapshot(STATE, dicePlacementCheckpoint.state);
-  turnActionTaken = dicePlacementCheckpoint.turnActionTaken;
-  dicePlacementCheckpoint = null;
+/** Undoes just the single most recent cancelable action -- a die placement or a free action (2026-08-10,
+ * generalized 2026-08-27, per user request -- see actionCheckpoints' own doc for why this is scoped
+ * narrower than handleUndoClick, and for the "click N times to undo N actions" behavior this stack
+ * enables). No-op if the stack is empty (button is disabled in that case anyway, but guard here too since
+ * both buttons share this handler). Clears the same UI-only scratch state handleUndoClick does, restores
+ * turnActionTaken from the popped snapshot rather than always forcing it to false (placing a die is what
+ * set it true; canceling that placement puts it back to whatever it was right before), and does NOT
+ * re-record undoMod's own turn-start checkpoint -- that one still points further back (start of turn),
+ * which remains exactly correct after this narrower rollback. Each click pops exactly one entry; calling
+ * it repeatedly walks back through the whole stack, one action per click. */
+function handleCancelPreviousActionClick() {
+  if (actionCheckpoints.length === 0) return;
+  const checkpoint = actionCheckpoints.pop();
+  undoMod.restoreSnapshot(STATE, checkpoint.state);
+  turnActionTaken = checkpoint.turnActionTaken;
   selectedDieIds = [];
   pendingBuildChoice = null;
   pendingPlacementChoice = null;
@@ -6252,14 +6284,14 @@ function handleDiceCancelClick() {
 /** Enables/disables both undo buttons (the persistent one in the sidebar header, and the duplicate
  * inside #build-choice-overlay so it's reachable even while that modal covers the screen -- confirmed
  * 2026-07-30, per user feedback: "城にダイスをおいて建築を選ぶ画面でも戻れるように") based on whether
- * there's actually a checkpoint to revert to. Also drives the dice-cancel buttons' own enabled state the
- * same way, off dicePlacementCheckpoint instead of state.undoCheckpoint (2026-08-10). */
+ * there's actually a checkpoint to revert to. Also drives the "直前のアクションをキャンセル" buttons' own
+ * enabled state the same way, off actionCheckpoints instead of state.undoCheckpoint (2026-08-10). */
 function renderUndoButtons(state) {
   const disabled = !state.undoCheckpoint;
   for (const id of ['undo-button', 'undo-button-build']) {
     document.getElementById(id).disabled = disabled;
   }
-  const diceCancelDisabled = !dicePlacementCheckpoint;
+  const diceCancelDisabled = actionCheckpoints.length === 0;
   for (const id of ['dice-cancel-button', 'dice-cancel-button-build']) {
     document.getElementById(id).disabled = diceCancelDisabled;
   }
@@ -6704,8 +6736,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('undo-button').addEventListener('click', handleUndoClick);
   document.getElementById('undo-button-build').addEventListener('click', handleUndoClick);
-  document.getElementById('dice-cancel-button').addEventListener('click', handleDiceCancelClick);
-  document.getElementById('dice-cancel-button-build').addEventListener('click', handleDiceCancelClick);
+  document.getElementById('dice-cancel-button').addEventListener('click', handleCancelPreviousActionClick);
+  document.getElementById('dice-cancel-button-build').addEventListener('click', handleCancelPreviousActionClick);
 
   document.getElementById('game-end-replay-button').addEventListener('click', () => enterReplayMode());
   document.getElementById('replay-back').addEventListener('click', handleReplayBack);
