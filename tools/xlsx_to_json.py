@@ -28,7 +28,18 @@ UNNAMED_COLUMN_OVERRIDES = {
 
 
 def load_sheet(ws):
-    header_row = ws[1]
+    # The header is normally row 1, but a sheet can have a blank leading row (found 2026-08-27 in
+    # 評価値_3, whose real header sits on row 2 -- silently produced all-empty rows under the old
+    # header_row=row-1 assumption, since every column index came up unnamed and got skipped). Scan
+    # forward to the first row that isn't entirely blank and use that as the header instead, so a
+    # leading blank row never breaks a sheet's parse.
+    header_row_num = 1
+    for row in ws.iter_rows(min_row=1):
+        if any(cell.value is not None for cell in row):
+            header_row_num = row[0].row
+            break
+
+    header_row = ws[header_row_num]
     columns = []  # list of (index, name)
     for idx, cell in enumerate(header_row):
         name = cell.value
@@ -40,7 +51,7 @@ def load_sheet(ws):
         columns.append((idx, name))
 
     rows = []
-    for row in ws.iter_rows(min_row=2):
+    for row in ws.iter_rows(min_row=header_row_num + 1):
         row_id = row[0].value
         if row_id is None:
             continue
