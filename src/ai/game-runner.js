@@ -44,9 +44,26 @@ const AREA_CARD_BY_MAP = {
 };
 
 /** Runs setup steps 1-7 (players/board/shops/dice/CON+RESOURCE dealing) through computeStartOrder,
- * picking each player's 2 kept RESOURCE cards uniformly at random (see this module's own doc). Does
- * not touch JOB/CON face choice yet (round-1 onboarding, driven turn-by-turn in playGame). */
-function setupGame(seed, playerNames, index, evaluator) {
+ * picking each player's 2 kept RESOURCE cards uniformly at random by default (see this module's own doc
+ * on why RESOURCE/CON/JOB stay random for the ordinary LV1-3 AI). Does not touch JOB/CON face choice
+ * yet (round-1 onboarding, driven turn-by-turn in playGame).
+ *
+ * Deals the JOB pool (setup.dealJobPool) BEFORE resource-candidate dealing, not after (2026-08-27 fix,
+ * found while building "AI LV4"'s smart onboarding -- see smart-onboarding.js's own doc): this used to
+ * happen only right before turnFlow.startRound, well after resource cards were already dealt AND chosen
+ * here, which main.js's real UI flow never did (it already reveals the JOB pool before resource-card
+ * choice -- confirmed with the user: "初期資源選ぶ段階でJOBは見えてないといけない"). Every existing
+ * caller only ever fed this into a purely random pick (which never read state.jobPool), so this was an
+ * inert ordering bug until resourceCardPicker (below) started actually caring about it -- callers must
+ * no longer call dealJobPool themselves afterward (see playGame/playGameForFitness, updated alongside
+ * this fix).
+ *
+ * resourceCardPicker (optional, 2026-08-27, for "AI LV4"'s smart-onboarding.js#pickResourceCards):
+ * (candidateIds, state, index, player) => [id, id], called once per player instead of the default random
+ * shuffle+slice(0,2) when provided. Every existing caller passes none, so this stays exactly the
+ * original random behavior unless a caller opts in.
+ */
+function setupGame(seed, playerNames, index, evaluator, resourceCardPicker) {
   const { createEmptyGameState } = require('../game-state');
   const state = createEmptyGameState(seed);
   setup.createPlayers(state, playerNames);
@@ -54,10 +71,13 @@ function setupGame(seed, playerNames, index, evaluator) {
   setup.prepareShops(state, index);
   setup.rollInitialColorDice(state);
   setup.dealConCards(state);
+  setup.dealJobPool(state, index);
   setup.dealResourceCandidates(state, index);
   for (const player of state.players) {
     const choice = state.pendingChoices.find((c) => c.playerId === player.id);
-    const pair = rng.shuffle(state.rng, choice.context.candidates).slice(0, 2);
+    const pair = resourceCardPicker
+      ? resourceCardPicker(choice.context.candidates, state, index, player)
+      : rng.shuffle(state.rng, choice.context.candidates).slice(0, 2);
     setup.chooseResourceCards(state, player.id, pair);
   }
   setup.computeStartOrder(state, index);
@@ -302,7 +322,6 @@ function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorO
   try {
 
   turnFlow.startRound(state);
-  setup.dealJobPool(state, index);
 
   // Round transitions actually happen *inside* driveTurn (applyInPlace's END_TURN case calls
   // turnFlow.endRound/startRound itself, same as main.js's UI does) -- getNextTurn() in this outer
@@ -462,6 +481,86 @@ function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorO
   }
 }
 
-module.exports = { setupGame, driveOnboarding, driveTurn, playGame, AREA_CARD_BY_MAP };
+/**
+ * Plays one full game using a DIFFERENT Evaluator per seat -- e.g. tools/ga_train.js's genetic-algorithm
+ * training, where every seat is a distinct individual (2026-08-27, per user request: "完全ランダムウォー
+ * クから第一世代第二世代という風に進化させていく方式でAIを作りたい"). Otherwise identical machinery to
+ * playGame (same setupGame/driveOnboarding/driveTurn, same round-dispatch loop) -- deliberately skips
+ * every piece of per-card/per-round history bookkeeping playGame collects for AI.DATA.xlsx reporting,
+ * since fitness only needs the final scoreByPlayerId/rankByPlayerId; collecting the full history for
+ * potentially thousands of training games per run would be pure overhead nobody reads.
+ *
+ * @param {Object<string, {score: function}>} evaluatorByPlayerId - one Evaluator (or RandomEvaluator, see
+ *   random-evaluator.js) instance per seat.
+ * @param {import('./move-generator').MoveGenerator} [moveGenerator] - shared across every seat (stateless
+ *   given no policy options); a fresh default instance is created if omitted.
+ * @param {Function} [resourceCardPicker] - passed straight through to setupGame (see its own doc) --
+ *   e.g. smart-onboarding.js#pickResourceCards for "AI LV4". Omitted by every caller that hasn't opted
+ *   into smart onboarding yet, which keeps the original random resource-card pick.
+ * @returns {{state: GameState, scoreByPlayerId: Object<string,number>, rankByPlayerId: Object<string,number>}}
+ */
+function playGameForFitness(seed, playerNames, index, evaluatorByPlayerId, moveGenerator, resourceCardPicker) {
+  const { Simulator } = require('./simulator');
+  const { AIPlayer } = require('./ai-player');
+  const { MoveGenerator } = require('./move-generator');
+
+  const sharedMoveGenerator = moveGenerator || new MoveGenerator();
+  const simulator = new Simulator();
+  // evaluator=null: setupGame/driveOnboarding accept it purely for API symmetry with playGame -- neither
+  // actually reads it today (onboarding is pure RNG, see this file's own top doc), so null is safe here.
+  const state = setupGame(seed, playerNames, index, null, resourceCardPicker);
+  const aiPlayersByPlayerId = {};
+  for (const player of state.players) {
+    aiPlayersByPlayerId[player.id] = new AIPlayer(index, sharedMoveGenerator, evaluatorByPlayerId[player.id], simulator);
+  }
+
+  // Same call playGame makes before its own loop -- without startRound, state.round/phase never leave
+  // their pre-game defaults. (dealJobPool now happens inside setupGame itself, before resource-card
+  // dealing -- see its own doc; calling it again here would silently re-shuffle the pool a 2nd time.)
+  turnFlow.startRound(state);
+
+  let openTurnPlayerId = null;
+  let openTurnHasPlacedDie = false;
+  const MAX_ITERATIONS = 2000; // safety valve, same as playGame's own
+  let iterations = 0;
+  while (state.phase !== 'GAME_END' && iterations < MAX_ITERATIONS) {
+    iterations++;
+    const next = turnFlow.getNextTurn(state);
+    if (next.type === 'ROUND_OVER') {
+      turnFlow.endRound(state, index);
+      if (state.phase !== 'GAME_END') turnFlow.startRound(state);
+      openTurnPlayerId = null;
+      continue;
+    }
+    if (next.type === 'ONBOARDING_NEEDED') {
+      driveOnboarding(state, index, next.playerId, null);
+      continue;
+    }
+    const roundBeforeTurn = state.round;
+    const initialHasPlacedDie = next.playerId === openTurnPlayerId ? openTurnHasPlacedDie : false;
+    const moves = driveTurn(state, index, next.playerId, aiPlayersByPlayerId[next.playerId], initialHasPlacedDie);
+    const endedTurn = moves.some((m) => m.move.type === 'END_TURN' && m.result.success);
+    if (endedTurn || state.round > roundBeforeTurn) {
+      openTurnPlayerId = null;
+    } else {
+      openTurnPlayerId = next.playerId;
+      openTurnHasPlacedDie = initialHasPlacedDie || moves.some((m) => (m.move.type === 'PLACE_DIE' || m.move.type === 'PLACE_WILDCARD_DIE' || m.move.type === 'PLACE_DICE_GROUP' || m.move.type === 'PASS_DIE') && m.result.success);
+    }
+  }
+
+  const rankings = scoring.rankPlayers(state, index);
+  const scoreByPlayerId = {};
+  const rankByPlayerId = {};
+  rankings.forEach((r, i) => { scoreByPlayerId[r.playerId] = r.score; rankByPlayerId[r.playerId] = i + 1; });
+  // qstScoreByPlayerId (2026-08-27, for tools/ga_report_top.js's per-genome breakdown): VP actually
+  // gained from QST's rank-based rewards, same field playGame exposes -- see its own doc on
+  // state.qstRewardsGranted (always populated by GAME_END). scoreByPlayerId already includes this; it's
+  // surfaced separately here purely so a caller can report "素点"(score-qstScore)/QST/合計(score) apart,
+  // matching tools/ai_data_report.js's existing 平均得点/QST平均得点 split.
+  const qstScoreByPlayerId = state.qstRewardsGranted || {};
+  return { state, scoreByPlayerId, rankByPlayerId, qstScoreByPlayerId };
+}
+
+module.exports = { setupGame, driveOnboarding, driveTurn, playGame, playGameForFitness, AREA_CARD_BY_MAP };
 
 })();
