@@ -87,6 +87,51 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 }
 
 // ---------------------------------------------------------------------------
+// 1c. USAGE_FEE VP-escape (2026-08-27, per user request: "すべての資源がなく支払いができないときは 足りな
+//     い1Kにつき-1VPされて支払いにあてる ただし1Aでも資源があるときはできない"): a player with literally
+//     none of K/A/B/C/Z can still end their turn despite an unpayable fee -- the shortfall comes out of
+//     VP instead, 1 VP per missing 1K, and the map owner still gets the fee's full amount.
+// ---------------------------------------------------------------------------
+{
+  const state = freshState();
+  state.maps['MAP001'] = createMapState('MAP001', 'AREA001A');
+  const player = getPlayerRef(state, 'P1');
+  player.resources.VP = 5;
+  player.pendingFee = { mapId: 'MAP001', amount: 2 };
+  check('canEndTurn is OK despite the unpayable fee, since every convertible resource is genuinely 0', executor.canEndTurn(state, index, 'P1').ok, true);
+  executor.applyTurnEnd(state, index, 'P1');
+  check('...K stays at 0 (nothing to pay from)', getPlayerRef(state, 'P1').resources.K || 0, 0);
+  check('...VP dropped by the full 2K shortfall (5-2=3)', getPlayerRef(state, 'P1').resources.VP, 3);
+  check('...the map owner still gets the fee\'s full amount', state.maps['MAP001'].accumulatedFee, 2);
+  check('...pendingFee cleared', getPlayerRef(state, 'P1').pendingFee, null);
+}
+{
+  // Control: even a single unit of ANY convertible resource (here just 1A, nowhere near enough to cover
+  // a 2K fee on its own) keeps the normal block in place -- the VP-escape is only for genuinely zero.
+  const state = freshState();
+  state.maps['MAP001'] = createMapState('MAP001', 'AREA001A');
+  const player = getPlayerRef(state, 'P1');
+  player.resources.A = 1;
+  player.pendingFee = { mapId: 'MAP001', amount: 2 };
+  const result = executor.canEndTurn(state, index, 'P1');
+  check('canEndTurn still blocks when the player holds even 1A (not genuinely resourceless)', result.ok, false);
+  check('...citing the USAGE_FEE violation', result.violations, [{ type: 'USAGE_FEE', mapId: 'MAP001', amount: 2 }]);
+}
+{
+  // Control: a fully-payable fee is completely unaffected by any of this (paid from K as always, no VP
+  // touched).
+  const state = freshState();
+  state.maps['MAP001'] = createMapState('MAP001', 'AREA001A');
+  const player = getPlayerRef(state, 'P1');
+  player.resources.K = 5;
+  player.resources.VP = 5;
+  player.pendingFee = { mapId: 'MAP001', amount: 2 };
+  executor.applyTurnEnd(state, index, 'P1');
+  check('A fully-payable fee is unaffected: K pays it in full (5-2=3)', getPlayerRef(state, 'P1').resources.K, 3);
+  check('...VP untouched', getPlayerRef(state, 'P1').resources.VP, 5);
+}
+
+// ---------------------------------------------------------------------------
 // 2. CON005A: PASSIVE=REPLACE_ADD(D,wD) forces ADD(D) -> ADD(wD)
 // ---------------------------------------------------------------------------
 {

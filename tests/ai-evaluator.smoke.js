@@ -236,12 +236,16 @@ function stateWithM012InShop(round) {
 }
 {
   // Unpaid, currently-unaffordable USAGE_FEE also blocks canEndTurn (executor.canEndTurn checks both) --
-  // confirms the penalty isn't hardcoded to RESOURCE_TOTAL_LIMIT specifically.
+  // confirms the penalty isn't hardcoded to RESOURCE_TOTAL_LIMIT specifically. p1.resources.A=1 (2026-08-27:
+  // genuinely zero of every convertible resource now escapes the block entirely via a VP deduction
+  // instead -- see executor.canEndTurn's own doc -- so this needs at least one, still-insufficient unit
+  // to keep demonstrating a real lockout).
   const state = freshState(1);
   const p1 = state.players[0];
   p1.pendingFee = { mapId: 'MAP001', amount: 2 };
   p1.resources.K = 0; // can't cover the 2K fee
-  check('An unpayable pending USAGE_FEE also triggers the lockout penalty', evaluator.score(state, 'P1'), -1000);
+  p1.resources.A = 1; // present but insufficient -- doesn't trigger the VP-escape
+  check('An unpayable pending USAGE_FEE also triggers the lockout penalty', evaluator.score(state, 'P1'), -1000 + 1 * 5);
 }
 
 // ---------------------------------------------------------------------------

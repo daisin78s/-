@@ -1309,8 +1309,17 @@ function canEndTurn(state, index, playerId) {
       if (total > cmd.limit) violations.push(cmd);
     }
   }
+  // USAGE_FEE VP-escape (2026-08-27, per user request: "すべての資源がなく支払いができないときは 足りない
+  // 1Kにつき-1VPされて支払いにあてる ただし1Aでも資源があるときはできない"): only when the player holds
+  // literally none of K/A/B/C/Z -- the same "convertible resources" set board.canAffordFee already checks
+  // -- does an unpayable fee stop blocking TURNEND; even a single unit of any of them (even if genuinely
+  // insufficient to cover the whole fee) means the normal block still applies, matching the user's own
+  // stated boundary. See applyTurnEnd's own doc for how the shortfall actually gets paid via VP instead.
   if (player.pendingFee && (player.resources.K || 0) < player.pendingFee.amount) {
-    violations.push({ type: 'USAGE_FEE', ...player.pendingFee });
+    const hasAnyConvertibleResource = ['K', 'A', 'B', 'C', 'Z'].some((r) => (player.resources[r] || 0) > 0);
+    if (hasAnyConvertibleResource) {
+      violations.push({ type: 'USAGE_FEE', ...player.pendingFee });
+    }
   }
   if (state.pendingChoices.some((c) => c.playerId === playerId && c.kind === 'UNTAP_CHOICE')) {
     violations.push({ type: 'UNTAP_CHOICE' });
@@ -1329,10 +1338,17 @@ function applyTurnEnd(state, index, playerId) {
   // instead spends 2K toward the fee (10-2=8K), and only then discards down to the cap (8-1=7K final) --
   // 2K less needlessly lost to the discard. canEndTurn() already guaranteed affordability before this
   // ever runs, so this is just the mutation half of that gate-then-mutate pair (same contract as
-  // RESOURCE_TOTAL_LIMIT/RESOURCE_LIMIT below).
+  // RESOURCE_TOTAL_LIMIT/RESOURCE_LIMIT below) -- EXCEPT the USAGE_FEE VP-escape case (2026-08-27, see
+  // canEndTurn's own doc): canEndTurn can now let TURNEND through even with K short of the fee, when the
+  // player holds none of K/A/B/C/Z at all. Whatever K is missing is paid via VP instead (1 VP per missing
+  // 1K, per user spec) -- the map's owner still gets the fee's full amount either way.
   if (player.pendingFee) {
-    player.resources.K -= player.pendingFee.amount;
-    state.maps[player.pendingFee.mapId].accumulatedFee += player.pendingFee.amount;
+    const amount = player.pendingFee.amount;
+    const paidFromK = Math.min(amount, player.resources.K || 0);
+    const shortfall = amount - paidFromK;
+    player.resources.K -= paidFromK;
+    if (shortfall > 0) player.resources.VP = (player.resources.VP || 0) - shortfall;
+    state.maps[player.pendingFee.mapId].accumulatedFee += amount;
     player.pendingFee = null;
     player.lockedK = 0;
   }
