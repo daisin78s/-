@@ -137,6 +137,30 @@ function driveOnboarding(state, index, playerId, evaluator) {
   resolveUntapChoiceIfPending(state, playerId);
 }
 
+/** "AI LV4" counterpart of driveOnboarding (2026-08-27) -- same shape (JOB draft, JOB010 replacement,
+ * CON face, receiveInitialResources, UNTAP_CHOICE cleanup), but JOB/CON face come from
+ * smart-onboarding.js's pickJob/pickConFace (reachability-based, see that file's own doc) instead of a
+ * uniform random pick. JOB010's own PICK_JOB_REPLACEMENT choice stays random even here -- no user spec
+ * covers it, and it's a rare, JOB010-specific edge case unrelated to the JOB/CON pick this function
+ * otherwise targets. */
+function driveSmartOnboarding(state, index, playerId, synergyTable2, moveGenerator, simulator) {
+  const { pickJob, pickConFace } = require('./smart-onboarding');
+  const jobFaceId = pickJob(state, index, playerId, synergyTable2, moveGenerator, simulator, state.rng);
+  setup.chooseJob(state, index, playerId, jobFaceId);
+
+  const jobReplacementChoice = state.pendingChoices.find((c) => c.playerId === playerId && c.kind === 'PICK_JOB_REPLACEMENT');
+  if (jobReplacementChoice) {
+    const picked = jobReplacementChoice.context.candidates[Math.floor(rng.next(state.rng) * jobReplacementChoice.context.candidates.length)];
+    setup.resolveJobReplacementChoice(state, index, playerId, picked);
+  }
+
+  const face = pickConFace(state, index, playerId, jobFaceId, synergyTable2, state.rng);
+  setup.chooseConFace(state, index, playerId, face);
+
+  setup.receiveInitialResources(state, index, playerId);
+  resolveUntapChoiceIfPending(state, playerId);
+}
+
 /** Drives playerId through their entire current turn (repeated AIPlayer.selectMove + apply, until
  * END_TURN or no legal moves) -- mutates `state` in place, one real move at a time, same as a human
  * clicking through the UI. Returns the moves actually taken (for history logging -- e.g. the caller
@@ -497,9 +521,13 @@ function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorO
  * @param {Function} [resourceCardPicker] - passed straight through to setupGame (see its own doc) --
  *   e.g. smart-onboarding.js#pickResourceCards for "AI LV4". Omitted by every caller that hasn't opted
  *   into smart onboarding yet, which keeps the original random resource-card pick.
+ * @param {Object} [synergyTable2] - game.xlsx's 評価値_2 sheet (see con-job-synergy.js's
+ *   buildConJobSynergyTable). When provided, JOB draft + CON face choice use
+ *   driveSmartOnboarding/smart-onboarding.js's pickJob/pickConFace instead of driveOnboarding's uniform
+ *   random pick -- "AI LV4"'s own JOB/CON selection. Omitted by every caller that hasn't opted in yet.
  * @returns {{state: GameState, scoreByPlayerId: Object<string,number>, rankByPlayerId: Object<string,number>}}
  */
-function playGameForFitness(seed, playerNames, index, evaluatorByPlayerId, moveGenerator, resourceCardPicker) {
+function playGameForFitness(seed, playerNames, index, evaluatorByPlayerId, moveGenerator, resourceCardPicker, synergyTable2) {
   const { Simulator } = require('./simulator');
   const { AIPlayer } = require('./ai-player');
   const { MoveGenerator } = require('./move-generator');
@@ -533,7 +561,11 @@ function playGameForFitness(seed, playerNames, index, evaluatorByPlayerId, moveG
       continue;
     }
     if (next.type === 'ONBOARDING_NEEDED') {
-      driveOnboarding(state, index, next.playerId, null);
+      if (synergyTable2) {
+        driveSmartOnboarding(state, index, next.playerId, synergyTable2, sharedMoveGenerator, simulator);
+      } else {
+        driveOnboarding(state, index, next.playerId, null);
+      }
       continue;
     }
     const roundBeforeTurn = state.round;
@@ -561,6 +593,6 @@ function playGameForFitness(seed, playerNames, index, evaluatorByPlayerId, moveG
   return { state, scoreByPlayerId, rankByPlayerId, qstScoreByPlayerId };
 }
 
-module.exports = { setupGame, driveOnboarding, driveTurn, playGame, playGameForFitness, AREA_CARD_BY_MAP };
+module.exports = { setupGame, driveOnboarding, driveSmartOnboarding, driveTurn, playGame, playGameForFitness, AREA_CARD_BY_MAP };
 
 })();

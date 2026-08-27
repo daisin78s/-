@@ -53,6 +53,9 @@ const { randomGenome, mutateGenome } = require('../src/ai/ga');
 const { RandomEvaluator } = require('../src/ai/random-evaluator');
 const { Evaluator } = require('../src/ai/evaluator');
 const { playGameForFitness } = require('../src/ai/game-runner');
+const { buildResourceSynergyTable } = require('../src/ai/resource-card-synergy');
+const { buildConJobSynergyTable } = require('../src/ai/con-job-synergy');
+const { pickResourceCards } = require('../src/ai/smart-onboarding');
 const rng = require('../src/rng');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
@@ -99,8 +102,11 @@ function loadResumePopulation(resumeFromDir) {
 
 /** Plays enough games (population shuffled into groups of 4, repeated gamesPerIndividual times) that
  * every individual in `population` (an array of genomes) gets exactly gamesPerIndividual games, and
- * returns each individual's {avgRank, avgScore, gamesPlayed} by its index into `population`. */
-function evaluatePopulationFitness(population, index, runRng, gamesPerIndividual, runId, generationLabel) {
+ * returns each individual's {avgRank, avgScore, gamesPlayed} by its index into `population`.
+ * resourceCardPicker/synergyTable2 (2026-08-27, "AI LV4"'s own smart onboarding, see
+ * smart-onboarding.js's own doc) are passed straight through to playGameForFitness so every training
+ * game already uses the same JOB/CON/resource-card selection LV4 actually plays with. */
+function evaluatePopulationFitness(population, index, runRng, gamesPerIndividual, runId, generationLabel, resourceCardPicker, synergyTable2) {
   const rankSumByIndex = new Array(population.length).fill(0);
   const scoreSumByIndex = new Array(population.length).fill(0);
   const gamesPlayedByIndex = new Array(population.length).fill(0);
@@ -115,7 +121,7 @@ function evaluatePopulationFitness(population, index, runRng, gamesPerIndividual
       seatIndices.forEach((idx, seat) => { evaluatorByPlayerId[`P${seat + 1}`] = evaluators[idx]; });
       const seed = `ga-${runId}-${generationLabel}-${gameCount}`;
       gameCount++;
-      const { rankByPlayerId, scoreByPlayerId } = playGameForFitness(seed, PLAYER_NAMES, index, evaluatorByPlayerId);
+      const { rankByPlayerId, scoreByPlayerId } = playGameForFitness(seed, PLAYER_NAMES, index, evaluatorByPlayerId, undefined, resourceCardPicker, synergyTable2);
       seatIndices.forEach((idx, seat) => {
         const playerId = `P${seat + 1}`;
         rankSumByIndex[idx] += rankByPlayerId[playerId];
@@ -157,6 +163,14 @@ function main() {
   const index = buildDataIndex(raw);
   const ids = Object.keys(buildEvalTable(raw)[1]);
 
+  // "AI LV4" smart onboarding (2026-08-27/28, see smart-onboarding.js's own doc) -- every training game
+  // from here on picks resource cards/JOB/CON the same way LV4 actually plays, not randomly. Generation
+  // 0's own baseline (measureBaseline) deliberately stays fully random (RandomEvaluator's whole point is
+  // zero knowledge), so these are never passed there.
+  const synergyTable3 = buildResourceSynergyTable(raw);
+  const synergyTable2 = buildConJobSynergyTable(raw);
+  const resourceCardPicker = (candidateIds, state, idx, player) => pickResourceCards(candidateIds, state, idx, synergyTable3, player.conPhysicalId);
+
   const runId = Date.now();
   const runRng = rng.createRng(`ga-run-${runId}`);
 
@@ -180,7 +194,7 @@ function main() {
 
   for (let gen = startGeneration + 1; gen <= finalGeneration; gen++) {
     const t0 = Date.now();
-    const fitness = evaluatePopulationFitness(population, index, runRng, gamesPerIndividual, runId, gen);
+    const fitness = evaluatePopulationFitness(population, index, runRng, gamesPerIndividual, runId, gen, resourceCardPicker, synergyTable2);
     const ranked = fitness
       .map((f, i) => ({ ...f, genome: population[i] }))
       .sort((a, b) => a.avgRank - b.avgRank);

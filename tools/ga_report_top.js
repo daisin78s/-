@@ -28,6 +28,9 @@ const path = require('path');
 const { loadGameData, buildDataIndex } = require('../src/data-loader');
 const { Evaluator } = require('../src/ai/evaluator');
 const { playGameForFitness } = require('../src/ai/game-runner');
+const { buildResourceSynergyTable } = require('../src/ai/resource-card-synergy');
+const { buildConJobSynergyTable } = require('../src/ai/con-job-synergy');
+const { pickResourceCards } = require('../src/ai/smart-onboarding');
 const rng = require('../src/rng');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
@@ -66,6 +69,12 @@ function main() {
   const index = buildDataIndex(raw);
   const evaluators = top.map((entry) => new Evaluator(index, entry.genome));
 
+  // "AI LV4" smart onboarding (2026-08-27/28) -- re-measures under the same resource-card/JOB/CON
+  // selection LV4 actually trains and plays with, not a random one.
+  const synergyTable3 = buildResourceSynergyTable(raw);
+  const synergyTable2 = buildConJobSynergyTable(raw);
+  const resourceCardPicker = (candidateIds, state, idx, player) => pickResourceCards(candidateIds, state, idx, synergyTable3, player.conPhysicalId);
+
   const scoreSums = new Array(top.length).fill(0);
   const qstScoreSums = new Array(top.length).fill(0);
   const gamesPlayed = new Array(top.length).fill(0);
@@ -80,7 +89,7 @@ function main() {
       seatIndices.forEach((idx, seat) => { evaluatorByPlayerId[`P${seat + 1}`] = evaluators[idx]; });
       const seed = `ga-report-${gameCount}`;
       gameCount++;
-      const { scoreByPlayerId, qstScoreByPlayerId } = playGameForFitness(seed, PLAYER_NAMES, index, evaluatorByPlayerId);
+      const { scoreByPlayerId, qstScoreByPlayerId } = playGameForFitness(seed, PLAYER_NAMES, index, evaluatorByPlayerId, undefined, resourceCardPicker, synergyTable2);
       seatIndices.forEach((idx, seat) => {
         const playerId = `P${seat + 1}`;
         scoreSums[idx] += scoreByPlayerId[playerId];
