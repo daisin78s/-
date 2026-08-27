@@ -22,6 +22,7 @@ const { getCardRow, getQstRow } = require('../data-loader');
 const { lowerCostList, lowerProgram } = require('../command-builder');
 const { parse } = require('../dsl-parser');
 const executor = require('../executor');
+const board = require('../board');
 const qst = require('../qst');
 const { evalValue } = require('./eval-table');
 
@@ -211,6 +212,37 @@ class Evaluator {
           total -= v(faceId) + vp * v('VP');
         }
       }
+    }
+
+    // SHOP201-203 next-round availability credit (2026-08-27, per user report: "新しく2R 3R 4Rから獲得
+    // できるカードができた AIはラウンド終了までよむため ラウンド終了時で資源を使い切ってしまうため 新し
+    // いカードを獲得することができない" -- since the AI's own lookahead never sees past the current
+    // round, it has no reason to hold resources back for a card that only becomes purchasable next round
+    // (see board.specialShopMinRound's own doc on the round-gating -- such a card can already be sitting
+    // visibly in a SPECIAL shop slot well before its own round arrives), so it always prefers spending
+    // everything on whatever's reachable THIS round instead. Confirmed simplification with the user:
+    // no need to actually verify the build would succeed next round (BZ discounts, exact affordability
+    // enumeration, real dice/turn-order timing, etc.) -- a plain COST-vs-currently-held-resources check
+    // is enough, credited the same value an OWNED card would get NEXT round (v(faceId)+VP*v('VP')
+    // evaluated at round+1, not the current round -- these cards' own 評価値 entries are deliberately
+    // blank/0 before their own round arrives, per eval-table.js's own doc, so reading them at the
+    // current round would always credit 0), so holding onto those resources scores at least as well as
+    // spending them on a lesser immediate option. Only the single best such candidate is credited, not
+    // summed across every affordable slot at once -- the same resources can't buy more than one.
+    if (state.shops && state.shops.SPECIAL) {
+      let bestNextRoundCredit = 0;
+      for (const faceId of Object.values(state.shops.SPECIAL.slots)) {
+        if (!faceId) continue;
+        if (board.specialShopMinRound(faceId) !== round + 1) continue;
+        const row = getCardRow(this.index, faceId);
+        const costItems = lowerCostList(row.COST);
+        const affordable = costItems.every((item) => (player.resources[item.resource] || 0) >= item.count);
+        if (!affordable) continue;
+        const vp = typeof row.VP === 'number' ? row.VP : 0;
+        const nextRoundValue = evalValue(this.evalTable, round + 1, faceId) + vp * evalValue(this.evalTable, round + 1, 'VP');
+        bestNextRoundCredit = Math.max(bestNextRoundCredit, nextRoundValue);
+      }
+      total += bestNextRoundCredit;
     }
 
     return total;
