@@ -1552,11 +1552,15 @@ function grantLandlordBonusIfEarned(state, index, context, mapId, alreadyHadOwnC
 
 /** The minimum round a SHOP201-203 (SPECIAL) card becomes purchasable, derived from its own ID's number
  * (2026-08-24 rework, per user spec): wave 1 (200-299, A201/A202 families) from round 2, wave 2 (300-399,
- * A301 family, the former A008/B008/C008) from round 3, wave 3 (400+, M401-403) from round 4. This is
- * separate from *visibility* -- a card can already be sitting in a slot (see setup.prepareShops' own doc
- * on the concatenated-drawPile reveal) well before its own round arrives; getBuildCandidates uses this to
- * keep it out of the buildable candidate list until then, and main.js uses the exported copy of this same
- * function to show it with a locked overlay in the meantime. Exported for that reason. */
+ * A301 family, the former A008/B008/C008) from round 3. The >=400 (M401-403) branch is unreachable in
+ * practice as of 2026-08-28 -- those moved to the M shop's own drawPile instead (see setup.prepareShops'
+ * own doc), no longer ever appearing in SPECIAL at all -- left in place only because a faceId this
+ * function has never seen before still needs SOME defined answer, not because 400+ is a real "wave 3"
+ * any more. This is separate from *visibility* -- a card can already be sitting in a slot (see
+ * setup.prepareShops' own doc on the concatenated-drawPile reveal) well before its own round arrives;
+ * getBuildCandidates uses this to keep it out of the buildable candidate list until then, and main.js
+ * uses the exported copy of this same function to show it with a locked overlay in the meantime.
+ * Exported for that reason. */
 function specialShopMinRound(faceId) {
   const num = Number(splitCardId(faceId).physicalId.replace(/^[A-Z]+/, ''));
   if (num < 300) return 2;
@@ -1754,25 +1758,6 @@ function restockShop(state, shopKey) {
   }
 }
 
-/** Called once at the start of round 4 (from turn-flow.startRound), per user spec: "4R開始時に
- * モニュメント以外のカードはすべて捨て札にしてモニュメント３枚が出てくるようにして". SHOP201-203's wave
- * 3 is exactly the 3 monuments M401-403 (specialShopMinRound returns 4 only for those), so this discards
- * any wave1/2 card still occupying a slot (there's no discard-pile bookkeeping for shop cards anywhere in
- * this codebase -- see setup.js's own top-of-file doc -- so "discard" here just means clearing the slot,
- * same as an ordinary purchase does) and purges the draw pile of any remaining wave1/2 ids the same way,
- * then reuses restockShop's own compact+refill to pull the 3 now-unblocked monuments into the freshly-
- * emptied slots. Idempotent -- harmless if the shop already happened to be all-monuments already (possible
- * if every wave1/2 card sold out early: wave 3 would already be visible-but-locked in some slots by then). */
-function forceSpecialShopMonumentsAtRound4(state) {
-  const shop = state.shops.SPECIAL;
-  for (const slotId of Object.keys(shop.slots)) {
-    const faceId = shop.slots[slotId];
-    if (faceId !== null && specialShopMinRound(faceId) < 4) shop.slots[slotId] = null;
-  }
-  shop.drawPile = shop.drawPile.filter((faceId) => specialShopMinRound(faceId) === 4);
-  restockShop(state, 'SPECIAL');
-}
-
 module.exports = {
   CASTLE_MAP_ID,
   AREA009_MAP_ID,
@@ -1799,7 +1784,6 @@ module.exports = {
   resolveBuild,
   restockShop,
   compactShop,
-  forceSpecialShopMonumentsAtRound4,
 };
 
 })();

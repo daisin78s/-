@@ -130,11 +130,19 @@ function fillShopSlots(shopDeck) {
  * argument and sees identical behavior to before.
  */
 function prepareShops(state, index, preferredNormalFaceIds) {
-  // M401-403 (SHOP201-203's own wave-3 monuments, see the SPECIAL block below) are excluded from the
-  // regular SHOP001-006 pool -- they only ever surface via the SPECIAL shop's wave progression.
+  // M401-403 moved here from SHOP201-203's own wave-3 (2026-08-28, per user request: "SHOP006が空に
+  // なったら[M401-403が]出てくる" -- SHOP201-203 no longer force-clears to monuments at round 4 either,
+  // see board.js's own removed forceSpecialShopMonumentsAtRound4). Concatenated AFTER the original 15
+  // (M001-M012), same "one drawPile, FIFO restock reveals the next wave once the previous one's gone"
+  // trick SHOP201-203's own wave1->wave2 progression already used -- so M401-403 only ever surface once
+  // the original 15 are fully sold, and (unlike their old SHOP201-203 life) carry no round-purchase gate
+  // at all, same as M001-M012 (board.getBuildCandidates' round check only ever applies to shopKey
+  // 'SPECIAL', never 'M').
   const monumentIds = index.raw.M.map((r) => r.ID).filter((id) => Number(id.slice(1)) < 400);
-  registerCardPool(state, monumentIds);
-  state.shops.M = createShopDeck(shuffle(state.rng, monumentIds), MONUMENT_SHOP_SLOT_IDS);
+  const extraMonumentIds = index.raw.M.map((r) => r.ID).filter((id) => Number(id.slice(1)) >= 400);
+  registerCardPool(state, [...monumentIds, ...extraMonumentIds]);
+  const monumentDrawPile = [...shuffle(state.rng, monumentIds), ...shuffle(state.rng, extraMonumentIds)];
+  state.shops.M = createShopDeck(monumentDrawPile, MONUMENT_SHOP_SLOT_IDS);
   fillShopSlots(state.shops.M);
 
   const normalIds = collectNormalShopFaceIds(index);
@@ -148,24 +156,23 @@ function prepareShops(state, index, preferredNormalFaceIds) {
   state.shops.NORMAL = createShopDeck(normalOrder, NORMAL_SHOP_SLOT_IDS);
   fillShopSlots(state.shops.NORMAL);
 
-  // SHOP201-203 (2026-08-24 rework, per user spec): 3 waves, each visible only once the previous one's
+  // SHOP201-203 (2026-08-24 rework, per user spec): 2 waves now (2026-08-28: wave 3/M401-403 moved to
+  // the M shop above -- see this function's own top doc), each visible only once the previous one's
   // cards are gone -- but this needs no dedicated "wave" bookkeeping at all. Concatenating each wave's
-  // own independently-shuffled ids into ONE drawPile (wave 1 first, then wave 2, then wave 3) and letting
-  // the ordinary FIFO restock (fillShopSlots/board.restockShop, unchanged) draw from its front reproduces
-  // the exact desired reveal curve for free: with 3 slots and a 6-card wave 1, the pile's own front runs
-  // out of wave-1 ids right as wave 1's own last 3 unsold copies are sitting one in each slot, so the
-  // first wave-2 id gets drawn into a slot exactly when wave 1 has 2 left, the second when 1 is left, and
-  // the third once wave 1 is fully gone (confirmed by hand-simulating a full buyout sequence). Visible
-  // from the very start (fillShopSlots runs immediately, no ROUND_MIN gate any more) -- see
-  // board.specialShopMinRound for the separate purchase-round gate (2R/3R/4R) that still applies on top.
+  // own independently-shuffled ids into ONE drawPile (wave 1 first, then wave 2) and letting the ordinary
+  // FIFO restock (fillShopSlots/board.restockShop, unchanged) draw from its front reproduces the exact
+  // desired reveal curve for free: with 3 slots and a 6-card wave 1, the pile's own front runs out of
+  // wave-1 ids right as wave 1's own last 3 unsold copies are sitting one in each slot, so the first
+  // wave-2 id gets drawn into a slot exactly when wave 1 has 2 left, the second when 1 is left, and the
+  // third once wave 1 is fully gone (confirmed by hand-simulating a full buyout sequence). Visible from
+  // the very start (fillShopSlots runs immediately, no ROUND_MIN gate any more) -- see
+  // board.specialShopMinRound for the separate purchase-round gate (2R/3R) that still applies on top.
   const wave1Ids = collectSpecialShopWaveIds(index, 200, 299);
   const wave2Ids = collectSpecialShopWaveIds(index, 300, 399);
-  const wave3Ids = index.raw.M.map((r) => r.ID).filter((id) => Number(id.slice(1)) >= 400);
-  registerCardPool(state, [...wave1Ids, ...wave2Ids, ...wave3Ids]);
+  registerCardPool(state, [...wave1Ids, ...wave2Ids]);
   const specialDrawPile = [
     ...shuffle(state.rng, wave1Ids),
     ...shuffle(state.rng, wave2Ids),
-    ...shuffle(state.rng, wave3Ids),
   ];
   state.shops.SPECIAL = createShopDeck(specialDrawPile, SPECIAL_SHOP_SLOT_IDS);
   fillShopSlots(state.shops.SPECIAL);

@@ -49,13 +49,16 @@ check('MAP003 starts at AREA003A (2 numbered + 1 ANY slot)', state.maps['MAP003'
 check('MAP008 (castle) starts with 6 ANY slots', state.maps['MAP008'].slots.length, 6);
 
 check('Monument shop has 6 slots filled', Object.values(state.shops.M.slots).filter(Boolean).length, 6);
-check('Monument shop draw pile has 6 left (12 base monuments - 6 shown, M401-403 excluded)', state.shops.M.drawPile.length, 6);
+// M401-403 moved from SHOP201-203's own wave-3 into the M shop's own drawPile (2026-08-28, per user
+// request -- see setup.prepareShops' own doc) -- 12 base monuments + 3 extra (M401-403), 6 shown.
+check('Monument shop draw pile has 9 left (12 base + 3 extra (M401-403) - 6 shown)', state.shops.M.drawPile.length, 9);
 check('Normal shop has 6 slots filled', Object.values(state.shops.NORMAL.slots).filter(Boolean).length, 6);
 check('Normal shop draw pile has 12 left (18 - 6 shown)', state.shops.NORMAL.drawPile.length, 12);
 // SHOP201-203 (2026-08-24 rework): visible from setup itself, no round-2 reveal step any more -- see
-// setup.prepareShops' own doc on the 3-wave concatenated drawPile.
+// setup.prepareShops' own doc on the wave concatenated drawPile. Only 2 waves now (2026-08-28: wave 3/
+// M401-403 moved to the M shop above).
 check('Special shop IS already visible at setup (wave 1)', Object.values(state.shops.SPECIAL.slots).filter(Boolean).length, 3);
-check('...its drawPile holds the other 9 (3 wave-1 + 3 wave-2 + 3 wave-3, waiting behind wave 1)', state.shops.SPECIAL.drawPile.length, 9);
+check('...its drawPile holds the other 6 (3 wave-1 + 3 wave-2, waiting behind wave 1)', state.shops.SPECIAL.drawPile.length, 6);
 
 const allShopFaceIds = [
   ...Object.values(state.shops.M.slots),

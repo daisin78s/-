@@ -33,7 +33,7 @@
 
 const { rollDie } = require('./rng');
 const { getAreaRow, getCardRow } = require('./data-loader');
-const { getSlotRequirements, restockShop, CASTLE_MAP_ID, forceSpecialShopMonumentsAtRound4 } = require('./board');
+const { getSlotRequirements, restockShop, CASTLE_MAP_ID } = require('./board');
 const { recordCheckpoint } = require('./undo');
 const setup = require('./setup');
 // Named executorApi, not executor, just to disambiguate from board.js's own `const executor` at a
@@ -66,14 +66,14 @@ function rerollDiceForNextRound(state) {
  * 2 -- setup.prepareShops now fills it from the very start, see its own doc; only *purchasing* from it
  * stays round-gated, per board.specialShopMinRound, checked at build-candidate time instead.)
  *
- * Round 4 also force-clears SHOP201-203 down to just its 3 monuments (2026-08-25, per user spec: "4R
- * 開始時にモニュメント以外のカードはすべて捨て札にしてモニュメント３枚が出てくるようにして") -- see
- * board.forceSpecialShopMonumentsAtRound4's own doc.
+ * No longer force-clears SHOP201-203 at round 4 (2026-08-28, per user request reverting the 2026-08-25
+ * "4R開始時にモニュメント以外のカードはすべて捨て札にして..." behavior -- SHOP201-203 no longer holds any
+ * monuments at all now that M401-403 moved to the M shop's own drawPile, see setup.prepareShops' own
+ * doc, so there is nothing left to force-reveal here).
  */
 function startRound(state) {
   state.round += 1;
   state.phase = 'ROUND';
-  if (state.round === 4) forceSpecialShopMonumentsAtRound4(state);
   return state.round;
 }
 

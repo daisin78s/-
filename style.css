@@ -447,9 +447,13 @@ h1, h2, h3 { margin: 0; }
 
 /* Remaining-card-count badge, one per shop row (M/NORMAL/SPECIAL), sitting in the 7th grid column just
    right of that row's last slot (SHOP006/SHOP106/SHOP203 -- see renderShopGrid). Small and muted, same
-   visual weight as .shop-slot__req's own caption text. */
+   visual weight as .shop-slot__req's own caption text. Vertical (縦書き, 2026-08-28, per user request)
+   since the reserved column is narrow -- horizontal text would either wrap awkwardly or force the
+   column much wider than the badge itself needs. */
 .shop-remaining-count {
+  writing-mode: vertical-rl;
   align-self: center;
+  justify-self: center;
   font-size: 11px;
   color: var(--text-muted);
   white-space: nowrap;

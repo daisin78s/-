@@ -625,38 +625,54 @@ function giveDie(state, playerId, value) {
   }
 }
 {
-  // forceSpecialShopMonumentsAtRound4 (2026-08-25, per user spec: "4R開始時にモニュメント以外のカードは
-  // すべて捨て札にしてモニュメント３枚が出てくるようにして") -- the common case: wave 1/2 haven't sold
-  // out yet, so all 3 slots (and the whole remaining drawPile) still hold a mix of wave1/2/3 ids.
+  // M401-403 moved from SHOP201-203's own wave-3 into the M shop's own drawPile (2026-08-28, per user
+  // request: "SHOP006が空になったら[M401-403が]出てくる" -- reverting the 2026-08-25
+  // forceSpecialShopMonumentsAtRound4 behavior, since SHOP201-203 no longer holds any monuments to force
+  // at all). SHOP201-203 never contains an M401-403 id, at any point, drawPile included.
   const state = freshStateWithShops();
   const waveNum = (faceId) => Number(faceId.replace(/\D/g, ''));
-  const isMonument = (faceId) => faceId && waveNum(faceId) >= 400;
-  check('Before: not yet all-monuments (wave 1/2 still dominates)', Object.values(state.shops.SPECIAL.slots).every(isMonument), false);
-  board.forceSpecialShopMonumentsAtRound4(state);
-  const slotFaceIds = Object.values(state.shops.SPECIAL.slots);
-  check('After: all 3 slots hold a monument', slotFaceIds.every(isMonument), true);
-  check('...specifically all 3 of M401/M402/M403, each exactly once', [...slotFaceIds].sort(), ['M401', 'M402', 'M403']);
-  check('...the draw pile is now empty (only ever had 3 monuments left to give)', state.shops.SPECIAL.drawPile.length, 0);
+  const isExtraMonument = (faceId) => faceId && waveNum(faceId) >= 400;
+  check('SHOP201-203 never holds an M401-403 id (slots)', Object.values(state.shops.SPECIAL.slots).some(isExtraMonument), false);
+  check('...nor in its drawPile', state.shops.SPECIAL.drawPile.some(isExtraMonument), false);
 }
 {
-  // Idempotent, and correct even when wave 1/2 already fully sold out early (monuments already visible,
-  // possibly still locked, before round 4 ever arrives) -- calling it again changes nothing.
+  // The M shop (SHOP001-006) reveals M401-403 only once the original 12 (M001-012) are fully sold --
+  // same "one concatenated drawPile, FIFO restock reveals the next wave" mechanic SHOP201-203's own
+  // wave1->wave2 progression uses, just applied to M001-012 (12, "wave 1") -> M401-403 (3, "wave 2")
+  // across 6 slots instead of 3.
   const state = freshStateWithShops();
-  board.forceSpecialShopMonumentsAtRound4(state); // simulate "already all sold out by some earlier round"
-  const before = { ...state.shops.SPECIAL.slots };
-  board.forceSpecialShopMonumentsAtRound4(state);
-  check('Calling it again with the shop already all-monuments is a no-op', state.shops.SPECIAL.slots, before);
+  const waveNum = (faceId) => Number(faceId.replace(/\D/g, ''));
+  const isOriginal = (faceId) => faceId && waveNum(faceId) < 400 && waveNum(faceId) > 0;
+  const isExtra = (faceId) => faceId && waveNum(faceId) >= 400;
+  const countWave = (pred) => [...Object.values(state.shops.M.slots), ...state.shops.M.drawPile].filter(pred).length;
+  check('Starts with all 12 original monuments somewhere (6 shown + 6 in the pile), 0 extra visible', countWave(isOriginal), 12);
+  check('...and no M401-403 visible in a slot yet', Object.values(state.shops.M.slots).some(isExtra), false);
+
+  const buyOneSlot = (slotId) => {
+    state.shops.M.slots[slotId] = null;
+    board.restockShop(state, 'M');
+  };
+  // Expected extra-visible count at each step, indexed by original-remaining count (12..0) -- extras
+  // start entering slots once original-remaining drops below the slot count (6), same relationship
+  // SPECIAL's own wave1/wave2 test already established.
+  const expectedExtraVisibleByOriginalRemaining = { 12: 0, 11: 0, 10: 0, 9: 0, 8: 0, 7: 0, 6: 0, 5: 1, 4: 2, 3: 3, 2: 3, 1: 3, 0: 3 };
+  while (countWave(isOriginal) > 0) {
+    const originalSlot = Object.keys(state.shops.M.slots).find((id) => isOriginal(state.shops.M.slots[id]));
+    buyOneSlot(originalSlot);
+    const originalRemaining = countWave(isOriginal);
+    const extraVisible = Object.values(state.shops.M.slots).filter(isExtra).length;
+    check(`After original-monument remaining drops to ${originalRemaining}, M401-403 visible is ${expectedExtraVisibleByOriginalRemaining[originalRemaining]}`, extraVisible, expectedExtraVisibleByOriginalRemaining[originalRemaining]);
+  }
 }
 {
-  // turnFlow.startRound integration: reaching round 4 triggers this automatically, without the caller
-  // having to know about it.
+  // turnFlow.startRound no longer touches SHOP201-203 at all when reaching round 4 (2026-08-28 revert).
   const state = freshStateWithShops();
   const turnFlow = require('../src/turn-flow');
+  const before = { ...state.shops.SPECIAL.slots };
   state.round = 3;
   turnFlow.startRound(state);
-  check('startRound landing on round 4 auto-clears SHOP201-203 down to just the 3 monuments', state.round, 4);
-  const waveNum = (faceId) => Number(faceId.replace(/\D/g, ''));
-  check('...all 3 SPECIAL slots hold a monument', Object.values(state.shops.SPECIAL.slots).every((id) => id && waveNum(id) >= 400), true);
+  check('startRound landing on round 4 leaves SHOP201-203 untouched', state.round, 4);
+  check('...same slots as before', state.shops.SPECIAL.slots, before);
 }
 {
   // A hole at the far right (the common case: the rightmost occupied card is the one built) needs no
