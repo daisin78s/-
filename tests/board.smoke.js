@@ -1161,9 +1161,14 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   state.maps['MAP001'] = mapWithArea('MAP001', 'AREA001B', 3, 'P1');
   const die = giveDie(state, 'P2', 1); // SLOT1=1 (SLOT2 is ANY, but the numbered slot is preferred)
   board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP001', 0);
-  // AREA001B's own ACTION (ADD(5K)) just handed P2 5K -- zero it back out so this block actually tests
+  // AREA001B's own ACTION (ADD(6K)) just handed P2 6K -- zero it back out so this block actually tests
   // "can't afford the fee" rather than accidentally already being solvent from the area's own effect.
+  // A=1 (2026-08-27): present, not yet converted -- keeps this a genuine block rather than tripping the
+  // new USAGE_FEE VP-escape, which only applies when K/A/B/C/Z are ALL genuinely 0 (see
+  // executor.canEndTurn's own doc); raw K alone still gates TURNEND regardless of an unconverted A sitting
+  // there.
   player(state, 'P2').resources.K = 0;
+  player(state, 'P2').resources.A = 1;
 
   check('canEndTurn blocks P2 while unable to afford the 1K fee (K=0)', executor.canEndTurn(state, index, 'P2').ok, false);
   const violations = executor.canEndTurn(state, index, 'P2').violations;
@@ -1224,7 +1229,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   check('An unplaced wD no longer helps cover the fee -- placement is still refused as unaffordable', result, { success: false, reason: 'UNAFFORDABLE_USAGE_FEE', amount: 2 });
 }
 {
-  // AREA001B's own ACTION (ADD(5K)) trivially covers its own 1K fee -- confirms the check happens
+  // AREA001B's own ACTION (ADD(6K)) trivially covers its own 1K fee -- confirms the check happens
   // AFTER the area's own action resolves, not before (a pre-resolution-only check would have wrongly
   // refused this very common, perfectly safe case -- caught by this exact test while developing the fix).
   const state = freshStateWithShops();
@@ -1232,7 +1237,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   const die = giveDie(state, 'P2', 1); // SLOT1=1 (SLOT2 is ANY, but the numbered slot is preferred)
   const result = board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP001', 0);
   check('Placement succeeds when the AREA\'s own action grants enough to cover the fee, even from 0 starting K', result.success, true);
-  check('...P2 actually has the 5K from ADD(5K)', player(state, 'P2').resources.K, 5);
+  check('...P2 actually has the 6K from ADD(6K)', player(state, 'P2').resources.K, 6);
 }
 {
   // BARE_TAP is allowed even while a usage fee is owed (2026-08-10, per user request: "使用料の支払いが
@@ -1863,8 +1868,8 @@ function giveJob009(state, playerId) {
   check('開拓者: a 2nd placement on the same (no longer empty) AREA does not trigger again', p1.resources.K - beforeK2, 3);
 }
 {
-  // 2026-08-20 spec update: the trigger's own wording dropped "色ダイスを配置すること" for plain "ダイス
-  // を配置すること" ("wDでもOKになります") -- a wD placement on a fresh AREA now triggers the bonus too.
+  // 2026-08-27 spec revert: back to color-die-only (wD no longer qualifies) -- see
+  // grantPioneerBonusIfEarned's own doc.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   giveJob009(state, 'P1');
@@ -1873,7 +1878,7 @@ function giveJob009(state, playerId) {
   p1.dice.push(wDie);
   const beforeK = p1.resources.K || 0;
   board.placeDice(state, index, { playerId: 'P1' }, wDie.id, 'MAP001', 0);
-  check('開拓者: a white die (wD) on a fresh AREA now DOES trigger the bonus (3 AREA + 1 pioneer)', p1.resources.K - beforeK, 4);
+  check('開拓者: a white die (wD) on a fresh AREA does NOT trigger the bonus (just the AREA\'s own 3K)', p1.resources.K - beforeK, 3);
 }
 {
   const state = freshStateWithShops();
@@ -1944,12 +1949,10 @@ function giveJob009(state, playerId) {
   const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
   check('開拓者: group placement with different-valued dice succeeds', result.success, true);
   check('...grants both 1C (die value 4) and 1Z (die value 5), one per die', [p1.resources.C - beforeC, p1.resources.Z - beforeZ], [1, 1]);
-  const jobInst = state.cards[p1.jobCardId];
-  check('...only ONE tap transition for the whole group action', jobInst.tapped, true);
 }
 {
-  // 2026-08-20 spec update: a wD mixed into a group placement now grants its own resource too, same as
-  // any COLOR die in the group -- one entry per die regardless of kind.
+  // 2026-08-27 spec revert: a wD mixed into a group placement grants nothing -- only the COLOR die(s) in
+  // the group do.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   giveJob009(state, 'P1');
@@ -1964,8 +1967,8 @@ function giveJob009(state, playerId) {
   const beforeC = p1.resources.C || 0;
   const beforeVp = p1.resources.VP || 0;
   const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [wDie.id, d1.id], board.CASTLE_MAP_ID);
-  check('開拓者: wD in a group placement now DOES grant its own resource too', result.success, true);
-  check('...the COLOR die (value 4) grants C AND the wD (value 6) grants VP', [p1.resources.C - beforeC, p1.resources.VP - beforeVp], [1, 1]);
+  check('開拓者: wD in a group placement grants nothing', result.success, true);
+  check('...the COLOR die (value 4) grants C but the wD (value 6) grants no VP', [p1.resources.C - beforeC, p1.resources.VP - beforeVp], [1, 0]);
 }
 {
   // The same die-value mapping applies via placeWildcardDie too (JOB003's ☆ mechanic) -- a synthetic
@@ -2005,23 +2008,19 @@ function giveJob009(state, playerId) {
   executor.runProgram(state, index, { playerId: 'P1' }, getCardRow(index, 'A004A').ONCE);
   check('MAP001 is now AREA001B (a fresh, empty tier)', state.maps['MAP001'].currentAreaId, 'AREA001B');
 
-  // Trigger condition re-fires here (fresh empty AREA001B), but per the 2026-08-18 TAP mechanic the
-  // card is already tapped from d1's own trigger -- so this untaps it instead of granting again.
-  const jobInst = state.cards[p1.jobCardId];
-  check('開拓者 is tapped after its first trigger (d1)', jobInst.tapped, true);
-  const d3 = giveDie(state, 'P1', 1); // AREA001B SLOT1=1 (SLOT2 is ANY, but the numbered slot is preferred) -> AREA001B's own ADD(5K)
+  // Trigger condition re-fires here (fresh empty AREA001B) and grants again -- no TAP/untap gating any
+  // more (2026-08-27 revert), so this isn't a "used up" one-shot the way it briefly was.
+  const d3 = giveDie(state, 'P1', 1); // AREA001B SLOT1=1 (SLOT2 is ANY, but the numbered slot is preferred) -> AREA001B's own ADD(6K)
   const beforeThirdK = p1.resources.K;
   board.placeDice(state, index, { playerId: 'P1' }, d3.id, 'MAP001', 0);
-  check('開拓者: the trigger condition still re-fires after the LVUP...', p1.resources.K - beforeThirdK, 5);
-  check('...but grants nothing this time -- it just untaps itself since it was already tapped', jobInst.tapped, false);
+  // AREA001B.ACTION=ADD(6K) (2026-08-27 data edit, was ADD(5K)) + 1K from the pioneer bonus.
+  check('開拓者: the trigger condition re-fires after the LVUP and grants again (6 AREA + 1 pioneer)', p1.resources.K - beforeThirdK, 7);
 
-  // Now untapped again -- a 4th, unrelated fresh-empty-AREA placement (a different map entirely) grants
-  // normally once more, completing the full "grant+tap -> untap-only -> grant+tap -> ..." cycle.
+  // A 4th, unrelated fresh-empty-AREA placement (a different map entirely) grants normally too.
   const d4 = giveDie(state, 'P1', 4); // AREA002A (MAP002, still untouched) SLOT1=4 -> grants C
   const beforeC = p1.resources.C || 0;
   board.placeDice(state, index, { playerId: 'P1' }, d4.id, 'MAP002', 0);
-  check('開拓者: grants again on the next fresh-AREA trigger now that it\'s untapped', p1.resources.C - beforeC, 1);
-  check('...and taps itself again', jobInst.tapped, true);
+  check('開拓者: grants again on the next fresh-AREA trigger too (no per-turn/per-tap limit)', p1.resources.C - beforeC, 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -2130,7 +2129,7 @@ function withPatchedTap(physicalFaceId, tap, fn) {
 // 地主/JOB011 (2026-08-17, per user spec: "元老院以外のLVアップされたAREAにダイスを配置した時食料を得る
 // そのAREAに自分の色Dがすでにあるなら代わりに1VPを得る", confirmed with the user: 食料=K, and "すでに
 // ある" means a color die from an *earlier* placement action still sitting there). AREA001B ("小麦畑LV1")
-// is used as the "LVアップされた" (already-upgraded) test AREA -- its own ACTION is ADD(5K), always
+// is used as the "LVアップされた" (already-upgraded) test AREA -- its own ACTION is ADD(6K), always
 // added on top of whatever JOB011 itself grants, so every check below accounts for both sources.
 // ---------------------------------------------------------------------------
 {
@@ -2143,13 +2142,13 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   const beforeK = p1.resources.K || 0;
   const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
   check('地主: placement on an upgraded AREA succeeds normally', result.success, true);
-  check('...grants 5K (AREA001B\'s own ADD(5K)) + 1K (地主, no prior own color die here) = 6', p1.resources.K - beforeK, 6);
+  check('...grants 6K (AREA001B\'s own ADD(6K)) + 1K (地主, no prior own color die here) = 7', p1.resources.K - beforeK, 7);
   check('...no VP granted this time', p1.resources.VP || 0, 0);
 
   const d2 = giveDie(state, 'P1', 3); // AREA001B SLOT2=ANY -- P1 already has d1 sitting in SLOT1
   const beforeK2 = p1.resources.K;
   board.placeDice(state, index, { playerId: 'P1' }, d2.id, 'MAP001', 1);
-  check('...2nd placement still grants 5K (area) + 1K (地主, always) = 6', p1.resources.K - beforeK2, 6);
+  check('...2nd placement still grants 6K (area) + 1K (地主, always) = 7', p1.resources.K - beforeK2, 7);
   check('...and grants 1VP ADDITIONALLY (2026-08-20: changed from "instead of"), since P1 already had a color die here', p1.resources.VP, 1);
 }
 {
@@ -2185,7 +2184,7 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   state.maps['MAP001'].currentAreaId = 'AREA001B';
   const d1 = giveDie(state, 'P1', 1); // AREA001B SLOT1=1 (SLOT2 is ANY, but the numbered slot is preferred)
   board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
-  check('A player without 地主 gets only the AREA\'s own 5K, no bonus on top', p1.resources.K, 5);
+  check('A player without 地主 gets only the AREA\'s own 6K, no bonus on top', p1.resources.K, 6);
 }
 {
   // A white die placement still triggers the bonus -- JOB011's own text has no wD exclusion, unlike
@@ -2200,7 +2199,7 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   p1.dice.push(wd);
   const beforeK = p1.resources.K || 0;
   board.placeDice(state, index, { playerId: 'P1' }, wd.id, 'MAP001', 0);
-  check('地主: a white die placement still grants the bonus (5K area + 1K 地主)', p1.resources.K - beforeK, 6);
+  check('地主: a white die placement still grants the bonus (6K area + 1K 地主)', p1.resources.K - beforeK, 7);
 }
 
 // ---------------------------------------------------------------------------
