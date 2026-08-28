@@ -332,6 +332,38 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
 }
 
 // ---------------------------------------------------------------------------
+// forcedJob004ConversionMove (2026-08-28, per user request/experiment: "策士は3K以上あれば基本的に毎ターン
+// 使うでどうでしょうか") -- unconditional: forces CHANGE(3K,2Z) whenever the player owns an untapped
+// JOB004 with >=3K, with no build-outlet check at all (unlike forcedBzConversionMove above).
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const jobInst = createCardInstance('JOB004');
+  jobInst.ownerId = 'P1';
+  state.cards[jobInst.physicalId] = jobInst;
+  p1.ownedCardPhysicalIds.push(jobInst.physicalId);
+
+  p1.resources.K = 2;
+  check('forcedJob004ConversionMove is null with less than 3K', moveGenerator.forcedJob004ConversionMove(state, index, 'P1'), null);
+
+  p1.resources.K = 3;
+  check(
+    'forcedJob004ConversionMove forces the tap at exactly 3K, with no build outlet needed at all',
+    moveGenerator.forcedJob004ConversionMove(state, index, 'P1'),
+    { type: 'BARE_TAP', playerId: 'P1', physicalId: jobInst.physicalId }
+  );
+
+  jobInst.tapped = true;
+  check('forcedJob004ConversionMove is null once the card is already tapped', moveGenerator.forcedJob004ConversionMove(state, index, 'P1'), null);
+}
+{
+  const state = freshStateWithShops();
+  player(state, 'P1').resources.K = 10;
+  check('forcedJob004ConversionMove is null for a player who doesn\'t own JOB004 at all', moveGenerator.forcedJob004ConversionMove(state, index, 'P1'), null);
+}
+
+// ---------------------------------------------------------------------------
 // Regression (2026-08-06, per user feedback: "AIは建築しないときはJOB004をTAPしない（できない）"):
 // forcedBzConversionMove already declined to *force* JOB004's tap with no build outlet (previous
 // block), but #bareTapMoves still offered the same tap as a normal generateMoves candidate regardless

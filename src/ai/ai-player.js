@@ -113,6 +113,11 @@ class AIPlayer {
     // just another scored candidate.
     const forced = this.moveGenerator.forcedBzConversionMove(state, this.index, playerId, context);
     if (forced) return forced;
+    // Forced 策士/JOB004 conversion (2026-08-28, per user request/experiment) -- see
+    // MoveGenerator#forcedJob004ConversionMove's own doc for why this is a separate, simpler,
+    // unconditional mechanism rather than broadening forcedBzConversionMove above.
+    const forcedJob004 = this.moveGenerator.forcedJob004ConversionMove(state, this.index, playerId);
+    if (forcedJob004) return forcedJob004;
     const moves = this.moveGenerator.generateMoves(state, this.index, playerId, context);
     const scored = [];
     for (const move of moves) {
@@ -173,14 +178,17 @@ class AIPlayer {
 
   /** Plain 1-ply-greedy move choice, reusing the same generate+score+pick-best logic as
    * lookaheadExtraTurns:0's selectMove -- deliberately not recursive (that's the whole point of
-   * stopping branching once inside a rollout, see this class's own doc). Also checks the forced BZ
-   * conversion first, same as selectMove -- without this, a rollout simulating this player's own future
-   * turns would never account for it, making the lookahead inconsistent with how selectMove will
+   * stopping branching once inside a rollout, see this class's own doc). Also checks the forced BZ/JOB004
+   * conversions first, same as selectMove -- without this, a rollout simulating this player's own future
+   * turns would never account for them, making the lookahead inconsistent with how selectMove will
    * actually behave once that turn really arrives. */
   #greedyMove(state, playerId, hasPlacedDieThisTurn) {
     const context = { hasPlacedDieThisTurn };
     const forced = this.moveGenerator.forcedBzConversionMove(state, this.index, playerId, context);
     if (forced) return forced;
+    // Forced 策士/JOB004 conversion -- see selectMove's own matching comment.
+    const forcedJob004 = this.moveGenerator.forcedJob004ConversionMove(state, this.index, playerId);
+    if (forcedJob004) return forcedJob004;
     const moves = this.moveGenerator.generateMoves(state, this.index, playerId, context);
     let best = null;
     let bestScore = -Infinity;

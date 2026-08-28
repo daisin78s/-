@@ -522,6 +522,29 @@ class MoveGenerator {
     return null;
   }
 
+  /** 策士/JOB004 (2026-08-28, per user request/experiment: "策士は3K以上あれば基本的に毎ターン使うでどう
+   * でしょうか これで逆に弱くなるようなら戻します" -- prompted by a report that AI LV4 passed up a
+   * 策士→終わりの兆しLV2→鐘楼 combo because the immediate score of converting 3K->2Z alone doesn't reflect
+   * the build it can enable 1-2 moves later, so a beam/rollout search can prune it before ever discovering
+   * that value): forces CHANGE(3K,2Z) unconditionally whenever the player owns an untapped JOB004 with
+   * >=3K, with NO build-outlet check -- deliberately simpler than forcedBzConversionMove's own gating.
+   * JOB004's TAP no longer grants BZ at all (a 2026-08-24 data edit changed it to grant plain Z instead),
+   * so bzConversionTap/forcedBzConversionMove don't recognize this card's current shape any more -- this
+   * is a separate, JOB004-specific mechanism rather than broadening that BZ-specific one, since the
+   * intended policy genuinely differs (always force here, vs. only-when-useful there). JOB004's own
+   * TURNEND=UNTAP() means this can fire again every single turn, not just once per round -- revert this
+   * (per the user's own framing) if it turns out to make JOB004 weaker in practice. */
+  forcedJob004ConversionMove(state, index, playerId) {
+    const player = state.players.find((p) => p.id === playerId);
+    if (!player || (player.resources.K || 0) < 3) return null;
+    for (const physicalId of player.ownedCardPhysicalIds) {
+      const cardState = state.cards[physicalId];
+      if (!cardState || cardState.tapped || cardState.currentFaceId !== 'JOB004') continue;
+      return { type: 'BARE_TAP', playerId, physicalId };
+    }
+    return null;
+  }
+
   /** Whether some build-resolving move (PLACE_DIE/BARE_TAP carrying a buildCandidateIndex)
    * in clone would actually succeed if applied right now -- shared by forcedBzConversionMove (deciding
    * whether to force a BZ-conversion tap) and #bareTapMoves' IMMEDIATE branch (deciding whether to even

@@ -7,8 +7,9 @@
  * candidate move with the highest score (first-max-wins tie-break) -- feeding it random scores per
  * candidate is a standard "argmax of iid random values" trick for selecting uniformly at random among
  * N candidates, so wiring this into AIPlayer/MoveGenerator/Simulator exactly as normal reuses that
- * whole pipeline unchanged (including MoveGenerator's forcedBzConversionMove short-circuit, which stays
- * forced here too -- that's a genuine game rule, not a policy choice, same as every other AI level).
+ * whole pipeline unchanged (including MoveGenerator's forcedBzConversionMove/forcedJob004ConversionMove
+ * short-circuits, which stay forced here too -- that's a genuine game rule, not a policy choice, same as
+ * every other AI level).
  *
  * Built 2026-08-27 as "Generation 0" for tools/ga_train.js's genetic-algorithm AI training (per user
  * request: "完全ランダムウォークから第一世代第二世代という風に進化させていく方式でAIを作りたい"): a

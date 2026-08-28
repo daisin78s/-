@@ -27,10 +27,10 @@ function check(label, actual, expected) {
  * asserting it explicitly here keeps these tests about the 1-ply contract, not an accident of the mock
  * shape -- see the "lookahead" tests below for a stub that actually exercises the rollout. */
 function makeAIPlayer(moves) {
-  // forcedBzConversionMove: () => null (2026-08-04) -- AIPlayer.selectMove/#greedyMove both check this
-  // first now (see move-generator.js's own doc); these stubs never need it to fire, so it's just a
-  // no-op here, but the stub still needs the method to exist.
-  const moveGenerator = { generateMoves: () => moves, forcedBzConversionMove: () => null };
+  // forcedBzConversionMove/forcedJob004ConversionMove: () => null (2026-08-04/28) -- AIPlayer.selectMove/
+  // #greedyMove both check these first now (see move-generator.js's own doc); these stubs never need
+  // either to fire, so they're just no-ops here, but the stub still needs both methods to exist.
+  const moveGenerator = { generateMoves: () => moves, forcedBzConversionMove: () => null, forcedJob004ConversionMove: () => null };
   const simulator = { apply: (state, index, move) => ({ state: { afterMoveId: move.id }, result: { success: move.ok } }) };
   const evaluator = { score: (state) => moves.find((m) => m.id === state.afterMoveId).score };
   return new AIPlayer(null, moveGenerator, evaluator, simulator, { lookaheadExtraTurns: 0 });
@@ -110,6 +110,7 @@ function makeLookaheadStubs() {
       return [];
     },
     forcedBzConversionMove: () => null, // see makeAIPlayer's own comment
+    forcedJob004ConversionMove: () => null,
   };
   const simulator = {
     apply: (state, index, move) => {
@@ -216,7 +217,7 @@ function die(id, value, kind = 'COLOR', placedMapId = null) {
   return { id, value, kind, placedMapId };
 }
 function makeTieBreakAIPlayer(moves, options) {
-  const moveGenerator = { generateMoves: () => moves, forcedBzConversionMove: () => null };
+  const moveGenerator = { generateMoves: () => moves, forcedBzConversionMove: () => null, forcedJob004ConversionMove: () => null };
   const simulator = { apply: (state, index, move) => ({ state: { afterMoveId: move.id }, result: { success: true } }) };
   const evaluator = { score: (state) => 10 }; // every candidate ties on score -- only the tie-break matters
   return new AIPlayer(null, moveGenerator, evaluator, simulator, options);
