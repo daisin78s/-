@@ -386,20 +386,28 @@ class MoveGenerator {
       } else {
         // SET_DICE_ANY / SET_DIE_VALUE / CHANGE_DIE_VALUE -- needs a die + a value/delta up front
         // (the whole TAP field runs as one atomic program, see board.useBareTapAbility's own doc).
+        // Only offered once applying it actually enables a BUILD-resolving move to succeed (2026-08-28,
+        // per user report: "AILV4が無意味にダイス変換を使ってターン終了時に元に戻っています" -- a die
+        // whose value changed this turn but never got PLACED this same turn silently reverts to its
+        // original value at TURNEND (see executor.js's own valueChangedThisTurn revert), so a conversion
+        // with nowhere useful to spend it is a pure loss: the once-per-round tap is burned for nothing).
+        // Same #hasAffordableBuildOutlet gate bzConversionTap-shaped taps already use just above, for the
+        // same reason -- reused as-is rather than a narrower "just this die" check, matching that
+        // existing precedent's own bar ("is there truly nothing to do with this at all").
         const values = bareTap.kind === 'SET_DICE_ANY' ? [1, 2, 3, 4, 5, 6] : bareTap.choices;
         for (const die of unplacedDice) {
           for (const value of values) {
-            const context = { playerId, chosenDieId: die.id };
-            if (bareTap.kind === 'CHANGE_DIE_VALUE') context.chosenDelta = value;
-            else context.chosenValue = value;
+            const tapContext = { playerId, chosenDieId: die.id };
+            if (bareTap.kind === 'CHANGE_DIE_VALUE') tapContext.chosenDelta = value;
+            else tapContext.chosenValue = value;
             const clone = cloneState(state);
-            const result = board.useBareTapAbility(clone, index, context, physicalId);
-            if (result.success) {
-              moves.push({
-                type: 'BARE_TAP', playerId, physicalId, chosenDieId: die.id,
-                ...(bareTap.kind === 'CHANGE_DIE_VALUE' ? { chosenDelta: value } : { chosenValue: value }),
-              });
-            }
+            const result = board.useBareTapAbility(clone, index, tapContext, physicalId);
+            if (!result.success) continue;
+            if (!this.#hasAffordableBuildOutlet(clone, index, playerId, context)) continue;
+            moves.push({
+              type: 'BARE_TAP', playerId, physicalId, chosenDieId: die.id,
+              ...(bareTap.kind === 'CHANGE_DIE_VALUE' ? { chosenDelta: value } : { chosenValue: value }),
+            });
           }
         }
       }

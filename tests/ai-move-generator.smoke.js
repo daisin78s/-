@@ -365,6 +365,39 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
 }
 
 // ---------------------------------------------------------------------------
+// Regression (2026-08-28, per user report: "AILV4が無意味にダイス変換を使ってターン終了時に元に戻って
+// います"): a die whose value is changed via a bare SET_DICE_ANY/SET_DIE_VALUE/CHANGE_DIE_VALUE TAP but
+// never actually PLACED that same turn silently reverts to its original value at TURNEND (see
+// executor.js's own valueChangedThisTurn revert) -- so offering the tap at all when there's nowhere to
+// spend the new value burns the once-per-round tap for nothing. B003A/運命の導き ("CHANGE_DIE_VALUE
+// (SELF+2)", no other side effect) is the cleanest real vehicle for this -- same #hasAffordableBuildOutlet
+// gate bzConversionTap-shaped taps already used (see the JOB004 tests just above).
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const cardInst = createCardInstance('B003A');
+  cardInst.ownerId = 'P1';
+  state.cards[cardInst.physicalId] = cardInst;
+  p1.ownedCardPhysicalIds.push(cardInst.physicalId);
+  const die = giveDie(state, 'P1', 1); // +2 -> 3, but 0 resources means nothing buildable anywhere
+  const context = { hasPlacedDieThisTurn: false };
+
+  const movesNoOutlet = moveGenerator.generateMoves(state, index, 'P1', context);
+  assertTrue(
+    'generateMoves omits the B003A die-value-change BARE_TAP candidate entirely when no build outlet exists',
+    !movesNoOutlet.some((m) => m.type === 'BARE_TAP' && m.physicalId === cardInst.physicalId)
+  );
+
+  p1.resources.BZ = 20; // covers whatever the cheapest reachable candidate turns out to be
+  const movesWithOutlet = moveGenerator.generateMoves(state, index, 'P1', context);
+  assertTrue(
+    'generateMoves still includes the B003A die-value-change BARE_TAP candidate once a build outlet exists',
+    movesWithOutlet.some((m) => m.type === 'BARE_TAP' && m.physicalId === cardInst.physicalId && m.chosenDieId === die.id && m.chosenDelta === 2)
+  );
+}
+
+// ---------------------------------------------------------------------------
 // avoidMapIdFromRound mechanism (see MoveGenerator's own doc). The shared, policy-free `moveGenerator`
 // is used as a same-state control to confirm the policy is opt-in, not a global behavior change.
 // ---------------------------------------------------------------------------
