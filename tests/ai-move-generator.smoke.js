@@ -401,5 +401,72 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
   );
 }
 
+// ---------------------------------------------------------------------------
+// preferCastleOverSenate (2026-08-28, "AI LV4", see MoveGenerator's own doc): 王宮(MAP008)/元老院(MAP009)
+// are functionally identical, so offering both every turn is redundant search -- when both currently
+// have a legal move, drop 元老院 in favor of 王宮, UNLESS the player holds 開拓者 (JOB009), whose bonus
+// only fires on a currently-empty AREA, in which case the CURRENTLY-EMPTY one wins instead (falling back
+// to plain 王宮 preference on a tie).
+// ---------------------------------------------------------------------------
+const moveGeneratorLv4 = new MoveGenerator({ preferCastleOverSenate: true });
+function offersMapId(moves, dieId, mapId) { return moves.some((m) => m.dieId === dieId && m.mapId === mapId); }
+
+{
+  // Plain (non-開拓者) player: both empty (fresh board) -- 元老院 dropped, 王宮 kept.
+  const state = freshStateWithShops();
+  player(state, 'P1').resources.BZ = 20; // covers whatever candidate the die's buildValue reaches
+  const die = giveDie(state, 'P1', 5);
+  const context = { hasPlacedDieThisTurn: false };
+  const policedMoves = moveGeneratorLv4.generateMoves(state, index, 'P1', context);
+  assertTrue('Non-開拓者: 王宮 is kept', offersMapId(policedMoves, die.id, 'MAP008'));
+  assertTrue('Non-開拓者: 元老院 is dropped in favor of 王宮', !offersMapId(policedMoves, die.id, 'MAP009'));
+  const unpolicedMoves = moveGenerator.generateMoves(state, index, 'P1', context);
+  assertTrue('Control: the unpoliced MoveGenerator still offers 王宮', offersMapId(unpolicedMoves, die.id, 'MAP008'));
+  assertTrue('Control: the unpoliced MoveGenerator still offers 元老院 too', offersMapId(unpolicedMoves, die.id, 'MAP009'));
+}
+
+{
+  // 開拓者 owner, 王宮 already occupied (by someone else) / 元老院 still empty -- keeps 元老院 (the
+  // currently-empty one, for the pioneer bonus), drops 王宮 -- the OPPOSITE of the plain preference.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.jobCardId = 'JOB009'; // hasPioneerAbility only reads this field -- see board.js's own doc
+  p1.resources.BZ = 20;
+  state.maps['MAP008'].slots[0].push({ playerId: 'P2', dieId: 'occupant', value: 3, seq: 1, countsForTurnOrder: true });
+  const die = giveDie(state, 'P1', 5);
+  const moves = moveGeneratorLv4.generateMoves(state, index, 'P1', { hasPlacedDieThisTurn: false });
+  assertTrue('開拓者, 王宮 occupied/元老院 empty: 元老院 is kept', offersMapId(moves, die.id, 'MAP009'));
+  assertTrue('開拓者, 王宮 occupied/元老院 empty: 王宮 is dropped', !offersMapId(moves, die.id, 'MAP008'));
+}
+
+{
+  // 開拓者 owner, 元老院 already occupied / 王宮 still empty -- keeps 王宮 (same outcome as the plain
+  // preference here, but for the pioneer-bonus reason, not the default fallback).
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.jobCardId = 'JOB009';
+  p1.resources.BZ = 20;
+  state.maps['MAP009'].slots[0].push({ playerId: 'P2', dieId: 'occupant', value: 3, seq: 1, countsForTurnOrder: true });
+  const die = giveDie(state, 'P1', 5);
+  const moves = moveGeneratorLv4.generateMoves(state, index, 'P1', { hasPlacedDieThisTurn: false });
+  assertTrue('開拓者, 元老院 occupied/王宮 empty: 王宮 is kept', offersMapId(moves, die.id, 'MAP008'));
+  assertTrue('開拓者, 元老院 occupied/王宮 empty: 元老院 is dropped', !offersMapId(moves, die.id, 'MAP009'));
+}
+
+{
+  // 開拓者 owner, BOTH already occupied (a tie -- neither triggers the bonus) -- falls back to the plain
+  // 王宮 preference.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.jobCardId = 'JOB009';
+  p1.resources.BZ = 20;
+  state.maps['MAP008'].slots[0].push({ playerId: 'P2', dieId: 'occupant8', value: 3, seq: 1, countsForTurnOrder: true });
+  state.maps['MAP009'].slots[0].push({ playerId: 'P2', dieId: 'occupant9', value: 3, seq: 1, countsForTurnOrder: true });
+  const die = giveDie(state, 'P1', 5);
+  const moves = moveGeneratorLv4.generateMoves(state, index, 'P1', { hasPlacedDieThisTurn: false });
+  assertTrue('開拓者, both occupied (tie): 王宮 is kept', offersMapId(moves, die.id, 'MAP008'));
+  assertTrue('開拓者, both occupied (tie): 元老院 is dropped', !offersMapId(moves, die.id, 'MAP009'));
+}
+
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);

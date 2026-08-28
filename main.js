@@ -179,14 +179,15 @@ const aiPlayerLv3 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGenerator, aiEvaluator
 });
 // AI LV4 (2026-08-28, per user request to make this the new default level). Reuses LV3's evaluator
 // (same hand-tuned aiEvalTable + qstAware -- per user confirmation, the GA-trained genomes under
-// output/ are NOT wired in yet) and the shared policy-free aiMoveGenerator (孤児院/王宮 exclusions and
-// the "read to next round" lookahead are still unimplemented spec, not yet reflected here) plus LV3's
-// own round-4 deep-search override. The one behavioral difference from LV3 so far: dieScarcityTieBreak
-// (see src/ai/die-priority.js) -- ties in 1-ply score prefer spending the more plentiful die value.
-// Its RESOURCE_CHOICE/ONBOARDING (JOB/CON/resource-card picks) also go through smart-onboarding.js
-// instead of driveOneAiStepInner's uniform-random default -- see that function's own branches below;
-// LV1/2/3 are unaffected either way since only 'AI_LV4' triggers those branches.
-const aiPlayerLv4 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGenerator, aiEvaluatorLv3, aiSimulator, {
+// output/ are NOT wired in yet) plus LV3's own round-4 deep-search override. The behavioral differences
+// from LV3 so far: dieScarcityTieBreak (see src/ai/die-priority.js, ties in 1-ply score prefer spending
+// the more plentiful die value) and its own MoveGenerator with preferCastleOverSenate (see that class's
+// own doc -- 孤児院 exclusion and the "read to next round" lookahead are still unimplemented spec, not
+// yet reflected here). Its RESOURCE_CHOICE/ONBOARDING (JOB/CON/resource-card picks) also go through
+// smart-onboarding.js instead of driveOneAiStepInner's uniform-random default -- see that function's own
+// branches below; LV1/2/3 are unaffected either way since only 'AI_LV4' triggers those branches.
+const aiMoveGeneratorLv4 = new moveGeneratorMod.MoveGenerator({ preferCastleOverSenate: true });
+const aiPlayerLv4 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGeneratorLv4, aiEvaluatorLv3, aiSimulator, {
   lookaheadExtraTurns: 1,
   roundOverrides: { 4: { lookaheadExtraTurns: 20, beamWidth: 10, maxRolloutMoves: 200 } },
   dieScarcityTieBreak: true,

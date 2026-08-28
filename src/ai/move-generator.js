@@ -106,9 +106,40 @@ class MoveGenerator {
    *   buying new A/B/C cards from a given round on and banked toward monuments instead, meant to stop
    *   LV1/LV2 from routinely ending games with large unspent resource piles. Removed per user request
    *   once QST's rank-based rewards rework made the round 3/4 build restriction unnecessary.)
+   *   preferCastleOverSenate (2026-08-28, "AI LV4", default false, per user spec: "王宮 元老院 どちらに
+   *   も置けるときは 王宮優先", exception confirmed the same day: "開拓者を例外にして" -- "空いている方を
+   *   優先"): 王宮(CASTLE_MAP_ID/MAP008) and 元老院(AREA009_MAP_ID/MAP009) are functionally identical
+   *   (both ANY-slot BUILD() areas), so offering both as separate candidates every turn is pure redundant
+   *   search for computation-reduction purposes (see this class's own die-priority.js sibling for the
+   *   same motivation). When both currently have at least one legal placement move this call, all 元老院
+   *   moves are dropped in favor of 王宮 -- UNLESS playerId holds 開拓者 (JOB009, board.hasPioneerAbility),
+   *   whose bonus only fires on an AREA with zero dice placed on it yet (board.isMapEmptyOfDice): a
+   *   開拓者 owner instead keeps only whichever of the two is CURRENTLY empty (dropping the other), since
+   *   that is a genuine value difference between them for this player specifically; a tie (both empty or
+   *   both already occupied, so neither/either equally triggers or fails to trigger the bonus) falls back
+   *   to the plain 王宮 preference. Applied as a post-filter over the whole move list (mapId is absent on
+   *   every non-placement move type, e.g. FREE_ACTION/END_TURN, so those are always left untouched).
    */
   constructor(policy) {
     this.policy = policy || {};
+  }
+
+  /** See preferCastleOverSenate's own constructor doc for the full rule. No-op (returns moves unchanged)
+   * whenever the policy isn't set, or when 王宮/元老院 aren't BOTH currently offering a legal move. */
+  #applyCastleSenatePreference(state, index, playerId, moves) {
+    if (!this.policy.preferCastleOverSenate) return moves;
+    const CASTLE = board.CASTLE_MAP_ID;
+    const SENATE = board.AREA009_MAP_ID;
+    if (!moves.some((m) => m.mapId === CASTLE) || !moves.some((m) => m.mapId === SENATE)) return moves;
+    let dropMapId = SENATE;
+    if (board.hasPioneerAbility(state, index, playerId)) {
+      const castleEmpty = board.isMapEmptyOfDice(state.maps[CASTLE]);
+      const senateEmpty = board.isMapEmptyOfDice(state.maps[SENATE]);
+      if (senateEmpty && !castleEmpty) dropMapId = CASTLE;
+      // else: castle-only-empty, or a tie (both/neither empty) -- dropMapId stays SENATE (plain
+      // preference, see this method's own doc).
+    }
+    return moves.filter((m) => m.mapId !== dropMapId);
   }
 
   /** True once state.round has reached the policy's avoidMapIdFromRound.round threshold for this exact
@@ -120,13 +151,14 @@ class MoveGenerator {
 
   /** @returns {Object[]} every legal Move for playerId right now. */
   generateMoves(state, index, playerId, context) {
-    const moves = [];
+    let moves = [];
     const player = state.players.find((p) => p.id === playerId);
     if (!player) return moves;
 
     if (!context.hasPlacedDieThisTurn) {
       moves.push(...this.#placeDieMoves(state, index, playerId, player));
       moves.push(...this.#placeDiceGroupMoves(state, index, playerId, player));
+      moves = this.#applyCastleSenatePreference(state, index, playerId, moves);
     }
     // Only offered while actually needed to unblock a RESOURCE_TOTAL_LIMIT-blocked turn end (2026-08-03,
     // per user feedback: "AIが無駄にA→K B→K C→K Z→K wD→2Kをやっています この行動には意味がないため

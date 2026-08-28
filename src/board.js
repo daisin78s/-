@@ -1780,6 +1780,8 @@ module.exports = {
   hasAnyUpgradeEligibleCard,
   isColorDieReuseBlocked,
   hasWildcardDice,
+  hasPioneerAbility,
+  isMapEmptyOfDice,
   isCandidateAffordable,
   resolveBuild,
   restockShop,
