@@ -80,12 +80,13 @@ async function main() {
 
   let aiLevel;
   while (true) {
-    const answer = (await ask(lineIterator, 'AIレベルを選んでください（0: レベル混合(比較用) / 1: LV1 速い / 2: LV2 先読みあり・遅い / 3: LV3 先読み+AREA007回避+QST対応・遅い）: ')).trim();
+    const answer = (await ask(lineIterator, 'AIレベルを選んでください（0: レベル混合(比較用) / 1: LV1 速い / 2: LV2 先読みあり・遅い / 3: LV3 先読み+QST対応・遅い / 4: LV4 LV3+ダイス優先度+スマートオンボーディング・遅い）: ')).trim();
     if (answer === '0') { aiLevel = 'MIX'; break; }
     if (answer === '1') { aiLevel = 'LV1'; break; }
     if (answer === '2') { aiLevel = 'LV2'; break; }
     if (answer === '3') { aiLevel = 'LV3'; break; }
-    console.log('0 か 1 か 2 か 3 を入力してください。');
+    if (answer === '4') { aiLevel = 'LV4'; break; }
+    console.log('0 か 1 か 2 か 3 か 4 を入力してください。');
   }
 
   // "0: レベル混合" (2026-08-10, per user request: "LV1 2 3をランダムで入れる対戦ができるようにしたい"):
