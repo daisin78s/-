@@ -757,9 +757,20 @@ function runUntap(state, context, cmd) {
   return { success: true };
 }
 
-function runUntapAll(state, context, cmd) {
+/** UNTAP_ALL(SELF) (2026-08-28, per user request: "王女 聖女のUNTAP_ALL(SELF) 兆しカード以外に設定お願
+ * いします") -- excludes 兆し-named cards (始まりの兆し/革命の兆し/移ろいの兆し/終わりの兆し, matched by
+ * NAME rather than a hardcoded physical-id list, same resilience-to-reorg reasoning as
+ * untapChoiceWeight's own doc), matching what 王女LV1/LV2 and 聖女LV2's own INST text has always claimed
+ * ("カードをすべてアンタップする\n兆しカード以外") but this command never actually enforced until now.
+ * Every current UNTAP_ALL usage wants this exclusion (confirmed via a full-data grep, 2026-08-28) --
+ * baked in directly rather than a new DSL parameter, since there is no card that wants the un-excluded
+ * behavior to fall back to. */
+function runUntapAll(state, index, context, cmd) {
   for (const physicalId of Object.keys(state.cards)) {
-    if (state.cards[physicalId].ownerId === context.playerId) state.cards[physicalId].tapped = false;
+    const cardState = state.cards[physicalId];
+    if (cardState.ownerId !== context.playerId) continue;
+    if (getCardRow(index, cardState.currentFaceId).NAME.includes('兆し')) continue;
+    cardState.tapped = false;
   }
   return { success: true };
 }
@@ -1213,7 +1224,7 @@ function runCommand(state, index, context, cmd) {
     case 'PAY': return runPay(state, index, context, cmd);
     case 'CHANGE': return runChange(state, index, context, cmd);
     case 'UNTAP': return runUntap(state, context, cmd);
-    case 'UNTAP_ALL': return runUntapAll(state, context, cmd);
+    case 'UNTAP_ALL': return runUntapAll(state, index, context, cmd);
     case 'UNTAP_CHOICE': return runUntapChoice(state, index, context, cmd);
     case 'SET_CURRENT_AREA': return runSetCurrentArea(state, index, context, cmd);
     case 'SET_DICE_ANY': return runSetDiceAny(state, context);

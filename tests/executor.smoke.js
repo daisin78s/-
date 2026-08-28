@@ -1243,5 +1243,23 @@ const UNTAP_CHOICE_3 = { type: 'UNTAP_CHOICE', scope: 'SELF', count: 3 };
   check('canEndTurn allows TURNEND again once resolved', executor.canEndTurn(state, index, 'P1').ok, true);
 }
 
+// ---------------------------------------------------------------------------
+// UNTAP_ALL(SELF) excludes 兆し-named cards (2026-08-28, per user request: "王女 聖女のUNTAP_ALL(SELF)
+// 兆しカード以外に設定お願いします" -- matching what 王女LV1/LV2(C301A/C301B) and 聖女LV2(C202B)'s own
+// INST text has always claimed ("カードをすべてアンタップする\n兆しカード以外") but this command never
+// actually enforced until now). B004A/始まりの兆し stands in for any 兆し card (matched by NAME, same
+// resilience-to-reorg reasoning as untapChoiceWeight's own doc).
+// ---------------------------------------------------------------------------
+{
+  const state = freshState();
+  const signId = giveCard(state, 'B004A', 'P1'); // 始まりの兆しLV1
+  const plainId = giveCard(state, 'A001A', 'P1');
+  state.cards[signId].tapped = true;
+  state.cards[plainId].tapped = true;
+  executor.runCommand(state, index, { playerId: 'P1' }, { type: 'UNTAP_ALL', scope: 'SELF' });
+  check('UNTAP_ALL(SELF) leaves a 兆し-named card tapped', state.cards[signId].tapped, true);
+  check('...but untaps every other owned card', state.cards[plainId].tapped, false);
+}
+
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);
