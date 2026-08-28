@@ -368,33 +368,58 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
 // Regression (2026-08-28, per user report: "AILV4が無意味にダイス変換を使ってターン終了時に元に戻って
 // います"): a die whose value is changed via a bare SET_DICE_ANY/SET_DIE_VALUE/CHANGE_DIE_VALUE TAP but
 // never actually PLACED that same turn silently reverts to its original value at TURNEND (see
-// executor.js's own valueChangedThisTurn revert) -- so offering the tap at all when there's nowhere to
-// spend the new value burns the once-per-round tap for nothing. B003A/運命の導き ("CHANGE_DIE_VALUE
-// (SELF+2)", no other side effect) is the cleanest real vehicle for this -- same #hasAffordableBuildOutlet
-// gate bzConversionTap-shaped taps already used (see the JOB004 tests just above).
+// executor.js's own valueChangedThisTurn revert) -- so offering the tap at all with nowhere useful to
+// spend the new value burns the once-per-round tap for nothing. Refined the same day, per user spec:
+// "置かないダイスにダイス変換を使わない 結果がだいたい同じときは（同じSLOTにおけて同じカードが獲得でき
+// るとき、残すダイスが違ってもOK）ダイス変換を使わない" -- only offered once it lets THIS die reach a
+// genuinely NEW (mapId,slotIndex,outcome) it couldn't already reach at its original value (see
+// #dieReachableOutcomes' own doc). B003A/運命の導き ("CHANGE_DIE_VALUE(SELF+2)", no other side effect) is
+// the cleanest real vehicle for this.
 // ---------------------------------------------------------------------------
-{
-  const state = freshStateWithShops();
-  const p1 = player(state, 'P1');
+function giveB003A(state, playerId) {
   const cardInst = createCardInstance('B003A');
-  cardInst.ownerId = 'P1';
+  cardInst.ownerId = playerId;
   state.cards[cardInst.physicalId] = cardInst;
-  p1.ownedCardPhysicalIds.push(cardInst.physicalId);
-  const die = giveDie(state, 'P1', 1); // +2 -> 3, but 0 resources means nothing buildable anywhere
-  const context = { hasPlacedDieThisTurn: false };
-
-  const movesNoOutlet = moveGenerator.generateMoves(state, index, 'P1', context);
-  assertTrue(
-    'generateMoves omits the B003A die-value-change BARE_TAP candidate entirely when no build outlet exists',
-    !movesNoOutlet.some((m) => m.type === 'BARE_TAP' && m.physicalId === cardInst.physicalId)
-  );
-
-  p1.resources.BZ = 20; // covers whatever the cheapest reachable candidate turns out to be
-  const movesWithOutlet = moveGenerator.generateMoves(state, index, 'P1', context);
-  assertTrue(
-    'generateMoves still includes the B003A die-value-change BARE_TAP candidate once a build outlet exists',
-    movesWithOutlet.some((m) => m.type === 'BARE_TAP' && m.physicalId === cardInst.physicalId && m.chosenDieId === die.id && m.chosenDelta === 2)
-  );
+  player(state, playerId).ownedCardPhysicalIds.push(cardInst.physicalId);
+  return cardInst;
+}
+const offersB003ATap = (moves, cardInst, die) => moves.some((m) => m.type === 'BARE_TAP' && m.physicalId === cardInst.physicalId && m.chosenDieId === die.id && m.chosenDelta === 2);
+{
+  // Positive case: even with 0 resources, MAP001's own tier-A area happens to give every exact die value
+  // its own uniquely-reachable free slot (empirically confirmed) -- so 1->3 genuinely opens a NEW slot
+  // (MAP001 slot index 2) neither value could reach before, and the tap is offered.
+  const state = freshStateWithShops();
+  const cardInst = giveB003A(state, 'P1');
+  const die = giveDie(state, 'P1', 1);
+  const moves = moveGenerator.generateMoves(state, index, 'P1', { hasPlacedDieThisTurn: false });
+  assertTrue('Offered: converting 1->3 reaches a genuinely new slot even with 0 resources', offersB003ATap(moves, cardInst, die));
+}
+{
+  // Blocked case 1 (rule 1: nothing to place at all): MAP001/MAP002 swapped to 王宮's own ANY-slot,
+  // BUILD()-gated area (AREA008) -- unlike MAP001/002's own tier-A areas, a BUILD()-gated area genuinely
+  // offers nothing with 0 resources, for any die value, so there is no map left where 1 or 3 reach
+  // anything at all.
+  const state = freshStateWithShops();
+  state.maps.MAP001.currentAreaId = 'AREA008';
+  state.maps.MAP002.currentAreaId = 'AREA008';
+  const cardInst = giveB003A(state, 'P1');
+  const die = giveDie(state, 'P1', 1);
+  const moves = moveGenerator.generateMoves(state, index, 'P1', { hasPlacedDieThisTurn: false });
+  assertTrue('Blocked: nothing reachable at all, at either value, with 0 resources', !offersB003ATap(moves, cardInst, die));
+}
+{
+  // Blocked case 2 (rule 2: same result either way): same neutralized fixture, now with BZ=20. Every
+  // ANY-slot BUILD() area reaches the identical cheapest candidate regardless of the die's exact value,
+  // so 1->3 doesn't open anything NEW -- converting would be pure waste even though real resources (and a
+  // real build outlet) now genuinely exist.
+  const state = freshStateWithShops();
+  state.maps.MAP001.currentAreaId = 'AREA008';
+  state.maps.MAP002.currentAreaId = 'AREA008';
+  player(state, 'P1').resources.BZ = 20;
+  const cardInst = giveB003A(state, 'P1');
+  const die = giveDie(state, 'P1', 1);
+  const moves = moveGenerator.generateMoves(state, index, 'P1', { hasPlacedDieThisTurn: false });
+  assertTrue('Blocked: a real build outlet exists, but 1 and 3 reach the exact same outcome', !offersB003ATap(moves, cardInst, die));
 }
 
 // ---------------------------------------------------------------------------

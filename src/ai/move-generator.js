@@ -398,19 +398,30 @@ class MoveGenerator {
           if (isBz && !this.#hasAffordableBuildOutlet(clone, index, playerId, context)) continue;
           moves.push({ type: 'BARE_TAP', playerId, physicalId, chosenDieId: die.id });
         }
+      } else if (board.hasWildcardDice(state, index, playerId)) {
+        // 道化(JOB003)'s own ☆ dice ignore VALUE_MISMATCH entirely and their buildValue is category-fixed
+        // (1 for A/B/C, 6 for monument -- see board.placeWildcardDie's own doc), never dependent on the
+        // die's own .value at all -- so a SET_DICE_ANY/SET_DIE_VALUE/CHANGE_DIE_VALUE tap can NEVER change
+        // what a ☆-owning player can reach with any die, for any value. #dieReachableOutcomes below
+        // assumes board.placeDice (the non-wildcard path), which doesn't reflect ☆'s real placement rules
+        // -- rather than adapting it for a case that's provably always a no-op anyway, this player is
+        // simply never offered these taps at all (2026-08-28, part of the same gating this whole branch
+        // exists for -- see the other branch's own doc).
       } else {
         // SET_DICE_ANY / SET_DIE_VALUE / CHANGE_DIE_VALUE -- needs a die + a value/delta up front
         // (the whole TAP field runs as one atomic program, see board.useBareTapAbility's own doc).
-        // Only offered once applying it actually enables a BUILD-resolving move to succeed (2026-08-28,
-        // per user report: "AILV4が無意味にダイス変換を使ってターン終了時に元に戻っています" -- a die
-        // whose value changed this turn but never got PLACED this same turn silently reverts to its
-        // original value at TURNEND (see executor.js's own valueChangedThisTurn revert), so a conversion
-        // with nowhere useful to spend it is a pure loss: the once-per-round tap is burned for nothing).
-        // Same #hasAffordableBuildOutlet gate bzConversionTap-shaped taps already use just above, for the
-        // same reason -- reused as-is rather than a narrower "just this die" check, matching that
-        // existing precedent's own bar ("is there truly nothing to do with this at all").
+        // Only offered once it lets THIS SPECIFIC die reach a genuinely NEW outcome (mapId/slotIndex/
+        // resulting card) it couldn't already reach at its original value (2026-08-28, per user spec:
+        // "置かないダイスにダイス変換を使わない 結果がだいたい同じときは（同じSLOTにおけて同じカードが
+        // 獲得できるとき、残すダイスが違ってもOK）ダイス変換を使わない" -- refining the earlier
+        // #hasAffordableBuildOutlet gate, which only checked "is there an outlet ANYWHERE on the board",
+        // not whether THIS die specifically ends up used for it, or whether the outlet was reachable
+        // without converting at all. A die whose value changes this turn but never gets PLACED that same
+        // turn silently reverts at TURNEND (see executor.js's own valueChangedThisTurn revert), so either
+        // gap left the once-per-round tap burnable for nothing.
         const values = bareTap.kind === 'SET_DICE_ANY' ? [1, 2, 3, 4, 5, 6] : bareTap.choices;
         for (const die of unplacedDice) {
+          const outcomesBefore = this.#dieReachableOutcomes(state, index, playerId, die.id);
           for (const value of values) {
             const tapContext = { playerId, chosenDieId: die.id };
             if (bareTap.kind === 'CHANGE_DIE_VALUE') tapContext.chosenDelta = value;
@@ -418,7 +429,9 @@ class MoveGenerator {
             const clone = cloneState(state);
             const result = board.useBareTapAbility(clone, index, tapContext, physicalId);
             if (!result.success) continue;
-            if (!this.#hasAffordableBuildOutlet(clone, index, playerId, context)) continue;
+            const outcomesAfter = this.#dieReachableOutcomes(clone, index, playerId, die.id);
+            const hasNewOutcome = [...outcomesAfter].some((o) => !outcomesBefore.has(o));
+            if (!hasNewOutcome) continue;
             moves.push({
               type: 'BARE_TAP', playerId, physicalId, chosenDieId: die.id,
               ...(bareTap.kind === 'CHANGE_DIE_VALUE' ? { chosenDelta: value } : { chosenValue: value }),
@@ -517,6 +530,37 @@ class MoveGenerator {
     const buildMoves = this.generateMoves(clone, index, playerId, context)
       .filter((m) => m.buildCandidateIndex !== undefined);
     return buildMoves.some((m) => applyInPlace(cloneState(clone), index, m).success);
+  }
+
+  /** Every (mapId, slotIndex, outcome) dieId could legally, effectively reach right now in `state` --
+   * outcome is the built/upgraded faceId for a BUILD-resolving placement, or 'NONE' for a plain
+   * AREA-effect resolution. Used by #bareTapMoves' die-value-change gating (2026-08-28, per user spec:
+   * "置かないダイスにダイス変換を使わない 結果がだいたい同じときは...ダイス変換を使わない") to compare
+   * one die's reach before vs after a value-change TAP -- keyed by the actual resulting card rather than
+   * a candidate array INDEX, since indices from two different dry-run calls aren't comparable (the whole
+   * point here is diffing this die's reach across two different states). Mirrors #placeDieMoves' own
+   * per-slot dry-run loop, scoped to one die. Never called for a wildcard-owning player (see the call
+   * site's own comment on why that case is skipped entirely instead). */
+  #dieReachableOutcomes(state, index, playerId, dieId) {
+    const outcomes = new Set();
+    for (const mapId of Object.keys(state.maps)) {
+      if (this.#isMapIdAvoided(state, mapId)) continue;
+      const areaRow = getAreaRow(index, state.maps[mapId].currentAreaId);
+      const slotCount = board.getSlotRequirements(areaRow).length;
+      for (let slotIndex = 0; slotIndex < slotCount; slotIndex++) {
+        const clone = cloneState(state);
+        const result = board.placeDice(clone, index, { playerId }, dieId, mapId, slotIndex);
+        if (!result.success) continue;
+        if (result.actionResult && result.actionResult.pendingBuild) {
+          for (const candidate of result.actionResult.pendingBuild.candidates) {
+            outcomes.add(`${mapId}|${slotIndex}|${candidate.faceId || candidate.toFaceId}`);
+          }
+        } else {
+          outcomes.add(`${mapId}|${slotIndex}|NONE`);
+        }
+      }
+    }
+    return outcomes;
   }
 }
 
