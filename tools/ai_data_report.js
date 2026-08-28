@@ -211,17 +211,24 @@ function main() {
   // game-runner.js's historyByPlayerId.rank -- see that field's own doc for the ranking rule reused, same
   // one the real in-game UI's own standings/GAME_END screens use) for the new "平均順位" table.
   const conjob = new Map();
-  // abcm["A001A"][1] = { count, scoreSum, qstScoreSum, usageSum, rankSum } -- 1-4 for rounds, plus the "D"
-  // row for colored-die gains. usageSum (2026-08-07) only ever gets added to for isUsageEligible ids --
-  // see that function's own doc. scoreSum/qstScoreSum/rankSum split the same way as conjob's own, above.
+  // abcm["A001A"][1] = { count, scoreSum, qstScoreSum, usageSum, orphanageVpSum, rankSum } -- 1-4 for
+  // rounds, plus the "D" row for colored-die gains. usageSum (2026-08-07) only ever gets added to for
+  // isUsageEligible ids -- see that function's own doc. orphanageVpSum (2026-08-28, per user request --
+  // see game-runner.js's roundDetailByPlayerId.orphanageVpGained doc) is a separate accumulator only ever
+  // touched for A201A/A201B ("孤児院の支配LV1/LV2" in the ABCM sheet's own ID column) -- see the build loop
+  // below. Kept separate from usageSum rather than reusing it, since A201A already has a real, different
+  // usageSum meaning (usage-fee collected via its own AREA -- see isUsageEligible's own doc) that this
+  // must not be mixed into; ai_data_write.py writes this into the SAME "使用回数2/3/4" columns as usageSum
+  // for these two rows specifically, per user request ("これはAIDATAの使用回数に表示してほしいという意味
+  // でした"). scoreSum/qstScoreSum/rankSum split the same way as conjob's own, above.
   const abcm = new Map();
   function abcmEntry(id, round) {
     if (!abcm.has(id)) {
       abcm.set(id, {
-        1: { count: 0, scoreSum: 0, qstScoreSum: 0, usageSum: 0, rankSum: 0 },
-        2: { count: 0, scoreSum: 0, qstScoreSum: 0, usageSum: 0, rankSum: 0 },
-        3: { count: 0, scoreSum: 0, qstScoreSum: 0, usageSum: 0, rankSum: 0 },
-        4: { count: 0, scoreSum: 0, qstScoreSum: 0, usageSum: 0, rankSum: 0 },
+        1: { count: 0, scoreSum: 0, qstScoreSum: 0, usageSum: 0, orphanageVpSum: 0, rankSum: 0 },
+        2: { count: 0, scoreSum: 0, qstScoreSum: 0, usageSum: 0, orphanageVpSum: 0, rankSum: 0 },
+        3: { count: 0, scoreSum: 0, qstScoreSum: 0, usageSum: 0, orphanageVpSum: 0, rankSum: 0 },
+        4: { count: 0, scoreSum: 0, qstScoreSum: 0, usageSum: 0, orphanageVpSum: 0, rankSum: 0 },
       });
     }
     return abcm.get(id)[round];
@@ -332,6 +339,15 @@ function main() {
           if (faceId === 'B301B') {
             e.usageSum += executor.evalMetric(state, index, playerId, { name: 'MAX_EMBLEM_COUNT', args: [] });
           }
+          // 孤児院の支配LV1/LV2 (A201A/A201B) (2026-08-28, per user request): this player's own cumulative
+          // VP from 孤児院's CHANGE(...,VP,...) ACTION, whole game -- see orphanageVpSum's own doc above.
+          // Building A201A upgrades MAP010 to AREA010B, A201B to AREA010C; a player who upgrades further
+          // in a LATER round still only appears in buildsByRound[round] for A201A in THIS (earlier) round
+          // -- their eventual A201B build (if any) gets counted separately, in whichever later round that
+          // happens, under A201B's own row.
+          if (faceId === 'A201A' || faceId === 'A201B') {
+            e.orphanageVpSum += detail.orphanageVpGained;
+          }
           const feeForThisCard = (detail.areaFeeByRoundAndCard[round] || {})[faceId];
           if (feeForThisCard !== undefined) e.usageSum += feeForThisCard;
           if (!AREA_FEE_FACES.has(faceId) && faceId !== 'B301A' && faceId !== 'B301B' && /^[BC]\d{3}[AB]$/.test(faceId) && getCardRow(index, faceId).TAP) {
@@ -394,6 +410,10 @@ function main() {
           avgScore: e.count > 0 ? e.scoreSum / e.count : null,
           avgQstScore: e.count > 0 ? e.qstScoreSum / e.count : null,
           avgUsage: usageEligible && e.count > 0 ? e.usageSum / e.count : null,
+          // 孤児院の支配LV1/LV2 only (2026-08-28) -- see orphanageVpSum's own doc above. null (blank) for
+          // every other id, and for round 1 (孤児院 can't structurally be reached that early -- confirmed
+          // with the user), same as e.count simply staying 0 there.
+          avgOrphanageVp: (id === 'A201A' || id === 'A201B') && e.count > 0 ? e.orphanageVpSum / e.count : null,
           // Per-round average rank (2026-08-20, per user request: "AI.DATA平均順位1R-4Rを追加しました" --
           // added alongside the overall avgRank below, once the user added matching 平均順位{r}R columns
           // to the sheet).

@@ -311,7 +311,13 @@ for card_id, entry in report['abcm'].items():
             ws2.cell(row=row, column=AVG_COLS[round_num], value=round(cell['avgScore'], 2))
         if cell.get('avgQstScore') is not None:
             ws2.cell(row=row, column=QST_AVG_COLS[round_num], value=round(cell['avgQstScore'], 2))
-        if cell.get('avgUsage') is not None:
+        # 孤児院の支配LV1/LV2 (2026-08-28, per user request): these two rows' own "使用回数{r}" columns
+        # hold the average total VP that player personally got from 孤児院's CHANGE(...,VP,...) ACTION,
+        # whole game -- NOT a plain usage count -- so avgOrphanageVp (only ever non-null for these two
+        # card_ids, see tools/ai_data_report.js's own doc) takes priority over avgUsage when both exist.
+        if cell.get('avgOrphanageVp') is not None:
+            ws2.cell(row=row, column=USAGE_COLS[round_num], value=round(cell['avgOrphanageVp'], 2))
+        elif cell.get('avgUsage') is not None:
             ws2.cell(row=row, column=USAGE_COLS[round_num], value=round(cell['avgUsage'], 2))
         if cell.get('avgRank') is not None:
             ws2.cell(row=row, column=RANK_AVG_COLS[round_num], value=round(cell['avgRank'], 2))

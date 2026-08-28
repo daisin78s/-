@@ -163,6 +163,13 @@ function createDie(id, kind) {
  *   Checked/incremented once per TURNEND (see turn-flow.grantBardBonusIfEarned) -- floor(current
  *   TOTAL_EMBLEM_COUNT / 3) minus this value is how many new units to grant (1VP+1Z each) right now.
  *   Irrelevant for a player without 吟遊詩人 (stays 0, never read).
+ * @property {number} orphanageVpGained - 孤児院(MAP010)-only, reporting use only, no gameplay effect
+ *   (2026-08-28, replacing the old per-map MapState.changeVpUses/changeVpTotal this player's own live
+ *   board-tile "平均XVP" display used to read -- removed per user request, "孤児院LV2に出てくるアイコン
+ *   の平均点は不要です", in favor of tools/ai_data_report.js's own AIDATA.xlsx ABCM-sheet column for
+ *   A201A/A201B, "孤児院の支配LV1/LV2"): cumulative VP THIS player has personally been granted by 孤児院's
+ *   own CHANGE(...,VP,...) ACTION, at either tier (AREA010B's CHANGE(2K,2VP) or AREA010C's
+ *   CHANGE(K,VP,5)), for the whole game. See board.placeDice's own doc for where this is updated.
  */
 
 /** Fixed palette, assigned in player order (player 1 = PINK, ...). Provisional -- see PlayerState.color. */
@@ -218,6 +225,7 @@ function createPlayer(id, name, color = null) {
     pendingFee: null,
     lockedK: 0,
     bardEmblemUnitsGranted: 0,
+    orphanageVpGained: 0,
   };
 }
 
@@ -276,12 +284,6 @@ function createCardInstance(faceCardId) {
  *   per-die COLOR-return/WHITE-discard logic picks it up exactly as if it were still genuinely placed --
  *   nothing else needs to know this array exists. Reset to [] every round in endRound(), alongside
  *   `slots`.
- * @property {number} changeVpUses     - 孤児院LV2(AREA010C)-only (2026-08-26, per user request: "孤児院
- *   LV2は獲得したVPを表示できるようにできますか" -> "後者の平均"): count of successful placements here
- *   that granted at least 1 VP via its own CHANGE(K,VP,5) ACTION, game-lifetime (never reset by
- *   endRound). See board.placeDice's own doc for where this is updated and main.js's map-tile render for
- *   the "平均{changeVpTotal/changeVpUses}VP" display it drives.
- * @property {number} changeVpTotal    - sum of VP actually granted across those same placements.
  */
 
 /**
@@ -305,7 +307,7 @@ function createCardInstance(faceCardId) {
  * @returns {MapState}
  */
 function createMapState(mapId, initialAreaId) {
-  return { mapId, currentAreaId: initialAreaId, slots: [], accumulatedFee: 0, feeOwnerId: null, discardedTurnOrderEntries: [], changeVpUses: 0, changeVpTotal: 0 };
+  return { mapId, currentAreaId: initialAreaId, slots: [], accumulatedFee: 0, feeOwnerId: null, discardedTurnOrderEntries: [] };
 }
 
 /**

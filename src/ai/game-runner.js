@@ -220,7 +220,7 @@ function driveTurn(state, index, playerId, aiPlayer, initialHasPlacedDieThisTurn
  *
  * roundDetailByPlayerId[playerId] = {buildsByRound: {1:[faceId,...], 2:[...], 3:[...], 4:[...]},
  * colorDiceGainedByRound: {1:n, 2:n, 3:n, 4:n}, areaFeeByRoundAndCard: {1:{faceId:amount,...}, ...},
- * job008BonusVp: n|null, finalScore: n, qstScore: n} -- AI-side data the human log doesn't need but
+ * job008BonusVp: n|null, orphanageVpGained: n, finalScore: n, qstScore: n} -- AI-side data the human log doesn't need but
  * tools/ai_data_report.js does, to fill in AI.DATA.xlsx's ABCM/CONJOB sheets (2026-08-07, per user spec
  * for the "使用回数" columns; 2026-08-09, qstScore added for the new "QST平均得点" columns -- VP gained
  * from QST's rank-based rewards this game, see turn-flow.js's own comment on state.qstRewardsGranted --
@@ -504,6 +504,11 @@ function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorO
       colorDiceGainedByRound: colorDiceGainedByRound[player.id],
       areaFeeByRoundAndCard,
       job008BonusVp,
+      // 孤児院(A201A/A201B) AIDATA.xlsx column, 2026-08-28 (see PlayerState.orphanageVpGained's own doc)
+      // -- this player's own cumulative VP from 孤児院's CHANGE(...,VP,...) ACTION, whole game. Paired
+      // with buildsByRound above (which round A201A/A201B was built in, if at all) by
+      // tools/ai_data_report.js to fill in the ABCM sheet's "孤児院の支配LV1/LV2" rows.
+      orphanageVpGained: player.orphanageVpGained,
       finalScore: scoreByPlayerId[player.id],
       qstScore: qstScoreByPlayerId[player.id] || 0,
       rank: rankByPlayerId[player.id],
