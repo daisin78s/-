@@ -63,6 +63,9 @@ const { loadGameData, buildDataIndex, getCardRow } = require('../src/data-loader
 const { buildEvalTable } = require('../src/ai/eval-table');
 const { playGame, AREA_CARD_BY_MAP } = require('../src/ai/game-runner');
 const { LEVELS, getLevel } = require('../src/ai/levels');
+const { pickResourceCards } = require('../src/ai/smart-onboarding');
+const { buildResourceSynergyTable } = require('../src/ai/resource-card-synergy');
+const { buildConJobSynergyTable } = require('../src/ai/con-job-synergy');
 const executor = require('../src/executor');
 const scoring = require('../src/scoring');
 
@@ -187,6 +190,18 @@ function main() {
   const index = buildDataIndex(raw);
   const evalTable = buildEvalTable(raw);
 
+  // "LV4" smart onboarding (2026-08-28, matching main.js's live-UI wiring -- see driveOneAiStepInner's
+  // own RESOURCE_CHOICE/ONBOARDING branches there): JOB/CON/resource-card picks go through
+  // smart-onboarding.js instead of playGame's own pure-random default. Every other level leaves both
+  // undefined, so playGame's onboarding stays exactly as before.
+  let resourceCardPicker;
+  let synergyTable2;
+  if (aiLevel === 'LV4') {
+    const synergyTable3 = buildResourceSynergyTable(raw);
+    synergyTable2 = buildConJobSynergyTable(raw);
+    resourceCardPicker = (candidateIds, state, idx, player) => pickResourceCards(candidateIds, state, idx, synergyTable3, player.conPhysicalId);
+  }
+
   // conjob["CON001A\tJOB001"] = { count, scoreSum, qstScoreSum, rankSum }. scoreSum (2026-08-09, per user
   // request: "AIDATA 平均得点は QSTカードなしの今までの得点で平均を出してください") now excludes QST's
   // rank-based reward VP -- i.e. it's finalScore minus qstScore, matching the metric's original,
@@ -264,7 +279,7 @@ function main() {
     let roundDetailByPlayerId;
     let activationCounts;
     try {
-      ({ state, historyByPlayerId, roundDetailByPlayerId, activationCounts } = playGame(seed, PLAYER_NAMES, index, evalTable, aiOptions, moveGeneratorOptions, evaluatorOptions));
+      ({ state, historyByPlayerId, roundDetailByPlayerId, activationCounts } = playGame(seed, PLAYER_NAMES, index, evalTable, aiOptions, moveGeneratorOptions, evaluatorOptions, undefined, resourceCardPicker, synergyTable2));
     } catch (e) {
       console.error(`Game ${i + 1}/${n} (seed=${seed}) crashed: ${e.message}`);
       console.error(e.stack);

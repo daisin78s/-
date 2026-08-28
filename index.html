@@ -653,6 +653,18 @@
   <script src="src/ai/ai-player.js"></script>
   <script>__captureModule('ai-player');</script>
 
+  <!-- AI LV4 smart onboarding (2026-08-27/28). Leaf: no src/*.js dependencies. -->
+  <script src="src/ai/resource-card-synergy.js"></script>
+  <script>__captureModule('resource-card-synergy');</script>
+
+  <!-- Leaf: no src/*.js dependencies. -->
+  <script src="src/ai/con-job-synergy.js"></script>
+  <script>__captureModule('con-job-synergy');</script>
+
+  <!-- Depends on: data-loader, resource-card-synergy, con-job-synergy, rng, setup, game-state -->
+  <script src="src/ai/smart-onboarding.js"></script>
+  <script>__captureModule('smart-onboarding');</script>
+
   <!-- Game master data, embedded as window.GAME_DATA by tools/xlsx_to_json.py (see that file's and
        data-loader.js's comments -- file:// pages can't fetch() game.json, so this is a plain global
        instead, loaded the same way as everything else here). -->

@@ -36,6 +36,9 @@ const simulatorMod = window.__modules['simulator'];
 const moveGeneratorMod = window.__modules['move-generator'];
 const evaluatorMod = window.__modules['evaluator'];
 const aiPlayerMod = window.__modules['ai-player'];
+const resourceCardSynergyMod = window.__modules['resource-card-synergy'];
+const conJobSynergyMod = window.__modules['con-job-synergy'];
+const smartOnboardingMod = window.__modules['smart-onboarding'];
 
 const INDEX = dataLoaderMod.buildDataIndex(dataLoaderMod.loadGameData(window.GAME_DATA));
 
@@ -139,7 +142,7 @@ const STATE = createInitialState(consumeDebugSetupPlan());
 // the way two separately-hardcoded copies eventually would. Adding a future AI_LV4/5/... only ever means
 // appending one more [id, label] entry here, in order -- everything that cares "which level is strongest"
 // (right now, just the default below) then already sees it with no further edits.
-const PLAYER_ROLE_OPTIONS = [['HUMAN', '人間'], ['AI_LV1', 'AI LV1'], ['AI_LV2', 'AI LV2'], ['AI_LV3', 'AI LV3']];
+const PLAYER_ROLE_OPTIONS = [['HUMAN', '人間'], ['AI_LV1', 'AI LV1'], ['AI_LV2', 'AI LV2'], ['AI_LV3', 'AI LV3'], ['AI_LV4', 'AI LV4']];
 // The strongest AI level currently defined -- the last entry in PLAYER_ROLE_OPTIONS (2026-08-11, per user
 // request: "デフォルトのAILVを3にして　今後デフォルトは一番高いAILVを選択してください"). Was a hardcoded
 // 'AI_LV2' before LV3 existed; now derived so it keeps pointing at whichever level is actually strongest
@@ -174,11 +177,30 @@ const aiPlayerLv3 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGenerator, aiEvaluator
   lookaheadExtraTurns: 1,
   roundOverrides: { 4: { lookaheadExtraTurns: 20, beamWidth: 10, maxRolloutMoves: 200 } },
 });
+// AI LV4 (2026-08-28, per user request to make this the new default level). Reuses LV3's evaluator
+// (same hand-tuned aiEvalTable + qstAware -- per user confirmation, the GA-trained genomes under
+// output/ are NOT wired in yet) and the shared policy-free aiMoveGenerator (孤児院/王宮 exclusions and
+// the "read to next round" lookahead are still unimplemented spec, not yet reflected here) plus LV3's
+// own round-4 deep-search override. The one behavioral difference from LV3 so far: dieScarcityTieBreak
+// (see src/ai/die-priority.js) -- ties in 1-ply score prefer spending the more plentiful die value.
+// Its RESOURCE_CHOICE/ONBOARDING (JOB/CON/resource-card picks) also go through smart-onboarding.js
+// instead of driveOneAiStepInner's uniform-random default -- see that function's own branches below;
+// LV1/2/3 are unaffected either way since only 'AI_LV4' triggers those branches.
+const aiPlayerLv4 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGenerator, aiEvaluatorLv3, aiSimulator, {
+  lookaheadExtraTurns: 1,
+  roundOverrides: { 4: { lookaheadExtraTurns: 20, beamWidth: 10, maxRolloutMoves: 200 } },
+  dieScarcityTieBreak: true,
+});
+// Synergy tables for AI LV4's smart onboarding (see driveOneAiStepInner's RESOURCE_CHOICE/ONBOARDING
+// branches below) -- built once here, same pattern as aiEvalTable above.
+const aiResourceSynergyTable = resourceCardSynergyMod.buildResourceSynergyTable(INDEX.raw);
+const aiConJobSynergyTable = conJobSynergyMod.buildConJobSynergyTable(INDEX.raw);
 /** Which AIPlayer instance drives playerId's own TURN moves -- see playerRoles' own comment. */
 function aiPlayerFor(playerId) {
   const role = playerRoles.get(playerId);
   if (role === 'AI_LV1') return aiPlayerLv1;
   if (role === 'AI_LV3') return aiPlayerLv3;
+  if (role === 'AI_LV4') return aiPlayerLv4;
   return aiPlayerLv2;
 }
 
@@ -463,11 +485,21 @@ function driveOneAiStepInner(state) {
   if (!ctx) return false;
 
   if (ctx.type === 'RESOURCE_CHOICE') {
-    // Random, not simulate-and-score (2026-08-03, per user feedback: "初期資源、CON、JOBは現状は完全
-    // ランダムでお願いします そのうち評価値を入れます" -- see src/ai/game-runner.js's matching fix and
-    // its own doc for why: RESOURCE/CON/JOB have no real eval-table values yet).
-    const pair = rngMod.shuffle(state.rng, ctx.resourceChoice.context.candidates).slice(0, 2);
-    setupMod.chooseResourceCards(state, ctx.resourceChoice.playerId, pair);
+    const resourcePlayerId = ctx.resourceChoice.playerId;
+    // AI LV4 (2026-08-28): reachability/synergy-based pick via smart-onboarding.js instead of the
+    // uniform-random default below -- see that module's own doc. Every other level (2026-08-03, per
+    // user feedback: "初期資源、CON、JOBは現状は完全ランダムでお願いします そのうち評価値を入れます" --
+    // see src/ai/game-runner.js's matching fix and its own doc for why) still picks purely at random.
+    const pair = playerRoles.get(resourcePlayerId) === 'AI_LV4'
+      ? smartOnboardingMod.pickResourceCards(
+          ctx.resourceChoice.context.candidates,
+          state,
+          INDEX,
+          aiResourceSynergyTable,
+          state.players.find((p) => p.id === resourcePlayerId).conPhysicalId,
+        )
+      : rngMod.shuffle(state.rng, ctx.resourceChoice.context.candidates).slice(0, 2);
+    setupMod.chooseResourceCards(state, resourcePlayerId, pair);
     maybeStartRound1(state);
     return true;
   }
@@ -491,25 +523,34 @@ function driveOneAiStepInner(state) {
   }
 
   if (ctx.type === 'ONBOARDING') {
+    // AI LV4 (2026-08-28): reachability/synergy-based JOB draft + CON face pick via smart-onboarding.js
+    // instead of the uniform-random default below in both branches -- see that module's own doc. Every
+    // other level still picks purely at random (2026-08-03, per user feedback -- see the resource-choice
+    // branch above, and src/ai/game-runner.js's matching fix and its own doc for why).
+    const isLv4 = playerRoles.get(ctx.playerId) === 'AI_LV4';
     if (!ctx.player.jobCardId) {
-      // Random, not simulate-and-score (2026-08-03, per user feedback -- see the resource-choice
-      // branch above, and src/ai/game-runner.js's matching fix and its own doc for why).
-      const jobFaceId = state.jobPool[Math.floor(rngMod.next(state.rng) * state.jobPool.length)];
+      const jobFaceId = isLv4
+        ? smartOnboardingMod.pickJob(state, INDEX, ctx.playerId, aiConJobSynergyTable, aiMoveGenerator, aiSimulator, state.rng)
+        : state.jobPool[Math.floor(rngMod.next(state.rng) * state.jobPool.length)];
       setupMod.chooseJob(state, INDEX, ctx.playerId, jobFaceId);
       // No auto/manual-mode prompt for AI (unlike the human path, e.g. renderJobPool's click handler)
       // -- pendingAutoModeChoice is a human-UI convenience only; MoveGenerator's own move generation
       // already accounts for whichever mode (auto/manual) is actually active, see its own doc.
       // JOB010/革命家's PICK_JOB_REPLACEMENT (2026-08-21, see setup.grantRevolutionaryBonusIfEarned's
-      // own doc): same random-pick policy as src/ai/game-runner.js's matching driveOnboarding hook --
-      // must resolve synchronously here or it sits in state.pendingChoices forever (renderJobPool's own
-      // "still drafting" check only ever looks at jobCardId, which is already non-null by this point).
+      // own doc): same random-pick policy as src/ai/game-runner.js's matching driveOnboarding/
+      // driveSmartOnboarding hooks (no user spec covers this rare, JOB010-specific edge case under LV4
+      // either) -- must resolve synchronously here or it sits in state.pendingChoices forever
+      // (renderJobPool's own "still drafting" check only ever looks at jobCardId, which is already
+      // non-null by this point).
       const jobReplacementChoice = state.pendingChoices.find((c) => c.playerId === ctx.playerId && c.kind === 'PICK_JOB_REPLACEMENT');
       if (jobReplacementChoice) {
         const picked = jobReplacementChoice.context.candidates[Math.floor(rngMod.next(state.rng) * jobReplacementChoice.context.candidates.length)];
         setupMod.resolveJobReplacementChoice(state, INDEX, ctx.playerId, picked);
       }
     } else {
-      const face = rngMod.next(state.rng) < 0.5 ? 'A' : 'B';
+      const face = isLv4
+        ? smartOnboardingMod.pickConFace(state, INDEX, ctx.playerId, ctx.player.jobCardId, aiConJobSynergyTable, state.rng)
+        : (rngMod.next(state.rng) < 0.5 ? 'A' : 'B');
       setupMod.chooseConFace(state, INDEX, ctx.playerId, face);
       setupMod.receiveInitialResources(state, INDEX, ctx.playerId);
     }

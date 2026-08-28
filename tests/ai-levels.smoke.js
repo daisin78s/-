@@ -16,9 +16,10 @@ function check(label, actual, expected) {
   if (ok) passCount++; else failCount++;
 }
 
-check('LEVELS lists LV1/LV2/LV3, in that order', LEVELS.map((l) => l.name), ['LV1', 'LV2', 'LV3']);
+check('LEVELS lists LV1/LV2/LV3/LV4, in that order', LEVELS.map((l) => l.name), ['LV1', 'LV2', 'LV3', 'LV4']);
 check('getLevel("LV2") returns the matching registry entry', getLevel('LV2'), LEVELS[1]);
 check('getLevel("LV3") includes qstAware evaluatorOptions', getLevel('LV3').evaluatorOptions, { qstAware: true });
+check('getLevel("LV4") includes dieScarcityTieBreak aiOptions', getLevel('LV4').aiOptions.dieScarcityTieBreak, true);
 {
   let threw = false;
   try { getLevel('LV99'); } catch (e) { threw = true; }

@@ -274,8 +274,16 @@ function driveTurn(state, index, playerId, aiPlayer, initialHasPlacedDieThisTurn
  * `evaluator` regardless -- onboarding (JOB/CON/RESOURCE) is pure RNG (see this file's own doc), so
  * which Evaluator instance reaches it has never mattered. Every existing caller leaves this undefined,
  * so the uniform single-evaluator/moveGenerator behavior below is completely unaffected.
+ *
+ * resourceCardPicker/synergyTable2 (2026-08-28, optional, for "AI LV4" in tools/ai_data_report.js):
+ * same meaning/wiring as playGameForFitness's own matching params -- resourceCardPicker is passed
+ * straight through to setupGame (see its own doc); synergyTable2 present switches the ONBOARDING_NEEDED
+ * branch below from driveOnboarding to driveSmartOnboarding (JOB/CON via smart-onboarding.js's
+ * pickJob/pickConFace) using the single shared moveGenerator/simulator this function already builds
+ * above (fine for playGame's non-levelByPlayerId path, the only one tools/ai_data_report.js uses).
+ * Every existing caller leaves both undefined, so onboarding stays pure-random as before.
  */
-function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorOptions, evaluatorOptions, levelByPlayerId) {
+function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorOptions, evaluatorOptions, levelByPlayerId, resourceCardPicker, synergyTable2) {
   const { Evaluator } = require('./evaluator');
   const { MoveGenerator } = require('./move-generator');
   const { Simulator } = require('./simulator');
@@ -286,7 +294,7 @@ function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorO
   const simulator = new Simulator();
   const aiPlayersByPlayerId = {};
 
-  const state = setupGame(seed, playerNames, index, evaluator);
+  const state = setupGame(seed, playerNames, index, evaluator, resourceCardPicker);
   if (levelByPlayerId) {
     const { getLevel } = require('./levels');
     const instancesByLevelName = new Map();
@@ -373,7 +381,11 @@ function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorO
       continue;
     }
     if (next.type === 'ONBOARDING_NEEDED') {
-      driveOnboarding(state, index, next.playerId, evaluator);
+      if (synergyTable2) {
+        driveSmartOnboarding(state, index, next.playerId, synergyTable2, moveGenerator, simulator);
+      } else {
+        driveOnboarding(state, index, next.playerId, evaluator);
+      }
       continue;
     }
     // next.type === 'TURN'
