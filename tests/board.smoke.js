@@ -2628,5 +2628,43 @@ function withWildcardOwner(state) {
   check('Group placement of 2 ☆ dice is refused outright regardless of shop contents', result, { success: false, reason: 'WILDCARD_GROUP_NOT_ALLOWED' });
 }
 
+// ---------------------------------------------------------------------------
+// wildcardExAnyChoice / placeWildcardDie's preferredSlotIndex (2026-08-28, per user request: "道化の
+// ☆ダイス 自分のEXとANYと両方置けるときANYにしか置けません その時だけはどちらか選べるようにお願い").
+// AREA003B/城下町LV1 has SLOT1=ANY, SLOT2=EX -- a clean 2-slot mixed layout.
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  state.maps.MAP003.currentAreaId = 'AREA003B';
+  state.maps.MAP003.feeOwnerId = 'P1';
+  const die = giveDie(state, 'P1', 4);
+  const choice = board.wildcardExAnyChoice(state, index, { playerId: 'P1' }, 'MAP003');
+  check('wildcardExAnyChoice finds the EX(index1)-vs-ANY(index0) split', choice, { exSlotIndex: 1, otherSlotIndex: 0 });
+
+  const autoState = structuredClone(state);
+  const autoResult = board.placeWildcardDie(autoState, index, { playerId: 'P1' }, die.id, 'MAP003');
+  check('placeWildcardDie with no preferredSlotIndex still auto-picks the leftmost (ANY, index0) as before', autoResult.success, true);
+  check('...lands on SLOT1 (index 0)', autoState.maps.MAP003.slots[0].some((o) => o.dieId === die.id), true);
+
+  const exState = structuredClone(state);
+  const exResult = board.placeWildcardDie(exState, index, { playerId: 'P1' }, die.id, 'MAP003', choice.exSlotIndex);
+  check('placeWildcardDie with preferredSlotIndex=exSlotIndex lands there instead', exResult.success, true);
+  check('...lands on SLOT2 (index 1, EX)', exState.maps.MAP003.slots[1].some((o) => o.dieId === die.id), true);
+}
+{
+  // No real choice: both empty slots are the SAME kind (2 ANY) -- interchangeable, so no ambiguity.
+  const state = freshStateWithShops();
+  const choice = board.wildcardExAnyChoice(state, index, { playerId: 'P1' }, board.CASTLE_MAP_ID); // 王宮: all ANY
+  check('wildcardExAnyChoice returns null when there is no EX-vs-non-EX split', choice, null);
+}
+{
+  // No real choice: the EX slot belongs to a DIFFERENT player -- not a valid target for this player at all.
+  const state = freshStateWithShops();
+  state.maps.MAP003.currentAreaId = 'AREA003B';
+  state.maps.MAP003.feeOwnerId = 'P2';
+  const choice = board.wildcardExAnyChoice(state, index, { playerId: 'P1' }, 'MAP003');
+  check('wildcardExAnyChoice returns null when the EX slot belongs to someone else', choice, null);
+}
+
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);

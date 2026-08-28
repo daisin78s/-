@@ -514,5 +514,27 @@ function offersMapId(moves, dieId, mapId) { return moves.some((m) => m.dieId ===
   assertTrue('Round 3+: 元老院 is NOT dropped -- the preference no longer applies', offersMapId(moves, die.id, 'MAP009'));
 }
 
+// ---------------------------------------------------------------------------
+// #wildcardPlaceDieMoves' EX-vs-ANY choice (2026-08-28, see board.wildcardExAnyChoice's own doc): a ☆
+// die offers BOTH slots as separate Moves when the player's own empty EX slot and an empty non-EX slot
+// are both available at an AREA, instead of a single slotIndex-less Move. AREA003B/城下町LV1 has
+// SLOT1=ANY, SLOT2=EX -- a clean 2-slot mixed layout (same fixture as board.smoke.js's own test).
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const wildInst = createCardInstance('JOB003');
+  wildInst.ownerId = 'P1';
+  state.cards[wildInst.physicalId] = wildInst;
+  p1.ownedCardPhysicalIds.push(wildInst.physicalId);
+  state.maps.MAP003.currentAreaId = 'AREA003B';
+  state.maps.MAP003.feeOwnerId = 'P1';
+  const die = giveDie(state, 'P1', 4);
+
+  const moves = moveGenerator.generateMoves(state, index, 'P1', { hasPlacedDieThisTurn: false });
+  const wildcardMoves = moves.filter((m) => m.type === 'PLACE_WILDCARD_DIE' && m.dieId === die.id && m.mapId === 'MAP003');
+  assertTrue('Both the ANY slot (index 0) and the EX slot (index 1) are offered as separate Moves', wildcardMoves.some((m) => m.slotIndex === 0) && wildcardMoves.some((m) => m.slotIndex === 1));
+}
+
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);

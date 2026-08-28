@@ -826,6 +826,12 @@ let pendingBzOutcomeChoice = null;
 // renderPlacementChoiceModal). Set instead of placing immediately; the die isn't placed yet at this
 // point, so unlike pendingBuildChoice this one has a real cancel affordance.
 let pendingPlacementChoice = null;
+// { mapId, dieId, colorPreference, exSlotIndex, otherSlotIndex } | null -- 道化(JOB003)の☆ダイスで自分の
+// 空きEXスロットと空きANYスロットが両方選べる時だけ表示 (2026-08-28, per user request: "自分のEXとANYと
+// 両方置けるときANYにしか置けません その時だけはどちらか選べるようにお願い" -- see
+// board.wildcardExAnyChoice/placeSelectedWildcardDie/renderWildcardSlotChoiceModal). Checked AFTER the
+// 色欲 payment choice above (same "nothing committed yet" ordering) since neither depends on the other.
+let pendingWildcardSlotChoice = null;
 // { physicalId, playerId, bareTap:{kind,choices?}, dieId, value } | null -- a bare TAP ability that
 // needs a die+value choice before it can run (SET_DICE_ANY/SET_DIE_VALUE/CHANGE_DIE_VALUE, see
 // attachTapToggle/bareTapKind/renderTapChoiceModal). dieId/value start null (nothing picked yet); the
@@ -947,6 +953,7 @@ function jumpToHistoryIndex(idx) {
   selectedDieIds = [];
   pendingBuildChoice = null;
   pendingPlacementChoice = null;
+  pendingWildcardSlotChoice = null;
   pendingTapChoice = null;
   pendingAutoModeChoice = null;
   pendingTurnEndPlayerId = null;
@@ -3884,8 +3891,17 @@ function renderBoard(state, next) {
       const wildcardSingleSelection = highlightOwnerIsWildcard && selectedDieIds.length === 1;
       if (wildcardSingleSelection) {
         const context = { playerId: highlightOwner.id, colorPreference: {} };
-        const preview = boardMod.previewPlaceWildcardDie(state, INDEX, context, selectedDieIds[0], mapId);
-        if (preview.ok) highlightedSlots = new Set([preview.slotIndex]);
+        // EX-vs-ANY (2026-08-28): light up BOTH candidate slots when it's a genuine choice (see
+        // board.wildcardExAnyChoice's own doc), not just whichever the plain auto-pick preview below
+        // would land on -- the player hasn't decided yet at this point (renderWildcardSlotChoiceModal
+        // handles the actual choice, triggered from attemptPlaceSelectedWildcardDie's own click).
+        const exAnyChoice = boardMod.wildcardExAnyChoice(state, INDEX, context, mapId);
+        if (exAnyChoice) {
+          highlightedSlots = new Set([exAnyChoice.exSlotIndex, exAnyChoice.otherSlotIndex]);
+        } else {
+          const preview = boardMod.previewPlaceWildcardDie(state, INDEX, context, selectedDieIds[0], mapId);
+          if (preview.ok) highlightedSlots = new Set([preview.slotIndex]);
+        }
       } else if (highlightOwner && selectedDieIds.length === 1) {
         highlightedSlots = new Set();
         for (let i = 0; i < slots.length; i++) {
@@ -4120,7 +4136,8 @@ function attemptPlaceSelectedDie(state, mapId, slotIndex) {
 /** Entry point for a whole-TILE click when a single ☆ wildcard die is selected (2026-08-19, JOB003/道化
  * -- see renderBoard's own doc on why there's no per-slot click for this case at all). Mirrors
  * attemptPlaceSelectedDie's single-die branch exactly (same 色欲 payment-choice pause), just without a
- * slotIndex -- board.placeWildcardDie auto-assigns the slot itself. */
+ * slotIndex -- board.placeWildcardDie auto-assigns the slot itself (see placeSelectedWildcardDie's own
+ * doc for the one exception, an EX-vs-ANY choice, checked right after this function hands off to it). */
 function attemptPlaceSelectedWildcardDie(state, mapId) {
   const dieId = selectedDieIds[selectedDieIds.length - 1];
   const player = state.players.find((p) => p.dice.some((d) => d.id === dieId));
@@ -4215,31 +4232,45 @@ function placeSelectedDieCommit(state, player, dieId, mapId, slotIndex, colorPre
 }
 
 /** Wildcard counterpart of placeSelectedDie/placeSelectedDieCommit (2026-08-19, JOB003/道化) -- same
- * wD-overflow-confirm pattern, checkpoint bookkeeping, and result handling, just via
- * board.placeWildcardDie (no slotIndex) instead of board.placeDice. */
-function placeSelectedWildcardDie(state, dieId, mapId, colorPreference) {
+ * wD-overflow-confirm pattern, checkpoint bookkeeping, and result handling, via board.placeWildcardDie
+ * instead of board.placeDice. preferredSlotIndex is normally omitted (the engine auto-assigns the slot,
+ * see board.placeWildcardDie's own doc) -- the one exception is EX-vs-ANY (2026-08-28, per user request:
+ * "自分のEXとANYと両方置けるときANYにしか置けません その時だけはどちらか選べるようにお願い"): when
+ * board.wildcardExAnyChoice finds a genuine choice and preferredSlotIndex hasn't already been decided
+ * (i.e. this is the very first call, not a resumption after the picker/色欲/wD-overflow prompts below),
+ * this pauses for renderWildcardSlotChoiceModal instead of placing immediately -- same "nothing
+ * committed yet, so cancelable" shape as pendingPlacementChoice. */
+function placeSelectedWildcardDie(state, dieId, mapId, colorPreference, preferredSlotIndex) {
   const player = state.players.find((p) => p.dice.some((d) => d.id === dieId));
+  if (preferredSlotIndex === undefined) {
+    const exAnyChoice = boardMod.wildcardExAnyChoice(state, INDEX, { playerId: player.id }, mapId);
+    if (exAnyChoice) {
+      pendingWildcardSlotChoice = { mapId, dieId, colorPreference, ...exAnyChoice };
+      render(STATE);
+      return;
+    }
+  }
   // JOB007/宮廷人 tap-first offer -- see placeSelectedDie's own doc for the pattern.
   withJob007TapPrompt(
     state, player.id, dieId,
-    (clone) => boardMod.placeWildcardDie(clone, INDEX, { playerId: player.id, colorPreference }, dieId, mapId),
-    () => placeSelectedWildcardDieAfterJob007Check(state, player, dieId, mapId, colorPreference),
+    (clone) => boardMod.placeWildcardDie(clone, INDEX, { playerId: player.id, colorPreference }, dieId, mapId, preferredSlotIndex),
+    () => placeSelectedWildcardDieAfterJob007Check(state, player, dieId, mapId, colorPreference, preferredSlotIndex),
   );
 }
 
-function placeSelectedWildcardDieAfterJob007Check(state, player, dieId, mapId, colorPreference) {
-  if (wouldCauseWhiteOverflow(state, (clone) => boardMod.placeWildcardDie(clone, INDEX, { playerId: player.id, colorPreference }, dieId, mapId))) {
-    pendingWhiteOverflowConfirm = { onConfirm: () => placeSelectedWildcardDieCommit(state, player, dieId, mapId, colorPreference) };
+function placeSelectedWildcardDieAfterJob007Check(state, player, dieId, mapId, colorPreference, preferredSlotIndex) {
+  if (wouldCauseWhiteOverflow(state, (clone) => boardMod.placeWildcardDie(clone, INDEX, { playerId: player.id, colorPreference }, dieId, mapId, preferredSlotIndex))) {
+    pendingWhiteOverflowConfirm = { onConfirm: () => placeSelectedWildcardDieCommit(state, player, dieId, mapId, colorPreference, preferredSlotIndex) };
     render(STATE);
     return;
   }
-  placeSelectedWildcardDieCommit(state, player, dieId, mapId, colorPreference);
+  placeSelectedWildcardDieCommit(state, player, dieId, mapId, colorPreference, preferredSlotIndex);
 }
 
-function placeSelectedWildcardDieCommit(state, player, dieId, mapId, colorPreference) {
+function placeSelectedWildcardDieCommit(state, player, dieId, mapId, colorPreference, preferredSlotIndex) {
   const preSnapshot = gameStateMod.cloneState(state);
   const preTurnActionTaken = turnActionTaken;
-  const result = boardMod.placeWildcardDie(state, INDEX, { playerId: player.id, colorPreference }, dieId, mapId);
+  const result = boardMod.placeWildcardDie(state, INDEX, { playerId: player.id, colorPreference }, dieId, mapId, preferredSlotIndex);
   selectedDieIds = [];
   if (result.success) actionCheckpoints.push({ state: preSnapshot, turnActionTaken: preTurnActionTaken });
   applyPlaceDiceResult(result, player.id);
@@ -4742,6 +4773,14 @@ function renderPlacementChoiceModal() {
     group.appendChild(zBtn);
     body.appendChild(group);
   }
+}
+
+/** 道化(JOB003)の☆ダイスのEX-vs-ANY choice prompt (2026-08-28, see pendingWildcardSlotChoice's own doc)
+ * -- just shows/hides the overlay; the two option buttons are wired once in the DOMContentLoaded handler
+ * below (same pattern as renderPlacementChoiceModal's own confirm/cancel), since neither needs per-render
+ * rebuilding (no dynamic list, unlike that modal's per-resource buttons). */
+function renderWildcardSlotChoiceModal() {
+  document.getElementById('wildcard-slot-choice-overlay').hidden = !pendingWildcardSlotChoice;
 }
 
 // Kinds that support targeting one of the player's own eligible cards instead of a real die (2026-08-25,
@@ -6239,6 +6278,7 @@ function render(state) {
   document.getElementById('board-message').textContent = placementMessage;
   renderBuildChoiceModal();
   renderPlacementChoiceModal();
+  renderWildcardSlotChoiceModal();
   renderTapChoiceModal();
   renderAutoModeChoiceModal();
   renderTurnEndWarningModal();
@@ -6273,6 +6313,7 @@ function handleUndoClick() {
   selectedDieIds = [];
   pendingBuildChoice = null;
   pendingPlacementChoice = null;
+  pendingWildcardSlotChoice = null;
   pendingTapChoice = null;
   pendingAutoModeChoice = null;
   pendingTurnEndPlayerId = null;
@@ -6305,6 +6346,7 @@ function handleCancelPreviousActionClick() {
   selectedDieIds = [];
   pendingBuildChoice = null;
   pendingPlacementChoice = null;
+  pendingWildcardSlotChoice = null;
   pendingTapChoice = null;
   pendingAutoModeChoice = null;
   placementMessage = '';
@@ -6856,6 +6898,24 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       placeSelectedDie(STATE, dieId, mapId, slotIndex, colorPreference);
     }
+  });
+
+  // EX-vs-ANY choice for a ☆ die (2026-08-28) -- see pendingWildcardSlotChoice's own doc. Both option
+  // buttons commit immediately (no separate confirm step, unlike placement-choice-confirm above --
+  // there's nothing further to adjust once the slot itself is picked).
+  document.getElementById('wildcard-slot-choice-cancel').addEventListener('click', () => {
+    pendingWildcardSlotChoice = null;
+    render(STATE);
+  });
+  document.getElementById('wildcard-slot-choice-ex').addEventListener('click', () => {
+    const { dieId, mapId, colorPreference, exSlotIndex } = pendingWildcardSlotChoice;
+    pendingWildcardSlotChoice = null;
+    placeSelectedWildcardDie(STATE, dieId, mapId, colorPreference, exSlotIndex);
+  });
+  document.getElementById('wildcard-slot-choice-any').addEventListener('click', () => {
+    const { dieId, mapId, colorPreference, otherSlotIndex } = pendingWildcardSlotChoice;
+    pendingWildcardSlotChoice = null;
+    placeSelectedWildcardDie(STATE, dieId, mapId, colorPreference, otherSlotIndex);
   });
 
   document.getElementById('tap-choice-cancel').addEventListener('click', () => {

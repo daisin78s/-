@@ -92,9 +92,11 @@ function applyInPlace(state, index, move) {
       return result;
     }
     // JOB003/道化 (2026-08-19, hasWildcardDice): mirrors PLACE_DIE exactly, just via board.placeWildcardDie
-    // (no slotIndex -- see move-generator.js's #wildcardPlaceDieMoves' own doc) instead of board.placeDice.
+    // (usually no slotIndex -- the engine auto-picks one, same as board.placeDice's own doc -- except when
+    // move.slotIndex is set, 2026-08-28, see move-generator.js's #wildcardPlaceDieMoves' own doc on the
+    // EX-vs-ANY choice) instead of board.placeDice.
     case 'PLACE_WILDCARD_DIE': {
-      const result = board.placeWildcardDie(state, index, { playerId: move.playerId, colorPreference: move.colorPreference }, move.dieId, move.mapId);
+      const result = board.placeWildcardDie(state, index, { playerId: move.playerId, colorPreference: move.colorPreference }, move.dieId, move.mapId, move.slotIndex);
       if (!result.success) return result;
       if (result.actionResult && result.actionResult.pendingBuild) {
         if (move.buildCandidateIndex === undefined || move.buildCandidateIndex === null) {

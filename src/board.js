@@ -1026,7 +1026,7 @@ function previewPlaceDiceGroup(state, index, context, dieIds, mapId) {
  * 道化で打ち消す") -- none of placeDice's matching checks are reproduced here on purpose; this is a
  * wholly separate entrypoint, not a variant of placeDice.
  */
-function placeWildcardDie(state, index, context, dieId, mapId) {
+function placeWildcardDie(state, index, context, dieId, mapId, preferredSlotIndex) {
   const player = state.players.find((p) => p.id === context.playerId);
   const die = player.dice.find((d) => d.id === dieId && d.placedMapId === null && !d.passed);
   if (!die) return { success: false, reason: 'DIE_NOT_AVAILABLE' };
@@ -1048,11 +1048,23 @@ function placeWildcardDie(state, index, context, dieId, mapId) {
   }
   if (eligibleIndexes.length === 0) return { success: false, reason: 'NO_LEGAL_SLOT' };
 
-  let slotIndex = eligibleIndexes.find((i) => map.slots[i].length === 0);
+  // preferredSlotIndex (2026-08-28, per user request: "自分のEXとANYと両方置けるときANYにしか置けません
+  // その時だけはどちらか選べるように") -- lets a caller (main.js's own EX/ANY choice prompt, or
+  // move-generator.js offering both as separate Moves) override which genuinely-empty eligible slot gets
+  // used, instead of always the leftmost one. Falls through to the original auto-pick behavior whenever
+  // omitted, or when the requested slot turns out not to actually be a real empty eligible option (stale
+  // caller state) -- see wildcardExAnyChoice's own doc for when this is ever worth offering at all.
+  let slotIndex;
   let excludedFromBuildValue = false;
-  if (slotIndex === undefined) {
-    slotIndex = eligibleIndexes[0]; // leftmost eligible slot -- forced fallback (evicts whoever's there)
-    excludedFromBuildValue = true;
+  if (preferredSlotIndex !== undefined && preferredSlotIndex !== null
+    && eligibleIndexes.includes(preferredSlotIndex) && map.slots[preferredSlotIndex].length === 0) {
+    slotIndex = preferredSlotIndex;
+  } else {
+    slotIndex = eligibleIndexes.find((i) => map.slots[i].length === 0);
+    if (slotIndex === undefined) {
+      slotIndex = eligibleIndexes[0]; // leftmost eligible slot -- forced fallback (evicts whoever's there)
+      excludedFromBuildValue = true;
+    }
   }
   const targetOccupants = map.slots[slotIndex];
 
@@ -1137,16 +1149,44 @@ function placeWildcardDie(state, index, context, dieId, mapId) {
 
 /** Non-mutating preview of placeWildcardDie (same purpose as previewPlaceDice/previewPlaceDiceGroup
  * above): runs the real placeWildcardDie against a throwaway clone and, if it would succeed, reports
- * which slot index it landed on (the caller doesn't get to pick one -- the engine auto-assigns, see
- * placeWildcardDie's own doc -- so the UI needs this to know which slot to light up). Never touches the
- * real state. */
-function previewPlaceWildcardDie(state, index, context, dieId, mapId) {
+ * which slot index it landed on (the caller doesn't get to pick one unless preferredSlotIndex is given --
+ * see placeWildcardDie's own doc -- so the UI needs this to know which slot to light up). Never touches
+ * the real state. */
+function previewPlaceWildcardDie(state, index, context, dieId, mapId, preferredSlotIndex) {
   const clone = structuredClone(state);
-  const result = placeWildcardDie(clone, index, context, dieId, mapId);
+  const result = placeWildcardDie(clone, index, context, dieId, mapId, preferredSlotIndex);
   if (!result.success) return { ok: false, slotIndex: null };
   if (result.actionResult && result.actionResult.success === false) return { ok: false, slotIndex: null };
   const slotIndex = clone.maps[mapId].slots.findIndex((occupants) => occupants.some((o) => o.dieId === dieId));
   return { ok: true, slotIndex };
+}
+
+/** Whether placing context.playerId's ☆ die at mapId right now is a genuine EX-vs-ANY choice (2026-08-28,
+ * per user request: "道化の☆ダイス 自分のEXとANYと両方置けるときANYにしか置けません その時だけはどちら
+ * か選べるようにお願い") -- placeWildcardDie's own auto-pick always takes whichever empty eligible slot
+ * comes first in the AREA's own SLOT1-6 order, so when the player's own empty EX slot and an empty
+ * non-EX slot (a plain numbered SLOT or ANY -- ☆ ignores the distinction, see placeWildcardDie's own doc)
+ * are BOTH available, one silently wins over the other with no way to pick. Multiple empty slots of the
+ * SAME kind are never ambiguous this way (interchangeable for a solo ☆ placement, see placeWildcardDie's
+ * own doc on buildValue), so this only ever returns non-null on a genuine EX-vs-non-EX split. Used by
+ * both main.js (whether to pause for a picker before placing) and move-generator.js's
+ * #wildcardPlaceDieMoves (offering both as separate Moves for the AI to score).
+ * @returns {{exSlotIndex: number, otherSlotIndex: number}|null} */
+function wildcardExAnyChoice(state, index, context, mapId) {
+  const map = state.maps[mapId];
+  const areaRow = getAreaRow(index, map.currentAreaId);
+  const requirements = getSlotRequirements(areaRow);
+  let exSlotIndex = null;
+  let otherSlotIndex = null;
+  for (let i = 0; i < requirements.length; i++) {
+    if (map.slots[i].length > 0) continue;
+    if (requirements[i] === 'EX') {
+      if (exSlotIndex === null && map.feeOwnerId === context.playerId) exSlotIndex = i;
+    } else if (otherSlotIndex === null) {
+      otherSlotIndex = i;
+    }
+  }
+  return exSlotIndex !== null && otherSlotIndex !== null ? { exSlotIndex, otherSlotIndex } : null;
 }
 
 /**
@@ -1769,6 +1809,7 @@ module.exports = {
   previewPlaceDice,
   previewPlaceDiceGroup,
   previewPlaceWildcardDie,
+  wildcardExAnyChoice,
   passDie,
   resolveAreaAction,
   resolveProgramOrBuild,

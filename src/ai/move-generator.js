@@ -9,7 +9,7 @@
  *
  * Move shapes (a plain discriminated union, matching what simulator.js's applyInPlace expects):
  *   { type:'PLACE_DIE', playerId, dieId, mapId, slotIndex, buildCandidateIndex? }
- *   { type:'PLACE_WILDCARD_DIE', playerId, dieId, mapId, buildCandidateIndex? }
+ *   { type:'PLACE_WILDCARD_DIE', playerId, dieId, mapId, slotIndex?, buildCandidateIndex? }
  *   { type:'PLACE_DICE_GROUP', playerId, dieIds:[id,id], mapId, buildCandidateIndex? }
  *   { type:'PASS_DIE', playerId, dieId }
  *   { type:'BARE_TAP', playerId, physicalId, chosenDieId?, chosenValue?, chosenDelta?, buildCandidateIndex? }
@@ -36,7 +36,10 @@
  * PLACE_WILDCARD_DIE (2026-08-19, JOB003/hasWildcardDice): #placeDieMoves enumerates die x mapId only,
  * no slotIndex loop, for a wildcard-owning player -- board.placeWildcardDie auto-assigns the slot itself
  * (see its own doc), so there is nothing for MoveGenerator to search over per-slot the way PLACE_DIE
- * does.
+ * does. EXCEPTION (2026-08-28, see board.wildcardExAnyChoice's own doc): when the player's own empty EX
+ * slot and an empty non-EX slot are both available at mapId, that IS a genuine choice with no single
+ * "correct" auto-pick, so #wildcardPlaceDieMoves offers BOTH as separate Moves (each carrying its own
+ * slotIndex) instead of the usual single slotIndex-less Move.
  *
  * PLACE_DICE_GROUP (2026-08-21, per user request "AIがダイスを２個使ってモニュメントを獲得できるように
  * してほしい"): #placeDiceGroupMoves enumerates 2-die pairs (never 3+) at 王宮/元老院 only -- the only 2
@@ -246,22 +249,34 @@ class MoveGenerator {
   /** #placeDieMoves' wildcard branch (JOB003/道化, 2026-08-19): board.placeWildcardDie auto-assigns the
    * slot itself, so this only tries die x mapId, never a slotIndex loop -- mirrors the non-wildcard
    * PLACE_DIE branch's pendingBuild/candidate handling exactly, just emitting PLACE_WILDCARD_DIE instead
-   * (no slotIndex field at all, since the caller never chose one). Returns true iff this mapId yielded a
+   * (no slotIndex field at all, since the caller never chose one).
+   * EX-vs-ANY choice (2026-08-28, see board.wildcardExAnyChoice's own doc and this file's own top-of-file
+   * doc): when that returns non-null, tries BOTH slot indices (each dry-run via a fresh clone, same as
+   * every other candidate here) and offers whichever succeed as separate Moves, each carrying its own
+   * slotIndex -- letting the Evaluator actually choose, rather than silently defaulting to whichever slot
+   * the AREA's own SLOT1-6 order happens to list first. Returns true iff this mapId yielded at least one
    * legal placement, so the caller can track diceWithAPlacement for the PASS_DIE fallback the same way. */
   #wildcardPlaceDieMoves(state, index, playerId, die, mapId, moves) {
-    const clone = cloneState(state);
-    const result = board.placeWildcardDie(clone, index, { playerId }, die.id, mapId);
-    if (!result.success) return false;
-    if (result.actionResult && result.actionResult.pendingBuild) {
-      const candidates = result.actionResult.pendingBuild.candidates;
-      for (let buildCandidateIndex = 0; buildCandidateIndex < candidates.length; buildCandidateIndex++) {
-        moves.push({ type: 'PLACE_WILDCARD_DIE', playerId, dieId: die.id, mapId, buildCandidateIndex });
+    const exAnyChoice = board.wildcardExAnyChoice(state, index, { playerId }, mapId);
+    const slotOptions = exAnyChoice ? [exAnyChoice.exSlotIndex, exAnyChoice.otherSlotIndex] : [undefined];
+    let placedAny = false;
+    for (const slotIndex of slotOptions) {
+      const clone = cloneState(state);
+      const result = board.placeWildcardDie(clone, index, { playerId }, die.id, mapId, slotIndex);
+      if (!result.success) continue;
+      placedAny = true;
+      const moveBase = { type: 'PLACE_WILDCARD_DIE', playerId, dieId: die.id, mapId, ...(slotIndex !== undefined ? { slotIndex } : {}) };
+      if (result.actionResult && result.actionResult.pendingBuild) {
+        const candidates = result.actionResult.pendingBuild.candidates;
+        for (let buildCandidateIndex = 0; buildCandidateIndex < candidates.length; buildCandidateIndex++) {
+          moves.push({ ...moveBase, buildCandidateIndex });
+        }
+        moves.push({ ...moveBase });
+      } else {
+        moves.push({ ...moveBase });
       }
-      moves.push({ type: 'PLACE_WILDCARD_DIE', playerId, dieId: die.id, mapId });
-    } else {
-      moves.push({ type: 'PLACE_WILDCARD_DIE', playerId, dieId: die.id, mapId });
     }
-    return true;
+    return placedAny;
   }
 
   /** PLACE_DICE_GROUP (2026-08-21, per user request -- see board.placeDiceGroup's own doc): AI-side
