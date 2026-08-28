@@ -14,6 +14,22 @@ const executor = require('../src/executor');
 
 const index = buildDataIndex(loadGameData(path.join(__dirname, '..', 'data', 'game.json')));
 
+// Synthetic tier-C AREA matching 孤児院LV2(AREA010C)'s OLD shape (SLOT1=ANY, ACTION=ADD(2VP)) -- 孤児院
+// LV2 itself became EX-only (SLOT1=EX) + CHANGE(K,VP,5) in a later, intentional data edit (confirmed with
+// the user, 2026-08-28: "意図的な変更です" -- LV2 is now deliberately owner-exclusive), which broke this
+// file's own usage-fee-isolation tests below: their whole point was a NON-owner interacting with a
+// tiered-up AREA whose own action never grants K/A/B/C/Z, isolating the fee-affordability check from
+// whatever the AREA's own action happens to do -- but a non-owner can no longer reach AREA010C's only
+// (now EX) slot at all. Registered as its own synthetic AREA row (not a mutation of the real AREA010C,
+// which stays untouched for the EX-only tests further down that specifically exercise it) purely so these
+// tests keep exercising that isolated mechanism regardless of what 孤児院 itself does going forward.
+// 2 ANY slots (not 1) so a 地主 test further down can occupy one with an "already placed here earlier"
+// die while a second, new placement still targets the other -- AREA010C's own old shape only had 1.
+index.raw.AREA.push({
+  ID: 'AREA999C', NAME: 'test-fee-tier-c-any-slot', SLOT1: 'ANY', SLOT2: 'ANY', SLOT3: 'NONE', SLOT4: 'NONE', SLOT5: 'NONE', SLOT6: 'NONE',
+  ACTION: 'ADD(2VP)', INST: '',
+});
+
 let passCount = 0;
 let failCount = 0;
 function check(label, actual, expected) {
@@ -1204,11 +1220,10 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
 {
   // Placement itself is refused if the resulting usage fee would be entirely unpayable, checked AFTER
   // the AREA's own action resolves (2026-08-05, per user diagnosis: "AREA010を使うときはAIが使用料が
-  // 払えることを確認してからダイスを置く用に直せますか" -- AREA010's own actions never grant K to a
-  // non-owner: ADD(2VP) (2026-08-25 data edit: was CHANGE(1K,2VP)) grants none at all -- see
-  // canAffordFee's own doc).
+  // 払えることを確認してからダイスを置く用に直せますか"). AREA999C (see this file's own synthetic-row
+  // doc up top) stands in for what AREA010C used to be -- ADD(2VP) grants no K to a non-owner at all.
   const state = freshStateWithShops();
-  state.maps['MAP010'] = mapWithArea('MAP010', 'AREA010C', 3, 'P1'); // SLOT1=ANY, ACTION=ADD(2VP)
+  state.maps['MAP010'] = mapWithArea('MAP010', 'AREA999C', 3, 'P1'); // SLOT1=ANY, ACTION=ADD(2VP)
   player(state, 'P2').resources.K = 1; // below the 2K fee, and ADD(2VP) never grants any more
   const die = giveDie(state, 'P2', 1);
   const result = board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP010', 0);
@@ -1224,7 +1239,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   // canAffordFee's own doc: A/B/C/Z->K free actions have no usage cap). ADD(2VP) never touches K at all,
   // so P2's 2 extra A alone have to cover the whole 2K fee.
   const state = freshStateWithShops();
-  state.maps['MAP010'] = mapWithArea('MAP010', 'AREA010C', 3, 'P1');
+  state.maps['MAP010'] = mapWithArea('MAP010', 'AREA999C', 3, 'P1');
   player(state, 'P2').resources.A = 2;
   const die = giveDie(state, 'P2', 1);
   const result = board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP010', 0);
@@ -1234,15 +1249,27 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
 {
   // 2026-08-07, per user request ("wD→２Kのフリーアクション廃止します コードも削除してください"): an
   // unplaced wD no longer counts toward canAffordFee at all -- before this removal it added +2 (modeling
-  // "the player could still use the now-abolished wD->2K free action"). Same AREA010C setup as the two
+  // "the player could still use the now-abolished wD->2K free action"). Same AREA999C setup as the two
   // blocks above, but P2's only resources are a K below the fee, plus an unplaced wD that doesn't help.
   const state = freshStateWithShops();
-  state.maps['MAP010'] = mapWithArea('MAP010', 'AREA010C', 3, 'P1');
+  state.maps['MAP010'] = mapWithArea('MAP010', 'AREA999C', 3, 'P1');
   player(state, 'P2').resources.K = 1;
   player(state, 'P2').dice.push(require('../src/game-state').createDie('test-wd', 'WHITE'));
   const die = giveDie(state, 'P2', 1);
   const result = board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP010', 0);
   check('An unplaced wD no longer helps cover the fee -- placement is still refused as unaffordable', result, { success: false, reason: 'UNAFFORDABLE_USAGE_FEE', amount: 2 });
+}
+{
+  // Regression guard for the intentional 2026-08-25/28 孤児院LV2 rework (confirmed with the user,
+  // 2026-08-28: "意図的な変更です"): AREA010C's only slot is now EX, so a non-owner can never reach it at
+  // all any more, regardless of resources -- there is no usage-fee scenario left to test against the real
+  // AREA010C (see this file's own synthetic AREA999C above for why the tests just above use that instead).
+  const state = freshStateWithShops();
+  state.maps['MAP010'] = mapWithArea('MAP010', 'AREA010C', 1, 'P1');
+  player(state, 'P2').resources.K = 20; // resources are irrelevant -- EX_NOT_OWNER blocks this outright
+  const die = giveDie(state, 'P2', 1);
+  const result = board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP010', 0);
+  check('孤児院LV2 (AREA010C) is EX-only now -- a non-owner can never place there at all', result, { success: false, reason: 'EX_NOT_OWNER' });
 }
 {
   // AREA001B's own ACTION (ADD(6K)) trivially covers its own 1K fee -- confirms the check happens
@@ -2222,10 +2249,7 @@ function withPatchedTap(physicalFaceId, tap, fn) {
 // 地主's bonus is usable immediately by the *same* placement it comes from (2026-08-18, per user
 // worked examples): AREA010B (孤児院LV1)'s own ACTION is CHANGE(2K,2VP) (2026-08-25 data edit: was
 // CHANGE(3K,2VP)) -- with 1K, the bonus's +1K is what bridges the shortfall to actually trigger it.
-// (AREA010C/孤児院LV2's own ACTION lost its K cost entirely in this same data edit -- ADD(2VP), no
-// longer a useful subject for "bonus covers the AREA's own cost" -- see the usage-fee-only block below
-// for what AREA010C is still used to test.) mapWithArea (see the EX-slot tests above) builds the map
-// fixture; AREA010B's SLOT1 requires value 2.
+// mapWithArea (see the EX-slot tests above) builds the map fixture; AREA010B's SLOT1 requires value 2.
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
@@ -2242,19 +2266,22 @@ function withPatchedTap(physicalFaceId, tap, fn) {
 
 // ---------------------------------------------------------------------------
 // 地主's bonus also covers an otherwise-unaffordable usage fee (2026-08-18, per user worked example):
-// placing on ANOTHER player's 孤児院LV2 (tier C, usage fee 2K). AREA010C's own ACTION (ADD(2VP),
-// 2026-08-25 data edit: was CHANGE(1K,2VP)) no longer costs K at all, so this block now tests the fee
-// check in isolation -- 1K alone falls 1 short of the 2K fee; 地主's +1K bridges exactly that gap.
+// placing on ANOTHER player's tiered-up AREA (tier C, usage fee 2K). Originally used 孤児院LV2/AREA010C
+// itself, but that card became EX-only (owner-exclusive) in a later, intentional data edit (confirmed
+// with the user, 2026-08-28) -- a non-owner can no longer reach it at all, so this now uses AREA999C
+// (this file's own synthetic tier-C stand-in, see its own doc up top), which still isolates the fee
+// check the same way AREA010C's own ADD(2VP) used to (1K alone falls 1 short of the 2K fee; 地主's +1K
+// bridges exactly that gap).
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   p1.jobCardId = 'JOB011';
   p1.resources.K = 1; // 1 short of the 2K fee on its own
-  state.maps['MAP001'] = mapWithArea('MAP001', 'AREA010C', 6, 'P2'); // P2 owns it -- usage fee applies to P1
+  state.maps['MAP001'] = mapWithArea('MAP001', 'AREA999C', 6, 'P2'); // P2 owns it -- usage fee applies to P1
   const d1 = giveDie(state, 'P1', 3); // SLOT1=ANY
   const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
-  check('地主: 1K is enough on another player\'s 孤児院LV2 once the +1K bonus bridges the 1K shortfall', result.success, true);
+  check('地主: 1K is enough on another player\'s tiered-up AREA once the +1K bonus bridges the 1K shortfall', result.success, true);
   check('...the 1K from 地主 was granted, ADD(2VP) leaves K untouched (1+1=2, reserved for the pending fee)', p1.resources.K, 2);
   check('...and ADD(2VP) granted 2VP', p1.resources.VP, 2);
   check('...the usage fee is now pending, not yet deducted', p1.pendingFee, { mapId: 'MAP001', amount: 2 });
@@ -2262,14 +2289,16 @@ function withPatchedTap(physicalFaceId, tap, fn) {
 {
   // Same setup, but P1 already has a color die sitting in this map -- 地主 STILL grants 1K (unconditional
   // now, 2026-08-20: changed from "1VP instead of K" to "1VP in addition to K"), which bridges the same
-  // 1K shortfall exactly as the no-prior-die case above, PLUS the extra 1VP on top this time.
+  // 1K shortfall exactly as the no-prior-die case above, PLUS the extra 1VP on top this time. The earlier
+  // die occupies AREA999C's OTHER ANY slot (index 1) so it doesn't collide with the new placement's own
+  // slot 0.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   p1.jobCardId = 'JOB011';
   p1.resources.K = 1;
-  state.maps['MAP001'] = mapWithArea('MAP001', 'AREA010C', 6, 'P2');
+  state.maps['MAP001'] = mapWithArea('MAP001', 'AREA999C', 6, 'P2');
   const earlierDie = giveDie(state, 'P1', 5);
-  state.maps['MAP001'].slots[2].push({ playerId: 'P1', dieId: earlierDie.id, value: 5, seq: 1, countsForTurnOrder: true }); // SLOT3=EX
+  state.maps['MAP001'].slots[1].push({ playerId: 'P1', dieId: earlierDie.id, value: 5, seq: 1, countsForTurnOrder: true }); // AREA999C's SLOT2=ANY
   earlierDie.placedMapId = 'MAP001';
   const d1 = giveDie(state, 'P1', 3);
   const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
