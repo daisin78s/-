@@ -468,5 +468,18 @@ function offersMapId(moves, dieId, mapId) { return moves.some((m) => m.dieId ===
   assertTrue('開拓者, both occupied (tie): 元老院 is dropped', !offersMapId(moves, die.id, 'MAP009'));
 }
 
+{
+  // Scoped to rounds 1-2 only (2026-08-28 follow-up: "元老院と王宮どちらも置けるときに王宮にするという
+  // のは 1-2R限定の話です") -- from round 3 on, preferCastleOverSenate is a complete no-op and both
+  // areas stay full, independent candidates, same as the unpoliced generator.
+  const state = freshStateWithShops();
+  state.round = 3;
+  player(state, 'P1').resources.BZ = 20;
+  const die = giveDie(state, 'P1', 5);
+  const moves = moveGeneratorLv4.generateMoves(state, index, 'P1', { hasPlacedDieThisTurn: false });
+  assertTrue('Round 3+: 王宮 is still offered', offersMapId(moves, die.id, 'MAP008'));
+  assertTrue('Round 3+: 元老院 is NOT dropped -- the preference no longer applies', offersMapId(moves, die.id, 'MAP009'));
+}
+
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);

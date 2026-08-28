@@ -108,8 +108,11 @@ class MoveGenerator {
    *   once QST's rank-based rewards rework made the round 3/4 build restriction unnecessary.)
    *   preferCastleOverSenate (2026-08-28, "AI LV4", default false, per user spec: "王宮 元老院 どちらに
    *   も置けるときは 王宮優先", exception confirmed the same day: "開拓者を例外にして" -- "空いている方を
-   *   優先"): 王宮(CASTLE_MAP_ID/MAP008) and 元老院(AREA009_MAP_ID/MAP009) are functionally identical
-   *   (both ANY-slot BUILD() areas), so offering both as separate candidates every turn is pure redundant
+   *   優先"; scoped to rounds 1-2 only, per a same-day follow-up: "元老院と王宮どちらも置けるときに王宮に
+   *   するというのは 1-2R限定の話です" -- from round 3 on this policy is a complete no-op and both areas
+   *   stay full, independent candidates): 王宮(CASTLE_MAP_ID/MAP008) and 元老院(AREA009_MAP_ID/MAP009) are
+   *   functionally identical (both ANY-slot BUILD() areas), so offering both as separate candidates every
+   *   turn is pure redundant
    *   search for computation-reduction purposes (see this class's own die-priority.js sibling for the
    *   same motivation). When both currently have at least one legal placement move this call, all 元老院
    *   moves are dropped in favor of 王宮 -- UNLESS playerId holds 開拓者 (JOB009, board.hasPioneerAbility),
@@ -125,9 +128,10 @@ class MoveGenerator {
   }
 
   /** See preferCastleOverSenate's own constructor doc for the full rule. No-op (returns moves unchanged)
-   * whenever the policy isn't set, or when 王宮/元老院 aren't BOTH currently offering a legal move. */
+   * whenever the policy isn't set, state.round > 2, or 王宮/元老院 aren't BOTH currently offering a legal
+   * move. */
   #applyCastleSenatePreference(state, index, playerId, moves) {
-    if (!this.policy.preferCastleOverSenate) return moves;
+    if (!this.policy.preferCastleOverSenate || state.round > 2) return moves;
     const CASTLE = board.CASTLE_MAP_ID;
     const SENATE = board.AREA009_MAP_ID;
     if (!moves.some((m) => m.mapId === CASTLE) || !moves.some((m) => m.mapId === SENATE)) return moves;
