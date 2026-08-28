@@ -118,6 +118,14 @@ class AIPlayer {
     // unconditional mechanism rather than broadening forcedBzConversionMove above.
     const forcedJob004 = this.moveGenerator.forcedJob004ConversionMove(state, this.index, playerId);
     if (forcedJob004) return forcedJob004;
+    // Forced 終わりの兆しLV2/B202B build (2026-08-28, per user request) -- see
+    // MoveGenerator#forcedEndSignLv2Move's own doc.
+    const forcedEndSignLv2 = this.moveGenerator.forcedEndSignLv2Move(state, this.index, playerId);
+    if (forcedEndSignLv2) return forcedEndSignLv2;
+    // Forced 訓練場の支配/A202A・A202B placement (2026-08-28, per user request) -- see
+    // MoveGenerator#forcedTrainingGroundMove's own doc.
+    const forcedTrainingGround = this.moveGenerator.forcedTrainingGroundMove(state, this.index, playerId, context);
+    if (forcedTrainingGround) return forcedTrainingGround;
     const moves = this.moveGenerator.generateMoves(state, this.index, playerId, context);
     const scored = [];
     for (const move of moves) {
@@ -178,10 +186,10 @@ class AIPlayer {
 
   /** Plain 1-ply-greedy move choice, reusing the same generate+score+pick-best logic as
    * lookaheadExtraTurns:0's selectMove -- deliberately not recursive (that's the whole point of
-   * stopping branching once inside a rollout, see this class's own doc). Also checks the forced BZ/JOB004
-   * conversions first, same as selectMove -- without this, a rollout simulating this player's own future
-   * turns would never account for them, making the lookahead inconsistent with how selectMove will
-   * actually behave once that turn really arrives. */
+   * stopping branching once inside a rollout, see this class's own doc). Also checks every forced move
+   * first (BZ/JOB004/B202B/訓練場), same as selectMove -- without this, a rollout simulating this player's
+   * own future turns would never account for them, making the lookahead inconsistent with how selectMove
+   * will actually behave once that turn really arrives. */
   #greedyMove(state, playerId, hasPlacedDieThisTurn) {
     const context = { hasPlacedDieThisTurn };
     const forced = this.moveGenerator.forcedBzConversionMove(state, this.index, playerId, context);
@@ -189,6 +197,12 @@ class AIPlayer {
     // Forced 策士/JOB004 conversion -- see selectMove's own matching comment.
     const forcedJob004 = this.moveGenerator.forcedJob004ConversionMove(state, this.index, playerId);
     if (forcedJob004) return forcedJob004;
+    // Forced 終わりの兆しLV2/B202B build -- see selectMove's own matching comment.
+    const forcedEndSignLv2 = this.moveGenerator.forcedEndSignLv2Move(state, this.index, playerId);
+    if (forcedEndSignLv2) return forcedEndSignLv2;
+    // Forced 訓練場の支配/A202A・A202B placement -- see selectMove's own matching comment.
+    const forcedTrainingGround = this.moveGenerator.forcedTrainingGroundMove(state, this.index, playerId, context);
+    if (forcedTrainingGround) return forcedTrainingGround;
     const moves = this.moveGenerator.generateMoves(state, this.index, playerId, context);
     let best = null;
     let bestScore = -Infinity;

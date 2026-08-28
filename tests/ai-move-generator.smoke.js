@@ -364,6 +364,94 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
 }
 
 // ---------------------------------------------------------------------------
+// forcedEndSignLv2Move (2026-08-28, per user request: "終わりの兆しLV2は獲得できるカードがあればすぐ使う
+// ようにしてください 使用対象が複数の時はダイス目高いほうを優先で"): forces B202B's BUILD(M,12) tap
+// whenever at least one monument candidate is genuinely affordable, preferring the candidate with the
+// HIGHEST DICE threshold when more than one qualifies. M001(記念碑, DICE>=12, COST=C) and M002(鐘楼,
+// DICE>=11, COST=2B) are both reachable at buildValue=12 -- a clean pair with different thresholds.
+// ---------------------------------------------------------------------------
+function giveB202B(state, playerId) {
+  const cardInst = createCardInstance('B202B');
+  cardInst.ownerId = playerId;
+  state.cards[cardInst.physicalId] = cardInst;
+  player(state, playerId).ownedCardPhysicalIds.push(cardInst.physicalId);
+  return cardInst;
+}
+{
+  const state = freshStateWithShops();
+  state.shops.M.slots.SHOP001 = 'M001'; // DICE>=12, COST=C
+  state.shops.M.slots.SHOP002 = 'M002'; // DICE>=11, COST=2B
+  const cardInst = giveB202B(state, 'P1');
+  const p1 = player(state, 'P1');
+
+  p1.resources.C = 0;
+  p1.resources.B = 0;
+  check('forcedEndSignLv2Move is null with nothing affordable', moveGenerator.forcedEndSignLv2Move(state, index, 'P1'), null);
+
+  p1.resources.B = 2; // only M002 (DICE>=11) affordable
+  const onlyM002 = moveGenerator.forcedEndSignLv2Move(state, index, 'P1');
+  assertTrue('Only M002 affordable: forces the tap', onlyM002 !== null && onlyM002.type === 'BARE_TAP' && onlyM002.physicalId === cardInst.physicalId);
+
+  p1.resources.C = 1; // now BOTH M001 (DICE>=12) and M002 (DICE>=11) are affordable
+  const both = moveGenerator.forcedEndSignLv2Move(state, index, 'P1');
+  const clone = require('../src/game-state').cloneState(state);
+  const applied = require('../src/ai/simulator').applyInPlace(clone, index, both);
+  check('Both affordable: prefers the HIGHER DICE threshold (M001, >=12, over M002, >=11)', applied.candidate.faceId, 'M001');
+
+  cardInst.tapped = true;
+  check('forcedEndSignLv2Move is null once the card is already tapped', moveGenerator.forcedEndSignLv2Move(state, index, 'P1'), null);
+}
+
+// ---------------------------------------------------------------------------
+// forcedTrainingGroundMove (2026-08-28, per user request: "訓練場の支配も獲得したら必ずすぐに訓練場に
+// ダイスを置いて追加色ダイスを獲得するようにしてほしい"; scoped to "新しい色ダイスが得られる時だけ強制"):
+// forces a PLACE_DIE at 訓練場(MAP007) once the player owns A202A/A202B, but ONLY when it would actually
+// raise their own color-dice count -- not merely "the placement succeeds".
+// ---------------------------------------------------------------------------
+function giveTrainingGroundControl(state, playerId, faceId) {
+  const cardInst = createCardInstance(faceId);
+  cardInst.ownerId = playerId;
+  state.cards[cardInst.physicalId] = cardInst;
+  player(state, playerId).ownedCardPhysicalIds.push(cardInst.physicalId);
+  return cardInst;
+}
+{
+  const state = freshStateWithShops();
+  giveTrainingGroundControl(state, 'P1', 'A202A');
+  const p1 = player(state, 'P1');
+  p1.resources.A = 1; // MAP007's default tier-A ACTION is CHANGE((A,B,C),D) -- needs 1 of each to trigger
+  p1.resources.B = 1;
+  p1.resources.C = 1;
+  const die = giveDie(state, 'P1', 3);
+  const context = { hasPlacedDieThisTurn: false };
+  const forced = moveGenerator.forcedTrainingGroundMove(state, index, 'P1', context);
+  check(
+    'Owns 訓練場の支配, has an unplaced die: forces a PLACE_DIE at MAP007',
+    forced && forced.type === 'PLACE_DIE' && forced.mapId === 'MAP007' && forced.dieId === die.id,
+    true
+  );
+}
+{
+  // No unplaced die at all -- nothing to force.
+  const state = freshStateWithShops();
+  giveTrainingGroundControl(state, 'P1', 'A202A');
+  check('No unplaced die: forcedTrainingGroundMove is null', moveGenerator.forcedTrainingGroundMove(state, index, 'P1', { hasPlacedDieThisTurn: false }), null);
+}
+{
+  // Doesn't own 訓練場の支配 at all.
+  const state = freshStateWithShops();
+  giveDie(state, 'P1', 3);
+  check('Doesn\'t own 訓練場の支配: forcedTrainingGroundMove is null', moveGenerator.forcedTrainingGroundMove(state, index, 'P1', { hasPlacedDieThisTurn: false }), null);
+}
+{
+  // Already placed a die this turn -- PLACE_DIE-family gating applies.
+  const state = freshStateWithShops();
+  giveTrainingGroundControl(state, 'P1', 'A202B');
+  giveDie(state, 'P1', 3);
+  check('hasPlacedDieThisTurn already true: forcedTrainingGroundMove is null', moveGenerator.forcedTrainingGroundMove(state, index, 'P1', { hasPlacedDieThisTurn: true }), null);
+}
+
+// ---------------------------------------------------------------------------
 // Regression (2026-08-06, per user feedback: "AIは建築しないときはJOB004をTAPしない（できない）"):
 // forcedBzConversionMove already declined to *force* JOB004's tap with no build outlet (previous
 // block), but #bareTapMoves still offered the same tap as a normal generateMoves candidate regardless

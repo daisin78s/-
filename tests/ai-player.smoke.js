@@ -11,6 +11,19 @@
 
 const { AIPlayer } = require('../src/ai/ai-player');
 
+// AIPlayer.selectMove/#greedyMove check every forcedXxxMove on MoveGenerator before ever touching
+// generateMoves/Evaluator/Simulator (see move-generator.js's own docs for each) -- every stub
+// MoveGenerator below needs all of them to exist, even when a given test has no interest in any of them
+// firing (2026-08-04/28, added to as new forced moves were introduced).
+function noForcedMoves() {
+  return {
+    forcedBzConversionMove: () => null,
+    forcedJob004ConversionMove: () => null,
+    forcedEndSignLv2Move: () => null,
+    forcedTrainingGroundMove: () => null,
+  };
+}
+
 let passCount = 0;
 let failCount = 0;
 function check(label, actual, expected) {
@@ -27,10 +40,8 @@ function check(label, actual, expected) {
  * asserting it explicitly here keeps these tests about the 1-ply contract, not an accident of the mock
  * shape -- see the "lookahead" tests below for a stub that actually exercises the rollout. */
 function makeAIPlayer(moves) {
-  // forcedBzConversionMove/forcedJob004ConversionMove: () => null (2026-08-04/28) -- AIPlayer.selectMove/
-  // #greedyMove both check these first now (see move-generator.js's own doc); these stubs never need
-  // either to fire, so they're just no-ops here, but the stub still needs both methods to exist.
-  const moveGenerator = { generateMoves: () => moves, forcedBzConversionMove: () => null, forcedJob004ConversionMove: () => null };
+  // See noForcedMoves' own doc -- these stubs never need any forced move to fire, just to exist.
+  const moveGenerator = { generateMoves: () => moves, ...noForcedMoves() };
   const simulator = { apply: (state, index, move) => ({ state: { afterMoveId: move.id }, result: { success: move.ok } }) };
   const evaluator = { score: (state) => moves.find((m) => m.id === state.afterMoveId).score };
   return new AIPlayer(null, moveGenerator, evaluator, simulator, { lookaheadExtraTurns: 0 });
@@ -109,8 +120,7 @@ function makeLookaheadStubs() {
       if (state.turn1Ended && !context.hasPlacedDieThisTurn) return [{ type: 'PLACE_DIE', playerId, id: 'BUILD' }];
       return [];
     },
-    forcedBzConversionMove: () => null, // see makeAIPlayer's own comment
-    forcedJob004ConversionMove: () => null,
+    ...noForcedMoves(),
   };
   const simulator = {
     apply: (state, index, move) => {
@@ -217,7 +227,7 @@ function die(id, value, kind = 'COLOR', placedMapId = null) {
   return { id, value, kind, placedMapId };
 }
 function makeTieBreakAIPlayer(moves, options) {
-  const moveGenerator = { generateMoves: () => moves, forcedBzConversionMove: () => null, forcedJob004ConversionMove: () => null };
+  const moveGenerator = { generateMoves: () => moves, ...noForcedMoves() };
   const simulator = { apply: (state, index, move) => ({ state: { afterMoveId: move.id }, result: { success: true } }) };
   const evaluator = { score: (state) => 10 }; // every candidate ties on score -- only the tie-break matters
   return new AIPlayer(null, moveGenerator, evaluator, simulator, options);

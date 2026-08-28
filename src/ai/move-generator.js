@@ -545,6 +545,87 @@ class MoveGenerator {
     return null;
   }
 
+  /** 終わりの兆しLV2/B202B (2026-08-28, per user request: "終わりの兆しLV2は獲得できるカードがあれば
+   * すぐ使うようにしてください 使用対象が複数の時はダイス目高いほうを優先で" -- "ダイス目" here means the
+   * MONUMENT's own DICE threshold (e.g. ">=12" vs ">=11"), not a real placed die -- B202B's own
+   * TAP="BUILD(M,12)" has a fixed buildValue, no die involved at all): forces the tap unconditionally
+   * whenever at least one monument candidate is genuinely affordable, picking whichever affordable
+   * candidate has the HIGHEST DICE threshold when more than one qualifies -- a higher-threshold monument
+   * is harder to reach via an ordinary die (solo max 6, PLACE_DICE_GROUP max 12) or other cards, so this
+   * spends B202B's fixed-12 reach on whichever one benefits most from it, not just the first one found.
+   * Unlike #bareTapMoves' own BUILD branch (which offers every reachable candidate as a separate scored
+   * Move, dice/category-eligible but not affordability-filtered -- see getBuildCandidates' own doc), this
+   * actually simulates each one via applyInPlace to find which are real options, same as
+   * #hasAffordableBuildOutlet's own approach. */
+  forcedEndSignLv2Move(state, index, playerId) {
+    const player = state.players.find((p) => p.id === playerId);
+    if (!player) return null;
+    for (const physicalId of player.ownedCardPhysicalIds) {
+      const cardState = state.cards[physicalId];
+      if (!cardState || cardState.tapped || cardState.currentFaceId !== 'B202B') continue;
+      const clone = cloneState(state);
+      const result = board.useBareTapAbility(clone, index, { playerId }, physicalId);
+      if (!result.success || !result.pendingBuild) continue;
+      let bestIndex = null;
+      let bestThreshold = -Infinity;
+      for (let i = 0; i < result.pendingBuild.candidates.length; i++) {
+        const move = { type: 'BARE_TAP', playerId, physicalId, buildCandidateIndex: i };
+        if (!applyInPlace(cloneState(state), index, move).success) continue;
+        const candidate = result.pendingBuild.candidates[i];
+        const faceId = candidate.faceId || candidate.toFaceId;
+        const match = /^>=(\d+)$/.exec(getCardRow(index, faceId).DICE || '');
+        const threshold = match ? Number(match[1]) : -Infinity;
+        if (threshold > bestThreshold) {
+          bestThreshold = threshold;
+          bestIndex = i;
+        }
+      }
+      if (bestIndex !== null) return { type: 'BARE_TAP', playerId, physicalId, buildCandidateIndex: bestIndex };
+    }
+    return null;
+  }
+
+  /** 訓練場の支配/A202A・A202B (2026-08-28, per user request: "訓練場の支配も獲得したら必ずすぐに訓練場に
+   * ダイスを置いて追加色ダイスを獲得するようにしてほしい"; scoped to "新しい色ダイスが得られる時だけ強制"
+   * per follow-up confirmation): forces a PLACE_DIE at 訓練場(MAP007) whenever the player owns either
+   * face AND some unplaced die's placement there would genuinely raise their own COLOR-dice count (not
+   * just "the placement succeeds" -- a placement that succeeds without a net gain, e.g. once already at
+   * whatever cap applies, is left alone so the player's own turn choice/normal search still picks whatever
+   * else looks best). Mirrors board.js's own AREA007-tier CHANGE((A,B,C),D)/CHANGE(K,D)/ADD(D) shapes by
+   * just diffing color-dice count before/after a real dry-run placement, rather than re-deriving each
+   * tier's own resource math here. Only offered while this player hasn't already placed a die this turn
+   * (context.hasPlacedDieThisTurn), same PLACE_DIE-family gating as everywhere else. Skipped entirely for
+   * a wildcard-owning (道化/JOB003) player -- their dice all need board.placeWildcardDie instead of
+   * board.placeDice below (see #placeDieMoves' own dieIsWildcard branch); this rare combination (owning
+   * BOTH JOB003 and A202A/B) is left to the normal search rather than adding a second placement path here. */
+  forcedTrainingGroundMove(state, index, playerId, context) {
+    if (context.hasPlacedDieThisTurn) return null;
+    const player = state.players.find((p) => p.id === playerId);
+    if (!player || board.hasWildcardDice(state, index, playerId)) return null;
+    const ownsControl = player.ownedCardPhysicalIds.some((physicalId) => {
+      const cardState = state.cards[physicalId];
+      return cardState && (cardState.currentFaceId === 'A202A' || cardState.currentFaceId === 'A202B');
+    });
+    if (!ownsControl) return null;
+    const beforeColorCount = player.dice.filter((d) => d.kind === 'COLOR').length;
+    const unplacedDice = player.dice.filter((d) => d.placedMapId === null && !d.passed);
+    const areaRow = getAreaRow(index, state.maps.MAP007.currentAreaId);
+    const slotCount = board.getSlotRequirements(areaRow).length;
+    for (const die of unplacedDice) {
+      for (let slotIndex = 0; slotIndex < slotCount; slotIndex++) {
+        const clone = cloneState(state);
+        const result = board.placeDice(clone, index, { playerId }, die.id, 'MAP007', slotIndex);
+        if (!result.success) continue;
+        const afterPlayer = clone.players.find((p) => p.id === playerId);
+        const afterColorCount = afterPlayer.dice.filter((d) => d.kind === 'COLOR').length;
+        if (afterColorCount > beforeColorCount) {
+          return { type: 'PLACE_DIE', playerId, dieId: die.id, mapId: 'MAP007', slotIndex };
+        }
+      }
+    }
+    return null;
+  }
+
   /** Whether some build-resolving move (PLACE_DIE/BARE_TAP carrying a buildCandidateIndex)
    * in clone would actually succeed if applied right now -- shared by forcedBzConversionMove (deciding
    * whether to force a BZ-conversion tap) and #bareTapMoves' IMMEDIATE branch (deciding whether to even
