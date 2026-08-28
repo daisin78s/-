@@ -154,19 +154,13 @@ const aiMoveGenerator = new moveGeneratorMod.MoveGenerator();
 const aiSimulator = new simulatorMod.Simulator();
 const aiPlayerLv1 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGenerator, aiEvaluator, aiSimulator, { lookaheadExtraTurns: 0 });
 const aiPlayerLv2 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGenerator, aiEvaluator, aiSimulator, { lookaheadExtraTurns: 1 });
-// AI LV3 (2026-08-09). Gets its OWN MoveGenerator instance built with an avoidMapIdFromRound policy
-// (see that class's own doc) -- LV1/LV2's shared aiMoveGenerator above stays policy-free and therefore
-// completely unaffected. Reuses LV2's lookaheadExtraTurns:1 (not asked about specifically; matched to
-// LV2 rather than LV1's 0, since LV3 is meant to be the stronger/smarter option, not a speed tier).
-// avoidMapIdFromRound (2026-08-10, per user request: "R3からAREA007にダイスを置かないようにかえたい") --
-// AREA007 (訓練場, always MAP007's CURRENT_AREA -- it has no B/C tier) stops being a legal placement for
-// LV3 from round 3 onward. See MoveGenerator's own doc for why this is a soft removal, not a hard block.
-// (2026-08-10: this used to also carry a monumentFocusFromRound policy -- removed per user request once
-// QST's rank-based rewards rework made the round 3/4 new-A/B/C-build restriction it existed for
-// unnecessary. See MoveGenerator's own doc.)
-const aiMoveGeneratorLv3 = new moveGeneratorMod.MoveGenerator({
-  avoidMapIdFromRound: { mapId: 'MAP007', round: 3 },
-});
+// AI LV3 (2026-08-09). Uses the shared, policy-free aiMoveGenerator above (2026-08-28, per user
+// request "3Rから訓練場を避けるは削除してください" -- LV3 used to get its own MoveGenerator instance
+// built with an avoidMapIdFromRound:{mapId:'MAP007',round:3} policy, added 2026-08-10 per an earlier
+// request "R3からAREA007にダイスを置かないようにかえたい"; that restriction is now removed, so LV3 no
+// longer needs a separate MoveGenerator instance at all). Reuses LV2's lookaheadExtraTurns:1 (not asked
+// about specifically; matched to LV2 rather than LV1's 0, since LV3 is meant to be the stronger/smarter
+// option, not a speed tier).
 // Own Evaluator instance too (2026-08-10, per user request: "AI LV3はQSTカードに対応してVPを稼ぐように
 // したい") -- qstAware:true (see Evaluator's own doc), sharing aiEvalTable with the LV1/LV2-shared
 // aiEvaluator above, which stays policy-free and therefore completely unaffected.
@@ -176,7 +170,7 @@ const aiEvaluatorLv3 = new evaluatorMod.Evaluator(INDEX, aiEvalTable, { qstAware
 // Round 4 is the last round, so the own-turns-only rollout naturally stops once this player's own dice
 // for the round run out (no artificial early cutoff from a small lookaheadExtraTurns/maxRolloutMoves),
 // and the extra beamWidth cost is bounded since there's no round 5 left to also pay it in.
-const aiPlayerLv3 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGeneratorLv3, aiEvaluatorLv3, aiSimulator, {
+const aiPlayerLv3 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGenerator, aiEvaluatorLv3, aiSimulator, {
   lookaheadExtraTurns: 1,
   roundOverrides: { 4: { lookaheadExtraTurns: 20, beamWidth: 10, maxRolloutMoves: 200 } },
 });

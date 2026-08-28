@@ -91,11 +91,14 @@ function bareTapKind(index, faceId) {
 class MoveGenerator {
   /**
    * @param {{avoidMapIdFromRound?: {mapId: string, round: number}}} [policy] - optional strategy knob
-   *   (2026-08-09, "AI LV3"). Default {} (no restriction at all) -- LV1/LV2 keep using a MoveGenerator
-   *   built with no policy, so their behavior is byte-for-byte unchanged; LV3 gets its own instance
-   *   constructed with this set (see main.js's aiMoveGeneratorLv3).
+   *   (2026-08-09, originally added for "AI LV3"). Default {} (no restriction at all) -- every AI level
+   *   currently uses a MoveGenerator built with no policy, so behavior is byte-for-byte unchanged unless
+   *   a level is explicitly given one of its own (construct a separate MoveGenerator instance with this
+   *   set, as main.js's aiMoveGeneratorLv3 used to for LV3).
    *   avoidMapIdFromRound (2026-08-10, per user request: "AILV3について R3からAREA007にダイスを置かない
-   *   ようにかえたい"): once state.round reaches .round, #placeDieMoves stops offering ANY placement
+   *   ようにかえたい"; removed from LV3 2026-08-28 per user request "3Rから訓練場を避けるは削除してくださ
+   *   い" -- the mechanism itself is kept here, unused by any level for now, since it's generic and may
+   *   be reused later): once state.round reaches .round, #placeDieMoves stops offering ANY placement
    *   (any slot, any die) on .mapId at all -- not a preference the Evaluator weighs, an outright removal
    *   from the candidate list (a die left with no other legal slot still falls back to PASS_DIE, same
    *   escape hatch as always -- this can't deadlock the AI).

@@ -29,8 +29,11 @@ index.byId.set('CON005B', { sheet: 'CON', row: { ...index.byId.get('CON005B').ro
 // still-used CHANGE branch against an actual ownable card id.
 index.byId.set('JOB004', { sheet: 'JOB', row: { ...index.byId.get('JOB004').row, TAP: 'CHANGE(3K,2BZ);BLOCK_BUILD(M,THIS_TURN)' } });
 const moveGenerator = new MoveGenerator();
-// see AI LV3's own doc in main.js
-const moveGeneratorLv3 = new MoveGenerator({
+// Generic avoidMapIdFromRound policy exercise (2026-08-28: no longer used by any AI level -- LV3's own
+// MAP007/round-3 usage of this was removed per user request "3Rから訓練場を避けるは削除してください" --
+// but the mechanism itself stays in MoveGenerator for future reuse, so this keeps testing it directly
+// with arbitrary params rather than deleting the coverage).
+const moveGeneratorPoliced = new MoveGenerator({
   avoidMapIdFromRound: { mapId: 'MAP007', round: 3 },
 });
 
@@ -362,14 +365,13 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
 }
 
 // ---------------------------------------------------------------------------
-// AI LV3 policy (avoidMapIdFromRound -- see MoveGenerator's own doc). The shared, policy-free
-// `moveGenerator` (LV1/LV2) is used as a same-state control to confirm the policy is opt-in, not a
-// global behavior change.
+// avoidMapIdFromRound mechanism (see MoveGenerator's own doc). The shared, policy-free `moveGenerator`
+// is used as a same-state control to confirm the policy is opt-in, not a global behavior change.
 // ---------------------------------------------------------------------------
 {
-  // AREA007 avoidance (2026-08-10, avoidMapIdFromRound -- see MoveGenerator's own doc): from the
-  // configured round onward, MAP007 (AREA007, ACTION=CHANGE((A,B,C),D)) is dropped from PLACE_DIE
-  // candidates entirely, for every die/slot -- not just build-resolving decision points.
+  // AREA007 avoidance (avoidMapIdFromRound -- see MoveGenerator's own doc): from the configured round
+  // onward, MAP007 (AREA007, ACTION=CHANGE((A,B,C),D)) is dropped from PLACE_DIE candidates entirely,
+  // for every die/slot -- not just build-resolving decision points.
   const state = freshStateWithShops();
   // AREA007's CHANGE((A,B,C),D) pays the whole A+B+C bundle at once (double-parens = bundle, not a
   // choice of one -- see project-dice-wp-dsl-spec's own doc), so all three are needed to afford it and
@@ -384,17 +386,17 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
 
   state.round = 2;
   assertTrue(
-    'Before avoidMapIdFromRound\'s threshold, LV3 still offers a placement on MAP007 (AREA007)',
-    offersMap007(moveGeneratorLv3.generateMoves(state, index, 'P1', context))
+    'Before avoidMapIdFromRound\'s threshold, the policed generator still offers a placement on MAP007 (AREA007)',
+    offersMap007(moveGeneratorPoliced.generateMoves(state, index, 'P1', context))
   );
 
   state.round = 3;
   assertTrue(
-    'At/after avoidMapIdFromRound\'s threshold, LV3 no longer offers MAP007 at all',
-    !offersMap007(moveGeneratorLv3.generateMoves(state, index, 'P1', context))
+    'At/after avoidMapIdFromRound\'s threshold, the policed generator no longer offers MAP007 at all',
+    !offersMap007(moveGeneratorPoliced.generateMoves(state, index, 'P1', context))
   );
   assertTrue(
-    'The unpoliced MoveGenerator (LV1/LV2) still offers MAP007 at the very same round (control)',
+    'The unpoliced MoveGenerator still offers MAP007 at the very same round (control)',
     offersMap007(moveGenerator.generateMoves(state, index, 'P1', context))
   );
 }
