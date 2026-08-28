@@ -199,5 +199,118 @@ function makeLookaheadStubs() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// dieScarcityTieBreak (2026-08-28, "AI LV4"): when several moves tie on 1-ply score, and each carries a
+// die (PLACE_DIE/PLACE_WILDCARD_DIE's dieId, or PLACE_DICE_GROUP's dieIds), the die-priority rule in
+// src/ai/die-priority.js picks which one to prefer instead of plain generation order. These stubs build
+// a real-shaped `state.players[*].dice` (all that die-priority.js reads) and tie every candidate move's
+// score so only the tie-break itself is under test.
+// ---------------------------------------------------------------------------
+function makeDiceState(round, diceByPlayer) {
+  return {
+    round,
+    players: Object.entries(diceByPlayer).map(([id, dice]) => ({ id, dice })),
+  };
+}
+function die(id, value, kind = 'COLOR', placedMapId = null) {
+  return { id, value, kind, placedMapId };
+}
+function makeTieBreakAIPlayer(moves, options) {
+  const moveGenerator = { generateMoves: () => moves, forcedBzConversionMove: () => null };
+  const simulator = { apply: (state, index, move) => ({ state: { afterMoveId: move.id }, result: { success: true } }) };
+  const evaluator = { score: (state) => 10 }; // every candidate ties on score -- only the tie-break matters
+  return new AIPlayer(null, moveGenerator, evaluator, simulator, options);
+}
+
+{
+  // Higher remaining-count value wins: value 3 has 2 dice left unplaced (d1,d3), value 5 has only 1 (d2).
+  const state = makeDiceState(2, {
+    P1: [die('d1', 3), die('d2', 5)],
+    P2: [die('d3', 3)],
+  });
+  const moves = [
+    { id: 'usesFive', type: 'PLACE_DIE', dieId: 'd2' },
+    { id: 'usesThree', type: 'PLACE_DIE', dieId: 'd1' },
+  ];
+  const ai = makeTieBreakAIPlayer(moves, { dieScarcityTieBreak: true });
+  check(
+    'dieScarcityTieBreak prefers the die whose value has the higher remaining unplaced count (3, count 2, over 5, count 1)',
+    ai.selectMove(state, 'P1', {}).id,
+    'usesThree',
+  );
+}
+
+{
+  // Same remaining count (1 each) but different values -- round 1-2 prefers the LARGER value.
+  const state = makeDiceState(1, {
+    P1: [die('d1', 2), die('d2', 6)],
+  });
+  const moves = [
+    { id: 'usesTwo', type: 'PLACE_DIE', dieId: 'd1' },
+    { id: 'usesSix', type: 'PLACE_DIE', dieId: 'd2' },
+  ];
+  const ai = makeTieBreakAIPlayer(moves, { dieScarcityTieBreak: true });
+  check(
+    'Round 1-2: tied remaining count falls back to the LARGER die value (6 over 2)',
+    ai.selectMove(state, 'P1', {}).id,
+    'usesSix',
+  );
+}
+
+{
+  // Same setup, round 3-4 -- prefers the SMALLER value instead.
+  const state = makeDiceState(3, {
+    P1: [die('d1', 2), die('d2', 6)],
+  });
+  const moves = [
+    { id: 'usesTwo', type: 'PLACE_DIE', dieId: 'd1' },
+    { id: 'usesSix', type: 'PLACE_DIE', dieId: 'd2' },
+  ];
+  const ai = makeTieBreakAIPlayer(moves, { dieScarcityTieBreak: true });
+  check(
+    'Round 3-4: tied remaining count falls back to the SMALLER die value (2 over 6)',
+    ai.selectMove(state, 'P1', {}).id,
+    'usesTwo',
+  );
+}
+
+{
+  // Same value (so same remaining count too, both dice counted in the same value-4 bucket) -- a real
+  // color die (PLACE_DIE) is preferred over a white/wildcard die (PLACE_WILDCARD_DIE) of the same value.
+  const state = makeDiceState(1, {
+    P1: [die('dc', 4, 'COLOR'), die('dw', 4, 'WHITE')],
+  });
+  const moves = [
+    { id: 'usesWild', type: 'PLACE_WILDCARD_DIE', dieId: 'dw' },
+    { id: 'usesColor', type: 'PLACE_DIE', dieId: 'dc' },
+  ];
+  const ai = makeTieBreakAIPlayer(moves, { dieScarcityTieBreak: true });
+  check(
+    'Same value/count: a real color die is spent before a white/wildcard die of the same value',
+    ai.selectMove(state, 'P1', {}).id,
+    'usesColor',
+  );
+}
+
+{
+  // dieScarcityTieBreak omitted (default false) -- must NOT apply this rule at all, falling back to
+  // plain generation order same as every other AI level. Same dice as the very first test above, but
+  // listed with the "wrong" (by die-priority) move first to prove that one still wins unmodified.
+  const state = makeDiceState(2, {
+    P1: [die('d1', 3), die('d2', 5)],
+    P2: [die('d3', 3)],
+  });
+  const moves = [
+    { id: 'usesFive', type: 'PLACE_DIE', dieId: 'd2' },
+    { id: 'usesThree', type: 'PLACE_DIE', dieId: 'd1' },
+  ];
+  const ai = makeTieBreakAIPlayer(moves, {});
+  check(
+    'dieScarcityTieBreak:false (default) ignores die priority entirely -- first-generated move still wins ties',
+    ai.selectMove(state, 'P1', {}).id,
+    'usesFive',
+  );
+}
+
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);

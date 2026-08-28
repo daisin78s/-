@@ -645,7 +645,11 @@
   <script src="src/ai/evaluator.js"></script>
   <script>__captureModule('evaluator');</script>
 
-  <!-- Leaf: no src/*.js dependencies (takes the other 4 AI classes as constructor args instead). -->
+  <!-- Leaf: no src/*.js dependencies. -->
+  <script src="src/ai/die-priority.js"></script>
+  <script>__captureModule('die-priority');</script>
+
+  <!-- Depends on: die-priority (takes the other 4 AI classes as constructor args instead). -->
   <script src="src/ai/ai-player.js"></script>
   <script>__captureModule('ai-player');</script>
 

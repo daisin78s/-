@@ -1,6 +1,8 @@
 (function () {
 'use strict';
 
+const { compareDicePriority } = require('./die-priority');
+
 /**
  * AIPlayer: picks ONE move at a time. "Generate legal moves -> evaluate -> pick the best" (confirmed
  * 2026-08-01, no randomness anywhere in this loop: ties are broken by move order, first-max wins, so
@@ -67,6 +69,11 @@ class AIPlayer {
    *      wider beamWidth (round 4 is also the only round where the extra cost is bounded -- there's no
    *      round 5 to also pay it in). Every other round, and every other AI level (LV1/LV2's shared
    *      AIPlayer instances never pass this option), keeps using the flat base values, unaffected.
+   *    dieScarcityTieBreak (2026-08-28, "AI LV4", default false): when true, ties in selectMove's 1-ply
+   *      score (several moves reaching the exact same score, e.g. multiple of this player's own dice can
+   *      all reach the same outcome) are broken by src/ai/die-priority.js's compareDicePriority instead
+   *      of plain move-generation order -- see that module's own doc for the exact rule. false/omitted
+   *      (LV1/2/3) keeps selectMove byte-for-byte unchanged.
    */
   constructor(index, moveGenerator, evaluator, simulator, options) {
     this.index = index;
@@ -78,6 +85,7 @@ class AIPlayer {
     this.beamWidth = opts.beamWidth || 6;
     this.maxRolloutMoves = opts.maxRolloutMoves || 60;
     this.roundOverrides = opts.roundOverrides || {};
+    this.dieScarcityTieBreak = !!opts.dieScarcityTieBreak;
   }
 
   /** Resolves the base lookaheadExtraTurns/beamWidth/maxRolloutMoves against this.roundOverrides[round]
@@ -114,8 +122,11 @@ class AIPlayer {
     }
     if (scored.length === 0) return null;
     // First-max-wins tie-break (no randomness) -- stable sort keeps MoveGenerator's own generation
-    // order for equal scores, same guarantee the original pure-1-ply version made.
-    scored.sort((a, b) => b.score - a.score);
+    // order for equal scores, same guarantee the original pure-1-ply version made. dieScarcityTieBreak
+    // (AI LV4) replaces that generation-order tie-break with die-priority.js's rule instead; every other
+    // level leaves dieTieBreak null, so the `|| 0` keeps this identical to the original single-line sort.
+    const dieTieBreak = this.dieScarcityTieBreak ? compareDicePriority(state, state.round) : null;
+    scored.sort((a, b) => (b.score - a.score) || (dieTieBreak ? dieTieBreak(a.move, b.move) : 0));
     const { lookaheadExtraTurns, beamWidth, maxRolloutMoves } = this.#effectiveOptions(state.round);
     if (lookaheadExtraTurns <= 0) return scored[0].move;
 
