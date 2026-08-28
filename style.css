@@ -452,6 +452,12 @@ h1, h2, h3 { margin: 0; }
    column much wider than the badge itself needs. */
 .shop-remaining-count {
   writing-mode: vertical-rl;
+  /* text-orientation defaults to `mixed`, which rotates numerals/Latin characters 90° sideways within
+     vertical flow (CJK characters stay upright either way) -- since this badge is almost entirely
+     digits ("残り12枚"), that default left the number sideways while the rest read normally (2026-08-28,
+     per user report). `upright` keeps every character, digits included, upright while still stacking
+     top-to-bottom. */
+  text-orientation: upright;
   align-self: center;
   justify-self: center;
   font-size: 11px;
