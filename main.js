@@ -177,17 +177,21 @@ const aiPlayerLv3 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGenerator, aiEvaluator
   lookaheadExtraTurns: 1,
   roundOverrides: { 4: { lookaheadExtraTurns: 20, beamWidth: 10, maxRolloutMoves: 200 } },
 });
-// AI LV4 (2026-08-28, per user request to make this the new default level). Reuses LV3's evaluator
-// (same hand-tuned aiEvalTable + qstAware -- per user confirmation, the GA-trained genomes under
-// output/ are NOT wired in yet) plus LV3's own round-4 deep-search override. The behavioral differences
-// from LV3 so far: dieScarcityTieBreak (see src/ai/die-priority.js, ties in 1-ply score prefer spending
-// the more plentiful die value) and its own MoveGenerator with preferCastleOverSenate (see that class's
-// own doc -- 孤児院 exclusion and the "read to next round" lookahead are still unimplemented spec, not
-// yet reflected here). Its RESOURCE_CHOICE/ONBOARDING (JOB/CON/resource-card picks) also go through
-// smart-onboarding.js instead of driveOneAiStepInner's uniform-random default -- see that function's own
-// branches below; LV1/2/3 are unaffected either way since only 'AI_LV4' triggers those branches.
+// AI LV4 (2026-08-28, per user request to make this the new default level). Own Evaluator instance
+// (2026-08-28, conBuildAware:true, see Evaluator's own doc -- per user bug report: 憤怒 still built
+// 双星の加護 despite 評価値_4 already holding -200 for that pairing, because 評価値_4 had never been read
+// by any code) -- shares the same hand-tuned aiEvalTable + qstAware as LV3's own aiEvaluatorLv3, but
+// needs its own instance rather than reusing that one so LV3 stays completely unaffected. Plus LV3's own
+// round-4 deep-search override. Other differences from LV3: dieScarcityTieBreak (see
+// src/ai/die-priority.js, ties in 1-ply score prefer spending the more plentiful die value) and its own
+// MoveGenerator with preferCastleOverSenate (see that class's own doc -- 孤児院 exclusion and the "read
+// to next round" lookahead are still unimplemented spec, not yet reflected here). Its RESOURCE_CHOICE/
+// ONBOARDING (JOB/CON/resource-card picks) also go through smart-onboarding.js instead of
+// driveOneAiStepInner's uniform-random default -- see that function's own branches below; LV1/2/3 are
+// unaffected either way since only 'AI_LV4' triggers those branches.
+const aiEvaluatorLv4 = new evaluatorMod.Evaluator(INDEX, aiEvalTable, { qstAware: true, conBuildAware: true });
 const aiMoveGeneratorLv4 = new moveGeneratorMod.MoveGenerator({ preferCastleOverSenate: true });
-const aiPlayerLv4 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGeneratorLv4, aiEvaluatorLv3, aiSimulator, {
+const aiPlayerLv4 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGeneratorLv4, aiEvaluatorLv4, aiSimulator, {
   lookaheadExtraTurns: 1,
   roundOverrides: { 4: { lookaheadExtraTurns: 20, beamWidth: 10, maxRolloutMoves: 200 } },
   dieScarcityTieBreak: true,

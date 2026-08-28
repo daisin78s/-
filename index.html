@@ -641,7 +641,11 @@
   <script src="src/ai/move-generator.js"></script>
   <script>__captureModule('move-generator');</script>
 
-  <!-- Depends on: data-loader, command-builder, dsl-parser, executor, board, qst, eval-table -->
+  <!-- Leaf: no src/*.js dependencies. -->
+  <script src="src/ai/con-build-synergy.js"></script>
+  <script>__captureModule('con-build-synergy');</script>
+
+  <!-- Depends on: data-loader, command-builder, dsl-parser, executor, board, qst, eval-table, con-build-synergy -->
   <script src="src/ai/evaluator.js"></script>
   <script>__captureModule('evaluator');</script>
 

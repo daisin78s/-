@@ -22,9 +22,16 @@ const index = buildDataIndex(raw);
 // as-is) purely so the lockout-penalty tests below can keep exercising that still-real, still-used
 // generic engine mechanism against an actual ownable card id.
 index.byId.set('CON005B', { sheet: 'CON', row: { ...index.byId.get('CON005B').row, TURNEND: 'RESOURCE_TOTAL_LIMIT((A,B,C),7)' } });
+// 評価値_4's real "D"(追加色ダイス, renamed from "色ダイス" 2026-08-28)x"憤怒" cell is currently blank --
+// patches a synthetic non-zero value onto that one cell (every other cell left as-is) purely so the
+// conBuildAware color-dice test below can exercise that row at all; the card-row ("双星の加護LV1"x
+// "憤怒") test doesn't need a patch since that cell is already the real -200 that motivated wiring
+// 評価値_4 in to begin with.
+raw['評価値_4'].find((r) => r.NAME === 'D').憤怒 = -7;
 const evalTable = buildEvalTable(raw);
 const evaluator = new Evaluator(index, evalTable);
 const evaluatorQstAware = new Evaluator(index, evalTable, { qstAware: true }); // see AI LV3's own doc in main.js
+const evaluatorConBuildAware = new Evaluator(index, evalTable, { conBuildAware: true }); // see AI LV4's own doc in main.js
 
 let passCount = 0;
 let failCount = 0;
@@ -330,6 +337,67 @@ index.raw.QST = [
 // index.raw === raw (buildDataIndex wraps the same object, doesn't copy it), and nothing below this
 // point needs real QST data -- no restoration necessary (each tests/*.smoke.js file also runs in its
 // own separate `node` process, so this mutation can't leak into any other test file either).
+
+// ---------------------------------------------------------------------------
+// conBuildAware (2026-08-28, "AI LV4" only -- see Evaluator's own doc and con-build-synergy.js for the
+// motivating bug report): 評価値_4's real "双星の加護LV1"x"憤怒" cell is -200; a 憤怒 (CON005B) player
+// owning B201A (双星の加護LV1, eval=100 round2, VP=0) should score 100 + (-200), not just 100.
+// ---------------------------------------------------------------------------
+{
+  const state = freshState(2);
+  const p1 = state.players[0];
+  p1.conPhysicalId = 'CON005';
+  p1.conFace = 'B'; // CON005B/憤怒
+  giveCard(state, 'B201A', 'P1');
+  const plainScore = evaluator.score(state, 'P1');
+  check('The plain (non-conBuildAware) Evaluator ignores 評価値_4 entirely (control)', plainScore, 100);
+  check('conBuildAware applies 評価値_4\'s -200 for 憤怒 x 双星の加護LV1 on top of the normal eval-table value', evaluatorConBuildAware.score(state, 'P1'), 100 - 200);
+}
+
+{
+  // Same pairing, but the LV2-upgraded face (B201B, eval=50 round2, VP=1) -- still matches 評価値_4's
+  // LV1-named row via normalizeToLv1Name (per user confirmation: the penalty is just as real post-upgrade).
+  const state = freshState(2);
+  const p1 = state.players[0];
+  p1.conPhysicalId = 'CON005';
+  p1.conFace = 'B';
+  giveCard(state, 'B201B', 'P1');
+  const plainScore = evaluator.score(state, 'P1');
+  check('Control: plain Evaluator score for the LV2 face', plainScore, 50 + 1 * 12); // VP-weight(round2)=12
+  check('conBuildAware still applies the LV1 row\'s -200 to the LV2-upgraded card', evaluatorConBuildAware.score(state, 'P1'), (50 + 1 * 12) - 200);
+}
+
+{
+  // "色ダイス" row = "追加色ダイス" (2026-08-28, per user clarification: "色ダイスは追加色ダイスのこと
+  // です" -- only color dice PAST the 5-die baseline count, "何で得た分か追跡不要です"). Patched to -7
+  // for 憤怒 (see this file's own raw['評価値_4'] patch near the top -- the real cell is blank). 6 total
+  // color dice = 1 additional (6-5) -- contributes 1 * -7, not 6 * -7.
+  const state = freshState(2);
+  const p1 = state.players[0];
+  p1.conPhysicalId = 'CON005';
+  p1.conFace = 'B';
+  for (let i = 0; i < 6; i++) p1.dice.push(createDie(`cd${i}`, 'COLOR'));
+  const plainScore = evaluator.score(state, 'P1');
+  check('conBuildAware\'s 追加色ダイス penalty applies only to the 1 die past the 5-die baseline', evaluatorConBuildAware.score(state, 'P1'), plainScore - 7);
+}
+
+{
+  // Exactly at the baseline (5) -- 0 additional color dice, no adjustment at all.
+  const state = freshState(2);
+  const p1 = state.players[0];
+  p1.conPhysicalId = 'CON005';
+  p1.conFace = 'B';
+  for (let i = 0; i < 5; i++) p1.dice.push(createDie(`cd${i}`, 'COLOR'));
+  check('Exactly at the 5-die baseline: no 追加色ダイス adjustment', evaluatorConBuildAware.score(state, 'P1'), evaluator.score(state, 'P1'));
+}
+
+{
+  // conBuildAware is a genuine no-op before CON is chosen (conFace still null, e.g. mid-onboarding) --
+  // must not throw, and must match the plain Evaluator exactly.
+  const state = freshState(2);
+  giveCard(state, 'B201A', 'P1');
+  check('conBuildAware with no CON face chosen yet behaves exactly like the plain Evaluator', evaluatorConBuildAware.score(state, 'P1'), evaluator.score(state, 'P1'));
+}
 
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);

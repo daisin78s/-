@@ -25,6 +25,7 @@ const executor = require('../executor');
 const board = require('../board');
 const qst = require('../qst');
 const { evalValue } = require('./eval-table');
+const conBuildSynergy = require('./con-build-synergy');
 
 /** Same regex board.js's own (unexported) parseMonumentThreshold uses, e.g. ">=12" -> 12. Duplicated
  * rather than exported from board.js purely for this one line -- see monumentAtRiskFromOpponents. */
@@ -76,15 +77,22 @@ function monumentAtRiskFromOpponents(state, index, playerId, monumentFaceId) {
 
 class Evaluator {
   /** @param {DataIndex} index @param {Object} evalTable - see eval-table.js's buildEvalTable()
-   *  @param {{qstAware?: boolean}} [policy] - optional strategy knob (2026-08-10, "AI LV3": per user
-   *   request "AI LV3はQSTカードに対応してVPを稼ぐようにしたい"). Default {} (qstAware unset/falsy) --
-   *   LV1/LV2 keep using an Evaluator built with no policy, so their behavior is byte-for-byte unchanged;
-   *   LV3 gets its own instance constructed with qstAware:true (see main.js's aiEvaluatorLv3). See
-   *   score()'s own QST block for what this actually adds. */
+   *  @param {{qstAware?: boolean, conBuildAware?: boolean}} [policy] - optional strategy knobs.
+   *   qstAware (2026-08-10, "AI LV3": per user request "AI LV3はQSTカードに対応してVPを稼ぐようにした
+   *   い"). Default {} (qstAware unset/falsy) -- LV1/LV2 keep using an Evaluator built with no policy, so
+   *   their behavior is byte-for-byte unchanged; LV3 gets its own instance constructed with qstAware:true
+   *   (see main.js's aiEvaluatorLv3). See score()'s own QST block for what this actually adds.
+   *   conBuildAware (2026-08-28, "AI LV4" only, per user bug report -- see con-build-synergy.js's own
+   *   doc for the motivating incident): builds a game.xlsx 評価値_4 lookup table once here (from
+   *   index.raw) and applies it in score()'s own per-owned-card loop and color-dice section -- see those
+   *   blocks' own comments. Default false -- every other level's Evaluator instance leaves this unset,
+   *   so score() stays byte-for-byte unchanged for them. main.js's aiEvaluatorLv4 is the one instance
+   *   that sets this true (a separate instance from aiEvaluatorLv3, precisely so LV3 stays unaffected). */
   constructor(index, evalTable, policy) {
     this.index = index;
     this.evalTable = evalTable;
     this.policy = policy || {};
+    this.conBuildSynergyTable = this.policy.conBuildAware ? conBuildSynergy.buildConBuildSynergyTable(index.raw) : null;
   }
 
   /** @returns {number} playerId's position score in state, at state's current round. */
@@ -140,6 +148,25 @@ class Evaluator {
     const TRAINING_GROUND_DOMINATION_PENALTY = 1000;
     const totalColorDiceCount = player.dice.filter((d) => d.kind === 'COLOR').length;
 
+    // conBuildAware (2026-08-28, "AI LV4" only -- see this class's own constructor doc and
+    // con-build-synergy.js's doc for the motivating bug report): the player's own chosen CON face's
+    // NAME (e.g. "憤怒"), looked up once here rather than per owned card below. null whenever the
+    // policy is off, or CON hasn't been chosen yet (conPhysicalId/conFace still unset, e.g. mid-onboarding).
+    let conBuildFaceName = null;
+    if (this.conBuildSynergyTable && player.conPhysicalId && player.conFace) {
+      try { conBuildFaceName = getCardRow(this.index, `${player.conPhysicalId}${player.conFace}`).NAME; } catch (e) { conBuildFaceName = null; }
+    }
+    if (conBuildFaceName) {
+      // "色ダイス" row (2026-08-28, per user clarification: "色ダイスは追加色ダイスのことです" -- 訓練場
+      // (AREA007)'s own ADD(D)/CHANGE(...,D) actions raising a player's color-die count past the normal
+      // 5-die baseline, not their total color-die count outright; confirmed no per-die acquisition
+      // tracking is needed -- "何で得た分か追跡不要です" -- so any color die beyond 5, from any source,
+      // counts the same): a per-extra-color-die bonus/penalty specific to this CON face.
+      const ADDITIONAL_COLOR_DICE_BASELINE = 5;
+      const additionalColorDiceCount = Math.max(0, totalColorDiceCount - ADDITIONAL_COLOR_DICE_BASELINE);
+      total += additionalColorDiceCount * conBuildSynergy.synergyValue(this.conBuildSynergyTable, conBuildSynergy.COLOR_DICE_ROW_NAME, conBuildFaceName);
+    }
+
     for (const physicalId of player.ownedCardPhysicalIds) {
       const cardState = state.cards[physicalId];
       if (!cardState) continue;
@@ -150,6 +177,12 @@ class Evaluator {
       if (cardState.currentFaceId === 'A202A' || cardState.currentFaceId === 'A202B') {
         if (totalColorDiceCount === 3) total += TRAINING_GROUND_DOMINATION_BONUS;
         else if (totalColorDiceCount >= 4) total -= TRAINING_GROUND_DOMINATION_PENALTY;
+      }
+      // 評価値_4 card-row synergy (2026-08-28): an LV2 upgrade still matches its base card's own LV1 row
+      // (see con-build-synergy.js's normalizeToLv1Name) -- e.g. 憤怒 owning either tier of 双星の加護
+      // (ADD(2wD), immediately lost to WHITE_DICE_CAP(0)) gets the same penalty either way.
+      if (conBuildFaceName) {
+        total += conBuildSynergy.synergyValue(this.conBuildSynergyTable, conBuildSynergy.normalizeToLv1Name(row.NAME), conBuildFaceName);
       }
     }
 

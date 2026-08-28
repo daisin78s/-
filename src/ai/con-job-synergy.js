@@ -9,14 +9,15 @@
  *     no board-state check needed (see smart-onboarding.js's own doc for how this feeds into pickJob).
  *   - LV1 card names (e.g. "城下町の支配LV1") -- achieved only if that specific card is actually
  *     buildable this turn (real dice/resources/shop contents), never just "sitting in the shop".
- *   - The single literal row "色ダイス" -- achieved only if gaining an extra color die is actually
- *     reachable this turn (e.g. via 訓練場/AREA007, resources permitting).
+ *   - The single literal row "D" (2026-08-28: renamed from "色ダイス" per user request, to match the
+ *     main 評価値 sheet's own "D" row naming) -- achieved only if gaining an extra color die is
+ *     actually reachable this turn (e.g. via 訓練場/AREA007, resources permitting).
  * Columns are JOB ids (JOB001-011) directly, not names -- no translation needed on that side.
  * A cell's value is the bonus (or penalty) for holding that JOB were that row's condition to be true.
  * Blank cells mean 0 (no opinion), same convention as eval-table.js's own buildEvalTable.
  */
 
-const COLOR_DICE_ROW_NAME = '色ダイス';
+const COLOR_DICE_ROW_NAME = 'D';
 
 /** table[rowName][jobId], defaulting to 0 for an unknown row/job or a blank cell. */
 function buildConJobSynergyTable(rawData) {

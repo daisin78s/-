@@ -100,7 +100,8 @@ function findReachableOutcomes(state, index, playerId, moveGenerator, simulator)
  * applied -- see pickJobAndConFace's own doc for how that clone gets built. Candidates considered:
  *   - The CON face's own row -- unconditional (choosing it IS achieving it, no board-state check).
  *   - Every LV1 card row that's actually reachable this turn (findReachableOutcomes).
- *   - The "色ダイス" row, if gaining a color die is actually reachable this turn.
+ *   - The "D" row (renamed from "色ダイス" 2026-08-28), if gaining a color die is actually reachable
+ *     this turn.
  * Only non-negative candidates are ever picked (2026-08-27, per user spec: "マイナスのついている組み合
  * わせは選ばない") -- if every candidate here is negative, returns -Infinity so this (job, face) pair
  * always loses to any pairing with a genuine non-negative option. Never sums multiple simultaneously-
