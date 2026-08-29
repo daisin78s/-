@@ -6090,38 +6090,52 @@ function renderRankingRegisterList(state) {
 }
 
 /** All-time top-20 list (2026-08-16) -- see ranking.js's RankingStorage.list (already sorted
- * totalScore descending, capped at 20 by save()). */
+ * totalScore descending, capped at 20 by save()). Async since 2026-08-29 (Firebase-backed -- see
+ * ranking.js's own doc): shows a "読み込み中..." placeholder while the Firestore read is in flight,
+ * rather than flashing "まだ登録がありません" first. rankingListRequestId guards against a stale
+ * response painting over a newer one if the overlay gets reopened again before the first read finishes
+ * (e.g. a slow connection) -- only the MOST RECENT call's result is ever rendered. */
+let rankingListRequestId = 0;
 function renderRankingList() {
   const list = document.getElementById('ranking-list');
   list.innerHTML = '';
-  const entries = RankingStorage.list();
-  if (entries.length === 0) {
-    list.appendChild(el('div', 'ranking-empty', 'まだ登録がありません'));
-    return;
-  }
-  entries.forEach((entry, i) => {
-    const row = el('div', i === 0 ? 'ranking-row ranking-row--top' : 'ranking-row');
-    row.appendChild(el('span', 'ranking-row__rank', `${i + 1}位`));
-    const swatch = el('span', 'player-panel__swatch');
-    swatch.dataset.color = entry.playerColor;
-    row.appendChild(swatch);
-    row.appendChild(el('span', 'ranking-row__name', entry.name));
-    row.appendChild(el('span', 'ranking-row__score', `総合 ${entry.totalScore}VP（素点${entry.rawScore} + QST${entry.qstScore}）`));
-    row.appendChild(el('span', 'ranking-row__con', `CON: ${rankingCardDisplayName(entry.conFaceId)}`));
-    row.appendChild(el('span', 'ranking-row__job', `JOB: ${rankingCardDisplayName(entry.jobCardId)}`));
-    row.appendChild(el('span', 'ranking-row__opponents', entry.opponents.join('　')));
-    const replayButton = el('button', 'undo-button', entry.hasReplay ? '▶ 再生' : '再生不可');
-    replayButton.type = 'button';
-    replayButton.disabled = !entry.hasReplay;
-    replayButton.addEventListener('click', () => {
-      replayButton.disabled = true;
-      RankingStorage.loadReplay(entry.id).then((history) => {
-        if (history && history.length) enterReplayMode(history);
-        else replayButton.disabled = false;
+  list.appendChild(el('div', 'ranking-empty', '読み込み中...'));
+  const requestId = ++rankingListRequestId;
+  RankingStorage.list().then((entries) => {
+    if (requestId !== rankingListRequestId) return; // superseded by a later renderRankingList() call
+    list.innerHTML = '';
+    if (entries.length === 0) {
+      list.appendChild(el('div', 'ranking-empty', 'まだ登録がありません'));
+      return;
+    }
+    entries.forEach((entry, i) => {
+      const row = el('div', i === 0 ? 'ranking-row ranking-row--top' : 'ranking-row');
+      row.appendChild(el('span', 'ranking-row__rank', `${i + 1}位`));
+      const swatch = el('span', 'player-panel__swatch');
+      swatch.dataset.color = entry.playerColor;
+      row.appendChild(swatch);
+      row.appendChild(el('span', 'ranking-row__name', entry.name));
+      row.appendChild(el('span', 'ranking-row__score', `総合 ${entry.totalScore}VP（素点${entry.rawScore} + QST${entry.qstScore}）`));
+      row.appendChild(el('span', 'ranking-row__con', `CON: ${rankingCardDisplayName(entry.conFaceId)}`));
+      row.appendChild(el('span', 'ranking-row__job', `JOB: ${rankingCardDisplayName(entry.jobCardId)}`));
+      row.appendChild(el('span', 'ranking-row__opponents', entry.opponents.join('　')));
+      const replayButton = el('button', 'undo-button', entry.hasReplay ? '▶ 再生' : '再生不可');
+      replayButton.type = 'button';
+      replayButton.disabled = !entry.hasReplay;
+      replayButton.addEventListener('click', () => {
+        replayButton.disabled = true;
+        RankingStorage.loadReplay(entry.id).then((history) => {
+          if (history && history.length) enterReplayMode(history);
+          else replayButton.disabled = false;
+        });
       });
+      row.appendChild(replayButton);
+      list.appendChild(row);
     });
-    row.appendChild(replayButton);
-    list.appendChild(row);
+  }).catch(() => {
+    if (requestId !== rankingListRequestId) return;
+    list.innerHTML = '';
+    list.appendChild(el('div', 'ranking-empty', '読み込みに失敗しました'));
   });
 }
 

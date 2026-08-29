@@ -707,11 +707,13 @@
        ランキング/リプレイのクラウド共有" plan). Compat build (namespaced firebase.* API, not the modular
        ES-module one) specifically so this stays a plain <script src> like everything else here -- no
        bundler, works from file://'s own CDN fetch same as any other external resource. firebase-config.js
-       must load before online-sync.js (not yet added -- placeholder step) needs window.FIREBASE_CONFIG. -->
+       must load before online-sync.js, which is the one file that actually calls firebase.initializeApp
+       and talks to Firestore/Storage -- see online-sync.js's own doc. -->
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-storage-compat.js"></script>
   <script src="firebase-config.js"></script>
+  <script src="online-sync.js"></script>
 
   <script src="ranking.js"></script>
   <script src="main.js"></script>
