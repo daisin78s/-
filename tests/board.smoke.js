@@ -476,6 +476,34 @@ function giveDie(state, playerId, value) {
   check('...but GRANT_PLACE_ANYWHERE (placeAnywhereThisTurn) waives it', bypassed.success, true);
 }
 {
+  // 憤怒's own-AREA block has an exception for the player's own EX slot (2026-08-29, per user request:
+  // "自分のEXSLOTは例外で置けるようにして") -- reported against 農園LV2 (AREA005-family, same SLOT1=
+  // numbered/SLOT2=ANY/SLOT3=EX shape as AREA001B used here): placing on SLOT1 first, then unable to
+  // reach EX afterward. isExSlot already implies THIS player owns it (a non-owner is refused EX_NOT_OWNER
+  // before this rule is even reached), so the exception is never "someone else's EX".
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const con6 = createCardInstance('CON005B');
+  con6.ownerId = 'P1';
+  state.cards[con6.physicalId] = con6;
+  p1.ownedCardPhysicalIds.push(con6.physicalId);
+  state.maps['MAP001'] = require('../src/game-state').createMapState('MAP001', 'AREA001B');
+  state.maps['MAP001'].slots = [[], [], []];
+  state.maps['MAP001'].feeOwnerId = 'P1'; // AREA001B: SLOT1=1, SLOT2=ANY, SLOT3=EX
+
+  const d1 = giveDie(state, 'P1', 1);
+  const first = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
+  check('First own COLOR die onto AREA001B\'s SLOT1 succeeds', first.success, true);
+
+  const d2 = giveDie(state, 'P1', 2);
+  const blockedOnAny = board.placeDice(state, index, { playerId: 'P1' }, d2.id, 'MAP001', 1);
+  check('A 2nd own COLOR die on the same AREA\'s ANY slot is still blocked as normal', blockedOnAny, { success: false, reason: 'OWN_COLOR_DIE_ALREADY_IN_AREA' });
+
+  const d3 = giveDie(state, 'P1', 6);
+  const onOwnEx = board.placeDice(state, index, { playerId: 'P1' }, d3.id, 'MAP001', 2);
+  check('...but this player\'s own EX slot is exempt -- succeeds despite the earlier SLOT1 die', onOwnEx.success, true);
+}
+{
   // A player without CON005B is never restricted this way.
   const state = freshStateWithShops();
   const d1 = giveDie(state, 'P1', 1);

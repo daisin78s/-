@@ -297,12 +297,15 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
   // on, from an *earlier* placement action -- see isColorDieReuseBlocked's own doc. Checked against live
   // state, so a die placed earlier THIS SAME action (placeDiceGroup) never trips this; only prior,
   // already-committed placements do. Waived by GRANT_PLACE_ANYWHERE (bypass), unlike DUPLICATE_VALUE_IN_
-  // AREA above -- confirmed distinct on purpose.
+  // AREA above -- confirmed distinct on purpose. Also waived for the player's own EX slot (2026-08-29,
+  // per user request: "自分のEXSLOTは例外で置けるようにして") -- isExSlot here already implies ownership
+  // (a non-owner's attempt already returned EX_NOT_OWNER above), so this is unconditionally "my own EX",
+  // never someone else's.
   // TEST CHANGE (2026-08-16, per user: "自分のカラーダイスがおかれているAREAにカラーダイスもｗDも置け
   // なくなります", explicitly flagged as trial/revertible): widened from COLOR-only to every die kind --
   // wD (WHITE) used to be exempt (`die.kind === 'COLOR' &&` guarded this whole block). To revert to
   // COLOR-only, restore that guard on the line below.
-  if (!bypass && isColorDieReuseBlocked(state, index, context.playerId)) {
+  if (!bypass && !isExSlot && isColorDieReuseBlocked(state, index, context.playerId)) {
     if (playerHasOwnColorDieInMapSlots(state, map, context.playerId)) {
       return { success: false, reason: 'OWN_COLOR_DIE_ALREADY_IN_AREA' };
     }
