@@ -151,6 +151,41 @@ const DEFAULT_AI_ROLE = PLAYER_ROLE_OPTIONS[PLAYER_ROLE_OPTIONS.length - 1][0];
 const playerRoles = new Map([['P1', 'HUMAN'], ['P2', DEFAULT_AI_ROLE], ['P3', DEFAULT_AI_ROLE], ['P4', DEFAULT_AI_ROLE]]);
 function isAiPlayer(playerId) { return playerRoles.get(playerId) !== 'HUMAN'; }
 
+// ---------------------------------------------------------------------------
+// オンライン対戦 (2026-08-29, per user request: "2〜4人の友人同士(合言葉/ルームコードで合流)") -- see
+// online-sync.js's own doc for the Firestore "rooms/{code}" shape and the "state まるごと同期方式" this
+// is built on. All UI-scratch, like debugSetupFlow/cardListView above -- none of this is part of
+// GameState itself.
+//   onlineRoomCode: null while playing locally (the default on page load); the joined/created room's
+//     code from then on.
+//   localSeatId: which playerId (P1-P4) THIS device controls once online -- only this seat's clicks are
+//     ever allowed to actually mutate STATE (see realTurnPlayerId's own extension below).
+//   isOnlineHost: true only for the seat that created the room (always P1) -- the host's device is the
+//     ONLY one that locally drives any AI-role seat (see resolveAiTurnContext's own guard) and the one
+//     that generates+pushes the initial GameState once お all players have joined and it clicks 開始. A
+//     <4-human room still gets a full 4-seat GameState (this engine has no notion of "only 2 players") --
+//     every seat nobody claimed in the lobby defaults to DEFAULT_AI_ROLE (AI LV4, per user confirmation:
+//     "空席はLV4で"), driven locally by the host exactly like any other AI seat in local play.
+//   applyingRemoteState: true only while adopting an incoming Firestore snapshot into STATE -- guards
+//     pushOnlineStateIfChanged (render()'s own broadcast hook) against re-broadcasting a state this
+//     device just received rather than caused itself.
+//   onlineGameStarted: false until this device has adopted a real "phase:'playing'" room state at least
+//     once -- pushOnlineStateIfChanged must stay a no-op before that, or the still-booting *local*
+//     default game (every device auto-creates one at page load, see createInitialState below) would
+//     overwrite the room doc's own "phase:'lobby', no state yet" the moment any background AI-pump
+//     render() fires while the lobby overlay just happens to be open on top of it.
+let onlineRoomCode = null;
+let localSeatId = null;
+let isOnlineHost = false;
+let applyingRemoteState = false;
+let onlineGameStarted = false;
+// null | 'choice' | 'join' | 'waiting' -- see renderOnlineLobbyOverlay. null means the overlay is closed.
+let onlineLobbyView = null;
+let onlineLobbyRoomData = null; // latest "rooms/{code}" snapshot, for rendering the waiting-room seat list
+let onlineLobbyError = null; // a joinRoom() failure reason (ROOM_NOT_FOUND etc.), shown in the join view
+let onlineRoomUnsubscribe = null; // the active onSnapshot's own unsubscribe function, once subscribed
+let lastPushedOnlineStateJson = null; // dedup guard, same convention as recordReplaySnapshotIfChanged's own
+
 const aiEvalTable = evalTableMod.buildEvalTable(INDEX.raw);
 const aiEvaluator = new evaluatorMod.Evaluator(INDEX, aiEvalTable);
 const aiMoveGenerator = new moveGeneratorMod.MoveGenerator();
@@ -329,6 +364,10 @@ function openTurnPlayerId() {
  * a read-only peek, mirrors driveOneAiStep's own gating exactly but never mutates state. Used to decide
  * whether to keep pumping (any mode) and whether to show the manual-mode button at all. */
 function hasAiWorkPending(state) {
+  // Online play (2026-08-29): same reasoning as resolveAiTurnContext's own matching guard -- a non-host
+  // device never drives AI itself, so it should never claim AI work is "pending" either (e.g. the manual-
+  // pacing mode's "次のAI行動へ" button would otherwise show up doing nothing on that device).
+  if (onlineRoomCode && !isOnlineHost) return false;
   // A BUILD/UPGRADE candidate choice is always mid-resolution for the human (AI moves never go through
   // this UI-only flow -- see pendingBuildChoice's own comment) -- found 2026-08-06, per user report:
   // "最後の1個のダイスで建築するとき　どれを選ぶか考えてる間にAIプレイヤーが次のターンを始めました".
@@ -391,7 +430,7 @@ function hasAiWorkPending(state) {
  * move game replay" section for the full picture. */
 function driveOneAiStep(state) {
   const did = driveOneAiStepInner(state);
-  if (did) recordReplaySnapshotIfChanged(state);
+  if (did) { recordReplaySnapshotIfChanged(state); pushOnlineStateIfChanged(state); }
   return did;
 }
 
@@ -405,6 +444,12 @@ function driveOneAiStep(state) {
  *   {type:'ONBOARDING', playerId, player} | {type:'TURN', playerId, hasPlacedDieThisTurn}}
  */
 function resolveAiTurnContext(state) {
+  // Online play (2026-08-29): only the host's own device drives any AI-role seat -- every other device
+  // just receives whatever the host's AI moves produce via the room's own state sync (see
+  // pushOnlineStateIfChanged/applyIncomingRoomState). Without this, every joined device would try to
+  // independently drive the SAME AI seats off its own (necessarily out-of-sync-by-a-render-tick) local
+  // copy of STATE, racing to push conflicting results.
+  if (onlineRoomCode && !isOnlineHost) return null;
   // The real block -- see hasAiWorkPending's matching guard for the full story. pumpAiInstant's while
   // loop calls driveOneAiStepInner directly (not hasAiWorkPending) each iteration, so the guard has to
   // live here too, not just in hasAiWorkPending, or 'instant' mode would still blow straight through the
@@ -1062,6 +1107,19 @@ function recordReplaySnapshotIfChanged(state) {
   replayHistory.push(structuredClone(state));
 }
 
+/** Online play's own broadcast hook (2026-08-29) -- called from the exact same 2 places
+ * recordReplaySnapshotIfChanged is (driveOneAiStep, for the host's own AI moves; render()'s own top, for
+ * this device's own human moves), same "only once per real change" dedup convention. A no-op before
+ * onlineGameStarted (still mid-lobby -- see that flag's own doc) or while applyingRemoteState (adopting
+ * an incoming update, not causing a new one). */
+function pushOnlineStateIfChanged(state) {
+  if (!onlineRoomCode || !onlineGameStarted || applyingRemoteState) return;
+  const json = JSON.stringify(state);
+  if (json === lastPushedOnlineStateJson) return;
+  lastPushedOnlineStateJson = json;
+  OnlineSync.pushRoomState(onlineRoomCode, json);
+}
+
 // Set only while viewing a saved ranking entry's replay (2026-08-16) -- see enterReplayMode's
 // historyOverride param. Holds the live game's own replayHistory/replayCursor so exitReplayMode can
 // restore them, since replayHistory is temporarily swapped to the ranking entry's saved history.
@@ -1080,7 +1138,7 @@ function enterReplayMode(historyOverride) {
   // index.html's own comment) same as #replay-controls does on purpose.
   for (const id of ['card-inst-overlay', 'build-choice-overlay', 'placement-choice-overlay',
     'tap-choice-overlay', 'auto-mode-choice-overlay', 'turn-end-warning-overlay', 'round-pass-confirm-overlay',
-    'white-overflow-confirm-overlay', 'job-replacement-choice-overlay', 'ranking-overlay']) {
+    'white-overflow-confirm-overlay', 'job-replacement-choice-overlay', 'ranking-overlay', 'online-lobby-overlay']) {
     document.getElementById(id).hidden = true;
   }
   if (historyOverride) {
@@ -3860,7 +3918,11 @@ function renderBoard(state, next) {
   const activePlayer = next ? state.players.find((p) => p.id === next.playerId) : null;
   // !isAiPlayer (2026-08-03): an AI player's turn is driven entirely by driveOneAiStep, never by
   // clicks -- this must stay null while it's their turn so the human can't collect their fee for them.
-  const realTurnPlayerId = activePlayer && hasFinishedOnboarding(activePlayer) && !isAiPlayer(activePlayer.id) ? activePlayer.id : null;
+  // Online play (2026-08-29): also requires localSeatId to match -- a HUMAN-role seat that ISN'T this
+  // device's own (some other player's turn, in a room with 2+ humans) must stay just as read-only as an
+  // AI seat does; only the one device actually assigned that seat may ever act on its behalf.
+  const realTurnPlayerId = activePlayer && hasFinishedOnboarding(activePlayer) && !isAiPlayer(activePlayer.id)
+    && (!onlineRoomCode || localSeatId === activePlayer.id) ? activePlayer.id : null;
 
   // Which SLOTs to light up for the currently selected die(s) (2026-08-0X, per user feedback: "配置可能
   // SLOTが光るようにして欲しい") -- "valid" here means both the basic slot rules AND the resulting AREA
@@ -4910,7 +4972,10 @@ function renderTurnEndWarningModal() {
 function actingHumanPlayerId(state, next) {
   if (!next) return null;
   const activePlayer = state.players.find((p) => p.id === next.playerId);
-  if (!activePlayer || !hasFinishedOnboarding(activePlayer) || isAiPlayer(next.playerId)) return null;
+  // Online play (2026-08-29): same localSeatId requirement as realTurnPlayerId's own extension -- a
+  // HUMAN-role seat that isn't THIS device's own must stay just as non-interactive as an AI seat does.
+  if (!activePlayer || !hasFinishedOnboarding(activePlayer) || isAiPlayer(next.playerId)
+    || (onlineRoomCode && localSeatId !== next.playerId)) return null;
   // UNTAP_CHOICE (2026-08-20 bug fix, per user report: "農夫を獲得した時アンタップするカードを選ばなくても
   // 進めてしまう...他の操作（ダイス配置など）ができてしまう") -- nothing gated pending choices at all
   // (canEndTurn only ever checked RESOURCE_TOTAL_LIMIT/pendingFee), so a player could freely place dice/
@@ -5063,6 +5128,9 @@ function renderPlayers(state, next) {
  * own source), so this splices it out of state.pendingChoices manually either way. */
 function renderTapReactions(container, state, playerId) {
   container.innerHTML = '';
+  // Online play (2026-08-29): same reasoning as isAiPlayer(playerId) just below -- a HUMAN-role seat
+  // that isn't this device's own must never get clickable buttons for someone else's decision.
+  if (onlineRoomCode && localSeatId !== playerId) return;
   // An AI player's own reactions are resolved by driveOneAiStep as part of its normal Move selection
   // (2026-08-03) -- shouldn't normally still be pending by the time this paints (esp. in 'instant'
   // mode), but during 'delayed'/'manual' pacing there's a real window where one is; skip rendering
@@ -5125,6 +5193,8 @@ function renderTapReactions(container, state, playerId) {
  */
 function renderUntapChoice(container, state, playerId) {
   container.innerHTML = '';
+  // Online play (2026-08-29): same reasoning as renderTapReactions' own matching guard.
+  if (onlineRoomCode && localSeatId !== playerId) return;
   if (isAiPlayer(playerId)) return;
   const choice = state.pendingChoices.find((c) => c.playerId === playerId && c.kind === 'UNTAP_CHOICE');
   if (!choice) return;
@@ -5531,7 +5601,9 @@ function renderJobPool(state, next) {
   container.innerHTML = '';
   if (round1FirstPlayerTurnStartCount >= 2) return;
   // !isAiPlayer (2026-08-03): an AI player's JOB draft is decided by driveOneAiStep, never by clicks.
-  const draftingPlayerId = next && next.type === 'ONBOARDING_NEEDED' && !isAiPlayer(next.playerId) ? next.playerId : null;
+  // Online play (2026-08-29): also requires localSeatId to match -- see realTurnPlayerId's own doc.
+  const draftingPlayerId = next && next.type === 'ONBOARDING_NEEDED' && !isAiPlayer(next.playerId)
+    && (!onlineRoomCode || localSeatId === next.playerId) ? next.playerId : null;
   // Highlight the panel while it's actually someone's turn to draft from it (2026-07-30, per user
   // feedback: "今やるべきことの背景色を変えて"). #job-pool is a persistent element reused across
   // renders (unlike the per-player onboard-* containers, which are freshly cloned each render), so
@@ -5585,7 +5657,9 @@ function renderJobPool(state, next) {
  * ONBOARDING branch resolves it synchronously right after chooseJob, before this ever renders. */
 function renderJobReplacementChoice(state) {
   const overlay = document.getElementById('job-replacement-choice-overlay');
-  const choice = state.pendingChoices.find((c) => c.kind === 'PICK_JOB_REPLACEMENT' && !isAiPlayer(c.playerId));
+  // Online play (2026-08-29): also requires localSeatId to match -- see realTurnPlayerId's own doc.
+  const choice = state.pendingChoices.find((c) => c.kind === 'PICK_JOB_REPLACEMENT' && !isAiPlayer(c.playerId)
+    && (!onlineRoomCode || localSeatId === c.playerId));
   if (!choice) {
     overlay.hidden = true;
     return;
@@ -5709,7 +5783,9 @@ function renderConChoice(container, state, player) {
   // their turns for the rest of the game. Once a CON face is actually owned, nothing renders here again,
   // for AI and human alike -- matching the human branch's own pre-existing guard, just applied earlier).
   if (player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'))) return;
-  if (!player.jobCardId || isAiPlayer(player.id)) { renderConPreview(container, player); return; }
+  // Online play (2026-08-29): a HUMAN-role seat that isn't this device's own falls back to the same
+  // read-only preview an AI seat gets -- see renderResourceChoice's own matching guard.
+  if (!player.jobCardId || isAiPlayer(player.id) || (onlineRoomCode && localSeatId !== player.id)) { renderConPreview(container, player); return; }
   renderConFacesRow(container, player, (face) => {
     setupMod.chooseConFace(state, INDEX, player.id, face);
     setupMod.receiveInitialResources(state, INDEX, player.id);
@@ -5758,6 +5834,10 @@ function renderResourceChoice(container, state, player) {
   // -- nothing to show here; it resolves on its own, usually before the human even sees a render with
   // it still pending (only 'delayed'/'manual' pacing could show a brief gap).
   if (isAiPlayer(player.id)) return;
+  // Online play (2026-08-29, the bug this whole block of fixes was found from -- see renderTapReactions'
+  // own matching guard): a HUMAN-role seat that isn't this device's own must never get clickable resource
+  // cards for someone else's choice.
+  if (onlineRoomCode && localSeatId !== player.id) return;
   const choice = state.pendingChoices.find((c) => c.playerId === player.id && c.kind === 'SELECT_RESOURCE_CARDS');
   if (!choice) return;
   // Highlight this player's own panel only (2026-07-30, per user feedback) -- container is a
@@ -5851,7 +5931,10 @@ function renderPlayerCards(state, next) {
     // bare TAP usage is decided by driveOneAiStep (as a BARE_TAP Move), never by clicks. Pending
     // UNTAP_CHOICE (2026-08-20, same fix/reasoning as actingHumanPlayerId's own doc) blocks this too --
     // "other operations" includes bare TAP, not just dice placement.
+    // Online play (2026-08-29): a HUMAN-role seat that isn't this device's own must never offer bare TAP
+    // either -- same reasoning as realTurnPlayerId/actingHumanPlayerId's own matching extension.
     const canUseTap = isSelf && hasFinishedOnboarding(player) && !isAiPlayer(player.id)
+      && (!onlineRoomCode || localSeatId === player.id)
       && !state.pendingChoices.some((c) => c.playerId === player.id && c.kind === 'UNTAP_CHOICE');
     const tpl = document.getElementById('tpl-card-group');
     const node = tpl.content.firstElementChild.cloneNode(true);
@@ -6149,6 +6232,178 @@ function openRankingOverlay() {
   renderRankingOverlay(STATE);
 }
 
+// ---------------------------------------------------------------------------
+// オンライン対戦ロビー (2026-08-29) -- see this file's own top-of-file doc (near onlineRoomCode) for the
+// state shape, and online-sync.js's own doc for the Firestore "rooms/{code}" document shape.
+// ---------------------------------------------------------------------------
+
+function openOnlineLobby() {
+  onlineLobbyView = 'choice';
+  onlineLobbyError = null;
+  document.getElementById('online-lobby-overlay').hidden = false;
+  renderOnlineLobbyOverlay();
+}
+
+/** Closes the overlay. Deliberately does NOT tear down onlineRoomCode/the subscription once a room has
+ * actually been joined -- closing the lobby view is just "stop looking at the waiting-room list", not
+ * "leave the room" (there's no leave-room flow in this v1 -- see the plan's own scope note). Only clears
+ * the subscription if a room was never actually joined (still on the 'choice'/'join' view). */
+function closeOnlineLobby() {
+  if (!onlineRoomCode && onlineRoomUnsubscribe) { onlineRoomUnsubscribe(); onlineRoomUnsubscribe = null; }
+  onlineLobbyView = null;
+  document.getElementById('online-lobby-overlay').hidden = true;
+}
+
+function handleCreateRoomClick() {
+  OnlineSync.createRoom().then(({ code, seatId }) => {
+    onlineRoomCode = code;
+    localSeatId = seatId;
+    isOnlineHost = true;
+    onlineLobbyView = 'waiting';
+    subscribeToOnlineRoom(code);
+  });
+}
+
+function handleJoinRoomSubmit(codeInput) {
+  const code = codeInput.trim();
+  if (!code) return;
+  OnlineSync.joinRoom(code).then(({ code: normalizedCode, seatId }) => {
+    onlineRoomCode = normalizedCode;
+    localSeatId = seatId;
+    isOnlineHost = false;
+    onlineLobbyError = null;
+    onlineLobbyView = 'waiting';
+    subscribeToOnlineRoom(normalizedCode);
+  }).catch((e) => {
+    onlineLobbyError = e.message; // ROOM_NOT_FOUND / ROOM_ALREADY_STARTED / ROOM_FULL
+    renderOnlineLobbyOverlay();
+  });
+}
+
+/** Subscribes once, for the lifetime of this room membership. Handles 2 distinct kinds of update:
+ * the FIRST time phase becomes 'playing' (the host just clicked 開始, or this device joined a room that
+ * had already started -- see below) is the lobby-to-live-game hand-off, via applyIncomingRoomState;
+ * every update after that (onlineGameStarted already true) is just an ordinary in-game move arriving
+ * from whichever device made it. Still-in-'lobby' updates (a new seat joining) just re-render the
+ * waiting-room list. */
+function subscribeToOnlineRoom(code) {
+  onlineRoomUnsubscribe = OnlineSync.subscribeToRoom(code, (roomData) => {
+    onlineLobbyRoomData = roomData;
+    if (!roomData) return; // room doc briefly not-yet-visible right after create/join; next snapshot has it
+    if (roomData.phase === 'playing') {
+      applyIncomingRoomState(roomData.state, onlineGameStarted ? null : roomData.seatIsHuman);
+      if (!onlineGameStarted) {
+        onlineGameStarted = true;
+        onlineLobbyView = null;
+        document.getElementById('online-lobby-overlay').hidden = true;
+      }
+      return;
+    }
+    renderOnlineLobbyOverlay(); // still in the lobby -- e.g. another seat just joined
+  });
+}
+
+/** Host-only: builds a fresh 4-seat GameState (createInitialState(null) -- no debug-setup overrides,
+ * same as an ordinary local page load) and pushes it as the room's starting state. seatIsHuman marks
+ * every seat that was actually claimed in the lobby; every unclaimed seat defaults to DEFAULT_AI_ROLE
+ * (AI LV4, per user confirmation: "空席はLV4で") once applyIncomingRoomState sets up playerRoles from it.
+ * Doesn't touch local STATE/playerRoles directly -- this device's own subscription (already active,
+ * see subscribeToOnlineRoom) adopts the just-pushed state the exact same way every other device's does. */
+function handleStartRoomClick() {
+  const seatIsHuman = {};
+  for (const seatId of ['P1', 'P2', 'P3', 'P4']) seatIsHuman[seatId] = !!(onlineLobbyRoomData.seats[seatId]);
+  const freshState = createInitialState(null);
+  OnlineSync.startRoom(onlineRoomCode, JSON.stringify(freshState), seatIsHuman);
+}
+
+/** Adopts an incoming room state wholesale, same "clear every own-enumerable key, then reassign" pattern
+ * board.js's own rollback snapshots use (see e.g. resolveAreaAction's preJobBonusSnapshot restore) --
+ * STATE is `const`, so its *contents* are replaced in place rather than the binding itself. seatIsHuman
+ * (only passed on the initial lobby-to-live hand-off, null for every ordinary update after that -- see
+ * subscribeToOnlineRoom) sets playerRoles for all 4 seats at once; every other update leaves playerRoles
+ * untouched since it never changes mid-game. applyingRemoteState guards pushOnlineStateIfChanged against
+ * re-broadcasting a state this device just received rather than caused itself. */
+function applyIncomingRoomState(stateJson, seatIsHuman) {
+  const incoming = JSON.parse(stateJson);
+  applyingRemoteState = true;
+  if (seatIsHuman) {
+    for (const seatId of ['P1', 'P2', 'P3', 'P4']) playerRoles.set(seatId, seatIsHuman[seatId] ? 'HUMAN' : DEFAULT_AI_ROLE);
+  }
+  Object.keys(STATE).forEach((k) => delete STATE[k]);
+  Object.assign(STATE, incoming);
+  render(STATE);
+  applyingRemoteState = false;
+}
+
+/** @returns {number} how many of the 4 seats are currently occupied. */
+function onlineRoomOccupiedSeatCount(roomData) {
+  return ['P1', 'P2', 'P3', 'P4'].filter((seatId) => !!roomData.seats[seatId]).length;
+}
+
+const ONLINE_LOBBY_ERROR_MESSAGES = {
+  ROOM_NOT_FOUND: 'その合言葉の部屋は見つかりませんでした',
+  ROOM_ALREADY_STARTED: 'その部屋はすでに開始されています',
+  ROOM_FULL: 'その部屋はすでに満員です',
+};
+
+function renderOnlineLobbyOverlay() {
+  const body = document.getElementById('online-lobby-body');
+  body.innerHTML = '';
+
+  if (onlineLobbyView === 'choice') {
+    const createButton = el('button', 'undo-button', '部屋を作る');
+    createButton.type = 'button';
+    createButton.addEventListener('click', handleCreateRoomClick);
+    body.appendChild(createButton);
+
+    const joinButton = el('button', 'undo-button', '部屋に入る');
+    joinButton.type = 'button';
+    joinButton.addEventListener('click', () => { onlineLobbyView = 'join'; renderOnlineLobbyOverlay(); });
+    body.appendChild(joinButton);
+    return;
+  }
+
+  if (onlineLobbyView === 'join') {
+    if (onlineLobbyError) {
+      body.appendChild(el('div', 'ranking-empty', ONLINE_LOBBY_ERROR_MESSAGES[onlineLobbyError] || onlineLobbyError));
+    }
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = '合言葉(4文字)';
+    input.maxLength = 4;
+    body.appendChild(input);
+    const submitButton = el('button', 'undo-button', '参加する');
+    submitButton.type = 'button';
+    submitButton.addEventListener('click', () => handleJoinRoomSubmit(input.value));
+    body.appendChild(submitButton);
+    return;
+  }
+
+  if (onlineLobbyView === 'waiting') {
+    body.appendChild(el('div', 'ranking-row__score', `合言葉: ${onlineRoomCode}`));
+    if (!onlineLobbyRoomData) {
+      body.appendChild(el('div', 'ranking-empty', '読み込み中...')); // the brief window before the first onSnapshot fires
+      return;
+    }
+    const list = el('div', '');
+    for (const seatId of ['P1', 'P2', 'P3', 'P4']) {
+      const occupied = !!onlineLobbyRoomData.seats[seatId];
+      const label = seatId === localSeatId ? `${seatId}: あなた` : occupied ? `${seatId}: 参加済み` : `${seatId}: 空席(未参加ならAI LV4)`;
+      list.appendChild(el('div', 'ranking-row__opponents', label));
+    }
+    body.appendChild(list);
+    if (isOnlineHost) {
+      const startButton = el('button', 'undo-button', '開始');
+      startButton.type = 'button';
+      startButton.disabled = onlineRoomOccupiedSeatCount(onlineLobbyRoomData) < 2;
+      startButton.addEventListener('click', handleStartRoomClick);
+      body.appendChild(startButton);
+    } else {
+      body.appendChild(el('div', 'ranking-empty', 'ホストが開始するのを待っています...'));
+    }
+  }
+}
+
 function closeRankingOverlay() {
   document.getElementById('ranking-overlay').hidden = true;
 }
@@ -6209,6 +6464,7 @@ function render(state) {
   // changed) from adding a spurious one. Must run BEFORE pumpAiInstant below, or a human's own move would
   // never get its own entry -- it'd only show up bundled together with whatever AI moves follow it.
   recordReplaySnapshotIfChanged(state);
+  pushOnlineStateIfChanged(state);
 
   // Plays out every AI-controlled player's backlog before painting anything (2026-08-03) -- 'instant'
   // resolves it all synchronously right here so the rest of render() sees the post-AI state already;
@@ -6847,6 +7103,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('undo-button-build').addEventListener('click', handleUndoClick);
   document.getElementById('dice-cancel-button').addEventListener('click', handleCancelPreviousActionClick);
   document.getElementById('dice-cancel-button-build').addEventListener('click', handleCancelPreviousActionClick);
+
+  document.getElementById('online-lobby-open-button').addEventListener('click', openOnlineLobby);
+  document.getElementById('online-lobby-close-button').addEventListener('click', closeOnlineLobby);
 
   document.getElementById('anytime-ranking-button').addEventListener('click', openLiveRankingOverlay);
   document.getElementById('game-end-close-button').addEventListener('click', closeLiveRankingOverlay);

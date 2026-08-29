@@ -107,6 +107,10 @@
            (that one gates the turn-history timeline for the CURRENT game; this one configures the NEXT
            one, for P1 only). -->
       <button type="button" id="debug-setup-start-button" class="debug-panel__toggle">テストゲーム開始</button>
+      <!-- オンライン対戦 (2026-08-29, per user request: "2〜4人の友人同士(合言葉/ルームコードで合流)"、
+           空席はAI LV4で埋める -- see main.js's openOnlineLobby/DEFAULT_AI_ROLE). Opens #online-lobby-overlay
+           (create/join a room, then a live waiting-room seat list -- see main.js's renderOnlineLobbyOverlay). -->
+      <button type="button" id="online-lobby-open-button" class="debug-panel__toggle">オンライン対戦</button>
       <!-- ランキング (2026-08-29, per user request: "ランキングやリプレイをゲーム終了後だけでなくいつでも
            見れるように") -- opens the same #game-end-overlay (current standings + 🏆歴代ランキング/▶リプレイ)
            used at GAME_END, but usable mid-game too -- see main.js's openLiveRankingOverlay/
@@ -364,6 +368,19 @@
         <button type="button" id="job007-tap-prompt-no">いいえ</button>
         <button type="button" id="job007-tap-prompt-yes">はい</button>
       </div>
+    </div>
+  </div>
+
+  <!-- オンライン対戦ロビー (2026-08-29) -- see main.js's openOnlineLobby/renderOnlineLobbyOverlay. Body
+       content is fully rebuilt per onlineLobbyView state (room choice / join-code entry / waiting room
+       with a live seat list) -- see that function's own doc for the exact view states. -->
+  <div id="online-lobby-overlay" class="card-inst-overlay" hidden>
+    <div class="card-inst-modal">
+      <div class="card-inst-modal__header">
+        <span class="card-inst-modal__title">オンライン対戦</span>
+        <button type="button" class="card-inst-modal__close" id="online-lobby-close-button" aria-label="閉じる">&times;</button>
+      </div>
+      <div class="card-inst-modal__body" id="online-lobby-body"></div>
     </div>
   </div>
 

@@ -14,8 +14,16 @@
  * better suited to Firebase Storage (one JSON file per entry, same id, under "replays/") than a
  * Firestore document (1MiB per-document cap).
  *
- * Room/live-game-state sync (createRoom/joinRoom/pushState/subscribeToRoom) is a LATER step of the same
- * plan and does not exist here yet -- this file only covers ranking/replay for now. */
+ * Room/live-game-state sync (2026-08-29, step 3 of the same plan -- per user request: 2〜4人の友人同士で
+ * オンライン対戦がしたい、合言葉/ルームコードで合流): one Firestore document per room, "rooms/{code}"
+ * (code is the room's own document id, a short human-typeable string -- no separate id field needed).
+ * {hostSeatId, seats: {P1:{joinedAt}|null, P2:..., P3:..., P4:...}, phase: 'lobby'|'playing',
+ * seatIsHuman: {P1:bool,...} (set once, at start), state: <the current GameState, JSON.stringify'd -- see
+ * main.js's own doc on why "overwrite the whole state" rather than broadcasting individual moves>}. Every
+ * device subscribes via onSnapshot; whichever device's own local action just changed STATE pushes the new
+ * JSON back to the same field. No authentication in this app at all -- the room CODE itself is the only
+ * access control (see the plan's own Firestore Security Rules note: reads/writes need the exact document
+ * id, but the collection can't be listed), same trust model as a physical board game's own house rules. */
 (function () {
 'use strict';
 
@@ -100,6 +108,88 @@ function deleteReplay(id) {
   return storage().ref(REPLAY_STORAGE_PREFIX + id + '.json').delete();
 }
 
+var ROOM_COLLECTION = 'rooms';
+var SEAT_IDS = ['P1', 'P2', 'P3', 'P4'];
+var ROOM_CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O/1/I/L -- easy to read aloud/type
+
+function randomRoomCode() {
+  var code = '';
+  for (var i = 0; i < 4; i++) code += ROOM_CODE_CHARS[Math.floor(Math.random() * ROOM_CODE_CHARS.length)];
+  return code;
+}
+
+/** Generates a fresh 4-char code, retrying on the extremely unlikely chance it's already taken, creates
+ * "rooms/{code}" with P1 (the creator) as the only occupied seat, and returns it.
+ * @returns {Promise<{code:string, seatId:'P1'}>} */
+function createRoom() {
+  var ref = db().collection(ROOM_COLLECTION).doc(randomRoomCode());
+  return ref.get().then(function (snap) {
+    if (snap.exists) return createRoom(); // collision (rare) -- just try a new random code
+    var seats = {};
+    SEAT_IDS.forEach(function (id) { seats[id] = null; });
+    seats.P1 = { joinedAt: Date.now() };
+    return ref.set({ hostSeatId: 'P1', seats: seats, phase: 'lobby', createdAt: Date.now() }).then(function () {
+      return { code: ref.id, seatId: 'P1' };
+    });
+  });
+}
+
+/** Claims the first open seat (P2/P3/P4 -- P1 is always the creator) in "rooms/{code}" inside a
+ * transaction, so two people joining at the exact same moment can never both claim the same seat.
+ * @returns {Promise<{code:string, seatId:string}>}
+ * @throws {Error} with .message one of ROOM_NOT_FOUND / ROOM_ALREADY_STARTED / ROOM_FULL */
+function joinRoom(code) {
+  var normalizedCode = code.toUpperCase();
+  var ref = db().collection(ROOM_COLLECTION).doc(normalizedCode);
+  return db().runTransaction(function (tx) {
+    return tx.get(ref).then(function (snap) {
+      if (!snap.exists) throw new Error('ROOM_NOT_FOUND');
+      var data = snap.data();
+      if (data.phase !== 'lobby') throw new Error('ROOM_ALREADY_STARTED');
+      var openSeatId = null;
+      for (var i = 0; i < SEAT_IDS.length; i++) {
+        if (!data.seats[SEAT_IDS[i]]) { openSeatId = SEAT_IDS[i]; break; }
+      }
+      if (!openSeatId) throw new Error('ROOM_FULL');
+      var seats = Object.assign({}, data.seats);
+      seats[openSeatId] = { joinedAt: Date.now() };
+      tx.update(ref, { seats: seats });
+      return openSeatId;
+    });
+  }).then(function (seatId) {
+    return { code: normalizedCode, seatId: seatId };
+  });
+}
+
+/** Subscribes to "rooms/{code}", calling onUpdate(roomData) on the initial read and every change
+ * thereafter (roomData is null if the room doc doesn't exist -- e.g. never created, or somehow deleted).
+ * @returns {function()} unsubscribe */
+function subscribeToRoom(code, onUpdate) {
+  return db().collection(ROOM_COLLECTION).doc(code).onSnapshot(function (snap) {
+    onUpdate(snap.exists ? snap.data() : null);
+  });
+}
+
+/** Host-only: marks the room "playing", fixes which seats are human (the rest default to AI on every
+ * device -- see main.js's own doc on why a <4-human room still needs exactly 4 seats), and pushes the
+ * freshly-created initial GameState. Every subscribed device (including the host's own) picks this up
+ * via the same onSnapshot callback as any later in-game update. */
+function startRoom(code, initialStateJson, seatIsHuman) {
+  return db().collection(ROOM_COLLECTION).doc(code).update({
+    phase: 'playing',
+    seatIsHuman: seatIsHuman,
+    state: initialStateJson,
+  });
+}
+
+/** Overwrites the room's current state (2026-08-29, "state まるごと同期方式" -- see the plan's own doc on
+ * why: real GameState JSON is ~27KB even at round 4, comfortably inside Firestore's 1MiB/doc cap, so
+ * broadcasting the whole thing after every move is simpler and more robust than reconstructing individual
+ * Move objects from main.js's ~20 scattered human-action handlers). */
+function pushRoomState(code, stateJson) {
+  return db().collection(ROOM_COLLECTION).doc(code).update({ state: stateJson });
+}
+
 window.OnlineSync = {
   listRanking: listRanking,
   saveRankingEntry: saveRankingEntry,
@@ -109,5 +199,10 @@ window.OnlineSync = {
   saveReplay: saveReplay,
   loadReplay: loadReplay,
   deleteReplay: deleteReplay,
+  createRoom: createRoom,
+  joinRoom: joinRoom,
+  subscribeToRoom: subscribeToRoom,
+  startRoom: startRoom,
+  pushRoomState: pushRoomState,
 };
 })();
