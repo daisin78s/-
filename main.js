@@ -5954,14 +5954,25 @@ function renderPlayerCards(state, next) {
  * round 4 ends (see advanceTurnIfPossible) -- board.js/executor.js keep working normally after that
  * (nothing gates on phase elsewhere), so this is purely an overlay on top of the final board state,
  * not a hard stop. scoring.rankPlayers does the actual VP tally (card VP + resources.VP +
- * VP_MODIFIER); this only renders it, winner-first, with the top row highlighted. */
+ * VP_MODIFIER); this only renders it, winner-first, with the top row highlighted.
+ *
+ * Also opened mid-game (2026-08-29, per user request: "ランキングやリプレイをゲーム終了後だけでなくいつ
+ * でも見れるように") via liveRankingOverlayOpen/openLiveRankingOverlay -- rankPlayers/the list below don't
+ * care which reason triggered this, so the exact same rendering shows live current standings (VP so far,
+ * no QST projection since that's only granted at GAME_END -- same as standingsRows' own `vp` field). The
+ * title and close button are the only two things that differ by reason: real GAME_END keeps the original
+ * no-close-button "it's genuinely over" behavior, since state.phase alone already re-triggers this even
+ * if it becomes true while manually open. */
 function renderGameEndOverlay(state) {
   const overlay = document.getElementById('game-end-overlay');
-  if (state.phase !== 'GAME_END') {
+  const isRealGameEnd = state.phase === 'GAME_END';
+  if (!isRealGameEnd && !liveRankingOverlayOpen) {
     overlay.hidden = true;
     return;
   }
   overlay.hidden = false;
+  document.getElementById('game-end-title').textContent = isRealGameEnd ? 'ゲーム終了 — 最終結果' : '現在の順位';
+  document.getElementById('game-end-close-button').hidden = isRealGameEnd;
   const list = document.getElementById('game-end-list');
   list.innerHTML = '';
   scoringMod.rankPlayers(state, INDEX).forEach((entry, i) => {
@@ -5976,6 +5987,20 @@ function renderGameEndOverlay(state) {
     list.appendChild(row);
   });
   document.getElementById('game-end-replay-button').disabled = replayHistory.length === 0;
+}
+
+// True while the ランキング button's mid-game view of #game-end-overlay is open (2026-08-29) -- purely
+// UI-scratch, like cardListView/debugSetupFlow. Never true at real GAME_END (irrelevant there anyway,
+// since state.phase alone already keeps the overlay open regardless of this flag).
+let liveRankingOverlayOpen = false;
+
+function openLiveRankingOverlay() {
+  liveRankingOverlayOpen = true;
+  render(STATE);
+}
+function closeLiveRankingOverlay() {
+  liveRankingOverlayOpen = false;
+  render(STATE);
 }
 
 // Human seats already registered into the ranking THIS game (2026-08-16) -- a fresh page load (the
@@ -6808,6 +6833,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('undo-button-build').addEventListener('click', handleUndoClick);
   document.getElementById('dice-cancel-button').addEventListener('click', handleCancelPreviousActionClick);
   document.getElementById('dice-cancel-button-build').addEventListener('click', handleCancelPreviousActionClick);
+
+  document.getElementById('anytime-ranking-button').addEventListener('click', openLiveRankingOverlay);
+  document.getElementById('game-end-close-button').addEventListener('click', closeLiveRankingOverlay);
 
   document.getElementById('game-end-replay-button').addEventListener('click', () => enterReplayMode());
   document.getElementById('replay-back').addEventListener('click', handleReplayBack);

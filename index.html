@@ -107,6 +107,11 @@
            (that one gates the turn-history timeline for the CURRENT game; this one configures the NEXT
            one, for P1 only). -->
       <button type="button" id="debug-setup-start-button" class="debug-panel__toggle">テストゲーム開始</button>
+      <!-- ランキング (2026-08-29, per user request: "ランキングやリプレイをゲーム終了後だけでなくいつでも
+           見れるように") -- opens the same #game-end-overlay (current standings + 🏆歴代ランキング/▶リプレイ)
+           used at GAME_END, but usable mid-game too -- see main.js's openLiveRankingOverlay/
+           renderGameEndOverlay. Always visible, same as テストゲーム開始/カードリスト. -->
+      <button type="button" id="anytime-ranking-button" class="debug-panel__toggle">ランキング</button>
       <!-- カードリスト (2026-08-22, per user request): 全カード種別を閲覧専用（タップで拡大のみ、選択
            ボタンなし）で見られる画面 -- see main.js's openCardListOverlay/renderCardListOverlay。
            デバッグモードのON/OFFとは無関係、テストゲーム開始ボタンと同じく常時表示。 -->
@@ -362,12 +367,14 @@
     </div>
   </div>
 
-  <!-- GAME_END final results (2026-07-31) -- see main.js's renderGameEndOverlay. No close button:
-       the game is genuinely over, there's nothing left to interact with underneath. -->
+  <!-- GAME_END final results (2026-07-31) -- see main.js's renderGameEndOverlay. At real GAME_END, no
+       close button: the game is genuinely over, there's nothing left to interact with underneath. Also
+       reused mid-game (2026-08-29) via the always-visible ランキング button -- #game-end-close-button is
+       shown only in that case, since the live game underneath is still very much interactable. -->
   <div id="game-end-overlay" class="card-inst-overlay" hidden>
     <div class="card-inst-modal game-end-modal">
       <div class="card-inst-modal__header">
-        <span class="card-inst-modal__title">ゲーム終了 — 最終結果</span>
+        <span class="card-inst-modal__title" id="game-end-title">ゲーム終了 — 最終結果</span>
         <!-- 2026-08-1X, per user request: "ゲーム終了 最終結果 が表示されたときにリプレイボタンを押すと
              リプレイモード...がほしい" -- opens a read-only, move-by-move playback of the whole game just
              played. See main.js's enterReplayMode/renderReplayFrame. -->
@@ -375,6 +382,7 @@
         <!-- 2026-08-16, per user request: "ランキングとは人間対AIで歴代の得点を最高得点順に並べる
              もの" -- opens the all-time ranking overlay below. See main.js's renderRankingOverlay. -->
         <button type="button" class="undo-button" id="game-end-ranking-button">🏆 ランキング</button>
+        <button type="button" class="card-inst-modal__close" id="game-end-close-button" aria-label="閉じる" hidden>&times;</button>
       </div>
       <div class="card-inst-modal__body" id="game-end-list"></div>
     </div>
