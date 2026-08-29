@@ -546,6 +546,65 @@ function giveDie(state, playerId, value) {
   check('A group placement reusing a map with an earlier own COLOR die is blocked', result, { success: false, reason: 'OWN_COLOR_DIE_ALREADY_IN_AREA' });
 }
 {
+  // ダイス変換 exception (2026-08-29, per user request: "ダイス変換を使ったときは憤怒の制約関係なしにどこ
+  // にでも置ける") -- a die whose value was changed this turn (die.valueChangedThisTurn, the same generic
+  // flag markDieValueChanged sets for SET_DICE_ANY/SET_DIE_VALUE/CHANGE_DIE_VALUE) is exempt from
+  // OWN_COLOR_DIE_ALREADY_IN_AREA entirely, same as GRANT_PLACE_ANYWHERE.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const con6 = createCardInstance('CON005B');
+  con6.ownerId = 'P1';
+  state.cards[con6.physicalId] = con6;
+  p1.ownedCardPhysicalIds.push(con6.physicalId);
+  const d1 = giveDie(state, 'P1', 1);
+  board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
+  const d2 = giveDie(state, 'P1', 2);
+  d2.valueChangedThisTurn = true;
+  const result = board.placeDice(state, index, { playerId: 'P1' }, d2.id, 'MAP001', 1);
+  check('A die changed this turn (ダイス変換) is exempt from the same-AREA block', result.success, true);
+}
+{
+  // Same exception via placeDiceGroup: a group where every die not carrying GRANT_PLACE_ANYWHERE was at
+  // least changed this turn is exempt too, individually per die. Forces M006 (DICE>=7) into the shop,
+  // same as the earlier "Every castle slot filled first" block above, since a bare buildValue=7 (1+6)
+  // isn't guaranteed affordable against whatever the deterministic shuffle happens to deal.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.resources.BZ = 20;
+  for (const slotId of Object.keys(state.shops.M.slots)) state.shops.M.slots[slotId] = null;
+  state.shops.M.slots.SHOP001 = 'M006'; // DICE>=7 -- exactly this group's own 1+6
+  const con6 = createCardInstance('CON005B');
+  con6.ownerId = 'P1';
+  state.cards[con6.physicalId] = con6;
+  p1.ownedCardPhysicalIds.push(con6.physicalId);
+  const earlierDie = giveDie(state, 'P1', 5);
+  board.placeDice(state, index, { playerId: 'P1' }, earlierDie.id, board.CASTLE_MAP_ID, 0);
+  const d1 = giveDie(state, 'P1', 1);
+  d1.valueChangedThisTurn = true;
+  const d2 = giveDie(state, 'P1', 6);
+  d2.valueChangedThisTurn = true;
+  const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
+  check('A group placement where every die was changed this turn is exempt too', result.success, true);
+}
+{
+  // But a group where only SOME dice were changed this turn still blocks -- every die needs its own
+  // exemption (GRANT_PLACE_ANYWHERE or valueChangedThisTurn), not just one of them.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.resources.BZ = 20;
+  const con6 = createCardInstance('CON005B');
+  con6.ownerId = 'P1';
+  state.cards[con6.physicalId] = con6;
+  p1.ownedCardPhysicalIds.push(con6.physicalId);
+  const earlierDie = giveDie(state, 'P1', 5);
+  board.placeDice(state, index, { playerId: 'P1' }, earlierDie.id, board.CASTLE_MAP_ID, 0);
+  const d1 = giveDie(state, 'P1', 1);
+  d1.valueChangedThisTurn = true;
+  const d2 = giveDie(state, 'P1', 6); // neither GRANT_PLACE_ANYWHERE nor changed this turn
+  const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
+  check('A group with only SOME dice exempt is still blocked', result, { success: false, reason: 'OWN_COLOR_DIE_ALREADY_IN_AREA' });
+}
+{
   // Bug fix (2026-08-16, per user report: "CON憤怒 現在AREAがLVUPしても前の情報が残りダイスが置けません"):
   // once the AREA a player's own COLOR die sat on LVUPs (map.slots resets, see executor.js's own doc on
   // runSetCurrentArea), that die's old occupancy should no longer count against CON005B's own-color-die

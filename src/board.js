@@ -300,12 +300,15 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
   // AREA above -- confirmed distinct on purpose. Also waived for the player's own EX slot (2026-08-29,
   // per user request: "自分のEXSLOTは例外で置けるようにして") -- isExSlot here already implies ownership
   // (a non-owner's attempt already returned EX_NOT_OWNER above), so this is unconditionally "my own EX",
-  // never someone else's.
+  // never someone else's. Also waived for a die whose value was changed this turn via ダイス変換 (SET_
+  // DICE_ANY/SET_DIE_VALUE/CHANGE_DIE_VALUE -- 運命の導き/宮廷人/JOB004's conversion etc., 2026-08-29,
+  // per user spec: "ダイス変換を使ったときは憤怒の制約関係なしにどこにでも置ける") -- die.valueChangedThisTurn
+  // is the same generic flag markDieValueChanged sets for any of those commands.
   // TEST CHANGE (2026-08-16, per user: "自分のカラーダイスがおかれているAREAにカラーダイスもｗDも置け
   // なくなります", explicitly flagged as trial/revertible): widened from COLOR-only to every die kind --
   // wD (WHITE) used to be exempt (`die.kind === 'COLOR' &&` guarded this whole block). To revert to
   // COLOR-only, restore that guard on the line below.
-  if (!bypass && !isExSlot && isColorDieReuseBlocked(state, index, context.playerId)) {
+  if (!bypass && !isExSlot && !die.valueChangedThisTurn && isColorDieReuseBlocked(state, index, context.playerId)) {
     if (playerHasOwnColorDieInMapSlots(state, map, context.playerId)) {
       return { success: false, reason: 'OWN_COLOR_DIE_ALREADY_IN_AREA' };
     }
@@ -810,14 +813,15 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   // ONCE for the whole group against pre-existing map.slots occupancy (i.e. only earlier, already-
   // committed placements -- confirmed with the user this rule should NOT block a single group action
   // from placing 2+ of this player's own COLOR dice together, e.g. combining values at 王宮/AREA009 to
-  // reach a monument threshold: "スタッキングは許可"). A die in this group carrying GRANT_PLACE_ANYWHERE still waives it,
-  // same as placeDice. Also waived unconditionally for a wildcard-owning player (2026-08-19, per user
-  // spec: 憤怒/CON005B's same-AREA block is specifically negated by 道化's ☆ -- "憤怒の効果を道化で
-  // 打ち消す" -- other restrictions, e.g. another player's EX slot, are untouched).
+  // reach a monument threshold: "スタッキングは許可"). A die in this group carrying GRANT_PLACE_ANYWHERE
+  // or valueChangedThisTurn (ダイス変換, 2026-08-29 -- see placeDice's matching comment) still waives it
+  // individually, same as placeDice. Also waived unconditionally for a wildcard-owning player (2026-08-19,
+  // per user spec: 憤怒/CON005B's same-AREA block is specifically negated by 道化's ☆ -- "憤怒の効果を
+  // 道化で打ち消す" -- other restrictions, e.g. another player's EX slot, are untouched).
   // TEST CHANGE (2026-08-16, see placeDice's matching comment -- revertible by restoring `d.kind ===
   // 'COLOR' &&` below): widened from COLOR-only to every die kind, so a wD in the group trips this too.
   if (!dieIsWildcard && isColorDieReuseBlocked(state, index, playerId) && playerHasOwnColorDieInMapSlots(state, map, playerId)) {
-    if (dice.some((d) => !d.placeAnywhereThisTurn)) {
+    if (dice.some((d) => !d.placeAnywhereThisTurn && !d.valueChangedThisTurn)) {
       return { success: false, reason: 'OWN_COLOR_DIE_ALREADY_IN_AREA' };
     }
   }
