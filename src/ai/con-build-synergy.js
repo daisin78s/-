@@ -2,10 +2,10 @@
 'use strict';
 
 /**
- * Synergy lookup for game.xlsx's 評価値_4 sheet (2026-08-28, "AI LV4" -- wiring a CON-face x LV1-card
+ * Synergy lookup for game.xlsx's 評価値_CON sheet (2026-08-28, "AI LV4" -- wiring a CON-face x LV1-card
  * BUILD-time evaluation adjustment, per user bug report: 憤怒(CON005B, PASSIVE=WHITE_DICE_CAP(0)) still
  * built 双星の加護(B201A, ONCE=ADD(2wD), immediately lost to the cap) despite this sheet already holding
- * -200 for that exact pairing -- because 評価値_4 had never actually been read by any code; this module
+ * -200 for that exact pairing -- because 評価値_CON had never actually been read by any code; this module
  * (plus evaluator.js's own conBuildAware policy) is what finally wires it in.
  *
  * Rows are one of two kinds:
@@ -25,7 +25,7 @@
 const COLOR_DICE_ROW_NAME = 'D';
 
 function buildConBuildSynergyTable(rawData) {
-  const rows = rawData['評価値_4'] || [];
+  const rows = rawData['評価値_CON'] || [];
   const table = {};
   for (const row of rows) {
     const name = row.NAME;
@@ -48,7 +48,7 @@ function synergyValue(table, rowName, conFaceName) {
 }
 
 /** "双星の加護LV2" -> "双星の加護LV1" (2026-08-28, per user confirmation that an upgraded card keeps
- * applying its base card's own 評価値_4 entry, since that sheet only ever lists a card's LV1 name).
+ * applying its base card's own 評価値_CON entry, since that sheet only ever lists a card's LV1 name).
  * No-op for a name that already ends in "LV1", or doesn't end in "LV<n>" at all (e.g. "色ダイス"). */
 function normalizeToLv1Name(name) {
   return name.replace(/LV\d+$/, 'LV1');

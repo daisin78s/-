@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * "AI LV4" smart onboarding policy -- hand-authored domain knowledge (game.xlsx's 評価値_2/評価値_3
+ * "AI LV4" smart onboarding policy -- hand-authored domain knowledge (game.xlsx's 評価値_JOB/評価値_初期資源
  * sheets) driving the onboarding decisions the ordinary random-onboarding AI (LV1-3, see
  * game-runner.js's own doc on why RESOURCE/CON/JOB stay random there) never bothered with. Only
  * resource-card selection is implemented so far (2026-08-27); CON/JOB selection are a planned follow-up
@@ -12,7 +12,7 @@
  * 自分の持っているCONの片面と相性の悪い初期資源はマイナス評価します 逆に自分の持っているCONや見えている
  * JOBと相性のいいカードはプラス評価します" -- the "数字" is each RESOURCE card's own START_ORDER (a
  * plain data field, not a computed eval-table score -- confirmed 2026-08-27), adjusted by summing
- * 評価値_3's synergy value for every name relevant to this pick: both faces of the player's own dealt CON
+ * 評価値_初期資源's synergy value for every name relevant to this pick: both faces of the player's own dealt CON
  * (confirmed: a penalty applies if EITHER face clashes, not just the one that ends up chosen later) plus
  * every JOB currently visible in state.jobPool. The adjustment is added directly onto START_ORDER itself
  * (confirmed via a worked example: "先行順6のカードが-2だったら4扱い"), not treated as a mere tie-break,
@@ -95,7 +95,7 @@ function findReachableOutcomes(state, index, playerId, moveGenerator, simulator)
   return outcomes;
 }
 
-/** The single best 評価値_2 value achievable this turn for (jobId, conFaceId), given `state` already has
+/** The single best 評価値_JOB value achievable this turn for (jobId, conFaceId), given `state` already has
  * that JOB/CON face's ONCE effects (and the player's own already-chosen RESOURCE cards' ONCE effects)
  * applied -- see pickJobAndConFace's own doc for how that clone gets built. Candidates considered:
  *   - The CON face's own row -- unconditional (choosing it IS achieving it, no board-state check).
@@ -141,7 +141,7 @@ function simulateOnboardingChoice(state, index, playerId, jobId, face) {
 /**
  * Picks the best JOB to draft from state.jobPool (2026-08-27, "AI LV4" -- per user design: for every
  * (JOB, CON face) combination, simulate through the resulting onboarding state and take the best
- * achievable 評価値_2 value (see bestAchievableSynergyValue) -- excluding negative-only combos entirely.
+ * achievable 評価値_JOB value (see bestAchievableSynergyValue) -- excluding negative-only combos entirely.
  * The JOB associated with the single highest value across BOTH of the player's CON faces wins; ties broken
  * uniformly at random (per user spec: "評価値が同じなら最上位評価値の中からランダムに選ぶ"). Does NOT
  * commit anything -- purely picks which jobId setup.chooseJob should then be called with for real.
@@ -172,7 +172,7 @@ function pickJob(state, index, playerId, synergyTable2, moveGenerator, simulator
  * Picks the better of the player's own 2 CON faces, now that jobId is already fixed (2026-08-27, "AI
  * LV4") -- a direct lookup, no simulation needed (confirmed with the user: unlike JOB, which previews
  * both faces via a full reachability simulation, the CON face decision itself just compares
- * 評価値_2[jobId][faceA] vs [faceB] directly). Ties broken uniformly at random, same as pickJob.
+ * 評価値_JOB[jobId][faceA] vs [faceB] directly). Ties broken uniformly at random, same as pickJob.
  * @returns {'A'|'B'}
  */
 function pickConFace(state, index, playerId, jobId, synergyTable2, rngState) {

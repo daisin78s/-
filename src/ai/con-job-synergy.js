@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * Synergy lookup for game.xlsx's 評価値_2 sheet (added 2026-08-27, for "AI LV4"'s JOB/CON selection --
+ * Synergy lookup for game.xlsx's 評価値_JOB sheet (added 2026-08-27, for "AI LV4"'s JOB/CON selection --
  * per user design: "評価値2で マイナスのついている組み合わせは選ばない プラスの組み合わせは積極的に選
  * ぶ"). Rows are one of three kinds:
  *   - CON face names (e.g. "祝福") -- unconditional: choosing that face always counts as achieving it,
@@ -21,11 +21,11 @@ const COLOR_DICE_ROW_NAME = 'D';
 
 /** table[rowName][jobId], defaulting to 0 for an unknown row/job or a blank cell. */
 function buildConJobSynergyTable(rawData) {
-  const rows = rawData['評価値_2'] || [];
+  const rows = rawData['評価値_JOB'] || [];
   const table = {};
   for (const row of rows) {
-    const name = row.ID; // 評価値_2's own header column is literally "ID", holding each row's NAME text
-    if (!name || name === 'NAME') continue; // the "NAME" row is 評価値_2's own JOB-id-to-JOB-name legend, not real data
+    const name = row.ID; // 評価値_JOB's own header column is literally "ID", holding each row's NAME text
+    if (!name || name === 'NAME') continue; // the "NAME" row is 評価値_JOB's own JOB-id-to-JOB-name legend, not real data
     const entry = {};
     for (const [key, value] of Object.entries(row)) {
       if (key === 'ID') continue;
@@ -42,7 +42,7 @@ function synergyValue(table, rowName, jobId) {
   return row[jobId] || 0;
 }
 
-/** NAME -> faceId for every CON face (2026-08-27, for matching 評価値_2's CON-face rows back to a real
+/** NAME -> faceId for every CON face (2026-08-27, for matching 評価値_JOB's CON-face rows back to a real
  * conPhysicalId+face). */
 function buildConFaceIdByName(rawData) {
   const map = {};
@@ -50,7 +50,7 @@ function buildConFaceIdByName(rawData) {
   return map;
 }
 
-/** NAME -> faceId for every LV1 A/B/C card (2026-08-27, for matching 評価値_2's card rows -- all LV1
+/** NAME -> faceId for every LV1 A/B/C card (2026-08-27, for matching 評価値_JOB's card rows -- all LV1
  * names -- back to a real buildable faceId). */
 function buildLv1CardFaceIdByName(rawData) {
   const map = {};

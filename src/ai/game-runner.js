@@ -538,7 +538,7 @@ function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorO
  * @param {Function} [resourceCardPicker] - passed straight through to setupGame (see its own doc) --
  *   e.g. smart-onboarding.js#pickResourceCards for "AI LV4". Omitted by every caller that hasn't opted
  *   into smart onboarding yet, which keeps the original random resource-card pick.
- * @param {Object} [synergyTable2] - game.xlsx's 評価値_2 sheet (see con-job-synergy.js's
+ * @param {Object} [synergyTable2] - game.xlsx's 評価値_JOB sheet (see con-job-synergy.js's
  *   buildConJobSynergyTable). When provided, JOB draft + CON face choice use
  *   driveSmartOnboarding/smart-onboarding.js's pickJob/pickConFace instead of driveOnboarding's uniform
  *   random pick -- "AI LV4"'s own JOB/CON selection. Omitted by every caller that hasn't opted in yet.

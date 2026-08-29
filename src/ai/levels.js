@@ -43,7 +43,7 @@ const LEVELS = [
       dieScarcityTieBreak: true,
     },
     moveGeneratorOptions: { preferCastleOverSenate: true },
-    evaluatorOptions: { qstAware: true, conBuildAware: true },
+    evaluatorOptions: { qstAware: true, conBuildAware: true, monumentIncentiveAware: true },
   },
 ];
 

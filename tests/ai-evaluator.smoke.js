@@ -22,16 +22,17 @@ const index = buildDataIndex(raw);
 // as-is) purely so the lockout-penalty tests below can keep exercising that still-real, still-used
 // generic engine mechanism against an actual ownable card id.
 index.byId.set('CON005B', { sheet: 'CON', row: { ...index.byId.get('CON005B').row, TURNEND: 'RESOURCE_TOTAL_LIMIT((A,B,C),7)' } });
-// 評価値_4's real "D"(追加色ダイス, renamed from "色ダイス" 2026-08-28)x"憤怒" cell is currently blank --
+// 評価値_CON's real "D"(追加色ダイス, renamed from "色ダイス" 2026-08-28)x"憤怒" cell is currently blank --
 // patches a synthetic non-zero value onto that one cell (every other cell left as-is) purely so the
 // conBuildAware color-dice test below can exercise that row at all; the card-row ("双星の加護LV1"x
 // "憤怒") test doesn't need a patch since that cell is already the real -200 that motivated wiring
-// 評価値_4 in to begin with.
-raw['評価値_4'].find((r) => r.NAME === 'D').憤怒 = -7;
+// 評価値_CON in to begin with.
+raw['評価値_CON'].find((r) => r.NAME === 'D').憤怒 = -7;
 const evalTable = buildEvalTable(raw);
 const evaluator = new Evaluator(index, evalTable);
 const evaluatorQstAware = new Evaluator(index, evalTable, { qstAware: true }); // see AI LV3's own doc in main.js
 const evaluatorConBuildAware = new Evaluator(index, evalTable, { conBuildAware: true }); // see AI LV4's own doc in main.js
+const evaluatorMonumentIncentiveAware = new Evaluator(index, evalTable, { monumentIncentiveAware: true }); // see AI LV4's own doc in main.js
 
 let passCount = 0;
 let failCount = 0;
@@ -340,7 +341,7 @@ index.raw.QST = [
 
 // ---------------------------------------------------------------------------
 // conBuildAware (2026-08-28, "AI LV4" only -- see Evaluator's own doc and con-build-synergy.js for the
-// motivating bug report): 評価値_4's real "双星の加護LV1"x"憤怒" cell is -200; a 憤怒 (CON005B) player
+// motivating bug report): 評価値_CON's real "双星の加護LV1"x"憤怒" cell is -200; a 憤怒 (CON005B) player
 // owning B201A (双星の加護LV1, eval=100 round2, VP=0) should score 100 + (-200), not just 100.
 // ---------------------------------------------------------------------------
 {
@@ -350,12 +351,12 @@ index.raw.QST = [
   p1.conFace = 'B'; // CON005B/憤怒
   giveCard(state, 'B201A', 'P1');
   const plainScore = evaluator.score(state, 'P1');
-  check('The plain (non-conBuildAware) Evaluator ignores 評価値_4 entirely (control)', plainScore, 100);
-  check('conBuildAware applies 評価値_4\'s -200 for 憤怒 x 双星の加護LV1 on top of the normal eval-table value', evaluatorConBuildAware.score(state, 'P1'), 100 - 200);
+  check('The plain (non-conBuildAware) Evaluator ignores 評価値_CON entirely (control)', plainScore, 100);
+  check('conBuildAware applies 評価値_CON\'s -200 for 憤怒 x 双星の加護LV1 on top of the normal eval-table value', evaluatorConBuildAware.score(state, 'P1'), 100 - 200);
 }
 
 {
-  // Same pairing, but the LV2-upgraded face (B201B, eval=50 round2, VP=1) -- still matches 評価値_4's
+  // Same pairing, but the LV2-upgraded face (B201B, eval=50 round2, VP=1) -- still matches 評価値_CON's
   // LV1-named row via normalizeToLv1Name (per user confirmation: the penalty is just as real post-upgrade).
   const state = freshState(2);
   const p1 = state.players[0];
@@ -370,7 +371,7 @@ index.raw.QST = [
 {
   // "色ダイス" row = "追加色ダイス" (2026-08-28, per user clarification: "色ダイスは追加色ダイスのこと
   // です" -- only color dice PAST the 5-die baseline count, "何で得た分か追跡不要です"). Patched to -7
-  // for 憤怒 (see this file's own raw['評価値_4'] patch near the top -- the real cell is blank). 6 total
+  // for 憤怒 (see this file's own raw['評価値_CON'] patch near the top -- the real cell is blank). 6 total
   // color dice = 1 additional (6-5) -- contributes 1 * -7, not 6 * -7.
   const state = freshState(2);
   const p1 = state.players[0];
@@ -397,6 +398,164 @@ index.raw.QST = [
   const state = freshState(2);
   giveCard(state, 'B201A', 'P1');
   check('conBuildAware with no CON face chosen yet behaves exactly like the plain Evaluator', evaluatorConBuildAware.score(state, 'P1'), evaluator.score(state, 'P1'));
+}
+
+// ---------------------------------------------------------------------------
+// monumentIncentiveAware (2026-08-29, "AI LV4" only -- see Evaluator's own doc and monument-incentive.js
+// for the motivating report). Expected numbers below are pulled straight from the current 評価値_戦略
+// sheet, same convention as this file's own top-of-file note for the main 評価値 sheet -- re-check if the
+// sheet changes.
+// ---------------------------------------------------------------------------
+{
+  // 宮廷人(JOB007)+1能力で施療院(M006, DICE>=7) -- needs an unplaced die showing exactly 6 (6+1=7).
+  const state = freshState(3);
+  giveCard(state, 'JOB007', 'P1');
+  const d1 = createDie('d1', 'COLOR');
+  d1.value = 6;
+  state.players[0].dice.push(d1);
+  const plainScore = evaluator.score(state, 'P1');
+  check('plain Evaluator ignores 評価値_戦略 entirely (control)', plainScore, evaluator.score(state, 'P1'));
+  check('monumentIncentiveAware credits 宮廷人+1施療院 (round3=200) with a qualifying die=6', evaluatorMonumentIncentiveAware.score(state, 'P1'), plainScore + 200);
+}
+{
+  // Same setup, but die=5 -- 5+1=6, doesn't reach 施療院's >=7 -- no credit.
+  const state = freshState(3);
+  giveCard(state, 'JOB007', 'P1');
+  const d1 = createDie('d1', 'COLOR');
+  d1.value = 5;
+  state.players[0].dice.push(d1);
+  check('No credit when the die value is 1 short of what 宮廷人\'s +1 needs', evaluatorMonumentIncentiveAware.score(state, 'P1'), evaluator.score(state, 'P1'));
+}
+{
+  // Same setup (die=6), but 宮廷人 already tapped this round -- the ability isn't available, no credit.
+  const state = freshState(3);
+  const inst = giveCard(state, 'JOB007', 'P1');
+  inst.tapped = true;
+  const d1 = createDie('d1', 'COLOR');
+  d1.value = 6;
+  state.players[0].dice.push(d1);
+  check('No credit once 宮廷人 is already tapped', evaluatorMonumentIncentiveAware.score(state, 'P1'), evaluator.score(state, 'P1'));
+}
+{
+  // Same setup (die=6, untapped), but 施療院 has already been built by someone -- no longer unclaimed.
+  const state = freshState(3);
+  giveCard(state, 'JOB007', 'P1');
+  const d1 = createDie('d1', 'COLOR');
+  d1.value = 6;
+  state.players[0].dice.push(d1);
+  const built = createCardInstance('M006');
+  built.ownerId = 'P1';
+  state.cards[built.physicalId] = built;
+  check('No credit once 施療院 is already claimed (by anyone)', evaluatorMonumentIncentiveAware.score(state, 'P1'), evaluator.score(state, 'P1'));
+}
+{
+  // Same setup (die=6), but at round 1 -- 評価値_戦略's own 1R column is blank(0) for this row, so the
+  // condition being true still contributes nothing (round-gating lives in the sheet, not extra code).
+  const state = freshState(1);
+  giveCard(state, 'JOB007', 'P1');
+  const d1 = createDie('d1', 'COLOR');
+  d1.value = 6;
+  state.players[0].dice.push(d1);
+  check('No credit at round 1 (sheet\'s own 1R column is blank for this row)', evaluatorMonumentIncentiveAware.score(state, 'P1'), evaluator.score(state, 'P1'));
+}
+{
+  // 運命の導きLV2(B003B)+3能力で凱旋門(M004, DICE>=9) -- needs die=6 (6+3=9). Also confirms an owned
+  // card (not a JOB) is matched the same way as 宮廷人 above.
+  const state = freshState(4);
+  giveCard(state, 'B003B', 'P1');
+  const d1 = createDie('d1', 'COLOR');
+  d1.value = 6;
+  state.players[0].dice.push(d1);
+  const plainScore = evaluator.score(state, 'P1');
+  check('monumentIncentiveAware credits 運命の導きLV2+3凱旋門 (round4=300)', evaluatorMonumentIncentiveAware.score(state, 'P1'), plainScore + 300);
+}
+{
+  // 歓楽街の支配LV2(A006B) + 王都建設(M402, COST=5A,5B,5C -> 15 units -> needs 2*15=30K held).
+  const state = freshState(3);
+  giveCard(state, 'A006B', 'P1');
+  state.players[0].resources.K = 30;
+  const plainScore = evaluator.score(state, 'P1');
+  check('monumentIncentiveAware credits 歓楽街LV2+王都建設 (round3=500) with exactly 30K held', evaluatorMonumentIncentiveAware.score(state, 'P1'), plainScore + 500);
+}
+{
+  // Same setup, but only 11K -- below even the group's cheapest threshold (凱旋門's own 2*6=12) -- no
+  // row in the group can possibly credit anything.
+  const state = freshState(3);
+  giveCard(state, 'A006B', 'P1');
+  state.players[0].resources.K = 11;
+  check('No credit anywhere in the 歓楽街LV2 group with K below every target\'s own threshold', evaluatorMonumentIncentiveAware.score(state, 'P1'), evaluator.score(state, 'P1'));
+}
+{
+  // 30K clears every target's threshold at once, but an opponent can already snipe 王都建設 (and, at
+  // this die value, also 聖王城/円形闘技場 -- die>=their own lower thresholds too) right now -- per user
+  // spec ("他プレイヤーの動向も見る"), this suppresses 王都建設's own credit specifically. Per priority
+  // order, the group then falls back to 中央広場 (DICE>=6, the opponent's die=5 doesn't reach it -- not
+  // at risk), the next-highest-priority target P1's own 30K still clears -- "そうでなければとれるものを
+  // とる": a target actually safe to hold for still credits, even though the very top choice doesn't.
+  const state = freshState(3);
+  state.players.push(createPlayer('P2', 'Bob'));
+  giveCard(state, 'A006B', 'P1');
+  state.players[0].resources.K = 30;
+  const opponentDie = createDie('opp-d1', 'COLOR');
+  opponentDie.value = 5; // meets M402/M008/M009's own DICE thresholds (5/5/4), not M007's (6) or M004's (9)
+  state.players[1].dice.push(opponentDie);
+  state.players[1].resources = { ...state.players[1].resources, A: 5, B: 5, C: 5 };
+  const plainScore = evaluator.score(state, 'P1');
+  check('王都建設 itself gets no credit while at risk, but the group falls back to 中央広場 (round3=300)', evaluatorMonumentIncentiveAware.score(state, 'P1'), plainScore + 300);
+}
+{
+  // Same risk, but P1 only holds 18K -- exactly enough for 中央広場 (2*9), not for anything above it in
+  // priority order that could have masked the fallback. Isolates the fallback-credit path more directly.
+  const state = freshState(3);
+  state.players.push(createPlayer('P2', 'Bob'));
+  giveCard(state, 'A006B', 'P1');
+  state.players[0].resources.K = 18;
+  const opponentDie = createDie('opp-d1', 'COLOR');
+  opponentDie.value = 5;
+  state.players[1].dice.push(opponentDie);
+  state.players[1].resources = { ...state.players[1].resources, A: 5, B: 5, C: 5 };
+  const plainScore = evaluator.score(state, 'P1');
+  check('With exactly 18K (only 中央広場 reachable), credits 中央広場 (round3=300) directly', evaluatorMonumentIncentiveAware.score(state, 'P1'), plainScore + 300);
+}
+{
+  // Same 18K, but the opponent's die is 9 -- meets every one of the group's 5 own DICE thresholds at
+  // once (max is 凱旋門's own >=9) -- combined with A=5,B=5,C=5 covering every target's own COST too,
+  // every target P1's 18K could otherwise reach (中央広場 directly, 凱旋門 as a would-be fallback) is at
+  // risk simultaneously -- no credit anywhere in the group.
+  const state = freshState(3);
+  state.players.push(createPlayer('P2', 'Bob'));
+  giveCard(state, 'A006B', 'P1');
+  state.players[0].resources.K = 18;
+  const opponentDie = createDie('opp-d1', 'COLOR');
+  opponentDie.value = 9;
+  state.players[1].dice.push(opponentDie);
+  state.players[1].resources = { ...state.players[1].resources, A: 5, B: 5, C: 5 };
+  check('No credit anywhere once the opponent can snipe every target P1\'s K could reach', evaluatorMonumentIncentiveAware.score(state, 'P1'), evaluator.score(state, 'P1'));
+}
+{
+  // 農園または小麦畑の支配(いずれか) + 13K以上保有 (round3=100). Confirms 小麦畑 (A004A) counts the same
+  // as 農園 itself, per "小麦畑も農園と同じ扱い".
+  const state = freshState(3);
+  giveCard(state, 'A004A', 'P1');
+  state.players[0].resources.K = 13;
+  const plainScore = evaluator.score(state, 'P1');
+  check('monumentIncentiveAware credits the 13K row via 小麦畑の支配LV1 (round3=100)', evaluatorMonumentIncentiveAware.score(state, 'P1'), plainScore + 100);
+}
+{
+  // Same setup, but only 12K -- 1 short -- no credit.
+  const state = freshState(3);
+  giveCard(state, 'A004A', 'P1');
+  state.players[0].resources.K = 12;
+  check('No credit for the 13K row with 1K short', evaluatorMonumentIncentiveAware.score(state, 'P1'), evaluator.score(state, 'P1'));
+}
+{
+  // monumentIncentiveAware is a genuine no-op with none of the qualifying cards owned at all.
+  const state = freshState(3);
+  state.players[0].resources.K = 999;
+  const d1 = createDie('d1', 'COLOR');
+  d1.value = 6;
+  state.players[0].dice.push(d1);
+  check('monumentIncentiveAware with no qualifying cards owned behaves exactly like the plain Evaluator', evaluatorMonumentIncentiveAware.score(state, 'P1'), evaluator.score(state, 'P1'));
 }
 
 console.log(`\n${passCount} passed, ${failCount} failed`);

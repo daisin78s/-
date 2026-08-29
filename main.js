@@ -189,7 +189,7 @@ const aiPlayerLv3 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGenerator, aiEvaluator
 // ONBOARDING (JOB/CON/resource-card picks) also go through smart-onboarding.js instead of
 // driveOneAiStepInner's uniform-random default -- see that function's own branches below; LV1/2/3 are
 // unaffected either way since only 'AI_LV4' triggers those branches.
-const aiEvaluatorLv4 = new evaluatorMod.Evaluator(INDEX, aiEvalTable, { qstAware: true, conBuildAware: true });
+const aiEvaluatorLv4 = new evaluatorMod.Evaluator(INDEX, aiEvalTable, { qstAware: true, conBuildAware: true, monumentIncentiveAware: true });
 const aiMoveGeneratorLv4 = new moveGeneratorMod.MoveGenerator({ preferCastleOverSenate: true });
 const aiPlayerLv4 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGeneratorLv4, aiEvaluatorLv4, aiSimulator, {
   lookaheadExtraTurns: 1,
