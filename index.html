@@ -214,6 +214,25 @@
     </div>
   </div>
 
+  <!-- 資源選択の確認ステップ (2026-08-29, per user request: タップ→拡大→選択 だったのを タップで色が変わる
+       (選択)→2枚目タップで拡大確認 に変更) -- 2枚選び終わった時点でここが開き、選んだ2枚を並べて表示、
+       大きな「この選択でOK」/「別のにする」の2択のみ。キャンセル(×)はなし -- 別のにするボタン自体が
+       選び直しの導線を兼ねる。 -->
+  <div id="resource-confirm-overlay" class="card-inst-overlay" hidden>
+    <div class="card-inst-modal build-choice-modal">
+      <div class="card-inst-modal__header">
+        <span class="card-inst-modal__title">この2枚でよろしいですか？</span>
+      </div>
+      <div class="card-inst-modal__body">
+        <div class="build-choice-group" id="resource-confirm-visual"></div>
+        <div class="resource-confirm-buttons">
+          <button type="button" id="resource-confirm-redo-button" class="resource-confirm-button resource-confirm-button--redo">別のにする</button>
+          <button type="button" id="resource-confirm-ok-button" class="resource-confirm-button resource-confirm-button--ok">この選択でOK</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- CON002B's "real or Z" payment choice for an AREA that pays A/B/C directly, e.g. AREA007's
        CHANGE((A,B,C),D) (2026-07-31) -- see main.js's attemptPlaceSelectedDie/renderPlacementChoiceModal.
        Unlike the BUILD modal above, nothing has been committed yet at this point, so a cancel button

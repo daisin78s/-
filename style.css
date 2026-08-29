@@ -2723,6 +2723,32 @@ h1, h2, h3 { margin: 0; }
 }
 .card-inst-modal__pick-button[hidden] { display: none; }
 
+/* 資源選択の確認ステップ (2026-08-29, per user request: "この選択でOK or 別のにするの文字は大きく") --
+   2枚並べた下に大きな文字の2択ボタン。OKをより目立たせる(accent色)、別のにするは控えめなsurface色。 */
+.resource-confirm-buttons {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+.resource-confirm-button {
+  flex: 1;
+  padding: 16px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 20px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.resource-confirm-button--ok {
+  border: none;
+  background: var(--accent);
+  color: #fff;
+}
+.resource-confirm-button--redo {
+  border: 1px solid var(--border);
+  background: var(--surface-sunken);
+  color: var(--text);
+}
+
 /* テストゲーム開始 picker's END button (2026-08-13) -- same prominent-accent treatment as
    .card-inst-modal__pick-button above, since it's the same "commit this step" action, just always
    available (not gated on 2 picks like RESOURCE choice) rather than tucked inside a per-card modal. */

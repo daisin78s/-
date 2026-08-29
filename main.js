@@ -1138,7 +1138,8 @@ function enterReplayMode(historyOverride) {
   // index.html's own comment) same as #replay-controls does on purpose.
   for (const id of ['card-inst-overlay', 'build-choice-overlay', 'placement-choice-overlay',
     'tap-choice-overlay', 'auto-mode-choice-overlay', 'turn-end-warning-overlay', 'round-pass-confirm-overlay',
-    'white-overflow-confirm-overlay', 'job-replacement-choice-overlay', 'ranking-overlay', 'online-lobby-overlay']) {
+    'white-overflow-confirm-overlay', 'job-replacement-choice-overlay', 'resource-confirm-overlay',
+    'ranking-overlay', 'online-lobby-overlay']) {
     document.getElementById(id).hidden = true;
   }
   if (historyOverride) {
@@ -5698,6 +5699,33 @@ function renderJobReplacementChoice(state) {
   }
 }
 
+/** 資源選択の確認オーバーレイ (2026-08-29, per user request) -- renderResourceChoice's plain-tap toggle
+ * only ever gets a single player's SELECT_RESOURCE_CARDS choice interactable at a time (gated by
+ * currentResourceChooserId at the call site), so there's at most one choice anywhere in `state` that can
+ * ever reach `requiredCount` selected -- safe to just scan for it here rather than being told which one.
+ * Shows the 2 (or however many `context.count` requires) selected cards enlarged with 2 big buttons; OK
+ * commits via the same setupMod.chooseResourceCards/maybeStartRound1 path the old auto-commit used, 別の
+ * にする clears the selection back to empty so the player lands back on the plain tappable grid. */
+function renderResourceConfirmOverlay(state) {
+  const overlay = document.getElementById('resource-confirm-overlay');
+  const choice = state.pendingChoices.find((c) => c.kind === 'SELECT_RESOURCE_CARDS' && !isAiPlayer(c.playerId)
+    && (!onlineRoomCode || localSeatId === c.playerId)
+    && c.context.selected && c.context.selected.length === (c.context.count || 2));
+  if (!choice) {
+    overlay.hidden = true;
+    return;
+  }
+  overlay.hidden = false;
+  const visual = document.getElementById('resource-confirm-visual');
+  visual.innerHTML = '';
+  for (const faceId of choice.context.selected) {
+    const cardNode = buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true });
+    const cell = el('div', cardNode.classList.contains('shop-card--tall') ? 'owned-card-cell owned-card-cell--tall' : 'owned-card-cell');
+    cell.appendChild(cardNode);
+    visual.appendChild(cell);
+  }
+}
+
 /** Both of player's CON faces side by side (2026-07-30, layout confirmed, see
  * [[project-dice-wp-ui-requirements]]) -- shared by renderConPreview (read-only, shown during
  * pre-round-1 RESOURCE selection) and renderConChoice (interactive, shown during round-1 onboarding).
@@ -5857,27 +5885,23 @@ function renderResourceChoice(container, state, player) {
     const cell = el('div', tall ? 'owned-card-cell owned-card-cell--tall owned-card-cell--selectable' : 'owned-card-cell owned-card-cell--selectable');
     if (isSelected) cell.classList.add('owned-card-cell--selected');
     cell.appendChild(cardNode);
-    // 2026-08-0X, per user feedback (these cards weren't tappable to enlarge at all): tapping the card
-    // now always opens the enlarge modal; toggling this candidate in/out of the 2-picked set happens
-    // via the modal's pick button instead of a plain tap on the cell -- see attachPickableEnlarge's own
-    // doc. The button is skipped (pickAction: null) once 2 are already picked and this isn't one of
-    // them -- nothing to do with a 3rd candidate until one of the first 2 is deselected.
+    // 2026-08-29, per user request ("タップ→拡大→選択 だったのを タップで色が変わる(選択)→別のをタップして
+    // 拡大確認 にしてほしい"): a plain tap now toggles this candidate in/out of the selected set directly
+    // (no enlarge modal here anymore) -- once `requiredCount` are selected, renderResourceConfirmOverlay
+    // (called from render()'s own top) takes over with the enlarged "この選択でOK"/"別のにする" step. The
+    // click is skipped once 2 are already picked and this isn't one of them -- nothing to do with a 3rd
+    // candidate until the confirm overlay's "別のにする" clears the selection.
     const canToggle = isSelected || selected.length < requiredCount;
-    attachPickableEnlarge(cardNode, faceId, canToggle ? {
-      label: isSelected ? '選択を解除する' : '選ぶ',
-      onPick: () => {
+    if (canToggle) {
+      cell.addEventListener('click', () => {
         if (isSelected) {
           choice.context.selected = selected.filter((id) => id !== faceId);
         } else {
           selected.push(faceId);
-          if (selected.length === requiredCount) {
-            setupMod.chooseResourceCards(state, player.id, selected);
-            maybeStartRound1(state);
-          }
         }
         render(STATE);
-      },
-    } : null);
+      });
+    }
     container.appendChild(cell);
   }
   // Explanatory hint to the right of the 4 candidates (2026-08-0X, per user request) -- explains both
@@ -5915,6 +5939,14 @@ function maybeStartRound1(state) {
   if (state.pendingChoices.some((c) => c.kind === 'SELECT_RESOURCE_CARDS')) return;
   setupMod.computeStartOrder(state, INDEX);
   turnFlowMod.startRound(state);
+  // 2026-08-29, per user request: "JOB選択画面でターン開始時に戻るを押したら資源選択後 JOB未選択の状態に
+  // 戻してほしい" -- without this, state.undoCheckpoint stayed whatever setup.rollInitialColorDice
+  // recorded (a snapshot from BEFORE resource cards/JOB pool/CON/quests were ever dealt -- see that
+  // function's own doc), since render()'s own per-TURN recordCheckpoint call is gated on
+  // hasFinishedOnboarding, which stays false through the whole JOB draft -> CON pick stretch. Recording
+  // fresh right here -- resource cards done, JOB/CON still unresolved -- gives Undo a meaningful target
+  // for that whole stretch instead of nuking the game back to before anything was ever dealt.
+  undoMod.recordCheckpoint(state);
 }
 
 function renderPlayerCards(state, next) {
@@ -6556,6 +6588,7 @@ function render(state) {
   renderPlayers(state, next);
   renderJobPool(state, next);
   renderJobReplacementChoice(state);
+  renderResourceConfirmOverlay(state);
   renderPlayerCards(state, next);
   // Drains GameState.whiteOverflowEvents into whatever placementMessage this render's own action
   // already produced (2026-08-11, per user request) -- appended, not replacing, so a placement that
@@ -6652,7 +6685,16 @@ function handleCancelPreviousActionClick() {
  * there's actually a checkpoint to revert to. Also drives the "直前のアクションをキャンセル" buttons' own
  * enabled state the same way, off actionCheckpoints instead of state.undoCheckpoint (2026-08-10). */
 function renderUndoButtons(state) {
-  const disabled = !state.undoCheckpoint;
+  // state.round === 0 (2026-08-29, per user bug report: "対戦中 JOB選択時 ターン開始に戻るを押したらば
+  // ぐりました"): state.undoCheckpoint is already non-null from the very start of the game -- setup.
+  // rollInitialColorDice records it right before rolling initial dice, well before JOB/CON/resource
+  // candidates/quests are ever dealt (see its own doc) -- so without this extra check, clicking undo
+  // during round-0 onboarding silently reverted all the way back to that pre-deal moment: no dice, no
+  // JOB pool, no resource candidates, nothing, with no real turn to even resume. The per-TURN checkpoint
+  // this button is actually meant to revert to (render()'s own recordCheckpoint call, gated on
+  // hasFinishedOnboarding) never exists before round 1 genuinely starts, so the button must stay
+  // disabled until then regardless of what stale checkpoint object happens to be sitting there.
+  const disabled = !state.undoCheckpoint || state.round === 0;
   for (const id of ['undo-button', 'undo-button-build']) {
     document.getElementById(id).disabled = disabled;
   }
@@ -7147,6 +7189,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const { playerId } = pendingRoundPassConfirm;
     pendingRoundPassConfirm = null;
     handleRoundPassConfirmed(STATE, playerId);
+    render(STATE);
+  });
+
+  // 資源選択の確認オーバーレイのボタン (2026-08-29) -- どちらも押された時点のSTATEから対象のchoiceを
+  // 引き直す(renderRoundPassConfirmModal同様、専用のモジュール変数を持たずに済む)。
+  document.getElementById('resource-confirm-ok-button').addEventListener('click', () => {
+    const choice = STATE.pendingChoices.find((c) => c.kind === 'SELECT_RESOURCE_CARDS'
+      && c.context.selected && c.context.selected.length === (c.context.count || 2));
+    if (!choice) return;
+    setupMod.chooseResourceCards(STATE, choice.playerId, choice.context.selected);
+    maybeStartRound1(STATE);
+    render(STATE);
+  });
+  document.getElementById('resource-confirm-redo-button').addEventListener('click', () => {
+    const choice = STATE.pendingChoices.find((c) => c.kind === 'SELECT_RESOURCE_CARDS'
+      && c.context.selected && c.context.selected.length === (c.context.count || 2));
+    if (!choice) return;
+    choice.context.selected = [];
     render(STATE);
   });
 
