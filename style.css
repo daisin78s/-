@@ -1756,6 +1756,21 @@ h1, h2, h3 { margin: 0; }
   font-weight: 700;
   color: var(--text);
   margin-right: 2px;
+  font-size: 12px;
+  font-family: inherit;
+  width: 5.5em;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  padding: 1px 3px;
+}
+.player-role-control__name:hover:not(:disabled),
+.player-role-control__name:focus {
+  border-color: var(--border);
+  background: var(--surface);
+}
+.player-role-control__name:disabled {
+  cursor: default;
 }
 
 .player-role-control__option {

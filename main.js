@@ -894,6 +894,12 @@ let pendingAutoModeChoice = null;
 // checkpoint-recording logic and handleUndoClick below. null whenever nobody's mid-TURN (onboarding,
 // or before round 1 starts).
 let lastTurnPlayerId = null;
+// Which round-1 player's own "about to onboard" undo checkpoint is currently the active one (2026-08-30,
+// per user bug report: "CON選択後 ターン開始に戻すを押したところ JOBが選べなくなりました") -- see render()'s
+// own two matching checkpoint blocks (one that records this the moment ONBOARDING_NEEDED first appears
+// for a new round-1 player, one that reads it to suppress the *next* block's usual re-record once that
+// same player finishes CON and their real turn begins). null once nobody's mid-onboarding-or-just-past-it.
+let onboardingCheckpointPlayerId = null;
 // Tracks round 1's original turnOrder[0] ("1番手") and how many genuine TURNs they've started, purely
 // to drive renderJobPool's auto-hide (2026-08-04, per user feedback: "えらばれなかったJOBは1番手の２
 // ターン目から片付けてください"). Snapshotted once (turnOrder is recomputed every round, but "1番手"
@@ -1028,6 +1034,12 @@ function jumpToHistoryIndex(idx) {
   // with this entry's own playerId makes render() correctly recognize "already noted" and skip that.
   lastNotedActiveTurnPlayerId = turnHistory[idx].playerId;
   lastTurnPlayerId = turnHistory[idx].playerId;
+  // onboardingCheckpointPlayerId (2026-08-30): same class of stale-UI-var bug as everything else reset in
+  // this function -- null is always a safe reset regardless of where the jump landed, since the explicit
+  // recordCheckpoint(STATE) a few lines down already gets *this* moment's checkpoint right either way; this
+  // only matters for renders after the jump, where null just means the next genuine ONBOARDING_NEEDED
+  // transition (if any) records fresh rather than risking a stale id suppressing it.
+  onboardingCheckpointPlayerId = null;
   // round1FirstPlayerId/round1FirstPlayerTurnStartCount (found 2026-08-05, per user bug report: "デバッ
   // グモードで初期状態まで戻るとJOB選択をする時JOBが非表示でえらべない") -- same class of bug as
   // aiOpenTurnPlayerId/lastNotedActiveTurnPlayerId above (a UI-only var outside GameState, left stale by
@@ -5747,16 +5759,6 @@ function renderConFacesRow(container, player, onPick) {
     // read-only preview or the real choice): tapping the card now always opens the enlarge modal;
     // committing the choice happens via the modal's pick button -- see attachPickableEnlarge's own doc.
     attachPickableEnlarge(cardNode, faceId, onPick ? { label: `この面（${face}面）を選ぶ`, onPick: () => onPick(face) } : null);
-    // 道化(JOB003)所有時、憤怒(CON005B)面への相性注意 (2026-08-19, per user request) -- purely
-    // informational, not blocking: 道化のONCE=ADD(wD)はJOB選択時に既に使用済みなので実害はないが、
-    // 憤怒のWHITE_DICE_CAP(0)を選ぶと以降道化と組み合わせる旨味がなくなることを知らせる。NAME一致で判定
-    // （物理IDの将来的な再編に強くするため、他の同種チェックと同じ方針 -- board.hasPioneerAbility等参照）。
-    // Text updated 2026-08-20, per user request: the wD overflow no longer becomes K -- it's simply lost
-    // now (see executor.grantOneDie's own doc).
-    if (dataLoaderMod.getCardRow(INDEX, faceId).NAME === '憤怒' && player.jobCardId
-      && dataLoaderMod.getCardRow(INDEX, player.jobCardId).NAME === '道化') {
-      cell.appendChild(el('div', 'onboard-hint__line onboard-hint__line--emphasis', '道化との相性が悪いカードです（wDが常に失われます）'));
-    }
     container.appendChild(cell);
   }
   // Explanatory hint to the right of the two CON faces (2026-08-0X, per user request) -- shown in both
@@ -5940,13 +5942,9 @@ function maybeStartRound1(state) {
   setupMod.computeStartOrder(state, INDEX);
   turnFlowMod.startRound(state);
   // 2026-08-29, per user request: "JOB選択画面でターン開始時に戻るを押したら資源選択後 JOB未選択の状態に
-  // 戻してほしい" -- without this, state.undoCheckpoint stayed whatever setup.rollInitialColorDice
-  // recorded (a snapshot from BEFORE resource cards/JOB pool/CON/quests were ever dealt -- see that
-  // function's own doc), since render()'s own per-TURN recordCheckpoint call is gated on
-  // hasFinishedOnboarding, which stays false through the whole JOB draft -> CON pick stretch. Recording
-  // fresh right here -- resource cards done, JOB/CON still unresolved -- gives Undo a meaningful target
-  // for that whole stretch instead of nuking the game back to before anything was ever dealt.
-  undoMod.recordCheckpoint(state);
+  // 戻してほしい" -- P1's own "about to onboard" checkpoint is now recorded generically by render()'s own
+  // ONBOARDING_NEEDED-entry block (2026-08-30, see onboardingCheckpointPlayerId's own doc), on the very
+  // next render after this call returns, so no need to record one here too.
 }
 
 function renderPlayerCards(state, next) {
@@ -6561,11 +6559,29 @@ function render(state) {
   // lastTurnPlayerId can't: the same player taking several turns in a row with nobody else's turn in
   // between (once every other player is out of dice for the round), where next.playerId never actually
   // changes across those later turns.
+  // Fresh "about to onboard" checkpoint for each round-1 player in turn (2026-08-30, per user bug report
+  // "CON選択後 ターン開始に戻すを押したところ JOBが選べなくなりました") -- fires once per player, the first
+  // render where ONBOARDING_NEEDED names them (P1 right after maybeStartRound1 starts round 1, P2/P3/P4
+  // right after the previous player's own turn ends), capturing "resources chosen, JOB/CON both still
+  // unset" as this player's own undo target -- see onboardingCheckpointPlayerId's own doc and the
+  // suppression check just below for why this must survive past the moment CON actually resolves.
+  if (next && next.type === 'ONBOARDING_NEEDED' && next.playerId !== onboardingCheckpointPlayerId) {
+    undoMod.recordCheckpoint(state);
+    onboardingCheckpointPlayerId = next.playerId;
+  }
   const activePlayer = next ? state.players.find((p) => p.id === next.playerId) : null;
   if (activePlayer && hasFinishedOnboarding(activePlayer)) {
     noteActiveTurnPlayerForJobPool(state, next.playerId, turnJustEnded);
     if (next.playerId !== lastTurnPlayerId || turnJustEnded) {
-      undoMod.recordCheckpoint(state);
+      // Suppressed exactly once, right as this player's CON choice resolves (2026-08-30) -- overwriting
+      // the onboarding-entry checkpoint above with "onboarding just finished, nothing placed yet" would
+      // make "ターン開始に戻す" a no-op for the rest of their first turn instead of the pre-JOB/pre-CON
+      // revert the previous fix already promised during the JOB/CON screens themselves (see maybeStartRound1's
+      // own doc). Left alone, this same checkpoint naturally keeps covering their whole first turn (dice
+      // placement included) until the next genuinely new transition -- another player's own onboarding
+      // entry, or (round 2+) this same player's next real turn -- fires this block again with
+      // onboardingCheckpointPlayerId no longer matching next.playerId.
+      if (next.playerId !== onboardingCheckpointPlayerId) undoMod.recordCheckpoint(state);
       // 変化ハイライトの計算 (2026-08-16): 人間のターンが始まる、まさにこの瞬間だけ、直前の人間ターン
       // 終了時に取ったbaseline(changeHighlightBaseline)と今のstateを比較する。AIのターンが始まる瞬間は
       // ここを素通りする(baselineは消費されず残ったまま)ので、複数のAIが連続で動いても、次に人間の番が
@@ -6771,7 +6787,22 @@ function renderPlayerRoleControl(state) {
     const swatch = el('span', 'player-role-control__swatch');
     swatch.dataset.color = player.color;
     nameLine.appendChild(swatch);
-    nameLine.appendChild(el('span', 'player-role-control__name', player.name));
+    // 2026-08-30, per user request ("名前をBOBなどからかえれるようにしてほしい"): plain text input styled
+    // to look like the old static label, editing state.players[i].name directly (a pure display label --
+    // every other lookup in the codebase keys off player.id, never .name -- so this is side-effect-free).
+    // Online play: restrict editing to this device's own seat, same isolation rule as every other
+    // per-seat control added this session (see renderResourceChoice's own doc for the pattern).
+    const nameInput = el('input', 'player-role-control__name');
+    nameInput.type = 'text';
+    nameInput.value = player.name;
+    nameInput.maxLength = 12;
+    nameInput.disabled = onlineRoomCode && localSeatId !== player.id;
+    nameInput.addEventListener('change', () => {
+      const trimmed = nameInput.value.trim();
+      if (trimmed) player.name = trimmed;
+      render(STATE);
+    });
+    nameLine.appendChild(nameInput);
     row.appendChild(nameLine);
 
     const optionsLine = el('div', 'player-role-control__options-line');
