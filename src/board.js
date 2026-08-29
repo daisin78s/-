@@ -396,6 +396,8 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
   // never reaching here (2026-08-07) -- so occupancy is the only remaining bypass-relevant case.
   // Captured BEFORE evictSlotOccupants below empties targetOccupants -- .length must be read first.
   const joinedOccupiedSlot = bypass && targetOccupants.length > 0;
+  // 2026-08-29, per user spec: "スタプレ順に影響するのは色ダイスのみ wDはいかなる場合も影響しない" -- a
+  // WHITE die never counts toward turn order, full stop, regardless of the joinedOccupiedSlot case above.
   // 2026-08-21, per user request ("GRANT_PLACE_ANYWHEREや☆の強制フォールバックのみです 通常のダイスは
   // できません"): joining an occupied slot now EVICTS whatever was there instead of stacking onto it --
   // see evictSlotOccupants' own doc for what happens to the evicted die (nothing touches it directly;
@@ -407,7 +409,7 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
     dieId,
     value: die.value,
     seq: state.placementSeq,
-    countsForTurnOrder: !joinedOccupiedSlot,
+    countsForTurnOrder: !joinedOccupiedSlot && die.kind !== 'WHITE',
   });
   chargeUsageFeeIfOwed(state, map, context.playerId);
 
@@ -937,7 +939,8 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
       value: die.value,
       isWildcard: dieIsWildcard,
       seq: state.placementSeq,
-      countsForTurnOrder: !slotJoinedOccupied.get(slotIndex),
+      // 2026-08-29, per user spec: "スタプレ順に影響するのは色ダイスのみ wDはいかなる場合も影響しない".
+      countsForTurnOrder: !slotJoinedOccupied.get(slotIndex) && die.kind !== 'WHITE',
     });
     executor.emitAndResolve(state, index, actionContext, 'PLACE', mapId);
   }
@@ -1126,8 +1129,10 @@ function placeWildcardDie(state, index, context, dieId, mapId, preferredSlotInde
     seq: state.placementSeq,
     // Same convention as placeDice's own countsForTurnOrder -- false only when this placement had to
     // force its way onto an already-occupied slot rather than a genuinely free empty one, which for a ☆
-    // die is exactly the excludedFromBuildValue case.
-    countsForTurnOrder: !excludedFromBuildValue,
+    // die is exactly the excludedFromBuildValue case. Also false whenever the underlying die is WHITE
+    // (2026-08-29, per user spec: "スタプレ順に影響するのは色ダイスのみ wDはいかなる場合も影響しない") --
+    // a ☆-wildcarded WHITE die is still a WHITE die underneath.
+    countsForTurnOrder: !excludedFromBuildValue && die.kind !== 'WHITE',
   });
   chargeUsageFeeIfOwed(state, map, context.playerId);
 
@@ -1591,20 +1596,19 @@ function grantLandlordBonusIfEarned(state, index, context, mapId, alreadyHadOwnC
 
 /** The minimum round a SHOP201-203 (SPECIAL) card becomes purchasable, derived from its own ID's number
  * (2026-08-24 rework, per user spec): wave 1 (200-299, A201/A202 families) from round 2, wave 2 (300-399,
- * A301 family, the former A008/B008/C008) from round 3. The >=400 (M401-403) branch is unreachable in
- * practice as of 2026-08-28 -- those moved to the M shop's own drawPile instead (see setup.prepareShops'
- * own doc), no longer ever appearing in SPECIAL at all -- left in place only because a faceId this
- * function has never seen before still needs SOME defined answer, not because 400+ is a real "wave 3"
- * any more. This is separate from *visibility* -- a card can already be sitting in a slot (see
- * setup.prepareShops' own doc on the concatenated-drawPile reveal) well before its own round arrives;
- * getBuildCandidates uses this to keep it out of the buildable candidate list until then, and main.js
- * uses the exported copy of this same function to show it with a locked overlay in the meantime.
- * Exported for that reason. */
+ * A301 family, the former A008/B008/C008) from round 3. Monuments (M-family) never gate on round at all
+ * (2026-08-29: M401-403 can now land in SPECIAL via revealExtraMonumentsIfAnyShopEmptied, same as any
+ * other shop -- they carry no round-purchase gate of their own, matching M001-012's own M-shop behavior)
+ * -- returns 0 so `round < specialShopMinRound(...)` is never true. This is separate from *visibility* --
+ * a card can already be sitting in a slot (see setup.prepareShops' own doc on the concatenated-drawPile
+ * reveal) well before its own round arrives; getBuildCandidates uses this to keep it out of the buildable
+ * candidate list until then, and main.js uses the exported copy of this same function to show it with a
+ * locked overlay in the meantime. Exported for that reason. */
 function specialShopMinRound(faceId) {
+  if (faceId[0] === 'M') return 0;
   const num = Number(splitCardId(faceId).physicalId.replace(/^[A-Z]+/, ''));
   if (num < 300) return 2;
-  if (num < 400) return 3;
-  return 4;
+  return 3;
 }
 
 /**
@@ -1648,11 +1652,15 @@ function getBuildCandidates(state, index, playerId, categories, buildValue, monu
     // DISCOUNT(n,THIS_TURN) grant (2026-08-18, JOB007/密使) -- floored at 0 so a large enough discount
     // just makes every monument buildable regardless of dice value, rather than going negative.
     const discountedThreshold = (rawThreshold) => Math.max(0, rawThreshold - player.monumentDiceDiscountThisTurn);
-    // Monuments can sit in 2 different shops: the ordinary M deck (SHOP001-006) and SHOP201-203's own
-    // wave 3 (M401-403, 2026-08-24 SHOP201-203 rework -- see specialShopMinRound's own doc). SPECIAL's
-    // slots hold A/B/C-family cards during waves 1/2, so faceId[0]==='M' filters those out naturally.
+    // Monuments can sit in any of the 3 shops now (2026-08-29: M401-403, previously M-shop-only, can
+    // also land in NORMAL or SPECIAL via revealExtraMonumentsIfAnyShopEmptied -- see its own doc). A
+    // monument's own DICE threshold always governs it regardless of which shop slot it's sitting in --
+    // NORMAL/SPECIAL's own per-slot DICE_MIN/MAX (used above for A/B/C) never applies to an M-family
+    // card, and specialShopMinRound returns 0 for M-family so it never gates on round either. faceId[0]
+    // ==='M' filters out the A/B/C-family cards NORMAL/SPECIAL slots otherwise hold.
     const monumentSlotSources = [
       ...Object.entries(state.shops.M.slots).map(([slotId, faceId]) => ({ slotId, faceId, shopKey: 'M' })),
+      ...Object.entries(state.shops.NORMAL.slots).map(([slotId, faceId]) => ({ slotId, faceId, shopKey: 'NORMAL' })),
       ...Object.entries(state.shops.SPECIAL.slots).map(([slotId, faceId]) => ({ slotId, faceId, shopKey: 'SPECIAL' })),
     ];
     for (const { slotId, faceId, shopKey } of monumentSlotSources) {
@@ -1797,6 +1805,35 @@ function restockShop(state, shopKey) {
   }
 }
 
+/** Called once per endTurn, right after the ordinary 3-shop restock (2026-08-29, per user spec: "どこか
+ * のSHOPが空になったらそこに強化モニュメント1枚がランダムで出る。また別のSHOPが空になったらそこに強化
+ * モニュメント1枚がランダムで出る" -- one at a time, one per shop, never 2 in the same shop): M401-403
+ * (state.extraMonumentPool, shuffled at setup and held back from every shop's own initial pool -- see
+ * setup.prepareShops) go out one by one as each of the M/NORMAL/SPECIAL shops independently runs out of
+ * its own cards -- i.e. a shop whose drawPile is empty yet still has an unfilled slot after this turn's
+ * ordinary restock (that combination is only possible once that shop's own supply is fully exhausted;
+ * while any of its own cards remain, restockShop always keeps every slot full). state.
+ * extraMonumentClaimedShopKeys tracks which shops already got theirs so a shop that later empties again
+ * (its one extra monument having since sold too) never gets a second one -- checking every shop on every
+ * call (not stopping at the first match) lets 2 shops each receive their own monument on the very same
+ * turn if both happen to run dry together. Taking from the front of the pre-shuffled pool is what makes
+ * "ランダムで" a plain array shift rather than a fresh shuffle. Pushing the one id into the winning shop's
+ * own drawPile and re-running restockShop reuses the exact same left-compacted, FIFO-refilled reveal
+ * every other shop wave already uses. */
+function revealExtraMonumentsIfAnyShopEmptied(state) {
+  if (state.extraMonumentPool.length === 0) return;
+  for (const shopKey of ['M', 'NORMAL', 'SPECIAL']) {
+    if (state.extraMonumentClaimedShopKeys.includes(shopKey)) continue;
+    const shop = state.shops[shopKey];
+    if (shop.drawPile.length === 0 && Object.values(shop.slots).some((faceId) => faceId === null)) {
+      shop.drawPile.push(state.extraMonumentPool.shift());
+      state.extraMonumentClaimedShopKeys.push(shopKey);
+      restockShop(state, shopKey);
+      if (state.extraMonumentPool.length === 0) return;
+    }
+  }
+}
+
 module.exports = {
   CASTLE_MAP_ID,
   AREA009_MAP_ID,
@@ -1826,6 +1863,7 @@ module.exports = {
   resolveBuild,
   restockShop,
   compactShop,
+  revealExtraMonumentsIfAnyShopEmptied,
 };
 
 })();

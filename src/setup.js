@@ -130,19 +130,12 @@ function fillShopSlots(shopDeck) {
  * argument and sees identical behavior to before.
  */
 function prepareShops(state, index, preferredNormalFaceIds) {
-  // M401-403 moved here from SHOP201-203's own wave-3 (2026-08-28, per user request: "SHOP006が空に
-  // なったら[M401-403が]出てくる" -- SHOP201-203 no longer force-clears to monuments at round 4 either,
-  // see board.js's own removed forceSpecialShopMonumentsAtRound4). Concatenated AFTER the original 15
-  // (M001-M012), same "one drawPile, FIFO restock reveals the next wave once the previous one's gone"
-  // trick SHOP201-203's own wave1->wave2 progression already used -- so M401-403 only ever surface once
-  // the original 15 are fully sold, and (unlike their old SHOP201-203 life) carry no round-purchase gate
-  // at all, same as M001-M012 (board.getBuildCandidates' round check only ever applies to shopKey
-  // 'SPECIAL', never 'M').
+  // M401-403 are excluded from the regular SHOP001-006 pool -- they're held back in
+  // state.extraMonumentPool instead (see below) and only ever surface once one of the 3 shops runs out
+  // of its own cards, via board.revealExtraMonumentsIfAnyShopEmptied.
   const monumentIds = index.raw.M.map((r) => r.ID).filter((id) => Number(id.slice(1)) < 400);
-  const extraMonumentIds = index.raw.M.map((r) => r.ID).filter((id) => Number(id.slice(1)) >= 400);
-  registerCardPool(state, [...monumentIds, ...extraMonumentIds]);
-  const monumentDrawPile = [...shuffle(state.rng, monumentIds), ...shuffle(state.rng, extraMonumentIds)];
-  state.shops.M = createShopDeck(monumentDrawPile, MONUMENT_SHOP_SLOT_IDS);
+  registerCardPool(state, monumentIds);
+  state.shops.M = createShopDeck(shuffle(state.rng, monumentIds), MONUMENT_SHOP_SLOT_IDS);
   fillShopSlots(state.shops.M);
 
   const normalIds = collectNormalShopFaceIds(index);
@@ -156,8 +149,7 @@ function prepareShops(state, index, preferredNormalFaceIds) {
   state.shops.NORMAL = createShopDeck(normalOrder, NORMAL_SHOP_SLOT_IDS);
   fillShopSlots(state.shops.NORMAL);
 
-  // SHOP201-203 (2026-08-24 rework, per user spec): 2 waves now (2026-08-28: wave 3/M401-403 moved to
-  // the M shop above -- see this function's own top doc), each visible only once the previous one's
+  // SHOP201-203 (2026-08-24 rework, per user spec): 2 waves, each visible only once the previous one's
   // cards are gone -- but this needs no dedicated "wave" bookkeeping at all. Concatenating each wave's
   // own independently-shuffled ids into ONE drawPile (wave 1 first, then wave 2) and letting the ordinary
   // FIFO restock (fillShopSlots/board.restockShop, unchanged) draw from its front reproduces the exact
@@ -167,6 +159,8 @@ function prepareShops(state, index, preferredNormalFaceIds) {
   // third once wave 1 is fully gone (confirmed by hand-simulating a full buyout sequence). Visible from
   // the very start (fillShopSlots runs immediately, no ROUND_MIN gate any more) -- see
   // board.specialShopMinRound for the separate purchase-round gate (2R/3R) that still applies on top.
+  // SHOP201-203's own cards are never discarded/force-cleared for any reason (confirmed with the user,
+  // 2026-08-29) -- once revealed they just sit there like any other shop until bought.
   const wave1Ids = collectSpecialShopWaveIds(index, 200, 299);
   const wave2Ids = collectSpecialShopWaveIds(index, 300, 399);
   registerCardPool(state, [...wave1Ids, ...wave2Ids]);
@@ -176,6 +170,18 @@ function prepareShops(state, index, preferredNormalFaceIds) {
   ];
   state.shops.SPECIAL = createShopDeck(specialDrawPile, SPECIAL_SHOP_SLOT_IDS);
   fillShopSlots(state.shops.SPECIAL);
+
+  // M401-403 (2026-08-29, per user spec: "どこかのSHOPが空になったらそこに強化モニュメント1枚がランダムで
+  // 出る。また別のSHOPが空になったらそこに1枚出る" -- one at a time, one per shop): held in reserve, not
+  // in any shop's own initial pool -- board.revealExtraMonumentsIfAnyShopEmptied (called from
+  // turn-flow.endTurn each turn) drops one at a time into each of the 3 shops as it independently runs
+  // out of its own cards. Registered up front like every other shop-eligible card so state.cards has an
+  // instance for them from the very start, even while they're sitting in this reserve pool rather than a
+  // shop. Pre-shuffled here so "ランダムで出る" is just taking from the pool's own front later.
+  const extraMonumentIds = index.raw.M.map((r) => r.ID).filter((id) => Number(id.slice(1)) >= 400);
+  registerCardPool(state, extraMonumentIds);
+  state.extraMonumentPool = shuffle(state.rng, extraMonumentIds);
+  state.extraMonumentClaimedShopKeys = [];
 }
 
 // ---------------------------------------------------------------------------

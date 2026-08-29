@@ -641,54 +641,87 @@ function giveDie(state, playerId, value) {
   }
 }
 {
-  // M401-403 moved from SHOP201-203's own wave-3 into the M shop's own drawPile (2026-08-28, per user
-  // request: "SHOP006が空になったら[M401-403が]出てくる" -- reverting the 2026-08-25
-  // forceSpecialShopMonumentsAtRound4 behavior, since SHOP201-203 no longer holds any monuments to force
-  // at all). SHOP201-203 never contains an M401-403 id, at any point, drawPile included.
+  // setup.prepareShops (2026-08-29, per user spec: "SHOP006 106 203のいずれかが空になったときそこに出て
+  // くる"): M401-403 start in state.extraMonumentPool, not in any of the 3 shops' own slots/drawPiles.
   const state = freshStateWithShops();
-  const waveNum = (faceId) => Number(faceId.replace(/\D/g, ''));
-  const isExtraMonument = (faceId) => faceId && waveNum(faceId) >= 400;
-  check('SHOP201-203 never holds an M401-403 id (slots)', Object.values(state.shops.SPECIAL.slots).some(isExtraMonument), false);
-  check('...nor in its drawPile', state.shops.SPECIAL.drawPile.some(isExtraMonument), false);
-}
-{
-  // The M shop (SHOP001-006) reveals M401-403 only once the original 12 (M001-012) are fully sold --
-  // same "one concatenated drawPile, FIFO restock reveals the next wave" mechanic SHOP201-203's own
-  // wave1->wave2 progression uses, just applied to M001-012 (12, "wave 1") -> M401-403 (3, "wave 2")
-  // across 6 slots instead of 3.
-  const state = freshStateWithShops();
-  const waveNum = (faceId) => Number(faceId.replace(/\D/g, ''));
-  const isOriginal = (faceId) => faceId && waveNum(faceId) < 400 && waveNum(faceId) > 0;
-  const isExtra = (faceId) => faceId && waveNum(faceId) >= 400;
-  const countWave = (pred) => [...Object.values(state.shops.M.slots), ...state.shops.M.drawPile].filter(pred).length;
-  check('Starts with all 12 original monuments somewhere (6 shown + 6 in the pile), 0 extra visible', countWave(isOriginal), 12);
-  check('...and no M401-403 visible in a slot yet', Object.values(state.shops.M.slots).some(isExtra), false);
-
-  const buyOneSlot = (slotId) => {
-    state.shops.M.slots[slotId] = null;
-    board.restockShop(state, 'M');
-  };
-  // Expected extra-visible count at each step, indexed by original-remaining count (12..0) -- extras
-  // start entering slots once original-remaining drops below the slot count (6), same relationship
-  // SPECIAL's own wave1/wave2 test already established.
-  const expectedExtraVisibleByOriginalRemaining = { 12: 0, 11: 0, 10: 0, 9: 0, 8: 0, 7: 0, 6: 0, 5: 1, 4: 2, 3: 3, 2: 3, 1: 3, 0: 3 };
-  while (countWave(isOriginal) > 0) {
-    const originalSlot = Object.keys(state.shops.M.slots).find((id) => isOriginal(state.shops.M.slots[id]));
-    buyOneSlot(originalSlot);
-    const originalRemaining = countWave(isOriginal);
-    const extraVisible = Object.values(state.shops.M.slots).filter(isExtra).length;
-    check(`After original-monument remaining drops to ${originalRemaining}, M401-403 visible is ${expectedExtraVisibleByOriginalRemaining[originalRemaining]}`, extraVisible, expectedExtraVisibleByOriginalRemaining[originalRemaining]);
+  const isExtraMonument = (faceId) => faceId && Number(faceId.replace(/\D/g, '')) >= 400;
+  check('extraMonumentPool starts with all 3', [...state.extraMonumentPool].sort(), ['M401', 'M402', 'M403']);
+  for (const shopKey of ['M', 'NORMAL', 'SPECIAL']) {
+    check(`${shopKey} shop slots hold no M401-403`, Object.values(state.shops[shopKey].slots).some(isExtraMonument), false);
+    check(`${shopKey} shop drawPile holds no M401-403`, state.shops[shopKey].drawPile.some(isExtraMonument), false);
   }
 }
 {
-  // turnFlow.startRound no longer touches SHOP201-203 at all when reaching round 4 (2026-08-28 revert).
+  // revealExtraMonumentsIfAnyShopEmptied: the common no-op case -- every shop still has cards left in
+  // its own drawPile, so nothing happens.
   const state = freshStateWithShops();
-  const turnFlow = require('../src/turn-flow');
+  board.revealExtraMonumentsIfAnyShopEmptied(state);
+  check('No-op while every shop still has its own drawPile cards left', state.extraMonumentPool.length, 3);
+}
+{
+  // Buy out SHOP201-203 entirely (both waves) so its own drawPile hits 0 -- the first restock that then
+  // still leaves a slot null is exactly the "SHOP203が空になった" moment the user's spec describes.
+  // Per user spec, this gets exactly ONE random monument, not all 3 -- the other 2 stay in the pool for
+  // whichever shop(s) empty next.
+  const state = freshStateWithShops();
+  const isExtraMonument = (faceId) => faceId && Number(faceId.replace(/\D/g, '')) >= 400;
+  while (state.shops.SPECIAL.drawPile.length > 0 || Object.values(state.shops.SPECIAL.slots).some(Boolean)) {
+    const slotId = Object.keys(state.shops.SPECIAL.slots).find((id) => state.shops.SPECIAL.slots[id] !== null);
+    if (!slotId) break;
+    state.shops.SPECIAL.slots[slotId] = null;
+    board.restockShop(state, 'SPECIAL');
+  }
+  check('SPECIAL fully drained: drawPile empty', state.shops.SPECIAL.drawPile.length, 0);
+  check('...and every slot null (nothing left to draw M/NORMAL are untouched by the loop above)', Object.values(state.shops.SPECIAL.slots).every((v) => v === null), true);
+  board.revealExtraMonumentsIfAnyShopEmptied(state);
+  check('Pool now holds 2 (SPECIAL claimed exactly 1)', state.extraMonumentPool.length, 2);
+  check('SPECIAL is marked claimed', state.extraMonumentClaimedShopKeys, ['SPECIAL']);
+  const specialFaceIds = Object.values(state.shops.SPECIAL.slots);
+  check('Exactly 1 of M401-403 sits in SPECIAL', specialFaceIds.filter(isExtraMonument).length, 1);
+  check('M shop received none (only SPECIAL emptied)', Object.values(state.shops.M.slots).some(isExtraMonument), false);
+  check('NORMAL shop received none either', Object.values(state.shops.NORMAL.slots).some(isExtraMonument), false);
+  // SPECIAL already claimed its one -- even if it somehow empties again, it never gets a second.
   const before = { ...state.shops.SPECIAL.slots };
-  state.round = 3;
-  turnFlow.startRound(state);
-  check('startRound landing on round 4 leaves SHOP201-203 untouched', state.round, 4);
-  check('...same slots as before', state.shops.SPECIAL.slots, before);
+  board.revealExtraMonumentsIfAnyShopEmptied(state);
+  check('Calling it again with SPECIAL already claimed changes nothing there', state.shops.SPECIAL.slots, before);
+  check('Pool still holds 2 (nothing else has emptied)', state.extraMonumentPool.length, 2);
+}
+{
+  // Draining BOTH the M shop and the NORMAL shop in the same check gives each its own distinct monument
+  // (never the same id twice) -- confirms this isn't a first-shop-wins/winner-takes-all design.
+  const state = freshStateWithShops();
+  const isExtraMonument = (faceId) => faceId && Number(faceId.replace(/\D/g, '')) >= 400;
+  const drainShop = (shopKey) => {
+    while (state.shops[shopKey].drawPile.length > 0 || Object.values(state.shops[shopKey].slots).some(Boolean)) {
+      const slotId = Object.keys(state.shops[shopKey].slots).find((id) => state.shops[shopKey].slots[id] !== null);
+      if (!slotId) break;
+      state.shops[shopKey].slots[slotId] = null;
+      board.restockShop(state, shopKey);
+    }
+  };
+  drainShop('M');
+  drainShop('NORMAL');
+  board.revealExtraMonumentsIfAnyShopEmptied(state);
+  check('Pool now holds 1 (M and NORMAL each claimed 1)', state.extraMonumentPool.length, 1);
+  check('Both M and NORMAL marked claimed', [...state.extraMonumentClaimedShopKeys].sort(), ['M', 'NORMAL']);
+  const mExtra = Object.values(state.shops.M.slots).filter(isExtraMonument);
+  const normalExtra = Object.values(state.shops.NORMAL.slots).filter(isExtraMonument);
+  check('M shop got exactly 1', mExtra.length, 1);
+  check('NORMAL shop got exactly 1', normalExtra.length, 1);
+  check('...and they are different monuments', mExtra[0] !== normalExtra[0], true);
+  check('SPECIAL received none (never emptied)', Object.values(state.shops.SPECIAL.slots).some(isExtraMonument), false);
+}
+{
+  // Monuments ignore the shop slot's own dice-value requirement (2026-08-29, per user spec: "モニュメン
+  // トはSHOPのダイス目は無視する") -- getBuildCandidates checks M401-403's own DICE>=threshold even when
+  // sitting in a NORMAL slot, never that slot's DICE_MIN/MAX (which governs A/B/C cards only).
+  const state = freshStateWithShops();
+  // Force M401 (晩餐会, DICE>=1, COST=15K) directly into a NORMAL slot to simulate having landed there
+  // via revealExtraMonumentsIfAnyShopEmptied, regardless of that slot's own DICE_MIN/MAX range.
+  const normalSlotId = Object.keys(state.shops.NORMAL.slots)[0];
+  state.shops.NORMAL.slots[normalSlotId] = 'M401';
+  const candidates = board.getBuildCandidates(state, index, 'P1', ['M'], 1);
+  check('M401 buildable from a NORMAL slot at die value 1 (its own DICE>=1), regardless of that slot\'s own DICE_MIN/MAX', candidates.some((c) => c.faceId === 'M401' && c.shopKey === 'NORMAL'), true);
 }
 {
   // A hole at the far right (the common case: the rightmost occupied card is the one built) needs no
@@ -1510,6 +1543,52 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   check('...2 DIFFERENT slots were evicted-and-replaced, not shared', p1Slots.length, 2);
   check('...every castle slot still holds exactly 1 occupant (6 total, none doubled up)', state.maps[board.CASTLE_MAP_ID].slots.every((s) => s.length === 1), true);
   check('...neither of the 2 new dice counts toward next round\'s turn order', p1Slots.every((s) => s.every((o) => o.countsForTurnOrder === false)), true);
+}
+{
+  // 2026-08-29, per user spec: "スタプレ順に影響するのは色ダイスのみ wDはいかなる場合も影響しない" -- a
+  // WHITE die placed at the castle via the ordinary placeDice path never counts toward turn order, even
+  // though it landed on a genuinely empty slot (which would make a COLOR die's placement count).
+  const state = freshStateWithShops();
+  player(state, 'P1').resources.BZ = 20; // see the earlier castle blocks' comment on the affordability gate
+  const wDie = createDie('test-wd-castle', 'WHITE');
+  wDie.value = 3;
+  player(state, 'P1').dice.push(wDie);
+  const result = board.placeDice(state, index, { playerId: 'P1' }, wDie.id, board.CASTLE_MAP_ID, 0);
+  check('wD placement at the castle succeeds', result.success, true);
+  const occ = state.maps[board.CASTLE_MAP_ID].slots[0][0];
+  check('...but does NOT count toward next round\'s turn order', occ.countsForTurnOrder, false);
+}
+{
+  // Same rule via placeDiceGroup (2 WHITE dice summing to a monument threshold). Forces M009 (DICE>=4)
+  // into the shop, same as the earlier "Every castle slot filled first" block above, since a bare
+  // buildValue=4 isn't guaranteed affordable against whatever the deterministic shuffle happens to deal.
+  const state = freshStateWithShops();
+  player(state, 'P1').resources.BZ = 20;
+  for (const slotId of Object.keys(state.shops.M.slots)) state.shops.M.slots[slotId] = null;
+  state.shops.M.slots.SHOP001 = 'M009'; // DICE>=4 -- exactly this group's own 2+2
+  const w1 = createDie('test-wd-group-1', 'WHITE');
+  w1.value = 2;
+  const w2 = createDie('test-wd-group-2', 'WHITE');
+  w2.value = 2;
+  player(state, 'P1').dice.push(w1, w2);
+  const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [w1.id, w2.id], board.CASTLE_MAP_ID);
+  check('WHITE-only group placement at the castle succeeds', result.success, true);
+  const p1Slots = state.maps[board.CASTLE_MAP_ID].slots.filter((s) => s.some((o) => o.playerId === 'P1'));
+  check('...both dice actually landed on the castle', p1Slots.length, 2);
+  check('...neither WHITE die counts toward next round\'s turn order', p1Slots.every((s) => s.every((o) => o.countsForTurnOrder === false)), true);
+}
+{
+  // Same rule via placeWildcardDie (☆/JOB003), when the underlying die is WHITE.
+  const state = freshStateWithShops();
+  withWildcardOwner(state);
+  player(state, 'P1').resources.BZ = 20; // see the earlier castle blocks' comment on the affordability gate
+  const wDie = createDie('test-wd-wildcard-castle', 'WHITE');
+  wDie.value = 3;
+  player(state, 'P1').dice.push(wDie);
+  const result = board.placeWildcardDie(state, index, { playerId: 'P1' }, wDie.id, board.CASTLE_MAP_ID);
+  check('☆-wildcarded WHITE die placement at the castle succeeds', result.success, true);
+  const occ = state.maps[board.CASTLE_MAP_ID].slots[0][0];
+  check('...does NOT count toward next round\'s turn order, even via the ☆ path', occ.countsForTurnOrder, false);
 }
 
 // ---------------------------------------------------------------------------

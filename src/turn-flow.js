@@ -33,7 +33,7 @@
 
 const { rollDie } = require('./rng');
 const { getAreaRow, getCardRow } = require('./data-loader');
-const { getSlotRequirements, restockShop, CASTLE_MAP_ID } = require('./board');
+const { getSlotRequirements, restockShop, CASTLE_MAP_ID, revealExtraMonumentsIfAnyShopEmptied } = require('./board');
 const { recordCheckpoint } = require('./undo');
 const setup = require('./setup');
 // Named executorApi, not executor, just to disambiguate from board.js's own `const executor` at a
@@ -66,10 +66,9 @@ function rerollDiceForNextRound(state) {
  * 2 -- setup.prepareShops now fills it from the very start, see its own doc; only *purchasing* from it
  * stays round-gated, per board.specialShopMinRound, checked at build-candidate time instead.)
  *
- * No longer force-clears SHOP201-203 at round 4 (2026-08-28, per user request reverting the 2026-08-25
- * "4R開始時にモニュメント以外のカードはすべて捨て札にして..." behavior -- SHOP201-203 no longer holds any
- * monuments at all now that M401-403 moved to the M shop's own drawPile, see setup.prepareShops' own
- * doc, so there is nothing left to force-reveal here).
+ * Never force-clears SHOP201-203 for any reason (confirmed with the user, 2026-08-29) -- its cards just
+ * sit there like any other shop's until bought; see board.revealExtraMonumentsIfAnyShopEmptied for how
+ * M401-403 (previously a round-4-only SHOP201-203 wave) surface now instead.
  */
 function startRound(state) {
   state.round += 1;
@@ -149,6 +148,7 @@ function endTurn(state, index, playerId) {
   restockShop(state, 'M');
   restockShop(state, 'NORMAL');
   restockShop(state, 'SPECIAL');
+  revealExtraMonumentsIfAnyShopEmptied(state);
 
   const idx = state.turnOrder.indexOf(playerId);
   state.currentPlayerIndex = (idx + 1) % state.turnOrder.length;
@@ -160,10 +160,13 @@ function endTurn(state, index, playerId) {
  * (confirmed 2026-07-29, "城への再配置"): for each player, find their
  * *last* (highest seq) castle placement that counts toward turn order
  * (countsForTurnOrder -- excludes GRANT_PLACE_ANYWHERE-forced placements
- * into an occupied slot, and JOB003/道化's ☆ forced-fallback). Players are
- * ordered by recency of that last placement, most recent first. Players who
- * placed no counting die at the castle this round keep their relative order
- * from the *current* state.turnOrder, appended after everyone who did place.
+ * into an occupied slot, JOB003/道化's ☆ forced-fallback, and -- per user
+ * spec, 2026-08-29, "スタプレ順に影響するのは色ダイスのみ wDはいかなる場合も
+ * 影響しない" -- any WHITE die, unconditionally, regardless of which of
+ * those 3 placement paths it went through). Players are ordered by recency
+ * of that last placement, most recent first. Players who placed no counting
+ * die at the castle this round keep their relative order from the *current*
+ * state.turnOrder, appended after everyone who did place.
  *
  * Worked example (confirmed): castle placements in order Red, Green, Green,
  * Red (only those two colors ever placed there) -> new order is [Red,

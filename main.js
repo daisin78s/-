@@ -3618,7 +3618,9 @@ function renderQsts(state) {
  * When true, also fills the same .shop-slot__req caption slot with "2Rから"/"3Rから"/"4Rから" (2026-08-25,
  * per user spec: "赤✖がついているカードの下に　2Rから　3Rから　4Rから　と書いて") -- takes priority over
  * showReqCaption, which is always false for SPECIAL anyway (see this doc's own paragraph above), so
- * there's no real conflict between the two captions in practice.
+ * there's no real conflict between the two captions in practice. Monuments (M-family) never lock here --
+ * board.specialShopMinRound returns 0 for them -- since SHOP201-203's cards are never discarded/force-
+ * cleared for any reason (confirmed with the user, 2026-08-29).
  */
 function buildShopSlotNode(slotId, faceId, showReqCaption, locked) {
   const slotTpl = document.getElementById('tpl-shop-slot');

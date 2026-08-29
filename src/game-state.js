@@ -296,9 +296,11 @@ function createCardInstance(faceCardId) {
  *   turn-order -- see [[project-dice-wp-flow-spec]])
  * @property {boolean} countsForTurnOrder - false if this placement only succeeded because of
  *   GRANT_PLACE_ANYWHERE overriding an otherwise-illegal (occupied) slot, or JOB003/道化's ☆ forced-
- *   fallback (confirmed: such placements are excluded from the castle's next-turn-order calculation).
- *   True for every other placement. See MapState.discardedTurnOrderEntries' own doc for what happens to
- *   this value once a die carrying it gets evicted by a later placement.
+ *   fallback (confirmed: such placements are excluded from the castle's next-turn-order calculation) --
+ *   or if the underlying die is kind WHITE, unconditionally (2026-08-29, per user spec: "スタプレ順に影響
+ *   するのは色ダイスのみ wDはいかなる場合も影響しない"). True for every other placement. See
+ *   MapState.discardedTurnOrderEntries' own doc for what happens to this value once a die carrying it
+ *   gets evicted by a later placement.
  */
 
 /**
@@ -429,6 +431,8 @@ function createEmptyGameState(seed) {
     players: [],
     maps: {},
     shops: {},
+    extraMonumentPool: [], // M401-403, held back from every shop's own pool -- see setup.prepareShops
+    extraMonumentClaimedShopKeys: [], // which of M/NORMAL/SPECIAL already got their one extra monument
     cards: {},
     log: [],
     undoCheckpoint: null,
