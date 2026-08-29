@@ -661,8 +661,10 @@ function giveDie(state, playerId, value) {
 {
   // Buy out SHOP201-203 entirely (both waves) so its own drawPile hits 0 -- the first restock that then
   // still leaves a slot null is exactly the "SHOP203が空になった" moment the user's spec describes.
-  // Per user spec, this gets exactly ONE random monument, not all 3 -- the other 2 stay in the pool for
-  // whichever shop(s) empty next.
+  // Per user spec (revised 2026-08-29: "強化モニュメントがまだある限りSHOPは空にならないように...強化
+  // モニュメントもなくなったら空になる"), this gets exactly ONE random monument per call -- SPECIAL still
+  // has 2 more empty slots afterward, so a 2nd call (simulating the next endTurn) gives it ANOTHER one
+  // (no per-shop cap), continuing until either SPECIAL is full or the shared pool runs out.
   const state = freshStateWithShops();
   const isExtraMonument = (faceId) => faceId && Number(faceId.replace(/\D/g, '')) >= 400;
   while (state.shops.SPECIAL.drawPile.length > 0 || Object.values(state.shops.SPECIAL.slots).some(Boolean)) {
@@ -674,21 +676,28 @@ function giveDie(state, playerId, value) {
   check('SPECIAL fully drained: drawPile empty', state.shops.SPECIAL.drawPile.length, 0);
   check('...and every slot null (nothing left to draw M/NORMAL are untouched by the loop above)', Object.values(state.shops.SPECIAL.slots).every((v) => v === null), true);
   board.revealExtraMonumentsIfAnyShopEmptied(state);
-  check('Pool now holds 2 (SPECIAL claimed exactly 1)', state.extraMonumentPool.length, 2);
-  check('SPECIAL is marked claimed', state.extraMonumentClaimedShopKeys, ['SPECIAL']);
-  const specialFaceIds = Object.values(state.shops.SPECIAL.slots);
-  check('Exactly 1 of M401-403 sits in SPECIAL', specialFaceIds.filter(isExtraMonument).length, 1);
+  check('Pool now holds 2 (SPECIAL drew exactly 1 this call)', state.extraMonumentPool.length, 2);
+  check('Exactly 1 of M401-403 sits in SPECIAL so far', Object.values(state.shops.SPECIAL.slots).filter(isExtraMonument).length, 1);
   check('M shop received none (only SPECIAL emptied)', Object.values(state.shops.M.slots).some(isExtraMonument), false);
   check('NORMAL shop received none either', Object.values(state.shops.NORMAL.slots).some(isExtraMonument), false);
-  // SPECIAL already claimed its one -- even if it somehow empties again, it never gets a second.
+  // SPECIAL still has 2 empty slots and the pool isn't empty -- the SAME shop draws again.
+  board.revealExtraMonumentsIfAnyShopEmptied(state);
+  check('A 2nd call gives SPECIAL a 2nd extra monument (no per-shop cap)', Object.values(state.shops.SPECIAL.slots).filter(isExtraMonument).length, 2);
+  check('Pool now holds 1', state.extraMonumentPool.length, 1);
+  // ...and a 3rd call fills SPECIAL's last empty slot, exhausting the pool entirely.
+  board.revealExtraMonumentsIfAnyShopEmptied(state);
+  check('A 3rd call fills SPECIAL\'s last slot', Object.values(state.shops.SPECIAL.slots).filter(isExtraMonument).length, 3);
+  check('Pool is now empty', state.extraMonumentPool.length, 0);
+  check('...specifically all 3 of M401/M402/M403, each exactly once', [...Object.values(state.shops.SPECIAL.slots)].sort(), ['M401', 'M402', 'M403']);
+  // A 4th call is a genuine no-op -- SPECIAL is full and the pool is empty, so it can finally sit as an
+  // ordinary fully-stocked shop (or, if bought down again from here, actually go empty for good).
   const before = { ...state.shops.SPECIAL.slots };
   board.revealExtraMonumentsIfAnyShopEmptied(state);
-  check('Calling it again with SPECIAL already claimed changes nothing there', state.shops.SPECIAL.slots, before);
-  check('Pool still holds 2 (nothing else has emptied)', state.extraMonumentPool.length, 2);
+  check('Calling it again once both SPECIAL is full and the pool is empty changes nothing', state.shops.SPECIAL.slots, before);
 }
 {
   // Draining BOTH the M shop and the NORMAL shop in the same check gives each its own distinct monument
-  // (never the same id twice) -- confirms this isn't a first-shop-wins/winner-takes-all design.
+  // (never the same id twice) -- confirms the pool is shared/random-order, not first-shop-wins.
   const state = freshStateWithShops();
   const isExtraMonument = (faceId) => faceId && Number(faceId.replace(/\D/g, '')) >= 400;
   const drainShop = (shopKey) => {
@@ -702,8 +711,7 @@ function giveDie(state, playerId, value) {
   drainShop('M');
   drainShop('NORMAL');
   board.revealExtraMonumentsIfAnyShopEmptied(state);
-  check('Pool now holds 1 (M and NORMAL each claimed 1)', state.extraMonumentPool.length, 1);
-  check('Both M and NORMAL marked claimed', [...state.extraMonumentClaimedShopKeys].sort(), ['M', 'NORMAL']);
+  check('Pool now holds 1 (M and NORMAL each drew 1 this call)', state.extraMonumentPool.length, 1);
   const mExtra = Object.values(state.shops.M.slots).filter(isExtraMonument);
   const normalExtra = Object.values(state.shops.NORMAL.slots).filter(isExtraMonument);
   check('M shop got exactly 1', mExtra.length, 1);

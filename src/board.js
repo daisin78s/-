@@ -1807,27 +1807,26 @@ function restockShop(state, shopKey) {
 
 /** Called once per endTurn, right after the ordinary 3-shop restock (2026-08-29, per user spec: "どこか
  * のSHOPが空になったらそこに強化モニュメント1枚がランダムで出る。また別のSHOPが空になったらそこに強化
- * モニュメント1枚がランダムで出る" -- one at a time, one per shop, never 2 in the same shop): M401-403
- * (state.extraMonumentPool, shuffled at setup and held back from every shop's own initial pool -- see
- * setup.prepareShops) go out one by one as each of the M/NORMAL/SPECIAL shops independently runs out of
- * its own cards -- i.e. a shop whose drawPile is empty yet still has an unfilled slot after this turn's
- * ordinary restock (that combination is only possible once that shop's own supply is fully exhausted;
- * while any of its own cards remain, restockShop always keeps every slot full). state.
- * extraMonumentClaimedShopKeys tracks which shops already got theirs so a shop that later empties again
- * (its one extra monument having since sold too) never gets a second one -- checking every shop on every
- * call (not stopping at the first match) lets 2 shops each receive their own monument on the very same
- * turn if both happen to run dry together. Taking from the front of the pre-shuffled pool is what makes
- * "ランダムで" a plain array shift rather than a fresh shuffle. Pushing the one id into the winning shop's
- * own drawPile and re-running restockShop reuses the exact same left-compacted, FIFO-refilled reveal
- * every other shop wave already uses. */
+ * モニュメント1枚がランダムで出る" -- then revised, per user follow-up: "強化モニュメントがまだある限り
+ * SHOPは空にならないように変更して 強化モニュメントもなくなったら空になる" -- no per-shop cap after all:
+ * ANY of the M/NORMAL/SPECIAL shops that runs out of its own cards (drawPile empty yet still has an
+ * unfilled slot after this turn's ordinary restock -- only possible once that shop's own supply is fully
+ * exhausted, since restockShop always keeps every slot full while any of its own cards remain) draws one
+ * more from state.extraMonumentPool (shuffled at setup, held back from every shop's own initial pool --
+ * see setup.prepareShops) instead of actually sitting empty, for as long as the shared pool of 3
+ * (M401-403) still has any left -- including the SAME shop repeatedly, if it's the one that keeps running
+ * dry. A shop only genuinely goes empty once this pool is also exhausted. Checking every shop on every
+ * call (not stopping at the first match) lets 2 shops each draw their own one on the very same turn if
+ * both happen to run dry together. Taking from the front of the pre-shuffled pool is what makes "ランダム
+ * で" a plain array shift rather than a fresh shuffle. Pushing the one id into the winning shop's own
+ * drawPile and re-running restockShop reuses the exact same left-compacted, FIFO-refilled reveal every
+ * other shop wave already uses. */
 function revealExtraMonumentsIfAnyShopEmptied(state) {
   if (state.extraMonumentPool.length === 0) return;
   for (const shopKey of ['M', 'NORMAL', 'SPECIAL']) {
-    if (state.extraMonumentClaimedShopKeys.includes(shopKey)) continue;
     const shop = state.shops[shopKey];
     if (shop.drawPile.length === 0 && Object.values(shop.slots).some((faceId) => faceId === null)) {
       shop.drawPile.push(state.extraMonumentPool.shift());
-      state.extraMonumentClaimedShopKeys.push(shopKey);
       restockShop(state, shopKey);
       if (state.extraMonumentPool.length === 0) return;
     }

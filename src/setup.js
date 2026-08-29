@@ -171,17 +171,17 @@ function prepareShops(state, index, preferredNormalFaceIds) {
   state.shops.SPECIAL = createShopDeck(specialDrawPile, SPECIAL_SHOP_SLOT_IDS);
   fillShopSlots(state.shops.SPECIAL);
 
-  // M401-403 (2026-08-29, per user spec: "どこかのSHOPが空になったらそこに強化モニュメント1枚がランダムで
-  // 出る。また別のSHOPが空になったらそこに1枚出る" -- one at a time, one per shop): held in reserve, not
-  // in any shop's own initial pool -- board.revealExtraMonumentsIfAnyShopEmptied (called from
-  // turn-flow.endTurn each turn) drops one at a time into each of the 3 shops as it independently runs
-  // out of its own cards. Registered up front like every other shop-eligible card so state.cards has an
-  // instance for them from the very start, even while they're sitting in this reserve pool rather than a
-  // shop. Pre-shuffled here so "ランダムで出る" is just taking from the pool's own front later.
+  // M401-403 (2026-08-29, per user spec: "強化モニュメントがまだある限りSHOPは空にならないように変更して
+  // 強化モニュメントもなくなったら空になる"): held in reserve, not in any shop's own initial pool --
+  // board.revealExtraMonumentsIfAnyShopEmptied (called from turn-flow.endTurn each turn) drops one into
+  // whichever of the 3 shops runs out of its own cards, for as long as this pool still has any left (no
+  // per-shop cap -- the same shop can draw more than one if it's the one that keeps running dry).
+  // Registered up front like every other shop-eligible card so state.cards has an instance for them from
+  // the very start, even while they're sitting in this reserve pool rather than a shop. Pre-shuffled here
+  // so "ランダムで出る" is just taking from the pool's own front later.
   const extraMonumentIds = index.raw.M.map((r) => r.ID).filter((id) => Number(id.slice(1)) >= 400);
   registerCardPool(state, extraMonumentIds);
   state.extraMonumentPool = shuffle(state.rng, extraMonumentIds);
-  state.extraMonumentClaimedShopKeys = [];
 }
 
 // ---------------------------------------------------------------------------

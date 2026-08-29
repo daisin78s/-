@@ -432,7 +432,6 @@ function createEmptyGameState(seed) {
     maps: {},
     shops: {},
     extraMonumentPool: [], // M401-403, held back from every shop's own pool -- see setup.prepareShops
-    extraMonumentClaimedShopKeys: [], // which of M/NORMAL/SPECIAL already got their one extra monument
     cards: {},
     log: [],
     undoCheckpoint: null,

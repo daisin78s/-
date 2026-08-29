@@ -59,7 +59,6 @@ check('...its drawPile holds the other 6 (3 wave-1 + 3 wave-2, waiting behind wa
 // M401-403 (2026-08-29 rework): held back in extraMonumentPool, not in any shop's own pool -- see
 // setup.prepareShops' own doc and board.revealExtraMonumentsIfAnyShopEmptied.
 check('extraMonumentPool starts with all 3 (M401-403)', [...state.extraMonumentPool].sort(), ['M401', 'M402', 'M403']);
-check('...and no shop has claimed one yet', state.extraMonumentClaimedShopKeys.length, 0);
 
 const allShopFaceIds = [
   ...Object.values(state.shops.M.slots),
