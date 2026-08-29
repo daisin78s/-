@@ -4153,8 +4153,13 @@ function attemptPlaceSelectedWildcardDie(state, mapId) {
 function applyPlaceDiceResult(result, playerId) {
   if (!result.success) {
     // Placement itself was illegal (value mismatch / slot occupied / no legal slot for the whole
-    // group / etc.) -- see board.placeDice/placeDiceGroup.
-    placementMessage = `配置できません（${result.reason}）`;
+    // group / etc.) -- see board.placeDice/placeDiceGroup. OWN_COLOR_DIE_ALREADY_IN_AREA (2026-08-29,
+    // per user report) gets its own friendly message -- only 憤怒/CON005B currently carries the
+    // BLOCK_COLOR_DIE_REUSE passive that produces this reason (see board.isColorDieReuseBlocked), so
+    // naming it directly is accurate rather than showing the raw reason code.
+    placementMessage = result.reason === 'OWN_COLOR_DIE_ALREADY_IN_AREA'
+      ? '憤怒の効果でダイスを置くことができません'
+      : `配置できません（${result.reason}）`;
     return;
   }
   if (result.actionResult && result.actionResult.pendingBuild) {
