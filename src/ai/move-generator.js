@@ -626,6 +626,106 @@ class MoveGenerator {
     return null;
   }
 
+  /** 訓練場の支配/A202Aを先取りする (2026-08-30, per user request, following a replay report where the AI
+   * collected 小麦畑's 3K then only afterward built 訓練場の支配 -- with just 2 dice left that order wastes
+   * the round's only chance to also spend a die on 訓練場's own CHANGE(K,D)/ADD(D): forces building A202A
+   * BEFORE any other move whenever (a) round>=2 (per user confirmation -- round 1 dice are too scarce/
+   * onboarding-heavy for this to reliably pay off), (b) the player doesn't already own it, (c) total color
+   * dice count is exactly 3 (same trigger evaluator.js's own TRAINING_GROUND_DOMINATION_BONUS uses -- this
+   * is the "stuck right at CON005A's 3-die cap" sweet spot), and (d) at least one MORE unplaced die would
+   * be left over after spending one on this build, so forcedTrainingGroundMove above has something left
+   * to actually use afterward -- building on the round's last die would strand the upgrade unused this
+   * round, which the user explicitly confirmed should NOT be forced ("ダイスが残っていなくて次のラウンド
+   * になってしまうようであれば逆に獲得しない"). Mirrors #placeDieMoves' own dice x map x slot x
+   * buildCandidateIndex enumeration (build candidates for an AREA upgrade can appear at any hammer-icon
+   * area, not just AREA007 itself) rather than forcedEndSignLv2Move's bare-TAP path -- A202A has no TAP
+   * field of its own, so it's only ever reachable via a normal PLACE_DIE build candidate. */
+  forcedTrainingGroundBuildMove(state, index, playerId) {
+    if (state.round < 2) return null;
+    const player = state.players.find((p) => p.id === playerId);
+    if (!player || board.hasWildcardDice(state, index, playerId)) return null;
+    const ownsControl = player.ownedCardPhysicalIds.some((physicalId) => {
+      const cardState = state.cards[physicalId];
+      return cardState && (cardState.currentFaceId === 'A202A' || cardState.currentFaceId === 'A202B');
+    });
+    if (ownsControl) return null;
+    const totalColorDiceCount = player.dice.filter((d) => d.kind === 'COLOR').length;
+    if (totalColorDiceCount !== 3) return null;
+    const unplacedDice = player.dice.filter((d) => d.placedMapId === null && !d.passed);
+    if (unplacedDice.length < 2) return null;
+    for (const die of unplacedDice) {
+      for (const mapId of Object.keys(state.maps)) {
+        const areaRow = getAreaRow(index, state.maps[mapId].currentAreaId);
+        const slotCount = board.getSlotRequirements(areaRow).length;
+        for (let slotIndex = 0; slotIndex < slotCount; slotIndex++) {
+          const clone = cloneState(state);
+          const result = board.placeDice(clone, index, { playerId }, die.id, mapId, slotIndex);
+          if (!result.success || !result.actionResult || !result.actionResult.pendingBuild) continue;
+          const candidates = result.actionResult.pendingBuild.candidates;
+          for (let buildCandidateIndex = 0; buildCandidateIndex < candidates.length; buildCandidateIndex++) {
+            const candidate = candidates[buildCandidateIndex];
+            if ((candidate.faceId || candidate.toFaceId) !== 'A202A') continue;
+            const move = { type: 'PLACE_DIE', playerId, dieId: die.id, mapId, slotIndex, buildCandidateIndex };
+            if (applyInPlace(cloneState(state), index, move).success) return move;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  /** 訓練場の支配所有時、Kが無ければ先にKを用意する (2026-08-30, per user request: "ただしKがなくてダイス
+   * が２個以上残っているなら小麦畑か農園のKが多く獲得できる方にいってその次に訓練場　ダイスが最後の一こ
+   * なら　ABCのいずれかをKに変えて訓練場に行く"): forcedTrainingGroundMove above only ever succeeds once
+   * the player actually has K on hand to spend on 訓練場's own CHANGE(K,D) -- with K=0 it dry-run-fails
+   * every slot and returns null, silently falling through to whatever the normal search picks instead.
+   * This fills that gap: with 2+ dice left, force a placement at whichever of 小麦畑(MAP001)/農園(MAP002)
+   * currently yields more K (comparing their own live ACTION field, not a hardcoded LEVEL, since either
+   * could be independently upgraded); with exactly 1 die left, spend a free action converting whichever of
+   * A/B/C the player holds the most of into K (2026-08-30, per user confirmation on ties/multiple) --
+   * free actions don't consume the die or set hasPlacedDieThisTurn, so the very next selectMove/#greedyMove
+   * call this same turn re-checks forcedTrainingGroundMove, which will now succeed and place the last die
+   * at 訓練場. */
+  forcedTrainingGroundKPrepMove(state, index, playerId, context) {
+    const player = state.players.find((p) => p.id === playerId);
+    if (!player || board.hasWildcardDice(state, index, playerId)) return null;
+    const ownsControl = player.ownedCardPhysicalIds.some((physicalId) => {
+      const cardState = state.cards[physicalId];
+      return cardState && (cardState.currentFaceId === 'A202A' || cardState.currentFaceId === 'A202B');
+    });
+    if (!ownsControl) return null;
+    if ((player.resources.K || 0) > 0) return null;
+    const unplacedDice = player.dice.filter((d) => d.placedMapId === null && !d.passed);
+    if (unplacedDice.length === 0) return null;
+    if (unplacedDice.length >= 2) {
+      if (context.hasPlacedDieThisTurn) return null;
+      let best = null;
+      for (const mapId of ['MAP001', 'MAP002']) {
+        const areaRow = getAreaRow(index, state.maps[mapId].currentAreaId);
+        const match = /^ADD\((\d+)K\)$/.exec(areaRow.ACTION || '');
+        if (!match) continue;
+        const yieldK = Number(match[1]);
+        if (!best || yieldK > best.yieldK) best = { mapId, yieldK };
+      }
+      if (!best) return null;
+      const areaRow = getAreaRow(index, state.maps[best.mapId].currentAreaId);
+      const slotCount = board.getSlotRequirements(areaRow).length;
+      for (const die of unplacedDice) {
+        for (let slotIndex = 0; slotIndex < slotCount; slotIndex++) {
+          const clone = cloneState(state);
+          if (board.placeDice(clone, index, { playerId }, die.id, best.mapId, slotIndex).success) {
+            return { type: 'PLACE_DIE', playerId, dieId: die.id, mapId: best.mapId, slotIndex };
+          }
+        }
+      }
+      return null;
+    }
+    const candidates = ['A', 'B', 'C'].filter((r) => (player.resources[r] || 0) > 0);
+    if (candidates.length === 0) return null;
+    candidates.sort((a, b) => player.resources[b] - player.resources[a]);
+    return { type: 'FREE_ACTION', playerId, freeActionId: `${candidates[0]}_K` };
+  }
+
   /** Whether some build-resolving move (PLACE_DIE/BARE_TAP carrying a buildCandidateIndex)
    * in clone would actually succeed if applied right now -- shared by forcedBzConversionMove (deciding
    * whether to force a BZ-conversion tap) and #bareTapMoves' IMMEDIATE branch (deciding whether to even
