@@ -1864,6 +1864,7 @@ module.exports = {
   hasPioneerAbility,
   isMapEmptyOfDice,
   isCandidateAffordable,
+  canAffordFee,
   resolveBuild,
   restockShop,
   compactShop,

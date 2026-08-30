@@ -403,6 +403,31 @@ function giveB202B(state, playerId) {
 }
 
 // ---------------------------------------------------------------------------
+// forcedEndSignLv2Move's usage-fee guard (2026-08-30, per a forced-move consistency audit: extending the
+// same class of guard already added to forcedJob004ConversionMove/forcedTrainingGroundMove) -- a
+// candidate that would spend away everything needed to still cover an already-pending usage fee is
+// skipped, same as those two, checked via board.canAffordFee against the *resulting* (post-build)
+// resources rather than a precomputed amount (a monument's own COST can mix A/B/C/K, unlike those two's
+// flat K cost).
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  state.shops.M.slots.SHOP001 = 'M002'; // DICE>=11, COST=2B -- the only affordable candidate below
+  giveB202B(state, 'P1');
+  const p1 = player(state, 'P1');
+  p1.resources.B = 2; // exactly covers M002's own 2B cost, nothing left over
+  p1.pendingFee = { mapId: 'MAP099', amount: 1 };
+  check(
+    'forcedEndSignLv2Move is null when the only affordable candidate would leave a pending fee unpayable',
+    moveGenerator.forcedEndSignLv2Move(state, index, 'P1'),
+    null,
+  );
+  p1.resources.B = 3; // 1 more than the build needs -- enough left over to also cover the 1K fee
+  const move = moveGenerator.forcedEndSignLv2Move(state, index, 'P1');
+  assertTrue('...but fires once there\'s enough left over to also cover it', move !== null && move.type === 'BARE_TAP');
+}
+
+// ---------------------------------------------------------------------------
 // forcedTrainingGroundMove (2026-08-28, per user request: "訓練場の支配も獲得したら必ずすぐに訓練場に
 // ダイスを置いて追加色ダイスを獲得するようにしてほしい"; scoped to "新しい色ダイスが得られる時だけ強制"):
 // forces a PLACE_DIE at 訓練場(MAP007) once the player owns A202A/A202B, but ONLY when it would actually
@@ -449,6 +474,39 @@ function giveTrainingGroundControl(state, playerId, faceId) {
   giveTrainingGroundControl(state, 'P1', 'A202B');
   giveDie(state, 'P1', 3);
   check('hasPlacedDieThisTurn already true: forcedTrainingGroundMove is null', moveGenerator.forcedTrainingGroundMove(state, index, 'P1', { hasPlacedDieThisTurn: true }), null);
+}
+
+// ---------------------------------------------------------------------------
+// forcedTrainingGroundBuildMove's hasPlacedDieThisTurn gate (2026-08-30, found during a forced-move
+// consistency audit): this returns a PLACE_DIE move (the once-per-turn placement) but, unlike
+// forcedTrainingGroundMove above, never checked context.hasPlacedDieThisTurn at all -- a selectMove call
+// made after this player already placed their one die this turn some other way (still possible since
+// none of this function's OWN conditions depend on it) would force a genuine SECOND placement. Confirmed
+// reproducible directly: with round>=2, exactly 3 color dice, not yet owning 訓練場の支配, and 2+
+// unplaced dice (one of which already sits at a real placedMapId, simulating "already placed this turn"),
+// this used to still return a real build move.
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  state.round = 2;
+  state.shops.SPECIAL.slots.SHOP202 = 'A202A'; // known slot -- see board.js's own SPECIAL shop layout
+  const p1 = player(state, 'P1');
+  p1.resources = { K: 0, A: 3, B: 1, C: 0, Z: 0, VP: 0, BZ: 0 }; // covers A202A's own COST (2A,B)
+  giveDie(state, 'P1', 4); // color, already placed elsewhere -- see below
+  giveDie(state, 'P1', 2);
+  giveDie(state, 'P1', 6);
+  const [d1, d2] = p1.dice;
+  d1.placedMapId = 'MAP005'; // simulates "already placed this turn's one die, somewhere else"
+  check(
+    'hasPlacedDieThisTurn:true -- even with 2 unplaced dice and 3 color dice total, must NOT force a second placement',
+    moveGenerator.forcedTrainingGroundBuildMove(state, index, 'P1', { hasPlacedDieThisTurn: true }),
+    null,
+  );
+  const forced = moveGenerator.forcedTrainingGroundBuildMove(state, index, 'P1', { hasPlacedDieThisTurn: false });
+  assertTrue(
+    'hasPlacedDieThisTurn:false -- fires normally, forcing a build of A202A',
+    forced !== null && forced.type === 'PLACE_DIE' && forced.buildCandidateIndex !== undefined,
+  );
 }
 
 // ---------------------------------------------------------------------------

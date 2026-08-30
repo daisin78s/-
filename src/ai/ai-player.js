@@ -126,7 +126,7 @@ class AIPlayer {
     // MoveGenerator#forcedTrainingGroundBuildMove's own doc. Checked before the "already own it" cases
     // below since it only ever applies while NOT yet owned -- mutually exclusive with them, but building
     // is the natural first step of this whole mechanism.
-    const forcedTrainingGroundBuild = this.moveGenerator.forcedTrainingGroundBuildMove(state, this.index, playerId);
+    const forcedTrainingGroundBuild = this.moveGenerator.forcedTrainingGroundBuildMove(state, this.index, playerId, context);
     if (forcedTrainingGroundBuild) return forcedTrainingGroundBuild;
     // Forced 訓練場の支配所有時のK不足対応 (2026-08-30, per user request) -- see
     // MoveGenerator#forcedTrainingGroundKPrepMove's own doc. Checked before forcedTrainingGroundMove
@@ -231,7 +231,7 @@ class AIPlayer {
     const forcedEndSignLv2 = this.moveGenerator.forcedEndSignLv2Move(state, this.index, playerId);
     if (forcedEndSignLv2) return forcedEndSignLv2;
     // Forced 訓練場の支配/A202A・A202B build-before-it's-too-late -- see selectMove's own matching comment.
-    const forcedTrainingGroundBuild = this.moveGenerator.forcedTrainingGroundBuildMove(state, this.index, playerId);
+    const forcedTrainingGroundBuild = this.moveGenerator.forcedTrainingGroundBuildMove(state, this.index, playerId, context);
     if (forcedTrainingGroundBuild) return forcedTrainingGroundBuild;
     // Forced 訓練場の支配所有時のK不足対応 -- see selectMove's own matching comment.
     const forcedTrainingGroundKPrep = this.moveGenerator.forcedTrainingGroundKPrepMove(state, this.index, playerId, context);

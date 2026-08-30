@@ -567,7 +567,16 @@ class MoveGenerator {
    * Unlike #bareTapMoves' own BUILD branch (which offers every reachable candidate as a separate scored
    * Move, dice/category-eligible but not affordability-filtered -- see getBuildCandidates' own doc), this
    * actually simulates each one via applyInPlace to find which are real options, same as
-   * #hasAffordableBuildOutlet's own approach. */
+   * #hasAffordableBuildOutlet's own approach.
+   *
+   * Usage-fee guard (2026-08-30, per user request, extending the same class of guard already added to
+   * forcedJob004ConversionMove/forcedTrainingGroundMove): a candidate that would leave an already-pending
+   * usage fee unaffordable is skipped, same as those two. Unlike those two (a flat K cost), a monument's
+   * COST can be any mix of A/B/C/K, so this checks the *resulting* player's post-build resources against
+   * board.canAffordFee (K + every free-action-convertible resource) rather than a precomputed K amount --
+   * player.lockedK (the AREA009-specific reserved floor) doesn't need its own separate check here since
+   * board.js's own payment logic already refuses to dip below it, so a candidate that would violate it
+   * already fails the applyInPlace call above and never reaches this point. */
   forcedEndSignLv2Move(state, index, playerId) {
     const player = state.players.find((p) => p.id === playerId);
     if (!player) return null;
@@ -581,7 +590,10 @@ class MoveGenerator {
       let bestThreshold = -Infinity;
       for (let i = 0; i < result.pendingBuild.candidates.length; i++) {
         const move = { type: 'BARE_TAP', playerId, physicalId, buildCandidateIndex: i };
-        if (!applyInPlace(cloneState(state), index, move).success) continue;
+        const tryClone = cloneState(state);
+        if (!applyInPlace(tryClone, index, move).success) continue;
+        const afterPlayer = tryClone.players.find((p) => p.id === playerId);
+        if (afterPlayer.pendingFee && !board.canAffordFee(afterPlayer, afterPlayer.pendingFee.amount)) continue;
         const candidate = result.pendingBuild.candidates[i];
         const faceId = candidate.faceId || candidate.toFaceId;
         const match = /^>=(\d+)$/.exec(getCardRow(index, faceId).DICE || '');
@@ -674,9 +686,18 @@ class MoveGenerator {
    * になってしまうようであれば逆に獲得しない"). Mirrors #placeDieMoves' own dice x map x slot x
    * buildCandidateIndex enumeration (build candidates for an AREA upgrade can appear at any hammer-icon
    * area, not just AREA007 itself) rather than forcedEndSignLv2Move's bare-TAP path -- A202A has no TAP
-   * field of its own, so it's only ever reachable via a normal PLACE_DIE build candidate. */
-  forcedTrainingGroundBuildMove(state, index, playerId) {
-    if (state.round < 2) return null;
+   * field of its own, so it's only ever reachable via a normal PLACE_DIE build candidate.
+   *
+   * hasPlacedDieThisTurn gate (2026-08-30, found during a forced-move consistency audit): this returns a
+   * PLACE_DIE move, the once-per-turn placement -- without checking context.hasPlacedDieThisTurn (unlike
+   * forcedTrainingGroundMove's own matching gate), a selectMove call made *after* this player already
+   * placed their one die this turn some other way (e.g. a normal scored move, before ownsControl became
+   * true) would still force a SECOND placement here, since nothing else in this function's own conditions
+   * depends on whether a die was placed yet. Confirmed reproducible via a direct unit check: with one die
+   * already sitting at placedMapId!==null and the rest of the trigger conditions intact, this returned a
+   * real move to place a second die. */
+  forcedTrainingGroundBuildMove(state, index, playerId, context) {
+    if (state.round < 2 || context.hasPlacedDieThisTurn) return null;
     const player = state.players.find((p) => p.id === playerId);
     if (!player || board.hasWildcardDice(state, index, playerId)) return null;
     const ownsControl = player.ownedCardPhysicalIds.some((physicalId) => {
