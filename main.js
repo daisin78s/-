@@ -620,6 +620,19 @@ function driveOneAiStepInner(state) {
   const move = aiPlayerFor(ctx.playerId).selectMove(state, ctx.playerId, { hasPlacedDieThisTurn: ctx.hasPlacedDieThisTurn });
   if (!move) return false; // defensive -- canEndTurn should always eventually free this up
   const result = simulatorMod.applyInPlace(state, INDEX, move);
+  // 2026-08-30, per user bug report (AI froze the browser tab): unlike game-runner.js's own driveTurn
+  // (`if (!result.success) break;`), this function used to return true unconditionally regardless of
+  // result.success -- MoveGenerator should only ever offer legal moves (same "defensive" assumption
+  // driveTurn's own comment makes), but if some forced-move short-circuit (BZ/JOB004/B202B/訓練場) ever
+  // returns one that doesn't actually apply, state never changes, selectMove keeps returning the exact
+  // same move forever, and pumpAiInstant's while loop spins the full MAX_STEPS (20000) synchronously --
+  // long enough to look and feel like the whole tab hung. Stopping here instead (same as the !move case
+  // just above) surfaces the stuck turn immediately rather than burning tens of thousands of iterations
+  // first.
+  if (!result.success) {
+    console.error(`driveOneAiStepInner: ${move.type} for ${ctx.playerId} failed to apply (${JSON.stringify(result)}) -- stopping AI auto-play here instead of retrying forever.`);
+    return false;
+  }
   if (move.type === 'END_TURN' && result.success) {
     aiOpenTurnPlayerId = null;
     lastEndedAiTurnPlayerId = ctx.playerId;

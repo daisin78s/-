@@ -533,10 +533,21 @@ class MoveGenerator {
    * is a separate, JOB004-specific mechanism rather than broadening that BZ-specific one, since the
    * intended policy genuinely differs (always force here, vs. only-when-useful there). JOB004's own
    * TURNEND=UNTAP() means this can fire again every single turn, not just once per round -- revert this
-   * (per the user's own framing) if it turns out to make JOB004 weaker in practice. */
+   * (per the user's own framing) if it turns out to make JOB004 weaker in practice.
+   *
+   * Usage-fee guard (2026-08-30, per user bug report: a live game froze after leveling up 元老院LV2 with
+   * 4K, this firing and spending 3K down to 1K, leaving the AREA009 usage fee unpayable -- "3Kあったら
+   * 必ず使う→手数料をひいて3K余るなら使う"): now also requires that 3K would still be left over AFTER
+   * paying whatever K this player currently has reserved -- player.lockedK (the AREA009-specific floor
+   * tryPay/resolvePayment already refuse to dip below, see its own doc) and/or player.pendingFee.amount
+   * (a non-AREA009 B/C-tier fee, which doesn't reserve lockedK but still needs paying at TURNEND) --
+   * without this, forcing the conversion anyway could leave the fee unpayable with no K left to fix it,
+   * which (depending on what resources remain) can leave the player's turn genuinely stuck. */
   forcedJob004ConversionMove(state, index, playerId) {
     const player = state.players.find((p) => p.id === playerId);
     if (!player || (player.resources.K || 0) < 3) return null;
+    const reservedK = Math.max(player.lockedK || 0, player.pendingFee ? player.pendingFee.amount : 0);
+    if ((player.resources.K || 0) - 3 < reservedK) return null;
     for (const physicalId of player.ownedCardPhysicalIds) {
       const cardState = state.cards[physicalId];
       if (!cardState || cardState.tapped || cardState.currentFaceId !== 'JOB004') continue;
