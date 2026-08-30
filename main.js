@@ -2430,15 +2430,17 @@ function buildChangeToVpIcon(actionText) {
   return actionRow([...resourceItemNodes(payCount, 'K'), actionArrow(), actionSuffix(gainCount ? `${gainCount}VP` : 'VP')]);
 }
 
-/** CHANGE(K,VP,n): a capped-repeat K->VP conversion, usable up to n times, e.g. AREA010C/孤児院LV2's
- * "CHANGE(K,VP,5)" (2026-08-26, per user request: "孤児院LV2 能力変えました アイコンを K→1VP （MAX5）に
- * 変えてください"). Distinct from buildCappedChangeIcon's shared "n X -> n Y" shape (K/A/B/C/Z pairs
- * only, no VP) -- VP always shows as plain "1VP" text per-use here rather than scaling the shown count
- * to the usage cap, plus a MAX badge (same convention as buildConvertLimitIcon/buildUpgradeLimitIcon). */
+/** CHANGE(K,VP,n): a capped-repeat K->VP conversion, usable up to n times -- now all 3 孤児院 tiers
+ * (AREA010A/B/C, 2026-08-30 data edits "孤児院すこしかえました"/"孤児院再び変えました" unified A/B onto
+ * the same shape C already used) share this one builder. MAX badge wrapped in full-width parentheses
+ * (2026-08-30, per user request: "〇→1VP（MAX2）のように（）をつけてください 孤児院のアイコンすべて" --
+ * previously plain "MAXn" text with no parens). Distinct from buildCappedChangeIcon's shared "n X -> n Y"
+ * shape (K/A/B/C/Z pairs only, no VP) -- VP always shows as plain "1VP" text per-use here rather than
+ * scaling the shown count to the usage cap. */
 function buildChangeToVpCappedIcon(actionText) {
   const match = /^CHANGE\(K,VP,(\d+)\)$/.exec(actionText || '');
   if (!match) return null;
-  return actionRow([actionDot('K'), actionArrow(), actionSuffix('1VP'), actionSuffix(`MAX${match[1]}`)]);
+  return actionRow([actionDot('K'), actionArrow(), actionSuffix('1VP'), actionSuffix(`（MAX${match[1]}）`)]);
 }
 
 /** CHANGE(X,Y,ALL);ADD(nZ) -- e.g. AREA003B's "CHANGE(K,A,ALL);ADD(2B)" (2026-08-05, per user feedback
