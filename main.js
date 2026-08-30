@@ -2909,6 +2909,12 @@ function renderDie(die) {
   const node = tpl.content.firstElementChild.cloneNode(true);
   node.classList.add(`die--${die.kind === 'WHITE' ? 'WHITE' : die.color}`);
   if (die.wildcard) node.classList.add('die--wildcard');
+  // ダイス変換 (2026-08-30, per user request: "ダイス変換を使った後は使ったダイスが分かるように光るように
+  // してほしい") -- die.valueChangedThisTurn is already tracked (SET_DIE_VALUE/SET_DICE_ANY/
+  // CHANGE_DIE_VALUE/MONUMENT_CHANGE_DIE_VALUE all set it, see executor.markDieValueChanged) and reverts
+  // at TURNEND regardless of whether the change was ever used (see executor.applyTurnEnd's own doc), so
+  // this naturally clears itself at the same moment the value itself reverts.
+  if (die.valueChangedThisTurn) node.classList.add('die--value-changed');
   // Reverted 2026-07-29: die-face glyphs made the small colored dice harder to read, not easier --
   // back to a plain digit (unlike the board slot requirements / SET_DIE_VALUE icons, which keep the
   // ⚀-⚅ glyphs; this revert is specific to the actual player dice).
@@ -4657,7 +4663,12 @@ function renderBuildChoiceBzTapPrompt() {
     const btn = el('button', 'build-choice-bz-tap-prompt__button', '使う');
     btn.type = 'button';
     btn.addEventListener('click', () => {
-      boardMod.useBareTapAbility(STATE, INDEX, { playerId: pendingBuildChoice.playerId }, physicalId);
+      // Pushed onto actionCheckpoints (2026-08-30, see attachTapToggle's own matching doc) -- same
+      // "cancel just this TAP" coverage, extended to this bz-tap-prompt commit point too.
+      const preSnapshot = gameStateMod.cloneState(STATE);
+      const preTurnActionTaken = turnActionTaken;
+      const result = boardMod.useBareTapAbility(STATE, INDEX, { playerId: pendingBuildChoice.playerId }, physicalId);
+      if (result.success) actionCheckpoints.push({ state: preSnapshot, turnActionTaken: preTurnActionTaken });
       render(STATE);
     });
     row.appendChild(btn);
@@ -4912,9 +4923,13 @@ function renderTapChoiceModal() {
     }
   }
 
+  // 2026-08-30, per user request: a CHANGE_DIE_VALUE with only one possible delta (choices.length===1,
+  // e.g. a flat "+2") is pre-selected at pendingTapChoice creation time (see attachTapToggle's own doc)
+  // and needs no picker row at all here, same treatment MONUMENT_CHANGE_DIE_VALUE already got.
+  const hasSingleFixedValue = !!bareTap.choices && bareTap.choices.length === 1;
   const valuesEl = document.getElementById('tap-choice-values');
   valuesEl.innerHTML = '';
-  if (bareTap.kind !== 'MONUMENT_CHANGE_DIE_VALUE') {
+  if (bareTap.kind !== 'MONUMENT_CHANGE_DIE_VALUE' && !hasSingleFixedValue) {
     const valueOptions = bareTap.kind === 'SET_DICE_ANY' ? [1, 2, 3, 4, 5, 6] : bareTap.choices;
     for (const option of valueOptions) {
       const label = bareTap.kind === 'CHANGE_DIE_VALUE' ? (option > 0 ? `+${option}` : `${option}`) : `${option}`;
@@ -4927,7 +4942,7 @@ function renderTapChoiceModal() {
   }
 
   const hasTarget = dieId !== null || cardPhysicalId !== null;
-  const needsValue = bareTap.kind !== 'MONUMENT_CHANGE_DIE_VALUE';
+  const needsValue = bareTap.kind !== 'MONUMENT_CHANGE_DIE_VALUE' && !hasSingleFixedValue;
   document.getElementById('tap-choice-confirm').disabled = !hasTarget || (needsValue && value === null);
 }
 
@@ -5450,12 +5465,23 @@ function attachTapToggle(cardNode, cardState, faceId, canAct, physicalId) {
     // No longer blocked while a usage fee is owed (2026-08-10 -- see board.useBareTapAbility's own doc
     // on why that gate was removed there; mirrored here since this used to pre-empt it before the picker
     // modal even opened).
+    // Pushed onto actionCheckpoints (2026-08-30, per user request: "終わりの兆しなどの兆しカードをタップ
+    // したときターン開始時に戻るの代わりにTAPをキャンセルするがほしい") only once useBareTapAbility
+    // actually succeeds -- same "snapshot before, commit only on success" pattern renderFreeActionButtons/
+    // die placement already use. Scoped to IMMEDIATE/BUILD here since those two commit (tap the card,
+    // run any flat leading effect) synchronously, right in this same click; the 3rd kind (CHANGE_DIE_VALUE
+    // family, routed to pendingTapChoice/tap-choice-overlay below) doesn't actually mutate state until its
+    // own confirm button, which pushes its own checkpoint there instead -- see that handler's own doc.
+    const preSnapshot = gameStateMod.cloneState(STATE);
+    const preTurnActionTaken = turnActionTaken;
     if (bareTap.kind === 'IMMEDIATE') {
       const result = boardMod.useBareTapAbility(STATE, INDEX, { playerId: cardState.ownerId }, physicalId);
+      if (result.success) actionCheckpoints.push({ state: preSnapshot, turnActionTaken: preTurnActionTaken });
       placementMessage = result.success ? '' : `カードを使用できません（${result.reason}）`;
     } else if (bareTap.kind === 'BUILD') {
       const result = boardMod.useBareTapAbility(STATE, INDEX, { playerId: cardState.ownerId }, physicalId);
       if (result.success && result.pendingBuild) {
+        actionCheckpoints.push({ state: preSnapshot, turnActionTaken: preTurnActionTaken });
         pendingBuildChoice = { source: 'TAP', playerId: cardState.ownerId, ...result.pendingBuild };
         buildColorPreference = {};
         pendingBzOutcomeChoice = null;
@@ -5476,7 +5502,15 @@ function attachTapToggle(cardNode, cardState, faceId, canAct, physicalId) {
         placementMessage = `カードを使用できません（${result.reason}）`;
       }
     } else {
-      pendingTapChoice = { physicalId, playerId: cardState.ownerId, bareTap, dieId: null, cardPhysicalId: null, value: null };
+      // Pre-select the value when there's only one possible one (2026-08-30, per user request: "ダイス目
+      // +1 や+2 +3を使ったとき +2などのほうは選択肢がないのですでに選ばれた状態でダイスだけを選べばいい
+      // ようにしてほしい") -- a CHANGE_DIE_VALUE(SELF+n)/(SELF-n) card (single fixed delta, e.g. a flat
+      // "+2") lowers to choices:[delta], a 1-element array (see command-builder.js's own doc); only the
+      // real "±n" case (choices:[n,-n], a genuine 2-way pick) still needs the player to choose. Same
+      // treatment MONUMENT_CHANGE_DIE_VALUE already got (it has no `choices` array at all, always a single
+      // baked-in delta) -- see renderTapChoiceModal's own matching check.
+      const preselectedValue = bareTap.choices && bareTap.choices.length === 1 ? bareTap.choices[0] : null;
+      pendingTapChoice = { physicalId, playerId: cardState.ownerId, bareTap, dieId: null, cardPhysicalId: null, value: preselectedValue };
     }
     render(STATE);
   });
@@ -6399,7 +6433,11 @@ function renderOnlineLobbyOverlay() {
     }
     const input = document.createElement('input');
     input.type = 'text';
-    input.placeholder = '合言葉(4文字)';
+    // inputMode/pattern (2026-08-30, per user request: "部屋番号　数字4桁にして"): brings up the numeric
+    // keypad on iPad/mobile Safari, matching randomRoomCode's own digits-only alphabet in online-sync.js.
+    input.inputMode = 'numeric';
+    input.pattern = '[0-9]*';
+    input.placeholder = '合言葉(数字4桁)';
     input.maxLength = 4;
     body.appendChild(input);
     const submitButton = el('button', 'undo-button', '参加する');
@@ -7322,7 +7360,13 @@ document.addEventListener('DOMContentLoaded', () => {
     else context.chosenDieId = dieId;
     if (bareTap.kind === 'CHANGE_DIE_VALUE') context.chosenDelta = value;
     else if (bareTap.kind !== 'MONUMENT_CHANGE_DIE_VALUE') context.chosenValue = value;
+    // Pushed onto actionCheckpoints (2026-08-30, see attachTapToggle's own matching doc) only once this
+    // actually succeeds -- the die/card+value picker above this button never itself mutates STATE, so this
+    // confirm click is the real commit moment for this bareTap kind.
+    const preSnapshot = gameStateMod.cloneState(STATE);
+    const preTurnActionTaken = turnActionTaken;
     const result = boardMod.useBareTapAbility(STATE, INDEX, context, physicalId);
+    if (result.success) actionCheckpoints.push({ state: preSnapshot, turnActionTaken: preTurnActionTaken });
     placementMessage = result.success ? '' : `カードを使用できません（${result.reason}）`;
     render(STATE);
   });

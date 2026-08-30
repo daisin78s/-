@@ -1333,6 +1333,15 @@ h1, h2, h3 { margin: 0; }
   outline-offset: 2px;
 }
 
+/* ダイス変換 (2026-08-30, per user request: "使ったダイスが分かるように光るようにしてほしい") -- reuses
+   .change-highlight's own glow color/tokens (box-shadow only, so it doesn't break the die's round shape,
+   same reasoning as .change-highlight--pending above it) but static, not pulsing -- this persists for the
+   rest of the turn (until die.valueChangedThisTurn reverts at TURNEND), not just a brief pre-placement
+   moment, so a constant pulse would be more distracting than helpful here. */
+.die--value-changed {
+  box-shadow: 0 0 0 2px var(--change-highlight-soft), 0 0 8px 2px var(--change-highlight);
+}
+
 /* Passed (2026-08-03, see board.passDie) -- stays visible in-hand but greyed out and unclickable until
    the next round's reset. */
 .die--passed {

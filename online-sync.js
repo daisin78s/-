@@ -110,7 +110,7 @@ function deleteReplay(id) {
 
 var ROOM_COLLECTION = 'rooms';
 var SEAT_IDS = ['P1', 'P2', 'P3', 'P4'];
-var ROOM_CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O/1/I/L -- easy to read aloud/type
+var ROOM_CODE_CHARS = '0123456789'; // 2026-08-30, per user request: "部屋番号　数字4桁にして"
 
 function randomRoomCode() {
   var code = '';
@@ -139,7 +139,7 @@ function createRoom() {
  * @returns {Promise<{code:string, seatId:string}>}
  * @throws {Error} with .message one of ROOM_NOT_FOUND / ROOM_ALREADY_STARTED / ROOM_FULL */
 function joinRoom(code) {
-  var normalizedCode = code.toUpperCase();
+  var normalizedCode = code.trim();
   var ref = db().collection(ROOM_COLLECTION).doc(normalizedCode);
   return db().runTransaction(function (tx) {
     return tx.get(ref).then(function (snap) {
