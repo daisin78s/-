@@ -141,9 +141,11 @@ function createDie(id, kind) {
  *   than once in the same turn (no card does today, but nothing stops a future one). Turn-scoped, same
  *   reset point as blockedBuildCategoriesThisTurn above.
  * @property {{mapId:string, amount:number}|null} pendingFee - set by board.placeDice/placeDiceGroup
- *   (2026-08-04, fixing a gap where accumulatedFee was never actually charged -- see executor.js's
- *   USAGE_FEE_BY_TIER) when this player places on a MAP whose feeOwnerId is someone else (tier B=1K,
- *   C=2K, confirmed: "持ち主自身が使う場合は使用料なし"). Resolved at this same TURNEND (confirmed:
+ *   (2026-08-04, fixing a gap where accumulatedFee was never actually charged) when this player places on
+ *   a MAP whose feeOwnerId is someone else, amount coming straight from that AREA row's own `fee` column
+ *   (2026-08-30 -- previously a flat per-tier constant, board.js's own USAGE_FEE_BY_TIER, but the
+ *   spreadsheet turned out to have real per-AREA exceptions -- see board.wouldOweFee's own doc; confirmed:
+ *   "持ち主自身が使う場合は使用料なし"). Resolved at this same TURNEND (confirmed:
  *   "使用料はTURNEND時に支払い（払えなければフリーアクションで変換 or 巻き戻し）") -- same
  *   gate-then-mutate pattern as RESOURCE_TOTAL_LIMIT: executor.canEndTurn blocks TURNEND while unpayable,
  *   executor.applyTurnEnd deducts K from the player and adds it to the map's accumulatedFee, then clears

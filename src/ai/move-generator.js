@@ -596,6 +596,18 @@ class MoveGenerator {
     return null;
   }
 
+  /** How much K MAP007's own current face spends per die placed there, via its CHANGE(nK,D) ACTION --
+   * 0 for AREA007A/C (CHANGE((A,B,C),D)/ADD(D), no K involved). Shared by forcedTrainingGroundMove's own
+   * pendingFee/lockedK guard and forcedTrainingGroundKPrepMove's "do I even have enough yet" check --
+   * factored out (2026-08-30) so both stay correct together as this amount keeps changing (2026-08-25
+   * "訓練場LV1　能力変えました" added CHANGE(K,D); 2026-08-30 "訓練場すこしかえました" raised it to
+   * CHANGE(2K,D)). */
+  #trainingGroundKCost(index, state) {
+    const areaRow = getAreaRow(index, state.maps.MAP007.currentAreaId);
+    const match = /^CHANGE\((\d*)K,D\)$/.exec(areaRow.ACTION || '');
+    return match ? Number(match[1] || 1) : 0;
+  }
+
   /** 訓練場の支配/A202A・A202B (2026-08-28, per user request: "訓練場の支配も獲得したら必ずすぐに訓練場に
    * ダイスを置いて追加色ダイスを獲得するようにしてほしい"; scoped to "新しい色ダイスが得られる時だけ強制"
    * per follow-up confirmation): forces a PLACE_DIE at 訓練場(MAP007) whenever the player owns either
@@ -608,7 +620,16 @@ class MoveGenerator {
    * (context.hasPlacedDieThisTurn), same PLACE_DIE-family gating as everywhere else. Skipped entirely for
    * a wildcard-owning (道化/JOB003) player -- their dice all need board.placeWildcardDie instead of
    * board.placeDice below (see #placeDieMoves' own dieIsWildcard branch); this rare combination (owning
-   * BOTH JOB003 and A202A/B) is left to the normal search rather than adding a second placement path here. */
+   * BOTH JOB003 and A202A/B) is left to the normal search rather than adding a second placement path here.
+   *
+   * Usage-fee guard (2026-08-30, per user request: "使用料を認識して払えるように", same class of bug as
+   * forcedJob004ConversionMove's own matching guard): building/owning 訓練場 makes this player its own
+   * feeOwnerId (see executor.runSetCurrentArea), so placing on their own copy never incurs a NEW fee here
+   * -- but if some OTHER fee is already pending from earlier this same turn, spending this AREA's own K
+   * cost on top of it could leave that fee unpayable. board.placeDice's own payment logic already refuses
+   * to dip below player.lockedK (the AREA009-specific reserved floor) on its own, but a non-AREA009
+   * pendingFee.amount isn't reserved that way -- checked explicitly here too, so both cases are covered
+   * consistently regardless of which one actually applies. */
   forcedTrainingGroundMove(state, index, playerId, context) {
     if (context.hasPlacedDieThisTurn) return null;
     const player = state.players.find((p) => p.id === playerId);
@@ -618,6 +639,9 @@ class MoveGenerator {
       return cardState && (cardState.currentFaceId === 'A202A' || cardState.currentFaceId === 'A202B');
     });
     if (!ownsControl) return null;
+    const kCost = this.#trainingGroundKCost(index, state);
+    const reservedK = Math.max(player.lockedK || 0, player.pendingFee ? player.pendingFee.amount : 0);
+    if (kCost > 0 && (player.resources.K || 0) - kCost < reservedK) return null;
     const beforeColorCount = player.dice.filter((d) => d.kind === 'COLOR').length;
     const unplacedDice = player.dice.filter((d) => d.placedMapId === null && !d.passed);
     const areaRow = getAreaRow(index, state.maps.MAP007.currentAreaId);
@@ -688,15 +712,18 @@ class MoveGenerator {
   /** 訓練場の支配所有時、Kが無ければ先にKを用意する (2026-08-30, per user request: "ただしKがなくてダイス
    * が２個以上残っているなら小麦畑か農園のKが多く獲得できる方にいってその次に訓練場　ダイスが最後の一こ
    * なら　ABCのいずれかをKに変えて訓練場に行く"): forcedTrainingGroundMove above only ever succeeds once
-   * the player actually has K on hand to spend on 訓練場's own CHANGE(K,D) -- with K=0 it dry-run-fails
-   * every slot and returns null, silently falling through to whatever the normal search picks instead.
-   * This fills that gap: with 2+ dice left, force a placement at whichever of 小麦畑(MAP001)/農園(MAP002)
-   * currently yields more K (comparing their own live ACTION field, not a hardcoded LEVEL, since either
-   * could be independently upgraded); with exactly 1 die left, spend a free action converting whichever of
-   * A/B/C the player holds the most of into K (2026-08-30, per user confirmation on ties/multiple) --
-   * free actions don't consume the die or set hasPlacedDieThisTurn, so the very next selectMove/#greedyMove
-   * call this same turn re-checks forcedTrainingGroundMove, which will now succeed and place the last die
-   * at 訓練場. */
+   * the player actually has enough K on hand to spend on 訓練場's own CHANGE(nK,D) -- with too little K it
+   * dry-run-fails every slot and returns null, silently falling through to whatever the normal search
+   * picks instead. This fills that gap: with 2+ dice left, force a placement at whichever of 小麦畑
+   * (MAP001)/農園(MAP002) currently yields more K (comparing their own live ACTION field, not a hardcoded
+   * LEVEL, since either could be independently upgraded); with exactly 1 die left, spend a free action
+   * converting whichever of A/B/C the player holds the most of into K (2026-08-30, per user confirmation
+   * on ties/multiple) -- free actions don't consume the die or set hasPlacedDieThisTurn, so the very next
+   * selectMove/#greedyMove call this same turn re-checks forcedTrainingGroundMove, which will now succeed
+   * and place the last die at 訓練場. K-needed comes from #trainingGroundKCost (0 for AREA007C's ADD(D),
+   * which needs no K at all) rather than being hardcoded here, since the exact amount has already changed
+   * twice (2026-08-25 "訓練場LV1　能力変えました" added CHANGE(K,D); 2026-08-30 "訓練場すこしかえました"
+   * raised it to CHANGE(2K,D)) and could again. */
   forcedTrainingGroundKPrepMove(state, index, playerId, context) {
     const player = state.players.find((p) => p.id === playerId);
     if (!player || board.hasWildcardDice(state, index, playerId)) return null;
@@ -705,7 +732,8 @@ class MoveGenerator {
       return cardState && (cardState.currentFaceId === 'A202A' || cardState.currentFaceId === 'A202B');
     });
     if (!ownsControl) return null;
-    if ((player.resources.K || 0) > 0) return null;
+    const kNeeded = this.#trainingGroundKCost(index, state);
+    if (kNeeded === 0 || (player.resources.K || 0) >= kNeeded) return null;
     const unplacedDice = player.dice.filter((d) => d.placedMapId === null && !d.passed);
     if (unplacedDice.length === 0) return null;
     if (unplacedDice.length >= 2) {

@@ -884,12 +884,6 @@ let pendingBzOutcomeChoice = null;
 // renderPlacementChoiceModal). Set instead of placing immediately; the die isn't placed yet at this
 // point, so unlike pendingBuildChoice this one has a real cancel affordance.
 let pendingPlacementChoice = null;
-// { mapId, dieId, colorPreference, exSlotIndex, otherSlotIndex } | null -- 道化(JOB003)の☆ダイスで自分の
-// 空きEXスロットと空きANYスロットが両方選べる時だけ表示 (2026-08-28, per user request: "自分のEXとANYと
-// 両方置けるときANYにしか置けません その時だけはどちらか選べるようにお願い" -- see
-// board.wildcardExAnyChoice/placeSelectedWildcardDie/renderWildcardSlotChoiceModal). Checked AFTER the
-// 色欲 payment choice above (same "nothing committed yet" ordering) since neither depends on the other.
-let pendingWildcardSlotChoice = null;
 // { physicalId, playerId, bareTap:{kind,choices?}, dieId, value } | null -- a bare TAP ability that
 // needs a die+value choice before it can run (SET_DICE_ANY/SET_DIE_VALUE/CHANGE_DIE_VALUE, see
 // attachTapToggle/bareTapKind/renderTapChoiceModal). dieId/value start null (nothing picked yet); the
@@ -1017,7 +1011,6 @@ function jumpToHistoryIndex(idx) {
   selectedDieIds = [];
   pendingBuildChoice = null;
   pendingPlacementChoice = null;
-  pendingWildcardSlotChoice = null;
   pendingTapChoice = null;
   pendingAutoModeChoice = null;
   pendingTurnEndPlayerId = null;
@@ -3985,13 +3978,17 @@ function renderBoard(state, next) {
 
       let highlightedSlots = null;
       const wildcardSingleSelection = highlightOwnerIsWildcard && selectedDieIds.length === 1;
+      // Hoisted to this outer scope (2026-08-30, per user request: "道化でANYかEXを選ぶとき...出ずにその
+      // SLOTをタップすれば置けるようにできませんか") -- also read by the slot-click-wiring loop and the
+      // tile-level click wiring below, both of which now use it to switch a genuine EX-vs-ANY choice over
+      // to direct per-slot clicks instead of pausing for a picker modal.
+      let exAnyChoice = null;
       if (wildcardSingleSelection) {
         const context = { playerId: highlightOwner.id, colorPreference: {} };
         // EX-vs-ANY (2026-08-28): light up BOTH candidate slots when it's a genuine choice (see
         // board.wildcardExAnyChoice's own doc), not just whichever the plain auto-pick preview below
-        // would land on -- the player hasn't decided yet at this point (renderWildcardSlotChoiceModal
-        // handles the actual choice, triggered from attemptPlaceSelectedWildcardDie's own click).
-        const exAnyChoice = boardMod.wildcardExAnyChoice(state, INDEX, context, mapId);
+        // would land on.
+        exAnyChoice = boardMod.wildcardExAnyChoice(state, INDEX, context, mapId);
         if (exAnyChoice) {
           highlightedSlots = new Set([exAnyChoice.exSlotIndex, exAnyChoice.otherSlotIndex]);
         } else {
@@ -4071,11 +4068,17 @@ function renderBoard(state, next) {
         // entirely by board.placeDice itself, not re-validated here -- clicking an ultimately-illegal
         // slot just surfaces that reason via placementMessage instead of silently doing nothing.
         // 2+ selected dice on the castle/AREA009 (2026-08-02) is a *group* placement instead --
-        // see attemptPlaceSelectedDie's own branch. A single selected ☆ die (2026-08-19) never gets its
-        // own per-slot click at all -- the whole tile is clickable instead (see the tile-level listener
-        // below), since board.placeWildcardDie auto-assigns the slot; individual .slot elements just
-        // show the highlighted preview.
-        if (selectedDieIds.length > 0 && !wildcardSingleSelection) {
+        // see attemptPlaceSelectedDie's own branch. A single selected ☆ die normally never gets its own
+        // per-slot click at all -- the whole tile is clickable instead (see the tile-level listener
+        // below), since board.placeWildcardDie auto-assigns the slot -- EXCEPT a genuine EX-vs-ANY choice
+        // (2026-08-30, per user request: "道化でANYかEXを選ぶとき...出ずにそのSLOTをタップすれば置ける
+        // ようにできませんか"), where tapping either specific slot now places there directly instead of
+        // pausing for a picker modal -- passing preferredSlotIndex here (see placeSelectedWildcardDie's
+        // own doc) does the placement immediately.
+        if (wildcardSingleSelection && exAnyChoice) {
+          slotEl.classList.add('slot--selectable');
+          slotEl.addEventListener('click', () => placeSelectedWildcardDie(state, selectedDieIds[0], mapId, {}, i));
+        } else if (selectedDieIds.length > 0 && !wildcardSingleSelection) {
           slotEl.classList.add('slot--selectable');
           slotEl.addEventListener('click', () => attemptPlaceSelectedDie(state, mapId, i));
         }
@@ -4109,8 +4112,9 @@ function renderBoard(state, next) {
       }
 
       // Usage-fee display (2026-08-0X, moved into the header, replacing the old "tier A"/"tier B" text
-      // badge -- per user request). Two lines: the flat per-tier rate (tier B = 1K, tier C = 2K, per
-      // [[project-dice-wp-flow-spec]] -- tier A has no usage fee at all, so no rate line) and the
+      // badge -- per user request). Two lines: the rate (straight from this AREA row's own `fee` column,
+      // 2026-08-30 -- previously a flat per-tier constant, but real per-AREA exceptions exist, see
+      // board.wouldOweFee's own doc; tier A has no usage fee at all, so no rate line) and the
       // currently-accumulated amount, which -- unlike the old fee badge -- is now always shown, even at
       // "0 K", rather than only appearing once something has actually accumulated. Castle (no tier at
       // all) never has a fee concept, so its fee element is removed entirely rather than left empty.
@@ -4124,7 +4128,7 @@ function renderBoard(state, next) {
       if (!tier) {
         feeEl.remove();
       } else {
-        const feeRate = tier[1] === 'B' ? 1 : tier[1] === 'C' ? 2 : 0;
+        const feeRate = areaRow.fee || 0;
         feeEl.querySelector('.map-tile__fee-rate').textContent = feeRate > 0 ? `使用料${feeRate}K` : '';
         feeEl.querySelector('.map-tile__fee-amount').textContent = `${mapState.accumulatedFee} K`;
         if (mapState.accumulatedFee > 0 && mapState.feeOwnerId) {
@@ -4144,7 +4148,10 @@ function renderBoard(state, next) {
       // a .slot, since there's no per-slot click wired for this case -- see the slot-loop's own comment
       // above) -- clicking anywhere on the tile except the fee badge attempts board.placeWildcardDie at
       // this mapId, matching "the player picks the AREA, the engine picks the slot" (per user spec).
-      if (wildcardSingleSelection) {
+      // Skipped when exAnyChoice is genuinely ambiguous (2026-08-30) -- the slot loop above already wired
+      // the 2 candidate slots individually for that case, and leaving this whole-tile listener attached
+      // too would fight over the exact same click.
+      if (wildcardSingleSelection && !exAnyChoice) {
         node.classList.add('map-tile--wildcard-target');
         node.addEventListener('click', (e) => {
           if (e.target.closest('.map-tile__fee')) return;
@@ -4326,22 +4333,13 @@ function placeSelectedDieCommit(state, player, dieId, mapId, slotIndex, colorPre
 /** Wildcard counterpart of placeSelectedDie/placeSelectedDieCommit (2026-08-19, JOB003/道化) -- same
  * wD-overflow-confirm pattern, checkpoint bookkeeping, and result handling, via board.placeWildcardDie
  * instead of board.placeDice. preferredSlotIndex is normally omitted (the engine auto-assigns the slot,
- * see board.placeWildcardDie's own doc) -- the one exception is EX-vs-ANY (2026-08-28, per user request:
- * "自分のEXとANYと両方置けるときANYにしか置けません その時だけはどちらか選べるようにお願い"): when
- * board.wildcardExAnyChoice finds a genuine choice and preferredSlotIndex hasn't already been decided
- * (i.e. this is the very first call, not a resumption after the picker/色欲/wD-overflow prompts below),
- * this pauses for renderWildcardSlotChoiceModal instead of placing immediately -- same "nothing
- * committed yet, so cancelable" shape as pendingPlacementChoice. */
+ * see board.placeWildcardDie's own doc) -- the one exception is a genuine EX-vs-ANY choice (2026-08-28,
+ * per user request: "自分のEXとANYと両方置けるときANYにしか置けません その時だけはどちらか選べるように
+ * お願い"), where renderBoard's own slot-click wiring passes the specific slot the player tapped directly
+ * (2026-08-30, per user request: "出ずにそのSLOTをタップすれば置けるようにできませんか" -- replacing an
+ * earlier picker modal that used to pause here instead). */
 function placeSelectedWildcardDie(state, dieId, mapId, colorPreference, preferredSlotIndex) {
   const player = state.players.find((p) => p.dice.some((d) => d.id === dieId));
-  if (preferredSlotIndex === undefined) {
-    const exAnyChoice = boardMod.wildcardExAnyChoice(state, INDEX, { playerId: player.id }, mapId);
-    if (exAnyChoice) {
-      pendingWildcardSlotChoice = { mapId, dieId, colorPreference, ...exAnyChoice };
-      render(STATE);
-      return;
-    }
-  }
   // JOB007/宮廷人 tap-first offer -- see placeSelectedDie's own doc for the pattern.
   withJob007TapPrompt(
     state, player.id, dieId,
@@ -4870,14 +4868,6 @@ function renderPlacementChoiceModal() {
     group.appendChild(zBtn);
     body.appendChild(group);
   }
-}
-
-/** 道化(JOB003)の☆ダイスのEX-vs-ANY choice prompt (2026-08-28, see pendingWildcardSlotChoice's own doc)
- * -- just shows/hides the overlay; the two option buttons are wired once in the DOMContentLoaded handler
- * below (same pattern as renderPlacementChoiceModal's own confirm/cancel), since neither needs per-render
- * rebuilding (no dynamic list, unlike that modal's per-resource buttons). */
-function renderWildcardSlotChoiceModal() {
-  document.getElementById('wildcard-slot-choice-overlay').hidden = !pendingWildcardSlotChoice;
 }
 
 // Kinds that support targeting one of the player's own eligible cards instead of a real die (2026-08-25,
@@ -6671,7 +6661,6 @@ function render(state) {
   document.getElementById('board-message').textContent = placementMessage;
   renderBuildChoiceModal();
   renderPlacementChoiceModal();
-  renderWildcardSlotChoiceModal();
   renderTapChoiceModal();
   renderAutoModeChoiceModal();
   renderTurnEndWarningModal();
@@ -6706,7 +6695,6 @@ function handleUndoClick() {
   selectedDieIds = [];
   pendingBuildChoice = null;
   pendingPlacementChoice = null;
-  pendingWildcardSlotChoice = null;
   pendingTapChoice = null;
   pendingAutoModeChoice = null;
   pendingTurnEndPlayerId = null;
@@ -6739,7 +6727,6 @@ function handleCancelPreviousActionClick() {
   selectedDieIds = [];
   pendingBuildChoice = null;
   pendingPlacementChoice = null;
-  pendingWildcardSlotChoice = null;
   pendingTapChoice = null;
   pendingAutoModeChoice = null;
   placementMessage = '';
@@ -7127,7 +7114,7 @@ function buildAreaTilePreviewNode(areaId) {
   if (!tier) {
     feeEl.remove();
   } else {
-    const feeRate = tier[1] === 'B' ? 1 : tier[1] === 'C' ? 2 : 0;
+    const feeRate = areaRow.fee || 0;
     feeEl.querySelector('.map-tile__fee-rate').textContent = feeRate > 0 ? `使用料${feeRate}K` : '';
     feeEl.querySelector('.map-tile__fee-amount').remove();
   }
@@ -7339,24 +7326,6 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       placeSelectedDie(STATE, dieId, mapId, slotIndex, colorPreference);
     }
-  });
-
-  // EX-vs-ANY choice for a ☆ die (2026-08-28) -- see pendingWildcardSlotChoice's own doc. Both option
-  // buttons commit immediately (no separate confirm step, unlike placement-choice-confirm above --
-  // there's nothing further to adjust once the slot itself is picked).
-  document.getElementById('wildcard-slot-choice-cancel').addEventListener('click', () => {
-    pendingWildcardSlotChoice = null;
-    render(STATE);
-  });
-  document.getElementById('wildcard-slot-choice-ex').addEventListener('click', () => {
-    const { dieId, mapId, colorPreference, exSlotIndex } = pendingWildcardSlotChoice;
-    pendingWildcardSlotChoice = null;
-    placeSelectedWildcardDie(STATE, dieId, mapId, colorPreference, exSlotIndex);
-  });
-  document.getElementById('wildcard-slot-choice-any').addEventListener('click', () => {
-    const { dieId, mapId, colorPreference, otherSlotIndex } = pendingWildcardSlotChoice;
-    pendingWildcardSlotChoice = null;
-    placeSelectedWildcardDie(STATE, dieId, mapId, colorPreference, otherSlotIndex);
   });
 
   document.getElementById('tap-choice-cancel').addEventListener('click', () => {

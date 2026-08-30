@@ -341,8 +341,10 @@ index.raw.QST = [
 
 // ---------------------------------------------------------------------------
 // conBuildAware (2026-08-28, "AI LV4" only -- see Evaluator's own doc and con-build-synergy.js for the
-// motivating bug report): 評価値_CON's real "双星の加護LV1"x"憤怒" cell is -200; a 憤怒 (CON005B) player
-// owning B201A (双星の加護LV1, eval=100 round2, VP=0) should score 100 + (-200), not just 100.
+// motivating bug report): 評価値_CON's real "双星の加護LV1"x"憤怒" cell is -1000 (2026-08-30, raised from
+// -200 as part of a broader spreadsheet rebalance -- see 評価値 round-3 weights' own comment further down
+// for the sibling change from that same pass); a 憤怒 (CON005B) player owning B201A (双星の加護LV1,
+// eval=100 round2, VP=0) should score 100 + (-1000), not just 100.
 // ---------------------------------------------------------------------------
 {
   const state = freshState(2);
@@ -352,7 +354,7 @@ index.raw.QST = [
   giveCard(state, 'B201A', 'P1');
   const plainScore = evaluator.score(state, 'P1');
   check('The plain (non-conBuildAware) Evaluator ignores 評価値_CON entirely (control)', plainScore, 100);
-  check('conBuildAware applies 評価値_CON\'s -200 for 憤怒 x 双星の加護LV1 on top of the normal eval-table value', evaluatorConBuildAware.score(state, 'P1'), 100 - 200);
+  check('conBuildAware applies 評価値_CON\'s -1000 for 憤怒 x 双星の加護LV1 on top of the normal eval-table value', evaluatorConBuildAware.score(state, 'P1'), 100 - 1000);
 }
 
 {
@@ -365,7 +367,7 @@ index.raw.QST = [
   giveCard(state, 'B201B', 'P1');
   const plainScore = evaluator.score(state, 'P1');
   check('Control: plain Evaluator score for the LV2 face', plainScore, 50 + 1 * 12); // VP-weight(round2)=12
-  check('conBuildAware still applies the LV1 row\'s -200 to the LV2-upgraded card', evaluatorConBuildAware.score(state, 'P1'), (50 + 1 * 12) - 200);
+  check('conBuildAware still applies the LV1 row\'s -1000 to the LV2-upgraded card', evaluatorConBuildAware.score(state, 'P1'), (50 + 1 * 12) - 1000);
 }
 
 {

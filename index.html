@@ -250,23 +250,6 @@
     </div>
   </div>
 
-  <!-- 道化(JOB003)の☆ダイス: 自分の空きEXスロットと空きANYスロットが両方選べる時だけ表示 (2026-08-28,
-       per user request: "自分のEXとANYと両方置けるときANYにしか置けません その時だけはどちらか選べる
-       ように") -- see main.js's attemptPlaceSelectedWildcardDie/placeSelectedWildcardDie/
-       renderWildcardSlotChoiceModal/board.wildcardExAnyChoice. Nothing committed yet, so cancelable. -->
-  <div id="wildcard-slot-choice-overlay" class="card-inst-overlay" hidden>
-    <div class="card-inst-modal placement-choice-modal">
-      <div class="card-inst-modal__header">
-        <span class="card-inst-modal__title">☆ダイスをどちらに置きますか？</span>
-      </div>
-      <div class="placement-choice-actions">
-        <button type="button" id="wildcard-slot-choice-cancel">キャンセル</button>
-        <button type="button" id="wildcard-slot-choice-ex">自分専用SLOTに置く</button>
-        <button type="button" id="wildcard-slot-choice-any">共通SLOTに置く</button>
-      </div>
-    </div>
-  </div>
-
   <!-- Bare (direct) TAP ability die+value choice, e.g. B001A's SET_DIE_VALUE(SELF1|2);
        GRANT_PLACE_ANYWHERE(...), B003A's CHANGE_DIE_VALUE(SELF±1), or JOB007's
        MONUMENT_CHANGE_DIE_VALUE(SELF+2) -- see main.js's attachTapToggle/bareTapKind/

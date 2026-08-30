@@ -56,29 +56,27 @@ const AREA009_MAP_ID = 'MAP009';
 // the rule's actual intent. The cap now applies to every ALL-based CHANGE, so board.js no longer has to
 // tell executor.js which AREA fired one -- see executor.js's runChange.)
 
-/** Usage fee owed by a non-owner who uses a tier-B/C AREA (confirmed: "tier Bは一律1K...tier Cは一律2K",
- * a flat system rule, not per-AREA data). Tier A has no fee. */
-const USAGE_FEE_BY_TIER = { B: 1, C: 2 };
-
 /** Pure: the usage fee placing on map would incur for playerId right now, or null if none applies (the
- * map's own owner, a tier-A map with no feeOwnerId, or an AREA with no tier suffix at all -- castle/
- * AREA007, confirmed to have no tier concept). Factored out of chargeUsageFeeIfOwed (2026-08-05) so
- * wouldOweUnaffordableFee below can ask "how much, if any" without mutating anything. */
-function wouldOweFee(map, playerId) {
+ * map's own owner, or a map with no feeOwnerId at all). Amount comes straight from the current AREA row's
+ * own `fee` column (2026-08-30, per user data change: previously a flat per-tier system rule, "tier Bは
+ * 一律1K...tier Cは一律2K", but the user's own spreadsheet data turned out to have real per-AREA
+ * exceptions -- 訓練場/AREA007B・C and AREA010C are all 3, not the tier-implied 1/2/2 -- so this is now
+ * authoritative data, not a tier-derived constant. Falsy/blank `fee` (e.g. every tier-A row) means no fee,
+ * same as before. Factored out of chargeUsageFeeIfOwed (2026-08-05) so wouldOweUnaffordableFee below can
+ * ask "how much, if any" without mutating anything. */
+function wouldOweFee(index, map, playerId) {
   if (!map.feeOwnerId || map.feeOwnerId === playerId) return null;
-  const { tier } = splitCardId(map.currentAreaId);
-  const amount = USAGE_FEE_BY_TIER[tier];
+  const amount = getAreaRow(index, map.currentAreaId).fee;
   return amount ? { mapId: map.mapId, amount } : null;
 }
 
 /** Sets player.pendingFee (see its own doc in game-state.js) if placing on mapId right now means using
- * someone else's tiered-up AREA -- a no-op (leaves pendingFee untouched) for the map's own owner, a
- * tier-A map (feeOwnerId null), or an AREA with no tier suffix at all (castle/AREA007, confirmed to have
- * no tier concept). Called once per placement action (placeDice, or once for the whole group in
+ * someone else's tiered-up AREA -- a no-op (leaves pendingFee untouched) for the map's own owner or a map
+ * with no feeOwnerId at all. Called once per placement action (placeDice, or once for the whole group in
  * placeDiceGroup) -- "using the area" is what's billed, not per-die, matching how this is always exactly
  * one turn's worth of action even when placeDiceGroup lets multiple dice land in it. */
-function chargeUsageFeeIfOwed(state, map, playerId) {
-  const fee = wouldOweFee(map, playerId);
+function chargeUsageFeeIfOwed(state, index, map, playerId) {
+  const fee = wouldOweFee(index, map, playerId);
   if (!fee) return;
   const player = state.players.find((p) => p.id === playerId);
   player.pendingFee = fee;
@@ -385,7 +383,7 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
   // gap this closes, without over-restricting AREAs whose own effect already covers their fee. See
   // canAffordFee's own doc for what "payable" means (current K + every free-action-convertible
   // resource, not just raw K).
-  const owedFee = wouldOweFee(map, context.playerId);
+  const owedFee = wouldOweFee(index, map, context.playerId);
   // Reuses preJobBonusSnapshot (already taken *before* the landlord/pioneer grant, i.e. before this
   // whole placement's own effects began) when one exists, rather than taking a fresh structuredClone
   // here -- a fresh one at this point would already include that bonus, so rolling back to it below
@@ -417,7 +415,7 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
     seq: state.placementSeq,
     countsForTurnOrder: !joinedOccupiedSlot && die.kind !== 'WHITE',
   });
-  chargeUsageFeeIfOwed(state, map, context.playerId);
+  chargeUsageFeeIfOwed(state, index, map, context.playerId);
 
   // 孤児院(AREA010B/AREA010C)-only, reporting use only (2026-08-28, see game-state.js's
   // PlayerState.orphanageVpGained doc): snapshotted before resolveAreaAction runs so the delta below
@@ -923,7 +921,7 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   // Same usage-fee affordability gate as placeDice's own (2026-08-05) -- AREA009 can carry a tier (A301A,
   // renamed from A008A by the 2026-08-24 SHOP201-203 rework's card renumbering, tiers it up), so a group
   // placement here can owe a fee too, not just the single-die path.
-  const owedFee = wouldOweFee(map, playerId);
+  const owedFee = wouldOweFee(index, map, playerId);
   if (owedFee && !canAffordFee(player, owedFee.amount)) {
     if (preJobBonusSnapshot) {
       Object.keys(state).forEach((k) => delete state[k]);
@@ -951,7 +949,7 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
     });
     executor.emitAndResolve(state, index, actionContext, 'PLACE', mapId);
   }
-  chargeUsageFeeIfOwed(state, map, playerId);
+  chargeUsageFeeIfOwed(state, index, map, playerId);
   // 開拓者's own bonus already landed earlier (see preJobBonusSnapshot above) -- not called again here;
   // it needed to be pre-commit (unlike 地主 just below) specifically because it must feed this function's
   // own build-affordability gate, which 地主's bonus never needs to.
@@ -1117,7 +1115,7 @@ function placeWildcardDie(state, index, context, dieId, mapId, preferredSlotInde
     return { success: false, reason: prediction.reason };
   }
 
-  const owedFee = wouldOweFee(map, context.playerId);
+  const owedFee = wouldOweFee(index, map, context.playerId);
   const preFeeSnapshot = owedFee ? (preJobBonusSnapshot || structuredClone(state)) : null;
 
   state.placementSeq += 1;
@@ -1141,7 +1139,7 @@ function placeWildcardDie(state, index, context, dieId, mapId, preferredSlotInde
     // a ☆-wildcarded WHITE die is still a WHITE die underneath.
     countsForTurnOrder: !excludedFromBuildValue && die.kind !== 'WHITE',
   });
-  chargeUsageFeeIfOwed(state, map, context.playerId);
+  chargeUsageFeeIfOwed(state, index, map, context.playerId);
 
   executor.emitAndResolve(state, index, actionContext, 'PLACE', mapId);
   const actionResult = resolveAreaAction(state, index, actionContext, areaRow, abcBuildValue, monumentBuildValue);

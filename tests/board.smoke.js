@@ -25,9 +25,12 @@ const index = buildDataIndex(loadGameData(path.join(__dirname, '..', 'data', 'ga
 // tests keep exercising that isolated mechanism regardless of what 孤児院 itself does going forward.
 // 2 ANY slots (not 1) so a 地主 test further down can occupy one with an "already placed here earlier"
 // die while a second, new placement still targets the other -- AREA010C's own old shape only had 1.
+// fee: 2 (2026-08-30, per user data change: usage fee now comes straight from each AREA row's own `fee`
+// column instead of a flat per-tier constant -- see board.wouldOweFee's own doc) -- matches this
+// synthetic row's own "tier-C" framing (its whole point is isolating the flat tier-C fee amount).
 index.raw.AREA.push({
   ID: 'AREA999C', NAME: 'test-fee-tier-c-any-slot', SLOT1: 'ANY', SLOT2: 'ANY', SLOT3: 'NONE', SLOT4: 'NONE', SLOT5: 'NONE', SLOT6: 'NONE',
-  ACTION: 'ADD(2VP)', INST: '',
+  ACTION: 'ADD(2VP)', fee: 2, INST: '',
 });
 
 let passCount = 0;
@@ -1388,16 +1391,28 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   check('An unplaced wD no longer helps cover the fee -- placement is still refused as unaffordable', result, { success: false, reason: 'UNAFFORDABLE_USAGE_FEE', amount: 2 });
 }
 {
-  // Regression guard for the intentional 2026-08-25/28 孤児院LV2 rework (confirmed with the user,
-  // 2026-08-28: "意図的な変更です"): AREA010C's only slot is now EX, so a non-owner can never reach it at
-  // all any more, regardless of resources -- there is no usage-fee scenario left to test against the real
-  // AREA010C (see this file's own synthetic AREA999C above for why the tests just above use that instead).
+  // 孤児院LV2 (AREA010C)'s slot layout was reworked again (2026-08-30, per user data change) -- back to
+  // an ANY slot (SLOT1) alongside 2 owner-only EX slots (SLOT2/3), the same "ANY + EX×2" shape 訓練場LV1
+  // uses, reversing the all-EX shape a 2026-08-25/28 edit had given it (this test used to be a regression
+  // guard for that all-EX shape -- see this file's own synthetic AREA999C above for why the fee-isolation
+  // tests just above still use that stand-in rather than the real, now-differently-shaped AREA010C). A
+  // non-owner can reach the ANY slot now, owing the AREA row's own 3K fee (getAreaRow(...).fee, not a
+  // flat per-tier constant -- see board.wouldOweFee's own doc) -- but the EX slots stay owner-only.
   const state = freshStateWithShops();
-  state.maps['MAP010'] = mapWithArea('MAP010', 'AREA010C', 1, 'P1');
-  player(state, 'P2').resources.K = 20; // resources are irrelevant -- EX_NOT_OWNER blocks this outright
+  state.maps['MAP010'] = mapWithArea('MAP010', 'AREA010C', 3, 'P1');
+  player(state, 'P2').resources.K = 20;
   const die = giveDie(state, 'P2', 1);
   const result = board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP010', 0);
-  check('孤児院LV2 (AREA010C) is EX-only now -- a non-owner can never place there at all', result, { success: false, reason: 'EX_NOT_OWNER' });
+  check('孤児院LV2 (AREA010C): a non-owner can now place at its ANY slot (slot 0)', result.success, true);
+  check('...and owes the AREA row\'s own 3K fee', player(state, 'P2').pendingFee, { mapId: 'MAP010', amount: 3 });
+}
+{
+  const state = freshStateWithShops();
+  state.maps['MAP010'] = mapWithArea('MAP010', 'AREA010C', 3, 'P1');
+  player(state, 'P2').resources.K = 20;
+  const die = giveDie(state, 'P2', 1);
+  const result = board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP010', 1);
+  check('...but a non-owner still cannot reach its EX slots (slot 1)', result, { success: false, reason: 'EX_NOT_OWNER' });
 }
 {
   // AREA001B's own ACTION (ADD(6K)) trivially covers its own 1K fee -- confirms the check happens
@@ -2494,18 +2509,21 @@ function withPatchedTap(physicalFaceId, tap, fn) {
 // ダイスを置いたときダイス上限が5になるように（怠惰でもダイスが増える）訓練場LV2のAREAにダイスを置いた
 // ときダイス上限が６になるように") -- bypasses both the normal 5-color-dice cap and 怠惰/CON005A's
 // REPLACE_ADD(D,wD) redirect, for just this one grant. Confirmed with the user this is scoped to 訓練場's
-// own D grant only, not a lasting change to the player's own cap. SLOT1/2 at both tiers are EX
-// (owner-only). AREA007B's own ACTION changed 2026-08-25 from a free ADD(D) to CHANGE(K,D) (per user
-// data edit "訓練場LV1　能力変えました") -- the bypass logic (keyed off grantsColorDie's generic
-// CHANGE/ADD detection, not this AREA's specific formula) needed no code change for this, but tests
-// placing there now need to actually afford the K cost. AREA007C (LV2) is untouched, still ADD(D).
+// own D grant only, not a lasting change to the player's own cap. SLOT1 at both tiers is now ANY (a
+// 2026-08-30 data edit added it back alongside the owner-only EX slot(s), see board.wouldOweFee's own doc
+// on the same edit's `fee` column) -- doesn't affect these tests either way since P1 is always the map's
+// own owner here, free to use any slot type. AREA007B's own ACTION changed 2026-08-25 from a free ADD(D)
+// to CHANGE(K,D), then 2026-08-30 to CHANGE(2K,D) (per user data edits "訓練場LV1　能力変えました" then
+// "訓練場すこしかえました") -- the bypass logic (keyed off grantsColorDie's generic CHANGE/ADD detection,
+// not this AREA's specific formula) needed no code change for either, but tests placing there now need to
+// actually afford the current K cost. AREA007C (LV2) is untouched, still ADD(D), no K needed.
 // ---------------------------------------------------------------------------
 {
   // 怠惰 (CON005A) normally turns EVERY D grant into a wD instead, unconditionally, everywhere -- except
   // now at 訓練場LV1, where it's bypassed entirely.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  p1.resources.K = 1; // AREA007B's own ACTION is now CHANGE(K,D)
+  p1.resources.K = 2; // AREA007B's own ACTION is now CHANGE(2K,D)
   const con5a = createCardInstance('CON005A');
   con5a.ownerId = 'P1';
   state.cards[con5a.physicalId] = con5a;
@@ -2572,7 +2590,7 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   // A ☆ die (JOB003/道化) can land on 訓練場LV1/LV2 too ("全AREA共通") -- same bypass applies.
   const state = freshStateWithShops();
   const p1 = withWildcardOwner(state);
-  p1.resources.K = 1; // AREA007B's own ACTION is now CHANGE(K,D)
+  p1.resources.K = 2; // AREA007B's own ACTION is now CHANGE(2K,D)
   const con5a = createCardInstance('CON005A');
   con5a.ownerId = 'P1';
   state.cards[con5a.physicalId] = con5a;

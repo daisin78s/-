@@ -1344,7 +1344,7 @@
       "WARNING": "",
       "NOTE": "",
       "AUTO": "",
-      "INST": "自分のカラーダイスが置かれているAREAにはダイスを配置できない。\n🎲上限0　上限を超えた🎲は失われる",
+      "INST": "自分のカラーダイスが置かれているAREAにはダイスを配置できない。EXSLOTは制約と関係なく置ける。\n🎲上限0　上限を超えた🎲は失われる\n道化やダイス変換と組み合わせると制約に関係なく置けるようになるが、ｗDは得ることができない。",
       "アイコン": "自分の色DがあるAREA\nダイス配置不可\n🎲上限0"
     },
     {
@@ -2104,6 +2104,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "ADD(3K)",
+      "fee": "",
       "INST": "ここにダイスを置くと食糧（K）を3個得ることができます"
     },
     {
@@ -2116,6 +2117,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "ADD(3K)",
+      "fee": "",
       "INST": ""
     },
     {
@@ -2128,6 +2130,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "CHANGE(K,A,ALL)",
+      "fee": "",
       "INST": ""
     },
     {
@@ -2140,6 +2143,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "CHANGE(K,B,ALL)",
+      "fee": "",
       "INST": ""
     },
     {
@@ -2152,6 +2156,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "CHANGE(K,C,ALL)",
+      "fee": "",
       "INST": ""
     },
     {
@@ -2164,6 +2169,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "CHANGE(2K,2Z)",
+      "fee": "",
       "INST": ""
     },
     {
@@ -2176,6 +2182,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "CHANGE((A,B,C),D)",
+      "fee": "",
       "INST": "色ダイスの上限は5個"
     },
     {
@@ -2188,6 +2195,7 @@
       "SLOT5": "ANY",
       "SLOT6": "ANY",
       "ACTION": "BUILD()",
+      "fee": "",
       "INST": ""
     },
     {
@@ -2200,6 +2208,7 @@
       "SLOT5": "ANY",
       "SLOT6": "ANY",
       "ACTION": "BUILD()",
+      "fee": "",
       "INST": ""
     },
     {
@@ -2211,7 +2220,8 @@
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
-      "ACTION": "CHANGE(2K,VP)",
+      "ACTION": "CHANGE(K,VP)",
+      "fee": "",
       "INST": ""
     },
     {
@@ -2224,6 +2234,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "ADD(6K)",
+      "fee": 1,
       "INST": ""
     },
     {
@@ -2236,6 +2247,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "ADD(5K)",
+      "fee": 1,
       "INST": ""
     },
     {
@@ -2248,6 +2260,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "CHANGE(K,A,ALL);ADD(2B)",
+      "fee": 1,
       "INST": ""
     },
     {
@@ -2260,6 +2273,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "CHANGE(K,B,ALL);ADD(2C)",
+      "fee": 1,
       "INST": ""
     },
     {
@@ -2272,6 +2286,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "CHANGE(K,C,ALL);ADD(2A)",
+      "fee": 1,
       "INST": ""
     },
     {
@@ -2284,18 +2299,20 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "CHANGE(2K,(A,B,C,Z))",
+      "fee": 1,
       "INST": ""
     },
     {
       "ID": "AREA007B",
       "NAME": "訓練場",
-      "SLOT1": "EX",
+      "SLOT1": "ANY",
       "SLOT2": "EX",
-      "SLOT3": "NONE",
+      "SLOT3": "EX",
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
-      "ACTION": "CHANGE(K,D)",
+      "ACTION": "CHANGE(2K,D)",
+      "fee": 2,
       "INST": "色ダイスの上限は5個\nこのAREAにダイスを置くと怠惰の制約は解除される"
     },
     {
@@ -2308,6 +2325,7 @@
       "SLOT5": "EX",
       "SLOT6": "EX",
       "ACTION": "BUILD();ADD(2K)",
+      "fee": 1,
       "INST": ""
     },
     {
@@ -2320,6 +2338,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "CHANGE(2K,2VP)",
+      "fee": 1,
       "INST": ""
     },
     {
@@ -2332,6 +2351,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "ADD(7K)",
+      "fee": 2,
       "INST": ""
     },
     {
@@ -2344,6 +2364,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "ADD(8K)",
+      "fee": 2,
       "INST": ""
     },
     {
@@ -2356,6 +2377,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "CHANGE(K,A,ALL);ADD(4B)",
+      "fee": 2,
       "INST": ""
     },
     {
@@ -2368,6 +2390,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "CHANGE(K,B,ALL);ADD(4C)",
+      "fee": 2,
       "INST": ""
     },
     {
@@ -2380,6 +2403,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "CHANGE(K,C,ALL);ADD(4A)",
+      "fee": 2,
       "INST": ""
     },
     {
@@ -2392,18 +2416,20 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "CHANGE(2K,(A,B,C,3Z))",
+      "fee": 2,
       "INST": ""
     },
     {
       "ID": "AREA007C",
       "NAME": "訓練場",
-      "SLOT1": "EX",
-      "SLOT2": "NONE",
+      "SLOT1": "ANY",
+      "SLOT2": "EX",
       "SLOT3": "NONE",
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "ADD(D)",
+      "fee": 3,
       "INST": "このAREAにダイスを置くと\n色ダイスの上限6個になる"
     },
     {
@@ -2416,18 +2442,20 @@
       "SLOT5": "EX",
       "SLOT6": "EX",
       "ACTION": "BUILD();ADD(2K,BZ)",
+      "fee": 2,
       "INST": ""
     },
     {
       "ID": "AREA010C",
       "NAME": "孤児院LV2",
-      "SLOT1": "EX",
-      "SLOT2": "NONE",
-      "SLOT3": "NONE",
+      "SLOT1": "ANY",
+      "SLOT2": "EX",
+      "SLOT3": "EX",
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "CHANGE(K,VP,5)",
+      "fee": 3,
       "INST": "KをVPに変えるMAX5"
     }
   ],
@@ -2558,7 +2586,7 @@
       "ID": "VP",
       "1R": 10,
       "2R": 12,
-      "3R": 20,
+      "3R": 100,
       "4R": 1000
     },
     {
@@ -2572,28 +2600,28 @@
       "ID": "A",
       "1R": 5,
       "2R": 5,
-      "3R": 5,
+      "3R": 10,
       "4R": 5
     },
     {
       "ID": "B",
       "1R": 5,
       "2R": 5,
-      "3R": 5,
+      "3R": 10,
       "4R": 5
     },
     {
       "ID": "C",
       "1R": 5,
       "2R": 5,
-      "3R": 5,
+      "3R": 10,
       "4R": 5
     },
     {
       "ID": "Z",
       "1R": 6,
       "2R": 6,
-      "3R": 6,
+      "3R": 12,
       "4R": 6
     },
     {
@@ -2607,7 +2635,7 @@
       "ID": "wD",
       "1R": 10,
       "2R": 9,
-      "3R": 8,
+      "3R": 12,
       "4R": 8
     },
     {
@@ -4203,7 +4231,7 @@
       "強欲": "",
       "憂鬱": "",
       "嫉妬": "",
-      "憤怒": -200,
+      "憤怒": -1000,
       "裏切": ""
     },
     {
@@ -4218,7 +4246,7 @@
       "強欲": "",
       "憂鬱": "",
       "嫉妬": "",
-      "憤怒": -20,
+      "憤怒": 100,
       "裏切": ""
     },
     {
@@ -4233,7 +4261,7 @@
       "強欲": "",
       "憂鬱": "",
       "嫉妬": "",
-      "憤怒": -50,
+      "憤怒": -1000,
       "裏切": ""
     },
     {
@@ -4248,7 +4276,7 @@
       "強欲": "",
       "憂鬱": "",
       "嫉妬": "",
-      "憤怒": -50,
+      "憤怒": -1000,
       "裏切": ""
     },
     {
@@ -4263,7 +4291,7 @@
       "強欲": "",
       "憂鬱": "",
       "嫉妬": "",
-      "憤怒": -50,
+      "憤怒": -1000,
       "裏切": ""
     },
     {
@@ -4323,7 +4351,7 @@
       "強欲": "",
       "憂鬱": "",
       "嫉妬": "",
-      "憤怒": -200,
+      "憤怒": -1000,
       "裏切": ""
     },
     {
@@ -4473,7 +4501,7 @@
       "強欲": "",
       "憂鬱": "",
       "嫉妬": "",
-      "憤怒": -200,
+      "憤怒": -1000,
       "裏切": ""
     },
     {
