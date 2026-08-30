@@ -154,9 +154,28 @@ class AIPlayer {
     const { lookaheadExtraTurns, beamWidth, maxRolloutMoves } = this.#effectiveOptions(state.round);
     if (lookaheadExtraTurns <= 0) return scored[0].move;
 
+    // Beam de-duplication (2026-08-30, per user request: "結果として同じような手は間引くようにできます
+    // か"): candidates that tie EXACTLY at 1-ply -- e.g. a die-value-change/free-action applied to two
+    // interchangeable dice -- are, in practice, almost always "the same idea" wearing a different move
+    // object. Without this, several of the limited beamWidth rollout slots could go to near-identical
+    // variants of one idea instead of genuinely different alternatives, which then never get a rollout at
+    // all (and could lose out purely because their own 1-ply score was a hair lower). scored is already
+    // sorted by score descending, so exact-score duplicates are adjacent -- keep only the first (i.e.
+    // whichever tie-break already preferred) of each distinct score before taking the top beamWidth.
+    // Deliberately an EXACT match, not a "close enough" epsilon band -- the evaluator's own weighted-sum
+    // scores make a genuine tie a good proxy for redundancy, but two merely-close scores could still be
+    // real, distinct strategic options worth their own rollout.
+    const deduped = [];
+    let lastScore = null;
+    for (const candidate of scored) {
+      if (candidate.score === lastScore) continue;
+      deduped.push(candidate);
+      lastScore = candidate.score;
+    }
+
     let best = scored[0].move;
     let bestDeepScore = -Infinity;
-    for (const candidate of scored.slice(0, beamWidth)) {
+    for (const candidate of deduped.slice(0, beamWidth)) {
       const deepScore = this.#rolloutScore(candidate.resultState, playerId, candidate.move, lookaheadExtraTurns, maxRolloutMoves);
       if (deepScore > bestDeepScore) {
         bestDeepScore = deepScore;

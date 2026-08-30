@@ -213,6 +213,53 @@ function makeLookaheadStubs() {
 }
 
 // ---------------------------------------------------------------------------
+// Beam de-duplication (2026-08-30, per user request: "結果として同じような手は間引くようにできますか"):
+// A1/A2 are two "same idea, different move object" candidates (both score 10 at 1-ply, both a dead end --
+// their own rollout goes nowhere further, staying at 10); B scores slightly lower at 1-ply (9) but its
+// rollout reveals a much better payoff (100). With beamWidth:2 and no dedup, the top-2 by raw score would
+// be [A1, A2] -- B, sitting just outside the beam, would never get a rollout at all, and the AI would
+// wrongly settle for A1/A2's dead-end 10. With dedup, A1/A2 collapse to one slot, freeing the beam to
+// also roll out B, which then correctly wins on its deeper score.
+// ---------------------------------------------------------------------------
+function makeBeamDedupStubs() {
+  const moveGenerator = {
+    generateMoves: (state, index, playerId, context) => {
+      if (state.path === undefined) {
+        return [
+          { type: 'PLACE_DIE', playerId, id: 'A1' },
+          { type: 'PLACE_DIE', playerId, id: 'A2' },
+          { type: 'PLACE_DIE', playerId, id: 'B' },
+        ];
+      }
+      if (context.hasPlacedDieThisTurn && !state.turn1Ended) return [{ type: 'END_TURN', playerId }];
+      if (state.turn1Ended && !context.hasPlacedDieThisTurn) return [{ type: 'PLACE_DIE', playerId, id: 'FINAL' }];
+      return [];
+    },
+    ...noForcedMoves(),
+  };
+  const simulator = {
+    apply: (state, index, move) => {
+      if (move.type === 'PLACE_DIE' && (move.id === 'A1' || move.id === 'A2')) return { state: { path: 'A', turn1Score: 10 }, result: { success: true } };
+      if (move.type === 'PLACE_DIE' && move.id === 'B') return { state: { path: 'B', turn1Score: 9 }, result: { success: true } };
+      if (move.type === 'END_TURN') return { state: { ...state, turn1Ended: true }, result: { success: true } };
+      if (move.type === 'PLACE_DIE' && move.id === 'FINAL') return { state: { ...state, finalScore: state.path === 'A' ? 10 : 100 }, result: { success: true } };
+      return { state, result: { success: false } };
+    },
+  };
+  const evaluator = { score: (state) => (state.finalScore !== undefined ? state.finalScore : state.turn1Score !== undefined ? state.turn1Score : 0) };
+  return { moveGenerator, evaluator, simulator };
+}
+{
+  const { moveGenerator, evaluator, simulator } = makeBeamDedupStubs();
+  const ai = new AIPlayer(null, moveGenerator, evaluator, simulator, { lookaheadExtraTurns: 1, beamWidth: 2 });
+  check(
+    'Beam dedup: with A1/A2 tied at 1-ply (10) collapsing to one slot, B (1-ply 9, rollout 100) still gets a rollout and wins over A1/A2\'s dead-end 10',
+    ai.selectMove({}, 'P1', { hasPlacedDieThisTurn: false }).id,
+    'B',
+  );
+}
+
+// ---------------------------------------------------------------------------
 // dieScarcityTieBreak (2026-08-28, "AI LV4"): when several moves tie on 1-ply score, and each carries a
 // die (PLACE_DIE/PLACE_WILDCARD_DIE's dieId, or PLACE_DICE_GROUP's dieIds), the die-priority rule in
 // src/ai/die-priority.js picks which one to prefer instead of plain generation order. These stubs build
