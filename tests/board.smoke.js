@@ -2436,21 +2436,26 @@ function withPatchedTap(physicalFaceId, tap, fn) {
 
 // ---------------------------------------------------------------------------
 // 地主's bonus is usable immediately by the *same* placement it comes from (2026-08-18, per user
-// worked examples): AREA010B (孤児院LV1)'s own ACTION is CHANGE(2K,2VP) (2026-08-25 data edit: was
-// CHANGE(3K,2VP)) -- with 1K, the bonus's +1K is what bridges the shortfall to actually trigger it.
-// mapWithArea (see the EX-slot tests above) builds the map fixture; AREA010B's SLOT1 requires value 2.
+// worked examples): AREA010B (孤児院LV1)'s own ACTION is CHANGE(K,VP,3) (2026-08-30 data edit "孤児院
+// 再び変えました" -- switched from a fixed CHANGE(3K,3VP) cost to the same capped-conversion shape
+// AREA010C already used, just with cap=3 instead of 5: converts however much K is on hand into VP,
+// scaled down to whatever's affordable, up to 3 conversions -- see command-builder.lowerChange's own
+// doc). Unlike a fixed-cost CHANGE, there's no "too little K to trigger it" case any more -- 1K alone
+// would just convert 1 -- so this now demonstrates 地主's bonus simply adding to the total converted,
+// not bridging a shortfall. mapWithArea (see the EX-slot tests above) builds the map fixture; AREA010B's
+// SLOT1 requires value 2.
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   p1.jobCardId = 'JOB011';
-  p1.resources.K = 1; // short of CHANGE(2K,2VP)'s own cost by exactly 1
+  p1.resources.K = 1;
   state.maps['MAP001'] = mapWithArea('MAP001', 'AREA010B', 6, 'P1'); // P1 owns it -- no usage fee here
   const d1 = giveDie(state, 'P1', 2); // SLOT1=2
   const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
-  check('地主: placing at 孤児院LV1 with 1K succeeds (the +1K bonus covers CHANGE(2K,2VP)\'s own cost)', result.success, true);
-  check('...the 2K (1 starting + 1 from 地主) was spent by CHANGE, leaving 0', p1.resources.K, 0);
-  check('...and CHANGE(2K,2VP) granted 2VP', p1.resources.VP, 2);
+  check('地主: placing at 孤児院LV1 succeeds', result.success, true);
+  check('...the 2K (1 starting + 1 from 地主) was all converted (under CHANGE(K,VP,3)\'s cap of 3), leaving 0', p1.resources.K, 0);
+  check('...and 2VP was granted', p1.resources.VP, 2);
 }
 
 // ---------------------------------------------------------------------------

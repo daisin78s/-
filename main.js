@@ -2065,11 +2065,11 @@ const ACTION_ICON_BUILDERS = {
   // how you get one". Deliberately scoped to this entry: ADD(D) elsewhere keeps saying 色D (see
   // buildAddResourceIcon), since those cards are about the die itself, not about growing past the start.
   'CHANGE((A,B,C),D)': () => actionRow([actionDot('A'), actionDot('B'), actionDot('C'), actionArrow(), actionSuffix('追加色ダイス')]),
-  // 訓練場LV1 (AREA007B)'s own ACTION -- same 追加色ダイス wording as the entry above, just a single K
-  // dot on the pay side instead of an A/B/C group (2026-08-25, per user request: "訓練場LV1のアイコン
-  // K→追加色ダイス Kはアイコンに直して" -- previously unhandled, falling through to the raw DSL text
-  // "CHANGE(K,D)" fallback).
-  'CHANGE(K,D)': () => actionRow([actionDot('K'), actionArrow(), actionSuffix('追加色ダイス')]),
+  // 訓練場LV1 (AREA007B)'s own ACTION, "CHANGE(K,D)" or "CHANGE(nK,D)" (2026-08-30, per user request:
+  // "訓練場のアイコン ○2→追加色ダイス にして", after the K cost changed from 1 to 2 -- see
+  // forcedTrainingGroundMove's own doc for the matching AI-side change) -- used to be a plain exact-match
+  // entry here for the bare, count-less case only; now handled generically (both shapes) by
+  // buildChangeToColorDieIcon below instead, since the K cost has already changed twice.
   // CHANGE(4K,VP) used to live here as an exact-match entry -- removed 2026-08-05, no longer reachable
   // (no card/AREA in the current data uses that literal count) and superseded by the general
   // buildChangeToVpIcon below, added per user feedback covering AREA010A/C's own K->VP counts.
@@ -2332,6 +2332,19 @@ function buildChangeQuantityIcon(actionText) {
     actionArrow(),
     ...resourceItemNodes(getCount, getResource),
   ]);
+}
+
+/** CHANGE(nK,D)/CHANGE(K,D) -- 訓練場LV1 (AREA007B)'s own ACTION (2026-08-30, per user request:
+ * "訓練場のアイコン ○2→追加色ダイス にして", generalizing the old exact-match ACTION_ICON_BUILDERS
+ * entry to also cover an explicit count, since the K cost has already changed twice: 2026-08-25 added
+ * the bare CHANGE(K,D) shape, 2026-08-30 raised it to CHANGE(2K,D)). Same 追加色ダイス wording as the
+ * 'CHANGE((A,B,C),D)' entry above -- see its own doc for why (a die gained mid-game is definitionally
+ * "extra"). Distinct from buildChangeQuantityIcon above: that one requires K/A/B/C/Z on BOTH sides, but
+ * "D" (a color die) isn't a plain countable resource the same way, so it needs its own match/wording. */
+function buildChangeToColorDieIcon(actionText) {
+  const match = /^CHANGE\((\d*)K,D\)$/.exec(actionText || '');
+  if (!match) return null;
+  return actionRow([...resourceItemNodes(match[1], 'K'), actionArrow(), actionSuffix('追加色ダイス')]);
 }
 
 /** CHANGE(nX,(item1,item2,...)) -- pay a single resource, gain a fixed GROUP of resources all at once
@@ -2819,6 +2832,8 @@ function buildActionIcons(actionText) {
   if (addMultiResourceIcon) return addMultiResourceIcon;
   const changeQuantityIcon = buildChangeQuantityIcon(actionText);
   if (changeQuantityIcon) return changeQuantityIcon;
+  const changeToColorDieIcon = buildChangeToColorDieIcon(actionText);
+  if (changeToColorDieIcon) return changeToColorDieIcon;
   const changeGroupGainIcon = buildChangeGroupGainIcon(actionText);
   if (changeGroupGainIcon) return changeGroupGainIcon;
   const cappedChangeIcon = buildCappedChangeIcon(actionText);

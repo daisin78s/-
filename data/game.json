@@ -2220,7 +2220,7 @@
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
-      "ACTION": "CHANGE(K,VP)",
+      "ACTION": "CHANGE(K,VP,2)",
       "fee": "",
       "INST": ""
     },
@@ -2337,8 +2337,8 @@
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
-      "ACTION": "CHANGE(2K,2VP)",
-      "fee": 1,
+      "ACTION": "CHANGE(K,VP,3)",
+      "fee": 2,
       "INST": ""
     },
     {

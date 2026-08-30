@@ -170,7 +170,7 @@ function createDie(id, kind) {
  *   board-tile "平均XVP" display used to read -- removed per user request, "孤児院LV2に出てくるアイコン
  *   の平均点は不要です", in favor of tools/ai_data_report.js's own AIDATA.xlsx ABCM-sheet column for
  *   A201A/A201B, "孤児院の支配LV1/LV2"): cumulative VP THIS player has personally been granted by 孤児院's
- *   own CHANGE(...,VP,...) ACTION, at either tier (AREA010B's CHANGE(2K,2VP) or AREA010C's
+ *   own CHANGE(...,VP,...) ACTION, at either tier (AREA010B's CHANGE(3K,3VP) or AREA010C's
  *   CHANGE(K,VP,5)), for the whole game. See board.placeDice's own doc for where this is updated.
  */
 
