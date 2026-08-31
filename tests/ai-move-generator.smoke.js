@@ -192,6 +192,35 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
 }
 
 // ---------------------------------------------------------------------------
+// A CHANGE-based bare TAP that would execute 0 times (2026-08-31, per user report: watching a replay,
+// an AI player tapped C003A/商人LV1's CHANGE(K,C,3) at 0K -- board.useBareTapAbility still returns
+// success:true for a 0-times CHANGE, since it never fails outright, only scales down to whatever's
+// affordable) must not be offered at all -- it is a true no-op (see #bareTapMoves' own doc on the fix).
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const inst = createCardInstance('C001A'); // TAP=CHANGE(K,A,3)
+  inst.ownerId = 'P1';
+  state.cards[inst.physicalId] = inst;
+  p1.ownedCardPhysicalIds.push(inst.physicalId);
+  p1.resources.K = 0;
+  const movesAtZeroK = moveGenerator.generateMoves(state, index, 'P1', { hasPlacedDieThisTurn: true });
+  check(
+    'A CHANGE(K,A,3) bare TAP is never offered at 0K (would execute 0 times -- a true no-op)',
+    movesOfType(movesAtZeroK, 'BARE_TAP').filter((m) => m.physicalId === inst.physicalId).length,
+    0,
+  );
+
+  p1.resources.K = 1;
+  const movesWithK = moveGenerator.generateMoves(state, index, 'P1', { hasPlacedDieThisTurn: true });
+  assertTrue(
+    'The same CHANGE(K,A,3) bare TAP IS offered once K>0 (a real, non-zero conversion)',
+    movesOfType(movesWithK, 'BARE_TAP').some((m) => m.physicalId === inst.physicalId),
+  );
+}
+
+// ---------------------------------------------------------------------------
 // FREE_ACTION: withheld entirely unless actually needed to unblock a RESOURCE_TOTAL_LIMIT-blocked turn
 // end (2026-08-03, per user feedback: "AIが無駄にA→K...をやっています...意味がないため...基本的には
 // やらないように") -- even though these have no usage limit (confirmed 2026-08-02), a simple
@@ -506,6 +535,43 @@ function giveTrainingGroundControl(state, playerId, faceId) {
   assertTrue(
     'hasPlacedDieThisTurn:false -- fires normally, forcing a build of A202A',
     forced !== null && forced.type === 'PLACE_DIE' && forced.buildCandidateIndex !== undefined,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// forcedTrainingGroundBuildMove prefers a TAP-based build over a die-based one (2026-08-31, per user
+// report: watching a replay, this used to force a die-based build of A202A even though B006A/移ろいの兆し
+// LV1's own BUILD-kind bare TAP (TAP=BUILD((A,B,C,M),4)) could build the exact same A202A for free, no
+// die spent -- confirmed by re-scoring the real replay state, where the TAP path scored higher than the
+// die path this function actually forced. Same trigger setup as the block above, but with an untapped
+// B006A also on hand -- the forced move must now be the free BARE_TAP, not a die placement.
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  state.round = 2;
+  state.shops.SPECIAL.slots.SHOP202 = 'A202A';
+  const p1 = player(state, 'P1');
+  p1.resources = { K: 0, A: 3, B: 1, C: 0, Z: 0, VP: 0, BZ: 0 }; // covers A202A's own COST (2A,B)
+  giveDie(state, 'P1', 4);
+  giveDie(state, 'P1', 2);
+  giveDie(state, 'P1', 6);
+  const b006Inst = createCardInstance('B006A'); // TAP=BUILD((A,B,C,M),4)
+  b006Inst.ownerId = 'P1';
+  state.cards[b006Inst.physicalId] = b006Inst;
+  p1.ownedCardPhysicalIds.push(b006Inst.physicalId);
+
+  const forced = moveGenerator.forcedTrainingGroundBuildMove(state, index, 'P1', { hasPlacedDieThisTurn: false });
+  assertTrue(
+    'A free TAP-based build (B006A) is preferred over the die-based path -- no die spent',
+    forced !== null && forced.type === 'BARE_TAP' && forced.physicalId === b006Inst.physicalId && forced.buildCandidateIndex !== undefined,
+  );
+  assertTrue('...and every die is still unplaced', p1.dice.every((d) => d.placedMapId === null));
+
+  b006Inst.tapped = true;
+  const forcedWhenTapped = moveGenerator.forcedTrainingGroundBuildMove(state, index, 'P1', { hasPlacedDieThisTurn: false });
+  assertTrue(
+    'Once B006A is already tapped, falls back to the die-based path again',
+    forcedWhenTapped !== null && forcedWhenTapped.type === 'PLACE_DIE',
   );
 }
 

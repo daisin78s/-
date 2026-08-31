@@ -355,6 +355,16 @@ class MoveGenerator {
         const clone = cloneState(state);
         const result = board.useBareTapAbility(clone, index, { playerId }, physicalId);
         if (!result.success) continue;
+        // Skip a genuine no-op (2026-08-31, per user report: watching a replay, an AI player tapped
+        // C003A/商人LV1's CHANGE(K,C,3) at 0K -- board.useBareTapAbility still returns success:true for a
+        // 0-times CHANGE (see executor.runChange's own "times <= 0" doc), so without this check
+        // MoveGenerator would keep offering a completely inert tap that ties the Evaluator's score with
+        // "do nothing" and can win that tie purely by generation order. Compares the WHOLE player object
+        // (not just the CHANGE's own resources) so a tap with a genuine non-resource side effect --
+        // GRANT_PLACE_ANYWHERE, a die-value set, etc. -- is never mistaken for a no-op.
+        const beforePlayer = state.players.find((p) => p.id === playerId);
+        const afterPlayer = clone.players.find((p) => p.id === playerId);
+        if (JSON.stringify(beforePlayer) === JSON.stringify(afterPlayer)) continue;
         // A BZ-conversion tap (e.g. JOB004A's "CHANGE(3K,2BZ);BLOCK_BUILD(M,THIS_TURN)") is never
         // offered as a normal scored candidate unless a build outlet actually exists for the BZ it
         // would generate (2026-08-06, per user feedback: "AIは建築しないときはJOB004をTAPしない
@@ -695,7 +705,18 @@ class MoveGenerator {
    * true) would still force a SECOND placement here, since nothing else in this function's own conditions
    * depends on whether a die was placed yet. Confirmed reproducible via a direct unit check: with one die
    * already sitting at placedMapId!==null and the rest of the trigger conditions intact, this returned a
-   * real move to place a second die. */
+   * real move to place a second die.
+   *
+   * TAP-based build preferred first (2026-08-31, per user report: watching a replay, the AI forced a
+   * die-based build of A202A here even though B006A/移ろいの兆しLV1's own BUILD-kind bare TAP
+   * (TAP=BUILD((A,B,C,M),4)) could build the exact same A202A for free, no die spent -- confirmed by
+   * re-scoring the real state, where the TAP move scored higher (1459) than the die move this function
+   * actually forced (1409). "A202A has no TAP field of its own" (see this function's own doc above) is
+   * true but incomplete -- a DIFFERENT owned card's generic BUILD tap can still reach it as one of its
+   * candidates. #trainingGroundTapBuildMove is checked before the die-based search below (and before the
+   * die-count/dice-remaining gates that search relies on, since those exist purely to reason about a die
+   * trade-off this free path doesn't have) -- whenever it finds one, it's strictly better (same
+   * acquisition, no die spent) and wins outright. */
   forcedTrainingGroundBuildMove(state, index, playerId, context) {
     if (state.round < 2 || context.hasPlacedDieThisTurn) return null;
     const player = state.players.find((p) => p.id === playerId);
@@ -705,6 +726,8 @@ class MoveGenerator {
       return cardState && (cardState.currentFaceId === 'A202A' || cardState.currentFaceId === 'A202B');
     });
     if (ownsControl) return null;
+    const tapBuild = this.#trainingGroundTapBuildMove(state, index, playerId, player);
+    if (tapBuild) return tapBuild;
     const totalColorDiceCount = player.dice.filter((d) => d.kind === 'COLOR').length;
     if (totalColorDiceCount !== 3) return null;
     const unplacedDice = player.dice.filter((d) => d.placedMapId === null && !d.passed);
@@ -725,6 +748,30 @@ class MoveGenerator {
             if (applyInPlace(cloneState(state), index, move).success) return move;
           }
         }
+      }
+    }
+    return null;
+  }
+
+  /** A currently-untapped owned card whose BUILD-kind bare TAP (e.g. B006A/移ろいの兆しLV1's
+   * TAP=BUILD((A,B,C,M),4)) can build A202A right now, if any -- see forcedTrainingGroundBuildMove's own
+   * doc on why this is checked first. Same per-card dry-run pattern #bareTapMoves' own 'BUILD' branch
+   * uses, just filtered down to the one target face this caller cares about. */
+  #trainingGroundTapBuildMove(state, index, playerId, player) {
+    for (const physicalId of player.ownedCardPhysicalIds) {
+      const cardState = state.cards[physicalId];
+      if (!cardState || cardState.tapped) continue;
+      const bareTap = bareTapKind(index, cardState.currentFaceId);
+      if (!bareTap || bareTap.kind !== 'BUILD') continue;
+      const clone = cloneState(state);
+      const result = board.useBareTapAbility(clone, index, { playerId }, physicalId);
+      if (!result.success || !result.pendingBuild) continue;
+      const candidates = result.pendingBuild.candidates;
+      for (let buildCandidateIndex = 0; buildCandidateIndex < candidates.length; buildCandidateIndex++) {
+        const candidate = candidates[buildCandidateIndex];
+        if ((candidate.faceId || candidate.toFaceId) !== 'A202A') continue;
+        const move = { type: 'BARE_TAP', playerId, physicalId, buildCandidateIndex };
+        if (applyInPlace(cloneState(state), index, move).success) return move;
       }
     }
     return null;
