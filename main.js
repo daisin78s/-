@@ -1121,19 +1121,22 @@ let replayCursor = -1;
 let lastReplaySnapshotJson = null;
 let replayMode = false;
 
-/** Downloads the current game's full replayHistory as a JSON file (2026-08-31, per user request:
- * "リプレイを渡す方法はありますか" -- watching a live replay for an odd AI decision, no way existed to
- * hand that game over for debugging). Each entry is a complete GameState snapshot, one per Move actually
- * applied (human or AI) -- exactly what renderReplayFrame already steps through, so the saved file can be
- * read back move-by-move the same way. */
-function downloadReplayAsJson() {
-  const json = JSON.stringify(replayHistory);
+/** Downloads a replay's full history (an array of GameState snapshots, one per Move actually applied --
+ * exactly what renderReplayFrame already steps through) as a JSON file, so a specific game can be handed
+ * over for debugging odd AI behavior. `history` defaults to the LIVE, currently-in-progress game's own
+ * replayHistory (2026-08-31, per user request: "リプレイを渡す方法はありますか"); the ranking overlay's
+ * own per-entry "ダウンロード" button (2026-08-31, per user follow-up: "過去のゲームも選んでダウンロード
+ * したい") instead passes a PAST game's history loaded via RankingStorage.loadReplay, and `labelHint`
+ * (e.g. a player name) so that download's filename is distinguishable from the live one's. */
+function downloadReplayAsJson(history, labelHint) {
+  const json = JSON.stringify(history || replayHistory);
   const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const suffix = labelHint ? `-${labelHint}` : '';
   a.href = url;
-  a.download = `dice-wp-replay-${timestamp}.json`;
+  a.download = `dice-wp-replay${suffix}-${timestamp}.json`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -6319,6 +6322,20 @@ function renderRankingList() {
         });
       });
       row.appendChild(replayButton);
+      // ダウンロード (2026-08-31, per user request: "過去のゲームも選んでダウンロードしたい") -- same
+      // RankingStorage.loadReplay this row's own 再生 button uses, just handed to downloadReplayAsJson
+      // instead of enterReplayMode. labelHint strips filesystem-unsafe characters from the player's name.
+      const downloadButton = el('button', 'undo-button', entry.hasReplay ? 'ダウンロード' : 'DL不可');
+      downloadButton.type = 'button';
+      downloadButton.disabled = !entry.hasReplay;
+      downloadButton.addEventListener('click', () => {
+        downloadButton.disabled = true;
+        RankingStorage.loadReplay(entry.id).then((history) => {
+          downloadButton.disabled = false;
+          if (history && history.length) downloadReplayAsJson(history, entry.name.replace(/[\\/:*?"<>|\s]+/g, '_'));
+        });
+      });
+      row.appendChild(downloadButton);
       list.appendChild(row);
     });
   }).catch(() => {
