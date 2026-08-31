@@ -718,7 +718,7 @@ class MoveGenerator {
    * trade-off this free path doesn't have) -- whenever it finds one, it's strictly better (same
    * acquisition, no die spent) and wins outright. */
   forcedTrainingGroundBuildMove(state, index, playerId, context) {
-    if (state.round < 2 || context.hasPlacedDieThisTurn) return null;
+    if (state.round < 2) return null;
     const player = state.players.find((p) => p.id === playerId);
     if (!player || board.hasWildcardDice(state, index, playerId)) return null;
     const ownsControl = player.ownedCardPhysicalIds.some((physicalId) => {
@@ -726,8 +726,16 @@ class MoveGenerator {
       return cardState && (cardState.currentFaceId === 'A202A' || cardState.currentFaceId === 'A202B');
     });
     if (ownsControl) return null;
+    // Checked BEFORE context.hasPlacedDieThisTurn (2026-08-31, found via a forced-move consistency
+    // audit): a TAP-based build spends no die at all, so unlike the die-based search below it has no
+    // real dependency on whether this turn's one die placement has already happened -- e.g. if THIS
+    // turn's own die placement is what built/acquired the TAP-granting card in the first place,
+    // hasPlacedDieThisTurn is already true by the time it's untapped-and-owned, and gating this check
+    // behind that flag would silently lose the "always force it when free" guarantee this whole function
+    // exists for, even though the free build is still legal and still the better move.
     const tapBuild = this.#trainingGroundTapBuildMove(state, index, playerId, player);
     if (tapBuild) return tapBuild;
+    if (context.hasPlacedDieThisTurn) return null; // the die-based path below needs the turn's die still unplaced
     const totalColorDiceCount = player.dice.filter((d) => d.kind === 'COLOR').length;
     if (totalColorDiceCount !== 3) return null;
     const unplacedDice = player.dice.filter((d) => d.placedMapId === null && !d.passed);
@@ -756,7 +764,13 @@ class MoveGenerator {
   /** A currently-untapped owned card whose BUILD-kind bare TAP (e.g. B006A/移ろいの兆しLV1's
    * TAP=BUILD((A,B,C,M),4)) can build A202A right now, if any -- see forcedTrainingGroundBuildMove's own
    * doc on why this is checked first. Same per-card dry-run pattern #bareTapMoves' own 'BUILD' branch
-   * uses, just filtered down to the one target face this caller cares about. */
+   * uses, just filtered down to the one target face this caller cares about.
+   *
+   * pendingFee guard (2026-08-31, same class of guard forcedEndSignLv2Move's own BUILD loop already has
+   * for the identical shape): A202A's own COST (2A,B) is real spending, so if some OTHER usage fee is
+   * already pending from earlier this same turn, paying that cost on top of it could leave the fee
+   * unpayable at TURNEND -- checked against the *resulting* (post-build) resources, same as
+   * forcedEndSignLv2Move, since a monument/A-tier COST can mix resources unlike a flat K amount. */
   #trainingGroundTapBuildMove(state, index, playerId, player) {
     for (const physicalId of player.ownedCardPhysicalIds) {
       const cardState = state.cards[physicalId];
@@ -771,7 +785,11 @@ class MoveGenerator {
         const candidate = candidates[buildCandidateIndex];
         if ((candidate.faceId || candidate.toFaceId) !== 'A202A') continue;
         const move = { type: 'BARE_TAP', playerId, physicalId, buildCandidateIndex };
-        if (applyInPlace(cloneState(state), index, move).success) return move;
+        const tryClone = cloneState(state);
+        if (!applyInPlace(tryClone, index, move).success) continue;
+        const afterPlayer = tryClone.players.find((p) => p.id === playerId);
+        if (afterPlayer.pendingFee && !board.canAffordFee(afterPlayer, afterPlayer.pendingFee.amount)) continue;
+        return move;
       }
     }
     return null;

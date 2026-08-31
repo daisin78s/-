@@ -576,6 +576,62 @@ function giveTrainingGroundControl(state, playerId, faceId) {
 }
 
 // ---------------------------------------------------------------------------
+// The TAP-based path is reachable even once hasPlacedDieThisTurn is true (2026-08-31, found via a
+// forced-move consistency audit): a free TAP-based build has no real dependency on whether this turn's
+// die has already been placed -- e.g. if THIS turn's own die placement is what built the TAP-granting
+// card in the first place, hasPlacedDieThisTurn is already true by the time it's untapped-and-owned, and
+// gating the TAP check behind that flag (as the die-based path correctly is) would silently lose the
+// "always force it when free" guarantee. Same setup as the block above, but with hasPlacedDieThisTurn:true.
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  state.round = 2;
+  state.shops.SPECIAL.slots.SHOP202 = 'A202A';
+  const p1 = player(state, 'P1');
+  p1.resources = { K: 0, A: 3, B: 1, C: 0, Z: 0, VP: 0, BZ: 0 };
+  giveDie(state, 'P1', 4);
+  giveDie(state, 'P1', 2);
+  giveDie(state, 'P1', 6);
+  const b006Inst = createCardInstance('B006A');
+  b006Inst.ownerId = 'P1';
+  state.cards[b006Inst.physicalId] = b006Inst;
+  p1.ownedCardPhysicalIds.push(b006Inst.physicalId);
+
+  const forced = moveGenerator.forcedTrainingGroundBuildMove(state, index, 'P1', { hasPlacedDieThisTurn: true });
+  assertTrue(
+    'hasPlacedDieThisTurn:true still forces the free TAP-based build (no die needed for it)',
+    forced !== null && forced.type === 'BARE_TAP' && forced.physicalId === b006Inst.physicalId,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// #trainingGroundTapBuildMove's pendingFee guard (2026-08-31, same class of guard forcedEndSignLv2Move's
+// own BUILD loop already has): a TAP-based build whose own COST would leave an already-pending usage fee
+// unpayable must be skipped, same as the die-based path effectively gets for free via applyInPlace's own
+// rollback -- this one needs it explicitly since it stops at "the build itself succeeded", never checking
+// pendingFee afterward.
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  state.round = 2;
+  state.shops.SPECIAL.slots.SHOP202 = 'A202A';
+  const p1 = player(state, 'P1');
+  p1.resources = { K: 0, A: 3, B: 1, C: 0, Z: 0, VP: 0, BZ: 0 };
+  p1.pendingFee = { mapId: 'MAP999', amount: 5 }; // far more K than this player could ever pay
+  giveDie(state, 'P1', 4);
+  const b006Inst = createCardInstance('B006A');
+  b006Inst.ownerId = 'P1';
+  state.cards[b006Inst.physicalId] = b006Inst;
+  p1.ownedCardPhysicalIds.push(b006Inst.physicalId);
+
+  check(
+    'A TAP-based build that would leave an unpayable pending fee is skipped',
+    moveGenerator.forcedTrainingGroundBuildMove(state, index, 'P1', { hasPlacedDieThisTurn: true }),
+    null,
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Regression (2026-08-06, per user feedback: "AIは建築しないときはJOB004をTAPしない（できない）"):
 // forcedBzConversionMove already declined to *force* JOB004's tap with no build outlet (previous
 // block), but #bareTapMoves still offered the same tap as a normal generateMoves candidate regardless
