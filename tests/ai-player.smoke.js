@@ -372,5 +372,86 @@ function makeTieBreakAIPlayer(moves, options) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// preferExOnOwnTerritory (2026-08-31, "AI LV4"): when several moves tie on 1-ply score and place onto an
+// AREA this player already owns (state.maps[mapId].feeOwnerId === playerId), an EX slot is preferred over
+// any other slot -- see src/ai/slot-priority.js's own doc for why (only the owner can ever use an EX
+// slot, so taking it never denies an opponent, while leaving the ANY slot free for a fee-paying opponent
+// later). Self-disables from round 4 onward.
+// ---------------------------------------------------------------------------
+function makeExSlotState(round, feeOwnerId) {
+  const index = { raw: { AREA: [{ ID: 'AREA999X', SLOT1: 'EX', SLOT2: 'ANY', SLOT3: 'NONE', SLOT4: 'NONE', SLOT5: 'NONE', SLOT6: 'NONE' }] } };
+  const state = {
+    round,
+    maps: { MAP999: { mapId: 'MAP999', currentAreaId: 'AREA999X', feeOwnerId } },
+  };
+  return { index, state };
+}
+function makeExSlotAIPlayer(index, moves, options) {
+  const moveGenerator = { generateMoves: () => moves, ...noForcedMoves() };
+  const simulator = { apply: (state, idx, move) => ({ state: { afterMoveId: move.id }, result: { success: true } }) };
+  const evaluator = { score: () => 10 }; // every candidate ties on score -- only the tie-break matters
+  return new AIPlayer(index, moveGenerator, evaluator, simulator, options);
+}
+
+{
+  const { index, state } = makeExSlotState(1, 'P1');
+  const moves = [
+    { id: 'usesAny', type: 'PLACE_DIE', dieId: 'd1', mapId: 'MAP999', slotIndex: 1 },
+    { id: 'usesEx', type: 'PLACE_DIE', dieId: 'd1', mapId: 'MAP999', slotIndex: 0 },
+  ];
+  const ai = makeExSlotAIPlayer(index, moves, { preferExOnOwnTerritory: true });
+  check(
+    'preferExOnOwnTerritory prefers the EX slot over the ANY slot on this player\'s own AREA',
+    ai.selectMove(state, 'P1', {}).id,
+    'usesEx',
+  );
+}
+
+{
+  // Same AREA, but owned by someone else -- no preference applies (falls back to generation order).
+  const { index, state } = makeExSlotState(1, 'P2');
+  const moves = [
+    { id: 'usesAny', type: 'PLACE_DIE', dieId: 'd1', mapId: 'MAP999', slotIndex: 1 },
+    { id: 'usesEx', type: 'PLACE_DIE', dieId: 'd1', mapId: 'MAP999', slotIndex: 0 },
+  ];
+  const ai = makeExSlotAIPlayer(index, moves, { preferExOnOwnTerritory: true });
+  check(
+    'preferExOnOwnTerritory does not apply to an AREA this player does not own',
+    ai.selectMove(state, 'P1', {}).id,
+    'usesAny',
+  );
+}
+
+{
+  // Round 4 is an explicit exception (user: "4Rは例外で") -- no preference applies even on own territory.
+  const { index, state } = makeExSlotState(4, 'P1');
+  const moves = [
+    { id: 'usesAny', type: 'PLACE_DIE', dieId: 'd1', mapId: 'MAP999', slotIndex: 1 },
+    { id: 'usesEx', type: 'PLACE_DIE', dieId: 'd1', mapId: 'MAP999', slotIndex: 0 },
+  ];
+  const ai = makeExSlotAIPlayer(index, moves, { preferExOnOwnTerritory: true });
+  check(
+    'preferExOnOwnTerritory self-disables in round 4',
+    ai.selectMove(state, 'P1', {}).id,
+    'usesAny',
+  );
+}
+
+{
+  // preferExOnOwnTerritory omitted (default false) -- must NOT apply this rule at all.
+  const { index, state } = makeExSlotState(1, 'P1');
+  const moves = [
+    { id: 'usesAny', type: 'PLACE_DIE', dieId: 'd1', mapId: 'MAP999', slotIndex: 1 },
+    { id: 'usesEx', type: 'PLACE_DIE', dieId: 'd1', mapId: 'MAP999', slotIndex: 0 },
+  ];
+  const ai = makeExSlotAIPlayer(index, moves, {});
+  check(
+    'preferExOnOwnTerritory:false (default) ignores EX-slot priority entirely -- first-generated move still wins ties',
+    ai.selectMove(state, 'P1', {}).id,
+    'usesAny',
+  );
+}
+
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);

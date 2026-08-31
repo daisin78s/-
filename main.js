@@ -218,7 +218,9 @@ const aiPlayerLv3 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGenerator, aiEvaluator
 // by any code) -- shares the same hand-tuned aiEvalTable + qstAware as LV3's own aiEvaluatorLv3, but
 // needs its own instance rather than reusing that one so LV3 stays completely unaffected. Plus LV3's own
 // round-4 deep-search override. Other differences from LV3: dieScarcityTieBreak (see
-// src/ai/die-priority.js, ties in 1-ply score prefer spending the more plentiful die value) and its own
+// src/ai/die-priority.js, ties in 1-ply score prefer spending the more plentiful die value),
+// preferExOnOwnTerritory (2026-08-31, see src/ai/slot-priority.js -- ties in 1-ply score prefer an EX
+// slot over any other slot when placing on this player's own AREA, disabled for round 4), and its own
 // MoveGenerator with preferCastleOverSenate (see that class's own doc -- 孤児院 exclusion and the "read
 // to next round" lookahead are still unimplemented spec, not yet reflected here). Its RESOURCE_CHOICE/
 // ONBOARDING (JOB/CON/resource-card picks) also go through smart-onboarding.js instead of
@@ -230,6 +232,7 @@ const aiPlayerLv4 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGeneratorLv4, aiEvalua
   lookaheadExtraTurns: 1,
   roundOverrides: { 4: { lookaheadExtraTurns: 20, beamWidth: 10, maxRolloutMoves: 200 } },
   dieScarcityTieBreak: true,
+  preferExOnOwnTerritory: true,
 });
 // Synergy tables for AI LV4's smart onboarding (see driveOneAiStepInner's RESOURCE_CHOICE/ONBOARDING
 // branches below) -- built once here, same pattern as aiEvalTable above.
@@ -1117,6 +1120,25 @@ let replayHistory = [];
 let replayCursor = -1;
 let lastReplaySnapshotJson = null;
 let replayMode = false;
+
+/** Downloads the current game's full replayHistory as a JSON file (2026-08-31, per user request:
+ * "リプレイを渡す方法はありますか" -- watching a live replay for an odd AI decision, no way existed to
+ * hand that game over for debugging). Each entry is a complete GameState snapshot, one per Move actually
+ * applied (human or AI) -- exactly what renderReplayFrame already steps through, so the saved file can be
+ * read back move-by-move the same way. */
+function downloadReplayAsJson() {
+  const json = JSON.stringify(replayHistory);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  a.href = url;
+  a.download = `dice-wp-replay-${timestamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
 function recordReplaySnapshotIfChanged(state) {
   const json = JSON.stringify(state);
@@ -7265,6 +7287,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('debug-setup-cancel-button').addEventListener('click', cancelDebugSetupFlow);
 
   document.getElementById('card-list-open-button').addEventListener('click', openCardListOverlay);
+  document.getElementById('replay-download-button').addEventListener('click', downloadReplayAsJson);
 
   document.getElementById('round-pass-button').addEventListener('click', handleRoundPassClick);
   document.getElementById('round-pass-confirm-no').addEventListener('click', () => {

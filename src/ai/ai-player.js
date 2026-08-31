@@ -2,6 +2,7 @@
 'use strict';
 
 const { compareDicePriority } = require('./die-priority');
+const { compareExSlotPreference } = require('./slot-priority');
 
 /**
  * AIPlayer: picks ONE move at a time. "Generate legal moves -> evaluate -> pick the best" (confirmed
@@ -74,6 +75,11 @@ class AIPlayer {
    *      all reach the same outcome) are broken by src/ai/die-priority.js's compareDicePriority instead
    *      of plain move-generation order -- see that module's own doc for the exact rule. false/omitted
    *      (LV1/2/3) keeps selectMove byte-for-byte unchanged.
+   *    preferExOnOwnTerritory (2026-08-31, "AI LV4", default false): when true, ties in selectMove's
+   *      1-ply score are ALSO broken (checked before dieScarcityTieBreak) by src/ai/slot-priority.js's
+   *      compareExSlotPreference -- among placements onto an AREA this player already owns, an EX slot is
+   *      preferred over any other slot (see that module's own doc for why). Self-disables for round 4 (the
+   *      user's own "4Rは例外で"). false/omitted (LV1/2/3) keeps selectMove byte-for-byte unchanged.
    */
   constructor(index, moveGenerator, evaluator, simulator, options) {
     this.index = index;
@@ -86,6 +92,7 @@ class AIPlayer {
     this.maxRolloutMoves = opts.maxRolloutMoves || 60;
     this.roundOverrides = opts.roundOverrides || {};
     this.dieScarcityTieBreak = !!opts.dieScarcityTieBreak;
+    this.preferExOnOwnTerritory = !!opts.preferExOnOwnTerritory;
   }
 
   /** Resolves the base lookaheadExtraTurns/beamWidth/maxRolloutMoves against this.roundOverrides[round]
@@ -146,11 +153,15 @@ class AIPlayer {
     }
     if (scored.length === 0) return null;
     // First-max-wins tie-break (no randomness) -- stable sort keeps MoveGenerator's own generation
-    // order for equal scores, same guarantee the original pure-1-ply version made. dieScarcityTieBreak
-    // (AI LV4) replaces that generation-order tie-break with die-priority.js's rule instead; every other
-    // level leaves dieTieBreak null, so the `|| 0` keeps this identical to the original single-line sort.
+    // order for equal scores, same guarantee the original pure-1-ply version made. preferExOnOwnTerritory
+    // (checked first) and dieScarcityTieBreak (AI LV4) replace that generation-order tie-break with
+    // slot-priority.js's/die-priority.js's own rules instead; every other level leaves both null, so the
+    // `|| 0 || 0` keeps this identical to the original single-line sort.
+    const exSlotTieBreak = this.preferExOnOwnTerritory ? compareExSlotPreference(state, this.index, playerId) : null;
     const dieTieBreak = this.dieScarcityTieBreak ? compareDicePriority(state, state.round) : null;
-    scored.sort((a, b) => (b.score - a.score) || (dieTieBreak ? dieTieBreak(a.move, b.move) : 0));
+    scored.sort((a, b) => (b.score - a.score)
+      || (exSlotTieBreak ? exSlotTieBreak(a.move, b.move) : 0)
+      || (dieTieBreak ? dieTieBreak(a.move, b.move) : 0));
     const { lookaheadExtraTurns, beamWidth, maxRolloutMoves } = this.#effectiveOptions(state.round);
     if (lookaheadExtraTurns <= 0) return scored[0].move;
 
