@@ -1143,6 +1143,33 @@ function downloadReplayAsJson(history, labelHint) {
   URL.revokeObjectURL(url);
 }
 
+/** Reads a JSON file selected via #replay-upload-input (see index.html's own doc) and opens it in the
+ * same read-only replay viewer enterReplayMode already drives -- the counterpart to downloadReplayAsJson,
+ * for a replay generated outside the live UI (e.g. a script-driven AI-vs-AI game) to be watched move-by-
+ * move here. Expects exactly what downloadReplayAsJson writes: a JSON array of GameState snapshots. */
+function handleReplayUploadChange(event) {
+  const file = event.target.files[0];
+  event.target.value = ''; // allow re-selecting the same file next time
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    let history;
+    try {
+      history = JSON.parse(reader.result);
+    } catch (e) {
+      window.alert('リプレイファイルの読み込みに失敗しました（JSONとして解析できません）。');
+      return;
+    }
+    if (!Array.isArray(history) || history.length === 0) {
+      window.alert('リプレイファイルの中身が正しくありません（空、またはゲーム状態の配列ではありません）。');
+      return;
+    }
+    enterReplayMode(history);
+  };
+  reader.onerror = () => window.alert('リプレイファイルの読み込みに失敗しました。');
+  reader.readAsText(file);
+}
+
 function recordReplaySnapshotIfChanged(state) {
   const json = JSON.stringify(state);
   if (json === lastReplaySnapshotJson) return;
@@ -7305,6 +7332,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('card-list-open-button').addEventListener('click', openCardListOverlay);
   document.getElementById('replay-download-button').addEventListener('click', downloadReplayAsJson);
+  document.getElementById('replay-upload-button').addEventListener('click', () => document.getElementById('replay-upload-input').click());
+  document.getElementById('replay-upload-input').addEventListener('change', handleReplayUploadChange);
 
   document.getElementById('round-pass-button').addEventListener('click', handleRoundPassClick);
   document.getElementById('round-pass-confirm-no').addEventListener('click', () => {
