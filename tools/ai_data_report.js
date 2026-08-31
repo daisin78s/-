@@ -265,6 +265,17 @@ function main() {
     if (!job.has(jobFaceId)) job.set(jobFaceId, { count: 0, usageSum: 0, scoreSum: 0, qstScoreSum: 0, rankSum: 0 });
     return job.get(jobFaceId);
   }
+  // con["CON001A"] = {count, scoreSum, qstScoreSum, rankSum} -- same TRUE weighted-average idea as job/
+  // jobEntry above, but aggregated across every JOB a CON face was ever paired with instead of across
+  // every CON a JOB was paired with. Feeds CONJOB's own per-CON marginal column N (2026-08-31, per user
+  // report: column N's own "=AVERAGE(11 already-averaged per-JOB cells)" formula has the exact same
+  // unweighted-average-of-averages bias jobEntry's own doc already explains for the JOB-axis rows this
+  // fixed on 2026-08-20 -- this is the CON-axis counterpart of that same fix).
+  const con = new Map();
+  function conEntry(conFaceId) {
+    if (!con.has(conFaceId)) con.set(conFaceId, { count: 0, scoreSum: 0, qstScoreSum: 0, rankSum: 0 });
+    return con.get(conFaceId);
+  }
   // conVpPenalty["CON003A"] = { count, sum } -- see CON_VP_PENALTY_FACES' own doc. count is how many
   // player-games actually held that face (not every game, since not every player draws every CON), sum
   // is the total of conCardOwnVpEffect across those.
@@ -377,6 +388,13 @@ function main() {
       je.scoreSum += detail.finalScore - detail.qstScore;
       je.qstScoreSum += detail.qstScore;
       je.rankSum += h.rank;
+
+      // CON's own TRUE weighted average across every JOB it was paired with (see conEntry's own doc).
+      const ce = conEntry(h.conFaceId);
+      ce.count++;
+      ce.scoreSum += detail.finalScore - detail.qstScore;
+      ce.qstScoreSum += detail.qstScore;
+      ce.rankSum += h.rank;
     }
 
     if ((i + 1) % 10 === 0 || i + 1 === n) {
@@ -440,6 +458,18 @@ function main() {
         avgRank: e.count > 0 ? e.rankSum / e.count : null,
       };
     }
+    // con["CON001A"] = {count, avgScore, avgQstScore, avgRank} -- see conEntry's own doc. Written as
+    // plain values directly into CONJOB's per-CON marginal column N (all three tables), replacing the
+    // sheet's own unweighted =AVERAGE(already-averaged-per-JOB-cells) formula there.
+    const conOut = {};
+    for (const [conFaceId, e] of con) {
+      conOut[conFaceId] = {
+        count: e.count,
+        avgScore: e.count > 0 ? e.scoreSum / e.count : null,
+        avgQstScore: e.count > 0 ? e.qstScoreSum / e.count : null,
+        avgRank: e.count > 0 ? e.rankSum / e.count : null,
+      };
+    }
     // conVpPenalty["CON003A"] = {count, avgVpPenalty} -- see CON_VP_PENALTY_FACES' own doc. Written into
     // CONJOB's own "VPペナルティ平均" column by ai_data_write.py, alongside the existing per-CON marginal
     // average column -- one value per CON face, independent of which JOB it was paired with.
@@ -447,8 +477,8 @@ function main() {
     for (const [faceId, e] of conVpPenalty) {
       conVpPenaltyOut[faceId] = { count: e.count, avgVpPenalty: e.count > 0 ? e.sum / e.count : null };
     }
-    fs.writeFileSync(outputPath, JSON.stringify({ gamesRun, aiLevel, conjob: conjobOut, abcm: abcmOut, job: jobOut, conVpPenalty: conVpPenaltyOut, highScoreThreshold, highScoreRows }, null, 1));
-    console.log(`Wrote aggregate report (${gamesRun} games at ${aiLevel}, ${conjobOut.length} CON x JOB combos, ${abcm.size} ABCM rows with data, ${job.size} JOB rows with data, ${conVpPenalty.size} CON VP-penalty rows with data, ${highScoreRows.length} high-score (>=${highScoreThreshold}) player-rows) to ${outputPath}`);
+    fs.writeFileSync(outputPath, JSON.stringify({ gamesRun, aiLevel, conjob: conjobOut, abcm: abcmOut, job: jobOut, con: conOut, conVpPenalty: conVpPenaltyOut, highScoreThreshold, highScoreRows }, null, 1));
+    console.log(`Wrote aggregate report (${gamesRun} games at ${aiLevel}, ${conjobOut.length} CON x JOB combos, ${abcm.size} ABCM rows with data, ${job.size} JOB rows with data, ${con.size} CON rows with data, ${conVpPenalty.size} CON VP-penalty rows with data, ${highScoreRows.length} high-score (>=${highScoreThreshold}) player-rows) to ${outputPath}`);
     // Also pushes straight into AI.DATA.xlsx itself at every checkpoint (2026-08-04, per user feedback:
     // "10戦ごとにAIDATAに上書きしていってください"), not just this intermediate JSON -- same
     // tools/ai_data_write.py this project already used for the final write, just invoked automatically

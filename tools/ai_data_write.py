@@ -51,7 +51,6 @@ import json
 import re
 import sys
 import openpyxl
-from openpyxl.utils import get_column_letter
 
 JSON_PATH = sys.argv[1] if len(sys.argv) > 1 else 'output/ai_data_report.json'
 XLSX_PATH = sys.argv[2] if len(sys.argv) > 2 else 'AI.DATA.xlsx'
@@ -104,8 +103,9 @@ avg_rows, avg_cols = find_table(avg_header_row)
 # further down the sheet (the user's own pre-existing addition, found the same dynamic way).
 qst_avg_rows, qst_avg_cols = find_table(find_header_row('QST平均得点'))
 # 平均順位 (2026-08-20, per user request: "これを参考に平均順位を書き出すようにしてほしい") -- a fourth
-# table, same CON row / JOB column layout as the three above (no extra K/N-style columns, unlike 平均得点's
-# own VPペナルティ平均 -- confirmed by inspection), also the user's own pre-existing addition.
+# table, same CON row / JOB column layout as the three above (no extra 独自 column like 平均得点's own
+# VPペナルティ平均, but it does share the same headerless per-CON marginal column N every table here has
+# -- see this file's own N-column comment below), also the user's own pre-existing addition.
 rank_avg_rows, rank_avg_cols = find_table(find_header_row('平均順位'))
 
 def find_col_in_row(row, label):
@@ -149,34 +149,51 @@ for entry in report['conjob']:
 
 print(f'CONJOB: wrote {written} combinations, skipped {len(skipped)}: {skipped}')
 
-# K: per-CON marginal average across the 8 JOB columns (2026-08-07, per user request: "JOBCONシートの
-# J、K列も出力できるようにしてください"; J column abolished and K's formula corrected 2026-08-10, per
-# user report: "試行回数が0のものがあると平均値が著しくずれてしまいます" -- the original K=J/8 divided
-# by a FIXED 8 regardless of how many of those 8 JOB columns actually had any games this run. A blank
-# (0-trial) 平均得点 cell contributes nothing to J's SUM, but still counted toward the /8 divisor, so
-# every 0-trial JOB column dragged K down even though it has no data at all. Excel's own AVERAGE()
-# already ignores blank cells when computing its average (only counts actual numeric cells), which is
-# exactly "the same marginal average, but over however many JOB columns actually have data" -- so K now
-# calls AVERAGE(...) directly on the B:I row instead of dividing a separately-computed SUM, and J (which
-# only ever existed to feed that division) is no longer written. Still a live Excel formula, not a
-# pre-computed Python value, so it keeps recalculating whenever this script rewrites the underlying B:I
-# cells on a later run. Written for every CON row unconditionally (not just ones report['conjob'] had
-# data for this run) and for the QST平均得点 table's own rows too (2026-08-09) -- same per-CON-row
-# marginal, just at that table's own row positions.
+# N (per-CON marginal average across the JOB columns; historically called "K" in this comment from when
+# it lived at column K, before J was abolished -- see below): TRUE per-CON weighted average (2026-08-31,
+# per user report: "AIDATAのCONJOBのN列 今は簡易的な平均を入れているが これを実際の平均が出るように直し
+# てほしい"), computed in ai_data_report.js's conEntry (see its own doc) the exact same way the JOB-axis
+# rows 31/51/69 were already fixed on 2026-08-20 -- replaces the sheet's own unweighted
+# "=AVERAGE(11 already-averaged per-JOB cells)" formula, which silently over-weights a CON+JOB combo with
+# very few trials exactly as much as one with many. Written as a plain Python value (not a live formula
+# any more, since the correct computation needs the underlying per-game sums this script doesn't have --
+# only ai_data_report.js does), for all three tables (avg_rows/qst_avg_rows/rank_avg_rows) -- the
+# 平均順位 table's own N column had the same formula (pre-existing in the user's own sheet, never
+# previously touched by this script) with the same bias, so it's fixed here too rather than left as-is.
+# J (2026-08-10, per user report: "試行回数が0のものがあると平均値が著しくずれてしまいます") is not
+# written any more -- it only ever existed to feed a divide-by-a-fixed-8 computation this file abolished
+# then, and nothing reads it today.
 j_col = last_job_col + 1
-k_col = last_job_col + 2
-first_col_letter = get_column_letter(min(avg_cols.values()))
-last_col_letter = get_column_letter(max(avg_cols.values()))
-for row_map in (avg_rows, qst_avg_rows):
+n_col = last_job_col + 2
+# Blanked for every CON row unconditionally, not just ones report['con'] has data for this run (same
+# "never let a stale number from an earlier run linger" policy this file already applies to the JOB001..
+# JOBnnn cells above) -- a CON with zero trials this run would otherwise keep whatever N value an
+# earlier, possibly differently-configured run left behind. Note: ws.cell(row, column, value=None) is a
+# NO-OP in openpyxl (its cell() only assigns when value is not None) -- must set .value on the returned
+# Cell directly to actually clear it (found while verifying this fix: the pre-existing J-column "blank"
+# below had the same silent-no-op bug, harmless there since nothing reads J any more, but it would have
+# defeated this N-column fix's whole point).
+for row_map in (avg_rows, qst_avg_rows, rank_avg_rows):
     for con_face_id, r in row_map.items():
-        ws.cell(row=r, column=j_col, value=None)  # abolished -- see this block's own comment
-        # IFERROR-wrapped (found while verifying this change): AVERAGE() of an all-blank row (a CON with
-        # zero games across all 8 JOBs this run) is #DIV/0!, not 0 -- surfacing a spreadsheet full of
-        # error cells for every untested CON would be its own kind of misleading "wrong average" this
-        # fix is meant to get away from, so those rows blank out instead.
-        ws.cell(row=r, column=k_col, value=f'=IFERROR(AVERAGE({first_col_letter}{r}:{last_col_letter}{r}),"")')
+        ws.cell(row=r, column=j_col).value = None  # abolished -- see this block's own comment
+        ws.cell(row=r, column=n_col).value = None
 
-print(f'CONJOB K: wrote per-CON marginal average formulas for {len(avg_rows)} + {len(qst_avg_rows)} rows (J column abolished)')
+con_avg_written = 0
+con_avg_skipped = []
+for con_face_id, entry in report.get('con', {}).items():
+    con_name = NAME_BY_CON_FACE.get(con_face_id, con_face_id)
+    if con_name not in avg_rows:
+        con_avg_skipped.append(con_face_id)
+        continue
+    if entry.get('avgScore') is not None:
+        ws.cell(row=avg_rows[con_name], column=n_col, value=round(entry['avgScore'], 2))
+    if entry.get('avgQstScore') is not None:
+        ws.cell(row=qst_avg_rows[con_name], column=n_col, value=round(entry['avgQstScore'], 2))
+    if entry.get('avgRank') is not None:
+        ws.cell(row=rank_avg_rows[con_name], column=n_col, value=round(entry['avgRank'], 2))
+    con_avg_written += 1
+
+print(f'CONJOB N (CONの真の加重平均: 平均得点/QST平均得点/平均順位): wrote {con_avg_written} CON faces, skipped {len(con_avg_skipped)}: {con_avg_skipped}')
 
 # N (平均得点 table only, 2026-08-15, per user request: "VPペナルティがあるものは　その平均も出るように
 # してください") -- one value per CON face, independent of JOB, so it doesn't fit the (CON,JOB) grid
