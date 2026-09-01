@@ -24,7 +24,7 @@
 'use strict';
 
 const { getCardRow } = require('./data-loader');
-const { ownedCardRows, collectVpModifiers, activePassiveCommands, evalCountNode, evalMetric } = require('./executor');
+const { ownedCardRows, collectVpModifiers, collectFinalOnlyVpModifiers, activePassiveCommands, evalCountNode, evalMetric } = require('./executor');
 const qst = require('./qst');
 
 /** CON face ids whose PASSIVE-driven VP effect isn't attributable to a single card via the generic
@@ -148,8 +148,13 @@ function computeFinalScore(state, index, playerId) {
   }, 0);
   const resourceVp = player.resources.VP || 0;
   const modifierVp = collectVpModifiers(state, index, playerId);
+  // 2026-09-01, M401/晩餐会's own "ゲーム終了時持っている2Kにつき1VP(MAX10VP)" -- see
+  // executor.collectFinalOnlyVpModifiers's own doc for why this is 0 for every state until the game
+  // has actually ended (state.phase==='GAME_END'), so this function's own "safe to call every render"
+  // contract (main.js's live running-score display) is unaffected before then.
+  const finalOnlyModifierVp = collectFinalOnlyVpModifiers(state, index, playerId);
   const conAdjustment = conCardVpAdjustment(state, index, playerId);
-  return cardVp + resourceVp + modifierVp + conAdjustment;
+  return cardVp + resourceVp + modifierVp + finalOnlyModifierVp + conAdjustment;
 }
 
 /**

@@ -552,6 +552,14 @@ function evalMetric(state, index, playerId, metric) {
       const player = getPlayer(state, playerId);
       return metric.args.reduce((sum, resource) => sum + (player.resources[resource] || 0), 0);
     }
+    // PER(resource,n) -- floor(held resource / n), e.g. PER(K,1) for "every 1K held" (2026-09-01, added
+    // for M401/晩餐会's VP_MODIFIER_FINAL(PER(K,1),10) -- see that command's own doc). Generalizes past
+    // RESOURCE's own plain 1:1 sum since nothing before this needed integer division.
+    case 'PER': {
+      const [resource, n] = metric.args;
+      const player = getPlayer(state, playerId);
+      return Math.floor((player.resources[resource] || 0) / n);
+    }
     // "ABC建築数+追加色ダイス" (Q001B GOAL, 2026-08-11): CARD_COUNT(A,B,C) plus the player's *additional*
     // color dice -- how many they've gained BEYOND their starting hand, i.e. colorDiceCount minus
     // INITIAL_COLOR_DICE, floored at 0. Range 0..2 (starting 3, colorDiceCap 5).
@@ -640,6 +648,29 @@ function collectVpModifiers(state, index, playerId) {
   const perUnitPenaltySum = getPassiveRules(state, index, playerId, 'VP_PENALTY_PER')
     .reduce((sum, r) => sum - evalMetric(state, index, playerId, r.metric), 0);
   return modifierSum + shortfallSum + perUnitPenaltySum;
+}
+
+/** Sum of every active VP_MODIFIER_FINAL, but ONLY once state.phase is actually 'GAME_END' -- 0
+ * otherwise, unconditionally (2026-09-01, M401/晩餐会's own "ゲーム終了時持っている2Kにつき1VP
+ * (MAX10VP)", per user spec). Deliberately a SEPARATE function from collectVpModifiers, not an extra
+ * phase check folded into it: collectVpModifiers is read live by src/ai/evaluator.js's Evaluator.score
+ * on every intermediate 1-ply/rollout state the AI considers while deciding a move, not just the real
+ * end -- an ordinary VP_MODIFIER based on a resource the player can freely top up (e.g. held K) would
+ * make the AI's own move-by-move score go up simply by hoarding/converting into that resource at ANY
+ * point in the game, well before it's actually locked in, a pure artifact of the estimator rather than
+ * real value. Gating on state.phase==='GAME_END' instead means every intermediate state this player's
+ * own search ever scores contributes exactly 0 here (no hoarding incentive at all in rounds 1-3, or
+ * mid-round-4) -- EXCEPT the one state that's genuinely real: the actual final position (round 4's
+ * turn-flow.endRound sets phase to 'GAME_END' itself), which a round-4 rollout's own multi-turn
+ * lookahead (see AIPlayer's own doc) naturally reaches once this player's last die is spent, so the AI
+ * still correctly values holding K into the true endgame without ever being tempted to fake it early.
+ * scoring.computeFinalScore calls this too, for the same value, once the game has actually ended. */
+function collectFinalOnlyVpModifiers(state, index, playerId) {
+  if (state.phase !== 'GAME_END') return 0;
+  return getPassiveRules(state, index, playerId, 'VP_MODIFIER_FINAL').reduce((sum, r) => {
+    const value = evalCountNode(state, index, playerId, r.count);
+    return sum + (r.cap !== null ? Math.min(value, r.cap) : value);
+  }, 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -1618,6 +1649,7 @@ module.exports = {
   getPassiveRules,
   activePassiveCommands,
   collectVpModifiers,
+  collectFinalOnlyVpModifiers,
   activeResourceLimits,
   canEndTurn,
   applyTurnEnd,

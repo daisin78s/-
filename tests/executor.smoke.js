@@ -247,6 +247,32 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 }
 
 // ---------------------------------------------------------------------------
+// 3c. M401/晩餐会's own VP_MODIFIER_FINAL(PER(K,1),10) (2026-09-01, per user spec: "ゲーム終了時持って
+// いる1Kにつき1VP(MAX10VP)") -- collectFinalOnlyVpModifiers, a SEPARATE aggregator from
+// collectVpModifiers precisely because this one must return 0 for every state until state.phase is
+// actually 'GAME_END' (see its own doc in executor.js for why: collectVpModifiers is read live by the
+// AI's 1-ply evaluator on every intermediate state it considers, which would otherwise reward hoarding
+// toward a bonus that hasn't actually happened yet).
+// ---------------------------------------------------------------------------
+{
+  const state = freshState();
+  giveCard(state, 'M401', 'P1');
+  const player = getPlayerRef(state, 'P1');
+  player.resources.K = 7;
+  state.phase = 'ROUND';
+  check('Mid-game (phase=ROUND): contributes 0 regardless of K held -- no hoarding incentive', executor.collectFinalOnlyVpModifiers(state, index, 'P1'), 0);
+
+  state.phase = 'GAME_END';
+  check('At the real GAME_END: 7K -> 7VP', executor.collectFinalOnlyVpModifiers(state, index, 'P1'), 7);
+
+  player.resources.K = 30;
+  check('Capped at 10VP even though PER(K,1) alone would give 30', executor.collectFinalOnlyVpModifiers(state, index, 'P1'), 10);
+
+  player.resources.K = 0;
+  check('0K -> 0VP', executor.collectFinalOnlyVpModifiers(state, index, 'P1'), 0);
+}
+
+// ---------------------------------------------------------------------------
 // 4. JOB005: TAP=ON(GET(K),CHANGE(K,A)), TURNEND=UNTAP() (2026-08-25 data edit: was CHANGE(K,Z))
 // ---------------------------------------------------------------------------
 {

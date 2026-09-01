@@ -50,6 +50,25 @@ function giveCard(state, faceCardId, ownerId) {
 }
 
 // ---------------------------------------------------------------------------
+// M401/晩餐会's own VP_MODIFIER_FINAL(PER(K,1),10) (2026-09-01) -- computeFinalScore must include it
+// once the game has actually ended, and NOT before (see executor.collectFinalOnlyVpModifiers's own doc
+// for why this is gated on state.phase==='GAME_END' rather than being a plain VP_MODIFIER).
+// ---------------------------------------------------------------------------
+{
+  const state = createEmptyGameState('scoring-smoke-M401');
+  state.players.push(createPlayer('P1', 'Alice'));
+  state.turnOrder = ['P1'];
+  giveCard(state, 'M401', 'P1');
+  state.players[0].resources.K = 9;
+
+  state.phase = 'ROUND';
+  check('Mid-game: M401\'s own VP_MODIFIER_FINAL contributes nothing yet', scoring.computeFinalScore(state, index, 'P1'), 0);
+
+  state.phase = 'GAME_END';
+  check('At the real GAME_END: 9K -> 9VP added', scoring.computeFinalScore(state, index, 'P1'), 9);
+}
+
+// ---------------------------------------------------------------------------
 // rankPlayers: highest score wins; ties broken by turnOrder position
 // ---------------------------------------------------------------------------
 {

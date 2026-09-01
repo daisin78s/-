@@ -560,5 +560,27 @@ index.raw.QST = [
   check('monumentIncentiveAware with no qualifying cards owned behaves exactly like the plain Evaluator', evaluatorMonumentIncentiveAware.score(state, 'P1'), evaluator.score(state, 'P1'));
 }
 
+// ---------------------------------------------------------------------------
+// M401/晩餐会's own VP_MODIFIER_FINAL(PER(K,1),10) (2026-09-01, per user spec: "ゲーム終了時にVPが
+// プラスされることはAIが把握できるようにしてください" while also confirming a mid-game hoarding
+// incentive should NOT exist) -- the Evaluator must score this as exactly 0 for any non-GAME_END state
+// (no reward for holding K early) but the real, round-4-VP-weighted value once state.phase is actually
+// 'GAME_END' (reachable via AIPlayer's own round-4 rollout once this player's last die is spent).
+// ---------------------------------------------------------------------------
+{
+  const state = freshState(4);
+  giveCard(state, 'M401', 'P1');
+  state.players[0].resources.K = 9;
+
+  state.phase = 'ROUND';
+  const midGameScore = evaluator.score(state, 'P1');
+
+  state.phase = 'GAME_END';
+  const atEndScore = evaluator.score(state, 'P1');
+
+  const bonusVp = 9; // well under the 10VP cap
+  check('Reaching the real GAME_END adds exactly 9K -> 9VP, weighted by round 4\'s own v(VP)=1000', atEndScore - midGameScore, bonusVp * 1000);
+}
+
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);

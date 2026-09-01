@@ -207,6 +207,16 @@ function lowerCall(node) {
       // as ADD's item counts -- see lowerCount's own doc. A literal like VP_MODIFIER(-2) still lowers
       // to {kind:'literal', value:-2} exactly as before.
       return { type: 'VP_MODIFIER', count: lowerCount(node.args[0]) };
+    // VP_MODIFIER_FINAL(count, cap?) -- same count-expression grammar as VP_MODIFIER, plus an optional
+    // second numeric cap, but ONLY ever contributes at the real GAME_END (see
+    // executor.collectFinalOnlyVpModifiers's own doc for why this is a SEPARATE command from
+    // VP_MODIFIER rather than an extra arg on it: VP_MODIFIER is read live by the AI's own 1-ply
+    // evaluator at every intermediate decision, which would otherwise incentivize hoarding toward a
+    // bonus that hasn't actually happened yet -- 2026-09-01, M401/晩餐会's own "ゲーム終了時持っている
+    // 1Kにつき1VP(MAX10VP)", per user spec: "ゲーム終了時にVPがプラスされることはAIが把握できるように
+    // してください" while also confirming the mid-game hoarding risk should NOT be encouraged).
+    case 'VP_MODIFIER_FINAL':
+      return { type: 'VP_MODIFIER_FINAL', count: lowerCount(node.args[0]), cap: node.args[1] !== undefined ? numberValue(node.args[1]) : null };
     // VP_PENALTY_IF_BELOW(metric,threshold) -- the general "○○が必要" shortfall rule (2026-08-15, per
     // user spec: "ゲーム終了時○○が必要　足りない１個につき-1VP"): -1VP per unit metric falls short of
     // threshold, 0 once at/above it (see executor.collectVpModifiers). metric reuses the same bare-

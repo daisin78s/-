@@ -194,6 +194,12 @@ class Evaluator {
     }
 
     total += executor.collectVpModifiers(state, this.index, playerId) * v('VP');
+    // 2026-09-01, M401/晩餐会's own "ゲーム終了時持っている2Kにつき1VP(MAX10VP)" -- see
+    // executor.collectFinalOnlyVpModifiers's own doc for why this is a separate call from
+    // collectVpModifiers just above: it's 0 for every state until state.phase is actually 'GAME_END',
+    // so it never rewards hoarding toward this bonus mid-game, but a round-4 rollout's own lookahead
+    // (see this class's own doc) still correctly credits it once it actually reaches the true end.
+    total += executor.collectFinalOnlyVpModifiers(state, this.index, playerId) * v('VP');
 
     // Turn-end lockout risk (2026-08-10, per user report: a greedy AI holding CON005B
     // (TURNEND=RESOURCE_TOTAL_LIMIT((A,B,C),7)) would convert a big pile of K into A/B/C -- A/B/C's
