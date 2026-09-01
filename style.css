@@ -2183,6 +2183,17 @@ h1, h2, h3 { margin: 0; }
   width: 128px;
 }
 
+/* M401/晩餐会 (2026-09-01, per user spec: "横幅はほかのモニュメントと同じ幅にして") -- gaining its own
+   PASSIVE effect (VP_MODIFIER_FINAL, see buildBanquetFinalVpModifierIcon) makes fillCardFace mark it
+   shop-card--tall the same as any other card with a non-empty effect row (see that function's own
+   .tall doc), which would otherwise widen it via .owned-card-cell--tall above -- but its own
+   .action-suffix--small text is narrow enough to fit the normal monument width, so this overrides back
+   down to it specifically, keeping every monument card the same width regardless of which ones happen
+   to carry an effect. */
+.owned-card-cell--tall .shop-card--monument {
+  width: 108px;
+}
+
 /* Confirmed 2026-07-29: TAP turns a card sideways; UNTAP returns it to normal. */
 .shop-card--tapped {
   transform: rotate(90deg);

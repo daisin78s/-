@@ -2685,17 +2685,16 @@ function buildMaxEmblemVpModifierIcon(actionText) {
 }
 
 /** VP_MODIFIER_FINAL(PER(K,1),10): M401/晩餐会's own PASSIVE (2026-09-01, per user spec, verbatim line
- * breaks: "ゲーム終了時持って/いる1Kにつき1VP/（MAX10VP)" -- three lines at a smaller size than the base
- * .action-suffix, since this is full flavor-text rather than a short label -- see .action-suffix--small
- * in style.css). Exact-match on this one card's own current parameters, same convention as
- * buildMaxEmblemVpModifierIcon above (a bespoke icon for one specific PASSIVE string, not a generic
- * PER(...)/cap renderer) -- would need updating if M401's own K-ratio/cap numbers ever change again. */
+ * breaks: "1Kにつき1VP/（MAX10）" -- two lines at a smaller size than the base .action-suffix, since this
+ * is flavor-text rather than a short label -- see .action-suffix--small in style.css). Exact-match on
+ * this one card's own current parameters, same convention as buildMaxEmblemVpModifierIcon above (a
+ * bespoke icon for one specific PASSIVE string, not a generic PER(...)/cap renderer) -- would need
+ * updating if M401's own K-ratio/cap numbers ever change again. */
 function buildBanquetFinalVpModifierIcon(actionText) {
   if (actionText !== 'VP_MODIFIER_FINAL(PER(K,1),10)') return null;
   const stack = el('div', 'action-icons-stack');
-  stack.appendChild(actionRow([el('span', 'action-suffix action-suffix--small', 'ゲーム終了時持って')]));
-  stack.appendChild(actionRow([el('span', 'action-suffix action-suffix--small', 'いる1Kにつき1VP')]));
-  stack.appendChild(actionRow([el('span', 'action-suffix action-suffix--small', '（MAX10VP)')]));
+  stack.appendChild(actionRow([el('span', 'action-suffix action-suffix--small', '1Kにつき1VP')]));
+  stack.appendChild(actionRow([el('span', 'action-suffix action-suffix--small', '（MAX10）')]));
   return stack;
 }
 
