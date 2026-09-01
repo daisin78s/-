@@ -616,10 +616,10 @@ console.log(`\n${passCount} passed, ${failCount} failed`);
 {
   const state = freshState();
   const target = giveCard(state, 'B004A', 'P1');
-  const row = getCardRow(index, 'JOB007'); // TAP=ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+1);BLOCK_BUILD(...) (2026-08-25: was +2)
+  const row = getCardRow(index, 'JOB007'); // TAP=ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+3);BLOCK_BUILD(...) (2026-08-25: was +2/+1, 2026-09-01: +3)
   const result = executor.runProgram(state, index, { playerId: 'P1', chosenCardPhysicalId: target }, row.TAP);
   check('MONUMENT_CHANGE_DIE_VALUE targeting a card succeeds with no chosenValue/chosenDelta needed (delta is fixed)', result.success, true);
-  check('...buildValueOverride is 1+1=2', state.cards[target].buildValueOverride, 2);
+  check('...buildValueOverride is 1+3=4', state.cards[target].buildValueOverride, 4);
 }
 {
   // Ineligible targets: not owned by this player, or owned but not a "fixed BUILD value" card at all
@@ -1006,9 +1006,9 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 {
   // 2026-08-20: JOB004/策士's own TAP dropped its BLOCK_BUILD(M,THIS_TURN) clause (per user edit), so
   // this real-data vehicle moved to JOB007/宮廷人, whose TAP still carries BLOCK_BUILD (now A/B/C, not M).
-  // The middle line is now MONUMENT_CHANGE_DIE_VALUE(SELF+1) (2026-08-24 data edit, replacing
-  // MONUMENT_DICE_DISCOUNT(2,THIS_TURN); lowered from +2 to +1 on 2026-08-25), which needs a chosenDieId
-  // same as CHANGE_DIE_VALUE.
+  // The middle line is now MONUMENT_CHANGE_DIE_VALUE(SELF+n) (2026-08-24 data edit, replacing
+  // MONUMENT_DICE_DISCOUNT(2,THIS_TURN); +2 -> +1 on 2026-08-25 -> +3 on 2026-09-01), which needs a
+  // chosenDieId same as CHANGE_DIE_VALUE.
   const state = freshState();
   const row = getCardRow(index, 'JOB007');
   const player = getPlayerRef(state, 'P1');
@@ -1016,8 +1016,8 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   die.value = 4;
   player.dice.push(die);
   const result = executor.runProgram(state, index, { playerId: 'P1', chosenDieId: die.id }, row.TAP);
-  check('JOB007\'s TAP (ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+1);BLOCK_BUILD(A/B/C,THIS_TURN)) succeeds and grants BZ', { success: result.success, BZ: player.resources.BZ }, { success: true, BZ: 1 });
-  check('...and changes the chosen die by +1 (4 -> 5)', die.value, 5);
+  check('JOB007\'s TAP (ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+3);BLOCK_BUILD(A/B/C,THIS_TURN)) succeeds and grants BZ', { success: result.success, BZ: player.resources.BZ }, { success: true, BZ: 1 });
+  check('...and changes the chosen die by +3 (4 -> 7)', die.value, 7);
   check('...and blocks A,B,C for this player this turn', player.blockedBuildCategoriesThisTurn, ['A', 'B', 'C']);
 }
 

@@ -1012,7 +1012,7 @@ function giveDie(state, playerId, value) {
   check('...1 of the 2 Z was spent covering the missing A, 1 left over', p1.resources.Z, 1);
 }
 {
-  // JOB007.TAP=ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+1);BLOCK_BUILD(A,THIS_TURN);BLOCK_BUILD(B,
+  // JOB007.TAP=ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+3);BLOCK_BUILD(A,THIS_TURN);BLOCK_BUILD(B,
   // THIS_TURN);BLOCK_BUILD(C,THIS_TURN) -- 2026-08-07, replacing the old ON(BUILD(U,M),ADD(BZ)) reaction
   // (per user feedback: reacting *after* an UPGRADE/Monument build meant the granted BZ arrived too late
   // to help pay for the very build that triggered it, and evaporated unspent at TURNEND since a turn
@@ -1022,10 +1022,10 @@ function giveDie(state, playerId, value) {
   // builds this turn keeps the discount scoped to U/M as originally intended (and, being a bare TAP
   // rather than an ON(...) reaction, it has no auto/manual concept at all -- see main.js's
   // reactiveTapKind/bareTapKind split -- so this also settles the user's request to make it manual-only).
-  // The middle MONUMENT_CHANGE_DIE_VALUE(SELF+1) line (2026-08-24 data edit, replacing the earlier
-  // MONUMENT_DICE_DISCOUNT(2,THIS_TURN); lowered from +2 to +1 on 2026-08-25) reuses CHANGE_DIE_VALUE's
-  // own mechanic with a fixed delta -- see command-builder.lowerMonumentChangeDieValue/executor.
-  // runMonumentChangeDieValue's own docs.
+  // The middle MONUMENT_CHANGE_DIE_VALUE(SELF+n) line (2026-08-24 data edit, replacing the earlier
+  // MONUMENT_DICE_DISCOUNT(2,THIS_TURN); +2 -> +1 on 2026-08-25 -> +3 on 2026-09-01) reuses
+  // CHANGE_DIE_VALUE's own mechanic with a fixed delta -- see command-builder.lowerMonumentChangeDieValue/
+  // executor.runMonumentChangeDieValue's own docs.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   const jobInst = createCardInstance('JOB007');
@@ -1037,10 +1037,10 @@ function giveDie(state, playerId, value) {
   const result = board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: die.id }, jobInst.physicalId);
   check('JOB007.TAP=ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(...);BLOCK_BUILD(...) succeeds as a direct (non-reactive) TAP', result, { success: true });
   check('...gained 1 BZ for free', p1.resources.BZ, 1);
-  check('...the chosen die is now +1 (5 -> 6, no wrap)', die.value, 6);
+  check('...the chosen die is now +3 (5 -> 8, no wrap)', die.value, 8);
   check('...the card is now tapped', state.cards[jobInst.physicalId].tapped, true);
   check('...A/B/C builds are blocked this turn', p1.blockedBuildCategoriesThisTurn.slice().sort(), ['A', 'B', 'C']);
-  check('...A/B/C builds are excluded from candidates this turn', board.getBuildCandidates(state, index, 'P1', ['A', 'B', 'C'], 6).length, 0);
+  check('...A/B/C builds are excluded from candidates this turn', board.getBuildCandidates(state, index, 'P1', ['A', 'B', 'C'], 8).length, 0);
 
   // The BZ gained this way is usable for an UPGRADE attempted right afterward, in the same turn.
   const upgradeInst = createCardInstance('A001A'); // A001B exists
@@ -2139,18 +2139,19 @@ function giveJob009(state, playerId) {
 }
 {
   // Raw resource does NOT help, but auto-converting to K does (2026-08-20, per user's own worked
-  // example): 歓楽街(AREA006A)'s CHANGE(2K,2Z) needs K specifically; player holds only 1K, die value 3
-  // grants B (not a valid substitute for K), so the bonus auto-converts that B to K via B_K.
+  // example): 歓楽街(AREA006A)'s CHANGE(3K,3Z) (2026-09-01 data edit: was CHANGE(2K,2Z)) needs K
+  // specifically; player holds only 2K, die value 3 grants B (not a valid substitute for K), so the
+  // bonus auto-converts that B to K via B_K.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   giveJob009(state, 'P1');
-  p1.resources.K = 1;
+  p1.resources.K = 2;
   const d1 = giveDie(state, 'P1', 3); // AREA006A SLOT2=3 -- die value 3 grants B
   const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP006', 1);
   check('開拓者+歓楽街: raw B doesn\'t help (K needed), auto-converts to K', result.success, true);
   check('...B nets to 0 (granted then converted away)', p1.resources.B || 0, 0);
-  check('...K nets to 0 (1 start + 1 from B_K conversion - 2 spent by CHANGE)', p1.resources.K || 0, 0);
-  check('...Z increases by 2 (CHANGE(2K,2Z)\'s own gain)', p1.resources.Z || 0, 2);
+  check('...K nets to 0 (2 start + 1 from B_K conversion - 3 spent by CHANGE)', p1.resources.K || 0, 0);
+  check('...Z increases by 3 (CHANGE(3K,3Z)\'s own gain)', p1.resources.Z || 0, 3);
 }
 {
   // Neither raw nor converted is actually needed (AREA001A/ADD(3K) is unconditional) -- raw is kept, no
