@@ -1174,6 +1174,16 @@ h1, h2, h3 { margin: 0; }
   color: var(--text);
 }
 
+/* M401/晩餐会's own 3-line PASSIVE flavor text (2026-09-01, per user spec: "ちょうど3行になる時の大きさ
+   で") -- smaller than the base .action-suffix (10px) since this is a full sentence split across 3
+   lines, not a short label; an explicit literal size (not scaled off any parent context) so it stays
+   exactly 3 lines regardless of which card-display context (shop/map-tile/card-list) renders it. */
+.action-suffix--small {
+  font-size: 7px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
 /* Plain-text card caption. Originally added for CON003A/CON005B's own one-off reminder notes; now also
    the whole CON-card effect display (2026-08-15, per user request: "CONのアイコン表示をCONシートのアイ
    コン欄を参考にして表示してほしい...改行もそのままかいて" -- see main.js's fillCardFace), shown verbatim
