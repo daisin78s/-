@@ -220,10 +220,10 @@ const aiPlayerLv3 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGenerator, aiEvaluator
 // round-4 deep-search override. Other differences from LV3: dieScarcityTieBreak (see
 // src/ai/die-priority.js, ties in 1-ply score prefer spending the more plentiful die value),
 // preferExOnOwnTerritory (2026-08-31, see src/ai/slot-priority.js -- ties in 1-ply score prefer an EX
-// slot over any other slot when placing on this player's own AREA, disabled for round 4), and its own
-// MoveGenerator with preferCastleOverSenate (see that class's own doc -- 孤児院 exclusion and the "read
-// to next round" lookahead are still unimplemented spec, not yet reflected here). Its RESOURCE_CHOICE/
-// ONBOARDING (JOB/CON/resource-card picks) also go through smart-onboarding.js instead of
+// slot over any other slot when placing on this player's own AREA, disabled for round 4), and
+// preferCastleOverSenate (see MoveGenerator's own doc -- 王宮/元老院 are functionally identical, so this
+// drops one in favor of the other rather than offering both as separate candidates every turn). Its
+// RESOURCE_CHOICE/ONBOARDING (JOB/CON/resource-card picks) also go through smart-onboarding.js instead of
 // driveOneAiStepInner's uniform-random default -- see that function's own branches below; LV1/2/3 are
 // unaffected either way since only 'AI_LV4' triggers those branches.
 const aiEvaluatorLv4 = new evaluatorMod.Evaluator(INDEX, aiEvalTable, { qstAware: true, conBuildAware: true, monumentIncentiveAware: true });
@@ -855,10 +855,14 @@ function renderJob007TapPromptModal() {
 // no way to actually finish (2026-07-31 fix -- free actions exist and are usable here, but nothing
 // previously re-attempted the turn-end they're meant to unblock).
 let pendingTurnEndPlayerId = null;
-// { playerId, warnings } | null -- set by attemptAdvanceTurn when ending playerId's turn right now
-// would trigger a RESOURCE_LIMIT/FORCE_CONVERT WARNING (see turnEndWarnings/
-// renderTurnEndWarningModal). Cancelable ("いいえ" just leaves the turn as-is, nothing has happened
-// yet at this point -- ending the turn is exactly what's being confirmed).
+// { playerId, warnings, feeConversionPlan } | null -- set by attemptAdvanceTurn when ending playerId's
+// turn right now would trigger a RESOURCE_LIMIT/FORCE_CONVERT WARNING (see turnEndWarnings/
+// renderTurnEndWarningModal) and/or would need an automatic ABC->Z usage-fee conversion first
+// (feeConversionPlan: board.planFeeConversion's own plan shape, or null -- see
+// feeConversionPlanForTurnEnd/2026-08-31, per user spec: "ターンエンドボタンを押したら『A→Kを2回発動
+// します』はい/いいえ...ここで出てくる候補はAIと同じ順番"). Cancelable ("いいえ" just leaves the turn
+// as-is, nothing has happened yet at this point -- ending the turn (and any needed conversion) is
+// exactly what's being confirmed).
 let pendingTurnEndWarning = null;
 // { playerId } | null -- set by the "ラウンドパス" header button, confirmed/canceled via
 // renderRoundPassConfirmModal (2026-08-02, per user feedback). Nothing has happened yet at this point
@@ -4520,15 +4524,32 @@ function turnEndWarnings(state, playerId) {
   return warnings;
 }
 
+/** Whether ending playerId's turn right now needs an automatic usage-fee ABC->Z conversion first, and if
+ * so, exactly which one (2026-08-31, per user spec: same board.planFeeConversion order the AI's own
+ * forcedFeeConversionMove uses -- "ここで出てくる候補はAIと同じ順番"). null when there's no pending fee,
+ * or current K already covers it (nothing to convert). A non-empty plan here means canEndTurn would
+ * currently block TURNEND on USAGE_FEE (see its own doc) -- attemptAdvanceTurn below surfaces this as a
+ * confirmation instead of just failing with a message telling the player to go do it manually. */
+function feeConversionPlanForTurnEnd(state, playerId) {
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player.pendingFee) return null;
+  const shortfall = player.pendingFee.amount - (player.resources.K || 0);
+  if (shortfall <= 0) return null;
+  return boardMod.planFeeConversion(player.resources, shortfall);
+}
+
 /** Entry point for ending a turn (2026-08-01) -- placeSelectedDie/renderBuildChoiceModal/the free-
  * action retry all call this instead of advanceTurnIfPossible directly now. If ending right now would
- * trigger a RESOURCE_LIMIT/FORCE_CONVERT WARNING, pauses for confirmation (see
- * renderTurnEndWarningModal) instead of ending immediately -- "いいえ" leaves the turn as-is (matches
- * the data's own "TURNENDを取り消す" NOTE), "はい" runs the real advanceTurnIfPossible. */
+ * trigger a RESOURCE_LIMIT/FORCE_CONVERT WARNING, and/or would need an automatic usage-fee conversion
+ * (feeConversionPlanForTurnEnd, 2026-08-31), pauses for confirmation (see renderTurnEndWarningModal)
+ * instead of ending immediately -- "いいえ" leaves the turn as-is (matches the data's own "TURNENDを取り
+ * 消す" NOTE for the warning half), "はい" applies the conversion plan (if any) THEN runs the real
+ * advanceTurnIfPossible. */
 function attemptAdvanceTurn(state, playerId) {
   const warnings = turnEndWarnings(state, playerId);
-  if (warnings.length > 0) {
-    pendingTurnEndWarning = { playerId, warnings };
+  const feeConversionPlan = feeConversionPlanForTurnEnd(state, playerId);
+  if (warnings.length > 0 || (feeConversionPlan && feeConversionPlan.length > 0)) {
+    pendingTurnEndWarning = { playerId, warnings, feeConversionPlan };
     return;
   }
   advanceTurnIfPossible(state, playerId);
@@ -5048,8 +5069,10 @@ function renderAutoModeChoiceModal() {
 
 /** RESOURCE_LIMIT/FORCE_CONVERT's "はい/いいえ" confirmation before actually ending a turn (2026-08-01,
  * see turnEndWarnings/attemptAdvanceTurn -- previously always auto-confirmed as "はい"). Shows each
- * applicable card's own WARNING text verbatim (data-driven, no hardcoded copy here). Wired once in the
- * DOMContentLoaded handler below. */
+ * applicable card's own WARNING text verbatim (data-driven, no hardcoded copy here), plus (2026-08-31)
+ * one line per resource in pendingTurnEndWarning.feeConversionPlan (e.g. "A→Kを2回発動します") when an
+ * unpaid usage fee needs an automatic ABC->Z conversion first -- see feeConversionPlanForTurnEnd's own
+ * doc. Wired once in the DOMContentLoaded handler below. */
 function renderTurnEndWarningModal() {
   const overlay = document.getElementById('turn-end-warning-overlay');
   if (!pendingTurnEndWarning) {
@@ -5061,6 +5084,11 @@ function renderTurnEndWarningModal() {
   body.innerHTML = '';
   for (const warning of pendingTurnEndWarning.warnings) {
     body.appendChild(el('p', 'turn-end-warning__text', warning.warningText));
+  }
+  if (pendingTurnEndWarning.feeConversionPlan) {
+    for (const { resource, count } of pendingTurnEndWarning.feeConversionPlan) {
+      body.appendChild(el('p', 'turn-end-warning__text', `${resource}→Kを${count}回発動します`));
+    }
   }
 }
 
@@ -7449,8 +7477,17 @@ document.addEventListener('DOMContentLoaded', () => {
     render(STATE);
   });
   document.getElementById('turn-end-warning-yes').addEventListener('click', () => {
-    const { playerId } = pendingTurnEndWarning;
+    const { playerId, feeConversionPlan } = pendingTurnEndWarning;
     pendingTurnEndWarning = null;
+    // Applies the confirmed ABC->Z conversion plan (2026-08-31, see feeConversionPlanForTurnEnd's own
+    // doc) BEFORE actually ending the turn -- same executor.tryFreeAction every other free-action click
+    // in this file already calls, just looped over the plan's own {resource,count} entries instead of
+    // one button click at a time.
+    if (feeConversionPlan) {
+      for (const { resource, count } of feeConversionPlan) {
+        for (let i = 0; i < count; i++) executorMod.tryFreeAction(STATE, INDEX, playerId, `${resource}_K`);
+      }
+    }
     advanceTurnIfPossible(STATE, playerId);
     render(STATE);
   });

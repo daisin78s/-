@@ -106,6 +106,35 @@ function canAffordFee(player, amount) {
   return (player.resources.K || 0) + convertible >= amount;
 }
 
+/** The deterministic ABC->Z conversion order for covering a K shortfall (2026-08-31, per user spec:
+ * "順番は機械的にABCの多い順　一緒ならABCの順　ABCが足りなければZ　それでも足りなければ-1VP") -- shared
+ * by the AI's own forcedFeeConversionMove (move-generator.js) and main.js's human-facing turn-end
+ * confirmation modal, so both apply the IDENTICAL order rather than risking drift between two separate
+ * implementations. A/B/C are ranked ONCE by their current quantity (descending, ties broken A->B->C --
+ * not re-ranked after every single unit spent, so e.g. A=2/B=2 drains all of A before touching B, rather
+ * than alternating), then Z is used only once all of A/B/C are exhausted, regardless of how much Z itself
+ * is held. Never mutates `resources`. Whatever shortfall remains after this plan is exhausted is exactly
+ * what executor.applyTurnEnd's own "1 missing K -> -1VP" rule covers, once canEndTurn's own USAGE_FEE
+ * gate (which checks only A/B/C/Z, deliberately excluding K itself -- see its own doc) lets TURNEND
+ * through.
+ * @returns {{resource:'A'|'B'|'C'|'Z', count:number}[]} only the resources actually used, in use order */
+function planFeeConversion(resources, neededK) {
+  const order = ['A', 'B', 'C']
+    .map((r) => ({ r, count: resources[r] || 0 }))
+    .sort((a, b) => b.count - a.count || ['A', 'B', 'C'].indexOf(a.r) - ['A', 'B', 'C'].indexOf(b.r))
+    .map(({ r }) => r)
+    .concat('Z');
+  const plan = [];
+  let remaining = neededK;
+  for (const resource of order) {
+    if (remaining <= 0) break;
+    const use = Math.min(resources[resource] || 0, remaining);
+    if (use > 0) plan.push({ resource, count: use });
+    remaining -= use;
+  }
+  return plan;
+}
+
 /**
  * Places one of the player's own, not-yet-placed dice onto AREA slot
  * `slotIndex` of `mapId`, then resolves that AREA's ACTION. Enforces the
@@ -1865,6 +1894,7 @@ module.exports = {
   isMapEmptyOfDice,
   isCandidateAffordable,
   canAffordFee,
+  planFeeConversion,
   resolveBuild,
   restockShop,
   compactShop,

@@ -632,6 +632,84 @@ function giveTrainingGroundControl(state, playerId, faceId) {
 }
 
 // ---------------------------------------------------------------------------
+// forcedPureGainCTap (2026-08-31, per user request): an untapped pure-ADD(...) C-tier card (貴族/司教/
+// 金貸し/農夫/聖女/王女, both tiers) is always force-tapped, regardless of round/hasPlacedDieThisTurn.
+// 代官/修道士/商人 (CHANGE(K,...)-shaped, real K cost) must NOT be forced. A genuine no-op (ADD(wD) at
+// whiteDiceCap) must be skipped rather than forced.
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const c004Inst = createCardInstance('C004A'); // 貴族LV1, TAP=ADD(A,K) -- pure gain
+  c004Inst.ownerId = 'P1';
+  state.cards[c004Inst.physicalId] = c004Inst;
+  p1.ownedCardPhysicalIds.push(c004Inst.physicalId);
+
+  const forced = moveGenerator.forcedPureGainCTap(state, index, 'P1');
+  check('An untapped pure-gain C card (貴族) is force-tapped', forced, { type: 'BARE_TAP', playerId: 'P1', physicalId: c004Inst.physicalId });
+
+  c004Inst.tapped = true;
+  check('Once already tapped, no longer forced', moveGenerator.forcedPureGainCTap(state, index, 'P1'), null);
+}
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const c001Inst = createCardInstance('C001A'); // 代官LV1, TAP=CHANGE(K,A,3) -- real K cost
+  c001Inst.ownerId = 'P1';
+  state.cards[c001Inst.physicalId] = c001Inst;
+  p1.ownedCardPhysicalIds.push(c001Inst.physicalId);
+  p1.resources.K = 3; // affordable, but must still never be forced (K-cost card, not in PURE_GAIN_C_FACES)
+
+  check('A K-cost C card (代官) is never forced, even when affordable', moveGenerator.forcedPureGainCTap(state, index, 'P1'), null);
+}
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const c202Inst = createCardInstance('C202A'); // 聖女LV1, TAP=ADD(wD)
+  c202Inst.ownerId = 'P1';
+  state.cards[c202Inst.physicalId] = c202Inst;
+  p1.ownedCardPhysicalIds.push(c202Inst.physicalId);
+  p1.whiteDiceCap = p1.dice.length; // already at cap -- ADD(wD) would be a genuine no-op
+
+  check('A genuine no-op (ADD(wD) at whiteDiceCap) is not forced', moveGenerator.forcedPureGainCTap(state, index, 'P1'), null);
+}
+
+// ---------------------------------------------------------------------------
+// forcedFeeConversionMove (2026-08-31, per user spec: "順番は機械的にABCの多い順 一緒ならABCの順 ABCが
+// 足りなければZ それでも足りなければ-1VP...AIがそれを理解したうえでこの順を選ぶのならそれでいい") --
+// forces ONE step at a time of board.planFeeConversion's own order; see that function's own smoke tests
+// (tests/board.smoke.js) for the ordering logic itself, this only checks the wiring.
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.pendingFee = { mapId: 'MAP001', amount: 3 };
+  p1.resources.K = 0;
+  p1.resources.A = 1;
+  p1.resources.B = 2;
+  check('B (more abundant than A) is converted first', moveGenerator.forcedFeeConversionMove(state, index, 'P1'), { type: 'FREE_ACTION', playerId: 'P1', freeActionId: 'B_K' });
+}
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.pendingFee = { mapId: 'MAP001', amount: 3 };
+  p1.resources.K = 3;
+  check('Current K already covers the fee -- nothing forced', moveGenerator.forcedFeeConversionMove(state, index, 'P1'), null);
+}
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.pendingFee = { mapId: 'MAP001', amount: 3 };
+  p1.resources.K = 1;
+  check('Nothing left in A/B/C/Z to convert -- falls through (the TURNEND VP-shortfall rule takes over)', moveGenerator.forcedFeeConversionMove(state, index, 'P1'), null);
+}
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  check('No pendingFee at all -- never forced', moveGenerator.forcedFeeConversionMove(state, index, 'P1'), null);
+}
+
+// ---------------------------------------------------------------------------
 // Regression (2026-08-06, per user feedback: "AIは建築しないときはJOB004をTAPしない（できない）"):
 // forcedBzConversionMove already declined to *force* JOB004's tap with no build outlet (previous
 // block), but #bareTapMoves still offered the same tap as a normal generateMoves candidate regardless

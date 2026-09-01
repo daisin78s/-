@@ -17,6 +17,8 @@ const { AIPlayer } = require('../src/ai/ai-player');
 // firing (2026-08-04/28, added to as new forced moves were introduced).
 function noForcedMoves() {
   return {
+    forcedPureGainCTap: () => null,
+    forcedFeeConversionMove: () => null,
     forcedBzConversionMove: () => null,
     forcedJob004ConversionMove: () => null,
     forcedEndSignLv2Move: () => null,
@@ -157,6 +159,8 @@ function makeLookaheadStubs() {
   const forcedMove = { type: 'BARE_TAP', playerId: 'P1', physicalId: 'JOB004' };
   const moveGenerator = {
     generateMoves: () => { throw new Error('generateMoves should not be called when a forced move applies'); },
+    forcedPureGainCTap: () => null,
+    forcedFeeConversionMove: () => null,
     forcedBzConversionMove: () => forcedMove,
   };
   const evaluator = { score: () => { throw new Error('Evaluator.score should not be called when a forced move applies'); } };

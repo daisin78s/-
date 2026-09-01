@@ -2892,5 +2892,31 @@ function withWildcardOwner(state) {
   check('wildcardExAnyChoice returns null when the EX slot belongs to someone else', choice, null);
 }
 
+// ---------------------------------------------------------------------------
+// planFeeConversion (2026-08-31, per user spec: "順番は機械的にABCの多い順 一緒ならABCの順 ABCが足りな
+// ければZ それでも足りなければ-1VP" -- shared by move-generator.js's forcedFeeConversionMove and
+// main.js's own human-facing turn-end confirmation modal).
+// ---------------------------------------------------------------------------
+{
+  const plan = board.planFeeConversion({ A: 1, B: 3, C: 2, Z: 5 }, 4);
+  check('Ranks A/B/C by quantity descending (B=3 first, then C=2, then A=1) -- Z untouched since ABC covers it', plan, [{ resource: 'B', count: 3 }, { resource: 'C', count: 1 }]);
+}
+{
+  const plan = board.planFeeConversion({ A: 2, B: 2, C: 0, Z: 1 }, 3);
+  check('A tie between A/B (both 2) breaks A before B (fixed ABC order, not re-ranked mid-drain)', plan, [{ resource: 'A', count: 2 }, { resource: 'B', count: 1 }]);
+}
+{
+  const plan = board.planFeeConversion({ A: 0, B: 0, C: 0, Z: 5 }, 2);
+  check('Z is used only once A/B/C are all exhausted (here: already 0)', plan, [{ resource: 'Z', count: 2 }]);
+}
+{
+  const plan = board.planFeeConversion({ A: 1, B: 0, C: 0, Z: 1 }, 5);
+  check('Plan stops once every resource is exhausted, even if the fee shortfall is not fully covered -- the remainder is left for the caller\'s own VP-shortfall rule', plan, [{ resource: 'A', count: 1 }, { resource: 'Z', count: 1 }]);
+}
+{
+  const plan = board.planFeeConversion({ A: 5, B: 5, C: 5, Z: 5 }, 0);
+  check('Zero shortfall needs no conversion at all', plan, []);
+}
+
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);

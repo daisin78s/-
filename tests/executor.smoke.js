@@ -118,6 +118,24 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
   check('...citing the USAGE_FEE violation', result.violations, [{ type: 'USAGE_FEE', mapId: 'MAP001', amount: 2 }]);
 }
 {
+  // Regression (2026-08-31, per user bug report): K itself must NOT count as a "still convertible"
+  // resource in the USAGE_FEE gate -- a player who converted every last A/B/C/Z into K and is STILL short
+  // (here: 1K leftover from a lone converted A, fee needs 3K) has nothing left to convert; the old
+  // K-inclusive check kept finding that same leftover K "convertible" and blocked forever, a genuine
+  // softlock with no way to ever raise K further this turn. Only A/B/C/Z are checked now -- K short of the
+  // fee, with A/B/C/Z all genuinely 0, lets the VP-escape apply exactly like the fully-resourceless case.
+  const state = freshState();
+  state.maps['MAP001'] = createMapState('MAP001', 'AREA001A');
+  const player = getPlayerRef(state, 'P1');
+  player.resources.K = 1;
+  player.resources.VP = 5;
+  player.pendingFee = { mapId: 'MAP001', amount: 3 };
+  check('canEndTurn is OK: A/B/C/Z are all 0, even though leftover K (1) is still short of the fee (3)', executor.canEndTurn(state, index, 'P1').ok, true);
+  executor.applyTurnEnd(state, index, 'P1');
+  check('...the leftover 1K is spent toward the fee first', getPlayerRef(state, 'P1').resources.K, 0);
+  check('...VP drops by the remaining 2K shortfall (5-2=3)', getPlayerRef(state, 'P1').resources.VP, 3);
+}
+{
   // Control: a fully-payable fee is completely unaffected by any of this (paid from K as always, no VP
   // touched).
   const state = freshState();

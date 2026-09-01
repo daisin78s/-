@@ -1321,13 +1321,20 @@ function canEndTurn(state, index, playerId) {
     }
   }
   // USAGE_FEE VP-escape (2026-08-27, per user request: "すべての資源がなく支払いができないときは 足りない
-  // 1Kにつき-1VPされて支払いにあてる ただし1Aでも資源があるときはできない"): only when the player holds
-  // literally none of K/A/B/C/Z -- the same "convertible resources" set board.canAffordFee already checks
-  // -- does an unpayable fee stop blocking TURNEND; even a single unit of any of them (even if genuinely
-  // insufficient to cover the whole fee) means the normal block still applies, matching the user's own
-  // stated boundary. See applyTurnEnd's own doc for how the shortfall actually gets paid via VP instead.
+  // 1Kにつき-1VPされて支払いにあてる ただし1Aでも資源があるときはできない"; boundary corrected 2026-08-31,
+  // per user bug report -- see board.planFeeConversion's own doc for the matching conversion-order spec):
+  // only when the player holds literally none of A/B/C/Z -- the resources a free action could still turn
+  // INTO K -- does an unpayable fee stop blocking TURNEND; even a single unit of any of them (even if
+  // genuinely insufficient to cover the whole fee) means the normal block still applies, matching the
+  // user's own stated boundary. K itself is deliberately EXCLUDED from this check (unlike the original
+  // 2026-08-27 version, which checked K too): K is the actual payment currency, not a "still-unconverted"
+  // resource, so a player who has already converted every last A/B/C/Z into K and is STILL short (e.g. 1K
+  // converted from a lone A, fee needs 3K) held nothing left to convert, yet the old K-inclusive check kept
+  // finding that same leftover K "convertible" and blocking forever -- a genuine softlock, since there was
+  // no further action that could ever raise K again this turn. See applyTurnEnd's own doc for how the
+  // shortfall actually gets paid via VP instead once this lets TURNEND through.
   if (player.pendingFee && (player.resources.K || 0) < player.pendingFee.amount) {
-    const hasAnyConvertibleResource = ['K', 'A', 'B', 'C', 'Z'].some((r) => (player.resources[r] || 0) > 0);
+    const hasAnyConvertibleResource = ['A', 'B', 'C', 'Z'].some((r) => (player.resources[r] || 0) > 0);
     if (hasAnyConvertibleResource) {
       violations.push({ type: 'USAGE_FEE', ...player.pendingFee });
     }
@@ -1350,9 +1357,10 @@ function applyTurnEnd(state, index, playerId) {
   // 2K less needlessly lost to the discard. canEndTurn() already guaranteed affordability before this
   // ever runs, so this is just the mutation half of that gate-then-mutate pair (same contract as
   // RESOURCE_TOTAL_LIMIT/RESOURCE_LIMIT below) -- EXCEPT the USAGE_FEE VP-escape case (2026-08-27, see
-  // canEndTurn's own doc): canEndTurn can now let TURNEND through even with K short of the fee, when the
-  // player holds none of K/A/B/C/Z at all. Whatever K is missing is paid via VP instead (1 VP per missing
-  // 1K, per user spec) -- the map's owner still gets the fee's full amount either way.
+  // canEndTurn's own doc): canEndTurn can now let TURNEND through even with K short of the fee, once the
+  // player holds none of A/B/C/Z at all (nothing left to convert into K -- see canEndTurn's own 2026-08-31
+  // note on why K itself isn't part of that check). Whatever K is missing is paid via VP instead (1 VP per
+  // missing 1K, per user spec) -- the map's owner still gets the fee's full amount either way.
   if (player.pendingFee) {
     const amount = player.pendingFee.amount;
     const paidFromK = Math.min(amount, player.resources.K || 0);

@@ -56,6 +56,15 @@ const board = require('../board');
 const executor = require('../executor');
 const { applyInPlace } = require('./simulator');
 
+/** The 12 C-tier faces (both LV1/LV2 tiers of 貴族/司教/金貸し/農夫/聖女/王女) whose TAP is a pure
+ * ADD(...) resource grant with no cost at all -- see MoveGenerator#forcedPureGainCTap's own doc on why
+ * these specifically (and not 代官/修道士/商人's CHANGE(K,...)-shaped taps) are safe to force
+ * unconditionally. */
+const PURE_GAIN_C_FACES = new Set([
+  'C004A', 'C004B', 'C005A', 'C005B', 'C006A', 'C006B',
+  'C201A', 'C201B', 'C202A', 'C202B', 'C301A', 'C301B',
+]);
+
 /** Mirrors main.js's bareTapKind (2026-07-31) -- duplicated rather than shared because main.js is a
  * browser-only classic script, not a requireable CommonJS module like the rest of src/. Keep the two
  * in sync if either changes. null = no TAP field, or purely ON(...)-wrapped (reactive-only, handled as
@@ -461,6 +470,61 @@ class MoveGenerator {
       moves.push({ type: 'TAP_REACTION', playerId, choiceId: choice.id, use: false });
     }
     return moves;
+  }
+
+  /** Forces one step of the deterministic ABC->Z conversion plan (board.planFeeConversion, see its own
+   * doc for the exact order/rationale) whenever an unpaid usage fee (player.pendingFee) exceeds current
+   * K (2026-08-31, per user spec: "順番は機械的にABCの多い順 一緒ならABCの順 ABCが足りなければZ それでも
+   * 足りなければ-1VP...AIがそれを理解したうえでこの順を選ぶのならそれでいい"). Returns just the FIRST
+   * conversion the plan calls for, as a single FREE_ACTION move -- same one-step-per-call idiom as every
+   * other forced move here (e.g. forcedTrainingGroundKPrepMove's own free-action branch): the next
+   * selectMove/#greedyMove call re-derives the plan fresh against the now-updated resources and forces
+   * the next step, naturally converging until either K covers the fee or the plan comes back empty
+   * (nothing left in A/B/C/Z to convert) -- at which point this returns null and the pre-existing TURNEND
+   * "missing K -> -1VP" rule (executor.applyTurnEnd, now actually reachable thanks to canEndTurn's
+   * matching 2026-08-31 fix excluding K itself from its own USAGE_FEE gate) settles the remainder. */
+  forcedFeeConversionMove(state, index, playerId) {
+    const player = state.players.find((p) => p.id === playerId);
+    if (!player || !player.pendingFee) return null;
+    const shortfall = player.pendingFee.amount - (player.resources.K || 0);
+    if (shortfall <= 0) return null;
+    const plan = board.planFeeConversion(player.resources, shortfall);
+    if (plan.length === 0) return null;
+    return { type: 'FREE_ACTION', playerId, freeActionId: `${plan[0].resource}_K` };
+  }
+
+  /** Forces an unconditional TAP whenever the player owns an untapped instance of a pure-resource-gain
+   * C-tier card (2026-08-31, per user request, following a replay review where the AI's greedy 1-ply
+   * rollout kept passing over 貴族/C004's ADD(A,K) -- ranked outside the beam purely because its own
+   * immediate score looked unremarkable, even though tapping it was a free, no-downside prerequisite for
+   * a much better build a few moves later): 貴族/司教/金貸し/農夫/聖女/王女, both LV1 and LV2
+   * (PURE_GAIN_C_FACES) -- deliberately excludes 代官/修道士/商人 (C001-C003, both tiers), whose
+   * CHANGE(K,...)-shaped taps spend real K that some other action this same turn/round might still need;
+   * forcing those unconditionally could do real harm, unlike this group's plain ADD(...) grants, which are
+   * never worse and often better done as soon as possible (more resources available for whatever this
+   * player decides next, this same turn). One unconditional rule covers both triggers the user asked for
+   * ("獲得した時" and "ラウンド初め") -- a freshly-built card is untapped by construction, and the
+   * universal round-start untap makes every one of these untapped again every round, so both moments
+   * naturally satisfy the same "owned and untapped" check with no separate logic needed.
+   *
+   * No-op guard: some of these can legitimately have zero effect right now (e.g. ADD(wD) at
+   * player.whiteDiceCap) -- compares the whole player object before/after, same technique #bareTapMoves'
+   * own IMMEDIATE-branch no-op fix uses, so this never forces a tap that would burn the card for nothing. */
+  forcedPureGainCTap(state, index, playerId) {
+    const player = state.players.find((p) => p.id === playerId);
+    if (!player) return null;
+    for (const physicalId of player.ownedCardPhysicalIds) {
+      const cardState = state.cards[physicalId];
+      if (!cardState || cardState.tapped || !PURE_GAIN_C_FACES.has(cardState.currentFaceId)) continue;
+      const clone = cloneState(state);
+      const result = board.useBareTapAbility(clone, index, { playerId }, physicalId);
+      if (!result.success) continue;
+      const beforePlayer = state.players.find((p) => p.id === playerId);
+      const afterPlayer = clone.players.find((p) => p.id === playerId);
+      if (JSON.stringify(beforePlayer) === JSON.stringify(afterPlayer)) continue;
+      return { type: 'BARE_TAP', playerId, physicalId };
+    }
+    return null;
   }
 
   /** Finds playerId's forced BZ-conversion bare TAP (e.g. JOB004A's "CHANGE(3K,2BZ)"), if one is

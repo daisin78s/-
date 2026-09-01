@@ -28,14 +28,13 @@ const LEVELS = [
   },
   {
     // AI LV4 (2026-08-28): same aiOptions as LV3 (main.js's aiPlayerLv4 uses the exact same values), plus
-    // dieScarcityTieBreak and preferExOnOwnTerritory (2026-08-31, see ai-player.js's own doc on each) and
-    // its own MoveGenerator policy, preferCastleOverSenate (see move-generator.js's own doc -- main.js's
-    // aiMoveGeneratorLv4 uses the exact same value). evaluatorOptions adds conBuildAware on top of LV3's
-    // own qstAware (see Evaluator's own doc/con-build-synergy.js -- main.js's aiEvaluatorLv4 uses the
-    // exact same value). tools/ai_data_report.js additionally wires this level's own
-    // resourceCardPicker/synergyTable2 (smart-onboarding.js) whenever aiLevel==='LV4', matching main.js's
-    // live-UI behavior -- see that tool's own doc; this entry alone only covers the
-    // aiOptions/moveGeneratorOptions/evaluatorOptions half of "LV4", same as every other level here.
+    // dieScarcityTieBreak and preferExOnOwnTerritory (2026-08-31, see ai-player.js's own doc on each).
+    // evaluatorOptions adds conBuildAware on top of LV3's own qstAware (see Evaluator's own doc/
+    // con-build-synergy.js -- main.js's aiEvaluatorLv4 uses the exact same value).
+    // tools/ai_data_report.js additionally wires this level's own resourceCardPicker/synergyTable2
+    // (smart-onboarding.js) whenever aiLevel==='LV4', matching main.js's live-UI behavior -- see that
+    // tool's own doc; this entry alone only covers the aiOptions/moveGeneratorOptions/evaluatorOptions
+    // half of "LV4", same as every other level here.
     name: 'LV4',
     aiOptions: {
       lookaheadExtraTurns: 1,

@@ -107,6 +107,31 @@ class AIPlayer {
     };
   }
 
+  /** The full forced-move chain, checked (in this fixed order) before ANY scored search -- shared by
+   * selectMove's own top-level call and #greedyMove's per-step call during a rollout (2026-08-31,
+   * factored out of what used to be 2 separately-maintained copies of this exact same chain). Returns
+   * the first applicable forced Move, or null if none applies -- see each MoveGenerator#forcedXxx
+   * method's own doc for why it exists and why the order matters. */
+  #checkForcedMoves(state, playerId, context) {
+    const forcedPureGainC = this.moveGenerator.forcedPureGainCTap(state, this.index, playerId);
+    if (forcedPureGainC) return forcedPureGainC;
+    const forcedFeeConversion = this.moveGenerator.forcedFeeConversionMove(state, this.index, playerId);
+    if (forcedFeeConversion) return forcedFeeConversion;
+    const forced = this.moveGenerator.forcedBzConversionMove(state, this.index, playerId, context);
+    if (forced) return forced;
+    const forcedJob004 = this.moveGenerator.forcedJob004ConversionMove(state, this.index, playerId);
+    if (forcedJob004) return forcedJob004;
+    const forcedEndSignLv2 = this.moveGenerator.forcedEndSignLv2Move(state, this.index, playerId);
+    if (forcedEndSignLv2) return forcedEndSignLv2;
+    const forcedTrainingGroundBuild = this.moveGenerator.forcedTrainingGroundBuildMove(state, this.index, playerId, context);
+    if (forcedTrainingGroundBuild) return forcedTrainingGroundBuild;
+    const forcedTrainingGroundKPrep = this.moveGenerator.forcedTrainingGroundKPrepMove(state, this.index, playerId, context);
+    if (forcedTrainingGroundKPrep) return forcedTrainingGroundKPrep;
+    const forcedTrainingGround = this.moveGenerator.forcedTrainingGroundMove(state, this.index, playerId, context);
+    if (forcedTrainingGround) return forcedTrainingGround;
+    return null;
+  }
+
   /**
    * @param {GameState} state
    * @param {string} playerId
@@ -114,36 +139,8 @@ class AIPlayer {
    * @returns {Object|null} the single best legal Move, or null if none exist
    */
   selectMove(state, playerId, context) {
-    // Forced BZ conversion (2026-08-04, per user feedback: "JOB004の効果は使えるときは必ず使う") --
-    // short-circuits straight past the normal search when applicable. See
-    // MoveGenerator#forcedBzConversionMove's own doc for why this needed to be unconditional rather than
-    // just another scored candidate.
-    const forced = this.moveGenerator.forcedBzConversionMove(state, this.index, playerId, context);
-    if (forced) return forced;
-    // Forced 策士/JOB004 conversion (2026-08-28, per user request/experiment) -- see
-    // MoveGenerator#forcedJob004ConversionMove's own doc for why this is a separate, simpler,
-    // unconditional mechanism rather than broadening forcedBzConversionMove above.
-    const forcedJob004 = this.moveGenerator.forcedJob004ConversionMove(state, this.index, playerId);
-    if (forcedJob004) return forcedJob004;
-    // Forced 終わりの兆しLV2/B202B build (2026-08-28, per user request) -- see
-    // MoveGenerator#forcedEndSignLv2Move's own doc.
-    const forcedEndSignLv2 = this.moveGenerator.forcedEndSignLv2Move(state, this.index, playerId);
-    if (forcedEndSignLv2) return forcedEndSignLv2;
-    // Forced 訓練場の支配/A202A・A202B build-before-it's-too-late (2026-08-30, per user request) -- see
-    // MoveGenerator#forcedTrainingGroundBuildMove's own doc. Checked before the "already own it" cases
-    // below since it only ever applies while NOT yet owned -- mutually exclusive with them, but building
-    // is the natural first step of this whole mechanism.
-    const forcedTrainingGroundBuild = this.moveGenerator.forcedTrainingGroundBuildMove(state, this.index, playerId, context);
-    if (forcedTrainingGroundBuild) return forcedTrainingGroundBuild;
-    // Forced 訓練場の支配所有時のK不足対応 (2026-08-30, per user request) -- see
-    // MoveGenerator#forcedTrainingGroundKPrepMove's own doc. Checked before forcedTrainingGroundMove
-    // itself since that one only succeeds once K is actually available to spend.
-    const forcedTrainingGroundKPrep = this.moveGenerator.forcedTrainingGroundKPrepMove(state, this.index, playerId, context);
-    if (forcedTrainingGroundKPrep) return forcedTrainingGroundKPrep;
-    // Forced 訓練場の支配/A202A・A202B placement (2026-08-28, per user request) -- see
-    // MoveGenerator#forcedTrainingGroundMove's own doc.
-    const forcedTrainingGround = this.moveGenerator.forcedTrainingGroundMove(state, this.index, playerId, context);
-    if (forcedTrainingGround) return forcedTrainingGround;
+    const forcedAtTop = this.#checkForcedMoves(state, playerId, context);
+    if (forcedAtTop) return forcedAtTop;
     const moves = this.moveGenerator.generateMoves(state, this.index, playerId, context);
     const scored = [];
     for (const move of moves) {
@@ -233,23 +230,8 @@ class AIPlayer {
    * will actually behave once that turn really arrives. */
   #greedyMove(state, playerId, hasPlacedDieThisTurn) {
     const context = { hasPlacedDieThisTurn };
-    const forced = this.moveGenerator.forcedBzConversionMove(state, this.index, playerId, context);
-    if (forced) return forced;
-    // Forced 策士/JOB004 conversion -- see selectMove's own matching comment.
-    const forcedJob004 = this.moveGenerator.forcedJob004ConversionMove(state, this.index, playerId);
-    if (forcedJob004) return forcedJob004;
-    // Forced 終わりの兆しLV2/B202B build -- see selectMove's own matching comment.
-    const forcedEndSignLv2 = this.moveGenerator.forcedEndSignLv2Move(state, this.index, playerId);
-    if (forcedEndSignLv2) return forcedEndSignLv2;
-    // Forced 訓練場の支配/A202A・A202B build-before-it's-too-late -- see selectMove's own matching comment.
-    const forcedTrainingGroundBuild = this.moveGenerator.forcedTrainingGroundBuildMove(state, this.index, playerId, context);
-    if (forcedTrainingGroundBuild) return forcedTrainingGroundBuild;
-    // Forced 訓練場の支配所有時のK不足対応 -- see selectMove's own matching comment.
-    const forcedTrainingGroundKPrep = this.moveGenerator.forcedTrainingGroundKPrepMove(state, this.index, playerId, context);
-    if (forcedTrainingGroundKPrep) return forcedTrainingGroundKPrep;
-    // Forced 訓練場の支配/A202A・A202B placement -- see selectMove's own matching comment.
-    const forcedTrainingGround = this.moveGenerator.forcedTrainingGroundMove(state, this.index, playerId, context);
-    if (forcedTrainingGround) return forcedTrainingGround;
+    const forcedMove = this.#checkForcedMoves(state, playerId, context);
+    if (forcedMove) return forcedMove;
     const moves = this.moveGenerator.generateMoves(state, this.index, playerId, context);
     let best = null;
     let bestScore = -Infinity;
