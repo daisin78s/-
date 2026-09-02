@@ -2096,11 +2096,17 @@ function actionSuffix(text) {
 }
 const DIE_FACES = { 1: '⚀', 2: '⚁', 3: '⚂', 4: '⚃', 5: '⚄', 6: '⚅' };
 /** A die-face glyph (⚀-⚅) instead of a plain digit, for anywhere a die's VALUE is shown (as opposed
- * to a resource count) -- confirmed 2026-07-29, sized larger for visibility. Falls back to a plain
- * digit for anything out of 1-6 (shouldn't happen for a real die value). */
+ * to a resource count) -- confirmed 2026-07-29, sized larger for visibility. Unicode has no die-face
+ * glyph past 6, but a real die value CAN now exceed 6 (大いなる導きLV2/B002B's own SET_DIE_VALUE(SELF6|7),
+ * 2026-09-02) -- for those, .die-face-numeral draws a bordered square sized to match .die-face's own
+ * glyph footprint, so e.g. B002B's "7" choice doesn't look mismatched next to its "6" (per user report:
+ * "7を隣のサイコロの6と同じ大きさの□の中に入れてください"). */
 function dieFace(n) {
   const face = DIE_FACES[Number(n)];
-  return face ? el('span', 'die-face', face) : actionCount(n);
+  if (face) return el('span', 'die-face', face);
+  const box = el('span', 'die-face-numeral');
+  box.appendChild(el('span', 'die-face-numeral__digit', String(n)));
+  return box;
 }
 function actionRow(children) {
   const row = el('div', 'action-icons');
@@ -3044,7 +3050,12 @@ function renderResourceBadge(resource, count) {
  * "matches the card's own color" fixes C without a C-only special case. faceId is optional (M/JOB/CON/
  * QST callers pass none, and see no reordering -- they have no "own color" to prioritize anyway). */
 function renderCostBadges(container, costString, faceId) {
-  if (!costString) return;
+  if (!costString) {
+    // M-deck monuments can have an empty COST (e.g. M001, 2026-09-02 balance change) -- without this,
+    // the card silently showed no cost info at all, per user request: show it explicitly instead.
+    if (faceId && faceId.startsWith('M')) container.appendChild(el('span', 'shop-card__cost-empty', '必要資源なし'));
+    return;
+  }
   const ownColor = faceId && /^[ABC]/.test(faceId) ? faceId[0] : null;
   const parts = costString.split(',');
   if (ownColor) parts.sort((a, b) => (b.trim().endsWith(ownColor) ? 1 : 0) - (a.trim().endsWith(ownColor) ? 1 : 0));

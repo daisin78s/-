@@ -716,6 +716,37 @@ h1, h2, h3 { margin: 0; }
   height: 10.5px;
 }
 
+/* 2026-09-02, per user request: M001's COST became empty (free monument) -- shown explicitly instead
+   of silently rendering nothing, sized to match the .resource-badge text it replaces. */
+.shop-card__cost-empty {
+  font-size: 10.5px;
+  color: var(--text);
+}
+
+/* 2026-09-02, per user request ("7を隣のサイコロの6と同じ大きさの□の中に入れてください"): a die value
+   past 6 (大いなる導きLV2/B002B's own SET_DIE_VALUE(SELF6|7)) has no ⚀-⚅ glyph to reuse, so this draws a
+   bordered square box for the plain digit instead, reading as the same "kind of die" next to an adjacent
+   real ⚅ rather than a mismatched plain number. Sized to actually fit next to that ⚅ (plus the TAP's own
+   arrow icon) within the card's fixed 112px width -- a full 1em-square match to .die-face's own 42px font
+   size doesn't fit on one line there (confirmed 2026-09-02, per user decision: fit-on-one-line prioritized
+   over an exact size match, which isn't reliably achievable across devices/fonts anyway). */
+.die-face-numeral {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--text);
+  border-radius: 3px;
+  box-sizing: border-box;
+}
+.die-face-numeral__digit {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text);
+}
+
 .shop-card__vp {
   margin-top: auto;
   /* 2026-08-16, per user request: "6 VP の文字を の支配 の文字くらいの大きさと濃さに" -- matches
