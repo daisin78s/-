@@ -396,8 +396,10 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
 // forcedEndSignLv2Move (2026-08-28, per user request: "終わりの兆しLV2は獲得できるカードがあればすぐ使う
 // ようにしてください 使用対象が複数の時はダイス目高いほうを優先で"): forces B202B's BUILD(M,12) tap
 // whenever at least one monument candidate is genuinely affordable, preferring the candidate with the
-// HIGHEST DICE threshold when more than one qualifies. M001(記念碑, DICE>=12, COST=C) and M002(鐘楼,
-// DICE>=11, COST=2B) are both reachable at buildValue=12 -- a clean pair with different thresholds.
+// HIGHEST DICE threshold when more than one qualifies. M002(鐘楼, DICE>=11, COST=B) and M003(騎士像,
+// DICE>=10, COST=3A,B) are both reachable at buildValue=12 -- a clean pair with different thresholds.
+// (M001 is no longer usable for this test, 2026-09-02: its COST was changed to free, so it's always
+// affordable regardless of resources and can't stand in for "nothing affordable"/"only X affordable".)
 // ---------------------------------------------------------------------------
 function giveB202B(state, playerId) {
   const cardInst = createCardInstance('B202B');
@@ -408,24 +410,24 @@ function giveB202B(state, playerId) {
 }
 {
   const state = freshStateWithShops();
-  state.shops.M.slots.SHOP001 = 'M001'; // DICE>=12, COST=C
-  state.shops.M.slots.SHOP002 = 'M002'; // DICE>=11, COST=2B
+  state.shops.M.slots.SHOP001 = 'M002'; // DICE>=11, COST=B
+  state.shops.M.slots.SHOP002 = 'M003'; // DICE>=10, COST=3A,B
   const cardInst = giveB202B(state, 'P1');
   const p1 = player(state, 'P1');
 
-  p1.resources.C = 0;
+  p1.resources.A = 0;
   p1.resources.B = 0;
   check('forcedEndSignLv2Move is null with nothing affordable', moveGenerator.forcedEndSignLv2Move(state, index, 'P1'), null);
 
-  p1.resources.B = 2; // only M002 (DICE>=11) affordable
+  p1.resources.B = 1; // only M002 (DICE>=11) affordable -- M003 also needs 3A, not met
   const onlyM002 = moveGenerator.forcedEndSignLv2Move(state, index, 'P1');
   assertTrue('Only M002 affordable: forces the tap', onlyM002 !== null && onlyM002.type === 'BARE_TAP' && onlyM002.physicalId === cardInst.physicalId);
 
-  p1.resources.C = 1; // now BOTH M001 (DICE>=12) and M002 (DICE>=11) are affordable
+  p1.resources.A = 3; // now BOTH M002 (DICE>=11) and M003 (DICE>=10) are affordable
   const both = moveGenerator.forcedEndSignLv2Move(state, index, 'P1');
   const clone = require('../src/game-state').cloneState(state);
   const applied = require('../src/ai/simulator').applyInPlace(clone, index, both);
-  check('Both affordable: prefers the HIGHER DICE threshold (M001, >=12, over M002, >=11)', applied.candidate.faceId, 'M001');
+  check('Both affordable: prefers the HIGHER DICE threshold (M002, >=11, over M003, >=10)', applied.candidate.faceId, 'M002');
 
   cardInst.tapped = true;
   check('forcedEndSignLv2Move is null once the card is already tapped', moveGenerator.forcedEndSignLv2Move(state, index, 'P1'), null);
@@ -441,17 +443,17 @@ function giveB202B(state, playerId) {
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
-  state.shops.M.slots.SHOP001 = 'M002'; // DICE>=11, COST=2B -- the only affordable candidate below
+  state.shops.M.slots.SHOP001 = 'M002'; // DICE>=11, COST=B -- the only affordable candidate below
   giveB202B(state, 'P1');
   const p1 = player(state, 'P1');
-  p1.resources.B = 2; // exactly covers M002's own 2B cost, nothing left over
+  p1.resources.B = 1; // exactly covers M002's own B cost, nothing left over
   p1.pendingFee = { mapId: 'MAP099', amount: 1 };
   check(
     'forcedEndSignLv2Move is null when the only affordable candidate would leave a pending fee unpayable',
     moveGenerator.forcedEndSignLv2Move(state, index, 'P1'),
     null,
   );
-  p1.resources.B = 3; // 1 more than the build needs -- enough left over to also cover the 1K fee
+  p1.resources.B = 2; // 1 more than the build needs -- enough left over to also cover the 1K fee
   const move = moveGenerator.forcedEndSignLv2Move(state, index, 'P1');
   assertTrue('...but fires once there\'s enough left over to also cover it', move !== null && move.type === 'BARE_TAP');
 }

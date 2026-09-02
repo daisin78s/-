@@ -51,7 +51,8 @@ function freshState(round) {
 }
 
 // ---------------------------------------------------------------------------
-// Base resources + unplaced dice, round 1: K=3, A=5, VP=10, D=50, wD=10 per the current sheet.
+// Base resources + unplaced dice, round 1: K=3, A=5, VP=1, D=50, wD=10 per the current sheet
+// (VP's own round-1 weight was lowered from 10 to 1, 2026-09-02, per user request).
 // ---------------------------------------------------------------------------
 {
   const state = freshState(1);
@@ -63,7 +64,7 @@ function freshState(round) {
   const whiteDie = createDie('d2', 'WHITE');
   p1.dice.push(colorDie, whiteDie);
 
-  const expected = 2 * 3 + 1 * 5 + 1 * 10 + 1 * 50 + 1 * 10; // K + A + VP + unplaced D + unplaced wD
+  const expected = 2 * 3 + 1 * 5 + 1 * 1 + 1 * 50 + 1 * 10; // K + A + VP + unplaced D + unplaced wD
   check('Score sums resources + unplaced dice using round-1 eval-table weights', evaluator.score(state, 'P1'), expected);
 }
 
@@ -109,7 +110,12 @@ function freshState(round) {
 
 // ---------------------------------------------------------------------------
 // Owned cards: A001A has eval-table value 30 (round 1) and printed VP 0 -- contributes exactly 30.
-// M001 has eval-table value 0 (all rounds) and printed VP 4 -- contributes 4 * VP-weight(round 1) = 40.
+// M001 has eval-table value 0 (all rounds) and printed VP 4 -- contributes 4 * VP-weight(round 2) = 48.
+// Checked at round 2 rather than round 1 (2026-09-02): round 1's own VP-weight was lowered from 10 to 1
+// (per user request, following empirical AI-battle data showing a round-1-monument-build strategy had a
+// notably low win rate) -- at weight 1, "4 * VP-weight" and "the raw VP count" are numerically identical
+// (both 4), so the round-1 case could no longer actually distinguish the two; round 2 (weight 12) keeps
+// the distinction meaningful.
 // ---------------------------------------------------------------------------
 function giveCard(state, faceId, playerId) {
   const inst = createCardInstance(faceId);
@@ -124,9 +130,9 @@ function giveCard(state, faceId, playerId) {
   check('Owned A001A (eval=30, VP=0) contributes exactly its eval-table value', evaluator.score(state, 'P1'), 30);
 }
 {
-  const state = freshState(1);
+  const state = freshState(2);
   giveCard(state, 'M001', 'P1');
-  check('Owned M001 (eval=0, VP=4) contributes 4 * VP-weight, not the raw VP count', evaluator.score(state, 'P1'), 40);
+  check('Owned M001 (eval=0, VP=4) contributes 4 * VP-weight, not the raw VP count', evaluator.score(state, 'P1'), 48);
 }
 
 // ---------------------------------------------------------------------------
@@ -173,7 +179,7 @@ function stateWithM012InShop(round) {
   p2.resources.C = 13; // M012's full COST
   const withoutM012Risk = evaluator.score(freshState(1), 'P1'); // 0, no cards/resources/dice at all
   const withM012Risk = evaluator.score(state, 'P1');
-  check('An opponent who can already afford M012 right now subtracts its would-be value from the score', withM012Risk, withoutM012Risk - (0 /* M012's own eval-table value */ + 6 * 10 /* VP=6 * round-1 VP weight */));
+  check('An opponent who can already afford M012 right now subtracts its would-be value from the score', withM012Risk, withoutM012Risk - (0 /* M012's own eval-table value */ + 6 * 1 /* VP=6 * round-1 VP weight (lowered from 10 to 1, 2026-09-02) */));
 }
 {
   const state = stateWithM012InShop(1);
@@ -308,7 +314,7 @@ index.raw.QST = [
   giveCard(state, 'A001A', 'P1'); // eval=30, VP=0 -- CARD_COUNT=1, ahead of P2's 0
   const plainScore = evaluator.score(state, 'P1');
   check('The plain (non-qstAware) Evaluator ignores QST entirely (control)', plainScore, 30);
-  check('qstAware credits the rank-1 REWARD1 (ADD(4VP)) on top of the normal score', evaluatorQstAware.score(state, 'P1'), 30 + 4 * 10);
+  check('qstAware credits the rank-1 REWARD1 (ADD(4VP)) on top of the normal score', evaluatorQstAware.score(state, 'P1'), 30 + 4 * 1 /* round-1 VP weight, lowered from 10 to 1, 2026-09-02 */);
 }
 {
   // Rank 4+ (only reachable with 4 players at 4 distinct values) earns nothing -- REWARD_FIELDS only
