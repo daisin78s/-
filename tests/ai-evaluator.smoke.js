@@ -110,12 +110,13 @@ function freshState(round) {
 
 // ---------------------------------------------------------------------------
 // Owned cards: A001A has eval-table value 30 (round 1) and printed VP 0 -- contributes exactly 30.
-// M001 has eval-table value 0 (all rounds) and printed VP 4 -- contributes 4 * VP-weight(round 2) = 48.
+// M001 has eval-table value 0 (all rounds) and printed VP 4 -- contributes 4 * VP-weight(round 2) = 40.
 // Checked at round 2 rather than round 1 (2026-09-02): round 1's own VP-weight was lowered from 10 to 1
 // (per user request, following empirical AI-battle data showing a round-1-monument-build strategy had a
 // notably low win rate) -- at weight 1, "4 * VP-weight" and "the raw VP count" are numerically identical
-// (both 4), so the round-1 case could no longer actually distinguish the two; round 2 (weight 12) keeps
-// the distinction meaningful.
+// (both 4), so the round-1 case could no longer actually distinguish the two; round 2's own weight was
+// also later lowered, 12->10 (2026-09-02, same reason: round-2-monument-build also had a low win rate),
+// but 10 still keeps the round-1-vs-weighted distinction meaningful (4 vs 40).
 // ---------------------------------------------------------------------------
 function giveCard(state, faceId, playerId) {
   const inst = createCardInstance(faceId);
@@ -132,7 +133,7 @@ function giveCard(state, faceId, playerId) {
 {
   const state = freshState(2);
   giveCard(state, 'M001', 'P1');
-  check('Owned M001 (eval=0, VP=4) contributes 4 * VP-weight, not the raw VP count', evaluator.score(state, 'P1'), 48);
+  check('Owned M001 (eval=0, VP=4) contributes 4 * VP-weight, not the raw VP count', evaluator.score(state, 'P1'), 40);
 }
 
 // ---------------------------------------------------------------------------
@@ -372,8 +373,8 @@ index.raw.QST = [
   p1.conFace = 'B';
   giveCard(state, 'B201B', 'P1');
   const plainScore = evaluator.score(state, 'P1');
-  check('Control: plain Evaluator score for the LV2 face', plainScore, 50 + 1 * 12); // VP-weight(round2)=12
-  check('conBuildAware still applies the LV1 row\'s -1000 to the LV2-upgraded card', evaluatorConBuildAware.score(state, 'P1'), (50 + 1 * 12) - 1000);
+  check('Control: plain Evaluator score for the LV2 face', plainScore, 50 + 1 * 10); // VP-weight(round2)=10, lowered from 12 on 2026-09-02
+  check('conBuildAware still applies the LV1 row\'s -1000 to the LV2-upgraded card', evaluatorConBuildAware.score(state, 'P1'), (50 + 1 * 10) - 1000);
 }
 
 {
