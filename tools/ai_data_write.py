@@ -346,11 +346,13 @@ print(f'ABCM: wrote {abcm_written} card rows, skipped {len(abcm_skipped)}: {abcm
 
 # ---------------------------------------------------------------------------
 # HighScores sheet (2026-08-04, per user feedback: "20点以上の点数があった時 その得点を取ったAIが何を
-# したのか確認できるように...ログは一つのエクセルファイルにまとめる") -- one row per player (all 4, not
-# just whoever crossed the threshold, per "4人とも記録 それぞれの得点も") for every game where at least
-# one player's score reached report['highScoreThreshold']. Deliberately limited to score-relevant fields
-# only (CON/JOB/initial RESOURCE/builds by round, per "スコアに直結する行動だけに絞ります") -- not a full
-# move-by-move log.
+# したのか確認できるように...ログは一つのエクセルファイルにまとめる") -- one row per player whose OWN
+# score reached report['highScoreThreshold'] (2026-09-02, per user request -- originally recorded all 4
+# players of any qualifying game; now limited to just the player(s) who actually crossed it). Deliberately
+# limited to score-relevant fields only (CON/JOB/initial RESOURCE/builds by round, per "スコアに直結する
+# 行動だけに絞ります") -- not a full move-by-move log. Player/CON/JOB/Resources/Builds are all the
+# Japanese card NAME rather than a face ID (2026-09-02, per user request -- Player was the internal
+# playerId before; CON/JOB/Resources/Builds were raw face IDs like "CON001A"/"B003A").
 # ---------------------------------------------------------------------------
 if 'HighScores' in wb.sheetnames:
     del wb['HighScores']
@@ -359,7 +361,7 @@ ws3.append(['Seed', 'Player', 'Score', 'CON', 'JOB', 'Resources', 'R1 Builds', '
 for row in report.get('highScoreRows', []):
     ws3.append([
         row['seed'],
-        row['playerId'],
+        row['playerName'],
         row['score'],
         row['con'],
         row['job'],

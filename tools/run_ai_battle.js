@@ -113,15 +113,15 @@ async function main() {
   }
 
   // High-score logging threshold (2026-08-04, per user feedback: "記録するゲームの得点を記入してください
-  // 20 以上（デフォルト値は20変更できるように）"; raised to 30, 2026-08-18) -- blank input keeps the
-  // suggested default (30) rather than forcing the user to retype it every run.
+  // 20 以上（デフォルト値は20変更できるように）"; raised to 30, 2026-08-18; raised to 40, 2026-09-02) --
+  // blank input keeps the suggested default (40) rather than forcing the user to retype it every run.
   let highScoreThreshold;
   while (true) {
-    const answer = (await ask(lineIterator, '記録するゲームの得点を入力してください（未入力で既定値30）: ')).trim();
-    if (answer === '') { highScoreThreshold = 30; break; }
+    const answer = (await ask(lineIterator, '記録するゲームの得点を入力してください（未入力で既定値40）: ')).trim();
+    if (answer === '') { highScoreThreshold = 40; break; }
     const num = Number(answer);
     if (Number.isFinite(num)) { highScoreThreshold = num; break; }
-    console.log('数値を入力するか、何も入力せず既定値30を使ってください。');
+    console.log('数値を入力するか、何も入力せず既定値40を使ってください。');
   }
 
   rl.close();
@@ -131,7 +131,7 @@ async function main() {
   const jsonPath = xlsxPath.replace(/\.xlsx$/, '.json');
 
   console.log('');
-  console.log(`${n}戦（${aiLevel}）を開始します。結果は ${path.basename(xlsxPath)} に10戦ごと自動保存されます（得点${highScoreThreshold}以上が出たゲームはHighScoresシートにも記録されます）。`);
+  console.log(`${n}戦（${aiLevel}）を開始します。結果は ${path.basename(xlsxPath)} に10戦ごと自動保存されます（得点${highScoreThreshold}以上を取ったプレイヤーはHighScoresシートにも記録されます）。`);
   console.log('途中で止めたい場合はこのウィンドウを閉じてください（それまでの分は保存済みのファイルに残ります）。');
   console.log('');
 

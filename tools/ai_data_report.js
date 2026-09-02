@@ -46,12 +46,13 @@
  *   to AI.DATA.xlsx itself (the original behavior), but tools/run_ai_battle.js passes a fresh dated copy
  *   instead (2026-08-04, per user feedback: "同じフォルダにAIDATA20260802-1のような名前でエクセルを生成
  *   して") so a self-service battle run never touches the main AI.DATA.xlsx.
- *   highScoreThreshold: default 30 (2026-08-04, per user feedback: "20点以上の点数があった時 その得点を
- *   取ったAIが何をしたのか確認できるように"). Any game where at least one player's finalScore reaches
- *   this records all 4 players' score/CON/JOB/initial-RESOURCE/builds-by-round as rows in a "HighScores"
- *   sheet inside the SAME xlsxOutputPath workbook (per user feedback: "ログは一つのエクセルファイルに
- *   まとめる" -- one row per player, not a separate file) -- see collectHighScoreRows's own doc for
- *   exactly what's captured and why (JOB/CON/initial RESOURCE/builds only, not full move-by-move detail).
+ *   highScoreThreshold: default 40 (originally 30 per 2026-08-04 user feedback: "20点以上の点数があった時
+ *   その得点を取ったAIが何をしたのか確認できるように"; raised to 40 on 2026-09-02 per user request). Any
+ *   player whose finalScore reaches this gets their own score/CON/JOB/initial-RESOURCE/builds-by-round
+ *   recorded as a row in a "HighScores" sheet inside the SAME xlsxOutputPath workbook (per user feedback:
+ *   "ログは一つのエクセルファイルにまとめる") -- see collectHighScoreRows's own doc for exactly what's
+ *   captured and why (JOB/CON/initial RESOURCE/builds only, not full move-by-move detail), and for the
+ *   2026-09-02 change limiting rows to just the players who crossed the threshold themselves.
  */
 
 'use strict';
@@ -132,34 +133,40 @@ function isUsageEligible(index, id) {
   return !!getCardRow(index, id).TAP;
 }
 
-/** One row per player (all 4, not just whoever crossed the threshold -- per user feedback: "4人とも記録
- * それぞれの得点も") for a game that had at least one high score. Deliberately limited to "score-relevant
- * actions" (per user feedback: "JOB CON 初期資源 建築/改築など「スコアに直結する行動」だけに絞ります") --
- * NOT a full move-by-move log (no die placements, free actions, TAP reactions, etc.). The initial
- * RESOURCE cards aren't in historyByPlayerId/roundDetailByPlayerId at all, but don't need new tracking
- * in game-runner.js either -- setup.chooseResourceCards already leaves them as permanent (if UI-hidden)
- * entries in ownedCardPhysicalIds (confirmed 2026-07-31), so they're recovered here straight from the
- * final `state` by their "R" ID prefix. */
-function collectHighScoreRows(state, seed, historyByPlayerId, roundDetailByPlayerId) {
-  return state.players.map((player) => {
-    const h = historyByPlayerId[player.id];
-    const resources = player.ownedCardPhysicalIds
-      .filter((physicalId) => physicalId.startsWith('R'))
-      .map((physicalId) => state.cards[physicalId].currentFaceId);
-    const buildsByRound = roundDetailByPlayerId[player.id].buildsByRound;
-    return {
-      seed,
-      playerId: player.id,
-      score: h.finalScore,
-      con: h.conFaceId,
-      job: h.jobFaceId,
-      resources,
-      builds1: buildsByRound[1],
-      builds2: buildsByRound[2],
-      builds3: buildsByRound[3],
-      builds4: buildsByRound[4],
-    };
-  });
+/** One row per player who actually crossed the threshold themselves (2026-09-02, per user request --
+ * supersedes the original 2026-08-04 "4人とも記録 それぞれの得点も" behavior of recording all 4 players
+ * of any game containing a high score; the other players' own sub-threshold scores are no longer
+ * included here at all). Deliberately limited to "score-relevant actions" (per user feedback: "JOB CON
+ * 初期資源 建築/改築など「スコアに直結する行動」だけに絞ります") -- NOT a full move-by-move log (no die
+ * placements, free actions, TAP reactions, etc.). The initial RESOURCE cards aren't in
+ * historyByPlayerId/roundDetailByPlayerId at all, but don't need new tracking in game-runner.js either --
+ * setup.chooseResourceCards already leaves them as permanent (if UI-hidden) entries in
+ * ownedCardPhysicalIds (confirmed 2026-07-31), so they're recovered here straight from the final `state`
+ * by their "R" ID prefix. Player/CON/JOB/Resources/Builds are all reported by their Japanese card NAME
+ * rather than face ID (2026-09-02, per user request), via cardName() below. */
+function collectHighScoreRows(state, index, seed, historyByPlayerId, roundDetailByPlayerId, highScoreThreshold) {
+  const cardName = (faceId) => getCardRow(index, faceId).NAME;
+  return state.players
+    .filter((player) => historyByPlayerId[player.id].finalScore >= highScoreThreshold)
+    .map((player) => {
+      const h = historyByPlayerId[player.id];
+      const resources = player.ownedCardPhysicalIds
+        .filter((physicalId) => physicalId.startsWith('R'))
+        .map((physicalId) => cardName(state.cards[physicalId].currentFaceId));
+      const buildsByRound = roundDetailByPlayerId[player.id].buildsByRound;
+      return {
+        seed,
+        playerName: player.name,
+        score: h.finalScore,
+        con: cardName(h.conFaceId),
+        job: cardName(h.jobFaceId),
+        resources,
+        builds1: buildsByRound[1].map(cardName),
+        builds2: buildsByRound[2].map(cardName),
+        builds3: buildsByRound[3].map(cardName),
+        builds4: buildsByRound[4].map(cardName),
+      };
+    });
 }
 
 function main() {
@@ -176,7 +183,7 @@ function main() {
     process.exit(1);
   }
   const XLSX_PATH = process.argv[5] ? path.resolve(process.argv[5]) : DEFAULT_XLSX_PATH;
-  const highScoreThreshold = process.argv[6] !== undefined ? Number(process.argv[6]) : 30;
+  const highScoreThreshold = process.argv[6] !== undefined ? Number(process.argv[6]) : 40;
   if (!Number.isFinite(highScoreThreshold)) {
     console.error(`Invalid highScoreThreshold "${process.argv[6]}" -- expected a number`);
     process.exit(1);
@@ -305,7 +312,7 @@ function main() {
     }
 
     if (Object.values(historyByPlayerId).some((h) => h.finalScore >= highScoreThreshold)) {
-      highScoreRows.push(...collectHighScoreRows(state, seed, historyByPlayerId, roundDetailByPlayerId));
+      highScoreRows.push(...collectHighScoreRows(state, index, seed, historyByPlayerId, roundDetailByPlayerId, highScoreThreshold));
     }
 
     for (const playerId of Object.keys(historyByPlayerId)) {
