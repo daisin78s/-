@@ -716,12 +716,12 @@
       "VP": 1,
       "LEVEL": 2,
       "ONCE": "ADD(wD)",
-      "TAP": "SET_DIE_VALUE(SELF5|6);GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN)",
+      "TAP": "SET_DIE_VALUE(SELF6|7);GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "即時ｗDを１個得る\n自分のダイス目１個を5か6に変える\nこのターンそれはどのAREAにも置ける"
+      "INST": "即時ｗDを１個得る\n自分のダイス目１個を6か7に変える\nこのターンそれはどのAREAにも置ける"
     },
     {
       "ID": "B003B",
@@ -2293,7 +2293,7 @@
       "ID": "AREA006B",
       "NAME": "歓楽街LV1",
       "SLOT1": 3,
-      "SLOT2": 5,
+      "SLOT2": "ANY",
       "SLOT3": "EX",
       "SLOT4": "NONE",
       "SLOT5": "NONE",
@@ -2415,7 +2415,7 @@
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
-      "ACTION": "CHANGE(3K,7Z)",
+      "ACTION": "CHANGE(3K,8Z)",
       "fee": 2,
       "INST": ""
     },
