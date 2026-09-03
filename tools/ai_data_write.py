@@ -241,6 +241,28 @@ for job_face_id, entry in report.get('job', {}).items():
 
 print(f'CONJOB row {job_usage_row} (JOB使用回数): wrote {job_written} JOBs, skipped {len(job_skipped)}: {job_skipped}')
 
+# JOB trial-count totals row (2026-09-03, per user request: "CONJOBシートのB１５セルに社交家の試行回数の
+# 合計を書いて その隣以降も同じように合計を出して") -- one column per JOB, at the user's own explicit cell
+# address B15 (a fixed row number, unlike every other row above, since there's no pre-existing label in
+# column A here for find_header_row to look up). Each cell is that JOB's own total trial count across
+# every CON it was paired with (report['job'][jobFaceId]['count'], already summed once in
+# ai_data_report.js's jobEntry) -- same value the 試行回数 table's own per-JOB column would sum to if you
+# added up its 12 CON rows by hand.
+TRIAL_TOTAL_ROW = 15
+for c in range(2, last_job_col + 1):
+    ws.cell(row=TRIAL_TOTAL_ROW, column=c).value = None
+
+trial_total_written = 0
+for job_face_id, entry in report.get('job', {}).items():
+    job_physical_id = re.sub(r'[A-Z]$', '', job_face_id)
+    job_name = NAME_BY_JOB.get(job_physical_id, job_physical_id)
+    if job_name not in count_cols:
+        continue
+    ws.cell(row=TRIAL_TOTAL_ROW, column=count_cols[job_name], value=entry['count'])
+    trial_total_written += 1
+
+print(f'CONJOB row {TRIAL_TOTAL_ROW} (JOB試行回数合計): wrote {trial_total_written} JOBs')
+
 # Per-JOB TRUE weighted average score / QST平均得点 / 平均順位 (2026-08-20, per user request: "この計算式
 # で出る平均は実際の平均とずれると思います...実際の平均にしてもらうことはできますか") -- replaces the
 # sheet's own unweighted "=AVERAGE(12 already-averaged per-CON cells)" formula at these rows with the real
@@ -358,6 +380,11 @@ if 'HighScores' in wb.sheetnames:
     del wb['HighScores']
 ws3 = wb.create_sheet('HighScores')
 ws3.append(['Seed', 'Player', 'Score', 'CON', 'JOB', 'Resources', 'R1 Builds', 'R2 Builds', 'R3 Builds', 'R4 Builds'])
+# G:J (R1-R4 Builds, comma-joined card-name lists) widened to 4x Excel's own default column width
+# (8.43 -- this sheet is deleted and recreated from scratch every run, so a manual Excel resize wouldn't
+# survive the next report; per user request: "AIDATA ハイスコアシートのGHIJ列の幅を４倍に広げてほしい").
+for col_letter in ('G', 'H', 'I', 'J'):
+    ws3.column_dimensions[col_letter].width = 8.43 * 4
 for row in report.get('highScoreRows', []):
     ws3.append([
         row['seed'],
