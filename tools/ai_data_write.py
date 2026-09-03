@@ -372,23 +372,25 @@ print(f'ABCM: wrote {abcm_written} card rows, skipped {len(abcm_skipped)}: {abcm
 # score reached report['highScoreThreshold'] (2026-09-02, per user request -- originally recorded all 4
 # players of any qualifying game; now limited to just the player(s) who actually crossed it). Deliberately
 # limited to score-relevant fields only (CON/JOB/initial RESOURCE/builds by round, per "スコアに直結する
-# 行動だけに絞ります") -- not a full move-by-move log. Player/CON/JOB/Resources/Builds are all the
-# Japanese card NAME rather than a face ID (2026-09-02, per user request -- Player was the internal
-# playerId before; CON/JOB/Resources/Builds were raw face IDs like "CON001A"/"B003A").
+# 行動だけに絞ります") -- not a full move-by-move log. CON/JOB/Resources/Builds are all the Japanese card
+# NAME rather than a face ID (2026-09-02, per user request -- they were raw face IDs like "CON001A"/
+# "B003A" before). Seed/Player columns dropped entirely (2026-09-03, per user request: "AIDATA の
+# ハイスコアシート AとB列いらない").
 # ---------------------------------------------------------------------------
 if 'HighScores' in wb.sheetnames:
     del wb['HighScores']
 ws3 = wb.create_sheet('HighScores')
-ws3.append(['Seed', 'Player', 'Score', 'CON', 'JOB', 'Resources', 'R1 Builds', 'R2 Builds', 'R3 Builds', 'R4 Builds'])
-# G:J (R1-R4 Builds, comma-joined card-name lists) widened to 4x Excel's own default column width
-# (8.43 -- this sheet is deleted and recreated from scratch every run, so a manual Excel resize wouldn't
-# survive the next report; per user request: "AIDATA ハイスコアシートのGHIJ列の幅を４倍に広げてほしい").
-for col_letter in ('G', 'H', 'I', 'J'):
-    ws3.column_dimensions[col_letter].width = 8.43 * 4
+ws3.append(['Score', 'CON', 'JOB', 'Resources', 'R1 Builds', 'R2 Builds', 'R3 Builds', 'R4 Builds'])
+# E (R1 Builds) widened to 4x Excel's own default column width (8.43); F:H (R2-R4 Builds) widened
+# further, to 1.5x that same 4x width (2026-09-03, per user request: "HIJ列を今の１．５倍の幅にして" --
+# their own letters from before the Seed/Player columns above were dropped, i.e. R2-R4 Builds
+# specifically, not R1) -- this sheet is deleted and recreated from scratch every run, so a manual Excel
+# resize wouldn't survive the next report.
+ws3.column_dimensions['E'].width = 8.43 * 4
+for col_letter in ('F', 'G', 'H'):
+    ws3.column_dimensions[col_letter].width = 8.43 * 4 * 1.5
 for row in report.get('highScoreRows', []):
     ws3.append([
-        row['seed'],
-        row['playerName'],
         row['score'],
         row['con'],
         row['job'],
