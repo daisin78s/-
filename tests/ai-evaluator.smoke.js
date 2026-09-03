@@ -28,6 +28,14 @@ index.byId.set('CON005B', { sheet: 'CON', row: { ...index.byId.get('CON005B').ro
 // "憤怒") test doesn't need a patch since that cell is already the real -200 that motivated wiring
 // 評価値_CON in to begin with.
 raw['評価値_CON'].find((r) => r.NAME === 'D').憤怒 = -7;
+// monument-incentive.js's COMBO_TARGETS rows (2026-09-03, per user request: "大いなる導きLV2 や 運命の
+// 導きLV1 2 宮廷人 などの複合でもAIが判断できるように") don't exist in the real 評価値_戦略 sheet yet (the
+// user still needs to add them in game.xlsx with real per-round point values) -- synthetic placeholder
+// rows patched in here (same pattern as 評価値_CON's own patch just above) purely so the combo tests below
+// can exercise the new reachability logic against a real, nonzero incentive value.
+for (const name of ['複合ダイス強化で天空の塔を獲得', '複合ダイス強化で凱旋門を獲得', '複合ダイス強化で騎士像を獲得', '複合ダイス強化で鐘楼を獲得', '複合ダイス強化で宮殿を獲得', '複合ダイス強化で施療院を獲得']) {
+  raw['評価値_戦略'].push({ NAME: name, '1R': '', '2R': '', '3R': '', '4R': 999 });
+}
 const evalTable = buildEvalTable(raw);
 const evaluator = new Evaluator(index, evalTable);
 const evaluatorQstAware = new Evaluator(index, evalTable, { qstAware: true }); // see AI LV3's own doc in main.js
@@ -481,6 +489,79 @@ index.raw.QST = [
   const plainScore = evaluator.score(state, 'P1');
   check('monumentIncentiveAware credits 運命の導きLV2+3凱旋門 (round4=300)', evaluatorMonumentIncentiveAware.score(state, 'P1'), plainScore + 300);
 }
+
+// ---------------------------------------------------------------------------
+// COMBO_TARGETS (2026-09-03, per user request: "大いなる導きLV2 や 運命の導きLV1 2 宮廷人 などの複合でも
+// AIが判断できるように") -- stacking 2+ die-boosting TAPs onto the SAME die. Synthetic 999-point rows
+// patched into raw['評価値_戦略'] at the top of this file stand in for the real point values (not yet
+// added to game.xlsx) -- only the reachability logic is under test here.
+// ---------------------------------------------------------------------------
+{
+  // The user's own headline example: 宮廷人(+3) + 運命の導きLV2(+4) = +7, on a real die=6 -> 13, exactly
+  // 天空の塔/M403's own DICE threshold. Neither ability alone gets remotely close (max single delta is
+  // 4, from 運命の導きLV2), so this only fires through the new combo path.
+  const state = freshState(4);
+  giveCard(state, 'JOB007', 'P1');
+  giveCard(state, 'B003B', 'P1');
+  const d1 = createDie('d1', 'COLOR');
+  d1.value = 6;
+  state.players[0].dice.push(d1);
+  const plainScore = evaluator.score(state, 'P1');
+  check('monumentIncentiveAware credits 宮廷人+運命の導きLV2 combo -> 天空の塔 (die=6, +3+4=13)', evaluatorMonumentIncentiveAware.score(state, 'P1'), plainScore + 999);
+}
+{
+  // Same die (=6), but only 宮廷人 owned (no second die-boosting card) -- exactly 1 die-boost source, so
+  // the combo gate (needs 2+) blocks it entirely. (宮廷人 alone would need die=4 for its own M006 row --
+  // die=6 doesn't satisfy that either, so this is a clean "no credit anywhere" case.)
+  const state = freshState(4);
+  giveCard(state, 'JOB007', 'P1');
+  const d1 = createDie('d1', 'COLOR');
+  d1.value = 6;
+  state.players[0].dice.push(d1);
+  check('No combo credit with only 1 die-boosting card owned (gate requires 2+)', evaluatorMonumentIncentiveAware.score(state, 'P1'), evaluator.score(state, 'P1'));
+}
+{
+  // 大いなる導きLV2(B002B, SET to 6|7) + 運命の導きLV1(B003A, +2): reachable = {6+2, 7+2} = {8, 9} ->
+  // 宮殿/M005 (>=8) AND 凱旋門/M004 (>=9) both look individually reachable, but the SET only fixes ONE
+  // real die to ONE of its 2 choices -- only the higher-priority target (凱旋門, listed first in
+  // COMBO_TARGETS) should actually credit, not both. Die's own real value (1) is irrelevant here since
+  // SET_DIE_VALUE overwrites it -- just needs to exist, unplaced.
+  const state = freshState(4);
+  giveCard(state, 'B002B', 'P1');
+  giveCard(state, 'B003A', 'P1');
+  const d1 = createDie('d1', 'COLOR');
+  d1.value = 1;
+  state.players[0].dice.push(d1);
+  const plainScore = evaluator.score(state, 'P1');
+  check('monumentIncentiveAware credits 大いなる導きLV2+運命の導きLV1 combo -> only 凱旋門, not also 宮殿', evaluatorMonumentIncentiveAware.score(state, 'P1'), plainScore + 999);
+}
+{
+  // Same setup, but 大いなる導きLV2 already tapped -- only 1 usable source (運命の導きLV1 alone) left,
+  // gate blocks it (and 運命の導きLV1 alone doesn't reach anything at die=1 either: 1+2=3, no target).
+  const state = freshState(4);
+  const setInst = giveCard(state, 'B002B', 'P1');
+  setInst.tapped = true;
+  giveCard(state, 'B003A', 'P1');
+  const d1 = createDie('d1', 'COLOR');
+  d1.value = 1;
+  state.players[0].dice.push(d1);
+  check('No combo credit once the SET ability is already tapped (back down to 1 source)', evaluatorMonumentIncentiveAware.score(state, 'P1'), evaluator.score(state, 'P1'));
+}
+{
+  // Same combo (宮廷人+運命の導きLV2, die=6, reaches 天空の塔) but the monument was already claimed --
+  // no longer unclaimed, no credit.
+  const state = freshState(4);
+  giveCard(state, 'JOB007', 'P1');
+  giveCard(state, 'B003B', 'P1');
+  const d1 = createDie('d1', 'COLOR');
+  d1.value = 6;
+  state.players[0].dice.push(d1);
+  const built = createCardInstance('M403');
+  built.ownerId = 'P1';
+  state.cards[built.physicalId] = built;
+  check('No combo credit once 天空の塔 is already claimed (by anyone)', evaluatorMonumentIncentiveAware.score(state, 'P1'), evaluator.score(state, 'P1'));
+}
+
 {
   // 歓楽街の支配LV2(A006B) + 王都建設(M402, COST=5A,5B,5C -> 15 units -> needs 2*15=30K held).
   const state = freshState(3);

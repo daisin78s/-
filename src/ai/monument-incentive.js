@@ -128,6 +128,87 @@ const SINGLE_DIE_ROWS = [
   { name: '運命の導きLV2が+3能力で凱旋門を獲得', ownedFaceId: 'B003B', bonus: 4, targetFaceId: 'M004' },
 ];
 
+/** Stacking 2+ die-boosting TAPs onto the SAME die (2026-09-03, per user request: "大いなる導きLV2 や
+ * 運命の導きLV1 2 宮廷人 などの複合でもAIが判断できるように" -- e.g. 宮廷人's own +3 plus 運命の導きLV2's
+ * own +4 turning a real die=6 into 13, reaching 天空の塔/M403's DICE>=13, which no single ability above
+ * gets remotely close to alone). Unlike SINGLE_DIE_ROWS above (one row per owning-card+target pair, since
+ * the user wanted that fine-grained control there), this is one row PER TARGET only (per user decision,
+ * prioritizing easy maintenance if a card's own bonus changes again later, over per-card tuning) --
+ * DELTA_ABILITIES/SET_ABILITIES below list every known die-boosting TAP once, so a future new one only
+ * needs an entry there, not a new row per target it might combo into.
+ *
+ * DELTA_ABILITIES adds a fixed amount to whatever a die already shows (CHANGE_DIE_VALUE/
+ * MONUMENT_CHANGE_DIE_VALUE); every owned+untapped one sums together (deltaSum), since using one card's
+ * TAP doesn't consume or block another's. SET_ABILITIES instead picks one of 2 fixed values regardless of
+ * the die's current value (SET_DIE_VALUE) -- only the single BEST owned+untapped one is used (there's no
+ * benefit stacking 2 SET abilities on one die; whichever is applied last just overwrites the other), taken
+ * as its higher of the 2 choices being the interesting one for reaching a threshold.
+ *
+ * A combo only counts once at least 2 of these sources are actually owned+untapped together (totalSources
+ * check in monumentIncentiveScore below) -- exactly 1 source is already SINGLE_DIE_ROWS' own territory, so
+ * this must not also fire for that case (would double-count the same real scenario under 2 different
+ * names).
+ *
+ * Only the single highest-priority reachable target below credits anything (same "break after first
+ * match" reasoning ENTERTAINMENT_DISTRICT_ROWS' own doc already explains) -- a SET ability only fixes ONE
+ * real die to ONE of its 2 choices, so a case where e.g. both 宮殿 and 凱旋門 look simultaneously
+ * "reachable" (one via the SET's low choice, the other via its high choice) can still only actually be
+ * finished as ONE of them, not both -- listed here in descending target-value order so the credited one is
+ * whichever the player would actually pursue. */
+const DELTA_ABILITIES = [
+  { faceId: 'JOB007', delta: 3 },
+  { faceId: 'B003A', delta: 2 },
+  { faceId: 'B003B', delta: 4 },
+];
+const SET_ABILITIES = [
+  { faceId: 'B001A', values: [1, 2] },
+  { faceId: 'B001B', values: [1, 2] },
+  { faceId: 'B002A', values: [5, 6] },
+  { faceId: 'B002B', values: [6, 7] },
+];
+const COMBO_TARGETS = [
+  { name: '複合ダイス強化で天空の塔を獲得', targetFaceId: 'M403' },
+  { name: '複合ダイス強化で凱旋門を獲得', targetFaceId: 'M004' },
+  { name: '複合ダイス強化で騎士像を獲得', targetFaceId: 'M003' },
+  { name: '複合ダイス強化で鐘楼を獲得', targetFaceId: 'M002' },
+  { name: '複合ダイス強化で宮殿を獲得', targetFaceId: 'M005' },
+  { name: '複合ダイス強化で施療院を獲得', targetFaceId: 'M006' },
+];
+
+/** True if player holds any own unplaced/not-passed die at all, regardless of its current value -- used
+ * for a SET_DIE_VALUE-based combo, where the die's starting value doesn't matter (it gets overwritten). */
+function hasAnyQualifyingDie(player) {
+  return player.dice.some((d) => d.placedMapId === null && !d.passed);
+}
+
+/** The single owned+untapped SET_ABILITIES entry with the highest top value, or null. Comparing by top
+ * value only (not literally "best for every target") is good enough here -- a higher SET range always
+ * reaches everything a lower one does, minus the low end, which DELTA_ABILITIES' own sum can usually make
+ * up for anyway. */
+function bestOwnedSetAbility(state, player) {
+  let best = null;
+  for (const ability of SET_ABILITIES) {
+    const inst = findOwnedCardInstance(state, player, ability.faceId);
+    if (!inst || inst.tapped) continue;
+    if (!best || Math.max(...ability.values) > Math.max(...best.values)) best = ability;
+  }
+  return best;
+}
+
+/** @returns {{sum:number, count:number}} total delta and how many DELTA_ABILITIES entries contributed to
+ * it (owned + untapped only). */
+function ownedDeltaSum(state, player) {
+  let sum = 0;
+  let count = 0;
+  for (const ability of DELTA_ABILITIES) {
+    const inst = findOwnedCardInstance(state, player, ability.faceId);
+    if (!inst || inst.tapped) continue;
+    sum += ability.delta;
+    count += 1;
+  }
+  return { sum, count };
+}
+
 /** 歓楽街の支配LV2 (A006B)'s own CHANGE(2K,(A,B,C,Z)) converts 2K into 1 unit of any chosen color, so the
  * K needed to fully fund a target's COST is 2x its total unit count (confirmed by the same ratio the
  * user's own "農園または小麦畑の支配で13Kいじょうためる" row uses for 大交易所's COST=13C via a 1:1
@@ -172,6 +253,29 @@ function monumentIncentiveScore(state, index, playerId, table) {
     if (requiredDieValue < 1 || requiredDieValue > 6) continue;
     if (!hasQualifyingDie(player, requiredDieValue)) continue;
     total += incentiveValue(table, name, round);
+  }
+
+  const setAbility = bestOwnedSetAbility(state, player);
+  const { sum: deltaSum, count: deltaCount } = ownedDeltaSum(state, player);
+  const totalDieBoostSources = deltaCount + (setAbility ? 1 : 0);
+  if (totalDieBoostSources >= 2) {
+    for (const { name, targetFaceId } of COMBO_TARGETS) {
+      if (!isMonumentUnclaimed(state, targetFaceId)) continue;
+      const threshold = parseMonumentThreshold(getCardRow(index, targetFaceId).DICE);
+      if (threshold === null) continue;
+      let reachable = false;
+      if (deltaSum > 0) {
+        const requiredDieValue = threshold - deltaSum;
+        reachable = requiredDieValue >= 1 && requiredDieValue <= 6 && hasQualifyingDie(player, requiredDieValue);
+      }
+      if (!reachable && setAbility && hasAnyQualifyingDie(player)) {
+        reachable = setAbility.values.some((v) => v + deltaSum === threshold);
+      }
+      if (reachable) {
+        total += incentiveValue(table, name, round);
+        break; // only the single highest-priority reachable target credits anything -- see COMBO_TARGETS' own doc
+      }
+    }
   }
 
   if (findOwnedCardInstance(state, player, ENTERTAINMENT_DISTRICT_FACE_ID)) {
