@@ -2177,6 +2177,18 @@ const ACTION_ICON_BUILDERS = {
     stack.appendChild(actionRow([dieFace(6)]));
     return stack;
   },
+  // B006A/移ろいの兆しLV1 (2026-09-03, per user request: "移ろいの兆しのアイコン 始まりの兆しのような
+  // アイコンにして"): same shape as B004A/B202A just above -- its own TAP grew a PAY(K) prefix on
+  // 2026-09-03 too (was a bare BUILD((A,B,C,M),4), which buildBuildIcon's generic startsWith('BUILD(')
+  // check used to handle on its own), so it fell out of any icon mapping entirely once the prefix no
+  // longer matched that check -- an exact-match entry here, not a change to buildBuildIcon, matches how
+  // B004A/B202A are handled for the exact same reason (see this table's own doc above).
+  'PAY(K);BUILD((A,B,C,M),4)': () => {
+    const stack = el('div', 'action-icons-stack');
+    stack.appendChild(actionRow([actionDot('K'), actionArrow(), actionEmoji('⚒️')]));
+    stack.appendChild(actionRow([dieFace(4)]));
+    return stack;
+  },
   'PAY(K);BUILD(U)': () => actionRow([actionDot('K'), actionArrow(), actionEmoji('⚒️'), actionSuffix('U')]),
   // REPLACE_ADD(D,wD) (confirmed 2026-07-29): a passive that swaps "gain your own die" for "gain a
   // white die" instead -- shown as the source resource turning into the replacement.
