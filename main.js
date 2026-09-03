@@ -2152,41 +2152,28 @@ const ACTION_ICON_BUILDERS = {
   // reactive/direct TAP abilities), so "毎ターン" (plain text) reads more clearly there than the ⤴️
   // glyph alone did.
   'UNTAP()': () => actionRow([actionSuffix('毎ターン')]),
-  // B004A/B202A/B005A (renamed from B005A/B006A/B007A by the 2026-08-24 SHOP201-203 rework's card
-  // renumbering; 始まりの兆し/終わりの兆し/革命の兆し, 2026-08-21, per user spec: "⤵〇→🔨 / ⚀"、
-  // "⤵〇→🔨 / ⚅"、"⤵〇→🔨U" -- ⤵ is buildEffectRow's own auto TAP-cost prefix, not repeated here; 〇 is
-  // the bare K-cost dot, no count shown, since the DSL's own PAY(K) has no explicit number either. The
-  // hammer itself is ⚒️, not the user's own literal 🔨 -- per their follow-up, matched to 王宮(AREA008)'s
-  // own BUILD() icon (buildBuildIcon's actionEmoji('⚒️')) for visual consistency; 🔨 was only what their
-  // PC could render while typing the spec, not the intended glyph. "ダイス目" label text removed per a
-  // later follow-up -- the bare dieFace glyph alone (now 1.6x larger, see .action-icons .die-face in
-  // style.css) is enough on its own). One-off exact-match entries rather than generalizing buildBuildIcon,
-  // same reasoning as before (PAY(...) prefixes aren't a handled shape there -- see board.
-  // resolveProgramOrBuild's own doc on why the TAP text isn't just "BUILD(...)" alone). B004A/B202A get a
-  // 2nd row for the required die value -- B005A/UPGRADE has no die-value threshold, so it stays a single
-  // row ending in "U".
+  // B004A/B006A/B005A (renamed from B005A/B006A/B007A by the 2026-08-24 SHOP201-203 rework's card
+  // renumbering; 始まりの兆し/移ろいの兆し/革命の兆し) -- these 2 (B004A/B006A) have a PAY(K) prefix
+  // buildBuildIcon's own generic startsWith('BUILD(') check doesn't recognize, so they need their own
+  // exact-match entry here just to add the K-cost row on top; the required-die-value row itself now
+  // reuses buildBuildIcon's own "ダイス目　N" plain-number style verbatim (2026-09-03, per user request:
+  // "この際すべて ダイス目6やダイス目12のような数字にそろえて サイコロではなく" -- was a boxed die-face
+  // glyph before, briefly, per an earlier same-day request that this one supersedes) so every 兆し card
+  // reads the same way regardless of whether a PAY(K) prefix forces it through this table instead of
+  // straight through buildBuildIcon (終わりの兆しLV1/B202A's bare BUILD((A,B,C,M),6) and 終わりの兆し
+  // LV2/B202B's BUILD(M,12), 移ろいの兆しLV2/B006B's BUILD((M),9) all already render this way with no
+  // entry needed here at all). B005A/UPGRADE has no die-value threshold, so it stays a single row ending
+  // in "U", untouched by this.
   'PAY(K);BUILD((A,B,C,M),1)': () => {
     const stack = el('div', 'action-icons-stack');
     stack.appendChild(actionRow([actionDot('K'), actionArrow(), actionEmoji('⚒️')]));
-    stack.appendChild(actionRow([dieFace(1)]));
+    stack.appendChild(actionRow([actionSuffix('ダイス目　'), el('span', 'action-count action-count--large', '1')]));
     return stack;
   },
-  'PAY(K);BUILD((A,B,C,M),6)': () => {
-    const stack = el('div', 'action-icons-stack');
-    stack.appendChild(actionRow([actionDot('K'), actionArrow(), actionEmoji('⚒️')]));
-    stack.appendChild(actionRow([dieFace(6)]));
-    return stack;
-  },
-  // B006A/移ろいの兆しLV1 (2026-09-03, per user request: "移ろいの兆しのアイコン 始まりの兆しのような
-  // アイコンにして"): same shape as B004A/B202A just above -- its own TAP grew a PAY(K) prefix on
-  // 2026-09-03 too (was a bare BUILD((A,B,C,M),4), which buildBuildIcon's generic startsWith('BUILD(')
-  // check used to handle on its own), so it fell out of any icon mapping entirely once the prefix no
-  // longer matched that check -- an exact-match entry here, not a change to buildBuildIcon, matches how
-  // B004A/B202A are handled for the exact same reason (see this table's own doc above).
   'PAY(K);BUILD((A,B,C,M),4)': () => {
     const stack = el('div', 'action-icons-stack');
     stack.appendChild(actionRow([actionDot('K'), actionArrow(), actionEmoji('⚒️')]));
-    stack.appendChild(actionRow([dieFace(4)]));
+    stack.appendChild(actionRow([actionSuffix('ダイス目　'), el('span', 'action-count action-count--large', '4')]));
     return stack;
   },
   'PAY(K);BUILD(U)': () => actionRow([actionDot('K'), actionArrow(), actionEmoji('⚒️'), actionSuffix('U')]),
