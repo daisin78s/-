@@ -759,25 +759,26 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 }
 
 // ---------------------------------------------------------------------------
-// 14b. 'capped'-kind CHANGE (explicit numeric third argument, e.g. C001A's real TAP=CHANGE(K,A,3)):
+// 14b. 'capped'-kind CHANGE (explicit numeric third argument, e.g. C001A's real TAP=CHANGE(K,A,4)):
 //     executes up to N times, scaled down to whatever's affordable, instead of requiring the full amount
 //     (2026-08-11, per user request: "C001A 002 003 2K→2A を1Kしか持ってないときにTAPしたら 1K→1Aに
 //     なるように" -- these 3 cards used to be a flat CHANGE(2K,2A) and needed the full 2K or did nothing;
-//     cap raised from 2 to 3, 2026-08-18, per user edit to game.xlsx: "C001 002 003 変更しました").
+//     cap raised 2->3 on 2026-08-18, then 3->4 on 2026-09-03, both per user edits to game.xlsx: "C001 002
+//     003 変更しました"/"Cカード 変更しました").
 // ---------------------------------------------------------------------------
 {
   const row = getCardRow(index, 'C001A');
-  check('C001A\'s real TAP is now CHANGE(K,A,3), not the old flat CHANGE(2K,2A)', row.TAP, 'CHANGE(K,A,3)');
+  check('C001A\'s real TAP is now CHANGE(K,A,4), not the old flat CHANGE(2K,2A)', row.TAP, 'CHANGE(K,A,4)');
 
   const state = freshState();
   const physicalId = giveCard(state, 'C001A', 'P1');
   const context = { playerId: 'P1', sourcePhysicalId: physicalId };
 
-  getPlayerRef(state, 'P1').resources.K = 3;
+  getPlayerRef(state, 'P1').resources.K = 4;
   const full = executor.runProgram(state, index, context, getCardRow(index, 'C001A').TAP);
-  check('With the full 3K available, TAP succeeds', full.success, true);
-  check('...converts 3K -> 3A', getPlayerRef(state, 'P1').resources.K, 0);
-  check('...granting 3A', getPlayerRef(state, 'P1').resources.A, 3);
+  check('With the full 4K available, TAP succeeds', full.success, true);
+  check('...converts 4K -> 4A', getPlayerRef(state, 'P1').resources.K, 0);
+  check('...granting 4A', getPlayerRef(state, 'P1').resources.A, 4);
 
   const state2 = freshState();
   giveCard(state2, 'C001A', 'P1');
@@ -791,14 +792,14 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   giveCard(state3, 'C001A', 'P1');
   getPlayerRef(state3, 'P1').resources.K = 5;
   executor.runProgram(state3, index, context, getCardRow(index, 'C001A').TAP);
-  check('With MORE than 3K, the cap still holds at 3 -- only 3 of the 5K spent, not "convert everything"', getPlayerRef(state3, 'P1').resources.K, 2);
-  check('...granting 3A, not 5', getPlayerRef(state3, 'P1').resources.A, 3);
+  check('With MORE than 4K, the cap still holds at 4 -- only 4 of the 5K spent, not "convert everything"', getPlayerRef(state3, 'P1').resources.K, 1);
+  check('...granting 4A, not 5', getPlayerRef(state3, 'P1').resources.A, 4);
 
   const state4 = freshState();
   giveCard(state4, 'CON003B', 'P1'); // PASSIVE=CONVERT_LIMIT(ALL,4) -- must NOT reach into 'capped' mode
-  getPlayerRef(state4, 'P1').resources.K = 3;
+  getPlayerRef(state4, 'P1').resources.K = 4;
   executor.runProgram(state4, index, context, getCardRow(index, 'C001A').TAP);
-  check('CONVERT_LIMIT(ALL,4) from an unrelated owned card does not affect capped-mode at all (still spends 3K, not further reduced)', getPlayerRef(state4, 'P1').resources.K, 0);
+  check('CONVERT_LIMIT(ALL,4) from an unrelated owned card does not affect capped-mode at all (still spends 4K, not further reduced)', getPlayerRef(state4, 'P1').resources.K, 0);
 }
 {
   // Without the CON003B PASSIVE there's no cap at all -- the whole 20K converts.
