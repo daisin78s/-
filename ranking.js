@@ -71,5 +71,19 @@ function clearAll() {
   return window.OnlineSync.clearAllRanking();
 }
 
-window.RankingStorage = { list: list, save: save, loadReplay: loadReplay, clearAll: clearAll };
+/** Deletes a single ranking entry (and its replay, if any) rather than clearAll's whole-list wipe
+ * (2026-09-03, per user request: "今あるランキングをリセットするとき すべてリセットするのではなく え
+ * らんでリセットするようにできますか") -- reuses the same OnlineSync.deleteRankingEntry/deleteReplay
+ * calls save()'s own MAX_ENTRIES eviction already made internally, just exposed here for a real button
+ * (main.js's handleRankingEntryDeleteClick) instead of only ever firing automatically. deleteReplay
+ * failing (e.g. no replay was ever saved for this entry, hasReplay:false) is swallowed the same way
+ * save()'s eviction already does -- the ranking entry itself is still gone either way.
+ * @param {string} id */
+function deleteOne(id) {
+  return window.OnlineSync.deleteRankingEntry(id).then(function () {
+    return window.OnlineSync.deleteReplay(id).catch(function () {});
+  });
+}
+
+window.RankingStorage = { list: list, save: save, loadReplay: loadReplay, clearAll: clearAll, deleteOne: deleteOne };
 })();

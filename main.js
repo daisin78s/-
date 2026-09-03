@@ -6417,6 +6417,11 @@ function renderRankingList() {
         });
       });
       row.appendChild(downloadButton);
+      // 1件だけ削除 (2026-09-03, per user request) -- see handleRankingEntryDeleteClick's own doc.
+      const deleteButton = el('button', 'undo-button', '削除');
+      deleteButton.type = 'button';
+      deleteButton.addEventListener('click', () => handleRankingEntryDeleteClick(entry));
+      row.appendChild(deleteButton);
       list.appendChild(row);
     });
   }).catch(() => {
@@ -6641,15 +6646,37 @@ async function sha256Hex(text) {
   const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return Array.from(new Uint8Array(bytes)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
-async function handleRankingResetClick() {
-  const entered = window.prompt('ランキングをリセットするにはパスワードを入力してください。');
-  if (entered === null) return; // canceled
+/** Shared password gate for any ranking-destructive action (2026-09-03, factored out of
+ * handleRankingResetClick so per-entry deletion below can reuse the exact same gate) -- see
+ * handleRankingResetClick's own doc just above for the full threat-model rationale (casual-tap
+ * prevention only, not real security).
+ * @returns {Promise<boolean>} true once the correct password was entered; false if canceled or wrong
+ *   (an alert is already shown for "wrong", nothing shown for "canceled"). */
+async function checkRankingResetPassword(promptText) {
+  const entered = window.prompt(promptText);
+  if (entered === null) return false; // canceled
   if ((await sha256Hex(entered)) !== RANKING_RESET_PASSWORD_HASH) {
     window.alert('パスワードが違います。');
-    return;
+    return false;
   }
+  return true;
+}
+async function handleRankingResetClick() {
+  if (!(await checkRankingResetPassword('ランキングをリセットするにはパスワードを入力してください。'))) return;
   if (!window.confirm('歴代ランキングと保存されているリプレイをすべて削除します。よろしいですか？')) return;
   RankingStorage.clearAll().then(() => renderRankingList());
+}
+
+/** 1件だけ削除 (2026-09-03, per user request: "今あるランキングをリセットするとき すべてリセットするので
+ * はなく えらんでリセットするようにできますか" -- ranking.js's own OnlineSync.deleteRankingEntry/
+ * deleteReplay already existed internally for save()'s own MAX_ENTRIES eviction; RankingStorage.deleteOne
+ * just exposes that same per-entry delete to a real button instead of only ever firing automatically).
+ * Same password gate as the existing "すべて削除" button, since deleting one entry is just as
+ * irreversible for that entry specifically. */
+async function handleRankingEntryDeleteClick(entry) {
+  if (!(await checkRankingResetPassword('この記録を削除するにはパスワードを入力してください。'))) return;
+  if (!window.confirm(`${entry.name}さんの記録（総合${entry.totalScore}VP）を削除します。よろしいですか？`)) return;
+  RankingStorage.deleteOne(entry.id).then(() => renderRankingList());
 }
 
 function render(state) {
