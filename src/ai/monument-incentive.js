@@ -113,13 +113,19 @@ function monumentAtRiskFromOpponents(state, index, playerId, monumentFaceId) {
  * own bonus (confirmed with the user: only the "1 die + ability reaches it exactly" scenario counts, not
  * a 2-dice group that happens to reach the same threshold -- a group placement never goes through this
  * exact-value single-die check at all). */
+// bonus values matched to each card's own TAP delta (2026-09-02 audit: 宮廷人/JOB007 was still 1 here
+// long after its TAP grew to +3, and 運命の導きLV2/B003B was still 3 here after its own TAP grew to +4 --
+// both silently understated how close a held die really was to a target's threshold, since
+// requiredDieValue = threshold - bonus overstates the die value actually needed whenever bonus is too
+// low). Row *names* still say "+1"/"+3" (the old values) since they're 評価値_戦略's own sheet-authored
+// labels, not live-computed -- cosmetic only, doesn't affect scoring.
 const SINGLE_DIE_ROWS = [
-  { name: '宮廷人が+1能力で施療院を獲得', ownedFaceId: 'JOB007', bonus: 1, targetFaceId: 'M006' },
+  { name: '宮廷人が+1能力で施療院を獲得', ownedFaceId: 'JOB007', bonus: 3, targetFaceId: 'M006' },
   { name: '運命の導きLV1が+2能力で施療院を獲得', ownedFaceId: 'B003A', bonus: 2, targetFaceId: 'M006' },
   { name: '運命の導きLV1が+2能力で宮殿を獲得', ownedFaceId: 'B003A', bonus: 2, targetFaceId: 'M005' },
-  { name: '運命の導きLV2が+3能力で施療院を獲得', ownedFaceId: 'B003B', bonus: 3, targetFaceId: 'M006' },
-  { name: '運命の導きLV2が+3能力で宮殿を獲得', ownedFaceId: 'B003B', bonus: 3, targetFaceId: 'M005' },
-  { name: '運命の導きLV2が+3能力で凱旋門を獲得', ownedFaceId: 'B003B', bonus: 3, targetFaceId: 'M004' },
+  { name: '運命の導きLV2が+3能力で施療院を獲得', ownedFaceId: 'B003B', bonus: 4, targetFaceId: 'M006' },
+  { name: '運命の導きLV2が+3能力で宮殿を獲得', ownedFaceId: 'B003B', bonus: 4, targetFaceId: 'M005' },
+  { name: '運命の導きLV2が+3能力で凱旋門を獲得', ownedFaceId: 'B003B', bonus: 4, targetFaceId: 'M004' },
 ];
 
 /** 歓楽街の支配LV2 (A006B)'s own CHANGE(2K,(A,B,C,Z)) converts 2K into 1 unit of any chosen color, so the

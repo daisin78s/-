@@ -416,41 +416,43 @@ index.raw.QST = [
 // sheet changes.
 // ---------------------------------------------------------------------------
 {
-  // 宮廷人(JOB007)+1能力で施療院(M006, DICE>=7) -- needs an unplaced die showing exactly 6 (6+1=7).
+  // 宮廷人(JOB007)の実際のTAPは+3 (2026-09-02, monument-incentive.js's SINGLE_DIE_ROWS own bonus was
+  // fixed from a stale 1 -- see that file's own comment) -- needs an unplaced die showing exactly 4
+  // (4+3=7=施療院/M006's own DICE threshold).
   const state = freshState(3);
   giveCard(state, 'JOB007', 'P1');
   const d1 = createDie('d1', 'COLOR');
-  d1.value = 6;
+  d1.value = 4;
   state.players[0].dice.push(d1);
   const plainScore = evaluator.score(state, 'P1');
   check('plain Evaluator ignores 評価値_戦略 entirely (control)', plainScore, evaluator.score(state, 'P1'));
-  check('monumentIncentiveAware credits 宮廷人+1施療院 (round3=200) with a qualifying die=6', evaluatorMonumentIncentiveAware.score(state, 'P1'), plainScore + 200);
+  check('monumentIncentiveAware credits 宮廷人+1施療院 (round3=200) with a qualifying die=4', evaluatorMonumentIncentiveAware.score(state, 'P1'), plainScore + 200);
 }
 {
-  // Same setup, but die=5 -- 5+1=6, doesn't reach 施療院's >=7 -- no credit.
+  // Same setup, but die=3 -- 3+3=6, doesn't reach 施療院's >=7 -- no credit.
   const state = freshState(3);
   giveCard(state, 'JOB007', 'P1');
   const d1 = createDie('d1', 'COLOR');
-  d1.value = 5;
+  d1.value = 3;
   state.players[0].dice.push(d1);
   check('No credit when the die value is 1 short of what 宮廷人\'s +1 needs', evaluatorMonumentIncentiveAware.score(state, 'P1'), evaluator.score(state, 'P1'));
 }
 {
-  // Same setup (die=6), but 宮廷人 already tapped this round -- the ability isn't available, no credit.
+  // Same setup (die=4), but 宮廷人 already tapped this round -- the ability isn't available, no credit.
   const state = freshState(3);
   const inst = giveCard(state, 'JOB007', 'P1');
   inst.tapped = true;
   const d1 = createDie('d1', 'COLOR');
-  d1.value = 6;
+  d1.value = 4;
   state.players[0].dice.push(d1);
   check('No credit once 宮廷人 is already tapped', evaluatorMonumentIncentiveAware.score(state, 'P1'), evaluator.score(state, 'P1'));
 }
 {
-  // Same setup (die=6, untapped), but 施療院 has already been built by someone -- no longer unclaimed.
+  // Same setup (die=4, untapped), but 施療院 has already been built by someone -- no longer unclaimed.
   const state = freshState(3);
   giveCard(state, 'JOB007', 'P1');
   const d1 = createDie('d1', 'COLOR');
-  d1.value = 6;
+  d1.value = 4;
   state.players[0].dice.push(d1);
   const built = createCardInstance('M006');
   built.ownerId = 'P1';
@@ -458,22 +460,23 @@ index.raw.QST = [
   check('No credit once 施療院 is already claimed (by anyone)', evaluatorMonumentIncentiveAware.score(state, 'P1'), evaluator.score(state, 'P1'));
 }
 {
-  // Same setup (die=6), but at round 1 -- 評価値_戦略's own 1R column is blank(0) for this row, so the
+  // Same setup (die=4), but at round 1 -- 評価値_戦略's own 1R column is blank(0) for this row, so the
   // condition being true still contributes nothing (round-gating lives in the sheet, not extra code).
   const state = freshState(1);
   giveCard(state, 'JOB007', 'P1');
   const d1 = createDie('d1', 'COLOR');
-  d1.value = 6;
+  d1.value = 4;
   state.players[0].dice.push(d1);
   check('No credit at round 1 (sheet\'s own 1R column is blank for this row)', evaluatorMonumentIncentiveAware.score(state, 'P1'), evaluator.score(state, 'P1'));
 }
 {
-  // 運命の導きLV2(B003B)+3能力で凱旋門(M004, DICE>=9) -- needs die=6 (6+3=9). Also confirms an owned
-  // card (not a JOB) is matched the same way as 宮廷人 above.
+  // 運命の導きLV2(B003B)の実際のTAPは+4 (2026-09-02, same stale-bonus fix as 宮廷人 above -- was 3) --
+  // needs die=5 (5+4=9=凱旋門/M004's own DICE threshold). Also confirms an owned card (not a JOB) is
+  // matched the same way as 宮廷人 above.
   const state = freshState(4);
   giveCard(state, 'B003B', 'P1');
   const d1 = createDie('d1', 'COLOR');
-  d1.value = 6;
+  d1.value = 5;
   state.players[0].dice.push(d1);
   const plainScore = evaluator.score(state, 'P1');
   check('monumentIncentiveAware credits 運命の導きLV2+3凱旋門 (round4=300)', evaluatorMonumentIncentiveAware.score(state, 'P1'), plainScore + 300);
