@@ -806,34 +806,32 @@ function runUntapAll(state, index, context, cmd) {
   return { success: true };
 }
 
-/** UNTAP_CHOICE weighted-budget rule (2026-08-17, per user request: "カードを３枚選んでアンタップする
- * 兆しカードをアンタップするときは3枚分としてカウントする"; weight lowered 3->2 on 2026-08-21, per user
- * request) -- 始まりの兆し/終わりの兆し/革命の兆し (B004/B202/B005, renamed from B005/B006/B007 by the
- * 2026-08-24 SHOP201-203 rework's card renumbering; both LV1 and LV2 faces) each cost 2
- * of the budget; every other card costs 1. Matched by NAME containing "兆し" rather than a hardcoded
- * physical-id list, per this session's own lesson about NAME-matching being more resilient to future
- * data reorgs (see hasPioneerAbility in board.js for the same pattern). */
-function untapChoiceWeight(index, faceId) {
-  return getCardRow(index, faceId).NAME.includes('兆し') ? 2 : 1;
+/** UNTAP_CHOICE weight (2026-09-04, per user request: "アンタップ3枚 兆しカードも関係なしに３枚選べる
+ * ようにして" -- drops the 兆し-named surcharge this used to apply (2026-08-17 "3枚分としてカウントする",
+ * lowered 3->2 on 2026-08-21): every candidate now costs flat 1, so cmd.count really does mean "pick up
+ * to this many cards", 兆し or not. Kept as its own function (not just inlining `1` at runUntapChoice's
+ * own call site) purely so a future card-type-specific weight rule, if one's ever wanted again, has an
+ * obvious single place to add it back. */
+function untapChoiceWeight() {
+  return 1;
 }
 
-/** UNTAP_CHOICE(SELF,3) (2026-08-15; reworked 2026-08-17 into a weighted budget, see
- * untapChoiceWeight's own doc): if the total weight of the player's own tapped cards is within
- * cmd.count, all of them untap immediately, same as UNTAP_ALL -- no choice needed since there's only
- * one possible outcome. Otherwise queues an UNTAP_CHOICE pendingChoice (candidates = every one of the
- * player's own tapped physicalIds, plus a weight map) for the player/UI to resolve later via
- * resolveUntapChoice(), same "queue now, commit later" shape as emitAndResolve's own
- * TAP_REACTION_AVAILABLE pendingChoice.
+/** UNTAP_CHOICE(SELF,3) (2026-08-15; briefly a weighted budget 2026-08-17 through 2026-09-04, where a
+ * 兆し-named card cost more than 1 -- see untapChoiceWeight's own doc for why that's gone): if the
+ * player's own tapped-card count is within cmd.count, all of them untap immediately, same as UNTAP_ALL
+ * -- no choice needed since there's only one possible outcome. Otherwise queues an UNTAP_CHOICE
+ * pendingChoice (candidates = every one of the player's own tapped physicalIds, plus a weight map, kept
+ * even though every weight is flat 1 now -- resolveUntapChoice's own budget check reuses it either way)
+ * for the player/UI to resolve later via resolveUntapChoice(), same "queue now, commit later" shape as
+ * emitAndResolve's own TAP_REACTION_AVAILABLE pendingChoice.
  *
  * Also auto-resolves as "nothing untaps" (2026-08-22, found via tests/ai-game-runner.smoke.js going
  * stuck forever after the RESOURCE sheet grew to 24 cards shifted this fixed-seed game's RNG sequence
- * enough to finally trigger it) when even the single CHEAPEST candidate's weight exceeds cmd.count --
- * e.g. a player's only tapped card is a weight-2 兆しカード but this particular UNTAP_CHOICE only has
- * budget 1. Without this, the queued choice was mathematically unsatisfiable (no non-empty subset ever
- * fits), yet both resolveUntapChoice (rejects an empty selection) and the human UI's own
- * renderUntapChoice (only ever shows a confirm button once selected.length>0) require a non-empty pick
- * to resolve it -- the choice would sit in state.pendingChoices forever, for a human and the AI driver
- * alike. */
+ * enough to finally trigger it) on the degenerate cmd.count<1 case, where no non-empty selection could
+ * ever fit the budget. Without this, the queued choice was mathematically unsatisfiable, yet both
+ * resolveUntapChoice (rejects an empty selection) and the human UI's own renderUntapChoice (only ever
+ * shows a confirm button once selected.length>0) require a non-empty pick to resolve it -- the choice
+ * would sit in state.pendingChoices forever, for a human and the AI driver alike. */
 function runUntapChoice(state, index, context, cmd) {
   const tappedOwned = Object.keys(state.cards).filter(
     (id) => state.cards[id].ownerId === context.playerId && state.cards[id].tapped
