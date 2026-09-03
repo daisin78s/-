@@ -2168,7 +2168,7 @@
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
-      "ACTION": "CHANGE(3K,3Z)",
+      "ACTION": "CHANGE(2K,2Z)",
       "fee": "",
       "INST": ""
     },
@@ -2298,7 +2298,7 @@
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
-      "ACTION": "CHANGE(3K,6Z)",
+      "ACTION": "CHANGE(2K,5Z)",
       "fee": 1,
       "INST": ""
     },
@@ -2415,7 +2415,7 @@
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
-      "ACTION": "CHANGE(3K,7Z)",
+      "ACTION": "CHANGE(2K,7Z)",
       "fee": 2,
       "INST": ""
     },

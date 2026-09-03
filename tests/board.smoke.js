@@ -2139,19 +2139,19 @@ function giveJob009(state, playerId) {
 }
 {
   // Raw resource does NOT help, but auto-converting to K does (2026-08-20, per user's own worked
-  // example): 歓楽街(AREA006A)'s CHANGE(3K,3Z) (2026-09-01 data edit: was CHANGE(2K,2Z)) needs K
-  // specifically; player holds only 2K, die value 3 grants B (not a valid substitute for K), so the
-  // bonus auto-converts that B to K via B_K.
+  // example): 歓楽街(AREA006A)'s CHANGE(2K,2Z) (2026-09-03 data edit: was CHANGE(3K,3Z), itself a
+  // 2026-09-01 edit from an earlier CHANGE(2K,2Z)) needs K specifically; player holds only 1K, die value
+  // 3 grants B (not a valid substitute for K), so the bonus auto-converts that B to K via B_K.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   giveJob009(state, 'P1');
-  p1.resources.K = 2;
+  p1.resources.K = 1;
   const d1 = giveDie(state, 'P1', 3); // AREA006A SLOT2=3 -- die value 3 grants B
   const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP006', 1);
   check('開拓者+歓楽街: raw B doesn\'t help (K needed), auto-converts to K', result.success, true);
   check('...B nets to 0 (granted then converted away)', p1.resources.B || 0, 0);
-  check('...K nets to 0 (2 start + 1 from B_K conversion - 3 spent by CHANGE)', p1.resources.K || 0, 0);
-  check('...Z increases by 3 (CHANGE(3K,3Z)\'s own gain)', p1.resources.Z || 0, 3);
+  check('...K nets to 0 (1 start + 1 from B_K conversion - 2 spent by CHANGE)', p1.resources.K || 0, 0);
+  check('...Z increases by 2 (CHANGE(2K,2Z)\'s own gain)', p1.resources.Z || 0, 2);
 }
 {
   // Neither raw nor converted is actually needed (AREA001A/ADD(3K) is unconditional) -- raw is kept, no
