@@ -343,14 +343,21 @@ function giveDie(state, playerId, value) {
 
 {
   // A TAP-sourced BUILD (B006A.TAP=PAY(K);BUILD((A,B,C,M),6)) that builds a card whose own ONCE untaps
-  // other owned cards (C301A.ONCE=UNTAP_ALL(SELF)) -- originally written 2026-08-09 (per user report:
-  // "B006AをTAPしてその効果でC301Aを建築したときB006Aがアンタップしない") to confirm B006A itself ends up
-  // untapped, back when UNTAP_ALL(SELF) reached every owned card unconditionally. Flipped 2026-08-28 (per
-  // user request: "王女 聖女のUNTAP_ALL(SELF) 兆しカード以外に設定お願いします" -- see
-  // executor.runUntapAll's own doc): B006A/移ろいの兆しLV1 is itself 兆し-named, so it's now excluded and
-  // stays tapped -- this test now confirms that exclusion holds even for the very card whose TAP built
-  // the UNTAP_ALL source. The built card's ONCE runs *inside* completeAreaBuild, so the source card must
-  // already be marked tapped *before* that call for this to be a meaningful check either way.
+  // other owned cards (C301A.ONCE) -- originally written 2026-08-09 (per user report: "B006AをTAPして
+  // その効果でC301Aを建築したときB006Aがアンタップしない") to confirm B006A itself ends up untapped, back
+  // when C301A's ONCE was UNTAP_ALL(SELF), reaching every owned card unconditionally. Flipped 2026-08-28
+  // (per user request: "王女 聖女のUNTAP_ALL(SELF) 兆しカード以外に設定お願いします" -- see
+  // executor.runUntapAll's own doc) to exclude 兆し-named cards, which made B006A/移ろいの兆しLV1 (itself
+  // 兆し-named) stay tapped. Flipped AGAIN 2026-09-03 (per user request: C301A/王女LV1, C202B/聖女LV2,
+  // C301B/王女LV2 all changed from "カードをすべてアンタップする(兆しカード以外)" to "カードを3枚選んで
+  // アンタップする", i.e. ONCE=UNTAP_CHOICE(SELF,3) instead of UNTAP_ALL(SELF)) -- UNTAP_CHOICE has no
+  // 兆し-name exclusion at all (untapChoiceWeight's own doc: 兆し cards just cost weight 2 of the budget
+  // instead of 1, they're never outright excluded), so with only B006A tapped (weight 2, well within
+  // UNTAP_CHOICE(SELF,3)'s budget of 3) this auto-resolves immediately (runUntapChoice's own "totalWeight
+  // <= cmd.count" branch, no manual choice needed) and untaps it -- back to the ORIGINAL 2026-08-09
+  // expectation, just via a different mechanism this time. The built card's ONCE runs *inside*
+  // completeAreaBuild, so the source card must already be marked tapped *before* that call for this to be
+  // a meaningful check either way.
   const state = freshStateWithShops();
   state.round = 3; // C301A is a SHOP201-203 wave-2 card, purchasable only from round 3 (board.specialShopMinRound)
   const p1 = player(state, 'P1');
@@ -373,7 +380,7 @@ function giveDie(state, playerId, value) {
   const { state: resultState, result } = simulator.apply(state, index, move);
   check('Building C301A via B006A\'s TAP succeeds', result.success, true);
   check('C301A was actually built', resultState.players.find((p) => p.id === 'P1').ownedCardPhysicalIds.includes(b006a.physicalId) && resultState.players.find((p) => p.id === 'P1').ownedCardPhysicalIds.length === 2, true);
-  check('B006A stays tapped -- 兆し-named cards are excluded from C301A\'s UNTAP_ALL(SELF)', resultState.cards[b006a.physicalId].tapped, true);
+  check('B006A ends up untapped -- UNTAP_CHOICE(SELF,3) auto-resolves (weight 2 within budget 3), no 兆し exclusion applies', resultState.cards[b006a.physicalId].tapped, false);
 }
 {
   // Failure case: if the chosen candidate turns out unaffordable, the speculative tap must be reverted

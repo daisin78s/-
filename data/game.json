@@ -609,7 +609,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "M",
-      "INST": "カード一枚を獲得する\nダイス目は1\n通常通り資源は必要"
+      "INST": "⤵カード一枚を獲得する\nダイス目は1\n通常通り資源は必要"
     },
     {
       "ID": "B005A",
@@ -625,7 +625,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "M",
-      "INST": "LVアップする\n通常通り資源は必要"
+      "INST": "⤵LVアップする\n通常通り資源は必要"
     },
     {
       "ID": "B006A",
@@ -641,7 +641,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "カード一枚を獲得する\nダイス目は4\n通常通り資源は必要"
+      "INST": "⤵カード一枚を獲得する\nダイス目は4\n通常通り資源は必要"
     },
     {
       "ID": "B201A",
@@ -673,7 +673,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "M",
-      "INST": "カード一枚を獲得する\nダイス目は6\n通常通り資源は必要"
+      "INST": "⤵カード一枚を獲得する\nダイス目は6\n通常通り資源は必要"
     },
     {
       "ID": "B301A",
@@ -785,7 +785,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "カード一枚を獲得する\nダイス目は9\n通常通り資源は必要"
+      "INST": "⤵カード一枚を獲得する\nダイス目は9\n通常通り資源は必要"
     },
     {
       "ID": "B201B",
@@ -973,13 +973,13 @@
       "EMBLEM_C": 1,
       "VP": 0,
       "LEVEL": 1,
-      "ONCE": "UNTAP_ALL(SELF)",
+      "ONCE": "UNTAP_CHOICE(SELF,3)",
       "TAP": "ADD(VP)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "カードをすべてアンタップする\n兆しカード以外"
+      "INST": "カードを3枚選んでアンタップする"
     },
     {
       "ID": "C001B",
@@ -1038,7 +1038,7 @@
       "VP": 1,
       "LEVEL": 2,
       "ONCE": "",
-      "TAP": "ADD(4A)",
+      "TAP": "ADD(2A,2K)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
@@ -1054,7 +1054,7 @@
       "VP": 1,
       "LEVEL": 2,
       "ONCE": "",
-      "TAP": "ADD(4B)",
+      "TAP": "ADD(2B,2K)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
@@ -1070,7 +1070,7 @@
       "VP": 1,
       "LEVEL": 2,
       "ONCE": "",
-      "TAP": "ADD(4C)",
+      "TAP": "ADD(2C,2K)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
@@ -1101,13 +1101,13 @@
       "EMBLEM_C": 1,
       "VP": 1,
       "LEVEL": 2,
-      "ONCE": "UNTAP_ALL(SELF)",
+      "ONCE": "UNTAP_CHOICE(SELF,3)",
       "TAP": "ADD(wD)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "カードをすべてアンタップする\n兆しカード以外"
+      "INST": "カードを3枚選んでアンタップする"
     },
     {
       "ID": "C301B",
@@ -1117,13 +1117,13 @@
       "EMBLEM_C": 1,
       "VP": 1,
       "LEVEL": 2,
-      "ONCE": "UNTAP_ALL(SELF)",
+      "ONCE": "UNTAP_CHOICE(SELF,3)",
       "TAP": "ADD(2VP)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "カードをすべてアンタップする\n兆しカード以外"
+      "INST": "カードを3枚選んでアンタップする"
     }
   ],
   "CON": [
@@ -2298,7 +2298,7 @@
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
-      "ACTION": "CHANGE(3K,5Z)",
+      "ACTION": "CHANGE(3K,6Z)",
       "fee": 1,
       "INST": ""
     },
@@ -2415,7 +2415,7 @@
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
-      "ACTION": "CHANGE(3K,8Z)",
+      "ACTION": "CHANGE(3K,7Z)",
       "fee": 2,
       "INST": ""
     },
@@ -4604,6 +4604,48 @@
       "2R": "",
       "3R": 100,
       "4R": ""
+    },
+    {
+      "NAME": "複合ダイス強化で天空の塔を獲得",
+      "1R": "",
+      "2R": "",
+      "3R": "",
+      "4R": 500
+    },
+    {
+      "NAME": "複合ダイス強化で凱旋門を獲得",
+      "1R": "",
+      "2R": "",
+      "3R": 350,
+      "4R": 350
+    },
+    {
+      "NAME": "複合ダイス強化で騎士像を獲得",
+      "1R": "",
+      "2R": "",
+      "3R": 300,
+      "4R": 300
+    },
+    {
+      "NAME": "複合ダイス強化で鐘楼を獲得",
+      "1R": "",
+      "2R": "",
+      "3R": 250,
+      "4R": 250
+    },
+    {
+      "NAME": "複合ダイス強化で宮殿を獲得",
+      "1R": "",
+      "2R": "",
+      "3R": 250,
+      "4R": 250
+    },
+    {
+      "NAME": "複合ダイス強化で施療院を獲得",
+      "1R": "",
+      "2R": "",
+      "3R": 200,
+      "4R": 200
     }
   ],
   "INST": [
