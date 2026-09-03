@@ -3423,6 +3423,15 @@ h1, h2, h3 { margin: 0; }
   flex: 0 0 auto;
 }
 
+/* 複数選択用チェックボックス (2026-09-03) -- sized up from the browser default for a comfortable tap
+   target on iPad, matching this app's other touch-first controls. */
+.ranking-row__checkbox {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
 .ranking-row__name {
   font-size: 13px;
   font-weight: 700;

@@ -6373,6 +6373,8 @@ function renderRankingList() {
   const list = document.getElementById('ranking-list');
   list.innerHTML = '';
   list.appendChild(el('div', 'ranking-empty', '読み込み中...'));
+  selectedRankingIds = new Set(); // fresh list -- see selectedRankingIds' own doc on why this always resets
+  updateRankingDeleteSelectedButton();
   const requestId = ++rankingListRequestId;
   RankingStorage.list().then((entries) => {
     if (requestId !== rankingListRequestId) return; // superseded by a later renderRankingList() call
@@ -6383,6 +6385,15 @@ function renderRankingList() {
     }
     entries.forEach((entry, i) => {
       const row = el('div', i === 0 ? 'ranking-row ranking-row--top' : 'ranking-row');
+      // 複数選択用チェックボックス (2026-09-03) -- see selectedRankingIds' own doc.
+      const checkbox = el('input', 'ranking-row__checkbox');
+      checkbox.type = 'checkbox';
+      checkbox.addEventListener('change', () => {
+        if (checkbox.checked) selectedRankingIds.add(entry.id);
+        else selectedRankingIds.delete(entry.id);
+        updateRankingDeleteSelectedButton();
+      });
+      row.appendChild(checkbox);
       row.appendChild(el('span', 'ranking-row__rank', `${i + 1}位`));
       const swatch = el('span', 'player-panel__swatch');
       swatch.dataset.color = entry.playerColor;
@@ -6417,11 +6428,6 @@ function renderRankingList() {
         });
       });
       row.appendChild(downloadButton);
-      // 1件だけ削除 (2026-09-03, per user request) -- see handleRankingEntryDeleteClick's own doc.
-      const deleteButton = el('button', 'undo-button', '削除');
-      deleteButton.type = 'button';
-      deleteButton.addEventListener('click', () => handleRankingEntryDeleteClick(entry));
-      row.appendChild(deleteButton);
       list.appendChild(row);
     });
   }).catch(() => {
@@ -6646,10 +6652,8 @@ async function sha256Hex(text) {
   const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return Array.from(new Uint8Array(bytes)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
-/** Shared password gate for any ranking-destructive action (2026-09-03, factored out of
- * handleRankingResetClick so per-entry deletion below can reuse the exact same gate) -- see
- * handleRankingResetClick's own doc just above for the full threat-model rationale (casual-tap
- * prevention only, not real security).
+/** Shared password gate for any ranking-destructive action -- see handleRankingDeleteSelectedClick's
+ * own doc for the full threat-model rationale (casual-tap prevention only, not real security).
  * @returns {Promise<boolean>} true once the correct password was entered; false if canceled or wrong
  *   (an alert is already shown for "wrong", nothing shown for "canceled"). */
 async function checkRankingResetPassword(promptText) {
@@ -6661,22 +6665,33 @@ async function checkRankingResetPassword(promptText) {
   }
   return true;
 }
-async function handleRankingResetClick() {
-  if (!(await checkRankingResetPassword('ランキングをリセットするにはパスワードを入力してください。'))) return;
-  if (!window.confirm('歴代ランキングと保存されているリプレイをすべて削除します。よろしいですか？')) return;
-  RankingStorage.clearAll().then(() => renderRankingList());
+
+/** Checkbox-based multi-select delete (2026-09-03, per user request: "削除一回ごとにパスワード入れるの
+ * 大変なんで 削除ボタンを複数選んで削除できるようにお願い それとランキングをリセット（オールリセット）
+ * ボタンは不要になりました" -- replaces both the old one-button-per-row immediate delete AND the old
+ * "ランキングをリセット" all-at-once button: check any number of rows, then one password prompt + one
+ * confirm deletes all of them together via RankingStorage.deleteOne (ranking.js's own per-entry delete,
+ * already used internally by save()'s own MAX_ENTRIES eviction). Reset to empty at the start of every
+ * renderRankingList() call (see there) -- a stale selection referencing an entry that's since been
+ * deleted or scrolled past a fresh reload isn't worth preserving across reloads. */
+let selectedRankingIds = new Set();
+
+/** Enables/labels the "選択した項目を削除" button to match selectedRankingIds' current size -- called
+ * both from renderRankingList (fresh render, always starts empty/disabled) and every checkbox's own
+ * change listener. */
+function updateRankingDeleteSelectedButton() {
+  const button = document.getElementById('ranking-delete-selected-button');
+  const n = selectedRankingIds.size;
+  button.disabled = n === 0;
+  button.textContent = n === 0 ? '選択した項目を削除' : `選択した${n}件を削除`;
 }
 
-/** 1件だけ削除 (2026-09-03, per user request: "今あるランキングをリセットするとき すべてリセットするので
- * はなく えらんでリセットするようにできますか" -- ranking.js's own OnlineSync.deleteRankingEntry/
- * deleteReplay already existed internally for save()'s own MAX_ENTRIES eviction; RankingStorage.deleteOne
- * just exposes that same per-entry delete to a real button instead of only ever firing automatically).
- * Same password gate as the existing "すべて削除" button, since deleting one entry is just as
- * irreversible for that entry specifically. */
-async function handleRankingEntryDeleteClick(entry) {
-  if (!(await checkRankingResetPassword('この記録を削除するにはパスワードを入力してください。'))) return;
-  if (!window.confirm(`${entry.name}さんの記録（総合${entry.totalScore}VP）を削除します。よろしいですか？`)) return;
-  RankingStorage.deleteOne(entry.id).then(() => renderRankingList());
+async function handleRankingDeleteSelectedClick() {
+  if (selectedRankingIds.size === 0) return; // button is disabled in this state, but guard anyway
+  const ids = Array.from(selectedRankingIds);
+  if (!(await checkRankingResetPassword('選択した記録を削除するにはパスワードを入力してください。'))) return;
+  if (!window.confirm(`選択した${ids.length}件の記録を削除します。よろしいですか？`)) return;
+  Promise.all(ids.map((id) => RankingStorage.deleteOne(id))).then(() => renderRankingList());
 }
 
 function render(state) {
@@ -7395,7 +7410,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('game-end-ranking-button').addEventListener('click', openRankingOverlay);
   document.getElementById('ranking-close-button').addEventListener('click', closeRankingOverlay);
-  document.getElementById('ranking-reset-button').addEventListener('click', handleRankingResetClick);
+  document.getElementById('ranking-delete-selected-button').addEventListener('click', handleRankingDeleteSelectedClick);
   const rankingOverlayEl = document.getElementById('ranking-overlay');
   rankingOverlayEl.addEventListener('click', (e) => {
     if (e.target === rankingOverlayEl) closeRankingOverlay(); // backdrop click only, matching #card-inst-overlay
