@@ -604,12 +604,12 @@
       "VP": 0,
       "LEVEL": 1,
       "ONCE": "",
-      "TAP": "BUILD((A,B,C,M),1)",
+      "TAP": "PAY(K);BUILD((A,B,C,M),1)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "M",
-      "INST": "⤵カード一枚を獲得する\nダイス目は1\n通常通り資源は必要"
+      "INST": "1K支払う⤵カード一枚を獲得する\nダイス目は1\n通常通り資源は必要"
     },
     {
       "ID": "B005A",
@@ -620,12 +620,12 @@
       "VP": 0,
       "LEVEL": 1,
       "ONCE": "",
-      "TAP": "BUILD(U)",
+      "TAP": "PAY(K);BUILD(U)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "M",
-      "INST": "⤵LVアップする\n通常通り資源は必要"
+      "INST": "1K支払う⤵LVアップする\n通常通り資源は必要"
     },
     {
       "ID": "B006A",
@@ -636,12 +636,12 @@
       "VP": 0,
       "LEVEL": 1,
       "ONCE": "",
-      "TAP": "BUILD((A,B,C,M),4)",
+      "TAP": "PAY(K);BUILD((A,B,C,M),4)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "⤵カード一枚を獲得する\nダイス目は4\n通常通り資源は必要"
+      "INST": "1K支払う⤵カード一枚を獲得する\nダイス目は4\n通常通り資源は必要"
     },
     {
       "ID": "B201A",

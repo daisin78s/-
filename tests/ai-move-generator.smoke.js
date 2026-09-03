@@ -543,21 +543,22 @@ function giveTrainingGroundControl(state, playerId, faceId) {
 // ---------------------------------------------------------------------------
 // forcedTrainingGroundBuildMove prefers a TAP-based build over a die-based one (2026-08-31, per user
 // report: watching a replay, this used to force a die-based build of A202A even though B006A/移ろいの兆し
-// LV1's own BUILD-kind bare TAP (TAP=BUILD((A,B,C,M),4)) could build the exact same A202A for free, no
-// die spent -- confirmed by re-scoring the real replay state, where the TAP path scored higher than the
-// die path this function actually forced. Same trigger setup as the block above, but with an untapped
-// B006A also on hand -- the forced move must now be the free BARE_TAP, not a die placement.
+// LV1's own BUILD-kind bare TAP (TAP=PAY(K);BUILD((A,B,C,M),4), 2026-09-03: now costs 1K up front, was
+// free) could build the exact same A202A with no die spent -- confirmed by re-scoring the real replay
+// state, where the TAP path scored higher than the die path this function actually forced. Same trigger
+// setup as the block above, but with an untapped B006A also on hand -- the forced move must now be the
+// BARE_TAP, not a die placement.
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
   state.round = 2;
   state.shops.SPECIAL.slots.SHOP202 = 'A202A';
   const p1 = player(state, 'P1');
-  p1.resources = { K: 0, A: 3, B: 1, C: 0, Z: 0, VP: 0, BZ: 0 }; // covers A202A's own COST (2A,B)
+  p1.resources = { K: 1, A: 3, B: 1, C: 0, Z: 0, VP: 0, BZ: 0 }; // covers A202A's own COST (2A,B) + B006A's own PAY(K)
   giveDie(state, 'P1', 4);
   giveDie(state, 'P1', 2);
   giveDie(state, 'P1', 6);
-  const b006Inst = createCardInstance('B006A'); // TAP=BUILD((A,B,C,M),4)
+  const b006Inst = createCardInstance('B006A'); // TAP=PAY(K);BUILD((A,B,C,M),4)
   b006Inst.ownerId = 'P1';
   state.cards[b006Inst.physicalId] = b006Inst;
   p1.ownedCardPhysicalIds.push(b006Inst.physicalId);
@@ -579,18 +580,18 @@ function giveTrainingGroundControl(state, playerId, faceId) {
 
 // ---------------------------------------------------------------------------
 // The TAP-based path is reachable even once hasPlacedDieThisTurn is true (2026-08-31, found via a
-// forced-move consistency audit): a free TAP-based build has no real dependency on whether this turn's
+// forced-move consistency audit): a TAP-based build has no real dependency on whether this turn's
 // die has already been placed -- e.g. if THIS turn's own die placement is what built the TAP-granting
 // card in the first place, hasPlacedDieThisTurn is already true by the time it's untapped-and-owned, and
 // gating the TAP check behind that flag (as the die-based path correctly is) would silently lose the
-// "always force it when free" guarantee. Same setup as the block above, but with hasPlacedDieThisTurn:true.
+// "always force it when reachable" guarantee. Same setup as the block above, but with hasPlacedDieThisTurn:true.
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
   state.round = 2;
   state.shops.SPECIAL.slots.SHOP202 = 'A202A';
   const p1 = player(state, 'P1');
-  p1.resources = { K: 0, A: 3, B: 1, C: 0, Z: 0, VP: 0, BZ: 0 };
+  p1.resources = { K: 1, A: 3, B: 1, C: 0, Z: 0, VP: 0, BZ: 0 }; // K:1 covers B006A's own PAY(K)
   giveDie(state, 'P1', 4);
   giveDie(state, 'P1', 2);
   giveDie(state, 'P1', 6);
@@ -611,14 +612,15 @@ function giveTrainingGroundControl(state, playerId, faceId) {
 // own BUILD loop already has): a TAP-based build whose own COST would leave an already-pending usage fee
 // unpayable must be skipped, same as the die-based path effectively gets for free via applyInPlace's own
 // rollback -- this one needs it explicitly since it stops at "the build itself succeeded", never checking
-// pendingFee afterward.
+// pendingFee afterward. K:1 here (2026-09-03: B006A's own TAP now costs PAY(K)) covers B006A's own 1K
+// cost exactly, so the null result below is genuinely from the fee guard, not just plain unaffordability.
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
   state.round = 2;
   state.shops.SPECIAL.slots.SHOP202 = 'A202A';
   const p1 = player(state, 'P1');
-  p1.resources = { K: 0, A: 3, B: 1, C: 0, Z: 0, VP: 0, BZ: 0 };
+  p1.resources = { K: 1, A: 3, B: 1, C: 0, Z: 0, VP: 0, BZ: 0 };
   p1.pendingFee = { mapId: 'MAP999', amount: 5 }; // far more K than this player could ever pay
   giveDie(state, 'P1', 4);
   const b006Inst = createCardInstance('B006A');
