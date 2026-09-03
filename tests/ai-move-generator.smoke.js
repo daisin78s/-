@@ -608,6 +608,35 @@ function giveTrainingGroundControl(state, playerId, faceId) {
 }
 
 // ---------------------------------------------------------------------------
+// Not forced at all once color dice count is already 4+ (2026-09-03, per user request: "訓練場はダイス
+// が２こ増やせる前提でないと強くありません そのため ダイスが３個の時はいいですが 色ダイスが4こか5この時
+// は取りに行かないようにしてください") -- same setup as the free-TAP-build block above (B006A untapped,
+// its BUILD-kind bare TAP could build A202A for free), but with a 4th color die added, so the free build
+// must no longer be forced either (previously unconditional regardless of dice count).
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  state.round = 2;
+  state.shops.SPECIAL.slots.SHOP202 = 'A202A';
+  const p1 = player(state, 'P1');
+  p1.resources = { K: 1, A: 3, B: 1, C: 0, Z: 0, VP: 0, BZ: 0 };
+  giveDie(state, 'P1', 4);
+  giveDie(state, 'P1', 2);
+  giveDie(state, 'P1', 6);
+  giveDie(state, 'P1', 1); // 4th color die -- past the "only worth it with 2+ slots of headroom" threshold
+  const b006Inst = createCardInstance('B006A');
+  b006Inst.ownerId = 'P1';
+  state.cards[b006Inst.physicalId] = b006Inst;
+  p1.ownedCardPhysicalIds.push(b006Inst.physicalId);
+
+  check(
+    'forcedTrainingGroundBuildMove is null with 4 color dice, even though the free TAP-based build is available',
+    moveGenerator.forcedTrainingGroundBuildMove(state, index, 'P1', { hasPlacedDieThisTurn: false }),
+    null,
+  );
+}
+
+// ---------------------------------------------------------------------------
 // #trainingGroundTapBuildMove's pendingFee guard (2026-08-31, same class of guard forcedEndSignLv2Move's
 // own BUILD loop already has): a TAP-based build whose own COST would leave an already-pending usage fee
 // unpayable must be skipped, same as the die-based path effectively gets for free via applyInPlace's own

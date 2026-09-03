@@ -790,6 +790,16 @@ class MoveGenerator {
       return cardState && (cardState.currentFaceId === 'A202A' || cardState.currentFaceId === 'A202B');
     });
     if (ownsControl) return null;
+    // Not worth forcing (free TAP-based build included) once the player already has 4+ color dice
+    // (2026-09-03, per user request: "訓練場はダイスが２こ増やせる前提でないと強くありません そのため
+    // ダイスが３個の時はいいですが 色ダイスが4こか5この時は取りに行かないようにしてください") --
+    // 訓練場's own value comes from repeatedly using forcedTrainingGroundMove to climb toward
+    // colorDiceCap(5), so it only has real room to matter with at least 2 more slots open (count<=3);
+    // at 4 it can gain at most 1 more, and at the 5 cap it can gain none at all. Checked before the
+    // free TAP-based path too (previously unconditional regardless of dice count), not just the
+    // die-based search below.
+    const totalColorDiceCount = player.dice.filter((d) => d.kind === 'COLOR').length;
+    if (totalColorDiceCount > 3) return null;
     // Checked BEFORE context.hasPlacedDieThisTurn (2026-08-31, found via a forced-move consistency
     // audit): a TAP-based build spends no die at all, so unlike the die-based search below it has no
     // real dependency on whether this turn's one die placement has already happened -- e.g. if THIS
@@ -800,7 +810,6 @@ class MoveGenerator {
     const tapBuild = this.#trainingGroundTapBuildMove(state, index, playerId, player);
     if (tapBuild) return tapBuild;
     if (context.hasPlacedDieThisTurn) return null; // the die-based path below needs the turn's die still unplaced
-    const totalColorDiceCount = player.dice.filter((d) => d.kind === 'COLOR').length;
     if (totalColorDiceCount !== 3) return null;
     const unplacedDice = player.dice.filter((d) => d.placedMapId === null && !d.passed);
     if (unplacedDice.length < 2) return null;
