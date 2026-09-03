@@ -359,7 +359,7 @@ index.raw.QST = [
 // motivating bug report): 評価値_CON's real "双星の加護LV1"x"憤怒" cell is -1000 (2026-08-30, raised from
 // -200 as part of a broader spreadsheet rebalance -- see 評価値 round-3 weights' own comment further down
 // for the sibling change from that same pass); a 憤怒 (CON005B) player owning B201A (双星の加護LV1,
-// eval=100 round2, VP=0) should score 100 + (-1000), not just 100.
+// eval=50 round2 -- lowered from 100 on 2026-09-03, VP=0) should score 50 + (-1000), not just 50.
 // ---------------------------------------------------------------------------
 {
   const state = freshState(2);
@@ -368,8 +368,8 @@ index.raw.QST = [
   p1.conFace = 'B'; // CON005B/憤怒
   giveCard(state, 'B201A', 'P1');
   const plainScore = evaluator.score(state, 'P1');
-  check('The plain (non-conBuildAware) Evaluator ignores 評価値_CON entirely (control)', plainScore, 100);
-  check('conBuildAware applies 評価値_CON\'s -1000 for 憤怒 x 双星の加護LV1 on top of the normal eval-table value', evaluatorConBuildAware.score(state, 'P1'), 100 - 1000);
+  check('The plain (non-conBuildAware) Evaluator ignores 評価値_CON entirely (control)', plainScore, 50);
+  check('conBuildAware applies 評価値_CON\'s -1000 for 憤怒 x 双星の加護LV1 on top of the normal eval-table value', evaluatorConBuildAware.score(state, 'P1'), 50 - 1000);
 }
 
 {
