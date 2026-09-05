@@ -37,15 +37,21 @@ def load_real_eval_table():
     """Replicates src/ai/eval-table.js's buildEvalTable() in Python (same {round: {id: value}} shape,
     blank/non-numeric cells resolve to 0) -- used for the H:K delta columns and M:P reference columns
     below, per user request: "HIJK列に gameエクセルのデータから どのくらい動いたか MNOP列に gameエクセ
-    ルの データも出力できるように"."""
+    ルの データも出力できるように". Also returns the sheet's own row order (VP, K, A, B, C, ... as
+    game.xlsx's own 評価値 sheet lists them) -- 2026-09-04, per user request: "今あるものすべてとこれから
+    のものgameエクセルにある順番で表示して" -- replaces the previous alphabetical sort, which scattered
+    e.g. "A" away from "A001A"/"A002A" etc. instead of grouping them the way the real sheet does.
+    @returns {(dict, list[str])} (table, ids_in_sheet_order)"""
     with open(GAME_JSON_PATH, 'r', encoding='utf-8') as f:
         game_data = json.load(f)
     table = {1: {}, 2: {}, 3: {}, 4: {}}
+    ids_in_order = []
     for row in game_data.get('評価値', []):
+        ids_in_order.append(row['ID'])
         for r in (1, 2, 3, 4):
             raw = row.get(f'{r}R')
             table[r][row['ID']] = raw if isinstance(raw, (int, float)) else 0
-    return table
+    return table, ids_in_order
 
 if len(sys.argv) < 3:
     print('Usage: python tools/ga_progress_to_xlsx.py <outputDir> <generationSummaryJsonPath>')
@@ -114,8 +120,12 @@ write_stats_block(ws, row, '最良個体', best)
 row += 3  # blank spacer row before the eval table
 
 genome = best['genome']
-real_table = load_real_eval_table()
-ids = sorted(genome['1'].keys())
+real_table, ids_in_sheet_order = load_real_eval_table()
+# Real sheet's own order first (VP, K, A, B, C, ...); any genome id that isn't in the real sheet at all
+# (shouldn't normally happen -- ga_train.js builds genomes from that same id set -- but sorted
+# alphabetically as a fallback rather than silently dropped, just in case) appended after.
+extra_ids = sorted(set(genome['1'].keys()) - set(ids_in_sheet_order))
+ids = [id_ for id_ in ids_in_sheet_order if id_ in genome['1']] + extra_ids
 header_row = row
 ws.cell(row=header_row, column=1, value='ID')
 for i, r in enumerate((1, 2, 3, 4)):
