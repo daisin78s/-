@@ -47,7 +47,9 @@
 
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const { execFileSync } = require('child_process');
+const { Worker } = require('worker_threads');
 const { loadGameData, buildDataIndex } = require('../src/data-loader');
 const { buildEvalTable } = require('../src/ai/eval-table');
 const { randomGenome, mutateGenome, mutateGenomePercent } = require('../src/ai/ga');
@@ -63,6 +65,12 @@ const PROJECT_ROOT = path.resolve(__dirname, '..');
 const DATA_PATH = path.join(PROJECT_ROOT, 'data', 'game.json');
 const PLAYER_NAMES = ['Alice', 'Bob', 'Carol', 'Dan'];
 const PROGRESS_XLSX_SCRIPT = path.join(PROJECT_ROOT, 'tools', 'ga_progress_to_xlsx.py');
+const WORKER_SCRIPT = path.join(PROJECT_ROOT, 'tools', 'ga_worker.js');
+// 2026-09-05, per user request: "継続できる前提で最速化お願い" -- this machine has 16 cores; every
+// per-generation game used to run one at a time on the main thread alone. Leaves 2 cores free for the
+// OS/this same Claude Code session's own other work (e.g. the user talking to Claude Code mid-run)
+// rather than claiming literally every core, per their own follow-up concern about that overlap.
+const WORKER_COUNT = Math.max(1, os.cpus().length - 2);
 
 const RANDOM_INIT_MIN = -10;
 const RANDOM_INIT_MAX = 10;
@@ -118,6 +126,49 @@ function loadResumePopulation(resumeFromDir) {
   return { startGeneration: generation, population: population.map((p) => p.genome) };
 }
 
+/** Spawns WORKER_COUNT persistent tools/ga_worker.js threads (2026-09-05, per user request:
+ * "継続できる前提で最速化お願い") -- created once for the whole training run (not per generation: each
+ * worker's own startup cost, loading data/game.json + building the synergy tables, would otherwise
+ * repeat every single generation) and reused until terminateWorkerPool at the very end. */
+function createWorkerPool(count) {
+  return Array.from({ length: count }, () => new Worker(WORKER_SCRIPT));
+}
+
+function terminateWorkerPool(pool) {
+  for (const worker of pool) worker.terminate();
+}
+
+/** Runs `jobs` (each {jobId, genomes, seed}, see ga_worker.js's own doc for the shape) across `pool`,
+ * one job per free worker at a time, resolving once every job's result has come back. Worker assignment
+ * is greedy/first-idle rather than a fixed round-robin split, so a worker that happens to finish a
+ * slower game early picks up the next queued job immediately instead of sitting idle while a slower
+ * sibling worker is still mid-game -- keeps every core saturated even though individual games don't all
+ * take exactly the same wall time. */
+function runJobsOnPool(pool, jobs) {
+  return new Promise((resolve, reject) => {
+    if (jobs.length === 0) { resolve([]); return; }
+    const results = new Array(jobs.length);
+    let nextJobIndex = 0;
+    let completedCount = 0;
+    const assignNext = (worker) => {
+      if (nextJobIndex >= jobs.length) return;
+      worker.postMessage(jobs[nextJobIndex++]);
+    };
+    for (const worker of pool) {
+      worker.removeAllListeners('message');
+      worker.removeAllListeners('error');
+      worker.on('message', (msg) => {
+        results[msg.jobId] = msg;
+        completedCount++;
+        if (completedCount === jobs.length) resolve(results);
+        else assignNext(worker);
+      });
+      worker.on('error', reject);
+      assignNext(worker);
+    }
+  });
+}
+
 /** Plays enough games (population shuffled into groups of 4, repeated gamesPerIndividual times) that
  * every individual in `population` (an array of genomes) gets exactly gamesPerIndividual games, and
  * returns each individual's {avgRank, avgScore, avgRawScore, avgQstScore, winRate, gamesPlayed} by its
@@ -129,37 +180,46 @@ function loadResumePopulation(resumeFromDir) {
  * QST's own contribution and everything else -- playGameForFitness's own qstScoreByPlayerId already
  * carries this, previously only read by ga_report_top.js's separate post-hoc replay, now captured
  * directly during training too so it's available every generation without a second replay pass.
- * resourceCardPicker/synergyTable2 (2026-08-27, "AI LV4"'s own smart onboarding, see
- * smart-onboarding.js's own doc) are passed straight through to playGameForFitness so every training
- * game already uses the same JOB/CON/resource-card selection LV4 actually plays with. */
-function evaluatePopulationFitness(population, index, runRng, gamesPerIndividual, runId, generationLabel, resourceCardPicker, synergyTable2) {
+ *
+ * Parallelized across `pool` (2026-09-05) -- game-order shuffling still happens synchronously on the
+ * main thread first (cheap, needs runRng's own sequential state), producing a flat list of independent
+ * per-game jobs (each already carrying its own genomes + unique seed, no shared mutable state with any
+ * other job) that runJobsOnPool then fans out across every worker; resourceCardPicker/synergyTable2 no
+ * longer need to be passed in at all -- each worker builds its own copy once at its own startup (see
+ * ga_worker.js's own doc) instead of the main thread building one shared copy every call. */
+async function evaluatePopulationFitness(pool, population, runRng, gamesPerIndividual, runId, generationLabel) {
+  const jobs = [];
+  for (let round = 0; round < gamesPerIndividual; round++) {
+    const order = rng.shuffle(runRng, population.map((_, i) => i));
+    for (let g = 0; g < order.length; g += 4) {
+      const seatIndices = order.slice(g, g + 4);
+      jobs.push({
+        jobId: jobs.length,
+        seatIndices,
+        genomes: seatIndices.map((idx) => population[idx]),
+        seed: `ga-${runId}-${generationLabel}-${jobs.length}`,
+      });
+    }
+  }
+
+  const results = await runJobsOnPool(pool, jobs);
+
   const rankSumByIndex = new Array(population.length).fill(0);
   const scoreSumByIndex = new Array(population.length).fill(0);
   const qstScoreSumByIndex = new Array(population.length).fill(0);
   const winCountByIndex = new Array(population.length).fill(0);
   const gamesPlayedByIndex = new Array(population.length).fill(0);
-  const evaluators = population.map((genome) => new Evaluator(index, genome));
-
-  let gameCount = 0;
-  for (let round = 0; round < gamesPerIndividual; round++) {
-    const order = rng.shuffle(runRng, population.map((_, i) => i));
-    for (let g = 0; g < order.length; g += 4) {
-      const seatIndices = order.slice(g, g + 4);
-      const evaluatorByPlayerId = {};
-      seatIndices.forEach((idx, seat) => { evaluatorByPlayerId[`P${seat + 1}`] = evaluators[idx]; });
-      const seed = `ga-${runId}-${generationLabel}-${gameCount}`;
-      gameCount++;
-      const { rankByPlayerId, scoreByPlayerId, qstScoreByPlayerId } = playGameForFitness(seed, PLAYER_NAMES, index, evaluatorByPlayerId, undefined, resourceCardPicker, synergyTable2);
-      seatIndices.forEach((idx, seat) => {
-        const playerId = `P${seat + 1}`;
-        rankSumByIndex[idx] += rankByPlayerId[playerId];
-        scoreSumByIndex[idx] += scoreByPlayerId[playerId];
-        qstScoreSumByIndex[idx] += qstScoreByPlayerId[playerId] || 0;
-        if (rankByPlayerId[playerId] === 1) winCountByIndex[idx]++;
-        gamesPlayedByIndex[idx]++;
-      });
-    }
-  }
+  jobs.forEach((job, i) => {
+    const { rankByPlayerId, scoreByPlayerId, qstScoreByPlayerId } = results[i];
+    job.seatIndices.forEach((idx, seat) => {
+      const playerId = `P${seat + 1}`;
+      rankSumByIndex[idx] += rankByPlayerId[playerId];
+      scoreSumByIndex[idx] += scoreByPlayerId[playerId];
+      qstScoreSumByIndex[idx] += qstScoreByPlayerId[playerId] || 0;
+      if (rankByPlayerId[playerId] === 1) winCountByIndex[idx]++;
+      gamesPlayedByIndex[idx]++;
+    });
+  });
 
   return population.map((genome, i) => ({
     avgRank: rankSumByIndex[i] / gamesPlayedByIndex[i],
@@ -218,9 +278,22 @@ function measureRealTableBaseline(index, realGenome, runRng, runId, resourceCard
   return { avgRank, avgScore, winRate, games: BASELINE_GAMES };
 }
 
-function main() {
+async function main() {
   const { generations, populationSize, gamesPerIndividual, outputDir, resumeFromDir, seedFromReal } = parseArgs();
   fs.mkdirSync(outputDir, { recursive: true });
+
+  // One pool for the whole run (2026-09-05, see createWorkerPool's own doc) -- terminated in a finally
+  // block below so a crash partway through this function still doesn't leave orphaned worker processes
+  // running after ga_train.js itself exits.
+  const pool = createWorkerPool(WORKER_COUNT);
+  console.log(`Worker pool: ${WORKER_COUNT} threads (this machine has ${os.cpus().length} CPU cores).`);
+  try {
+    await runMain();
+  } finally {
+    terminateWorkerPool(pool);
+  }
+
+  async function runMain() {
 
   const raw = loadGameData(DATA_PATH);
   const index = buildDataIndex(raw);
@@ -298,7 +371,7 @@ function main() {
 
   for (let gen = startGeneration + 1; gen <= finalGeneration; gen++) {
     const t0 = Date.now();
-    const fitness = evaluatePopulationFitness(population, index, runRng, gamesPerIndividual, runId, gen, resourceCardPicker, synergyTable2);
+    const fitness = await evaluatePopulationFitness(pool, population, runRng, gamesPerIndividual, runId, gen);
     const ranked = fitness
       .map((f, i) => ({ ...f, genome: population[i] }))
       .sort((a, b) => a.avgRank - b.avgRank);
@@ -356,6 +429,10 @@ function main() {
   }
 
   console.log(`Done. Best genome (avgRank=${bestEver.avgRank.toFixed(2)}) written to ${path.join(outputDir, 'best_genome.json')}`);
+  } // end runMain()
 }
 
-main();
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
