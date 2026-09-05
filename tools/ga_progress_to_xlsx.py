@@ -69,9 +69,16 @@ def write_stats_block(ws, start_row, label, stats):
     ws.cell(row=start_row + 1, column=10, value=round(stats['avgRank'], 2))
     # 2026-09-04, per user request: "最良個体の平均点と平均順位 何試合での平均かも書いてほしい 例 100試合"
     # -- all 5 stats above (勝率/平均点/素点/QST/平均順位) come from the same gamesPlayed sample, so one
-    # shared "試合数" column covers all of them rather than repeating it per metric.
-    ws.cell(row=start_row + 1, column=11, value='試合数')
-    ws.cell(row=start_row + 1, column=12, value=f"{stats['gamesPlayed']}試合")
+    # shared "試合数" column covers all of them rather than repeating it per metric. .get(), not ['...']
+    # (2026-09-04 hotfix, found live mid-run): a ga_train.js process already running when this field was
+    # added keeps calling this script with its own OLD summary shape (no "gamesPlayed" key at all) until
+    # it's next restarted -- a bare KeyError here was silently breaking progress.xlsx's per-generation
+    # update from that point on (caught by ga_train.js's own try/catch, so training itself kept running
+    # fine, just this file stopped advancing -- confirmed via the real generation count in progress.csv
+    # continuing past whatever generation this got stuck at).
+    if 'gamesPlayed' in stats:
+        ws.cell(row=start_row + 1, column=11, value='試合数')
+        ws.cell(row=start_row + 1, column=12, value=f"{stats['gamesPlayed']}試合")
 
 row = 1
 if anchor:
