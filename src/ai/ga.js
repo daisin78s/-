@@ -51,6 +51,45 @@ function mutateGenome(genome, rngState, mutationRate, mutationAmount) {
   return mutated;
 }
 
-module.exports = { randomGenome, mutateGenome };
+/** Round-scaled flat step used by mutateGenomePercent below ONLY for a currently-zero cell (see its own
+ * doc for why a pure percentage step can never move a 0 at all). Picked as roughly 5-6% of each round's
+ * own observed real-data max (round1 up to ~80, round2 ~200, round3 ~400, round4 ~1000, confirmed via
+ * buildEvalTable(loadGameData('data/game.json')) on 2026-09-04) -- keeps a "discovered from zero" value
+ * in the same rough ballpark as that round's other real values, rather than using one flat constant
+ * across all 4 rounds despite their wildly different scales. */
+const ZERO_ESCAPE_STEP_BY_ROUND = { 1: 5, 2: 10, 3: 20, 4: 50 };
+
+/** A mutated copy of genome (never mutates the input), scaling each nudge to the cell's OWN current
+ * value instead of mutateGenome's flat +/-mutationAmount (2026-09-04, per user request: "変異差は大きく
+ * して" while starting from the real, already-tuned 評価値 table rather than randomGenome's uniform
+ * [-10,10] spread -- with real values ranging from 0 up to 1000 depending on round (see
+ * ZERO_ESCAPE_STEP_BY_ROUND's own doc), a single flat delta is either negligible for a round-4 VP-scale
+ * cell or wildly disruptive for a round-1 K-scale one; scaling by the cell's own value keeps the nudge
+ * proportionate everywhere). Each (round, id) value independently has `mutationRate` probability of being
+ * nudged: a nonzero value gets multiplied by `1 + uniform(-mutationPercent, +mutationPercent)`; a value
+ * that's currently exactly 0 (blank in the sheet) would otherwise be unable to ever move at all under a
+ * pure percentage rule (0 times anything is still 0), so it instead gets ZERO_ESCAPE_STEP_BY_ROUND's own
+ * flat step for that round -- letting evolution discover that a currently-unused id deserves a nonzero
+ * weight, not just rescale ones that already have one. */
+function mutateGenomePercent(genome, rngState, mutationRate, mutationPercent) {
+  const mutated = { 1: {}, 2: {}, 3: {}, 4: {} };
+  for (const round of [1, 2, 3, 4]) {
+    for (const [id, value] of Object.entries(genome[round])) {
+      if (rng.next(rngState) >= mutationRate) {
+        mutated[round][id] = value;
+        continue;
+      }
+      if (value === 0) {
+        const step = ZERO_ESCAPE_STEP_BY_ROUND[round];
+        mutated[round][id] = (rng.next(rngState) * 2 - 1) * step;
+      } else {
+        mutated[round][id] = value * (1 + (rng.next(rngState) * 2 - 1) * mutationPercent);
+      }
+    }
+  }
+  return mutated;
+}
+
+module.exports = { randomGenome, mutateGenome, mutateGenomePercent };
 
 })();

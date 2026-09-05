@@ -49,7 +49,7 @@ const fs = require('fs');
 const path = require('path');
 const { loadGameData, buildDataIndex } = require('../src/data-loader');
 const { buildEvalTable } = require('../src/ai/eval-table');
-const { randomGenome, mutateGenome } = require('../src/ai/ga');
+const { randomGenome, mutateGenome, mutateGenomePercent } = require('../src/ai/ga');
 const { RandomEvaluator } = require('../src/ai/random-evaluator');
 const { Evaluator } = require('../src/ai/evaluator');
 const { playGameForFitness } = require('../src/ai/game-runner');
@@ -65,18 +65,30 @@ const PLAYER_NAMES = ['Alice', 'Bob', 'Carol', 'Dan'];
 const RANDOM_INIT_MIN = -10;
 const RANDOM_INIT_MAX = 10;
 const MUTATION_RATE = 0.1; // per-(round,id) probability of being nudged each generation
-const MUTATION_AMOUNT = 2; // max +/- nudge when mutated
+const MUTATION_AMOUNT = 2; // max +/- nudge when mutated (randomGenome-seeded runs only, see mutate() below)
+const MUTATION_PERCENT = 0.2; // max +/-20% nudge when mutated (--seed-real runs only, see mutate() below)
 const ELITE_FRACTION = 0.2; // top fraction of the population carried over unchanged each generation
 const BASELINE_GAMES = 20; // one-time Generation-0 (pure random) measurement sample size
 
+/** --seed-real (2026-09-04, per user request: "それを０からやると時間がかかるので　今ある評価値から進め
+ * たらどうかと思う") -- a bare flag, not tied to a positional slot, so it can be dropped in anywhere on
+ * the command line without shifting generations/populationSize/etc. When present, Generation 1's initial
+ * population is small mutations of the REAL current game.xlsx 評価値 table (via mutateGenomePercent, see
+ * its own doc) instead of randomGenome's uniform-random spread -- lets a run start from an already-
+ * competitive point rather than pure noise. Incompatible with resumeFromDir (that already supplies its
+ * own starting population from a previous run). */
+const SEED_REAL_FLAG = '--seed-real';
+
 function parseArgs() {
-  const generations = Number(process.argv[2]);
-  const populationSize = process.argv[3] ? Number(process.argv[3]) : 20;
-  const gamesPerIndividual = process.argv[4] ? Number(process.argv[4]) : 4;
-  const outputDir = process.argv[5] ? path.resolve(process.argv[5]) : path.join(PROJECT_ROOT, 'output', 'ga_train');
-  const resumeFromDir = process.argv[6] ? path.resolve(process.argv[6]) : null;
+  const positional = process.argv.slice(2).filter((arg) => arg !== SEED_REAL_FLAG);
+  const seedFromReal = process.argv.includes(SEED_REAL_FLAG);
+  const generations = Number(positional[0]);
+  const populationSize = positional[1] ? Number(positional[1]) : 20;
+  const gamesPerIndividual = positional[2] ? Number(positional[2]) : 4;
+  const outputDir = positional[3] ? path.resolve(positional[3]) : path.join(PROJECT_ROOT, 'output', 'ga_train');
+  const resumeFromDir = positional[4] ? path.resolve(positional[4]) : null;
   if (!Number.isInteger(generations) || generations < 1) {
-    console.error('Usage: node tools/ga_train.js <generations> [populationSize] [gamesPerIndividual] [outputDir] [resumeFromDir]');
+    console.error('Usage: node tools/ga_train.js <generations> [populationSize] [gamesPerIndividual] [outputDir] [resumeFromDir] [--seed-real]');
     process.exit(1);
   }
   if (!Number.isInteger(populationSize) || populationSize < 4 || populationSize % 4 !== 0) {
@@ -87,7 +99,11 @@ function parseArgs() {
     console.error('gamesPerIndividual must be a positive integer.');
     process.exit(1);
   }
-  return { generations, populationSize, gamesPerIndividual, outputDir, resumeFromDir };
+  if (seedFromReal && resumeFromDir) {
+    console.error('--seed-real and resumeFromDir are mutually exclusive (resumeFromDir already supplies its own starting population).');
+    process.exit(1);
+  }
+  return { generations, populationSize, gamesPerIndividual, outputDir, resumeFromDir, seedFromReal };
 }
 
 /** Reads resumeFromDir's highest-numbered gen_XXXX.json (see parseArgs' own doc on resumeFromDir) and
@@ -155,13 +171,41 @@ function measureBaseline(index, runRng, runId) {
   return { avgRank, avgScore, games: BASELINE_GAMES };
 }
 
+/** --seed-real's own reference measurement (2026-09-04, per user request, see parseArgs' own doc on
+ * SEED_REAL_FLAG): plays the REAL, unmutated current game.xlsx 評価値 table against 4 copies of itself
+ * (same "AI LV4" onboarding as every other game in a --seed-real run, via resourceCardPicker/
+ * synergyTable2) for BASELINE_GAMES games, so there's a concrete "before" number to compare every
+ * evolved generation's own avgScore against. avgRank is trivially ~2.5 here (all 4 seats are equally
+ * strong copies of the same table) -- not a bug, just not a meaningful signal on its own; avgScore is
+ * the actually comparable number. (avgRank *within* a later generation is still meaningful there, since
+ * it's relative to that generation's own sibling population -- it's only a cross-generation/cross-this-
+ * baseline comparison that rank can't support, unlike score.) */
+function measureRealTableBaseline(index, realGenome, runRng, runId, resourceCardPicker, synergyTable2) {
+  const rankSum = { P1: 0, P2: 0, P3: 0, P4: 0 };
+  const scoreSum = { P1: 0, P2: 0, P3: 0, P4: 0 };
+  const evaluator = new Evaluator(index, realGenome);
+  const evaluatorByPlayerId = { P1: evaluator, P2: evaluator, P3: evaluator, P4: evaluator };
+  for (let i = 0; i < BASELINE_GAMES; i++) {
+    const seed = `ga-${runId}-realbaseline-${i}`;
+    const { rankByPlayerId, scoreByPlayerId } = playGameForFitness(seed, PLAYER_NAMES, index, evaluatorByPlayerId, undefined, resourceCardPicker, synergyTable2);
+    for (const playerId of Object.keys(rankSum)) {
+      rankSum[playerId] += rankByPlayerId[playerId];
+      scoreSum[playerId] += scoreByPlayerId[playerId];
+    }
+  }
+  const avgRank = Object.values(rankSum).reduce((a, b) => a + b, 0) / (BASELINE_GAMES * 4);
+  const avgScore = Object.values(scoreSum).reduce((a, b) => a + b, 0) / (BASELINE_GAMES * 4);
+  return { avgRank, avgScore, games: BASELINE_GAMES };
+}
+
 function main() {
-  const { generations, populationSize, gamesPerIndividual, outputDir, resumeFromDir } = parseArgs();
+  const { generations, populationSize, gamesPerIndividual, outputDir, resumeFromDir, seedFromReal } = parseArgs();
   fs.mkdirSync(outputDir, { recursive: true });
 
   const raw = loadGameData(DATA_PATH);
   const index = buildDataIndex(raw);
-  const ids = Object.keys(buildEvalTable(raw)[1]);
+  const realTable = buildEvalTable(raw);
+  const ids = Object.keys(realTable[1]);
 
   // "AI LV4" smart onboarding (2026-08-27/28, see smart-onboarding.js's own doc) -- every training game
   // from here on picks resource cards/JOB/CON the same way LV4 actually plays, not randomly. Generation
@@ -174,6 +218,14 @@ function main() {
   const runId = Date.now();
   const runRng = rng.createRng(`ga-run-${runId}`);
 
+  // Percentage-based (--seed-real) vs flat-amount (default, randomGenome-seeded) mutation -- see
+  // mutateGenomePercent's own doc in src/ai/ga.js for why a flat delta doesn't work once real values
+  // span 0..1000 depending on round. Used both for Generation 1's own seeding below and every later
+  // generation's breeding step, so the whole run stays on one consistent mutation style throughout.
+  const mutate = (genome) => (seedFromReal
+    ? mutateGenomePercent(genome, runRng, MUTATION_RATE, MUTATION_PERCENT)
+    : mutateGenome(genome, runRng, MUTATION_RATE, MUTATION_AMOUNT));
+
   let population;
   let startGeneration;
   let bestEver = { avgRank: Infinity };
@@ -182,6 +234,13 @@ function main() {
     population = resumed.population;
     startGeneration = resumed.startGeneration;
     console.log(`Resuming from ${resumeFromDir} at generation ${startGeneration} (population size ${population.length}) for ${generations} more generations.`);
+  } else if (seedFromReal) {
+    console.log(`Real 評価値 table baseline (self-play, ${BASELINE_GAMES} games)...`);
+    const baseline = measureRealTableBaseline(index, realTable, runRng, runId, resourceCardPicker, synergyTable2);
+    console.log(`  avgScore=${baseline.avgScore.toFixed(1)} (avgRank=${baseline.avgRank.toFixed(2)}, trivially ~2.5 here -- 4 equal copies of the same table; avgScore is the number worth comparing later generations against)`);
+    fs.writeFileSync(path.join(outputDir, 'gen_0000_real_baseline.json'), JSON.stringify({ ...baseline, genome: realTable }, null, 2));
+    population = Array.from({ length: populationSize }, () => mutate(realTable));
+    startGeneration = 0;
   } else {
     console.log(`Generation 0 baseline (pure random, no eval-table, ${BASELINE_GAMES} games)...`);
     const baseline = measureBaseline(index, runRng, runId);
@@ -222,7 +281,7 @@ function main() {
     const nextPopulation = elites.slice();
     while (nextPopulation.length < currentPopulationSize) {
       const parent = elites[Math.floor(rng.next(runRng) * elites.length)];
-      nextPopulation.push(mutateGenome(parent, runRng, MUTATION_RATE, MUTATION_AMOUNT));
+      nextPopulation.push(mutate(parent));
     }
     population = nextPopulation;
   }
