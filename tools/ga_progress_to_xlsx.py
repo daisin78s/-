@@ -29,6 +29,24 @@ import os
 import sys
 import openpyxl
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+GAME_JSON_PATH = os.path.join(SCRIPT_DIR, '..', 'data', 'game.json')
+
+
+def load_real_eval_table():
+    """Replicates src/ai/eval-table.js's buildEvalTable() in Python (same {round: {id: value}} shape,
+    blank/non-numeric cells resolve to 0) -- used for the H:K delta columns and M:P reference columns
+    below, per user request: "HIJK列に gameエクセルのデータから どのくらい動いたか MNOP列に gameエクセ
+    ルの データも出力できるように"."""
+    with open(GAME_JSON_PATH, 'r', encoding='utf-8') as f:
+        game_data = json.load(f)
+    table = {1: {}, 2: {}, 3: {}, 4: {}}
+    for row in game_data.get('評価値', []):
+        for r in (1, 2, 3, 4):
+            raw = row.get(f'{r}R')
+            table[r][row['ID']] = raw if isinstance(raw, (int, float)) else 0
+    return table
+
 if len(sys.argv) < 3:
     print('Usage: python tools/ga_progress_to_xlsx.py <outputDir> <generationSummaryJsonPath>')
     sys.exit(1)
@@ -88,20 +106,36 @@ write_stats_block(ws, row, '最良個体', best)
 row += 3  # blank spacer row before the eval table
 
 genome = best['genome']
+real_table = load_real_eval_table()
 ids = sorted(genome['1'].keys())
 header_row = row
 ws.cell(row=header_row, column=1, value='ID')
 for i, r in enumerate((1, 2, 3, 4)):
     ws.cell(row=header_row, column=2 + i, value=f'{r}R')
+# G:K -- 差分(最良個体 - game.xlsx)、L:P -- game.xlsx自身の値 (2026-09-04, per user request: "G列にID
+# HIJK列に gameエクセルのデータから どのくらい動いたか MNOP列に gameエクセルの データも出力できるよう
+# に") -- ID repeated at G purely for readability (so this block reads standalone without scrolling back
+# to column A), G:K/M:P rows always line up with A:E's own row by ID, not by position (some ids exist in
+# one table but not the other -- see real_table.get() below).
+ws.cell(row=header_row, column=7, value='ID')
+for i, r in enumerate((1, 2, 3, 4)):
+    ws.cell(row=header_row, column=8 + i, value=f'{r}R差')
+for i, r in enumerate((1, 2, 3, 4)):
+    ws.cell(row=header_row, column=13 + i, value=f'{r}R(game)')
 row += 1
 for id_ in ids:
     ws.cell(row=row, column=1, value=id_)
+    ws.cell(row=row, column=7, value=id_)
     for i, r in enumerate((1, 2, 3, 4)):
         value = genome[str(r)][id_]
         ws.cell(row=row, column=2 + i, value=round(value, 2) if isinstance(value, float) else value)
+        real_value = real_table[r].get(id_, 0)
+        delta = value - real_value
+        ws.cell(row=row, column=8 + i, value=round(delta, 2) if isinstance(delta, float) else delta)
+        ws.cell(row=row, column=13 + i, value=round(real_value, 2) if isinstance(real_value, float) else real_value)
     row += 1
 
-for col_letter in ('A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'):
+for col_letter in ('A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P'):
     ws.column_dimensions[col_letter].width = 14
 
 # Newest generation always first (leftmost tab) -- move this sheet to index 0.
