@@ -47,6 +47,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { execFileSync } = require('child_process');
 const { loadGameData, buildDataIndex } = require('../src/data-loader');
 const { buildEvalTable } = require('../src/ai/eval-table');
 const { randomGenome, mutateGenome, mutateGenomePercent } = require('../src/ai/ga');
@@ -61,6 +62,7 @@ const rng = require('../src/rng');
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const DATA_PATH = path.join(PROJECT_ROOT, 'data', 'game.json');
 const PLAYER_NAMES = ['Alice', 'Bob', 'Carol', 'Dan'];
+const PROGRESS_XLSX_SCRIPT = path.join(PROJECT_ROOT, 'tools', 'ga_progress_to_xlsx.py');
 
 const RANDOM_INIT_MIN = -10;
 const RANDOM_INIT_MAX = 10;
@@ -118,13 +120,23 @@ function loadResumePopulation(resumeFromDir) {
 
 /** Plays enough games (population shuffled into groups of 4, repeated gamesPerIndividual times) that
  * every individual in `population` (an array of genomes) gets exactly gamesPerIndividual games, and
- * returns each individual's {avgRank, avgScore, gamesPlayed} by its index into `population`.
+ * returns each individual's {avgRank, avgScore, avgRawScore, avgQstScore, winRate, gamesPlayed} by its
+ * index into `population` -- winRate (2026-09-04, per user request: "勝率...を出してほしい") is the
+ * fraction of its own games where it finished rank 1 (ties broken the same way turn-flow's own ranking
+ * always has been, so "rank 1" here means sole 1st place, same convention historyByPlayerId.rank uses
+ * elsewhere in this codebase). avgRawScore/avgQstScore (2026-09-04, per user request: "平均点（素点と
+ * QSTも）", same 合計/素点/クエスト split tools/ga_report_top.js already reports) split avgScore into
+ * QST's own contribution and everything else -- playGameForFitness's own qstScoreByPlayerId already
+ * carries this, previously only read by ga_report_top.js's separate post-hoc replay, now captured
+ * directly during training too so it's available every generation without a second replay pass.
  * resourceCardPicker/synergyTable2 (2026-08-27, "AI LV4"'s own smart onboarding, see
  * smart-onboarding.js's own doc) are passed straight through to playGameForFitness so every training
  * game already uses the same JOB/CON/resource-card selection LV4 actually plays with. */
 function evaluatePopulationFitness(population, index, runRng, gamesPerIndividual, runId, generationLabel, resourceCardPicker, synergyTable2) {
   const rankSumByIndex = new Array(population.length).fill(0);
   const scoreSumByIndex = new Array(population.length).fill(0);
+  const qstScoreSumByIndex = new Array(population.length).fill(0);
+  const winCountByIndex = new Array(population.length).fill(0);
   const gamesPlayedByIndex = new Array(population.length).fill(0);
   const evaluators = population.map((genome) => new Evaluator(index, genome));
 
@@ -137,11 +149,13 @@ function evaluatePopulationFitness(population, index, runRng, gamesPerIndividual
       seatIndices.forEach((idx, seat) => { evaluatorByPlayerId[`P${seat + 1}`] = evaluators[idx]; });
       const seed = `ga-${runId}-${generationLabel}-${gameCount}`;
       gameCount++;
-      const { rankByPlayerId, scoreByPlayerId } = playGameForFitness(seed, PLAYER_NAMES, index, evaluatorByPlayerId, undefined, resourceCardPicker, synergyTable2);
+      const { rankByPlayerId, scoreByPlayerId, qstScoreByPlayerId } = playGameForFitness(seed, PLAYER_NAMES, index, evaluatorByPlayerId, undefined, resourceCardPicker, synergyTable2);
       seatIndices.forEach((idx, seat) => {
         const playerId = `P${seat + 1}`;
         rankSumByIndex[idx] += rankByPlayerId[playerId];
         scoreSumByIndex[idx] += scoreByPlayerId[playerId];
+        qstScoreSumByIndex[idx] += qstScoreByPlayerId[playerId] || 0;
+        if (rankByPlayerId[playerId] === 1) winCountByIndex[idx]++;
         gamesPlayedByIndex[idx]++;
       });
     }
@@ -150,6 +164,9 @@ function evaluatePopulationFitness(population, index, runRng, gamesPerIndividual
   return population.map((genome, i) => ({
     avgRank: rankSumByIndex[i] / gamesPlayedByIndex[i],
     avgScore: scoreSumByIndex[i] / gamesPlayedByIndex[i],
+    avgQstScore: qstScoreSumByIndex[i] / gamesPlayedByIndex[i],
+    avgRawScore: (scoreSumByIndex[i] - qstScoreSumByIndex[i]) / gamesPlayedByIndex[i],
+    winRate: winCountByIndex[i] / gamesPlayedByIndex[i],
     gamesPlayed: gamesPlayedByIndex[i],
   }));
 }
@@ -183,6 +200,7 @@ function measureBaseline(index, runRng, runId) {
 function measureRealTableBaseline(index, realGenome, runRng, runId, resourceCardPicker, synergyTable2) {
   const rankSum = { P1: 0, P2: 0, P3: 0, P4: 0 };
   const scoreSum = { P1: 0, P2: 0, P3: 0, P4: 0 };
+  const winCount = { P1: 0, P2: 0, P3: 0, P4: 0 };
   const evaluator = new Evaluator(index, realGenome);
   const evaluatorByPlayerId = { P1: evaluator, P2: evaluator, P3: evaluator, P4: evaluator };
   for (let i = 0; i < BASELINE_GAMES; i++) {
@@ -191,11 +209,13 @@ function measureRealTableBaseline(index, realGenome, runRng, runId, resourceCard
     for (const playerId of Object.keys(rankSum)) {
       rankSum[playerId] += rankByPlayerId[playerId];
       scoreSum[playerId] += scoreByPlayerId[playerId];
+      if (rankByPlayerId[playerId] === 1) winCount[playerId]++;
     }
   }
   const avgRank = Object.values(rankSum).reduce((a, b) => a + b, 0) / (BASELINE_GAMES * 4);
   const avgScore = Object.values(scoreSum).reduce((a, b) => a + b, 0) / (BASELINE_GAMES * 4);
-  return { avgRank, avgScore, games: BASELINE_GAMES };
+  const winRate = Object.values(winCount).reduce((a, b) => a + b, 0) / (BASELINE_GAMES * 4);
+  return { avgRank, avgScore, winRate, games: BASELINE_GAMES };
 }
 
 function main() {
@@ -226,20 +246,45 @@ function main() {
     ? mutateGenomePercent(genome, runRng, MUTATION_RATE, MUTATION_PERCENT)
     : mutateGenome(genome, runRng, MUTATION_RATE, MUTATION_AMOUNT));
 
+  // 固定アンカー (2026-09-04, per user request: "エクセルのものを一定数入れる", clarified as "毎世代、常に
+  // 固定で存在させる", count=1) -- ANCHOR_COUNT slots of the population are forced to be the exact,
+  // unmutated real 評価値 table every single generation, regardless of what elitism/breeding would
+  // otherwise have put there. Unlike a one-time seed, this never drifts away and never gets bred from
+  // (any of its own children breeding logic might otherwise produce), so its own fitness each generation
+  // is a live, continuously-refreshed "is anything actually beating the real table right now" signal --
+  // more direct than comparing against an isolated one-time baseline measurement, and self-correcting in
+  // the same way the rest of the population is (each generation plays fresh games/opponents).
+  const ANCHOR_COUNT = 1;
+  const withAnchors = (pop) => {
+    const result = pop.slice();
+    for (let i = 0; i < ANCHOR_COUNT && i < result.length; i++) result[i] = realTable;
+    return result;
+  };
+  const realTableStr = JSON.stringify(realTable);
+  const findAnchor = (ranked) => ranked.find((r) => JSON.stringify(r.genome) === realTableStr) || null;
+
+  // 世代ごとの進捗ログ (2026-09-04, per user request: "世代が変わるごとにデータを追加してほしい") --
+  // CSV (not JSON) specifically so it opens directly in Excel like every other report this project
+  // produces, one row appended per generation, never rewritten -- readable mid-run, not just at the end.
+  const progressCsvPath = path.join(outputDir, 'progress.csv');
+  if (!fs.existsSync(progressCsvPath)) {
+    fs.writeFileSync(progressCsvPath, 'generation,best_avg_rank,best_avg_score,best_win_rate,anchor_avg_rank,anchor_avg_score,anchor_win_rate\n');
+  }
+
   let population;
   let startGeneration;
   let bestEver = { avgRank: Infinity };
   if (resumeFromDir) {
     const resumed = loadResumePopulation(resumeFromDir);
-    population = resumed.population;
+    population = withAnchors(resumed.population);
     startGeneration = resumed.startGeneration;
-    console.log(`Resuming from ${resumeFromDir} at generation ${startGeneration} (population size ${population.length}) for ${generations} more generations.`);
+    console.log(`Resuming from ${resumeFromDir} at generation ${startGeneration} (population size ${population.length}, ${ANCHOR_COUNT} anchor slot(s) (re-)inserted) for ${generations} more generations.`);
   } else if (seedFromReal) {
     console.log(`Real 評価値 table baseline (self-play, ${BASELINE_GAMES} games)...`);
     const baseline = measureRealTableBaseline(index, realTable, runRng, runId, resourceCardPicker, synergyTable2);
-    console.log(`  avgScore=${baseline.avgScore.toFixed(1)} (avgRank=${baseline.avgRank.toFixed(2)}, trivially ~2.5 here -- 4 equal copies of the same table; avgScore is the number worth comparing later generations against)`);
+    console.log(`  avgScore=${baseline.avgScore.toFixed(1)} winRate=${(baseline.winRate * 100).toFixed(0)}% (avgRank=${baseline.avgRank.toFixed(2)}, trivially ~2.5/~25% here -- 4 equal copies of the same table; avgScore/winRate are the numbers worth comparing later generations against)`);
     fs.writeFileSync(path.join(outputDir, 'gen_0000_real_baseline.json'), JSON.stringify({ ...baseline, genome: realTable }, null, 2));
-    population = Array.from({ length: populationSize }, () => mutate(realTable));
+    population = withAnchors(Array.from({ length: populationSize }, () => mutate(realTable)));
     startGeneration = 0;
   } else {
     console.log(`Generation 0 baseline (pure random, no eval-table, ${BASELINE_GAMES} games)...`);
@@ -257,18 +302,42 @@ function main() {
     const ranked = fitness
       .map((f, i) => ({ ...f, genome: population[i] }))
       .sort((a, b) => a.avgRank - b.avgRank);
+    const anchor = findAnchor(ranked);
 
     const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
-    console.log(`Generation ${gen}/${finalGeneration}: best avgRank=${ranked[0].avgRank.toFixed(2)} (avgScore=${ranked[0].avgScore.toFixed(1)}), worst avgRank=${ranked[ranked.length - 1].avgRank.toFixed(2)} (${elapsed}s)`);
+    const anchorSummary = anchor ? `, anchor avgRank=${anchor.avgRank.toFixed(2)} (avgScore=${anchor.avgScore.toFixed(1)}, winRate=${(anchor.winRate * 100).toFixed(0)}%)` : '';
+    console.log(`Generation ${gen}/${finalGeneration}: best avgRank=${ranked[0].avgRank.toFixed(2)} (avgScore=${ranked[0].avgScore.toFixed(1)}, winRate=${(ranked[0].winRate * 100).toFixed(0)}%), worst avgRank=${ranked[ranked.length - 1].avgRank.toFixed(2)}${anchorSummary} (${elapsed}s)`);
 
     fs.writeFileSync(
       path.join(outputDir, `gen_${String(gen).padStart(4, '0')}.json`),
-      JSON.stringify({ generation: gen, population: ranked.map(({ genome, avgRank, avgScore, gamesPlayed }) => ({ genome, avgRank, avgScore, gamesPlayed })) }, null, 2)
+      JSON.stringify({ generation: gen, population: ranked.map(({ genome, avgRank, avgScore, avgRawScore, avgQstScore, winRate, gamesPlayed }) => ({ genome, avgRank, avgScore, avgRawScore, avgQstScore, winRate, gamesPlayed })) }, null, 2)
     );
+    fs.appendFileSync(progressCsvPath, [
+      gen,
+      ranked[0].avgRank.toFixed(3), ranked[0].avgScore.toFixed(2), ranked[0].winRate.toFixed(3),
+      anchor ? anchor.avgRank.toFixed(3) : '', anchor ? anchor.avgScore.toFixed(2) : '', anchor ? anchor.winRate.toFixed(3) : '',
+    ].join(',') + '\n');
+
+    // Excel progress report (2026-09-04, per user request: "エクセルに 1 2 3 4とシートを作り...") -- one
+    // sheet per generation via tools/ga_progress_to_xlsx.py, same Node->Python subprocess pattern
+    // ai_data_report.js already uses for ai_data_write.py. A small per-generation summary JSON (not the
+    // full gen_XXXX.json) is all that script needs; written to a fixed, reused filename since nothing
+    // else ever needs to read it back afterward.
+    const summaryPath = path.join(outputDir, '_gen_summary.json');
+    fs.writeFileSync(summaryPath, JSON.stringify({
+      generation: gen,
+      anchor: anchor ? { avgRank: anchor.avgRank, avgScore: anchor.avgScore, avgRawScore: anchor.avgRawScore, avgQstScore: anchor.avgQstScore, winRate: anchor.winRate } : null,
+      best: { avgRank: ranked[0].avgRank, avgScore: ranked[0].avgScore, avgRawScore: ranked[0].avgRawScore, avgQstScore: ranked[0].avgQstScore, winRate: ranked[0].winRate, genome: ranked[0].genome },
+    }));
+    try {
+      execFileSync('python', [PROGRESS_XLSX_SCRIPT, outputDir, summaryPath], { stdio: 'pipe' });
+    } catch (e) {
+      console.error(`  (progress.xlsx update failed, continuing anyway: ${e.message})`);
+    }
 
     if (ranked[0].avgRank < bestEver.avgRank) {
       bestEver = ranked[0];
-      fs.writeFileSync(path.join(outputDir, 'best_genome.json'), JSON.stringify({ generation: gen, avgRank: bestEver.avgRank, avgScore: bestEver.avgScore, genome: bestEver.genome }, null, 2));
+      fs.writeFileSync(path.join(outputDir, 'best_genome.json'), JSON.stringify({ generation: gen, avgRank: bestEver.avgRank, avgScore: bestEver.avgScore, avgRawScore: bestEver.avgRawScore, avgQstScore: bestEver.avgQstScore, winRate: bestEver.winRate, genome: bestEver.genome }, null, 2));
     }
 
     if (gen === finalGeneration) break; // no need to breed a generation nobody will evaluate
@@ -283,7 +352,7 @@ function main() {
       const parent = elites[Math.floor(rng.next(runRng) * elites.length)];
       nextPopulation.push(mutate(parent));
     }
-    population = nextPopulation;
+    population = withAnchors(nextPopulation);
   }
 
   console.log(`Done. Best genome (avgRank=${bestEver.avgRank.toFixed(2)}) written to ${path.join(outputDir, 'best_genome.json')}`);
