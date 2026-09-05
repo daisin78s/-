@@ -74,17 +74,25 @@ if sheet_name in wb.sheetnames:
 ws = wb.create_sheet(sheet_name)
 
 def write_stats_block(ws, start_row, label, stats):
+    # .get(key) throughout, not stats[key] (2026-09-04 hotfix, found during a bulk backfill over every
+    # past generation): gen_XXXX.json files from before winRate/avgRawScore/avgQstScore existed at all
+    # (generations 1-39, predating even --seed-real's own ANCHOR_COUNT/gamesPlayed addition) lack these
+    # keys entirely, not just gamesPlayed -- same "tolerate whatever shape this particular generation's
+    # file happens to have" reasoning as gamesPlayed's own earlier .get() fix just below.
+    def fmt(key, digits=2):
+        value = stats.get(key)
+        return round(value, digits) if isinstance(value, (int, float)) else None
     ws.cell(row=start_row, column=1, value=label)
     ws.cell(row=start_row + 1, column=1, value='勝率')
-    ws.cell(row=start_row + 1, column=2, value=round(stats['winRate'], 3))
+    ws.cell(row=start_row + 1, column=2, value=fmt('winRate', 3))
     ws.cell(row=start_row + 1, column=3, value='平均点(合計)')
-    ws.cell(row=start_row + 1, column=4, value=round(stats['avgScore'], 2))
+    ws.cell(row=start_row + 1, column=4, value=fmt('avgScore'))
     ws.cell(row=start_row + 1, column=5, value='素点')
-    ws.cell(row=start_row + 1, column=6, value=round(stats['avgRawScore'], 2))
+    ws.cell(row=start_row + 1, column=6, value=fmt('avgRawScore'))
     ws.cell(row=start_row + 1, column=7, value='QST')
-    ws.cell(row=start_row + 1, column=8, value=round(stats['avgQstScore'], 2))
+    ws.cell(row=start_row + 1, column=8, value=fmt('avgQstScore'))
     ws.cell(row=start_row + 1, column=9, value='平均順位')
-    ws.cell(row=start_row + 1, column=10, value=round(stats['avgRank'], 2))
+    ws.cell(row=start_row + 1, column=10, value=fmt('avgRank'))
     # 2026-09-04, per user request: "最良個体の平均点と平均順位 何試合での平均かも書いてほしい 例 100試合"
     # -- all 5 stats above (勝率/平均点/素点/QST/平均順位) come from the same gamesPlayed sample, so one
     # shared "試合数" column covers all of them rather than repeating it per metric. .get(), not ['...']
