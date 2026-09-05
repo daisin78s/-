@@ -67,6 +67,11 @@ def write_stats_block(ws, start_row, label, stats):
     ws.cell(row=start_row + 1, column=8, value=round(stats['avgQstScore'], 2))
     ws.cell(row=start_row + 1, column=9, value='平均順位')
     ws.cell(row=start_row + 1, column=10, value=round(stats['avgRank'], 2))
+    # 2026-09-04, per user request: "最良個体の平均点と平均順位 何試合での平均かも書いてほしい 例 100試合"
+    # -- all 5 stats above (勝率/平均点/素点/QST/平均順位) come from the same gamesPlayed sample, so one
+    # shared "試合数" column covers all of them rather than repeating it per metric.
+    ws.cell(row=start_row + 1, column=11, value='試合数')
+    ws.cell(row=start_row + 1, column=12, value=f"{stats['gamesPlayed']}試合")
 
 row = 1
 if anchor:
@@ -89,7 +94,7 @@ for id_ in ids:
         ws.cell(row=row, column=2 + i, value=round(value, 2) if isinstance(value, float) else value)
     row += 1
 
-for col_letter in ('A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'):
+for col_letter in ('A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'):
     ws.column_dimensions[col_letter].width = 14
 
 # Newest generation always first (leftmost tab) -- move this sheet to index 0.

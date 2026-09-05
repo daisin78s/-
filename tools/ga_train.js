@@ -326,8 +326,8 @@ function main() {
     const summaryPath = path.join(outputDir, '_gen_summary.json');
     fs.writeFileSync(summaryPath, JSON.stringify({
       generation: gen,
-      anchor: anchor ? { avgRank: anchor.avgRank, avgScore: anchor.avgScore, avgRawScore: anchor.avgRawScore, avgQstScore: anchor.avgQstScore, winRate: anchor.winRate } : null,
-      best: { avgRank: ranked[0].avgRank, avgScore: ranked[0].avgScore, avgRawScore: ranked[0].avgRawScore, avgQstScore: ranked[0].avgQstScore, winRate: ranked[0].winRate, genome: ranked[0].genome },
+      anchor: anchor ? { avgRank: anchor.avgRank, avgScore: anchor.avgScore, avgRawScore: anchor.avgRawScore, avgQstScore: anchor.avgQstScore, winRate: anchor.winRate, gamesPlayed: anchor.gamesPlayed } : null,
+      best: { avgRank: ranked[0].avgRank, avgScore: ranked[0].avgScore, avgRawScore: ranked[0].avgRawScore, avgQstScore: ranked[0].avgQstScore, winRate: ranked[0].winRate, gamesPlayed: ranked[0].gamesPlayed, genome: ranked[0].genome },
     }));
     try {
       execFileSync('python', [PROGRESS_XLSX_SCRIPT, outputDir, summaryPath], { stdio: 'pipe' });
