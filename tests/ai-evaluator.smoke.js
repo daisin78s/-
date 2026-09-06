@@ -36,6 +36,15 @@ raw['評価値_CON'].find((r) => r.NAME === 'D').憤怒 = -7;
 for (const name of ['複合ダイス強化で天空の塔を獲得', '複合ダイス強化で凱旋門を獲得', '複合ダイス強化で騎士像を獲得', '複合ダイス強化で鐘楼を獲得', '複合ダイス強化で宮殿を獲得', '複合ダイス強化で施療院を獲得']) {
   raw['評価値_戦略'].push({ NAME: name, '1R': '', '2R': '', '3R': '', '4R': 999 });
 }
+// 評価値's own 'モニュメント確保ボーナス' row (2026-09-06, per user report: AI skipping reachable, exclusive
+// monuments in favor of economy cards -- see evaluator.js's own "exclusive monument-securing bonus" doc)
+// is genuinely seeded at 0/0/0/0 in the real sheet until GA training discovers a value worth deploying --
+// patched here to nonzero round-3/4 numbers purely so the tests below can exercise the mechanism.
+{
+  const row = raw['評価値'].find((r) => r.ID === 'モニュメント確保ボーナス');
+  row['3R'] = 50;
+  row['4R'] = 80;
+}
 const evalTable = buildEvalTable(raw);
 const evaluator = new Evaluator(index, evalTable);
 const evaluatorQstAware = new Evaluator(index, evalTable, { qstAware: true }); // see AI LV3's own doc in main.js
@@ -223,6 +232,102 @@ function stateWithM012InShop(round) {
     'This player having what it takes themselves is not treated as "at risk" against themselves',
     evaluator.score(stateWithP1QualifyingHand(true), 'P1'),
     evaluator.score(stateWithP1QualifyingHand(false), 'P1'),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Exclusive monument-securing bonus (2026-09-06, per user report: "本来モニュメントを獲得しに行かなければ
+// いけないラウンドで拡大再生産用のカードを獲得しに行っている" -- the sniping-risk penalty above only
+// creates urgency when an OPPONENT could also grab a monument; this credits round-3+ 'モニュメント確保
+// ボーナス' (patched to 50/80 for round 3/4 above -- the real sheet keeps it at 0 until GA training finds
+// a value) for every M-shop monument this player could already build that NO opponent could also grab.
+// Reuses stateWithM012InShop (round argument now matters, unlike the round-1-only risk tests above).
+// ---------------------------------------------------------------------------
+// stateWithP1QualifyingHand(round, includeMonument) always gives P1 the same die+13C -- whether M012
+// actually sits in the shop is the ONLY thing that differs, so the score difference isolates exactly the
+// securing bonus (or lack of it), never conflated with P1's own die/resource contribution to the score.
+function stateWithP1QualifyingHand(round, includeMonument) {
+  const state = includeMonument ? stateWithM012InShop(round) : freshState(round);
+  const p1 = state.players[0];
+  const die = createDie('d1', 'COLOR');
+  die.value = 3; // >= M012's threshold of 1
+  p1.dice.push(die);
+  p1.resources.C = 13; // M012's full COST
+  return state;
+}
+{
+  check(
+    'Round 3: a monument only I can currently build credits the new bonus (+50)',
+    evaluator.score(stateWithP1QualifyingHand(3, true), 'P1'),
+    evaluator.score(stateWithP1QualifyingHand(3, false), 'P1') + 50,
+  );
+}
+{
+  check(
+    'Round 4 uses its own round value (+80), not round 3\'s',
+    evaluator.score(stateWithP1QualifyingHand(4, true), 'P1'),
+    evaluator.score(stateWithP1QualifyingHand(4, false), 'P1') + 80,
+  );
+}
+{
+  // Round-gated: even with a fully qualifying hand and zero opponent risk, round 1-2 never credit this
+  // bonus (round 1-2 columns were never patched away from their real, genuine 0).
+  check(
+    'Round 1: the same qualifying hand credits nothing (round-gated to 3+)',
+    evaluator.score(stateWithP1QualifyingHand(1, true), 'P1'),
+    evaluator.score(stateWithP1QualifyingHand(1, false), 'P1'),
+  );
+}
+{
+  // A monument an OPPONENT could also snipe gets neither this bonus nor is it double-counted with the
+  // sniping-risk penalty above -- the two blocks are mutually exclusive per monument (this one explicitly
+  // skips any monumentAtRiskFromOpponents-true monument). Both states give P1 the exact same qualifying
+  // hand; only whether P2 ALSO qualifies differs, isolating the exclusive-bonus-vs-at-risk-penalty switch
+  // from P1's own resource/die holdings (which would otherwise also change the raw score).
+  function stateWithP1Qualifying(p2AlsoQualifies) {
+    const state = stateWithM012InShop(3);
+    const p1 = state.players[0];
+    const p1Die = createDie('d1', 'COLOR');
+    p1Die.value = 3;
+    p1.dice.push(p1Die);
+    p1.resources.C = 13;
+    if (p2AlsoQualifies) {
+      const p2 = state.players[1];
+      const p2Die = createDie('d2', 'COLOR');
+      p2Die.value = 3;
+      p2.dice.push(p2Die);
+      p2.resources.C = 13;
+    }
+    return state;
+  }
+  // Exclusive (P2 doesn't qualify): +50 bonus, no penalty. At risk (P2 also qualifies): no bonus, -600
+  // penalty (M012's eval-table value 0 + VP=6 * round-3 VP weight 100). Difference: 50 - (-600) = 650.
+  check(
+    'Losing exclusivity (an opponent starts also qualifying) swings the score by bonus-lost + penalty-gained (650)',
+    evaluator.score(stateWithP1Qualifying(false), 'P1'),
+    evaluator.score(stateWithP1Qualifying(true), 'P1') + 650,
+  );
+}
+{
+  // Multiple simultaneously-securable exclusive monuments accumulate, not just the single best one.
+  // Both states give P1 the identical die + C=13 + A=7 holdings; only whether M010 (COST="7A", DICE=">=3"
+  // -- also satisfied by this same die=3) additionally sits in the shop differs, isolating exactly its
+  // own bonus contribution.
+  function stateWithTwoMonumentCandidates(includeM010) {
+    const state = stateWithM012InShop(3);
+    if (includeM010) state.shops.M.slots.M2 = 'M010';
+    const p1 = state.players[0];
+    const die = createDie('d1', 'COLOR');
+    die.value = 3;
+    p1.dice.push(die);
+    p1.resources.C = 13; // covers M012
+    p1.resources.A = 7; // covers M010 too
+    return state;
+  }
+  check(
+    'A second simultaneously-securable exclusive monument adds its own bonus on top (accumulates, not just the best one)',
+    evaluator.score(stateWithTwoMonumentCandidates(true), 'P1'),
+    evaluator.score(stateWithTwoMonumentCandidates(false), 'P1') + 50,
   );
 }
 

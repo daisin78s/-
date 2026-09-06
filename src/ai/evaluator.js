@@ -53,27 +53,44 @@ function estimateRewardVp(rewardText) {
   return vp;
 }
 
-/** Whether some OTHER player already has, right now, both a qualifying unplaced color die and enough
- * resources to build monumentFaceId (2026-08-04, per user feedback: "そのモニュメントとられるかもは
- * 相手のダイスと資源が今足りているかで判断するようにしてください フリーアクションやJOBは現在は考慮
- * しなくていいです") -- a cheap current-state-only snapshot: never simulates an opponent's future
- * turns, and deliberately ignores free actions (e.g. A->K) or JOB abilities that could let them convert
- * toward affording it -- just their raw held resources and raw die values right now. Only checks the
- * die-value threshold (not e.g. the castle's own same-value-stacking accumulation), matching the common
- * case of a monument reachable via a normal AREA's own die value. */
+/** Whether `player` already has, right now, both a qualifying unplaced color die and enough resources to
+ * build a monument needing `threshold` DICE and `costItems` (lowerCostList's own shape) -- shared by
+ * monumentAtRiskFromOpponents (checking every OPPONENT) and monumentSecurableByPlayer (checking the
+ * scored player themselves) below, so both read the exact same "could grab this right now" definition.
+ * Deliberately ignores free actions (e.g. A->K) or JOB abilities that could let a player convert toward
+ * affording it -- just raw held resources and raw die values right now (2026-08-04, per user feedback,
+ * see monumentAtRiskFromOpponents' own original doc). Only checks the die-value threshold (not e.g. the
+ * castle's own same-value-stacking accumulation), matching the common case of a monument reachable via a
+ * normal AREA's own die value. */
+function playerQualifiesForMonument(player, threshold, costItems) {
+  const hasQualifyingDie = player.dice.some((d) => d.kind === 'COLOR' && d.placedMapId === null && !d.passed && d.value !== null && d.value >= threshold);
+  if (!hasQualifyingDie) return false;
+  return costItems.every((item) => (player.resources[item.resource] || 0) >= item.count);
+}
+
+/** Whether some OTHER player already qualifies (playerQualifiesForMonument) to build monumentFaceId right
+ * now (2026-08-04, per user feedback: "そのモニュメントとられるかもは相手のダイスと資源が今足りているか
+ * で判断するようにしてください フリーアクションやJOBは現在は考慮しなくていいです") -- a cheap
+ * current-state-only snapshot, never simulates an opponent's future turns. */
 function monumentAtRiskFromOpponents(state, index, playerId, monumentFaceId) {
   const row = getCardRow(index, monumentFaceId);
   const threshold = parseMonumentThreshold(row.DICE);
   if (threshold === null) return false;
   const costItems = lowerCostList(row.COST);
-  for (const opponent of state.players) {
-    if (opponent.id === playerId) continue;
-    const hasQualifyingDie = opponent.dice.some((d) => d.kind === 'COLOR' && d.placedMapId === null && !d.passed && d.value !== null && d.value >= threshold);
-    if (!hasQualifyingDie) continue;
-    const canAfford = costItems.every((item) => (opponent.resources[item.resource] || 0) >= item.count);
-    if (canAfford) return true;
-  }
-  return false;
+  return state.players.some((opponent) => opponent.id !== playerId && playerQualifiesForMonument(opponent, threshold, costItems));
+}
+
+/** Whether playerId THEMSELVES already qualifies (playerQualifiesForMonument) to build monumentFaceId
+ * right now (2026-09-06, per user report: "本来モニュメントを獲得しに行かなければいけないラウンドで拡大
+ * 再生産用のカードを獲得しに行っている" -- see this file's own score() doc on the "exclusive monument-
+ * securing bonus" this feeds, right below monumentAtRiskFromOpponents' matching opponent-side check). */
+function monumentSecurableByPlayer(state, index, playerId, monumentFaceId) {
+  const row = getCardRow(index, monumentFaceId);
+  const threshold = parseMonumentThreshold(row.DICE);
+  if (threshold === null) return false;
+  const costItems = lowerCostList(row.COST);
+  const player = state.players.find((p) => p.id === playerId);
+  return !!player && playerQualifiesForMonument(player, threshold, costItems);
 }
 
 class Evaluator {
@@ -256,6 +273,30 @@ class Evaluator {
           const row = getCardRow(this.index, faceId);
           const vp = typeof row.VP === 'number' ? row.VP : 0;
           total -= v(faceId) + vp * v('VP');
+        }
+      }
+    }
+
+    // Exclusive monument-securing bonus (2026-09-06, per user report: "本来モニュメントを獲得しに行かな
+    // ければいけないラウンドで拡大再生産用のカードを獲得しに行っている" -- the sniping-risk penalty just
+    // above only creates urgency when some OPPONENT could also grab a monument right now; when nobody
+    // else can, there's no time pressure at all, so a shallow-lookahead AI has no reason to actually go
+    // get it instead of continuing to build economy engines -- even though building it would obviously
+    // score more, eventually. Round 3+ only (per user spec: "3-4R" -- round 1-2 monuments are essentially
+    // never actually reachable yet, so this would just be dead weight before then). Credits a new,
+    // GA-tunable eval-table value (id 'モニュメント確保ボーナス', seeded at 0 in every round -- see
+    // src/ai/ga.js's mutateGenomePercent zero-escape step for how training discovers a nonzero value from
+    // here) for EVERY M-shop monument this player could already build right now
+    // (monumentSecurableByPlayer) that no opponent could also grab (!monumentAtRiskFromOpponents) --
+    // summed across every such monument, not just the best one, since a state with several
+    // simultaneously-grabbable exclusive monuments really is that much more valuable than one with just
+    // one.
+    if (round >= 3 && state.shops && state.shops.M) {
+      for (const faceId of Object.values(state.shops.M.slots)) {
+        if (!faceId) continue;
+        if (monumentAtRiskFromOpponents(state, this.index, playerId, faceId)) continue;
+        if (monumentSecurableByPlayer(state, this.index, playerId, faceId)) {
+          total += v('モニュメント確保ボーナス');
         }
       }
     }
