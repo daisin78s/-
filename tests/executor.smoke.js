@@ -1021,6 +1021,34 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   check('...and changes the chosen die by +3 (4 -> 7)', die.value, 7);
   check('...and blocks A,B,C for this player this turn', player.blockedBuildCategoriesThisTurn, ['A', 'B', 'C']);
 }
+{
+  // skipDieChange (2026-09-06, per user request: "宮廷人の能力 +3したい対象がないとき +3しなくても軽減
+  // 能力だけでも使えるようにして"): with no die (and no chosenCardPhysicalId) supplied at all, the whole
+  // atomic TAP program used to fail outright with CHOICE_REQUIRED, discarding the ADD(BZ)/BLOCK_BUILD
+  // that ran before it -- an explicit skip now lets those still commit, leaving every die untouched.
+  const state = freshState();
+  const row = getCardRow(index, 'JOB007');
+  const player = getPlayerRef(state, 'P1');
+  const die = createDie('d1', 'COLOR');
+  die.value = 4;
+  player.dice.push(die);
+  const result = executor.runProgram(state, index, { playerId: 'P1', skipDieChange: true }, row.TAP);
+  check('JOB007\'s TAP with skipDieChange still succeeds and grants BZ', { success: result.success, BZ: player.resources.BZ }, { success: true, BZ: 1 });
+  check('...but leaves the die completely untouched (still 4)', die.value, 4);
+  check('...and still blocks A,B,C for this player this turn', player.blockedBuildCategoriesThisTurn, ['A', 'B', 'C']);
+}
+{
+  // Without EITHER chosenDieId/chosenCardPhysicalId OR an explicit skipDieChange, this still fails with
+  // CHOICE_REQUIRED exactly as before -- skipping must be a deliberate choice, never the silent default.
+  const state = freshState();
+  const row = getCardRow(index, 'JOB007');
+  const result = executor.runProgram(state, index, { playerId: 'P1' }, row.TAP);
+  check('JOB007\'s TAP with no target and no skipDieChange still fails with CHOICE_REQUIRED', result.reason, 'CHOICE_REQUIRED');
+  // Re-fetched by id, not a pre-call reference -- a rollback replaces state.players' contents wholesale
+  // (see runProgram's own doc), so the object a pre-call reference points to is left stranded holding
+  // whatever ADD(BZ) mutated it to just before the later command failed, never "un-mutated" in place.
+  check('...and grants no BZ (whole atomic program rolled back)', getPlayerRef(state, 'P1').resources.BZ || 0, 0);
+}
 
 // ---------------------------------------------------------------------------
 // runChange's gain side fires GET again (2026-08-04, per user feedback: "JOB006はCHANGEで色Dを手に入れ

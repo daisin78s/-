@@ -135,6 +135,10 @@ function applyInPlace(state, index, move) {
       if (move.chosenDieId !== undefined) context.chosenDieId = move.chosenDieId;
       if (move.chosenValue !== undefined) context.chosenValue = move.chosenValue;
       if (move.chosenDelta !== undefined) context.chosenDelta = move.chosenDelta;
+      // skipDieChange (2026-09-06, JOB007/宮廷人's own MONUMENT_CHANGE_DIE_VALUE -- see
+      // executor.runMonumentChangeDieValue's own doc): lets this bare TAP commit its non-die effects
+      // (ADD(BZ), BLOCK_BUILD) with no die/card targeted at all.
+      if (move.skipDieChange) context.skipDieChange = true;
       const result = board.useBareTapAbility(state, index, context, move.physicalId);
       if (!result.success) return result;
       if (result.pendingBuild) {

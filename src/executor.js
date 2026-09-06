@@ -1068,8 +1068,17 @@ function runMonumentChangeDieValue(state, index, context, cmd) {
   if (context.chosenCardPhysicalId !== undefined) {
     return runChangeCardBuildValue(state, index, context, cmd.delta, context.chosenCardPhysicalId);
   }
+  // context.skipDieChange (2026-09-06, per user request: JOB007/宮廷人's own TAP -- "ADD(BZ);
+  // MONUMENT_CHANGE_DIE_VALUE(SELF+3);BLOCK_BUILD(...)" -- used to be entirely unusable whenever the
+  // player had no die/card worth +3'ing (chosenDieId/chosenCardPhysicalId both required, or this returned
+  // CHOICE_REQUIRED and the whole atomic TAP program failed before ever reaching ADD(BZ)) -- "+3したい
+  // 対象がないとき +3しなくても軽減能力だけでも使えるようにして": an explicit skip lets the rest of the
+  // program (ADD(BZ), BLOCK_BUILD) still commit, simply leaving every die/card untouched. Distinct from
+  // omitting both fields outright (still CHOICE_REQUIRED below) so a caller must actively choose to skip,
+  // never skip by accident.
+  if (context.skipDieChange) return { success: true };
   if (context.chosenDieId === undefined) {
-    return { success: false, reason: 'CHOICE_REQUIRED', need: ['chosenDieId or chosenCardPhysicalId'] };
+    return { success: false, reason: 'CHOICE_REQUIRED', need: ['chosenDieId or chosenCardPhysicalId or skipDieChange'] };
   }
   const die = requireOwnDie(state, context, context.chosenDieId);
   markDieValueChanged(die);

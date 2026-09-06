@@ -273,6 +273,10 @@
       <div class="card-inst-modal__body">
         <div id="tap-choice-dice" class="tap-choice-dice"></div>
         <div id="tap-choice-cards" class="tap-choice-dice"></div>
+        <!-- +3しない (2026-09-06, per user request: JOB007/宮廷人の能力で対象がなくても使えるように) --
+             MONUMENT_CHANGE_DIE_VALUE専用、常にダイス/カード候補と並んで表示 -- see main.js's
+             renderTapChoiceModal. -->
+        <div id="tap-choice-skip" class="build-choice-payment__group"></div>
         <div id="tap-choice-values" class="build-choice-payment__group"></div>
       </div>
       <div class="placement-choice-actions">

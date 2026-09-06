@@ -328,6 +328,56 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
 }
 
 // ---------------------------------------------------------------------------
+// skipDieChange (2026-09-06, per user request: JOB007/宮廷人's own MONUMENT_CHANGE_DIE_VALUE-shaped TAP
+// -- "+3したい対象がないとき +3しなくても軽減能力だけでも使えるようにして ダイスやカードの候補に+3しない
+// を加える") -- #bareTapMoves must always offer a skipDieChange:true candidate for this TAP shape
+// alongside its normal per-die candidates (not just when no die exists at all), and forcedBzConversionMove
+// must fall back to it once every real die has been tried (or none exist).
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const jobInst = createCardInstance('JOB007');
+  jobInst.ownerId = 'P1';
+  state.cards[jobInst.physicalId] = jobInst;
+  p1.ownedCardPhysicalIds.push(jobInst.physicalId);
+  // die value=6 (not a low value like 3): JOB007's own BLOCK_BUILD(A/B/C,THIS_TURN) always fires as
+  // part of this same TAP regardless of skip, so the ONLY outlet either candidate could ever find
+  // post-tap is a monument -- die=6 already reaches DICE>=6 monuments even WITHOUT the +3 (the skip
+  // path), and die=9 (die-based, +3'd) reaches them too, so both paths get a genuine outlet to check
+  // against, unlike a low die value that would only become monument-reachable via the +3 itself.
+  giveDie(state, 'P1', 6);
+  // Generous real resources (not relying on JOB007's own single BZ covering a whole cost alone, unlike
+  // the JOB004 test above which grants 2 BZ) so SOME reachable monument is affordable regardless of the
+  // current shop's exact costs.
+  p1.resources.A = 5; p1.resources.B = 5; p1.resources.C = 5;
+
+  const moves = moveGenerator.generateMoves(state, index, 'P1', { hasPlacedDieThisTurn: false });
+  const bareTapMoves = moves.filter((m) => m.type === 'BARE_TAP' && m.physicalId === jobInst.physicalId);
+  assertTrue('A per-die BARE_TAP candidate (chosenDieId) still exists alongside the skip option', bareTapMoves.some((m) => m.chosenDieId !== undefined));
+  assertTrue('A skipDieChange:true BARE_TAP candidate is ALSO offered, even though a real die exists', bareTapMoves.some((m) => m.skipDieChange === true));
+}
+{
+  // With zero unplaced dice AND no build outlet reachable any other way, skipDieChange is NOT offered
+  // either -- it shares the exact same isBz/hasAffordableBuildOutlet gate the per-die candidates already
+  // had (2026-08-06, per user diagnosis: offering a BZ-granting tap with nothing to spend the BZ on just
+  // wastes it and still pays the BLOCK_BUILD downside for nothing -- confirmed harmful for JOB004 via
+  // tools/ai_batch_run.js). The skip option only ever ADDS a way to use this TAP when it's still
+  // genuinely worth using, never bypasses that existing safety check.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const jobInst = createCardInstance('JOB007');
+  jobInst.ownerId = 'P1';
+  state.cards[jobInst.physicalId] = jobInst;
+  p1.ownedCardPhysicalIds.push(jobInst.physicalId);
+  // No dice given at all -- p1.dice stays empty, so no build outlet is reachable via die placement, and
+  // no other owned card offers one either.
+  const moves = moveGenerator.generateMoves(state, index, 'P1', { hasPlacedDieThisTurn: false });
+  const bareTapMoves = moves.filter((m) => m.type === 'BARE_TAP' && m.physicalId === jobInst.physicalId);
+  check('With zero unplaced dice and no build outlet, no BARE_TAP candidate is offered at all (skipDieChange included)', bareTapMoves, []);
+}
+
+// ---------------------------------------------------------------------------
 // Regression (2026-08-04, per user feedback: "JOB004のAIの平均点が低すぎます 3K→2BZ 使えていますか？"):
 // "a build is reachable this turn" used to mean only dice/category-eligible (per #placeDieMoves' own
 // doc, getBuildCandidates doesn't check affordability), so this used to force the conversion even when

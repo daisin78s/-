@@ -5012,7 +5012,7 @@ function renderTapChoiceModal() {
     return;
   }
   overlay.hidden = false;
-  const { playerId, dieId, cardPhysicalId, value, bareTap } = pendingTapChoice;
+  const { playerId, dieId, cardPhysicalId, value, bareTap, skip } = pendingTapChoice;
   const player = STATE.players.find((p) => p.id === playerId);
 
   const diceEl = document.getElementById('tap-choice-dice');
@@ -5021,7 +5021,7 @@ function renderTapChoiceModal() {
     const dieNode = renderDie({ ...die, color: player.color });
     dieNode.classList.add('die--selectable');
     dieNode.classList.toggle('die--selected', die.id === dieId);
-    dieNode.addEventListener('click', () => { pendingTapChoice.dieId = die.id; pendingTapChoice.cardPhysicalId = null; render(STATE); });
+    dieNode.addEventListener('click', () => { pendingTapChoice.dieId = die.id; pendingTapChoice.cardPhysicalId = null; pendingTapChoice.skip = false; render(STATE); });
     diceEl.appendChild(dieNode);
   }
 
@@ -5037,9 +5037,24 @@ function renderTapChoiceModal() {
       const cell = el('div', 'owned-card-cell owned-card-cell--tall owned-card-cell--selectable');
       cell.classList.toggle('owned-card-cell--selected', physicalId === cardPhysicalId);
       cell.appendChild(buildCardVisual(inst.currentFaceId, { showEffect: true, noInteraction: true }));
-      cell.addEventListener('click', () => { pendingTapChoice.cardPhysicalId = physicalId; pendingTapChoice.dieId = null; render(STATE); });
+      cell.addEventListener('click', () => { pendingTapChoice.cardPhysicalId = physicalId; pendingTapChoice.dieId = null; pendingTapChoice.skip = false; render(STATE); });
       cardsEl.appendChild(cell);
     }
+  }
+
+  // +3しない (2026-09-06, per user request: "+3したい対象がないとき +3しなくても軽減能力だけでも使える
+  // ようにして ダイスやカードの候補に+3しないを加える") -- JOB007/宮廷人 only (MONUMENT_CHANGE_DIE_VALUE
+  // is the sole kind executor.runMonumentChangeDieValue actually supports skipDieChange for); always
+  // shown alongside the die/card options above, not just when both are empty, since the player may simply
+  // not want to spend +3 on any of them this time.
+  const skipEl = document.getElementById('tap-choice-skip');
+  skipEl.innerHTML = '';
+  if (bareTap.kind === 'MONUMENT_CHANGE_DIE_VALUE') {
+    const btn = el('button', 'build-choice-payment__option', '+3しない');
+    btn.type = 'button';
+    btn.classList.toggle('build-choice-payment__option--active', !!skip);
+    btn.addEventListener('click', () => { pendingTapChoice.skip = true; pendingTapChoice.dieId = null; pendingTapChoice.cardPhysicalId = null; render(STATE); });
+    skipEl.appendChild(btn);
   }
 
   // 2026-08-30, per user request: a CHANGE_DIE_VALUE with only one possible delta (choices.length===1,
@@ -5060,7 +5075,7 @@ function renderTapChoiceModal() {
     }
   }
 
-  const hasTarget = dieId !== null || cardPhysicalId !== null;
+  const hasTarget = dieId !== null || cardPhysicalId !== null || !!skip;
   const needsValue = bareTap.kind !== 'MONUMENT_CHANGE_DIE_VALUE' && !hasSingleFixedValue;
   document.getElementById('tap-choice-confirm').disabled = !hasTarget || (needsValue && value === null);
 }
@@ -5636,7 +5651,7 @@ function attachTapToggle(cardNode, cardState, faceId, canAct, physicalId) {
       // treatment MONUMENT_CHANGE_DIE_VALUE already got (it has no `choices` array at all, always a single
       // baked-in delta) -- see renderTapChoiceModal's own matching check.
       const preselectedValue = bareTap.choices && bareTap.choices.length === 1 ? bareTap.choices[0] : null;
-      pendingTapChoice = { physicalId, playerId: cardState.ownerId, bareTap, dieId: null, cardPhysicalId: null, value: preselectedValue };
+      pendingTapChoice = { physicalId, playerId: cardState.ownerId, bareTap, dieId: null, cardPhysicalId: null, skip: false, value: preselectedValue };
     }
     render(STATE);
   });
@@ -7515,12 +7530,14 @@ document.addEventListener('DOMContentLoaded', () => {
     render(STATE);
   });
   document.getElementById('tap-choice-confirm').addEventListener('click', () => {
-    const { physicalId, playerId, bareTap, dieId, cardPhysicalId, value } = pendingTapChoice;
+    const { physicalId, playerId, bareTap, dieId, cardPhysicalId, skip, value } = pendingTapChoice;
     pendingTapChoice = null;
     const context = { playerId };
     // 2026-08-25: cardPhysicalId (targeting one of the player's own eligible cards) and dieId (a real
-    // die) are mutually exclusive -- see renderTapChoiceModal's own doc.
-    if (cardPhysicalId !== null) context.chosenCardPhysicalId = cardPhysicalId;
+    // die) are mutually exclusive -- see renderTapChoiceModal's own doc. 2026-09-06: skip (JOB007/宮廷人's
+    // own "+3しない") is a third, equally-exclusive option -- see executor.runMonumentChangeDieValue's doc.
+    if (skip) context.skipDieChange = true;
+    else if (cardPhysicalId !== null) context.chosenCardPhysicalId = cardPhysicalId;
     else context.chosenDieId = dieId;
     if (bareTap.kind === 'CHANGE_DIE_VALUE') context.chosenDelta = value;
     else if (bareTap.kind !== 'MONUMENT_CHANGE_DIE_VALUE') context.chosenValue = value;

@@ -417,6 +417,19 @@ class MoveGenerator {
           if (isBz && !this.#hasAffordableBuildOutlet(clone, index, playerId, context)) continue;
           moves.push({ type: 'BARE_TAP', playerId, physicalId, chosenDieId: die.id });
         }
+        // skipDieChange (2026-09-06, per user request: "+3したい対象がないとき +3しなくても軽減能力だけ
+        // でも使えるようにして ダイスやカードの候補に+3しないを加える"): always offered alongside the
+        // per-die candidates above, not just as a fallback when unplacedDice is empty -- the rest of the
+        // TAP program (ADD(BZ), BLOCK_BUILD) is worth using on its own even when a die exists but isn't
+        // worth spending on +3. See executor.runMonumentChangeDieValue's own doc for the skip itself.
+        {
+          const tapContext = { playerId, skipDieChange: true };
+          const clone = cloneState(state);
+          const result = board.useBareTapAbility(clone, index, tapContext, physicalId);
+          if (result.success && !(isBz && !this.#hasAffordableBuildOutlet(clone, index, playerId, context))) {
+            moves.push({ type: 'BARE_TAP', playerId, physicalId, skipDieChange: true });
+          }
+        }
       } else if (board.hasWildcardDice(state, index, playerId)) {
         // 道化(JOB003)'s own ☆ dice ignore VALUE_MISMATCH entirely and their buildValue is category-fixed
         // (1 for A/B/C, 6 for monument -- see board.placeWildcardDie's own doc), never dependent on the
@@ -582,14 +595,18 @@ class MoveGenerator {
       if (!cardState || cardState.tapped) continue;
       if (!bzConversionTap(index, cardState.currentFaceId)) continue;
       const needsDieChoice = bareTapKind(index, cardState.currentFaceId).kind === 'MONUMENT_CHANGE_DIE_VALUE';
-      const dieCandidates = needsDieChoice ? player.dice.filter((d) => d.placedMapId === null) : [null];
+      // skipDieChange (2026-09-06, per user request -- see executor.runMonumentChangeDieValue's own doc):
+      // tried last, after every real die, so a genuinely useful die-value bump is still preferred over
+      // skipping it outright -- but this force should still fire (for the sake of ADD(BZ) alone) when no
+      // die is worth it or none exists at all, rather than never firing for this card the way it used to.
+      const dieCandidates = needsDieChoice ? [...player.dice.filter((d) => d.placedMapId === null), null] : [null];
       for (const die of dieCandidates) {
-        const tapContext = die ? { playerId, chosenDieId: die.id } : { playerId };
+        const tapContext = die ? { playerId, chosenDieId: die.id } : needsDieChoice ? { playerId, skipDieChange: true } : { playerId };
         const clone = cloneState(state);
         const result = board.useBareTapAbility(clone, index, tapContext, physicalId);
         if (!result.success) continue;
         if (this.#hasAffordableBuildOutlet(clone, index, playerId, context)) {
-          return { type: 'BARE_TAP', playerId, physicalId, ...(die ? { chosenDieId: die.id } : {}) };
+          return { type: 'BARE_TAP', playerId, physicalId, ...(die ? { chosenDieId: die.id } : needsDieChoice ? { skipDieChange: true } : {}) };
         }
       }
     }
