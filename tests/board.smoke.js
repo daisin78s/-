@@ -1349,26 +1349,37 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   check('...map.accumulatedFee is back to 0', state.maps['MAP001'].accumulatedFee, 0);
 }
 {
-  // Placement itself is refused if the resulting usage fee would be entirely unpayable, checked AFTER
-  // the AREA's own action resolves (2026-08-05, per user diagnosis: "AREA010を使うときはAIが使用料が
-  // 払えることを確認してからダイスを置く用に直せますか"). AREA999C (see this file's own synthetic-row
-  // doc up top) stands in for what AREA010C used to be -- ADD(2VP) grants no K to a non-owner at all.
+  // 2026-09-06, per user request ("おくてが合法で使用料が足りないときは 置いてターンエンドするときに警告
+  // 文を発するようにできますか"): placement no longer refuses itself just because the resulting usage fee
+  // would be entirely unpayable right now -- executor.canEndTurn's own USAGE_FEE VP-escape (2026-08-27)
+  // already resolves that gracefully at TURNEND, so the old placement-time hard block (removed from
+  // board.placeDice/placeDiceGroup/placeWildcardDie) was stricter than the game actually needs. AREA999C
+  // (see this file's own synthetic-row doc up top) stands in for what AREA010C used to be -- ADD(2VP)
+  // grants no K to a non-owner at all.
+  const turnFlow = require('../src/turn-flow');
   const state = freshStateWithShops();
   state.maps['MAP010'] = mapWithArea('MAP010', 'AREA999C', 3, 'P1'); // SLOT1=ANY, ACTION=ADD(2VP)
-  player(state, 'P2').resources.K = 1; // below the 2K fee, and ADD(2VP) never grants any more
+  player(state, 'P2').resources.K = 1; // below the 2K fee, and ADD(2VP) never grants any more, nor any A/B/C/Z
   const die = giveDie(state, 'P2', 1);
   const result = board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP010', 0);
-  check('Placement is refused when the resulting 2K fee would be entirely unpayable', result, { success: false, reason: 'UNAFFORDABLE_USAGE_FEE', amount: 2 });
-  // Re-fetched by id (not the pre-call `die` reference), since a rollback replaces state.players'
-  // contents wholesale -- see runProgram's own doc on this exact trap, which the rollback here mirrors.
-  check('...the die was never actually placed', player(state, 'P2').dice.find((d) => d.id === die.id).placedMapId, null);
-  check('...and no fee/state change leaked through', player(state, 'P2').pendingFee, null);
-  check('...and the whole placement (incl. the ADD(2VP) that just ran) was rolled back, K restored', player(state, 'P2').resources.K, 1);
+  check('Placement succeeds even though the resulting 2K fee is entirely unpayable right now', result.success, true);
+  check('...the die really is placed', player(state, 'P2').dice.find((d) => d.id === die.id).placedMapId, 'MAP010');
+  check('...the AREA action still ran (ADD(2VP) grants 2VP, K untouched)', { k: player(state, 'P2').resources.K, vp: player(state, 'P2').resources.VP }, { k: 1, vp: 2 });
+  check('...and pendingFee carries the debt forward to TURNEND', player(state, 'P2').pendingFee, { mapId: 'MAP010', amount: 2 });
+
+  // With zero A/B/C/Z left to convert, executor.canEndTurn's VP-escape lets TURNEND through anyway --
+  // paying the 1K shortfall (fee 2 - K 1 on hand) via -1VP instead of blocking forever.
+  check('...canEndTurn lets P2 through via the VP-escape (no A/B/C/Z left to convert)', executor.canEndTurn(state, index, 'P2').ok, true);
+  const endResult = turnFlow.endTurn(state, index, 'P2');
+  check('...endTurn succeeds', endResult.success, true);
+  check('...K fully spent, 1 shortfall VP paid (VP 2 -> 1)', { k: player(state, 'P2').resources.K, vp: player(state, 'P2').resources.VP }, { k: 0, vp: 1 });
+  check('...the map still received the fee\'s full amount', state.maps['MAP010'].accumulatedFee, 2);
 }
 {
-  // ...but succeeds once enough convertible resources are on hand -- not necessarily raw K (see
-  // canAffordFee's own doc: A/B/C/Z->K free actions have no usage cap). ADD(2VP) never touches K at all,
-  // so P2's 2 extra A alone have to cover the whole 2K fee.
+  // ...and once enough convertible resources are on hand -- not necessarily raw K (see canAffordFee's own
+  // doc: A/B/C/Z->K free actions have no usage cap) -- canEndTurn instead blocks TURNEND until the fee is
+  // actually converted/paid, same as any other pendingFee. ADD(2VP) never touches K at all, so P2's 2
+  // extra A alone would have to cover the whole 2K fee.
   const state = freshStateWithShops();
   state.maps['MAP010'] = mapWithArea('MAP010', 'AREA999C', 3, 'P1');
   player(state, 'P2').resources.A = 2;
@@ -1376,19 +1387,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   const result = board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP010', 0);
   check('Placement succeeds once enough convertible resources are on hand', result.success, true);
   check('...the AREA action still ran (ADD(2VP) grants 2VP, K untouched -- the fee itself is deferred to TURNEND, not charged yet)', { k: player(state, 'P2').resources.K, vp: player(state, 'P2').resources.VP }, { k: 0, vp: 2 });
-}
-{
-  // 2026-08-07, per user request ("wD→２Kのフリーアクション廃止します コードも削除してください"): an
-  // unplaced wD no longer counts toward canAffordFee at all -- before this removal it added +2 (modeling
-  // "the player could still use the now-abolished wD->2K free action"). Same AREA999C setup as the two
-  // blocks above, but P2's only resources are a K below the fee, plus an unplaced wD that doesn't help.
-  const state = freshStateWithShops();
-  state.maps['MAP010'] = mapWithArea('MAP010', 'AREA999C', 3, 'P1');
-  player(state, 'P2').resources.K = 1;
-  player(state, 'P2').dice.push(require('../src/game-state').createDie('test-wd', 'WHITE'));
-  const die = giveDie(state, 'P2', 1);
-  const result = board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP010', 0);
-  check('An unplaced wD no longer helps cover the fee -- placement is still refused as unaffordable', result, { success: false, reason: 'UNAFFORDABLE_USAGE_FEE', amount: 2 });
+  check('...canEndTurn blocks TURNEND until the 2A is actually converted (not a VP-escape case)', executor.canEndTurn(state, index, 'P2').ok, false);
 }
 {
   // 孤児院LV2 (AREA010C)'s slot layout was reworked again (2026-08-30, per user data change) -- back to

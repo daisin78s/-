@@ -87,20 +87,20 @@ function chargeUsageFeeIfOwed(state, index, map, playerId) {
 }
 
 /** Pure: could playerId ever actually pay a fee of `amount` K, counting not just K on hand but every
- * resource a free action could turn into K (2026-08-05, per user diagnosis of the residual usage-fee
- * softlock after the BARE_TAP block above: "AREA010を使うときはAIが使用料が払えることを確認してから
- * ダイスを置く用に直せますか" -- AREA010's own AREA action never grants K to a non-owner (it either
- * costs K outright via CHANGE(2K,...) or grants only VP via ADD(VP)/ADD(2VP)), so a non-owner placing
- * there gets nothing back that could help pay the fee they just incurred). A/B/C/Z->K free actions have
- * no usage cap at all ("回数制限ありません", confirmed [[project-dice-wp-dsl-spec]]), so every unit of
- * those four resources genuinely converts 1:1. Deliberately ignores whatever the AREA action about to
- * resolve might itself grant -- checking affordability with *current* resources alone is conservative (a
- * placement that would only become affordable *after* its own ADD/CHANGE effect stays blocked), but never
- * risks the reverse (never allows an actually-impossible placement through) -- matching the same
- * "affordability gates legality" precedent AREA008/009's own isCandidateAffordable already established.
- * (2026-08-07: used to also count an unplaced wD as +2, since wD->2K was a free action too -- removed
- * along with that free action, see FREE_ACTION_IDS' own doc; wD no longer converts to K on demand at
- * all.) */
+ * resource a free action could turn into K. A/B/C/Z->K free actions have no usage cap at all ("回数制限
+ * ありません", confirmed [[project-dice-wp-dsl-spec]]), so every unit of those four resources genuinely
+ * converts 1:1. (2026-08-07: used to also count an unplaced wD as +2, since wD->2K was a free action too
+ * -- removed along with that free action, see FREE_ACTION_IDS' own doc; wD no longer converts to K on
+ * demand at all.)
+ *
+ * 2026-09-06, per user request ("おくてが合法で使用料が足りないときは 置いてターンエンドするときに警告文
+ * を発するようにできますか"): no longer used by placeDice/placeDiceGroup/placeWildcardDie to refuse an
+ * otherwise-legal placement outright -- executor.canEndTurn's own USAGE_FEE VP-escape (2026-08-27) already
+ * resolves a genuinely unpayable fee at TURNEND (paid via -1VP per missing K once the player holds no
+ * convertible A/B/C/Z left), so the placement-time hard block was stricter than the game actually needs.
+ * Still used by move-generator.js's own, separate filters, which keep the AI from ever choosing to place
+ * into an unpayable fee in the first place -- this function's own contract (a pure affordability check,
+ * nothing more) didn't need to change, only who calls it. */
 function canAffordFee(player, amount) {
   const convertible = (player.resources.A || 0) + (player.resources.B || 0) + (player.resources.C || 0) + (player.resources.Z || 0);
   return (player.resources.K || 0) + convertible >= amount;
@@ -401,25 +401,6 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
     return { success: false, reason: prediction.reason };
   }
 
-  // Would this placement owe a usage fee at all? If so, snapshot state now so the whole placement can be
-  // rolled back if it turns out unpayable (2026-08-05, per user diagnosis: "AREA010を使うときはAIが使用
-  // 料が払えることを確認してからダイスを置く用に直せますか"). Checked *after* the area's own ACTION
-  // resolves below, not before -- e.g. AREA001B's ACTION is ADD(5K), which trivially covers its own 1K
-  // fee, so checking with only pre-resolution resources would incorrectly block that common, perfectly
-  // safe case (confirmed via a failing test this exact change caught: freshly-placed non-owners with 0
-  // K starting resources routinely gain plenty from the AREA itself). AREA010's own actions never grant
-  // K to a non-owner (CHANGE(2K,...) costs K outright, ADD(n)VP grants none at all) -- that's the actual
-  // gap this closes, without over-restricting AREAs whose own effect already covers their fee. See
-  // canAffordFee's own doc for what "payable" means (current K + every free-action-convertible
-  // resource, not just raw K).
-  const owedFee = wouldOweFee(index, map, context.playerId);
-  // Reuses preJobBonusSnapshot (already taken *before* the landlord/pioneer grant, i.e. before this
-  // whole placement's own effects began) when one exists, rather than taking a fresh structuredClone
-  // here -- a fresh one at this point would already include that bonus, so rolling back to it below
-  // would incorrectly leave it in place even though the point of this rollback is to undo the *entire*
-  // placement, job bonus included.
-  const preFeeSnapshot = owedFee ? (preJobBonusSnapshot || structuredClone(state)) : null;
-
   state.placementSeq += 1;
   die.placedMapId = mapId;
   // False only when this placement actually needed GRANT_PLACE_ANYWHERE to join an occupied slot
@@ -457,14 +438,16 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
   executor.emitAndResolve(state, index, actionContext, 'PLACE', mapId);
   const actionResult = resolveAreaAction(state, index, actionContext, areaRow, buildValue);
 
-  if (preFeeSnapshot) {
-    const updatedPlayer = state.players.find((p) => p.id === context.playerId);
-    if (!canAffordFee(updatedPlayer, owedFee.amount)) {
-      Object.keys(state).forEach((k) => delete state[k]);
-      Object.assign(state, preFeeSnapshot);
-      return { success: false, reason: 'UNAFFORDABLE_USAGE_FEE', amount: owedFee.amount };
-    }
-  }
+  // 2026-09-06, per user request: placement used to be rolled back entirely here when the resulting fee
+  // was judged totally unpayable (canAffordFee) -- removed. That pre-check predates executor.canEndTurn's
+  // own USAGE_FEE VP-escape (2026-08-27: a player with zero convertible A/B/C/Z pays whatever K is still
+  // missing via -1VP per K at TURNEND instead of being blocked forever), which already makes an
+  // "unpayable" fee a non-issue by the time TURNEND is reached -- so refusing the placement itself here
+  // was stricter than the game actually needs: it forbade the exact case its own later escape valve was
+  // built to resolve. Placement now always succeeds regardless of fee affordability; pendingFee (set by
+  // chargeUsageFeeIfOwed above) carries the debt forward to canEndTurn/applyTurnEnd as normal. AI is
+  // unaffected -- move-generator.js's own, separate canAffordFee filters (never touched here) still keep
+  // the AI from ever choosing to place into an unpayable fee in the first place.
 
   // 地主/開拓者's own bonus already landed earlier (see preJobBonusSnapshot above) -- not called again here.
 
@@ -947,17 +930,14 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
     }
     return { success: false, reason: 'NO_BUILDABLE_CARD' };
   }
-  // Same usage-fee affordability gate as placeDice's own (2026-08-05) -- AREA009 can carry a tier (A301A,
-  // renamed from A008A by the 2026-08-24 SHOP201-203 rework's card renumbering, tiers it up), so a group
-  // placement here can owe a fee too, not just the single-die path.
-  const owedFee = wouldOweFee(index, map, playerId);
-  if (owedFee && !canAffordFee(player, owedFee.amount)) {
-    if (preJobBonusSnapshot) {
-      Object.keys(state).forEach((k) => delete state[k]);
-      Object.assign(state, preJobBonusSnapshot);
-    }
-    return { success: false, reason: 'UNAFFORDABLE_USAGE_FEE', amount: owedFee.amount };
-  }
+  // 2026-09-06, per user request: this used to also refuse the whole group placement outright when the
+  // resulting fee (AREA009 can carry a tier too, not just the single-die path) was judged entirely
+  // unpayable via canAffordFee -- removed, same reasoning as placeDice's own matching removal above:
+  // executor.canEndTurn's USAGE_FEE VP-escape (2026-08-27) already resolves an unpayable fee gracefully
+  // at TURNEND (paid via -1VP per missing K once the player holds no convertible A/B/C/Z left), so
+  // refusing it here was stricter than the game needs. chargeUsageFeeIfOwed below still sets pendingFee
+  // as normal; AI is unaffected since move-generator.js's own separate canAffordFee filters (untouched)
+  // still keep it from ever choosing this.
 
   // Everything fits and can lead somewhere -- commit for real.
   for (const die of dice) {
@@ -1144,9 +1124,6 @@ function placeWildcardDie(state, index, context, dieId, mapId, preferredSlotInde
     return { success: false, reason: prediction.reason };
   }
 
-  const owedFee = wouldOweFee(index, map, context.playerId);
-  const preFeeSnapshot = owedFee ? (preJobBonusSnapshot || structuredClone(state)) : null;
-
   state.placementSeq += 1;
   die.placedMapId = mapId;
   // excludedFromBuildValue is exactly "this forced its way onto an already-occupied slot" (see its own
@@ -1173,14 +1150,10 @@ function placeWildcardDie(state, index, context, dieId, mapId, preferredSlotInde
   executor.emitAndResolve(state, index, actionContext, 'PLACE', mapId);
   const actionResult = resolveAreaAction(state, index, actionContext, areaRow, abcBuildValue, monumentBuildValue);
 
-  if (preFeeSnapshot) {
-    const updatedPlayer = state.players.find((p) => p.id === context.playerId);
-    if (!canAffordFee(updatedPlayer, owedFee.amount)) {
-      Object.keys(state).forEach((k) => delete state[k]);
-      Object.assign(state, preFeeSnapshot);
-      return { success: false, reason: 'UNAFFORDABLE_USAGE_FEE', amount: owedFee.amount };
-    }
-  }
+  // 2026-09-06, per user request -- same removal as placeDice's own matching rollback above: an
+  // otherwise-unpayable fee no longer refuses the placement itself, since executor.canEndTurn's USAGE_FEE
+  // VP-escape (2026-08-27) already resolves it gracefully at TURNEND. AI unaffected (move-generator.js's
+  // own separate canAffordFee filters, untouched, still keep it from choosing this).
 
   return { success: true, actionResult };
 }
