@@ -111,6 +111,19 @@ def write_stats_block(ws, start_row, label, stats):
     if 'gamesPlayed' in stats:
         ws.cell(row=start_row + 1, column=11, value='試合数')
         ws.cell(row=start_row + 1, column=12, value=f"{stats['gamesPlayed']}試合")
+    # モニュメント確保ボーナス (2026-09-06, per user request: "モニュメントボーナスも数値として見れるように
+    # 最良個体に書いて" -- the new GA-tunable 評価値 row evaluator.js's own "exclusive monument-securing
+    # bonus" reads; only round 3/4 are ever actually read there (see its own doc), so only those two are
+    # surfaced here rather than all 4 rounds). Only present when this block's own stats carry a genome at
+    # all (today: 'best' only -- 'anchor' is always the exact real table, whose own value is always
+    # whatever game.xlsx itself currently has, trivial to check there directly).
+    genome = stats.get('genome')
+    if genome:
+        def fmt_genome(round_key):
+            value = genome.get(round_key, {}).get('モニュメント確保ボーナス')
+            return round(value, 2) if isinstance(value, (int, float)) else None
+        ws.cell(row=start_row + 1, column=13, value='モニュメント確保ボーナス')
+        ws.cell(row=start_row + 1, column=14, value=f"3R={fmt_genome('3')} / 4R={fmt_genome('4')}")
 
 row = 1
 if anchor:
