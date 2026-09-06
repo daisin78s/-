@@ -38,6 +38,7 @@ const { applyInPlace } = require('../src/ai/simulator');
 const { mutateGenomePercent } = require('../src/ai/ga');
 const turnFlow = require('../src/turn-flow');
 const rng = require('../src/rng');
+const { candidatesForBothContexts, reconstructDecision } = require('./lib/replay_reconstruction');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const DATA_PATH = path.join(PROJECT_ROOT, 'data', 'game.json');
@@ -64,21 +65,10 @@ function parseArgs() {
   return { generations, populationSize, outputDir: path.resolve(outDirArg), replayPaths };
 }
 
-/** Every legal move for playerId at `state` under both possible hasPlacedDieThisTurn values (that flag
- * isn't itself part of GameState -- see move-generator.js's own context param), tagged with which
- * context produced it. Mirrors tools/analyze_human_replay.js's own candidatesForBothContexts exactly. */
-function candidatesForBothContexts(moveGenerator, state, index, playerId) {
-  const out = [];
-  for (const hasPlacedDieThisTurn of [false, true]) {
-    for (const move of moveGenerator.generateMoves(state, index, playerId, { hasPlacedDieThisTurn })) {
-      out.push({ move, hasPlacedDieThisTurn });
-    }
-  }
-  return out;
-}
-
 /** Walks one replay file, reconstructing every ROUNDS_TO_USE-round TURN decision PLAYER_ID actually made
- * (same match-by-exact-resulting-state approach as analyze_human_replay.js), and returns each as
+ * (see tools/lib/replay_reconstruction.js's reconstructDecision for how -- notably, a placement that
+ * opens a BUILD candidate choice is correctly treated as ONE decision spanning multiple replay steps, not
+ * mistaken for "placed and declined to build", which was never actually possible), and returns each as
  * {resultStates: GameState[], humanIndex: number} -- resultStates[humanIndex] is what actually happened;
  * every other entry is a legal alternative the human didn't take. Move application happens here, ONCE,
  * regardless of how many generations/genomes will later re-score these same states. */
@@ -87,46 +77,34 @@ function extractDecisionPoints(replayPath, moveGenerator, index) {
   const decisionPoints = [];
   let reconstructed = 0;
   let skipped = 0;
-  for (let i = 0; i < replay.length - 1; i++) {
+  let i = 0;
+  while (i < replay.length - 1) {
     const state = replay[i];
-    const nextState = replay[i + 1];
     if (state.phase === 'GAME_END') break;
-    if (!ROUNDS_TO_USE.includes(state.round)) continue;
+    if (!ROUNDS_TO_USE.includes(state.round)) { i++; continue; }
     let next;
-    try { next = turnFlow.getNextTurn(state); } catch (e) { continue; }
-    if (next.type !== 'TURN' || next.playerId !== PLAYER_ID) continue;
+    try { next = turnFlow.getNextTurn(state); } catch (e) { i++; continue; }
+    if (next.type !== 'TURN' || next.playerId !== PLAYER_ID) { i++; continue; }
 
-    const candidates = candidatesForBothContexts(moveGenerator, state, index, PLAYER_ID);
-    const nextStateJson = JSON.stringify(nextState);
-    let matchedContext = null;
-    let matchedIndex = -1;
-    const sameContextResultStates = { false: [], true: [] };
-    // Apply every candidate once, bucketed by context -- whichever bucket contains the actual match is
-    // the one whose full sibling list becomes this decision point's candidate set (the other context's
-    // candidates were never really on offer at this exact moment, see hasPlacedDieThisTurn's own doc).
-    for (const candidate of candidates) {
-      const clone = structuredClone(state);
-      let result;
-      try { result = applyInPlace(clone, index, candidate.move); } catch (e) { continue; }
-      if (!result.success) continue;
-      const bucket = sameContextResultStates[String(candidate.hasPlacedDieThisTurn)];
-      const thisIndex = bucket.length;
-      bucket.push(clone);
-      // First match wins (2026-09-06 fix): candidatesForBothContexts always yields every false-context
-      // candidate before any true-context one, and a BARE_TAP/FREE_ACTION/etc. move (ungated by
-      // hasPlacedDieThisTurn, see move-generator.js's own generateMoves) can legitimately reach the exact
-      // same resulting state under EITHER tag. Without this guard, a later true-context duplicate match
-      // would silently overwrite the earlier false-context one -- and since hasPlacedDieThisTurn=true
-      // suppresses every placement move entirely, that swap shrinks the candidate pool this decision gets
-      // ranked against from ~dozens down to a handful, wildly inflating how often the human's move looks
-      // like "the top pick" for no real reason. Preferring the first (false) match, same as
-      // tools/analyze_human_replay.js's own break-on-first-match, is the more inclusive, safer default
-      // whenever the true context can't be told apart from context alone.
-      if (matchedContext === null && JSON.stringify(clone) === nextStateJson) { matchedContext = candidate.hasPlacedDieThisTurn; matchedIndex = thisIndex; }
-    }
-    if (matchedContext === null) { skipped++; continue; }
+    const matched = reconstructDecision(replay, i, moveGenerator, index, PLAYER_ID);
+    if (!matched) { skipped++; i++; continue; }
     reconstructed++;
-    decisionPoints.push({ resultStates: sameContextResultStates[String(matchedContext)], humanIndex: matchedIndex, round: state.round });
+    i += matched.consumedSteps;
+
+    // Re-applies every candidate under the SAME context the matched move actually used, to build the
+    // full sibling result-state list this decision gets ranked against (reconstructDecision itself only
+    // returns the winning move, not every alternative's own resulting state).
+    const sameContextCandidates = candidatesForBothContexts(moveGenerator, state, index, PLAYER_ID).filter((c) => c.hasPlacedDieThisTurn === matched.hasPlacedDieThisTurn);
+    const resultStates = [];
+    let humanIndex = -1;
+    for (const candidate of sameContextCandidates) {
+      const clone = structuredClone(state);
+      const result = applyInPlace(clone, index, candidate.move);
+      if (!result.success) continue;
+      if (JSON.stringify(candidate.move) === JSON.stringify(matched.move)) humanIndex = resultStates.length;
+      resultStates.push(clone);
+    }
+    decisionPoints.push({ resultStates, humanIndex, round: state.round });
   }
   return { decisionPoints, reconstructed, skipped };
 }

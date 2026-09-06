@@ -39,6 +39,7 @@ const { MoveGenerator } = require('../src/ai/move-generator');
 const { Simulator, applyInPlace } = require('../src/ai/simulator');
 const { AIPlayer } = require('../src/ai/ai-player');
 const turnFlow = require('../src/turn-flow');
+const { candidatesForBothContexts, reconstructDecision } = require('./lib/replay_reconstruction');
 
 const DATA_PATH = path.join(__dirname, '..', 'data', 'game.json');
 
@@ -84,68 +85,32 @@ function describeMove(state, index, move) {
   }
 }
 
-/** Every legal move for playerId at `state` under both possible hasPlacedDieThisTurn values, tagged with
- * which context produced it (a move can appear under both, e.g. END_TURN never does but BARE_TAP might --
- * kept as separate tagged entries rather than deduped, since the caller needs to know which context to
- * re-score/re-select under once a match is found). */
-function candidatesForBothContexts(moveGenerator, state, index, playerId) {
-  const out = [];
-  for (const hasPlacedDieThisTurn of [false, true]) {
-    for (const move of moveGenerator.generateMoves(state, index, playerId, { hasPlacedDieThisTurn })) {
-      out.push({ move, hasPlacedDieThisTurn });
-    }
-  }
-  return out;
-}
-
-function main() {
-  const [replayPathArg, playerIdArg, aiLevelArg, topNArg] = process.argv.slice(2);
-  if (!replayPathArg) {
-    console.error('Usage: node tools/analyze_human_replay.js <replayJsonPath> [playerId=P1] [aiLevel=LV4] [topN=15]');
-    process.exit(1);
-  }
-  const playerId = playerIdArg || 'P1';
-  const levelName = aiLevelArg || 'LV4';
-  const topN = topNArg ? Number(topNArg) : 15;
-
-  const replay = JSON.parse(fs.readFileSync(replayPathArg, 'utf8'));
-  const raw = loadGameData(DATA_PATH);
-  const index = buildDataIndex(raw);
-  const evalTable = buildEvalTable(raw);
-  const level = getLevel(levelName);
-  const evaluator = new Evaluator(index, evalTable, level.evaluatorOptions);
-  const moveGenerator = new MoveGenerator(level.moveGeneratorOptions);
-  const simulator = new Simulator();
-  const aiPlayer = new AIPlayer(index, moveGenerator, evaluator, simulator, level.aiOptions);
-
+/** Reconstructs+scores every playerId TURN decision in one replay file -- factored out of main() (2026-09-06)
+ * so multiple replay files can be combined into one aggregate report instead of only ever analyzing one
+ * game at a time. Returns {decisions, reconstructed, skipped} -- same shape main() used to build inline. */
+function analyzeOneReplay(replayPath, playerId, index, level, evaluator, moveGenerator, aiPlayer) {
+  const replay = JSON.parse(fs.readFileSync(replayPath, 'utf8'));
   const decisions = [];
   let reconstructed = 0;
   let skipped = 0;
 
-  for (let i = 0; i < replay.length - 1; i++) {
+  let i = 0;
+  while (i < replay.length - 1) {
     const state = replay[i];
-    const nextState = replay[i + 1];
     if (state.phase === 'GAME_END') break;
     let next;
-    try { next = turnFlow.getNextTurn(state); } catch (e) { continue; }
-    if (next.type !== 'TURN' || next.playerId !== playerId) continue;
+    try { next = turnFlow.getNextTurn(state); } catch (e) { i++; continue; }
+    if (next.type !== 'TURN' || next.playerId !== playerId) { i++; continue; }
 
-    const candidates = candidatesForBothContexts(moveGenerator, state, index, playerId);
-    const nextStateJson = JSON.stringify(nextState);
-    let matched = null;
-    for (const candidate of candidates) {
-      const clone = structuredClone(state);
-      let result;
-      try { result = applyInPlace(clone, index, candidate.move); } catch (e) { continue; }
-      if (!result.success) continue;
-      if (JSON.stringify(clone) === nextStateJson) { matched = candidate; break; }
-    }
-    if (!matched) { skipped++; continue; }
+    const matched = reconstructDecision(replay, i, moveGenerator, index, playerId);
+    if (!matched) { skipped++; i++; continue; }
     reconstructed++;
+    i += matched.consumedSteps; // skip past whatever intermediate (build-choice-pending) snapshots this decision spanned
 
     // 1-ply ranking of every candidate under the SAME context the matched move actually used -- mirrors
-    // AIPlayer.selectMove's own first pass (see this file's own doc).
-    const sameContextCandidates = candidates.filter((c) => c.hasPlacedDieThisTurn === matched.hasPlacedDieThisTurn);
+    // AIPlayer.selectMove's own first pass (see this file's own doc). Re-derives candidatesForBothContexts
+    // itself (not returned by reconstructDecision) since only the winning context's own list is needed here.
+    const sameContextCandidates = candidatesForBothContexts(moveGenerator, state, index, playerId).filter((c) => c.hasPlacedDieThisTurn === matched.hasPlacedDieThisTurn);
     const scored = [];
     for (const candidate of sameContextCandidates) {
       const clone = structuredClone(state);
@@ -182,8 +147,40 @@ function main() {
       aiFinalMatchesHuman,
     });
   }
+  return { decisions, reconstructed, skipped };
+}
 
-  console.log(`Reconstructed ${reconstructed} of ${reconstructed + skipped} ${playerId} TURN decisions (${skipped} skipped -- no exact-match candidate found).`);
+function main() {
+  const [playerIdArg, aiLevelArg, topNArg, ...replayPaths] = process.argv.slice(2);
+  if (replayPaths.length === 0) {
+    console.error('Usage: node tools/analyze_human_replay.js <playerId=P1> <aiLevel=LV4> <topN=15> <replayJsonPath> [replayJsonPath...]');
+    process.exit(1);
+  }
+  const playerId = playerIdArg || 'P1';
+  const levelName = aiLevelArg || 'LV4';
+  const topN = topNArg ? Number(topNArg) : 15;
+
+  const raw = loadGameData(DATA_PATH);
+  const index = buildDataIndex(raw);
+  const evalTable = buildEvalTable(raw);
+  const level = getLevel(levelName);
+  const evaluator = new Evaluator(index, evalTable, level.evaluatorOptions);
+  const moveGenerator = new MoveGenerator(level.moveGeneratorOptions);
+  const simulator = new Simulator();
+  const aiPlayer = new AIPlayer(index, moveGenerator, evaluator, simulator, level.aiOptions);
+
+  let decisions = [];
+  let totalReconstructed = 0;
+  let totalSkipped = 0;
+  for (const replayPath of replayPaths) {
+    const result = analyzeOneReplay(replayPath, playerId, index, level, evaluator, moveGenerator, aiPlayer);
+    console.log(`${path.basename(replayPath)}: ${result.reconstructed} reconstructed, ${result.skipped} skipped`);
+    decisions = decisions.concat(result.decisions);
+    totalReconstructed += result.reconstructed;
+    totalSkipped += result.skipped;
+  }
+
+  console.log(`\nReconstructed ${totalReconstructed} of ${totalReconstructed + totalSkipped} ${playerId} TURN decisions across ${replayPaths.length} game(s) (${totalSkipped} skipped -- no exact-match candidate found).`);
   const matchCount = decisions.filter((d) => d.humanRank === 1).length;
   console.log(`Human's move was the AI's own #1-ranked (1-ply) choice in ${matchCount}/${decisions.length} decisions (${((matchCount / decisions.length) * 100).toFixed(0)}%).`);
   const gaps = decisions.map((d) => d.gap || 0).sort((a, b) => a - b);
@@ -199,11 +196,34 @@ function main() {
     const roundDecisions = decisions.filter((d) => d.round === round);
     if (roundDecisions.length === 0) continue;
     const roundGaps = roundDecisions.map((d) => d.gap || 0);
+    const roundGapsSorted = roundGaps.slice().sort((a, b) => a - b);
+    const roundMedian = roundGapsSorted.length % 2 === 1 ? roundGapsSorted[(roundGapsSorted.length - 1) / 2] : (roundGapsSorted[roundGapsSorted.length / 2 - 1] + roundGapsSorted[roundGapsSorted.length / 2]) / 2;
     const roundMatch = roundDecisions.filter((d) => d.humanRank === 1).length;
-    console.log(`  Round ${round}: ${roundDecisions.length} decisions, human matched AI's #1 in ${roundMatch} (${((roundMatch / roundDecisions.length) * 100).toFixed(0)}%), mean gap=${(roundGaps.reduce((a, b) => a + b, 0) / roundGaps.length).toFixed(1)}`);
+    console.log(`  Round ${round}: ${roundDecisions.length} decisions, human matched AI's #1 in ${roundMatch} (${((roundMatch / roundDecisions.length) * 100).toFixed(0)}%), mean gap=${(roundGaps.reduce((a, b) => a + b, 0) / roundGaps.length).toFixed(1)}, median gap=${roundMedian.toFixed(1)}`);
   }
   const finalMatchCount = decisions.filter((d) => d.aiFinalMatchesHuman).length;
   console.log(`Human's move matched the AI's FINAL pick (incl. lookahead/rollout) in ${finalMatchCount}/${decisions.length} decisions.`);
+
+  // Per-move-TYPE breakdown (2026-09-06, per user request: "どの部分が一番違ったか") -- which kind of
+  // action the human chose vs. which kind the AI's own #1 pick was, when they disagreed. A move type that
+  // shows up heavily on the "AI's #1 pick" side but rarely on the "human's actual choice" side is a
+  // concrete signal that this eval-table currently OVERvalues that action type relative to what the
+  // human's own play suggests is actually good.
+  console.log('\nWhen human and AI disagreed, move type breakdown:');
+  const disagreements = decisions.filter((d) => d.humanRank !== 1);
+  const humanTypeCounts = {};
+  const aiTypeCounts = {};
+  for (const d of disagreements) {
+    const humanType = d.humanMove.type;
+    const aiType = d.topMove ? d.topMove.type : 'n/a';
+    humanTypeCounts[humanType] = (humanTypeCounts[humanType] || 0) + 1;
+    aiTypeCounts[aiType] = (aiTypeCounts[aiType] || 0) + 1;
+  }
+  const allTypes = new Set([...Object.keys(humanTypeCounts), ...Object.keys(aiTypeCounts)]);
+  console.log('  type                  human chose   AI would have chosen');
+  for (const type of allTypes) {
+    console.log(`  ${type.padEnd(20)}  ${String(humanTypeCounts[type] || 0).padEnd(12)}  ${aiTypeCounts[type] || 0}`);
+  }
 
   const sorted = decisions.slice().sort((a, b) => (b.gap || 0) - (a.gap || 0));
   console.log(`\nTop ${topN} biggest disagreements (by 1-ply score gap):`);
