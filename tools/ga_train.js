@@ -77,6 +77,12 @@ const RANDOM_INIT_MAX = 10;
 const MUTATION_RATE = 0.1; // per-(round,id) probability of being nudged each generation
 const MUTATION_AMOUNT = 2; // max +/- nudge when mutated (randomGenome-seeded runs only, see mutate() below)
 const MUTATION_PERCENT = 0.2; // max +/-20% nudge when mutated (--seed-real runs only, see mutate() below)
+// Occasional larger "jump" mutation (2026-09-06, per user request after a 361-generation plateau: "今
+// +-10%の変動になっていますが 変動した時10%の確率で+-30%にするのはどうですか") -- see
+// src/ai/ga.js's mutateGenomePercent for the full doc on why. --seed-real runs only, same as
+// MUTATION_PERCENT itself.
+const BIG_MUTATION_CHANCE = 0.1; // fraction of mutating cells that get the bigger jump instead
+const BIG_MUTATION_PERCENT = 0.3; // that jump's own +/- spread
 const ELITE_FRACTION = 0.2; // top fraction of the population carried over unchanged each generation
 const BASELINE_GAMES = 20; // one-time Generation-0 (pure random) measurement sample size
 
@@ -105,8 +111,11 @@ function parseArgs() {
     console.error('populationSize must be a positive multiple of 4 (one game = 4 seats).');
     process.exit(1);
   }
-  if (!Number.isInteger(gamesPerIndividual) || gamesPerIndividual < 1) {
-    console.error('gamesPerIndividual must be a positive integer.');
+  if (!Number.isInteger(gamesPerIndividual) || gamesPerIndividual < 4 || gamesPerIndividual % 4 !== 0) {
+    // Multiple of 4, not just a positive integer (2026-09-06, see evaluatePopulationFitness's own doc on
+    // seat-rotated groups): each group of 4 genomes now plays its one shared board across exactly 4 seat
+    // rotations, so a genome's own total game count only ever comes out even in multiples of 4.
+    console.error('gamesPerIndividual must be a positive multiple of 4 (each group of 4 plays 4 seat rotations of one shared board).');
     process.exit(1);
   }
   if (seedFromReal && resumeFromDir) {
@@ -169,17 +178,29 @@ function runJobsOnPool(pool, jobs) {
   });
 }
 
-/** Plays enough games (population shuffled into groups of 4, repeated gamesPerIndividual times) that
- * every individual in `population` (an array of genomes) gets exactly gamesPerIndividual games, and
- * returns each individual's {avgRank, avgScore, avgRawScore, avgQstScore, winRate, gamesPlayed} by its
- * index into `population` -- winRate (2026-09-04, per user request: "勝率...を出してほしい") is the
- * fraction of its own games where it finished rank 1 (ties broken the same way turn-flow's own ranking
- * always has been, so "rank 1" here means sole 1st place, same convention historyByPlayerId.rank uses
- * elsewhere in this codebase). avgRawScore/avgQstScore (2026-09-04, per user request: "平均点（素点と
- * QSTも）", same 合計/素点/クエスト split tools/ga_report_top.js already reports) split avgScore into
- * QST's own contribution and everything else -- playGameForFitness's own qstScoreByPlayerId already
- * carries this, previously only read by ga_report_top.js's separate post-hoc replay, now captured
- * directly during training too so it's available every generation without a second replay pass.
+/** Plays enough games that every individual in `population` (an array of genomes) gets exactly
+ * gamesPerIndividual games, and returns each individual's {avgRank, avgScore, avgRawScore, avgQstScore,
+ * winRate, gamesPlayed} by its index into `population` -- winRate (2026-09-04, per user request: "勝率...
+ * を出してほしい") is the fraction of its own games where it finished rank 1 (ties broken the same way
+ * turn-flow's own ranking always has been, so "rank 1" here means sole 1st place, same convention
+ * historyByPlayerId.rank uses elsewhere in this codebase). avgRawScore/avgQstScore (2026-09-04, per user
+ * request: "平均点（素点とQSTも）", same 合計/素点/クエスト split tools/ga_report_top.js already reports)
+ * split avgScore into QST's own contribution and everything else -- playGameForFitness's own
+ * qstScoreByPlayerId already carries this, previously only read by ga_report_top.js's separate post-hoc
+ * replay, now captured directly during training too so it's available every generation without a second
+ * replay pass.
+ *
+ * Seat-rotated groups (2026-09-06, per user request: "１世代ごとにAIを１６体作る 一つ盤面を生成したら乱数
+ * も含めて保存しALICE BOB CAROL DANで必ず４回対戦させる") -- population is shuffled into groups of 4 same
+ * as before, but each group now plays its ONE randomly-shuffled-together board FOUR times under the SAME
+ * seed, cycling which of the 4 genomes sits at P1/P2/P3/P4 each time (a genome's own seat never repeats
+ * within its own group's 4 rotations). Since board setup (maps/shops/dice rolls/JOB pool/CON deal) is
+ * entirely determined by the seed itself, not by which genome ends up at which player id, all 4 rotations
+ * share the exact same underlying "luck" -- any given group of 4 genomes now experiences IDENTICAL board
+ * conditions across their whole comparison, not just within a single game, cancelling both seat-order and
+ * board-luck noise between them (stronger than simply running more games, which only cancels noise on
+ * average). Requires gamesPerIndividual to be a multiple of 4 (one group of 4 genomes x 4 rotations gives
+ * exactly 4 games per genome per grouping-round); enforced in parseArgs.
  *
  * Parallelized across `pool` (2026-09-05) -- game-order shuffling still happens synchronously on the
  * main thread first (cheap, needs runRng's own sequential state), producing a flat list of independent
@@ -188,17 +209,19 @@ function runJobsOnPool(pool, jobs) {
  * longer need to be passed in at all -- each worker builds its own copy once at its own startup (see
  * ga_worker.js's own doc) instead of the main thread building one shared copy every call. */
 async function evaluatePopulationFitness(pool, population, runRng, gamesPerIndividual, runId, generationLabel) {
+  const roundsNeeded = gamesPerIndividual / 4;
   const jobs = [];
-  for (let round = 0; round < gamesPerIndividual; round++) {
+  for (let round = 0; round < roundsNeeded; round++) {
     const order = rng.shuffle(runRng, population.map((_, i) => i));
     for (let g = 0; g < order.length; g += 4) {
-      const seatIndices = order.slice(g, g + 4);
-      jobs.push({
-        jobId: jobs.length,
-        seatIndices,
-        genomes: seatIndices.map((idx) => population[idx]),
-        seed: `ga-${runId}-${generationLabel}-${jobs.length}`,
-      });
+      const group = order.slice(g, g + 4);
+      // One board (seed) per group, shared by all 4 of its own seat-rotations below -- see this
+      // function's own doc on why a shared seed is exactly what makes the rotation cancel noise.
+      const seed = `ga-${runId}-${generationLabel}-board${jobs.length}`;
+      for (let rotation = 0; rotation < 4; rotation++) {
+        const seatIndices = [0, 1, 2, 3].map((i) => group[(i + rotation) % 4]);
+        jobs.push({ jobId: jobs.length, seatIndices, genomes: seatIndices.map((idx) => population[idx]), seed });
+      }
     }
   }
 
@@ -316,7 +339,7 @@ async function main() {
   // span 0..1000 depending on round. Used both for Generation 1's own seeding below and every later
   // generation's breeding step, so the whole run stays on one consistent mutation style throughout.
   const mutate = (genome) => (seedFromReal
-    ? mutateGenomePercent(genome, runRng, MUTATION_RATE, MUTATION_PERCENT)
+    ? mutateGenomePercent(genome, runRng, MUTATION_RATE, MUTATION_PERCENT, BIG_MUTATION_CHANCE, BIG_MUTATION_PERCENT)
     : mutateGenome(genome, runRng, MUTATION_RATE, MUTATION_AMOUNT));
 
   // 固定アンカー (2026-09-04, per user request: "エクセルのものを一定数入れる", clarified as "毎世代、常に

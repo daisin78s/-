@@ -89,6 +89,53 @@ function assertTrue(label, condition) {
   mutateGenomePercent(genome, rng.createRng('seed6'), 1, 0.5);
   check('mutateGenomePercent never mutates the input genome in place', genome[1].X, 10);
 }
+{
+  // bigMutationChance/bigMutationPercent (2026-09-06, per user request after a 361-generation plateau:
+  // "今+-10%の変動になっていますが 変動した時10%の確率で+-30%にするのはどうですか") -- omitted entirely,
+  // every existing caller's behavior is unchanged (defaults to 0/0, i.e. never triggers).
+  const genome = { 1: { X: 100 }, 2: { X: 100 }, 3: { X: 100 }, 4: { X: 100 } };
+  const rngState = rng.createRng('seed7');
+  let everExceededNormalPercent = false;
+  for (let i = 0; i < 30; i++) {
+    const mutated = mutateGenomePercent(genome, rngState, 1, 0.2);
+    for (const round of [1, 2, 3, 4]) {
+      if (Math.abs(mutated[round].X - 100) > 20.0001) everExceededNormalPercent = true;
+    }
+  }
+  assertTrue('Omitting bigMutationChance/bigMutationPercent never exceeds the normal +/-20%', !everExceededNormalPercent);
+}
+{
+  // bigMutationChance=1 -- every mutating cell always takes the big jump instead of the normal one.
+  const genome = { 1: { X: 100 }, 2: { X: 100 }, 3: { X: 100 }, 4: { X: 100 } };
+  const rngState = rng.createRng('seed8');
+  let allWithinBigPercent = true;
+  let sawBiggerThanNormal = false;
+  for (let i = 0; i < 20; i++) {
+    const mutated = mutateGenomePercent(genome, rngState, 1, 0.2, 1, 0.3);
+    for (const round of [1, 2, 3, 4]) {
+      const delta = Math.abs(mutated[round].X - 100);
+      if (delta > 30.0001) allWithinBigPercent = false; // 30% of 100 = 30
+      if (delta > 20.0001) sawBiggerThanNormal = true; // bigger than the normal 20% would ever allow
+    }
+  }
+  assertTrue('bigMutationChance=1 always stays within the bigger +/-30%', allWithinBigPercent);
+  assertTrue('...and actually exceeds the normal +/-20% at least once', sawBiggerThanNormal);
+}
+{
+  // A currently-zero cell is unaffected by bigMutationChance/bigMutationPercent -- still governed
+  // entirely by ZERO_ESCAPE_STEP_BY_ROUND, same as the plain mutateGenomePercent case above.
+  const genome = { 1: { X: 0 }, 2: { X: 0 }, 3: { X: 0 }, 4: { X: 0 } };
+  const rngState = rng.createRng('seed9');
+  const steps = { 1: 5, 2: 10, 3: 20, 4: 50 };
+  let seenWithinStep = true;
+  for (let i = 0; i < 20; i++) {
+    const mutated = mutateGenomePercent(genome, rngState, 1, 0.2, 1, 0.3);
+    for (const round of [1, 2, 3, 4]) {
+      if (Math.abs(mutated[round].X) > steps[round] + 0.0001) seenWithinStep = false;
+    }
+  }
+  assertTrue('A zero-valued cell still uses the flat escape step, unaffected by bigMutationChance/Percent', seenWithinStep);
+}
 
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);

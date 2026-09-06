@@ -70,8 +70,17 @@ const ZERO_ESCAPE_STEP_BY_ROUND = { 1: 5, 2: 10, 3: 20, 4: 50 };
  * that's currently exactly 0 (blank in the sheet) would otherwise be unable to ever move at all under a
  * pure percentage rule (0 times anything is still 0), so it instead gets ZERO_ESCAPE_STEP_BY_ROUND's own
  * flat step for that round -- letting evolution discover that a currently-unused id deserves a nonzero
- * weight, not just rescale ones that already have one. */
-function mutateGenomePercent(genome, rngState, mutationRate, mutationPercent) {
+ * weight, not just rescale ones that already have one.
+ *
+ * bigMutationChance/bigMutationPercent (2026-09-06, per user request, after a 361-generation run plateaued
+ * for its last 168 generations with zero improvement: "今+-10%の変動になっていますが 変動した時10%の確率
+ * で+-30%にするのはどうですか" -- both optional, default 0/unused so every existing caller keeps its exact
+ * prior behavior): among the cells that DO mutate this call, a bigMutationChance fraction use
+ * bigMutationPercent's wider spread instead of the normal mutationPercent -- an occasional larger "jump"
+ * alongside the usual small "creep" steps, meant to let a converged/plateaued population occasionally
+ * escape a local optimum that small steps alone can't climb out of. Only affects the nonzero-value branch
+ * (ZERO_ESCAPE_STEP_BY_ROUND's own flat step is unrelated to this percentage scheme either way). */
+function mutateGenomePercent(genome, rngState, mutationRate, mutationPercent, bigMutationChance = 0, bigMutationPercent = 0) {
   const mutated = { 1: {}, 2: {}, 3: {}, 4: {} };
   for (const round of [1, 2, 3, 4]) {
     for (const [id, value] of Object.entries(genome[round])) {
@@ -83,7 +92,8 @@ function mutateGenomePercent(genome, rngState, mutationRate, mutationPercent) {
         const step = ZERO_ESCAPE_STEP_BY_ROUND[round];
         mutated[round][id] = (rng.next(rngState) * 2 - 1) * step;
       } else {
-        mutated[round][id] = value * (1 + (rng.next(rngState) * 2 - 1) * mutationPercent);
+        const percent = rng.next(rngState) < bigMutationChance ? bigMutationPercent : mutationPercent;
+        mutated[round][id] = value * (1 + (rng.next(rngState) * 2 - 1) * percent);
       }
     }
   }
