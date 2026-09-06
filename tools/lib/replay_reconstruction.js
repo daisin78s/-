@@ -56,7 +56,15 @@ function reconstructDecision(replay, i, moveGenerator, index, playerId) {
     let result;
     try { result = applyInPlace(clone, index, candidate.move); } catch (e) { continue; }
     if (!result.success) continue;
-    const hasPendingBuild = !!(result.actionResult && result.actionResult.pendingBuild);
+    // 2026-09-07 fix: applyInPlace's own PLACE_DIE/PLACE_WILDCARD_DIE/PLACE_DICE_GROUP/BARE_TAP cases all
+    // return pendingBuild at the TOP level ({success, pendingBuild}), not nested under an actionResult
+    // field the way board.js's own raw placeDice/useBareTapAbility do -- see src/ai/simulator.js's own
+    // "leave the build unresolved" branches. Checking result.actionResult.pendingBuild here (board.js's
+    // shape) instead of result.pendingBuild (Simulator's own) meant this was always undefined/false
+    // regardless of whether a real choice existed, so the very bug this whole module exists to fix kept
+    // slipping through unfixed -- found 2026-09-07 via a user-flagged example that was still impossible
+    // (declining an offered build choice was never actually a real option, see this file's own top doc).
+    const hasPendingBuild = !!result.pendingBuild;
     if (candidate.move.buildCandidateIndex === undefined && hasPendingBuild) continue; // see this file's own doc
     for (let steps = 1; steps <= MAX_LOOKAHEAD && i + steps < replay.length; steps++) {
       if (JSON.stringify(clone) === JSON.stringify(replay[i + steps])) {
