@@ -2345,11 +2345,19 @@ function buildAddWdIcon(actionText) {
 }
 
 /** One resource "item" within an ADD(...) list, e.g. "3K" or "VP" -- returns the DOM node(s) for it
- * (a colored dot + optional count, or plain suffix text for VP/D which have no dot). Shared by
- * buildAddResourceIcon (single item) and buildAddMultiResourceIcon (comma-separated list) below. */
+ * (a colored dot + optional count, or plain suffix text for VP/D which have no dot, or repeated 🎲 for
+ * wD -- see buildAddWdIcon's own single-resource convention, matched here for the multi-resource case).
+ * Shared by buildAddResourceIcon (single item) and buildAddMultiResourceIcon (comma-separated list)
+ * below. wD added 2026-09-07, per user report: a RESOURCE card's own ADD(wD,K) (先着順2, "wD,K") showed
+ * no icon at all -- buildAddMultiResourceIcon's own per-item regex didn't recognize "wD" as a token, so
+ * it silently bailed (returned null) on the whole icon instead of just that one item. */
 function resourceItemNodes(countStr, resource) {
   if (resource === 'VP') return [actionCount(`${countStr || '1'}VP`)];
   if (resource === 'D') return [actionSuffix(`${countStr || ''}追加色D`)];
+  if (resource === 'wD') {
+    const count = countStr ? parseInt(countStr, 10) : 1;
+    return Array.from({ length: count }, () => actionEmoji('🎲'));
+  }
   const nodes = [actionDot(resource)];
   if (countStr) nodes.push(actionCount(countStr));
   return nodes;
@@ -2375,18 +2383,19 @@ function buildAddResourceIcon(actionText) {
   return gainIconRow(resourceItemNodes(countStr, resource));
 }
 
-/** ADD(A,K) / ADD(2C,4K) / ADD(A,B,C) etc: a bundled multi-resource grant (confirmed in
+/** ADD(A,K) / ADD(2C,4K) / ADD(A,B,C) / ADD(wD,K) etc: a bundled multi-resource grant (confirmed in
  * [[project-dice-wp-dsl-spec]]: everything in one ADD(...) list is granted together as one command)
- * -- ⚡ once, then each item's dot/count in sequence (2026-07-30, fixes R010/R011/R012 and
- * CON002A/CON003B/CON004B/CON005B showing no icon at all). Falls back to null (letting the raw-text
- * fallback handle it, where allowed) if any comma-separated part isn't a recognized shape. */
+ * -- ⚡ once, then each item's dot/count (or 🎲 for wD) in sequence (2026-07-30, fixes R010/R011/R012 and
+ * CON002A/CON003B/CON004B/CON005B showing no icon at all; wD added 2026-09-07, see resourceItemNodes'
+ * own doc). Falls back to null (letting the raw-text fallback handle it, where allowed) if any
+ * comma-separated part isn't a recognized shape. */
 function buildAddMultiResourceIcon(actionText) {
   const match = /^ADD\(([^()]+,[^()]+)\)$/.exec(actionText || '');
   if (!match) return null;
   const parts = match[1].split(',');
   const resourceNodes = [];
   for (const part of parts) {
-    const itemMatch = /^(\d*)(K|A|B|C|Z|VP|D)$/.exec(part.trim());
+    const itemMatch = /^(\d*)(K|A|B|C|Z|VP|D|wD)$/.exec(part.trim());
     if (!itemMatch) return null;
     resourceNodes.push(...resourceItemNodes(itemMatch[1], itemMatch[2]));
   }
