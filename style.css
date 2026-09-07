@@ -3385,6 +3385,35 @@ h1, h2, h3 { margin: 0; }
   color: var(--text);
 }
 
+/* 3-way ranking split (2026-09-07) -- 左=アルティメット/中央=スタンダード/右=ウィークリー, fixed order
+   per the user's own spec. */
+.ranking-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 8px 16px 0;
+}
+
+.ranking-tab {
+  flex: 1 1 0;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: pre-line;
+  text-align: center;
+  padding: 6px 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.ranking-tab--active {
+  background: var(--accent-soft);
+  color: var(--text);
+  border-color: var(--accent);
+}
+
 #ranking-list {
   display: flex;
   flex-direction: column;

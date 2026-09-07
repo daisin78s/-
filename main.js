@@ -128,7 +128,18 @@ function createInitialState(plan) {
   return state;
 }
 
-const STATE = createInitialState(consumeDebugSetupPlan());
+const debugSetupPlanAtLoad = consumeDebugSetupPlan();
+const STATE = createInitialState(debugSetupPlanAtLoad);
+
+// True once this game has used デバッグモード or テストゲーム開始 at any point (2026-09-07, per user
+// spec, for the ranking's 3-way split -- see renderRankingList's own doc): "スタンダード" ranking
+// eligibility requires NEITHER ever having been used across the whole game; "アルティメット" catches
+// everything else (this flag true, or an old entry saved before this flag existed at all). Naturally
+// resets to false on every fresh page load (starting a genuinely new game always means a reload in this
+// app -- see consumeDebugSetupPlan's own doc), so there's no separate "game start" reset step needed;
+// only ever flips false->true, never back, for the lifetime of one page load. Seeded true here already
+// if a debug-setup plan (テストゲーム開始) was used to build the very state just created above.
+let usedDebugOrTestGameThisGame = !!debugSetupPlanAtLoad;
 
 // ---------------------------------------------------------------------------
 // AI players (2026-08-03, per user feedback: "プレイヤー1は人間 プレイヤー2 3 4はAIの対戦を実装して
@@ -992,8 +1003,10 @@ function noteActiveTurnPlayerForJobPool(state, playerId, forceNewTurn) {
 // point. Only active while debugMode is on (see toggleDebugMode) -- recording a full GameState clone
 // every turn boundary isn't free, and this feature is opt-in by design.
 // ---------------------------------------------------------------------------
-// Defaults to on (2026-08-04, per user feedback: "デバッグモードのデフォルトもONにして").
-let debugMode = true;
+// Defaults to off (2026-09-07, per user request, reversing the 2026-08-04 "デフォルトもONにして" -- see
+// usedDebugOrTestGameThisGame's own doc: a game needs to start clean of debug mode to ever be eligible
+// for the ranking's "スタンダード" tab).
+let debugMode = false;
 /** @type {{round:number, playerId:string, snapshot:Object}[]} */
 let turnHistory = [];
 /** Index into turnHistory currently being viewed. -1 means "no history recorded yet". */
@@ -1339,9 +1352,10 @@ function renderReplayControls() {
  * waiting for the next turn boundary (recordTurnHistorySnapshot only fires going forward from here).
  * Turning it off again does not clear turnHistory -- toggling back on later still has the full timeline
  * (recording just pauses while off, per debugMode's own gate in recordTurnHistorySnapshot). */
-/** Shared by toggleDebugMode and the startup path (now that debugMode defaults to true, 2026-08-04, per
- * user feedback: "デバッグモードのデフォルトもONにして" -- the panel needs the same "something to show
- * immediately" seeding either way, not just when toggled on by hand mid-game). */
+/** Shared by toggleDebugMode and the startup path -- debugMode defaulted to true from 2026-08-04 until
+ * 2026-09-07 (reversed per a later user request, see debugMode's own doc); this still needs to seed the
+ * panel with "something to show immediately" either way debugMode ends up starting, not just when
+ * toggled on by hand mid-game. */
 function seedDebugHistoryIfNeeded() {
   if (!debugMode || turnHistory.length > 0) return;
   const next = STATE.round >= 1 ? turnFlowMod.getNextTurn(STATE) : null;
@@ -1351,6 +1365,7 @@ function seedDebugHistoryIfNeeded() {
 
 function toggleDebugMode() {
   debugMode = !debugMode;
+  if (debugMode) usedDebugOrTestGameThisGame = true; // see this flag's own doc -- never flips back
   seedDebugHistoryIfNeeded();
   render(STATE);
 }
@@ -6414,9 +6429,13 @@ function renderRankingRegisterList(state) {
         jobCardId: c.jobCardId,
         opponents: c.opponents,
         playerColor: c.playerColor,
+        // 3-way ranking split (2026-09-07, per user spec): 'standard' only if デバッグモード/テストゲーム
+        // were never used this whole game; 'ultimate' otherwise. 'weekly' (ウィークリーチャレンジ) is a
+        // separate, not-yet-built entry path, not reachable from here.
+        category: usedDebugOrTestGameThisGame ? 'ultimate' : 'standard',
       }, replayHistory).then((entry) => {
         registeredRankingPlayerIds.add(c.playerId);
-        renderRankingOverlay(STATE, entry.id);
+        renderRankingOverlay(STATE, entry.id, entry.category);
       });
     });
     row.appendChild(registerButton);
@@ -6424,26 +6443,58 @@ function renderRankingRegisterList(state) {
   }
 }
 
-/** All-time top-20 list (2026-08-16) -- see ranking.js's RankingStorage.list (already sorted
- * totalScore descending, capped at 20 by save()). Async since 2026-08-29 (Firebase-backed -- see
- * ranking.js's own doc): shows a "読み込み中..." placeholder while the Firestore read is in flight,
- * rather than flashing "まだ登録がありません" first. rankingListRequestId guards against a stale
- * response painting over a newer one if the overlay gets reopened again before the first read finishes
- * (e.g. a slow connection) -- only the MOST RECENT call's result is ever rendered. */
+// 3-way ranking split (2026-09-07, per user spec -- see usedDebugOrTestGameThisGame's own doc):
+// 'ultimate' (デバッグ/テストゲーム有, and every pre-existing entry from before this split existed),
+// 'standard' (通常プレイでデバッグ/テストゲーム一切なし), 'weekly' (ウィークリーチャレンジ -- not built
+// yet, always empty for now). Which tab is currently showing -- module-scope UI-scratch, like
+// selectedRankingIds below.
+let activeRankingCategory = 'ultimate';
 let rankingListRequestId = 0;
-/** @param {string} [highlightId] - a just-registered entry's id (2026-09-07, per user report: pressing
+const RANKING_CATEGORY_LABELS = { ultimate: 'アルティメット\nランキング', standard: 'スタンダード\nランキング', weekly: 'ウィークリー\nランキング' };
+
+/** Tab bar above the ranking list itself (左=アルティメット/中央=スタンダード/右=ウィークリー, in that
+ * fixed order per the user's own spec) -- rebuilt every renderRankingList call so the active tab's own
+ * highlight always matches activeRankingCategory. */
+function renderRankingTabs() {
+  const container = document.getElementById('ranking-tabs');
+  container.innerHTML = '';
+  for (const category of ['ultimate', 'standard', 'weekly']) {
+    const tab = el('button', category === activeRankingCategory ? 'ranking-tab ranking-tab--active' : 'ranking-tab');
+    tab.type = 'button';
+    tab.textContent = RANKING_CATEGORY_LABELS[category];
+    tab.addEventListener('click', () => {
+      if (activeRankingCategory === category) return;
+      activeRankingCategory = category;
+      renderRankingList();
+    });
+    container.appendChild(tab);
+  }
+}
+
+/** All-time top-50 list (2026-08-16) -- see ranking.js's RankingStorage.list (already sorted
+ * totalScore descending, capped at 50 by save()), scoped to activeRankingCategory (2026-09-07). Async
+ * since 2026-08-29 (Firebase-backed -- see ranking.js's own doc): shows a "読み込み中..." placeholder
+ * while the Firestore read is in flight, rather than flashing "まだ登録がありません" first.
+ * rankingListRequestId guards against a stale response painting over a newer one if the overlay gets
+ * reopened (or the tab switched) again before the first read finishes (e.g. a slow connection) -- only
+ * the MOST RECENT call's result is ever rendered.
+ * @param {string} [highlightId] - a just-registered entry's id (2026-09-07, per user report: pressing
  *   登録 gave no clear confirmation the save actually happened, leading to accidental double-registers).
  *   When given, once the freshly-fetched list renders, the list scrolls from the top down to that
  *   entry's own row and pulses it (.ranking-row--just-registered, auto-removed after a few seconds) --
- *   "上からスクロールされて今入力した名前のところで光る" per the user's own spec. */
+ *   "上からスクロールされて今入力した名前のところで光る" per the user's own spec. Only ever passed
+ *   alongside activeRankingCategory already having been switched to that same entry's own category (see
+ *   renderRankingOverlay), so it's always findable in whichever list this fetch returns. */
 function renderRankingList(highlightId) {
+  renderRankingTabs();
   const list = document.getElementById('ranking-list');
   list.innerHTML = '';
   list.appendChild(el('div', 'ranking-empty', '読み込み中...'));
   selectedRankingIds = new Set(); // fresh list -- see selectedRankingIds' own doc on why this always resets
   updateRankingDeleteSelectedButton();
   const requestId = ++rankingListRequestId;
-  RankingStorage.list().then((entries) => {
+  const category = activeRankingCategory;
+  RankingStorage.list(category).then((entries) => {
     if (requestId !== rankingListRequestId) return; // superseded by a later renderRankingList() call
     list.innerHTML = '';
     if (entries.length === 0) {
@@ -6514,7 +6565,11 @@ function renderRankingList(highlightId) {
   });
 }
 
-function renderRankingOverlay(state, highlightId) {
+/** @param {string} [highlightCategory] - when given (right after a fresh registration), switches to that
+ *   entry's own tab first so highlightId (passed alongside it) is actually visible in the list that
+ *   renders -- see renderRankingList's own doc. */
+function renderRankingOverlay(state, highlightId, highlightCategory) {
+  if (highlightCategory) activeRankingCategory = highlightCategory;
   renderRankingRegisterList(state);
   renderRankingList(highlightId);
 }
@@ -6768,7 +6823,7 @@ async function handleRankingDeleteSelectedClick() {
   const ids = Array.from(selectedRankingIds);
   if (!(await checkRankingResetPassword('選択した記録を削除するにはパスワードを入力してください。'))) return;
   if (!window.confirm(`選択した${ids.length}件の記録を削除します。よろしいですか？`)) return;
-  Promise.all(ids.map((id) => RankingStorage.deleteOne(id))).then(() => renderRankingList());
+  Promise.all(ids.map((id) => RankingStorage.deleteOne(id, activeRankingCategory))).then(() => renderRankingList());
 }
 
 function render(state) {

@@ -17,10 +17,13 @@
 
 var MAX_ENTRIES = 50; // 2026-09-07: 20->50 per user request, to keep more replays available for AI training
 
-/** @returns {Promise<{playerId,name,rawScore,qstScore,totalScore,conFaceId,jobCardId,opponents,playerColor,savedAt,hasReplay,id}[]>}
+/** @param {string} [category] - 'ultimate' (default)|'standard'|'weekly' -- 3-way split (2026-09-07, per
+ *   user spec, see main.js's usedDebugOrTestGameThisGame doc), each backed by its own OnlineSync
+ *   collection so one category's scores can never evict another's out of the list.
+ * @returns {Promise<{playerId,name,rawScore,qstScore,totalScore,conFaceId,jobCardId,opponents,playerColor,savedAt,hasReplay,id}[]>}
  *   sorted totalScore descending (OnlineSync.listRanking already sorts+caps server-side). */
-function list() {
-  return window.OnlineSync.listRanking();
+function list(category) {
+  return window.OnlineSync.listRanking(category);
 }
 
 /** @returns {Promise<object[]|null>} the saved replayHistory array, or null if unavailable (e.g. the
@@ -33,11 +36,15 @@ function loadReplay(id) {
  * would exceed MAX_ENTRIES (2026-08-16, per user: "上位20件"). The replay upload is best-effort: if it
  * fails (e.g. offline), the ranking entry is still saved with hasReplay:false so the ranking list itself
  * never gets lost over a replay-storage hiccup.
- * @param {object} entryWithoutId - {name,rawScore,qstScore,totalScore,conFaceId,jobCardId,opponents,playerColor}
+ * @param {object} entryWithoutId - {name,rawScore,qstScore,totalScore,conFaceId,jobCardId,opponents,
+ *   playerColor,category?} -- category ('ultimate'|'standard'|'weekly', defaults to 'ultimate' if
+ *   omitted) picks which collection (and therefore which independent MAX_ENTRIES eviction pool) this
+ *   entry lands in -- see online-sync.js's own rankingCollectionName doc.
  * @param {object[]} replayHistory
  * @returns {Promise<object>} the saved entry (with id/savedAt/hasReplay filled in)
  */
 function save(entryWithoutId, replayHistory) {
+  var category = entryWithoutId.category || 'ultimate';
   var entry = Object.assign({}, entryWithoutId, {
     id: (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : String(Date.now()) + '-' + Math.random().toString(36).slice(2),
     savedAt: new Date().toISOString(),
@@ -48,13 +55,13 @@ function save(entryWithoutId, replayHistory) {
   }).then(function () {
     var toSave = Object.assign({}, entry);
     delete toSave.id; // the id is the Firestore document key, not a field within it
-    return window.OnlineSync.saveRankingEntry(entry.id, toSave);
+    return window.OnlineSync.saveRankingEntry(entry.id, toSave, category);
   }).then(function () {
-    return window.OnlineSync.listAllRankingSorted();
+    return window.OnlineSync.listAllRankingSorted(category);
   }).then(function (current) {
     var evicted = current.slice(MAX_ENTRIES);
     return Promise.all(evicted.map(function (e) {
-      return window.OnlineSync.deleteRankingEntry(e.id).catch(function () {})
+      return window.OnlineSync.deleteRankingEntry(e.id, category).catch(function () {})
         .then(function () { return window.OnlineSync.deleteReplay(e.id).catch(function () {}); });
     }));
   }).then(function () {
@@ -66,9 +73,10 @@ function save(entryWithoutId, replayHistory) {
  * のでランキングを一度リセットしてください" -- old entries saved before a physical-id reorg (e.g. the
  * CON sheet reshuffle) reference card ids that mean something different, or nothing at all, under the
  * current data.json, so their replays render garbled/broken -- see main.js's renderReplayFrame try/
- * catch for the defensive side of the same issue). */
-function clearAll() {
-  return window.OnlineSync.clearAllRanking();
+ * catch for the defensive side of the same issue). Not wired to any UI button any more -- see
+ * online-sync.js's own clearAllRanking doc. */
+function clearAll(category) {
+  return window.OnlineSync.clearAllRanking(category);
 }
 
 /** Deletes a single ranking entry (and its replay, if any) rather than clearAll's whole-list wipe
@@ -78,9 +86,11 @@ function clearAll() {
  * (main.js's handleRankingEntryDeleteClick) instead of only ever firing automatically. deleteReplay
  * failing (e.g. no replay was ever saved for this entry, hasReplay:false) is swallowed the same way
  * save()'s eviction already does -- the ranking entry itself is still gone either way.
- * @param {string} id */
-function deleteOne(id) {
-  return window.OnlineSync.deleteRankingEntry(id).then(function () {
+ * @param {string} id
+ * @param {string} [category] - which collection id lives in -- see list()'s own doc; the caller (main.js)
+ *   always knows this already, since it's whichever tab is currently showing. */
+function deleteOne(id, category) {
+  return window.OnlineSync.deleteRankingEntry(id, category).then(function () {
     return window.OnlineSync.deleteReplay(id).catch(function () {});
   });
 }

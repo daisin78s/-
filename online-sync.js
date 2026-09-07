@@ -34,8 +34,15 @@
 firebase.initializeApp(window.FIREBASE_CONFIG);
 
 var MAX_ENTRIES = 50; // same cap ranking.js's old localStorage version enforced (2026-09-07: 20->50 per user request, to keep more replays available for AI training)
-var RANKING_COLLECTION = 'ranking';
-var REPLAY_STORAGE_PREFIX = 'replays/';
+// 3-way ranking split (2026-09-07, per user spec -- see main.js's usedDebugOrTestGameThisGame doc): each
+// category gets its OWN Firestore collection (and therefore its own independent MAX_ENTRIES eviction --
+// a single shared collection+cap would let one category's higher scores silently starve another's out of
+// the list entirely). 'ultimate' keeps the original collection name so every pre-existing entry (saved
+// before this split existed, with no category field at all) stays exactly where it already was, with no
+// migration needed. 'weekly' has no writer yet (ウィークリーチャレンジ isn't built) -- reserved for it.
+var RANKING_COLLECTIONS = { ultimate: 'ranking', standard: 'ranking_standard', weekly: 'ranking_weekly' };
+function rankingCollectionName(category) { return RANKING_COLLECTIONS[category] || RANKING_COLLECTIONS.ultimate; }
+var REPLAY_STORAGE_PREFIX = 'replays/'; // shared across every category -- ids are globally-unique UUIDs, no collision risk
 
 function db() { return firebase.firestore(); }
 function storage() { return firebase.storage(); }
@@ -43,8 +50,8 @@ function storage() { return firebase.storage(); }
 /** @returns {Promise<{playerId,name,rawScore,qstScore,totalScore,conFaceId,jobCardId,opponents,playerColor,savedAt,hasReplay,id}[]>}
  *   sorted totalScore descending -- Firestore's own orderBy/limit does the sort+cap server-side, same
  *   result shape ranking.js's old readList().sort(...) produced. */
-function listRanking() {
-  return db().collection(RANKING_COLLECTION)
+function listRanking(category) {
+  return db().collection(rankingCollectionName(category))
     .orderBy('totalScore', 'desc')
     .limit(MAX_ENTRIES)
     .get()
@@ -56,31 +63,33 @@ function listRanking() {
 /** Saves entry (Firestore doc, id as the document key) -- caller (ranking.js) is responsible for
  * eviction (deleteRankingEntry for whichever entries fall outside the top MAX_ENTRIES), same division
  * of responsibility as the old save()/writeList() split. */
-function saveRankingEntry(id, entryWithoutId) {
-  return db().collection(RANKING_COLLECTION).doc(id).set(entryWithoutId);
+function saveRankingEntry(id, entryWithoutId, category) {
+  return db().collection(rankingCollectionName(category)).doc(id).set(entryWithoutId);
 }
 
-function deleteRankingEntry(id) {
-  return db().collection(RANKING_COLLECTION).doc(id).delete();
+function deleteRankingEntry(id, category) {
+  return db().collection(rankingCollectionName(category)).doc(id).delete();
 }
 
 /** Every entry currently in the collection, sorted totalScore descending, NOT capped at MAX_ENTRIES --
  * used by ranking.js's own save() to find which entries (if any) now fall outside the top MAX_ENTRIES
  * after adding a new one (same role the old localStorage save()'s `current.splice(MAX_ENTRIES)` played),
  * and by clearAllRanking below. */
-function listAllRankingSorted() {
-  return db().collection(RANKING_COLLECTION).orderBy('totalScore', 'desc').get().then(function (snapshot) {
+function listAllRankingSorted(category) {
+  return db().collection(rankingCollectionName(category)).orderBy('totalScore', 'desc').get().then(function (snapshot) {
     return snapshot.docs.map(function (doc) { return Object.assign({ id: doc.id }, doc.data()); });
   });
 }
 
 /** Deletes every ranking entry AND its replay blob (2026-08-18 policy, "データが一新されたので..." -- see
  * ranking.js's own doc). deleteReplay is best-effort per entry (an entry with hasReplay:false never had
- * one to begin with, and a stray Storage 404 shouldn't block clearing the rest of the list). */
-function clearAllRanking() {
-  return listAllRankingSorted().then(function (entries) {
+ * one to begin with, and a stray Storage 404 shouldn't block clearing the rest of the list). Not wired to
+ * any UI button any more (per-entry 選択削除 replaced the old "reset everything" button) -- kept working,
+ * category-aware, purely so it doesn't bit-rot into a broken call if ever reused. */
+function clearAllRanking(category) {
+  return listAllRankingSorted(category).then(function (entries) {
     return Promise.all(entries.map(function (e) {
-      return deleteRankingEntry(e.id).then(function () { return deleteReplay(e.id).catch(function () {}); });
+      return deleteRankingEntry(e.id, category).then(function () { return deleteReplay(e.id).catch(function () {}); });
     }));
   });
 }
