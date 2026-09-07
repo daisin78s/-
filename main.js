@@ -171,6 +171,12 @@ function consumeWeeklyChallengePending() {
 }
 const weeklyChallengeActive = consumeWeeklyChallengePending();
 let weeklyChallengeSeatChosen = null; // playerId ('P1'..'P4') once chosen, null while still picking
+// 席選択画面での初期資源2枚選択のスクラッチ状態 (2026-09-07, per user request: "同じプレイヤーの初期資源
+// カードを２枚タップしたら これで始める Y/N で始まるように", replacing the earlier plain "○○で始める"
+// button) -- playerId -> array of currently-tapped candidate faceIds (0-2), purely UI-scratch like every
+// other Map in this section; never touches state.pendingChoices until the "はい" confirm actually commits
+// via setupMod.chooseResourceCards (see renderWeeklySeatPicker/chooseWeeklyChallengeSeat).
+const weeklyResourceSelection = new Map();
 
 const debugSetupPlanAtLoad = weeklyChallengeActive ? null : consumeDebugSetupPlan();
 const STATE = createInitialState(debugSetupPlanAtLoad, weeklyChallengeActive ? `weekly-${currentWeeklyChallengeId()}` : undefined);
@@ -239,8 +245,8 @@ function openWeeklyChallenge() {
  * cheap and safe. */
 function relocateShopsIntoWeeklyPicker() {
   const shops = document.getElementById('shops');
-  const rows = document.getElementById('weekly-seat-picker__rows');
-  if (shops.nextElementSibling !== rows) rows.parentElement.insertBefore(shops, rows);
+  const jobs = document.getElementById('weekly-seat-picker__jobs');
+  if (shops.nextElementSibling !== jobs) jobs.parentElement.insertBefore(shops, jobs);
 }
 function relocateShopsBackToBoardArea() {
   const shops = document.getElementById('shops');
@@ -248,21 +254,38 @@ function relocateShopsBackToBoardArea() {
   if (boardArea.firstElementChild !== shops) boardArea.insertBefore(shops, boardArea.firstElementChild);
 }
 
-/** Renders the ウィークリーチャレンジ seat-picker screen (2026-09-07, per user spec; revised 3 times on
- * 2026-09-07 follow-ups) in place of the normal board, top to bottom: the real 配置カード(ショップ)+QST
+/** Renders the ウィークリーチャレンジ seat-picker screen (2026-09-07, per user spec; revised several times
+ * on 2026-09-07 follow-ups) in place of the normal board, top to bottom: the real 配置カード(ショップ)+QST
  * panel (relocateShopsIntoWeeklyPicker, above -- "配置カードとQST（通常ゲームと同じ）"), no MAP/AREA tiles
- * ("マップは削除（一時的）"), then one color-coded row per seat (P1-P4). Each row shows that seat's own 手札
+ * ("マップは削除（一時的）"), the single SHARED state.jobPool (4th follow-up: "ALICEたちのCON候補の上に
+ * JOB候補を表示" -- JOB is one 6-card pool all 4 seats draft from during round-1 onboarding, same jobPool
+ * the real game's own #job-pool shows, so it's rendered once here rather than duplicated per seat), then
+ * one color-coded row per seat (P1-P4). Each row shows that seat's own 手札
  * (CON card's BOTH faces -- "CONは表裏表示", 3rd follow-up: CON is a constraint card whose back face trades
  * more resources for a harsher constraint, so comparing only the front face before picking a seat wasn't
- * enough -- plus its 4 initial RESOURCE candidates) on the left, and that seat's own ダイス + choose button
- * pushed to the right of the same row via .weekly-seat-picker__side (3rd follow-up, per an annotated
- * screenshot: dice+button used to sit on their own line below the hand, taking up a tall mostly-empty
- * row -- moved up beside the hand instead, and enlarged/tinted toward the seat's own color, "大きく目立つ
- * ようにちょっとプレイヤーカラー寄りの色に") -- no explanatory hint text. Reads directly off the fixed-seed
- * STATE already built at load time (see weeklyChallengeActive's own doc); nothing here mutates it -- this
+ * enough -- plus its 4 initial RESOURCE candidates, now individually tappable) on the left, and that seat's
+ * own ダイス pushed to the right of the same row via .weekly-seat-picker__side (3rd follow-up, per an
+ * annotated screenshot: dice used to sit on their own line below the hand, taking up a tall mostly-empty
+ * row -- moved up beside the hand instead, and enlarged, "大きく目立つように").
+ *
+ * Committing to a seat (5th follow-up, replacing the earlier plain "○○で始める" button entirely): "同じ
+ * プレイヤーの初期資源カードを２枚タップしたら これで始める Y/N で始まるように" -- tapping 2 of that same
+ * seat's 4 RESOURCE candidates (weeklyResourceSelection, capped at 2, same toggle convention the real
+ * onboarding renderResourceChoice already uses) reveals a small "これで始める" はい/いいえ confirm in that
+ * seat's own .weekly-seat-picker__side; はい both resolves this seat's SELECT_RESOURCE_CARDS pendingChoice
+ * with exactly the 2 tapped cards (setupMod.chooseResourceCards, the same real commit path onboarding
+ * itself uses -- so the other 3 seats' own still-pending resource choices resolve normally via the AI pump
+ * once play resumes) and commits the seat itself (chooseWeeklyChallengeSeat); いいえ just clears this
+ * seat's selection back to empty. No explanatory hint text. Reads directly off the fixed-seed STATE already
+ * built at load time (see weeklyChallengeActive's own doc); nothing here mutates it on its own -- this
  * is purely a comparison view before committing to a seat. */
 function renderWeeklySeatPicker(state) {
   renderShops(state);
+  const jobsContainer = document.getElementById('weekly-seat-picker__jobs');
+  jobsContainer.innerHTML = '';
+  for (const faceId of state.jobPool) {
+    jobsContainer.appendChild(buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true }));
+  }
   const rowsContainer = document.getElementById('weekly-seat-picker__rows');
   rowsContainer.innerHTML = '';
   for (const player of state.players) {
@@ -273,9 +296,27 @@ function renderWeeklySeatPicker(state) {
     cardsRow.appendChild(buildCardVisual(`${player.conPhysicalId}A`, { showEffect: true, allowTextFallback: false, noInteraction: true }));
     cardsRow.appendChild(buildCardVisual(`${player.conPhysicalId}B`, { showEffect: true, allowTextFallback: false, noInteraction: true }));
     const resourceChoice = state.pendingChoices.find((c) => c.playerId === player.id && c.kind === 'SELECT_RESOURCE_CARDS');
+    const selected = weeklyResourceSelection.get(player.id) || [];
     if (resourceChoice) {
       for (const faceId of resourceChoice.context.candidates) {
-        cardsRow.appendChild(buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true }));
+        const cardNode = buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true });
+        const tall = cardNode.classList.contains('shop-card--tall');
+        const isSelected = selected.includes(faceId);
+        const cell = el('div', tall ? 'owned-card-cell owned-card-cell--tall owned-card-cell--selectable' : 'owned-card-cell owned-card-cell--selectable');
+        if (isSelected) cell.classList.add('owned-card-cell--selected');
+        cell.appendChild(cardNode);
+        // 手札の初期資源カードを2枚タップ->「これで始める」確認 (2026-09-07, per user request, replacing
+        // the old single "○○で始める" button): same tap-to-toggle convention renderResourceChoice's real
+        // onboarding version uses -- capped at 2, a tap beyond that is a no-op until one is deselected.
+        const canToggle = isSelected || selected.length < 2;
+        if (canToggle) {
+          cell.addEventListener('click', () => {
+            const current = weeklyResourceSelection.get(player.id) || [];
+            weeklyResourceSelection.set(player.id, isSelected ? current.filter((id) => id !== faceId) : [...current, faceId]);
+            render(STATE);
+          });
+        }
+        cardsRow.appendChild(cell);
       }
     }
     row.appendChild(cardsRow);
@@ -286,11 +327,30 @@ function renderWeeklySeatPicker(state) {
       diceRow.appendChild(renderDie({ kind: die.kind, value: die.value, color: player.color }));
     }
     side.appendChild(diceRow);
-    const chooseButton = el('button', 'weekly-seat-picker__choose-button', `${player.name}で始める`);
-    chooseButton.type = 'button';
-    chooseButton.dataset.color = player.color;
-    chooseButton.addEventListener('click', () => chooseWeeklyChallengeSeat(player.id));
-    side.appendChild(chooseButton);
+    // 2枚選び終わったときだけ「これで始める」はい/いいえを出す -- それまでは何も表示しない(2026-09-07,
+    // per user request: "同じプレイヤーの初期資源カードを２枚タップしたら これで始める Y/N で始まるように")。
+    if (selected.length === 2) {
+      const confirm = el('div', 'weekly-seat-picker__confirm');
+      confirm.appendChild(el('div', 'weekly-seat-picker__confirm-label', 'これで始める'));
+      const yesBtn = el('button', 'weekly-seat-picker__confirm-yes', 'はい');
+      yesBtn.type = 'button';
+      yesBtn.dataset.color = player.color;
+      yesBtn.addEventListener('click', () => {
+        setupMod.chooseResourceCards(STATE, player.id, selected);
+        chooseWeeklyChallengeSeat(player.id);
+      });
+      const noBtn = el('button', 'weekly-seat-picker__confirm-no', 'いいえ');
+      noBtn.type = 'button';
+      noBtn.addEventListener('click', () => {
+        weeklyResourceSelection.set(player.id, []);
+        render(STATE);
+      });
+      const buttonsRow = el('div', 'weekly-seat-picker__confirm-buttons');
+      buttonsRow.appendChild(yesBtn);
+      buttonsRow.appendChild(noBtn);
+      confirm.appendChild(buttonsRow);
+      side.appendChild(confirm);
+    }
     row.appendChild(side);
     rowsContainer.appendChild(row);
   }

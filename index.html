@@ -7,20 +7,23 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- ウィークリーチャレンジの席選択 (2026-09-07, per user spec; revised twice on 2026-09-07 follow-up) --
-       shown in place of the normal #app view while weeklyChallengeActive && weeklyChallengeSeatChosen===
-       null (see main.js's renderWeeklySeatPicker/chooseWeeklyChallengeSeat). Top to bottom, per the latest
-       spec ("配置カードとQST（通常ゲームと同じ）／マップは削除（一時的）／ALICEの手札／ALICEのダイス／
-       BOBの手札／BOBのダイス..."): the real #shops section (physically relocated in here by main.js's
+  <!-- ウィークリーチャレンジの席選択 (2026-09-07, per user spec; revised several times on 2026-09-07
+       follow-ups) -- shown in place of the normal #app view while weeklyChallengeActive &&
+       weeklyChallengeSeatChosen===null (see main.js's renderWeeklySeatPicker/chooseWeeklyChallengeSeat).
+       Top to bottom: the real #shops section (physically relocated in here by main.js's
        relocateShopsIntoWeeklyPicker, then back out to #board-area once a seat is chosen -- NOT a separate
        copy, so it's always genuinely "同じ" as the normal game's own shop/QST panel) gets inserted right
-       before #weekly-seat-picker__rows at render time; each row inside #weekly-seat-picker__rows then
-       interleaves that one seat's own hand and dice together (no separate all-dice-then-all-hands blocks
-       any more -- see renderWeeklySeatPicker's own doc for why). MAP/AREA tiles are deliberately never
-       rendered anywhere on this screen ("MAP（AREA）をすべて消し"), so this is a side-by-side comparison of
-       what each of the 4 seats would start with, not the real board. -->
+       before #weekly-seat-picker__jobs at render time; #weekly-seat-picker__jobs then shows the single
+       SHARED state.jobPool (2026-09-07 follow-up: "ALICEたちのCON候補の上にJOB候補を表示" -- JOB is one
+       pool all 4 seats draft from during round-1 onboarding, not a per-seat hand, so it's shown once here
+       rather than repeated on every row below); each row inside #weekly-seat-picker__rows then shows that
+       one seat's own hand (CON both faces + RESOURCE candidates) with its own dice+choose button pushed to
+       the row's right side (see renderWeeklySeatPicker's own doc for the full history of this layout).
+       MAP/AREA tiles are deliberately never rendered anywhere on this screen ("MAP（AREA）をすべて消し"), so
+       this is a side-by-side comparison of what each of the 4 seats would start with, not the real board. -->
   <div id="weekly-seat-picker" hidden>
     <h2 id="weekly-seat-picker__title">ウィークリーチャレンジ — 席を選んでください</h2>
+    <div id="weekly-seat-picker__jobs"></div>
     <div id="weekly-seat-picker__rows"></div>
   </div>
 
