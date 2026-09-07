@@ -178,7 +178,7 @@ function giveDie(state, playerId, value) {
 }
 
 // ---------------------------------------------------------------------------
-// BARE_TAP (immediate): C001A.TAP=CHANGE(3K,4A).
+// BARE_TAP (immediate): C001A.TAP=CHANGE(K,A,ALL).
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
@@ -192,7 +192,7 @@ function giveDie(state, playerId, value) {
   const move = { type: 'BARE_TAP', playerId: 'P1', physicalId: inst.physicalId };
   const { state: resultState, result } = simulator.apply(state, index, move);
   check('BARE_TAP (immediate) succeeds', result.success, true);
-  check('...paid 3K, gained 4A in the returned state', { K: resultState.players[0].resources.K, A: resultState.players[0].resources.A }, { K: 0, A: 4 });
+  check('...paid 3K, gained 3A (1-for-1, ALL of the held K) in the returned state', { K: resultState.players[0].resources.K, A: resultState.players[0].resources.A }, { K: 0, A: 3 });
   check('...the card is tapped in the returned state', resultState.cards[inst.physicalId].tapped, true);
   check('The ORIGINAL state\'s card is still untapped', state.cards[inst.physicalId].tapped, false);
 }
