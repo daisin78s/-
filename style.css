@@ -3388,17 +3388,20 @@ h1, h2, h3 { margin: 0; }
 
 /* 3-way ranking split (2026-09-07) -- 左=アルティメット/中央=スタンダード/右=ウィークリー, fixed order,
    all 3 shown AT ONCE side by side (per user correction: "３つのランキングをボタンで切り替えるのではなく
-   ３つ同時に表示して" -- not a tab switcher). Wraps to a vertical stack on narrow screens (each column
-   keeping a sane minimum width) rather than a horizontal scrollbar inside the modal. */
+   ３つ同時に表示して" -- not a tab switcher, confirmed again: "どの画面で見ても上下に並んです" after an
+   earlier flex-wrap:wrap + 260px-basis version fell back to a vertical stack on anything narrower than
+   ~830px content width, iPad-portrait included -- the primary device this app targets). No flex-wrap at
+   all now: always exactly 3 equal-width columns dividing whatever width IS available, never stacking --
+   .ranking-row's own flex-wrap handles a narrow column's contents by wrapping fields within the row
+   instead. */
 .ranking-columns {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px;
   padding: 12px 16px;
 }
 
 .ranking-column {
-  flex: 1 1 260px;
+  flex: 1 1 0;
   min-width: 0;
   display: flex;
   flex-direction: column;
