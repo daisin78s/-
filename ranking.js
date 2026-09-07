@@ -15,7 +15,7 @@
 (function () {
 'use strict';
 
-var MAX_ENTRIES = 20;
+var MAX_ENTRIES = 50; // 2026-09-07: 20->50 per user request, to keep more replays available for AI training
 
 /** @returns {Promise<{playerId,name,rawScore,qstScore,totalScore,conFaceId,jobCardId,opponents,playerColor,savedAt,hasReplay,id}[]>}
  *   sorted totalScore descending (OnlineSync.listRanking already sorts+caps server-side). */

@@ -33,7 +33,7 @@
 // window.OnlineSync, never firebase.* directly.
 firebase.initializeApp(window.FIREBASE_CONFIG);
 
-var MAX_ENTRIES = 20; // same cap ranking.js's old localStorage version enforced
+var MAX_ENTRIES = 50; // same cap ranking.js's old localStorage version enforced (2026-09-07: 20->50 per user request, to keep more replays available for AI training)
 var RANKING_COLLECTION = 'ranking';
 var REPLAY_STORAGE_PREFIX = 'replays/';
 
