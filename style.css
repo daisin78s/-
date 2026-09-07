@@ -3426,6 +3426,22 @@ h1, h2, h3 { margin: 0; }
   overflow-y: auto;
 }
 
+/* 削除/印付け選択モーダル (2026-09-07) -- see index.html's own #ranking-delete-or-mark-overlay doc. */
+.ranking-delete-or-mark-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0 4px;
+}
+
+/* 最新版でないリプレイの目印 (2026-09-07, per user request: "この〇は最新版でないリプレイデータを間違え
+   て学習させないためのものです") -- shown before a marked entry's own 再生 button. */
+.ranking-row__outdated-mark {
+  font-weight: 700;
+  color: var(--text-muted);
+  flex: 0 0 auto;
+}
+
 .ranking-empty {
   font-size: 13px;
   color: var(--text-muted);

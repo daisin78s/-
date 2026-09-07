@@ -448,6 +448,24 @@
     </div>
   </div>
 
+  <!-- 選択した項目の削除/印付け選択 (2026-09-07, per user request) -- shown after the password prompt in
+       place of the old plain window.confirm, since there are now 3 outcomes, not 2. 印をつける marks each
+       selected entry as outdated (a "〇" badge before its own 再生 button, see main.js's own doc) instead
+       of deleting it -- for a replay whose game rules are no longer current, so it should never feed
+       AI-training data by mistake, without losing the record/replay itself. -->
+  <div id="ranking-delete-or-mark-overlay" class="card-inst-overlay" hidden>
+    <div class="card-inst-modal">
+      <div class="card-inst-modal__header">
+        <span class="card-inst-modal__title">選択した項目をどうしますか？</span>
+      </div>
+      <div class="ranking-delete-or-mark-choices">
+        <button type="button" class="undo-button" id="ranking-delete-or-mark-delete-button">削除する</button>
+        <button type="button" class="undo-button" id="ranking-delete-or-mark-flag-button">印をつける</button>
+        <button type="button" class="undo-button" id="ranking-delete-or-mark-cancel-button">やめる</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Replay mode's own control bar (2026-08-1X) -- always in the DOM (like #debug-panel), shown only
        while main.js's replayMode is true. Lives outside #app so .replay-locked's pointer-events:none
        (see style.css) never applies to it -- these buttons must stay clickable even though the whole

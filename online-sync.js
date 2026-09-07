@@ -71,6 +71,15 @@ function deleteRankingEntry(id, category) {
   return db().collection(rankingCollectionName(category)).doc(id).delete();
 }
 
+/** Merges { outdated: true } into an existing entry rather than replacing the whole document (2026-09-07,
+ * per user request: 選択した項目を削除 now offers "印をつける" as an alternative to actually deleting --
+ * flags a replay whose game rules are no longer current so it's never fed into AI-training data by
+ * mistake, without losing the ranking record/replay itself). Firestore's own .update() (not .set()) is
+ * what makes this a merge rather than a full overwrite. */
+function markRankingEntryOutdated(id, category) {
+  return db().collection(rankingCollectionName(category)).doc(id).update({ outdated: true });
+}
+
 /** Every entry currently in the collection, sorted totalScore descending, NOT capped at MAX_ENTRIES --
  * used by ranking.js's own save() to find which entries (if any) now fall outside the top MAX_ENTRIES
  * after adding a new one (same role the old localStorage save()'s `current.splice(MAX_ENTRIES)` played),
@@ -203,6 +212,7 @@ window.OnlineSync = {
   listRanking: listRanking,
   saveRankingEntry: saveRankingEntry,
   deleteRankingEntry: deleteRankingEntry,
+  markRankingEntryOutdated: markRankingEntryOutdated,
   listAllRankingSorted: listAllRankingSorted,
   clearAllRanking: clearAllRanking,
   saveReplay: saveReplay,

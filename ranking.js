@@ -95,5 +95,15 @@ function deleteOne(id, category) {
   });
 }
 
-window.RankingStorage = { list: list, save: save, loadReplay: loadReplay, clearAll: clearAll, deleteOne: deleteOne };
+/** Flags a single ranking entry as outdated instead of deleting it (2026-09-07, per user request: an
+ * alternative offered alongside 削除 after the same password prompt -- see main.js's
+ * handleRankingDeleteOrMarkChoice) -- "この〇は最新版でないリプレイデータを間違えて学習させないためのもの
+ * です". The entry (and its replay) stays exactly as-is otherwise, just gains outdated:true.
+ * @param {string} id
+ * @param {string} [category] - see list()'s own doc. */
+function markOutdated(id, category) {
+  return window.OnlineSync.markRankingEntryOutdated(id, category);
+}
+
+window.RankingStorage = { list: list, save: save, loadReplay: loadReplay, clearAll: clearAll, deleteOne: deleteOne, markOutdated: markOutdated };
 })();

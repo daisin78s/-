@@ -1246,7 +1246,7 @@ function enterReplayMode(historyOverride) {
   for (const id of ['card-inst-overlay', 'build-choice-overlay', 'placement-choice-overlay',
     'tap-choice-overlay', 'auto-mode-choice-overlay', 'turn-end-warning-overlay', 'round-pass-confirm-overlay',
     'white-overflow-confirm-overlay', 'job-replacement-choice-overlay', 'resource-confirm-overlay',
-    'ranking-overlay', 'online-lobby-overlay']) {
+    'ranking-overlay', 'ranking-delete-or-mark-overlay', 'online-lobby-overlay']) {
     document.getElementById(id).hidden = true;
   }
   if (historyOverride) {
@@ -6514,6 +6514,10 @@ function renderRankingList(highlightId, highlightCategory) {
         row.appendChild(el('span', 'ranking-row__con', `CON: ${rankingCardDisplayName(entry.conFaceId)}`));
         row.appendChild(el('span', 'ranking-row__job', `JOB: ${rankingCardDisplayName(entry.jobCardId)}`));
         row.appendChild(el('span', 'ranking-row__opponents', entry.opponents.join('　')));
+        // 最新版でないリプレイの目印 (2026-09-07, per user request: "この〇は最新版でないリプレイデータを
+        // 間違えて学習させないためのものです") -- set via 選択した項目を削除's own "印をつける" choice
+        // (see handleRankingDeleteSelectedClick/ranking.js's markOutdated), shown right before 再生.
+        if (entry.outdated) row.appendChild(el('span', 'ranking-row__outdated-mark', '〇'));
         const replayButton = el('button', 'undo-button', entry.hasReplay ? '▶ 再生' : '再生不可');
         replayButton.type = 'button';
         replayButton.disabled = !entry.hasReplay;
@@ -6801,12 +6805,48 @@ function updateRankingDeleteSelectedButton() {
   button.textContent = n === 0 ? '選択した項目を削除' : `選択した${n}件を削除`;
 }
 
+/** Shows #ranking-delete-or-mark-overlay and resolves once one of its 3 buttons is clicked (2026-09-07,
+ * per user request: after the password prompt, "削除する/印をつける/やめる" replaces the old plain
+ * window.confirm, since there are now 3 outcomes rather than 2 -- window.confirm's own OK/Cancel labels
+ * can't be relabeled). One-shot listeners (added fresh, removed on resolve) rather than permanent ones --
+ * this overlay is only ever driven by handleRankingDeleteSelectedClick, never independently. */
+function showRankingDeleteOrMarkChoice() {
+  return new Promise((resolve) => {
+    const overlay = document.getElementById('ranking-delete-or-mark-overlay');
+    const deleteButton = document.getElementById('ranking-delete-or-mark-delete-button');
+    const flagButton = document.getElementById('ranking-delete-or-mark-flag-button');
+    const cancelButton = document.getElementById('ranking-delete-or-mark-cancel-button');
+    const finish = (choice) => {
+      overlay.hidden = true;
+      deleteButton.removeEventListener('click', onDelete);
+      flagButton.removeEventListener('click', onFlag);
+      cancelButton.removeEventListener('click', onCancel);
+      resolve(choice);
+    };
+    const onDelete = () => finish('delete');
+    const onFlag = () => finish('mark');
+    const onCancel = () => finish('cancel');
+    deleteButton.addEventListener('click', onDelete);
+    flagButton.addEventListener('click', onFlag);
+    cancelButton.addEventListener('click', onCancel);
+    overlay.hidden = false;
+  });
+}
+
+/** Checkbox-selected entries -> password -> 削除する/印をつける/やめる (2026-09-07, per user request,
+ * replacing the old plain "削除しますか？" confirm). "印をつける" flags each selected entry as outdated
+ * instead of deleting it -- see ranking.js's own markOutdated doc and renderRankingList's own
+ * .ranking-row__outdated-mark rendering for the resulting "〇" badge. */
 async function handleRankingDeleteSelectedClick() {
   if (selectedRankingEntries.size === 0) return; // button is disabled in this state, but guard anyway
   const entries = Array.from(selectedRankingEntries.entries()); // [id, {category,...}][]
-  if (!(await checkRankingResetPassword('選択した記録を削除するにはパスワードを入力してください。'))) return;
-  if (!window.confirm(`選択した${entries.length}件の記録を削除します。よろしいですか？`)) return;
-  Promise.all(entries.map(([id, { category }]) => RankingStorage.deleteOne(id, category))).then(() => renderRankingList());
+  if (!(await checkRankingResetPassword('選択した記録を削除・印付けするにはパスワードを入力してください。'))) return;
+  const choice = await showRankingDeleteOrMarkChoice();
+  if (choice === 'delete') {
+    Promise.all(entries.map(([id, { category }]) => RankingStorage.deleteOne(id, category))).then(() => renderRankingList());
+  } else if (choice === 'mark') {
+    Promise.all(entries.map(([id, { category }]) => RankingStorage.markOutdated(id, category))).then(() => renderRankingList());
+  }
 }
 
 /** Enables/labels the "選択した項目をダウンロード" button (2026-09-07, per user request: replaces the old
