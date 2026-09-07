@@ -35,6 +35,21 @@ function parseMonumentThreshold(diceString) {
   return match ? Number(match[1]) : null;
 }
 
+/** Every 導き/兆し(B001-B006,B202) and C-card(C001-C006,C201) face -- i.e. every B/C-tier card whose own
+ * TAP ability does NOT self-untap -- the user's own "ラウンドタップ" category (see score()'s own doc on
+ * the 聖女/王女 synergy bonus this feeds). Excludes 聖女/王女(C202/C301, scored separately) and B301/栄光
+ * の証(no TAP field at all). */
+const UNTAP_SYNERGY_FACE_IDS = new Set([
+  'B001A', 'B001B', 'B002A', 'B002B', 'B003A', 'B003B',
+  'B004A', 'B004B', 'B005A', 'B005B', 'B006A', 'B006B', 'B202A', 'B202B',
+  'C001A', 'C001B', 'C002A', 'C002B', 'C003A', 'C003B',
+  'C004A', 'C004B', 'C005A', 'C005B', 'C006A', 'C006B', 'C201A', 'C201B',
+]);
+
+/** 小麦畑/農園の支配(A004/A005) + 農夫(C201), either tier -- the user's own K-stockpiling-economy group
+ * feeding the 晩餐会(M401) synergy bonus in score(). */
+const FARM_SYNERGY_FACE_IDS = new Set(['A004A', 'A004B', 'A005A', 'A005B', 'C201A', 'C201B']);
+
 /** How much VP rewardText would grant, read via the real DSL parser rather than executed (2026-08-10,
  * QST awareness -- see Evaluator's own qstAware policy doc). Every QST REWARD field today is a plain
  * ADD(nVP) (see qst.js's own doc on resolveEndGameRewards), so this sums every literal-count VP item
@@ -298,6 +313,55 @@ class Evaluator {
         if (monumentSecurableByPlayer(state, this.index, playerId, faceId)) {
           total += v('モニュメント確保ボーナス');
         }
+      }
+    }
+
+    // Owned-card synergy bonuses (2026-09-07, per user report: "このゲームはすでに獲得されているカードとの
+    // 相性で獲得点数の最大効率も変わります" -- e.g. 聖女/王女(ONCE=UNTAP_CHOICE(SELF,3), fired once per
+    // acquisition/LVUP) are only as good as the「ラウンドタップ」cards already on hand to untap-and-reuse
+    // (user's own term, confirmed 2026-09-07: "タップするカードで毎ターン使えないカードをラウンドタップと
+    // 呼びます" -- every 導き/兆し(B001-B006,B202) and C-card(C001-C006,C201) qualifies, since none of
+    // their own TAP abilities self-untap), and 晩餐会(M401, final-VP-per-K) is only worth chasing with a
+    // K-stockpiling economy already in place. Two new GA-tunable eval-table values (seeded at 0 in every
+    // round, same "zero-escape" discovery mechanism as モニュメント確保ボーナス above -- see
+    // src/ai/ga.js's mutateGenomePercent), unconditional like that row (harmless no-op until training
+    // discovers a nonzero value). Deliberately named/enumerated combos (per user decision, confirmed
+    // 2026-09-07: "決め打ち列挙" over a generic owned-card-tag system), matching monument-incentive.js's
+    // own established convention for this kind of thing.
+    {
+      // Only a CURRENTLY TAPPED ラウンドタップ card benefits from being untapped (an untapped one can
+      // already be used normally) -- per user's own worked example: "聖女はできれば獲得する前にラウンド
+      // タップが1枚、LVアップする前にLV2のラウンドタップが2枚はあったほうがいい(最後の1枚のアンタップは
+      // 聖女自身なので)、王女も獲得する時にラウンドタップが3枚ある状態で獲得できると強い" -- describes the
+      // value of having several ラウンドタップ cards already TAPPED (used up) at the moment 聖女/王女 is
+      // acquired/upgraded, not merely owned.
+      let ownsFairyOrPrincess = false;
+      let tappedUntapSynergyCount = 0;
+      for (const pid of player.ownedCardPhysicalIds) {
+        const inst = state.cards[pid];
+        if (!inst) continue;
+        const faceId = inst.currentFaceId;
+        if (faceId === 'C202A' || faceId === 'C202B' || faceId === 'C301A' || faceId === 'C301B') {
+          ownsFairyOrPrincess = true;
+        } else if (inst.tapped && UNTAP_SYNERGY_FACE_IDS.has(faceId)) {
+          tappedUntapSynergyCount++;
+        }
+      }
+      if (ownsFairyOrPrincess) {
+        total += tappedUntapSynergyCount * v('聖女王女ラウンドタップ相性');
+      }
+      // 農園/小麦畑/農夫(A004/A005/C201, either tier) x 晩餐会(M401, COST=10K, final VP_MODIFIER per K
+      // held): a K-stockpiling economy already in place makes 晩餐会 both easier to afford and more
+      // valuable once owned -- credited once while 晩餐会 is still unclaimed by anyone (same
+      // isMonumentUnclaimed convention monument-incentive.js's own FARM_ROW_NAME check uses).
+      const ownsFarmSynergy = player.ownedCardPhysicalIds.some((pid) => {
+        const inst = state.cards[pid];
+        return inst && FARM_SYNERGY_FACE_IDS.has(inst.currentFaceId);
+      });
+      const banquetHallInst = state.cards['M401'];
+      const banquetHallUnclaimed = !banquetHallInst || banquetHallInst.ownerId === null;
+      if (ownsFarmSynergy && banquetHallUnclaimed) {
+        total += v('晩餐会食料生産相性');
       }
     }
 

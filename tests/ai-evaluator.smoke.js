@@ -45,6 +45,14 @@ for (const name of ['複合ダイス強化で天空の塔を獲得', '複合ダ�
   row['3R'] = 50;
   row['4R'] = 80;
 }
+// 評価値's own '聖女王女ラウンドタップ相性'/'晩餐会食料生産相性' rows (2026-09-07, per user report on
+// owned-card synergy -- see evaluator.js's own doc) are genuinely seeded at 0/0/0/0 until GA/replay
+// training discovers a value -- patched here to a nonzero round-3 number purely so the tests below can
+// exercise the mechanism, same pattern as モニュメント確保ボーナス's own patch just above.
+{
+  raw['評価値'].find((r) => r.ID === '聖女王女ラウンドタップ相性')['3R'] = 20;
+  raw['評価値'].find((r) => r.ID === '晩餐会食料生産相性')['3R'] = 30;
+}
 const evalTable = buildEvalTable(raw);
 const evaluator = new Evaluator(index, evalTable);
 const evaluatorQstAware = new Evaluator(index, evalTable, { qstAware: true }); // see AI LV3's own doc in main.js
@@ -776,6 +784,84 @@ index.raw.QST = [
 
   const bonusVp = 9; // well under the 10VP cap
   check('Reaching the real GAME_END adds exactly 9K -> 9VP, weighted by round 4\'s own v(VP)=1000', atEndScore - midGameScore, bonusVp * 1000);
+}
+
+// ---------------------------------------------------------------------------
+// Owned-card synergy bonuses (2026-09-07, per user report: "このゲームはすでに獲得されているカードとの
+// 相性で獲得点数の最大効率も変わります" -- see evaluator.js's own doc). '聖女王女ラウンドタップ相性'
+// patched to round-3=20 above; '晩餐会食料生産相性' patched to round-3=30.
+// ---------------------------------------------------------------------------
+{
+  // Isolates the synergy bonus itself: 2 states identical except for the SAME 2 owned cards' tapped
+  // flag -- everything else (王女's own eval value, C001A/B003A's own eval values) cancels in the diff.
+  const round = 3;
+  const makeState = (tapped) => {
+    const state = freshState(round);
+    giveCard(state, 'C301A', 'P1'); // 王女LV1
+    giveCard(state, 'C001A', 'P1').tapped = tapped; // 代官LV1, a ラウンドタップ card
+    giveCard(state, 'B003A', 'P1').tapped = tapped; // 運命の導きLV1, also ラウンドタップ
+    return state;
+  };
+  check(
+    '王女 + 2 tapped ラウンドタップ cards credits the synergy bonus twice, vs both untapped',
+    evaluator.score(makeState(true), 'P1') - evaluator.score(makeState(false), 'P1'),
+    2 * 20,
+  );
+}
+{
+  // An UNTAPPED ラウンドタップ card doesn't need untapping -- credits only its own base eval value, no
+  // synergy bonus on top.
+  const round = 3;
+  const base = () => { const state = freshState(round); giveCard(state, 'C202A', 'P1'); return state; }; // 聖女LV1 alone
+  const withUntapped = () => { const state = base(); giveCard(state, 'C001A', 'P1'); return state; }; // tapped:false (default)
+  check(
+    '聖女 + an UNTAPPED ラウンドタップ card credits only its own base value, no synergy bonus',
+    evaluator.score(withUntapped(), 'P1') - evaluator.score(base(), 'P1'),
+    evalTable[round].C001A,
+  );
+}
+{
+  // No 聖女/王女 owned at all -- a tapped ラウンドタップ card alone credits nothing.
+  const state = freshState(3);
+  const tapped = giveCard(state, 'C001A', 'P1');
+  tapped.tapped = true;
+  check(
+    'A tapped ラウンドタップ card with no 聖女/王女 owned credits nothing',
+    evaluator.score(state, 'P1'),
+    evaluator.score(freshState(3), 'P1') + evalTable[3].C001A,
+  );
+}
+{
+  // 農夫(C201A) owned, 晩餐会(M401) unclaimed (not in state.cards at all) -- credited.
+  const state = freshState(3);
+  giveCard(state, 'C201A', 'P1');
+  check(
+    '農夫 owned + 晩餐会 unclaimed credits the synergy bonus (+30)',
+    evaluator.score(state, 'P1'),
+    evaluator.score(freshState(3), 'P1') + evalTable[3].C201A + 30,
+  );
+}
+{
+  // 晩餐会 already owned (by anyone) -- no longer "unclaimed", no credit.
+  const state = freshState(3);
+  giveCard(state, 'C201A', 'P1');
+  const p2 = createPlayer('P2', 'Bob');
+  state.players.push(p2);
+  giveCard(state, 'M401', 'P2');
+  const withoutFarm = freshState(3);
+  const p2Only = createPlayer('P2', 'Bob');
+  withoutFarm.players.push(p2Only);
+  giveCard(withoutFarm, 'M401', 'P2');
+  check(
+    '農夫 owned but 晩餐会 already claimed (by anyone) credits nothing',
+    evaluator.score(state, 'P1') - evaluator.score(withoutFarm, 'P1'),
+    evalTable[3].C201A,
+  );
+}
+{
+  // No farm/farmer card owned at all -- 晩餐会 being unclaimed alone credits nothing.
+  const state = freshState(3);
+  check('No 農園/小麦畑/農夫 owned credits nothing toward 晩餐会', evaluator.score(state, 'P1'), evaluator.score(freshState(3), 'P1'));
 }
 
 console.log(`\n${passCount} passed, ${failCount} failed`);
