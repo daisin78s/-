@@ -2153,6 +2153,10 @@ const ACTION_ICON_BUILDERS = {
   'CHANGE(K,A,ALL)': () => actionRow([actionDot('K'), actionArrow(), actionDot('A'), actionSuffix('ALL')]),
   'CHANGE(K,B,ALL)': () => actionRow([actionDot('K'), actionArrow(), actionDot('B'), actionSuffix('ALL')]),
   'CHANGE(K,C,ALL)': () => actionRow([actionDot('K'), actionArrow(), actionDot('C'), actionSuffix('ALL')]),
+  // 2026-09-07, per user data edit ("Cカード能力変えました"): 代官/修道士/商人LV2 all converged onto this
+  // same CHANGE(K,Z,ALL) TAP -- the K,A/B,C,ALL siblings just above already had their own icon entries
+  // from this shape's earlier 2026-08-05 use, this one didn't exist yet.
+  'CHANGE(K,Z,ALL)': () => actionRow([actionDot('K'), actionArrow(), actionDot('Z'), actionSuffix('ALL')]),
   // CHANGE(K,Z,2)/(K,A,2)/(K,B,2)/(K,C,2) used to live here (the count-argument form) -- removed
   // 2026-08-0X, no longer reachable: C001-3's TAP was changed to the quantity-prefixed CHANGE(2K,2A)
   // form (per user request), which buildChangeQuantityIcon now handles generically.
