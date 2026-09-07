@@ -94,8 +94,29 @@ function consumeDebugSetupPlan() {
  * completely unaffected either way. plan.qst (2026-08-18, not P1-scoped at all -- QST reveals are
  * whole-game, shared by every player) forces which QST faces get revealed, in pick order -- see
  * qst.setupQuests' own doc. */
-function createInitialState(plan) {
-  const state = gameStateMod.createEmptyGameState(randomSeed());
+/** ISO-8601 week id anchored to Japan time (UTC+9) regardless of the player's own device timezone
+ * (2026-09-07, per user request confirming "日本時間で" for the weekly challenge's own Sun/Mon boundary --
+ * every player sees the new week at the same real-world moment, JST midnight Mon, not whenever midnight
+ * happens to fall in their own timezone). Used as this.week's fixed RNG seed (via createInitialState's
+ * forcedSeed) so every attempt at the same week, by any player, gets the exact same board. ISO weeks
+ * already start on Monday, matching "日曜と月曜のさかいで" with no extra day-of-week adjustment needed. */
+function currentWeeklyChallengeId() {
+  const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+  const nowJst = new Date(Date.now() + JST_OFFSET_MS);
+  // Standard ISO-8601 week algorithm, applied to the JST wall-clock date treated as if it were itself UTC
+  // (the +9h shift above already did the real timezone conversion -- using UTC getters from here on
+  // avoids the browser's own local timezone leaking back in a second time). ISO weeks start Monday,
+  // matching "日曜と月曜のさかいで" with no extra day-of-week adjustment needed. Verified against known
+  // reference dates (2026-09-06 Sun -> 2026-W36, 2026-09-07 Mon -> 2026-W37, etc.) before use.
+  const d = new Date(Date.UTC(nowJst.getUTCFullYear(), nowJst.getUTCMonth(), nowJst.getUTCDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const week = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+
+function createInitialState(plan, forcedSeed) {
+  const state = gameStateMod.createEmptyGameState(forcedSeed || randomSeed());
   // P1's own display name (2026-09-07, per user request: "ランキングに名前を入力したら...次回以降その人
   // (その端末)では入ったときにALICEの代わりにその名前が表示される") -- reuses the same
   // RANKING_PLAYER_NAME_KEY localStorage value the ranking registration form remembers, falling back to
@@ -128,8 +149,26 @@ function createInitialState(plan) {
   return state;
 }
 
-const debugSetupPlanAtLoad = consumeDebugSetupPlan();
-const STATE = createInitialState(debugSetupPlanAtLoad);
+// ウィークリーチャレンジ (2026-09-07, per user spec): "ウィークリーチャレンジ" button stashes this flag and
+// reloads (same "plan in sessionStorage, pick it up on the resulting fresh load" pattern
+// consumeDebugSetupPlan/openDebugSetupFlow already use for テストゲーム開始), consumed exactly once so a
+// later plain refresh doesn't re-enter weekly mode. While active: テストゲーム開始 is forced off entirely
+// (plan=null below, regardless of any pending debug-setup plan -- "全員同じ盤面" would break otherwise)
+// and forcedSeed comes from currentWeeklyChallengeId() instead of the normal per-load random one, so
+// every attempt at the same JST week gets the exact same board. weeklyChallengeSeatChosen stays null
+// until a seat is picked (see renderWeeklySeatPicker/chooseWeeklyChallengeSeat) -- render() shows the
+// seat-picker screen in place of the normal board the whole time it's null.
+const WEEKLY_CHALLENGE_PENDING_KEY = 'diceWpWeeklyChallengePending';
+function consumeWeeklyChallengePending() {
+  const pending = sessionStorage.getItem(WEEKLY_CHALLENGE_PENDING_KEY) === '1';
+  if (pending) sessionStorage.removeItem(WEEKLY_CHALLENGE_PENDING_KEY);
+  return pending;
+}
+const weeklyChallengeActive = consumeWeeklyChallengePending();
+let weeklyChallengeSeatChosen = null; // playerId ('P1'..'P4') once chosen, null while still picking
+
+const debugSetupPlanAtLoad = weeklyChallengeActive ? null : consumeDebugSetupPlan();
+const STATE = createInitialState(debugSetupPlanAtLoad, weeklyChallengeActive ? `weekly-${currentWeeklyChallengeId()}` : undefined);
 
 // True once this game has used デバッグモード or テストゲーム開始 at any point (2026-09-07, per user
 // spec, for the ranking's 3-way split -- see renderRankingList's own doc): "スタンダード" ranking
@@ -170,8 +209,72 @@ const PLAYER_ROLE_OPTIONS = [['HUMAN', '人間'], ['AI_LV1', 'AI LV1'], ['AI_LV2
 // 'AI_LV2' before LV3 existed; now derived so it keeps pointing at whichever level is actually strongest
 // without needing to be hand-updated again the next time one is added.
 const DEFAULT_AI_ROLE = PLAYER_ROLE_OPTIONS[PLAYER_ROLE_OPTIONS.length - 1][0];
-const playerRoles = new Map([['P1', 'HUMAN'], ['P2', DEFAULT_AI_ROLE], ['P3', DEFAULT_AI_ROLE], ['P4', DEFAULT_AI_ROLE]]);
+// ウィークリーチャレンジ (2026-09-07): every seat starts AI-controlled while still on the seat-picker
+// screen (weeklyChallengeSeatChosen null) -- nobody has committed to a seat yet, so nothing should wait on
+// human input anywhere. chooseWeeklyChallengeSeat flips the chosen one over to HUMAN (and every other seat
+// stays/reverts to DEFAULT_AI_ROLE) once picked, same playerRoles.set(...) pattern the online lobby's own
+// seatIsHuman sync already uses.
+const playerRoles = weeklyChallengeActive
+  ? new Map([['P1', DEFAULT_AI_ROLE], ['P2', DEFAULT_AI_ROLE], ['P3', DEFAULT_AI_ROLE], ['P4', DEFAULT_AI_ROLE]])
+  : new Map([['P1', 'HUMAN'], ['P2', DEFAULT_AI_ROLE], ['P3', DEFAULT_AI_ROLE], ['P4', DEFAULT_AI_ROLE]]);
 function isAiPlayer(playerId) { return playerRoles.get(playerId) !== 'HUMAN'; }
+
+function openWeeklyChallenge() {
+  sessionStorage.setItem(WEEKLY_CHALLENGE_PENDING_KEY, '1');
+  location.reload();
+}
+
+/** Renders the ウィークリーチャレンジ seat-picker screen (2026-09-07, per user spec) in place of the
+ * normal board: dice at top, then one color-coded row per seat (P1-P4) showing that seat's own CON card
+ * and its 4 initial RESOURCE candidates side by side -- no explanatory hint text, no MAP/AREA tiles.
+ * Reads directly off the fixed-seed STATE already built at load time (see weeklyChallengeActive's own
+ * doc); nothing here mutates it -- this is purely a comparison view before committing to a seat. The CON
+ * card shown is its own A face (a preview only -- which face to actually build is still chosen normally,
+ * during onboarding, same as any other game). */
+function renderWeeklySeatPicker(state) {
+  const diceContainer = document.getElementById('weekly-seat-picker__dice');
+  diceContainer.innerHTML = '';
+  for (const player of state.players) {
+    const row = el('div', 'weekly-seat-picker__dice-row');
+    row.dataset.color = player.color;
+    for (const die of player.dice) {
+      row.appendChild(renderDie({ kind: die.kind, value: die.value, color: player.color }));
+    }
+    diceContainer.appendChild(row);
+  }
+
+  const rowsContainer = document.getElementById('weekly-seat-picker__rows');
+  rowsContainer.innerHTML = '';
+  for (const player of state.players) {
+    const row = el('div', 'weekly-seat-picker__row');
+    row.dataset.color = player.color;
+    row.appendChild(el('div', 'weekly-seat-picker__name', player.name));
+    const cardsRow = el('div', 'weekly-seat-picker__cards');
+    cardsRow.appendChild(buildCardVisual(`${player.conPhysicalId}A`, { showEffect: true, allowTextFallback: false, noInteraction: true }));
+    const resourceChoice = state.pendingChoices.find((c) => c.playerId === player.id && c.kind === 'SELECT_RESOURCE_CARDS');
+    if (resourceChoice) {
+      for (const faceId of resourceChoice.context.candidates) {
+        cardsRow.appendChild(buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true }));
+      }
+    }
+    row.appendChild(cardsRow);
+    const chooseButton = el('button', 'undo-button weekly-seat-picker__choose-button', `${player.name}で始める`);
+    chooseButton.type = 'button';
+    chooseButton.addEventListener('click', () => chooseWeeklyChallengeSeat(player.id));
+    row.appendChild(chooseButton);
+    rowsContainer.appendChild(row);
+  }
+}
+
+/** Commits to playerId as the human seat for this ウィークリーチャレンジ attempt -- every other seat
+ * (re)confirms DEFAULT_AI_ROLE, same playerRoles.set(...) pattern the online lobby's own seatIsHuman sync
+ * already uses. Clears weeklyChallengeSeatChosen's null so render()'s own top-level branch switches back
+ * to the normal board from here on (see render()'s own doc). */
+function chooseWeeklyChallengeSeat(playerId) {
+  for (const seatId of ['P1', 'P2', 'P3', 'P4']) playerRoles.set(seatId, seatId === playerId ? 'HUMAN' : DEFAULT_AI_ROLE);
+  weeklyChallengeSeatChosen = playerId;
+  render(STATE);
+}
 
 // ---------------------------------------------------------------------------
 // オンライン対戦 (2026-08-29, per user request: "2〜4人の友人同士(合言葉/ルームコードで合流)") -- see
@@ -1864,6 +1967,13 @@ function renderCardListOverlay() {
  * STATE/historyCursor currently are (including right after a jump, since jumpToHistoryIndex ends with
  * its own render(STATE) call). */
 function renderDebugPanel(state) {
+  // ウィークリーチャレンジ中 (2026-09-07, per user spec): デバッグモード/テストゲーム開始/(re-opening)
+  // ウィークリーチャレンジ自体は全部使えない -- "全員同じ盤面" の前提を崩せる手段を、ピッキング画面から
+  // GAME_ENDまでこのページ全体の生存期間ずっと塞いでおく(このアプリは新しいゲームを始めるのに必ずリロード
+  // が要るので、このロード全体が1回のウィークリーチャレンジの試行そのもの)。
+  document.getElementById('weekly-challenge-button').hidden = weeklyChallengeActive;
+  document.getElementById('debug-setup-start-button').hidden = weeklyChallengeActive;
+  document.getElementById('debug-mode-toggle').hidden = weeklyChallengeActive;
   const toggleBtn = document.getElementById('debug-mode-toggle');
   toggleBtn.textContent = `デバッグモード: ${debugMode ? 'ON' : 'OFF'}`;
   toggleBtn.classList.toggle('debug-panel__toggle--on', debugMode);
@@ -6433,10 +6543,11 @@ function renderRankingRegisterList(state) {
         jobCardId: c.jobCardId,
         opponents: c.opponents,
         playerColor: c.playerColor,
-        // 3-way ranking split (2026-09-07, per user spec): 'standard' only if デバッグモード/テストゲーム
-        // were never used this whole game; 'ultimate' otherwise. 'weekly' (ウィークリーチャレンジ) is a
-        // separate, not-yet-built entry path, not reachable from here.
-        category: usedDebugOrTestGameThisGame ? 'ultimate' : 'standard',
+        // 3-way ranking split (2026-09-07, per user spec): ウィークリーチャレンジ games always register
+        // as 'weekly' (デバッグモード/テストゲーム are both forced unavailable for the whole attempt
+        // anyway -- see renderDebugPanel -- so usedDebugOrTestGameThisGame is moot here); otherwise
+        // 'standard' only if neither was ever used this whole game, 'ultimate' if either was.
+        category: weeklyChallengeActive ? 'weekly' : (usedDebugOrTestGameThisGame ? 'ultimate' : 'standard'),
       }, replayHistory).then((entry) => {
         registeredRankingPlayerIds.add(c.playerId);
         renderRankingOverlay(STATE, entry.id, entry.category);
@@ -6889,6 +7000,16 @@ function render(state) {
   // itself is full of live-play-only side effects -- AI pumping, checkpoint recording, turn bookkeeping
   // -- none of which make sense, or are even safe, against a frozen historical snapshot).
   if (replayMode) { renderReplayFrame(); return; }
+  // ウィークリーチャレンジの席選択画面 (2026-09-07, per user spec) -- same "takes over the whole screen
+  // with its own render path" idea as replayMode just above, shown until a seat is actually chosen.
+  if (weeklyChallengeActive && weeklyChallengeSeatChosen === null) {
+    document.getElementById('app').hidden = true;
+    document.getElementById('weekly-seat-picker').hidden = false;
+    renderWeeklySeatPicker(state);
+    return;
+  }
+  document.getElementById('app').hidden = false;
+  document.getElementById('weekly-seat-picker').hidden = true;
   document.getElementById('app').classList.remove('replay-locked');
   // 変化ハイライトのクリア (2026-08-16, see changeHighlightDiff's own doc): nothing in this app ever
   // calls render() on its own (no polling/interval) -- every call is caused by a human doing something,
@@ -7609,6 +7730,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('debug-mode-toggle').addEventListener('click', toggleDebugMode);
+  document.getElementById('weekly-challenge-button').addEventListener('click', openWeeklyChallenge);
   document.getElementById('debug-turn-back').addEventListener('click', handleDebugTurnBack);
   document.getElementById('debug-turn-forward').addEventListener('click', handleDebugTurnForward);
   document.getElementById('debug-round-back').addEventListener('click', handleDebugRoundBack);

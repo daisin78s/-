@@ -3585,3 +3585,81 @@ h1, h2, h3 { margin: 0; }
   vertical-align: -1px;
   margin: 0 1px;
 }
+
+/* ウィークリーチャレンジ 席選択画面 (2026-09-07, per user spec: "MAP（AREA）をすべて消し ダイスを上に寄
+   せる その下に縦に４つ並べて色分け...CONと初期資源は同じ行に並べる") -- takes over the whole screen in
+   place of #app while picking (see main.js's render()/renderWeeklySeatPicker doc). Left-border accent per
+   row (not a full background fill) for the same "readable + color-coded" balance .player-panel__swatch's
+   own dot-based color-coding already strikes elsewhere. */
+#weekly-seat-picker {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+#weekly-seat-picker__title {
+  font-size: 16px;
+  text-align: center;
+}
+
+#weekly-seat-picker__dice {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.weekly-seat-picker__dice-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-left: 4px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.weekly-seat-picker__dice-row[data-color="PINK"] { border-left-color: var(--player-pink); }
+.weekly-seat-picker__dice-row[data-color="PURPLE"] { border-left-color: var(--player-purple); }
+.weekly-seat-picker__dice-row[data-color="GREEN"] { border-left-color: var(--player-green); }
+.weekly-seat-picker__dice-row[data-color="ORANGE"] { border-left-color: var(--player-orange); }
+
+#weekly-seat-picker__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.weekly-seat-picker__row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px;
+  border-left: 4px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.weekly-seat-picker__row[data-color="PINK"] { border-left-color: var(--player-pink); }
+.weekly-seat-picker__row[data-color="PURPLE"] { border-left-color: var(--player-purple); }
+.weekly-seat-picker__row[data-color="GREEN"] { border-left-color: var(--player-green); }
+.weekly-seat-picker__row[data-color="ORANGE"] { border-left-color: var(--player-orange); }
+
+.weekly-seat-picker__name {
+  font-weight: 700;
+  flex: 0 0 60px;
+}
+
+.weekly-seat-picker__cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1 1 auto;
+}
+
+.weekly-seat-picker__choose-button {
+  flex: 0 0 auto;
+}

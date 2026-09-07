@@ -7,6 +7,17 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <!-- ウィークリーチャレンジの席選択 (2026-09-07, per user spec) -- shown in place of the normal #app view
+       while weeklyChallengeActive && weeklyChallengeSeatChosen===null (see main.js's
+       renderWeeklySeatPicker/chooseWeeklyChallengeSeat). MAP/AREA tiles deliberately absent here -- per
+       spec ("MAP（AREA）をすべて消し"), this is a side-by-side comparison of what each of the 4 seats
+       would start with, not the real board. -->
+  <div id="weekly-seat-picker" hidden>
+    <h2 id="weekly-seat-picker__title">ウィークリーチャレンジ — 席を選んでください</h2>
+    <div id="weekly-seat-picker__dice"></div>
+    <div id="weekly-seat-picker__rows"></div>
+  </div>
+
   <div id="app">
     <main id="game-layout">
       <div id="board-area">
@@ -102,6 +113,12 @@
          2026-08-04: 表示位置を#appの一番下に移動（本人指示「デバッグモードの表示位置 一番したにして」）。 -->
     <section id="debug-panel" class="debug-panel" aria-label="デバッグ">
       <button type="button" id="debug-mode-toggle" class="debug-panel__toggle">デバッグモード: OFF</button>
+      <!-- ウィークリーチャレンジ (2026-09-07, per user spec): reloads into a fixed-per-JST-week seed --
+           see main.js's currentWeeklyChallengeId/openWeeklyChallenge. Hidden entirely for the whole
+           duration of an attempt (picking through GAME_END) via renderDebugPanel, same as
+           debug-setup-start-button/debug-mode-toggle -- "全員同じ盤面" would break if either of those
+           could still be used mid-attempt. -->
+      <button type="button" id="weekly-challenge-button" class="debug-panel__toggle">ウィークリーチャレンジ</button>
       <!-- テストゲーム開始 (2026-08-13, per user request): opens #debug-setup-overlay's CON/JOB/初期資源/
            ABCカード picker flow -- see main.js's openDebugSetupFlow. Unrelated to the ON/OFF toggle above
            (that one gates the turn-history timeline for the CURRENT game; this one configures the NEXT
