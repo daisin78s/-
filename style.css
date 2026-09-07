@@ -3388,13 +3388,14 @@ h1, h2, h3 { margin: 0; }
 
 /* 3-way ranking split (2026-09-07) -- 左=アルティメット/中央=スタンダード/右=ウィークリー, fixed order,
    all 3 shown AT ONCE side by side (per user correction: "３つのランキングをボタンで切り替えるのではなく
-   ３つ同時に表示して" -- not a tab switcher, confirmed again: "どの画面で見ても上下に並んです" after an
-   earlier flex-wrap:wrap + 260px-basis version fell back to a vertical stack on anything narrower than
-   ~830px content width, iPad-portrait included -- the primary device this app targets). No flex-wrap at
-   all now: always exactly 3 equal-width columns dividing whatever width IS available, never stacking --
-   .ranking-row's own flex-wrap handles a narrow column's contents by wrapping fields within the row
-   instead. */
-.ranking-columns {
+   ３つ同時に表示して" -- not a tab switcher). No flex-wrap: always exactly 3 equal-width columns dividing
+   whatever width IS available, never stacking -- .ranking-row's own flex-wrap handles a narrow column's
+   contents by wrapping fields within the row instead.
+   #ranking-columns, NOT .ranking-columns (2026-09-07 fix, per user report: "横に3つ並べようとしているのに
+   縦に並んでいる" -- index.html's own element only ever carried this as an id, never as a class, so this
+   whole rule silently never matched anything and the 3 .ranking-column children fell back to plain block
+   stacking). */
+#ranking-columns {
   display: flex;
   gap: 8px;
   padding: 12px 16px;
