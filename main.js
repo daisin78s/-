@@ -7474,7 +7474,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('online-lobby-open-button').addEventListener('click', openOnlineLobby);
   document.getElementById('online-lobby-close-button').addEventListener('click', closeOnlineLobby);
 
-  document.getElementById('anytime-ranking-button').addEventListener('click', openLiveRankingOverlay);
+  // 2026-09-07, per user request: この「ランキング」ボタンは以前「現在の順位」(mid-game live standings)
+  // へ遷移していたが、それはプレイ画面上ですでに確認できるので、ボタンの名前通り歴代ランキングへ直行させる。
+  document.getElementById('anytime-ranking-button').addEventListener('click', openRankingOverlay);
   document.getElementById('game-end-close-button').addEventListener('click', closeLiveRankingOverlay);
 
   document.getElementById('game-end-replay-button').addEventListener('click', () => enterReplayMode());
