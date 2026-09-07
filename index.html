@@ -120,9 +120,10 @@
            ボタンなし）で見られる画面 -- see main.js's openCardListOverlay/renderCardListOverlay。
            デバッグモードのON/OFFとは無関係、テストゲーム開始ボタンと同じく常時表示。 -->
       <button type="button" id="card-list-open-button" class="debug-panel__toggle">カードリスト</button>
-      <!-- リプレイダウンロード (2026-08-31, per user request: "リプレイを渡す方法はありますか") -- see
-           main.js's downloadReplayAsJson. Always visible, same as テストゲーム開始/カードリスト. -->
-      <button type="button" id="replay-download-button" class="debug-panel__toggle">リプレイをダウンロード</button>
+      <!-- リプレイダウンロード (2026-08-31, per user request: "リプレイを渡す方法はありますか") -- removed
+           2026-09-07, per user request: was originally for handing over a replay when online sync failed,
+           which rarely happens any more. downloadReplayAsJson itself stays (still used by the ranking
+           overlay's own 選択した項目をダウンロード button). -->
       <!-- リプレイ読み込み (2026-08-31, per user request: ダウンロードした/外部で生成したリプレイJSONを
            このゲームのリプレイビューア(進む/戻るで1手ずつ確認)で開けるように -- see main.js's
            handleReplayUploadChange. 隠しfile inputをボタン経由でクリックする、よくあるパターン。 -->

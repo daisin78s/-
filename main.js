@@ -7619,7 +7619,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('debug-setup-cancel-button').addEventListener('click', cancelDebugSetupFlow);
 
   document.getElementById('card-list-open-button').addEventListener('click', openCardListOverlay);
-  document.getElementById('replay-download-button').addEventListener('click', downloadReplayAsJson);
   document.getElementById('replay-upload-button').addEventListener('click', () => document.getElementById('replay-upload-input').click());
   document.getElementById('replay-upload-input').addEventListener('change', handleReplayUploadChange);
 
