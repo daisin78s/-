@@ -3459,9 +3459,12 @@ h1, h2, h3 { margin: 0; }
 }
 
 /* 最新版でないリプレイの目印 (2026-09-07, per user request: "この〇は最新版でないリプレイデータを間違え
-   て学習させないためのものです") -- shown before a marked entry's own 再生 button. */
+   て学習させないためのものです") -- shown right after .ranking-row__opponents ("AI LV4 AI LV4 AI LV4"),
+   before the entry's own 再生 button. Deliberately unstyled beyond color (2026-09-07 follow-up, per user
+   request with an annotated screenshot: "実際には目立たないように同じフォント同じ文字サイズ同じ濃さで
+   AILV4の後に〇をつける") -- no font-weight/size override, so it reads as part of that same text rather
+   than a distinct badge; color left matching .ranking-row__opponents' own var(--text-muted). */
 .ranking-row__outdated-mark {
-  font-weight: 700;
   color: var(--text-muted);
   flex: 0 0 auto;
 }
