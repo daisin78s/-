@@ -3416,6 +3416,17 @@ h1, h2, h3 { margin: 0; }
   font-weight: 700;
 }
 
+/* Just-registered confirmation (2026-09-07, per user report: pressing 登録 gave no clear confirmation
+   that the entry actually saved -- registerRankingEntry's own row disappearing was easy to miss, leading
+   to accidental double-registers or thinking a save failed when it hadn't). Same pulse animation as
+   .slot--highlight, reused rather than inventing a new one -- see renderRankingList's own doc for the
+   scroll-to-reveal this pairs with. Removed automatically a few seconds after appearing. */
+.ranking-row--just-registered {
+  border: 1.5px solid var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft), 0 0 6px 1px var(--accent);
+  animation: slot-highlight-pulse 1.4s ease-in-out infinite;
+}
+
 .ranking-row__rank {
   font-weight: 700;
   color: var(--text-muted);

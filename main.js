@@ -47,6 +47,12 @@ const INDEX = dataLoaderMod.buildDataIndex(dataLoaderMod.loadGameData(window.GAM
 // to read it at page-load time (see consumeDebugSetupPlan/openDebugSetupFlow/advanceDebugSetupFlow).
 const DEBUG_SETUP_PLAN_KEY = 'diceWpDebugSetupPlan';
 
+// localStorage key for the last name typed into the ranking registration form (2026-09-07, per user
+// request: "プレイヤーネームをそれぞれのブラウザに記憶させることはできる？" -- per-browser convenience
+// only, not any kind of account/login; see renderRankingRegisterList's own doc). localStorage (not
+// sessionStorage like DEBUG_SETUP_PLAN_KEY above) since this should survive across browser restarts.
+const RANKING_PLAYER_NAME_KEY = 'diceWpRankingPlayerName';
+
 /**
  * Builds one fresh GameState via setup.js's real setup pipeline (steps 1-5 + JOB pool reveal + QST
  * reveal -- mirrors tests/setup.smoke.js's runFullSetup up through dealResourceCandidates). Steps 6-8
@@ -90,7 +96,12 @@ function consumeDebugSetupPlan() {
  * qst.setupQuests' own doc. */
 function createInitialState(plan) {
   const state = gameStateMod.createEmptyGameState(randomSeed());
-  setupMod.createPlayers(state, ['Alice', 'Bob', 'Carol', 'Dan']);
+  // P1's own display name (2026-09-07, per user request: "ランキングに名前を入力したら...次回以降その人
+  // (その端末)では入ったときにALICEの代わりにその名前が表示される") -- reuses the same
+  // RANKING_PLAYER_NAME_KEY localStorage value the ranking registration form remembers, falling back to
+  // the literal "Alice" the first time this browser is ever used (nothing remembered yet). P2-P4
+  // (Bob/Carol/Dan) stay fixed either way -- only the human seat's own name is ever customized here.
+  setupMod.createPlayers(state, [loadRememberedRankingName() || 'Alice', 'Bob', 'Carol', 'Dan']);
   setupMod.prepareMaps(state, INDEX);
   setupMod.prepareShops(state, INDEX, plan ? plan.abc : undefined);
   setupMod.rollInitialColorDice(state);
@@ -6333,13 +6344,29 @@ function rankingCandidatesForGameEnd(state) {
     });
 }
 
+/** Reads RANKING_PLAYER_NAME_KEY, or null if unset/unavailable (private browsing, storage blocked,
+ * etc. -- see this app's own "wrap every localStorage access" convention). */
+function loadRememberedRankingName() {
+  try { return localStorage.getItem(RANKING_PLAYER_NAME_KEY); } catch (e) { return null; }
+}
+
+/** Best-effort write, silently ignored if localStorage is unavailable -- a remembered-name convenience
+ * is never worth surfacing an error over. */
+function rememberRankingName(name) {
+  try { localStorage.setItem(RANKING_PLAYER_NAME_KEY, name); } catch (e) { /* ignore */ }
+}
+
 /** Name-entry + register row for each HUMAN seat not yet saved into the ranking this game (2026-08-16,
  * per user: name is "ランキングをとったプレイヤーが入力" -- typed by the player themselves, not
  * auto-filled). This is the app's first real `<input>` element (see index.html's own comment on
- * #ranking-overlay) -- everywhere else in the UI is click-only. */
+ * #ranking-overlay) -- everywhere else in the UI is click-only. Pre-filled from this browser's own
+ * last-used name (2026-09-07, per user request: "プレイヤーネームをそれぞれのブラウザに記憶させることは
+ * できる？例 私が自分のiPadで入ったときにhigebuchoで登録したら以降それが自動で出てくる") -- a per-browser
+ * localStorage convenience, not any kind of account/login; still freely editable/clearable per row. */
 function renderRankingRegisterList(state) {
   const container = document.getElementById('ranking-register-list');
   container.innerHTML = '';
+  const rememberedName = loadRememberedRankingName();
   for (const c of rankingCandidatesForGameEnd(state)) {
     if (registeredRankingPlayerIds.has(c.playerId)) continue;
     const row = el('div', 'ranking-register-row');
@@ -6352,12 +6379,14 @@ function renderRankingRegisterList(state) {
     input.className = 'ranking-name-input';
     input.placeholder = c.defaultName;
     input.maxLength = 20;
+    if (rememberedName) input.value = rememberedName;
     row.appendChild(input);
     const registerButton = el('button', 'undo-button', '登録');
     registerButton.type = 'button';
     registerButton.addEventListener('click', () => {
       registerButton.disabled = true;
       const name = input.value.trim() || c.defaultName;
+      rememberRankingName(name);
       RankingStorage.save({
         name,
         rawScore: c.rawScore,
@@ -6367,9 +6396,9 @@ function renderRankingRegisterList(state) {
         jobCardId: c.jobCardId,
         opponents: c.opponents,
         playerColor: c.playerColor,
-      }, replayHistory).then(() => {
+      }, replayHistory).then((entry) => {
         registeredRankingPlayerIds.add(c.playerId);
-        renderRankingOverlay(STATE);
+        renderRankingOverlay(STATE, entry.id);
       });
     });
     row.appendChild(registerButton);
@@ -6384,7 +6413,12 @@ function renderRankingRegisterList(state) {
  * response painting over a newer one if the overlay gets reopened again before the first read finishes
  * (e.g. a slow connection) -- only the MOST RECENT call's result is ever rendered. */
 let rankingListRequestId = 0;
-function renderRankingList() {
+/** @param {string} [highlightId] - a just-registered entry's id (2026-09-07, per user report: pressing
+ *   登録 gave no clear confirmation the save actually happened, leading to accidental double-registers).
+ *   When given, once the freshly-fetched list renders, the list scrolls from the top down to that
+ *   entry's own row and pulses it (.ranking-row--just-registered, auto-removed after a few seconds) --
+ *   "上からスクロールされて今入力した名前のところで光る" per the user's own spec. */
+function renderRankingList(highlightId) {
   const list = document.getElementById('ranking-list');
   list.innerHTML = '';
   list.appendChild(el('div', 'ranking-empty', '読み込み中...'));
@@ -6398,6 +6432,7 @@ function renderRankingList() {
       list.appendChild(el('div', 'ranking-empty', 'まだ登録がありません'));
       return;
     }
+    let highlightRow = null;
     entries.forEach((entry, i) => {
       const row = el('div', i === 0 ? 'ranking-row ranking-row--top' : 'ranking-row');
       // 複数選択用チェックボックス (2026-09-03) -- see selectedRankingIds' own doc.
@@ -6444,7 +6479,16 @@ function renderRankingList() {
       });
       row.appendChild(downloadButton);
       list.appendChild(row);
+      if (highlightId && entry.id === highlightId) highlightRow = row;
     });
+    if (highlightRow) {
+      list.scrollTop = 0; // "上からスクロールされて" -- always starts the scroll from the top
+      requestAnimationFrame(() => {
+        highlightRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        highlightRow.classList.add('ranking-row--just-registered');
+        setTimeout(() => highlightRow.classList.remove('ranking-row--just-registered'), 4000);
+      });
+    }
   }).catch(() => {
     if (requestId !== rankingListRequestId) return;
     list.innerHTML = '';
@@ -6452,9 +6496,9 @@ function renderRankingList() {
   });
 }
 
-function renderRankingOverlay(state) {
+function renderRankingOverlay(state, highlightId) {
   renderRankingRegisterList(state);
-  renderRankingList();
+  renderRankingList(highlightId);
 }
 
 function openRankingOverlay() {
