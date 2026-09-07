@@ -1485,12 +1485,18 @@ function renderReplayControls() {
   appEl.style.paddingTop = `${controls.getBoundingClientRect().bottom + 16}px`;
 }
 
-/** Turns debugMode on/off (spec item 14: the history UI itself is hidden while off, see
- * renderDebugPanel). Turning it on for the first time this session seeds turnHistory with the *current*
- * live state as history entry 0, so the panel has something to show/navigate immediately rather than
- * waiting for the next turn boundary (recordTurnHistorySnapshot only fires going forward from here).
- * Turning it off again does not clear turnHistory -- toggling back on later still has the full timeline
- * (recording just pauses while off, per debugMode's own gate in recordTurnHistorySnapshot). */
+/** Turns debugMode ON (spec item 14: the history UI itself is hidden while off, see renderDebugPanel).
+ * Seeds turnHistory with the *current* live state as history entry 0, so the panel has something to
+ * show/navigate immediately rather than waiting for the next turn boundary (recordTurnHistorySnapshot
+ * only fires going forward from here).
+ *
+ * One-way once ON (2026-09-07, per user request: "オンにするときは警告なしでいいですが一度オンにしたら
+ * ブラウザリセットしない限りオフにならないように", confirmed "更新ボタンでもいい" -- any fresh page load,
+ * not specifically closing the browser, is what resets it) -- see toggleDebugMode below. No confirmation
+ * needed to turn it ON; turning it back OFF is simply not offered at all once it's true, for the rest of
+ * this page load. debugMode is a plain top-level `let`, so it (and usedDebugOrTestGameThisGame, and every
+ * other per-load UI-scratch flag) already resets to false on its own the next time this page loads --
+ * nothing extra needed to make a refresh/reload count as "reset". */
 /** Shared by toggleDebugMode and the startup path -- debugMode defaulted to true from 2026-08-04 until
  * 2026-09-07 (reversed per a later user request, see debugMode's own doc); this still needs to seed the
  * panel with "something to show immediately" either way debugMode ends up starting, not just when
@@ -1503,8 +1509,9 @@ function seedDebugHistoryIfNeeded() {
 }
 
 function toggleDebugMode() {
-  debugMode = !debugMode;
-  if (debugMode) usedDebugOrTestGameThisGame = true; // see this flag's own doc -- never flips back
+  if (debugMode) return; // one-way -- see this function's own doc
+  debugMode = true;
+  usedDebugOrTestGameThisGame = true; // see this flag's own doc -- never flips back either
   seedDebugHistoryIfNeeded();
   render(STATE);
 }
@@ -2008,11 +2015,16 @@ function renderDebugPanel(state) {
   // GAME_ENDまでこのページ全体の生存期間ずっと塞いでおく(このアプリは新しいゲームを始めるのに必ずリロード
   // が要るので、このロード全体が1回のウィークリーチャレンジの試行そのもの)。
   document.getElementById('weekly-challenge-button').hidden = weeklyChallengeActive;
-  document.getElementById('debug-setup-start-button').hidden = weeklyChallengeActive;
+  // テストゲーム開始 (2026-09-07, per user request): hidden by default, only shown once デバッグモード is
+  // switched ON -- previously always visible whenever a weekly challenge wasn't active, regardless of
+  // debugMode, so it sat next to デバッグモード even while OFF. Still unconditionally hidden during a
+  // weekly challenge attempt either way (per the existing "全員同じ盤面" constraint above).
+  document.getElementById('debug-setup-start-button').hidden = weeklyChallengeActive || !debugMode;
   document.getElementById('debug-mode-toggle').hidden = weeklyChallengeActive;
   const toggleBtn = document.getElementById('debug-mode-toggle');
   toggleBtn.textContent = `デバッグモード: ${debugMode ? 'ON' : 'OFF'}`;
   toggleBtn.classList.toggle('debug-panel__toggle--on', debugMode);
+  toggleBtn.disabled = debugMode; // one-way -- see toggleDebugMode's own doc; avoids a silent no-op click
   const controls = document.getElementById('debug-history-controls');
   controls.hidden = !debugMode;
   if (!debugMode) return;
