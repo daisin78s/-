@@ -12,13 +12,20 @@ value for these from scratch, same mechanism that row already uses).
   - 晩餐会食料生産相性: credited once while the player owns 農園/小麦畑/農夫 (A004/A005/C201, either
     tier) and 晩餐会(M401) is still unclaimed -- per user: "農園 小麦畑 農民などがあると...晩餐会...が
     狙いやすい".
+  - 元老院支配拡張相性 (2026-09-07 addition): credited once per owned card among 導き(B001-B003)/
+    双星の加護(B201)/JOB002実業家/JOB006育成者/JOB007宮廷人 while the player owns 元老院の支配
+    (A301A/B) -- per user: "元老院はただとってもそれなりに強いが、導きや双星をすでに獲得していたり
+    JOBが実業家、宮廷人、育成者だったりすると尚いい" (each reaches 元老院's own BUILD() usefulness via a
+    different mechanism: 導き boosts the die value placed there, 双星 grants extra dice to spend there,
+    実業家/育成者 turn the resulting BUILD/dice-gain events into more K, 宮廷人 boosts the die value for
+    a MONUMENT candidate specifically).
 
 Run once: `python tools/add_synergy_eval_rows.py`, then `python tools/xlsx_to_json.py` to recompile.
 """
 import openpyxl
 
 PATH = 'data/game.xlsx'
-NEW_ROWS = ['聖女王女アンタップ相性', '晩餐会食料生産相性']
+NEW_ROWS = ['聖女王女ラウンドタップ相性', '晩餐会食料生産相性', '元老院支配拡張相性']
 
 wb = openpyxl.load_workbook(PATH)
 ws = wb['評価値']

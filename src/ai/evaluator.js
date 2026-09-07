@@ -50,6 +50,21 @@ const UNTAP_SYNERGY_FACE_IDS = new Set([
  * feeding the 晩餐会(M401) synergy bonus in score(). */
 const FARM_SYNERGY_FACE_IDS = new Set(['A004A', 'A004B', 'A005A', 'A005B', 'C201A', 'C201B']);
 
+/** 導き(B001-B003, either tier) + 双星の加護(B201, either tier) + JOB002/実業家 + JOB006/育成者 +
+ * JOB007/宮廷人 -- the user's own 元老院の支配(A301) synergy group (2026-09-07: "元老院はただとっても
+ * それなりに強いが、導きや双星をすでに獲得していたりJOBが実業家、宮廷人、育成者だったりすると尚いい"),
+ * each reaching 元老院's own BUILD() usefulness via a different mechanism -- 導き boosts the die value
+ * placed there, 双星(ONCE=ADD(2wD)) grants extra dice to spend there, 実業家(TAP=ON(BUILD(),ADD(K)))/
+ * 育成者(PASSIVE=ON(GET(D),ADD(Z,VP));ON(GET(wD),ADD(K))) turn the resulting BUILD/dice-gain events into
+ * more resources, 宮廷人 boosts the die value for a MONUMENT candidate specifically (see
+ * monument-incentive.js's own DELTA_ABILITIES for that narrower, already-existing mechanism -- this row
+ * is a separate, broader "元老院 ownership is generally more valuable" credit, not a duplicate of it).
+ * JOBs have no tier (physicalId===faceId). */
+const SENATE_SYNERGY_FACE_IDS = new Set([
+  'B001A', 'B001B', 'B002A', 'B002B', 'B003A', 'B003B',
+  'B201A', 'B201B', 'JOB002', 'JOB006', 'JOB007',
+]);
+
 /** How much VP rewardText would grant, read via the real DSL parser rather than executed (2026-08-10,
  * QST awareness -- see Evaluator's own qstAware policy doc). Every QST REWARD field today is a plain
  * ADD(nVP) (see qst.js's own doc on resolveEndGameRewards), so this sums every literal-count VP item
@@ -362,6 +377,21 @@ class Evaluator {
       const banquetHallUnclaimed = !banquetHallInst || banquetHallInst.ownerId === null;
       if (ownsFarmSynergy && banquetHallUnclaimed) {
         total += v('晩餐会食料生産相性');
+      }
+      // 元老院の支配(A301, either tier) x SENATE_SYNERGY_FACE_IDS (see that const's own doc): credited
+      // once per qualifying card actually owned -- unlike the 聖女/王女 bonus above, ownership alone is
+      // enough here (no tapped-state gating; 双星's dice grant/実業家's per-BUILD K/育成者's per-die-gain
+      // resources/導き・宮廷人's die-value boosts are all standing benefits, not one-time untap fodder).
+      const ownsSenate = player.ownedCardPhysicalIds.some((pid) => {
+        const inst = state.cards[pid];
+        return inst && (inst.currentFaceId === 'A301A' || inst.currentFaceId === 'A301B');
+      });
+      if (ownsSenate) {
+        const senateSynergyCount = player.ownedCardPhysicalIds.reduce((n, pid) => {
+          const inst = state.cards[pid];
+          return inst && SENATE_SYNERGY_FACE_IDS.has(inst.currentFaceId) ? n + 1 : n;
+        }, 0);
+        total += senateSynergyCount * v('元老院支配拡張相性');
       }
     }
 

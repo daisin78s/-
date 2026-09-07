@@ -52,6 +52,7 @@ for (const name of ['複合ダイス強化で天空の塔を獲得', '複合ダ�
 {
   raw['評価値'].find((r) => r.ID === '聖女王女ラウンドタップ相性')['3R'] = 20;
   raw['評価値'].find((r) => r.ID === '晩餐会食料生産相性')['3R'] = 30;
+  raw['評価値'].find((r) => r.ID === '元老院支配拡張相性')['3R'] = 15;
 }
 const evalTable = buildEvalTable(raw);
 const evaluator = new Evaluator(index, evalTable);
@@ -862,6 +863,53 @@ index.raw.QST = [
   // No farm/farmer card owned at all -- 晩餐会 being unclaimed alone credits nothing.
   const state = freshState(3);
   check('No 農園/小麦畑/農夫 owned credits nothing toward 晩餐会', evaluator.score(state, 'P1'), evaluator.score(freshState(3), 'P1'));
+}
+
+// ---------------------------------------------------------------------------
+// 元老院支配 synergy (2026-09-07, per user report: "元老院はただとってもそれなりに強いが、導きや双星を
+// すでに獲得していたりJOBが実業家、宮廷人、育成者だったりすると尚いい" -- see evaluator.js's own
+// SENATE_SYNERGY_FACE_IDS doc). '元老院支配拡張相性' patched to round-3=15 above.
+// ---------------------------------------------------------------------------
+{
+  const round = 3;
+  const base = () => { const state = freshState(round); giveCard(state, 'A301A', 'P1'); return state; }; // 元老院の支配LV1 alone
+  const withMichibiki = () => { const state = base(); giveCard(state, 'B003A', 'P1'); return state; }; // 運命の導きLV1
+  const withJob007 = () => { const state = base(); giveCard(state, 'JOB007', 'P1'); return state; }; // 宮廷人
+  check(
+    '元老院 + 導き(運命の導きLV1) credits the synergy bonus once (+15)',
+    evaluator.score(withMichibiki(), 'P1') - evaluator.score(base(), 'P1'),
+    evalTable[round].B003A + 15,
+  );
+  check(
+    '元老院 + JOB007/宮廷人 credits the synergy bonus once (+15)',
+    evaluator.score(withJob007(), 'P1') - evaluator.score(base(), 'P1'),
+    (evalTable[round].JOB007 || 0) + 15, // JOB002/006/007 have no row in the main 評価値 sheet (0 base)
+  );
+}
+{
+  // No 元老院 owned -- owning the synergy cards alone credits nothing extra.
+  const state = freshState(3);
+  giveCard(state, 'B003A', 'P1'); // 運命の導きLV1, no 元老院 owned
+  check(
+    '運命の導き owned with no 元老院 credits only its own base value, no synergy bonus',
+    evaluator.score(state, 'P1'),
+    evaluator.score(freshState(3), 'P1') + evalTable[3].B003A,
+  );
+}
+{
+  // Multiple qualifying cards stack (count-based, same pattern as 聖女/王女's bonus).
+  const state = freshState(3);
+  giveCard(state, 'A301B', 'P1'); // 元老院の支配LV2
+  giveCard(state, 'B201A', 'P1'); // 双星の加護LV1
+  giveCard(state, 'JOB002', 'P1'); // 実業家
+  giveCard(state, 'JOB006', 'P1'); // 育成者
+  const baseline = freshState(3);
+  giveCard(baseline, 'A301B', 'P1');
+  check(
+    '元老院 + 双星 + 実業家 + 育成者 credits the synergy bonus 3 times (+45)',
+    evaluator.score(state, 'P1') - evaluator.score(baseline, 'P1'),
+    evalTable[3].B201A + (evalTable[3].JOB002 || 0) + (evalTable[3].JOB006 || 0) + 3 * 15, // JOB002/006 have no row in the main 評価値 sheet (0 base)
+  );
 }
 
 console.log(`\n${passCount} passed, ${failCount} failed`);
