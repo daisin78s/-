@@ -2394,9 +2394,12 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   check('...and no VP either', p1.resources.VP || 0, 0);
 }
 {
-  // 元老院 (AREA009) is excluded outright, even once upgraded. Its own ACTION is BUILD();ADD(2K), so
-  // placement there needs an affordable BUILD candidate to succeed at all -- generously funded so *some*
-  // A/B/C card is reachable regardless of this run's randomized shop contents.
+  // 元老院 (AREA009), once upgraded, now qualifies for 地主's bonus too (2026-09-07, per user request
+  // removing the original "元老院以外" carve-out -- see isLandlordEligibleArea's own doc). Its own ACTION
+  // is BUILD();ADD(2K), so placement there needs an affordable BUILD candidate to succeed at all --
+  // generously funded so *some* A/B/C card is reachable regardless of this run's randomized shop
+  // contents; the BUILD() itself is left pending (no buildCandidateIndex given here), so only its own
+  // ADD(2K) actually ran -- same reasoning the pre-2026-09-07 version of this test already relied on.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   p1.jobCardId = 'JOB011';
@@ -2406,8 +2409,8 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   const beforeK = p1.resources.K;
   const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP009', 0);
   check('地主: placement at 元老院 succeeds (needed an affordable BUILD candidate)', result.success, true);
-  check('地主: no bonus at 元老院 even when upgraded -- only its own ADD(2K), no extra 1K', p1.resources.K - beforeK, 2);
-  check('...and no VP either', p1.resources.VP || 0, 0);
+  check('地主: bonus now applies at 元老院 too -- 2K (area) + 1K (地主, no prior own color die here) = 3', p1.resources.K - beforeK, 3);
+  check('...and no VP either (no prior own color die there)', p1.resources.VP || 0, 0);
 }
 {
   // A player without 地主 gets no bonus (control).
@@ -2501,13 +2504,34 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   check('...ADD(2VP) granted 2VP, plus 1 more from 地主\'s own bonus (already had a color die here) = 3', p1.resources.VP, 3);
   check('...the usage fee is now pending, not yet deducted', p1.pendingFee, { mapId: 'MAP001', amount: 2 });
 }
-// No placeDiceGroup test for 地主: group placement only ever succeeds against a monument-buildable
-// candidate (confirmed empirically -- getBuildCandidates(['M'],...) gates it), and the only 2 maps that
-// support stacking multiple dice at all are the castle (MAP008/AREA008, which has no LVUP tier at all --
-// grantLandlordBonusIfEarned's own `!tier` check always excludes it) and 元老院 (MAP009/AREA009, excluded
-// by name outright). So group placement and 地主's bonus zone never actually overlap in the current data
-// -- grantLandlordBonusIfEarned is still wired into placeDiceGroup the same way grantPioneerBonusIfEarned
-// is (see its own call site), it just has no reachable trigger there today.
+// placeDiceGroup x 地主 (2026-09-07): group placement only ever succeeds against a monument-buildable
+// candidate (confirmed empirically -- getBuildCandidates(['M'],...) gates it), and of the only 2 maps
+// that support stacking multiple dice at all, the castle (MAP008/AREA008) has no LVUP tier at all --
+// isLandlordEligibleArea's own `!tier` check always excludes it -- but 元老院 (MAP009/AREA009) now
+// qualifies once upgraded, since the original "元老院以外" carve-out was removed (see
+// isLandlordEligibleArea's own doc) -- this path is genuinely reachable now, unlike before. Its own
+// hadOwnColorDieThereAlready snapshot is already taken before any mutation (right at this function's own
+// top, same as placeDice's), so no additional pre-grant/rollback machinery was needed to make this work
+// correctly once the carve-out was gone.
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.jobCardId = 'JOB011';
+  // M006 (DICE>=7, COST=2B,C) -- neither die alone reaches 7 (would get excluded as "overfunded" by a
+  // single die, like M012 would be at DICE>=1), so this group's combined 3+4=7 is genuinely needed.
+  // Forced into a known shop slot (like the AREA009C/A001A test above) rather than relying on
+  // prepareShops' own random layout to have drawn it.
+  state.shops.M.slots.SHOP001 = 'M006';
+  p1.resources.B = 2; p1.resources.C = 1;
+  state.maps['MAP009'] = mapWithArea('MAP009', 'AREA009C', 6, 'P1'); // 元老院LV2, SLOT1-4=ANY, SLOT5/6=EX
+  const die1 = giveDie(state, 'P1', 3);
+  const die2 = giveDie(state, 'P1', 4);
+  const beforeK = p1.resources.K;
+  const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [die1.id, die2.id], 'MAP009');
+  check('地主: group placement at 元老院 succeeds (M006 reachable via the combined 3+4=7 buildValue)', result.success, true);
+  check('地主: bonus applies here too -- 2K (AREA009C\'s own ADD(2K,BZ)) + 1K (地主, no prior own color die here) = 3', p1.resources.K - beforeK, 3);
+  check('...and no VP either (no prior own color die there)', p1.resources.VP || 0, 0);
+}
 
 // ---------------------------------------------------------------------------
 // 訓練場LV1/LV2 (AREA007B/AREA007C) own dice grant (2026-08-25, per user spec: "訓練場LV1のAREAに

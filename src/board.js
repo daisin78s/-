@@ -1553,23 +1553,25 @@ function grantPioneerBonusIfEarned(state, index, context, wasEmpty, dieValues, w
  * sitting in that map's slots, checked before this new one -- same live-state semantics as
  * playerHasOwnColorDieInMapSlots below, which this reuses directly). Bespoke, no DSL representation --
  * same class of exception as hasPioneerAbility above. Matched by NAME, not physical id, for the same
- * reorg-safety reason. */
+ * reorg-safety reason. (2026-09-07: the "元老院以外" carve-out this doc's own worked example still
+ * quotes was removed -- see isLandlordEligibleArea's own doc.) */
 function hasLandlordAbility(state, index, playerId) {
   const player = state.players.find((p) => p.id === playerId);
   if (!player.jobCardId) return false;
   return getCardRow(index, player.jobCardId).NAME === '地主';
 }
 
-/** Whether mapId's *current* AREA face qualifies for 地主's bonus at all -- excluded entirely for
- * AREA009 (元老院) and for a map still at its base (not-yet-upgraded) tier, "元老院以外のLVアップされた
- * AREA". tier is null (not 'A') for AREA007/AREA008, which have no LVUP tiers at all (a single fixed
- * face, per splitCardId's own doc) -- `!tier` excludes those too, not just the literal 'A' case, since a
- * tier-less area can never have been "leveled up" in the first place. Split out from
+/** Whether mapId's *current* AREA face qualifies for 地主's bonus at all -- any LVUP'd AREA, 元老院
+ * included (2026-09-07, per user request removing the original "元老院以外" carve-out -- see
+ * hasLandlordAbility's own doc for that original spec). Still excluded for a map still at its base
+ * (not-yet-upgraded) tier. tier is null (not 'A') for AREA007/AREA008, which have no LVUP tiers at all (a
+ * single fixed face, per splitCardId's own doc) -- `!tier` excludes those too, not just the literal 'A'
+ * case, since a tier-less area can never have been "leveled up" in the first place. Split out from
  * grantLandlordBonusIfEarned (2026-08-18) so placeDice can cheaply check eligibility *before* deciding
  * whether the more expensive pre-grant snapshot below is even worth taking. */
 function isLandlordEligibleArea(mapCurrentAreaId) {
-  const { physicalId: areaPhysicalId, tier } = splitCardId(mapCurrentAreaId);
-  return areaPhysicalId !== 'AREA009' && !!tier && tier !== 'A';
+  const { tier } = splitCardId(mapCurrentAreaId);
+  return !!tier && tier !== 'A';
 }
 
 /** Grants 地主's bonus if earned by this placement: 1K always, PLUS 1VP more (2026-08-20, changed from
