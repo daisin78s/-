@@ -554,7 +554,16 @@ function driveOneAiStepInner(state) {
     // uniform-random default below -- see that module's own doc. Every other level (2026-08-03, per
     // user feedback: "初期資源、CON、JOBは現状は完全ランダムでお願いします そのうち評価値を入れます" --
     // see src/ai/game-runner.js's matching fix and its own doc for why) still picks purely at random.
-    const pair = playerRoles.get(resourcePlayerId) === 'AI_LV4'
+    //
+    // Temporarily forced off (2026-09-07, per user request: "評価値初期資源いったんリセットしました 指示
+    // があるまでAIはランダムにとってください") -- game.xlsx's 評価値_初期資源 sheet is now blank while new
+    // values are worked out, and pickResourceCards' own effectiveOrder falls back to each RESOURCE card's
+    // plain START_ORDER field when synergy is 0 (NOT randomness -- see that function's own doc), so
+    // leaving this on with an empty synergy table would silently keep picking deterministically instead
+    // of the genuinely random selection asked for here. Flip RESOURCE_SYNERGY_PICK_ENABLED back to true
+    // once 評価値_初期資源 has real values again.
+    const RESOURCE_SYNERGY_PICK_ENABLED = false;
+    const pair = RESOURCE_SYNERGY_PICK_ENABLED && playerRoles.get(resourcePlayerId) === 'AI_LV4'
       ? smartOnboardingMod.pickResourceCards(
           ctx.resourceChoice.context.candidates,
           state,
