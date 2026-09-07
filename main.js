@@ -1209,8 +1209,14 @@ function noteActiveTurnPlayerForJobPool(state, playerId, forceNewTurn) {
 // ---------------------------------------------------------------------------
 // Defaults to off (2026-09-07, per user request, reversing the 2026-08-04 "デフォルトもONにして" -- see
 // usedDebugOrTestGameThisGame's own doc: a game needs to start clean of debug mode to ever be eligible
-// for the ranking's "スタンダード" tab).
-let debugMode = false;
+// for the ranking's "スタンダード" tab) -- EXCEPT during a ウィークリーチャレンジ attempt (2026-09-08, per
+// user request: "ウィークリーチャレンジデフォルトでデバッグモードオンにして"), where it defaults straight
+// to ON instead. Safe to default true there specifically: usedDebugOrTestGameThisGame/the スタンダード
+// tab are already moot for weekly-challenge games (they always register as 'weekly' regardless -- see
+// renderRankingRegisterList's own doc), and テストゲーム開始 stays hidden/forbidden for the whole attempt
+// either way (see renderDebugPanel) -- only the turn/round-crossing rewind toggling this on unlocks, which
+// the 2026-09-08 follow-up explicitly allowed mid-attempt.
+let debugMode = weeklyChallengeActive;
 /** @type {{round:number, playerId:string, snapshot:Object}[]} */
 let turnHistory = [];
 /** Index into turnHistory currently being viewed. -1 means "no history recorded yet". */
