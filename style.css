@@ -3635,16 +3635,32 @@ h1, h2, h3 { margin: 0; }
   text-align: center;
 }
 
-/* 2026-09-07 follow-up: dice are now rendered INSIDE each seat's own .weekly-seat-picker__row (right
-   after that seat's own hand -- see renderWeeklySeatPicker's own doc), not as a separate top-level block
-   above the rows any more -- flex-basis:100% forces it onto its own line within the row's own flex-wrap
-   layout, below .weekly-seat-picker__cards, without needing a second color-bordered box nested inside the
-   row's own one. */
+/* 2026-09-07, 3rd follow-up (per an annotated screenshot): dice + the choose button now sit together in
+   .weekly-seat-picker__side, pushed to the right end of the row (margin-left:auto) beside the hand instead
+   of dropping to their own full-width line below it -- the row is wide enough (matches #app's own
+   max-width above) that the hand's own cards never come close to filling it, so the previous full-width
+   dice line just left a lot of dead space. Enlarged from the base .die's 22px ("大きく目立つように") --
+   color already comes from .die--PINK etc, already the seat's own exact player color. */
+.weekly-seat-picker__side {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
 .weekly-seat-picker__dice-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex: 1 1 100%;
+  gap: 8px;
+}
+
+.weekly-seat-picker__dice-row .die {
+  width: 36px;
+  height: 36px;
+  font-size: 18px;
+  border-radius: 8px;
 }
 
 #weekly-seat-picker__rows {
@@ -3681,6 +3697,29 @@ h1, h2, h3 { margin: 0; }
   flex: 1 1 auto;
 }
 
+/* Enlarged + tinted toward the seat's own player color (2026-09-07, 3rd follow-up: "ALICEで始めるボタン
+   は大きく目立つようにちょっとプレイヤーカラー寄りの色にして") -- same color-mix "a little of the player
+   color into a neutral surface" convention .map-tile[data-tier]'s own AREA-ownership tint already uses,
+   rather than a full solid fill (which would fight with the die glyphs' own white text at this size). No
+   longer .undo-button-based -- this button needed its own bigger/bolder sizing regardless of what that
+   class looks like elsewhere, so its full appearance (not just an override) lives here. */
 .weekly-seat-picker__choose-button {
   flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  padding: 14px 28px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  border: 2px solid var(--border);
+  background: var(--surface);
 }
+
+.weekly-seat-picker__choose-button[data-color="PINK"] { background: color-mix(in srgb, var(--player-pink) 30%, var(--surface)); border-color: var(--player-pink); }
+.weekly-seat-picker__choose-button[data-color="PURPLE"] { background: color-mix(in srgb, var(--player-purple) 30%, var(--surface)); border-color: var(--player-purple); }
+.weekly-seat-picker__choose-button[data-color="GREEN"] { background: color-mix(in srgb, var(--player-green) 30%, var(--surface)); border-color: var(--player-green); }
+.weekly-seat-picker__choose-button[data-color="ORANGE"] { background: color-mix(in srgb, var(--player-orange) 30%, var(--surface)); border-color: var(--player-orange); }

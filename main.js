@@ -248,17 +248,19 @@ function relocateShopsBackToBoardArea() {
   if (boardArea.firstElementChild !== shops) boardArea.insertBefore(shops, boardArea.firstElementChild);
 }
 
-/** Renders the ウィークリーチャレンジ seat-picker screen (2026-09-07, per user spec; revised twice on
- * 2026-09-07 follow-up) in place of the normal board, top to bottom: the real 配置カード(ショップ)+QST
+/** Renders the ウィークリーチャレンジ seat-picker screen (2026-09-07, per user spec; revised 3 times on
+ * 2026-09-07 follow-ups) in place of the normal board, top to bottom: the real 配置カード(ショップ)+QST
  * panel (relocateShopsIntoWeeklyPicker, above -- "配置カードとQST（通常ゲームと同じ）"), no MAP/AREA tiles
- * ("マップは削除（一時的）"), then one color-coded row per seat (P1-P4), each interleaving that seat's own
- * 手札 (CON card + 4 initial RESOURCE candidates) immediately followed by that seat's own ダイス (2nd
- * follow-up: "ALICEの手札／ALICEのダイス／BOBの手札／BOBのダイス..." -- replacing the original layout's
- * separate "all 4 dice rows, then all 4 hand rows" blocks) -- no explanatory hint text. Reads directly off
- * the fixed-seed STATE already built at load time (see weeklyChallengeActive's own doc); nothing here
- * mutates it -- this is purely a comparison view before committing to a seat. The CON card shown is its
- * own A face (a preview only -- which face to actually build is still chosen normally, during onboarding,
- * same as any other game). */
+ * ("マップは削除（一時的）"), then one color-coded row per seat (P1-P4). Each row shows that seat's own 手札
+ * (CON card's BOTH faces -- "CONは表裏表示", 3rd follow-up: CON is a constraint card whose back face trades
+ * more resources for a harsher constraint, so comparing only the front face before picking a seat wasn't
+ * enough -- plus its 4 initial RESOURCE candidates) on the left, and that seat's own ダイス + choose button
+ * pushed to the right of the same row via .weekly-seat-picker__side (3rd follow-up, per an annotated
+ * screenshot: dice+button used to sit on their own line below the hand, taking up a tall mostly-empty
+ * row -- moved up beside the hand instead, and enlarged/tinted toward the seat's own color, "大きく目立つ
+ * ようにちょっとプレイヤーカラー寄りの色に") -- no explanatory hint text. Reads directly off the fixed-seed
+ * STATE already built at load time (see weeklyChallengeActive's own doc); nothing here mutates it -- this
+ * is purely a comparison view before committing to a seat. */
 function renderWeeklySeatPicker(state) {
   renderShops(state);
   const rowsContainer = document.getElementById('weekly-seat-picker__rows');
@@ -269,6 +271,7 @@ function renderWeeklySeatPicker(state) {
     row.appendChild(el('div', 'weekly-seat-picker__name', player.name));
     const cardsRow = el('div', 'weekly-seat-picker__cards');
     cardsRow.appendChild(buildCardVisual(`${player.conPhysicalId}A`, { showEffect: true, allowTextFallback: false, noInteraction: true }));
+    cardsRow.appendChild(buildCardVisual(`${player.conPhysicalId}B`, { showEffect: true, allowTextFallback: false, noInteraction: true }));
     const resourceChoice = state.pendingChoices.find((c) => c.playerId === player.id && c.kind === 'SELECT_RESOURCE_CARDS');
     if (resourceChoice) {
       for (const faceId of resourceChoice.context.candidates) {
@@ -276,16 +279,19 @@ function renderWeeklySeatPicker(state) {
       }
     }
     row.appendChild(cardsRow);
+    const side = el('div', 'weekly-seat-picker__side');
     const diceRow = el('div', 'weekly-seat-picker__dice-row');
     diceRow.dataset.color = player.color;
     for (const die of player.dice) {
       diceRow.appendChild(renderDie({ kind: die.kind, value: die.value, color: player.color }));
     }
-    row.appendChild(diceRow);
-    const chooseButton = el('button', 'undo-button weekly-seat-picker__choose-button', `${player.name}で始める`);
+    side.appendChild(diceRow);
+    const chooseButton = el('button', 'weekly-seat-picker__choose-button', `${player.name}で始める`);
     chooseButton.type = 'button';
+    chooseButton.dataset.color = player.color;
     chooseButton.addEventListener('click', () => chooseWeeklyChallengeSeat(player.id));
-    row.appendChild(chooseButton);
+    side.appendChild(chooseButton);
+    row.appendChild(side);
     rowsContainer.appendChild(row);
   }
 }
