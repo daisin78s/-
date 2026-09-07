@@ -3630,9 +3630,26 @@ h1, h2, h3 { margin: 0; }
   gap: 16px;
 }
 
+/* 2026-09-07 follow-up: title moved below #weekly-seat-picker__jobs (see index.html's own doc), paired
+   with a glowing hint explaining the tap-2-resource-cards mechanic that replaced the old "○○で始める"
+   button -- .onboard-panel--active is reused as-is for the glow itself (same "something needs your
+   attention, not urgently" pulse this app already uses for every other pending-choice highlight). */
+#weekly-seat-picker__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
 #weekly-seat-picker__title {
   font-size: 16px;
-  text-align: center;
+}
+
+#weekly-seat-picker__hint {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
 }
 
 /* 2026-09-07, 4th follow-up: state.jobPool shown once here (see renderWeeklySeatPicker's own doc) -- same

@@ -16,14 +16,21 @@
        before #weekly-seat-picker__jobs at render time; #weekly-seat-picker__jobs then shows the single
        SHARED state.jobPool (2026-09-07 follow-up: "ALICEたちのCON候補の上にJOB候補を表示" -- JOB is one
        pool all 4 seats draft from during round-1 onboarding, not a per-seat hand, so it's shown once here
-       rather than repeated on every row below); each row inside #weekly-seat-picker__rows then shows that
-       one seat's own hand (CON both faces + RESOURCE candidates) with its own dice+choose button pushed to
-       the row's right side (see renderWeeklySeatPicker's own doc for the full history of this layout).
+       rather than repeated on every row below); the title + a glowing hint (2026-09-07, another follow-up:
+       "席を選んでくださいをJOB候補の下に その横に目立つように光って 初期資源カード２枚を選択するとゲームが
+       始まります" -- since the old always-visible "○○で始める" button was replaced by tapping 2 RESOURCE
+       candidates, per the prior follow-up, this explains that mechanic since it's no longer self-evident
+       from a button label) sit right below that, before #weekly-seat-picker__rows -- each row inside which
+       then shows one seat's own hand (CON both faces + RESOURCE candidates) with its own dice pushed to the
+       row's right side (see renderWeeklySeatPicker's own doc for the full history of this layout).
        MAP/AREA tiles are deliberately never rendered anywhere on this screen ("MAP（AREA）をすべて消し"), so
        this is a side-by-side comparison of what each of the 4 seats would start with, not the real board. -->
   <div id="weekly-seat-picker" hidden>
-    <h2 id="weekly-seat-picker__title">ウィークリーチャレンジ — 席を選んでください</h2>
     <div id="weekly-seat-picker__jobs"></div>
+    <div id="weekly-seat-picker__title-row">
+      <h2 id="weekly-seat-picker__title">ウィークリーチャレンジ — 席を選んでください</h2>
+      <div id="weekly-seat-picker__hint" class="onboard-panel--active">初期資源カード２枚を選択するとゲームが始まります</div>
+    </div>
     <div id="weekly-seat-picker__rows"></div>
   </div>
 
