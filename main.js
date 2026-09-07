@@ -2076,17 +2076,20 @@ function renderCardListOverlay() {
  * STATE/historyCursor currently are (including right after a jump, since jumpToHistoryIndex ends with
  * its own render(STATE) call). */
 function renderDebugPanel(state) {
-  // ウィークリーチャレンジ中 (2026-09-07, per user spec): デバッグモード/テストゲーム開始/(re-opening)
-  // ウィークリーチャレンジ自体は全部使えない -- "全員同じ盤面" の前提を崩せる手段を、ピッキング画面から
-  // GAME_ENDまでこのページ全体の生存期間ずっと塞いでおく(このアプリは新しいゲームを始めるのに必ずリロード
-  // が要るので、このロード全体が1回のウィークリーチャレンジの試行そのもの)。
+  // ウィークリーチャレンジ中 (2026-09-07, per user spec; revised 2026-09-08 follow-up: "デバッグモードの
+  // ターンまたいでの巻き戻しはできるようにしてください テストプレイは絶対ダメ") -- テストゲーム開始 and
+  // re-opening ウィークリーチャレンジ itself stay blocked for the whole attempt (picking screen through
+  // GAME_END, this app's own reload-per-new-game rule making "this page load" == "this one attempt"): both
+  // could change what this attempt's own starting setup even IS, breaking "全員同じ盤面". デバッグモード's
+  // own turn/round-crossing rewind is different -- it never touches the initial setup (same dice rolls,
+  // same shop layout, same everyone's own cards either way), it only lets this seat's own human player
+  // reconsider THEIR OWN later decisions, so it's allowed now.
   document.getElementById('weekly-challenge-button').hidden = weeklyChallengeActive;
-  // テストゲーム開始 (2026-09-07, per user request): hidden by default, only shown once デバッグモード is
-  // switched ON -- previously always visible whenever a weekly challenge wasn't active, regardless of
-  // debugMode, so it sat next to デバッグモード even while OFF. Still unconditionally hidden during a
-  // weekly challenge attempt either way (per the existing "全員同じ盤面" constraint above).
+  // テストゲーム開始 (2026-08-13, then 2026-09-07 follow-up): hidden by default, shown once デバッグモード
+  // is switched ON -- but unconditionally hidden during a weekly challenge attempt regardless of debugMode
+  // (per this function's own doc above -- this is the one still absolutely forbidden during an attempt).
   document.getElementById('debug-setup-start-button').hidden = weeklyChallengeActive || !debugMode;
-  document.getElementById('debug-mode-toggle').hidden = weeklyChallengeActive;
+  document.getElementById('debug-mode-toggle').hidden = false;
   const toggleBtn = document.getElementById('debug-mode-toggle');
   toggleBtn.textContent = `デバッグモード: ${debugMode ? 'ON' : 'OFF'}`;
   toggleBtn.classList.toggle('debug-panel__toggle--on', debugMode);

@@ -137,10 +137,13 @@
            オンにするとデバッグモードの隣に出てくるように") -- see renderDebugPanel. -->
       <button type="button" id="debug-setup-start-button" class="debug-panel__toggle" hidden>テストゲーム開始</button>
       <!-- ウィークリーチャレンジ (2026-09-07, per user spec): reloads into a fixed-per-JST-week seed --
-           see main.js's currentWeeklyChallengeId/openWeeklyChallenge. Hidden entirely for the whole
-           duration of an attempt (picking through GAME_END) via renderDebugPanel, same as
-           debug-setup-start-button/debug-mode-toggle -- "全員同じ盤面" would break if either of those
-           could still be used mid-attempt. -->
+           see main.js's currentWeeklyChallengeId/openWeeklyChallenge. This button itself, and
+           debug-setup-start-button, stay hidden for the whole duration of an attempt (picking through
+           GAME_END) via renderDebugPanel -- both could change what the attempt's own starting setup even
+           IS, breaking "全員同じ盤面". debug-mode-toggle is NOT included in that block any more (2026-09-08
+           follow-up, reversing the original 2026-09-07 spec: "デバッグモードのターンまたいでの巻き戻しは
+           できるようにしてください テストプレイは絶対ダメ") -- its own turn/round-crossing rewind never
+           touches the initial setup, only this seat's own later decisions, so it's allowed mid-attempt. -->
       <button type="button" id="weekly-challenge-button" class="debug-panel__toggle">ウィークリーチャレンジ</button>
       <!-- オンライン対戦 (2026-08-29, per user request: "2〜4人の友人同士(合言葉/ルームコードで合流)"、
            空席はAI LV4で埋める -- see main.js's openOnlineLobby/DEFAULT_AI_ROLE). Opens #online-lobby-overlay
