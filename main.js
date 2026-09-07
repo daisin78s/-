@@ -6386,7 +6386,13 @@ function renderPlayerCards(state, next) {
       const cell = el('div', tall ? 'owned-card-cell owned-card-cell--tall' : 'owned-card-cell');
       // 変化ハイライト (2026-08-16) -- this card was built/acquired since the viewing human's last turn ended.
       if (changeHighlightDiff && changeHighlightDiff.cardKeys.has(`${player.id}|${physicalId}`)) cell.classList.add('change-highlight');
-      const cardNode = buildCardVisual(cardState.currentFaceId, { tapped: cardState.tapped, showEffect: tall });
+      // req (2026-09-07, per user report: "獲得したモニュメントもダイス目12などを表示させたままにして
+      // ください") -- buildCardVisual doesn't derive a monument's own DICE threshold on its own (see
+      // fillCardFace's own options.req use); every other caller passes req: factsForFaceId(faceId).req
+      // explicitly (e.g. buildShopSlotNode/buildCardListCell). Harmless for non-monument cards, where
+      // .req is just '' (row has no DICE column) and .shop-card__req collapses away via its own :empty
+      // rule -- so this is safe to pass unconditionally, not just for M-prefixed physicalIds.
+      const cardNode = buildCardVisual(cardState.currentFaceId, { tapped: cardState.tapped, showEffect: tall, req: factsForFaceId(cardState.currentFaceId).req });
       attachTapToggle(cardNode, cardState, cardState.currentFaceId, canUseTap, physicalId);
       cell.appendChild(cardNode);
       listEl.appendChild(cell);
