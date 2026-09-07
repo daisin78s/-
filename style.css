@@ -3627,7 +3627,9 @@ h1, h2, h3 { margin: 0; }
   padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  /* 2026-09-07 follow-up: 16px->8px, same "shorten the page so the glowing hint stays visible" reasoning
+     as #weekly-seat-picker__rows' own tightened gap below. */
+  gap: 8px;
 }
 
 /* 2026-09-07 follow-up: title moved below #weekly-seat-picker__jobs (see index.html's own doc), paired
@@ -3692,10 +3694,14 @@ h1, h2, h3 { margin: 0; }
   border-radius: 8px;
 }
 
+/* 2026-09-07 follow-up: tightened (12px->3px gap, 10px->5px vertical padding) per user report -- the
+   glowing #weekly-seat-picker__hint above these rows was scrolled out of view on a real device before the
+   4 seat rows' own combined height was ever seen; packing the rows closer together shortens the whole
+   page enough to keep the hint on-screen (or at least reachable with far less scrolling). */
 #weekly-seat-picker__rows {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 3px;
 }
 
 .weekly-seat-picker__row {
@@ -3703,7 +3709,7 @@ h1, h2, h3 { margin: 0; }
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
-  padding: 10px;
+  padding: 5px 10px;
   border-left: 4px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface);
