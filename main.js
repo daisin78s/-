@@ -6843,9 +6843,17 @@ async function handleRankingDeleteSelectedClick() {
   if (!(await checkRankingResetPassword('選択した記録を削除・印付けするにはパスワードを入力してください。'))) return;
   const choice = await showRankingDeleteOrMarkChoice();
   if (choice === 'delete') {
-    Promise.all(entries.map(([id, { category }]) => RankingStorage.deleteOne(id, category))).then(() => renderRankingList());
+    Promise.all(entries.map(([id, { category }]) => RankingStorage.deleteOne(id, category)))
+      .then(() => renderRankingList())
+      // 2026-09-07, per user report ("印をつけるを押したのに印が付かない"): a rejected write here used to
+      // fail completely silently (renderRankingList's own .then() just never ran) -- surfaced now so a
+      // real failure (e.g. a Firestore security rule rejecting this operation specifically) is at least
+      // visible instead of looking like nothing happened.
+      .catch((err) => window.alert(`削除に失敗しました: ${err.message || err}`));
   } else if (choice === 'mark') {
-    Promise.all(entries.map(([id, { category }]) => RankingStorage.markOutdated(id, category))).then(() => renderRankingList());
+    Promise.all(entries.map(([id, { category }]) => RankingStorage.markOutdated(id, category)))
+      .then(() => renderRankingList())
+      .catch((err) => window.alert(`印付けに失敗しました: ${err.message || err}`));
   }
 }
 
