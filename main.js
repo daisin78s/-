@@ -6654,7 +6654,18 @@ function renderRankingRegisterList(state) {
     const registerButton = el('button', 'undo-button', '登録');
     registerButton.type = 'button';
     registerButton.addEventListener('click', () => {
+      // 登録中アニメーション (2026-09-08, per user request: "登録ボタンを押したとき 登録中とわかるアニメー
+      // ションが欲しい") -- RankingStorage.save is a real network round-trip (Firestore write + replay
+      // upload), so simply disabling the button (the old behavior) left no visible sign anything was
+      // happening until the whole row vanished once registeredRankingPlayerIds picked up the new id. A
+      // small CSS-spin ring + "登録中…" text now fills that gap; .catch (new here too -- this click had no
+      // failure handling at all before) restores the button to its original clickable state and surfaces
+      // the error via window.alert, matching this app's other Firestore-write failure handling (see
+      // handleRankingDeleteSelectedClick).
       registerButton.disabled = true;
+      registerButton.innerHTML = '';
+      registerButton.appendChild(el('span', 'ranking-register-spinner'));
+      registerButton.appendChild(document.createTextNode('登録中…'));
       const name = input.value.trim() || c.defaultName;
       rememberRankingName(name);
       RankingStorage.save({
@@ -6674,6 +6685,11 @@ function renderRankingRegisterList(state) {
       }, replayHistory).then((entry) => {
         registeredRankingPlayerIds.add(c.playerId);
         renderRankingOverlay(STATE, entry.id, entry.category);
+      }).catch((err) => {
+        registerButton.disabled = false;
+        registerButton.innerHTML = '';
+        registerButton.textContent = '登録';
+        window.alert(`登録に失敗しました: ${err.message || err}`);
       });
     });
     row.appendChild(registerButton);

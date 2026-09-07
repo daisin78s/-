@@ -3395,6 +3395,29 @@ h1, h2, h3 { margin: 0; }
   font-weight: 700;
 }
 
+/* 登録中スピナー (2026-09-08, per user request: "登録ボタンを押したとき 登録中とわかるアニメーションが
+   欲しい") -- a plain CSS-only spinning ring, no image/library needed. Sits inside #registerButton itself
+   (.undo-button is already display:flex with a small gap, see its own rule) alongside the "登録中…" text
+   that replaces the button's own "登録" label for the duration of the RankingStorage.save() round-trip.
+   Overrides .undo-button:disabled's own opacity:0.4 -- here "disabled" means "in progress", not
+   "unavailable", so it should stay clearly visible rather than looking greyed-out/inert. */
+.ranking-register-row .undo-button:disabled {
+  opacity: 0.85;
+}
+
+.ranking-register-spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  animation: ranking-register-spin 0.7s linear infinite;
+}
+
+@keyframes ranking-register-spin {
+  to { transform: rotate(360deg); }
+}
+
 /* First real <input> in the app (2026-08-16) -- everywhere else is click-only, see index.html's own
    comment on #ranking-overlay. Styled to match the surrounding modal's tokens rather than the
    browser default. */
