@@ -899,7 +899,7 @@ function giveDie(state, playerId, value) {
 // ---------------------------------------------------------------------------
 // useBareTapAbility (2026-07-31): a card's own *direct* TAP ability (no ON(...) wrapper), initiated
 // by the player at any point during their turn -- distinct from executor.resolveTapReaction's
-// event-triggered reactions. C001A.TAP=CHANGE(K,A,2): simplest case, no player choice needed.
+// event-triggered reactions. C001A.TAP=CHANGE(3K,4A): simplest case, no player choice needed.
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
@@ -908,11 +908,11 @@ function giveDie(state, playerId, value) {
   inst.ownerId = 'P1';
   state.cards[inst.physicalId] = inst;
   p1.ownedCardPhysicalIds.push(inst.physicalId);
-  p1.resources.K = 2;
+  p1.resources.K = 3;
 
   const result = board.useBareTapAbility(state, index, { playerId: 'P1' }, inst.physicalId);
-  check('C001A.TAP=CHANGE(K,A,2) succeeds with no player choice needed', result, { success: true });
-  check('...paid 2K, gained 2A', { K: p1.resources.K, A: p1.resources.A }, { K: 0, A: 2 });
+  check('C001A.TAP=CHANGE(3K,4A) succeeds with no player choice needed', result, { success: true });
+  check('...paid 3K, gained 4A', { K: p1.resources.K, A: p1.resources.A }, { K: 0, A: 4 });
   check('...the card is now tapped', state.cards[inst.physicalId].tapped, true);
 
   const secondAttempt = board.useBareTapAbility(state, index, { playerId: 'P1' }, inst.physicalId);
@@ -985,7 +985,7 @@ function giveDie(state, playerId, value) {
 // resource payCostList already substitutes for any real-resource shortfall (persistent, unlike BZ's
 // turn-scoped build-only discount), so this is a genuine mechanic change, not just a rename). Still a
 // bare (non-reactive) TAP ability, usable any time during the player's own turn, same as C001A's
-// CHANGE(K,A,2).
+// CHANGE(3K,4A).
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();

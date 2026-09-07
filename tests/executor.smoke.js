@@ -631,7 +631,7 @@ console.log(`\n${passCount} passed, ${failCount} failed`);
   const r1 = executor.runProgram(state, index, { playerId: 'P1', chosenCardPhysicalId: notOwned, chosenDelta: 2 }, row.TAP);
   check('Targeting a card the player does not own fails', r1, { success: false, reason: 'INVALID_BUILD_VALUE_CARD' });
 
-  const notEligible = giveCard(state, 'C001A', 'P1'); // TAP=CHANGE(K,A,3), no BUILD command at all
+  const notEligible = giveCard(state, 'C001A', 'P1'); // TAP=CHANGE(3K,4A), no BUILD command at all
   const r2 = executor.runProgram(state, index, { playerId: 'P1', chosenCardPhysicalId: notEligible, chosenDelta: 2 }, row.TAP);
   check('Targeting an owned card with no fixed BUILD value fails', r2, { success: false, reason: 'INVALID_BUILD_VALUE_CARD' });
 }
@@ -759,23 +759,26 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 }
 
 // ---------------------------------------------------------------------------
-// 14b. 'capped'-kind CHANGE (explicit numeric third argument, e.g. C001A's real TAP=CHANGE(K,A,4)):
-//     executes up to N times, scaled down to whatever's affordable, instead of requiring the full amount
-//     (2026-08-11, per user request: "C001A 002 003 2K→2A を1Kしか持ってないときにTAPしたら 1K→1Aに
-//     なるように" -- these 3 cards used to be a flat CHANGE(2K,2A) and needed the full 2K or did nothing;
-//     cap raised 2->3 on 2026-08-18, then 3->4 on 2026-09-03, both per user edits to game.xlsx: "C001 002
-//     003 変更しました"/"Cカード 変更しました").
+// 14b. 'capped'-kind CHANGE (explicit numeric third argument, e.g. CHANGE(K,A,4)): executes up to N
+//     times, scaled down to whatever's affordable, instead of requiring the full amount (2026-08-11, per
+//     user request: "C001A 002 003 2K→2A を1Kしか持ってないときにTAPしたら 1K→1Aになるように" -- these 3
+//     cards used to be a flat CHANGE(2K,2A) and needed the full 2K or did nothing; cap raised 2->3 on
+//     2026-08-18, then 3->4 on 2026-09-03. See the synthetic-DSL-string note just below for why C001A
+//     itself no longer anchors this test as of 2026-09-07.
 // ---------------------------------------------------------------------------
 {
-  const row = getCardRow(index, 'C001A');
-  check('C001A\'s real TAP is now CHANGE(K,A,4), not the old flat CHANGE(2K,2A)', row.TAP, 'CHANGE(K,A,4)');
-
+  // 2026-09-07: C001A/002A/003A moved to a fixed-cost CHANGE(3K,4A)-shaped exchange instead (per user
+  // data edit, "カード変更しました"), so this DSL mechanism no longer has a real-card anchor -- tested
+  // here via a hand-written DSL string instead of a card row, same "synthetic fixture" convention this
+  // file already uses elsewhere (see this file's own top-of-file patches) for a mechanism real data
+  // doesn't currently exercise.
+  const cappedChangeK2A4 = 'CHANGE(K,A,4)';
   const state = freshState();
-  const physicalId = giveCard(state, 'C001A', 'P1');
+  const physicalId = giveCard(state, 'C001A', 'P1'); // stand-in owned card, only its physicalId matters here
   const context = { playerId: 'P1', sourcePhysicalId: physicalId };
 
   getPlayerRef(state, 'P1').resources.K = 4;
-  const full = executor.runProgram(state, index, context, getCardRow(index, 'C001A').TAP);
+  const full = executor.runProgram(state, index, context, cappedChangeK2A4);
   check('With the full 4K available, TAP succeeds', full.success, true);
   check('...converts 4K -> 4A', getPlayerRef(state, 'P1').resources.K, 0);
   check('...granting 4A', getPlayerRef(state, 'P1').resources.A, 4);
@@ -783,7 +786,7 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   const state2 = freshState();
   giveCard(state2, 'C001A', 'P1');
   getPlayerRef(state2, 'P1').resources.K = 1;
-  const partial = executor.runProgram(state2, index, context, getCardRow(index, 'C001A').TAP);
+  const partial = executor.runProgram(state2, index, context, cappedChangeK2A4);
   check('With only 1K, TAP succeeds instead of failing outright', partial.success, true);
   check('...converts the 1K -> 1A', getPlayerRef(state2, 'P1').resources.K, 0);
   check('...granting exactly 1A', getPlayerRef(state2, 'P1').resources.A, 1);
@@ -791,14 +794,14 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   const state3 = freshState();
   giveCard(state3, 'C001A', 'P1');
   getPlayerRef(state3, 'P1').resources.K = 5;
-  executor.runProgram(state3, index, context, getCardRow(index, 'C001A').TAP);
+  executor.runProgram(state3, index, context, cappedChangeK2A4);
   check('With MORE than 4K, the cap still holds at 4 -- only 4 of the 5K spent, not "convert everything"', getPlayerRef(state3, 'P1').resources.K, 1);
   check('...granting 4A, not 5', getPlayerRef(state3, 'P1').resources.A, 4);
 
   const state4 = freshState();
   giveCard(state4, 'CON003B', 'P1'); // PASSIVE=CONVERT_LIMIT(ALL,4) -- must NOT reach into 'capped' mode
   getPlayerRef(state4, 'P1').resources.K = 4;
-  executor.runProgram(state4, index, context, getCardRow(index, 'C001A').TAP);
+  executor.runProgram(state4, index, context, cappedChangeK2A4);
   check('CONVERT_LIMIT(ALL,4) from an unrelated owned card does not affect capped-mode at all (still spends 4K, not further reduced)', getPlayerRef(state4, 'P1').resources.K, 0);
 }
 {

@@ -200,22 +200,22 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  const inst = createCardInstance('C001A'); // TAP=CHANGE(K,A,3)
+  const inst = createCardInstance('C001A'); // TAP=CHANGE(3K,4A) -- fixed-rate exchange, needs 3K to fire at all
   inst.ownerId = 'P1';
   state.cards[inst.physicalId] = inst;
   p1.ownedCardPhysicalIds.push(inst.physicalId);
   p1.resources.K = 0;
   const movesAtZeroK = moveGenerator.generateMoves(state, index, 'P1', { hasPlacedDieThisTurn: true });
   check(
-    'A CHANGE(K,A,3) bare TAP is never offered at 0K (would execute 0 times -- a true no-op)',
+    'A CHANGE(3K,4A) bare TAP is never offered at 0K (would execute 0 times -- a true no-op)',
     movesOfType(movesAtZeroK, 'BARE_TAP').filter((m) => m.physicalId === inst.physicalId).length,
     0,
   );
 
-  p1.resources.K = 1;
+  p1.resources.K = 3;
   const movesWithK = moveGenerator.generateMoves(state, index, 'P1', { hasPlacedDieThisTurn: true });
   assertTrue(
-    'The same CHANGE(K,A,3) bare TAP IS offered once K>0 (a real, non-zero conversion)',
+    'The same CHANGE(3K,4A) bare TAP IS offered once K>=3 (a real, affordable conversion)',
     movesOfType(movesWithK, 'BARE_TAP').some((m) => m.physicalId === inst.physicalId),
   );
 }
@@ -737,7 +737,7 @@ function giveTrainingGroundControl(state, playerId, faceId) {
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  const c001Inst = createCardInstance('C001A'); // 代官LV1, TAP=CHANGE(K,A,3) -- real K cost
+  const c001Inst = createCardInstance('C001A'); // 代官LV1, TAP=CHANGE(3K,4A) -- real K cost
   c001Inst.ownerId = 'P1';
   state.cards[c001Inst.physicalId] = c001Inst;
   p1.ownedCardPhysicalIds.push(c001Inst.physicalId);

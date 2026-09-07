@@ -310,7 +310,7 @@ function forceB005ALocation(state, location) {
   check('redealResourceCandidates leaves P2 owning no RESOURCE cards', state.players[1].ownedCardPhysicalIds.filter((id) => id.startsWith('R')).length, 0);
   const newChoice = state.pendingChoices.find((c) => c.playerId === 'P2' && c.kind === 'SELECT_RESOURCE_CARDS');
   assertTrue('...and P2 has a fresh pending choice', !!newChoice);
-  check('...with exactly 5 new candidates', newChoice.context.candidates.length, 5);
+  check('...with exactly 4 new candidates', newChoice.context.candidates.length, 4);
   const othersUsedIds = new Set();
   for (const p of state.players) {
     if (p.id === 'P2') continue;

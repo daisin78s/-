@@ -243,13 +243,19 @@ function nextChoiceId() {
   return `choice${choiceCounter}`;
 }
 
-/** Deals 5 RESOURCE candidates to each player as a pending SELECT_RESOURCE_CARDS choice (raised from 4
- * to 5 on 2026-08-22, per user request, alongside the RESOURCE sheet growing to 24 cards and R003/R006
- * being unfrozen -- see this file's git history for the now-removed DISABLED_RESOURCE_IDS exclusion
- * those two briefly had). skipPlayerIds (optional array, 2026-08-13 debug-setup feature): those players
- * get no candidates/pendingChoice at all here -- used when grantResourceCards() below has already
- * directly settled their 2 RESOURCE cards, so there's nothing left for them to choose. Every other
- * caller passes no 3rd argument and sees identical behavior to before. */
+// Lowered 5->4 (2026-09-07) after game.xlsx's RESOURCE sheet shrank from 24 to 18 cards (per user data
+// edit) -- dealResourceCandidates deals every player's candidates from ONE shared shuffled pool with no
+// reuse across players (4 players x 5 = 20 > 18 would have silently shorted whichever player got dealt
+// last, e.g. 3 candidates instead of 5, confirmed via a direct repro before this fix). 4 players x 4 = 16
+// fits with room to spare. redealResourceCandidates below uses the same constant for consistency, though
+// its own pool (RESOURCE minus every already-owned/already-offered id) has more headroom by nature.
+const RESOURCE_CANDIDATE_COUNT = 4;
+
+/** Deals RESOURCE_CANDIDATE_COUNT RESOURCE candidates to each player as a pending SELECT_RESOURCE_CARDS
+ * choice. skipPlayerIds (optional array, 2026-08-13 debug-setup feature): those players get no
+ * candidates/pendingChoice at all here -- used when grantResourceCards() below has already directly
+ * settled their 2 RESOURCE cards, so there's nothing left for them to choose. Every other caller passes
+ * no 3rd argument and sees identical behavior to before. */
 function dealResourceCandidates(state, index, skipPlayerIds) {
   const skip = new Set(skipPlayerIds || []);
   const allIds = index.raw.RESOURCE.map((r) => r.ID);
@@ -257,8 +263,8 @@ function dealResourceCandidates(state, index, skipPlayerIds) {
   let cursor = 0;
   for (const player of state.players) {
     if (skip.has(player.id)) continue;
-    const candidates = shuffled.slice(cursor, cursor + 5);
-    cursor += 5;
+    const candidates = shuffled.slice(cursor, cursor + RESOURCE_CANDIDATE_COUNT);
+    cursor += RESOURCE_CANDIDATE_COUNT;
     state.pendingChoices.push({
       id: nextChoiceId(),
       playerId: player.id,
@@ -295,7 +301,7 @@ function redealResourceCandidates(state, index, playerId) {
     if (choice.kind === 'SELECT_RESOURCE_CARDS') for (const id of choice.context.candidates) usedIds.add(id);
   }
   const available = index.raw.RESOURCE.map((r) => r.ID).filter((id) => !usedIds.has(id));
-  const candidates = shuffle(state.rng, available).slice(0, 5);
+  const candidates = shuffle(state.rng, available).slice(0, RESOURCE_CANDIDATE_COUNT);
   state.pendingChoices.push({
     id: nextChoiceId(),
     playerId,
