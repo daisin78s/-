@@ -435,12 +435,16 @@
              of one prompt per entry. Starts disabled (see updateRankingDeleteSelectedButton) until at
              least one row is checked. -->
         <button type="button" class="undo-button" id="ranking-delete-selected-button" disabled>選択した項目を削除</button>
+        <!-- 選択ダウンロード (2026-09-07, per user request: 行ごとの「ダウンロード」ボタンを廃止し、削除と
+             同じチェックボックス選択方式でまとめてダウンロードできるように) -- see main.js's
+             handleRankingDownloadSelectedClick. -->
+        <button type="button" class="undo-button" id="ranking-download-selected-button" disabled>選択した項目をダウンロード</button>
         <button type="button" class="card-inst-modal__close" id="ranking-close-button" aria-label="閉じる">&times;</button>
       </div>
       <div id="ranking-register-list" class="ranking-register-list"></div>
-      <!-- 3-way split (2026-09-07) -- see main.js's renderRankingTabs. -->
-      <div id="ranking-tabs" class="ranking-tabs"></div>
-      <div class="card-inst-modal__body" id="ranking-list"></div>
+      <!-- 3-way split (2026-09-07): 3列同時表示(タブ切り替えではない、per user correction) -- see
+           main.js's renderRankingList. -->
+      <div class="card-inst-modal__body" id="ranking-columns"></div>
     </div>
   </div>
 

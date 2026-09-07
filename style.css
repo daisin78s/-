@@ -3344,9 +3344,10 @@ h1, h2, h3 { margin: 0; }
   color: var(--resource-vp);
 }
 
-/* 歴代ランキング (2026-08-16) -- see main.js's renderRankingOverlay / ranking.js's RankingStorage. */
+/* 歴代ランキング (2026-08-16) -- see main.js's renderRankingOverlay / ranking.js's RankingStorage.
+   Widened 2026-09-07 (was a fixed 420px) for the 3-way split's 3 simultaneous side-by-side columns. */
 .ranking-modal {
-  width: 420px;
+  width: min(1100px, calc(100vw - 32px));
 }
 
 .ranking-register-list {
@@ -3385,40 +3386,39 @@ h1, h2, h3 { margin: 0; }
   color: var(--text);
 }
 
-/* 3-way ranking split (2026-09-07) -- 左=アルティメット/中央=スタンダード/右=ウィークリー, fixed order
-   per the user's own spec. */
-.ranking-tabs {
+/* 3-way ranking split (2026-09-07) -- 左=アルティメット/中央=スタンダード/右=ウィークリー, fixed order,
+   all 3 shown AT ONCE side by side (per user correction: "３つのランキングをボタンで切り替えるのではなく
+   ３つ同時に表示して" -- not a tab switcher). Wraps to a vertical stack on narrow screens (each column
+   keeping a sane minimum width) rather than a horizontal scrollbar inside the modal. */
+.ranking-columns {
   display: flex;
-  gap: 6px;
-  padding: 8px 16px 0;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 16px;
 }
 
-.ranking-tab {
-  flex: 1 1 0;
-  font: inherit;
+.ranking-column {
+  flex: 1 1 260px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ranking-column__title {
   font-size: 12px;
   font-weight: 700;
   white-space: pre-line;
   text-align: center;
   padding: 6px 4px;
-  border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: var(--surface);
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.ranking-tab--active {
   background: var(--accent-soft);
-  color: var(--text);
-  border-color: var(--accent);
 }
 
-#ranking-list {
+.ranking-column__list {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 12px 16px;
   max-height: 60vh;
   overflow-y: auto;
 }

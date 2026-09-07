@@ -6450,132 +6450,106 @@ function renderRankingRegisterList(state) {
 // 3-way ranking split (2026-09-07, per user spec -- see usedDebugOrTestGameThisGame's own doc):
 // 'ultimate' (デバッグ/テストゲーム有, and every pre-existing entry from before this split existed),
 // 'standard' (通常プレイでデバッグ/テストゲーム一切なし), 'weekly' (ウィークリーチャレンジ -- not built
-// yet, always empty for now). Which tab is currently showing -- module-scope UI-scratch, like
-// selectedRankingIds below.
-let activeRankingCategory = 'ultimate';
-let rankingListRequestId = 0;
+// yet, always empty for now). All 3 show AT ONCE, side by side (per user correction: "３つのランキングを
+// ボタンで切り替えるのではなく３つ同時に表示して" -- this was originally a tab switcher, corrected the
+// same day), in this fixed left-to-right order.
+const RANKING_CATEGORIES = ['ultimate', 'standard', 'weekly'];
 const RANKING_CATEGORY_LABELS = { ultimate: 'アルティメット\nランキング', standard: 'スタンダード\nランキング', weekly: 'ウィークリー\nランキング' };
+let rankingListRequestId = 0;
 
-/** Tab bar above the ranking list itself (左=アルティメット/中央=スタンダード/右=ウィークリー, in that
- * fixed order per the user's own spec) -- rebuilt every renderRankingList call so the active tab's own
- * highlight always matches activeRankingCategory. */
-function renderRankingTabs() {
-  const container = document.getElementById('ranking-tabs');
-  container.innerHTML = '';
-  for (const category of ['ultimate', 'standard', 'weekly']) {
-    const tab = el('button', category === activeRankingCategory ? 'ranking-tab ranking-tab--active' : 'ranking-tab');
-    tab.type = 'button';
-    tab.textContent = RANKING_CATEGORY_LABELS[category];
-    tab.addEventListener('click', () => {
-      if (activeRankingCategory === category) return;
-      activeRankingCategory = category;
-      renderRankingList();
+/** Renders all 3 category columns at once into #ranking-columns (2026-08-16, reworked 2026-09-07 for the
+ * 3-way simultaneous split). Each column fetches its own RankingStorage.list(category) independently and
+ * shows a "読み込み中..." placeholder while in flight. rankingListRequestId guards against a stale
+ * response painting over a newer one if the overlay gets reopened again before an earlier fetch finishes
+ * (e.g. a slow connection) -- only the MOST RECENT call's results are ever rendered.
+ * @param {string} [highlightId] - a just-registered entry's id (2026-09-07, per user report: pressing
+ *   登録 gave no clear confirmation the save actually happened, leading to accidental double-registers).
+ * @param {string} [highlightCategory] - which column highlightId lives in (always known by the caller,
+ *   right after a fresh registration -- see renderRankingOverlay). Once that column's own fetch resolves,
+ *   its list scrolls from the top down to that entry's own row and pulses it
+ *   (.ranking-row--just-registered, auto-removed after a few seconds) -- "上からスクロールされて今入力し
+ *   た名前のところで光る" per the user's own spec. */
+function renderRankingList(highlightId, highlightCategory) {
+  const columnsContainer = document.getElementById('ranking-columns');
+  columnsContainer.innerHTML = '';
+  selectedRankingEntries = new Map(); // fresh list -- see its own doc on why this always resets
+  updateRankingDeleteSelectedButton();
+  updateRankingDownloadSelectedButton();
+  const requestId = ++rankingListRequestId;
+
+  for (const category of RANKING_CATEGORIES) {
+    const column = el('div', 'ranking-column');
+    column.appendChild(el('div', 'ranking-column__title', RANKING_CATEGORY_LABELS[category]));
+    const list = el('div', 'ranking-column__list');
+    list.appendChild(el('div', 'ranking-empty', '読み込み中...'));
+    column.appendChild(list);
+    columnsContainer.appendChild(column);
+
+    RankingStorage.list(category).then((entries) => {
+      if (requestId !== rankingListRequestId) return; // superseded by a later renderRankingList() call
+      list.innerHTML = '';
+      if (entries.length === 0) {
+        list.appendChild(el('div', 'ranking-empty', 'まだ登録がありません'));
+        return;
+      }
+      let highlightRow = null;
+      entries.forEach((entry, i) => {
+        const row = el('div', i === 0 ? 'ranking-row ranking-row--top' : 'ranking-row');
+        // 複数選択用チェックボックス (2026-09-03) -- see selectedRankingEntries' own doc.
+        const checkbox = el('input', 'ranking-row__checkbox');
+        checkbox.type = 'checkbox';
+        checkbox.addEventListener('change', () => {
+          if (checkbox.checked) selectedRankingEntries.set(entry.id, { category, name: entry.name, hasReplay: entry.hasReplay });
+          else selectedRankingEntries.delete(entry.id);
+          updateRankingDeleteSelectedButton();
+          updateRankingDownloadSelectedButton();
+        });
+        row.appendChild(checkbox);
+        row.appendChild(el('span', 'ranking-row__rank', `${i + 1}位`));
+        const swatch = el('span', 'player-panel__swatch');
+        swatch.dataset.color = entry.playerColor;
+        row.appendChild(swatch);
+        row.appendChild(el('span', 'ranking-row__name', entry.name));
+        row.appendChild(el('span', 'ranking-row__score', `総合 ${entry.totalScore}VP（素点${entry.rawScore} + QST${entry.qstScore}）`));
+        row.appendChild(el('span', 'ranking-row__con', `CON: ${rankingCardDisplayName(entry.conFaceId)}`));
+        row.appendChild(el('span', 'ranking-row__job', `JOB: ${rankingCardDisplayName(entry.jobCardId)}`));
+        row.appendChild(el('span', 'ranking-row__opponents', entry.opponents.join('　')));
+        const replayButton = el('button', 'undo-button', entry.hasReplay ? '▶ 再生' : '再生不可');
+        replayButton.type = 'button';
+        replayButton.disabled = !entry.hasReplay;
+        replayButton.addEventListener('click', () => {
+          replayButton.disabled = true;
+          RankingStorage.loadReplay(entry.id).then((history) => {
+            if (history && history.length) enterReplayMode(history);
+            else replayButton.disabled = false;
+          });
+        });
+        row.appendChild(replayButton);
+        // Per-row ダウンロード button removed 2026-09-07, per user request, replaced by the shared
+        // checkbox-selection "選択した項目をダウンロード" button below (same selection mechanism 削除
+        // already used) -- see handleRankingDownloadSelectedClick.
+        list.appendChild(row);
+        if (highlightCategory === category && highlightId && entry.id === highlightId) highlightRow = row;
+      });
+      if (highlightRow) {
+        list.scrollTop = 0; // "上からスクロールされて" -- always starts the scroll from the top
+        requestAnimationFrame(() => {
+          highlightRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          highlightRow.classList.add('ranking-row--just-registered');
+          setTimeout(() => highlightRow.classList.remove('ranking-row--just-registered'), 4000);
+        });
+      }
+    }).catch(() => {
+      if (requestId !== rankingListRequestId) return;
+      list.innerHTML = '';
+      list.appendChild(el('div', 'ranking-empty', '読み込みに失敗しました'));
     });
-    container.appendChild(tab);
   }
 }
 
-/** All-time top-50 list (2026-08-16) -- see ranking.js's RankingStorage.list (already sorted
- * totalScore descending, capped at 50 by save()), scoped to activeRankingCategory (2026-09-07). Async
- * since 2026-08-29 (Firebase-backed -- see ranking.js's own doc): shows a "読み込み中..." placeholder
- * while the Firestore read is in flight, rather than flashing "まだ登録がありません" first.
- * rankingListRequestId guards against a stale response painting over a newer one if the overlay gets
- * reopened (or the tab switched) again before the first read finishes (e.g. a slow connection) -- only
- * the MOST RECENT call's result is ever rendered.
- * @param {string} [highlightId] - a just-registered entry's id (2026-09-07, per user report: pressing
- *   登録 gave no clear confirmation the save actually happened, leading to accidental double-registers).
- *   When given, once the freshly-fetched list renders, the list scrolls from the top down to that
- *   entry's own row and pulses it (.ranking-row--just-registered, auto-removed after a few seconds) --
- *   "上からスクロールされて今入力した名前のところで光る" per the user's own spec. Only ever passed
- *   alongside activeRankingCategory already having been switched to that same entry's own category (see
- *   renderRankingOverlay), so it's always findable in whichever list this fetch returns. */
-function renderRankingList(highlightId) {
-  renderRankingTabs();
-  const list = document.getElementById('ranking-list');
-  list.innerHTML = '';
-  list.appendChild(el('div', 'ranking-empty', '読み込み中...'));
-  selectedRankingIds = new Set(); // fresh list -- see selectedRankingIds' own doc on why this always resets
-  updateRankingDeleteSelectedButton();
-  const requestId = ++rankingListRequestId;
-  const category = activeRankingCategory;
-  RankingStorage.list(category).then((entries) => {
-    if (requestId !== rankingListRequestId) return; // superseded by a later renderRankingList() call
-    list.innerHTML = '';
-    if (entries.length === 0) {
-      list.appendChild(el('div', 'ranking-empty', 'まだ登録がありません'));
-      return;
-    }
-    let highlightRow = null;
-    entries.forEach((entry, i) => {
-      const row = el('div', i === 0 ? 'ranking-row ranking-row--top' : 'ranking-row');
-      // 複数選択用チェックボックス (2026-09-03) -- see selectedRankingIds' own doc.
-      const checkbox = el('input', 'ranking-row__checkbox');
-      checkbox.type = 'checkbox';
-      checkbox.addEventListener('change', () => {
-        if (checkbox.checked) selectedRankingIds.add(entry.id);
-        else selectedRankingIds.delete(entry.id);
-        updateRankingDeleteSelectedButton();
-      });
-      row.appendChild(checkbox);
-      row.appendChild(el('span', 'ranking-row__rank', `${i + 1}位`));
-      const swatch = el('span', 'player-panel__swatch');
-      swatch.dataset.color = entry.playerColor;
-      row.appendChild(swatch);
-      row.appendChild(el('span', 'ranking-row__name', entry.name));
-      row.appendChild(el('span', 'ranking-row__score', `総合 ${entry.totalScore}VP（素点${entry.rawScore} + QST${entry.qstScore}）`));
-      row.appendChild(el('span', 'ranking-row__con', `CON: ${rankingCardDisplayName(entry.conFaceId)}`));
-      row.appendChild(el('span', 'ranking-row__job', `JOB: ${rankingCardDisplayName(entry.jobCardId)}`));
-      row.appendChild(el('span', 'ranking-row__opponents', entry.opponents.join('　')));
-      const replayButton = el('button', 'undo-button', entry.hasReplay ? '▶ 再生' : '再生不可');
-      replayButton.type = 'button';
-      replayButton.disabled = !entry.hasReplay;
-      replayButton.addEventListener('click', () => {
-        replayButton.disabled = true;
-        RankingStorage.loadReplay(entry.id).then((history) => {
-          if (history && history.length) enterReplayMode(history);
-          else replayButton.disabled = false;
-        });
-      });
-      row.appendChild(replayButton);
-      // ダウンロード (2026-08-31, per user request: "過去のゲームも選んでダウンロードしたい") -- same
-      // RankingStorage.loadReplay this row's own 再生 button uses, just handed to downloadReplayAsJson
-      // instead of enterReplayMode. labelHint strips filesystem-unsafe characters from the player's name.
-      const downloadButton = el('button', 'undo-button', entry.hasReplay ? 'ダウンロード' : 'DL不可');
-      downloadButton.type = 'button';
-      downloadButton.disabled = !entry.hasReplay;
-      downloadButton.addEventListener('click', () => {
-        downloadButton.disabled = true;
-        RankingStorage.loadReplay(entry.id).then((history) => {
-          downloadButton.disabled = false;
-          if (history && history.length) downloadReplayAsJson(history, entry.name.replace(/[\\/:*?"<>|\s]+/g, '_'));
-        });
-      });
-      row.appendChild(downloadButton);
-      list.appendChild(row);
-      if (highlightId && entry.id === highlightId) highlightRow = row;
-    });
-    if (highlightRow) {
-      list.scrollTop = 0; // "上からスクロールされて" -- always starts the scroll from the top
-      requestAnimationFrame(() => {
-        highlightRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        highlightRow.classList.add('ranking-row--just-registered');
-        setTimeout(() => highlightRow.classList.remove('ranking-row--just-registered'), 4000);
-      });
-    }
-  }).catch(() => {
-    if (requestId !== rankingListRequestId) return;
-    list.innerHTML = '';
-    list.appendChild(el('div', 'ranking-empty', '読み込みに失敗しました'));
-  });
-}
-
-/** @param {string} [highlightCategory] - when given (right after a fresh registration), switches to that
- *   entry's own tab first so highlightId (passed alongside it) is actually visible in the list that
- *   renders -- see renderRankingList's own doc. */
 function renderRankingOverlay(state, highlightId, highlightCategory) {
-  if (highlightCategory) activeRankingCategory = highlightCategory;
   renderRankingRegisterList(state);
-  renderRankingList(highlightId);
+  renderRankingList(highlightId, highlightCategory);
 }
 
 function openRankingOverlay() {
@@ -6807,27 +6781,58 @@ async function checkRankingResetPassword(promptText) {
  * ボタンは不要になりました" -- replaces both the old one-button-per-row immediate delete AND the old
  * "ランキングをリセット" all-at-once button: check any number of rows, then one password prompt + one
  * confirm deletes all of them together via RankingStorage.deleteOne (ranking.js's own per-entry delete,
- * already used internally by save()'s own MAX_ENTRIES eviction). Reset to empty at the start of every
- * renderRankingList() call (see there) -- a stale selection referencing an entry that's since been
+ * already used internally by save()'s own MAX_ENTRIES eviction). Also backs the "選択した項目をダウン
+ * ロード" button below (2026-09-07, per user request, replacing the old per-row ダウンロード button) --
+ * both actions share this one selection. Map<id, {category, name, hasReplay}> rather than a plain Set of
+ * ids (2026-09-03 -> 2026-09-07): the 3-way split means rows across 3 DIFFERENT categories/collections
+ * can be selected together, so each entry's own category (needed by deleteOne/RankingStorage.list) and
+ * name (needed for the downloaded file's own name) travel with its id. Reset to empty at the start of
+ * every renderRankingList() call (see there) -- a stale selection referencing an entry that's since been
  * deleted or scrolled past a fresh reload isn't worth preserving across reloads. */
-let selectedRankingIds = new Set();
+let selectedRankingEntries = new Map();
 
-/** Enables/labels the "選択した項目を削除" button to match selectedRankingIds' current size -- called
+/** Enables/labels the "選択した項目を削除" button to match selectedRankingEntries' current size -- called
  * both from renderRankingList (fresh render, always starts empty/disabled) and every checkbox's own
  * change listener. */
 function updateRankingDeleteSelectedButton() {
   const button = document.getElementById('ranking-delete-selected-button');
-  const n = selectedRankingIds.size;
+  const n = selectedRankingEntries.size;
   button.disabled = n === 0;
   button.textContent = n === 0 ? '選択した項目を削除' : `選択した${n}件を削除`;
 }
 
 async function handleRankingDeleteSelectedClick() {
-  if (selectedRankingIds.size === 0) return; // button is disabled in this state, but guard anyway
-  const ids = Array.from(selectedRankingIds);
+  if (selectedRankingEntries.size === 0) return; // button is disabled in this state, but guard anyway
+  const entries = Array.from(selectedRankingEntries.entries()); // [id, {category,...}][]
   if (!(await checkRankingResetPassword('選択した記録を削除するにはパスワードを入力してください。'))) return;
-  if (!window.confirm(`選択した${ids.length}件の記録を削除します。よろしいですか？`)) return;
-  Promise.all(ids.map((id) => RankingStorage.deleteOne(id, activeRankingCategory))).then(() => renderRankingList());
+  if (!window.confirm(`選択した${entries.length}件の記録を削除します。よろしいですか？`)) return;
+  Promise.all(entries.map(([id, { category }]) => RankingStorage.deleteOne(id, category))).then(() => renderRankingList());
+}
+
+/** Enables/labels the "選択した項目をダウンロード" button (2026-09-07, per user request: replaces the old
+ * per-row ダウンロード button with this shared-selection one, same UI pattern 削除 already uses) -- called
+ * both from renderRankingList (fresh render, always starts empty/disabled) and every checkbox's own
+ * change listener. */
+function updateRankingDownloadSelectedButton() {
+  const button = document.getElementById('ranking-download-selected-button');
+  const n = selectedRankingEntries.size;
+  button.disabled = n === 0;
+  button.textContent = n === 0 ? '選択した項目をダウンロード' : `選択した${n}件をダウンロード`;
+}
+
+/** Downloads every selected entry's own replay as a separate JSON file (one browser download per entry,
+ * same downloadReplayAsJson the old per-row button used) -- entries with hasReplay:false are silently
+ * skipped (nothing to download), no password/confirm needed since this is non-destructive. */
+async function handleRankingDownloadSelectedClick() {
+  const entries = Array.from(selectedRankingEntries.entries()).filter(([, e]) => e.hasReplay);
+  if (entries.length === 0) return; // button is disabled in this state, but guard anyway
+  const button = document.getElementById('ranking-download-selected-button');
+  button.disabled = true;
+  for (const [id, { name }] of entries) {
+    const history = await RankingStorage.loadReplay(id);
+    if (history && history.length) downloadReplayAsJson(history, name.replace(/[\\/:*?"<>|\s]+/g, '_'));
+  }
+  updateRankingDownloadSelectedButton(); // re-enables based on current selection size, same as before the click
 }
 
 function render(state) {
@@ -7549,6 +7554,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('game-end-ranking-button').addEventListener('click', openRankingOverlay);
   document.getElementById('ranking-close-button').addEventListener('click', closeRankingOverlay);
   document.getElementById('ranking-delete-selected-button').addEventListener('click', handleRankingDeleteSelectedClick);
+  document.getElementById('ranking-download-selected-button').addEventListener('click', handleRankingDownloadSelectedClick);
   const rankingOverlayEl = document.getElementById('ranking-overlay');
   rankingOverlayEl.addEventListener('click', (e) => {
     if (e.target === rankingOverlayEl) closeRankingOverlay(); // backdrop click only, matching #card-inst-overlay
