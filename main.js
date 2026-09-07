@@ -239,8 +239,8 @@ function openWeeklyChallenge() {
  * cheap and safe. */
 function relocateShopsIntoWeeklyPicker() {
   const shops = document.getElementById('shops');
-  const dice = document.getElementById('weekly-seat-picker__dice');
-  if (shops.nextElementSibling !== dice) dice.parentElement.insertBefore(shops, dice);
+  const rows = document.getElementById('weekly-seat-picker__rows');
+  if (shops.nextElementSibling !== rows) rows.parentElement.insertBefore(shops, rows);
 }
 function relocateShopsBackToBoardArea() {
   const shops = document.getElementById('shops');
@@ -248,28 +248,19 @@ function relocateShopsBackToBoardArea() {
   if (boardArea.firstElementChild !== shops) boardArea.insertBefore(shops, boardArea.firstElementChild);
 }
 
-/** Renders the ウィークリーチャレンジ seat-picker screen (2026-09-07, per user spec, revised per
+/** Renders the ウィークリーチャレンジ seat-picker screen (2026-09-07, per user spec; revised twice on
  * 2026-09-07 follow-up) in place of the normal board, top to bottom: the real 配置カード(ショップ)+QST
  * panel (relocateShopsIntoWeeklyPicker, above -- "配置カードとQST（通常ゲームと同じ）"), no MAP/AREA tiles
- * ("マップは削除（一時的）"), initial dice, then one color-coded row per seat (P1-P4) showing that seat's
- * own CON card and its 4 initial RESOURCE candidates side by side -- no explanatory hint text. Reads
- * directly off the fixed-seed STATE already built at load time (see weeklyChallengeActive's own doc);
- * nothing here mutates it -- this is purely a comparison view before committing to a seat. The CON card
- * shown is its own A face (a preview only -- which face to actually build is still chosen normally, during
- * onboarding, same as any other game). */
+ * ("マップは削除（一時的）"), then one color-coded row per seat (P1-P4), each interleaving that seat's own
+ * 手札 (CON card + 4 initial RESOURCE candidates) immediately followed by that seat's own ダイス (2nd
+ * follow-up: "ALICEの手札／ALICEのダイス／BOBの手札／BOBのダイス..." -- replacing the original layout's
+ * separate "all 4 dice rows, then all 4 hand rows" blocks) -- no explanatory hint text. Reads directly off
+ * the fixed-seed STATE already built at load time (see weeklyChallengeActive's own doc); nothing here
+ * mutates it -- this is purely a comparison view before committing to a seat. The CON card shown is its
+ * own A face (a preview only -- which face to actually build is still chosen normally, during onboarding,
+ * same as any other game). */
 function renderWeeklySeatPicker(state) {
   renderShops(state);
-  const diceContainer = document.getElementById('weekly-seat-picker__dice');
-  diceContainer.innerHTML = '';
-  for (const player of state.players) {
-    const row = el('div', 'weekly-seat-picker__dice-row');
-    row.dataset.color = player.color;
-    for (const die of player.dice) {
-      row.appendChild(renderDie({ kind: die.kind, value: die.value, color: player.color }));
-    }
-    diceContainer.appendChild(row);
-  }
-
   const rowsContainer = document.getElementById('weekly-seat-picker__rows');
   rowsContainer.innerHTML = '';
   for (const player of state.players) {
@@ -285,6 +276,12 @@ function renderWeeklySeatPicker(state) {
       }
     }
     row.appendChild(cardsRow);
+    const diceRow = el('div', 'weekly-seat-picker__dice-row');
+    diceRow.dataset.color = player.color;
+    for (const die of player.dice) {
+      diceRow.appendChild(renderDie({ kind: die.kind, value: die.value, color: player.color }));
+    }
+    row.appendChild(diceRow);
     const chooseButton = el('button', 'undo-button weekly-seat-picker__choose-button', `${player.name}で始める`);
     chooseButton.type = 'button';
     chooseButton.addEventListener('click', () => chooseWeeklyChallengeSeat(player.id));

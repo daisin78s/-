@@ -3632,26 +3632,17 @@ h1, h2, h3 { margin: 0; }
   text-align: center;
 }
 
-#weekly-seat-picker__dice {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
+/* 2026-09-07 follow-up: dice are now rendered INSIDE each seat's own .weekly-seat-picker__row (right
+   after that seat's own hand -- see renderWeeklySeatPicker's own doc), not as a separate top-level block
+   above the rows any more -- flex-basis:100% forces it onto its own line within the row's own flex-wrap
+   layout, below .weekly-seat-picker__cards, without needing a second color-bordered box nested inside the
+   row's own one. */
 .weekly-seat-picker__dice-row {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px;
-  border-left: 4px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface);
+  flex: 1 1 100%;
 }
-
-.weekly-seat-picker__dice-row[data-color="PINK"] { border-left-color: var(--player-pink); }
-.weekly-seat-picker__dice-row[data-color="PURPLE"] { border-left-color: var(--player-purple); }
-.weekly-seat-picker__dice-row[data-color="GREEN"] { border-left-color: var(--player-green); }
-.weekly-seat-picker__dice-row[data-color="ORANGE"] { border-left-color: var(--player-orange); }
 
 #weekly-seat-picker__rows {
   display: flex;
