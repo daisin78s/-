@@ -122,7 +122,12 @@ function createInitialState(plan, forcedSeed) {
   // RANKING_PLAYER_NAME_KEY localStorage value the ranking registration form remembers, falling back to
   // the literal "Alice" the first time this browser is ever used (nothing remembered yet). P2-P4
   // (Bob/Carol/Dan) stay fixed either way -- only the human seat's own name is ever customized here.
-  setupMod.createPlayers(state, [loadRememberedRankingName() || 'Alice', 'Bob', 'Carol', 'Dan']);
+  //
+  // ウィークリーチャレンジ中は素通りする (2026-09-07, per user spec follow-up): which seat ends up human
+  // isn't known yet at this point -- P1 is just one of 4 AI-controlled seats being compared side by side
+  // on the seat-picker screen (see renderWeeklySeatPicker) -- so all 4 stay their plain ALICE/BOB/CAROL/
+  // DAN names here. chooseWeeklyChallengeSeat renames the actually-chosen seat afterward instead.
+  setupMod.createPlayers(state, weeklyChallengeActive ? ['Alice', 'Bob', 'Carol', 'Dan'] : [loadRememberedRankingName() || 'Alice', 'Bob', 'Carol', 'Dan']);
   setupMod.prepareMaps(state, INDEX);
   setupMod.prepareShops(state, INDEX, plan ? plan.abc : undefined);
   setupMod.rollInitialColorDice(state);
@@ -224,14 +229,36 @@ function openWeeklyChallenge() {
   location.reload();
 }
 
-/** Renders the ウィークリーチャレンジ seat-picker screen (2026-09-07, per user spec) in place of the
- * normal board: dice at top, then one color-coded row per seat (P1-P4) showing that seat's own CON card
- * and its 4 initial RESOURCE candidates side by side -- no explanatory hint text, no MAP/AREA tiles.
- * Reads directly off the fixed-seed STATE already built at load time (see weeklyChallengeActive's own
- * doc); nothing here mutates it -- this is purely a comparison view before committing to a seat. The CON
- * card shown is its own A face (a preview only -- which face to actually build is still chosen normally,
- * during onboarding, same as any other game). */
+/** Physically relocates the real #shops node (ショップ/QST -- see renderShops) between its normal home
+ * inside #board-area and the top of the ウィークリーチャレンジ seat-picker screen (2026-09-07, per user
+ * follow-up spec: "配置カードが見える状態で座席を選びたい...配置カードとQST（通常ゲームと同じ）"). Moving
+ * the live node (rather than duplicating the shop-rendering logic) is what makes "同じ（通常ゲームと同じ）"
+ * trivially true -- renderShopGrid/renderQsts already target #shop-combined-slots/#qst-slots by id, which
+ * keep working unchanged no matter which parent currently holds them. Both directions are idempotent
+ * (checked via the current parent/sibling before touching the DOM) so calling them on every render is
+ * cheap and safe. */
+function relocateShopsIntoWeeklyPicker() {
+  const shops = document.getElementById('shops');
+  const dice = document.getElementById('weekly-seat-picker__dice');
+  if (shops.nextElementSibling !== dice) dice.parentElement.insertBefore(shops, dice);
+}
+function relocateShopsBackToBoardArea() {
+  const shops = document.getElementById('shops');
+  const boardArea = document.getElementById('board-area');
+  if (boardArea.firstElementChild !== shops) boardArea.insertBefore(shops, boardArea.firstElementChild);
+}
+
+/** Renders the ウィークリーチャレンジ seat-picker screen (2026-09-07, per user spec, revised per
+ * 2026-09-07 follow-up) in place of the normal board, top to bottom: the real 配置カード(ショップ)+QST
+ * panel (relocateShopsIntoWeeklyPicker, above -- "配置カードとQST（通常ゲームと同じ）"), no MAP/AREA tiles
+ * ("マップは削除（一時的）"), initial dice, then one color-coded row per seat (P1-P4) showing that seat's
+ * own CON card and its 4 initial RESOURCE candidates side by side -- no explanatory hint text. Reads
+ * directly off the fixed-seed STATE already built at load time (see weeklyChallengeActive's own doc);
+ * nothing here mutates it -- this is purely a comparison view before committing to a seat. The CON card
+ * shown is its own A face (a preview only -- which face to actually build is still chosen normally, during
+ * onboarding, same as any other game). */
 function renderWeeklySeatPicker(state) {
+  renderShops(state);
   const diceContainer = document.getElementById('weekly-seat-picker__dice');
   diceContainer.innerHTML = '';
   for (const player of state.players) {
@@ -269,9 +296,20 @@ function renderWeeklySeatPicker(state) {
 /** Commits to playerId as the human seat for this ウィークリーチャレンジ attempt -- every other seat
  * (re)confirms DEFAULT_AI_ROLE, same playerRoles.set(...) pattern the online lobby's own seatIsHuman sync
  * already uses. Clears weeklyChallengeSeatChosen's null so render()'s own top-level branch switches back
- * to the normal board from here on (see render()'s own doc). */
+ * to the normal board from here on (see render()'s own doc).
+ *
+ * Also renames the chosen seat to this browser's own remembered ranking name, if one exists (2026-09-07,
+ * per user spec follow-up: "選んだらその座席の名前がプレイヤーネームに置き換わる プレイヤーネームがなければ
+ * そのままの名前で") -- createInitialState deliberately left every seat at its plain ALICE/BOB/CAROL/DAN
+ * name while weeklyChallengeActive (see its own doc), since which seat is "the player" wasn't known until
+ * right now; a browser with no remembered name yet just keeps whichever of those 4 names was chosen. */
 function chooseWeeklyChallengeSeat(playerId) {
   for (const seatId of ['P1', 'P2', 'P3', 'P4']) playerRoles.set(seatId, seatId === playerId ? 'HUMAN' : DEFAULT_AI_ROLE);
+  const rememberedName = loadRememberedRankingName();
+  if (rememberedName) {
+    const player = STATE.players.find((p) => p.id === playerId);
+    if (player) player.name = rememberedName;
+  }
   weeklyChallengeSeatChosen = playerId;
   render(STATE);
 }
@@ -1408,6 +1446,7 @@ function renderReplayFrame() {
     const next = snapshot.round >= 1 ? turnFlowMod.getNextTurn(snapshot) : null;
     document.getElementById('app').classList.add('replay-locked');
     document.getElementById('game-end-overlay').hidden = true;
+    relocateShopsBackToBoardArea(); // defensive: in case #shops was left inside #weekly-seat-picker
     renderShops(snapshot);
     renderBoard(snapshot, next);
     renderPlayers(snapshot, next);
@@ -7011,11 +7050,13 @@ function render(state) {
   if (weeklyChallengeActive && weeklyChallengeSeatChosen === null) {
     document.getElementById('app').hidden = true;
     document.getElementById('weekly-seat-picker').hidden = false;
+    relocateShopsIntoWeeklyPicker();
     renderWeeklySeatPicker(state);
     return;
   }
   document.getElementById('app').hidden = false;
   document.getElementById('weekly-seat-picker').hidden = true;
+  relocateShopsBackToBoardArea();
   document.getElementById('app').classList.remove('replay-locked');
   // 変化ハイライトのクリア (2026-08-16, see changeHighlightDiff's own doc): nothing in this app ever
   // calls render() on its own (no polling/interval) -- every call is caused by a human doing something,

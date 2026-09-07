@@ -137,6 +137,20 @@ h1, h2, h3 { margin: 0; }
   gap: 20px;
 }
 
+/* 2026-09-07, found while verifying the ウィークリーチャレンジ seat->board transition: the plain `hidden`
+   attribute main.js's render() toggles on #app/#weekly-seat-picker (replayMode vs the weekly seat-picker
+   vs normal play, see render()'s own doc) never actually hid either one -- an author-stylesheet ID
+   selector's own `display` declaration always wins over the UA stylesheet's generic `[hidden]{display:
+   none}` regardless of specificity (author beats UA in the cascade), so both #app's and
+   #weekly-seat-picker's own `display: flex` above/below kept them visible even while `.hidden===true`.
+   This went unnoticed until now because the seat-picker->board switch (the one transition that needs
+   both states to actually alternate) had never been through-clicked before. Explicit overrides, same
+   convention as .card-inst-overlay[hidden]/.replay-controls[hidden] elsewhere in this file. */
+#app[hidden],
+#weekly-seat-picker[hidden] {
+  display: none;
+}
+
 /* ---------------------------------------------------------------------- */
 /* Status chip (confirmed 2026-07-30: page title and the header bar it lived */
 /* in were removed; round-indicator now reuses this chip inside            */
@@ -314,10 +328,19 @@ h1, h2, h3 { margin: 0; }
 /* Shops                                                                   */
 /* ---------------------------------------------------------------------- */
 
+/* 2026-09-07: box-panel look (background/border/shadow/padding) duplicated here from the generic
+   "#board-area > section" rule below, rather than relied on -- #shops now gets physically relocated into
+   #weekly-seat-picker while its seat-picker screen is up (see main.js's relocateShopsIntoWeeklyPicker),
+   so it needs to look right regardless of which parent currently holds it. */
 #shops {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 16px;
 }
 
 .shop-row__combined {
@@ -3592,7 +3615,11 @@ h1, h2, h3 { margin: 0; }
    row (not a full background fill) for the same "readable + color-coded" balance .player-panel__swatch's
    own dot-based color-coding already strikes elsewhere. */
 #weekly-seat-picker {
-  max-width: 900px;
+  /* 2026-09-07: widened from 900px to match #app's own max-width -- #shops (see
+     relocateShopsIntoWeeklyPicker) is designed for that width (SHOP101-106+SHOP201-203 on one row); at
+     900px it would just be squeezed into .shop-row__combined's own horizontal-scroll safety net instead
+     of showing "同じ（通常ゲームと同じ）" the way it does in the normal game. */
+  max-width: 1960px;
   margin: 0 auto;
   padding: 16px;
   display: flex;
