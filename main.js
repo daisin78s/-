@@ -5452,6 +5452,18 @@ function hasQualifyingProperSubset(values, cap) {
   return false;
 }
 
+/** The highest monument DICE threshold anywhere in the current dataset (M sheet's own ">=N" column, e.g.
+ * M403's ">=13") -- 2026-09-08 fix, per user report: dice 3/3/6/6/6 couldn't reach a 13-threshold monument
+ * at all. hasQualifyingProperSubset's own call site below used to hardcode cap=12 (from 2026-08-06, back
+ * when >=12 (M001) was the highest threshold that existed) -- once M403 raised the real max to 13, that
+ * stale 12 started rejecting the 3rd die the instant any 2 already-selected dice summed to 12 (e.g. 6+6),
+ * even though a 3rd die was exactly what a real >=13 monument needed. Computed once from the live M sheet
+ * instead of hand-updated again the next time an even higher threshold is added. */
+const MAX_MONUMENT_DICE_THRESHOLD = INDEX.raw.M.reduce((max, row) => {
+  const match = /^>=(\d+)$/.exec(row.DICE || '');
+  return match ? Math.max(max, Number(match[1])) : max;
+}, 0);
+
 function renderPlayers(state, next) {
   const container = document.getElementById('players');
   container.innerHTML = '';
@@ -5547,7 +5559,7 @@ function renderPlayers(state, next) {
             // Never reached for a wildcard player (the branch above always replaces instead, so
             // selectedDieIds can never exceed length 1 for them) -- real dice values only.
             const prospectiveValues = [...selectedDieIds, die.id].map((id) => player.dice.find((d) => d.id === id).value);
-            if (!hasQualifyingProperSubset(prospectiveValues, 12)) selectedDieIds.push(die.id);
+            if (!hasQualifyingProperSubset(prospectiveValues, MAX_MONUMENT_DICE_THRESHOLD)) selectedDieIds.push(die.id);
           }
           render(STATE);
         });
