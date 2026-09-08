@@ -30,7 +30,7 @@
  * genome is always (over)written to <outputDir>/best_genome.json -- this is the file whose shape can be
  * pasted directly into game.xlsx's 評価値 sheet if it ever outperforms the hand-tuned table.
  *
- * Usage: node tools/ga_train.js <generations> [populationSize] [gamesPerIndividual] [outputDir] [resumeFromDir]
+ * Usage: node tools/ga_train.js <generations> [populationSize] [gamesPerIndividual] [outputDir] [resumeFromDir] [--seed-real]
  * Population size must be a multiple of 4 (one game = 4 seats, no partial/refilled groups).
  *
  * resumeFromDir (2026-08-27, per user request: "今日の18：00より前にすべて終わったら追加で50世代づつ増や
@@ -40,7 +40,9 @@
  * gen_0151..gen_0200 into outputDir (which may be the same directory, to extend it in place, or a new
  * one to branch off). populationSize is ignored when resuming (the resumed population's own size is
  * used); Generation-0's baseline is skipped (the pure-random baseline never changes run to run, so
- * there's nothing new to measure).
+ * there's nothing new to measure). If the run being resumed was itself started with --seed-real, pass
+ * --seed-real again here too (2026-09-08 fix, see SEED_REAL_FLAG's own doc) -- otherwise this run's
+ * mutation silently switches from percent-based to flat-amount mid-lineage.
  */
 
 'use strict';
@@ -88,11 +90,23 @@ const BASELINE_GAMES = 20; // one-time Generation-0 (pure random) measurement sa
 
 /** --seed-real (2026-09-04, per user request: "それを０からやると時間がかかるので　今ある評価値から進め
  * たらどうかと思う") -- a bare flag, not tied to a positional slot, so it can be dropped in anywhere on
- * the command line without shifting generations/populationSize/etc. When present, Generation 1's initial
- * population is small mutations of the REAL current game.xlsx 評価値 table (via mutateGenomePercent, see
- * its own doc) instead of randomGenome's uniform-random spread -- lets a run start from an already-
- * competitive point rather than pure noise. Incompatible with resumeFromDir (that already supplies its
- * own starting population from a previous run). */
+ * the command line without shifting generations/populationSize/etc. When present WITHOUT resumeFromDir,
+ * Generation 1's initial population is small mutations of the REAL current game.xlsx 評価値 table (via
+ * mutateGenomePercent, see its own doc) instead of randomGenome's uniform-random spread -- lets a run
+ * start from an already-competitive point rather than pure noise.
+ *
+ * 2026-09-08 fix, per user request to continue a --seed-real run (ga_train_seedreal_20260904) further:
+ * this flag ALSO controls every later generation's ongoing mutation style, not just Generation 1's seed
+ * (see mutate()'s own doc below -- percent-based mutateGenomePercent vs flat-amount mutateGenome). A
+ * --seed-real run's real-valued genes span roughly 0..1000 depending on round, so a flat delta mutation
+ * is either negligible or wildly oversized depending on which gene it lands on -- continuing such a run
+ * via resumeFromDir WITHOUT also re-passing --seed-real would silently switch its mutation style
+ * mid-run, breaking the "stays on one consistent mutation style throughout" invariant the comment on
+ * mutate() itself calls out. --seed-real and resumeFromDir together is therefore the CORRECT way to
+ * resume a --seed-real lineage (population still comes from resumeFromDir -- the `if (resumeFromDir)`
+ * branch below runs first and unconditionally wins -- only the mutation style reads seedFromReal); this
+ * combination used to be rejected outright as "mutually exclusive", which was true only for the
+ * population-seeding purpose, not the mutation-style purpose the flag also serves. */
 const SEED_REAL_FLAG = '--seed-real';
 
 function parseArgs() {
@@ -118,21 +132,44 @@ function parseArgs() {
     console.error('gamesPerIndividual must be a positive multiple of 4 (each group of 4 plays 4 seat rotations of one shared board).');
     process.exit(1);
   }
-  if (seedFromReal && resumeFromDir) {
-    console.error('--seed-real and resumeFromDir are mutually exclusive (resumeFromDir already supplies its own starting population).');
-    process.exit(1);
-  }
+  // 2026-09-08: no longer rejected -- see SEED_REAL_FLAG's own doc above. resumeFromDir always wins for
+  // population seeding; --seed-real here only keeps mutation style (percent, not flat) consistent when
+  // resuming a run that itself started with --seed-real.
   return { generations, populationSize, gamesPerIndividual, outputDir, resumeFromDir, seedFromReal };
 }
 
 /** Reads resumeFromDir's highest-numbered gen_XXXX.json (see parseArgs' own doc on resumeFromDir) and
  * returns {startGeneration, population} -- startGeneration is that file's own generation number (this
- * run's numbering continues from startGeneration+1), population is its genomes in ranked order. */
-function loadResumePopulation(resumeFromDir) {
+ * run's numbering continues from startGeneration+1), population is its genomes in ranked order.
+ *
+ * currentIds backfill (2026-09-08 fix, found while resuming ga_train_seedreal_20260904 after several
+ * eval-table rows were added to game.xlsx since that run last checkpointed on 2026-09-06 -- モニュメント
+ *確保ボーナス + 3 new synergy rows, see evaluator.js's own recent additions): mutateGenome/
+ * mutateGenomePercent (src/ai/ga.js) only ever iterate a genome's OWN existing keys via
+ * Object.entries(genome[round]) -- they never ADD a key that isn't already present. A resumed genome
+ * missing a newly-added id would therefore keep silently evaluating to 0 for it (evalValue's own
+ * fallback) FOREVER, with mutation never getting a chance to discover a nonzero weight for it -- the same
+ * "starts at 0, mutation's ZERO_ESCAPE_STEP discovers a real value" story a real 評価値 sheet's blank cell
+ * already gets, except this population would never even receive that starting 0 as a real key to escape
+ * from. Backfilling every currentIds entry as 0 (matching a blank real-sheet cell) into every resumed
+ * genome, for every round, fixes this once, right here, rather than leaving each individual id gap to be
+ * silently rediscovered (or not) generation after generation. */
+function loadResumePopulation(resumeFromDir, currentIds) {
   const files = fs.readdirSync(resumeFromDir).filter((f) => /^gen_\d{4}\.json$/.test(f)).sort();
   if (files.length === 0) throw new Error(`No gen_XXXX.json files found in ${resumeFromDir} to resume from`);
   const { generation, population } = JSON.parse(fs.readFileSync(path.join(resumeFromDir, files[files.length - 1]), 'utf8'));
-  return { startGeneration: generation, population: population.map((p) => p.genome) };
+  const backfilled = population.map((p) => {
+    const genome = { 1: {}, 2: {}, 3: {}, 4: {} };
+    for (const round of [1, 2, 3, 4]) {
+      for (const id of currentIds) genome[round][id] = p.genome[round][id] || 0;
+    }
+    return genome;
+  });
+  const addedIds = currentIds.filter((id) => !Object.prototype.hasOwnProperty.call(population[0].genome[1], id));
+  if (addedIds.length > 0) {
+    console.log(`Resumed population was missing ${addedIds.length} current eval-table id(s), backfilled as 0: ${addedIds.join(', ')}`);
+  }
+  return { startGeneration: generation, population: backfilled };
 }
 
 /** Spawns WORKER_COUNT persistent tools/ga_worker.js threads (2026-09-05, per user request:
@@ -371,7 +408,7 @@ async function main() {
   let startGeneration;
   let bestEver = { avgRank: Infinity };
   if (resumeFromDir) {
-    const resumed = loadResumePopulation(resumeFromDir);
+    const resumed = loadResumePopulation(resumeFromDir, ids);
     population = withAnchors(resumed.population);
     startGeneration = resumed.startGeneration;
     console.log(`Resuming from ${resumeFromDir} at generation ${startGeneration} (population size ${population.length}, ${ANCHOR_COUNT} anchor slot(s) (re-)inserted) for ${generations} more generations.`);
