@@ -126,6 +126,29 @@ function deleteReplay(id) {
   return storage().ref(REPLAY_STORAGE_PREFIX + id + '.json').delete();
 }
 
+var WEEKLY_EVAL_SNAPSHOT_COLLECTION = 'weekly_eval_snapshots';
+
+/** Get-or-create this week's frozen AI LV4 評価値 table (2026-09-08, per user spec -- see main.js's own
+ * doc on aiPlayerLv4Weekly for the full "why"): the first attempt of a new week freezes whatever
+ * currentEvalTable is AT THAT MOMENT into "weekly_eval_snapshots/{weekId}"; every later attempt (any
+ * device, any player) during the same week reads that same saved snapshot back unchanged, so every
+ * attempt within one week plays against an identical AI LV4 regardless of how much tuning happens to the
+ * live table in between weeks. A transaction (same pattern joinRoom already uses) makes "read, and only
+ * write if absent" atomic -- two devices racing to be the very first attempt of a brand new week can never
+ * each save a different snapshot; whichever transaction commits first wins, and the other's tx.get just
+ * sees that doc already exists and returns it instead.
+ * @returns {Promise<Object>} the eval-table (this week's own, whether just created or already existing) */
+function getOrCreateWeeklyEvalTable(weekId, currentEvalTable) {
+  var ref = db().collection(WEEKLY_EVAL_SNAPSHOT_COLLECTION).doc(weekId);
+  return db().runTransaction(function (tx) {
+    return tx.get(ref).then(function (snap) {
+      if (snap.exists) return snap.data().evalTable;
+      tx.set(ref, { evalTable: currentEvalTable, createdAt: Date.now() });
+      return currentEvalTable;
+    });
+  });
+}
+
 var ROOM_COLLECTION = 'rooms';
 var SEAT_IDS = ['P1', 'P2', 'P3', 'P4'];
 var ROOM_CODE_CHARS = '0123456789'; // 2026-08-30, per user request: "部屋番号　数字4桁にして"
@@ -215,6 +238,7 @@ window.OnlineSync = {
   markRankingEntryOutdated: markRankingEntryOutdated,
   listAllRankingSorted: listAllRankingSorted,
   clearAllRanking: clearAllRanking,
+  getOrCreateWeeklyEvalTable: getOrCreateWeeklyEvalTable,
   saveReplay: saveReplay,
   loadReplay: loadReplay,
   deleteReplay: deleteReplay,

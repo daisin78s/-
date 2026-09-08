@@ -464,12 +464,43 @@ const aiPlayerLv4 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGeneratorLv4, aiEvalua
 // branches below) -- built once here, same pattern as aiEvalTable above.
 const aiResourceSynergyTable = resourceCardSynergyMod.buildResourceSynergyTable(INDEX.raw);
 const aiConJobSynergyTable = conJobSynergyMod.buildConJobSynergyTable(INDEX.raw);
+
+// ウィークリーチャレンジ専用のAI LV4評価値スナップショット (2026-09-08, per user spec: AI LV4を自由に
+// チューニングし続けたいが、ウィークリーチャレンジの公平性（同じ週の全アテンプトが同じ強さのAIと対戦す
+// る）は保ちたい -- 手動で「日曜まで触らない」と自分に言い聞かせる運用 ([[project-dice-wp-ai-lv4-freeze]]
+// 参照) の代わりに、週が変わって最初にこのページが読み込まれた瞬間の評価値テーブルをその週専用のスナッ
+// プショットとしてFirestoreに保存し、その週のウィークリーチャレンジは常にそのスナップショットだけを読む
+// ようにする。通常プレイ（weeklyChallengeActive===false）はこれまで通り常に最新のaiEvalTableを使うので、
+// AI LV4/LV5の学習・チューニングは今まで通り自由に続けられる。
+//
+// aiPlayerLv4Weekly は最初nullで、getOrCreateWeeklyEvalTable（online-sync.jsのFirestoreトランザクション
+// -- 同じ週の最初のアテンプトなら今のaiEvalTableをそのまま保存、2回目以降はすでに保存済みの値を読むだけ)
+// が解決した時点で初めて実体を持つ -- 座席選択画面ではAIのターンは一切進行しない(render()の
+// weeklyChallengeActiveの早期returnブランチ参照)ので、実際にAIが動き出すまでには少なくとも人間が座席を
+// 選ぶ分の時間があり、この非同期フェッチは通常それより十分速く終わる。万一まだ解決していない場合は
+// aiPlayerFor が現在の生きたaiPlayerLv4に自然にフォールバックする(その週の最初の一度きりの保存タイミン
+// グでしか値がずれ得ない、極めて起きにくいケース)。
+let aiPlayerLv4Weekly = null;
+if (weeklyChallengeActive) {
+  window.OnlineSync.getOrCreateWeeklyEvalTable(currentWeeklyChallengeId(), aiEvalTable).then((weeklyEvalTable) => {
+    const weeklyEvaluator = new evaluatorMod.Evaluator(INDEX, weeklyEvalTable, { qstAware: true, conBuildAware: true, monumentIncentiveAware: true });
+    aiPlayerLv4Weekly = new aiPlayerMod.AIPlayer(INDEX, aiMoveGeneratorLv4, weeklyEvaluator, aiSimulator, {
+      lookaheadExtraTurns: 1,
+      roundOverrides: { 4: { lookaheadExtraTurns: 20, beamWidth: 10, maxRolloutMoves: 200 } },
+      dieScarcityTieBreak: true,
+      preferExOnOwnTerritory: true,
+    });
+  }).catch((err) => {
+    console.error('Weekly eval-table snapshot fetch failed, falling back to the live table for this attempt:', err);
+  });
+}
+
 /** Which AIPlayer instance drives playerId's own TURN moves -- see playerRoles' own comment. */
 function aiPlayerFor(playerId) {
   const role = playerRoles.get(playerId);
   if (role === 'AI_LV1') return aiPlayerLv1;
   if (role === 'AI_LV3') return aiPlayerLv3;
-  if (role === 'AI_LV4') return aiPlayerLv4;
+  if (role === 'AI_LV4') return (weeklyChallengeActive && aiPlayerLv4Weekly) || aiPlayerLv4;
   return aiPlayerLv2;
 }
 
