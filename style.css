@@ -3571,9 +3571,10 @@ h1, h2, h3 { margin: 0; }
 
 .replay-controls {
   position: fixed;
-  top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
+  /* 2026-09-09, per user request: "リプレイを見るときの操作バーの位置を今の上から右下に変えたい" --
+     moved from top-center to bottom-right. */
+  bottom: 12px;
+  right: 12px;
   z-index: 200;
   display: flex;
   align-items: center;
