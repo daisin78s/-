@@ -704,7 +704,7 @@ function hasAiWorkPending(state) {
  * move game replay" section for the full picture. */
 function driveOneAiStep(state) {
   const did = driveOneAiStepInner(state);
-  if (did) { recordReplaySnapshotIfChanged(state); pushOnlineStateIfChanged(state); }
+  if (did) { recordReplaySnapshotIfChanged(state, aiOpenTurnPlayerId); pushOnlineStateIfChanged(state); }
   return did;
 }
 
@@ -1462,11 +1462,24 @@ function handleReplayUploadChange(event) {
   reader.readAsText(file);
 }
 
-function recordReplaySnapshotIfChanged(state) {
+/** effectiveTurnPlayerId (2026-09-10, per user bug report: viewing a saved replay at move 50, the turn
+ * indicator had already switched from NA to Bob one entry BEFORE NA's own card-acquisition (a free
+ * action taken after her last die but before she clicked ターン終了) actually showed up) -- the caller's
+ * own "who's REALLY still mid-turn, doing free actions after their last die" signal (openTurnPlayerId()
+ * for a human move, aiOpenTurnPlayerId for an AI one -- see each call site), stashed onto the CLONE only
+ * (never onto `state` itself, so the dedup JSON comparison above stays exactly what it always compared)
+ * as a plain extra property. renderReplayFrame reads it back to reapply the exact same "still mid-turn"
+ * override render() itself already applies live -- see that function's own doc for why replay can't just
+ * recompute this from the raw snapshot alone (it depends on UI-only scratch state, not GameState).
+ * Omitted (stays undefined) on any snapshot recorded before this fix -- renderReplayFrame's own override
+ * simply never fires for those older entries, unchanged from their existing (uncorrected) behavior. */
+function recordReplaySnapshotIfChanged(state, effectiveTurnPlayerId) {
   const json = JSON.stringify(state);
   if (json === lastReplaySnapshotJson) return;
   lastReplaySnapshotJson = json;
-  replayHistory.push(structuredClone(state));
+  const clone = structuredClone(state);
+  if (effectiveTurnPlayerId) clone.__replayTurnPlayerId = effectiveTurnPlayerId;
+  replayHistory.push(clone);
 }
 
 /** Online play's own broadcast hook (2026-08-29) -- called from the exact same 2 places
@@ -1648,10 +1661,13 @@ function jumpToReplayRound(round) {
 
 /** The replay-mode counterpart of render() (see this section's own doc for why it's a separate,
  * side-effect-free function rather than branching deep inside render() itself). Computes `next` the same
- * way render() does (minus the live-only stillMidTurnPlayerId/aiOpenTurnPlayerId override, which reads
- * module state that has no meaning against a frozen historical snapshot) purely so the board visually
- * matches what was actually clickable at that point in history -- .replay-locked's pointer-events:none
- * (see style.css) is what actually guarantees none of it responds to a click. */
+ * way render() does, then reapplies the exact same "still mid-turn" override render() itself applies live
+ * (2026-09-10 fix, per user bug report: a saved replay's turn indicator switched to the next player one
+ * entry BEFORE that player's own trailing free action -- e.g. a card acquired via bare TAP after their
+ * last die -- actually appeared) -- using snapshot.__replayTurnPlayerId (see recordReplaySnapshotIfChanged's
+ * own doc) instead of the live openTurnPlayerId()/aiOpenTurnPlayerId this can't read from a frozen
+ * snapshot. A snapshot recorded before this fix has no such field, so the override simply never fires for
+ * it (unchanged, older behavior) -- purely additive, no games need re-recording. */
 function renderReplayFrame() {
   // Defensive try/catch (2026-08-18, per user report: "前のランキングのリプレイだったためIDがずれていて
   // 変な挙動でした") -- a ranking entry's saved replay can predate a physical-id reorg (e.g. the CON
@@ -1663,7 +1679,11 @@ function renderReplayFrame() {
   // replay mode outright and telling the user, rather than a broken/half-drawn board staying on screen.
   try {
     const snapshot = replayHistory[replayCursor];
-    const next = snapshot.round >= 1 ? turnFlowMod.getNextTurn(snapshot) : null;
+    let next = snapshot.round >= 1 ? turnFlowMod.getNextTurn(snapshot) : null;
+    const savedTurnPlayerId = snapshot.__replayTurnPlayerId;
+    if (savedTurnPlayerId && (!next || next.playerId !== savedTurnPlayerId)) {
+      next = { type: 'TURN', playerId: savedTurnPlayerId, playerIndex: snapshot.turnOrder.indexOf(savedTurnPlayerId) };
+    }
     document.getElementById('app').classList.add('replay-locked');
     document.getElementById('game-end-overlay').hidden = true;
     relocateShopsBackToBoardArea(); // defensive: in case #shops was left inside #weekly-seat-picker
@@ -7365,7 +7385,10 @@ function render(state) {
   // dedup against the previous entry is what keeps a pure UI-only re-render (nothing in STATE actually
   // changed) from adding a spurious one. Must run BEFORE pumpAiInstant below, or a human's own move would
   // never get its own entry -- it'd only show up bundled together with whatever AI moves follow it.
-  recordReplaySnapshotIfChanged(state);
+  // openTurnPlayerId() here (2026-09-10) -- NOT the `next` computed further below, which intentionally
+  // reflects the POST-pumpAiInstant state -- reads the CURRENT (pre-pump) human mid-turn signal, matching
+  // exactly what this specific snapshot (state as of right now, before any AI moves run this tick) needs.
+  recordReplaySnapshotIfChanged(state, openTurnPlayerId());
   pushOnlineStateIfChanged(state);
 
   // Plays out every AI-controlled player's backlog before painting anything (2026-08-03) -- 'instant'
