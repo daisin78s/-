@@ -1672,14 +1672,17 @@ function renderReplayControls() {
   for (let round = 1; round <= 4; round++) {
     document.getElementById(`replay-round-${round}`).disabled = midGlow || !replayHistory.some((s) => s.round === round);
   }
-  // Reserves enough top space that .replay-controls' own fixed position (see style.css) never covers
-  // the board underneath (2026-08-1X, found via tablet-width testing -- iPad portrait's narrower
-  // #game-layout stack has shop cards right at the top, and the bar sat directly on top of them,
-  // obscuring/blocking a couple of SHOP slots entirely). Measured live rather than a fixed guess: the
-  // bar's own width/wrapping (and therefore height) already varies by viewport and by how long
-  // replayHistory's move count gets ("手 205 / 205" vs "手 12 / 12"), so a hardcoded padding would drift
-  // out of sync on some width instead of tracking it. +16px breathing room below the bar.
-  appEl.style.paddingTop = `${controls.getBoundingClientRect().bottom + 16}px`;
+  // 2026-09-09 fix: this used to reserve top space (appEl.style.paddingTop, measured from
+  // controls.getBoundingClientRect().bottom) back when .replay-controls sat fixed at the TOP of the
+  // viewport (2026-08-1X, tablet-width testing -- it used to cover a couple of SHOP slots there). Now
+  // that the bar lives at bottom-right instead (2026-09-09, per user request: "操作バーの位置を今の上か
+  // ら右下に変えたい"), that same measurement reads close to the full viewport HEIGHT (the bar's own
+  // .bottom is now near the bottom of the screen), which was pushing #app down by nearly a full screen's
+  // worth of blank top padding -- reported as "リプレイの画面上に大きく真っ白な空間ができた". No longer
+  // needed at all: a bottom-right bar doesn't sit over the top shop content this padding existed to
+  // protect. appEl.style.paddingTop stays '' (the plain CSS default, same as the !replayMode branch
+  // above) for the whole time replay mode is active now.
+  appEl.style.paddingTop = '';
 }
 
 /** Turns debugMode ON (spec item 14: the history UI itself is hidden while off, see renderDebugPanel).
