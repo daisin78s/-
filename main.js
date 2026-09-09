@@ -563,20 +563,22 @@ let changeHighlightPainted = false;
 // { playerId, dieId } | null -- 'delayed' pacing's own extra highlight (per user request, "1手ずつの
 // ときは、それに加えて、おかれる直前のダイスが光る"): which of an AI's own in-hand dice it's about to
 // place, shown during the same existing AI_STEP_DELAY_MS wait pumpAiDelayed already has (no added
-// delay) -- see pumpAiDelayed's own doc. ALSO reused by handleReplayForward below (2026-09-09) for the
-// exact same "die about to move" glow, just computed by diffing 2 already-known snapshots instead of
-// predicting an upcoming live move -- renderPlayers' own check doesn't care which caller set it.
+// delay) -- see pumpAiDelayed's own doc. ALSO reused by handleReplayForward below (2026-09-09) for a
+// PASSED die specifically (a die that stays in-hand, just marked .passed -- everything else replayHighlight
+// covers ends up somewhere else on screen, see its own doc) -- renderPlayers' own check doesn't care which
+// caller set it.
 let aiPreHighlightMove = null;
-// Set<"playerId|physicalId"> | null -- リプレイの「先に光ってから動く」用 (2026-09-09, per user request:
-// "光ってからTAP" / "色ダイスが光ってからSLOTに移動") -- a card about to become TAPPED or newly owned,
-// shown during the brief REPLAY_ADVANCE_DELAY_MS pause handleReplayForward inserts before actually
-// advancing replayCursor. Distinct from changeHighlightDiff's own cardKeys (which only ever tracks
-// "newly owned", for the live "what did the AI just do" highlight, and only ever applies to the ALREADY-
-// advanced state) -- a TAP reaction never occupies a new slot or grants a new card at all, so that diff
-// alone can't cover it.
-let replayPreHighlightCardKeys = null;
-let replayAdvanceTimer = null; // setTimeout handle for the pause above, so a 2nd click mid-glow is a no-op
-const REPLAY_ADVANCE_DELAY_MS = 550;
+// {dieId, dicePlayerId, slotKeys, cardKeys, resourceKeys, feeMapIds} | null -- リプレイの変化ハイライト
+// (2026-09-09, per user request, revised same day after seeing the first version in action: "進を押して
+// 変わった個所が次のボタン（進むなど）を押すまで光るようにしてほしい 例 獲得したカード／使用料をもらった
+// ときその使用料の箇所とそのプレイヤーの増えた資源の箇所／SLOTに置かれたダイス／フリーアクションA→Kの
+// とき増えた資源と減った資源") -- computed once per navigation action (computeReplayChangeHighlight,
+// diffing the 2 snapshots that step actually crosses) and left set (not auto-cleared by a timer) until the
+// NEXT navigation action recomputes or clears it -- see clearReplayHighlight. Broader than the original
+// cards-and-one-die version: slotKeys (reuses changeHighlightDiff's own "die landed here" concept, checked
+// in renderBoard) and resourceKeys (any resource whose count changed, up OR down, checked in renderPlayers)
+// are new here specifically for this revision.
+let replayHighlight = null;
 
 /** Pure diff between a structuredClone(state) baseline and the current state (2026-08-16) -- see the
  * change-highlight state block above. Only looks at the two things that matter for this feature: newly
@@ -1511,19 +1513,16 @@ function enterReplayMode(historyOverride) {
   render(STATE);
 }
 
-/** Clears any in-flight replay glow (aiPreHighlightMove/replayPreHighlightCardKeys) and cancels its
- * pending advance timer, if one is running -- shared by every way of leaving/jumping within replay mode
- * (exitReplayMode, handleReplayBack, jumpToReplayRound) so none of them can strand a stale highlight or
- * let an old timer's setTimeout callback fire later and silently advance a cursor the user has since
- * moved away from by some other means. */
-function clearReplayAdvanceGlow() {
-  if (replayAdvanceTimer) { clearTimeout(replayAdvanceTimer); replayAdvanceTimer = null; }
+/** Clears any active replay highlight (aiPreHighlightMove/replayHighlight) -- used by exitReplayMode and
+ * jumpToReplayRound, neither of which crosses exactly one step the way handleReplayForward/
+ * handleReplayBack do, so neither has a single meaningful diff of its own to show. */
+function clearReplayHighlight() {
   aiPreHighlightMove = null;
-  replayPreHighlightCardKeys = null;
+  replayHighlight = null;
 }
 
 function exitReplayMode() {
-  clearReplayAdvanceGlow();
+  clearReplayHighlight();
   replayMode = false;
   if (liveReplayBackup) {
     replayHistory = liveReplayBackup.history;
@@ -1533,34 +1532,38 @@ function exitReplayMode() {
   render(STATE);
 }
 
-function handleReplayBack() {
-  clearReplayAdvanceGlow();
-  if (replayCursor > 0) { replayCursor--; render(STATE); }
-}
-
-/** Diffs replayHistory[replayCursor] against the NEXT entry (2026-09-09, per user request: "リプレイを
- * 進めるときどこが動いたかわかりにくいので先に光ってから動くようにしてほしい 例 光ってからTAP 色ダイス
- * が光ってからSLOTに移動") -- rather than jumping straight to the next snapshot, this glows whatever's
- * about to change in the CURRENT (still pre-step) frame first, then advances after
- * REPLAY_ADVANCE_DELAY_MS. Reuses aiPreHighlightMove for the die (renderPlayers already checks it,
- * regardless of live vs replay -- see that variable's own doc) and the new
- * replayPreHighlightCardKeys for a card about to be tapped or newly built/acquired (computeChangeDiff's
- * own cardKeys only ever covers "newly owned", not "about to be tapped", so this needs its own pass
- * rather than reusing that one). A move with neither (e.g. a pure passive VP/resource change with no
- * visible die or card-tap effect) just advances immediately, same as before this feature existed. */
-function computeReplayStepHighlight(before, after) {
+/** Diffs 2 adjacent replayHistory snapshots (2026-09-09, per user request; revised same day after seeing
+ * the first version -- a brief pre-move glow that auto-advanced -- in action, asking for a broader and
+ * persistent version instead). Always diffs (before=whichever snapshot comes first, after=whichever comes
+ * second) regardless of which direction the user is actually navigating -- 戻る shows the exact same
+ * highlight moving forward again from the new position would.
+ * @returns {{dieId:?string, dicePlayerId:?string, slotKeys:Set, cardKeys:Set, resourceKeys:Set, feeMapIds:Set}} */
+function computeReplayChangeHighlight(before, after) {
+  // ダイス: only a PASSED die still needs its own hand-slot highlight here -- a PLACED die's own
+  // destination slot is already covered by slotKeys below (checked in renderBoard).
   let dieId = null;
   let dicePlayerId = null;
   for (const afterPlayer of after.players) {
     const beforePlayer = before.players.find((p) => p.id === afterPlayer.id);
     if (!beforePlayer) continue;
-    const movedDie = afterPlayer.dice.find((afterDie) => {
+    const passedDie = afterPlayer.dice.find((afterDie) => {
       const beforeDie = beforePlayer.dice.find((d) => d.id === afterDie.id);
-      return beforeDie && beforeDie.placedMapId === null && !beforeDie.passed
-        && (afterDie.placedMapId !== null || afterDie.passed);
+      return beforeDie && !beforeDie.passed && afterDie.passed;
     });
-    if (movedDie) { dieId = movedDie.id; dicePlayerId = afterPlayer.id; break; }
+    if (passedDie) { dieId = passedDie.id; dicePlayerId = afterPlayer.id; break; }
   }
+
+  // SLOT ("SLOTに置かれたダイス") -- a die landed here since `before`.
+  const slotKeys = new Set();
+  for (const mapId of Object.keys(after.maps)) {
+    const beforeSlots = before.maps[mapId] ? before.maps[mapId].slots : [];
+    after.maps[mapId].slots.forEach((occupants, i) => {
+      const beforeDieIds = new Set((beforeSlots[i] || []).map((o) => o.dieId));
+      if (occupants.some((o) => !beforeDieIds.has(o.dieId))) slotKeys.add(`${mapId}|${i}`);
+    });
+  }
+
+  // カード (獲得 or TAP)
   const cardKeys = new Set();
   for (const afterPlayer of after.players) {
     const beforePlayer = before.players.find((p) => p.id === afterPlayer.id);
@@ -1577,28 +1580,55 @@ function computeReplayStepHighlight(before, after) {
       }
     }
   }
-  return { dieId, dicePlayerId, cardKeys };
+
+  // 資源の増減 ("使用料をもらったときの増えた資源" / "A→Kのとき増えた資源と減った資源") -- every
+  // resource whose count differs at all, up OR down, per player.
+  const resourceKeys = new Set();
+  for (const afterPlayer of after.players) {
+    const beforePlayer = before.players.find((p) => p.id === afterPlayer.id);
+    if (!beforePlayer) continue;
+    for (const resource of ['K', 'A', 'B', 'C', 'Z', 'BZ', 'VP']) {
+      if ((beforePlayer.resources[resource] || 0) !== (afterPlayer.resources[resource] || 0)) {
+        resourceKeys.add(`${afterPlayer.id}|${resource}`);
+      }
+    }
+  }
+
+  // 使用料 ("使用料をもらったときその使用料の箇所") -- accumulatedFee changing covers both a
+  // collection (drops, usually to 0) and a fresh accrual (rises) with the same check.
+  const feeMapIds = new Set();
+  for (const mapId of Object.keys(after.maps)) {
+    const beforeFee = before.maps[mapId] ? before.maps[mapId].accumulatedFee : 0;
+    if (beforeFee !== after.maps[mapId].accumulatedFee) feeMapIds.add(mapId);
+  }
+
+  return { dieId, dicePlayerId, slotKeys, cardKeys, resourceKeys, feeMapIds };
+}
+
+/** True if `highlight` has nothing at all to show -- lets forward/back leave aiPreHighlightMove/
+ * replayHighlight cleared for a step with no visible effect (e.g. a pure internal bookkeeping change). */
+function replayHighlightIsEmpty(highlight) {
+  return !highlight.dieId && highlight.slotKeys.size === 0 && highlight.cardKeys.size === 0
+    && highlight.resourceKeys.size === 0 && highlight.feeMapIds.size === 0;
 }
 
 function handleReplayForward() {
-  if (replayAdvanceTimer) return; // already mid-glow -- ignore a double click
   if (replayCursor >= replayHistory.length - 1) return;
-  const highlight = computeReplayStepHighlight(replayHistory[replayCursor], replayHistory[replayCursor + 1]);
-  if (!highlight.dieId && highlight.cardKeys.size === 0) {
-    replayCursor++;
-    render(STATE);
-    return;
-  }
-  if (highlight.dieId) aiPreHighlightMove = { playerId: highlight.dicePlayerId, dieId: highlight.dieId };
-  replayPreHighlightCardKeys = highlight.cardKeys;
-  render(STATE); // paints the CURRENT (pre-step) frame with the glow applied
-  replayAdvanceTimer = setTimeout(() => {
-    replayAdvanceTimer = null;
-    aiPreHighlightMove = null;
-    replayPreHighlightCardKeys = null;
-    replayCursor++;
-    render(STATE);
-  }, REPLAY_ADVANCE_DELAY_MS);
+  const highlight = computeReplayChangeHighlight(replayHistory[replayCursor], replayHistory[replayCursor + 1]);
+  replayCursor++;
+  aiPreHighlightMove = highlight.dieId ? { playerId: highlight.dicePlayerId, dieId: highlight.dieId } : null;
+  replayHighlight = replayHighlightIsEmpty(highlight) ? null : highlight;
+  render(STATE);
+}
+
+function handleReplayBack() {
+  if (replayCursor <= 0) return;
+  const after = replayHistory[replayCursor];
+  replayCursor--;
+  const highlight = computeReplayChangeHighlight(replayHistory[replayCursor], after);
+  aiPreHighlightMove = highlight.dieId ? { playerId: highlight.dicePlayerId, dieId: highlight.dieId } : null;
+  replayHighlight = replayHighlightIsEmpty(highlight) ? null : highlight;
+  render(STATE);
 }
 
 /** Jumps straight to round N's own first recorded entry (2026-08-17, per user request: "リプレイモードに
@@ -1611,7 +1641,7 @@ function handleReplayForward() {
 function jumpToReplayRound(round) {
   const idx = replayHistory.findIndex((s) => s.round === round);
   if (idx === -1) return;
-  clearReplayAdvanceGlow();
+  clearReplayHighlight();
   replayCursor = idx;
   render(STATE);
 }
@@ -1659,18 +1689,14 @@ function renderReplayControls() {
     appEl.style.paddingTop = ''; // back to the plain CSS default (see #app's own rule)
     return;
   }
-  // Mid-glow (2026-09-09, see handleReplayForward's own doc): every navigation control stays disabled
-  // for the brief REPLAY_ADVANCE_DELAY_MS pause so a human can't mash 戻る/進む/R1-4 while a highlighted
-  // move is still "about to happen" and land in a confusing half-transitioned state.
-  const midGlow = !!replayAdvanceTimer;
-  document.getElementById('replay-back').disabled = midGlow || replayCursor <= 0;
-  document.getElementById('replay-forward').disabled = midGlow || replayCursor >= replayHistory.length - 1;
+  document.getElementById('replay-back').disabled = replayCursor <= 0;
+  document.getElementById('replay-forward').disabled = replayCursor >= replayHistory.length - 1;
   document.getElementById('replay-position').textContent = `手 ${replayCursor + 1} / ${replayHistory.length}`;
   // R1-R4 jump buttons (see jumpToReplayRound's own doc) -- disabled for any round this particular
   // history never actually reached, same "don't offer a jump with nowhere to land" reasoning as
   // replay-back/forward's own disabled states above.
   for (let round = 1; round <= 4; round++) {
-    document.getElementById(`replay-round-${round}`).disabled = midGlow || !replayHistory.some((s) => s.round === round);
+    document.getElementById(`replay-round-${round}`).disabled = !replayHistory.some((s) => s.round === round);
   }
   // 2026-09-09 fix: this used to reserve top space (appEl.style.paddingTop, measured from
   // controls.getBoundingClientRect().bottom) back when .replay-controls sat fixed at the TOP of the
@@ -4597,7 +4623,12 @@ function renderBoard(state, next) {
         // 変化ハイライト (2026-08-16) -- a die landed here since the viewing human's last turn ended.
         // Separate class/color from .slot--highlight just above (that one means "you could place here
         // right now"; this one means "something already happened here").
-        if (changeHighlightDiff && changeHighlightDiff.slotKeys.has(`${mapId}|${i}`)) slotEl.classList.add('change-highlight');
+        // replayHighlight (2026-09-09) -- see computeReplayChangeHighlight's own doc; independent of
+        // changeHighlightDiff (live-only) so both can be checked unconditionally regardless of mode.
+        if ((changeHighlightDiff && changeHighlightDiff.slotKeys.has(`${mapId}|${i}`))
+          || (replayHighlight && replayHighlight.slotKeys.has(`${mapId}|${i}`))) {
+          slotEl.classList.add('change-highlight');
+        }
         slotsEl.appendChild(slotEl);
       });
 
@@ -4639,6 +4670,9 @@ function renderBoard(state, next) {
         const feeRate = areaRow.fee || 0;
         feeEl.querySelector('.map-tile__fee-rate').textContent = feeRate > 0 ? `使用料${feeRate}K` : '';
         feeEl.querySelector('.map-tile__fee-amount').textContent = `${mapState.accumulatedFee} K`;
+        // replayHighlight (2026-09-09, per user request: "使用料をもらったときその使用料の箇所") -- see
+        // computeReplayChangeHighlight's own doc.
+        if (replayHighlight && replayHighlight.feeMapIds.has(mapId)) feeEl.classList.add('change-highlight');
         if (mapState.accumulatedFee > 0 && mapState.feeOwnerId) {
           feeEl.dataset.color = colorForPlayer(state, mapState.feeOwnerId);
           if (mapState.feeOwnerId === realTurnPlayerId) {
@@ -5630,7 +5664,16 @@ function renderPlayers(state, next) {
     // raw count anymore.
     for (const resource of ['K', 'A', 'B', 'C', 'Z', 'BZ', 'VP']) {
       const count = player.resources[resource] || 0;
-      if (count > 0) resourcesEl.appendChild(renderResourceBadge(resource, count));
+      // replayHighlight (2026-09-09, per user request: "フリーアクションA→Kのとき増えた資源と減った
+      // 資源") -- a resource that changed but landed at exactly 0 (e.g. spending the very last of it)
+      // would otherwise have no badge left to highlight at all, so its badge is shown (at "0") for just
+      // this one render specifically so the highlight has something to attach to.
+      const highlighted = replayHighlight && replayHighlight.resourceKeys.has(`${player.id}|${resource}`);
+      if (count > 0 || highlighted) {
+        const badge = renderResourceBadge(resource, count);
+        if (highlighted) badge.classList.add('change-highlight');
+        resourcesEl.appendChild(badge);
+      }
     }
 
     // Split into two rows -- color dice and wD (confirmed 2026-07-30) -- rather than one mixed row.
@@ -6608,11 +6651,11 @@ function renderPlayerCards(state, next) {
       });
       const cell = el('div', cardNode.classList.contains('shop-card--tall') ? 'owned-card-cell owned-card-cell--tall' : 'owned-card-cell');
       // 変化ハイライト (2026-08-16) -- this JOB/CON was drafted since the viewing human's last turn ended.
-      // replayPreHighlightCardKeys (2026-09-09) -- the リプレイ「先に光ってから動く」glow, see
-      // handleReplayForward's own doc; independent of changeHighlightDiff (live-only) so both can be
-      // checked unconditionally here regardless of which mode is currently rendering.
+      // replayHighlight (2026-09-09) -- the リプレイ変化ハイライト, see computeReplayChangeHighlight's own
+      // doc; independent of changeHighlightDiff (live-only) so both can be checked unconditionally here
+      // regardless of which mode is currently rendering.
       if ((changeHighlightDiff && changeHighlightDiff.cardKeys.has(`${player.id}|${physicalId}`))
-        || (replayPreHighlightCardKeys && replayPreHighlightCardKeys.has(`${player.id}|${physicalId}`))) {
+        || (replayHighlight && replayHighlight.cardKeys.has(`${player.id}|${physicalId}`))) {
         cell.classList.add('change-highlight');
       }
       attachTapToggle(cardNode, cardState, cardState.currentFaceId, canUseTap, physicalId);
@@ -6654,11 +6697,11 @@ function renderPlayerCards(state, next) {
       const tall = isNormalDeckCard(physicalId); // A/B/C decks: taller, with effect text (confirmed)
       const cell = el('div', tall ? 'owned-card-cell owned-card-cell--tall' : 'owned-card-cell');
       // 変化ハイライト (2026-08-16) -- this card was built/acquired since the viewing human's last turn ended.
-      // replayPreHighlightCardKeys (2026-09-09) -- the リプレイ「先に光ってから動く」glow, see
-      // handleReplayForward's own doc; independent of changeHighlightDiff (live-only) so both can be
-      // checked unconditionally here regardless of which mode is currently rendering.
+      // replayHighlight (2026-09-09) -- the リプレイ変化ハイライト, see computeReplayChangeHighlight's own
+      // doc; independent of changeHighlightDiff (live-only) so both can be checked unconditionally here
+      // regardless of which mode is currently rendering.
       if ((changeHighlightDiff && changeHighlightDiff.cardKeys.has(`${player.id}|${physicalId}`))
-        || (replayPreHighlightCardKeys && replayPreHighlightCardKeys.has(`${player.id}|${physicalId}`))) {
+        || (replayHighlight && replayHighlight.cardKeys.has(`${player.id}|${physicalId}`))) {
         cell.classList.add('change-highlight');
       }
       // req (2026-09-07, per user report: "獲得したモニュメントもダイス目12などを表示させたままにして
