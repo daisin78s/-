@@ -563,8 +563,20 @@ let changeHighlightPainted = false;
 // { playerId, dieId } | null -- 'delayed' pacing's own extra highlight (per user request, "1手ずつの
 // ときは、それに加えて、おかれる直前のダイスが光る"): which of an AI's own in-hand dice it's about to
 // place, shown during the same existing AI_STEP_DELAY_MS wait pumpAiDelayed already has (no added
-// delay) -- see pumpAiDelayed's own doc.
+// delay) -- see pumpAiDelayed's own doc. ALSO reused by handleReplayForward below (2026-09-09) for the
+// exact same "die about to move" glow, just computed by diffing 2 already-known snapshots instead of
+// predicting an upcoming live move -- renderPlayers' own check doesn't care which caller set it.
 let aiPreHighlightMove = null;
+// Set<"playerId|physicalId"> | null -- リプレイの「先に光ってから動く」用 (2026-09-09, per user request:
+// "光ってからTAP" / "色ダイスが光ってからSLOTに移動") -- a card about to become TAPPED or newly owned,
+// shown during the brief REPLAY_ADVANCE_DELAY_MS pause handleReplayForward inserts before actually
+// advancing replayCursor. Distinct from changeHighlightDiff's own cardKeys (which only ever tracks
+// "newly owned", for the live "what did the AI just do" highlight, and only ever applies to the ALREADY-
+// advanced state) -- a TAP reaction never occupies a new slot or grants a new card at all, so that diff
+// alone can't cover it.
+let replayPreHighlightCardKeys = null;
+let replayAdvanceTimer = null; // setTimeout handle for the pause above, so a 2nd click mid-glow is a no-op
+const REPLAY_ADVANCE_DELAY_MS = 550;
 
 /** Pure diff between a structuredClone(state) baseline and the current state (2026-08-16) -- see the
  * change-highlight state block above. Only looks at the two things that matter for this feature: newly
@@ -1499,7 +1511,19 @@ function enterReplayMode(historyOverride) {
   render(STATE);
 }
 
+/** Clears any in-flight replay glow (aiPreHighlightMove/replayPreHighlightCardKeys) and cancels its
+ * pending advance timer, if one is running -- shared by every way of leaving/jumping within replay mode
+ * (exitReplayMode, handleReplayBack, jumpToReplayRound) so none of them can strand a stale highlight or
+ * let an old timer's setTimeout callback fire later and silently advance a cursor the user has since
+ * moved away from by some other means. */
+function clearReplayAdvanceGlow() {
+  if (replayAdvanceTimer) { clearTimeout(replayAdvanceTimer); replayAdvanceTimer = null; }
+  aiPreHighlightMove = null;
+  replayPreHighlightCardKeys = null;
+}
+
 function exitReplayMode() {
+  clearReplayAdvanceGlow();
   replayMode = false;
   if (liveReplayBackup) {
     replayHistory = liveReplayBackup.history;
@@ -1509,8 +1533,73 @@ function exitReplayMode() {
   render(STATE);
 }
 
-function handleReplayBack() { if (replayCursor > 0) { replayCursor--; render(STATE); } }
-function handleReplayForward() { if (replayCursor < replayHistory.length - 1) { replayCursor++; render(STATE); } }
+function handleReplayBack() {
+  clearReplayAdvanceGlow();
+  if (replayCursor > 0) { replayCursor--; render(STATE); }
+}
+
+/** Diffs replayHistory[replayCursor] against the NEXT entry (2026-09-09, per user request: "リプレイを
+ * 進めるときどこが動いたかわかりにくいので先に光ってから動くようにしてほしい 例 光ってからTAP 色ダイス
+ * が光ってからSLOTに移動") -- rather than jumping straight to the next snapshot, this glows whatever's
+ * about to change in the CURRENT (still pre-step) frame first, then advances after
+ * REPLAY_ADVANCE_DELAY_MS. Reuses aiPreHighlightMove for the die (renderPlayers already checks it,
+ * regardless of live vs replay -- see that variable's own doc) and the new
+ * replayPreHighlightCardKeys for a card about to be tapped or newly built/acquired (computeChangeDiff's
+ * own cardKeys only ever covers "newly owned", not "about to be tapped", so this needs its own pass
+ * rather than reusing that one). A move with neither (e.g. a pure passive VP/resource change with no
+ * visible die or card-tap effect) just advances immediately, same as before this feature existed. */
+function computeReplayStepHighlight(before, after) {
+  let dieId = null;
+  let dicePlayerId = null;
+  for (const afterPlayer of after.players) {
+    const beforePlayer = before.players.find((p) => p.id === afterPlayer.id);
+    if (!beforePlayer) continue;
+    const movedDie = afterPlayer.dice.find((afterDie) => {
+      const beforeDie = beforePlayer.dice.find((d) => d.id === afterDie.id);
+      return beforeDie && beforeDie.placedMapId === null && !beforeDie.passed
+        && (afterDie.placedMapId !== null || afterDie.passed);
+    });
+    if (movedDie) { dieId = movedDie.id; dicePlayerId = afterPlayer.id; break; }
+  }
+  const cardKeys = new Set();
+  for (const afterPlayer of after.players) {
+    const beforePlayer = before.players.find((p) => p.id === afterPlayer.id);
+    const beforeOwnedIds = new Set(beforePlayer ? beforePlayer.ownedCardPhysicalIds : []);
+    for (const physicalId of afterPlayer.ownedCardPhysicalIds) {
+      if (!beforeOwnedIds.has(physicalId)) {
+        cardKeys.add(`${afterPlayer.id}|${physicalId}`); // newly built/acquired
+        continue;
+      }
+      const beforeCard = before.cards[physicalId];
+      const afterCard = after.cards[physicalId];
+      if (beforeCard && afterCard && !beforeCard.tapped && afterCard.tapped) {
+        cardKeys.add(`${afterPlayer.id}|${physicalId}`); // about to be tapped
+      }
+    }
+  }
+  return { dieId, dicePlayerId, cardKeys };
+}
+
+function handleReplayForward() {
+  if (replayAdvanceTimer) return; // already mid-glow -- ignore a double click
+  if (replayCursor >= replayHistory.length - 1) return;
+  const highlight = computeReplayStepHighlight(replayHistory[replayCursor], replayHistory[replayCursor + 1]);
+  if (!highlight.dieId && highlight.cardKeys.size === 0) {
+    replayCursor++;
+    render(STATE);
+    return;
+  }
+  if (highlight.dieId) aiPreHighlightMove = { playerId: highlight.dicePlayerId, dieId: highlight.dieId };
+  replayPreHighlightCardKeys = highlight.cardKeys;
+  render(STATE); // paints the CURRENT (pre-step) frame with the glow applied
+  replayAdvanceTimer = setTimeout(() => {
+    replayAdvanceTimer = null;
+    aiPreHighlightMove = null;
+    replayPreHighlightCardKeys = null;
+    replayCursor++;
+    render(STATE);
+  }, REPLAY_ADVANCE_DELAY_MS);
+}
 
 /** Jumps straight to round N's own first recorded entry (2026-08-17, per user request: "リプレイモードに
  * R1（ラウンド1　ゲーム開始時）R2　R3　R4に飛べるボタンが欲しい") -- R1's target is always index 0 (the
@@ -1522,6 +1611,7 @@ function handleReplayForward() { if (replayCursor < replayHistory.length - 1) { 
 function jumpToReplayRound(round) {
   const idx = replayHistory.findIndex((s) => s.round === round);
   if (idx === -1) return;
+  clearReplayAdvanceGlow();
   replayCursor = idx;
   render(STATE);
 }
@@ -1569,14 +1659,18 @@ function renderReplayControls() {
     appEl.style.paddingTop = ''; // back to the plain CSS default (see #app's own rule)
     return;
   }
-  document.getElementById('replay-back').disabled = replayCursor <= 0;
-  document.getElementById('replay-forward').disabled = replayCursor >= replayHistory.length - 1;
+  // Mid-glow (2026-09-09, see handleReplayForward's own doc): every navigation control stays disabled
+  // for the brief REPLAY_ADVANCE_DELAY_MS pause so a human can't mash 戻る/進む/R1-4 while a highlighted
+  // move is still "about to happen" and land in a confusing half-transitioned state.
+  const midGlow = !!replayAdvanceTimer;
+  document.getElementById('replay-back').disabled = midGlow || replayCursor <= 0;
+  document.getElementById('replay-forward').disabled = midGlow || replayCursor >= replayHistory.length - 1;
   document.getElementById('replay-position').textContent = `手 ${replayCursor + 1} / ${replayHistory.length}`;
   // R1-R4 jump buttons (see jumpToReplayRound's own doc) -- disabled for any round this particular
   // history never actually reached, same "don't offer a jump with nowhere to land" reasoning as
   // replay-back/forward's own disabled states above.
   for (let round = 1; round <= 4; round++) {
-    document.getElementById(`replay-round-${round}`).disabled = !replayHistory.some((s) => s.round === round);
+    document.getElementById(`replay-round-${round}`).disabled = midGlow || !replayHistory.some((s) => s.round === round);
   }
   // Reserves enough top space that .replay-controls' own fixed position (see style.css) never covers
   // the board underneath (2026-08-1X, found via tablet-width testing -- iPad portrait's narrower
@@ -6511,7 +6605,13 @@ function renderPlayerCards(state, next) {
       });
       const cell = el('div', cardNode.classList.contains('shop-card--tall') ? 'owned-card-cell owned-card-cell--tall' : 'owned-card-cell');
       // 変化ハイライト (2026-08-16) -- this JOB/CON was drafted since the viewing human's last turn ended.
-      if (changeHighlightDiff && changeHighlightDiff.cardKeys.has(`${player.id}|${physicalId}`)) cell.classList.add('change-highlight');
+      // replayPreHighlightCardKeys (2026-09-09) -- the リプレイ「先に光ってから動く」glow, see
+      // handleReplayForward's own doc; independent of changeHighlightDiff (live-only) so both can be
+      // checked unconditionally here regardless of which mode is currently rendering.
+      if ((changeHighlightDiff && changeHighlightDiff.cardKeys.has(`${player.id}|${physicalId}`))
+        || (replayPreHighlightCardKeys && replayPreHighlightCardKeys.has(`${player.id}|${physicalId}`))) {
+        cell.classList.add('change-highlight');
+      }
       attachTapToggle(cardNode, cardState, cardState.currentFaceId, canUseTap, physicalId);
       cell.appendChild(cardNode);
       jobConEl.appendChild(cell);
@@ -6551,7 +6651,13 @@ function renderPlayerCards(state, next) {
       const tall = isNormalDeckCard(physicalId); // A/B/C decks: taller, with effect text (confirmed)
       const cell = el('div', tall ? 'owned-card-cell owned-card-cell--tall' : 'owned-card-cell');
       // 変化ハイライト (2026-08-16) -- this card was built/acquired since the viewing human's last turn ended.
-      if (changeHighlightDiff && changeHighlightDiff.cardKeys.has(`${player.id}|${physicalId}`)) cell.classList.add('change-highlight');
+      // replayPreHighlightCardKeys (2026-09-09) -- the リプレイ「先に光ってから動く」glow, see
+      // handleReplayForward's own doc; independent of changeHighlightDiff (live-only) so both can be
+      // checked unconditionally here regardless of which mode is currently rendering.
+      if ((changeHighlightDiff && changeHighlightDiff.cardKeys.has(`${player.id}|${physicalId}`))
+        || (replayPreHighlightCardKeys && replayPreHighlightCardKeys.has(`${player.id}|${physicalId}`))) {
+        cell.classList.add('change-highlight');
+      }
       // req (2026-09-07, per user report: "獲得したモニュメントもダイス目12などを表示させたままにして
       // ください") -- buildCardVisual doesn't derive a monument's own DICE threshold on its own (see
       // fillCardFace's own options.req use); every other caller passes req: factsForFaceId(faceId).req
