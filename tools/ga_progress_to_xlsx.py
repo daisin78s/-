@@ -95,11 +95,18 @@ sheet_name = str(generation)
 # resumed at) -- progress.xlsx had already gotten too heavy to wait the remaining ~150 generations for the
 # clean round-number boundary, so the very next generation after resuming starts the new file immediately.
 FIRST_ROLLOVER_GEN = 2853
+# 2026-09-13, per user follow-up ("３０００になったら新しいエクセルにして その後500ごとに新しいエクセル
+# に"): a second, one-time boundary at 3000 (so the just-started 2854-onward file stays short), then every
+# 500 generations after that (narrower than the original 1000, superseding it) gets its own fresh file.
+SECOND_ROLLOVER_GEN = 3000
+ROLLOVER_INTERVAL_AFTER_SECOND = 500
 if generation <= FIRST_ROLLOVER_GEN:
     XLSX_PATH = os.path.join(OUTPUT_DIR, 'progress.xlsx')
+elif generation <= SECOND_ROLLOVER_GEN:
+    XLSX_PATH = os.path.join(OUTPUT_DIR, f'progress_{FIRST_ROLLOVER_GEN + 1}-{SECOND_ROLLOVER_GEN}.xlsx')
 else:
-    batch_start = FIRST_ROLLOVER_GEN + 1 + ((generation - FIRST_ROLLOVER_GEN - 1) // 1000) * 1000
-    batch_end = batch_start + 999
+    batch_start = SECOND_ROLLOVER_GEN + 1 + ((generation - SECOND_ROLLOVER_GEN - 1) // ROLLOVER_INTERVAL_AFTER_SECOND) * ROLLOVER_INTERVAL_AFTER_SECOND
+    batch_end = batch_start + ROLLOVER_INTERVAL_AFTER_SECOND - 1
     XLSX_PATH = os.path.join(OUTPUT_DIR, f'progress_{batch_start}-{batch_end}.xlsx')
 
 if os.path.exists(XLSX_PATH):

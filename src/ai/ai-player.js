@@ -131,8 +131,6 @@ class AIPlayer {
     if (forcedJob004) return forcedJob004;
     const forcedEndSignLv2 = this.moveGenerator.forcedEndSignLv2Move(state, this.index, playerId);
     if (forcedEndSignLv2) return forcedEndSignLv2;
-    const forcedTrainingGroundBuild = this.moveGenerator.forcedTrainingGroundBuildMove(state, this.index, playerId, context);
-    if (forcedTrainingGroundBuild) return forcedTrainingGroundBuild;
     const forcedTrainingGroundKPrep = this.moveGenerator.forcedTrainingGroundKPrepMove(state, this.index, playerId, context);
     if (forcedTrainingGroundKPrep) return forcedTrainingGroundKPrep;
     const forcedTrainingGround = this.moveGenerator.forcedTrainingGroundMove(state, this.index, playerId, context);

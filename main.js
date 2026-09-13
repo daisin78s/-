@@ -1482,7 +1482,12 @@ function handleReplayUploadChange(event) {
  * usedDebugOrTestGameThisGame = true (see that flag's own doc, right where it's declared) so this
  * attempt's eventual ranking registration lands in "アルティメット" (per user request: "ランキングは左の
  * アルティメットに保存するようにして"), never "スタンダード" -- this game never went through a genuinely
- * untouched-from-the-start human playthrough. */
+ * untouched-from-the-start human playthrough.
+ *
+ * Turn/round rewind, floored at round 3 (2026-09-13, per user request: "3Rからターンをまたいで戻れるよう
+ * にして ただし1R2Rには戻れない"): forces debugMode on and resets+reseeds turnHistory with ONLY this
+ * round-3 handoff state as entry 0 -- see the code below its own doc for why that alone is enough to make
+ * "can't rewind into round 1/2" hold automatically (nothing before this point was ever recorded). */
 function handleStartFromRound3Click() {
   const seed = `start-from-round3-${Date.now()}`;
   const state = gameRunnerMod.setupGame(seed, ['Alice', 'Bob', 'Carol', 'Dan'], INDEX, aiEvaluatorLv4);
@@ -1529,6 +1534,18 @@ function handleStartFromRound3Click() {
   playerRoles.set('P3', DEFAULT_AI_ROLE);
   playerRoles.set('P4', DEFAULT_AI_ROLE);
   usedDebugOrTestGameThisGame = true;
+
+  // Turn/round rewind from round 3 onward, but NEVER back into round 1/2 (2026-09-13, per user request:
+  // "3Rからターンをまたいで戻れるようにして ただし1R2Rには戻れない") -- rounds 1-2 were bulk-resolved
+  // offline above with no incremental per-turn snapshots at all, so the natural way to guarantee this is
+  // to make sure turnHistory contains NOTHING before this round-3 handoff point: reset it first (in case
+  // stale entries exist from browsing an earlier game this same page load, e.g. debugMode was already on)
+  // before seeding it fresh from the just-swapped-in STATE -- seedDebugHistoryIfNeeded's own
+  // `turnHistory.length > 0` guard would otherwise silently refuse to reseed over old entries.
+  turnHistory = [];
+  historyCursor = -1;
+  debugMode = true;
+  seedDebugHistoryIfNeeded();
   render(STATE);
 }
 

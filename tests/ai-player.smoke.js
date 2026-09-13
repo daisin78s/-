@@ -22,7 +22,6 @@ function noForcedMoves() {
     forcedBzConversionMove: () => null,
     forcedJob004ConversionMove: () => null,
     forcedEndSignLv2Move: () => null,
-    forcedTrainingGroundBuildMove: () => null,
     forcedTrainingGroundKPrepMove: () => null,
     forcedTrainingGroundMove: () => null,
   };
