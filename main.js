@@ -39,6 +39,7 @@ const aiPlayerMod = window.__modules['ai-player'];
 const resourceCardSynergyMod = window.__modules['resource-card-synergy'];
 const conJobSynergyMod = window.__modules['con-job-synergy'];
 const smartOnboardingMod = window.__modules['smart-onboarding'];
+const gameRunnerMod = window.__modules['game-runner'];
 
 const INDEX = dataLoaderMod.buildDataIndex(dataLoaderMod.loadGameData(window.GAME_DATA));
 
@@ -1460,6 +1461,75 @@ function handleReplayUploadChange(event) {
   };
   reader.onerror = () => window.alert('リプレイファイルの読み込みに失敗しました。');
   reader.readAsText(file);
+}
+
+/** "3Rから" button (2026-09-13, per user request: "リプレイを読み込むのとなりに3Rからというボタンを作り
+ * AILV4どうしの対戦で 2Rまで終わって3Rからの盤面を作る...それを人間がプレイしてAIより高い得点が取れるか
+ * 知りたい"): synchronously (no per-move animation -- src/ai/game-runner.js's own setupGame/driveTurn/
+ * driveSmartOnboarding, the same primitives every tools/*.js CLI script uses, not main.js's own
+ * move-by-move-paced driveOneAiStep) plays out a FRESH 4-seat AI-LV4-vs-AI-LV4 game up through the end of
+ * round 2, then swaps the resulting state into the live UI (same "clear every own-enumerable key, then
+ * reassign" pattern applyIncomingRoomState already uses for online hand-off) with P1 switched to HUMAN
+ * for round 3 onward -- the point being a round-3 starting board with ZERO human influence on rounds 1-2,
+ * so a later "did the human actually score higher than AI here" comparison isn't confounded by the human
+ * having already shaped rounds 1-2 themselves (see the user's own reasoning: "そうでなければその前の1R2R
+ * で差がついていてわかってないだけかもしれない").
+ *
+ * P1 is always named/played as "Alice" here (per user request: "プレイはALICE固定"), NOT
+ * loadRememberedRankingName()'s usual remembered custom name -- same override precedent
+ * weeklyChallengeActive's own createInitialState branch already uses.
+ *
+ * usedDebugOrTestGameThisGame = true (see that flag's own doc, right where it's declared) so this
+ * attempt's eventual ranking registration lands in "アルティメット" (per user request: "ランキングは左の
+ * アルティメットに保存するようにして"), never "スタンダード" -- this game never went through a genuinely
+ * untouched-from-the-start human playthrough. */
+function handleStartFromRound3Click() {
+  const seed = `start-from-round3-${Date.now()}`;
+  const state = gameRunnerMod.setupGame(seed, ['Alice', 'Bob', 'Carol', 'Dan'], INDEX, aiEvaluatorLv4);
+
+  let openTurnPlayerId = null;
+  let openTurnHasPlacedDie = false;
+  const MAX_ITERATIONS = 1000; // safety valve, mirrors game-runner.js's own playGame
+  let iterations = 0;
+  while (state.round < 3 && state.phase !== 'GAME_END' && iterations < MAX_ITERATIONS) {
+    iterations++;
+    const next = turnFlowMod.getNextTurn(state);
+    if (next.type === 'ROUND_OVER') {
+      // Defensive fallback only -- round transitions actually happen inside driveTurn itself, see
+      // game-runner.js's own playGame doc on why this essentially never fires in practice.
+      turnFlowMod.endRound(state, INDEX);
+      if (state.phase !== 'GAME_END') turnFlowMod.startRound(state);
+      openTurnPlayerId = null;
+      continue;
+    }
+    if (next.type === 'ONBOARDING_NEEDED') {
+      gameRunnerMod.driveSmartOnboarding(state, INDEX, next.playerId, aiConJobSynergyTable, aiMoveGeneratorLv4, aiSimulator);
+      continue;
+    }
+    const roundBeforeTurn = state.round;
+    const initialHasPlacedDie = next.playerId === openTurnPlayerId ? openTurnHasPlacedDie : false;
+    const moves = gameRunnerMod.driveTurn(state, INDEX, next.playerId, aiPlayerLv4, initialHasPlacedDie);
+    const endedTurn = moves.some((m) => m.move.type === 'END_TURN' && m.result.success);
+    if (endedTurn || state.round > roundBeforeTurn) {
+      openTurnPlayerId = null;
+    } else {
+      openTurnPlayerId = next.playerId;
+      openTurnHasPlacedDie = initialHasPlacedDie || moves.some((m) => ['PLACE_DIE', 'PLACE_WILDCARD_DIE', 'PLACE_DICE_GROUP', 'PASS_DIE'].includes(m.move.type) && m.result.success);
+    }
+  }
+  if (state.round < 3) {
+    window.alert('3R開始盤面の生成に失敗しました（安全上限に到達）。もう一度お試しください。');
+    return;
+  }
+
+  Object.keys(STATE).forEach((k) => delete STATE[k]);
+  Object.assign(STATE, state);
+  playerRoles.set('P1', 'HUMAN');
+  playerRoles.set('P2', DEFAULT_AI_ROLE);
+  playerRoles.set('P3', DEFAULT_AI_ROLE);
+  playerRoles.set('P4', DEFAULT_AI_ROLE);
+  usedDebugOrTestGameThisGame = true;
+  render(STATE);
 }
 
 /** effectiveTurnPlayerId (2026-09-10, per user bug report: viewing a saved replay at move 50, the turn
@@ -8108,6 +8178,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('card-list-open-button').addEventListener('click', openCardListOverlay);
   document.getElementById('replay-upload-button').addEventListener('click', () => document.getElementById('replay-upload-input').click());
   document.getElementById('replay-upload-input').addEventListener('change', handleReplayUploadChange);
+  document.getElementById('start-from-round3-button').addEventListener('click', handleStartFromRound3Click);
 
   document.getElementById('round-pass-button').addEventListener('click', handleRoundPassClick);
   document.getElementById('round-pass-confirm-no').addEventListener('click', () => {

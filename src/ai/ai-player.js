@@ -70,6 +70,12 @@ class AIPlayer {
    *      wider beamWidth (round 4 is also the only round where the extra cost is bounded -- there's no
    *      round 5 to also pay it in). Every other round, and every other AI level (LV1/LV2's shared
    *      AIPlayer instances never pass this option), keeps using the flat base values, unaffected.
+   *    beamWidths (2026-09-13, per user request: "5→3→2→2→1のようにはできない？" -- a genuine multi-ply
+   *      NARROWING beam search, one ply per own turn, as an alternative to the beamWidth/lookaheadExtraTurns
+   *      rollout above (see #deepBeamSearch's own doc for exactly how it works and why it's a fully
+   *      separate code path rather than a variant of #rolloutScore). When set (a non-empty array, e.g.
+   *      [5,3,2,2,1]), OVERRIDES lookaheadExtraTurns/beamWidth entirely for that selectMove() call --
+   *      every existing level leaves this unset/null, so nothing about their behavior changes.
    *    dieScarcityTieBreak (2026-08-28, "AI LV4", default false): when true, ties in selectMove's 1-ply
    *      score (several moves reaching the exact same score, e.g. multiple of this player's own dice can
    *      all reach the same outcome) are broken by src/ai/die-priority.js's compareDicePriority instead
@@ -90,6 +96,7 @@ class AIPlayer {
     this.lookaheadExtraTurns = opts.lookaheadExtraTurns !== undefined ? opts.lookaheadExtraTurns : 0;
     this.beamWidth = opts.beamWidth || 6;
     this.maxRolloutMoves = opts.maxRolloutMoves || 60;
+    this.beamWidths = opts.beamWidths || null;
     this.roundOverrides = opts.roundOverrides || {};
     this.dieScarcityTieBreak = !!opts.dieScarcityTieBreak;
     this.preferExOnOwnTerritory = !!opts.preferExOnOwnTerritory;
@@ -104,6 +111,7 @@ class AIPlayer {
       lookaheadExtraTurns: override.lookaheadExtraTurns !== undefined ? override.lookaheadExtraTurns : this.lookaheadExtraTurns,
       beamWidth: override.beamWidth !== undefined ? override.beamWidth : this.beamWidth,
       maxRolloutMoves: override.maxRolloutMoves !== undefined ? override.maxRolloutMoves : this.maxRolloutMoves,
+      beamWidths: override.beamWidths !== undefined ? override.beamWidths : this.beamWidths,
     };
   }
 
@@ -159,8 +167,6 @@ class AIPlayer {
     scored.sort((a, b) => (b.score - a.score)
       || (exSlotTieBreak ? exSlotTieBreak(a.move, b.move) : 0)
       || (dieTieBreak ? dieTieBreak(a.move, b.move) : 0));
-    const { lookaheadExtraTurns, beamWidth, maxRolloutMoves } = this.#effectiveOptions(state.round);
-    if (lookaheadExtraTurns <= 0) return scored[0].move;
 
     // Beam de-duplication (2026-08-30, per user request: "結果として同じような手は間引くようにできます
     // か"): candidates that tie EXACTLY at 1-ply -- e.g. a die-value-change/free-action applied to two
@@ -172,7 +178,8 @@ class AIPlayer {
     // whichever tie-break already preferred) of each distinct score before taking the top beamWidth.
     // Deliberately an EXACT match, not a "close enough" epsilon band -- the evaluator's own weighted-sum
     // scores make a genuine tie a good proxy for redundancy, but two merely-close scores could still be
-    // real, distinct strategic options worth their own rollout.
+    // real, distinct strategic options worth their own rollout. Computed unconditionally (moved ahead of
+    // the lookaheadExtraTurns<=0 early return, 2026-09-13) since #deepBeamSearch needs it too.
     const deduped = [];
     let lastScore = null;
     for (const candidate of scored) {
@@ -180,6 +187,10 @@ class AIPlayer {
       deduped.push(candidate);
       lastScore = candidate.score;
     }
+
+    const { lookaheadExtraTurns, beamWidth, maxRolloutMoves, beamWidths } = this.#effectiveOptions(state.round);
+    if (beamWidths && beamWidths.length > 0) return this.#deepBeamSearch(deduped, playerId, beamWidths, maxRolloutMoves);
+    if (lookaheadExtraTurns <= 0) return scored[0].move;
 
     let best = scored[0].move;
     let bestDeepScore = -Infinity;
@@ -245,6 +256,115 @@ class AIPlayer {
       }
     }
     return best;
+  }
+
+  /** Genuine multi-ply NARROWING beam search (2026-09-13, per user request: "5→3→2→2→1のようにできない
+   * か" -- unlike #rolloutScore/selectMove's own beamWidth+lookaheadExtraTurns combo above, which expands
+   * each of `beamWidth` 1-ply candidates via ONE single-path GREEDY rollout each (branching factor 1 past
+   * the very first ply), this keeps `beamWidths[i]` distinct candidate lineages alive at EVERY ply, one
+   * ply per own turn (matching how the user described this: "1自分のターンごと"). `beamWidths=[5,3,2,2,1]`
+   * means: the 5 best root candidates (already 1-ply-scored+deduped by the caller) survive; each one's own
+   * turn is completed greedily (#finishTurnGreedy -- branching happens at TURN boundaries only, not within
+   * a turn's own die-placement/build-choice/etc. sequence); their combined next-turn children are pooled
+   * and narrowed to the GLOBAL top 3 (not top-3-per-parent, standard beam search); this repeats down to 2,
+   * then 2 again, then the single best of THOSE becomes the final answer -- the root move whose lineage it
+   * descends from is what selectMove actually returns and plays now.
+   *
+   * Cost is roughly sum(beamWidths[i] * avg-legal-moves-per-turn) rather than beamWidth*lookaheadExtraTurns
+   * *rollout-steps-per-turn -- for the [5,3,2,2,1] example this is typically CHEAPER than a wide/long
+   * single-path rollout while actually keeping multiple live alternatives instead of committing to one
+   * greedy path after the first choice (see this class's own top-of-file doc on why the OLD rollout can
+   * cheaply widen breadth at ply 1 but never regains any branching after that).
+   *
+   * A fully separate code path from #rolloutScore/#finishTurnGreedy-less rollout on purpose -- no existing
+   * level (LV1-4) sets `beamWidths`, so none of their behavior changes by so much as a rounding difference.
+   * maxRolloutMoves here is a PER-TURN safety valve (this method's own #finishTurnGreedy call), not the
+   * single PER-ROLLOUT total budget #rolloutScore's own maxRolloutMoves is -- a deliberately simpler,
+   * separate semantic for this separate method, not a change to the old one. */
+  #deepBeamSearch(rootCandidates, playerId, beamWidths, maxRolloutMoves) {
+    let beam = rootCandidates.slice(0, beamWidths[0]).map((c) => ({
+      rootMove: c.move,
+      turnEndState: this.#finishTurnGreedy(c.resultState, playerId, this.#startedTurn(c.move), maxRolloutMoves),
+    }));
+
+    for (let ply = 1; ply < beamWidths.length; ply++) {
+      const frontier = [];
+      for (const node of beam) {
+        for (const c of this.#firstMoveCandidatesForTurn(node.turnEndState, playerId)) {
+          frontier.push({ rootMove: node.rootMove, score: c.score, resultState: c.resultState, move: c.move });
+        }
+      }
+      if (frontier.length === 0) break; // every surviving lineage ran out of legal moves (round/game end)
+      frontier.sort((a, b) => b.score - a.score);
+      beam = frontier.slice(0, beamWidths[ply]).map((s) => ({
+        rootMove: s.rootMove,
+        turnEndState: this.#finishTurnGreedy(s.resultState, playerId, this.#startedTurn(s.move), maxRolloutMoves),
+      }));
+    }
+
+    let best = beam[0];
+    let bestScore = this.evaluator.score(best.turnEndState, playerId);
+    for (const node of beam.slice(1)) {
+      const score = this.evaluator.score(node.turnEndState, playerId);
+      if (score > bestScore) { bestScore = score; best = node; }
+    }
+    return best.rootMove;
+  }
+
+  /** Whether `move` counts as "this turn's die has been placed" -- same predicate #rolloutScore/driveTurn
+   * already use in a few places, factored out here since #deepBeamSearch needs it at two call sites. */
+  #startedTurn(move) {
+    return move.type === 'PLACE_DIE' || move.type === 'PLACE_WILDCARD_DIE' || move.type === 'PLACE_DICE_GROUP' || move.type === 'PASS_DIE';
+  }
+
+  /** Plays out the REST of the current turn only (never more than one turn, unlike #rolloutScore which
+   * keeps going for lookaheadExtraTurns more) via #greedyMove, starting from `state` with
+   * `hasPlacedDieThisTurn` already known. Stops once the turn actually ends (END_TURN) or maxRolloutMoves
+   * (a per-turn cap here, see #deepBeamSearch's own doc) is hit. */
+  #finishTurnGreedy(state, playerId, hasPlacedDieThisTurn, maxRolloutMoves) {
+    let steps = 0;
+    while (steps < maxRolloutMoves) {
+      steps++;
+      const move = this.#greedyMove(state, playerId, hasPlacedDieThisTurn);
+      if (!move) break;
+      const { state: nextState, result } = this.simulator.apply(state, this.index, move);
+      if (!result.success) break;
+      state = nextState;
+      if (this.#startedTurn(move)) hasPlacedDieThisTurn = true;
+      if (move.type === 'END_TURN') break;
+    }
+    return state;
+  }
+
+  /** Generates+scores+dedupes candidates for the FIRST move of a NEW turn from `state` (a turn-ending
+   * state) -- same forced-move-check+generate+score logic as selectMove's own top-level candidate pass
+   * (including the exact-score dedup, see selectMove's own doc on why), reused by #deepBeamSearch to
+   * expand one ply. A brand-new turn always starts with hasPlacedDieThisTurn:false, same convention
+   * #rolloutScore's own turn-boundary handling uses. */
+  #firstMoveCandidatesForTurn(state, playerId) {
+    const context = { hasPlacedDieThisTurn: false };
+    const forcedMove = this.#checkForcedMoves(state, playerId, context);
+    if (forcedMove) {
+      const { state: resultState, result } = this.simulator.apply(state, this.index, forcedMove);
+      if (!result.success) return [];
+      return [{ move: forcedMove, resultState, score: this.evaluator.score(resultState, playerId) }];
+    }
+    const moves = this.moveGenerator.generateMoves(state, this.index, playerId, context);
+    const scored = [];
+    for (const move of moves) {
+      const { state: resultState, result } = this.simulator.apply(state, this.index, move);
+      if (!result.success) continue;
+      scored.push({ move, resultState, score: this.evaluator.score(resultState, playerId) });
+    }
+    scored.sort((a, b) => b.score - a.score);
+    const deduped = [];
+    let lastScore = null;
+    for (const candidate of scored) {
+      if (candidate.score === lastScore) continue;
+      deduped.push(candidate);
+      lastScore = candidate.score;
+    }
+    return deduped;
   }
 }
 

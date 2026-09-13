@@ -100,6 +100,23 @@ function mutateGenomePercent(genome, rngState, mutationRate, mutationPercent, bi
   return mutated;
 }
 
-module.exports = { randomGenome, mutateGenome, mutateGenomePercent };
+/** A crossed-over copy of two genomes (never mutates either input): each (round, id) value is
+ * independently taken from `genomeA` or `genomeB` with 50/50 probability (uniform crossover -- no
+ * single-point/multi-point cut, since a 評価値 genome's ids have no meaningful linear order for a cut
+ * point to respect). Deliberately left out of ga_train.js's own first pass (see its own doc) as
+ * unnecessary complexity for a single-lineage self-play run; added 2026-09-11 for
+ * tools/train_from_human_replay.js, where multiple qualitatively different seed genomes (hand-tuned vs.
+ * self-play-evolved) are combined and each generation is cheap (no simulation), making it worth trying. */
+function crossoverGenome(genomeA, genomeB, rngState) {
+  const child = { 1: {}, 2: {}, 3: {}, 4: {} };
+  for (const round of [1, 2, 3, 4]) {
+    for (const id of Object.keys(genomeA[round])) {
+      child[round][id] = rng.next(rngState) < 0.5 ? genomeA[round][id] : genomeB[round][id];
+    }
+  }
+  return child;
+}
+
+module.exports = { randomGenome, mutateGenome, mutateGenomePercent, crossoverGenome };
 
 })();

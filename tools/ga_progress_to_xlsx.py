@@ -33,6 +33,22 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 GAME_JSON_PATH = os.path.join(SCRIPT_DIR, '..', 'data', 'game.json')
 
 
+def load_id_to_name():
+    """ID -> NAME lookup for every card-face row across the A/B/C/M sheets (2026-09-12, per user request:
+    "A列のIDで出しているのはNAMEがあるものはNAMEで出して") -- covers every 評価値-sheet ID that's actually
+    a card face (A001A..C301B, M001..M403); plain resource ids (VP/K/A/B/C/Z/BZ/wD/D) and the handful of
+    already-Japanese synergy-bonus row names (モニュメント確保ボーナス etc.) have no matching row here and
+    fall back to their own id/label unchanged wherever this dict is used (see its own .get(id_, id_) calls)."""
+    with open(GAME_JSON_PATH, 'r', encoding='utf-8') as f:
+        game_data = json.load(f)
+    id_to_name = {}
+    for sheet in ('A', 'B', 'C', 'M'):
+        for row in game_data.get(sheet, []):
+            if row.get('ID') and row.get('NAME'):
+                id_to_name[row['ID']] = row['NAME']
+    return id_to_name
+
+
 def load_real_eval_table():
     """Replicates src/ai/eval-table.js's buildEvalTable() in Python (same {round: {id: value}} shape,
     blank/non-numeric cells resolve to 0) -- used for the H:K delta columns and M:P reference columns
@@ -58,7 +74,6 @@ if len(sys.argv) < 3:
     sys.exit(1)
 OUTPUT_DIR = sys.argv[1]
 SUMMARY_PATH = sys.argv[2]
-XLSX_PATH = os.path.join(OUTPUT_DIR, 'progress.xlsx')
 
 with open(SUMMARY_PATH, 'r', encoding='utf-8') as f:
     summary = json.load(f)
@@ -67,6 +82,25 @@ generation = summary['generation']
 anchor = summary.get('anchor')
 best = summary['best']
 sheet_name = str(generation)
+
+# File rollover (2026-09-12, per user request: "重いので2000まではこのファイルで...3000まで行ったら別の
+# エクセルに...その後も1000ごとに別のエクセルに出力する" -- progress.xlsx was growing unbounded, one sheet
+# per generation forever, and had already reached 15MB+ by generation ~2000). Generations 1-2853 keep the
+# original progress.xlsx filename unchanged (this file already holds that whole range, written before this
+# rollover existed); every 1000 generations after that gets its own fresh file instead of piling onto one
+# ever-growing workbook.
+#
+# 2026-09-13, per user request ("エクセルが重いので新しいエクセルでお願い" on resuming from generation
+# 2853): moved up from the originally-planned 3000 to 2853 (the exact generation the run was stopped/
+# resumed at) -- progress.xlsx had already gotten too heavy to wait the remaining ~150 generations for the
+# clean round-number boundary, so the very next generation after resuming starts the new file immediately.
+FIRST_ROLLOVER_GEN = 2853
+if generation <= FIRST_ROLLOVER_GEN:
+    XLSX_PATH = os.path.join(OUTPUT_DIR, 'progress.xlsx')
+else:
+    batch_start = FIRST_ROLLOVER_GEN + 1 + ((generation - FIRST_ROLLOVER_GEN - 1) // 1000) * 1000
+    batch_end = batch_start + 999
+    XLSX_PATH = os.path.join(OUTPUT_DIR, f'progress_{batch_start}-{batch_end}.xlsx')
 
 if os.path.exists(XLSX_PATH):
     wb = openpyxl.load_workbook(XLSX_PATH)
@@ -134,6 +168,7 @@ row += 3  # blank spacer row before the eval table
 
 genome = best['genome']
 real_table, ids_in_sheet_order = load_real_eval_table()
+id_to_name = load_id_to_name()
 # Real sheet's own order first (VP, K, A, B, C, ...); any genome id that isn't in the real sheet at all
 # (shouldn't normally happen -- ga_train.js builds genomes from that same id set -- but sorted
 # alphabetically as a fallback rather than silently dropped, just in case) appended after.
@@ -155,8 +190,9 @@ for i, r in enumerate((1, 2, 3, 4)):
     ws.cell(row=header_row, column=13 + i, value=f'{r}R(game)')
 row += 1
 for id_ in ids:
-    ws.cell(row=row, column=1, value=id_)
-    ws.cell(row=row, column=7, value=id_)
+    label = id_to_name.get(id_, id_)
+    ws.cell(row=row, column=1, value=label)
+    ws.cell(row=row, column=7, value=label)
     for i, r in enumerate((1, 2, 3, 4)):
         value = genome[str(r)][id_]
         ws.cell(row=row, column=2 + i, value=round(value, 2) if isinstance(value, float) else value)
@@ -166,8 +202,10 @@ for id_ in ids:
         ws.cell(row=row, column=13 + i, value=round(real_value, 2) if isinstance(real_value, float) else real_value)
     row += 1
 
-for col_letter in ('A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P'):
+for col_letter in ('B', 'C', 'D', 'E', 'F', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P'):
     ws.column_dimensions[col_letter].width = 14
+for col_letter in ('A', 'G'):  # wider than the rest -- now holds NAME text, not just a short ID code
+    ws.column_dimensions[col_letter].width = 24
 
 # Newest generation always first (leftmost tab) -- move this sheet to index 0.
 wb.move_sheet(sheet_name, offset=-wb.sheetnames.index(sheet_name))

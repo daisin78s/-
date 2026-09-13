@@ -151,14 +151,23 @@ function analyzeOneReplay(replayPath, playerId, index, level, evaluator, moveGen
 }
 
 function main() {
-  const [playerIdArg, aiLevelArg, topNArg, ...replayPaths] = process.argv.slice(2);
-  if (replayPaths.length === 0) {
-    console.error('Usage: node tools/analyze_human_replay.js <playerId=P1> <aiLevel=LV4> <topN=15> <replayJsonPath> [replayJsonPath...]');
+  const [playerIdArg, aiLevelArg, topNArg, ...replaySpecs] = process.argv.slice(2);
+  if (replaySpecs.length === 0) {
+    console.error('Usage: node tools/analyze_human_replay.js <defaultPlayerId=P1> <aiLevel=LV4> <topN=15> <replayJsonPath>[=playerId] [replayJsonPath[=playerId]...]');
     process.exit(1);
   }
-  const playerId = playerIdArg || 'P1';
+  const defaultPlayerId = playerIdArg || 'P1';
   const levelName = aiLevelArg || 'LV4';
   const topN = topNArg ? Number(topNArg) : 15;
+  // Per-replay =playerId suffix (2026-09-12 fix, same reasoning/convention as
+  // tools/train_from_human_replay.js's own fix: earlier replay batches all happened to have the human at
+  // P1, so this used to hardcode one playerId across every file -- wrong on a batch where the human's seat
+  // varies (P1/P2/P3/P4) across files, which would silently analyze AI-vs-AI decisions as if they were
+  // "the human's own" for any file where defaultPlayerId isn't actually where the human sat.
+  const replayPaths = replaySpecs.map((spec) => {
+    const eq = spec.lastIndexOf('=');
+    return eq === -1 ? { path: spec, playerId: defaultPlayerId } : { path: spec.slice(0, eq), playerId: spec.slice(eq + 1) };
+  });
 
   const raw = loadGameData(DATA_PATH);
   const index = buildDataIndex(raw);
@@ -172,15 +181,15 @@ function main() {
   let decisions = [];
   let totalReconstructed = 0;
   let totalSkipped = 0;
-  for (const replayPath of replayPaths) {
+  for (const { path: replayPath, playerId } of replayPaths) {
     const result = analyzeOneReplay(replayPath, playerId, index, level, evaluator, moveGenerator, aiPlayer);
-    console.log(`${path.basename(replayPath)}: ${result.reconstructed} reconstructed, ${result.skipped} skipped`);
+    console.log(`${path.basename(replayPath)} (${playerId}): ${result.reconstructed} reconstructed, ${result.skipped} skipped`);
     decisions = decisions.concat(result.decisions);
     totalReconstructed += result.reconstructed;
     totalSkipped += result.skipped;
   }
 
-  console.log(`\nReconstructed ${totalReconstructed} of ${totalReconstructed + totalSkipped} ${playerId} TURN decisions across ${replayPaths.length} game(s) (${totalSkipped} skipped -- no exact-match candidate found).`);
+  console.log(`\nReconstructed ${totalReconstructed} of ${totalReconstructed + totalSkipped} TURN decisions across ${replayPaths.length} game(s) (${totalSkipped} skipped -- no exact-match candidate found).`);
   const matchCount = decisions.filter((d) => d.humanRank === 1).length;
   console.log(`Human's move was the AI's own #1-ranked (1-ply) choice in ${matchCount}/${decisions.length} decisions (${((matchCount / decisions.length) * 100).toFixed(0)}%).`);
   const gaps = decisions.map((d) => d.gap || 0).sort((a, b) => a - b);

@@ -297,18 +297,25 @@ function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorO
   const state = setupGame(seed, playerNames, index, evaluator, resourceCardPicker);
   if (levelByPlayerId) {
     const { getLevel } = require('./levels');
+    // A levelByPlayerId entry is either a registered LEVELS name (string, original behavior) or an
+    // inline {evaluatorOptions, moveGeneratorOptions, aiOptions} object (2026-09-13, per user request to
+    // A/B-test one-off search-depth tweaks -- e.g. a wider round-3/4 roundOverrides -- without having to
+    // register a throwaway entry in the shared LEVELS list for every experiment). Map keys by the raw
+    // spec value either way, so two players sharing the exact same string OR the exact same object
+    // reference correctly share one instance; two DIFFERENT inline objects (even with identical content)
+    // each get their own instance, which is harmless (just a little redundant construction).
     const instancesByLevelName = new Map();
     for (const player of state.players) {
-      const levelName = levelByPlayerId[player.id];
-      if (!instancesByLevelName.has(levelName)) {
-        const level = getLevel(levelName);
-        instancesByLevelName.set(levelName, {
+      const levelSpec = levelByPlayerId[player.id];
+      if (!instancesByLevelName.has(levelSpec)) {
+        const level = typeof levelSpec === 'string' ? getLevel(levelSpec) : levelSpec;
+        instancesByLevelName.set(levelSpec, {
           evaluator: new Evaluator(index, evalTable, level.evaluatorOptions),
           moveGenerator: new MoveGenerator(level.moveGeneratorOptions),
           aiOptions: level.aiOptions,
         });
       }
-      const lv = instancesByLevelName.get(levelName);
+      const lv = instancesByLevelName.get(levelSpec);
       aiPlayersByPlayerId[player.id] = new AIPlayer(index, lv.moveGenerator, lv.evaluator, simulator, lv.aiOptions);
     }
   } else {
