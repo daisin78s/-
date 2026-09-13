@@ -24,19 +24,29 @@ const table = buildEvalTable(raw);
 // ---------------------------------------------------------------------------
 // buildEvalTable: one entry per ID per round, straight from the "評価値" sheet's 1R/2R/3R/4R columns.
 // ---------------------------------------------------------------------------
-check('D (colored die) 1R value', evalValue(table, 1, 'D'), 50);
-check('D 2R value', evalValue(table, 2, 'D'), 50);
-check('D 3R value', evalValue(table, 3, 'D'), 20);
-check('D 4R value', evalValue(table, 4, 'D'), 0);
-check('VP 1R value', evalValue(table, 1, 'VP'), 1);
-check('VP 4R value (endgame VP weighted highest)', evalValue(table, 4, 'VP'), 1000);
-check('K is round-independent (3 every round)', [1, 2, 3, 4].map((r) => evalValue(table, r, 'K')), [3, 3, 3, 3]);
+// 2026-09-14: values below are pulled straight from the current sheet (a tools/ga_train.js-evolved
+// genome as of this date, see CLAUDE.md/git log -- these are no longer the original hand-tuned round
+// numbers) -- re-check whenever the sheet changes, same as any other data-driven test in this project.
+check('D (colored die) 1R value', evalValue(table, 1, 'D'), 58.9686);
+check('D 2R value', evalValue(table, 2, 'D'), 68.9825);
+check('D 3R value', evalValue(table, 3, 'D'), 22.1421);
+check('D 4R value', evalValue(table, 4, 'D'), 31.1914);
+check('VP 1R value', evalValue(table, 1, 'VP'), 1.0344);
+check('VP 4R value (endgame VP weighted highest)', evalValue(table, 4, 'VP'), 1017.9637);
+// K is no longer round-independent post-evolution (was a flat hand-tuned 3 every round before) -- this
+// now just spot-checks the current 4 values come through unchanged from the sheet, not a "same every
+// round" invariant the code actually enforces anywhere.
+check('K value per round comes through unchanged from the sheet', [1, 2, 3, 4].map((r) => evalValue(table, r, 'K')), [3.8855, 4.2285, 3.0657, 2.2745]);
 
 // ---------------------------------------------------------------------------
 // evalValue: missing IDs/blank cells default to 0, never throw.
 // ---------------------------------------------------------------------------
 check('Unknown ID returns 0 rather than throwing', evalValue(table, 1, 'NO_SUCH_ID'), 0);
-check('A card with all-zero rows (e.g. a monument) returns 0', evalValue(table, 1, 'M001'), 0);
+// A synthetic table (not real data, 2026-09-14 -- a real card's row can no longer be assumed to stay all-
+// zero forever once GA evolution can nudge any currently-0 cell away from 0, see src/ai/ga.js's own
+// ZERO_ESCAPE_STEP_BY_ROUND doc) with one genuinely all-zero row, isolating this from whatever the real
+// sheet's own values happen to be right now.
+check('A card with all-zero rows (e.g. a monument) returns 0', evalValue({ 1: { ZEROID: 0 }, 2: { ZEROID: 0 }, 3: { ZEROID: 0 }, 4: { ZEROID: 0 } }, 1, 'ZEROID'), 0);
 
 // ---------------------------------------------------------------------------
 // evalValue: round is clamped to [1,4] -- callers may pass state.round directly, which for round 0

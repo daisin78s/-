@@ -90,7 +90,7 @@ function freshState(round) {
   const whiteDie = createDie('d2', 'WHITE');
   p1.dice.push(colorDie, whiteDie);
 
-  const expected = 2 * 3 + 1 * 5 + 1 * 1 + 1 * 50 + 1 * 10; // K + A + VP + unplaced D + unplaced wD
+  const expected = 2 * evalTable[1].K + 1 * evalTable[1].A + 1 * evalTable[1].VP + 1 * evalTable[1].D + 1 * evalTable[1].wD; // K + A + VP + unplaced D + unplaced wD
   check('Score sums resources + unplaced dice using round-1 eval-table weights', evaluator.score(state, 'P1'), expected);
 }
 
@@ -110,7 +110,7 @@ function freshState(round) {
   const passedDie = createDie('d2', 'COLOR');
   passedDie.passed = true;
   p1.dice.push(unplacedDie, passedDie);
-  const expected = 1 * 50 + 1 * (3 * 3); // still-placeable D + passed die's guaranteed-3K-equivalent value
+  const expected = 1 * evalTable[1].D + 1 * (3 * evalTable[1].K); // still-placeable D + passed die's guaranteed-3K-equivalent value
   check('A passed color die scores at its guaranteed round-end 3K value, not the full unplaced D weight', evaluator.score(state, 'P1'), expected);
 }
 {
@@ -119,7 +119,7 @@ function freshState(round) {
   const passedWhiteDie = createDie('d1', 'WHITE');
   passedWhiteDie.passed = true;
   p1.dice.push(passedWhiteDie);
-  check('A passed white die keeps the normal wD weight (no guaranteed round-end conversion exists for it)', evaluator.score(state, 'P1'), 10);
+  check('A passed white die keeps the normal wD weight (no guaranteed round-end conversion exists for it)', evaluator.score(state, 'P1'), evalTable[1].wD);
 }
 
 // ---------------------------------------------------------------------------
@@ -135,14 +135,12 @@ function freshState(round) {
 }
 
 // ---------------------------------------------------------------------------
-// Owned cards: A001A has eval-table value 30 (round 1) and printed VP 0 -- contributes exactly 30.
-// M001 has eval-table value 0 (all rounds) and printed VP 4 -- contributes 4 * VP-weight(round 2) = 40.
-// Checked at round 2 rather than round 1 (2026-09-02): round 1's own VP-weight was lowered from 10 to 1
-// (per user request, following empirical AI-battle data showing a round-1-monument-build strategy had a
-// notably low win rate) -- at weight 1, "4 * VP-weight" and "the raw VP count" are numerically identical
-// (both 4), so the round-1 case could no longer actually distinguish the two; round 2's own weight was
-// also later lowered, 12->10 (2026-09-02, same reason: round-2-monument-build also had a low win rate),
-// but 10 still keeps the round-1-vs-weighted distinction meaningful (4 vs 40).
+// Owned cards: A001A contributes exactly its own eval-table value (compared dynamically via evalTable[]
+// below, not a hardcoded literal, since tools/ga_train.js-evolved genomes -- see 2026-09-14's adoption --
+// legitimately change every one of these numbers; a hardcoded number here would need re-checking on every
+// such swap). M001 (printed VP 4) contributes its own eval-table value PLUS 4 * VP-weight(round 2), not
+// just the raw VP count -- checked at round 2 rather than round 1 (2026-09-02) since round 1's VP-weight
+// is small enough that "VP-weight" and "raw VP count" could become numerically indistinguishable there.
 // ---------------------------------------------------------------------------
 function giveCard(state, faceId, playerId) {
   const inst = createCardInstance(faceId);
@@ -154,12 +152,12 @@ function giveCard(state, faceId, playerId) {
 {
   const state = freshState(1);
   giveCard(state, 'A001A', 'P1');
-  check('Owned A001A (eval=30, VP=0) contributes exactly its eval-table value', evaluator.score(state, 'P1'), 30);
+  check('Owned A001A contributes exactly its eval-table value', evaluator.score(state, 'P1'), evalTable[1].A001A);
 }
 {
   const state = freshState(2);
   giveCard(state, 'M001', 'P1');
-  check('Owned M001 (eval=0, VP=4) contributes 4 * VP-weight, not the raw VP count', evaluator.score(state, 'P1'), 40);
+  check('Owned M001 (VP=4) contributes its own eval-table value PLUS 4 * VP-weight, not the raw VP count', evaluator.score(state, 'P1'), evalTable[2].M001 + 4 * evalTable[2].VP);
 }
 
 // ---------------------------------------------------------------------------
@@ -206,7 +204,7 @@ function stateWithM012InShop(round) {
   p2.resources.C = 13; // M012's full COST
   const withoutM012Risk = evaluator.score(freshState(1), 'P1'); // 0, no cards/resources/dice at all
   const withM012Risk = evaluator.score(state, 'P1');
-  check('An opponent who can already afford M012 right now subtracts its would-be value from the score', withM012Risk, withoutM012Risk - (0 /* M012's own eval-table value */ + 6 * 1 /* VP=6 * round-1 VP weight (lowered from 10 to 1, 2026-09-02) */));
+  check('An opponent who can already afford M012 right now subtracts its would-be value from the score', withM012Risk, withoutM012Risk - (evalTable[1].M012 + 6 * evalTable[1].VP));
 }
 {
   const state = stateWithM012InShop(1);
@@ -309,12 +307,14 @@ function stateWithP1QualifyingHand(round, includeMonument) {
     }
     return state;
   }
-  // Exclusive (P2 doesn't qualify): +50 bonus, no penalty. At risk (P2 also qualifies): no bonus, -600
-  // penalty (M012's eval-table value 0 + VP=6 * round-3 VP weight 100). Difference: 50 - (-600) = 650.
+  // Exclusive (P2 doesn't qualify): +50 bonus, no penalty. At risk (P2 also qualifies): no bonus, a
+  // -(M012's own eval-table value + VP=6 * round-3 VP weight) sniping-risk penalty instead -- both
+  // genome-dependent (see this file's own top-of-file note), so computed dynamically via evalTable[].
+  // Rounded to 6 decimals (same float-noise reasoning as the ラウンドタップ check further down).
   check(
-    'Losing exclusivity (an opponent starts also qualifying) swings the score by bonus-lost + penalty-gained (650)',
-    evaluator.score(stateWithP1Qualifying(false), 'P1'),
-    evaluator.score(stateWithP1Qualifying(true), 'P1') + 650,
+    'Losing exclusivity (an opponent starts also qualifying) swings the score by bonus-lost + penalty-gained',
+    Math.round(evaluator.score(stateWithP1Qualifying(false), 'P1') * 1e6) / 1e6,
+    Math.round((evaluator.score(stateWithP1Qualifying(true), 'P1') + 50 + (evalTable[3].M012 + 6 * evalTable[3].VP)) * 1e6) / 1e6,
   );
 }
 {
@@ -352,7 +352,7 @@ function stateWithP1QualifyingHand(round, includeMonument) {
   p1.resources.A = 3;
   p1.resources.B = 2;
   p1.resources.C = 2; // total 7 -- exactly at CON005B's limit, not over it
-  const expected = 3 * 5 + 2 * 5 + 2 * 5; // CON005B itself contributes 0 (eval=0, no printed VP)
+  const expected = 3 * evalTable[1].A + 2 * evalTable[1].B + 2 * evalTable[1].C; // CON005B itself contributes 0 (no row in 評価値, no printed VP)
   check('At exactly the RESOURCE_TOTAL_LIMIT (7), no lockout penalty applies', evaluator.score(state, 'P1'), expected);
 }
 {
@@ -362,14 +362,14 @@ function stateWithP1QualifyingHand(round, includeMonument) {
   p1.resources.A = 4;
   p1.resources.B = 2;
   p1.resources.C = 2; // total 8 -- 1 over CON005B's limit of 7
-  const expected = 4 * 5 + 2 * 5 + 2 * 5 - 1000; // same holdings, minus the flat lockout penalty
+  const expected = 4 * evalTable[1].A + 2 * evalTable[1].B + 2 * evalTable[1].C - 1000; // same holdings, minus the flat lockout penalty
   check('One unit over the RESOURCE_TOTAL_LIMIT, the 1000-point lockout penalty applies', evaluator.score(state, 'P1'), expected);
 }
 {
   const state = freshState(1);
   const p1 = state.players[0];
   p1.resources.A = 40; // huge pile, but no RESOURCE_TOTAL_LIMIT-granting card owned at all
-  check('Large resource totals alone (no RESOURCE_TOTAL_LIMIT card owned) never trigger the lockout penalty', evaluator.score(state, 'P1'), 40 * 5);
+  check('Large resource totals alone (no RESOURCE_TOTAL_LIMIT card owned) never trigger the lockout penalty', evaluator.score(state, 'P1'), 40 * evalTable[1].A);
 }
 {
   // Unpaid, currently-unaffordable USAGE_FEE also blocks canEndTurn (executor.canEndTurn checks both) --
@@ -382,7 +382,7 @@ function stateWithP1QualifyingHand(round, includeMonument) {
   p1.pendingFee = { mapId: 'MAP001', amount: 2 };
   p1.resources.K = 0; // can't cover the 2K fee
   p1.resources.A = 1; // present but insufficient -- doesn't trigger the VP-escape
-  check('An unpayable pending USAGE_FEE also triggers the lockout penalty', evaluator.score(state, 'P1'), -1000 + 1 * 5);
+  check('An unpayable pending USAGE_FEE also triggers the lockout penalty', evaluator.score(state, 'P1'), -1000 + 1 * evalTable[1].A);
 }
 
 // ---------------------------------------------------------------------------
@@ -396,13 +396,13 @@ function stateWithP1QualifyingHand(round, includeMonument) {
   giveCard(state, 'CON006A', 'P1'); // 暴食: TURNEND=RESOURCE_LIMIT(K,7), eval-table value 0, no printed VP -- moved from CON001A to CON006A (2026-08-17 CON sheet renumbering)
   const p1 = state.players[0];
   p1.resources.K = 8; // 1 over CON006A's limit of 7
-  check('K clamped to CON006A\'s RESOURCE_LIMIT(K,7) cap (8 -> 7) when scoring', evaluator.score(state, 'P1'), 7 * 3);
+  check('K clamped to CON006A\'s RESOURCE_LIMIT(K,7) cap (8 -> 7) when scoring', evaluator.score(state, 'P1'), 7 * evalTable[1].K);
 }
 {
   const state = freshState(1);
   const p1 = state.players[0];
   p1.resources.K = 8; // same 8K, but no RESOURCE_LIMIT-granting card owned at all
-  check('Without a RESOURCE_LIMIT card owned, the same 8K scores at its raw, uncapped value', evaluator.score(state, 'P1'), 8 * 3);
+  check('Without a RESOURCE_LIMIT card owned, the same 8K scores at its raw, uncapped value', evaluator.score(state, 'P1'), 8 * evalTable[1].K);
 }
 {
   // The illustrative comparison itself: +7K (1->8, clamped to 7) should still outscore +3K (1->4, no
@@ -436,8 +436,8 @@ index.raw.QST = [
   state.quests = { Q001A: true };
   giveCard(state, 'A001A', 'P1'); // eval=30, VP=0 -- CARD_COUNT=1, ahead of P2's 0
   const plainScore = evaluator.score(state, 'P1');
-  check('The plain (non-qstAware) Evaluator ignores QST entirely (control)', plainScore, 30);
-  check('qstAware credits the rank-1 REWARD1 (ADD(4VP)) on top of the normal score', evaluatorQstAware.score(state, 'P1'), 30 + 4 * 1 /* round-1 VP weight, lowered from 10 to 1, 2026-09-02 */);
+  check('The plain (non-qstAware) Evaluator ignores QST entirely (control)', plainScore, evalTable[1].A001A);
+  check('qstAware credits the rank-1 REWARD1 (ADD(4VP)) on top of the normal score', evaluatorQstAware.score(state, 'P1'), evalTable[1].A001A + 4 * evalTable[1].VP);
 }
 {
   // Rank 4+ (only reachable with 4 players at 4 distinct values) earns nothing -- REWARD_FIELDS only
@@ -482,21 +482,21 @@ index.raw.QST = [
   p1.conFace = 'B'; // CON005B/憤怒
   giveCard(state, 'B201A', 'P1');
   const plainScore = evaluator.score(state, 'P1');
-  check('The plain (non-conBuildAware) Evaluator ignores 評価値_CON entirely (control)', plainScore, 50);
-  check('conBuildAware applies 評価値_CON\'s -1000 for 憤怒 x 双星の加護LV1 on top of the normal eval-table value', evaluatorConBuildAware.score(state, 'P1'), 50 - 1000);
+  check('The plain (non-conBuildAware) Evaluator ignores 評価値_CON entirely (control)', plainScore, evalTable[2].B201A);
+  check('conBuildAware applies 評価値_CON\'s -1000 for 憤怒 x 双星の加護LV1 on top of the normal eval-table value', evaluatorConBuildAware.score(state, 'P1'), evalTable[2].B201A - 1000);
 }
 
 {
-  // Same pairing, but the LV2-upgraded face (B201B, eval=50 round2, VP=1) -- still matches 評価値_CON's
-  // LV1-named row via normalizeToLv1Name (per user confirmation: the penalty is just as real post-upgrade).
+  // Same pairing, but the LV2-upgraded face (B201B, printed VP=1) -- still matches 評価値_CON's LV1-named
+  // row via normalizeToLv1Name (per user confirmation: the penalty is just as real post-upgrade).
   const state = freshState(2);
   const p1 = state.players[0];
   p1.conPhysicalId = 'CON005';
   p1.conFace = 'B';
   giveCard(state, 'B201B', 'P1');
   const plainScore = evaluator.score(state, 'P1');
-  check('Control: plain Evaluator score for the LV2 face', plainScore, 50 + 1 * 10); // VP-weight(round2)=10, lowered from 12 on 2026-09-02
-  check('conBuildAware still applies the LV1 row\'s -1000 to the LV2-upgraded card', evaluatorConBuildAware.score(state, 'P1'), (50 + 1 * 10) - 1000);
+  check('Control: plain Evaluator score for the LV2 face', plainScore, evalTable[2].B201B + 1 * evalTable[2].VP);
+  check('conBuildAware still applies the LV1 row\'s -1000 to the LV2-upgraded card', evaluatorConBuildAware.score(state, 'P1'), (evalTable[2].B201B + 1 * evalTable[2].VP) - 1000);
 }
 
 {
@@ -784,7 +784,7 @@ index.raw.QST = [
   const atEndScore = evaluator.score(state, 'P1');
 
   const bonusVp = 9; // well under the 10VP cap
-  check('Reaching the real GAME_END adds exactly 9K -> 9VP, weighted by round 4\'s own v(VP)=1000', atEndScore - midGameScore, bonusVp * 1000);
+  check('Reaching the real GAME_END adds exactly 9K -> 9VP, weighted by round 4\'s own VP weight', atEndScore - midGameScore, bonusVp * evalTable[4].VP);
 }
 
 // ---------------------------------------------------------------------------
@@ -815,10 +815,15 @@ index.raw.QST = [
   const round = 3;
   const base = () => { const state = freshState(round); giveCard(state, 'C202A', 'P1'); return state; }; // 聖女LV1 alone
   const withUntapped = () => { const state = base(); giveCard(state, 'C001A', 'P1'); return state; }; // tapped:false (default)
+  // Rounded to 6 decimals on both sides (2026-09-14, since adopting an evolved genome): subtracting two
+  // evaluator.score() floats that are each themselves sums of many non-integer weights can differ from
+  // the "clean" evalTable[round].C001A lookup by float noise in the last couple of decimal places even
+  // when mathematically identical -- exact JSON.stringify equality is too strict for that, unlike every
+  // other check() call in this file which compares genuinely different quantities, not float noise.
   check(
     '聖女 + an UNTAPPED ラウンドタップ card credits only its own base value, no synergy bonus',
-    evaluator.score(withUntapped(), 'P1') - evaluator.score(base(), 'P1'),
-    evalTable[round].C001A,
+    Math.round((evaluator.score(withUntapped(), 'P1') - evaluator.score(base(), 'P1')) * 1e6) / 1e6,
+    Math.round(evalTable[round].C001A * 1e6) / 1e6,
   );
 }
 {
