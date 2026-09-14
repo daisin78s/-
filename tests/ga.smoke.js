@@ -67,21 +67,51 @@ function assertTrue(label, condition) {
 }
 {
   // A currently-zero cell can't be moved by any percentage of itself (0 * anything = 0) -- must instead
-  // use the round-specific flat escape step, never staying stuck at exactly 0 forever.
+  // use the flat +/-5 small-value escape step, never staying stuck at exactly 0 forever. Flat across all
+  // 4 rounds now (2026-09-14, replacing the old round-scaled 5/10/20/50 -- see SMALL_VALUE_ESCAPE_STEP's
+  // own doc for why the user chose a single flat step over scaling to each round's typical magnitude).
   const genome = { 1: { X: 0 }, 2: { X: 0 }, 3: { X: 0 }, 4: { X: 0 } };
   const rngState = rng.createRng('seed5');
   const seenNonzero = { 1: false, 2: false, 3: false, 4: false };
   const seenWithinStep = { 1: true, 2: true, 3: true, 4: true };
-  const steps = { 1: 5, 2: 10, 3: 20, 4: 50 };
   for (let i = 0; i < 20; i++) {
     const mutated = mutateGenomePercent(genome, rngState, 1, 0.2);
     for (const round of [1, 2, 3, 4]) {
       if (mutated[round].X !== 0) seenNonzero[round] = true;
-      if (Math.abs(mutated[round].X) > steps[round] + 0.0001) seenWithinStep[round] = false;
+      if (Math.abs(mutated[round].X) > 5.0001) seenWithinStep[round] = false;
     }
   }
   check('A zero-valued cell can escape zero in every round', seenNonzero, { 1: true, 2: true, 3: true, 4: true });
-  check('...and stays within that round\'s own escape step (5/10/20/50)', seenWithinStep, { 1: true, 2: true, 3: true, 4: true });
+  check('...and stays within the flat +/-5 escape step in every round', seenWithinStep, { 1: true, 2: true, 3: true, 4: true });
+}
+{
+  // The actual motivating case (2026-09-14, per user report: a percentage step can never change a value's
+  // SIGN, so a small negative value stays negative forever under pure +/-20% mutation -- confirmed via
+  // node -e empirically before this fix). A small nonzero value (|value| < SMALL_VALUE_THRESHOLD=10) now
+  // gets the SAME flat +/-5 escape step as exactly-0, which CAN cross zero.
+  const genome = { 1: { X: -1 }, 2: { X: -1 }, 3: { X: -1 }, 4: { X: -1 } };
+  const rngState = rng.createRng('seed5b');
+  let everWentPositive = false;
+  let allWithinStep = true;
+  for (let i = 0; i < 40; i++) {
+    const mutated = mutateGenomePercent(genome, rngState, 1, 0.2);
+    for (const round of [1, 2, 3, 4]) {
+      if (mutated[round].X > 0) everWentPositive = true;
+      if (Math.abs(mutated[round].X) > 5.0001) allWithinStep = false;
+    }
+  }
+  assertTrue('A small negative value (-1) CAN flip to positive under the small-value escape step', everWentPositive);
+  assertTrue('...and stays within the flat +/-5 step regardless of its starting sign', allWithinStep);
+}
+{
+  // A value right at the boundary keeps using the percentage branch (>=10 is NOT "small"), while just
+  // under it switches to the flat step -- confirms the threshold is |value| < 10, not <=.
+  const genomeAtBoundary = { 1: { X: 10 }, 2: { X: 10 }, 3: { X: 10 }, 4: { X: 10 } };
+  const mutatedAtBoundary = mutateGenomePercent(genomeAtBoundary, rng.createRng('seed5c'), 1, 0.2);
+  assertTrue('Exactly 10 (not "small") uses the percentage branch, never exceeding +/-20%=2', [1, 2, 3, 4].every((r) => Math.abs(mutatedAtBoundary[r].X - 10) <= 2.0001));
+  const genomeJustUnder = { 1: { X: 9.9999 }, 2: { X: 9.9999 }, 3: { X: 9.9999 }, 4: { X: 9.9999 } };
+  const mutatedJustUnder = mutateGenomePercent(genomeJustUnder, rng.createRng('seed5d'), 1, 0.2);
+  assertTrue('Just under 10 uses the flat +/-5 step instead, which a 20% move never would', [1, 2, 3, 4].every((r) => Math.abs(mutatedJustUnder[r].X) <= 5.0001));
 }
 {
   // Never mutates the input genome in place (same convention as mutateGenome).
@@ -123,18 +153,17 @@ function assertTrue(label, condition) {
 }
 {
   // A currently-zero cell is unaffected by bigMutationChance/bigMutationPercent -- still governed
-  // entirely by ZERO_ESCAPE_STEP_BY_ROUND, same as the plain mutateGenomePercent case above.
+  // entirely by the flat +/-5 SMALL_VALUE_ESCAPE_STEP, same as the plain mutateGenomePercent case above.
   const genome = { 1: { X: 0 }, 2: { X: 0 }, 3: { X: 0 }, 4: { X: 0 } };
   const rngState = rng.createRng('seed9');
-  const steps = { 1: 5, 2: 10, 3: 20, 4: 50 };
   let seenWithinStep = true;
   for (let i = 0; i < 20; i++) {
     const mutated = mutateGenomePercent(genome, rngState, 1, 0.2, 1, 0.3);
     for (const round of [1, 2, 3, 4]) {
-      if (Math.abs(mutated[round].X) > steps[round] + 0.0001) seenWithinStep = false;
+      if (Math.abs(mutated[round].X) > 5.0001) seenWithinStep = false;
     }
   }
-  assertTrue('A zero-valued cell still uses the flat escape step, unaffected by bigMutationChance/Percent', seenWithinStep);
+  assertTrue('A zero-valued cell still uses the flat +/-5 escape step, unaffected by bigMutationChance/Percent', seenWithinStep);
 }
 
 // ---------------------------------------------------------------------------

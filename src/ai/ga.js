@@ -57,26 +57,32 @@ function mutateGenome(genome, rngState, mutationRate, mutationAmount) {
   return mutated;
 }
 
-/** Round-scaled flat step used by mutateGenomePercent below ONLY for a currently-zero cell (see its own
- * doc for why a pure percentage step can never move a 0 at all). Picked as roughly 5-6% of each round's
- * own observed real-data max (round1 up to ~80, round2 ~200, round3 ~400, round4 ~1000, confirmed via
- * buildEvalTable(loadGameData('data/game.json')) on 2026-09-04) -- keeps a "discovered from zero" value
- * in the same rough ballpark as that round's other real values, rather than using one flat constant
- * across all 4 rounds despite their wildly different scales. */
-const ZERO_ESCAPE_STEP_BY_ROUND = { 1: 5, 2: 10, 3: 20, 4: 50 };
+/** Flat step used by mutateGenomePercent below for any cell whose CURRENT value has absolute value below
+ * SMALL_VALUE_THRESHOLD (2026-09-14, per user request, replacing the earlier round-scaled
+ * ZERO_ESCAPE_STEP_BY_ROUND that only kicked in for a value of EXACTLY 0 -- see this file's own git
+ * history for that superseded version). Motivating problem, raised by the user directly: a percentage
+ * step can never change a value's SIGN (value * positive factor keeps the same sign no matter what), so
+ * once a cell drifts to some small negative number, say -1, a pure +/-20% mutation only ever explores
+ * -0.8 to -1.2 forever -- it can never discover that the id might actually deserve a positive weight. The
+ * old exactly-0 special case only fixed this for the single point value===0 (never actually reached again
+ * once a value has moved even slightly away from it under floating-point mutation), not for every small
+ * value drifting near it. Threshold and step both flat across all 4 rounds (2026-09-14, user's own choice
+ * of a simpler flat rule over scaling the step to each round's typical magnitude, unlike this constant's
+ * own predecessor) -- confirmed via 2 short questions in chat rather than assumed. */
+const SMALL_VALUE_THRESHOLD = 10;
+const SMALL_VALUE_ESCAPE_STEP = 5;
 
 /** A mutated copy of genome (never mutates the input), scaling each nudge to the cell's OWN current
  * value instead of mutateGenome's flat +/-mutationAmount (2026-09-04, per user request: "変異差は大きく
  * して" while starting from the real, already-tuned 評価値 table rather than randomGenome's uniform
- * [-10,10] spread -- with real values ranging from 0 up to 1000 depending on round (see
- * ZERO_ESCAPE_STEP_BY_ROUND's own doc), a single flat delta is either negligible for a round-4 VP-scale
- * cell or wildly disruptive for a round-1 K-scale one; scaling by the cell's own value keeps the nudge
- * proportionate everywhere). Each (round, id) value independently has `mutationRate` probability of being
- * nudged: a nonzero value gets multiplied by `1 + uniform(-mutationPercent, +mutationPercent)`; a value
- * that's currently exactly 0 (blank in the sheet) would otherwise be unable to ever move at all under a
- * pure percentage rule (0 times anything is still 0), so it instead gets ZERO_ESCAPE_STEP_BY_ROUND's own
- * flat step for that round -- letting evolution discover that a currently-unused id deserves a nonzero
- * weight, not just rescale ones that already have one.
+ * [-10,10] spread -- with real values ranging from 0 up to 1000 depending on round, a single flat delta
+ * is either negligible for a round-4 VP-scale cell or wildly disruptive for a round-1 K-scale one; scaling
+ * by the cell's own value keeps the nudge proportionate everywhere). Each (round, id) value independently
+ * has `mutationRate` probability of being nudged: a value with |value| >= SMALL_VALUE_THRESHOLD gets
+ * multiplied by `1 + uniform(-mutationPercent, +mutationPercent)`; a small one (|value| < threshold,
+ * including exactly 0) would otherwise be unable to move meaningfully -- or, for a nonzero small value,
+ * ever change SIGN at all -- under a pure percentage rule, so it instead gets SMALL_VALUE_ESCAPE_STEP's
+ * own flat +/-5 step (see that const's own doc), which CAN cross zero and land on either sign.
  *
  * bigMutationChance/bigMutationPercent (2026-09-06, per user request, after a 361-generation run plateaued
  * for its last 168 generations with zero improvement: "今+-10%の変動になっていますが 変動した時10%の確率
@@ -84,11 +90,11 @@ const ZERO_ESCAPE_STEP_BY_ROUND = { 1: 5, 2: 10, 3: 20, 4: 50 };
  * prior behavior): among the cells that DO mutate this call, a bigMutationChance fraction use
  * bigMutationPercent's wider spread instead of the normal mutationPercent -- an occasional larger "jump"
  * alongside the usual small "creep" steps, meant to let a converged/plateaued population occasionally
- * escape a local optimum that small steps alone can't climb out of. Only affects the nonzero-value branch
- * (ZERO_ESCAPE_STEP_BY_ROUND's own flat step is unrelated to this percentage scheme either way).
+ * escape a local optimum that small steps alone can't climb out of. Only affects the |value|>=threshold
+ * branch (SMALL_VALUE_ESCAPE_STEP is unrelated to this percentage scheme either way).
  * isStructurallyBlankRound-pinned cells (2026-09-14, see randomGenome's own doc) are forced to exactly 0
- * and skip every branch above -- including the zero-escape one, which exists precisely to let a
- * genuinely-unused-so-far id discover a real nonzero value, the opposite of what these cells need. */
+ * and skip every branch above -- including the small-value escape one, which exists precisely to let a
+ * genuinely-undiscovered id find a real nonzero weight, the opposite of what these cells need. */
 function mutateGenomePercent(genome, rngState, mutationRate, mutationPercent, bigMutationChance = 0, bigMutationPercent = 0) {
   const mutated = { 1: {}, 2: {}, 3: {}, 4: {} };
   for (const round of [1, 2, 3, 4]) {
@@ -101,9 +107,8 @@ function mutateGenomePercent(genome, rngState, mutationRate, mutationPercent, bi
         mutated[round][id] = value;
         continue;
       }
-      if (value === 0) {
-        const step = ZERO_ESCAPE_STEP_BY_ROUND[round];
-        mutated[round][id] = (rng.next(rngState) * 2 - 1) * step;
+      if (Math.abs(value) < SMALL_VALUE_THRESHOLD) {
+        mutated[round][id] = (rng.next(rngState) * 2 - 1) * SMALL_VALUE_ESCAPE_STEP;
       } else {
         const percent = rng.next(rngState) < bigMutationChance ? bigMutationPercent : mutationPercent;
         mutated[round][id] = value * (1 + (rng.next(rngState) * 2 - 1) * percent);
