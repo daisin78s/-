@@ -3418,6 +3418,29 @@ h1, h2, h3 { margin: 0; }
   to { transform: rotate(360deg); }
 }
 
+/* 3Rから生成中オーバーレイ (2026-09-14) -- #round3-generating-overlay itself reuses .card-inst-overlay's
+   full-screen dimmed backdrop; this is just the centered box + spinner inside it. Bigger spinner than
+   .ranking-register-spinner's own 12px (that one sits inline in a small button label; this is the whole
+   screen's only visible content while the 1R/2R simulation runs). */
+.round3-generating-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 28px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+  box-shadow: 0 4px 24px rgba(16, 24, 40, 0.3);
+}
+
+.round3-generating-box .ranking-register-spinner {
+  width: 20px;
+  height: 20px;
+  border-width: 3px;
+}
+
 /* First real <input> in the app (2026-08-16) -- everywhere else is click-only, see index.html's own
    comment on #ranking-overlay. Styled to match the surrounding modal's tokens rather than the
    browser default. */

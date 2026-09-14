@@ -1510,65 +1510,87 @@ function handleReplayUploadChange(event) {
  * にして ただし1R2Rには戻れない"): forces debugMode on and resets+reseeds turnHistory with ONLY this
  * round-3 handoff state as entry 0 -- see the code below its own doc for why that alone is enough to make
  * "can't rewind into round 1/2" hold automatically (nothing before this point was ever recorded). */
+/** Shows/hides #round3-generating-overlay (2026-09-14, per user request: "3Rからボタンをしたときに待つの
+ * が長いので生成中をいうアニメーションが欲しい"). handleStartFromRound3Click's own 1R/2R AI-vs-AI
+ * simulation loop runs synchronously on the main thread -- several seconds of a completely frozen tab,
+ * with nothing to show it's actually working. A `setTimeout(..., 0)` between showing this overlay and
+ * starting that loop is required, not optional: the browser only repaints between synchronous tasks, so
+ * without it the overlay's own `hidden = false` would sit queued in the same paint cycle as the blocking
+ * work that follows and never actually appear on screen until after that work (and the overlay's own
+ * hide-again call) had both already happened. */
+function showRound3GeneratingOverlay() {
+  document.getElementById('round3-generating-overlay').hidden = false;
+  document.getElementById('start-from-round3-button').disabled = true;
+}
+function hideRound3GeneratingOverlay() {
+  document.getElementById('round3-generating-overlay').hidden = true;
+  document.getElementById('start-from-round3-button').disabled = false;
+}
+
 function handleStartFromRound3Click() {
-  const seed = `start-from-round3-${Date.now()}`;
-  const state = gameRunnerMod.setupGame(seed, ['Alice', 'Bob', 'Carol', 'Dan'], INDEX, aiEvaluatorLv4);
+  showRound3GeneratingOverlay();
+  setTimeout(() => {
+    const seed = `start-from-round3-${Date.now()}`;
+    const state = gameRunnerMod.setupGame(seed, ['Alice', 'Bob', 'Carol', 'Dan'], INDEX, aiEvaluatorLv4);
 
-  let openTurnPlayerId = null;
-  let openTurnHasPlacedDie = false;
-  const MAX_ITERATIONS = 1000; // safety valve, mirrors game-runner.js's own playGame
-  let iterations = 0;
-  while (state.round < 3 && state.phase !== 'GAME_END' && iterations < MAX_ITERATIONS) {
-    iterations++;
-    const next = turnFlowMod.getNextTurn(state);
-    if (next.type === 'ROUND_OVER') {
-      // Defensive fallback only -- round transitions actually happen inside driveTurn itself, see
-      // game-runner.js's own playGame doc on why this essentially never fires in practice.
-      turnFlowMod.endRound(state, INDEX);
-      if (state.phase !== 'GAME_END') turnFlowMod.startRound(state);
-      openTurnPlayerId = null;
-      continue;
+    let openTurnPlayerId = null;
+    let openTurnHasPlacedDie = false;
+    const MAX_ITERATIONS = 1000; // safety valve, mirrors game-runner.js's own playGame
+    let iterations = 0;
+    while (state.round < 3 && state.phase !== 'GAME_END' && iterations < MAX_ITERATIONS) {
+      iterations++;
+      const next = turnFlowMod.getNextTurn(state);
+      if (next.type === 'ROUND_OVER') {
+        // Defensive fallback only -- round transitions actually happen inside driveTurn itself, see
+        // game-runner.js's own playGame doc on why this essentially never fires in practice.
+        turnFlowMod.endRound(state, INDEX);
+        if (state.phase !== 'GAME_END') turnFlowMod.startRound(state);
+        openTurnPlayerId = null;
+        continue;
+      }
+      if (next.type === 'ONBOARDING_NEEDED') {
+        gameRunnerMod.driveSmartOnboarding(state, INDEX, next.playerId, aiConJobSynergyTable, aiMoveGeneratorLv4, aiSimulator);
+        continue;
+      }
+      const roundBeforeTurn = state.round;
+      const initialHasPlacedDie = next.playerId === openTurnPlayerId ? openTurnHasPlacedDie : false;
+      const moves = gameRunnerMod.driveTurn(state, INDEX, next.playerId, aiPlayerLv4, initialHasPlacedDie);
+      const endedTurn = moves.some((m) => m.move.type === 'END_TURN' && m.result.success);
+      if (endedTurn || state.round > roundBeforeTurn) {
+        openTurnPlayerId = null;
+      } else {
+        openTurnPlayerId = next.playerId;
+        openTurnHasPlacedDie = initialHasPlacedDie || moves.some((m) => ['PLACE_DIE', 'PLACE_WILDCARD_DIE', 'PLACE_DICE_GROUP', 'PASS_DIE'].includes(m.move.type) && m.result.success);
+      }
     }
-    if (next.type === 'ONBOARDING_NEEDED') {
-      gameRunnerMod.driveSmartOnboarding(state, INDEX, next.playerId, aiConJobSynergyTable, aiMoveGeneratorLv4, aiSimulator);
-      continue;
+    if (state.round < 3) {
+      hideRound3GeneratingOverlay();
+      window.alert('3R開始盤面の生成に失敗しました（安全上限に到達）。もう一度お試しください。');
+      return;
     }
-    const roundBeforeTurn = state.round;
-    const initialHasPlacedDie = next.playerId === openTurnPlayerId ? openTurnHasPlacedDie : false;
-    const moves = gameRunnerMod.driveTurn(state, INDEX, next.playerId, aiPlayerLv4, initialHasPlacedDie);
-    const endedTurn = moves.some((m) => m.move.type === 'END_TURN' && m.result.success);
-    if (endedTurn || state.round > roundBeforeTurn) {
-      openTurnPlayerId = null;
-    } else {
-      openTurnPlayerId = next.playerId;
-      openTurnHasPlacedDie = initialHasPlacedDie || moves.some((m) => ['PLACE_DIE', 'PLACE_WILDCARD_DIE', 'PLACE_DICE_GROUP', 'PASS_DIE'].includes(m.move.type) && m.result.success);
-    }
-  }
-  if (state.round < 3) {
-    window.alert('3R開始盤面の生成に失敗しました（安全上限に到達）。もう一度お試しください。');
-    return;
-  }
 
-  Object.keys(STATE).forEach((k) => delete STATE[k]);
-  Object.assign(STATE, state);
-  playerRoles.set('P1', 'HUMAN');
-  playerRoles.set('P2', DEFAULT_AI_ROLE);
-  playerRoles.set('P3', DEFAULT_AI_ROLE);
-  playerRoles.set('P4', DEFAULT_AI_ROLE);
-  usedDebugOrTestGameThisGame = true;
+    Object.keys(STATE).forEach((k) => delete STATE[k]);
+    Object.assign(STATE, state);
+    playerRoles.set('P1', 'HUMAN');
+    playerRoles.set('P2', DEFAULT_AI_ROLE);
+    playerRoles.set('P3', DEFAULT_AI_ROLE);
+    playerRoles.set('P4', DEFAULT_AI_ROLE);
+    usedDebugOrTestGameThisGame = true;
 
-  // Turn/round rewind from round 3 onward, but NEVER back into round 1/2 (2026-09-13, per user request:
-  // "3Rからターンをまたいで戻れるようにして ただし1R2Rには戻れない") -- rounds 1-2 were bulk-resolved
-  // offline above with no incremental per-turn snapshots at all, so the natural way to guarantee this is
-  // to make sure turnHistory contains NOTHING before this round-3 handoff point: reset it first (in case
-  // stale entries exist from browsing an earlier game this same page load, e.g. debugMode was already on)
-  // before seeding it fresh from the just-swapped-in STATE -- seedDebugHistoryIfNeeded's own
-  // `turnHistory.length > 0` guard would otherwise silently refuse to reseed over old entries.
-  turnHistory = [];
-  historyCursor = -1;
-  debugMode = true;
-  seedDebugHistoryIfNeeded();
-  render(STATE);
+    // Turn/round rewind from round 3 onward, but NEVER back into round 1/2 (2026-09-13, per user request:
+    // "3Rからターンをまたいで戻れるようにして ただし1R2Rには戻れない") -- rounds 1-2 were bulk-resolved
+    // offline above with no incremental per-turn snapshots at all, so the natural way to guarantee this is
+    // to make sure turnHistory contains NOTHING before this round-3 handoff point: reset it first (in case
+    // stale entries exist from browsing an earlier game this same page load, e.g. debugMode was already on)
+    // before seeding it fresh from the just-swapped-in STATE -- seedDebugHistoryIfNeeded's own
+    // `turnHistory.length > 0` guard would otherwise silently refuse to reseed over old entries.
+    turnHistory = [];
+    historyCursor = -1;
+    debugMode = true;
+    seedDebugHistoryIfNeeded();
+    hideRound3GeneratingOverlay();
+    render(STATE);
+  }, 0);
 }
 
 /** effectiveTurnPlayerId (2026-09-10, per user bug report: viewing a saved replay at move 50, the turn
