@@ -509,5 +509,102 @@ check('startRound(2) itself does not touch dice (already rerolled at the previou
   check('No 吟遊詩人 -> no VP/C bonus despite 3 emblems', [p1.resources.VP || 0, p1.resources.C || 0], [0, 0]);
 }
 
+// ---------------------------------------------------------------------------
+// M401/晩餐会 auto-convert-to-K=10 at real GAME_END (2026-09-14, per user request: "晩餐会を持っていると
+// きにゲームエンドしたとき A→KやZ→Kなどをk=10まで自動でやるようにしてほしい") -- endRound's own
+// round>=4 GAME_END branch now tops up K to 10 (never past it) for every player owning M401, converting
+// A/B/C/Z via board.planFeeConversion's own "most-plentiful-of-ABC first, then Z" ordering.
+// ---------------------------------------------------------------------------
+function giveM401(s, playerId) {
+  const { createCardInstance } = require('../src/game-state');
+  const inst = createCardInstance('M401');
+  inst.ownerId = playerId;
+  s.cards[inst.physicalId] = inst;
+  s.players.find((p) => p.id === playerId).ownedCardPhysicalIds.push(inst.physicalId);
+}
+{
+  const { createEmptyGameState: freshEmptyState } = require('../src/game-state');
+  const s = freshEmptyState('m401-autoconvert-smoke');
+  setup.createPlayers(s, ['Alice']);
+  setup.prepareMaps(s, index);
+  setup.prepareShops(s, index);
+  s.turnOrder = ['P1'];
+  s.round = 4;
+  giveM401(s, 'P1');
+  const p1 = s.players[0];
+  p1.resources.K = 3;
+  p1.resources.A = 2;
+  p1.resources.B = 1;
+  p1.resources.C = 10; // most plentiful of A/B/C -- planFeeConversion prefers this first
+  p1.resources.Z = 5;
+  turnFlow.endRound(s, index);
+  check('M401 owner auto-converts up to K=10, preferring the most-plentiful ABC first (C)', [p1.resources.K, p1.resources.C], [10, 3]);
+  check('...leaving A/B/Z untouched once C alone covered the shortfall', [p1.resources.A, p1.resources.B, p1.resources.Z], [2, 1, 5]);
+}
+{
+  // Not enough A/B/C/Z combined to fully reach 10 -- converts everything available, still falls short.
+  const { createEmptyGameState: freshEmptyState } = require('../src/game-state');
+  const s = freshEmptyState('m401-autoconvert-shortfall-smoke');
+  setup.createPlayers(s, ['Alice']);
+  setup.prepareMaps(s, index);
+  setup.prepareShops(s, index);
+  s.turnOrder = ['P1'];
+  s.round = 4;
+  giveM401(s, 'P1');
+  const p1 = s.players[0];
+  p1.resources.K = 2;
+  p1.resources.A = 1;
+  p1.resources.Z = 3;
+  turnFlow.endRound(s, index);
+  check('Converts every available A/B/C/Z even when still short of 10', [p1.resources.K, p1.resources.A, p1.resources.Z], [6, 0, 0]);
+}
+{
+  // Already at/above 10 -- no conversion happens at all (nothing to gain, nothing touched).
+  const { createEmptyGameState: freshEmptyState } = require('../src/game-state');
+  const s = freshEmptyState('m401-autoconvert-already-enough-smoke');
+  setup.createPlayers(s, ['Alice']);
+  setup.prepareMaps(s, index);
+  setup.prepareShops(s, index);
+  s.turnOrder = ['P1'];
+  s.round = 4;
+  giveM401(s, 'P1');
+  const p1 = s.players[0];
+  p1.resources.K = 12;
+  p1.resources.A = 5;
+  turnFlow.endRound(s, index);
+  check('K already at/above 10 -- no conversion, A left untouched', [p1.resources.K, p1.resources.A], [12, 5]);
+}
+{
+  // A player who does NOT own M401 never gets auto-converted, even at round 4 GAME_END.
+  const { createEmptyGameState: freshEmptyState } = require('../src/game-state');
+  const s = freshEmptyState('m401-autoconvert-not-owned-smoke');
+  setup.createPlayers(s, ['Alice']);
+  setup.prepareMaps(s, index);
+  setup.prepareShops(s, index);
+  s.turnOrder = ['P1'];
+  s.round = 4;
+  const p1 = s.players[0];
+  p1.resources.K = 2;
+  p1.resources.A = 5;
+  turnFlow.endRound(s, index);
+  check('No M401 -> no auto-conversion at all', [p1.resources.K, p1.resources.A], [2, 5]);
+}
+{
+  // Before round 4 (no real GAME_END yet), owning M401 triggers no conversion either.
+  const { createEmptyGameState: freshEmptyState } = require('../src/game-state');
+  const s = freshEmptyState('m401-autoconvert-not-round4-smoke');
+  setup.createPlayers(s, ['Alice']);
+  setup.prepareMaps(s, index);
+  setup.prepareShops(s, index);
+  s.turnOrder = ['P1'];
+  s.round = 2;
+  giveM401(s, 'P1');
+  const p1 = s.players[0];
+  p1.resources.K = 2;
+  p1.resources.A = 5;
+  turnFlow.endRound(s, index);
+  check('Round < 4 (no real game end yet) -- no auto-conversion', [p1.resources.K, p1.resources.A], [2, 5]);
+}
+
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);

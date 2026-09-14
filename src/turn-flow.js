@@ -33,7 +33,7 @@
 
 const { rollDie } = require('./rng');
 const { getAreaRow, getCardRow } = require('./data-loader');
-const { getSlotRequirements, restockShop, CASTLE_MAP_ID, revealExtraMonumentsIfAnyShopEmptied } = require('./board');
+const { getSlotRequirements, restockShop, CASTLE_MAP_ID, revealExtraMonumentsIfAnyShopEmptied, planFeeConversion } = require('./board');
 const { recordCheckpoint } = require('./undo');
 const setup = require('./setup');
 // Named executorApi, not executor, just to disambiguate from board.js's own `const executor` at a
@@ -279,6 +279,27 @@ function endRound(state, index) {
   if (state.round < 4) rerollDiceForNextRound(state);
   if (state.round >= 4) {
     state.phase = 'GAME_END';
+    // M401/晩餐会's own "ゲーム終了時持っている1Kにつき1VP(MAX10VP)" (2026-09-14, per user request:
+    // "晩餐会を持っているときにゲームエンドしたとき A→KやZ→Kなどをk=10まで自動でやるようにしてほしい"):
+    // auto-converts A/B/C/Z into K, up to K=10, for every player who owns M401 -- reusing
+    // board.planFeeConversion's own "most-plentiful-of-ABC first, then Z" ordering (the same plan used to
+    // cover a pendingFee shortfall) for a shortfall against 10 instead. There is never a reason to hold
+    // A/B/C/Z back at this exact point (the game is over, nothing else can spend them), so this is a pure
+    // convenience/correctness fix, not a strategic choice left to the player -- and it applies uniformly to
+    // every player (AI included), closing the same gap for AI opponents whose own move-generator might
+    // never have been offered these free-action conversions at exactly the right moment (see
+    // move-generator.js's own doc on why free actions are normally withheld unless canEndTurn needs them).
+    // Never exceeds K=10 (extra K past that has no further value from this card) and never touches K
+    // already at/above 10.
+    for (const player of state.players) {
+      if (!player.ownedCardPhysicalIds.includes('M401')) continue;
+      const shortfall = Math.max(0, 10 - (player.resources.K || 0));
+      if (shortfall <= 0) continue;
+      for (const { resource, count } of planFeeConversion(player.resources, shortfall)) {
+        player.resources[resource] -= count;
+        player.resources.K = (player.resources.K || 0) + count;
+      }
+    }
     // QST's rank-based rewards (2026-08-09, see qst.js's own doc) settle exactly here, exactly once --
     // nothing after this point can trigger another round-4 endRound (the game loop stops advancing
     // turns once phase is GAME_END, both in main.js's UI and src/ai/game-runner.js), so this needs no
