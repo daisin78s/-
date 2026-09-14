@@ -163,13 +163,15 @@ function giveCard(state, faceId, playerId) {
 // ---------------------------------------------------------------------------
 // 訓練場の支配 (A202A/A202B) timing tax (2026-09-14, per user report: watching a replay, the AI grabbed
 // this in round 2 with its very last die, unable to use the newly-unlocked AREA007 slot at all that round
-// -- see evaluator.js's own doc on why a flat -100 was added on top of the existing +1000/-1000
-// color-dice-count bonus/penalty). totalColorDiceCount deliberately kept away from 3 and 4+ in most of
-// these (0 here) so the bonus/penalty branch doesn't confound the timing-tax check on its own.
+// -- see evaluator.js's own doc on why a flat -100 was added). totalColorDiceCount deliberately kept below
+// 4 in most of these (0 here) so the -1000 "don't bother past 4" penalty doesn't confound the timing-tax
+// check on its own -- the +1000 "go get it at exactly 3" bonus this originally stacked with was removed
+// the same day, per a follow-up user request, once this narrower timing tax turned out to be the fix that
+// actually mattered.
 // ---------------------------------------------------------------------------
 {
   const state = freshState(1);
-  giveCard(state, 'A202A', 'P1'); // 0 color dice at all -- neither bonus nor penalty branch, dice.every() on [] is vacuously true
+  giveCard(state, 'A202A', 'P1'); // 0 color dice at all -- below the -1000 penalty's own >=4 threshold, dice.every() on [] is vacuously true
   check('Owning A202A with literally no dice this round (can\'t place on the new slot) applies the -100 timing tax', evaluator.score(state, 'P1'), evalTable[1].A202A - 100);
 }
 {
@@ -194,14 +196,26 @@ function giveCard(state, faceId, playerId) {
   check('Owning A202A with every die already placed applies the timing tax the same way', evaluator.score(state, 'P1'), evalTable[1].A202A - 100);
 }
 {
+  // totalColorDiceCount===3 no longer means anything special on its own (the +1000 "go get it" bonus at
+  // exactly this count was removed) -- only the timing tax applies here, same as any other count below 4.
   const state = freshState(1);
   giveCard(state, 'A202A', 'P1');
   for (let i = 0; i < 3; i++) {
     const d = createDie(`d${i}`, 'COLOR');
-    d.placedMapId = 'MAP001'; // all 3 placed -- totalColorDiceCount===3 (the +1000 bonus) AND 0 unplaced (the -100 tax) at once
+    d.placedMapId = 'MAP001'; // all 3 placed -- 0 unplaced (the -100 tax fires), still under the -1000 penalty's own >=4 threshold
     state.players[0].dice.push(d);
   }
-  check('The domination bonus (+1000) and timing tax (-100) stack independently: net +900 over the plain card value', evaluator.score(state, 'P1'), evalTable[1].A202A + 1000 - 100);
+  check('3 total color dice (all placed) no longer gets any special bonus -- just the plain timing tax', evaluator.score(state, 'P1'), evalTable[1].A202A - 100);
+}
+{
+  const state = freshState(1);
+  giveCard(state, 'A202A', 'P1');
+  for (let i = 0; i < 4; i++) {
+    const d = createDie(`d${i}`, 'COLOR');
+    d.placedMapId = 'MAP001'; // all 4 placed -- totalColorDiceCount>=4 (the -1000 penalty) AND 0 unplaced (the -100 tax) at once
+    state.players[0].dice.push(d);
+  }
+  check('The -1000 domination penalty and -100 timing tax stack independently at 4+ color dice', evaluator.score(state, 'P1'), evalTable[1].A202A - 1000 - 100);
 }
 
 // ---------------------------------------------------------------------------

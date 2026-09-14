@@ -193,28 +193,21 @@ class Evaluator {
 
     // 訓練場の支配 (A202A/A202B) -- color-dice-count-conditioned valuation (2026-08-26, per user spec:
     // "色ダイス3個（置いたのも含む）なら訓練場の支配を取りに行く+1000くらい 逆に色ダイス4個なら一切取り
-    // に行かない"): this card's main value is lifting CON005A(怠惰)'s "色ダイス上限3個" -- see
-    // board.js's TRAINING_GROUND_COLOR_DIE_CAP doc -- so it's a sharp, non-monotonic value curve (great
-    // exactly when stuck at 3, worthless once already past it) that the flat per-round 評価値 number
-    // can't express on its own; this state-dependent term lives here in code instead. Total color dice
-    // (in hand AND currently placed) matches board.js's own established "TOTAL color dice" counting
-    // convention, not just unplaced ones.
-    const TRAINING_GROUND_DOMINATION_BONUS = 1000;
+    // に行かない"; the +1000 "go get it" bonus half was removed 2026-09-14, per user request, once the
+    // -100 timing tax below turned out to be the more targeted fix for the actual problem it caused --
+    // see that constant's own doc): the -1000 "don't bother" penalty stays, since this card's main value
+    // is lifting CON005A(怠惰)'s "色ダイス上限3個" -- see board.js's TRAINING_GROUND_COLOR_DIE_CAP doc --
+    // which is already worthless (no cap left to lift) once past 3, independent of any timing concern.
+    // Total color dice (in hand AND currently placed) matches board.js's own established "TOTAL color
+    // dice" counting convention, not just unplaced ones.
     const TRAINING_GROUND_DOMINATION_PENALTY = 1000;
     // Timing tax (2026-09-14, per user report: watching a replay, the AI grabbed 訓練場の支配 in round 2
-    // with its very last die of the round -- the +1000 bonus above only looks at totalColorDiceCount, not
-    // whether there's any die LEFT this round to actually place on the newly-unlocked AREA007 slot (the
-    // real payoff beyond CON005A/怠惰's cap-lift, which is a genuine one-time permanent effect and stays
-    // worth getting even at the buzzer -- the user confirmed that half is fine as-is). +1000 is so much
-    // larger than every other per-card weight (see eval-table.js's own evolved values, typically tens not
-    // thousands) that it can win a 1-ply comparison even against a move that would have given real round-2
-    // value, purely because the eval-based system has no concept of "and then what" once dice are gone.
-    // A flat, much smaller -100 (not scaled to a specific "lost slot value" -- deliberately rough, same
-    // idiom as the domination bonus/penalty themselves) softens that specific worst case (racing to grab
-    // this literally on the last die) without blocking a genuinely worthwhile late pickup: with the
-    // domination bonus still net +900 once this stacks with it. Scoped to A202 only, per user request --
-    // other 支配 cards (城下町/ギルド/小麦畑/農園) have the exact same "ONCE flips a MAP's AREA, real value
-    // needs a later die placed there" shape, but this deliberately doesn't touch them yet.
+    // with its very last die of the round, unable to place on the newly-unlocked AREA007 slot at all that
+    // round -- the real payoff beyond CON005A/怠惰's cap-lift, which is a genuine one-time permanent effect
+    // and stays worth getting even at the buzzer, per the user's own confirmation). Scoped to A202 only,
+    // per user request -- other 支配 cards (城下町/ギルド/小麦畑/農園) have the exact same "ONCE flips a
+    // MAP's AREA, real value needs a later die placed there" shape, but this deliberately doesn't touch
+    // them yet.
     const TRAINING_GROUND_UNUSABLE_THIS_ROUND_PENALTY = 100;
     const totalColorDiceCount = player.dice.filter((d) => d.kind === 'COLOR').length;
     const hasNoDiceLeftThisRound = player.dice.every((d) => d.placedMapId !== null || d.passed);
@@ -246,8 +239,7 @@ class Evaluator {
       total += v(cardState.currentFaceId);
       if (typeof row.VP === 'number') total += row.VP * v('VP');
       if (cardState.currentFaceId === 'A202A' || cardState.currentFaceId === 'A202B') {
-        if (totalColorDiceCount === 3) total += TRAINING_GROUND_DOMINATION_BONUS;
-        else if (totalColorDiceCount >= 4) total -= TRAINING_GROUND_DOMINATION_PENALTY;
+        if (totalColorDiceCount >= 4) total -= TRAINING_GROUND_DOMINATION_PENALTY;
         if (hasNoDiceLeftThisRound) total -= TRAINING_GROUND_UNUSABLE_THIS_ROUND_PENALTY;
       }
       // 評価値_CON card-row synergy (2026-08-28): an LV2 upgrade still matches its base card's own LV1 row
