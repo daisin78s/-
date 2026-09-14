@@ -77,10 +77,16 @@ const SENATE_SYNERGY_FACE_IDS = new Set([
  * "歓楽街は両方です") -- its own penalty can stack from both independently. 訓練場/孤児院/元老院
  * (A202/A201/A301) are deliberately excluded from both -- each already has its own dedicated
  * synergy/domination-style logic elsewhere in this file (see TRAINING_GROUND_* above and
- * FARM_SYNERGY_FACE_IDS/SENATE_SYNERGY_FACE_IDS). See score()'s own use of these for the actual penalty
- * math. */
-const SAME_ROLE_GROUP_A = { ids: new Set(['A004', 'A005', 'A006']), penaltyPerExtra: 50 };
-const SAME_ROLE_GROUP_B = { ids: new Set(['A001', 'A002', 'A003', 'A006', 'C001', 'C002', 'C003']), penaltyPerExtra: 30 };
+ * FARM_SYNERGY_FACE_IDS/SENATE_SYNERGY_FACE_IDS). penaltyId names a per-round evolvable 評価値-sheet row
+ * (2026-09-14, per user follow-up request: "評価値の家族補正も進化で変動するようにしたい") instead of a
+ * hardcoded JS constant -- same pattern this file already uses for 晩餐会食料生産相性/聖女王女ラウンドタッ
+ * プ相性/元老院支配拡張相性 (see score()'s own `v()` lookups for those): self-play can now tune how harshly
+ * each group's redundancy is actually punished, same as every other weight here, rather than being frozen
+ * at whatever number a human picked. Seeded at -50/-30 (this feature's own original hand-chosen values) in
+ * game.xlsx, one flat number across all 4 rounds -- nothing stops evolution from diverging that per round
+ * once training resumes. See score()'s own use of these for the actual penalty math. */
+const SAME_ROLE_GROUP_A = { ids: new Set(['A004', 'A005', 'A006']), penaltyId: '小麦畑農園歓楽街重複ペナルティ' };
+const SAME_ROLE_GROUP_B = { ids: new Set(['A001', 'A002', 'A003', 'A006', 'C001', 'C002', 'C003']), penaltyId: '城下町大聖堂ギルド重複ペナルティ' };
 
 /** Unclaimed-fee-opportunity bonus groups (2026-09-14, per user follow-up to the redundancy penalty
  * above, worked through across several messages -- see the exact wording in that day's chat for the full
@@ -97,9 +103,12 @@ const SAME_ROLE_GROUP_B = { ids: new Set(['A001', 'A002', 'A003', 'A006', 'C001'
  * for each member the scored player OWNS, if EVERY OTHER member's own map is still unclaimed by anyone
  * (feeOwnerId null -- checked regardless of who would eventually claim it, not just opponents, since the
  * scored player owning a 2nd sibling itself also closes this same window, correctly yielding no bonus
- * either, consistent with the redundancy penalty above), add bonusPerMember once for that owned card. */
-const FEE_OPPORTUNITY_GROUP_A = { members: [{ id: 'A004', mapId: 'MAP001' }, { id: 'A005', mapId: 'MAP002' }], bonusPerMember: 20 };
-const FEE_OPPORTUNITY_GROUP_B = { members: [{ id: 'A001', mapId: 'MAP003' }, { id: 'A002', mapId: 'MAP004' }, { id: 'A003', mapId: 'MAP005' }], bonusPerMember: 20 };
+ * either, consistent with the redundancy penalty above), add this group's own bonusId value once for that
+ * owned card. bonusId, like SAME_ROLE_GROUP_A/B's penaltyId above, names an evolvable 評価値-sheet row
+ * (2026-09-14, same "評価値の家族補正も進化で変動するようにしたい" request) rather than a hardcoded 20 --
+ * seeded at 20 (this feature's own original value) in game.xlsx. */
+const FEE_OPPORTUNITY_GROUP_A = { members: [{ id: 'A004', mapId: 'MAP001' }, { id: 'A005', mapId: 'MAP002' }], bonusId: '小麦畑農園未支配ボーナス' };
+const FEE_OPPORTUNITY_GROUP_B = { members: [{ id: 'A001', mapId: 'MAP003' }, { id: 'A002', mapId: 'MAP004' }, { id: 'A003', mapId: 'MAP005' }], bonusId: '城下町大聖堂ギルド未支配ボーナス' };
 
 /** How much VP rewardText would grant, read via the real DSL parser rather than executed (2026-08-10,
  * QST awareness -- see Evaluator's own qstAware policy doc). Every QST REWARD field today is a plain
@@ -250,10 +259,11 @@ class Evaluator {
 
     // Same-role redundancy penalty (see SAME_ROLE_GROUP_A/B's own doc above) -- counted once per group,
     // not per owned card, since what matters is how many DISTINCT family members are owned in total, not
-    // which specific one "is" the redundant one.
+    // which specific one "is" the redundant one. v(group.penaltyId) is already negative in the sheet (seeded
+    // -50/-30), so ADDING it (not subtracting) is what actually applies the penalty.
     for (const group of [SAME_ROLE_GROUP_A, SAME_ROLE_GROUP_B]) {
       const ownedInGroup = player.ownedCardPhysicalIds.filter((id) => group.ids.has(id)).length;
-      if (ownedInGroup > 1) total -= (ownedInGroup - 1) * group.penaltyPerExtra;
+      if (ownedInGroup > 1) total += (ownedInGroup - 1) * v(group.penaltyId);
     }
 
     // Unclaimed-fee-opportunity bonus (see FEE_OPPORTUNITY_GROUP_A/B's own doc above) -- per owned member,
@@ -264,7 +274,7 @@ class Evaluator {
       for (const member of group.members) {
         if (!player.ownedCardPhysicalIds.includes(member.id)) continue;
         const othersAllUnclaimed = group.members.every((other) => other === member || !state.maps[other.mapId] || state.maps[other.mapId].feeOwnerId === null);
-        if (othersAllUnclaimed) total += group.bonusPerMember;
+        if (othersAllUnclaimed) total += v(group.bonusId);
       }
     }
 

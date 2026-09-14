@@ -262,7 +262,7 @@ function dominate(state, mapId, playerId) {
   giveCard(state, 'A005A', 'P1'); // 農園 -- 2nd GROUP_A member
   dominate(state, 'MAP001', 'P1');
   dominate(state, 'MAP002', 'P1');
-  check('小麦畑 + 農園 (both GROUP_A) applies a single -50 redundancy penalty', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1].A005A + evalTable[1]['晩餐会食料生産相性'] - 50));
+  check('小麦畑 + 農園 (both GROUP_A) applies a single redundancy penalty', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1].A005A + evalTable[1]['晩餐会食料生産相性'] + evalTable[1]['小麦畑農園歓楽街重複ペナルティ']));
 }
 {
   const state = freshState(1);
@@ -271,13 +271,13 @@ function dominate(state, mapId, playerId) {
   giveCard(state, 'A006A', 'P1'); // 歓楽街 -- 3rd GROUP_A member (not itself farm-synergy, nor in any FEE_OPPORTUNITY group)
   dominate(state, 'MAP001', 'P1');
   dominate(state, 'MAP002', 'P1');
-  check('3 GROUP_A cards applies -50 per extra beyond the first (2 * -50 = -100)', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1].A005A + evalTable[1].A006A + evalTable[1]['晩餐会食料生産相性'] - 100));
+  check('3 GROUP_A cards applies the penalty twice (2 extras beyond the first)', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1].A005A + evalTable[1].A006A + evalTable[1]['晩餐会食料生産相性'] + 2 * evalTable[1]['小麦畑農園歓楽街重複ペナルティ']));
 }
 {
   const state = freshState(1);
   giveCard(state, 'C001A', 'P1'); // 代官
   giveCard(state, 'C002A', 'P1'); // 修道士 -- 2nd GROUP_B member (neither is in any FEE_OPPORTUNITY group)
-  check('代官 + 修道士 (both GROUP_B) applies a single -30 redundancy penalty', round6(evaluator.score(state, 'P1')), round6(evalTable[1].C001A + evalTable[1].C002A - 30));
+  check('代官 + 修道士 (both GROUP_B) applies a single redundancy penalty', round6(evaluator.score(state, 'P1')), round6(evalTable[1].C001A + evalTable[1].C002A + evalTable[1]['城下町大聖堂ギルド重複ペナルティ']));
 }
 {
   // 歓楽街(A006) sits in BOTH groups (per user confirmation "歓楽街は両方です") -- owning it alongside one
@@ -288,7 +288,7 @@ function dominate(state, mapId, playerId) {
   giveCard(state, 'A001A', 'P1'); // 城下町 -- makes GROUP_B have 2 members (歓楽街 + 城下町)
   dominate(state, 'MAP002', 'P1'); // 農園's map -- neutralizes 小麦畑's own FEE_OPPORTUNITY_GROUP_A check
   dominate(state, 'MAP004', 'P1'); // 大聖堂's map -- neutralizes 城下町's own FEE_OPPORTUNITY_GROUP_B check
-  check('歓楽街 stacks both groups\' penalties at once (-50 from GROUP_A, -30 from GROUP_B)', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A006A + evalTable[1].A004A + evalTable[1].A001A + evalTable[1]['晩餐会食料生産相性'] - 50 - 30));
+  check('歓楽街 stacks both groups\' penalties at once', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A006A + evalTable[1].A004A + evalTable[1].A001A + evalTable[1]['晩餐会食料生産相性'] + evalTable[1]['小麦畑農園歓楽街重複ペナルティ'] + evalTable[1]['城下町大聖堂ギルド重複ペナルティ']));
 }
 {
   // A202(訓練場)/A201(孤児院)/A301(元老院) are deliberately excluded from both groups. An unplaced die is
@@ -311,7 +311,7 @@ function dominate(state, mapId, playerId) {
   const state = freshState(1);
   giveCard(state, 'A004A', 'P1'); // 小麦畑, sibling 農園(MAP002) never claimed by anyone in this state
   dominate(state, 'MAP001', 'P1'); // 小麦畑's own map -- doesn't disqualify ITS OWN bonus, only checks OTHERS
-  check('Owning 小麦畑 while 農園 remains unclaimed by anyone credits +20', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1]['晩餐会食料生産相性'] + 20));
+  check('Owning 小麦畑 while 農園 remains unclaimed by anyone credits the fee-opportunity bonus', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1]['晩餐会食料生産相性'] + evalTable[1]['小麦畑農園未支配ボーナス']));
 }
 {
   const state = freshState(2);
@@ -331,7 +331,7 @@ function dominate(state, mapId, playerId) {
   giveCard(state, 'A005A', 'P1');
   dominate(state, 'MAP001', 'P1');
   dominate(state, 'MAP002', 'P1');
-  check('Owning BOTH 小麦畑 and 農園 credits no fee-opportunity bonus for either (self-cannibalized)', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1].A005A + evalTable[1]['晩餐会食料生産相性'] - 50));
+  check('Owning BOTH 小麦畑 and 農園 credits no fee-opportunity bonus for either (self-cannibalized)', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1].A005A + evalTable[1]['晩餐会食料生産相性'] + evalTable[1]['小麦畑農園歓楽街重複ペナルティ']));
 }
 {
   // 3-member group: owning one requires BOTH others to still be unclaimed, not just one of them. Note
@@ -348,7 +348,7 @@ function dominate(state, mapId, playerId) {
   const state = freshState(1);
   giveCard(state, 'A001A', 'P1'); // 城下町, both 大聖堂(MAP004) and ギルド(MAP005) still unclaimed
   dominate(state, 'MAP003', 'P1');
-  check('城下町 owned with BOTH other GROUP_B members unclaimed credits +20', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A001A + 20));
+  check('城下町 owned with BOTH other GROUP_B members unclaimed credits the fee-opportunity bonus', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A001A + evalTable[1]['城下町大聖堂ギルド未支配ボーナス']));
 }
 
 // ---------------------------------------------------------------------------
