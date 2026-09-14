@@ -7,7 +7,7 @@
 
 const path = require('path');
 const { loadGameData } = require('../src/data-loader');
-const { buildEvalTable, evalValue } = require('../src/ai/eval-table');
+const { buildEvalTable, evalValue, isStructurallyBlankRound } = require('../src/ai/eval-table');
 
 const raw = loadGameData(path.join(__dirname, '..', 'data', 'game.json'));
 
@@ -61,6 +61,23 @@ check('Round 5 clamps to round 4', evalValue(table, 5, 'D'), evalValue(table, 4,
 // eval-table.js enforces it (the sheet is the source of truth, eval-table.js just reads it verbatim).
 // ---------------------------------------------------------------------------
 check('A001B (upgraded face) 1R value is greater than A001A\'s (cumulative, not incremental)', evalValue(table, 1, 'A001B') > evalValue(table, 1, 'A001A'), true);
+
+// ---------------------------------------------------------------------------
+// isStructurallyBlankRound (2026-09-14, per user request: "進化で動かす評価値 1r 2rに出てこないカードは
+// 空白にしてください") -- wave-1 special-shop cards (A/B/C 201-299, either tier) can't be built before
+// round 2; wave-2 (A/B/C 301-399) not before round 3; M401-403 not before round 3 either (no hard round
+// gate in code, but per the user's own observation, shops practically never empty out that early).
+// buildEvalTable forces these to exactly 0 regardless of what the sheet actually contains.
+// ---------------------------------------------------------------------------
+check('Wave-1 special card (A202A) has no 1R value', isStructurallyBlankRound('A202A', 1), true);
+check('...but DOES have a real 2R/3R/4R value', [2, 3, 4].map((r) => isStructurallyBlankRound('A202A', r)), [false, false, false]);
+check('Wave-2 special card (A301B) has no 1R or 2R value', [1, 2].map((r) => isStructurallyBlankRound('A301B', r)), [true, true]);
+check('...but DOES have a real 3R/4R value', [3, 4].map((r) => isStructurallyBlankRound('A301B', r)), [false, false]);
+check('M401 (晩餐会) has no 1R or 2R value', [1, 2].map((r) => isStructurallyBlankRound('M401', r)), [true, true]);
+check('A plain resource row (D) is never blank in any round', [1, 2, 3, 4].map((r) => isStructurallyBlankRound('D', r)), [false, false, false, false]);
+check('An ordinary card (A001A, not a special-shop/extra-monument id) is never blank in any round', [1, 2, 3, 4].map((r) => isStructurallyBlankRound('A001A', r)), [false, false, false, false]);
+check('buildEvalTable forces A202A\'s 1R to exactly 0 even if the sheet somehow had a nonzero value', evalValue(buildEvalTable({ '評価値': [{ ID: 'A202A', '1R': 999, '2R': 5 }] }), 1, 'A202A'), 0);
+check('...while its own 2R (not pinned) passes through unchanged', evalValue(buildEvalTable({ '評価値': [{ ID: 'A202A', '1R': 999, '2R': 5 }] }), 2, 'A202A'), 5);
 
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);

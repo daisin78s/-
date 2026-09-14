@@ -22,7 +22,10 @@
  *    C301, both tiers, wave 2 -- renumbered from a single A008/B008/C008 wave by the 2026-08-24
  *    SHOP201-203 rework's card renumbering) have no 1R entry (blank/0), and the wave-2 ids have no 2R
  *    entry either -- see setup.js's SPECIAL_SHOP_SLOT_IDS/prepareShops for the round gating that makes
- *    them structurally unbuildable that early.
+ *    them structurally unbuildable that early. Same for M401/M402/M403 (晩餐会/王都建設/天空の塔), no 1R
+ *    or 2R entry -- see isStructurallyBlankRound's own doc for why. Force-zeroed below (2026-09-14)
+ *    regardless of what the sheet actually contains, in case a stray nonzero value ever drifts back in
+ *    there (e.g. via training/mutation, or a hand edit) -- these cells are never meant to hold real data.
  */
 function buildEvalTable(rawData) {
   const rows = rawData['評価値'] || [];
@@ -30,7 +33,7 @@ function buildEvalTable(rawData) {
   for (const row of rows) {
     for (const round of [1, 2, 3, 4]) {
       const raw = row[`${round}R`];
-      byRound[round][row.ID] = typeof raw === 'number' ? raw : 0;
+      byRound[round][row.ID] = isStructurallyBlankRound(row.ID, round) ? 0 : (typeof raw === 'number' ? raw : 0);
     }
   }
   return byRound;
@@ -46,6 +49,35 @@ function evalValue(table, round, id) {
   return (forRound && forRound[id]) || 0;
 }
 
-module.exports = { buildEvalTable, evalValue };
+/** Whether id's cell at `round` is STRUCTURALLY blank -- the card/monument in question cannot possibly be
+ * owned that early in a real game, so any nonzero value sitting there is meaningless noise, not a real
+ * signal (2026-09-14, per user request: "進化で動かす評価値 1r 2rに出てこないカードは空白にしてくださ
+ * い"). Two sources, both already-established round gates elsewhere in this codebase, just not previously
+ * enforced ON the 評価値 table itself:
+ *  - SHOP201-203 special-shop cards (board.js's own specialShopMinRound, see its doc): wave 1
+ *    (A201/A202/B201/B202/C201/C202, either tier) can't be BUILT before round 2, so has no real 1R value;
+ *    wave 2 (A301/B301/C301, either tier) can't be built before round 3, so has no real 1R OR 2R value.
+ *    This function's own doc already claimed this convention existed (see buildEvalTable's header comment)
+ *    -- it just wasn't actually enforced anywhere until now, which is how A202A's 1R cell drifted to a
+ *    nonzero value over many generations of training/mutation despite being structurally unreachable.
+ *  - M401/M402/M403 (晩餐会/王都建設/天空の塔): no hard round gate in code (setup.js's prepareShops holds
+ *    them back in state.extraMonumentPool until any shop's own pool empties, not a fixed round), but per
+ *    the user's own observation from real games, that practically never happens before round 3 -- treated
+ *    the same as wave 2 here (no 1R or 2R value) on that basis.
+ * Used by ga.js's randomGenome/mutateGenome/mutateGenomePercent to keep these cells pinned at exactly 0
+ * through every generation, rather than wasting genome search space (and, once written back into
+ * game.xlsx by tools/apply_evolved_genome.py, spreadsheet clarity) mutating a value nothing can ever
+ * actually query in a real game. */
+function isStructurallyBlankRound(id, round) {
+  if (id === 'M401' || id === 'M402' || id === 'M403') return round <= 2;
+  const match = /^[A-Z]+(\d+)[A-Z]$/.exec(id);
+  if (!match) return false;
+  const num = Number(match[1]);
+  if (num >= 200 && num < 300) return round === 1;
+  if (num >= 300 && num < 400) return round <= 2;
+  return false;
+}
+
+module.exports = { buildEvalTable, evalValue, isStructurallyBlankRound };
 
 })();

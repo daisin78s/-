@@ -137,5 +137,39 @@ function assertTrue(label, condition) {
   assertTrue('A zero-valued cell still uses the flat escape step, unaffected by bigMutationChance/Percent', seenWithinStep);
 }
 
+// ---------------------------------------------------------------------------
+// isStructurallyBlankRound-pinned cells (2026-09-14, per user request: "進化で動かす評価値 1r 2rに出てこ
+// ないカードは空白にしてください" -- e.g. 訓練場/A202 can't be built before round 2, 晩餐会/M401 not before
+// round 3). randomGenome/mutateGenome/mutateGenomePercent must all force these to exactly 0 and never move
+// them, regardless of population/mutation settings -- see eval-table.js's own isStructurallyBlankRound doc
+// for the full id list/reasoning.
+// ---------------------------------------------------------------------------
+{
+  // A202A: wave-1 special-shop card, no 1R value (round<2 gate). M401: no 1R or 2R value.
+  const genome = randomGenome(['A202A', 'M401', 'X'], rng.createRng('seed10'), -10, 10);
+  check('randomGenome pins A202A\'s 1R to 0 (wave-1, round<2 gate)', genome[1].A202A, 0);
+  assertTrue('...but leaves A202A\'s own 2R/3R/4R randomized as usual', [2, 3, 4].some((r) => genome[r].A202A !== 0));
+  check('randomGenome pins M401\'s 1R AND 2R to 0', [genome[1].M401, genome[2].M401], [0, 0]);
+  assertTrue('...but leaves M401\'s own 3R/4R randomized as usual', [3, 4].some((r) => genome[r].M401 !== 0));
+  assertTrue('A plain id (X) with no round gate is randomized in every round, unaffected', [1, 2, 3, 4].every((r) => genome[r].X !== 0));
+}
+{
+  // Even a genome that (incorrectly) already has a nonzero value in a pinned cell -- e.g. seeded from a
+  // real 評価値 table that drifted before this feature existed -- must be forced back to 0, never just
+  // left alone or nudged.
+  const genome = { 1: { A202A: 7, M401: 3 }, 2: { A202A: 7, M401: 3 }, 3: { A202A: 7, M401: 3 }, 4: { A202A: 7, M401: 3 } };
+  const mutated = mutateGenome(genome, rng.createRng('seed11'), 1, 5); // rate=1 -- would otherwise always mutate
+  check('mutateGenome forces A202A\'s 1R back to 0 even from a stray nonzero seed', mutated[1].A202A, 0);
+  check('mutateGenome forces M401\'s 1R/2R back to 0 even from a stray nonzero seed', [mutated[1].M401, mutated[2].M401], [0, 0]);
+  assertTrue('...but A202A\'s own 2R (not pinned) still mutates normally', mutated[2].A202A !== 7);
+}
+{
+  const genome = { 1: { A202A: 7, M401: 3 }, 2: { A202A: 7, M401: 3 }, 3: { A202A: 7, M401: 3 }, 4: { A202A: 7, M401: 3 } };
+  const mutated = mutateGenomePercent(genome, rng.createRng('seed12'), 1, 0.5);
+  check('mutateGenomePercent forces A202A\'s 1R back to 0 even from a stray nonzero seed', mutated[1].A202A, 0);
+  check('mutateGenomePercent forces M401\'s 1R/2R back to 0 even from a stray nonzero seed', [mutated[1].M401, mutated[2].M401], [0, 0]);
+  assertTrue('...but A202A\'s own 2R (not pinned) still mutates normally', mutated[2].A202A !== 7);
+}
+
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);

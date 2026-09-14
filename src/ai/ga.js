@@ -18,17 +18,22 @@
  */
 
 const rng = require('../rng');
+const { isStructurallyBlankRound } = require('./eval-table');
 
 /** A fresh genome with every (round, id) pair independently uniform-random in [min, max]. `ids` is the
  * full addressable id list (every resource row + every card row the real 評価値 sheet has, see
  * eval-table.js's own doc) -- reusing the real sheet's own key set keeps a trained genome's shape
  * identical to production data, so it drops straight into game.xlsx's 評価値 sheet if it performs well.
- * `rngState` is an rng.createRng(seed) result, mutated in place as usual. */
+ * `rngState` is an rng.createRng(seed) result, mutated in place as usual. isStructurallyBlankRound-pinned
+ * cells (2026-09-14, per user request -- see that function's own doc) are forced to exactly 0 instead of a
+ * random value: a card that can't possibly be owned that early has nothing real to evolve there, so
+ * spending genome search space randomizing it is pure waste (and, once written back into game.xlsx by
+ * tools/apply_evolved_genome.py, spreadsheet noise). */
 function randomGenome(ids, rngState, min, max) {
   const genome = { 1: {}, 2: {}, 3: {}, 4: {} };
   for (const id of ids) {
     for (const round of [1, 2, 3, 4]) {
-      genome[round][id] = min + rng.next(rngState) * (max - min);
+      genome[round][id] = isStructurallyBlankRound(id, round) ? 0 : min + rng.next(rngState) * (max - min);
     }
   }
   return genome;
@@ -38,14 +43,15 @@ function randomGenome(ids, rngState, min, max) {
  * `mutationRate` probability of being nudged by a uniform-random delta in [-mutationAmount,
  * +mutationAmount]. Everything else is copied unchanged -- this is plain Gaussian-free "small step"
  * mutation, no crossover (kept deliberately simple for this first training pass; see tools/ga_train.js's
- * own doc for why crossover was left out for now). */
+ * own doc for why crossover was left out for now). isStructurallyBlankRound-pinned cells never mutate,
+ * staying exactly 0 regardless of `value` or the mutation roll -- see randomGenome's own doc. */
 function mutateGenome(genome, rngState, mutationRate, mutationAmount) {
   const mutated = { 1: {}, 2: {}, 3: {}, 4: {} };
   for (const round of [1, 2, 3, 4]) {
     for (const [id, value] of Object.entries(genome[round])) {
-      mutated[round][id] = rng.next(rngState) < mutationRate
+      mutated[round][id] = (!isStructurallyBlankRound(id, round) && rng.next(rngState) < mutationRate)
         ? value + (rng.next(rngState) * 2 - 1) * mutationAmount
-        : value;
+        : (isStructurallyBlankRound(id, round) ? 0 : value);
     }
   }
   return mutated;
@@ -79,11 +85,18 @@ const ZERO_ESCAPE_STEP_BY_ROUND = { 1: 5, 2: 10, 3: 20, 4: 50 };
  * bigMutationPercent's wider spread instead of the normal mutationPercent -- an occasional larger "jump"
  * alongside the usual small "creep" steps, meant to let a converged/plateaued population occasionally
  * escape a local optimum that small steps alone can't climb out of. Only affects the nonzero-value branch
- * (ZERO_ESCAPE_STEP_BY_ROUND's own flat step is unrelated to this percentage scheme either way). */
+ * (ZERO_ESCAPE_STEP_BY_ROUND's own flat step is unrelated to this percentage scheme either way).
+ * isStructurallyBlankRound-pinned cells (2026-09-14, see randomGenome's own doc) are forced to exactly 0
+ * and skip every branch above -- including the zero-escape one, which exists precisely to let a
+ * genuinely-unused-so-far id discover a real nonzero value, the opposite of what these cells need. */
 function mutateGenomePercent(genome, rngState, mutationRate, mutationPercent, bigMutationChance = 0, bigMutationPercent = 0) {
   const mutated = { 1: {}, 2: {}, 3: {}, 4: {} };
   for (const round of [1, 2, 3, 4]) {
     for (const [id, value] of Object.entries(genome[round])) {
+      if (isStructurallyBlankRound(id, round)) {
+        mutated[round][id] = 0;
+        continue;
+      }
       if (rng.next(rngState) >= mutationRate) {
         mutated[round][id] = value;
         continue;
