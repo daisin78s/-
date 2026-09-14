@@ -88,6 +88,27 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 }
 
 // ---------------------------------------------------------------------------
+// player.lockedK removed (2026-09-14, per user report: "使用料がターン終了時にある時 TAPアクションができ
+// ないときがあります 今のルールなら阻む理由がないのでブロックしているものを外してください"). This used to
+// reserve K against an AREA009 usage fee (see board.js's chargeUsageFeeIfOwed's own doc for the deadlock
+// it originally prevented, now handled generically by the USAGE_FEE VP-escape below instead) -- tryPay/
+// resolvePayment must fully spend K regardless of any pending fee, even if a stale lockedK value somehow
+// still sits on the player object (e.g. from an old save/replay predating this removal).
+// ---------------------------------------------------------------------------
+{
+  const state = freshState();
+  state.maps['MAP001'] = createMapState('MAP001', 'AREA001A');
+  const player = getPlayerRef(state, 'P1');
+  player.resources.K = 7;
+  player.pendingFee = { mapId: 'MAP001', amount: 7 }; // fully consumes K if paid -- would need every last unit
+  player.lockedK = 7; // stale field, as if set by pre-removal code -- must have no effect any more
+  const result = executor.runCommand(state, index, { playerId: 'P1' }, { type: 'CHANGE', pay: [{ resource: 'K', count: { kind: 'literal', value: 7 } }], gain: [{ resource: 'A', count: { kind: 'literal', value: 7 } }], times: { kind: 'literal', value: 1 } });
+  check('A K payment fully succeeds even with a pending fee (and a stale lockedK) that would have reserved all of it', result.success, true);
+  check('...every last K was actually spent', getPlayerRef(state, 'P1').resources.K, 0);
+  check('...gained the full 7A', getPlayerRef(state, 'P1').resources.A, 7);
+}
+
+// ---------------------------------------------------------------------------
 // 1c. USAGE_FEE VP-escape (2026-08-27, per user request: "すべての資源がなく支払いができないときは 足りな
 //     い1Kにつき-1VPされて支払いにあてる ただし1Aでも資源があるときはできない"): a player with literally
 //     none of K/A/B/C/Z can still end their turn despite an unpayable fee -- the shortfall comes out of

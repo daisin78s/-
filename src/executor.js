@@ -230,9 +230,10 @@ function grantResource(state, index, playerId, resource, count, context) {
   return effectiveResource;
 }
 
-/** Returns true and pays if affordable; returns false and leaves state untouched otherwise. K spending
- * is capped below player.lockedK (see its own doc in game-state.js -- K reserved for an AREA009 usage
- * fee, off-limits to every other payment). */
+/** Returns true and pays if affordable; returns false and leaves state untouched otherwise. No longer
+ * reserves any K against a pending usage fee (2026-09-14 -- see chargeUsageFeeIfOwed's own doc in
+ * board.js for why the old AREA009-only reservation was removed): a player is free to spend K on
+ * anything, including a TAP ability, even with a fee still owed. */
 function tryPay(state, playerId, resource, count) {
   const player = getPlayer(state, playerId);
   const dieKind = DICE_KIND_BY_RESOURCE[resource];
@@ -249,7 +250,7 @@ function tryPay(state, playerId, resource, count) {
     });
     return true;
   }
-  const available = resource === 'K' ? (player.resources.K || 0) - (player.lockedK || 0) : (player.resources[resource] || 0);
+  const available = player.resources[resource] || 0;
   if (available < count) return false;
   player.resources[resource] -= count;
   return true;
@@ -301,8 +302,7 @@ function resolvePayment(state, playerId, items, colorPreference) {
     const have = dieKind
       ? player.dice.filter((d) => d.kind === dieKind).length
       : item.resource === 'Z' ? zPool
-      : item.resource === 'K' ? (player.resources.K || 0) - (player.lockedK || 0) // see tryPay's own doc
-      : (player.resources[item.resource] || 0);
+      : (player.resources[item.resource] || 0); // K no longer reserved against a pending fee -- see tryPay's own doc
     if (have < item.count) return { ok: false, resource: item.resource };
     if (item.resource === 'Z') zPool -= item.count;
     resolved.push(item);
@@ -1413,7 +1413,6 @@ function applyTurnEnd(state, index, playerId) {
     if (shortfall > 0) player.resources.VP = (player.resources.VP || 0) - shortfall;
     state.maps[player.pendingFee.mapId].accumulatedFee += amount;
     player.pendingFee = null;
-    player.lockedK = 0;
   }
   for (const { row } of ownedCardRows(state, index, playerId)) {
     if (!row.TURNEND) continue;

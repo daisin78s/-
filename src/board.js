@@ -80,10 +80,14 @@ function chargeUsageFeeIfOwed(state, index, map, playerId) {
   if (!fee) return;
   const player = state.players.find((p) => p.id === playerId);
   player.pendingFee = fee;
-  // Reserve this much K for the fee itself, AREA009 only (2026-08-11, per user decision -- see
-  // PlayerState.lockedK's own doc in game-state.js for the deadlock this closes). Other tier B/C AREAs
-  // deliberately keep the older, unreserved behavior.
-  if (map.mapId === AREA009_MAP_ID) player.lockedK = fee.amount;
+  // player.lockedK (AREA009-only K reservation) removed 2026-09-14, per user report: a pending usage fee
+  // could leave a TAP ability (or any other K payment) blocked/short even though there was no longer any
+  // real reason to reserve against it. lockedK was added 2026-08-11 to prevent a genuine deadlock (K spent
+  // away leaving an AREA009 fee permanently unpayable), but executor.canEndTurn's USAGE_FEE VP-escape
+  // (2026-08-27, see its own doc) now resolves exactly that case generically -- once a player holds no
+  // convertible A/B/C/Z left, an unpayable fee (AREA009's included) pays via -1VP per missing K instead of
+  // blocking TURNEND forever, so reserving K ahead of time no longer prevents anything a later mechanism
+  // doesn't already handle. AREA009 now behaves like every other tier B/C AREA's fee always did.
 }
 
 /** Pure: could playerId ever actually pay a fee of `amount` K, counting not just K on hand but every

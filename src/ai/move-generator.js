@@ -629,15 +629,15 @@ class MoveGenerator {
    * Usage-fee guard (2026-08-30, per user bug report: a live game froze after leveling up 元老院LV2 with
    * 4K, this firing and spending 3K down to 1K, leaving the AREA009 usage fee unpayable -- "3Kあったら
    * 必ず使う→手数料をひいて3K余るなら使う"): now also requires that 3K would still be left over AFTER
-   * paying whatever K this player currently has reserved -- player.lockedK (the AREA009-specific floor
-   * tryPay/resolvePayment already refuse to dip below, see its own doc) and/or player.pendingFee.amount
-   * (a non-AREA009 B/C-tier fee, which doesn't reserve lockedK but still needs paying at TURNEND) --
-   * without this, forcing the conversion anyway could leave the fee unpayable with no K left to fix it,
-   * which (depending on what resources remain) can leave the player's turn genuinely stuck. */
+   * paying whatever pending usage fee this player owes (player.pendingFee.amount) -- a strategic choice to
+   * avoid an easily-avoidable VP loss (see executor.canEndTurn's own USAGE_FEE VP-escape doc: an unpayable
+   * fee is no longer a hard deadlock, just -1VP per missing K), not a hard block (2026-09-14: the
+   * player.lockedK reservation this used to also check was removed -- see board.js's
+   * chargeUsageFeeIfOwed's own doc -- so this is now just the plain pendingFee amount). */
   forcedJob004ConversionMove(state, index, playerId) {
     const player = state.players.find((p) => p.id === playerId);
     if (!player || (player.resources.K || 0) < 3) return null;
-    const reservedK = Math.max(player.lockedK || 0, player.pendingFee ? player.pendingFee.amount : 0);
+    const reservedK = player.pendingFee ? player.pendingFee.amount : 0;
     if ((player.resources.K || 0) - 3 < reservedK) return null;
     for (const physicalId of player.ownedCardPhysicalIds) {
       const cardState = state.cards[physicalId];
@@ -664,10 +664,7 @@ class MoveGenerator {
    * forcedJob004ConversionMove/forcedTrainingGroundMove): a candidate that would leave an already-pending
    * usage fee unaffordable is skipped, same as those two. Unlike those two (a flat K cost), a monument's
    * COST can be any mix of A/B/C/K, so this checks the *resulting* player's post-build resources against
-   * board.canAffordFee (K + every free-action-convertible resource) rather than a precomputed K amount --
-   * player.lockedK (the AREA009-specific reserved floor) doesn't need its own separate check here since
-   * board.js's own payment logic already refuses to dip below it, so a candidate that would violate it
-   * already fails the applyInPlace call above and never reaches this point. */
+   * board.canAffordFee (K + every free-action-convertible resource) rather than a precomputed K amount. */
   forcedEndSignLv2Move(state, index, playerId) {
     const player = state.players.find((p) => p.id === playerId);
     if (!player) return null;
@@ -701,7 +698,7 @@ class MoveGenerator {
 
   /** How much K MAP007's own current face spends per die placed there, via its CHANGE(nK,D) ACTION --
    * 0 for AREA007A/C (CHANGE((A,B,C),D)/ADD(D), no K involved). Shared by forcedTrainingGroundMove's own
-   * pendingFee/lockedK guard and forcedTrainingGroundKPrepMove's "do I even have enough yet" check --
+   * pendingFee guard and forcedTrainingGroundKPrepMove's "do I even have enough yet" check --
    * factored out (2026-08-30) so both stay correct together as this amount keeps changing (2026-08-25
    * "訓練場LV1　能力変えました" added CHANGE(K,D); 2026-08-30 "訓練場すこしかえました" raised it to
    * CHANGE(2K,D)). */
@@ -729,10 +726,11 @@ class MoveGenerator {
    * forcedJob004ConversionMove's own matching guard): building/owning 訓練場 makes this player its own
    * feeOwnerId (see executor.runSetCurrentArea), so placing on their own copy never incurs a NEW fee here
    * -- but if some OTHER fee is already pending from earlier this same turn, spending this AREA's own K
-   * cost on top of it could leave that fee unpayable. board.placeDice's own payment logic already refuses
-   * to dip below player.lockedK (the AREA009-specific reserved floor) on its own, but a non-AREA009
-   * pendingFee.amount isn't reserved that way -- checked explicitly here too, so both cases are covered
-   * consistently regardless of which one actually applies. */
+   * cost on top of it is a strategic choice to avoid (see executor.canEndTurn's own USAGE_FEE VP-escape
+   * doc: an unpayable fee is no longer a hard deadlock, just -1VP per missing K) -- checked explicitly
+   * here since this is a FORCED move, not something the normal search would otherwise weigh against
+   * itself (2026-09-14: the player.lockedK reservation this used to also check was removed -- see
+   * board.js's chargeUsageFeeIfOwed's own doc -- so this is now just the plain pendingFee amount). */
   forcedTrainingGroundMove(state, index, playerId, context) {
     if (context.hasPlacedDieThisTurn) return null;
     const player = state.players.find((p) => p.id === playerId);
@@ -743,7 +741,7 @@ class MoveGenerator {
     });
     if (!ownsControl) return null;
     const kCost = this.#trainingGroundKCost(index, state);
-    const reservedK = Math.max(player.lockedK || 0, player.pendingFee ? player.pendingFee.amount : 0);
+    const reservedK = player.pendingFee ? player.pendingFee.amount : 0;
     if (kCost > 0 && (player.resources.K || 0) - kCost < reservedK) return null;
     const beforeColorCount = player.dice.filter((d) => d.kind === 'COLOR').length;
     const unplacedDice = player.dice.filter((d) => d.placedMapId === null && !d.passed);
