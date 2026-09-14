@@ -147,6 +147,28 @@ function deleteReplay(id) {
   return storage().ref(REPLAY_STORAGE_PREFIX + id + '.json').delete();
 }
 
+/** Deletes the replay BLOB (Storage) for every 'weekly' entry older than `cutoffWeekId`, but keeps the
+ * ranking ENTRY itself (Firestore doc, just flipped to hasReplay:false) -- 2026-09-14, per user request
+ * ("ランキングが増えると容量オーバーしない？" -- see main.js's own KEEP_REPLAY_WEEKS doc): once weekly
+ * rankings reset every week and never evict across weeks (see save()'s own per-week eviction doc), a full
+ * game replay (multi-MB, see ranking.js's own doc on why replays are Storage blobs not Firestore fields)
+ * getting kept forever for EVERY week's top 50 would grow Storage usage unboundedly. Score-history rows
+ * (name/score/CON/JOB/opponents) stay tiny and harmless to keep forever -- only the big blob is pruned.
+ * ISO week ids (YYYY-Www, zero-padded week) sort correctly as plain strings even across a year boundary
+ * (e.g. "2026-W52" < "2027-W01"), so a plain `<` comparison is enough; an entry saved before this feature
+ * added weekId has weekId===undefined, and `undefined < anything` is always false in JS, so those are
+ * safely left untouched here (nothing to prune them TO -- they predate per-week accounting entirely).
+ * Best-effort per entry, same as every other eviction path here -- one stray Storage 404 (e.g. an entry
+ * whose upload already failed at save time) must never block pruning the rest. */
+function pruneOldWeeklyReplays(cutoffWeekId) {
+  return db().collection(rankingCollectionName('weekly')).where('hasReplay', '==', true).get().then(function (snapshot) {
+    var stale = snapshot.docs.filter(function (doc) { return doc.data().weekId < cutoffWeekId; });
+    return Promise.all(stale.map(function (doc) {
+      return deleteReplay(doc.id).catch(function () {}).then(function () { return doc.ref.update({ hasReplay: false }); });
+    }));
+  });
+}
+
 var WEEKLY_EVAL_SNAPSHOT_COLLECTION = 'weekly_eval_snapshots';
 
 /** Get-or-create this week's frozen AI LV4 評価値 table (2026-09-08, per user spec -- see main.js's own
@@ -263,6 +285,7 @@ window.OnlineSync = {
   saveReplay: saveReplay,
   loadReplay: loadReplay,
   deleteReplay: deleteReplay,
+  pruneOldWeeklyReplays: pruneOldWeeklyReplays,
   createRoom: createRoom,
   joinRoom: joinRoom,
   subscribeToRoom: subscribeToRoom,

@@ -7050,6 +7050,18 @@ let rankingListRequestId = 0;
 // 1 = 先週, 2 = 先々週, etc. Only the 'weekly' column's own list() call ever reads this; ultimate/standard
 // are unaffected. Module-level UI-only state, same idiom as e.g. debugMode/historyCursor above.
 let weeklyRankingWeekOffset = 0;
+// 容量対策 (2026-09-14, per user question "ランキングが増えると容量オーバーしない？"): weekly ranking now
+// keeps its own independent top-MAX_ENTRIES pool PER WEEK forever (see ranking.js's save() doc) rather
+// than one shared pool for the whole 'weekly' collection like ultimate/standard -- so unlike those two,
+// its Storage usage (full-game replay blobs, multi-MB each, see ranking.js's own doc on why they're
+// Storage not Firestore) no longer has any ceiling on its own. Score rows themselves (name/score/CON/JOB)
+// are tiny and kept forever regardless -- only the big replay blob gets pruned once a week falls more than
+// this many weeks in the past; see openRankingOverlay's own pruneOldWeeklyReplays call and
+// online-sync.js's pruneOldWeeklyReplays for what "pruned" means (hasReplay flips to false, entry stays).
+// 10 weeks (~2.5 months, per user confirmation 2026-09-14): even at the full 50-entries/week cap and
+// ~5MB/replay (measured from an actual saved replay file), 10 weeks tops out around 2.5GB -- comfortably
+// under Firebase Storage's 5GB free tier. Easy to change here alone if real usage patterns differ.
+const KEEP_REPLAY_WEEKS = 10;
 function weeklyRankingWeekLabel(offset) {
   if (offset === 0) return '今週';
   if (offset === 1) return '先週';
@@ -7199,6 +7211,13 @@ function openRankingOverlay() {
   weeklyRankingWeekOffset = 0; // always open on 今週 (2026-09-14, per user request) -- see its own doc
   document.getElementById('ranking-overlay').hidden = false;
   renderRankingOverlay(STATE);
+  // Best-effort, fire-and-forget capacity cleanup (2026-09-14, see KEEP_REPLAY_WEEKS's own doc) -- runs
+  // once per overlay open rather than on some separate schedule (this app has no server/cron, "zero
+  // server dependency" per this project's own architecture) -- low-traffic enough that re-running this
+  // check on every open costs a negligible number of Firestore reads. Never awaited/surfaced to the user:
+  // a failed prune attempt (offline, etc.) just means the cleanup is retried next time the overlay opens,
+  // not a real failure the user needs to see.
+  RankingStorage.pruneOldWeeklyReplays(weeklyRankingIdForOffset(KEEP_REPLAY_WEEKS)).catch(() => {});
 }
 
 // ---------------------------------------------------------------------------

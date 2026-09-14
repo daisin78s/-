@@ -114,5 +114,15 @@ function markOutdated(id, category) {
   return window.OnlineSync.markRankingEntryOutdated(id, category);
 }
 
-window.RankingStorage = { list: list, save: save, loadReplay: loadReplay, clearAll: clearAll, deleteOne: deleteOne, markOutdated: markOutdated };
+/** Deletes the replay BLOB (not the ranking entry/score row) for every 'weekly' entry older than
+ * cutoffWeekId (2026-09-14, per user request "ランキングが増えると容量オーバーしない？" -- see main.js's
+ * own KEEP_REPLAY_WEEKS doc for why this exists and online-sync.js's pruneOldWeeklyReplays for exactly
+ * what it does). Fire-and-forget from main.js's openRankingOverlay -- callers should swallow errors
+ * themselves, same as this file's other best-effort eviction calls.
+ * @param {string} cutoffWeekId */
+function pruneOldWeeklyReplays(cutoffWeekId) {
+  return window.OnlineSync.pruneOldWeeklyReplays(cutoffWeekId);
+}
+
+window.RankingStorage = { list: list, save: save, loadReplay: loadReplay, clearAll: clearAll, deleteOne: deleteOne, markOutdated: markOutdated, pruneOldWeeklyReplays: pruneOldWeeklyReplays };
 })();
