@@ -3465,6 +3465,50 @@ h1, h2, h3 { margin: 0; }
   background: var(--accent-soft);
 }
 
+/* ウィークリーランキング列だけの週送りヘッダー (2026-09-14, per user request: "ウィークリーランキングと
+   書いてある箇所の右側にボタンを作り...") -- wraps the same .ranking-column__title used by the other 2
+   columns plus a week label + back/forward buttons, laid out as one row so the title keeps its existing
+   look while the nav controls sit to its right. */
+.ranking-column__header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ranking-column__header .ranking-column__title {
+  flex: 1 1 auto;
+}
+
+.ranking-column__week-nav {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.ranking-column__week-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.ranking-column__week-nav-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.ranking-week-nav-button {
+  font-size: 10px;
+  padding: 3px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
 .ranking-column__list {
   display: flex;
   flex-direction: column;

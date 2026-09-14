@@ -47,17 +47,32 @@ var REPLAY_STORAGE_PREFIX = 'replays/'; // shared across every category -- ids a
 function db() { return firebase.firestore(); }
 function storage() { return firebase.storage(); }
 
-/** @returns {Promise<{playerId,name,rawScore,qstScore,totalScore,conFaceId,jobCardId,opponents,playerColor,savedAt,hasReplay,id}[]>}
- *   sorted totalScore descending -- Firestore's own orderBy/limit does the sort+cap server-side, same
- *   result shape ranking.js's old readList().sort(...) produced. */
-function listRanking(category) {
-  return db().collection(rankingCollectionName(category))
-    .orderBy('totalScore', 'desc')
-    .limit(MAX_ENTRIES)
-    .get()
-    .then(function (snapshot) {
-      return snapshot.docs.map(function (doc) { return Object.assign({ id: doc.id }, doc.data()); });
-    });
+/** @param {string} [weekId] - 2026-09-14, per user request "ウィークリーランキングを毎週リセットしたい,
+ *   先週・先々週にも戻れるように": when given, restricts to docs whose own weekId field matches (client-
+ *   side filter, not a Firestore .where() -- see this function's own note below on why). Meaningless for
+ *   category !=='weekly' (those entries never have a weekId field at all) -- callers only ever pass it
+ *   alongside 'weekly'.
+ * @returns {Promise<{playerId,name,rawScore,qstScore,totalScore,conFaceId,jobCardId,opponents,playerColor,savedAt,hasReplay,id}[]>}
+ *   sorted totalScore descending, capped at MAX_ENTRIES.
+ *   Deliberately NOT `.where('weekId','==',weekId).orderBy('totalScore','desc')` -- combining an equality
+ *   filter on one field with orderBy on a DIFFERENT field needs a Firestore composite index that doesn't
+ *   exist for this collection and can't be created from client code (only via a console link a developer
+ *   would have to click once, which would leave the ranking silently broken -- "an index is required for
+ *   this query" -- until someone did). Fetching the whole (small: MAX_ENTRIES-per-week-capped, see save()'s
+ *   own per-week eviction) collection with just `.orderBy('totalScore','desc')` and filtering/limiting in
+ *   JS avoids that entirely at negligible cost. */
+function listRanking(category, weekId) {
+  var query = db().collection(rankingCollectionName(category)).orderBy('totalScore', 'desc');
+  // Only 'weekly' ever passes weekId -- ultimate/standard keep the original server-side .limit(), cheaper
+  // for the two categories actually queried on every ranking-overlay open. 'weekly' can't limit server-side
+  // once a weekId filter is layered on top (see this function's own doc on why the filter itself is
+  // client-side), so it fetches the whole collection and slices after filtering instead.
+  if (weekId === undefined) query = query.limit(MAX_ENTRIES);
+  return query.get().then(function (snapshot) {
+    var entries = snapshot.docs.map(function (doc) { return Object.assign({ id: doc.id }, doc.data()); });
+    if (weekId !== undefined) entries = entries.filter(function (e) { return e.weekId === weekId; }).slice(0, MAX_ENTRIES);
+    return entries;
+  });
 }
 
 /** Saves entry (Firestore doc, id as the document key) -- caller (ranking.js) is responsible for
@@ -83,10 +98,16 @@ function markRankingEntryOutdated(id, category) {
 /** Every entry currently in the collection, sorted totalScore descending, NOT capped at MAX_ENTRIES --
  * used by ranking.js's own save() to find which entries (if any) now fall outside the top MAX_ENTRIES
  * after adding a new one (same role the old localStorage save()'s `current.splice(MAX_ENTRIES)` played),
- * and by clearAllRanking below. */
-function listAllRankingSorted(category) {
+ * and by clearAllRanking below.
+ * @param {string} [weekId] - 2026-09-14: when given (only ever alongside category 'weekly'), restricts to
+ *   that week's own entries first -- see save()'s own doc on why eviction must be scoped per-week rather
+ *   than across the whole 'weekly' collection at once (otherwise an old week's top scores could get pushed
+ *   out purely by a newer week's activity, once the collection's total across every week ever played
+ *   passed MAX_ENTRIES). Client-side filter, same rationale as listRanking's own doc. */
+function listAllRankingSorted(category, weekId) {
   return db().collection(rankingCollectionName(category)).orderBy('totalScore', 'desc').get().then(function (snapshot) {
-    return snapshot.docs.map(function (doc) { return Object.assign({ id: doc.id }, doc.data()); });
+    var entries = snapshot.docs.map(function (doc) { return Object.assign({ id: doc.id }, doc.data()); });
+    return weekId === undefined ? entries : entries.filter(function (e) { return e.weekId === weekId; });
   });
 }
 

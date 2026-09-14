@@ -20,10 +20,15 @@ var MAX_ENTRIES = 50; // 2026-09-07: 20->50 per user request, to keep more repla
 /** @param {string} [category] - 'ultimate' (default)|'standard'|'weekly' -- 3-way split (2026-09-07, per
  *   user spec, see main.js's usedDebugOrTestGameThisGame doc), each backed by its own OnlineSync
  *   collection so one category's scores can never evict another's out of the list.
+ * @param {string} [weekId] - 2026-09-14, per user request "毎週変わるようにしてほしい...先週、先々週と戻っ
+ *   てみることができる": only meaningful for category 'weekly' (ignored otherwise) -- restricts the list
+ *   to entries whose own stored weekId matches (see main.js's weeklyRankingIdForOffset for how a caller
+ *   picks which week). Omitted/undefined for 'weekly' shows every week's entries pooled together (not
+ *   currently used by any caller -- main.js's ranking overlay always passes an explicit week).
  * @returns {Promise<{playerId,name,rawScore,qstScore,totalScore,conFaceId,jobCardId,opponents,playerColor,savedAt,hasReplay,id}[]>}
- *   sorted totalScore descending (OnlineSync.listRanking already sorts+caps server-side). */
-function list(category) {
-  return window.OnlineSync.listRanking(category);
+ *   sorted totalScore descending (OnlineSync.listRanking already sorts+caps). */
+function list(category, weekId) {
+  return window.OnlineSync.listRanking(category, weekId);
 }
 
 /** @returns {Promise<object[]|null>} the saved replayHistory array, or null if unavailable (e.g. the
@@ -37,14 +42,18 @@ function loadReplay(id) {
  * fails (e.g. offline), the ranking entry is still saved with hasReplay:false so the ranking list itself
  * never gets lost over a replay-storage hiccup.
  * @param {object} entryWithoutId - {name,rawScore,qstScore,totalScore,conFaceId,jobCardId,opponents,
- *   playerColor,category?} -- category ('ultimate'|'standard'|'weekly', defaults to 'ultimate' if
+ *   playerColor,category?,weekId?} -- category ('ultimate'|'standard'|'weekly', defaults to 'ultimate' if
  *   omitted) picks which collection (and therefore which independent MAX_ENTRIES eviction pool) this
- *   entry lands in -- see online-sync.js's own rankingCollectionName doc.
+ *   entry lands in -- see online-sync.js's own rankingCollectionName doc. weekId (2026-09-14, only ever
+ *   set by main.js for category:'weekly') further scopes that eviction pool to just the SAME week's
+ *   entries, so an old week's top scores can never get pushed out by a newer week's -- each week is its
+ *   own independent top-MAX_ENTRIES pool, not one pool shared across every week ever played.
  * @param {object[]} replayHistory
  * @returns {Promise<object>} the saved entry (with id/savedAt/hasReplay filled in)
  */
 function save(entryWithoutId, replayHistory) {
   var category = entryWithoutId.category || 'ultimate';
+  var weekId = entryWithoutId.weekId; // undefined for ultimate/standard -- see this function's own doc
   var entry = Object.assign({}, entryWithoutId, {
     id: (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : String(Date.now()) + '-' + Math.random().toString(36).slice(2),
     savedAt: new Date().toISOString(),
@@ -57,7 +66,7 @@ function save(entryWithoutId, replayHistory) {
     delete toSave.id; // the id is the Firestore document key, not a field within it
     return window.OnlineSync.saveRankingEntry(entry.id, toSave, category);
   }).then(function () {
-    return window.OnlineSync.listAllRankingSorted(category);
+    return window.OnlineSync.listAllRankingSorted(category, weekId);
   }).then(function (current) {
     var evicted = current.slice(MAX_ENTRIES);
     return Promise.all(evicted.map(function (e) {

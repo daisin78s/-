@@ -101,19 +101,41 @@ function consumeDebugSetupPlan() {
  * happens to fall in their own timezone). Used as this.week's fixed RNG seed (via createInitialState's
  * forcedSeed) so every attempt at the same week, by any player, gets the exact same board. ISO weeks
  * already start on Monday, matching "日曜と月曜のさかいで" with no extra day-of-week adjustment needed. */
-function currentWeeklyChallengeId() {
-  const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
-  const nowJst = new Date(Date.now() + JST_OFFSET_MS);
-  // Standard ISO-8601 week algorithm, applied to the JST wall-clock date treated as if it were itself UTC
-  // (the +9h shift above already did the real timezone conversion -- using UTC getters from here on
-  // avoids the browser's own local timezone leaking back in a second time). ISO weeks start Monday,
-  // matching "日曜と月曜のさかいで" with no extra day-of-week adjustment needed. Verified against known
-  // reference dates (2026-09-06 Sun -> 2026-W36, 2026-09-07 Mon -> 2026-W37, etc.) before use.
-  const d = new Date(Date.UTC(nowJst.getUTCFullYear(), nowJst.getUTCMonth(), nowJst.getUTCDate()));
+// Standard ISO-8601 week algorithm, applied to a JST wall-clock date treated as if it were itself UTC
+// -- factored out of currentWeeklyChallengeId (2026-09-14, per user request: ウィークリーランキングを
+// 毎週リセットし、過去の週も見られるようにしたい) so weeklyRankingIdForOffset below can reuse the exact
+// same week-boundary math for a PAST week instead of duplicating it. ISO weeks start Monday, matching
+// "日曜と月曜のさかいで" with no extra day-of-week adjustment needed. Verified against known reference
+// dates (2026-09-06 Sun -> 2026-W36, 2026-09-07 Mon -> 2026-W37, etc.) before use.
+function isoWeekIdForUtcDate(dateActingAsUtc) {
+  const d = new Date(Date.UTC(dateActingAsUtc.getUTCFullYear(), dateActingAsUtc.getUTCMonth(), dateActingAsUtc.getUTCDate()));
   d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
   const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
   const week = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
   return `${d.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+
+/** ISO-8601 week id anchored to Japan time (UTC+9) regardless of the player's own device timezone
+ * (2026-09-07, per user request confirming "日本時間で" for the weekly challenge's own Sun/Mon boundary --
+ * every player sees the new week at the same real-world moment, JST midnight Mon, not whenever midnight
+ * happens to fall in their own timezone). Used as this.week's fixed RNG seed (via createInitialState's
+ * forcedSeed) so every attempt at the same week, by any player, gets the exact same board; also stamped
+ * onto every 'weekly'-category ranking entry (see its own save() call site) so the ranking itself can be
+ * filtered to just the current week -- see weeklyRankingIdForOffset below for past weeks. */
+function currentWeeklyChallengeId() {
+  const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+  return isoWeekIdForUtcDate(new Date(Date.now() + JST_OFFSET_MS));
+}
+
+/** Same week id as currentWeeklyChallengeId, but `weeksAgo` weeks earlier (0 = this week, 1 = 先週, 2 =
+ * 先々週, ...) -- used only by the ウィークリーランキング column's own back/forward navigation
+ * (renderRankingList), never by game setup (that always wants the CURRENT week's id). Because the ranking
+ * naturally only ever shows entries whose stored weekId matches, a fresh week automatically starts empty
+ * at JST Monday 00:00 with no separate "reset" step needed -- see ranking.js's save()/list() doc. */
+function weeklyRankingIdForOffset(weeksAgo) {
+  const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+  const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+  return isoWeekIdForUtcDate(new Date(Date.now() + JST_OFFSET_MS - weeksAgo * WEEK_MS));
 }
 
 function createInitialState(plan, forcedSeed) {
@@ -6990,6 +7012,15 @@ function renderRankingRegisterList(state) {
         // anyway -- see renderDebugPanel -- so usedDebugOrTestGameThisGame is moot here); otherwise
         // 'standard' only if neither was ever used this whole game, 'ultimate' if either was.
         category: weeklyChallengeActive ? 'weekly' : (usedDebugOrTestGameThisGame ? 'ultimate' : 'standard'),
+        // weekId (2026-09-14, per user request: ウィークリーランキングを毎週リセットしたい): stamped only
+        // for 'weekly' entries -- the SAME id currentWeeklyChallengeId() used to seed this very game's
+        // board, so an entry always lands in the week it was actually played, not whatever week it happens
+        // to get registered in (registration can lag the game itself by a few minutes, never enough to
+        // cross a JST Monday boundary in practice, but this is correct either way). Omitted entirely (not
+        // even as an explicit undefined -- Firestore's .set() rejects undefined field values) for
+        // ultimate/standard entries -- see ranking.js's save()/online-sync.js's listRanking doc for how
+        // this field turns into a per-week Firestore filter.
+        ...(weeklyChallengeActive ? { weekId: currentWeeklyChallengeId() } : {}),
       }, replayHistory).then((entry) => {
         registeredRankingPlayerIds.add(c.playerId);
         renderRankingOverlay(STATE, entry.id, entry.category);
@@ -7014,6 +7045,17 @@ function renderRankingRegisterList(state) {
 const RANKING_CATEGORIES = ['ultimate', 'standard', 'weekly'];
 const RANKING_CATEGORY_LABELS = { ultimate: 'アルティメット\nランキング', standard: 'スタンダード\nランキング', weekly: 'ウィークリー\nランキング' };
 let rankingListRequestId = 0;
+// ウィークリーランキングの週送り (2026-09-14, per user request: "毎週変わるようにしてほしい...先週、先々週
+// と戻ってみることができる"): 0 = 今週 (always what a fresh openRankingOverlay shows -- see its own reset),
+// 1 = 先週, 2 = 先々週, etc. Only the 'weekly' column's own list() call ever reads this; ultimate/standard
+// are unaffected. Module-level UI-only state, same idiom as e.g. debugMode/historyCursor above.
+let weeklyRankingWeekOffset = 0;
+function weeklyRankingWeekLabel(offset) {
+  if (offset === 0) return '今週';
+  if (offset === 1) return '先週';
+  if (offset === 2) return '先々週';
+  return `${offset}週間前`;
+}
 
 /** Renders all 3 category columns at once into #ranking-columns (2026-08-16, reworked 2026-09-07 for the
  * 3-way simultaneous split). Each column fetches its own RankingStorage.list(category) independently and
@@ -7037,13 +7079,48 @@ function renderRankingList(highlightId, highlightCategory) {
 
   for (const category of RANKING_CATEGORIES) {
     const column = el('div', 'ranking-column');
-    column.appendChild(el('div', 'ranking-column__title', RANKING_CATEGORY_LABELS[category]));
+    if (category === 'weekly') {
+      // 週送りナビゲーション (2026-09-14, per user request: "ウィークリーランキングと書いてある箇所の右側
+      // にボタンを作り、それを押すことで先週、先々週と戻ってみることができる") -- a header row instead of
+      // the plain title div ultimate/standard use: the title on the left, a "◀ 前週" button on the right
+      // that goes one week further back each click, plus a "今週へ ▶" button (shown only once offset>0,
+      // i.e. not viewing the current week already) to jump straight back to today's week. Clicking either
+      // just re-renders the whole overlay's list -- simplest way to keep every column's own in-flight
+      // fetch/highlight logic below untouched.
+      const header = el('div', 'ranking-column__header');
+      header.appendChild(el('div', 'ranking-column__title', RANKING_CATEGORY_LABELS[category]));
+      const nav = el('div', 'ranking-column__week-nav');
+      nav.appendChild(el('div', 'ranking-column__week-label', weeklyRankingWeekLabel(weeklyRankingWeekOffset)));
+      const buttons = el('div', 'ranking-column__week-nav-buttons');
+      if (weeklyRankingWeekOffset > 0) {
+        const toCurrentButton = el('button', 'ranking-week-nav-button', '今週へ');
+        toCurrentButton.type = 'button';
+        toCurrentButton.addEventListener('click', () => {
+          weeklyRankingWeekOffset = 0;
+          renderRankingList();
+        });
+        buttons.appendChild(toCurrentButton);
+      }
+      const prevButton = el('button', 'ranking-week-nav-button', '◀ 前週');
+      prevButton.type = 'button';
+      prevButton.addEventListener('click', () => {
+        weeklyRankingWeekOffset += 1;
+        renderRankingList();
+      });
+      buttons.appendChild(prevButton);
+      nav.appendChild(buttons);
+      header.appendChild(nav);
+      column.appendChild(header);
+    } else {
+      column.appendChild(el('div', 'ranking-column__title', RANKING_CATEGORY_LABELS[category]));
+    }
     const list = el('div', 'ranking-column__list');
     list.appendChild(el('div', 'ranking-empty', '読み込み中...'));
     column.appendChild(list);
     columnsContainer.appendChild(column);
 
-    RankingStorage.list(category).then((entries) => {
+    const weekId = category === 'weekly' ? weeklyRankingIdForOffset(weeklyRankingWeekOffset) : undefined;
+    RankingStorage.list(category, weekId).then((entries) => {
       if (requestId !== rankingListRequestId) return; // superseded by a later renderRankingList() call
       list.innerHTML = '';
       if (entries.length === 0) {
@@ -7110,11 +7187,16 @@ function renderRankingList(highlightId, highlightCategory) {
 }
 
 function renderRankingOverlay(state, highlightId, highlightCategory) {
+  // A fresh registration always lands in the CURRENT week (see its own save() call site) -- jump the
+  // weekly column back to 今週 so the just-registered entry's own highlight (below) can actually be found;
+  // otherwise a still-scrolled-back-to-先週 view would silently never show it (2026-09-14).
+  if (highlightCategory === 'weekly') weeklyRankingWeekOffset = 0;
   renderRankingRegisterList(state);
   renderRankingList(highlightId, highlightCategory);
 }
 
 function openRankingOverlay() {
+  weeklyRankingWeekOffset = 0; // always open on 今週 (2026-09-14, per user request) -- see its own doc
   document.getElementById('ranking-overlay').hidden = false;
   renderRankingOverlay(STATE);
 }
