@@ -611,6 +611,15 @@
     </div>
   </template>
 
+  <!-- SHOP001-006 (モニュメント), 1R限定 (2026-09-14, per user request: "shop001～006 1Rはすべて裏向き
+       にして2Rからと表示 2Rから獲得できるようになる") -- the card's own identity is hidden entirely (not
+       just a locked-but-visible overlay like SHOP201-203 uses), see main.js's buildShopSlotNode doc. -->
+  <template id="tpl-shop-card-facedown">
+    <div class="shop-card shop-card--facedown">
+      <span>2Rから</span>
+    </div>
+  </template>
+
   <template id="tpl-map-tile">
     <div class="map-tile">
       <div class="map-tile__header">

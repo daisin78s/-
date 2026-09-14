@@ -4389,12 +4389,21 @@ function renderQsts(state) {
  * there's no real conflict between the two captions in practice. Monuments (M-family) never lock here --
  * board.specialShopMinRound returns 0 for them -- since SHOP201-203's cards are never discarded/force-
  * cleared for any reason (confirmed with the user, 2026-08-29).
+ *
+ * faceDown (2026-09-14, SHOP001-006/monuments only, default false, per user request: "shop001～006 1Rは
+ * すべて裏向きにして2Rからと表示 2Rから獲得できるようになる"): unlike `locked` above (card identity still
+ * shown, just an X overlay + caption), this hides the card's identity ENTIRELY -- tpl-shop-card-facedown
+ * instead of the real buildCardVisual -- with "2Rから" as the only caption, since there is nothing else
+ * worth showing about a card the player can't even see yet. See renderShopGrid's own M-shop loop for the
+ * round<2 condition that sets this; see board.getBuildCandidates for the matching rule enforcement
+ * (round<2 M-shop slots were never real candidates regardless of this display).
  */
-function buildShopSlotNode(slotId, faceId, showReqCaption, locked) {
+function buildShopSlotNode(slotId, faceId, showReqCaption, locked, faceDown = false) {
   const slotTpl = document.getElementById('tpl-shop-slot');
   const slotNode = slotTpl.content.firstElementChild.cloneNode(true);
   if (locked) slotNode.classList.add('shop-slot--locked');
   const reqCaption = () => {
+    if (faceDown) return '2Rから';
     if (locked) return `${boardMod.specialShopMinRound(faceId)}Rから`;
     return showReqCaption ? shopReqForSlotId(slotId) : '';
   };
@@ -4402,6 +4411,12 @@ function buildShopSlotNode(slotId, faceId, showReqCaption, locked) {
     slotNode.querySelector('.shop-slot__req').textContent = showReqCaption ? shopReqForSlotId(slotId) : '';
     const emptyTpl = document.getElementById('tpl-shop-card-empty');
     slotNode.querySelector('.shop-slot__card').appendChild(emptyTpl.content.firstElementChild.cloneNode(true));
+    return slotNode;
+  }
+  if (faceDown) {
+    slotNode.querySelector('.shop-slot__req').textContent = reqCaption();
+    const facedownTpl = document.getElementById('tpl-shop-card-facedown');
+    slotNode.querySelector('.shop-slot__card').appendChild(facedownTpl.content.firstElementChild.cloneNode(true));
     return slotNode;
   }
   const facts = factsForFaceId(faceId);
@@ -4457,7 +4472,9 @@ function renderShopGrid(state) {
   // added for the remaining-count badges below -- relying on implicit 6-wide auto-flow would otherwise
   // let NORMAL's first item spill into row 1's now-available 7th cell instead of starting row 2).
   Object.entries(state.shops.M.slots).forEach(([slotId, faceId], i) => {
-    const node = buildShopSlotNode(slotId, faceId, true);
+    // SHOP001-006 stay face-down through round 1 (2026-09-14, per user request) -- see
+    // buildShopSlotNode's own faceDown doc.
+    const node = buildShopSlotNode(slotId, faceId, true, false, state.round < 2);
     node.style.gridRow = '1';
     node.style.gridColumn = String(i + 1);
     container.appendChild(node);

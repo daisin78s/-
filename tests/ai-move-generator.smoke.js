@@ -48,6 +48,11 @@ function assertTrue(label, cond) { check(label, !!cond, true); }
 
 function freshStateWithShops() {
   const state = createEmptyGameState('ai-move-generator-smoke');
+  // createEmptyGameState defaults round to 0 -- bumped to 2 here (2026-09-14) now that SHOP001-006 (the
+  // M-shop) round-gates monument candidates to round>=2 (per user request: "shop001～006 1Rはすべて裏向
+  // きにして2Rからと表示 2Rから獲得できるようになる"), so this fixture's own castle/monument-build tests
+  // keep exercising what they always tested.
+  state.round = 2;
   setup.createPlayers(state, ['Alice', 'Bob']);
   setup.prepareMaps(state, index);
   setup.prepareShops(state, index);
@@ -388,6 +393,13 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
+  // round=1 (not this fixture's own default of 2, see freshStateWithShops' own doc): this test's whole
+  // premise is "die value 6 on the castle only reaches candidates costing 3+ units" (see the comment just
+  // below) -- at round 2, SPECIAL's own wave-1 cards (specialShopMinRound===2) become reachable too, which
+  // could introduce a newly-affordable candidate this test never accounted for. round=1 reproduces the
+  // exact reachability this test was originally authored against (SPECIAL wave-1 blocked, same as the
+  // round-0 default this fixture used before 2026-09-14's SHOP001-006 gate existed at all).
+  state.round = 1;
   const p1 = player(state, 'P1');
   const jobInst = createCardInstance('JOB004');
   jobInst.ownerId = 'P1';

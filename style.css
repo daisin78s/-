@@ -869,6 +869,19 @@ h1, h2, h3 { margin: 0; }
   border-style: dashed;
 }
 
+/* SHOP001-006 face-down placeholder (2026-09-14) -- a real card sits here, just hidden until round 2 (see
+   main.js's buildShopSlotNode doc), so this is deliberately a SOLID card-back look rather than
+   .shop-card--empty's own dashed "nothing here" style -- the two must read as visually different states. */
+.shop-card--facedown {
+  align-items: center;
+  justify-content: center;
+  color: var(--surface);
+  font-size: 13px;
+  font-weight: 700;
+  background: var(--monument);
+  border-style: solid;
+}
+
 /* ---------------------------------------------------------------------- */
 /* Board                                                                   */
 /* ---------------------------------------------------------------------- */

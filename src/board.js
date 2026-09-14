@@ -1675,6 +1675,13 @@ function getBuildCandidates(state, index, playerId, categories, buildValue, monu
     for (const { slotId, faceId, shopKey } of monumentSlotSources) {
       if (!faceId || faceId[0] !== 'M') continue;
       if (shopKey === 'SPECIAL' && state.round < specialShopMinRound(faceId)) continue;
+      // SHOP001-006 (the M-shop's OWN 6 slots) are round-gated too now (2026-09-14, per user request:
+      // "shop001～006 1Rはすべて裏向きにして2Rからと表示 2Rから獲得できるようになる") -- scoped to
+      // shopKey==='M' specifically, not every monument regardless of shop: a monument that happened to
+      // spill into a NORMAL/SPECIAL slot via revealExtraMonumentsIfAnyShopEmptied keeps whatever rule
+      // already governs that shop instead (NORMAL: none; SPECIAL: specialShopMinRound above), since the
+      // user's own request named these 6 slots specifically, not "every monument, wherever it sits".
+      if (shopKey === 'M' && state.round < 2) continue;
       const threshold = discountedThreshold(parseMonumentThreshold(getCardRow(index, faceId).DICE));
       if (monumentBuildValue >= threshold) {
         candidates.push({ type: 'BUILD_NEW', faceId, shopKey, slotId });

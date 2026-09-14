@@ -43,6 +43,12 @@ function check(label, actual, expected) {
 
 function freshStateWithShops() {
   const state = createEmptyGameState('board-smoke');
+  // createEmptyGameState defaults round to 0 -- bumped to 2 here (2026-09-14) now that SHOP001-006
+  // (the M-shop) round-gates monument candidates to round>=2 (per user request: "shop001～006 1Rはすべて
+  // 裏向きにして2Rからと表示 2Rから獲得できるようになる"), so this shared fixture's own many
+  // placeDiceGroup/getBuildCandidates(['M'],...) callers keep exercising what they always tested instead
+  // of being confounded by a round that was never a deliberate choice to begin with.
+  state.round = 2;
   setup.createPlayers(state, ['Alice', 'Bob']);
   setup.prepareMaps(state, index);
   setup.prepareShops(state, index);
@@ -261,11 +267,49 @@ function giveDie(state, playerId, value) {
 }
 
 // ---------------------------------------------------------------------------
+// SHOP001-006 (M-shop) round-gated to round>=2 (2026-09-14, per user request: "shop001～006 1Rはすべて
+// 裏向きにして2Rからと表示 2Rから獲得できるようになる"). Scoped to shopKey==='M' specifically -- a
+// monument that happens to sit in a NORMAL/SPECIAL slot instead (via
+// revealExtraMonumentsIfAnyShopEmptied) keeps whatever rule already governs THAT shop, unaffected by
+// this one.
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  state.round = 1;
+  for (const slotId of Object.keys(state.shops.M.slots)) state.shops.M.slots[slotId] = null;
+  state.shops.M.slots.SHOP001 = 'M012'; // DICE>=1 -- would be trivially reachable at any real buildValue
+  const candidates = board.getBuildCandidates(state, index, 'P1', ['M'], 6);
+  check('Round 1: SHOP001-006 offers no monument candidates at all, even one with DICE>=1', candidates.length, 0);
+}
+{
+  const state = freshStateWithShops();
+  state.round = 2;
+  for (const slotId of Object.keys(state.shops.M.slots)) state.shops.M.slots[slotId] = null;
+  state.shops.M.slots.SHOP001 = 'M012';
+  const candidates = board.getBuildCandidates(state, index, 'P1', ['M'], 6);
+  check('Round 2: the same M-shop candidate is offered once the gate lifts', candidates.some((c) => c.faceId === 'M012' && c.shopKey === 'M'), true);
+}
+{
+  // M401-403 sitting in a NORMAL slot (via revealExtraMonumentsIfAnyShopEmptied) are unaffected by the
+  // M-shop-specific gate above -- NORMAL never round-gates monuments at all (unchanged from before this
+  // feature).
+  const state = freshStateWithShops();
+  state.round = 1;
+  const normalSlotId = Object.keys(state.shops.NORMAL.slots)[0];
+  state.shops.NORMAL.slots[normalSlotId] = 'M401'; // DICE>=1
+  const candidates = board.getBuildCandidates(state, index, 'P1', ['M'], 6);
+  check('Round 1: a monument sitting in a NORMAL slot is still offered (the M-shop gate does not apply there)', candidates.some((c) => c.faceId === 'M401' && c.shopKey === 'NORMAL'), true);
+}
+
+// ---------------------------------------------------------------------------
 // getBuildCandidates respects BLOCK_BUILD (2026-08-04, per user feedback: using JOB004's TAP blocks
 // monument building for the rest of that turn) -- the single choke point every BUILD(M) path shares.
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
+  // SHOP001-006 (M-shop) are round-gated to round>=2 now (2026-09-14) -- this test is about BLOCK_BUILD,
+  // not the round gate, so bump past it to keep testing what it always tested.
+  state.round = 2;
   const p1 = player(state, 'P1');
   // buildValue=12 clears every monument's threshold (max DICE is ">=12"), so at least one M candidate
   // is guaranteed regardless of this seed's shop shuffle.
@@ -289,6 +333,7 @@ function giveDie(state, playerId, value) {
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
+  state.round = 2; // SHOP001-006 round-gated to round>=2 now (2026-09-14) -- this test is about the discount, not the gate.
   const p1 = player(state, 'P1');
   const withoutDiscount = board.getBuildCandidates(state, index, 'P1', ['M'], 10);
   check('M001 (DICE>=12) is not reachable at buildValue=10 with no discount', withoutDiscount.some((c) => c.faceId === 'M001'), false);
@@ -520,6 +565,7 @@ function giveDie(state, playerId, value) {
   // action, onto the castle -- must NOT be blocked even though CON005B is owned, since neither die was
   // "already there" before this action started.
   const state = freshStateWithShops();
+  state.round = 2; // placeDiceGroup only ever targets a monument (see its own doc) -- SHOP001-006 round-gated to round>=2 now (2026-09-14).
   const p1 = player(state, 'P1');
   p1.resources.BZ = 20;
   const con6 = createCardInstance('CON005B');
@@ -572,6 +618,7 @@ function giveDie(state, playerId, value) {
   // same as the earlier "Every castle slot filled first" block above, since a bare buildValue=7 (1+6)
   // isn't guaranteed affordable against whatever the deterministic shuffle happens to deal.
   const state = freshStateWithShops();
+  state.round = 2; // SHOP001-006 round-gated to round>=2 now (2026-09-14) -- this test targets SHOP001 directly.
   const p1 = player(state, 'P1');
   p1.resources.BZ = 20;
   for (const slotId of Object.keys(state.shops.M.slots)) state.shops.M.slots[slotId] = null;
@@ -1277,6 +1324,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   // atomic group action correctly counts as "claimed" even though nothing's actually been pushed to
   // map.slots yet).
   const state = freshStateWithShops();
+  state.round = 2; // placeDiceGroup only ever targets a monument (see its own doc) -- SHOP001-006 round-gated to round>=2 now (2026-09-14).
   state.maps['MAP005'] = mapWithArea('MAP005', 'AREA005A', 2, null); // SLOT1=6, SLOT2=ANY
   player(state, 'P1').resources.BZ = 20;
   const d1 = giveDie(state, 'P1', 6);
@@ -1547,6 +1595,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
+  state.round = 2; // SHOP001-006 round-gated to round>=2 now (2026-09-14) -- this test is about castle group placement, not the gate.
   player(state, 'P1').resources.BZ = 20; // see the earlier castle blocks' comment on the affordability gate (max monument COST is M012's 13 units)
   const d1 = giveDie(state, 'P1', 6);
   const d2 = giveDie(state, 'P1', 3);
@@ -1559,6 +1608,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
 }
 {
   const state = freshStateWithShops();
+  state.round = 2; // SHOP001-006 round-gated to round>=2 now (2026-09-14) -- this test is about castle group placement, not the gate.
   player(state, 'P1').resources.BZ = 20; // see the earlier castle blocks' comment on the affordability gate
   // 2026-08-21, per user request ("一度に２個置くときにダイスを重ねない ぞろ目でも　ぞろ目でなくても"):
   // same-valued dice no longer share a slot together -- each always claims its own, exactly like
@@ -1575,6 +1625,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   // were spent to reach 12 -- "ダイスを減らしても建築できるモニュメントは表示しないでください". M001
   // (needs >=12, the max) genuinely requires both and must stay offered.
   const state = freshStateWithShops();
+  state.round = 2; // SHOP001-006 round-gated to round>=2 now (2026-09-14) -- this test is about castle group placement, not the gate.
   player(state, 'P1').resources.BZ = 20;
   const d1 = giveDie(state, 'P1', 6);
   const d2 = giveDie(state, 'P1', 6);
