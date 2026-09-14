@@ -151,23 +151,29 @@ function parseArgs() {
  * fallback) FOREVER, with mutation never getting a chance to discover a nonzero weight for it -- the same
  * "starts at 0, mutation's ZERO_ESCAPE_STEP discovers a real value" story a real 評価値 sheet's blank cell
  * already gets, except this population would never even receive that starting 0 as a real key to escape
- * from. Backfilling every currentIds entry as 0 (matching a blank real-sheet cell) into every resumed
- * genome, for every round, fixes this once, right here, rather than leaving each individual id gap to be
- * silently rediscovered (or not) generation after generation. */
-function loadResumePopulation(resumeFromDir, currentIds) {
+ * from.
+ *
+ * Backfill VALUE changed 2026-09-14 (per user request, right after hitting exactly this case for the new
+ * SAME_ROLE_GROUP/FEE_OPPORTUNITY_GROUP rows: "初期値はこれで(-50/-30/20/20)" -- the population had just
+ * backfilled them as 0, not the seeded values already sitting in game.xlsx): backfills from realTable (the
+ * CURRENT game.xlsx values, already loaded by the time this runs) instead of a flat 0. For a genuinely
+ * blank real cell this is still 0 (identical to the old behavior), but for a row seeded with a real
+ * nonzero starting guess -- as these 4 were -- the whole population now starts from that guess instead of
+ * every non-anchor individual wasting generations rediscovering it via mutation from scratch. */
+function loadResumePopulation(resumeFromDir, currentIds, realTable) {
   const files = fs.readdirSync(resumeFromDir).filter((f) => /^gen_\d{4}\.json$/.test(f)).sort();
   if (files.length === 0) throw new Error(`No gen_XXXX.json files found in ${resumeFromDir} to resume from`);
   const { generation, population } = JSON.parse(fs.readFileSync(path.join(resumeFromDir, files[files.length - 1]), 'utf8'));
   const backfilled = population.map((p) => {
     const genome = { 1: {}, 2: {}, 3: {}, 4: {} };
     for (const round of [1, 2, 3, 4]) {
-      for (const id of currentIds) genome[round][id] = p.genome[round][id] || 0;
+      for (const id of currentIds) genome[round][id] = p.genome[round][id] !== undefined ? p.genome[round][id] : (realTable[round][id] || 0);
     }
     return genome;
   });
   const addedIds = currentIds.filter((id) => !Object.prototype.hasOwnProperty.call(population[0].genome[1], id));
   if (addedIds.length > 0) {
-    console.log(`Resumed population was missing ${addedIds.length} current eval-table id(s), backfilled as 0: ${addedIds.join(', ')}`);
+    console.log(`Resumed population was missing ${addedIds.length} current eval-table id(s), backfilled from the real table's own current value: ${addedIds.join(', ')}`);
   }
   return { startGeneration: generation, population: backfilled };
 }
@@ -408,7 +414,7 @@ async function main() {
   let startGeneration;
   let bestEver = { avgRank: Infinity };
   if (resumeFromDir) {
-    const resumed = loadResumePopulation(resumeFromDir, ids);
+    const resumed = loadResumePopulation(resumeFromDir, ids, realTable);
     population = withAnchors(resumed.population);
     startGeneration = resumed.startGeneration;
     console.log(`Resuming from ${resumeFromDir} at generation ${startGeneration} (population size ${population.length}, ${ANCHOR_COUNT} anchor slot(s) (re-)inserted) for ${generations} more generations.`);
