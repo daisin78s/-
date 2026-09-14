@@ -632,7 +632,7 @@ console.log(`\n${passCount} passed, ${failCount} failed`);
   const r1 = executor.runProgram(state, index, { playerId: 'P1', chosenCardPhysicalId: notOwned, chosenDelta: 2 }, row.TAP);
   check('Targeting a card the player does not own fails', r1, { success: false, reason: 'INVALID_BUILD_VALUE_CARD' });
 
-  const notEligible = giveCard(state, 'C001A', 'P1'); // TAP=CHANGE(K,A,ALL), no BUILD command at all
+  const notEligible = giveCard(state, 'C001A', 'P1'); // TAP=CHANGE(K,A,7), no BUILD command at all
   const r2 = executor.runProgram(state, index, { playerId: 'P1', chosenCardPhysicalId: notEligible, chosenDelta: 2 }, row.TAP);
   check('Targeting an owned card with no fixed BUILD value fails', r2, { success: false, reason: 'INVALID_BUILD_VALUE_CARD' });
 }
@@ -768,13 +768,13 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 //     itself no longer anchors this test as of 2026-09-07.
 // ---------------------------------------------------------------------------
 {
-  // 2026-09-07: C001A/002A/003A's own TAP has moved around twice this same day (briefly a fixed-cost
-  // CHANGE(3K,4A) exchange, now CHANGE(K,A,ALL) -- see the ALL-kind CHANGE tests elsewhere in this
-  // file/board.smoke.js/ai-simulator.smoke.js/ai-move-generator.smoke.js for that current real shape),
-  // so this 'capped'-kind (explicit numeric 3rd argument) DSL mechanism no longer has any real-card
-  // anchor at all -- tested here via a hand-written DSL string instead of a card row, same "synthetic
-  // fixture" convention this file already uses elsewhere (see this file's own top-of-file patches) for a
-  // mechanism real data doesn't currently exercise.
+  // C001A/002A/003A's own TAP has moved around several times (briefly a fixed-cost CHANGE(3K,4A)
+  // exchange, then CHANGE(K,A,ALL) as of 2026-09-07, now CHANGE(K,A,7) as of 2026-09-14 -- see
+  // board.smoke.js/ai-simulator.smoke.js/ai-move-generator.smoke.js for that current real shape) -- this
+  // test wants a fixed cap of 4 specifically, independent of whatever cap the real cards happen to use at
+  // any given moment, so it's tested here via a hand-written DSL string instead of a card row, same
+  // "synthetic fixture" convention this file already uses elsewhere (see this file's own top-of-file
+  // patches) rather than one more test that breaks/needs re-anchoring every time C001A's own cap changes.
   const cappedChangeK2A4 = 'CHANGE(K,A,4)';
   const state = freshState();
   const physicalId = giveCard(state, 'C001A', 'P1'); // stand-in owned card, only its physicalId matters here

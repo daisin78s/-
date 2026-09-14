@@ -178,7 +178,7 @@ function giveDie(state, playerId, value) {
 }
 
 // ---------------------------------------------------------------------------
-// BARE_TAP (immediate): C001A.TAP=CHANGE(K,A,ALL).
+// BARE_TAP (immediate): C001A.TAP=CHANGE(K,A,7).
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
