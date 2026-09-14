@@ -161,6 +161,50 @@ function giveCard(state, faceId, playerId) {
 }
 
 // ---------------------------------------------------------------------------
+// 訓練場の支配 (A202A/A202B) timing tax (2026-09-14, per user report: watching a replay, the AI grabbed
+// this in round 2 with its very last die, unable to use the newly-unlocked AREA007 slot at all that round
+// -- see evaluator.js's own doc on why a flat -100 was added on top of the existing +1000/-1000
+// color-dice-count bonus/penalty). totalColorDiceCount deliberately kept away from 3 and 4+ in most of
+// these (0 here) so the bonus/penalty branch doesn't confound the timing-tax check on its own.
+// ---------------------------------------------------------------------------
+{
+  const state = freshState(1);
+  giveCard(state, 'A202A', 'P1'); // 0 color dice at all -- neither bonus nor penalty branch, dice.every() on [] is vacuously true
+  check('Owning A202A with literally no dice this round (can\'t place on the new slot) applies the -100 timing tax', evaluator.score(state, 'P1'), evalTable[1].A202A - 100);
+}
+{
+  const state = freshState(1);
+  giveCard(state, 'A202A', 'P1');
+  state.players[0].dice.push(createDie('d1', 'COLOR')); // unplaced, unpassed -- still has a die to spend this round
+  // The unplaced die itself contributes its own 'D'-weight score too (see the unplacedColor line just
+  // above this whole block in evaluator.js) -- unrelated to A202, just an unavoidable side effect of
+  // giving this player a die at all to prove one is available.
+  check('Owning A202A with an unplaced die left does NOT apply the timing tax', evaluator.score(state, 'P1'), evalTable[1].A202A + evalTable[1].D);
+}
+{
+  const state = freshState(1);
+  giveCard(state, 'A202A', 'P1');
+  const placed1 = createDie('d1', 'COLOR');
+  placed1.placedMapId = 'MAP001';
+  const placed2 = createDie('d2', 'COLOR');
+  placed2.placedMapId = 'MAP001';
+  state.players[0].dice.push(placed1, placed2); // both already placed (not merely passed -- see the
+  // passedColor-vs-placed distinction just above) -- neither the unplacedColor nor passedColor lines add
+  // anything for these, keeping this case a clean isolated check of just the timing tax.
+  check('Owning A202A with every die already placed applies the timing tax the same way', evaluator.score(state, 'P1'), evalTable[1].A202A - 100);
+}
+{
+  const state = freshState(1);
+  giveCard(state, 'A202A', 'P1');
+  for (let i = 0; i < 3; i++) {
+    const d = createDie(`d${i}`, 'COLOR');
+    d.placedMapId = 'MAP001'; // all 3 placed -- totalColorDiceCount===3 (the +1000 bonus) AND 0 unplaced (the -100 tax) at once
+    state.players[0].dice.push(d);
+  }
+  check('The domination bonus (+1000) and timing tax (-100) stack independently: net +900 over the plain card value', evaluator.score(state, 'P1'), evalTable[1].A202A + 1000 - 100);
+}
+
+// ---------------------------------------------------------------------------
 // Round sensitivity: the same holdings score differently across rounds, since weights (esp. D and VP)
 // are round-dependent -- this is the whole point of a per-round eval table.
 // ---------------------------------------------------------------------------

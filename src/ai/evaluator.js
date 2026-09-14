@@ -201,7 +201,23 @@ class Evaluator {
     // convention, not just unplaced ones.
     const TRAINING_GROUND_DOMINATION_BONUS = 1000;
     const TRAINING_GROUND_DOMINATION_PENALTY = 1000;
+    // Timing tax (2026-09-14, per user report: watching a replay, the AI grabbed 訓練場の支配 in round 2
+    // with its very last die of the round -- the +1000 bonus above only looks at totalColorDiceCount, not
+    // whether there's any die LEFT this round to actually place on the newly-unlocked AREA007 slot (the
+    // real payoff beyond CON005A/怠惰's cap-lift, which is a genuine one-time permanent effect and stays
+    // worth getting even at the buzzer -- the user confirmed that half is fine as-is). +1000 is so much
+    // larger than every other per-card weight (see eval-table.js's own evolved values, typically tens not
+    // thousands) that it can win a 1-ply comparison even against a move that would have given real round-2
+    // value, purely because the eval-based system has no concept of "and then what" once dice are gone.
+    // A flat, much smaller -100 (not scaled to a specific "lost slot value" -- deliberately rough, same
+    // idiom as the domination bonus/penalty themselves) softens that specific worst case (racing to grab
+    // this literally on the last die) without blocking a genuinely worthwhile late pickup: with the
+    // domination bonus still net +900 once this stacks with it. Scoped to A202 only, per user request --
+    // other 支配 cards (城下町/ギルド/小麦畑/農園) have the exact same "ONCE flips a MAP's AREA, real value
+    // needs a later die placed there" shape, but this deliberately doesn't touch them yet.
+    const TRAINING_GROUND_UNUSABLE_THIS_ROUND_PENALTY = 100;
     const totalColorDiceCount = player.dice.filter((d) => d.kind === 'COLOR').length;
+    const hasNoDiceLeftThisRound = player.dice.every((d) => d.placedMapId !== null || d.passed);
 
     // conBuildAware (2026-08-28, "AI LV4" only -- see this class's own constructor doc and
     // con-build-synergy.js's doc for the motivating bug report): the player's own chosen CON face's
@@ -232,6 +248,7 @@ class Evaluator {
       if (cardState.currentFaceId === 'A202A' || cardState.currentFaceId === 'A202B') {
         if (totalColorDiceCount === 3) total += TRAINING_GROUND_DOMINATION_BONUS;
         else if (totalColorDiceCount >= 4) total -= TRAINING_GROUND_DOMINATION_PENALTY;
+        if (hasNoDiceLeftThisRound) total -= TRAINING_GROUND_UNUSABLE_THIS_ROUND_PENALTY;
       }
       // 評価値_CON card-row synergy (2026-08-28): an LV2 upgrade still matches its base card's own LV1 row
       // (see con-build-synergy.js's normalizeToLv1Name) -- e.g. 憤怒 owning either tier of 双星の加護
