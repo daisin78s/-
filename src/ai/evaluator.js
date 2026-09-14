@@ -65,6 +65,23 @@ const SENATE_SYNERGY_FACE_IDS = new Set([
   'B201A', 'B201B', 'JOB002', 'JOB006', 'JOB007',
 ]);
 
+/** Same-role redundancy penalty groups (2026-09-14, per user report: watching a 3Rから replay, the AI
+ * kept acquiring multiple cards that do "the same job" -- e.g. both 小麦畑 and 農園's支配 (A004/A005), or
+ * both 代官 and 修道士 (C001/C002) -- since the evolved eval-table only knows each card's OWN standalone
+ * value, with no notion of "I already have one of these." Two overlapping groups, split by the user's own
+ * COST-shape distinction: SAME_ROLE_GROUP_A (2A,B-cost 支配 cards) and SAME_ROLE_GROUP_B (2A-cost 支配
+ * cards + the C-deck K-converters, same "convert K into one specific resource, capped at 7" shape). Keyed
+ * by physicalId (a card's own base ID, e.g. "A004" -- see game-state.js's splitCardId), not faceId: owning
+ * either tier (LV1 or LV2) of the same physical card is still just ONE card, never two, since upgrading
+ * never changes which "slot" it occupies. 歓楽街(A006) deliberately sits in BOTH groups (user confirmed:
+ * "歓楽街は両方です") -- its own penalty can stack from both independently. 訓練場/孤児院/元老院
+ * (A202/A201/A301) are deliberately excluded from both -- each already has its own dedicated
+ * synergy/domination-style logic elsewhere in this file (see TRAINING_GROUND_* above and
+ * FARM_SYNERGY_FACE_IDS/SENATE_SYNERGY_FACE_IDS). See score()'s own use of these for the actual penalty
+ * math. */
+const SAME_ROLE_GROUP_A = { ids: new Set(['A004', 'A005', 'A006']), penaltyPerExtra: 50 };
+const SAME_ROLE_GROUP_B = { ids: new Set(['A001', 'A002', 'A003', 'A006', 'C001', 'C002', 'C003']), penaltyPerExtra: 30 };
+
 /** How much VP rewardText would grant, read via the real DSL parser rather than executed (2026-08-10,
  * QST awareness -- see Evaluator's own qstAware policy doc). Every QST REWARD field today is a plain
  * ADD(nVP) (see qst.js's own doc on resolveEndGameRewards), so this sums every literal-count VP item
@@ -211,6 +228,14 @@ class Evaluator {
     const TRAINING_GROUND_UNUSABLE_THIS_ROUND_PENALTY = 100;
     const totalColorDiceCount = player.dice.filter((d) => d.kind === 'COLOR').length;
     const hasNoDiceLeftThisRound = player.dice.every((d) => d.placedMapId !== null || d.passed);
+
+    // Same-role redundancy penalty (see SAME_ROLE_GROUP_A/B's own doc above) -- counted once per group,
+    // not per owned card, since what matters is how many DISTINCT family members are owned in total, not
+    // which specific one "is" the redundant one.
+    for (const group of [SAME_ROLE_GROUP_A, SAME_ROLE_GROUP_B]) {
+      const ownedInGroup = player.ownedCardPhysicalIds.filter((id) => group.ids.has(id)).length;
+      if (ownedInGroup > 1) total -= (ownedInGroup - 1) * group.penaltyPerExtra;
+    }
 
     // conBuildAware (2026-08-28, "AI LV4" only -- see this class's own constructor doc and
     // con-build-synergy.js's doc for the motivating bug report): the player's own chosen CON face's

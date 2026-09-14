@@ -219,6 +219,63 @@ function giveCard(state, faceId, playerId) {
 }
 
 // ---------------------------------------------------------------------------
+// Same-role redundancy penalty (2026-09-14, per user report: watching a 3Rから replay, the AI kept
+// acquiring multiple cards doing "the same job" -- see evaluator.js's own SAME_ROLE_GROUP_A/B doc for the
+// exact groups/amounts, confirmed with the user card by card). A004/A005 (小麦畑/農園) happen to ALSO be
+// in the pre-existing FARM_SYNERGY_FACE_IDS set (see that const's own doc, unrelated to this feature) --
+// owning either one, with M401/晩餐会 not yet in `state.cards` at all (freshState never adds it, which
+// this file's own banquetHallUnclaimed check treats the same as "still in the shop, unclaimed"), credits
+// that separate +v('晩餐会食料生産相性') bonus once regardless of how many qualifying cards are owned --
+// included below wherever 小麦畑/農園 appears, to keep each check an exact match rather than an
+// approximation. A round() step guards every check here against harmless float-summation-order noise
+// (this file's own established fix for the same class of issue elsewhere, e.g. its M001/CON001B checks).
+// ---------------------------------------------------------------------------
+function round6(n) { return Math.round(n * 1e6) / 1e6; }
+{
+  const state = freshState(1);
+  giveCard(state, 'A004A', 'P1'); // alone -- no redundancy yet, but still trips the farm synergy
+  check('A single GROUP_A card (小麦畑) alone gets no redundancy penalty', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1]['晩餐会食料生産相性']));
+}
+{
+  const state = freshState(1);
+  giveCard(state, 'A004A', 'P1'); // 小麦畑
+  giveCard(state, 'A005A', 'P1'); // 農園 -- 2nd GROUP_A member
+  check('小麦畑 + 農園 (both GROUP_A) applies a single -50 redundancy penalty', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1].A005A + evalTable[1]['晩餐会食料生産相性'] - 50));
+}
+{
+  const state = freshState(1);
+  giveCard(state, 'A004A', 'P1'); // 小麦畑
+  giveCard(state, 'A005A', 'P1'); // 農園
+  giveCard(state, 'A006A', 'P1'); // 歓楽街 -- 3rd GROUP_A member (not itself farm-synergy)
+  check('3 GROUP_A cards applies -50 per extra beyond the first (2 * -50 = -100)', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1].A005A + evalTable[1].A006A + evalTable[1]['晩餐会食料生産相性'] - 100));
+}
+{
+  const state = freshState(1);
+  giveCard(state, 'C001A', 'P1'); // 代官
+  giveCard(state, 'C002A', 'P1'); // 修道士 -- 2nd GROUP_B member
+  check('代官 + 修道士 (both GROUP_B) applies a single -30 redundancy penalty', round6(evaluator.score(state, 'P1')), round6(evalTable[1].C001A + evalTable[1].C002A - 30));
+}
+{
+  // 歓楽街(A006) sits in BOTH groups (per user confirmation "歓楽街は両方です") -- owning it alongside one
+  // member of EACH group should charge both groups' own penalty independently, not just once overall.
+  const state = freshState(1);
+  giveCard(state, 'A006A', 'P1'); // 歓楽街 -- in both GROUP_A and GROUP_B
+  giveCard(state, 'A004A', 'P1'); // 小麦畑 -- makes GROUP_A have 2 members (歓楽街 + 小麦畑), also farm-synergy
+  giveCard(state, 'A001A', 'P1'); // 城下町 -- makes GROUP_B have 2 members (歓楽街 + 城下町)
+  check('歓楽街 stacks both groups\' penalties at once (-50 from GROUP_A, -30 from GROUP_B)', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A006A + evalTable[1].A004A + evalTable[1].A001A + evalTable[1]['晩餐会食料生産相性'] - 50 - 30));
+}
+{
+  // A202(訓練場)/A201(孤児院)/A301(元老院) are deliberately excluded from both groups. An unplaced die is
+  // given here purely to keep A202's own OWN -100 timing tax (see its own block above) from firing, so
+  // this stays a clean isolated check of just the redundancy penalty (or lack of one).
+  const state = freshState(1);
+  giveCard(state, 'A004A', 'P1'); // 小麦畑 (GROUP_A, also farm-synergy)
+  giveCard(state, 'A202A', 'P1'); // 訓練場 -- NOT in any group
+  state.players[0].dice.push(createDie('d1', 'COLOR'));
+  check('訓練場 owned alongside a GROUP_A card triggers no redundancy penalty at all', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1].A202A + evalTable[1].D + evalTable[1]['晩餐会食料生産相性']));
+}
+
+// ---------------------------------------------------------------------------
 // Round sensitivity: the same holdings score differently across rounds, since weights (esp. D and VP)
 // are round-dependent -- this is the whole point of a per-round eval table.
 // ---------------------------------------------------------------------------
