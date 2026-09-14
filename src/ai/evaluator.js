@@ -82,6 +82,25 @@ const SENATE_SYNERGY_FACE_IDS = new Set([
 const SAME_ROLE_GROUP_A = { ids: new Set(['A004', 'A005', 'A006']), penaltyPerExtra: 50 };
 const SAME_ROLE_GROUP_B = { ids: new Set(['A001', 'A002', 'A003', 'A006', 'C001', 'C002', 'C003']), penaltyPerExtra: 30 };
 
+/** Unclaimed-fee-opportunity bonus groups (2026-09-14, per user follow-up to the redundancy penalty
+ * above, worked through across several messages -- see the exact wording in that day's chat for the full
+ * back-and-forth): narrower than SAME_ROLE_GROUP_A/B on purpose -- these two groups are about whether
+ * OPPONENTS will actually generate usage-fee traffic (map.feeOwnerId, see executor.js's own doc), not
+ * about "same shape" redundancy, so 歓楽街 and the C-deck converters (no map/fee of their own at all) are
+ * deliberately left out here even though they're part of the redundancy groups above for an unrelated
+ * reason. User's own worked example: "すでに小麦畑が支配されていたら、農園を獲得しても誰もSLOTに置かない
+ * 使用料が取れない。まだ両方出ていなければ、みんなslotに置くので使用料がもらえる" -- i.e. these AREAs
+ * offer opponents an interchangeable-enough benefit that once ANY one sibling is already dominated by
+ * ANYONE (their own placement need already satisfied there), the others largely stop attracting real
+ * placement traffic. FEE_OPPORTUNITY_GROUP_A: 小麦畑/農園 (A004/A005, MAP001/MAP002). FEE_OPPORTUNITY_
+ * GROUP_B: 城下町/大聖堂/ギルド (A001/A002/A003, MAP003/MAP004/MAP005). See score()'s own use of these:
+ * for each member the scored player OWNS, if EVERY OTHER member's own map is still unclaimed by anyone
+ * (feeOwnerId null -- checked regardless of who would eventually claim it, not just opponents, since the
+ * scored player owning a 2nd sibling itself also closes this same window, correctly yielding no bonus
+ * either, consistent with the redundancy penalty above), add bonusPerMember once for that owned card. */
+const FEE_OPPORTUNITY_GROUP_A = { members: [{ id: 'A004', mapId: 'MAP001' }, { id: 'A005', mapId: 'MAP002' }], bonusPerMember: 20 };
+const FEE_OPPORTUNITY_GROUP_B = { members: [{ id: 'A001', mapId: 'MAP003' }, { id: 'A002', mapId: 'MAP004' }, { id: 'A003', mapId: 'MAP005' }], bonusPerMember: 20 };
+
 /** How much VP rewardText would grant, read via the real DSL parser rather than executed (2026-08-10,
  * QST awareness -- see Evaluator's own qstAware policy doc). Every QST REWARD field today is a plain
  * ADD(nVP) (see qst.js's own doc on resolveEndGameRewards), so this sums every literal-count VP item
@@ -235,6 +254,18 @@ class Evaluator {
     for (const group of [SAME_ROLE_GROUP_A, SAME_ROLE_GROUP_B]) {
       const ownedInGroup = player.ownedCardPhysicalIds.filter((id) => group.ids.has(id)).length;
       if (ownedInGroup > 1) total -= (ownedInGroup - 1) * group.penaltyPerExtra;
+    }
+
+    // Unclaimed-fee-opportunity bonus (see FEE_OPPORTUNITY_GROUP_A/B's own doc above) -- per owned member,
+    // not once per group: with a 3-member group, owning one while the OTHER two are still both unclaimed
+    // is exactly as good regardless of the group's total size, so this doesn't scale down just because the
+    // group happens to have more members.
+    for (const group of [FEE_OPPORTUNITY_GROUP_A, FEE_OPPORTUNITY_GROUP_B]) {
+      for (const member of group.members) {
+        if (!player.ownedCardPhysicalIds.includes(member.id)) continue;
+        const othersAllUnclaimed = group.members.every((other) => other === member || !state.maps[other.mapId] || state.maps[other.mapId].feeOwnerId === null);
+        if (othersAllUnclaimed) total += group.bonusPerMember;
+      }
     }
 
     // conBuildAware (2026-08-28, "AI LV4" only -- see this class's own constructor doc and

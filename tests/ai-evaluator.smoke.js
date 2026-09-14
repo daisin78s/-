@@ -10,7 +10,7 @@
 
 const path = require('path');
 const { loadGameData, buildDataIndex } = require('../src/data-loader');
-const { createEmptyGameState, createPlayer, createDie, createCardInstance } = require('../src/game-state');
+const { createEmptyGameState, createPlayer, createDie, createCardInstance, createMapState } = require('../src/game-state');
 const { buildEvalTable } = require('../src/ai/eval-table');
 const { Evaluator } = require('../src/ai/evaluator');
 
@@ -150,9 +150,14 @@ function giveCard(state, faceId, playerId) {
   return inst;
 }
 {
+  // A201A (孤児院) rather than A001A -- 2026-09-14: A001A is now also affected by the
+  // FEE_OPPORTUNITY_GROUP_B bonus (see evaluator.js's own doc), which would muddy this test's own basic
+  // "an owned card contributes its plain eval-table value" intent. A201A sits in neither that group nor
+  // any of the other synergy sets in this file (SAME_ROLE_GROUP_A/B, FARM/SENATE_SYNERGY_FACE_IDS), so it
+  // stays a clean baseline card unaffected by any of them.
   const state = freshState(1);
-  giveCard(state, 'A001A', 'P1');
-  check('Owned A001A contributes exactly its eval-table value', evaluator.score(state, 'P1'), evalTable[1].A001A);
+  giveCard(state, 'A201A', 'P1');
+  check('Owned A201A contributes exactly its eval-table value', evaluator.score(state, 'P1'), evalTable[1].A201A);
 }
 {
   const state = freshState(2);
@@ -227,41 +232,62 @@ function giveCard(state, faceId, playerId) {
 // this file's own banquetHallUnclaimed check treats the same as "still in the shop, unclaimed"), credits
 // that separate +v('晩餐会食料生産相性') bonus once regardless of how many qualifying cards are owned --
 // included below wherever 小麦畑/農園 appears, to keep each check an exact match rather than an
-// approximation. A round() step guards every check here against harmless float-summation-order noise
-// (this file's own established fix for the same class of issue elsewhere, e.g. its M001/CON001B checks).
+// approximation. A004/A005/A001 are ALSO members of FEE_OPPORTUNITY_GROUP_A/B (see that const's own doc,
+// a separate 2026-09-14 feature) -- `dominate` below stands in for the real ONCE-effect's
+// `map.feeOwnerId = playerId` assignment (see executor.js) that a real BUILD of one of these cards always
+// does but this file's own bare `giveCard` helper does not, so these redundancy-penalty checks can claim
+// every relevant map up front and stay a clean, isolated test of JUST the redundancy penalty -- see the
+// FEE_OPPORTUNITY tests further below for that other feature's own dedicated coverage. A round() step
+// guards every check here against harmless float-summation-order noise (this file's own established fix
+// for the same class of issue elsewhere, e.g. its M001/CON001B checks).
 // ---------------------------------------------------------------------------
 function round6(n) { return Math.round(n * 1e6) / 1e6; }
+function dominate(state, mapId, playerId) {
+  state.maps[mapId] = createMapState(mapId, `${mapId.replace('MAP', 'AREA')}B`);
+  state.maps[mapId].feeOwnerId = playerId;
+}
 {
+  // dominate(MAP002) here claims 農園's own map (by this same player, doesn't matter who) -- the
+  // FEE_OPPORTUNITY check for 小麦畑 looks at the OTHER member's map, not its own, so this is what's
+  // actually needed to keep this an isolated check of JUST the redundancy penalty (see the dedicated
+  // FEE_OPPORTUNITY tests further below for that other feature's own coverage of "still unclaimed").
   const state = freshState(1);
   giveCard(state, 'A004A', 'P1'); // alone -- no redundancy yet, but still trips the farm synergy
+  dominate(state, 'MAP002', 'P1');
   check('A single GROUP_A card (小麦畑) alone gets no redundancy penalty', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1]['晩餐会食料生産相性']));
 }
 {
   const state = freshState(1);
   giveCard(state, 'A004A', 'P1'); // 小麦畑
   giveCard(state, 'A005A', 'P1'); // 農園 -- 2nd GROUP_A member
+  dominate(state, 'MAP001', 'P1');
+  dominate(state, 'MAP002', 'P1');
   check('小麦畑 + 農園 (both GROUP_A) applies a single -50 redundancy penalty', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1].A005A + evalTable[1]['晩餐会食料生産相性'] - 50));
 }
 {
   const state = freshState(1);
   giveCard(state, 'A004A', 'P1'); // 小麦畑
   giveCard(state, 'A005A', 'P1'); // 農園
-  giveCard(state, 'A006A', 'P1'); // 歓楽街 -- 3rd GROUP_A member (not itself farm-synergy)
+  giveCard(state, 'A006A', 'P1'); // 歓楽街 -- 3rd GROUP_A member (not itself farm-synergy, nor in any FEE_OPPORTUNITY group)
+  dominate(state, 'MAP001', 'P1');
+  dominate(state, 'MAP002', 'P1');
   check('3 GROUP_A cards applies -50 per extra beyond the first (2 * -50 = -100)', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1].A005A + evalTable[1].A006A + evalTable[1]['晩餐会食料生産相性'] - 100));
 }
 {
   const state = freshState(1);
   giveCard(state, 'C001A', 'P1'); // 代官
-  giveCard(state, 'C002A', 'P1'); // 修道士 -- 2nd GROUP_B member
+  giveCard(state, 'C002A', 'P1'); // 修道士 -- 2nd GROUP_B member (neither is in any FEE_OPPORTUNITY group)
   check('代官 + 修道士 (both GROUP_B) applies a single -30 redundancy penalty', round6(evaluator.score(state, 'P1')), round6(evalTable[1].C001A + evalTable[1].C002A - 30));
 }
 {
   // 歓楽街(A006) sits in BOTH groups (per user confirmation "歓楽街は両方です") -- owning it alongside one
   // member of EACH group should charge both groups' own penalty independently, not just once overall.
   const state = freshState(1);
-  giveCard(state, 'A006A', 'P1'); // 歓楽街 -- in both GROUP_A and GROUP_B
+  giveCard(state, 'A006A', 'P1'); // 歓楽街 -- in both GROUP_A and GROUP_B, but no FEE_OPPORTUNITY group
   giveCard(state, 'A004A', 'P1'); // 小麦畑 -- makes GROUP_A have 2 members (歓楽街 + 小麦畑), also farm-synergy
   giveCard(state, 'A001A', 'P1'); // 城下町 -- makes GROUP_B have 2 members (歓楽街 + 城下町)
+  dominate(state, 'MAP002', 'P1'); // 農園's map -- neutralizes 小麦畑's own FEE_OPPORTUNITY_GROUP_A check
+  dominate(state, 'MAP004', 'P1'); // 大聖堂's map -- neutralizes 城下町's own FEE_OPPORTUNITY_GROUP_B check
   check('歓楽街 stacks both groups\' penalties at once (-50 from GROUP_A, -30 from GROUP_B)', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A006A + evalTable[1].A004A + evalTable[1].A001A + evalTable[1]['晩餐会食料生産相性'] - 50 - 30));
 }
 {
@@ -271,8 +297,58 @@ function round6(n) { return Math.round(n * 1e6) / 1e6; }
   const state = freshState(1);
   giveCard(state, 'A004A', 'P1'); // 小麦畑 (GROUP_A, also farm-synergy)
   giveCard(state, 'A202A', 'P1'); // 訓練場 -- NOT in any group
+  dominate(state, 'MAP002', 'P1'); // 農園's map -- neutralizes 小麦畑's own FEE_OPPORTUNITY_GROUP_A check
   state.players[0].dice.push(createDie('d1', 'COLOR'));
   check('訓練場 owned alongside a GROUP_A card triggers no redundancy penalty at all', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1].A202A + evalTable[1].D + evalTable[1]['晩餐会食料生産相性']));
+}
+
+// ---------------------------------------------------------------------------
+// Unclaimed-fee-opportunity bonus (2026-09-14, per user follow-up -- see evaluator.js's own
+// FEE_OPPORTUNITY_GROUP_A/B doc for the exact groups/reasoning, worked through with the user's own worked
+// example about 小麦畑/農園's usage-fee traffic).
+// ---------------------------------------------------------------------------
+{
+  const state = freshState(1);
+  giveCard(state, 'A004A', 'P1'); // 小麦畑, sibling 農園(MAP002) never claimed by anyone in this state
+  dominate(state, 'MAP001', 'P1'); // 小麦畑's own map -- doesn't disqualify ITS OWN bonus, only checks OTHERS
+  check('Owning 小麦畑 while 農園 remains unclaimed by anyone credits +20', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1]['晩餐会食料生産相性'] + 20));
+}
+{
+  const state = freshState(2);
+  const p2 = createPlayer('P2', 'Bob');
+  state.players.push(p2);
+  giveCard(state, 'A004A', 'P1'); // 小麦畑
+  dominate(state, 'MAP001', 'P1');
+  dominate(state, 'MAP002', 'P2'); // 農園 already claimed by an OPPONENT -- the +20 window has closed
+  check('Owning 小麦畑 once an OPPONENT has already claimed 農園 credits no bonus', round6(evaluator.score(state, 'P1')), round6(evalTable[2].A004A + evalTable[2]['晩餐会食料生産相性']));
+}
+{
+  // Owning BOTH closes the window on itself too (each one's own "is the OTHER still open" check fails,
+  // since the player's own 2nd acquisition also counts as "claimed") -- consistent with the redundancy
+  // penalty above already discouraging this same double-acquisition.
+  const state = freshState(1);
+  giveCard(state, 'A004A', 'P1');
+  giveCard(state, 'A005A', 'P1');
+  dominate(state, 'MAP001', 'P1');
+  dominate(state, 'MAP002', 'P1');
+  check('Owning BOTH 小麦畑 and 農園 credits no fee-opportunity bonus for either (self-cannibalized)', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1].A005A + evalTable[1]['晩餐会食料生産相性'] - 50));
+}
+{
+  // 3-member group: owning one requires BOTH others to still be unclaimed, not just one of them. Note
+  // dominating MAP004 here does NOT also give P1 the A002A card itself -- feeOwnerId and card ownership
+  // are tracked independently (a real BUILD always sets both together, but this test only needs the map
+  // side to exercise the "other member already claimed" check).
+  const state = freshState(1);
+  giveCard(state, 'A001A', 'P1'); // 城下町
+  dominate(state, 'MAP003', 'P1');
+  dominate(state, 'MAP004', 'P1'); // 大聖堂's map already claimed -- ギルド alone being open isn't enough
+  check('城下町 owned with only ONE of the other 2 GROUP_B members unclaimed credits no bonus', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A001A));
+}
+{
+  const state = freshState(1);
+  giveCard(state, 'A001A', 'P1'); // 城下町, both 大聖堂(MAP004) and ギルド(MAP005) still unclaimed
+  dominate(state, 'MAP003', 'P1');
+  check('城下町 owned with BOTH other GROUP_B members unclaimed credits +20', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A001A + 20));
 }
 
 // ---------------------------------------------------------------------------
@@ -552,10 +628,10 @@ index.raw.QST = [
   const p2 = createPlayer('P2', 'Bob');
   state.players.push(p2);
   state.quests = { Q001A: true };
-  giveCard(state, 'A001A', 'P1'); // eval=30, VP=0 -- CARD_COUNT=1, ahead of P2's 0
+  giveCard(state, 'A201A', 'P1'); // VP=0, unaffected by SAME_ROLE_GROUP/FEE_OPPORTUNITY_GROUP -- CARD_COUNT=1, ahead of P2's 0
   const plainScore = evaluator.score(state, 'P1');
-  check('The plain (non-qstAware) Evaluator ignores QST entirely (control)', plainScore, evalTable[1].A001A);
-  check('qstAware credits the rank-1 REWARD1 (ADD(4VP)) on top of the normal score', evaluatorQstAware.score(state, 'P1'), evalTable[1].A001A + 4 * evalTable[1].VP);
+  check('The plain (non-qstAware) Evaluator ignores QST entirely (control)', plainScore, evalTable[1].A201A);
+  check('qstAware credits the rank-1 REWARD1 (ADD(4VP)) on top of the normal score', evaluatorQstAware.score(state, 'P1'), evalTable[1].A201A + 4 * evalTable[1].VP);
 }
 {
   // Rank 4+ (only reachable with 4 players at 4 distinct values) earns nothing -- REWARD_FIELDS only
