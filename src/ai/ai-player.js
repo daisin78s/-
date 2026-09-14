@@ -100,6 +100,17 @@ class AIPlayer {
     this.roundOverrides = opts.roundOverrides || {};
     this.dieScarcityTieBreak = !!opts.dieScarcityTieBreak;
     this.preferExOnOwnTerritory = !!opts.preferExOnOwnTerritory;
+    // Hard wall-clock cap on one selectMove() call's own-turns-only rollout (2026-09-14, per user
+    // report: a replay showed 40-56s decisions in round 4). Root cause found and fixed separately
+    // (see #rolloutScore's own GAME_END check below) -- this is a safety net on TOP of that fix, not
+    // instead of it, for whatever other expensive-but-legal exploration this own-turns-only rollout
+    // might still stumble into (e.g. the legitimate multi-map resource-generation chains found during
+    // that investigation, which are real but not worth arbitrarily deep exploration this late in a
+    // round). 0/null/Infinity disables it -- tests that construct AIPlayer directly never pass this,
+    // so their determinism (see this class's own top-of-file doc) is unaffected as long as they finish
+    // well under the default. Checked only inside the rollout loops, never around the cheap top-level
+    // 1-ply scoring pass, so selectMove always returns at least that 1-ply-best move no matter what.
+    this.maxDecisionTimeMs = opts.maxDecisionTimeMs !== undefined ? opts.maxDecisionTimeMs : 10000;
   }
 
   /** Resolves the base lookaheadExtraTurns/beamWidth/maxRolloutMoves against this.roundOverrides[round]
@@ -187,13 +198,17 @@ class AIPlayer {
     }
 
     const { lookaheadExtraTurns, beamWidth, maxRolloutMoves, beamWidths } = this.#effectiveOptions(state.round);
-    if (beamWidths && beamWidths.length > 0) return this.#deepBeamSearch(deduped, playerId, beamWidths, maxRolloutMoves);
+    const deadline = this.maxDecisionTimeMs ? Date.now() + this.maxDecisionTimeMs : Infinity;
+    if (beamWidths && beamWidths.length > 0) return this.#deepBeamSearch(deduped, playerId, beamWidths, maxRolloutMoves, deadline);
     if (lookaheadExtraTurns <= 0) return scored[0].move;
 
     let best = scored[0].move;
     let bestDeepScore = -Infinity;
     for (const candidate of deduped.slice(0, beamWidth)) {
-      const deepScore = this.#rolloutScore(candidate.resultState, playerId, candidate.move, lookaheadExtraTurns, maxRolloutMoves);
+      // Once the time budget is already spent, don't start yet another candidate's rollout -- keep
+      // whichever candidate (rolled-out or, worst case, the plain 1-ply best) is already `best`.
+      if (Date.now() > deadline) break;
+      const deepScore = this.#rolloutScore(candidate.resultState, playerId, candidate.move, lookaheadExtraTurns, maxRolloutMoves, deadline);
       if (deepScore > bestDeepScore) {
         bestDeepScore = deepScore;
         best = candidate.move;
@@ -208,13 +223,37 @@ class AIPlayer {
    * used only to seed hasPlacedDieThisTurn/turnsLeft correctly for the very first step. lookaheadExtraTurns/
    * maxRolloutMoves are passed in explicitly (2026-08-10, not read from `this`) since selectMove now
    * resolves them per-round via #effectiveOptions -- see roundOverrides' own doc. */
-  #rolloutScore(state, playerId, firstMove, lookaheadExtraTurns, maxRolloutMoves) {
+  #rolloutScore(state, playerId, firstMove, lookaheadExtraTurns, maxRolloutMoves, deadline) {
     // JOB003/道化 (2026-08-20 fix, per user bug report -- see game-runner.js driveTurn's matching comment
     // for the full story): PLACE_WILDCARD_DIE counts as "placed a die this turn" too, both here and below.
     let hasPlacedDieThisTurn = firstMove.type === 'PLACE_DIE' || firstMove.type === 'PLACE_WILDCARD_DIE' || firstMove.type === 'PLACE_DICE_GROUP' || firstMove.type === 'PASS_DIE';
     let turnsLeft = lookaheadExtraTurns;
     let steps = 0;
     while (steps < maxRolloutMoves) {
+      // GAME_END guard (2026-09-14, per user report of a 40-56s decision, root-caused via a replay
+      // where round 4's last few dice took tens of seconds despite having no legal way to gain more
+      // dice or untap anything): this own-turns-only rollout (see this class's own top-of-file doc on
+      // why opponents aren't simulated) never advances any OTHER player's turn, so once THIS player's
+      // own END_TURN makes turnFlow.isRoundOver() look true (every player, opponents included, frozen
+      // at "no unplaced dice left" -- trivially true once this is genuinely the last player still
+      // placing dice in round 4), simulator.js's own END_TURN handling calls turnFlow.endRound()
+      // for real: it unconditionally untaps EVERY owned card and returns EVERY die to "unplaced"
+      // before checking state.round >= 4 and only THEN setting state.phase to GAME_END. Without this
+      // check, the loop below can't tell that happened -- it just sees a state with plenty of
+      // untapped cards and unplaced dice again and keeps "playing" up to lookaheadExtraTurns more
+      // fictional turns through a game that has already ended, repeating this reset (confirmed via
+      // instrumentation: 186 separate endRound() firings in one single selectMove call) and paying the
+      // full cost of #bareTapMoves' die-value-change reachability scan (#dieReachableOutcomes) fresh
+      // each time for cards that only exist as untapped because of this loop -- none of which
+      // corresponds to anything that can happen in the real game. Checked at the very top, before
+      // #greedyMove/simulator.apply even run for this step, since anything past GAME_END is pure
+      // fiction the evaluator should just score as-is rather than build on.
+      if (state.phase === 'GAME_END') break;
+      // Hard wall-clock cap (see constructor's own maxDecisionTimeMs doc) -- a safety net for whatever
+      // OTHER expensive-but-legal exploration this own-turns-only rollout might still find (e.g. the
+      // legitimate multi-map resource-generation chains found during the same investigation), on top
+      // of the GAME_END fix above rather than instead of it.
+      if (Date.now() > deadline) break;
       steps++;
       const move = this.#greedyMove(state, playerId, hasPlacedDieThisTurn);
       if (!move) break; // nothing legal (shouldn't normally happen -- canEndTurn eventually frees this up)
@@ -224,6 +263,24 @@ class AIPlayer {
       if (move.type === 'PLACE_DIE' || move.type === 'PLACE_WILDCARD_DIE' || move.type === 'PLACE_DICE_GROUP' || move.type === 'PASS_DIE') hasPlacedDieThisTurn = true;
       if (move.type === 'END_TURN') {
         if (turnsLeft <= 0) break; // rollout horizon reached right at a turn boundary
+        // Stop simulating further "own future turns" once this player has no unplaced dice left at all
+        // (2026-09-14, per user report: watching a replay, the AI spent tens of seconds on its very LAST
+        // real die because the rollout kept simulating up to lookaheadExtraTurns more "own turns" even
+        // after dice ran out -- with 0 unplaced dice, there is nothing left to do this round except chase
+        // owned-card TAP/untap chains, which this own-turns-only rollout (see this class's own top-of-
+        // file doc on why opponents aren't simulated) would keep re-exploring as if this player's next
+        // turn were immediately available again, when in the real game the other 3 players (and likely
+        // the round itself) go first -- burning real computation for lookahead that doesn't correspond to
+        // anything that will realistically happen soon). Checked here, not before choosing `move` itself,
+        // so the CURRENT turn's own last legitimate actions (a die-free TAP, END_TURN itself) are always
+        // still taken -- only ADDITIONAL turns beyond this one get skipped. Array.isArray guard: a real
+        // GameState always has `.players`, but tests/ai-player.smoke.js's own lightweight lookahead stubs
+        // (plain {path, turn1Score, ...} objects, no `.players` at all) don't -- falls back to the old
+        // "keep going" behavior for anything that doesn't look like a real GameState, rather than
+        // misreading "no players field" as "no dice left" and cutting a stub's own simulated turn short.
+        const currentPlayer = Array.isArray(state.players) && state.players.find((p) => p.id === playerId);
+        const hasAnyUnplacedDie = !Array.isArray(state.players) || (currentPlayer && currentPlayer.dice.some((d) => d.placedMapId === null && !d.passed));
+        if (!hasAnyUnplacedDie) break;
         turnsLeft--;
         hasPlacedDieThisTurn = false; // a "next turn" nominally starts here (opponents not simulated)
       }
