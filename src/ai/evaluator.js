@@ -159,17 +159,18 @@ class Evaluator {
     let total = 0;
 
     // RESOURCE_LIMIT-aware resource scoring (2026-08-10, per user request: "K MAX7の時 1K+7Kで8Kになる
-    // のは 減らして7Kとして評価" -- a resource held past an owned card's RESOURCE_LIMIT cap (e.g.
-    // CON001A's K MAX7) is worth exactly its post-TURNEND-clamp amount, not its raw current count, since
-    // the excess is auto-discarded at TURNEND and never actually kept (see executor.applyTurnEnd). Using
-    // the clamped amount still correctly favors a bigger-but-overshooting gain over a smaller-but-safe
-    // one whenever the clamped amount is itself larger (e.g. 1K+7K clamped to 7 still beats 1K+3K's 4),
-    // it just no longer overstates the overshooting gain by the wasted excess.
+    // のは 減らして7Kとして評価" -- a resource held past an owned card's RESOURCE_LIMIT cap (e.g. 暴食/
+    // CON006A's K MAX7) is worth exactly its true post-TURNEND value, not its raw current count.
+    // 2026-09-14 correction (per user request: "暴食の7Kを超えたKターン終了時に1Kだけ減らすように変更"
+    // -- applyTurnEnd only ever subtracts 1 from an over-limit resource, it doesn't clamp straight to the
+    // limit; this used to assume the old clamp-to-limit behavior via Math.min(have, limit), understating
+    // a big overshoot's true value (e.g. 10K with a cap-7 card is really still worth 9 next turn, not 7).
     const resourceLimits = executor.activeResourceLimits(state, this.index, playerId);
     for (const resource of ['K', 'A', 'B', 'C', 'Z', 'BZ']) {
       const have = player.resources[resource] || 0;
       const limit = resourceLimits[resource];
-      total += (limit !== undefined ? Math.min(have, limit) : have) * v(resource);
+      const effective = limit !== undefined && have > limit ? have - 1 : have;
+      total += effective * v(resource);
     }
     total += (player.resources.VP || 0) * v('VP');
 

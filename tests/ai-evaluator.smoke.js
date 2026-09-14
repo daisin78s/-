@@ -387,36 +387,39 @@ function stateWithP1QualifyingHand(round, includeMonument) {
 
 // ---------------------------------------------------------------------------
 // RESOURCE_LIMIT-aware resource scoring (2026-08-10, per user request: "K MAX7の時 1K+7Kで8Kになるのは
-// 減らして7Kとして評価"): a resource held past an owned card's RESOURCE_LIMIT cap scores at its true
-// post-TURNEND-clamp amount, not its raw current count -- the excess is worthless (auto-discarded, see
-// executor.applyTurnEnd), so scoring it at face value overstates the gain.
+// 減らして7Kとして評価"; corrected 2026-09-14, per user request: "暴食の7Kを超えたKターン終了時に1Kだけ
+// 減らすように変更" -- applyTurnEnd only ever subtracts 1 from an over-limit resource, it never clamps
+// straight to the limit, so scoring must use `have - 1` when over, not `Math.min(have, limit)`; K=10,
+// well past CON006A's limit of 7, is used below specifically so a stale "clamp to 7" formula and the
+// correct "decrease by 1" formula give VISIBLY DIFFERENT numbers (9 vs 7) -- K=8 (exactly 1 over) would
+// happen to give the same answer either way and couldn't have caught this by itself).
 // ---------------------------------------------------------------------------
 {
   const state = freshState(1);
-  giveCard(state, 'CON006A', 'P1'); // 暴食: TURNEND=RESOURCE_LIMIT(K,7), eval-table value 0, no printed VP -- moved from CON001A to CON006A (2026-08-17 CON sheet renumbering)
+  giveCard(state, 'CON006A', 'P1'); // 暴食: TURNEND=RESOURCE_LIMIT(K,7), eval-table value 0, no printed VP
   const p1 = state.players[0];
-  p1.resources.K = 8; // 1 over CON006A's limit of 7
-  check('K clamped to CON006A\'s RESOURCE_LIMIT(K,7) cap (8 -> 7) when scoring', evaluator.score(state, 'P1'), 7 * evalTable[1].K);
+  p1.resources.K = 10; // 3 over CON006A's limit of 7 -- true post-TURNEND value is 9 (10-1), not 7
+  check('K past CON006A\'s RESOURCE_LIMIT(K,7) cap scores at have-1 (10 -> 9), not clamped to the limit (7)', evaluator.score(state, 'P1'), 9 * evalTable[1].K);
 }
 {
   const state = freshState(1);
   const p1 = state.players[0];
-  p1.resources.K = 8; // same 8K, but no RESOURCE_LIMIT-granting card owned at all
-  check('Without a RESOURCE_LIMIT card owned, the same 8K scores at its raw, uncapped value', evaluator.score(state, 'P1'), 8 * evalTable[1].K);
+  p1.resources.K = 10; // same 10K, but no RESOURCE_LIMIT-granting card owned at all
+  check('Without a RESOURCE_LIMIT card owned, the same 10K scores at its raw, uncapped value', evaluator.score(state, 'P1'), 10 * evalTable[1].K);
 }
 {
-  // The illustrative comparison itself: +7K (1->8, clamped to 7) should still outscore +3K (1->4, no
-  // clamp needed) -- clamping to the true post-TURNEND value doesn't flip which option is better, it
-  // just stops overstating the wasted excess.
-  const withPlus7 = freshState(1);
-  giveCard(withPlus7, 'CON006A', 'P1');
-  withPlus7.players[0].resources.K = 8;
+  // The illustrative comparison itself: +9K (1->10, true post-TURNEND value 9) should still outscore
+  // +3K (1->4, no adjustment needed) -- accounting for the 1-unit-per-turn decay doesn't flip which
+  // option is better, it just stops overstating a big overshoot as if it were clamped all the way to 7.
+  const withPlus9 = freshState(1);
+  giveCard(withPlus9, 'CON006A', 'P1');
+  withPlus9.players[0].resources.K = 10;
   const withPlus3 = freshState(1);
   giveCard(withPlus3, 'CON006A', 'P1');
   withPlus3.players[0].resources.K = 4;
   check(
-    '+7K (clamped to 7) still scores higher than +3K (4), just not overstated as if it kept all 8',
-    evaluator.score(withPlus7, 'P1') > evaluator.score(withPlus3, 'P1'),
+    '+9K (true value, not clamped to 7) still scores higher than +3K (4)',
+    evaluator.score(withPlus9, 'P1') > evaluator.score(withPlus3, 'P1'),
     true,
   );
 }

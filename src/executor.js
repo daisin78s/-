@@ -1320,12 +1320,18 @@ function runProgram(state, index, context, dslText) {
 
 /** Every currently-active RESOURCE_LIMIT cap this player is under, from their owned cards' TURNEND
  * rules -- {resource: limit}, the MINIMUM limit per resource if more than one owned card caps the same
- * resource (matches applyTurnEnd's own sequential clamping below: applying several RESOURCE_LIMIT rules
- * to the same resource leaves it at whichever limit is smallest, regardless of application order).
- * Read-only, no mutation -- added 2026-08-10 for the AI Evaluator (per user request: "K MAX7の時 1K+7K
- * で8Kになるのは 減らして7Kとして評価" -- score a RESOURCE_LIMIT-capped resource at its true
- * post-TURNEND value, not its raw current count, since the excess is worthless -- it'll just get
- * auto-discarded before the player ever "keeps" it). */
+ * resource (matches applyTurnEnd's own sequential -1-if-over handling below: applying several
+ * RESOURCE_LIMIT rules to the same resource in one TURNEND is governed by whichever limit is smallest,
+ * regardless of application order). Read-only, no mutation -- added 2026-08-10 for the AI Evaluator (per
+ * user request: "K MAX7の時 1K+7Kで8Kになるのは 減らして7Kとして評価" -- score a RESOURCE_LIMIT-capped
+ * resource at its true post-TURNEND value, not its raw current count).
+ *
+ * NOTE (2026-09-14, per user request "暴食の7Kを超えたKターン終了時に1Kだけ減らすように変更"): the
+ * caller can no longer just do Math.min(have, limit) using the limit returned here -- applyTurnEnd only
+ * ever subtracts 1 when over, it doesn't clamp straight to the limit -- see Evaluator.score()'s own
+ * "have > limit ? have - 1 : have" for the corrected formula. This function itself still only reports
+ * the limit (and whether resources are even capped at all), which is all the caller needs alongside its
+ * own `have`. */
 function activeResourceLimits(state, index, playerId) {
   const limits = {};
   for (const { row } of ownedCardRows(state, index, playerId)) {
@@ -1413,8 +1419,15 @@ function applyTurnEnd(state, index, playerId) {
     if (!row.TURNEND) continue;
     for (const cmd of lowerProgram(parse(row.TURNEND))) {
       if (cmd.type === 'RESOURCE_LIMIT') {
+        // Decrease by exactly 1, not clamp straight down to the limit (2026-09-14, per user request:
+        // "暴食の7Kを超えたKターン終了時に1Kだけ減らすように変更お願い" -- this actually FIXES a
+        // mismatch with 暴食/CON006A's own printed WARNING/INST text, which already said "1個消費します"
+        // /"1個消費" -- the engine was clamping straight to the cap in one shot instead, losing far more
+        // than the card's own text ever promised whenever `have` was more than 1 over the limit). Still a
+        // no-op once already at/under the limit -- multiple turns of being over it are needed to fully
+        // return to the cap, one unit at a time.
         const have = player.resources[cmd.resource] || 0;
-        if (have > cmd.limit) player.resources[cmd.resource] = cmd.limit;
+        if (have > cmd.limit) player.resources[cmd.resource] = have - 1;
       } else if (cmd.type === 'FORCE_CONVERT') {
         const have = player.resources[cmd.from] || 0;
         if (have <= 0) continue;
