@@ -5205,6 +5205,15 @@ function advanceTurnIfPossible(state, playerId) {
   if (!isAiPlayer(playerId)) changeHighlightBaseline = structuredClone(state);
   if (turnFlowMod.isRoundOver(state)) {
     turnFlowMod.endRound(state, INDEX);
+    // M401/晩餐会 auto-conversion notice (2026-09-14, per user request: "自動でa→kなどがあった場合 警告文
+    // 資源を自動で食料に変換します と出るようにしてください") -- state.m401AutoConvertedPlayerIds (see
+    // turn-flow.js's own doc) lists everyone endRound just converted; only alert for THIS device's own
+    // human seat, same "!onlineRoomCode || localSeatId === X" scoping every other local-seat-only UI
+    // reaction in this file already uses, so an online co-player's own conversion doesn't pop an
+    // unrelated alert on this browser.
+    if (state.m401AutoConvertedPlayerIds && state.m401AutoConvertedPlayerIds.some((id) => !isAiPlayer(id) && (!onlineRoomCode || localSeatId === id))) {
+      window.alert('資源を自動で食料に変換します');
+    }
     if (state.phase !== 'GAME_END') turnFlowMod.startRound(state);
   }
 }

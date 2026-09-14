@@ -291,14 +291,22 @@ function endRound(state, index) {
     // move-generator.js's own doc on why free actions are normally withheld unless canEndTurn needs them).
     // Never exceeds K=10 (extra K past that has no further value from this card) and never touches K
     // already at/above 10.
+    // Stashed on state the same way qstRewardsGranted just below is (2026-09-14, per user request: a
+    // UI warning -- "資源を自動で食料に変換します" -- should show whenever this actually fires): the
+    // list of playerIds this conversion actually moved any resource for, so a caller (main.js) can tell
+    // apart "converted something" from "owns M401 but was already at/above 10K, nothing to do".
+    state.m401AutoConvertedPlayerIds = [];
     for (const player of state.players) {
       if (!player.ownedCardPhysicalIds.includes('M401')) continue;
       const shortfall = Math.max(0, 10 - (player.resources.K || 0));
       if (shortfall <= 0) continue;
-      for (const { resource, count } of planFeeConversion(player.resources, shortfall)) {
+      const plan = planFeeConversion(player.resources, shortfall);
+      if (plan.length === 0) continue;
+      for (const { resource, count } of plan) {
         player.resources[resource] -= count;
         player.resources.K = (player.resources.K || 0) + count;
       }
+      state.m401AutoConvertedPlayerIds.push(player.id);
     }
     // QST's rank-based rewards (2026-08-09, see qst.js's own doc) settle exactly here, exactly once --
     // nothing after this point can trigger another round-4 endRound (the game loop stops advancing
