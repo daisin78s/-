@@ -2209,7 +2209,7 @@
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
-      "ACTION": "CHANGE(K,D)",
+      "ACTION": "ADD(D)",
       "fee": 2,
       "INST": "色ダイスの上限は5個\nこのAREAにダイスを置くと怠惰の制約は解除される"
     },
