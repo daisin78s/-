@@ -11,6 +11,9 @@ from pathlib import Path
 
 import openpyxl
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from export_real_eval_table import DEFAULT_XLSX_PATH, export as export_real_eval_table
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SRC_XLSX = PROJECT_ROOT / "data" / "game.xlsx"
 DEST_JSON = PROJECT_ROOT / "data" / "game.json"
@@ -87,6 +90,17 @@ def main():
     print(f"Wrote {DEST_JSON}")
     print(f"Wrote {DEST_JS}")
     print(sheet_summary)
+
+    # Keep the standalone "AI LV4's current eval table" snapshot in sync on every rebuild (2026-09-15,
+    # per user request: "AILV4の評価値が変わるごとに...記入お願い") -- game.xlsx's 評価値 sheet IS AI
+    # LV4's real eval table, so any edit that goes through this normal rebuild step should also refresh
+    # this file, without a separate manual export step. Best-effort: a missing/locked destination (e.g.
+    # the file open in Excel) must not break the actual data build this script exists for.
+    try:
+        eval_row_count = export_real_eval_table(DEFAULT_XLSX_PATH, game_json_path=str(DEST_JSON))
+        print(f"Wrote {DEFAULT_XLSX_PATH} ({eval_row_count} rows)")
+    except Exception as exc:
+        print(f"WARNING: could not update {DEFAULT_XLSX_PATH}: {exc}", file=sys.stderr)
 
 
 if __name__ == "__main__":
