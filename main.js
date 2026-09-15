@@ -838,14 +838,13 @@ function driveOneAiStepInner(state) {
     // user feedback: "初期資源、CON、JOBは現状は完全ランダムでお願いします そのうち評価値を入れます" --
     // see src/ai/game-runner.js's matching fix and its own doc for why) still picks purely at random.
     //
-    // Temporarily forced off (2026-09-07, per user request: "評価値初期資源いったんリセットしました 指示
-    // があるまでAIはランダムにとってください") -- game.xlsx's 評価値_初期資源 sheet is now blank while new
-    // values are worked out, and pickResourceCards' own effectiveOrder falls back to each RESOURCE card's
-    // plain START_ORDER field when synergy is 0 (NOT randomness -- see that function's own doc), so
-    // leaving this on with an empty synergy table would silently keep picking deterministically instead
-    // of the genuinely random selection asked for here. Flip RESOURCE_SYNERGY_PICK_ENABLED back to true
-    // once 評価値_初期資源 has real values again.
-    const RESOURCE_SYNERGY_PICK_ENABLED = false;
+    // Re-enabled 2026-09-15, per user request: "初期資源カード 現在ランダムでとる設定になっていますが
+    // START_ORDERが大きいものを優先してとるように変更 同じSTART_ORDERならIDが小さいものを優先" --
+    // game.xlsx's 評価値_初期資源 sheet is still blank (synergy contributes 0 to every candidate), so
+    // pickResourceCards' effectiveOrder reduces to exactly this: plain descending START_ORDER, ties
+    // broken by ascending numeric ID (see that function's own sort) -- already matches
+    // tools/ai_data_report.js's own LV4 wiring, which never had this flag and was never turned off.
+    const RESOURCE_SYNERGY_PICK_ENABLED = true;
     const pair = RESOURCE_SYNERGY_PICK_ENABLED && playerRoles.get(resourcePlayerId) === 'AI_LV4'
       ? smartOnboardingMod.pickResourceCards(
           ctx.resourceChoice.context.candidates,
@@ -1272,8 +1271,16 @@ function noteActiveTurnPlayerForJobPool(state, playerId, forceNewTurn) {
 // separate from the normal in-game Undo (undo.js's single "start of this turn" checkpoint, used during
 // real play). This instead keeps a full timeline of every turn boundary crossed so far this session, and
 // lets the debug panel jump freely to any of them (or step by TURN/ROUND) to re-test from that exact
-// point. Only active while debugMode is on (see toggleDebugMode) -- recording a full GameState clone
-// every turn boundary isn't free, and this feature is opt-in by design.
+// point. Recorded unconditionally from turn 1, regardless of debugMode (2026-09-15, per user request:
+// "デバッグOFFでプレイしている状態からデバッグONにしたとき、デバッグがOFFだったころの過去のラウンドにも
+// 戻れるようにしてほしい" -- previously gated behind `if (!debugMode) return`, so a game started with
+// debug off had no snapshots at all to jump back into once debug got turned on mid-game. Recording used
+// to be treated as an opt-in cost specifically to avoid an unconditional structuredClone every turn --
+// but per the user's own observation, recordReplaySnapshotIfChanged below already does an unconditional
+// structuredClone on every single MOVE (finer-grained than this, which only fires once per turn
+// boundary) for the replay/ranking feature, regardless of debugMode -- so this was never actually saving
+// any real cost, just leaving a gap in what debugMode could reach). The panel itself stays hidden while
+// debugMode is off (see renderDebugPanel/toggleDebugMode) -- only the recording is now unconditional.
 // ---------------------------------------------------------------------------
 // Defaults to off (2026-09-07, per user request, reversing the 2026-08-04 "デフォルトもONにして" -- see
 // usedDebugOrTestGameThisGame's own doc: a game needs to start clean of debug mode to ever be eligible
@@ -1306,7 +1313,7 @@ function recordTurnHistorySnapshot(state, playerId) {
   // correspond to any real, replayable action. Left alone, jumping back to an earlier point and letting
   // play run back up to GAME_END again would append a *different* bogus tail each time (whichever
   // player getNextTurn happened to name that pass), making the timeline drift on repeated round-trips.
-  if (!debugMode || state.phase === 'GAME_END') return;
+  if (state.phase === 'GAME_END') return;
   if (historyCursor < turnHistory.length - 1) turnHistory = turnHistory.slice(0, historyCursor + 1);
   turnHistory.push({ round: state.round, playerId, snapshot: structuredClone(state) });
   historyCursor = turnHistory.length - 1;
@@ -1531,7 +1538,13 @@ function handleStartFromRound3Click() {
   showRound3GeneratingOverlay();
   setTimeout(() => {
     const seed = `start-from-round3-${Date.now()}`;
-    const state = gameRunnerMod.setupGame(seed, ['Alice', 'Bob', 'Carol', 'Dan'], INDEX, aiEvaluatorLv4);
+    // resourceCardPicker (2026-09-15, per the same request as driveOneAiStepInner's own
+    // RESOURCE_SYNERGY_PICK_ENABLED flag just above): this function's own 1R/2R AI-vs-AI simulation
+    // loop calls setupGame directly, bypassing that flag entirely -- every player here is played by
+    // aiPlayerLv4 (the human hasn't taken over yet), so all 4 should use the same START_ORDER/ID-based
+    // pick, not setupGame's own random default.
+    const round3ResourceCardPicker = (candidateIds, state, idx, player) => smartOnboardingMod.pickResourceCards(candidateIds, state, idx, aiResourceSynergyTable, player.conPhysicalId);
+    const state = gameRunnerMod.setupGame(seed, ['Alice', 'Bob', 'Carol', 'Dan'], INDEX, aiEvaluatorLv4, round3ResourceCardPicker);
 
     let openTurnPlayerId = null;
     let openTurnHasPlacedDie = false;
