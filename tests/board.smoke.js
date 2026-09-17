@@ -267,6 +267,37 @@ function giveDie(state, playerId, value) {
 }
 
 // ---------------------------------------------------------------------------
+// 訓練場の支配 (A202A) sets PlayerState.trainingGroundDominationOk once, at the real moment of
+// acquisition (2026-09-17, per user bug report watching AI LV5 -- see PlayerState's own doc and
+// evaluator.js's matching fix: this watermark must be captured here, not re-derived from a later color
+// dice count, or growing past the threshold via 訓練場's own effect after a legitimate acquisition would
+// wrongly look like a mistake).
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.resources.A = 2; p1.resources.B = 1; // A202A costs "2A,B"
+  const [slotId] = Object.keys(state.shops.SPECIAL.slots);
+  state.shops.SPECIAL.slots[slotId] = 'A202A'; // force a known slot, regardless of this seed's shuffle
+  const candidate = { type: 'BUILD_NEW', faceId: 'A202A', shopKey: 'SPECIAL', slotId };
+  const result = board.resolveBuild(state, index, { playerId: 'P1' }, candidate);
+  check('resolveBuild(A202A) succeeds with 0 color dice', result.success, true);
+  check('trainingGroundDominationOk is set true when acquired under the 4-color-dice threshold', p1.trainingGroundDominationOk, true);
+}
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  for (let i = 0; i < 4; i++) giveDie(state, 'P1', 3); // 4 color dice -- at/past the threshold
+  p1.resources.A = 2; p1.resources.B = 1;
+  const [slotId] = Object.keys(state.shops.SPECIAL.slots);
+  state.shops.SPECIAL.slots[slotId] = 'A202A';
+  const candidate = { type: 'BUILD_NEW', faceId: 'A202A', shopKey: 'SPECIAL', slotId };
+  const result = board.resolveBuild(state, index, { playerId: 'P1' }, candidate);
+  check('resolveBuild(A202A) succeeds with 4 color dice', result.success, true);
+  check('trainingGroundDominationOk is set false when acquired at/past the 4-color-dice threshold', p1.trainingGroundDominationOk, false);
+}
+
+// ---------------------------------------------------------------------------
 // SHOP001-006 (M-shop) round-gated to round>=2 (2026-09-14, per user request: "shop001～006 1Rはすべて
 // 裏向きにして2Rからと表示 2Rから獲得できるようになる"). Scoped to shopKey==='M' specifically -- a
 // monument that happens to sit in a NORMAL/SPECIAL slot instead (via

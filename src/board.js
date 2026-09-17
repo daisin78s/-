@@ -1739,7 +1739,17 @@ function resolveBuildNew(state, index, context, candidate) {
   const inst = createCardInstance(candidate.faceId);
   inst.ownerId = context.playerId;
   state.cards[inst.physicalId] = inst;
-  state.players.find((p) => p.id === context.playerId).ownedCardPhysicalIds.push(inst.physicalId);
+  const player = state.players.find((p) => p.id === context.playerId);
+  player.ownedCardPhysicalIds.push(inst.physicalId);
+
+  // 訓練場の支配(A202A) watermark (2026-09-17, see PlayerState.trainingGroundDominationOk's own doc) --
+  // captured once, right here, from this exact moment's own color-dice count, before this BUILD's own
+  // ONCE (if any) or anything later could change it. A202 has no ONCE granting dice itself, so reading
+  // it after runProgram below would give the identical number anyway, but before is the conceptually
+  // correct point (matches evaluator.js's own "at acquisition" framing) and costs nothing extra.
+  if (candidate.faceId === 'A202A') {
+    player.trainingGroundDominationOk = player.dice.filter((d) => d.kind === 'COLOR').length < 4;
+  }
 
   const onceResult = executor.runProgram(state, index, { ...context, sourcePhysicalId: inst.physicalId }, row.ONCE);
   executor.emitAndResolve(state, index, context, 'BUILD', candidate.faceId[0]);

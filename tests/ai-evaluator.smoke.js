@@ -215,12 +215,29 @@ function giveCard(state, faceId, playerId) {
 {
   const state = freshState(1);
   giveCard(state, 'A202A', 'P1');
+  state.players[0].trainingGroundDominationOk = false; // acquired at/past the threshold (see below) -- watermark set explicitly since giveCard bypasses board.resolveBuildNew's own real hook
   for (let i = 0; i < 4; i++) {
     const d = createDie(`d${i}`, 'COLOR');
     d.placedMapId = 'MAP001'; // all 4 placed -- totalColorDiceCount>=4 (the -1000 penalty) AND 0 unplaced (the -100 tax) at once
     state.players[0].dice.push(d);
   }
   check('The -1000 domination penalty and -100 timing tax stack independently at 4+ color dice', evaluator.score(state, 'P1'), evalTable[1].A202A - 1000 - 100);
+}
+// 2026-09-17 fix (per user bug report watching AI LV5): the -1000 penalty must NOT re-fire just because
+// the player's CURRENT dice count is now >=4, if trainingGroundDominationOk was set true at the real
+// moment of acquisition (i.e. this player used 訓練場's own effect to legitimately grow past the
+// threshold afterward) -- that's the card's entire purpose, not a mistake. See PlayerState's own doc and
+// board.resolveBuildNew for where the real watermark gets set (the next block tests that hook directly).
+{
+  const state = freshState(1);
+  giveCard(state, 'A202A', 'P1');
+  state.players[0].trainingGroundDominationOk = true; // acquired while under the threshold
+  for (let i = 0; i < 4; i++) {
+    const d = createDie(`d${i}`, 'COLOR');
+    d.placedMapId = 'MAP001'; // now at 4 total color dice, presumably via 訓練場's own ADD(D) -- no penalty
+    state.players[0].dice.push(d);
+  }
+  check('No -1000 penalty when dice grew past the threshold AFTER a legitimate acquisition (trainingGroundDominationOk:true)', evaluator.score(state, 'P1'), evalTable[1].A202A - 100);
 }
 
 // ---------------------------------------------------------------------------

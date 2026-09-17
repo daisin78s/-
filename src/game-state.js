@@ -164,6 +164,20 @@ function createDie(id, kind) {
  *   A201A/A201B, "孤児院の支配LV1/LV2"): cumulative VP THIS player has personally been granted by 孤児院's
  *   own CHANGE(...,VP,...) ACTION, at either tier (AREA010B's CHANGE(3K,3VP) or AREA010C's
  *   CHANGE(K,VP,5)), for the whole game. See board.placeDice's own doc for where this is updated.
+ * @property {boolean|null} trainingGroundDominationOk - 訓練場の支配(A202A/A202B)'s own watermark
+ *   (2026-09-17, per user bug report: watching AI LV5, it acquired 訓練場の支配 while under evaluator.js's
+ *   own TRAINING_GROUND_DOMINATION_PENALTY color-dice-count threshold, then never actually placed on 訓練
+ *   場 again to raise its own dice count past that threshold -- the exact same -1000 penalty that
+ *   (correctly) discourages ACQUIRING the card once already past the threshold was *also* re-firing on
+ *   every later evaluation of the resulting, already-past-threshold state, making the very payoff the
+ *   card exists for look like a mistake). null until A202A is actually built (see
+ *   board.resolveBuildNew's own doc for where this gets set, once, from that exact moment's own color-dice
+ *   count) -- true if acquired while still under the threshold ("worth it," matches the user's own "ダイ
+ *   ス3こ...その後ダイスを増やすようにする"), false if acquired at/past it (an edge case that shouldn't
+ *   normally happen given the same threshold already discourages the acquisition itself, but kept
+ *   consistent with the pre-existing penalty if it ever does). Never re-derived from the player's current
+ *   dice count afterward -- see evaluator.js's own doc for why a live re-check defeats the card's entire
+ *   purpose. Survives the A202A->A202B upgrade unchanged (same physical card, not a new acquisition).
  */
 
 /** Fixed palette, assigned in player order (player 1 = PINK, ...). Provisional -- see PlayerState.color. */
@@ -219,6 +233,7 @@ function createPlayer(id, name, color = null) {
     pendingFee: null,
     bardEmblemUnitsGranted: 0,
     orphanageVpGained: 0,
+    trainingGroundDominationOk: null,
   };
 }
 

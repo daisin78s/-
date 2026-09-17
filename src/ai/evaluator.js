@@ -245,6 +245,15 @@ class Evaluator {
     // which is already worthless (no cap left to lift) once past 3, independent of any timing concern.
     // Total color dice (in hand AND currently placed) matches board.js's own established "TOTAL color
     // dice" counting convention, not just unplaced ones.
+    //
+    // 2026-09-17 fix (per user bug report watching AI LV5): this used to re-check the player's CURRENT
+    // total color-dice count on every single evaluation, not just the acquisition decision -- so once a
+    // player who acquired this while under the threshold actually went and placed on 訓練場 to raise
+    // their own dice count past it (literally the card's entire purpose), that resulting state now also
+    // read as "past the threshold" and got the exact same -1000, making the card's own intended payoff
+    // look like a mistake the AI's search would then avoid. Now uses player.trainingGroundDominationOk
+    // (see PlayerState's own doc) instead -- a watermark set ONCE, at the real moment of acquisition
+    // (board.resolveBuildNew), never re-derived from a later dice count.
     const TRAINING_GROUND_DOMINATION_PENALTY = 1000;
     // Timing tax (2026-09-14, per user report: watching a replay, the AI grabbed 訓練場の支配 in round 2
     // with its very last die of the round, unable to place on the newly-unlocked AREA007 slot at all that
@@ -305,7 +314,7 @@ class Evaluator {
       total += v(cardState.currentFaceId);
       if (typeof row.VP === 'number') total += row.VP * v('VP');
       if (cardState.currentFaceId === 'A202A' || cardState.currentFaceId === 'A202B') {
-        if (totalColorDiceCount >= 4) total -= TRAINING_GROUND_DOMINATION_PENALTY;
+        if (player.trainingGroundDominationOk === false) total -= TRAINING_GROUND_DOMINATION_PENALTY;
         if (hasNoDiceLeftThisRound) total -= TRAINING_GROUND_UNUSABLE_THIS_ROUND_PENALTY;
       }
       // 評価値_CON card-row synergy (2026-08-28): an LV2 upgrade still matches its base card's own LV1 row
