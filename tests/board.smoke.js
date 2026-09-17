@@ -2623,18 +2623,20 @@ function withPatchedTap(physicalFaceId, tap, fn) {
 // own D grant only, not a lasting change to the player's own cap. SLOT1 at both tiers is now ANY (a
 // 2026-08-30 data edit added it back alongside the owner-only EX slot(s), see board.wouldOweFee's own doc
 // on the same edit's `fee` column) -- doesn't affect these tests either way since P1 is always the map's
-// own owner here, free to use any slot type. AREA007B's own ACTION changed 2026-08-25 from a free ADD(D)
-// to CHANGE(K,D), then 2026-08-30 to CHANGE(2K,D) (per user data edits "訓練場LV1　能力変えました" then
-// "訓練場すこしかえました") -- the bypass logic (keyed off grantsColorDie's generic CHANGE/ADD detection,
-// not this AREA's specific formula) needed no code change for either, but tests placing there now need to
-// actually afford the current K cost. AREA007C (LV2) is untouched, still ADD(D), no K needed.
+// own owner here, free to use any slot type. AREA007B's own ACTION has been edited back and forth several
+// times (2026-08-25: free ADD(D) -> CHANGE(K,D); 2026-08-30: -> CHANGE(2K,D); 2026-09-15: -> free ADD(D)
+// again; 2026-09-17, per user data edit "訓練場変更しました": reverted back to CHANGE(K,D)) -- the bypass
+// logic (keyed off grantsColorDie's generic CHANGE/ADD detection, not this AREA's specific formula) has
+// never needed a code change for any of these, but a test placing there needs to afford whatever the
+// CURRENT K cost actually is (giving more K than strictly needed is harmless -- payCostList never
+// requires spending an exact surplus). AREA007C (LV2) is untouched throughout, still ADD(D), no K needed.
 // ---------------------------------------------------------------------------
 {
   // 怠惰 (CON005A) normally turns EVERY D grant into a wD instead, unconditionally, everywhere -- except
   // now at 訓練場LV1, where it's bypassed entirely.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  p1.resources.K = 2; // AREA007B's own ACTION is now CHANGE(2K,D)
+  p1.resources.K = 2; // AREA007B's own ACTION is currently CHANGE(K,D) -- 2 is a generous surplus, not the exact cost
   const con5a = createCardInstance('CON005A');
   con5a.ownerId = 'P1';
   state.cards[con5a.physicalId] = con5a;
@@ -2701,7 +2703,7 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   // A ☆ die (JOB003/道化) can land on 訓練場LV1/LV2 too ("全AREA共通") -- same bypass applies.
   const state = freshStateWithShops();
   const p1 = withWildcardOwner(state);
-  p1.resources.K = 2; // AREA007B's own ACTION is now CHANGE(2K,D)
+  p1.resources.K = 2; // AREA007B's own ACTION is currently CHANGE(K,D) -- 2 is a generous surplus, not the exact cost
   const con5a = createCardInstance('CON005A');
   con5a.ownerId = 'P1';
   state.cards[con5a.physicalId] = con5a;
