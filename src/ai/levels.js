@@ -45,6 +45,30 @@ const LEVELS = [
     moveGeneratorOptions: { preferCastleOverSenate: true },
     evaluatorOptions: { qstAware: true, conBuildAware: true, monumentIncentiveAware: true },
   },
+  {
+    // AI LV5 (2026-09-16, per user design consultation): same evaluator/move-generator/round-4 settings
+    // as LV4 (evaluatorOptions unchanged -- LV5 reads AI LV4's own real 評価値 table, not a separate one,
+    // per user confirmation "評価値はAILV4を使う"), but a different rounds 1-3 search: beamWidth 6->3
+    // (see tools/ai_lookahead_variant_tournament.js's own 2026-09-16 finding -- 100-game seat-rotated
+    // testing showed beamWidth 3 vs 6 is not measurably weaker, only cheaper) and lookaheadExtraTurns 1->2
+    // (the "321" scheme discussed with the user), PLUS crossRoundLookahead:true (see ai-player.js's own
+    // constructor doc for the full mechanism) -- lets the own-turns-only rollout genuinely peek 1 turn
+    // into round 2/3/4 instead of only ever seeing the current round's own numbers, so hoarding resources
+    // late in a round specifically to afford a round 2/3 card can actually show up as a better score than
+    // spending them immediately. Round 4 itself is unaffected (roundOverrides identical to LV4's own,
+    // "それはそのままで") -- there is no round 5 to peek into, so crossRoundLookahead never engages there.
+    name: 'LV5',
+    aiOptions: {
+      lookaheadExtraTurns: 2,
+      beamWidth: 3,
+      roundOverrides: { 4: { lookaheadExtraTurns: 20, beamWidth: 10, maxRolloutMoves: 200 } },
+      dieScarcityTieBreak: true,
+      preferExOnOwnTerritory: true,
+      crossRoundLookahead: true,
+    },
+    moveGeneratorOptions: { preferCastleOverSenate: true },
+    evaluatorOptions: { qstAware: true, conBuildAware: true, monumentIncentiveAware: true },
+  },
 ];
 
 /** @param {string} name - e.g. "LV2" @returns {Object} the matching LEVELS entry, or throws */

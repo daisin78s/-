@@ -16,10 +16,13 @@ function check(label, actual, expected) {
   if (ok) passCount++; else failCount++;
 }
 
-check('LEVELS lists LV1/LV2/LV3/LV4, in that order', LEVELS.map((l) => l.name), ['LV1', 'LV2', 'LV3', 'LV4']);
+check('LEVELS lists LV1/LV2/LV3/LV4/LV5, in that order', LEVELS.map((l) => l.name), ['LV1', 'LV2', 'LV3', 'LV4', 'LV5']);
 check('getLevel("LV2") returns the matching registry entry', getLevel('LV2'), LEVELS[1]);
 check('getLevel("LV3") includes qstAware evaluatorOptions', getLevel('LV3').evaluatorOptions, { qstAware: true });
 check('getLevel("LV4") includes dieScarcityTieBreak aiOptions', getLevel('LV4').aiOptions.dieScarcityTieBreak, true);
+check('getLevel("LV5") includes crossRoundLookahead aiOptions', getLevel('LV5').aiOptions.crossRoundLookahead, true);
+check('getLevel("LV5") uses beamWidth 3 (vs LV4\'s default 6)', getLevel('LV5').aiOptions.beamWidth, 3);
+check('getLevel("LV5") shares LV4\'s own evaluatorOptions (same real 評価値 table)', getLevel('LV5').evaluatorOptions, getLevel('LV4').evaluatorOptions);
 {
   let threw = false;
   try { getLevel('LV99'); } catch (e) { threw = true; }

@@ -3,6 +3,13 @@
 
 const { compareDicePriority } = require('./die-priority');
 const { compareExSlotPreference } = require('./slot-priority');
+const turnFlow = require('../turn-flow');
+const rng = require('../rng');
+
+// "AI LV5" cross-round lookahead (see AIPlayer's own crossRoundLookahead option doc): a solo dice-move
+// candidate is exactly one of these 4 move types (matches the same list #rolloutScore's own
+// hasPlacedDieThisTurn tracking already checks for).
+const DICE_MOVE_TYPES = new Set(['PLACE_DIE', 'PLACE_WILDCARD_DIE', 'PLACE_DICE_GROUP', 'PASS_DIE']);
 
 /**
  * AIPlayer: picks ONE move at a time. "Generate legal moves -> evaluate -> pick the best" (confirmed
@@ -86,6 +93,15 @@ class AIPlayer {
    *      compareExSlotPreference -- among placements onto an AREA this player already owns, an EX slot is
    *      preferred over any other slot (see that module's own doc for why). Self-disables for round 4 (the
    *      user's own "4Rは例外で"). false/omitted (LV1/2/3) keeps selectMove byte-for-byte unchanged.
+   *    crossRoundLookahead (2026-09-16, "AI LV5", default false): lets #rolloutScore peek 1 turn into the
+   *      NEXT round instead of always stopping once this player's own dice for the CURRENT round run out
+   *      early (see #rolloutScore's own doc on the exact mechanism and #forceOpponentsFinishRound for how
+   *      the other 3 seats get fast-forwarded through their own remaining round dice). Motivation (per
+   *      user): this game deals its strongest cards in round 2/3, so an own-turns-only rollout that never
+   *      sees past the CURRENT round can't tell "hoard resources now, spend them on a round-3 card" from
+   *      "spend them now" -- it just sees the immediate round's own numbers either way. Disabled (false)
+   *      for LV1-4, whose #rolloutScore stays byte-for-byte unchanged. Never engages in round 4 (no round
+   *      5 to peek into -- see #rolloutScore's own round check).
    */
   constructor(index, moveGenerator, evaluator, simulator, options) {
     this.index = index;
@@ -100,6 +116,7 @@ class AIPlayer {
     this.roundOverrides = opts.roundOverrides || {};
     this.dieScarcityTieBreak = !!opts.dieScarcityTieBreak;
     this.preferExOnOwnTerritory = !!opts.preferExOnOwnTerritory;
+    this.crossRoundLookahead = !!opts.crossRoundLookahead;
     // Hard wall-clock cap on one selectMove() call's own-turns-only rollout (2026-09-14, per user
     // report: a replay showed 40-56s decisions in round 4). Root cause found and fixed separately
     // (see #rolloutScore's own GAME_END check below) -- this is a safety net on TOP of that fix, not
@@ -202,13 +219,27 @@ class AIPlayer {
     if (beamWidths && beamWidths.length > 0) return this.#deepBeamSearch(deduped, playerId, beamWidths, maxRolloutMoves, deadline);
     if (lookaheadExtraTurns <= 0) return scored[0].move;
 
+    // crossRoundLookahead's "planned own turns this round" (2026-09-16, "AI LV5"): computed ONCE here,
+    // from `state` (before ANY of the beamWidth candidates' own moves), not per-candidate -- see this
+    // option's own constructor doc. Using the pre-move count keeps the trigger condition identical across
+    // every candidate being compared in this one decision (a candidate that happens to place vs. pass a
+    // die would otherwise see a slightly different post-move dice count, which must NOT change which
+    // candidates get the round-crossing treatment -- see #rolloutScore's own doc on why this also has to
+    // stay fixed even if a bonus die shows up mid-rollout).
+    let plannedOwnTurnsThisRound = null;
+    if (this.crossRoundLookahead && state.round >= 1 && state.round <= 3) {
+      const player = state.players.find((p) => p.id === playerId);
+      const ownUnplacedDiceCount = player.dice.filter((d) => d.placedMapId === null && !d.passed).length;
+      if (ownUnplacedDiceCount <= lookaheadExtraTurns) plannedOwnTurnsThisRound = ownUnplacedDiceCount;
+    }
+
     let best = scored[0].move;
     let bestDeepScore = -Infinity;
     for (const candidate of deduped.slice(0, beamWidth)) {
       // Once the time budget is already spent, don't start yet another candidate's rollout -- keep
       // whichever candidate (rolled-out or, worst case, the plain 1-ply best) is already `best`.
       if (Date.now() > deadline) break;
-      const deepScore = this.#rolloutScore(candidate.resultState, playerId, candidate.move, lookaheadExtraTurns, maxRolloutMoves, deadline);
+      const deepScore = this.#rolloutScore(candidate.resultState, playerId, candidate.move, lookaheadExtraTurns, maxRolloutMoves, deadline, plannedOwnTurnsThisRound);
       if (deepScore > bestDeepScore) {
         bestDeepScore = deepScore;
         best = candidate.move;
@@ -217,17 +248,118 @@ class AIPlayer {
     return best;
   }
 
+  /** AI LV5 only (crossRoundLookahead): randomly fast-forwards every player OTHER than playerId through
+   * ALL of their remaining round dice -- no free actions, no BARE_TAP, just a uniformly-random pick among
+   * PLACE_DIE/PLACE_WILDCARD_DIE/PLACE_DICE_GROUP/PASS_DIE each step, then END_TURN once they have none
+   * left -- until it's genuinely playerId's own turn again. Since playerId's own dice for this round are
+   * already exhausted by the time this is called (see #rolloutScore's own call site), that can only mean
+   * the round has actually advanced (simulator.js's own END_TURN handling calls endRound/startRound the
+   * moment isRoundOver() goes true, exactly as it would in a real game) -- this is purely a cheap stand-in
+   * for "let the other 3 players finish their turns" so the round genuinely ends, not an attempt to play
+   * them well (this rollout still never tries to predict what an opponent would actually choose).
+   * `#checkForcedMoves` is still honored for each opponent (BZ/JOB004/etc. are mandatory board-state
+   * corrections, not discretionary "free actions" in the sense the user meant to exclude here) --
+   * skipping those could leave a player stuck unable to reach END_TURN at all.
+   * @returns {GameState|null} the state once it's playerId's turn again, or null if this got stuck (no
+   *   legal move for some opponent, e.g. an unpayable USAGE_FEE with RESOURCE_TOTAL_LIMIT blocking
+   *   END_TURN and no free action allowed to fix it) or ran past the deadline/safety step cap -- callers
+   *   fall back to stopping the rollout where it already was, same as if crossRoundLookahead were off. */
+  #forceOpponentsFinishRound(state, playerId, deadline) {
+    const MAX_STEPS = 300; // safety valve -- a real round never needs anywhere near this many individual moves
+    let openTurnPlayerId = null;
+    let openTurnHasPlacedDie = false;
+    for (let steps = 0; steps < MAX_STEPS; steps++) {
+      if (Date.now() > deadline) return null;
+      if (state.phase === 'GAME_END') return null;
+      const next = turnFlow.getNextTurn(state);
+      if (next.type === 'TURN' && next.playerId === playerId) return state; // round has genuinely advanced
+      if (next.type === 'ONBOARDING_NEEDED') {
+        // Round 1 only (turnFlow.getNextTurn's own gate): an opponent who hasn't taken their first turn
+        // yet needs JOB/CON/initial-resources resolved before they can place any dice at all -- same
+        // uniform-random pick LV1-3's own onboarding already uses (game-runner.js#driveOnboarding),
+        // matching this whole mechanism's "cheap, not trying to play opponents well" philosophy.
+        const gameRunner = require('./game-runner');
+        gameRunner.driveOnboarding(state, this.index, next.playerId, this.evaluator);
+        continue;
+      }
+      if (next.type === 'ROUND_OVER') {
+        // Every player's dice are already placed/passed, but the actual endRound()/startRound()
+        // transition only happens as a side effect of simulator.js processing an END_TURN move (see its
+        // own END_TURN case) -- if the very last die across all 4 players got placed/passed WITHOUT that
+        // same step also being (or immediately triggering) an END_TURN, getNextTurn briefly reports this
+        // gap state instead of TURN for anyone. Same defensive fallback game-runner.js's own playGame
+        // loop already has for this ("not expected to fire in practice" there, but does fire here since
+        // this loop's random dice-move-first ordering routinely places an opponent's last die a step
+        // before their own END_TURN).
+        turnFlow.endRound(state, this.index);
+        if (state.phase !== 'GAME_END') turnFlow.startRound(state);
+        continue;
+      }
+      if (next.type !== 'TURN') return null; // ONBOARDING_NEEDED already handled above -- shouldn't reach here
+      const opponentId = next.playerId;
+      const context = { hasPlacedDieThisTurn: opponentId === openTurnPlayerId ? openTurnHasPlacedDie : false };
+      const forcedMove = this.#checkForcedMoves(state, opponentId, context);
+      // Candidates to try, forced move first if any, then a shuffled run of the dice moves, then a bare
+      // END_TURN as the last resort -- a BUILD-carrying PLACE_DIE's own buildCandidateIndex can fail
+      // INSUFFICIENT_RESOURCES on apply despite MoveGenerator having offered it (the same defensive
+      // "should only ever offer legal moves, but don't treat a miss as fatal" tolerance selectMove's own
+      // 1-ply scoring loop already has -- see its own comment), so a single random pick with no retry was
+      // aborting this whole cross-round attempt on what's really just one candidate's bad luck.
+      let candidateMoves;
+      if (forcedMove) {
+        candidateMoves = [forcedMove];
+      } else {
+        const moves = this.moveGenerator.generateMoves(state, this.index, opponentId, context);
+        const diceMoves = rng.shuffle(state.rng, moves.filter((m) => DICE_MOVE_TYPES.has(m.type)));
+        const endTurnMove = moves.find((m) => m.type === 'END_TURN');
+        candidateMoves = endTurnMove ? [...diceMoves, endTurnMove] : diceMoves;
+      }
+      let applied = null;
+      for (const candidate of candidateMoves) {
+        const { state: nextState, result } = this.simulator.apply(state, this.index, candidate);
+        if (result.success) { applied = { move: candidate, nextState }; break; }
+      }
+      if (!applied) return null; // stuck -- every candidate failed (or none existed) for this opponent
+      state = applied.nextState;
+      if (DICE_MOVE_TYPES.has(applied.move.type)) { openTurnPlayerId = opponentId; openTurnHasPlacedDie = true; }
+      else if (applied.move.type === 'END_TURN') { openTurnPlayerId = null; openTurnHasPlacedDie = false; }
+    }
+    return null;
+  }
+
   /** Continues playing playerId's own moves, 1-ply greedy from here on (no further branching -- see
    * this class's own doc for why), through the rest of the current turn and lookaheadExtraTurns more of
    * their own turns, then scores the resulting state. `firstMove` is the move that produced `state`,
    * used only to seed hasPlacedDieThisTurn/turnsLeft correctly for the very first step. lookaheadExtraTurns/
    * maxRolloutMoves are passed in explicitly (2026-08-10, not read from `this`) since selectMove now
-   * resolves them per-round via #effectiveOptions -- see roundOverrides' own doc. */
-  #rolloutScore(state, playerId, firstMove, lookaheadExtraTurns, maxRolloutMoves, deadline) {
+   * resolves them per-round via #effectiveOptions -- see roundOverrides' own doc.
+   *
+   * plannedOwnTurnsThisRound (2026-09-16, "AI LV5"/crossRoundLookahead, null for LV1-4): computed ONCE by
+   * selectMove from the state BEFORE any of this decision's beamWidth candidates were applied (see that
+   * call site's own doc for why it must be fixed up front rather than re-checked here) -- the exact
+   * number of this player's own turns to play out in the CURRENT round before treating the round as
+   * "over" for this rollout's purposes, regardless of how many unplaced dice this player actually still
+   * has by then (e.g. a bonus color die picked up mid-rollout must NOT change this count, or two
+   * candidates that differ only in "gained a bonus die or not" would end up scored against DIFFERENT
+   * rounds' eval columns -- a comparison the user specifically flagged as unfair). Once that many of this
+   * player's own turns have completed, #forceOpponentsFinishRound is used to genuinely finish the round
+   * (the other 3 seats play out their own remaining dice randomly), then exactly 1 further turn of this
+   * player's own (real, evaluated, free-actions-allowed) play continues in the new round before stopping
+   * -- never more than 1, regardless of how much of the original lookaheadExtraTurns budget is left
+   * unspent (confirmed with the user: "残りダイス1個でも追加ターンは1つだけ"). Left null, this parameter
+   * changes nothing -- #rolloutScore behaves exactly as it did before this option existed. */
+  #rolloutScore(state, playerId, firstMove, lookaheadExtraTurns, maxRolloutMoves, deadline, plannedOwnTurnsThisRound = null) {
     // JOB003/道化 (2026-08-20 fix, per user bug report -- see game-runner.js driveTurn's matching comment
     // for the full story): PLACE_WILDCARD_DIE counts as "placed a die this turn" too, both here and below.
     let hasPlacedDieThisTurn = firstMove.type === 'PLACE_DIE' || firstMove.type === 'PLACE_WILDCARD_DIE' || firstMove.type === 'PLACE_DICE_GROUP' || firstMove.type === 'PASS_DIE';
     let turnsLeft = lookaheadExtraTurns;
+    // AI LV5 only (plannedOwnTurnsThisRound !== null): counts this player's own completed turns since
+    // this rollout started, compared against the fixed plan (see this method's own doc) rather than the
+    // dynamic per-step hasAnyUnplacedDie check below. crossedRoundTurnsRemaining starts null (not yet
+    // crossed); once #forceOpponentsFinishRound succeeds it's set to 1, counting down to a hard stop
+    // after exactly that many further turns of this player's own play, regardless of turnsLeft/dice state.
+    let ownTurnsCompletedThisRound = 0;
+    let crossedRoundTurnsRemaining = null;
     let steps = 0;
     while (steps < maxRolloutMoves) {
       // GAME_END guard (2026-09-14, per user report of a 40-56s decision, root-caused via a replay
@@ -262,7 +394,31 @@ class AIPlayer {
       state = nextState;
       if (move.type === 'PLACE_DIE' || move.type === 'PLACE_WILDCARD_DIE' || move.type === 'PLACE_DICE_GROUP' || move.type === 'PASS_DIE') hasPlacedDieThisTurn = true;
       if (move.type === 'END_TURN') {
+        // AI LV5's post-crossing turn: exactly crossedRoundTurnsRemaining more turns, full stop after
+        // that regardless of turnsLeft or dice state (see this method's own doc -- "残りダイス1個でも
+        // 追加ターンは1つだけ").
+        if (crossedRoundTurnsRemaining !== null) {
+          crossedRoundTurnsRemaining--;
+          if (crossedRoundTurnsRemaining <= 0) break;
+          hasPlacedDieThisTurn = false;
+          continue;
+        }
         if (turnsLeft <= 0) break; // rollout horizon reached right at a turn boundary
+        ownTurnsCompletedThisRound++;
+        // AI LV5's fixed plan (see this method's own doc for why this must be a precomputed count, not a
+        // live hasAnyUnplacedDie re-check): once this player's own committed turns for the CURRENT round
+        // are done, try to genuinely finish the round (other 3 seats resolved randomly) and continue for
+        // exactly 1 more turn in the new round instead of just stopping here.
+        if (plannedOwnTurnsThisRound !== null && ownTurnsCompletedThisRound >= plannedOwnTurnsThisRound) {
+          const crossedState = this.#forceOpponentsFinishRound(state, playerId, deadline);
+          if (crossedState) {
+            state = crossedState;
+            crossedRoundTurnsRemaining = 1;
+            hasPlacedDieThisTurn = false;
+            continue;
+          }
+          break; // couldn't force the crossing (stuck/timeout) -- fall back to stopping here, as LV1-4 would
+        }
         // Stop simulating further "own future turns" once this player has no unplaced dice left at all
         // (2026-09-14, per user report: watching a replay, the AI spent tens of seconds on its very LAST
         // real die because the rollout kept simulating up to lookaheadExtraTurns more "own turns" even

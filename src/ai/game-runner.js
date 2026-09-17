@@ -549,9 +549,15 @@ function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorO
  *   buildConJobSynergyTable). When provided, JOB draft + CON face choice use
  *   driveSmartOnboarding/smart-onboarding.js's pickJob/pickConFace instead of driveOnboarding's uniform
  *   random pick -- "AI LV4"'s own JOB/CON selection. Omitted by every caller that hasn't opted in yet.
+ * @param {Object} [aiOptions] - passed straight through to every seat's own AIPlayer constructor
+ *   (2026-09-17, per user request to train the eval table against a specific level's own full search --
+ *   e.g. "AI LV5"'s {lookaheadExtraTurns:2, beamWidth:3, crossRoundLookahead:true, ...} -- instead of
+ *   always the bare no-options/no-lookahead AIPlayer every prior caller relied on). Omitted (undefined)
+ *   by every existing caller, which keeps this byte-for-byte the original plain-1-ply behavior -- see
+ *   ai-player.js's own constructor doc for what an empty options object defaults to.
  * @returns {{state: GameState, scoreByPlayerId: Object<string,number>, rankByPlayerId: Object<string,number>}}
  */
-function playGameForFitness(seed, playerNames, index, evaluatorByPlayerId, moveGenerator, resourceCardPicker, synergyTable2) {
+function playGameForFitness(seed, playerNames, index, evaluatorByPlayerId, moveGenerator, resourceCardPicker, synergyTable2, aiOptions) {
   const { Simulator } = require('./simulator');
   const { AIPlayer } = require('./ai-player');
   const { MoveGenerator } = require('./move-generator');
@@ -563,7 +569,7 @@ function playGameForFitness(seed, playerNames, index, evaluatorByPlayerId, moveG
   const state = setupGame(seed, playerNames, index, null, resourceCardPicker);
   const aiPlayersByPlayerId = {};
   for (const player of state.players) {
-    aiPlayersByPlayerId[player.id] = new AIPlayer(index, sharedMoveGenerator, evaluatorByPlayerId[player.id], simulator);
+    aiPlayersByPlayerId[player.id] = new AIPlayer(index, sharedMoveGenerator, evaluatorByPlayerId[player.id], simulator, aiOptions);
   }
 
   // Same call playGame makes before its own loop -- without startRound, state.round/phase never leave

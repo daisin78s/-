@@ -237,11 +237,17 @@ let usedDebugOrTestGameThisGame = !!debugSetupPlanAtLoad;
 // the way two separately-hardcoded copies eventually would. Adding a future AI_LV4/5/... only ever means
 // appending one more [id, label] entry here, in order -- everything that cares "which level is strongest"
 // (right now, just the default below) then already sees it with no further edits.
-const PLAYER_ROLE_OPTIONS = [['HUMAN', '人間'], ['AI_LV1', 'AI LV1'], ['AI_LV2', 'AI LV2'], ['AI_LV3', 'AI LV3'], ['AI_LV4', 'AI LV4']];
+const PLAYER_ROLE_OPTIONS = [['HUMAN', '人間'], ['AI_LV1', 'AI LV1'], ['AI_LV2', 'AI LV2'], ['AI_LV3', 'AI LV3'], ['AI_LV4', 'AI LV4'], ['AI_LV5', 'AI LV5']];
 // The strongest AI level currently defined -- the last entry in PLAYER_ROLE_OPTIONS (2026-08-11, per user
 // request: "デフォルトのAILVを3にして　今後デフォルトは一番高いAILVを選択してください"). Was a hardcoded
 // 'AI_LV2' before LV3 existed; now derived so it keeps pointing at whichever level is actually strongest
 // without needing to be hand-updated again the next time one is added.
+//
+// AI LV5 briefly kept AI_LV4 pinned here instead (2026-09-16, while LV5 was still untested) -- reverted
+// the same day once a real 400-game seat-rotated LV4-vs-LV5 tournament (see
+// tools/ai_lv4_vs_lv5_tournament.js) came back in LV4's favor (winRate .290 vs .210) and the user asked
+// to try LV5 as the live default anyway ("とりあえず初期設定でAILV4になっているのをLV5にしてください
+// 対戦してみて考えてみます") -- back to the plain "always the last/strongest entry" rule, no more pin.
 const DEFAULT_AI_ROLE = PLAYER_ROLE_OPTIONS[PLAYER_ROLE_OPTIONS.length - 1][0];
 // ウィークリーチャレンジ (2026-09-07): every seat starts AI-controlled while still on the seat-picker
 // screen (weeklyChallengeSeatChosen null) -- nobody has committed to a seat yet, so nothing should wait on
@@ -488,6 +494,22 @@ const aiPlayerLv4 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGeneratorLv4, aiEvalua
 const aiResourceSynergyTable = resourceCardSynergyMod.buildResourceSynergyTable(INDEX.raw);
 const aiConJobSynergyTable = conJobSynergyMod.buildConJobSynergyTable(INDEX.raw);
 
+// AI LV5 (2026-09-16, see src/ai/levels.js's own doc for the full design/reasoning). Reuses LV4's own
+// aiEvaluatorLv4/aiMoveGeneratorLv4 instances outright (evaluatorOptions/moveGeneratorOptions are
+// identical to LV4's -- LV5 reads AI LV4's own real 評価値 table, per user confirmation "評価値はAILV4を
+// 使う" -- only its own AIPlayer options differ), rather than constructing duplicate Evaluator/
+// MoveGenerator instances that would just be redundant clones of LV4's. Its own onboarding also reuses
+// LV4's smart-onboarding branches below (driveOneAiStepInner's RESOURCE_CHOICE/ONBOARDING) -- see each
+// branch's own updated condition.
+const aiPlayerLv5 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGeneratorLv4, aiEvaluatorLv4, aiSimulator, {
+  lookaheadExtraTurns: 2,
+  beamWidth: 3,
+  roundOverrides: { 4: { lookaheadExtraTurns: 20, beamWidth: 10, maxRolloutMoves: 200 } },
+  dieScarcityTieBreak: true,
+  preferExOnOwnTerritory: true,
+  crossRoundLookahead: true,
+});
+
 // ウィークリーチャレンジ専用のAI LV4評価値スナップショット (2026-09-08, per user spec: AI LV4を自由に
 // チューニングし続けたいが、ウィークリーチャレンジの公平性（同じ週の全アテンプトが同じ強さのAIと対戦す
 // る）は保ちたい -- 手動で「日曜まで触らない」と自分に言い聞かせる運用 ([[project-dice-wp-ai-lv4-freeze]]
@@ -524,6 +546,7 @@ function aiPlayerFor(playerId) {
   if (role === 'AI_LV1') return aiPlayerLv1;
   if (role === 'AI_LV3') return aiPlayerLv3;
   if (role === 'AI_LV4') return (weeklyChallengeActive && aiPlayerLv4Weekly) || aiPlayerLv4;
+  if (role === 'AI_LV5') return aiPlayerLv5;
   return aiPlayerLv2;
 }
 
@@ -845,7 +868,9 @@ function driveOneAiStepInner(state) {
     // broken by ascending numeric ID (see that function's own sort) -- already matches
     // tools/ai_data_report.js's own LV4 wiring, which never had this flag and was never turned off.
     const RESOURCE_SYNERGY_PICK_ENABLED = true;
-    const pair = RESOURCE_SYNERGY_PICK_ENABLED && playerRoles.get(resourcePlayerId) === 'AI_LV4'
+    // AI_LV5 (2026-09-16): shares LV4's own onboarding style outright -- see levels.js's own doc.
+    const usesSmartOnboarding = playerRoles.get(resourcePlayerId) === 'AI_LV4' || playerRoles.get(resourcePlayerId) === 'AI_LV5';
+    const pair = RESOURCE_SYNERGY_PICK_ENABLED && usesSmartOnboarding
       ? smartOnboardingMod.pickResourceCards(
           ctx.resourceChoice.context.candidates,
           state,
@@ -878,11 +903,12 @@ function driveOneAiStepInner(state) {
   }
 
   if (ctx.type === 'ONBOARDING') {
-    // AI LV4 (2026-08-28): reachability/synergy-based JOB draft + CON face pick via smart-onboarding.js
-    // instead of the uniform-random default below in both branches -- see that module's own doc. Every
-    // other level still picks purely at random (2026-08-03, per user feedback -- see the resource-choice
-    // branch above, and src/ai/game-runner.js's matching fix and its own doc for why).
-    const isLv4 = playerRoles.get(ctx.playerId) === 'AI_LV4';
+    // AI LV4/LV5 (2026-08-28, LV5 added 2026-09-16 -- see levels.js's own doc): reachability/synergy-based
+    // JOB draft + CON face pick via smart-onboarding.js instead of the uniform-random default below in
+    // both branches -- see that module's own doc. Every other level still picks purely at random
+    // (2026-08-03, per user feedback -- see the resource-choice branch above, and
+    // src/ai/game-runner.js's matching fix and its own doc for why).
+    const isLv4 = playerRoles.get(ctx.playerId) === 'AI_LV4' || playerRoles.get(ctx.playerId) === 'AI_LV5';
     if (!ctx.player.jobCardId) {
       const jobFaceId = isLv4
         ? smartOnboardingMod.pickJob(state, INDEX, ctx.playerId, aiConJobSynergyTable, aiMoveGenerator, aiSimulator, state.rng)
