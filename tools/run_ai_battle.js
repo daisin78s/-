@@ -80,13 +80,14 @@ async function main() {
 
   let aiLevel;
   while (true) {
-    const answer = (await ask(lineIterator, 'AIレベルを選んでください（0: レベル混合(比較用) / 1: LV1 速い / 2: LV2 先読みあり・遅い / 3: LV3 先読み+QST対応・遅い / 4: LV4 LV3+ダイス優先度+スマートオンボーディング・遅い）: ')).trim();
+    const answer = (await ask(lineIterator, 'AIレベルを選んでください（0: レベル混合(比較用) / 1: LV1 速い / 2: LV2 先読みあり・遅い / 3: LV3 先読み+QST対応・遅い / 4: LV4 LV3+ダイス優先度+スマートオンボーディング・遅い / 5: LV5 LV4+ラウンドまたぎ先読み・さらに遅い）: ')).trim();
     if (answer === '0') { aiLevel = 'MIX'; break; }
     if (answer === '1') { aiLevel = 'LV1'; break; }
     if (answer === '2') { aiLevel = 'LV2'; break; }
     if (answer === '3') { aiLevel = 'LV3'; break; }
     if (answer === '4') { aiLevel = 'LV4'; break; }
-    console.log('0 か 1 か 2 か 3 か 4 を入力してください。');
+    if (answer === '5') { aiLevel = 'LV5'; break; }
+    console.log('0 か 1 か 2 か 3 か 4 か 5 を入力してください。');
   }
 
   // "0: レベル混合" (2026-08-10, per user request: "LV1 2 3をランダムで入れる対戦ができるようにしたい"):
@@ -124,6 +125,20 @@ async function main() {
     console.log('数値を入力するか、何も入力せず既定値40を使ってください。');
   }
 
+  // Concurrency (2026-09-16, per user request: "4戦同時にできるようにしてほしい") -- how many games
+  // tools/ai_data_report.js plays at once across worker threads instead of strictly one at a time. 1
+  // (blank input) keeps the original single-threaded behavior; capped at 8 (per user spec) since this
+  // machine's own CPU core count is the real ceiling anyway (see ai_data_report.js's own
+  // Math.min(concurrency, n) besides).
+  let concurrency;
+  while (true) {
+    const answer = (await ask(lineIterator, '何戦同時に対戦させますか？（未入力で既定値1、最大8）: ')).trim();
+    if (answer === '') { concurrency = 1; break; }
+    const num = Number(answer);
+    if (Number.isInteger(num) && num >= 1 && num <= 8) { concurrency = num; break; }
+    console.log('1以上8以下の整数を入力するか、何も入力せず既定値1を使ってください。');
+  }
+
   rl.close();
 
   const xlsxPath = nextDatedFilePath('AIDATA', 'xlsx');
@@ -131,13 +146,13 @@ async function main() {
   const jsonPath = xlsxPath.replace(/\.xlsx$/, '.json');
 
   console.log('');
-  console.log(`${n}戦（${aiLevel}）を開始します。結果は ${path.basename(xlsxPath)} に10戦ごと自動保存されます（得点${highScoreThreshold}以上を取ったプレイヤーはHighScoresシートにも記録されます）。`);
+  console.log(`${n}戦（${aiLevel}、同時${concurrency}戦）を開始します。結果は ${path.basename(xlsxPath)} に10戦ごと自動保存されます（得点${highScoreThreshold}以上を取ったプレイヤーはHighScoresシートにも記録されます）。`);
   console.log('途中で止めたい場合はこのウィンドウを閉じてください（それまでの分は保存済みのファイルに残ります）。');
   console.log('');
 
   const result = spawnSync(
     process.execPath,
-    [AI_DATA_REPORT_SCRIPT, String(n), jsonPath, aiLevel, xlsxPath, String(highScoreThreshold)],
+    [AI_DATA_REPORT_SCRIPT, String(n), jsonPath, aiLevel, xlsxPath, String(highScoreThreshold), String(concurrency)],
     { stdio: 'inherit' },
   );
 

@@ -35,7 +35,7 @@
  * xlsx) since this project has no xlsx-writing library in Node, only openpyxl in Python (same split
  * tools/xlsx_to_json.py already uses in the other direction).
  *
- * Usage: node tools/ai_data_report.js <N> [outputJsonPath] [aiLevel] [xlsxOutputPath] [highScoreThreshold]
+ * Usage: node tools/ai_data_report.js <N> [outputJsonPath] [aiLevel] [xlsxOutputPath] [highScoreThreshold] [concurrency]
  *   aiLevel: one of src/ai/levels.js's LEVELS (2026-08-10, that file is the single source of truth for
  *   what each level actually means -- see its own doc). "LV1" (default, no lookahead -- fast,
  *   ~10s/game), "LV2" (1-turn lookahead, same as main.js's AI LV2 -- measurably slower, ~60-70s/game per
@@ -53,6 +53,9 @@
  *   "ログは一つのエクセルファイルにまとめる") -- see collectHighScoreRows's own doc for exactly what's
  *   captured and why (JOB/CON/initial RESOURCE/builds only, not full move-by-move detail), and for the
  *   2026-09-02 change limiting rows to just the players who crossed the threshold themselves.
+ *   concurrency: default 1 (original single-threaded behavior, unchanged). >1 plays that many games at
+ *   once across tools/ai_data_report_worker.js threads instead (2026-09-16, per user request to
+ *   tools/run_ai_battle.js) -- see its own doc where it's read, below.
  */
 
 'use strict';
@@ -169,7 +172,7 @@ function collectHighScoreRows(state, index, seed, historyByPlayerId, roundDetail
     });
 }
 
-function main() {
+async function main() {
   const n = Number(process.argv[2]);
   if (!Number.isInteger(n) || n < 1) {
     console.error('Usage: node tools/ai_data_report.js <N> [outputJsonPath] [aiLevel] [xlsxOutputPath]');
@@ -197,13 +200,15 @@ function main() {
   const index = buildDataIndex(raw);
   const evalTable = buildEvalTable(raw);
 
-  // "LV4" smart onboarding (2026-08-28, matching main.js's live-UI wiring -- see driveOneAiStepInner's
-  // own RESOURCE_CHOICE/ONBOARDING branches there): JOB/CON/resource-card picks go through
-  // smart-onboarding.js instead of playGame's own pure-random default. Every other level leaves both
-  // undefined, so playGame's onboarding stays exactly as before.
+  // "LV4"/"LV5" smart onboarding (2026-08-28, matching main.js's live-UI wiring -- see
+  // driveOneAiStepInner's own RESOURCE_CHOICE/ONBOARDING branches there; LV5 added 2026-09-16 since it
+  // shares LV4's exact onboarding behavior, only its rounds 1-3 search differs -- see levels.js's own
+  // doc): JOB/CON/resource-card picks go through smart-onboarding.js instead of playGame's own
+  // pure-random default. Every other level leaves both undefined, so playGame's onboarding stays exactly
+  // as before.
   let resourceCardPicker;
   let synergyTable2;
-  if (aiLevel === 'LV4') {
+  if (aiLevel === 'LV4' || aiLevel === 'LV5') {
     const synergyTable3 = buildResourceSynergyTable(raw);
     synergyTable2 = buildConJobSynergyTable(raw);
     resourceCardPicker = (candidateIds, state, idx, player) => pickResourceCards(candidateIds, state, idx, synergyTable3, player.conPhysicalId);
@@ -297,20 +302,12 @@ function main() {
 
   const runId = Date.now();
   const t0 = Date.now();
-  for (let i = 0; i < n; i++) {
-    const seed = `data-report-${runId}-${i}`;
-    let state;
-    let historyByPlayerId;
-    let roundDetailByPlayerId;
-    let activationCounts;
-    try {
-      ({ state, historyByPlayerId, roundDetailByPlayerId, activationCounts } = playGame(seed, PLAYER_NAMES, index, evalTable, aiOptions, moveGeneratorOptions, evaluatorOptions, undefined, resourceCardPicker, synergyTable2));
-    } catch (e) {
-      console.error(`Game ${i + 1}/${n} (seed=${seed}) crashed: ${e.message}`);
-      console.error(e.stack);
-      process.exit(1);
-    }
 
+  // One game's worth of aggregation (2026-09-16, factored out of the old inline loop body so
+  // tools/ai_data_report_worker.js's own parallel results can feed the exact same logic the sequential
+  // path always has -- see concurrency's own doc below). Mutates the outer conjob/abcm/job/con/
+  // conVpPenalty/highScoreRows closures, same as before.
+  function processGameResult(seed, state, historyByPlayerId, roundDetailByPlayerId, activationCounts) {
     if (Object.values(historyByPlayerId).some((h) => h.finalScore >= highScoreThreshold)) {
       highScoreRows.push(...collectHighScoreRows(state, index, seed, historyByPlayerId, roundDetailByPlayerId, highScoreThreshold));
     }
@@ -403,22 +400,105 @@ function main() {
       ce.qstScoreSum += detail.qstScore;
       ce.rankSum += h.rank;
     }
+  }
 
-    if ((i + 1) % 10 === 0 || i + 1 === n) {
-      const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
-      console.log(`${i + 1}/${n} games done (${elapsed}s elapsed)`);
-      // Incremental checkpoint (2026-08-04, per user feedback after watching a long LV2 run: they asked
-      // to see interim results and to be able to redirect to a smaller N mid-run) -- overwrites the same
-      // outputPath every 10 games with whatever's accumulated so far, gamesRun reflecting the ACTUAL
-      // count completed so far (not the target n). Without this, killing a long run early (e.g. to switch
-      // to a smaller N, or just to see progress) meant losing every game's data -- this script only ever
-      // wrote its output once, at the very end of the full loop. Cheap enough to do every 10 games (the
-      // aggregation itself, not the games, is what's slow) that there's no reason to gate it further.
-      writeReport(i + 1);
+  // concurrency (2026-09-16, per user request to tools/run_ai_battle.js: "4戦同時にできるようにしてほし
+  // い" -- self-service AI-vs-AI runs previously always played one game at a time on a single core despite
+  // this machine having many idle ones during a long run). 1 (default) keeps the ORIGINAL plain sequential
+  // loop byte-for-byte -- every existing caller (ga tools, ai_level_comparison.js, any script invoking
+  // this one directly without the new 7th arg) is completely unaffected. >1 spins up that many
+  // tools/ai_data_report_worker.js threads instead, each playing one game at a time and posting its full
+  // result back for processGameResult to aggregate exactly as the sequential path always has -- game
+  // order becomes non-deterministic (whichever worker finishes first), but every game's own seed is still
+  // uniquely derived from runId+its own index, same as before, so this doesn't affect reproducibility of
+  // any INDIVIDUAL game, only the order results arrive in.
+  const concurrency = process.argv[7] !== undefined ? Number(process.argv[7]) : 1;
+  if (!Number.isInteger(concurrency) || concurrency < 1) {
+    console.error(`Invalid concurrency "${process.argv[7]}" -- expected a positive integer`);
+    process.exit(1);
+  }
+
+  if (concurrency <= 1) {
+    for (let i = 0; i < n; i++) {
+      const seed = `data-report-${runId}-${i}`;
+      let state;
+      let historyByPlayerId;
+      let roundDetailByPlayerId;
+      let activationCounts;
+      try {
+        ({ state, historyByPlayerId, roundDetailByPlayerId, activationCounts } = playGame(seed, PLAYER_NAMES, index, evalTable, aiOptions, moveGeneratorOptions, evaluatorOptions, undefined, resourceCardPicker, synergyTable2));
+      } catch (e) {
+        console.error(`Game ${i + 1}/${n} (seed=${seed}) crashed: ${e.message}`);
+        console.error(e.stack);
+        process.exit(1);
+      }
+      processGameResult(seed, state, historyByPlayerId, roundDetailByPlayerId, activationCounts);
+      if ((i + 1) % 10 === 0 || i + 1 === n) {
+        const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+        console.log(`${i + 1}/${n} games done (${elapsed}s elapsed)`);
+        // Incremental checkpoint (2026-08-04, per user feedback after watching a long LV2 run: they asked
+        // to see interim results and to be able to redirect to a smaller N mid-run) -- overwrites the same
+        // outputPath every 10 games with whatever's accumulated so far, gamesRun reflecting the ACTUAL
+        // count completed so far (not the target n). Without this, killing a long run early (e.g. to
+        // switch to a smaller N, or just to see progress) meant losing every game's data -- this script
+        // only ever wrote its output once, at the very end of the full loop. Cheap enough to do every 10
+        // games (the aggregation itself, not the games, is what's slow) that there's no reason to gate it
+        // further.
+        writeReport(i + 1);
+      }
     }
+  } else {
+    await runParallel();
   }
 
   writeReport(n);
+
+  /** concurrency>1 path -- see concurrency's own doc above. A worker-pool dispatch identical in shape to
+   * tools/ga_train.js's own runJobsOnPool, except results are processed (via processGameResult) and
+   * checkpointed AS THEY STREAM IN rather than collected into one array and handled afterward, so a long
+   * parallel run gets the exact same "see progress / can redirect mid-run" checkpointing the sequential
+   * path already had. */
+  function runParallel() {
+    const { Worker } = require('worker_threads');
+    const WORKER_SCRIPT = path.join(__dirname, 'ai_data_report_worker.js');
+    const workerCount = Math.min(concurrency, n);
+    const pool = Array.from({ length: workerCount }, () => new Worker(WORKER_SCRIPT));
+    let nextIndex = 0;
+    let completedCount = 0;
+    return new Promise((resolve, reject) => {
+      const assignNext = (worker) => {
+        if (nextIndex >= n) return;
+        const seed = `data-report-${runId}-${nextIndex}`;
+        worker.postMessage({ jobId: nextIndex, seed, aiLevel });
+        nextIndex++;
+      };
+      const finish = () => {
+        for (const worker of pool) worker.terminate();
+        resolve();
+      };
+      for (const worker of pool) {
+        worker.on('message', (msg) => {
+          if (msg.error) {
+            console.error(`Game (seed=${msg.seed}) crashed in worker: ${msg.error}`);
+            console.error(msg.stack);
+            for (const w of pool) w.terminate();
+            process.exit(1);
+          }
+          processGameResult(msg.seed, msg.state, msg.historyByPlayerId, msg.roundDetailByPlayerId, msg.activationCounts);
+          completedCount++;
+          if (completedCount % 10 === 0 || completedCount === n) {
+            const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+            console.log(`${completedCount}/${n} games done (${elapsed}s elapsed)`);
+            writeReport(completedCount);
+          }
+          if (completedCount === n) { finish(); return; }
+          assignNext(worker);
+        });
+        worker.on('error', reject);
+        assignNext(worker);
+      }
+    });
+  }
 
   function writeReport(gamesRun) {
     const conjobOut = [...conjob.values()].map((e) => ({ con: e.con, job: e.job, count: e.count, avgScore: e.scoreSum / e.count, avgQstScore: e.qstScoreSum / e.count, avgRank: e.rankSum / e.count }));
@@ -501,4 +581,4 @@ function main() {
   }
 }
 
-main();
+main().catch((err) => { console.error(err); process.exit(1); });
