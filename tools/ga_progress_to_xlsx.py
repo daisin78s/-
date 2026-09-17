@@ -70,10 +70,11 @@ def load_real_eval_table():
     return table, ids_in_order
 
 if len(sys.argv) < 3:
-    print('Usage: python tools/ga_progress_to_xlsx.py <outputDir> <generationSummaryJsonPath>')
+    print('Usage: python tools/ga_progress_to_xlsx.py <outputDir> <generationSummaryJsonPath> [filePrefix]')
     sys.exit(1)
 OUTPUT_DIR = sys.argv[1]
 SUMMARY_PATH = sys.argv[2]
+FILE_PREFIX = sys.argv[3] if len(sys.argv) > 3 else 'progress'
 
 with open(SUMMARY_PATH, 'r', encoding='utf-8') as f:
     summary = json.load(f)
@@ -83,31 +84,44 @@ anchor = summary.get('anchor')
 best = summary['best']
 sheet_name = str(generation)
 
-# File rollover (2026-09-12, per user request: "重いので2000まではこのファイルで...3000まで行ったら別の
-# エクセルに...その後も1000ごとに別のエクセルに出力する" -- progress.xlsx was growing unbounded, one sheet
-# per generation forever, and had already reached 15MB+ by generation ~2000). Generations 1-2853 keep the
-# original progress.xlsx filename unchanged (this file already holds that whole range, written before this
-# rollover existed); every 1000 generations after that gets its own fresh file instead of piling onto one
-# ever-growing workbook.
-#
-# 2026-09-13, per user request ("エクセルが重いので新しいエクセルでお願い" on resuming from generation
-# 2853): moved up from the originally-planned 3000 to 2853 (the exact generation the run was stopped/
-# resumed at) -- progress.xlsx had already gotten too heavy to wait the remaining ~150 generations for the
-# clean round-number boundary, so the very next generation after resuming starts the new file immediately.
-FIRST_ROLLOVER_GEN = 2853
-# 2026-09-13, per user follow-up ("３０００になったら新しいエクセルにして その後500ごとに新しいエクセル
-# に"): a second, one-time boundary at 3000 (so the just-started 2854-onward file stays short), then every
-# 500 generations after that (narrower than the original 1000, superseding it) gets its own fresh file.
-SECOND_ROLLOVER_GEN = 3000
-ROLLOVER_INTERVAL_AFTER_SECOND = 500
-if generation <= FIRST_ROLLOVER_GEN:
-    XLSX_PATH = os.path.join(OUTPUT_DIR, 'progress.xlsx')
-elif generation <= SECOND_ROLLOVER_GEN:
-    XLSX_PATH = os.path.join(OUTPUT_DIR, f'progress_{FIRST_ROLLOVER_GEN + 1}-{SECOND_ROLLOVER_GEN}.xlsx')
+if FILE_PREFIX == 'progress':
+    # File rollover (2026-09-12, per user request: "重いので2000まではこのファイルで...3000まで行ったら
+    # 別のエクセルに...その後も1000ごとに別のエクセルに出力する" -- progress.xlsx was growing unbounded, one
+    # sheet per generation forever, and had already reached 15MB+ by generation ~2000). Generations 1-2853
+    # keep the original progress.xlsx filename unchanged (this file already holds that whole range, written
+    # before this rollover existed); every 1000 generations after that gets its own fresh file instead of
+    # piling onto one ever-growing workbook.
+    #
+    # 2026-09-13, per user request ("エクセルが重いので新しいエクセルでお願い" on resuming from generation
+    # 2853): moved up from the originally-planned 3000 to 2853 (the exact generation the run was stopped/
+    # resumed at) -- progress.xlsx had already gotten too heavy to wait the remaining ~150 generations for
+    # the clean round-number boundary, so the very next generation after resuming starts the new file
+    # immediately.
+    FIRST_ROLLOVER_GEN = 2853
+    # 2026-09-13, per user follow-up ("３０００になったら新しいエクセルにして その後500ごとに新しいエクセ
+    # ルに"): a second, one-time boundary at 3000 (so the just-started 2854-onward file stays short), then
+    # every 500 generations after that (narrower than the original 1000, superseding it) gets its own fresh
+    # file. Specific to this ORIGINAL run's own history (hence gated behind FILE_PREFIX=='progress' only)
+    # -- a fresh run started with its own --progress-prefix (see below) has no such history to honor.
+    SECOND_ROLLOVER_GEN = 3000
+    ROLLOVER_INTERVAL_AFTER_SECOND = 500
+    if generation <= FIRST_ROLLOVER_GEN:
+        XLSX_PATH = os.path.join(OUTPUT_DIR, 'progress.xlsx')
+    elif generation <= SECOND_ROLLOVER_GEN:
+        XLSX_PATH = os.path.join(OUTPUT_DIR, f'progress_{FIRST_ROLLOVER_GEN + 1}-{SECOND_ROLLOVER_GEN}.xlsx')
+    else:
+        batch_start = SECOND_ROLLOVER_GEN + 1 + ((generation - SECOND_ROLLOVER_GEN - 1) // ROLLOVER_INTERVAL_AFTER_SECOND) * ROLLOVER_INTERVAL_AFTER_SECOND
+        batch_end = batch_start + ROLLOVER_INTERVAL_AFTER_SECOND - 1
+        XLSX_PATH = os.path.join(OUTPUT_DIR, f'progress_{batch_start}-{batch_end}.xlsx')
 else:
-    batch_start = SECOND_ROLLOVER_GEN + 1 + ((generation - SECOND_ROLLOVER_GEN - 1) // ROLLOVER_INTERVAL_AFTER_SECOND) * ROLLOVER_INTERVAL_AFTER_SECOND
-    batch_end = batch_start + ROLLOVER_INTERVAL_AFTER_SECOND - 1
-    XLSX_PATH = os.path.join(OUTPUT_DIR, f'progress_{batch_start}-{batch_end}.xlsx')
+    # Clean, uniform 500-generation blocks starting at generation 1 (2026-09-17, per user request for this
+    # run's own naming: "A1-500という名前のエクセルで500まで その後A501-1000という風に") -- any FILE_PREFIX
+    # other than the default "progress" gets this simple rule instead of the original run's own
+    # special-cased early boundaries above, which only make sense for that specific run's own history.
+    ROLLOVER_INTERVAL = 500
+    batch_start = ((generation - 1) // ROLLOVER_INTERVAL) * ROLLOVER_INTERVAL + 1
+    batch_end = batch_start + ROLLOVER_INTERVAL - 1
+    XLSX_PATH = os.path.join(OUTPUT_DIR, f'{FILE_PREFIX}{batch_start}-{batch_end}.xlsx')
 
 if os.path.exists(XLSX_PATH):
     wb = openpyxl.load_workbook(XLSX_PATH)

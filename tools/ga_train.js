@@ -61,6 +61,7 @@ const { playGameForFitness } = require('../src/ai/game-runner');
 const { buildResourceSynergyTable } = require('../src/ai/resource-card-synergy');
 const { buildConJobSynergyTable } = require('../src/ai/con-job-synergy');
 const { pickResourceCards } = require('../src/ai/smart-onboarding');
+const { LEVELS } = require('../src/ai/levels');
 const rng = require('../src/rng');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
@@ -108,9 +109,26 @@ const BASELINE_GAMES = 20; // one-time Generation-0 (pure random) measurement sa
  * combination used to be rejected outright as "mutually exclusive", which was true only for the
  * population-seeding purpose, not the mutation-style purpose the flag also serves. */
 const SEED_REAL_FLAG = '--seed-real';
+// --ai-level=LV5 (2026-09-17, per user request: "現在の最良データをもとにAILV5で...進めてください" -- try
+// evolving the eval table against LV5's OWN full search (deeper lookahead + crossRoundLookahead) instead
+// of the plain no-lookahead 1-ply Evaluator every past run has used, since the current table was never
+// trained with any search deeper than that in mind and might be leaving LV5-specific value on the table --
+// see ai-player.js's own crossRoundLookahead doc and the 2026-09-16 LV4-vs-LV5 tournament that motivated
+// this). Omitted (the default): every job leaves `aiLevel` undefined and ga_worker.js's own fitness
+// AIPlayer stays exactly the bare, no-lookahead one every prior run used -- fully backward compatible.
+const AI_LEVEL_FLAG_PREFIX = '--ai-level=';
+// --progress-prefix=A (2026-09-17, per user request for this run's own progress workbook naming: "A1-500
+// という名前のエクセルで500まで その後A501-1000という風に") -- see ga_progress_to_xlsx.py's own doc for
+// the clean, uniform-from-generation-1 rollover this switches to whenever the prefix isn't the default
+// "progress" (which keeps the original run's own special-cased early boundaries untouched).
+const PROGRESS_PREFIX_FLAG_PREFIX = '--progress-prefix=';
 
 function parseArgs() {
-  const positional = process.argv.slice(2).filter((arg) => arg !== SEED_REAL_FLAG);
+  const aiLevelArg = process.argv.find((arg) => arg.startsWith(AI_LEVEL_FLAG_PREFIX));
+  const aiLevel = aiLevelArg ? aiLevelArg.slice(AI_LEVEL_FLAG_PREFIX.length).toUpperCase() : null;
+  const progressPrefixArg = process.argv.find((arg) => arg.startsWith(PROGRESS_PREFIX_FLAG_PREFIX));
+  const progressPrefix = progressPrefixArg ? progressPrefixArg.slice(PROGRESS_PREFIX_FLAG_PREFIX.length) : 'progress';
+  const positional = process.argv.slice(2).filter((arg) => arg !== SEED_REAL_FLAG && !arg.startsWith(AI_LEVEL_FLAG_PREFIX) && !arg.startsWith(PROGRESS_PREFIX_FLAG_PREFIX));
   const seedFromReal = process.argv.includes(SEED_REAL_FLAG);
   const generations = Number(positional[0]);
   const populationSize = positional[1] ? Number(positional[1]) : 20;
@@ -135,7 +153,11 @@ function parseArgs() {
   // 2026-09-08: no longer rejected -- see SEED_REAL_FLAG's own doc above. resumeFromDir always wins for
   // population seeding; --seed-real here only keeps mutation style (percent, not flat) consistent when
   // resuming a run that itself started with --seed-real.
-  return { generations, populationSize, gamesPerIndividual, outputDir, resumeFromDir, seedFromReal };
+  if (aiLevel && !LEVELS.some((l) => l.name === aiLevel)) {
+    console.error(`Unknown --ai-level "${aiLevel}" -- expected one of: ${LEVELS.map((l) => l.name).join(', ')}`);
+    process.exit(1);
+  }
+  return { generations, populationSize, gamesPerIndividual, outputDir, resumeFromDir, seedFromReal, aiLevel, progressPrefix };
 }
 
 /** Reads resumeFromDir's highest-numbered gen_XXXX.json (see parseArgs' own doc on resumeFromDir) and
@@ -251,7 +273,7 @@ function runJobsOnPool(pool, jobs) {
  * other job) that runJobsOnPool then fans out across every worker; resourceCardPicker/synergyTable2 no
  * longer need to be passed in at all -- each worker builds its own copy once at its own startup (see
  * ga_worker.js's own doc) instead of the main thread building one shared copy every call. */
-async function evaluatePopulationFitness(pool, population, runRng, gamesPerIndividual, runId, generationLabel) {
+async function evaluatePopulationFitness(pool, population, runRng, gamesPerIndividual, runId, generationLabel, aiLevel) {
   const roundsNeeded = gamesPerIndividual / 4;
   const jobs = [];
   for (let round = 0; round < roundsNeeded; round++) {
@@ -263,7 +285,7 @@ async function evaluatePopulationFitness(pool, population, runRng, gamesPerIndiv
       const seed = `ga-${runId}-${generationLabel}-board${jobs.length}`;
       for (let rotation = 0; rotation < 4; rotation++) {
         const seatIndices = [0, 1, 2, 3].map((i) => group[(i + rotation) % 4]);
-        jobs.push({ jobId: jobs.length, seatIndices, genomes: seatIndices.map((idx) => population[idx]), seed });
+        jobs.push({ jobId: jobs.length, seatIndices, genomes: seatIndices.map((idx) => population[idx]), seed, aiLevel });
       }
     }
   }
@@ -345,8 +367,9 @@ function measureRealTableBaseline(index, realGenome, runRng, runId, resourceCard
 }
 
 async function main() {
-  const { generations, populationSize, gamesPerIndividual, outputDir, resumeFromDir, seedFromReal } = parseArgs();
+  const { generations, populationSize, gamesPerIndividual, outputDir, resumeFromDir, seedFromReal, aiLevel, progressPrefix } = parseArgs();
   fs.mkdirSync(outputDir, { recursive: true });
+  if (aiLevel) console.log(`Fitness games play through AI ${aiLevel}'s own full search (not the plain no-lookahead default) -- see --ai-level's own doc.`);
 
   // One pool for the whole run (2026-09-05, see createWorkerPool's own doc) -- terminated in a finally
   // block below so a crash partway through this function still doesn't leave orphaned worker processes
@@ -437,7 +460,7 @@ async function main() {
 
   for (let gen = startGeneration + 1; gen <= finalGeneration; gen++) {
     const t0 = Date.now();
-    const fitness = await evaluatePopulationFitness(pool, population, runRng, gamesPerIndividual, runId, gen);
+    const fitness = await evaluatePopulationFitness(pool, population, runRng, gamesPerIndividual, runId, gen, aiLevel);
     const ranked = fitness
       .map((f, i) => ({ ...f, genome: population[i] }))
       .sort((a, b) => a.avgRank - b.avgRank);
@@ -469,7 +492,7 @@ async function main() {
       best: { avgRank: ranked[0].avgRank, avgScore: ranked[0].avgScore, avgRawScore: ranked[0].avgRawScore, avgQstScore: ranked[0].avgQstScore, winRate: ranked[0].winRate, gamesPlayed: ranked[0].gamesPlayed, genome: ranked[0].genome },
     }));
     try {
-      execFileSync('python', [PROGRESS_XLSX_SCRIPT, outputDir, summaryPath], { stdio: 'pipe' });
+      execFileSync('python', [PROGRESS_XLSX_SCRIPT, outputDir, summaryPath, progressPrefix], { stdio: 'pipe' });
     } catch (e) {
       console.error(`  (progress.xlsx update failed, continuing anyway: ${e.message})`);
     }

@@ -10,8 +10,14 @@
  *
  * Message protocol (plain objects, structured-clone-safe -- genomes are plain {round:{id:value}}
  * objects, nothing exotic):
- *   in:  { jobId, genomes: [g0,g1,g2,g3], seed }
+ *   in:  { jobId, genomes: [g0,g1,g2,g3], seed, aiLevel? }
  *   out: { jobId, rankByPlayerId, scoreByPlayerId, qstScoreByPlayerId }
+ *
+ * aiLevel (2026-09-17, per user request: "現在の最良データをもとにAILV5で...進めてください" -- see
+ * ga_train.js's own --ai-level doc): when present (e.g. "LV5"), each seat's Evaluator/AIPlayer/
+ * MoveGenerator get that src/ai/levels.js entry's own evaluatorOptions/aiOptions/moveGeneratorOptions,
+ * so fitness is measured through that level's actual full search instead of the plain bare, no-lookahead
+ * default every prior run used. Omitted (undefined): byte-for-byte the original behavior.
  */
 
 'use strict';
@@ -20,7 +26,9 @@ const path = require('path');
 const { parentPort } = require('worker_threads');
 const { loadGameData, buildDataIndex } = require('../src/data-loader');
 const { Evaluator } = require('../src/ai/evaluator');
+const { MoveGenerator } = require('../src/ai/move-generator');
 const { playGameForFitness } = require('../src/ai/game-runner');
+const { getLevel } = require('../src/ai/levels');
 const { buildResourceSynergyTable } = require('../src/ai/resource-card-synergy');
 const { buildConJobSynergyTable } = require('../src/ai/con-job-synergy');
 const { pickResourceCards } = require('../src/ai/smart-onboarding');
@@ -36,13 +44,16 @@ const resourceCardPicker = (candidateIds, state, idx, player) =>
   pickResourceCards(candidateIds, state, idx, synergyTable3, player.conPhysicalId);
 
 parentPort.on('message', (job) => {
-  const { jobId, genomes, seed } = job;
+  const { jobId, genomes, seed, aiLevel } = job;
+  const level = aiLevel ? getLevel(aiLevel) : null;
   const evaluatorByPlayerId = {};
   genomes.forEach((genome, seat) => {
-    evaluatorByPlayerId[`P${seat + 1}`] = new Evaluator(index, genome);
+    evaluatorByPlayerId[`P${seat + 1}`] = new Evaluator(index, genome, level ? level.evaluatorOptions : undefined);
   });
+  const moveGenerator = level ? new MoveGenerator(level.moveGeneratorOptions) : undefined;
   const { rankByPlayerId, scoreByPlayerId, qstScoreByPlayerId } = playGameForFitness(
-    seed, PLAYER_NAMES, index, evaluatorByPlayerId, undefined, resourceCardPicker, synergyTable2
+    seed, PLAYER_NAMES, index, evaluatorByPlayerId, moveGenerator, resourceCardPicker, synergyTable2,
+    level ? level.aiOptions : undefined,
   );
   parentPort.postMessage({ jobId, rankByPlayerId, scoreByPlayerId, qstScoreByPlayerId });
 });
