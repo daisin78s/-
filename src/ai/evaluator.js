@@ -87,6 +87,13 @@ const SENATE_SYNERGY_FACE_IDS = new Set([
  * once training resumes. See score()'s own use of these for the actual penalty math. */
 const SAME_ROLE_GROUP_A = { ids: new Set(['A004', 'A005', 'A006']), penaltyId: '小麦畑農園歓楽街重複ペナルティ' };
 const SAME_ROLE_GROUP_B = { ids: new Set(['A001', 'A002', 'A003', 'A006', 'C001', 'C002', 'C003']), penaltyId: '城下町大聖堂ギルド重複ペナルティ' };
+// 兆し(B004-B006) redundancy penalty (2026-09-18, per user request: same "does the same job" shape as
+// SAME_ROLE_GROUP_A/B above, applied to 始まりの兆し/革命の兆し/移ろいの兆し). 終わりの兆し(B202) is
+// deliberately excluded -- it's a SHOP201-203 special-shop card on a different round-gate/tier entirely,
+// not part of the regular B-deck 兆し family the user named. Seeded at -30 (flat across all 4 rounds) in
+// game.xlsx, same evolvable-per-round-value pattern as the other two groups (see their own doc above for
+// why penaltyId is a 評価値-sheet row, not a hardcoded constant).
+const SAME_ROLE_GROUP_C = { ids: new Set(['B004', 'B005', 'B006']), penaltyId: '兆し重複ペナルティ' };
 
 /** Unclaimed-fee-opportunity bonus groups (2026-09-14, per user follow-up to the redundancy penalty
  * above, worked through across several messages -- see the exact wording in that day's chat for the full
@@ -270,7 +277,7 @@ class Evaluator {
     // not per owned card, since what matters is how many DISTINCT family members are owned in total, not
     // which specific one "is" the redundant one. v(group.penaltyId) is already negative in the sheet (seeded
     // -50/-30), so ADDING it (not subtracting) is what actually applies the penalty.
-    for (const group of [SAME_ROLE_GROUP_A, SAME_ROLE_GROUP_B]) {
+    for (const group of [SAME_ROLE_GROUP_A, SAME_ROLE_GROUP_B, SAME_ROLE_GROUP_C]) {
       const ownedInGroup = player.ownedCardPhysicalIds.filter((id) => group.ids.has(id)).length;
       if (ownedInGroup > 1) total += (ownedInGroup - 1) * v(group.penaltyId);
     }

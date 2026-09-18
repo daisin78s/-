@@ -318,6 +318,35 @@ function dominate(state, mapId, playerId) {
   state.players[0].dice.push(createDie('d1', 'COLOR'));
   check('訓練場 owned alongside a GROUP_A card triggers no redundancy penalty at all', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1].A202A + evalTable[1].D + evalTable[1]['晩餐会食料生産相性']));
 }
+{
+  // SAME_ROLE_GROUP_C (2026-09-18, per user request): 始まりの兆し/革命の兆し/移ろいの兆し (B004/B005/
+  // B006), same shape as GROUP_A/B above. None of these three sit in FARM_SYNERGY_FACE_IDS or any
+  // FEE_OPPORTUNITY group, so no `dominate()`/extra bonus terms are needed to isolate this check.
+  const state = freshState(1);
+  giveCard(state, 'B004A', 'P1'); // 始まりの兆し alone -- no redundancy yet
+  check('A single GROUP_C card (始まりの兆し) alone gets no redundancy penalty', round6(evaluator.score(state, 'P1')), round6(evalTable[1].B004A));
+}
+{
+  const state = freshState(1);
+  giveCard(state, 'B004A', 'P1'); // 始まりの兆し
+  giveCard(state, 'B005A', 'P1'); // 革命の兆し -- 2nd GROUP_C member
+  check('始まりの兆し + 革命の兆し (both GROUP_C) applies a single redundancy penalty', round6(evaluator.score(state, 'P1')), round6(evalTable[1].B004A + evalTable[1].B005A + evalTable[1]['兆し重複ペナルティ']));
+}
+{
+  const state = freshState(1);
+  giveCard(state, 'B004A', 'P1'); // 始まりの兆し
+  giveCard(state, 'B005A', 'P1'); // 革命の兆し
+  giveCard(state, 'B006A', 'P1'); // 移ろいの兆し -- 3rd GROUP_C member
+  check('3 GROUP_C cards applies the penalty twice (2 extras beyond the first)', round6(evaluator.score(state, 'P1')), round6(evalTable[1].B004A + evalTable[1].B005A + evalTable[1].B006A + 2 * evalTable[1]['兆し重複ペナルティ']));
+}
+{
+  // 終わりの兆し(B202) is deliberately excluded from GROUP_C -- a special-shop card on a different tier,
+  // not part of the regular B-deck 兆し family this group covers.
+  const state = freshState(1);
+  giveCard(state, 'B004A', 'P1'); // 始まりの兆し (GROUP_C)
+  giveCard(state, 'B202A', 'P1'); // 終わりの兆し -- NOT in GROUP_C
+  check('終わりの兆し owned alongside a GROUP_C card triggers no redundancy penalty', round6(evaluator.score(state, 'P1')), round6(evalTable[1].B004A + evalTable[1].B202A));
+}
 
 // ---------------------------------------------------------------------------
 // Unclaimed-fee-opportunity bonus (2026-09-14, per user follow-up -- see evaluator.js's own
