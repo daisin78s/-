@@ -132,41 +132,79 @@ function giveDie(state, playerId, value) {
 }
 
 // ---------------------------------------------------------------------------
-// JOB002's new TAP=ON(BUILD(),ADD(K)) (2026-08-04, per user feedback: "JOB002 TAP で
-// ON(BUILD(),ADD(K))に変更しました" -- replaces its old PASSIVE=ON(PLACE(MAP008/009),ADD(K))). Empty
-// BUILD() args means "react to a build of ANY category" (see executor.js's eventArgsMatch, added
-// specifically because this is the only card using an empty ON(...) event so far). Auto-fires rather
-// than queueing a manual choice (2026-08-05: game.xlsx's AUTO column for JOB002 was filled in as "A",
-// closing the data-quality gap flagged when this ability was first added) -- exercised here through a
-// real placeDice -> completeAreaBuild flow (not a synthetic runCommand/emit call) so the actual BUILD
-// event wiring gets covered end-to-end, complementing the more isolated ON(...)-reaction tests in
-// executor.smoke.js.
+// 料理人/JOB002 (renamed from 実業家 2026-09-20, alongside a full ability redesign replacing its old
+// TAP=ON(BUILD(),ADD(K))): reacts to ANY live VP-resource grant (executor.grantResourceAndEmitGet('VP',
+// ...), from any card or bespoke bonus) by tapping the card and granting min(vpGained,3) K -- see
+// executor.grantChefBonusIfEarned's own doc for the full worked-through trigger scope (confirmed with the
+// user card-by-card). Bespoke, no DSL representation -- TAP field is blank in the data. Gated on the same
+// state.cards[...].tapped flag every other TAP ability uses; TURNEND=UNTAP() resets it each turn. A
+// monument's own printed VP (never a live grant) gets a second, explicit trigger of its own from
+// board.resolveBuildNew.
 // ---------------------------------------------------------------------------
+function giveJob002(state, playerId) {
+  const p = player(state, playerId);
+  const inst = createCardInstance('JOB002');
+  inst.ownerId = playerId;
+  state.cards[inst.physicalId] = inst;
+  p.ownedCardPhysicalIds.push(inst.physicalId);
+  p.jobCardId = 'JOB002';
+  return inst;
+}
 {
   const state = freshStateWithShops();
-  const { lowerCostList } = require('../src/command-builder');
-  const jobInst = createCardInstance('JOB002');
-  jobInst.ownerId = 'P1';
-  state.cards[jobInst.physicalId] = jobInst;
-  player(state, 'P1').ownedCardPhysicalIds.push(jobInst.physicalId);
-  player(state, 'P1').resources.BZ = 20; // covers whichever candidate ends up picked below
+  const p1 = player(state, 'P1');
+  const jobInst = giveJob002(state, 'P1');
+  const beforeK = p1.resources.K || 0;
+  executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'VP', 2);
+  check('料理人: a live 2VP grant grants 2K (within the cap)', (p1.resources.K || 0) - beforeK, 2);
+  check('...and taps JOB002', state.cards[jobInst.physicalId].tapped, true);
+}
+{
+  // Cap is per-triggering-event (confirmed with the user), not a lifetime total -- a single grant of 5VP
+  // still only ever yields 3K.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  giveJob002(state, 'P1');
+  const beforeK = p1.resources.K || 0;
+  executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'VP', 5);
+  check('料理人: a single 5VP grant is capped at 3K, not 5', (p1.resources.K || 0) - beforeK, 3);
+}
+{
+  // Tap-gating: a 2nd VP grant before the card untaps does nothing more; untapping (TURNEND=UNTAP() in
+  // the real data) lets it fire again.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const jobInst = giveJob002(state, 'P1');
+  executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'VP', 1);
+  const afterFirstK = p1.resources.K || 0;
+  executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'VP', 1);
+  check('料理人: a 2nd VP grant before untapping triggers nothing more', (p1.resources.K || 0) - afterFirstK, 0);
 
-  const die = giveDie(state, 'P1', 1);
-  const placeResult = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP008', 0);
-  const candidate = placeResult.actionResult.pendingBuild.candidates.find((c) => c.type === 'BUILD_NEW');
-  const row = getCardRow(index, candidate.faceId);
-  const bzDiscount = {};
-  let remaining = 20;
-  for (const item of lowerCostList(row.COST)) {
-    const use = Math.min(item.count, remaining);
-    if (use > 0) { bzDiscount[item.resource] = use; remaining -= use; }
-  }
-  const beforeK = player(state, 'P1').resources.K || 0;
-  const buildResult = board.completeAreaBuild(state, index, { playerId: 'P1', bzDiscount }, candidate, placeResult.actionResult.pendingBuild.remainingCommands);
-  check('The build itself succeeds (fully BZ-funded)', buildResult.success, true);
-
-  check('JOB002 auto-fires on the BUILD event (AUTO="A"), no manual choice queued', state.pendingChoices.some((c) => c.kind === 'TAP_REACTION_AVAILABLE' && c.context.physicalId === jobInst.physicalId), false);
-  check('...and grants 1K immediately', player(state, 'P1').resources.K, beforeK + 1);
+  state.cards[jobInst.physicalId].tapped = false; // simulates TURNEND=UNTAP()
+  const beforeThirdK = p1.resources.K || 0;
+  executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'VP', 1);
+  check('料理人: fires again once untapped', (p1.resources.K || 0) - beforeThirdK, 1);
+}
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1'); // no jobCardId set at all
+  const beforeK = p1.resources.K || 0;
+  executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'VP', 2);
+  check('A player without 料理人 gets no bonus from a live VP grant', (p1.resources.K || 0) - beforeK, 0);
+}
+{
+  // Monument BUILD trigger (2026-09-20, confirmed with the user): a monument's own printed VP is never a
+  // live grant (only summed at scoring.computeFinalScore), so board.resolveBuildNew calls
+  // executor.grantChefBonusIfEarned directly with the built monument's own row.VP. M001/記念碑 (VP=4,
+  // COST blank -- free to build) keeps this test isolated from any BZ/affordability setup.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const jobInst = giveJob002(state, 'P1');
+  state.shops.M.slots.SHOP001 = 'M001';
+  const beforeK = p1.resources.K || 0;
+  const result = board.resolveBuild(state, index, { playerId: 'P1' }, { type: 'BUILD_NEW', faceId: 'M001', shopKey: 'M', slotId: 'SHOP001' });
+  check('Building M001 (記念碑) succeeds', result.success, true);
+  check('料理人: building a monument grants K matching its printed VP (4, capped at 3)', (p1.resources.K || 0) - beforeK, 3);
   check('...and taps JOB002', state.cards[jobInst.physicalId].tapped, true);
 }
 

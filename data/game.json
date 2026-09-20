@@ -1687,16 +1687,16 @@
       "EMBLEM_C": "",
       "VP": "",
       "ONCE": "",
-      "TAP": "ADD(Z)",
+      "TAP": "ADD(Z,K)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "TAPした時Zを得る"
+      "INST": "TAPした時ZとKを得る"
     },
     {
       "ID": "JOB002",
-      "NAME": "実業家",
+      "NAME": "料理人",
       "DICE": "",
       "COST": "",
       "EMBLEM_A": "",
@@ -1704,12 +1704,12 @@
       "EMBLEM_C": "",
       "VP": "",
       "ONCE": "",
-      "TAP": "ON(BUILD(),ADD(K))",
+      "TAP": "",
       "PASSIVE": "",
       "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "カードを獲得した時とLVアップしたとき食料を得る\n毎ターンアンタップする"
+      "INST": "VPを得たとき必ずTAPする\n得たVPと同じKを3まで得る\n毎ターンアンタップする"
     },
     {
       "ID": "JOB003",
@@ -1760,7 +1760,7 @@
       "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "食料を得たときTAPすると\nそのうちの１個をAに変える\n初期資源含む\n毎ターンアンタップする"
+      "INST": "食料を得たとき必ずTAPする\nそのうちの１個をAに変える\n初期資源含む\n毎ターンアンタップする"
     },
     {
       "ID": "JOB006",

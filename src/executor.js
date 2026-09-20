@@ -263,6 +263,17 @@ function hasPaymentChoiceAbility(state, playerId) {
   return player.ownedCardPhysicalIds.some((physicalId) => state.cards[physicalId].currentFaceId === PAYMENT_CHOICE_CON_FACE_ID);
 }
 
+/** True if playerId's own JOB is 料理人/JOB002 (renamed from 実業家 2026-09-20, alongside a full ability
+ * redesign -- see grantChefBonusIfEarned's own doc). Bespoke, no DSL representation -- same class of
+ * exception as hasPaymentChoiceAbility above, or board.js's hasPioneerAbility/hasLandlordAbility. Matched
+ * by NAME rather than physical id, for the same JOB-sheet-reorg-safety reason those two cite. JOB has no
+ * A/B tier flip, so player.jobCardId is already the live faceId directly. */
+function hasChefAbility(state, index, playerId) {
+  const player = getPlayer(state, playerId);
+  if (!player.jobCardId) return false;
+  return getCardRow(index, player.jobCardId).NAME === '料理人';
+}
+
 /**
  * Resolves a flat {resource,count} cost list against playerId's actual resources, substituting Z for
  * any A/B/C item per COLOR_RESOURCES' comment above. colorPreference is an optional {A,B,C: 'Z'|
@@ -1653,8 +1664,54 @@ function grantResourceAndEmitGet(state, index, context, resource, count) {
     } else {
       emitAndResolve(state, index, context, 'GET', effectiveResource);
     }
+    // 料理人(JOB002) (2026-09-20) -- see grantChefBonusIfEarned's own doc for why this lives HERE rather
+    // than as an ON(GET(VP),...) TAP-field DSL entry: this is the one function every live VP grant, from
+    // ANY card or bespoke bonus, already funnels through, and it's the only place `count` (how much was
+    // actually granted) is still available -- emitAndResolve's own GET dispatch above only ever conveys
+    // WHICH resource, never how much.
+    if (effectiveResource === 'VP') grantChefBonusIfEarned(state, index, context, count);
   }
   return effectiveResource;
+}
+
+/** Grants 料理人(旧実業家)/JOB002's bonus if earned (2026-09-20 redesign, replacing the old
+ * "ON(BUILD(),ADD(K))" DSL-driven ability -- per user request, its TAP field is now blank, same "bespoke,
+ * no DSL representation" treatment as hasChefAbility's own doc cites) -- reacts to ANY live VP-resource
+ * grant of `vpCount` for a player holding this JOB, granting min(vpCount,3) K and tapping the card, gated
+ * on the SAME `state.cards[...].tapped` flag every other TAP ability uses (confirmed with the user: the
+ * cap is PER TRIGGERING EVENT, not a lifetime total -- multiple separate VP grants across a game, or even
+ * across a single turn, each get their own up-to-3 grant, as long as the card has untapped again by then).
+ * TURNEND=UNTAP() in the data resets it for the next turn, same as JOB005A's own ON(GET(K),...) already
+ * behaves -- confirmed with the user this genuinely fires every time (not a lifetime one-shot), so a
+ * player who never spends a turn without gaining VP could tap/untap it every single turn.
+ *
+ * Deliberately unconditional/"AUTO" in effect (bypasses the whole isCardAutoMode/pendingChoices reactive-
+ * dispatch machinery entirely, same as board.js's own 地主/開拓者 bespoke bonuses) -- matches the user's
+ * own "必ずTAPする" (always taps, no player choice) wording, unlike a manual-mode TAP_REACTION_AVAILABLE.
+ *
+ * Confirmed scope, worked through card-by-card with the user: 王女's TAP(ADD(VP)/ADD(2VP)), 孤児院's
+ * CHANGE(...,VP,...), 祝福's ONCE(ADD(3VP)), and 地主(JOB011)'s own "LVアップ済みAREAに自分の色Dがすでに
+ * あれば1VP" bonus (board.js's grantLandlordBonusIfEarned, itself a grantResourceAndEmitGet('VP',1) call)
+ * all correctly trigger this, being ordinary live VP grants; QST's rank-based rewards and 晩餐会/栄光の証's
+ * own live VP_MODIFIER-style formulas (scoring.js's collectVpModifiers/collectFinalOnlyVpModifiers)
+ * correctly do NOT, since neither is ever a grantResourceAndEmitGet('VP',...) call at all -- they're
+ * summed directly into computeFinalScore instead, never touching player.resources.VP as a discrete event
+ * during play. A monument's own PRINTED VP (row.VP) is the one exception needing a second, explicit
+ * trigger of its own for the same reason (see board.resolveBuildNew's own call site and comment) -- it's
+ * counted the exact same "never actually granted live" way QST/晩餐会/栄光の証 are, but the user confirmed
+ * a monument BUILD should still count here, unlike those three.
+ *
+ * Also reports through executor.notifyActivation for the same AI.DATA "使用回数" reason board.js's own
+ * bespoke JOB bonuses (地主/開拓者) do. */
+function grantChefBonusIfEarned(state, index, context, vpCount) {
+  if (vpCount <= 0) return;
+  if (!hasChefAbility(state, index, context.playerId)) return;
+  const player = getPlayer(state, context.playerId);
+  const inst = state.cards[player.jobCardId];
+  if (inst.tapped) return;
+  inst.tapped = true;
+  grantResourceAndEmitGet(state, index, context, 'K', Math.min(vpCount, 3));
+  notifyActivation(state, context.playerId, player.jobCardId, player.jobCardId, 'TAP');
 }
 
 module.exports = {
@@ -1680,6 +1737,7 @@ module.exports = {
   notifyActivation,
   grantResource,
   grantResourceAndEmitGet,
+  grantChefBonusIfEarned,
   enforceWhiteDiceCap,
   cardOwnFixedBuildValue,
   payCostList,

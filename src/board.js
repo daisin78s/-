@@ -1749,6 +1749,20 @@ function resolveBuildNew(state, index, context, candidate) {
 
   const onceResult = executor.runProgram(state, index, { ...context, sourcePhysicalId: inst.physicalId }, row.ONCE);
   executor.emitAndResolve(state, index, context, 'BUILD', candidate.faceId[0]);
+
+  // 料理人(JOB002) monument-build trigger (2026-09-20, see executor.grantChefBonusIfEarned's own doc for
+  // why this needs a separate, explicit call here instead of being covered by the generic VP-grant hook
+  // every other trigger source funnels through): a monument's own printed VP (row.VP) is only ever summed
+  // once at scoring.computeFinalScore, never actually granted into player.resources.VP during play, so
+  // there's no executor.grantResourceAndEmitGet('VP',...) call anywhere in a monument's own BUILD to hook
+  // into -- confirmed with the user this should still trigger 料理人's bonus anyway, treating the printed
+  // VP as the "amount". row.VP is undefined for M401/晩餐会 (no printed VP of its own -- see
+  // scoring.collectFinalOnlyVpModifiers instead), so `|| 0` here is a genuine no-op, not a fallback
+  // masking a bug.
+  if (candidate.faceId[0] === 'M') {
+    executor.grantChefBonusIfEarned(state, index, context, row.VP || 0);
+  }
+
   return { success: true, physicalId: inst.physicalId, onceResult };
 }
 
