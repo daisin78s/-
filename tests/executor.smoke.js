@@ -931,9 +931,10 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 }
 
 // ---------------------------------------------------------------------------
-// 19. hasPaymentChoiceAbility / colorPreference (色欲's "real or Z, player's choice"): false/
-// ignored without the card, honored with it. 色欲 lived at CON002B until the user reorganized
-// game.xlsx's CON sheet by START_ORDER (2026-08-17); it's CON001B now.
+// 19. hasPaymentChoiceAbility (色欲's auto-prefer-Z payment behavior, see executor.resolvePayment's own
+// doc): false/real-drained-first without the card, true/Z-drained-first automatically with it (2026-09-20
+// redesign, per user request -- no longer a manual per-payment colorPreference choice). 色欲 lived at
+// CON002B until the user reorganized game.xlsx's CON sheet by START_ORDER (2026-08-17); it's CON001B now.
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
@@ -942,23 +943,22 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   check('hasPaymentChoiceAbility is true once 色欲 (CON001B) is owned', executor.hasPaymentChoiceAbility(state, 'P1'), true);
 }
 {
-  // Without 色欲, a colorPreference of 'Z' must be silently ignored (defense in depth against a
-  // UI bug granting the choice to someone who doesn't have it) -- real is still drained first.
+  // Without 色欲, real is drained first, Z only as a fallback -- the default for every player.
   const state = freshState();
   getPlayerRef(state, 'P1').resources.B = 5;
   getPlayerRef(state, 'P1').resources.Z = 5;
-  executor.payCostList(state, 'P1', [{ resource: 'B', count: 2 }], { B: 'Z' });
-  check('colorPreference is ignored without 色欲 (real B still drained)', getPlayerRef(state, 'P1').resources, { K: 0, A: 0, B: 3, C: 0, Z: 5, VP: 0, BZ: 0 });
+  executor.payCostList(state, 'P1', [{ resource: 'B', count: 2 }]);
+  check('Without 色欲, real B is drained first (Z untouched)', getPlayerRef(state, 'P1').resources, { K: 0, A: 0, B: 3, C: 0, Z: 5, VP: 0, BZ: 0 });
 }
 {
-  // With 色欲, colorPreference:'Z' actually prefers Z even though real is fully affordable --
-  // e.g. to spend Z down before 色欲's own TURNEND=FORCE_CONVERT(Z,K,1) claims it anyway.
+  // With 色欲, Z is automatically drained first even though real is fully affordable -- no choice
+  // needed -- e.g. to spend Z down before 色欲's own TURNEND=FORCE_CONVERT(Z,K,1) claims it anyway.
   const state = freshState();
   giveCard(state, 'CON001B', 'P1');
   getPlayerRef(state, 'P1').resources.B = 5;
   getPlayerRef(state, 'P1').resources.Z = 5;
-  executor.payCostList(state, 'P1', [{ resource: 'B', count: 2 }], { B: 'Z' });
-  check('colorPreference:Z is honored with 色欲 (Z drained instead of real B)', getPlayerRef(state, 'P1').resources, { K: 0, A: 0, B: 5, C: 0, Z: 3, VP: 0, BZ: 0 });
+  executor.payCostList(state, 'P1', [{ resource: 'B', count: 2 }]);
+  check('With 色欲, Z is auto-drained first (real B untouched)', getPlayerRef(state, 'P1').resources, { K: 0, A: 0, B: 5, C: 0, Z: 3, VP: 0, BZ: 0 });
 }
 
 // ---------------------------------------------------------------------------

@@ -31,7 +31,8 @@
  * own gating.
  *
  * Simplification confirmed for this first pass (see simulator.js's matching note): PLACE_DIE/BARE_TAP
- * candidates never vary colorPreference/bzDiscount -- payment always resolves AUTO.
+ * candidates never vary bzDiscount -- payment always resolves with the engine's own default (real first,
+ * Z fallback, or Z-first automatically for a 色欲 owner -- see executor.resolvePayment's own doc).
  *
  * PLACE_WILDCARD_DIE (2026-08-19, JOB003/hasWildcardDice): #placeDieMoves enumerates die x mapId only,
  * no slotIndex loop, for a wildcard-owning player -- board.placeWildcardDie auto-assigns the slot itself

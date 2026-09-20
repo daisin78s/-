@@ -276,24 +276,23 @@ function hasChefAbility(state, index, playerId) {
 
 /**
  * Resolves a flat {resource,count} cost list against playerId's actual resources, substituting Z for
- * any A/B/C item per COLOR_RESOURCES' comment above. colorPreference is an optional {A,B,C: 'Z'|
- * anything} map -- 'Z' drains Z first for that resource (real makes up any shortfall); anything else
- * (including omitted) is the default: real first, Z only as a fallback for whatever's left. Either
- * way affordability is identical (real+Z combined must cover the count) -- preference only changes
- * *which* is drained first, never whether the payment succeeds. colorPreference is silently ignored
- * (treated as all-default) unless the player actually has hasPaymentChoiceAbility, so a UI bug can't
- * grant the choice to a player who doesn't own 色欲.
+ * any A/B/C item per COLOR_RESOURCES' comment above. Automatically drains Z FIRST (real makes up any
+ * shortfall) for every color resource whenever the player has hasPaymentChoiceAbility (色欲) -- real
+ * first, Z only as a fallback, for everyone else (2026-09-20: was previously a manual per-payment
+ * colorPreference choice the player made each time; per user request, 色欲 now always auto-prefers Z, no
+ * choice presented at all -- see main.js's own removal of the "支払いに使う資源を選択" toggle). Either
+ * way affordability is identical (real+Z combined must cover the count) -- this only changes *which* is
+ * drained first, never whether the payment succeeds.
  * @returns {{ok:true, items:{resource:string,count:number}[]}|{ok:false, resource:string}}
  */
-function resolvePayment(state, playerId, items, colorPreference) {
+function resolvePayment(state, playerId, items) {
   const player = getPlayer(state, playerId);
-  const preference = colorPreference && hasPaymentChoiceAbility(state, playerId) ? colorPreference : null;
+  const preferZ = hasPaymentChoiceAbility(state, playerId);
   let zPool = player.resources.Z || 0;
   const resolved = [];
   for (const item of items) {
     if (COLOR_RESOURCES.has(item.resource)) {
       const haveReal = player.resources[item.resource] || 0;
-      const preferZ = preference && preference[item.resource] === 'Z';
       let realUsed;
       let zUsed;
       if (preferZ) {
@@ -324,11 +323,10 @@ function resolvePayment(state, playerId, items, colorPreference) {
 /**
  * Atomically pays a flat {resource,count} list (e.g. a lowered COST column
  * from command-builder's lowerCostList) -- all items must be affordable or
- * nothing is paid. Used by board.js for BUILD/UPGRADE costs. colorPreference:
- * see resolvePayment.
+ * nothing is paid. Used by board.js for BUILD/UPGRADE costs.
  */
-function payCostList(state, playerId, items, colorPreference) {
-  const resolution = resolvePayment(state, playerId, items, colorPreference);
+function payCostList(state, playerId, items) {
+  const resolution = resolvePayment(state, playerId, items);
   if (!resolution.ok) return { success: false, reason: 'INSUFFICIENT_RESOURCES', resource: resolution.resource };
   for (const item of resolution.items) tryPay(state, playerId, item.resource, item.count);
   return { success: true };
@@ -385,7 +383,7 @@ function applyBzDiscount(items, bzDiscount) {
  *   One entry per distinct affordable outcome. Empty array means unaffordable (no valid distribution
  *   the player can actually pay for) -- same meaning as candidateAffordable's old false.
  */
-function enumerateBzOutcomes(state, playerId, items, bzAvailable, colorPreference) {
+function enumerateBzOutcomes(state, playerId, items, bzAvailable) {
   const total = items.reduce((sum, item) => sum + item.count, 0);
   const maxBz = Math.max(0, Math.min(bzAvailable, total));
   const distributions = [];
@@ -409,7 +407,7 @@ function enumerateBzOutcomes(state, playerId, items, bzAvailable, colorPreferenc
     const discount = applyBzDiscount(items, bzDiscount);
     if (!discount) continue; // pragma: shouldn't happen, distributions are already capped per-item
     const payItems = discount.bzUsed > 0 ? [...discount.items, { resource: 'BZ', count: discount.bzUsed }] : discount.items;
-    const resolution = resolvePayment(state, playerId, payItems, colorPreference);
+    const resolution = resolvePayment(state, playerId, payItems);
     if (!resolution.ok) continue;
     const key = resolution.items.map((i) => `${i.resource}:${i.count}`).sort().join(',');
     if (!seen.has(key)) seen.set(key, { bzDiscount, resolvedItems: resolution.items });
@@ -701,7 +699,7 @@ function runAdd(state, index, context, cmd) {
  * than a bespoke check, so e.g. Z-substitution for K works identically here too. */
 function runPay(state, index, context, cmd) {
   const items = cmd.items.map((item) => ({ resource: item.resource, count: evalCountNode(state, index, context.playerId, item.count) }));
-  return payCostList(state, context.playerId, items, context.colorPreference);
+  return payCostList(state, context.playerId, items);
 }
 
 function runChange(state, index, context, cmd) {
@@ -769,9 +767,9 @@ function runChange(state, index, context, cmd) {
 
   if (times <= 0) return { success: true, timesExecuted: 0 };
 
-  // Substitutes Z for any A/B/C item per resolvePayment (context.colorPreference: see its own doc).
+  // Substitutes Z for any A/B/C item per resolvePayment's own doc (auto-prefers Z for 色欲 owners).
   const scaledPay = pay.map((item) => ({ resource: item.resource, count: item.count * times }));
-  const resolution = resolvePayment(state, context.playerId, scaledPay, context.colorPreference);
+  const resolution = resolvePayment(state, context.playerId, scaledPay);
   if (!resolution.ok) return { success: false, reason: 'INSUFFICIENT_RESOURCES', resource: resolution.resource };
   for (const item of resolution.items) {
     const ok = tryPay(state, context.playerId, item.resource, item.count);

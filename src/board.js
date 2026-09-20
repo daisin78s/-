@@ -1723,7 +1723,7 @@ function resolveBuildNew(state, index, context, candidate) {
   const discount = executor.applyBzDiscount(lowerCostList(row.COST), context.bzDiscount);
   if (!discount) return { success: false, reason: 'INVALID_BZ_DISCOUNT' };
   const payItems = discount.bzUsed > 0 ? [...discount.items, { resource: 'BZ', count: discount.bzUsed }] : discount.items;
-  const payResult = executor.payCostList(state, context.playerId, payItems, context.colorPreference);
+  const payResult = executor.payCostList(state, context.playerId, payItems);
   if (!payResult.success) return payResult;
 
   state.shops[candidate.shopKey].slots[candidate.slotId] = null;
@@ -1781,7 +1781,7 @@ function resolveUpgrade(state, index, context, candidate) {
   const discount = executor.applyBzDiscount(lowerCostList(fromRow.COST), context.bzDiscount);
   if (!discount) return { success: false, reason: 'INVALID_BZ_DISCOUNT' };
   const payItems = discount.bzUsed > 0 ? [...discount.items, { resource: 'BZ', count: discount.bzUsed }] : discount.items;
-  const payResult = executor.payCostList(state, context.playerId, payItems, context.colorPreference);
+  const payResult = executor.payCostList(state, context.playerId, payItems);
   if (!payResult.success) return payResult;
 
   const inst = state.cards[candidate.physicalId];

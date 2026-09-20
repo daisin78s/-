@@ -14,9 +14,10 @@
  *
  * Simplifications confirmed for this first pass (structure supports removing these later without
  * changing Simulator's own shape):
- *  - BUILD/UPGRADE payments always use colorPreference: undefined (AUTO -- real resource first, Z only
- *    as a fallback). Optimizing *which color* to pay with is a separate, later concern from *whether/
- *    what* to build.
+ *  - BUILD/UPGRADE payments never pass any payment preference of their own -- real resource first, Z
+ *    only as a fallback, same default every player gets (2026-09-20: 色欲 owners now auto-prefer Z
+ *    instead, unconditionally, so an AI-controlled 色欲 owner gets that behavior for free too -- see
+ *    executor.resolvePayment's own doc; there is no longer a *choice* left to model here at all).
  *  - Ending a turn always answers any RESOURCE_LIMIT/FORCE_CONVERT WARNING "はい" (proceeds), matching
  *    the engine's pre-WARNING-UI default. An AI that specifically wants to preserve resources across a
  *    TURNEND by staying put isn't modeled yet -- see main.js's turnEndWarnings for the real rule set.
@@ -69,7 +70,7 @@ class SimulationError extends Error {}
 function applyInPlace(state, index, move) {
   switch (move.type) {
     case 'PLACE_DIE': {
-      const result = board.placeDice(state, index, { playerId: move.playerId, colorPreference: move.colorPreference }, move.dieId, move.mapId, move.slotIndex);
+      const result = board.placeDice(state, index, { playerId: move.playerId }, move.dieId, move.mapId, move.slotIndex);
       if (!result.success) return result;
       if (result.actionResult && result.actionResult.pendingBuild) {
         if (move.buildCandidateIndex === undefined || move.buildCandidateIndex === null) {
@@ -82,7 +83,7 @@ function applyInPlace(state, index, move) {
         const candidate = result.actionResult.pendingBuild.candidates[move.buildCandidateIndex];
         if (!candidate) throw new SimulationError(`buildCandidateIndex ${move.buildCandidateIndex} out of range`);
         const bzDiscount = maxBzDiscount(state, index, move.playerId, candidate);
-        const buildResult = board.completeAreaBuild(state, index, { playerId: move.playerId, colorPreference: move.colorPreference, bzDiscount }, candidate, result.actionResult.pendingBuild.remainingCommands);
+        const buildResult = board.completeAreaBuild(state, index, { playerId: move.playerId, bzDiscount }, candidate, result.actionResult.pendingBuild.remainingCommands);
         // candidate is folded into the return (2026-08-03) so callers can identify exactly what was
         // built/upgraded -- buildResult itself carries a faceId only for BUILD_NEW (board.resolveBuild's
         // own doc: UPGRADE's buildResult has no physicalId/faceId at all), but candidate always has
@@ -96,7 +97,7 @@ function applyInPlace(state, index, move) {
     // move.slotIndex is set, 2026-08-28, see move-generator.js's #wildcardPlaceDieMoves' own doc on the
     // EX-vs-ANY choice) instead of board.placeDice.
     case 'PLACE_WILDCARD_DIE': {
-      const result = board.placeWildcardDie(state, index, { playerId: move.playerId, colorPreference: move.colorPreference }, move.dieId, move.mapId, move.slotIndex);
+      const result = board.placeWildcardDie(state, index, { playerId: move.playerId }, move.dieId, move.mapId, move.slotIndex);
       if (!result.success) return result;
       if (result.actionResult && result.actionResult.pendingBuild) {
         if (move.buildCandidateIndex === undefined || move.buildCandidateIndex === null) {
@@ -105,7 +106,7 @@ function applyInPlace(state, index, move) {
         const candidate = result.actionResult.pendingBuild.candidates[move.buildCandidateIndex];
         if (!candidate) throw new SimulationError(`buildCandidateIndex ${move.buildCandidateIndex} out of range`);
         const bzDiscount = maxBzDiscount(state, index, move.playerId, candidate);
-        const buildResult = board.completeAreaBuild(state, index, { playerId: move.playerId, colorPreference: move.colorPreference, bzDiscount }, candidate, result.actionResult.pendingBuild.remainingCommands);
+        const buildResult = board.completeAreaBuild(state, index, { playerId: move.playerId, bzDiscount }, candidate, result.actionResult.pendingBuild.remainingCommands);
         return { ...buildResult, candidate };
       }
       return result;

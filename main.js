@@ -1199,11 +1199,6 @@ let pendingRoundPassConfirm = null;
 // { playerId, categories, buildValue, candidates, remainingCommands } | null -- see placeSelectedDie
 // and renderBuildChoiceModal (real engine wiring pass 3, BUILD/UPGRADE candidate selection).
 let pendingBuildChoice = null;
-// {A:'AUTO'|'Z', B:..., C:...} -- 色欲's "real or Z" payment choice for whichever BUILD/UPGRADE
-// candidate ends up picked in the modal above (see renderBuildChoicePaymentControls). Reset whenever
-// pendingBuildChoice changes; irrelevant (never read) for players without the ability, since
-// executor.resolvePayment ignores colorPreference unless hasPaymentChoiceAbility is true anyway.
-let buildColorPreference = {};
 // { candidate, outcomes } | null -- BZ is spent automatically now (2026-08-04, per user feedback:
 // "デフォルトでBZを使って建築するようにして"; see executor.enumerateBzOutcomes for the full rationale).
 // Clicking a BUILD_NEW candidate computes every distinct affordable way to spend the max usable BZ; if
@@ -1212,13 +1207,8 @@ let buildColorPreference = {};
 // real resource gets spent), this holds the pending choice while renderBzOutcomeChoice asks which
 // outcome to commit. Applies to UPGRADE too (2026-08-06, per user feedback -- BZ discounts an UPGRADE's
 // COST exactly like a BUILD_NEW's, against the *original* tier's COST; see board.resolveUpgrade). Reset
-// alongside buildColorPreference wherever a fresh pendingBuildChoice is set.
+// wherever a fresh pendingBuildChoice is set.
 let pendingBzOutcomeChoice = null;
-// { mapId, slotIndex, colors, colorPreference } | null -- 色欲's payment choice for an AREA whose
-// own ACTION pays A/B/C directly (see attemptPlaceSelectedDie/areaColorPayResources/
-// renderPlacementChoiceModal). Set instead of placing immediately; the die isn't placed yet at this
-// point, so unlike pendingBuildChoice this one has a real cancel affordance.
-let pendingPlacementChoice = null;
 // { physicalId, playerId, bareTap:{kind,choices?}, dieId, value } | null -- a bare TAP ability that
 // needs a die+value choice before it can run (SET_DICE_ANY/SET_DIE_VALUE/CHANGE_DIE_VALUE, see
 // attachTapToggle/bareTapKind/renderTapChoiceModal). dieId/value start null (nothing picked yet); the
@@ -1361,7 +1351,6 @@ function jumpToHistoryIndex(idx) {
   Object.assign(STATE, restored);
   selectedDieIds = [];
   pendingBuildChoice = null;
-  pendingPlacementChoice = null;
   pendingTapChoice = null;
   pendingAutoModeChoice = null;
   pendingTurnEndPlayerId = null;
@@ -4726,7 +4715,7 @@ function renderBoard(state, next) {
       // to direct per-slot clicks instead of pausing for a picker modal.
       let exAnyChoice = null;
       if (wildcardSingleSelection) {
-        const context = { playerId: highlightOwner.id, colorPreference: {} };
+        const context = { playerId: highlightOwner.id };
         // EX-vs-ANY (2026-08-28): light up BOTH candidate slots when it's a genuine choice (see
         // board.wildcardExAnyChoice's own doc), not just whichever the plain auto-pick preview below
         // would land on.
@@ -4740,7 +4729,7 @@ function renderBoard(state, next) {
       } else if (highlightOwner && selectedDieIds.length === 1) {
         highlightedSlots = new Set();
         for (let i = 0; i < slots.length; i++) {
-          const context = { playerId: highlightOwner.id, colorPreference: {} };
+          const context = { playerId: highlightOwner.id };
           if (boardMod.previewPlaceDice(state, INDEX, context, selectedDieIds[0], mapId, i)) highlightedSlots.add(i);
         }
       } else if (highlightOwner && selectedDieIds.length > 1
@@ -4819,7 +4808,7 @@ function renderBoard(state, next) {
         // own doc) does the placement immediately.
         if (wildcardSingleSelection && exAnyChoice) {
           slotEl.classList.add('slot--selectable');
-          slotEl.addEventListener('click', () => placeSelectedWildcardDie(state, selectedDieIds[0], mapId, {}, i));
+          slotEl.addEventListener('click', () => placeSelectedWildcardDie(state, selectedDieIds[0], mapId, i));
         } else if (selectedDieIds.length > 0 && !wildcardSingleSelection) {
           slotEl.classList.add('slot--selectable');
           slotEl.addEventListener('click', () => attemptPlaceSelectedDie(state, mapId, i));
@@ -4927,31 +4916,10 @@ function renderBoard(state, next) {
   }
 }
 
-/** Colors (subset of A/B/C) that mapId's *current* AREA ACTION would actually pay -- e.g. AREA007's
- * CHANGE((A,B,C),D) ("ABC→色D", confirmed 2026-07-31 as the case [[project-dice-wp-dsl-spec]]'s Z
- * substitution rule needs to cover beyond plain BUILD/UPGRADE costs). Used only to decide whether
- * attemptPlaceSelectedDie needs to pause for 色欲's payment-choice prompt before placing. */
-function areaColorPayResources(mapId) {
-  const areaRow = dataLoaderMod.getAreaRow(INDEX, STATE.maps[mapId].currentAreaId);
-  if (!areaRow.ACTION) return [];
-  const colors = new Set();
-  for (const cmd of commandBuilderMod.lowerProgram(dslParserMod.parse(areaRow.ACTION))) {
-    if (cmd.type !== 'CHANGE') continue;
-    for (const item of cmd.pay) {
-      if (item.resource === 'A' || item.resource === 'B' || item.resource === 'C') colors.add(item.resource);
-    }
-  }
-  return [...colors];
-}
-
-/** Entry point for a SLOT click (2026-07-31): if placing here would pay A/B/C (BUILD/UPGRADE
- * candidates are the far more common case, but the AREA's own ACTION can also pay colored resources
- * directly -- see areaColorPayResources) and the player has both 色欲 and some Z on hand, pauses
- * for the "real or Z" choice (see renderPlacementChoiceModal) instead of placing immediately. The
- * BUILD/UPGRADE side of this same choice happens later, in renderBuildChoicePaymentControls, once a
- * candidate is on offer -- this only covers the AREA-ACTION-pays-directly case. Otherwise places
- * immediately with the default (real-first, Z-fallback) split, same as every player without the
- * ability. */
+/** Entry point for a SLOT click (2026-07-31). 色欲 owners now auto-prefer Z for any A/B/C payment
+ * (2026-09-20, per user request -- see executor.resolvePayment's own doc); this used to pause here for a
+ * per-payment "real or Z" choice when the AREA's own ACTION paid A/B/C directly, but that choice no
+ * longer exists, so this always places immediately. */
 function attemptPlaceSelectedDie(state, mapId, slotIndex) {
   // 2+ selected dice on the castle/AREA009 (2026-08-02, per user feedback) is a monument-only *group*
   // placement instead of a normal single-die one -- see placeSelectedDiceGroup/board.placeDiceGroup.
@@ -4965,35 +4933,14 @@ function attemptPlaceSelectedDie(state, mapId, slotIndex) {
   // 2026-08-02: if 2+ dice are selected but the player places on some OTHER area, only the most
   // recently selected one actually gets placed here -- the rest just fall back to unselected/in-hand).
   const dieId = selectedDieIds[selectedDieIds.length - 1];
-  const player = state.players.find((p) => p.dice.some((d) => d.id === dieId));
-  if (executorMod.hasPaymentChoiceAbility(state, player.id) && (player.resources.Z || 0) > 0) {
-    const colors = areaColorPayResources(mapId);
-    if (colors.length > 0) {
-      pendingPlacementChoice = { mapId, slotIndex, colors, colorPreference: {}, dieId };
-      render(STATE);
-      return;
-    }
-  }
-  placeSelectedDie(state, dieId, mapId, slotIndex, {});
+  placeSelectedDie(state, dieId, mapId, slotIndex);
 }
 
 /** Entry point for a whole-TILE click when a single ☆ wildcard die is selected (2026-08-19, JOB003/道化
- * -- see renderBoard's own doc on why there's no per-slot click for this case at all). Mirrors
- * attemptPlaceSelectedDie's single-die branch exactly (same 色欲 payment-choice pause), just without a
- * slotIndex -- board.placeWildcardDie auto-assigns the slot itself (see placeSelectedWildcardDie's own
- * doc for the one exception, an EX-vs-ANY choice, checked right after this function hands off to it). */
+ * -- see renderBoard's own doc on why there's no per-slot click for this case at all). */
 function attemptPlaceSelectedWildcardDie(state, mapId) {
   const dieId = selectedDieIds[selectedDieIds.length - 1];
-  const player = state.players.find((p) => p.dice.some((d) => d.id === dieId));
-  if (executorMod.hasPaymentChoiceAbility(state, player.id) && (player.resources.Z || 0) > 0) {
-    const colors = areaColorPayResources(mapId);
-    if (colors.length > 0) {
-      pendingPlacementChoice = { mapId, wildcard: true, colors, colorPreference: {}, dieId };
-      render(STATE);
-      return;
-    }
-  }
-  placeSelectedWildcardDie(state, dieId, mapId, {});
+  placeSelectedWildcardDie(state, dieId, mapId);
 }
 
 /** Shared result-handling for a successful call into board.placeDice/placeDiceGroup (2026-08-02,
@@ -5016,7 +4963,6 @@ function applyPlaceDiceResult(result, playerId) {
   if (result.actionResult && result.actionResult.pendingBuild) {
     placementMessage = '';
     pendingBuildChoice = { source: 'AREA', playerId, ...result.actionResult.pendingBuild };
-    buildColorPreference = {};
     pendingBzOutcomeChoice = null;
     return;
   }
@@ -5041,39 +4987,38 @@ function applyPlaceDiceResult(result, playerId) {
 
 /** Attempts to place dieId onto (mapId, slotIndex) via the real board.placeDice (2026-07-30, real
  * engine wiring pass 2). Legality is entirely board.placeDice's call -- see renderBoard's slot click
- * handler for why nothing is re-validated here. colorPreference: see executor.resolvePayment -- only
- * ever non-empty via attemptPlaceSelectedDie's pre-placement choice above. Always clears the *entire*
- * selection (2026-08-02), not just dieId -- placing consumes this turn's one main action regardless of
- * how many dice happened to be selected, so any others just fall back to unselected/in-hand (confirmed
- * 2026-08-02, see attemptPlaceSelectedDie's own comment). */
-function placeSelectedDie(state, dieId, mapId, slotIndex, colorPreference) {
+ * handler for why nothing is re-validated here. Always clears the *entire* selection (2026-08-02), not
+ * just dieId -- placing consumes this turn's one main action regardless of how many dice happened to be
+ * selected, so any others just fall back to unselected/in-hand (confirmed 2026-08-02, see
+ * attemptPlaceSelectedDie's own comment). */
+function placeSelectedDie(state, dieId, mapId, slotIndex) {
   const player = state.players.find((p) => p.dice.some((d) => d.id === dieId));
   // JOB007/宮廷人 tap-first offer (2026-08-22) -- checked before the wD-overflow confirm below, since
   // accepting it can change what monument candidates this same placement offers (MONUMENT_DICE_
   // DISCOUNT). See pendingJob007TapPrompt's own doc.
   withJob007TapPrompt(
     state, player.id, dieId,
-    (clone) => boardMod.placeDice(clone, INDEX, { playerId: player.id, colorPreference }, dieId, mapId, slotIndex),
-    () => placeSelectedDieAfterJob007Check(state, player, dieId, mapId, slotIndex, colorPreference),
+    (clone) => boardMod.placeDice(clone, INDEX, { playerId: player.id }, dieId, mapId, slotIndex),
+    () => placeSelectedDieAfterJob007Check(state, player, dieId, mapId, slotIndex),
   );
 }
 
-function placeSelectedDieAfterJob007Check(state, player, dieId, mapId, slotIndex, colorPreference) {
+function placeSelectedDieAfterJob007Check(state, player, dieId, mapId, slotIndex) {
   // wD-overflow confirm (2026-08-19, per user request) -- checked BEFORE any real mutation, so a
   // declined confirm leaves selectedDieIds/turnActionTaken/actionCheckpoints untouched, same as if
   // the click never happened. See pendingWhiteOverflowConfirm's own doc.
-  if (wouldCauseWhiteOverflow(state, (clone) => boardMod.placeDice(clone, INDEX, { playerId: player.id, colorPreference }, dieId, mapId, slotIndex))) {
-    pendingWhiteOverflowConfirm = { onConfirm: () => placeSelectedDieCommit(state, player, dieId, mapId, slotIndex, colorPreference) };
+  if (wouldCauseWhiteOverflow(state, (clone) => boardMod.placeDice(clone, INDEX, { playerId: player.id }, dieId, mapId, slotIndex))) {
+    pendingWhiteOverflowConfirm = { onConfirm: () => placeSelectedDieCommit(state, player, dieId, mapId, slotIndex) };
     render(STATE);
     return;
   }
-  placeSelectedDieCommit(state, player, dieId, mapId, slotIndex, colorPreference);
+  placeSelectedDieCommit(state, player, dieId, mapId, slotIndex);
 }
 
-function placeSelectedDieCommit(state, player, dieId, mapId, slotIndex, colorPreference) {
+function placeSelectedDieCommit(state, player, dieId, mapId, slotIndex) {
   const preSnapshot = gameStateMod.cloneState(state);
   const preTurnActionTaken = turnActionTaken;
-  const result = boardMod.placeDice(state, INDEX, { playerId: player.id, colorPreference }, dieId, mapId, slotIndex);
+  const result = boardMod.placeDice(state, INDEX, { playerId: player.id }, dieId, mapId, slotIndex);
   selectedDieIds = [];
   if (result.success) actionCheckpoints.push({ state: preSnapshot, turnActionTaken: preTurnActionTaken });
   applyPlaceDiceResult(result, player.id);
@@ -5088,29 +5033,29 @@ function placeSelectedDieCommit(state, player, dieId, mapId, slotIndex, colorPre
  * お願い"), where renderBoard's own slot-click wiring passes the specific slot the player tapped directly
  * (2026-08-30, per user request: "出ずにそのSLOTをタップすれば置けるようにできませんか" -- replacing an
  * earlier picker modal that used to pause here instead). */
-function placeSelectedWildcardDie(state, dieId, mapId, colorPreference, preferredSlotIndex) {
+function placeSelectedWildcardDie(state, dieId, mapId, preferredSlotIndex) {
   const player = state.players.find((p) => p.dice.some((d) => d.id === dieId));
   // JOB007/宮廷人 tap-first offer -- see placeSelectedDie's own doc for the pattern.
   withJob007TapPrompt(
     state, player.id, dieId,
-    (clone) => boardMod.placeWildcardDie(clone, INDEX, { playerId: player.id, colorPreference }, dieId, mapId, preferredSlotIndex),
-    () => placeSelectedWildcardDieAfterJob007Check(state, player, dieId, mapId, colorPreference, preferredSlotIndex),
+    (clone) => boardMod.placeWildcardDie(clone, INDEX, { playerId: player.id }, dieId, mapId, preferredSlotIndex),
+    () => placeSelectedWildcardDieAfterJob007Check(state, player, dieId, mapId, preferredSlotIndex),
   );
 }
 
-function placeSelectedWildcardDieAfterJob007Check(state, player, dieId, mapId, colorPreference, preferredSlotIndex) {
-  if (wouldCauseWhiteOverflow(state, (clone) => boardMod.placeWildcardDie(clone, INDEX, { playerId: player.id, colorPreference }, dieId, mapId, preferredSlotIndex))) {
-    pendingWhiteOverflowConfirm = { onConfirm: () => placeSelectedWildcardDieCommit(state, player, dieId, mapId, colorPreference, preferredSlotIndex) };
+function placeSelectedWildcardDieAfterJob007Check(state, player, dieId, mapId, preferredSlotIndex) {
+  if (wouldCauseWhiteOverflow(state, (clone) => boardMod.placeWildcardDie(clone, INDEX, { playerId: player.id }, dieId, mapId, preferredSlotIndex))) {
+    pendingWhiteOverflowConfirm = { onConfirm: () => placeSelectedWildcardDieCommit(state, player, dieId, mapId, preferredSlotIndex) };
     render(STATE);
     return;
   }
-  placeSelectedWildcardDieCommit(state, player, dieId, mapId, colorPreference, preferredSlotIndex);
+  placeSelectedWildcardDieCommit(state, player, dieId, mapId, preferredSlotIndex);
 }
 
-function placeSelectedWildcardDieCommit(state, player, dieId, mapId, colorPreference, preferredSlotIndex) {
+function placeSelectedWildcardDieCommit(state, player, dieId, mapId, preferredSlotIndex) {
   const preSnapshot = gameStateMod.cloneState(state);
   const preTurnActionTaken = turnActionTaken;
-  const result = boardMod.placeWildcardDie(state, INDEX, { playerId: player.id, colorPreference }, dieId, mapId, preferredSlotIndex);
+  const result = boardMod.placeWildcardDie(state, INDEX, { playerId: player.id }, dieId, mapId, preferredSlotIndex);
   selectedDieIds = [];
   if (result.success) actionCheckpoints.push({ state: preSnapshot, turnActionTaken: preTurnActionTaken });
   applyPlaceDiceResult(result, player.id);
@@ -5307,30 +5252,18 @@ function advanceTurnIfPossible(state, playerId) {
  * game: you can't back out of a die placement that already resolved), same as the real engine offers
  * no "skip" path here either. */
 
-/** Colors (subset of A/B/C) a candidate's payment actually needs -- BUILD_NEW pays faceId's own COST,
- * UPGRADE pays fromFaceId's (see board.js's resolveUpgrade: "支払えなければ実行不可" against the
- * *original* tier's COST, confirmed identical to the tier-B row's). */
-function candidateColorResources(candidate) {
-  const costFaceId = candidate.type === 'UPGRADE' ? candidate.fromFaceId : candidate.faceId;
-  const row = dataLoaderMod.getCardRow(INDEX, costFaceId);
-  return commandBuilderMod.lowerCostList(row.COST)
-    .map((item) => item.resource)
-    .filter((resource) => resource === 'A' || resource === 'B' || resource === 'C');
-}
-
 /** Every distinct affordable way to auto-spend BZ on candidate's COST, per executor.enumerateBzOutcomes
  * (2026-08-04 -- replaces the old manual per-resource stepper; BZ itself is always maxed out
  * automatically now, this only ever enumerates *which real resource* ends up spent when that's a real
- * fork). Works for UPGRADE too (2026-08-06, per user feedback) -- costFaceId mirrors
- * candidateColorResources' own BUILD_NEW-vs-UPGRADE split (UPGRADE pays fromFaceId's COST, the original
- * tier's, per board.resolveUpgrade). */
+ * fork). Works for UPGRADE too (2026-08-06, per user feedback) -- costFaceId pays fromFaceId's COST for an
+ * UPGRADE (the original tier's, per board.resolveUpgrade), faceId's own for a BUILD_NEW. */
 function bzOutcomesForCandidate(candidate, playerId) {
   const costFaceId = candidate.type === 'UPGRADE' ? candidate.fromFaceId : candidate.faceId;
   const row = dataLoaderMod.getCardRow(INDEX, costFaceId);
   const items = commandBuilderMod.lowerCostList(row.COST);
   const player = STATE.players.find((p) => p.id === playerId);
   const bzAvailable = player.resources.BZ || 0;
-  return executorMod.enumerateBzOutcomes(STATE, playerId, items, bzAvailable, buildColorPreference);
+  return executorMod.enumerateBzOutcomes(STATE, playerId, items, bzAvailable);
 }
 
 /** Whether playerId can currently pay candidate's COST (real + Z + auto-maxed BZ combined). Used to
@@ -5345,41 +5278,6 @@ function candidateAffordable(candidate, playerId) {
   return bzOutcomesForCandidate(candidate, playerId).length > 0;
 }
 
-/** 色欲's "real or Z" payment-preference toggle (2026-07-31, see [[project-dice-wp-dsl-spec]]'s
- * Z-substitution rule and executor.hasPaymentChoiceAbility) -- one toggle per colored resource used by
- * *any* candidate currently on offer (buildColorPreference is shared across candidates: it's a
- * per-resource-type preference, not per-candidate, since only one candidate ever actually gets built).
- * Hidden entirely for players without the ability, or with no Z on hand to substitute at all. */
-function renderBuildChoicePaymentControls() {
-  const container = document.getElementById('build-choice-payment');
-  container.innerHTML = '';
-  const playerId = pendingBuildChoice.playerId;
-  const player = STATE.players.find((p) => p.id === playerId);
-  if (!executorMod.hasPaymentChoiceAbility(STATE, playerId) || (player.resources.Z || 0) <= 0) return;
-  const colors = new Set();
-  for (const candidate of pendingBuildChoice.candidates.filter((c) => candidateAffordable(c, playerId))) {
-    for (const resource of candidateColorResources(candidate)) colors.add(resource);
-  }
-  if (colors.size === 0) return;
-  container.appendChild(el('span', 'build-choice-payment__label', '色欲: 支払いに使う資源を選択'));
-  for (const resource of ['A', 'B', 'C']) {
-    if (!colors.has(resource)) continue;
-    const group = el('div', 'build-choice-payment__group');
-    group.appendChild(el('span', 'build-choice-payment__resource', resource));
-    const current = buildColorPreference[resource] === 'Z' ? 'Z' : 'AUTO';
-    const realBtn = el('button', 'build-choice-payment__option', `資源${resource}優先`);
-    const zBtn = el('button', 'build-choice-payment__option', '資源Z優先');
-    realBtn.type = 'button';
-    zBtn.type = 'button';
-    realBtn.classList.toggle('build-choice-payment__option--active', current === 'AUTO');
-    zBtn.classList.toggle('build-choice-payment__option--active', current === 'Z');
-    realBtn.addEventListener('click', () => { buildColorPreference[resource] = 'AUTO'; renderBuildChoicePaymentControls(); });
-    zBtn.addEventListener('click', () => { buildColorPreference[resource] = 'Z'; renderBuildChoicePaymentControls(); });
-    group.appendChild(realBtn);
-    group.appendChild(zBtn);
-    container.appendChild(group);
-  }
-}
 
 /** Ambiguous-BZ-outcome chooser (2026-08-04, per user feedback: "デフォルトでBZを使って建築するように
  * して" -- replaces the old manual per-resource stepper entirely). Only ever rendered once a BUILD_NEW
@@ -5474,7 +5372,7 @@ function renderBuildChoiceBzTapPrompt() {
  * upgraded card's own ONCE (e.g. B004A's ADD(2wD)) is exactly the kind of grant this catches. */
 function commitBuildCandidate(candidate, bzDiscount) {
   const playerId = pendingBuildChoice.playerId;
-  const context = { playerId, colorPreference: buildColorPreference, bzDiscount };
+  const context = { playerId, bzDiscount };
   if (wouldCauseWhiteOverflow(STATE, (clone) => boardMod.completeAreaBuild(clone, INDEX, context, candidate, pendingBuildChoice.remainingCommands))) {
     pendingWhiteOverflowConfirm = { onConfirm: () => commitBuildCandidateReal(candidate, bzDiscount) };
     render(STATE);
@@ -5485,7 +5383,7 @@ function commitBuildCandidate(candidate, bzDiscount) {
 
 function commitBuildCandidateReal(candidate, bzDiscount) {
   const playerId = pendingBuildChoice.playerId;
-  const context = { playerId, colorPreference: buildColorPreference, bzDiscount };
+  const context = { playerId, bzDiscount };
   const source = pendingBuildChoice.source;
   // Tap the TAP-source card BEFORE resolving the build, not after (2026-08-09 fix, per user report on
   // what were then B006A/C008A -- renamed to B202A/C301A by the 2026-08-24 SHOP201-203 rework's card
@@ -5544,7 +5442,6 @@ function renderBuildChoiceModal() {
   // resolved, so the player can't accidentally click a *different* candidate mid-choice.
   if (pendingBzOutcomeChoice) {
     document.getElementById('build-choice-bz-tap-prompt').innerHTML = '';
-    document.getElementById('build-choice-payment').innerHTML = '';
     renderBzOutcomeChoice();
     const list = document.getElementById('build-choice-list');
     list.innerHTML = '';
@@ -5558,7 +5455,6 @@ function renderBuildChoiceModal() {
     return;
   }
   renderBuildChoiceBzTapPrompt();
-  renderBuildChoicePaymentControls();
   document.getElementById('build-choice-bz').innerHTML = '';
   const list = document.getElementById('build-choice-list');
   list.innerHTML = '';
@@ -5615,36 +5511,6 @@ function renderBuildChoiceModal() {
   }
 }
 
-/** 色欲's payment-choice prompt for an AREA that pays A/B/C directly (see
- * attemptPlaceSelectedDie/areaColorPayResources) -- unlike renderBuildChoicePaymentControls (which
- * only ever adjusts a payment that's already been decided to happen), this pauses the placement
- * itself, so it needs its own confirm/cancel, wired once in the DOMContentLoaded handler below. */
-function renderPlacementChoiceModal() {
-  const overlay = document.getElementById('placement-choice-overlay');
-  if (!pendingPlacementChoice) {
-    overlay.hidden = true;
-    return;
-  }
-  overlay.hidden = false;
-  const body = document.getElementById('placement-choice-body');
-  body.innerHTML = '';
-  for (const resource of pendingPlacementChoice.colors) {
-    const group = el('div', 'build-choice-payment__group');
-    group.appendChild(el('span', 'build-choice-payment__resource', resource));
-    const current = pendingPlacementChoice.colorPreference[resource] === 'Z' ? 'Z' : 'AUTO';
-    const realBtn = el('button', 'build-choice-payment__option', `資源${resource}優先`);
-    const zBtn = el('button', 'build-choice-payment__option', '資源Z優先');
-    realBtn.type = 'button';
-    zBtn.type = 'button';
-    realBtn.classList.toggle('build-choice-payment__option--active', current === 'AUTO');
-    zBtn.classList.toggle('build-choice-payment__option--active', current === 'Z');
-    realBtn.addEventListener('click', () => { pendingPlacementChoice.colorPreference[resource] = 'AUTO'; render(STATE); });
-    zBtn.addEventListener('click', () => { pendingPlacementChoice.colorPreference[resource] = 'Z'; render(STATE); });
-    group.appendChild(realBtn);
-    group.appendChild(zBtn);
-    body.appendChild(group);
-  }
-}
 
 // Kinds that support targeting one of the player's own eligible cards instead of a real die (2026-08-25,
 // per user request: "カードのダイス目も変えられるようにしたい") -- SET_DICE_ANY is excluded on purpose:
@@ -6305,8 +6171,7 @@ function attachTapToggle(cardNode, cardState, faceId, canAct, physicalId) {
       if (result.success && result.pendingBuild) {
         actionCheckpoints.push({ state: preSnapshot, turnActionTaken: preTurnActionTaken });
         pendingBuildChoice = { source: 'TAP', playerId: cardState.ownerId, ...result.pendingBuild };
-        buildColorPreference = {};
-        pendingBzOutcomeChoice = null;
+            pendingBzOutcomeChoice = null;
         placementMessage = '';
       } else if (
         // 傲慢/CON004A (2026-08-21, per user report: 革命の兆しLV2のBUILD(U)がNO_BUILDABLE_CARDという
@@ -7790,7 +7655,6 @@ function render(state) {
   }
   document.getElementById('board-message').textContent = placementMessage;
   renderBuildChoiceModal();
-  renderPlacementChoiceModal();
   renderTapChoiceModal();
   renderAutoModeChoiceModal();
   renderTurnEndWarningModal();
@@ -7824,7 +7688,6 @@ function handleUndoClick() {
   if (!result.success) return;
   selectedDieIds = [];
   pendingBuildChoice = null;
-  pendingPlacementChoice = null;
   pendingTapChoice = null;
   pendingAutoModeChoice = null;
   pendingTurnEndPlayerId = null;
@@ -7856,7 +7719,6 @@ function handleCancelPreviousActionClick() {
   turnActionTaken = checkpoint.turnActionTaken;
   selectedDieIds = [];
   pendingBuildChoice = null;
-  pendingPlacementChoice = null;
   pendingTapChoice = null;
   pendingAutoModeChoice = null;
   placementMessage = '';
@@ -8448,21 +8310,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('ai-manual-step-button').addEventListener('click', () => {
     driveOneAiStep(STATE);
     render(STATE);
-  });
-
-  document.getElementById('placement-choice-cancel').addEventListener('click', () => {
-    pendingPlacementChoice = null;
-    render(STATE);
-  });
-  document.getElementById('placement-choice-confirm').addEventListener('click', () => {
-    const { dieId, mapId, slotIndex, colorPreference, wildcard } = pendingPlacementChoice;
-    pendingPlacementChoice = null;
-    // JOB003/道化 (2026-08-19) -- see attemptPlaceSelectedWildcardDie's own doc.
-    if (wildcard) {
-      placeSelectedWildcardDie(STATE, dieId, mapId, colorPreference);
-    } else {
-      placeSelectedDie(STATE, dieId, mapId, slotIndex, colorPreference);
-    }
   });
 
   document.getElementById('tap-choice-cancel').addEventListener('click', () => {

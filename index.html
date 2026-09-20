@@ -296,22 +296,6 @@
     </div>
   </div>
 
-  <!-- CON002B's "real or Z" payment choice for an AREA that pays A/B/C directly, e.g. AREA007's
-       CHANGE((A,B,C),D) (2026-07-31) -- see main.js's attemptPlaceSelectedDie/renderPlacementChoiceModal.
-       Unlike the BUILD modal above, nothing has been committed yet at this point, so a cancel button
-       is offered. -->
-  <div id="placement-choice-overlay" class="card-inst-overlay" hidden>
-    <div class="card-inst-modal placement-choice-modal">
-      <div class="card-inst-modal__header">
-        <span class="card-inst-modal__title">CON002B: 支払いに使う資源を選択</span>
-      </div>
-      <div class="card-inst-modal__body" id="placement-choice-body"></div>
-      <div class="placement-choice-actions">
-        <button type="button" id="placement-choice-cancel">キャンセル</button>
-        <button type="button" id="placement-choice-confirm">この内容で配置</button>
-      </div>
-    </div>
-  </div>
 
   <!-- Bare (direct) TAP ability die+value choice, e.g. B001A's SET_DIE_VALUE(SELF1|2);
        GRANT_PLACE_ANYWHERE(...), B003A's CHANGE_DIE_VALUE(SELF±1), or JOB007's
