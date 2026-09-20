@@ -4023,22 +4023,23 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     const noteEl = el('div', 'card-note card-note--large');
     noteEl.appendChild(document.createTextNode('革命の兆しを\n獲得する'));
     q('.shop-card__effect').appendChild(noteEl);
-  } else if (options.showEffect && (facts.name === '開拓者' || facts.name === '吟遊詩人' || facts.name === '地主')) {
-    // Bespoke JOB card-notes (開拓者/JOB009 2026-08-17, per user mockup: "無人AREAに色D / ▽ / ランダム
-    // ABC"; 吟遊詩人/JOB008 and 地主/JOB011 2026-08-17, per user mockups: "エンブレム３個 / ▽ / Z　1VP"
+  } else if (options.showEffect && (facts.name === '宣教師' || facts.name === '吟遊詩人' || facts.name === '地主')) {
+    // Bespoke JOB card-notes (宣教師/JOB009, renamed from 開拓者 2026-09-20 alongside its ability redesign
+    // -- fixed 1B per qualifying die now, no longer die-value-dependent, per user mockup: "無人AREAに色D /
+    // ▽ / B"; 吟遊詩人/JOB008 and 地主/JOB011 2026-08-17, per user mockups: "エンブレム３個 / ▽ / Z　1VP"
     // and "LVアップAREA / ▽ / 〇/1VP", both "ABCZはアイコンで表記") -- none of these 3 abilities have any
     // DSL representation at all (see hasPioneerAbility/hasLandlordAbility's own docs in board.js, and
     // turn-flow.grantBardBonusIfEarned's for 吟遊詩人), so each is a one-off hand-built display, the same
     // class of exception CON003A/CON005B used to each get their own ad-hoc .card-note patch for before
     // the general CON アイコン column existed. "▽" is plain text (matching CON004A's own literal "▽" in
-    // its card-note text), not actionTriggerDown()'s 🔽 emoji -- 開拓者's own mockup used the plain
+    // its card-note text), not actionTriggerDown()'s 🔽 emoji -- 開拓者/宣教師's own mockup used the plain
     // triangle character specifically, reused here for the other two to stay visually consistent.
     tall = true;
     const noteEl = el('div', 'card-note');
     const iconRow = el('span', 'job-note-icon-row');
-    if (facts.name === '開拓者') {
+    if (facts.name === '宣教師') {
       noteEl.appendChild(document.createTextNode('無人AREAに色D\n▽\n'));
-      for (const resource of ['A', 'B', 'C']) iconRow.appendChild(actionDot(resource));
+      iconRow.appendChild(actionDot('B'));
     } else if (facts.name === '吟遊詩人') {
       noteEl.appendChild(document.createTextNode('エンブレム３個\n▽\n'));
       iconRow.appendChild(actionDot('C'));

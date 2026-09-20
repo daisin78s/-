@@ -2118,19 +2118,16 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
 }
 
 // ---------------------------------------------------------------------------
-// 開拓者/JOB009 (2026-08-20 redesign, per user spec, replacing the old "random A/B/C" grant): the placed
-// die's own face value now determines what's granted -- 1->K, 2->A, 3->B, 4->C, 5->Z, 6->VP -- and the
-// grant lands speculatively BEFORE the AREA's own affordability/candidacy check, so it's immediately
-// usable for this same placement (mirrors 地主's own early-grant pattern). If the raw resource alone
-// wouldn't make the placement viable but converting it to K via the matching free action (A_K/B_K/C_K/
-// Z_K, same 1:1 rate a player could otherwise trigger manually) would, that conversion is applied
-// automatically -- see resolvePioneerGrantForDie's own doc. Everything else about the trigger condition
-// is unchanged: whole-AREA/any-player "nobody has placed here yet this round" basis, TAP-alternation
-// (grants on one qualifying trigger, just untaps on the next), and -- confirmed with the user -- a
-// placeDiceGroup action grants ONCE PER DIE in the group (not once for the whole action), still only one
-// tap/untap transition regardless. 2026-08-20 follow-up: the trigger's own wording dropped "色ダイスを
-// 配置すること" for plain "ダイスを配置すること" ("wDでもOKになります") -- wD now qualifies too, both
-// for the trigger itself and for its own per-die grant in a group placement (previously excluded).
+// 宣教師/JOB009 (renamed from 開拓者 2026-09-20, ability redesigned in the same change: no longer
+// die-value-dependent -- every qualifying die grants a flat 1B instead of the old value->resource lookup,
+// 1->K/2->A/3->B/4->C/5->Z/6->VP). The grant still lands speculatively BEFORE the AREA's own
+// affordability/candidacy check, so it's immediately usable for this same placement (mirrors 地主's own
+// early-grant pattern), and still auto-converts to K via B_K if raw B alone wouldn't make the placement
+// viable (see resolvePioneerGrant's own doc, kept per user request even though the granted resource is no
+// longer die-value-derived). Everything else about the trigger condition is unchanged: whole-AREA/
+// any-player "nobody has placed here yet this round" basis, no TAP/untap gating, color-die-only (wD
+// doesn't qualify), and -- confirmed with the user -- a placeDiceGroup action grants ONCE PER DIE in the
+// group (not once for the whole action).
 // ---------------------------------------------------------------------------
 function giveJob009(state, playerId) {
   const p = player(state, playerId);
@@ -2142,47 +2139,48 @@ function giveJob009(state, playerId) {
   return inst;
 }
 {
-  // Full 1-6 die-value -> resource mapping, each on a fresh map with an unconditional ADD-based ACTION
-  // (AREA001A/ADD(3K) for values matching its own SLOT1-3=1,2,3; AREA002A/ADD(3K) for SLOT1-3=4,5,6) so
-  // the grant itself is never gated by CHANGE affordability. Value 1 (->K) collides with AREA001A's own
-  // ADD(3K) grant -- expectedDelta accounts for both landing in the same resource.
+  // Every die value 1-6 now grants the SAME flat 1B (die value no longer selects the resource) -- placed
+  // on fresh unconditional-ADD areas (AREA001A/AREA002A's own ADD(3K)) so the grant itself is never gated
+  // by CHANGE affordability.
   const cases = [
-    { value: 1, mapId: 'MAP001', slotIndex: 0, resource: 'K', expectedDelta: 4 }, // 3 (AREA's own ADD(3K)) + 1 (pioneer)
-    { value: 2, mapId: 'MAP001', slotIndex: 1, resource: 'A', expectedDelta: 1 },
-    { value: 3, mapId: 'MAP001', slotIndex: 2, resource: 'B', expectedDelta: 1 },
-    { value: 4, mapId: 'MAP002', slotIndex: 0, resource: 'C', expectedDelta: 1 },
-    { value: 5, mapId: 'MAP002', slotIndex: 1, resource: 'Z', expectedDelta: 1 },
-    { value: 6, mapId: 'MAP002', slotIndex: 2, resource: 'VP', expectedDelta: 1 },
+    { value: 1, mapId: 'MAP001', slotIndex: 0 },
+    { value: 2, mapId: 'MAP001', slotIndex: 1 },
+    { value: 4, mapId: 'MAP002', slotIndex: 0 },
+    { value: 6, mapId: 'MAP002', slotIndex: 2 },
   ];
-  for (const { value, mapId, slotIndex, resource, expectedDelta } of cases) {
+  for (const { value, mapId, slotIndex } of cases) {
     const state = freshStateWithShops();
     const p1 = player(state, 'P1');
     giveJob009(state, 'P1');
     const d1 = giveDie(state, 'P1', value);
-    const before = p1.resources[resource] || 0;
+    const beforeB = p1.resources.B || 0;
     const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, mapId, slotIndex);
-    check(`開拓者: placement with die value ${value} succeeds`, result.success, true);
-    check(`開拓者: die value ${value} grants ${resource} (delta ${expectedDelta})`, p1.resources[resource] - before, expectedDelta);
+    check(`宣教師: placement with die value ${value} succeeds`, result.success, true);
+    check(`宣教師: die value ${value} grants a flat 1B regardless of value`, (p1.resources.B || 0) - beforeB, 1);
   }
 }
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   giveJob009(state, 'P1');
-  const d1 = giveDie(state, 'P1', 1); // AREA001A SLOT1=1, a fresh map nobody has touched yet -> grants K
+  const d1 = giveDie(state, 'P1', 1); // AREA001A SLOT1=1, a fresh map nobody has touched yet
   const beforeK = p1.resources.K || 0;
+  const beforeB = p1.resources.B || 0;
   const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
-  check('開拓者: placement on a fresh AREA still succeeds normally', result.success, true);
-  check('...grants 3K (AREA001A own ADD(3K)) + 1K (開拓者, die value 1) = 4', p1.resources.K - beforeK, 4);
+  check('宣教師: placement on a fresh AREA still succeeds normally', result.success, true);
+  check('...grants 3K (AREA001A own ADD(3K)), no more', p1.resources.K - beforeK, 3);
+  check('...grants 1B (宣教師)', (p1.resources.B || 0) - beforeB, 1);
 
   const d2 = giveDie(state, 'P1', 2); // AREA001A SLOT2=2, same (now non-empty) map
   const beforeK2 = p1.resources.K;
+  const beforeB2 = p1.resources.B || 0;
   board.placeDice(state, index, { playerId: 'P1' }, d2.id, 'MAP001', 1);
-  check('開拓者: a 2nd placement on the same (no longer empty) AREA does not trigger again', p1.resources.K - beforeK2, 3);
+  check('宣教師: a 2nd placement on the same (no longer empty) AREA does not trigger again', p1.resources.K - beforeK2, 3);
+  check('...no additional B either', (p1.resources.B || 0) - beforeB2, 0);
 }
 {
-  // 2026-08-27 spec revert: back to color-die-only (wD no longer qualifies) -- see
-  // grantPioneerBonusIfEarned's own doc.
+  // wD (color-die-only carve-out, unchanged by the 2026-09-20 redesign) -- a white die on a fresh AREA
+  // does NOT trigger the bonus.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   giveJob009(state, 'P1');
@@ -2190,8 +2188,10 @@ function giveJob009(state, playerId) {
   wDie.value = 1;
   p1.dice.push(wDie);
   const beforeK = p1.resources.K || 0;
+  const beforeB = p1.resources.B || 0;
   board.placeDice(state, index, { playerId: 'P1' }, wDie.id, 'MAP001', 0);
-  check('開拓者: a white die (wD) on a fresh AREA does NOT trigger the bonus (just the AREA\'s own 3K)', p1.resources.K - beforeK, 3);
+  check('宣教師: a white die (wD) on a fresh AREA does NOT trigger the bonus (just the AREA\'s own 3K)', p1.resources.K - beforeK, 3);
+  check('...no B granted for the wD either', (p1.resources.B || 0) - beforeB, 0);
 }
 {
   const state = freshStateWithShops();
@@ -2199,57 +2199,55 @@ function giveJob009(state, playerId) {
   const d1 = giveDie(state, 'P1', 1);
   const beforeK = p1.resources.K || 0;
   board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
-  check('A player without 開拓者 gets no bonus from a fresh-AREA placement', p1.resources.K - beforeK, 3);
+  check('A player without 宣教師 gets no bonus from a fresh-AREA placement', p1.resources.K - beforeK, 3);
 }
 {
-  // Raw resource directly unlocks a previously-illegal AREA (2026-08-20): 訓練場(AREA007)'s
-  // CHANGE((A,B,C),D) needs A,B,C -- player holds A,B but 0 C, die value 4 grants exactly C, no
-  // conversion needed or attempted.
+  // Raw B directly unlocks a previously-illegal AREA: 訓練場(AREA007)'s CHANGE((A,B,C),D) needs A,B,C --
+  // player holds A,C but 0 B, so the flat 1B grant is exactly what's missing, no conversion needed.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   giveJob009(state, 'P1');
   p1.resources.A = 1;
-  p1.resources.B = 1;
-  const d1 = giveDie(state, 'P1', 4); // AREA007 is ANY,ANY,ANY -- die value 4 grants C
+  p1.resources.C = 1;
+  const d1 = giveDie(state, 'P1', 4); // AREA007 is ANY,ANY,ANY -- die value no longer matters
   const diceCountBeforePlace = p1.dice.length;
   const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP007', 0);
-  check('開拓者+訓練場: raw C directly unlocks a placement missing exactly C', result.success, true);
+  check('宣教師+訓練場: raw B directly unlocks a placement missing exactly B', result.success, true);
   check('...A/B/C all spent by CHANGE((A,B,C),D), none left over', [p1.resources.A || 0, p1.resources.B || 0, p1.resources.C || 0], [0, 0, 0]);
-  check('...no K gained (no C_K conversion happened -- raw was already enough)', p1.resources.K || 0, 0);
+  check('...no K gained (no B_K conversion happened -- raw was already enough)', p1.resources.K || 0, 0);
   check('...a new die was granted by CHANGE(...,D)', p1.dice.length, diceCountBeforePlace + 1);
 }
 {
-  // Raw resource does NOT help, but auto-converting to K does (2026-08-20, per user's own worked
-  // example): 歓楽街(AREA006A)'s CHANGE(2K,2Z) (2026-09-03 data edit: was CHANGE(3K,3Z), itself a
-  // 2026-09-01 edit from an earlier CHANGE(2K,2Z)) needs K specifically; player holds only 1K, die value
-  // 3 grants B (not a valid substitute for K), so the bonus auto-converts that B to K via B_K.
+  // Raw B does NOT help, but auto-converting to K does: 歓楽街(AREA006A)'s CHANGE(2K,2Z) needs K
+  // specifically; player holds only 1K, so the granted B (not a valid substitute for K) auto-converts to
+  // K via B_K.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   giveJob009(state, 'P1');
   p1.resources.K = 1;
-  const d1 = giveDie(state, 'P1', 3); // AREA006A SLOT2=3 -- die value 3 grants B
+  const d1 = giveDie(state, 'P1', 3); // AREA006A SLOT2=3
   const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP006', 1);
-  check('開拓者+歓楽街: raw B doesn\'t help (K needed), auto-converts to K', result.success, true);
+  check('宣教師+歓楽街: raw B doesn\'t help (K needed), auto-converts to K', result.success, true);
   check('...B nets to 0 (granted then converted away)', p1.resources.B || 0, 0);
   check('...K nets to 0 (1 start + 1 from B_K conversion - 2 spent by CHANGE)', p1.resources.K || 0, 0);
   check('...Z increases by 2 (CHANGE(2K,2Z)\'s own gain)', p1.resources.Z || 0, 2);
 }
 {
-  // Neither raw nor converted is actually needed (AREA001A/ADD(3K) is unconditional) -- raw is kept, no
-  // wasteful Z_K conversion fires just because one exists.
+  // Neither raw nor converted is actually needed (AREA002A/ADD(3K) is unconditional) -- raw B is kept, no
+  // wasteful B_K conversion fires just because one exists.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   giveJob009(state, 'P1');
-  const d1 = giveDie(state, 'P1', 5); // AREA002A SLOT2=5 -- die value 5 grants Z
+  const d1 = giveDie(state, 'P1', 5); // AREA002A SLOT2=5 -- die value no longer matters
   const beforeK = p1.resources.K || 0;
-  const beforeZ = p1.resources.Z || 0;
+  const beforeB = p1.resources.B || 0;
   board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP002', 1);
-  check('開拓者: raw Z kept when unneeded, no wasteful conversion', p1.resources.Z - beforeZ, 1);
-  check('...K only from the AREA\'s own ADD(3K), not +1 more from a spurious Z_K conversion', p1.resources.K - beforeK, 3);
+  check('宣教師: raw B kept when unneeded, no wasteful conversion', (p1.resources.B || 0) - beforeB, 1);
+  check('...K only from the AREA\'s own ADD(3K), not +1 more from a spurious B_K conversion', p1.resources.K - beforeK, 3);
 }
 {
-  // Group placement with 2 DIFFERENT-valued dice grants once PER die, not once for the whole action
-  // (confirmed with the user).
+  // Group placement with 2 dice grants once PER die, not once for the whole action (confirmed with the
+  // user) -- both grant the same flat 1B now.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   giveJob009(state, 'P1');
@@ -2258,15 +2256,13 @@ function giveJob009(state, playerId) {
   state.shops.M.slots.SHOP001 = 'M004'; // DICE>=9, reachable by 4+5=9 combined
   const d1 = giveDie(state, 'P1', 4);
   const d2 = giveDie(state, 'P1', 5);
-  const beforeC = p1.resources.C || 0;
-  const beforeZ = p1.resources.Z || 0;
+  const beforeB = p1.resources.B || 0;
   const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
-  check('開拓者: group placement with different-valued dice succeeds', result.success, true);
-  check('...grants both 1C (die value 4) and 1Z (die value 5), one per die', [p1.resources.C - beforeC, p1.resources.Z - beforeZ], [1, 1]);
+  check('宣教師: group placement with different-valued dice succeeds', result.success, true);
+  check('...grants 2B total, one per die', (p1.resources.B || 0) - beforeB, 2);
 }
 {
-  // 2026-08-27 spec revert: a wD mixed into a group placement grants nothing -- only the COLOR die(s) in
-  // the group do.
+  // A wD mixed into a group placement grants nothing -- only the COLOR die(s) in the group do.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   giveJob009(state, 'P1');
@@ -2278,17 +2274,15 @@ function giveJob009(state, playerId) {
   wDie.value = 6;
   p1.dice.push(wDie);
   const d1 = giveDie(state, 'P1', 4);
-  const beforeC = p1.resources.C || 0;
-  const beforeVp = p1.resources.VP || 0;
+  const beforeB = p1.resources.B || 0;
   const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [wDie.id, d1.id], board.CASTLE_MAP_ID);
-  check('開拓者: wD in a group placement grants nothing', result.success, true);
-  check('...the COLOR die (value 4) grants C but the wD (value 6) grants no VP', [p1.resources.C - beforeC, p1.resources.VP - beforeVp], [1, 0]);
+  check('宣教師: wD in a group placement grants nothing', result.success, true);
+  check('...only 1B total, from the COLOR die alone', (p1.resources.B || 0) - beforeB, 1);
 }
 {
-  // The same die-value mapping applies via placeWildcardDie too (JOB003's ☆ mechanic) -- a synthetic
-  // second card carrying WILDCARD_DICE() is registered directly (not via jobCardId, since a player can
-  // only hold one JOB) purely to route this placement through placeWildcardDie and confirm die.value is
-  // read the same way there.
+  // The same flat-1B grant applies via placeWildcardDie too (JOB003's ☆ mechanic) -- a synthetic second
+  // card carrying WILDCARD_DICE() is registered directly (not via jobCardId, since a player can only hold
+  // one JOB) purely to route this placement through placeWildcardDie.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   giveJob009(state, 'P1');
@@ -2296,11 +2290,11 @@ function giveJob009(state, playerId) {
   wildInst.ownerId = 'P1';
   state.cards[wildInst.physicalId] = wildInst;
   p1.ownedCardPhysicalIds.push(wildInst.physicalId);
-  const d1 = giveDie(state, 'P1', 4); // -> C, via placeWildcardDie this time (numbered slots ignored)
-  const beforeC = p1.resources.C || 0;
+  const d1 = giveDie(state, 'P1', 4); // via placeWildcardDie this time (numbered slots ignored)
+  const beforeB = p1.resources.B || 0;
   const result = board.placeWildcardDie(state, index, { playerId: 'P1' }, d1.id, 'MAP001');
-  check('開拓者+☆: the same die-value mapping applies via placeWildcardDie', result.success, true);
-  check('...grants 1C (die value 4)', p1.resources.C - beforeC, 1);
+  check('宣教師+☆: the flat 1B grant applies via placeWildcardDie too', result.success, true);
+  check('...grants 1B', (p1.resources.B || 0) - beforeB, 1);
 }
 {
   // Re-triggers once the AREA LVUPs (map.slots resets), even though this player already placed there
@@ -2308,33 +2302,34 @@ function giveJob009(state, playerId) {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   giveJob009(state, 'P1');
-  const d1 = giveDie(state, 'P1', 1); // AREA001A SLOT1=1 -> grants K
+  const d1 = giveDie(state, 'P1', 1); // AREA001A SLOT1=1
   board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
-  const d2 = giveDie(state, 'P1', 2); // AREA001A SLOT2=2, same already-touched map -- no bonus this time (would map to A, not K)
+  const d2 = giveDie(state, 'P1', 2); // AREA001A SLOT2=2, same already-touched map -- no bonus this time
   const beforeSecondK = p1.resources.K;
-  const beforeSecondA = p1.resources.A || 0;
+  const beforeSecondB = p1.resources.B || 0;
   board.placeDice(state, index, { playerId: 'P1' }, d2.id, 'MAP001', 1);
-  check('開拓者: no bonus for the 2nd placement before the LVUP (K delta is just the AREA\'s own ADD(3K))', p1.resources.K - beforeSecondK, 3);
-  check('...and no A granted either (die value 2 -> A, but the trigger never fired)', (p1.resources.A || 0) - beforeSecondA, 0);
+  check('宣教師: no bonus for the 2nd placement before the LVUP (K delta is just the AREA\'s own ADD(3K))', p1.resources.K - beforeSecondK, 3);
+  check('...and no B granted either (the trigger never fired)', (p1.resources.B || 0) - beforeSecondB, 0);
 
   // A004A.ONCE = 'MAP001.CURRENT_AREA=AREA001B' -- the real LVUP trigger, resets map.slots for real
   // (2026-08-24 SHOP201-203 rework renumbered the A-deck, so this used to be A005A).
   executor.runProgram(state, index, { playerId: 'P1' }, getCardRow(index, 'A004A').ONCE);
   check('MAP001 is now AREA001B (a fresh, empty tier)', state.maps['MAP001'].currentAreaId, 'AREA001B');
 
-  // Trigger condition re-fires here (fresh empty AREA001B) and grants again -- no TAP/untap gating any
-  // more (2026-08-27 revert), so this isn't a "used up" one-shot the way it briefly was.
-  const d3 = giveDie(state, 'P1', 1); // AREA001B SLOT1=1 (SLOT2 is ANY, but the numbered slot is preferred) -> AREA001B's own ADD(6K)
+  // Trigger condition re-fires here (fresh empty AREA001B) and grants again -- no TAP/untap gating, so
+  // this isn't a "used up" one-shot.
+  const d3 = giveDie(state, 'P1', 1); // AREA001B SLOT1=1 (SLOT2 is ANY, but the numbered slot is preferred)
   const beforeThirdK = p1.resources.K;
+  const beforeThirdB = p1.resources.B || 0;
   board.placeDice(state, index, { playerId: 'P1' }, d3.id, 'MAP001', 0);
-  // AREA001B.ACTION=ADD(6K) (2026-08-27 data edit, was ADD(5K)) + 1K from the pioneer bonus.
-  check('開拓者: the trigger condition re-fires after the LVUP and grants again (6 AREA + 1 pioneer)', p1.resources.K - beforeThirdK, 7);
+  // AREA001B.ACTION=ADD(6K) (2026-08-27 data edit, was ADD(5K)) + 1B from the 宣教師 bonus.
+  check('宣教師: the trigger condition re-fires after the LVUP and grants again (6K + 1B)', [p1.resources.K - beforeThirdK, (p1.resources.B || 0) - beforeThirdB], [6, 1]);
 
   // A 4th, unrelated fresh-empty-AREA placement (a different map entirely) grants normally too.
-  const d4 = giveDie(state, 'P1', 4); // AREA002A (MAP002, still untouched) SLOT1=4 -> grants C
-  const beforeC = p1.resources.C || 0;
+  const d4 = giveDie(state, 'P1', 4); // AREA002A (MAP002, still untouched) SLOT1=4
+  const beforeB4 = p1.resources.B || 0;
   board.placeDice(state, index, { playerId: 'P1' }, d4.id, 'MAP002', 0);
-  check('開拓者: grants again on the next fresh-AREA trigger too (no per-turn/per-tap limit)', p1.resources.C - beforeC, 1);
+  check('宣教師: grants again on the next fresh-AREA trigger too (no per-turn/per-tap limit)', (p1.resources.B || 0) - beforeB4, 1);
 }
 
 // ---------------------------------------------------------------------------

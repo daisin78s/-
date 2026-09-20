@@ -1440,64 +1440,59 @@ function playerHasOwnColorDieInMapSlots(state, map, playerId) {
   return player.dice.some((d) => d.kind === 'COLOR' && ownDieIdsInSlots.has(d.id));
 }
 
-/** True if playerId's own JOB is 開拓者/JOB009. Bespoke, no DSL representation -- same class of exception
- * as isColorDieReuseBlocked above, or executor.js's PAYMENT_CHOICE_CON_FACE_ID. Matched by NAME rather
- * than physical id, since JOB ids could in principle get reorganized the same way CON's own physical
- * slots did (2026-08-17 CON-sheet reorg) -- see that incident's own memory. JOB has no A/B tier flip the
- * way CON does, so player.jobCardId is already the live faceId directly, no ownedCardPhysicalIds scan
- * needed. */
+/** True if playerId's own JOB is 宣教師/JOB009 (renamed from 開拓者 2026-09-20, same physical card/ability
+ * slot -- see PIONEER_RAW_RESOURCE's own doc for the ability redesign that came with the rename). Bespoke,
+ * no DSL representation -- same class of exception as isColorDieReuseBlocked above, or executor.js's
+ * PAYMENT_CHOICE_CON_FACE_ID. Matched by NAME rather than physical id, since JOB ids could in principle get
+ * reorganized the same way CON's own physical slots did (2026-08-17 CON-sheet reorg) -- see that incident's
+ * own memory. JOB has no A/B tier flip the way CON does, so player.jobCardId is already the live faceId
+ * directly, no ownedCardPhysicalIds scan needed. */
 function hasPioneerAbility(state, index, playerId) {
   const player = state.players.find((p) => p.id === playerId);
   if (!player.jobCardId) return false;
-  return getCardRow(index, player.jobCardId).NAME === '開拓者';
+  return getCardRow(index, player.jobCardId).NAME === '宣教師';
 }
 
-// 開拓者/JOB009 (2026-08-20, replacing the old "random A/B/C" grant, per user spec): the placed die's
-// own face value determines what's granted. K/VP have no matching free action (never converted); A/B/C/Z
-// each convert 1:1 to K via the same free action a player could otherwise trigger manually (executor.js's
-// FREE_ACTION_DEFS) -- see resolvePioneerGrantForDie's own doc for when that conversion actually fires.
-const PIONEER_RESOURCE_BY_DIE_VALUE = { 1: 'K', 2: 'A', 3: 'B', 4: 'C', 5: 'Z', 6: 'VP' };
-const PIONEER_FREE_ACTION_BY_RESOURCE = { A: 'A_K', B: 'B_K', C: 'C_K', Z: 'Z_K' };
+// 開拓者/JOB009 (2026-09-20 redesign, per user spec: die value no longer matters, every qualifying die
+// grants a flat 1B instead. The "immediately usable" auto-convert-to-K behavior below is deliberately
+// kept (per user request) -- B has no matching free action of its own the way A/C/Z used to map to one,
+// but B_K (executor.js's FREE_ACTION_DEFS) is the exact same 1:1 conversion a player could otherwise
+// trigger manually, so this is unchanged in kind from the old per-value design, just fixed to always
+// start from B. See resolvePioneerGrant's own doc for exactly when that conversion fires.
+const PIONEER_RAW_RESOURCE = 'B';
+const PIONEER_FREE_ACTION_ID = 'B_K';
 
-/** Resolves one die's worth of 開拓者's bonus (2026-08-20) -- looks up dieValue's mapped resource
- * (PIONEER_RESOURCE_BY_DIE_VALUE) and decides whether to grant it raw or auto-convert it to K first,
- * so the bonus is "immediately usable" for THIS SAME placement (per user spec) rather than just sitting
- * unused: tries the raw resource first (speculatively, on a throwaway clone) against `wouldHelp` -- if
- * that alone would make the placement's own AREA action viable (e.g. AREA007's CHANGE((A,B,C),D) missing
- * exactly this color), grants it raw and stops, matching the user's own confirmed example (a die worth 4
- * grants C directly, no conversion). Only if the raw form does NOT help does it also try the SAME
- * resource converted to K via the matching free action (executor.tryFreeAction, the identical 1:1
- * pay/gain a player could otherwise trigger manually) -- if THAT would help (e.g. 歓楽街's CHANGE(2K,2Z)
- * needs K, not A), applies the conversion for real. Deliberately calls executor.tryFreeAction directly
- * rather than routing through any usage-count bookkeeping: confirmed with the user this auto-conversion
- * is unlimited and must never consume/interact with player.freeActionTaps (that flag, if anything reads
- * it, is a UI/AI-caller-side convenience only -- tryFreeAction itself has no built-in cap). If neither
- * form would help, the resource is still granted raw (the die's value always grants *something* per the
- * table) -- observable only when the overall placement still succeeds for an unrelated reason (a
- * different AREA whose own action doesn't need this resource at all), since if the WHOLE placement were
- * about to fail, the caller's own rollback undoes this speculative grant along with everything else. */
-function resolvePioneerGrantForDie(state, index, context, dieValue, wouldHelp) {
-  const rawResource = PIONEER_RESOURCE_BY_DIE_VALUE[dieValue];
-  const freeActionId = PIONEER_FREE_ACTION_BY_RESOURCE[rawResource];
-  if (!freeActionId) {
-    executor.grantResourceAndEmitGet(state, index, context, rawResource, 1);
-    return;
-  }
+/** Resolves one die's worth of 開拓者's bonus (2026-09-20 redesign -- see PIONEER_RAW_RESOURCE's own doc;
+ * previously per-die-value, now a flat 1B every time) -- decides whether to grant it raw or auto-convert
+ * it to K first, so the bonus is "immediately usable" for THIS SAME placement (per user spec) rather than
+ * just sitting unused: tries B first (speculatively, on a throwaway clone) against `wouldHelp` -- if that
+ * alone would make the placement's own AREA action viable, grants it raw and stops. Only if the raw form
+ * does NOT help does it also try B converted to K via the matching free action (executor.tryFreeAction,
+ * the identical 1:1 pay/gain a player could otherwise trigger manually) -- if THAT would help (e.g.
+ * 歓楽街's CHANGE(2K,2Z) needs K, not B), applies the conversion for real. Deliberately calls
+ * executor.tryFreeAction directly rather than routing through any usage-count bookkeeping: confirmed with
+ * the user this auto-conversion is unlimited and must never consume/interact with player.freeActionTaps
+ * (that flag, if anything reads it, is a UI/AI-caller-side convenience only -- tryFreeAction itself has no
+ * built-in cap). If neither form would help, B is still granted raw -- observable only when the overall
+ * placement still succeeds for an unrelated reason (a different AREA whose own action doesn't need B or K
+ * at all), since if the WHOLE placement were about to fail, the caller's own rollback undoes this
+ * speculative grant along with everything else. */
+function resolvePioneerGrant(state, index, context, wouldHelp) {
   const rawClone = structuredClone(state);
-  executor.grantResourceAndEmitGet(rawClone, index, context, rawResource, 1);
+  executor.grantResourceAndEmitGet(rawClone, index, context, PIONEER_RAW_RESOURCE, 1);
   if (wouldHelp(rawClone).ok) {
-    executor.grantResourceAndEmitGet(state, index, context, rawResource, 1);
+    executor.grantResourceAndEmitGet(state, index, context, PIONEER_RAW_RESOURCE, 1);
     return;
   }
   const convertedClone = structuredClone(state);
-  executor.grantResourceAndEmitGet(convertedClone, index, context, rawResource, 1);
-  executor.tryFreeAction(convertedClone, index, context.playerId, freeActionId);
+  executor.grantResourceAndEmitGet(convertedClone, index, context, PIONEER_RAW_RESOURCE, 1);
+  executor.tryFreeAction(convertedClone, index, context.playerId, PIONEER_FREE_ACTION_ID);
   if (wouldHelp(convertedClone).ok) {
-    executor.grantResourceAndEmitGet(state, index, context, rawResource, 1);
-    executor.tryFreeAction(state, index, context.playerId, freeActionId);
+    executor.grantResourceAndEmitGet(state, index, context, PIONEER_RAW_RESOURCE, 1);
+    executor.tryFreeAction(state, index, context.playerId, PIONEER_FREE_ACTION_ID);
     return;
   }
-  executor.grantResourceAndEmitGet(state, index, context, rawResource, 1);
+  executor.grantResourceAndEmitGet(state, index, context, PIONEER_RAW_RESOURCE, 1);
 }
 
 /** True if none of map's slots currently hold any occupant, from any player (2026-08-17, for 開拓者's own
@@ -1510,14 +1505,15 @@ function isMapEmptyOfDice(map) {
   return map.slots.every((occupants) => occupants.length === 0);
 }
 
-/** Grants 開拓者's bonus if earned by this placement (2026-08-17) -- 1 resource per qualifying die, via
- * the same grantResourceAndEmitGet every other resource grant in the engine uses (so e.g. a player who
- * also owns 育成者/JOB006 still sees its own GET-reactive PASSIVE fire correctly off this, same as any
- * other source). Only ever called once per placement action (placeDice: once per die; placeDiceGroup:
- * once for the whole group, not once per die within it -- confirmed with the user this is a "first move
- * into this AREA" reward, not a per-die one, so stacking several dice into a single group action
- * shouldn't multiply it). wasEmpty must be captured by the caller *before* this action's own die(s) are
- * committed.
+/** Grants 宣教師(旧開拓者)'s bonus if earned by this placement (2026-08-17; ability redesigned 2026-09-20,
+ * see PIONEER_RAW_RESOURCE's own doc) -- 1B per qualifying die (auto-converted to K if B alone wouldn't
+ * help, see resolvePioneerGrant), via the same grantResourceAndEmitGet every other resource grant in the
+ * engine uses (so e.g. a player who also owns 育成者/JOB006 still sees its own GET-reactive PASSIVE fire
+ * correctly off this, same as any other source). Only ever called once per placement action (placeDice:
+ * once per die; placeDiceGroup: once for the whole group, not once per die within it -- confirmed with the
+ * user this is a "first move into this AREA" reward, not a per-die one, so stacking several dice into a
+ * single group action shouldn't multiply it). wasEmpty must be captured by the caller *before* this
+ * action's own die(s) are committed.
  *
  * No TAP/untap gating (2026-08-27, per user spec reverting the 2026-08-18 TAP-alternation addition:
  * "TAPもアンタップもしない毎回もらえます") -- fires unconditionally every qualifying placement now, back
@@ -1525,28 +1521,28 @@ function isMapEmptyOfDice(map) {
  * touched by this function any more.
  *
  * Also reports through executor.notifyActivation (2026-08-17, per user request: "AIDATAも変更お願い") --
- * 開拓者 has no TAP/PASSIVE at all in the DSL sense (no ON(...) wrapper for the usual activationCounts
+ * 宣教師 has no TAP/PASSIVE at all in the DSL sense (no ON(...) wrapper for the usual activationCounts
  * listener to ever see), so without this its own AI.DATA.xlsx "使用回数" column would always read 0 the
  * same way JOB008's IF(...)-based PASSIVE needed its own bespoke job008BonusVp tracking in
  * game-runner.js -- this is the lighter-weight equivalent for an event that fires live during play
  * rather than one recomputable from final state alone. tools/ai_data_report.js's existing
  * `activationCounts[jobFaceId]` fallback picks this up automatically, no changes needed there.
  *
- * dieValues: every qualifying die's own face value placed as part of THIS action -- COLOR dice only
- * again (2026-08-27, reverting the 2026-08-20 "any die kind" generalization per user spec: "色ダイスで
- * 発動 wDは発動しない"), so callers must filter to `d.kind === 'COLOR'` before building this array.
- * placeDice/placeWildcardDie always pass a 0- or 1-element array (their own single die, if it qualifies),
+ * dieValues: one entry per qualifying die placed as part of THIS action -- the values themselves are no
+ * longer read (the 2026-09-20 redesign made the grant a flat 1B regardless of die value), only the array's
+ * LENGTH still matters, as a per-die trigger count. COLOR dice only (2026-08-27, "色ダイスで発動 wDは発動
+ * しない"), so callers must filter to `d.kind === 'COLOR'` before building this array. placeDice/
+ * placeWildcardDie always pass a 0- or 1-element array (their own single die, if it qualifies),
  * placeDiceGroup passes one entry per qualifying die in the group, since the user confirmed each die in
- * a simultaneous group placement grants its own resource separately (e.g. a 4 and a 5 placed together
- * grant both 1C and 1Z). wouldHelp: see resolvePioneerGrantForDie's own doc -- a caller-supplied "would
- * this placement's own AREA action succeed, given a hypothetical resulting state" predicate, reused
- * (never re-derived) per call site. */
+ * a simultaneous group placement grants its own resource separately. wouldHelp: see resolvePioneerGrant's
+ * own doc -- a caller-supplied "would this placement's own AREA action succeed, given a hypothetical
+ * resulting state" predicate, reused (never re-derived) per call site. */
 function grantPioneerBonusIfEarned(state, index, context, wasEmpty, dieValues, wouldHelp) {
   if (!wasEmpty || dieValues.length === 0) return;
   if (!hasPioneerAbility(state, index, context.playerId)) return;
   const player = state.players.find((p) => p.id === context.playerId);
-  for (const value of dieValues) {
-    resolvePioneerGrantForDie(state, index, context, value, wouldHelp);
+  for (let i = 0; i < dieValues.length; i++) {
+    resolvePioneerGrant(state, index, context, wouldHelp);
   }
   executor.notifyActivation(state, context.playerId, player.jobCardId, player.jobCardId, 'PASSIVE');
 }
