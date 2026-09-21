@@ -1709,7 +1709,7 @@
       "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "VPを得たとき必ずTAPする\n得たVPと同じKを3まで得る\n毎ターンアンタップする"
+      "INST": "VPを得たとき必ずTAPする\n得たVPと同じKを5まで得る\n毎ターンアンタップする"
     },
     {
       "ID": "JOB003",
