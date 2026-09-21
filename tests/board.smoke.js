@@ -161,13 +161,13 @@ function giveJob002(state, playerId) {
 }
 {
   // Cap is per-triggering-event (confirmed with the user), not a lifetime total -- a single grant of 5VP
-  // still only ever yields 3K.
+  // still only ever yields 5K (cap raised 3->5 on 2026-09-21).
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   giveJob002(state, 'P1');
   const beforeK = p1.resources.K || 0;
-  executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'VP', 5);
-  check('料理人: a single 5VP grant is capped at 3K, not 5', (p1.resources.K || 0) - beforeK, 3);
+  executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'VP', 7);
+  check('料理人: a single 7VP grant is capped at 5K, not 7', (p1.resources.K || 0) - beforeK, 5);
 }
 {
   // Tap-gating: a 2nd VP grant before the card untaps does nothing more; untapping (TURNEND=UNTAP() in
@@ -204,7 +204,7 @@ function giveJob002(state, playerId) {
   const beforeK = p1.resources.K || 0;
   const result = board.resolveBuild(state, index, { playerId: 'P1' }, { type: 'BUILD_NEW', faceId: 'M001', shopKey: 'M', slotId: 'SHOP001' });
   check('Building M001 (記念碑) succeeds', result.success, true);
-  check('料理人: building a monument grants K matching its printed VP (4, capped at 3)', (p1.resources.K || 0) - beforeK, 3);
+  check('料理人: building a monument grants K matching its printed VP (4, under the cap of 5)', (p1.resources.K || 0) - beforeK, 4);
   check('...and taps JOB002', state.cards[jobInst.physicalId].tapped, true);
 }
 

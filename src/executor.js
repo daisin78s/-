@@ -1675,10 +1675,10 @@ function grantResourceAndEmitGet(state, index, context, resource, count) {
 /** Grants 料理人(旧実業家)/JOB002's bonus if earned (2026-09-20 redesign, replacing the old
  * "ON(BUILD(),ADD(K))" DSL-driven ability -- per user request, its TAP field is now blank, same "bespoke,
  * no DSL representation" treatment as hasChefAbility's own doc cites) -- reacts to ANY live VP-resource
- * grant of `vpCount` for a player holding this JOB, granting min(vpCount,3) K and tapping the card, gated
+ * grant of `vpCount` for a player holding this JOB, granting min(vpCount,5) K and tapping the card, gated
  * on the SAME `state.cards[...].tapped` flag every other TAP ability uses (confirmed with the user: the
- * cap is PER TRIGGERING EVENT, not a lifetime total -- multiple separate VP grants across a game, or even
- * across a single turn, each get their own up-to-3 grant, as long as the card has untapped again by then).
+ * cap (3 originally, raised to 5 on 2026-09-21 per user request) is PER TRIGGERING EVENT, not a lifetime total -- multiple separate VP grants across a game, or even
+ * across a single turn, each get their own up-to-5 grant, as long as the card has untapped again by then).
  * TURNEND=UNTAP() in the data resets it for the next turn, same as JOB005A's own ON(GET(K),...) already
  * behaves -- confirmed with the user this genuinely fires every time (not a lifetime one-shot), so a
  * player who never spends a turn without gaining VP could tap/untap it every single turn.
@@ -1708,7 +1708,7 @@ function grantChefBonusIfEarned(state, index, context, vpCount) {
   const inst = state.cards[player.jobCardId];
   if (inst.tapped) return;
   inst.tapped = true;
-  grantResourceAndEmitGet(state, index, context, 'K', Math.min(vpCount, 3));
+  grantResourceAndEmitGet(state, index, context, 'K', Math.min(vpCount, 5));
   notifyActivation(state, context.playerId, player.jobCardId, player.jobCardId, 'TAP');
 }
 
