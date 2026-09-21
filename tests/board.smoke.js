@@ -2256,7 +2256,7 @@ function giveJob009(state, playerId) {
   check('...a new die was granted by CHANGE(...,D)', p1.dice.length, diceCountBeforePlace + 1);
 }
 {
-  // Raw B does NOT help, but auto-converting to K does: 歓楽街(AREA006A)'s CHANGE(2K,2Z) needs K
+  // Raw B does NOT help, but auto-converting to K does: 歓楽街(AREA006A)'s CHANGE(2K,3Z) needs K
   // specifically; player holds only 1K, so the granted B (not a valid substitute for K) auto-converts to
   // K via B_K.
   const state = freshStateWithShops();
@@ -2268,7 +2268,7 @@ function giveJob009(state, playerId) {
   check('宣教師+歓楽街: raw B doesn\'t help (K needed), auto-converts to K', result.success, true);
   check('...B nets to 0 (granted then converted away)', p1.resources.B || 0, 0);
   check('...K nets to 0 (1 start + 1 from B_K conversion - 2 spent by CHANGE)', p1.resources.K || 0, 0);
-  check('...Z increases by 2 (CHANGE(2K,2Z)\'s own gain)', p1.resources.Z || 0, 2);
+  check('...Z increases by 3 (CHANGE(2K,3Z)\'s own gain)', p1.resources.Z || 0, 3);
 }
 {
   // Neither raw nor converted is actually needed (AREA002A/ADD(3K) is unconditional) -- raw B is kept, no
