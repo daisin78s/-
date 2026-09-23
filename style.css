@@ -3702,27 +3702,6 @@ h1, h2, h3 { margin: 0; }
   color: var(--text-muted);
 }
 
-/* あなた(P1)の選んだカード/CONの裏を目立たせる赤丸 (2026-09-23, per user request: "あなたの選んだ初期
-   資源カードと制約の裏の先行順に目立つように赤丸をつける") -- wraps the existing .shop-card__start-order
-   caption (or buildTutorialCardBack's own peeking copy of it) in a red pill outline. */
-.tutorial-turnorder-highlight {
-  display: inline-block;
-  border: 2px solid #e53935;
-  border-radius: 999px;
-  padding: 1px 8px;
-  font-weight: 700;
-  color: var(--text);
-}
-
-/* ほかのプレイヤーの伏せられたカード (2026-09-23, per user request: "ほかの3人の選んだカードは裏で表示")
-   -- reuses the plain, un-modified .shop-card box look (the same neutral surface/border every real card
-   starts from before its own deck-color/content fills in) rather than .shop-card--facedown's monument-
-   specific dark-green "2Rから" styling, which would be misleading here. */
-.tutorial-card-back {
-  align-items: center;
-  justify-content: center;
-}
-
 /* このオーバーレイの中だけ、カード行を折り返さず1列で -- .build-choice-groupの既定
    (flex-wrap:wrap; justify-content:center) は他の画面(建築候補など)と共有しているため、ここだけの
    見た目はスコープしたセレクタで上書きする。2026-09-23、"カードのサイズを小さくしないで" per user

@@ -7589,21 +7589,6 @@ const TUTORIAL_STEPS = [
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
     body: 'それではゲームを始めましょう。\nランダムに配られた初期資源カード4枚のうち2枚を選んでください。\nお試しのゲーム説明なので、深く考えずにとってもらって大丈夫です。',
   },
-  // 2026-09-23, per user request -- the "新しいセリフ" promised in resource_choice's own comment above.
-  // body is a function of state (not a plain string, see renderTutorialOverlay's own branch for this)
-  // since it needs to embed あなた/P1's own actual computed 先行順合計. Dismissing THIS step specifically
-  // (see dismissTutorialStep) is also what reveals the other 3 players' own cards in the turn-order
-  // overlay -- see tutorialOthersRevealed's own doc.
-  {
-    id: 'turn_order_intro',
-    match: (state) => !!(state.turnOrder && state.turnOrder.length === state.players.length),
-    body: (state) => {
-      const p1 = state.players.find((p) => p.id === 'P1');
-      const resourceIds = p1.ownedCardPhysicalIds.filter((id) => id.startsWith('R'));
-      const total = resourceChoiceStartOrderTotal(state, 'P1', resourceIds);
-      return `あなたの選んだカードはこちら。\n先行順は${total}になります。\nこの数字が大きいほど、得られる初期資源が多くなります。\nこの数字が小さいほど、先に行動してJOBや獲得カードを選ぶことができます。\nそれでは、ほかのプレイヤーの先行順も見てみましょう。`;
-    },
-  },
 ];
 
 /** Shows the next not-yet-seen matching step, if any, or keeps showing whichever one is already on
@@ -7621,14 +7606,10 @@ function renderTutorialOverlay(state) {
   const step = TUTORIAL_STEPS.find((s) => s.id === tutorialCurrentStepId);
   wrap.hidden = !step;
   if (!step) return;
-  document.getElementById('tutorial-bubble__text').textContent = typeof step.body === 'function' ? step.body(state) : step.body;
+  document.getElementById('tutorial-bubble__text').textContent = step.body;
 }
 
 function dismissTutorialStep() {
-  // Dismissing turn_order_intro is what reveals the other 3 players' own cards (2026-09-23, per user
-  // request: "クリックすると ほかのプレイヤーの カードが表示になる") -- see tutorialOthersRevealed's own
-  // doc at its declaration.
-  if (tutorialCurrentStepId === 'turn_order_intro') tutorialOthersRevealed = true;
   tutorialCurrentStepId = null;
   render(STATE);
 }
@@ -7641,34 +7622,12 @@ function dismissTutorialStep() {
  * pressed", regardless of exactly whose click triggered it. Shown once, tracked in the same
  * tutorialSeenStepIds set TUTORIAL_STEPS uses, via its own reserved id below.
  *
- * あなた/P1のCON表裏 (2026-09-23, further revised per user request: "あなたの選んだカードは表 ほかの3人の
- * 選んだカードは裏で表示" + "あなたの選んだ初期資源カードと制約の裏の先行順に目立つように赤丸をつける")
- * -- every player's CON is shown as a plain face-down back (buildTutorialCardBack) rather than both real
- * A/B faces, since nobody has actually picked one yet; あなた's own back additionally peeks its own
- * 先攻順 number (needed for the "先行順は◯◯になります" bubble text) with a red-circle highlight, same
- * highlight added to あなたの real (face-up) resource cards' own 先攻順 captions. */
+ * Both CON faces are shown (not just the eventually-chosen one) because at this exact moment nobody has
+ * picked a face yet -- player.conPhysicalId is dealt at setup, long before each player's own round-1
+ * onboarding turn actually picks A or B -- so this doubles as an early preview, same idea as
+ * renderConPreview's own pre-round-1 use of renderConFacesRow. */
 const TUTORIAL_TURN_ORDER_STEP_ID = 'turn_order_reveal';
 let tutorialTurnOrderOverlayOpen = false;
-// Other 3 players' own CON/resource cards start face-down (buildTutorialCardBack, no info at all) and
-// flip to their real visuals once this becomes true -- set by dismissTutorialStep specifically when the
-// turn_order_intro bubble ("それでは、ほかのプレイヤーの先行順も見てみましょう。") is closed, per user
-// request: "クリックすると ほかのプレイヤーの カードが表示になる". Reset alongside the overlay itself in
-// endTutorialMode.
-let tutorialOthersRevealed = false;
-
-/** A blank/hidden card placeholder (2026-09-23) -- reuses the plain, un-modified .shop-card box look
- * (same neutral surface/border every real card starts from before its own deck-color/content fills in)
- * rather than .shop-card--facedown's monument-specific dark-green "2Rから" styling, which would be
- * misleading here. startOrderText, when given, peeks just that one caption through the otherwise-blank
- * back (あなた's own CON only -- see this section's own doc), styled via the same
- * .tutorial-turnorder-highlight red-circle emphasis used on あなたの resource cards' own captions. */
-function buildTutorialCardBack(startOrderText) {
-  const node = el('div', 'shop-card tutorial-card-back');
-  if (startOrderText) {
-    node.appendChild(el('span', 'shop-card__start-order tutorial-turnorder-highlight', startOrderText));
-  }
-  return node;
-}
 
 function renderTutorialTurnOrderOverlay(state) {
   const overlay = document.getElementById('tutorial-turnorder-overlay');
@@ -7710,39 +7669,11 @@ function renderTutorialTurnOrderOverlay(state) {
     // Not renderConFacesRow (it always appends its own "JOB選択後、CONの表/裏を選んでください" onboarding
     // hint, meant for the single player currently mid-choice -- out of place repeated once per row here).
     const cardsRow = el('div', 'build-choice-group');
-    const isSelf = playerId === 'P1';
-    const appendRealCard = (faceId, highlight) => {
+    for (const faceId of [`${player.conPhysicalId}A`, `${player.conPhysicalId}B`, ...resourceIds]) {
       const cardNode = buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true });
-      if (highlight) {
-        const startOrderEl = cardNode.querySelector('.shop-card__start-order');
-        if (startOrderEl) startOrderEl.classList.add('tutorial-turnorder-highlight');
-      }
       const cell = el('div', cardNode.classList.contains('shop-card--tall') ? 'owned-card-cell owned-card-cell--tall' : 'owned-card-cell');
       cell.appendChild(cardNode);
       cardsRow.appendChild(cell);
-    };
-    const appendBack = (startOrderText) => {
-      const cell = el('div', 'owned-card-cell');
-      cell.appendChild(buildTutorialCardBack(startOrderText));
-      cardsRow.appendChild(cell);
-    };
-    // CON: あなた's own is always a back (peeking its own 先攻順, highlighted); others' backs show
-    // nothing until tutorialOthersRevealed flips them to their real A/B faces (same as before).
-    if (isSelf) {
-      const conStartOrder = dataLoaderMod.getCardRow(INDEX, `${player.conPhysicalId}A`).START_ORDER;
-      appendBack(`先攻順 ${conStartOrder}`);
-    } else if (tutorialOthersRevealed) {
-      appendRealCard(`${player.conPhysicalId}A`, false);
-      appendRealCard(`${player.conPhysicalId}B`, false);
-    } else {
-      appendBack(null);
-    }
-    // Resource cards: あなた's own are always real/face-up with the highlight; others' stay backs until
-    // revealed.
-    for (const faceId of resourceIds) {
-      if (isSelf) appendRealCard(faceId, true);
-      else if (tutorialOthersRevealed) appendRealCard(faceId, false);
-      else appendBack(null);
     }
     row.appendChild(cardsRow);
     list.appendChild(row);
@@ -7758,7 +7689,6 @@ function endTutorialMode() {
   tutorialModeActive = false;
   tutorialCurrentStepId = null;
   tutorialTurnOrderOverlayOpen = false;
-  tutorialOthersRevealed = false;
   render(STATE);
 }
 
