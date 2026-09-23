@@ -300,16 +300,24 @@ h1, h2, h3 { margin: 0; }
 @media (max-width: 1400px) {
   #game-layout {
     grid-template-columns: 1fr;
+    /* 0 (2026-09-23, per user request with a screenshot marking this exact gap in red: "隙間をゼロに
+       してください") -- was the base rule's own 20px. Only overridden here (not in the base rule above),
+       since this is specifically the vertical gap between #board-area and the #player-cards sidebar once
+       they stack into one column at this breakpoint -- the wider side-by-side layout's own horizontal
+       gap between the two columns is untouched. */
+    gap: 0;
   }
 }
 
 /* Revised 2026-07-29: the "no gap" instruction meant no *large* gap, not zero -- restored to 3
    separate panels (same treatment as #player-cards) with a small gap between them, roughly the
-   size used elsewhere for related-but-distinct groups (vs. the page-level 20px gap). */
+   size used elsewhere for related-but-distinct groups (vs. the page-level 20px gap).
+   Revised again 2026-09-23, per user request with a screenshot marking these exact gaps (between
+   #shops/#board and between #board/#players) in red -- genuinely zero this time. */
 #board-area {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0;
   /* Confirmed 2026-07-30: without this, a grid item's default min-width is its content's intrinsic
      width, so a wide child (the QST row widened .shop-row__combined past the 1fr track) grows the
      whole page instead of scrolling locally via .shop-row__combined's own overflow-x:auto. */
