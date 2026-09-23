@@ -3569,11 +3569,12 @@ h1, h2, h3 { margin: 0; }
 }
 
 /* チュートリアル: 手番順の発表 (2026-09-23, per user request、続けて複数回の調整依頼: 横長化+左右スペース
-   活用、"手番順が決まりました は不要"(タイトル削除)、"閉じる は右上に大きく✖アイコン"、"スクロールは
-   一切しないようにしたい") -- #tutorial-turnorder-overlayの中身。モーダルを横長にし、各行を「左に順位/
-   名前/先行順合計を縦積みのサイドバー、右にカード実物を横並び」の1段組みにした上で、カード自体を
-   zoomで縮小(見た目はそのまま、実物のカードほど場所を取らない)して4人分+✖ボタンが確実に1画面に収まる
-   ようにしている(2026-09-23、overflow-y:autoでのモーダル内スクロール自体を廃止)。 */
+   活用、"手番順が決まりました は不要"(タイトル削除)、"閉じる は右上に大きく✖アイコン"、続けて
+   "カードのサイズを小さくしないで" -- スクロール回避のためのzoom縮小を撤回、カードは実物大のまま) --
+   #tutorial-turnorder-overlayの中身。モーダルを横長にし、各行を「左に順位/名前/先行順合計を縦積みの
+   サイドバー、右にカード実物を横並び」の1段組みにしている。カードが実物大の分、4人分だと縦に収まりきら
+   ないことがあるため、モーダル自体に90vh+overflow-yのスクロールキャップを付けて、暗転背景の外にはみ出す
+   (以前の不具合)のではなく、モーダルの中でスクロールするようにしている。 */
 .tutorial-turnorder-modal {
   position: relative;
   width: min(94vw, 1100px);
@@ -3600,6 +3601,11 @@ h1, h2, h3 { margin: 0; }
   flex-direction: column;
   gap: 8px;
   padding-right: 40px; /* keep rows clear of the top-right ✖ */
+  padding-top: 44px; /* keep the FIRST row clear of the top-right ✖ too */
+  /* Only the row list scrolls (not the whole modal, and not the ✖ button) -- same
+     "cap+scroll just the body, keep the rest pinned" idea as #card-list-nav's own doc. */
+  max-height: calc(90vh - 44px);
+  overflow-y: auto;
 }
 
 .tutorial-turnorder-row {
