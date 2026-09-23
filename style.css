@@ -3585,9 +3585,17 @@ h1, h2, h3 { margin: 0; }
    サイドバー、右にカード実物を横並び」の1段組みにしている。カードが実物大の分、4人分だと縦に収まりきら
    ないことがあるため、モーダル自体に90vh+overflow-yのスクロールキャップを付けて、暗転背景の外にはみ出す
    (以前の不具合)のではなく、モーダルの中でスクロールするようにしている。 */
+/* 左寄せ (2026-09-23, per user request: "表示画面をもっと左に寄せて セリフが見えるようにして") --
+   #tutorial-bubble-wrap(会話吹き出し)は右下固定なので、このモーダルを画面いっぱいの幅+中央寄せのまま
+   にすると吹き出しを覆い隠してしまう。左寄せ+幅を絞ることで、右側に吹き出しの見える余白を作る。 */
+#tutorial-turnorder-overlay {
+  justify-content: flex-start;
+  padding-left: 16px;
+}
+
 .tutorial-turnorder-modal {
   position: relative;
-  width: min(94vw, 1100px);
+  width: min(72vw, 820px);
 }
 
 .tutorial-turnorder-close-x {
@@ -3666,6 +3674,10 @@ h1, h2, h3 { margin: 0; }
   flex: 1 1 auto;
   flex-wrap: nowrap;
   justify-content: flex-start;
+  /* Safety fallback (2026-09-23, re-added alongside the modal width reduction above): the narrower
+     modal doesn't always leave room for 4 full-size cards on one line -- scroll that one row instead of
+     letting cards get squeezed/overlap their neighbors. */
+  overflow-x: auto;
 }
 
 /* First real <input> in the app (2026-08-16) -- everywhere else is click-only, see index.html's own
