@@ -3286,7 +3286,11 @@ function buildChangeDieValueIcon(actionText) {
   // .action-suffix--large/.card-note--large elsewhere).
   const fixedMatch = /^CHANGE_DIE_VALUE\(SELF([+-]\d+)\)/.exec(actionText || '');
   if (!fixedMatch) return null;
-  return actionRow([actionSuffix('ダイス目　'), el('span', 'action-count action-count--large', fixedMatch[1])]);
+  // action-count--die-delta (2026-09-23, per user request: "運命の導き の⤵ダイス目+2 2行にならないように
+  // ⤵をもう少し左に寄せてください") -- a marker distinct from action-count--large (also used by
+  // buildBuildIcon's own "ダイス目 N" rows, which this fix must NOT touch) so style.css can nudge just
+  // this ⤵-prefixed row's own TAP icon left, narrowly, via .action-icons:has(.action-count--die-delta).
+  return actionRow([actionSuffix('ダイス目　'), el('span', 'action-count action-count--large action-count--die-delta', fixedMatch[1])]);
 }
 
 /** ADD(COUNT(emblem)*wD): the die count is dynamic (however many of that emblem the player owns),

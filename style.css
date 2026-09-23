@@ -1232,6 +1232,15 @@ h1, h2, h3 { margin: 0; }
   font-size: 16px;
 }
 
+/* 運命の導き/B003A-B's own "⤵ダイス目　+2/+4" TAP row was wrapping onto 2 lines (2026-09-23, per user
+   request: "2行にならないように⤵をもう少し左に寄せてください") -- pulls the ⤵ TAP-cost prefix a few px
+   left (tighter trailing gap before "ダイス目"), freeing just enough width for the row to fit on one
+   line. Scoped via :has() to rows containing .action-count--die-delta specifically, not every ⤵-prefixed
+   row -- buildBuildIcon's own unrelated "ダイス目 N" rows share .action-count--large but never this. */
+.action-icons:has(.action-count--die-delta) .action-emoji {
+  margin-right: -3px;
+}
+
 .action-arrow {
   font-size: 12px;
   font-weight: 700;
@@ -2341,6 +2350,17 @@ h1, h2, h3 { margin: 0; }
 }
 
 .shop-card__effect:empty { display: none; }
+
+/* 小さな導き/大いなる導き(B001/B002)'s own ONCE(ADD(wD), "⚡🎲") + TAP(SET_DIE_VALUE, "⤵⚀⚁") 2-row
+   stack grows past .shop-card--tall's 118px min-height, making these cards taller than their siblings
+   in the same shop row (2026-09-23, per user request: "カードの縦サイズをほかのカードと同じにしたい
+   ⤵⚀⚁を少し上にあげて ⚡🎲と被ってもいい") -- pulls the TAP row (identified via its own .die-face/
+   .die-face-numeral children -- see dieFace's own doc, only ever used here within .shop-card__effect)
+   up over the ONCE row above it instead of stacking with the normal 3px gap. Confirmed acceptable that
+   the two rows visually overlap. */
+.shop-card__effect .action-icons:has(.die-face, .die-face-numeral) {
+  margin-top: -14px;
+}
 .shop-card__effect .action-icons { justify-content: center; }
 
 /* エリア所有カードの効果テキスト(2026-08-16、ユーザー指定: "城下町LV1／　　の支配 という配置にして
