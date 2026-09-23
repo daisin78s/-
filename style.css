@@ -3647,15 +3647,15 @@ h1, h2, h3 { margin: 0; }
   color: var(--text-muted);
 }
 
-/* このオーバーレイの中だけ、カード行を折り返さず1列で縮小表示 -- .build-choice-groupの既定
+/* このオーバーレイの中だけ、カード行を折り返さず1列で -- .build-choice-groupの既定
    (flex-wrap:wrap; justify-content:center) は他の画面(建築候補など)と共有しているため、ここだけの
-   見た目はスコープしたセレクタで上書きする。zoomはtransformと違い実際のレイアウト面積も縮小するので、
-   縮小した分だけ行の高さそのものが下がる(4人分でも縦に長くならない)。 */
+   見た目はスコープしたセレクタで上書きする。2026-09-23、"カードのサイズを小さくしないで" per user
+   request -- 以前ここにあったzoom:0.55(カード縮小)は削除済みのはずが、コメントだけ直して実際の
+   宣言を消し忘れていたミスを修正(fa1342cのつもりが未反映だった)。 */
 .tutorial-turnorder-row .build-choice-group {
   flex: 1 1 auto;
   flex-wrap: nowrap;
   justify-content: flex-start;
-  zoom: 0.55;
 }
 
 /* First real <input> in the app (2026-08-16) -- everywhere else is click-only, see index.html's own
