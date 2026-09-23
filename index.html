@@ -465,18 +465,17 @@
 
   <!-- チュートリアル: 手番順の発表 (2026-09-23, per user request: "この選択でOKを押した後 プレイヤー全員の
        プレイヤーネーム 制約カード表裏 選んだ初期資源カード2枚 先手順合計を表示して プレイヤーネームの左に
-       1番手2番手3番手4番手と表示する"、続けて "その後クリックすると ゲームが進んでゆく") -- 全員の資源
-       選択が終わってstate.turnOrderが確定した最初のレンダーで一度だけ、暗転モーダルとして表示。閉じる
-       ボタンを押すと(下の操作を止めていただけで)そのままゲームが進む。チュートリアルモード限定 -- see
-       main.js's TUTORIAL_STEPS/renderTutorialTurnOrderOverlay。 -->
+       1番手2番手3番手4番手と表示する"、続けて 各種調整依頼 -- "手番順が決まりました は不要"でタイトル削除、
+       "閉じる は右上に大きく✖アイコン"、"スクロールは一切しないように"、"表示画面を消すとゲームが進む
+       ように AIが勝手にゲームを進めない") -- 全員の資源選択が終わってstate.turnOrderが確定した最初の
+       レンダーで一度だけ、暗転モーダルとして表示。表示中はAIの自動進行を止め(main.jsのrender本体側)、
+       ✖を押すとそのままゲームが進む。チュートリアルモード限定 -- see main.js's
+       TUTORIAL_STEPS/renderTutorialTurnOrderOverlay。 -->
   <div id="tutorial-turnorder-overlay" class="card-inst-overlay" hidden>
-    <div class="card-inst-modal build-choice-modal">
-      <div class="card-inst-modal__header">
-        <span class="card-inst-modal__title">手番順が決まりました</span>
-      </div>
+    <div class="card-inst-modal build-choice-modal tutorial-turnorder-modal">
+      <button type="button" id="tutorial-turnorder-close-button" class="tutorial-turnorder-close-x" aria-label="閉じる">&times;</button>
       <div class="card-inst-modal__body">
         <div id="tutorial-turnorder-list" class="tutorial-turnorder-list"></div>
-        <button type="button" id="tutorial-turnorder-close-button" class="resource-confirm-button resource-confirm-button--ok tutorial-turnorder-close">閉じる</button>
       </div>
     </div>
   </div>

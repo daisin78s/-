@@ -3568,76 +3568,88 @@ h1, h2, h3 { margin: 0; }
   white-space: nowrap;
 }
 
-/* チュートリアル: 手番順の発表 (2026-09-23, per user request、続けて "スクロールしなくていいように調整
-   表示画面を横長にして左右にスペースを作る 1番手/Dan/先行順合計6などは左右のスペースに表示") --
-   #tutorial-turnorder-overlayの中身。モーダル自体を横長にし、各行を「左に順位/名前/先行順合計を縦積みの
-   サイドバー、右にカード実物を横並び」の1段組みに変更(以前は名前等のヘッダー行の下にカード行を積む2段
-   組みで、4人分だと縦に長くスクロールが必要だった)。 */
-#tutorial-turnorder-overlay .card-inst-modal {
+/* チュートリアル: 手番順の発表 (2026-09-23, per user request、続けて複数回の調整依頼: 横長化+左右スペース
+   活用、"手番順が決まりました は不要"(タイトル削除)、"閉じる は右上に大きく✖アイコン"、"スクロールは
+   一切しないようにしたい") -- #tutorial-turnorder-overlayの中身。モーダルを横長にし、各行を「左に順位/
+   名前/先行順合計を縦積みのサイドバー、右にカード実物を横並び」の1段組みにした上で、カード自体を
+   zoomで縮小(見た目はそのまま、実物のカードほど場所を取らない)して4人分+✖ボタンが確実に1画面に収まる
+   ようにしている(2026-09-23、overflow-y:autoでのモーダル内スクロール自体を廃止)。 */
+.tutorial-turnorder-modal {
+  position: relative;
   width: min(94vw, 1100px);
-  max-height: 90vh;
-  overflow-y: auto;
+}
+
+.tutorial-turnorder-close-x {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 44px;
+  height: 44px;
+  border: none;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 50%;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 1;
 }
 
 .tutorial-turnorder-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
+  padding-right: 40px; /* keep rows clear of the top-right ✖ */
 }
 
 .tutorial-turnorder-row {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 10px;
+  padding: 6px 8px;
 }
 
 .tutorial-turnorder-row__header {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
+  gap: 2px;
   flex: 0 0 auto;
-  width: 96px;
+  width: 90px;
 }
 
 .tutorial-turnorder-rank {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--accent);
   background: var(--accent-soft);
   border-radius: 999px;
-  padding: 2px 10px;
+  padding: 1px 8px;
 }
 
 .tutorial-turnorder-name {
   font-weight: 700;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text);
 }
 
 .tutorial-turnorder-total {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--text-muted);
 }
 
-/* このオーバーレイの中だけ、カード行を折り返さず1列で -- .build-choice-groupの既定
+/* このオーバーレイの中だけ、カード行を折り返さず1列で縮小表示 -- .build-choice-groupの既定
    (flex-wrap:wrap; justify-content:center) は他の画面(建築候補など)と共有しているため、ここだけの
-   見た目はスコープしたセレクタで上書きする。 */
+   見た目はスコープしたセレクタで上書きする。zoomはtransformと違い実際のレイアウト面積も縮小するので、
+   縮小した分だけ行の高さそのものが下がる(4人分でも縦に長くならない)。 */
 .tutorial-turnorder-row .build-choice-group {
   flex: 1 1 auto;
   flex-wrap: nowrap;
   justify-content: flex-start;
-  overflow-x: auto;
-}
-
-.tutorial-turnorder-close {
-  display: block;
-  width: 100%;
-  margin-top: 16px;
+  zoom: 0.55;
 }
 
 /* First real <input> in the app (2026-08-16) -- everywhere else is click-only, see index.html's own

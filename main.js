@@ -7604,16 +7604,13 @@ let tutorialTurnOrderOverlayOpen = false;
 function renderTutorialTurnOrderOverlay(state) {
   const overlay = document.getElementById('tutorial-turnorder-overlay');
   if (!tutorialModeActive) { overlay.hidden = true; return; }
+  // 2026-09-23, per user request ("セリフは閉じないで 新しいセリフを入れます") -- does NOT force-close
+  // the resource_choice bubble here (a prior version of this code did); a new TUTORIAL_STEPS entry for
+  // this moment (replacing the stale "カード2枚を選んでください" text with something that still makes
+  // sense once this overlay is showing/closed) is coming once the user provides its wording.
   if (!tutorialSeenStepIds.has(TUTORIAL_TURN_ORDER_STEP_ID) && state.turnOrder && state.turnOrder.length === state.players.length) {
     tutorialSeenStepIds.add(TUTORIAL_TURN_ORDER_STEP_ID);
     tutorialTurnOrderOverlayOpen = true;
-    // 2026-09-23, per user request ("チュートリアルのセリフと表示画面がかぶらないように") -- the
-    // resource_choice bubble stays "open" (tutorialCurrentStepId set) until its own 閉じる is clicked;
-    // if the player never dismissed it before pressing この選択でOK, it would otherwise still be sitting
-    // there (invisible only because this modal's own opaque backdrop currently paints over it) and pop
-    // back into view, showing its now-stale "カード2枚を選んでください" text, the moment this overlay is
-    // later closed. Force it closed here so it can never reappear once resource selection is done.
-    tutorialCurrentStepId = null;
   }
   overlay.hidden = !tutorialTurnOrderOverlayOpen;
   if (!tutorialTurnOrderOverlayOpen) return;
@@ -7703,8 +7700,17 @@ function render(state) {
   // pre-that-step state, same as any other render call. 'manual' does nothing here at all -- see the
   // "次のAI行動へ" button. Must run before `next` is computed below, since AI turns change whose turn
   // it is.
-  if (aiPacingMode === 'instant') pumpAiInstant(state);
-  else if (aiPacingMode === 'delayed') pumpAiDelayed();
+  //
+  // Held off entirely while tutorialTurnOrderOverlayOpen (2026-09-23, per user request: "AIが勝手に
+  // ゲームを進めない" -- while this overlay is up, the board underneath must stay frozen exactly as it
+  // was the instant it opened, not silently race ahead turns while the player is still reading it. "表示
+  // 画面を消すとゲームが進むように" -- closeTutorialTurnOrderOverlay's own render(STATE) call, right
+  // after flipping this flag off, is what actually lets the AI pump resume, with no separate trigger
+  // needed.
+  if (!tutorialTurnOrderOverlayOpen) {
+    if (aiPacingMode === 'instant') pumpAiInstant(state);
+    else if (aiPacingMode === 'delayed') pumpAiDelayed();
+  }
 
   // turn-flow.getNextTurn needs a real turnOrder, which only exists once maybeStartRound1 has run
   // (round>0) -- before that, nobody is "the active player" yet (see renderResourceChoice/
@@ -7831,9 +7837,6 @@ function render(state) {
   renderPlayerRoleControl(state);
   renderAiPacingControl(state);
   renderGameEndOverlay(state);
-  // Order matters (2026-09-23): renderTutorialTurnOrderOverlay may clear tutorialCurrentStepId (see its
-  // own doc on why) the very first render it opens on -- running it BEFORE renderTutorialOverlay lets
-  // that same render already reflect the cleared bubble, instead of a stray one-frame flash of it.
   renderTutorialTurnOrderOverlay(state);
   renderTutorialOverlay(state);
   renderDebugPanel(state);
