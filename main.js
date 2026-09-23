@@ -6471,6 +6471,21 @@ function renderJobReplacementChoice(state) {
  * Shows the 2 (or however many `context.count` requires) selected cards enlarged with 2 big buttons; OK
  * commits via the same setupMod.chooseResourceCards/maybeStartRound1 path the old auto-commit used, 別の
  * にする clears the selection back to empty so the player lands back on the plain tappable grid. */
+/** setup.computeStartOrder's own per-player formula (CON's own A-face START_ORDER + the sum of the
+ * player's RESOURCE cards' START_ORDER -- see that function's own doc; both CON faces share the same
+ * START_ORDER, so which face gets chosen later doesn't matter here), applied to a not-yet-committed
+ * SELECT_RESOURCE_CARDS choice's currently-selected candidates -- 2026-09-23, per user request: "この2枚
+ * でよろしいですか？の左側に先行順の合計値を表示してほしい 合計値はCON(制約)の先行順も含む". Lets the
+ * player see the exact number computeStartOrder will actually use for this pick BEFORE confirming --
+ * lower is earlier turn order (ties then broken by CON's own START_ORDER alone, same as
+ * computeStartOrder's own sort). */
+function resourceChoiceStartOrderTotal(state, playerId, selectedFaceIds) {
+  const player = state.players.find((p) => p.id === playerId);
+  const conStartOrder = dataLoaderMod.getCardRow(INDEX, `${player.conPhysicalId}A`).START_ORDER;
+  const resourceSum = selectedFaceIds.reduce((sum, faceId) => sum + dataLoaderMod.getCardRow(INDEX, faceId).START_ORDER, 0);
+  return conStartOrder + resourceSum;
+}
+
 function renderResourceConfirmOverlay(state) {
   const overlay = document.getElementById('resource-confirm-overlay');
   const choice = state.pendingChoices.find((c) => c.kind === 'SELECT_RESOURCE_CARDS' && !isAiPlayer(c.playerId)
@@ -6481,6 +6496,7 @@ function renderResourceConfirmOverlay(state) {
     return;
   }
   overlay.hidden = false;
+  document.getElementById('resource-confirm-start-order').textContent = `先行順合計 ${resourceChoiceStartOrderTotal(state, choice.playerId, choice.context.selected)}`;
   const visual = document.getElementById('resource-confirm-visual');
   visual.innerHTML = '';
   for (const faceId of choice.context.selected) {

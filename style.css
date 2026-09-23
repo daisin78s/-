@@ -2835,6 +2835,24 @@ h1, h2, h3 { margin: 0; }
 }
 .card-inst-modal__pick-button[hidden] { display: none; }
 
+/* 先行順の合計値バッジ (2026-09-23, per user request) -- .card-inst-modal__header は基本
+   justify-content:space-between (タイトル単独/タイトル+閉じるボタンの2パターンを両端に振り分ける想定)
+   だが、このヘッダーはタイトルの「左」にバッジを添えたいので、この1箇所だけ左詰め+gapに上書きする。 */
+.resource-confirm-header {
+  justify-content: flex-start;
+  gap: 8px;
+}
+.resource-confirm-start-order {
+  flex: 0 0 auto;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 /* 資源選択の確認ステップ (2026-08-29, per user request: "この選択でOK or 別のにするの文字は大きく") --
    2枚並べた下に大きな文字の2択ボタン。OKをより目立たせる(accent色)、別のにするは控えめなsurface色。 */
 .resource-confirm-buttons {

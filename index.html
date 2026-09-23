@@ -288,7 +288,12 @@
        選び直しの導線を兼ねる。 -->
   <div id="resource-confirm-overlay" class="card-inst-overlay" hidden>
     <div class="card-inst-modal build-choice-modal">
-      <div class="card-inst-modal__header">
+      <!-- 先行順の合計値 (2026-09-23, per user request: "この2枚でよろしいですか？の左側に先行順の合計値を
+           表示してほしい 合計値はCON(制約)の先行順も含む") -- setup.computeStartOrder's own formula
+           (CONの先行順 + 選んだ2枚のRESOURCEカードの先行順の合計) をそのまま、確定前にプレビュー表示する。
+           see main.js's resourceChoiceStartOrderTotal/renderResourceConfirmOverlay. -->
+      <div class="card-inst-modal__header resource-confirm-header">
+        <span id="resource-confirm-start-order" class="resource-confirm-start-order"></span>
         <span class="card-inst-modal__title">この2枚でよろしいですか？</span>
       </div>
       <div class="card-inst-modal__body">
