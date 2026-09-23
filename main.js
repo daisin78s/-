@@ -4464,7 +4464,11 @@ function buildShopSlotNode(slotId, faceId, showReqCaption, locked, faceDown = fa
   const slotNode = slotTpl.content.firstElementChild.cloneNode(true);
   if (locked) slotNode.classList.add('shop-slot--locked');
   const reqCaption = () => {
-    if (faceDown) return '2Rから';
+    // faceDown (2026-09-23, per user request: "モニュメントの下に書いてある2Rからと SHOPの部分にも2Rから
+    // と書いてあるので不要です") -- tpl-shop-card-facedown itself already shows "2Rから" inside the card
+    // box, so this caption underneath used to just repeat the exact same text right below it. Left blank
+    // here now; the card's own face-down label is the only place it's shown.
+    if (faceDown) return '';
     if (locked) return `${boardMod.specialShopMinRound(faceId)}Rから`;
     return showReqCaption ? shopReqForSlotId(slotId) : '';
   };
