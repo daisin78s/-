@@ -7586,9 +7586,70 @@ function dismissTutorialStep() {
   render(STATE);
 }
 
+/** 手番順の発表 (2026-09-23, per user request: "この選択でOKを押した後 プレイヤー全員のプレイヤーネーム
+ * 制約カード表裏 選んだ初期資源カード2枚 先手順合計を表示して プレイヤーネームの左に1番手2番手3番手4番手
+ * と表示する"、続けて "その後クリックすると ゲームが進んでゆく") -- state.turnOrder is computed by
+ * maybeStartRound1 the instant every player's own SELECT_RESOURCE_CARDS choice (P1's own "この選択でOK"
+ * included) is resolved, so "the first render where turnOrder exists" IS exactly "right after OK was
+ * pressed", regardless of exactly whose click triggered it. Shown once, tracked in the same
+ * tutorialSeenStepIds set TUTORIAL_STEPS uses, via its own reserved id below.
+ *
+ * Both CON faces are shown (not just the eventually-chosen one) because at this exact moment nobody has
+ * picked a face yet -- player.conPhysicalId is dealt at setup, long before each player's own round-1
+ * onboarding turn actually picks A or B -- so this doubles as an early preview, same idea as
+ * renderConPreview's own pre-round-1 use of renderConFacesRow. */
+const TUTORIAL_TURN_ORDER_STEP_ID = 'turn_order_reveal';
+let tutorialTurnOrderOverlayOpen = false;
+
+function renderTutorialTurnOrderOverlay(state) {
+  const overlay = document.getElementById('tutorial-turnorder-overlay');
+  if (!tutorialModeActive) { overlay.hidden = true; return; }
+  if (!tutorialSeenStepIds.has(TUTORIAL_TURN_ORDER_STEP_ID) && state.turnOrder && state.turnOrder.length === state.players.length) {
+    tutorialSeenStepIds.add(TUTORIAL_TURN_ORDER_STEP_ID);
+    tutorialTurnOrderOverlayOpen = true;
+  }
+  overlay.hidden = !tutorialTurnOrderOverlayOpen;
+  if (!tutorialTurnOrderOverlayOpen) return;
+  const list = document.getElementById('tutorial-turnorder-list');
+  list.innerHTML = '';
+  state.turnOrder.forEach((playerId, i) => {
+    const player = state.players.find((p) => p.id === playerId);
+    const resourceIds = player.ownedCardPhysicalIds.filter((id) => id.startsWith('R'));
+    const total = resourceChoiceStartOrderTotal(state, playerId, resourceIds);
+
+    const row = el('div', 'tutorial-turnorder-row');
+    const header = el('div', 'tutorial-turnorder-row__header');
+    header.appendChild(el('span', 'tutorial-turnorder-rank', `${i + 1}番手`));
+    const swatch = el('span', 'player-panel__swatch player-panel__swatch--tiny');
+    swatch.dataset.color = player.color;
+    header.appendChild(swatch);
+    header.appendChild(el('span', 'tutorial-turnorder-name', player.name));
+    header.appendChild(el('span', 'tutorial-turnorder-total', `先行順合計 ${total}`));
+    row.appendChild(header);
+
+    // Not renderConFacesRow (it always appends its own "JOB選択後、CONの表/裏を選んでください" onboarding
+    // hint, meant for the single player currently mid-choice -- out of place repeated once per row here).
+    const cardsRow = el('div', 'build-choice-group');
+    for (const faceId of [`${player.conPhysicalId}A`, `${player.conPhysicalId}B`, ...resourceIds]) {
+      const cardNode = buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true });
+      const cell = el('div', cardNode.classList.contains('shop-card--tall') ? 'owned-card-cell owned-card-cell--tall' : 'owned-card-cell');
+      cell.appendChild(cardNode);
+      cardsRow.appendChild(cell);
+    }
+    row.appendChild(cardsRow);
+    list.appendChild(row);
+  });
+}
+
+function closeTutorialTurnOrderOverlay() {
+  tutorialTurnOrderOverlayOpen = false;
+  render(STATE);
+}
+
 function endTutorialMode() {
   tutorialModeActive = false;
   tutorialCurrentStepId = null;
+  tutorialTurnOrderOverlayOpen = false;
   render(STATE);
 }
 
@@ -7764,6 +7825,7 @@ function render(state) {
   renderAiPacingControl(state);
   renderGameEndOverlay(state);
   renderTutorialOverlay(state);
+  renderTutorialTurnOrderOverlay(state);
   renderDebugPanel(state);
   renderDebugSetupOverlay();
   renderCardListOverlay();
@@ -8335,6 +8397,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('tutorial-mode-button').addEventListener('click', openTutorialMode);
   document.getElementById('tutorial-bubble__dismiss').addEventListener('click', dismissTutorialStep);
   document.getElementById('tutorial-bubble__end').addEventListener('click', endTutorialMode);
+  document.getElementById('tutorial-turnorder-close-button').addEventListener('click', closeTutorialTurnOrderOverlay);
   document.getElementById('debug-turn-back').addEventListener('click', handleDebugTurnBack);
   document.getElementById('debug-turn-forward').addEventListener('click', handleDebugTurnForward);
   document.getElementById('debug-round-back').addEventListener('click', handleDebugRoundBack);
