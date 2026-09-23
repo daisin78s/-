@@ -3602,7 +3602,11 @@ h1, h2, h3 { margin: 0; }
 
 .tutorial-turnorder-modal {
   position: relative;
-  width: min(72vw, 820px);
+  /* +15% (2026-09-23, per user request: "横に15%ほど画面を伸ばせばスクロール不要です") -- was
+     min(72vw,820px), which left each card row too narrow to fit without its own horizontal scrollbar
+     (and, per the user's own diagnosis, that's also what was forcing the whole list into a vertical
+     scrollbar too). 72*1.15=82.8, 820*1.15=943. */
+  width: min(82.8vw, 943px);
 }
 
 .tutorial-turnorder-close-x {
