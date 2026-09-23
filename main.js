@@ -222,6 +222,14 @@ const weeklyResourceSelection = new Map();
 
 const debugSetupPlanAtLoad = weeklyChallengeActive ? null : consumeDebugSetupPlan();
 const STATE = createInitialState(debugSetupPlanAtLoad, weeklyChallengeActive ? `weekly-${currentWeeklyChallengeId()}` : undefined);
+// チュートリアルモード (2026-09-23, per user request: "名前の表記 ALICE を あなた にして") -- P1's own
+// display name reads "あなた" instead of the usual Alice/remembered-ranking-name for the whole tutorial
+// attempt. player.name is a pure display label (every lookup elsewhere keys off player.id, never .name
+// -- see renderPlayerRoleControl's own name-input doc), so overwriting it here is side-effect-free.
+if (tutorialModeActive) {
+  const tutorialP1 = STATE.players.find((p) => p.id === 'P1');
+  if (tutorialP1) tutorialP1.name = 'あなた';
+}
 
 // True once this game has used デバッグモード or テストゲーム開始 at any point (2026-09-07, per user
 // spec, for the ranking's 3-way split -- see renderRankingList's own doc): "スタンダード" ranking
@@ -898,7 +906,12 @@ function driveOneAiStepInner(state) {
     // tools/ai_data_report.js's own LV4 wiring, which never had this flag and was never turned off.
     const RESOURCE_SYNERGY_PICK_ENABLED = true;
     // AI_LV5 (2026-09-16): shares LV4's own onboarding style outright -- see levels.js's own doc.
-    const usesSmartOnboarding = playerRoles.get(resourcePlayerId) === 'AI_LV4' || playerRoles.get(resourcePlayerId) === 'AI_LV5';
+    // AI_LV1 (2026-09-23, per user request: "AILV1の初期資源カードの選び方をAILV5と同じにしてください")
+    // -- explicitly opted into the same smart RESOURCE-card pick, overriding the 2026-08-03 "every other
+    // level stays purely random" default above for LV1's resource-card choice specifically. Scoped to
+    // resource cards only, as asked -- LV1's own JOB/CON picks (the isLv4 check further below) are
+    // untouched.
+    const usesSmartOnboarding = ['AI_LV1', 'AI_LV4', 'AI_LV5'].includes(playerRoles.get(resourcePlayerId));
     const pair = RESOURCE_SYNERGY_PICK_ENABLED && usesSmartOnboarding
       ? smartOnboardingMod.pickResourceCards(
           ctx.resourceChoice.context.candidates,
@@ -4865,14 +4878,15 @@ function renderBoard(state, next) {
         slotsEl.appendChild(slotEl);
       });
 
-      // Castle-only: next round's recomputed turn order below the slots (see computeNextCastleTurnOrder
-      // -- it reacts to whatever's currently placed on the castle). The current round's own turn order
-      // ("現在" + its 4 player icons) used to show above the slots too -- removed 2026-08-21 per user
-      // request; .map-tile__turnorder--current is left unpopulated (and therefore collapsed via
-      // .map-tile__turnorder:empty, same as it already was on every non-castle tile) rather than
-      // deleted from the template, so nothing else needs to change.
+      // Castle-only: next round's recomputed turn order (see computeNextCastleTurnOrder -- it reacts to
+      // whatever's currently placed on the castle). Shown in the header, to the right of "王宮" itself
+      // (2026-09-23, per user request: "SLOTの下ではなく SLOTの上の 王宮 書いてある場所の右に 次ラウンド
+      // 〇〇〇〇のように表示" -- was below .map-tile__slots via .map-tile__turnorder--next until this
+      // change; that slot is left unpopulated now, same as .map-tile__turnorder--current already was
+      // before this (its own "現在" row was removed 2026-08-21) -- both collapse via
+      // .map-tile__turnorder:empty when unpopulated, so reusing --current here needs no template change.
       if (isCastle) {
-        fillTurnOrderRow(node.querySelector('.map-tile__turnorder--next'), '次', computeNextCastleTurnOrder(state), state);
+        fillTurnOrderRow(node.querySelector('.map-tile__turnorder--current'), '次ラウンド', computeNextCastleTurnOrder(state), state);
       }
 
       const actionEl = node.querySelector('.map-tile__action');
