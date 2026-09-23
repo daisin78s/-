@@ -4561,7 +4561,13 @@ function renderShopGrid(state) {
     node.style.gridColumn = String(i + 1);
     container.appendChild(node);
   });
-  container.appendChild(buildShopRemainingCountNode(state.shops.M.drawPile.length, 1));
+  // 1R中は面出しされたSHOP001-006自体もまだ「見えていない」ため、山札の残数だけでなくその6枚分も
+  // 残り扱いに含める (2026-09-24, per user request: "1Rではまだ一枚も出ていないので 1Rだけ 残り12枚に
+  // して") -- 2Rになれば通常通り山札の実数のみに戻る。
+  const monumentRemainingCount = state.round < 2
+    ? state.shops.M.drawPile.length + Object.values(state.shops.M.slots).filter(Boolean).length
+    : state.shops.M.drawPile.length;
+  container.appendChild(buildShopRemainingCountNode(monumentRemainingCount, 1));
   Object.entries(state.shops.NORMAL.slots).forEach(([slotId, faceId], i) => {
     const node = buildShopSlotNode(slotId, faceId, true);
     node.style.gridRow = '2';
