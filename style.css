@@ -3472,18 +3472,20 @@ h1, h2, h3 { margin: 0; }
   border-width: 3px;
 }
 
-/* チュートリアル会話吹き出し (2026-09-23, per user request: "会話風のセリフアイコンの中に表示") --
-   .card-inst-overlay系の暗転モーダルとは違い、背景を暗くせず盤面/下の操作を塞がない。画面下に固定表示さ
-   れる🎲アイコン+吹き出しで、キャラクターが話しかけてくるような見た目にする。 */
+/* チュートリアル会話吹き出し (2026-09-23, per user request: "会話風のセリフアイコンの中に表示"、続けて
+   "縦横今の2倍で 文字サイズも2倍 場所は右下 背景白に白いセリフはわかりずらいので少し色を付けて") --
+   .card-inst-overlay系の暗転モーダルとは違い、背景を暗くせず盤面/下の操作を塞がない。画面右下に固定表示
+   される🎲アイコン+吹き出しで、キャラクターが話しかけてくるような見た目にする。背景は真っ白(--surface)
+   だとページの白背景に溶けて見えづらいため、うっすら色の付いた--accent-softに変更(ダークモードでも
+   --accent-soft自体が既に暗めの紺に切り替わるので、そのまま流用できる)。 */
 .tutorial-bubble-wrap {
   position: fixed;
-  left: 50%;
+  right: max(16px, env(safe-area-inset-right, 0px));
   bottom: max(16px, env(safe-area-inset-bottom, 0px));
-  transform: translateX(-50%);
   display: flex;
   align-items: flex-end;
-  gap: 8px;
-  width: min(92vw, 420px);
+  gap: 16px;
+  width: min(92vw, 840px);
   z-index: 90;
   pointer-events: none;
 }
@@ -3492,24 +3494,24 @@ h1, h2, h3 { margin: 0; }
 
 .tutorial-bubble-avatar {
   flex: 0 0 auto;
-  width: 40px;
-  height: 40px;
+  width: 80px;
+  height: 80px;
   border-radius: 50%;
-  background: var(--surface);
+  background: var(--accent-soft);
   box-shadow: var(--shadow-lg);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: 40px;
   pointer-events: auto;
 }
 
 .tutorial-bubble {
   position: relative;
-  background: var(--surface);
+  background: var(--accent-soft);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
-  padding: 12px 14px;
+  padding: 24px 28px;
   flex: 1 1 auto;
   pointer-events: auto;
 }
@@ -3518,49 +3520,52 @@ h1, h2, h3 { margin: 0; }
 .tutorial-bubble::before {
   content: '';
   position: absolute;
-  left: -7px;
-  bottom: 16px;
+  left: -14px;
+  bottom: 32px;
   width: 0;
   height: 0;
   border-style: solid;
-  border-width: 7px 8px 7px 0;
-  border-color: transparent var(--surface) transparent transparent;
+  border-width: 14px 16px 14px 0;
+  border-color: transparent var(--accent-soft) transparent transparent;
 }
 
 .tutorial-bubble__text {
-  font-size: 13px;
+  font-size: 26px;
   line-height: 1.6;
   color: var(--text);
   white-space: pre-line;
-  margin: 0 0 8px;
+  margin: 0 0 16px;
 }
 
 .tutorial-bubble__actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   align-items: center;
-  gap: 12px;
+  gap: 12px 24px;
 }
 
 #tutorial-bubble__end {
   background: none;
   border: none;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 22px;
   text-decoration: underline;
   cursor: pointer;
-  padding: 4px;
+  padding: 8px;
+  white-space: nowrap;
 }
 
 #tutorial-bubble__dismiss {
   background: var(--surface);
-  border: 1px solid var(--accent);
+  border: 2px solid var(--accent);
   color: var(--accent);
   border-radius: 999px;
-  padding: 6px 14px;
-  font-size: 12px;
+  padding: 12px 28px;
+  font-size: 24px;
   font-weight: 700;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 /* First real <input> in the app (2026-08-16) -- everywhere else is click-only, see index.html's own
