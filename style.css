@@ -2360,7 +2360,13 @@ h1, h2, h3 { margin: 0; }
    the flex child of .shop-row__combined now, so it carries the column's width/flex; #qst-slots inside
    is just the vertical stack of card rows. */
 .qst-panel {
-  width: 300px;
+  /* 260px (2026-09-23, per user request with a screenshot marking excess empty space in red: "少し
+     詰めてください") -- was 300px. rankPlayersForQuest gives NO_REWARD_RANK (no column content at all)
+     to anyone at value 0, so a QST only 1 player currently qualifies for leaves its 2位/3位 columns
+     (each an equal 1/3 of this width, by design -- see .qst-card__ranks/.qst-panel__bands, so every row
+     stays aligned to the shared legend below) empty; narrowing the whole panel shrinks that unused
+     space along with everything else, without changing the 1/3-1/3-1/3 proportions those rely on. */
+  width: 260px;
   flex: 0 0 auto;
   position: relative;
   overflow: hidden; /* clips the bands to the panel's own corners */
