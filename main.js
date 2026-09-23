@@ -7634,14 +7634,21 @@ function renderTutorialTurnOrderOverlay(state) {
   if (!tutorialTurnOrderOverlayOpen) return;
   const list = document.getElementById('tutorial-turnorder-list');
   list.innerHTML = '';
-  state.turnOrder.forEach((playerId, i) => {
-    const player = state.players.find((p) => p.id === playerId);
+  // Rows are listed by FIXED seat (P1/あなた, P2/Bob, P3/Carol, P4/Dan), not by computed turn-order rank
+  // (2026-09-23, per user request: "1番上を あなた 2番目 BOB 3 CAROL 4 DAN にして") -- easier to scan
+  // ("where am I?" is always the top row) than the previous rank-sorted order, which moved あなた's own
+  // row around depending on the roll. Each row still shows that player's own ACTUAL rank (via
+  // state.turnOrder.indexOf), so the ◯番手 labels read top-to-bottom in whatever order they actually
+  // landed, not necessarily 1,2,3,4.
+  state.players.forEach((player) => {
+    const playerId = player.id;
+    const rank = state.turnOrder.indexOf(playerId) + 1;
     const resourceIds = player.ownedCardPhysicalIds.filter((id) => id.startsWith('R'));
     const total = resourceChoiceStartOrderTotal(state, playerId, resourceIds);
 
     const row = el('div', 'tutorial-turnorder-row');
     const header = el('div', 'tutorial-turnorder-row__header');
-    header.appendChild(el('span', 'tutorial-turnorder-rank', `${i + 1}番手`));
+    header.appendChild(el('span', 'tutorial-turnorder-rank', `${rank}番手`));
     const swatch = el('span', 'player-panel__swatch player-panel__swatch--tiny');
     swatch.dataset.color = player.color;
     header.appendChild(swatch);
