@@ -207,6 +207,26 @@ function giveJob002(state, playerId) {
   check('料理人: building a monument grants K matching its printed VP (4, under the cap of 5)', (p1.resources.K || 0) - beforeK, 4);
   check('...and taps JOB002', state.cards[jobInst.physicalId].tapped, true);
 }
+{
+  // Initial-RESOURCE-card printed VP (2026-09-23, per user request): same gap as the monument case above
+  // -- a RESOURCE card's own printed VP (row.VP, e.g. R004's "2VP,Z") is never a live GET(VP) grant
+  // either (receiveInitialResources only runs row.ONCE, which grants the OTHER resource), so setup.
+  // receiveInitialResources now calls executor.grantChefBonusIfEarned directly with each owned RESOURCE
+  // card's own row.VP, same as board.resolveBuildNew does for a monument's printed VP.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const jobInst = giveJob002(state, 'P1');
+  const inst = createCardInstance('R004'); // R004 = "2VP,Z", ONCE=ADD(K,Z)
+  inst.ownerId = 'P1';
+  state.cards[inst.physicalId] = inst;
+  p1.ownedCardPhysicalIds.push(inst.physicalId);
+  const beforeK = p1.resources.K || 0;
+  setup.receiveInitialResources(state, index, 'P1');
+  // Total K delta = R004's own ONCE=ADD(K,Z) (1K) + the chef bonus matching its printed VP (2, under the
+  // cap of 5) = 3.
+  check('料理人: receiving R004 (2VP) grants K = ONCE\'s own 1K + a chef bonus matching its printed VP (2)', (p1.resources.K || 0) - beforeK, 3);
+  check('...and taps JOB002', state.cards[jobInst.physicalId].tapped, true);
+}
 
 // ---------------------------------------------------------------------------
 // Castle stacking: the old unconditional same-value auto-stack is abolished (2026-08-06, per user

@@ -34,7 +34,7 @@ const {
   INITIAL_COLOR_DICE,
 } = require('./game-state');
 const { getAreaRow, getCardRow } = require('./data-loader');
-const { runProgram, enforceWhiteDiceCap } = require('./executor');
+const { runProgram, enforceWhiteDiceCap, grantChefBonusIfEarned } = require('./executor');
 const { recordCheckpoint } = require('./undo');
 const board = require('./board');
 
@@ -556,7 +556,16 @@ function chooseConFace(state, index, playerId, face) {
   return result;
 }
 
-/** Runs the ONCE effect of both of the player's chosen RESOURCE cards (the "初期資源受取" step). */
+/** Runs the ONCE effect of both of the player's chosen RESOURCE cards (the "初期資源受取" step).
+ *
+ * 料理人(JOB002) (2026-09-23, per user request): a RESOURCE card's own printed VP (row.VP, e.g. R004's
+ * "2VP,Z") is never granted as a live GET(VP) event -- receiveInitialResources only ever runs row.ONCE,
+ * which for these cards grants the OTHER resource (ADD(K,Z)/ADD(3K)), not the VP itself -- so it would
+ * otherwise never reach executor.grantChefBonusIfEarned's own live-VP-grant hook (same gap M001/monument
+ * printed VP had before board.resolveBuildNew got its own explicit call; see grantChefBonusIfEarned's own
+ * doc for the full confirmed-with-the-user trigger scope). Fired here, once per owned RESOURCE card,
+ * right after that card's ONCE effect -- called by chooseConFace's caller only after chooseJob has
+ * already run, so player.jobCardId is already set by this point. */
 function receiveInitialResources(state, index, playerId) {
   const player = state.players.find((p) => p.id === playerId);
   const results = [];
@@ -564,6 +573,9 @@ function receiveInitialResources(state, index, playerId) {
     if (!physicalId.startsWith('R')) continue;
     const row = getCardRow(index, physicalId);
     results.push(runProgram(state, index, { playerId, sourcePhysicalId: physicalId }, row.ONCE));
+    if (typeof row.VP === 'number' && row.VP > 0) {
+      grantChefBonusIfEarned(state, index, { playerId, sourcePhysicalId: physicalId }, row.VP);
+    }
   }
   return results;
 }
