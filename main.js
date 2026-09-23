@@ -193,6 +193,25 @@ function consumeWeeklyChallengePending() {
   return pending;
 }
 const weeklyChallengeActive = consumeWeeklyChallengePending();
+
+// チュートリアルモード (2026-09-23, per user request: "チュートリアルモードを作りたい") -- same
+// "stash a flag in sessionStorage + reload" pattern as ウィークリーチャレンジ above, so the resulting
+// fresh createInitialState() call already starts a genuinely new local game. Unlike weekly, the board/
+// dice/cards stay fully random (per user request: "実際のランダムゲーム＋その場解説", not a fixed
+// scenario) -- only the AI opponents' level (forced to AI_LV1 below, see playerRoles) and the in-play
+// explanation popups (see TUTORIAL_STEPS near render()) differ from a normal local game.
+const TUTORIAL_MODE_PENDING_KEY = 'diceWpTutorialModePending';
+function consumeTutorialModePending() {
+  const pending = sessionStorage.getItem(TUTORIAL_MODE_PENDING_KEY) === '1';
+  if (pending) sessionStorage.removeItem(TUTORIAL_MODE_PENDING_KEY);
+  return pending;
+}
+let tutorialModeActive = !weeklyChallengeActive && consumeTutorialModePending();
+function openTutorialMode() {
+  sessionStorage.setItem(TUTORIAL_MODE_PENDING_KEY, '1');
+  location.reload();
+}
+
 let weeklyChallengeSeatChosen = null; // playerId ('P1'..'P4') once chosen, null while still picking
 // 席選択画面での初期資源2枚選択のスクラッチ状態 (2026-09-07, per user request: "同じプレイヤーの初期資源
 // カードを２枚タップしたら これで始める Y/N で始まるように", replacing the earlier plain "○○で始める"
@@ -254,9 +273,19 @@ const DEFAULT_AI_ROLE = PLAYER_ROLE_OPTIONS[PLAYER_ROLE_OPTIONS.length - 1][0];
 // human input anywhere. chooseWeeklyChallengeSeat flips the chosen one over to HUMAN (and every other seat
 // stays/reverts to DEFAULT_AI_ROLE) once picked, same playerRoles.set(...) pattern the online lobby's own
 // seatIsHuman sync already uses.
+// チュートリアルモード (2026-09-23, per user request, "AILV1で" confirmed): P2-4 use AI_LV1 -- the
+// gentlest/never-tuned level (see feedback_collaboration_style's own "AI LV1は変更予定がない" note) --
+// instead of DEFAULT_AI_ROLE (the current strongest level), so a first-time player isn't up against the
+// sharpest opponent while still learning the UI.
+const TUTORIAL_AI_ROLE = 'AI_LV1';
 const playerRoles = weeklyChallengeActive
   ? new Map([['P1', DEFAULT_AI_ROLE], ['P2', DEFAULT_AI_ROLE], ['P3', DEFAULT_AI_ROLE], ['P4', DEFAULT_AI_ROLE]])
-  : new Map([['P1', 'HUMAN'], ['P2', DEFAULT_AI_ROLE], ['P3', DEFAULT_AI_ROLE], ['P4', DEFAULT_AI_ROLE]]);
+  : new Map([
+      ['P1', 'HUMAN'],
+      ['P2', tutorialModeActive ? TUTORIAL_AI_ROLE : DEFAULT_AI_ROLE],
+      ['P3', tutorialModeActive ? TUTORIAL_AI_ROLE : DEFAULT_AI_ROLE],
+      ['P4', tutorialModeActive ? TUTORIAL_AI_ROLE : DEFAULT_AI_ROLE],
+    ]);
 function isAiPlayer(playerId) { return playerRoles.get(playerId) !== 'HUMAN'; }
 
 function openWeeklyChallenge() {
@@ -2424,6 +2453,9 @@ function renderDebugPanel(state) {
   // same shop layout, same everyone's own cards either way), it only lets this seat's own human player
   // reconsider THEIR OWN later decisions, so it's allowed now.
   document.getElementById('weekly-challenge-button').hidden = weeklyChallengeActive;
+  // チュートリアル (2026-09-23): same "hidden for the whole attempt" rule as weekly-challenge-button
+  // above -- re-opening it mid-attempt would reload into a brand-new random game, losing progress.
+  document.getElementById('tutorial-mode-button').hidden = weeklyChallengeActive || tutorialModeActive;
   // テストゲーム開始 (2026-08-13, then 2026-09-07 follow-up): hidden by default, shown once デバッグモード
   // is switched ON -- but unconditionally hidden during a weekly challenge attempt regardless of debugMode
   // (per this function's own doc above -- this is the one still absolutely forbidden during an attempt).
@@ -7495,6 +7527,55 @@ async function handleRankingDownloadSelectedClick() {
   updateRankingDownloadSelectedButton(); // re-enables based on current selection size, same as before the click
 }
 
+// ---------------------------------------------------------------------------
+// チュートリアルモード -- その場解説 (2026-09-23, per user request: "チュートリアルモードを作りたい")
+// ---------------------------------------------------------------------------
+// Each step shows once, the first render where its own `match` becomes true -- scanned in this array's
+// own order, so an earlier entry wins if more than one would match on the same render. Purely UI-side
+// (no engine file needs to know this exists): every check below reads STATE/pendingBuildChoice/etc.,
+// never mutates them. Content is being filled in one step at a time per the user's own dictation
+// ("まずはさっきのセリフだけ出るようにしてください その後追加していきます", 2026-09-23) -- only the
+// resource-choice step exists so far; more get appended here as they're confirmed.
+const tutorialSeenStepIds = new Set();
+let tutorialCurrentStepId = null; // the step currently on screen, until 閉じる/チュートリアルをやめる is clicked
+
+const TUTORIAL_STEPS = [
+  {
+    id: 'resource_choice',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: 'それではゲームを始めましょう。\nランダムに配られた初期資源カード4枚のうち2枚を選んでください。\nお試しのゲーム説明なので、深く考えずにとってもらって大丈夫です。',
+  },
+];
+
+/** Shows the next not-yet-seen matching step, if any, or keeps showing whichever one is already on
+ * screen until dismissed. Called once per render(), same as every other renderX(state) function. */
+function renderTutorialOverlay(state) {
+  const wrap = document.getElementById('tutorial-bubble-wrap');
+  if (!tutorialModeActive) { wrap.hidden = true; return; }
+  if (!tutorialCurrentStepId) {
+    const step = TUTORIAL_STEPS.find((s) => !tutorialSeenStepIds.has(s.id) && s.match(state));
+    if (step) {
+      tutorialSeenStepIds.add(step.id);
+      tutorialCurrentStepId = step.id;
+    }
+  }
+  const step = TUTORIAL_STEPS.find((s) => s.id === tutorialCurrentStepId);
+  wrap.hidden = !step;
+  if (!step) return;
+  document.getElementById('tutorial-bubble__text').textContent = step.body;
+}
+
+function dismissTutorialStep() {
+  tutorialCurrentStepId = null;
+  render(STATE);
+}
+
+function endTutorialMode() {
+  tutorialModeActive = false;
+  tutorialCurrentStepId = null;
+  render(STATE);
+}
+
 function render(state) {
   // Replay mode takes over the whole screen with its own render path -- see this file's "Move-by-move
   // game replay" section for why that's a separate function rather than a branch further down (render()
@@ -7666,6 +7747,7 @@ function render(state) {
   renderPlayerRoleControl(state);
   renderAiPacingControl(state);
   renderGameEndOverlay(state);
+  renderTutorialOverlay(state);
   renderDebugPanel(state);
   renderDebugSetupOverlay();
   renderCardListOverlay();
@@ -8234,6 +8316,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('debug-mode-toggle').addEventListener('click', toggleDebugMode);
   document.getElementById('weekly-challenge-button').addEventListener('click', openWeeklyChallenge);
+  document.getElementById('tutorial-mode-button').addEventListener('click', openTutorialMode);
+  document.getElementById('tutorial-bubble__dismiss').addEventListener('click', dismissTutorialStep);
+  document.getElementById('tutorial-bubble__end').addEventListener('click', endTutorialMode);
   document.getElementById('debug-turn-back').addEventListener('click', handleDebugTurnBack);
   document.getElementById('debug-turn-forward').addEventListener('click', handleDebugTurnForward);
   document.getElementById('debug-round-back').addEventListener('click', handleDebugRoundBack);

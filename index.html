@@ -145,6 +145,11 @@
            できるようにしてください テストプレイは絶対ダメ") -- its own turn/round-crossing rewind never
            touches the initial setup, only this seat's own later decisions, so it's allowed mid-attempt. -->
       <button type="button" id="weekly-challenge-button" class="debug-panel__toggle">ウィークリーチャレンジ</button>
+      <!-- チュートリアル (2026-09-23, per user request: "チュートリアルモードを作りたい") -- 通常のランダム
+           ゲーム(P1=人間、P2-4=AI LV1)を新しく開始し、各フェーズの初回だけ#tutorial-bubbleでその場解説を
+           挟む。ウィークリーチャレンジと同じ「フラグを立てて再読み込み」方式 -- see main.js's
+           openTutorialMode/tutorialModeActive。 -->
+      <button type="button" id="tutorial-mode-button" class="debug-panel__toggle">チュートリアル</button>
       <!-- オンライン対戦 (2026-08-29, per user request: "2〜4人の友人同士(合言葉/ルームコードで合流)"、
            空席はAI LV4で埋める -- see main.js's openOnlineLobby/DEFAULT_AI_ROLE). Opens #online-lobby-overlay
            (create/join a room, then a live waiting-room seat list -- see main.js's renderOnlineLobbyOverlay). -->
@@ -434,6 +439,21 @@
         <button type="button" class="card-inst-modal__close" id="online-lobby-close-button" aria-label="閉じる">&times;</button>
       </div>
       <div class="card-inst-modal__body" id="online-lobby-body"></div>
+    </div>
+  </div>
+
+  <!-- チュートリアル解説 (2026-09-23, per user request: "チュートリアルモードを作りたい"、続けて "会話風の
+       セリフアイコンの中に表示") -- 盤面を隠さない、キャラクターが話しかけてくるような会話風の吹き出し。
+       #card-inst-overlay系の暗転モーダルとは別物で、背景を暗くせず下の操作(初期資源カードのタップなど)を
+       塞がない -- see main.js's TUTORIAL_STEPS/renderTutorialOverlay。 -->
+  <div id="tutorial-bubble-wrap" class="tutorial-bubble-wrap" hidden>
+    <div class="tutorial-bubble-avatar" aria-hidden="true">🎲</div>
+    <div class="tutorial-bubble">
+      <p id="tutorial-bubble__text" class="tutorial-bubble__text"></p>
+      <div class="tutorial-bubble__actions">
+        <button type="button" id="tutorial-bubble__end">チュートリアルをやめる</button>
+        <button type="button" id="tutorial-bubble__dismiss">閉じる</button>
+      </div>
     </div>
   </div>
 

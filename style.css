@@ -3454,6 +3454,97 @@ h1, h2, h3 { margin: 0; }
   border-width: 3px;
 }
 
+/* チュートリアル会話吹き出し (2026-09-23, per user request: "会話風のセリフアイコンの中に表示") --
+   .card-inst-overlay系の暗転モーダルとは違い、背景を暗くせず盤面/下の操作を塞がない。画面下に固定表示さ
+   れる🎲アイコン+吹き出しで、キャラクターが話しかけてくるような見た目にする。 */
+.tutorial-bubble-wrap {
+  position: fixed;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  width: min(92vw, 420px);
+  z-index: 90;
+  pointer-events: none;
+}
+
+.tutorial-bubble-wrap[hidden] { display: none; }
+
+.tutorial-bubble-avatar {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  pointer-events: auto;
+}
+
+.tutorial-bubble {
+  position: relative;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 12px 14px;
+  flex: 1 1 auto;
+  pointer-events: auto;
+}
+
+/* 吹き出しの三角(左のアイコンを指す) */
+.tutorial-bubble::before {
+  content: '';
+  position: absolute;
+  left: -7px;
+  bottom: 16px;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 7px 8px 7px 0;
+  border-color: transparent var(--surface) transparent transparent;
+}
+
+.tutorial-bubble__text {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+  white-space: pre-line;
+  margin: 0 0 8px;
+}
+
+.tutorial-bubble__actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+}
+
+#tutorial-bubble__end {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 4px;
+}
+
+#tutorial-bubble__dismiss {
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 /* First real <input> in the app (2026-08-16) -- everywhere else is click-only, see index.html's own
    comment on #ranking-overlay. Styled to match the surrounding modal's tokens rather than the
    browser default. */
