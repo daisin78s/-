@@ -34,7 +34,7 @@ const {
   INITIAL_COLOR_DICE,
 } = require('./game-state');
 const { getAreaRow, getCardRow } = require('./data-loader');
-const { runProgram, enforceWhiteDiceCap, grantChefBonusIfEarned } = require('./executor');
+const { runProgram, enforceWhiteDiceCap, grantResourceAndEmitGet } = require('./executor');
 const { recordCheckpoint } = require('./undo');
 const board = require('./board');
 
@@ -558,14 +558,23 @@ function chooseConFace(state, index, playerId, face) {
 
 /** Runs the ONCE effect of both of the player's chosen RESOURCE cards (the "初期資源受取" step).
  *
- * 料理人(JOB002) (2026-09-23, per user request): a RESOURCE card's own printed VP (row.VP, e.g. R004's
- * "2VP,Z") is never granted as a live GET(VP) event -- receiveInitialResources only ever runs row.ONCE,
- * which for these cards grants the OTHER resource (ADD(K,Z)/ADD(3K)), not the VP itself -- so it would
- * otherwise never reach executor.grantChefBonusIfEarned's own live-VP-grant hook (same gap M001/monument
- * printed VP had before board.resolveBuildNew got its own explicit call; see grantChefBonusIfEarned's own
- * doc for the full confirmed-with-the-user trigger scope). Fired here, once per owned RESOURCE card,
- * right after that card's ONCE effect -- called by chooseConFace's caller only after chooseJob has
- * already run, so player.jobCardId is already set by this point. */
+ * A RESOURCE card's own printed VP (row.VP, e.g. R004's "2VP,Z") used to be counted ONLY at
+ * scoring.computeFinalScore (via ownedCardRows' cardVp sum), the same "never actually granted live" way a
+ * monument's own printed VP is -- meaning it silently sat in the player's total score with no visible
+ * resource-panel change, unlike e.g. 孤児院's CHANGE(K,VP,n), whose VP gain shows up immediately as the
+ * ordinary "VP" resource badge. 2026-09-23, per user request ("わかるように 初期資源のVPも バッジで表示さ
+ * れるようにしてほしい") + explicit confirmation to accept the tradeoff this implies: this now grants that
+ * VP the exact same LIVE way 孤児院 does (grantResourceAndEmitGet), so it shows as an ordinary VP-badge
+ * increase right away instead of a silent total-score bump. Confirmed consequence (not a bug): this also
+ * makes the initial resource card's VP subject to the same USAGE_FEE VP-escape mechanic every other live
+ * VP grant already is (applyTurnEnd's own doc) -- i.e. it can now be spent down, even below 0, to cover an
+ * unpayable usage fee, whereas before it was a score value nothing could ever touch. This also fires
+ * executor.grantChefBonusIfEarned automatically (grantResourceAndEmitGet's own 'VP' branch), replacing
+ * the old direct call this function used to make. scoring.js/evaluator.js's own cardVp sums now skip
+ * RESOURCE-card ids specifically, since this VP is live-resource income now, not printed-card income --
+ * counting both would double it. Runs once per owned RESOURCE card, right after that card's own ONCE
+ * effect -- called by chooseConFace's caller only after chooseJob has already run, so player.jobCardId is
+ * already set by this point (needed for the chef-bonus check inside grantResourceAndEmitGet). */
 function receiveInitialResources(state, index, playerId) {
   const player = state.players.find((p) => p.id === playerId);
   const results = [];
@@ -574,7 +583,7 @@ function receiveInitialResources(state, index, playerId) {
     const row = getCardRow(index, physicalId);
     results.push(runProgram(state, index, { playerId, sourcePhysicalId: physicalId }, row.ONCE));
     if (typeof row.VP === 'number' && row.VP > 0) {
-      grantChefBonusIfEarned(state, index, { playerId, sourcePhysicalId: physicalId }, row.VP);
+      grantResourceAndEmitGet(state, index, { playerId, sourcePhysicalId: physicalId }, 'VP', row.VP);
     }
   }
   return results;

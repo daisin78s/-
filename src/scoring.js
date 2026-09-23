@@ -142,7 +142,11 @@ function conCardVpAdjustment(state, index, playerId) {
 /** @returns {number} */
 function computeFinalScore(state, index, playerId) {
   const player = state.players.find((p) => p.id === playerId);
-  const cardVp = ownedCardRows(state, index, playerId).reduce((sum, { row }) => {
+  // RESOURCE cards (physicalId starting with 'R') are excluded here (2026-09-23): their own printed VP
+  // is now granted live into resources.VP by setup.receiveInitialResources instead of being counted as
+  // printed-card VP -- see that function's own doc. Counting it here too would double it.
+  const cardVp = ownedCardRows(state, index, playerId).reduce((sum, { physicalId, row }) => {
+    if (physicalId.startsWith('R')) return sum;
     const vp = row.VP;
     return sum + (typeof vp === 'number' ? vp : 0);
   }, 0);

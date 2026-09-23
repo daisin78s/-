@@ -319,7 +319,11 @@ class Evaluator {
       let row;
       try { row = getCardRow(this.index, cardState.currentFaceId); } catch (e) { continue; }
       total += v(cardState.currentFaceId);
-      if (typeof row.VP === 'number') total += row.VP * v('VP');
+      // RESOURCE cards (physicalId starting with 'R') excluded here (2026-09-23, see setup.
+      // receiveInitialResources' own doc): their printed VP is now granted live into resources.VP
+      // (already reflected via player.resources.VP elsewhere in this function), not counted as printed-
+      // card VP -- counting it here too would double it.
+      if (typeof row.VP === 'number' && !physicalId.startsWith('R')) total += row.VP * v('VP');
       if (cardState.currentFaceId === 'A202A' || cardState.currentFaceId === 'A202B') {
         if (player.trainingGroundDominationOk === false) total -= TRAINING_GROUND_DOMINATION_PENALTY;
         if (hasNoDiceLeftThisRound) total -= TRAINING_GROUND_UNUSABLE_THIS_ROUND_PENALTY;
