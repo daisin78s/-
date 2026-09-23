@@ -696,6 +696,13 @@ h1, h2, h3 { margin: 0; }
 .shop-card__id {
   font-weight: 700;
   font-size: 13px;
+  /* 1行固定 (2026-09-23, per user request: "小麦畑の支配LV1など ほかのカードより縦長なので NAMEを2行
+     ではなく1行にしてほしい エンブレムと被っても横がはみ出してもいい") -- a long NAME (e.g. 小麦畑の支配
+     LV1) used to wrap onto 2 lines, growing that one card taller than its neighbors in the same
+     row/grid. Neither .shop-card nor .owned-card-cell clips overflow, so the now-unwrapped text simply
+     spills past the card's own edge and/or under the top-right .shop-card__emblem badge instead --
+     confirmed acceptable by the user (this only affects a handful of unusually long AREA-支配 names). */
+  white-space: nowrap;
 }
 
 /* Only ever empty for RESOURCE cards (2026-08-17, see fillCardFace's own doc) -- every other deck still
