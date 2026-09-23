@@ -7607,6 +7607,13 @@ function renderTutorialTurnOrderOverlay(state) {
   if (!tutorialSeenStepIds.has(TUTORIAL_TURN_ORDER_STEP_ID) && state.turnOrder && state.turnOrder.length === state.players.length) {
     tutorialSeenStepIds.add(TUTORIAL_TURN_ORDER_STEP_ID);
     tutorialTurnOrderOverlayOpen = true;
+    // 2026-09-23, per user request ("チュートリアルのセリフと表示画面がかぶらないように") -- the
+    // resource_choice bubble stays "open" (tutorialCurrentStepId set) until its own 閉じる is clicked;
+    // if the player never dismissed it before pressing この選択でOK, it would otherwise still be sitting
+    // there (invisible only because this modal's own opaque backdrop currently paints over it) and pop
+    // back into view, showing its now-stale "カード2枚を選んでください" text, the moment this overlay is
+    // later closed. Force it closed here so it can never reappear once resource selection is done.
+    tutorialCurrentStepId = null;
   }
   overlay.hidden = !tutorialTurnOrderOverlayOpen;
   if (!tutorialTurnOrderOverlayOpen) return;
@@ -7824,8 +7831,11 @@ function render(state) {
   renderPlayerRoleControl(state);
   renderAiPacingControl(state);
   renderGameEndOverlay(state);
-  renderTutorialOverlay(state);
+  // Order matters (2026-09-23): renderTutorialTurnOrderOverlay may clear tutorialCurrentStepId (see its
+  // own doc on why) the very first render it opens on -- running it BEFORE renderTutorialOverlay lets
+  // that same render already reflect the cleared bubble, instead of a stray one-frame flash of it.
   renderTutorialTurnOrderOverlay(state);
+  renderTutorialOverlay(state);
   renderDebugPanel(state);
   renderDebugSetupOverlay();
   renderCardListOverlay();

@@ -3568,12 +3568,13 @@ h1, h2, h3 { margin: 0; }
   white-space: nowrap;
 }
 
-/* チュートリアル: 手番順の発表 (2026-09-23, per user request) -- #tutorial-turnorder-overlayの中身。
-   4人分の行を縦に並べ、各行の頭に「1番手」等の順位ラベル+色スウォッチ+名前+先行順合計、その下に
-   制約(CON)カード表裏+選んだ初期資源カード2枚をカード実物で並べる。4人分だと縦に長くなるため、
-   #debug-setup-overlay .card-inst-modalと同じ「モーダル全体を90vh+overflow-yでスクロールキャップ」を
-   適用(2026-09-23、キャップなしで背景の暗転より下に中身がはみ出て見えていた不具合の修正)。 */
+/* チュートリアル: 手番順の発表 (2026-09-23, per user request、続けて "スクロールしなくていいように調整
+   表示画面を横長にして左右にスペースを作る 1番手/Dan/先行順合計6などは左右のスペースに表示") --
+   #tutorial-turnorder-overlayの中身。モーダル自体を横長にし、各行を「左に順位/名前/先行順合計を縦積みの
+   サイドバー、右にカード実物を横並び」の1段組みに変更(以前は名前等のヘッダー行の下にカード行を積む2段
+   組みで、4人分だと縦に長くスクロールが必要だった)。 */
 #tutorial-turnorder-overlay .card-inst-modal {
+  width: min(94vw, 1100px);
   max-height: 90vh;
   overflow-y: auto;
 }
@@ -3581,10 +3582,13 @@ h1, h2, h3 { margin: 0; }
 .tutorial-turnorder-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 .tutorial-turnorder-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 10px;
@@ -3592,10 +3596,11 @@ h1, h2, h3 { margin: 0; }
 
 .tutorial-turnorder-row__header {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  flex: 0 0 auto;
+  width: 96px;
 }
 
 .tutorial-turnorder-rank {
@@ -3614,10 +3619,19 @@ h1, h2, h3 { margin: 0; }
 }
 
 .tutorial-turnorder-total {
-  margin-left: auto;
   font-size: 12px;
   font-weight: 700;
   color: var(--text-muted);
+}
+
+/* このオーバーレイの中だけ、カード行を折り返さず1列で -- .build-choice-groupの既定
+   (flex-wrap:wrap; justify-content:center) は他の画面(建築候補など)と共有しているため、ここだけの
+   見た目はスコープしたセレクタで上書きする。 */
+.tutorial-turnorder-row .build-choice-group {
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  overflow-x: auto;
 }
 
 .tutorial-turnorder-close {
