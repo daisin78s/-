@@ -7640,7 +7640,7 @@ const TUTORIAL_STEPS = [
       const p1 = state.players.find((p) => p.id === 'P1');
       const resourceIds = p1.ownedCardPhysicalIds.filter((id) => id.startsWith('R'));
       const total = resourceChoiceStartOrderTotal(state, 'P1', resourceIds);
-      return `あなたが選んだカードはこちら。\n制約カードに書かれた先行順と足された合計は${total}です。\nこの数字がおおきいほど、得られる資源が多くなり、小さいほど、先に行動してJOBや獲得カードを選ぶことができます。\nそれでは、ほかのプレイヤーの先行順も見てみましょう。`;
+      return `あなたの先攻順は${total}です。\nそれでは、他のプレイヤーの先行順も見てみましょう。`;
     },
   },
 ];
