@@ -3529,7 +3529,14 @@ h1, h2, h3 { margin: 0; }
   align-items: flex-end;
   gap: 16px;
   width: min(92vw, 840px);
-  z-index: 90;
+  /* 200 (2026-09-24, per user report with a screenshot: "レイヤーが違うためか操作ができません") -- was
+     90, BELOW #tutorial-turnorder-overlay's own z-index:100. That overlay's dark backdrop is a
+     position:fixed;inset:0 box spanning the WHOLE viewport (even where it's visually just dim/empty, to
+     the side of its own narrower white modal box) -- at a higher z-index than the bubble, it silently
+     swallowed every click aimed at the bubble sitting underneath it, even though the two never visually
+     overlapped. Bumped above every other overlay in this file (the highest prior one, #card-inst-overlay,
+     is 150) so the bubble/its buttons always stay clickable regardless of whatever else is open. */
+  z-index: 200;
   pointer-events: none;
 }
 
