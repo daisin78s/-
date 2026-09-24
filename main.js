@@ -7748,6 +7748,11 @@ const JOB_EXPLANATION_BODIES = {
     { term: 'Z', label: 'コネ' },
     '1を得ることができます。\nこのカードはラウンド開始時にアンタップして再び使えるようになります\nどんな状況下でも使える安定して強いカードです',
   ],
+  '道化': [
+    '道化ですね\nこのカードは獲得するとあなたの持つすべてのダイスはオールマイティの☆ダイスになります\n☆ダイスはいかなる場合でもどのAREAにでも置くことができます\nカードを獲得するときも☆ダイスは1～6のどのダイス目としてでも使えるため大変便利です\n\nこのカードを獲得した時即座に',
+    { term: 'wD', label: '恩寵ダイス（ｗD）' },
+    'も獲得でき序盤中盤終盤スキのないJOBです',
+  ],
 };
 
 // job_explanation's own target JOB face (2026-09-24, see that step's own doc) -- set right before
@@ -7794,7 +7799,10 @@ function tutorialBubbleTokens(body) {
 
 // A term token's span opens showCardListTermModal, same as a 資源や用語一覧 tile tap -- stopPropagation
 // is required here since #tutorial-bubble itself has its own whole-box click-to-dismiss listener (see
-// its own doc) that would otherwise also fire and advance/close this step on the same tap.
+// its own doc) that would otherwise also fire and advance/close this step on the same tap. The popup's
+// own title always uses CARD_LIST_RESOURCE_GLOSSARY's canonical name (not the token's own label text) --
+// 道化's "恩寵ダイス（ｗD）" term (2026-09-24) reads naturally inline in that sentence, but the popup
+// itself should still read "恩寵（wD）", same as every other route into this same popup.
 function appendTutorialBubbleToken(textEl, token) {
   if (token.type === 'char') {
     textEl.appendChild(document.createTextNode(token.value));
@@ -7803,7 +7811,8 @@ function appendTutorialBubbleToken(textEl, token) {
   const span = el('span', 'tutorial-bubble__term', token.label);
   span.addEventListener('click', (event) => {
     event.stopPropagation();
-    showCardListTermModal(`${token.label}（${token.code}）`, token.code);
+    const glossaryName = (CARD_LIST_RESOURCE_GLOSSARY.find((g) => g.code === token.code) || {}).name;
+    showCardListTermModal(glossaryName ? `${glossaryName}（${token.code}）` : token.code, token.code);
   });
   textEl.appendChild(span);
 }
