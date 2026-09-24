@@ -7591,7 +7591,7 @@ const TUTORIAL_STEPS = [
   {
     id: 'resource_choice',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: 'それではゲームを始めましょう。\nランダムに配られた初期資源カード4枚のうち2枚を選んでください。\nお試しのゲーム説明なので、深く考えずにとってもらって大丈夫です。',
+    body: 'それではゲームを始めましょう。\nあなたにランダムな制約カード一枚（表裏）と初期資源カード4枚が配られました。\nまずは初期資源カード4枚のうち2枚を選んでください。\nお試しのゲームなので深く考えずにとってもらって大丈夫です。',
     // 2026-09-24, per user request: "初期資源カード2枚選んだらこのセリフは消す" -- auto-dismissed (no
     // manual 閉じる needed) the moment the player has actually picked 2 candidates, the same moment
     // renderResourceConfirmOverlay's own "この2枚でよろしいですか？" takes over -- not just once
