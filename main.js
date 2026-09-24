@@ -7753,6 +7753,22 @@ const JOB_EXPLANATION_BODIES = {
     { term: 'wD', label: '恩寵ダイス（ｗD）' },
     'も獲得でき序盤中盤終盤スキのないJOBです',
   ],
+  // 教師(JOB006, 旧「育成者」)の説明セリフ (2026-09-24) -- 資源用語(コネ/恩寵ダイス/食料)は社交家/道化と同じ
+  // { term, label } マーカーだが、「憤怒」だけは資源用語ではなく制約カード(CON005B)そのものを指すため、
+  // 別の { card, label } マーカーを使う -- タップで showTutorialConstraintCardModal がそのカードの拡大
+  // ポップアップを開く(用語一覧のテキストポップアップではない)。ユーザー自身の文言通り、GET(D)で本来
+  // 一緒に得るVPには触れていない(教師のPASSIVE: ON(GET(D),ADD(Z,VP));ON(GET(wD),ADD(K)))。
+  '教師': [
+    '教師ですね\nこのカードは\n追加色ダイスを得ると　',
+    { term: 'Z', label: 'コネ' },
+    '\n',
+    { term: 'wD', label: '恩寵ダイス（ｗD）' },
+    'を得ると',
+    { term: 'K', label: '食料' },
+    '　を得ることができます\n爆発力がある反面ダイスを得ることができないと何も仕事をしないためプレイングがものを言います\n制約や初期資源カードにダイスが含まれている場合、それに対応した資源を得ることができますが、制約',
+    { card: 'CON005B', label: '憤怒' },
+    'との相性は最悪なので注意してください',
+  ],
 };
 
 // job_explanation's own target JOB face (2026-09-24, see that step's own doc) -- set right before
@@ -7782,14 +7798,18 @@ let tutorialTypewriterTimer = null;
 // body is normally a plain string (typed one character at a time, as before); JOB_EXPLANATION_BODIES'
 // 社交家 entry (2026-09-24) shows a body can also be an array mixing plain strings with { term, label }
 // markers -- flattened here into one token list so the typewriter still advances one unit at a time,
-// except a term marker reveals as a single atomic clickable span (typing a link glyph-by-glyph would
-// briefly show live-but-broken partial spans, and isn't what "1文字ずつ" was asked for anyway).
+// except a marker reveals as a single atomic clickable span (typing a link glyph-by-glyph would briefly
+// show live-but-broken partial spans, and isn't what "1文字ずつ" was asked for anyway). { term, label }
+// opens the 資源や用語一覧 popup for that code (社交家/道化); { card, label } (教師's "憤怒", 2026-09-24)
+// instead opens the card-enlarge popup for that faceId -- 憤怒 is a constraint CARD, not a resource term.
 function tutorialBubbleTokens(body) {
   const parts = Array.isArray(body) ? body : [body];
   const tokens = [];
   for (const part of parts) {
     if (typeof part === 'string') {
       for (const ch of part) tokens.push({ type: 'char', value: ch });
+    } else if (part.card) {
+      tokens.push({ type: 'card', faceId: part.card, label: part.label });
     } else {
       tokens.push({ type: 'term', code: part.term, label: part.label });
     }
@@ -7797,12 +7817,13 @@ function tutorialBubbleTokens(body) {
   return tokens;
 }
 
-// A term token's span opens showCardListTermModal, same as a 資源や用語一覧 tile tap -- stopPropagation
-// is required here since #tutorial-bubble itself has its own whole-box click-to-dismiss listener (see
-// its own doc) that would otherwise also fire and advance/close this step on the same tap. The popup's
-// own title always uses CARD_LIST_RESOURCE_GLOSSARY's canonical name (not the token's own label text) --
-// 道化's "恩寵ダイス（ｗD）" term (2026-09-24) reads naturally inline in that sentence, but the popup
-// itself should still read "恩寵（wD）", same as every other route into this same popup.
+// A term token's span opens showCardListTermModal, same as a 資源や用語一覧 tile tap; a card token's span
+// opens the normal card-enlarge popup instead (see showTutorialConstraintCardModal's own doc).
+// stopPropagation is required here since #tutorial-bubble itself has its own whole-box click-to-dismiss
+// listener (see its own doc) that would otherwise also fire and advance/close this step on the same tap.
+// A term popup's own title always uses CARD_LIST_RESOURCE_GLOSSARY's canonical name (not the token's own
+// label text) -- 道化's "恩寵ダイス（ｗD）" term (2026-09-24) reads naturally inline in that sentence, but
+// the popup itself should still read "恩寵（wD）", same as every other route into this same popup.
 function appendTutorialBubbleToken(textEl, token) {
   if (token.type === 'char') {
     textEl.appendChild(document.createTextNode(token.value));
@@ -7811,10 +7832,28 @@ function appendTutorialBubbleToken(textEl, token) {
   const span = el('span', 'tutorial-bubble__term', token.label);
   span.addEventListener('click', (event) => {
     event.stopPropagation();
+    if (token.type === 'card') {
+      showTutorialConstraintCardModal(token.faceId);
+      return;
+    }
     const glossaryName = (CARD_LIST_RESOURCE_GLOSSARY.find((g) => g.code === token.code) || {}).name;
     showCardListTermModal(glossaryName ? `${glossaryName}（${token.code}）` : token.code, token.code);
   });
   textEl.appendChild(span);
+}
+
+// 教師の「憤怒」用語マーカー(2026-09-24)専用 -- attachPickableEnlarge/showCardEnlargeModalの通常のカード
+// クリック経路をpickActionなし(このカードを選ぶボタンなし、閲覧専用)でそのまま再利用。CON005B「憤怒」には
+// CON005A「怠惰」という表側の対の面があるので、siblingFaceIdで見つかれば両面とも表示する(通常のカード
+// 拡大ポップアップと同じ挙動)。
+function showTutorialConstraintCardModal(faceId) {
+  const sibling = siblingFaceId(faceId);
+  const hasSiblingData = sibling && cardFaceExists(sibling);
+  const visualNode = buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true });
+  const siblingVisualNode = hasSiblingData
+    ? buildCardVisual(sibling, { showEffect: true, allowTextFallback: false, noInteraction: true })
+    : null;
+  showCardEnlargeModal(faceId, visualNode, hasSiblingData ? sibling : null, siblingVisualNode);
 }
 
 function startTutorialTypewriter(stepId, body) {
