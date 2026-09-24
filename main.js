@@ -2400,6 +2400,11 @@ function showCardListTermModal(title, instId) {
   const pickBtn = overlay.querySelector('.card-inst-modal__pick-button');
 
   overlay.hidden = false;
+  // tutorial-left (2026-09-24): same left-alignment showCardEnlargeModal already applies during the
+  // tutorial (see its own doc) -- this popup opens ON TOP of the tutorial bubble (z-index 200 > this
+  // overlay's 150) when a job_explanation term span is tapped, and its own centered position would
+  // otherwise sit right under/behind that still-open bubble.
+  overlay.classList.toggle('card-inst-overlay--tutorial-left', tutorialModeActive);
   modal.classList.remove('card-inst-modal--wide', 'card-inst-modal--area-wide');
   modal.classList.add('card-inst-modal--term');
   flipBtn.hidden = true;
@@ -7715,17 +7720,35 @@ const TUTORIAL_STEPS = [
   // (match always returns false, so it's also never added to tutorialSeenStepIds and can show again for a
   // different JOB every time) -- showJobExplanationBubble sets tutorialCurrentStepId to this id directly,
   // right when a JOB card is clicked during あなた/P1's own draft (see renderJobPool's own call site).
-  // Body text per the user's own worked example ("宣教師ですね / このカードは") -- the continuation past
-  // "このカードは" is intentionally left for later ("このカードはの続きは後で考えます"), not invented here.
+  // Body text per JOB_EXPLANATION_BODIES below when the drafted JOB has bespoke text (社交家 so far);
+  // any other JOB falls back to the original generic placeholder ("宣教師ですね / このカードは" -- the
+  // continuation past "このカードは" is intentionally left for later, not invented here).
   {
     id: 'job_explanation',
     match: () => false,
     body: () => {
       const name = dataLoaderMod.getCardRow(INDEX, tutorialExplainedJobFaceId).NAME;
-      return `${name}ですね。\nこのカードは`;
+      return JOB_EXPLANATION_BODIES[name] || `${name}ですね。\nこのカードは`;
     },
   },
 ];
+
+// 社交家(JOB001)の説明セリフ (2026-09-24, per user's own verbatim wording). A step body is normally a
+// plain string, but this one mixes in { term, label } markers for "食料"/"コネ" -- rendered as blue
+// clickable spans (see tutorialBubbleTokens/appendTutorialBubbleToken below) that open the same
+// 資源や用語一覧 detail popup (showCardListTermModal) those terms already open elsewhere, per the user's
+// own request: "食料 コネ の文字だけ青く色を変え クリックすると資源や用語一覧の食料コネの文章が表示
+// されるようにしてください". Other JOBs without an entry here fall back to the generic placeholder
+// above (see job_explanation's own doc) until the user supplies their wording too.
+const JOB_EXPLANATION_BODIES = {
+  '社交家': [
+    '社交家ですね\nこのカードはクリックすることで横向き（TAP）になり、あなたは',
+    { term: 'K', label: '食料' },
+    '1と',
+    { term: 'Z', label: 'コネ' },
+    '1を得ることができます。\nこのカードはラウンド開始時にアンタップして再び使えるようになります\nどんな状況下でも使える安定して強いカードです',
+  ],
+};
 
 // job_explanation's own target JOB face (2026-09-24, see that step's own doc) -- set right before
 // showing it, read by its body() above.
@@ -7751,15 +7774,51 @@ const TUTORIAL_TYPEWRITER_MS_PER_CHAR = 18;
 let tutorialTypewriterStepId = null;
 let tutorialTypewriterTimer = null;
 
-function startTutorialTypewriter(stepId, fullText) {
+// body is normally a plain string (typed one character at a time, as before); JOB_EXPLANATION_BODIES'
+// 社交家 entry (2026-09-24) shows a body can also be an array mixing plain strings with { term, label }
+// markers -- flattened here into one token list so the typewriter still advances one unit at a time,
+// except a term marker reveals as a single atomic clickable span (typing a link glyph-by-glyph would
+// briefly show live-but-broken partial spans, and isn't what "1文字ずつ" was asked for anyway).
+function tutorialBubbleTokens(body) {
+  const parts = Array.isArray(body) ? body : [body];
+  const tokens = [];
+  for (const part of parts) {
+    if (typeof part === 'string') {
+      for (const ch of part) tokens.push({ type: 'char', value: ch });
+    } else {
+      tokens.push({ type: 'term', code: part.term, label: part.label });
+    }
+  }
+  return tokens;
+}
+
+// A term token's span opens showCardListTermModal, same as a 資源や用語一覧 tile tap -- stopPropagation
+// is required here since #tutorial-bubble itself has its own whole-box click-to-dismiss listener (see
+// its own doc) that would otherwise also fire and advance/close this step on the same tap.
+function appendTutorialBubbleToken(textEl, token) {
+  if (token.type === 'char') {
+    textEl.appendChild(document.createTextNode(token.value));
+    return;
+  }
+  const span = el('span', 'tutorial-bubble__term', token.label);
+  span.addEventListener('click', (event) => {
+    event.stopPropagation();
+    showCardListTermModal(`${token.label}（${token.code}）`, token.code);
+  });
+  textEl.appendChild(span);
+}
+
+function startTutorialTypewriter(stepId, body) {
   if (tutorialTypewriterTimer) clearInterval(tutorialTypewriterTimer);
   const textEl = document.getElementById('tutorial-bubble__text');
-  let shown = 0;
   textEl.textContent = '';
+  const tokens = tutorialBubbleTokens(body);
+  let shown = 0;
+  if (tokens.length === 0) return;
   tutorialTypewriterTimer = setInterval(() => {
+    appendTutorialBubbleToken(textEl, tokens[shown]);
     shown++;
-    textEl.textContent = fullText.slice(0, shown);
-    if (shown >= fullText.length) {
+    if (shown >= tokens.length) {
       clearInterval(tutorialTypewriterTimer);
       tutorialTypewriterTimer = null;
     }
