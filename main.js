@@ -7678,7 +7678,30 @@ const TUTORIAL_STEPS = [
       });
       return `${lines.join('\n')}\nに決まりました。`;
     },
+    // 2026-09-24, per user request: "次へを押したとき一緒に右上の✖も押されて次の画面にいき" -- dismissing
+    // this one also closes the turn-order overlay itself (see dismissTutorialStep's own doc), so a single
+    // tap both advances the dialogue AND takes the player back to the real board, where job_draft_intro
+    // below picks up once it's genuinely their turn.
     nextLabel: '次へ',
+    alsoCloseTurnOrderOverlay: true,
+  },
+  // 2026-09-24, per user request -- shown once it's genuinely あなた/P1's own turn to draft a JOB (not
+  // just once the turn-order overlay closes: every AI seat ranked ahead of P1 still takes its own real
+  // onboarding turn first, via the normal AI pump, same pacing as any other AI turn). Names whoever
+  // played before P1, in order, joined by と -- empty (あなたが1番手) reads as just "あなたのターンです"
+  // instead of a dangling "のターンが終わり".
+  {
+    id: 'job_draft_intro',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'ONBOARDING_NEEDED' && next.playerId === 'P1';
+    },
+    body: (state) => {
+      const precedingNames = state.turnOrder.slice(0, state.turnOrder.indexOf('P1'))
+        .map((id) => state.players.find((p) => p.id === id).name);
+      const turnLine = precedingNames.length > 0 ? `${precedingNames.join('と')}のターンが終わりあなたのターンです。` : 'あなたのターンです。';
+      return `${turnLine}\nJOBカードを選んでください。\nJOBカードをクリックすると説明が表示されます。`;
+    },
   },
 ];
 
@@ -7771,6 +7794,10 @@ function dismissTutorialStep() {
   // Dismissing turn_order_intro is what reveals the other 3 players' own cards (2026-09-24, per user
   // request: "新しいセリフを出して そこをクリックすると次に行く") -- see tutorialOthersRevealed's own doc.
   if (tutorialCurrentStepId === 'turn_order_intro') tutorialOthersRevealed = true;
+  // alsoCloseTurnOrderOverlay (2026-09-24, see turn_order_reveal_summary's own doc): 次へ on this step
+  // also presses the turn-order overlay's own ✖ in the same tap, instead of leaving the player to close
+  // it separately.
+  if (currentStep && currentStep.alsoCloseTurnOrderOverlay) tutorialTurnOrderOverlayOpen = false;
   tutorialCurrentStepId = null;
   stopTutorialTypewriter();
   render(STATE);
