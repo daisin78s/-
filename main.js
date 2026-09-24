@@ -4090,6 +4090,23 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     }
     noteEl.appendChild(iconRow);
     q('.shop-card__effect').appendChild(noteEl);
+  } else if (options.showEffect && facts.name === '料理人') {
+    // JOB002/料理人 (2026-09-24, per user mockup: "1VP　▷　〇 / MAX5 / 毎ターン") -- this ability has no
+    // DSL representation either (bespoke -- TAP field is blank in the data, see executor.
+    // grantChefBonusIfEarned's own doc: reacts to any live VP grant by tapping and granting min(vpCount,5)
+    // K, untapping again via TURNEND=UNTAP()). Reuses actionTrigger()'s existing ▶ "condition→consequence"
+    // glyph (same meaning as the user's own "▷") rather than introducing a new one-off character. Icon row
+    // comes FIRST here, unlike 宣教師/吟遊詩人/地主's own "text\n▽\nicon row" shape just above -- MAX5/
+    // 毎ターン are their own plain lines below it instead.
+    tall = true;
+    const noteEl = el('div', 'card-note');
+    const iconRow = el('span', 'job-note-icon-row');
+    iconRow.appendChild(actionCount('1VP'));
+    iconRow.appendChild(actionTrigger());
+    iconRow.appendChild(actionDot('K'));
+    noteEl.appendChild(iconRow);
+    noteEl.appendChild(document.createTextNode('\nMAX5\n毎ターン'));
+    q('.shop-card__effect').appendChild(noteEl);
   } else if (options.showEffect && facts.effects && facts.effects.length) {
     // allowTextFallback (confirmed 2026-07-30): A/B/C cards fall back to raw DSL text for any
     // pattern buildActionIcons doesn't recognize yet (established 2026-07-29). JOB is new to icon
