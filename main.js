@@ -7604,6 +7604,26 @@ const TUTORIAL_STEPS = [
     // ever go away via autoDismissWhen above. See dismissTutorialStep's own doc for the guard.
     noManualDismiss: true,
   },
+  // 2026-09-24, per user request: shown as soon as renderResourceConfirmOverlay's own "この2枚でよろしい
+  // ですか？" appears (2 candidates picked, not yet committed via この選択でOK) -- body embeds the
+  // PROVISIONAL 先行順合計 for whatever's currently selected (same resourceChoiceStartOrderTotal helper
+  // that overlay's own badge uses), via choice.context.selected rather than ownedCardPhysicalIds (the
+  // cards aren't actually owned yet at this point). Auto-dismisses once that choice is actually
+  // committed. Shows once, same as every other step here -- even if 別のにする resets the selection and
+  // different cards get picked, this id is already in tutorialSeenStepIds by then.
+  {
+    id: 'resource_confirm_intro',
+    match: (state) => {
+      const choice = state.pendingChoices.find((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS');
+      return !!(choice && choice.context.selected && choice.context.selected.length === (choice.context.count || 2));
+    },
+    body: (state) => {
+      const choice = state.pendingChoices.find((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS');
+      const total = resourceChoiceStartOrderTotal(state, 'P1', choice.context.selected);
+      return `あなたの選んだカードはこちら。\n先行順は${total}になります。\nこの数字が大きいほど、得られる初期資源が多くなります。\nこの数字が小さいほど、先に行動してJOBや獲得カードを選ぶことができます。`;
+    },
+    autoDismissWhen: (state) => !state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+  },
   // 2026-09-24, re-added per user request (was reverted 2026-09-23 for an unrelated card-sizing bug in
   // the turn-order overlay, now fixed separately -- see tutorialOthersRevealed's own doc). body is a
   // function of state (not a plain string) since it embeds あなた/P1's own actual computed 先行順合計.
