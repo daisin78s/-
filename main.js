@@ -7588,6 +7588,14 @@ const TUTORIAL_STEPS = [
     id: 'resource_choice',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
     body: 'それではゲームを始めましょう。\nランダムに配られた初期資源カード4枚のうち2枚を選んでください。\nお試しのゲーム説明なので、深く考えずにとってもらって大丈夫です。',
+    // 2026-09-24, per user request: "初期資源カード2枚選んだらこのセリフは消す" -- auto-dismissed (no
+    // manual 閉じる needed) the moment the player has actually picked 2 candidates, the same moment
+    // renderResourceConfirmOverlay's own "この2枚でよろしいですか？" takes over -- not just once
+    // setupMod.chooseResourceCards actually commits (this step's own `match` only goes false then).
+    autoDismissWhen: (state) => {
+      const choice = state.pendingChoices.find((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS');
+      return !!(choice && choice.context.selected && choice.context.selected.length === (choice.context.count || 2));
+    },
   },
   // 2026-09-24, re-added per user request (was reverted 2026-09-23 for an unrelated card-sizing bug in
   // the turn-order overlay, now fixed separately -- see tutorialOthersRevealed's own doc). body is a
@@ -7649,6 +7657,15 @@ function renderTutorialOverlay(state) {
     }
   }
   const step = TUTORIAL_STEPS.find((s) => s.id === tutorialCurrentStepId);
+  // autoDismissWhen (2026-09-24): a step can opt into closing itself automatically, unlike every other
+  // step here (which stays open until 閉じる/チュートリアルをやめる is clicked, per the standing
+  // "セリフは閉じないで" instruction) -- see resource_choice's own doc for why it needs this.
+  if (step && step.autoDismissWhen && step.autoDismissWhen(state)) {
+    tutorialCurrentStepId = null;
+    stopTutorialTypewriter();
+    wrap.hidden = true;
+    return;
+  }
   wrap.hidden = !step;
   if (!step) return;
   if (tutorialTypewriterStepId !== step.id) {
