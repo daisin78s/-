@@ -8531,6 +8531,13 @@ function autoScrollToBottomOnStart() {
   const startY = window.scrollY;
   const endY = document.documentElement.scrollHeight - window.innerHeight;
   if (endY <= startY) return; // page doesn't even overflow -- nothing to scroll
+  // チュートリアル中は即座に一番下から始める (2026-09-24, per user request: "画面が上からスクロールして
+  // いきますが チュートリアルの時だけはスクロールせずに いきなり一番下から始めるようにしてほしい") --
+  // skips the slow guided-tour animation below, jumping straight to the bottom instead.
+  if (tutorialModeActive) {
+    window.scrollTo(0, endY);
+    return;
+  }
   const durationMs = 3000;
   const startTime = performance.now();
   function step(now) {
