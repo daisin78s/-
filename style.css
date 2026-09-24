@@ -2716,9 +2716,14 @@ h1, h2, h3 { margin: 0; }
    time, but カードリスト deliberately keeps #card-list-overlay open underneath while this shows a
    term's detail on top of it, which made the later-wins tie-break actually matter: #card-inst-overlay
    was rendering fully hidden behind #card-list-overlay. Explicit higher z-index makes source order
-   irrelevant here. */
+   irrelevant here.
+   210 (2026-09-25, per user request: "リンクした説明文や拡大カードはセリフの上に表示するようにして
+   ください") -- チュートリアル中に本文中のリンク(用語一覧/カード拡大)をタップして開くのもこの同じ
+   #card-inst-overlay なので、.tutorial-bubble-wrap(200)より上げて、開いている間はセリフの上に重ねて
+   表示する。「常にスタックの一番上」という上のコメントの方針をそのまま踏襲しているだけで、セリフの
+   方があとから200まで上げられた(2026-09-24)ときにこの前提が崩れていたのを直した形。 */
 #card-inst-overlay {
-  z-index: 150;
+  z-index: 210;
 }
 
 .card-inst-overlay[hidden] { display: none; }
@@ -3534,8 +3539,11 @@ h1, h2, h3 { margin: 0; }
      position:fixed;inset:0 box spanning the WHOLE viewport (even where it's visually just dim/empty, to
      the side of its own narrower white modal box) -- at a higher z-index than the bubble, it silently
      swallowed every click aimed at the bubble sitting underneath it, even though the two never visually
-     overlapped. Bumped above every other overlay in this file (the highest prior one, #card-inst-overlay,
-     is 150) so the bubble/its buttons always stay clickable regardless of whatever else is open. */
+     overlapped. Bumped above every other overlay in this file at the time (#card-inst-overlay was 150).
+     #card-inst-overlay was later (2026-09-25) raised again to 210, ABOVE this -- unlike
+     #tutorial-turnorder-overlay, that one is a real modal the player is actively reading/dismissing
+     (a term/card popup opened by tapping a link in the セリフ itself), so it's meant to sit on top of and
+     block the bubble underneath while it's open, not silently swallow unrelated clicks. */
   z-index: 200;
   pointer-events: none;
 }

@@ -7740,41 +7740,29 @@ const TUTORIAL_STEPS = [
 // own request: "食料 コネ の文字だけ青く色を変え クリックすると資源や用語一覧の食料コネの文章が表示
 // されるようにしてください". Other JOBs without an entry here fall back to the generic placeholder
 // above (see job_explanation's own doc) until the user supplies their wording too.
-// 2026-09-25: every plain string below gets auto-linkified for resource/TAP terms by
-// autoLinkifyTutorialText (see its own doc) -- these entries no longer hand-mark { term, label } spots
-// themselves (社交家's 食料/コネ, 道化's 恩寵ダイス, 教師/権力者's own resource words all used to be
-// hand-marked before auto-linkify existed; now the same plain text just gets picked up automatically).
-// { card, label } markers are still hand-written, though -- autoLinkifyTutorialText only knows the
-// resource/TAP glossary, not arbitrary CARD names like 憤怒/小麦畑の支配/農園の支配.
+// 2026-09-25: every entry below is a plain string -- autoLinkifyTutorialText (see its own doc) picks up
+// both resource/TAP terms (食料/コネ/恩寵ダイス/...) AND existing card names (憤怒/小麦畑の支配/革命の
+// 兆し/...) automatically now, so nothing here needs a hand-written { term, label } / { card, label }
+// marker any more (教師/権力者 used to hand-mark 憤怒/小麦畑の支配/農園の支配 before card-name
+// auto-linkify existed; 革命家's own "革命の兆し" mention, initially left unlinked since it wasn't
+// explicitly requested yet, now auto-links too once the general "セリフに既存カード名があったらリンク
+// する" policy was requested).
 const JOB_EXPLANATION_BODIES = {
   '社交家': '社交家ですね\nこのカードはクリックすることで横向き（TAP）になり、あなたは食料1とコネ1を得ることができます。\nこのカードはラウンド開始時にアンタップして再び使えるようになります\nどんな状況下でも使える安定して強いカードです',
   '道化': '道化ですね\nこのカードは獲得するとあなたの持つすべてのダイスはオールマイティの☆ダイスになります\n☆ダイスはいかなる場合でもどのAREAにでも置くことができます\nカードを獲得するときも☆ダイスは1～6のどのダイス目としてでも使えるため大変便利です\n\nこのカードを獲得した時即座に恩寵ダイス（ｗD）も獲得でき序盤中盤終盤スキのないJOBです',
-  // 教師(JOB006, 旧「育成者」)の説明セリフ (2026-09-24) -- 「憤怒」だけは資源用語ではなく制約カード
-  // (CON005B)そのものを指すため { card, label } マーカーを使う -- タップで showTutorialCardTermModal が
-  // そのカードの拡大ポップアップを開く(用語一覧のテキストポップアップではない)。ユーザー自身の文言通り、
-  // GET(D)で本来一緒に得るVPには触れていない(教師のPASSIVE: ON(GET(D),ADD(Z,VP));ON(GET(wD),ADD(K)))。
-  '教師': [
-    '教師ですね\nこのカードは\n追加色ダイスを得ると　コネ\n恩寵ダイス（ｗD）を得ると食料　を得ることができます\n爆発力がある反面ダイスを得ることができないと何も仕事をしないためプレイングがものを言います\n制約や初期資源カードにダイスが含まれている場合、それに対応した資源を得ることができますが、制約',
-    { card: 'CON005B', label: '憤怒' },
-    'との相性は最悪なので注意してください',
-  ],
-  // 権力者(JOB005)の説明セリフ (2026-09-24) -- 「小麦畑の支配」「農園の支配」は資源用語ではなくAREA領地
-  // カード(A004A/A005A、そのLV1面)そのものを指すため { card, label } マーカーを使う。
-  '権力者': [
-    '権力者ですね\nこのカードは食料を得るとそのうち一つを権力に変換します\n1回の効果はささやかですが毎ターン使うことで多くの権力を得ることができます\n',
-    { card: 'A004A', label: '小麦畑の支配' },
-    '　や　',
-    { card: 'A005A', label: '農園の支配' },
-    '　との相性は抜群です\n\nあなたの持っている初期資源カードや制約に食料が含まれているならもちろんそれも1つだけ権力に変えることができます',
-  ],
+  // 教師(JOB006, 旧「育成者」)の説明セリフ (2026-09-24)。ユーザー自身の文言通り、GET(D)で本来一緒に得る
+  // VPには触れていない(教師のPASSIVE: ON(GET(D),ADD(Z,VP));ON(GET(wD),ADD(K)))。
+  '教師': '教師ですね\nこのカードは\n追加色ダイスを得ると　コネ\n恩寵ダイス（ｗD）を得ると食料　を得ることができます\n爆発力がある反面ダイスを得ることができないと何も仕事をしないためプレイングがものを言います\n制約や初期資源カードにダイスが含まれている場合、それに対応した資源を得ることができますが、制約憤怒との相性は最悪なので注意してください',
+  '権力者': '権力者ですね\nこのカードは食料を得るとそのうち一つを権力に変換します\n1回の効果はささやかですが毎ターン使うことで多くの権力を得ることができます\n小麦畑の支配　や　農園の支配　との相性は抜群です\n\nあなたの持っている初期資源カードや制約に食料が含まれているならもちろんそれも1つだけ権力に変えることができます',
   // 吟遊詩人(JOB008)の説明セリフ (2026-09-25) -- 資源用語のみ(金貨/VP、どちらも本文に複数回登場、すべて
   // auto-linkifyされる)、カードへの参照はなし。
   '吟遊詩人': '吟遊詩人ですね\nこのカードはエンブレムを3個得るごとにターン終了時に1VPと金貨を得ることができます\n同じターン中に3個のエンブレムを得る必要はなく3，6，9...個目のエンブレムを得たターン終了時に得ます。\n制約カードのエンブレムでもVPと金貨を得ることができますがターン終了時に得るため初めのターンに金貨を使うことはできないので注意が必要です',
-  // 革命家(JOB010)の説明セリフ (2026-09-25) -- ユーザーから「青文字」指定なし: 本文中の"TAP"は
-  // autoLinkifyTutorialTextで自動的にリンクされるが(既存のTUTORIAL_TERM_ALIASES設定通り)、「革命の兆し」
-  // 自体は他のJOBの「憤怒」「小麦畑の支配」のようなカードリンクにはしていない -- 明示的に頼まれていない
-  // 変更は加えない方針。
   '革命家': '革命家ですね\nこのカードを選ぶと、天運カードの革命の兆しも即座に獲得することができます\n革命の兆しはTAPすることでダイスを消費することなくほかのカードのLVをあげることができます\n革命の兆しは強力なカードですが、毎ラウンド使い倒すには計画力が必要で少し上級者向けのカードになります',
+  // 宣教師(JOB009)の説明セリフ (2026-09-25)。
+  '宣教師': '宣教師ですね\nこのカードはまだ誰のダイスも置かれていない無人のAREAのSLOTに色ダイスを置くと信心を得ることができます\nほかのプレイヤーと同じ行動をしても信心を得ることができないため個性的なプレイをしたい方にお勧めのJOBです',
+  // 宮廷人(JOB007)の説明セリフ (2026-09-25) -- ユーザー自身の文言通り、1行目は他のJOBと違い「ですね」が
+  // 付いていない。
+  '宮廷人': '宮廷人\nこのカードはTAPするとモニュメントかLVUPの資源を1軽減することができます\nまた、ダイス目を+3することができるためダイス目7　8　9　などの特定モニュメントをダイス1個で獲得することができます\n強力な反面序盤に軽減を使うのはむつかしいため終盤用のテクニカルなJOBです',
 };
 
 // job_explanation's own target JOB face (2026-09-24, see that step's own doc) -- set right before
@@ -7807,9 +7795,14 @@ let tutorialTypewriterTimer = null;
 // in any plain tutorial-bubble string, present or future; a code can have more than one alias (TAP shows
 // up as both "タップ" and "TAP" across existing card text, wD as "恩寵ダイス" even though its own glossary
 // name is just "恩寵", D's alias is "追加色ダイス" -- the phrase already used in 教師's own body -- plus its
-// new post-rename glossary name "追加ダイス" itself). Sorted longest-alias-first before matching so a
-// longer alias always wins over a shorter one that happens to be its prefix (none collide today, but this
-// keeps future aliases safe by construction rather than by luck).
+// new post-rename glossary name "追加ダイス" itself).
+// excludePrecededBy (2026-09-25, per user report: "アンタップのタップ部分にはリンクを張らないで") -- "タッ
+// プ" is a plain substring of "アンタップ" (untap, the opposite action), so without this a tutorial line
+// like 社交家's "ラウンド開始時にアンタップして" would wrongly link just the trailing "タップ" out of it.
+// Unlike a longer alias that's a strict EXTENSION of a shorter one (e.g. 権力者/権力 below, where the
+// longest-alias-first sort in buildTutorialLinkCandidates already picks the right one on its own),
+// "アン"+"タップ" isn't itself a term/card worth its own alias entry, so this is a plain exclusion instead:
+// skip the "タップ" match specifically when it's immediately preceded by "アン".
 const TUTORIAL_TERM_ALIASES = [
   { code: 'VP', aliases: ['VP'] },
   { code: 'K', aliases: ['食料'] },
@@ -7820,25 +7813,69 @@ const TUTORIAL_TERM_ALIASES = [
   { code: 'BZ', aliases: ['口利き'] },
   { code: 'D', aliases: ['追加色ダイス', '追加ダイス'] },
   { code: 'wD', aliases: ['恩寵ダイス'] },
-  { code: 'TAP', aliases: ['タップ', 'TAP'] },
-]
-  .flatMap(({ code, aliases }) => aliases.map((alias) => ({ code, alias })))
-  .sort((a, b) => b.alias.length - a.alias.length);
+  { code: 'TAP', aliases: [{ text: 'タップ', excludePrecededBy: ['アン'] }, 'TAP'] },
+];
 
-/** Scans one plain string left-to-right, greedily matching the longest TUTORIAL_TERM_ALIASES alias at
- * each position -- returns a flat token list ('char' for everything else, one char at a time so the
- * typewriter keeps advancing at its normal pace; 'term' for a whole matched alias, revealed atomically
- * like any other term marker below). */
+// カード名の自動リンク化 (2026-09-25, per user request: "セリフに既存カード名があったらリンクするように
+// してください") -- built once from INDEX's own card sheets (A/B/C/M/CON/JOB; RESOURCE's own NAME is just
+// a resource code like "wD" and QST's is just a placeholder equal to its own ID, neither a real card name,
+// so both are excluded) so a future rename (like 育成者→教師, 2026-09-24) is picked up automatically
+// without ever needing to hand-edit a table here. A/B/C's own "<name>LV1"/"<name>LV2" pair share one base
+// name once the trailing "LV\d+" is stripped -- first occurrence wins when building the map, and since
+// each sheet's own row order always lists the LV1 ("A") face before its LV2 ("B") sibling (see
+// data/game.json's own row order), that naturally resolves to the LV1 faceId as the link target, matching
+// every hand-picked case from before this existed (小麦畑の支配->A004A, 革命の兆し->B005A, 憤怒->CON005B).
+const TUTORIAL_CARD_NAME_LINKS = (() => {
+  const links = new Map();
+  for (const sheet of ['A', 'B', 'C', 'M', 'CON', 'JOB']) {
+    for (const row of INDEX.raw[sheet] || []) {
+      const base = (row.NAME || '').replace(/LV\d+$/, '');
+      if (base && !links.has(base)) links.set(base, row.ID);
+    }
+  }
+  return links;
+})();
+
+// One combined, longest-text-first candidate list covering both systems above, so e.g. 権力者(JOB005's
+// own name) correctly wins over the shorter 権力(A) resource alias it happens to start with, rather than
+// autoLinkifyTutorialText splitting it into a 権力 link plus a bare trailing "者".
+function buildTutorialLinkCandidates() {
+  const candidates = [];
+  for (const { code, aliases } of TUTORIAL_TERM_ALIASES) {
+    for (const aliasEntry of aliases) {
+      const isObj = typeof aliasEntry === 'object';
+      candidates.push({
+        kind: 'term',
+        code,
+        text: isObj ? aliasEntry.text : aliasEntry,
+        excludePrecededBy: isObj ? aliasEntry.excludePrecededBy : null,
+      });
+    }
+  }
+  for (const [text, faceId] of TUTORIAL_CARD_NAME_LINKS) {
+    candidates.push({ kind: 'card', faceId, text, excludePrecededBy: null });
+  }
+  return candidates.sort((a, b) => b.text.length - a.text.length);
+}
+const TUTORIAL_LINK_CANDIDATES = buildTutorialLinkCandidates();
+
+/** Scans one plain string left-to-right, greedily matching the longest TUTORIAL_LINK_CANDIDATES entry at
+ * each position (skipping one whose excludePrecededBy matches what's right before it here) -- returns a
+ * flat token list ('char' for everything else, one char at a time so the typewriter keeps advancing at
+ * its normal pace; 'term'/'card' for a whole matched alias, revealed atomically like any other marker
+ * below). */
 function autoLinkifyTutorialText(text) {
   const tokens = [];
   let i = 0;
   outer: while (i < text.length) {
-    for (const { code, alias } of TUTORIAL_TERM_ALIASES) {
-      if (text.startsWith(alias, i)) {
-        tokens.push({ type: 'term', code, label: alias });
-        i += alias.length;
-        continue outer;
-      }
+    for (const c of TUTORIAL_LINK_CANDIDATES) {
+      if (!text.startsWith(c.text, i)) continue;
+      if (c.excludePrecededBy && c.excludePrecededBy.some((p) => text.slice(i - p.length, i) === p)) continue;
+      tokens.push(c.kind === 'card'
+        ? { type: 'card', faceId: c.faceId, label: c.text }
+        : { type: 'term', code: c.code, label: c.text });
+      i += c.text.length;
+      continue outer;
     }
     tokens.push({ type: 'char', value: text[i] });
     i++;
@@ -7847,12 +7884,10 @@ function autoLinkifyTutorialText(text) {
 }
 
 // body is normally a plain string (typed one character at a time, auto-linkified per
-// autoLinkifyTutorialText above); JOB_EXPLANATION_BODIES entries can also mix in { card, label } markers
-// (教師's "憤怒", 権力者's "小麦畑の支配"/"農園の支配", 2026-09-24/25) for a plain CARD reference that
-// autoLinkifyTutorialText can't detect on its own (it only knows resource/TAP glossary terms) -- those
-// open the normal card-enlarge popup for that faceId instead of a 資源や用語一覧 term popup. A bare
-// { term, label } marker (not auto-detected, e.g. a term whose display label deliberately differs from
-// every known alias) is still supported too, for whatever a future case like that needs.
+// autoLinkifyTutorialText above, for both resource/TAP terms and card names alike). A bare
+// { term, label } / { card, label } marker is still supported too (JOB_EXPLANATION_BODIES no longer needs
+// either now that both systems auto-detect, but this stays available for whatever future case needs a
+// label that deliberately differs from the real term/card name).
 function tutorialBubbleTokens(body) {
   const parts = Array.isArray(body) ? body : [body];
   const tokens = [];
