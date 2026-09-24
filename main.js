@@ -2339,7 +2339,7 @@ const CARD_LIST_RESOURCE_GLOSSARY = [
   { code: 'C', name: '金貨' },
   { code: 'Z', name: 'コネ' },
   { code: 'BZ', name: '口利き' },
-  { code: 'D', name: '行動力' },
+  { code: 'D', name: '追加ダイス' }, // 2026-09-24, per user request: "行動力を追加ダイスに名前を変更したい"
   { code: 'wD', name: '恩寵' },
   { code: 'TAP', name: 'タップ' },
 ];
@@ -7740,55 +7740,36 @@ const TUTORIAL_STEPS = [
 // own request: "食料 コネ の文字だけ青く色を変え クリックすると資源や用語一覧の食料コネの文章が表示
 // されるようにしてください". Other JOBs without an entry here fall back to the generic placeholder
 // above (see job_explanation's own doc) until the user supplies their wording too.
+// 2026-09-25: every plain string below gets auto-linkified for resource/TAP terms by
+// autoLinkifyTutorialText (see its own doc) -- these entries no longer hand-mark { term, label } spots
+// themselves (社交家's 食料/コネ, 道化's 恩寵ダイス, 教師/権力者's own resource words all used to be
+// hand-marked before auto-linkify existed; now the same plain text just gets picked up automatically).
+// { card, label } markers are still hand-written, though -- autoLinkifyTutorialText only knows the
+// resource/TAP glossary, not arbitrary CARD names like 憤怒/小麦畑の支配/農園の支配.
 const JOB_EXPLANATION_BODIES = {
-  '社交家': [
-    '社交家ですね\nこのカードはクリックすることで横向き（TAP）になり、あなたは',
-    { term: 'K', label: '食料' },
-    '1と',
-    { term: 'Z', label: 'コネ' },
-    '1を得ることができます。\nこのカードはラウンド開始時にアンタップして再び使えるようになります\nどんな状況下でも使える安定して強いカードです',
-  ],
-  '道化': [
-    '道化ですね\nこのカードは獲得するとあなたの持つすべてのダイスはオールマイティの☆ダイスになります\n☆ダイスはいかなる場合でもどのAREAにでも置くことができます\nカードを獲得するときも☆ダイスは1～6のどのダイス目としてでも使えるため大変便利です\n\nこのカードを獲得した時即座に',
-    { term: 'wD', label: '恩寵ダイス（ｗD）' },
-    'も獲得でき序盤中盤終盤スキのないJOBです',
-  ],
-  // 教師(JOB006, 旧「育成者」)の説明セリフ (2026-09-24) -- 資源用語(コネ/恩寵ダイス/食料)は社交家/道化と同じ
-  // { term, label } マーカーだが、「憤怒」だけは資源用語ではなく制約カード(CON005B)そのものを指すため、
-  // 別の { card, label } マーカーを使う -- タップで showTutorialCardTermModal がそのカードの拡大
-  // ポップアップを開く(用語一覧のテキストポップアップではない)。ユーザー自身の文言通り、GET(D)で本来
-  // 一緒に得るVPには触れていない(教師のPASSIVE: ON(GET(D),ADD(Z,VP));ON(GET(wD),ADD(K)))。
+  '社交家': '社交家ですね\nこのカードはクリックすることで横向き（TAP）になり、あなたは食料1とコネ1を得ることができます。\nこのカードはラウンド開始時にアンタップして再び使えるようになります\nどんな状況下でも使える安定して強いカードです',
+  '道化': '道化ですね\nこのカードは獲得するとあなたの持つすべてのダイスはオールマイティの☆ダイスになります\n☆ダイスはいかなる場合でもどのAREAにでも置くことができます\nカードを獲得するときも☆ダイスは1～6のどのダイス目としてでも使えるため大変便利です\n\nこのカードを獲得した時即座に恩寵ダイス（ｗD）も獲得でき序盤中盤終盤スキのないJOBです',
+  // 教師(JOB006, 旧「育成者」)の説明セリフ (2026-09-24) -- 「憤怒」だけは資源用語ではなく制約カード
+  // (CON005B)そのものを指すため { card, label } マーカーを使う -- タップで showTutorialCardTermModal が
+  // そのカードの拡大ポップアップを開く(用語一覧のテキストポップアップではない)。ユーザー自身の文言通り、
+  // GET(D)で本来一緒に得るVPには触れていない(教師のPASSIVE: ON(GET(D),ADD(Z,VP));ON(GET(wD),ADD(K)))。
   '教師': [
-    '教師ですね\nこのカードは\n追加色ダイスを得ると　',
-    { term: 'Z', label: 'コネ' },
-    '\n',
-    { term: 'wD', label: '恩寵ダイス（ｗD）' },
-    'を得ると',
-    { term: 'K', label: '食料' },
-    '　を得ることができます\n爆発力がある反面ダイスを得ることができないと何も仕事をしないためプレイングがものを言います\n制約や初期資源カードにダイスが含まれている場合、それに対応した資源を得ることができますが、制約',
+    '教師ですね\nこのカードは\n追加色ダイスを得ると　コネ\n恩寵ダイス（ｗD）を得ると食料　を得ることができます\n爆発力がある反面ダイスを得ることができないと何も仕事をしないためプレイングがものを言います\n制約や初期資源カードにダイスが含まれている場合、それに対応した資源を得ることができますが、制約',
     { card: 'CON005B', label: '憤怒' },
     'との相性は最悪なので注意してください',
   ],
-  // 権力者(JOB005)の説明セリフ (2026-09-24) -- 「小麦畑の支配」「農園の支配」も「憤怒」と同じ { card, label }
-  // マーカー(この場合はAREA領地カードA004A/A005A、そのLV1面)。食料/権力は本文中に2回ずつ登場するが、
-  // ユーザーの「青文字」指定はどちらも用語そのものを指しているので、出現するたびに毎回マーカー化している。
+  // 権力者(JOB005)の説明セリフ (2026-09-24) -- 「小麦畑の支配」「農園の支配」は資源用語ではなくAREA領地
+  // カード(A004A/A005A、そのLV1面)そのものを指すため { card, label } マーカーを使う。
   '権力者': [
-    '権力者ですね\nこのカードは',
-    { term: 'K', label: '食料' },
-    'を得るとそのうち一つを',
-    { term: 'A', label: '権力' },
-    'に変換します\n1回の効果はささやかですが毎ターン使うことで多くの',
-    { term: 'A', label: '権力' },
-    'を得ることができます\n',
+    '権力者ですね\nこのカードは食料を得るとそのうち一つを権力に変換します\n1回の効果はささやかですが毎ターン使うことで多くの権力を得ることができます\n',
     { card: 'A004A', label: '小麦畑の支配' },
     '　や　',
     { card: 'A005A', label: '農園の支配' },
-    '　との相性は抜群です\n\nあなたの持っている初期資源カードや制約に',
-    { term: 'K', label: '食料' },
-    'が含まれているならもちろんそれも1つだけ',
-    { term: 'A', label: '権力' },
-    'に変えることができます',
+    '　との相性は抜群です\n\nあなたの持っている初期資源カードや制約に食料が含まれているならもちろんそれも1つだけ権力に変えることができます',
   ],
+  // 吟遊詩人(JOB008)の説明セリフ (2026-09-25) -- 資源用語のみ(金貨/VP、どちらも本文に複数回登場、すべて
+  // auto-linkifyされる)、カードへの参照はなし。
+  '吟遊詩人': '吟遊詩人ですね\nこのカードはエンブレムを3個得るごとにターン終了時に1VPと金貨を得ることができます\n同じターン中に3個のエンブレムを得る必要はなく3，6，9...個目のエンブレムを得たターン終了時に得ます。\n制約カードのエンブレムでもVPと金貨を得ることができますがターン終了時に得るため初めのターンに金貨を使うことはできないので注意が必要です',
 };
 
 // job_explanation's own target JOB face (2026-09-24, see that step's own doc) -- set right before
@@ -7815,19 +7796,64 @@ const TUTORIAL_TYPEWRITER_MS_PER_CHAR = 18;
 let tutorialTypewriterStepId = null;
 let tutorialTypewriterTimer = null;
 
-// body is normally a plain string (typed one character at a time, as before); JOB_EXPLANATION_BODIES'
-// 社交家 entry (2026-09-24) shows a body can also be an array mixing plain strings with { term, label }
-// markers -- flattened here into one token list so the typewriter still advances one unit at a time,
-// except a marker reveals as a single atomic clickable span (typing a link glyph-by-glyph would briefly
-// show live-but-broken partial spans, and isn't what "1文字ずつ" was asked for anyway). { term, label }
-// opens the 資源や用語一覧 popup for that code (社交家/道化); { card, label } (教師's "憤怒", 2026-09-24)
-// instead opens the card-enlarge popup for that faceId -- 憤怒 is a constraint CARD, not a resource term.
+// 資源や用語一覧の用語を本文中で自動で青文字化 (2026-09-25, per user request: "資源や用語一覧に出てくる
+// 用語が今後（今まで入力した分も含めて）出てきたら自動で青文字になって飛べるようにしてほしい") -- each
+// entry's alias list is the exact substring(s) that should trigger that code's popup wherever they appear
+// in any plain tutorial-bubble string, present or future; a code can have more than one alias (TAP shows
+// up as both "タップ" and "TAP" across existing card text, wD as "恩寵ダイス" even though its own glossary
+// name is just "恩寵", D's alias is "追加色ダイス" -- the phrase already used in 教師's own body -- plus its
+// new post-rename glossary name "追加ダイス" itself). Sorted longest-alias-first before matching so a
+// longer alias always wins over a shorter one that happens to be its prefix (none collide today, but this
+// keeps future aliases safe by construction rather than by luck).
+const TUTORIAL_TERM_ALIASES = [
+  { code: 'VP', aliases: ['VP'] },
+  { code: 'K', aliases: ['食料'] },
+  { code: 'A', aliases: ['権力'] },
+  { code: 'B', aliases: ['信心'] },
+  { code: 'C', aliases: ['金貨'] },
+  { code: 'Z', aliases: ['コネ'] },
+  { code: 'BZ', aliases: ['口利き'] },
+  { code: 'D', aliases: ['追加色ダイス', '追加ダイス'] },
+  { code: 'wD', aliases: ['恩寵ダイス'] },
+  { code: 'TAP', aliases: ['タップ', 'TAP'] },
+]
+  .flatMap(({ code, aliases }) => aliases.map((alias) => ({ code, alias })))
+  .sort((a, b) => b.alias.length - a.alias.length);
+
+/** Scans one plain string left-to-right, greedily matching the longest TUTORIAL_TERM_ALIASES alias at
+ * each position -- returns a flat token list ('char' for everything else, one char at a time so the
+ * typewriter keeps advancing at its normal pace; 'term' for a whole matched alias, revealed atomically
+ * like any other term marker below). */
+function autoLinkifyTutorialText(text) {
+  const tokens = [];
+  let i = 0;
+  outer: while (i < text.length) {
+    for (const { code, alias } of TUTORIAL_TERM_ALIASES) {
+      if (text.startsWith(alias, i)) {
+        tokens.push({ type: 'term', code, label: alias });
+        i += alias.length;
+        continue outer;
+      }
+    }
+    tokens.push({ type: 'char', value: text[i] });
+    i++;
+  }
+  return tokens;
+}
+
+// body is normally a plain string (typed one character at a time, auto-linkified per
+// autoLinkifyTutorialText above); JOB_EXPLANATION_BODIES entries can also mix in { card, label } markers
+// (教師's "憤怒", 権力者's "小麦畑の支配"/"農園の支配", 2026-09-24/25) for a plain CARD reference that
+// autoLinkifyTutorialText can't detect on its own (it only knows resource/TAP glossary terms) -- those
+// open the normal card-enlarge popup for that faceId instead of a 資源や用語一覧 term popup. A bare
+// { term, label } marker (not auto-detected, e.g. a term whose display label deliberately differs from
+// every known alias) is still supported too, for whatever a future case like that needs.
 function tutorialBubbleTokens(body) {
   const parts = Array.isArray(body) ? body : [body];
   const tokens = [];
   for (const part of parts) {
     if (typeof part === 'string') {
-      for (const ch of part) tokens.push({ type: 'char', value: ch });
+      tokens.push(...autoLinkifyTutorialText(part));
     } else if (part.card) {
       tokens.push({ type: 'card', faceId: part.card, label: part.label });
     } else {
