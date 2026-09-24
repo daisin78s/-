@@ -8534,6 +8534,16 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('tutorial-mode-button').addEventListener('click', openTutorialMode);
   document.getElementById('tutorial-bubble__dismiss').addEventListener('click', dismissTutorialStep);
   document.getElementById('tutorial-bubble__end').addEventListener('click', endTutorialMode);
+  // タップで次へ (2026-09-24, per user report: "セリフがクリックできないので進めない" -- the small 閉じる
+  // text button alone was too fiddly/easy to miss on a touch screen; the whole bubble box now advances
+  // too, matching the original "そこをクリックすると次に行く" request). Ignores clicks that actually
+  // landed on one of the 2 buttons inside it -- those already have their own listeners above, and
+  // 閉じる's would otherwise double-fire (harmless but redundant) while チュートリアルをやめる's would be
+  // wrongly followed by an ALSO-firing dismiss.
+  document.getElementById('tutorial-bubble').addEventListener('click', (e) => {
+    if (e.target.closest('button')) return;
+    dismissTutorialStep();
+  });
   document.getElementById('tutorial-turnorder-close-button').addEventListener('click', closeTutorialTurnOrderOverlay);
   document.getElementById('debug-turn-back').addEventListener('click', handleDebugTurnBack);
   document.getElementById('debug-turn-forward').addEventListener('click', handleDebugTurnForward);

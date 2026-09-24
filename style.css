@@ -3557,6 +3557,9 @@ h1, h2, h3 { margin: 0; }
   padding: 24px 28px;
   flex: 1 1 auto;
   pointer-events: auto;
+  /* 2026-09-24, per user report ("セリフがクリックできないので進めない") -- the whole box is tappable to
+     advance now, not just the small 閉じる button (see main.js's own click wiring). */
+  cursor: pointer;
 }
 
 /* 吹き出しの三角(左のアイコンを指す) */

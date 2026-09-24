@@ -454,7 +454,10 @@
        塞がない -- see main.js's TUTORIAL_STEPS/renderTutorialOverlay。 -->
   <div id="tutorial-bubble-wrap" class="tutorial-bubble-wrap" hidden>
     <div class="tutorial-bubble-avatar" aria-hidden="true">🎲</div>
-    <div class="tutorial-bubble">
+    <!-- 2026-09-24, per user report ("セリフがクリックできないので進めない") -- id added so the whole
+         bubble box (not just the small 閉じる text button) can be tapped to advance, matching the
+         original "そこをクリックすると次に行く" request -- see main.js's own click wiring. -->
+    <div class="tutorial-bubble" id="tutorial-bubble">
       <p id="tutorial-bubble__text" class="tutorial-bubble__text"></p>
       <div class="tutorial-bubble__actions">
         <button type="button" id="tutorial-bubble__end">チュートリアルをやめる</button>
