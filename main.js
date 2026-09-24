@@ -7596,6 +7596,13 @@ const TUTORIAL_STEPS = [
       const choice = state.pendingChoices.find((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS');
       return !!(choice && choice.context.selected && choice.context.selected.length === (choice.context.count || 2));
     },
+    // 2026-09-24, per user report ("チュートリアルがクリックするだけで消えてしまう" -- confirmed: "その
+    // セリフだけが消える(次のセリフも出ない)") -- unlike every other step, a manual tap (either the whole
+    // bubble or its own 閉じる) must NOT close this one: dismissing it before the player has actually
+    // picked 2 cards leaves them with no guidance at all and nothing else ready to show yet (turn_order_
+    // intro's own `match` needs state.turnOrder, which doesn't exist until they've chosen). It can only
+    // ever go away via autoDismissWhen above. See dismissTutorialStep's own doc for the guard.
+    noManualDismiss: true,
   },
   // 2026-09-24, re-added per user request (was reverted 2026-09-23 for an unrelated card-sizing bug in
   // the turn-order overlay, now fixed separately -- see tutorialOthersRevealed's own doc). body is a
@@ -7668,6 +7675,12 @@ function renderTutorialOverlay(state) {
   }
   wrap.hidden = !step;
   if (!step) return;
+  // Hide 閉じる for a noManualDismiss step (2026-09-24, see resource_choice's own doc) -- a visible
+  // button that silently does nothing would be confusing; チュートリアルをやめる still always works.
+  // Also drops the whole-bubble pointer cursor for the same step, so it doesn't visually invite a tap
+  // that dismissTutorialStep is just going to ignore.
+  document.getElementById('tutorial-bubble__dismiss').hidden = !!step.noManualDismiss;
+  document.getElementById('tutorial-bubble').classList.toggle('tutorial-bubble--no-dismiss', !!step.noManualDismiss);
   if (tutorialTypewriterStepId !== step.id) {
     tutorialTypewriterStepId = step.id;
     const fullText = typeof step.body === 'function' ? step.body(state) : step.body;
@@ -7676,6 +7689,10 @@ function renderTutorialOverlay(state) {
 }
 
 function dismissTutorialStep() {
+  // noManualDismiss (2026-09-24, per user report -- see resource_choice's own doc): ignore a manual
+  // tap/閉じる entirely for a step that opted into this; it can only go away via its own autoDismissWhen.
+  const currentStep = TUTORIAL_STEPS.find((s) => s.id === tutorialCurrentStepId);
+  if (currentStep && currentStep.noManualDismiss) return;
   // Dismissing turn_order_intro is what reveals the other 3 players' own cards (2026-09-24, per user
   // request: "新しいセリフを出して そこをクリックすると次に行く") -- see tutorialOthersRevealed's own doc.
   if (tutorialCurrentStepId === 'turn_order_intro') tutorialOthersRevealed = true;

@@ -3569,6 +3569,14 @@ h1, h2, h3 { margin: 0; }
   cursor: pointer;
 }
 
+/* resource_choice's own noManualDismiss (2026-09-24, per user report: "チュートリアルがクリックするだけで
+   消えてしまう" -- confirmed: dismissing it before 2 cards are actually picked left the player with no
+   guidance and nothing else ready to show) -- drops the pointer cursor so it doesn't visually invite a
+   tap dismissTutorialStep is just going to ignore for this one step. */
+.tutorial-bubble--no-dismiss {
+  cursor: default;
+}
+
 /* 吹き出しの三角(左のアイコンを指す) */
 .tutorial-bubble::before {
   content: '';
