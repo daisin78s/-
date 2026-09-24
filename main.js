@@ -7589,7 +7589,52 @@ const TUTORIAL_STEPS = [
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
     body: 'それではゲームを始めましょう。\nランダムに配られた初期資源カード4枚のうち2枚を選んでください。\nお試しのゲーム説明なので、深く考えずにとってもらって大丈夫です。',
   },
+  // 2026-09-24, re-added per user request (was reverted 2026-09-23 for an unrelated card-sizing bug in
+  // the turn-order overlay, now fixed separately -- see tutorialOthersRevealed's own doc). body is a
+  // function of state (not a plain string) since it embeds あなた/P1's own actual computed 先行順合計.
+  // Dismissing THIS step specifically (see dismissTutorialStep) is also what reveals the other 3
+  // players' own cards in the turn-order overlay.
+  {
+    id: 'turn_order_intro',
+    match: (state) => !!(state.turnOrder && state.turnOrder.length === state.players.length),
+    body: (state) => {
+      const p1 = state.players.find((p) => p.id === 'P1');
+      const resourceIds = p1.ownedCardPhysicalIds.filter((id) => id.startsWith('R'));
+      const total = resourceChoiceStartOrderTotal(state, 'P1', resourceIds);
+      return `あなたの選んだカードはこちら。\n先行順は${total}になります。\nこの数字が大きいほど、得られる初期資源が多くなります。\nこの数字が小さいほど、先に行動してJOBや獲得カードを選ぶことができます。\nそれでは、ほかのプレイヤーの先行順も見てみましょう。`;
+    },
+  },
 ];
+
+// タイプライター表示 (2026-09-24, per user request: "セリフはすべて 全部いっぺんに出るのではなく 1文字ずつ
+// 高速で出る") -- every tutorial bubble's text reveals one character at a time instead of appearing all
+// at once. Runs on its own setInterval, independent of render()'s own (much more frequent, for unrelated
+// reasons) calls -- renderTutorialOverlay only ever (re)starts it when the STEP ID actually changes, so a
+// re-render mid-typing never restarts/interrupts it.
+const TUTORIAL_TYPEWRITER_MS_PER_CHAR = 18;
+let tutorialTypewriterStepId = null;
+let tutorialTypewriterTimer = null;
+
+function startTutorialTypewriter(stepId, fullText) {
+  if (tutorialTypewriterTimer) clearInterval(tutorialTypewriterTimer);
+  const textEl = document.getElementById('tutorial-bubble__text');
+  let shown = 0;
+  textEl.textContent = '';
+  tutorialTypewriterTimer = setInterval(() => {
+    shown++;
+    textEl.textContent = fullText.slice(0, shown);
+    if (shown >= fullText.length) {
+      clearInterval(tutorialTypewriterTimer);
+      tutorialTypewriterTimer = null;
+    }
+  }, TUTORIAL_TYPEWRITER_MS_PER_CHAR);
+}
+
+function stopTutorialTypewriter() {
+  if (tutorialTypewriterTimer) clearInterval(tutorialTypewriterTimer);
+  tutorialTypewriterTimer = null;
+  tutorialTypewriterStepId = null;
+}
 
 /** Shows the next not-yet-seen matching step, if any, or keeps showing whichever one is already on
  * screen until dismissed. Called once per render(), same as every other renderX(state) function. */
@@ -7606,11 +7651,19 @@ function renderTutorialOverlay(state) {
   const step = TUTORIAL_STEPS.find((s) => s.id === tutorialCurrentStepId);
   wrap.hidden = !step;
   if (!step) return;
-  document.getElementById('tutorial-bubble__text').textContent = step.body;
+  if (tutorialTypewriterStepId !== step.id) {
+    tutorialTypewriterStepId = step.id;
+    const fullText = typeof step.body === 'function' ? step.body(state) : step.body;
+    startTutorialTypewriter(step.id, fullText);
+  }
 }
 
 function dismissTutorialStep() {
+  // Dismissing turn_order_intro is what reveals the other 3 players' own cards (2026-09-24, per user
+  // request: "新しいセリフを出して そこをクリックすると次に行く") -- see tutorialOthersRevealed's own doc.
+  if (tutorialCurrentStepId === 'turn_order_intro') tutorialOthersRevealed = true;
   tutorialCurrentStepId = null;
+  stopTutorialTypewriter();
   render(STATE);
 }
 
@@ -7625,9 +7678,21 @@ function dismissTutorialStep() {
  * Both CON faces are shown (not just the eventually-chosen one) because at this exact moment nobody has
  * picked a face yet -- player.conPhysicalId is dealt at setup, long before each player's own round-1
  * onboarding turn actually picks A or B -- so this doubles as an early preview, same idea as
- * renderConPreview's own pre-round-1 use of renderConFacesRow. */
+ * renderConPreview's own pre-round-1 use of renderConFacesRow.
+ *
+ * 他3人のカードを裏向きに (2026-09-24, per user request: "ほかのプレイヤーのカードを裏向きに" -- a first
+ * attempt 2026-09-23 built a separate blank placeholder for this and was reverted the same day because it
+ * didn't get buildCardVisual's own shop-card--tall classification, so hidden cards sat at the wrong
+ * height next to real ones. Fixed this time per the user's own suggested approach ("カードの文字やアイコン
+ * を透明にするか背景と同色にすれば解決しますか") -- still renders the REAL buildCardVisual node (so its
+ * height is always correct) and just hides its content visually via .tutorial-card-hidden (all of its
+ * children get visibility:hidden, leaving the plain card box/border/background exactly as a real card's
+ * would be, just blank). Only the OTHER 3 players' CON+resource cards get this treatment; あなた/P1's own
+ * are always shown normally. Flips to fully real (visible) once tutorialOthersRevealed is set -- see
+ * dismissTutorialStep's own doc for what sets it. */
 const TUTORIAL_TURN_ORDER_STEP_ID = 'turn_order_reveal';
 let tutorialTurnOrderOverlayOpen = false;
+let tutorialOthersRevealed = false;
 
 function renderTutorialTurnOrderOverlay(state) {
   const overlay = document.getElementById('tutorial-turnorder-overlay');
@@ -7669,8 +7734,13 @@ function renderTutorialTurnOrderOverlay(state) {
     // Not renderConFacesRow (it always appends its own "JOB選択後、CONの表/裏を選んでください" onboarding
     // hint, meant for the single player currently mid-choice -- out of place repeated once per row here).
     const cardsRow = el('div', 'build-choice-group');
+    const isSelf = playerId === 'P1';
     for (const faceId of [`${player.conPhysicalId}A`, `${player.conPhysicalId}B`, ...resourceIds]) {
       const cardNode = buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true });
+      // Other 3 players' cards stay face-down (blank) until tutorialOthersRevealed -- see this
+      // function's own doc above for why this hides the real node's CONTENT instead of swapping in a
+      // separate placeholder (that broke card height matching last time).
+      if (!isSelf && !tutorialOthersRevealed) cardNode.classList.add('tutorial-card-hidden');
       const cell = el('div', cardNode.classList.contains('shop-card--tall') ? 'owned-card-cell owned-card-cell--tall' : 'owned-card-cell');
       cell.appendChild(cardNode);
       cardsRow.appendChild(cell);
@@ -7689,6 +7759,8 @@ function endTutorialMode() {
   tutorialModeActive = false;
   tutorialCurrentStepId = null;
   tutorialTurnOrderOverlayOpen = false;
+  tutorialOthersRevealed = false;
+  stopTutorialTypewriter();
   render(STATE);
 }
 
