@@ -7676,23 +7676,33 @@ function stopTutorialTypewriter() {
 function renderTutorialOverlay(state) {
   const wrap = document.getElementById('tutorial-bubble-wrap');
   if (!tutorialModeActive) { wrap.hidden = true; return; }
-  if (!tutorialCurrentStepId) {
-    const step = TUTORIAL_STEPS.find((s) => !tutorialSeenStepIds.has(s.id) && s.match(state));
-    if (step) {
-      tutorialSeenStepIds.add(step.id);
-      tutorialCurrentStepId = step.id;
+  // Loop rather than a single pass (2026-09-24 fix, per user report: "この選択でOKを押した後 セリフが
+  // 出てくる" -- should have appeared already, at the この2枚でよろしいですか？ confirm screen) -- a
+  // single pass used to `return` the instant autoDismissWhen fired, leaving tutorialCurrentStepId null
+  // for the rest of THIS render, so a step that became eligible on this exact same render (e.g.
+  // resource_confirm_intro, whose own match only turns true the moment resource_choice's autoDismissWhen
+  // also turns true) never got picked up until some LATER, unrelated render happened to run -- in
+  // practice not until the この選択でOK click itself, well past the confirm screen this was meant for.
+  // Looping lets one render chain through any number of steps that are born already-auto-dismissed.
+  for (;;) {
+    if (!tutorialCurrentStepId) {
+      const next = TUTORIAL_STEPS.find((s) => !tutorialSeenStepIds.has(s.id) && s.match(state));
+      if (!next) break;
+      tutorialSeenStepIds.add(next.id);
+      tutorialCurrentStepId = next.id;
     }
+    const current = TUTORIAL_STEPS.find((s) => s.id === tutorialCurrentStepId);
+    // autoDismissWhen (2026-09-24): a step can opt into closing itself automatically, unlike every other
+    // step here (which stays open until 閉じる/チュートリアルをやめる is clicked, per the standing
+    // "セリフは閉じないで" instruction) -- see resource_choice's own doc for why it needs this.
+    if (current && current.autoDismissWhen && current.autoDismissWhen(state)) {
+      tutorialCurrentStepId = null;
+      stopTutorialTypewriter();
+      continue;
+    }
+    break;
   }
   const step = TUTORIAL_STEPS.find((s) => s.id === tutorialCurrentStepId);
-  // autoDismissWhen (2026-09-24): a step can opt into closing itself automatically, unlike every other
-  // step here (which stays open until 閉じる/チュートリアルをやめる is clicked, per the standing
-  // "セリフは閉じないで" instruction) -- see resource_choice's own doc for why it needs this.
-  if (step && step.autoDismissWhen && step.autoDismissWhen(state)) {
-    tutorialCurrentStepId = null;
-    stopTutorialTypewriter();
-    wrap.hidden = true;
-    return;
-  }
   wrap.hidden = !step;
   if (!step) return;
   // Hide 閉じる for a noManualDismiss step (2026-09-24, see resource_choice's own doc) -- a visible
