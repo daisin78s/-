@@ -7755,7 +7755,7 @@ const JOB_EXPLANATION_BODIES = {
   ],
   // 教師(JOB006, 旧「育成者」)の説明セリフ (2026-09-24) -- 資源用語(コネ/恩寵ダイス/食料)は社交家/道化と同じ
   // { term, label } マーカーだが、「憤怒」だけは資源用語ではなく制約カード(CON005B)そのものを指すため、
-  // 別の { card, label } マーカーを使う -- タップで showTutorialConstraintCardModal がそのカードの拡大
+  // 別の { card, label } マーカーを使う -- タップで showTutorialCardTermModal がそのカードの拡大
   // ポップアップを開く(用語一覧のテキストポップアップではない)。ユーザー自身の文言通り、GET(D)で本来
   // 一緒に得るVPには触れていない(教師のPASSIVE: ON(GET(D),ADD(Z,VP));ON(GET(wD),ADD(K)))。
   '教師': [
@@ -7768,6 +7768,26 @@ const JOB_EXPLANATION_BODIES = {
     '　を得ることができます\n爆発力がある反面ダイスを得ることができないと何も仕事をしないためプレイングがものを言います\n制約や初期資源カードにダイスが含まれている場合、それに対応した資源を得ることができますが、制約',
     { card: 'CON005B', label: '憤怒' },
     'との相性は最悪なので注意してください',
+  ],
+  // 権力者(JOB005)の説明セリフ (2026-09-24) -- 「小麦畑の支配」「農園の支配」も「憤怒」と同じ { card, label }
+  // マーカー(この場合はAREA領地カードA004A/A005A、そのLV1面)。食料/権力は本文中に2回ずつ登場するが、
+  // ユーザーの「青文字」指定はどちらも用語そのものを指しているので、出現するたびに毎回マーカー化している。
+  '権力者': [
+    '権力者ですね\nこのカードは',
+    { term: 'K', label: '食料' },
+    'を得るとそのうち一つを',
+    { term: 'A', label: '権力' },
+    'に変換します\n1回の効果はささやかですが毎ターン使うことで多くの',
+    { term: 'A', label: '権力' },
+    'を得ることができます\n',
+    { card: 'A004A', label: '小麦畑の支配' },
+    '　や　',
+    { card: 'A005A', label: '農園の支配' },
+    '　との相性は抜群です\n\nあなたの持っている初期資源カードや制約に',
+    { term: 'K', label: '食料' },
+    'が含まれているならもちろんそれも1つだけ',
+    { term: 'A', label: '権力' },
+    'に変えることができます',
   ],
 };
 
@@ -7818,7 +7838,7 @@ function tutorialBubbleTokens(body) {
 }
 
 // A term token's span opens showCardListTermModal, same as a 資源や用語一覧 tile tap; a card token's span
-// opens the normal card-enlarge popup instead (see showTutorialConstraintCardModal's own doc).
+// opens the normal card-enlarge popup instead (see showTutorialCardTermModal's own doc).
 // stopPropagation is required here since #tutorial-bubble itself has its own whole-box click-to-dismiss
 // listener (see its own doc) that would otherwise also fire and advance/close this step on the same tap.
 // A term popup's own title always uses CARD_LIST_RESOURCE_GLOSSARY's canonical name (not the token's own
@@ -7833,7 +7853,7 @@ function appendTutorialBubbleToken(textEl, token) {
   span.addEventListener('click', (event) => {
     event.stopPropagation();
     if (token.type === 'card') {
-      showTutorialConstraintCardModal(token.faceId);
+      showTutorialCardTermModal(token.faceId);
       return;
     }
     const glossaryName = (CARD_LIST_RESOURCE_GLOSSARY.find((g) => g.code === token.code) || {}).name;
@@ -7842,11 +7862,12 @@ function appendTutorialBubbleToken(textEl, token) {
   textEl.appendChild(span);
 }
 
-// 教師の「憤怒」用語マーカー(2026-09-24)専用 -- attachPickableEnlarge/showCardEnlargeModalの通常のカード
-// クリック経路をpickActionなし(このカードを選ぶボタンなし、閲覧専用)でそのまま再利用。CON005B「憤怒」には
-// CON005A「怠惰」という表側の対の面があるので、siblingFaceIdで見つかれば両面とも表示する(通常のカード
-// 拡大ポップアップと同じ挙動)。
-function showTutorialConstraintCardModal(faceId) {
+// { card, label } マーカー用 (教師の「憤怒」、権力者の「小麦畑の支配」「農園の支配」, 2026-09-24) --
+// attachPickableEnlarge/showCardEnlargeModalの通常のカードクリック経路をpickActionなし(このカードを
+// 選ぶボタンなし、閲覧専用)でそのまま再利用。CON005B「憤怒」の表側の対の面(CON005A「怠惰」)や、
+// A004A「小麦畑の支配LV1」のLVUP面(A004B)のように、siblingFaceIdで見つかれば両面とも表示する(通常の
+// カード拡大ポップアップと同じ挙動)。
+function showTutorialCardTermModal(faceId) {
   const sibling = siblingFaceId(faceId);
   const hasSiblingData = sibling && cardFaceExists(sibling);
   const visualNode = buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true });
