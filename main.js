@@ -7624,7 +7624,7 @@ const TUTORIAL_STEPS = [
     body: (state) => {
       const choice = state.pendingChoices.find((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS');
       const total = resourceChoiceStartOrderTotal(state, 'P1', choice.context.selected);
-      return `あなたの選んだカードはこちら。\n先行順は${total}です。\nこの数字が大きいほど、得られる初期資源が多くなります。\nこの数字が小さいほど、先に行動してJOBや獲得カードを選ぶことができます。`;
+      return `あなたが選んだカードはこちら。\n制約カードに書かれた先行順と足された合計は${total}です。\nこの数字が大きいほど、得られる初期資源が多くなります。\nこの数字が小さいほど、先に行動してJOBや獲得カードを選ぶことができます。`;
     },
     autoDismissWhen: (state) => !state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
   },
@@ -7640,7 +7640,7 @@ const TUTORIAL_STEPS = [
       const p1 = state.players.find((p) => p.id === 'P1');
       const resourceIds = p1.ownedCardPhysicalIds.filter((id) => id.startsWith('R'));
       const total = resourceChoiceStartOrderTotal(state, 'P1', resourceIds);
-      return `あなたの選んだカードはこちら。\n先行順は${total}です。\nこの数字が大きいほど、得られる初期資源が多くなります。\nこの数字が小さいほど、先に行動してJOBや獲得カードを選ぶことができます。\nそれでは、ほかのプレイヤーの先行順も見てみましょう。`;
+      return `あなたが選んだカードはこちら。\n制約カードに書かれた先行順と足された合計は${total}です。\nこの数字が大きいほど、得られる初期資源が多くなります。\nこの数字が小さいほど、先に行動してJOBや獲得カードを選ぶことができます。\nそれでは、ほかのプレイヤーの先行順も見てみましょう。`;
     },
   },
 ];
