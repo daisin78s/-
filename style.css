@@ -3654,7 +3654,9 @@ h1, h2, h3 { margin: 0; }
 .tutorial-turnorder-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  /* 0 (2026-09-24, per user request with a screenshot marking these row-to-row gaps in red: "隙間を
+     なくしてください") -- was 8px. */
+  gap: 0;
   padding-right: 40px; /* keep rows clear of the top-right ✖ */
   padding-top: 44px; /* keep the FIRST row clear of the top-right ✖ too */
   /* Only the row list scrolls (not the whole modal, and not the ✖ button) -- same
