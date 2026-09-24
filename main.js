@@ -7659,6 +7659,26 @@ const TUTORIAL_STEPS = [
       const total = resourceChoiceStartOrderTotal(state, 'P1', resourceIds);
       return `あなたの先攻順は${total}です。\nそれでは、他のプレイヤーの先行順も見てみましょう。`;
     },
+    // 2026-09-24, per user request: "閉じるではなく次へと表示して" -- this step leads straight into
+    // another one (turn_order_reveal_summary below), so its own button reads 次へ instead of the default
+    // 閉じる. Dismissing it is unchanged otherwise -- still what sets tutorialOthersRevealed (see
+    // dismissTutorialStep's own doc).
+    nextLabel: '次へ',
+  },
+  // 2026-09-24, per user request: shown right after turn_order_intro is dismissed (tutorialOthersRevealed
+  // becomes true then, which is also what reveals the other 3 players' own cards in the turn-order
+  // overlay -- see dismissTutorialStep's own doc). Lists the final turn order by name, in rank order.
+  {
+    id: 'turn_order_reveal_summary',
+    match: () => tutorialOthersRevealed,
+    body: (state) => {
+      const lines = state.turnOrder.map((playerId, i) => {
+        const player = state.players.find((p) => p.id === playerId);
+        return `${i + 1}番手は${player.name}`;
+      });
+      return `${lines.join('\n')}\nに決まりました。`;
+    },
+    nextLabel: '次へ',
   },
 ];
 
@@ -7732,6 +7752,10 @@ function renderTutorialOverlay(state) {
   // that dismissTutorialStep is just going to ignore.
   document.getElementById('tutorial-bubble__dismiss').hidden = !!step.noManualDismiss;
   document.getElementById('tutorial-bubble').classList.toggle('tutorial-bubble--no-dismiss', !!step.noManualDismiss);
+  // nextLabel (2026-09-24, per user request: "閉じるではなく次へと表示して") -- a step that leads
+  // straight into another one reads 次へ instead of the default 閉じる; the click behavior itself
+  // (dismissTutorialStep) is unchanged either way.
+  document.getElementById('tutorial-bubble__dismiss').textContent = step.nextLabel || '閉じる';
   if (tutorialTypewriterStepId !== step.id) {
     tutorialTypewriterStepId = step.id;
     const fullText = typeof step.body === 'function' ? step.body(state) : step.body;
