@@ -6452,6 +6452,13 @@ function renderJobPool(state, next) {
         commit();
       },
     } : null);
+    // 2026-09-24, per user request: "JOBをクリックしたときそのJOBの説明をセリフで流したい" -- fires
+    // alongside attachPickableEnlarge's own click listener above (both attach to the same cardNode/click,
+    // and simply run independently), only while it's genuinely あなた/P1's own drafting turn. See
+    // showJobExplanationBubble's own doc.
+    if (draftingPlayerId === 'P1') {
+      cardNode.addEventListener('click', () => showJobExplanationBubble(faceId));
+    }
     container.appendChild(cell);
   }
 }
@@ -7703,7 +7710,37 @@ const TUTORIAL_STEPS = [
       return `${turnLine}\nJOBカードを選んでください。\nJOBカードをクリックすると説明が表示されます。`;
     },
   },
+  // 2026-09-24, per user request: "JOBをクリックしたときそのJOBの説明をセリフで流したい" -- unlike every
+  // step above, this one is never picked up by the normal "scan for the next unseen matching step" pass
+  // (match always returns false, so it's also never added to tutorialSeenStepIds and can show again for a
+  // different JOB every time) -- showJobExplanationBubble sets tutorialCurrentStepId to this id directly,
+  // right when a JOB card is clicked during あなた/P1's own draft (see renderJobPool's own call site).
+  // Body text per the user's own worked example ("宣教師ですね / このカードは") -- the continuation past
+  // "このカードは" is intentionally left for later ("このカードはの続きは後で考えます"), not invented here.
+  {
+    id: 'job_explanation',
+    match: () => false,
+    body: () => {
+      const name = dataLoaderMod.getCardRow(INDEX, tutorialExplainedJobFaceId).NAME;
+      return `${name}ですね。\nこのカードは`;
+    },
+  },
 ];
+
+// job_explanation's own target JOB face (2026-09-24, see that step's own doc) -- set right before
+// showing it, read by its body() above.
+let tutorialExplainedJobFaceId = null;
+
+/** Shows job_explanation for jobFaceId, overriding whatever tutorial step (if any) was already on
+ * screen. Called from renderJobPool's own click wiring, only while it's genuinely あなた/P1's own turn to
+ * draft (same drafting-player check that click's own enlarge-modal already applies). */
+function showJobExplanationBubble(jobFaceId) {
+  if (!tutorialModeActive) return;
+  tutorialExplainedJobFaceId = jobFaceId;
+  tutorialCurrentStepId = 'job_explanation';
+  stopTutorialTypewriter();
+  render(STATE);
+}
 
 // タイプライター表示 (2026-09-24, per user request: "セリフはすべて 全部いっぺんに出るのではなく 1文字ずつ
 // 高速で出る") -- every tutorial bubble's text reveals one character at a time instead of appearing all
@@ -8367,6 +8404,12 @@ function showCardEnlargeModal(faceId, visualNode, sibling, siblingVisualNode, pi
   // still-hidden (display:none) overlay always reports 0x0, since the browser never lays out
   // display:none content.
   overlay.hidden = false;
+  // チュートリアル中だけ左寄せ (2026-09-24, per user report with a screenshot: "セリフと被っているので
+  // チュートリアルだけ左に寄せてください" -- #card-inst-overlay is used for every card enlarge popup app-
+  // wide (JOB draft included), and its default center alignment can land under the right-anchored
+  // seli-fu bubble) -- same treatment as #resource-confirm-overlay/#tutorial-turnorder-overlay already
+  // got; normal (non-tutorial) play is untouched.
+  overlay.classList.toggle('card-inst-overlay--tutorial-left', tutorialModeActive);
 
   visualContainer.innerHTML = '';
   visualContainer.style.width = '';
