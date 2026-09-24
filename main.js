@@ -8637,6 +8637,18 @@ document.addEventListener('DOMContentLoaded', () => {
       && c.context.selected && c.context.selected.length === (c.context.count || 2));
     if (!choice) return;
     choice.context.selected = [];
+    // 2026-09-24, per user request: "別のにするを選んだらセリフも戻るようにしてほしい" -- 別のにする only
+    // clears .selected back to [] (the same pendingChoice object survives), so resource_confirm_intro's
+    // own autoDismissWhen (which only fires once the choice is fully committed/gone, i.e. この選択でOK)
+    // never noticed the selection was undone, leaving its now-stale "先行順はNです" text on screen. Un-
+    // seeing both resource-choice steps here makes the very next render pick resource_choice back up
+    // fresh, matching the screen's own revert to the plain candidate grid.
+    if (tutorialModeActive) {
+      tutorialSeenStepIds.delete('resource_choice');
+      tutorialSeenStepIds.delete('resource_confirm_intro');
+      tutorialCurrentStepId = null;
+      stopTutorialTypewriter();
+    }
     render(STATE);
   });
 
