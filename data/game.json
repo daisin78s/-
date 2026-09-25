@@ -1259,13 +1259,13 @@
       "ONCE": "ADD(3Z)",
       "TAP": "",
       "PASSIVE": "",
-      "TURNEND": "FORCE_CONVERT(Z,K,1)",
+      "TURNEND": "",
       "START_ORDER": 0,
-      "WARNING": "Zを1個Kに変換します。\nよろしいですか？",
-      "NOTE": "TURNEND時にFORCE_CONVERT(Z,K,1)が適用される場合のみWARNINGを表示する。\n「はい」で処理を続行する。\n「いいえ」でTURNENDを取り消す。",
+      "WARNING": "Zがすべて〇に変換されます。\nよろしいですか？",
+      "NOTE": "このプレイヤーの色ダイス（COLOR）が残り0個になるターンの終了時のみWARNINGを表示し、Zをすべて食料に変換する。\n「はい」で処理を続行する。\n「いいえ」でTURNENDを取り消す。",
       "AUTO": "",
-      "INST": "ターン終了時Z1個が◯1個に変わる",
-      "アイコン": "Z→K\nターン終了時"
+      "INST": "ラウンド終了時Zがすべて◯1個に変わる\n資源の支払い時Zから優先的に使うようになる",
+      "アイコン": "Z→K\nラウンド終了時"
     },
     {
       "ID": "CON002B",

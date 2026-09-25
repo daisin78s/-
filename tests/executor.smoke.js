@@ -952,7 +952,8 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 }
 {
   // With 色欲, Z is automatically drained first even though real is fully affordable -- no choice
-  // needed -- e.g. to spend Z down before 色欲's own TURNEND=FORCE_CONVERT(Z,K,1) claims it anyway.
+  // needed -- e.g. to spend Z down before 色欲's own round-end all-Z->K conversion (see
+  // executor.colorConvertLastTurnAmount) claims it anyway.
   const state = freshState();
   giveCard(state, 'CON001B', 'P1');
   getPlayerRef(state, 'P1').resources.B = 5;
@@ -1323,6 +1324,50 @@ const UNTAP_CHOICE_3 = { type: 'UNTAP_CHOICE', scope: 'SELF', count: 3 };
   executor.runCommand(state, index, { playerId: 'P1' }, { type: 'UNTAP_ALL', scope: 'SELF' });
   check('UNTAP_ALL(SELF) leaves a 兆し-named card tapped', state.cards[signId].tapped, true);
   check('...but untaps every other owned card', state.cards[plainId].tapped, false);
+}
+
+// ---------------------------------------------------------------------------
+// colorConvertLastTurnAmount / 色欲(CON001B)'s round-end all-Z->K conversion (2026-09-26, per user's
+// ability redesign request -- replaces the old plain TURNEND=FORCE_CONVERT(Z,K,1), now cleared from
+// CON001B's own TURNEND column). Bespoke: fires a VARIABLE amount (all currently-held Z, not a fixed 1)
+// and only on this player's own LAST turn of the round (no COLOR die left unplaced).
+// ---------------------------------------------------------------------------
+{
+  const state = freshState();
+  const player = getPlayerRef(state, 'P1');
+  player.resources.Z = 3;
+  check('0 without 色欲, even fully out of COLOR dice', executor.colorConvertLastTurnAmount(state, 'P1'), 0);
+
+  giveCard(state, 'CON001B', 'P1'); // 色欲
+  player.dice.push(createDie('unplaced', 'COLOR'));
+  check('0 with 色欲 but a COLOR die still unplaced (not this player\'s last turn yet)', executor.colorConvertLastTurnAmount(state, 'P1'), 0);
+
+  player.dice[0].placedMapId = 'MAP001'; // that same die placed -- now genuinely the last turn
+  check('All 3 Z would convert once every COLOR die is placed', executor.colorConvertLastTurnAmount(state, 'P1'), 3);
+
+  player.resources.Z = 0;
+  check('0 once Z itself is already empty, even on the last turn', executor.colorConvertLastTurnAmount(state, 'P1'), 0);
+}
+{
+  // applyTurnEnd actually performs the conversion when colorConvertLastTurnAmount says it should.
+  const state = freshState();
+  const player = getPlayerRef(state, 'P1');
+  giveCard(state, 'CON001B', 'P1');
+  player.resources.Z = 4;
+  player.resources.K = 1;
+  executor.applyTurnEnd(state, index, 'P1'); // no COLOR dice at all -- already this player's last turn
+  check('applyTurnEnd converts every Z into K on the last turn of the round', player.resources, { K: 5, A: 0, B: 0, C: 0, Z: 0, VP: 0, BZ: 0 });
+}
+{
+  // ...but leaves Z untouched while a COLOR die is still unplaced.
+  const state = freshState();
+  const player = getPlayerRef(state, 'P1');
+  giveCard(state, 'CON001B', 'P1');
+  player.dice.push(createDie('unplaced', 'COLOR'));
+  player.resources.Z = 4;
+  player.resources.K = 1;
+  executor.applyTurnEnd(state, index, 'P1');
+  check('applyTurnEnd leaves Z untouched mid-round (a COLOR die is still unplaced)', player.resources, { K: 1, A: 0, B: 0, C: 0, Z: 4, VP: 0, BZ: 0 });
 }
 
 console.log(`\n${passCount} passed, ${failCount} failed`);

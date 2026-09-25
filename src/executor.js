@@ -50,13 +50,14 @@ const CARD_COUNT_SHEETS = new Set(['A', 'B', 'C', 'M']); // CARD_COUNT excludes 
 // Z is a universal substitute for any of A/B/C when paying a cost (confirmed 2026-07-31): by default
 // real A/B/C is always drained first and Z only covers a shortfall, automatically, for every player.
 // 色欲 specifically grants the *choice* to prefer Z instead (e.g. to spend it down before its own
-// TURNEND=FORCE_CONVERT(Z,K,1) claims it anyway) -- see resolvePayment/hasPaymentChoiceAbility below.
+// round-end all-Z->K conversion, see colorConvertLastTurnAmount below, claims it anyway) -- see
+// resolvePayment/hasPaymentChoiceAbility below.
 const COLOR_RESOURCES = new Set(['A', 'B', 'C']);
 // Bespoke, explicitly-confirmed exception to "the engine only interprets DSL, never card IDs" --
 // same precedent as board.js's CASTLE_MAP_ID. 色欲's payment-choice ability has no DSL representation
-// of its own (its only real DSL is TURNEND=FORCE_CONVERT(Z,K,1); "you may choose to pay with Z
-// instead" is WARNING/INST flavor text, never parsed). 色欲 moved from CON002B to CON001B when the
-// user reorganized game.xlsx's CON sheet by START_ORDER (2026-08-17) -- updated to match.
+// of its own ("you may choose to pay with Z instead" is WARNING/INST flavor text, never parsed). 色欲
+// moved from CON002B to CON001B when the user reorganized game.xlsx's CON sheet by START_ORDER
+// (2026-08-17) -- updated to match.
 const PAYMENT_CHOICE_CON_FACE_ID = 'CON001B';
 
 // ---------------------------------------------------------------------------
@@ -261,6 +262,25 @@ function tryPay(state, playerId, resource, count) {
 function hasPaymentChoiceAbility(state, playerId) {
   const player = getPlayer(state, playerId);
   return player.ownedCardPhysicalIds.some((physicalId) => state.cards[physicalId].currentFaceId === PAYMENT_CHOICE_CON_FACE_ID);
+}
+
+/** How much Z would convert to K if playerId ended their turn right now -- 0 unless they own 色欲
+ * (PAYMENT_CHOICE_CON_FACE_ID), this is their own LAST turn of the round (no COLOR die left unplaced
+ * once this turn ends), and they actually hold any Z (2026-09-26, per user's ability redesign request:
+ * "ラウンド終了時Zがすべて食料に変わる", replacing the previous plain TURNEND=FORCE_CONVERT(Z,K,1) DSL,
+ * now cleared from CON001B's own TURNEND column -- this bespoke check runs instead). Bespoke rather than
+ * a generic DSL command because the DSL's own FORCE_CONVERT always fires a FIXED count unconditionally
+ * every TURNEND; this instead converts a VARIABLE amount (all of it) and only conditionally (last turn of
+ * the round only) -- same class of exception as hasPaymentChoiceAbility above (this same card's OTHER
+ * ability) or board.js's hasPioneerAbility/hasLandlordAbility. Shared by main.js's turnEndWarnings
+ * (preview, must not mutate) and applyTurnEnd's real mutation below, so both always agree exactly on
+ * whether/how much would convert. */
+function colorConvertLastTurnAmount(state, playerId) {
+  if (!hasPaymentChoiceAbility(state, playerId)) return 0;
+  const player = getPlayer(state, playerId);
+  const hasRemainingColorDie = player.dice.some((d) => d.kind === 'COLOR' && d.placedMapId === null);
+  if (hasRemainingColorDie) return 0;
+  return player.resources.Z || 0;
 }
 
 /** True if playerId's own JOB is 料理人/JOB002 (renamed from 実業家 2026-09-20, alongside a full ability
@@ -1452,6 +1472,14 @@ function applyTurnEnd(state, index, playerId) {
       }
     }
   }
+  // 色欲(CON001B)のラウンド最終ターン変換 (2026-09-26) -- see colorConvertLastTurnAmount's own doc for why
+  // this is bespoke rather than a DSL FORCE_CONVERT command (which this loop would otherwise have already
+  // handled above).
+  const colorConvertAmount = colorConvertLastTurnAmount(state, playerId);
+  if (colorConvertAmount > 0) {
+    player.resources.Z -= colorConvertAmount;
+    player.resources.K = (player.resources.K || 0) + colorConvertAmount;
+  }
   // GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN)'s flag is turn-scoped.
   for (const die of player.dice) die.placeAnywhereThisTurn = false;
   // SET_DICE_ANY/SET_DIE_VALUE/CHANGE_DIE_VALUE's own value change is turn-scoped too (2026-08-24, per
@@ -1743,6 +1771,7 @@ module.exports = {
   enumerateBzOutcomes,
   resolvePayment,
   hasPaymentChoiceAbility,
+  colorConvertLastTurnAmount,
   ownedCardRows,
   tryFreeAction,
   collectUsageFee,

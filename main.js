@@ -5231,6 +5231,16 @@ function turnEndWarnings(state, playerId) {
       }
     }
   }
+  // 色欲(CON001B)のラウンド最終ターン変換 (2026-09-26, see executorMod.colorConvertLastTurnAmount's own
+  // doc) -- bespoke, not covered by the DSL loop above since CON001B's own TURNEND column is now empty
+  // (this ability isn't expressible as a plain FORCE_CONVERT: it converts a variable amount, only on this
+  // player's own last turn of the round). Reuses that same card's own WARNING text.
+  const colorConvertAmount = executorMod.colorConvertLastTurnAmount(state, playerId);
+  if (colorConvertAmount > 0) {
+    const conPhysicalId = player.conPhysicalId;
+    const row = dataLoaderMod.getCardRow(INDEX, state.cards[conPhysicalId].currentFaceId);
+    warnings.push({ physicalId: conPhysicalId, warningText: row.WARNING, kind: 'FORCE_CONVERT' });
+  }
   return warnings;
 }
 
