@@ -6553,10 +6553,11 @@ function renderResourceConfirmOverlay(state) {
     return;
   }
   overlay.hidden = false;
-  // チュートリアル中だけ左寄せ (2026-09-24, per user report with a screenshot: "ipadで見ると画像がかぶって
-  // います" -- resource_confirm_introの会話吹き出し(右下固定)と、中央寄せのこのモーダルが重なっていた)
-  // -- #tutorial-turnorder-overlayに施した同じ左寄せをここにも適用、通常プレイ時は中央寄せのまま。
-  overlay.classList.toggle('resource-confirm-overlay--tutorial-left', tutorialModeActive);
+  // チュートリアル中だけ少し上げる (2026-09-24, per user report with a screenshot: "ipadで見ると画像が
+  // かぶっています" -- resource_confirm_introの会話吹き出し(右下固定)と、中央寄せのこのモーダルが重なって
+  // いた)。2026-09-25、ユーザー再指示で左寄せをやめ、元の中央寄せに戻したうえで少し上に上げる方式に変更
+  // (下固定のセリフと被らない程度)。通常プレイ時は中央寄せのまま。
+  overlay.classList.toggle('resource-confirm-overlay--tutorial-raised', tutorialModeActive);
   document.getElementById('resource-confirm-start-order').textContent = `先行順合計 ${resourceChoiceStartOrderTotal(state, choice.playerId, choice.context.selected)}`;
   const visual = document.getElementById('resource-confirm-visual');
   visual.innerHTML = '';
