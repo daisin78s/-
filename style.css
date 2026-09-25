@@ -852,6 +852,15 @@ h1, h2, h3 { margin: 0; }
   color: var(--text-muted);
 }
 .shop-card__start-order:empty { display: none; }
+/* チュートリアル中の先行順ハイライト (2026-09-25, per user request: "先行順が分かりやすいように先行順の
+   場所を光らせて") -- .shop-card__start-orderは元々ただの小さいテキストで箱を持たないため、
+   .change-highlight(main.js側でクラス付与)の枠線/背景がそのまま出るだけだと窮屈に見える。ハイライト時
+   だけ小さなチップ状の余白と角丸を足す。 */
+.shop-card__start-order.change-highlight {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 6px;
+}
 
 /* Confirmed 2026-07-29 (revised): click a card to flip it and see its sibling tier face (e.g. C003A
    -> C003B) -- it reverts when the cursor leaves. Cards with no sibling-tier data (M/JOB/CON, or

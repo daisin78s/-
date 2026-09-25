@@ -6558,7 +6558,8 @@ function renderResourceConfirmOverlay(state) {
   // いた)。2026-09-25、ユーザー再指示で左寄せをやめ、元の中央寄せに戻したうえで少し上に上げる方式に変更
   // (下固定のセリフと被らない程度)。通常プレイ時は中央寄せのまま。
   overlay.classList.toggle('resource-confirm-overlay--tutorial-raised', tutorialModeActive);
-  document.getElementById('resource-confirm-start-order').textContent = `先行順合計 ${resourceChoiceStartOrderTotal(state, choice.playerId, choice.context.selected)}`;
+  const startOrderBadge = document.getElementById('resource-confirm-start-order');
+  startOrderBadge.textContent = `先行順合計 ${resourceChoiceStartOrderTotal(state, choice.playerId, choice.context.selected)}`;
   const visual = document.getElementById('resource-confirm-visual');
   visual.innerHTML = '';
   for (const faceId of choice.context.selected) {
@@ -6566,6 +6567,14 @@ function renderResourceConfirmOverlay(state) {
     const cell = el('div', cardNode.classList.contains('shop-card--tall') ? 'owned-card-cell owned-card-cell--tall' : 'owned-card-cell');
     cell.appendChild(cardNode);
     visual.appendChild(cell);
+  }
+  // 先行順を光らせる (2026-09-25, per user request: "先行順が分かりやすいように先行順の場所を光らせて") --
+  // 合計バッジ自身と、選んだ2枚それぞれの.shop-card__start-order(先攻順X表示)を両方光らせる。tutorialModeActive
+  // のみで判定できる(このoverlay自体がresource_confirm_introと同じ条件でしか表示されないため -- 詳細は
+  // tutorialResourceConfirmActiveの doc)。
+  startOrderBadge.classList.toggle('change-highlight', tutorialModeActive);
+  for (const label of visual.querySelectorAll('.shop-card__start-order')) {
+    label.classList.toggle('change-highlight', tutorialModeActive);
   }
 }
 
@@ -6879,6 +6888,15 @@ function renderPlayerCards(state, next) {
       if (tutorialConRevealed(player.id)) {
         renderConPreview(conContainer, player);
         if (tutorialConCardJustRevealed) { tutorialGlowRevealedCards(conContainer); tutorialConCardJustRevealed = false; }
+        // 制約カードの表面(A面)の先行順を光らせる (2026-09-25, per user request: "制約カードの表面の
+        // 先行順も光らせて") -- resourceChoiceStartOrderTotal自身がconPhysicalId+'A'(表面)のSTART_ORDERしか
+        // 使わない(main.js内のresourceChoiceStartOrderTotal参照)ので、光らせるのも表面だけでよい。
+        // renderConFacesRowは常に['A','B']の順でセルを追加するので、conContainer内で最初に見つかる
+        // .shop-card__start-orderが必ずA面(表)のもの。
+        if (tutorialResourceConfirmActive(state, player.id)) {
+          const frontStartOrder = conContainer.querySelector('.shop-card__start-order');
+          if (frontStartOrder) frontStartOrder.classList.add('change-highlight');
+        }
       }
       const resourceContainer = node.querySelector('.card-group__onboard-resources');
       if (tutorialResourceCandidatesRevealed(player.id)) {
@@ -8164,6 +8182,19 @@ let tutorialResourceCandidatesJustRevealed = false;
 // アンバーの枠線)を流用する。
 function tutorialGlowRevealedCards(container) {
   for (const cell of container.querySelectorAll('.owned-card-cell')) cell.classList.add('change-highlight');
+}
+
+// resource_confirm_introの「先行順」ハイライト (2026-09-25, per user request: "先行順が分かりやすいように
+// 先行順の場所を光らせて") -- resource_confirm_intro自身のmatch条件("SELECT_RESOURCE_CARDSが2枚選択済み")
+// と全く同じ条件をここでも直接チェックする -- tutorialCurrentStepId自体は(tutorialConRevealed等と同じ理由
+// で)renderResourceConfirmOverlay/renderPlayerCardsの実行時点ではまだ古い値のままなので使えない。この
+// ハイライトは一回限りのJustRevealedとは違い、このステップが表示され続けている間ずっと光らせておきたい
+// (「この時」という一回きりの演出ではなく状態そのもの)ので、都度この条件を再評価するだけでよく、
+// JustRevealedのような消費フラグは不要。
+function tutorialResourceConfirmActive(state, playerId) {
+  if (!tutorialModeActive || playerId !== 'P1') return false;
+  const choice = state.pendingChoices.find((c) => c.playerId === playerId && c.kind === 'SELECT_RESOURCE_CARDS');
+  return !!(choice && choice.context.selected && choice.context.selected.length === (choice.context.count || 2));
 }
 
 function renderTutorialTurnOrderOverlay(state) {
