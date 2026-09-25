@@ -6882,7 +6882,32 @@ function renderPlayerCards(state, next) {
       const resourceContainer = node.querySelector('.card-group__onboard-resources');
       if (tutorialResourceCandidatesRevealed(player.id)) {
         renderResourceChoice(resourceContainer, state, player);
-        if (tutorialResourceCandidatesJustRevealed) { tutorialGlowRevealedCards(resourceContainer); tutorialResourceCandidatesJustRevealed = false; }
+        if (tutorialResourceCandidatesJustRevealed) {
+          tutorialGlowRevealedCards(resourceContainer);
+          tutorialResourceCandidatesJustRevealed = false;
+          // 2026-09-25, per user report: "セリフで初期資源カードが見えなくなるため上にスクロールさせて
+          // ください" -- チュートリアルは起動時に一番下までスクロールした状態から始まる
+          // (autoScrollToBottomOnStart)ので、途中にある所持カードのRESOURCE候補は下固定のセリフ吹き出し
+          // の裏に隠れたまま。plain scrollIntoView({block:'center'})では不十分 -- ビューポート全体の中央に
+          // 寄せるだけで、下に固定表示されているセリフ吹き出し自体が占めている領域を考慮しないため、結局
+          // その裏に入ってしまう(実際にこの通りになった)。代わりに、吹き出しの上端より上の「実際に見える
+          // 範囲」だけを基準に中央寄せする。behavior:'instant'は既存のautoScrollToBottomOnStart自身の
+          // 「チュートリアル中はスクロールせずいきなり」という方針に合わせたもの。requestAnimationFrameで
+          // 遅延させているのは: `node` はこの時点ではまだテンプレートからcloneしただけの未接続ノードで
+          // (container.appendChild(node)はこの後、同じループの続きで実行される)、今すぐgetBoundingClientRect
+          // しても対象がまだ実DOMに繋がっておらず正しい位置が取れないため、appendChildが済んだ次のフレーム
+          // まで遅らせる。
+          requestAnimationFrame(() => {
+            const bubbleWrap = document.getElementById('tutorial-bubble-wrap');
+            const visibleHeight = (bubbleWrap && !bubbleWrap.hidden) ? bubbleWrap.getBoundingClientRect().top : window.innerHeight;
+            const rect = resourceContainer.getBoundingClientRect();
+            const desiredTop = Math.max(0, (visibleHeight - rect.height) / 2);
+            // 'auto' here, not 'instant' -- window.scrollBy's own behavior enum (unlike
+            // Element.scrollIntoView's) only recognizes 'auto'/'smooth'; 'auto' means immediate/no
+            // animation by default since nothing here sets CSS scroll-behavior:smooth.
+            window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
+          });
+        }
       }
     } else if (isSelf && !hasFinishedOnboarding(player)) {
       // Round 1's JOB draft / CON face choice (2026-08-02, per user feedback): keep showing the 2
