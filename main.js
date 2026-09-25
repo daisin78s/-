@@ -6868,8 +6868,22 @@ function renderPlayerCards(state, next) {
       // stay private in a shared-screen/hotseat setting -- see currentResourceChooserId's own doc).
       // Whoever already finished stays invisible too, same as before (renderResourceChoice's own "no
       // pending choice, nothing to show" return covers that automatically).
-      renderConPreview(node.querySelector('.card-group__onboard-con'), player);
-      renderResourceChoice(node.querySelector('.card-group__onboard-resources'), state, player);
+      // tutorialConRevealed/tutorialResourceCandidatesRevealed (2026-09-25, see their own doc): during the
+      // tutorial's own resource_choice_intro/resource_choice_con_intro/resource_choice steps, these two
+      // stay hidden (not rendered at all -- both containers are freshly-cloned template nodes per render,
+      // so simply skipping the call leaves them correctly empty) until their own step, then glow once via
+      // the JustRevealed one-shot flags (see their own doc for why tutorialCurrentStepId itself can't be
+      // checked here instead).
+      const conContainer = node.querySelector('.card-group__onboard-con');
+      if (tutorialConRevealed(player.id)) {
+        renderConPreview(conContainer, player);
+        if (tutorialConCardJustRevealed) { tutorialGlowRevealedCards(conContainer); tutorialConCardJustRevealed = false; }
+      }
+      const resourceContainer = node.querySelector('.card-group__onboard-resources');
+      if (tutorialResourceCandidatesRevealed(player.id)) {
+        renderResourceChoice(resourceContainer, state, player);
+        if (tutorialResourceCandidatesJustRevealed) { tutorialGlowRevealedCards(resourceContainer); tutorialResourceCandidatesJustRevealed = false; }
+      }
     } else if (isSelf && !hasFinishedOnboarding(player)) {
       // Round 1's JOB draft / CON face choice (2026-08-02, per user feedback): keep showing the 2
       // already-picked RESOURCE cards read-only, same container renderResourceChoice used pre-round-1
@@ -7617,22 +7631,35 @@ const tutorialSeenStepIds = new Set();
 let tutorialCurrentStepId = null; // the step currently on screen, until 閉じる/チュートリアルをやめる is clicked
 
 const TUTORIAL_STEPS = [
-  // 2026-09-25, per user request: split out of the single resource_choice step below into its own intro
-  // ("それではゲームを始めましょう...配られました" alone), advanced via 次へ -- resource_choice itself
-  // keeps its own identical `match`, so the moment this one is dismissed and added to
-  // tutorialSeenStepIds, renderTutorialOverlay's own "next unseen matching step" scan naturally falls
-  // through to resource_choice next (still true at that point -- nothing about STATE changed), no special
-  // hand-off flag needed (unlike turn_order_intro -> turn_order_reveal_summary's own tutorialOthersRevealed).
+  // 2026-09-25, per user request: split into 3 steps (originally 1, then split into 2 the same day) --
+  // resource_choice_intro alone ("それではゲームを始めましょう", nothing dealt/shown yet) ->
+  // resource_choice_con_intro (制約カード1枚 gets revealed+glows here) -> resource_choice itself (初期
+  // 資源カード4枚 get revealed+glow here, then stays open -- unchanged -- until 2 are picked). Each step
+  // shares the exact same `match`, so the moment one is dismissed and added to tutorialSeenStepIds,
+  // renderTutorialOverlay's own "next unseen matching step" scan naturally falls through to the next one
+  // (still true at that point -- nothing about STATE itself changed), no special hand-off flag needed
+  // (unlike turn_order_intro -> turn_order_reveal_summary's own tutorialOthersRevealed). The CON
+  // preview/RESOURCE candidates being hidden until their own step, then glowing once revealed, is done in
+  // renderPlayerCards via tutorialConRevealed/tutorialResourceCandidatesRevealed/tutorialGlowRevealedCards
+  // below -- the CARDS THEMSELVES are already dealt in STATE well before this (setup's own dealConCards/
+  // dealResourceCards), this is purely a presentational reveal, same category as tutorialOthersRevealed's
+  // own "hide other players' real cards" trick.
   {
     id: 'resource_choice_intro',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: 'それではゲームを始めましょう\nあなたにランダムな制約カード一枚（表裏）と初期資源カード4枚が配られました。',
+    body: 'それではゲームを始めましょう',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'resource_choice_con_intro',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: 'あなたにランダムな制約カード1枚が配られました\nこれは表面と裏面があり後でどちらを使うか選ぶことができます',
     nextLabel: '次へ',
   },
   {
     id: 'resource_choice',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: 'まずは初期資源カード4枚のうち2枚を選んでください。\nお試しのゲームなので深く考えずにとってもらって大丈夫です。',
+    body: 'ランダムな初期資源カード4枚が配られました\n配られた初期資源カード4枚のうち使用する2枚を選んでください\nお試しのゲームなので深く考えずにとってもらって大丈夫です',
     // 2026-09-24, per user request: "初期資源カード2枚選んだらこのセリフは消す" -- auto-dismissed (no
     // manual 閉じる needed) the moment the player has actually picked 2 candidates, the same moment
     // renderResourceConfirmOverlay's own "この2枚でよろしいですか？" takes over -- not just once
@@ -8039,6 +8066,12 @@ function dismissTutorialStep() {
   // Dismissing turn_order_intro is what reveals the other 3 players' own cards (2026-09-24, per user
   // request: "新しいセリフを出して そこをクリックすると次に行く") -- see tutorialOthersRevealed's own doc.
   if (tutorialCurrentStepId === 'turn_order_intro') tutorialOthersRevealed = true;
+  // Dismissing resource_choice_intro/resource_choice_con_intro is what reveals あなた/P1's own CON card /
+  // RESOURCE candidates respectively -- see tutorialConCardRevealed's own doc for why this can't just
+  // reuse tutorialSeenStepIds like every other step here does. The JustRevealed flags (see their own doc)
+  // are consumed by renderPlayerCards on the very next render to trigger the one-time glow.
+  if (tutorialCurrentStepId === 'resource_choice_intro') { tutorialConCardRevealed = true; tutorialConCardJustRevealed = true; }
+  if (tutorialCurrentStepId === 'resource_choice_con_intro') { tutorialResourceCandidatesRevealedFlag = true; tutorialResourceCandidatesJustRevealed = true; }
   // alsoCloseTurnOrderOverlay (2026-09-24, see turn_order_reveal_summary's own doc): 次へ on this step
   // also presses the turn-order overlay's own ✖ in the same tap, instead of leaving the player to close
   // it separately.
@@ -8074,6 +8107,38 @@ function dismissTutorialStep() {
 const TUTORIAL_TURN_ORDER_STEP_ID = 'turn_order_reveal';
 let tutorialTurnOrderOverlayOpen = false;
 let tutorialOthersRevealed = false;
+
+// CON/RESOURCE候補の段階的な表示 (2026-09-25, per user request: "それではゲームを始めましょう の時はまだ
+// 制約カードと初期資源カードは配られていない" -- resource_choice_intro/resource_choice_con_intro/
+// resource_choice の3ステップに合わせて、実際にはSTATE側ではもう配られている(setup.dealConCards/
+// dealResourceCards)自分のCON/初期資源カード候補を、対応するセリフが出るまではUI上でまだ見せない -- 他の
+// プレイヤーのカードを裏向きにするtutorialOthersRevealedと同じ「見た目だけ隠す」考え方)。
+// tutorialSeenStepIds ではなく専用フラグを使う点に注意 -- tutorialSeenStepIds はrenderTutorialOverlayが
+// そのステップを「これから表示する」と決めた瞬間に即addされる(閉じた/次へを押した後ではない)ため、もし
+// それで判定すると、resource_choice_introが最初に表示された、まさにそのレンダーでCONがもう見えてしまう
+// (実際にこの通りのバグが発生し、ユーザーが気づく前に見つかった)。tutorialOthersRevealedと同じく、
+// dismissTutorialStepでそのステップを実際に閉じる(次へを押す)瞬間にセットする。
+let tutorialConCardRevealed = false;
+let tutorialResourceCandidatesRevealedFlag = false;
+function tutorialConRevealed(playerId) {
+  return !tutorialModeActive || playerId !== 'P1' || tutorialConCardRevealed;
+}
+function tutorialResourceCandidatesRevealed(playerId) {
+  return !tutorialModeActive || playerId !== 'P1' || tutorialResourceCandidatesRevealedFlag;
+}
+// 「光る」演出用の一回限りのフラグ (2026-09-25, per user request: "次へを押すと...配られてひかる") --
+// dismissTutorialStepが上のRevealedフラグと同時にtrueにする。renderPlayerCards(render()内でrenderTutorial
+// Overlayより前に呼ばれる -- tutorialCurrentStepIdがまだ新しいステップに更新されていない)自身の中で読んで
+// すぐfalseに戻す一回きりの消費フラグ -- tutorialCurrentStepIdをその場でチェックする方式だと、まさに
+// 切り替わった瞬間のレンダーでは古い値のままなので光らず、後から何か別の理由で再レンダーが起きたときに
+// 初めて光ってしまう(実際にこの通りのタイミングずれが起きた)。
+let tutorialConCardJustRevealed = false;
+let tutorialResourceCandidatesJustRevealed = false;
+// 変化ハイライトとして既存の.change-highlight(JOB/CON新規ドラフト時などに使っているのと同じパルスする
+// アンバーの枠線)を流用する。
+function tutorialGlowRevealedCards(container) {
+  for (const cell of container.querySelectorAll('.owned-card-cell')) cell.classList.add('change-highlight');
+}
 
 function renderTutorialTurnOrderOverlay(state) {
   const overlay = document.getElementById('tutorial-turnorder-overlay');
@@ -8141,6 +8206,10 @@ function endTutorialMode() {
   tutorialCurrentStepId = null;
   tutorialTurnOrderOverlayOpen = false;
   tutorialOthersRevealed = false;
+  tutorialConCardRevealed = false;
+  tutorialResourceCandidatesRevealedFlag = false;
+  tutorialConCardJustRevealed = false;
+  tutorialResourceCandidatesJustRevealed = false;
   stopTutorialTypewriter();
   render(STATE);
 }
