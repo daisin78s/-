@@ -6566,6 +6566,14 @@ function renderResourceConfirmOverlay(state) {
     && c.context.selected && c.context.selected.length === (c.context.count || 2));
   if (!choice) {
     overlay.hidden = true;
+    // 光る演出の消し忘れ (2026-09-26, per user report: "背景で光り続けています") -- #resource-confirm-
+    // overlay内の要素はテンプレートcloneされる所持カード欄と違って持続的なので、choiceが解決されてこの
+    // overlay自体が隠れた後もこの早期returnのせいで.change-highlightトグル/visual再構築(下)まで二度と
+    // 到達せず、選んだ2枚のカードノード(とその.shop-card__start-order)ごとクラスが永久に残ったままに
+    // なっていた(実害は「隠れた状態で残る」だけだが、後で万一この要素が別の理由で再利用/再表示されると
+    // 意図せず光って見えるバグの元になる)。隠す瞬間に明示的に空にする/消す。
+    document.getElementById('resource-confirm-start-order').classList.remove('change-highlight');
+    document.getElementById('resource-confirm-visual').innerHTML = '';
     return;
   }
   overlay.hidden = false;
@@ -8103,10 +8111,7 @@ function renderTutorialOverlay(state) {
   if (!step) return;
   // Hide 閉じる for a noManualDismiss step (2026-09-24, see resource_choice's own doc) -- a visible
   // button that silently does nothing would be confusing; チュートリアルをやめる still always works.
-  // Also drops the whole-bubble pointer cursor for the same step, so it doesn't visually invite a tap
-  // that dismissTutorialStep is just going to ignore.
   document.getElementById('tutorial-bubble__dismiss').hidden = !!step.noManualDismiss;
-  document.getElementById('tutorial-bubble').classList.toggle('tutorial-bubble--no-dismiss', !!step.noManualDismiss);
   // nextLabel (2026-09-24, per user request: "閉じるではなく次へと表示して") -- a step that leads
   // straight into another one reads 次へ instead of the default 閉じる; the click behavior itself
   // (dismissTutorialStep) is unchanged either way.
@@ -8115,6 +8120,19 @@ function renderTutorialOverlay(state) {
     tutorialTypewriterStepId = step.id;
     const fullText = typeof step.body === 'function' ? step.body(state) : step.body;
     startTutorialTypewriter(step.id, fullText);
+    // job_draft_introが見えるようにスクロール (2026-09-26, per user report: "この時JOBが見えないので上に
+    // スクロールさせてください") -- 初期資源カード用のスクロール調整と同じ考え方(下固定のセリフ吹き出し
+    // が占める領域を避けて中央寄せ)だが、#job-poolはテンプレートからcloneされる所持カード欄と違って
+    // 常にDOMに存在する持続的な要素なので(renderJobPool自身のドキュメント参照)、requestAnimationFrameで
+    // 次のフレームまで遅らせる必要はなく、この時点で直接scrollできる。
+    if (step.id === 'job_draft_intro') {
+      const jobPool = document.getElementById('job-pool');
+      const bubbleWrap = document.getElementById('tutorial-bubble-wrap');
+      const visibleHeight = (bubbleWrap && !bubbleWrap.hidden) ? bubbleWrap.getBoundingClientRect().top : window.innerHeight;
+      const rect = jobPool.getBoundingClientRect();
+      const desiredTop = Math.max(0, (visibleHeight - rect.height) / 2);
+      window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
+    }
   }
 }
 
@@ -9057,16 +9075,12 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('tutorial-mode-button').addEventListener('click', openTutorialMode);
   document.getElementById('tutorial-bubble__dismiss').addEventListener('click', dismissTutorialStep);
   document.getElementById('tutorial-bubble__end').addEventListener('click', endTutorialMode);
-  // タップで次へ (2026-09-24, per user report: "セリフがクリックできないので進めない" -- the small 閉じる
-  // text button alone was too fiddly/easy to miss on a touch screen; the whole bubble box now advances
-  // too, matching the original "そこをクリックすると次に行く" request). Ignores clicks that actually
-  // landed on one of the 2 buttons inside it -- those already have their own listeners above, and
-  // 閉じる's would otherwise double-fire (harmless but redundant) while チュートリアルをやめる's would be
-  // wrongly followed by an ALSO-firing dismiss.
-  document.getElementById('tutorial-bubble').addEventListener('click', (e) => {
-    if (e.target.closest('button')) return;
-    dismissTutorialStep();
-  });
+  // 2026-09-24: the whole bubble box briefly also dismissed on tap here (per user report: "セリフが
+  // クリックできないので進めない" -- the small 閉じる text button alone was too fiddly on a touch screen).
+  // Reverted 2026-09-26 (per user report: "セリフをクリックすると閉じてしまいます クリックしただけでは
+  // とじないようにしてください") -- only the explicit 閉じる/次へ button (and チュートリアルをやめる) now
+  // dismiss/advance a step; a stray tap anywhere else on the bubble (e.g. while trying to scroll, or
+  // reading a job_explanation term link that isn't a button) no longer does.
   document.getElementById('tutorial-turnorder-close-button').addEventListener('click', closeTutorialTurnOrderOverlay);
   document.getElementById('debug-turn-back').addEventListener('click', handleDebugTurnBack);
   document.getElementById('debug-turn-forward').addEventListener('click', handleDebugTurnForward);

@@ -3581,17 +3581,10 @@ h1, h2, h3 { margin: 0; }
   padding: 24px 28px;
   flex: 1 1 auto;
   pointer-events: auto;
-  /* 2026-09-24, per user report ("セリフがクリックできないので進めない") -- the whole box is tappable to
-     advance now, not just the small 閉じる button (see main.js's own click wiring). */
-  cursor: pointer;
-}
-
-/* resource_choice's own noManualDismiss (2026-09-24, per user report: "チュートリアルがクリックするだけで
-   消えてしまう" -- confirmed: dismissing it before 2 cards are actually picked left the player with no
-   guidance and nothing else ready to show) -- drops the pointer cursor so it doesn't visually invite a
-   tap dismissTutorialStep is just going to ignore for this one step. */
-.tutorial-bubble--no-dismiss {
-  cursor: default;
+  /* 2026-09-24, per user report ("セリフがクリックできないので進めない"): briefly made the whole box
+     tappable to advance too, not just the small 閉じる button -- reverted 2026-09-26 (per user report:
+     "クリックしただけではとじないようにしてください"), so no pointer cursor here any more either; only
+     the explicit 閉じる/次へ button (and チュートリアルをやめる) actually dismiss/advance a step now. */
 }
 
 /* 吹き出しの三角(左のアイコンを指す) */
