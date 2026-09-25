@@ -7617,10 +7617,22 @@ const tutorialSeenStepIds = new Set();
 let tutorialCurrentStepId = null; // the step currently on screen, until 閉じる/チュートリアルをやめる is clicked
 
 const TUTORIAL_STEPS = [
+  // 2026-09-25, per user request: split out of the single resource_choice step below into its own intro
+  // ("それではゲームを始めましょう...配られました" alone), advanced via 次へ -- resource_choice itself
+  // keeps its own identical `match`, so the moment this one is dismissed and added to
+  // tutorialSeenStepIds, renderTutorialOverlay's own "next unseen matching step" scan naturally falls
+  // through to resource_choice next (still true at that point -- nothing about STATE changed), no special
+  // hand-off flag needed (unlike turn_order_intro -> turn_order_reveal_summary's own tutorialOthersRevealed).
+  {
+    id: 'resource_choice_intro',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: 'それではゲームを始めましょう\nあなたにランダムな制約カード一枚（表裏）と初期資源カード4枚が配られました。',
+    nextLabel: '次へ',
+  },
   {
     id: 'resource_choice',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: 'それではゲームを始めましょう。\nあなたにランダムな制約カード一枚（表裏）と初期資源カード4枚が配られました。\nまずは初期資源カード4枚のうち2枚を選んでください。\nお試しのゲームなので深く考えずにとってもらって大丈夫です。',
+    body: 'まずは初期資源カード4枚のうち2枚を選んでください。\nお試しのゲームなので深く考えずにとってもらって大丈夫です。',
     // 2026-09-24, per user request: "初期資源カード2枚選んだらこのセリフは消す" -- auto-dismissed (no
     // manual 閉じる needed) the moment the player has actually picked 2 candidates, the same moment
     // renderResourceConfirmOverlay's own "この2枚でよろしいですか？" takes over -- not just once
