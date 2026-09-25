@@ -397,9 +397,11 @@ function grantOneResourceCardAndDealRest(state, index, playerId, preferredFaceId
 
 /**
  * turnOrder = ascending by (CON.START_ORDER + sum of the 2 kept RESOURCE
- * cards' START_ORDER); ties broken by ascending CON.START_ORDER. Requires
- * every player to already have conPhysicalId set and exactly 2 owned
- * RESOURCE cards (i.e. dealConCards() + chooseResourceCards() for everyone).
+ * cards' START_ORDER); ties broken by DESCENDING CON.START_ORDER (2026-09-25,
+ * per user request: "先行順が同じとき...制約カードの先攻順が大きいほうが先攻になるようにしてほしい" --
+ * was ascending before this). Requires every player to already have
+ * conPhysicalId set and exactly 2 owned RESOURCE cards (i.e. dealConCards() +
+ * chooseResourceCards() for everyone).
  */
 function computeStartOrder(state, index) {
   const scored = state.players.map((player) => {
@@ -408,7 +410,7 @@ function computeStartOrder(state, index) {
     const resourceSum = resourceIds.reduce((sum, id) => sum + getCardRow(index, id).START_ORDER, 0);
     return { playerId: player.id, total: conRow.START_ORDER + resourceSum, conStartOrder: conRow.START_ORDER };
   });
-  scored.sort((a, b) => a.total - b.total || a.conStartOrder - b.conStartOrder);
+  scored.sort((a, b) => a.total - b.total || b.conStartOrder - a.conStartOrder);
   state.turnOrder = scored.map((s) => s.playerId);
   return state.turnOrder;
 }

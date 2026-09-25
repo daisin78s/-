@@ -3768,6 +3768,11 @@ h1, h2, h3 { margin: 0; }
   font-weight: 700;
   color: var(--text-muted);
 }
+/* 数字部分だけ2倍 (2026-09-25, per user request: "先攻順合計9 の数字部分を2倍の大きさにしてほしい") --
+   ラベル文字はそのまま11pxで、main.js側で分離した数字spanだけここで22pxにする。 */
+.tutorial-turnorder-total__number {
+  font-size: 22px;
+}
 
 /* ほかのプレイヤーの伏せられたカード (2026-09-24, per user request: "ほかのプレイヤーのカードを裏向きに"、
    カードサイズが崩れた件を受けて "カードの文字やアイコンを透明にするか背景と同色にすれば解決しますか" ->

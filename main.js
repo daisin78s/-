@@ -4017,7 +4017,13 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
   // monument has its own threshold), unlike normal/special cards' req which is a slot property --
   // so only monuments pass req here; everything else's req lives in the slot caption instead.
   renderDiceThresholdReq(q('.shop-card__req'), options.req);
-  q('.shop-card__start-order').textContent = facts.startOrder !== null && facts.startOrder !== undefined ? `先攻順 ${facts.startOrder}` : '';
+  // 制約カードの表裏表記 (2026-09-25, per user request: "制約カードの右下部分に表 裏と表記するようにして
+  // ほしい") -- .shop-card__start-orderは元々このカードの一番下の行なので、そこに表/裏をそのまま追記する
+  // だけで新しい要素/CSSを増やさずに済む(表示位置は自然と右下寄りになる、狭いカード幅のため)。CON以外の
+  // デッキは変わらず先攻順のみ。
+  const startOrderText = facts.startOrder !== null && facts.startOrder !== undefined ? `先攻順 ${facts.startOrder}` : '';
+  const conFaceLabel = faceId.startsWith('CON') ? (faceId.endsWith('A') ? '表' : '裏') : '';
+  q('.shop-card__start-order').textContent = [startOrderText, conFaceLabel].filter(Boolean).join('　');
 
   let tall = false;
   // A pure MAP-assignment card (see areaOwnershipLabel's own doc) never falls through to the generic
@@ -8231,7 +8237,11 @@ function renderTutorialTurnOrderOverlay(state) {
     swatch.dataset.color = player.color;
     header.appendChild(swatch);
     header.appendChild(el('span', 'tutorial-turnorder-name', player.name));
-    header.appendChild(el('span', 'tutorial-turnorder-total', `先行順合計 ${total}`));
+    // 数字部分だけ2倍サイズ (2026-09-25, per user request: "先攻順合計9 の数字部分を2倍の大きさにしてほしい")
+    // -- ラベルと数字を別々のspanに分け、数字側だけ.tutorial-turnorder-total__numberで拡大する。
+    const totalEl = el('span', 'tutorial-turnorder-total', '先行順合計 ');
+    totalEl.appendChild(el('span', 'tutorial-turnorder-total__number', String(total)));
+    header.appendChild(totalEl);
     row.appendChild(header);
 
     // Not renderConFacesRow (it always appends its own "JOB選択後、CONの表/裏を選んでください" onboarding
