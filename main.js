@@ -7942,6 +7942,12 @@ const TUTORIAL_STEPS = [
       return `${turnLine}\n第1ラウンド第1ターンの開始時にジョブカードを選びます`;
     },
     nextLabel: '次へ',
+    // 2026-09-26, per user request: "このセリフの時 次へを押さなくても一般市民を選んだら強制的に次のセリフに
+    // 行くように" -- the job-pool cards are clickable/pickable regardless of which tutorial bubble is
+    // currently showing (nothing in renderJobPool's pick logic checks tutorialCurrentStepId), so a player
+    // could commit their JOB pick while this step is still on screen (次へ never pressed); same
+    // autoDismissWhen as job_draft_pick_hint below so that's handled the same way either way.
+    autoDismissWhen: (state) => !!state.players.find((p) => p.id === 'P1').jobCardId,
   },
   {
     id: 'job_draft_pick_hint',
@@ -7988,11 +7994,11 @@ const TUTORIAL_STEPS = [
       const player = state.players.find((p) => p.id === 'P1');
       const r = player.resources;
       const parts = [];
-      if (r.K) parts.push(`〇（食料）${r.K}`);
-      if (r.A) parts.push(`赤〇（権力）${r.A}`);
-      if (r.B) parts.push(`青〇（信心）${r.B}`);
-      if (r.C) parts.push(`黄〇（金貨）${r.C}`);
-      if (r.Z) parts.push(`コネ${r.Z}`);
+      if (r.K) parts.push(`（食料）〇${r.K}`);
+      if (r.A) parts.push(`（権力）赤〇${r.A}`);
+      if (r.B) parts.push(`（信心）青〇${r.B}`);
+      if (r.C) parts.push(`（金貨）黄〇${r.C}`);
+      if (r.Z) parts.push(`（コネ）Z〇${r.Z}`);
       if (r.BZ) parts.push(`口利き${r.BZ}`);
       if (r.VP) parts.push(`VP${r.VP}`);
       const lines = parts.map((line, i) => (i === parts.length - 1 ? `${line}があります` : line));
@@ -8073,6 +8079,20 @@ const TUTORIAL_TERM_ALIASES = [
   { code: 'TAP', aliases: [{ text: 'タップ', excludePrecededBy: ['アン'] }, 'TAP'] },
 ];
 
+// 資源アイコン記法 (2026-09-26, per user request: "赤〇と書いたらアイコンの赤〇を表示するようにお願い
+// こちらはアイコンの赤〇をチャットに表示できないため" -- チャットでは実際の色付き丸アイコンを直接送れない
+// ので、色名+〇のテキスト表記をactionDotの実アイコンに変換する。A=赤〇/B=青〇/C=黄〇はそのままの色名、
+// Zは単色名がないため代わりに符号+〇のZ〇、Kは色名なし(白/無色)の裸の〇 -- 裸の〇は他すべての接頭辞
+// 付き表記の末尾と一致してしまうため、下の長さ優先ソートで必ず最後に試される。TUTORIAL_LINK_CANDIDATES
+// と同じ配列にまとめて長さ優先でスキャンされるので、通常のterm/cardリンクと衝突なく共存できる。
+const TUTORIAL_ICON_NOTATIONS = [
+  { code: 'A', text: '赤〇' },
+  { code: 'B', text: '青〇' },
+  { code: 'C', text: '黄〇' },
+  { code: 'Z', text: 'Z〇' },
+  { code: 'K', text: '〇' },
+];
+
 // カード名の自動リンク化 (2026-09-25, per user request: "セリフに既存カード名があったらリンクするように
 // してください") -- built once from INDEX's own card sheets (A/B/C/M/CON/JOB; RESOURCE's own NAME is just
 // a resource code like "wD" and QST's is just a placeholder equal to its own ID, neither a real card name,
@@ -8112,6 +8132,9 @@ function buildTutorialLinkCandidates() {
   for (const [text, faceId] of TUTORIAL_CARD_NAME_LINKS) {
     candidates.push({ kind: 'card', faceId, text, excludePrecededBy: null });
   }
+  for (const { code, text } of TUTORIAL_ICON_NOTATIONS) {
+    candidates.push({ kind: 'icon', code, text, excludePrecededBy: null });
+  }
   return candidates.sort((a, b) => b.text.length - a.text.length);
 }
 const TUTORIAL_LINK_CANDIDATES = buildTutorialLinkCandidates();
@@ -8119,8 +8142,9 @@ const TUTORIAL_LINK_CANDIDATES = buildTutorialLinkCandidates();
 /** Scans one plain string left-to-right, greedily matching the longest TUTORIAL_LINK_CANDIDATES entry at
  * each position (skipping one whose excludePrecededBy matches what's right before it here) -- returns a
  * flat token list ('char' for everything else, one char at a time so the typewriter keeps advancing at
- * its normal pace; 'term'/'card' for a whole matched alias, revealed atomically like any other marker
- * below). */
+ * its normal pace; 'term'/'card' for a whole matched alias, 'icon' for a TUTORIAL_ICON_NOTATIONS match
+ * (renders the real actionDot icon in place of the text, see appendTutorialBubbleToken), revealed
+ * atomically like any other marker below). */
 function autoLinkifyTutorialText(text) {
   const tokens = [];
   let i = 0;
@@ -8128,8 +8152,8 @@ function autoLinkifyTutorialText(text) {
     for (const c of TUTORIAL_LINK_CANDIDATES) {
       if (!text.startsWith(c.text, i)) continue;
       if (c.excludePrecededBy && c.excludePrecededBy.some((p) => text.slice(i - p.length, i) === p)) continue;
-      tokens.push(c.kind === 'card'
-        ? { type: 'card', faceId: c.faceId, label: c.text }
+      tokens.push(c.kind === 'card' ? { type: 'card', faceId: c.faceId, label: c.text }
+        : c.kind === 'icon' ? { type: 'icon', code: c.code }
         : { type: 'term', code: c.code, label: c.text });
       i += c.text.length;
       continue outer;
@@ -8170,6 +8194,10 @@ function tutorialBubbleTokens(body) {
 function appendTutorialBubbleToken(textEl, token) {
   if (token.type === 'char') {
     textEl.appendChild(document.createTextNode(token.value));
+    return;
+  }
+  if (token.type === 'icon') {
+    textEl.appendChild(actionDot(token.code));
     return;
   }
   const span = el('span', 'tutorial-bubble__term', token.label);
