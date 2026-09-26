@@ -7782,6 +7782,21 @@ const TUTORIAL_STEPS = [
   // below -- the CARDS THEMSELVES are already dealt in STATE well before this (setup's own dealConCards/
   // dealResourceCards), this is purely a presentational reveal, same category as tutorialOthersRevealed's
   // own "hide other players' real cards" trick.
+  // 2026-09-26, per user request -- 2 general-rules screens shown before resource_choice_intro's own
+  // "それではゲームを始めましょう" (same match condition, same "next unseen step" fall-through pattern as
+  // the resource_choice_intro/con_intro/choice split documented just above).
+  {
+    id: 'game_rules_intro_1',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: 'このゲームは、ダイスを「ワーカー」として使う、ワーカープレイスメント型の拡大再生産ゲームです\nプレイヤーは手持ちのダイスを使ってさまざまな場所にワーカーを配置し、資源を獲得したりカードやダイスを獲得したりしながら、自分の生産力を高めていきます',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'game_rules_intro_2',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '1ターンに置けるダイスは1個\n全員がダイスを使い切るか、ラウンドをパスするとラウンド終了です\nこれを4ラウンド繰り返し、ゲーム終了時に最も多くのVP（勝利点）を獲得したプレイヤーが勝者となります',
+    nextLabel: '次へ',
+  },
   {
     id: 'resource_choice_intro',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
@@ -7791,7 +7806,7 @@ const TUTORIAL_STEPS = [
   {
     id: 'resource_choice_con_intro',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: 'あなたにランダムな制約カード1枚が配られました\nこれは表面と裏面があり後でどちらを使うか選ぶことができます',
+    body: 'あなたにランダムな制約カード1枚が配られました\n制約カードには表面と裏面があり得られる初期資源やプレイにかかる制約が違います\n表面裏面どちらを使うかあとで選ぶことができます',
     nextLabel: '次へ',
   },
   {
