@@ -7892,6 +7892,21 @@ const TUTORIAL_STEPS = [
       return `${turnLine}\nJOBカードを選びます\n今回はこの中で比較的使いやすい一般市民にしてみましょう`;
     },
   },
+  // 2026-09-26, per user request -- shown once P1 has drafted their JOB (一般市民) but hasn't chosen a CON
+  // face yet. Note: getNextTurn's own ONBOARDING_NEEDED type flips to plain TURN the instant jobCardId is
+  // set (see turn-flow.js's own doc), so unlike job_draft_intro above this can't gate on next.type; it
+  // matches renderConChoice's own real trigger instead (isSelf via next.playerId, plus jobCardId set but
+  // no owned CON card yet).
+  {
+    id: 'con_face_choice_intro',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      if (next.playerId !== 'P1') return false;
+      const player = state.players.find((p) => p.id === 'P1');
+      return !!player.jobCardId && !player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
+    },
+    body: 'JOBを選んだら制約カードを選びます\n制約カードは特定の行動ができなかったりVP（得点）のペナルティがあったりします\n基本的に表面に比べて裏面のほうが、得られる初期資源が多く、制約が厳しいものになります\n初回プレイは表面をお勧めしますが、自己責任で裏面を選んでも大丈夫です',
+  },
 ];
 
 // job_explanation (2026-09-24: "JOBをクリックしたときそのJOBの説明をセリフで流したい" -- per-JOB bespoke
