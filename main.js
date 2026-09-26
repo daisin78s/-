@@ -7880,7 +7880,7 @@ const TUTORIAL_STEPS = [
         const player = state.players.find((p) => p.id === playerId);
         return `${i + 1}番手は${player.name}`;
       });
-      return `${lines.join('\n')}\nに決まりました`;
+      return `${lines.join('\n')}\nに決まりました\n数字が同じときは制約カードの先攻順が大きいほうが先攻になります`;
     },
     // 2026-09-24, per user request: "次へを押したとき一緒に右上の✖も押されて次の画面にいき" -- dismissing
     // this one also closes the turn-order overlay itself (see dismissTutorialStep's own doc), so a single
