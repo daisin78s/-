@@ -7904,7 +7904,7 @@ const TUTORIAL_STEPS = [
       const precedingNames = state.turnOrder.slice(0, state.turnOrder.indexOf('P1'))
         .map((id) => state.players.find((p) => p.id === id).name);
       const turnLine = precedingNames.length > 0 ? `${precedingNames.join('と')}のターンが終わりあなたのターンです` : 'あなたのターンです';
-      return `${turnLine}\nジョブカードを選びます\n今回はこの中で比較的使いやすい一般市民にしてみましょう`;
+      return `${turnLine}\nジョブカードを選びます\n今回はこの中で比較的使いやすい一般市民にしてみましょう\nカードをクリックすると拡大され選ぶことができます`;
     },
   },
   // 2026-09-26, per user request -- shown once P1 has drafted their JOB (一般市民) but hasn't chosen a CON
