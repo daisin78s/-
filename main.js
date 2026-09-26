@@ -7877,7 +7877,8 @@ const TUTORIAL_STEPS = [
   },
 ];
 
-// 社交家(JOB001)の説明セリフ (2026-09-24, per user's own verbatim wording). A step body is normally a
+// 遊び人(JOB001, 旧「社交家」-- 2026-09-26に改名)の説明セリフ (2026-09-24, per user's own verbatim
+// wording). A step body is normally a
 // plain string, but this one mixes in { term, label } markers for "食料"/"コネ" -- rendered as blue
 // clickable spans (see tutorialBubbleTokens/appendTutorialBubbleToken below) that open the same
 // 資源や用語一覧 detail popup (showCardListTermModal) those terms already open elsewhere, per the user's
@@ -7892,7 +7893,7 @@ const TUTORIAL_STEPS = [
 // explicitly requested yet, now auto-links too once the general "セリフに既存カード名があったらリンク
 // する" policy was requested).
 const JOB_EXPLANATION_BODIES = {
-  '社交家': '社交家ですね\nこのカードはクリックすることで横向き（TAP）になり、あなたは食料1とコネ1を得ることができます。\nこのカードはラウンド開始時にアンタップして再び使えるようになります\nどんな状況下でも使える安定して強いカードです',
+  '遊び人': '遊び人ですね\nこのカードはクリックすることで横向き（TAP）になり、あなたは食料1とコネ1を得ることができます。\nこのカードはラウンド開始時にアンタップして再び使えるようになります\nどんな状況下でも使える安定して強いカードです',
   '道化': '道化ですね\nこのカードは獲得するとあなたの持つすべてのダイスはオールマイティの☆ダイスになります\n☆ダイスはいかなる場合でもどのAREAにでも置くことができます\nカードを獲得するときも☆ダイスは1～6のどのダイス目としてでも使えるため大変便利です\n\nこのカードを獲得した時即座に恩寵ダイス（ｗD）も獲得でき序盤中盤終盤スキのないJOBです',
   // 教師(JOB006, 旧「育成者」)の説明セリフ (2026-09-24)。ユーザー自身の文言通り、GET(D)で本来一緒に得る
   // VPには触れていない(教師のPASSIVE: ON(GET(D),ADD(Z,VP));ON(GET(wD),ADD(K)))。
