@@ -5944,6 +5944,12 @@ function renderPlayers(state, next) {
     // JOB003/道化 (2026-08-19): checked once per player, applies to every one of their dice (COLOR and
     // WHITE alike) uniformly -- see board.hasWildcardDice's own doc.
     const playerIsWildcard = boardMod.hasWildcardDice(state, INDEX, player.id);
+    // dice_select_hintの「1個だけ光らせて、そのダイスしか掴めないように」(2026-09-27, per user request: "自分の
+    // 色ダイスの一番左1個だけ光るに変更 そのダイスしかつかめないように") -- player.dice配列の並び順=描画順
+    // (左から)なので、配列内で最初に見つかるCOLORダイス(まだ配置されていないもの)がそのまま「一番左」になる。
+    const tutorialForcedDieId = (tutorialDiceSelectHintGlowing && player.id === 'P1')
+      ? (player.dice.find((d) => d.kind === 'COLOR' && !d.placedMapId) || {}).id || null
+      : null;
     for (const die of player.dice) {
       if (die.placedMapId) continue; // dice on the board are shown on the board, not in-hand
       const rowEl = die.kind === 'WHITE' ? whiteDiceEl : colorDiceEl;
@@ -5963,7 +5969,8 @@ function renderPlayers(state, next) {
       // this gate was missing entirely: once turnActionTaken became true (2026-08-01's "don't auto-end
       // the turn" change), a *different* remaining die was still shown as die--selectable with a click
       // listener, letting the player select and place a second die before ever clicking "ターン終了".
-      if (player.id === canPlaceDiceFor && !die.passed && !turnActionTaken) {
+      if (player.id === canPlaceDiceFor && !die.passed && !turnActionTaken
+        && (!tutorialForcedDieId || die.id === tutorialForcedDieId)) {
         dieNode.classList.add('die--selectable');
         if (selectedDieIds.includes(die.id)) dieNode.classList.add('die--selected');
         // Multi-select toggle (2026-08-02, per user feedback: "1個目のダイスをクリック 2個目のダイスを
@@ -6014,9 +6021,10 @@ function renderPlayers(state, next) {
       // slot_any_rule_introの「光る」演出 (2026-09-26, per user request: "自分のすべてのダイスが光る")
       // -- ANYにはどの目でも置けるので、色/白/目の値を問わず全ダイスを光らせる。
       if (tutorialSlotAnyGlowing && player.id === 'P1') dieNode.classList.add('change-highlight');
-      // dice_select_hintの「光る」演出 (2026-09-27, per user request: "この時自分のダイスがすべて光る")
-      // -- tutorialDiceSelectHintGlowing's own doc。色/白ダイス問わず全て光らせる。
-      if (tutorialDiceSelectHintGlowing && player.id === 'P1') dieNode.classList.add('change-highlight');
+      // dice_select_hintの「光る」演出 (2026-09-27, per user request: "自分の色ダイスの一番左1個だけ光るに
+      // 変更 そのダイスしかつかめないように") -- 一番左の色ダイス1個だけを光らせる(tutorialForcedDieId's own
+      // doc)。以前は自分の全ダイスを光らせていたが、選択の絞り込みに合わせて対象を1個に変更。
+      if (tutorialDiceSelectHintGlowing && player.id === 'P1' && die.id === tutorialForcedDieId) dieNode.classList.add('change-highlight');
       rowEl.appendChild(dieNode);
     }
 
@@ -8206,6 +8214,20 @@ const TUTORIAL_STEPS = [
     body: '行動が気に入らなかったり間違えたときは「直前のアクションをキャンセル」を押せばキャンセルすることができます',
     nextLabel: '次へ',
   },
+  // 2026-09-27, per user request -- cancel_action_hintが閉じられた瞬間、プレイヤーのクリックを待たず
+  // ゲーム側が自動で一般市民を再TAPする(forceRetapJob001ForTutorial's own doc)。光る演出は無し(タップ後の
+  // 通常のtapped表示で十分)。
+  {
+    id: 'job_retap_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      if (next.playerId !== 'P1') return false;
+      const player = state.players.find((p) => p.id === 'P1');
+      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
+    },
+    body: '基本的にこのジョブはすぐに使って問題ないのでもう一度タップさせておきますね',
+    nextLabel: '次へ',
+  },
   // 2026-09-27, per user request -- ダイスを1個クリックした瞬間に自動遷移(通常経路。renderPlayersの
   // die click handlerのdoc参照)、または次へで手動遷移(フォールバック)。
   {
@@ -8605,6 +8627,18 @@ function renderTutorialOverlay(state) {
   }
 }
 
+/** job_retap_hintの「この時強制的に一般市民の効果を使う」(2026-09-27, per user request: "基本的にこの
+ * ジョブはすぐに使って問題ないのでもう一度タップさせておきますね") -- cancel_action_hintで一般市民の
+ * TAPをキャンセルした直後、プレイヤーのクリックを待たずゲーム側が自動でもう一度TAPしてやり直す。
+ * attachTapToggleのIMMEDIATE分岐と全く同じ「使用前にスナップショットを取り、成功したらactionCheckpoints
+ * に積む」処理を、実際のクリックの代わりにここから直接呼ぶだけの薄いラッパー。 */
+function forceRetapJob001ForTutorial() {
+  const preSnapshot = gameStateMod.cloneState(STATE);
+  const preTurnActionTaken = turnActionTaken;
+  const result = boardMod.useBareTapAbility(STATE, INDEX, { playerId: 'P1' }, 'JOB001');
+  if (result.success) actionCheckpoints.push({ state: preSnapshot, turnActionTaken: preTurnActionTaken });
+}
+
 function dismissTutorialStep() {
   // noManualDismiss (2026-09-24, per user report -- see resource_choice's own doc): ignore a manual
   // tap/閉じる entirely for a step that opted into this; it can only go away via its own autoDismissWhen.
@@ -8652,9 +8686,12 @@ function dismissTutorialStep() {
   // 閉じられた瞬間にONにする。
   if (tutorialCurrentStepId === 'job_tap_resource_intro') { tutorialResourceGainGlowing = false; tutorialCancelButtonGlowing = true; }
   // 通常はhandleCancelPreviousActionClickが直接同じ処理をやってからrender()する(そちらのdoc参照) -- ここは
-  // 「実際にキャンセルボタンを押さず次へだけ押した」フォールバック経路用。dice_select_hintの光る演出は
-  // cancel_action_hintが閉じられた瞬間にONにする。
-  if (tutorialCurrentStepId === 'cancel_action_hint') { tutorialCancelButtonGlowing = false; tutorialDiceSelectHintGlowing = true; }
+  // 「実際にキャンセルボタンを押さず次へだけ押した」フォールバック経路用。job_retap_hintの「一般市民を
+  // 強制的に再TAP」も同じタイミングで行う(forceRetapJob001ForTutorial's own doc)。
+  if (tutorialCurrentStepId === 'cancel_action_hint') { tutorialCancelButtonGlowing = false; forceRetapJob001ForTutorial(); }
+  // job_retap_hintの「光る」演出は無し(この時タップされる一般市民カード自体は通常のtapped表示で十分)。
+  // dice_select_hintの光る演出はjob_retap_hintが閉じられた瞬間にONにする。
+  if (tutorialCurrentStepId === 'job_retap_hint') tutorialDiceSelectHintGlowing = true;
   // 通常はダイスクリックのイベントリスナーが直接同じ処理をやってからrender()する(そちらのdoc参照) -- ここは
   // 「実際にダイスをクリックせず次へだけ押した」フォールバック経路用。
   if (tutorialCurrentStepId === 'dice_select_hint') tutorialDiceSelectHintGlowing = false;
@@ -8761,10 +8798,12 @@ let tutorialResourceGainGlowing = false;
 // このボタン自体はrenderUndoButtonsが毎回同じDOMノードを使い回す(cloneされない)ため、他の継続フラグと違い
 // classList.add一辺倒ではなくtoggleで明示的にON/OFFする必要がある(renderUndoButtonsの doc 参照)。
 let tutorialCancelButtonGlowing = false;
-// 自分のダイス全部の「光る」演出 (2026-09-27, per user request: "この時自分のダイスがすべて光る") --
-// dice_select_hintが表示され続けている間ずっとtrueになる継続フラグ。ダイスが選択された瞬間に次のセリフへ
-// 切り替える必要があるため、free_action_hintと同じ理由でautoDismissWhenは使わず、ダイスクリックの
-// イベントリスナー内で直接render()を呼ぶ前にセットする(renderPlayersのdie click handlerのdoc参照)。
+// 一番左の色ダイス1個だけの「光る」演出 + 選択制限 (2026-09-27, per user request: 当初は"この時自分の
+// ダイスがすべて光る"だったが、"自分の色ダイスの一番左1個だけ光るに変更 そのダイスしかつかめないように"
+// に変更) -- dice_select_hintが表示され続けている間ずっとtrueになる継続フラグ。ダイスが選択された瞬間に
+// 次のセリフへ切り替える必要があるため、free_action_hintと同じ理由でautoDismissWhenは使わず、ダイス
+// クリックのイベントリスナー内で直接render()を呼ぶ前にセットする(renderPlayersのdie click handlerのdoc
+// 参照)。renderPlayers内ではこのフラグからtutorialForcedDieId(光らせる/選択可能にする対象の1個)を導出する。
 let tutorialDiceSelectHintGlowing = false;
 // RESOURCE候補側は今のところ元の一回限りの点滅のまま(まだ同じ報告を受けていないため変更せず) -- 同じ
 // タイミングずれ問題を避けるため、dismissTutorialStepが上のRevealedフラグと同時にtrueにし、
@@ -9116,11 +9155,12 @@ function handleCancelPreviousActionClick() {
   // cancel_action_hintの「キャンセルボタンをクリック」演出 (2026-09-26, per user request: "この時直前の
   // アクションをキャンセルボタンを押すと一般市民のフリーアクションがキャンセルされ次のセリフに進む") --
   // job_tap_resource_introと同じ理由でrender()を呼ぶ前にここでフラグを立てる(tutorialCancelButtonGlowing
-  // 自身のdoc参照)。
+  // 自身のdoc参照)。続くjob_retap_hintの「一般市民を強制的に再TAP」も同じタイミングで行う
+  // (forceRetapJob001ForTutorial's own doc)。
   if (tutorialCurrentStepId === 'cancel_action_hint') {
     tutorialCurrentStepId = null;
     tutorialCancelButtonGlowing = false;
-    tutorialDiceSelectHintGlowing = true;
+    forceRetapJob001ForTutorial();
     stopTutorialTypewriter();
   }
   render(STATE);
