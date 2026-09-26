@@ -6905,13 +6905,14 @@ function renderPlayerCards(state, next) {
       // tutorialConRevealed/tutorialResourceCandidatesRevealed (2026-09-25, see their own doc): during the
       // tutorial's own resource_choice_intro/resource_choice_con_intro/resource_choice steps, these two
       // stay hidden (not rendered at all -- both containers are freshly-cloned template nodes per render,
-      // so simply skipping the call leaves them correctly empty) until their own step, then glow once via
-      // the JustRevealed one-shot flags (see their own doc for why tutorialCurrentStepId itself can't be
-      // checked here instead).
+      // so simply skipping the call leaves them correctly empty) until their own step.
       const conContainer = node.querySelector('.card-group__onboard-con');
       if (tutorialConRevealed(player.id)) {
         renderConPreview(conContainer, player);
-        if (tutorialConCardJustRevealed) { tutorialGlowRevealedCards(conContainer); tutorialConCardJustRevealed = false; }
+        // CONは表示され続けている間ずっと光る (2026-09-26, see tutorialConCardGlowing's own doc) --
+        // RESOURCE側(下)と違い一回限りの点滅ではない。conContainerは毎レンダーtemplateから作り直される
+        // ため、この場でクラスを毎回付け直しても問題ない。
+        if (tutorialConCardGlowing) tutorialGlowRevealedCards(conContainer);
         // 制約カードの表面(A面)の先行順を光らせる (2026-09-25, per user request: "制約カードの表面の
         // 先行順も光らせて") -- resourceChoiceStartOrderTotal自身がconPhysicalId+'A'(表面)のSTART_ORDERしか
         // 使わない(main.js内のresourceChoiceStartOrderTotal参照)ので、光らせるのも表面だけでよい。
@@ -8146,10 +8147,12 @@ function dismissTutorialStep() {
   if (tutorialCurrentStepId === 'turn_order_intro') tutorialOthersRevealed = true;
   // Dismissing resource_choice_intro/resource_choice_con_intro is what reveals あなた/P1's own CON card /
   // RESOURCE candidates respectively -- see tutorialConCardRevealed's own doc for why this can't just
-  // reuse tutorialSeenStepIds like every other step here does. The JustRevealed flags (see their own doc)
-  // are consumed by renderPlayerCards on the very next render to trigger the one-time glow.
-  if (tutorialCurrentStepId === 'resource_choice_intro') { tutorialConCardRevealed = true; tutorialConCardJustRevealed = true; }
-  if (tutorialCurrentStepId === 'resource_choice_con_intro') { tutorialResourceCandidatesRevealedFlag = true; tutorialResourceCandidatesJustRevealed = true; }
+  // reuse tutorialSeenStepIds like every other step here does. tutorialConCardGlowing turns ON here and
+  // OFF again once resource_choice_con_intro itself is dismissed (continuous glow for as long as that step
+  // is on screen, see its own doc); tutorialResourceCandidatesJustRevealed (see its own doc) is instead
+  // consumed by renderPlayerCards on the very next render, a one-time flash.
+  if (tutorialCurrentStepId === 'resource_choice_intro') { tutorialConCardRevealed = true; tutorialConCardGlowing = true; }
+  if (tutorialCurrentStepId === 'resource_choice_con_intro') { tutorialResourceCandidatesRevealedFlag = true; tutorialResourceCandidatesJustRevealed = true; tutorialConCardGlowing = false; }
   // alsoCloseTurnOrderOverlay (2026-09-24, see turn_order_reveal_summary's own doc): 次へ on this step
   // also presses the turn-order overlay's own ✖ in the same tap, instead of leaving the player to close
   // it separately.
@@ -8204,13 +8207,18 @@ function tutorialConRevealed(playerId) {
 function tutorialResourceCandidatesRevealed(playerId) {
   return !tutorialModeActive || playerId !== 'P1' || tutorialResourceCandidatesRevealedFlag;
 }
-// 「光る」演出用の一回限りのフラグ (2026-09-25, per user request: "次へを押すと...配られてひかる") --
-// dismissTutorialStepが上のRevealedフラグと同時にtrueにする。renderPlayerCards(render()内でrenderTutorial
-// Overlayより前に呼ばれる -- tutorialCurrentStepIdがまだ新しいステップに更新されていない)自身の中で読んで
-// すぐfalseに戻す一回きりの消費フラグ -- tutorialCurrentStepIdをその場でチェックする方式だと、まさに
-// 切り替わった瞬間のレンダーでは古い値のままなので光らず、後から何か別の理由で再レンダーが起きたときに
-// 初めて光ってしまう(実際にこの通りのタイミングずれが起きた)。
-let tutorialConCardJustRevealed = false;
+// CON面の「光る」演出 (2026-09-25, per user request: "次へを押すと...配られてひかる"; 2026-09-26に
+// 一回限りの点滅から継続的な点灯へ変更 -- per user report: "この時 制約カードが光って 一瞬で消えます
+// 光り続けるようにお願い") -- resource_choice_con_introが表示され続けている間ずっとtrueになる継続フラグ
+// (dismissTutorialStepが次のステップに進むタイミングでON/OFFする、一回きりの消費フラグではない)。
+let tutorialConCardGlowing = false;
+// RESOURCE候補側は今のところ元の一回限りの点滅のまま(まだ同じ報告を受けていないため変更せず) -- 同じ
+// タイミングずれ問題を避けるため、dismissTutorialStepが上のRevealedフラグと同時にtrueにし、
+// renderPlayerCards(render()内でrenderTutorialOverlayより前に呼ばれる -- tutorialCurrentStepIdがまだ
+// 新しいステップに更新されていない)自身の中で読んですぐfalseに戻す一回きりの消費フラグ --
+// tutorialCurrentStepIdをその場でチェックする方式だと、まさに切り替わった瞬間のレンダーでは古い値の
+// ままなので光らず、後から何か別の理由で再レンダーが起きたときに初めて光ってしまう(実際にこの通りの
+// タイミングずれが起きた)。
 let tutorialResourceCandidatesJustRevealed = false;
 // 変化ハイライトとして既存の.change-highlight(JOB/CON新規ドラフト時などに使っているのと同じパルスする
 // アンバーの枠線)を流用する。
@@ -8303,7 +8311,7 @@ function endTutorialMode() {
   tutorialOthersRevealed = false;
   tutorialConCardRevealed = false;
   tutorialResourceCandidatesRevealedFlag = false;
-  tutorialConCardJustRevealed = false;
+  tutorialConCardGlowing = false;
   tutorialResourceCandidatesJustRevealed = false;
   stopTutorialTypewriter();
   render(STATE);
