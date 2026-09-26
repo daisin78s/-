@@ -6687,7 +6687,7 @@ function renderConFacesRow(container, player, onPick) {
     // 2026-08-0X, per user feedback (CON cards weren't tappable to enlarge at all, in either the
     // read-only preview or the real choice): tapping the card now always opens the enlarge modal;
     // committing the choice happens via the modal's pick button -- see attachPickableEnlarge's own doc.
-    attachPickableEnlarge(cardNode, faceId, onPick ? { label: `この面（${face}面）を選ぶ`, onPick: () => onPick(face) } : null);
+    attachPickableEnlarge(cardNode, faceId, onPick ? { label: `${face === 'A' ? '表面' : '裏面'}を選ぶ`, onPick: () => onPick(face) } : null);
     container.appendChild(cell);
   }
   // Explanatory hint to the right of the two CON faces (2026-08-0X, per user request) -- shown in both
@@ -6897,6 +6897,12 @@ function renderPlayerCards(state, next) {
       && !state.pendingChoices.some((c) => c.playerId === player.id && c.kind === 'UNTAP_CHOICE');
     const tpl = document.getElementById('tpl-card-group');
     const node = tpl.content.firstElementChild.cloneNode(true);
+    // playerId (2026-09-26, for con_face_choice_introのスクロール調整 -- see renderTutorialOverlay's own
+    // doc): lets that later code reliably find P1's own .card-group__onboard-con among the 4 per-player
+    // groups, since other players' own onboard-con containers can also be non-empty (their CON preview,
+    // just visually hidden via tutorialOthersRevealed's own visibility trick) -- "first non-empty one"
+    // isn't a safe way to pick out P1's specifically.
+    node.dataset.playerId = player.id;
     // Whole-group highlight only for the player's real TURN (dice placement), not during JOB/CON
     // selection (confirmed 2026-07-30, per user feedback) -- the more specific job-pool/CON-row
     // highlight (.onboard-panel--active) already covers those moments on its own.
@@ -8188,6 +8194,25 @@ function renderTutorialOverlay(state) {
       const rect = jobPool.getBoundingClientRect();
       const desiredTop = Math.max(0, (visibleHeight - rect.height) / 2);
       window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
+    }
+    // con_face_choice_introが見えるようにスクロール (2026-09-26, per user request: "セリフので制約カードが
+    // 隠れないようにスクロールさせてください") -- job_draft_introと同じ考え方。.card-group__onboard-conは
+    // 4人分クローンされる持続的でない要素だが(renderPlayerCardsのisSelf分岐でのみ中身が入る)、
+    // renderTutorialOverlayはrenderPlayerCardsの後に呼ばれる(render()自身の呼び出し順)ため、この時点では
+    // すでにP1本人の実DOMに繋がった選択可能なCON面が入っている -- job_draft_introの#job-poolと同じく
+    // requestAnimationFrame不要。node.dataset.playerId(renderPlayerCardsで付与)でP1本人のグループだけを
+    // 特定する -- 他プレイヤーの.card-group__onboard-conもtutorialOthersRevealedの非表示トリックにより
+    // 中身自体は入っている(見た目だけ隠れている)ため、「中身が空でない最初の要素」では誤って別プレイヤーの
+    // ものを掴んでしまう(実際にこの通りのバグが発生し、確認中に見つかった)。
+    if (step.id === 'con_face_choice_intro') {
+      const conContainer = document.querySelector('.card-group[data-player-id="P1"] .card-group__onboard-con');
+      if (conContainer) {
+        const bubbleWrap = document.getElementById('tutorial-bubble-wrap');
+        const visibleHeight = (bubbleWrap && !bubbleWrap.hidden) ? bubbleWrap.getBoundingClientRect().top : window.innerHeight;
+        const rect = conContainer.getBoundingClientRect();
+        const desiredTop = Math.max(0, (visibleHeight - rect.height) / 2);
+        window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
+      }
     }
   }
 }
