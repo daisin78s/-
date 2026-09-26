@@ -8008,7 +8008,20 @@ const TUTORIAL_STEPS = [
     },
     nextLabel: '次へ',
   },
-  // 2026-09-26, per user request -- shown right after initial_resources_reveal's own 次へ (normal
+  // 2026-09-26, per user request -- shown right after initial_resources_reveal's own 次へ, same
+  // match-condition/fall-through pattern as every other plain-次へ step here.
+  {
+    id: 'resource_conversion_intro',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      if (next.playerId !== 'P1') return false;
+      const player = state.players.find((p) => p.id === 'P1');
+      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
+    },
+    body: '（食料）〇はこのゲームの一番基本的な資源です\nただし基本的にはそのまま使うことはできず、カードを獲得するにはいずれかの資源に変換する必要があります\n赤〇（権力）　青〇（信心）　黄〇（金貨）　はそれぞれカードを獲得するのに必要な資源です\nそれぞれの資源によって獲得できるカードの特性が違います\nZ〇（コネ）は赤〇青〇黄〇どの資源として使うこともできる万能資源です\nそれぞれの資源はターン中いつでも好きなだけフリーアクションで〇に変換することができます\nそのため基本的には　〇＜赤〇≒青〇≒黄〇＜Z〇　　になります',
+    nextLabel: '次へ',
+  },
+  // 2026-09-26, per user request -- shown right after resource_conversion_intro's own 次へ (normal
   // dismissTutorialStep flow, same match condition as that step so the usual "next unseen still-matching
   // step" fall-through picks this up automatically -- no special auto-transition trick needed here, unlike
   // con_face_choice_intro -> initial_resources_reveal, since this transition IS a plain 次へ tap).
@@ -8033,7 +8046,7 @@ const TUTORIAL_STEPS = [
       const player = state.players.find((p) => p.id === 'P1');
       return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
     },
-    body: 'あなたのターンになったら「小麦畑」「農園」などのいずれかのエリアのスロットにダイスを一つ置きます\nこれをメインアクションと呼びます\nダイスを置くときにはいくつかのルールがあります',
+    body: 'あなたのターンになったら「小麦畑」「農園」などのいずれかのエリアのスロットにダイスを一つ置かなければなりません\nこれをメインアクションと呼びます\nダイスを置くときにはいくつかのルールがあります',
     nextLabel: '次へ',
   },
   // 2026-09-26, per user request -- shown right after main_action_intro's own 次へ, same match condition/
