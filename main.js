@@ -5962,6 +5962,9 @@ function renderPlayers(state, next) {
           render(STATE);
         });
       }
+      // color_dice_revealの「光る」演出 (2026-09-26, per user request: "この時色ダイスを光らせる（ｗDは
+      // 光らせない）") -- COLORダイスのみ(die.kind==='WHITE'ではない)、tutorialColorDiceGlowing's own doc。
+      if (tutorialColorDiceGlowing && player.id === 'P1' && die.kind !== 'WHITE') dieNode.classList.add('change-highlight');
       rowEl.appendChild(dieNode);
     }
 
@@ -7990,6 +7993,21 @@ const TUTORIAL_STEPS = [
     },
     nextLabel: '次へ',
   },
+  // 2026-09-26, per user request -- shown right after initial_resources_reveal's own 次へ (normal
+  // dismissTutorialStep flow, same match condition as that step so the usual "next unseen still-matching
+  // step" fall-through picks this up automatically -- no special auto-transition trick needed here, unlike
+  // con_face_choice_intro -> initial_resources_reveal, since this transition IS a plain 次へ tap).
+  {
+    id: 'color_dice_reveal',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      if (next.playerId !== 'P1') return false;
+      const player = state.players.find((p) => p.id === 'P1');
+      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
+    },
+    body: 'これがあなたの色ダイス（ワーカー）です\nこの色ダイスはエリアに置かれてもラウンド開始時に戻ってきます\n恩寵ダイス（白ダイス　ｗD）は使い捨てになるため戻ってきません',
+    nextLabel: '次へ',
+  },
 ];
 
 // job_explanation (2026-09-24: "JOBをクリックしたときそのJOBの説明をセリフで流したい" -- per-JOB bespoke
@@ -8296,8 +8314,10 @@ function dismissTutorialStep() {
   if (tutorialCurrentStepId === 'resource_choice_intro') { tutorialConCardRevealed = true; tutorialConCardGlowing = true; }
   if (tutorialCurrentStepId === 'resource_choice_con_intro') { tutorialResourceCandidatesRevealedFlag = true; tutorialResourceCandidatesJustRevealed = true; tutorialConCardGlowing = false; }
   // initial_resources_reveal's own glow -- turned ON directly in renderConChoice's onPick (see
-  // tutorialInitialResourcesGlowing's own doc), turned OFF here once the player taps 次へ.
-  if (tutorialCurrentStepId === 'initial_resources_reveal') tutorialInitialResourcesGlowing = false;
+  // tutorialInitialResourcesGlowing's own doc); turned OFF here once the player taps 次へ, and
+  // tutorialColorDiceGlowing turns ON for the very next step (color_dice_reveal) at the same moment.
+  if (tutorialCurrentStepId === 'initial_resources_reveal') { tutorialInitialResourcesGlowing = false; tutorialColorDiceGlowing = true; }
+  if (tutorialCurrentStepId === 'color_dice_reveal') tutorialColorDiceGlowing = false;
   // alsoCloseTurnOrderOverlay (2026-09-24, see turn_order_reveal_summary's own doc): 次へ on this step
   // also presses the turn-order overlay's own ✖ in the same tap, instead of leaving the player to close
   // it separately.
@@ -8366,6 +8386,12 @@ let tutorialConCardGlowing = false;
 // はまってしまうため、代わりにdismissTutorialStepと全く同じ「render()を呼ぶ前にフラグを立てる」方式を
 // ここでも使っている。
 let tutorialInitialResourcesGlowing = false;
+// 色ダイスの「光る」演出 (2026-09-26, per user request: "この時色ダイスを光らせる（ｗDは光らせない）") --
+// color_dice_revealが表示され続けている間ずっとtrueになる継続フラグ、他の継続フラグと同じ形。今回は
+// initial_resources_reveal→color_dice_revealへの遷移が普通の「次へ」タップ(dismissTutorialStep)経由な
+// ので、CON面選択の時のような特別な仕掛けは不要 -- dismissTutorialStep自身がすでにrender()を呼ぶ前に
+// フラグを立てる方式になっている。
+let tutorialColorDiceGlowing = false;
 // RESOURCE候補側は今のところ元の一回限りの点滅のまま(まだ同じ報告を受けていないため変更せず) -- 同じ
 // タイミングずれ問題を避けるため、dismissTutorialStepが上のRevealedフラグと同時にtrueにし、
 // renderPlayerCards(render()内でrenderTutorialOverlayより前に呼ばれる -- tutorialCurrentStepIdがまだ
