@@ -2173,7 +2173,7 @@ function setCardListView(key) {
 const CARD_LIST_NAV = [
   { key: 'resource', label: '資源や用語一覧' },
   { key: 'con', label: 'CON一覧' },
-  { key: 'job', label: 'JOB一覧' },
+  { key: 'job', label: 'ジョブ一覧' },
   { key: 'initialResource', label: '初期資源一覧' },
   { key: 'A', label: '領地カード一覧' },
   { key: 'B', label: '天運カード一覧' },
@@ -2191,7 +2191,7 @@ const CARD_LIST_NAV = [
  * す" 2026-08-22 request). CON gets its own dedicated renderCardListConCategory instead (表/裏 row
  * split, per user request), so it's not listed here. */
 const CARD_LIST_FLAT_CATEGORIES = {
-  job: { label: 'JOB一覧', columns: 6, isQst: false, faceIds: () => INDEX.raw.JOB.map((r) => r.ID) },
+  job: { label: 'ジョブ一覧', columns: 6, isQst: false, faceIds: () => INDEX.raw.JOB.map((r) => r.ID) },
   // 24 rows -> columns:6 gives a clean 6x4 grid (2026-08-25, per user spec: "初期資源カード一覧
   // 横６枚　縦４枚の配置にして" -- was columns:8/8x3 since the RESOURCE sheet grew from 18 to 24
   // on 2026-08-22).
@@ -4127,14 +4127,14 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     const noteEl = el('div', 'card-note');
     const iconRow = el('span', 'job-note-icon-row');
     if (facts.name === '宣教師') {
-      noteEl.appendChild(document.createTextNode('無人AREAに色D\n▽\n'));
+      noteEl.appendChild(document.createTextNode('無人エリアに色D\n▽\n'));
       iconRow.appendChild(actionDot('B'));
     } else if (facts.name === '吟遊詩人') {
       noteEl.appendChild(document.createTextNode('エンブレム３個\n▽\n'));
       iconRow.appendChild(actionDot('C'));
       iconRow.appendChild(actionCount('1VP'));
     } else {
-      noteEl.appendChild(document.createTextNode('LVアップAREA\n▽\n'));
+      noteEl.appendChild(document.createTextNode('LVアップエリア\n▽\n'));
       iconRow.appendChild(actionDot('K'));
       iconRow.appendChild(actionSuffix('/'));
       iconRow.appendChild(actionCount('1VP'));
@@ -5601,7 +5601,7 @@ function renderBuildChoiceModal() {
   // other (A/B/C/M) candidates are still on offer alongside it -- without this, an UPGRADE a player
   // expects to see would just silently be missing from the list with no explanation.
   if (boardMod.isUpgradeBlockedByQstRank(STATE, INDEX, pendingBuildChoice.playerId)) {
-    list.appendChild(el('div', 'build-choice-warning', '自分よりAREA数が多いプレイヤーがいるためLVUPできません'));
+    list.appendChild(el('div', 'build-choice-warning', '自分よりエリア数が多いプレイヤーがいるためLVUPできません'));
   }
   const affordableCandidates = pendingBuildChoice.candidates.filter((c) => candidateAffordable(c, pendingBuildChoice.playerId));
   if (affordableCandidates.length === 0) {
@@ -6501,7 +6501,7 @@ function renderJobPool(state, next) {
     if (canReallyPick) cell.classList.add('owned-card-cell--selectable');
     if (tutorialModeActive && draftingPlayerId && faceId === 'JOB001') cell.classList.add('change-highlight');
     attachPickableEnlarge(cardNode, faceId, draftingPlayerId ? (canReallyPick ? {
-      label: 'このJOBを選ぶ',
+      label: 'このジョブを選ぶ',
       onPick: () => {
         const commit = () => {
           setupMod.chooseJob(state, INDEX, draftingPlayerId, faceId);
@@ -6522,7 +6522,7 @@ function renderJobPool(state, next) {
         }
         commit();
       },
-    } : { label: 'チュートリアルではこのJOBは選べません', disabled: true }) : null);
+    } : { label: 'チュートリアルではこのジョブは選べません', disabled: true }) : null);
     container.appendChild(cell);
   }
 }
@@ -6559,7 +6559,7 @@ function renderJobReplacementChoice(state) {
     const cell = el('div', tall ? 'owned-card-cell owned-card-cell--tall owned-card-cell--selectable' : 'owned-card-cell owned-card-cell--selectable');
     cell.appendChild(cardNode);
     attachPickableEnlarge(cardNode, faceId, {
-      label: 'このJOBを選ぶ',
+      label: 'このジョブを選ぶ',
       onPick: () => {
         const commit = () => {
           setupMod.resolveJobReplacementChoice(state, INDEX, choice.playerId, faceId);
@@ -6698,7 +6698,7 @@ function renderConFacesRow(container, player, onPick) {
   // not discoverable at all on a card a player hasn't picked yet.
   container.appendChild(buildOnboardHint(
     [
-      'JOB選択後　CONカードの表面か裏面を選んでください',
+      'ジョブ選択後　CONカードの表面か裏面を選んでください',
       'CONカードは制約カードです。表面より裏面のほうが獲得資源が大きい代わりに制約が厳しくなります',
     ],
     '詳しくはカードをタップ（クリック）してください',
@@ -6840,7 +6840,7 @@ function renderResourceChoice(container, state, player) {
   // player lands here with zero context on what a "先着順" number even refers to.
   container.appendChild(buildOnboardHint([
     `← 初期資源カード${choice.context.candidates.length}枚のうちから${requiredCount}枚を選んでください`,
-    '先着順の数字の合計が少ないプレイヤーからJOBを選択しゲームが始まります',
+    '先着順の数字の合計が少ないプレイヤーからジョブを選択しゲームが始まります',
   ]));
 }
 
@@ -7373,7 +7373,7 @@ function renderRankingList(highlightId, highlightCategory) {
         row.appendChild(el('span', 'ranking-row__name', entry.name));
         row.appendChild(el('span', 'ranking-row__score', `総合 ${entry.totalScore}VP（素点${entry.rawScore} + QST${entry.qstScore}）`));
         row.appendChild(el('span', 'ranking-row__con', `CON: ${rankingCardDisplayName(entry.conFaceId)}`));
-        row.appendChild(el('span', 'ranking-row__job', `JOB: ${rankingCardDisplayName(entry.jobCardId)}`));
+        row.appendChild(el('span', 'ranking-row__job', `ジョブ: ${rankingCardDisplayName(entry.jobCardId)}`));
         row.appendChild(el('span', 'ranking-row__opponents', entry.opponents.join('　')));
         // 最新版でないリプレイの目印 (2026-09-07, per user request: "この〇は最新版でないリプレイデータを
         // 間違えて学習させないためのものです") -- set via 選択した項目を削除's own "印をつける" choice
@@ -7830,7 +7830,7 @@ const TUTORIAL_STEPS = [
     body: (state) => {
       const choice = state.pendingChoices.find((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS');
       const total = resourceChoiceStartOrderTotal(state, 'P1', choice.context.selected);
-      return `あなたが選んだカードはこちら\n制約カードに書かれた先攻順と足された合計は${total}です\nこの数字が大きいほど得られる資源が多くなり、小さいほど先に行動してJOBや獲得カードを選ぶことができます`;
+      return `あなたが選んだカードはこちら\n制約カードに書かれた先攻順と足された合計は${total}です\nこの数字が大きいほど得られる資源が多くなり、小さいほど先に行動してジョブや獲得カードを選ぶことができます`;
     },
     autoDismissWhen: (state) => !state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
   },
@@ -7889,7 +7889,7 @@ const TUTORIAL_STEPS = [
       const precedingNames = state.turnOrder.slice(0, state.turnOrder.indexOf('P1'))
         .map((id) => state.players.find((p) => p.id === id).name);
       const turnLine = precedingNames.length > 0 ? `${precedingNames.join('と')}のターンが終わりあなたのターンです` : 'あなたのターンです';
-      return `${turnLine}\nJOBカードを選びます\n今回はこの中で比較的使いやすい一般市民にしてみましょう`;
+      return `${turnLine}\nジョブカードを選びます\n今回はこの中で比較的使いやすい一般市民にしてみましょう`;
     },
   },
   // 2026-09-26, per user request -- shown once P1 has drafted their JOB (一般市民) but hasn't chosen a CON
@@ -7905,7 +7905,7 @@ const TUTORIAL_STEPS = [
       const player = state.players.find((p) => p.id === 'P1');
       return !!player.jobCardId && !player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
     },
-    body: 'JOBを選んだら制約カードを選びます\n制約カードは特定の行動ができなかったりVP（得点）のペナルティがあったりします\n基本的に表面に比べて裏面のほうが、得られる初期資源が多く、制約が厳しいものになります\n初回プレイは表面をお勧めしますが、自己責任で裏面を選んでも大丈夫です',
+    body: 'ジョブを選んだら制約カードを選びます\n制約カードは特定の行動ができなかったりVP（得点）のペナルティがあったりします\n基本的に表面に比べて裏面のほうが、得られる初期資源が多く、制約が厳しいものになります\n初回プレイは表面をお勧めしますが、自己責任で裏面を選んでも大丈夫です',
   },
 ];
 
