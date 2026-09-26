@@ -8232,6 +8232,18 @@ const TUTORIAL_STEPS = [
     body: '今光っているスロットが配置可能スロットです',
     nextLabel: '次へ',
   },
+  // 2026-09-27, per user request -- 光る演出は無し。プレイの助言のみ。
+  {
+    id: 'first_turn_recommendation_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      if (next.playerId !== 'P1') return false;
+      const player = state.players.find((p) => p.id === 'P1');
+      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
+    },
+    body: '初めのターンは初期資源を使ってダイスかカードを獲得するのがおすすめです',
+    nextLabel: '次へ',
+  },
 ];
 
 // job_explanation (2026-09-24: "JOBをクリックしたときそのJOBの説明をセリフで流したい" -- per-JOB bespoke
