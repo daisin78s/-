@@ -6583,21 +6583,38 @@ function renderResourceConfirmOverlay(state) {
   // (下固定のセリフと被らない程度)。通常プレイ時は中央寄せのまま。
   overlay.classList.toggle('resource-confirm-overlay--tutorial-raised', tutorialModeActive);
   const startOrderBadge = document.getElementById('resource-confirm-start-order');
-  startOrderBadge.textContent = `先行順合計 ${resourceChoiceStartOrderTotal(state, choice.playerId, choice.context.selected)}`;
+  startOrderBadge.textContent = `先攻順合計 ${resourceChoiceStartOrderTotal(state, choice.playerId, choice.context.selected)}`;
   const visual = document.getElementById('resource-confirm-visual');
   visual.innerHTML = '';
+  // 制約カード(表裏)も並べて表示 (2026-09-26, per user request with an iPad screenshot: "ウィンドウを左に
+  // 伸ばして 制約カードも表示 そのうち一枚の先行順も光らせる") -- .build-choice-modal自身はwidth:autoな
+  // ので、ここで並べるカードが増えるだけでモーダルは自動的に(左右へ)広がる。先行順合計に実際に使われるのは
+  // CONの表面(A面)のSTART_ORDERだけ(resourceChoiceStartOrderTotal自身がconPhysicalId+'A'決め打ち)なので、
+  // 光らせるのもA面の.shop-card__start-orderだけ -- B面は参考として表示するのみ、光らせない。
+  const conPhysicalId = state.players.find((p) => p.id === choice.playerId).conPhysicalId;
+  let conFrontStartOrderLabel = null;
+  for (const face of ['A', 'B']) {
+    const cardNode = buildCardVisual(`${conPhysicalId}${face}`, { showEffect: true, allowTextFallback: false, noInteraction: true });
+    const cell = el('div', cardNode.classList.contains('shop-card--tall') ? 'owned-card-cell owned-card-cell--tall' : 'owned-card-cell');
+    cell.appendChild(cardNode);
+    visual.appendChild(cell);
+    if (face === 'A') conFrontStartOrderLabel = cell.querySelector('.shop-card__start-order');
+  }
+  const resourceStartOrderLabels = [];
   for (const faceId of choice.context.selected) {
     const cardNode = buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true });
     const cell = el('div', cardNode.classList.contains('shop-card--tall') ? 'owned-card-cell owned-card-cell--tall' : 'owned-card-cell');
     cell.appendChild(cardNode);
     visual.appendChild(cell);
+    resourceStartOrderLabels.push(...cell.querySelectorAll('.shop-card__start-order'));
   }
   // 先行順を光らせる (2026-09-25, per user request: "先行順が分かりやすいように先行順の場所を光らせて") --
-  // 合計バッジ自身と、選んだ2枚それぞれの.shop-card__start-order(先攻順X表示)を両方光らせる。tutorialModeActive
-  // のみで判定できる(このoverlay自体がresource_confirm_introと同じ条件でしか表示されないため -- 詳細は
-  // tutorialResourceConfirmActiveの doc)。
+  // 合計バッジ自身、選んだ2枚それぞれの.shop-card__start-order(先攻順X表示)、CON表面の.shop-card__start-
+  // orderを光らせる。tutorialModeActiveのみで判定できる(このoverlay自体がresource_confirm_introと同じ
+  // 条件でしか表示されないため -- 詳細はtutorialResourceConfirmActiveのdoc)。
   startOrderBadge.classList.toggle('change-highlight', tutorialModeActive);
-  for (const label of visual.querySelectorAll('.shop-card__start-order')) {
+  if (conFrontStartOrderLabel) conFrontStartOrderLabel.classList.toggle('change-highlight', tutorialModeActive);
+  for (const label of resourceStartOrderLabels) {
     label.classList.toggle('change-highlight', tutorialModeActive);
   }
 }
@@ -7761,7 +7778,7 @@ const TUTORIAL_STEPS = [
     body: (state) => {
       const choice = state.pendingChoices.find((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS');
       const total = resourceChoiceStartOrderTotal(state, 'P1', choice.context.selected);
-      return `あなたが選んだカードはこちら。\n制約カードに書かれた先行順と足された合計は${total}です。\nこの数字がおおきいほど、得られる資源が多くなり、小さいほど、先に行動してJOBや獲得カードを選ぶことができます。`;
+      return `あなたが選んだカードはこちら。\n制約カードに書かれた先攻順と足された合計は${total}です。\nこの数字が大きいほど、得られる資源が多くなり、小さいほど、先に行動してJOBや獲得カードを選ぶことができます。`;
     },
     autoDismissWhen: (state) => !state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
   },
@@ -7777,7 +7794,7 @@ const TUTORIAL_STEPS = [
       const p1 = state.players.find((p) => p.id === 'P1');
       const resourceIds = p1.ownedCardPhysicalIds.filter((id) => id.startsWith('R'));
       const total = resourceChoiceStartOrderTotal(state, 'P1', resourceIds);
-      return `あなたの先攻順は${total}です。\nそれでは、他のプレイヤーの先行順も見てみましょう。`;
+      return `あなたの先攻順は${total}です。\nそれでは、他のプレイヤーの先攻順も見てみましょう。`;
     },
     // 2026-09-24, per user request: "閉じるではなく次へと表示して" -- this step leads straight into
     // another one (turn_order_reveal_summary below), so its own button reads 次へ instead of the default
@@ -8275,7 +8292,7 @@ function renderTutorialTurnOrderOverlay(state) {
     header.appendChild(el('span', 'tutorial-turnorder-name', player.name));
     // 数字部分だけ2倍サイズ (2026-09-25, per user request: "先攻順合計9 の数字部分を2倍の大きさにしてほしい")
     // -- ラベルと数字を別々のspanに分け、数字側だけ.tutorial-turnorder-total__numberで拡大する。
-    const totalEl = el('span', 'tutorial-turnorder-total', '先行順合計 ');
+    const totalEl = el('span', 'tutorial-turnorder-total', '先攻順合計 ');
     totalEl.appendChild(el('span', 'tutorial-turnorder-total__number', String(total)));
     header.appendChild(totalEl);
     row.appendChild(header);
