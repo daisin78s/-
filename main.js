@@ -2430,11 +2430,11 @@ function showCardListTermModal(title, instId) {
   const pickBtn = overlay.querySelector('.card-inst-modal__pick-button');
 
   overlay.hidden = false;
-  // tutorial-left (2026-09-24): same left-alignment showCardEnlargeModal already applies during the
-  // tutorial (see its own doc) -- this popup opens ON TOP of the tutorial bubble (z-index 200 > this
+  // tutorial-raised (2026-09-24, changed from a left-shift to an upward shift 2026-09-26 -- see
+  // showCardEnlargeModal's own doc): this popup opens ON TOP of the tutorial bubble (z-index 200 > this
   // overlay's 150) when an auto-linked term span in the bubble's own text is tapped, and its own centered
   // position would otherwise sit right under/behind that still-open bubble.
-  overlay.classList.toggle('card-inst-overlay--tutorial-left', tutorialModeActive);
+  overlay.classList.toggle('card-inst-overlay--tutorial-raised', tutorialModeActive);
   modal.classList.remove('card-inst-modal--wide', 'card-inst-modal--area-wide');
   modal.classList.add('card-inst-modal--term');
   flipBtn.hidden = true;
@@ -7904,8 +7904,17 @@ const TUTORIAL_STEPS = [
       const precedingNames = state.turnOrder.slice(0, state.turnOrder.indexOf('P1'))
         .map((id) => state.players.find((p) => p.id === id).name);
       const turnLine = precedingNames.length > 0 ? `${precedingNames.join('と')}のターンが終わりあなたのターンです` : 'あなたのターンです';
-      return `${turnLine}\nジョブカードを選びます\n今回はこの中で比較的使いやすい一般市民にしてみましょう\nカードをクリックすると拡大され選ぶことができます`;
+      return `${turnLine}\n第1ラウンド第1ターンの開始時にジョブカードを選びます`;
     },
+    nextLabel: '次へ',
+  },
+  {
+    id: 'job_draft_pick_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'ONBOARDING_NEEDED' && next.playerId === 'P1';
+    },
+    body: '今回はこの中で比較的使いやすい一般市民にしてみましょう\nカードをクリックすると拡大され選ぶことができます',
   },
   // 2026-09-26, per user request -- shown once P1 has drafted their JOB (一般市民) but hasn't chosen a CON
   // face yet. Note: getNextTurn's own ONBOARDING_NEEDED type flips to plain TURN the instant jobCardId is
@@ -8829,12 +8838,13 @@ function showCardEnlargeModal(faceId, visualNode, sibling, siblingVisualNode, pi
   // still-hidden (display:none) overlay always reports 0x0, since the browser never lays out
   // display:none content.
   overlay.hidden = false;
-  // チュートリアル中だけ左寄せ (2026-09-24, per user report with a screenshot: "セリフと被っているので
-  // チュートリアルだけ左に寄せてください" -- #card-inst-overlay is used for every card enlarge popup app-
-  // wide (JOB draft included), and its default center alignment can land under the right-anchored
-  // seli-fu bubble) -- same treatment as #resource-confirm-overlay/#tutorial-turnorder-overlay already
-  // got; normal (non-tutorial) play is untouched.
-  overlay.classList.toggle('card-inst-overlay--tutorial-left', tutorialModeActive);
+  // チュートリアル中だけ上に寄せる (2026-09-24, per user report with a screenshot: "セリフと被っているので
+  // チュートリアルだけ左に寄せてください" -- originally a left-shift; changed 2026-09-26 per user request:
+  // "中央に寄せる代わりに セリフに隠れないように少し上に" -- #card-inst-overlay is used for every card
+  // enlarge popup app-wide (JOB draft included), and its default centered position can land behind the
+  // bottom-anchored seli-fu bubble) -- same treatment as #resource-confirm-overlay/#tutorial-turnorder-
+  // overlay already got; normal (non-tutorial) play is untouched.
+  overlay.classList.toggle('card-inst-overlay--tutorial-raised', tutorialModeActive);
 
   visualContainer.innerHTML = '';
   visualContainer.style.width = '';

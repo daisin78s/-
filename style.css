@@ -3694,12 +3694,13 @@ h1, h2, h3 { margin: 0; }
 }
 
 /* チュートリアル中のカード拡大ポップアップ (2026-09-24, per user report with a screenshot: "セリフと
-   被っているので チュートリアルだけ左に寄せてください" -- #card-inst-overlayはJOBカードのクリック含め
-   アプリ全体で使われる汎用の拡大モーダルなので、main.jsのshowCardEnlargeModalがtutorialModeActive中だけ
-   このクラスを付与する。通常プレイ時はセンター寄せのまま。 */
-.card-inst-overlay--tutorial-left {
-  justify-content: flex-start;
-  padding-left: 16px;
+   被っているので チュートリアルだけ左に寄せてください" -- 当初は左寄せ。2026-09-26、per user request:
+   "中央に寄せる代わりに セリフに隠れないように少し上に" -- 左右中央寄せに戻し、代わりに下パディングで
+   上に押し上げる方式に変更。#card-inst-overlayはJOBカードのクリック含めアプリ全体で使われる汎用の拡大
+   モーダルなので、main.jsのshowCardEnlargeModalがtutorialModeActive中だけこのクラスを付与する。通常
+   プレイ時は元のセンター表示のまま。 */
+.card-inst-overlay--tutorial-raised {
+  padding-bottom: 18vh;
 }
 
 .tutorial-turnorder-modal {
