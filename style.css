@@ -3642,6 +3642,22 @@ h1, h2, h3 { margin: 0; }
   margin: 0 0 16px;
 }
 
+/* TUTORIAL_ICON_NOTATIONSの実アイコンを2倍サイズに (2026-09-26, per user request: "チュートリアルの
+   アイコン小さいので2倍の大きさにして") -- action-dot(11px)は特に他の要素に埋もれるほど小さかった。
+   die/die-faceは元から比較的大きいが、統一感のため同じ倍率で揃える。 */
+.tutorial-bubble__text .action-dot {
+  width: 22px;
+  height: 22px;
+}
+.tutorial-bubble__text .die-face {
+  font-size: 84px;
+}
+.tutorial-bubble__text .die {
+  width: 44px;
+  height: 44px;
+  font-size: 24px;
+}
+
 /* job_explanation's 食料/コネ-style term markers (2026-09-24, per user request: "食料 コネ の文字だけ
    青く色を変え クリックすると資源や用語一覧の文章が表示されるように") -- tapping opens
    showCardListTermModal for that term (see JOB_EXPLANATION_BODIES/appendTutorialBubbleToken in main.js). */
