@@ -6128,12 +6128,15 @@ function renderUntapChoice(container, state, playerId) {
  * placement/BUILD selection elsewhere in this file, rather than being pre-validated away.
  * (2026-08-07: wD->2K, formerly a 5th button here, was abolished per user request -- see
  * game-state.js's FREE_ACTION_IDS for the engine-side removal.) */
-const FREE_ACTION_LABELS = { A_K: 'A→K', B_K: 'B→K', C_K: 'C→K', Z_K: 'Z→K' };
+// アイコン表記 (2026-09-26, per user request: "フリーアクションのA→Kを赤〇→〇に B C Zも同様にアイコンに
+// して") -- 他のカード効果アイコン(ACTION_ICON_BUILDERS等)と同じactionDot/actionArrowの組み合わせに統一。
+const FREE_ACTION_RESOURCE = { A_K: 'A', B_K: 'B', C_K: 'C', Z_K: 'Z' };
 function renderFreeActionButtons(container, state, player, canAct) {
   container.innerHTML = '';
   if (!canAct) return;
   for (const freeActionId of ['A_K', 'B_K', 'C_K', 'Z_K']) {
-    const btn = el('button', 'free-action-button', FREE_ACTION_LABELS[freeActionId]);
+    const btn = el('button', 'free-action-button');
+    btn.appendChild(actionRow([actionDot(FREE_ACTION_RESOURCE[freeActionId]), actionArrow(), actionDot('K')]));
     btn.type = 'button';
     btn.addEventListener('click', () => {
       // Pushed onto actionCheckpoints (2026-08-27, see its own doc) only once tryFreeAction actually
