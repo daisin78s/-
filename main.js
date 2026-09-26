@@ -4830,6 +4830,11 @@ function renderBoard(state, next) {
   // (see attemptPlaceSelectedWildcardDie's own doc for the whole-tile click wiring this drives).
   const highlightOwnerIsWildcard = highlightOwner ? boardMod.hasWildcardDice(state, INDEX, highlightOwner.id) : false;
 
+  // slot_any_rule_introの「光る」演出 (2026-09-26, per user request: "スロットの配置可能ANY（1番左）...
+  // が光る") -- ボード全体を通して最初に見つかった、空いているANYスロット1つだけを光らせるためのフラグ。
+  // MAP_ORDER順(盤面の左上から)に走査するので「1番左」は事実上「盤面上で一番最初に見つかったもの」になる。
+  let anyGlowSlotAssigned = false;
+
   // Two independent rows (see .board-row in style.css) so the castle tile can be wider than the
   // other bottom-row tiles without pushing anything into an orphan third row.
   const rows = [MAP_ORDER.slice(0, 5), MAP_ORDER.slice(5, 10)];
@@ -4964,6 +4969,17 @@ function renderBoard(state, next) {
         // main_action_introの「光る」演出 (2026-09-26, per user request: "この時エリアのスロットを光らせる")
         // -- tutorialAreaSlotsGlowing's own doc.
         if (tutorialAreaSlotsGlowing) slotEl.classList.add('change-highlight');
+        // slot_dice_value_rule_introの「光る」演出 (2026-09-26, per user request: "スロットの⚀...が光る")
+        // -- ⚀(ダイス目1)を要求するスロットはすべて光らせる。占有中かどうかは問わない(main_action_introの
+        // 全SLOT演出と同じ扱い)。
+        if (tutorialSlotValueOneGlowing && requirement === 1) slotEl.classList.add('change-highlight');
+        // slot_any_rule_introの「光る」演出 (2026-09-26, per user request: "スロットの配置可能ANY（1番左）
+        // ...が光る") -- 盤面全体で最初に見つかった、空いているANYスロット1つだけを光らせる
+        // (anyGlowSlotAssigned's own doc)。
+        if (tutorialSlotAnyGlowing && requirement === 'ANY' && occupants.length === 0 && !anyGlowSlotAssigned) {
+          slotEl.classList.add('change-highlight');
+          anyGlowSlotAssigned = true;
+        }
         slotsEl.appendChild(slotEl);
       });
 
@@ -5977,6 +5993,12 @@ function renderPlayers(state, next) {
       // color_dice_revealの「光る」演出 (2026-09-26, per user request: "この時色ダイスを光らせる（ｗDは
       // 光らせない）") -- COLORダイスのみ(die.kind==='WHITE'ではない)、tutorialColorDiceGlowing's own doc。
       if (tutorialColorDiceGlowing && player.id === 'P1' && die.kind !== 'WHITE') dieNode.classList.add('change-highlight');
+      // slot_dice_value_rule_introの「光る」演出 (2026-09-26, per user request: "自分のダイスの1が光る")
+      // -- 目が1のダイスはすべて光らせる(色/白ダイス問わず)、tutorialSlotValueOneGlowing's own doc。
+      if (tutorialSlotValueOneGlowing && player.id === 'P1' && die.value === 1) dieNode.classList.add('change-highlight');
+      // slot_any_rule_introの「光る」演出 (2026-09-26, per user request: "自分のすべてのダイスが光る")
+      // -- ANYにはどの目でも置けるので、色/白/目の値を問わず全ダイスを光らせる。
+      if (tutorialSlotAnyGlowing && player.id === 'P1') dieNode.classList.add('change-highlight');
       rowEl.appendChild(dieNode);
     }
 
@@ -8069,10 +8091,23 @@ const TUTORIAL_STEPS = [
       const player = state.players.find((p) => p.id === 'P1');
       return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
     },
-    body: 'ダイスはスロットに書かれているマーク通りにしか置けません\nスロットに⚀と書かれていれば1⃣か白1⃣しか置けません\nスロットにANYと書かれていれば何の目でも置けます',
+    body: 'ダイスはスロットに書かれているマーク通りにしか置けません\nスロットに⚀と書かれていれば\n1⃣か白1⃣しか置けません',
     nextLabel: '次へ',
   },
-  // 2026-09-26, per user request -- shown right after slot_dice_value_rule_introの次へ, same
+  // 2026-09-26, per user request -- slot_dice_value_rule_introから分割した新しいステップ(ANYスロットの
+  // 説明のみ)。同じmatch-condition/fall-throughパターン。
+  {
+    id: 'slot_any_rule_intro',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      if (next.playerId !== 'P1') return false;
+      const player = state.players.find((p) => p.id === 'P1');
+      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
+    },
+    body: 'スロットにANYと書かれていれば何の目でも置けます',
+    nextLabel: '次へ',
+  },
+  // 2026-09-26, per user request -- shown right after slot_any_rule_introの次へ, same
   // match-condition/fall-through pattern as every other plain-次へ step here.
   {
     id: 'slot_dice_value_rule_intro_2',
@@ -8475,7 +8510,11 @@ function dismissTutorialStep() {
   // very next step (main_action_intro) at the same moment (2026-09-26, per user request: "この時エリアの
   // スロットを光らせる").
   if (tutorialCurrentStepId === 'color_dice_reveal') { tutorialColorDiceGlowing = false; tutorialAreaSlotsGlowing = true; }
-  if (tutorialCurrentStepId === 'main_action_intro') tutorialAreaSlotsGlowing = false;
+  // slot_dice_value_rule_intro(⚀SLOT/自分の1のダイス)の「光る」演出 -- main_action_introが閉じられた瞬間に
+  // ONにし、slot_dice_value_rule_intro自身が閉じられたらOFF+slot_any_rule_intro側をONにする。
+  if (tutorialCurrentStepId === 'main_action_intro') { tutorialAreaSlotsGlowing = false; tutorialSlotValueOneGlowing = true; }
+  if (tutorialCurrentStepId === 'slot_dice_value_rule_intro') { tutorialSlotValueOneGlowing = false; tutorialSlotAnyGlowing = true; }
+  if (tutorialCurrentStepId === 'slot_any_rule_intro') tutorialSlotAnyGlowing = false;
   // free_action_hintの「光る」演出 (2026-09-26, per user request: "この時一般市民が光る") -- 直前の
   // slot_dice_value_rule_intro_2が閉じられた瞬間にONにし、free_action_hint自身が閉じられたらOFFにする。
   if (tutorialCurrentStepId === 'slot_dice_value_rule_intro_2') tutorialJobCardGlowing = true;
@@ -8560,6 +8599,14 @@ let tutorialAreaSlotsGlowing = false;
 // あなた自身のJOBカードの「光る」演出 (2026-09-26, per user request: "この時一般市民が光る") --
 // free_action_hintが表示され続けている間ずっとtrueになる継続フラグ、他の継続フラグと同じ形。
 let tutorialJobCardGlowing = false;
+// ⚀スロット/自分の1のダイスの「光る」演出 (2026-09-26, per user request: "この時 スロットの⚀と 自分の
+// ダイスの1が光る") -- slot_dice_value_rule_introが表示され続けている間ずっとtrueになる継続フラグ。
+// renderBoard(数値SLOTのglow)とrenderPlayers(値が1のダイスのglow)の両方から参照する。
+let tutorialSlotValueOneGlowing = false;
+// ANYスロット（一番左の配置可能なもの）/自分の全ダイスの「光る」演出 (2026-09-26, per user request: "この時
+// スロットの配置可能ANY（1番左）と自分のすべてのダイスが光る") -- slot_any_rule_introが表示され続けている
+// 間ずっとtrueになる継続フラグ。
+let tutorialSlotAnyGlowing = false;
 // RESOURCE候補側は今のところ元の一回限りの点滅のまま(まだ同じ報告を受けていないため変更せず) -- 同じ
 // タイミングずれ問題を避けるため、dismissTutorialStepが上のRevealedフラグと同時にtrueにし、
 // renderPlayerCards(render()内でrenderTutorialOverlayより前に呼ばれる -- tutorialCurrentStepIdがまだ
