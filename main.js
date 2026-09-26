@@ -172,7 +172,7 @@ function createInitialState(plan, forcedSeed) {
   } else {
     setupMod.dealResourceCandidates(state, INDEX);
   }
-  // チュートリアルでは町人(JOB001)が必ずJOBプールに入るようにする (2026-09-26, per user request:
+  // チュートリアルでは一般市民(JOB001)が必ずJOBプールに入るようにする (2026-09-26, per user request:
   // "チュートリアルでは町人は必ず出てくる") -- dealJobPoolの既存のpreferredFaceIds機能(元々はデバッグ
   // セットアップの「テストゲーム開始」用)をそのまま流用する。
   const preferredJobs = [...(tutorialModeActive ? ['JOB001'] : []), ...(plan ? plan.job : [])];
@@ -287,8 +287,8 @@ const DEFAULT_AI_ROLE = PLAYER_ROLE_OPTIONS[PLAYER_ROLE_OPTIONS.length - 1][0];
 // seatIsHuman sync already uses.
 // チュートリアルモード: P2-4のAIレベル。2026-09-23、当初は "AILV1で" 確認済みでAI_LV1(最も手加減する
 // レベル)を使っていたが、2026-09-26、per user request: "チュートリアルのAILVを5にしてください" -- AI_LV5
-// (最も強いレベル)に変更。町人(JOB001)を必ずJOBプールに入れる+AIには町人を選ばせない仕組み(dealJobPool/
-// ONBOARDING分岐のtutorialExcludedJobs参照)と合わせて使う想定。
+// (最も強いレベル)に変更。一般市民(JOB001)を必ずJOBプールに入れる+AIには一般市民を選ばせない仕組み
+// (dealJobPool/ONBOARDING分岐のtutorialExcludedJobs参照)と合わせて使う想定。
 const TUTORIAL_AI_ROLE = 'AI_LV5';
 const playerRoles = weeklyChallengeActive
   ? new Map([['P1', DEFAULT_AI_ROLE], ['P2', DEFAULT_AI_ROLE], ['P3', DEFAULT_AI_ROLE], ['P4', DEFAULT_AI_ROLE]])
@@ -956,8 +956,8 @@ function driveOneAiStepInner(state) {
     // src/ai/game-runner.js's matching fix and its own doc for why).
     const isLv4 = playerRoles.get(ctx.playerId) === 'AI_LV4' || playerRoles.get(ctx.playerId) === 'AI_LV5';
     if (!ctx.player.jobCardId) {
-      // チュートリアル中はAIに町人(JOB001)を選ばせない (2026-09-26, per user request: "チュートリアルでは
-      // AIは町人は選ばない" -- 町人はdealJobPool側でJOBプールに必ず入れているぶん、あなた/P1が確実に選べる
+      // チュートリアル中はAIに一般市民(JOB001)を選ばせない (2026-09-26, per user request: "チュートリアルでは
+      // AIは町人は選ばない" -- 一般市民はdealJobPool側でJOBプールに必ず入れているぶん、あなた/P1が確実に選べる
       // ようAIの候補からは除外する)。両方の分岐(LV4/5のsmartOnboarding、それ以外の完全ランダム)に適用。
       const tutorialExcludedJobs = tutorialModeActive ? ['JOB001'] : undefined;
       const randomPoolChoices = tutorialExcludedJobs
@@ -6470,17 +6470,17 @@ function renderJobPool(state, next) {
     // 2026-08-0X, per user feedback (JOB cards weren't tappable to enlarge at all): tapping the card
     // now always opens the enlarge modal; drafting it happens via the modal's pick button instead of
     // a plain tap on the cell -- see attachPickableEnlarge's own doc.
-    // チュートリアル中は町人(JOB001)しか選べない (2026-09-26, per user request: "JOBカードは町人しか
+    // チュートリアル中は一般市民(JOB001)しか選べない (2026-09-26, per user request: "JOBカードは町人しか
     // 選べない JOB選択時 町人だけ光らせて ほかのJOBは選べないように...クリックすると拡大はするが
-    // 「このJOBを選ぶ」を「チュートリアルではこのJOBは選べません」となって選べないように") -- 町人
+    // 「このJOBを選ぶ」を「チュートリアルではこのJOBは選べません」となって選べないように") -- 一般市民
     // 以外は拡大表示(カードの中身を見る)自体は普通にできるが、ピックボタンが無効化された
     // 「チュートリアルではこのJOBは選べません」に置き換わる。tutorialModeActiveがfalseの通常プレイでは
-    // isTutorialLockedは常にfalseになり、以前と全く同じ挙動のまま。
-    const jobName = dataLoaderMod.getCardRow(INDEX, faceId).NAME;
-    const isTutorialLocked = tutorialModeActive && !!draftingPlayerId && jobName !== '町人';
+    // isTutorialLockedは常にfalseになり、以前と全く同じ挙動のまま。faceIdでの比較なのでJOB001のNAMEが
+    // 今後また改名されても(社交家→遊び人→町人→一般市民と改名済み)ここは影響を受けない。
+    const isTutorialLocked = tutorialModeActive && !!draftingPlayerId && faceId !== 'JOB001';
     const canReallyPick = !!draftingPlayerId && !isTutorialLocked;
     if (canReallyPick) cell.classList.add('owned-card-cell--selectable');
-    if (tutorialModeActive && draftingPlayerId && jobName === '町人') cell.classList.add('change-highlight');
+    if (tutorialModeActive && draftingPlayerId && faceId === 'JOB001') cell.classList.add('change-highlight');
     attachPickableEnlarge(cardNode, faceId, draftingPlayerId ? (canReallyPick ? {
       label: 'このJOBを選ぶ',
       onPick: () => {
@@ -7870,7 +7870,7 @@ const TUTORIAL_STEPS = [
       const precedingNames = state.turnOrder.slice(0, state.turnOrder.indexOf('P1'))
         .map((id) => state.players.find((p) => p.id === id).name);
       const turnLine = precedingNames.length > 0 ? `${precedingNames.join('と')}のターンが終わりあなたのターンです` : 'あなたのターンです';
-      return `${turnLine}\nJOBカードを選びます\n今回はこの中で比較的使いやすい町人にしてみましょう`;
+      return `${turnLine}\nJOBカードを選びます\n今回はこの中で比較的使いやすい一般市民にしてみましょう`;
     },
   },
 ];
@@ -7878,7 +7878,7 @@ const TUTORIAL_STEPS = [
 // job_explanation (2026-09-24: "JOBをクリックしたときそのJOBの説明をセリフで流したい" -- per-JOB bespoke
 // tutorial seli-fu shown on click, JOB_EXPLANATION_BODIES/tutorialExplainedJobFaceId/
 // showJobExplanationBubble) was removed 2026-09-26, per user request: "JOBカードを選んだ時に出るセリフ
-// すべて削除" -- replaced by a different tutorial design where only 町人/JOB001 is actually pickable (see
+// すべて削除" -- replaced by a different tutorial design where only 一般市民/JOB001 is actually pickable (see
 // renderJobPool's own doc) and every other JOB's card-enlarge popup still opens normally (no bespoke
 // seli-fu), just with its pick button disabled.
 
