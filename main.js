@@ -5861,6 +5861,9 @@ function renderPlayers(state, next) {
   roundOrderedPlayers(state).forEach((player) => {
     const tpl = document.getElementById('tpl-player-panel');
     const node = tpl.content.firstElementChild.cloneNode(true);
+    // playerId (2026-09-26, for initial_resources_revealのスクロール/光る演出 -- see renderTutorialOverlay's
+    // own doc): same reasoning as .card-group's own dataset.playerId addition.
+    node.dataset.playerId = player.id;
     if (player.id === activePlayerId) node.classList.add('player-panel--active');
 
     node.querySelector('.player-panel__swatch').dataset.color = player.color;
@@ -5893,6 +5896,9 @@ function renderPlayers(state, next) {
       if (count > 0 || highlighted) {
         const badge = renderResourceBadge(resource, count);
         if (highlighted) badge.classList.add('change-highlight');
+        // initial_resources_revealの「光る」演出 (2026-09-26, per user request) -- tutorialConCardGlowingと
+        // 同じ継続フラグ方式(このステップが表示され続けている間ずっとON、次のセリフに進んだらOFF)。
+        if (tutorialInitialResourcesGlowing && player.id === 'P1') badge.classList.add('change-highlight');
         resourcesEl.appendChild(badge);
       }
     }
@@ -6472,6 +6478,11 @@ function renderJobPool(state, next) {
   const container = document.getElementById('job-pool');
   container.innerHTML = '';
   if (round1FirstPlayerTurnStartCount >= 2) return;
+  // initial_resources_reveal表示中は一時的に非表示 (2026-09-26, per user request: "この時残りのジョブを
+  // 一時的に見えなくする（次のターンAIが選ぶのを妨げない）") -- UI上だけ隠す(container.innerHTML=''のまま
+  // 何も足さずreturnするだけ、state.jobPool自体には一切触れない)ため、まだ未ドラフトのAIプレイヤーの次の
+  // ターン(driveOneAiStepがstate.jobPoolを直接読む)には影響しない。
+  if (tutorialModeActive && tutorialInitialResourcesGlowing) return;
   // !isAiPlayer (2026-08-03): an AI player's JOB draft is decided by driveOneAiStep, never by clicks.
   // Online play (2026-08-29): also requires localSeatId to match -- see realTurnPlayerId's own doc.
   const draftingPlayerId = next && next.type === 'ONBOARDING_NEEDED' && !isAiPlayer(next.playerId)
@@ -6748,6 +6759,14 @@ function renderConChoice(container, state, player) {
   renderConFacesRow(container, player, (face) => {
     setupMod.chooseConFace(state, INDEX, player.id, face);
     setupMod.receiveInitialResources(state, INDEX, player.id);
+    // 2026-09-26, per user request: "制約カードの表面か裏面を選んだら次のセリフ...この時初期資源を
+    // 光らせる" -- tutorialInitialResourcesGlowing's own doc for why this is set here (before render()),
+    // not via con_face_choice_intro's own autoDismissWhen.
+    if (tutorialCurrentStepId === 'con_face_choice_intro') {
+      tutorialCurrentStepId = null;
+      tutorialInitialResourcesGlowing = true;
+      stopTutorialTypewriter();
+    }
     render(STATE);
   });
 }
@@ -7942,6 +7961,35 @@ const TUTORIAL_STEPS = [
     },
     body: 'ジョブを選んだら制約カードを表面にするか裏面にするか選びます\n基本的に表面に比べて裏面のほうが得られる初期資源が多い代わりにプレイにかかる制約が厳しいものになります\n初回プレイでは表面をお勧めしますが、自己責任で裏面を選んでも大丈夫です',
   },
+  // 2026-09-26, per user request -- shown once P1 has actually committed a CON face (renderConChoiceの
+  // onPickがtutorialInitialResourcesGlowingと一緒にこの状態へ直接遷移させる、上のcon_face_choice_intro
+  // 自体にはautoDismissWhenを持たせていない -- tutorialInitialResourcesGlowing自身のdocを参照)。本文は
+  // player.resourcesを直接読んで組み立てる動的セリフ -- CON面のONCE+2枚のRESOURCEカードのONCEがすでに
+  // 実行済み(receiveInitialResources)なので、この時点のresourcesがそのまま「初期資源」そのもの。
+  {
+    id: 'initial_resources_reveal',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      if (next.playerId !== 'P1') return false;
+      const player = state.players.find((p) => p.id === 'P1');
+      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
+    },
+    body: (state) => {
+      const player = state.players.find((p) => p.id === 'P1');
+      const r = player.resources;
+      const parts = [];
+      if (r.K) parts.push(`〇（食料）${r.K}`);
+      if (r.A) parts.push(`赤〇（権力）${r.A}`);
+      if (r.B) parts.push(`青〇（信心）${r.B}`);
+      if (r.C) parts.push(`黄〇（金貨）${r.C}`);
+      if (r.Z) parts.push(`コネ${r.Z}`);
+      if (r.BZ) parts.push(`口利き${r.BZ}`);
+      if (r.VP) parts.push(`VP${r.VP}`);
+      const lines = parts.map((line, i) => (i === parts.length - 1 ? `${line}があります` : line));
+      return ['これがあなたの初期資源になります', ...lines].join('\n');
+    },
+    nextLabel: '次へ',
+  },
 ];
 
 // job_explanation (2026-09-24: "JOBをクリックしたときそのJOBの説明をセリフで流したい" -- per-JOB bespoke
@@ -8214,6 +8262,20 @@ function renderTutorialOverlay(state) {
         window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
       }
     }
+    // initial_resources_revealが見えるようにスクロール (2026-09-26, per user request: "この時 初期資源が
+    // 見えるようにスクロールさせる") -- con_face_choice_introと同じ考え方。.player-panelはonboard-con等と
+    // 違い最初から常に存在するが、renderPlayers自体はrenderPlayerCardsとは別の関数で毎回丸ごと作り直される
+    // ため、同じくnode.dataset.playerId(renderPlayersで付与)でP1本人の行を特定する。
+    if (step.id === 'initial_resources_reveal') {
+      const resourcesEl = document.querySelector('.player-panel[data-player-id="P1"] .player-panel__resources');
+      if (resourcesEl) {
+        const bubbleWrap = document.getElementById('tutorial-bubble-wrap');
+        const visibleHeight = (bubbleWrap && !bubbleWrap.hidden) ? bubbleWrap.getBoundingClientRect().top : window.innerHeight;
+        const rect = resourcesEl.getBoundingClientRect();
+        const desiredTop = Math.max(0, (visibleHeight - rect.height) / 2);
+        window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
+      }
+    }
   }
 }
 
@@ -8233,6 +8295,9 @@ function dismissTutorialStep() {
   // consumed by renderPlayerCards on the very next render, a one-time flash.
   if (tutorialCurrentStepId === 'resource_choice_intro') { tutorialConCardRevealed = true; tutorialConCardGlowing = true; }
   if (tutorialCurrentStepId === 'resource_choice_con_intro') { tutorialResourceCandidatesRevealedFlag = true; tutorialResourceCandidatesJustRevealed = true; tutorialConCardGlowing = false; }
+  // initial_resources_reveal's own glow -- turned ON directly in renderConChoice's onPick (see
+  // tutorialInitialResourcesGlowing's own doc), turned OFF here once the player taps 次へ.
+  if (tutorialCurrentStepId === 'initial_resources_reveal') tutorialInitialResourcesGlowing = false;
   // alsoCloseTurnOrderOverlay (2026-09-24, see turn_order_reveal_summary's own doc): 次へ on this step
   // also presses the turn-order overlay's own ✖ in the same tap, instead of leaving the player to close
   // it separately.
@@ -8292,6 +8357,15 @@ function tutorialResourceCandidatesRevealed(playerId) {
 // 光り続けるようにお願い") -- resource_choice_con_introが表示され続けている間ずっとtrueになる継続フラグ
 // (dismissTutorialStepが次のステップに進むタイミングでON/OFFする、一回きりの消費フラグではない)。
 let tutorialConCardGlowing = false;
+// 初期資源の「光る」演出 (2026-09-26, per user request: "制約カードの表面か裏面を選んだら次のセリフ...
+// この時初期資源を光らせる") -- initial_resources_revealが表示され続けている間ずっとtrueになる継続フラグ、
+// tutorialConCardGlowingと同じ形。CON面選択はautoDismissWhenを使わず、その場で選んだ瞬間(renderConChoice
+// のonPick)にrender(STATE)を呼ぶ前にこのフラグと同時にtutorialCurrentStepIdをnullへ戻す -- CON面選択は
+// autoDismissWhenで検知する形にすると(renderPlayerCardsがrenderTutorialOverlayより先に呼ばれるため)まさに
+// 切り替わった瞬間のレンダーでは光らない、というtutorialConCardGlowing系の既知のタイミングずれ問題に
+// はまってしまうため、代わりにdismissTutorialStepと全く同じ「render()を呼ぶ前にフラグを立てる」方式を
+// ここでも使っている。
+let tutorialInitialResourcesGlowing = false;
 // RESOURCE候補側は今のところ元の一回限りの点滅のまま(まだ同じ報告を受けていないため変更せず) -- 同じ
 // タイミングずれ問題を避けるため、dismissTutorialStepが上のRevealedフラグと同時にtrueにし、
 // renderPlayerCards(render()内でrenderTutorialOverlayより前に呼ばれる -- tutorialCurrentStepIdがまだ
