@@ -2893,6 +2893,14 @@ h1, h2, h3 { margin: 0; }
   cursor: pointer;
 }
 .card-inst-modal__pick-button[hidden] { display: none; }
+/* チュートリアル中、町人以外のJOBは選べない (2026-09-26, per user request: "このJOBを選ぶ を
+   チュートリアルではこのJOBは選べません となって選べないように") -- ボタン自体は残したまま
+   (main.js側でtextContentを差し替え済み)、押せないグレー表示にする。 */
+.card-inst-modal__pick-button:disabled {
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
 
 /* 先行順の合計値バッジ (2026-09-23, per user request)。2026-09-26、実機スクリーンショット付き報告で
    "この2枚でよろしいですか の位置変更" -- モーダルが制約カード表示分(2026-09-26の別対応)で大きく横に

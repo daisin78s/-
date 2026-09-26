@@ -172,7 +172,11 @@ function createInitialState(plan, forcedSeed) {
   } else {
     setupMod.dealResourceCandidates(state, INDEX);
   }
-  setupMod.dealJobPool(state, INDEX, plan ? plan.job : undefined);
+  // チュートリアルでは町人(JOB001)が必ずJOBプールに入るようにする (2026-09-26, per user request:
+  // "チュートリアルでは町人は必ず出てくる") -- dealJobPoolの既存のpreferredFaceIds機能(元々はデバッグ
+  // セットアップの「テストゲーム開始」用)をそのまま流用する。
+  const preferredJobs = [...(tutorialModeActive ? ['JOB001'] : []), ...(plan ? plan.job : [])];
+  setupMod.dealJobPool(state, INDEX, preferredJobs.length ? preferredJobs : undefined);
   qstMod.setupQuests(state, plan ? plan.qst : undefined);
   return state;
 }
@@ -281,11 +285,11 @@ const DEFAULT_AI_ROLE = PLAYER_ROLE_OPTIONS[PLAYER_ROLE_OPTIONS.length - 1][0];
 // human input anywhere. chooseWeeklyChallengeSeat flips the chosen one over to HUMAN (and every other seat
 // stays/reverts to DEFAULT_AI_ROLE) once picked, same playerRoles.set(...) pattern the online lobby's own
 // seatIsHuman sync already uses.
-// チュートリアルモード (2026-09-23, per user request, "AILV1で" confirmed): P2-4 use AI_LV1 -- the
-// gentlest/never-tuned level (see feedback_collaboration_style's own "AI LV1は変更予定がない" note) --
-// instead of DEFAULT_AI_ROLE (the current strongest level), so a first-time player isn't up against the
-// sharpest opponent while still learning the UI.
-const TUTORIAL_AI_ROLE = 'AI_LV1';
+// チュートリアルモード: P2-4のAIレベル。2026-09-23、当初は "AILV1で" 確認済みでAI_LV1(最も手加減する
+// レベル)を使っていたが、2026-09-26、per user request: "チュートリアルのAILVを5にしてください" -- AI_LV5
+// (最も強いレベル)に変更。町人(JOB001)を必ずJOBプールに入れる+AIには町人を選ばせない仕組み(dealJobPool/
+// ONBOARDING分岐のtutorialExcludedJobs参照)と合わせて使う想定。
+const TUTORIAL_AI_ROLE = 'AI_LV5';
 const playerRoles = weeklyChallengeActive
   ? new Map([['P1', DEFAULT_AI_ROLE], ['P2', DEFAULT_AI_ROLE], ['P3', DEFAULT_AI_ROLE], ['P4', DEFAULT_AI_ROLE]])
   : new Map([
@@ -952,9 +956,16 @@ function driveOneAiStepInner(state) {
     // src/ai/game-runner.js's matching fix and its own doc for why).
     const isLv4 = playerRoles.get(ctx.playerId) === 'AI_LV4' || playerRoles.get(ctx.playerId) === 'AI_LV5';
     if (!ctx.player.jobCardId) {
+      // チュートリアル中はAIに町人(JOB001)を選ばせない (2026-09-26, per user request: "チュートリアルでは
+      // AIは町人は選ばない" -- 町人はdealJobPool側でJOBプールに必ず入れているぶん、あなた/P1が確実に選べる
+      // ようAIの候補からは除外する)。両方の分岐(LV4/5のsmartOnboarding、それ以外の完全ランダム)に適用。
+      const tutorialExcludedJobs = tutorialModeActive ? ['JOB001'] : undefined;
+      const randomPoolChoices = tutorialExcludedJobs
+        ? state.jobPool.filter((id) => !tutorialExcludedJobs.includes(id))
+        : state.jobPool;
       const jobFaceId = isLv4
-        ? smartOnboardingMod.pickJob(state, INDEX, ctx.playerId, aiConJobSynergyTable, aiMoveGenerator, aiSimulator, state.rng)
-        : state.jobPool[Math.floor(rngMod.next(state.rng) * state.jobPool.length)];
+        ? smartOnboardingMod.pickJob(state, INDEX, ctx.playerId, aiConJobSynergyTable, aiMoveGenerator, aiSimulator, state.rng, tutorialExcludedJobs)
+        : randomPoolChoices[Math.floor(rngMod.next(state.rng) * randomPoolChoices.length)];
       setupMod.chooseJob(state, INDEX, ctx.playerId, jobFaceId);
       // No auto/manual-mode prompt for AI (unlike the human path, e.g. renderJobPool's click handler)
       // -- pendingAutoModeChoice is a human-UI convenience only; MoveGenerator's own move generation
@@ -2402,8 +2413,8 @@ function showCardListTermModal(title, instId) {
   overlay.hidden = false;
   // tutorial-left (2026-09-24): same left-alignment showCardEnlargeModal already applies during the
   // tutorial (see its own doc) -- this popup opens ON TOP of the tutorial bubble (z-index 200 > this
-  // overlay's 150) when a job_explanation term span is tapped, and its own centered position would
-  // otherwise sit right under/behind that still-open bubble.
+  // overlay's 150) when an auto-linked term span in the bubble's own text is tapped, and its own centered
+  // position would otherwise sit right under/behind that still-open bubble.
   overlay.classList.toggle('card-inst-overlay--tutorial-left', tutorialModeActive);
   modal.classList.remove('card-inst-modal--wide', 'card-inst-modal--area-wide');
   modal.classList.add('card-inst-modal--term');
@@ -6459,8 +6470,18 @@ function renderJobPool(state, next) {
     // 2026-08-0X, per user feedback (JOB cards weren't tappable to enlarge at all): tapping the card
     // now always opens the enlarge modal; drafting it happens via the modal's pick button instead of
     // a plain tap on the cell -- see attachPickableEnlarge's own doc.
-    if (draftingPlayerId) cell.classList.add('owned-card-cell--selectable');
-    attachPickableEnlarge(cardNode, faceId, draftingPlayerId ? {
+    // チュートリアル中は町人(JOB001)しか選べない (2026-09-26, per user request: "JOBカードは町人しか
+    // 選べない JOB選択時 町人だけ光らせて ほかのJOBは選べないように...クリックすると拡大はするが
+    // 「このJOBを選ぶ」を「チュートリアルではこのJOBは選べません」となって選べないように") -- 町人
+    // 以外は拡大表示(カードの中身を見る)自体は普通にできるが、ピックボタンが無効化された
+    // 「チュートリアルではこのJOBは選べません」に置き換わる。tutorialModeActiveがfalseの通常プレイでは
+    // isTutorialLockedは常にfalseになり、以前と全く同じ挙動のまま。
+    const jobName = dataLoaderMod.getCardRow(INDEX, faceId).NAME;
+    const isTutorialLocked = tutorialModeActive && !!draftingPlayerId && jobName !== '町人';
+    const canReallyPick = !!draftingPlayerId && !isTutorialLocked;
+    if (canReallyPick) cell.classList.add('owned-card-cell--selectable');
+    if (tutorialModeActive && draftingPlayerId && jobName === '町人') cell.classList.add('change-highlight');
+    attachPickableEnlarge(cardNode, faceId, draftingPlayerId ? (canReallyPick ? {
       label: 'このJOBを選ぶ',
       onPick: () => {
         const commit = () => {
@@ -6482,14 +6503,7 @@ function renderJobPool(state, next) {
         }
         commit();
       },
-    } : null);
-    // 2026-09-24, per user request: "JOBをクリックしたときそのJOBの説明をセリフで流したい" -- fires
-    // alongside attachPickableEnlarge's own click listener above (both attach to the same cardNode/click,
-    // and simply run independently), only while it's genuinely あなた/P1's own drafting turn. See
-    // showJobExplanationBubble's own doc.
-    if (draftingPlayerId === 'P1') {
-      cardNode.addEventListener('click', () => showJobExplanationBubble(faceId));
-    }
+    } : { label: 'チュートリアルではこのJOBは選べません', disabled: true }) : null);
     container.appendChild(cell);
   }
 }
@@ -7797,7 +7811,7 @@ const TUTORIAL_STEPS = [
     body: (state) => {
       const choice = state.pendingChoices.find((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS');
       const total = resourceChoiceStartOrderTotal(state, 'P1', choice.context.selected);
-      return `あなたが選んだカードはこちら。\n制約カードに書かれた先攻順と足された合計は${total}です。\nこの数字が大きいほど、得られる資源が多くなり、小さいほど、先に行動してJOBや獲得カードを選ぶことができます。`;
+      return `あなたが選んだカードはこちら\n制約カードに書かれた先攻順と足された合計は${total}です\nこの数字が大きいほど、得られる資源が多くなり、小さいほど、先に行動してJOBや獲得カードを選ぶことができます`;
     },
     autoDismissWhen: (state) => !state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
   },
@@ -7813,7 +7827,7 @@ const TUTORIAL_STEPS = [
       const p1 = state.players.find((p) => p.id === 'P1');
       const resourceIds = p1.ownedCardPhysicalIds.filter((id) => id.startsWith('R'));
       const total = resourceChoiceStartOrderTotal(state, 'P1', resourceIds);
-      return `あなたの先攻順は${total}です。\nそれでは、他のプレイヤーの先攻順も見てみましょう。`;
+      return `あなたの先攻順は${total}です\nそれでは、他のプレイヤーの先攻順も見てみましょう`;
     },
     // 2026-09-24, per user request: "閉じるではなく次へと表示して" -- this step leads straight into
     // another one (turn_order_reveal_summary below), so its own button reads 次へ instead of the default
@@ -7832,7 +7846,7 @@ const TUTORIAL_STEPS = [
         const player = state.players.find((p) => p.id === playerId);
         return `${i + 1}番手は${player.name}`;
       });
-      return `${lines.join('\n')}\nに決まりました。`;
+      return `${lines.join('\n')}\nに決まりました`;
     },
     // 2026-09-24, per user request: "次へを押したとき一緒に右上の✖も押されて次の画面にいき" -- dismissing
     // this one also closes the turn-order overlay itself (see dismissTutorialStep's own doc), so a single
@@ -7855,77 +7869,18 @@ const TUTORIAL_STEPS = [
     body: (state) => {
       const precedingNames = state.turnOrder.slice(0, state.turnOrder.indexOf('P1'))
         .map((id) => state.players.find((p) => p.id === id).name);
-      const turnLine = precedingNames.length > 0 ? `${precedingNames.join('と')}のターンが終わりあなたのターンです。` : 'あなたのターンです。';
-      return `${turnLine}\nJOBカードを選んでください。\nJOBカードをクリックすると説明が表示されます。`;
-    },
-  },
-  // 2026-09-24, per user request: "JOBをクリックしたときそのJOBの説明をセリフで流したい" -- unlike every
-  // step above, this one is never picked up by the normal "scan for the next unseen matching step" pass
-  // (match always returns false, so it's also never added to tutorialSeenStepIds and can show again for a
-  // different JOB every time) -- showJobExplanationBubble sets tutorialCurrentStepId to this id directly,
-  // right when a JOB card is clicked during あなた/P1's own draft (see renderJobPool's own call site).
-  // Body text per JOB_EXPLANATION_BODIES below when the drafted JOB has bespoke text (社交家 so far);
-  // any other JOB falls back to the original generic placeholder ("宣教師ですね / このカードは" -- the
-  // continuation past "このカードは" is intentionally left for later, not invented here).
-  {
-    id: 'job_explanation',
-    match: () => false,
-    body: () => {
-      const name = dataLoaderMod.getCardRow(INDEX, tutorialExplainedJobFaceId).NAME;
-      return JOB_EXPLANATION_BODIES[name] || `${name}ですね。\nこのカードは`;
+      const turnLine = precedingNames.length > 0 ? `${precedingNames.join('と')}のターンが終わりあなたのターンです` : 'あなたのターンです';
+      return `${turnLine}\nJOBカードを選びます\n今回はこの中で比較的使いやすい町人にしてみましょう`;
     },
   },
 ];
 
-// 遊び人(JOB001, 旧「社交家」-- 2026-09-26に改名)の説明セリフ (2026-09-24, per user's own verbatim
-// wording). A step body is normally a
-// plain string, but this one mixes in { term, label } markers for "食料"/"コネ" -- rendered as blue
-// clickable spans (see tutorialBubbleTokens/appendTutorialBubbleToken below) that open the same
-// 資源や用語一覧 detail popup (showCardListTermModal) those terms already open elsewhere, per the user's
-// own request: "食料 コネ の文字だけ青く色を変え クリックすると資源や用語一覧の食料コネの文章が表示
-// されるようにしてください". Other JOBs without an entry here fall back to the generic placeholder
-// above (see job_explanation's own doc) until the user supplies their wording too.
-// 2026-09-25: every entry below is a plain string -- autoLinkifyTutorialText (see its own doc) picks up
-// both resource/TAP terms (食料/コネ/恩寵ダイス/...) AND existing card names (憤怒/小麦畑の支配/革命の
-// 兆し/...) automatically now, so nothing here needs a hand-written { term, label } / { card, label }
-// marker any more (教師/権力者 used to hand-mark 憤怒/小麦畑の支配/農園の支配 before card-name
-// auto-linkify existed; 革命家's own "革命の兆し" mention, initially left unlinked since it wasn't
-// explicitly requested yet, now auto-links too once the general "セリフに既存カード名があったらリンク
-// する" policy was requested).
-const JOB_EXPLANATION_BODIES = {
-  '遊び人': '遊び人ですね\nこのカードはクリックすることで横向き（TAP）になり、あなたは食料1とコネ1を得ることができます。\nこのカードはラウンド開始時にアンタップして再び使えるようになります\nどんな状況下でも使える安定して強いカードです',
-  '道化': '道化ですね\nこのカードは獲得するとあなたの持つすべてのダイスはオールマイティの☆ダイスになります\n☆ダイスはいかなる場合でもどのAREAにでも置くことができます\nカードを獲得するときも☆ダイスは1～6のどのダイス目としてでも使えるため大変便利です\n\nこのカードを獲得した時即座に恩寵ダイス（ｗD）も獲得でき序盤中盤終盤スキのないJOBです',
-  // 教師(JOB006, 旧「育成者」)の説明セリフ (2026-09-24)。ユーザー自身の文言通り、GET(D)で本来一緒に得る
-  // VPには触れていない(教師のPASSIVE: ON(GET(D),ADD(Z,VP));ON(GET(wD),ADD(K)))。
-  '教師': '教師ですね\nこのカードは\n追加色ダイスを得ると　コネ\n恩寵ダイス（ｗD）を得ると食料　を得ることができます\n爆発力がある反面ダイスを得ることができないと何も仕事をしないためプレイングがものを言います\n制約や初期資源カードにダイスが含まれている場合、それに対応した資源を得ることができますが、制約憤怒との相性は最悪なので注意してください',
-  '権力者': '権力者ですね\nこのカードは食料を得るとそのうち一つを権力に変換します\n1回の効果はささやかですが毎ターン使うことで多くの権力を得ることができます\n小麦畑の支配　や　農園の支配　との相性は抜群です\n\nあなたの持っている初期資源カードや制約に食料が含まれているならもちろんそれも1つだけ権力に変えることができます',
-  // 吟遊詩人(JOB008)の説明セリフ (2026-09-25) -- 資源用語のみ(金貨/VP、どちらも本文に複数回登場、すべて
-  // auto-linkifyされる)、カードへの参照はなし。
-  '吟遊詩人': '吟遊詩人ですね\nこのカードはエンブレムを3個得るごとにターン終了時に1VPと金貨を得ることができます\n同じターン中に3個のエンブレムを得る必要はなく3，6，9...個目のエンブレムを得たターン終了時に得ます。\n制約カードのエンブレムでもVPと金貨を得ることができますがターン終了時に得るため初めのターンに金貨を使うことはできないので注意が必要です',
-  '革命家': '革命家ですね\nこのカードを選ぶと、天運カードの革命の兆しも即座に獲得することができます\n革命の兆しはTAPすることでダイスを消費することなくほかのカードのLVをあげることができます\n革命の兆しは強力なカードですが、毎ラウンド使い倒すには計画力が必要で少し上級者向けのカードになります',
-  // 宣教師(JOB009)の説明セリフ (2026-09-25)。
-  '宣教師': '宣教師ですね\nこのカードはまだ誰のダイスも置かれていない無人のAREAのSLOTに色ダイスを置くと信心を得ることができます\nほかのプレイヤーと同じ行動をしても信心を得ることができないため個性的なプレイをしたい方にお勧めのJOBです',
-  // 宮廷人(JOB007)の説明セリフ (2026-09-25, 「宮廷人ですね にしてください」で1行目を「ですね」付きに修正)。
-  '宮廷人': '宮廷人ですね\nこのカードはTAPするとモニュメントかLVUPの資源を1軽減することができます\nまた、ダイス目を+3することができるためダイス目7　8　9　などの特定モニュメントをダイス1個で獲得することができます\n強力な反面序盤に軽減を使うのはむつかしいため終盤用のテクニカルなJOBです',
-  // 策士(JOB004)の説明セリフ (2026-09-25) -- 「暴食」「憂鬱」はそれぞれCON006A/CON003Aのカード名なので
-  // 資源用語ではなくカードリンクとしてauto-linkifyされる。
-  '策士': '策士ですね\nこのカードはTAPすることで食料3をコネ2に変換することができます\n変換効率はいいとは言えないものの毎ターン使うことができるため柔軟性は抜群です\nまた暴食や憂鬱などのきつい制約を回避するにはもってこいのJOBです',
-};
-
-// job_explanation's own target JOB face (2026-09-24, see that step's own doc) -- set right before
-// showing it, read by its body() above.
-let tutorialExplainedJobFaceId = null;
-
-/** Shows job_explanation for jobFaceId, overriding whatever tutorial step (if any) was already on
- * screen. Called from renderJobPool's own click wiring, only while it's genuinely あなた/P1's own turn to
- * draft (same drafting-player check that click's own enlarge-modal already applies). */
-function showJobExplanationBubble(jobFaceId) {
-  if (!tutorialModeActive) return;
-  tutorialExplainedJobFaceId = jobFaceId;
-  tutorialCurrentStepId = 'job_explanation';
-  stopTutorialTypewriter();
-  render(STATE);
-}
+// job_explanation (2026-09-24: "JOBをクリックしたときそのJOBの説明をセリフで流したい" -- per-JOB bespoke
+// tutorial seli-fu shown on click, JOB_EXPLANATION_BODIES/tutorialExplainedJobFaceId/
+// showJobExplanationBubble) was removed 2026-09-26, per user request: "JOBカードを選んだ時に出るセリフ
+// すべて削除" -- replaced by a different tutorial design where only 町人/JOB001 is actually pickable (see
+// renderJobPool's own doc) and every other JOB's card-enlarge popup still opens normally (no bespoke
+// seli-fu), just with its pick button disabled.
 
 // タイプライター表示 (2026-09-24, per user request: "セリフはすべて 全部いっぺんに出るのではなく 1文字ずつ
 // 高速で出る") -- every tutorial bubble's text reveals one character at a time instead of appearing all
@@ -8032,9 +7987,9 @@ function autoLinkifyTutorialText(text) {
 
 // body is normally a plain string (typed one character at a time, auto-linkified per
 // autoLinkifyTutorialText above, for both resource/TAP terms and card names alike). A bare
-// { term, label } / { card, label } marker is still supported too (JOB_EXPLANATION_BODIES no longer needs
-// either now that both systems auto-detect, but this stays available for whatever future case needs a
-// label that deliberately differs from the real term/card name).
+// { term, label } / { card, label } marker is still supported too, for whatever future case needs a
+// label that deliberately differs from the real term/card name (nothing currently uses one -- both
+// systems auto-detect on their own).
 function tutorialBubbleTokens(body) {
   const parts = Array.isArray(body) ? body : [body];
   const tokens = [];
@@ -8912,7 +8867,11 @@ function showCardEnlargeModal(faceId, visualNode, sibling, siblingVisualNode, pi
   pickBtn.hidden = !pickAction;
   if (pickAction) {
     pickBtn.textContent = pickAction.label;
-    pickBtn.onclick = () => {
+    // disabled (2026-09-26, per user request: "町人以外は...このJOBを選ぶ をチュートリアルではこのJOBは
+    // 選べません となって選べないように") -- still shown (so the player sees WHY, rather than the button
+    // just vanishing), but inert: no click handler, greyed out via :disabled (see its own CSS).
+    pickBtn.disabled = !!pickAction.disabled;
+    pickBtn.onclick = pickAction.disabled ? null : () => {
       hideCardEnlargeModal();
       pickAction.onPick();
     };
@@ -9129,7 +9088,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Reverted 2026-09-26 (per user report: "セリフをクリックすると閉じてしまいます クリックしただけでは
   // とじないようにしてください") -- only the explicit 閉じる/次へ button (and チュートリアルをやめる) now
   // dismiss/advance a step; a stray tap anywhere else on the bubble (e.g. while trying to scroll, or
-  // reading a job_explanation term link that isn't a button) no longer does.
+  // reading an auto-linked term that isn't a button) no longer does.
   document.getElementById('tutorial-turnorder-close-button').addEventListener('click', closeTutorialTurnOrderOverlay);
   document.getElementById('debug-turn-back').addEventListener('click', handleDebugTurnBack);
   document.getElementById('debug-turn-forward').addEventListener('click', handleDebugTurnForward);

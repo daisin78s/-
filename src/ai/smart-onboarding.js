@@ -146,12 +146,19 @@ function simulateOnboardingChoice(state, index, playerId, jobId, face) {
  * uniformly at random (per user spec: "評価値が同じなら最上位評価値の中からランダムに選ぶ"). Does NOT
  * commit anything -- purely picks which jobId setup.chooseJob should then be called with for real.
  * @param {GameState} state - state.jobPool populated, playerId not yet onboarded.
+ * @param {string[]} [excludeFaceIds] - optional, JOB faces to never consider even if present in
+ *   state.jobPool (2026-09-26, per user request: "チュートリアルではAIは町人は選ばない" -- main.js's own
+ *   ONBOARDING branch passes ['JOB001'] here only while tutorialModeActive; every other caller (including
+ *   src/ai/game-runner.js's own CLI battle driver) omits this and sees identical behavior to before).
  * @returns {string} the chosen jobId.
  */
-function pickJob(state, index, playerId, synergyTable2, moveGenerator, simulator, rngState) {
+function pickJob(state, index, playerId, synergyTable2, moveGenerator, simulator, rngState, excludeFaceIds) {
   let bestValue = -Infinity;
   let bestJobIds = [];
-  for (const jobId of state.jobPool) {
+  const candidateJobIds = excludeFaceIds && excludeFaceIds.length
+    ? state.jobPool.filter((jobId) => !excludeFaceIds.includes(jobId))
+    : state.jobPool;
+  for (const jobId of candidateJobIds) {
     let jobValue = -Infinity;
     for (const face of ['A', 'B']) {
       const { clone, conFaceId } = simulateOnboardingChoice(state, index, playerId, jobId, face);
