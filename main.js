@@ -138,6 +138,25 @@ function weeklyRankingIdForOffset(weeksAgo) {
   return isoWeekIdForUtcDate(new Date(Date.now() + JST_OFFSET_MS - weeksAgo * WEEK_MS));
 }
 
+/** チュートリアル用: SHOP101-106(通常商品6枠)に領地(A)/天運(B)/人材(C)デッキから必ず2枚ずつ含める
+ * (2026-09-26, per user request: "SHOP101-106 必ず 領地カード2枚 天運カード2枚 人材カード2枚 初期配置で
+ * 出るようにしてください どこに出るかはランダムで それ以外もランダムになるように") -- 各デッキの通常
+ * ショップ対象(setup.js内のcollectNormalShopFaceIdsと同じ条件: tier=A(表面)かつ番号7以下)の中から2枚ずつ
+ * ランダムに選び、6枚をまとめてシャッフルしてからsetup.prepareShopsのpreferredNormalFaceIdsとして渡す。
+ * この引数はSHOP101,102,...の順にそのまま割り当てられる仕様(prepareShops自身のdoc参照)なので、渡す前に
+ * 配列自体もシャッフルすることで「どの枠に何が出るか」もランダムにしている。 */
+function tutorialPreferredNormalFaceIds(state, index) {
+  const bySheet = { A: [], B: [], C: [] };
+  for (const sheet of ['A', 'B', 'C']) {
+    for (const row of index.raw[sheet]) {
+      const { physicalId, tier } = gameStateMod.splitCardId(row.ID);
+      if (tier === 'A' && Number(physicalId.slice(1)) <= 7) bySheet[sheet].push(row.ID);
+    }
+  }
+  const picks = ['A', 'B', 'C'].flatMap((sheet) => rngMod.shuffle(state.rng, bySheet[sheet]).slice(0, 2));
+  return rngMod.shuffle(state.rng, picks);
+}
+
 function createInitialState(plan, forcedSeed) {
   const state = gameStateMod.createEmptyGameState(forcedSeed || randomSeed());
   // P1's own display name (2026-09-07, per user request: "ランキングに名前を入力したら...次回以降その人
@@ -152,7 +171,7 @@ function createInitialState(plan, forcedSeed) {
   // DAN names here. chooseWeeklyChallengeSeat renames the actually-chosen seat afterward instead.
   setupMod.createPlayers(state, weeklyChallengeActive ? ['Alice', 'Bob', 'Carol', 'Dan'] : [loadRememberedRankingName() || 'Alice', 'Bob', 'Carol', 'Dan']);
   setupMod.prepareMaps(state, INDEX);
-  setupMod.prepareShops(state, INDEX, plan ? plan.abc : undefined);
+  setupMod.prepareShops(state, INDEX, plan ? plan.abc : (tutorialModeActive ? tutorialPreferredNormalFaceIds(state, INDEX) : undefined));
   setupMod.rollInitialColorDice(state);
   const forcedCon = plan && plan.con.length > 0 ? { P1: gameStateMod.splitCardId(plan.con[0]).physicalId } : undefined;
   setupMod.dealConCards(state, forcedCon);
