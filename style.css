@@ -853,10 +853,12 @@ h1, h2, h3 { margin: 0; }
 }
 .shop-card__start-order:empty { display: none; }
 /* チュートリアル中の先行順ハイライト (2026-09-25, per user request: "先行順が分かりやすいように先行順の
-   場所を光らせて") -- .shop-card__start-orderは元々ただの小さいテキストで箱を持たないため、
-   .change-highlight(main.js側でクラス付与)の枠線/背景がそのまま出るだけだと窮屈に見える。ハイライト時
-   だけ小さなチップ状の余白と角丸を足す。 */
-.shop-card__start-order.change-highlight {
+   場所を光らせて"; 2026-09-26、実機スクリーンショット付き報告で "光らせる箇所を数字のみに" -- "先攻順 5"
+   全体ではなく数字("5")だけを囲むよう、main.jsのfillCardFaceが分離して作る子span
+   .shop-card__start-order-numberの方だけをハイライト対象にする)。ハイライト時だけ小さなチップ状の余白と
+   角丸を足す(この数字spanは元々ただのテキストで箱を持たないため、.change-highlightの枠線/背景がそのまま
+   出るだけだと窮屈に見える)。 */
+.shop-card__start-order-number.change-highlight {
   display: inline-block;
   padding: 1px 6px;
   border-radius: 6px;
@@ -2892,12 +2894,19 @@ h1, h2, h3 { margin: 0; }
 }
 .card-inst-modal__pick-button[hidden] { display: none; }
 
-/* 先行順の合計値バッジ (2026-09-23, per user request) -- .card-inst-modal__header は基本
-   justify-content:space-between (タイトル単独/タイトル+閉じるボタンの2パターンを両端に振り分ける想定)
-   だが、このヘッダーはタイトルの「左」にバッジを添えたいので、この1箇所だけ左詰め+gapに上書きする。 */
+/* 先行順の合計値バッジ (2026-09-23, per user request)。2026-09-26、実機スクリーンショット付き報告で
+   "この2枚でよろしいですか の位置変更" -- モーダルが制約カード表示分(2026-09-26の別対応)で大きく横に
+   広がった結果、タイトルが左端に、バッジだけが右端に離れて表示され、間に大きな空白ができていた
+   (justify-content:flex-startでタイトル+バッジを左詰めにしようとした前回の上書きは、後ろの
+   .card-inst-modal__header自身のjustify-content:space-betweenにCSSの読み込み順で負けており実際には
+   効いていなかった)。タイトル側にflex-growとtext-alignを与えて、バッジまでの余白の「中央」にタイトルが
+   来るようにする方が確実(justify-content自体の値には依存しない)。 */
 .resource-confirm-header {
-  justify-content: flex-start;
   gap: 8px;
+}
+.resource-confirm-header .card-inst-modal__title {
+  flex: 1 1 auto;
+  text-align: center;
 }
 .resource-confirm-start-order {
   flex: 0 0 auto;

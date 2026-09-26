@@ -4021,9 +4021,19 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
   // ほしい") -- .shop-card__start-orderは元々このカードの一番下の行なので、そこに表/裏をそのまま追記する
   // だけで新しい要素/CSSを増やさずに済む(表示位置は自然と右下寄りになる、狭いカード幅のため)。CON以外の
   // デッキは変わらず先攻順のみ。
-  const startOrderText = facts.startOrder !== null && facts.startOrder !== undefined ? `先攻順 ${facts.startOrder}` : '';
+  // 数字部分だけ独立したspanにする (2026-09-26, per user report with a screenshot: "光らせる箇所を数字のみ
+  // に" -- 光る演出(.change-highlight, 下のrenderResourceConfirmOverlay/renderPlayerCards参照)が
+  // "先攻順 5" 全体ではなく数字("5")だけを囲むようにするため)。
+  const startOrderEl = q('.shop-card__start-order');
+  startOrderEl.textContent = '';
   const conFaceLabel = faceId.startsWith('CON') ? (faceId.endsWith('A') ? '表' : '裏') : '';
-  q('.shop-card__start-order').textContent = [startOrderText, conFaceLabel].filter(Boolean).join('　');
+  if (facts.startOrder !== null && facts.startOrder !== undefined) {
+    startOrderEl.appendChild(document.createTextNode('先攻順 '));
+    startOrderEl.appendChild(el('span', 'shop-card__start-order-number', String(facts.startOrder)));
+  }
+  if (conFaceLabel) {
+    startOrderEl.appendChild(document.createTextNode((startOrderEl.childNodes.length ? '　' : '') + conFaceLabel));
+  }
 
   let tall = false;
   // A pure MAP-assignment card (see areaOwnershipLabel's own doc) never falls through to the generic
@@ -6591,6 +6601,8 @@ function renderResourceConfirmOverlay(state) {
   // ので、ここで並べるカードが増えるだけでモーダルは自動的に(左右へ)広がる。先行順合計に実際に使われるのは
   // CONの表面(A面)のSTART_ORDERだけ(resourceChoiceStartOrderTotal自身がconPhysicalId+'A'決め打ち)なので、
   // 光らせるのもA面の.shop-card__start-orderだけ -- B面は参考として表示するのみ、光らせない。
+  // .shop-card__start-order-number (2026-09-26, per user report with a screenshot: "光らせる箇所を数字
+  // のみに") -- "先攻順 5"全体ではなく数字("5")だけを囲む、fillCardFaceが分離して作る子span。
   const conPhysicalId = state.players.find((p) => p.id === choice.playerId).conPhysicalId;
   let conFrontStartOrderLabel = null;
   for (const face of ['A', 'B']) {
@@ -6598,7 +6610,10 @@ function renderResourceConfirmOverlay(state) {
     const cell = el('div', cardNode.classList.contains('shop-card--tall') ? 'owned-card-cell owned-card-cell--tall' : 'owned-card-cell');
     cell.appendChild(cardNode);
     visual.appendChild(cell);
-    if (face === 'A') conFrontStartOrderLabel = cell.querySelector('.shop-card__start-order');
+    // .shop-card > .shop-card__start-order (子コンビネータ) で、.shop-card__backの中にある同名要素
+    // (CONにはA/B面同士のホバー反転プレビュー用に裏面データが入っている -- 2026-09-26、実機確認で発覚:
+    // querySelector単体だとDOM順で先に出てくる.shop-card__back側(非表示)を誤って掴んでいた)を除外する。
+    if (face === 'A') conFrontStartOrderLabel = cell.querySelector('.shop-card > .shop-card__start-order .shop-card__start-order-number');
   }
   const resourceStartOrderLabels = [];
   for (const faceId of choice.context.selected) {
@@ -6606,12 +6621,12 @@ function renderResourceConfirmOverlay(state) {
     const cell = el('div', cardNode.classList.contains('shop-card--tall') ? 'owned-card-cell owned-card-cell--tall' : 'owned-card-cell');
     cell.appendChild(cardNode);
     visual.appendChild(cell);
-    resourceStartOrderLabels.push(...cell.querySelectorAll('.shop-card__start-order'));
+    resourceStartOrderLabels.push(...cell.querySelectorAll('.shop-card__start-order-number'));
   }
   // 先行順を光らせる (2026-09-25, per user request: "先行順が分かりやすいように先行順の場所を光らせて") --
-  // 合計バッジ自身、選んだ2枚それぞれの.shop-card__start-order(先攻順X表示)、CON表面の.shop-card__start-
-  // orderを光らせる。tutorialModeActiveのみで判定できる(このoverlay自体がresource_confirm_introと同じ
-  // 条件でしか表示されないため -- 詳細はtutorialResourceConfirmActiveのdoc)。
+  // 合計バッジ自身、選んだ2枚それぞれの.shop-card__start-order-number(先攻順の数字部分)、CON表面の同要素を
+  // 光らせる。tutorialModeActiveのみで判定できる(このoverlay自体がresource_confirm_introと同じ条件でしか
+  // 表示されないため -- 詳細はtutorialResourceConfirmActiveのdoc)。
   startOrderBadge.classList.toggle('change-highlight', tutorialModeActive);
   if (conFrontStartOrderLabel) conFrontStartOrderLabel.classList.toggle('change-highlight', tutorialModeActive);
   for (const label of resourceStartOrderLabels) {
@@ -6934,9 +6949,13 @@ function renderPlayerCards(state, next) {
         // 先行順も光らせて") -- resourceChoiceStartOrderTotal自身がconPhysicalId+'A'(表面)のSTART_ORDERしか
         // 使わない(main.js内のresourceChoiceStartOrderTotal参照)ので、光らせるのも表面だけでよい。
         // renderConFacesRowは常に['A','B']の順でセルを追加するので、conContainer内で最初に見つかる
-        // .shop-card__start-orderが必ずA面(表)のもの。
+        // (.shop-card__backの中の非表示コピーを除いた)ものが必ずA面(表)のもの。2026-09-26、per user report
+        // with a screenshot: "光らせる箇所を数字のみに" -- "先攻順 4"全体ではなく数字部分だけを囲む。さらに
+        // 別の実機報告で発覚: querySelector単体だと.shop-card__back内の非表示コピー(CONのA/B面同士の
+        // ホバー反転プレビュー用データ)を誤って先に掴んでいたため、"> .shop-card__start-order"の子
+        // コンビネータで除外する。
         if (tutorialResourceConfirmActive(state, player.id)) {
-          const frontStartOrder = conContainer.querySelector('.shop-card__start-order');
+          const frontStartOrder = conContainer.querySelector('.shop-card > .shop-card__start-order .shop-card__start-order-number');
           if (frontStartOrder) frontStartOrder.classList.add('change-highlight');
         }
       }
@@ -7745,7 +7764,7 @@ const TUTORIAL_STEPS = [
   {
     id: 'resource_choice',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: 'ランダムな初期資源カード4枚が配られました\n配られた初期資源カード4枚のうち使用する2枚を選んでください\nお試しのゲームなので深く考えずにとってもらって大丈夫です',
+    body: 'ランダムな初期資源カード4枚が配られました\n配られた初期資源カード4枚のうち使用する2枚を選んでください\nお試しのゲームなので深く考えずにとってもらって大丈夫です\n気に入らなければ後でこの場面に戻ることもできます',
     // 2026-09-24, per user request: "初期資源カード2枚選んだらこのセリフは消す" -- auto-dismissed (no
     // manual 閉じる needed) the moment the player has actually picked 2 candidates, the same moment
     // renderResourceConfirmOverlay's own "この2枚でよろしいですか？" takes over -- not just once
