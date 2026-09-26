@@ -6868,7 +6868,7 @@ function renderResourceChoice(container, state, player) {
   // this choice itself and what happens right after it (turn order / JOB draft), since a first-time
   // player lands here with zero context on what a "先着順" number even refers to.
   container.appendChild(buildOnboardHint([
-    `← 初期資源カード${choice.context.candidates.length}枚のうちから${requiredCount}枚を選んでください`,
+    `初期資源カード${choice.context.candidates.length}枚のうちから${requiredCount}枚を選んでください`,
     '先着順の数字の合計が少ないプレイヤーからジョブを選択しゲームが始まります',
   ]));
 }
