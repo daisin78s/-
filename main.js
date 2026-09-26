@@ -8060,8 +8060,33 @@ const TUTORIAL_STEPS = [
       const player = state.players.find((p) => p.id === 'P1');
       return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
     },
-    body: 'ダイスはスロットに書かれているマーク通りにしか置けません\nスロットに⚀と書かれていれば1⃣しか置けません\nスロットにANYと書かれていれば何の目でも置けます',
+    body: 'ダイスはスロットに書かれているマーク通りにしか置けません\nスロットに⚀と書かれていれば1⃣か白1⃣しか置けません\nスロットにANYと書かれていれば何の目でも置けます',
     nextLabel: '次へ',
+  },
+  // 2026-09-26, per user request -- shown right after slot_dice_value_rule_introの次へ, same
+  // match-condition/fall-through pattern as every other plain-次へ step here.
+  {
+    id: 'slot_dice_value_rule_intro_2',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      if (next.playerId !== 'P1') return false;
+      const player = state.players.find((p) => p.id === 'P1');
+      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
+    },
+    body: 'ダイスを置くとき同じエリアのスロットにすでに置いてある目と同じ目は置けません\n資源が足りずエリアの効果を使えないときはそのエリアにダイスを置くことができません',
+    nextLabel: '次へ',
+  },
+  // 2026-09-26, per user request -- shown right after slot_dice_value_rule_intro_2の次へ, same
+  // match-condition/fall-through pattern as every other step here.
+  {
+    id: 'slot_dice_value_rule_intro_3',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      if (next.playerId !== 'P1') return false;
+      const player = state.players.find((p) => p.id === 'P1');
+      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
+    },
+    body: 'カードやジョブの効果でダイス目を変更したりすでに置いてあるダイスの上にダイスを置けることもあります\n詳細はプレイをして確かめてください',
   },
 ];
 
@@ -8131,9 +8156,16 @@ const TUTORIAL_ICON_NOTATIONS = [
 ];
 for (let n = 1; n <= 6; n++) {
   TUTORIAL_ICON_NOTATIONS.push({ text: DIE_FACES[n], build: () => dieFace(n) });
-  const dieBuild = () => renderDie({ kind: 'COLOR', color: 'PINK', value: n });
-  TUTORIAL_ICON_NOTATIONS.push({ text: `${n}️⃣`, build: dieBuild }); // digit + variation selector + keycap
-  TUTORIAL_ICON_NOTATIONS.push({ text: `${n}⃣`, build: dieBuild }); // digit + keycap, no variation selector
+  const colorDieBuild = () => renderDie({ kind: 'COLOR', color: 'PINK', value: n });
+  TUTORIAL_ICON_NOTATIONS.push({ text: `${n}️⃣`, build: colorDieBuild }); // digit + variation selector + keycap
+  TUTORIAL_ICON_NOTATIONS.push({ text: `${n}⃣`, build: colorDieBuild }); // digit + keycap, no variation selector
+  // 白{n}⃣ (2026-09-26, per user request: "1か1 初めの1は色ダイスの1 2個目の1はｗDの1") -- 白 prefix
+  // distinguishes an ｗD(white die) icon from the plain color-die keycap notation above. Longer text
+  // (white-prefixed) is tried first by the shared length-descending sort, so no ambiguity with the
+  // unprefixed color-die entries.
+  const whiteDieBuild = () => renderDie({ kind: 'WHITE', value: n });
+  TUTORIAL_ICON_NOTATIONS.push({ text: `白${n}️⃣`, build: whiteDieBuild });
+  TUTORIAL_ICON_NOTATIONS.push({ text: `白${n}⃣`, build: whiteDieBuild });
 }
 
 // カード名の自動リンク化 (2026-09-25, per user request: "セリフに既存カード名があったらリンクするように
