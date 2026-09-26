@@ -172,7 +172,11 @@ function createInitialState(plan, forcedSeed) {
   setupMod.createPlayers(state, weeklyChallengeActive ? ['Alice', 'Bob', 'Carol', 'Dan'] : [loadRememberedRankingName() || 'Alice', 'Bob', 'Carol', 'Dan']);
   setupMod.prepareMaps(state, INDEX);
   setupMod.prepareShops(state, INDEX, plan ? plan.abc : (tutorialModeActive ? tutorialPreferredNormalFaceIds(state, INDEX) : undefined));
-  setupMod.rollInitialColorDice(state);
+  // チュートリアルでは1R(初期配置)のみ、あなたの一番左のダイスを必ず1にする (2026-09-26, per user request:
+  // "1Rのみプレイヤーの初期ダイス一番左を1になるようにしてください あとはランダムで") -- 2R以降の
+  // ラウンド開始時の振り直し(turn-flow.js側)には触れないため、以後は完全ランダムに戻る。他の3人のAIや
+  // あなた自身の残り2個のダイスはこれまで通り完全ランダム。
+  setupMod.rollInitialColorDice(state, tutorialModeActive ? { P1: 1 } : undefined);
   const forcedCon = plan && plan.con.length > 0 ? { P1: gameStateMod.splitCardId(plan.con[0]).physicalId } : undefined;
   setupMod.dealConCards(state, forcedCon);
   // Resource step (2026-08-15, per user feedback: choosing 0 preferred resources used to still bypass
