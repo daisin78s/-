@@ -38,12 +38,18 @@ const qst = require('./qst');
  * keep this diff small -- don't take the name as the live physical id, check BESPOKE_QST_RANK_CON_FACES
  * or the id literal inside the function itself for that.
  *
+ * 2026-09-26: 裏切/暴食 swapped which face of CON006 is 表/裏 (per user request: "暴食 表／裏切 裏 を
+ * 裏切 表／暴食 裏 にしたい") -- 裏切 now lives at CON006A (was CON006B), 暴食 at CON006B (was CON006A).
+ * Bumped here and in con001bVpEffect's own check below to follow it; tools/ai_data_report.js's own
+ * mirrored CON_VP_PENALTY_FACES set and tests/scoring.smoke.js/tests/executor.smoke.js/
+ * tests/ai-evaluator.smoke.js's hardcoded ids were updated to match in the same commit.
+ *
  * CON004A (傲慢) added 2026-08-22, per user request -- its existing PASSIVE=
  * BLOCK_UPGRADE_UNLESS_QST_RANK(Q004A,1) already gates upgrades on being ranked 1st on Q004A's
  * AREA_COUNT goal; the new rule adds an ONGOING VP cost for the same shortfall ("最多AREAが必要　足りない
  * １個につき-1VP"), same qst.rankPlayersForQuest-driven shape as 裏切/嫉妬 below, so it belongs here too
  * rather than as a new generic DSL command -- see con004aVpEffect's own doc. */
-const BESPOKE_QST_RANK_CON_FACES = new Set(['CON006B', 'CON004B', 'CON004A']);
+const BESPOKE_QST_RANK_CON_FACES = new Set(['CON006A', 'CON004B', 'CON004A']);
 
 /** CON004A's own VP effect (傲慢, 2026-08-22, per user spec: "最多AREAが必要　足りない１個につき-1VP") --
  * -1VP for every AREA the player is short of whoever currently ranks 1st on Q004A's AREA_COUNT goal
@@ -63,11 +69,11 @@ function con004aVpEffect(state, index, playerId) {
 /** 裏切's own VP effect (2026-08-13, per user spec): "QSTで1位がある→-4VP、1位がなく2位がある→-2VP、
  * 1-2位がなく3位がある→-1VP、1-2-3位がない→0VP" -- best (lowest-numbered) rank across every currently-
  * revealed quest. 0 if playerId doesn't actually own 裏切. Still named con001bVpEffect after 裏切's
- * ORIGINAL physical id (CON001B) even though it now lives at CON006B -- see BESPOKE_QST_RANK_CON_FACES'
- * own doc. */
+ * ORIGINAL physical id (CON001B) even though it now lives at CON006A (2026-09-26, previously CON006B) --
+ * see BESPOKE_QST_RANK_CON_FACES' own doc. */
 function con001bVpEffect(state, index, playerId) {
   const player = state.players.find((p) => p.id === playerId);
-  const owned = player.ownedCardPhysicalIds.some((id) => state.cards[id].currentFaceId === 'CON006B');
+  const owned = player.ownedCardPhysicalIds.some((id) => state.cards[id].currentFaceId === 'CON006A');
   if (!owned) return 0;
   const ranks = Object.keys(state.quests).map((faceId) => {
     const entry = qst.rankPlayersForQuest(state, index, faceId).find((e) => e.playerId === playerId);
@@ -97,7 +103,7 @@ function con004bVpEffect(state, index, playerId) {
 /**
  * The VP effect a single owned card FACE contributes on its own, independent of what else the player
  * owns (2026-08-15, for AI.DATA.xlsx's per-CON "VPペナルティ平均" column -- see tools/ai_data_report.js).
- * CON006B(裏切)/CON004B(嫉妬)/CON004A(傲慢) (bespoke, see their own doc above -- none fit the generic
+ * CON006A(裏切)/CON004B(嫉妬)/CON004A(傲慢) (bespoke, see their own doc above -- none fit the generic
  * VP_MODIFIER/PASSIVE metric vocabulary since executor.evalMetric deliberately doesn't know about
  * qst.js, which sits ABOVE it in the layering) delegate to their own named functions. Everything else
  * with a real PASSIVE (VP_MODIFIER/VP_PENALTY_IF_BELOW/VP_PENALTY_PER clauses -- e.g. CON003A/CON002A/
@@ -109,7 +115,7 @@ function con004bVpEffect(state, index, playerId) {
  * @returns {number} a VP delta (0 or negative for every currently-defined case)
  */
 function conCardOwnVpEffect(state, index, playerId, faceId) {
-  if (faceId === 'CON006B') return con001bVpEffect(state, index, playerId);
+  if (faceId === 'CON006A') return con001bVpEffect(state, index, playerId);
   if (faceId === 'CON004B') return con004bVpEffect(state, index, playerId);
   if (faceId === 'CON004A') return con004aVpEffect(state, index, playerId);
   const player = state.players.find((p) => p.id === playerId);

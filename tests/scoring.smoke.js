@@ -190,10 +190,11 @@ function giveCard(state, faceCardId, ownerId) {
 // conCardVpAdjustment: 裏切 (2026-08-13, per user spec: "QSTで1位がある→-4VP、1位がなく2位がある→-2VP、
 // 1-2位がなく3位がある→-1VP、1-2-3位がない→0VP") -- best rank across EVERY revealed quest, not just the
 // first one (unlike CON004B above). 裏切 lived at CON001B until the user reorganized game.xlsx's CON
-// sheet by START_ORDER (2026-08-17); it's CON006B now.
+// sheet by START_ORDER (2026-08-17), then CON006B; 2026-09-26 it swapped faces with 暴食 again and is
+// now CON006A (see scoring.js's own doc).
 // ---------------------------------------------------------------------------
 {
-  const state = createEmptyGameState('scoring-smoke-con006b');
+  const state = createEmptyGameState('scoring-smoke-con006a');
   state.players.push(createPlayer('P1', 'Alice'), createPlayer('P2', 'Bob'));
   // Q001A (GOAL=CARD_COUNT): P2 owns more cards, so P1 ranks 2nd. Q002B (GOAL=EMBLEM_SET_COUNT, the
   // min across 天/地/人): P1 owns one card of each emblem type (地+天+人 -> EMBLEM_SET_COUNT=1) while
@@ -201,21 +202,21 @@ function giveCard(state, faceCardId, ownerId) {
   // across both quests is 1st, so 裏切 should apply the rank-1 penalty (-4), not the rank-2 one a
   // "just look at one quest" implementation would wrongly pick.
   state.quests = { Q001A: true, Q002B: true };
-  giveCard(state, 'CON006B', 'P1');
+  giveCard(state, 'CON006A', 'P1');
   giveCard(state, 'A001A', 'P1'); // 地
   giveCard(state, 'B001A', 'P1'); // 天
   giveCard(state, 'C001A', 'P1'); // 人 -- P1: CARD_COUNT=3, EMBLEM_SET_COUNT=1
   for (const faceId of ['A002A', 'A003A', 'A004A', 'A005A']) giveCard(state, faceId, 'P2'); // P2: CARD_COUNT=4, EMBLEM_SET_COUNT=0 (地 only)
 
   const result = scoring.conCardVpAdjustment(state, index, 'P1');
-  check('裏切 (CON006B): best rank across all revealed quests (not just one) drives the penalty', result, -4);
+  check('裏切 (CON006A): best rank across all revealed quests (not just one) drives the penalty', result, -4);
 
   // No revealed quest at all (or none the player ranks well on) -> no penalty.
-  const stateNoQuests = createEmptyGameState('scoring-smoke-con006b-none');
+  const stateNoQuests = createEmptyGameState('scoring-smoke-con006a-none');
   stateNoQuests.players.push(createPlayer('P1', 'Alice'));
   stateNoQuests.quests = {};
-  giveCard(stateNoQuests, 'CON006B', 'P1');
-  check('裏切 (CON006B): no revealed quests at all -> 0VP (nothing to rank against)', scoring.conCardVpAdjustment(stateNoQuests, index, 'P1'), 0);
+  giveCard(stateNoQuests, 'CON006A', 'P1');
+  check('裏切 (CON006A): no revealed quests at all -> 0VP (nothing to rank against)', scoring.conCardVpAdjustment(stateNoQuests, index, 'P1'), 0);
 }
 
 // ---------------------------------------------------------------------------

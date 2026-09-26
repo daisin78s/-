@@ -627,16 +627,17 @@ function stateWithP1QualifyingHand(round, includeMonument) {
 // 減らして7Kとして評価"; corrected 2026-09-14, per user request: "暴食の7Kを超えたKターン終了時に1Kだけ
 // 減らすように変更" -- applyTurnEnd only ever subtracts 1 from an over-limit resource, it never clamps
 // straight to the limit, so scoring must use `have - 1` when over, not `Math.min(have, limit)`; K=10,
-// well past CON006A's limit of 7, is used below specifically so a stale "clamp to 7" formula and the
+// well past 暴食's limit of 7, is used below specifically so a stale "clamp to 7" formula and the
 // correct "decrease by 1" formula give VISIBLY DIFFERENT numbers (9 vs 7) -- K=8 (exactly 1 over) would
-// happen to give the same answer either way and couldn't have caught this by itself).
+// happen to give the same answer either way and couldn't have caught this by itself). 暴食 lived at
+// CON006A until 2026-09-26, when it swapped faces with 裏切 again and moved to CON006B.
 // ---------------------------------------------------------------------------
 {
   const state = freshState(1);
-  giveCard(state, 'CON006A', 'P1'); // 暴食: TURNEND=RESOURCE_LIMIT(K,7), eval-table value 0, no printed VP
+  giveCard(state, 'CON006B', 'P1'); // 暴食: TURNEND=RESOURCE_LIMIT(K,7), eval-table value 0, no printed VP
   const p1 = state.players[0];
-  p1.resources.K = 10; // 3 over CON006A's limit of 7 -- true post-TURNEND value is 9 (10-1), not 7
-  check('K past CON006A\'s RESOURCE_LIMIT(K,7) cap scores at have-1 (10 -> 9), not clamped to the limit (7)', evaluator.score(state, 'P1'), 9 * evalTable[1].K);
+  p1.resources.K = 10; // 3 over 暴食's limit of 7 -- true post-TURNEND value is 9 (10-1), not 7
+  check('K past 暴食\'s RESOURCE_LIMIT(K,7) cap scores at have-1 (10 -> 9), not clamped to the limit (7)', evaluator.score(state, 'P1'), 9 * evalTable[1].K);
 }
 {
   const state = freshState(1);
@@ -649,10 +650,10 @@ function stateWithP1QualifyingHand(round, includeMonument) {
   // +3K (1->4, no adjustment needed) -- accounting for the 1-unit-per-turn decay doesn't flip which
   // option is better, it just stops overstating a big overshoot as if it were clamped all the way to 7.
   const withPlus9 = freshState(1);
-  giveCard(withPlus9, 'CON006A', 'P1');
+  giveCard(withPlus9, 'CON006B', 'P1');
   withPlus9.players[0].resources.K = 10;
   const withPlus3 = freshState(1);
-  giveCard(withPlus3, 'CON006A', 'P1');
+  giveCard(withPlus3, 'CON006B', 'P1');
   withPlus3.players[0].resources.K = 4;
   check(
     '+9K (true value, not clamped to 7) still scores higher than +3K (4)',

@@ -50,34 +50,37 @@ function getPlayerRef(state, id) { return state.players.find((p) => p.id === id)
 function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId).dice.find((d) => d.id === dieId); }
 
 // ---------------------------------------------------------------------------
-// 1. CON006A: ONCE=ADD(7K), TURNEND=RESOURCE_LIMIT(K,7)
+// 1. 暴食: ONCE=ADD(8K), TURNEND=RESOURCE_LIMIT(K,7) (ONCE bumped from 7K to 8K, 2026-09-26, per user
+// edit -- so the initial grant now immediately overshoots the cap by 1). Lived at CON006A until
+// 2026-09-26, when it swapped faces with 裏切 again and moved to CON006B (see src/scoring.js's own doc).
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
-  const physicalId = giveCard(state, 'CON006A', 'P1');
-  const row = getCardRow(index, 'CON006A');
+  const physicalId = giveCard(state, 'CON006B', 'P1');
+  const row = getCardRow(index, 'CON006B');
   const context = { playerId: 'P1', sourcePhysicalId: physicalId };
 
   executor.runProgram(state, index, context, row.ONCE);
-  check('CON006A ONCE grants 7K', getPlayerRef(state, 'P1').resources.K, 7);
+  check('暴食 (CON006B) ONCE grants 8K', getPlayerRef(state, 'P1').resources.K, 8);
 
   getPlayerRef(state, 'P1').resources.K = 10; // simulate accumulating over the limit
   executor.applyTurnEnd(state, index, 'P1');
-  check('CON006A TURNEND decreases K by 1 when over the cap (10 -> 9, not clamped straight to 7)', getPlayerRef(state, 'P1').resources.K, 9);
+  check('暴食 (CON006B) TURNEND decreases K by 1 when over the cap (10 -> 9, not clamped straight to 7)', getPlayerRef(state, 'P1').resources.K, 9);
 }
 
 // ---------------------------------------------------------------------------
-// 1b. Usage fee is paid BEFORE RESOURCE_LIMIT's auto-discard (2026-08-11, per user report on CON006A:
+// 1b. Usage fee is paid BEFORE RESOURCE_LIMIT's auto-discard (2026-08-11, per user report on 暴食
+//     (physically CON006A at the time, now CON006B -- see block 1's own doc):
 //     "現在　上限7K→使用料を払う　になっています　使用料を払う→上限7K　に直してください" -- it used to
 //     be the other way round, which wasted K to the discard that should have gone toward the fee
-//     instead). 10K, CON006A's cap-7, and a 2K pending fee: paying first (10-2=8K) then decreasing by 1
+//     instead). 10K, 暴食's cap-7, and a 2K pending fee: paying first (10-2=8K) then decreasing by 1
 //     for being over the cap (8-1=7K) ends higher than paying only what's left after an up-front discard
 //     would have.
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
   state.maps['MAP001'] = createMapState('MAP001', 'AREA001A');
-  giveCard(state, 'CON006A', 'P1');
+  giveCard(state, 'CON006B', 'P1');
   const player = getPlayerRef(state, 'P1');
   player.resources.K = 10;
   player.pendingFee = { mapId: 'MAP001', amount: 2 };

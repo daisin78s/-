@@ -7811,7 +7811,7 @@ const TUTORIAL_STEPS = [
     body: (state) => {
       const choice = state.pendingChoices.find((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS');
       const total = resourceChoiceStartOrderTotal(state, 'P1', choice.context.selected);
-      return `あなたが選んだカードはこちら\n制約カードに書かれた先攻順と足された合計は${total}です\nこの数字が大きいほど、得られる資源が多くなり、小さいほど、先に行動してJOBや獲得カードを選ぶことができます`;
+      return `あなたが選んだカードはこちら\n制約カードに書かれた先攻順と足された合計は${total}です\nこの数字が大きいほど得られる資源が多くなり、小さいほど先に行動してJOBや獲得カードを選ぶことができます`;
     },
     autoDismissWhen: (state) => !state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
   },
