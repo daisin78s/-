@@ -8283,6 +8283,7 @@ function renderTutorialTurnOrderOverlay(state) {
     const resourceIds = player.ownedCardPhysicalIds.filter((id) => id.startsWith('R'));
     const total = resourceChoiceStartOrderTotal(state, playerId, resourceIds);
 
+    const isSelf = playerId === 'P1';
     const row = el('div', 'tutorial-turnorder-row');
     const header = el('div', 'tutorial-turnorder-row__header');
     header.appendChild(el('span', 'tutorial-turnorder-rank', `${rank}番手`));
@@ -8292,15 +8293,18 @@ function renderTutorialTurnOrderOverlay(state) {
     header.appendChild(el('span', 'tutorial-turnorder-name', player.name));
     // 数字部分だけ2倍サイズ (2026-09-25, per user request: "先攻順合計9 の数字部分を2倍の大きさにしてほしい")
     // -- ラベルと数字を別々のspanに分け、数字側だけ.tutorial-turnorder-total__numberで拡大する。
+    // 他3人の分は次へを押すまで隠す (2026-09-26, per user report with a screenshot: 次へを押す前なのに
+    // Bob/Carol/Danの先攻順合計の数字だけ既に見えてしまっていた -- カード自体は下のtutorial-card-hiddenで
+    // 隠しているのに、この数字だけそのチェックが漏れていた) -- カードと同じtutorialOthersRevealed条件で
+    // ？に差し替える。
     const totalEl = el('span', 'tutorial-turnorder-total', '先攻順合計 ');
-    totalEl.appendChild(el('span', 'tutorial-turnorder-total__number', String(total)));
+    totalEl.appendChild(el('span', 'tutorial-turnorder-total__number', (isSelf || tutorialOthersRevealed) ? String(total) : '？'));
     header.appendChild(totalEl);
     row.appendChild(header);
 
     // Not renderConFacesRow (it always appends its own "JOB選択後、CONの表/裏を選んでください" onboarding
     // hint, meant for the single player currently mid-choice -- out of place repeated once per row here).
     const cardsRow = el('div', 'build-choice-group');
-    const isSelf = playerId === 'P1';
     for (const faceId of [`${player.conPhysicalId}A`, `${player.conPhysicalId}B`, ...resourceIds]) {
       const cardNode = buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true });
       // Other 3 players' cards stay face-down (blank) until tutorialOthersRevealed -- see this
