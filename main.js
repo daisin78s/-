@@ -2485,6 +2485,8 @@ function renderCardListOverlay() {
     const btn = el('button', 'card-list-nav__button', entry.label);
     btn.type = 'button';
     if (entry.key === cardListView) btn.classList.add('card-list-nav__button--active');
+    // 2026-09-26, per user request: "カードリストの右下のゲームに戻るボタン目立つように色を変えて"
+    if (entry.key === null) btn.classList.add('card-list-nav__button--exit');
     btn.addEventListener('click', () => (entry.key === null ? closeCardListOverlay() : setCardListView(entry.key)));
     nav.appendChild(btn);
   }
@@ -9365,6 +9367,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('debug-setup-cancel-button').addEventListener('click', cancelDebugSetupFlow);
 
   document.getElementById('card-list-open-button').addEventListener('click', openCardListOverlay);
+  document.getElementById('card-list-close-button').addEventListener('click', closeCardListOverlay);
   document.getElementById('replay-upload-button').addEventListener('click', () => document.getElementById('replay-upload-input').click());
   document.getElementById('replay-upload-input').addEventListener('change', handleReplayUploadChange);
   document.getElementById('start-from-round3-button').addEventListener('click', handleStartFromRound3Click);
