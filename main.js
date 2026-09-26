@@ -5994,6 +5994,14 @@ function renderPlayers(state, next) {
             const prospectiveValues = [...selectedDieIds, die.id].map((id) => player.dice.find((d) => d.id === id).value);
             if (!hasQualifyingProperSubset(prospectiveValues, MAX_MONUMENT_DICE_THRESHOLD)) selectedDieIds.push(die.id);
           }
+          // dice_select_hintの「ダイスをクリック」演出 (2026-09-27, per user request: "ダイスを1個クリック
+          // すると次のセリフに進む") -- ダイスが選択された瞬間に次のセリフへ切り替える。con_face_choice_intro
+          // と同じ理由でrender()を呼ぶ前にここでフラグを立てる(tutorialDiceSelectHintGlowing自身のdoc参照)。
+          if (tutorialCurrentStepId === 'dice_select_hint' && player.id === 'P1' && selectedDieIds.length > 0) {
+            tutorialCurrentStepId = null;
+            tutorialDiceSelectHintGlowing = false;
+            stopTutorialTypewriter();
+          }
           render(STATE);
         });
       }
@@ -6006,6 +6014,9 @@ function renderPlayers(state, next) {
       // slot_any_rule_introの「光る」演出 (2026-09-26, per user request: "自分のすべてのダイスが光る")
       // -- ANYにはどの目でも置けるので、色/白/目の値を問わず全ダイスを光らせる。
       if (tutorialSlotAnyGlowing && player.id === 'P1') dieNode.classList.add('change-highlight');
+      // dice_select_hintの「光る」演出 (2026-09-27, per user request: "この時自分のダイスがすべて光る")
+      // -- tutorialDiceSelectHintGlowing's own doc。色/白ダイス問わず全て光らせる。
+      if (tutorialDiceSelectHintGlowing && player.id === 'P1') dieNode.classList.add('change-highlight');
       rowEl.appendChild(dieNode);
     }
 
@@ -8195,6 +8206,32 @@ const TUTORIAL_STEPS = [
     body: '行動が気に入らなかったり間違えたときは「直前のアクションをキャンセル」を押せばキャンセルすることができます',
     nextLabel: '次へ',
   },
+  // 2026-09-27, per user request -- ダイスを1個クリックした瞬間に自動遷移(通常経路。renderPlayersの
+  // die click handlerのdoc参照)、または次へで手動遷移(フォールバック)。
+  {
+    id: 'dice_select_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      if (next.playerId !== 'P1') return false;
+      const player = state.players.find((p) => p.id === 'P1');
+      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
+    },
+    body: 'ダイスを1個クリックしてください',
+    nextLabel: '次へ',
+  },
+  // 2026-09-27, per user request -- 光る演出は無し。選択したダイスに対する既存の配置可能SLOTハイライト
+  // (.slot--highlight、renderBoardのhighlightedSlots)をそのまま指して説明するだけなので専用のフラグは不要。
+  {
+    id: 'placeable_slot_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      if (next.playerId !== 'P1') return false;
+      const player = state.players.find((p) => p.id === 'P1');
+      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
+    },
+    body: '今光っているスロットが配置可能スロットです',
+    nextLabel: '次へ',
+  },
 ];
 
 // job_explanation (2026-09-24: "JOBをクリックしたときそのJOBの説明をセリフで流したい" -- per-JOB bespoke
@@ -8603,8 +8640,12 @@ function dismissTutorialStep() {
   // 閉じられた瞬間にONにする。
   if (tutorialCurrentStepId === 'job_tap_resource_intro') { tutorialResourceGainGlowing = false; tutorialCancelButtonGlowing = true; }
   // 通常はhandleCancelPreviousActionClickが直接同じ処理をやってからrender()する(そちらのdoc参照) -- ここは
-  // 「実際にキャンセルボタンを押さず次へだけ押した」フォールバック経路用。
-  if (tutorialCurrentStepId === 'cancel_action_hint') tutorialCancelButtonGlowing = false;
+  // 「実際にキャンセルボタンを押さず次へだけ押した」フォールバック経路用。dice_select_hintの光る演出は
+  // cancel_action_hintが閉じられた瞬間にONにする。
+  if (tutorialCurrentStepId === 'cancel_action_hint') { tutorialCancelButtonGlowing = false; tutorialDiceSelectHintGlowing = true; }
+  // 通常はダイスクリックのイベントリスナーが直接同じ処理をやってからrender()する(そちらのdoc参照) -- ここは
+  // 「実際にダイスをクリックせず次へだけ押した」フォールバック経路用。
+  if (tutorialCurrentStepId === 'dice_select_hint') tutorialDiceSelectHintGlowing = false;
   // alsoCloseTurnOrderOverlay (2026-09-24, see turn_order_reveal_summary's own doc): 次へ on this step
   // also presses the turn-order overlay's own ✖ in the same tap, instead of leaving the player to close
   // it separately.
@@ -8708,6 +8749,11 @@ let tutorialResourceGainGlowing = false;
 // このボタン自体はrenderUndoButtonsが毎回同じDOMノードを使い回す(cloneされない)ため、他の継続フラグと違い
 // classList.add一辺倒ではなくtoggleで明示的にON/OFFする必要がある(renderUndoButtonsの doc 参照)。
 let tutorialCancelButtonGlowing = false;
+// 自分のダイス全部の「光る」演出 (2026-09-27, per user request: "この時自分のダイスがすべて光る") --
+// dice_select_hintが表示され続けている間ずっとtrueになる継続フラグ。ダイスが選択された瞬間に次のセリフへ
+// 切り替える必要があるため、free_action_hintと同じ理由でautoDismissWhenは使わず、ダイスクリックの
+// イベントリスナー内で直接render()を呼ぶ前にセットする(renderPlayersのdie click handlerのdoc参照)。
+let tutorialDiceSelectHintGlowing = false;
 // RESOURCE候補側は今のところ元の一回限りの点滅のまま(まだ同じ報告を受けていないため変更せず) -- 同じ
 // タイミングずれ問題を避けるため、dismissTutorialStepが上のRevealedフラグと同時にtrueにし、
 // renderPlayerCards(render()内でrenderTutorialOverlayより前に呼ばれる -- tutorialCurrentStepIdがまだ
@@ -9062,6 +9108,7 @@ function handleCancelPreviousActionClick() {
   if (tutorialCurrentStepId === 'cancel_action_hint') {
     tutorialCurrentStepId = null;
     tutorialCancelButtonGlowing = false;
+    tutorialDiceSelectHintGlowing = true;
     stopTutorialTypewriter();
   }
   render(STATE);
