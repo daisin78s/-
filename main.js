@@ -8015,6 +8015,19 @@ const TUTORIAL_STEPS = [
     body: 'これがあなたの色ダイス（ワーカー）です\nこの色ダイスはエリアに置かれてもラウンド開始時に戻ってきます\n恩寵ダイス（白ダイス　ｗD）は使い捨てになるため戻ってきません',
     nextLabel: '次へ',
   },
+  // 2026-09-26, per user request -- shown right after color_dice_reveal's own 次へ, same match condition/
+  // fall-through pattern as the steps above.
+  {
+    id: 'main_action_intro',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      if (next.playerId !== 'P1') return false;
+      const player = state.players.find((p) => p.id === 'P1');
+      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
+    },
+    body: 'あなたのターンになったら「小麦畑」「農園」などのいずれかのエリアのスロットにダイスを一つ置きます\nこれをメインアクションと呼びます\nダイスを置くときにはいくつかのルールがあります',
+    nextLabel: '次へ',
+  },
 ];
 
 // job_explanation (2026-09-24: "JOBをクリックしたときそのJOBの説明をセリフで流したい" -- per-JOB bespoke
