@@ -178,7 +178,9 @@ function createInitialState(plan, forcedSeed) {
   // あなた自身の残り2個のダイスはこれまで通り完全ランダム。
   setupMod.rollInitialColorDice(state, tutorialModeActive ? { P1: 1 } : undefined);
   const forcedCon = plan && plan.con.length > 0 ? { P1: gameStateMod.splitCardId(plan.con[0]).physicalId } : undefined;
-  setupMod.dealConCards(state, forcedCon);
+  // チュートリアルでは祝福/色欲(CON001)を誰にも配らない (2026-09-26, per user request: "チュートリアルでは
+  // 祝福 色欲 プレイヤーに配られないようにしてほしい")。
+  setupMod.dealConCards(state, forcedCon, tutorialModeActive ? ['CON001'] : undefined);
   // Resource step (2026-08-15, per user feedback: choosing 0 preferred resources used to still bypass
   // P1's normal choice and hand them 2 fully random cards -- P1 should instead see the exact same
   // 5-candidates/pick-2 flow as P2-4 whenever nothing was preselected. Choosing exactly 1 locks that
@@ -6989,6 +6991,9 @@ function renderPlayerCards(state, next) {
         || (replayHighlight && replayHighlight.cardKeys.has(`${player.id}|${physicalId}`))) {
         cell.classList.add('change-highlight');
       }
+      // free_action_hintの「光る」演出 (2026-09-26, per user request: "この時一般市民が光る") --
+      // tutorialJobCardGlowing's own doc。
+      if (tutorialJobCardGlowing && physicalId === jobId && player.id === 'P1') cell.classList.add('change-highlight');
       attachTapToggle(cardNode, cardState, cardState.currentFaceId, canUseTap, physicalId);
       cell.appendChild(cardNode);
       jobConEl.appendChild(cell);
@@ -8008,8 +8013,7 @@ const TUTORIAL_STEPS = [
       if (r.BZ) parts.push(`口利き${r.BZ}`);
       // VPは含めない (2026-09-26, per user request: "VPは初期資源とは別枠扱いにしたいので...セリフに表示
       // しなくていい") -- 光らせない対応(renderPlayersのVP除外)と対になっている。
-      const lines = parts.map((line, i) => (i === parts.length - 1 ? `${line}があります` : line));
-      return ['これがあなたの初期資源になります', ...lines].join('\n');
+      return ['これがあなたの初期資源です', ...parts, 'これらの資源でカードやダイスを獲得していきます'].join('\n');
     },
     nextLabel: '次へ',
   },
@@ -8082,16 +8086,19 @@ const TUTORIAL_STEPS = [
     nextLabel: '次へ',
   },
   // 2026-09-26, per user request -- shown right after slot_dice_value_rule_intro_2の次へ, same
-  // match-condition/fall-through pattern as every other step here.
+  // match-condition/fall-through pattern as every other step here. Originally had a different body
+  // ("カードやジョブの効果でダイス目を変更したり...") entirely replaced by this free-action explanation
+  // (2026-09-26, per user request, id renamed from slot_dice_value_rule_intro_3 to match its new topic).
   {
-    id: 'slot_dice_value_rule_intro_3',
+    id: 'free_action_hint',
     match: (state) => {
       const next = turnFlowMod.getNextTurn(state);
       if (next.playerId !== 'P1') return false;
       const player = state.players.find((p) => p.id === 'P1');
       return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
     },
-    body: 'カードやジョブの効果でダイス目を変更したりすでに置いてあるダイスの上にダイスを置けることもあります\n詳細はプレイをして確かめてください',
+    body: '自分のターン中メインアクションの前後にフリーアクションを行うことができます\n試しにあなたのジョブ一般市民をクリックしてみてください',
+    nextLabel: '次へ',
   },
 ];
 
@@ -8469,6 +8476,10 @@ function dismissTutorialStep() {
   // スロットを光らせる").
   if (tutorialCurrentStepId === 'color_dice_reveal') { tutorialColorDiceGlowing = false; tutorialAreaSlotsGlowing = true; }
   if (tutorialCurrentStepId === 'main_action_intro') tutorialAreaSlotsGlowing = false;
+  // free_action_hintの「光る」演出 (2026-09-26, per user request: "この時一般市民が光る") -- 直前の
+  // slot_dice_value_rule_intro_2が閉じられた瞬間にONにし、free_action_hint自身が閉じられたらOFFにする。
+  if (tutorialCurrentStepId === 'slot_dice_value_rule_intro_2') tutorialJobCardGlowing = true;
+  if (tutorialCurrentStepId === 'free_action_hint') tutorialJobCardGlowing = false;
   // alsoCloseTurnOrderOverlay (2026-09-24, see turn_order_reveal_summary's own doc): 次へ on this step
   // also presses the turn-order overlay's own ✖ in the same tap, instead of leaving the player to close
   // it separately.
@@ -8546,6 +8557,9 @@ let tutorialColorDiceGlowing = false;
 // エリアのスロットの「光る」演出 (2026-09-26, per user request: "この時エリアのスロットを光らせる") --
 // main_action_introが表示され続けている間ずっとtrueになる継続フラグ、他の継続フラグと同じ形。
 let tutorialAreaSlotsGlowing = false;
+// あなた自身のJOBカードの「光る」演出 (2026-09-26, per user request: "この時一般市民が光る") --
+// free_action_hintが表示され続けている間ずっとtrueになる継続フラグ、他の継続フラグと同じ形。
+let tutorialJobCardGlowing = false;
 // RESOURCE候補側は今のところ元の一回限りの点滅のまま(まだ同じ報告を受けていないため変更せず) -- 同じ
 // タイミングずれ問題を避けるため、dismissTutorialStepが上のRevealedフラグと同時にtrueにし、
 // renderPlayerCards(render()内でrenderTutorialOverlayより前に呼ばれる -- tutorialCurrentStepIdがまだ

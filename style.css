@@ -3656,6 +3656,12 @@ h1, h2, h3 { margin: 0; }
   width: 44px;
   height: 44px;
   font-size: 24px;
+  /* 2026-09-26, per user report: "この部分改行入れないでほしい" -- base .die is display:flex (a block-level
+     box), which forces a line break before/after itself when embedded mid-sentence in running text (the
+     surrounding words ended up shoved onto their own lines around it). inline-flex keeps the same internal
+     centering layout while behaving as an inline element in the text flow. */
+  display: inline-flex;
+  vertical-align: middle;
 }
 
 /* job_explanation's 食料/コネ-style term markers (2026-09-24, per user request: "食料 コネ の文字だけ

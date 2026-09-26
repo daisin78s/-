@@ -229,11 +229,17 @@ function rollInitialColorDice(state, forcedFirstDieValues) {
  * among everyone else as usual. Which FACE (A/B) they end up with is untouched by this -- that's still
  * chooseConFace()'s own normal onboarding-time player choice, same as any other player. Every other
  * caller passes no 2nd argument and sees identical behavior to before.
+ *
+ * excludePhysicalIds (optional, string[], 2026-09-26 チュートリアル用): those physical CON cards are never
+ * dealt to anyone (left among the always-2-unused-per-game leftovers instead) -- per user request:
+ * "チュートリアルでは祝福 色欲 プレイヤーに配られないようにしてほしい" (CON001A/B). Only 6 physical CON
+ * cards exist for 4 players either way, so excluding 1 still leaves enough (5) to go around.
  */
-function dealConCards(state, forcedAssignments) {
+function dealConCards(state, forcedAssignments, excludePhysicalIds) {
   const forced = forcedAssignments || {};
   const forcedIds = new Set(Object.values(forced));
-  const shuffledRemaining = shuffle(state.rng, CON_PHYSICAL_IDS.filter((id) => !forcedIds.has(id)));
+  const excluded = new Set(excludePhysicalIds || []);
+  const shuffledRemaining = shuffle(state.rng, CON_PHYSICAL_IDS.filter((id) => !forcedIds.has(id) && !excluded.has(id)));
   let cursor = 0;
   state.players.forEach((player) => {
     player.conPhysicalId = forced[player.id] || shuffledRemaining[cursor++];
