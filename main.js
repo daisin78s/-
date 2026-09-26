@@ -4830,11 +4830,6 @@ function renderBoard(state, next) {
   // (see attemptPlaceSelectedWildcardDie's own doc for the whole-tile click wiring this drives).
   const highlightOwnerIsWildcard = highlightOwner ? boardMod.hasWildcardDice(state, INDEX, highlightOwner.id) : false;
 
-  // slot_any_rule_introの「光る」演出 (2026-09-26, per user request: "スロットの配置可能ANY（1番左）...
-  // が光る") -- ボード全体を通して最初に見つかった、空いているANYスロット1つだけを光らせるためのフラグ。
-  // MAP_ORDER順(盤面の左上から)に走査するので「1番左」は事実上「盤面上で一番最初に見つかったもの」になる。
-  let anyGlowSlotAssigned = false;
-
   // Two independent rows (see .board-row in style.css) so the castle tile can be wider than the
   // other bottom-row tiles without pushing anything into an orphan third row.
   const rows = [MAP_ORDER.slice(0, 5), MAP_ORDER.slice(5, 10)];
@@ -4845,6 +4840,11 @@ function renderBoard(state, next) {
       const areaRow = dataLoaderMod.getAreaRow(INDEX, mapState.currentAreaId);
       const isCastle = mapId === boardMod.CASTLE_MAP_ID;
       const slots = boardMod.getSlotRequirements(areaRow);
+      // slot_any_rule_introの「光る」演出 (2026-09-27, per user request: "すべてのエリアのANYを一つだけ
+      // 光らせる その一つは一番左" -- ボード全体で1つだけではなく、ANYスロットを持つエリアごとに、その
+      // エリア内で一番左の空いているANYスロット1つを光らせる。タイルごとにリセットするので前のタイルの
+      // 判定を持ち越さない。
+      let anyGlowSlotAssigned = false;
       const action = areaRow.ACTION;
 
       let highlightedSlots = null;
@@ -4973,13 +4973,17 @@ function renderBoard(state, next) {
         // -- ⚀(ダイス目1)を要求するスロットはすべて光らせる。占有中かどうかは問わない(main_action_introの
         // 全SLOT演出と同じ扱い)。
         if (tutorialSlotValueOneGlowing && requirement === 1) slotEl.classList.add('change-highlight');
-        // slot_any_rule_introの「光る」演出 (2026-09-26, per user request: "スロットの配置可能ANY（1番左）
-        // ...が光る") -- 盤面全体で最初に見つかった、空いているANYスロット1つだけを光らせる
-        // (anyGlowSlotAssigned's own doc)。
+        // slot_any_rule_introの「光る」演出 (2026-09-27, per user request: "すべてのエリアのANYを一つだけ
+        // 光らせる その一つは一番左") -- ANYスロットを持つエリアごとに、そのエリア内で最初に見つかった
+        // (=一番左の)空いているANYスロット1つだけを光らせる(anyGlowSlotAssigned's own doc)。
         if (tutorialSlotAnyGlowing && requirement === 'ANY' && occupants.length === 0 && !anyGlowSlotAssigned) {
           slotEl.classList.add('change-highlight');
           anyGlowSlotAssigned = true;
         }
+        // ex_slot_introの「光る」演出 (2026-09-27, per user request: "この時EXスロットが光る（EXスロットが
+        // なければ光らない）") -- tutorialExSlotGlowing's own doc。main_action_introの全SLOT演出と同じく
+        // 占有中かどうかは問わずEX要求のスロットはすべて光らせる。
+        if (tutorialExSlotGlowing && requirement === 'EX') slotEl.classList.add('change-highlight');
         slotsEl.appendChild(slotEl);
       });
 
@@ -8121,7 +8125,23 @@ const TUTORIAL_STEPS = [
     body: 'スロットにANYと書かれていれば何の目でも置けます',
     nextLabel: '次へ',
   },
-  // 2026-09-26, per user request -- shown right after slot_any_rule_introの次へ, same
+  // 2026-09-27, per user request -- shown right after slot_any_rule_introの次へ。領地カード(支配)獲得で
+  // エリアの所有者になる仕組みとEXスロットの説明。同じmatch-condition/fall-throughパターン。
+  {
+    id: 'ex_slot_intro',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      if (next.playerId !== 'P1') return false;
+      const player = state.players.find((p) => p.id === 'P1');
+      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
+    },
+    // ○○(U+25CB、プレースホルダー用の白丸)を使用 -- チュートリアルの〇(U+3007)は必ず（食料）アイコンに
+    // 自動変換されるため(TUTORIAL_ICON_NOTATIONS参照)、「エリア名のプレースホルダー」の意図であることを
+    // 明示的にユーザー確認した上でこちらを採用(2026-09-27)。
+    body: '○○の支配と書かれている領地カードを獲得するとそのエリアの所有者になります\nEXと書かれたスロットは所有者しか置くことはできません',
+    nextLabel: '次へ',
+  },
+  // 2026-09-26, per user request -- shown right after ex_slot_introの次へ, same
   // match-condition/fall-through pattern as every other plain-次へ step here.
   {
     id: 'slot_dice_value_rule_intro_2',
@@ -8519,6 +8539,20 @@ function renderTutorialOverlay(state) {
         window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
       }
     }
+    // cancel_action_hintが見えるようにスクロール (2026-09-27, per user request: "この時「直前のアクションを
+    // キャンセル」ボタンが見えるようにスクロールお願い") -- 同じ考え方。サイドバー上部の常設ボタン
+    // (#dice-cancel-button)を対象にする -- ビルド選択モーダル用の複製(#dice-cancel-button-build)はモーダルが
+    // 開いている時しか意味を持たないのでここでは対象にしない。
+    if (step.id === 'cancel_action_hint') {
+      const cancelBtn = document.getElementById('dice-cancel-button');
+      if (cancelBtn) {
+        const bubbleWrap = document.getElementById('tutorial-bubble-wrap');
+        const visibleHeight = (bubbleWrap && !bubbleWrap.hidden) ? bubbleWrap.getBoundingClientRect().top : window.innerHeight;
+        const rect = cancelBtn.getBoundingClientRect();
+        const desiredTop = Math.max(0, (visibleHeight - rect.height) / 2);
+        window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
+      }
+    }
   }
 }
 
@@ -8554,7 +8588,9 @@ function dismissTutorialStep() {
   // ONにし、slot_dice_value_rule_intro自身が閉じられたらOFF+slot_any_rule_intro側をONにする。
   if (tutorialCurrentStepId === 'main_action_intro') { tutorialAreaSlotsGlowing = false; tutorialSlotValueOneGlowing = true; }
   if (tutorialCurrentStepId === 'slot_dice_value_rule_intro') { tutorialSlotValueOneGlowing = false; tutorialSlotAnyGlowing = true; }
-  if (tutorialCurrentStepId === 'slot_any_rule_intro') tutorialSlotAnyGlowing = false;
+  // ex_slot_introの「光る」演出(EXスロット) -- slot_any_rule_introが閉じられた瞬間にONにする。
+  if (tutorialCurrentStepId === 'slot_any_rule_intro') { tutorialSlotAnyGlowing = false; tutorialExSlotGlowing = true; }
+  if (tutorialCurrentStepId === 'ex_slot_intro') tutorialExSlotGlowing = false;
   // free_action_hintの「光る」演出 (2026-09-26, per user request: "この時一般市民が光る") -- 直前の
   // slot_dice_value_rule_intro_2が閉じられた瞬間にONにし、free_action_hint自身が閉じられたらOFFにする。
   if (tutorialCurrentStepId === 'slot_dice_value_rule_intro_2') tutorialJobCardGlowing = true;
@@ -8657,6 +8693,11 @@ let tutorialSlotValueOneGlowing = false;
 // スロットの配置可能ANY（1番左）と自分のすべてのダイスが光る") -- slot_any_rule_introが表示され続けている
 // 間ずっとtrueになる継続フラグ。
 let tutorialSlotAnyGlowing = false;
+// EXスロットの「光る」演出 (2026-09-27, per user request: "この時EXスロットが光る（EXスロットがなければ
+// 光らない）") -- ex_slot_introが表示され続けている間ずっとtrueになる継続フラグ。EXスロットが1つも無い
+// (誰もまだ領地カードを獲得していない)状態では単純にrequirement==='EX'にマッチするスロットが無いだけなので、
+// 「無ければ光らない」は特別な分岐なしで自然に成立する。
+let tutorialExSlotGlowing = false;
 // 一般市民TAPで増えた資源(K/Z)の「光る」演出 (2026-09-26, per user request: "この時増えた資源が光る") --
 // job_tap_resource_introが表示され続けている間ずっとtrueになる継続フラグ。JOB001のTAPが成功した瞬間に
 // ONにする必要があるため、con_face_choice_intro/tutorialInitialResourcesGlowingと同じ理由でautoDismissWhen
