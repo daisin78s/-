@@ -2373,7 +2373,7 @@ const CARD_LIST_RESOURCE_GLOSSARY = [
   { code: 'C', name: '金貨' },
   { code: 'Z', name: 'コネ' },
   { code: 'BZ', name: '口利き' },
-  { code: 'D', name: '追加ダイス' }, // 2026-09-24, per user request: "行動力を追加ダイスに名前を変更したい"
+  { code: 'D', name: '色ダイス' }, // 2026-09-24「行動力→追加ダイス」、2026-09-26「追加ダイス→色ダイス」に改名(per user requests)
   { code: 'wD', name: '恩寵' },
   { code: 'TAP', name: 'タップ' },
 ];
@@ -4959,6 +4959,9 @@ function renderBoard(state, next) {
           || (replayHighlight && replayHighlight.slotKeys.has(`${mapId}|${i}`))) {
           slotEl.classList.add('change-highlight');
         }
+        // main_action_introの「光る」演出 (2026-09-26, per user request: "この時エリアのスロットを光らせる")
+        // -- tutorialAreaSlotsGlowing's own doc.
+        if (tutorialAreaSlotsGlowing) slotEl.classList.add('change-highlight');
         slotsEl.appendChild(slotEl);
       });
 
@@ -5904,7 +5907,8 @@ function renderPlayers(state, next) {
         if (highlighted) badge.classList.add('change-highlight');
         // initial_resources_revealの「光る」演出 (2026-09-26, per user request) -- tutorialConCardGlowingと
         // 同じ継続フラグ方式(このステップが表示され続けている間ずっとON、次のセリフに進んだらOFF)。
-        if (tutorialInitialResourcesGlowing && player.id === 'P1') badge.classList.add('change-highlight');
+        // VPは除外 (2026-09-26, per user request: "VPは初期資源とは別枠扱いにしたいのでこの時光らせないで")。
+        if (tutorialInitialResourcesGlowing && player.id === 'P1' && resource !== 'VP') badge.classList.add('change-highlight');
         resourcesEl.appendChild(badge);
       }
     }
@@ -8002,7 +8006,8 @@ const TUTORIAL_STEPS = [
       if (r.C) parts.push(`（金貨）黄〇${r.C}`);
       if (r.Z) parts.push(`（コネ）Z〇${r.Z}`);
       if (r.BZ) parts.push(`口利き${r.BZ}`);
-      if (r.VP) parts.push(`VP${r.VP}`);
+      // VPは含めない (2026-09-26, per user request: "VPは初期資源とは別枠扱いにしたいので...セリフに表示
+      // しなくていい") -- 光らせない対応(renderPlayersのVP除外)と対になっている。
       const lines = parts.map((line, i) => (i === parts.length - 1 ? `${line}があります` : line));
       return ['これがあなたの初期資源になります', ...lines].join('\n');
     },
@@ -8018,7 +8023,7 @@ const TUTORIAL_STEPS = [
       const player = state.players.find((p) => p.id === 'P1');
       return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
     },
-    body: '（食料）〇はこのゲームの一番基本的な資源です\nただし基本的にはそのまま使うことはできず、カードを獲得するにはいずれかの資源に変換する必要があります\n赤〇（権力）　青〇（信心）　黄〇（金貨）　はそれぞれカードを獲得するのに必要な資源です\nそれぞれの資源によって獲得できるカードの特性が違います\nZ〇（コネ）は赤〇青〇黄〇どの資源として使うこともできる万能資源です\nそれぞれの資源はターン中いつでも好きなだけフリーアクションで〇に変換することができます\nそのため基本的には　〇＜赤〇≒青〇≒黄〇＜Z〇　　になります',
+    body: '（食料）〇はこのゲームの一番基本的な資源です\nただし基本的にはそのまま使うことはできず、カードを獲得するにはいずれかの資源に変換する必要があります\n赤〇（権力）　青〇（信心）　黄〇（金貨）　はそれぞれカードを獲得するのに必要な資源です\nZ〇（コネ）は赤〇青〇黄〇どの資源として使うこともできる万能資源です\nそれぞれの資源はターン中いつでも好きなだけフリーアクションで〇に変換することができます\nそのため基本的には　〇＜赤〇≒青〇≒黄〇＜Z〇　　になります',
     nextLabel: '次へ',
   },
   // 2026-09-26, per user request -- shown right after resource_conversion_intro's own 次へ (normal
@@ -8046,7 +8051,7 @@ const TUTORIAL_STEPS = [
       const player = state.players.find((p) => p.id === 'P1');
       return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
     },
-    body: 'あなたのターンになったら「小麦畑」「農園」などのいずれかのエリアのスロットにダイスを一つ置かなければなりません\nこれをメインアクションと呼びます\nダイスを置くときにはいくつかのルールがあります',
+    body: 'あなたのターンになったらいずれかのエリアのスロットにダイスを一つ置かなければなりません\nこれをメインアクションと呼びます',
     nextLabel: '次へ',
   },
   // 2026-09-26, per user request -- shown right after main_action_intro's own 次へ, same match condition/
@@ -8111,8 +8116,10 @@ let tutorialTypewriterTimer = null;
 // entry's alias list is the exact substring(s) that should trigger that code's popup wherever they appear
 // in any plain tutorial-bubble string, present or future; a code can have more than one alias (TAP shows
 // up as both "タップ" and "TAP" across existing card text, wD as "恩寵ダイス" even though its own glossary
-// name is just "恩寵", D's alias is "追加色ダイス" -- the phrase already used in 教師's own body -- plus its
-// new post-rename glossary name "追加ダイス" itself).
+// name is just "恩寵", D's aliases are "追加色ダイス" -- the phrase already used in 教師's own body -- plus
+// its two later glossary names "追加ダイス" then "色ダイス" (2026-09-26, per user request: "チュートリアル
+// のリンクも色ダイスでリンクするように"), all three kept since existing tutorial text already uses any of
+// them).
 // excludePrecededBy (2026-09-25, per user report: "アンタップのタップ部分にはリンクを張らないで") -- "タッ
 // プ" is a plain substring of "アンタップ" (untap, the opposite action), so without this a tutorial line
 // like 社交家's "ラウンド開始時にアンタップして" would wrongly link just the trailing "タップ" out of it.
@@ -8128,7 +8135,7 @@ const TUTORIAL_TERM_ALIASES = [
   { code: 'C', aliases: ['金貨'] },
   { code: 'Z', aliases: ['コネ'] },
   { code: 'BZ', aliases: ['口利き'] },
-  { code: 'D', aliases: ['追加色ダイス', '追加ダイス'] },
+  { code: 'D', aliases: ['追加色ダイス', '追加ダイス', '色ダイス'] },
   { code: 'wD', aliases: ['恩寵ダイス'] },
   { code: 'TAP', aliases: [{ text: 'タップ', excludePrecededBy: ['アン'] }, 'TAP'] },
 ];
@@ -8417,6 +8424,19 @@ function renderTutorialOverlay(state) {
         window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
       }
     }
+    // main_action_introが見えるようにスクロール (2026-09-26, per user request: "必要であればスクロール
+    // させる") -- 同じ考え方だが対象(#board、盤面全体)がここまでの単一カード/バッジより大きいため、
+    // 全体を収めようとはせず、上端がセリフより上に来る(見えている範囲の中央寄せ)ことだけを狙う。
+    if (step.id === 'main_action_intro') {
+      const boardEl = document.getElementById('board');
+      if (boardEl) {
+        const bubbleWrap = document.getElementById('tutorial-bubble-wrap');
+        const visibleHeight = (bubbleWrap && !bubbleWrap.hidden) ? bubbleWrap.getBoundingClientRect().top : window.innerHeight;
+        const rect = boardEl.getBoundingClientRect();
+        const desiredTop = Math.max(0, (visibleHeight - rect.height) / 2);
+        window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
+      }
+    }
   }
 }
 
@@ -8437,10 +8457,18 @@ function dismissTutorialStep() {
   if (tutorialCurrentStepId === 'resource_choice_intro') { tutorialConCardRevealed = true; tutorialConCardGlowing = true; }
   if (tutorialCurrentStepId === 'resource_choice_con_intro') { tutorialResourceCandidatesRevealedFlag = true; tutorialResourceCandidatesJustRevealed = true; tutorialConCardGlowing = false; }
   // initial_resources_reveal's own glow -- turned ON directly in renderConChoice's onPick (see
-  // tutorialInitialResourcesGlowing's own doc); turned OFF here once the player taps 次へ, and
-  // tutorialColorDiceGlowing turns ON for the very next step (color_dice_reveal) at the same moment.
-  if (tutorialCurrentStepId === 'initial_resources_reveal') { tutorialInitialResourcesGlowing = false; tutorialColorDiceGlowing = true; }
-  if (tutorialCurrentStepId === 'color_dice_reveal') tutorialColorDiceGlowing = false;
+  // tutorialInitialResourcesGlowing's own doc). Stays on through resource_conversion_intro too (2026-09-26,
+  // per user report: "このセリフの時すでにダイスが光っています このセリフの時は初期資源を光らせて
+  // ください" -- resource_conversion_intro was inserted between initial_resources_reveal and
+  // color_dice_reveal without moving this OFF/dice-ON handoff along with it, so the dice started glowing
+  // one step too early) -- turned OFF only once resource_conversion_intro itself is dismissed, same moment
+  // tutorialColorDiceGlowing turns ON for the next step (color_dice_reveal).
+  if (tutorialCurrentStepId === 'resource_conversion_intro') { tutorialInitialResourcesGlowing = false; tutorialColorDiceGlowing = true; }
+  // color_dice_reveal's own glow turns OFF once dismissed, and tutorialAreaSlotsGlowing turns ON for the
+  // very next step (main_action_intro) at the same moment (2026-09-26, per user request: "この時エリアの
+  // スロットを光らせる").
+  if (tutorialCurrentStepId === 'color_dice_reveal') { tutorialColorDiceGlowing = false; tutorialAreaSlotsGlowing = true; }
+  if (tutorialCurrentStepId === 'main_action_intro') tutorialAreaSlotsGlowing = false;
   // alsoCloseTurnOrderOverlay (2026-09-24, see turn_order_reveal_summary's own doc): 次へ on this step
   // also presses the turn-order overlay's own ✖ in the same tap, instead of leaving the player to close
   // it separately.
@@ -8515,6 +8543,9 @@ let tutorialInitialResourcesGlowing = false;
 // ので、CON面選択の時のような特別な仕掛けは不要 -- dismissTutorialStep自身がすでにrender()を呼ぶ前に
 // フラグを立てる方式になっている。
 let tutorialColorDiceGlowing = false;
+// エリアのスロットの「光る」演出 (2026-09-26, per user request: "この時エリアのスロットを光らせる") --
+// main_action_introが表示され続けている間ずっとtrueになる継続フラグ、他の継続フラグと同じ形。
+let tutorialAreaSlotsGlowing = false;
 // RESOURCE候補側は今のところ元の一回限りの点滅のまま(まだ同じ報告を受けていないため変更せず) -- 同じ
 // タイミングずれ問題を避けるため、dismissTutorialStepが上のRevealedフラグと同時にtrueにし、
 // renderPlayerCards(render()内でrenderTutorialOverlayより前に呼ばれる -- tutorialCurrentStepIdがまだ
