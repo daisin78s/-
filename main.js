@@ -7915,6 +7915,11 @@ const TUTORIAL_STEPS = [
       return next.type === 'ONBOARDING_NEEDED' && next.playerId === 'P1';
     },
     body: '今回はこの中で比較的使いやすい一般市民にしてみましょう\nカードをクリックすると拡大され選ぶことができます',
+    // 2026-09-26, per user request: "一般市民を選んだら自動的に次のセリフに行ってください" -- once P1
+    // actually commits their JOB pick, jobCardId flips non-null (setup.chooseJob), so this closes itself
+    // immediately instead of waiting for a manual 閉じる tap, flowing straight into con_face_choice_intro
+    // below (same fall-through the renderTutorialOverlay loop already does for every auto-dismissed step).
+    autoDismissWhen: (state) => !!state.players.find((p) => p.id === 'P1').jobCardId,
   },
   // 2026-09-26, per user request -- shown once P1 has drafted their JOB (一般市民) but hasn't chosen a CON
   // face yet. Note: getNextTurn's own ONBOARDING_NEEDED type flips to plain TURN the instant jobCardId is
