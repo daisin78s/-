@@ -8034,6 +8034,20 @@ const TUTORIAL_STEPS = [
     body: 'あなたのターンになったら「小麦畑」「農園」などのいずれかのエリアのスロットにダイスを一つ置きます\nこれをメインアクションと呼びます\nダイスを置くときにはいくつかのルールがあります',
     nextLabel: '次へ',
   },
+  // 2026-09-26, per user request -- shown right after main_action_intro's own 次へ, same match condition/
+  // fall-through pattern as the steps above. ⚀/1⃣ render as the real slot-mark glyph/color-die icon
+  // (see TUTORIAL_ICON_NOTATIONS' own doc), not literal text.
+  {
+    id: 'slot_dice_value_rule_intro',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      if (next.playerId !== 'P1') return false;
+      const player = state.players.find((p) => p.id === 'P1');
+      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
+    },
+    body: 'ダイスはスロットに書かれているマーク通りにしか置けません\nスロットに⚀と書かれていれば1⃣しか置けません\nスロットにANYと書かれていれば何の目でも置けます',
+    nextLabel: '次へ',
+  },
 ];
 
 // job_explanation (2026-09-24: "JOBをクリックしたときそのJOBの説明をセリフで流したい" -- per-JOB bespoke
@@ -8079,19 +8093,33 @@ const TUTORIAL_TERM_ALIASES = [
   { code: 'TAP', aliases: [{ text: 'タップ', excludePrecededBy: ['アン'] }, 'TAP'] },
 ];
 
-// 資源アイコン記法 (2026-09-26, per user request: "赤〇と書いたらアイコンの赤〇を表示するようにお願い
-// こちらはアイコンの赤〇をチャットに表示できないため" -- チャットでは実際の色付き丸アイコンを直接送れない
-// ので、色名+〇のテキスト表記をactionDotの実アイコンに変換する。A=赤〇/B=青〇/C=黄〇はそのままの色名、
-// Zは単色名がないため代わりに符号+〇のZ〇、Kは色名なし(白/無色)の裸の〇 -- 裸の〇は他すべての接頭辞
-// 付き表記の末尾と一致してしまうため、下の長さ優先ソートで必ず最後に試される。TUTORIAL_LINK_CANDIDATES
-// と同じ配列にまとめて長さ優先でスキャンされるので、通常のterm/cardリンクと衝突なく共存できる。
+// 資源/ダイスアイコン記法 (2026-09-26, per user request: "赤〇と書いたらアイコンの赤〇を表示するように
+// お願い こちらはアイコンの赤〇をチャットに表示できないため" -- チャットでは実際のアイコン画像を直接送れ
+// ないので、テキスト表記をその場で実アイコンのDOMノードに変換する。各エントリのbuildが実際に組み立てる
+// ノードを返す(kind問わず同じ仕組みで済むよう、code直指定ではなく関数にした)。A=赤〇/B=青〇/C=黄〇は
+// そのままの色名、Zは単色名がないため代わりに符号+〇のZ〇、Kは色名なし(白/無色)の裸の〇 -- 裸の〇は他
+// すべての接頭辞付き表記の末尾と一致してしまうため、下の長さ優先ソートで必ず最後に試される。
+// ⚀-⚅/1⃣-6⃣ (2026-09-26, per user request: "スロットに⚀と書かれていれば1⃣しか置けません...実際の
+// スロットのマークや色ダイスの目を表示して") -- ⚀-⚅はDIE_FACES自身のグリフ(盤面のSLOT要求表示と同じ
+// dieFace())、1⃣-6⃣(keycap digit -- 数字+U+20E3、絵文字バリエーションセレクタU+FE0Fが入るかは環境や
+// 入力元次第で変わる(実際に「1⃣」と直接打ち込んで確認したところU+FE0Fなしの2文字だった)ため、
+// あり/なし両方のバリアントを候補として登録し、どちらの入力でも実アイコンに変換されるようにする。
+// チュートリアルはP1しか存在しない(PLAYER_COLORS[0]固定)ので色はPINK固定でよい。
+// TUTORIAL_LINK_CANDIDATESと同じ配列にまとめて長さ優先でスキャンされるので、通常のterm/cardリンクと
+// 衝突なく共存できる。
 const TUTORIAL_ICON_NOTATIONS = [
-  { code: 'A', text: '赤〇' },
-  { code: 'B', text: '青〇' },
-  { code: 'C', text: '黄〇' },
-  { code: 'Z', text: 'Z〇' },
-  { code: 'K', text: '〇' },
+  { text: '赤〇', build: () => actionDot('A') },
+  { text: '青〇', build: () => actionDot('B') },
+  { text: '黄〇', build: () => actionDot('C') },
+  { text: 'Z〇', build: () => actionDot('Z') },
+  { text: '〇', build: () => actionDot('K') },
 ];
+for (let n = 1; n <= 6; n++) {
+  TUTORIAL_ICON_NOTATIONS.push({ text: DIE_FACES[n], build: () => dieFace(n) });
+  const dieBuild = () => renderDie({ kind: 'COLOR', color: 'PINK', value: n });
+  TUTORIAL_ICON_NOTATIONS.push({ text: `${n}️⃣`, build: dieBuild }); // digit + variation selector + keycap
+  TUTORIAL_ICON_NOTATIONS.push({ text: `${n}⃣`, build: dieBuild }); // digit + keycap, no variation selector
+}
 
 // カード名の自動リンク化 (2026-09-25, per user request: "セリフに既存カード名があったらリンクするように
 // してください") -- built once from INDEX's own card sheets (A/B/C/M/CON/JOB; RESOURCE's own NAME is just
@@ -8132,8 +8160,8 @@ function buildTutorialLinkCandidates() {
   for (const [text, faceId] of TUTORIAL_CARD_NAME_LINKS) {
     candidates.push({ kind: 'card', faceId, text, excludePrecededBy: null });
   }
-  for (const { code, text } of TUTORIAL_ICON_NOTATIONS) {
-    candidates.push({ kind: 'icon', code, text, excludePrecededBy: null });
+  for (const { build, text } of TUTORIAL_ICON_NOTATIONS) {
+    candidates.push({ kind: 'icon', build, text, excludePrecededBy: null });
   }
   return candidates.sort((a, b) => b.text.length - a.text.length);
 }
@@ -8143,8 +8171,8 @@ const TUTORIAL_LINK_CANDIDATES = buildTutorialLinkCandidates();
  * each position (skipping one whose excludePrecededBy matches what's right before it here) -- returns a
  * flat token list ('char' for everything else, one char at a time so the typewriter keeps advancing at
  * its normal pace; 'term'/'card' for a whole matched alias, 'icon' for a TUTORIAL_ICON_NOTATIONS match
- * (renders the real actionDot icon in place of the text, see appendTutorialBubbleToken), revealed
- * atomically like any other marker below). */
+ * (renders that notation's own real icon node in place of the text, see appendTutorialBubbleToken),
+ * revealed atomically like any other marker below). */
 function autoLinkifyTutorialText(text) {
   const tokens = [];
   let i = 0;
@@ -8153,7 +8181,7 @@ function autoLinkifyTutorialText(text) {
       if (!text.startsWith(c.text, i)) continue;
       if (c.excludePrecededBy && c.excludePrecededBy.some((p) => text.slice(i - p.length, i) === p)) continue;
       tokens.push(c.kind === 'card' ? { type: 'card', faceId: c.faceId, label: c.text }
-        : c.kind === 'icon' ? { type: 'icon', code: c.code }
+        : c.kind === 'icon' ? { type: 'icon', build: c.build }
         : { type: 'term', code: c.code, label: c.text });
       i += c.text.length;
       continue outer;
@@ -8197,7 +8225,7 @@ function appendTutorialBubbleToken(textEl, token) {
     return;
   }
   if (token.type === 'icon') {
-    textEl.appendChild(actionDot(token.code));
+    textEl.appendChild(token.build());
     return;
   }
   const span = el('span', 'tutorial-bubble__term', token.label);
