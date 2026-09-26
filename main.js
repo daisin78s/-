@@ -5927,6 +5927,9 @@ function renderPlayers(state, next) {
         // 同じ継続フラグ方式(このステップが表示され続けている間ずっとON、次のセリフに進んだらOFF)。
         // VPは除外 (2026-09-26, per user request: "VPは初期資源とは別枠扱いにしたいのでこの時光らせないで")。
         if (tutorialInitialResourcesGlowing && player.id === 'P1' && resource !== 'VP') badge.classList.add('change-highlight');
+        // job_tap_resource_introの「光る」演出 (2026-09-26, per user request: "この時増えた資源が光る")
+        // -- 一般市民(JOB001)のTAP(ADD(Z,K))で増える資源はKとZのみ、tutorialResourceGainGlowing's own doc。
+        if (tutorialResourceGainGlowing && player.id === 'P1' && (resource === 'K' || resource === 'Z')) badge.classList.add('change-highlight');
         resourcesEl.appendChild(badge);
       }
     }
@@ -6350,6 +6353,17 @@ function attachTapToggle(cardNode, cardState, faceId, canAct, physicalId) {
       const result = boardMod.useBareTapAbility(STATE, INDEX, { playerId: cardState.ownerId }, physicalId);
       if (result.success) actionCheckpoints.push({ state: preSnapshot, turnActionTaken: preTurnActionTaken });
       placementMessage = result.success ? '' : `カードを使用できません（${result.reason}）`;
+      // free_action_hintの「一般市民をクリック」演出 (2026-09-26, per user request: "この時増えた資源が
+      // 光る") -- 一般市民(JOB001)のTAPが成功した瞬間に次のセリフへ切り替え、増えたK/Zを光らせる。
+      // renderPlayers/renderPlayerCardsがrenderTutorialOverlayより先に呼ばれるため(tutorialConCardGlowing
+      // 系と同じ理由)、render()を呼ぶ前にここでフラグを立てる必要がある -- 詳細はtutorialResourceGainGlowing
+      // 自身のdoc参照。
+      if (tutorialCurrentStepId === 'free_action_hint' && result.success && faceId === 'JOB001') {
+        tutorialCurrentStepId = null;
+        tutorialJobCardGlowing = false;
+        tutorialResourceGainGlowing = true;
+        stopTutorialTypewriter();
+      }
     } else if (bareTap.kind === 'BUILD') {
       const result = boardMod.useBareTapAbility(STATE, INDEX, { playerId: cardState.ownerId }, physicalId);
       if (result.success && result.pendingBuild) {
@@ -8049,7 +8063,7 @@ const TUTORIAL_STEPS = [
       const player = state.players.find((p) => p.id === 'P1');
       return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
     },
-    body: '（食料）〇はこのゲームの一番基本的な資源です\nただし基本的にはそのまま使うことはできず、カードを獲得するにはいずれかの資源に変換する必要があります\n赤〇（権力）　青〇（信心）　黄〇（金貨）　はそれぞれカードを獲得するのに必要な資源です\nZ〇（コネ）は赤〇青〇黄〇どの資源として使うこともできる万能資源です\nそれぞれの資源はターン中いつでも好きなだけフリーアクションで〇に変換することができます\nそのため基本的には　〇＜赤〇≒青〇≒黄〇＜Z〇　　になります',
+    body: '（食料）〇はこのゲームの一番基本的な資源です\nただし基本的にはそのまま使うことはできず、カードを獲得するにはいずれかの資源に変換する必要があります\n赤〇（権力）　青〇（信心）　黄〇（金貨）　はそれぞれカードを獲得するのに必要な資源です\nZ〇（コネ）は赤〇青〇黄〇どの資源として使うこともできる万能資源です\nそれぞれの資源はターン中いつでも好きなだけフリーアクションで〇に変換することができます\nそのため基本的には　〇＜赤〇≒青〇≒黄〇＜Z〇　　となります',
     nextLabel: '次へ',
   },
   // 2026-09-26, per user request -- shown right after resource_conversion_intro's own 次へ (normal
@@ -8133,6 +8147,32 @@ const TUTORIAL_STEPS = [
       return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
     },
     body: '自分のターン中メインアクションの前後にフリーアクションを行うことができます\n試しにあなたのジョブ一般市民をクリックしてみてください',
+    nextLabel: '次へ',
+  },
+  // 2026-09-26, per user request -- 一般市民(JOB001)をTAPした瞬間に自動遷移(通常経路。attachTapToggleの
+  // doc参照)、または次へで手動遷移(フォールバック)。増えたK/ZはtutorialResourceGainGlowingで光る。
+  {
+    id: 'job_tap_resource_intro',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      if (next.playerId !== 'P1') return false;
+      const player = state.players.find((p) => p.id === 'P1');
+      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
+    },
+    body: 'このジョブはクリックすることで〇とZ〇を得ることができます\n使い終わったカードはタップされアンタップ（起き上がる）までは使えません\nラウンド開始時にはすべてのカードがアンタップされます\nジョブによっては毎ターンアンタップするものもあります',
+    nextLabel: '次へ',
+  },
+  // 2026-09-26, per user request -- 「直前のアクションをキャンセル」ボタンを押した瞬間に自動遷移(通常経路。
+  // handleCancelPreviousActionClickのdoc参照)、または次へで手動遷移(フォールバック)。
+  {
+    id: 'cancel_action_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      if (next.playerId !== 'P1') return false;
+      const player = state.players.find((p) => p.id === 'P1');
+      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
+    },
+    body: '行動が気に入らなかったり間違えたときは「直前のアクションをキャンセル」を押せばキャンセルすることができます',
     nextLabel: '次へ',
   },
 ];
@@ -8518,7 +8558,17 @@ function dismissTutorialStep() {
   // free_action_hintの「光る」演出 (2026-09-26, per user request: "この時一般市民が光る") -- 直前の
   // slot_dice_value_rule_intro_2が閉じられた瞬間にONにし、free_action_hint自身が閉じられたらOFFにする。
   if (tutorialCurrentStepId === 'slot_dice_value_rule_intro_2') tutorialJobCardGlowing = true;
-  if (tutorialCurrentStepId === 'free_action_hint') tutorialJobCardGlowing = false;
+  // job_tap_resource_introの「光る」演出(増えたK/Z) -- free_action_hintが閉じられた瞬間にONにする。通常は
+  // JOB001のTAP成功時にattachTapToggleが直接同じ処理をやってからrender()するので、ここが実際に効くのは
+  // 「一般市民をクリックせず次へだけ押した」フォールバック経路のときだけ(その場合資源は実際には増えていない
+  // が、他のフォールバック経路と同じ扱いとして許容する)。
+  if (tutorialCurrentStepId === 'free_action_hint') { tutorialJobCardGlowing = false; tutorialResourceGainGlowing = true; }
+  // cancel_action_hintの「光る」演出(直前のアクションをキャンセルボタン) -- job_tap_resource_introが
+  // 閉じられた瞬間にONにする。
+  if (tutorialCurrentStepId === 'job_tap_resource_intro') { tutorialResourceGainGlowing = false; tutorialCancelButtonGlowing = true; }
+  // 通常はhandleCancelPreviousActionClickが直接同じ処理をやってからrender()する(そちらのdoc参照) -- ここは
+  // 「実際にキャンセルボタンを押さず次へだけ押した」フォールバック経路用。
+  if (tutorialCurrentStepId === 'cancel_action_hint') tutorialCancelButtonGlowing = false;
   // alsoCloseTurnOrderOverlay (2026-09-24, see turn_order_reveal_summary's own doc): 次へ on this step
   // also presses the turn-order overlay's own ✖ in the same tap, instead of leaving the player to close
   // it separately.
@@ -8607,6 +8657,16 @@ let tutorialSlotValueOneGlowing = false;
 // スロットの配置可能ANY（1番左）と自分のすべてのダイスが光る") -- slot_any_rule_introが表示され続けている
 // 間ずっとtrueになる継続フラグ。
 let tutorialSlotAnyGlowing = false;
+// 一般市民TAPで増えた資源(K/Z)の「光る」演出 (2026-09-26, per user request: "この時増えた資源が光る") --
+// job_tap_resource_introが表示され続けている間ずっとtrueになる継続フラグ。JOB001のTAPが成功した瞬間に
+// ONにする必要があるため、con_face_choice_intro/tutorialInitialResourcesGlowingと同じ理由でautoDismissWhen
+// は使わず、attachTapToggleのTAP成功時に直接render()を呼ぶ前にセットする(そちらの doc 参照)。
+let tutorialResourceGainGlowing = false;
+// 「直前のアクションをキャンセル」ボタンの「光る」演出 (2026-09-26, per user request: "この時直前のアクション
+// をキャンセルボタンを光らせる") -- cancel_action_hintが表示され続けている間ずっとtrueになる継続フラグ。
+// このボタン自体はrenderUndoButtonsが毎回同じDOMノードを使い回す(cloneされない)ため、他の継続フラグと違い
+// classList.add一辺倒ではなくtoggleで明示的にON/OFFする必要がある(renderUndoButtonsの doc 参照)。
+let tutorialCancelButtonGlowing = false;
 // RESOURCE候補側は今のところ元の一回限りの点滅のまま(まだ同じ報告を受けていないため変更せず) -- 同じ
 // タイミングずれ問題を避けるため、dismissTutorialStepが上のRevealedフラグと同時にtrueにし、
 // renderPlayerCards(render()内でrenderTutorialOverlayより前に呼ばれる -- tutorialCurrentStepIdがまだ
@@ -8954,6 +9014,15 @@ function handleCancelPreviousActionClick() {
   pendingTapChoice = null;
   pendingAutoModeChoice = null;
   placementMessage = '';
+  // cancel_action_hintの「キャンセルボタンをクリック」演出 (2026-09-26, per user request: "この時直前の
+  // アクションをキャンセルボタンを押すと一般市民のフリーアクションがキャンセルされ次のセリフに進む") --
+  // job_tap_resource_introと同じ理由でrender()を呼ぶ前にここでフラグを立てる(tutorialCancelButtonGlowing
+  // 自身のdoc参照)。
+  if (tutorialCurrentStepId === 'cancel_action_hint') {
+    tutorialCurrentStepId = null;
+    tutorialCancelButtonGlowing = false;
+    stopTutorialTypewriter();
+  }
   render(STATE);
 }
 
@@ -8972,13 +9041,26 @@ function renderUndoButtons(state) {
   // this button is actually meant to revert to (render()'s own recordCheckpoint call, gated on
   // hasFinishedOnboarding) never exists before round 1 genuinely starts, so the button must stay
   // disabled until then regardless of what stale checkpoint object happens to be sitting there.
-  const disabled = !state.undoCheckpoint || state.round === 0;
+  // チュートリアルの1R1Tだけ無効化 (2026-09-26, per user request: "チュートリアルの1R1Tだけ ターン開始に
+  // 戻すボタンを使えないようにしてください") -- free_action_hint以降の一連のセリフは「直前のアクションを
+  // キャンセル」で個別に取り消す前提の演出のため、その場でターン開始まるごと巻き戻せてしまうと演出の
+  // 途中状態が崩れる。round1FirstPlayerTurnStartCountはround1の1番手(チュートリアルでは常にP1)が自分の
+  // TURNを開始した回数 -- 1のあいだ(=1番目のTURNがまだ進行中)だけ無効化し、2以降(2ターン目以降)は通常通り
+  // 使えるようにする。
+  const tutorialFirstTurnLock = tutorialModeActive && state.round === 1 && round1FirstPlayerTurnStartCount <= 1;
+  const disabled = !state.undoCheckpoint || state.round === 0 || tutorialFirstTurnLock;
   for (const id of ['undo-button', 'undo-button-build']) {
     document.getElementById(id).disabled = disabled;
   }
   const diceCancelDisabled = actionCheckpoints.length === 0;
   for (const id of ['dice-cancel-button', 'dice-cancel-button-build']) {
-    document.getElementById(id).disabled = diceCancelDisabled;
+    const btn = document.getElementById(id);
+    btn.disabled = diceCancelDisabled;
+    // cancel_action_hintの「光る」演出 (2026-09-26, per user request: "この時直前のアクションをキャンセル
+    // ボタンを光らせる") -- このボタンは毎回同じDOMノードを使い回すため(cloneされない)、フラグがfalseに
+    // 戻った後も前回付けたクラスが残らないようtoggleで明示的にON/OFFする。tutorialCancelButtonGlowing自身
+    // のdoc参照。
+    btn.classList.toggle('change-highlight', tutorialCancelButtonGlowing);
   }
 }
 
