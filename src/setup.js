@@ -198,18 +198,18 @@ function nextSetupDieId() {
  * executor.js's EXTRA_D_PLUS_ABC_COUNT metric, see that constant's own doc). Records the pre-roll undo
  * checkpoint.
  *
- * forcedFirstDieValues (optional, {playerId: value}, 2026-09-26 チュートリアル用): that player's very
- * first (leftmost) die is set to this value instead of rolled; every other die of theirs, and every other
- * player's dice, stay fully random as usual. Every other caller passes no 2nd argument and sees identical
- * behavior to before. */
-function rollInitialColorDice(state, forcedFirstDieValues) {
+ * forcedDieValues (optional, {playerId: [value0, value1, ...]}, 2026-09-26 チュートリアル用、
+ * 2026-09-27 複数インデックス対応に拡張): that player's die at each given (0-based, left-to-right)
+ * index is set to the given value instead of rolled; any index left undefined in the array, every other
+ * die of theirs, and every other player's dice, stay fully random as usual. Every other caller passes no
+ * 2nd argument and sees identical behavior to before. */
+function rollInitialColorDice(state, forcedDieValues) {
   recordCheckpoint(state);
   for (const player of state.players) {
+    const forced = forcedDieValues && forcedDieValues[player.id];
     for (let i = 0; i < INITIAL_COLOR_DICE; i++) {
       const die = createDie(nextSetupDieId(), 'COLOR');
-      die.value = (i === 0 && forcedFirstDieValues && forcedFirstDieValues[player.id] !== undefined)
-        ? forcedFirstDieValues[player.id]
-        : rollDie(state.rng);
+      die.value = (forced && forced[i] !== undefined) ? forced[i] : rollDie(state.rng);
       player.dice.push(die);
     }
   }

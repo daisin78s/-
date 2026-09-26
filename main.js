@@ -172,11 +172,12 @@ function createInitialState(plan, forcedSeed) {
   setupMod.createPlayers(state, weeklyChallengeActive ? ['Alice', 'Bob', 'Carol', 'Dan'] : [loadRememberedRankingName() || 'Alice', 'Bob', 'Carol', 'Dan']);
   setupMod.prepareMaps(state, INDEX);
   setupMod.prepareShops(state, INDEX, plan ? plan.abc : (tutorialModeActive ? tutorialPreferredNormalFaceIds(state, INDEX) : undefined));
-  // チュートリアルでは1R(初期配置)のみ、あなたの一番左のダイスを必ず1にする (2026-09-26, per user request:
-  // "1Rのみプレイヤーの初期ダイス一番左を1になるようにしてください あとはランダムで") -- 2R以降の
-  // ラウンド開始時の振り直し(turn-flow.js側)には触れないため、以後は完全ランダムに戻る。他の3人のAIや
-  // あなた自身の残り2個のダイスはこれまで通り完全ランダム。
-  setupMod.rollInitialColorDice(state, tutorialModeActive ? { P1: 1 } : undefined);
+  // チュートリアルでは1R(初期配置)のみ、あなたのダイスの一部を固定値にする (2026-09-26, per user request:
+  // "1Rのみプレイヤーの初期ダイス一番左を1になるようにしてください あとはランダムで"; 2026-09-27、per user
+  // request: "チュートリアルのプレイヤーの初期ダイス左から2番目を5の目にして" で2番目(index 1)も追加) --
+  // 2R以降のラウンド開始時の振り直し(turn-flow.js側)には触れないため、以後は完全ランダムに戻る。あなた自身の
+  // 残り1個(3個目)のダイスと他の3人のAIのダイスはこれまで通り完全ランダム。
+  setupMod.rollInitialColorDice(state, tutorialModeActive ? { P1: [1, 5] } : undefined);
   const forcedCon = plan && plan.con.length > 0 ? { P1: gameStateMod.splitCardId(plan.con[0]).physicalId } : undefined;
   // チュートリアルでは祝福/色欲(CON001)を誰にも配らない (2026-09-26, per user request: "チュートリアルでは
   // 祝福 色欲 プレイヤーに配られないようにしてほしい")。
@@ -4066,7 +4067,7 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
   startOrderEl.textContent = '';
   const conFaceLabel = faceId.startsWith('CON') ? (faceId.endsWith('A') ? '表' : '裏') : '';
   if (facts.startOrder !== null && facts.startOrder !== undefined) {
-    startOrderEl.appendChild(document.createTextNode('先攻順 '));
+    startOrderEl.appendChild(document.createTextNode('スタプレ '));
     startOrderEl.appendChild(el('span', 'shop-card__start-order-number', String(facts.startOrder)));
   }
   if (conFaceLabel) {
@@ -6714,7 +6715,7 @@ function renderResourceConfirmOverlay(state) {
   // (下固定のセリフと被らない程度)。通常プレイ時は中央寄せのまま。
   overlay.classList.toggle('resource-confirm-overlay--tutorial-raised', tutorialModeActive);
   const startOrderBadge = document.getElementById('resource-confirm-start-order');
-  startOrderBadge.textContent = `先攻順合計 ${resourceChoiceStartOrderTotal(state, choice.playerId, choice.context.selected)}`;
+  startOrderBadge.textContent = `スタプレ合計 ${resourceChoiceStartOrderTotal(state, choice.playerId, choice.context.selected)}`;
   const visual = document.getElementById('resource-confirm-visual');
   visual.innerHTML = '';
   // 制約カード(表裏)も並べて表示 (2026-09-26, per user request with an iPad screenshot: "ウィンドウを左に
@@ -7917,7 +7918,7 @@ const TUTORIAL_STEPS = [
   {
     id: 'resource_choice',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: 'ランダムな初期資源カード4枚が配られました\n配られた初期資源カード4枚のうち使用する2枚を選んでください\nお試しのゲームなので深く考えずにとってもらって大丈夫です\n気に入らなければ後でこの場面に戻ることもできます',
+    body: 'ランダムな初期資源カード4枚が配られました\n配られた初期資源カード4枚のうち使用する2枚を選んでください\nお試しのゲームなので深く考えずにとってもらって大丈夫です\nゲームに慣れないうちは色付きの資源のあるカードがおすすめです',
     // 2026-09-24, per user request: "初期資源カード2枚選んだらこのセリフは消す" -- auto-dismissed (no
     // manual 閉じる needed) the moment the player has actually picked 2 candidates, the same moment
     // renderResourceConfirmOverlay's own "この2枚でよろしいですか？" takes over -- not just once
@@ -7950,7 +7951,7 @@ const TUTORIAL_STEPS = [
     body: (state) => {
       const choice = state.pendingChoices.find((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS');
       const total = resourceChoiceStartOrderTotal(state, 'P1', choice.context.selected);
-      return `あなたが選んだカードはこちら\n制約カードに書かれた先攻順と足された合計は${total}です\nこの数字が大きいほど得られる資源が多くなり、小さいほど先にジョブや行動を選ぶことができます`;
+      return `あなたが選んだカードはこちら\n制約カードに書かれたスタプレ（スタートプレイヤー）と足された合計は${total}です\nこの数字が大きいほど得られる資源が多くなり、小さいほど先にジョブや行動を選ぶことができます`;
     },
     autoDismissWhen: (state) => !state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
   },
@@ -7966,7 +7967,7 @@ const TUTORIAL_STEPS = [
       const p1 = state.players.find((p) => p.id === 'P1');
       const resourceIds = p1.ownedCardPhysicalIds.filter((id) => id.startsWith('R'));
       const total = resourceChoiceStartOrderTotal(state, 'P1', resourceIds);
-      return `あなたの先攻順は${total}です\nそれでは、他のプレイヤーの先攻順も見てみましょう`;
+      return `あなたのスタプレは${total}です\nそれでは、他のプレイヤーのスタプレも見てみましょう`;
     },
     // 2026-09-24, per user request: "閉じるではなく次へと表示して" -- this step leads straight into
     // another one (turn_order_reveal_summary below), so its own button reads 次へ instead of the default
@@ -7985,7 +7986,7 @@ const TUTORIAL_STEPS = [
         const player = state.players.find((p) => p.id === playerId);
         return `${i + 1}番手は${player.name}`;
       });
-      return `${lines.join('\n')}\nに決まりました\n数字が同じときは制約カードの先攻順が大きいほうが先攻になります`;
+      return `${lines.join('\n')}\nに決まりました\n数字が同じときは制約カードのスタプレが大きいほうが先攻になります`;
     },
     // 2026-09-24, per user request: "次へを押したとき一緒に右上の✖も押されて次の画面にいき" -- dismissing
     // this one also closes the turn-order overlay itself (see dismissTutorialStep's own doc), so a single
@@ -8873,7 +8874,7 @@ function renderTutorialTurnOrderOverlay(state) {
     // Bob/Carol/Danの先攻順合計の数字だけ既に見えてしまっていた -- カード自体は下のtutorial-card-hiddenで
     // 隠しているのに、この数字だけそのチェックが漏れていた) -- カードと同じtutorialOthersRevealed条件で
     // ？に差し替える。
-    const totalEl = el('span', 'tutorial-turnorder-total', '先攻順合計 ');
+    const totalEl = el('span', 'tutorial-turnorder-total', 'スタプレ合計 ');
     totalEl.appendChild(el('span', 'tutorial-turnorder-total__number', (isSelf || tutorialOthersRevealed) ? String(total) : '？'));
     header.appendChild(totalEl);
     row.appendChild(header);
@@ -9295,6 +9296,14 @@ function renderPlayerRoleControl(state) {
       const btn = el('button', 'player-role-control__option', label);
       btn.type = 'button';
       btn.classList.toggle('player-role-control__option--active', currentRole === role);
+      // チュートリアル中はAILV設定を一切変更できないようにする (2026-09-27, per user request: "チュートリアル
+      // AILVの設定 一切かえれないようにして") -- P1=HUMAN/P2-4=TUTORIAL_AI_ROLEの固定割り当てに
+      // TUTORIAL_STEPSの各matchやAI除外ロジック(JOB001など)が依存しているため、途中で役割を変更されると
+      // チュートリアルの前提が崩れる。
+      if (tutorialModeActive) {
+        btn.disabled = true;
+        btn.title = 'チュートリアル中はAIレベルを変更できません';
+      }
       btn.addEventListener('click', () => {
         // 2026-08-21, per user request: switching a player from AI to HUMAN mid-resource-selection
         // (round 0) undoes whatever the AI already auto-picked for them (setup.redealResourceCandidates
