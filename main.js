@@ -5161,6 +5161,9 @@ function renderBoard(state, next) {
       } else {
         actionEl.textContent = action;
       }
+      // worker_placement_example_resultの「光る」演出(農園のACTION表示 ⚡〇3) (2026-09-28, per user request:
+      // "この時農園の ⚡〇3 部分も光らせる") -- 農園=MAP002固定、tutorialWorkerPlacementResultGlowing's own doc。
+      if (tutorialWorkerPlacementResultGlowing && mapId === 'MAP002') actionEl.classList.add('change-highlight');
 
       // Usage-fee display (2026-08-0X, moved into the header, replacing the old "tier A"/"tier B" text
       // badge -- per user request). Two lines: the rate (straight from this AREA row's own `fee` column,
@@ -8168,7 +8171,7 @@ const TUTORIAL_STEPS = [
   {
     id: 'worker_placement_example_result',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: '食料〇3　を手に入れることができます',
+    body: 'エリアに書かれている効果が起きます\nこの場合は食料3が手に入りました',
     nextLabel: '次へ',
   },
   // 2026-09-27, per user request -- ターン終了と次のプレイヤーへの説明。次のプレイヤー(BOB/P2)を光らせる
