@@ -3025,6 +3025,15 @@ function buildAddWdIcon(actionText) {
  * below. wD added 2026-09-07, per user report: a RESOURCE card's own ADD(wD,K) (先着順2, "wD,K") showed
  * no icon at all -- buildAddMultiResourceIcon's own per-item regex didn't recognize "wD" as a token, so
  * it silently bailed (returned null) on the whole icon instead of just that one item. */
+// 効果アイコン(resourceItemNodes)側で1〜2個アイコン反復の対象から除外したいカード (2026-09-27, per user
+// request: "強欲 憂鬱 嫉妬 策士は戻して" -- 策士/JOB004のTAP="CHANGE(3K,2Z)"が2Zの部分で反復アイコンに
+// なってしまったのを元(アイコン1個+数字)に戻す指定。強欲/憂鬱/嫉妬(CON002B/003B/004B)はCONの「アイコン
+// 欄」テキスト表示に完全に置き換わっており実際にはresourceItemNodes経由の表示自体が無い(=このリストに
+// 入れても見た目の変化は無い)が、指定された通り念のため含めておく)。currentCardVisualFaceId(fillCardFace
+// が呼ばれるたびにセットする、そのカードのfaceId)を見て判定する。
+const NO_ICON_REPEAT_PHYSICAL_IDS = ['JOB004', 'CON002', 'CON003', 'CON004'];
+let currentCardVisualFaceId = null;
+
 function resourceItemNodes(countStr, resource) {
   if (resource === 'VP') return [actionCount(`${countStr || '1'}VP`)];
   if (resource === 'D') return [actionSuffix(`${countStr || ''}追加色D`)];
@@ -3034,9 +3043,12 @@ function resourceItemNodes(countStr, resource) {
   }
   // 1〜2個はアイコンをそのまま個数分並べる、3個以上は今まで通りアイコン1個+数字 (2026-09-27, per user
   // request: "初期資源カードもお願い" -- renderResourceBadgeと同じ表示規則を、初期資源カード(R)など
-  // ADD(...)アイコンで資源を示すすべてのカード効果表示にも適用する)。
+  // ADD(...)アイコンで資源を示すすべてのカード効果表示にも適用する)。NO_ICON_REPEAT_PHYSICAL_IDS指定
+  // カードはこの反復を使わず常に旧来のアイコン+数字表記のまま。
   const count = countStr ? parseInt(countStr, 10) : 1;
-  if (count >= 1 && count <= 2) return Array.from({ length: count }, () => actionDot(resource));
+  const noRepeat = currentCardVisualFaceId
+    && NO_ICON_REPEAT_PHYSICAL_IDS.includes(gameStateMod.splitCardId(currentCardVisualFaceId).physicalId);
+  if (!noRepeat && count >= 1 && count <= 2) return Array.from({ length: count }, () => actionDot(resource));
   const nodes = [actionDot(resource)];
   if (countStr) nodes.push(actionCount(countStr));
   return nodes;
@@ -3738,8 +3750,9 @@ function renderDie(die) {
 // (2026-09-27, per user request: "元老院は赤〇赤〇赤〇青〇のように表示してほしい...元老院などは例外処理で
 // 赤〇赤〇赤〇青〇として" -- 通常の1〜2個までの上限だとカードのスペースに収まらない3個以上でも数字表記に
 // 落ちてしまうため、この特定カードだけ数字を使わず常にアイコンを並べる指定)。物理ID単位(A301)で持たせて
-// おけば表/裏(A301A/A301B)どちらも自動でカバーできる。"元老院など"と言われている通り今後追加される想定。
-const UNLIMITED_ICON_REPEAT_PHYSICAL_IDS = ['A301'];
+// おけば表/裏(A301A/A301B)どちらも自動でカバーできる。"栄光の証 王女 騎士像は 赤〇赤〇赤〇方式にして"
+// (2026-09-27)でB301(栄光の証)/C301(王女)/M003(騎士像)を追加。
+const UNLIMITED_ICON_REPEAT_PHYSICAL_IDS = ['A301', 'B301', 'C301', 'M003'];
 
 function renderResourceBadge(resource, count, unlimitedRepeat) {
   // Confirmed 2026-07-29: the dot's color alone identifies the resource -- no letter label needed.
@@ -3987,6 +4000,9 @@ function fillCardNoteContent(container, iconText) {
 function fillCardFace(root, faceId, options, directChildrenOnly) {
   const q = (sel) => (directChildrenOnly ? root.querySelector(`:scope > ${sel}`) : root.querySelector(sel));
   const facts = factsForFaceId(faceId);
+  // NO_ICON_REPEAT_PHYSICAL_IDS's own doc -- resourceItemNodes consults this for whichever card is
+  // currently being built, without needing a faceId threaded through every one of its ~15 callers.
+  currentCardVisualFaceId = faceId;
 
   // Monuments can carry 0-3 emblems now (confirmed 2026-07-30: game.xlsx's M sheet has separate
   // EMBLEM_A/B/C count columns, e.g. {地:1,天:1}) -- one individually-colored char per emblem, side
