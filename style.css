@@ -3663,6 +3663,14 @@ h1, h2, h3 { margin: 0; }
   display: inline-flex;
   vertical-align: middle;
 }
+/* 🎲🎲🎲(2026-09-27, TUTORIAL_ICON_NOTATIONS参照)の3個並びラッパー -- 中の.dieは既にinline-flexなので
+   このラッパー自体も同じ理由(改行させない)でinline-flexにし、3個の間に少し隙間を空ける。 */
+.tutorial-bubble__text .tutorial-inline-dice {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  vertical-align: middle;
+}
 
 /* job_explanation's 食料/コネ-style term markers (2026-09-24, per user request: "食料 コネ の文字だけ
    青く色を変え クリックすると資源や用語一覧の文章が表示されるように") -- tapping opens

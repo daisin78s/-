@@ -5032,6 +5032,10 @@ function renderBoard(state, next) {
           // いるダイスをすべて光らせる") -- どのプレイヤーが置いたかは問わず、盤面上のすべての配置済み
           // ダイスを光らせる(tutorialPlacedDiceGlowing's own doc)。
           if (tutorialPlacedDiceGlowing) occupantDieNode.classList.add('change-highlight');
+          // worker_placement_example_resultの「光る」演出 (2026-09-27, per user request: "スロットに
+          // 置かれたダイスも光る") -- 小麦畑=MAP001のスロット1(index 0)固定、tutorialWorkerPlacementResultGlowing's
+          // own doc。
+          if (tutorialWorkerPlacementResultGlowing && mapId === 'MAP001' && i === 0) occupantDieNode.classList.add('change-highlight');
           stack.appendChild(occupantDieNode);
           slotEl.appendChild(stack);
         } else if (typeof requirement === 'number') {
@@ -5090,6 +5094,9 @@ function renderBoard(state, next) {
         // なければ光らない）") -- tutorialExSlotGlowing's own doc。main_action_introの全SLOT演出と同じく
         // 占有中かどうかは問わずEX要求のスロットはすべて光らせる。
         if (tutorialExSlotGlowing && requirement === 'EX') slotEl.classList.add('change-highlight');
+        // worker_placement_example_introの「光る」演出 (2026-09-27, per user request: "この時...小麦畑の
+        // スロット1を光らせる") -- 小麦畑=MAP001のスロット1(index 0)固定。
+        if (tutorialWorkerPlacementExampleGlowing && mapId === 'MAP001' && i === 0) slotEl.classList.add('change-highlight');
         slotsEl.appendChild(slotEl);
       });
 
@@ -6040,6 +6047,10 @@ function renderPlayers(state, next) {
         // job_tap_resource_introの「光る」演出 (2026-09-26, per user request: "この時増えた資源が光る")
         // -- 一般市民(JOB001)のTAP(ADD(Z,K))で増える資源はKとZのみ、tutorialResourceGainGlowing's own doc。
         if (tutorialResourceGainGlowing && player.id === 'P1' && (resource === 'K' || resource === 'Z')) badge.classList.add('change-highlight');
+        // worker_placement_example_resultの「光る」演出 (2026-09-27, per user request: "食料3をふやし
+        // それを光らせる") -- 小麦畑への配置で増える資源はKのみ、tutorialWorkerPlacementResultGlowing's
+        // own doc。
+        if (tutorialWorkerPlacementResultGlowing && player.id === 'P1' && resource === 'K') badge.classList.add('change-highlight');
         resourcesEl.appendChild(badge);
       }
     }
@@ -6054,6 +6065,13 @@ function renderPlayers(state, next) {
     // 色ダイスの一番左1個だけ光るに変更 そのダイスしかつかめないように") -- player.dice配列の並び順=描画順
     // (左から)なので、配列内で最初に見つかるCOLORダイス(まだ配置されていないもの)がそのまま「一番左」になる。
     const tutorialForcedDieId = (tutorialDiceSelectHintGlowing && player.id === 'P1')
+      ? (player.dice.find((d) => d.kind === 'COLOR' && !d.placedMapId) || {}).id || null
+      : null;
+    // worker_placement_example_introの「一番左のダイス」の光る演出専用 (2026-09-27, per user request:
+    // "この時あなたの一番左のダイスと小麦畑のスロット1を光らせる") -- tutorialForcedDieIdとは別変数にして
+    // いるのは、こちらは選択可能状態(die--selectable)には一切影響させたくないため(このステップはただの
+    // デモで、プレイヤー自身のクリックは必要ない)。
+    const tutorialWorkerPlacementExampleDieId = (tutorialWorkerPlacementExampleGlowing && player.id === 'P1')
       ? (player.dice.find((d) => d.kind === 'COLOR' && !d.placedMapId) || {}).id || null
       : null;
     for (const die of player.dice) {
@@ -6131,6 +6149,12 @@ function renderPlayers(state, next) {
       // 変更 そのダイスしかつかめないように") -- 一番左の色ダイス1個だけを光らせる(tutorialForcedDieId's own
       // doc)。以前は自分の全ダイスを光らせていたが、選択の絞り込みに合わせて対象を1個に変更。
       if (tutorialDiceSelectHintGlowing && player.id === 'P1' && die.id === tutorialForcedDieId) dieNode.classList.add('change-highlight');
+      // game_rules_intro_1の「光る」演出 (2026-09-27, per user request: "このときあなたのダイス3つを
+      // 光らせる") -- 自分の色ダイス全部(tutorialGameRulesDiceGlowing's own doc)。
+      if (tutorialGameRulesDiceGlowing && player.id === 'P1' && die.kind !== 'WHITE') dieNode.classList.add('change-highlight');
+      // worker_placement_example_introの「光る」演出(一番左のダイス) --
+      // tutorialWorkerPlacementExampleDieId's own doc。
+      if (die.id === tutorialWorkerPlacementExampleDieId) dieNode.classList.add('change-highlight');
       rowEl.appendChild(dieNode);
     }
 
@@ -8001,10 +8025,30 @@ const TUTORIAL_STEPS = [
   // 2026-09-26, per user request -- 2 general-rules screens shown before resource_choice_intro's own
   // "それではゲームを始めましょう" (same match condition, same "next unseen step" fall-through pattern as
   // the resource_choice_intro/con_intro/choice split documented just above).
+  // 2026-09-27, per user request -- 「ダイス🎲🎲🎲を「ワーカー」として使う」の説明。🎲🎲🎲はP1の実際の
+  // 色ダイス3個のアイコンに変換される(TUTORIAL_ICON_NOTATIONS参照)。この時プレイヤーパネルの実物のダイス
+  // 3個も光る(tutorialGameRulesDiceGlowing's own doc)。
   {
     id: 'game_rules_intro_1',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: 'このゲームは、ダイスを「ワーカー」として使う、ワーカープレイスメント系拡大再生産ゲームです\nプレイヤーは手持ちのダイスを使ってさまざまなエリアにワーカーを配置し、資源を増やしたりカードやダイスを獲得して自分の生産力を高めていきます',
+    body: 'このゲームは、ダイス🎲🎲🎲を「ワーカー」として使う、ワーカープレイスメント系拡大再生産ゲームです',
+    nextLabel: '次へ',
+  },
+  // 2026-09-27, per user request -- ワーカープレイスメントの具体例(小麦畑)。一番左のダイスと小麦畑の
+  // スロット1(index 0)を光らせる(tutorialWorkerPlacementExampleGlowing's own doc)。
+  {
+    id: 'worker_placement_example_intro',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '例えばダイスをエリア「小麦畑」のスロットに置けば',
+    nextLabel: '次へ',
+  },
+  // 2026-09-27, per user request -- 表示された瞬間に実際に一番左のダイスを小麦畑のスロット1へ強制的に
+  // 置く(forcePlaceLeftmostDieOnWheatFieldForTutorial's own doc)。増えた食料と、置かれたダイス自体が光る
+  // (tutorialWorkerPlacementResultGlowing's own doc)。
+  {
+    id: 'worker_placement_example_result',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '食料〇3　を手に入れることができます',
     nextLabel: '次へ',
   },
   {
@@ -8597,6 +8641,23 @@ for (let n = 1; n <= 6; n++) {
   TUTORIAL_ICON_NOTATIONS.push({ text: `白${n}️⃣`, build: whiteDieBuild });
   TUTORIAL_ICON_NOTATIONS.push({ text: `白${n}⃣`, build: whiteDieBuild });
 }
+// 🎲🎲🎲 (2026-09-27, per user request: "🎲🎲🎲はあなたの色ダイスと同じものを3つ表示してそれも光らせる")
+// -- P1の実際の色ダイス3個(現在の目/色)をそのまま表示し、常に光らせる(この記法が使われるのは
+// game_rules_intro_1一箇所だけで、その場面では常に光っているものとして扱う指示のため)。STATEはグローバル
+// なので、build()が呼ばれる時点(タイプライター表示中)の最新のダイス状態を毎回読み直す。
+TUTORIAL_ICON_NOTATIONS.push({
+  text: '🎲🎲🎲',
+  build: () => {
+    const wrapper = el('span', 'tutorial-inline-dice');
+    const p1 = STATE.players.find((p) => p.id === 'P1');
+    for (const die of p1.dice.filter((d) => d.kind === 'COLOR').slice(0, 3)) {
+      const dieNode = renderDie({ ...die, color: p1.color });
+      dieNode.classList.add('change-highlight');
+      wrapper.appendChild(dieNode);
+    }
+    return wrapper;
+  },
+});
 
 // カード名の自動リンク化 (2026-09-25, per user request: "セリフに既存カード名があったらリンクするように
 // してください") -- built once from INDEX's own card sheets (A/B/C/M/CON/JOB; RESOURCE's own NAME is just
@@ -8775,6 +8836,11 @@ function renderTutorialOverlay(state) {
       if (!next) break;
       tutorialSeenStepIds.add(next.id);
       tutorialCurrentStepId = next.id;
+      // game_rules_intro_1の「光る」演出(自分のダイス3個) (2026-09-27, per user request: "このときあなた
+      // のダイス3つを光らせる") -- この段階では手前に閉じられる別のステップが無い(通常の線形探索で見つかる
+      // 一番最初のステップ)ため、dismissTutorialStepの遷移チェーンではなくここで直接ONにする
+      // (tutorialGameRulesDiceGlowing's own doc)。
+      if (next.id === 'game_rules_intro_1') tutorialGameRulesDiceGlowing = true;
     }
     const current = TUTORIAL_STEPS.find((s) => s.id === tutorialCurrentStepId);
     // autoDismissWhen (2026-09-24): a step can opt into closing itself automatically, unlike every other
@@ -8907,6 +8973,18 @@ function renderTutorialOverlay(state) {
         window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
       }
     }
+    // game_rules_intro_1が見えるようにスクロール (2026-09-27, per user request: "必要ならすクロール") --
+    // 同じ考え方。P1自身の色ダイス行を対象にする。
+    if (step.id === 'game_rules_intro_1') {
+      const diceRowEl = document.querySelector('.player-panel[data-player-id="P1"] .player-panel__dice-row--color');
+      if (diceRowEl) {
+        const bubbleWrap = document.getElementById('tutorial-bubble-wrap');
+        const visibleHeight = (bubbleWrap && !bubbleWrap.hidden) ? bubbleWrap.getBoundingClientRect().top : window.innerHeight;
+        const rect = diceRowEl.getBoundingClientRect();
+        const desiredTop = Math.max(0, (visibleHeight - rect.height) / 2);
+        window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
+      }
+    }
     // resource_icon_explanation/resource_icon_conversion_hintが見えるようにスクロール (2026-09-27, per
     // user request: "必要ならスクロール") -- 同じ考え方。#board(盤面全体)を対象にする。
     if (step.id === 'resource_icon_explanation' || step.id === 'resource_icon_conversion_hint') {
@@ -8932,6 +9010,23 @@ function forceRetapJob001ForTutorial() {
   const preTurnActionTaken = turnActionTaken;
   const result = boardMod.useBareTapAbility(STATE, INDEX, { playerId: 'P1' }, 'JOB001');
   if (result.success) actionCheckpoints.push({ state: preSnapshot, turnActionTaken: preTurnActionTaken });
+}
+
+/** worker_placement_example_resultの「この時一番左のダイスを小麦畑のスロット1に置き 食料3をふやし
+ * それを光らせる」(2026-09-27) -- ワーカープレイスメントの具体例として、プレイヤーのクリックを待たず
+ * ゲーム側が自動で一番左の(未配置の)色ダイスを小麦畑(MAP001)のスロット1(index 0)へ置く。
+ * forceRetapJob001ForTutorialと同じ「本物のエンジンAPIを直接呼ぶだけの薄いラッパー」パターン。 */
+function forcePlaceLeftmostDieOnWheatFieldForTutorial() {
+  const p1 = STATE.players.find((p) => p.id === 'P1');
+  const die = p1.dice.find((d) => d.kind === 'COLOR' && !d.placedMapId);
+  if (!die) return;
+  const preSnapshot = gameStateMod.cloneState(STATE);
+  const preTurnActionTaken = turnActionTaken;
+  const result = boardMod.placeDice(STATE, INDEX, { playerId: 'P1' }, die.id, 'MAP001', 0);
+  if (result.success) {
+    actionCheckpoints.push({ state: preSnapshot, turnActionTaken: preTurnActionTaken });
+    applyPlaceDiceResult(result, 'P1');
+  }
 }
 
 /** ボタンによってセリフが分岐するステップ(TUTORIAL_STEPSのchoices)専用の遷移処理 (2026-09-27, per user
@@ -9045,6 +9140,18 @@ function dismissTutorialStep() {
     render(STATE);
     return;
   }
+  // worker_placement_example_introの「光る」演出(一番左のダイス+小麦畑のスロット1) -- game_rules_intro_1
+  // が閉じられた瞬間にONにする。
+  if (tutorialCurrentStepId === 'game_rules_intro_1') { tutorialGameRulesDiceGlowing = false; tutorialWorkerPlacementExampleGlowing = true; }
+  // worker_placement_example_resultの「光る」演出(増えた食料+置かれたダイス) -- worker_placement_example_
+  // introが閉じられた瞬間にONにし、同時に実際にダイスを1個小麦畑へ置く
+  // (forcePlaceLeftmostDieOnWheatFieldForTutorial's own doc)。
+  if (tutorialCurrentStepId === 'worker_placement_example_intro') {
+    tutorialWorkerPlacementExampleGlowing = false;
+    tutorialWorkerPlacementResultGlowing = true;
+    forcePlaceLeftmostDieOnWheatFieldForTutorial();
+  }
+  if (tutorialCurrentStepId === 'worker_placement_example_result') tutorialWorkerPlacementResultGlowing = false;
   // alsoCloseTurnOrderOverlay (2026-09-24, see turn_order_reveal_summary's own doc): 次へ on this step
   // also presses the turn-order overlay's own ✖ in the same tap, instead of leaving the player to close
   // it separately.
@@ -9200,6 +9307,19 @@ let tutorialCastletownGlowing = false;
 // 続けている間ずっとtrueになる継続フラグ。tutorialExSlotGlowingと同じ考え方で盤面タイルとSHOPのAカード
 // 両方に使う。
 let tutorialAreaCardHintGlowing = false;
+// 自分の色ダイス3個(プレイヤーパネル本物)の「光る」演出 (2026-09-27, per user request: "このときあなたの
+// ダイス3つを光らせる") -- game_rules_intro_1が表示され続けている間ずっとtrueになる継続フラグ。
+// 🎲🎲🎲(TUTORIAL_ICON_NOTATIONS)側の光る演出は常時ONで別管理、こちらはrenderPlayers側の実物のダイス用。
+let tutorialGameRulesDiceGlowing = false;
+// 一番左のダイス+小麦畑のスロット1(index 0)の「光る」演出 (2026-09-27, per user request: "この時あなたの
+// 一番左のダイスと小麦畑のスロット1を光らせる") -- worker_placement_example_introが表示され続けている間
+// ずっとtrueになる継続フラグ。
+let tutorialWorkerPlacementExampleGlowing = false;
+// 増えた食料+小麦畑のスロット1に置かれたダイスの「光る」演出 (2026-09-27, per user request: "この時
+// 一番左のダイスを小麦畑のスロット1に置き 食料3をふやしそれを光らせる スロットに置かれたダイスも光る")
+// -- worker_placement_example_resultが表示され続けている間ずっとtrueになる継続フラグ。このステップに
+// 入った瞬間に実際にダイスを置く(forcePlaceLeftmostDieOnWheatFieldForTutorial's own doc)。
+let tutorialWorkerPlacementResultGlowing = false;
 // RESOURCE候補側は今のところ元の一回限りの点滅のまま(まだ同じ報告を受けていないため変更せず) -- 同じ
 // タイミングずれ問題を避けるため、dismissTutorialStepが上のRevealedフラグと同時にtrueにし、
 // renderPlayerCards(render()内でrenderTutorialOverlayより前に呼ばれる -- tutorialCurrentStepIdがまだ
