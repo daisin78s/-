@@ -4884,6 +4884,15 @@ function renderBoard(state, next) {
       const node = tpl.content.firstElementChild.cloneNode(true);
       if (isCastle) node.classList.add('map-tile--castle');
       node.querySelector('.map-tile__id').textContent = areaName(mapState.currentAreaId);
+      // training_ground_hintの「光る」演出 (2026-09-27, per user request: "この時訓練場を光らせる") --
+      // 訓練場はAREA007系(MAP007固定)なので、専用の定数は無いがCASTLE_MAP_ID/AREA009_MAP_IDと同じ考え方で
+      // mapId自体を直接比較する(tutorialTrainingGroundGlowing's own doc)。
+      if (tutorialTrainingGroundGlowing && mapId === 'MAP007') node.classList.add('change-highlight');
+      // card_areas_hintの「光る」演出 (2026-09-27, per user request: "このとき王宮と元老院を光らせる") --
+      // 王宮/元老院は既存のCASTLE_MAP_ID/AREA009_MAP_IDをそのまま使う。
+      if (tutorialCardAreasGlowing && (mapId === boardMod.CASTLE_MAP_ID || mapId === boardMod.AREA009_MAP_ID)) {
+        node.classList.add('change-highlight');
+      }
 
       const tier = mapState.currentAreaId.match(/([ABC])$/);
       if (tier) {
@@ -8281,6 +8290,30 @@ const TUTORIAL_STEPS = [
     body: '初めのターンは初期資源を使ってダイスかカードを獲得するのがおすすめです',
     nextLabel: '次へ',
   },
+  // 2026-09-27, per user request -- 訓練場(MAP007)を光らせる。tutorialTrainingGroundGlowing's own doc。
+  {
+    id: 'training_ground_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      if (next.playerId !== 'P1') return false;
+      const player = state.players.find((p) => p.id === 'P1');
+      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
+    },
+    body: 'ダイスを獲得するには訓練場にダイスを置きます\nそうすれば赤〇青〇黄〇と引き換えに追加の色ダイスを獲得します\nそのダイスは即座に振り、このラウンドからすぐに使えます',
+    nextLabel: '次へ',
+  },
+  // 2026-09-27, per user request -- 王宮/元老院を光らせる。tutorialCardAreasGlowing's own doc。
+  {
+    id: 'card_areas_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      if (next.playerId !== 'P1') return false;
+      const player = state.players.find((p) => p.id === 'P1');
+      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
+    },
+    body: 'カードを獲得するには王宮か元老院にダイスを置きます',
+    nextLabel: '次へ',
+  },
 ];
 
 // job_explanation (2026-09-24: "JOBをクリックしたときそのJOBの説明をセリフで流したい" -- per-JOB bespoke
@@ -8725,6 +8758,11 @@ function dismissTutorialStep() {
   // 通常はダイスクリックのイベントリスナーが直接同じ処理をやってからrender()する(そちらのdoc参照) -- ここは
   // 「実際にダイスをクリックせず次へだけ押した」フォールバック経路用。
   if (tutorialCurrentStepId === 'dice_select_hint') tutorialDiceSelectHintGlowing = false;
+  // training_ground_hintの「光る」演出(訓練場) -- first_turn_recommendation_hintが閉じられた瞬間にONにする。
+  if (tutorialCurrentStepId === 'first_turn_recommendation_hint') tutorialTrainingGroundGlowing = true;
+  // card_areas_hintの「光る」演出(王宮/元老院) -- training_ground_hintが閉じられた瞬間にONにする。
+  if (tutorialCurrentStepId === 'training_ground_hint') { tutorialTrainingGroundGlowing = false; tutorialCardAreasGlowing = true; }
+  if (tutorialCurrentStepId === 'card_areas_hint') tutorialCardAreasGlowing = false;
   // alsoCloseTurnOrderOverlay (2026-09-24, see turn_order_reveal_summary's own doc): 次へ on this step
   // also presses the turn-order overlay's own ✖ in the same tap, instead of leaving the player to close
   // it separately.
@@ -8839,6 +8877,12 @@ let tutorialCancelButtonGlowing = false;
 // クリックのイベントリスナー内で直接render()を呼ぶ前にセットする(renderPlayersのdie click handlerのdoc
 // 参照)。renderPlayers内ではこのフラグからtutorialForcedDieId(光らせる/選択可能にする対象の1個)を導出する。
 let tutorialDiceSelectHintGlowing = false;
+// 訓練場の「光る」演出 (2026-09-27, per user request: "この時訓練場を光らせる") -- training_ground_hintが
+// 表示され続けている間ずっとtrueになる継続フラグ。renderBoardのタイル自体(map-tile)を光らせる。
+let tutorialTrainingGroundGlowing = false;
+// 王宮/元老院の「光る」演出 (2026-09-27, per user request: "このとき王宮と元老院を光らせる") --
+// card_areas_hintが表示され続けている間ずっとtrueになる継続フラグ。
+let tutorialCardAreasGlowing = false;
 // RESOURCE候補側は今のところ元の一回限りの点滅のまま(まだ同じ報告を受けていないため変更せず) -- 同じ
 // タイミングずれ問題を避けるため、dismissTutorialStepが上のRevealedフラグと同時にtrueにし、
 // renderPlayerCards(render()内でrenderTutorialOverlayより前に呼ばれる -- tutorialCurrentStepIdがまだ
