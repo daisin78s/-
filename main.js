@@ -3754,7 +3754,7 @@ function renderDie(die) {
 // (2026-09-27)でB301(栄光の証)/C301(王女)/M003(騎士像)を追加。
 const UNLIMITED_ICON_REPEAT_PHYSICAL_IDS = ['A301', 'B301', 'C301', 'M003'];
 
-function renderResourceBadge(resource, count, unlimitedRepeat) {
+function renderResourceBadge(resource, count, unlimitedRepeat, neverRepeat) {
   // Confirmed 2026-07-29: the dot's color alone identifies the resource -- no letter label needed.
   const badge = el('span', 'resource-badge');
   badge.dataset.resource = resource;
@@ -3770,8 +3770,10 @@ function renderResourceBadge(resource, count, unlimitedRepeat) {
   // 1〜2個はアイコンをそのまま個数分並べる、3個以上は今まで通りアイコン1個+数字 (2026-09-27, per user
   // request: 当初は1〜3/4以上のしきい値だったが、"1ABCZ BZはから2までは アイコンをそのままふやし 3以上は
   // 〇3のようにする VPのみ今まで通り" で1〜2/3以上に修正)。unlimitedRepeat指定時はこの上限を無視する
-  // (UNLIMITED_ICON_REPEAT_PHYSICAL_IDS's own doc)。
-  if ((count >= 1 && count <= 2) || (unlimitedRepeat && count >= 1)) {
+  // (UNLIMITED_ICON_REPEAT_PHYSICAL_IDS's own doc)。neverRepeat指定時は逆にこの反復自体を一切使わない
+  // (2026-09-27, per user request: "プレイヤーの資源置き場のアイコンは赤〇赤〇ではなく赤〇2としてください"
+  // -- プレイヤーパネルの資源置き場だけはこの反復ルールの対象外にする)。
+  if (!neverRepeat && ((count >= 1 && count <= 2) || (unlimitedRepeat && count >= 1))) {
     for (let i = 0; i < count; i++) badge.appendChild(el('span', 'resource-badge__dot'));
     return badge;
   }
@@ -6008,7 +6010,7 @@ function renderPlayers(state, next) {
       // this one render specifically so the highlight has something to attach to.
       const highlighted = replayHighlight && replayHighlight.resourceKeys.has(`${player.id}|${resource}`);
       if (count > 0 || highlighted) {
-        const badge = renderResourceBadge(resource, count);
+        const badge = renderResourceBadge(resource, count, false, true);
         if (highlighted) badge.classList.add('change-highlight');
         // initial_resources_revealの「光る」演出 (2026-09-26, per user request) -- tutorialConCardGlowingと
         // 同じ継続フラグ方式(このステップが表示され続けている間ずっとON、次のセリフに進んだらOFF)。
@@ -8326,7 +8328,7 @@ const TUTORIAL_STEPS = [
       const player = state.players.find((p) => p.id === 'P1');
       return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
     },
-    body: 'ダイスを1個クリックしてください',
+    body: 'あなたの1番左のダイスをクリックしてください',
     // 2026-09-27, per user request: "この時も 次へ を消す" -- 実際にダイスをクリックすること以外に先へ
     // 進む手段が無いようにする(free_action_hint/cancel_action_hintと同じnoManualDismissパターン)。
     noManualDismiss: true,
@@ -8403,7 +8405,7 @@ const TUTORIAL_STEPS = [
       const player = state.players.find((p) => p.id === 'P1');
       return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
     },
-    body: 'どのカードが獲得できるかは置いたダイス目とショップに書かれているダイス目の通りです\nダイス目 1 を置けばどのカードでも1枚獲得できますが',
+    body: 'どのカードが獲得できるかは置いたダイス目とショップに書かれているダイス目の通りです\nダイス目 1 を置けば資源さえあればどのカードでも1枚獲得できますが',
     nextLabel: '次へ',
   },
   // 2026-09-27, per user request -- 目1-6/目1-5のキャプションと、その2つのレンジにdie値5が含まれる
