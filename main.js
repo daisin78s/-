@@ -145,6 +145,12 @@ function weeklyRankingIdForOffset(weeksAgo) {
  * ランダムに選び、6枚をまとめてシャッフルしてからsetup.prepareShopsのpreferredNormalFaceIdsとして渡す。
  * この引数はSHOP101,102,...の順にそのまま割り当てられる仕様(prepareShops自身のdoc参照)なので、渡す前に
  * 配列自体もシャッフルすることで「どの枠に何が出るか」もランダムにしている。 */
+// チュートリアル冒頭の領地カード(A)2枚のうち1枚を、すでに説明済みのエリア(城下町/大聖堂/ギルド)の支配
+// カードに固定する (2026-09-27, per user request: "チュートリアル 初期に出てくる 領地カード2枚のうち
+// 1枚は城下町 大聖堂 ぎるど のうちどれかにして" -- 王宮でカードを獲得するデモの前までにこの3エリアは
+// すでに説明済みなので、実際に馴染みのあるカードがショップに並ぶようにする)。
+const TUTORIAL_PREFERRED_AREA_CARD_FACE_IDS = ['A003A', 'A004A', 'A005A'];
+
 function tutorialPreferredNormalFaceIds(state, index) {
   const bySheet = { A: [], B: [], C: [] };
   for (const sheet of ['A', 'B', 'C']) {
@@ -153,7 +159,13 @@ function tutorialPreferredNormalFaceIds(state, index) {
       if (tier === 'A' && Number(physicalId.slice(1)) <= 7) bySheet[sheet].push(row.ID);
     }
   }
-  const picks = ['A', 'B', 'C'].flatMap((sheet) => rngMod.shuffle(state.rng, bySheet[sheet]).slice(0, 2));
+  const forcedAreaCardFaceId = rngMod.shuffle(state.rng, TUTORIAL_PREFERRED_AREA_CARD_FACE_IDS)[0];
+  const otherA = rngMod.shuffle(state.rng, bySheet.A.filter((id) => id !== forcedAreaCardFaceId)).slice(0, 1);
+  const picks = [
+    forcedAreaCardFaceId,
+    ...otherA,
+    ...['B', 'C'].flatMap((sheet) => rngMod.shuffle(state.rng, bySheet[sheet]).slice(0, 2)),
+  ];
   return rngMod.shuffle(state.rng, picks);
 }
 
@@ -4919,6 +4931,10 @@ function renderBoard(state, next) {
       // エリア内で一番左の空いているANYスロット1つを光らせる。タイルごとにリセットするので前のタイルの
       // 判定を持ち越さない。
       let anyGlowSlotAssigned = false;
+      // card_acquisition_introの「光る」演出用 (2026-09-27, per user request: "王宮の次に配置可能なスロット
+      // を光らせる") -- 王宮(CASTLE_MAP_ID)の中で最初に見つかった(=一番左の)空いているスロット1つだけを
+      // 光らせる。isCastleで対象タイルを絞り込むので、他のエリアの空きスロットとは無関係。
+      let castleAcquisitionSlotAssigned = false;
       const action = areaRow.ACTION;
 
       let highlightedSlots = null;
@@ -5033,9 +5049,13 @@ function renderBoard(state, next) {
           // ダイスを光らせる(tutorialPlacedDiceGlowing's own doc)。
           if (tutorialPlacedDiceGlowing) occupantDieNode.classList.add('change-highlight');
           // worker_placement_example_resultの「光る」演出 (2026-09-27, per user request: "スロットに
-          // 置かれたダイスも光る") -- 小麦畑=MAP001のスロット1(index 0)固定、tutorialWorkerPlacementResultGlowing's
+          // 置かれたダイスも光る") -- 農園=MAP002のスロット2(index 1)固定、tutorialWorkerPlacementResultGlowing's
           // own doc。
-          if (tutorialWorkerPlacementResultGlowing && mapId === 'MAP001' && i === 0) occupantDieNode.classList.add('change-highlight');
+          if (tutorialWorkerPlacementResultGlowing && mapId === 'MAP002' && i === 1) occupantDieNode.classList.add('change-highlight');
+          // castletown_placement_resultの「光る」演出 (2026-09-27, per user request: "この時一番右のダイスが
+          // 城下町のスロットANYに置かれ光る") -- 城下町=MAP003のスロットANY(index 1)固定、
+          // tutorialCastletownResultGlowing's own doc。
+          if (tutorialCastletownResultGlowing && mapId === 'MAP003' && i === 1) occupantDieNode.classList.add('change-highlight');
           stack.appendChild(occupantDieNode);
           slotEl.appendChild(stack);
         } else if (typeof requirement === 'number') {
@@ -5094,9 +5114,16 @@ function renderBoard(state, next) {
         // なければ光らない）") -- tutorialExSlotGlowing's own doc。main_action_introの全SLOT演出と同じく
         // 占有中かどうかは問わずEX要求のスロットはすべて光らせる。
         if (tutorialExSlotGlowing && requirement === 'EX') slotEl.classList.add('change-highlight');
-        // worker_placement_example_introの「光る」演出 (2026-09-27, per user request: "この時...小麦畑の
-        // スロット1を光らせる") -- 小麦畑=MAP001のスロット1(index 0)固定。
-        if (tutorialWorkerPlacementExampleGlowing && mapId === 'MAP001' && i === 0) slotEl.classList.add('change-highlight');
+        // worker_placement_example_introの「光る」演出 (2026-09-27, per user request: 当初は"小麦畑の
+        // スロット1"だったが、"変更"で"農園の5のスロット"に差し替え) -- 農園=MAP002のスロット2(index 1)固定。
+        if (tutorialWorkerPlacementExampleGlowing && mapId === 'MAP002' && i === 1) slotEl.classList.add('change-highlight');
+        // card_acquisition_introの「光る」演出 (2026-09-27, per user request: "王宮の次に配置可能なスロット
+        // を光らせる") -- 王宮の中で最初に見つかった空いているスロット1つだけ(castleAcquisitionSlotAssigned's
+        // own doc)。
+        if (tutorialCardAcquisitionGlowing && isCastle && occupants.length === 0 && !castleAcquisitionSlotAssigned) {
+          slotEl.classList.add('change-highlight');
+          castleAcquisitionSlotAssigned = true;
+        }
         slotsEl.appendChild(slotEl);
       });
 
@@ -6009,6 +6036,9 @@ function renderPlayers(state, next) {
     // own doc): same reasoning as .card-group's own dataset.playerId addition.
     node.dataset.playerId = player.id;
     if (player.id === activePlayerId) node.classList.add('player-panel--active');
+    // worker_placement_turn_end_hintの「光る」演出 (2026-09-27, per user request: "この時次のプレイヤー
+    // BOBを光らせる") -- BOB=P2固定、tutorialNextPlayerGlowing's own doc。
+    if (tutorialNextPlayerGlowing && player.id === 'P2') node.classList.add('change-highlight');
 
     node.querySelector('.player-panel__swatch').dataset.color = player.color;
     node.querySelector('.player-panel__name').textContent = player.name;
@@ -6051,6 +6081,10 @@ function renderPlayers(state, next) {
         // それを光らせる") -- 小麦畑への配置で増える資源はKのみ、tutorialWorkerPlacementResultGlowing's
         // own doc。
         if (tutorialWorkerPlacementResultGlowing && player.id === 'P1' && resource === 'K') badge.classList.add('change-highlight');
+        // castletown_placement_resultの「光る」演出 (2026-09-27, per user request: "この時資源赤〇を
+        // 光らせる") -- 城下町のCHANGE(K,A,ALL)で増える資源はAのみ、tutorialCastletownResultGlowing's
+        // own doc。
+        if (tutorialCastletownResultGlowing && player.id === 'P1' && resource === 'A') badge.classList.add('change-highlight');
         resourcesEl.appendChild(badge);
       }
     }
@@ -6067,11 +6101,24 @@ function renderPlayers(state, next) {
     const tutorialForcedDieId = (tutorialDiceSelectHintGlowing && player.id === 'P1')
       ? (player.dice.find((d) => d.kind === 'COLOR' && !d.placedMapId) || {}).id || null
       : null;
-    // worker_placement_example_introの「一番左のダイス」の光る演出専用 (2026-09-27, per user request:
-    // "この時あなたの一番左のダイスと小麦畑のスロット1を光らせる") -- tutorialForcedDieIdとは別変数にして
-    // いるのは、こちらは選択可能状態(die--selectable)には一切影響させたくないため(このステップはただの
-    // デモで、プレイヤー自身のクリックは必要ない)。
+    // worker_placement_example_introの「真ん中のダイス」の光る演出専用 (2026-09-27, per user request:
+    // "この時光らせるのは真ん中のダイス") -- tutorialForcedDieIdとは別変数にしているのは、こちらは選択可能
+    // 状態(die--selectable)には一切影響させたくないため(このステップはただのデモで、プレイヤー自身の
+    // クリックは必要ない)。この時点ではまだ何も配置されていないので、未配置色ダイスのindex 1が「真ん中」。
     const tutorialWorkerPlacementExampleDieId = (tutorialWorkerPlacementExampleGlowing && player.id === 'P1')
+      ? (player.dice.filter((d) => d.kind === 'COLOR' && !d.placedMapId)[1] || {}).id || null
+      : null;
+    // castletown_placement_introの「一番右のダイス」の光る演出専用 (2026-09-27, per user request: "この時
+    // 一番右のダイスを光らせる") -- この時点ではまだ真ん中(index 1)しか配置されておらず、一番左(index 0)と
+    // 一番右(index 2)の2個が未配置のまま残っている。.find()(配列内で最初に見つかったもの)だと未配置の
+    // うち一番左を拾ってしまうため、.filter()して末尾(元の配列順で最後=一番右)を取る必要がある。
+    const tutorialRightmostDieId = (tutorialRightmostDieGlowing && player.id === 'P1')
+      ? (() => { const cs = player.dice.filter((d) => d.kind === 'COLOR' && !d.placedMapId); return cs[cs.length - 1] ? cs[cs.length - 1].id : null; })()
+      : null;
+    // card_acquisition_introの「残ったダイス」の光る演出専用 (2026-09-27, per user request: "この時残った
+    // ダイスと王宮の次に配置可能なスロットを光らせる") -- この時点では3個すべて(農園+城下町デモ用)配置済み
+    // なので、残っている未配置の色ダイスが自然に最後の1個(目1固定)だけになる。
+    const tutorialCardAcquisitionDieId = (tutorialCardAcquisitionGlowing && player.id === 'P1')
       ? (player.dice.find((d) => d.kind === 'COLOR' && !d.placedMapId) || {}).id || null
       : null;
     for (const die of player.dice) {
@@ -6152,9 +6199,13 @@ function renderPlayers(state, next) {
       // game_rules_intro_1の「光る」演出 (2026-09-27, per user request: "このときあなたのダイス3つを
       // 光らせる") -- 自分の色ダイス全部(tutorialGameRulesDiceGlowing's own doc)。
       if (tutorialGameRulesDiceGlowing && player.id === 'P1' && die.kind !== 'WHITE') dieNode.classList.add('change-highlight');
-      // worker_placement_example_introの「光る」演出(一番左のダイス) --
+      // worker_placement_example_introの「光る」演出(真ん中のダイス) --
       // tutorialWorkerPlacementExampleDieId's own doc。
       if (die.id === tutorialWorkerPlacementExampleDieId) dieNode.classList.add('change-highlight');
+      // castletown_placement_introの「光る」演出(一番右のダイス) -- tutorialRightmostDieId's own doc。
+      if (die.id === tutorialRightmostDieId) dieNode.classList.add('change-highlight');
+      // card_acquisition_introの「光る」演出(残ったダイス) -- tutorialCardAcquisitionDieId's own doc。
+      if (die.id === tutorialCardAcquisitionDieId) dieNode.classList.add('change-highlight');
       rowEl.appendChild(dieNode);
     }
 
@@ -8031,24 +8082,78 @@ const TUTORIAL_STEPS = [
   {
     id: 'game_rules_intro_1',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: 'このゲームは、ダイス🎲🎲🎲を「ワーカー」として使う、ワーカープレイスメント系拡大再生産ゲームです',
+    body: 'このゲームは、ダイス🎲🎲🎲を「ワーカー」として使う\nワーカープレイスメント系拡大再生産ゲームです',
     nextLabel: '次へ',
   },
-  // 2026-09-27, per user request -- ワーカープレイスメントの具体例(小麦畑)。一番左のダイスと小麦畑の
-  // スロット1(index 0)を光らせる(tutorialWorkerPlacementExampleGlowing's own doc)。
+  // 2026-09-27, per user request -- ワーカープレイスメントの具体例(当初は小麦畑+一番左のダイスだったが、
+  // "変更"で農園+真ん中のダイスに差し替え)。真ん中のダイス(index 1、常に目5に固定済み-- rollInitialColorDice
+  // の{P1:[1,5]}参照)と農園のスロット2(index 1、目5要求)を光らせる(tutorialWorkerPlacementExampleGlowing's
+  // own doc)。
   {
     id: 'worker_placement_example_intro',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: '例えばダイスをエリア「小麦畑」のスロットに置けば',
+    body: '例えばダイスをエリア「農園」のスロットに置けば',
     nextLabel: '次へ',
   },
-  // 2026-09-27, per user request -- 表示された瞬間に実際に一番左のダイスを小麦畑のスロット1へ強制的に
-  // 置く(forcePlaceLeftmostDieOnWheatFieldForTutorial's own doc)。増えた食料と、置かれたダイス自体が光る
+  // 2026-09-27, per user request -- 表示された瞬間に実際に真ん中のダイスを農園のスロット2へ強制的に
+  // 置く(forcePlaceMiddleDieOnFarmForTutorial's own doc)。増えた食料と、置かれたダイス自体が光る
   // (tutorialWorkerPlacementResultGlowing's own doc)。
   {
     id: 'worker_placement_example_result',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
     body: '食料〇3　を手に入れることができます',
+    nextLabel: '次へ',
+  },
+  // 2026-09-27, per user request -- ターン終了と次のプレイヤーへの説明。次のプレイヤー(BOB/P2)を光らせる
+  // (tutorialNextPlayerGlowing's own doc)。
+  {
+    id: 'worker_placement_turn_end_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: 'ダイスを置いたらターン終了\n次のプレイヤーのターンになります',
+    nextLabel: '次へ',
+  },
+  // 2026-09-27, per user request -- 次へを押すとBOB/CAROL/DANが(城下町を避けて、効果を発動させずに)適当に
+  // ダイスを置く演出フラグを立てる。実際の配置はこのステップ自身が閉じられた瞬間に行う
+  // (forceFakeAiPlacementsForTutorial's own doc)。
+  {
+    id: 'ai_fake_turns_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '次へを押すとBOB　CAROL　DAN　がダイスを適当に置く（城下町は置かない）（効果は発動しない）',
+    nextLabel: '次へ',
+  },
+  // 2026-09-27, per user request -- 城下町にダイスを置く具体例の導入。🎲(単体)はP1の残っている最後の
+  // ダイス(一番右)のアイコンに変換される(TUTORIAL_ICON_NOTATIONS参照)。一番右のダイスを光らせる
+  // (tutorialRightmostDieGlowing's own doc)。
+  {
+    id: 'castletown_placement_intro',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: 'あなたのターンが回ってきました\n今度は🎲を「城下町」に置いてみましょう',
+    nextLabel: '次へ',
+  },
+  // 2026-09-27, per user request -- 表示された瞬間に実際に一番右のダイスを城下町のスロットANY(index 1)へ
+  // 強制的に置く(forcePlaceRightmostDieOnCastletownForTutorial's own doc)。今回は本物のCHANGE(K,A,ALL)
+  // アクションを実際に発動させ、食料が権力に変換される。増えた権力と、置かれたダイス自体が光る
+  // (tutorialCastletownResultGlowing's own doc)。
+  {
+    id: 'castletown_placement_result',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: 'あなたの持っている食料〇すべてが権力赤〇に変換されました',
+    nextLabel: '次へ',
+  },
+  // 2026-09-27, per user request -- 2回目のBOB/CAROL/DANの見た目だけの配置演出。光る演出は無し
+  // (forceFakeAiPlacementsForTutorialの2回目呼び出しはこのステップ自身が閉じられた瞬間に実行する)。
+  {
+    id: 'ai_fake_turns_hint_2',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '次へを押すとBOB　CAROL　DANが適当にダイスを置く',
+    nextLabel: '次へ',
+  },
+  // 2026-09-27, per user request -- カード獲得デモの導入。残った(目1固定の)ダイスと王宮の次に配置可能な
+  // (=最初に見つかる空いている)スロットを光らせる(tutorialCardAcquisitionGlowing's own doc)。
+  {
+    id: 'card_acquisition_intro',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '最後にカードを獲得してみましょう',
     nextLabel: '次へ',
   },
   {
@@ -8658,6 +8763,22 @@ TUTORIAL_ICON_NOTATIONS.push({
     return wrapper;
   },
 });
+// 🎲(単体) (2026-09-27, per user request: "🎲は一番右と同じものを表示" -- castletown_placement_introの
+// 時点ではすでに2個(小麦畑改め農園デモ用)配置済みで、残っている未配置の色ダイスは一番右の1個だけなので、
+// 「未配置の色ダイス」を取るだけで自然に「一番右」になる。常に光らせる(🎲🎲🎲と同じ理由)。
+TUTORIAL_ICON_NOTATIONS.push({
+  text: '🎲',
+  build: () => {
+    const p1 = STATE.players.find((p) => p.id === 'P1');
+    // .find()だと未配置のうち一番左を拾ってしまう -- tutorialRightmostDieId's own doc参照。.filter()して
+    // 末尾(元の配列順で最後=一番右)を取る。
+    const unplacedColorDice = p1.dice.filter((d) => d.kind === 'COLOR' && !d.placedMapId);
+    const die = unplacedColorDice[unplacedColorDice.length - 1];
+    const dieNode = renderDie(die ? { ...die, color: p1.color } : { kind: 'COLOR', color: p1.color, value: null });
+    dieNode.classList.add('change-highlight');
+    return dieNode;
+  },
+});
 
 // カード名の自動リンク化 (2026-09-25, per user request: "セリフに既存カード名があったらリンクするように
 // してください") -- built once from INDEX's own card sheets (A/B/C/M/CON/JOB; RESOURCE's own NAME is just
@@ -9003,17 +9124,63 @@ function forceRetapJob001ForTutorial() {
   if (result.success) actionCheckpoints.push({ state: preSnapshot, turnActionTaken: preTurnActionTaken });
 }
 
-/** worker_placement_example_resultの「この時一番左のダイスを小麦畑のスロット1に置き 食料3をふやし
- * それを光らせる」(2026-09-27) -- ワーカープレイスメントの具体例として、プレイヤーのクリックを待たず
- * ゲーム側が自動で一番左の(未配置の)色ダイスを小麦畑(MAP001)のスロット1(index 0)へ置く。
- * forceRetapJob001ForTutorialと同じ「本物のエンジンAPIを直接呼ぶだけの薄いラッパー」パターン。 */
-function forcePlaceLeftmostDieOnWheatFieldForTutorial() {
+/** worker_placement_example_resultの「食料3をふやしそれを光らせる」(2026-09-27) -- ワーカープレイス
+ * メントの具体例として、プレイヤーのクリックを待たずゲーム側が自動で真ん中の(未配置の)色ダイスを
+ * 農園(MAP002)のスロット2(index 1)へ置く。forceRetapJob001ForTutorialと同じ「本物のエンジンAPIを
+ * 直接呼ぶだけの薄いラッパー」パターン。 */
+function forcePlaceMiddleDieOnFarmForTutorial() {
   const p1 = STATE.players.find((p) => p.id === 'P1');
-  const die = p1.dice.find((d) => d.kind === 'COLOR' && !d.placedMapId);
+  // 真ん中=まだ何も配置されていない時点でのindex 1(rollInitialColorDiceの{P1:[1,5]}によりこのダイスは
+  // 常に目5 -- 農園のスロット2(index 1)の要求と一致する)。
+  const die = p1.dice.filter((d) => d.kind === 'COLOR' && !d.placedMapId)[1];
   if (!die) return;
   const preSnapshot = gameStateMod.cloneState(STATE);
   const preTurnActionTaken = turnActionTaken;
-  const result = boardMod.placeDice(STATE, INDEX, { playerId: 'P1' }, die.id, 'MAP001', 0);
+  const result = boardMod.placeDice(STATE, INDEX, { playerId: 'P1' }, die.id, 'MAP002', 1);
+  if (result.success) {
+    actionCheckpoints.push({ state: preSnapshot, turnActionTaken: preTurnActionTaken });
+    applyPlaceDiceResult(result, 'P1');
+  }
+}
+
+/** ai_fake_turns_hintの「次へを押すとBOB CAROL DAN がダイスを適当に置く（城下町は置かない）（効果は
+ * 発動しない）」(2026-09-27) -- 各AIの未配置の色ダイス1個を、城下町(MAP003)を除くランダムなエリアの
+ * ランダムなスロットへ直接書き込むだけの見た目だけの配置。board.placeDice等の本物のエンジンAPIを一切
+ * 経由しない(値の一致チェックもエリアのACTIONも完全にスキップする)ため、実際の資源やカードへの影響は
+ * 一切無い -- ここが他のforcePlaceXxxForTutorial系(本物のplaceDiceを呼ぶ)との唯一かつ最大の違い。 */
+function forceFakeAiPlacementsForTutorial(excludeMapIds) {
+  const excluded = new Set(excludeMapIds || []);
+  for (const playerId of ['P2', 'P3', 'P4']) {
+    const player = STATE.players.find((p) => p.id === playerId);
+    const die = player.dice.find((d) => d.kind === 'COLOR' && !d.placedMapId);
+    if (!die) continue;
+    const candidateMapIds = MAP_ORDER.filter((id) => {
+      if (excluded.has(id)) return false;
+      // 王宮に目1のダイスが置かれてしまうと、あとで残った(目1固定の)P1自身のダイスで王宮の空きスロットを
+      // 使うカード獲得デモの前提が崩れるため、目1のダイスだけは王宮を避ける (2026-09-27, per user request:
+      // "王宮にはダイス1が置かれないようにその前ののターンも" -- 「その前のターン」= 城下町デモ前の1回目の
+      // フェイク配置にも遡って適用するため、この関数自体に組み込んでいる)。
+      if (die.value === 1 && id === boardMod.CASTLE_MAP_ID) return false;
+      return true;
+    });
+    const mapId = candidateMapIds[Math.floor(Math.random() * candidateMapIds.length)];
+    const mapState = STATE.maps[mapId];
+    const slotIndex = Math.floor(Math.random() * mapState.slots.length);
+    mapState.slots[slotIndex] = [{ playerId, dieId: die.id, value: die.value, isWildcard: false }];
+    die.placedMapId = mapId;
+  }
+}
+
+function forcePlaceRightmostDieOnCastletownForTutorial() {
+  const p1 = STATE.players.find((p) => p.id === 'P1');
+  // .find()だと未配置のうち一番左(index 0、目1固定)を拾ってしまう -- tutorialRightmostDieId's own doc
+  // 参照。.filter()して末尾(元の配列順で最後=一番右)を取る。
+  const unplacedColorDice = p1.dice.filter((d) => d.kind === 'COLOR' && !d.placedMapId);
+  const die = unplacedColorDice[unplacedColorDice.length - 1];
+  if (!die) return;
+  const preSnapshot = gameStateMod.cloneState(STATE);
+  const preTurnActionTaken = turnActionTaken;
+  const result = boardMod.placeDice(STATE, INDEX, { playerId: 'P1' }, die.id, 'MAP003', 1);
   if (result.success) {
     actionCheckpoints.push({ state: preSnapshot, turnActionTaken: preTurnActionTaken });
     applyPlaceDiceResult(result, 'P1');
@@ -9131,18 +9298,51 @@ function dismissTutorialStep() {
     render(STATE);
     return;
   }
-  // worker_placement_example_introの「光る」演出(一番左のダイス+小麦畑のスロット1) -- game_rules_intro_1
+  // worker_placement_example_introの「光る」演出(真ん中のダイス+農園のスロット2) -- game_rules_intro_1
   // が閉じられた瞬間にONにする。
   if (tutorialCurrentStepId === 'game_rules_intro_1') { tutorialGameRulesDiceGlowing = false; tutorialWorkerPlacementExampleGlowing = true; }
   // worker_placement_example_resultの「光る」演出(増えた食料+置かれたダイス) -- worker_placement_example_
-  // introが閉じられた瞬間にONにし、同時に実際にダイスを1個小麦畑へ置く
-  // (forcePlaceLeftmostDieOnWheatFieldForTutorial's own doc)。
+  // introが閉じられた瞬間にONにし、同時に実際にダイスを1個農園へ置く
+  // (forcePlaceMiddleDieOnFarmForTutorial's own doc)。
   if (tutorialCurrentStepId === 'worker_placement_example_intro') {
     tutorialWorkerPlacementExampleGlowing = false;
     tutorialWorkerPlacementResultGlowing = true;
-    forcePlaceLeftmostDieOnWheatFieldForTutorial();
+    forcePlaceMiddleDieOnFarmForTutorial();
   }
-  if (tutorialCurrentStepId === 'worker_placement_example_result') tutorialWorkerPlacementResultGlowing = false;
+  // worker_placement_turn_end_hintの「光る」演出(次のプレイヤーBOB) -- worker_placement_example_resultが
+  // 閉じられた瞬間にONにする。
+  if (tutorialCurrentStepId === 'worker_placement_example_result') { tutorialWorkerPlacementResultGlowing = false; tutorialNextPlayerGlowing = true; }
+  // ai_fake_turns_hintの光る演出は無し(セリフのみ) -- worker_placement_turn_end_hintが閉じられた瞬間に
+  // 次のプレイヤーの光る演出をOFFにする。
+  if (tutorialCurrentStepId === 'worker_placement_turn_end_hint') tutorialNextPlayerGlowing = false;
+  // castletown_placement_introの「光る」演出(一番右のダイス) -- ai_fake_turns_hintが閉じられた瞬間に
+  // BOB/CAROL/DANの見た目だけの配置を実行する(forceFakeAiPlacementsForTutorial's own doc)。1回目は
+  // 城下町(MAP003)を避ける。
+  if (tutorialCurrentStepId === 'ai_fake_turns_hint') {
+    forceFakeAiPlacementsForTutorial(['MAP003']);
+    tutorialRightmostDieGlowing = true;
+  }
+  // castletown_placement_resultの「光る」演出(増えた権力+置かれたダイス) -- castletown_placement_introが
+  // 閉じられた瞬間にONにし、同時に実際にダイスを1個城下町へ置く
+  // (forcePlaceRightmostDieOnCastletownForTutorial's own doc)。
+  if (tutorialCurrentStepId === 'castletown_placement_intro') {
+    tutorialRightmostDieGlowing = false;
+    tutorialCastletownResultGlowing = true;
+    forcePlaceRightmostDieOnCastletownForTutorial();
+  }
+  // ai_fake_turns_hint_2の光る演出は無し(セリフのみ) -- castletown_placement_resultが閉じられた瞬間に
+  // 増えた権力/置かれたダイスの光る演出をOFFにする。
+  if (tutorialCurrentStepId === 'castletown_placement_result') tutorialCastletownResultGlowing = false;
+  // card_acquisition_introの「光る」演出(残ったダイス+王宮の次の空きスロット) -- ai_fake_turns_hint_2が
+  // 閉じられた瞬間に2回目のBOB/CAROL/DANの見た目だけの配置を実行する(今回は城下町を避ける必要は無い、
+  // 王宮への目1回避は関数自体に組み込み済み)。
+  if (tutorialCurrentStepId === 'ai_fake_turns_hint_2') {
+    forceFakeAiPlacementsForTutorial();
+    tutorialCardAcquisitionGlowing = true;
+  }
+  // card_acquisition_intro自身が閉じられたらOFF -- この先の本番配置(王宮でのカード獲得)はまだ未指示のため、
+  // 通常の直線探索でgame_rules_intro_2へ進む。
+  if (tutorialCurrentStepId === 'card_acquisition_intro') tutorialCardAcquisitionGlowing = false;
   // alsoCloseTurnOrderOverlay (2026-09-24, see turn_order_reveal_summary's own doc): 次へ on this step
   // also presses the turn-order overlay's own ✖ in the same tap, instead of leaving the player to close
   // it separately.
@@ -9302,15 +9502,31 @@ let tutorialAreaCardHintGlowing = false;
 // ダイス3つを光らせる") -- game_rules_intro_1が表示され続けている間ずっとtrueになる継続フラグ。
 // 🎲🎲🎲(TUTORIAL_ICON_NOTATIONS)側の光る演出は常時ONで別管理、こちらはrenderPlayers側の実物のダイス用。
 let tutorialGameRulesDiceGlowing = false;
-// 一番左のダイス+小麦畑のスロット1(index 0)の「光る」演出 (2026-09-27, per user request: "この時あなたの
-// 一番左のダイスと小麦畑のスロット1を光らせる") -- worker_placement_example_introが表示され続けている間
-// ずっとtrueになる継続フラグ。
+// 真ん中のダイス+農園のスロット2(index 1)の「光る」演出 (2026-09-27, per user request: 当初は"一番左の
+// ダイスと小麦畑のスロット1"だったが、"変更"で"真ん中のダイス と農園の5のスロット"に差し替え) --
+// worker_placement_example_introが表示され続けている間ずっとtrueになる継続フラグ。
 let tutorialWorkerPlacementExampleGlowing = false;
-// 増えた食料+小麦畑のスロット1に置かれたダイスの「光る」演出 (2026-09-27, per user request: "この時
-// 一番左のダイスを小麦畑のスロット1に置き 食料3をふやしそれを光らせる スロットに置かれたダイスも光る")
-// -- worker_placement_example_resultが表示され続けている間ずっとtrueになる継続フラグ。このステップに
-// 入った瞬間に実際にダイスを置く(forcePlaceLeftmostDieOnWheatFieldForTutorial's own doc)。
+// 増えた食料+農園のスロット2に置かれたダイスの「光る」演出 (2026-09-27, per user request: "食料3を
+// ふやしそれを光らせる スロットに置かれたダイスも光る") -- worker_placement_example_resultが表示され
+// 続けている間ずっとtrueになる継続フラグ。このステップに入った瞬間に実際にダイスを置く
+// (forcePlaceMiddleDieOnFarmForTutorial's own doc)。
 let tutorialWorkerPlacementResultGlowing = false;
+// 次のプレイヤー(BOB/P2)の「光る」演出 (2026-09-27, per user request: "この時次のプレイヤーBOBを
+// 光らせる") -- worker_placement_turn_end_hintが表示され続けている間ずっとtrueになる継続フラグ。
+let tutorialNextPlayerGlowing = false;
+// 一番右のダイス(自分の最後の未配置色ダイス)の「光る」演出 (2026-09-27, per user request: "この時一番右の
+// ダイスを光らせる") -- castletown_placement_introが表示され続けている間ずっとtrueになる継続フラグ。
+// 🎲(単体、TUTORIAL_ICON_NOTATIONS)側は常時ONで別管理、こちらはrenderPlayers側の実物のダイス用。
+let tutorialRightmostDieGlowing = false;
+// 増えた権力(A)+城下町のスロットANY(index 1)に置かれたダイスの「光る」演出 (2026-09-27, per user request:
+// "この時資源赤〇を光らせる この時一番右のダイスが城下町のスロットANYに置かれ光る") --
+// castletown_placement_resultが表示され続けている間ずっとtrueになる継続フラグ。このステップに入った瞬間に
+// 実際にダイスを置く(forcePlaceRightmostDieOnCastletownForTutorial's own doc)。
+let tutorialCastletownResultGlowing = false;
+// 残ったダイス(目1固定)+王宮の次に配置可能なスロットの「光る」演出 (2026-09-27, per user request: "この時
+// 残ったダイスと王宮の次に配置可能なスロットを光らせる") -- card_acquisition_introが表示され続けている間
+// ずっとtrueになる継続フラグ。
+let tutorialCardAcquisitionGlowing = false;
 // RESOURCE候補側は今のところ元の一回限りの点滅のまま(まだ同じ報告を受けていないため変更せず) -- 同じ
 // タイミングずれ問題を避けるため、dismissTutorialStepが上のRevealedフラグと同時にtrueにし、
 // renderPlayerCards(render()内でrenderTutorialOverlayより前に呼ばれる -- tutorialCurrentStepIdがまだ
