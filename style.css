@@ -3693,6 +3693,28 @@ h1, h2, h3 { margin: 0; }
   white-space: nowrap;
 }
 
+/* 2026-09-27, per user request -- ボタンによってセリフが分岐するステップ用(TUTORIAL_STEPSのchoices)。
+   #tutorial-bubble__dismissと同じ見た目を、選択肢の数だけ縦に並べる。 */
+.tutorial-bubble__choices {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  width: 100%;
+}
+
+.tutorial-bubble__choice-button {
+  background: var(--surface);
+  border: 2px solid var(--accent);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 12px 28px;
+  font-size: 22px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: normal;
+}
+
 /* チュートリアル: 手番順の発表 (2026-09-23, per user request、続けて複数回の調整依頼: 横長化+左右スペース
    活用、"手番順が決まりました は不要"(タイトル削除)、"閉じる は右上に大きく✖アイコン"、続けて
    "カードのサイズを小さくしないで" -- スクロール回避のためのzoom縮小を撤回、カードは実物大のまま) --

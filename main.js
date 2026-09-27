@@ -7185,6 +7185,11 @@ function renderPlayerCards(state, next) {
       const resourceContainer = node.querySelector('.card-group__onboard-resources');
       if (tutorialResourceCandidatesRevealed(player.id)) {
         renderResourceChoice(resourceContainer, state, player);
+        // resource_pick_hintは表示され続けている間ずっと光る (2026-09-27, per user request: "それでは
+        // 光っている4枚の初期資源カードのうち2枚をクリックしてください") -- 下のJustRevealedと違い
+        // 一回限りの点滅ではない、tutorialConCardGlowingと同じ継続フラグ方式
+        // (tutorialResourceCandidatesGlowing's own doc)。
+        if (tutorialResourceCandidatesGlowing) tutorialGlowRevealedCards(resourceContainer);
         if (tutorialResourceCandidatesJustRevealed) {
           tutorialGlowRevealedCards(resourceContainer);
           tutorialResourceCandidatesJustRevealed = false;
@@ -7999,10 +8004,29 @@ const TUTORIAL_STEPS = [
     body: 'あなたにランダムな制約カード1枚が配られました\nこれはあなたの性格や特性を表しています\n制約カードには表面と裏面があり得られる初期資源や制約が違います\n表面裏面どちらを使うかあとで選ぶことができます\nカードをクリックすることで拡大され詳細が表示されますが今は気にせず先に進みましょう',
     nextLabel: '次へ',
   },
+  // 2026-09-27, per user request -- 「初期資源のアイコンの意味を知りたい」/「とりあえず先に進める」の
+  // 2ボタンで次のセリフが分岐する(TUTORIAL_STEPSのchoices/handleTutorialChoiceClickのdoc参照)。
   {
     id: 'resource_choice',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: 'ランダムな初期資源カード4枚が配られました\n配られた初期資源カード4枚のうち使用する2枚を選んでください\nお試しのゲームなので深く考えずにとってもらって大丈夫です\nゲームに慣れないうちは色付きの資源のあるカードがおすすめです',
+    body: 'ランダムな初期資源カード4枚が配られました\nこれはあなたが初めに持っている財産を表しています\n配られた初期資源カード4枚のうち使用する2枚を選んでください',
+    choices: [
+      { label: '初期資源のアイコンの意味を知りたい', targetStepId: 'resource_icon_explanation' },
+      { label: 'とりあえず先に進める', targetStepId: 'resource_pick_hint' },
+    ],
+  },
+  // TODO(2026-09-27): 本文未確定 -- 「初期資源のアイコンの意味を知りたい」を選んだ場合のセリフはまだ
+  // ユーザーから指示を受けていないため、resource_pick_hintと全く同じ本文の仮置き。指示が来たら差し替える。
+  {
+    id: 'resource_icon_explanation',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: 'それでは光っている4枚の初期資源カードのうち2枚をクリックしてください',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'resource_pick_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: 'それでは光っている4枚の初期資源カードのうち2枚をクリックしてください',
     // 2026-09-24, per user request: "初期資源カード2枚選んだらこのセリフは消す" -- auto-dismissed (no
     // manual 閉じる needed) the moment the player has actually picked 2 candidates, the same moment
     // renderResourceConfirmOverlay's own "この2枚でよろしいですか？" takes over -- not just once
@@ -8711,6 +8735,9 @@ function renderTutorialOverlay(state) {
     // step here (which stays open until 閉じる/チュートリアルをやめる is clicked, per the standing
     // "セリフは閉じないで" instruction) -- see resource_choice's own doc for why it needs this.
     if (current && current.autoDismissWhen && current.autoDismissWhen(state)) {
+      // resource_pick_hintの「光る」演出(光っている初期資源カード) -- autoDismissWhen経由の遷移は
+      // dismissTutorialStepを通らないため、ここで直接OFFにする(tutorialResourceCandidatesGlowing's own doc)。
+      if (tutorialCurrentStepId === 'resource_pick_hint') tutorialResourceCandidatesGlowing = false;
       tutorialCurrentStepId = null;
       stopTutorialTypewriter();
       continue;
@@ -8720,13 +8747,31 @@ function renderTutorialOverlay(state) {
   const step = TUTORIAL_STEPS.find((s) => s.id === tutorialCurrentStepId);
   wrap.hidden = !step;
   if (!step) return;
-  // Hide 閉じる for a noManualDismiss step (2026-09-24, see resource_choice's own doc) -- a visible
-  // button that silently does nothing would be confusing.
-  document.getElementById('tutorial-bubble__dismiss').hidden = !!step.noManualDismiss;
-  // nextLabel (2026-09-24, per user request: "閉じるではなく次へと表示して") -- a step that leads
-  // straight into another one reads 次へ instead of the default 閉じる; the click behavior itself
-  // (dismissTutorialStep) is unchanged either way.
-  document.getElementById('tutorial-bubble__dismiss').textContent = step.nextLabel || '閉じる';
+  // choices (2026-09-27, per user request: "という二つのボタンを用意してボタンによってセリフが分岐する
+  // ようにしたい") -- 単一の閉じる/次への代わりに、選択肢の数だけボタンを動的に組み立てる。どちらを選んでも
+  // choice.targetStepIdへ直接遷移する(handleTutorialChoiceClickのdoc参照)。
+  const dismissBtn = document.getElementById('tutorial-bubble__dismiss');
+  const choicesEl = document.getElementById('tutorial-bubble__choices');
+  if (step.choices) {
+    dismissBtn.hidden = true;
+    choicesEl.hidden = false;
+    choicesEl.innerHTML = '';
+    for (const choice of step.choices) {
+      const btn = el('button', 'tutorial-bubble__choice-button', choice.label);
+      btn.type = 'button';
+      btn.addEventListener('click', () => handleTutorialChoiceClick(choice.targetStepId));
+      choicesEl.appendChild(btn);
+    }
+  } else {
+    choicesEl.hidden = true;
+    // Hide 閉じる for a noManualDismiss step (2026-09-24, see resource_choice's own doc) -- a visible
+    // button that silently does nothing would be confusing.
+    dismissBtn.hidden = !!step.noManualDismiss;
+    // nextLabel (2026-09-24, per user request: "閉じるではなく次へと表示して") -- a step that leads
+    // straight into another one reads 次へ instead of the default 閉じる; the click behavior itself
+    // (dismissTutorialStep) is unchanged either way.
+    dismissBtn.textContent = step.nextLabel || '閉じる';
+  }
   if (tutorialTypewriterStepId !== step.id) {
     tutorialTypewriterStepId = step.id;
     const fullText = typeof step.body === 'function' ? step.body(state) : step.body;
@@ -8829,6 +8874,22 @@ function forceRetapJob001ForTutorial() {
   const preTurnActionTaken = turnActionTaken;
   const result = boardMod.useBareTapAbility(STATE, INDEX, { playerId: 'P1' }, 'JOB001');
   if (result.success) actionCheckpoints.push({ state: preSnapshot, turnActionTaken: preTurnActionTaken });
+}
+
+/** ボタンによってセリフが分岐するステップ(TUTORIAL_STEPSのchoices)専用の遷移処理 (2026-09-27, per user
+ * request: "という二つのボタンを用意してボタンによってセリフが分岐するようにしたい") -- 選ばれなかった方の
+ * 選択肢は通常のmatch()走査で後から勝手に出てこないよう、両方ともtutorialSeenStepIdsに入れてしまってから
+ * 選ばれた方だけをtutorialCurrentStepIdにする。resource_pick_hintに入る場合はその光る演出もここでONにする
+ * (tutorialResourceCandidatesGlowing's own doc)。 */
+function handleTutorialChoiceClick(targetStepId) {
+  const currentStep = TUTORIAL_STEPS.find((s) => s.id === tutorialCurrentStepId);
+  if (currentStep) {
+    for (const choice of currentStep.choices) tutorialSeenStepIds.add(choice.targetStepId);
+  }
+  if (targetStepId === 'resource_pick_hint') tutorialResourceCandidatesGlowing = true;
+  tutorialCurrentStepId = targetStepId;
+  stopTutorialTypewriter();
+  render(STATE);
 }
 
 function dismissTutorialStep() {
@@ -9040,6 +9101,11 @@ let tutorialShopValue5Glowing = false;
 // にあるすべてのカードの支払い資源部分を光らせる") -- shop_cost_introが表示され続けている間ずっとtrueに
 // なる継続フラグ。
 let tutorialShopCostGlowing = false;
+// resource_pick_hint表示中、光っている4枚の初期資源カードの「光る」演出 (2026-09-27, per user request:
+// "それでは光っている4枚の初期資源カードのうち2枚をクリックしてください") -- handleTutorialChoiceClickが
+// この段階に入った瞬間にONにし、resource_pick_hint自身のautoDismissWhenが発火した瞬間にOFFにする
+// (renderTutorialOverlay自身のdoc参照、dismissTutorialStepを経由しないため専用の分岐が必要)。
+let tutorialResourceCandidatesGlowing = false;
 // RESOURCE候補側は今のところ元の一回限りの点滅のまま(まだ同じ報告を受けていないため変更せず) -- 同じ
 // タイミングずれ問題を避けるため、dismissTutorialStepが上のRevealedフラグと同時にtrueにし、
 // renderPlayerCards(render()内でrenderTutorialOverlayより前に呼ばれる -- tutorialCurrentStepIdがまだ

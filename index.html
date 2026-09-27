@@ -463,6 +463,10 @@
       <div class="tutorial-bubble__actions">
         <button type="button" id="tutorial-bubble__dismiss">閉じる</button>
       </div>
+      <!-- 2026-09-27, per user request -- 一部のセリフはボタン一つの「次へ」ではなく、選んだボタンによって
+           次に出るセリフが分岐する。空のまま持っておき、そのステップの時だけrenderTutorialOverlayが動的に
+           ボタンを組み立てる(自身のdocも参照) -- #tutorial-bubble__dismissとは排他表示。 -->
+      <div class="tutorial-bubble__choices" id="tutorial-bubble__choices" hidden></div>
     </div>
   </div>
 
