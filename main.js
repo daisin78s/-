@@ -8049,7 +8049,7 @@ const TUTORIAL_STEPS = [
       const p1 = state.players.find((p) => p.id === 'P1');
       const resourceIds = p1.ownedCardPhysicalIds.filter((id) => id.startsWith('R'));
       const total = resourceChoiceStartOrderTotal(state, 'P1', resourceIds);
-      return `あなたのスタプレは${total}です\nそれでは、他のプレイヤーのスタプレも見てみましょう`;
+      return `あなたのスタプレ合計は${total}です\nそれでは、他のプレイヤーのスタプレも見てみましょう`;
     },
     // 2026-09-24, per user request: "閉じるではなく次へと表示して" -- this step leads straight into
     // another one (turn_order_reveal_summary below), so its own button reads 次へ instead of the default
@@ -8068,7 +8068,7 @@ const TUTORIAL_STEPS = [
         const player = state.players.find((p) => p.id === playerId);
         return `${i + 1}番手は${player.name}`;
       });
-      return `${lines.join('\n')}\nに決まりました\n数字が同じときは制約カードのスタプレが大きいほうが先攻になります`;
+      return `${lines.join('\n')}\nに決まりました\n数字が同じときは制約カードのスタプレの数字が大きいほうが先攻になります`;
     },
     // 2026-09-24, per user request: "次へを押したとき一緒に右上の✖も押されて次の画面にいき" -- dismissing
     // this one also closes the turn-order overlay itself (see dismissTutorialStep's own doc), so a single
