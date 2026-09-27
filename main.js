@@ -9094,9 +9094,19 @@ function renderTutorialOverlay(state) {
         window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
       }
     }
-    // game_rules_intro_1の自動スクロールは一時的に無効化 (2026-09-27, per user report: "一番初めのセリフの
-    // 次へが一瞬出てすぐ消えてしまう" -- iPadで発生。原因切り分けのため、この回だけ今回新規追加した
-    // scrollByをいったん外して様子を見る、per user request: "まずスクロールを一時的に外して確認")。
+    // game_rules_intro_1が見えるようにスクロール (2026-09-27, per user request: "必要ならすクロール") --
+    // 同じ考え方。P1自身の色ダイス行を対象にする。一時的に無効化していたが(iPadで「次への消失」が報告された
+    // ため)、原因は🎲🎲🎲の折り返し計算のズレによる別の問題と判明(改行修正で解決済み)なので復活させる。
+    if (step.id === 'game_rules_intro_1') {
+      const diceRowEl = document.querySelector('.player-panel[data-player-id="P1"] .player-panel__dice-row--color');
+      if (diceRowEl) {
+        const bubbleWrap = document.getElementById('tutorial-bubble-wrap');
+        const visibleHeight = (bubbleWrap && !bubbleWrap.hidden) ? bubbleWrap.getBoundingClientRect().top : window.innerHeight;
+        const rect = diceRowEl.getBoundingClientRect();
+        const desiredTop = Math.max(0, (visibleHeight - rect.height) / 2);
+        window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
+      }
+    }
     // resource_icon_explanation/resource_icon_conversion_hintが見えるようにスクロール (2026-09-27, per
     // user request: "必要ならスクロール") -- 同じ考え方。#board(盤面全体)を対象にする。
     if (step.id === 'resource_icon_explanation' || step.id === 'resource_icon_conversion_hint') {
