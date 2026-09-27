@@ -185,20 +185,17 @@ function createInitialState(plan, forcedSeed) {
   setupMod.createPlayers(state, weeklyChallengeActive ? ['Alice', 'Bob', 'Carol', 'Dan'] : [loadRememberedRankingName() || 'Alice', 'Bob', 'Carol', 'Dan']);
   setupMod.prepareMaps(state, INDEX);
   setupMod.prepareShops(state, INDEX, plan ? plan.abc : (tutorialModeActive ? tutorialPreferredNormalFaceIds(state, INDEX) : undefined));
-  // チュートリアルでは1R(初期配置)のみ、あなたのダイスの一部を固定値にする (2026-09-26, per user request:
+  // チュートリアルでは1R(初期配置)のみ、あなたのダイスを完全に固定値にする (2026-09-26, per user request:
   // "1Rのみプレイヤーの初期ダイス一番左を1になるようにしてください あとはランダムで"; 2026-09-27、per user
-  // request: "チュートリアルのプレイヤーの初期ダイス左から2番目を5の目にして" で2番目(index 1)も追加) --
-  // 2R以降のラウンド開始時の振り直し(turn-flow.js側)には触れないため、以後は完全ランダムに戻る。他の3人の
-  // AIのダイスはこれまで通り完全ランダム。
-  // 3個目(一番右)は城下町(MAP003)のANYスロットの実演(castletown_placement_intro)で使うため、値2だけは
-  // 除外してランダムに固定する (2026-09-27, per user report経由で発覚: たまたま目2が出ると、MAP003自身の
-  // 数字スロット(SLOT1=2)がまだ空いている限りboard.isAllowedSlotForValueの「同じエリア内にぴったりの数字
-  // スロットが空いているならそちらを優先しなければならない」ルールに引っかかり、ANYスロット(SLOT2)への配置が
-  // SLOT_NOT_PREFERREDで拒否されてしまう -- 案内文が常に「ANYスロットをクリック」と言っている以上、目2は
-  // 最初から出さないのが最も単純で確実)。
-  const tutorialThirdDieValues = [1, 3, 4, 5, 6];
-  const tutorialThirdDieValue = tutorialThirdDieValues[Math.floor(Math.random() * tutorialThirdDieValues.length)];
-  setupMod.rollInitialColorDice(state, tutorialModeActive ? { P1: [1, 5, tutorialThirdDieValue] } : undefined);
+  // request: "チュートリアルのプレイヤーの初期ダイス左から2番目を5の目にして" で2番目(index 1)も追加、
+  // 続けて"3個目(一番右)は城下町のANYスロット実演のため値2だけ除外してランダムに固定"としていたが、
+  // 2026-09-28、per user request: "あなたの初期ダイスは左から163にする"/"農園に置くダイス 5→6" で
+  // 左から1,6,3の3個とも固定値に変更(2番目5→6により、農園デモの配置先もスロット2(値5)からスロット3
+  // (値6)へ変更 -- forcePlaceMiddleDieOnFarmForTutorial/関連する光る演出のslotIndex参照)。3個目は3固定
+  // (城下町のSLOT1=2と衝突しないため、以前のような除外ロジックは不要)。2R以降のラウンド開始時の振り直し
+  // (turn-flow.js側)には触れないため、以後は完全ランダムに戻る。他の3人のAIのダイスはこれまで通り完全
+  // ランダム。
+  setupMod.rollInitialColorDice(state, tutorialModeActive ? { P1: [1, 6, 3] } : undefined);
   const forcedCon = plan && plan.con.length > 0 ? { P1: gameStateMod.splitCardId(plan.con[0]).physicalId } : undefined;
   // チュートリアルでは祝福/色欲(CON001)を誰にも配らない (2026-09-26, per user request: "チュートリアルでは
   // 祝福 色欲 プレイヤーに配られないようにしてほしい")。
@@ -5060,9 +5057,9 @@ function renderBoard(state, next) {
           // ダイスを光らせる(tutorialPlacedDiceGlowing's own doc)。
           if (tutorialPlacedDiceGlowing) occupantDieNode.classList.add('change-highlight');
           // worker_placement_example_resultの「光る」演出 (2026-09-27, per user request: "スロットに
-          // 置かれたダイスも光る") -- 農園=MAP002のスロット2(index 1)固定、tutorialWorkerPlacementResultGlowing's
-          // own doc。
-          if (tutorialWorkerPlacementResultGlowing && mapId === 'MAP002' && i === 1) occupantDieNode.classList.add('change-highlight');
+          // 置かれたダイスも光る") -- 農園=MAP002のスロット3(index 2、2026-09-28に値5→6へ変更)固定、
+          // tutorialWorkerPlacementResultGlowing's own doc。
+          if (tutorialWorkerPlacementResultGlowing && mapId === 'MAP002' && i === 2) occupantDieNode.classList.add('change-highlight');
           // castletown_placement_resultの「光る」演出 (2026-09-27, per user request: "この時一番右のダイスが
           // 城下町のスロットANYに置かれ光る") -- 城下町=MAP003のスロットANY(index 1)固定、
           // tutorialCastletownResultGlowing's own doc。
@@ -5126,8 +5123,9 @@ function renderBoard(state, next) {
         // 占有中かどうかは問わずEX要求のスロットはすべて光らせる。
         if (tutorialExSlotGlowing && requirement === 'EX') slotEl.classList.add('change-highlight');
         // worker_placement_example_introの「光る」演出 (2026-09-27, per user request: 当初は"小麦畑の
-        // スロット1"だったが、"変更"で"農園の5のスロット"に差し替え) -- 農園=MAP002のスロット2(index 1)固定。
-        if (tutorialWorkerPlacementExampleGlowing && mapId === 'MAP002' && i === 1) slotEl.classList.add('change-highlight');
+        // スロット1"だったが、"変更"で"農園の5のスロット"に差し替え、2026-09-28にさらに"農園に置くダイス
+        // 5→6"で"農園の6のスロット"に変更) -- 農園=MAP002のスロット3(index 2)固定。
+        if (tutorialWorkerPlacementExampleGlowing && mapId === 'MAP002' && i === 2) slotEl.classList.add('change-highlight');
         // castletown_placement_introの「光る」演出(城下町のANYスロット) (2026-09-27, per user request:
         // "この時城下町のANYスロットを光らせる") -- 城下町=MAP003のスロットANY(index 1)固定。ダイス側の
         // 光る演出(tutorialRightmostDieId)と同じtutorialRightmostDieGlowingフラグを共有する -- 実クリック
@@ -8156,18 +8154,18 @@ const TUTORIAL_STEPS = [
     nextLabel: '次へ',
   },
   // 2026-09-27, per user request -- ワーカープレイスメントの具体例(当初は小麦畑+一番左のダイスだったが、
-  // "変更"で農園+真ん中のダイスに差し替え)。真ん中のダイス(index 1、常に目5に固定済み-- rollInitialColorDice
-  // の{P1:[1,5]}参照)と農園のスロット2(index 1、目5要求)を光らせる(tutorialWorkerPlacementExampleGlowing's
-  // own doc)。
+  // "変更"で農園+真ん中のダイスに差し替え)。真ん中のダイス(index 1、常に目6に固定済み(2026-09-28変更前は
+  // 5) -- rollInitialColorDiceの{P1:[1,6,3]}参照)と農園のスロット3(index 2、目6要求)を光らせる
+  // (tutorialWorkerPlacementExampleGlowing's own doc)。
   {
     id: 'worker_placement_example_intro',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
     body: '例えばダイスをエリア「農園」のスロットに置けば',
     nextLabel: '次へ',
   },
-  // 2026-09-27, per user request -- 表示された瞬間に実際に真ん中のダイスを農園のスロット2へ強制的に
-  // 置く(forcePlaceMiddleDieOnFarmForTutorial's own doc)。増えた食料と、置かれたダイス自体が光る
-  // (tutorialWorkerPlacementResultGlowing's own doc)。
+  // 2026-09-27, per user request -- 表示された瞬間に実際に真ん中のダイスを農園のスロット3(2026-09-28変更、
+  // 変更前はスロット2)へ強制的に置く(forcePlaceMiddleDieOnFarmForTutorial's own doc)。増えた食料と、
+  // 置かれたダイス自体が光る(tutorialWorkerPlacementResultGlowing's own doc)。
   {
     id: 'worker_placement_example_result',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
@@ -9249,17 +9247,18 @@ function forceRetapJob001ForTutorial() {
 
 /** worker_placement_example_resultの「食料3をふやしそれを光らせる」(2026-09-27) -- ワーカープレイス
  * メントの具体例として、プレイヤーのクリックを待たずゲーム側が自動で真ん中の(未配置の)色ダイスを
- * 農園(MAP002)のスロット2(index 1)へ置く。forceRetapJob001ForTutorialと同じ「本物のエンジンAPIを
- * 直接呼ぶだけの薄いラッパー」パターン。 */
+ * 農園(MAP002)のスロット3(index 2、2026-09-28に値5→6へ変更)へ置く。forceRetapJob001ForTutorialと同じ
+ * 「本物のエンジンAPIを直接呼ぶだけの薄いラッパー」パターン。 */
 function forcePlaceMiddleDieOnFarmForTutorial() {
   const p1 = STATE.players.find((p) => p.id === 'P1');
-  // 真ん中=まだ何も配置されていない時点でのindex 1(rollInitialColorDiceの{P1:[1,5]}によりこのダイスは
-  // 常に目5 -- 農園のスロット2(index 1)の要求と一致する)。
+  // 真ん中=まだ何も配置されていない時点でのindex 1(rollInitialColorDiceの{P1:[1,6,3]}によりこのダイスは
+  // 常に目6 -- 農園のスロット3(index 2)の要求と一致する。2026-09-28、per user request: "農園に置くダイス
+  // 5→6" で、以前のスロット2(値5)からスロット3(値6)へ変更)。
   const die = p1.dice.filter((d) => d.kind === 'COLOR' && !d.placedMapId)[1];
   if (!die) return;
   const preSnapshot = gameStateMod.cloneState(STATE);
   const preTurnActionTaken = turnActionTaken;
-  const result = boardMod.placeDice(STATE, INDEX, { playerId: 'P1' }, die.id, 'MAP002', 1);
+  const result = boardMod.placeDice(STATE, INDEX, { playerId: 'P1' }, die.id, 'MAP002', 2);
   if (result.success) {
     actionCheckpoints.push({ state: preSnapshot, turnActionTaken: preTurnActionTaken });
     applyPlaceDiceResult(result, 'P1');
@@ -9444,7 +9443,7 @@ function dismissTutorialStep() {
     render(STATE);
     return;
   }
-  // worker_placement_example_introの「光る」演出(真ん中のダイス+農園のスロット2) -- game_rules_intro_1
+  // worker_placement_example_introの「光る」演出(真ん中のダイス+農園のスロット3) -- game_rules_intro_1
   // が閉じられた瞬間にONにする。
   if (tutorialCurrentStepId === 'game_rules_intro_1') { tutorialGameRulesDiceGlowing = false; tutorialWorkerPlacementExampleGlowing = true; }
   // worker_placement_example_resultの「光る」演出(増えた食料+置かれたダイス) -- worker_placement_example_
@@ -9661,11 +9660,12 @@ let tutorialAreaCardHintGlowing = false;
 // ダイス3つを光らせる") -- game_rules_intro_1が表示され続けている間ずっとtrueになる継続フラグ。
 // 🎲🎲🎲(TUTORIAL_ICON_NOTATIONS)側の光る演出は常時ONで別管理、こちらはrenderPlayers側の実物のダイス用。
 let tutorialGameRulesDiceGlowing = false;
-// 真ん中のダイス+農園のスロット2(index 1)の「光る」演出 (2026-09-27, per user request: 当初は"一番左の
-// ダイスと小麦畑のスロット1"だったが、"変更"で"真ん中のダイス と農園の5のスロット"に差し替え) --
-// worker_placement_example_introが表示され続けている間ずっとtrueになる継続フラグ。
+// 真ん中のダイス+農園のスロット3(index 2)の「光る」演出 (2026-09-27, per user request: 当初は"一番左の
+// ダイスと小麦畑のスロット1"だったが、"変更"で"真ん中のダイス と農園の5のスロット"に差し替え、2026-09-28に
+// さらに"農園に置くダイス 5→6"で農園のスロット3(値6)に変更) -- worker_placement_example_introが
+// 表示され続けている間ずっとtrueになる継続フラグ。
 let tutorialWorkerPlacementExampleGlowing = false;
-// 増えた食料+農園のスロット2に置かれたダイスの「光る」演出 (2026-09-27, per user request: "食料3を
+// 増えた食料+農園のスロット3に置かれたダイスの「光る」演出 (2026-09-27, per user request: "食料3を
 // ふやしそれを光らせる スロットに置かれたダイスも光る") -- worker_placement_example_resultが表示され
 // 続けている間ずっとtrueになる継続フラグ。このステップに入った瞬間に実際にダイスを置く
 // (forcePlaceMiddleDieOnFarmForTutorial's own doc)。
