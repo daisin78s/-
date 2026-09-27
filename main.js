@@ -5334,14 +5334,22 @@ function placeSelectedDieCommit(state, player, dieId, mapId, slotIndex) {
   selectedDieIds = [];
   if (result.success) actionCheckpoints.push({ state: preSnapshot, turnActionTaken: preTurnActionTaken });
   // castletown_placement_introの実クリック操作の完了 (2026-09-27, per user request) -- 城下町(MAP003)への
-  // 実配置に成功した瞬間、次のセリフ(castletown_placement_result)へ直接進める。dismissTutorialStepを経由
-  // しない直接遷移のため、handleTutorialChoiceClick/resource_icon_area_card_hintと同じ理由でここで明示的に
-  // tutorialSeenStepIdsへ加えておく(でないとgame_rules_intro_2への通常の直線探索時に再度見つかってしまう)。
-  if (tutorialCurrentStepId === 'castletown_placement_intro' && result.success && mapId === 'MAP003') {
+  // 実配置に成功した瞬間、次のセリフ(castletown_placement_result)へ直接進める。他のエリアへの配置も禁止は
+  // しない(per user request: "ほかのスロットに置いてもいい")が、その場合は誤配置の救済セリフ
+  // (castletown_misclick_hint)へ回す。どちらもdismissTutorialStepを経由しない直接遷移のため、
+  // handleTutorialChoiceClick/resource_icon_area_card_hintと同じ理由でここで明示的にtutorialSeenStepIdsへ
+  // 加えておく(でないとgame_rules_intro_2への通常の直線探索時に再度見つかってしまう)。
+  if (tutorialCurrentStepId === 'castletown_placement_intro' && result.success) {
     tutorialRightmostDieGlowing = false;
-    tutorialCastletownResultGlowing = true;
-    tutorialSeenStepIds.add('castletown_placement_result');
-    tutorialCurrentStepId = 'castletown_placement_result';
+    if (mapId === 'MAP003') {
+      tutorialCastletownResultGlowing = true;
+      tutorialSeenStepIds.add('castletown_placement_result');
+      tutorialCurrentStepId = 'castletown_placement_result';
+    } else {
+      tutorialCancelButtonGlowing = true;
+      tutorialSeenStepIds.add('castletown_misclick_hint');
+      tutorialCurrentStepId = 'castletown_misclick_hint';
+    }
     stopTutorialTypewriter();
   }
   applyPlaceDiceResult(result, player.id);
@@ -8158,6 +8166,17 @@ const TUTORIAL_STEPS = [
     // 行う(dismissTutorialStepは経由しない)。
     noManualDismiss: true,
   },
+  // 2026-09-27, per user request -- 城下町以外のスロットに誤って置いてしまった場合の救済セリフ("ほかの
+  // スロットに置いてもいい" -- 禁止はしない、置けてしまった時に「直前のアクションをキャンセル」を教える形)。
+  // placeSelectedDieCommit内の専用フックで、castletown_placement_intro中にMAP003以外への実配置が成功した
+  // 瞬間にここへ遷移する。次へボタンは無く(noManualDismiss)、実際にキャンセルボタンを押すまで進めない
+  // (handleCancelPreviousActionClick内の専用フック参照)。
+  {
+    id: 'castletown_misclick_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: 'おっと、別のスロットに置いてしまいましたね\nそういう時は直前の「アクションをキャンセル」ボタンを押してください',
+    noManualDismiss: true,
+  },
   // 2026-09-27, per user request -- プレイヤー自身が実際に一番右のダイスを城下町のスロットANY(index 1)へ
   // クリックで置く(placeSelectedDieCommit内の専用フック参照)。本物のCHANGE(K,A,ALL)アクションが実際に
   // 発動し、食料が権力に変換される。増えた権力と、置かれたダイス自体が光る
@@ -8168,15 +8187,11 @@ const TUTORIAL_STEPS = [
     body: 'あなたの持っている食料〇すべてが権力赤〇に変換されました',
     nextLabel: '次へ',
   },
-  // 2026-09-27, per user request -- 2回目のBOB/CAROL/DANの見た目だけの配置演出。光る演出は無し
-  // (forceFakeAiPlacementsForTutorialの2回目呼び出しはこのステップ自身が閉じられた瞬間に実行する)。
-  {
-    id: 'ai_fake_turns_hint_2',
-    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: '次へを押すとBOB　CAROL　DANが適当にダイスを置く',
-    nextLabel: '次へ',
-  },
-  // 2026-09-27, per user request -- カード獲得デモの導入。残った(目1固定の)ダイスと王宮の次に配置可能な
+  // 2026-09-27, per user request -- カード獲得デモの導入。2回目のBOB/CAROL/DANの見た目だけの配置は、この
+  // ステップの1つ前(castletown_placement_result)が閉じられた瞬間にセリフ無しで実行する
+  // (forceFakeAiPlacementsForTutorial's own doc、per user report: "次へを押すとBOB CAROL DANが適当に
+  // ダイスを置く はセリフ出ないので決して" -- 1回目(ai_fake_turns_hint)と同じ理由で削除)。残った
+  // (目1固定の)ダイスと王宮の次に配置可能な
   // (=最初に見つかる空いている)スロットを光らせる(tutorialCardAcquisitionGlowing's own doc)。
   {
     id: 'card_acquisition_intro',
@@ -9103,11 +9118,12 @@ function renderTutorialOverlay(state) {
         window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
       }
     }
-    // cancel_action_hintが見えるようにスクロール (2026-09-27, per user request: "この時「直前のアクションを
-    // キャンセル」ボタンが見えるようにスクロールお願い") -- 同じ考え方。サイドバー上部の常設ボタン
-    // (#dice-cancel-button)を対象にする -- ビルド選択モーダル用の複製(#dice-cancel-button-build)はモーダルが
-    // 開いている時しか意味を持たないのでここでは対象にしない。
-    if (step.id === 'cancel_action_hint') {
+    // cancel_action_hint/castletown_misclick_hintが見えるようにスクロール (2026-09-27, per user request:
+    // "この時「直前のアクションをキャンセル」ボタンが見えるようにスクロールお願い"、城下町の誤配置救済
+    // セリフでも同様に"必要ならスクロール") -- 同じ考え方。サイドバー上部の常設ボタン(#dice-cancel-button)
+    // を対象にする -- ビルド選択モーダル用の複製(#dice-cancel-button-build)はモーダルが開いている時しか
+    // 意味を持たないのでここでは対象にしない。
+    if (step.id === 'cancel_action_hint' || step.id === 'castletown_misclick_hint') {
       const cancelBtn = document.getElementById('dice-cancel-button');
       if (cancelBtn) {
         const bubbleWrap = document.getElementById('tutorial-bubble-wrap');
@@ -9188,7 +9204,7 @@ function forcePlaceMiddleDieOnFarmForTutorial() {
   }
 }
 
-/** worker_placement_turn_end_hintが閉じられた瞬間/ai_fake_turns_hint_2が閉じられた瞬間の、BOB/CAROL/DANの
+/** worker_placement_turn_end_hint/castletown_placement_resultが閉じられた瞬間の、BOB/CAROL/DANの
  * 見た目だけの配置(2026-09-27) -- 各AIの未配置の色ダイス1個を、城下町(MAP003、1回目のみ除外)を除く、実際に
  * 配置可能なスロット(board.previewPlaceDiceで判定 -- 目の一致/ANY/重複値/資源不足などの本物のルールを
  * すべて満たすスロットに限定、per user request: "適当に置くと書きましたが 配置可能なスロットに限定して
@@ -9381,13 +9397,13 @@ function dismissTutorialStep() {
   // 実際にクリックで置かせる形に変更 -- castletown_placement_introはnoManualDismissのためここには来ない。
   // 実際の遷移とtutorialCastletownResultGlowingのON/forcePlaceRightmostDieOnCastletownForTutorial相当の
   // 実配置は、placeSelectedDieCommit内の専用フックで行う)。
-  // ai_fake_turns_hint_2の光る演出は無し(セリフのみ) -- castletown_placement_resultが閉じられた瞬間に
-  // 増えた権力/置かれたダイスの光る演出をOFFにする。
-  if (tutorialCurrentStepId === 'castletown_placement_result') tutorialCastletownResultGlowing = false;
-  // card_acquisition_introの「光る」演出(残ったダイス+王宮の次の空きスロット) -- ai_fake_turns_hint_2が
-  // 閉じられた瞬間に2回目のBOB/CAROL/DANの見た目だけの配置を実行する(今回は城下町を避ける必要は無い、
-  // 王宮への目1回避は関数自体に組み込み済み)。
-  if (tutorialCurrentStepId === 'ai_fake_turns_hint_2') {
+  // card_acquisition_introの「光る」演出(残ったダイス+王宮の次の空きスロット) -- castletown_placement_result
+  // が閉じられた瞬間に、増えた権力/置かれたダイスの光る演出をOFFにしつつ、2回目のBOB/CAROL/DANの見た目だけの
+  // 配置をセリフ無しで実行する(forceFakeAiPlacementsForTutorial's own doc、per user report: 「次へを押すと
+  // BOB CAROL DANが適当にダイスを置く」はセリフではなかったため削除 -- 1回目と同じ理由)。今回は城下町を
+  // 避ける必要は無い、王宮への目1回避は関数自体に組み込み済み。
+  if (tutorialCurrentStepId === 'castletown_placement_result') {
+    tutorialCastletownResultGlowing = false;
     forceFakeAiPlacementsForTutorial();
     tutorialCardAcquisitionGlowing = true;
   }
@@ -9497,9 +9513,10 @@ let tutorialPlacedDiceGlowing = false;
 // は使わず、attachTapToggleのTAP成功時に直接render()を呼ぶ前にセットする(そちらの doc 参照)。
 let tutorialResourceGainGlowing = false;
 // 「直前のアクションをキャンセル」ボタンの「光る」演出 (2026-09-26, per user request: "この時直前のアクション
-// をキャンセルボタンを光らせる") -- cancel_action_hintが表示され続けている間ずっとtrueになる継続フラグ。
-// このボタン自体はrenderUndoButtonsが毎回同じDOMノードを使い回す(cloneされない)ため、他の継続フラグと違い
-// classList.add一辺倒ではなくtoggleで明示的にON/OFFする必要がある(renderUndoButtonsの doc 参照)。
+// をキャンセルボタンを光らせる") -- cancel_action_hint/castletown_misclick_hint(城下町以外への誤配置の
+// 救済セリフ)が表示され続けている間ずっとtrueになる継続フラグ。このボタン自体はrenderUndoButtonsが毎回
+// 同じDOMノードを使い回す(cloneされない)ため、他の継続フラグと違いclassList.add一辺倒ではなくtoggleで
+// 明示的にON/OFFする必要がある(renderUndoButtonsの doc 参照)。
 let tutorialCancelButtonGlowing = false;
 // 一番左の色ダイス1個だけの「光る」演出 + 選択制限 (2026-09-27, per user request: 当初は"この時自分の
 // ダイスがすべて光る"だったが、"自分の色ダイスの一番左1個だけ光るに変更 そのダイスしかつかめないように"
@@ -9934,6 +9951,15 @@ function handleCancelPreviousActionClick() {
     tutorialCurrentStepId = null;
     tutorialCancelButtonGlowing = false;
     forceRetapJob001ForTutorial();
+    stopTutorialTypewriter();
+  }
+  // castletown_misclick_hintの「キャンセルボタンをクリック」演出 (2026-09-27, per user request) -- 城下町
+  // 以外へ誤って置いてしまった後の救済セリフからキャンセルボタンを押すと、castletown_placement_introへ
+  // 戻ってやり直せるようにする(一番右のダイスの光る演出も再度ONにする)。
+  if (tutorialCurrentStepId === 'castletown_misclick_hint') {
+    tutorialCurrentStepId = 'castletown_placement_intro';
+    tutorialCancelButtonGlowing = false;
+    tutorialRightmostDieGlowing = true;
     stopTutorialTypewriter();
   }
   render(STATE);
