@@ -3742,6 +3742,13 @@ function renderResourceBadge(resource, count) {
     badge.appendChild(document.createTextNode(`${count}VP`));
     return badge;
   }
+  // 1〜2個はアイコンをそのまま個数分並べる、3個以上は今まで通りアイコン1個+数字 (2026-09-27, per user
+  // request: 当初は1〜3/4以上のしきい値だったが、"1ABCZ BZはから2までは アイコンをそのままふやし 3以上は
+  // 〇3のようにする VPのみ今まで通り" で1〜2/3以上に修正)。
+  if (count >= 1 && count <= 2) {
+    for (let i = 0; i < count; i++) badge.appendChild(el('span', 'resource-badge__dot'));
+    return badge;
+  }
   const dot = el('span', 'resource-badge__dot');
   badge.appendChild(dot);
   badge.appendChild(document.createTextNode(`${count}`));
