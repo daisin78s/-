@@ -8199,7 +8199,7 @@ const TUTORIAL_STEPS = [
       const player = state.players.find((p) => p.id === 'P1');
       return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
     },
-    body: 'あなたのターンになったらいずれかのエリアのスロットにダイスを一つ置かなければなりません\nこれをメインアクションと呼びます',
+    body: 'あなたのターンになったらいずれかのエリアのスロットにダイスを一つ置きます\nダイスはどの順番で選んでもかまいません\nこのダイスをエリアに置く行動をメインアクションと呼びます',
     nextLabel: '次へ',
   },
   // 2026-09-26, per user request -- shown right after main_action_intro's own 次へ, same match condition/
