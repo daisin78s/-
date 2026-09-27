@@ -7996,7 +7996,7 @@ const TUTORIAL_STEPS = [
   {
     id: 'resource_choice_con_intro',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: 'あなたにランダムな制約カード1枚が配られました\n制約カードには表面と裏面があり得られる初期資源やプレイにかかる制約が違います\n表面裏面どちらを使うかあとで選ぶことができます',
+    body: 'あなたにランダムな制約カード1枚が配られました\nこれはあなたの性格や特性を表しています\n制約カードには表面と裏面があり得られる初期資源や制約が違います\n表面裏面どちらを使うかあとで選ぶことができます\nカードをクリックすることで拡大され詳細が表示されますが今は気にせず先に進みましょう',
     nextLabel: '次へ',
   },
   {
