@@ -4553,6 +4553,14 @@ function renderQsts(state) {
  * round<2 condition that sets this; see board.getBuildCandidates for the matching rule enforcement
  * (round<2 M-shop slots were never real candidates regardless of this display).
  */
+// shop_dice_value1_intro/shop_dice_value5_introの「光る」演出用スロットIDリスト (2026-09-27, per user
+// request) -- SHOP101-106はNORMAL店の6枠(目1-6～目1)、SHOP201/202はSPECIAL店のうちdie値5も買える枠
+// (目1-6/目1-5、SHOP101/102と同じレンジ)。ゲームデータのDICE_MIN/DICE_MAXから導くのではなく、
+// dictationで明示された通りの固定リストにしている(die値1の説明では意図的にSHOP201-203を含めていない
+// -- "6個すべて"という文言がSHOP101-106の6枠だけを指しているため)。
+const TUTORIAL_SHOP_NORMAL_SLOT_IDS = ['SHOP101', 'SHOP102', 'SHOP103', 'SHOP104', 'SHOP105', 'SHOP106'];
+const TUTORIAL_SHOP_VALUE5_SLOT_IDS = ['SHOP101', 'SHOP102', 'SHOP201', 'SHOP202'];
+
 function buildShopSlotNode(slotId, faceId, showReqCaption, locked, faceDown = false) {
   const slotTpl = document.getElementById('tpl-shop-slot');
   const slotNode = slotTpl.content.firstElementChild.cloneNode(true);
@@ -4566,14 +4574,20 @@ function buildShopSlotNode(slotId, faceId, showReqCaption, locked, faceDown = fa
     if (locked) return `${boardMod.specialShopMinRound(faceId)}Rから`;
     return showReqCaption ? shopReqForSlotId(slotId) : '';
   };
+  // shop_dice_value1_intro/shop_dice_value5_introの「光る」演出(SHOPのダイス目キャプション) -- どちらも
+  // 実カードの有無に関わらずキャプション自体は常に表示されるので、早期returnの前でまとめて判定する。
+  const reqGlowing = (tutorialShopValue1Glowing && TUTORIAL_SHOP_NORMAL_SLOT_IDS.includes(slotId))
+    || (tutorialShopValue5Glowing && TUTORIAL_SHOP_VALUE5_SLOT_IDS.includes(slotId));
   if (!faceId) {
     slotNode.querySelector('.shop-slot__req').textContent = showReqCaption ? shopReqForSlotId(slotId) : '';
+    if (reqGlowing) slotNode.querySelector('.shop-slot__req').classList.add('change-highlight');
     const emptyTpl = document.getElementById('tpl-shop-card-empty');
     slotNode.querySelector('.shop-slot__card').appendChild(emptyTpl.content.firstElementChild.cloneNode(true));
     return slotNode;
   }
   if (faceDown) {
     slotNode.querySelector('.shop-slot__req').textContent = reqCaption();
+    if (reqGlowing) slotNode.querySelector('.shop-slot__req').classList.add('change-highlight');
     const facedownTpl = document.getElementById('tpl-shop-card-facedown');
     slotNode.querySelector('.shop-slot__card').appendChild(facedownTpl.content.firstElementChild.cloneNode(true));
     return slotNode;
@@ -4589,8 +4603,21 @@ function buildShopSlotNode(slotId, faceId, showReqCaption, locked, faceDown = fa
   // ex_slot_introの「光る」演出 (2026-09-27, per user request: "SHOPの領地カードをすべて光らせる") --
   // 領地カード(Aカード)はfaceIdが必ず'A'で始まる(AREAなど盤面データの'AREA'とは別シートで無関係)。
   if (tutorialExSlotGlowing && faceId.startsWith('A')) cardVisual.classList.add('change-highlight');
+  // shop_cards_introの「光る」演出 (2026-09-27, per user request: "この時SHOP101-106を光らせる") --
+  // NORMAL店の6枚すべて。
+  if (tutorialShopCardsGlowing && TUTORIAL_SHOP_NORMAL_SLOT_IDS.includes(slotId)) cardVisual.classList.add('change-highlight');
+  // shop_dice_value5_introの「光る」演出(カード自体) -- SHOP101/102/201/202のカードも光らせる。
+  if (tutorialShopValue5Glowing && TUTORIAL_SHOP_VALUE5_SLOT_IDS.includes(slotId)) cardVisual.classList.add('change-highlight');
+  // shop_cost_introの「光る」演出 (2026-09-27, per user request: "ショップにあるすべてのカードの支払い
+  // 資源部分を光らせる") -- M/NORMAL/SPECIALすべてのショップスロットが対象(buildShopSlotNodeはどの店の
+  // スロットでも呼ばれる)。モニュメントなど支払い資源が無いカードは.shop-card__cost-emptyの方に光らせる。
+  if (tutorialShopCostGlowing) {
+    const costEl = cardVisual.querySelector('.shop-card__cost, .shop-card__cost-empty');
+    if (costEl) costEl.classList.add('change-highlight');
+  }
   slotNode.querySelector('.shop-slot__card').appendChild(cardVisual);
   slotNode.querySelector('.shop-slot__req').textContent = reqCaption();
+  if (reqGlowing) slotNode.querySelector('.shop-slot__req').classList.add('change-highlight');
   return slotNode;
 }
 
@@ -8314,6 +8341,70 @@ const TUTORIAL_STEPS = [
     body: 'カードを獲得するには王宮か元老院にダイスを置きます',
     nextLabel: '次へ',
   },
+  // 2026-09-27, per user request -- SHOP101-106のカードを光らせる。tutorialShopCardsGlowing's own doc。
+  {
+    id: 'shop_cards_intro',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      if (next.playerId !== 'P1') return false;
+      const player = state.players.find((p) => p.id === 'P1');
+      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
+    },
+    body: 'そうするとショップにあるカードを獲得することができます',
+    nextLabel: '次へ',
+  },
+  // 2026-09-27, per user request -- SHOP101-106のダイス目キャプション(目1-6～目1)6個すべてを光らせる。
+  // die値1はどのSHOPのレンジにも含まれるため、どのカードでも1枚獲得できる。tutorialShopValue1Glowing's
+  // own doc。
+  {
+    id: 'shop_dice_value1_intro',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      if (next.playerId !== 'P1') return false;
+      const player = state.players.find((p) => p.id === 'P1');
+      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
+    },
+    body: 'どのカードが獲得できるかは置いたダイス目とショップに書かれているダイス目の通りです\nダイス目 1 を置けばどのカードでも1枚獲得できますが',
+    nextLabel: '次へ',
+  },
+  // 2026-09-27, per user request -- 目1-6/目1-5のキャプションと、その2つのレンジにdie値5が含まれる
+  // SHOP101/102/201/202のカード自体を光らせる。tutorialShopValue5Glowing's own doc。
+  {
+    id: 'shop_dice_value5_intro',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      if (next.playerId !== 'P1') return false;
+      const player = state.players.find((p) => p.id === 'P1');
+      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
+    },
+    body: 'ダイス目 5 を置けばここのショップのカードからしか選べません',
+    nextLabel: '次へ',
+  },
+  // 2026-09-27, per user request -- ショップの全カードの支払い資源部分を光らせる。tutorialShopCostGlowing's
+  // own doc。
+  {
+    id: 'shop_cost_intro',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      if (next.playerId !== 'P1') return false;
+      const player = state.players.find((p) => p.id === 'P1');
+      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
+    },
+    body: 'カードを獲得するには資源を払う必要があります',
+    nextLabel: '次へ',
+  },
+  // 2026-09-27, per user request -- 光る演出は無し。プレイの助言のみ。
+  {
+    id: 'used_card_immediately_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      if (next.playerId !== 'P1') return false;
+      const player = state.players.find((p) => p.id === 'P1');
+      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
+    },
+    body: '獲得したカードはこのラウンドからすぐに使うことができますのでガンガン使っていきましょう',
+    nextLabel: '次へ',
+  },
 ];
 
 // job_explanation (2026-09-24: "JOBをクリックしたときそのJOBの説明をセリフで流したい" -- per-JOB bespoke
@@ -8762,7 +8853,16 @@ function dismissTutorialStep() {
   if (tutorialCurrentStepId === 'first_turn_recommendation_hint') tutorialTrainingGroundGlowing = true;
   // card_areas_hintの「光る」演出(王宮/元老院) -- training_ground_hintが閉じられた瞬間にONにする。
   if (tutorialCurrentStepId === 'training_ground_hint') { tutorialTrainingGroundGlowing = false; tutorialCardAreasGlowing = true; }
-  if (tutorialCurrentStepId === 'card_areas_hint') tutorialCardAreasGlowing = false;
+  // shop_cards_introの「光る」演出(SHOP101-106のカード) -- card_areas_hintが閉じられた瞬間にONにする。
+  if (tutorialCurrentStepId === 'card_areas_hint') { tutorialCardAreasGlowing = false; tutorialShopCardsGlowing = true; }
+  // shop_dice_value1_introの「光る」演出(SHOPのダイス目キャプション、die値1用) -- shop_cards_introが
+  // 閉じられた瞬間にONにする。
+  if (tutorialCurrentStepId === 'shop_cards_intro') { tutorialShopCardsGlowing = false; tutorialShopValue1Glowing = true; }
+  // shop_dice_value5_introの「光る」演出(die値5用) -- shop_dice_value1_introが閉じられた瞬間にONにする。
+  if (tutorialCurrentStepId === 'shop_dice_value1_intro') { tutorialShopValue1Glowing = false; tutorialShopValue5Glowing = true; }
+  // shop_cost_introの「光る」演出(支払い資源部分) -- shop_dice_value5_introが閉じられた瞬間にONにする。
+  if (tutorialCurrentStepId === 'shop_dice_value5_intro') { tutorialShopValue5Glowing = false; tutorialShopCostGlowing = true; }
+  if (tutorialCurrentStepId === 'shop_cost_intro') tutorialShopCostGlowing = false;
   // alsoCloseTurnOrderOverlay (2026-09-24, see turn_order_reveal_summary's own doc): 次へ on this step
   // also presses the turn-order overlay's own ✖ in the same tap, instead of leaving the player to close
   // it separately.
@@ -8883,6 +8983,22 @@ let tutorialTrainingGroundGlowing = false;
 // 王宮/元老院の「光る」演出 (2026-09-27, per user request: "このとき王宮と元老院を光らせる") --
 // card_areas_hintが表示され続けている間ずっとtrueになる継続フラグ。
 let tutorialCardAreasGlowing = false;
+// SHOP101-106(NORMAL店)カード自体の「光る」演出 (2026-09-27, per user request: "この時SHOP101-106を
+// 光らせる") -- shop_cards_introが表示され続けている間ずっとtrueになる継続フラグ。
+let tutorialShopCardsGlowing = false;
+// SHOPのダイス目キャプション(目1-6等)の「光る」演出、die値1の説明用 (2026-09-27, per user request: "目
+// 1-6から目6まで6個すべて光らせる") -- shop_dice_value1_introが表示され続けている間ずっとtrueになる
+// 継続フラグ。TUTORIAL_SHOP_NORMAL_SLOT_IDSの6枠すべてのキャプションを光らせる(buildShopSlotNodeの
+// reqGlowing参照)。
+let tutorialShopValue1Glowing = false;
+// SHOPのダイス目キャプション+カード自体の「光る」演出、die値5の説明用 (2026-09-27, per user request: "目
+// 1-6と目1-5とSHOP101 102 201 202を光らせる") -- shop_dice_value5_introが表示され続けている間ずっと
+// trueになる継続フラグ。TUTORIAL_SHOP_VALUE5_SLOT_IDSのキャプションとカード両方を光らせる。
+let tutorialShopValue5Glowing = false;
+// SHOP全体(M/NORMAL/SPECIAL)のカードの支払い資源部分の「光る」演出 (2026-09-27, per user request: "ショップ
+// にあるすべてのカードの支払い資源部分を光らせる") -- shop_cost_introが表示され続けている間ずっとtrueに
+// なる継続フラグ。
+let tutorialShopCostGlowing = false;
 // RESOURCE候補側は今のところ元の一回限りの点滅のまま(まだ同じ報告を受けていないため変更せず) -- 同じ
 // タイミングずれ問題を避けるため、dismissTutorialStepが上のRevealedフラグと同時にtrueにし、
 // renderPlayerCards(render()内でrenderTutorialOverlayより前に呼ばれる -- tutorialCurrentStepIdがまだ
