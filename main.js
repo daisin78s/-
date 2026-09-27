@@ -4581,13 +4581,15 @@ function buildShopSlotNode(slotId, faceId, showReqCaption, locked, faceDown = fa
   const facts = factsForFaceId(faceId);
   // showEffect: true is safe for every shop card, incl. monuments -- buildCardVisual only grows
   // the card and shows an effect row when it actually has one (monuments have none).
-  if (facts.req) {
+  const cardVisual = facts.req
     // Monuments: req is intrinsic to this specific card, shown inside the card box, not the slot
     // caption (corrected 2026-07-29).
-    slotNode.querySelector('.shop-slot__card').appendChild(buildCardVisual(faceId, { req: facts.req, showEffect: true }));
-  } else {
-    slotNode.querySelector('.shop-slot__card').appendChild(buildCardVisual(faceId, { showEffect: true }));
-  }
+    ? buildCardVisual(faceId, { req: facts.req, showEffect: true })
+    : buildCardVisual(faceId, { showEffect: true });
+  // ex_slot_introの「光る」演出 (2026-09-27, per user request: "SHOPの領地カードをすべて光らせる") --
+  // 領地カード(Aカード)はfaceIdが必ず'A'で始まる(AREAなど盤面データの'AREA'とは別シートで無関係)。
+  if (tutorialExSlotGlowing && faceId.startsWith('A')) cardVisual.classList.add('change-highlight');
+  slotNode.querySelector('.shop-slot__card').appendChild(cardVisual);
   slotNode.querySelector('.shop-slot__req').textContent = reqCaption();
   return slotNode;
 }
@@ -4922,12 +4924,17 @@ function renderBoard(state, next) {
           // player's own dice (dice aren't removed from player.dice on placement, only placedMapId is set).
           const occupantOwner = state.players.find((p) => p.id === topOccupant.playerId);
           const occupantDie = occupantOwner && occupantOwner.dice.find((d) => d.id === topOccupant.dieId);
-          stack.appendChild(renderDie({
+          const occupantDieNode = renderDie({
             kind: occupantDie ? occupantDie.kind : 'COLOR',
             value: topOccupant.value,
             color: colorForPlayer(state, topOccupant.playerId),
             wildcard: !!topOccupant.isWildcard,
-          }));
+          });
+          // slot_dice_value_rule_intro_2の「光る」演出 (2026-09-27, per user request: "スロットに置かれて
+          // いるダイスをすべて光らせる") -- どのプレイヤーが置いたかは問わず、盤面上のすべての配置済み
+          // ダイスを光らせる(tutorialPlacedDiceGlowing's own doc)。
+          if (tutorialPlacedDiceGlowing) occupantDieNode.classList.add('change-highlight');
+          stack.appendChild(occupantDieNode);
           slotEl.appendChild(stack);
         } else if (typeof requirement === 'number') {
           slotEl.appendChild(dieFace(requirement));
@@ -8186,8 +8193,11 @@ const TUTORIAL_STEPS = [
       const player = state.players.find((p) => p.id === 'P1');
       return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
     },
-    body: '自分のターン中メインアクションの前後にフリーアクションを行うことができます\n試しにあなたのジョブ一般市民をクリックしてみてください',
-    nextLabel: '次へ',
+    body: '自分のターン中メインアクションの前後にフリーアクションを行うことができます\n試しにあなたのジョブ一般市民の⤵（タップアイコン）をクリックしてみてください',
+    // 2026-09-27, per user request: "この時 次へ と消す" -- 一般市民の⤵をクリックすること以外に先へ進む
+    // 手段が無いようにする(resource_choiceと同じnoManualDismissパターン)。実際の遷移はattachTapToggleの
+    // TAP成功時に直接行われる(そちらのdoc参照)。
+    noManualDismiss: true,
   },
   // 2026-09-26, per user request -- 一般市民(JOB001)をTAPした瞬間に自動遷移(通常経路。attachTapToggleの
   // doc参照)、または次へで手動遷移(フォールバック)。増えたK/ZはtutorialResourceGainGlowingで光る。
@@ -8203,7 +8213,7 @@ const TUTORIAL_STEPS = [
     nextLabel: '次へ',
   },
   // 2026-09-26, per user request -- 「直前のアクションをキャンセル」ボタンを押した瞬間に自動遷移(通常経路。
-  // handleCancelPreviousActionClickのdoc参照)、または次へで手動遷移(フォールバック)。
+  // handleCancelPreviousActionClickのdoc参照)。
   {
     id: 'cancel_action_hint',
     match: (state) => {
@@ -8213,7 +8223,9 @@ const TUTORIAL_STEPS = [
       return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
     },
     body: '行動が気に入らなかったり間違えたときは「直前のアクションをキャンセル」を押せばキャンセルすることができます',
-    nextLabel: '次へ',
+    // 2026-09-27, per user request: "このとき 次へ を消す" -- 実際にキャンセルボタンを押すこと以外に先へ
+    // 進む手段が無いようにする(free_action_hintと同じnoManualDismissパターン)。
+    noManualDismiss: true,
   },
   // 2026-09-27, per user request -- cancel_action_hintが閉じられた瞬間、プレイヤーのクリックを待たず
   // ゲーム側が自動で一般市民を再TAPする(forceRetapJob001ForTutorial's own doc)。光る演出は無し(タップ後の
@@ -8230,7 +8242,7 @@ const TUTORIAL_STEPS = [
     nextLabel: '次へ',
   },
   // 2026-09-27, per user request -- ダイスを1個クリックした瞬間に自動遷移(通常経路。renderPlayersの
-  // die click handlerのdoc参照)、または次へで手動遷移(フォールバック)。
+  // die click handlerのdoc参照)。
   {
     id: 'dice_select_hint',
     match: (state) => {
@@ -8240,7 +8252,9 @@ const TUTORIAL_STEPS = [
       return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
     },
     body: 'ダイスを1個クリックしてください',
-    nextLabel: '次へ',
+    // 2026-09-27, per user request: "この時も 次へ を消す" -- 実際にダイスをクリックすること以外に先へ
+    // 進む手段が無いようにする(free_action_hint/cancel_action_hintと同じnoManualDismissパターン)。
+    noManualDismiss: true,
   },
   // 2026-09-27, per user request -- 光る演出は無し。選択したダイスに対する既存の配置可能SLOTハイライト
   // (.slot--highlight、renderBoardのhighlightedSlots)をそのまま指して説明するだけなので専用のフラグは不要。
@@ -8625,6 +8639,18 @@ function renderTutorialOverlay(state) {
         window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
       }
     }
+    // ex_slot_introが見えるようにスクロール (2026-09-27, per user request: "領地カードを光らせるとき SHOPが
+    // 見えるように上にスクロールさせて") -- 同じ考え方。#shops(ショップ全体)を対象にする。
+    if (step.id === 'ex_slot_intro') {
+      const shopsEl = document.getElementById('shops');
+      if (shopsEl) {
+        const bubbleWrap = document.getElementById('tutorial-bubble-wrap');
+        const visibleHeight = (bubbleWrap && !bubbleWrap.hidden) ? bubbleWrap.getBoundingClientRect().top : window.innerHeight;
+        const rect = shopsEl.getBoundingClientRect();
+        const desiredTop = Math.max(0, (visibleHeight - rect.height) / 2);
+        window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
+      }
+    }
   }
 }
 
@@ -8674,10 +8700,13 @@ function dismissTutorialStep() {
   if (tutorialCurrentStepId === 'slot_dice_value_rule_intro') { tutorialSlotValueOneGlowing = false; tutorialSlotAnyGlowing = true; }
   // ex_slot_introの「光る」演出(EXスロット) -- slot_any_rule_introが閉じられた瞬間にONにする。
   if (tutorialCurrentStepId === 'slot_any_rule_intro') { tutorialSlotAnyGlowing = false; tutorialExSlotGlowing = true; }
-  if (tutorialCurrentStepId === 'ex_slot_intro') tutorialExSlotGlowing = false;
+  // slot_dice_value_rule_intro_2の「光る」演出(盤面上の配置済みダイス) -- ex_slot_introが閉じられた瞬間に
+  // ONにする。
+  if (tutorialCurrentStepId === 'ex_slot_intro') { tutorialExSlotGlowing = false; tutorialPlacedDiceGlowing = true; }
   // free_action_hintの「光る」演出 (2026-09-26, per user request: "この時一般市民が光る") -- 直前の
   // slot_dice_value_rule_intro_2が閉じられた瞬間にONにし、free_action_hint自身が閉じられたらOFFにする。
-  if (tutorialCurrentStepId === 'slot_dice_value_rule_intro_2') tutorialJobCardGlowing = true;
+  // 盤面上の配置済みダイスの光る演出も同じ瞬間にOFFにする。
+  if (tutorialCurrentStepId === 'slot_dice_value_rule_intro_2') { tutorialJobCardGlowing = true; tutorialPlacedDiceGlowing = false; }
   // job_tap_resource_introの「光る」演出(増えたK/Z) -- free_action_hintが閉じられた瞬間にONにする。通常は
   // JOB001のTAP成功時にattachTapToggleが直接同じ処理をやってからrender()するので、ここが実際に効くのは
   // 「一般市民をクリックせず次へだけ押した」フォールバック経路のときだけ(その場合資源は実際には増えていない
@@ -8789,6 +8818,10 @@ let tutorialSlotAnyGlowing = false;
 // (誰もまだ領地カードを獲得していない)状態では単純にrequirement==='EX'にマッチするスロットが無いだけなので、
 // 「無ければ光らない」は特別な分岐なしで自然に成立する。
 let tutorialExSlotGlowing = false;
+// 盤面上の配置済みダイスすべての「光る」演出 (2026-09-27, per user request: "スロットに置かれているダイスを
+// すべて光らせる") -- slot_dice_value_rule_intro_2が表示され続けている間ずっとtrueになる継続フラグ。誰が
+// 置いたかは問わず盤面上のすべての配置済みダイスを光らせる。
+let tutorialPlacedDiceGlowing = false;
 // 一般市民TAPで増えた資源(K/Z)の「光る」演出 (2026-09-26, per user request: "この時増えた資源が光る") --
 // job_tap_resource_introが表示され続けている間ずっとtrueになる継続フラグ。JOB001のTAPが成功した瞬間に
 // ONにする必要があるため、con_face_choice_intro/tutorialInitialResourcesGlowingと同じ理由でautoDismissWhen
