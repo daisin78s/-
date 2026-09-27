@@ -3681,17 +3681,6 @@ h1, h2, h3 { margin: 0; }
   gap: 12px 24px;
 }
 
-#tutorial-bubble__end {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: 22px;
-  text-decoration: underline;
-  cursor: pointer;
-  padding: 8px;
-  white-space: nowrap;
-}
-
 #tutorial-bubble__dismiss {
   background: var(--surface);
   border: 2px solid var(--accent);

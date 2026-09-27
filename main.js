@@ -3032,6 +3032,11 @@ function resourceItemNodes(countStr, resource) {
     const count = countStr ? parseInt(countStr, 10) : 1;
     return Array.from({ length: count }, () => actionEmoji('🎲'));
   }
+  // 1〜2個はアイコンをそのまま個数分並べる、3個以上は今まで通りアイコン1個+数字 (2026-09-27, per user
+  // request: "初期資源カードもお願い" -- renderResourceBadgeと同じ表示規則を、初期資源カード(R)など
+  // ADD(...)アイコンで資源を示すすべてのカード効果表示にも適用する)。
+  const count = countStr ? parseInt(countStr, 10) : 1;
+  if (count >= 1 && count <= 2) return Array.from({ length: count }, () => actionDot(resource));
   const nodes = [actionDot(resource)];
   if (countStr) nodes.push(actionCount(countStr));
   return nodes;
@@ -3729,7 +3734,14 @@ function renderDie(die) {
   return node;
 }
 
-function renderResourceBadge(resource, count) {
+// renderResourceBadgeのアイコン反復上限(1〜2個)を無視して、常に個数分アイコンを並べたい例外カード
+// (2026-09-27, per user request: "元老院は赤〇赤〇赤〇青〇のように表示してほしい...元老院などは例外処理で
+// 赤〇赤〇赤〇青〇として" -- 通常の1〜2個までの上限だとカードのスペースに収まらない3個以上でも数字表記に
+// 落ちてしまうため、この特定カードだけ数字を使わず常にアイコンを並べる指定)。物理ID単位(A301)で持たせて
+// おけば表/裏(A301A/A301B)どちらも自動でカバーできる。"元老院など"と言われている通り今後追加される想定。
+const UNLIMITED_ICON_REPEAT_PHYSICAL_IDS = ['A301'];
+
+function renderResourceBadge(resource, count, unlimitedRepeat) {
   // Confirmed 2026-07-29: the dot's color alone identifies the resource -- no letter label needed.
   const badge = el('span', 'resource-badge');
   badge.dataset.resource = resource;
@@ -3744,8 +3756,9 @@ function renderResourceBadge(resource, count) {
   }
   // 1〜2個はアイコンをそのまま個数分並べる、3個以上は今まで通りアイコン1個+数字 (2026-09-27, per user
   // request: 当初は1〜3/4以上のしきい値だったが、"1ABCZ BZはから2までは アイコンをそのままふやし 3以上は
-  // 〇3のようにする VPのみ今まで通り" で1〜2/3以上に修正)。
-  if (count >= 1 && count <= 2) {
+  // 〇3のようにする VPのみ今まで通り" で1〜2/3以上に修正)。unlimitedRepeat指定時はこの上限を無視する
+  // (UNLIMITED_ICON_REPEAT_PHYSICAL_IDS's own doc)。
+  if ((count >= 1 && count <= 2) || (unlimitedRepeat && count >= 1)) {
     for (let i = 0; i < count; i++) badge.appendChild(el('span', 'resource-badge__dot'));
     return badge;
   }
@@ -3772,11 +3785,14 @@ function renderCostBadges(container, costString, faceId) {
   const ownColor = faceId && /^[ABC]/.test(faceId) ? faceId[0] : null;
   const parts = costString.split(',');
   if (ownColor) parts.sort((a, b) => (b.trim().endsWith(ownColor) ? 1 : 0) - (a.trim().endsWith(ownColor) ? 1 : 0));
+  // UNLIMITED_ICON_REPEAT_PHYSICAL_IDS's own doc -- 元老院(A301)などスペースの都合で数字表記に落とさず
+  // 常にアイコンを個数分並べたい例外カード。
+  const unlimitedRepeat = !!(faceId && UNLIMITED_ICON_REPEAT_PHYSICAL_IDS.includes(gameStateMod.splitCardId(faceId).physicalId));
   for (const part of parts) {
     const match = /^(\d*)([A-Z]+)$/.exec(part.trim());
     if (!match) continue;
     const [, countStr, resource] = match;
-    container.appendChild(renderResourceBadge(resource, countStr || 1));
+    container.appendChild(renderResourceBadge(resource, countStr || 1, unlimitedRepeat));
   }
 }
 
@@ -8687,7 +8703,7 @@ function renderTutorialOverlay(state) {
   wrap.hidden = !step;
   if (!step) return;
   // Hide 閉じる for a noManualDismiss step (2026-09-24, see resource_choice's own doc) -- a visible
-  // button that silently does nothing would be confusing; チュートリアルをやめる still always works.
+  // button that silently does nothing would be confusing.
   document.getElementById('tutorial-bubble__dismiss').hidden = !!step.noManualDismiss;
   // nextLabel (2026-09-24, per user request: "閉じるではなく次へと表示して") -- a step that leads
   // straight into another one reads 次へ instead of the default 閉じる; the click behavior itself
@@ -9099,19 +9115,6 @@ function renderTutorialTurnOrderOverlay(state) {
 
 function closeTutorialTurnOrderOverlay() {
   tutorialTurnOrderOverlayOpen = false;
-  render(STATE);
-}
-
-function endTutorialMode() {
-  tutorialModeActive = false;
-  tutorialCurrentStepId = null;
-  tutorialTurnOrderOverlayOpen = false;
-  tutorialOthersRevealed = false;
-  tutorialConCardRevealed = false;
-  tutorialResourceCandidatesRevealedFlag = false;
-  tutorialConCardGlowing = false;
-  tutorialResourceCandidatesJustRevealed = false;
-  stopTutorialTypewriter();
   render(STATE);
 }
 
@@ -9917,7 +9920,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('weekly-challenge-button').addEventListener('click', openWeeklyChallenge);
   document.getElementById('tutorial-mode-button').addEventListener('click', openTutorialMode);
   document.getElementById('tutorial-bubble__dismiss').addEventListener('click', dismissTutorialStep);
-  document.getElementById('tutorial-bubble__end').addEventListener('click', endTutorialMode);
   // 2026-09-24: the whole bubble box briefly also dismissed on tap here (per user report: "セリフが
   // クリックできないので進めない" -- the small 閉じる text button alone was too fiddly on a touch screen).
   // Reverted 2026-09-26 (per user report: "セリフをクリックすると閉じてしまいます クリックしただけでは
