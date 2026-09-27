@@ -8255,7 +8255,7 @@ const TUTORIAL_STEPS = [
       const player = state.players.find((p) => p.id === 'P1');
       return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
     },
-    body: 'ダイスを置くとき同じエリアのスロットにすでに置いてある目と同じ目は置けません\n資源が足りずエリアの効果を使えないときはそのエリアにダイスを置くことができません',
+    body: 'ダイスを置くとき同じエリアのスロットにすでに置いてある目と同じ目は置けません\nまた資源が足りずエリアの効果を使えないときはそのエリアにダイスを置くことができません',
     nextLabel: '次へ',
   },
   // 2026-09-26, per user request -- shown right after slot_dice_value_rule_intro_2の次へ, same
