@@ -4644,6 +4644,9 @@ function buildShopSlotNode(slotId, faceId, showReqCaption, locked, faceDown = fa
   // ex_slot_introの「光る」演出 (2026-09-27, per user request: "SHOPの領地カードをすべて光らせる") --
   // 領地カード(Aカード)はfaceIdが必ず'A'で始まる(AREAなど盤面データの'AREA'とは別シートで無関係)。
   if (tutorialExSlotGlowing && faceId.startsWith('A')) cardVisual.classList.add('change-highlight');
+  // resource_icon_area_card_hintの「光る」演出(カード側) (2026-09-27, per user request: "見えている領地
+  // カードもすべて光らせる") -- tutorialAreaCardHintGlowing's own doc。
+  if (tutorialAreaCardHintGlowing && faceId.startsWith('A')) cardVisual.classList.add('change-highlight');
   // shop_cards_introの「光る」演出 (2026-09-27, per user request: "この時SHOP101-106を光らせる") --
   // NORMAL店の6枚すべて。
   if (tutorialShopCardsGlowing && TUTORIAL_SHOP_NORMAL_SLOT_IDS.includes(slotId)) cardVisual.classList.add('change-highlight');
@@ -4969,6 +4972,14 @@ function renderBoard(state, next) {
       // 判断) -- 城下町=MAP003/大聖堂=MAP004/ギルド=MAP005/歓楽街=MAP006固定。
       if (tutorialConversionAreasGlowing
         && (mapId === 'MAP003' || mapId === 'MAP004' || mapId === 'MAP005' || mapId === 'MAP006')) {
+        node.classList.add('change-highlight');
+      }
+      // resource_icon_castletown_hintの「光る」演出 (2026-09-27, per user request: "この時城下町を光らせる")
+      // -- 城下町=MAP003固定。
+      if (tutorialCastletownGlowing && mapId === 'MAP003') node.classList.add('change-highlight');
+      // resource_icon_area_card_hintの「光る」演出(タイル側) (2026-09-27, per user request: "この時「王宮」
+      // か「元老院」を光らせる") -- 見えている領地カード側はbuildShopSlotNode参照。
+      if (tutorialAreaCardHintGlowing && (mapId === boardMod.CASTLE_MAP_ID || mapId === boardMod.AREA009_MAP_ID)) {
         node.classList.add('change-highlight');
       }
 
@@ -8042,6 +8053,22 @@ const TUTORIAL_STEPS = [
     body: '〇食料は基本的にはそのままではカードやダイスを獲得するのに使えません\nカードやダイスを獲得するには別のエリアで様々な資源に変換する必要があります',
     nextLabel: '次へ',
   },
+  // 2026-09-27, per user request -- 城下町を光らせる(tutorialCastletownGlowing's own doc)。
+  {
+    id: 'resource_icon_castletown_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: 'エリア「城下町」にダイスを置くと自分が持っている食料すべてを\n赤〇権力に変換することができます',
+    nextLabel: '次へ',
+  },
+  // 2026-09-27, per user request -- 王宮/元老院と見えている領地カードすべてを光らせる
+  // (tutorialAreaCardHintGlowing's own doc)。次へで通常の直線探索ではなくresource_pick_hintへ直接合流する
+  // (dismissTutorialStep自身のdoc参照)。
+  {
+    id: 'resource_icon_area_card_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '赤〇権力は　領地を支配するのに必要です\n「王宮」か「元老院」にダイスを置いて赤〇権力を支払うことで領地カードを獲得することができます',
+    nextLabel: '次へ',
+  },
   {
     id: 'resource_pick_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
@@ -9000,12 +9027,18 @@ function dismissTutorialStep() {
   // resource_icon_conversion_hintの「光る」演出(城下町/大聖堂/ギルド/歓楽街) -- resource_icon_explanationが
   // 閉じられた瞬間にONにする。
   if (tutorialCurrentStepId === 'resource_icon_explanation') { tutorialFoodAreasGlowing = false; tutorialConversionAreasGlowing = true; }
-  // resource_icon_conversion_hintを閉じたら通常の直線的な次のステップ探索には戻さず、直接resource_pick_hint
+  // resource_icon_castletown_hintの「光る」演出(城下町のみ) -- resource_icon_conversion_hintが閉じられた
+  // 瞬間にONにする。
+  if (tutorialCurrentStepId === 'resource_icon_conversion_hint') { tutorialConversionAreasGlowing = false; tutorialCastletownGlowing = true; }
+  // resource_icon_area_card_hintの「光る」演出(王宮/元老院+見えている領地カード) --
+  // resource_icon_castletown_hintが閉じられた瞬間にONにする。
+  if (tutorialCurrentStepId === 'resource_icon_castletown_hint') { tutorialCastletownGlowing = false; tutorialAreaCardHintGlowing = true; }
+  // resource_icon_area_card_hintを閉じたら通常の直線的な次のステップ探索には戻さず、直接resource_pick_hint
   // へ合流させる (2026-09-27, per user request の分岐設計) -- handleTutorialChoiceClickが選ばれなかった方の
   // 選択肢(resource_pick_hint)もすでにtutorialSeenStepIdsに入れてしまっているため、ここで明示的に
   // 遷移させないと通常の再探索では二度と出てこない。
-  if (tutorialCurrentStepId === 'resource_icon_conversion_hint') {
-    tutorialConversionAreasGlowing = false;
+  if (tutorialCurrentStepId === 'resource_icon_area_card_hint') {
+    tutorialAreaCardHintGlowing = false;
     tutorialResourceCandidatesGlowing = true;
     tutorialCurrentStepId = 'resource_pick_hint';
     stopTutorialTypewriter();
@@ -9159,6 +9192,14 @@ let tutorialFoodAreasGlowing = false;
 // 城下町/大聖堂/ギルド/歓楽街の「光る」演出 (2026-09-27, per user request: "この時城下町 大神殿 ギルド
 // 歓楽街を光らせる") -- resource_icon_conversion_hintが表示され続けている間ずっとtrueになる継続フラグ。
 let tutorialConversionAreasGlowing = false;
+// 城下町のみの「光る」演出 (2026-09-27, per user request: "この時城下町を光らせる") --
+// resource_icon_castletown_hintが表示され続けている間ずっとtrueになる継続フラグ。
+let tutorialCastletownGlowing = false;
+// 王宮/元老院+見えている領地カード(Aカード)の「光る」演出 (2026-09-27, per user request: "この時「王宮」か
+// 「元老院」を光らせる 見えている領地カードもすべて光らせる") -- resource_icon_area_card_hintが表示され
+// 続けている間ずっとtrueになる継続フラグ。tutorialExSlotGlowingと同じ考え方で盤面タイルとSHOPのAカード
+// 両方に使う。
+let tutorialAreaCardHintGlowing = false;
 // RESOURCE候補側は今のところ元の一回限りの点滅のまま(まだ同じ報告を受けていないため変更せず) -- 同じ
 // タイミングずれ問題を避けるため、dismissTutorialStepが上のRevealedフラグと同時にtrueにし、
 // renderPlayerCards(render()内でrenderTutorialOverlayより前に呼ばれる -- tutorialCurrentStepIdがまだ
