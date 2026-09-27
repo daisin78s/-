@@ -4961,6 +4961,16 @@ function renderBoard(state, next) {
       if (tutorialCardAreasGlowing && (mapId === boardMod.CASTLE_MAP_ID || mapId === boardMod.AREA009_MAP_ID)) {
         node.classList.add('change-highlight');
       }
+      // resource_icon_explanationの「光る」演出 (2026-09-27, per user request: "この時エリア「小麦畑」
+      // 「農園」を光らせる") -- 小麦畑=MAP001/農園=MAP002固定。
+      if (tutorialFoodAreasGlowing && (mapId === 'MAP001' || mapId === 'MAP002')) node.classList.add('change-highlight');
+      // resource_icon_conversion_hintの「光る」演出 (2026-09-27, per user request: "この時城下町 大神殿
+      // ギルド 歓楽街を光らせる" -- データ上の名称は「大聖堂」だがユーザーの言う「大神殿」と同一エリアと
+      // 判断) -- 城下町=MAP003/大聖堂=MAP004/ギルド=MAP005/歓楽街=MAP006固定。
+      if (tutorialConversionAreasGlowing
+        && (mapId === 'MAP003' || mapId === 'MAP004' || mapId === 'MAP005' || mapId === 'MAP006')) {
+        node.classList.add('change-highlight');
+      }
 
       const tier = mapState.currentAreaId.match(/([ABC])$/);
       if (tier) {
@@ -8015,12 +8025,21 @@ const TUTORIAL_STEPS = [
       { label: 'とりあえず先に進める', targetStepId: 'resource_pick_hint' },
     ],
   },
-  // TODO(2026-09-27): 本文未確定 -- 「初期資源のアイコンの意味を知りたい」を選んだ場合のセリフはまだ
-  // ユーザーから指示を受けていないため、resource_pick_hintと全く同じ本文の仮置き。指示が来たら差し替える。
+  // 2026-09-27, per user request -- 「初期資源のアイコンの意味を知りたい」を選んだ場合の1つ目のセリフ。
+  // 小麦畑/農園を光らせる(tutorialFoodAreasGlowing's own doc)。
   {
     id: 'resource_icon_explanation',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: 'それでは光っている4枚の初期資源カードのうち2枚をクリックしてください',
+    body: '〇このアイコンが食料です\nこの世界の1番もととなる資源でエリアの「小麦畑」「農園」にダイス（ワーカー）を置くことで3つ手に入れることができます',
+    nextLabel: '次へ',
+  },
+  // 2026-09-27, per user request -- 続く2つ目のセリフ。城下町/大聖堂(ユーザーの言う「大神殿」)/ギルド/歓楽街
+  // を光らせる(tutorialConversionAreasGlowing's own doc)。次へで通常の直線探索ではなくresource_pick_hintへ
+  // 直接合流する(dismissTutorialStep自身のdoc参照)。
+  {
+    id: 'resource_icon_conversion_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '〇食料は基本的にはそのままではカードやダイスを獲得するのに使えません\nカードやダイスを獲得するには別のエリアで様々な資源に変換する必要があります',
     nextLabel: '次へ',
   },
   {
@@ -8861,6 +8880,18 @@ function renderTutorialOverlay(state) {
         window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
       }
     }
+    // resource_icon_explanation/resource_icon_conversion_hintが見えるようにスクロール (2026-09-27, per
+    // user request: "必要ならスクロール") -- 同じ考え方。#board(盤面全体)を対象にする。
+    if (step.id === 'resource_icon_explanation' || step.id === 'resource_icon_conversion_hint') {
+      const boardEl = document.getElementById('board');
+      if (boardEl) {
+        const bubbleWrap = document.getElementById('tutorial-bubble-wrap');
+        const visibleHeight = (bubbleWrap && !bubbleWrap.hidden) ? bubbleWrap.getBoundingClientRect().top : window.innerHeight;
+        const rect = boardEl.getBoundingClientRect();
+        const desiredTop = Math.max(0, (visibleHeight - rect.height) / 2);
+        window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
+      }
+    }
   }
 }
 
@@ -8887,6 +8918,7 @@ function handleTutorialChoiceClick(targetStepId) {
     for (const choice of currentStep.choices) tutorialSeenStepIds.add(choice.targetStepId);
   }
   if (targetStepId === 'resource_pick_hint') tutorialResourceCandidatesGlowing = true;
+  if (targetStepId === 'resource_icon_explanation') tutorialFoodAreasGlowing = true;
   tutorialCurrentStepId = targetStepId;
   stopTutorialTypewriter();
   render(STATE);
@@ -8965,6 +8997,21 @@ function dismissTutorialStep() {
   // shop_cost_introの「光る」演出(支払い資源部分) -- shop_dice_value5_introが閉じられた瞬間にONにする。
   if (tutorialCurrentStepId === 'shop_dice_value5_intro') { tutorialShopValue5Glowing = false; tutorialShopCostGlowing = true; }
   if (tutorialCurrentStepId === 'shop_cost_intro') tutorialShopCostGlowing = false;
+  // resource_icon_conversion_hintの「光る」演出(城下町/大聖堂/ギルド/歓楽街) -- resource_icon_explanationが
+  // 閉じられた瞬間にONにする。
+  if (tutorialCurrentStepId === 'resource_icon_explanation') { tutorialFoodAreasGlowing = false; tutorialConversionAreasGlowing = true; }
+  // resource_icon_conversion_hintを閉じたら通常の直線的な次のステップ探索には戻さず、直接resource_pick_hint
+  // へ合流させる (2026-09-27, per user request の分岐設計) -- handleTutorialChoiceClickが選ばれなかった方の
+  // 選択肢(resource_pick_hint)もすでにtutorialSeenStepIdsに入れてしまっているため、ここで明示的に
+  // 遷移させないと通常の再探索では二度と出てこない。
+  if (tutorialCurrentStepId === 'resource_icon_conversion_hint') {
+    tutorialConversionAreasGlowing = false;
+    tutorialResourceCandidatesGlowing = true;
+    tutorialCurrentStepId = 'resource_pick_hint';
+    stopTutorialTypewriter();
+    render(STATE);
+    return;
+  }
   // alsoCloseTurnOrderOverlay (2026-09-24, see turn_order_reveal_summary's own doc): 次へ on this step
   // also presses the turn-order overlay's own ✖ in the same tap, instead of leaving the player to close
   // it separately.
@@ -9106,6 +9153,12 @@ let tutorialShopCostGlowing = false;
 // この段階に入った瞬間にONにし、resource_pick_hint自身のautoDismissWhenが発火した瞬間にOFFにする
 // (renderTutorialOverlay自身のdoc参照、dismissTutorialStepを経由しないため専用の分岐が必要)。
 let tutorialResourceCandidatesGlowing = false;
+// 小麦畑/農園の「光る」演出 (2026-09-27, per user request: "この時エリア「小麦畑」「農園」を光らせる") --
+// resource_icon_explanationが表示され続けている間ずっとtrueになる継続フラグ。
+let tutorialFoodAreasGlowing = false;
+// 城下町/大聖堂/ギルド/歓楽街の「光る」演出 (2026-09-27, per user request: "この時城下町 大神殿 ギルド
+// 歓楽街を光らせる") -- resource_icon_conversion_hintが表示され続けている間ずっとtrueになる継続フラグ。
+let tutorialConversionAreasGlowing = false;
 // RESOURCE候補側は今のところ元の一回限りの点滅のまま(まだ同じ報告を受けていないため変更せず) -- 同じ
 // タイミングずれ問題を避けるため、dismissTutorialStepが上のRevealedフラグと同時にtrueにし、
 // renderPlayerCards(render()内でrenderTutorialOverlayより前に呼ばれる -- tutorialCurrentStepIdがまだ
