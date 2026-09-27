@@ -3710,6 +3710,10 @@ h1, h2, h3 { margin: 0; }
   gap: 12px;
   width: 100%;
 }
+/* .card-inst-overlay[hidden]等と同じ理由 (2026-09-27, per user report: 「初期資源のアイコンの意味を知りたい」
+   「とりあえず先に進める」どちらのボタンを押しても消えない) -- 上のdisplay:flexがUAスタイルシートの
+   [hidden]{display:none}と同じ詳細度で後勝ちするため、choicesEl.hidden=trueが効かなかった。 */
+.tutorial-bubble__choices[hidden] { display: none; }
 
 .tutorial-bubble__choice-button {
   background: var(--surface);
