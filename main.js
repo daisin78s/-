@@ -4880,7 +4880,12 @@ function computeNextCastleTurnOrder(state) {
     }
   }
   const placed = [...lastSeqByPlayer.entries()].sort((a, b) => b[1] - a[1]).map(([playerId]) => playerId);
-  const unplaced = state.turnOrder.filter((id) => !lastSeqByPlayer.has(id));
+  // チュートリアルの初期状態 (2026-09-28, per user request: "チュートリアルの 次ラウンドのスタプレ 初期状態で
+  // あなた BOB CAROL DANの順番にして") -- 手番順(state.turnOrder)は初期資源を選ぶまで決まらず空(round 0)の
+  // ため、王宮の「次ラウンド」欄が空になってしまう(ワーカープレイスメントの実演中にBOB等が置いても
+  // 置いた人だけ表示される)。手番順が決まるまでの間だけ、座席順(あなた/BOB/CAROL/DAN)を基準にする。
+  const baseOrder = (tutorialModeActive && state.turnOrder.length === 0) ? state.players.map((p) => p.id) : state.turnOrder;
+  const unplaced = baseOrder.filter((id) => !lastSeqByPlayer.has(id));
   return [...placed, ...unplaced];
 }
 
@@ -9497,7 +9502,9 @@ function revertLastPlacementForTutorial() {
 // に対応する。
 const TUTORIAL_SCRIPTED_AI_PLACEMENTS = {
   1: { P2: 'MAP008', P3: 'MAP002', P4: 'MAP001' },
-  2: { P2: 'MAP004', P3: 'MAP008', P4: 'MAP008' },
+  // 2ターン目のDAN(P4)は当初王宮だったが、置けなかったため元老院(MAP009)に変更
+  // (2026-09-28, per user request: "DANの2個目のダイス 王宮にはおけなかったので 元老院に変更")。
+  2: { P2: 'MAP004', P3: 'MAP008', P4: 'MAP009' },
   3: { P2: 'MAP006', P3: 'MAP008', P4: 'MAP002' },
 };
 
