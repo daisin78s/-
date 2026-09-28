@@ -9345,6 +9345,8 @@ function renderTutorialOverlay(state) {
     // straight into another one reads 次へ instead of the default 閉じる; the click behavior itself
     // (dismissTutorialStep) is unchanged either way.
     dismissBtn.textContent = step.nextLabel || '閉じる';
+    // 台本のBOB/CAROL/DANの配置を1手ずつ実行している間は押せない(tutorialScriptedMovesRunning's own doc)。
+    dismissBtn.disabled = tutorialScriptedMovesRunning;
   }
   if (tutorialTypewriterStepId !== step.id) {
     tutorialTypewriterStepId = step.id;
@@ -9553,32 +9555,67 @@ const TUTORIAL_SCRIPTED_AI_PLACEMENTS = {
  * 常に決まった値)を指定のエリアの空きスロット(値が一致する数字スロットがあればそこ、無ければ最初の空き
  * ANYスロット)へ直接書き込むだけの見た目だけの配置。board.placeDice等の本物のエンジンAPIは一切経由しない
  * (エリアのACTIONは発動しない、資源やカードへの影響は一切無い)ため、legalityの厳密なチェックも不要 --
- * 台本の値は元々このエリアに置けることを確認済み(per user dictation)。 */
-function placeScriptedFakeAiDiceForTutorial(round) {
+ * 台本の値は元々このエリアに置けることを確認済み(per user dictation)。
+ *
+ * stepwise=true (2026-09-29, per user request: "1手ずつ くらいの速度でお願い"、"2ターン目も"、3ターン目は
+ * 台本ができたら同じにする) -- BOB→CAROL→DANを一気に置かず、既存の「1手ずつ表示」のAI進行と同じ速さ
+ * (AI_STEP_DELAY_MS、置かれる直前のダイスが光る=aiPreHighlightMove)で1人ずつ順に置く。その間は
+ * tutorialScriptedMovesRunningが立ち、セリフの「次へ」を押しても進めない(途中でP1の次の操作が割り込むと
+ * 台本の順序が崩れるため)。stepwise=false(既定)は従来どおり一気に置く。 */
+function placeScriptedFakeAiDiceForTutorial(round, stepwise = false) {
   const script = TUTORIAL_SCRIPTED_AI_PLACEMENTS[round];
-  for (const playerId of ['P2', 'P3', 'P4']) {
-    const mapId = script[playerId];
-    if (!mapId) continue;
-    const player = STATE.players.find((p) => p.id === playerId);
-    const die = player.dice.find((d) => d.kind === 'COLOR' && !d.placedMapId);
-    if (!die) continue;
-    const mapState = STATE.maps[mapId];
-    const areaRow = dataLoaderMod.getAreaRow(INDEX, mapState.currentAreaId);
-    const requirements = boardMod.getSlotRequirements(areaRow);
-    let slotIndex = requirements.findIndex((r, i) => r === die.value && mapState.slots[i].length === 0);
-    if (slotIndex === -1) slotIndex = requirements.findIndex((r, i) => r === 'ANY' && mapState.slots[i].length === 0);
-    if (slotIndex === -1) continue;
-    // 置いた順の番号(seq)と手番順への算入(countsForTurnOrder)も本物の配置(board.placeDice)と同じ形で付ける
-    // (2026-09-29, per user request: "王宮のスタプレ順 置かれたダイスを反映するように") -- 王宮の
-    // 「次ラウンド」欄(computeNextCastleTurnOrder)は、王宮に最後に置いた順(seqが大きいほど新しい)で並べる
-    // ため、seqが無いと台本のダイスが順番に反映されない。
-    STATE.placementSeq += 1;
-    mapState.slots[slotIndex] = [{
-      playerId, dieId: die.id, value: die.value, isWildcard: false,
-      seq: STATE.placementSeq, countsForTurnOrder: true,
-    }];
-    die.placedMapId = mapId;
+  const playerIds = ['P2', 'P3', 'P4'].filter((id) => script[id]);
+  if (!stepwise) {
+    for (const playerId of playerIds) placeOneScriptedFakeAiDie(script[playerId], playerId);
+    return;
   }
+  const queue = [...playerIds];
+  tutorialScriptedMovesRunning = true;
+  const highlightNext = () => {
+    const player = STATE.players.find((p) => p.id === queue[0]);
+    const die = player.dice.find((d) => d.kind === 'COLOR' && !d.placedMapId);
+    aiPreHighlightMove = die ? { playerId: player.id, dieId: die.id } : null;
+    render(STATE);
+  };
+  const placeNext = () => {
+    const playerId = queue.shift();
+    aiPreHighlightMove = null;
+    placeOneScriptedFakeAiDie(script[playerId], playerId);
+    if (queue.length > 0) {
+      highlightNext();
+      setTimeout(placeNext, AI_STEP_DELAY_MS);
+    } else {
+      tutorialScriptedMovesRunning = false;
+      render(STATE);
+    }
+  };
+  if (queue.length === 0) { tutorialScriptedMovesRunning = false; return; }
+  highlightNext();
+  setTimeout(placeNext, AI_STEP_DELAY_MS);
+}
+
+/** 台本の1人分: playerIdの未配置の色ダイス1個を、mapIdの空きスロット(値が一致する数字スロットがあればそこ、
+ * 無ければ最初の空きANYスロット)へ見た目だけ置く。 */
+function placeOneScriptedFakeAiDie(mapId, playerId) {
+  const player = STATE.players.find((p) => p.id === playerId);
+  const die = player.dice.find((d) => d.kind === 'COLOR' && !d.placedMapId);
+  if (!die) return;
+  const mapState = STATE.maps[mapId];
+  const areaRow = dataLoaderMod.getAreaRow(INDEX, mapState.currentAreaId);
+  const requirements = boardMod.getSlotRequirements(areaRow);
+  let slotIndex = requirements.findIndex((r, i) => r === die.value && mapState.slots[i].length === 0);
+  if (slotIndex === -1) slotIndex = requirements.findIndex((r, i) => r === 'ANY' && mapState.slots[i].length === 0);
+  if (slotIndex === -1) return;
+  // 置いた順の番号(seq)と手番順への算入(countsForTurnOrder)も本物の配置(board.placeDice)と同じ形で付ける
+  // (2026-09-29, per user request: "王宮のスタプレ順 置かれたダイスを反映するように") -- 王宮の
+  // 「次ラウンド」欄(computeNextCastleTurnOrder)は、王宮に最後に置いた順(seqが大きいほど新しい)で並べる
+  // ため、seqが無いと台本のダイスが順番に反映されない。
+  STATE.placementSeq += 1;
+  mapState.slots[slotIndex] = [{
+    playerId, dieId: die.id, value: die.value, isWildcard: false,
+    seq: STATE.placementSeq, countsForTurnOrder: true,
+  }];
+  die.placedMapId = mapId;
 }
 
 /** ボタンによってセリフが分岐するステップ(TUTORIAL_STEPSのchoices)専用の遷移処理 (2026-09-27, per user
@@ -9599,6 +9636,8 @@ function handleTutorialChoiceClick(targetStepId) {
 }
 
 function dismissTutorialStep() {
+  // 台本のBOB/CAROL/DANの配置を1手ずつ実行中は進めない(tutorialScriptedMovesRunning's own doc)。
+  if (tutorialScriptedMovesRunning) return;
   // noManualDismiss (2026-09-24, per user report -- see resource_choice's own doc): ignore a manual
   // tap/閉じる entirely for a step that opted into this; it can only go away via its own autoDismissWhen.
   const currentStep = TUTORIAL_STEPS.find((s) => s.id === tutorialCurrentStepId);
@@ -9731,7 +9770,7 @@ function dismissTutorialStep() {
   // 実行する)。
   if (tutorialCurrentStepId === 'worker_placement_turn_end_hint') {
     tutorialNextPlayerGlowing = false;
-    placeScriptedFakeAiDiceForTutorial(1);
+    placeScriptedFakeAiDiceForTutorial(1, true);
     tutorialRightmostDieGlowing = true;
   }
   // castletown_placement_resultの「光る」演出(増えた権力+置かれたダイス) -- castletown_placement_intro
@@ -9776,7 +9815,7 @@ function dismissTutorialStep() {
   // 同じ理由)。
   if (tutorialCurrentStepId === 'castletown_turn_end_hint') {
     tutorialNextPlayerGlowing = false;
-    placeScriptedFakeAiDiceForTutorial(2);
+    placeScriptedFakeAiDiceForTutorial(2, true);
     tutorialCardAcquisitionGlowing = true;
   }
   // card_acquisition_intro自身が閉じられてもtutorialCardAcquisitionGlowingはOFFにしない (2026-09-27, per
@@ -10019,6 +10058,10 @@ let tutorialTrainingGlowing = false;
 // チュートリアル専用のターン終了ボタンを表示している間だけtrue (2026-09-29, Excel T011) --
 // kabukicho_result_hintの「次へ」を押した時に先に立て、ボタンを押した時(renderTutorialTurnEndButton)に消す。
 let tutorialTurnEndButtonShown = false;
+// BOB/CAROL/DANの台本の配置を1手ずつ実行している間だけtrue (2026-09-29, per user request: "1手ずつ くらいの
+// 速度でお願い") -- この間はセリフの「次へ」を押しても進めない(dismissTutorialStepの先頭でreturn、ボタンも
+// 無効表示にする)。途中でP1の次の操作(強制配置等)が割り込むと台本の順序が崩れるため。
+let tutorialScriptedMovesRunning = false;
 // ワーカープレイスメントの実演一式(game_rules_intro_1〜card_acquisition_intro)が始まる直前のGameState
 // スナップショット (2026-09-27, per user request: "この時一度エリアのダイスをすべて元に戻す 増えた資源や
 // カードも元に戻す") -- 実演中に本物のboard.placeDice/placeScriptedFakeAiDiceForTutorialで置かれたダイスや
