@@ -124,8 +124,9 @@ python tools/xlsx_to_json.py
 
 Regenerate `data/tutorial.data.js` (tutorial dialogue text, `window.TUTORIAL_SERIFU`) after the user edits the
 tutorial script spreadsheet `C:\Users\miwa\Desktop\チュートリアル.xlsx` (also found via `data/tutorial.xlsx`, or pass a
-path as the argument). Only the セリフ column is read by the game; main.js's `TUTORIAL_STEP_TEXT_IDS` maps each
-step id to its row id (T001…), and steps without a row/data file fall back to the text hard-coded in main.js.
+path as the argument). Only the セリフ column is read by the game, keyed by the sheet's 実装ID column (= the step id
+in main.js's `TUTORIAL_STEPS`, not the row number, so inserting/renumbering rows can't shift lines onto the wrong step);
+rows with an empty 実装ID (not implemented yet) are skipped, and steps without data fall back to the text hard-coded in main.js.
 The other columns (光る/動く/進む条件/…) are instructions for Claude Code to implement in main.js, not auto-loaded:
 
 ```
