@@ -4626,7 +4626,8 @@ function buildShopSlotNode(slotId, faceId, showReqCaption, locked, faceDown = fa
   // shop_dice_value1_intro/shop_dice_value5_introの「光る」演出(SHOPのダイス目キャプション) -- どちらも
   // 実カードの有無に関わらずキャプション自体は常に表示されるので、早期returnの前でまとめて判定する。
   const reqGlowing = (tutorialShopValue1Glowing && TUTORIAL_SHOP_NORMAL_SLOT_IDS.includes(slotId))
-    || (tutorialShopValue5Glowing && TUTORIAL_SHOP_VALUE5_SLOT_IDS.includes(slotId));
+    || (tutorialShopValue5Glowing && TUTORIAL_SHOP_VALUE5_SLOT_IDS.includes(slotId))
+    || (!!tutorialBuildShopGlowSlots && tutorialBuildShopGlowSlots.includes(slotId));
   if (!faceId) {
     slotNode.querySelector('.shop-slot__req').textContent = showReqCaption ? shopReqForSlotId(slotId) : '';
     if (reqGlowing) slotNode.querySelector('.shop-slot__req').classList.add('change-highlight');
@@ -4661,6 +4662,8 @@ function buildShopSlotNode(slotId, faceId, showReqCaption, locked, faceDown = fa
   if (tutorialShopCardsGlowing && TUTORIAL_SHOP_NORMAL_SLOT_IDS.includes(slotId)) cardVisual.classList.add('change-highlight');
   // shop_dice_value5_introの「光る」演出(カード自体) -- SHOP101/102/201/202のカードも光らせる。
   if (tutorialShopValue5Glowing && TUTORIAL_SHOP_VALUE5_SLOT_IDS.includes(slotId)) cardVisual.classList.add('change-highlight');
+  // カード獲得の説明(T024〜T027)のダイス目別「光る」 -- そのスロットのカードも光らせる。
+  if (tutorialBuildShopGlowSlots && tutorialBuildShopGlowSlots.includes(slotId)) cardVisual.classList.add('change-highlight');
   // shop_cost_introの「光る」演出 (2026-09-27, per user request: "ショップにあるすべてのカードの支払い
   // 資源部分を光らせる") -- M/NORMAL/SPECIALすべてのショップスロットが対象(buildShopSlotNodeはどの店の
   // スロットでも呼ばれる)。モニュメントなど支払い資源が無いカードは.shop-card__cost-emptyの方に光らせる。
@@ -5184,6 +5187,8 @@ function renderBoard(state, next) {
       // worker_placement_example_resultの「光る」演出(農園のACTION表示 ⚡〇3) (2026-09-28, per user request:
       // "この時農園の ⚡〇3 部分も光らせる") -- 農園=MAP002固定、tutorialWorkerPlacementResultGlowing's own doc。
       if (tutorialWorkerPlacementResultGlowing && mapId === 'MAP002') actionEl.classList.add('change-highlight');
+      // build_icon_hint(T022)の「光る」演出(🔨=BUILDのACTION表示) (2026-09-29) -- カード獲得できるエリアすべて。
+      if (tutorialHammerGlowing && buildBuildIcon(action)) actionEl.classList.add('change-highlight');
 
       // Usage-fee display (2026-08-0X, moved into the header, replacing the old "tier A"/"tier B" text
       // badge -- per user request). Two lines: the rate (straight from this AREA row's own `fee` column,
@@ -5409,7 +5414,9 @@ function placeSelectedDieCommit(state, player, dieId, mapId, slotIndex) {
     if (mapId === boardMod.CASTLE_MAP_ID || mapId === boardMod.AREA009_MAP_ID) {
       // 3ターン目のBOB/CAROL/DANの見た目だけの配置(台本) (2026-09-28, per user request) -- あなた自身の
       // カード獲得デモが成功した瞬間にセリフ無しで実行する(placeScriptedFakeAiDiceForTutorial's own doc)。
-      placeScriptedFakeAiDiceForTutorial(3);
+      // 2026-09-29: 1・2ターン目と同じく1手ずつ(0.6秒間隔)、その間セリフ(build_candidates_hint)は待つ。
+      placeScriptedFakeAiDiceForTutorial(3, true);
+      tutorialBuildCandidatesGlowing = true;
       tutorialCurrentStepId = null;
     } else {
       tutorialCancelButtonGlowing = true;
@@ -5880,6 +5887,8 @@ function renderBuildChoiceModal() {
   function buildCandidateCell(candidate) {
     const faceId = candidate.type === 'UPGRADE' ? candidate.toFaceId : candidate.faceId;
     const cardNode = buildCardVisual(faceId, { showEffect: true, noInteraction: true });
+    // build_candidates_hint(T030)の「光る」演出(ウィンドウ上の獲得可能なカード) (2026-09-29)。
+    if (tutorialBuildCandidatesGlowing) cardNode.classList.add('change-highlight');
     const tall = cardNode.classList.contains('shop-card--tall');
     const wrapper = el('div', 'build-choice-item');
     if (candidate.type === 'UPGRADE') wrapper.appendChild(el('div', 'build-choice-label', 'LVアップ'));
@@ -8423,6 +8432,52 @@ const TUTORIAL_STEPS = [
     body: '行動をキャンセルしたいときは「直前のアクションをキャンセル」を押せばキャンセルすることができます\n「直前のアクションをキャンセル」ボタンを押してください',
     noManualDismiss: true,
   },
+  // 2026-09-29, per user request (Excelの新しい行T021〜T027) -- 訓練場のキャンセルの後、カードの獲得の仕方の
+  // 説明(次へ x7)。T022は🔨、T024〜T027はダイス目ごとに獲得できるSHOPのスロットを光らせる
+  // (tutorialBuildShopGlowSlots's own doc)。T027の次へで、カード獲得の実操作(card_acquisition_placement_intro)
+  // のダイス/王宮/元老院の光る+クリック可能が始まる(dismissTutorialStep内)。
+  {
+    id: 'build_intro_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '行動がキャンセルされました\n今度はカードの獲得の仕方を説明します',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'build_icon_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '🔨このマークがカードを獲得できるアイコンです\nこのマークがあるエリアにダイスを置けばカードを獲得できます',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'build_dice_value_intro',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '獲得可能なカードはダイス目によって変わります',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'build_dice_value6_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: 'エリアに置かれたダイス目が6ならこの場所のショップのカードしか獲得できません',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'build_dice_value5_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '5ならこうです',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'build_dice_value4_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '4ならこうなります',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'build_dice_value1_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '今回置くダイス目は1なのですべてのショップから選ぶことができます',
+    nextLabel: '次へ',
+  },
   // 2026-09-27, per user request -- カード獲得の実クリック操作。城下町デモ(castletown_placement_intro)と
   // 同じ形: 次へボタンは無く(noManualDismiss)、プレイヤー自身が実際に光っているダイスをクリックし、王宮か
   // 元老院の光っているスロットへクリックして置くと次に進む(通常の直線探索でgame_rules_intro_2が見つかる)。
@@ -8432,8 +8487,17 @@ const TUTORIAL_STEPS = [
   {
     id: 'card_acquisition_placement_intro',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: 'カードを獲得するにはダイスを「王宮」か「元老院」に置いてください',
+    body: 'ダイスを「王宮」か「元老院」に置いてください',
     noManualDismiss: true,
+  },
+  // 2026-09-29, per user request (Excel T030) -- 王宮/元老院への実配置成功後、通常のカード獲得選択ウィンドウ
+  // (BUILD候補)が開いた状態で出る説明。ウィンドウ上の獲得可能なカードを光らせる
+  // (tutorialBuildCandidatesGlowing's own doc)。次へでgame_rules_intro_2へ。
+  {
+    id: 'build_candidates_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '「王宮」か「元老院」にダイスが置かれると獲得可能なカードのリストが出てきます',
+    nextLabel: '次へ',
   },
   {
     id: 'game_rules_intro_2',
@@ -9465,7 +9529,21 @@ function renderTutorialOverlay(state) {
     }
     // ex_slot_introが見えるようにスクロール (2026-09-27, per user request: "領地カードを光らせるとき SHOPが
     // 見えるように上にスクロールさせて") -- 同じ考え方。#shops(ショップ全体)を対象にする。
+    // カード獲得の説明のスクロール (2026-09-29, Excel T022/T024〜T027) -- 🔨は盤面(main_action_introと同じ考え方)、
+    // ダイス目別のSHOPはex_slot_introと同じくSHOP全体。
+    if (step.id === 'build_icon_hint') {
+      const boardEl = document.getElementById('board');
+      if (boardEl) {
+        const bubbleWrap = document.getElementById('tutorial-bubble-wrap');
+        const visibleHeight = (bubbleWrap && !bubbleWrap.hidden) ? bubbleWrap.getBoundingClientRect().top : window.innerHeight;
+        const rect = boardEl.getBoundingClientRect();
+        const desiredTop = Math.max(0, (visibleHeight - rect.height) / 2);
+        window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
+      }
+    }
     if (step.id === 'ex_slot_intro' || step.id === 'castletown_territory_cards_hint'
+      || step.id === 'build_dice_value6_hint' || step.id === 'build_dice_value5_hint'
+      || step.id === 'build_dice_value4_hint' || step.id === 'build_dice_value1_hint'
       || step.id === 'castletown_fortune_cards_hint' || step.id === 'castletown_talent_cards_hint') {
       const shopsEl = document.getElementById('shops');
       if (shopsEl) {
@@ -9474,6 +9552,18 @@ function renderTutorialOverlay(state) {
         const rect = shopsEl.getBoundingClientRect();
         const desiredTop = Math.max(0, (visibleHeight - rect.height) / 2);
         window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
+      }
+    }
+    // card_acquisition_placement_introが見えるようにスクロール (2026-09-29) -- 直前のダイス目別SHOP説明(T024〜T027)で
+    // SHOPへスクロールしたため、クリックするあなたのダイスが画面外に出てしまう。ダイス行を見える範囲の下端に寄せる
+    // (王宮/元老院のスロットもそのまま見えるように、中央寄せではなく下端寄せ)。
+    if (step.id === 'card_acquisition_placement_intro') {
+      const diceRowEl = document.querySelector('.player-panel[data-player-id="P1"] .player-panel__dice-row--color');
+      if (diceRowEl) {
+        const bubbleWrap = document.getElementById('tutorial-bubble-wrap');
+        const visibleHeight = (bubbleWrap && !bubbleWrap.hidden) ? bubbleWrap.getBoundingClientRect().top : window.innerHeight;
+        const rect = diceRowEl.getBoundingClientRect();
+        window.scrollBy({ top: rect.bottom - (visibleHeight - 8), behavior: 'auto' });
       }
     }
     // castletown_alt_cathedral_hint/castletown_alt_guild_hintが見えるようにスクロール (2026-09-29) -- 直前のカード説明
@@ -9897,6 +9987,21 @@ function dismissTutorialStep() {
     tutorialCardAcquisitionGlowing = false;
     tutorialTrainingGlowing = true;
   }
+  // カード獲得の説明(T021〜T027)の「光る」の受け渡し。T021→🔨、T022→なし、T023→目6のSHOP(101/201)、T024→+目5
+  // (102/202)、T025→+目4(103/203)、T026→2段目3段目のすべて、T027→カード獲得の実操作の光る+クリック可能
+  // (以前はキャンセル押下時に立てていた、handleCancelPreviousActionClick内参照)。
+  if (tutorialCurrentStepId === 'build_intro_hint') tutorialHammerGlowing = true;
+  if (tutorialCurrentStepId === 'build_icon_hint') tutorialHammerGlowing = false;
+  if (tutorialCurrentStepId === 'build_dice_value_intro') tutorialBuildShopGlowSlots = ['SHOP101', 'SHOP201'];
+  if (tutorialCurrentStepId === 'build_dice_value6_hint') tutorialBuildShopGlowSlots = ['SHOP101', 'SHOP201', 'SHOP102', 'SHOP202'];
+  if (tutorialCurrentStepId === 'build_dice_value5_hint') tutorialBuildShopGlowSlots = ['SHOP101', 'SHOP201', 'SHOP102', 'SHOP202', 'SHOP103', 'SHOP203'];
+  if (tutorialCurrentStepId === 'build_dice_value4_hint') tutorialBuildShopGlowSlots = [...TUTORIAL_SHOP_NORMAL_SLOT_IDS, 'SHOP201', 'SHOP202', 'SHOP203'];
+  if (tutorialCurrentStepId === 'build_dice_value1_hint') {
+    tutorialBuildShopGlowSlots = null;
+    tutorialCardAcquisitionGlowing = true;
+    tutorialCardAcquisitionPlaceable = true;
+  }
+  if (tutorialCurrentStepId === 'build_candidates_hint') tutorialBuildCandidatesGlowing = false;
   // kabukicho_result_hint(T010)を閉じたらチュートリアル専用のターン終了ボタンを出す(T011)。
   if (tutorialCurrentStepId === 'kabukicho_result_hint') tutorialTurnEndButtonShown = true;
   // training_ground_result_hint(T016)を閉じたらキャンセルボタンを光らせる(T017、cancel_action_hintと同じ扱い)。
@@ -10127,6 +10232,11 @@ let tutorialCardAcquisitionPlaceable = false;
 // (ステップIDの切り替えを待つと描画順の都合で1回遅れる -- tutorialCardAcquisitionPlaceableと同じ理由)。
 // 実配置が成功した瞬間(placeSelectedDieCommit内)に消え、誤配置後のキャンセルで戻ってきた時に再度立てる。
 let tutorialTrainingGlowing = false;
+// カード獲得の説明(Excel T021〜T030, 2026-09-29)の「光る」演出 -- 🔨(BUILDのACTION表示)、ダイス目ごとに買えるSHOPの
+// スロット(SHOP101...のカードとダイス目キャプション。null=光らせない)、BUILD候補ウィンドウ上のカード。
+let tutorialHammerGlowing = false;
+let tutorialBuildShopGlowSlots = null;
+let tutorialBuildCandidatesGlowing = false;
 // チュートリアル専用のターン終了ボタンを表示している間だけtrue (2026-09-29, Excel T011) --
 // kabukicho_result_hintの「次へ」を押した時に先に立て、ボタンを押した時(renderTutorialTurnEndButton)に消す。
 let tutorialTurnEndButtonShown = false;
@@ -10508,11 +10618,11 @@ function handleCancelPreviousActionClick() {
   // 戻り資源も元に戻る)ので、tutorialCurrentStepIdをnullにして通常の直線探索に戻す(次はcard_acquisition_
   // placement_intro)。そのステップで必要な、残ったダイス+王宮/元老院の光る演出とクリック可能をここで先に
   // 立てる(render()の前に立てる理由はtutorialCardAcquisitionPlaceable's own doc参照)。
+  // 2026-09-29(Excel T021〜T027): この後はカード獲得の説明(build_intro_hint〜build_dice_value1_hint)が入るので、
+  // ダイス/王宮/元老院の光る+クリック可能はここではなく、その最後(build_dice_value1_hintを閉じた時)に立てる。
   if (tutorialCurrentStepId === 'cancel_training_ground_hint') {
     tutorialCurrentStepId = null;
     tutorialCancelButtonGlowing = false;
-    tutorialCardAcquisitionGlowing = true;
-    tutorialCardAcquisitionPlaceable = true;
     stopTutorialTypewriter();
   }
   render(STATE);
