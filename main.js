@@ -9302,6 +9302,11 @@ function stopTutorialTypewriter() {
 function renderTutorialOverlay(state) {
   const wrap = document.getElementById('tutorial-bubble-wrap');
   if (!tutorialModeActive) { wrap.hidden = true; return; }
+  // BOB/CAROL/DANの台本の配置を1手ずつ実行している間はセリフを出さない (2026-09-29, per user request: "DANの
+  // ダイスが置かれてから あなたのターンが回ってきました…のセリフが出るように" / 2ターン目も) -- 直前のステップが
+  // 閉じられた時点ではtutorialCurrentStepIdがnullなので、ここで抜けるだけで次のステップの発見も止まる。
+  // 配置が終わる時にplaceScriptedFakeAiDiceForTutorialが最後にrender(STATE)を呼ぶので、その時に発見される。
+  if (tutorialScriptedMovesRunning) { wrap.hidden = true; return; }
   // Loop rather than a single pass (2026-09-24 fix, per user report: "この選択でOKを押した後 セリフが
   // 出てくる" -- should have appeared already, at the この2枚でよろしいですか？ confirm screen) -- a
   // single pass used to `return` the instant autoDismissWhen fired, leaving tutorialCurrentStepId null
