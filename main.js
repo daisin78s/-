@@ -2504,6 +2504,11 @@ function renderCardListOverlay() {
  * STATE/historyCursor currently are (including right after a jump, since jumpToHistoryIndex ends with
  * its own render(STATE) call). */
 function renderDebugPanel(state) {
+  // チュートリアル中はデバッグモード/ウィークリーチャレンジ/オンライン対戦/ランキング/カードリスト/リプレイ/3Rから
+  // /TURN・ROUNDボタンなど、この欄ぜんぶを隠す (2026-09-29, per user request: "チュートリアル中 デバッグモード: OFF
+  // ... ROUND ▶ を隠す") -- 欄自体(#debug-panel)をdisplay:noneにする(.debug-panelのdisplayが[hidden]に勝つため)。チュートリアル中はデバッグモードがONに
+  // なることもない(ボタンが見えないので)。
+  document.getElementById('debug-panel').style.display = tutorialModeActive ? 'none' : '';
   // ウィークリーチャレンジ中 (2026-09-07, per user spec; revised 2026-09-08 follow-up: "デバッグモードの
   // ターンまたいでの巻き戻しはできるようにしてください テストプレイは絶対ダメ") -- テストゲーム開始 and
   // re-opening ウィークリーチャレンジ itself stay blocked for the whole attempt (picking screen through
