@@ -5130,6 +5130,15 @@ function renderBoard(state, next) {
         // kabukicho_placement_introの「光る」演出(歓楽街の配置可能スロット) (2026-09-28, per user request:
         // "歓楽街のスロットも光る") -- 戻ってきたあなたの一番右のダイスを実際に置けるスロット(値の一致/ANY/
         // 資源など本物のルール、board.previewPlaceDice)だけを光らせる。
+        // training_ground_placement_introの「光る」演出(訓練場の配置可能スロット) (2026-09-29, Excel T015、
+        // 歓楽街と同じ扱い) -- 手元に残ったダイスを実際に置けるスロットだけ光らせる。
+        if (tutorialTrainingGlowing && mapId === 'MAP007' && occupants.length === 0) {
+          const p1ForTraining = state.players.find((p) => p.id === 'P1');
+          const dieForTraining = p1ForTraining.dice.find((d) => d.kind === 'COLOR' && !d.placedMapId);
+          if (dieForTraining && boardMod.previewPlaceDice(state, INDEX, { playerId: 'P1' }, dieForTraining.id, mapId, i)) {
+            slotEl.classList.add('change-highlight');
+          }
+        }
         if (tutorialKabukichoGlowing && mapId === 'MAP006' && occupants.length === 0) {
           const p1ForGlow = state.players.find((p) => p.id === 'P1');
           const unplacedForGlow = p1ForGlow.dice.filter((d) => d.kind === 'COLOR' && !d.placedMapId);
@@ -5347,7 +5356,9 @@ function placeSelectedDieCommit(state, player, dieId, mapId, slotIndex) {
   // kabukicho_placement_introの実クリック操作の完了 (2026-09-28, per user request: "戻ったダイスをつかんで
   // 歓楽街に置くと次に進む 歓楽街以外に置くと おっと、別のスロットに置いてしまいましたね...がでる") --
   // 歓楽街(MAP006)への実配置に成功した瞬間、tutorialCurrentStepIdをnullにして通常の直線探索に戻す
-  // (次はcastletown_turn_end_hintが見つかる -- 次のプレイヤーBOBの光る演出もここでONにする)。他のエリアへの
+  // (次は歓楽街の結果セリフ kabukicho_result_hint が見つかる -- 2026-09-29にExcelのT010が追加された。次の
+  // プレイヤーBOBの光る演出は、その後のターン終了ボタンを押した時(tutorialTurnEndButtonShown参照)に
+  // ONにするよう移した)。他のエリアへの
   // 配置も禁止はしないが、その場合は誤配置の救済セリフ(dice_misclick_hint、汎用 --
   // tutorialMisclickReturnStepId's own doc)へ回す。誤配置側はdismissTutorialStepを経由しない直接遷移のため、
   // handleTutorialChoiceClick/resource_icon_area_card_hintと同じ理由でここで明示的にtutorialSeenStepIdsへ
@@ -5355,11 +5366,27 @@ function placeSelectedDieCommit(state, player, dieId, mapId, slotIndex) {
   if (tutorialCurrentStepId === 'kabukicho_placement_intro' && result.success) {
     tutorialKabukichoGlowing = false;
     if (mapId === 'MAP006') {
-      tutorialNextPlayerGlowing = true;
       tutorialCurrentStepId = null;
     } else {
       tutorialCancelButtonGlowing = true;
       tutorialMisclickReturnStepId = 'kabukicho_placement_intro';
+      tutorialSeenStepIds.add('dice_misclick_hint');
+      tutorialCurrentStepId = 'dice_misclick_hint';
+    }
+    stopTutorialTypewriter();
+  }
+  // training_ground_placement_introの実クリック操作の完了 (2026-09-29, per user request: Excelの新しい行T015
+  // 「訓練場にダイスが置かれる」) -- 訓練場(MAP007)への実配置に成功した瞬間(実際に資源を払って追加の色ダイスを
+  // 獲得する)、tutorialCurrentStepIdをnullにして通常の直線探索に戻す(次はtraining_ground_result_hint)。
+  // それ以外のエリアへの配置も禁止しないが、他の実操作と同じdice_misclick_hintへ回す(ExcelにT015の救済行は
+  // 無いが、置き直せなくなる(ダイスが無くなる)のを防ぐため)。
+  if (tutorialCurrentStepId === 'training_ground_placement_intro' && result.success) {
+    tutorialTrainingGlowing = false;
+    if (mapId === 'MAP007') {
+      tutorialCurrentStepId = null;
+    } else {
+      tutorialCancelButtonGlowing = true;
+      tutorialMisclickReturnStepId = 'training_ground_placement_intro';
       tutorialSeenStepIds.add('dice_misclick_hint');
       tutorialCurrentStepId = 'dice_misclick_hint';
     }
@@ -6192,6 +6219,12 @@ function renderPlayers(state, next) {
     const tutorialCardAcquisitionDieId = (tutorialCardAcquisitionGlowing && player.id === 'P1')
       ? (player.dice.find((d) => d.kind === 'COLOR' && !d.placedMapId) || {}).id || null
       : null;
+    // training_ground_placement_introの「残ったダイス」の光る演出+クリック可能 (2026-09-29, Excel T015) --
+    // この時点で手元に残っているあなたの色ダイスは、農園と歓楽街に置いた後の目1の1個だけなので、最初に
+    // 見つかる未配置の色ダイスがそれ。
+    const tutorialTrainingDieId = (tutorialTrainingGlowing && player.id === 'P1')
+      ? (player.dice.find((d) => d.kind === 'COLOR' && !d.placedMapId) || {}).id || null
+      : null;
     for (const die of player.dice) {
       if (die.placedMapId) continue; // dice on the board are shown on the board, not in-hand
       const rowEl = die.kind === 'WHITE' ? whiteDiceEl : colorDiceEl;
@@ -6231,7 +6264,9 @@ function renderPlayers(state, next) {
       // 先に立てる方式にした(歓楽街のtutorialKabukichoGlowingなど、他の実クリック操作と同じ形)。
       const tutorialCardAcquisitionClickable = tutorialCardAcquisitionGlowing && tutorialCardAcquisitionPlaceable
         && player.id === 'P1' && die.id === tutorialCardAcquisitionDieId;
-      if (((player.id === canPlaceDiceFor && !turnActionTaken) || tutorialCastletownClickable || tutorialCardAcquisitionClickable) && !die.passed
+      // 訓練場の実演(Excel T015)も同じ形 -- ステップIDではなく専用フラグ(tutorialTrainingGlowing)で判定する。
+      const tutorialTrainingClickable = tutorialTrainingGlowing && player.id === 'P1' && die.id === tutorialTrainingDieId;
+      if (((player.id === canPlaceDiceFor && !turnActionTaken) || tutorialCastletownClickable || tutorialCardAcquisitionClickable || tutorialTrainingClickable) && !die.passed
         && (!tutorialForcedDieId || die.id === tutorialForcedDieId)) {
         dieNode.classList.add('die--selectable');
         if (selectedDieIds.includes(die.id)) dieNode.classList.add('die--selected');
@@ -6297,13 +6332,19 @@ function renderPlayers(state, next) {
       if (die.id === tutorialRightmostDieId) dieNode.classList.add('change-highlight');
       // card_acquisition_introの「光る」演出(残ったダイス) -- tutorialCardAcquisitionDieId's own doc。
       if (die.id === tutorialCardAcquisitionDieId) dieNode.classList.add('change-highlight');
+      // training_ground_placement_introの「光る」演出(残ったダイス) -- tutorialTrainingDieId's own doc。
+      if (die.id === tutorialTrainingDieId) dieNode.classList.add('change-highlight');
       rowEl.appendChild(dieNode);
     }
 
     renderFreeActionButtons(node.querySelector('.player-panel__free-actions'), state, player, player.id === canPlaceDiceFor);
     renderTapReactions(node.querySelector('.player-panel__tap-reactions'), state, player.id);
     renderUntapChoice(node.querySelector('.player-panel__untap-choice'), state, player.id);
-    renderTurnEndButton(node.querySelector('.player-panel__turn-end'), state, player, player.id === canPlaceDiceFor);
+    if (tutorialTurnEndButtonShown && player.id === 'P1') {
+      renderTutorialTurnEndButton(node.querySelector('.player-panel__turn-end'));
+    } else {
+      renderTurnEndButton(node.querySelector('.player-panel__turn-end'), state, player, player.id === canPlaceDiceFor);
+    }
 
     container.appendChild(node);
   });
@@ -6499,6 +6540,27 @@ function renderTurnEndButton(container, state, player, canAct) {
   btn.type = 'button';
   btn.addEventListener('click', () => {
     attemptAdvanceTurn(state, player.id);
+    render(STATE);
+  });
+  container.appendChild(btn);
+}
+
+/** チュートリアル専用のターン終了ボタン (2026-09-29, per user request: Excelの新しい行T011「やることがなく
+ * なったら『ターン終了』ボタンを押してください」→「『ターン終了』ボタンが押された」で進む) -- 本物の
+ * renderTurnEndButtonと同じ見た目のボタンを、あなたのパネルに出す。この段階はまだラウンド1の前(実際の手番は
+ * 存在しない)ので、押しても本物のターン終了(attemptAdvanceTurn)は行わず、チュートリアルを次のセリフへ進めるだけ
+ * (次のプレイヤーBOBの光る演出をONにして通常の直線探索に戻す)。render()を呼ぶ前にフラグを立てるのは、
+ * 他の実クリック操作と同じ理由(renderPlayersがrenderTutorialOverlayより先に呼ばれるため)。光る演出は他の
+ * 「〜を押してください」ステップ(直前のアクションをキャンセル等)と同じ扱い。 */
+function renderTutorialTurnEndButton(container) {
+  container.innerHTML = '';
+  const btn = el('button', 'free-action-button turn-end-button change-highlight', 'ターン終了');
+  btn.type = 'button';
+  btn.addEventListener('click', () => {
+    tutorialTurnEndButtonShown = false;
+    tutorialNextPlayerGlowing = true;
+    tutorialCurrentStepId = null;
+    stopTutorialTypewriter();
     render(STATE);
   });
   container.appendChild(btn);
@@ -8268,6 +8330,23 @@ const TUTORIAL_STEPS = [
     body: '今度はあなたが「歓楽街」にダイスを置いてください',
     noManualDismiss: true,
   },
+  // 2026-09-29, per user request (Excelの新しい行T010・T011: "セリフと分岐はエクセル通りに") -- 歓楽街に置いた後の
+  // 結果セリフ(次へ)と、続くターン終了ボタンの案内。歓楽街への実配置成功後(placeSelectedDieCommit内の専用
+  // フック)に通常の直線探索で順に出る。
+  {
+    id: 'kabukicho_result_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '「歓楽街」にダイスが置かれると食料〇2がコネZ〇3に変換されます\nコネZ〇は権力赤〇、信心青〇、金貨黄〇のどれとしても使うことのできる万能資源です',
+    nextLabel: '次へ',
+  },
+  // T011: ボタンは出さず、あなたが(チュートリアル専用の)ターン終了ボタンを押すと次へ進む
+  // (tutorialTurnEndButtonShown's own doc)。押しても実際のターン終了は行わない(まだラウンド1の前)。
+  {
+    id: 'turn_end_button_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: 'やることがなくなったら「ターン終了」ボタンを押してください',
+    noManualDismiss: true,
+  },
   // 2026-09-27, per user request -- ターン終了と次のプレイヤー(BOB)への説明、worker_placement_turn_end_hint
   // と同じ形(次のプレイヤーの光る演出もtutorialNextPlayerGlowingを再利用)。
   {
@@ -8288,6 +8367,29 @@ const TUTORIAL_STEPS = [
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
     body: '最後にカードを獲得してみましょう',
     nextLabel: '次へ',
+  },
+  // 2026-09-29, per user request (Excelの新しい行T015〜T017) -- 訓練場でダイスを獲得する実演。T015: あなた自身が
+  // 光っているダイスを訓練場に実際にクリックで置くと次へ進む(次へボタンなし、訓練場以外に置くとdice_misclick_
+  // hintへ -- ExcelにT015の救済行は無いが、置き直せなくなる(ダイスが無くなる)のを防ぐため他の実操作と同じ
+  // 仕組みを使う)。T016: 次へ。T017: 「直前のアクションをキャンセル」を押すと(訓練場への配置が取り消されて)
+  // カード獲得の実演(card_acquisition_placement_intro)へ進む。
+  {
+    id: 'training_ground_placement_intro',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: 'ダイスを獲得するには訓練場にダイスを置きます そうすれば赤〇青〇黄〇と引き換えに追加の色ダイスを獲得します そのダイスは即座に振り、このラウンドからすぐに使えます',
+    noManualDismiss: true,
+  },
+  {
+    id: 'training_ground_result_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '獲得した追加色ダイスはすぐに降りこのラウンドから使えます\nもちろん次のラウンド開始時に手元に戻ってきます',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'cancel_training_ground_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '行動をキャンセルしたいときは「直前のアクションをキャンセル」を押せばキャンセルすることができます\n「直前のアクションをキャンセル」ボタンを押してください',
+    noManualDismiss: true,
   },
   // 2026-09-27, per user request -- カード獲得の実クリック操作。城下町デモ(castletown_placement_intro)と
   // 同じ形: 次へボタンは無く(noManualDismiss)、プレイヤー自身が実際に光っているダイスをクリックし、王宮か
@@ -9312,7 +9414,7 @@ function renderTutorialOverlay(state) {
     // 同様に"必要ならスクロール") -- 同じ考え方。サイドバー上部の常設ボタン(#dice-cancel-button)を対象に
     // する -- ビルド選択モーダル用の複製(#dice-cancel-button-build)はモーダルが開いている時しか意味を
     // 持たないのでここでは対象にしない。
-    if (step.id === 'cancel_action_hint' || step.id === 'dice_misclick_hint') {
+    if (step.id === 'cancel_action_hint' || step.id === 'dice_misclick_hint' || step.id === 'cancel_training_ground_hint') {
       const cancelBtn = document.getElementById('dice-cancel-button');
       if (cancelBtn) {
         const bubbleWrap = document.getElementById('tutorial-bubble-wrap');
@@ -9683,7 +9785,18 @@ function dismissTutorialStep() {
   // introが次に見つかり、そのステップ自身の実配置成功時にOFFになる(placeSelectedDieCommit内の専用フック
   // 参照)。一方、残ったダイスをクリックできる状態(tutorialCardAcquisitionPlaceable's own doc)は、この
   // 「次へ」を押す時点で先に立てる(ステップIDの切り替えを待つと描画順の都合で1回遅れてクリックできない)。
-  if (tutorialCurrentStepId === 'card_acquisition_intro') tutorialCardAcquisitionPlaceable = true;
+  // 2026-09-29(Excelの新しい行T015〜T017): card_acquisition_introの次は訓練場の実演(training_ground_
+  // placement_intro)になったので、ここでは訓練場側の光る/クリック可能を先に立て、カード獲得側の光る/
+  // クリック可能(tutorialCardAcquisitionGlowing/Placeable)は、訓練場の実演が終わってキャンセルを押した時
+  // (handleCancelPreviousActionClick内)に改めて立てる。
+  if (tutorialCurrentStepId === 'card_acquisition_intro') {
+    tutorialCardAcquisitionGlowing = false;
+    tutorialTrainingGlowing = true;
+  }
+  // kabukicho_result_hint(T010)を閉じたらチュートリアル専用のターン終了ボタンを出す(T011)。
+  if (tutorialCurrentStepId === 'kabukicho_result_hint') tutorialTurnEndButtonShown = true;
+  // training_ground_result_hint(T016)を閉じたらキャンセルボタンを光らせる(T017、cancel_action_hintと同じ扱い)。
+  if (tutorialCurrentStepId === 'training_ground_result_hint') tutorialCancelButtonGlowing = true;
   // alsoCloseTurnOrderOverlay (2026-09-24, see turn_order_reveal_summary's own doc): 次へ on this step
   // also presses the turn-order overlay's own ✖ in the same tap, instead of leaving the player to close
   // it separately.
@@ -9898,6 +10011,14 @@ let tutorialCardAcquisitionGlowing = false;
 // 1回遅れてクリックできなくなる -- renderPlayersのtutorialCardAcquisitionClickable参照)。実配置が成功
 // した瞬間(placeSelectedDieCommit内)に消え、誤配置後のキャンセルで戻ってきた時に再度立てる。
 let tutorialCardAcquisitionPlaceable = false;
+// 訓練場の実演(Excel T015)中の「光る」演出+クリック可能 (2026-09-29) -- 残ったダイス+訓練場の配置可能スロット。
+// training_ground_placement_introの間だけtrue。card_acquisition_introの「次へ」を押した時に先に立てる
+// (ステップIDの切り替えを待つと描画順の都合で1回遅れる -- tutorialCardAcquisitionPlaceableと同じ理由)。
+// 実配置が成功した瞬間(placeSelectedDieCommit内)に消え、誤配置後のキャンセルで戻ってきた時に再度立てる。
+let tutorialTrainingGlowing = false;
+// チュートリアル専用のターン終了ボタンを表示している間だけtrue (2026-09-29, Excel T011) --
+// kabukicho_result_hintの「次へ」を押した時に先に立て、ボタンを押した時(renderTutorialTurnEndButton)に消す。
+let tutorialTurnEndButtonShown = false;
 // ワーカープレイスメントの実演一式(game_rules_intro_1〜card_acquisition_intro)が始まる直前のGameState
 // スナップショット (2026-09-27, per user request: "この時一度エリアのダイスをすべて元に戻す 増えた資源や
 // カードも元に戻す") -- 実演中に本物のboard.placeDice/placeScriptedFakeAiDiceForTutorialで置かれたダイスや
@@ -10259,11 +10380,24 @@ function handleCancelPreviousActionClick() {
     tutorialCurrentStepId = tutorialMisclickReturnStepId;
     tutorialCancelButtonGlowing = false;
     if (tutorialMisclickReturnStepId === 'kabukicho_placement_intro') tutorialKabukichoGlowing = true;
+    if (tutorialMisclickReturnStepId === 'training_ground_placement_intro') tutorialTrainingGlowing = true;
     if (tutorialMisclickReturnStepId === 'card_acquisition_placement_intro') {
       tutorialCardAcquisitionGlowing = true;
       tutorialCardAcquisitionPlaceable = true;
     }
     tutorialMisclickReturnStepId = null;
+    stopTutorialTypewriter();
+  }
+  // cancel_training_ground_hintの「キャンセルボタンをクリック」 (2026-09-29, Excel T017 "直前のアクションを
+  // キャンセル」を押す") -- 訓練場への配置を取り消した(上のundoMod.restoreSnapshotで済んでいる、ダイスは手元に
+  // 戻り資源も元に戻る)ので、tutorialCurrentStepIdをnullにして通常の直線探索に戻す(次はcard_acquisition_
+  // placement_intro)。そのステップで必要な、残ったダイス+王宮/元老院の光る演出とクリック可能をここで先に
+  // 立てる(render()の前に立てる理由はtutorialCardAcquisitionPlaceable's own doc参照)。
+  if (tutorialCurrentStepId === 'cancel_training_ground_hint') {
+    tutorialCurrentStepId = null;
+    tutorialCancelButtonGlowing = false;
+    tutorialCardAcquisitionGlowing = true;
+    tutorialCardAcquisitionPlaceable = true;
     stopTutorialTypewriter();
   }
   render(STATE);
