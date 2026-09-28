@@ -179,7 +179,7 @@ function createInitialState(plan, forcedSeed) {
   // 台本(TUTORIAL_SCRIPTED_AI_PLACEMENTS's own doc参照)がプレイヤーごとの固定ダイス値に依存しているため。
   // 2R以降のラウンド開始時の振り直し(turn-flow.js側)には触れないため、以後は完全ランダムに戻る。
   setupMod.rollInitialColorDice(state, tutorialModeActive
-    ? { P1: [1, 6, 3], P2: [3, 6, 1], P3: [5, 2, 6], P4: [3, 3, 4] }
+    ? { P1: [1, 6, 3], P2: [3, 6, 1], P3: [5, 2, 6], P4: [3, 5, 4] }
     : undefined);
   const forcedCon = plan && plan.con.length > 0 ? { P1: gameStateMod.splitCardId(plan.con[0]).physicalId } : undefined;
   // チュートリアルでは祝福/色欲(CON001)を誰にも配らない (2026-09-26, per user request: "チュートリアルでは
@@ -9478,16 +9478,18 @@ function revertLastPlacementForTutorial() {
 // worker_placement_turn_end_hint/castletown_turn_end_hint/card_acquisition_placement_introが閉じられた
 // 瞬間に実行する、BOB/CAROL/DANの見た目だけの配置の台本 (2026-09-28, per user request: "BOBのダイスは左から
 // 361 CAROLのダイスは左から526 DANのダイスは左から334"、続けて3ターン分の配置先を指定 -- 各プレイヤーの
-// 固定ダイス(rollInitialColorDiceの{P2:[3,6,1],P3:[5,2,6],P4:[3,3,4]}参照)を左から順に1個ずつ、3ターンに
+// 固定ダイス(rollInitialColorDiceの{P2:[3,6,1],P3:[5,2,6],P4:[3,5,4]}参照)を左から順に1個ずつ、3ターンに
 // わたって指定のエリアへ見た目だけ置く。"あなた以外のプレイヤーはおいても何も起きない"per user request の
 // 通り、エリアが何であってもACTIONは一切発動しない(値もvalueとして書き込むだけ)。ラウンドキーは1/2/3、
 // それぞれworker_placement_turn_end_hint/castletown_turn_end_hint/card_acquisition_placement_intro成功時
 // に対応する。
 const TUTORIAL_SCRIPTED_AI_PLACEMENTS = {
   1: { P2: 'MAP008', P3: 'MAP002', P4: 'MAP001' },
-  // 2ターン目のDAN(P4)は当初王宮だったが、置けなかったため元老院(MAP009)に変更
-  // (2026-09-28, per user request: "DANの2個目のダイス 王宮にはおけなかったので 元老院に変更")。
-  2: { P2: 'MAP004', P3: 'MAP008', P4: 'MAP009' },
+  // 2ターン目のDAN(P4)のダイスは、当初は目3で王宮に置く予定だったが置けなかったため元老院(MAP009)に
+  // 変更(2026-09-28, per user request: "DANの2個目のダイス 王宮にはおけなかったので 元老院に変更")、
+  // その後(2026-09-29, per user request: "DANの2番目のダイス目を5にして王宮に置くように変更して")
+  // ダイス目を3→5に変えて王宮(MAP008)に戻した(BOBの目3と同じ目が王宮に並ばないようにするため)。
+  2: { P2: 'MAP004', P3: 'MAP008', P4: 'MAP008' },
   3: { P2: 'MAP006', P3: 'MAP008', P4: 'MAP002' },
 };
 
@@ -9510,7 +9512,15 @@ function placeScriptedFakeAiDiceForTutorial(round) {
     let slotIndex = requirements.findIndex((r, i) => r === die.value && mapState.slots[i].length === 0);
     if (slotIndex === -1) slotIndex = requirements.findIndex((r, i) => r === 'ANY' && mapState.slots[i].length === 0);
     if (slotIndex === -1) continue;
-    mapState.slots[slotIndex] = [{ playerId, dieId: die.id, value: die.value, isWildcard: false }];
+    // 置いた順の番号(seq)と手番順への算入(countsForTurnOrder)も本物の配置(board.placeDice)と同じ形で付ける
+    // (2026-09-29, per user request: "王宮のスタプレ順 置かれたダイスを反映するように") -- 王宮の
+    // 「次ラウンド」欄(computeNextCastleTurnOrder)は、王宮に最後に置いた順(seqが大きいほど新しい)で並べる
+    // ため、seqが無いと台本のダイスが順番に反映されない。
+    STATE.placementSeq += 1;
+    mapState.slots[slotIndex] = [{
+      playerId, dieId: die.id, value: die.value, isWildcard: false,
+      seq: STATE.placementSeq, countsForTurnOrder: true,
+    }];
     die.placedMapId = mapId;
   }
 }
