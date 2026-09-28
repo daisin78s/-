@@ -5066,6 +5066,12 @@ function renderBoard(state, next) {
           // 城下町のスロットANYに置かれ光る") -- 城下町=MAP003のスロットANY(index 1)固定、
           // tutorialCastletownResultGlowing's own doc。
           if (tutorialCastletownResultGlowing && mapId === 'MAP003' && i === 1) occupantDieNode.classList.add('change-highlight');
+          // castletown_alt_cathedral_hint/castletown_alt_guild_hintの「光る」演出 (2026-09-28, per user request:
+          // "この時城下町に置かれたダイスが大聖堂に置かれて光る"/"大聖堂に置かれたダイスがギルドに置かれて光る")
+          // -- 大聖堂=MAP004/ギルド=MAP005のスロットANY(index 1)固定、tutorialCathedralGlowing/
+          // tutorialGuildGlowing's own doc。
+          if (tutorialCathedralGlowing && mapId === 'MAP004' && i === 1) occupantDieNode.classList.add('change-highlight');
+          if (tutorialGuildGlowing && mapId === 'MAP005' && i === 1) occupantDieNode.classList.add('change-highlight');
           stack.appendChild(occupantDieNode);
           slotEl.appendChild(stack);
         } else if (typeof requirement === 'number') {
@@ -5133,6 +5139,17 @@ function renderBoard(state, next) {
         // 光る演出(tutorialRightmostDieId)と同じtutorialRightmostDieGlowingフラグを共有する -- 実クリック
         // 操作が成功した瞬間(placeSelectedDieCommit内)にOFFになる。
         if (tutorialRightmostDieGlowing && mapId === 'MAP003' && i === 1) slotEl.classList.add('change-highlight');
+        // kabukicho_placement_introの「光る」演出(歓楽街の配置可能スロット) (2026-09-28, per user request:
+        // "歓楽街のスロットも光る") -- 戻ってきたあなたの一番右のダイスを実際に置けるスロット(値の一致/ANY/
+        // 資源など本物のルール、board.previewPlaceDice)だけを光らせる。
+        if (tutorialKabukichoGlowing && mapId === 'MAP006' && occupants.length === 0) {
+          const p1ForGlow = state.players.find((p) => p.id === 'P1');
+          const unplacedForGlow = p1ForGlow.dice.filter((d) => d.kind === 'COLOR' && !d.placedMapId);
+          const dieForGlow = unplacedForGlow[unplacedForGlow.length - 1];
+          if (dieForGlow && boardMod.previewPlaceDice(state, INDEX, { playerId: 'P1' }, dieForGlow.id, mapId, i)) {
+            slotEl.classList.add('change-highlight');
+          }
+        }
         // card_acquisition_intro/card_acquisition_placement_introの「光る」演出 (2026-09-27, per user
         // request: "王宮と元老院の配置可能スロットを光らせる") -- 王宮/元老院それぞれの中で最初に見つかった
         // 空いているスロット1つだけ(acquisitionSlotAssigned's own doc)。
@@ -5339,22 +5356,22 @@ function placeSelectedDieCommit(state, player, dieId, mapId, slotIndex) {
   const result = boardMod.placeDice(state, INDEX, { playerId: player.id }, dieId, mapId, slotIndex);
   selectedDieIds = [];
   if (result.success) actionCheckpoints.push({ state: preSnapshot, turnActionTaken: preTurnActionTaken });
-  // castletown_placement_introの実クリック操作の完了 (2026-09-27, per user request) -- 城下町(MAP003)への
-  // 実配置に成功した瞬間、次のセリフ(castletown_placement_result)へ直接進める。他のエリアへの配置も禁止は
-  // しない(per user request: "ほかのスロットに置いてもいい")が、その場合は誤配置の救済セリフ
-  // (dice_misclick_hint、汎用 -- tutorialMisclickReturnStepId's own doc)へ回す。どちらも
-  // dismissTutorialStepを経由しない直接遷移のため、handleTutorialChoiceClick/resource_icon_area_card_hintと
-  // 同じ理由でここで明示的にtutorialSeenStepIdsへ加えておく(でないとgame_rules_intro_2への通常の直線探索時に
-  // 再度見つかってしまう)。
-  if (tutorialCurrentStepId === 'castletown_placement_intro' && result.success) {
-    tutorialRightmostDieGlowing = false;
-    if (mapId === 'MAP003') {
-      tutorialCastletownResultGlowing = true;
-      tutorialSeenStepIds.add('castletown_placement_result');
-      tutorialCurrentStepId = 'castletown_placement_result';
+  // kabukicho_placement_introの実クリック操作の完了 (2026-09-28, per user request: "戻ったダイスをつかんで
+  // 歓楽街に置くと次に進む 歓楽街以外に置くと おっと、別のスロットに置いてしまいましたね...がでる") --
+  // 歓楽街(MAP006)への実配置に成功した瞬間、tutorialCurrentStepIdをnullにして通常の直線探索に戻す
+  // (次はcastletown_turn_end_hintが見つかる -- 次のプレイヤーBOBの光る演出もここでONにする)。他のエリアへの
+  // 配置も禁止はしないが、その場合は誤配置の救済セリフ(dice_misclick_hint、汎用 --
+  // tutorialMisclickReturnStepId's own doc)へ回す。誤配置側はdismissTutorialStepを経由しない直接遷移のため、
+  // handleTutorialChoiceClick/resource_icon_area_card_hintと同じ理由でここで明示的にtutorialSeenStepIdsへ
+  // 加えておく(でないとgame_rules_intro_2への通常の直線探索時に再度見つかってしまう)。
+  if (tutorialCurrentStepId === 'kabukicho_placement_intro' && result.success) {
+    tutorialKabukichoGlowing = false;
+    if (mapId === 'MAP006') {
+      tutorialNextPlayerGlowing = true;
+      tutorialCurrentStepId = null;
     } else {
       tutorialCancelButtonGlowing = true;
-      tutorialMisclickReturnStepId = 'castletown_placement_intro';
+      tutorialMisclickReturnStepId = 'kabukicho_placement_intro';
       tutorialSeenStepIds.add('dice_misclick_hint');
       tutorialCurrentStepId = 'dice_misclick_hint';
     }
@@ -6145,6 +6162,11 @@ function renderPlayers(state, next) {
         // 光らせる") -- 城下町のCHANGE(K,A,ALL)で増える資源はAのみ、tutorialCastletownResultGlowing's
         // own doc。
         if (tutorialCastletownResultGlowing && player.id === 'P1' && resource === 'A') badge.classList.add('change-highlight');
+        // castletown_alt_cathedral_hint/castletown_alt_guild_hintの「光る」演出 (2026-09-28, per user request:
+        // "あなたの信心も光る"/"あなたの金貨も光る") -- 大聖堂のCHANGE(K,B,ALL)で増えるのはB(信心)、
+        // ギルドのCHANGE(K,C,ALL)で増えるのはC(金貨)。
+        if (tutorialCathedralGlowing && player.id === 'P1' && resource === 'B') badge.classList.add('change-highlight');
+        if (tutorialGuildGlowing && player.id === 'P1' && resource === 'C') badge.classList.add('change-highlight');
         resourcesEl.appendChild(badge);
       }
     }
@@ -6172,7 +6194,7 @@ function renderPlayers(state, next) {
     // 一番右のダイスを光らせる") -- この時点ではまだ真ん中(index 1)しか配置されておらず、一番左(index 0)と
     // 一番右(index 2)の2個が未配置のまま残っている。.find()(配列内で最初に見つかったもの)だと未配置の
     // うち一番左を拾ってしまうため、.filter()して末尾(元の配列順で最後=一番右)を取る必要がある。
-    const tutorialRightmostDieId = (tutorialRightmostDieGlowing && player.id === 'P1')
+    const tutorialRightmostDieId = ((tutorialRightmostDieGlowing || tutorialKabukichoGlowing) && player.id === 'P1')
       ? (() => { const cs = player.dice.filter((d) => d.kind === 'COLOR' && !d.placedMapId); return cs[cs.length - 1] ? cs[cs.length - 1].id : null; })()
       : null;
     // card_acquisition_introの「残ったダイス」の光る演出専用 (2026-09-27, per user request: "この時残った
@@ -6205,7 +6227,9 @@ function renderPlayers(state, next) {
       // デモ)ためcanPlaceDiceForは常にnullで、かつ農園デモの直前のapplyPlaceDiceResultですでにturnActionTaken
       // =trueになっている -- どちらも通常のクリック可否ゲートを素通りできないので、tutorialRightmostDieGlowing
       // が立っている間だけ一番右のダイス(tutorialRightmostDieId)1個に限り例外的にクリック可能にする。
-      const tutorialCastletownClickable = tutorialRightmostDieGlowing && player.id === 'P1' && die.id === tutorialRightmostDieId;
+      // 2026-09-28: 城下町デモが次への自動実演に戻ったため(castletown_placement_intro)、クリック操作の対象は
+      // 歓楽街デモ(kabukicho_placement_intro、tutorialKabukichoGlowing)の一番右のダイスに移った。
+      const tutorialCastletownClickable = tutorialKabukichoGlowing && player.id === 'P1' && die.id === tutorialRightmostDieId;
       // card_acquisition_placement_introの実クリック操作 (2026-09-27, per user request: "この時あなたの
       // ダイスを光らせる...ダイスをクリックして王宮か元老院に置くと") -- castletown_placement_introと同じ
       // 理由・同じ仕組みで、tutorialCardAcquisitionGlowingが立っていてこのステップが表示中の間だけ、残った
@@ -8193,12 +8217,12 @@ const TUTORIAL_STEPS = [
   {
     id: 'castletown_placement_intro',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: 'あなたのターンが回ってきました\n今度は🎲を「城下町」に置いてみましょう\n光っているあなたのダイスをクリックして、その後「城下町」のANYスロットをクリックしてください',
-    // 次へボタンは表示しない (2026-09-27, per user request: "この時 次へ を消す") -- プレイヤー自身が実際に
-    // 光っているダイス→城下町のANYスロットの順にクリックして配置するまで、自力で次には進めない
-    // (resource_choice等と同じnoManualDismissパターン)。実際の遷移はplaceSelectedDieCommit内の専用フックで
-    // 行う(dismissTutorialStepは経由しない)。
-    noManualDismiss: true,
+    // 2026-09-28, per user request -- 城下町への配置は当初プレイヤー自身のクリック操作だったが、"変更"で
+    // 「今度は3を「城下町」に置いてみます」+次への自動実演に戻した(クリック操作はこの後の歓楽街
+    // (kabukicho_placement_intro)に移った)。このステップが閉じられた瞬間に実際にダイスを城下町へ
+    // 強制的に置く(dismissTutorialStep内、forcePlaceRightmostDieForTutorial's own doc)。
+    body: 'あなたのターンが回ってきました\n今度は🎲を「城下町」に置いてみます',
+    nextLabel: '次へ',
   },
   // 2026-09-27, per user request -- 意図した配置先(城下町/王宮/元老院)以外のスロットに誤って置いてしまった
   // 場合の救済セリフ("ほかのスロットに置いてもいい" -- 禁止はしない、置けてしまった時に「直前のアクションを
@@ -8221,6 +8245,34 @@ const TUTORIAL_STEPS = [
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
     body: 'あなたの持っている食料〇すべてが権力赤〇に変換されました',
     nextLabel: '次へ',
+  },
+  // 2026-09-28, per user request -- 「城下町」に置く代わりに「大聖堂」に置いたらどうなるかの実演。
+  // castletown_placement_resultが閉じられた瞬間に、城下町への配置を取り消して同じダイスを大聖堂(MAP004)の
+  // ANYスロットへ本物のエンジンで置き直す(dismissTutorialStep内)。置かれたダイスとあなたの信心(B)が光る
+  // (tutorialCathedralGlowing's own doc)。
+  {
+    id: 'castletown_alt_cathedral_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '「城下町」に置く代わりに「大聖堂」に置けば\nあなたの持っている食料〇すべてが信心青〇に変換されます',
+    nextLabel: '次へ',
+  },
+  // 同上、「ギルド」版。大聖堂への配置を取り消して同じダイスをギルド(MAP005)のANYスロットへ置き直す。
+  // 置かれたダイスとあなたの金貨(C)が光る(tutorialGuildGlowing's own doc)。
+  {
+    id: 'castletown_alt_guild_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '「ギルド」なら\nあなたの持っている食料〇すべてが金貨黄〇に変換されます',
+    nextLabel: '次へ',
+  },
+  // 2026-09-28, per user request -- 今度はプレイヤー自身が実際にクリックで歓楽街(MAP006)へ置く実操作。
+  // 次へボタンは無く(noManualDismiss)、ギルドへの配置を取り消してダイスが手元に戻り光る+歓楽街の配置可能
+  // スロットが光る(tutorialKabukichoGlowing's own doc)。歓楽街に置くと次に進む、歓楽街以外に置くと
+  // dice_misclick_hintへ(どちらもplaceSelectedDieCommit内の専用フック参照)。
+  {
+    id: 'kabukicho_placement_intro',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '今度はあなたが「歓楽街」にダイスを置いてください',
+    noManualDismiss: true,
   },
   // 2026-09-27, per user request -- ターン終了と次のプレイヤー(BOB)への説明、worker_placement_turn_end_hint
   // と同じ形(次のプレイヤーの光る演出もtutorialNextPlayerGlowingを再利用)。
@@ -9268,6 +9320,41 @@ function forcePlaceMiddleDieOnFarmForTutorial() {
   }
 }
 
+/** 城下町/大聖堂/ギルドの実演用 (2026-09-28, per user request) -- あなた(P1)の残っている一番右(未配置の
+ * 色ダイスのうち最後)のダイスを、本物のエンジンAPI(board.placeDice)で指定のエリア/スロットへ強制的に置く。
+ * forcePlaceMiddleDieOnFarmForTutorialと同じ「本物のエンジンAPIを直接呼ぶだけの薄いラッパー」パターン
+ * (成功したらactionCheckpointsに積む)。.find()だと未配置のうち一番左を拾ってしまうため(tutorialRightmost
+ * DieId's own doc)、.filter()して末尾を取る。 */
+function forcePlaceRightmostDieForTutorial(mapId, slotIndex) {
+  const p1 = STATE.players.find((p) => p.id === 'P1');
+  const unplacedColorDice = p1.dice.filter((d) => d.kind === 'COLOR' && !d.placedMapId);
+  const die = unplacedColorDice[unplacedColorDice.length - 1];
+  if (!die) return;
+  const preSnapshot = gameStateMod.cloneState(STATE);
+  const preTurnActionTaken = turnActionTaken;
+  const result = boardMod.placeDice(STATE, INDEX, { playerId: 'P1' }, die.id, mapId, slotIndex);
+  if (result.success) {
+    actionCheckpoints.push({ state: preSnapshot, turnActionTaken: preTurnActionTaken });
+    applyPlaceDiceResult(result, 'P1');
+  }
+}
+
+/** 「城下町の代わりに大聖堂に置けば」等の実演で、直前の強制配置を取り消して元の状態に戻す (2026-09-28) --
+ * 「直前のアクションをキャンセル」ボタン(handleCancelPreviousActionClick)と同じactionCheckpointsの
+ * pop+undoMod.restoreSnapshotだが、ボタンのクリックではなくチュートリアル側から直接呼ぶためUI固有の
+ * 副作用(tutorialCurrentStepIdの遷移等)は持たない。 */
+function revertLastPlacementForTutorial() {
+  if (actionCheckpoints.length === 0) return;
+  const checkpoint = actionCheckpoints.pop();
+  undoMod.restoreSnapshot(STATE, checkpoint.state);
+  turnActionTaken = checkpoint.turnActionTaken;
+  selectedDieIds = [];
+  pendingBuildChoice = null;
+  pendingTapChoice = null;
+  pendingAutoModeChoice = null;
+  placementMessage = '';
+}
+
 // worker_placement_turn_end_hint/castletown_turn_end_hint/card_acquisition_placement_introが閉じられた
 // 瞬間に実行する、BOB/CAROL/DANの見た目だけの配置の台本 (2026-09-28, per user request: "BOBのダイスは左から
 // 361 CAROLのダイスは左から526 DANのダイスは左から334"、続けて3ターン分の配置先を指定 -- 各プレイヤーの
@@ -9459,17 +9546,40 @@ function dismissTutorialStep() {
     placeScriptedFakeAiDiceForTutorial(1);
     tutorialRightmostDieGlowing = true;
   }
-  // castletown_placement_resultの「光る」演出(増えた権力+置かれたダイス)への遷移は、もはやこのdismiss
-  // チェーン経由ではない (2026-09-27, per user request: 次へを消してプレイヤー自身に城下町のANYスロットへ
-  // 実際にクリックで置かせる形に変更 -- castletown_placement_introはnoManualDismissのためここには来ない。
-  // 実際の遷移とtutorialCastletownResultGlowingのON/forcePlaceRightmostDieOnCastletownForTutorial相当の
-  // 実配置は、placeSelectedDieCommit内の専用フックで行う)。
-  // castletown_turn_end_hintの「光る」演出(次のプレイヤーBOB) -- castletown_placement_resultが閉じられた
-  // 瞬間に、増えた権力/置かれたダイスの光る演出をOFFにしつつONにする(worker_placement_turn_end_hintと同じ
-  // tutorialNextPlayerGlowingを再利用)。
+  // castletown_placement_resultの「光る」演出(増えた権力+置かれたダイス) -- castletown_placement_intro
+  // が閉じられた瞬間にONにし、同時に実際に一番右のダイスを城下町のANYスロット(index 1)へ強制的に置く
+  // (forcePlaceRightmostDieForTutorial's own doc、2026-09-28、per user request: クリック操作から次への
+  // 自動実演に戻した)。
+  if (tutorialCurrentStepId === 'castletown_placement_intro') {
+    tutorialRightmostDieGlowing = false;
+    tutorialCastletownResultGlowing = true;
+    forcePlaceRightmostDieForTutorial('MAP003', 1);
+  }
+  // castletown_alt_cathedral_hintの「光る」演出(大聖堂に置かれたダイス+あなたの信心) --
+  // castletown_placement_resultが閉じられた瞬間に、城下町への配置を取り消して同じダイスを大聖堂の
+  // ANYスロット(index 1)へ置き直す(revertLastPlacementForTutorial/forcePlaceRightmostDieForTutorial's own doc)。
   if (tutorialCurrentStepId === 'castletown_placement_result') {
     tutorialCastletownResultGlowing = false;
-    tutorialNextPlayerGlowing = true;
+    revertLastPlacementForTutorial();
+    forcePlaceRightmostDieForTutorial('MAP004', 1);
+    tutorialCathedralGlowing = true;
+  }
+  // castletown_alt_guild_hintの「光る」演出(ギルドに置かれたダイス+あなたの金貨) --
+  // castletown_alt_cathedral_hintが閉じられた瞬間に、大聖堂への配置を取り消してギルドのANYスロット
+  // (index 1)へ置き直す。
+  if (tutorialCurrentStepId === 'castletown_alt_cathedral_hint') {
+    tutorialCathedralGlowing = false;
+    revertLastPlacementForTutorial();
+    forcePlaceRightmostDieForTutorial('MAP005', 1);
+    tutorialGuildGlowing = true;
+  }
+  // kabukicho_placement_introの「光る」演出(戻ったダイス+歓楽街の配置可能スロット) --
+  // castletown_alt_guild_hintが閉じられた瞬間に、ギルドへの配置を取り消してダイスを手元に戻し、
+  // プレイヤー自身のクリック操作を待つ(以後の遷移はplaceSelectedDieCommit内の専用フック)。
+  if (tutorialCurrentStepId === 'castletown_alt_guild_hint') {
+    tutorialGuildGlowing = false;
+    revertLastPlacementForTutorial();
+    tutorialKabukichoGlowing = true;
   }
   // card_acquisition_introの「光る」演出(残ったダイス+王宮の次の空きスロット) -- castletown_turn_end_hintが
   // 閉じられた瞬間に、次のプレイヤーの光る演出をOFFにしつつ、2ターン目のBOB/CAROL/DANの見た目だけの配置
@@ -9668,11 +9778,20 @@ let tutorialNextPlayerGlowing = false;
 // request: "この時一番右のダイスを光らせる"、後に"この時城下町のANYスロットを光らせる"が追加) --
 // castletown_placement_introが表示され続けている間ずっとtrueになる継続フラグ。🎲(単体、
 // TUTORIAL_ICON_NOTATIONS)側は常時ONで別管理、こちらはrenderPlayers/renderBoard側の実物のダイス・スロット
-// 用。このステップは自動配置ではなく実際のクリック操作(die--selectable/slot--selectableの通常経路)で
-// 進める形になっており(次へボタンは無い、noManualDismiss)、renderPlayersのdie--selectable判定でも
-// このフラグを一番右のダイスに限り例外的に使う(tutorialCastletownClickable参照)。OFFになるのは
-// placeSelectedDieCommit内の専用フックで実配置が成功した瞬間。
+// 用。2026-09-28、per user request: このステップは「今度は3を「城下町」に置いてみます」+次への自動実演に
+// 変更されたため光るだけでクリックはできない(クリック操作は歓楽街のtutorialKabukichoGlowingへ移った)。
+// OFFになるのはこのステップ自身が閉じられた瞬間(dismissTutorialStep内)。
 let tutorialRightmostDieGlowing = false;
+// 大聖堂/ギルドに置き直されたダイス+あなたの信心(B)/金貨(C)の「光る」演出 (2026-09-28, per user request) --
+// それぞれcastletown_alt_cathedral_hint/castletown_alt_guild_hintが表示され続けている間ずっとtrueになる継続フラグ。
+let tutorialCathedralGlowing = false;
+let tutorialGuildGlowing = false;
+// 戻ってきた一番右のダイス+歓楽街の配置可能スロットの「光る」演出 (2026-09-28, per user request: "このとき
+// ギルドに置かれたダイスが戻って光る 歓楽街のスロットも光る") -- kabukicho_placement_introが表示され続けて
+// いる間ずっとtrueになる継続フラグ。このステップは実際のクリック操作で進める(次へボタンは無い、
+// noManualDismiss)ため、renderPlayersのdie--selectable判定でもこのフラグを一番右のダイスに限り例外的に使う
+// (tutorialCastletownClickable参照)。OFFになるのはplaceSelectedDieCommit内の専用フックで実配置が成功した瞬間。
+let tutorialKabukichoGlowing = false;
 // 増えた権力(A)+城下町のスロットANY(index 1)に置かれたダイスの「光る」演出 (2026-09-27, per user request:
 // "この時資源赤〇を光らせる この時一番右のダイスが城下町のスロットANYに置かれ光る") --
 // castletown_placement_resultが表示され続けている間ずっとtrueになる継続フラグ。ONになるのは
@@ -10045,7 +10164,7 @@ function handleCancelPreviousActionClick() {
   if (tutorialCurrentStepId === 'dice_misclick_hint') {
     tutorialCurrentStepId = tutorialMisclickReturnStepId;
     tutorialCancelButtonGlowing = false;
-    if (tutorialMisclickReturnStepId === 'castletown_placement_intro') tutorialRightmostDieGlowing = true;
+    if (tutorialMisclickReturnStepId === 'kabukicho_placement_intro') tutorialKabukichoGlowing = true;
     if (tutorialMisclickReturnStepId === 'card_acquisition_placement_intro') tutorialCardAcquisitionGlowing = true;
     tutorialMisclickReturnStepId = null;
     stopTutorialTypewriter();
