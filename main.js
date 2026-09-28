@@ -6895,6 +6895,10 @@ function renderJobPool(state, next) {
   // 何も足さずreturnするだけ、state.jobPool自体には一切触れない)ため、まだ未ドラフトのAIプレイヤーの次の
   // ターン(driveOneAiStepがstate.jobPoolを直接読む)には影響しない。
   if (tutorialModeActive && tutorialInitialResourcesGlowing) return;
+  // チュートリアルの出だし(ルール説明・実演)ではJOBカードを見せない (2026-09-29, per user request: "チュートリアルの
+  // 出だし ジョブカードは表示しない / それではゲームを始めましょう / 以降表示する") -- resource_choice_introを閉じる
+  // 瞬間から表示する(tutorialJobPoolRevealed's own doc)。上と同じくUI上だけ隠す。
+  if (tutorialModeActive && !tutorialJobPoolRevealed) return;
   // !isAiPlayer (2026-08-03): an AI player's JOB draft is decided by driveOneAiStep, never by clicks.
   // Online play (2026-08-29): also requires localSeatId to match -- see realTurnPlayerId's own doc.
   const draftingPlayerId = next && next.type === 'ONBOARDING_NEEDED' && !isAiPlayer(next.playerId)
@@ -9691,6 +9695,7 @@ function dismissTutorialStep() {
   // consumed by renderPlayerCards on the very next render, a one-time flash.
   if (tutorialCurrentStepId === 'resource_choice_intro') {
     tutorialConCardRevealed = true;
+    tutorialJobPoolRevealed = true;
     tutorialConCardGlowing = true;
     // ワーカープレイスメントの実演一式(game_rules_intro_1〜card_acquisition_intro)の巻き戻し (2026-09-27,
     // per user request: "この時一度エリアのダイスをすべて元に戻す 増えた資源やカードも元に戻す") --
@@ -9933,6 +9938,9 @@ let tutorialOthersRevealed = false;
 // (実際にこの通りのバグが発生し、ユーザーが気づく前に見つかった)。tutorialOthersRevealedと同じく、
 // dismissTutorialStepでそのステップを実際に閉じる(次へを押す)瞬間にセットする。
 let tutorialConCardRevealed = false;
+// JOBカード置き場(#job-pool)の表示 (2026-09-29) -- resource_choice_intro("それではゲームを始めましょう")を
+// 閉じる瞬間にセットする(tutorialConCardRevealedと同じ理由でtutorialSeenStepIdsは使えない)。
+let tutorialJobPoolRevealed = false;
 let tutorialResourceCandidatesRevealedFlag = false;
 function tutorialConRevealed(playerId) {
   return !tutorialModeActive || playerId !== 'P1' || tutorialConCardRevealed;
