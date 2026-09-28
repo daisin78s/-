@@ -10544,7 +10544,12 @@ function renderUndoButtons(state) {
   for (const id of ['undo-button', 'undo-button-build']) {
     document.getElementById(id).disabled = disabled;
   }
-  const diceCancelDisabled = actionCheckpoints.length === 0;
+  // チュートリアル中は、キャンセルを押すこと自体がセリフの指示になっている間(=ボタンが光っている間: cancel_action_hint/
+  // dice_misclick_hint/cancel_training_ground_hint)だけ使える (2026-09-29, per user request: "直前のアクションを
+  // キャンセルボタンもチュートリアル中は使えないようにしてください おっと別の… ダイスが別のエリアに置かれた が
+  // あるときは使えるように")。ステップIDではなく光るフラグで判定するのは、renderがrenderTutorialOverlayより先に
+  // 走るため(tutorialCancelButtonGlowing's own docの通り、どの場合もrender()の前に立つ)。
+  const diceCancelDisabled = actionCheckpoints.length === 0 || (tutorialModeActive && !tutorialCancelButtonGlowing);
   for (const id of ['dice-cancel-button', 'dice-cancel-button-build']) {
     const btn = document.getElementById(id);
     btn.disabled = diceCancelDisabled;
