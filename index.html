@@ -872,6 +872,11 @@
        instead, loaded the same way as everything else here). -->
   <script src="data/game.data.js"></script>
 
+  <!-- チュートリアルのセリフ (2026-09-28, per user request: "まずはセリフだけ反映されるようにしてください") --
+       チュートリアル.xlsx を tools/tutorial_xlsx_to_js.py で変換した window.TUTORIAL_SERIFU。無くても
+       main.js の実装側の本文にフォールバックするだけで動く。main.js より前に読み込むこと。 -->
+  <script src="data/tutorial.data.js"></script>
+
   <!-- Firebase (2026-08-29, online multiplayer + cloud ranking/replay -- see the "オンライン対戦 +
        ランキング/リプレイのクラウド共有" plan). Compat build (namespaced firebase.* API, not the modular
        ES-module one) specifically so this stays a plain <script src> like everything else here -- no

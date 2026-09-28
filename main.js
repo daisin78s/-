@@ -8818,6 +8818,138 @@ const TUTORIAL_STEPS = [
   },
 ];
 
+// セリフのExcel反映 (2026-09-28, per user request: "まずはセリフだけ反映されるようにしてください") --
+// チュートリアル.xlsx(tools/tutorial_xlsx_to_js.pyで変換した data/tutorial.data.js の window.TUTORIAL_SERIFU)
+// に書かれたセリフで、各ステップの本文(body)を差し替える。光る/動く/進む条件/選択肢/移動先はまだExcelから
+// 読まない(実装側のまま、Excelは指示書 -- per user request: "2 3 はエクセルで大まかな指示をして
+// クロードコードさんにやってもらった方がいい")。データファイルが無い/該当行が無いステップは、これまで通りの
+// 実装側の本文をそのまま使う(step.originalBodyに元の本文を残す)。
+// ステップid -> Excelの行番号。dice_misclick_hintは実装が1ステップを共有しているため、Excel側の
+// T010/T014(同じセリフ)のうちT010を使う。
+const TUTORIAL_STEP_TEXT_IDS = {
+  game_rules_intro_1: 'T001',
+  worker_placement_example_intro: 'T002',
+  worker_placement_example_result: 'T003',
+  worker_placement_turn_end_hint: 'T004',
+  castletown_placement_intro: 'T005',
+  castletown_placement_result: 'T006',
+  castletown_alt_cathedral_hint: 'T007',
+  castletown_alt_guild_hint: 'T008',
+  kabukicho_placement_intro: 'T009',
+  dice_misclick_hint: 'T010',
+  castletown_turn_end_hint: 'T011',
+  card_acquisition_intro: 'T012',
+  card_acquisition_placement_intro: 'T013',
+  game_rules_intro_2: 'T015',
+  resource_choice_intro: 'T016',
+  resource_choice_con_intro: 'T017',
+  resource_choice: 'T018',
+  resource_icon_explanation: 'T019',
+  resource_icon_conversion_hint: 'T020',
+  resource_icon_castletown_hint: 'T021',
+  resource_icon_area_card_hint: 'T022',
+  resource_pick_hint: 'T023',
+  resource_confirm_intro: 'T024',
+  turn_order_intro: 'T025',
+  turn_order_reveal_summary: 'T026',
+  job_draft_intro: 'T027',
+  job_draft_pick_hint: 'T028',
+  con_face_choice_intro: 'T029',
+  initial_resources_reveal: 'T030',
+  resource_conversion_intro: 'T031',
+  color_dice_reveal: 'T032',
+  main_action_intro: 'T033',
+  slot_dice_value_rule_intro: 'T034',
+  slot_any_rule_intro: 'T035',
+  ex_slot_intro: 'T036',
+  slot_dice_value_rule_intro_2: 'T037',
+  free_action_hint: 'T038',
+  job_tap_resource_intro: 'T039',
+  cancel_action_hint: 'T040',
+  job_retap_hint: 'T041',
+  dice_select_hint: 'T042',
+  placeable_slot_hint: 'T043',
+  first_turn_recommendation_hint: 'T044',
+  training_ground_hint: 'T045',
+  card_areas_hint: 'T046',
+  shop_cards_intro: 'T047',
+  shop_dice_value1_intro: 'T048',
+  shop_dice_value5_intro: 'T049',
+  shop_cost_intro: 'T050',
+  used_card_immediately_hint: 'T051',
+};
+
+/** Excelのセリフ内の {名前} を values[名前] に置き換える。{名前} だけの行で値が空文字なら、その行ごと消す
+ * (例: 初期資源が1つも無い時に空行を残さない)。values に無い {…} はそのまま残す。 */
+function fillTutorialPlaceholders(template, values) {
+  const has = (name) => Object.prototype.hasOwnProperty.call(values, name);
+  const lines = [];
+  for (const line of template.split('\n')) {
+    const whole = /^\{([^{}]+)\}$/.exec(line);
+    if (whole && has(whole[1]) && values[whole[1]] === '') continue;
+    lines.push(line.replace(/\{([^{}]+)\}/g, (m, name) => (has(name) ? values[name] : m)));
+  }
+  return lines.join('\n');
+}
+
+// 実行時に値が入るセリフ(bodyが関数のステップ)用。(state, Excelのセリフ)を受け取り、埋め込み後の本文を返す。
+// 実装側の元のbodyと同じ内容になるよう、値の作り方は元の関数と同じにしてある。
+const TUTORIAL_TEXT_RESOLVERS = {
+  resource_confirm_intro: (state, template) => {
+    const choice = state.pendingChoices.find((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS');
+    const total = resourceChoiceStartOrderTotal(state, 'P1', choice.context.selected);
+    return fillTutorialPlaceholders(template, { 'あなたのスタプレ合計': String(total) });
+  },
+  turn_order_intro: (state, template) => {
+    const p1 = state.players.find((p) => p.id === 'P1');
+    const resourceIds = p1.ownedCardPhysicalIds.filter((id) => id.startsWith('R'));
+    const total = resourceChoiceStartOrderTotal(state, 'P1', resourceIds);
+    return fillTutorialPlaceholders(template, { 'あなたのスタプレ合計': String(total) });
+  },
+  turn_order_reveal_summary: (state, template) => {
+    const values = {};
+    state.turnOrder.forEach((playerId, i) => {
+      values[`${i + 1}番手の名前`] = state.players.find((p) => p.id === playerId).name;
+    });
+    return fillTutorialPlaceholders(template, values);
+  },
+  job_draft_intro: (state, template) => {
+    const names = state.turnOrder.slice(0, state.turnOrder.indexOf('P1'))
+      .map((id) => state.players.find((p) => p.id === id).name);
+    const key = 'あなたより前の手番の名前を「と」でつなぐ';
+    // 誰も先に動いていない(あなたが1番手)時は、元の実装と同じく「あなたのターンです」だけにする。
+    const text = names.length > 0 ? template : template.replace(`{${key}}のターンが終わりあなたのターンです`, 'あなたのターンです');
+    return fillTutorialPlaceholders(text, { [key]: names.join('と') });
+  },
+  initial_resources_reveal: (state, template) => {
+    const r = state.players.find((p) => p.id === 'P1').resources;
+    const parts = [];
+    if (r.K) parts.push(`（食料）〇${r.K}`);
+    if (r.A) parts.push(`（権力）赤〇${r.A}`);
+    if (r.B) parts.push(`（信心）青〇${r.B}`);
+    if (r.C) parts.push(`（金貨）黄〇${r.C}`);
+    if (r.Z) parts.push(`（コネ）Z〇${r.Z}`);
+    if (r.BZ) parts.push(`口利き${r.BZ}`);
+    return fillTutorialPlaceholders(template, { '持っている初期資源を1行ずつ': parts.join('\n') });
+  },
+};
+
+for (const step of TUTORIAL_STEPS) {
+  step.originalBody = step.body;
+  const rowId = TUTORIAL_STEP_TEXT_IDS[step.id];
+  const template = rowId && window.TUTORIAL_SERIFU ? window.TUTORIAL_SERIFU[rowId] : null;
+  if (rowId && window.TUTORIAL_SERIFU && !template) {
+    console.warn(`チュートリアルのセリフ ${rowId}(${step.id}) が data/tutorial.data.js に見つからないため、実装側の本文を使います`);
+  }
+  if (!template) continue;
+  if (typeof step.body === 'function') {
+    const resolver = TUTORIAL_TEXT_RESOLVERS[step.id];
+    if (resolver) step.body = (state) => resolver(state, template);
+  } else {
+    step.body = template;
+  }
+}
+
 // job_explanation (2026-09-24: "JOBをクリックしたときそのJOBの説明をセリフで流したい" -- per-JOB bespoke
 // tutorial seli-fu shown on click, JOB_EXPLANATION_BODIES/tutorialExplainedJobFaceId/
 // showJobExplanationBubble) was removed 2026-09-26, per user request: "JOBカードを選んだ時に出るセリフ
