@@ -10567,8 +10567,11 @@ function renderRoundPassButton(state, next) {
   const playerId = actingHumanPlayerId(state, next);
   const player = playerId ? state.players.find((p) => p.id === playerId) : null;
   const hasDiceLeftThisRound = !!player && player.dice.some((d) => d.placedMapId === null && !d.passed);
-  btn.disabled = !hasDiceLeftThisRound;
-  btn.dataset.playerId = hasDiceLeftThisRound ? playerId : '';
+  // チュートリアル中は押せない (2026-09-29, per user request: "チュートリアル中ラウンドパスを押せないように")。
+  const blockedByTutorial = tutorialModeActive;
+  btn.disabled = !hasDiceLeftThisRound || blockedByTutorial;
+  btn.title = blockedByTutorial ? 'チュートリアル中は使えません' : '';
+  btn.dataset.playerId = hasDiceLeftThisRound && !blockedByTutorial ? playerId : '';
 }
 
 function handleRoundPassClick() {
