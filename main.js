@@ -5372,6 +5372,7 @@ function placeSelectedDieCommit(state, player, dieId, mapId, slotIndex) {
   // 禁止しないが、castletown_placement_introと同じdice_misclick_hintへ回す。
   if (tutorialCurrentStepId === 'card_acquisition_placement_intro' && result.success) {
     tutorialCardAcquisitionGlowing = false;
+    tutorialCardAcquisitionPlaceable = false;
     if (mapId === boardMod.CASTLE_MAP_ID || mapId === boardMod.AREA009_MAP_ID) {
       // 3ターン目のBOB/CAROL/DANの見た目だけの配置(台本) (2026-09-28, per user request) -- あなた自身の
       // カード獲得デモが成功した瞬間にセリフ無しで実行する(placeScriptedFakeAiDiceForTutorial's own doc)。
@@ -6220,10 +6221,15 @@ function renderPlayers(state, next) {
       const tutorialCastletownClickable = tutorialKabukichoGlowing && player.id === 'P1' && die.id === tutorialRightmostDieId;
       // card_acquisition_placement_introの実クリック操作 (2026-09-27, per user request: "この時あなたの
       // ダイスを光らせる...ダイスをクリックして王宮か元老院に置くと") -- castletown_placement_introと同じ
-      // 理由・同じ仕組みで、tutorialCardAcquisitionGlowingが立っていてこのステップが表示中の間だけ、残った
-      // 1個のダイス(tutorialCardAcquisitionDieId)に限り例外的にクリック可能にする。card_acquisition_intro
-      // 自身(まだ次へボタンの通常ステップ)が表示中はクリック可能にしない。
-      const tutorialCardAcquisitionClickable = tutorialCardAcquisitionGlowing && tutorialCurrentStepId === 'card_acquisition_placement_intro'
+      // 理由・同じ仕組みで、残った1個のダイス(tutorialCardAcquisitionDieId)に限り例外的にクリック可能にする。
+      // card_acquisition_intro自身(まだ次へボタンの通常ステップ)が表示中はクリック可能にしない。
+      // 2026-09-29 bug fix (per user report: "この時ダイスをクリックできません") -- 判定を
+      // tutorialCurrentStepId === 'card_acquisition_placement_intro' にしていたため、前のステップの次へを押した
+      // 直後の描画(renderPlayersはrenderTutorialOverlayより先に呼ばれ、まだtutorialCurrentStepIdがnullで
+      // 次のステップに切り替わっていない)ではクリック可能にならず、その後は再描画が起きないので押せない
+      // ままだった。専用フックtutorialCardAcquisitionPlaceableを、次へを押す時点(dismissTutorialStep内)で
+      // 先に立てる方式にした(歓楽街のtutorialKabukichoGlowingなど、他の実クリック操作と同じ形)。
+      const tutorialCardAcquisitionClickable = tutorialCardAcquisitionGlowing && tutorialCardAcquisitionPlaceable
         && player.id === 'P1' && die.id === tutorialCardAcquisitionDieId;
       if (((player.id === canPlaceDiceFor && !turnActionTaken) || tutorialCastletownClickable || tutorialCardAcquisitionClickable) && !die.passed
         && (!tutorialForcedDieId || die.id === tutorialForcedDieId)) {
@@ -9727,7 +9733,9 @@ function dismissTutorialStep() {
   // user request -- カード獲得の実クリック操作(card_acquisition_placement_intro)が続くため、ダイス/王宮/
   // 元老院の光る演出はそのステップの間も光り続ける必要がある。通常の直線探索でcard_acquisition_placement_
   // introが次に見つかり、そのステップ自身の実配置成功時にOFFになる(placeSelectedDieCommit内の専用フック
-  // 参照)。
+  // 参照)。一方、残ったダイスをクリックできる状態(tutorialCardAcquisitionPlaceable's own doc)は、この
+  // 「次へ」を押す時点で先に立てる(ステップIDの切り替えを待つと描画順の都合で1回遅れてクリックできない)。
+  if (tutorialCurrentStepId === 'card_acquisition_intro') tutorialCardAcquisitionPlaceable = true;
   // alsoCloseTurnOrderOverlay (2026-09-24, see turn_order_reveal_summary's own doc): 次へ on this step
   // also presses the turn-order overlay's own ✖ in the same tap, instead of leaving the player to close
   // it separately.
@@ -9936,6 +9944,12 @@ let tutorialCastletownResultGlowing = false;
 // 途切れず光り続ける -- dismissTutorialStepのcard_acquisition_intro自身の doc 参照)。OFFになるのは
 // card_acquisition_placement_intro自身で実配置が成功した瞬間(placeSelectedDieCommit内の専用フック)。
 let tutorialCardAcquisitionGlowing = false;
+// 残ったダイスを実際にクリックして置ける状態 (2026-09-29 bug fix、per user report: "この時ダイスを
+// クリックできません") -- card_acquisition_placement_introの間だけtrue。card_acquisition_introの
+// 「次へ」を押した瞬間にdismissTutorialStepが先に立てる(ステップIDの切り替えを待つと描画順の都合で
+// 1回遅れてクリックできなくなる -- renderPlayersのtutorialCardAcquisitionClickable参照)。実配置が成功
+// した瞬間(placeSelectedDieCommit内)に消え、誤配置後のキャンセルで戻ってきた時に再度立てる。
+let tutorialCardAcquisitionPlaceable = false;
 // ワーカープレイスメントの実演一式(game_rules_intro_1〜card_acquisition_intro)が始まる直前のGameState
 // スナップショット (2026-09-27, per user request: "この時一度エリアのダイスをすべて元に戻す 増えた資源や
 // カードも元に戻す") -- 実演中に本物のboard.placeDice/placeScriptedFakeAiDiceForTutorialで置かれたダイスや
@@ -10297,7 +10311,10 @@ function handleCancelPreviousActionClick() {
     tutorialCurrentStepId = tutorialMisclickReturnStepId;
     tutorialCancelButtonGlowing = false;
     if (tutorialMisclickReturnStepId === 'kabukicho_placement_intro') tutorialKabukichoGlowing = true;
-    if (tutorialMisclickReturnStepId === 'card_acquisition_placement_intro') tutorialCardAcquisitionGlowing = true;
+    if (tutorialMisclickReturnStepId === 'card_acquisition_placement_intro') {
+      tutorialCardAcquisitionGlowing = true;
+      tutorialCardAcquisitionPlaceable = true;
+    }
     tutorialMisclickReturnStepId = null;
     stopTutorialTypewriter();
   }
