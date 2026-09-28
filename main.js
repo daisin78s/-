@@ -185,17 +185,19 @@ function createInitialState(plan, forcedSeed) {
   setupMod.createPlayers(state, weeklyChallengeActive ? ['Alice', 'Bob', 'Carol', 'Dan'] : [loadRememberedRankingName() || 'Alice', 'Bob', 'Carol', 'Dan']);
   setupMod.prepareMaps(state, INDEX);
   setupMod.prepareShops(state, INDEX, plan ? plan.abc : (tutorialModeActive ? tutorialPreferredNormalFaceIds(state, INDEX) : undefined));
-  // チュートリアルでは1R(初期配置)のみ、あなたのダイスを完全に固定値にする (2026-09-26, per user request:
-  // "1Rのみプレイヤーの初期ダイス一番左を1になるようにしてください あとはランダムで"; 2026-09-27、per user
-  // request: "チュートリアルのプレイヤーの初期ダイス左から2番目を5の目にして" で2番目(index 1)も追加、
-  // 続けて"3個目(一番右)は城下町のANYスロット実演のため値2だけ除外してランダムに固定"としていたが、
+  // チュートリアルでは1R(初期配置)のみ、全プレイヤーのダイスを完全に固定値にする (2026-09-26, per user
+  // request: "1Rのみプレイヤーの初期ダイス一番左を1になるようにしてください あとはランダムで"; 2026-09-27、
+  // per user request: "チュートリアルのプレイヤーの初期ダイス左から2番目を5の目にして" で2番目(index 1)も
+  // 追加、続けて"3個目(一番右)は城下町のANYスロット実演のため値2だけ除外してランダムに固定"としていたが、
   // 2026-09-28、per user request: "あなたの初期ダイスは左から163にする"/"農園に置くダイス 5→6" で
   // 左から1,6,3の3個とも固定値に変更(2番目5→6により、農園デモの配置先もスロット2(値5)からスロット3
-  // (値6)へ変更 -- forcePlaceMiddleDieOnFarmForTutorial/関連する光る演出のslotIndex参照)。3個目は3固定
-  // (城下町のSLOT1=2と衝突しないため、以前のような除外ロジックは不要)。2R以降のラウンド開始時の振り直し
-  // (turn-flow.js側)には触れないため、以後は完全ランダムに戻る。他の3人のAIのダイスはこれまで通り完全
-  // ランダム。
-  setupMod.rollInitialColorDice(state, tutorialModeActive ? { P1: [1, 6, 3] } : undefined);
+  // (値6)へ変更)。続けて同日、per user request: "BOBのダイスは左から361 CAROLのダイスは左から526 DANの
+  // ダイスは左から334"で、他の3人のAI(BOB/CAROL/DAN)のダイスも完全固定に変更 -- チュートリアルの3ターン分の
+  // 台本(TUTORIAL_SCRIPTED_AI_PLACEMENTS's own doc参照)がプレイヤーごとの固定ダイス値に依存しているため。
+  // 2R以降のラウンド開始時の振り直し(turn-flow.js側)には触れないため、以後は完全ランダムに戻る。
+  setupMod.rollInitialColorDice(state, tutorialModeActive
+    ? { P1: [1, 6, 3], P2: [3, 6, 1], P3: [5, 2, 6], P4: [3, 3, 4] }
+    : undefined);
   const forcedCon = plan && plan.con.length > 0 ? { P1: gameStateMod.splitCardId(plan.con[0]).physicalId } : undefined;
   // チュートリアルでは祝福/色欲(CON001)を誰にも配らない (2026-09-26, per user request: "チュートリアルでは
   // 祝福 色欲 プレイヤーに配られないようにしてほしい")。
@@ -5366,6 +5368,9 @@ function placeSelectedDieCommit(state, player, dieId, mapId, slotIndex) {
   if (tutorialCurrentStepId === 'card_acquisition_placement_intro' && result.success) {
     tutorialCardAcquisitionGlowing = false;
     if (mapId === boardMod.CASTLE_MAP_ID || mapId === boardMod.AREA009_MAP_ID) {
+      // 3ターン目のBOB/CAROL/DANの見た目だけの配置(台本) (2026-09-28, per user request) -- あなた自身の
+      // カード獲得デモが成功した瞬間にセリフ無しで実行する(placeScriptedFakeAiDiceForTutorial's own doc)。
+      placeScriptedFakeAiDiceForTutorial(3);
       tutorialCurrentStepId = null;
     } else {
       tutorialCancelButtonGlowing = true;
@@ -8181,11 +8186,10 @@ const TUTORIAL_STEPS = [
     nextLabel: '次へ',
   },
   // 2026-09-27, per user request -- 城下町にダイスを置く具体例の導入。BOB/CAROL/DANの見た目だけの配置
-  // (城下町を避け、配置可能なスロットに限定、効果は発動させない)は、このステップの1つ前
-  // (worker_placement_turn_end_hint)が閉じられた瞬間にセリフ無しで実行する
-  // (forceFakeAiPlacementsForTutorial's own doc)。🎲(単体)はP1の残っている最後の
-  // ダイス(一番右)のアイコンに変換される(TUTORIAL_ICON_NOTATIONS参照)。一番右のダイスを光らせる
-  // (tutorialRightmostDieGlowing's own doc)。
+  // (1ターン目の台本)は、このステップの1つ前(worker_placement_turn_end_hint)が閉じられた瞬間にセリフ無しで
+  // 実行する(placeScriptedFakeAiDiceForTutorial/TUTORIAL_SCRIPTED_AI_PLACEMENTS's own doc)。🎲(単体)は
+  // P1の残っている最後のダイス(一番右)のアイコンに変換される(TUTORIAL_ICON_NOTATIONS参照)。一番右の
+  // ダイスを光らせる(tutorialRightmostDieGlowing's own doc)。
   {
     id: 'castletown_placement_intro',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
@@ -8226,14 +8230,13 @@ const TUTORIAL_STEPS = [
     body: 'あなたのターンが終了しまた次のプレイヤーのターンになります',
     nextLabel: '次へ',
   },
-  // 2026-09-27, per user request -- カード獲得デモの導入。2回目のBOB/CAROL/DANの見た目だけの配置は、この
-  // ステップの1つ前(castletown_turn_end_hint)が閉じられた瞬間にセリフ無しで実行する
-  // (forceFakeAiPlacementsForTutorial's own doc、per user report: 「次へを押すとBOB CAROL DANがダイスを
-  // 置くようにお願いします 注意事項 ダイスは訓練場にはおかれない 王宮 元老院に資源がなくても置いていいが
-  // 王宮には1は置かない」はセリフではなかったため削除 -- 1回目と同じ理由。この注意事項自体は
-  // forceFakeAiPlacementsForTutorialの新しい引数excludeMapIds=['MAP007']/bypassLegalityMapIds=[CASTLE_MAP_ID,
-  // AREA009_MAP_ID]として実装している)。残った(目1固定の)ダイスと王宮/元老院の次に配置可能な
-  // (=最初に見つかる空いている)スロットを光らせる(tutorialCardAcquisitionGlowing's own doc)。
+  // 2026-09-27, per user request -- カード獲得デモの導入。2ターン目のBOB/CAROL/DANの見た目だけの配置
+  // (台本)は、このステップの1つ前(castletown_turn_end_hint)が閉じられた瞬間にセリフ無しで実行する
+  // (placeScriptedFakeAiDiceForTutorial's own doc、per user report: 「次へを押すとBOB CAROL DANがダイスを
+  // 置くようにお願いします...」はセリフではなかったため削除 -- 1ターン目と同じ理由)。残った(目1固定の)
+  // ダイスと王宮/元老院の次に配置可能な(=最初に見つかる空いている)スロットを光らせる
+  // (tutorialCardAcquisitionGlowing's own doc)。3ターン目のBOB/CAROL/DANの見た目だけの配置は、
+  // card_acquisition_placement_intro自身の実配置成功時に実行する(placeSelectedDieCommit内の専用フック参照)。
   {
     id: 'card_acquisition_intro',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
@@ -9265,51 +9268,40 @@ function forcePlaceMiddleDieOnFarmForTutorial() {
   }
 }
 
-/** worker_placement_turn_end_hint/castletown_turn_end_hintが閉じられた瞬間の、BOB/CAROL/DANの見た目だけの
- * 配置(2026-09-27) -- 各AIの未配置の色ダイス1個を、excludeMapIds(1回目は城下町MAP003、2回目は訓練場MAP007
- * -- per user request: "ダイスは訓練場にはおかれない")を除く、実際に配置可能なスロット(board.previewPlaceDice
- * で判定 -- 目の一致/ANY/重複値/資源不足などの本物のルールをすべて満たすスロットに限定、per user request:
- * "適当に置くと書きましたが 配置可能なスロットに限定してください")の中からランダムに選んで直接書き込むだけの
- * 配置。実際にboard.placeDiceを呼んで適用するわけではない(エリアのACTIONは発動しない、資源やカードへの影響は
- * 一切無い)ため、legalityチェックにはpreviewのクローンstateを使うだけで本物のSTATEは変更しない -- ここが
- * 他のforcePlaceXxxForTutorial系(本物のplaceDiceを呼ぶ)との唯一かつ最大の違い。
- *
- * bypassLegalityMapIds (2026-09-27, per user request: "王宮 元老院に資源がなくても置いていいが") --
- * これらのマップだけは、previewPlaceDiceの資源不足による拒否を無視する。実装は、previewPlaceDiceを呼ぶ間
- * だけ対象プレイヤーの資源を一時的に潤沢にしてBUILD等の実際のACTIONを必ず成功させ(=資源面の拒否だけを
- * 迂回)、値の一致/ANY/重複値/EX所有権などそれ以外の本物のルールはそのまま生きたゲームロジックで判定させる
- * (手書きで再実装して本物のルールとズレるのを防ぐ)。previewPlaceDice自体は自分のクローンで判定するだけで
- * 本物のSTATEを変更しないので、呼び出し前後で対象プレイヤーの資源を元に戻せば安全。 */
-function forceFakeAiPlacementsForTutorial(excludeMapIds, bypassLegalityMapIds) {
-  const excluded = new Set(excludeMapIds || []);
-  const bypassLegality = new Set(bypassLegalityMapIds || []);
+// worker_placement_turn_end_hint/castletown_turn_end_hint/card_acquisition_placement_introが閉じられた
+// 瞬間に実行する、BOB/CAROL/DANの見た目だけの配置の台本 (2026-09-28, per user request: "BOBのダイスは左から
+// 361 CAROLのダイスは左から526 DANのダイスは左から334"、続けて3ターン分の配置先を指定 -- 各プレイヤーの
+// 固定ダイス(rollInitialColorDiceの{P2:[3,6,1],P3:[5,2,6],P4:[3,3,4]}参照)を左から順に1個ずつ、3ターンに
+// わたって指定のエリアへ見た目だけ置く。"あなた以外のプレイヤーはおいても何も起きない"per user request の
+// 通り、エリアが何であってもACTIONは一切発動しない(値もvalueとして書き込むだけ)。ラウンドキーは1/2/3、
+// それぞれworker_placement_turn_end_hint/castletown_turn_end_hint/card_acquisition_placement_intro成功時
+// に対応する。
+const TUTORIAL_SCRIPTED_AI_PLACEMENTS = {
+  1: { P2: 'MAP008', P3: 'MAP002', P4: 'MAP001' },
+  2: { P2: 'MAP004', P3: 'MAP008', P4: 'MAP008' },
+  3: { P2: 'MAP006', P3: 'MAP008', P4: 'MAP002' },
+};
+
+/** TUTORIAL_SCRIPTED_AI_PLACEMENTS[round]に従い、各AIの未配置の色ダイス1個(左から順、固定ダイスなので
+ * 常に決まった値)を指定のエリアの空きスロット(値が一致する数字スロットがあればそこ、無ければ最初の空き
+ * ANYスロット)へ直接書き込むだけの見た目だけの配置。board.placeDice等の本物のエンジンAPIは一切経由しない
+ * (エリアのACTIONは発動しない、資源やカードへの影響は一切無い)ため、legalityの厳密なチェックも不要 --
+ * 台本の値は元々このエリアに置けることを確認済み(per user dictation)。 */
+function placeScriptedFakeAiDiceForTutorial(round) {
+  const script = TUTORIAL_SCRIPTED_AI_PLACEMENTS[round];
   for (const playerId of ['P2', 'P3', 'P4']) {
+    const mapId = script[playerId];
+    if (!mapId) continue;
     const player = STATE.players.find((p) => p.id === playerId);
     const die = player.dice.find((d) => d.kind === 'COLOR' && !d.placedMapId);
     if (!die) continue;
-    const candidates = [];
-    for (const mapId of MAP_ORDER) {
-      if (excluded.has(mapId)) continue;
-      // 王宮に目1のダイスが置かれてしまうと、あとで残った(目1固定の)P1自身のダイスで王宮の空きスロットを
-      // 使うカード獲得デモの前提が崩れるため、目1のダイスだけは王宮を避ける (2026-09-27, per user request:
-      // "王宮にはダイス1が置かれないようにその前ののターンも" -- 「その前のターン」= 城下町デモ前の1回目の
-      // フェイク配置にも遡って適用するため、この関数自体に組み込んでいる)。
-      if (die.value === 1 && mapId === boardMod.CASTLE_MAP_ID) continue;
-      const mapState = STATE.maps[mapId];
-      const originalResources = bypassLegality.has(mapId) ? { ...player.resources } : null;
-      if (originalResources) {
-        Object.keys(player.resources).forEach((k) => { player.resources[k] = 99; });
-      }
-      for (let slotIndex = 0; slotIndex < mapState.slots.length; slotIndex += 1) {
-        if (boardMod.previewPlaceDice(STATE, INDEX, { playerId }, die.id, mapId, slotIndex)) {
-          candidates.push({ mapId, slotIndex });
-        }
-      }
-      if (originalResources) player.resources = originalResources;
-    }
-    if (candidates.length === 0) continue;
-    const { mapId, slotIndex } = candidates[Math.floor(Math.random() * candidates.length)];
-    STATE.maps[mapId].slots[slotIndex] = [{ playerId, dieId: die.id, value: die.value, isWildcard: false }];
+    const mapState = STATE.maps[mapId];
+    const areaRow = dataLoaderMod.getAreaRow(INDEX, mapState.currentAreaId);
+    const requirements = boardMod.getSlotRequirements(areaRow);
+    let slotIndex = requirements.findIndex((r, i) => r === die.value && mapState.slots[i].length === 0);
+    if (slotIndex === -1) slotIndex = requirements.findIndex((r, i) => r === 'ANY' && mapState.slots[i].length === 0);
+    if (slotIndex === -1) continue;
+    mapState.slots[slotIndex] = [{ playerId, dieId: die.id, value: die.value, isWildcard: false }];
     die.placedMapId = mapId;
   }
 }
@@ -9458,12 +9450,13 @@ function dismissTutorialStep() {
   // 閉じられた瞬間にONにする。
   if (tutorialCurrentStepId === 'worker_placement_example_result') { tutorialWorkerPlacementResultGlowing = false; tutorialNextPlayerGlowing = true; }
   // castletown_placement_introの「光る」演出(一番右のダイス) -- worker_placement_turn_end_hintが閉じられた
-  // 瞬間に、次のプレイヤーの光る演出をOFFにしつつ、BOB/CAROL/DANの見た目だけの配置をセリフ無しで実行する
-  // (forceFakeAiPlacementsForTutorial's own doc)。1回目は城下町(MAP003)を避ける (2026-09-27, per user
-  // report: 「次へを押すと...」の行はセリフではなかったため削除 -- 演出自体はこの遷移で無言のまま実行する)。
+  // 瞬間に、次のプレイヤーの光る演出をOFFにしつつ、BOB/CAROL/DANの見た目だけの配置(1ターン目の台本)を
+  // セリフ無しで実行する(placeScriptedFakeAiDiceForTutorial/TUTORIAL_SCRIPTED_AI_PLACEMENTS's own doc、
+  // per user report: 「次へを押すと...」の行はセリフではなかったため削除 -- 演出自体はこの遷移で無言のまま
+  // 実行する)。
   if (tutorialCurrentStepId === 'worker_placement_turn_end_hint') {
     tutorialNextPlayerGlowing = false;
-    forceFakeAiPlacementsForTutorial(['MAP003']);
+    placeScriptedFakeAiDiceForTutorial(1);
     tutorialRightmostDieGlowing = true;
   }
   // castletown_placement_resultの「光る」演出(増えた権力+置かれたダイス)への遷移は、もはやこのdismiss
@@ -9479,15 +9472,13 @@ function dismissTutorialStep() {
     tutorialNextPlayerGlowing = true;
   }
   // card_acquisition_introの「光る」演出(残ったダイス+王宮の次の空きスロット) -- castletown_turn_end_hintが
-  // 閉じられた瞬間に、次のプレイヤーの光る演出をOFFにしつつ、2回目のBOB/CAROL/DANの見た目だけの配置を
-  // セリフ無しで実行する(forceFakeAiPlacementsForTutorial's own doc、per user report: 「次へを押すとBOB
-  // CAROL DANがダイスを置くようにお願いします 注意事項 ダイスは訓練場にはおかれない 王宮 元老院に資源が
-  // なくても置いていいが 王宮には1は置かない」はセリフではなかったため削除 -- 1回目と同じ理由。この注意事項
-  // 自体は excludeMapIds=['MAP007'] / bypassLegalityMapIds=[CASTLE_MAP_ID, AREA009_MAP_ID] として実装)。
-  // 今回は城下町を避ける必要は無い、王宮への目1回避は関数自体に組み込み済み。
+  // 閉じられた瞬間に、次のプレイヤーの光る演出をOFFにしつつ、2ターン目のBOB/CAROL/DANの見た目だけの配置
+  // (台本)をセリフ無しで実行する(placeScriptedFakeAiDiceForTutorial's own doc、per user report: 「次へを
+  // 押すとBOB CAROL DANがダイスを置くようにお願いします...」はセリフではなかったため削除 -- 1ターン目と
+  // 同じ理由)。
   if (tutorialCurrentStepId === 'castletown_turn_end_hint') {
     tutorialNextPlayerGlowing = false;
-    forceFakeAiPlacementsForTutorial(['MAP007'], [boardMod.CASTLE_MAP_ID, boardMod.AREA009_MAP_ID]);
+    placeScriptedFakeAiDiceForTutorial(2);
     tutorialCardAcquisitionGlowing = true;
   }
   // card_acquisition_intro自身が閉じられてもtutorialCardAcquisitionGlowingはOFFにしない (2026-09-27, per
@@ -9696,7 +9687,7 @@ let tutorialCastletownResultGlowing = false;
 let tutorialCardAcquisitionGlowing = false;
 // ワーカープレイスメントの実演一式(game_rules_intro_1〜card_acquisition_intro)が始まる直前のGameState
 // スナップショット (2026-09-27, per user request: "この時一度エリアのダイスをすべて元に戻す 増えた資源や
-// カードも元に戻す") -- 実演中に本物のboard.placeDice/forceFakeAiPlacementsForTutorialで置かれたダイスや
+// カードも元に戻す") -- 実演中に本物のboard.placeDice/placeScriptedFakeAiDiceForTutorialで置かれたダイスや
 // 変換された資源は、実演が終わったらresource_choice_intro(それではゲームを始めましょう)の閉じ際に
 // このスナップショットへ丸ごと復元する(dismissTutorialStep内の専用フック参照)。SELECT_RESOURCE_CARDSは
 // この間ずっとpending中のまま(実演全体が本編の手前で差し込まれているだけ)なので、以後は通常通り
