@@ -11019,6 +11019,8 @@ function autoScrollToBottomOnStart() {
 
 document.addEventListener('DOMContentLoaded', () => {
   seedDebugHistoryIfNeeded();
+  // チュートリアル中だけ「光る」を強調する(style.cssのbody.tutorial-mode .change-highlight参照)。
+  if (tutorialModeActive) document.body.classList.add('tutorial-mode');
   render(STATE);
   autoScrollToBottomOnStart();
 

@@ -1103,6 +1103,21 @@ h1, h2, h3 { margin: 0; }
   50% { box-shadow: 0 0 0 3px var(--change-highlight-soft), 0 0 12px 4px var(--change-highlight); }
 }
 
+/* チュートリアル中の「光る」をもっと目立たせる (2026-09-29, per user request: "光るアニメーションもう少し目立つように
+   お願い") -- 通常のゲームの変化ハイライト(上の.change-highlight)は同じクラスを共有していて、そちらは今のまま
+   なので、チュートリアル中だけ(bodyに付くtutorial-modeクラス、main.jsのDOMContentLoaded参照)枠を太く、
+   光を大きく強く、脈打つ幅も大きくする。box-shadowだけなのでダイスの丸い形やレイアウトは崩さない。 */
+body.tutorial-mode .change-highlight {
+  border-color: var(--change-highlight);
+  box-shadow: 0 0 0 3px var(--change-highlight), 0 0 12px 4px var(--change-highlight);
+  animation: tutorial-highlight-pulse 0.8s ease-in-out infinite;
+}
+
+@keyframes tutorial-highlight-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px var(--change-highlight), 0 0 10px 3px var(--change-highlight); }
+  50% { box-shadow: 0 0 0 5px var(--change-highlight), 0 0 26px 12px var(--change-highlight); }
+}
+
 /* 「1手ずつ」ペースの事前ハイライト (2026-08-16) -- AIが置こうとしている手札のダイス自体に付く。見た目は
    .change-highlightと同じパルスを流用(box-shadowのみなのでダイスの丸い形を崩さない)。 */
 .change-highlight--pending {
