@@ -1106,11 +1106,11 @@ h1, h2, h3 { margin: 0; }
 /* チュートリアル中の「光る」をもっと目立たせる (2026-09-29, per user request: "光るアニメーションもう少し目立つように
    お願い") -- 通常のゲームの変化ハイライト(上の.change-highlight)は同じクラスを共有していて、そちらは今のまま
    なので、チュートリアル中だけ(bodyに付くtutorial-modeクラス、main.jsのDOMContentLoaded参照)枠を太く、
-   光を大きく強く、脈打つ幅も大きくする。box-shadowだけなのでダイスの丸い形やレイアウトは崩さない。 */
+   光を大きく強く、脈打つ幅も大きくする(周期は1秒、per user request: "点滅速度は 1秒にして")。box-shadowだけなのでダイスの丸い形やレイアウトは崩さない。 */
 body.tutorial-mode .change-highlight {
   border-color: var(--change-highlight);
   box-shadow: 0 0 0 3px var(--change-highlight), 0 0 12px 4px var(--change-highlight);
-  animation: tutorial-highlight-pulse 0.8s ease-in-out infinite;
+  animation: tutorial-highlight-pulse 1s ease-in-out infinite;
 }
 
 @keyframes tutorial-highlight-pulse {
