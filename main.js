@@ -4650,6 +4650,7 @@ function buildShopSlotNode(slotId, faceId, showReqCaption, locked, faceDown = fa
   // resource_icon_area_card_hintの「光る」演出(カード側) (2026-09-27, per user request: "見えている領地
   // カードもすべて光らせる") -- tutorialAreaCardHintGlowing's own doc。
   if (tutorialAreaCardHintGlowing && faceId.startsWith('A')) cardVisual.classList.add('change-highlight');
+  if (tutorialShopCardTypeGlow && faceId.startsWith(tutorialShopCardTypeGlow)) cardVisual.classList.add('change-highlight');
   // shop_cards_introの「光る」演出 (2026-09-27, per user request: "この時SHOP101-106を光らせる") --
   // NORMAL店の6枚すべて。
   if (tutorialShopCardsGlowing && TUTORIAL_SHOP_NORMAL_SLOT_IDS.includes(slotId)) cardVisual.classList.add('change-highlight');
@@ -8302,26 +8303,48 @@ const TUTORIAL_STEPS = [
     body: 'あなたの持っている食料〇すべてが権力赤〇に変換されました',
     nextLabel: '次へ',
   },
+  // 2026-09-29, per user request (ExcelのT007・T009・T011: "T006-012変更しました") -- 各資源の説明(領地/天運/
+  // 人材カード)を、城下町/大聖堂/ギルドそれぞれの結果セリフの直後に独立した1画面として出す。SHOPの該当種別
+  // のカードすべてを光らせる(tutorialShopCardTypeGlow's own doc)。次へを押した時に、次の実演(大聖堂/ギルド/
+  // 歓楽街への置き直し)が実行される(dismissTutorialStep内)。
+  {
+    id: 'castletown_territory_cards_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '権力赤〇は領地カードを獲得するのに使います\n領地カードはエリアを支配して強化したりそのエリアを使ったプレイヤーから使用料をとることができます',
+    nextLabel: '次へ',
+  },
   // 2026-09-28, per user request -- 「城下町」に置く代わりに「大聖堂」に置いたらどうなるかの実演。
-  // castletown_placement_resultが閉じられた瞬間に、城下町への配置を取り消して同じダイスを大聖堂(MAP004)の
-  // ANYスロットへ本物のエンジンで置き直す(dismissTutorialStep内)。置かれたダイスとあなたの信心(B)が光る
-  // (tutorialCathedralGlowing's own doc)。
+  // castletown_territory_cards_hint(2026-09-29〜。それ以前はcastletown_placement_result)が閉じられた瞬間に、
+  // 城下町への配置を取り消して同じダイスを大聖堂(MAP004)のANYスロットへ本物のエンジンで置き直す
+  // (dismissTutorialStep内)。置かれたダイスとあなたの信心(B)が光る(tutorialCathedralGlowing's own doc)。
   {
     id: 'castletown_alt_cathedral_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
     body: '「城下町」に置く代わりに「大聖堂」に置けば\nあなたの持っている食料〇すべてが信心青〇に変換されます',
     nextLabel: '次へ',
   },
-  // 同上、「ギルド」版。大聖堂への配置を取り消して同じダイスをギルド(MAP005)のANYスロットへ置き直す。
-  // 置かれたダイスとあなたの金貨(C)が光る(tutorialGuildGlowing's own doc)。
+  {
+    id: 'castletown_fortune_cards_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '信心青〇は天運カードを獲得するのに使います\n天運カードはダイスなしでカードを獲得できるようになったり\nダイス目を変更したりすることができます',
+    nextLabel: '次へ',
+  },
+  // 同上、「ギルド」版。castletown_fortune_cards_hintが閉じられた瞬間に、大聖堂への配置を取り消して同じダイスを
+  // ギルド(MAP005)のANYスロットへ置き直す。置かれたダイスとあなたの金貨(C)が光る(tutorialGuildGlowing's own doc)。
   {
     id: 'castletown_alt_guild_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
     body: '「ギルド」なら\nあなたの持っている食料〇すべてが金貨黄〇に変換されます',
     nextLabel: '次へ',
   },
+  {
+    id: 'castletown_talent_cards_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '金貨は人材カードを獲得するのに使います\n人材カードは資源を増やしたり変換することができます',
+    nextLabel: '次へ',
+  },
   // 2026-09-28, per user request -- 今度はプレイヤー自身が実際にクリックで歓楽街(MAP006)へ置く実操作。
-  // 次へボタンは無く(noManualDismiss)、ギルドへの配置を取り消してダイスが手元に戻り光る+歓楽街の配置可能
+  // 次へボタンは無く(noManualDismiss)、(castletown_talent_cards_hintを閉じると)ギルドへの配置を取り消してダイスが手元に戻り光る+歓楽街の配置可能
   // スロットが光る(tutorialKabukichoGlowing's own doc)。歓楽街に置くと次に進む、歓楽街以外に置くと
   // dice_misclick_hintへ(どちらもplaceSelectedDieCommit内の専用フック参照)。
   {
@@ -9428,7 +9451,8 @@ function renderTutorialOverlay(state) {
     }
     // ex_slot_introが見えるようにスクロール (2026-09-27, per user request: "領地カードを光らせるとき SHOPが
     // 見えるように上にスクロールさせて") -- 同じ考え方。#shops(ショップ全体)を対象にする。
-    if (step.id === 'ex_slot_intro') {
+    if (step.id === 'ex_slot_intro' || step.id === 'castletown_territory_cards_hint'
+      || step.id === 'castletown_fortune_cards_hint' || step.id === 'castletown_talent_cards_hint') {
       const shopsEl = document.getElementById('shops');
       if (shopsEl) {
         const bubbleWrap = document.getElementById('tutorial-bubble-wrap');
@@ -9436,6 +9460,20 @@ function renderTutorialOverlay(state) {
         const rect = shopsEl.getBoundingClientRect();
         const desiredTop = Math.max(0, (visibleHeight - rect.height) / 2);
         window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
+      }
+    }
+    // castletown_alt_cathedral_hint/castletown_alt_guild_hintが見えるようにスクロール (2026-09-29) -- 直前のカード説明
+    // (castletown_territory_cards_hint/castletown_fortune_cards_hint)でSHOPへスクロールしたため、光らせる
+    // 信心(B)/金貨(C)を含むP1の資源欄が画面外に出てしまう。initial_resources_revealと同じ考え方で戻す(ただし下端寄せ、下記)。
+    if (step.id === 'castletown_alt_cathedral_hint' || step.id === 'castletown_alt_guild_hint') {
+      const resourcesEl = document.querySelector('.player-panel[data-player-id="P1"] .player-panel__resources');
+      if (resourcesEl) {
+        const bubbleWrap = document.getElementById('tutorial-bubble-wrap');
+        const visibleHeight = (bubbleWrap && !bubbleWrap.hidden) ? bubbleWrap.getBoundingClientRect().top : window.innerHeight;
+        const rect = resourcesEl.getBoundingClientRect();
+        // 中央寄せではなく資源欄を見える範囲の下端に寄せる -- 同じく光る、大聖堂/ギルドに置かれたダイス(盤面、
+        // 資源欄より上)も一緒に画面内に残すため。
+        window.scrollBy({ top: rect.bottom - (visibleHeight - 8), behavior: 'auto' });
       }
     }
     // game_rules_intro_1が見えるようにスクロール (2026-09-27, per user request: "必要ならすクロール") --
@@ -9785,26 +9823,38 @@ function dismissTutorialStep() {
   // castletown_alt_cathedral_hintの「光る」演出(大聖堂に置かれたダイス+あなたの信心) --
   // castletown_placement_resultが閉じられた瞬間に、城下町への配置を取り消して同じダイスを大聖堂の
   // ANYスロット(index 1)へ置き直す(revertLastPlacementForTutorial/forcePlaceRightmostDieForTutorial's own doc)。
+  // 2026-09-29(ExcelのT007・T009・T011): 各結果セリフ(城下町/大聖堂/ギルド)の次に、SHOPの領地/天運/人材
+  // カードの説明が1画面ずつ入った。結果セリフを閉じると該当種別のSHOPカードが光り、その説明を閉じた瞬間に
+  // 次の実演(置き直し)が実行される。
   if (tutorialCurrentStepId === 'castletown_placement_result') {
     tutorialCastletownResultGlowing = false;
+    tutorialShopCardTypeGlow = 'A';
+  }
+  if (tutorialCurrentStepId === 'castletown_territory_cards_hint') {
+    tutorialShopCardTypeGlow = null;
     revertLastPlacementForTutorial();
     forcePlaceRightmostDieForTutorial('MAP004', 1);
     tutorialCathedralGlowing = true;
   }
-  // castletown_alt_guild_hintの「光る」演出(ギルドに置かれたダイス+あなたの金貨) --
-  // castletown_alt_cathedral_hintが閉じられた瞬間に、大聖堂への配置を取り消してギルドのANYスロット
-  // (index 1)へ置き直す。
   if (tutorialCurrentStepId === 'castletown_alt_cathedral_hint') {
     tutorialCathedralGlowing = false;
+    tutorialShopCardTypeGlow = 'B';
+  }
+  if (tutorialCurrentStepId === 'castletown_fortune_cards_hint') {
+    tutorialShopCardTypeGlow = null;
     revertLastPlacementForTutorial();
     forcePlaceRightmostDieForTutorial('MAP005', 1);
     tutorialGuildGlowing = true;
   }
-  // kabukicho_placement_introの「光る」演出(戻ったダイス+歓楽街の配置可能スロット) --
-  // castletown_alt_guild_hintが閉じられた瞬間に、ギルドへの配置を取り消してダイスを手元に戻し、
-  // プレイヤー自身のクリック操作を待つ(以後の遷移はplaceSelectedDieCommit内の専用フック)。
   if (tutorialCurrentStepId === 'castletown_alt_guild_hint') {
     tutorialGuildGlowing = false;
+    tutorialShopCardTypeGlow = 'C';
+  }
+  // kabukicho_placement_introの「光る」演出(戻ったダイス+歓楽街の配置可能スロット) --
+  // castletown_talent_cards_hintが閉じられた瞬間に、ギルドへの配置を取り消してダイスを手元に戻し、
+  // プレイヤー自身のクリック操作を待つ(以後の遷移はplaceSelectedDieCommit内の専用フック)。
+  if (tutorialCurrentStepId === 'castletown_talent_cards_hint') {
+    tutorialShopCardTypeGlow = null;
     revertLastPlacementForTutorial();
     tutorialKabukichoGlowing = true;
   }
@@ -10026,6 +10076,10 @@ let tutorialRightmostDieGlowing = false;
 // それぞれcastletown_alt_cathedral_hint/castletown_alt_guild_hintが表示され続けている間ずっとtrueになる継続フラグ。
 let tutorialCathedralGlowing = false;
 let tutorialGuildGlowing = false;
+// SHOPの領地('A')/天運('B')/人材('C')カードすべての「光る」演出 (2026-09-29, ExcelのT007・T009・T011) --
+// カードのfaceIdの先頭文字が一致するものを光らせる。null=光らせない。各カード説明ステップが表示され続ける
+// 間、直前のステップのdismissTutorialStepで立て、そのステップ自身のdismissTutorialStepで下ろす。
+let tutorialShopCardTypeGlow = null;
 // 戻ってきた一番右のダイス+歓楽街の配置可能スロットの「光る」演出 (2026-09-28, per user request: "このとき
 // ギルドに置かれたダイスが戻って光る 歓楽街のスロットも光る") -- kabukicho_placement_introが表示され続けて
 // いる間ずっとtrueになる継続フラグ。このステップは実際のクリック操作で進める(次へボタンは無い、
