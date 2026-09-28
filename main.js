@@ -138,36 +138,19 @@ function weeklyRankingIdForOffset(weeksAgo) {
   return isoWeekIdForUtcDate(new Date(Date.now() + JST_OFFSET_MS - weeksAgo * WEEK_MS));
 }
 
-/** チュートリアル用: SHOP101-106(通常商品6枠)に領地(A)/天運(B)/人材(C)デッキから必ず2枚ずつ含める
- * (2026-09-26, per user request: "SHOP101-106 必ず 領地カード2枚 天運カード2枚 人材カード2枚 初期配置で
- * 出るようにしてください どこに出るかはランダムで それ以外もランダムになるように") -- 各デッキの通常
- * ショップ対象(setup.js内のcollectNormalShopFaceIdsと同じ条件: tier=A(表面)かつ番号7以下)の中から2枚ずつ
- * ランダムに選び、6枚をまとめてシャッフルしてからsetup.prepareShopsのpreferredNormalFaceIdsとして渡す。
- * この引数はSHOP101,102,...の順にそのまま割り当てられる仕様(prepareShops自身のdoc参照)なので、渡す前に
- * 配列自体もシャッフルすることで「どの枠に何が出るか」もランダムにしている。 */
-// チュートリアル冒頭の領地カード(A)2枚のうち1枚を、城下町(A003A)の支配カードに固定する (2026-09-27, per
-// user request: 当初は"チュートリアル 初期に出てくる 領地カード2枚のうち1枚は城下町 大聖堂 ぎるど のうち
-// どれかにして"だったが、後に"チュートリアルの初期配置 ショップに必ず 城下町が出るようにしてください"で
-// 城下町(A003A)固定に変更 -- 城下町は実際にワーカープレイスメントの実演(castletown_placement_intro)で
-// プレイヤー自身が使うエリアなので、そのものずばりの支配カードがショップに並ぶようにする)。
-const TUTORIAL_PREFERRED_AREA_CARD_FACE_ID = 'A003A';
+/** チュートリアル用: SHOP101-106(通常商品6枠)に出るカードを固定する (2026-09-29, per user request:
+ * "チュートリアル 初期のショップに出るカード 小麦畑の支配 城下町の支配 始まりの兆し 小さな導き 金貸し 修道士
+ * 場所はランダムで") -- 以前は領地/天運/人材から2枚ずつランダム(2026-09-26)、のち領地の1枚を「城下町」に
+ * 固定(2026-09-27/28)していたが、6枚とも指定されたカードに完全固定した(表面のLV1、カードIDはゲームデータの
+ * NAMEから確認: 小麦畑の支配LV1=A004A / 城下町の支配LV1=A001A / 始まりの兆しLV1=B004A / 小さな導きLV1=B001A /
+ * 金貸しLV1=C006A / 修道士LV1=C002A)。なお、以前「城下町」として固定していたA003Aは実際は「ギルドの支配」
+ * だった(IDとエリアの対応の思い違い)ので、この置き換えで解消している。どの枠(SHOP101〜106)に何が出るかは
+ * ランダム -- setup.prepareShopsのpreferredNormalFaceIdsはSHOP101,102,...の順にそのまま割り当てられる仕様
+ * (prepareShops自身のdoc参照)なので、渡す前に配列自体をシャッフルしている。 */
+const TUTORIAL_SHOP_NORMAL_FACE_IDS = ['A004A', 'A001A', 'B004A', 'B001A', 'C006A', 'C002A'];
 
-function tutorialPreferredNormalFaceIds(state, index) {
-  const bySheet = { A: [], B: [], C: [] };
-  for (const sheet of ['A', 'B', 'C']) {
-    for (const row of index.raw[sheet]) {
-      const { physicalId, tier } = gameStateMod.splitCardId(row.ID);
-      if (tier === 'A' && Number(physicalId.slice(1)) <= 7) bySheet[sheet].push(row.ID);
-    }
-  }
-  const forcedAreaCardFaceId = TUTORIAL_PREFERRED_AREA_CARD_FACE_ID;
-  const otherA = rngMod.shuffle(state.rng, bySheet.A.filter((id) => id !== forcedAreaCardFaceId)).slice(0, 1);
-  const picks = [
-    forcedAreaCardFaceId,
-    ...otherA,
-    ...['B', 'C'].flatMap((sheet) => rngMod.shuffle(state.rng, bySheet[sheet]).slice(0, 2)),
-  ];
-  return rngMod.shuffle(state.rng, picks);
+function tutorialPreferredNormalFaceIds(state) {
+  return rngMod.shuffle(state.rng, TUTORIAL_SHOP_NORMAL_FACE_IDS);
 }
 
 function createInitialState(plan, forcedSeed) {
