@@ -10099,15 +10099,19 @@ function dismissTutorialStep() {
     tutorialCardAcquisitionGlowing = true;
     tutorialCardAcquisitionPlaceable = true;
   }
-  // 3ターン目のBOB/CAROL/DANの見た目だけの配置(台本) -- 1・2ターン目と同じく1手ずつ(0.6秒間隔)、その間は
-  // 次のセリフ(game_rules_intro_2)を待つ(tutorialScriptedMovesRunning's own doc)。
-  if (tutorialCurrentStepId === 'build_candidates_hint') {
-    placeScriptedFakeAiDiceForTutorial(3, true);
-  }
   // build_candidate_summary_hint(T038)の「光る」(直前のアクションをキャンセルボタン) -- どの候補カードを選んでも
   // (build_candidate_*_hintのどれか)閉じた後は必ずT038に合流するので、ここでまとめて判定する。
   if (Object.values(TUTORIAL_BUILD_CANDIDATE_STEP_IDS).includes(tutorialCurrentStepId)) tutorialCancelButtonGlowing = true;
-  if (tutorialCurrentStepId === 'build_candidate_summary_hint') tutorialCancelButtonGlowing = false;
+  // 3ターン目のBOB/CAROL/DANの見た目だけの配置(台本) -- 1・2ターン目と同じく1手ずつ(0.6秒間隔)、その間は
+  // 次のセリフ(game_rules_intro_2、T039)を待つ(tutorialScriptedMovesRunning's own doc)。Excelの「動く」は
+  // T039自身の行にあり、直前の行(T038、build_candidate_summary_hint)の次へを押した時に実行される(次への
+  // 自動実演一覧の他の例と同じ「前のステップを閉じた瞬間」パターン)。2026-09-29 bug fix, per user report:
+  // "BOBのダイス03を歓楽街へ… があるのはT039のはずなのにその前にダイスが置かれる" -- 以前はbuild_candidates_
+  // hint(T030)を閉じた瞬間に実行していたため、T031〜T038(カードを選ぶ実演)が新設された今、そのぶん早すぎた。
+  if (tutorialCurrentStepId === 'build_candidate_summary_hint') {
+    tutorialCancelButtonGlowing = false;
+    placeScriptedFakeAiDiceForTutorial(3, true);
+  }
   // kabukicho_result_hint(T010)を閉じたらチュートリアル専用のターン終了ボタンを出す(T011)。
   if (tutorialCurrentStepId === 'kabukicho_result_hint') tutorialTurnEndButtonShown = true;
   // training_ground_result_hint(T016)を閉じたらキャンセルボタンを光らせる(T017、cancel_action_hintと同じ扱い)。
