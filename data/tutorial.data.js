@@ -30,7 +30,7 @@ window.TUTORIAL_SERIFU = {
   "card_acquisition_placement_intro": "ダイスを「王宮」か「元老院」に置いてください",
   "build_candidates_hint": "「王宮」か「元老院」にダイスが置かれると獲得可能なカードのリストが出てきます",
   "build_candidate_pick_hint": "試しに好きなカードを選んでください\n使い方の説明をします",
-  "build_candidate_a004a_hint": "小麦畑の支配ですね\nこのカードは",
+  "build_candidate_a005a_hint": "農園の支配ですね\nこのカードは",
   "build_candidate_a001a_hint": "城下町の支配ですね\nこのカードは",
   "build_candidate_b004a_hint": "始まりの兆しですね\nこのカードは",
   "build_candidate_b001a_hint": "小さな導きですね\nこのカードは",

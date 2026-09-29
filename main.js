@@ -146,8 +146,11 @@ function weeklyRankingIdForOffset(weeksAgo) {
  * 金貸しLV1=C006A / 修道士LV1=C002A)。なお、以前「城下町」として固定していたA003Aは実際は「ギルドの支配」
  * だった(IDとエリアの対応の思い違い)ので、この置き換えで解消している。どの枠(SHOP101〜106)に何が出るかは
  * ランダム -- setup.prepareShopsのpreferredNormalFaceIdsはSHOP101,102,...の順にそのまま割り当てられる仕様
- * (prepareShops自身のdoc参照)なので、渡す前に配列自体をシャッフルしている。 */
-const TUTORIAL_SHOP_NORMAL_FACE_IDS = ['A004A', 'A001A', 'B004A', 'B001A', 'C006A', 'C002A'];
+ * (prepareShops自身のdoc参照)なので、渡す前に配列自体をシャッフルしている。
+ * 2026-09-29追記、per user request: "チュートリアル初期に出てくるカード 小麦畑→農園の支配" -- 冒頭のワーカー
+ * プレイスメントの実演がすでに小麦畑ではなく農園を使う形に変わっている(2026-09-28)ため、それに合わせて
+ * 6枚のうち小麦畑の支配LV1(A004A)を農園の支配LV1(A005A、コストは同じ2A,B)に差し替えた。 */
+const TUTORIAL_SHOP_NORMAL_FACE_IDS = ['A005A', 'A001A', 'B004A', 'B001A', 'C006A', 'C002A'];
 
 function tutorialPreferredNormalFaceIds(state) {
   return rngMod.shuffle(state.rng, TUTORIAL_SHOP_NORMAL_FACE_IDS);
@@ -4609,10 +4612,10 @@ function renderQsts(state) {
 // -- "6個すべて"という文言がSHOP101-106の6枠だけを指しているため)。
 const TUTORIAL_SHOP_NORMAL_SLOT_IDS = ['SHOP101', 'SHOP102', 'SHOP103', 'SHOP104', 'SHOP105', 'SHOP106'];
 // build_candidate_pick_hint(T031)で実際に選ばれたカードのfaceId -> 対応する説明ステップid (2026-09-29, Excelの
-// T032〜T037)。TUTORIAL_SHOP_NORMAL_FACE_IDSと同じ6枚(小麦畑の支配/城下町の支配/始まりの兆し/小さな導き/
+// T032〜T037)。TUTORIAL_SHOP_NORMAL_FACE_IDSと同じ6枚(農園の支配/城下町の支配/始まりの兆し/小さな導き/
 // 金貸し/修道士)。
 const TUTORIAL_BUILD_CANDIDATE_STEP_IDS = {
-  A004A: 'build_candidate_a004a_hint',
+  A005A: 'build_candidate_a005a_hint',
   A001A: 'build_candidate_a001a_hint',
   B004A: 'build_candidate_b004a_hint',
   B001A: 'build_candidate_b001a_hint',
@@ -8548,9 +8551,9 @@ const TUTORIAL_STEPS = [
     noManualDismiss: true,
   },
   {
-    id: 'build_candidate_a004a_hint',
+    id: 'build_candidate_a005a_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: '小麦畑の支配ですね\nこのカードは',
+    body: '農園の支配ですね\nこのカードは',
     nextLabel: '次へ',
   },
   {
