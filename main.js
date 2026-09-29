@@ -4611,7 +4611,7 @@ function renderQsts(state) {
 // dictationで明示された通りの固定リストにしている(die値1の説明では意図的にSHOP201-203を含めていない
 // -- "6個すべて"という文言がSHOP101-106の6枠だけを指しているため)。
 const TUTORIAL_SHOP_NORMAL_SLOT_IDS = ['SHOP101', 'SHOP102', 'SHOP103', 'SHOP104', 'SHOP105', 'SHOP106'];
-// build_candidate_pick_hint(T031)で実際に選ばれたカードのfaceId -> 対応する説明ステップid (2026-09-29, Excelの
+// build_candidates_hint(改名前はbuild_candidate_pick_hint、T032)で実際に選ばれたカードのfaceId -> 対応する説明ステップid (2026-09-29, Excelの
 // T032〜T037)。TUTORIAL_SHOP_NORMAL_FACE_IDSと同じ6枚(農園の支配/城下町の支配/始まりの兆し/小さな導き/
 // 金貸し/修道士)。
 const TUTORIAL_BUILD_CANDIDATE_STEP_IDS = {
@@ -5812,7 +5812,7 @@ function renderBuildChoiceBzTapPrompt() {
 function commitBuildCandidate(candidate, bzDiscount) {
   const playerId = pendingBuildChoice.playerId;
   const context = { playerId, bzDiscount };
-  // build_candidate_pick_hint(T031)の「キャンセルで選び直せる」用スナップショット (2026-09-29) -- 実際に建築
+  // build_candidates_hint(改名前はbuild_candidate_pick_hint、T032)の「キャンセルで選び直せる」用スナップショット (2026-09-29) -- 実際に建築
   // する前の状態を、このクリック限りのクロージャに閉じ込めておく(wouldCauseWhiteOverflowで分岐しても同じ
   // クロージャを共有するのでどちらの経路でも安全)。placeSelectedDieCommit等、他の実操作の checkpoint と
   // 同じ考え方(preSnapshot/preTurnActionTaken)。
@@ -5820,7 +5820,7 @@ function commitBuildCandidate(candidate, bzDiscount) {
   // handleCancelPreviousActionClickは無条件にpendingBuildChoice=nullするため、そのままだとキャンセル後
   // カード獲得ウィンドウ自体が消えてしまう(2026-09-29 bug fix, ヘッドレステストで発見)。ここで一緒に
   // 保存しておき、下のT038キャンセルフックで明示的に復元する。
-  const tutorialPreSnapshot = tutorialCurrentStepId === 'build_candidate_pick_hint'
+  const tutorialPreSnapshot = tutorialCurrentStepId === 'build_candidates_hint'
     ? { state: gameStateMod.cloneState(STATE), turnActionTaken, pendingBuildChoice: structuredClone(pendingBuildChoice) }
     : null;
   if (wouldCauseWhiteOverflow(STATE, (clone) => boardMod.completeAreaBuild(clone, INDEX, context, candidate, pendingBuildChoice.remainingCommands))) {
@@ -5868,7 +5868,7 @@ function commitBuildCandidateReal(candidate, bzDiscount, tutorialPreSnapshot) {
       pendingAutoModeChoice = { physicalId: newPhysicalId, playerId };
     }
     if (source === 'AREA') turnActionTaken = true; // this placement's die is spent, but the turn itself waits for the "ターン終了" button (2026-08-01)
-    // build_candidate_pick_hint(T031)の実クリック操作の完了 (2026-09-29) -- 実際に建築が成功した瞬間、選んだ
+    // build_candidates_hint(改名前はbuild_candidate_pick_hint、T032)の実クリック操作の完了 (2026-09-29) -- 実際に建築が成功した瞬間、選んだ
     // カードのfaceIdに対応する説明ステップへ直接遷移する(通常の直線探索ではなく、TUTORIAL_BUILD_CANDIDATE_
     // STEP_IDS's own doc参照)。残り5つの説明も今seenへ加えておかないと、後で通常の直線探索がそれらを誤って
     // 拾ってしまう。
@@ -6247,6 +6247,8 @@ function renderPlayers(state, next) {
         // ギルドのCHANGE(K,C,ALL)で増えるのはC(金貨)。
         if (tutorialCathedralGlowing && player.id === 'P1' && resource === 'B') badge.classList.add('change-highlight');
         if (tutorialGuildGlowing && player.id === 'P1' && resource === 'C') badge.classList.add('change-highlight');
+        // build_cost_z_hintの「光る」演出(あなたのコネ) (2026-09-29) -- tutorialConnectionGlowing's own doc。
+        if (tutorialConnectionGlowing && player.id === 'P1' && resource === 'Z') badge.classList.add('change-highlight');
         resourcesEl.appendChild(badge);
       }
     }
@@ -8543,33 +8545,45 @@ const TUTORIAL_STEPS = [
     body: '今回置くダイス目は1なのですべてのショップから選ぶことができます',
     nextLabel: '次へ',
   },
+  // 2026-09-29, per user request (Excel変更、新しい行T028・T029) -- ショップの必要資源部分と、あなたのコネ(Z)の
+  // 説明。build_cost_hintはtutorialShopCostGlowingを再利用(既存のshop_cost_intro(後のラウンド1開始後の説明)と
+  // 同じ「光る」見た目でよい、時期が重ならないため使い回して問題ない)。build_cost_z_hintはtutorialConnectionGlowing
+  // (新規、あなたのコネ資源バッジを光らせる)。
+  {
+    id: 'build_cost_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: 'カードを獲得するには資源が必要です\nこの部分が獲得に必要な資源になります',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'build_cost_z_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '今は万能資源\u3000コネZ〇\u3000が3個あるためすべてのカードが獲得可能ですね',
+    nextLabel: '次へ',
+  },
   // 2026-09-27, per user request -- カード獲得の実クリック操作。城下町デモ(castletown_placement_intro)と
   // 同じ形: 次へボタンは無く(noManualDismiss)、プレイヤー自身が実際に光っているダイスをクリックし、王宮か
-  // 元老院の光っているスロットへクリックして置くと次に進む(通常の直線探索でgame_rules_intro_2が見つかる)。
+  // 元老院の光っているスロットへクリックして置くと次に進む(通常の直線探索でbuild_candidates_hintが見つかる)。
   // 城下町以外への誤配置と同様、王宮/元老院以外に置いてしまっても禁止はしないが、dice_misclick_hintへ回す
   // (placeSelectedDieCommit内の専用フック参照)。tutorialCardAcquisitionGlowingはcard_acquisition_introから
   // このステップまで途切れず光り続ける(die/slotの光る対象はtutorialCardAcquisitionGlowing's own doc参照)。
+  // 2026-09-29、Excel変更でT030の本文に「そうすると獲得可能なカードのリストが出てきます」が統合され(旧・独立
+  // 画面だったbuild_candidates_hintの文言)、旧build_candidates_hintは廃止された。
   {
     id: 'card_acquisition_placement_intro',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: 'ダイスを「王宮」か「元老院」に置いてください',
+    body: 'ダイスを「王宮」か「元老院」に置いてください\nそうすると獲得可能なカードのリストが出てきます',
     noManualDismiss: true,
   },
-  // 2026-09-29, per user request (Excel T030) -- 王宮/元老院への実配置成功後、通常のカード獲得選択ウィンドウ
-  // (BUILD候補)が開いた状態で出る説明。ウィンドウ上の獲得可能なカードを光らせる
-  // (tutorialBuildCandidatesGlowing's own doc)。次へでgame_rules_intro_2へ。
+  // 2026-09-29, per user request (Excel変更) -- 旧build_candidate_pick_hintを実装ID 'build_candidates_hint'に
+  // 改名(Excel側がこの実装IDをT032の「試しに好きなカードを選んでください」行に付け直したため)。王宮/元老院への
+  // 実配置成功直後、間に画面を挟まず直接ここに来る(card_acquisition_placement_introの成功ハンドラでtutorialCurrentStepId
+  // をnullにするだけ、通常の直線探索でここが見つかる)。次へボタンは無く(noManualDismiss)、実際に候補カードを
+  // クリックすると(commitBuildCandidateReal内の専用フック参照)選んだカードに応じた説明(build_candidate_*_hint)へ
+  // 直接遷移する。ウィンドウ上のカードは(card_acquisition_placement_intro成功時から)光る
+  // (tutorialBuildCandidatesGlowing、カードが実際に選ばれた瞬間に消える)。
   {
     id: 'build_candidates_hint',
-    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: '「王宮」か「元老院」にダイスが置かれると獲得可能なカードのリストが出てきます',
-    nextLabel: '次へ',
-  },
-  // 2026-09-29, per user request (Excelの新しい行T031〜T038) -- 試しに候補カードを1枚、実際にクリックして
-  // 獲得してみる実演。次へボタンは無く(noManualDismiss)、実際に候補カードをクリックすると(commitBuildCandidateReal
-  // 内の専用フック参照)選んだカードに応じた説明(build_candidate_*_hint)へ直接遷移する。ウィンドウ上のカードは
-  // build_candidates_hintから引き続き光る(tutorialBuildCandidatesGlowing、カードが実際に選ばれた瞬間に消える)。
-  {
-    id: 'build_candidate_pick_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
     body: '試しに好きなカードを選んでください\n使い方の説明をします',
     noManualDismiss: true,
@@ -8615,7 +8629,7 @@ const TUTORIAL_STEPS = [
   // 瞬間に残り5つもまとめてseenへ加えておく、commitBuildCandidateReal内の専用フック参照)。2026-09-29、Excelの
   // 変更で「次へ」ではなく実際に「ターン終了」ボタンを押すと進む形になった(turn_end_button_hint/T011と同じ
   // renderTutorialTurnEndButtonの仕組みを再利用 -- tutorialTurnEndButtonShown's own doc)。実際に「直前の
-  // アクションをキャンセル」ボタンを押すと、獲得そのものを取り消してbuild_candidate_pick_hint(T031)に戻り
+  // アクションをキャンセル」ボタンを押すと、獲得そのものを取り消してbuild_candidates_hint(改名前はbuild_candidate_pick_hint、T032)に戻り
   // 選び直せる(handleCancelPreviousActionClick内の専用フック参照)。次へボタンは出さない(noManualDismiss)。
   {
     id: 'build_candidate_summary_hint',
@@ -10122,6 +10136,17 @@ function dismissTutorialStep() {
   if (tutorialCurrentStepId === 'build_dice_value4_hint') tutorialBuildShopGlowSlots = [...TUTORIAL_SHOP_NORMAL_SLOT_IDS, 'SHOP201', 'SHOP202', 'SHOP203'];
   if (tutorialCurrentStepId === 'build_dice_value1_hint') {
     tutorialBuildShopGlowSlots = null;
+    tutorialShopCostGlowing = true;
+  }
+  // 2026-09-29, per user request (Excelの新しい行T028・T029) -- build_cost_hint(ショップの必要資源部分)→
+  // build_cost_z_hint(あなたのコネ)の受け渡し。build_cost_z_hintを閉じたら、以前build_dice_value1_hintの
+  // 閉じ際に行っていたカード獲得の実操作の光る+クリック可能を始める。
+  if (tutorialCurrentStepId === 'build_cost_hint') {
+    tutorialShopCostGlowing = false;
+    tutorialConnectionGlowing = true;
+  }
+  if (tutorialCurrentStepId === 'build_cost_z_hint') {
+    tutorialConnectionGlowing = false;
     tutorialCardAcquisitionGlowing = true;
     tutorialCardAcquisitionPlaceable = true;
   }
@@ -10298,6 +10323,9 @@ let tutorialShopValue5Glowing = false;
 // にあるすべてのカードの支払い資源部分を光らせる") -- shop_cost_introが表示され続けている間ずっとtrueに
 // なる継続フラグ。
 let tutorialShopCostGlowing = false;
+// build_cost_z_hint(2026-09-29, Excel T029「今は万能資源 コネZ〇 が3個あるため…」)の「光る」演出 --
+// あなたのコネ(Z)資源バッジを光らせる、表示され続けている間ずっとtrueになる継続フラグ。
+let tutorialConnectionGlowing = false;
 // resource_pick_hint表示中、光っている4枚の初期資源カードの「光る」演出 (2026-09-27, per user request:
 // "それでは光っている4枚の初期資源カードのうち2枚をクリックしてください") -- handleTutorialChoiceClickが
 // この段階に入った瞬間にONにし、resource_pick_hint自身のautoDismissWhenが発火した瞬間にOFFにする
@@ -10762,10 +10790,10 @@ function handleCancelPreviousActionClick() {
   }
   // build_candidate_summary_hint(T038)の「キャンセルボタンをクリック」 (2026-09-29, Excel T038 「直前のアクション
   // をキャンセル」を押すと別のカードを選び直せる) -- 上のundoMod.restoreSnapshotで実際の建築(資源とカード)が
-  // 取り消し済み。build_candidate_pick_hint(T031)に戻って選び直せるようにする。
+  // 取り消し済み。build_candidates_hint(改名前はbuild_candidate_pick_hint、T032)に戻って選び直せるようにする。
   if (tutorialCurrentStepId === 'build_candidate_summary_hint') {
     if (checkpoint.pendingBuildChoice) pendingBuildChoice = checkpoint.pendingBuildChoice;
-    tutorialCurrentStepId = 'build_candidate_pick_hint';
+    tutorialCurrentStepId = 'build_candidates_hint';
     tutorialCancelButtonGlowing = false;
     tutorialTurnEndButtonShown = false;
     tutorialBuildCandidatesGlowing = true;
