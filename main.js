@@ -6614,7 +6614,16 @@ function renderTutorialTurnEndButton(container) {
   btn.type = 'button';
   btn.addEventListener('click', () => {
     tutorialTurnEndButtonShown = false;
-    tutorialNextPlayerGlowing = true;
+    // build_candidate_summary_hint(T038)の「ターン終了」ボタン (2026-09-29, Excelの変更で「次へ」から実際の
+    // ボタン押下に変わった) -- 3ターン目のBOB/CAROL/DANの台本配置をここで実行する(以前はdismissTutorialStep
+    // 経由だったが、T038がnoManualDismissになったためそちらは通らない)。turn_end_button_hint(T011)は
+    // 従来通り次のプレイヤーの光る演出。
+    if (tutorialCurrentStepId === 'build_candidate_summary_hint') {
+      tutorialCancelButtonGlowing = false;
+      placeScriptedFakeAiDiceForTutorial(3, true);
+    } else {
+      tutorialNextPlayerGlowing = true;
+    }
     tutorialCurrentStepId = null;
     stopTutorialTypewriter();
     render(STATE);
@@ -8588,14 +8597,16 @@ const TUTORIAL_STEPS = [
   },
   // 2026-09-29(Excel T038) -- どの候補を選んでも6つの説明のどれか1つの後にここへ合流する(build_candidate_*_hint
   // が閉じられる瞬間、通常の直線探索が6つとも既にseen扱いになっているためここが次に見つかる -- 実際に選ばれた
-  // 瞬間に残り5つもまとめてseenへ加えておく、commitBuildCandidateReal内の専用フック参照)。次へでgame_rules_
-  // intro_2へ進む。実際に「直前のアクションをキャンセル」ボタンを押すと、獲得そのものを取り消してbuild_candidate_
-  // pick_hint(T031)に戻り選び直せる(handleCancelPreviousActionClick内の専用フック参照)。
+  // 瞬間に残り5つもまとめてseenへ加えておく、commitBuildCandidateReal内の専用フック参照)。2026-09-29、Excelの
+  // 変更で「次へ」ではなく実際に「ターン終了」ボタンを押すと進む形になった(turn_end_button_hint/T011と同じ
+  // renderTutorialTurnEndButtonの仕組みを再利用 -- tutorialTurnEndButtonShown's own doc)。実際に「直前の
+  // アクションをキャンセル」ボタンを押すと、獲得そのものを取り消してbuild_candidate_pick_hint(T031)に戻り
+  // 選び直せる(handleCancelPreviousActionClick内の専用フック参照)。次へボタンは出さない(noManualDismiss)。
   {
     id: 'build_candidate_summary_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: '他のカードの説明も見たいのなら「直前のアクションをキャンセル」ボタンを押せば見ることができます\n次へを押せば先に進みます',
-    nextLabel: '次へ',
+    body: '他のカードの説明も見たいのなら「直前のアクションをキャンセル」ボタンを押せば見ることができます\nこれでよければ「ターン終了」ボタンを押してください',
+    noManualDismiss: true,
   },
   {
     id: 'game_rules_intro_2',
@@ -10099,18 +10110,29 @@ function dismissTutorialStep() {
     tutorialCardAcquisitionGlowing = true;
     tutorialCardAcquisitionPlaceable = true;
   }
-  // build_candidate_summary_hint(T038)の「光る」(直前のアクションをキャンセルボタン) -- どの候補カードを選んでも
-  // (build_candidate_*_hintのどれか)閉じた後は必ずT038に合流するので、ここでまとめて判定する。
-  if (Object.values(TUTORIAL_BUILD_CANDIDATE_STEP_IDS).includes(tutorialCurrentStepId)) tutorialCancelButtonGlowing = true;
-  // 3ターン目のBOB/CAROL/DANの見た目だけの配置(台本) -- 1・2ターン目と同じく1手ずつ(0.6秒間隔)、その間は
-  // 次のセリフ(game_rules_intro_2、T039)を待つ(tutorialScriptedMovesRunning's own doc)。Excelの「動く」は
-  // T039自身の行にあり、直前の行(T038、build_candidate_summary_hint)の次へを押した時に実行される(次への
-  // 自動実演一覧の他の例と同じ「前のステップを閉じた瞬間」パターン)。2026-09-29 bug fix, per user report:
-  // "BOBのダイス03を歓楽街へ… があるのはT039のはずなのにその前にダイスが置かれる" -- 以前はbuild_candidates_
-  // hint(T030)を閉じた瞬間に実行していたため、T031〜T038(カードを選ぶ実演)が新設された今、そのぶん早すぎた。
-  if (tutorialCurrentStepId === 'build_candidate_summary_hint') {
-    tutorialCancelButtonGlowing = false;
-    placeScriptedFakeAiDiceForTutorial(3, true);
+  // build_candidate_summary_hint(T038)の「光る」(直前のアクションをキャンセルボタン+チュートリアル専用の
+  // ターン終了ボタン) -- どの候補カードを選んでも(build_candidate_*_hintのどれか)閉じた後は必ずT038に合流
+  // するので、ここでまとめて判定する。T038自身はnoManualDismissのため、次へ(dismissTutorialStep)では進めず、
+  // 実際に「ターン終了」ボタン(renderTutorialTurnEndButton、押した時の処理はそちら側)か「直前のアクションを
+  // キャンセル」ボタン(handleCancelPreviousActionClick)を押して進む。2026-09-29 bug fix, per user report:
+  // "この時 ターン終了ボタンが押せない" -- 以前は次へテキストボタンで進む想定のままExcelが変わっていた。
+  if (Object.values(TUTORIAL_BUILD_CANDIDATE_STEP_IDS).includes(tutorialCurrentStepId)) {
+    // 通常の「次に見つかる未見のステップ」探索には任せない (2026-09-29 bug fix, per user report: "この時
+    // ターン終了ボタンが押せない" の原因調査中に発覚) -- build_candidate_summary_hintは通常の直線探索で
+    // 一度発見されるとtutorialSeenStepIdsに入ってしまうため、キャンセルで選び直した2回目以降はここが
+    // 「既に見た」として素通りされ、いきなりgame_rules_intro_2まで進んでしまっていた
+    // (resource_icon_area_card_hint等、他の分岐と同じ理由で強制遷移+returnが必要)。
+    tutorialCancelButtonGlowing = true;
+    tutorialTurnEndButtonShown = true;
+    tutorialCurrentStepId = 'build_candidate_summary_hint';
+    // 強制遷移で入るため通常の発見時のadd('build_candidate_summary_hint')が起きない -- ここで明示的に
+    // seen扱いにしておかないと、後で(ターン終了ボタン押下後)tutorialCurrentStepIdがnullに戻った瞬間、
+    // 通常の直線探索がまだ「未見」のこのステップを再度見つけてしまう(実際にこの通りのバグが発生: ターン
+    // 終了ボタンを押した後、台本の配置が終わってもgame_rules_intro_2へ進まずT038に戻ってしまっていた)。
+    tutorialSeenStepIds.add('build_candidate_summary_hint');
+    stopTutorialTypewriter();
+    render(STATE);
+    return;
   }
   // kabukicho_result_hint(T010)を閉じたらチュートリアル専用のターン終了ボタンを出す(T011)。
   if (tutorialCurrentStepId === 'kabukicho_result_hint') tutorialTurnEndButtonShown = true;
@@ -10730,6 +10752,7 @@ function handleCancelPreviousActionClick() {
     if (checkpoint.pendingBuildChoice) pendingBuildChoice = checkpoint.pendingBuildChoice;
     tutorialCurrentStepId = 'build_candidate_pick_hint';
     tutorialCancelButtonGlowing = false;
+    tutorialTurnEndButtonShown = false;
     tutorialBuildCandidatesGlowing = true;
     stopTutorialTypewriter();
   }
