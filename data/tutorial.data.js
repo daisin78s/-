@@ -2,7 +2,7 @@
 window.TUTORIAL_SERIFU = {
   "game_rules_intro_1": "このゲームは、ダイス🎲🎲🎲をワーカーとして使う\nワーカープレイスメント系拡大再生産ゲームです",
   "worker_placement_example_intro": "例えばダイスをエリア「農園」のスロットに置けば",
-  "worker_placement_example_result": "エリアに書かれている効果が起きます\nこの場合は食料〇3が手に入りました\nこのダイスを置く行動をメインアクションといいます",
+  "worker_placement_example_result": "エリアに書かれている効果が起きます\nこの場合は食料〇3が手に入りました\nこの⚡マークは即座に手に入るという意味です\n\nこのダイスを置く行動をメインアクションといいます",
   "worker_placement_turn_end_hint": "ダイスを置いたらターン終了\n次のプレイヤーのターンになります",
   "castletown_placement_intro": "あなたのターンが回ってきました\n今度は🎲を「城下町」に置いてみます",
   "castletown_placement_result": "あなたの持っている食料〇すべてが権力赤〇に変換されました",
@@ -30,7 +30,7 @@ window.TUTORIAL_SERIFU = {
   "build_cost_hint": "カードを獲得するには資源が必要です\nこの部分が獲得に必要な資源になります",
   "build_cost_z_hint": "今は万能資源　コネZ〇　が3個あるためすべてのカードが獲得可能ですね",
   "card_acquisition_placement_intro": "ダイスを「王宮」か「元老院」に置いてください\nそうすると獲得可能なカードのリストが出てきます",
-  "build_candidates_hint": "試しに好きなカードを選んでください\n使い方の説明をします",
+  "build_candidates_hint": "獲得するカードを選んでください\n使い方の説明をします",
   "build_candidate_a005a_hint": "農園の支配ですね\nこのカードは",
   "build_candidate_a001a_hint": "城下町の支配ですね\nこのカードを獲得するとエリア城下町の",
   "build_candidate_b004a_hint": "始まりの兆しですね\nこのカードは",

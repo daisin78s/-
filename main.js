@@ -6570,11 +6570,21 @@ function renderUntapChoice(container, state, playerId) {
 const FREE_ACTION_RESOURCE = { A_K: 'A', B_K: 'B', C_K: 'C', Z_K: 'Z' };
 function renderFreeActionButtons(container, state, player, canAct) {
   container.innerHTML = '';
-  if (!canAct) return;
+  // チュートリアル中はP1について、押せなくても常に表示だけする (2026-09-30, per user request: "チュートリアル中
+  // A→Kなどのフリーアクションも表示してほしい ただし押せないように") -- canActは通常round<1/onboarding未完了の
+  // 間ずっとfalseなので(実際の手番が存在しないため)、本来のcanAct判定はそのまま(押せる場面ではボタンを本物として
+  // 使えるようにする)、!canActの間だけこのtutorialShowDisabledで見た目を出す。
+  const tutorialShowDisabled = !canAct && tutorialModeActive && player.id === 'P1';
+  if (!canAct && !tutorialShowDisabled) return;
   for (const freeActionId of ['A_K', 'B_K', 'C_K', 'Z_K']) {
     const btn = el('button', 'free-action-button');
     btn.appendChild(actionRow([actionDot(FREE_ACTION_RESOURCE[freeActionId]), actionArrow(), actionDot('K')]));
     btn.type = 'button';
+    if (tutorialShowDisabled) {
+      btn.disabled = true;
+      container.appendChild(btn);
+      continue;
+    }
     btn.addEventListener('click', () => {
       // Pushed onto actionCheckpoints (2026-08-27, see its own doc) only once tryFreeAction actually
       // succeeds -- same "snapshot before, commit only on success" pattern as die placement.
