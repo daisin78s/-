@@ -4623,6 +4623,14 @@ const TUTORIAL_BUILD_CANDIDATE_STEP_IDS = {
   C002A: 'build_candidate_c002a_hint',
 };
 const TUTORIAL_SHOP_VALUE5_SLOT_IDS = ['SHOP101', 'SHOP102', 'SHOP201', 'SHOP202'];
+// カード獲得デモ中、onboarding未完了でも獲得したカードをタップできるようにする対象ステップ (2026-09-29, per
+// user request: "説明をするためにタップができる必要があります") -- 6枚どれかの説明画面(build_candidate_*_hint、
+// 獲得直後)とその後のbuild_candidate_summary_hint(T038、ターン終了を押すまでの間)。renderPlayerCards's own
+// canUseTap参照。
+const TUTORIAL_TAP_ALLOWED_STEP_IDS = new Set([
+  ...Object.values(TUTORIAL_BUILD_CANDIDATE_STEP_IDS),
+  'build_candidate_summary_hint',
+]);
 
 function buildShopSlotNode(slotId, faceId, showReqCaption, locked, faceDown = false) {
   const slotTpl = document.getElementById('tpl-shop-slot');
@@ -7391,7 +7399,14 @@ function renderPlayerCards(state, next) {
     // "other operations" includes bare TAP, not just dice placement.
     // Online play (2026-08-29): a HUMAN-role seat that isn't this device's own must never offer bare TAP
     // either -- same reasoning as realTurnPlayerId/actingHumanPlayerId's own matching extension.
-    const canUseTap = isSelf && hasFinishedOnboarding(player) && !isAiPlayer(player.id)
+    // チュートリアルのカード獲得デモ中(T031〜T038)だけ、onboarding未完了でもタップできる (2026-09-29, per
+    // user request: "説明をするためにタップができる必要があります" -- 獲得したカードの使い方をその場で実演する
+    // ため。TUTORIAL_TAP_ALLOWED_STEP_IDS's own doc参照。isSelfも一緒にバイパスする必要がある -- この段階では
+    // 実はBOB/CAROL/DANの3ターン目の台本の配置がまだ(意図的に)実行されていないため、turnFlowMod.getNextTurnが
+    // ROUND_OVERを返し、P1自身を含め誰もisSelfにならない(ヘッドレステストで発見)。それ以外の通常プレイ/
+    // チュートリアルの他の場面は従来通りisSelf+hasFinishedOnboarding必須のまま。
+    const tutorialTapOverride = tutorialModeActive && player.id === 'P1' && TUTORIAL_TAP_ALLOWED_STEP_IDS.has(tutorialCurrentStepId);
+    const canUseTap = (tutorialTapOverride || (isSelf && hasFinishedOnboarding(player))) && !isAiPlayer(player.id)
       && (!onlineRoomCode || localSeatId === player.id)
       && !state.pendingChoices.some((c) => c.playerId === player.id && c.kind === 'UNTAP_CHOICE');
     const tpl = document.getElementById('tpl-card-group');
