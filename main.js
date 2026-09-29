@@ -4608,6 +4608,17 @@ function renderQsts(state) {
 // dictationで明示された通りの固定リストにしている(die値1の説明では意図的にSHOP201-203を含めていない
 // -- "6個すべて"という文言がSHOP101-106の6枠だけを指しているため)。
 const TUTORIAL_SHOP_NORMAL_SLOT_IDS = ['SHOP101', 'SHOP102', 'SHOP103', 'SHOP104', 'SHOP105', 'SHOP106'];
+// build_candidate_pick_hint(T031)で実際に選ばれたカードのfaceId -> 対応する説明ステップid (2026-09-29, Excelの
+// T032〜T037)。TUTORIAL_SHOP_NORMAL_FACE_IDSと同じ6枚(小麦畑の支配/城下町の支配/始まりの兆し/小さな導き/
+// 金貸し/修道士)。
+const TUTORIAL_BUILD_CANDIDATE_STEP_IDS = {
+  A004A: 'build_candidate_a004a_hint',
+  A001A: 'build_candidate_a001a_hint',
+  B004A: 'build_candidate_b004a_hint',
+  B001A: 'build_candidate_b001a_hint',
+  C006A: 'build_candidate_c006a_hint',
+  C002A: 'build_candidate_c002a_hint',
+};
 const TUTORIAL_SHOP_VALUE5_SLOT_IDS = ['SHOP101', 'SHOP102', 'SHOP201', 'SHOP202'];
 
 function buildShopSlotNode(slotId, faceId, showReqCaption, locked, faceDown = false) {
@@ -5412,10 +5423,12 @@ function placeSelectedDieCommit(state, player, dieId, mapId, slotIndex) {
     tutorialCardAcquisitionGlowing = false;
     tutorialCardAcquisitionPlaceable = false;
     if (mapId === boardMod.CASTLE_MAP_ID || mapId === boardMod.AREA009_MAP_ID) {
-      // 3ターン目のBOB/CAROL/DANの見た目だけの配置(台本) (2026-09-28, per user request) -- あなた自身の
-      // カード獲得デモが成功した瞬間にセリフ無しで実行する(placeScriptedFakeAiDiceForTutorial's own doc)。
-      // 2026-09-29: 1・2ターン目と同じく1手ずつ(0.6秒間隔)、その間セリフ(build_candidates_hint)は待つ。
-      placeScriptedFakeAiDiceForTutorial(3, true);
+      // build_candidates_hintのウィンドウ上のカードを光らせる。3ターン目のBOB/CAROL/DANの見た目だけの配置
+      // (台本)はここではまだ実行しない (2026-09-29 bug fix, per user report: "このとき AIのダイスが置かれて
+      // しまいます" -- ここで即座に実行すると、build_candidates_hint自体が表示された時点ですでにBOB/CAROL/DAN
+      // が置かれてしまっていた。Excelの動くは次のセリフ(game_rules_intro_2、「1ターンに置けるダイスは1個」)が
+      // 表示される直前に実行する指定のため、1・2ターン目と同じ「前のステップを閉じた瞬間」パターンに合わせ、
+      // build_candidates_hintを閉じた時(dismissTutorialStep内)に移した)。
       tutorialBuildCandidatesGlowing = true;
       tutorialCurrentStepId = null;
     } else {
@@ -5788,15 +5801,26 @@ function renderBuildChoiceBzTapPrompt() {
 function commitBuildCandidate(candidate, bzDiscount) {
   const playerId = pendingBuildChoice.playerId;
   const context = { playerId, bzDiscount };
+  // build_candidate_pick_hint(T031)の「キャンセルで選び直せる」用スナップショット (2026-09-29) -- 実際に建築
+  // する前の状態を、このクリック限りのクロージャに閉じ込めておく(wouldCauseWhiteOverflowで分岐しても同じ
+  // クロージャを共有するのでどちらの経路でも安全)。placeSelectedDieCommit等、他の実操作の checkpoint と
+  // 同じ考え方(preSnapshot/preTurnActionTaken)。
+  // pendingBuildChoiceはSTATEの外(main.jsのローカル変数)なので、cloneState(STATE)だけでは戻せない --
+  // handleCancelPreviousActionClickは無条件にpendingBuildChoice=nullするため、そのままだとキャンセル後
+  // カード獲得ウィンドウ自体が消えてしまう(2026-09-29 bug fix, ヘッドレステストで発見)。ここで一緒に
+  // 保存しておき、下のT038キャンセルフックで明示的に復元する。
+  const tutorialPreSnapshot = tutorialCurrentStepId === 'build_candidate_pick_hint'
+    ? { state: gameStateMod.cloneState(STATE), turnActionTaken, pendingBuildChoice: structuredClone(pendingBuildChoice) }
+    : null;
   if (wouldCauseWhiteOverflow(STATE, (clone) => boardMod.completeAreaBuild(clone, INDEX, context, candidate, pendingBuildChoice.remainingCommands))) {
-    pendingWhiteOverflowConfirm = { onConfirm: () => commitBuildCandidateReal(candidate, bzDiscount) };
+    pendingWhiteOverflowConfirm = { onConfirm: () => commitBuildCandidateReal(candidate, bzDiscount, tutorialPreSnapshot) };
     render(STATE);
     return;
   }
-  commitBuildCandidateReal(candidate, bzDiscount);
+  commitBuildCandidateReal(candidate, bzDiscount, tutorialPreSnapshot);
 }
 
-function commitBuildCandidateReal(candidate, bzDiscount) {
+function commitBuildCandidateReal(candidate, bzDiscount, tutorialPreSnapshot) {
   const playerId = pendingBuildChoice.playerId;
   const context = { playerId, bzDiscount };
   const source = pendingBuildChoice.source;
@@ -5833,6 +5857,20 @@ function commitBuildCandidateReal(candidate, bzDiscount) {
       pendingAutoModeChoice = { physicalId: newPhysicalId, playerId };
     }
     if (source === 'AREA') turnActionTaken = true; // this placement's die is spent, but the turn itself waits for the "ターン終了" button (2026-08-01)
+    // build_candidate_pick_hint(T031)の実クリック操作の完了 (2026-09-29) -- 実際に建築が成功した瞬間、選んだ
+    // カードのfaceIdに対応する説明ステップへ直接遷移する(通常の直線探索ではなく、TUTORIAL_BUILD_CANDIDATE_
+    // STEP_IDS's own doc参照)。残り5つの説明も今seenへ加えておかないと、後で通常の直線探索がそれらを誤って
+    // 拾ってしまう。
+    if (tutorialPreSnapshot) {
+      const variantStepId = TUTORIAL_BUILD_CANDIDATE_STEP_IDS[candidate.faceId];
+      if (variantStepId) {
+        actionCheckpoints.push(tutorialPreSnapshot);
+        for (const sid of Object.values(TUTORIAL_BUILD_CANDIDATE_STEP_IDS)) tutorialSeenStepIds.add(sid);
+        tutorialBuildCandidatesGlowing = false;
+        tutorialCurrentStepId = variantStepId;
+        stopTutorialTypewriter();
+      }
+    }
   } else {
     // Payment somehow failed even after bzOutcomesForCandidate said it would succeed (stale state
     // between render and click) -- drop back to the plain candidate list rather than leaving the
@@ -8499,6 +8537,63 @@ const TUTORIAL_STEPS = [
     body: '「王宮」か「元老院」にダイスが置かれると獲得可能なカードのリストが出てきます',
     nextLabel: '次へ',
   },
+  // 2026-09-29, per user request (Excelの新しい行T031〜T038) -- 試しに候補カードを1枚、実際にクリックして
+  // 獲得してみる実演。次へボタンは無く(noManualDismiss)、実際に候補カードをクリックすると(commitBuildCandidateReal
+  // 内の専用フック参照)選んだカードに応じた説明(build_candidate_*_hint)へ直接遷移する。ウィンドウ上のカードは
+  // build_candidates_hintから引き続き光る(tutorialBuildCandidatesGlowing、カードが実際に選ばれた瞬間に消える)。
+  {
+    id: 'build_candidate_pick_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '試しに好きなカードを選んでください\n使い方の説明をします',
+    noManualDismiss: true,
+  },
+  {
+    id: 'build_candidate_a004a_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '小麦畑の支配ですね\nこのカードは',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'build_candidate_a001a_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '城下町の支配ですね\nこのカードは',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'build_candidate_b004a_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '始まりの兆しですね\nこのカードは',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'build_candidate_b001a_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '小さな導きですね\nこのカードは',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'build_candidate_c006a_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '金貸しですね\nこのカードは',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'build_candidate_c002a_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '修道士ですね\nこのカードは',
+    nextLabel: '次へ',
+  },
+  // 2026-09-29(Excel T038) -- どの候補を選んでも6つの説明のどれか1つの後にここへ合流する(build_candidate_*_hint
+  // が閉じられる瞬間、通常の直線探索が6つとも既にseen扱いになっているためここが次に見つかる -- 実際に選ばれた
+  // 瞬間に残り5つもまとめてseenへ加えておく、commitBuildCandidateReal内の専用フック参照)。次へでgame_rules_
+  // intro_2へ進む。実際に「直前のアクションをキャンセル」ボタンを押すと、獲得そのものを取り消してbuild_candidate_
+  // pick_hint(T031)に戻り選び直せる(handleCancelPreviousActionClick内の専用フック参照)。
+  {
+    id: 'build_candidate_summary_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '他のカードの説明も見たいのなら「直前のアクションをキャンセル」ボタンを押せば見ることができます\n次へを押せば先に進みます',
+    nextLabel: '次へ',
+  },
   {
     id: 'game_rules_intro_2',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
@@ -10001,7 +10096,15 @@ function dismissTutorialStep() {
     tutorialCardAcquisitionGlowing = true;
     tutorialCardAcquisitionPlaceable = true;
   }
-  if (tutorialCurrentStepId === 'build_candidates_hint') tutorialBuildCandidatesGlowing = false;
+  // 3ターン目のBOB/CAROL/DANの見た目だけの配置(台本) -- 1・2ターン目と同じく1手ずつ(0.6秒間隔)、その間は
+  // 次のセリフ(game_rules_intro_2)を待つ(tutorialScriptedMovesRunning's own doc)。
+  if (tutorialCurrentStepId === 'build_candidates_hint') {
+    placeScriptedFakeAiDiceForTutorial(3, true);
+  }
+  // build_candidate_summary_hint(T038)の「光る」(直前のアクションをキャンセルボタン) -- どの候補カードを選んでも
+  // (build_candidate_*_hintのどれか)閉じた後は必ずT038に合流するので、ここでまとめて判定する。
+  if (Object.values(TUTORIAL_BUILD_CANDIDATE_STEP_IDS).includes(tutorialCurrentStepId)) tutorialCancelButtonGlowing = true;
+  if (tutorialCurrentStepId === 'build_candidate_summary_hint') tutorialCancelButtonGlowing = false;
   // kabukicho_result_hint(T010)を閉じたらチュートリアル専用のターン終了ボタンを出す(T011)。
   if (tutorialCurrentStepId === 'kabukicho_result_hint') tutorialTurnEndButtonShown = true;
   // training_ground_result_hint(T016)を閉じたらキャンセルボタンを光らせる(T017、cancel_action_hintと同じ扱い)。
@@ -10611,6 +10714,16 @@ function handleCancelPreviousActionClick() {
       tutorialCardAcquisitionPlaceable = true;
     }
     tutorialMisclickReturnStepId = null;
+    stopTutorialTypewriter();
+  }
+  // build_candidate_summary_hint(T038)の「キャンセルボタンをクリック」 (2026-09-29, Excel T038 「直前のアクション
+  // をキャンセル」を押すと別のカードを選び直せる) -- 上のundoMod.restoreSnapshotで実際の建築(資源とカード)が
+  // 取り消し済み。build_candidate_pick_hint(T031)に戻って選び直せるようにする。
+  if (tutorialCurrentStepId === 'build_candidate_summary_hint') {
+    if (checkpoint.pendingBuildChoice) pendingBuildChoice = checkpoint.pendingBuildChoice;
+    tutorialCurrentStepId = 'build_candidate_pick_hint';
+    tutorialCancelButtonGlowing = false;
+    tutorialBuildCandidatesGlowing = true;
     stopTutorialTypewriter();
   }
   // cancel_training_ground_hintの「キャンセルボタンをクリック」 (2026-09-29, Excel T017 "直前のアクションを
