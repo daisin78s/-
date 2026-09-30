@@ -5154,6 +5154,9 @@ function renderBoard(state, next) {
         // なければ光らない）") -- tutorialExSlotGlowing's own doc。main_action_introの全SLOT演出と同じく
         // 占有中かどうかは問わずEX要求のスロットはすべて光らせる。
         if (tutorialExSlotGlowing && requirement === 'EX') slotEl.classList.add('change-highlight');
+        // build_candidate_a005a_ex_hintの「光る」演出(その特定エリアのEXスロットのみ) (2026-09-30) --
+        // tutorialAreaExSlotGlowMapId's own doc。
+        if (tutorialAreaExSlotGlowMapId === mapId && requirement === 'EX') slotEl.classList.add('change-highlight');
         // worker_placement_example_introの「光る」演出 (2026-09-27, per user request: 当初は"小麦畑の
         // スロット1"だったが、"変更"で"農園の5のスロット"に差し替え、2026-09-28にさらに"農園に置くダイス
         // 5→6"で"農園の6のスロット"に変更) -- 農園=MAP002のスロット3(index 2)固定。
@@ -5886,6 +5889,10 @@ function commitBuildCandidateReal(candidate, bzDiscount, tutorialPreSnapshot) {
         actionCheckpoints.push(tutorialPreSnapshot);
         for (const sid of Object.values(TUTORIAL_BUILD_CANDIDATE_STEP_IDS)) tutorialSeenStepIds.add(sid);
         tutorialBuildCandidatesGlowing = false;
+        // build_candidate_a005a_hint(T034)の「光る」(農園のエリア) (2026-09-30, per user request: "この
+        // ときエリア農園を光らせてください") -- 農園の支配が選ばれた時だけ、以後T037まで農園のタイル全体を
+        // 光らせ続ける(T037自身も同じタイルを光らせるので、そのまま引き継ぐ形でここからONにする)。
+        if (variantStepId === 'build_candidate_a005a_hint') tutorialAreaTileGlowMapId = 'MAP002';
         tutorialCurrentStepId = variantStepId;
         stopTutorialTypewriter();
       }
@@ -10280,12 +10287,12 @@ function dismissTutorialStep() {
   if (tutorialCurrentStepId === 'build_candidate_a005a_hint') tutorialAreaFeeGlowMapId = 'MAP002';
   if (tutorialCurrentStepId === 'build_candidate_a005a_fee_hint') {
     tutorialAreaFeeGlowMapId = null;
-    tutorialExSlotGlowing = true;
+    tutorialAreaExSlotGlowMapId = 'MAP002';
   }
   // build_candidate_a005a_ex_hint(T036)を閉じたら、T037自身の「動く」(農園のLVをあげる)をここで実際に実行し、
   // 農園のタイル全体を光らせる(動くは「そのステップが表示される時に実行」パターン、他の動くと同じ)。
   if (tutorialCurrentStepId === 'build_candidate_a005a_ex_hint') {
-    tutorialExSlotGlowing = false;
+    tutorialAreaExSlotGlowMapId = null;
     upgradeAreaForTutorial('MAP002');
     tutorialAreaTileGlowMapId = 'MAP002';
   }
@@ -10454,6 +10461,10 @@ let tutorialFreeActionGlowId = null;
 // build_candidate_a005a_levelup_hintはタイル全体を光らせる(renderBoard's own参照)。
 let tutorialAreaFeeGlowMapId = null;
 let tutorialAreaTileGlowMapId = null;
+// build_candidate_a005a_ex_hint(2026-09-30, Excel T036)の「光る」演出専用 -- そのmapIdのEXスロットだけを
+// 光らせる、null=光らせない。既存のtutorialExSlotGlowing(SHOPのAカードも一緒に光ってしまう、2026-09-30
+// per user report: "このとき城下町の支配と訓練場の支配もなぜか光っています")とは別の専用フラグにする。
+let tutorialAreaExSlotGlowMapId = null;
 // resource_pick_hint表示中、光っている4枚の初期資源カードの「光る」演出 (2026-09-27, per user request:
 // "それでは光っている4枚の初期資源カードのうち2枚をクリックしてください") -- handleTutorialChoiceClickが
 // この段階に入った瞬間にONにし、resource_pick_hint自身のautoDismissWhenが発火した瞬間にOFFにする
@@ -10925,6 +10936,8 @@ function handleCancelPreviousActionClick() {
     tutorialCancelButtonGlowing = false;
     tutorialTurnEndButtonShown = false;
     tutorialBuildCandidatesGlowing = true;
+    // 2026-09-30: 農園のタイル全体の光る(build_candidate_a005a_hint's own doc)も、選び直しに戻る時は消す。
+    tutorialAreaTileGlowMapId = null;
     stopTutorialTypewriter();
   }
   // cancel_training_ground_hintの「キャンセルボタンをクリック」 (2026-09-29, Excel T017 "直前のアクションを
