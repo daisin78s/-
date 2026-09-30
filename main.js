@@ -4642,11 +4642,20 @@ const TUTORIAL_BUILD_CANDIDATE_AREA_CHAINS = {
   build_candidate_a005a_hint: { feeHint: 'build_candidate_a005a_fee_hint', exHint: 'build_candidate_a005a_ex_hint', levelupHint: 'build_candidate_a005a_levelup_hint' },
   build_candidate_a001a_hint: { feeHint: 'build_candidate_a001a_fee_hint', exHint: 'build_candidate_a001a_ex_hint', levelupHint: 'build_candidate_a001a_levelup_hint' },
 };
-// 選ばれなかった方のエリアのサブチェーンは丸ごとseen扱いにする(共有のhowto/vp豆知識/summaryは対象外) -- 上と
-// 同じ内容だが値がフラットな配列の方が扱いやすいのでchainsとは別に持つ。
-const TUTORIAL_BUILD_CANDIDATE_AREA_SUBCHAIN_IDS = Object.fromEntries(
-  Object.entries(TUTORIAL_BUILD_CANDIDATE_AREA_CHAINS).map(([hintId, chain]) => [hintId, Object.values(chain)]),
-);
+// 始まりの兆し(B004A)専用の追加説明チェーンのステップid一覧 (2026-09-30、Excelの新しい行T043〜T045) --
+// エリア所有カードとは形が違う(資源を見た目だけ増やす→実際にタップして試させる→レベルアップの説明)ため、
+// 専用の配列で持つ。この配列に並んだ順に、dismissTutorialStep内で明示的に強制遷移させる。
+const TUTORIAL_BUILD_CANDIDATE_B004A_CHAIN_IDS = [
+  'build_candidate_b004a_resource_grant_hint',
+  'build_candidate_b004a_try_hint',
+  'build_candidate_b004a_levelup_hint',
+];
+// 選ばれなかった方のカードのサブチェーンは丸ごとseen扱いにする(共有のhowto/vp豆知識/summaryは対象外) --
+// エリア2枚(値がフラットな配列の方が扱いやすいのでchainsとは別に持つ)+始まりの兆しをまとめる。
+const TUTORIAL_BUILD_CANDIDATE_ALL_SUBCHAIN_IDS = {
+  ...Object.fromEntries(Object.entries(TUTORIAL_BUILD_CANDIDATE_AREA_CHAINS).map(([hintId, chain]) => [hintId, Object.values(chain)])),
+  build_candidate_b004a_hint: TUTORIAL_BUILD_CANDIDATE_B004A_CHAIN_IDS,
+};
 const TUTORIAL_SHOP_VALUE5_SLOT_IDS = ['SHOP101', 'SHOP102', 'SHOP201', 'SHOP202'];
 // カード獲得デモ中、onboarding未完了でも獲得したカードをタップできるようにする対象ステップ (2026-09-29, per
 // user request: "説明をするためにタップができる必要があります") -- 6枚どれかの説明画面(build_candidate_*_hint、
@@ -4654,6 +4663,9 @@ const TUTORIAL_SHOP_VALUE5_SLOT_IDS = ['SHOP101', 'SHOP102', 'SHOP201', 'SHOP202
 // canUseTap参照。
 const TUTORIAL_TAP_ALLOWED_STEP_IDS = new Set([
   ...Object.values(TUTORIAL_BUILD_CANDIDATE_STEP_IDS),
+  ...Object.values(TUTORIAL_BUILD_CANDIDATE_ALL_SUBCHAIN_IDS).flat(),
+  'build_candidate_a005a_levelup_howto_hint',
+  'build_candidate_levelup_vp_hint',
   'build_candidate_summary_hint',
 ]);
 
@@ -5916,8 +5928,8 @@ function commitBuildCandidateReal(candidate, bzDiscount, tutorialPreSnapshot) {
         for (const sid of Object.values(TUTORIAL_BUILD_CANDIDATE_STEP_IDS)) tutorialSeenStepIds.add(sid);
         // 選ばれなかった方のエリアの専用サブチェーンもseen扱いにし、選ばれた方は(以前の選び直しでseen扱いに
         // なっていたかもしれないので)明示的に未見に戻す (2026-09-30 bug fix、
-        // TUTORIAL_BUILD_CANDIDATE_AREA_SUBCHAIN_IDS's own doc参照)。
-        for (const [ownerId, subChainIds] of Object.entries(TUTORIAL_BUILD_CANDIDATE_AREA_SUBCHAIN_IDS)) {
+        // TUTORIAL_BUILD_CANDIDATE_ALL_SUBCHAIN_IDS's own doc参照)。
+        for (const [ownerId, subChainIds] of Object.entries(TUTORIAL_BUILD_CANDIDATE_ALL_SUBCHAIN_IDS)) {
           if (ownerId === variantStepId) {
             for (const sid of subChainIds) tutorialSeenStepIds.delete(sid);
           } else {
@@ -6303,6 +6315,11 @@ function renderPlayers(state, next) {
         if (tutorialGuildGlowing && player.id === 'P1' && resource === 'C') badge.classList.add('change-highlight');
         // build_cost_z_hintの「光る」演出(あなたのコネ) (2026-09-29) -- tutorialConnectionGlowing's own doc。
         if (tutorialConnectionGlowing && player.id === 'P1' && resource === 'Z') badge.classList.add('change-highlight');
+        // build_candidate_b004a_resource_grant_hintの「光る」演出(見た目だけ増やしたA/B/C) (2026-09-30) --
+        // tutorialB004aResourceGrantGlowing's own doc。
+        if (tutorialB004aResourceGrantGlowing && player.id === 'P1' && (resource === 'A' || resource === 'B' || resource === 'C')) {
+          badge.classList.add('change-highlight');
+        }
         resourcesEl.appendChild(badge);
       }
     }
@@ -8751,6 +8768,30 @@ const TUTORIAL_STEPS = [
     body: '始まりの兆しですね\nこのカードは',
     nextLabel: '次へ',
   },
+  // 2026-09-30, per user request (Excelの新しい行T043〜T045、始まりの兆しを選んだ時だけの追加説明) --
+  // 農園/城下町のエリア所有カードと同じ「1枚だけ説明が続く」構造だが、内容は別(資源を見た目だけ増やす→
+  // 実際にタップして試させる→レベルアップの説明、TUTORIAL_BUILD_CANDIDATE_B004A_CHAIN_IDS's own doc)。
+  {
+    id: 'build_candidate_b004a_resource_grant_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '資源がないとお見せできないので一時的に資源を増やしますね',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'build_candidate_b004a_try_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '試しにクリックしてみてください\n使い方が理解できたなら次へ進みます',
+    nextLabel: '理解した',
+  },
+  {
+    id: 'build_candidate_b004a_levelup_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: 'このカードはレベルが上がると必要な資源を一つ軽減できるようになります\nこのカードは雑にとっても強い追加色ダイスと違い計画的にとらないと使えないこともあります\nそのかわりダイス目に左右されずにカードを獲得したり\nメインアクションで資源を増やしてすぐにフリーアクションとして次のカードを獲得したりできるのでぜひ使ってみてください',
+    choices: [
+      { label: 'レベルのあげ方を教えて', targetStepId: 'build_candidate_a005a_levelup_howto_hint' },
+      { label: '次へ', targetStepId: 'build_candidate_summary_hint' },
+    ],
+  },
   {
     id: 'build_candidate_b001a_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
@@ -9977,6 +10018,16 @@ function upgradeAreaForTutorial(mapId) {
   mapState.currentAreaId = nextAreaId;
 }
 
+/** 始まりの兆しの実演用 (2026-09-30, per user request、ExcelのT043「動く: 赤〇2青〇2黄〇2資源を増やす」) --
+ * 見た目だけの演出(upgradeAreaForTutorialと同じ考え方 -- 本物の資源支払いや消費は一切伴わない、単純にplayerの
+ * resourcesへ直接加算するだけ)。 */
+function grantResourcesForTutorial(playerId, amounts) {
+  const player = STATE.players.find((p) => p.id === playerId);
+  for (const [resource, count] of Object.entries(amounts)) {
+    player.resources[resource] = (player.resources[resource] || 0) + count;
+  }
+}
+
 // worker_placement_turn_end_hint/castletown_turn_end_hint/card_acquisition_placement_introが閉じられた
 // 瞬間に実行する、BOB/CAROL/DANの見た目だけの配置の台本 (2026-09-28, per user request: "BOBのダイスは左から
 // 361 CAROLのダイスは左から526 DANのダイスは左から334"、続けて3ターン分の配置先を指定 -- 各プレイヤーの
@@ -10099,7 +10150,7 @@ function enterBuildCandidateSummaryHintFlags() {
   // 二度と自然に見せる必要がない。ここで未見のまま残っていると、後で(例えばターン終了後の台本配置が
   // 終わった直後)tutorialCurrentStepIdがnullに戻った瞬間、通常の直線探索がまだ「未見」のこれらを誤って
   // 拾ってgame_rules_intro_2まで進めなくなる。まとめてここでseen扱いにしておく。
-  for (const subChainIds of Object.values(TUTORIAL_BUILD_CANDIDATE_AREA_SUBCHAIN_IDS)) {
+  for (const subChainIds of Object.values(TUTORIAL_BUILD_CANDIDATE_ALL_SUBCHAIN_IDS)) {
     for (const sid of subChainIds) tutorialSeenStepIds.add(sid);
   }
   tutorialSeenStepIds.add('build_candidate_a005a_levelup_howto_hint');
@@ -10360,12 +10411,12 @@ function dismissTutorialStep() {
   // 実際に「ターン終了」ボタン(renderTutorialTurnEndButton、押した時の処理はそちら側)か「直前のアクションを
   // キャンセル」ボタン(handleCancelPreviousActionClick)を押して進む。2026-09-29 bug fix, per user report:
   // "この時 ターン終了ボタンが押せない" -- 以前は次へテキストボタンで進む想定のままExcelが変わっていた。
-  // 2026-09-30, per user request (Excelの新しい行T035〜T037・T043、続けて城下町にも同じ追加説明が増えた
-  // T039〜T041) -- エリア所有カード(農園/城下町、TUTORIAL_BUILD_CANDIDATE_AREA_MAP_IDS)だけは他の4枚と違い、
-  // 直接build_candidate_summary_hintへは進まず、専用の追加説明(fee/ex/levelup)へ続く(通常の直線探索に任せる、
-  // 下で除外)。
-  const areaOwningVariantIds = Object.keys(TUTORIAL_BUILD_CANDIDATE_AREA_MAP_IDS);
-  const variantIdsWithoutOwnChain = Object.values(TUTORIAL_BUILD_CANDIDATE_STEP_IDS).filter((id) => !areaOwningVariantIds.includes(id));
+  // 2026-09-30, per user request (Excelの新しい行T035〜T037・T043、続けて城下町・始まりの兆しにも追加説明が
+  // 増えたT039〜T041・T043〜T045) -- 専用の追加説明が続くカード(TUTORIAL_BUILD_CANDIDATE_ALL_SUBCHAIN_IDSの
+  // キー)だけは他のカードと違い、直接build_candidate_summary_hintへは進まず、専用の追加説明へ続く(強制遷移に
+  // 任せる、下で除外)。
+  const cardsWithOwnChain = Object.keys(TUTORIAL_BUILD_CANDIDATE_ALL_SUBCHAIN_IDS);
+  const variantIdsWithoutOwnChain = Object.values(TUTORIAL_BUILD_CANDIDATE_STEP_IDS).filter((id) => !cardsWithOwnChain.includes(id));
   if (variantIdsWithoutOwnChain.includes(tutorialCurrentStepId)) {
     // 通常の「次に見つかる未見のステップ」探索には任せない (2026-09-29 bug fix, per user report: "この時
     // ターン終了ボタンが押せない" の原因調査中に発覚) -- build_candidate_summary_hintは通常の直線探索で
@@ -10406,6 +10457,33 @@ function dismissTutorialStep() {
       upgradeAreaForTutorial(mapId);
       tutorialSeenStepIds.add(chain.levelupHint);
       tutorialCurrentStepId = chain.levelupHint;
+      stopTutorialTypewriter();
+      render(STATE);
+      return;
+    }
+  }
+  // 始まりの兆し(2026-09-30, Excelの新しい行T043〜T045)専用の追加説明チェーン -- エリア所有カードと同じく
+  // 強制遷移で配列の並び順に頼らない(TUTORIAL_BUILD_CANDIDATE_B004A_CHAIN_IDS's own doc)。hint→資源を見た目
+  // だけ増やす→実際にタップして試させる→レベルアップの説明、の順。
+  if (tutorialCurrentStepId === 'build_candidate_b004a_hint') {
+    // T043自身の「動く」(資源を見た目だけ増やす)を、直前の行(build_candidate_b004a_hint)の次へを押した瞬間に
+    // 実際に実行する(動くは「そのステップが表示される時に実行」パターン、他の動くと同じ)。
+    grantResourcesForTutorial('P1', { A: 2, B: 2, C: 2 });
+    tutorialB004aResourceGrantGlowing = true;
+    const nextId = TUTORIAL_BUILD_CANDIDATE_B004A_CHAIN_IDS[0];
+    tutorialSeenStepIds.add(nextId);
+    tutorialCurrentStepId = nextId;
+    stopTutorialTypewriter();
+    render(STATE);
+    return;
+  }
+  {
+    const idx = TUTORIAL_BUILD_CANDIDATE_B004A_CHAIN_IDS.indexOf(tutorialCurrentStepId);
+    if (idx >= 0 && idx < TUTORIAL_BUILD_CANDIDATE_B004A_CHAIN_IDS.length - 1) {
+      if (tutorialCurrentStepId === 'build_candidate_b004a_resource_grant_hint') tutorialB004aResourceGrantGlowing = false;
+      const nextId = TUTORIAL_BUILD_CANDIDATE_B004A_CHAIN_IDS[idx + 1];
+      tutorialSeenStepIds.add(nextId);
+      tutorialCurrentStepId = nextId;
       stopTutorialTypewriter();
       render(STATE);
       return;
@@ -10584,6 +10662,9 @@ let tutorialShopCostGlowing = false;
 // build_cost_z_hint(2026-09-29, Excel T029「今は万能資源 コネZ〇 が3個あるため…」)の「光る」演出 --
 // あなたのコネ(Z)資源バッジを光らせる、表示され続けている間ずっとtrueになる継続フラグ。
 let tutorialConnectionGlowing = false;
+// build_candidate_b004a_resource_grant_hint(2026-09-30, Excel T043「この時光る: 増えた資源」)の「光る」
+// 演出 -- 見た目だけ増やしたA/B/C資源のバッジを光らせる。
+let tutorialB004aResourceGrantGlowing = false;
 // castletown_free_action_hint(2026-09-30, Excel T007「変換された赤〇はフリーアクションでいつでも戻せます」)の
 // 「光る」演出 -- 対象のフリーアクションボタン(FREE_ACTION_RESOURCEのキー、例'A_K')のidをそのまま持つ。
 // null=光らせない。renderFreeActionButtons's own参照。
