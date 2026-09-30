@@ -5029,6 +5029,9 @@ function renderBoard(state, next) {
       if (tutorialAreaCardHintGlowing && (mapId === boardMod.CASTLE_MAP_ID || mapId === boardMod.AREA009_MAP_ID)) {
         node.classList.add('change-highlight');
       }
+      // build_candidate_a005a_levelup_hintの「光る」演出(農園のタイル全体) (2026-09-30, Excel T037) --
+      // tutorialAreaTileGlowMapId's own doc。
+      if (tutorialAreaTileGlowMapId === mapId) node.classList.add('change-highlight');
 
       const tier = mapState.currentAreaId.match(/([ABC])$/);
       if (tier) {
@@ -5237,6 +5240,9 @@ function renderBoard(state, next) {
         // replayHighlight (2026-09-09, per user request: "使用料をもらったときその使用料の箇所") -- see
         // computeReplayChangeHighlight's own doc.
         if (replayHighlight && replayHighlight.feeMapIds.has(mapId)) feeEl.classList.add('change-highlight');
+        // build_candidate_a005a_fee_hintの「光る」演出(農園の使用料置き場) (2026-09-30, Excel T035) --
+        // tutorialAreaFeeGlowMapId's own doc。
+        if (tutorialAreaFeeGlowMapId === mapId) feeEl.classList.add('change-highlight');
         if (mapState.accumulatedFee > 0 && mapState.feeOwnerId) {
           feeEl.dataset.color = colorForPlayer(state, mapState.feeOwnerId);
           if (mapState.feeOwnerId === realTurnPlayerId) {
@@ -8620,6 +8626,40 @@ const TUTORIAL_STEPS = [
     body: '農園の支配ですね\nこのカードは',
     nextLabel: '次へ',
   },
+  // 2026-09-30, per user request (Excelの新しい行T035〜T037・T043、農園の支配を選んだ時だけの追加説明) --
+  // 他の5枚と違い、農園の支配だけは説明が続く(使用料/EXスロット/レベルアップ)。build_candidate_a005a_hintの
+  // 次へは、他の5枚のような直接build_candidate_summary_hintへの強制遷移ではなく、通常の直線探索でここに
+  // 続く(dismissTutorialStep内の専用の除外分岐参照)。
+  {
+    id: 'build_candidate_a005a_fee_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '他のプレイヤーがこのエリアを利用するときは使用料が必要です\n払われた使用料はエリアの使用料置き場にプールされます\nあなたはプールされた使用料を自分のターン中いつでも回収できるようになります',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'build_candidate_a005a_ex_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: 'このEXスロットはあなただけの専用スロットです\nあなたはメインアクションで何の目でもここに置くことができます',
+    nextLabel: '次へ',
+  },
+  // T037: 「動く」(農園のLVをあげる)はこの行自身に付いているため、直前の行(build_candidate_a005a_ex_hint)の
+  // 次へを押した瞬間に実際に農園を実際にLV2へ上げる(他の「動く」表記と同じ「そのステップが表示される時に
+  // 実行」パターン、dismissTutorialStep内)。選択肢で分岐(レベルのあげ方を教えて/次へ)。
+  {
+    id: 'build_candidate_a005a_levelup_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: 'このエリアはレベルが上がるとさらに強化され使用料も〇2になります\nレベルが上がると本当に強いのでぜひ使ってみてください',
+    choices: [
+      { label: 'レベルのあげ方を教えて', targetStepId: 'build_candidate_a005a_levelup_howto_hint' },
+      { label: '次へ', targetStepId: 'build_candidate_summary_hint' },
+    ],
+  },
+  {
+    id: 'build_candidate_a005a_levelup_howto_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '自分のカードのレベルを上げたいときはハンマーアイコンのある「王宮」か「元老院」にダイスを置いて資源を払えばOKです\nこの時のダイス目はなんでもよく払う資源は獲得資源と同じです',
+    nextLabel: '次へ',
+  },
   {
     id: 'build_candidate_a001a_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
@@ -9839,6 +9879,17 @@ function revertLastPlacementForTutorial() {
   placementMessage = '';
 }
 
+/** 農園のレベルアップ実演用 (2026-09-30, per user request、ExcelのT037「動く: 農園のLVをあげる」) --
+ * 見た目だけの演出(BOB/CAROL/DANの台本配置と同じ考え方 -- 本物の資源支払い/ダイス配置は一切行わず、
+ * state.maps[mapId].currentAreaIdの末尾の階層を1段階(B→C)進めるだけ)。データに次の階層が無ければ
+ * 何もしない。 */
+function upgradeAreaForTutorial(mapId) {
+  const mapState = STATE.maps[mapId];
+  const nextAreaId = mapState.currentAreaId.replace(/([A-Z])$/, (letter) => String.fromCharCode(letter.charCodeAt(0) + 1));
+  if (nextAreaId === mapState.currentAreaId || !areaFaceExists(nextAreaId)) return;
+  mapState.currentAreaId = nextAreaId;
+}
+
 // worker_placement_turn_end_hint/castletown_turn_end_hint/card_acquisition_placement_introが閉じられた
 // 瞬間に実行する、BOB/CAROL/DANの見た目だけの配置の台本 (2026-09-28, per user request: "BOBのダイスは左から
 // 361 CAROLのダイスは左から526 DANのダイスは左から334"、続けて3ターン分の配置先を指定 -- 各プレイヤーの
@@ -9936,7 +9987,31 @@ function handleTutorialChoiceClick(targetStepId) {
   }
   if (targetStepId === 'resource_pick_hint') tutorialResourceCandidatesGlowing = true;
   if (targetStepId === 'resource_icon_explanation') tutorialFoodAreasGlowing = true;
+  // 2026-09-30, per user request (Excel T037) -- 農園のレベルアップ実演を離れる時、タイル全体の光る演出を消す
+  // (どちらの選択肢を選んでも、build_candidate_a005a_levelup_hint自身はchoicesで進むためdismissTutorialStep
+  // を経由しない)。
+  if (tutorialCurrentStepId === 'build_candidate_a005a_levelup_hint') tutorialAreaTileGlowMapId = null;
+  if (targetStepId === 'build_candidate_summary_hint') enterBuildCandidateSummaryHintFlags();
   tutorialCurrentStepId = targetStepId;
+  stopTutorialTypewriter();
+  render(STATE);
+}
+
+// build_candidate_summary_hint(T038)へ入る時の光る/ボタン表示のセットアップ (2026-09-29〜30) -- 通常の
+// 「次に見つかる未見のステップ」探索に任せると、一度発見されて以降tutorialSeenStepIdsに入るため、選び直し
+// (キャンセル)や複数の経路(農園以外の5枚/農園の「次へ」選択肢/農園の「レベルのあげ方を教えて」の先)いずれ
+// からもここへ確実に来られるよう、入る側で毎回明示的にセットする共通処理。
+function enterBuildCandidateSummaryHintFlags() {
+  tutorialCancelButtonGlowing = true;
+  tutorialTurnEndButtonShown = true;
+  tutorialSeenStepIds.add('build_candidate_summary_hint');
+}
+
+// dismissTutorialStep内の強制遷移(seen登録される前に発見されてしまう分岐)用 -- 上のenterBuildCandidateSummaryHintFlagsに
+// 加えてtutorialCurrentStepId自体の切り替え・render・returnまで行う。
+function enterBuildCandidateSummaryHint() {
+  enterBuildCandidateSummaryHintFlags();
+  tutorialCurrentStepId = 'build_candidate_summary_hint';
   stopTutorialTypewriter();
   render(STATE);
 }
@@ -10186,22 +10261,36 @@ function dismissTutorialStep() {
   // 実際に「ターン終了」ボタン(renderTutorialTurnEndButton、押した時の処理はそちら側)か「直前のアクションを
   // キャンセル」ボタン(handleCancelPreviousActionClick)を押して進む。2026-09-29 bug fix, per user report:
   // "この時 ターン終了ボタンが押せない" -- 以前は次へテキストボタンで進む想定のままExcelが変わっていた。
-  if (Object.values(TUTORIAL_BUILD_CANDIDATE_STEP_IDS).includes(tutorialCurrentStepId)) {
+  // 2026-09-30, per user request (Excelの新しい行T035〜T037・T043) -- 農園の支配(build_candidate_a005a_hint)
+  // だけは他の5枚と違い、直接build_candidate_summary_hintへは進まず、専用の追加説明(fee/ex/levelup)へ続く
+  // (通常の直線探索に任せる、下のexcludedFromDirectSummaryで除外)。
+  const variantIdsExceptA005A = Object.values(TUTORIAL_BUILD_CANDIDATE_STEP_IDS).filter((id) => id !== 'build_candidate_a005a_hint');
+  if (variantIdsExceptA005A.includes(tutorialCurrentStepId)) {
     // 通常の「次に見つかる未見のステップ」探索には任せない (2026-09-29 bug fix, per user report: "この時
     // ターン終了ボタンが押せない" の原因調査中に発覚) -- build_candidate_summary_hintは通常の直線探索で
     // 一度発見されるとtutorialSeenStepIdsに入ってしまうため、キャンセルで選び直した2回目以降はここが
     // 「既に見た」として素通りされ、いきなりgame_rules_intro_2まで進んでしまっていた
     // (resource_icon_area_card_hint等、他の分岐と同じ理由で強制遷移+returnが必要)。
-    tutorialCancelButtonGlowing = true;
-    tutorialTurnEndButtonShown = true;
-    tutorialCurrentStepId = 'build_candidate_summary_hint';
-    // 強制遷移で入るため通常の発見時のadd('build_candidate_summary_hint')が起きない -- ここで明示的に
-    // seen扱いにしておかないと、後で(ターン終了ボタン押下後)tutorialCurrentStepIdがnullに戻った瞬間、
-    // 通常の直線探索がまだ「未見」のこのステップを再度見つけてしまう(実際にこの通りのバグが発生: ターン
-    // 終了ボタンを押した後、台本の配置が終わってもgame_rules_intro_2へ進まずT038に戻ってしまっていた)。
-    tutorialSeenStepIds.add('build_candidate_summary_hint');
-    stopTutorialTypewriter();
-    render(STATE);
+    enterBuildCandidateSummaryHint();
+    return;
+  }
+  // build_candidate_a005a_hint自身の次へは、通常の直線探索でbuild_candidate_a005a_fee_hintへ続く(何もしない)。
+  // build_candidate_a005a_fee_hint(T035)の「光る」(農園の使用料置き場) -- build_candidate_a005a_ex_hintを
+  // 閉じたら消して次(EXスロット)を光らせる。
+  if (tutorialCurrentStepId === 'build_candidate_a005a_hint') tutorialAreaFeeGlowMapId = 'MAP002';
+  if (tutorialCurrentStepId === 'build_candidate_a005a_fee_hint') {
+    tutorialAreaFeeGlowMapId = null;
+    tutorialExSlotGlowing = true;
+  }
+  // build_candidate_a005a_ex_hint(T036)を閉じたら、T037自身の「動く」(農園のLVをあげる)をここで実際に実行し、
+  // 農園のタイル全体を光らせる(動くは「そのステップが表示される時に実行」パターン、他の動くと同じ)。
+  if (tutorialCurrentStepId === 'build_candidate_a005a_ex_hint') {
+    tutorialExSlotGlowing = false;
+    upgradeAreaForTutorial('MAP002');
+    tutorialAreaTileGlowMapId = 'MAP002';
+  }
+  if (tutorialCurrentStepId === 'build_candidate_a005a_levelup_howto_hint') {
+    enterBuildCandidateSummaryHint();
     return;
   }
   // kabukicho_result_hint(T010)を閉じたらチュートリアル専用のターン終了ボタンを出す(T011)。
@@ -10360,6 +10449,11 @@ let tutorialConnectionGlowing = false;
 // 「光る」演出 -- 対象のフリーアクションボタン(FREE_ACTION_RESOURCEのキー、例'A_K')のidをそのまま持つ。
 // null=光らせない。renderFreeActionButtons's own参照。
 let tutorialFreeActionGlowId = null;
+// 農園の支配カードの説明(2026-09-30, Excel T035・T037)の「光る」演出 -- どちらもmapId(常に'MAP002')を
+// そのまま持つ、null=光らせない。build_candidate_a005a_fee_hintは使用料置き場(.map-tile__fee)、
+// build_candidate_a005a_levelup_hintはタイル全体を光らせる(renderBoard's own参照)。
+let tutorialAreaFeeGlowMapId = null;
+let tutorialAreaTileGlowMapId = null;
 // resource_pick_hint表示中、光っている4枚の初期資源カードの「光る」演出 (2026-09-27, per user request:
 // "それでは光っている4枚の初期資源カードのうち2枚をクリックしてください") -- handleTutorialChoiceClickが
 // この段階に入った瞬間にONにし、resource_pick_hint自身のautoDismissWhenが発火した瞬間にOFFにする
