@@ -5228,6 +5228,9 @@ function renderBoard(state, next) {
       // .map-tile__turnorder:empty when unpopulated, so reusing --current here needs no template change.
       if (isCastle) {
         fillTurnOrderRow(node.querySelector('.map-tile__turnorder--current'), '次ラウンド', computeNextCastleTurnOrder(state), state);
+        // castle_turn_order_hintの「光る」演出(次ラウンドのスタプレ順) (2026-09-30, Excel T050) --
+        // tutorialCastleTurnOrderGlowing's own doc。
+        if (tutorialCastleTurnOrderGlowing) node.querySelector('.map-tile__turnorder--current').classList.add('change-highlight');
       }
 
       const actionEl = node.querySelector('.map-tile__action');
@@ -8785,6 +8788,14 @@ const TUTORIAL_STEPS = [
     body: '1ターンに置けるダイスは1個\n全員がダイスを使い切るか、ラウンドをパスするとラウンド終了です\nこれを4ラウンド繰り返し、ゲーム終了時に最も多くのVP（勝利点）を獲得したプレイヤーが勝者となります',
     nextLabel: '次へ',
   },
+  // 2026-09-30, per user request (Excelの新しい行T050) -- 3ターン目のBOB/CAROL/DAN(見た目だけ)の配置が終わった
+  // 後、王宮の「次ラウンド」欄(次ラウンドのスタプレ順)を光らせて説明する。
+  {
+    id: 'castle_turn_order_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '次のラウンドの手番はこの順番になります\n王宮の後ろのスロットに置いた順から先の手番になります',
+    nextLabel: '次へ',
+  },
   {
     id: 'resource_choice_intro',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
@@ -10417,6 +10428,10 @@ function dismissTutorialStep() {
     enterBuildCandidateSummaryHint();
     return;
   }
+  // castle_turn_order_hint(2026-09-30, Excel T050)の「光る」(王宮の次ラウンド欄) -- game_rules_intro_2を
+  // 閉じたらON、castle_turn_order_hint自身を閉じたらOFF。
+  if (tutorialCurrentStepId === 'game_rules_intro_2') tutorialCastleTurnOrderGlowing = true;
+  if (tutorialCurrentStepId === 'castle_turn_order_hint') tutorialCastleTurnOrderGlowing = false;
   // kabukicho_result_hint(T010)を閉じたらチュートリアル専用のターン終了ボタンを出す(T011)。
   if (tutorialCurrentStepId === 'kabukicho_result_hint') tutorialTurnEndButtonShown = true;
   // training_ground_result_hint(T016)を閉じたらキャンセルボタンを光らせる(T017、cancel_action_hintと同じ扱い)。
@@ -10573,6 +10588,8 @@ let tutorialConnectionGlowing = false;
 // 「光る」演出 -- 対象のフリーアクションボタン(FREE_ACTION_RESOURCEのキー、例'A_K')のidをそのまま持つ。
 // null=光らせない。renderFreeActionButtons's own参照。
 let tutorialFreeActionGlowId = null;
+// castle_turn_order_hint(2026-09-30, Excel T050)の「光る」演出 -- 王宮の「次ラウンド」欄。
+let tutorialCastleTurnOrderGlowing = false;
 // 農園の支配カードの説明(2026-09-30, Excel T035・T037)の「光る」演出 -- どちらもmapId(常に'MAP002')を
 // そのまま持つ、null=光らせない。build_candidate_a005a_fee_hintは使用料置き場(.map-tile__fee)、
 // build_candidate_a005a_levelup_hintはタイル全体を光らせる(renderBoard's own参照)。
