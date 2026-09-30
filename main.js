@@ -6580,6 +6580,10 @@ function renderFreeActionButtons(container, state, player, canAct) {
     const btn = el('button', 'free-action-button');
     btn.appendChild(actionRow([actionDot(FREE_ACTION_RESOURCE[freeActionId]), actionArrow(), actionDot('K')]));
     btn.type = 'button';
+    // castletown_free_action_hintの「光る」演出 (2026-09-30) -- tutorialFreeActionGlowId's own doc。
+    if (tutorialModeActive && player.id === 'P1' && tutorialFreeActionGlowId === freeActionId) {
+      btn.classList.add('change-highlight');
+    }
     if (tutorialShowDisabled) {
       btn.disabled = true;
       container.appendChild(btn);
@@ -8400,6 +8404,16 @@ const TUTORIAL_STEPS = [
     body: 'あなたの持っている食料〇すべてが権力赤〇に変換されました',
     nextLabel: '次へ',
   },
+  // 2026-09-30, per user request (Excelの新しい行T007) -- 変換された資源(赤〇)はフリーアクションでいつでも
+  // 戻せることの説明。A→Kのフリーアクションボタン自体を光らせる(tutorialFreeActionGlowId's own doc)。
+  // このボタンはチュートリアル中は常に表示されているが押せない(renderFreeActionButtonsのtutorialShowDisabled
+  // 参照、2026-09-30の別の変更で追加済み)。
+  {
+    id: 'castletown_free_action_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '変換された赤〇はフリーアクションでターン中いつでも〇に戻せます',
+    nextLabel: '次へ',
+  },
   // 2026-09-29, per user request (ExcelのT007・T009・T011: "T006-012変更しました") -- 各資源の説明(領地/天運/
   // 人材カード)を、城下町/大聖堂/ギルドそれぞれの結果セリフの直後に独立した1画面として出す。SHOPの該当種別
   // のカードすべてを光らせる(tutorialShopCardTypeGlow's own doc)。次へを押した時に、次の実演(大聖堂/ギルド/
@@ -10083,6 +10097,10 @@ function dismissTutorialStep() {
   // 次の実演(置き直し)が実行される。
   if (tutorialCurrentStepId === 'castletown_placement_result') {
     tutorialCastletownResultGlowing = false;
+    tutorialFreeActionGlowId = 'A_K';
+  }
+  if (tutorialCurrentStepId === 'castletown_free_action_hint') {
+    tutorialFreeActionGlowId = null;
     tutorialShopCardTypeGlow = 'A';
   }
   if (tutorialCurrentStepId === 'castletown_territory_cards_hint') {
@@ -10338,6 +10356,10 @@ let tutorialShopCostGlowing = false;
 // build_cost_z_hint(2026-09-29, Excel T029「今は万能資源 コネZ〇 が3個あるため…」)の「光る」演出 --
 // あなたのコネ(Z)資源バッジを光らせる、表示され続けている間ずっとtrueになる継続フラグ。
 let tutorialConnectionGlowing = false;
+// castletown_free_action_hint(2026-09-30, Excel T007「変換された赤〇はフリーアクションでいつでも戻せます」)の
+// 「光る」演出 -- 対象のフリーアクションボタン(FREE_ACTION_RESOURCEのキー、例'A_K')のidをそのまま持つ。
+// null=光らせない。renderFreeActionButtons's own参照。
+let tutorialFreeActionGlowId = null;
 // resource_pick_hint表示中、光っている4枚の初期資源カードの「光る」演出 (2026-09-27, per user request:
 // "それでは光っている4枚の初期資源カードのうち2枚をクリックしてください") -- handleTutorialChoiceClickが
 // この段階に入った瞬間にONにし、resource_pick_hint自身のautoDismissWhenが発火した瞬間にOFFにする
