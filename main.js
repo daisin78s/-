@@ -6909,6 +6909,14 @@ function attachTapToggle(cardNode, cardState, faceId, canAct, physicalId) {
         tutorialResourceGainGlowing = true;
         stopTutorialTypewriter();
       }
+      // build_candidate_c006a_hintの「金貸しがタップされる」演出 (2026-09-30, per user request: "T050 次へを
+      // 消して金貸しがタップされたらに変更しました") -- 「次へ」ボタンではなく実際のTAPで直接レベルアップの
+      // 説明へ進む(間に別画面を挟まない、Excelの新しい移動先の並び通り)。
+      if (tutorialCurrentStepId === 'build_candidate_c006a_hint' && result.success && faceId === 'C006A') {
+        tutorialSeenStepIds.add('build_candidate_c006a_levelup_hint');
+        tutorialCurrentStepId = 'build_candidate_c006a_levelup_hint';
+        stopTutorialTypewriter();
+      }
     } else if (bareTap.kind === 'BUILD') {
       const result = boardMod.useBareTapAbility(STATE, INDEX, { playerId: cardState.ownerId }, physicalId);
       if (result.success && result.pendingBuild) {
@@ -8866,7 +8874,9 @@ const TUTORIAL_STEPS = [
     id: 'build_candidate_c006a_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
     body: '金貸しですね\nこのカードは',
-    nextLabel: '次へ',
+    // 2026-09-30, per user request (Excel T050「次へを消して金貸しがタップされたらに変更しました」) --
+    // 「次へ」ボタンでは進めず、実際に金貸しをタップ(attachTapToggleのIMMEDIATE分岐参照)するまで待つ。
+    noManualDismiss: true,
   },
   // 2026-09-30, per user request (Excelの新しい行T051、金貸しを選んだ時だけの追加説明) -- 1画面だけで
   // すぐ共有のhowto/summaryへ分岐。
@@ -10218,7 +10228,13 @@ function handleTutorialChoiceClick(targetStepId) {
 // (キャンセル)や複数の経路(農園以外の5枚/農園の「次へ」選択肢/農園の「レベルのあげ方を教えて」の先)いずれ
 // からもここへ確実に来られるよう、入る側で毎回明示的にセットする共通処理。
 function enterBuildCandidateSummaryHintFlags() {
-  tutorialCancelButtonGlowing = true;
+  // 2026-09-30, per user request (Excel T059「ターン開始に戻すにしました これはタップアクションが使われた
+  // ときに直前のアクションをキャンセルでは対応できないためです」) -- 金貸し(のちに修道士も)は説明の途中で
+  // 実際にTAPが発生する(attachTapToggleが別のactionCheckpointを積む)ため、「直前のアクションをキャンセル」
+  // (1段階しか戻せない)ではカード選択そのものまで戻せないことがある。build_candidate_b004a_summary_hint
+  // と同じ「ターン開始に戻す」(tutorialCardAcquisitionRestartButtonShown、カード選択前の深さまで戻す)を
+  // 共有summaryでも使う。
+  tutorialCardAcquisitionRestartButtonShown = true;
   tutorialTurnEndButtonShown = true;
   tutorialSeenStepIds.add('build_candidate_summary_hint');
   // 2026-09-30 bug fix, ヘッドレステストで発見 -- summary_hintへ到達した時点で、エリア所有カードの
