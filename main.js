@@ -4736,8 +4736,12 @@ function buildShopSlotNode(slotId, faceId, showReqCaption, locked, faceDown = fa
   // shop_cost_introの「光る」演出 (2026-09-27, per user request: "ショップにあるすべてのカードの支払い
   // 資源部分を光らせる") -- M/NORMAL/SPECIALすべてのショップスロットが対象(buildShopSlotNodeはどの店の
   // スロットでも呼ばれる)。モニュメントなど支払い資源が無いカードは.shop-card__cost-emptyの方に光らせる。
+  // 2026-09-30、実機報告(build_cost_hintで「何も光らない」)を受けて修正: querySelector単体だとDOM順で
+  // 先に出てくる.shop-card__back側(サイブリング面プレビュー用の非表示コピー、buildCardVisual参照)の
+  // .shop-card__costを誤って掴んでいた(w0/h0で不可視) -- 子コンビネータで表面側だけに絞る(7252行目の
+  // 同種の修正と同じパターン)。
   if (tutorialShopCostGlowing) {
-    const costEl = cardVisual.querySelector('.shop-card__cost, .shop-card__cost-empty');
+    const costEl = cardVisual.querySelector(':scope > .shop-card__cost, :scope > .shop-card__cost-empty');
     if (costEl) costEl.classList.add('change-highlight');
   }
   slotNode.querySelector('.shop-slot__card').appendChild(cardVisual);
