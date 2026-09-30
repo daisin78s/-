@@ -4650,12 +4650,21 @@ const TUTORIAL_BUILD_CANDIDATE_B004A_CHAIN_IDS = [
   'build_candidate_b004a_try_hint',
   'build_candidate_b004a_levelup_hint',
 ];
+// 小さな導き(B001A)/金貸し(C006A)のような「N画面のプレーンな次への後、最後の1画面だけ共有のhowto/summaryへ
+// 分岐する」形の追加説明チェーン (2026-09-30、Excelの新しい行T047〜T049・T051) -- 農園/城下町(fee/ex/levelupの
+// 3種の演出付き)や始まりの兆し(専用のsummary)ほど凝っておらず、単純に並んだ順に強制遷移させるだけでよい
+// カード用。今後似た形のカード(修道士など、まだExcelで書きかけ)が増えても、この表に1行追加するだけで済む。
+const TUTORIAL_BUILD_CANDIDATE_LINEAR_CHAINS = {
+  build_candidate_b001a_hint: ['build_candidate_b001a_tap_hint', 'build_candidate_b001a_reroll_hint', 'build_candidate_b001a_levelup_hint'],
+  build_candidate_c006a_hint: ['build_candidate_c006a_levelup_hint'],
+};
 // 選ばれなかった方のカードのサブチェーンは丸ごとseen扱いにする(共有のhowto/vp豆知識/summaryは対象外) --
 // エリア2枚(値がフラットな配列の方が扱いやすいのでchainsとは別に持つ)+始まりの兆し(専用のsummary_hintも
-// 含む、共有summaryへは合流しないため)をまとめる。
+// 含む、共有summaryへは合流しないため)+小さな導き/金貸しをまとめる。
 const TUTORIAL_BUILD_CANDIDATE_ALL_SUBCHAIN_IDS = {
   ...Object.fromEntries(Object.entries(TUTORIAL_BUILD_CANDIDATE_AREA_CHAINS).map(([hintId, chain]) => [hintId, Object.values(chain)])),
   build_candidate_b004a_hint: [...TUTORIAL_BUILD_CANDIDATE_B004A_CHAIN_IDS, 'build_candidate_b004a_summary_hint'],
+  ...TUTORIAL_BUILD_CANDIDATE_LINEAR_CHAINS,
 };
 const TUTORIAL_SHOP_VALUE5_SLOT_IDS = ['SHOP101', 'SHOP102', 'SHOP201', 'SHOP202'];
 // カード獲得デモ中、onboarding未完了でも獲得したカードをタップできるようにする対象ステップ (2026-09-29, per
@@ -8820,11 +8829,47 @@ const TUTORIAL_STEPS = [
     body: '小さな導きですね\nこのカードは',
     nextLabel: '次へ',
   },
+  // 2026-09-30, per user request (Excelの新しい行T047〜T049、小さな導しを選んだ時だけの追加説明) --
+  // 農園/城下町と同じく、最後は共有のhowto/summaryへ分岐する形(始まりの兆しの特別な「ターン開始に戻す」は
+  // 不要 -- このカードのTAPは自分のダイス目を変えるだけで他のカードは獲得できないため)。
+  // TUTORIAL_BUILD_CANDIDATE_LINEAR_CHAINS's own doc参照。
+  {
+    id: 'build_candidate_b001a_tap_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: 'このカードをタップ（⤵アイコンをクリック）するとこのターン中、自分のダイスを１個の目を1か2に変更することができます\n変更されたダイスはすでにほかのダイスが置かれているスロットにも関係なく置くことができるようになります',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'build_candidate_b001a_reroll_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '恩寵ダイス🎲は使わなかった場合ラウンド開始時にふりなおして使えます',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'build_candidate_b001a_levelup_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: 'このカードはレベルが上がるとまた恩寵ダイスを１個得ることができます\n極端な強さはないですがスロットがうまりダイスが置けなくなってくる後半戦いぶし銀の活躍を見せるのでぜひ使ってみてください',
+    choices: [
+      { label: 'レベルのあげ方を教えて', targetStepId: 'build_candidate_a005a_levelup_howto_hint' },
+      { label: '次へ', targetStepId: 'build_candidate_summary_hint' },
+    ],
+  },
   {
     id: 'build_candidate_c006a_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
     body: '金貸しですね\nこのカードは',
     nextLabel: '次へ',
+  },
+  // 2026-09-30, per user request (Excelの新しい行T051、金貸しを選んだ時だけの追加説明) -- 1画面だけで
+  // すぐ共有のhowto/summaryへ分岐。
+  {
+    id: 'build_candidate_c006a_levelup_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: 'レベルが上がると得られる資源もさらに増えます\nただしタップ状態でレベルを上げてしまうとせっかく増やした効果がそのラウンドでは使えないので、レベルを上げてからタップさせるように気を付けてください\nシンプルだけに使いやすいカードなのでぜひ使ってみてください',
+    choices: [
+      { label: 'レベルのあげ方を教えて', targetStepId: 'build_candidate_a005a_levelup_howto_hint' },
+      { label: '次へ', targetStepId: 'build_candidate_summary_hint' },
+    ],
   },
   {
     id: 'build_candidate_c002a_hint',
@@ -9898,6 +9943,7 @@ function renderTutorialOverlay(state) {
     if (step.id === 'ex_slot_intro' || step.id === 'castletown_territory_cards_hint'
       || step.id === 'build_dice_value6_hint' || step.id === 'build_dice_value5_hint'
       || step.id === 'build_dice_value4_hint' || step.id === 'build_dice_value1_hint'
+      || step.id === 'build_cost_hint'
       || step.id === 'castletown_fortune_cards_hint' || step.id === 'castletown_talent_cards_hint') {
       const shopsEl = document.getElementById('shops');
       if (shopsEl) {
@@ -10528,6 +10574,27 @@ function dismissTutorialStep() {
     stopTutorialTypewriter();
     render(STATE);
     return;
+  }
+  // 小さな導き/金貸しのような単純な連続チェーン (2026-09-30、Excelの新しい行T047〜T049・T051) -- 配列の
+  // 並び順に頼らず、TUTORIAL_BUILD_CANDIDATE_LINEAR_CHAINSに並んだ順へ明示的に強制遷移させる(他のチェーン
+  // と同じ理由)。各チェーンの最後の要素はchoicesを持つ分岐ステップなので、そこへ強制遷移させたら終わり
+  // (そのステップ自身の「次へ」はhandleTutorialChoiceClickが処理する)。
+  for (const [hintId, chainIds] of Object.entries(TUTORIAL_BUILD_CANDIDATE_LINEAR_CHAINS)) {
+    if (tutorialCurrentStepId === hintId) {
+      tutorialSeenStepIds.add(chainIds[0]);
+      tutorialCurrentStepId = chainIds[0];
+      stopTutorialTypewriter();
+      render(STATE);
+      return;
+    }
+    const idx = chainIds.indexOf(tutorialCurrentStepId);
+    if (idx >= 0 && idx < chainIds.length - 1) {
+      tutorialSeenStepIds.add(chainIds[idx + 1]);
+      tutorialCurrentStepId = chainIds[idx + 1];
+      stopTutorialTypewriter();
+      render(STATE);
+      return;
+    }
   }
   // 2026-09-30, per user request (Excelの新しい行T047) -- レベルアップの方法説明(農園/城下町共有)を閉じたら、
   // VPの豆知識(build_candidate_levelup_vp_hint)へ強制遷移する(通常の直線探索には任せない -- 農園/城下町の
