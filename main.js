@@ -4657,6 +4657,10 @@ const TUTORIAL_BUILD_CANDIDATE_B004A_CHAIN_IDS = [
 const TUTORIAL_BUILD_CANDIDATE_LINEAR_CHAINS = {
   build_candidate_b001a_hint: ['build_candidate_b001a_tap_hint', 'build_candidate_b001a_reroll_hint', 'build_candidate_b001a_levelup_hint'],
   build_candidate_c006a_hint: ['build_candidate_c006a_levelup_hint'],
+  // 修道士(C002A、2026-09-30, Excelの新しい行T054〜T056) -- 1画面目(資源を見た目だけ増やす)への突入時に
+  // 食料〇を10増やすグラント自体は、dismissTutorialStep内のbuild_candidate_c002a_hint専用フックで実行する
+  // (始まりの兆しと同じ理由)。
+  build_candidate_c002a_hint: ['build_candidate_c002a_resource_grant_hint', 'build_candidate_c002a_try_hint', 'build_candidate_c002a_levelup_hint'],
 };
 // 選ばれなかった方のカードのサブチェーンは丸ごとseen扱いにする(共有のhowto/vp豆知識/summaryは対象外) --
 // エリア2枚(値がフラットな配列の方が扱いやすいのでchainsとは別に持つ)+始まりの兆し(専用のsummary_hintも
@@ -5463,6 +5467,9 @@ function placeSelectedDieCommit(state, player, dieId, mapId, slotIndex) {
     tutorialKabukichoGlowing = false;
     if (mapId === 'MAP006') {
       tutorialCurrentStepId = null;
+      // kabukicho_result_hintの「光る」演出(あなたのコネ) (2026-09-30, per user request: "T014 あなたのコネを
+      // 光らせて") -- tutorialConnectionGlowing(build_cost_z_hintと共通の既存フラグ)を再利用。
+      tutorialConnectionGlowing = true;
     } else {
       tutorialCancelButtonGlowing = true;
       tutorialMisclickReturnStepId = 'kabukicho_placement_intro';
@@ -8895,6 +8902,31 @@ const TUTORIAL_STEPS = [
     body: '修道士ですね\nこのカードは',
     nextLabel: '次へ',
   },
+  // 2026-09-30, per user request (Excelの新しい行T054〜T056、修道士を選んだ時だけの追加説明) -- 小さな導き/
+  // 金貸しと同じくTUTORIAL_BUILD_CANDIDATE_LINEAR_CHAINSで強制遷移させる、3画面の直列チェーン。1画面目
+  // (資源を見た目だけ増やす)だけは始まりの兆しと同じ理由でグラント自体をdismissTutorialStep側で実行する
+  // (修道士のTAPは食料〇7個の変換のため、資源が無いと実演できない)。
+  {
+    id: 'build_candidate_c002a_resource_grant_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: 'この状態では強さがわかりにくいので一時的に食料〇を１０増やしますね',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'build_candidate_c002a_try_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: 'タップしてみてください\n一気に信心が増えますでしょう\n食料〇が７に満たないときはあるだけ変換します',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'build_candidate_c002a_levelup_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: 'レベルが上がると信心青〇ではなくコネZ〇に変換できるようになります\n持っている食料〇の数によって強さが変わりますがはまったときはものすごい威力なのでぜひ使ってみてください',
+    choices: [
+      { label: 'レベルのあげ方を教えて', targetStepId: 'build_candidate_a005a_levelup_howto_hint' },
+      { label: '次へ', targetStepId: 'build_candidate_summary_hint' },
+    ],
+  },
   // 2026-09-29(Excel T038) -- どの候補を選んでも6つの説明のどれか1つの後にここへ合流する(build_candidate_*_hint
   // が閉じられる瞬間、通常の直線探索が6つとも既にseen扱いになっているためここが次に見つかる -- 実際に選ばれた
   // 瞬間に残り5つもまとめてseenへ加えておく、commitBuildCandidateReal内の専用フック参照)。2026-09-29、Excelの
@@ -10448,15 +10480,18 @@ function dismissTutorialStep() {
     revertLastPlacementForTutorial();
     tutorialKabukichoGlowing = true;
   }
-  // card_acquisition_introの「光る」演出(残ったダイス+王宮の次の空きスロット) -- castletown_turn_end_hintが
-  // 閉じられた瞬間に、次のプレイヤーの光る演出をOFFにしつつ、2ターン目のBOB/CAROL/DANの見た目だけの配置
-  // (台本)をセリフ無しで実行する(placeScriptedFakeAiDiceForTutorial's own doc、per user report: 「次へを
-  // 押すとBOB CAROL DANがダイスを置くようにお願いします...」はセリフではなかったため削除 -- 1ターン目と
-  // 同じ理由)。
+  // castletown_turn_end_hintが閉じられた瞬間に、次のプレイヤーの光る演出をOFFにしつつ、2ターン目の
+  // BOB/CAROL/DANの見た目だけの配置(台本)をセリフ無しで実行する(placeScriptedFakeAiDiceForTutorial's own
+  // doc、per user report: 「次へを押すとBOB CAROL DANがダイスを置くようにお願いします...」はセリフでは
+  // なかったため削除 -- 1ターン目と同じ理由)。
+  // 2026-09-30, per user request (Excel T019「最後にダイスやカードを獲得してみましょう このときまだ王宮
+  // 元老院のスロットを光らせないで」) -- ここでtutorialCardAcquisitionGlowingをONにしていたのは古い実装の
+  // 残骸(王宮/元老院の本当の光るはずっと後のbuild_cost_z_hintを閉じた時、10525行目参照)で、card_acquisition_
+  // intro自身の表示中(次のcard_acquisition_intro自身の閉じるまで、10500行目でOFFに戻されるまで)だけ意図せず
+  // 光ってしまっていた。ここでは立てない。
   if (tutorialCurrentStepId === 'castletown_turn_end_hint') {
     tutorialNextPlayerGlowing = false;
     placeScriptedFakeAiDiceForTutorial(2, true);
-    tutorialCardAcquisitionGlowing = true;
   }
   // card_acquisition_intro自身が閉じられてもtutorialCardAcquisitionGlowingはOFFにしない (2026-09-27, per
   // user request -- カード獲得の実クリック操作(card_acquisition_placement_intro)が続くため、ダイス/王宮/
@@ -10605,6 +10640,10 @@ function dismissTutorialStep() {
   if (tutorialCurrentStepId === 'build_candidate_b001a_hint') tutorialB001aWhiteDieGlowing = false;
   if (tutorialCurrentStepId === 'build_candidate_b001a_tap_hint') tutorialB001aWhiteDieGlowing = true;
   if (tutorialCurrentStepId === 'build_candidate_b001a_reroll_hint') tutorialB001aWhiteDieGlowing = false;
+  // build_candidate_c002a_hint(修道士)自身の「次へ」を押した瞬間、T054自身の「動く」(食料〇が10増える)を
+  // 実際に実行する(始まりの兆しの資源グラントと同じ「動くはそのステップが表示される時に実行」パターン) --
+  // 修道士のTAP(CHANGE(K,B,7))は食料〇が無いと実演できないため。
+  if (tutorialCurrentStepId === 'build_candidate_c002a_hint') grantResourcesForTutorial('P1', { K: 10 });
   // 小さな導き/金貸しのような単純な連続チェーン (2026-09-30、Excelの新しい行T047〜T049・T051) -- 配列の
   // 並び順に頼らず、TUTORIAL_BUILD_CANDIDATE_LINEAR_CHAINSに並んだ順へ明示的に強制遷移させる(他のチェーン
   // と同じ理由)。各チェーンの最後の要素はchoicesを持つ分岐ステップなので、そこへ強制遷移させたら終わり
@@ -10648,7 +10687,10 @@ function dismissTutorialStep() {
   if (tutorialCurrentStepId === 'game_rules_intro_2') tutorialCastleTurnOrderGlowing = true;
   if (tutorialCurrentStepId === 'castle_turn_order_hint') tutorialCastleTurnOrderGlowing = false;
   // kabukicho_result_hint(T010)を閉じたらチュートリアル専用のターン終了ボタンを出す(T011)。
-  if (tutorialCurrentStepId === 'kabukicho_result_hint') tutorialTurnEndButtonShown = true;
+  if (tutorialCurrentStepId === 'kabukicho_result_hint') {
+    tutorialTurnEndButtonShown = true;
+    tutorialConnectionGlowing = false;
+  }
   // training_ground_result_hint(T016)を閉じたらキャンセルボタンを光らせる(T017、cancel_action_hintと同じ扱い)。
   if (tutorialCurrentStepId === 'training_ground_result_hint') tutorialCancelButtonGlowing = true;
   // alsoCloseTurnOrderOverlay (2026-09-24, see turn_order_reveal_summary's own doc): 次へ on this step
