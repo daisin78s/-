@@ -4624,6 +4624,29 @@ const TUTORIAL_BUILD_CANDIDATE_STEP_IDS = {
   C006A: 'build_candidate_c006a_hint',
   C002A: 'build_candidate_c002a_hint',
 };
+// 農園/城下町の支配は、選ばれた瞬間から専用の追加説明(使用料/EXスロット/レベルアップ)が続く2枚 (2026-09-30,
+// per user request: "これから農園以外も説明を増やす予定です" -- 城下町が最初の追加)。他の4枚(始まりの兆し/
+// 小さな導き/金貸し/修道士)はエリア所有カードではないためここには含まれない。
+// 各エリアのサブチェーンは、直前のステップからの通常の直線探索(配列の並び順)には頼らない -- 複数のエリアの
+// サブチェーン+共有のレベルアップ方法説明(howto)/VP豆知識が同じ配列に並ぶため、「まだ見ていない」他エリアの
+// 共有ステップを間違って先に拾ってしまうバグが実際に起きた(2026-09-30 bug fix、ヘッドレステストで発見)。
+// hint(選んだ瞬間)→fee_hint→ex_hint→levelup_hintの各遷移をdismissTutorialStep内で全部明示的に強制遷移させる
+// (下のTUTORIAL_BUILD_CANDIDATE_AREA_CHAIN_TRANSITIONS's own参照)。今後カードが増えてもこの1つの表に追加
+// するだけで対応できる。
+const TUTORIAL_BUILD_CANDIDATE_AREA_MAP_IDS = {
+  build_candidate_a005a_hint: 'MAP002',
+  build_candidate_a001a_hint: 'MAP003',
+};
+// 各エリアのfee_hint/ex_hint/levelup_hintのステップid (2026-09-30)。
+const TUTORIAL_BUILD_CANDIDATE_AREA_CHAINS = {
+  build_candidate_a005a_hint: { feeHint: 'build_candidate_a005a_fee_hint', exHint: 'build_candidate_a005a_ex_hint', levelupHint: 'build_candidate_a005a_levelup_hint' },
+  build_candidate_a001a_hint: { feeHint: 'build_candidate_a001a_fee_hint', exHint: 'build_candidate_a001a_ex_hint', levelupHint: 'build_candidate_a001a_levelup_hint' },
+};
+// 選ばれなかった方のエリアのサブチェーンは丸ごとseen扱いにする(共有のhowto/vp豆知識/summaryは対象外) -- 上と
+// 同じ内容だが値がフラットな配列の方が扱いやすいのでchainsとは別に持つ。
+const TUTORIAL_BUILD_CANDIDATE_AREA_SUBCHAIN_IDS = Object.fromEntries(
+  Object.entries(TUTORIAL_BUILD_CANDIDATE_AREA_CHAINS).map(([hintId, chain]) => [hintId, Object.values(chain)]),
+);
 const TUTORIAL_SHOP_VALUE5_SLOT_IDS = ['SHOP101', 'SHOP102', 'SHOP201', 'SHOP202'];
 // カード獲得デモ中、onboarding未完了でも獲得したカードをタップできるようにする対象ステップ (2026-09-29, per
 // user request: "説明をするためにタップができる必要があります") -- 6枚どれかの説明画面(build_candidate_*_hint、
@@ -5888,11 +5911,24 @@ function commitBuildCandidateReal(candidate, bzDiscount, tutorialPreSnapshot) {
       if (variantStepId) {
         actionCheckpoints.push(tutorialPreSnapshot);
         for (const sid of Object.values(TUTORIAL_BUILD_CANDIDATE_STEP_IDS)) tutorialSeenStepIds.add(sid);
+        // 選ばれなかった方のエリアの専用サブチェーンもseen扱いにし、選ばれた方は(以前の選び直しでseen扱いに
+        // なっていたかもしれないので)明示的に未見に戻す (2026-09-30 bug fix、
+        // TUTORIAL_BUILD_CANDIDATE_AREA_SUBCHAIN_IDS's own doc参照)。
+        for (const [ownerId, subChainIds] of Object.entries(TUTORIAL_BUILD_CANDIDATE_AREA_SUBCHAIN_IDS)) {
+          if (ownerId === variantStepId) {
+            for (const sid of subChainIds) tutorialSeenStepIds.delete(sid);
+          } else {
+            for (const sid of subChainIds) tutorialSeenStepIds.add(sid);
+          }
+        }
         tutorialBuildCandidatesGlowing = false;
-        // build_candidate_a005a_hint(T034)の「光る」(農園のエリア) (2026-09-30, per user request: "この
-        // ときエリア農園を光らせてください") -- 農園の支配が選ばれた時だけ、以後T037まで農園のタイル全体を
-        // 光らせ続ける(T037自身も同じタイルを光らせるので、そのまま引き継ぐ形でここからONにする)。
-        if (variantStepId === 'build_candidate_a005a_hint') tutorialAreaTileGlowMapId = 'MAP002';
+        // build_candidate_a005a_hint/build_candidate_a001a_hintの「光る」(農園/城下町のエリア) (2026-09-30,
+        // per user request: "このときエリア農園を光らせてください"、城下町の支配にも同様の追加説明が
+        // 増えたため一般化) -- エリア所有カードが選ばれた時だけ、以後レベルアップの実演まで対応するタイル
+        // 全体を光らせ続ける(TUTORIAL_BUILD_CANDIDATE_AREA_MAP_IDS's own doc)。
+        if (TUTORIAL_BUILD_CANDIDATE_AREA_MAP_IDS[variantStepId]) {
+          tutorialAreaTileGlowMapId = TUTORIAL_BUILD_CANDIDATE_AREA_MAP_IDS[variantStepId];
+        }
         tutorialCurrentStepId = variantStepId;
         stopTutorialTypewriter();
       }
@@ -8661,17 +8697,50 @@ const TUTORIAL_STEPS = [
       { label: '次へ', targetStepId: 'build_candidate_summary_hint' },
     ],
   },
+  // 2026-09-30, per user request (Excel変更) -- レベルアップの方法説明(build_candidate_a005a_levelup_howto_hint)
+  // は農園/城下町どちらの「レベルのあげ方を教えて」からも共有される汎用ステップ(専用のa001a版は作らない)。
+  // その次へで、新しいVPの豆知識(T047)へ進む。
   {
     id: 'build_candidate_a005a_levelup_howto_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: '自分のカードのレベルを上げたいときはハンマーアイコンのある「王宮」か「元老院」にダイスを置いて資源を払えばOKです\nこの時のダイス目はなんでもよく払う資源は獲得資源と同じです',
+    body: '自分のカードのレベルを上げたいときはハンマーアイコンのある「王宮」か「元老院」にダイスを置いて資源を払えばOKです\nこの時のダイス目はなんでもよく、払う資源は獲得資源と同じです',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'build_candidate_levelup_vp_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: 'レベルが上がったカードはすべて1VPを持っているので覚えておいてくださいね',
     nextLabel: '次へ',
   },
   {
     id: 'build_candidate_a001a_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: '城下町の支配ですね\nこのカードは',
+    body: '城下町の支配ですね\nこのカードを獲得すると城下町のレベルが上がりダイスを置いたときの効果が強化されます',
     nextLabel: '次へ',
+  },
+  // 2026-09-30, per user request (Excelの新しい行T039〜T041、城下町の支配を選んだ時だけの追加説明) --
+  // 農園の支配(build_candidate_a005a_*)と全く同じ構造。レベルアップの説明(「レベルのあげ方を教えて」)は
+  // 農園と共有のbuild_candidate_a005a_levelup_howto_hintへ合流する。
+  {
+    id: 'build_candidate_a001a_fee_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '他のプレイヤーがこのエリアを利用するには使用料が必要です\n払われた使用料はエリアの使用料置き場にプールされます\nあなたはプールされた使用料を自分のターン中いつでも回収できるようになります',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'build_candidate_a001a_ex_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: 'このEXスロットはあなただけの専用スロットです\nあなたはメインアクションで何の目でもここに置くことができます',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'build_candidate_a001a_levelup_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: 'このエリアはレベルが上がるとさらに強化され使用料も〇2になります\nお手軽に獲得できる割には結構使えるのでぜひ使ってみてください',
+    choices: [
+      { label: 'レベルのあげ方を教えて', targetStepId: 'build_candidate_a005a_levelup_howto_hint' },
+      { label: '次へ', targetStepId: 'build_candidate_summary_hint' },
+    ],
   },
   {
     id: 'build_candidate_b004a_hint',
@@ -9994,10 +10063,12 @@ function handleTutorialChoiceClick(targetStepId) {
   }
   if (targetStepId === 'resource_pick_hint') tutorialResourceCandidatesGlowing = true;
   if (targetStepId === 'resource_icon_explanation') tutorialFoodAreasGlowing = true;
-  // 2026-09-30, per user request (Excel T037) -- 農園のレベルアップ実演を離れる時、タイル全体の光る演出を消す
-  // (どちらの選択肢を選んでも、build_candidate_a005a_levelup_hint自身はchoicesで進むためdismissTutorialStep
-  // を経由しない)。
-  if (tutorialCurrentStepId === 'build_candidate_a005a_levelup_hint') tutorialAreaTileGlowMapId = null;
+  // 2026-09-30, per user request (Excel T037、続けてT041) -- エリアのレベルアップ実演を離れる時、タイル全体の
+  // 光る演出を消す(どちらの選択肢を選んでも、levelup_hint自身はchoicesで進むためdismissTutorialStepを
+  // 経由しない)。
+  if (tutorialCurrentStepId === 'build_candidate_a005a_levelup_hint' || tutorialCurrentStepId === 'build_candidate_a001a_levelup_hint') {
+    tutorialAreaTileGlowMapId = null;
+  }
   if (targetStepId === 'build_candidate_summary_hint') enterBuildCandidateSummaryHintFlags();
   tutorialCurrentStepId = targetStepId;
   stopTutorialTypewriter();
@@ -10012,6 +10083,16 @@ function enterBuildCandidateSummaryHintFlags() {
   tutorialCancelButtonGlowing = true;
   tutorialTurnEndButtonShown = true;
   tutorialSeenStepIds.add('build_candidate_summary_hint');
+  // 2026-09-30 bug fix, ヘッドレステストで発見 -- summary_hintへ到達した時点で、エリア所有カードの
+  // サブチェーン(選ばれなかった方はもちろん、「次へ」で飛ばした方も)と共有のhowto/VP豆知識は、この後
+  // 二度と自然に見せる必要がない。ここで未見のまま残っていると、後で(例えばターン終了後の台本配置が
+  // 終わった直後)tutorialCurrentStepIdがnullに戻った瞬間、通常の直線探索がまだ「未見」のこれらを誤って
+  // 拾ってgame_rules_intro_2まで進めなくなる。まとめてここでseen扱いにしておく。
+  for (const subChainIds of Object.values(TUTORIAL_BUILD_CANDIDATE_AREA_SUBCHAIN_IDS)) {
+    for (const sid of subChainIds) tutorialSeenStepIds.add(sid);
+  }
+  tutorialSeenStepIds.add('build_candidate_a005a_levelup_howto_hint');
+  tutorialSeenStepIds.add('build_candidate_levelup_vp_hint');
 }
 
 // dismissTutorialStep内の強制遷移(seen登録される前に発見されてしまう分岐)用 -- 上のenterBuildCandidateSummaryHintFlagsに
@@ -10268,11 +10349,13 @@ function dismissTutorialStep() {
   // 実際に「ターン終了」ボタン(renderTutorialTurnEndButton、押した時の処理はそちら側)か「直前のアクションを
   // キャンセル」ボタン(handleCancelPreviousActionClick)を押して進む。2026-09-29 bug fix, per user report:
   // "この時 ターン終了ボタンが押せない" -- 以前は次へテキストボタンで進む想定のままExcelが変わっていた。
-  // 2026-09-30, per user request (Excelの新しい行T035〜T037・T043) -- 農園の支配(build_candidate_a005a_hint)
-  // だけは他の5枚と違い、直接build_candidate_summary_hintへは進まず、専用の追加説明(fee/ex/levelup)へ続く
-  // (通常の直線探索に任せる、下のexcludedFromDirectSummaryで除外)。
-  const variantIdsExceptA005A = Object.values(TUTORIAL_BUILD_CANDIDATE_STEP_IDS).filter((id) => id !== 'build_candidate_a005a_hint');
-  if (variantIdsExceptA005A.includes(tutorialCurrentStepId)) {
+  // 2026-09-30, per user request (Excelの新しい行T035〜T037・T043、続けて城下町にも同じ追加説明が増えた
+  // T039〜T041) -- エリア所有カード(農園/城下町、TUTORIAL_BUILD_CANDIDATE_AREA_MAP_IDS)だけは他の4枚と違い、
+  // 直接build_candidate_summary_hintへは進まず、専用の追加説明(fee/ex/levelup)へ続く(通常の直線探索に任せる、
+  // 下で除外)。
+  const areaOwningVariantIds = Object.keys(TUTORIAL_BUILD_CANDIDATE_AREA_MAP_IDS);
+  const variantIdsWithoutOwnChain = Object.values(TUTORIAL_BUILD_CANDIDATE_STEP_IDS).filter((id) => !areaOwningVariantIds.includes(id));
+  if (variantIdsWithoutOwnChain.includes(tutorialCurrentStepId)) {
     // 通常の「次に見つかる未見のステップ」探索には任せない (2026-09-29 bug fix, per user report: "この時
     // ターン終了ボタンが押せない" の原因調査中に発覚) -- build_candidate_summary_hintは通常の直線探索で
     // 一度発見されるとtutorialSeenStepIdsに入ってしまうため、キャンセルで選び直した2回目以降はここが
@@ -10281,22 +10364,56 @@ function dismissTutorialStep() {
     enterBuildCandidateSummaryHint();
     return;
   }
-  // build_candidate_a005a_hint自身の次へは、通常の直線探索でbuild_candidate_a005a_fee_hintへ続く(何もしない)。
-  // build_candidate_a005a_fee_hint(T035)の「光る」(農園の使用料置き場) -- build_candidate_a005a_ex_hintを
-  // 閉じたら消して次(EXスロット)を光らせる。
-  if (tutorialCurrentStepId === 'build_candidate_a005a_hint') tutorialAreaFeeGlowMapId = 'MAP002';
-  if (tutorialCurrentStepId === 'build_candidate_a005a_fee_hint') {
-    tutorialAreaFeeGlowMapId = null;
-    tutorialAreaExSlotGlowMapId = 'MAP002';
+  // エリア所有カード自身(build_candidate_a005a_hint/build_candidate_a001a_hint)の次へ→対応するfee_hintへ、
+  // fee_hintの次へ→ex_hintへ、それぞれ強制遷移させる(配列の並び順に頼る通常の直線探索は使わない -- 複数の
+  // エリアのサブチェーン+共有ステップが同じ配列に並ぶため、他エリアのまだ見ていない共有ステップを誤って
+  // 先に拾ってしまうバグが実際に起きた、2026-09-30 bug fix)。今後カードが増えてもTUTORIAL_BUILD_CANDIDATE_
+  // AREA_CHAINSに追加するだけで済む。
+  for (const [hintId, chain] of Object.entries(TUTORIAL_BUILD_CANDIDATE_AREA_CHAINS)) {
+    const mapId = TUTORIAL_BUILD_CANDIDATE_AREA_MAP_IDS[hintId];
+    if (tutorialCurrentStepId === hintId) {
+      tutorialAreaFeeGlowMapId = mapId;
+      tutorialSeenStepIds.add(chain.feeHint);
+      tutorialCurrentStepId = chain.feeHint;
+      stopTutorialTypewriter();
+      render(STATE);
+      return;
+    }
+    if (tutorialCurrentStepId === chain.feeHint) {
+      tutorialAreaFeeGlowMapId = null;
+      tutorialAreaExSlotGlowMapId = mapId;
+      tutorialSeenStepIds.add(chain.exHint);
+      tutorialCurrentStepId = chain.exHint;
+      stopTutorialTypewriter();
+      render(STATE);
+      return;
+    }
+    // ex_hintを閉じたら、levelup_hint自身の「動く」(エリアのLVをあげる)をここで実際に実行する(動くは「その
+    // ステップが表示される時に実行」パターン、他の動くと同じ)。タイル全体の光るはエリア選択時からすでにON。
+    if (tutorialCurrentStepId === chain.exHint) {
+      tutorialAreaExSlotGlowMapId = null;
+      upgradeAreaForTutorial(mapId);
+      tutorialSeenStepIds.add(chain.levelupHint);
+      tutorialCurrentStepId = chain.levelupHint;
+      stopTutorialTypewriter();
+      render(STATE);
+      return;
+    }
   }
-  // build_candidate_a005a_ex_hint(T036)を閉じたら、T037自身の「動く」(農園のLVをあげる)をここで実際に実行し、
-  // 農園のタイル全体を光らせる(動くは「そのステップが表示される時に実行」パターン、他の動くと同じ)。
-  if (tutorialCurrentStepId === 'build_candidate_a005a_ex_hint') {
-    tutorialAreaExSlotGlowMapId = null;
-    upgradeAreaForTutorial('MAP002');
-    tutorialAreaTileGlowMapId = 'MAP002';
-  }
+  // 2026-09-30, per user request (Excelの新しい行T047) -- レベルアップの方法説明(農園/城下町共有)を閉じたら、
+  // VPの豆知識(build_candidate_levelup_vp_hint)へ強制遷移する(通常の直線探索には任せない -- 農園/城下町の
+  // どちらから来ても共有のこの2ステップは、1回目の選び直しで既にseen登録済みになっているとキャンセルで
+  // 選び直した2回目以降に素通りされてしまう、build_candidate_summary_hintと同じ理由)。豆知識自体は
+  // 「レベルのあげ方を教えて」を経由した時だけ出る(「次へ」で直接summaryへ進んだ場合は出ない、Excelの
+  // 分岐通り)。
   if (tutorialCurrentStepId === 'build_candidate_a005a_levelup_howto_hint') {
+    tutorialSeenStepIds.add('build_candidate_levelup_vp_hint');
+    tutorialCurrentStepId = 'build_candidate_levelup_vp_hint';
+    stopTutorialTypewriter();
+    render(STATE);
+    return;
+  }
+  if (tutorialCurrentStepId === 'build_candidate_levelup_vp_hint') {
     enterBuildCandidateSummaryHint();
     return;
   }
