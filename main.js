@@ -4651,10 +4651,11 @@ const TUTORIAL_BUILD_CANDIDATE_B004A_CHAIN_IDS = [
   'build_candidate_b004a_levelup_hint',
 ];
 // 選ばれなかった方のカードのサブチェーンは丸ごとseen扱いにする(共有のhowto/vp豆知識/summaryは対象外) --
-// エリア2枚(値がフラットな配列の方が扱いやすいのでchainsとは別に持つ)+始まりの兆しをまとめる。
+// エリア2枚(値がフラットな配列の方が扱いやすいのでchainsとは別に持つ)+始まりの兆し(専用のsummary_hintも
+// 含む、共有summaryへは合流しないため)をまとめる。
 const TUTORIAL_BUILD_CANDIDATE_ALL_SUBCHAIN_IDS = {
   ...Object.fromEntries(Object.entries(TUTORIAL_BUILD_CANDIDATE_AREA_CHAINS).map(([hintId, chain]) => [hintId, Object.values(chain)])),
-  build_candidate_b004a_hint: TUTORIAL_BUILD_CANDIDATE_B004A_CHAIN_IDS,
+  build_candidate_b004a_hint: [...TUTORIAL_BUILD_CANDIDATE_B004A_CHAIN_IDS, 'build_candidate_b004a_summary_hint'],
 };
 const TUTORIAL_SHOP_VALUE5_SLOT_IDS = ['SHOP101', 'SHOP102', 'SHOP201', 'SHOP202'];
 // カード獲得デモ中、onboarding未完了でも獲得したカードをタップできるようにする対象ステップ (2026-09-29, per
@@ -5872,6 +5873,14 @@ function commitBuildCandidate(candidate, bzDiscount) {
   const tutorialPreSnapshot = tutorialCurrentStepId === 'build_candidates_hint'
     ? { state: gameStateMod.cloneState(STATE), turnActionTaken, pendingBuildChoice: structuredClone(pendingBuildChoice) }
     : null;
+  // 始まりの兆しの「ターン開始に戻す」ボタン用 (2026-09-30) -- tutorialPreSnapshotと全く同じ内容を持つが、
+  // actionCheckpointsへのpush(1段階だけの「直前のアクションをキャンセル」用)とは別に、このカード獲得デモ
+  // 全体(ボーナス獲得も含めて何段階でも)を一気に巻き戻すため、checkpointDepth(pushする前のactionCheckpoints
+  // の長さ)も一緒に覚えておく専用の永続変数に保存する(TUTORIAL_BUILD_CANDIDATE_B004A_CHAIN_IDS's own doc、
+  // handleTutorialCardAcquisitionRestartClick参照)。
+  if (tutorialPreSnapshot) {
+    tutorialCardAcquisitionRestartSnapshot = { ...tutorialPreSnapshot, checkpointDepth: actionCheckpoints.length };
+  }
   if (wouldCauseWhiteOverflow(STATE, (clone) => boardMod.completeAreaBuild(clone, INDEX, context, candidate, pendingBuildChoice.remainingCommands))) {
     pendingWhiteOverflowConfirm = { onConfirm: () => commitBuildCandidateReal(candidate, bzDiscount, tutorialPreSnapshot) };
     render(STATE);
@@ -6713,8 +6722,10 @@ function renderTutorialTurnEndButton(container) {
     // ボタン押下に変わった) -- 3ターン目のBOB/CAROL/DANの台本配置をここで実行する(以前はdismissTutorialStep
     // 経由だったが、T038がnoManualDismissになったためそちらは通らない)。turn_end_button_hint(T011)は
     // 従来通り次のプレイヤーの光る演出。
-    if (tutorialCurrentStepId === 'build_candidate_summary_hint') {
+    // build_candidate_b004a_summary_hint(T046)の「ターン終了」も同様(2026-09-30、始まりの兆し専用の最終画面)。
+    if (tutorialCurrentStepId === 'build_candidate_summary_hint' || tutorialCurrentStepId === 'build_candidate_b004a_summary_hint') {
       tutorialCancelButtonGlowing = false;
+      tutorialCardAcquisitionRestartButtonShown = false;
       placeScriptedFakeAiDiceForTutorial(3, true);
     } else {
       tutorialNextPlayerGlowing = true;
@@ -8787,10 +8798,21 @@ const TUTORIAL_STEPS = [
     id: 'build_candidate_b004a_levelup_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
     body: 'このカードはレベルが上がると必要な資源を一つ軽減できるようになります\nこのカードは雑にとっても強い追加色ダイスと違い計画的にとらないと使えないこともあります\nそのかわりダイス目に左右されずにカードを獲得したり\nメインアクションで資源を増やしてすぐにフリーアクションとして次のカードを獲得したりできるのでぜひ使ってみてください',
-    choices: [
-      { label: 'レベルのあげ方を教えて', targetStepId: 'build_candidate_a005a_levelup_howto_hint' },
-      { label: '次へ', targetStepId: 'build_candidate_summary_hint' },
-    ],
+    nextLabel: '次へ',
+  },
+  // 2026-09-30, per user request (Excelの新しい行T046) -- 始まりの兆しはTAPでほかのカードも獲得できてしまう
+  // ため、共有のbuild_candidate_summary_hint(「直前のアクションをキャンセル」で1段階だけ戻す)では、その
+  // ボーナス獲得だけ取り消して元のダイス配置(王宮/元老院)まで戻せず、ダイスが無く進行不能になる場合がある
+  // (per user report: "始まりの兆しでほかのカードを獲得してしまうとターン開始に戻らないとダイスがなく進行
+  // 不能になってしまうため")。そのためこのカード専用に、チュートリアル内だけの「ターン開始に戻す」ボタンで
+  // (このカード獲得デモの開始地点=build_candidates_hintの直前まで)まとめて巻き戻せる専用の最終画面を用意する。
+  // noManualDismissで、実際のボタン(renderTutorialCardAcquisitionRestartButton/renderTutorialTurnEndButton)を
+  // 押して進む。
+  {
+    id: 'build_candidate_b004a_summary_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: '他のカードの説明も見たいのなら「ターン開始に戻す」ボタンを押してください\n必要なければ「ターン終了」ボタンを押してください',
+    noManualDismiss: true,
   },
   {
     id: 'build_candidate_b001a_hint',
@@ -10489,6 +10511,24 @@ function dismissTutorialStep() {
       return;
     }
   }
+  // build_candidate_b004a_levelup_hint(T045)を閉じたら、始まりの兆し専用の最終画面(T046、「ターン開始に戻す」
+  // /「ターン終了」)へ強制遷移する (2026-09-30) -- この専用画面は共有のbuild_candidate_summary_hintへは
+  // 合流しないため、共有側(howto/vp豆知識/summary)が今回一度も表示されないまま「未見」で残ってしまう。
+  // ターン終了を押した後、通常の直線探索がそれらを誤ってgame_rules_intro_2より先に拾わないよう、ここで
+  // まとめてseen扱いにしておく(build_candidate_summary_hint's own enterBuildCandidateSummaryHintFlagsと同じ
+  // 理由)。
+  if (tutorialCurrentStepId === 'build_candidate_b004a_levelup_hint') {
+    tutorialSeenStepIds.add('build_candidate_a005a_levelup_howto_hint');
+    tutorialSeenStepIds.add('build_candidate_levelup_vp_hint');
+    tutorialSeenStepIds.add('build_candidate_summary_hint');
+    tutorialSeenStepIds.add('build_candidate_b004a_summary_hint');
+    tutorialCardAcquisitionRestartButtonShown = true;
+    tutorialTurnEndButtonShown = true;
+    tutorialCurrentStepId = 'build_candidate_b004a_summary_hint';
+    stopTutorialTypewriter();
+    render(STATE);
+    return;
+  }
   // 2026-09-30, per user request (Excelの新しい行T047) -- レベルアップの方法説明(農園/城下町共有)を閉じたら、
   // VPの豆知識(build_candidate_levelup_vp_hint)へ強制遷移する(通常の直線探索には任せない -- 農園/城下町の
   // どちらから来ても共有のこの2ステップは、1回目の選び直しで既にseen登録済みになっているとキャンセルで
@@ -10665,6 +10705,13 @@ let tutorialConnectionGlowing = false;
 // build_candidate_b004a_resource_grant_hint(2026-09-30, Excel T043「この時光る: 増えた資源」)の「光る」
 // 演出 -- 見た目だけ増やしたA/B/C資源のバッジを光らせる。
 let tutorialB004aResourceGrantGlowing = false;
+// build_candidate_b004a_summary_hint(2026-09-30, Excel T046)の「ターン開始に戻す」ボタン用 -- 押した時に
+// 復元するスナップショット({state, turnActionTaken, pendingBuildChoice, checkpointDepth})。commitBuildCandidate
+// 内で、build_candidates_hintから実際にカードを選んだ瞬間(このカード獲得デモ全体の開始地点)に保存される。
+// tutorialCardAcquisitionRestartButtonShownは、そのボタン(実は#undo-button自体、renderUndoButtons's own doc
+// 参照)を表示・有効化している間trueになる継続フラグ。
+let tutorialCardAcquisitionRestartSnapshot = null;
+let tutorialCardAcquisitionRestartButtonShown = false;
 // castletown_free_action_hint(2026-09-30, Excel T007「変換された赤〇はフリーアクションでいつでも戻せます」)の
 // 「光る」演出 -- 対象のフリーアクションボタン(FREE_ACTION_RESOURCEのキー、例'A_K')のidをそのまま持つ。
 // null=光らせない。renderFreeActionButtons's own参照。
@@ -11076,7 +11123,40 @@ function render(state) {
  * immediately re-records a fresh checkpoint from the just-restored state so the button stays usable
  * for the rest of the turn instead of being a true one-shot (undo.js's own single-snapshot design
  * would otherwise clear undoCheckpoint after one use -- see src/undo.js's undo()). */
+/** build_candidate_b004a_summary_hint(T046)の「ターン開始に戻す」の実処理 (2026-09-30) -- 始まりの兆しを
+ * 選んだ瞬間に保存したtutorialCardAcquisitionRestartSnapshotへ丸ごと戻す。始まりの兆し自体の獲得だけでなく、
+ * その後TAPでボーナス獲得したカード(あれば)も含めて全部取り消し、actionCheckpointsもそのカードを選ぶ前の
+ * 深さまで切り詰める(1段階だけの「直前のアクションをキャンセル」ではボーナス獲得だけしか戻せず、ダイスが
+ * 元に戻らないまま進行不能になる場合があったため -- per user report)。build_candidates_hint(カードの選び直し
+ * 画面)へ戻る。 */
+function handleTutorialCardAcquisitionRestartClick() {
+  const snapshot = tutorialCardAcquisitionRestartSnapshot;
+  if (!snapshot) return;
+  undoMod.restoreSnapshot(STATE, snapshot.state);
+  turnActionTaken = snapshot.turnActionTaken;
+  pendingBuildChoice = snapshot.pendingBuildChoice;
+  actionCheckpoints.length = snapshot.checkpointDepth;
+  selectedDieIds = [];
+  pendingTapChoice = null;
+  pendingAutoModeChoice = null;
+  placementMessage = '';
+  tutorialCardAcquisitionRestartButtonShown = false;
+  tutorialTurnEndButtonShown = false;
+  tutorialAreaTileGlowMapId = null;
+  tutorialAreaFeeGlowMapId = null;
+  tutorialAreaExSlotGlowMapId = null;
+  tutorialB004aResourceGrantGlowing = false;
+  tutorialBuildCandidatesGlowing = true;
+  tutorialCurrentStepId = 'build_candidates_hint';
+  stopTutorialTypewriter();
+  render(STATE);
+}
+
 function handleUndoClick() {
+  if (tutorialCardAcquisitionRestartButtonShown) {
+    handleTutorialCardAcquisitionRestartClick();
+    return;
+  }
   const result = undoMod.undo(STATE);
   if (!result.success) return;
   selectedDieIds = [];
@@ -11192,9 +11272,18 @@ function renderUndoButtons(state) {
   // TURNを開始した回数 -- 1のあいだ(=1番目のTURNがまだ進行中)だけ無効化し、2以降(2ターン目以降)は通常通り
   // 使えるようにする。
   const tutorialFirstTurnLock = tutorialModeActive && state.round === 1 && round1FirstPlayerTurnStartCount <= 1;
-  const disabled = !state.undoCheckpoint || state.round === 0 || tutorialFirstTurnLock;
+  // 始まりの兆しの「ターン開始に戻す」演出 (2026-09-30, per user report: "始まりの兆しでほかのカードを獲得
+  // してしまうとターン開始に戻らないとダイスがなく進行不能になってしまうため") -- この段階では通常
+  // round===0でボタン自体が無効化されているが(すぐ上のコメント参照)、build_candidate_b004a_summary_hintの
+  // 間だけ例外的に有効化し、押すとhandleUndoClick内の専用フックでこのカード獲得デモ全体
+  // (tutorialCardAcquisitionRestartSnapshot's own doc)を巻き戻す(本物のundoMod.undoは呼ばない)。
+  const disabled = tutorialCardAcquisitionRestartButtonShown
+    ? false
+    : (!state.undoCheckpoint || state.round === 0 || tutorialFirstTurnLock);
   for (const id of ['undo-button', 'undo-button-build']) {
-    document.getElementById(id).disabled = disabled;
+    const btn = document.getElementById(id);
+    btn.disabled = disabled;
+    btn.classList.toggle('change-highlight', tutorialCardAcquisitionRestartButtonShown);
   }
   // チュートリアル中は、キャンセルを押すこと自体がセリフの指示になっている間(=ボタンが光っている間: cancel_action_hint/
   // dice_misclick_hint/cancel_training_ground_hint)だけ使える (2026-09-29, per user request: "直前のアクションを
