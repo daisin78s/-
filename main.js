@@ -5966,6 +5966,8 @@ function commitBuildCandidateReal(candidate, bzDiscount, tutorialPreSnapshot) {
         if (TUTORIAL_BUILD_CANDIDATE_AREA_MAP_IDS[variantStepId]) {
           tutorialAreaTileGlowMapId = TUTORIAL_BUILD_CANDIDATE_AREA_MAP_IDS[variantStepId];
         }
+        // build_candidate_b001a_hintの「光る」演出(恩寵ダイス) -- tutorialB001aWhiteDieGlowing's own doc。
+        if (variantStepId === 'build_candidate_b001a_hint') tutorialB001aWhiteDieGlowing = true;
         tutorialCurrentStepId = variantStepId;
         stopTutorialTypewriter();
       }
@@ -6471,6 +6473,8 @@ function renderPlayers(state, next) {
       // color_dice_revealの「光る」演出 (2026-09-26, per user request: "この時色ダイスを光らせる（ｗDは
       // 光らせない）") -- COLORダイスのみ(die.kind==='WHITE'ではない)、tutorialColorDiceGlowing's own doc。
       if (tutorialColorDiceGlowing && player.id === 'P1' && die.kind !== 'WHITE') dieNode.classList.add('change-highlight');
+      // build_candidate_b001a_hintの「光る」演出(恩寵ダイス) -- tutorialB001aWhiteDieGlowing's own doc。
+      if (tutorialB001aWhiteDieGlowing && player.id === 'P1' && die.kind === 'WHITE') dieNode.classList.add('change-highlight');
       // slot_dice_value_rule_introの「光る」演出 (2026-09-26, per user request: "自分のダイスの1が光る")
       // -- 目が1のダイスはすべて光らせる(色/白ダイス問わず)、tutorialSlotValueOneGlowing's own doc。
       if (tutorialSlotValueOneGlowing && player.id === 'P1' && die.value === 1) dieNode.classList.add('change-highlight');
@@ -10579,6 +10583,12 @@ function dismissTutorialStep() {
     render(STATE);
     return;
   }
+  // build_candidate_b001a_hint/build_candidate_b001a_reroll_hintの「光る」演出(恩寵ダイス) (2026-09-30,
+  // per user request: "このときも🎲として表示させたい") -- 間のtap_hintでは消し、reroll_hintでまた光らせる
+  // -- tutorialB001aWhiteDieGlowing's own doc。
+  if (tutorialCurrentStepId === 'build_candidate_b001a_hint') tutorialB001aWhiteDieGlowing = false;
+  if (tutorialCurrentStepId === 'build_candidate_b001a_tap_hint') tutorialB001aWhiteDieGlowing = true;
+  if (tutorialCurrentStepId === 'build_candidate_b001a_reroll_hint') tutorialB001aWhiteDieGlowing = false;
   // 小さな導き/金貸しのような単純な連続チェーン (2026-09-30、Excelの新しい行T047〜T049・T051) -- 配列の
   // 並び順に頼らず、TUTORIAL_BUILD_CANDIDATE_LINEAR_CHAINSに並んだ順へ明示的に強制遷移させる(他のチェーン
   // と同じ理由)。各チェーンの最後の要素はchoicesを持つ分岐ステップなので、そこへ強制遷移させたら終わり
@@ -10702,6 +10712,12 @@ let tutorialInitialResourcesGlowing = false;
 // ので、CON面選択の時のような特別な仕掛けは不要 -- dismissTutorialStep自身がすでにrender()を呼ぶ前に
 // フラグを立てる方式になっている。
 let tutorialColorDiceGlowing = false;
+// build_candidate_b001a_hint/build_candidate_b001a_reroll_hint(小さな導き、2026-09-30, per user request:
+// "このときは🎲を表示させたい"/"このときも🎲として表示させたい") の「光る」演出 -- 小さな導きのONCE
+// (ADD(wD))は実際のカード獲得と同時に本物の恩寵ダイスをすでに付与済み(commitBuildCandidateReal参照、
+// 他のカードと違い見た目だけの付与は不要)なので、ここでは単にあなたの白ダイス(die.kind==='WHITE')を
+// 光らせるだけでよい。間のtap_hintでは一旦消える(そこは光らせてほしいと言われていない)。
+let tutorialB001aWhiteDieGlowing = false;
 // エリアのスロットの「光る」演出 (2026-09-26, per user request: "この時エリアのスロットを光らせる") --
 // main_action_introが表示され続けている間ずっとtrueになる継続フラグ、他の継続フラグと同じ形。
 let tutorialAreaSlotsGlowing = false;
