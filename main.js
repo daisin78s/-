@@ -8842,7 +8842,13 @@ const TUTORIAL_STEPS = [
     id: 'build_candidate_b004a_levelup_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
     body: 'このカードはレベルが上がると必要な資源を一つ軽減できるようになります\nこのカードは雑にとっても強い追加色ダイスと違い計画的にとらないと使えないこともあります\nそのかわりダイス目に左右されずにカードを獲得したり\nメインアクションで資源を増やしてすぐにフリーアクションとして次のカードを獲得したりできるのでぜひ使ってみてください',
-    nextLabel: '次へ',
+    // 2026-09-30, per user request (Excel T045「レベルのあげ方を教えてを表示」) -- 他の5枚(農園/城下町/
+    // 小さな導き/金貸し/修道士)と同じ「レベルのあげ方を教えて」/「次へ」の2択に統一。
+    choicesLayout: 'row',
+    choices: [
+      { label: 'レベルのあげ方を教えて', targetStepId: 'build_candidate_a005a_levelup_howto_hint' },
+      { label: '次へ', targetStepId: 'build_candidate_summary_hint' },
+    ],
   },
   // 2026-09-30: 始まりの兆し専用のまとめ画面(build_candidate_b004a_summary_hint)はここにあったが、共有の
   // build_candidate_summary_hintが同じ「ターン開始に戻す」を使うようになり役割が重複したためExcelから
@@ -10386,14 +10392,10 @@ function dismissTutorialStep() {
       return;
     }
   }
-  // build_candidate_b004a_levelup_hint(T045)を閉じたら、共有のまとめ画面(build_candidate_summary_hint)へ
-  // 進む (2026-09-30: 始まりの兆し専用のまとめ画面(旧build_candidate_b004a_summary_hint)はExcelから削除
-  // された -- 共有側も既に「ターン開始に戻す」(カード選択前まで一気に戻す、タップで別カードを獲得して
-  // しまった場合も含めて対応できる)を使うようになったため、専用画面と役割が重複していた)。
-  if (tutorialCurrentStepId === 'build_candidate_b004a_levelup_hint') {
-    enterBuildCandidateSummaryHint();
-    return;
-  }
+  // 2026-09-30: build_candidate_b004a_levelup_hint(T045)は他の5枚と同じ「レベルのあげ方を教えて」/「次へ」
+  // の2択に統一された(Excel「T045もレベルのあげ方を教えてを表示してください」) -- choicesで進むため
+  // dismissTutorialStepは経由しない(handleTutorialChoiceClickが共有のbuild_candidate_summary_hintへの
+  // 遷移を処理する、他の levelup_hint と同じ)。
   // build_candidate_b001a_hint/build_candidate_b001a_reroll_hintの「光る」演出(恩寵ダイス) (2026-09-30,
   // per user request: "このときも🎲として表示させたい") -- 間のtap_hintでは消し、reroll_hintでまた光らせる
   // -- tutorialB001aWhiteDieGlowing's own doc。
