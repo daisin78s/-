@@ -6351,6 +6351,9 @@ function renderPlayers(state, next) {
         if (tutorialB004aResourceGrantGlowing && player.id === 'P1' && (resource === 'A' || resource === 'B' || resource === 'C')) {
           badge.classList.add('change-highlight');
         }
+        // build_candidate_c002a_resource_grant_hintの「光る」演出(見た目だけ増やした食料〇) (2026-09-30,
+        // per user request: "T054 増やした食料を光らせて") -- tutorialC002aResourceGrantGlowing's own doc。
+        if (tutorialC002aResourceGrantGlowing && player.id === 'P1' && resource === 'K') badge.classList.add('change-highlight');
         resourcesEl.appendChild(badge);
       }
     }
@@ -8755,6 +8758,7 @@ const TUTORIAL_STEPS = [
     id: 'build_candidate_a005a_levelup_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
     body: 'このエリアはレベルが上がるとさらに強化され使用料も〇2になります\nレベルが上がると本当に強いのでぜひ使ってみてください',
+    choicesLayout: 'row',
     choices: [
       { label: 'レベルのあげ方を教えて', targetStepId: 'build_candidate_a005a_levelup_howto_hint' },
       { label: '次へ', targetStepId: 'build_candidate_summary_hint' },
@@ -8800,6 +8804,7 @@ const TUTORIAL_STEPS = [
     id: 'build_candidate_a001a_levelup_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
     body: 'このエリアはレベルが上がるとさらに強化され使用料も〇2になります\nお手軽に獲得できる割には結構使えるのでぜひ使ってみてください',
+    choicesLayout: 'row',
     choices: [
       { label: 'レベルのあげ方を教えて', targetStepId: 'build_candidate_a005a_levelup_howto_hint' },
       { label: '次へ', targetStepId: 'build_candidate_summary_hint' },
@@ -8872,6 +8877,7 @@ const TUTORIAL_STEPS = [
     id: 'build_candidate_b001a_levelup_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
     body: 'このカードはレベルが上がるとまた恩寵ダイスを１個得ることができます\n極端な強さはないですがスロットがうまりダイスが置けなくなってくる後半戦いぶし銀の活躍を見せるのでぜひ使ってみてください',
+    choicesLayout: 'row',
     choices: [
       { label: 'レベルのあげ方を教えて', targetStepId: 'build_candidate_a005a_levelup_howto_hint' },
       { label: '次へ', targetStepId: 'build_candidate_summary_hint' },
@@ -8891,6 +8897,7 @@ const TUTORIAL_STEPS = [
     id: 'build_candidate_c006a_levelup_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
     body: 'レベルが上がると得られる資源もさらに増えます\nただしタップ状態でレベルを上げてしまうとせっかく増やした効果がそのラウンドでは使えないので、レベルを上げてからタップさせるように気を付けてください\nシンプルだけに使いやすいカードなのでぜひ使ってみてください',
+    choicesLayout: 'row',
     choices: [
       { label: 'レベルのあげ方を教えて', targetStepId: 'build_candidate_a005a_levelup_howto_hint' },
       { label: '次へ', targetStepId: 'build_candidate_summary_hint' },
@@ -8922,6 +8929,7 @@ const TUTORIAL_STEPS = [
     id: 'build_candidate_c002a_levelup_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
     body: 'レベルが上がると信心青〇ではなくコネZ〇に変換できるようになります\n持っている食料〇の数によって強さが変わりますがはまったときはものすごい威力なのでぜひ使ってみてください',
+    choicesLayout: 'row',
     choices: [
       { label: 'レベルのあげ方を教えて', targetStepId: 'build_candidate_a005a_levelup_howto_hint' },
       { label: '次へ', targetStepId: 'build_candidate_summary_hint' },
@@ -9880,6 +9888,10 @@ function renderTutorialOverlay(state) {
     dismissBtn.hidden = true;
     choicesEl.hidden = false;
     choicesEl.innerHTML = '';
+    // 2026-09-30, per user request: "「レベルのあげ方を教えて」「次へ」はすべて一番下の行で1行にする" --
+    // レベルアップ説明の分岐(choicesLayout:'row'を付けたステップ)だけ横1列、他(resource_choiceの長い文言の
+    // 分岐)は従来通り縦積みのまま。
+    choicesEl.classList.toggle('tutorial-bubble__choices--row', step.choicesLayout === 'row');
     for (const choice of step.choices) {
       const btn = el('button', 'tutorial-bubble__choice-button', choice.label);
       btn.type = 'button';
@@ -10643,7 +10655,13 @@ function dismissTutorialStep() {
   // build_candidate_c002a_hint(修道士)自身の「次へ」を押した瞬間、T054自身の「動く」(食料〇が10増える)を
   // 実際に実行する(始まりの兆しの資源グラントと同じ「動くはそのステップが表示される時に実行」パターン) --
   // 修道士のTAP(CHANGE(K,B,7))は食料〇が無いと実演できないため。
-  if (tutorialCurrentStepId === 'build_candidate_c002a_hint') grantResourcesForTutorial('P1', { K: 10 });
+  if (tutorialCurrentStepId === 'build_candidate_c002a_hint') {
+    grantResourcesForTutorial('P1', { K: 10 });
+    tutorialC002aResourceGrantGlowing = true;
+  }
+  // build_candidate_c002a_resource_grant_hintの「光る」演出(増えた食料〇)をここで消す (2026-09-30, per user
+  // request: "T054 増やした食料を光らせて") -- tutorialC002aResourceGrantGlowing's own doc。
+  if (tutorialCurrentStepId === 'build_candidate_c002a_resource_grant_hint') tutorialC002aResourceGrantGlowing = false;
   // 小さな導き/金貸しのような単純な連続チェーン (2026-09-30、Excelの新しい行T047〜T049・T051) -- 配列の
   // 並び順に頼らず、TUTORIAL_BUILD_CANDIDATE_LINEAR_CHAINSに並んだ順へ明示的に強制遷移させる(他のチェーン
   // と同じ理由)。各チェーンの最後の要素はchoicesを持つ分岐ステップなので、そこへ強制遷移させたら終わり
@@ -10850,6 +10868,9 @@ let tutorialConnectionGlowing = false;
 // build_candidate_b004a_resource_grant_hint(2026-09-30, Excel T043「この時光る: 増えた資源」)の「光る」
 // 演出 -- 見た目だけ増やしたA/B/C資源のバッジを光らせる。
 let tutorialB004aResourceGrantGlowing = false;
+// build_candidate_c002a_resource_grant_hint(2026-09-30, Excel T054「増やした食料を光らせて」)の「光る」
+// 演出 -- 見た目だけ増やした食料〇のバッジを光らせる。
+let tutorialC002aResourceGrantGlowing = false;
 // build_candidate_b004a_summary_hint(2026-09-30, Excel T046)の「ターン開始に戻す」ボタン用 -- 押した時に
 // 復元するスナップショット({state, turnActionTaken, pendingBuildChoice, checkpointDepth})。commitBuildCandidate
 // 内で、build_candidates_hintから実際にカードを選んだ瞬間(このカード獲得デモ全体の開始地点)に保存される。
@@ -11291,6 +11312,7 @@ function handleTutorialCardAcquisitionRestartClick() {
   tutorialAreaFeeGlowMapId = null;
   tutorialAreaExSlotGlowMapId = null;
   tutorialB004aResourceGrantGlowing = false;
+  tutorialC002aResourceGrantGlowing = false;
   tutorialBuildCandidatesGlowing = true;
   tutorialCurrentStepId = 'build_candidates_hint';
   stopTutorialTypewriter();

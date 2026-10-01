@@ -3730,6 +3730,14 @@ body.tutorial-mode .change-highlight {
    [hidden]{display:none}と同じ詳細度で後勝ちするため、choicesEl.hidden=trueが効かなかった。 */
 .tutorial-bubble__choices[hidden] { display: none; }
 
+/* 2026-09-30, per user request: "「レベルのあげ方を教えて」「次へ」はすべて一番下の行で1行にする" --
+   レベルアップ説明の分岐(農園/城下町/小さな導き/金貸し/修道士、どれも同じ2択)だけは縦積みではなく
+   横1列に並べる。選択肢の文言が長い初期資源の分岐(resource_choice)はこの対象外、従来通り縦積みのまま。 */
+.tutorial-bubble__choices--row {
+  flex-direction: row;
+  justify-content: center;
+}
+
 .tutorial-bubble__choice-button {
   background: var(--surface);
   border: 2px solid var(--accent);
