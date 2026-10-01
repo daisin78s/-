@@ -4663,11 +4663,11 @@ const TUTORIAL_BUILD_CANDIDATE_LINEAR_CHAINS = {
   build_candidate_c002a_hint: ['build_candidate_c002a_resource_grant_hint', 'build_candidate_c002a_try_hint', 'build_candidate_c002a_levelup_hint'],
 };
 // 選ばれなかった方のカードのサブチェーンは丸ごとseen扱いにする(共有のhowto/vp豆知識/summaryは対象外) --
-// エリア2枚(値がフラットな配列の方が扱いやすいのでchainsとは別に持つ)+始まりの兆し(専用のsummary_hintも
-// 含む、共有summaryへは合流しないため)+小さな導き/金貸しをまとめる。
+// エリア2枚(値がフラットな配列の方が扱いやすいのでchainsとは別に持つ)+始まりの兆し+小さな導き/金貸し/
+// 修道士をまとめる。始まりの兆しも今は共有summaryへ合流する(旧build_candidate_b004a_summary_hintは廃止)。
 const TUTORIAL_BUILD_CANDIDATE_ALL_SUBCHAIN_IDS = {
   ...Object.fromEntries(Object.entries(TUTORIAL_BUILD_CANDIDATE_AREA_CHAINS).map(([hintId, chain]) => [hintId, Object.values(chain)])),
-  build_candidate_b004a_hint: [...TUTORIAL_BUILD_CANDIDATE_B004A_CHAIN_IDS, 'build_candidate_b004a_summary_hint'],
+  build_candidate_b004a_hint: TUTORIAL_BUILD_CANDIDATE_B004A_CHAIN_IDS,
   ...TUTORIAL_BUILD_CANDIDATE_LINEAR_CHAINS,
 };
 const TUTORIAL_SHOP_VALUE5_SLOT_IDS = ['SHOP101', 'SHOP102', 'SHOP201', 'SHOP202'];
@@ -6770,8 +6770,7 @@ function renderTutorialTurnEndButton(container) {
     // ボタン押下に変わった) -- 3ターン目のBOB/CAROL/DANの台本配置をここで実行する(以前はdismissTutorialStep
     // 経由だったが、T038がnoManualDismissになったためそちらは通らない)。turn_end_button_hint(T011)は
     // 従来通り次のプレイヤーの光る演出。
-    // build_candidate_b004a_summary_hint(T046)の「ターン終了」も同様(2026-09-30、始まりの兆し専用の最終画面)。
-    if (tutorialCurrentStepId === 'build_candidate_summary_hint' || tutorialCurrentStepId === 'build_candidate_b004a_summary_hint') {
+    if (tutorialCurrentStepId === 'build_candidate_summary_hint') {
       tutorialCancelButtonGlowing = false;
       tutorialCardAcquisitionRestartButtonShown = false;
       placeScriptedFakeAiDiceForTutorial(3, true);
@@ -8891,20 +8890,9 @@ const TUTORIAL_STEPS = [
     body: 'このカードはレベルが上がると必要な資源を一つ軽減できるようになります\nこのカードは雑にとっても強い追加色ダイスと違い計画的にとらないと使えないこともあります\nそのかわりダイス目に左右されずにカードを獲得したり\nメインアクションで資源を増やしてすぐにフリーアクションとして次のカードを獲得したりできるのでぜひ使ってみてください',
     nextLabel: '次へ',
   },
-  // 2026-09-30, per user request (Excelの新しい行T046) -- 始まりの兆しはTAPでほかのカードも獲得できてしまう
-  // ため、共有のbuild_candidate_summary_hint(「直前のアクションをキャンセル」で1段階だけ戻す)では、その
-  // ボーナス獲得だけ取り消して元のダイス配置(王宮/元老院)まで戻せず、ダイスが無く進行不能になる場合がある
-  // (per user report: "始まりの兆しでほかのカードを獲得してしまうとターン開始に戻らないとダイスがなく進行
-  // 不能になってしまうため")。そのためこのカード専用に、チュートリアル内だけの「ターン開始に戻す」ボタンで
-  // (このカード獲得デモの開始地点=build_candidates_hintの直前まで)まとめて巻き戻せる専用の最終画面を用意する。
-  // noManualDismissで、実際のボタン(renderTutorialCardAcquisitionRestartButton/renderTutorialTurnEndButton)を
-  // 押して進む。
-  {
-    id: 'build_candidate_b004a_summary_hint',
-    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: '他のカードの説明も見たいのなら「ターン開始に戻す」ボタンを押してください\n必要なければ「ターン終了」ボタンを押してください',
-    noManualDismiss: true,
-  },
+  // 2026-09-30: 始まりの兆し専用のまとめ画面(build_candidate_b004a_summary_hint)はここにあったが、共有の
+  // build_candidate_summary_hintが同じ「ターン開始に戻す」を使うようになり役割が重複したためExcelから
+  // 削除され、main.js側もそれに合わせて撤去した(build_candidate_b004a_levelup_hintのdismiss側フック参照)。
   {
     id: 'build_candidate_b001a_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
@@ -10694,22 +10682,12 @@ function dismissTutorialStep() {
       return;
     }
   }
-  // build_candidate_b004a_levelup_hint(T045)を閉じたら、始まりの兆し専用の最終画面(T046、「ターン開始に戻す」
-  // /「ターン終了」)へ強制遷移する (2026-09-30) -- この専用画面は共有のbuild_candidate_summary_hintへは
-  // 合流しないため、共有側(howto/vp豆知識/summary)が今回一度も表示されないまま「未見」で残ってしまう。
-  // ターン終了を押した後、通常の直線探索がそれらを誤ってgame_rules_intro_2より先に拾わないよう、ここで
-  // まとめてseen扱いにしておく(build_candidate_summary_hint's own enterBuildCandidateSummaryHintFlagsと同じ
-  // 理由)。
+  // build_candidate_b004a_levelup_hint(T045)を閉じたら、共有のまとめ画面(build_candidate_summary_hint)へ
+  // 進む (2026-09-30: 始まりの兆し専用のまとめ画面(旧build_candidate_b004a_summary_hint)はExcelから削除
+  // された -- 共有側も既に「ターン開始に戻す」(カード選択前まで一気に戻す、タップで別カードを獲得して
+  // しまった場合も含めて対応できる)を使うようになったため、専用画面と役割が重複していた)。
   if (tutorialCurrentStepId === 'build_candidate_b004a_levelup_hint') {
-    tutorialSeenStepIds.add('build_candidate_a005a_levelup_howto_hint');
-    tutorialSeenStepIds.add('build_candidate_levelup_vp_hint');
-    tutorialSeenStepIds.add('build_candidate_summary_hint');
-    tutorialSeenStepIds.add('build_candidate_b004a_summary_hint');
-    tutorialCardAcquisitionRestartButtonShown = true;
-    tutorialTurnEndButtonShown = true;
-    tutorialCurrentStepId = 'build_candidate_b004a_summary_hint';
-    stopTutorialTypewriter();
-    render(STATE);
+    enterBuildCandidateSummaryHint();
     return;
   }
   // build_candidate_b001a_hint/build_candidate_b001a_reroll_hintの「光る」演出(恩寵ダイス) (2026-09-30,
