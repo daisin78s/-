@@ -4670,7 +4670,6 @@ const TUTORIAL_BUILD_CANDIDATE_ALL_SUBCHAIN_IDS = {
   build_candidate_b004a_hint: TUTORIAL_BUILD_CANDIDATE_B004A_CHAIN_IDS,
   ...TUTORIAL_BUILD_CANDIDATE_LINEAR_CHAINS,
 };
-const TUTORIAL_SHOP_VALUE5_SLOT_IDS = ['SHOP101', 'SHOP102', 'SHOP201', 'SHOP202'];
 // カード獲得デモ中、onboarding未完了でも獲得したカードをタップできるようにする対象ステップ (2026-09-29, per
 // user request: "説明をするためにタップができる必要があります") -- 6枚どれかの説明画面(build_candidate_*_hint、
 // 獲得直後)とその後のbuild_candidate_summary_hint(T038、ターン終了を押すまでの間)。renderPlayerCards's own
@@ -4696,11 +4695,9 @@ function buildShopSlotNode(slotId, faceId, showReqCaption, locked, faceDown = fa
     if (locked) return `${boardMod.specialShopMinRound(faceId)}Rから`;
     return showReqCaption ? shopReqForSlotId(slotId) : '';
   };
-  // shop_dice_value1_intro/shop_dice_value5_introの「光る」演出(SHOPのダイス目キャプション) -- どちらも
-  // 実カードの有無に関わらずキャプション自体は常に表示されるので、早期returnの前でまとめて判定する。
-  const reqGlowing = (tutorialShopValue1Glowing && TUTORIAL_SHOP_NORMAL_SLOT_IDS.includes(slotId))
-    || (tutorialShopValue5Glowing && TUTORIAL_SHOP_VALUE5_SLOT_IDS.includes(slotId))
-    || (!!tutorialBuildShopGlowSlots && tutorialBuildShopGlowSlots.includes(slotId));
+  // build_dice_value_intro系の「光る」演出(SHOPのダイス目キャプション) -- 実カードの有無に関わらず
+  // キャプション自体は常に表示されるので、早期returnの前で判定する。
+  const reqGlowing = !!tutorialBuildShopGlowSlots && tutorialBuildShopGlowSlots.includes(slotId);
   if (!faceId) {
     slotNode.querySelector('.shop-slot__req').textContent = showReqCaption ? shopReqForSlotId(slotId) : '';
     if (reqGlowing) slotNode.querySelector('.shop-slot__req').classList.add('change-highlight');
@@ -4723,18 +4720,7 @@ function buildShopSlotNode(slotId, faceId, showReqCaption, locked, faceDown = fa
     // caption (corrected 2026-07-29).
     ? buildCardVisual(faceId, { req: facts.req, showEffect: true })
     : buildCardVisual(faceId, { showEffect: true });
-  // ex_slot_introの「光る」演出 (2026-09-27, per user request: "SHOPの領地カードをすべて光らせる") --
-  // 領地カード(Aカード)はfaceIdが必ず'A'で始まる(AREAなど盤面データの'AREA'とは別シートで無関係)。
-  if (tutorialExSlotGlowing && faceId.startsWith('A')) cardVisual.classList.add('change-highlight');
-  // resource_icon_area_card_hintの「光る」演出(カード側) (2026-09-27, per user request: "見えている領地
-  // カードもすべて光らせる") -- tutorialAreaCardHintGlowing's own doc。
-  if (tutorialAreaCardHintGlowing && faceId.startsWith('A')) cardVisual.classList.add('change-highlight');
   if (tutorialShopCardTypeGlow && faceId.startsWith(tutorialShopCardTypeGlow)) cardVisual.classList.add('change-highlight');
-  // shop_cards_introの「光る」演出 (2026-09-27, per user request: "この時SHOP101-106を光らせる") --
-  // NORMAL店の6枚すべて。
-  if (tutorialShopCardsGlowing && TUTORIAL_SHOP_NORMAL_SLOT_IDS.includes(slotId)) cardVisual.classList.add('change-highlight');
-  // shop_dice_value5_introの「光る」演出(カード自体) -- SHOP101/102/201/202のカードも光らせる。
-  if (tutorialShopValue5Glowing && TUTORIAL_SHOP_VALUE5_SLOT_IDS.includes(slotId)) cardVisual.classList.add('change-highlight');
   // カード獲得の説明(T024〜T027)のダイス目別「光る」 -- そのスロットのカードも光らせる。
   if (tutorialBuildShopGlowSlots && tutorialBuildShopGlowSlots.includes(slotId)) cardVisual.classList.add('change-highlight');
   // shop_cost_introの「光る」演出 (2026-09-27, per user request: "ショップにあるすべてのカードの支払い
@@ -5057,31 +5043,6 @@ function renderBoard(state, next) {
       node.querySelector('.map-tile__id').textContent = areaName(mapState.currentAreaId);
       // training_ground_hintの「光る」演出 (2026-09-27, per user request: "この時訓練場を光らせる") --
       // 訓練場はAREA007系(MAP007固定)なので、専用の定数は無いがCASTLE_MAP_ID/AREA009_MAP_IDと同じ考え方で
-      // mapId自体を直接比較する(tutorialTrainingGroundGlowing's own doc)。
-      if (tutorialTrainingGroundGlowing && mapId === 'MAP007') node.classList.add('change-highlight');
-      // card_areas_hintの「光る」演出 (2026-09-27, per user request: "このとき王宮と元老院を光らせる") --
-      // 王宮/元老院は既存のCASTLE_MAP_ID/AREA009_MAP_IDをそのまま使う。
-      if (tutorialCardAreasGlowing && (mapId === boardMod.CASTLE_MAP_ID || mapId === boardMod.AREA009_MAP_ID)) {
-        node.classList.add('change-highlight');
-      }
-      // resource_icon_explanationの「光る」演出 (2026-09-27, per user request: "この時エリア「小麦畑」
-      // 「農園」を光らせる") -- 小麦畑=MAP001/農園=MAP002固定。
-      if (tutorialFoodAreasGlowing && (mapId === 'MAP001' || mapId === 'MAP002')) node.classList.add('change-highlight');
-      // resource_icon_conversion_hintの「光る」演出 (2026-09-27, per user request: "この時城下町 大神殿
-      // ギルド 歓楽街を光らせる" -- データ上の名称は「大聖堂」だがユーザーの言う「大神殿」と同一エリアと
-      // 判断) -- 城下町=MAP003/大聖堂=MAP004/ギルド=MAP005/歓楽街=MAP006固定。
-      if (tutorialConversionAreasGlowing
-        && (mapId === 'MAP003' || mapId === 'MAP004' || mapId === 'MAP005' || mapId === 'MAP006')) {
-        node.classList.add('change-highlight');
-      }
-      // resource_icon_castletown_hintの「光る」演出 (2026-09-27, per user request: "この時城下町を光らせる")
-      // -- 城下町=MAP003固定。
-      if (tutorialCastletownGlowing && mapId === 'MAP003') node.classList.add('change-highlight');
-      // resource_icon_area_card_hintの「光る」演出(タイル側) (2026-09-27, per user request: "この時「王宮」
-      // か「元老院」を光らせる") -- 見えている領地カード側はbuildShopSlotNode参照。
-      if (tutorialAreaCardHintGlowing && (mapId === boardMod.CASTLE_MAP_ID || mapId === boardMod.AREA009_MAP_ID)) {
-        node.classList.add('change-highlight');
-      }
       // build_candidate_a005a_levelup_hintの「光る」演出(農園のタイル全体) (2026-09-30, Excel T037) --
       // tutorialAreaTileGlowMapId's own doc。
       if (tutorialAreaTileGlowMapId === mapId) node.classList.add('change-highlight');
@@ -5203,10 +5164,6 @@ function renderBoard(state, next) {
           slotEl.classList.add('change-highlight');
           anyGlowSlotAssigned = true;
         }
-        // ex_slot_introの「光る」演出 (2026-09-27, per user request: "この時EXスロットが光る（EXスロットが
-        // なければ光らない）") -- tutorialExSlotGlowing's own doc。main_action_introの全SLOT演出と同じく
-        // 占有中かどうかは問わずEX要求のスロットはすべて光らせる。
-        if (tutorialExSlotGlowing && requirement === 'EX') slotEl.classList.add('change-highlight');
         // build_candidate_a005a_ex_hintの「光る」演出(その特定エリアのEXスロットのみ) (2026-09-30) --
         // tutorialAreaExSlotGlowMapId's own doc。
         if (tutorialAreaExSlotGlowMapId === mapId && requirement === 'EX') slotEl.classList.add('change-highlight');
@@ -6501,9 +6458,6 @@ function renderPlayers(state, next) {
           render(STATE);
         });
       }
-      // color_dice_revealの「光る」演出 (2026-09-26, per user request: "この時色ダイスを光らせる（ｗDは
-      // 光らせない）") -- COLORダイスのみ(die.kind==='WHITE'ではない)、tutorialColorDiceGlowing's own doc。
-      if (tutorialColorDiceGlowing && player.id === 'P1' && die.kind !== 'WHITE') dieNode.classList.add('change-highlight');
       // build_candidate_b001a_hintの「光る」演出(恩寵ダイス) -- tutorialB001aWhiteDieGlowing's own doc。
       if (tutorialB001aWhiteDieGlowing && player.id === 'P1' && die.kind === 'WHITE') dieNode.classList.add('change-highlight');
       // slot_dice_value_rule_introの「光る」演出 (2026-09-26, per user request: "自分のダイスの1が光る")
@@ -9016,48 +8970,13 @@ const TUTORIAL_STEPS = [
     body: 'あなたにランダムな制約カード1枚が配られました\nこれはあなたの性格や特性を表しています\n制約カードには表面と裏面があり得られる初期資源や制約が違います\n表面裏面どちらを使うかあとで選ぶことができます\nカードをクリックすることで拡大され詳細が表示されますが今は気にせず先に進みましょう',
     nextLabel: '次へ',
   },
-  // 2026-09-27, per user request -- 「初期資源のアイコンの意味を知りたい」/「とりあえず先に進める」の
-  // 2ボタンで次のセリフが分岐する(TUTORIAL_STEPSのchoices/handleTutorialChoiceClickのdoc参照)。
+  // 2026-09-30: 「初期資源のアイコンの意味を知りたい」の分岐(資源アイコン/変換/城下町/領地カードの説明、
+  // 計4画面)は、制約カードを選ぶ前の段階に統合されたためExcelから削除された -- ここは常にそのまま
+  // resource_pick_hintへ進む。
   {
     id: 'resource_choice',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
     body: 'ランダムな初期資源カード4枚が配られました\nこれはあなたが初めに持っている財産を表しています\n配られた初期資源カード4枚のうち使用する2枚を選んでください',
-    choices: [
-      { label: '初期資源のアイコンの意味を知りたい', targetStepId: 'resource_icon_explanation' },
-      { label: 'とりあえず先に進める', targetStepId: 'resource_pick_hint' },
-    ],
-  },
-  // 2026-09-27, per user request -- 「初期資源のアイコンの意味を知りたい」を選んだ場合の1つ目のセリフ。
-  // 小麦畑/農園を光らせる(tutorialFoodAreasGlowing's own doc)。
-  {
-    id: 'resource_icon_explanation',
-    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: '〇このアイコンが食料です\nこの世界の1番もととなる資源でエリアの「小麦畑」「農園」にダイス（ワーカー）を置くことで3つ手に入れることができます',
-    nextLabel: '次へ',
-  },
-  // 2026-09-27, per user request -- 続く2つ目のセリフ。城下町/大聖堂(ユーザーの言う「大神殿」)/ギルド/歓楽街
-  // を光らせる(tutorialConversionAreasGlowing's own doc)。次へで通常の直線探索ではなくresource_pick_hintへ
-  // 直接合流する(dismissTutorialStep自身のdoc参照)。
-  {
-    id: 'resource_icon_conversion_hint',
-    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: '〇食料は基本的にはそのままではカードやダイスを獲得するのに使えません\nカードやダイスを獲得するには別のエリアで様々な資源に変換する必要があります',
-    nextLabel: '次へ',
-  },
-  // 2026-09-27, per user request -- 城下町を光らせる(tutorialCastletownGlowing's own doc)。
-  {
-    id: 'resource_icon_castletown_hint',
-    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: 'エリア「城下町」にダイスを置くと自分が持っている食料すべてを\n赤〇権力に変換することができます',
-    nextLabel: '次へ',
-  },
-  // 2026-09-27, per user request -- 王宮/元老院と見えている領地カードすべてを光らせる
-  // (tutorialAreaCardHintGlowing's own doc)。次へで通常の直線探索ではなくresource_pick_hintへ直接合流する
-  // (dismissTutorialStep自身のdoc参照)。
-  {
-    id: 'resource_icon_area_card_hint',
-    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: '赤〇権力は　領地を支配するのに必要です\n「王宮」か「元老院」にダイスを置いて赤〇権力を支払うことで領地カードを獲得することができます',
     nextLabel: '次へ',
   },
   {
@@ -9222,36 +9141,9 @@ const TUTORIAL_STEPS = [
     },
     nextLabel: '次へ',
   },
-  // 2026-09-26, per user request -- shown right after initial_resources_reveal's own 次へ, same
-  // match-condition/fall-through pattern as every other plain-次へ step here.
-  {
-    id: 'resource_conversion_intro',
-    match: (state) => {
-      const next = turnFlowMod.getNextTurn(state);
-      if (next.playerId !== 'P1') return false;
-      const player = state.players.find((p) => p.id === 'P1');
-      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
-    },
-    body: '（食料）〇はこのゲームの一番基本的な資源です\nただし基本的にはそのまま使うことはできず、カードを獲得するにはいずれかの資源に変換する必要があります\n赤〇（権力）　青〇（信心）　黄〇（金貨）　はそれぞれカードを獲得するのに必要な資源です\nZ〇（コネ）は赤〇青〇黄〇どの資源として使うこともできる万能資源です\nそれぞれの資源はターン中いつでも好きなだけフリーアクションで〇に変換することができます\nそのため基本的には　〇＜赤〇≒青〇≒黄〇＜Z〇　　となります',
-    nextLabel: '次へ',
-  },
-  // 2026-09-26, per user request -- shown right after resource_conversion_intro's own 次へ (normal
-  // dismissTutorialStep flow, same match condition as that step so the usual "next unseen still-matching
-  // step" fall-through picks this up automatically -- no special auto-transition trick needed here, unlike
-  // con_face_choice_intro -> initial_resources_reveal, since this transition IS a plain 次へ tap).
-  {
-    id: 'color_dice_reveal',
-    match: (state) => {
-      const next = turnFlowMod.getNextTurn(state);
-      if (next.playerId !== 'P1') return false;
-      const player = state.players.find((p) => p.id === 'P1');
-      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
-    },
-    body: 'これがあなたの色ダイス（ワーカー）です\nこの色ダイスはエリアに置かれてもラウンド開始時に戻ってきます\n恩寵ダイス（白ダイス　ｗD）は使い捨てになるため戻ってきません',
-    nextLabel: '次へ',
-  },
-  // 2026-09-26, per user request -- shown right after color_dice_reveal's own 次へ, same match condition/
-  // fall-through pattern as the steps above.
+  // 2026-09-30: resource_conversion_intro/color_dice_revealはExcelから削除された(資源変換/色ダイスの
+  // 説明が制約カードを選ぶ前の段階に統合されたため)。initial_resources_revealの次は通常の直線探索で
+  // main_action_introが見つかる。
   {
     id: 'main_action_intro',
     match: (state) => {
@@ -9290,24 +9182,8 @@ const TUTORIAL_STEPS = [
     body: 'スロットにANYと書かれていれば何の目でも置けます',
     nextLabel: '次へ',
   },
-  // 2026-09-27, per user request -- shown right after slot_any_rule_introの次へ。領地カード(支配)獲得で
-  // エリアの所有者になる仕組みとEXスロットの説明。同じmatch-condition/fall-throughパターン。
-  {
-    id: 'ex_slot_intro',
-    match: (state) => {
-      const next = turnFlowMod.getNextTurn(state);
-      if (next.playerId !== 'P1') return false;
-      const player = state.players.find((p) => p.id === 'P1');
-      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
-    },
-    // ○○(U+25CB、プレースホルダー用の白丸)を使用 -- チュートリアルの〇(U+3007)は必ず（食料）アイコンに
-    // 自動変換されるため(TUTORIAL_ICON_NOTATIONS参照)、「エリア名のプレースホルダー」の意図であることを
-    // 明示的にユーザー確認した上でこちらを採用(2026-09-27)。
-    body: '○○の支配と書かれている領地カードを獲得するとそのエリアの所有者になります\nEXと書かれたスロットは所有者しか置くことはできません',
-    nextLabel: '次へ',
-  },
-  // 2026-09-26, per user request -- shown right after ex_slot_introの次へ, same
-  // match-condition/fall-through pattern as every other plain-次へ step here.
+  // 2026-09-30: ex_slot_introはExcelから削除された(EXスロットの説明が制約カードを選ぶ前の段階に統合された
+  // ため)。slot_any_rule_introの次は通常の直線探索でslot_dice_value_rule_intro_2が見つかる。
   {
     id: 'slot_dice_value_rule_intro_2',
     match: (state) => {
@@ -9350,37 +9226,9 @@ const TUTORIAL_STEPS = [
     body: 'このジョブはクリックすることで〇とZ〇を得ることができます\n使い終わったカードはタップされアンタップ（起き上がる）までは使えません\nラウンド開始時にはすべてのカードがアンタップされます\nジョブによっては毎ターンアンタップするものもあります',
     nextLabel: '次へ',
   },
-  // 2026-09-26, per user request -- 「直前のアクションをキャンセル」ボタンを押した瞬間に自動遷移(通常経路。
-  // handleCancelPreviousActionClickのdoc参照)。
-  {
-    id: 'cancel_action_hint',
-    match: (state) => {
-      const next = turnFlowMod.getNextTurn(state);
-      if (next.playerId !== 'P1') return false;
-      const player = state.players.find((p) => p.id === 'P1');
-      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
-    },
-    body: '行動が気に入らなかったり間違えたときは「直前のアクションをキャンセル」を押せばキャンセルすることができます',
-    // 2026-09-27, per user request: "このとき 次へ を消す" -- 実際にキャンセルボタンを押すこと以外に先へ
-    // 進む手段が無いようにする(free_action_hintと同じnoManualDismissパターン)。
-    noManualDismiss: true,
-  },
-  // 2026-09-27, per user request -- cancel_action_hintが閉じられた瞬間、プレイヤーのクリックを待たず
-  // ゲーム側が自動で一般市民を再TAPする(forceRetapJob001ForTutorial's own doc)。光る演出は無し(タップ後の
-  // 通常のtapped表示で十分)。
-  {
-    id: 'job_retap_hint',
-    match: (state) => {
-      const next = turnFlowMod.getNextTurn(state);
-      if (next.playerId !== 'P1') return false;
-      const player = state.players.find((p) => p.id === 'P1');
-      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
-    },
-    body: '基本的にこのジョブはすぐに使って問題ないのでもう一度タップさせておきますね',
-    nextLabel: '次へ',
-  },
-  // 2026-09-27, per user request -- ダイスを1個クリックした瞬間に自動遷移(通常経路。renderPlayersの
-  // die click handlerのdoc参照)。
+  // 2026-09-30: cancel_action_hint/job_retap_hint(「直前のアクションをキャンセル」の実演+一般市民の
+  // 再TAP)はExcelから削除された(キャンセル機能の説明が制約カードを選ぶ前の段階に統合されたため)。
+  // job_tap_resource_introの次は通常の直線探索でdice_select_hintが見つかる。
   {
     id: 'dice_select_hint',
     match: (state) => {
@@ -9419,83 +9267,9 @@ const TUTORIAL_STEPS = [
     body: '初めのターンは初期資源を使ってダイスかカードを獲得するのがおすすめです',
     nextLabel: '次へ',
   },
-  // 2026-09-27, per user request -- 訓練場(MAP007)を光らせる。tutorialTrainingGroundGlowing's own doc。
-  {
-    id: 'training_ground_hint',
-    match: (state) => {
-      const next = turnFlowMod.getNextTurn(state);
-      if (next.playerId !== 'P1') return false;
-      const player = state.players.find((p) => p.id === 'P1');
-      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
-    },
-    body: 'ダイスを獲得するには訓練場にダイスを置きます\nそうすれば赤〇青〇黄〇と引き換えに追加の色ダイスを獲得します\nそのダイスは即座に振り、このラウンドからすぐに使えます',
-    nextLabel: '次へ',
-  },
-  // 2026-09-27, per user request -- 王宮/元老院を光らせる。tutorialCardAreasGlowing's own doc。
-  {
-    id: 'card_areas_hint',
-    match: (state) => {
-      const next = turnFlowMod.getNextTurn(state);
-      if (next.playerId !== 'P1') return false;
-      const player = state.players.find((p) => p.id === 'P1');
-      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
-    },
-    body: 'カードを獲得するには王宮か元老院にダイスを置きます',
-    nextLabel: '次へ',
-  },
-  // 2026-09-27, per user request -- SHOP101-106のカードを光らせる。tutorialShopCardsGlowing's own doc。
-  {
-    id: 'shop_cards_intro',
-    match: (state) => {
-      const next = turnFlowMod.getNextTurn(state);
-      if (next.playerId !== 'P1') return false;
-      const player = state.players.find((p) => p.id === 'P1');
-      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
-    },
-    body: 'そうするとショップにあるカードを獲得することができます',
-    nextLabel: '次へ',
-  },
-  // 2026-09-27, per user request -- SHOP101-106のダイス目キャプション(目1-6～目1)6個すべてを光らせる。
-  // die値1はどのSHOPのレンジにも含まれるため、どのカードでも1枚獲得できる。tutorialShopValue1Glowing's
-  // own doc。
-  {
-    id: 'shop_dice_value1_intro',
-    match: (state) => {
-      const next = turnFlowMod.getNextTurn(state);
-      if (next.playerId !== 'P1') return false;
-      const player = state.players.find((p) => p.id === 'P1');
-      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
-    },
-    body: 'どのカードが獲得できるかは置いたダイス目とショップに書かれているダイス目の通りです\nダイス目 1 を置けば資源さえあればどのカードでも1枚獲得できますが',
-    nextLabel: '次へ',
-  },
-  // 2026-09-27, per user request -- 目1-6/目1-5のキャプションと、その2つのレンジにdie値5が含まれる
-  // SHOP101/102/201/202のカード自体を光らせる。tutorialShopValue5Glowing's own doc。
-  {
-    id: 'shop_dice_value5_intro',
-    match: (state) => {
-      const next = turnFlowMod.getNextTurn(state);
-      if (next.playerId !== 'P1') return false;
-      const player = state.players.find((p) => p.id === 'P1');
-      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
-    },
-    body: 'ダイス目 5 を置けばここのショップのカードからしか選べません',
-    nextLabel: '次へ',
-  },
-  // 2026-09-27, per user request -- ショップの全カードの支払い資源部分を光らせる。tutorialShopCostGlowing's
-  // own doc。
-  {
-    id: 'shop_cost_intro',
-    match: (state) => {
-      const next = turnFlowMod.getNextTurn(state);
-      if (next.playerId !== 'P1') return false;
-      const player = state.players.find((p) => p.id === 'P1');
-      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
-    },
-    body: 'カードを獲得するには資源を払う必要があります',
-    nextLabel: '次へ',
-  },
-  // 2026-09-27, per user request -- 光る演出は無し。プレイの助言のみ。
+  // 2026-09-30: training_ground_hint〜shop_cost_intro(訓練場/王宮元老院/SHOPカード/ダイス目/支払い資源の
+  // 説明、計6画面)はExcelから削除された(制約カードを選ぶ前の段階に統合されたため)。
+  // first_turn_recommendation_hintの次は通常の直線探索でused_card_immediately_hintが見つかる。
   {
     id: 'used_card_immediately_hint',
     match: (state) => {
@@ -10018,12 +9792,11 @@ function renderTutorialOverlay(state) {
         window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
       }
     }
-    // cancel_action_hint/dice_misclick_hintが見えるようにスクロール (2026-09-27, per user request:
-    // "この時「直前のアクションをキャンセル」ボタンが見えるようにスクロールお願い"、誤配置救済セリフでも
-    // 同様に"必要ならスクロール") -- 同じ考え方。サイドバー上部の常設ボタン(#dice-cancel-button)を対象に
-    // する -- ビルド選択モーダル用の複製(#dice-cancel-button-build)はモーダルが開いている時しか意味を
-    // 持たないのでここでは対象にしない。
-    if (step.id === 'cancel_action_hint' || step.id === 'dice_misclick_hint' || step.id === 'cancel_training_ground_hint') {
+    // dice_misclick_hintが見えるようにスクロール (2026-09-27, per user request: 誤配置救済セリフでも
+    // "必要ならスクロール") -- サイドバー上部の常設ボタン(#dice-cancel-button)を対象にする -- ビルド選択
+    // モーダル用の複製(#dice-cancel-button-build)はモーダルが開いている時しか意味を持たないのでここでは
+    // 対象にしない。
+    if (step.id === 'dice_misclick_hint' || step.id === 'cancel_training_ground_hint') {
       const cancelBtn = document.getElementById('dice-cancel-button');
       if (cancelBtn) {
         const bubbleWrap = document.getElementById('tutorial-bubble-wrap');
@@ -10033,10 +9806,8 @@ function renderTutorialOverlay(state) {
         window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
       }
     }
-    // ex_slot_introが見えるようにスクロール (2026-09-27, per user request: "領地カードを光らせるとき SHOPが
-    // 見えるように上にスクロールさせて") -- 同じ考え方。#shops(ショップ全体)を対象にする。
     // カード獲得の説明のスクロール (2026-09-29, Excel T022/T024〜T027) -- 🔨は盤面(main_action_introと同じ考え方)、
-    // ダイス目別のSHOPはex_slot_introと同じくSHOP全体。
+    // ダイス目別のSHOPは#shops(ショップ全体)を対象にする。
     if (step.id === 'build_icon_hint') {
       const boardEl = document.getElementById('board');
       if (boardEl) {
@@ -10047,7 +9818,7 @@ function renderTutorialOverlay(state) {
         window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
       }
     }
-    if (step.id === 'ex_slot_intro' || step.id === 'castletown_territory_cards_hint'
+    if (step.id === 'castletown_territory_cards_hint'
       || step.id === 'build_dice_value6_hint' || step.id === 'build_dice_value5_hint'
       || step.id === 'build_dice_value4_hint' || step.id === 'build_dice_value1_hint'
       || step.id === 'build_cost_hint'
@@ -10100,37 +9871,13 @@ function renderTutorialOverlay(state) {
         window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
       }
     }
-    // resource_icon_explanation/resource_icon_conversion_hintが見えるようにスクロール (2026-09-27, per
-    // user request: "必要ならスクロール") -- 同じ考え方。#board(盤面全体)を対象にする。
-    if (step.id === 'resource_icon_explanation' || step.id === 'resource_icon_conversion_hint') {
-      const boardEl = document.getElementById('board');
-      if (boardEl) {
-        const bubbleWrap = document.getElementById('tutorial-bubble-wrap');
-        const visibleHeight = (bubbleWrap && !bubbleWrap.hidden) ? bubbleWrap.getBoundingClientRect().top : window.innerHeight;
-        const rect = boardEl.getBoundingClientRect();
-        const desiredTop = Math.max(0, (visibleHeight - rect.height) / 2);
-        window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
-      }
-    }
   }
-}
-
-/** job_retap_hintの「この時強制的に一般市民の効果を使う」(2026-09-27, per user request: "基本的にこの
- * ジョブはすぐに使って問題ないのでもう一度タップさせておきますね") -- cancel_action_hintで一般市民の
- * TAPをキャンセルした直後、プレイヤーのクリックを待たずゲーム側が自動でもう一度TAPしてやり直す。
- * attachTapToggleのIMMEDIATE分岐と全く同じ「使用前にスナップショットを取り、成功したらactionCheckpoints
- * に積む」処理を、実際のクリックの代わりにここから直接呼ぶだけの薄いラッパー。 */
-function forceRetapJob001ForTutorial() {
-  const preSnapshot = gameStateMod.cloneState(STATE);
-  const preTurnActionTaken = turnActionTaken;
-  const result = boardMod.useBareTapAbility(STATE, INDEX, { playerId: 'P1' }, 'JOB001');
-  if (result.success) actionCheckpoints.push({ state: preSnapshot, turnActionTaken: preTurnActionTaken });
 }
 
 /** worker_placement_example_resultの「食料3をふやしそれを光らせる」(2026-09-27) -- ワーカープレイス
  * メントの具体例として、プレイヤーのクリックを待たずゲーム側が自動で真ん中の(未配置の)色ダイスを
- * 農園(MAP002)のスロット3(index 2、2026-09-28に値5→6へ変更)へ置く。forceRetapJob001ForTutorialと同じ
- * 「本物のエンジンAPIを直接呼ぶだけの薄いラッパー」パターン。 */
+ * 農園(MAP002)のスロット3(index 2、2026-09-28に値5→6へ変更)へ置く。本物のエンジンAPIを直接呼ぶだけの
+ * 薄いラッパー。 */
 function forcePlaceMiddleDieOnFarmForTutorial() {
   const p1 = STATE.players.find((p) => p.id === 'P1');
   // 真ん中=まだ何も配置されていない時点でのindex 1(rollInitialColorDiceの{P1:[1,6,3]}によりこのダイスは
@@ -10298,8 +10045,6 @@ function handleTutorialChoiceClick(targetStepId) {
   if (currentStep) {
     for (const choice of currentStep.choices) tutorialSeenStepIds.add(choice.targetStepId);
   }
-  if (targetStepId === 'resource_pick_hint') tutorialResourceCandidatesGlowing = true;
-  if (targetStepId === 'resource_icon_explanation') tutorialFoodAreasGlowing = true;
   // 2026-09-30, per user request (Excel T037、続けてT041) -- エリアのレベルアップ実演を離れる時、タイル全体の
   // 光る演出を消す(どちらの選択肢を選んでも、levelup_hint自身はchoicesで進むためdismissTutorialStepを
   // 経由しない)。
@@ -10404,26 +10149,17 @@ function dismissTutorialStep() {
   }
   if (tutorialCurrentStepId === 'resource_choice_con_intro') { tutorialResourceCandidatesRevealedFlag = true; tutorialResourceCandidatesJustRevealed = true; tutorialConCardGlowing = false; }
   // initial_resources_reveal's own glow -- turned ON directly in renderConChoice's onPick (see
-  // tutorialInitialResourcesGlowing's own doc). Stays on through resource_conversion_intro too (2026-09-26,
-  // per user report: "このセリフの時すでにダイスが光っています このセリフの時は初期資源を光らせて
-  // ください" -- resource_conversion_intro was inserted between initial_resources_reveal and
-  // color_dice_reveal without moving this OFF/dice-ON handoff along with it, so the dice started glowing
-  // one step too early) -- turned OFF only once resource_conversion_intro itself is dismissed, same moment
-  // tutorialColorDiceGlowing turns ON for the next step (color_dice_reveal).
-  if (tutorialCurrentStepId === 'resource_conversion_intro') { tutorialInitialResourcesGlowing = false; tutorialColorDiceGlowing = true; }
-  // color_dice_reveal's own glow turns OFF once dismissed, and tutorialAreaSlotsGlowing turns ON for the
-  // very next step (main_action_intro) at the same moment (2026-09-26, per user request: "この時エリアの
-  // スロットを光らせる").
-  if (tutorialCurrentStepId === 'color_dice_reveal') { tutorialColorDiceGlowing = false; tutorialAreaSlotsGlowing = true; }
+  // tutorialInitialResourcesGlowing's own doc). 2026-09-30: resource_conversion_intro/color_dice_revealが
+  // Excelから削除されたため、initial_resources_reveal自身が閉じられた瞬間に直接OFF、次のmain_action_intro
+  // 用のtutorialAreaSlotsGlowingを直接ONにする(間の2ステップ分の光る演出は不要になった)。
+  if (tutorialCurrentStepId === 'initial_resources_reveal') { tutorialInitialResourcesGlowing = false; tutorialAreaSlotsGlowing = true; }
   // slot_dice_value_rule_intro(⚀SLOT/自分の1のダイス)の「光る」演出 -- main_action_introが閉じられた瞬間に
   // ONにし、slot_dice_value_rule_intro自身が閉じられたらOFF+slot_any_rule_intro側をONにする。
   if (tutorialCurrentStepId === 'main_action_intro') { tutorialAreaSlotsGlowing = false; tutorialSlotValueOneGlowing = true; }
   if (tutorialCurrentStepId === 'slot_dice_value_rule_intro') { tutorialSlotValueOneGlowing = false; tutorialSlotAnyGlowing = true; }
-  // ex_slot_introの「光る」演出(EXスロット) -- slot_any_rule_introが閉じられた瞬間にONにする。
-  if (tutorialCurrentStepId === 'slot_any_rule_intro') { tutorialSlotAnyGlowing = false; tutorialExSlotGlowing = true; }
-  // slot_dice_value_rule_intro_2の「光る」演出(盤面上の配置済みダイス) -- ex_slot_introが閉じられた瞬間に
-  // ONにする。
-  if (tutorialCurrentStepId === 'ex_slot_intro') { tutorialExSlotGlowing = false; tutorialPlacedDiceGlowing = true; }
+  // slot_dice_value_rule_intro_2の「光る」演出(盤面上の配置済みダイス) -- 2026-09-30、ex_slot_introが
+  // Excelから削除されたため、slot_any_rule_introが閉じられた瞬間に直接ONにする。
+  if (tutorialCurrentStepId === 'slot_any_rule_intro') { tutorialSlotAnyGlowing = false; tutorialPlacedDiceGlowing = true; }
   // free_action_hintの「光る」演出 (2026-09-26, per user request: "この時一般市民が光る") -- 直前の
   // slot_dice_value_rule_intro_2が閉じられた瞬間にONにし、free_action_hint自身が閉じられたらOFFにする。
   // 盤面上の配置済みダイスの光る演出も同じ瞬間にOFFにする。
@@ -10433,54 +10169,22 @@ function dismissTutorialStep() {
   // 「一般市民をクリックせず次へだけ押した」フォールバック経路のときだけ(その場合資源は実際には増えていない
   // が、他のフォールバック経路と同じ扱いとして許容する)。
   if (tutorialCurrentStepId === 'free_action_hint') { tutorialJobCardGlowing = false; tutorialResourceGainGlowing = true; }
-  // cancel_action_hintの「光る」演出(直前のアクションをキャンセルボタン) -- job_tap_resource_introが
-  // 閉じられた瞬間にONにする。
-  if (tutorialCurrentStepId === 'job_tap_resource_intro') { tutorialResourceGainGlowing = false; tutorialCancelButtonGlowing = true; }
-  // 通常はhandleCancelPreviousActionClickが直接同じ処理をやってからrender()する(そちらのdoc参照) -- ここは
-  // 「実際にキャンセルボタンを押さず次へだけ押した」フォールバック経路用。job_retap_hintの「一般市民を
-  // 強制的に再TAP」も同じタイミングで行う(forceRetapJob001ForTutorial's own doc)。
-  if (tutorialCurrentStepId === 'cancel_action_hint') { tutorialCancelButtonGlowing = false; forceRetapJob001ForTutorial(); }
-  // job_retap_hintの「光る」演出は無し(この時タップされる一般市民カード自体は通常のtapped表示で十分)。
-  // dice_select_hintの光る演出はjob_retap_hintが閉じられた瞬間にONにする。
-  if (tutorialCurrentStepId === 'job_retap_hint') tutorialDiceSelectHintGlowing = true;
+  // 2026-09-30: cancel_action_hint/job_retap_hint(「直前のアクションをキャンセル」の実演+一般市民の
+  // 再TAP)はExcelから削除された(キャンセル機能の説明が制約カードを選ぶ前の段階に統合されたため) --
+  // dice_select_hintの光る演出はjob_tap_resource_introが閉じられた瞬間に直接ONにする(間の2ステップを
+  // 経由しない)。
+  if (tutorialCurrentStepId === 'job_tap_resource_intro') { tutorialResourceGainGlowing = false; tutorialDiceSelectHintGlowing = true; }
   // 通常はダイスクリックのイベントリスナーが直接同じ処理をやってからrender()する(そちらのdoc参照) -- ここは
   // 「実際にダイスをクリックせず次へだけ押した」フォールバック経路用。
   if (tutorialCurrentStepId === 'dice_select_hint') tutorialDiceSelectHintGlowing = false;
-  // training_ground_hintの「光る」演出(訓練場) -- first_turn_recommendation_hintが閉じられた瞬間にONにする。
-  if (tutorialCurrentStepId === 'first_turn_recommendation_hint') tutorialTrainingGroundGlowing = true;
-  // card_areas_hintの「光る」演出(王宮/元老院) -- training_ground_hintが閉じられた瞬間にONにする。
-  if (tutorialCurrentStepId === 'training_ground_hint') { tutorialTrainingGroundGlowing = false; tutorialCardAreasGlowing = true; }
-  // shop_cards_introの「光る」演出(SHOP101-106のカード) -- card_areas_hintが閉じられた瞬間にONにする。
-  if (tutorialCurrentStepId === 'card_areas_hint') { tutorialCardAreasGlowing = false; tutorialShopCardsGlowing = true; }
-  // shop_dice_value1_introの「光る」演出(SHOPのダイス目キャプション、die値1用) -- shop_cards_introが
-  // 閉じられた瞬間にONにする。
-  if (tutorialCurrentStepId === 'shop_cards_intro') { tutorialShopCardsGlowing = false; tutorialShopValue1Glowing = true; }
-  // shop_dice_value5_introの「光る」演出(die値5用) -- shop_dice_value1_introが閉じられた瞬間にONにする。
-  if (tutorialCurrentStepId === 'shop_dice_value1_intro') { tutorialShopValue1Glowing = false; tutorialShopValue5Glowing = true; }
-  // shop_cost_introの「光る」演出(支払い資源部分) -- shop_dice_value5_introが閉じられた瞬間にONにする。
-  if (tutorialCurrentStepId === 'shop_dice_value5_intro') { tutorialShopValue5Glowing = false; tutorialShopCostGlowing = true; }
-  if (tutorialCurrentStepId === 'shop_cost_intro') tutorialShopCostGlowing = false;
-  // resource_icon_conversion_hintの「光る」演出(城下町/大聖堂/ギルド/歓楽街) -- resource_icon_explanationが
-  // 閉じられた瞬間にONにする。
-  if (tutorialCurrentStepId === 'resource_icon_explanation') { tutorialFoodAreasGlowing = false; tutorialConversionAreasGlowing = true; }
-  // resource_icon_castletown_hintの「光る」演出(城下町のみ) -- resource_icon_conversion_hintが閉じられた
-  // 瞬間にONにする。
-  if (tutorialCurrentStepId === 'resource_icon_conversion_hint') { tutorialConversionAreasGlowing = false; tutorialCastletownGlowing = true; }
-  // resource_icon_area_card_hintの「光る」演出(王宮/元老院+見えている領地カード) --
-  // resource_icon_castletown_hintが閉じられた瞬間にONにする。
-  if (tutorialCurrentStepId === 'resource_icon_castletown_hint') { tutorialCastletownGlowing = false; tutorialAreaCardHintGlowing = true; }
-  // resource_icon_area_card_hintを閉じたら通常の直線的な次のステップ探索には戻さず、直接resource_pick_hint
-  // へ合流させる (2026-09-27, per user request の分岐設計) -- handleTutorialChoiceClickが選ばれなかった方の
-  // 選択肢(resource_pick_hint)もすでにtutorialSeenStepIdsに入れてしまっているため、ここで明示的に
-  // 遷移させないと通常の再探索では二度と出てこない。
-  if (tutorialCurrentStepId === 'resource_icon_area_card_hint') {
-    tutorialAreaCardHintGlowing = false;
-    tutorialResourceCandidatesGlowing = true;
-    tutorialCurrentStepId = 'resource_pick_hint';
-    stopTutorialTypewriter();
-    render(STATE);
-    return;
-  }
+  // 2026-09-30: training_ground_hint〜shop_cost_intro(訓練場/王宮元老院/SHOPカード/ダイス目/支払い資源の
+  // 説明、計6画面)はExcelから削除された(制約カードを選ぶ前の段階に統合されたため) -- first_turn_
+  // recommendation_hintの次は通常の直線探索でused_card_immediately_hintが見つかる、専用の光る演出は不要。
+  // tutorialShopCostGlowingはbuild_cost_hint(カード獲得デモ)で引き続き使われるため、フラグ自体は残す。
+  // 2026-09-30: resource_icon_explanation〜resource_icon_area_card_hint(初期資源アイコン/変換/城下町/
+  // 領地カードの説明、計4画面)も同じ理由でExcelから削除された -- resource_choiceの次は通常の直線探索で
+  // resource_pick_hintが見つかる。
+  if (tutorialCurrentStepId === 'resource_choice') tutorialResourceCandidatesGlowing = true;
   // worker_placement_example_introの「光る」演出(真ん中のダイス+農園のスロット3) -- game_rules_intro_1
   // が閉じられた瞬間にONにする。
   if (tutorialCurrentStepId === 'game_rules_intro_1') { tutorialGameRulesDiceGlowing = false; tutorialWorkerPlacementExampleGlowing = true; }
@@ -10839,12 +10543,6 @@ let tutorialConCardGlowing = false;
 // はまってしまうため、代わりにdismissTutorialStepと全く同じ「render()を呼ぶ前にフラグを立てる」方式を
 // ここでも使っている。
 let tutorialInitialResourcesGlowing = false;
-// 色ダイスの「光る」演出 (2026-09-26, per user request: "この時色ダイスを光らせる（ｗDは光らせない）") --
-// color_dice_revealが表示され続けている間ずっとtrueになる継続フラグ、他の継続フラグと同じ形。今回は
-// initial_resources_reveal→color_dice_revealへの遷移が普通の「次へ」タップ(dismissTutorialStep)経由な
-// ので、CON面選択の時のような特別な仕掛けは不要 -- dismissTutorialStep自身がすでにrender()を呼ぶ前に
-// フラグを立てる方式になっている。
-let tutorialColorDiceGlowing = false;
 // build_candidate_b001a_hint/build_candidate_b001a_reroll_hint(小さな導き、2026-09-30, per user request:
 // "このときは🎲を表示させたい"/"このときも🎲として表示させたい") の「光る」演出 -- 小さな導きのONCE
 // (ADD(wD))は実際のカード獲得と同時に本物の恩寵ダイスをすでに付与済み(commitBuildCandidateReal参照、
@@ -10865,11 +10563,6 @@ let tutorialSlotValueOneGlowing = false;
 // スロットの配置可能ANY（1番左）と自分のすべてのダイスが光る") -- slot_any_rule_introが表示され続けている
 // 間ずっとtrueになる継続フラグ。
 let tutorialSlotAnyGlowing = false;
-// EXスロットの「光る」演出 (2026-09-27, per user request: "この時EXスロットが光る（EXスロットがなければ
-// 光らない）") -- ex_slot_introが表示され続けている間ずっとtrueになる継続フラグ。EXスロットが1つも無い
-// (誰もまだ領地カードを獲得していない)状態では単純にrequirement==='EX'にマッチするスロットが無いだけなので、
-// 「無ければ光らない」は特別な分岐なしで自然に成立する。
-let tutorialExSlotGlowing = false;
 // 盤面上の配置済みダイスすべての「光る」演出 (2026-09-27, per user request: "スロットに置かれているダイスを
 // すべて光らせる") -- slot_dice_value_rule_intro_2が表示され続けている間ずっとtrueになる継続フラグ。誰が
 // 置いたかは問わず盤面上のすべての配置済みダイスを光らせる。
@@ -10897,27 +10590,9 @@ let tutorialMisclickReturnStepId = null;
 // クリックのイベントリスナー内で直接render()を呼ぶ前にセットする(renderPlayersのdie click handlerのdoc
 // 参照)。renderPlayers内ではこのフラグからtutorialForcedDieId(光らせる/選択可能にする対象の1個)を導出する。
 let tutorialDiceSelectHintGlowing = false;
-// 訓練場の「光る」演出 (2026-09-27, per user request: "この時訓練場を光らせる") -- training_ground_hintが
-// 表示され続けている間ずっとtrueになる継続フラグ。renderBoardのタイル自体(map-tile)を光らせる。
-let tutorialTrainingGroundGlowing = false;
-// 王宮/元老院の「光る」演出 (2026-09-27, per user request: "このとき王宮と元老院を光らせる") --
-// card_areas_hintが表示され続けている間ずっとtrueになる継続フラグ。
-let tutorialCardAreasGlowing = false;
-// SHOP101-106(NORMAL店)カード自体の「光る」演出 (2026-09-27, per user request: "この時SHOP101-106を
-// 光らせる") -- shop_cards_introが表示され続けている間ずっとtrueになる継続フラグ。
-let tutorialShopCardsGlowing = false;
-// SHOPのダイス目キャプション(目1-6等)の「光る」演出、die値1の説明用 (2026-09-27, per user request: "目
-// 1-6から目6まで6個すべて光らせる") -- shop_dice_value1_introが表示され続けている間ずっとtrueになる
-// 継続フラグ。TUTORIAL_SHOP_NORMAL_SLOT_IDSの6枠すべてのキャプションを光らせる(buildShopSlotNodeの
-// reqGlowing参照)。
-let tutorialShopValue1Glowing = false;
-// SHOPのダイス目キャプション+カード自体の「光る」演出、die値5の説明用 (2026-09-27, per user request: "目
-// 1-6と目1-5とSHOP101 102 201 202を光らせる") -- shop_dice_value5_introが表示され続けている間ずっと
-// trueになる継続フラグ。TUTORIAL_SHOP_VALUE5_SLOT_IDSのキャプションとカード両方を光らせる。
-let tutorialShopValue5Glowing = false;
 // SHOP全体(M/NORMAL/SPECIAL)のカードの支払い資源部分の「光る」演出 (2026-09-27, per user request: "ショップ
-// にあるすべてのカードの支払い資源部分を光らせる") -- shop_cost_introが表示され続けている間ずっとtrueに
-// なる継続フラグ。
+// にあるすべてのカードの支払い資源部分を光らせる") -- 元々shop_cost_introが表示され続けている間だけtrueに
+// なる継続フラグだったが、その画面はExcelから削除された。build_cost_hint(カード獲得デモ)で引き続き使う。
 let tutorialShopCostGlowing = false;
 // build_cost_z_hint(2026-09-29, Excel T029「今は万能資源 コネZ〇 が3個あるため…」)の「光る」演出 --
 // あなたのコネ(Z)資源バッジを光らせる、表示され続けている間ずっとtrueになる継続フラグ。
@@ -10951,24 +10626,10 @@ let tutorialAreaTileGlowMapId = null;
 // per user report: "このとき城下町の支配と訓練場の支配もなぜか光っています")とは別の専用フラグにする。
 let tutorialAreaExSlotGlowMapId = null;
 // resource_pick_hint表示中、光っている4枚の初期資源カードの「光る」演出 (2026-09-27, per user request:
-// "それでは光っている4枚の初期資源カードのうち2枚をクリックしてください") -- handleTutorialChoiceClickが
-// この段階に入った瞬間にONにし、resource_pick_hint自身のautoDismissWhenが発火した瞬間にOFFにする
-// (renderTutorialOverlay自身のdoc参照、dismissTutorialStepを経由しないため専用の分岐が必要)。
+// "それでは光っている4枚の初期資源カードのうち2枚をクリックしてください") -- resource_choiceが閉じられた
+// 瞬間にONにし(dismissTutorialStep参照)、resource_pick_hint自身のautoDismissWhenが発火した瞬間にOFFに
+// する(renderTutorialOverlay自身のdoc参照、dismissTutorialStepを経由しないため専用の分岐が必要)。
 let tutorialResourceCandidatesGlowing = false;
-// 小麦畑/農園の「光る」演出 (2026-09-27, per user request: "この時エリア「小麦畑」「農園」を光らせる") --
-// resource_icon_explanationが表示され続けている間ずっとtrueになる継続フラグ。
-let tutorialFoodAreasGlowing = false;
-// 城下町/大聖堂/ギルド/歓楽街の「光る」演出 (2026-09-27, per user request: "この時城下町 大神殿 ギルド
-// 歓楽街を光らせる") -- resource_icon_conversion_hintが表示され続けている間ずっとtrueになる継続フラグ。
-let tutorialConversionAreasGlowing = false;
-// 城下町のみの「光る」演出 (2026-09-27, per user request: "この時城下町を光らせる") --
-// resource_icon_castletown_hintが表示され続けている間ずっとtrueになる継続フラグ。
-let tutorialCastletownGlowing = false;
-// 王宮/元老院+見えている領地カード(Aカード)の「光る」演出 (2026-09-27, per user request: "この時「王宮」か
-// 「元老院」を光らせる 見えている領地カードもすべて光らせる") -- resource_icon_area_card_hintが表示され
-// 続けている間ずっとtrueになる継続フラグ。tutorialExSlotGlowingと同じ考え方で盤面タイルとSHOPのAカード
-// 両方に使う。
-let tutorialAreaCardHintGlowing = false;
 // 自分の色ダイス3個(プレイヤーパネル本物)の「光る」演出 (2026-09-27, per user request: "このときあなたの
 // ダイス3つを光らせる") -- game_rules_intro_1が表示され続けている間ずっとtrueになる継続フラグ。
 // 🎲🎲🎲(TUTORIAL_ICON_NOTATIONS)側の光る演出は常時ONで別管理、こちらはrenderPlayers側の実物のダイス用。
@@ -11474,17 +11135,6 @@ function handleCancelPreviousActionClick() {
   pendingTapChoice = null;
   pendingAutoModeChoice = null;
   placementMessage = '';
-  // cancel_action_hintの「キャンセルボタンをクリック」演出 (2026-09-26, per user request: "この時直前の
-  // アクションをキャンセルボタンを押すと一般市民のフリーアクションがキャンセルされ次のセリフに進む") --
-  // job_tap_resource_introと同じ理由でrender()を呼ぶ前にここでフラグを立てる(tutorialCancelButtonGlowing
-  // 自身のdoc参照)。続くjob_retap_hintの「一般市民を強制的に再TAP」も同じタイミングで行う
-  // (forceRetapJob001ForTutorial's own doc)。
-  if (tutorialCurrentStepId === 'cancel_action_hint') {
-    tutorialCurrentStepId = null;
-    tutorialCancelButtonGlowing = false;
-    forceRetapJob001ForTutorial();
-    stopTutorialTypewriter();
-  }
   // dice_misclick_hintの「キャンセルボタンをクリック」演出 (2026-09-27, per user request) -- 意図した配置先
   // 以外へ誤って置いてしまった後の救済セリフからキャンセルボタンを押すと、tutorialMisclickReturnStepId
   // (誤配置を検知した専用フックがセットしたもの、その doc 参照)へ戻ってやり直せるようにする。戻り先ごとに
