@@ -1656,6 +1656,18 @@ body.tutorial-mode .change-highlight {
   color: var(--accent);
 }
 
+/* 使用料回収ボタン (2026-09-30, per user request: "A→Kの下に使用料{N}Kのボタンを作り押すとすべての
+   領地の使用料を回収できるようにしてほしい") -- .player-panel__free-actionsの下に独立した行として表示
+   (別コンテナなのでflex-wrapで混ざらない)、回収可能な使用料が無ければ:emptyで消える。
+   See main.js's renderFeeCollectButton. */
+.player-panel__fee-collect:empty {
+  display: none;
+}
+
+.player-panel__fee-collect {
+  margin-top: 6px;
+}
+
 /* "ターン終了" button (2026-08-01) -- see main.js's renderTurnEndButton/turnActionTaken. Same
    container convention as .player-panel__free-actions (collapses away when not shown). */
 .player-panel__turn-end:empty {

@@ -713,6 +713,11 @@
            populated for the player whose real TURN it currently is. See main.js's
            renderFreeActionButtons. -->
       <div class="player-panel__free-actions"></div>
+      <!-- 使用料回収 (2026-09-30, per user request: "領地カードを持っていて回収可能な使用料がある場合
+           A→Kの下に使用料{N}Kのボタンを作り押すとすべての領地の使用料を回収できるようにしてほしい") --
+           自分が所有する(feeOwnerIdが自分の)すべてのエリアの未回収使用料をまとめて回収するボタン。
+           回収可能な使用料が無ければ空のまま(:empty{display:none})。See main.js's renderFeeCollectButton. -->
+      <div class="player-panel__fee-collect"></div>
       <!-- TAP reactions (2026-07-30, real engine wiring pass 6): pending ON(GET(...),...) manual-mode
            reactions this player can choose to use or skip. See main.js's renderTapReactions. -->
       <div class="player-panel__tap-reactions"></div>

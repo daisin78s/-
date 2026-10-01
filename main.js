@@ -6486,6 +6486,7 @@ function renderPlayers(state, next) {
     }
 
     renderFreeActionButtons(node.querySelector('.player-panel__free-actions'), state, player, player.id === canPlaceDiceFor);
+    renderFeeCollectButton(node.querySelector('.player-panel__fee-collect'), state, player, player.id === canPlaceDiceFor);
     renderTapReactions(node.querySelector('.player-panel__tap-reactions'), state, player.id);
     renderUntapChoice(node.querySelector('.player-panel__untap-choice'), state, player.id);
     if (tutorialTurnEndButtonShown && player.id === 'P1') {
@@ -6689,6 +6690,47 @@ function renderFreeActionButtons(container, state, player, canAct) {
     });
     container.appendChild(btn);
   }
+}
+
+/** 使用料回収ボタン (2026-09-30, per user request: "領地カードを持っていて回収可能な使用料がある場合
+ * A→Kの下に使用料{N}Kのボタンを作り押すとすべての領地の使用料を回収できるようにしてほしい") -- 自分が
+ * 所有する(feeOwnerIdが自分の)すべてのエリアの未回収使用料(accumulatedFee)の合計を一度に回収する。
+ * executor.collectUsageFeeは1エリアずつしか回収できない(board.js/executor.jsにまとめて回収するAPIは
+ * 無い、ai/move-generatorも1エリアずつCOLLECT_FEEを積む)ため、ここで対象エリア分だけループで呼ぶ。
+ * A→Kなどのフリーアクションと同じ「使えるのは実際の手番のプレイヤーだけ」というcanAct判定を再利用する
+ * (既存のマスタイル上の個別回収バッジもrealTurnPlayerIdでのみクリック可能にしている、buildMapTileNodeの
+ * 同種の判定参照)。*/
+function renderFeeCollectButton(container, state, player, canAct) {
+  container.innerHTML = '';
+  if (!canAct) return;
+  const feeMapIds = Object.keys(state.maps).filter((mapId) => {
+    const map = state.maps[mapId];
+    return map.feeOwnerId === player.id && map.accumulatedFee > 0;
+  });
+  const total = feeMapIds.reduce((sum, mapId) => sum + state.maps[mapId].accumulatedFee, 0);
+  if (total <= 0) return;
+  const btn = el('button', 'free-action-button', `使用料${total}K`);
+  btn.type = 'button';
+  btn.addEventListener('click', () => {
+    // 複数エリア分をまとめて1回のUndoで取り消せるよう、ループの前に1回だけスナップショットを取る
+    // (A→Kなどのフリーアクションと同じ「成功したらactionCheckpointsに積む」パターン)。
+    const preSnapshot = gameStateMod.cloneState(state);
+    const preTurnActionTaken = turnActionTaken;
+    let anySuccess = false;
+    for (const mapId of feeMapIds) {
+      const result = executorMod.collectUsageFee(state, INDEX, { playerId: player.id }, mapId);
+      if (result.success) anySuccess = true;
+    }
+    if (anySuccess) {
+      actionCheckpoints.push({ state: preSnapshot, turnActionTaken: preTurnActionTaken });
+      placementMessage = '';
+      if (pendingTurnEndPlayerId === player.id) attemptAdvanceTurn(state, player.id);
+    } else {
+      placementMessage = '使用料を回収できません';
+    }
+    render(STATE);
+  });
+  container.appendChild(btn);
 }
 
 /** "ターン終了" button (2026-08-01, per user feedback -- see turnActionTaken's own comment): only
