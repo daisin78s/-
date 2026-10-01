@@ -11691,12 +11691,12 @@ function areaTierUpCost(targetAreaId) {
 }
 
 /** デスクトップの手描き画像の矢印(直線+山形の矢先、Unicodeの➜のような塗りつぶし三角ではない)を再現した
- * インラインSVG。2026-10-01、「→ではなく」という再指示 ("→　ではなく　↓　　↑ / →→→ となるように
- * してください") を受けて、単純な右向き直線から「左のtierから下に降り、箱の下を横に渡って、右のtierへ
- * 上に昇る」コの字(⊔型)の矢印に変更 -- 左側は下向きの矢先(山形)、右側は上向きの矢先(山形)で、途中の
- * 横棒の上(コの字の内側)に支払い資源の箱(area-tier-up-connector__cost)が乗る形になる。
+ * インラインSVG。2026-10-01、「tierタイル同士を離さずくっつけて表示して」という指示を受けて、矢印+箱を
+ * tileの行から出し、行の下に独立して配置する形に変更(buildAreaTierUpConnectorsRowの doc参照)。これに
+ * 伴い矢印の形も、箱(下)から見て両側のtileへそれぞれ上向きに伸びる形(コの字⊔型、左右どちらの矢先も上向き)
+ * に変更 -- 手描き画像の「箱から両隣のカードへ上向きに矢印が伸びる」見た目に合わせた。
  * buildAreaTierUpConnectorでinnerHTMLとして挿入する。 */
-const AREA_TIER_UP_ARROW_SVG = '<svg viewBox="0 0 100 40" width="100%" height="auto" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4 V30 H86 V4"/><path d="M7 23 L14 30 L21 23"/><path d="M79 11 L86 4 L93 11"/></svg>';
+const AREA_TIER_UP_ARROW_SVG = '<svg viewBox="0 0 100 40" width="100%" height="auto" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4 V30 H86 V4"/><path d="M7 11 L14 4 L21 11"/><path d="M79 11 L86 4 L93 11"/></svg>';
 
 /** 赤い矢印+🔨付きの支払い資源を示すコネクタ (2026-10-01, per user request: デスクトップの手描き画像
  * "王宮以外のすべてのエリアの拡大画像...赤い矢印を書く 赤い四角の中には🔨赤〇赤〇のようにLVアップするのに
@@ -11705,10 +11705,11 @@ const AREA_TIER_UP_ARROW_SVG = '<svg viewBox="0 0 100 40" width="100%" height="a
  * ください") -- areaTierUpCostで求めたCOST文字列を、既存のrenderCostBadges(ショップカードの支払い資源と
  * 同じ見た目)で色付きドットにし、🔨アイコンを前に付けて赤枠の箱に入れる。このtier自身のINST(色ダイスの
  * 上限はN個、など)があれば、拡大モーダル下部の説明欄(廃止)の代わりにこの箱の中に続けて表示する。
- * showAreaEnlargeModalのarea-enlarge-row内で、前後のtierタイルの間に挟む。矢印は手描き画像の通り、
- * Unicode矢印(➜)ではなく直線+山形の矢先のSVG(area-tier-up-connector-arrow-svgのdoc参照)で描く。 */
-function buildAreaTierUpConnector(cost, inst) {
+ * buildAreaTierUpConnectorsRowがtile行の下に並べる(centerXで横位置を指定、absolute配置)。矢印は手描き
+ * 画像の通り、Unicode矢印(➜)ではなく直線+山形の矢先のSVG(AREA_TIER_UP_ARROW_SVGのdoc参照)で描く。 */
+function buildAreaTierUpConnector(cost, inst, centerX) {
   const wrap = el('div', 'area-tier-up-connector');
+  wrap.style.left = `${centerX}px`;
   const arrowEl = el('div', 'area-tier-up-connector__arrow');
   arrowEl.innerHTML = AREA_TIER_UP_ARROW_SVG;
   wrap.appendChild(arrowEl);
@@ -11720,6 +11721,38 @@ function buildAreaTierUpConnector(cost, inst) {
   if (inst) box.appendChild(el('div', 'area-tier-up-connector__inst', inst));
   wrap.appendChild(box);
   return wrap;
+}
+
+/** tierタイル同士の間の矢印+箱コネクタをまとめてabsolute配置する行 (2026-10-01, per user request:
+ * "デスクトップの画像のようにエリアとエリアが比べ安いように離さずにくっつけて表示して" -- それまでは
+ * コネクタをarea-enlarge-row自身のflexアイテムとしてtile同士の間に挟んでいたため、コネクタの幅の分
+ * tile同士が離れて見えていた。デスクトップの手描き画像ではtileの行自体は詰めて並び、矢印+箱はその下に
+ * 独立してあるので、それに合わせてtile行からコネクタを外し、この下側の行にabsolute配置でまとめる。
+ * 横位置はtileRow(既にDOMに挿入済み、レイアウト確定後)の各tileの実際のgetBoundingClientRectから
+ * 計算する(固定幅を決め打ちしてCSS側とズレるのを避けるため) -- tile i-1とtile iの隙間の中央にコネクタの
+ * 中心が来るようにcenterXを求める。 */
+function buildAreaTierUpConnectorsRow(chain, tileRow, wrap) {
+  const connectorsRow = el('div', 'area-tier-up-connectors-row');
+  // 中の.area-tier-up-connectorはabsolute配置(高さを親に伝えない)なので、連結前にwrapへ挿入してから
+  // 実測したコネクタの高さをconnectorsRow自身の高さとして明示的に設定する。これをしないとwrap/モーダルの
+  // 高さがtile行までしかなくなり、コネクタがモーダル外(背景)にはみ出して見えてしまう。
+  wrap.appendChild(connectorsRow);
+  const wrapRect = wrap.getBoundingClientRect();
+  const tileNodes = Array.from(tileRow.children);
+  let maxHeight = 0;
+  chain.forEach((id, i) => {
+    if (i === 0) return;
+    const cost = areaTierUpCost(id);
+    if (cost === null) return;
+    const prevRect = tileNodes[i - 1].getBoundingClientRect();
+    const curRect = tileNodes[i].getBoundingClientRect();
+    const centerX = (prevRect.right + curRect.left) / 2 - wrapRect.left;
+    const connector = buildAreaTierUpConnector(cost, dataLoaderMod.getAreaRow(INDEX, id).INST || '', centerX);
+    connectorsRow.appendChild(connector);
+    maxHeight = Math.max(maxHeight, connector.offsetHeight);
+  });
+  connectorsRow.style.height = `${maxHeight}px`;
+  return connectorsRow;
 }
 
 /** AREA tap-to-enlarge (2026-08-05, replaces the old plain-INST-text-only modal for AREA tiles -- see
@@ -11752,23 +11785,23 @@ function showAreaEnlargeModal(areaId) {
   visualContainer.innerHTML = '';
   visualContainer.style.width = '';
   visualContainer.style.height = '';
+  // 2026-10-01, per user request (デスクトップの手描き画像参照: "王宮以外のすべてのエリアの拡大画像...
+  // 赤い矢印を書く 赤い四角の中には🔨赤〇赤〇のようにLVアップするのに必要な資源をそれぞれ書く"、続けて
+  // "エリアのINST表示させなくていいです(拡大モーダル側の「説明は未設定です」を含む行も)その代わり
+  // デスクトップの画像のような矢印で表示してください"、さらに "デスクトップの画像のようにエリアとエリアが
+  // 比べ安いように離さずにくっつけて表示して") -- tileの行(area-enlarge-row)自体はtile同士を詰めたまま、
+  // 矢印+箱コネクタ(前の階層からこのtierへ上げるのに必要な資源+このtier自身のINST)はその下に別の行として
+  // まとめる(buildAreaTierUpConnectorsRowのdoc参照、下のcard-inst-modal__body側のINST表示は廃止)。
+  // 王宮(AREA008)のように上げるカード自体が存在しない(=1段階しかない)エリアにはコネクタは出ない。
+  const wrap = el('div', 'area-enlarge-wrap');
   const row = el('div', 'area-enlarge-row');
   const chain = areaTierChain(areaId);
-  chain.forEach((id, i) => {
-    // 2026-10-01, per user request (デスクトップの手描き画像参照: "王宮以外のすべてのエリアの拡大画像...
-    // 赤い矢印を書く 赤い四角の中には🔨赤〇赤〇のようにLVアップするのに必要な資源をそれぞれ書く"、続けて
-    // "エリアのINST表示させなくていいです(拡大モーダル側の「説明は未設定です」を含む行も)その代わり
-    // デスクトップの画像のような矢印で表示してください") -- 前の階層との間に、このtierへ上げるのに必要な
-    // 資源(areaTierUpCost's own doc)と、このtier自身のINST(色ダイスの上限はN個、など)を、どちらも
-    // 🔨付きの赤枠の矢印コネクタにまとめて表示する(下のcard-inst-modal__body側のINST表示は廃止)。
-    // 王宮(AREA008)のように上げるカード自体が存在しない(=1段階しかない)エリアには何も挟まらない。
-    if (i > 0) {
-      const cost = areaTierUpCost(id);
-      if (cost !== null) row.appendChild(buildAreaTierUpConnector(cost, dataLoaderMod.getAreaRow(INDEX, id).INST || ''));
-    }
-    row.appendChild(buildAreaTilePreviewNode(id));
-  });
-  visualContainer.appendChild(row);
+  chain.forEach((id) => row.appendChild(buildAreaTilePreviewNode(id)));
+  wrap.appendChild(row);
+  visualContainer.appendChild(wrap);
+  // tileの実レイアウトが確定した(=DOMに挿入済みでgetBoundingClientRectが取れる)後でないとコネクタの
+  // 横位置を正しく計算できないため、wrap/rowをvisualContainerに挿入してから呼ぶ(関数内でwrapに追加する)。
+  buildAreaTierUpConnectorsRow(chain, row, wrap);
 
   overlay.querySelector('.card-inst-modal__title').textContent = areaName(areaId);
   // 2026-10-01, per user request: エリア拡大モーダルの説明文欄(「説明は未設定です」含む)は廃止 -- INSTは

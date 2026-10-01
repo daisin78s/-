@@ -2835,7 +2835,20 @@ body.tutorial-mode .change-highlight {
 /* AREA tier-chain preview row (2026-08-05, per user feedback: "AREA001Aなど...拡大時に右側にレベルアップ
    後のカードの拡大画像を表示してください") -- see showAreaEnlargeModal/buildAreaTilePreviewNode.
    2026-10-01, per user request ("スクロールは絶対に使わないで"): 横スクロールの代わりにflex-wrapで折り
-   返す -- どんなに画面が狭くても(area-tier-up-connectorを挟んだ分を含め)スクロールバーが絶対に出ない。 */
+   返す -- どんなに画面が狭くてもスクロールバーが絶対に出ない。
+   同日、続けて per user request ("デスクトップの画像のようにエリアとエリアが比べ安いように離さずに
+   くっつけて表示して"): tile行とコネクタ行を縦に積むための外枠(.area-enlarge-wrap)を導入。中身(tile行)の
+   実幅に縮んで中央寄せされる -- これがないとarea-enlarge-rowがモーダル幅いっぱいに広がり、tile同士を
+   justify-content:centerで離れた状態のまま中央寄せしてしまう(間隔を詰めたいのはtile同士であって、tile行を
+   モーダル幅いっぱいに広げることではない)。 */
+.area-enlarge-wrap {
+  display: inline-flex;
+  flex-direction: column;
+  position: relative;
+  margin: 0 auto;
+  max-width: 100%;
+}
+
 .area-enlarge-row {
   display: flex;
   flex-wrap: wrap;
@@ -2844,25 +2857,35 @@ body.tutorial-mode .change-highlight {
   max-width: 100%;
 }
 
+/* tile行の下に独立して置く、矢印+箱コネクタの行 (2026-10-01、上のarea-enlarge-wrapのdoc参照)。コネクタ
+   自体はabsolute配置(buildAreaTierUpConnectorsRowが実測したtileの隙間中央にleftを指定)なので、この行自体の
+   高さはコンテンツに応じて自動で確保される。 */
+.area-tier-up-connectors-row {
+  position: relative;
+  width: 100%;
+}
+
 /* レベルアップに必要な資源(+そのtier自身のINST)を示す赤い矢印+箱 (2026-10-01, per user request:
    デスクトップの手描き画像 "王宮以外のすべてのエリアの拡大画像...赤い矢印を書く 赤い四角の中には
    🔨赤〇赤〇のようにLVアップするのに必要な資源をそれぞれ書く"、続けて "エリアのINST表示させなくていい
    です(拡大モーダル側の「説明は未設定です」を含む行も)その代わりデスクトップの画像のような矢印で表示
-   してください" -- 拡大モーダル下部の説明欄を廃止し、このtierのINST(あれば)もこの箱の中にまとめる) --
-   .area-enlarge-row内でtierタイル同士の間に挟む。 */
+   してください" -- 拡大モーダル下部の説明欄を廃止し、このtierのINST(あれば)もこの箱の中にまとめる)。
+   2026-10-01、続けて "エリアとエリアが比べ安いように離さずにくっつけて表示して" -- tile行には挟まず、
+   area-tier-up-connectors-row内でtileの隙間の中心にabsolute配置+横方向中央寄せ(translateX(-50%))する。 */
 .area-tier-up-connector {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   align-items: stretch;
   justify-content: center;
   gap: 0;
-  flex: 0 0 auto;
   width: 100px;
-  max-width: 110px;
 }
 
-/* コの字(⊔型)矢印(2026-10-01、"→　ではなく　↓　　↑ / →→→" per user request)は箱と同じ幅いっぱいに
-   広げる -- 左のtierから下に降り、箱の上を横に渡って、右のtierへ上に昇る形。 */
+/* コの字(⊔型)矢印、両端とも上向きの矢先(2026-10-01、箱から見て両隣のtileへ上向きに矢印が伸びる見た目に
+   する指示 -- AREA_TIER_UP_ARROW_SVGのdoc参照)は箱と同じ幅いっぱいに広げる。 */
 .area-tier-up-connector__arrow {
   color: var(--danger, #c0392b);
   display: flex;
