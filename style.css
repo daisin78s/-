@@ -1160,6 +1160,22 @@ body.tutorial-mode .change-highlight {
 .map-tile__action .action-arrow { font-size: 18px; }
 .map-tile__action .action-suffix { font-size: 14px; }
 
+/* このtierのINST(色ダイスの上限はN個、など) (2026-10-01, per user request: デスクトップの手描き画像参照
+   "エリア訓練場 赤□部分に 色ダイスの上限５個 と表示 赤〇青〇黄〇→追加色ダイス の枠の外になるように") --
+   .map-tile__action自身の箱(枠)とは別の、独立したキャプション行として下に続ける。続けてper user request
+   ("色ダイスの上限５個 枠いらない フォントの色はほかのアイコンの→追加色ダイスと同じ色") -- 枠は廃止、
+   文字色は.map-tile__action内の他のテキスト(.action-suffixなど)と同じvar(--text-muted)に合わせた。 */
+.map-tile__inst {
+  margin-top: 4px;
+  padding: 0 6px;
+  font-size: 10.5px;
+  color: var(--text-muted);
+  text-align: center;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.map-tile__inst:empty { display: none; }
+
 /* Icon-based action display (confirmed 2026-07-29): known DSL patterns render as icons instead of
    raw text -- see main.js's ACTION_ICON_BUILDERS. Falls back to the monospace text above when a
    pattern has no icon mapping yet. */
@@ -1171,6 +1187,14 @@ body.tutorial-mode .change-highlight {
   flex-wrap: wrap;
   width: 100%;
   font-family: inherit;
+}
+
+/* 元老院LV2の"⚡2K軽減Z"のように、テキストが長くなっても行を増やさずはみ出させたい行用の修飾 (2026-10-01,
+   per user request: "はみ出てもいいから行は増やさないように" -- BZ→軽減Zへの表記変更で文字数が増えた分、
+   通常の.action-iconsのflex-wrap:wrapのままだと2行に折り返ってしまうのを防ぐ)。 */
+.action-icons--nowrap {
+  flex-wrap: nowrap;
+  overflow: visible;
 }
 
 /* A compound effect that needs >1 line within a single ONCE/TAP slot (e.g. BUILD icon + "軽減Z" text
@@ -2903,13 +2927,15 @@ body.tutorial-mode .change-highlight {
   display: block;
 }
 
-.area-tier-up-connector__inst {
-  font-size: 9.5px;
-  line-height: 1.3;
-  color: var(--text-muted);
+/* 孤児院/訓練場/元老院の支配カードだけに出る"2Rから"/"3Rから"キャプション (2026-10-01, per user request:
+   "孤児院の支配 訓練場の支配 の下に 2Rから 元老院の支配の下に 3Rから と表記" -- areaTierUpConnectorCaption
+   のdoc参照)。カードリストの"2Rから登場"/"3Rから登場"(.card-list-abc-special__label)と同じ、素の太字
+   ラベルのスタイルに合わせる。 */
+.area-tier-up-connector__caption {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
   text-align: center;
-  white-space: pre-line;
-  overflow-wrap: anywhere;
 }
 
 /* Front/back card visual row (2026-08-25, see .card-inst-modal--dual's own doc above) -- same layout

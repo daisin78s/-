@@ -688,6 +688,10 @@
       <div class="map-tile__slots"></div>
       <div class="map-tile__turnorder map-tile__turnorder--next"></div>
       <div class="map-tile__action"></div>
+      <!-- このtierのINST(色ダイスの上限はN個、など) (2026-10-01, per user request: デスクトップの手描き
+           画像参照 "エリア訓練場 赤□部分に 色ダイスの上限５個 と表示 赤〇青〇黄〇→追加色ダイス の枠の外に
+           なるように") -- .map-tile__actionの箱の外(下)に表示。INSTが空のtierでは:emptyで消える。 -->
+      <div class="map-tile__inst"></div>
     </div>
   </template>
 
