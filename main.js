@@ -8984,6 +8984,14 @@ const TUTORIAL_STEPS = [
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
     body: 'ランダムな初期資源カード4枚が配られました\nこれはあなたが初めに持っている財産を表しています\n配られた初期資源カード4枚のうち使用する2枚を選んでください',
     nextLabel: '次へ',
+    // 2026-09-30, per user request (Excel T063「初期資源カードのうち2枚をクリックするが起きたときもT065に
+    // 行くようにしてください") -- 「次へ」を押さなくても、実際に2枚クリックしてしまった場合は
+    // resource_pick_hint(T064)を飛ばして直接resource_confirm_intro(T065)へ合流する(resource_pick_hint
+    // 自身のautoDismissWhenと同じ条件)。
+    autoDismissWhen: (state) => {
+      const choice = state.pendingChoices.find((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS');
+      return !!(choice && choice.context.selected && choice.context.selected.length === (choice.context.count || 2));
+    },
   },
   {
     id: 'resource_pick_hint',
@@ -9692,6 +9700,11 @@ function renderTutorialOverlay(state) {
       // resource_pick_hintの「光る」演出(光っている初期資源カード) -- autoDismissWhen経由の遷移は
       // dismissTutorialStepを通らないため、ここで直接OFFにする(tutorialResourceCandidatesGlowing's own doc)。
       if (tutorialCurrentStepId === 'resource_pick_hint') tutorialResourceCandidatesGlowing = false;
+      // resource_choiceが(「次へ」を押さず)実際の2枚クリックで自動的に閉じた場合、resource_pick_hint
+      // (T064、「それでは光っている4枚の...」)はまだ未見のままだと通常の直線探索で誤って先に拾われて
+      // しまう(resource_pick_hint自身のmatchは選択数を問わないため) -- ここで一緒にseen扱いにしておき、
+      // resource_confirm_intro(T065)へ直接合流させる。
+      if (tutorialCurrentStepId === 'resource_choice') tutorialSeenStepIds.add('resource_pick_hint');
       tutorialCurrentStepId = null;
       stopTutorialTypewriter();
       continue;
