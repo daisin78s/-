@@ -2383,7 +2383,7 @@ const CARD_LIST_RESOURCE_GLOSSARY = [
   { code: 'Z', name: 'コネ' },
   { code: 'BZ', name: '口利き' },
   { code: 'D', name: '色ダイス' }, // 2026-09-24「行動力→追加ダイス」、2026-09-26「追加ダイス→色ダイス」に改名(per user requests)
-  { code: 'wD', name: '恩寵' },
+  { code: 'wD', name: '白ダイス' }, // 2026-10-02「恩寵→白ダイス」に改名(per user request: "恩寵ダイス　正式名称を　白ダイスに変更します")
   { code: 'TAP', name: 'タップ' },
 ];
 
@@ -5947,7 +5947,7 @@ function commitBuildCandidateReal(candidate, bzDiscount, tutorialPreSnapshot) {
         if (TUTORIAL_BUILD_CANDIDATE_AREA_MAP_IDS[variantStepId]) {
           tutorialAreaTileGlowMapId = TUTORIAL_BUILD_CANDIDATE_AREA_MAP_IDS[variantStepId];
         }
-        // build_candidate_b001a_hintの「光る」演出(恩寵ダイス) -- tutorialB001aWhiteDieGlowing's own doc。
+        // build_candidate_b001a_hintの「光る」演出(白ダイス) -- tutorialB001aWhiteDieGlowing's own doc。
         if (variantStepId === 'build_candidate_b001a_hint') tutorialB001aWhiteDieGlowing = true;
         tutorialCurrentStepId = variantStepId;
         stopTutorialTypewriter();
@@ -6467,7 +6467,7 @@ function renderPlayers(state, next) {
           render(STATE);
         });
       }
-      // build_candidate_b001a_hintの「光る」演出(恩寵ダイス) -- tutorialB001aWhiteDieGlowing's own doc。
+      // build_candidate_b001a_hintの「光る」演出(白ダイス) -- tutorialB001aWhiteDieGlowing's own doc。
       if (tutorialB001aWhiteDieGlowing && player.id === 'P1' && die.kind === 'WHITE') dieNode.classList.add('change-highlight');
       // slot_dice_value_rule_introの「光る」演出 (2026-09-26, per user request: "自分のダイスの1が光る")
       // -- 目が1のダイスはすべて光らせる(色/白ダイス問わず)、tutorialSlotValueOneGlowing's own doc。
@@ -8923,13 +8923,13 @@ const TUTORIAL_STEPS = [
   {
     id: 'build_candidate_b001a_reroll_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: '恩寵ダイス🎲は使わなかった場合ラウンド開始時にふりなおして使えます',
+    body: '白ダイス🎲は使わなかった場合ラウンド開始時にふりなおして使えます',
     nextLabel: '次へ',
   },
   {
     id: 'build_candidate_b001a_levelup_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: 'このカードはレベルが上がるとまた恩寵ダイスを１個得ることができます\n極端な強さはないですがスロットがうまりダイスが置けなくなってくる後半戦いぶし銀の活躍を見せるのでぜひ使ってみてください',
+    body: 'このカードはレベルが上がるとまた白ダイスを１個得ることができます\n極端な強さはないですがスロットがうまりダイスが置けなくなってくる後半戦いぶし銀の活躍を見せるのでぜひ使ってみてください',
     choicesLayout: 'row',
     choices: [
       { label: 'レベルのあげ方を教えて', targetStepId: 'build_candidate_a005a_levelup_howto_hint' },
@@ -9000,6 +9000,16 @@ const TUTORIAL_STEPS = [
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
     body: '他のカードの説明も見たいのなら「直前のアクションをキャンセル」ボタンを押せば見ることができます\nこれでよければ「ターン終了」ボタンを押してください',
     noManualDismiss: true,
+  },
+  // 2026-10-02, per user request (Excelの新しい行T059) -- ラウンドパスで余ったダイスの扱い(色ダイス1個に
+  // つき食料〇3、白ダイスはラウンド開始時に振り直して使える)の説明。build_candidate_summary_hintの
+  // 「ターン終了」ボタン押下後、通常の直線探索でここに合流する(光る/動く/進む条件の指示なし、プレーンな
+  // 「次へ」のみ)。
+  {
+    id: 'round_pass_leftover_dice_hint',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: 'やりたい行動がないときはダイスを残したままラウンドパスをすることもできます\nラウンドパスをすると使わなかった色ダイス１個につき食料〇3入ります\n使わなかった白ダイスはラウンド開始時ふりなおして使えます',
+    nextLabel: '次へ',
   },
   {
     id: 'game_rules_intro_2',
@@ -9448,11 +9458,12 @@ let tutorialTypewriterTimer = null;
 // 用語が今後（今まで入力した分も含めて）出てきたら自動で青文字になって飛べるようにしてほしい") -- each
 // entry's alias list is the exact substring(s) that should trigger that code's popup wherever they appear
 // in any plain tutorial-bubble string, present or future; a code can have more than one alias (TAP shows
-// up as both "タップ" and "TAP" across existing card text, wD as "恩寵ダイス" even though its own glossary
-// name is just "恩寵", D's aliases are "追加色ダイス" -- the phrase already used in 教師's own body -- plus
-// its two later glossary names "追加ダイス" then "色ダイス" (2026-09-26, per user request: "チュートリアル
-// のリンクも色ダイスでリンクするように"), all three kept since existing tutorial text already uses any of
-// them).
+// up as both "タップ" and "TAP" across existing card text, wD's aliases are "白ダイス" (current glossary
+// name, 2026-10-02 per user request: "恩寵ダイス　正式名称を　白ダイスに変更します") plus the older
+// "恩寵ダイス" (kept since past tutorial text may still use it), D's aliases are "追加色ダイス" -- the
+// phrase already used in 教師's own body -- plus its two later glossary names "追加ダイス" then "色ダイス"
+// (2026-09-26, per user request: "チュートリアルのリンクも色ダイスでリンクするように"), all three kept
+// since existing tutorial text already uses any of them).
 // excludePrecededBy (2026-09-25, per user report: "アンタップのタップ部分にはリンクを張らないで") -- "タッ
 // プ" is a plain substring of "アンタップ" (untap, the opposite action), so without this a tutorial line
 // like 社交家's "ラウンド開始時にアンタップして" would wrongly link just the trailing "タップ" out of it.
@@ -9469,7 +9480,7 @@ const TUTORIAL_TERM_ALIASES = [
   { code: 'Z', aliases: ['コネ'] },
   { code: 'BZ', aliases: ['口利き'] },
   { code: 'D', aliases: ['追加色ダイス', '追加ダイス', '色ダイス'] },
-  { code: 'wD', aliases: ['恩寵ダイス'] },
+  { code: 'wD', aliases: ['白ダイス', '恩寵ダイス'] },
   { code: 'TAP', aliases: [{ text: 'タップ', excludePrecededBy: ['アン'] }, 'TAP'] },
 ];
 
@@ -9637,8 +9648,9 @@ function tutorialBubbleTokens(body) {
 // stopPropagation is required here since #tutorial-bubble itself has its own whole-box click-to-dismiss
 // listener (see its own doc) that would otherwise also fire and advance/close this step on the same tap.
 // A term popup's own title always uses CARD_LIST_RESOURCE_GLOSSARY's canonical name (not the token's own
-// label text) -- 道化's "恩寵ダイス（ｗD）" term (2026-09-24) reads naturally inline in that sentence, but
-// the popup itself should still read "恩寵（wD）", same as every other route into this same popup.
+// label text) -- 道化's "白ダイス（ｗD）" term (2026-09-24、2026-10-02に"恩寵"から改名) reads naturally
+// inline in that sentence, but the popup itself should still read "白ダイス（wD）", same as every other
+// route into this same popup.
 function appendTutorialBubbleToken(textEl, token) {
   if (token.type === 'char') {
     textEl.appendChild(document.createTextNode(token.value));
@@ -10460,7 +10472,7 @@ function dismissTutorialStep() {
   // の2択に統一された(Excel「T045もレベルのあげ方を教えてを表示してください」) -- choicesで進むため
   // dismissTutorialStepは経由しない(handleTutorialChoiceClickが共有のbuild_candidate_summary_hintへの
   // 遷移を処理する、他の levelup_hint と同じ)。
-  // build_candidate_b001a_hint/build_candidate_b001a_reroll_hintの「光る」演出(恩寵ダイス) (2026-09-30,
+  // build_candidate_b001a_hint/build_candidate_b001a_reroll_hintの「光る」演出(白ダイス) (2026-09-30,
   // per user request: "このときも🎲として表示させたい") -- 間のtap_hintでは消し、reroll_hintでまた光らせる
   // -- tutorialB001aWhiteDieGlowing's own doc。
   if (tutorialCurrentStepId === 'build_candidate_b001a_hint') tutorialB001aWhiteDieGlowing = false;
@@ -10611,7 +10623,7 @@ let tutorialConCardGlowing = false;
 let tutorialInitialResourcesGlowing = false;
 // build_candidate_b001a_hint/build_candidate_b001a_reroll_hint(小さな導き、2026-09-30, per user request:
 // "このときは🎲を表示させたい"/"このときも🎲として表示させたい") の「光る」演出 -- 小さな導きのONCE
-// (ADD(wD))は実際のカード獲得と同時に本物の恩寵ダイスをすでに付与済み(commitBuildCandidateReal参照、
+// (ADD(wD))は実際のカード獲得と同時に本物の白ダイスをすでに付与済み(commitBuildCandidateReal参照、
 // 他のカードと違い見た目だけの付与は不要)なので、ここでは単にあなたの白ダイス(die.kind==='WHITE')を
 // 光らせるだけでよい。間のtap_hintでは一旦消える(そこは光らせてほしいと言われていない)。
 let tutorialB001aWhiteDieGlowing = false;
