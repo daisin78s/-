@@ -5227,9 +5227,6 @@ function renderBoard(state, next) {
       } else {
         actionEl.textContent = action;
       }
-      // エリアの説明文(INSTシート) (2026-10-01, per user request: "訓練場のアイコン...の下に色ダイスの上限は
-      // ５個...を表示") -- 今までは拡大モーダル(instForId)でしか見えなかったが、アクション欄の下に常時表示する。
-      node.querySelector('.map-tile__inst').textContent = areaRow.INST || '';
       // worker_placement_example_resultの「光る」演出(農園のACTION表示 ⚡〇3) (2026-09-28, per user request:
       // "この時農園の ⚡〇3 部分も光らせる") -- 農園=MAP002固定、tutorialWorkerPlacementResultGlowing's own doc。
       if (tutorialWorkerPlacementResultGlowing && mapId === 'MAP002') actionEl.classList.add('change-highlight');
@@ -11695,15 +11692,21 @@ function areaTierUpCost(targetAreaId) {
 
 /** 赤い矢印+🔨付きの支払い資源を示すコネクタ (2026-10-01, per user request: デスクトップの手描き画像
  * "王宮以外のすべてのエリアの拡大画像...赤い矢印を書く 赤い四角の中には🔨赤〇赤〇のようにLVアップするのに
- * 必要な資源をそれぞれ書く 元老院なら🔨赤〇赤〇赤〇青〇") -- areaTierUpCostで求めたCOST文字列を、既存の
- * renderCostBadges(ショップカードの支払い資源と同じ見た目)で色付きドットにし、🔨アイコンを前に付けて
- * 赤枠の箱に入れる。showAreaEnlargeModalのarea-enlarge-row内で、前後のtierタイルの間に挟む。 */
-function buildAreaTierUpConnector(cost) {
+ * 必要な資源をそれぞれ書く 元老院なら🔨赤〇赤〇赤〇青〇"、続けて "エリアのINST表示させなくていいです
+ * (拡大モーダル側の「説明は未設定です」を含む行も)その代わりデスクトップの画像のような矢印で表示して
+ * ください") -- areaTierUpCostで求めたCOST文字列を、既存のrenderCostBadges(ショップカードの支払い資源と
+ * 同じ見た目)で色付きドットにし、🔨アイコンを前に付けて赤枠の箱に入れる。このtier自身のINST(色ダイスの
+ * 上限はN個、など)があれば、拡大モーダル下部の説明欄(廃止)の代わりにこの箱の中に続けて表示する。
+ * showAreaEnlargeModalのarea-enlarge-row内で、前後のtierタイルの間に挟む。 */
+function buildAreaTierUpConnector(cost, inst) {
   const wrap = el('div', 'area-tier-up-connector');
   wrap.appendChild(el('div', 'area-tier-up-connector__arrow', '➜'));
   const box = el('div', 'area-tier-up-connector__cost');
-  box.appendChild(actionEmoji('⚒️'));
-  renderCostBadges(box, cost, null);
+  const costRow = el('div', 'area-tier-up-connector__cost-row');
+  costRow.appendChild(actionEmoji('⚒️'));
+  renderCostBadges(costRow, cost, null);
+  box.appendChild(costRow);
+  if (inst) box.appendChild(el('div', 'area-tier-up-connector__inst', inst));
   wrap.appendChild(box);
   return wrap;
 }
@@ -11742,20 +11745,24 @@ function showAreaEnlargeModal(areaId) {
   const chain = areaTierChain(areaId);
   chain.forEach((id, i) => {
     // 2026-10-01, per user request (デスクトップの手描き画像参照: "王宮以外のすべてのエリアの拡大画像...
-    // 赤い矢印を書く 赤い四角の中には🔨赤〇赤〇のようにLVアップするのに必要な資源をそれぞれ書く") --
-    // 前の階層との間に、このtierへ上げるのに必要な資源(そのtierを解放するA/B/Cカードの支払い資源、
-    // areaTierUpCost's own doc)を🔨付きの赤枠で示す矢印コネクタを挟む。王宮(AREA008)のように上げる
-    // カード自体が存在しない(=1段階しかない)エリアには何も挟まらない。
+    // 赤い矢印を書く 赤い四角の中には🔨赤〇赤〇のようにLVアップするのに必要な資源をそれぞれ書く"、続けて
+    // "エリアのINST表示させなくていいです(拡大モーダル側の「説明は未設定です」を含む行も)その代わり
+    // デスクトップの画像のような矢印で表示してください") -- 前の階層との間に、このtierへ上げるのに必要な
+    // 資源(areaTierUpCost's own doc)と、このtier自身のINST(色ダイスの上限はN個、など)を、どちらも
+    // 🔨付きの赤枠の矢印コネクタにまとめて表示する(下のcard-inst-modal__body側のINST表示は廃止)。
+    // 王宮(AREA008)のように上げるカード自体が存在しない(=1段階しかない)エリアには何も挟まらない。
     if (i > 0) {
       const cost = areaTierUpCost(id);
-      if (cost !== null) row.appendChild(buildAreaTierUpConnector(cost));
+      if (cost !== null) row.appendChild(buildAreaTierUpConnector(cost, dataLoaderMod.getAreaRow(INDEX, id).INST || ''));
     }
     row.appendChild(buildAreaTilePreviewNode(id));
   });
   visualContainer.appendChild(row);
 
   overlay.querySelector('.card-inst-modal__title').textContent = areaName(areaId);
-  renderInstBody(overlay.querySelector('.card-inst-modal__body'), instForId(areaId));
+  // 2026-10-01, per user request: エリア拡大モーダルの説明文欄(「説明は未設定です」含む)は廃止 -- INSTは
+  // 上の矢印コネクタ側にまとめた。
+  overlay.querySelector('.card-inst-modal__body').innerHTML = '';
 }
 
 /** Slowly auto-scrolls from the top to the very bottom of the page once, right after the initial

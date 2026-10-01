@@ -1160,22 +1160,6 @@ body.tutorial-mode .change-highlight {
 .map-tile__action .action-arrow { font-size: 18px; }
 .map-tile__action .action-suffix { font-size: 14px; }
 
-/* エリアの説明文(INSTシート) (2026-10-01, per user request: "訓練場のアイコン...の下に色ダイスの上限は
-   ５個...を表示") -- アクション欄のすぐ下に小さな注記として常時表示。空なら:emptyで消える。
-   white-space:pre-lineでINST内の\nを改行として表示する(AREA007Bのように2行になる場合がある)。 */
-.map-tile__inst {
-  font-size: 9.5px;
-  line-height: 1.3;
-  color: var(--text-muted);
-  text-align: center;
-  white-space: pre-line;
-  overflow-wrap: anywhere;
-}
-
-.map-tile__inst:empty {
-  display: none;
-}
-
 /* Icon-based action display (confirmed 2026-07-29): known DSL patterns render as icons instead of
    raw text -- see main.js's ACTION_ICON_BUILDERS. Falls back to the monospace text above when a
    pattern has no icon mapping yet. */
@@ -2805,11 +2789,11 @@ body.tutorial-mode .change-highlight {
    .map-tile--preview's old 130px was noticeably narrower than a tile's real on-board width (盤面の
    .board-row内では.map-tileはflex:1 1 0でコンテナ幅いっぱいに広がる、実測で概ね180px前後)ため、数字目
    (⚀等、ANYより幅を取る)のSLOTが3個並ぶ面では2+1に折り返されて縦長に見えていた -- 184pxならその最悪
-   ケースでも1行に収まる。3 tiles at .map-tile--preview's 184px + 2×10px gaps = 572px of content; still
-   capped by .card-inst-modal's own max-width safety net on narrow ones (see .area-enlarge-row's own
-   overflow-x fallback). */
+   ケースでも1行に収まる。さらに2026-10-01、per user request: 各tierの間にarea-tier-up-connectorを挟む
+   ようになった分も含めて、スクロールが絶対出ないように再計算して広げ直した("スクロールは絶対に使わない
+   で") -- 3 tiles(184px)+2 connectors+4 gaps(10px)ぶん余裕を見て960pxに。 */
 .card-inst-modal--area-wide {
-  width: 620px;
+  width: 960px;
 }
 
 /* Both faces shown side by side in the enlarge modal, each at its normal ENLARGE_SCALE/
@@ -2849,19 +2833,23 @@ body.tutorial-mode .change-highlight {
 .card-inst-modal__visual:empty { display: none; }
 
 /* AREA tier-chain preview row (2026-08-05, per user feedback: "AREA001Aなど...拡大時に右側にレベルアップ
-   後のカードの拡大画像を表示してください") -- see showAreaEnlargeModal/buildAreaTilePreviewNode. Falls
-   back to horizontal scroll rather than shrinking further if 3 tiles + gaps would exceed the modal's own
-   max-width, same safety-net pattern used elsewhere (e.g. .shop-row__combined). */
+   後のカードの拡大画像を表示してください") -- see showAreaEnlargeModal/buildAreaTilePreviewNode.
+   2026-10-01, per user request ("スクロールは絶対に使わないで"): 横スクロールの代わりにflex-wrapで折り
+   返す -- どんなに画面が狭くても(area-tier-up-connectorを挟んだ分を含め)スクロールバーが絶対に出ない。 */
 .area-enlarge-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
-  overflow-x: auto;
+  justify-content: center;
   max-width: 100%;
 }
 
-/* レベルアップに必要な資源を示す赤い矢印+箱 (2026-10-01, per user request: デスクトップの手描き画像
-   "王宮以外のすべてのエリアの拡大画像...赤い矢印を書く 赤い四角の中には🔨赤〇赤〇のようにLVアップする
-   のに必要な資源をそれぞれ書く") -- .area-enlarge-row内でtierタイル同士の間に挟む。 */
+/* レベルアップに必要な資源(+そのtier自身のINST)を示す赤い矢印+箱 (2026-10-01, per user request:
+   デスクトップの手描き画像 "王宮以外のすべてのエリアの拡大画像...赤い矢印を書く 赤い四角の中には
+   🔨赤〇赤〇のようにLVアップするのに必要な資源をそれぞれ書く"、続けて "エリアのINST表示させなくていい
+   です(拡大モーダル側の「説明は未設定です」を含む行も)その代わりデスクトップの画像のような矢印で表示
+   してください" -- 拡大モーダル下部の説明欄を廃止し、このtierのINST(あれば)もこの箱の中にまとめる) --
+   .area-enlarge-row内でtierタイル同士の間に挟む。 */
 .area-tier-up-connector {
   display: flex;
   flex-direction: column;
@@ -2869,6 +2857,7 @@ body.tutorial-mode .change-highlight {
   justify-content: center;
   gap: 2px;
   flex: 0 0 auto;
+  max-width: 110px;
 }
 
 .area-tier-up-connector__arrow {
@@ -2879,6 +2868,7 @@ body.tutorial-mode .change-highlight {
 
 .area-tier-up-connector__cost {
   display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 3px;
   border: 2px solid var(--danger, #c0392b);
@@ -2887,12 +2877,27 @@ body.tutorial-mode .change-highlight {
   background: var(--surface);
 }
 
+.area-tier-up-connector__cost-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
 .area-tier-up-connector__cost .resource-badge {
   border: none;
   background: none;
   padding: 0;
   gap: 2px;
   font-size: 11px;
+}
+
+.area-tier-up-connector__inst {
+  font-size: 9.5px;
+  line-height: 1.3;
+  color: var(--text-muted);
+  text-align: center;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
 }
 
 /* Front/back card visual row (2026-08-25, see .card-inst-modal--dual's own doc above) -- same layout
