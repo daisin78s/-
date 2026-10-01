@@ -2853,17 +2853,27 @@ body.tutorial-mode .change-highlight {
 .area-tier-up-connector {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
-  gap: 2px;
+  gap: 0;
   flex: 0 0 auto;
+  width: 100px;
   max-width: 110px;
 }
 
+/* コの字(⊔型)矢印(2026-10-01、"→　ではなく　↓　　↑ / →→→" per user request)は箱と同じ幅いっぱいに
+   広げる -- 左のtierから下に降り、箱の上を横に渡って、右のtierへ上に昇る形。 */
 .area-tier-up-connector__arrow {
   color: var(--danger, #c0392b);
   display: flex;
   line-height: 0;
+  width: 100%;
+}
+
+.area-tier-up-connector__arrow svg {
+  width: 100%;
+  height: auto;
+  display: block;
 }
 
 .area-tier-up-connector__cost {

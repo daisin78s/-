@@ -11691,9 +11691,12 @@ function areaTierUpCost(targetAreaId) {
 }
 
 /** デスクトップの手描き画像の矢印(直線+山形の矢先、Unicodeの➜のような塗りつぶし三角ではない)を再現した
- * インラインSVG (2026-10-01, per user request: "矢印を→ではなくデスクトップの画像のような矢印にして
- * ください") -- buildAreaTierUpConnectorでinnerHTMLとして挿入する。横並びのtier間に挟むため右向き。 */
-const AREA_TIER_UP_ARROW_SVG = '<svg viewBox="0 0 32 24" width="32" height="24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12 H24"/><path d="M15 4 L24 12 L15 20"/></svg>';
+ * インラインSVG。2026-10-01、「→ではなく」という再指示 ("→　ではなく　↓　　↑ / →→→ となるように
+ * してください") を受けて、単純な右向き直線から「左のtierから下に降り、箱の下を横に渡って、右のtierへ
+ * 上に昇る」コの字(⊔型)の矢印に変更 -- 左側は下向きの矢先(山形)、右側は上向きの矢先(山形)で、途中の
+ * 横棒の上(コの字の内側)に支払い資源の箱(area-tier-up-connector__cost)が乗る形になる。
+ * buildAreaTierUpConnectorでinnerHTMLとして挿入する。 */
+const AREA_TIER_UP_ARROW_SVG = '<svg viewBox="0 0 100 40" width="100%" height="auto" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4 V30 H86 V4"/><path d="M7 23 L14 30 L21 23"/><path d="M79 11 L86 4 L93 11"/></svg>';
 
 /** 赤い矢印+🔨付きの支払い資源を示すコネクタ (2026-10-01, per user request: デスクトップの手描き画像
  * "王宮以外のすべてのエリアの拡大画像...赤い矢印を書く 赤い四角の中には🔨赤〇赤〇のようにLVアップするのに
