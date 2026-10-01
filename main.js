@@ -5913,6 +5913,14 @@ function commitBuildCandidateReal(candidate, bzDiscount, tutorialPreSnapshot) {
   const playerId = pendingBuildChoice.playerId;
   const context = { playerId, bzDiscount };
   const source = pendingBuildChoice.source;
+  // 始まりの兆しの「タップ→資源がなくてカードが獲得できない→おっと資源は通常通り必要です...→もう一度
+  // タップ」演出 (2026-09-30, per user request) -- useBareTapAbility(board.js)の時点では資源を問わず
+  // 候補が返るため、実際に資源が足りるかはここ(候補を1枚選んで確定する瞬間)で初めて判定される。
+  // build_candidate_b004a_hint中の1回目は資源不足で失敗する想定(資源グラント画面へ)、資源グラント後の
+  // 2回目(build_candidate_b004a_resource_grant_hint中)は成功する想定(実演説明へ)。
+  const b004aTutorialTapStep = source === 'TAP'
+    && STATE.cards[pendingBuildChoice.physicalId].currentFaceId === 'B004A'
+    && (tutorialCurrentStepId === 'build_candidate_b004a_hint' || tutorialCurrentStepId === 'build_candidate_b004a_resource_grant_hint');
   // Tap the TAP-source card BEFORE resolving the build, not after (2026-08-09 fix, per user report on
   // what were then B006A/C008A -- renamed to B202A/C301A by the 2026-08-24 SHOP201-203 rework's card
   // renumbering: "B006AをTAPしてその効果でC008Aを建築したときB006Aがアンタップしない"). The built card's
@@ -5979,6 +5987,13 @@ function commitBuildCandidateReal(candidate, bzDiscount, tutorialPreSnapshot) {
         stopTutorialTypewriter();
       }
     }
+    // b004aTutorialTapStep's own doc -- タップが成功した(資源が足りた)瞬間、実演説明へ直接進む。
+    if (b004aTutorialTapStep) {
+      tutorialB004aResourceGrantGlowing = false;
+      tutorialSeenStepIds.add('build_candidate_b004a_try_hint');
+      tutorialCurrentStepId = 'build_candidate_b004a_try_hint';
+      stopTutorialTypewriter();
+    }
   } else {
     // Payment somehow failed even after bzOutcomesForCandidate said it would succeed (stale state
     // between render and click) -- drop back to the plain candidate list rather than leaving the
@@ -5986,6 +6001,12 @@ function commitBuildCandidateReal(candidate, bzDiscount, tutorialPreSnapshot) {
     if (source === 'TAP') STATE.cards[pendingBuildChoice.physicalId].tapped = false; // build never actually happened -- the TAP wasn't spent
     pendingBzOutcomeChoice = null;
     placementMessage = `建築できません（${result.reason}）`;
+    // b004aTutorialTapStep's own doc -- 1回目のタップ(build_candidate_b004a_hint中)が資源不足で失敗した
+    // 瞬間、通常は(モーダルを開いたままにする代わりに)モーダルを閉じて資源グラント画面へ進む。
+    if (b004aTutorialTapStep && tutorialCurrentStepId === 'build_candidate_b004a_hint') {
+      pendingBuildChoice = null;
+      enterB004aResourceGrantHint();
+    }
   }
   render(STATE);
 }
@@ -6934,6 +6955,21 @@ function attachTapToggle(cardNode, cardState, faceId, canAct, physicalId) {
         pendingBuildChoice = { source: 'TAP', playerId: cardState.ownerId, ...result.pendingBuild };
             pendingBzOutcomeChoice = null;
         placementMessage = '';
+        // 始まりの兆しの「タップ→資源がなくてカードが獲得できない→おっと資源は通常通り必要です...→
+        // もう一度タップ」演出 (2026-09-30, per user request) -- getBuildCandidates(board.js)はダイス目/
+        // カテゴリだけで候補を絞り資源では絞らないため、useBareTapAbility自体はほぼ必ずpendingBuildを
+        // 返す。実際に資源で選べるかはrenderBuildChoiceModalと同じcandidateAffordableで判定する --
+        // 0枚なら(renderBuildChoiceModalが「今支払える資源では建築できるカードがありません」を出す代わりに)
+        // モーダルを閉じて資源グラント画面へ進む。
+        if (tutorialCurrentStepId === 'build_candidate_b004a_hint' && faceId === 'B004A') {
+          const affordable = pendingBuildChoice.candidates.filter((c) => candidateAffordable(c, cardState.ownerId));
+          if (affordable.length === 0) {
+            pendingBuildChoice = null;
+            STATE.cards[physicalId].tapped = false; // build never actually happened -- the TAP wasn't spent
+            actionCheckpoints.pop(); // このタップはモーダルを開いただけで何も確定していないので取り消す
+            enterB004aResourceGrantHint();
+          }
+        }
       } else if (
         // 傲慢/CON004A (2026-08-21, per user report: 革命の兆しLV2のBUILD(U)がNO_BUILDABLE_CARDという
         // 生の理由コードだけを表示していて分かりにくかった -- die-placement's own build-choice-modal
@@ -7715,6 +7751,13 @@ function renderPlayerCards(state, next) {
       // .req is just '' (row has no DICE column) and .shop-card__req collapses away via its own :empty
       // rule -- so this is safe to pass unconditionally, not just for M-prefixed physicalIds.
       const cardNode = buildCardVisual(cardState.currentFaceId, { tapped: cardState.tapped, showEffect: tall, req: factsForFaceId(cardState.currentFaceId).req });
+      // build_candidate_a005a_levelup_howto_hintの「光る」演出(あなたの持ちカードの獲得必要資源) --
+      // tutorialOwnedCardCostGlowing's own doc。.shop-card__backの中の非表示コピーを誤って掴まないよう
+      // 子コンビネータで表面側だけに絞る(build_cost_hintと同じ修正パターン)。
+      if (tutorialOwnedCardCostGlowing && player.id === 'P1') {
+        const costEl = cardNode.querySelector(':scope > .shop-card__cost, :scope > .shop-card__cost-empty');
+        if (costEl) costEl.classList.add('change-highlight');
+      }
       attachTapToggle(cardNode, cardState, cardState.currentFaceId, canUseTap, physicalId);
       cell.appendChild(cardNode);
       listEl.appendChild(cell);
@@ -8814,7 +8857,12 @@ const TUTORIAL_STEPS = [
     id: 'build_candidate_b004a_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
     body: '始まりの兆しですね\nこのカードは',
-    nextLabel: '次へ',
+    // 2026-09-30, per user request (Excel「この時次へを消す」+「始まりの兆しをタップしたらタップ→資源が
+    // なくてカードが獲得できない→おっと資源は通常通り必要です...が表示→もう一度タップ、という流れに
+    // したい") -- 「次へ」ボタンでは進めず、実際に始まりの兆しをタップするまで待つ(attachTapToggleのBUILD
+    // 分岐参照)。1回目は(この時点ではまだ資源が足りないはずなので)失敗してbuild_candidate_b004a_resource_
+    // grant_hintへ、そこでの2回目のタップで成功してbuild_candidate_b004a_try_hintへ進む。
+    noManualDismiss: true,
   },
   // 2026-09-30, per user request (Excelの新しい行T043〜T045、始まりの兆しを選んだ時だけの追加説明) --
   // 農園/城下町のエリア所有カードと同じ「1枚だけ説明が続く」構造だが、内容は別(資源を見た目だけ増やす→
@@ -8823,7 +8871,9 @@ const TUTORIAL_STEPS = [
     id: 'build_candidate_b004a_resource_grant_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
     body: '資源がないとお見せできないので一時的に資源を増やしますね',
-    nextLabel: '次へ',
+    // 2026-09-30, per user request ("もう一度タップ") -- 資源を見た目だけ増やした後、もう一度実際に
+    // 始まりの兆しをタップして試させる(commitBuildCandidateRealの成功分岐参照)。
+    noManualDismiss: true,
   },
   {
     id: 'build_candidate_b004a_try_hint',
@@ -10262,6 +10312,13 @@ function handleTutorialChoiceClick(targetStepId) {
     tutorialAreaTileGlowMapId = null;
   }
   if (targetStepId === 'build_candidate_summary_hint') enterBuildCandidateSummaryHintFlags();
+  // build_candidate_a005a_levelup_howto_hintの「光る」演出 (2026-09-30, per user request: "T057「王宮」
+  // 「元老院」のハンマーアイコン,あなたの持ちカードの獲得必要資源を光らせて") -- tutorialHammerGlowing
+  // (build_icon_hintと共通の既存フラグ)とtutorialOwnedCardCostGlowing(新規)。
+  if (targetStepId === 'build_candidate_a005a_levelup_howto_hint') {
+    tutorialHammerGlowing = true;
+    tutorialOwnedCardCostGlowing = true;
+  }
   tutorialCurrentStepId = targetStepId;
   stopTutorialTypewriter();
   render(STATE);
@@ -10300,6 +10357,18 @@ function enterBuildCandidateSummaryHint() {
   tutorialCurrentStepId = 'build_candidate_summary_hint';
   stopTutorialTypewriter();
   render(STATE);
+}
+
+// build_candidate_b004a_hintの実タップが失敗した瞬間(attachTapToggleのBUILD分岐参照、2026-09-30 per user
+// request)に呼ぶ -- T043自身の「動く」(資源を見た目だけ増やす)を実行してbuild_candidate_b004a_resource_
+// grant_hintへ進む。render()はこの関数の外、attachTapToggleの呼び出し元(クリックハンドラ末尾)がまとめて
+// 呼ぶ(他のTAP成功/失敗時の処理と同じ順序)。
+function enterB004aResourceGrantHint() {
+  grantResourcesForTutorial('P1', { A: 2, B: 2, C: 2 });
+  tutorialB004aResourceGrantGlowing = true;
+  tutorialSeenStepIds.add('build_candidate_b004a_resource_grant_hint');
+  tutorialCurrentStepId = 'build_candidate_b004a_resource_grant_hint';
+  stopTutorialTypewriter();
 }
 
 function dismissTutorialStep() {
@@ -10603,19 +10672,9 @@ function dismissTutorialStep() {
   }
   // 始まりの兆し(2026-09-30, Excelの新しい行T043〜T045)専用の追加説明チェーン -- エリア所有カードと同じく
   // 強制遷移で配列の並び順に頼らない(TUTORIAL_BUILD_CANDIDATE_B004A_CHAIN_IDS's own doc)。hint→資源を見た目
-  // だけ増やす→実際にタップして試させる→レベルアップの説明、の順。
-  if (tutorialCurrentStepId === 'build_candidate_b004a_hint') {
-    // T043自身の「動く」(資源を見た目だけ増やす)を、直前の行(build_candidate_b004a_hint)の次へを押した瞬間に
-    // 実際に実行する(動くは「そのステップが表示される時に実行」パターン、他の動くと同じ)。
-    grantResourcesForTutorial('P1', { A: 2, B: 2, C: 2 });
-    tutorialB004aResourceGrantGlowing = true;
-    const nextId = TUTORIAL_BUILD_CANDIDATE_B004A_CHAIN_IDS[0];
-    tutorialSeenStepIds.add(nextId);
-    tutorialCurrentStepId = nextId;
-    stopTutorialTypewriter();
-    render(STATE);
-    return;
-  }
+  // だけ増やす→実際にタップして試させる→レベルアップの説明、の順。build_candidate_b004a_hint自身は
+  // noManualDismissのため、資源グラントへの突入は実際のタップ失敗で行う(attachTapToggleのBUILD分岐参照、
+  // enterB004aResourceGrantHint's own doc)。
   {
     const idx = TUTORIAL_BUILD_CANDIDATE_B004A_CHAIN_IDS.indexOf(tutorialCurrentStepId);
     if (idx >= 0 && idx < TUTORIAL_BUILD_CANDIDATE_B004A_CHAIN_IDS.length - 1) {
@@ -10690,6 +10749,8 @@ function dismissTutorialStep() {
   // 「レベルのあげ方を教えて」を経由した時だけ出る(「次へ」で直接summaryへ進んだ場合は出ない、Excelの
   // 分岐通り)。
   if (tutorialCurrentStepId === 'build_candidate_a005a_levelup_howto_hint') {
+    tutorialHammerGlowing = false;
+    tutorialOwnedCardCostGlowing = false;
     tutorialSeenStepIds.add('build_candidate_levelup_vp_hint');
     tutorialCurrentStepId = 'build_candidate_levelup_vp_hint';
     stopTutorialTypewriter();
@@ -10977,6 +11038,9 @@ let tutorialTrainingGlowing = false;
 // カード獲得の説明(Excel T021〜T030, 2026-09-29)の「光る」演出 -- 🔨(BUILDのACTION表示)、ダイス目ごとに買えるSHOPの
 // スロット(SHOP101...のカードとダイス目キャプション。null=光らせない)、BUILD候補ウィンドウ上のカード。
 let tutorialHammerGlowing = false;
+// build_candidate_a005a_levelup_howto_hint(2026-09-30, Excel T057「あなたの持ちカードの獲得必要資源を
+// 光らせて」)の「光る」演出 -- 自分の所持カード(JOB/CON以外のA/B/C/M)の支払い資源部分を光らせる。
+let tutorialOwnedCardCostGlowing = false;
 let tutorialBuildShopGlowSlots = null;
 let tutorialBuildCandidatesGlowing = false;
 // チュートリアル専用のターン終了ボタンを表示している間だけtrue (2026-09-29, Excel T011) --
