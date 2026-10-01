@@ -11692,11 +11692,11 @@ function areaTierUpCost(targetAreaId) {
 
 /** デスクトップの手描き画像の矢印(直線+山形の矢先、Unicodeの➜のような塗りつぶし三角ではない)を再現した
  * インラインSVG。2026-10-01、「tierタイル同士を離さずくっつけて表示して」という指示を受けて、矢印+箱を
- * tileの行から出し、行の下に独立して配置する形に変更(buildAreaTierUpConnectorsRowの doc参照)。これに
- * 伴い矢印の形も、箱(下)から見て両側のtileへそれぞれ上向きに伸びる形(コの字⊔型、左右どちらの矢先も上向き)
- * に変更 -- 手描き画像の「箱から両隣のカードへ上向きに矢印が伸びる」見た目に合わせた。
- * buildAreaTierUpConnectorでinnerHTMLとして挿入する。 */
-const AREA_TIER_UP_ARROW_SVG = '<svg viewBox="0 0 100 40" width="100%" height="auto" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4 V30 H86 V4"/><path d="M7 11 L14 4 L21 11"/><path d="M79 11 L86 4 L93 11"/></svg>';
+ * tileの行から出し、行の下に独立して配置する形に変更(buildAreaTierUpConnectorsRowの doc参照)。コの字
+ * ⊔型で箱(下)から両側のtileへ線が伸びる形自体は維持しつつ、続けての指示「双方向矢印ではない」を受けて
+ * 矢先(山形)は昇格先(右側=上位tier)側の1箇所だけに変更 -- 左側(昇格元)はただの直線で、矢印が両方向を
+ * 指しているように見えないようにする。 */
+const AREA_TIER_UP_ARROW_SVG = '<svg viewBox="0 0 100 40" width="100%" height="auto" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4 V30 H86 V4"/><path d="M79 11 L86 4 L93 11"/></svg>';
 
 /** 赤い矢印+🔨付きの支払い資源を示すコネクタ (2026-10-01, per user request: デスクトップの手描き画像
  * "王宮以外のすべてのエリアの拡大画像...赤い矢印を書く 赤い四角の中には🔨赤〇赤〇のようにLVアップするのに
