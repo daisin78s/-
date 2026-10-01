@@ -2003,7 +2003,7 @@
       "SLOT6": "NONE",
       "ACTION": "ADD(3K)",
       "fee": "",
-      "INST": "ここにダイスを置くと食糧（K）を3個得ることができます"
+      "INST": ""
     },
     {
       "ID": "AREA002A",
@@ -2081,7 +2081,7 @@
       "SLOT6": "NONE",
       "ACTION": "CHANGE((A,B,C),D)",
       "fee": "",
-      "INST": "色ダイスの上限は5個"
+      "INST": "色ダイスの上限は５個"
     },
     {
       "ID": "AREA008",
@@ -2322,13 +2322,13 @@
       "NAME": "訓練場LV2",
       "SLOT1": "ANY",
       "SLOT2": "EX",
-      "SLOT3": "NONE",
+      "SLOT3": "EX",
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "ADD(D)",
       "fee": 3,
-      "INST": "このエリアにダイスを置くと\n色ダイスの上限6個になる"
+      "INST": "色ダイスの上限は６個"
     },
     {
       "ID": "AREA009C",

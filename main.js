@@ -5227,6 +5227,9 @@ function renderBoard(state, next) {
       } else {
         actionEl.textContent = action;
       }
+      // エリアの説明文(INSTシート) (2026-10-01, per user request: "訓練場のアイコン...の下に色ダイスの上限は
+      // ５個...を表示") -- 今までは拡大モーダル(instForId)でしか見えなかったが、アクション欄の下に常時表示する。
+      node.querySelector('.map-tile__inst').textContent = areaRow.INST || '';
       // worker_placement_example_resultの「光る」演出(農園のACTION表示 ⚡〇3) (2026-09-28, per user request:
       // "この時農園の ⚡〇3 部分も光らせる") -- 農園=MAP002固定、tutorialWorkerPlacementResultGlowing's own doc。
       if (tutorialWorkerPlacementResultGlowing && mapId === 'MAP002') actionEl.classList.add('change-highlight');
