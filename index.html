@@ -470,6 +470,27 @@
     </div>
   </div>
 
+  <!-- 会話ログ (2026-09-30, per user request: "すべての場面で左下に会話ログボタンが欲しい"、続けて
+       "会話ログボタンを押すと◁▷ボタンで出て会話ログを戻れるようにする") -- これまで表示されたチュートリアル
+       の吹き出し文章(tutorialBubbleHistory)を、新しい順に1件ずつ◁▷で前後に送って読み返せる、操作記録を
+       含まない単純な履歴。チュートリアルモード中は常に画面左下にボタンを表示 -- see main.js's
+       renderTutorialOverlay/renderTutorialLogOverlay。 -->
+  <button type="button" id="tutorial-log-button" class="tutorial-log-button" hidden>会話ログ</button>
+  <div id="tutorial-log-overlay" class="card-inst-overlay" hidden>
+    <div class="card-inst-modal build-choice-modal tutorial-log-modal">
+      <button type="button" id="tutorial-log-close-button" class="tutorial-turnorder-close-x" aria-label="閉じる">&times;</button>
+      <div class="card-inst-modal__body">
+        <div id="tutorial-log-text" class="tutorial-log-text"></div>
+        <div class="tutorial-log-nav">
+          <button type="button" id="tutorial-log-prev-button" class="tutorial-log-nav-button" aria-label="前へ">◁</button>
+          <div id="tutorial-log-position" class="tutorial-log-position"></div>
+          <button type="button" id="tutorial-log-next-button" class="tutorial-log-nav-button" aria-label="次へ">▷</button>
+        </div>
+        <button type="button" id="tutorial-log-end-button" class="tutorial-log-end-button">会話ログ終了</button>
+      </div>
+    </div>
+  </div>
+
   <!-- チュートリアル: 手番順の発表 (2026-09-23, per user request: "この選択でOKを押した後 プレイヤー全員の
        プレイヤーネーム 制約カード表裏 選んだ初期資源カード2枚 先手順合計を表示して プレイヤーネームの左に
        1番手2番手3番手4番手と表示する"、続けて 各種調整依頼 -- "手番順が決まりました は不要"でタイトル削除、

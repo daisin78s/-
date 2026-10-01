@@ -9964,6 +9964,9 @@ function renderTutorialOverlay(state) {
     tutorialTypewriterStepId = step.id;
     const fullText = typeof step.body === 'function' ? step.body(state) : step.body;
     startTutorialTypewriter(step.id, fullText);
+    // 会話ログ (2026-09-30, openTutorialLogOverlay's own doc) -- 新しいセリフが実際に表示される瞬間に
+    // 積む(1画面1回だけ、レンダーのたびには積まない)。
+    tutorialBubbleHistory.push(fullText);
     // job_draft_introが見えるようにスクロール (2026-09-26, per user report: "この時JOBが見えないので上に
     // スクロールさせてください") -- 初期資源カード用のスクロール調整と同じ考え方(下固定のセリフ吹き出し
     // が占める領域を避けて中央寄せ)だが、#job-poolはテンプレートからcloneされる所持カード欄と違って
@@ -10807,6 +10810,11 @@ function dismissTutorialStep() {
 const TUTORIAL_TURN_ORDER_STEP_ID = 'turn_order_reveal';
 let tutorialTurnOrderOverlayOpen = false;
 let tutorialOthersRevealed = false;
+// 会話ログ (openTutorialLogOverlay's own doc) -- これまで表示されたチュートリアルの吹き出し文章を古い順に
+// 積む配列、オーバーレイの開閉状態、新しい順に並べた配列への現在の表示位置(0=最新)。
+let tutorialBubbleHistory = [];
+let tutorialLogOverlayOpen = false;
+let tutorialLogViewIndex = 0;
 
 // CON/RESOURCE候補の段階的な表示 (2026-09-25, per user request: "それではゲームを始めましょう の時はまだ
 // 制約カードと初期資源カードは配られていない" -- resource_choice_intro/resource_choice_con_intro/
@@ -11154,6 +11162,57 @@ function closeTutorialTurnOrderOverlay() {
   render(STATE);
 }
 
+// 会話ログ (2026-09-30, per user request: "すべての場面で左下に会話ログボタンが欲しい"、続けて "会話ログ
+// ボタンを押すと◁▷ボタンで出て会話ログを戻れるようにする") -- これまで表示されたチュートリアルの吹き出し
+// 文章(tutorialBubbleHistory、renderTutorialOverlay側で新しいステップが表示される瞬間に積む)を、新しい順
+// (per user follow-up: "古い順ではなく新しい順")に1件ずつ◁▷で前後に送って読み返せる、操作記録を含まない
+// 単純な履歴。ボタン自体はチュートリアル中ずっと表示(tutorialModeActiveのみで判定)。
+// tutorialLogViewIndex: tutorialBubbleHistoryを新しい順に並べた配列への添字(0=最新)。開くたびに最新へ
+// 戻す。◁(前へ=より古い)でインクリメント、▷(次へ=より新しい)でデクリメント。
+function openTutorialLogOverlay() {
+  tutorialLogOverlayOpen = true;
+  tutorialLogViewIndex = 0;
+  render(STATE);
+}
+
+function closeTutorialLogOverlay() {
+  tutorialLogOverlayOpen = false;
+  render(STATE);
+}
+
+function handleTutorialLogPrevClick() {
+  tutorialLogViewIndex = Math.min(tutorialLogViewIndex + 1, Math.max(0, tutorialBubbleHistory.length - 1));
+  render(STATE);
+}
+
+function handleTutorialLogNextClick() {
+  tutorialLogViewIndex = Math.max(tutorialLogViewIndex - 1, 0);
+  render(STATE);
+}
+
+function renderTutorialLogOverlay() {
+  document.getElementById('tutorial-log-button').hidden = !tutorialModeActive;
+  const overlay = document.getElementById('tutorial-log-overlay');
+  overlay.hidden = !tutorialLogOverlayOpen;
+  if (!tutorialLogOverlayOpen) return;
+  const newestFirst = [...tutorialBubbleHistory].reverse();
+  const textEl = document.getElementById('tutorial-log-text');
+  const positionEl = document.getElementById('tutorial-log-position');
+  const prevBtn = document.getElementById('tutorial-log-prev-button');
+  const nextBtn = document.getElementById('tutorial-log-next-button');
+  if (newestFirst.length === 0) {
+    textEl.textContent = 'まだ表示されたセリフがありません';
+    positionEl.textContent = '';
+    prevBtn.disabled = true;
+    nextBtn.disabled = true;
+    return;
+  }
+  textEl.textContent = newestFirst[tutorialLogViewIndex];
+  positionEl.textContent = `${tutorialLogViewIndex + 1} / ${newestFirst.length}`;
+  prevBtn.disabled = tutorialLogViewIndex >= newestFirst.length - 1;
+  nextBtn.disabled = tutorialLogViewIndex <= 0;
+}
+
 function render(state) {
   // Replay mode takes over the whole screen with its own render path -- see this file's "Move-by-move
   // game replay" section for why that's a separate function rather than a branch further down (render()
@@ -11336,6 +11395,7 @@ function render(state) {
   renderGameEndOverlay(state);
   renderTutorialTurnOrderOverlay(state);
   renderTutorialOverlay(state);
+  renderTutorialLogOverlay();
   renderDebugPanel(state);
   renderDebugSetupOverlay();
   renderCardListOverlay();
@@ -12057,6 +12117,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // dismiss/advance a step; a stray tap anywhere else on the bubble (e.g. while trying to scroll, or
   // reading an auto-linked term that isn't a button) no longer does.
   document.getElementById('tutorial-turnorder-close-button').addEventListener('click', closeTutorialTurnOrderOverlay);
+  document.getElementById('tutorial-log-button').addEventListener('click', openTutorialLogOverlay);
+  document.getElementById('tutorial-log-close-button').addEventListener('click', closeTutorialLogOverlay);
+  document.getElementById('tutorial-log-end-button').addEventListener('click', closeTutorialLogOverlay);
+  document.getElementById('tutorial-log-prev-button').addEventListener('click', handleTutorialLogPrevClick);
+  document.getElementById('tutorial-log-next-button').addEventListener('click', handleTutorialLogNextClick);
   document.getElementById('debug-turn-back').addEventListener('click', handleDebugTurnBack);
   document.getElementById('debug-turn-forward').addEventListener('click', handleDebugTurnForward);
   document.getElementById('debug-round-back').addEventListener('click', handleDebugRoundBack);
