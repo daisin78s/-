@@ -11675,17 +11675,19 @@ function buildAreaTilePreviewNode(areaId) {
 }
 
 /** Finds the A/B/C-deck card whose ONCE effect transitions the map to targetAreaId (e.g. 'AREA009B') --
- * i.e. the "支配" ownership/tier-up card a player must build at 王宮か元老院 to reach that tier -- and
- * returns its COST string (2026-10-01, per user request, see buildAreaTierUpConnector's own doc).
+ * i.e. the "支配" ownership/tier-up card a player must build at 王宮か元老院 to reach that tier.
+ * 2026-10-01、per user request ("□の中に🔨赤〇赤〇となっているところの代わりに城下町の支配のカードを
+ * 表示できますか"): COST文字列だけでなく行全体を返すよう変更 -- row.IDをbuildAreaTierUpConnectorが
+ * buildCardVisualに渡し、カードそのものの見た目を描画する。
  * Returns null when no such card exists at all (AREA008/王宮 has no tier-up card -- it never gets a
- * connector), or '' when the card exists but its COST is genuinely empty (free upgrade). */
-function areaTierUpCost(targetAreaId) {
+ * connector). */
+function areaTierUpCardRow(targetAreaId) {
   const match = /^AREA(\d+)([ABC])$/.exec(targetAreaId);
   if (!match) return null;
   const onceText = `MAP${match[1]}.CURRENT_AREA=${targetAreaId}`;
   for (const deck of [INDEX.raw.A, INDEX.raw.B, INDEX.raw.C]) {
     const row = deck.find((r) => r.ONCE === onceText);
-    if (row) return row.COST || '';
+    if (row) return row;
   }
   return null;
 }
@@ -11696,30 +11698,25 @@ function areaTierUpCost(targetAreaId) {
  * ⊔型で箱(下)から両側のtileへ線が伸びる形自体は維持しつつ、続けての指示「双方向矢印ではない」を受けて
  * 矢先(山形)は昇格先(右側=上位tier)側の1箇所だけに変更 -- 左側(昇格元)はただの直線で、矢印が両方向を
  * 指しているように見えないようにする。 */
-const AREA_TIER_UP_ARROW_SVG = '<svg viewBox="0 0 100 40" width="100%" height="auto" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4 V30 H86 V4"/><path d="M79 11 L86 4 L93 11"/></svg>';
+const AREA_TIER_UP_ARROW_SVG = '<svg viewBox="0 0 100 40" width="100" height="40" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4 V30 H86 V4"/><path d="M79 11 L86 4 L93 11"/></svg>';
 
-/** 赤い矢印+🔨付きの支払い資源を示すコネクタ (2026-10-01, per user request: デスクトップの手描き画像
- * "王宮以外のすべてのエリアの拡大画像...赤い矢印を書く 赤い四角の中には🔨赤〇赤〇のようにLVアップするのに
- * 必要な資源をそれぞれ書く 元老院なら🔨赤〇赤〇赤〇青〇"、続けて "エリアのINST表示させなくていいです
- * (拡大モーダル側の「説明は未設定です」を含む行も)その代わりデスクトップの画像のような矢印で表示して
- * ください") -- areaTierUpCostで求めたCOST文字列を、既存のrenderCostBadges(ショップカードの支払い資源と
- * 同じ見た目)で色付きドットにし、🔨アイコンを前に付けて赤枠の箱に入れる。このtier自身のINST(色ダイスの
- * 上限はN個、など)があれば、拡大モーダル下部の説明欄(廃止)の代わりにこの箱の中に続けて表示する。
- * buildAreaTierUpConnectorsRowがtile行の下に並べる(centerXで横位置を指定、absolute配置)。矢印は手描き
- * 画像の通り、Unicode矢印(➜)ではなく直線+山形の矢先のSVG(AREA_TIER_UP_ARROW_SVGのdoc参照)で描く。 */
-function buildAreaTierUpConnector(cost, inst, centerX) {
+/** 赤い矢印+実際の「支配」カードを示すコネクタ。2026-10-01、当初は🔨付きの支払い資源を赤枠の箱に入れる
+ * だけの表示だったが("デスクトップの手描き画像...赤い四角の中には🔨赤〇赤〇のようにLVアップするのに
+ * 必要な資源をそれぞれ書く")、続けて per user request ("□の中に🔨赤〇赤〇となっているところの代わりに
+ * 城下町の支配のカードを表示できますか"): 箱をやめ、areaTierUpCardRowで見つけたカード本体を
+ * buildCardVisual(他のカード一覧と同じ通常サイズ、112px)でそのまま描画するよう変更。カード自体には
+ * 出ないこのtier自身のINST(色ダイスの上限はN個、など)があれば、拡大モーダル下部の説明欄(廃止)の
+ * 代わりにカードの下に続けて表示する。buildAreaTierUpConnectorsRowがtile行の下に並べる(centerXで
+ * 横位置を指定、absolute配置)。矢印は手描き画像の通り、Unicode矢印(➜)ではなく直線+山形の矢先のSVG
+ * (AREA_TIER_UP_ARROW_SVGのdoc参照)で描く。 */
+function buildAreaTierUpConnector(cardFaceId, inst, centerX) {
   const wrap = el('div', 'area-tier-up-connector');
   wrap.style.left = `${centerX}px`;
   const arrowEl = el('div', 'area-tier-up-connector__arrow');
   arrowEl.innerHTML = AREA_TIER_UP_ARROW_SVG;
   wrap.appendChild(arrowEl);
-  const box = el('div', 'area-tier-up-connector__cost');
-  const costRow = el('div', 'area-tier-up-connector__cost-row');
-  costRow.appendChild(actionEmoji('⚒️'));
-  renderCostBadges(costRow, cost, null);
-  box.appendChild(costRow);
-  if (inst) box.appendChild(el('div', 'area-tier-up-connector__inst', inst));
-  wrap.appendChild(box);
+  wrap.appendChild(buildCardVisual(cardFaceId, { showEffect: true, allowTextFallback: false, noInteraction: true }));
+  if (inst) wrap.appendChild(el('div', 'area-tier-up-connector__inst', inst));
   return wrap;
 }
 
@@ -11742,12 +11739,12 @@ function buildAreaTierUpConnectorsRow(chain, tileRow, wrap) {
   let maxHeight = 0;
   chain.forEach((id, i) => {
     if (i === 0) return;
-    const cost = areaTierUpCost(id);
-    if (cost === null) return;
+    const cardRow = areaTierUpCardRow(id);
+    if (cardRow === null) return;
     const prevRect = tileNodes[i - 1].getBoundingClientRect();
     const curRect = tileNodes[i].getBoundingClientRect();
     const centerX = (prevRect.right + curRect.left) / 2 - wrapRect.left;
-    const connector = buildAreaTierUpConnector(cost, dataLoaderMod.getAreaRow(INDEX, id).INST || '', centerX);
+    const connector = buildAreaTierUpConnector(cardRow.ID, dataLoaderMod.getAreaRow(INDEX, id).INST || '', centerX);
     connectorsRow.appendChild(connector);
     maxHeight = Math.max(maxHeight, connector.offsetHeight);
   });

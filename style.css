@@ -2865,13 +2865,17 @@ body.tutorial-mode .change-highlight {
   width: 100%;
 }
 
-/* レベルアップに必要な資源(+そのtier自身のINST)を示す赤い矢印+箱 (2026-10-01, per user request:
-   デスクトップの手描き画像 "王宮以外のすべてのエリアの拡大画像...赤い矢印を書く 赤い四角の中には
-   🔨赤〇赤〇のようにLVアップするのに必要な資源をそれぞれ書く"、続けて "エリアのINST表示させなくていい
-   です(拡大モーダル側の「説明は未設定です」を含む行も)その代わりデスクトップの画像のような矢印で表示
-   してください" -- 拡大モーダル下部の説明欄を廃止し、このtierのINST(あれば)もこの箱の中にまとめる)。
-   2026-10-01、続けて "エリアとエリアが比べ安いように離さずにくっつけて表示して" -- tile行には挟まず、
-   area-tier-up-connectors-row内でtileの隙間の中心にabsolute配置+横方向中央寄せ(translateX(-50%))する。 */
+/* レベルアップに必要な「支配」カード本体(+そのtier自身のINST)を示す赤い矢印 (2026-10-01, per user
+   request: デスクトップの手描き画像 "王宮以外のすべてのエリアの拡大画像...赤い矢印を書く"、続けて
+   "エリアのINST表示させなくていいです(拡大モーダル側の「説明は未設定です」を含む行も)その代わり
+   デスクトップの画像のような矢印で表示してください" -- 拡大モーダル下部の説明欄を廃止し、このtierの
+   INST(あれば)はカードの下にまとめる)。2026-10-01、続けて "エリアとエリアが比べ安いように離さずに
+   くっつけて表示して" -- tile行には挟まず、area-tier-up-connectors-row内でtileの隙間の中心にabsolute
+   配置+横方向中央寄せ(translateX(-50%))する。さらに続けて "□の中に🔨赤〇赤〇となっているところの
+   代わりに城下町の支配のカードを表示できますか" -- 赤枠の箱(🔨+コスト)をやめ、実際の支配カード本体
+   (.shop-card、通常サイズ112px)を表示するよう変更。widthは.shop-card本体と同じ112pxで固定(auto/
+   shrink-to-fitにすると、中のarrow divのwidth:100%がSVGのデフォルト置換サイズ(300px)を使って
+   shrink-to-fit計算されてしまい、矢印だけが異常に幅広になるバグが出たため、固定値にして回避)。 */
 .area-tier-up-connector {
   position: absolute;
   top: 0;
@@ -2880,12 +2884,12 @@ body.tutorial-mode .change-highlight {
   flex-direction: column;
   align-items: stretch;
   justify-content: center;
-  gap: 0;
-  width: 100px;
+  gap: 2px;
+  width: 112px;
 }
 
 /* コの字(⊔型)矢印、両端とも上向きの矢先(2026-10-01、箱から見て両隣のtileへ上向きに矢印が伸びる見た目に
-   する指示 -- AREA_TIER_UP_ARROW_SVGのdoc参照)は箱と同じ幅いっぱいに広げる。 */
+   する指示 -- AREA_TIER_UP_ARROW_SVGのdoc参照)はカードと同じ幅いっぱいに広げる。 */
 .area-tier-up-connector__arrow {
   color: var(--danger, #c0392b);
   display: flex;
@@ -2897,31 +2901,6 @@ body.tutorial-mode .change-highlight {
   width: 100%;
   height: auto;
   display: block;
-}
-
-.area-tier-up-connector__cost {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  border: 2px solid var(--danger, #c0392b);
-  border-radius: 6px;
-  padding: 4px 6px;
-  background: var(--surface);
-}
-
-.area-tier-up-connector__cost-row {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-}
-
-.area-tier-up-connector__cost .resource-badge {
-  border: none;
-  background: none;
-  padding: 0;
-  gap: 2px;
-  font-size: 11px;
 }
 
 .area-tier-up-connector__inst {
