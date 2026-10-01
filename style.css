@@ -2862,8 +2862,8 @@ body.tutorial-mode .change-highlight {
 
 .area-tier-up-connector__arrow {
   color: var(--danger, #c0392b);
-  font-size: 22px;
-  line-height: 1;
+  display: flex;
+  line-height: 0;
 }
 
 .area-tier-up-connector__cost {

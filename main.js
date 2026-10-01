@@ -11690,6 +11690,11 @@ function areaTierUpCost(targetAreaId) {
   return null;
 }
 
+/** デスクトップの手描き画像の矢印(直線+山形の矢先、Unicodeの➜のような塗りつぶし三角ではない)を再現した
+ * インラインSVG (2026-10-01, per user request: "矢印を→ではなくデスクトップの画像のような矢印にして
+ * ください") -- buildAreaTierUpConnectorでinnerHTMLとして挿入する。横並びのtier間に挟むため右向き。 */
+const AREA_TIER_UP_ARROW_SVG = '<svg viewBox="0 0 32 24" width="32" height="24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12 H24"/><path d="M15 4 L24 12 L15 20"/></svg>';
+
 /** 赤い矢印+🔨付きの支払い資源を示すコネクタ (2026-10-01, per user request: デスクトップの手描き画像
  * "王宮以外のすべてのエリアの拡大画像...赤い矢印を書く 赤い四角の中には🔨赤〇赤〇のようにLVアップするのに
  * 必要な資源をそれぞれ書く 元老院なら🔨赤〇赤〇赤〇青〇"、続けて "エリアのINST表示させなくていいです
@@ -11697,10 +11702,13 @@ function areaTierUpCost(targetAreaId) {
  * ください") -- areaTierUpCostで求めたCOST文字列を、既存のrenderCostBadges(ショップカードの支払い資源と
  * 同じ見た目)で色付きドットにし、🔨アイコンを前に付けて赤枠の箱に入れる。このtier自身のINST(色ダイスの
  * 上限はN個、など)があれば、拡大モーダル下部の説明欄(廃止)の代わりにこの箱の中に続けて表示する。
- * showAreaEnlargeModalのarea-enlarge-row内で、前後のtierタイルの間に挟む。 */
+ * showAreaEnlargeModalのarea-enlarge-row内で、前後のtierタイルの間に挟む。矢印は手描き画像の通り、
+ * Unicode矢印(➜)ではなく直線+山形の矢先のSVG(area-tier-up-connector-arrow-svgのdoc参照)で描く。 */
 function buildAreaTierUpConnector(cost, inst) {
   const wrap = el('div', 'area-tier-up-connector');
-  wrap.appendChild(el('div', 'area-tier-up-connector__arrow', '➜'));
+  const arrowEl = el('div', 'area-tier-up-connector__arrow');
+  arrowEl.innerHTML = AREA_TIER_UP_ARROW_SVG;
+  wrap.appendChild(arrowEl);
   const box = el('div', 'area-tier-up-connector__cost');
   const costRow = el('div', 'area-tier-up-connector__cost-row');
   costRow.appendChild(actionEmoji('⚒️'));
