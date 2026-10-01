@@ -11677,6 +11677,37 @@ function buildAreaTilePreviewNode(areaId) {
   return node;
 }
 
+/** Finds the A/B/C-deck card whose ONCE effect transitions the map to targetAreaId (e.g. 'AREA009B') --
+ * i.e. the "支配" ownership/tier-up card a player must build at 王宮か元老院 to reach that tier -- and
+ * returns its COST string (2026-10-01, per user request, see buildAreaTierUpConnector's own doc).
+ * Returns null when no such card exists at all (AREA008/王宮 has no tier-up card -- it never gets a
+ * connector), or '' when the card exists but its COST is genuinely empty (free upgrade). */
+function areaTierUpCost(targetAreaId) {
+  const match = /^AREA(\d+)([ABC])$/.exec(targetAreaId);
+  if (!match) return null;
+  const onceText = `MAP${match[1]}.CURRENT_AREA=${targetAreaId}`;
+  for (const deck of [INDEX.raw.A, INDEX.raw.B, INDEX.raw.C]) {
+    const row = deck.find((r) => r.ONCE === onceText);
+    if (row) return row.COST || '';
+  }
+  return null;
+}
+
+/** 赤い矢印+🔨付きの支払い資源を示すコネクタ (2026-10-01, per user request: デスクトップの手描き画像
+ * "王宮以外のすべてのエリアの拡大画像...赤い矢印を書く 赤い四角の中には🔨赤〇赤〇のようにLVアップするのに
+ * 必要な資源をそれぞれ書く 元老院なら🔨赤〇赤〇赤〇青〇") -- areaTierUpCostで求めたCOST文字列を、既存の
+ * renderCostBadges(ショップカードの支払い資源と同じ見た目)で色付きドットにし、🔨アイコンを前に付けて
+ * 赤枠の箱に入れる。showAreaEnlargeModalのarea-enlarge-row内で、前後のtierタイルの間に挟む。 */
+function buildAreaTierUpConnector(cost) {
+  const wrap = el('div', 'area-tier-up-connector');
+  wrap.appendChild(el('div', 'area-tier-up-connector__arrow', '➜'));
+  const box = el('div', 'area-tier-up-connector__cost');
+  box.appendChild(actionEmoji('⚒️'));
+  renderCostBadges(box, cost, null);
+  wrap.appendChild(box);
+  return wrap;
+}
+
 /** AREA tap-to-enlarge (2026-08-05, replaces the old plain-INST-text-only modal for AREA tiles -- see
  * this function's own doc above on the tier chain). Reuses the same overlay chrome as
  * showCardEnlargeModal (title/INST body/close button) but not its single-visualNode transform-scale
@@ -11708,9 +11739,19 @@ function showAreaEnlargeModal(areaId) {
   visualContainer.style.width = '';
   visualContainer.style.height = '';
   const row = el('div', 'area-enlarge-row');
-  for (const id of areaTierChain(areaId)) {
+  const chain = areaTierChain(areaId);
+  chain.forEach((id, i) => {
+    // 2026-10-01, per user request (デスクトップの手描き画像参照: "王宮以外のすべてのエリアの拡大画像...
+    // 赤い矢印を書く 赤い四角の中には🔨赤〇赤〇のようにLVアップするのに必要な資源をそれぞれ書く") --
+    // 前の階層との間に、このtierへ上げるのに必要な資源(そのtierを解放するA/B/Cカードの支払い資源、
+    // areaTierUpCost's own doc)を🔨付きの赤枠で示す矢印コネクタを挟む。王宮(AREA008)のように上げる
+    // カード自体が存在しない(=1段階しかない)エリアには何も挟まらない。
+    if (i > 0) {
+      const cost = areaTierUpCost(id);
+      if (cost !== null) row.appendChild(buildAreaTierUpConnector(cost));
+    }
     row.appendChild(buildAreaTilePreviewNode(id));
-  }
+  });
   visualContainer.appendChild(row);
 
   overlay.querySelector('.card-inst-modal__title').textContent = areaName(areaId);

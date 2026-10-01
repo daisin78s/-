@@ -2859,6 +2859,42 @@ body.tutorial-mode .change-highlight {
   max-width: 100%;
 }
 
+/* レベルアップに必要な資源を示す赤い矢印+箱 (2026-10-01, per user request: デスクトップの手描き画像
+   "王宮以外のすべてのエリアの拡大画像...赤い矢印を書く 赤い四角の中には🔨赤〇赤〇のようにLVアップする
+   のに必要な資源をそれぞれ書く") -- .area-enlarge-row内でtierタイル同士の間に挟む。 */
+.area-tier-up-connector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.area-tier-up-connector__arrow {
+  color: var(--danger, #c0392b);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.area-tier-up-connector__cost {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  border: 2px solid var(--danger, #c0392b);
+  border-radius: 6px;
+  padding: 4px 6px;
+  background: var(--surface);
+}
+
+.area-tier-up-connector__cost .resource-badge {
+  border: none;
+  background: none;
+  padding: 0;
+  gap: 2px;
+  font-size: 11px;
+}
+
 /* Front/back card visual row (2026-08-25, see .card-inst-modal--dual's own doc above) -- same layout
    idea as .area-enlarge-row, just for the two independently-built card visuals showCardEnlargeModal now
    lays out side by side instead of toggling one via a flip button. */
