@@ -7424,6 +7424,10 @@ function renderConChoice(container, state, player) {
       tutorialInitialResourcesGlowing = true;
       stopTutorialTypewriter();
     }
+    // 2026-09-30, per user request ("制約カードを選んだあとにしましょうか") -- tutorialGuidedDemoActive's
+    // own doc。制約カードを選んだ瞬間、以降「直前のアクションをキャンセル」/「ラウンドパス」をチュートリアル
+    // 専用に無効化するのをやめる。
+    tutorialGuidedDemoActive = false;
     render(STATE);
   });
 }
@@ -10815,6 +10819,12 @@ let tutorialOthersRevealed = false;
 let tutorialBubbleHistory = [];
 let tutorialLogOverlayOpen = false;
 let tutorialLogViewIndex = 0;
+// 2026-09-30, per user request ("このセリフ以降通常にゲームをプレイできるようにします...制約カードを
+// 選んだあとにしましょうか") -- 制約カード(CON)の表裏を選んだ瞬間にfalseにする(renderConChoice参照)。
+// true の間だけ「直前のアクションをキャンセル」/「ラウンドパス」をチュートリアル専用に無効化する
+// (diceCancelDisabled/renderRoundPassButton's own doc) -- それ以外のtutorialModeActive判定(AIレベル
+// 固定、デバッグパネル非表示、ダイス/ショップの初期固定など)はこの後もゲーム全体を通してそのまま。
+let tutorialGuidedDemoActive = true;
 
 // CON/RESOURCE候補の段階的な表示 (2026-09-25, per user request: "それではゲームを始めましょう の時はまだ
 // 制約カードと初期資源カードは配られていない" -- resource_choice_intro/resource_choice_con_intro/
@@ -11581,7 +11591,7 @@ function renderUndoButtons(state) {
   // キャンセルボタンもチュートリアル中は使えないようにしてください おっと別の… ダイスが別のエリアに置かれた が
   // あるときは使えるように")。ステップIDではなく光るフラグで判定するのは、renderがrenderTutorialOverlayより先に
   // 走るため(tutorialCancelButtonGlowing's own docの通り、どの場合もrender()の前に立つ)。
-  const diceCancelDisabled = actionCheckpoints.length === 0 || (tutorialModeActive && !tutorialCancelButtonGlowing);
+  const diceCancelDisabled = actionCheckpoints.length === 0 || (tutorialModeActive && tutorialGuidedDemoActive && !tutorialCancelButtonGlowing);
   for (const id of ['dice-cancel-button', 'dice-cancel-button-build']) {
     const btn = document.getElementById(id);
     btn.disabled = diceCancelDisabled;
@@ -11605,7 +11615,8 @@ function renderRoundPassButton(state, next) {
   const player = playerId ? state.players.find((p) => p.id === playerId) : null;
   const hasDiceLeftThisRound = !!player && player.dice.some((d) => d.placedMapId === null && !d.passed);
   // チュートリアル中は押せない (2026-09-29, per user request: "チュートリアル中ラウンドパスを押せないように")。
-  const blockedByTutorial = tutorialModeActive;
+  // 2026-09-30: 制約カードを選んだ以降は解放する(tutorialGuidedDemoActive's own doc)。
+  const blockedByTutorial = tutorialModeActive && tutorialGuidedDemoActive;
   btn.disabled = !hasDiceLeftThisRound || blockedByTutorial;
   btn.title = blockedByTutorial ? 'チュートリアル中は使えません' : '';
   btn.dataset.playerId = hasDiceLeftThisRound && !blockedByTutorial ? playerId : '';
