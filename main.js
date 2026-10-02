@@ -10180,6 +10180,23 @@ function handleTutorialChoiceClick(targetStepId) {
       const fromIdx = TUTORIAL_STEPS.findIndex((s) => s.id === 'game_rules_intro_1');
       const toIdx = TUTORIAL_STEPS.findIndex((s) => s.id === 'resource_choice_con_intro');
       for (let i = fromIdx + 1; i <= toIdx; i++) tutorialSeenStepIds.add(TUTORIAL_STEPS[i].id);
+      // 2026-10-02, per user report: "ショートカットしたところジョブが選べず進行不能になりました" --
+      // 実演一式を飛ばした結果、本来resource_choice_introを閉じた瞬間に立つはずの3つのフラグ
+      // (JOBカード置き場/あなたのCONカード/実演スナップショットの復元、dismissTutorialStepの
+      // resource_choice_intro分岐自身のdoc参照)が一度も立たず、JOBもCONも選べない状態のまま
+      // 取り残されていた。ここでも同じ処理を行い、resource_choice_con_introへ入った時と同じ状態に揃える。
+      tutorialConCardRevealed = true;
+      tutorialJobPoolRevealed = true;
+      tutorialConCardGlowing = true;
+      if (tutorialWorkerPlacementDemoSnapshot) {
+        Object.keys(STATE).forEach((k) => delete STATE[k]);
+        Object.assign(STATE, tutorialWorkerPlacementDemoSnapshot);
+        tutorialWorkerPlacementDemoSnapshot = null;
+        turnActionTaken = false;
+        placementMessage = '';
+        actionCheckpoints = [];
+        selectedDieIds = [];
+      }
     }
     // targetStepId === 'worker_placement_example_intro'(「次へ」)のときは何もしない -- 通常の直線探索に
     // そのまま任せる。
