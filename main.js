@@ -9694,6 +9694,23 @@ function stopTutorialTypewriter() {
   tutorialTypewriterStepId = null;
 }
 
+/** キーボード操作 (2026-10-02, per user request) -- ステップが新しく表示された瞬間に呼ばれ、「次へ」
+ * (choicesの中にあれば、無ければ最後の選択肢)、またはchoicesが無いステップではdismissBtn(閉じる/次へ)へ
+ * フォーカスを当てる。noManualDismissのステップ(実際のクリックでしか進めない)はdismissBtnが非表示なので
+ * 何もフォーカスしない。ENTERキーでの決定は、フォーカスされた<button>をクリックする標準のブラウザ挙動
+ * そのまま(専用コード不要)。←→での選択肢間のフォーカス移動は、呼び出し元near のdocument keydown
+ * リスナー(DOMContentLoaded内)が担当する。 */
+function focusTutorialBubbleDefaultButton(step) {
+  if (step.choices) {
+    const buttons = Array.from(document.querySelectorAll('#tutorial-bubble__choices .tutorial-bubble__choice-button'));
+    const defaultIndex = step.choices.findIndex((c) => c.label === '次へ');
+    const defaultBtn = buttons[defaultIndex] || buttons[buttons.length - 1];
+    if (defaultBtn) defaultBtn.focus();
+  } else if (!step.noManualDismiss) {
+    document.getElementById('tutorial-bubble__dismiss').focus();
+  }
+}
+
 /** Shows the next not-yet-seen matching step, if any, or keeps showing whichever one is already on
  * screen until dismissed. Called once per render(), same as every other renderX(state) function. */
 function renderTutorialOverlay(state) {
@@ -9793,6 +9810,13 @@ function renderTutorialOverlay(state) {
   }
   if (tutorialTypewriterStepId !== step.id) {
     tutorialTypewriterStepId = step.id;
+    // キーボード操作 (2026-10-02, per user request: "次へをクリックしなくてもENTERキーで次へを押すことは
+    // できますか" / "初期設定では次へとところにカーソルがあっている扱いで←→きーをおすとそれが移動する") --
+    // ステップが新しく表示された瞬間に「次へ」(無ければ最後の選択肢、または閉じる)へフォーカスを当てる。
+    // ENTERキーはフォーカスされた<button>をクリックする標準のブラウザ挙動にそのまま乗る(専用コードは不要)、
+    // ←→キーの選択肢間移動はfocusTutorialBubbleDefaultButtonと対になるdocument側のkeydownリスナー
+    // (tutorial-bubble__choice-button間のフォーカス移動)で処理する。
+    focusTutorialBubbleDefaultButton(step);
     const fullText = typeof step.body === 'function' ? step.body(state) : step.body;
     startTutorialTypewriter(step.id, fullText);
     // 会話ログ (2026-09-30, openTutorialLogOverlay's own doc) -- 新しいセリフが実際に表示される瞬間に
@@ -11947,6 +11971,22 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('weekly-challenge-button').addEventListener('click', openWeeklyChallenge);
   document.getElementById('tutorial-mode-button').addEventListener('click', openTutorialMode);
   document.getElementById('tutorial-bubble__dismiss').addEventListener('click', dismissTutorialStep);
+  // 2026-10-02, per user request ("次へをクリックしなくてもENTERキーで次へを押すことはできますか" /
+  // "初期設定では次へとところにカーソルがあっている扱いで←→きーをおすとそれが移動する") -- choicesが
+  // 複数ある分岐ステップ(「レベルのあげ方を教えて」/「次へ」など)で、フォーカス中のボタンから←→で
+  // 隣のボタンへフォーカスを移す。ENTERキーはフォーカスされた<button>をクリックする標準のブラウザ挙動
+  // そのままなので専用コード不要(focusTutorialBubbleDefaultButtonが初期フォーカスを「次へ」に当てる)。
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    const active = document.activeElement;
+    if (!active || !active.classList.contains('tutorial-bubble__choice-button')) return;
+    const buttons = Array.from(document.querySelectorAll('#tutorial-bubble__choices .tutorial-bubble__choice-button'));
+    const idx = buttons.indexOf(active);
+    if (idx === -1) return;
+    e.preventDefault();
+    const nextIdx = e.key === 'ArrowLeft' ? (idx - 1 + buttons.length) % buttons.length : (idx + 1) % buttons.length;
+    buttons[nextIdx].focus();
+  });
   // 2026-09-24: the whole bubble box briefly also dismissed on tap here (per user report: "セリフが
   // クリックできないので進めない" -- the small 閉じる text button alone was too fiddly on a touch screen).
   // Reverted 2026-09-26 (per user report: "セリフをクリックすると閉じてしまいます クリックしただけでは
