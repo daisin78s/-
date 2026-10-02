@@ -9969,6 +9969,18 @@ function renderTutorialOverlay(state) {
         window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
       }
     }
+    // castle_turn_order_hint(2026-09-30, Excel T050/T061)が見えるようにスクロール (2026-10-02, per user
+    // request: "T061もスクロールする") -- 光っている王宮の「次ラウンド」欄を見える範囲の中央に寄せる。
+    if (step.id === 'castle_turn_order_hint') {
+      const turnOrderEl = document.querySelector('.map-tile--castle .map-tile__turnorder--current');
+      if (turnOrderEl) {
+        const bubbleWrap = document.getElementById('tutorial-bubble-wrap');
+        const visibleHeight = (bubbleWrap && !bubbleWrap.hidden) ? bubbleWrap.getBoundingClientRect().top : window.innerHeight;
+        const rect = turnOrderEl.getBoundingClientRect();
+        const desiredTop = Math.max(0, (visibleHeight - rect.height) / 2);
+        window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
+      }
+    }
   }
 }
 
