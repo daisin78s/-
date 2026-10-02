@@ -156,6 +156,12 @@ function tutorialPreferredNormalFaceIds(state) {
   return rngMod.shuffle(state.rng, TUTORIAL_SHOP_NORMAL_FACE_IDS);
 }
 
+/** チュートリアル用: 初期のSHOP001-006(モニュメント)に、ダイス目(DICE列)>=12の記念碑(M001)を必ず
+ * 含める (2026-10-02, per user request: "２ラウンド目に出てくるモニュメントカード ダイス目12のカードを
+ * 必ず出して 場所はどこでもいい") -- setup.prepareShopsのpreferredMonumentFaceIdsに渡す。他の5枠は
+ * 通常通りランダム。 */
+const TUTORIAL_SHOP_MONUMENT_FACE_IDS = ['M001'];
+
 function createInitialState(plan, forcedSeed) {
   const state = gameStateMod.createEmptyGameState(forcedSeed || randomSeed());
   // P1's own display name (2026-09-07, per user request: "ランキングに名前を入力したら...次回以降その人
@@ -170,7 +176,11 @@ function createInitialState(plan, forcedSeed) {
   // DAN names here. chooseWeeklyChallengeSeat renames the actually-chosen seat afterward instead.
   setupMod.createPlayers(state, weeklyChallengeActive ? ['Alice', 'Bob', 'Carol', 'Dan'] : [loadRememberedRankingName() || 'Alice', 'Bob', 'Carol', 'Dan']);
   setupMod.prepareMaps(state, INDEX);
-  setupMod.prepareShops(state, INDEX, plan ? plan.abc : (tutorialModeActive ? tutorialPreferredNormalFaceIds(state, INDEX) : undefined));
+  setupMod.prepareShops(
+    state, INDEX,
+    plan ? plan.abc : (tutorialModeActive ? tutorialPreferredNormalFaceIds(state, INDEX) : undefined),
+    tutorialModeActive ? TUTORIAL_SHOP_MONUMENT_FACE_IDS : undefined,
+  );
   // チュートリアルでは1R(初期配置)のみ、全プレイヤーのダイスを完全に固定値にする (2026-09-26, per user
   // request: "1Rのみプレイヤーの初期ダイス一番左を1になるようにしてください あとはランダムで"; 2026-09-27、
   // per user request: "チュートリアルのプレイヤーの初期ダイス左から2番目を5の目にして" で2番目(index 1)も

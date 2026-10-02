@@ -128,14 +128,27 @@ function fillShopSlots(shopDeck) {
  * remaining slots filled by the usual random shuffle of whatever's left -- see fillShopSlots, which
  * always fills in slotId order from the front of the draw pile. Every other caller passes no 3rd
  * argument and sees identical behavior to before.
+ *
+ * preferredMonumentFaceIds (optional, up to 6, 2026-10-02, per user request: "２ラウンド目に出てくる
+ * モニュメントカード ダイス目12のカードを必ず出して 場所はどこでもいい") -- same mechanism as
+ * preferredNormalFaceIds above, but for the monument (SHOP001-006) pool instead: those faces fill
+ * SHOP001/002/... in that order first (deduped, only ones actually in the monument pool), guaranteeing
+ * they're among the initial 6 visible monuments regardless of which specific slot they land in ("場所は
+ * どこでもいい").
  */
-function prepareShops(state, index, preferredNormalFaceIds) {
+function prepareShops(state, index, preferredNormalFaceIds, preferredMonumentFaceIds) {
   // M401-403 are excluded from the regular SHOP001-006 pool -- they're held back in
   // state.extraMonumentPool instead (see below) and only ever surface once one of the 3 shops runs out
   // of its own cards, via board.revealExtraMonumentsIfAnyShopEmptied.
   const monumentIds = index.raw.M.map((r) => r.ID).filter((id) => Number(id.slice(1)) < 400);
   registerCardPool(state, monumentIds);
-  state.shops.M = createShopDeck(shuffle(state.rng, monumentIds), MONUMENT_SHOP_SLOT_IDS);
+  const preferredM = [...new Set(preferredMonumentFaceIds || [])]
+    .filter((id) => monumentIds.includes(id))
+    .slice(0, MONUMENT_SHOP_SLOT_IDS.length);
+  const monumentOrder = preferredM.length > 0
+    ? [...preferredM, ...shuffle(state.rng, monumentIds.filter((id) => !preferredM.includes(id)))]
+    : shuffle(state.rng, monumentIds);
+  state.shops.M = createShopDeck(monumentOrder, MONUMENT_SHOP_SLOT_IDS);
   fillShopSlots(state.shops.M);
 
   const normalIds = collectNormalShopFaceIds(index);
