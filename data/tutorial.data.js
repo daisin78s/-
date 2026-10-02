@@ -79,5 +79,11 @@ window.TUTORIAL_SERIFU = {
   "job_tap_resource_intro": "このジョブはクリックすることで〇とZ〇を得ることができます\n使い終わったカードはタップされアンタップ（起き上がる）までは使えません\nラウンド開始時にはすべてのカードがアンタップされます",
   "first_turn_recommendation_hint": "初めのターンは初期資源を使ってダイスかカードを獲得するのがおすすめです",
   "used_card_immediately_hint": "ここからはあなたが自由にプレイしてください",
-  "second_turn_intro_hint": "２ターン目が回ってきました"
+  "second_turn_intro_hint": "２ターン目が回ってきました",
+  "second_turn_aggressive_advice_hint": "資源が残っていてダイスやカードの獲得ができそうなら積極的に狙っていきましょう",
+  "second_turn_low_resource_advice_hint": "資源が足りないようなら資源を増やしに行きましょう",
+  "special_shop_unlock_intro": "次のラウンドからは強化カードが並ぶショップが解禁されます",
+  "special_shop_unlock_hint": "強化カードは通常カードよりも強いので今のうちから獲得するチャンスを伺ってください",
+  "monument_shop_unlock_intro": "次のラウンドからはモニュメントも解禁されます\nモニュメントはVP専用カードです\nこちらは急いで取りに行かなくても大丈夫なので後で説明しますね",
+  "round2_turn1_intro_hint": "2ラウンドになりました"
 };

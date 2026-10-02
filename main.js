@@ -9349,6 +9349,74 @@ const TUTORIAL_STEPS = [
     body: '２ターン目が回ってきました',
     nextLabel: '次へ',
   },
+  // 2026-10-02, per user request (Excelの新しい行T082〜T087) -- second_turn_intro_hintに続く、2ターン目の
+  // プレイ助言+次ラウンドで解禁されるSHOP(SPECIAL/M)の予告。T082〜T086はsecond_turn_intro_hintと同じ
+  // match条件(tutorialP1RealTurnEndCount === 1の間ずっと真)を共有し、通常の直線探索で連続して表示される。
+  // T087だけは別条件(実際にラウンド2になった瞬間)で、T086を閉じてから実際にラウンドが進むまでは出ない
+  // ("あなたに２ラウンド１ターン目が回ってくる"という書き方の通り、特定の条件がトリガーになって後から
+  // 出る -- per user note: "この後は特定の条件がトリガーになって会話が発生する仕組みにする予定です")。
+  {
+    id: 'second_turn_aggressive_advice_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1' && tutorialP1RealTurnEndCount === 1;
+    },
+    body: '資源が残っていてダイスやカードの獲得ができそうなら積極的に狙っていきましょう',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'second_turn_low_resource_advice_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1' && tutorialP1RealTurnEndCount === 1;
+    },
+    body: '資源が足りないようなら資源を増やしに行きましょう',
+    nextLabel: '次へ',
+  },
+  // SHOP201-203(SPECIAL、孤児院/訓練場/元老院の支配カード)が次ラウンドから解禁される予告 -- 光る演出は
+  // 既存のtutorialBuildShopGlowSlots(build_dice_value_intro等と同じ仕組み)を再利用、dismissTutorialStep
+  // 側で設定する。
+  {
+    id: 'special_shop_unlock_intro',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1' && tutorialP1RealTurnEndCount === 1;
+    },
+    body: '次のラウンドからは強化カードが並ぶショップが解禁されます',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'special_shop_unlock_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1' && tutorialP1RealTurnEndCount === 1;
+    },
+    body: '強化カードは通常カードよりも強いので今のうちから獲得するチャンスを伺ってください',
+    nextLabel: '次へ',
+  },
+  // SHOP001-006(M、モニュメント)が次ラウンドから解禁される予告。選択肢1「閉じる」で普通に閉じるだけの
+  // 単純なステップ(Excelの選択肢2「あなたに２ラウンド１ターン目が回ってくる」は実際のボタンではなく、
+  // 続くround2_turn1_intro_hintが実際にラウンド2になった瞬間に自然に見つかることの説明書き)。
+  {
+    id: 'monument_shop_unlock_intro',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1' && tutorialP1RealTurnEndCount === 1;
+    },
+    body: '次のラウンドからはモニュメントも解禁されます\nモニュメントはVP専用カードです\nこちらは急いで取りに行かなくても大丈夫なので後で説明しますね',
+  },
+  // 実際にラウンド2になった瞬間(P1の2ラウンド1ターン目)に見つかる、monument_shop_unlock_introとは別条件の
+  // ステップ -- こちらにtutorialP1RealTurnEndCountのような専用カウンタは不要(state.round自体が2になった
+  // 瞬間こそが探している条件そのもののため)。選択肢1がExcel上も空欄で、他のステップと同じデフォルトの
+  // 「閉じる」ボタンで普通に閉じるだけ。
+  {
+    id: 'round2_turn1_intro_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1' && state.round === 2;
+    },
+    body: '2ラウンドになりました',
+  },
 ];
 
 // セリフのExcel反映 (2026-09-28, per user request: "まずはセリフだけ反映されるようにしてください") --
@@ -10609,6 +10677,13 @@ function dismissTutorialStep() {
   // 閉じたらON、castle_turn_order_hint自身を閉じたらOFF。
   if (tutorialCurrentStepId === 'game_rules_intro_2') tutorialCastleTurnOrderGlowing = true;
   if (tutorialCurrentStepId === 'castle_turn_order_hint') tutorialCastleTurnOrderGlowing = false;
+  // special_shop_unlock_intro/hint(2026-10-02, Excel T084・T085)の「光る」(SHOP201-203、孤児院/訓練場/
+  // 元老院の支配カード) -- 既存のtutorialBuildShopGlowSlots(build_dice_value_intro等と同じ仕組み)を再利用。
+  // second_turn_low_resource_advice_hintを閉じたらON、special_shop_unlock_hintを閉じたらmonument_shop_
+  // unlock_intro(T086)用にSHOP001-006へ切り替える。
+  if (tutorialCurrentStepId === 'second_turn_low_resource_advice_hint') tutorialBuildShopGlowSlots = ['SHOP201', 'SHOP202', 'SHOP203'];
+  if (tutorialCurrentStepId === 'special_shop_unlock_hint') tutorialBuildShopGlowSlots = ['SHOP001', 'SHOP002', 'SHOP003', 'SHOP004', 'SHOP005', 'SHOP006'];
+  if (tutorialCurrentStepId === 'monument_shop_unlock_intro') tutorialBuildShopGlowSlots = null;
   // kabukicho_result_hint(T010)を閉じたらチュートリアル専用のターン終了ボタンを出す(T011)。
   if (tutorialCurrentStepId === 'kabukicho_result_hint') {
     tutorialTurnEndButtonShown = true;
