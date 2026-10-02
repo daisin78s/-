@@ -6351,15 +6351,9 @@ function renderPlayers(state, next) {
     // JOB003/道化 (2026-08-19): checked once per player, applies to every one of their dice (COLOR and
     // WHITE alike) uniformly -- see board.hasWildcardDice's own doc.
     const playerIsWildcard = boardMod.hasWildcardDice(state, INDEX, player.id);
-    // dice_select_hintの「1個だけ光らせて、そのダイスしか掴めないように」(2026-09-27, per user request: "自分の
-    // 色ダイスの一番左1個だけ光るに変更 そのダイスしかつかめないように") -- player.dice配列の並び順=描画順
-    // (左から)なので、配列内で最初に見つかるCOLORダイス(まだ配置されていないもの)がそのまま「一番左」になる。
-    const tutorialForcedDieId = (tutorialDiceSelectHintGlowing && player.id === 'P1')
-      ? (player.dice.find((d) => d.kind === 'COLOR' && !d.placedMapId) || {}).id || null
-      : null;
     // worker_placement_example_introの「真ん中のダイス」の光る演出専用 (2026-09-27, per user request:
-    // "この時光らせるのは真ん中のダイス") -- tutorialForcedDieIdとは別変数にしているのは、こちらは選択可能
-    // 状態(die--selectable)には一切影響させたくないため(このステップはただのデモで、プレイヤー自身の
+    // "この時光らせるのは真ん中のダイス") -- 選択可能状態(die--selectable)には一切影響させない専用変数
+    // にしているのは、このステップはただのデモで、プレイヤー自身の
     // クリックは必要ない)。この時点ではまだ何も配置されていないので、未配置色ダイスのindex 1が「真ん中」。
     const tutorialWorkerPlacementExampleDieId = (tutorialWorkerPlacementExampleGlowing && player.id === 'P1')
       ? (player.dice.filter((d) => d.kind === 'COLOR' && !d.placedMapId)[1] || {}).id || null
@@ -6424,8 +6418,7 @@ function renderPlayers(state, next) {
         && player.id === 'P1' && die.id === tutorialCardAcquisitionDieId;
       // 訓練場の実演(Excel T015)も同じ形 -- ステップIDではなく専用フラグ(tutorialTrainingGlowing)で判定する。
       const tutorialTrainingClickable = tutorialTrainingGlowing && player.id === 'P1' && die.id === tutorialTrainingDieId;
-      if (((player.id === canPlaceDiceFor && !turnActionTaken) || tutorialCastletownClickable || tutorialCardAcquisitionClickable || tutorialTrainingClickable) && !die.passed
-        && (!tutorialForcedDieId || die.id === tutorialForcedDieId)) {
+      if (((player.id === canPlaceDiceFor && !turnActionTaken) || tutorialCastletownClickable || tutorialCardAcquisitionClickable || tutorialTrainingClickable) && !die.passed) {
         dieNode.classList.add('die--selectable');
         if (selectedDieIds.includes(die.id)) dieNode.classList.add('die--selected');
         // Multi-select toggle (2026-08-02, per user feedback: "1個目のダイスをクリック 2個目のダイスを
@@ -6456,14 +6449,6 @@ function renderPlayers(state, next) {
             const prospectiveValues = [...selectedDieIds, die.id].map((id) => player.dice.find((d) => d.id === id).value);
             if (!hasQualifyingProperSubset(prospectiveValues, MAX_MONUMENT_DICE_THRESHOLD)) selectedDieIds.push(die.id);
           }
-          // dice_select_hintの「ダイスをクリック」演出 (2026-09-27, per user request: "ダイスを1個クリック
-          // すると次のセリフに進む") -- ダイスが選択された瞬間に次のセリフへ切り替える。con_face_choice_intro
-          // と同じ理由でrender()を呼ぶ前にここでフラグを立てる(tutorialDiceSelectHintGlowing自身のdoc参照)。
-          if (tutorialCurrentStepId === 'dice_select_hint' && player.id === 'P1' && selectedDieIds.length > 0) {
-            tutorialCurrentStepId = null;
-            tutorialDiceSelectHintGlowing = false;
-            stopTutorialTypewriter();
-          }
           render(STATE);
         });
       }
@@ -6475,10 +6460,6 @@ function renderPlayers(state, next) {
       // slot_any_rule_introの「光る」演出 (2026-09-26, per user request: "自分のすべてのダイスが光る")
       // -- ANYにはどの目でも置けるので、色/白/目の値を問わず全ダイスを光らせる。
       if (tutorialSlotAnyGlowing && player.id === 'P1') dieNode.classList.add('change-highlight');
-      // dice_select_hintの「光る」演出 (2026-09-27, per user request: "自分の色ダイスの一番左1個だけ光るに
-      // 変更 そのダイスしかつかめないように") -- 一番左の色ダイス1個だけを光らせる(tutorialForcedDieId's own
-      // doc)。以前は自分の全ダイスを光らせていたが、選択の絞り込みに合わせて対象を1個に変更。
-      if (tutorialDiceSelectHintGlowing && player.id === 'P1' && die.id === tutorialForcedDieId) dieNode.classList.add('change-highlight');
       // game_rules_intro_1の「光る」演出 (2026-09-27, per user request: "このときあなたのダイス3つを
       // 光らせる") -- 自分の色ダイス全部(tutorialGameRulesDiceGlowing's own doc)。
       if (tutorialGameRulesDiceGlowing && player.id === 'P1' && die.kind !== 'WHITE') dieNode.classList.add('change-highlight');
@@ -9306,33 +9287,9 @@ const TUTORIAL_STEPS = [
   },
   // 2026-09-30: cancel_action_hint/job_retap_hint(「直前のアクションをキャンセル」の実演+一般市民の
   // 再TAP)はExcelから削除された(キャンセル機能の説明が制約カードを選ぶ前の段階に統合されたため)。
-  // job_tap_resource_introの次は通常の直線探索でdice_select_hintが見つかる。
-  {
-    id: 'dice_select_hint',
-    match: (state) => {
-      const next = turnFlowMod.getNextTurn(state);
-      if (next.playerId !== 'P1') return false;
-      const player = state.players.find((p) => p.id === 'P1');
-      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
-    },
-    body: 'あなたの1番左のダイスをクリックしてください',
-    // 2026-09-27, per user request: "この時も 次へ を消す" -- 実際にダイスをクリックすること以外に先へ
-    // 進む手段が無いようにする(free_action_hint/cancel_action_hintと同じnoManualDismissパターン)。
-    noManualDismiss: true,
-  },
-  // 2026-09-27, per user request -- 光る演出は無し。選択したダイスに対する既存の配置可能SLOTハイライト
-  // (.slot--highlight、renderBoardのhighlightedSlots)をそのまま指して説明するだけなので専用のフラグは不要。
-  {
-    id: 'placeable_slot_hint',
-    match: (state) => {
-      const next = turnFlowMod.getNextTurn(state);
-      if (next.playerId !== 'P1') return false;
-      const player = state.players.find((p) => p.id === 'P1');
-      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
-    },
-    body: '今光っているスロットが配置可能スロットです',
-    nextLabel: '次へ',
-  },
+  // 2026-10-02: dice_select_hint/placeable_slot_hint(ダイスを1個クリックする実演+配置可能スロットの説明)も
+  // Excelから削除された(per user request: "T078とT079のあいだの会話削除して")。
+  // job_tap_resource_introの次は通常の直線探索でfirst_turn_recommendation_hintが見つかる。
   // 2026-09-27, per user request -- 光る演出は無し。プレイの助言のみ。
   {
     id: 'first_turn_recommendation_hint',
@@ -10280,13 +10237,11 @@ function dismissTutorialStep() {
   // が、他のフォールバック経路と同じ扱いとして許容する)。
   if (tutorialCurrentStepId === 'free_action_hint') { tutorialJobCardGlowing = false; tutorialResourceGainGlowing = true; }
   // 2026-09-30: cancel_action_hint/job_retap_hint(「直前のアクションをキャンセル」の実演+一般市民の
-  // 再TAP)はExcelから削除された(キャンセル機能の説明が制約カードを選ぶ前の段階に統合されたため) --
-  // dice_select_hintの光る演出はjob_tap_resource_introが閉じられた瞬間に直接ONにする(間の2ステップを
-  // 経由しない)。
-  if (tutorialCurrentStepId === 'job_tap_resource_intro') { tutorialResourceGainGlowing = false; tutorialDiceSelectHintGlowing = true; }
-  // 通常はダイスクリックのイベントリスナーが直接同じ処理をやってからrender()する(そちらのdoc参照) -- ここは
-  // 「実際にダイスをクリックせず次へだけ押した」フォールバック経路用。
-  if (tutorialCurrentStepId === 'dice_select_hint') tutorialDiceSelectHintGlowing = false;
+  // 再TAP)はExcelから削除された(キャンセル機能の説明が制約カードを選ぶ前の段階に統合されたため)。
+  // 2026-10-02: dice_select_hint/placeable_slot_hint(ダイスを1個クリックする実演+配置可能スロットの説明)も
+  // Excelから削除された -- job_tap_resource_introの次は通常の直線探索でfirst_turn_recommendation_hintが
+  // 見つかる、専用の光る演出は不要。
+  if (tutorialCurrentStepId === 'job_tap_resource_intro') tutorialResourceGainGlowing = false;
   // 2026-09-30: training_ground_hint〜shop_cost_intro(訓練場/王宮元老院/SHOPカード/ダイス目/支払い資源の
   // 説明、計6画面)はExcelから削除された(制約カードを選ぶ前の段階に統合されたため) -- first_turn_
   // recommendation_hintの次は通常の直線探索でused_card_immediately_hintが見つかる、専用の光る演出は不要。
@@ -10692,13 +10647,6 @@ let tutorialCancelButtonGlowing = false;
 // placeSelectedDieCommit内の各専用フックが誤配置を検知した瞬間にセットし、
 // handleCancelPreviousActionClick内の専用フックがこれを読んで戻り先を決め、対応する光る演出を再度ONにする。
 let tutorialMisclickReturnStepId = null;
-// 一番左の色ダイス1個だけの「光る」演出 + 選択制限 (2026-09-27, per user request: 当初は"この時自分の
-// ダイスがすべて光る"だったが、"自分の色ダイスの一番左1個だけ光るに変更 そのダイスしかつかめないように"
-// に変更) -- dice_select_hintが表示され続けている間ずっとtrueになる継続フラグ。ダイスが選択された瞬間に
-// 次のセリフへ切り替える必要があるため、free_action_hintと同じ理由でautoDismissWhenは使わず、ダイス
-// クリックのイベントリスナー内で直接render()を呼ぶ前にセットする(renderPlayersのdie click handlerのdoc
-// 参照)。renderPlayers内ではこのフラグからtutorialForcedDieId(光らせる/選択可能にする対象の1個)を導出する。
-let tutorialDiceSelectHintGlowing = false;
 // SHOP全体(M/NORMAL/SPECIAL)のカードの支払い資源部分の「光る」演出 (2026-09-27, per user request: "ショップ
 // にあるすべてのカードの支払い資源部分を光らせる") -- 元々shop_cost_introが表示され続けている間だけtrueに
 // なる継続フラグだったが、その画面はExcelから削除された。build_cost_hint(カード獲得デモ)で引き続き使う。
