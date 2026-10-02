@@ -8494,7 +8494,17 @@ const TUTORIAL_STEPS = [
     id: 'game_rules_intro_1',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
     body: 'このゲームは、ダイス🎲🎲🎲をワーカーとして使う\nワーカープレイスメント系拡大再生産ゲームです',
-    nextLabel: '次へ',
+    // 2026-10-02, per user request (Excelの新しい選択肢2「初期説明を飛ばす」→T063/resource_choice_con_intro):
+    // "ショートカットを作りチュートリアル作成を円滑にするためです そのため後で削除すると思います" -- 開発用の
+    // 一時的なショートカットなので、handleTutorialChoiceClick内の専用フック(下記)で間の全ステップを
+    // まとめてseen扱いにする簡易実装。「初期説明を飛ばす」を選ぶと、ワーカープレイスメント/カード獲得の
+    // 実演一式を飛ばしてresource_choice_con_introへ直接進み、そこから先(JOBドラフト/CON選択含む)は
+    // 通常通りプレイヤー自身が手動で行う("そのため そこからは手動でやります")。
+    choices: [
+      { label: '次へ', targetStepId: 'worker_placement_example_intro' },
+      { label: '初期説明を飛ばす', targetStepId: 'resource_choice_con_intro' },
+    ],
+    choicesLayout: 'row',
   },
   // 2026-09-27, per user request -- ワーカープレイスメントの具体例(当初は小麦畑+一番左のダイスだったが、
   // "変更"で農園+真ん中のダイスに差し替え)。真ん中のダイス(index 1、常に目6に固定済み(2026-09-28変更前は
@@ -10156,7 +10166,24 @@ function placeOneScriptedFakeAiDie(mapId, playerId) {
  * (tutorialResourceCandidatesGlowing's own doc)。 */
 function handleTutorialChoiceClick(targetStepId) {
   const currentStep = TUTORIAL_STEPS.find((s) => s.id === tutorialCurrentStepId);
-  if (currentStep) {
+  // game_rules_intro_1(T001)の「初期説明を飛ばす」(2026-10-02, 開発用の一時的なショートカット、その定義の
+  // doc参照) -- 他の6つのchoicesステップと違い、「次へ」と「初期説明を飛ばす」は全く別の場所に合流する
+  // (どちらも同じ場所へ収束する訳ではない)ため、下の汎用ループで両方の行き先を無条件seen化すると、通常の
+  // 「次へ」経路でも飛び先(resource_choice_con_intro)が先にseen扱いになってしまい、本来そこへ通常の直線
+  // 探索で辿り着くはずの実演一式を経た後に正しく表示されなくなる。このステップだけ汎用ループを通さず、
+  // 実際に選ばれた方だけに応じて個別に処理する。
+  if (tutorialCurrentStepId === 'game_rules_intro_1') {
+    if (targetStepId === 'resource_choice_con_intro') {
+      // 飛び先までの間に挟まるワーカープレイスメント/カード獲得の実演一式を、resource_choice_con_intro
+      // 自身も含めてまとめてseen扱いにする(そのままだと通常の直線探索で後から拾われてしまう、どれも
+      // 同じ広いmatch条件のため)。
+      const fromIdx = TUTORIAL_STEPS.findIndex((s) => s.id === 'game_rules_intro_1');
+      const toIdx = TUTORIAL_STEPS.findIndex((s) => s.id === 'resource_choice_con_intro');
+      for (let i = fromIdx + 1; i <= toIdx; i++) tutorialSeenStepIds.add(TUTORIAL_STEPS[i].id);
+    }
+    // targetStepId === 'worker_placement_example_intro'(「次へ」)のときは何もしない -- 通常の直線探索に
+    // そのまま任せる。
+  } else if (currentStep) {
     for (const choice of currentStep.choices) tutorialSeenStepIds.add(choice.targetStepId);
   }
   // 2026-09-30, per user request (Excel T037、続けてT041) -- エリアのレベルアップ実演を離れる時、タイル全体の
