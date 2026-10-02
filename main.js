@@ -1765,7 +1765,11 @@ function enterReplayMode(historyOverride) {
   // should ever be open at this point, but renderReplayFrame doesn't render (or re-hide) any of them
   // itself, and .replay-locked's pointer-events:none never reaches these -- they live outside #app (see
   // index.html's own comment) same as #replay-controls does on purpose.
-  for (const id of ['card-inst-overlay', 'build-choice-overlay', 'placement-choice-overlay',
+  // 2026-10-03 bug fix (per user report: "リプレイが再生されなくなりました") -- 'placement-choice-overlay'
+  // はCON002B自動優先化(2026-09-21、コミットbad6254)でindex.htmlから削除済みだったが、この配列から
+  // 消し忘れていたため、document.getElementById(...)がnullを返しその.hidden代入がTypeErrorで即死、
+  // enterReplayModeが一度も最後まで実行できずreplayMode=trueにすら到達していなかった。
+  for (const id of ['card-inst-overlay', 'build-choice-overlay',
     'tap-choice-overlay', 'auto-mode-choice-overlay', 'turn-end-warning-overlay', 'round-pass-confirm-overlay',
     'white-overflow-confirm-overlay', 'job-replacement-choice-overlay', 'resource-confirm-overlay',
     'ranking-overlay', 'ranking-delete-or-mark-overlay', 'online-lobby-overlay']) {
