@@ -6779,6 +6779,9 @@ function renderTutorialTurnEndButton(container) {
       tutorialCancelButtonGlowing = false;
       tutorialCardAcquisitionRestartButtonShown = false;
       placeScriptedFakeAiDiceForTutorial(3, true);
+      // round_pass_leftover_dice_hint(T059)がこの直後に合流するので、ここでラウンドパスボタンを光らせる
+      // (tutorialRoundPassButtonGlowing's own doc)。
+      tutorialRoundPassButtonGlowing = true;
     } else {
       tutorialNextPlayerGlowing = true;
     }
@@ -9953,6 +9956,19 @@ function renderTutorialOverlay(state) {
         window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
       }
     }
+    // round_pass_leftover_dice_hint(2026-10-02, Excel T059)が見えるようにスクロール (per user request:
+    // "このときラウンドパスボタンを光らせて必要ならスクロール") -- game_rules_intro_1と同じ考え方で
+    // ラウンドパスボタンを見える範囲の中央に寄せる。
+    if (step.id === 'round_pass_leftover_dice_hint') {
+      const roundPassBtnEl = document.getElementById('round-pass-button');
+      if (roundPassBtnEl) {
+        const bubbleWrap = document.getElementById('tutorial-bubble-wrap');
+        const visibleHeight = (bubbleWrap && !bubbleWrap.hidden) ? bubbleWrap.getBoundingClientRect().top : window.innerHeight;
+        const rect = roundPassBtnEl.getBoundingClientRect();
+        const desiredTop = Math.max(0, (visibleHeight - rect.height) / 2);
+        window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
+      }
+    }
   }
 }
 
@@ -10528,6 +10544,9 @@ function dismissTutorialStep() {
     enterBuildCandidateSummaryHint();
     return;
   }
+  // round_pass_leftover_dice_hint(2026-10-02, Excel T059)を閉じたらラウンドパスボタンの「光る」を消す
+  // (tutorialRoundPassButtonGlowing's own doc)。
+  if (tutorialCurrentStepId === 'round_pass_leftover_dice_hint') tutorialRoundPassButtonGlowing = false;
   // castle_turn_order_hint(2026-09-30, Excel T050)の「光る」(王宮の次ラウンド欄) -- game_rules_intro_2を
   // 閉じたらON、castle_turn_order_hint自身を閉じたらOFF。
   if (tutorialCurrentStepId === 'game_rules_intro_2') tutorialCastleTurnOrderGlowing = true;
@@ -10694,6 +10713,9 @@ let tutorialCardAcquisitionRestartButtonShown = false;
 let tutorialFreeActionGlowId = null;
 // castle_turn_order_hint(2026-09-30, Excel T050)の「光る」演出 -- 王宮の「次ラウンド」欄。
 let tutorialCastleTurnOrderGlowing = false;
+// round_pass_leftover_dice_hint(2026-10-02, Excel T059)の「光る」演出 -- ラウンドパスボタン。
+// renderRoundPassButton's own参照。
+let tutorialRoundPassButtonGlowing = false;
 // 農園の支配カードの説明(2026-09-30, Excel T035・T037)の「光る」演出 -- どちらもmapId(常に'MAP002')を
 // そのまま持つ、null=光らせない。build_candidate_a005a_fee_hintは使用料置き場(.map-tile__fee)、
 // build_candidate_a005a_levelup_hintはタイル全体を光らせる(renderBoard's own参照)。
@@ -11326,6 +11348,9 @@ function renderRoundPassButton(state, next) {
   btn.disabled = !hasDiceLeftThisRound || blockedByTutorial;
   btn.title = blockedByTutorial ? 'チュートリアル中は使えません' : '';
   btn.dataset.playerId = hasDiceLeftThisRound && !blockedByTutorial ? playerId : '';
+  // round_pass_leftover_dice_hintの「光る」演出 (2026-10-02, per user request: "このときラウンドパス
+  // ボタンを光らせて") -- tutorialRoundPassButtonGlowing's own doc。
+  btn.classList.toggle('change-highlight', tutorialRoundPassButtonGlowing);
 }
 
 function handleRoundPassClick() {
