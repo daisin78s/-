@@ -5680,6 +5680,12 @@ function advanceTurnIfPossible(state, playerId) {
     return;
   }
   pendingTurnEndPlayerId = null;
+  // second_turn_intro_hint(T081)の「2ターン目が回ってきた」判定用カウンタ (2026-10-02, per user report:
+  // "ターン終了ボタンを押してもいないのに２ターン目が回ってきましたと出てきました" -- 元々は「未解決
+  // ダイスが1個減った」で判定していたが、それだと本物のターン終了を押す前(同じ1ターン目の最中)でも
+  // 最初のダイスを置いた時点で誤発火していた。本物のENDTURNがここを通るたびに数え、「ちょうど1回
+  // 本物のターン終了を終えている」を条件にする -- tutorialP1RealTurnEndCount's own doc参照。
+  if (playerId === 'P1') tutorialP1RealTurnEndCount += 1;
   // Reset turnActionTaken here, synchronously with the real END_TURN, not just via render()'s bottom
   // "transition block" (2026-08-09 regression fix, per user report: "1Rの2ターン目にダイスを置けなくなる
   // "). That transition block only clears turnActionTaken once next.playerId's hasFinishedOnboarding is
@@ -9318,19 +9324,17 @@ const TUTORIAL_STEPS = [
     // デフォルト文言(「閉じる」)になる -- renderTutorialOverlay's own doc参照。
   },
   // 2026-10-02, per user request (Excelの新しい行T081): used_card_immediately_hint(T080)を閉じた後、
-  // あなたの2回目の手番(=最初のダイスを1個解決した直後)が回ってきたタイミングで改めて出す短い一言。
-  // 既存の「P1のターン+CON所有」という広い条件(ずっと真のまま)だけだと、この一言を見た直後に
-  // tutorialSeenStepIdsへ登録される前の一瞬のタイミング次第では再度拾われかねない(T078/T079間の
-  // 孤立ステップと同じ事故クラス)ため、「未解決ダイスがちょうど1個減った(=1個目を解決済み)」という
-  // 狭い条件にして、本当に2回目の手番の瞬間だけ真になるようにしている。
+  // あなたの2回目の手番(=本物の「ターン終了」ボタンを押し、ほかのプレイヤーの行動が終わってから、
+  // あなたのターンが回ってきた瞬間)に改めて出す短い一言。2026-10-02、per user report ("ターン終了ボタンを
+  // 押してもいないのに２ターン目が回ってきましたと出てきました") -- 当初は「未解決ダイスが1個減った」
+  // (=最初のダイスを置いた瞬間)で判定していたが、それだと本物のターン終了を押す前、1ターン目の最中に
+  // 誤発火していた。advanceTurnIfPossible(本物のENDTURNが必ず通る一箇所)でP1がターンを終えるたびに
+  // 数えるtutorialP1RealTurnEndCountに切り替え、「ちょうど1回終えている」を条件にした。
   {
     id: 'second_turn_intro_hint',
     match: (state) => {
       const next = turnFlowMod.getNextTurn(state);
-      if (next.type !== 'TURN' || next.playerId !== 'P1') return false;
-      const player = state.players.find((p) => p.id === 'P1');
-      const resolvedCount = player.dice.filter((d) => d.placedMapId !== null || d.passed).length;
-      return resolvedCount === 1;
+      return next.type === 'TURN' && next.playerId === 'P1' && tutorialP1RealTurnEndCount === 1;
     },
     body: '２ターン目が回ってきました',
     nextLabel: '次へ',
@@ -10695,6 +10699,10 @@ let tutorialCastleTurnOrderGlowing = false;
 // round_pass_leftover_dice_hint(2026-10-02, Excel T059)の「光る」演出 -- ラウンドパスボタン。
 // renderRoundPassButton's own参照。
 let tutorialRoundPassButtonGlowing = false;
+// second_turn_intro_hint(2026-10-02, Excel T081)用 -- P1が本物のターン終了(advanceTurnIfPossible、
+// attemptAdvanceTurnのWARNING確認後の直接呼び出しも含む)を実際に終えた回数。0=まだ1ターン目の最中
+// (ダイスを置いただけではカウントしない)、1=1ターン目を実際に終えて2ターン目が回ってきた瞬間。
+let tutorialP1RealTurnEndCount = 0;
 // 農園の支配カードの説明(2026-09-30, Excel T035・T037)の「光る」演出 -- どちらもmapId(常に'MAP002')を
 // そのまま持つ、null=光らせない。build_candidate_a005a_fee_hintは使用料置き場(.map-tile__fee)、
 // build_candidate_a005a_levelup_hintはタイル全体を光らせる(renderBoard's own参照)。
