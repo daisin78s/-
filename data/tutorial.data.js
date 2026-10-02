@@ -84,6 +84,13 @@ window.TUTORIAL_SERIFU = {
   "second_turn_low_resource_advice_hint": "資源が足りないようなら資源を増やしに行きましょう",
   "special_shop_unlock_intro": "次のラウンドからは強化カードが並ぶショップが解禁されます",
   "special_shop_unlock_hint": "強化カードは通常カードよりも強いので今のうちから獲得するチャンスを伺ってください",
-  "monument_shop_unlock_intro": "次のラウンドからはモニュメントも解禁されます\nモニュメントはVP専用カードです\nこちらは急いで取りに行かなくても大丈夫なので後で説明しますね",
-  "round2_turn1_intro_hint": "2ラウンドになりました"
+  "monument_shop_unlock_intro": "次のラウンドからはモニュメントカードも解禁されます\nこちらは急いで取りに行かなくても大丈夫なので後で説明しますね",
+  "round2_turn1_intro_hint": "2ラウンドになりました",
+  "round2_shop_unlock_summary_hint": "このラウンドから強化カードとモニュメントカードが獲得できるようになります",
+  "monument_vp_only_hint": "モニュメントカードは資源を生み出したりカードを獲得できたりしない純粋なVP専門のカードです",
+  "monument_dice_rule_hint": "このカードは通常カードと逆でダイス目が大きいほど獲得しやすくなっています\nショップの位置は関係なくカードに書いてある「ダイス目〇以上」のダイスを🔨エリアに置く必要があります",
+  "monument_multi_dice_hint": "モニュメントを獲得するときはダイスを複数選んで置けばその合計値で獲得できます",
+  "monument_dice_duplicate_rule_hint": "その時すでに置いてある目と同じ目は置けませんが、ゾロ目はその目がすでに置いてなければ置くことができます",
+  "monument_dice_example_hint": "例えばダイス目6を２個置けば「ダイス目１２以上」のモニュメントカードを獲得できます",
+  "monument_vs_special_urgency_hint": "モニュメントは急いで取りに行く必要はありませんが、強化カードは急がないとあっという間に売り切れてしまうでしょう"
 };

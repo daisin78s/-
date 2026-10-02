@@ -4756,6 +4756,13 @@ function buildShopSlotNode(slotId, faceId, showReqCaption, locked, faceDown = fa
     const costEl = cardVisual.querySelector(':scope > .shop-card__cost, :scope > .shop-card__cost-empty');
     if (costEl) costEl.classList.add('change-highlight');
   }
+  // monument_dice_rule_hint(2026-10-02, Excel T090)の「光る」演出(モニュメントの「ダイス目〇以上」) --
+  // .shop-card__reqはfacts.reqがあるモニュメントカードだけ中身を持つ(他は:emptyで消える)ので対象を
+  // 絞る判定は不要。.shop-card__costと同じく表裏2つ存在するため:scope >で表面側だけに絞る。
+  if (tutorialMonumentReqGlowing) {
+    const reqEl = cardVisual.querySelector(':scope > .shop-card__req');
+    if (reqEl) reqEl.classList.add('change-highlight');
+  }
   slotNode.querySelector('.shop-slot__card').appendChild(cardVisual);
   slotNode.querySelector('.shop-slot__req').textContent = reqCaption();
   if (reqGlowing) slotNode.querySelector('.shop-slot__req').classList.add('change-highlight');
@@ -9422,7 +9429,7 @@ const TUTORIAL_STEPS = [
       const next = turnFlowMod.getNextTurn(state);
       return next.type === 'TURN' && next.playerId === 'P1' && tutorialP1RealTurnEndCount === 1;
     },
-    body: '次のラウンドからはモニュメントも解禁されます\nモニュメントはVP専用カードです\nこちらは急いで取りに行かなくても大丈夫なので後で説明しますね',
+    body: '次のラウンドからはモニュメントカードも解禁されます\nこちらは急いで取りに行かなくても大丈夫なので後で説明しますね',
   },
   // 実際にラウンド2になった瞬間(P1の2ラウンド1ターン目)に見つかる、monument_shop_unlock_introとは別条件の
   // ステップ -- こちらにtutorialP1RealTurnEndCountのような専用カウンタは不要(state.round自体が2になった
@@ -9435,6 +9442,79 @@ const TUTORIAL_STEPS = [
       return next.type === 'TURN' && next.playerId === 'P1' && state.round === 2;
     },
     body: '2ラウンドになりました',
+  },
+  // 2026-10-02, per user request (Excelの新しい行T088〜T094) -- round2_turn1_intro_hintに続く、SPECIAL/
+  // モニュメントショップ解禁の詳しい説明(モニュメントの性質・獲得ルール・記念碑を使った具体例)。T088〜
+  // T093はround2_turn1_intro_hintと同じmatch条件(state.round===2である間ずっと真)を共有し、通常の直線
+  // 探索で連続して表示される。T094だけ「閉じる」1つの単純なステップ(Excelの選択肢2「あなたに２ラウンド
+  // 3ターン目が回ってくる」は実際のボタンではなく、将来追加予定のT095が実際にそのタイミングになった瞬間に
+  // 自然に見つかることの説明書き -- monument_shop_unlock_intro/round2_turn1_intro_hintと同じパターン)。
+  {
+    id: 'round2_shop_unlock_summary_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1' && state.round === 2;
+    },
+    body: 'このラウンドから強化カードとモニュメントカードが獲得できるようになります',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'monument_vp_only_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1' && state.round === 2;
+    },
+    body: 'モニュメントカードは資源を生み出したりカードを獲得できたりしない純粋なVP専門のカードです',
+    nextLabel: '次へ',
+  },
+  // 光る: 'モニュメントの「ダイス目〇以上」' -- tutorialMonumentReqGlowing(buildShopSlotNodeの.shop-card__req
+  // 参照)。
+  {
+    id: 'monument_dice_rule_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1' && state.round === 2;
+    },
+    body: 'このカードは通常カードと逆でダイス目が大きいほど獲得しやすくなっています\nショップの位置は関係なくカードに書いてある「ダイス目〇以上」のダイスを🔨エリアに置く必要があります',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'monument_multi_dice_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1' && state.round === 2;
+    },
+    body: 'モニュメントを獲得するときはダイスを複数選んで置けばその合計値で獲得できます',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'monument_dice_duplicate_rule_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1' && state.round === 2;
+    },
+    body: 'その時すでに置いてある目と同じ目は置けませんが、ゾロ目はその目がすでに置いてなければ置くことができます',
+    nextLabel: '次へ',
+  },
+  // 光る: '記念碑'(M001) -- 既存のtutorialShopCardTypeGlow(faceId.startsWithによる一致、A/B/Cデッキ全体を
+  // 光らせる既存用途と同じ仕組み)を'M001'に設定して再利用。M001はTUTORIAL_SHOP_MONUMENT_FACE_IDSで
+  // 常に初期6枠のどこかに含まれることが保証済み(createInitialState参照)。
+  {
+    id: 'monument_dice_example_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1' && state.round === 2;
+    },
+    body: '例えばダイス目6を２個置けば「ダイス目１２以上」のモニュメントカードを獲得できます',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'monument_vs_special_urgency_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1' && state.round === 2;
+    },
+    body: 'モニュメントは急いで取りに行く必要はありませんが、強化カードは急がないとあっという間に売り切れてしまうでしょう',
   },
 ];
 
@@ -10703,6 +10783,19 @@ function dismissTutorialStep() {
   if (tutorialCurrentStepId === 'second_turn_low_resource_advice_hint') tutorialBuildShopGlowSlots = ['SHOP201', 'SHOP202', 'SHOP203'];
   if (tutorialCurrentStepId === 'special_shop_unlock_hint') tutorialBuildShopGlowSlots = ['SHOP001', 'SHOP002', 'SHOP003', 'SHOP004', 'SHOP005', 'SHOP006'];
   if (tutorialCurrentStepId === 'monument_shop_unlock_intro') tutorialBuildShopGlowSlots = null;
+  // round2_shop_unlock_summary_hint〜monument_vs_special_urgency_hint(2026-10-02, Excel T088〜T094)の
+  // 「光る」の受け渡し。T088→SHOP201-203+SHOP001-006全部、T089→SHOP001-006のみ、T090→モニュメントの
+  // 「ダイス目〇以上」(tutorialMonumentReqGlowing)、T091/T092→光るなし、T093→記念碑(M001)のみ
+  // (tutorialShopCardTypeGlowを'M001'に設定して再利用)、T094→光るなし。
+  if (tutorialCurrentStepId === 'round2_turn1_intro_hint') tutorialBuildShopGlowSlots = ['SHOP201', 'SHOP202', 'SHOP203', 'SHOP001', 'SHOP002', 'SHOP003', 'SHOP004', 'SHOP005', 'SHOP006'];
+  if (tutorialCurrentStepId === 'round2_shop_unlock_summary_hint') tutorialBuildShopGlowSlots = ['SHOP001', 'SHOP002', 'SHOP003', 'SHOP004', 'SHOP005', 'SHOP006'];
+  if (tutorialCurrentStepId === 'monument_vp_only_hint') {
+    tutorialBuildShopGlowSlots = null;
+    tutorialMonumentReqGlowing = true;
+  }
+  if (tutorialCurrentStepId === 'monument_dice_rule_hint') tutorialMonumentReqGlowing = false;
+  if (tutorialCurrentStepId === 'monument_dice_duplicate_rule_hint') tutorialShopCardTypeGlow = 'M001';
+  if (tutorialCurrentStepId === 'monument_dice_example_hint') tutorialShopCardTypeGlow = null;
   // kabukicho_result_hint(T010)を閉じたらチュートリアル専用のターン終了ボタンを出す(T011)。
   if (tutorialCurrentStepId === 'kabukicho_result_hint') {
     tutorialTurnEndButtonShown = true;
@@ -10912,6 +11005,9 @@ let tutorialGuildGlowing = false;
 // カードのfaceIdの先頭文字が一致するものを光らせる。null=光らせない。各カード説明ステップが表示され続ける
 // 間、直前のステップのdismissTutorialStepで立て、そのステップ自身のdismissTutorialStepで下ろす。
 let tutorialShopCardTypeGlow = null;
+// monument_dice_rule_hint(2026-10-02, Excel T090)の「光る」演出(モニュメントの「ダイス目〇以上」) --
+// buildShopSlotNodeの.shop-card__req参照。表示され続けている間ずっとtrueになる継続フラグ。
+let tutorialMonumentReqGlowing = false;
 // 戻ってきた一番右のダイス+歓楽街の配置可能スロットの「光る」演出 (2026-09-28, per user request: "このとき
 // ギルドに置かれたダイスが戻って光る 歓楽街のスロットも光る") -- kabukicho_placement_introが表示され続けて
 // いる間ずっとtrueになる継続フラグ。このステップは実際のクリック操作で進める(次へボタンは無い、
