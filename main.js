@@ -9313,7 +9313,26 @@ const TUTORIAL_STEPS = [
       const player = state.players.find((p) => p.id === 'P1');
       return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
     },
-    body: '獲得したカードはこのラウンドからすぐに使うことができますのでガンガン使っていきましょう',
+    body: 'ここからはあなたが自由にプレイしてください',
+    // 2026-10-02, per user request (Excelの選択肢1列を「閉じる」に変更): nextLabelを外すとdismissBtnの
+    // デフォルト文言(「閉じる」)になる -- renderTutorialOverlay's own doc参照。
+  },
+  // 2026-10-02, per user request (Excelの新しい行T081): used_card_immediately_hint(T080)を閉じた後、
+  // あなたの2回目の手番(=最初のダイスを1個解決した直後)が回ってきたタイミングで改めて出す短い一言。
+  // 既存の「P1のターン+CON所有」という広い条件(ずっと真のまま)だけだと、この一言を見た直後に
+  // tutorialSeenStepIdsへ登録される前の一瞬のタイミング次第では再度拾われかねない(T078/T079間の
+  // 孤立ステップと同じ事故クラス)ため、「未解決ダイスがちょうど1個減った(=1個目を解決済み)」という
+  // 狭い条件にして、本当に2回目の手番の瞬間だけ真になるようにしている。
+  {
+    id: 'second_turn_intro_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      if (next.type !== 'TURN' || next.playerId !== 'P1') return false;
+      const player = state.players.find((p) => p.id === 'P1');
+      const resolvedCount = player.dice.filter((d) => d.placedMapId !== null || d.passed).length;
+      return resolvedCount === 1;
+    },
+    body: '２ターン目が回ってきました',
     nextLabel: '次へ',
   },
 ];

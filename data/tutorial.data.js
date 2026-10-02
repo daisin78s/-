@@ -78,5 +78,6 @@ window.TUTORIAL_SERIFU = {
   "free_action_hint": "自分のターン中メインアクションの前後にフリーアクションを行うことができます\n試しにあなたのジョブ一般市民の⤵（タップアイコン）をクリックしてみてください",
   "job_tap_resource_intro": "このジョブはクリックすることで〇とZ〇を得ることができます\n使い終わったカードはタップされアンタップ（起き上がる）までは使えません\nラウンド開始時にはすべてのカードがアンタップされます",
   "first_turn_recommendation_hint": "初めのターンは初期資源を使ってダイスかカードを獲得するのがおすすめです",
-  "used_card_immediately_hint": "ここからはあなたが自由にプレイしてください"
+  "used_card_immediately_hint": "ここからはあなたが自由にプレイしてください",
+  "second_turn_intro_hint": "２ターン目が回ってきました"
 };
