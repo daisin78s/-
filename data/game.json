@@ -1882,7 +1882,7 @@
       "REWARD1": "ADD(4VP)",
       "REWARD2": "ADD(2VP)",
       "REWARD3": "ADD(VP)",
-      "INST": "最多EMBLEMの数"
+      "INST": "最多エンブレムの数"
     },
     {
       "ID": "Q003A",
@@ -1927,7 +1927,7 @@
       "REWARD1": "ADD(4VP)",
       "REWARD2": "ADD(2VP)",
       "REWARD3": "ADD(VP)",
-      "INST": "EMBLEM総数"
+      "INST": "エンブレム総数"
     },
     {
       "ID": "Q004B",

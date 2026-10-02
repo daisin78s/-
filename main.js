@@ -3319,7 +3319,7 @@ function buildBzForBuildIcon(actionText) {
 
 /** JOB008's PASSIVE (2026-08-0X, per user request): N stacked IF(TOTAL_EMBLEM_COUNT>=k*step,
  * VP_MODIFIER(vp)) statements at evenly-spaced thresholds, all granting the same VP -- collapsed into
- * one compact "every {step} emblems -> +{vp}VP" icon (EMBLEM {step}個 / 🔽 / {vp}VP) instead of
+ * one compact "every {step} emblems -> +{vp}VP" icon (エンブレム{step}個 / 🔽 / {vp}VP) instead of
  * literally showing all N IF rows. Requires 2+ statements (a single IF is buildCardCountVpModifierIcon's
  * territory, a different shape) and a perfectly even step; anything irregular falls through to the
  * text fallback rather than showing a misleading simplified icon. */
@@ -3334,7 +3334,9 @@ function buildEmblemStepVpModifierIcon(actionText) {
   if (!vps.every((v) => v === vps[0])) return null;
   if (!thresholds.every((t, i) => t === step * (i + 1))) return null;
   const stack = el('div', 'action-icons-stack');
-  stack.appendChild(actionRow([actionSuffix(`EMBLEM ${step}個`)]));
+  // 2026-10-02, per user request: "EMBLEMもすべてエンブレムにします" -- カードリスト/INST/ジョブ/QSTの表示を
+  // 日本語の「エンブレム」に統一(EMBLEM_A/B/C・TOTAL_EMBLEM_COUNT等の内部DSL識別子はそのまま)。
+  stack.appendChild(actionRow([actionSuffix(`エンブレム${step}個`)]));
   stack.appendChild(actionRow([actionEmoji('🔽')]));
   stack.appendChild(actionRow([actionSuffix(`${vps[0]}VP`)]));
   return stack;
