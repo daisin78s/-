@@ -4712,7 +4712,14 @@ function buildShopSlotNode(slotId, faceId, showReqCaption, locked, faceDown = fa
     slotNode.querySelector('.shop-slot__req').textContent = reqCaption();
     if (reqGlowing) slotNode.querySelector('.shop-slot__req').classList.add('change-highlight');
     const facedownTpl = document.getElementById('tpl-shop-card-facedown');
-    slotNode.querySelector('.shop-slot__card').appendChild(facedownTpl.content.firstElementChild.cloneNode(true));
+    const facedownNode = facedownTpl.content.firstElementChild.cloneNode(true);
+    // monument_shop_unlock_intro(2026-10-02, per user report: "SHOP201-203は光りますがSHOP001-006は
+    // 光りません 2Rからのカバーがかかっているからでしょうか") -- faceDownのSHOP001-006はこの早期return
+    // パスを通るため、下のbuildCardVisual側のreqGlowing判定(line 4728相当)に一度も到達せず、空文字の
+    // reqCaption()しか光らせていなかった(.shop-slot__reqは空テキストで見た目上何も無い)。裏向きカード
+    // 自身(.shop-card--facedown)にも直接光らせるようにした。
+    if (reqGlowing) facedownNode.classList.add('change-highlight');
+    slotNode.querySelector('.shop-slot__card').appendChild(facedownNode);
     return slotNode;
   }
   const facts = factsForFaceId(faceId);
