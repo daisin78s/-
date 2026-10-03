@@ -4518,3 +4518,17 @@ body.tutorial-mode .change-highlight {
   border: 1px solid var(--border);
   background: var(--surface);
 }
+
+/* 著作権表示 (2026-10-03, per user request: "画面隅に小さく") -- 常時表示だが操作の邪魔にならないよう
+   右下に小さく/控えめに配置し、pointer-events:noneでクリックを透過させる。 */
+#copyright-notice {
+  position: fixed;
+  right: 6px;
+  bottom: 2px;
+  font-size: 9px;
+  color: var(--text-muted);
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: 50;
+  user-select: none;
+}
