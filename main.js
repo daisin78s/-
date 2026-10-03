@@ -9574,6 +9574,44 @@ const TUTORIAL_STEPS = [
     },
     body: 'どんなカードが出るかは出てのお楽しみです',
   },
+  // 2026-10-03, per user request (Excelの新しい行T099〜T101) -- extra_monument_surprise_hint(T098)に
+  // 続く、「3ラウンド2ターン目」(=本物のターン終了をちょうど1回終えた瞬間)に発火する終盤戦のアドバイス
+  // 3画面。round3_turn1_intro_hintが見つかった瞬間のtutorialP1RealTurnEndCountをtutorialP1RealTurnEndCountAtRound3Start
+  // としてスナップショットし、そこからちょうど1回終えた瞬間を判定する(wave2_special_unlock_hintと同じ
+  // 「狭い条件」方針)。光る演出はいずれも無し。
+  {
+    id: 'round3_turn2_endgame_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1'
+        && tutorialP1RealTurnEndCountAtRound3Start !== null
+        && tutorialP1RealTurnEndCount === tutorialP1RealTurnEndCountAtRound3Start + 1;
+    },
+    body: 'もうゲームも終盤戦です\n',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'game_end_condition_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1'
+        && tutorialP1RealTurnEndCountAtRound3Start !== null
+        && tutorialP1RealTurnEndCount === tutorialP1RealTurnEndCountAtRound3Start + 1;
+    },
+    body: 'このゲームは４ラウンド終了時にVPの多いプレイヤーの勝利です',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'endgame_vp_card_priority_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1'
+        && tutorialP1RealTurnEndCountAtRound3Start !== null
+        && tutorialP1RealTurnEndCount === tutorialP1RealTurnEndCountAtRound3Start + 1;
+    },
+    body: '生産性の高いカードよりもモニュメントなどのVPの多いカードを狙っていきましょう',
+    nextLabel: '次へ',
+  },
 ];
 
 // セリフのExcel反映 (2026-09-28, per user request: "まずはセリフだけ反映されるようにしてください") --
@@ -9999,6 +10037,10 @@ function renderTutorialOverlay(state) {
       // として覚えておく。そこから本物のターン終了をちょうど2回終えた時点(=3ターン目)がwave2_special_
       // unlock_hintの発火条件になる(tutorialP1RealTurnEndCountAtRound2Startのown doc参照)。
       if (next.id === 'round2_turn1_intro_hint') tutorialP1RealTurnEndCountAtRound2Start = tutorialP1RealTurnEndCount;
+      // round3_turn2_endgame_hint(2026-10-03, Excel T099)の「3ラウンド2ターン目」判定用 -- round2のときと
+      // 同じ考え方で、round3_turn1_intro_hintが見つかった瞬間を基準値にする(tutorialP1RealTurnEndCountAtRound3Start
+      // のown doc参照)。
+      if (next.id === 'round3_turn1_intro_hint') tutorialP1RealTurnEndCountAtRound3Start = tutorialP1RealTurnEndCount;
     }
     const current = TUTORIAL_STEPS.find((s) => s.id === tutorialCurrentStepId);
     // autoDismissWhen (2026-09-24): a step can opt into closing itself automatically, unlike every other
@@ -11042,6 +11084,11 @@ let tutorialP1RealTurnEndCount = 0;
 // いない。「2ラウンド3ターン目」は、このスナップショットから本物のターン終了をちょうど2回終えた瞬間
 // (tutorialP1RealTurnEndCount === スナップショット+2)として判定する。
 let tutorialP1RealTurnEndCountAtRound2Start = null;
+// round3_turn2_endgame_hint(2026-10-03, Excel T099)用 -- round3_turn1_intro_hintが見つかった(ラウンド3の
+// 1ターン目が始まった)瞬間のtutorialP1RealTurnEndCountのスナップショット。null=まだラウンド3に入って
+// いない。「3ラウンド2ターン目」は、このスナップショットから本物のターン終了をちょうど1回終えた瞬間
+// (tutorialP1RealTurnEndCount === スナップショット+1)として判定する。
+let tutorialP1RealTurnEndCountAtRound3Start = null;
 // 農園の支配カードの説明(2026-09-30, Excel T035・T037)の「光る」演出 -- どちらもmapId(常に'MAP002')を
 // そのまま持つ、null=光らせない。build_candidate_a005a_fee_hintは使用料置き場(.map-tile__fee)、
 // build_candidate_a005a_levelup_hintはタイル全体を光らせる(renderBoard's own参照)。

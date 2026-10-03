@@ -60,7 +60,7 @@ window.TUTORIAL_SERIFU = {
   "round_pass_leftover_dice_hint": "やりたい行動がないときはダイスを残したままラウンドパスをすることもできます\nラウンドパスをすると使わなかった色ダイス１個につき食料〇3入ります\n使わなかった白ダイスはラウンド開始時ふりなおして使えます",
   "game_rules_intro_2": "全員がダイスを使い切るか、ラウンドをパスするとラウンド終了です\nこれを4ラウンド繰り返し、ゲーム終了時に最も多くのVP（勝利点）を獲得したプレイヤーが勝者となります",
   "castle_turn_order_hint": "次のラウンドの手番はこの順番になります\n王宮の後ろのスロットに置いた順から先の手番です",
-  "resource_choice_intro": "それではゲームを始めましょう",
+  "resource_choice_intro": "それではゲームを始めましょう\nわからないところがあればクリックすると説明が出るようになっていますので活用していきましょう",
   "resource_choice_con_intro": "あなたにランダムな制約カード1枚が配られました\nこれはあなたの性格や特性を表しています\n表面裏面どちらを使うかあとで選ぶことができます",
   "resource_choice": "ランダムな初期資源カード4枚が配られました\nこれはあなたが初めに持っている財産を表しています",
   "resource_pick_hint": "それでは光っている4枚の初期資源カードのうち2枚をクリックしてください",
@@ -96,5 +96,8 @@ window.TUTORIAL_SERIFU = {
   "wave2_special_unlock_hint": "次のラウンドからはさらに強力な強化カードが獲得できるようになります\nスタプレ争いも重要です",
   "round3_turn1_intro_hint": "３ラウンドになりました\nすべてのカードが解禁になります",
   "shop_remaining_count_hint": "ここに残りカード枚数が書いてありいずれかのショップが売り切れになるとそこに強化モニュメントが出てきます",
-  "extra_monument_surprise_hint": "どんなカードが出るかは出てのお楽しみです"
+  "extra_monument_surprise_hint": "どんなカードが出るかは出てのお楽しみです",
+  "round3_turn2_endgame_hint": "もうゲームも終盤戦です",
+  "game_end_condition_hint": "このゲームは４ラウンド終了時にVPの多いプレイヤーの勝利です",
+  "endgame_vp_card_priority_hint": "生産性の高いカードよりもモニュメントなどのVPの多いカードを狙っていきましょう"
 };
