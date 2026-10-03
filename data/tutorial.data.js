@@ -98,7 +98,7 @@ window.TUTORIAL_SERIFU = {
   "shop_remaining_count_hint": "ここに残りカード枚数が書いてありいずれかのショップが売り切れになるとそこに強化モニュメントが出てきます",
   "extra_monument_surprise_hint": "どんなカードが出るかは出てのお楽しみです",
   "round3_turn2_endgame_hint": "もうゲームも終盤戦です",
-  "game_end_condition_hint": "このゲームは４ラウンド終了時にVPの多いプレイヤーの勝利です",
+  "game_end_condition_hint": "このゲームは４ラウンド終了時にVPの多いプレイヤーの勝利です\n（VPが同じ場合最後のラウンドのスタプレ順の先のプレイヤーの勝利です）",
   "endgame_vp_card_priority_hint": "生産性の高いカードよりもモニュメントなどのVPの多いカードを狙っていきましょう",
   "endgame_emblem_intro_hint": "説明が最後になりましたが、あなたが獲得したカードにはエンブレムが書かれています",
   "quest_rank_reward_hint": "クエストはすべてのプレイヤーで競い、上位プレイヤーはゲーム終了時に下に書かれた得点を得ます",
