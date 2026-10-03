@@ -4599,6 +4599,11 @@ function renderQsts(state) {
     container.appendChild(buildQstCardVisual(faceId, state, { showRankHeaders: !sharedRewards }));
   }
   renderQstLegend(sharedRewards);
+  // quest_table_intro_hint(2026-10-03, Excel T104)の「光る」演出(クエスト表全体) -- #qst-legend自身の
+  // 「一番下の順位」だけを光らせるtutorialQstLegendGlowing(quest_rank_reward_hint用)とは別に、
+  // .qst-panel全体を光らせる。表示され続けている間ずっとtrueになる継続フラグ。
+  const qstPanel = document.querySelector('.qst-panel');
+  if (qstPanel) qstPanel.classList.toggle('change-highlight', tutorialQstTableGlowing);
 }
 
 /**
@@ -4936,11 +4941,10 @@ function buildStandingsPanelNode(state) {
     // fixed quarters' contents around).
     const qstEl = el('span', 'standings-panel__qst', `（+${row.qstVp}）`);
     cell.appendChild(qstEl);
-    // standings_rank_hint(2026-10-03, Excel T106)の「光る」演出(得点順位の（+10）など) -- あなた(P1)自身の
-    // 順位と得点予想(qst)をまとめて光らせる。表示され続けている間ずっとtrueになる継続フラグ。
+    // standings_rank_hint(2026-10-03, Excel T107)の「光る」演出(あなたの順位) -- あなた(P1)自身の順位
+    // (place)だけを光らせる。表示され続けている間ずっとtrueになる継続フラグ。
     if (tutorialStandingsRankGlowing && row.playerId === 'P1') {
       placeEl.classList.add('change-highlight');
-      qstEl.classList.add('change-highlight');
     }
     // CON penalty, right next to QST (2026-08-17, per user request: "マイナスのVPペナルティがあるCONは
     // 順位表示のところでQSTの右隣にそれを表示してほしい") -- unlike qstVp above, only shown for a player
@@ -4948,8 +4952,16 @@ function buildStandingsPanelNode(state) {
     // keeps qstVp always rendered doesn't apply here the same way -- this cell's own contents are a plain
     // flex row that clips its own name (see .standings-panel__cell's own CSS), not something the outer
     // panel's quarter tracks depend on the exact element count of.
+    let conPenaltyEl = null;
     if (row.conPenalty !== 0) {
-      cell.appendChild(el('span', 'standings-panel__con-penalty', `（${row.conPenalty}）`));
+      conPenaltyEl = el('span', 'standings-panel__con-penalty', `（${row.conPenalty}）`);
+      cell.appendChild(conPenaltyEl);
+    }
+    // standings_projection_hint(2026-10-03, Excel T108)の「光る」演出(得点順位の（-2）など) -- 得点予想
+    // (qst)とCONペナルティ(あれば)をまとめて光らせる、あなた(P1)自身のセルのみ。
+    if (tutorialStandingsProjectionGlowing && row.playerId === 'P1') {
+      qstEl.classList.add('change-highlight');
+      if (conPenaltyEl) conPenaltyEl.classList.add('change-highlight');
     }
     panel.appendChild(cell);
   }
@@ -9509,7 +9521,20 @@ const TUTORIAL_STEPS = [
       const next = turnFlowMod.getNextTurn(state);
       return next.type === 'TURN' && next.playerId === 'P1' && state.round === 2;
     },
-    body: 'このカードは通常カードと逆でダイス目が大きいほど獲得しやすくなっています\nショップの位置は関係なくカードに書いてある「ダイス目〇以上」のダイスを🔨エリアに置く必要があります',
+    body: 'このカードは通常カードと逆でダイス目が大きいほど獲得しやすくなっています',
+    nextLabel: '次へ',
+  },
+  // 2026-10-03, per user request (Excelの新しい行T091) -- monument_dice_rule_hint(T090)の文言が2画面に
+  // 分割された(元は1画面にまとめて書かれていた「ショップの位置は関係なく...」の一文がこちらへ独立)。
+  // 光る(モニュメントの「ダイス目〇以上」)はmonument_dice_rule_hintから引き継いでそのまま続く --
+  // tutorialMonumentReqGlowingをOFFにするタイミングを、この新しいステップが閉じられる瞬間まで遅らせた。
+  {
+    id: 'monument_dice_area_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1' && state.round === 2;
+    },
+    body: 'ショップの位置は関係なく、「王宮」か「元老院」に置かれたダイスがモニュメントカードに書かれた「ダイス目〇以上」のダイスである必要があります',
     nextLabel: '次へ',
   },
   {
@@ -9646,6 +9671,20 @@ const TUTORIAL_STEPS = [
     body: '説明が最後になりましたが、あなたが獲得したカードにはエンブレムが書かれています',
     nextLabel: '次へ',
   },
+  // 2026-10-03, per user request (Excelの新しい行T104) -- endgame_emblem_intro_hint(T103)に続く、エンブレムの
+  // 使い道(クエスト)の予告。光る: 'クエスト表'(.qst-panel全体、tutorialQstTableGlowing) -- 続くquest_rank_
+  // reward_hint自身の「クエスト表の一番下の順位」(#qst-legendのみ)とは対象が異なる。
+  {
+    id: 'quest_table_intro_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1'
+        && tutorialP1RealTurnEndCountAtRound3Start !== null
+        && tutorialP1RealTurnEndCount === tutorialP1RealTurnEndCountAtRound3Start + 1;
+    },
+    body: 'エンブレムはクエストで得点を獲得するのに使います',
+    nextLabel: '次へ',
+  },
   {
     id: 'quest_rank_reward_hint',
     match: (state) => {
@@ -9688,6 +9727,19 @@ const TUTORIAL_STEPS = [
         && tutorialP1RealTurnEndCount === tutorialP1RealTurnEndCountAtRound3Start + 1;
     },
     body: '今の順位での獲得予想点数はカッコ内の数字です',
+    nextLabel: '次へ',
+  },
+  // 2026-10-03, per user request (Excelの新しい行T109) -- standings_projection_hint(T108)に続く、
+  // CONペナルティの説明。光るなし。
+  {
+    id: 'standings_con_penalty_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1'
+        && tutorialP1RealTurnEndCountAtRound3Start !== null
+        && tutorialP1RealTurnEndCount === tutorialP1RealTurnEndCountAtRound3Start + 1;
+    },
+    body: 'カッコ内のマイナスの数字は制約によるペナルティです',
     nextLabel: '次へ',
   },
 ];
@@ -10985,7 +11037,9 @@ function dismissTutorialStep() {
     tutorialBuildShopGlowSlots = null;
     tutorialMonumentReqGlowing = true;
   }
-  if (tutorialCurrentStepId === 'monument_dice_rule_hint') tutorialMonumentReqGlowing = false;
+  // 2026-10-03: monument_dice_rule_hintがmonument_dice_area_hintに分割されたため、光る(モニュメントの
+  // 「ダイス目〇以上」)のOFFタイミングもmonument_dice_area_hint自身が閉じる瞬間まで遅らせた。
+  if (tutorialCurrentStepId === 'monument_dice_area_hint') tutorialMonumentReqGlowing = false;
   if (tutorialCurrentStepId === 'monument_dice_duplicate_rule_hint') tutorialShopCardTypeGlow = 'M001';
   if (tutorialCurrentStepId === 'monument_dice_example_hint') tutorialShopCardTypeGlow = null;
   // wave2_special_unlock_hint〜extra_monument_surprise_hint(2026-10-03, Excel T095〜T098)の「光る」の
@@ -10995,17 +11049,25 @@ function dismissTutorialStep() {
   if (tutorialCurrentStepId === 'wave2_special_unlock_hint') tutorialShopCardTypeGlow = null;
   if (tutorialCurrentStepId === 'round3_turn1_intro_hint') tutorialShopRemainingCountGlowing = true;
   if (tutorialCurrentStepId === 'shop_remaining_count_hint') tutorialShopRemainingCountGlowing = false;
-  // endgame_emblem_intro_hint〜standings_projection_hint(2026-10-03, Excel T102・T104〜T107)の「光る」の
-  // 受け渡し。T102→あなたの獲得したカードのエンブレム、T104→クエスト表の一番下の順位(#qst-legend)、
-  // T105→光るなし、T106→得点順位の（+10）など(あなた自身のセルのみ)、T107→光るなし。
+  // endgame_emblem_intro_hint〜standings_projection_hint(2026-10-03, Excel T102・T104〜T108)の「光る」の
+  // 受け渡し。T102→あなたの獲得したカードのエンブレム、T104→クエスト表全体(.qst-panel)、T105→クエスト表の
+  // 一番下の順位(#qst-legend)、T106→光るなし、T107→あなたの順位のみ、T108→得点予想+CONペナルティ。
   if (tutorialCurrentStepId === 'endgame_vp_card_priority_hint') tutorialOwnedCardEmblemGlowing = true;
   if (tutorialCurrentStepId === 'endgame_emblem_intro_hint') {
     tutorialOwnedCardEmblemGlowing = false;
+    tutorialQstTableGlowing = true;
+  }
+  if (tutorialCurrentStepId === 'quest_table_intro_hint') {
+    tutorialQstTableGlowing = false;
     tutorialQstLegendGlowing = true;
   }
   if (tutorialCurrentStepId === 'quest_rank_reward_hint') tutorialQstLegendGlowing = false;
   if (tutorialCurrentStepId === 'quest_rank_reward_values_hint') tutorialStandingsRankGlowing = true;
-  if (tutorialCurrentStepId === 'standings_rank_hint') tutorialStandingsRankGlowing = false;
+  if (tutorialCurrentStepId === 'standings_rank_hint') {
+    tutorialStandingsRankGlowing = false;
+    tutorialStandingsProjectionGlowing = true;
+  }
+  if (tutorialCurrentStepId === 'standings_projection_hint') tutorialStandingsProjectionGlowing = false;
   // kabukicho_result_hint(T010)を閉じたらチュートリアル専用のターン終了ボタンを出す(T011)。
   if (tutorialCurrentStepId === 'kabukicho_result_hint') {
     tutorialTurnEndButtonShown = true;
@@ -11234,12 +11296,18 @@ let tutorialShopRemainingCountGlowing = false;
 // endgame_emblem_intro_hint(2026-10-03, Excel T102)の「光る」演出(あなたの獲得したカードのエンブレム) --
 // renderPlayerCards参照。表示され続けている間ずっとtrueになる継続フラグ。
 let tutorialOwnedCardEmblemGlowing = false;
-// quest_rank_reward_hint(2026-10-03, Excel T104)の「光る」演出(クエスト表の一番下の順位、#qst-legend) --
+// quest_table_intro_hint(2026-10-03, Excel T104)の「光る」演出(クエスト表全体、.qst-panel) -- renderQsts
+// 参照。表示され続けている間ずっとtrueになる継続フラグ。
+let tutorialQstTableGlowing = false;
+// quest_rank_reward_hint(2026-10-03, Excel T105)の「光る」演出(クエスト表の一番下の順位、#qst-legend) --
 // renderQstLegend参照。表示され続けている間ずっとtrueになる継続フラグ。
 let tutorialQstLegendGlowing = false;
-// standings_rank_hint(2026-10-03, Excel T106)の「光る」演出(得点順位の（+10）など、あなた自身のセルのみ) --
-// buildStandingsPanelNode参照。表示され続けている間ずっとtrueになる継続フラグ。
+// standings_rank_hint(2026-10-03, Excel T107)の「光る」演出(あなたの順位のみ) -- buildStandingsPanelNode
+// 参照。表示され続けている間ずっとtrueになる継続フラグ。
 let tutorialStandingsRankGlowing = false;
+// standings_projection_hint(2026-10-03, Excel T108)の「光る」演出(得点順位の（-2）など、あなたの得点予想+
+// CONペナルティ) -- buildStandingsPanelNode参照。表示され続けている間ずっとtrueになる継続フラグ。
+let tutorialStandingsProjectionGlowing = false;
 // 戻ってきた一番右のダイス+歓楽街の配置可能スロットの「光る」演出 (2026-09-28, per user request: "このとき
 // ギルドに置かれたダイスが戻って光る 歓楽街のスロットも光る") -- kabukicho_placement_introが表示され続けて
 // いる間ずっとtrueになる継続フラグ。このステップは実際のクリック操作で進める(次へボタンは無い、
