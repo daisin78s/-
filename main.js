@@ -9741,6 +9741,26 @@ const TUTORIAL_STEPS = [
     body: 'カッコ内のマイナスの数字は制約によるペナルティです',
     nextLabel: '次へ',
   },
+  // 2026-10-03, per user request (Excelの新しい行T110・T111) -- standings_con_penalty_hint(T109)に続く、
+  // 実際にラウンド4(最終ラウンド)になった瞬間に発火する締めの2画面。round2/round3_turn1_intro_hintと同じ
+  // 「state.round===4である間ずっと真」のパターン。光るなし。
+  {
+    id: 'round4_turn1_intro_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1' && state.round === 4;
+    },
+    body: '最後のラウンドです\nこのラウンド終了時にVPの多いプレイヤーの勝利です',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'endgame_use_everything_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1' && state.round === 4;
+    },
+    body: '余らせたダイスや資源は何の得点にもならず無駄になります\nすべてを出し切って勝ちに行ってください',
+  },
 ];
 
 // セリフのExcel反映 (2026-09-28, per user request: "まずはセリフだけ反映されるようにしてください") --

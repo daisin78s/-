@@ -107,5 +107,7 @@ window.TUTORIAL_SERIFU = {
   "quest_rank_reward_values_hint": "１位　4VP　2位　2VP　３位　1VP　４位　0VP　です",
   "standings_rank_hint": "クエストでのあなたの順位はここになります",
   "standings_projection_hint": "今の順位での獲得予想点数はカッコ内の数字です",
-  "standings_con_penalty_hint": "カッコ内のマイナスの数字は制約によるペナルティです"
+  "standings_con_penalty_hint": "カッコ内のマイナスの数字は制約によるペナルティです",
+  "round4_turn1_intro_hint": "最後のラウンドです\nこのラウンド終了時にVPの多いプレイヤーの勝利です",
+  "endgame_use_everything_hint": "余らせたダイスや資源は何の得点にもならず無駄になります\nすべてを出し切って勝ちに行ってください"
 };
