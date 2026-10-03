@@ -1,4 +1,6 @@
 /**
+ * Copyright (c) 2026 三輪敏春. All rights reserved.
+ *
  * UI layer, wired to the real game engine (src/*.js, loaded via index.html's window.__modules
  * registry -- see that file's comments). `STATE` is a real GameState built once via setup.js's setup
  * pipeline (see createInitialState()) and mutated in place by the same setup.js/turn-flow.js/board.js/
