@@ -182,6 +182,11 @@
            人間の癖が一切入らないよう4人ともAI LV4だけで進め、3R開始時点でP1(Alice固定)を人間に差し替える。
            see main.js's handleStartFromRound3Click.) -->
       <button type="button" id="start-from-round3-button" class="debug-panel__toggle">3Rから</button>
+      <!-- 実績記録 (2026-10-03, per user request: "実績解除を記録したい" -- 各端末のブラウザだけに保存する
+           個人の自己ベスト記録。オンラインランキングとは別物で、Firebaseには一切保存しない。game.xlsxの
+           「実績解除」シート(モード5種+CON12種+JOB11種)をそのまま反映。see main.js's
+           openAchievementOverlay/maybeRecordAchievements。) -->
+      <button type="button" id="achievement-open-button" class="debug-panel__toggle">実績記録</button>
       <!-- 生成中オーバーレイ (2026-09-14, per user request: "待つのが長いので生成中をいうアニメーションが
            欲しい" -- handleStartFromRound3Click's own 1R/2R AI-vs-AI simulation runs synchronously on the
            main thread and can take several seconds with nothing else on screen changing in the meantime.
@@ -245,6 +250,30 @@
       </div>
       <div class="card-inst-modal__body card-list-body" id="card-list-body"></div>
       <div id="card-list-nav" class="card-list-nav"></div>
+    </div>
+  </div>
+
+  <!-- 実績記録一覧 (2026-10-03) -- see main.js's renderAchievementOverlay/openAchievementOverlay。 -->
+  <div id="achievement-overlay" class="card-inst-overlay" hidden>
+    <div class="card-inst-modal build-choice-modal">
+      <div class="card-inst-modal__header">
+        <span class="card-inst-modal__title">実績記録</span>
+        <button type="button" class="card-inst-modal__close" id="achievement-close-button" aria-label="閉じる">&times;</button>
+      </div>
+      <div class="card-inst-modal__body" id="achievement-list"></div>
+    </div>
+  </div>
+
+  <!-- 実績解除ポップアップ (2026-10-03, per user request: "記録が更新されたらポップアップが出る") -- ゲーム
+       終了時にmaybeRecordAchievementsが自動判定、新記録が出たカテゴリだけ表示。see main.js's
+       showAchievementPopup。 -->
+  <div id="achievement-popup-overlay" class="card-inst-overlay" hidden>
+    <div class="card-inst-modal build-choice-modal">
+      <div class="card-inst-modal__header">
+        <span class="card-inst-modal__title">実績解除！</span>
+      </div>
+      <div class="card-inst-modal__body" id="achievement-popup-list"></div>
+      <button type="button" id="achievement-popup-close-button" class="undo-button">閉じる</button>
     </div>
   </div>
 

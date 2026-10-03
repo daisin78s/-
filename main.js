@@ -7857,6 +7857,7 @@ function renderGameEndOverlay(state) {
     return;
   }
   overlay.hidden = false;
+  if (isRealGameEnd) maybeRecordAchievements(state);
   document.getElementById('game-end-title').textContent = isRealGameEnd ? 'ゲーム終了 — 最終結果' : '現在の順位';
   document.getElementById('game-end-close-button').hidden = isRealGameEnd;
   const list = document.getElementById('game-end-list');
@@ -7902,6 +7903,111 @@ function rankingCardDisplayName(faceId) {
   if (!faceId) return '—';
   const row = dataLoaderMod.getCardRow(INDEX, faceId);
   return row.NAME && row.NAME !== faceId ? row.NAME : faceId;
+}
+
+// 実績記録 (2026-10-03, per user request: "実績解除を記録したい") -- オンラインランキング(Firebase)とは
+// 別物の、このブラウザだけのlocalStorage自己ベスト記録(per user回答: "個々人のブラウザに記録するように
+// したい")。カテゴリはgame.xlsxの「実績解除」シートをそのまま反映: モード5種(チュートリアル/ウィークリー
+// /オンライン/総合/AI対戦) + CON12種(名前はCON.NAME、フェイスごとに別名のため`con_<faceId>`キー) +
+// JOB11種(`job_<id>`キー)。CON/JOBの表示名はgame.xlsx側の名前変更に追従するようハードコードせず
+// INDEX.raw.CON/JOBから都度組み立てる。
+const ACHIEVEMENT_STORAGE_KEY = 'diceWpAchievements';
+const ACHIEVEMENT_MODE_LABELS = [
+  ['mode_tutorial', 'チュートリアル最高獲得点数'],
+  ['mode_weekly', 'ウィークリーチャレンジ最高点数'],
+  ['mode_online', 'オンライン対戦最高点数'],
+  ['overall', '最高点数'],
+  ['mode_ai', 'AI対戦最高点数'],
+];
+function buildAchievementCategories() {
+  const categories = ACHIEVEMENT_MODE_LABELS.map(([key, label]) => ({ key, label }));
+  for (const row of INDEX.raw.CON) categories.push({ key: `con_${row.ID}`, label: `${row.NAME}最高点数` });
+  for (const row of INDEX.raw.JOB) categories.push({ key: `job_${row.ID}`, label: `${row.NAME}最高点数` });
+  return categories;
+}
+const ACHIEVEMENT_CATEGORIES = buildAchievementCategories();
+
+function achievementLabel(key) {
+  const found = ACHIEVEMENT_CATEGORIES.find((c) => c.key === key);
+  return found ? found.label : key;
+}
+
+/** Best-effort localStorage read, matching this app's existing "wrap every localStorage access"
+ * convention (see loadRememberedRankingName's own doc) -- private browsing/storage-blocked just means
+ * no records are shown/updated this session, never a thrown error. */
+function loadAchievements() {
+  try { return JSON.parse(localStorage.getItem(ACHIEVEMENT_STORAGE_KEY)) || {}; } catch (e) { return {}; }
+}
+
+function saveAchievements(store) {
+  try { localStorage.setItem(ACHIEVEMENT_STORAGE_KEY, JSON.stringify(store)); } catch (e) { /* ignore */ }
+}
+
+// GAME_ENDのたびに一度だけ実行(achievementsRecordedThisGameでrenderGameEndOverlayの再描画による二重
+// 記録/二重ポップアップを防ぐ -- このフラグはページ全体がリロードされる次のゲーム開始まで保持される、
+// 他のモジュールレベルの「このゲーム限り」フラグ(usedDebugOrTestGameThisGame等)と同じ idiom)。オンライン
+// 対戦では自分の席(localSeatId)の得点だけを記録する -- 他プレイヤーの得点がこのブラウザの自己ベストに
+// 混ざらないように(realTurnPlayerId等と同じ"!onlineRoomCode || localSeatId === x"パターン)。
+let achievementsRecordedThisGame = false;
+function maybeRecordAchievements(state) {
+  if (achievementsRecordedThisGame) return;
+  achievementsRecordedThisGame = true;
+  const candidates = rankingCandidatesForGameEnd(state)
+    .filter((c) => !onlineRoomCode || localSeatId === c.playerId);
+  if (candidates.length === 0) return;
+  const modeKey = onlineRoomCode ? 'mode_online'
+    : tutorialModeActive ? 'mode_tutorial'
+    : weeklyChallengeActive ? 'mode_weekly'
+    : 'mode_ai';
+  const store = loadAchievements();
+  const updatedKeys = [];
+  for (const c of candidates) {
+    const keys = ['overall', modeKey];
+    if (c.conFaceId) keys.push(`con_${c.conFaceId}`);
+    if (c.jobCardId) keys.push(`job_${c.jobCardId}`);
+    for (const key of keys) {
+      if (store[key] === undefined || c.totalScore > store[key]) {
+        store[key] = c.totalScore;
+        updatedKeys.push(key);
+      }
+    }
+  }
+  saveAchievements(store);
+  if (updatedKeys.length > 0) showAchievementPopup(updatedKeys, store);
+}
+
+function showAchievementPopup(updatedKeys, store) {
+  const list = document.getElementById('achievement-popup-list');
+  list.innerHTML = '';
+  for (const key of updatedKeys) {
+    list.appendChild(el('div', 'achievement-row', `${achievementLabel(key)}: ${store[key]}VP`));
+  }
+  document.getElementById('achievement-popup-overlay').hidden = false;
+}
+
+function closeAchievementPopup() {
+  document.getElementById('achievement-popup-overlay').hidden = true;
+}
+
+function renderAchievementOverlay() {
+  const store = loadAchievements();
+  const list = document.getElementById('achievement-list');
+  list.innerHTML = '';
+  for (const { key, label } of ACHIEVEMENT_CATEGORIES) {
+    const row = el('div', 'achievement-row');
+    row.appendChild(el('span', 'achievement-row__label', label));
+    row.appendChild(el('span', 'achievement-row__score', store[key] !== undefined ? `${store[key]}VP` : '未記録'));
+    list.appendChild(row);
+  }
+}
+
+function openAchievementOverlay() {
+  renderAchievementOverlay();
+  document.getElementById('achievement-overlay').hidden = false;
+}
+
+function closeAchievementOverlay() {
+  document.getElementById('achievement-overlay').hidden = true;
 }
 
 /** Every HUMAN seat's ranking-eligible result at GAME_END (2026-08-16, per user: "人間対AIで歴代の得点を
@@ -8030,7 +8136,7 @@ function renderRankingRegisterList(state) {
 // ボタンで切り替えるのではなく３つ同時に表示して" -- this was originally a tab switcher, corrected the
 // same day), in this fixed left-to-right order.
 const RANKING_CATEGORIES = ['ultimate', 'standard', 'weekly'];
-const RANKING_CATEGORY_LABELS = { ultimate: 'アルティメット\nランキング', standard: 'スタンダード\nランキング', weekly: 'ウィークリー\nランキング' };
+const RANKING_CATEGORY_LABELS = { ultimate: 'デバッグあり\nランキング', standard: 'デバッグなし\nランキング', weekly: 'ウィークリー\nランキング' };
 let rankingListRequestId = 0;
 // ウィークリーランキングの週送り (2026-09-14, per user request: "毎週変わるようにしてほしい...先週、先々週
 // と戻ってみることができる"): 0 = 今週 (always what a fresh openRankingOverlay shows -- see its own reset),
@@ -12579,6 +12685,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('replay-upload-button').addEventListener('click', () => document.getElementById('replay-upload-input').click());
   document.getElementById('replay-upload-input').addEventListener('change', handleReplayUploadChange);
   document.getElementById('start-from-round3-button').addEventListener('click', handleStartFromRound3Click);
+  document.getElementById('achievement-open-button').addEventListener('click', openAchievementOverlay);
+  document.getElementById('achievement-close-button').addEventListener('click', closeAchievementOverlay);
+  document.getElementById('achievement-popup-close-button').addEventListener('click', closeAchievementPopup);
 
   document.getElementById('round-pass-button').addEventListener('click', handleRoundPassClick);
   document.getElementById('round-pass-confirm-no').addEventListener('click', () => {

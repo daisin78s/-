@@ -4532,3 +4532,36 @@ body.tutorial-mode .change-highlight {
   z-index: 50;
   user-select: none;
 }
+
+/* 実績記録 (2026-10-03, per user request: "実績解除を記録したい") -- #achievement-overlay(一覧)と
+   #achievement-popup-overlay(新記録ポップアップ)で共有する行スタイル。28件になるので一覧側は
+   max-height+スクロールにする。 */
+#achievement-list {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.achievement-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 2px;
+  border-bottom: 1px solid var(--border);
+  white-space: normal;
+}
+
+.achievement-row__score {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* #achievement-popup-overlay は#game-end-overlay(ゲーム終了直後)の上に出したいが、どちらも
+   .card-inst-overlayのz-index:100を共有しておりDOM順(game-end-overlayの方が後)で負けてしまうため、
+   明示的に高くする。 */
+#achievement-overlay {
+  z-index: 150;
+}
+
+#achievement-popup-overlay {
+  z-index: 200;
+}
