@@ -4583,6 +4583,9 @@ function renderQstLegend(sharedRewards) {
   legend.querySelectorAll('.qst-legend__cell').forEach((cell, i) => {
     cell.textContent = `${i + 1}位　${sharedRewards[i]}`;
   });
+  // quest_rank_reward_hint(2026-10-03, Excel T104)の「光る」演出(クエスト表の一番下の順位) --
+  // 表示され続けている間ずっとtrueになる継続フラグ。
+  legend.classList.toggle('change-highlight', tutorialQstLegendGlowing);
 }
 
 function renderQsts(state) {
@@ -4918,7 +4921,11 @@ function buildStandingsPanelNode(state) {
   panel.appendChild(el('div', 'standings-panel__round', `ラウンド ${state.round}/4`));
   for (const row of standingsRows(state)) {
     const cell = el('div', 'standings-panel__cell');
-    cell.appendChild(el('span', 'standings-panel__place', `${row.place}位`));
+    // standings_rank_hint(2026-10-03, Excel T106)がP1自身のセルだけを光らせるために必要 (2026-09-26の
+    // card-group__playerIdと同じ理由)。
+    cell.dataset.playerId = row.playerId;
+    const placeEl = el('span', 'standings-panel__place', `${row.place}位`);
+    cell.appendChild(placeEl);
     const swatch = el('span', 'standings-panel__swatch');
     swatch.dataset.color = row.color;
     cell.appendChild(swatch);
@@ -4927,7 +4934,14 @@ function buildStandingsPanelNode(state) {
     // Parenthesised QST projection -- see projectedQstVpForPlayer. Rendered even at 0 so the four cells
     // stay identical in shape (a cell that sometimes drops a element is exactly what would shift the
     // fixed quarters' contents around).
-    cell.appendChild(el('span', 'standings-panel__qst', `（+${row.qstVp}）`));
+    const qstEl = el('span', 'standings-panel__qst', `（+${row.qstVp}）`);
+    cell.appendChild(qstEl);
+    // standings_rank_hint(2026-10-03, Excel T106)の「光る」演出(得点順位の（+10）など) -- あなた(P1)自身の
+    // 順位と得点予想(qst)をまとめて光らせる。表示され続けている間ずっとtrueになる継続フラグ。
+    if (tutorialStandingsRankGlowing && row.playerId === 'P1') {
+      placeEl.classList.add('change-highlight');
+      qstEl.classList.add('change-highlight');
+    }
     // CON penalty, right next to QST (2026-08-17, per user request: "マイナスのVPペナルティがあるCONは
     // 順位表示のところでQSTの右隣にそれを表示してほしい") -- unlike qstVp above, only shown for a player
     // who actually has one (conPenalty!==0), since most players never do; the fixed-quarter concern that
@@ -7794,6 +7808,12 @@ function renderPlayerCards(state, next) {
         const costEl = cardNode.querySelector(':scope > .shop-card__cost, :scope > .shop-card__cost-empty');
         if (costEl) costEl.classList.add('change-highlight');
       }
+      // endgame_emblem_intro_hint(2026-10-03, Excel T102)の「光る」演出(あなたの獲得したカードのエンブレム) --
+      // tutorialOwnedCardCostGlowingと同じ考え方、対象は.shop-card__emblem。
+      if (tutorialOwnedCardEmblemGlowing && player.id === 'P1') {
+        const emblemEl = cardNode.querySelector(':scope > .shop-card__emblem');
+        if (emblemEl) emblemEl.classList.add('change-highlight');
+      }
       attachTapToggle(cardNode, cardState, cardState.currentFaceId, canUseTap, physicalId);
       cell.appendChild(cardNode);
       listEl.appendChild(cell);
@@ -9612,6 +9632,64 @@ const TUTORIAL_STEPS = [
     body: '生産性の高いカードよりもモニュメントなどのVPの多いカードを狙っていきましょう',
     nextLabel: '次へ',
   },
+  // 2026-10-03, per user request (Excelの新しい行T102・T104〜T107、T103は欠番) -- endgame_vp_card_priority_hint
+  // (T101)に続く、エンブレム/クエスト/順位表示の説明。すべてround3_turn2_endgame_hint〜endgame_vp_card_priority_hint
+  // と同じ「3ラウンド2ターン目」条件を共有し、通常の直線探索で連続して表示される。
+  {
+    id: 'endgame_emblem_intro_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1'
+        && tutorialP1RealTurnEndCountAtRound3Start !== null
+        && tutorialP1RealTurnEndCount === tutorialP1RealTurnEndCountAtRound3Start + 1;
+    },
+    body: '説明が最後になりましたが、あなたが獲得したカードにはエンブレムが書かれています',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'quest_rank_reward_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1'
+        && tutorialP1RealTurnEndCountAtRound3Start !== null
+        && tutorialP1RealTurnEndCount === tutorialP1RealTurnEndCountAtRound3Start + 1;
+    },
+    body: 'クエストはすべてのプレイヤーで競い、上位プレイヤーはゲーム終了時に下に書かれた得点を得ます',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'quest_rank_reward_values_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1'
+        && tutorialP1RealTurnEndCountAtRound3Start !== null
+        && tutorialP1RealTurnEndCount === tutorialP1RealTurnEndCountAtRound3Start + 1;
+    },
+    body: '１位　4VP　2位　2VP　３位　1VP　４位　0VP　です',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'standings_rank_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1'
+        && tutorialP1RealTurnEndCountAtRound3Start !== null
+        && tutorialP1RealTurnEndCount === tutorialP1RealTurnEndCountAtRound3Start + 1;
+    },
+    body: 'あなたの順位はここで',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'standings_projection_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1'
+        && tutorialP1RealTurnEndCountAtRound3Start !== null
+        && tutorialP1RealTurnEndCount === tutorialP1RealTurnEndCountAtRound3Start + 1;
+    },
+    body: '今の順位での獲得予想点数はカッコ内の数字です',
+    nextLabel: '次へ',
+  },
 ];
 
 // セリフのExcel反映 (2026-09-28, per user request: "まずはセリフだけ反映されるようにしてください") --
@@ -10917,6 +10995,17 @@ function dismissTutorialStep() {
   if (tutorialCurrentStepId === 'wave2_special_unlock_hint') tutorialShopCardTypeGlow = null;
   if (tutorialCurrentStepId === 'round3_turn1_intro_hint') tutorialShopRemainingCountGlowing = true;
   if (tutorialCurrentStepId === 'shop_remaining_count_hint') tutorialShopRemainingCountGlowing = false;
+  // endgame_emblem_intro_hint〜standings_projection_hint(2026-10-03, Excel T102・T104〜T107)の「光る」の
+  // 受け渡し。T102→あなたの獲得したカードのエンブレム、T104→クエスト表の一番下の順位(#qst-legend)、
+  // T105→光るなし、T106→得点順位の（+10）など(あなた自身のセルのみ)、T107→光るなし。
+  if (tutorialCurrentStepId === 'endgame_vp_card_priority_hint') tutorialOwnedCardEmblemGlowing = true;
+  if (tutorialCurrentStepId === 'endgame_emblem_intro_hint') {
+    tutorialOwnedCardEmblemGlowing = false;
+    tutorialQstLegendGlowing = true;
+  }
+  if (tutorialCurrentStepId === 'quest_rank_reward_hint') tutorialQstLegendGlowing = false;
+  if (tutorialCurrentStepId === 'quest_rank_reward_values_hint') tutorialStandingsRankGlowing = true;
+  if (tutorialCurrentStepId === 'standings_rank_hint') tutorialStandingsRankGlowing = false;
   // kabukicho_result_hint(T010)を閉じたらチュートリアル専用のターン終了ボタンを出す(T011)。
   if (tutorialCurrentStepId === 'kabukicho_result_hint') {
     tutorialTurnEndButtonShown = true;
@@ -11142,6 +11231,15 @@ let tutorialMonumentReqGlowing = false;
 // shop_remaining_count_hint(2026-10-03, Excel T097)の「光る」演出(ショップの右の残り枚数欄) --
 // buildShopRemainingCountNode参照。表示され続けている間ずっとtrueになる継続フラグ。
 let tutorialShopRemainingCountGlowing = false;
+// endgame_emblem_intro_hint(2026-10-03, Excel T102)の「光る」演出(あなたの獲得したカードのエンブレム) --
+// renderPlayerCards参照。表示され続けている間ずっとtrueになる継続フラグ。
+let tutorialOwnedCardEmblemGlowing = false;
+// quest_rank_reward_hint(2026-10-03, Excel T104)の「光る」演出(クエスト表の一番下の順位、#qst-legend) --
+// renderQstLegend参照。表示され続けている間ずっとtrueになる継続フラグ。
+let tutorialQstLegendGlowing = false;
+// standings_rank_hint(2026-10-03, Excel T106)の「光る」演出(得点順位の（+10）など、あなた自身のセルのみ) --
+// buildStandingsPanelNode参照。表示され続けている間ずっとtrueになる継続フラグ。
+let tutorialStandingsRankGlowing = false;
 // 戻ってきた一番右のダイス+歓楽街の配置可能スロットの「光る」演出 (2026-09-28, per user request: "このとき
 // ギルドに置かれたダイスが戻って光る 歓楽街のスロットも光る") -- kabukicho_placement_introが表示され続けて
 // いる間ずっとtrueになる継続フラグ。このステップは実際のクリック操作で進める(次へボタンは無い、

@@ -99,5 +99,10 @@ window.TUTORIAL_SERIFU = {
   "extra_monument_surprise_hint": "どんなカードが出るかは出てのお楽しみです",
   "round3_turn2_endgame_hint": "もうゲームも終盤戦です",
   "game_end_condition_hint": "このゲームは４ラウンド終了時にVPの多いプレイヤーの勝利です",
-  "endgame_vp_card_priority_hint": "生産性の高いカードよりもモニュメントなどのVPの多いカードを狙っていきましょう"
+  "endgame_vp_card_priority_hint": "生産性の高いカードよりもモニュメントなどのVPの多いカードを狙っていきましょう",
+  "endgame_emblem_intro_hint": "説明が最後になりましたが、あなたが獲得したカードにはエンブレムが書かれています",
+  "quest_rank_reward_hint": "クエストはすべてのプレイヤーで競い、上位プレイヤーはゲーム終了時に下に書かれた得点を得ます",
+  "quest_rank_reward_values_hint": "１位　4VP　2位　2VP　３位　1VP　４位　0VP　です",
+  "standings_rank_hint": "あなたの順位はここで",
+  "standings_projection_hint": "今の順位での獲得予想点数はカッコ内の数字です"
 };
