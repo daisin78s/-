@@ -9437,8 +9437,9 @@ const TUTORIAL_STEPS = [
   },
   // 実際にラウンド2になった瞬間(P1の2ラウンド1ターン目)に見つかる、monument_shop_unlock_introとは別条件の
   // ステップ -- こちらにtutorialP1RealTurnEndCountのような専用カウンタは不要(state.round自体が2になった
-  // 瞬間こそが探している条件そのもののため)。選択肢1がExcel上も空欄で、他のステップと同じデフォルトの
-  // 「閉じる」ボタンで普通に閉じるだけ。
+  // 瞬間こそが探している条件そのもののため)。2026-10-03 bug fix(per user report: "次へ ではなく 閉じる に
+  // なっています"): Excelの選択肢1は'次へ'だったが、nextLabelの指定が漏れておりデフォルトの「閉じる」に
+  // なっていた。
   {
     id: 'round2_turn1_intro_hint',
     match: (state) => {
@@ -9446,6 +9447,7 @@ const TUTORIAL_STEPS = [
       return next.type === 'TURN' && next.playerId === 'P1' && state.round === 2;
     },
     body: '2ラウンドになりました',
+    nextLabel: '次へ',
   },
   // 2026-10-02, per user request (Excelの新しい行T088〜T094) -- round2_turn1_intro_hintに続く、SPECIAL/
   // モニュメントショップ解禁の詳しい説明(モニュメントの性質・獲得ルール・記念碑を使った具体例)。T088〜
@@ -9667,7 +9669,12 @@ const TUTORIAL_ICON_NOTATIONS = [
   { text: '青〇', build: () => actionDot('B') },
   { text: '黄〇', build: () => actionDot('C') },
   { text: 'Z〇', build: () => actionDot('Z') },
-  { text: '〇', build: () => actionDot('K') },
+  // excludePrecededBy: ['目'] (2026-10-03, per user request: "ダイス目〇以上 の〇 は食料ではないので
+  // そのまま〇で表示" -- monument_dice_rule_hintの「ダイス目〇以上」は数値のプレースホルダーであって
+  // 食料のことではないため、"タップ"/"アンタップ"と同じexcludePrecededByの仕組みで「目〇」の〇だけ
+  // アイコン変換から除外する) -- 裸の〇は他すべての表記の末尾と一致するため、このexclusionは「目」の
+  // 直後に来る〇だけに絞り、それ以外の裸の〇(例: ○→1VPのような資源表記)には影響しない。
+  { text: '〇', build: () => actionDot('K'), excludePrecededBy: ['目'] },
 ];
 for (let n = 1; n <= 6; n++) {
   TUTORIAL_ICON_NOTATIONS.push({ text: DIE_FACES[n], build: () => dieFace(n) });
@@ -9755,8 +9762,8 @@ function buildTutorialLinkCandidates() {
   for (const [text, faceId] of TUTORIAL_CARD_NAME_LINKS) {
     candidates.push({ kind: 'card', faceId, text, excludePrecededBy: null });
   }
-  for (const { build, text } of TUTORIAL_ICON_NOTATIONS) {
-    candidates.push({ kind: 'icon', build, text, excludePrecededBy: null });
+  for (const { build, text, excludePrecededBy } of TUTORIAL_ICON_NOTATIONS) {
+    candidates.push({ kind: 'icon', build, text, excludePrecededBy: excludePrecededBy || null });
   }
   return candidates.sort((a, b) => b.text.length - a.text.length);
 }
@@ -10092,7 +10099,11 @@ function renderTutorialOverlay(state) {
       || step.id === 'build_dice_value6_hint' || step.id === 'build_dice_value5_hint'
       || step.id === 'build_dice_value4_hint' || step.id === 'build_dice_value1_hint'
       || step.id === 'build_cost_hint'
-      || step.id === 'castletown_fortune_cards_hint' || step.id === 'castletown_talent_cards_hint') {
+      || step.id === 'castletown_fortune_cards_hint' || step.id === 'castletown_talent_cards_hint'
+      // special_shop_unlock_intro(2026-10-03, Excel T084, per user request: "T084 スクロールするに") --
+      // 光っているSHOP201-203が画面外のときに見える範囲の中央へスクロールする、既存の#shops全体を
+      // 対象にするこのグループと同じ考え方。
+      || step.id === 'special_shop_unlock_intro') {
       const shopsEl = document.getElementById('shops');
       if (shopsEl) {
         const bubbleWrap = document.getElementById('tutorial-bubble-wrap');
