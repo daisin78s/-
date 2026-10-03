@@ -4746,7 +4746,12 @@ function buildShopSlotNode(slotId, faceId, showReqCaption, locked, faceDown = fa
     // caption (corrected 2026-07-29).
     ? buildCardVisual(faceId, { req: facts.req, showEffect: true })
     : buildCardVisual(faceId, { showEffect: true });
-  if (tutorialShopCardTypeGlow && faceId.startsWith(tutorialShopCardTypeGlow)) cardVisual.classList.add('change-highlight');
+  // 2026-10-03 (Excel T095, wave2_special_unlock_hint): 複数の接頭辞(元老院/王女/栄光の証=A301/B301/C301)
+  // を同時に光らせたいケース用に、配列も渡せるよう拡張(既存のA/B/C/'M001'のような単一文字列指定はそのまま)。
+  if (tutorialShopCardTypeGlow) {
+    const prefixes = Array.isArray(tutorialShopCardTypeGlow) ? tutorialShopCardTypeGlow : [tutorialShopCardTypeGlow];
+    if (prefixes.some((p) => faceId.startsWith(p))) cardVisual.classList.add('change-highlight');
+  }
   // カード獲得の説明(T024〜T027)のダイス目別「光る」 -- そのスロットのカードも光らせる。
   if (tutorialBuildShopGlowSlots && tutorialBuildShopGlowSlots.includes(slotId)) cardVisual.classList.add('change-highlight');
   // shop_cost_introの「光る」演出 (2026-09-27, per user request: "ショップにあるすべてのカードの支払い
@@ -4802,6 +4807,9 @@ function buildShopRemainingCountNode(count, gridRow) {
   const node = el('div', 'shop-remaining-count', `残り${count}枚`);
   node.style.gridColumn = '7';
   node.style.gridRow = String(gridRow);
+  // shop_remaining_count_hint(2026-10-03, Excel T097)の「光る」演出(ショップの右の残り枚数欄) --
+  // M/NORMAL/SPECIALどの行も対象(呼び出し元3箇所すべてこの関数を通る)。
+  if (tutorialShopRemainingCountGlowing) node.classList.add('change-highlight');
   return node;
 }
 
@@ -9522,6 +9530,50 @@ const TUTORIAL_STEPS = [
     },
     body: 'モニュメントは急いで取りに行く必要はありませんが、強化カードは急がないとあっという間に売り切れてしまうでしょう',
   },
+  // 2026-10-03, per user request (Excelの新しい行T095〜T098) -- monument_vs_special_urgency_hint(T094)に
+  // 続く、ラウンド3解禁の予告+残りカード枚数/強化モニュメントの説明。
+  // wave2_special_unlock_hintだけ「2ラウンド3ターン目」という狭い条件(tutorialP1RealTurnEndCountAtRound2Start
+  // +2)で、round3_turn1_intro_hint〜extra_monument_surprise_hintは実際にラウンド3になった瞬間の別条件
+  // (state.round===3である間ずっと真)を共有し、通常の直線探索で連続して表示される(round2_turn1_intro_hint
+  // 〜monument_vs_special_urgency_hintと同じパターン)。
+  {
+    id: 'wave2_special_unlock_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1'
+        && tutorialP1RealTurnEndCountAtRound2Start !== null
+        && tutorialP1RealTurnEndCount === tutorialP1RealTurnEndCountAtRound2Start + 2;
+    },
+    body: '次のラウンドからはさらに強力な強化カードが獲得できるようになります\nスタプレ争いも重要です\n',
+  },
+  {
+    id: 'round3_turn1_intro_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1' && state.round === 3;
+    },
+    body: '３ラウンドになりました\nすべてのカードが解禁になります',
+    nextLabel: '次へ',
+  },
+  // 光る: 'ショップの右の残り１枚と書いてある箇所' -- tutorialShopRemainingCountGlowing
+  // (buildShopRemainingCountNode参照、M/NORMAL/SPECIALどの行の.shop-remaining-countも対象)。
+  {
+    id: 'shop_remaining_count_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1' && state.round === 3;
+    },
+    body: 'ここに残りカード枚数が書いてありいずれかのショップが売り切れになるとそこに強化モニュメントが出てきます',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'extra_monument_surprise_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1' && state.round === 3;
+    },
+    body: 'どんなカードが出るかは出てのお楽しみです',
+  },
 ];
 
 // セリフのExcel反映 (2026-09-28, per user request: "まずはセリフだけ反映されるようにしてください") --
@@ -9942,6 +9994,11 @@ function renderTutorialOverlay(state) {
         // 直接遷移させたいので、それ以外では絶対に発見されないようここで先回りしてseen扱いにしておく)。
         tutorialSeenStepIds.add('dice_misclick_hint');
       }
+      // wave2_special_unlock_hint(2026-10-03, Excel T095)の「2ラウンド3ターン目」判定用 -- round2_turn1_
+      // intro_hintが見つかった(=ラウンド2の1ターン目が始まった)瞬間のtutorialP1RealTurnEndCountを基準値
+      // として覚えておく。そこから本物のターン終了をちょうど2回終えた時点(=3ターン目)がwave2_special_
+      // unlock_hintの発火条件になる(tutorialP1RealTurnEndCountAtRound2Startのown doc参照)。
+      if (next.id === 'round2_turn1_intro_hint') tutorialP1RealTurnEndCountAtRound2Start = tutorialP1RealTurnEndCount;
     }
     const current = TUTORIAL_STEPS.find((s) => s.id === tutorialCurrentStepId);
     // autoDismissWhen (2026-09-24): a step can opt into closing itself automatically, unlike every other
@@ -10811,6 +10868,13 @@ function dismissTutorialStep() {
   if (tutorialCurrentStepId === 'monument_dice_rule_hint') tutorialMonumentReqGlowing = false;
   if (tutorialCurrentStepId === 'monument_dice_duplicate_rule_hint') tutorialShopCardTypeGlow = 'M001';
   if (tutorialCurrentStepId === 'monument_dice_example_hint') tutorialShopCardTypeGlow = null;
+  // wave2_special_unlock_hint〜extra_monument_surprise_hint(2026-10-03, Excel T095〜T098)の「光る」の
+  // 受け渡し。T095→元老院/王女/栄光の証(A301/B301/C301、tutorialShopCardTypeGlowに配列を設定)、T096→
+  // 光るなし、T097→ショップの残り枚数欄(tutorialShopRemainingCountGlowing)、T098→光るなし。
+  if (tutorialCurrentStepId === 'monument_vs_special_urgency_hint') tutorialShopCardTypeGlow = ['A301', 'B301', 'C301'];
+  if (tutorialCurrentStepId === 'wave2_special_unlock_hint') tutorialShopCardTypeGlow = null;
+  if (tutorialCurrentStepId === 'round3_turn1_intro_hint') tutorialShopRemainingCountGlowing = true;
+  if (tutorialCurrentStepId === 'shop_remaining_count_hint') tutorialShopRemainingCountGlowing = false;
   // kabukicho_result_hint(T010)を閉じたらチュートリアル専用のターン終了ボタンを出す(T011)。
   if (tutorialCurrentStepId === 'kabukicho_result_hint') {
     tutorialTurnEndButtonShown = true;
@@ -10973,6 +11037,11 @@ let tutorialRoundPassButtonGlowing = false;
 // attemptAdvanceTurnのWARNING確認後の直接呼び出しも含む)を実際に終えた回数。0=まだ1ターン目の最中
 // (ダイスを置いただけではカウントしない)、1=1ターン目を実際に終えて2ターン目が回ってきた瞬間。
 let tutorialP1RealTurnEndCount = 0;
+// wave2_special_unlock_hint(2026-10-03, Excel T095)用 -- round2_turn1_intro_hintが見つかった(ラウンド2の
+// 1ターン目が始まった)瞬間のtutorialP1RealTurnEndCountのスナップショット。null=まだラウンド2に入って
+// いない。「2ラウンド3ターン目」は、このスナップショットから本物のターン終了をちょうど2回終えた瞬間
+// (tutorialP1RealTurnEndCount === スナップショット+2)として判定する。
+let tutorialP1RealTurnEndCountAtRound2Start = null;
 // 農園の支配カードの説明(2026-09-30, Excel T035・T037)の「光る」演出 -- どちらもmapId(常に'MAP002')を
 // そのまま持つ、null=光らせない。build_candidate_a005a_fee_hintは使用料置き場(.map-tile__fee)、
 // build_candidate_a005a_levelup_hintはタイル全体を光らせる(renderBoard's own参照)。
@@ -11023,6 +11092,9 @@ let tutorialShopCardTypeGlow = null;
 // monument_dice_rule_hint(2026-10-02, Excel T090)の「光る」演出(モニュメントの「ダイス目〇以上」) --
 // buildShopSlotNodeの.shop-card__req参照。表示され続けている間ずっとtrueになる継続フラグ。
 let tutorialMonumentReqGlowing = false;
+// shop_remaining_count_hint(2026-10-03, Excel T097)の「光る」演出(ショップの右の残り枚数欄) --
+// buildShopRemainingCountNode参照。表示され続けている間ずっとtrueになる継続フラグ。
+let tutorialShopRemainingCountGlowing = false;
 // 戻ってきた一番右のダイス+歓楽街の配置可能スロットの「光る」演出 (2026-09-28, per user request: "このとき
 // ギルドに置かれたダイスが戻って光る 歓楽街のスロットも光る") -- kabukicho_placement_introが表示され続けて
 // いる間ずっとtrueになる継続フラグ。このステップは実際のクリック操作で進める(次へボタンは無い、

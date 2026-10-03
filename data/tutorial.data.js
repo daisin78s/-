@@ -92,5 +92,9 @@ window.TUTORIAL_SERIFU = {
   "monument_multi_dice_hint": "モニュメントを獲得するときはダイスを複数選んで置けばその合計値で獲得できます",
   "monument_dice_duplicate_rule_hint": "その時すでに置いてある目と同じ目は置けませんが、ゾロ目はその目がすでに置いてなければ置くことができます",
   "monument_dice_example_hint": "例えばダイス目6を２個置けば「ダイス目１２以上」のモニュメントカードを獲得できます",
-  "monument_vs_special_urgency_hint": "モニュメントは急いで取りに行く必要はありませんが、強化カードは急がないとあっという間に売り切れてしまうでしょう"
+  "monument_vs_special_urgency_hint": "モニュメントは急いで取りに行く必要はありませんが、強化カードは急がないとあっという間に売り切れてしまうでしょう",
+  "wave2_special_unlock_hint": "次のラウンドからはさらに強力な強化カードが獲得できるようになります\nスタプレ争いも重要です",
+  "round3_turn1_intro_hint": "３ラウンドになりました\nすべてのカードが解禁になります",
+  "shop_remaining_count_hint": "ここに残りカード枚数が書いてありいずれかのショップが売り切れになるとそこに強化モニュメントが出てきます",
+  "extra_monument_surprise_hint": "どんなカードが出るかは出てのお楽しみです"
 };
