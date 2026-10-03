@@ -4956,12 +4956,12 @@ function buildStandingsPanelNode(state) {
       conPenaltyEl = el('span', 'standings-panel__con-penalty', `（${row.conPenalty}）`);
       cell.appendChild(conPenaltyEl);
     }
-    // standings_projection_hint(2026-10-03, Excel T108)の「光る」演出(得点順位の（-2）など) -- 得点予想
-    // (qst)とCONペナルティ(あれば)をまとめて光らせる、あなた(P1)自身のセルのみ。
-    if (tutorialStandingsProjectionGlowing && row.playerId === 'P1') {
-      qstEl.classList.add('change-highlight');
-      if (conPenaltyEl) conPenaltyEl.classList.add('change-highlight');
-    }
+    // standings_projection_hint(2026-10-03, Excel T108)の「光る」演出 -- per user request: "カッコ内の
+    // クエストの数字を全員分光らせて" -- あなた(P1)だけでなく全プレイヤーのqst(+N)を光らせる。
+    if (tutorialStandingsProjectionGlowing) qstEl.classList.add('change-highlight');
+    // standings_con_penalty_hint(2026-10-03, Excel T109)の「光る」演出 -- per user request: "カッコ内の
+    // 制約のペナルティ全員分を光らせて" -- 全プレイヤーのCONペナルティ(あれば)を光らせる。
+    if (tutorialStandingsConPenaltyGlowing && conPenaltyEl) conPenaltyEl.classList.add('change-highlight');
     panel.appendChild(cell);
   }
   return panel;
@@ -11066,7 +11066,11 @@ function dismissTutorialStep() {
     tutorialStandingsRankGlowing = false;
     tutorialStandingsProjectionGlowing = true;
   }
-  if (tutorialCurrentStepId === 'standings_projection_hint') tutorialStandingsProjectionGlowing = false;
+  if (tutorialCurrentStepId === 'standings_projection_hint') {
+    tutorialStandingsProjectionGlowing = false;
+    tutorialStandingsConPenaltyGlowing = true;
+  }
+  if (tutorialCurrentStepId === 'standings_con_penalty_hint') tutorialStandingsConPenaltyGlowing = false;
   // kabukicho_result_hint(T010)を閉じたらチュートリアル専用のターン終了ボタンを出す(T011)。
   if (tutorialCurrentStepId === 'kabukicho_result_hint') {
     tutorialTurnEndButtonShown = true;
@@ -11306,9 +11310,14 @@ let tutorialQstLegendGlowing = false;
 // 光らせて") -- buildQstCardVisualのQSTカード内、あなた(P1)自身のランク色スワッチを光らせる方式に変更。
 // 表示され続けている間ずっとtrueになる継続フラグ。
 let tutorialStandingsRankGlowing = false;
-// standings_projection_hint(2026-10-03, Excel T108)の「光る」演出(得点順位の（-2）など、あなたの得点予想+
-// CONペナルティ) -- buildStandingsPanelNode参照。表示され続けている間ずっとtrueになる継続フラグ。
+// standings_projection_hint(2026-10-03, Excel T108)の「光る」演出 -- per user request: "カッコ内の
+// クエストの数字を全員分光らせて" -- 全プレイヤーのqst(+N)を光らせる。buildStandingsPanelNode参照。
+// 表示され続けている間ずっとtrueになる継続フラグ。
 let tutorialStandingsProjectionGlowing = false;
+// standings_con_penalty_hint(2026-10-03, Excel T109)の「光る」演出 -- per user request: "カッコ内の
+// 制約のペナルティ全員分を光らせて" -- 全プレイヤーのCONペナルティ(あれば)を光らせる。
+// buildStandingsPanelNode参照。表示され続けている間ずっとtrueになる継続フラグ。
+let tutorialStandingsConPenaltyGlowing = false;
 // 戻ってきた一番右のダイス+歓楽街の配置可能スロットの「光る」演出 (2026-09-28, per user request: "このとき
 // ギルドに置かれたダイスが戻って光る 歓楽街のスロットも光る") -- kabukicho_placement_introが表示され続けて
 // いる間ずっとtrueになる継続フラグ。このステップは実際のクリック操作で進める(次へボタンは無い、
