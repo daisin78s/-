@@ -4527,6 +4527,10 @@ function buildQstCardVisual(faceId, state, options = {}) {
         const swatch = el('span', 'qst-card__rank-player');
         swatch.dataset.color = rankedPlayer.color;
         swatch.title = rankedPlayer.name;
+        // standings_rank_hint(2026-10-03, per user request: "VPの順位ではなくクエストの順位（ピンクの〇）
+        // を光らせて") -- 全体の得点順位パネル(.standings-panel__place)ではなく、このQSTカード内の
+        // あなた(P1)自身のピンクの丸を光らせる。表示され続けている間ずっとtrueになる継続フラグ。
+        if (tutorialStandingsRankGlowing && entry.playerId === 'P1') swatch.classList.add('change-highlight');
         playersEl.appendChild(swatch);
       }
     }
@@ -4941,11 +4945,6 @@ function buildStandingsPanelNode(state) {
     // fixed quarters' contents around).
     const qstEl = el('span', 'standings-panel__qst', `（+${row.qstVp}）`);
     cell.appendChild(qstEl);
-    // standings_rank_hint(2026-10-03, Excel T107)の「光る」演出(あなたの順位) -- あなた(P1)自身の順位
-    // (place)だけを光らせる。表示され続けている間ずっとtrueになる継続フラグ。
-    if (tutorialStandingsRankGlowing && row.playerId === 'P1') {
-      placeEl.classList.add('change-highlight');
-    }
     // CON penalty, right next to QST (2026-08-17, per user request: "マイナスのVPペナルティがあるCONは
     // 順位表示のところでQSTの右隣にそれを表示してほしい") -- unlike qstVp above, only shown for a player
     // who actually has one (conPenalty!==0), since most players never do; the fixed-quarter concern that
@@ -11302,8 +11301,10 @@ let tutorialQstTableGlowing = false;
 // quest_rank_reward_hint(2026-10-03, Excel T105)の「光る」演出(クエスト表の一番下の順位、#qst-legend) --
 // renderQstLegend参照。表示され続けている間ずっとtrueになる継続フラグ。
 let tutorialQstLegendGlowing = false;
-// standings_rank_hint(2026-10-03, Excel T107)の「光る」演出(あなたの順位のみ) -- buildStandingsPanelNode
-// 参照。表示され続けている間ずっとtrueになる継続フラグ。
+// standings_rank_hint(2026-10-03, Excel T107)の「光る」演出 -- 当初はstandings-panelの全体VP順位
+// (.standings-panel__place)だったが、per user request ("VPの順位ではなくクエストの順位（ピンクの〇）を
+// 光らせて") -- buildQstCardVisualのQSTカード内、あなた(P1)自身のランク色スワッチを光らせる方式に変更。
+// 表示され続けている間ずっとtrueになる継続フラグ。
 let tutorialStandingsRankGlowing = false;
 // standings_projection_hint(2026-10-03, Excel T108)の「光る」演出(得点順位の（-2）など、あなたの得点予想+
 // CONペナルティ) -- buildStandingsPanelNode参照。表示され続けている間ずっとtrueになる継続フラグ。

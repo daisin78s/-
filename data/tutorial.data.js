@@ -105,7 +105,7 @@ window.TUTORIAL_SERIFU = {
   "quest_table_intro_hint": "エンブレムはクエストで得点を獲得するのに使います",
   "quest_rank_reward_hint": "クエストはすべてのプレイヤーで競い、上位プレイヤーはゲーム終了時に下に書かれた得点を得ます",
   "quest_rank_reward_values_hint": "１位　4VP　2位　2VP　３位　1VP　４位　0VP　です",
-  "standings_rank_hint": "あなたの順位はここで",
+  "standings_rank_hint": "クエストでのあなたの順位はここになります",
   "standings_projection_hint": "今の順位での獲得予想点数はカッコ内の数字です",
   "standings_con_penalty_hint": "カッコ内のマイナスの数字は制約によるペナルティです"
 };
