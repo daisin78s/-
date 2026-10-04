@@ -1352,6 +1352,21 @@ const UNTAP_CHOICE_3 = { type: 'UNTAP_CHOICE', scope: 'SELF', count: 3 };
   check('0 once Z itself is already empty, even on the last turn', executor.colorConvertLastTurnAmount(state, 'P1'), 0);
 }
 {
+  // Bug fix regression (2026-10-04, per user report: "まれにラウンド終了時でないのにZ→Kが起こります" --
+  // colorConvertLastTurnAmount used to check only COLOR dice, so a player with every COLOR die placed but
+  // a WHITE die still unplaced (genuinely NOT their last turn this round yet) was wrongly treated as being
+  // on their last turn.
+  const state = freshState();
+  const player = getPlayerRef(state, 'P1');
+  giveCard(state, 'CON001B', 'P1'); // 色欲
+  player.resources.Z = 3;
+  player.dice.push(createDie('unplaced-white', 'WHITE'));
+  check('0 with 色欲, no COLOR die left, but a WHITE die still unplaced (not this player\'s last turn yet)', executor.colorConvertLastTurnAmount(state, 'P1'), 0);
+
+  player.dice[0].placedMapId = 'MAP001'; // that WHITE die placed -- now genuinely the last turn
+  check('All 3 Z would convert once every die (COLOR and WHITE) is placed', executor.colorConvertLastTurnAmount(state, 'P1'), 3);
+}
+{
   // applyTurnEnd actually performs the conversion when colorConvertLastTurnAmount says it should.
   const state = freshState();
   const player = getPlayerRef(state, 'P1');

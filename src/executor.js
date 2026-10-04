@@ -265,21 +265,30 @@ function hasPaymentChoiceAbility(state, playerId) {
 }
 
 /** How much Z would convert to K if playerId ended their turn right now -- 0 unless they own 色欲
- * (PAYMENT_CHOICE_CON_FACE_ID), this is their own LAST turn of the round (no COLOR die left unplaced
- * once this turn ends), and they actually hold any Z (2026-09-26, per user's ability redesign request:
- * "ラウンド終了時Zがすべて食料に変わる", replacing the previous plain TURNEND=FORCE_CONVERT(Z,K,1) DSL,
- * now cleared from CON001B's own TURNEND column -- this bespoke check runs instead). Bespoke rather than
- * a generic DSL command because the DSL's own FORCE_CONVERT always fires a FIXED count unconditionally
+ * (PAYMENT_CHOICE_CON_FACE_ID), this is their own LAST turn of the round (no die of ANY kind left
+ * unplaced-and-not-passed once this turn ends, the same "does this player still get a turn this round"
+ * check turn-flow.getNextTurn itself uses -- see its own `!player.dice.some((d) => d.placedMapId ===
+ * null && !d.passed)` check), and they actually hold any Z (2026-09-26, per user's ability redesign
+ * request: "ラウンド終了時Zがすべて食料に変わる", replacing the previous plain TURNEND=FORCE_CONVERT(Z,K,1)
+ * DSL, now cleared from CON001B's own TURNEND column -- this bespoke check runs instead). Bespoke rather
+ * than a generic DSL command because the DSL's own FORCE_CONVERT always fires a FIXED count unconditionally
  * every TURNEND; this instead converts a VARIABLE amount (all of it) and only conditionally (last turn of
  * the round only) -- same class of exception as hasPaymentChoiceAbility above (this same card's OTHER
  * ability) or board.js's hasPioneerAbility/hasLandlordAbility. Shared by main.js's turnEndWarnings
  * (preview, must not mutate) and applyTurnEnd's real mutation below, so both always agree exactly on
- * whether/how much would convert. */
+ * whether/how much would convert.
+ * Bug fix (2026-10-04, per user report: "まれにラウンド終了時でないのにZ→Kが起こります" / "警告が前のまま
+ * になっています"): this used to only check COLOR dice (`d.kind === 'COLOR'`), so a player who finished
+ * placing their COLOR dice while still holding unplaced WHITE dice (and therefore still had turns left
+ * this round) was wrongly treated as being on their last turn -- firing the conversion early, and then
+ * leaving the pre-TURNEND warning showing on every later turn this round too (same bespoke check, so both
+ * symptoms shared this one root cause). Now checks every die, matching turn-flow's own definition of
+ * "no turn left this round". */
 function colorConvertLastTurnAmount(state, playerId) {
   if (!hasPaymentChoiceAbility(state, playerId)) return 0;
   const player = getPlayer(state, playerId);
-  const hasRemainingColorDie = player.dice.some((d) => d.kind === 'COLOR' && d.placedMapId === null);
-  if (hasRemainingColorDie) return 0;
+  const hasRemainingTurnThisRound = player.dice.some((d) => d.placedMapId === null && !d.passed);
+  if (hasRemainingTurnThisRound) return 0;
   return player.resources.Z || 0;
 }
 
