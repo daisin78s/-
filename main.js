@@ -295,6 +295,15 @@ let usedDebugOrTestGameThisGame = !!debugSetupPlanAtLoad;
 // into its own achievement category instead of mode_debug_on.
 let startedFromRound3 = false;
 
+// 入口バナー (2026-10-04, per user request) -- 真っさらな新規ロードのときだけ表示(render()冒頭の分岐
+// 参照)。tutorialModeActive/weeklyChallengeActive/debugSetupPlanAtLoadのいずれかが既に真ということは
+// pending flag経由のreloadで来た = すでにモードを選んだ後、ということなので最初からスキップする。
+let entryBannerDismissed = tutorialModeActive || weeklyChallengeActive || !!debugSetupPlanAtLoad;
+function dismissEntryBanner() {
+  entryBannerDismissed = true;
+  render(STATE);
+}
+
 // ---------------------------------------------------------------------------
 // AI players (2026-08-03, per user feedback: "プレイヤー1は人間 プレイヤー2 3 4はAIの対戦を実装して
 // 欲しい", generalized same day: "4人のプレイヤー人間 AIをそれぞれ選べるようにしてほしい", then split
@@ -2533,7 +2542,11 @@ function renderDebugPanel(state) {
   // is switched ON -- but unconditionally hidden during a weekly challenge attempt regardless of debugMode
   // (per this function's own doc above -- this is the one still absolutely forbidden during an attempt).
   document.getElementById('debug-setup-start-button').hidden = weeklyChallengeActive || !debugMode;
-  document.getElementById('debug-mode-toggle').hidden = false;
+  // デバッグモードボタンを非表示に (2026-10-04, per user request: "とりあえずデバッグボタンを見えないように
+  // （押せないように）して" -- バナー導線の整理に合わせて、一般プレイヤーの目には触れないようにする。
+  // ロジック自体(debugMode/toggleDebugMode/テストゲーム開始等)はすべてそのまま残してあるので、
+  // 「戻せるように」(per user request)、ここをfalseに戻すだけで元通り表示される。
+  document.getElementById('debug-mode-toggle').hidden = true;
   const toggleBtn = document.getElementById('debug-mode-toggle');
   toggleBtn.textContent = `デバッグモード: ${debugMode ? 'ON' : 'OFF'}`;
   toggleBtn.classList.toggle('debug-panel__toggle--on', debugMode);
@@ -11716,6 +11729,15 @@ function render(state) {
   // itself is full of live-play-only side effects -- AI pumping, checkpoint recording, turn bookkeeping
   // -- none of which make sense, or are even safe, against a frozen historical snapshot).
   if (replayMode) { renderReplayFrame(); return; }
+  // 入口バナー (2026-10-04, per user request) -- replayMode同様、画面を丸ごと差し替えるパターン。
+  // entryBannerDismissedがtrueになるまでは#app/#weekly-seat-pickerどちらも隠す。
+  if (!entryBannerDismissed) {
+    document.getElementById('app').hidden = true;
+    document.getElementById('weekly-seat-picker').hidden = true;
+    document.getElementById('entry-banner').hidden = false;
+    return;
+  }
+  document.getElementById('entry-banner').hidden = true;
   // ウィークリーチャレンジの席選択画面 (2026-09-07, per user spec) -- same "takes over the whole screen
   // with its own render path" idea as replayMode just above, shown until a seat is actually chosen.
   if (weeklyChallengeActive && weeklyChallengeSeatChosen === null) {
@@ -12173,7 +12195,21 @@ function renderPlayerRoleControl(state) {
 
     const optionsLine = el('div', 'player-role-control__options-line');
     const currentRole = playerRoles.get(player.id);
-    for (const [role, label] of PLAYER_ROLE_OPTIONS) {
+    // ゲーム開始後はAIレベル変更不可 (2026-10-04, per user request: "ゲームが始まったら...LV3を選んだら
+    // LV1,2を消す" -- 初期資源2枚選択完了(=state.round>=1)をもって「ゲーム開始」とみなす。他のレベルを
+    // 無効化するのではなく選択肢自体を無くす、という指定どおり、現在の役割以外はそもそも描画しない。
+    // チュートリアルは従来通りstate.roundに関係なく最初から全ボタンdisabled(下のtutorialModeActive分岐、
+    // 別ルールのまま)。
+    const gameStarted = state.round >= 1;
+    // ウィークリーチャレンジ中は人間は選んだ1人だけ (2026-10-04, per user request: "AI対戦やウィークリーを
+    // 選んだら1つ以外人間も選べない" -- ローカル対戦はこの制限なし、per user follow-up "AI対戦をローカル
+    // 対戦にして人間も選べるように")。ゲーム開始後はどのみちcurrentRoleだけに絞られるので、この制限は
+    // 実質ラウンド0(初期資源選択までの準備中)だけ意味を持つ。
+    const restrictHuman = weeklyChallengeActive && player.id !== weeklyChallengeSeatChosen;
+    const visibleOptions = gameStarted
+      ? PLAYER_ROLE_OPTIONS.filter(([role]) => role === currentRole)
+      : (restrictHuman ? PLAYER_ROLE_OPTIONS.filter(([role]) => role !== 'HUMAN') : PLAYER_ROLE_OPTIONS);
+    for (const [role, label] of visibleOptions) {
       const btn = el('button', 'player-role-control__option', label);
       btn.type = 'button';
       btn.classList.toggle('player-role-control__option--active', currentRole === role);
@@ -12707,6 +12743,18 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('debug-mode-toggle').addEventListener('click', toggleDebugMode);
   document.getElementById('weekly-challenge-button').addEventListener('click', openWeeklyChallenge);
   document.getElementById('tutorial-mode-button').addEventListener('click', openTutorialMode);
+
+  // 入口バナー (2026-10-04, per user request) -- 4つの大ボタンはそれぞれ既存の入り口関数をそのまま呼ぶ
+  // (チュートリアル/ウィークリーはpending flag+reloadで戻ってこない、ローカル対戦/オンライン対戦は
+  // dismissEntryBannerで裏にある普通のゲーム画面を見せてからそれぞれの処理に入る)。下の3つの小ボタンも
+  // 同様にバナーを閉じてから、ゲーム中のボタン列と全く同じ関数を呼ぶ。
+  document.getElementById('entry-banner-tutorial-button').addEventListener('click', openTutorialMode);
+  document.getElementById('entry-banner-local-button').addEventListener('click', dismissEntryBanner);
+  document.getElementById('entry-banner-online-button').addEventListener('click', () => { dismissEntryBanner(); openOnlineLobby(); });
+  document.getElementById('entry-banner-weekly-button').addEventListener('click', openWeeklyChallenge);
+  document.getElementById('entry-banner-cardlist-button').addEventListener('click', () => { dismissEntryBanner(); openCardListOverlay(); });
+  document.getElementById('entry-banner-ranking-button').addEventListener('click', () => { dismissEntryBanner(); openRankingOverlay(); });
+  document.getElementById('entry-banner-achievement-button').addEventListener('click', () => { dismissEntryBanner(); openAchievementOverlay(); });
   document.getElementById('tutorial-bubble__dismiss').addEventListener('click', dismissTutorialStep);
   // 2026-10-02, per user request ("次へをクリックしなくてもENTERキーで次へを押すことはできますか" /
   // "初期設定では次へとところにカーソルがあっている扱いで←→きーをおすとそれが移動する") -- choicesが

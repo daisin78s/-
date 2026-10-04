@@ -4565,3 +4565,65 @@ body.tutorial-mode .change-highlight {
 #achievement-popup-overlay {
   z-index: 200;
 }
+
+/* 入口バナー (2026-10-04, per user request) -- #app/#weekly-seat-pickerと同じ「画面を丸ごと差し替える」
+   フルスクリーン表示。z-indexは他の全オーバーレイより上(ゲーム開始前の最初の画面なので常に最前面)。 */
+#entry-banner {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  padding: 16px;
+}
+
+#entry-banner__box {
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 20px;
+}
+
+#entry-banner__title {
+  text-align: center;
+  font-size: 28px;
+  color: var(--text);
+  margin: 0 0 4px;
+}
+
+#entry-banner__primary {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.entry-banner__primary-button {
+  padding: 22px 16px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+#entry-banner__secondary {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.entry-banner__secondary-button {
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}

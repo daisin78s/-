@@ -12,6 +12,29 @@
        クリックを邪魔しないようpointer-events:noneにする(style.css参照)。 -->
   <div id="copyright-notice">© 2026 higebucho</div>
 
+  <!-- 入口バナー (2026-10-04, per user request: "HPに入ったときに大き目バナーを用意して導線をわかりやすく
+       したい") -- #app/#weekly-seat-pickerと同じ「画面を丸ごと差し替える」パターン(main.jsのrender()
+       冒頭、entryBannerDismissedの分岐参照)。真っさらな新規ロードのときだけ表示し、チュートリアル/
+       ウィークリーチャレンジ/テストゲームのpendingフラグ経由でのreload後や、一度バナーを閉じた後は
+       スキップする。4つの大きいボタン(チュートリアル/ローカル対戦/オンライン対戦/ウィークリーチャレンジ)
+       + 下に小さく3つ(カードリスト/ランキング/実績記録、ゲーム中のボタン列と同じ処理を共有)。 -->
+  <div id="entry-banner">
+    <div id="entry-banner__box">
+      <h1 id="entry-banner__title">ダイスWP</h1>
+      <div id="entry-banner__primary">
+        <button type="button" class="entry-banner__primary-button" id="entry-banner-tutorial-button">チュートリアル</button>
+        <button type="button" class="entry-banner__primary-button" id="entry-banner-local-button">ローカル対戦</button>
+        <button type="button" class="entry-banner__primary-button" id="entry-banner-online-button">オンライン対戦</button>
+        <button type="button" class="entry-banner__primary-button" id="entry-banner-weekly-button">ウィークリーチャレンジ</button>
+      </div>
+      <div id="entry-banner__secondary">
+        <button type="button" class="entry-banner__secondary-button" id="entry-banner-cardlist-button">カードリスト</button>
+        <button type="button" class="entry-banner__secondary-button" id="entry-banner-ranking-button">ランキング</button>
+        <button type="button" class="entry-banner__secondary-button" id="entry-banner-achievement-button">実績記録</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ウィークリーチャレンジの席選択 (2026-09-07, per user spec; revised several times on 2026-09-07
        follow-ups) -- shown in place of the normal #app view while weeklyChallengeActive &&
        weeklyChallengeSeatChosen===null (see main.js's renderWeeklySeatPicker/chooseWeeklyChallengeSeat).
