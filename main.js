@@ -318,7 +318,7 @@ let startedFromRound3 = false;
 // the way two separately-hardcoded copies eventually would. Adding a future AI_LV4/5/... only ever means
 // appending one more [id, label] entry here, in order -- everything that cares "which level is strongest"
 // (right now, just the default below) then already sees it with no further edits.
-const PLAYER_ROLE_OPTIONS = [['HUMAN', '人間'], ['AI_LV1', 'AI LV1'], ['AI_LV2', 'AI LV2'], ['AI_LV3', 'AI LV3'], ['AI_LV4', 'AI LV4'], ['AI_LV5', 'AI LV5']];
+const PLAYER_ROLE_OPTIONS = [['HUMAN', '人間'], ['AI_LV1', 'AI LV1'], ['AI_LV2', 'AI LV2'], ['AI_LV3', 'AI LV3']];
 // The strongest AI level currently defined -- the last entry in PLAYER_ROLE_OPTIONS (2026-08-11, per user
 // request: "デフォルトのAILVを3にして　今後デフォルトは一番高いAILVを選択してください"). Was a hardcoded
 // 'AI_LV2' before LV3 existed; now derived so it keeps pointing at whichever level is actually strongest
@@ -336,10 +336,11 @@ const DEFAULT_AI_ROLE = PLAYER_ROLE_OPTIONS[PLAYER_ROLE_OPTIONS.length - 1][0];
 // stays/reverts to DEFAULT_AI_ROLE) once picked, same playerRoles.set(...) pattern the online lobby's own
 // seatIsHuman sync already uses.
 // チュートリアルモード: P2-4のAIレベル。2026-09-23、当初は "AILV1で" 確認済みでAI_LV1(最も手加減する
-// レベル)を使っていたが、2026-09-26、per user request: "チュートリアルのAILVを5にしてください" -- AI_LV5
-// (最も強いレベル)に変更。一般市民(JOB001)を必ずJOBプールに入れる+AIには一般市民を選ばせない仕組み
-// (dealJobPool/ONBOARDING分岐のtutorialExcludedJobs参照)と合わせて使う想定。
-const TUTORIAL_AI_ROLE = 'AI_LV5';
+// レベル)を使っていたが、2026-09-26、per user request: "チュートリアルのAILVを5にしてください" -- 当時の
+// AI_LV5(最も強いレベル)に変更。2026-10-04のLV1/2/3統合で旧LV5は新AI_LV3になった(最も強いレベルという
+// 位置づけは変わらない)ので、ここもそのまま追従。一般市民(JOB001)を必ずJOBプールに入れる+AIには一般市民
+// を選ばせない仕組み(dealJobPool/ONBOARDING分岐のtutorialExcludedJobs参照)と合わせて使う想定。
+const TUTORIAL_AI_ROLE = 'AI_LV3';
 const playerRoles = weeklyChallengeActive
   ? new Map([['P1', DEFAULT_AI_ROLE], ['P2', DEFAULT_AI_ROLE], ['P3', DEFAULT_AI_ROLE], ['P4', DEFAULT_AI_ROLE]])
   : new Map([
@@ -533,98 +534,78 @@ let onlineRoomUnsubscribe = null; // the active onSnapshot's own unsubscribe fun
 let lastPushedOnlineStateJson = null; // dedup guard, same convention as recordReplaySnapshotIfChanged's own
 
 const aiEvalTable = evalTableMod.buildEvalTable(INDEX.raw);
-const aiEvaluator = new evaluatorMod.Evaluator(INDEX, aiEvalTable);
+// AI LV1/2/3 (2026-10-04 consolidation, per user request: "AILV1-5まであって多すぎる...AILV1→LV1、
+// AILV3→LV2、AILV5→LV3にしましょうか" / "4Rの時間がかかりすぎるので"[3R/4Rを同じ軽い設定に統一] /
+// "AILV1 AILV2 評価値は同じもの（LV3と同じもの）を使って" / "すべて評価値は今後も共通で") -- replaces the
+// old 5-level lineup (LV1/LV2/LV3/LV4/LV5). All 3 levels now share ONE Evaluator instance (aiEvaluator,
+// the former LV4/LV5's qstAware+conBuildAware+monumentIncentiveAware table) so future 評価値 tuning never
+// has to be duplicated across levels again -- only the AIPlayer-level search depth/breadth (lookahead/
+// beam) and MoveGenerator still differ per level, same idea as before. The former round-4-only deep-
+// lookahead override is dropped entirely from both LV2(旧LV3) and LV3(旧LV5) -- round 4 now always uses
+// the same (lighter, faster) settings as round 3.
+//
+// 元の設定(戻すときの参照用 -- per user request "戻せるように今の設定だけはメモって", HPには残さない):
+//   旧LV1: aiEvaluator(policy-free, qstAware無し) + aiMoveGenerator(無印), {lookaheadExtraTurns:0}
+//   旧LV2: 旧LV1と全く同じaiEvaluator/aiMoveGenerator, {lookaheadExtraTurns:1}
+//   旧LV3: 専用aiEvaluatorLv3(qstAware:true) + aiMoveGenerator(無印), {lookaheadExtraTurns:1,
+//     roundOverrides:{4:{lookaheadExtraTurns:20,beamWidth:10,maxRolloutMoves:200}}}
+//   旧LV4: 専用aiEvaluatorLv4(qstAware,conBuildAware,monumentIncentiveAware) + 専用aiMoveGeneratorLv4
+//     (preferCastleOverSenate:true), {lookaheadExtraTurns:1,
+//     roundOverrides:{4:{lookaheadExtraTurns:20,beamWidth:10,maxRolloutMoves:200}},
+//     dieScarcityTieBreak:true, preferExOnOwnTerritory:true}
+//   旧LV5: 旧LV4と同じaiEvaluatorLv4/aiMoveGeneratorLv4、{lookaheadExtraTurns:2, beamWidth:3,
+//     roundOverrides:{4:{lookaheadExtraTurns:20,beamWidth:10,maxRolloutMoves:200}},
+//     dieScarcityTieBreak:true, preferExOnOwnTerritory:true, crossRoundLookahead:true}
+//   PLAYER_ROLE_OPTIONSは['HUMAN','AI_LV1'..'AI_LV5']の6択、TUTORIAL_AI_ROLEは'AI_LV5'、
+//   usesSmartOnboardingは['AI_LV1','AI_LV4','AI_LV5']、isLv4判定は'AI_LV4'||'AI_LV5'、
+//   ウィークリーチャレンジの評価値スナップショットはaiPlayerLv4Weekly/role==='AI_LV4'判定だった。
+const aiEvaluator = new evaluatorMod.Evaluator(INDEX, aiEvalTable, { qstAware: true, conBuildAware: true, monumentIncentiveAware: true });
 const aiMoveGenerator = new moveGeneratorMod.MoveGenerator();
+const aiMoveGeneratorLv3 = new moveGeneratorMod.MoveGenerator({ preferCastleOverSenate: true });
 const aiSimulator = new simulatorMod.Simulator();
 const aiPlayerLv1 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGenerator, aiEvaluator, aiSimulator, { lookaheadExtraTurns: 0 });
 const aiPlayerLv2 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGenerator, aiEvaluator, aiSimulator, { lookaheadExtraTurns: 1 });
-// AI LV3 (2026-08-09). Uses the shared, policy-free aiMoveGenerator above (2026-08-28, per user
-// request "3Rから訓練場を避けるは削除してください" -- LV3 used to get its own MoveGenerator instance
-// built with an avoidMapIdFromRound:{mapId:'MAP007',round:3} policy, added 2026-08-10 per an earlier
-// request "R3からAREA007にダイスを置かないようにかえたい"; that restriction is now removed, so LV3 no
-// longer needs a separate MoveGenerator instance at all). Reuses LV2's lookaheadExtraTurns:1 (not asked
-// about specifically; matched to LV2 rather than LV1's 0, since LV3 is meant to be the stronger/smarter
-// option, not a speed tier).
-// Own Evaluator instance too (2026-08-10, per user request: "AI LV3はQSTカードに対応してVPを稼ぐように
-// したい") -- qstAware:true (see Evaluator's own doc), sharing aiEvalTable with the LV1/LV2-shared
-// aiEvaluator above, which stays policy-free and therefore completely unaffected.
-const aiEvaluatorLv3 = new evaluatorMod.Evaluator(INDEX, aiEvalTable, { qstAware: true });
-// Round-4-only deep lookahead + wider beam (2026-08-10, per user request: "4Rのみ最後まで深堀させます" +
-// "R4だけビーム幅も広げるでいきます") -- see AIPlayer's own roundOverrides doc for the full mechanics.
-// Round 4 is the last round, so the own-turns-only rollout naturally stops once this player's own dice
-// for the round run out (no artificial early cutoff from a small lookaheadExtraTurns/maxRolloutMoves),
-// and the extra beamWidth cost is bounded since there's no round 5 left to also pay it in.
-const aiPlayerLv3 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGenerator, aiEvaluatorLv3, aiSimulator, {
-  lookaheadExtraTurns: 1,
-  roundOverrides: { 4: { lookaheadExtraTurns: 20, beamWidth: 10, maxRolloutMoves: 200 } },
-});
-// AI LV4 (2026-08-28, per user request to make this the new default level). Own Evaluator instance
-// (2026-08-28, conBuildAware:true, see Evaluator's own doc -- per user bug report: 憤怒 still built
-// 双星の加護 despite 評価値_4 already holding -200 for that pairing, because 評価値_4 had never been read
-// by any code) -- shares the same hand-tuned aiEvalTable + qstAware as LV3's own aiEvaluatorLv3, but
-// needs its own instance rather than reusing that one so LV3 stays completely unaffected. Plus LV3's own
-// round-4 deep-search override. Other differences from LV3: dieScarcityTieBreak (see
-// src/ai/die-priority.js, ties in 1-ply score prefer spending the more plentiful die value),
-// preferExOnOwnTerritory (2026-08-31, see src/ai/slot-priority.js -- ties in 1-ply score prefer an EX
-// slot over any other slot when placing on this player's own AREA, disabled for round 4), and
-// preferCastleOverSenate (see MoveGenerator's own doc -- 王宮/元老院 are functionally identical, so this
-// drops one in favor of the other rather than offering both as separate candidates every turn). Its
-// RESOURCE_CHOICE/ONBOARDING (JOB/CON/resource-card picks) also go through smart-onboarding.js instead of
-// driveOneAiStepInner's uniform-random default -- see that function's own branches below; LV1/2/3 are
-// unaffected either way since only 'AI_LV4' triggers those branches.
-const aiEvaluatorLv4 = new evaluatorMod.Evaluator(INDEX, aiEvalTable, { qstAware: true, conBuildAware: true, monumentIncentiveAware: true });
-const aiMoveGeneratorLv4 = new moveGeneratorMod.MoveGenerator({ preferCastleOverSenate: true });
-const aiPlayerLv4 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGeneratorLv4, aiEvaluatorLv4, aiSimulator, {
-  lookaheadExtraTurns: 1,
-  roundOverrides: { 4: { lookaheadExtraTurns: 20, beamWidth: 10, maxRolloutMoves: 200 } },
-  dieScarcityTieBreak: true,
-  preferExOnOwnTerritory: true,
-});
-// Synergy tables for AI LV4's smart onboarding (see driveOneAiStepInner's RESOURCE_CHOICE/ONBOARDING
-// branches below) -- built once here, same pattern as aiEvalTable above.
-const aiResourceSynergyTable = resourceCardSynergyMod.buildResourceSynergyTable(INDEX.raw);
-const aiConJobSynergyTable = conJobSynergyMod.buildConJobSynergyTable(INDEX.raw);
-
-// AI LV5 (2026-09-16, see src/ai/levels.js's own doc for the full design/reasoning). Reuses LV4's own
-// aiEvaluatorLv4/aiMoveGeneratorLv4 instances outright (evaluatorOptions/moveGeneratorOptions are
-// identical to LV4's -- LV5 reads AI LV4's own real 評価値 table, per user confirmation "評価値はAILV4を
-// 使う" -- only its own AIPlayer options differ), rather than constructing duplicate Evaluator/
-// MoveGenerator instances that would just be redundant clones of LV4's. Its own onboarding also reuses
-// LV4's smart-onboarding branches below (driveOneAiStepInner's RESOURCE_CHOICE/ONBOARDING) -- see each
-// branch's own updated condition.
-const aiPlayerLv5 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGeneratorLv4, aiEvaluatorLv4, aiSimulator, {
+const aiPlayerLv3 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGeneratorLv3, aiEvaluator, aiSimulator, {
   lookaheadExtraTurns: 2,
   beamWidth: 3,
-  roundOverrides: { 4: { lookaheadExtraTurns: 20, beamWidth: 10, maxRolloutMoves: 200 } },
   dieScarcityTieBreak: true,
   preferExOnOwnTerritory: true,
   crossRoundLookahead: true,
 });
+// Synergy tables for AI LV3's smart onboarding (see driveOneAiStepInner's RESOURCE_CHOICE/ONBOARDING
+// branches below) -- built once here, same pattern as aiEvalTable above.
+const aiResourceSynergyTable = resourceCardSynergyMod.buildResourceSynergyTable(INDEX.raw);
+const aiConJobSynergyTable = conJobSynergyMod.buildConJobSynergyTable(INDEX.raw);
 
-// ウィークリーチャレンジ専用のAI LV4評価値スナップショット (2026-09-08, per user spec: AI LV4を自由に
+// ウィークリーチャレンジ専用のAI LV3評価値スナップショット (2026-09-08, per user spec: AIを自由に
 // チューニングし続けたいが、ウィークリーチャレンジの公平性（同じ週の全アテンプトが同じ強さのAIと対戦す
 // る）は保ちたい -- 手動で「日曜まで触らない」と自分に言い聞かせる運用 ([[project-dice-wp-ai-lv4-freeze]]
 // 参照) の代わりに、週が変わって最初にこのページが読み込まれた瞬間の評価値テーブルをその週専用のスナッ
 // プショットとしてFirestoreに保存し、その週のウィークリーチャレンジは常にそのスナップショットだけを読む
 // ようにする。通常プレイ（weeklyChallengeActive===false）はこれまで通り常に最新のaiEvalTableを使うので、
-// AI LV4/LV5の学習・チューニングは今まで通り自由に続けられる。
+// AIの学習・チューニングは今まで通り自由に続けられる。
 //
-// aiPlayerLv4Weekly は最初nullで、getOrCreateWeeklyEvalTable（online-sync.jsのFirestoreトランザクション
-// -- 同じ週の最初のアテンプトなら今のaiEvalTableをそのまま保存、2回目以降はすでに保存済みの値を読むだけ)
-// が解決した時点で初めて実体を持つ -- 座席選択画面ではAIのターンは一切進行しない(render()の
+// aiPlayerLv3Weekly(2026-10-04、旧aiPlayerLv4Weeklyから改名 -- LV1/2/3統合でDEFAULT_AI_ROLEが'AI_LV3'に
+// なったのに合わせ、判定対象も'AI_LV4'から'AI_LV3'へ。以前は実はDEFAULT_AI_ROLEがLV5側に進んでいたのに
+// このスナップショットだけ'AI_LV4'判定のまま取り残されていて、ウィークリーチャレンジのAI枠が実際には
+// このスナップショットを一度も使わずaiPlayerLv5[生きたテーブル]に素通りしていた、という潜在バグがあった
+// -- 今回の統合でついでに解消) は最初nullで、getOrCreateWeeklyEvalTable（online-sync.jsのFirestoreトラン
+// ザクション -- 同じ週の最初のアテンプトなら今のaiEvalTableをそのまま保存、2回目以降はすでに保存済みの
+// 値を読むだけ)が解決した時点で初めて実体を持つ -- 座席選択画面ではAIのターンは一切進行しない(render()の
 // weeklyChallengeActiveの早期returnブランチ参照)ので、実際にAIが動き出すまでには少なくとも人間が座席を
 // 選ぶ分の時間があり、この非同期フェッチは通常それより十分速く終わる。万一まだ解決していない場合は
-// aiPlayerFor が現在の生きたaiPlayerLv4に自然にフォールバックする(その週の最初の一度きりの保存タイミン
+// aiPlayerFor が現在の生きたaiPlayerLv3に自然にフォールバックする(その週の最初の一度きりの保存タイミン
 // グでしか値がずれ得ない、極めて起きにくいケース)。
-let aiPlayerLv4Weekly = null;
+let aiPlayerLv3Weekly = null;
 if (weeklyChallengeActive) {
   window.OnlineSync.getOrCreateWeeklyEvalTable(currentWeeklyChallengeId(), aiEvalTable).then((weeklyEvalTable) => {
     const weeklyEvaluator = new evaluatorMod.Evaluator(INDEX, weeklyEvalTable, { qstAware: true, conBuildAware: true, monumentIncentiveAware: true });
-    aiPlayerLv4Weekly = new aiPlayerMod.AIPlayer(INDEX, aiMoveGeneratorLv4, weeklyEvaluator, aiSimulator, {
-      lookaheadExtraTurns: 1,
-      roundOverrides: { 4: { lookaheadExtraTurns: 20, beamWidth: 10, maxRolloutMoves: 200 } },
+    aiPlayerLv3Weekly = new aiPlayerMod.AIPlayer(INDEX, aiMoveGeneratorLv3, weeklyEvaluator, aiSimulator, {
+      lookaheadExtraTurns: 2,
+      beamWidth: 3,
       dieScarcityTieBreak: true,
       preferExOnOwnTerritory: true,
+      crossRoundLookahead: true,
     });
   }).catch((err) => {
     console.error('Weekly eval-table snapshot fetch failed, falling back to the live table for this attempt:', err);
@@ -635,10 +616,8 @@ if (weeklyChallengeActive) {
 function aiPlayerFor(playerId) {
   const role = playerRoles.get(playerId);
   if (role === 'AI_LV1') return aiPlayerLv1;
-  if (role === 'AI_LV3') return aiPlayerLv3;
-  if (role === 'AI_LV4') return (weeklyChallengeActive && aiPlayerLv4Weekly) || aiPlayerLv4;
-  if (role === 'AI_LV5') return aiPlayerLv5;
-  return aiPlayerLv2;
+  if (role === 'AI_LV2') return aiPlayerLv2;
+  return (weeklyChallengeActive && aiPlayerLv3Weekly) || aiPlayerLv3; // AI_LV3 (and any other value, as the strongest/default fallback)
 }
 
 // 'instant' (AI plays out immediately, no visible pause) | 'delayed' (one Move every AI_STEP_DELAY_MS,
@@ -959,13 +938,14 @@ function driveOneAiStepInner(state) {
     // broken by ascending numeric ID (see that function's own sort) -- already matches
     // tools/ai_data_report.js's own LV4 wiring, which never had this flag and was never turned off.
     const RESOURCE_SYNERGY_PICK_ENABLED = true;
-    // AI_LV5 (2026-09-16): shares LV4's own onboarding style outright -- see levels.js's own doc.
+    // AI_LV3 (2026-10-04, formerly AI_LV4/LV5 before the LV1/2/3 consolidation): shares the smart
+    // onboarding style outright -- see levels.js's own doc.
     // AI_LV1 (2026-09-23, per user request: "AILV1の初期資源カードの選び方をAILV5と同じにしてください")
     // -- explicitly opted into the same smart RESOURCE-card pick, overriding the 2026-08-03 "every other
     // level stays purely random" default above for LV1's resource-card choice specifically. Scoped to
-    // resource cards only, as asked -- LV1's own JOB/CON picks (the isLv4 check further below) are
+    // resource cards only, as asked -- LV1's own JOB/CON picks (the isLv3 check further below) are
     // untouched.
-    const usesSmartOnboarding = ['AI_LV1', 'AI_LV4', 'AI_LV5'].includes(playerRoles.get(resourcePlayerId));
+    const usesSmartOnboarding = ['AI_LV1', 'AI_LV3'].includes(playerRoles.get(resourcePlayerId));
     const pair = RESOURCE_SYNERGY_PICK_ENABLED && usesSmartOnboarding
       ? smartOnboardingMod.pickResourceCards(
           ctx.resourceChoice.context.candidates,
@@ -999,21 +979,22 @@ function driveOneAiStepInner(state) {
   }
 
   if (ctx.type === 'ONBOARDING') {
-    // AI LV4/LV5 (2026-08-28, LV5 added 2026-09-16 -- see levels.js's own doc): reachability/synergy-based
-    // JOB draft + CON face pick via smart-onboarding.js instead of the uniform-random default below in
-    // both branches -- see that module's own doc. Every other level still picks purely at random
-    // (2026-08-03, per user feedback -- see the resource-choice branch above, and
-    // src/ai/game-runner.js's matching fix and its own doc for why).
-    const isLv4 = playerRoles.get(ctx.playerId) === 'AI_LV4' || playerRoles.get(ctx.playerId) === 'AI_LV5';
+    // AI LV3 (2026-08-28, LV5 added 2026-09-16, merged into the single AI_LV3 role by the 2026-10-04
+    // LV1/2/3 consolidation -- see levels.js's own doc): reachability/synergy-based JOB draft + CON face
+    // pick via smart-onboarding.js instead of the uniform-random default below in both branches -- see
+    // that module's own doc. Every other level still picks purely at random (2026-08-03, per user
+    // feedback -- see the resource-choice branch above, and src/ai/game-runner.js's matching fix and its
+    // own doc for why).
+    const isLv3 = playerRoles.get(ctx.playerId) === 'AI_LV3';
     if (!ctx.player.jobCardId) {
       // チュートリアル中はAIに一般市民(JOB001)を選ばせない (2026-09-26, per user request: "チュートリアルでは
       // AIは町人は選ばない" -- 一般市民はdealJobPool側でJOBプールに必ず入れているぶん、あなた/P1が確実に選べる
-      // ようAIの候補からは除外する)。両方の分岐(LV4/5のsmartOnboarding、それ以外の完全ランダム)に適用。
+      // ようAIの候補からは除外する)。両方の分岐(LV3のsmartOnboarding、それ以外の完全ランダム)に適用。
       const tutorialExcludedJobs = tutorialModeActive ? ['JOB001'] : undefined;
       const randomPoolChoices = tutorialExcludedJobs
         ? state.jobPool.filter((id) => !tutorialExcludedJobs.includes(id))
         : state.jobPool;
-      const jobFaceId = isLv4
+      const jobFaceId = isLv3
         ? smartOnboardingMod.pickJob(state, INDEX, ctx.playerId, aiConJobSynergyTable, aiMoveGenerator, aiSimulator, state.rng, tutorialExcludedJobs)
         : randomPoolChoices[Math.floor(rngMod.next(state.rng) * randomPoolChoices.length)];
       setupMod.chooseJob(state, INDEX, ctx.playerId, jobFaceId);
@@ -1022,7 +1003,7 @@ function driveOneAiStepInner(state) {
       // already accounts for whichever mode (auto/manual) is actually active, see its own doc.
       // JOB010/革命家's PICK_JOB_REPLACEMENT (2026-08-21, see setup.grantRevolutionaryBonusIfEarned's
       // own doc): same random-pick policy as src/ai/game-runner.js's matching driveOnboarding/
-      // driveSmartOnboarding hooks (no user spec covers this rare, JOB010-specific edge case under LV4
+      // driveSmartOnboarding hooks (no user spec covers this rare, JOB010-specific edge case under LV3
       // either) -- must resolve synchronously here or it sits in state.pendingChoices forever
       // (renderJobPool's own "still drafting" check only ever looks at jobCardId, which is already
       // non-null by this point).
@@ -1032,7 +1013,7 @@ function driveOneAiStepInner(state) {
         setupMod.resolveJobReplacementChoice(state, INDEX, ctx.playerId, picked);
       }
     } else {
-      const face = isLv4
+      const face = isLv3
         ? smartOnboardingMod.pickConFace(state, INDEX, ctx.playerId, ctx.player.jobCardId, aiConJobSynergyTable, state.rng)
         : (rngMod.next(state.rng) < 0.5 ? 'A' : 'B');
       setupMod.chooseConFace(state, INDEX, ctx.playerId, face);
@@ -1614,7 +1595,8 @@ function handleReplayUploadChange(event) {
  * AILV4どうしの対戦で 2Rまで終わって3Rからの盤面を作る...それを人間がプレイしてAIより高い得点が取れるか
  * 知りたい"): synchronously (no per-move animation -- src/ai/game-runner.js's own setupGame/driveTurn/
  * driveSmartOnboarding, the same primitives every tools/*.js CLI script uses, not main.js's own
- * move-by-move-paced driveOneAiStep) plays out a FRESH 4-seat AI-LV4-vs-AI-LV4 game up through the end of
+ * move-by-move-paced driveOneAiStep) plays out a FRESH 4-seat AI-vs-AI game (aiPlayerLv3, the strongest
+ * level -- formerly AI LV4 before the 2026-10-04 LV1/2/3 consolidation) up through the end of
  * round 2, then swaps the resulting state into the live UI (same "clear every own-enumerable key, then
  * reassign" pattern applyIncomingRoomState already uses for online hand-off) with P1 switched to HUMAN
  * for round 3 onward -- the point being a round-3 starting board with ZERO human influence on rounds 1-2,
@@ -1659,10 +1641,10 @@ function handleStartFromRound3Click() {
     // resourceCardPicker (2026-09-15, per the same request as driveOneAiStepInner's own
     // RESOURCE_SYNERGY_PICK_ENABLED flag just above): this function's own 1R/2R AI-vs-AI simulation
     // loop calls setupGame directly, bypassing that flag entirely -- every player here is played by
-    // aiPlayerLv4 (the human hasn't taken over yet), so all 4 should use the same START_ORDER/ID-based
-    // pick, not setupGame's own random default.
+    // aiPlayerLv3 (the human hasn't taken over yet, 2026-10-04: formerly aiPlayerLv4), so all 4 should
+    // use the same START_ORDER/ID-based pick, not setupGame's own random default.
     const round3ResourceCardPicker = (candidateIds, state, idx, player) => smartOnboardingMod.pickResourceCards(candidateIds, state, idx, aiResourceSynergyTable, player.conPhysicalId);
-    const state = gameRunnerMod.setupGame(seed, ['Alice', 'Bob', 'Carol', 'Dan'], INDEX, aiEvaluatorLv4, round3ResourceCardPicker);
+    const state = gameRunnerMod.setupGame(seed, ['Alice', 'Bob', 'Carol', 'Dan'], INDEX, aiEvaluator, round3ResourceCardPicker);
 
     let openTurnPlayerId = null;
     let openTurnHasPlacedDie = false;
@@ -1680,12 +1662,12 @@ function handleStartFromRound3Click() {
         continue;
       }
       if (next.type === 'ONBOARDING_NEEDED') {
-        gameRunnerMod.driveSmartOnboarding(state, INDEX, next.playerId, aiConJobSynergyTable, aiMoveGeneratorLv4, aiSimulator);
+        gameRunnerMod.driveSmartOnboarding(state, INDEX, next.playerId, aiConJobSynergyTable, aiMoveGeneratorLv3, aiSimulator);
         continue;
       }
       const roundBeforeTurn = state.round;
       const initialHasPlacedDie = next.playerId === openTurnPlayerId ? openTurnHasPlacedDie : false;
-      const moves = gameRunnerMod.driveTurn(state, INDEX, next.playerId, aiPlayerLv4, initialHasPlacedDie);
+      const moves = gameRunnerMod.driveTurn(state, INDEX, next.playerId, aiPlayerLv3, initialHasPlacedDie);
       const endedTurn = moves.some((m) => m.move.type === 'END_TURN' && m.result.success);
       if (endedTurn || state.round > roundBeforeTurn) {
         openTurnPlayerId = null;
@@ -8469,7 +8451,8 @@ function subscribeToOnlineRoom(code) {
 /** Host-only: builds a fresh 4-seat GameState (createInitialState(null) -- no debug-setup overrides,
  * same as an ordinary local page load) and pushes it as the room's starting state. seatIsHuman marks
  * every seat that was actually claimed in the lobby; every unclaimed seat defaults to DEFAULT_AI_ROLE
- * (AI LV4, per user confirmation: "空席はLV4で") once applyIncomingRoomState sets up playerRoles from it.
+ * (per user confirmation: "空席はLV4で" -- originally AI LV4, now the strongest level after the 2026-10-04
+ * LV1/2/3 consolidation, i.e. AI LV3) once applyIncomingRoomState sets up playerRoles from it.
  * Doesn't touch local STATE/playerRoles directly -- this device's own subscription (already active,
  * see subscribeToOnlineRoom) adopts the just-pushed state the exact same way every other device's does. */
 function handleStartRoomClick() {
@@ -8555,7 +8538,7 @@ function renderOnlineLobbyOverlay() {
     const list = el('div', '');
     for (const seatId of ['P1', 'P2', 'P3', 'P4']) {
       const occupied = !!onlineLobbyRoomData.seats[seatId];
-      const label = seatId === localSeatId ? `${seatId}: あなた` : occupied ? `${seatId}: 参加済み` : `${seatId}: 空席(未参加ならAI LV4)`;
+      const label = seatId === localSeatId ? `${seatId}: あなた` : occupied ? `${seatId}: 参加済み` : `${seatId}: 空席(未参加ならAI LV3)`;
       list.appendChild(el('div', 'ranking-row__opponents', label));
     }
     body.appendChild(list);
