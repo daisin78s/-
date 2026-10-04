@@ -7964,6 +7964,10 @@ const ACHIEVEMENT_PER_GAME_DEFS = [
   ['monument_count', 'モニュメント獲得枚数（１ゲーム）', '枚'],
   ['monument_vp', 'モニュメント獲得点数（１ゲーム）', 'VP'],
   ['orphanage_vp', 'メインアクションでの獲得点数（１ゲーム）', 'VP'],
+  // 2026-10-05, per user request: "ダイス3個で終わったゲーム（追加ダイスなし）の最高得点" -- 他の
+  // per-gameカテゴリと違い、条件を満たさないゲームでは更新しない(CON/JOB系と同じ"該当したときだけ"
+  // パターン、maybeRecordAchievements参照)。訓練場等で色ダイスを1個でも増やしたら対象外になる。
+  ['dice3_score', 'ダイス３個最高得点', 'VP'],
 ];
 function buildAchievementCategories() {
   const categories = [
@@ -8046,6 +8050,14 @@ function maybeRecordAchievements(state) {
     recordAchievementIfNew(store, updatedKeys, 'monument_count', monumentRows.length);
     recordAchievementIfNew(store, updatedKeys, 'monument_vp', monumentRows.reduce((sum, r) => sum + (typeof r.row.VP === 'number' ? r.row.VP : 0), 0));
     recordAchievementIfNew(store, updatedKeys, 'orphanage_vp', player.orphanageVpGained || 0);
+    // ダイス3個最高得点 (2026-10-05) -- 色ダイスは一度増えたら減ることがなく(player.dice自体に一度
+    // 追加されたらゲーム終了までそのまま残る、executor.EXTRA_D_PLUS_ABC_COUNTの同じ前提を流用)、
+    // GAME_END時点のCOLOR dice数=INITIAL_COLOR_DICE(3)ならそのゲームを通じて一度も訓練場等で増やさな
+    // かったことになる。CON/JOB系と同じ「該当したときだけ更新」パターン。
+    const colorDiceCount = player.dice.filter((d) => d.kind === 'COLOR').length;
+    if (colorDiceCount === gameStateMod.INITIAL_COLOR_DICE) {
+      recordAchievementIfNew(store, updatedKeys, 'dice3_score', c.totalScore);
+    }
   }
   saveAchievements(store);
   if (updatedKeys.length > 0) showAchievementPopup(updatedKeys, store);
