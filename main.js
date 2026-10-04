@@ -260,6 +260,23 @@ function openTutorialMode() {
   location.reload();
 }
 
+// ローカル対戦 (2026-10-04, per user request: ゲーム中のボタン列からも「新しいローカル対戦を始める」が
+// 押せるように) -- 同じ「フラグを立てて再読み込み」方式だが、tutorialModeActive/weeklyChallengeActiveと
+// 違ってこのフラグ自体はcreateInitialStateの挙動を一切変えない(普通の新規ローカルゲームそのもの)。
+// 唯一の役目は、再読み込み後に入口バナーへまた戻ってしまわないよう、entryBannerDismissedを最初から
+// trueにすること。
+const LOCAL_BATTLE_PENDING_KEY = 'diceWpLocalBattlePending';
+function consumeLocalBattlePending() {
+  const pending = sessionStorage.getItem(LOCAL_BATTLE_PENDING_KEY) === '1';
+  if (pending) sessionStorage.removeItem(LOCAL_BATTLE_PENDING_KEY);
+  return pending;
+}
+const localBattlePending = consumeLocalBattlePending();
+function startLocalBattle() {
+  sessionStorage.setItem(LOCAL_BATTLE_PENDING_KEY, '1');
+  location.reload();
+}
+
 let weeklyChallengeSeatChosen = null; // playerId ('P1'..'P4') once chosen, null while still picking
 // 席選択画面での初期資源2枚選択のスクラッチ状態 (2026-09-07, per user request: "同じプレイヤーの初期資源
 // カードを２枚タップしたら これで始める Y/N で始まるように", replacing the earlier plain "○○で始める"
@@ -298,7 +315,7 @@ let startedFromRound3 = false;
 // 入口バナー (2026-10-04, per user request) -- 真っさらな新規ロードのときだけ表示(render()冒頭の分岐
 // 参照)。tutorialModeActive/weeklyChallengeActive/debugSetupPlanAtLoadのいずれかが既に真ということは
 // pending flag経由のreloadで来た = すでにモードを選んだ後、ということなので最初からスキップする。
-let entryBannerDismissed = tutorialModeActive || weeklyChallengeActive || !!debugSetupPlanAtLoad;
+let entryBannerDismissed = tutorialModeActive || weeklyChallengeActive || !!debugSetupPlanAtLoad || localBattlePending;
 function dismissEntryBanner() {
   entryBannerDismissed = true;
   render(STATE);
@@ -2538,6 +2555,9 @@ function renderDebugPanel(state) {
   // チュートリアル (2026-09-23): same "hidden for the whole attempt" rule as weekly-challenge-button
   // above -- re-opening it mid-attempt would reload into a brand-new random game, losing progress.
   document.getElementById('tutorial-mode-button').hidden = weeklyChallengeActive || tutorialModeActive;
+  // ローカル対戦 (2026-10-04): same "hidden for the whole attempt" rule -- reloading into a plain new
+  // local game mid-ウィークリーチャレンジ would abandon that attempt just the same.
+  document.getElementById('local-battle-button').hidden = weeklyChallengeActive;
   // テストゲーム開始 (2026-08-13, then 2026-09-07 follow-up): hidden by default, shown once デバッグモード
   // is switched ON -- but unconditionally hidden during a weekly challenge attempt regardless of debugMode
   // (per this function's own doc above -- this is the one still absolutely forbidden during an attempt).
@@ -12741,6 +12761,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('debug-mode-toggle').addEventListener('click', toggleDebugMode);
+  document.getElementById('local-battle-button').addEventListener('click', startLocalBattle);
   document.getElementById('weekly-challenge-button').addEventListener('click', openWeeklyChallenge);
   document.getElementById('tutorial-mode-button').addEventListener('click', openTutorialMode);
 

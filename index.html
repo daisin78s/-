@@ -172,6 +172,12 @@
            follow-up, reversing the original 2026-09-07 spec: "デバッグモードのターンまたいでの巻き戻しは
            できるようにしてください テストプレイは絶対ダメ") -- its own turn/round-crossing rewind never
            touches the initial setup, only this seat's own later decisions, so it's allowed mid-attempt. -->
+      <!-- ローカル対戦 (2026-10-04, per user request: 入口バナーの「ローカル対戦」と同じ役割を、ゲーム中
+           のボタン列からも押せるように。チュートリアル/ウィークリーチャレンジと同じ「フラグを立てて
+           再読み込み」方式だが、こちらは何も特別な状態を作らない(普通の新規ローカルゲーム)ので、
+           再読み込み後に入口バナーへ戻らず直接ゲーム画面へ行く、という違いだけがある -- see main.js's
+           startLocalBattle/entryBannerDismissed。 -->
+      <button type="button" id="local-battle-button" class="debug-panel__toggle">ローカル対戦</button>
       <button type="button" id="weekly-challenge-button" class="debug-panel__toggle">ウィークリーチャレンジ</button>
       <!-- チュートリアル (2026-09-23, per user request: "チュートリアルモードを作りたい") -- 通常のランダム
            ゲーム(P1=人間、P2-4=AI LV1)を新しく開始し、各フェーズの初回だけ#tutorial-bubbleでその場解説を
