@@ -4600,9 +4600,13 @@ body.tutorial-mode .change-highlight {
   gap: 20px;
 }
 
+/* 2026-10-04, per user request: "本格ワーカープレイスメントゲームを無料で遊べるボードゲームサイトと
+   大きく書きなおして" -- ゲーム名「ダイスWP」から、サイトのキャッチコピーに差し替え。2行に収まる長さ
+   なので(index.htmlの<br>参照)、縦積み時よりさらに大きいfont-sizeでも窮屈にならない。 */
 #entry-banner__title {
   text-align: center;
   font-size: 28px;
+  line-height: 1.4;
   color: var(--text);
   margin: 0 0 4px;
 }
