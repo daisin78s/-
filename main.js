@@ -289,6 +289,12 @@ if (tutorialModeActive) {
 // if a debug-setup plan (テストゲーム開始) was used to build the very state just created above.
 let usedDebugOrTestGameThisGame = !!debugSetupPlanAtLoad;
 
+// True once handleStartFromRound3Click has switched P1 over to human control (2026-10-04, for the
+// 実績記録 achievement's own "3Rから最高点数" category -- see ACHIEVEMENT_MODE_DEFS/maybeRecordAchievements).
+// Always also implies usedDebugOrTestGameThisGame=true, but is tracked separately so a 3Rから game records
+// into its own achievement category instead of mode_debug_on.
+let startedFromRound3 = false;
+
 // ---------------------------------------------------------------------------
 // AI players (2026-08-03, per user feedback: "プレイヤー1は人間 プレイヤー2 3 4はAIの対戦を実装して
 // 欲しい", generalized same day: "4人のプレイヤー人間 AIをそれぞれ選べるようにしてほしい", then split
@@ -1701,6 +1707,7 @@ function handleStartFromRound3Click() {
     playerRoles.set('P3', DEFAULT_AI_ROLE);
     playerRoles.set('P4', DEFAULT_AI_ROLE);
     usedDebugOrTestGameThisGame = true;
+    startedFromRound3 = true; // 実績記録の「3Rから最高点数」専用カテゴリ(maybeRecordAchievements参照)
 
     // Turn/round rewind from round 3 onward, but NEVER back into round 1/2 (2026-09-13, per user request:
     // "3Rからターンをまたいで戻れるようにして ただし1R2Rには戻れない") -- rounds 1-2 were bulk-resolved
@@ -7923,10 +7930,17 @@ const ACHIEVEMENT_MODE_DEFS = [
   ['mode_online', 'オンライン対戦最高点数', 'VP'],
   ['mode_debug_on', 'デバッグあり最高点数', 'VP'],
   ['mode_debug_off', 'デバッグなし最高点数', 'VP'],
+  // 2026-10-04, per user request ("3Rから最高点数 追加しました"): 「3Rから」デバッグボタン(1R/2RをAI
+  // LV4同士で生成し、3R開始時点でP1を人間に差し替える実験用機能、handleStartFromRound3Click参照)専用の
+  // カテゴリ。このボタン使用時はusedDebugOrTestGameThisGameも trueになる(デバッグ系の一種)が、
+  // mode_debug_onとは別枠で記録したいので、startedFromRound3が立っているときはそちらを優先する
+  // (maybeRecordAchievementsのmodeKey算出を参照)。
+  ['mode_round3_start', '3Rから最高点数', 'VP'],
 ];
 // 1ゲーム単位の累計系 (2026-10-03, per user confirmation): カード獲得枚数/LV2カード獲得枚数はA/B/Cカード
-// +Mカード(モニュメント)の合計、JOB/CON/RESOURCEは含まない。「カード以外の獲得点数」は当初「最終得点-
-// カードVP」の想定だったが、per user訂正で「孤児院のみメインアクションでの獲得点数」に変更 --
+// +Mカード(モニュメント)の合計、JOB/CON/RESOURCEは含まない。「メインアクションでの獲得点数」(2026-10-04に
+// 「カード以外の獲得点数」からラベルのみ改名、定義は変わらず)は当初「最終得点-カードVP」の想定だったが、
+// per user訂正で「孤児院のみメインアクションでの獲得点数」に変更 --
 // PlayerState.orphanageVpGained(2026-08-28からAI集計用に既にある、孤児院LV1/LV2のCHANGE(...,VP,...)累計)
 // をそのまま流用する。
 const ACHIEVEMENT_PER_GAME_DEFS = [
@@ -7934,7 +7948,7 @@ const ACHIEVEMENT_PER_GAME_DEFS = [
   ['lv2_card_count', 'LV2カード獲得枚数（１ゲーム）', '枚'],
   ['monument_count', 'モニュメント獲得枚数（１ゲーム）', '枚'],
   ['monument_vp', 'モニュメント獲得点数（１ゲーム）', 'VP'],
-  ['orphanage_vp', 'カード以外の獲得点数（１ゲーム）', 'VP'],
+  ['orphanage_vp', 'メインアクションでの獲得点数（１ゲーム）', 'VP'],
 ];
 function buildAchievementCategories() {
   const categories = [
@@ -8001,6 +8015,7 @@ function maybeRecordAchievements(state) {
   const modeKey = onlineRoomCode ? 'mode_online'
     : tutorialModeActive ? 'mode_tutorial'
     : weeklyChallengeActive ? 'mode_weekly'
+    : startedFromRound3 ? 'mode_round3_start'
     : (usedDebugOrTestGameThisGame ? 'mode_debug_on' : 'mode_debug_off');
   const store = loadAchievements();
   const updatedKeys = [];
