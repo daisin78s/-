@@ -7907,29 +7907,62 @@ function rankingCardDisplayName(faceId) {
 
 // 実績記録 (2026-10-03, per user request: "実績解除を記録したい") -- オンラインランキング(Firebase)とは
 // 別物の、このブラウザだけのlocalStorage自己ベスト記録(per user回答: "個々人のブラウザに記録するように
-// したい")。カテゴリはgame.xlsxの「実績解除」シートをそのまま反映: モード5種(チュートリアル/ウィークリー
-// /オンライン/総合/AI対戦) + CON12種(名前はCON.NAME、フェイスごとに別名のため`con_<faceId>`キー) +
-// JOB11種(`job_<id>`キー)。CON/JOBの表示名はgame.xlsx側の名前変更に追従するようハードコードせず
-// INDEX.raw.CON/JOBから都度組み立てる。
+// したい")。カテゴリはgame.xlsxの「実績記録」シート(2026-10-03、「実績解除」シートからリネーム+拡張)を
+// そのまま反映: モード6種(チュートリアル/ウィークリーチャレンジ/ウィークリーランキング順位/オンライン/
+// デバッグあり/デバッグなし) + CON12種(`con_<faceId>`キー) + JOB11種(`job_<id>`キー) + 1ゲーム単位の
+// 累計系5種(カード/LV2カード/モニュメント枚数、モニュメントVP、孤児院メインアクションVP)。CON/JOBの表示
+// 名はgame.xlsx側の名前変更に追従するようハードコードせずINDEX.raw.CON/JOBから都度組み立てる。
 const ACHIEVEMENT_STORAGE_KEY = 'diceWpAchievements';
-const ACHIEVEMENT_MODE_LABELS = [
-  ['mode_tutorial', 'チュートリアル最高獲得点数'],
-  ['mode_weekly', 'ウィークリーチャレンジ最高点数'],
-  ['mode_online', 'オンライン対戦最高点数'],
-  ['overall', '最高点数'],
-  ['mode_ai', 'AI対戦最高点数'],
+// unit: 表示用の単位(VP/枚/位)。betterIsLower: 既定は「大きいほど良い(VP/枚数)」、ウィークリーランキング
+// 順位だけ「小さいほど良い」(per user: "はい その後記録が抜かれても１位は１位で" -- 登録した瞬間の順位を
+// 以後ずっと保持し、ランキングから後で消えても記録は変わらない)。
+const ACHIEVEMENT_MODE_DEFS = [
+  ['mode_tutorial', 'チュートリアル最高獲得点数', 'VP'],
+  ['mode_weekly', 'ウィークリーチャレンジ最高点数', 'VP'],
+  ['weekly_rank', 'ウィークリーランキング最高順位', '位', true],
+  ['mode_online', 'オンライン対戦最高点数', 'VP'],
+  ['mode_debug_on', 'デバッグあり最高点数', 'VP'],
+  ['mode_debug_off', 'デバッグなし最高点数', 'VP'],
+];
+// 1ゲーム単位の累計系 (2026-10-03, per user confirmation): カード獲得枚数/LV2カード獲得枚数はA/B/Cカード
+// +Mカード(モニュメント)の合計、JOB/CON/RESOURCEは含まない。「カード以外の獲得点数」は当初「最終得点-
+// カードVP」の想定だったが、per user訂正で「孤児院のみメインアクションでの獲得点数」に変更 --
+// PlayerState.orphanageVpGained(2026-08-28からAI集計用に既にある、孤児院LV1/LV2のCHANGE(...,VP,...)累計)
+// をそのまま流用する。
+const ACHIEVEMENT_PER_GAME_DEFS = [
+  ['card_count', 'カード獲得枚数（１ゲーム）', '枚'],
+  ['lv2_card_count', 'LV2カード獲得枚数（１ゲーム）', '枚'],
+  ['monument_count', 'モニュメント獲得枚数（１ゲーム）', '枚'],
+  ['monument_vp', 'モニュメント獲得点数（１ゲーム）', 'VP'],
+  ['orphanage_vp', 'カード以外の獲得点数（１ゲーム）', 'VP'],
 ];
 function buildAchievementCategories() {
-  const categories = ACHIEVEMENT_MODE_LABELS.map(([key, label]) => ({ key, label }));
-  for (const row of INDEX.raw.CON) categories.push({ key: `con_${row.ID}`, label: `${row.NAME}最高点数` });
-  for (const row of INDEX.raw.JOB) categories.push({ key: `job_${row.ID}`, label: `${row.NAME}最高点数` });
+  const categories = [
+    ...ACHIEVEMENT_MODE_DEFS.map(([key, label, unit, betterIsLower]) => ({ key, label, unit, betterIsLower: !!betterIsLower })),
+  ];
+  for (const row of INDEX.raw.CON) categories.push({ key: `con_${row.ID}`, label: `${row.NAME}最高点数`, unit: 'VP' });
+  for (const row of INDEX.raw.JOB) categories.push({ key: `job_${row.ID}`, label: `${row.NAME}最高点数`, unit: 'VP' });
+  for (const [key, label, unit] of ACHIEVEMENT_PER_GAME_DEFS) categories.push({ key, label, unit });
   return categories;
 }
 const ACHIEVEMENT_CATEGORIES = buildAchievementCategories();
+const ACHIEVEMENT_CATEGORY_BY_KEY = new Map(ACHIEVEMENT_CATEGORIES.map((c) => [c.key, c]));
 
 function achievementLabel(key) {
-  const found = ACHIEVEMENT_CATEGORIES.find((c) => c.key === key);
+  const found = ACHIEVEMENT_CATEGORY_BY_KEY.get(key);
   return found ? found.label : key;
+}
+
+function achievementValueText(key, value) {
+  const found = ACHIEVEMENT_CATEGORY_BY_KEY.get(key);
+  const unit = found ? found.unit : 'VP';
+  return unit === '位' ? `${value}位` : `${value}${unit}`;
+}
+
+function isNewAchievementRecord(key, value, previous) {
+  if (previous === undefined) return true;
+  const found = ACHIEVEMENT_CATEGORY_BY_KEY.get(key);
+  return found && found.betterIsLower ? value < previous : value > previous;
 }
 
 /** Best-effort localStorage read, matching this app's existing "wrap every localStorage access"
@@ -7943,11 +7976,21 @@ function saveAchievements(store) {
   try { localStorage.setItem(ACHIEVEMENT_STORAGE_KEY, JSON.stringify(store)); } catch (e) { /* ignore */ }
 }
 
+function recordAchievementIfNew(store, updatedKeys, key, value) {
+  if (isNewAchievementRecord(key, value, store[key])) {
+    store[key] = value;
+    updatedKeys.push(key);
+  }
+}
+
 // GAME_ENDのたびに一度だけ実行(achievementsRecordedThisGameでrenderGameEndOverlayの再描画による二重
 // 記録/二重ポップアップを防ぐ -- このフラグはページ全体がリロードされる次のゲーム開始まで保持される、
 // 他のモジュールレベルの「このゲーム限り」フラグ(usedDebugOrTestGameThisGame等)と同じ idiom)。オンライン
 // 対戦では自分の席(localSeatId)の得点だけを記録する -- 他プレイヤーの得点がこのブラウザの自己ベストに
-// 混ざらないように(realTurnPlayerId等と同じ"!onlineRoomCode || localSeatId === x"パターン)。
+// 混ざらないように(realTurnPlayerId等と同じ"!onlineRoomCode || localSeatId === x"パターン)。モードの
+// 優先順位(オンライン > チュートリアル > ウィークリー > デバッグ有無)はranking.js登録時の3-way split
+// (usedDebugOrTestGameThisGame/weeklyChallengeActive、ranking登録ボタンのcategory算出と同じ考え方)に
+// オンラインを独立カテゴリとして追加したもの。
 let achievementsRecordedThisGame = false;
 function maybeRecordAchievements(state) {
   if (achievementsRecordedThisGame) return;
@@ -7958,29 +8001,44 @@ function maybeRecordAchievements(state) {
   const modeKey = onlineRoomCode ? 'mode_online'
     : tutorialModeActive ? 'mode_tutorial'
     : weeklyChallengeActive ? 'mode_weekly'
-    : 'mode_ai';
+    : (usedDebugOrTestGameThisGame ? 'mode_debug_on' : 'mode_debug_off');
   const store = loadAchievements();
   const updatedKeys = [];
   for (const c of candidates) {
-    const keys = ['overall', modeKey];
-    if (c.conFaceId) keys.push(`con_${c.conFaceId}`);
-    if (c.jobCardId) keys.push(`job_${c.jobCardId}`);
-    for (const key of keys) {
-      if (store[key] === undefined || c.totalScore > store[key]) {
-        store[key] = c.totalScore;
-        updatedKeys.push(key);
-      }
-    }
+    const player = state.players.find((p) => p.id === c.playerId);
+    const cardRows = executorMod.ownedCardRows(state, INDEX, c.playerId).filter((r) => /^[ABCM]/.test(r.physicalId));
+    const monumentRows = cardRows.filter((r) => r.physicalId.startsWith('M'));
+    recordAchievementIfNew(store, updatedKeys, modeKey, c.totalScore);
+    if (c.conFaceId) recordAchievementIfNew(store, updatedKeys, `con_${c.conFaceId}`, c.totalScore);
+    if (c.jobCardId) recordAchievementIfNew(store, updatedKeys, `job_${c.jobCardId}`, c.totalScore);
+    recordAchievementIfNew(store, updatedKeys, 'card_count', cardRows.length);
+    recordAchievementIfNew(store, updatedKeys, 'lv2_card_count', cardRows.filter((r) => r.inst.currentFaceId.endsWith('B')).length);
+    recordAchievementIfNew(store, updatedKeys, 'monument_count', monumentRows.length);
+    recordAchievementIfNew(store, updatedKeys, 'monument_vp', monumentRows.reduce((sum, r) => sum + (typeof r.row.VP === 'number' ? r.row.VP : 0), 0));
+    recordAchievementIfNew(store, updatedKeys, 'orphanage_vp', player.orphanageVpGained || 0);
   }
   saveAchievements(store);
   if (updatedKeys.length > 0) showAchievementPopup(updatedKeys, store);
+}
+
+// ウィークリーランキングへの登録成功時にだけ呼ばれる (2026-10-03, per user: "ウィークリーランキングに
+// 実際に登録した結果の順位を記録する" + "その後記録が抜かれても１位は１位で" -- 登録した瞬間の順位を
+// 恒久的に保持するスナップショットで、後からランキングが変動/削除されても追従しない)。
+function recordWeeklyRankAchievement(rank) {
+  const store = loadAchievements();
+  const updatedKeys = [];
+  recordAchievementIfNew(store, updatedKeys, 'weekly_rank', rank);
+  if (updatedKeys.length > 0) {
+    saveAchievements(store);
+    showAchievementPopup(updatedKeys, store);
+  }
 }
 
 function showAchievementPopup(updatedKeys, store) {
   const list = document.getElementById('achievement-popup-list');
   list.innerHTML = '';
   for (const key of updatedKeys) {
-    list.appendChild(el('div', 'achievement-row', `${achievementLabel(key)}: ${store[key]}VP`));
+    list.appendChild(el('div', 'achievement-row', `${achievementLabel(key)}: ${achievementValueText(key, store[key])}`));
   }
   document.getElementById('achievement-popup-overlay').hidden = false;
 }
@@ -7996,7 +8054,7 @@ function renderAchievementOverlay() {
   for (const { key, label } of ACHIEVEMENT_CATEGORIES) {
     const row = el('div', 'achievement-row');
     row.appendChild(el('span', 'achievement-row__label', label));
-    row.appendChild(el('span', 'achievement-row__score', store[key] !== undefined ? `${store[key]}VP` : '未記録'));
+    row.appendChild(el('span', 'achievement-row__score', store[key] !== undefined ? achievementValueText(key, store[key]) : '未記録'));
     list.appendChild(row);
   }
 }
@@ -8117,6 +8175,15 @@ function renderRankingRegisterList(state) {
       }, replayHistory).then((entry) => {
         registeredRankingPlayerIds.add(c.playerId);
         renderRankingOverlay(STATE, entry.id, entry.category);
+        // 実績記録: ウィークリーランキング最高順位 (2026-10-03) -- 登録直後のソート済み一覧から自分の
+        // 順位を1回だけ拾う。以後ランキングが変動/削除されても記録済みの順位はそのまま(recordWeeklyRank
+        // Achievement自身のdoc参照)。
+        if (entry.category === 'weekly') {
+          RankingStorage.list('weekly', entry.weekId).then((entries) => {
+            const rank = entries.findIndex((e) => e.id === entry.id) + 1;
+            if (rank > 0) recordWeeklyRankAchievement(rank);
+          }).catch(() => { /* 実績記録はbest-effort、失敗しても登録自体は成功扱いのまま */ });
+        }
       }).catch((err) => {
         registerButton.disabled = false;
         registerButton.innerHTML = '';
