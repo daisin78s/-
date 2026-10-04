@@ -4579,6 +4579,18 @@ body.tutorial-mode .change-highlight {
   padding: 16px;
 }
 
+/* 2026-10-04, same bug class as #app[hidden]/#weekly-seat-picker[hidden] above (see that rule's own doc):
+   an author-stylesheet ID selector's `display` declaration always wins over the UA stylesheet's generic
+   `[hidden]{display:none}`, so #entry-banner's own `display:flex` above kept it visible (and on top of
+   #app, fixed+z-index:300) even after main.js's render() set hidden=true -- banner buttons' click
+   handlers ran correctly (per user report confirmed working via headless real-click testing) but the
+   banner itself never visually disappeared, matching the user's own report: "ダブルクリックすると
+   スクロールバーが動きますが画面が変わらない" (the now-also-visible #app underneath added scrollable
+   height, while the still-displayed fixed banner stayed pinned over the viewport regardless of scroll). */
+#entry-banner[hidden] {
+  display: none;
+}
+
 #entry-banner__box {
   width: 100%;
   max-width: 480px;
