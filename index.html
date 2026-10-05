@@ -20,7 +20,17 @@
        + 下に小さく3つ(カードリスト/ランキング/実績記録、ゲーム中のボタン列と同じ処理を共有)。 -->
   <div id="entry-banner">
     <div id="entry-banner__box">
-      <h1 id="entry-banner__title">本格ワーカープレイスメントゲームを<br>無料で遊べるボードゲームサイト</h1>
+      <!-- トップ画像 (2026-10-05, per user提供: "トップ画像用意しました" + "下のボタンを押すとチュートリアル
+           やローカル対戦に飛ぶ" + "今すぐプレイはローカル対戦に飛ぶ") -- 元画像(S__35725317)は下部に見た目
+           だけのボタン行も含んでいたが、あれは実際には押せない装飾だったため、assets/entry-banner-hero.jpg
+           はそのボタン行(y>=782px)を切り落とした上部(タブレット写真+見出し+CTA部分)だけ。画像に焼き込み
+           済みの「今すぐプレイ」ボタンの上には透明な実ボタン(#entry-banner-hero-cta)を重ね、ローカル対戦
+           と同じ処理につなぐ(元画像1536x957中の座標(75,476)-(414,563)を%換算、CSS参照)。それ以外の実際に
+           押せるボタンはこの画像の下の#entry-banner__primary/__secondary(既存のまま)。 -->
+      <div id="entry-banner__hero-wrap">
+        <img id="entry-banner__hero" src="assets/entry-banner-hero.jpg" alt="ダイスで築く、あなただけの王国。ダイスをワーカーとして配置し、4ラウンドで最高得点を目指す本格ワーカープレイスメントゲーム。">
+        <button type="button" id="entry-banner-hero-cta" aria-label="今すぐプレイ"></button>
+      </div>
       <div id="entry-banner__primary">
         <button type="button" class="entry-banner__primary-button" id="entry-banner-tutorial-button">チュートリアル</button>
         <button type="button" class="entry-banner__primary-button" id="entry-banner-local-button">ローカル対戦</button>

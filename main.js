@@ -12783,6 +12783,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // 同様にバナーを閉じてから、ゲーム中のボタン列と全く同じ関数を呼ぶ。
   document.getElementById('entry-banner-tutorial-button').addEventListener('click', openTutorialMode);
   document.getElementById('entry-banner-local-button').addEventListener('click', dismissEntryBanner);
+  // トップ画像に焼き込み済みの「今すぐプレイ」ボタンの上に重ねた透明ボタン (2026-10-05, per user: "今すぐ
+  // プレイはローカル対戦に飛ぶ") -- ローカル対戦ボタンと全く同じ処理。
+  document.getElementById('entry-banner-hero-cta').addEventListener('click', dismissEntryBanner);
   document.getElementById('entry-banner-online-button').addEventListener('click', () => { dismissEntryBanner(); openOnlineLobby(); });
   document.getElementById('entry-banner-weekly-button').addEventListener('click', openWeeklyChallenge);
   document.getElementById('entry-banner-cardlist-button').addEventListener('click', () => { dismissEntryBanner(); openCardListOverlay(); });
