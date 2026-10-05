@@ -4576,7 +4576,9 @@ body.tutorial-mode .change-highlight {
   align-items: center;
   justify-content: center;
   background: var(--bg);
-  padding: 16px;
+  /* 2026-10-05, per user request: "画像を全画面にすることはできますか" -- 周囲の余白をゼロにして、
+     画像を画面いっぱいに広げる(下の#entry-banner__heroのmax-width/max-height:100vw/100vh参照)。 */
+  padding: 0;
 }
 
 /* 2026-10-04, same bug class as #app[hidden]/#weekly-seat-picker[hidden] above (see that rule's own doc):
@@ -4593,78 +4595,67 @@ body.tutorial-mode .change-highlight {
 
 #entry-banner__box {
   width: 100%;
-  /* 2026-10-05: 480px(テキスト見出し時代)から拡大 -- トップ画像(1536x782、アスペクト比約1.96:1)を
-     窮屈にせず見せるため。 */
-  max-width: 900px;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  gap: 20px;
+  align-items: center;
+  justify-content: center;
 }
 
-/* トップ画像 (2026-10-05, per user提供) -- index.htmlの#entry-banner__hero-wrap/__hero/hero-ctaの
-   own doc参照。画像は幅いっぱいに responsive、透明な#entry-banner-hero-ctaを画像内の「今すぐプレイ」
-   ボタンの実ピクセル位置(元画像1536x957中の(75,476)-(414,563))に%換算で重ねる。 */
+/* トップ画像 (2026-10-05, per user提供、"青い四角のボタンはいらない"per user訂正後の最終形) --
+   index.htmlの#entry-banner__hero-wrap/__hero/各.entry-banner__hotspotの own doc参照。画像自体に
+   「今すぐプレイ」CTA+7つのボタンが絵として描かれているので、それぞれの実ピクセル位置(元画像
+   1536x957基準)を%換算した透明ボタンを重ねる。座標はassets/entry-banner-hero.jpgの元になった
+   PNGにPillowでグリッド線を引いて目視で特定したもの(ボタン行はy:783-955、各ボタンはx方向に
+   ほぼ等間隔で幅199px・間隔8px、左端44pxから)。 */
 #entry-banner__hero-wrap {
   position: relative;
   line-height: 0;
 }
 
 #entry-banner__hero {
-  width: 100%;
-  height: auto;
+  /* アスペクト比(1536x957)を保ったまま、画面に収まる最大サイズまで拡大 -- object-fit:coverで切り抜く
+     とホットスポットの%座標がずれるため、widthとheightどちらも100vw/100vhを上限にしてcontain相当の
+     挙動にする(.entry-banner__hotspotの%位置は常にこの画像自身のレンダリングサイズを基準にできる)。 */
   display: block;
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
+  width: auto;
+  height: auto;
+  max-width: 100vw;
+  max-height: 100vh;
 }
 
-#entry-banner-hero-cta {
+.entry-banner__hotspot {
   position: absolute;
-  left: 4.88%;
-  top: 60.87%;
-  width: 22.07%;
-  height: 11.13%;
   background: transparent;
   border: none;
   padding: 0;
   cursor: pointer;
 }
 
-/* 2026-10-04, per user request: "縦に4つ並べるのではなく四角く並べたい" -- 縦積みから2x2グリッドへ。 */
-#entry-banner__primary {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+/* 今すぐプレイ CTA -- 元画像中の(75,476)-(414,563)を%換算。 */
+#entry-banner-hero-cta {
+  left: 4.88%;
+  top: 49.74%;
+  width: 22.07%;
+  height: 9.09%;
 }
 
-.entry-banner__primary-button {
-  aspect-ratio: 1 / 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 12px;
-  font-size: 18px;
-  font-weight: 700;
-  color: #fff;
-  background: var(--accent);
-  border: none;
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
+/* 下部の7ボタン行 -- 全ボタン共通でtop:81.82%/height:17.97%/width:12.96%、leftだけ等間隔にずらす。 */
+#entry-banner-tutorial-button,
+#entry-banner-local-button,
+#entry-banner-weekly-button,
+#entry-banner-online-button,
+#entry-banner-cardlist-button,
+#entry-banner-ranking-button,
+#entry-banner-achievement-button {
+  top: 81.82%;
+  height: 17.97%;
+  width: 12.96%;
 }
-
-#entry-banner__secondary {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.entry-banner__secondary-button {
-  padding: 8px 14px;
-  font-size: 13px;
-  color: var(--text-muted);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-}
+#entry-banner-tutorial-button { left: 2.86%; }
+#entry-banner-local-button { left: 16.34%; }
+#entry-banner-weekly-button { left: 29.82%; }
+#entry-banner-online-button { left: 43.29%; }
+#entry-banner-cardlist-button { left: 56.77%; }
+#entry-banner-ranking-button { left: 70.25%; }
+#entry-banner-achievement-button { left: 83.72%; }
