@@ -363,10 +363,11 @@ const DEFAULT_AI_ROLE = PLAYER_ROLE_OPTIONS[PLAYER_ROLE_OPTIONS.length - 1][0];
 // seatIsHuman sync already uses.
 // チュートリアルモード: P2-4のAIレベル。2026-09-23、当初は "AILV1で" 確認済みでAI_LV1(最も手加減する
 // レベル)を使っていたが、2026-09-26、per user request: "チュートリアルのAILVを5にしてください" -- 当時の
-// AI_LV5(最も強いレベル)に変更。2026-10-04のLV1/2/3統合で旧LV5は新AI_LV3になった(最も強いレベルという
-// 位置づけは変わらない)ので、ここもそのまま追従。一般市民(JOB001)を必ずJOBプールに入れる+AIには一般市民
-// を選ばせない仕組み(dealJobPool/ONBOARDING分岐のtutorialExcludedJobs参照)と合わせて使う想定。
-const TUTORIAL_AI_ROLE = 'AI_LV3';
+// AI_LV5(最も強いレベル)に変更。2026-10-04のLV1/2/3統合で旧LV5は新AI_LV3になり一旦そのまま追従したが、
+// 2026-10-06、per user request: "チュートリアルのAILV1にして" -- AI_LV1(新しい3段階のうち最も手加減する
+// レベル)に再変更。一般市民(JOB001)を必ずJOBプールに入れる+AIには一般市民を選ばせない仕組み
+// (dealJobPool/ONBOARDING分岐のtutorialExcludedJobs参照)と合わせて使う想定。
+const TUTORIAL_AI_ROLE = 'AI_LV1';
 const playerRoles = weeklyChallengeActive
   ? new Map([['P1', DEFAULT_AI_ROLE], ['P2', DEFAULT_AI_ROLE], ['P3', DEFAULT_AI_ROLE], ['P4', DEFAULT_AI_ROLE]])
   : new Map([
