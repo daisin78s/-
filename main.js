@@ -6824,7 +6824,10 @@ function renderFeeCollectButton(container, state, player, canAct) {
 function renderTurnEndButton(container, state, player, canAct) {
   container.innerHTML = '';
   if (!canAct || !turnActionTaken) return;
-  const btn = el('button', 'free-action-button turn-end-button', 'ターン終了');
+  // 2026-10-06, per user request: "ダイスを置いたら光るようにして" -- このボタン自体、ダイス配置などで
+  // turnActionTakenがtrueになって初めて出現する(直前のif参照)ので、出現した時点で常にchange-highlight
+  // (このアプリ共通の「光る」演出、.change-highlight参照)を付ける。
+  const btn = el('button', 'free-action-button turn-end-button change-highlight', 'ターン終了');
   btn.type = 'button';
   btn.addEventListener('click', () => {
     attemptAdvanceTurn(state, player.id);
