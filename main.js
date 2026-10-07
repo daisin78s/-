@@ -6461,7 +6461,13 @@ function renderPlayers(state, next) {
     // 一番右(index 2)の2個が未配置のまま残っている。.find()(配列内で最初に見つかったもの)だと未配置の
     // うち一番左を拾ってしまうため、.filter()して末尾(元の配列順で最後=一番右)を取る必要がある。
     const tutorialRightmostDieId = ((tutorialRightmostDieGlowing || tutorialKabukichoGlowing) && player.id === 'P1')
-      ? (() => { const cs = player.dice.filter((d) => d.kind === 'COLOR' && !d.placedMapId); return cs[cs.length - 1] ? cs[cs.length - 1].id : null; })()
+      ? (() => {
+          let cs = player.dice.filter((d) => d.kind === 'COLOR' && !d.placedMapId);
+          // kabukicho_placement_intro専用 (2026-10-07, per user request: "このときダイス1を光らさない") --
+          // 値1のダイスは後の訓練場デモ用に残しておきたいため、歓楽街の「一番右」候補からは除外する。
+          if (tutorialKabukichoGlowing) cs = cs.filter((d) => d.value !== 1);
+          return cs[cs.length - 1] ? cs[cs.length - 1].id : null;
+        })()
       : null;
     // card_acquisition_introの「残ったダイス」の光る演出専用 (2026-09-27, per user request: "この時残った
     // ダイスと王宮の次に配置可能なスロットを光らせる") -- この時点では3個すべて(農園+城下町デモ用)配置済み
