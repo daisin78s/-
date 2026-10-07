@@ -3013,7 +3013,10 @@ body.tutorial-mode .change-highlight {
   display: block;
   width: 100%;
   margin-top: 10px;
-  padding: 8px 10px;
+  /* 縦幅2倍 (2026-10-07, per user request: "JOB選択 制約選択の決定ボタンの縦幅を2倍にしたい" -- JOB/CON
+     だけでなくこのボタンを共有する全場面(ショップのBUILD候補、初期資源カード選択等)にまとめて適用
+     (per user選択: "1"=全部まとめて)。縦方向の上下paddingだけ8px→16pxに倍増、横paddingはそのまま。 */
+  padding: 16px 10px;
   border: none;
   border-radius: var(--radius-sm);
   background: var(--accent);
