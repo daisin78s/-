@@ -9731,6 +9731,55 @@ const TUTORIAL_STEPS = [
     body: '2ラウンドになりました',
     nextLabel: '次へ',
   },
+  // 2026-10-07, per user request (Excelの新しい行T062〜T066) -- round2_turn1_intro_hintに続く、ラウンド
+  // 開始時の処理(色ダイス回収+振り直し、カードのアンタップ)の説明と、強化カード/モニュメント解禁の
+  // 予告。全てround2_turn1_intro_hintと同じmatch条件(state.round===2である間ずっと真)を共有し、通常の
+  // 直線探索で連続して表示される。
+  {
+    id: 'round2_dice_reset_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1' && state.round === 2;
+    },
+    body: '2ラウンドになるとエリアに置かれた色ダイスは回収されふりなおします',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'round2_card_untap_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1' && state.round === 2;
+    },
+    body: 'カードはすべてアンタップ（起き上がる）されて再び使えます',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'round2_special_unlock_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1' && state.round === 2;
+    },
+    body: 'このラウンドから強化カードと',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'round2_monument_appear_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1' && state.round === 2;
+    },
+    body: 'モニュメントカードが出てきます\nVPを稼ぐにはモニュメントカードを獲得するのが有効です\nただしモニュメントカードは必要な資源やダイスが多いのでまずは通常カードや強化カードで資源を効率よくとれるようになってから狙いに行きましょう',
+    nextLabel: '次へ',
+  },
+  {
+    id: 'round2_rules_end_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1' && state.round === 2;
+    },
+    body: 'ルール説明は以上になります',
+    nextLabel: '次へ',
+  },
   // 2026-10-02, per user request (Excelの新しい行T088〜T094) -- round2_turn1_intro_hintに続く、SPECIAL/
   // モニュメントショップ解禁の詳しい説明(モニュメントの性質・獲得ルール・記念碑を使った具体例)。T088〜
   // T093はround2_turn1_intro_hintと同じmatch条件(state.round===2である間ずっと真)を共有し、通常の直線
@@ -10589,7 +10638,9 @@ function renderTutorialOverlay(state) {
     }
     // カード獲得の説明のスクロール (2026-09-29, Excel T022/T024〜T027) -- 🔨は盤面(main_action_introと同じ考え方)、
     // ダイス目別のSHOPは#shops(ショップ全体)を対象にする。
-    if (step.id === 'build_icon_hint') {
+    // round2_dice_reset_hint(2026-10-07, Excel T062「スクロールする」) -- 盤面上の配置済みダイス
+    // (tutorialPlacedDiceGlowing)が見えるように、build_icon_hintと同じ#board対象のグループに合流。
+    if (step.id === 'build_icon_hint' || step.id === 'round2_dice_reset_hint') {
       const boardEl = document.getElementById('board');
       if (boardEl) {
         const bubbleWrap = document.getElementById('tutorial-bubble-wrap');
@@ -10607,7 +10658,10 @@ function renderTutorialOverlay(state) {
       // special_shop_unlock_intro(2026-10-03, Excel T084, per user request: "T084 スクロールするに") --
       // 光っているSHOP201-203が画面外のときに見える範囲の中央へスクロールする、既存の#shops全体を
       // 対象にするこのグループと同じ考え方。
-      || step.id === 'special_shop_unlock_intro') {
+      || step.id === 'special_shop_unlock_intro'
+      // round2_special_unlock_hint(2026-10-07, Excel T064「スクロールする」) -- 同じくSHOP201-203が
+      // 光るので、同じグループに合流。
+      || step.id === 'round2_special_unlock_hint') {
       const shopsEl = document.getElementById('shops');
       if (shopsEl) {
         const bubbleWrap = document.getElementById('tutorial-bubble-wrap');
@@ -10629,9 +10683,10 @@ function renderTutorialOverlay(state) {
         window.scrollBy({ top: rect.bottom - (visibleHeight - 8), behavior: 'auto' });
       }
     }
-    // card_untap_intro_hintが見えるようにスクロール (2026-10-07, Excel T096「スクロールする」) -- あなたの
-    // 持ちカード欄(.card-group[data-player-id="P1"])を見える範囲の中央に寄せる、他のグループと同じ考え方。
-    if (step.id === 'card_untap_intro_hint') {
+    // card_untap_intro_hint/round2_card_untap_hintが見えるようにスクロール (2026-10-07, Excel T096/T063
+    // 「スクロールする」) -- あなたの持ちカード欄(.card-group[data-player-id="P1"])を見える範囲の中央に
+    // 寄せる、他のグループと同じ考え方。
+    if (step.id === 'card_untap_intro_hint' || step.id === 'round2_card_untap_hint') {
       const cardGroupEl = document.querySelector('.card-group[data-player-id="P1"]');
       if (cardGroupEl) {
         const bubbleWrap = document.getElementById('tutorial-bubble-wrap');
@@ -11318,7 +11373,15 @@ function dismissTutorialStep() {
   // 「光る」の受け渡し。T088→SHOP201-203+SHOP001-006全部、T089→SHOP001-006のみ、T090→モニュメントの
   // 「ダイス目〇以上」(tutorialMonumentReqGlowing)、T091/T092→光るなし、T093→記念碑(M001)のみ
   // (tutorialShopCardTypeGlowを'M001'に設定して再利用)、T094→光るなし。
-  if (tutorialCurrentStepId === 'round2_turn1_intro_hint') tutorialBuildShopGlowSlots = ['SHOP201', 'SHOP202', 'SHOP203', 'SHOP001', 'SHOP002', 'SHOP003', 'SHOP004', 'SHOP005', 'SHOP006'];
+  // 2026-10-07, per user request (Excel T062〜T066) -- round2_turn1_intro_hintとround2_shop_unlock_
+  // summary_hintの間に5ステップ挿入。旧来round2_turn1_intro_hintが直接セットしていた「SHOP201-203+
+  // SHOP001-006が全部光る」は、今はround2_rules_end_hintの終了時まで先送りする(以下の新しいチェーン参照)。
+  if (tutorialCurrentStepId === 'round2_turn1_intro_hint') tutorialPlacedDiceGlowing = true;
+  if (tutorialCurrentStepId === 'round2_dice_reset_hint') { tutorialPlacedDiceGlowing = false; tutorialUntapCardGlowing = true; }
+  if (tutorialCurrentStepId === 'round2_card_untap_hint') { tutorialUntapCardGlowing = false; tutorialBuildShopGlowSlots = ['SHOP201', 'SHOP202', 'SHOP203']; }
+  if (tutorialCurrentStepId === 'round2_special_unlock_hint') tutorialBuildShopGlowSlots = ['SHOP001', 'SHOP002', 'SHOP003', 'SHOP004', 'SHOP005', 'SHOP006'];
+  if (tutorialCurrentStepId === 'round2_monument_appear_hint') tutorialBuildShopGlowSlots = null;
+  if (tutorialCurrentStepId === 'round2_rules_end_hint') tutorialBuildShopGlowSlots = ['SHOP201', 'SHOP202', 'SHOP203', 'SHOP001', 'SHOP002', 'SHOP003', 'SHOP004', 'SHOP005', 'SHOP006'];
   if (tutorialCurrentStepId === 'round2_shop_unlock_summary_hint') tutorialBuildShopGlowSlots = ['SHOP001', 'SHOP002', 'SHOP003', 'SHOP004', 'SHOP005', 'SHOP006'];
   if (tutorialCurrentStepId === 'monument_vp_only_hint') {
     tutorialBuildShopGlowSlots = null;
