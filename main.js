@@ -7853,6 +7853,11 @@ function renderPlayerCards(state, next) {
         const emblemEl = cardNode.querySelector(':scope > .shop-card__emblem');
         if (emblemEl) emblemEl.classList.add('change-highlight');
       }
+      // card_untap_intro_hint(2026-10-07, Excel T096)の「光る」演出(あなたのアンタップされているカード) --
+      // 対象はカード全体(サブ要素ではない)なので、上の2つと違いcellごと光らせる。
+      if (tutorialUntapCardGlowing && player.id === 'P1' && !cardState.tapped) {
+        cell.classList.add('change-highlight');
+      }
       attachTapToggle(cardNode, cardState, cardState.currentFaceId, canUseTap, physicalId);
       cell.appendChild(cardNode);
       listEl.appendChild(cell);
@@ -9802,6 +9807,19 @@ const TUTORIAL_STEPS = [
   // +2)で、round3_turn1_intro_hint〜extra_monument_surprise_hintは実際にラウンド3になった瞬間の別条件
   // (state.round===3である間ずっと真)を共有し、通常の直線探索で連続して表示される(round2_turn1_intro_hint
   // 〜monument_vs_special_urgency_hintと同じパターン)。
+  // 2026-10-07, per user request (Excelの新しい行T096) -- monument_vs_special_urgency_hintとwave2_special_
+  // unlock_hintの間に挿入。wave2_special_unlock_hintと全く同じ「2ラウンド3ターン目」条件を共有し、直線探索で
+  // 連続して表示される。光る: あなたのアンタップされているカード(renderPlayerCards参照)。
+  {
+    id: 'card_untap_intro_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      return next.type === 'TURN' && next.playerId === 'P1'
+        && tutorialP1RealTurnEndCountAtRound2Start !== null
+        && tutorialP1RealTurnEndCount === tutorialP1RealTurnEndCountAtRound2Start + 2;
+    },
+    body: 'それからラウンド開始時にすべてのカードがアンタップ（起き上がる）して再び使えるようになります\n使い忘れないように気をつけましょう',
+  },
   {
     id: 'wave2_special_unlock_hint',
     match: (state) => {
@@ -10595,6 +10613,18 @@ function renderTutorialOverlay(state) {
         window.scrollBy({ top: rect.bottom - (visibleHeight - 8), behavior: 'auto' });
       }
     }
+    // card_untap_intro_hintが見えるようにスクロール (2026-10-07, Excel T096「スクロールする」) -- あなたの
+    // 持ちカード欄(.card-group[data-player-id="P1"])を見える範囲の中央に寄せる、他のグループと同じ考え方。
+    if (step.id === 'card_untap_intro_hint') {
+      const cardGroupEl = document.querySelector('.card-group[data-player-id="P1"]');
+      if (cardGroupEl) {
+        const bubbleWrap = document.getElementById('tutorial-bubble-wrap');
+        const visibleHeight = (bubbleWrap && !bubbleWrap.hidden) ? bubbleWrap.getBoundingClientRect().top : window.innerHeight;
+        const rect = cardGroupEl.getBoundingClientRect();
+        const desiredTop = Math.max(0, (visibleHeight - rect.height) / 2);
+        window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
+      }
+    }
     // castletown_alt_cathedral_hint/castletown_alt_guild_hintが見えるようにスクロール (2026-09-29) -- 直前のカード説明
     // (castletown_territory_cards_hint/castletown_fortune_cards_hint)でSHOPへスクロールしたため、光らせる
     // 信心(B)/金貨(C)を含むP1の資源欄が画面外に出てしまう。initial_resources_revealと同じ考え方で戻す(ただし下端寄せ、下記)。
@@ -11286,7 +11316,13 @@ function dismissTutorialStep() {
   // wave2_special_unlock_hint〜extra_monument_surprise_hint(2026-10-03, Excel T095〜T098)の「光る」の
   // 受け渡し。T095→元老院/王女/栄光の証(A301/B301/C301、tutorialShopCardTypeGlowに配列を設定)、T096→
   // 光るなし、T097→ショップの残り枚数欄(tutorialShopRemainingCountGlowing)、T098→光るなし。
-  if (tutorialCurrentStepId === 'monument_vs_special_urgency_hint') tutorialShopCardTypeGlow = ['A301', 'B301', 'C301'];
+  // 2026-10-07, per user request (Excel T096) -- monument_vs_special_urgency_hintの直後にcard_untap_
+  // intro_hintが割り込んだので、tutorialShopCardTypeGlowのセットはそちらの終了時に先送り。
+  if (tutorialCurrentStepId === 'monument_vs_special_urgency_hint') tutorialUntapCardGlowing = true;
+  if (tutorialCurrentStepId === 'card_untap_intro_hint') {
+    tutorialUntapCardGlowing = false;
+    tutorialShopCardTypeGlow = ['A301', 'B301', 'C301'];
+  }
   if (tutorialCurrentStepId === 'wave2_special_unlock_hint') tutorialShopCardTypeGlow = null;
   if (tutorialCurrentStepId === 'round3_turn1_intro_hint') tutorialShopRemainingCountGlowing = true;
   if (tutorialCurrentStepId === 'shop_remaining_count_hint') tutorialShopRemainingCountGlowing = false;
@@ -11541,6 +11577,9 @@ let tutorialShopRemainingCountGlowing = false;
 // endgame_emblem_intro_hint(2026-10-03, Excel T102)の「光る」演出(あなたの獲得したカードのエンブレム) --
 // renderPlayerCards参照。表示され続けている間ずっとtrueになる継続フラグ。
 let tutorialOwnedCardEmblemGlowing = false;
+// card_untap_intro_hint(2026-10-07, Excel T096)の「光る」演出(あなたのアンタップされているカード) --
+// renderPlayerCards参照。表示され続けている間ずっとtrueになる継続フラグ。
+let tutorialUntapCardGlowing = false;
 // quest_table_intro_hint(2026-10-03, Excel T104)の「光る」演出(クエスト表全体、.qst-panel) -- renderQsts
 // 参照。表示され続けている間ずっとtrueになる継続フラグ。
 let tutorialQstTableGlowing = false;
