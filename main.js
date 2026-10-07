@@ -196,7 +196,11 @@ function createInitialState(plan, forcedSeed) {
   setupMod.rollInitialColorDice(state, tutorialModeActive
     ? { P1: [1, 6, 3], P2: [3, 6, 1], P3: [5, 2, 6], P4: [3, 5, 4] }
     : undefined);
-  const forcedCon = plan && plan.con.length > 0 ? { P1: gameStateMod.splitCardId(plan.con[0]).physicalId } : undefined;
+  // チュートリアルではP1に必ず怠惰/憤怒(CON005)を配る (2026-10-07, per user request: "制約カードを
+  // 怠惰に限定したい" -- 裏面(憤怒)は選択肢に出さない形にするので(renderConFacesRow参照)、物理カード
+  // 自体をCON005に固定しておく必要がある)。
+  const forcedCon = tutorialModeActive ? { P1: 'CON005' }
+    : plan && plan.con.length > 0 ? { P1: gameStateMod.splitCardId(plan.con[0]).physicalId } : undefined;
   // チュートリアルでは祝福/色欲(CON001)を誰にも配らない (2026-09-26, per user request: "チュートリアルでは
   // 祝福 色欲 プレイヤーに配られないようにしてほしい")。
   setupMod.dealConCards(state, forcedCon, tutorialModeActive ? ['CON001'] : undefined);
@@ -7430,7 +7434,13 @@ function renderConFacesRow(container, player, onPick) {
   // per user feedback) -- container here is always a freshly-cloned template node (see
   // renderPlayerCards), so a plain add (no toggle-off) is enough, unlike renderJobPool's #job-pool.
   if (onPick) container.classList.add('onboard-panel--active');
-  for (const face of ['A', 'B']) {
+  // チュートリアルでは裏面(憤怒)を表示しない (2026-10-07, per user request: "表(怠惰)を強制的に確定させる
+  // ただし裏はでないが選択画面は出て選ばせる" -- JOB選択のように選べるが無効化されたボタンとして見せる
+  // のではなく、そもそも裏面のカード自体を出さない。表面(怠惰)だけが並ぶので、選択画面(タップ→「表面を
+  // 選ぶ」ボタン)自体は従来通り体験できる)。読み取り専用のプレビュー(renderConPreview)と実際の選択
+  // (renderConChoice)の両方がこの関数を共有しているので、ここ一箇所で両方に効く。
+  const faces = (tutorialModeActive && player.id === 'P1') ? ['A'] : ['A', 'B'];
+  for (const face of faces) {
     const faceId = `${player.conPhysicalId}${face}`;
     const cardNode = buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true });
     const tall = cardNode.classList.contains('shop-card--tall');
