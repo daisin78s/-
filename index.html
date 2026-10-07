@@ -9,8 +9,13 @@
 </head>
 <body>
   <!-- 著作権表示 (2026-10-03, per user request) -- 常時表示だが画面右下に小さく/控えめに配置し、
-       クリックを邪魔しないようpointer-events:noneにする(style.css参照)。 -->
-  <div id="copyright-notice">© 2026 higebucho</div>
+       クリックを邪魔しないようpointer-events:noneにする(style.css参照)。
+       バージョン表示 (2026-10-08, per user request: "そこまでキャッシュが原因だったと疑うようであれば
+       Ver.1.001などつけてください") -- 更新のたびに増やす手動のバージョン番号。表示されている番号が
+       古ければ、ブラウザがキャッシュした古いファイルを見ている/pushがまだ反映されていないと一目で
+       わかるようにするための目印(実際の挙動には一切影響しない、純粋な表示用の目印)。main.js/index.html/
+       data/をpushするたびにここをインクリメントすること。 -->
+  <div id="copyright-notice">© 2026 higebucho Ver.1.001</div>
 
   <!-- 入口バナー (2026-10-04, per user request: "HPに入ったときに大き目バナーを用意して導線をわかりやすく
        したい") -- #app/#weekly-seat-pickerと同じ「画面を丸ごと差し替える」パターン(main.jsのrender()
