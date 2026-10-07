@@ -6576,6 +6576,11 @@ function renderPlayers(state, next) {
       if (die.id === tutorialCardAcquisitionDieId) dieNode.classList.add('change-highlight');
       // training_ground_placement_introの「光る」演出(残ったダイス) -- tutorialTrainingDieId's own doc。
       if (die.id === tutorialTrainingDieId) dieNode.classList.add('change-highlight');
+      // kabukicho_placement_intro専用の最終防御 (2026-10-07, per user report: "ダイスの1の目と3の目が
+      // 光っています 1の目は置かないので1の目は光らないようにしてください") -- tutorialRightmostDieId
+      // 自体は既に値1を除外して計算しているが(2026-10-07の前回修正)、念のためこの場面では値1のダイスに
+      // change-highlightが付いていたら上の条件に関わらずここで確実に取り除く。
+      if (tutorialKabukichoGlowing && player.id === 'P1' && die.value === 1) dieNode.classList.remove('change-highlight');
       rowEl.appendChild(dieNode);
     }
 
