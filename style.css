@@ -4540,6 +4540,24 @@ body.tutorial-mode .change-highlight {
   user-select: none;
 }
 
+/* 入口バナー(トップ画像)上のバージョン表示 (2026-10-08, per user request: "セリフで見えにくいので
+   トップ画像の右下にも") -- #copyright-noticeと同じ考え方だが、#entry-banner__hero-wrap(position:
+   relative)基準で画像自体の右下隅に重ねる。画像は白背景が多いので、#copyright-noticeより濃い色+
+   半透明の背景を敷いて視認性を確保する。 */
+#entry-banner__version {
+  position: absolute;
+  right: 6px;
+  bottom: 4px;
+  font-size: 11px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.45);
+  padding: 2px 6px;
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 5;
+  user-select: none;
+}
+
 /* 実績記録 (2026-10-03, per user request: "実績解除を記録したい") -- #achievement-overlay(一覧)と
    #achievement-popup-overlay(新記録ポップアップ)で共有する行スタイル。28件になるので一覧側は
    max-height+スクロールにする。 */
