@@ -3823,7 +3823,8 @@ body.tutorial-mode .change-highlight {
   border: 2px solid var(--accent);
   color: var(--accent);
   border-radius: 999px;
-  padding: 12px 28px;
+  /* 2026-10-08, per user report: "次へを押したつもりが王宮のエリアを押してしまう" -- 当たり判定を広げる。 */
+  padding: 20px 36px;
   font-size: 24px;
   font-weight: 700;
   cursor: pointer;
@@ -4546,8 +4547,11 @@ body.tutorial-mode .change-highlight {
    半透明の背景を敷いて視認性を確保する。 */
 #entry-banner__version {
   position: absolute;
-  right: 6px;
-  bottom: 4px;
+  /* 2026-10-08, per user report: "画面が見切れてて見えない"→"もう少しうえで左" -- px固定だとボタン行
+     (画像下部783-955/957、下から約19%)と被ったり画面サイズによってはみ出たりするため、画像自体に対する
+     %指定にしてボタン行の上の空きスペース(Danのプレイヤー欄とボタン行の間)に収める。 */
+  right: 3%;
+  bottom: 21%;
   font-size: 11px;
   color: #fff;
   background: rgba(0, 0, 0, 0.45);
