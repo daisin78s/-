@@ -13048,8 +13048,10 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('achievement-open-button').addEventListener('click', openAchievementOverlay);
   document.getElementById('achievement-close-button').addEventListener('click', closeAchievementOverlay);
   document.getElementById('achievement-popup-close-button').addEventListener('click', closeAchievementPopup);
-  document.getElementById('achievement-ranking-button').addEventListener('click', openAchievementRankingOverlay);
   document.getElementById('achievement-ranking-close-button').addEventListener('click', closeAchievementRankingOverlay);
+  // 2026-10-08, per user request: "歴代ランキングのアイコンを押すとパスワード画面になる" -- 新しい
+  // ボタンではなく#ranking-overlayの既存タイトル自体を隠し入口にする(index.htmlのown doc参照)。
+  document.getElementById('ranking-overlay-title').addEventListener('click', openAchievementRankingOverlay);
 
   document.getElementById('round-pass-button').addEventListener('click', handleRoundPassClick);
   document.getElementById('round-pass-confirm-no').addEventListener('click', () => {

@@ -4572,32 +4572,20 @@ body.tutorial-mode .change-highlight {
   overflow-y: auto;
 }
 
-/* 合計点数 (2026-10-08, per user request: "合計点数を出せるようにする") -- 一覧の上に太字で強調表示。
-   「みんなの合計点数」ボタン(2026-10-08, per user request: 非公開ランキング)と横並びにする。 */
-.achievement-total-score-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+/* 合計点数 (2026-10-08, per user request: "合計点数を出せるようにする") -- 一覧の上に太字で強調表示。 */
+.achievement-total-score {
+  font-weight: bold;
+  font-size: 1.1em;
   padding: 6px 2px 10px;
   border-bottom: 2px solid var(--border);
   margin-bottom: 4px;
 }
 
-.achievement-total-score {
-  font-weight: bold;
-  font-size: 1.1em;
-}
-
-.achievement-ranking-button {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 6px 14px;
-  font-size: 0.85em;
+/* #ranking-overlayの🏆歴代ランキングタイトル (2026-10-08, per user request: "実績ランキングの格納場所
+   変更...歴代ランキングのアイコンを押すとパスワード画面になる") -- 見た目は変えず(カーソルだけ変える)、
+   実績合計ランキングへの隠し入口にする。index.html own doc参照。 */
+.card-inst-modal__title--clickable {
   cursor: pointer;
-  white-space: nowrap;
-  flex-shrink: 0;
 }
 
 .achievement-row {

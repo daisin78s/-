@@ -15,7 +15,7 @@
        古ければ、ブラウザがキャッシュした古いファイルを見ている/pushがまだ反映されていないと一目で
        わかるようにするための目印(実際の挙動には一切影響しない、純粋な表示用の目印)。main.js/index.html/
        data/をpushするたびにここをインクリメントすること。 -->
-  <div id="copyright-notice">© 2026 higebucho Ver.1.004</div>
+  <div id="copyright-notice">© 2026 higebucho Ver.1.005</div>
 
   <!-- 入口バナー (2026-10-04, per user request: "HPに入ったときに大き目バナーを用意して導線をわかりやすく
        したい") -- #app/#weekly-seat-pickerと同じ「画面を丸ごと差し替える」パターン(main.jsのrender()
@@ -35,7 +35,7 @@
         <!-- バージョン表示 (2026-10-08, per user request: "セリフで見えにくいので トップ画像の右下にも") --
              #copyright-noticeはゲーム中のセリフ吹き出しに隠れて見えにくいため、入口バナー(トップ画像)の
              右下にも同じ番号を複製表示する。中身は#copyright-noticeと手動で同期させること。 -->
-        <div id="entry-banner__version">Ver.1.004</div>
+        <div id="entry-banner__version">Ver.1.005</div>
         <button type="button" class="entry-banner__hotspot" id="entry-banner-hero-cta" aria-label="今すぐプレイ"></button>
         <button type="button" class="entry-banner__hotspot" id="entry-banner-tutorial-button" aria-label="チュートリアル"></button>
         <button type="button" class="entry-banner__hotspot" id="entry-banner-local-button" aria-label="ローカル対戦"></button>
@@ -304,13 +304,9 @@
       </div>
       <!-- 合計点数 (2026-10-08, per user request: "合計点数を出せるようにする") -- game.xlsxの「実績解除」
            シートのpoint列(カテゴリごとの倍率)をもとにmain.jsのachievementTotalPointsが計算する。
-           「みんなの合計点数」(2026-10-08, per user request: "誰かの得点が増えたら 総得点だけ記録して
-           ランキングを作る" + "ただし非公開"、見るのにパスワードが要る) -- 既存のランキング削除等と
-           同じパスワード(main.jsのcheckRankingResetPassword)で開く、openAchievementRankingOverlay参照。 -->
-      <div id="achievement-total-score-row" class="achievement-total-score-row">
-        <div id="achievement-total-score" class="achievement-total-score"></div>
-        <button type="button" id="achievement-ranking-button" class="achievement-ranking-button">🔒みんなの合計点数</button>
-      </div>
+           「みんなの合計点数」を見る入口は2026-10-08、per user request: "実績ランキングの格納場所変更"
+           でここから#ranking-overlayの🏆歴代ランキングタイトルへ移動(ボタンの名前が要らないとのこと)。 -->
+      <div id="achievement-total-score" class="achievement-total-score"></div>
       <div class="card-inst-modal__body" id="achievement-list"></div>
     </div>
   </div>
@@ -636,7 +632,11 @@
   <div id="ranking-overlay" class="card-inst-overlay" hidden>
     <div class="card-inst-modal ranking-modal">
       <div class="card-inst-modal__header">
-        <span class="card-inst-modal__title">🏆 歴代ランキング</span>
+        <!-- 2026-10-08, per user request: "実績ランキングの格納場所変更...歴代ランキングのアイコンを
+             押すとパスワード画面になる...みんなの合計点数などの名前はいらない" -- 新しいボタンを増やさず、
+             この既存タイトル自体をクリック可能にして実績合計ランキングへの隠し入口にする
+             (main.jsのopenAchievementRankingOverlay参照)。 -->
+        <span class="card-inst-modal__title card-inst-modal__title--clickable" id="ranking-overlay-title">🏆 歴代ランキング</span>
         <!-- 選択削除 (2026-09-03, per user request: "削除ボタンを複数選んで削除できるようにお願い それと
              ランキングをリセット（オールリセット）ボタンは不要になりました" -- replaces the old
              "ランキングをリセット" all-at-once button entirely). Each row gets its own checkbox instead of
