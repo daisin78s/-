@@ -4566,6 +4566,15 @@ body.tutorial-mode .change-highlight {
   overflow-y: auto;
 }
 
+/* 合計点数 (2026-10-08, per user request: "合計点数を出せるようにする") -- 一覧の上に太字で強調表示。 */
+.achievement-total-score {
+  font-weight: bold;
+  font-size: 1.1em;
+  padding: 6px 2px 10px;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 4px;
+}
+
 .achievement-row {
   display: flex;
   justify-content: space-between;

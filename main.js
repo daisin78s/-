@@ -8011,6 +8011,29 @@ function buildAchievementCategories() {
 const ACHIEVEMENT_CATEGORIES = buildAchievementCategories();
 const ACHIEVEMENT_CATEGORY_BY_KEY = new Map(ACHIEVEMENT_CATEGORIES.map((c) => [c.key, c]));
 
+// 実績記録の合計点数 (2026-10-08, per user request: "合計点数を出せるようにする") -- game.xlsxの「実績解除」
+// シートに追加されたpoint列(各カテゴリの記録値にかける倍率)をラベル名でひも付け、全カテゴリの
+// (記録値×倍率)を合計する。ほぼ全カテゴリは単純な"*N"倍率だが、ウィークリーランキング最高順位だけ
+// 「（１０－順位）*10」という専用の計算式(順位が低い=良い記録ほど高得点になる、10位で0点)。式の種類は
+// この2パターンしかないため、汎用の数式パーサーは作らずその場で判定する。
+const ACHIEVEMENT_POINT_FORMULA_BY_LABEL = new Map(
+  (INDEX.raw['実績解除'] || []).map((row) => [row.NAME, row.point])
+);
+function achievementPointsForCategory(label, value) {
+  const formula = ACHIEVEMENT_POINT_FORMULA_BY_LABEL.get(label);
+  if (!formula) return 0;
+  if (formula === '（１０－順位）*10') return (10 - value) * 10;
+  const multiplierMatch = /^\*(\d+)$/.exec(formula);
+  return multiplierMatch ? value * Number(multiplierMatch[1]) : 0;
+}
+function achievementTotalPoints(store) {
+  let total = 0;
+  for (const { key, label } of ACHIEVEMENT_CATEGORIES) {
+    if (store[key] !== undefined) total += achievementPointsForCategory(label, store[key]);
+  }
+  return total;
+}
+
 function achievementLabel(key) {
   const found = ACHIEVEMENT_CATEGORY_BY_KEY.get(key);
   return found ? found.label : key;
@@ -8121,6 +8144,7 @@ function closeAchievementPopup() {
 
 function renderAchievementOverlay() {
   const store = loadAchievements();
+  document.getElementById('achievement-total-score').textContent = `合計点数: ${achievementTotalPoints(store)}点`;
   const list = document.getElementById('achievement-list');
   list.innerHTML = '';
   for (const { key, label } of ACHIEVEMENT_CATEGORIES) {

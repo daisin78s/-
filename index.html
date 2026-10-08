@@ -302,6 +302,9 @@
         <span class="card-inst-modal__title">実績記録</span>
         <button type="button" class="card-inst-modal__close" id="achievement-close-button" aria-label="閉じる">&times;</button>
       </div>
+      <!-- 合計点数 (2026-10-08, per user request: "合計点数を出せるようにする") -- game.xlsxの「実績解除」
+           シートのpoint列(カテゴリごとの倍率)をもとにmain.jsのachievementTotalPointsが計算する。 -->
+      <div id="achievement-total-score" class="achievement-total-score"></div>
       <div class="card-inst-modal__body" id="achievement-list"></div>
     </div>
   </div>
