@@ -40,7 +40,14 @@ var MAX_ENTRIES = 50; // same cap ranking.js's old localStorage version enforced
 // the list entirely). 'ultimate' keeps the original collection name so every pre-existing entry (saved
 // before this split existed, with no category field at all) stays exactly where it already was, with no
 // migration needed. 'weekly' has no writer yet (ウィークリーチャレンジ isn't built) -- reserved for it.
-var RANKING_COLLECTIONS = { ultimate: 'ranking', standard: 'ranking_standard', weekly: 'ranking_weekly' };
+// 'achievement' (2026-10-08, per user request: "実績解除の得点 非公開でランキング作れますか" ->
+// "誰かの得点が増えたら 総得点だけ記録して ランキングを作る" + "ただし非公開"): main.jsのachievement
+// TotalPoints(実績記録の合計点数)専用。他カテゴリと違い1ゲームごとの記録ではなく、プレイヤー1人につき
+// 1件だけ(記録IDをブラウザごとの固定idにして上書き保存、main.jsのsyncAchievementTotalIfIncreased参照)。
+// 非公開(見るのに既存のRANKING_RESET_PASSWORD_HASHと同じパスワードが要る)はmain.js側のUIゲートのみで
+// 実現しており、Firestore側の読み取り自体はこのアプリの他コレクションと同じく制限していない(このアプリに
+// 認証機構が無いため -- このファイル冒頭own doc参照)。
+var RANKING_COLLECTIONS = { ultimate: 'ranking', standard: 'ranking_standard', weekly: 'ranking_weekly', achievement: 'ranking_achievement' };
 function rankingCollectionName(category) { return RANKING_COLLECTIONS[category] || RANKING_COLLECTIONS.ultimate; }
 var REPLAY_STORAGE_PREFIX = 'replays/'; // shared across every category -- ids are globally-unique UUIDs, no collision risk
 

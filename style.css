@@ -4570,13 +4570,32 @@ body.tutorial-mode .change-highlight {
   overflow-y: auto;
 }
 
-/* 合計点数 (2026-10-08, per user request: "合計点数を出せるようにする") -- 一覧の上に太字で強調表示。 */
-.achievement-total-score {
-  font-weight: bold;
-  font-size: 1.1em;
+/* 合計点数 (2026-10-08, per user request: "合計点数を出せるようにする") -- 一覧の上に太字で強調表示。
+   「みんなの合計点数」ボタン(2026-10-08, per user request: 非公開ランキング)と横並びにする。 */
+.achievement-total-score-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: 6px 2px 10px;
   border-bottom: 2px solid var(--border);
   margin-bottom: 4px;
+}
+
+.achievement-total-score {
+  font-weight: bold;
+  font-size: 1.1em;
+}
+
+.achievement-ranking-button {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 0.85em;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .achievement-row {
@@ -4598,6 +4617,11 @@ body.tutorial-mode .change-highlight {
    明示的に高くする。 */
 #achievement-overlay {
   z-index: 150;
+}
+
+/* #achievement-overlay(実績記録一覧)の上に開く (2026-10-08, per user request: 非公開ランキング)。 */
+#achievement-ranking-overlay {
+  z-index: 160;
 }
 
 #achievement-popup-overlay {

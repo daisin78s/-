@@ -8034,6 +8034,35 @@ function achievementTotalPoints(store) {
   return total;
 }
 
+// 実績合計点数のランキング同期 (2026-10-08, per user request: "誰かの得点が増えたら 総得点だけ記録して
+// ランキングを作る" + "ただし非公開") -- 合計点数が過去の同期済み最高値より増えた時だけ、Firestoreの
+// 専用コレクション(online-sync.jsのRANKING_COLLECTIONS.achievement、"ranking_achievement")へ上書き
+// 保存する。他のランキングと違い1ゲームごとの記録を積み上げるのではなく、プレイヤー1人(=このブラウザ)
+// につき1件だけを常に最新の合計点数で上書きする -- そのための固定id(ACHIEVEMENT_RANKING_ID_KEY、
+// 初回生成してlocalStorageに保持)。ベストエフォート(オフライン等での失敗は無視、他の実績記録処理自体を
+// 止めない)。非公開(見るのにパスワードが要る)はopenAchievementRankingOverlay側のUIゲートのみで実現
+// しており、この保存処理自体はいつでも無条件に行われる(online-sync.jsのown doc参照)。
+const ACHIEVEMENT_RANKING_SYNCED_TOTAL_KEY = 'diceWpAchievementTotalSynced';
+const ACHIEVEMENT_RANKING_ID_KEY = 'diceWpAchievementRankingId';
+function achievementRankingId() {
+  let id = null;
+  try { id = localStorage.getItem(ACHIEVEMENT_RANKING_ID_KEY); } catch (e) { /* ignore */ }
+  if (id) return id;
+  id = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : String(Date.now()) + '-' + Math.random().toString(36).slice(2);
+  try { localStorage.setItem(ACHIEVEMENT_RANKING_ID_KEY, id); } catch (e) { /* ignore */ }
+  return id;
+}
+function syncAchievementTotalIfIncreased(store) {
+  const total = achievementTotalPoints(store);
+  let synced = 0;
+  try { synced = Number(localStorage.getItem(ACHIEVEMENT_RANKING_SYNCED_TOTAL_KEY)) || 0; } catch (e) { /* ignore */ }
+  if (total <= synced) return;
+  try { localStorage.setItem(ACHIEVEMENT_RANKING_SYNCED_TOTAL_KEY, String(total)); } catch (e) { /* ignore */ }
+  if (!window.OnlineSync) return;
+  const name = loadRememberedRankingName() || 'Alice';
+  window.OnlineSync.saveRankingEntry(achievementRankingId(), { name, totalScore: total }, 'achievement').catch(() => { /* best-effort, offline等は無視 */ });
+}
+
 function achievementLabel(key) {
   const found = ACHIEVEMENT_CATEGORY_BY_KEY.get(key);
   return found ? found.label : key;
@@ -8113,7 +8142,10 @@ function maybeRecordAchievements(state) {
     }
   }
   saveAchievements(store);
-  if (updatedKeys.length > 0) showAchievementPopup(updatedKeys, store);
+  if (updatedKeys.length > 0) {
+    showAchievementPopup(updatedKeys, store);
+    syncAchievementTotalIfIncreased(store);
+  }
 }
 
 // ウィークリーランキングへの登録成功時にだけ呼ばれる (2026-10-03, per user: "ウィークリーランキングに
@@ -8126,6 +8158,7 @@ function recordWeeklyRankAchievement(rank) {
   if (updatedKeys.length > 0) {
     saveAchievements(store);
     showAchievementPopup(updatedKeys, store);
+    syncAchievementTotalIfIncreased(store);
   }
 }
 
@@ -8162,6 +8195,37 @@ function openAchievementOverlay() {
 
 function closeAchievementOverlay() {
   document.getElementById('achievement-overlay').hidden = true;
+}
+
+/** 「みんなの合計点数」ランキング (2026-10-08, per user request: "誰かの得点が増えたら 総得点だけ記録して
+ * ランキングを作る" + "ただし非公開" -- 見るのに既存のランキング削除等と同じパスワードが要る)。
+ * checkRankingResetPasswordで確認してから、ranking_achievementコレクションを読み取って表示する --
+ * パスワードが違う/キャンセルされた場合はオーバーレイ自体を開かない(syncAchievementTotalIfIncreasedの
+ * own doc参照、保存自体はこのゲートと無関係にいつも行われる)。 */
+async function openAchievementRankingOverlay() {
+  if (!(await checkRankingResetPassword('みんなの合計点数を見るにはパスワードを入力してください。'))) return;
+  const list = document.getElementById('achievement-ranking-list');
+  list.innerHTML = '読み込み中...';
+  document.getElementById('achievement-ranking-overlay').hidden = false;
+  let entries = [];
+  try {
+    entries = window.OnlineSync ? await window.OnlineSync.listRanking('achievement') : [];
+  } catch (e) { /* offline等 -- 空のまま表示 */ }
+  list.innerHTML = '';
+  if (entries.length === 0) {
+    list.appendChild(el('div', 'achievement-row', 'まだ記録がありません'));
+    return;
+  }
+  entries.forEach((entry, i) => {
+    const row = el('div', 'achievement-row');
+    row.appendChild(el('span', 'achievement-row__label', `${i + 1}位 ${entry.name}`));
+    row.appendChild(el('span', 'achievement-row__score', `${entry.totalScore}点`));
+    list.appendChild(row);
+  });
+}
+
+function closeAchievementRankingOverlay() {
+  document.getElementById('achievement-ranking-overlay').hidden = true;
 }
 
 /** Every HUMAN seat's ranking-eligible result at GAME_END (2026-08-16, per user: "人間対AIで歴代の得点を
@@ -12984,6 +13048,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('achievement-open-button').addEventListener('click', openAchievementOverlay);
   document.getElementById('achievement-close-button').addEventListener('click', closeAchievementOverlay);
   document.getElementById('achievement-popup-close-button').addEventListener('click', closeAchievementPopup);
+  document.getElementById('achievement-ranking-button').addEventListener('click', openAchievementRankingOverlay);
+  document.getElementById('achievement-ranking-close-button').addEventListener('click', closeAchievementRankingOverlay);
 
   document.getElementById('round-pass-button').addEventListener('click', handleRoundPassClick);
   document.getElementById('round-pass-confirm-no').addEventListener('click', () => {
