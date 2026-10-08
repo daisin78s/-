@@ -9430,37 +9430,18 @@ const TUTORIAL_STEPS = [
     body: '次のラウンドの手番はこの順番になります\n王宮の後ろのスロットに置いた順から先の手番になります',
     nextLabel: '次へ',
   },
-  // 2026-10-08 bug fix (per user report: "T062〜T066が出ない") -- Excelの実装ID列の並び順(行122〜127)を
-  // 確認したところ、この5つ(T062〜T066)はcastle_turn_order_hintの直後、まだ台本の実演中(resource_choice_
-  // intro「それではゲームを始めましょう」より前、盤面にはT001〜T060で置いたダイスがまだ残っている段階)に
-  // 表示される予定の、ラウンド2のルールを先取りして説明する内容だった。以前の実装では誤ってround2_turn1_
-  // intro_hint(本物のラウンド2が始まった瞬間)の直後に置き、本物のラウンド2に到達するまで表示されない
-  // ようになっていた -- 実際にはラウンド1を最後まで遊ばないと到達できず、ほぼ誰も見られなかった。
-  // castle_turn_order_hint/resource_choice_introと同じmatch条件(台本の実演中ずっと真)を共有する。
-  {
-    id: 'round2_dice_reset_hint',
-    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: '2ラウンドになるとエリアに置かれた色ダイスは回収されふりなおします',
-    nextLabel: '次へ',
-  },
-  {
-    id: 'round2_card_untap_hint',
-    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: 'カードはすべてアンタップ（起き上がる）されて再び使えます',
-    nextLabel: '次へ',
-  },
-  {
-    id: 'round2_special_unlock_hint',
-    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: 'このラウンドから強化カードと',
-    nextLabel: '次へ',
-  },
-  {
-    id: 'round2_monument_appear_hint',
-    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: 'モニュメントカードが出てきます\nVPを稼ぐにはモニュメントカードを獲得するのが有効です\nただしモニュメントカードは必要な資源やダイスが多いのでまずは通常カードや強化カードで資源を効率よくとれるようになってから狙いに行きましょう',
-    nextLabel: '次へ',
-  },
+  // 2026-10-08 bug fix (per user report: "T062〜T066が出ない") -- Excelの実装ID列の並び順を確認したところ、
+  // この行はcastle_turn_order_hintの直後、まだ台本の実演中(resource_choice_intro「それではゲームを始め
+  // ましょう」より前、盤面にはT001〜T060で置いたダイスがまだ残っている段階)に表示される予定の、ラウンド2
+  // のルールを先取りして説明する内容だった。以前の実装では誤ってround2_turn1_intro_hint(本物のラウンド2
+  // が始まった瞬間)の直後に置き、本物のラウンド2に到達するまで表示されないようになっていた -- 実際には
+  // ラウンド1を最後まで遊ばないと到達できず、ほぼ誰も見られなかった。castle_turn_order_hint/resource_
+  // choice_introと同じmatch条件(台本の実演中ずっと真)を共有する。
+  // 2026-10-08、per user report (「2らうんどの説明が２回あった」) -- 当初この前にround2_dice_reset_hint/
+  // round2_card_untap_hint/round2_special_unlock_hint/round2_monument_appear_hint(T062〜T065)も同じ位置に
+  // 実装していたが、本物のラウンド2開始時(round2_turn1_intro_hint〜round2_shop_unlock_summary_hint)に
+  // ほぼ同じ内容をもう一度説明しており二重になっていたため、エクセル側でその4行は削除され、この行
+  // (「ルール説明は以上になります」)だけが残った。
   {
     id: 'round2_rules_end_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
@@ -10719,9 +10700,7 @@ function renderTutorialOverlay(state) {
     }
     // カード獲得の説明のスクロール (2026-09-29, Excel T022/T024〜T027) -- 🔨は盤面(main_action_introと同じ考え方)、
     // ダイス目別のSHOPは#shops(ショップ全体)を対象にする。
-    // round2_dice_reset_hint(2026-10-07, Excel T062「スクロールする」) -- 盤面上の配置済みダイス
-    // (tutorialPlacedDiceGlowing)が見えるように、build_icon_hintと同じ#board対象のグループに合流。
-    if (step.id === 'build_icon_hint' || step.id === 'round2_dice_reset_hint') {
+    if (step.id === 'build_icon_hint') {
       const boardEl = document.getElementById('board');
       if (boardEl) {
         const bubbleWrap = document.getElementById('tutorial-bubble-wrap');
@@ -10739,10 +10718,7 @@ function renderTutorialOverlay(state) {
       // special_shop_unlock_intro(2026-10-03, Excel T084, per user request: "T084 スクロールするに") --
       // 光っているSHOP201-203が画面外のときに見える範囲の中央へスクロールする、既存の#shops全体を
       // 対象にするこのグループと同じ考え方。
-      || step.id === 'special_shop_unlock_intro'
-      // round2_special_unlock_hint(2026-10-07, Excel T064「スクロールする」) -- 同じくSHOP201-203が
-      // 光るので、同じグループに合流。
-      || step.id === 'round2_special_unlock_hint') {
+      || step.id === 'special_shop_unlock_intro') {
       const shopsEl = document.getElementById('shops');
       if (shopsEl) {
         const bubbleWrap = document.getElementById('tutorial-bubble-wrap');
@@ -10764,10 +10740,10 @@ function renderTutorialOverlay(state) {
         window.scrollBy({ top: rect.bottom - (visibleHeight - 8), behavior: 'auto' });
       }
     }
-    // card_untap_intro_hint/round2_card_untap_hintが見えるようにスクロール (2026-10-07, Excel T096/T063
-    // 「スクロールする」) -- あなたの持ちカード欄(.card-group[data-player-id="P1"])を見える範囲の中央に
-    // 寄せる、他のグループと同じ考え方。
-    if (step.id === 'card_untap_intro_hint' || step.id === 'round2_card_untap_hint') {
+    // card_untap_intro_hintが見えるようにスクロール (2026-10-07, Excel T096「スクロールする」) --
+    // あなたの持ちカード欄(.card-group[data-player-id="P1"])を見える範囲の中央に寄せる、他のグループと
+    // 同じ考え方。
+    if (step.id === 'card_untap_intro_hint') {
       const cardGroupEl = document.querySelector('.card-group[data-player-id="P1"]');
       if (cardGroupEl) {
         const bubbleWrap = document.getElementById('tutorial-bubble-wrap');
@@ -11454,20 +11430,14 @@ function dismissTutorialStep() {
   // 「光る」の受け渡し。T088→SHOP201-203+SHOP001-006全部、T089→SHOP001-006のみ、T090→モニュメントの
   // 「ダイス目〇以上」(tutorialMonumentReqGlowing)、T091/T092→光るなし、T093→記念碑(M001)のみ
   // (tutorialShopCardTypeGlowを'M001'に設定して再利用)、T094→光るなし。
-  // 2026-10-08 bug fix (per user report: "T062〜T066が出ない") -- このT062〜T066の5ステップはExcelの実装ID
+  // 2026-10-08 bug fix (per user report: "T062〜T066が出ない") -- round2_rules_end_hintはExcelの実装ID
   // 列の並び順を確認した結果、台本の実演中(castle_turn_order_hintの直後、まだresource_choice_introより前)
   // に表示される予定だったと判明 -- 以前はround2_turn1_intro_hint(本物のラウンド2開始)の直後に誤って
   // 置いていたため、ラウンド1を最後まで遊ばないと誰も到達できなかった(TUTORIAL_STEPS配列自体の定義位置も
-  // castle_turn_order_hintの直後へ移動済み、そちらのown doc参照)。光る演出の受け渡しチェーンもcastle_turn_
-  // order_hint起点に合わせて移動し、round2_rules_end_hintの終了時はresource_choice_intro(光るなし)へ戻す
-  // ように変更(以前のround2_shop_unlock_summary_hintへの「全部光る」引き継ぎは、本物のラウンド2開始時点の
-  // round2_turn1_intro_hint自身に戻した、すぐ下参照)。
-  if (tutorialCurrentStepId === 'castle_turn_order_hint') tutorialPlacedDiceGlowing = true;
-  if (tutorialCurrentStepId === 'round2_dice_reset_hint') { tutorialPlacedDiceGlowing = false; tutorialUntapCardGlowing = true; }
-  if (tutorialCurrentStepId === 'round2_card_untap_hint') { tutorialUntapCardGlowing = false; tutorialBuildShopGlowSlots = ['SHOP201', 'SHOP202', 'SHOP203']; }
-  if (tutorialCurrentStepId === 'round2_special_unlock_hint') tutorialBuildShopGlowSlots = ['SHOP001', 'SHOP002', 'SHOP003', 'SHOP004', 'SHOP005', 'SHOP006'];
-  if (tutorialCurrentStepId === 'round2_monument_appear_hint') tutorialBuildShopGlowSlots = null;
-  if (tutorialCurrentStepId === 'round2_rules_end_hint') tutorialBuildShopGlowSlots = null;
+  // castle_turn_order_hintの直後へ移動済み、そちらのown doc参照)。光るなし(このステップ自身のown doc
+  // 参照)なので特別な演出の受け渡しは不要 -- 2026-10-08、per user report (「2らうんどの説明が２回あった」)
+  // でround2_dice_reset_hint等4ステップ(光る演出付き)がエクセル側で削除され、この光るなしの1行だけが
+  // 残ったため、このチェーン自体も不要になった。
   // round2_turn1_intro_hint(本物のラウンド2が始まった瞬間)が直接セットする「SHOP201-203+SHOP001-006が
   // 全部光る」(2026-10-08 復元 -- T062〜T066挿入前の元の挙動、round2_shop_unlock_summary_hint用)。
   if (tutorialCurrentStepId === 'round2_turn1_intro_hint') tutorialBuildShopGlowSlots = ['SHOP201', 'SHOP202', 'SHOP203', 'SHOP001', 'SHOP002', 'SHOP003', 'SHOP004', 'SHOP005', 'SHOP006'];
