@@ -4547,15 +4547,17 @@ body.tutorial-mode .change-highlight {
    半透明の背景を敷いて視認性を確保する。 */
 #entry-banner__version {
   position: absolute;
-  /* 2026-10-08, per user report: "画面が見切れてて見えない"→"もう少しうえで左" -- px固定だとボタン行
-     (画像下部783-955/957、下から約19%)と被ったり画面サイズによってはみ出たりするため、画像自体に対する
-     %指定にしてボタン行の上の空きスペース(Danのプレイヤー欄とボタン行の間)に収める。 */
+  /* 2026-10-08, per user report: "画面が見切れてて見えない"→"もう少しうえで左"→"バージョン読みにくいです
+     実績解除のすぐ下に" -- px固定だとボタン行(画像下部783-955/957)と被ったり画面サイズによってはみ出たり
+     するため%指定。実績解除ボタン(右端、left:83.72%)のすぐ下、画像の一番下端ぎりぎり(iPad Safariで
+     見切れた経験があるため0にはしない)。 */
   right: 3%;
-  bottom: 21%;
-  font-size: 11px;
+  bottom: 0.5%;
+  font-size: 13px;
+  font-weight: 700;
   color: #fff;
-  background: rgba(0, 0, 0, 0.45);
-  padding: 2px 6px;
+  background: rgba(0, 0, 0, 0.65);
+  padding: 3px 8px;
   border-radius: 4px;
   pointer-events: none;
   z-index: 5;
