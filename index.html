@@ -15,7 +15,7 @@
        古ければ、ブラウザがキャッシュした古いファイルを見ている/pushがまだ反映されていないと一目で
        わかるようにするための目印(実際の挙動には一切影響しない、純粋な表示用の目印)。main.js/index.html/
        data/をpushするたびにここをインクリメントすること。 -->
-  <div id="copyright-notice">© 2026 higebucho Ver.1.006</div>
+  <div id="copyright-notice">© 2026 higebucho Ver.1.007</div>
 
   <!-- 入口バナー (2026-10-04, per user request: "HPに入ったときに大き目バナーを用意して導線をわかりやすく
        したい") -- #app/#weekly-seat-pickerと同じ「画面を丸ごと差し替える」パターン(main.jsのrender()
@@ -35,7 +35,7 @@
         <!-- バージョン表示 (2026-10-08, per user request: "セリフで見えにくいので トップ画像の右下にも") --
              #copyright-noticeはゲーム中のセリフ吹き出しに隠れて見えにくいため、入口バナー(トップ画像)の
              右下にも同じ番号を複製表示する。中身は#copyright-noticeと手動で同期させること。 -->
-        <div id="entry-banner__version">Ver.1.006</div>
+        <div id="entry-banner__version">Ver.1.007</div>
         <button type="button" class="entry-banner__hotspot" id="entry-banner-hero-cta" aria-label="今すぐプレイ"></button>
         <button type="button" class="entry-banner__hotspot" id="entry-banner-tutorial-button" aria-label="チュートリアル"></button>
         <button type="button" class="entry-banner__hotspot" id="entry-banner-local-button" aria-label="ローカル対戦"></button>
@@ -353,6 +353,11 @@
              just that placement instead of the whole turn. -->
         <button type="button" class="undo-button" id="dice-cancel-button-build" disabled>↩️ 直前のアクションをキャンセル</button>
       </div>
+      <!-- 所持資源の表示 (2026-10-09, per user request: "王宮や元老院にダイスを置く 始まりの兆しを使う
+           などで建築/LVアップを選択とポップアップが出たとき ポップアップにあなたの所持資源が表示される
+           ようにしてほしい") -- 支払う前にいくら持っているか確認できるように。main.jsの
+           renderBuildChoiceResources参照、player-panel__resourcesと同じ表示(renderResourceBadge)を流用。 -->
+      <div id="build-choice-resources" class="build-choice-resources"></div>
       <!-- BZ付与系の直接TAPアクション（例: JOB004A "3K→2BZ"）を、建築候補選択画面に入った瞬間に使える
            ようにする案内 (2026-08-03, per user feedback: "建築が発生したときにすぐに発動 Y/Nでハイを
            押すと3K→2BZその後建築対象を選べるようになる"). See main.js's renderBuildChoiceBzTapPrompt. -->

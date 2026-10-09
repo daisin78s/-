@@ -6075,6 +6075,20 @@ function commitBuildCandidateReal(candidate, bzDiscount, tutorialPreSnapshot) {
   render(STATE);
 }
 
+/** 所持資源の表示 (2026-10-09, per user request: "王宮や元老院にダイスを置く 始まりの兆しを使う などで
+ * 建築/LVアップを選択とポップアップが出たとき ポップアップにあなたの所持資源が表示されるようにしてほしい")
+ * -- renderPlayers側のplayer-panel__resources(6402行目付近)と全く同じ表示規則(renderResourceBadge、
+ * 0は表示しない)をそのまま流用する。 */
+function renderBuildChoiceResources() {
+  const container = document.getElementById('build-choice-resources');
+  container.innerHTML = '';
+  const player = STATE.players.find((p) => p.id === pendingBuildChoice.playerId);
+  for (const resource of ['K', 'A', 'B', 'C', 'Z', 'BZ', 'VP']) {
+    const count = player.resources[resource] || 0;
+    if (count > 0) container.appendChild(renderResourceBadge(resource, count, false, true));
+  }
+}
+
 function renderBuildChoiceModal() {
   const overlay = document.getElementById('build-choice-overlay');
   if (!pendingBuildChoice) {
@@ -6082,6 +6096,7 @@ function renderBuildChoiceModal() {
     return;
   }
   overlay.hidden = false;
+  renderBuildChoiceResources();
   // Ambiguous-BZ-outcome step (2026-08-04): a candidate was already clicked and there's more than one
   // distinct affordable way to spend BZ on it -- show only the chooser (plus a preview of the candidate
   // being built) and hold off on re-rendering the full candidate list/other controls until it's

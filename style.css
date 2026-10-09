@@ -3193,6 +3193,15 @@ body.tutorial-mode .change-highlight {
   max-width: calc(100vw - 32px);
 }
 
+/* 所持資源の表示 (2026-10-09, per user request: 建築/LVアップ選択ポップアップに所持資源を表示) --
+   .player-panel__resourcesと同じ横並び+折り返し。 */
+.build-choice-resources {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
 /* カードリスト (2026-08-22) -- reuses .card-inst-overlay/.build-choice-modal's wide auto-width shell.
    Same "whole-modal scroll cap" idea as #debug-setup-overlay .card-inst-modal (see that rule's own
    doc), but the bottom nav needs to stay visible while the body scrolls, so only .card-list-body
