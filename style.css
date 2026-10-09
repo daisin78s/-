@@ -4561,7 +4561,8 @@ body.tutorial-mode .change-highlight {
      するため%指定。実績解除ボタン(右端、left:83.72%)のすぐ下、画像の一番下端ぎりぎり(iPad Safariで
      見切れた経験があるため0にはしない)。 */
   right: 3%;
-  bottom: 0.5%;
+  /* 2026-10-09, per user request: "もう少し半ます分上に" -- 0.5%からわずかに引き上げる。 */
+  bottom: 1.5%;
   font-size: 13px;
   font-weight: 700;
   color: #fff;
