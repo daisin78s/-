@@ -4872,6 +4872,11 @@ function buildShopSlotNode(slotId, faceId, showReqCaption, locked, faceDown = fa
       label: 'このカードを獲得する',
       onPick: () => executeAcquireCardShortcut(faceId),
     } : null);
+    // 獲得可能バッジ (2026-10-09, per user request: "獲得可能なカードの右下に緑のチェックアイコンをつける
+    // あえてカードから少しはみ出すように（カードの能力ではないことをアピールするため）") -- カード本体の
+    // 印刷された効果アイコンと混同されないよう、.shop-card自体(position:relativeが要る、style.css参照)の
+    // 右下から意図的にはみ出す位置に絶対配置する。
+    if (acquireMove) cardVisual.appendChild(el('span', 'shop-card__acquirable-badge', '✓'));
   }
   // 2026-10-03 (Excel T095, wave2_special_unlock_hint): 複数の接頭辞(元老院/王女/栄光の証=A301/B301/C301)
   // を同時に光らせたいケース用に、配列も渡せるよう拡張(既存のA/B/C/'M001'のような単一文字列指定はそのまま)。
@@ -8223,6 +8228,9 @@ function maybeRecordAchievements(state) {
     : startedFromRound3 ? 'mode_round3_start'
     : (usedDebugOrTestGameThisGame ? 'mode_debug_on' : 'mode_debug_off');
   const store = loadAchievements();
+  // 実績ポイントの増加表示 (2026-10-09, per user request: "実績ポイント 100→125 のように表示して") --
+  // カテゴリ更新で値が書き換わる前の合計点数を先に控えておく。
+  const totalBefore = achievementTotalPoints(store);
   const updatedKeys = [];
   for (const c of candidates) {
     const player = state.players.find((p) => p.id === c.playerId);
@@ -8247,7 +8255,7 @@ function maybeRecordAchievements(state) {
   }
   saveAchievements(store);
   if (updatedKeys.length > 0) {
-    showAchievementPopup(updatedKeys, store);
+    showAchievementPopup(updatedKeys, store, totalBefore);
     syncAchievementTotalIfIncreased(store);
   }
 }
@@ -8257,18 +8265,26 @@ function maybeRecordAchievements(state) {
 // 恒久的に保持するスナップショットで、後からランキングが変動/削除されても追従しない)。
 function recordWeeklyRankAchievement(rank) {
   const store = loadAchievements();
+  const totalBefore = achievementTotalPoints(store);
   const updatedKeys = [];
   recordAchievementIfNew(store, updatedKeys, 'weekly_rank', rank);
   if (updatedKeys.length > 0) {
     saveAchievements(store);
-    showAchievementPopup(updatedKeys, store);
+    showAchievementPopup(updatedKeys, store, totalBefore);
     syncAchievementTotalIfIncreased(store);
   }
 }
 
-function showAchievementPopup(updatedKeys, store) {
+/** totalBefore (2026-10-09, per user request: "実績ポイント 100→125 のように表示して") -- 呼び出し元
+ * (maybeRecordAchievements/recordWeeklyRankAchievement)がカテゴリ更新前に控えておいた合計点数。storeは
+ * 既に更新後の値なので、achievementTotalPoints(store)が「→」の後ろ(更新後)にあたる。 */
+function showAchievementPopup(updatedKeys, store, totalBefore) {
   const list = document.getElementById('achievement-popup-list');
   list.innerHTML = '';
+  const totalAfter = achievementTotalPoints(store);
+  if (totalAfter > totalBefore) {
+    list.appendChild(el('div', 'achievement-row achievement-row--total', `実績ポイント ${totalBefore}→${totalAfter}`));
+  }
   for (const key of updatedKeys) {
     list.appendChild(el('div', 'achievement-row', `${achievementLabel(key)}: ${achievementValueText(key, store[key])}`));
   }

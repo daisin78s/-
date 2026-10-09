@@ -530,6 +530,28 @@ h1, h2, h3 { margin: 0; }
   transition: box-shadow 0.15s ease, transform 0.15s ease;
 }
 
+/* ワンクリック獲得ショートカットの獲得可能バッジ (2026-10-09, per user request: "獲得可能なカードの右下に
+   緑のチェックアイコンをつける あえてカードから少しはみ出すように（カードの能力ではないことをアピール
+   するため）") -- カード自体の印刷された効果アイコンと混同しないよう、right/bottomをマイナス値にして
+   カードの枠から意図的にはみ出す位置に絶対配置する。 */
+.shop-card__acquirable-badge {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #2e9e4f;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  z-index: 2;
+}
+
 /* SHOP201-203の「見えるが2R/3R/4Rまで買えない」カード用のロック表示 (2026-08-24, per user spec:
    「赤線2本で獲得できないことを視覚的にもわかるように」) -- .shop-card自体はposition:relative済みなので
    ::before/::afterで赤い斜線2本をX字に重ねる。main.jsのbuildShopSlotNode(locked引数)が.shop-slotに
@@ -4605,6 +4627,14 @@ body.tutorial-mode .change-highlight {
   padding: 6px 2px;
   border-bottom: 1px solid var(--border);
   white-space: normal;
+}
+
+/* 実績ポイント合計の増加表示 (2026-10-09, per user request: "実績ポイント 100→125 のように表示して") --
+   実績解除ポップアップの一覧の先頭に出す、太字で強調。 */
+.achievement-row--total {
+  font-weight: bold;
+  font-size: 1.1em;
+  justify-content: flex-start;
 }
 
 .achievement-row__score {
