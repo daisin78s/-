@@ -4742,6 +4742,81 @@ const TUTORIAL_TAP_ALLOWED_STEP_IDS = new Set([
   'build_candidate_summary_hint',
 ]);
 
+/** ショップカードのワンクリック獲得ショートカット (2026-10-09, per user request: "王宮や元老院にダイスを
+ * 置く 始まりの兆しを使う などで建築/LVアップを選択とポップアップが出たとき...このカードを獲得する という
+ * ボタンを出して...優先順位はさいこうLV AIと同じ考え方" + 補足: "カードをクリックすると AIを呼んで その
+ * カードをとらせる でもいい")。
+ *
+ * aiMoveGeneratorLv3(preferCastleOverSenate:true、driveOneAiStepInnerが実際のAI操作に使っているのと
+ * 同じインスタンス)でこの人間プレイヤーの今すぐ打てる手を全部洗い出し、buildCandidateIndexを伴う手
+ * (PLACE_DIE/PLACE_WILDCARD_DIE/PLACE_DICE_GROUP/BARE_TAP、始まりの兆し等の建築系TAPとダイス配置の両方を
+ * 含む)だけに絞って、結果としてfaceIdを獲得する手をaiSimulatorで実際にシミュレートして探す。該当する手が
+ * 複数あれば(例: 王宮にも元老院にも置ける)、aiEvaluatorのスコアが一番高いものを選ぶ -- これが「さいこう
+ * レベルAIと同じ考え方」をそのまま再利用する部分(手で優先順位を書き下さない)。
+ * @returns {{playerId: string, move: Object}|null} 最善手、またはこのカードが「フリーアクション等を使わず
+ *   今すぐ獲得できる」手が1つも無ければnull。
+ */
+// renderShopGrid1回につき1度だけ計算するキャッシュ (2026-10-09) -- findBestAcquireMove/buildShopSlotNode
+// 呼び出しのたびにMoveGenerator.generateMoves+15枚ぶんのシミュレーションをやり直すと重いため、
+// Map<faceId, {playerId, move}>を1回だけ作ってショップグリッド内のどのスロットからも参照する
+// (computeAcquirableMovesCache/findBestAcquireMoveの own doc参照)。
+let shopAcquirableMoveCache = new Map();
+
+/** shopAcquirableMoveCacheを作り直す (2026-10-09) -- renderShopGridの先頭で1回だけ呼ぶ。
+ * aiMoveGeneratorLv3(preferCastleOverSenate:true、driveOneAiStepInnerが実際のAI操作に使っているのと
+ * 同じインスタンス)でこの人間プレイヤーの今すぐ打てる手を全部洗い出し、buildCandidateIndexを伴う手
+ * (PLACE_DIE/PLACE_WILDCARD_DIE/PLACE_DICE_GROUP/BARE_TAP、始まりの兆し等の建築系TAPとダイス配置の両方を
+ * 含む)だけに絞って、それぞれaiSimulatorで実際にシミュレートし、結果として獲得できるfaceIdごとに
+ * aiEvaluatorのスコアが一番高い手を記録する -- これが「さいこうレベルAIと同じ考え方」をそのまま再利用
+ * する部分(手で優先順位を書き下さない)。 */
+function computeShopAcquirableMoveCache() {
+  const next = turnFlowMod.getNextTurn(STATE);
+  const playerId = actingHumanPlayerId(STATE, next);
+  // 建築選択ポップアップ(pendingBuildChoice)等、他の確認待ちが開いている間はこのカード自身のクリックも
+  // ショートカットも提供しない(renderPlayers等の既存クリック可否ゲートと同じ考え方)。
+  if (!playerId || pendingBuildChoice || pendingTurnEndWarning || pendingWhiteOverflowConfirm) return new Map();
+  const context = { hasPlacedDieThisTurn: turnActionTaken };
+  const candidateMoves = aiMoveGeneratorLv3.generateMoves(STATE, INDEX, playerId, context)
+    .filter((m) => m.buildCandidateIndex !== undefined && m.buildCandidateIndex !== null);
+  const bestByFaceId = new Map();
+  for (const move of candidateMoves) {
+    const { state: resultState, result } = aiSimulator.apply(STATE, INDEX, move);
+    if (!result.success || !result.candidate) continue;
+    const builtFaceId = result.candidate.type === 'UPGRADE' ? result.candidate.toFaceId : result.candidate.faceId;
+    const score = aiEvaluator.score(resultState, playerId);
+    const existing = bestByFaceId.get(builtFaceId);
+    if (!existing || score > existing.score) bestByFaceId.set(builtFaceId, { playerId, move, score });
+  }
+  return bestByFaceId;
+}
+
+function findBestAcquireMove(faceId) {
+  return shopAcquirableMoveCache.get(faceId) || null;
+}
+
+/** findBestAcquireMoveが見つけた手を実際にライブのSTATEへ適用する (2026-10-09) -- AI自身の手番処理
+ * (driveOneAiStepInner)と全く同じsimulatorMod.applyInPlace呼び出し1回で、ダイス配置/TAPと建築確定を
+ * まとめて完了させる。通常の人間操作(placeSelectedDieCommit等)と同じく、実行前の状態をactionCheckpoints
+ * に積んでおくので「直前のアクションをキャンセル」で1回のクリックとして取り消せる。 */
+function executeAcquireCardShortcut(faceId) {
+  const found = findBestAcquireMove(faceId);
+  if (!found) return;
+  const preSnapshot = gameStateMod.cloneState(STATE);
+  const preTurnActionTaken = turnActionTaken;
+  const result = simulatorMod.applyInPlace(STATE, INDEX, found.move);
+  if (!result.success) {
+    placementMessage = `カードを獲得できません（${result.reason}）`;
+    render(STATE);
+    return;
+  }
+  actionCheckpoints.push({ state: preSnapshot, turnActionTaken: preTurnActionTaken });
+  if (found.move.type === 'PLACE_DIE' || found.move.type === 'PLACE_WILDCARD_DIE' || found.move.type === 'PLACE_DICE_GROUP') {
+    turnActionTaken = true;
+  }
+  placementMessage = '';
+  render(STATE);
+}
+
 function buildShopSlotNode(slotId, faceId, showReqCaption, locked, faceDown = false) {
   const slotTpl = document.getElementById('tpl-shop-slot');
   const slotNode = slotTpl.content.firstElementChild.cloneNode(true);
@@ -4787,6 +4862,17 @@ function buildShopSlotNode(slotId, faceId, showReqCaption, locked, faceDown = fa
     // caption (corrected 2026-07-29).
     ? buildCardVisual(faceId, { req: facts.req, showEffect: true })
     : buildCardVisual(faceId, { showEffect: true });
+  // ワンクリック獲得ショートカット (2026-10-09, per user request) -- チュートリアル中は既存の台本演出を
+  // 乱さないよう対象外。拡大表示自体は常に可能(attachPickableEnlarge)、pickActionは今すぐ獲得できる手が
+  // 見つかった時だけ付く(findBestAcquireMoveがnullを返せばpickBtn自体が非表示になる、showCardEnlargeModal
+  // 参照)。
+  if (!tutorialModeActive) {
+    const acquireMove = findBestAcquireMove(faceId);
+    attachPickableEnlarge(cardVisual, faceId, acquireMove ? {
+      label: 'このカードを獲得する',
+      onPick: () => executeAcquireCardShortcut(faceId),
+    } : null);
+  }
   // 2026-10-03 (Excel T095, wave2_special_unlock_hint): 複数の接頭辞(元老院/王女/栄光の証=A301/B301/C301)
   // を同時に光らせたいケース用に、配列も渡せるよう拡張(既存のA/B/C/'M001'のような単一文字列指定はそのまま)。
   if (tutorialShopCardTypeGlow) {
@@ -4857,6 +4943,9 @@ function buildShopRemainingCountNode(count, gridRow) {
 function renderShopGrid(state) {
   const container = document.getElementById('shop-combined-slots');
   container.innerHTML = '';
+  // ワンクリック獲得ショートカット (2026-10-09) -- このグリッド全体で1回だけ計算し、各buildShopSlotNode
+  // 呼び出しから参照する(shopAcquirableMoveCache/computeShopAcquirableMoveCacheの own doc参照)。
+  shopAcquirableMoveCache = tutorialModeActive ? new Map() : computeShopAcquirableMoveCache();
   // M/NORMAL now get explicit gridRow/gridColumn too (2026-08-27, needed once a 7th grid column was
   // added for the remaining-count badges below -- relying on implicit 6-wide auto-flow would otherwise
   // let NORMAL's first item spill into row 1's now-available 7th cell instead of starting row 2).
