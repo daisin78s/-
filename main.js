@@ -12653,6 +12653,18 @@ const QST_PRE_SCALE_WIDTH = 250;
  * choice" gesture now lives here instead of on the card/cell itself, matching the user's own original
  * proposal for this: tap to see it enlarged, tap again (here) to actually pick it.
  */
+/** The MAP id a 領地(A-deck) card's ONCE effect targets (e.g. both A004A and A004B always point at
+ * MAP001, every tier of the same physical card controls the same map), or null for any non-A-deck
+ * faceId. Derived from the row's own ONCE text ("MAP{n}.CURRENT_AREA=...") rather than a hardcoded
+ * table, so it can never drift out of sync with a future renumbering (2026-10-10, per user request:
+ * "領地カード 拡大すると 対応するエリアを表示するようにして"). */
+function mapIdForAreaCard(faceId) {
+  const entry = INDEX.byId.get(faceId);
+  if (!entry || entry.sheet !== 'A') return null;
+  const match = /^(MAP\d+)\./.exec(entry.row.ONCE || '');
+  return match ? match[1] : null;
+}
+
 function showCardEnlargeModal(faceId, visualNode, sibling, siblingVisualNode, pickAction) {
   const overlay = document.getElementById('card-inst-overlay');
   const modal = overlay.querySelector('.card-inst-modal');
@@ -12747,6 +12759,17 @@ function showCardEnlargeModal(faceId, visualNode, sibling, siblingVisualNode, pi
     }
   } else {
     renderInstBody(body, instForId(faceId));
+  }
+  // 領地(A)カードの拡大時、対応するエリアタイル(現在の実際の階層)も合わせて表示する (2026-10-10, per user
+  // request: "領地カード 拡大すると 対応するエリアを表示するようにして")。pickAction("このカードを獲得する"
+  // ショートカットボタン)はこれまでと完全に同じロジックのまま下に続くので、この表示はその判定に影響しない
+  // (per user: "いままでどおり 表示させるように")。
+  const areaMapId = mapIdForAreaCard(faceId);
+  if (areaMapId && STATE && STATE.maps && STATE.maps[areaMapId]) {
+    const areaSection = el('div', 'card-inst-modal__area-preview');
+    areaSection.appendChild(el('div', 'card-inst-modal__area-preview-label', '対応するエリア'));
+    areaSection.appendChild(buildAreaTilePreviewNode(STATE.maps[areaMapId].currentAreaId));
+    body.appendChild(areaSection);
   }
   flipBtn.hidden = true;
   pickBtn.hidden = !pickAction;
