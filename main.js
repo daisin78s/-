@@ -2306,6 +2306,24 @@ function renderCardListFlatCategory(key, container) {
   container.appendChild(grid);
 }
 
+/** モニュメント一覧だけの特別扱い (2026-10-10, per user request: "モニュメントカード一覧 晩餐会の左側に
+ * いずれかのショップが売り切れたら登場 と記載して") -- M401-403(晩餐会/王都建設/天空の塔)はboard.
+ * revealExtraMonumentsIfAnyShopEmptied により、いずれかのショップが空になった時点でまとめて登場する
+ * (setup.js/board.jsの同名処理参照、M001-012とは別枠のextraMonumentPool)。renderCardListFlatCategory
+ * と同じ6列グリッドのまま、M401の直前にキャプション用のテキストセルだけ挿入する(そのままM401が1つ
+ * 右にずれ、「晩餐会の左側」に文言が来る)。*/
+function renderCardListMonumentCategory(container) {
+  const grid = el('div', 'card-list-grid');
+  grid.style.gridTemplateColumns = 'repeat(6, 122px)';
+  for (const row of INDEX.raw.M) {
+    if (row.ID === 'M401') {
+      grid.appendChild(el('div', 'card-list-monument-note', 'いずれかのショップが\n売り切れたら登場'));
+    }
+    grid.appendChild(buildCardListCell(row.ID, false));
+  }
+  container.appendChild(grid);
+}
+
 /** CON一覧, per user request ("上段左側に表 下段左側に裏と表記"): tier-A (表) faces on their own row,
  * tier-B (裏) faces on their own row below, each row labeled at its left edge. data/game.json's CON
  * sheet already lists every tier-A row before every tier-B row (confirmed 2026-08-22), so this is a
@@ -2518,6 +2536,9 @@ function renderCardListOverlay() {
   } else if (cardListView === 'con') {
     document.getElementById('card-list-title').textContent = 'CON一覧';
     renderCardListConCategory(body);
+  } else if (cardListView === 'monument') {
+    document.getElementById('card-list-title').textContent = CARD_LIST_FLAT_CATEGORIES.monument.label;
+    renderCardListMonumentCategory(body);
   } else {
     const config = CARD_LIST_FLAT_CATEGORIES[cardListView];
     document.getElementById('card-list-title').textContent = config.label;

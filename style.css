@@ -3319,6 +3319,19 @@ body.tutorial-mode .change-highlight {
   max-width: 122px;
 }
 
+/* モニュメント一覧、晩餐会の左側のキャプション (2026-10-10, per user request) --
+   renderCardListMonumentCategoryが素のグリッドセルとして挿入するテキストのみのセル。 */
+.card-list-monument-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: pre-line;
+}
+
 /* 領地/天運/人材一覧のINST説明文 (2026-08-22, per user request: "カード一覧とほかの一覧に飛ぶボタン
    との間にINSTシートのそれぞれの説明文を表示") -- instDescriptionText() reads INDEX.raw.INSTの
    "Aカード"/"Bカード"/"Cカード"行。現状は説明列が空なので:emptyで消える(データ投入待ち)。 */
