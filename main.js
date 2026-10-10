@@ -8467,7 +8467,15 @@ function renderAchievementOverlay() {
   for (const { key, label } of ACHIEVEMENT_CATEGORIES) {
     const row = el('div', 'achievement-row');
     row.appendChild(el('span', 'achievement-row__label', label));
-    row.appendChild(el('span', 'achievement-row__score', store[key] !== undefined ? achievementValueText(key, store[key]) : '未記録'));
+    // 2026-10-11, per user request: "合計点数は書いてありますが それぞれの点数はわかりません" -- 生の
+    // 達成値(VP/位など)だけでなく、achievementTotalPointsが合計に使うのと全く同じ
+    // achievementPointsForCategory計算を使って、そのカテゴリ単独の点数も併記する
+    // (例: "チュートリアル最高獲得点数 30VP　30点")。
+    const value = store[key];
+    const scoreText = value !== undefined
+      ? `${achievementValueText(key, value)}　${achievementPointsForCategory(label, value)}点`
+      : '未記録';
+    row.appendChild(el('span', 'achievement-row__score', scoreText));
     list.appendChild(row);
   }
 }

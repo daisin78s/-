@@ -15,7 +15,7 @@
        古ければ、ブラウザがキャッシュした古いファイルを見ている/pushがまだ反映されていないと一目で
        わかるようにするための目印(実際の挙動には一切影響しない、純粋な表示用の目印)。main.js/index.html/
        data/をpushするたびにここをインクリメントすること。 -->
-  <div id="copyright-notice">© 2026 higebucho Ver.1.015</div>
+  <div id="copyright-notice">© 2026 higebucho Ver.1.016</div>
 
   <!-- 入口バナー (2026-10-04, per user request: "HPに入ったときに大き目バナーを用意して導線をわかりやすく
        したい") -- #app/#weekly-seat-pickerと同じ「画面を丸ごと差し替える」パターン(main.jsのrender()
@@ -35,7 +35,7 @@
         <!-- バージョン表示 (2026-10-08, per user request: "セリフで見えにくいので トップ画像の右下にも") --
              #copyright-noticeはゲーム中のセリフ吹き出しに隠れて見えにくいため、入口バナー(トップ画像)の
              右下にも同じ番号を複製表示する。中身は#copyright-noticeと手動で同期させること。 -->
-        <div id="entry-banner__version">Ver.1.015</div>
+        <div id="entry-banner__version">Ver.1.016</div>
         <button type="button" class="entry-banner__hotspot" id="entry-banner-hero-cta" aria-label="今すぐプレイ"></button>
         <button type="button" class="entry-banner__hotspot" id="entry-banner-tutorial-button" aria-label="チュートリアル"></button>
         <button type="button" class="entry-banner__hotspot" id="entry-banner-local-button" aria-label="ローカル対戦"></button>
@@ -43,7 +43,7 @@
         <button type="button" class="entry-banner__hotspot" id="entry-banner-online-button" aria-label="オンライン対戦"></button>
         <button type="button" class="entry-banner__hotspot" id="entry-banner-cardlist-button" aria-label="カードリスト"></button>
         <button type="button" class="entry-banner__hotspot" id="entry-banner-ranking-button" aria-label="ランキング"></button>
-        <button type="button" class="entry-banner__hotspot" id="entry-banner-achievement-button" aria-label="実績記録"></button>
+        <button type="button" class="entry-banner__hotspot" id="entry-banner-achievement-button" aria-label="実績解除"></button>
       </div>
     </div>
   </div>
@@ -244,7 +244,7 @@
            個人の自己ベスト記録。オンラインランキングとは別物で、Firebaseには一切保存しない。game.xlsxの
            「実績解除」シート(モード5種+CON12種+JOB11種)をそのまま反映。see main.js's
            openAchievementOverlay/maybeRecordAchievements。) -->
-      <button type="button" id="achievement-open-button" class="debug-panel__toggle">実績記録</button>
+      <button type="button" id="achievement-open-button" class="debug-panel__toggle">実績解除</button>
       <!-- 生成中オーバーレイ (2026-09-14, per user request: "待つのが長いので生成中をいうアニメーションが
            欲しい" -- handleStartFromRound3Click's own 1R/2R AI-vs-AI simulation runs synchronously on the
            main thread and can take several seconds with nothing else on screen changing in the meantime.
@@ -315,7 +315,7 @@
   <div id="achievement-overlay" class="card-inst-overlay" hidden>
     <div class="card-inst-modal build-choice-modal">
       <div class="card-inst-modal__header">
-        <span class="card-inst-modal__title">実績記録</span>
+        <span class="card-inst-modal__title">実績解除</span>
         <button type="button" class="card-inst-modal__close" id="achievement-close-button" aria-label="閉じる">&times;</button>
       </div>
       <!-- 合計点数 (2026-10-08, per user request: "合計点数を出せるようにする") -- game.xlsxの「実績解除」
