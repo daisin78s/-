@@ -4248,18 +4248,19 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
       noteEl.appendChild(document.createTextNode('LVアップエリア\n▽\n'));
       iconRow.appendChild(actionDot('K'));
       iconRow.appendChild(actionSuffix('/'));
+      iconRow.appendChild(actionDot('K'));
       iconRow.appendChild(actionCount('1VP'));
     }
     noteEl.appendChild(iconRow);
     q('.shop-card__effect').appendChild(noteEl);
   } else if (options.showEffect && facts.name === '料理人') {
-    // JOB002/料理人 (2026-09-24, per user mockup: "1VP　▷　〇 / MAX5 / 毎ターン") -- this ability has no
-    // DSL representation either (bespoke -- TAP field is blank in the data, see executor.
-    // grantChefBonusIfEarned's own doc: reacts to any live VP grant by tapping and granting min(vpCount,5)
-    // K, untapping again via TURNEND=UNTAP()). Reuses actionTrigger()'s existing ▶ "condition→consequence"
-    // glyph (same meaning as the user's own "▷") rather than introducing a new one-off character. Icon row
-    // comes FIRST here, unlike 宣教師/吟遊詩人/地主's own "text\n▽\nicon row" shape just above -- MAX5/
-    // 毎ターン are their own plain lines below it instead.
+    // JOB002/料理人 (2026-09-24, per user mockup: "1VP　▷　〇 / MAX5 / 毎ターン"; 2026-10-10, per user
+    // request "料理人のアイコン MAX5 毎ターンを消して": MAX5/毎ターン removed since the 2026-10-10 ability
+    // redesign dropped both the cap and the tap-gate -- see executor.grantChefBonusIfEarned's own doc,
+    // now uncapped and fires every time with no tap at all) -- this ability has no DSL representation
+    // either (bespoke -- TAP field is blank in the data). Reuses actionTrigger()'s existing ▶
+    // "condition→consequence" glyph (same meaning as the user's own "▷") rather than introducing a new
+    // one-off character.
     tall = true;
     const noteEl = el('div', 'card-note');
     const iconRow = el('span', 'job-note-icon-row');
@@ -4267,7 +4268,6 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     iconRow.appendChild(actionTrigger());
     iconRow.appendChild(actionDot('K'));
     noteEl.appendChild(iconRow);
-    noteEl.appendChild(document.createTextNode('\nMAX5\n毎ターン'));
     q('.shop-card__effect').appendChild(noteEl);
   } else if (options.showEffect && facts.effects && facts.effects.length) {
     // allowTextFallback (confirmed 2026-07-30): A/B/C cards fall back to raw DSL text for any
@@ -7223,7 +7223,12 @@ function attachTapToggle(cardNode, cardState, faceId, canAct, physicalId) {
  */
 function attachPickableEnlarge(cardNode, faceId, pickAction) {
   cardNode.addEventListener('click', () => {
-    const sibling = siblingFaceId(faceId);
+    // 革命家(JOB010)だけ、拡大時に右側へ実際に獲得する革命の兆し(B005A)を並べて表示する (2026-10-10, per
+    // user request: "革命家 クリックして拡大した時 革命家の拡大画像を左に寄せて 右側に 革命の兆しを
+    // 表示して") -- siblingFaceId自体はJOB010に対して何も返さない(A/B面の裏表関係ではないため)が、
+    // 既存のcard-enlarge-row(front/backスロットを並べて表示する、二面カード用の仕組み)をそのまま
+    // 再利用すれば、front=JOB010(左)/back=B005A(右)の並びがそのまま得られる。
+    const sibling = faceId === 'JOB010' ? 'B005A' : siblingFaceId(faceId);
     const hasSiblingData = sibling && cardFaceExists(sibling);
     const visualNode = buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true });
     const siblingVisualNode = hasSiblingData
