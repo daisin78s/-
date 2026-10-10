@@ -7393,6 +7393,10 @@ function attachPickableEnlarge(cardNode, faceId, pickAction) {
     const siblingVisualNode = hasSiblingData
       ? buildCardVisual(sibling, { showEffect: true, allowTextFallback: false, noInteraction: true })
       : null;
+    // 右側の革命の兆し自体をクリックしたら、それ単独の拡大表示(本当にB005Aをクリックしたのと同じ)に
+    // 切り替える (2026-10-11, per user request) -- B005Aは自分のsiblingFaceId(B005B)を持つ本物の
+    // 二面カードなので、この再帰呼び出しでA/B面が並ぶ普通の拡大表示に自然に切り替わる。
+    if (faceId === 'JOB010' && hasSiblingData) attachPickableEnlarge(siblingVisualNode, sibling, null);
     showCardEnlargeModal(faceId, visualNode, hasSiblingData ? sibling : null, siblingVisualNode, pickAction);
   });
 }
@@ -12848,6 +12852,23 @@ function mapIdForAreaCard(faceId) {
   return match ? match[1] : null;
 }
 
+/** The card's own NAME column (e.g. "革命家", "革命の兆しLV1") instead of its raw faceId, for display in
+ * the enlarge modal's title/face-labels (2026-10-11, per user request: "拡大画像に出てくる ID 代わりに
+ * NAMEを表示するように すべてのカード"). Covers every card-ish sheet (A/B/C/CON/JOB/M/RESOURCE via
+ * getCardRow) plus QST (its own separate getQstRow -- see instForId's matching dispatch just above);
+ * falls back to the bare faceId for anything else (e.g. a not-yet-real id) rather than throwing. */
+function cardDisplayName(faceId) {
+  try {
+    return dataLoaderMod.getCardRow(INDEX, faceId).NAME || faceId;
+  } catch (e) {
+    try {
+      return dataLoaderMod.getQstRow(INDEX, faceId).NAME || faceId;
+    } catch (e2) {
+      return faceId;
+    }
+  }
+}
+
 function showCardEnlargeModal(faceId, visualNode, sibling, siblingVisualNode, pickAction) {
   // 領地(A)カードは2026-10-10の再設計で、board上のAREAタイル拡大(showAreaEnlargeModal)と完全に同じ表示に
   // 統一した(per user: "小麦畑の支配 をクリックすると エリア 小麦畑 をクリックしたときと 全く同じものが
@@ -12944,10 +12965,10 @@ function showCardEnlargeModal(faceId, visualNode, sibling, siblingVisualNode, pi
   // single shownId()/flip-button toggle -- see this function's own top-of-file doc).
   const body = overlay.querySelector('.card-inst-modal__body');
   body.innerHTML = '';
-  overlay.querySelector('.card-inst-modal__title').textContent = faceId;
+  overlay.querySelector('.card-inst-modal__title').textContent = cardDisplayName(faceId);
   if (siblingVisualNode) {
     for (const id of [faceId, sibling]) {
-      body.appendChild(el('div', 'card-inst-modal__face-label', id));
+      body.appendChild(el('div', 'card-inst-modal__face-label', cardDisplayName(id)));
       const section = el('div');
       renderInstBody(section, instForId(id));
       body.appendChild(section);
