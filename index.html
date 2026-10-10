@@ -15,7 +15,7 @@
        古ければ、ブラウザがキャッシュした古いファイルを見ている/pushがまだ反映されていないと一目で
        わかるようにするための目印(実際の挙動には一切影響しない、純粋な表示用の目印)。main.js/index.html/
        data/をpushするたびにここをインクリメントすること。 -->
-  <div id="copyright-notice">© 2026 higebucho Ver.1.014</div>
+  <div id="copyright-notice">© 2026 higebucho Ver.1.015</div>
 
   <!-- 入口バナー (2026-10-04, per user request: "HPに入ったときに大き目バナーを用意して導線をわかりやすく
        したい") -- #app/#weekly-seat-pickerと同じ「画面を丸ごと差し替える」パターン(main.jsのrender()
@@ -35,7 +35,7 @@
         <!-- バージョン表示 (2026-10-08, per user request: "セリフで見えにくいので トップ画像の右下にも") --
              #copyright-noticeはゲーム中のセリフ吹き出しに隠れて見えにくいため、入口バナー(トップ画像)の
              右下にも同じ番号を複製表示する。中身は#copyright-noticeと手動で同期させること。 -->
-        <div id="entry-banner__version">Ver.1.014</div>
+        <div id="entry-banner__version">Ver.1.015</div>
         <button type="button" class="entry-banner__hotspot" id="entry-banner-hero-cta" aria-label="今すぐプレイ"></button>
         <button type="button" class="entry-banner__hotspot" id="entry-banner-tutorial-button" aria-label="チュートリアル"></button>
         <button type="button" class="entry-banner__hotspot" id="entry-banner-local-button" aria-label="ローカル対戦"></button>
@@ -45,6 +45,22 @@
         <button type="button" class="entry-banner__hotspot" id="entry-banner-ranking-button" aria-label="ランキング"></button>
         <button type="button" class="entry-banner__hotspot" id="entry-banner-achievement-button" aria-label="実績記録"></button>
       </div>
+    </div>
+  </div>
+
+  <!-- 更新(リロード)しても進行中のゲームが消えないように (2026-10-11, per user request: "更新ボタンを
+       押すとゲームが消えてトップ画面になってしまいます 更新してもそのままゲーム画面から変わらないように
+       できますか") -- ローカル対戦/ウィークリーチャレンジ/チュートリアル/オンライン対戦のいずれかが進行中
+       のまま普通にブラウザを更新した場合だけ(他の「〇〇を始める」系ボタン経由のreloadは優先してそのまま
+       進む、see main.jsのsessionResumeChoicePendingのdoc)、入口バナーの代わりにこの選択画面を出す。
+       see main.js's renderSessionResumeOverlay/resumeSavedSession/startNewSessionDiscardingSaved/
+       returnToTopDiscardingSaved。 -->
+  <div id="session-resume-overlay" hidden>
+    <div id="session-resume-overlay__box">
+      <div id="session-resume-overlay__message">進行中のゲームがあります。</div>
+      <button type="button" id="session-resume-continue-button" class="session-resume-overlay__button session-resume-overlay__button--primary">ゲームに戻る</button>
+      <button type="button" id="session-resume-new-button" class="session-resume-overlay__button">新しいゲームを始める</button>
+      <button type="button" id="session-resume-top-button" class="session-resume-overlay__button">トップに戻る</button>
     </div>
   </div>
 

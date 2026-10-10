@@ -4707,6 +4707,55 @@ body.tutorial-mode .change-highlight {
   justify-content: center;
 }
 
+/* 更新しても進行中のゲームが消えないように (2026-10-11) -- #entry-banner/#appと同じ「画面を丸ごと
+   差し替える」パターン。#entry-banner[hidden]と同じ理由で、display宣言を持つこのID自身にも
+   [hidden]ルールが必要。 */
+#session-resume-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+#session-resume-overlay[hidden] {
+  display: none;
+}
+#session-resume-overlay__box {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  width: min(320px, calc(100vw - 48px));
+  padding: 24px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+}
+#session-resume-overlay__message {
+  text-align: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.session-resume-overlay__button {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.session-resume-overlay__button--primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
 /* トップ画像 (2026-10-05, per user提供、"青い四角のボタンはいらない"per user訂正後の最終形) --
    index.htmlの#entry-banner__hero-wrap/__hero/各.entry-banner__hotspotの own doc参照。画像自体に
    「今すぐプレイ」CTA+7つのボタンが絵として描かれているので、それぞれの実ピクセル位置(元画像

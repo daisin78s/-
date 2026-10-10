@@ -244,7 +244,10 @@ function consumeWeeklyChallengePending() {
   if (pending) sessionStorage.removeItem(WEEKLY_CHALLENGE_PENDING_KEY);
   return pending;
 }
-const weeklyChallengeActive = consumeWeeklyChallengePending();
+// let, not const (2026-10-11): resumeSavedSession() below can flip this true outside of the normal
+// pending-flag-reload flow, when the player chooses "ゲームに戻る" on a saved ウィークリーチャレンジ
+// session (see this file's own session-resume doc near GAME_SESSION_STORAGE_KEY).
+let weeklyChallengeActive = consumeWeeklyChallengePending();
 
 // チュートリアルモード (2026-09-23, per user request: "チュートリアルモードを作りたい") -- same
 // "stash a flag in sessionStorage + reload" pattern as ウィークリーチャレンジ above, so the resulting
@@ -281,6 +284,136 @@ function startLocalBattle() {
   location.reload();
 }
 
+// 更新(リロード)しても進行中のゲームが消えないように (2026-10-11, per user request: "更新ボタンを押すと
+// ゲームが消えてトップ画面になってしまいます 更新してもそのままゲーム画面から変わらないようにできますか"
+// -- 続けて "チュートリアル/ウィークリー/オンライン対戦も同じように") -- localStorage(ブラウザを閉じても
+// 消えないsessionStorageと違う種類)に、ローカル対戦/ウィークリー/チュートリアルは現在のGameStateその
+// ものを、オンライン対戦は(盤面は既にFirestore側にあるので)どの部屋/席に入っていたかだけを保存する。
+// render()の最後でsaveGameSessionIfApplicableが毎回呼ぶ(GAME_ENDなら逆に消す)。
+//
+// ページ読み込み時にここで保存データを読み、他の明示的な「〇〇を始める」系pending flag
+// (weeklyChallengeActive/tutorialModeActive/debugSetupPlanAtLoad/localBattlePending、いずれも「今まさに
+// そのボタンを押してreloadしてきた」ことを意味する)がどれも立っていない場合だけ、sessionResumeChoicePending
+// を立てて入口バナーの代わりに#session-resume-overlay(resumeSavedSession/
+// startNewSessionDiscardingSaved/returnToTopDiscardingSavedが操作する)を見せる -- そうでなければ、
+// ユーザーは今まさに新しいゲームを選んで始めたところなので、古い保存データより常にその意図が優先される。
+const GAME_SESSION_STORAGE_KEY = 'diceWpGameSession';
+const ONLINE_SESSION_STORAGE_KEY = 'diceWpOnlineSession';
+let pendingGameSession = null;
+try {
+  const raw = localStorage.getItem(GAME_SESSION_STORAGE_KEY);
+  if (raw) pendingGameSession = JSON.parse(raw);
+} catch (e) { pendingGameSession = null; }
+let pendingOnlineSession = null;
+try {
+  const raw = localStorage.getItem(ONLINE_SESSION_STORAGE_KEY);
+  if (raw) pendingOnlineSession = JSON.parse(raw);
+} catch (e) { pendingOnlineSession = null; }
+// Computed further below (right after debugSetupPlanAtLoad/STATE, which this depends on -- see that
+// line's own placement) rather than here, to avoid a TDZ ReferenceError at load.
+let sessionResumeChoicePending = false;
+
+function clearGameSession() {
+  try { localStorage.removeItem(GAME_SESSION_STORAGE_KEY); } catch (e) { /* ignore */ }
+}
+function clearOnlineSession() {
+  try { localStorage.removeItem(ONLINE_SESSION_STORAGE_KEY); } catch (e) { /* ignore */ }
+}
+
+/** Called at the end of every render() (see that function's own call site) -- best-effort, silently
+ * ignores any localStorage failure (quota exceeded, private-browsing mode, etc.) since this is a
+ * convenience feature, never something a real move should be blocked by. Does nothing at all before the
+ * entry banner is dismissed (nothing real to resume yet) or during replayMode (a historical viewer, not
+ * a live game). Online mode persists only the room/seat link, never a state snapshot -- the room's
+ * actual state already lives in Firestore (see subscribeToOnlineRoom). */
+function saveGameSessionIfApplicable(state) {
+  try {
+    if (replayMode || !entryBannerDismissed) return;
+    if (onlineRoomCode) {
+      if (state.phase === 'GAME_END') { clearOnlineSession(); return; }
+      localStorage.setItem(ONLINE_SESSION_STORAGE_KEY, JSON.stringify({ roomCode: onlineRoomCode, localSeatId, isOnlineHost }));
+      return;
+    }
+    if (weeklyChallengeActive && weeklyChallengeSeatChosen === null) return; // still picking a seat
+    if (state.phase === 'GAME_END') { clearGameSession(); return; }
+    const mode = weeklyChallengeActive ? 'weekly' : tutorialModeActive ? 'tutorial' : 'local';
+    const payload = { mode, state };
+    if (mode === 'weekly') payload.weeklyChallengeSeatChosen = weeklyChallengeSeatChosen;
+    // tutorialSeenStepIds only (2026-10-11, per user follow-up: "チュートリアル 全く同じ場所に戻らなくて
+    // も 保存されたところから再開にできないかな") -- restoring just this (plus the GameState itself) lets
+    // TUTORIAL_STEPS' own match(state)-driven discovery (see renderTutorialOverlay) naturally re-find the
+    // right current step on resume; the dozens of pure-UI glow flags (tutorialJobCardGlowing etc.) are
+    // NOT persisted -- restoring every one of those exactly would be impractically fragile, so a resumed
+    // tutorial may be missing a highlight here or there, but the actual step/text always lands correctly.
+    if (mode === 'tutorial') payload.tutorialSeenStepIds = Array.from(tutorialSeenStepIds);
+    localStorage.setItem(GAME_SESSION_STORAGE_KEY, JSON.stringify(payload));
+  } catch (e) { /* best-effort, ignore */ }
+}
+
+/** "ゲームに戻る" (2026-10-11) -- restores STATE in place (same "clear every own-enumerable key, then
+ * reassign" pattern applyIncomingRoomState already uses for incoming online-room states -- STATE is
+ * `const`, only its *contents* can be replaced) from the saved local/weekly/tutorial snapshot, or
+ * re-subscribes to the saved online room. */
+function resumeSavedSession() {
+  if (pendingGameSession) {
+    const session = pendingGameSession;
+    Object.keys(STATE).forEach((k) => delete STATE[k]);
+    Object.assign(STATE, session.state);
+    if (session.mode === 'weekly') {
+      weeklyChallengeActive = true;
+      weeklyChallengeSeatChosen = session.weeklyChallengeSeatChosen || null;
+    } else if (session.mode === 'tutorial') {
+      tutorialModeActive = true;
+      tutorialSeenStepIds.clear();
+      for (const id of session.tutorialSeenStepIds || []) tutorialSeenStepIds.add(id);
+    }
+    entryBannerDismissed = true;
+    sessionResumeChoicePending = false;
+    render(STATE);
+  } else if (pendingOnlineSession) {
+    onlineRoomCode = pendingOnlineSession.roomCode;
+    localSeatId = pendingOnlineSession.localSeatId;
+    isOnlineHost = pendingOnlineSession.isOnlineHost;
+    entryBannerDismissed = true;
+    sessionResumeChoicePending = false;
+    subscribeToOnlineRoom(onlineRoomCode);
+    render(STATE);
+  }
+}
+
+/** "新しいゲームを始める" (2026-10-11) -- discards the saved session, then triggers the exact same
+ * fresh-start flow the corresponding real entry-banner button uses for that mode. */
+function startNewSessionDiscardingSaved() {
+  const session = pendingGameSession;
+  const hadOnlineOnly = !session && !!pendingOnlineSession;
+  clearGameSession();
+  clearOnlineSession();
+  sessionResumeChoicePending = false;
+  if (session && session.mode === 'weekly') { openWeeklyChallenge(); return; }
+  if (session && session.mode === 'tutorial') { openTutorialMode(); return; }
+  if (hadOnlineOnly) { entryBannerDismissed = true; render(STATE); openOnlineLobby(); return; }
+  startLocalBattle();
+}
+
+/** "トップに戻る" (2026-10-11) -- discards the saved session and shows the normal entry banner (no
+ * reload needed -- entryBannerDismissed is still false at this point, same as a genuinely fresh load). */
+function returnToTopDiscardingSaved() {
+  clearGameSession();
+  clearOnlineSession();
+  sessionResumeChoicePending = false;
+  render(STATE);
+}
+
+/** Fills in the one line of #session-resume-overlay that differs by saved-session kind -- the 3
+ * buttons themselves are static markup (see index.html), wired once in the DOM-ready block. */
+function renderSessionResumeOverlay() {
+  document.getElementById('session-resume-overlay').hidden = false;
+  const message = pendingOnlineSession && !pendingGameSession
+    ? 'オンライン対戦の続きがあります。'
+    : '進行中のゲームがあります。';
+  document.getElementById('session-resume-overlay__message').textContent = message;
+}
+
 let weeklyChallengeSeatChosen = null; // playerId ('P1'..'P4') once chosen, null while still picking
 // 席選択画面での初期資源2枚選択のスクラッチ状態 (2026-09-07, per user request: "同じプレイヤーの初期資源
 // カードを２枚タップしたら これで始める Y/N で始まるように", replacing the earlier plain "○○で始める"
@@ -299,6 +432,11 @@ if (tutorialModeActive) {
   const tutorialP1 = STATE.players.find((p) => p.id === 'P1');
   if (tutorialP1) tutorialP1.name = 'あなた';
 }
+
+// sessionResumeChoicePending's real value (see its own declaration further up for why this is split out
+// here instead of computed in place -- debugSetupPlanAtLoad didn't exist yet up there).
+sessionResumeChoicePending = !!(pendingGameSession || pendingOnlineSession)
+  && !weeklyChallengeActive && !tutorialModeActive && !debugSetupPlanAtLoad && !localBattlePending;
 
 // True once this game has used デバッグモード or テストゲーム開始 at any point (2026-09-07, per user
 // spec, for the ranking's 3-way split -- see renderRankingList's own doc): "スタンダード" ranking
@@ -12088,6 +12226,16 @@ function render(state) {
   // itself is full of live-play-only side effects -- AI pumping, checkpoint recording, turn bookkeeping
   // -- none of which make sense, or are even safe, against a frozen historical snapshot).
   if (replayMode) { renderReplayFrame(); return; }
+  // 更新しても進行中のゲームが消えないように (2026-10-11) -- sessionResumeChoicePending自身の doc参照。
+  // 入口バナーより先に、画面を丸ごとこの選択肢に差し替える。
+  if (sessionResumeChoicePending) {
+    document.getElementById('app').hidden = true;
+    document.getElementById('weekly-seat-picker').hidden = true;
+    document.getElementById('entry-banner').hidden = true;
+    renderSessionResumeOverlay();
+    return;
+  }
+  document.getElementById('session-resume-overlay').hidden = true;
   // 入口バナー (2026-10-04, per user request) -- replayMode同様、画面を丸ごと差し替えるパターン。
   // entryBannerDismissedがtrueになるまでは#app/#weekly-seat-pickerどちらも隠す。
   if (!entryBannerDismissed) {
@@ -12127,6 +12275,7 @@ function render(state) {
   // exactly what this specific snapshot (state as of right now, before any AI moves run this tick) needs.
   recordReplaySnapshotIfChanged(state, openTurnPlayerId());
   pushOnlineStateIfChanged(state);
+  saveGameSessionIfApplicable(state);
 
   // Plays out every AI-controlled player's backlog before painting anything (2026-08-03) -- 'instant'
   // resolves it all synchronously right here so the rest of render() sees the post-AI state already;
@@ -13157,6 +13306,10 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('entry-banner-cardlist-button').addEventListener('click', () => { dismissEntryBanner(); openCardListOverlay(); });
   document.getElementById('entry-banner-ranking-button').addEventListener('click', () => { dismissEntryBanner(); openRankingOverlay(); });
   document.getElementById('entry-banner-achievement-button').addEventListener('click', () => { dismissEntryBanner(); openAchievementOverlay(); });
+  // 更新しても進行中のゲームが消えないように (2026-10-11) -- sessionResumeChoicePendingの doc参照。
+  document.getElementById('session-resume-continue-button').addEventListener('click', resumeSavedSession);
+  document.getElementById('session-resume-new-button').addEventListener('click', startNewSessionDiscardingSaved);
+  document.getElementById('session-resume-top-button').addEventListener('click', returnToTopDiscardingSaved);
   document.getElementById('tutorial-bubble__dismiss').addEventListener('click', dismissTutorialStep);
   // 2026-10-02, per user request ("次へをクリックしなくてもENTERキーで次へを押すことはできますか" /
   // "初期設定では次へとところにカーソルがあっている扱いで←→きーをおすとそれが移動する") -- choicesが
