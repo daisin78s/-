@@ -12666,6 +12666,18 @@ function mapIdForAreaCard(faceId) {
 }
 
 function showCardEnlargeModal(faceId, visualNode, sibling, siblingVisualNode, pickAction) {
+  // 領地(A)カードは2026-10-10の再設計で、board上のAREAタイル拡大(showAreaEnlargeModal)と完全に同じ表示に
+  // 統一した(per user: "小麦畑の支配 をクリックすると エリア 小麦畑 をクリックしたときと 全く同じものが
+  // 表示される 違いは そのカードが獲得できるときに このカードを獲得する ボタンがあること") -- カード自身の
+  // 見た目/INSTは表示せず、対応するAREAの現在の階層をそのチェーン+コネクタ表示で丸ごと差し替える。タイトルは
+  // エリア名ではなくカード名("小麦畑の支配")を使う(per user追加指示)。
+  const areaMapId = mapIdForAreaCard(faceId);
+  if (areaMapId && STATE && STATE.maps && STATE.maps[areaMapId]) {
+    const cardName = dataLoaderMod.getCardRow(INDEX, faceId).NAME;
+    showAreaEnlargeModal(STATE.maps[areaMapId].currentAreaId, pickAction, cardName);
+    return;
+  }
+
   const overlay = document.getElementById('card-inst-overlay');
   const modal = overlay.querySelector('.card-inst-modal');
   const visualContainer = overlay.querySelector('.card-inst-modal__visual');
@@ -12759,17 +12771,6 @@ function showCardEnlargeModal(faceId, visualNode, sibling, siblingVisualNode, pi
     }
   } else {
     renderInstBody(body, instForId(faceId));
-  }
-  // 領地(A)カードの拡大時、対応するエリアタイル(現在の実際の階層)も合わせて表示する (2026-10-10, per user
-  // request: "領地カード 拡大すると 対応するエリアを表示するようにして")。pickAction("このカードを獲得する"
-  // ショートカットボタン)はこれまでと完全に同じロジックのまま下に続くので、この表示はその判定に影響しない
-  // (per user: "いままでどおり 表示させるように")。
-  const areaMapId = mapIdForAreaCard(faceId);
-  if (areaMapId && STATE && STATE.maps && STATE.maps[areaMapId]) {
-    const areaSection = el('div', 'card-inst-modal__area-preview');
-    areaSection.appendChild(el('div', 'card-inst-modal__area-preview-label', '対応するエリア'));
-    areaSection.appendChild(buildAreaTilePreviewNode(STATE.maps[areaMapId].currentAreaId));
-    body.appendChild(areaSection);
   }
   flipBtn.hidden = true;
   pickBtn.hidden = !pickAction;
@@ -12962,7 +12963,7 @@ function buildAreaTierUpConnectorsRow(chain, tileRow, wrap) {
  * the tapped tier specifically (not the chain's first entry, which is the same thing unless a card's
  * own tier differs from what's currently on the board -- not possible today, but keeps this correct if
  * that ever changes). No flip/pick button -- neither concept applies here. */
-function showAreaEnlargeModal(areaId) {
+function showAreaEnlargeModal(areaId, pickAction, titleOverride) {
   const overlay = document.getElementById('card-inst-overlay');
   const modal = overlay.querySelector('.card-inst-modal');
   const visualContainer = overlay.querySelector('.card-inst-modal__visual');
@@ -12979,7 +12980,19 @@ function showAreaEnlargeModal(areaId) {
   modal.classList.remove('card-inst-modal--wide', 'card-inst-modal--term');
   modal.classList.add('card-inst-modal--area-wide');
   flipBtn.hidden = true;
-  pickBtn.hidden = true;
+  // pickAction (2026-10-10, per user request: 領地カードの拡大表示をエリア拡大表示と完全に統一し、唯一の
+  // 違いを「獲得可能なら獲得ボタンがある」だけにする -- showCardEnlargeModal側のpick-button配線と全く同じ
+  // パターン) -- 直接board上のAREAタイルをクリックした場合(showAreaEnlargeModalの他の呼び出し元)は
+  // pickActionを渡さないので、これまでと同じくボタンなし。
+  pickBtn.hidden = !pickAction;
+  if (pickAction) {
+    pickBtn.textContent = pickAction.label;
+    pickBtn.disabled = !!pickAction.disabled;
+    pickBtn.onclick = pickAction.disabled ? null : () => {
+      hideCardEnlargeModal();
+      pickAction.onPick();
+    };
+  }
 
   visualContainer.innerHTML = '';
   visualContainer.style.width = '';
@@ -13002,7 +13015,10 @@ function showAreaEnlargeModal(areaId) {
   // 横位置を正しく計算できないため、wrap/rowをvisualContainerに挿入してから呼ぶ(関数内でwrapに追加する)。
   buildAreaTierUpConnectorsRow(chain, row, wrap);
 
-  overlay.querySelector('.card-inst-modal__title').textContent = areaName(areaId);
+  // titleOverride (2026-10-10): 領地カード経由で開いた場合はエリア名("小麦畑")ではなくカード名
+  // ("小麦畑の支配")を表示する -- 直接board上のAREAタイルをクリックした場合は省略され、これまでと同じ
+  // エリア名のまま。
+  overlay.querySelector('.card-inst-modal__title').textContent = titleOverride || areaName(areaId);
   // 2026-10-01, per user request: エリア拡大モーダルの説明文欄(「説明は未設定です」含む)は廃止 -- INSTは
   // 上の矢印コネクタ側にまとめた。
   overlay.querySelector('.card-inst-modal__body').innerHTML = '';

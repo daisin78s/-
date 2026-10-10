@@ -3207,24 +3207,6 @@ body.tutorial-mode .change-highlight {
   white-space: pre-line;
 }
 
-/* 領地(A)カード拡大時の「対応するエリア」表示 (2026-10-10, per user request: "領地カード 拡大すると
-   対応するエリアを表示するようにして") -- showCardEnlargeModal's own body末尾に追加する、現在の実際の
-   階層のエリアタイルの静的プレビュー(buildAreaTilePreviewNode)。 */
-.card-inst-modal__area-preview {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-}
-.card-inst-modal__area-preview-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-faint);
-}
-
 /* BUILD/UPGRADE candidate selection (2026-07-30, real engine wiring pass 3) -- reuses the card-inst
    overlay/modal shell, but needs to be wide enough for a row of card-sized candidates rather than a
    narrow paragraph of text. */
