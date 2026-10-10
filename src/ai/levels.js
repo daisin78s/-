@@ -7,24 +7,38 @@
  * tools/ai_data_report.js's LV1/LV2/LV3 branch and tools/ai_level_comparison.js's random mix, so adding
  * a future level here is enough for both to pick it up automatically; no other code in either tool needs
  * to change. Each entry's aiOptions/moveGeneratorOptions/evaluatorOptions are exactly what gets passed
- * to AIPlayer/MoveGenerator/Evaluator's own constructors -- see their own docs for what each field means
- * (LV3's own fields mirror main.js's aiPlayerLv3/aiEvaluatorLv3 exactly).
+ * to AIPlayer/MoveGenerator/Evaluator's own constructors -- see their own docs for what each field means.
+ *
+ * LV1/LV2/LV3 updated 2026-10-11 (per user report: "AILVの変更が反映されていません" -- run_ai_battle.bat
+ * still offered the old 1-5 lineup/meanings after main.js's own 2026-10-04 LV1/2/3 consolidation (旧LV1
+ * stays LV1, 旧LV3→LV2, 旧LV5→LV3; 旧LV2/旧LV4 dropped from the live selector entirely -- see main.js's
+ * own aiPlayerLv1/Lv2/Lv3 construction comment for the exact mapping/history) rebuilt the live human-vs-
+ * AI selector's own meaning for those 3 names without this file following along. Now mirrors main.js's
+ * aiPlayerLv1/aiPlayerLv2/aiPlayerLv3 exactly, including the single shared aiEvaluator (every level now
+ * gets the full qstAware+conBuildAware+monumentIncentiveAware table, not just the old LV4/LV5). LV4/LV5
+ * below are left exactly as they were -- several other one-off dev tools (manual_play.js,
+ * replay_ai_takeover.js, train_from_human_replay.js, the lv4_depth_experiment/ai_lv4_vs_lv5_tournament
+ * scripts) still reference 'LV4'/'LV5' by name for their own historical comparisons; none of them ever
+ * referenced 'LV1'/'LV2'/'LV3', so updating those 3 here is safe and doesn't disturb any of them.
  *
  * Deliberately NOT used by main.js's in-browser play (its LV1/LV2/LV3 human-vs-AI selector stays its
- * own separate, hardcoded construction) -- changing what a live human-vs-AI game offers is a bigger,
- * separate decision from what the batch analysis tools iterate over, and out of scope here.
+ * own separate, hardcoded construction) -- this file just now tracks the SAME meaning by hand, same as
+ * LV4/LV5 already did relative to main.js's own former aiPlayerLv4 construction.
  */
 const LEVELS = [
-  { name: 'LV1', aiOptions: undefined, moveGeneratorOptions: undefined, evaluatorOptions: undefined },
-  { name: 'LV2', aiOptions: { lookaheadExtraTurns: 1 }, moveGeneratorOptions: undefined, evaluatorOptions: undefined },
+  { name: 'LV1', aiOptions: { lookaheadExtraTurns: 0 }, moveGeneratorOptions: undefined, evaluatorOptions: { qstAware: true, conBuildAware: true, monumentIncentiveAware: true } },
+  { name: 'LV2', aiOptions: { lookaheadExtraTurns: 1 }, moveGeneratorOptions: undefined, evaluatorOptions: { qstAware: true, conBuildAware: true, monumentIncentiveAware: true } },
   {
     name: 'LV3',
     aiOptions: {
-      lookaheadExtraTurns: 1,
-      roundOverrides: { 4: { lookaheadExtraTurns: 20, beamWidth: 10, maxRolloutMoves: 200 } },
+      lookaheadExtraTurns: 2,
+      beamWidth: 3,
+      dieScarcityTieBreak: true,
+      preferExOnOwnTerritory: true,
+      crossRoundLookahead: true,
     },
-    moveGeneratorOptions: undefined,
-    evaluatorOptions: { qstAware: true },
+    moveGeneratorOptions: { preferCastleOverSenate: true },
+    evaluatorOptions: { qstAware: true, conBuildAware: true, monumentIncentiveAware: true },
   },
   {
     // AI LV4 (2026-08-28): same aiOptions as LV3 (main.js's aiPlayerLv4 uses the exact same values), plus

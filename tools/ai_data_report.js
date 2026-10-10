@@ -201,18 +201,22 @@ async function main() {
   const index = buildDataIndex(raw);
   const evalTable = buildEvalTable(raw);
 
-  // "LV4"/"LV5" smart onboarding (2026-08-28, matching main.js's live-UI wiring -- see
-  // driveOneAiStepInner's own RESOURCE_CHOICE/ONBOARDING branches there; LV5 added 2026-09-16 since it
-  // shares LV4's exact onboarding behavior, only its rounds 1-3 search differs -- see levels.js's own
-  // doc): JOB/CON/resource-card picks go through smart-onboarding.js instead of playGame's own
-  // pure-random default. Every other level leaves both undefined, so playGame's onboarding stays exactly
-  // as before.
+  // "LV1"/"LV3" smart onboarding (2026-08-28, originally "LV4"/"LV5"; updated 2026-10-11 to match
+  // main.js's 2026-10-04 LV1/2/3 consolidation -- see levels.js's own doc on the rename/remapping, and
+  // driveOneAiStepInner's RESOURCE_CHOICE/ONBOARDING branches there for the live-UI behavior this
+  // mirrors): resource-card picks go smart for BOTH LV1 and LV3 (usesSmartOnboarding there), but the
+  // full JOB/CON smart-onboarding.js treatment (synergyTable2) is LV3-only (isLv3 there) -- LV1 never
+  // got that half even before the consolidation (see main.js's own 2026-09-23 "AILV1の初期資源カードの
+  // 選び方をAILV5と同じに" request, resource-cards only). LV2 leaves both undefined, so its onboarding
+  // stays exactly as before.
   let resourceCardPicker;
   let synergyTable2;
-  if (aiLevel === 'LV4' || aiLevel === 'LV5') {
+  if (aiLevel === 'LV1' || aiLevel === 'LV3') {
     const synergyTable3 = buildResourceSynergyTable(raw);
-    synergyTable2 = buildConJobSynergyTable(raw);
     resourceCardPicker = (candidateIds, state, idx, player) => pickResourceCards(candidateIds, state, idx, synergyTable3, player.conPhysicalId);
+  }
+  if (aiLevel === 'LV3') {
+    synergyTable2 = buildConJobSynergyTable(raw);
   }
 
   // conjob["CON001A\tJOB001"] = { count, scoreSum, qstScoreSum, rankSum }. scoreSum (2026-08-09, per user

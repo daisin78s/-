@@ -1,7 +1,7 @@
 /**
  * Worker-thread pool member for tools/ai_data_report.js's concurrency>1 path (2026-09-16, per user
  * request to tools/run_ai_battle.js: "4戦同時にできるようにしてほしい"). Each worker loads the game data
- * + LV4/LV5 smart-onboarding synergy tables ONCE at startup (same pattern as tools/ga_worker.js/
+ * + LV1/LV3 smart-onboarding synergy tables ONCE at startup (same pattern as tools/ga_worker.js/
  * tools/lookahead_variant_worker.js), then plays whatever single full game jobs the main thread hands it
  * over parentPort, returning the exact same {state, historyByPlayerId, roundDetailByPlayerId,
  * activationCounts} shape playGame() itself returns so the main thread's processGameResult can aggregate
@@ -32,7 +32,9 @@ const raw = loadGameData(DATA_PATH);
 const index = buildDataIndex(raw);
 const evalTable = buildEvalTable(raw);
 // Built unconditionally at startup (cheap, one-time) rather than per-job -- see ai_data_report.js's own
-// matching setup for why LV4/LV5 specifically get this wiring.
+// matching setup (2026-10-11, originally "LV4/LV5", now "LV1/LV3" -- see levels.js's own doc on the
+// 2026-10-04 consolidation this follows) for why LV1/LV3 specifically get this wiring, and why the
+// resource-card-only vs full-onboarding split differs between them.
 const synergyTable3 = buildResourceSynergyTable(raw);
 const synergyTable2 = buildConJobSynergyTable(raw);
 const resourceCardPicker = (candidateIds, state, idx, player) =>
@@ -42,10 +44,11 @@ parentPort.on('message', (job) => {
   const { jobId, seed, aiLevel } = job;
   try {
     const { aiOptions, moveGeneratorOptions, evaluatorOptions } = getLevel(aiLevel);
-    const usesSmartOnboarding = aiLevel === 'LV4' || aiLevel === 'LV5';
+    const usesResourceCardPicker = aiLevel === 'LV1' || aiLevel === 'LV3';
+    const usesFullSmartOnboarding = aiLevel === 'LV3';
     const { state, historyByPlayerId, roundDetailByPlayerId, activationCounts } = playGame(
       seed, PLAYER_NAMES, index, evalTable, aiOptions, moveGeneratorOptions, evaluatorOptions,
-      undefined, usesSmartOnboarding ? resourceCardPicker : undefined, usesSmartOnboarding ? synergyTable2 : undefined,
+      undefined, usesResourceCardPicker ? resourceCardPicker : undefined, usesFullSmartOnboarding ? synergyTable2 : undefined,
     );
     parentPort.postMessage({ jobId, seed, state, historyByPlayerId, roundDetailByPlayerId, activationCounts });
   } catch (err) {

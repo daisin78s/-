@@ -18,7 +18,15 @@ function check(label, actual, expected) {
 
 check('LEVELS lists LV1/LV2/LV3/LV4/LV5, in that order', LEVELS.map((l) => l.name), ['LV1', 'LV2', 'LV3', 'LV4', 'LV5']);
 check('getLevel("LV2") returns the matching registry entry', getLevel('LV2'), LEVELS[1]);
-check('getLevel("LV3") includes qstAware evaluatorOptions', getLevel('LV3').evaluatorOptions, { qstAware: true });
+// 2026-10-11: LV1/LV2/LV3 updated to mirror main.js's 2026-10-04 LV1/2/3 consolidation (旧LV1→LV1、
+// 旧LV3→LV2、旧LV5→LV3 -- see levels.js's own doc) -- every level now shares the SAME full evaluator
+// (qstAware+conBuildAware+monumentIncentiveAware, the former LV4/LV5-only table), not just a bare
+// qstAware for the old LV3.
+const UNIFIED_EVALUATOR_OPTIONS = { qstAware: true, conBuildAware: true, monumentIncentiveAware: true };
+check('getLevel("LV1") shares the unified evaluatorOptions', getLevel('LV1').evaluatorOptions, UNIFIED_EVALUATOR_OPTIONS);
+check('getLevel("LV2") shares the unified evaluatorOptions', getLevel('LV2').evaluatorOptions, UNIFIED_EVALUATOR_OPTIONS);
+check('getLevel("LV3") shares the unified evaluatorOptions', getLevel('LV3').evaluatorOptions, UNIFIED_EVALUATOR_OPTIONS);
+check('getLevel("LV3") uses preferCastleOverSenate moveGeneratorOptions (matching main.js\'s aiPlayerLv3)', getLevel('LV3').moveGeneratorOptions, { preferCastleOverSenate: true });
 check('getLevel("LV4") includes dieScarcityTieBreak aiOptions', getLevel('LV4').aiOptions.dieScarcityTieBreak, true);
 check('getLevel("LV5") includes crossRoundLookahead aiOptions', getLevel('LV5').aiOptions.crossRoundLookahead, true);
 check('getLevel("LV5") uses beamWidth 3 (vs LV4\'s default 6)', getLevel('LV5').aiOptions.beamWidth, 3);

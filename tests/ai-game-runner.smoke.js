@@ -18,6 +18,7 @@ const { Evaluator } = require('../src/ai/evaluator');
 const { MoveGenerator } = require('../src/ai/move-generator');
 const { Simulator } = require('../src/ai/simulator');
 const { AIPlayer } = require('../src/ai/ai-player');
+const { getLevel } = require('../src/ai/levels');
 
 const raw = loadGameData(path.join(__dirname, '..', 'data', 'game.json'));
 const index = buildDataIndex(raw);
@@ -139,14 +140,17 @@ check('A full game reaches GAME_END, not stuck at MAX_ITERATIONS', state1.phase,
 // one uniform config shared by all 4 seats.
 // ---------------------------------------------------------------------------
 {
-  // All 4 seats assigned "LV1" (levels.js's entry: every option undefined, same as the default uniform
-  // path's own defaults) must behave IDENTICALLY to the plain no-options call for the same seed --
-  // proves levelByPlayerId's per-distinct-level AIPlayer construction doesn't itself change behavior,
-  // only which config gets used.
+  // All 4 seats assigned "LV1" must behave IDENTICALLY to an explicit uniform call using that exact
+  // same config -- proves levelByPlayerId's per-distinct-level AIPlayer construction doesn't itself
+  // change behavior, only which config gets used. 2026-10-11: LV1's own config is no longer "every
+  // option undefined" (that WAS true before main.js's 2026-10-04 LV1/2/3 consolidation, which
+  // levels.js followed on 2026-10-11 -- see that file's own doc) -- the "plain" comparison call now
+  // passes LV1's real config explicitly instead of relying on both sides defaulting to undefined.
   const seed = 'ai-integration-smoke-level-mix-uniform';
-  const plain = playGame(seed, PLAYER_NAMES, index, evalTable);
+  const lv1 = getLevel('LV1');
+  const plain = playGame(seed, PLAYER_NAMES, index, evalTable, lv1.aiOptions, lv1.moveGeneratorOptions, lv1.evaluatorOptions);
   const allLv1 = playGame(seed, PLAYER_NAMES, index, evalTable, undefined, undefined, undefined, { P1: 'LV1', P2: 'LV1', P3: 'LV1', P4: 'LV1' });
-  check('levelByPlayerId with every seat on "LV1" matches the plain uniform call exactly (same seed)', allLv1.historyByPlayerId, plain.historyByPlayerId);
+  check('levelByPlayerId with every seat on "LV1" matches an explicit uniform call using LV1\'s own config (same seed)', allLv1.historyByPlayerId, plain.historyByPlayerId);
 }
 {
   // Genuinely mixed levels (LV1/LV2/LV3 all present in one game) still reaches GAME_END cleanly -- the

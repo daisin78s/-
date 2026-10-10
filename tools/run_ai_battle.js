@@ -78,16 +78,17 @@ async function main() {
     console.log('1以上の整数を入力してください。');
   }
 
+  // 2026-10-11, per user report ("AILVの変更が反映されていません"): main.jsの2026-10-04 LV1/2/3統合
+  // (旧LV1→新LV1、旧LV3→新LV2、旧LV5→新LV3、旧LV2/旧LV4は選べなくなった -- levels.jsの own doc参照)に
+  // 合わせ、ここも本物のゲーム画面と同じ1〜3の3択に揃えた(旧4/5は削除)。
   let aiLevel;
   while (true) {
-    const answer = (await ask(lineIterator, 'AIレベルを選んでください（0: レベル混合(比較用) / 1: LV1 速い / 2: LV2 先読みあり・遅い / 3: LV3 先読み+QST対応・遅い / 4: LV4 LV3+ダイス優先度+スマートオンボーディング・遅い / 5: LV5 LV4+ラウンドまたぎ先読み・さらに遅い）: ')).trim();
+    const answer = (await ask(lineIterator, 'AIレベルを選んでください（0: レベル混合(比較用) / 1: LV1 速い / 2: LV2 先読みあり・遅い / 3: LV3 先読み+ダイス優先度+スマートオンボーディング・さらに遅い）: ')).trim();
     if (answer === '0') { aiLevel = 'MIX'; break; }
     if (answer === '1') { aiLevel = 'LV1'; break; }
     if (answer === '2') { aiLevel = 'LV2'; break; }
     if (answer === '3') { aiLevel = 'LV3'; break; }
-    if (answer === '4') { aiLevel = 'LV4'; break; }
-    if (answer === '5') { aiLevel = 'LV5'; break; }
-    console.log('0 か 1 か 2 か 3 か 4 か 5 を入力してください。');
+    console.log('0 か 1 か 2 か 3 を入力してください。');
   }
 
   // "0: レベル混合" (2026-08-10, per user request: "LV1 2 3をランダムで入れる対戦ができるようにしたい"):
