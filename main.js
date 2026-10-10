@@ -12808,30 +12808,31 @@ function renderAiPacingControl(state) {
   manualBtn.hidden = !showManualBtn;
 }
 
-// "◯" is this project's own placeholder for K in hand-written INST text (matches K's white-circle
-// dot elsewhere) -- confirmed 2026-07-30, generalized from an initial Z-only request.
-const INST_RESOURCE_ALIAS = { '◯': 'K' };
+// 赤〇/青〇/黄〇/Z〇/bare 〇(or ◯) -> A/B/C/Z/K icon (2026-10-11, per user request: "人材カードのINST 〇
+// や 赤〇はアイコンで表示するようにして" -- 続けて "ジョブカードやほかのすべてのカードも") -- the game's
+// own data uses 2 different circle glyphs somewhat interchangeably for this (〇=U+3007, ◯=U+25EF; e.g.
+// CON001B's INST has both: "Z〇が同じ数の◯1個に変わる"), so both are matched the same way rather than
+// assuming the author always picks one. A color word immediately before either circle means that color's
+// resource (A/B/C); "Z" immediately before means Z; no prefix at all means K (plain/colorless 食料).
+// Confirmed via a full scan of every current INST/アイコン/WARNING string in data/game.json (C/CON/JOB
+// sheets) that this 2-case split (color-prefixed vs bare) covers every real occurrence -- no comma-
+// separated "資源A,B,C"-style lists exist anymore (the old, narrower pattern this replaces only ever
+// matched that shape, and nothing in the current data uses it any more).
+const INST_CIRCLE_COLOR_TO_RESOURCE = { 赤: 'A', 青: 'B', 黄: 'C', Z: 'Z' };
+const INST_CIRCLE_PATTERN = /(赤|青|黄|Z)?[〇◯]/g;
 
-/** Renders an INST description into container, replacing every "資源{letters}" run (e.g. "資源Z",
- * "資源A,B,C", "資源◯") with the literal word plus one small colored .action-dot per resource --
- * reuses the same dots/colors as the DSL action-icon rendering (buildActionIcons) rather than
- * introducing a second resource-color system. Confirmed 2026-07-30. */
 function renderInstBody(container, text) {
   container.innerHTML = '';
   if (!text) {
     container.textContent = '(説明は未設定です)';
     return;
   }
-  const pattern = /資源((?:[ABCKZ◯],?)+)/g;
   let lastIndex = 0;
   let match;
-  while ((match = pattern.exec(text))) {
+  while ((match = INST_CIRCLE_PATTERN.exec(text))) {
     if (match.index > lastIndex) container.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
-    container.appendChild(document.createTextNode('資源'));
-    for (const letter of match[1].split(',')) {
-      container.appendChild(actionDot(INST_RESOURCE_ALIAS[letter] || letter));
-    }
-    lastIndex = pattern.lastIndex;
+    container.appendChild(actionDot(INST_CIRCLE_COLOR_TO_RESOURCE[match[1]] || 'K'));
+    lastIndex = INST_CIRCLE_PATTERN.lastIndex;
   }
   container.appendChild(document.createTextNode(text.slice(lastIndex)));
 }
