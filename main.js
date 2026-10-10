@@ -2968,6 +2968,31 @@ function actionDot(resource) {
   dot.dataset.resource = resource;
   return dot;
 }
+
+/** Compact icon-based count display (2026-10-11, per user request: "使用料1K→使用料〇 / 使用料2K→
+ * 使用料〇〇 / 0K→0 / 3K→〇3 / 10K→〇10") -- 0 is a bare "0" text node (no icon at all), 1-2 repeats the
+ * resource's own actionDot() that many times, 3+ switches to a single icon + the plain number instead of
+ * spamming N icons. Returns an array of nodes to append in order (not a single string, since the icon is
+ * a real DOM element, not text) -- see appendUsageFeeLabel's own doc for the one existing caller. */
+function resourceCountIconNodes(resource, count) {
+  if (count <= 0) return [document.createTextNode('0')];
+  if (count <= 2) return Array.from({ length: count }, () => actionDot(resource));
+  return [actionDot(resource), document.createTextNode(String(count))];
+}
+
+/** "使用料" + resourceCountIconNodes('K', amount) (2026-10-11, per user request -- see that function's
+ * own doc for the exact count->display rules). Shared by both map-tile fee-rate labels (renderBoard's
+ * live tile, buildAreaTilePreviewNode's static enlarge-modal preview) and the 使用料回収 free-action
+ * button (renderFeeCollectButton) so the 3 existing "使用料{N}K" callers can't drift apart. Clears
+ * `container` first (callers used to just set .textContent, so this fully replaces whatever was there);
+ * does nothing at all for amount<=0 -- every caller already only invokes this when amount>0 (a 0-fee
+ * area/accumulated-total shows nothing, same as before this change). */
+function renderUsageFeeLabel(container, amount) {
+  container.innerHTML = '';
+  if (amount <= 0) return;
+  container.appendChild(document.createTextNode('使用料'));
+  for (const node of resourceCountIconNodes('K', amount)) container.appendChild(node);
+}
 function actionEmoji(char) {
   return el('span', 'action-emoji', char);
 }
@@ -5605,7 +5630,7 @@ function renderBoard(state, next) {
         feeEl.remove();
       } else {
         const feeRate = areaRow.fee || 0;
-        feeEl.querySelector('.map-tile__fee-rate').textContent = feeRate > 0 ? `使用料${feeRate}K` : '';
+        renderUsageFeeLabel(feeEl.querySelector('.map-tile__fee-rate'), feeRate);
         feeEl.querySelector('.map-tile__fee-amount').textContent = `${mapState.accumulatedFee} K`;
         // replayHighlight (2026-09-09, per user request: "使用料をもらったときその使用料の箇所") -- see
         // computeReplayChangeHighlight's own doc.
@@ -7076,7 +7101,8 @@ function renderFeeCollectButton(container, state, player, canAct) {
   });
   const total = feeMapIds.reduce((sum, mapId) => sum + state.maps[mapId].accumulatedFee, 0);
   if (total <= 0) return;
-  const btn = el('button', 'free-action-button', `使用料${total}K`);
+  const btn = el('button', 'free-action-button');
+  renderUsageFeeLabel(btn, total);
   btn.type = 'button';
   btn.addEventListener('click', () => {
     // 複数エリア分をまとめて1回のUndoで取り消せるよう、ループの前に1回だけスナップショットを取る
@@ -8296,10 +8322,20 @@ const ACHIEVEMENT_CATEGORY_BY_KEY = new Map(ACHIEVEMENT_CATEGORIES.map((c) => [c
 const ACHIEVEMENT_POINT_FORMULA_BY_LABEL = new Map(
   (INDEX.raw['実績解除'] || []).map((row) => [row.NAME, row.point])
 );
+/** Full-width digits (０-９) -> plain ASCII, so achievementPointsForCategory's own regex below doesn't
+ * care whether game.xlsxの「実績解除」シート's point column was typed with full-width or half-width (or
+ * mixed, e.g. "１1") digits (2026-10-11, found while investigating a user data edit that changed
+ * "（１０－順位）*10" to "（１1－順位）*10" -- the OLD code matched that formula via an exact string
+ * literal, so this digit-width mismatch alone would have silently zeroed out ウィークリーランキング's
+ * entire point category). */
+function normalizeFullWidthDigits(text) {
+  return text.replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
+}
 function achievementPointsForCategory(label, value) {
   const formula = ACHIEVEMENT_POINT_FORMULA_BY_LABEL.get(label);
   if (!formula) return 0;
-  if (formula === '（１０－順位）*10') return (10 - value) * 10;
+  const rankMatch = /^（(\d+)－順位）\*10$/.exec(normalizeFullWidthDigits(formula));
+  if (rankMatch) return (Number(rankMatch[1]) - value) * 10;
   const multiplierMatch = /^\*(\d+)$/.exec(formula);
   return multiplierMatch ? value * Number(multiplierMatch[1]) : 0;
 }
@@ -13059,7 +13095,7 @@ function buildAreaTilePreviewNode(areaId) {
     feeEl.remove();
   } else {
     const feeRate = areaRow.fee || 0;
-    feeEl.querySelector('.map-tile__fee-rate').textContent = feeRate > 0 ? `使用料${feeRate}K` : '';
+    renderUsageFeeLabel(feeEl.querySelector('.map-tile__fee-rate'), feeRate);
     feeEl.querySelector('.map-tile__fee-amount').remove();
   }
   return node;
