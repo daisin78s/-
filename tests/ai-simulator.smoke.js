@@ -26,6 +26,14 @@ index.byId.set('CON005B', { sheet: 'CON', row: { ...index.byId.get('CON005B').ro
 // so this patches the old text back onto B006A's row (every other field left as-is) purely so the tests
 // below can keep exercising it against an actual ownable card id.
 index.byId.set('B006A', { sheet: 'B', row: { ...index.byId.get('B006A').row, TAP: 'PAY(K);BUILD((A,B,C,M),6)' } });
+// JOB005's own TAP used to be ON(GET(K),CHANGE(K,A)) -- a reactive ability offered as an optional
+// TAP_REACTION choice -- until the 2026-10-10 data edit moved it to PASSIVE (auto-fires unconditionally,
+// no choice/tap at all; confirmed generic via executor.emit, no code change needed). No card in the
+// current dataset has an ON(...) reaction in its TAP field any more, but TAP_REACTION choice-queuing is
+// still real, still-used engine behavior, so this patches the old text back onto JOB005's row (every
+// other field left as-is) purely so the test below can keep exercising it against an actual ownable
+// card id.
+index.byId.set('JOB005', { sheet: 'JOB', row: { ...index.byId.get('JOB005').row, TAP: 'ON(GET(K),CHANGE(K,A))', PASSIVE: '' } });
 const simulator = new Simulator();
 
 let passCount = 0;
@@ -230,8 +238,9 @@ function giveDie(state, playerId, value) {
 }
 
 // ---------------------------------------------------------------------------
-// TAP_REACTION: JOB005.TAP=ON(GET(K),CHANGE(K,A)), forced to manual mode so GET(K) queues a choice
-// instead of auto-resolving. (2026-08-25 data edit: was CHANGE(K,Z).)
+// TAP_REACTION: JOB005.TAP=ON(GET(K),CHANGE(K,A)) (patched back onto its row above, see that comment),
+// forced to manual mode so GET(K) queues a choice instead of auto-resolving. (2026-08-25 data edit: was
+// CHANGE(K,Z).)
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();

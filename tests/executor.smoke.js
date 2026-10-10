@@ -20,6 +20,14 @@ const index = buildDataIndex(loadGameData(path.join(__dirname, '..', 'data', 'ga
 // as-is) purely so the tests below can keep exercising that still-real, still-used generic engine
 // mechanism (canEndTurn's TOTAL_LIMIT gate) against an actual ownable card id.
 index.byId.set('CON005B', { sheet: 'CON', row: { ...index.byId.get('CON005B').row, TURNEND: 'RESOURCE_TOTAL_LIMIT((A,B,C),7)' } });
+// JOB005's own TAP used to be ON(GET(K),CHANGE(K,A)) -- a reactive ability offered via executor.emit's
+// availableReactions/resolveTapReaction -- until the 2026-10-10 data edit moved it to PASSIVE (auto-fires
+// unconditionally, no choice/tap at all; confirmed generic via executor.emit, no code change needed). No
+// card in the current dataset has an ON(...) reaction in its TAP field any more, but that generic
+// TAP-reaction mechanism is still real, still-used engine behavior, so this patches the old text back
+// onto JOB005's row (every other field left as-is) purely so test block 4 below can keep exercising it
+// against an actual ownable card id.
+index.byId.set('JOB005', { sheet: 'JOB', row: { ...index.byId.get('JOB005').row, TAP: 'ON(GET(K),CHANGE(K,A))', TURNEND: 'UNTAP()', PASSIVE: '' } });
 
 let passCount = 0;
 let failCount = 0;
@@ -298,7 +306,8 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 }
 
 // ---------------------------------------------------------------------------
-// 4. JOB005: TAP=ON(GET(K),CHANGE(K,A)), TURNEND=UNTAP() (2026-08-25 data edit: was CHANGE(K,Z))
+// 4. JOB005 (patched back onto its row above, see that comment): TAP=ON(GET(K),CHANGE(K,A)),
+//    TURNEND=UNTAP() (2026-08-25 data edit: was CHANGE(K,Z))
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
@@ -641,10 +650,10 @@ console.log(`\n${passCount} passed, ${failCount} failed`);
 {
   const state = freshState();
   const target = giveCard(state, 'B004A', 'P1');
-  const row = getCardRow(index, 'JOB007'); // TAP=ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+3);BLOCK_BUILD(...) (2026-08-25: was +2/+1, 2026-09-01: +3)
+  const row = getCardRow(index, 'JOB007'); // TAP=ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+4);BLOCK_BUILD(...) (2026-08-25: was +2/+1, 2026-09-01: +3, 2026-10-10: +4)
   const result = executor.runProgram(state, index, { playerId: 'P1', chosenCardPhysicalId: target }, row.TAP);
   check('MONUMENT_CHANGE_DIE_VALUE targeting a card succeeds with no chosenValue/chosenDelta needed (delta is fixed)', result.success, true);
-  check('...buildValueOverride is 1+3=4', state.cards[target].buildValueOverride, 4);
+  check('...buildValueOverride is 1+4=5', state.cards[target].buildValueOverride, 5);
 }
 {
   // Ineligible targets: not owned by this player, or owned but not a "fixed BUILD value" card at all
@@ -1039,8 +1048,8 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   // 2026-08-20: JOB004/策士's own TAP dropped its BLOCK_BUILD(M,THIS_TURN) clause (per user edit), so
   // this real-data vehicle moved to JOB007/宮廷人, whose TAP still carries BLOCK_BUILD (now A/B/C, not M).
   // The middle line is now MONUMENT_CHANGE_DIE_VALUE(SELF+n) (2026-08-24 data edit, replacing
-  // MONUMENT_DICE_DISCOUNT(2,THIS_TURN); +2 -> +1 on 2026-08-25 -> +3 on 2026-09-01), which needs a
-  // chosenDieId same as CHANGE_DIE_VALUE.
+  // MONUMENT_DICE_DISCOUNT(2,THIS_TURN); +2 -> +1 on 2026-08-25 -> +3 on 2026-09-01 -> +4 on
+  // 2026-10-10), which needs a chosenDieId same as CHANGE_DIE_VALUE.
   const state = freshState();
   const row = getCardRow(index, 'JOB007');
   const player = getPlayerRef(state, 'P1');
@@ -1048,8 +1057,8 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   die.value = 4;
   player.dice.push(die);
   const result = executor.runProgram(state, index, { playerId: 'P1', chosenDieId: die.id }, row.TAP);
-  check('JOB007\'s TAP (ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+3);BLOCK_BUILD(A/B/C,THIS_TURN)) succeeds and grants BZ', { success: result.success, BZ: player.resources.BZ }, { success: true, BZ: 1 });
-  check('...and changes the chosen die by +3 (4 -> 7)', die.value, 7);
+  check('JOB007\'s TAP (ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+4);BLOCK_BUILD(A/B/C,THIS_TURN)) succeeds and grants BZ', { success: result.success, BZ: player.resources.BZ }, { success: true, BZ: 1 });
+  check('...and changes the chosen die by +4 (4 -> 8)', die.value, 8);
   check('...and blocks A,B,C for this player this turn', player.blockedBuildCategoriesThisTurn, ['A', 'B', 'C']);
 }
 {

@@ -117,10 +117,11 @@ function monumentAtRiskFromOpponents(state, index, playerId, monumentFaceId) {
 // long after its TAP grew to +3, and 運命の導きLV2/B003B was still 3 here after its own TAP grew to +4 --
 // both silently understated how close a held die really was to a target's threshold, since
 // requiredDieValue = threshold - bonus overstates the die value actually needed whenever bonus is too
-// low). Row *names* still say "+1"/"+3" (the old values) since they're 評価値_戦略's own sheet-authored
-// labels, not live-computed -- cosmetic only, doesn't affect scoring.
+// low. 2026-10-10: 宮廷人/JOB007's TAP grew again, +3 -> +4, same fix applied again). Row *names* still
+// say "+1"/"+3" (the old values) since they're 評価値_戦略's own sheet-authored labels, not live-computed
+// -- cosmetic only, doesn't affect scoring.
 const SINGLE_DIE_ROWS = [
-  { name: '宮廷人が+1能力で施療院を獲得', ownedFaceId: 'JOB007', bonus: 3, targetFaceId: 'M006' },
+  { name: '宮廷人が+1能力で施療院を獲得', ownedFaceId: 'JOB007', bonus: 4, targetFaceId: 'M006' },
   { name: '運命の導きLV1が+2能力で施療院を獲得', ownedFaceId: 'B003A', bonus: 2, targetFaceId: 'M006' },
   { name: '運命の導きLV1が+2能力で宮殿を獲得', ownedFaceId: 'B003A', bonus: 2, targetFaceId: 'M005' },
   { name: '運命の導きLV2が+3能力で施療院を獲得', ownedFaceId: 'B003B', bonus: 4, targetFaceId: 'M006' },
@@ -129,8 +130,9 @@ const SINGLE_DIE_ROWS = [
 ];
 
 /** Stacking 2+ die-boosting TAPs onto the SAME die (2026-09-03, per user request: "大いなる導きLV2 や
- * 運命の導きLV1 2 宮廷人 などの複合でもAIが判断できるように" -- e.g. 宮廷人's own +3 plus 運命の導きLV2's
- * own +4 turning a real die=6 into 13, reaching 天空の塔/M403's DICE>=13, which no single ability above
+ * 運命の導きLV1 2 宮廷人 などの複合でもAIが判断できるように" -- e.g. 宮廷人's own +4 (2026-10-10: was +3)
+ * plus 運命の導きLV2's own +4 turning a real die=5 into 13, reaching 天空の塔/M403's DICE>=13, which no
+ * single ability above
  * gets remotely close to alone). Unlike SINGLE_DIE_ROWS above (one row per owning-card+target pair, since
  * the user wanted that fine-grained control there), this is one row PER TARGET only (per user decision,
  * prioritizing easy maintenance if a card's own bonus changes again later, over per-card tuning) --
@@ -156,7 +158,7 @@ const SINGLE_DIE_ROWS = [
  * finished as ONE of them, not both -- listed here in descending target-value order so the credited one is
  * whichever the player would actually pursue. */
 const DELTA_ABILITIES = [
-  { faceId: 'JOB007', delta: 3 },
+  { faceId: 'JOB007', delta: 4 },
   { faceId: 'B003A', delta: 2 },
   { faceId: 'B003B', delta: 4 },
 ];

@@ -1692,7 +1692,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "TAPした時ZとKを得る"
+      "INST": "タップするとZ〇と〇を得る"
     },
     {
       "ID": "JOB002",
@@ -1706,10 +1706,10 @@
       "ONCE": "",
       "TAP": "",
       "PASSIVE": "",
-      "TURNEND": "UNTAP()",
+      "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "VPを得たとき必ずTAPする\n得たVPと同じKを5まで得る\n毎ターンアンタップする"
+      "INST": "得たVPと同じ数の〇を得る\n初期資源含む"
     },
     {
       "ID": "JOB003",
@@ -1743,7 +1743,7 @@
       "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "TAPした時、〇4を赤〇青〇黄〇に変換する\n毎ターンアンタップする"
+      "INST": "タップすると〇4を赤〇青〇黄〇に変換する\n毎ターンアンタップする"
     },
     {
       "ID": "JOB005",
@@ -1755,12 +1755,12 @@
       "EMBLEM_C": "",
       "VP": "",
       "ONCE": "",
-      "TAP": "ON(GET(K),CHANGE(K,A))",
-      "PASSIVE": "",
-      "TURNEND": "UNTAP()",
+      "TAP": "",
+      "PASSIVE": "ON(GET(K),CHANGE(K,A))",
+      "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "食料を得たとき必ずTAPする\nそのうちの１個をAに変える\n初期資源含む\n毎ターンアンタップする"
+      "INST": "そのうちの1個をAに変える\n初期資源含む"
     },
     {
       "ID": "JOB006",
@@ -1777,7 +1777,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "追加色Dを得たときZと1VPを得る\n🎲を得たときその数だけ食料を得る\n初期資源含む\n毎ターンアンタップする"
+      "INST": "追加色ダイスを得たときZ〇と1VPを得る\n🎲を得たときその数だけ〇を得る\n初期資源含む\n毎ターンアンタップする"
     },
     {
       "ID": "JOB007",
@@ -1789,12 +1789,12 @@
       "EMBLEM_C": "",
       "VP": "",
       "ONCE": "",
-      "TAP": "ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+3);BLOCK_BUILD(A,THIS_TURN);BLOCK_BUILD(B,THIS_TURN);BLOCK_BUILD(C,THIS_TURN)",
+      "TAP": "ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+4);BLOCK_BUILD(A,THIS_TURN);BLOCK_BUILD(B,THIS_TURN);BLOCK_BUILD(C,THIS_TURN)",
       "PASSIVE": "",
       "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "TAPした時、１資源軽減を得る\nこのターン自分のダイス目１個を+3する\nこのターンA,B,Cカードを建築できない"
+      "INST": "タップすると１資源軽減を得る\nこのターン自分のダイス目１個を+4する\nこのターン通常カードと強化カードを建築できない"
     },
     {
       "ID": "JOB008",
@@ -1845,7 +1845,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "M",
-      "INST": "Bカード革命の兆しをSHOPか山札から探して獲得する\n革命の兆しがいずれかのプレイヤーに先に獲得されていたならば\n代わりに山札からジョブを３枚引きその中からジョブを選ぶ"
+      "INST": "革命の兆しをショップか山札から探して獲得する\n革命の兆しがいずれかのプレイヤーに先に獲得されていたならば\n代わりに山札からジョブを３枚引きその中からジョブを選ぶ"
     },
     {
       "ID": "JOB011",
@@ -1862,7 +1862,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "LVアップされたエリアにダイスを配置した時食料を得る\nそのエリアに自分の色Dがすでにあるならさらに1VPを得る"
+      "INST": "レベルアップされたエリアにダイスを配置した時〇を得る\nそのエリアに自分の色ダイスがすでにあるならさらに1VPを得る"
     }
   ],
   "QST": [

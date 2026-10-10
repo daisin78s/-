@@ -779,43 +779,44 @@ index.raw.QST = [
 // sheet changes.
 // ---------------------------------------------------------------------------
 {
-  // 宮廷人(JOB007)の実際のTAPは+3 (2026-09-02, monument-incentive.js's SINGLE_DIE_ROWS own bonus was
-  // fixed from a stale 1 -- see that file's own comment) -- needs an unplaced die showing exactly 4
-  // (4+3=7=施療院/M006's own DICE threshold).
-  const state = freshState(3);
-  giveCard(state, 'JOB007', 'P1');
-  const d1 = createDie('d1', 'COLOR');
-  d1.value = 4;
-  state.players[0].dice.push(d1);
-  const plainScore = evaluator.score(state, 'P1');
-  check('plain Evaluator ignores 評価値_戦略 entirely (control)', plainScore, evaluator.score(state, 'P1'));
-  check('monumentIncentiveAware credits 宮廷人+1施療院 (round3=200) with a qualifying die=4', evaluatorMonumentIncentiveAware.score(state, 'P1'), plainScore + 200);
-}
-{
-  // Same setup, but die=3 -- 3+3=6, doesn't reach 施療院's >=7 -- no credit.
+  // 宮廷人(JOB007)の実際のTAPは+4 (2026-09-02, monument-incentive.js's SINGLE_DIE_ROWS own bonus was
+  // fixed from a stale 1 -- see that file's own comment; 2026-10-10: the real TAP itself grew again,
+  // +3 -> +4, same fix re-applied) -- needs an unplaced die showing exactly 3 (3+4=7=施療院/M006's own
+  // DICE threshold).
   const state = freshState(3);
   giveCard(state, 'JOB007', 'P1');
   const d1 = createDie('d1', 'COLOR');
   d1.value = 3;
   state.players[0].dice.push(d1);
+  const plainScore = evaluator.score(state, 'P1');
+  check('plain Evaluator ignores 評価値_戦略 entirely (control)', plainScore, evaluator.score(state, 'P1'));
+  check('monumentIncentiveAware credits 宮廷人+1施療院 (round3=200) with a qualifying die=3', evaluatorMonumentIncentiveAware.score(state, 'P1'), plainScore + 200);
+}
+{
+  // Same setup, but die=2 -- 2+4=6, doesn't reach 施療院's >=7 -- no credit.
+  const state = freshState(3);
+  giveCard(state, 'JOB007', 'P1');
+  const d1 = createDie('d1', 'COLOR');
+  d1.value = 2;
+  state.players[0].dice.push(d1);
   check('No credit when the die value is 1 short of what 宮廷人\'s +1 needs', evaluatorMonumentIncentiveAware.score(state, 'P1'), evaluator.score(state, 'P1'));
 }
 {
-  // Same setup (die=4), but 宮廷人 already tapped this round -- the ability isn't available, no credit.
+  // Same setup (die=3), but 宮廷人 already tapped this round -- the ability isn't available, no credit.
   const state = freshState(3);
   const inst = giveCard(state, 'JOB007', 'P1');
   inst.tapped = true;
   const d1 = createDie('d1', 'COLOR');
-  d1.value = 4;
+  d1.value = 3;
   state.players[0].dice.push(d1);
   check('No credit once 宮廷人 is already tapped', evaluatorMonumentIncentiveAware.score(state, 'P1'), evaluator.score(state, 'P1'));
 }
 {
-  // Same setup (die=4, untapped), but 施療院 has already been built by someone -- no longer unclaimed.
+  // Same setup (die=3, untapped), but 施療院 has already been built by someone -- no longer unclaimed.
   const state = freshState(3);
   giveCard(state, 'JOB007', 'P1');
   const d1 = createDie('d1', 'COLOR');
-  d1.value = 4;
+  d1.value = 3;
   state.players[0].dice.push(d1);
   const built = createCardInstance('M006');
   built.ownerId = 'P1';
@@ -823,12 +824,12 @@ index.raw.QST = [
   check('No credit once 施療院 is already claimed (by anyone)', evaluatorMonumentIncentiveAware.score(state, 'P1'), evaluator.score(state, 'P1'));
 }
 {
-  // Same setup (die=4), but at round 1 -- 評価値_戦略's own 1R column is blank(0) for this row, so the
+  // Same setup (die=3), but at round 1 -- 評価値_戦略's own 1R column is blank(0) for this row, so the
   // condition being true still contributes nothing (round-gating lives in the sheet, not extra code).
   const state = freshState(1);
   giveCard(state, 'JOB007', 'P1');
   const d1 = createDie('d1', 'COLOR');
-  d1.value = 4;
+  d1.value = 3;
   state.players[0].dice.push(d1);
   check('No credit at round 1 (sheet\'s own 1R column is blank for this row)', evaluatorMonumentIncentiveAware.score(state, 'P1'), evaluator.score(state, 'P1'));
 }
@@ -852,26 +853,29 @@ index.raw.QST = [
 // added to game.xlsx) -- only the reachability logic is under test here.
 // ---------------------------------------------------------------------------
 {
-  // The user's own headline example: 宮廷人(+3) + 運命の導きLV2(+4) = +7, on a real die=6 -> 13, exactly
-  // 天空の塔/M403's own DICE threshold. Neither ability alone gets remotely close (max single delta is
-  // 4, from 運命の導きLV2), so this only fires through the new combo path.
+  // The user's own headline example, updated for 2026-10-10's 宮廷人 +3->+4 change: 宮廷人(+4) +
+  // 運命の導きLV2(+4) = +8, on a real die=5 -> 13, exactly 天空の塔/M403's own DICE threshold, firing the
+  // combo path. Unlike the old die=6 (which cleared both single-ability thresholds too), die=5 also
+  // happens to independently satisfy 運命の導きLV2's OWN SINGLE_DIE_ROWS entry (bonus4, 凱旋門/M004's
+  // >=9: 5+4=9) -- SINGLE_DIE_ROWS and COMBO_TARGETS aren't mutually exclusive (no shared-die gate
+  // between them), so both credit here: +999 (combo) and +300 (round4's 運命の導きLV2+3凱旋門 single row).
   const state = freshState(4);
   giveCard(state, 'JOB007', 'P1');
   giveCard(state, 'B003B', 'P1');
   const d1 = createDie('d1', 'COLOR');
-  d1.value = 6;
+  d1.value = 5;
   state.players[0].dice.push(d1);
   const plainScore = evaluator.score(state, 'P1');
-  check('monumentIncentiveAware credits 宮廷人+運命の導きLV2 combo -> 天空の塔 (die=6, +3+4=13)', evaluatorMonumentIncentiveAware.score(state, 'P1'), plainScore + 999);
+  check('monumentIncentiveAware credits 宮廷人+運命の導きLV2 combo -> 天空の塔 (die=5, +4+4=13), plus 運命の導きLV2\'s own single-row credit for 凱旋門 (5+4=9)', evaluatorMonumentIncentiveAware.score(state, 'P1'), plainScore + 999 + 300);
 }
 {
-  // Same die (=6), but only 宮廷人 owned (no second die-boosting card) -- exactly 1 die-boost source, so
-  // the combo gate (needs 2+) blocks it entirely. (宮廷人 alone would need die=4 for its own M006 row --
-  // die=6 doesn't satisfy that either, so this is a clean "no credit anywhere" case.)
+  // Same die (=5), but only 宮廷人 owned (no second die-boosting card) -- exactly 1 die-boost source, so
+  // the combo gate (needs 2+) blocks it entirely. (宮廷人 alone would need die=3 for its own M006 row --
+  // die=5 doesn't satisfy that either, so this is a clean "no credit anywhere" case.)
   const state = freshState(4);
   giveCard(state, 'JOB007', 'P1');
   const d1 = createDie('d1', 'COLOR');
-  d1.value = 6;
+  d1.value = 5;
   state.players[0].dice.push(d1);
   check('No combo credit with only 1 die-boosting card owned (gate requires 2+)', evaluatorMonumentIncentiveAware.score(state, 'P1'), evaluator.score(state, 'P1'));
 }

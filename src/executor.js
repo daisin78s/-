@@ -1710,19 +1710,15 @@ function grantResourceAndEmitGet(state, index, context, resource, count) {
 }
 
 /** Grants 料理人(旧実業家)/JOB002's bonus if earned (2026-09-20 redesign, replacing the old
- * "ON(BUILD(),ADD(K))" DSL-driven ability -- per user request, its TAP field is now blank, same "bespoke,
- * no DSL representation" treatment as hasChefAbility's own doc cites) -- reacts to ANY live VP-resource
- * grant of `vpCount` for a player holding this JOB, granting min(vpCount,5) K and tapping the card, gated
- * on the SAME `state.cards[...].tapped` flag every other TAP ability uses (confirmed with the user: the
- * cap (3 originally, raised to 5 on 2026-09-21 per user request) is PER TRIGGERING EVENT, not a lifetime total -- multiple separate VP grants across a game, or even
- * across a single turn, each get their own up-to-5 grant, as long as the card has untapped again by then).
- * TURNEND=UNTAP() in the data resets it for the next turn, same as JOB005A's own ON(GET(K),...) already
- * behaves -- confirmed with the user this genuinely fires every time (not a lifetime one-shot), so a
- * player who never spends a turn without gaining VP could tap/untap it every single turn.
- *
- * Deliberately unconditional/"AUTO" in effect (bypasses the whole isCardAutoMode/pendingChoices reactive-
- * dispatch machinery entirely, same as board.js's own 地主/開拓者 bespoke bonuses) -- matches the user's
- * own "必ずTAPする" (always taps, no player choice) wording, unlike a manual-mode TAP_REACTION_AVAILABLE.
+ * "ON(BUILD(),ADD(K))" DSL-driven ability -- its TAP field is blank, same "bespoke, no DSL representation"
+ * treatment as hasChefAbility's own doc cites, since the DSL's generic ON(GET(x),...) dispatch never
+ * conveys HOW MUCH was granted, only which resource -- see grantResourceAndEmitGet's own call-site
+ * comment) -- reacts to ANY live VP-resource grant of `vpCount` for a player holding this JOB, granting
+ * that same amount of K, no cap and no TAP cost (2026-10-10 redesign, per user confirmation: "両方とも
+ * 廃止(完全に上限なし、毎回VPを得るたびに必ず発動)" -- removes the old 5-cap and the old tapped-gate that
+ * used to limit this to once per untap; every separate live VP grant, however many occur in a turn or
+ * across the game, now gets its own full, uncapped K grant). No longer taps the card at all (data's own
+ * TURNEND=UNTAP() was removed alongside this, since there's nothing left to untap).
  *
  * Confirmed scope, worked through card-by-card with the user: 王女's TAP(ADD(VP)/ADD(2VP)), 孤児院's
  * CHANGE(...,VP,...), 祝福's ONCE(ADD(3VP)), and 地主(JOB011)'s own "LVアップ済みAREAに自分の色Dがすでに
@@ -1736,17 +1732,14 @@ function grantResourceAndEmitGet(state, index, context, resource, count) {
  * counted the exact same "never actually granted live" way QST/晩餐会/栄光の証 are, but the user confirmed
  * a monument BUILD should still count here, unlike those three.
  *
- * Also reports through executor.notifyActivation for the same AI.DATA "使用回数" reason board.js's own
- * bespoke JOB bonuses (地主/開拓者) do. */
+ * Also reports through executor.notifyActivation (kind:'PASSIVE', matching the ability's new no-TAP
+ * shape) for the same AI.DATA "使用回数" reason board.js's own bespoke JOB bonuses (地主/開拓者) do. */
 function grantChefBonusIfEarned(state, index, context, vpCount) {
   if (vpCount <= 0) return;
   if (!hasChefAbility(state, index, context.playerId)) return;
   const player = getPlayer(state, context.playerId);
-  const inst = state.cards[player.jobCardId];
-  if (inst.tapped) return;
-  inst.tapped = true;
-  grantResourceAndEmitGet(state, index, context, 'K', Math.min(vpCount, 5));
-  notifyActivation(state, context.playerId, player.jobCardId, player.jobCardId, 'TAP');
+  grantResourceAndEmitGet(state, index, context, 'K', vpCount);
+  notifyActivation(state, context.playerId, player.jobCardId, player.jobCardId, 'PASSIVE');
 }
 
 module.exports = {

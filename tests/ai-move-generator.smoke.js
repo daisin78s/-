@@ -28,6 +28,14 @@ index.byId.set('CON005B', { sheet: 'CON', row: { ...index.byId.get('CON005B').ro
 // row (every other field left as-is) purely so the tests below can keep exercising that still-real,
 // still-used CHANGE branch against an actual ownable card id.
 index.byId.set('JOB004', { sheet: 'JOB', row: { ...index.byId.get('JOB004').row, TAP: 'CHANGE(3K,2BZ);BLOCK_BUILD(M,THIS_TURN)' } });
+// JOB005's own TAP used to be ON(GET(K),CHANGE(K,A)) -- a reactive ability offered as an optional
+// TAP_REACTION choice -- until the 2026-10-10 data edit moved it to PASSIVE (auto-fires unconditionally,
+// no choice/tap at all; confirmed generic via executor.emit, no code change needed). No card in the
+// current dataset has an ON(...) reaction in its TAP field any more, but TAP_REACTION move generation is
+// still a real, used generic engine mechanism, so this patches the old text back onto JOB005's row
+// (every other field left as-is) purely so the test below can keep exercising it against an actual
+// ownable card id.
+index.byId.set('JOB005', { sheet: 'JOB', row: { ...index.byId.get('JOB005').row, TAP: 'ON(GET(K),CHANGE(K,A))', PASSIVE: '' } });
 const moveGenerator = new MoveGenerator();
 // Generic avoidMapIdFromRound policy exercise (2026-08-28: no longer used by any AI level -- LV3's own
 // MAP007/round-3 usage of this was removed per user request "3Rから訓練場を避けるは削除してください" --

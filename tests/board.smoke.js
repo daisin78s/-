@@ -135,12 +135,13 @@ function giveDie(state, playerId, value) {
 // ---------------------------------------------------------------------------
 // 料理人/JOB002 (renamed from 実業家 2026-09-20, alongside a full ability redesign replacing its old
 // TAP=ON(BUILD(),ADD(K))): reacts to ANY live VP-resource grant (executor.grantResourceAndEmitGet('VP',
-// ...), from any card or bespoke bonus) by tapping the card and granting min(vpGained,3) K -- see
+// ...), from any card or bespoke bonus) by granting that same amount of K -- see
 // executor.grantChefBonusIfEarned's own doc for the full worked-through trigger scope (confirmed with the
-// user card-by-card). Bespoke, no DSL representation -- TAP field is blank in the data. Gated on the same
-// state.cards[...].tapped flag every other TAP ability uses; TURNEND=UNTAP() resets it each turn. A
-// monument's own printed VP (never a live grant) gets a second, explicit trigger of its own from
-// board.resolveBuildNew.
+// user card-by-card). Bespoke, no DSL representation -- TAP field is blank in the data. 2026-10-10
+// redesign (per user confirmation: "両方とも廃止(完全に上限なし、毎回VPを得るたびに必ず発動)"): no longer
+// capped, no longer taps the card/gated on untapping -- every separate live VP grant gets its own full,
+// uncapped K grant, every time. A monument's own printed VP (never a live grant) gets a second, explicit
+// trigger of its own from board.resolveBuildNew.
 // ---------------------------------------------------------------------------
 function giveJob002(state, playerId) {
   const p = player(state, playerId);
@@ -154,37 +155,31 @@ function giveJob002(state, playerId) {
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  const jobInst = giveJob002(state, 'P1');
+  giveJob002(state, 'P1');
   const beforeK = p1.resources.K || 0;
   executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'VP', 2);
-  check('料理人: a live 2VP grant grants 2K (within the cap)', (p1.resources.K || 0) - beforeK, 2);
-  check('...and taps JOB002', state.cards[jobInst.physicalId].tapped, true);
+  check('料理人: a live 2VP grant grants 2K', (p1.resources.K || 0) - beforeK, 2);
 }
 {
-  // Cap is per-triggering-event (confirmed with the user), not a lifetime total -- a single grant of 5VP
-  // still only ever yields 5K (cap raised 3->5 on 2026-09-21).
+  // No cap (2026-10-10 redesign) -- a single grant of 7VP now yields the full 7K, not capped at 5.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   giveJob002(state, 'P1');
   const beforeK = p1.resources.K || 0;
   executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'VP', 7);
-  check('料理人: a single 7VP grant is capped at 5K, not 7', (p1.resources.K || 0) - beforeK, 5);
+  check('料理人: a single 7VP grant is uncapped, grants the full 7K', (p1.resources.K || 0) - beforeK, 7);
 }
 {
-  // Tap-gating: a 2nd VP grant before the card untaps does nothing more; untapping (TURNEND=UNTAP() in
-  // the real data) lets it fire again.
+  // No tap-gating (2026-10-10 redesign) -- multiple separate VP grants in a row each trigger their own
+  // full K grant, with no suppression between them (the card is never tapped by this ability at all).
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   const jobInst = giveJob002(state, 'P1');
   executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'VP', 1);
   const afterFirstK = p1.resources.K || 0;
   executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'VP', 1);
-  check('料理人: a 2nd VP grant before untapping triggers nothing more', (p1.resources.K || 0) - afterFirstK, 0);
-
-  state.cards[jobInst.physicalId].tapped = false; // simulates TURNEND=UNTAP()
-  const beforeThirdK = p1.resources.K || 0;
-  executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'VP', 1);
-  check('料理人: fires again once untapped', (p1.resources.K || 0) - beforeThirdK, 1);
+  check('料理人: a 2nd VP grant in the same turn still triggers fully', (p1.resources.K || 0) - afterFirstK, 1);
+  check('...and never taps the card at all', state.cards[jobInst.physicalId].tapped, false);
 }
 {
   const state = freshStateWithShops();
@@ -200,13 +195,12 @@ function giveJob002(state, playerId) {
   // COST blank -- free to build) keeps this test isolated from any BZ/affordability setup.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  const jobInst = giveJob002(state, 'P1');
+  giveJob002(state, 'P1');
   state.shops.M.slots.SHOP001 = 'M001';
   const beforeK = p1.resources.K || 0;
   const result = board.resolveBuild(state, index, { playerId: 'P1' }, { type: 'BUILD_NEW', faceId: 'M001', shopKey: 'M', slotId: 'SHOP001' });
   check('Building M001 (記念碑) succeeds', result.success, true);
-  check('料理人: building a monument grants K matching its printed VP (4, under the cap of 5)', (p1.resources.K || 0) - beforeK, 4);
-  check('...and taps JOB002', state.cards[jobInst.physicalId].tapped, true);
+  check('料理人: building a monument grants K matching its printed VP (4)', (p1.resources.K || 0) - beforeK, 4);
 }
 {
   // Initial-RESOURCE-card printed VP is now a LIVE grant (2026-09-23, per user request: "初期資源のVPも
@@ -216,7 +210,7 @@ function giveJob002(state, playerId) {
   // (3) still trigger 料理人's chef bonus the same live-GET(VP) way any other VP grant does.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  const jobInst = giveJob002(state, 'P1');
+  giveJob002(state, 'P1');
   const inst = createCardInstance('R004'); // R004 = "2VP,Z", ONCE=ADD(K,Z)
   inst.ownerId = 'P1';
   state.cards[inst.physicalId] = inst;
@@ -225,10 +219,8 @@ function giveJob002(state, playerId) {
   setup.receiveInitialResources(state, index, 'P1');
   check('R004: its printed 2VP is now a live resources.VP grant (badge-visible)', p1.resources.VP || 0, 2);
   check('...computeFinalScore counts it exactly once (2), not double-counted via cardVp', scoring.computeFinalScore(state, index, 'P1'), 2);
-  // Total K delta = R004's own ONCE=ADD(K,Z) (1K) + the chef bonus matching its printed VP (2, under the
-  // cap of 5) = 3.
+  // Total K delta = R004's own ONCE=ADD(K,Z) (1K) + the chef bonus matching its printed VP (2) = 3.
   check('料理人: receiving R004 (2VP) grants K = ONCE\'s own 1K + a chef bonus matching its printed VP (2)', (p1.resources.K || 0) - beforeK, 3);
-  check('...and taps JOB002', state.cards[jobInst.physicalId].tapped, true);
 }
 
 // ---------------------------------------------------------------------------
@@ -1148,7 +1140,7 @@ function giveJob002(state, playerId) {
   check('...the extra C from JOB004 is untouched (A004A never needed it)', p1.resources.C, 1);
 }
 {
-  // JOB007.TAP=ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+3);BLOCK_BUILD(A,THIS_TURN);BLOCK_BUILD(B,
+  // JOB007.TAP=ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+4);BLOCK_BUILD(A,THIS_TURN);BLOCK_BUILD(B,
   // THIS_TURN);BLOCK_BUILD(C,THIS_TURN) -- 2026-08-07, replacing the old ON(BUILD(U,M),ADD(BZ)) reaction
   // (per user feedback: reacting *after* an UPGRADE/Monument build meant the granted BZ arrived too late
   // to help pay for the very build that triggered it, and evaporated unspent at TURNEND since a turn
@@ -1159,7 +1151,8 @@ function giveJob002(state, playerId) {
   // rather than an ON(...) reaction, it has no auto/manual concept at all -- see main.js's
   // reactiveTapKind/bareTapKind split -- so this also settles the user's request to make it manual-only).
   // The middle MONUMENT_CHANGE_DIE_VALUE(SELF+n) line (2026-08-24 data edit, replacing the earlier
-  // MONUMENT_DICE_DISCOUNT(2,THIS_TURN); +2 -> +1 on 2026-08-25 -> +3 on 2026-09-01) reuses
+  // MONUMENT_DICE_DISCOUNT(2,THIS_TURN); +2 -> +1 on 2026-08-25 -> +3 on 2026-09-01 -> +4 on
+  // 2026-10-10) reuses
   // CHANGE_DIE_VALUE's own mechanic with a fixed delta -- see command-builder.lowerMonumentChangeDieValue/
   // executor.runMonumentChangeDieValue's own docs.
   const state = freshStateWithShops();
@@ -1173,7 +1166,7 @@ function giveJob002(state, playerId) {
   const result = board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: die.id }, jobInst.physicalId);
   check('JOB007.TAP=ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(...);BLOCK_BUILD(...) succeeds as a direct (non-reactive) TAP', result, { success: true });
   check('...gained 1 BZ for free', p1.resources.BZ, 1);
-  check('...the chosen die is now +3 (5 -> 8, no wrap)', die.value, 8);
+  check('...the chosen die is now +4 (5 -> 9, no wrap)', die.value, 9);
   check('...the card is now tapped', state.cards[jobInst.physicalId].tapped, true);
   check('...A/B/C builds are blocked this turn', p1.blockedBuildCategoriesThisTurn.slice().sort(), ['A', 'B', 'C']);
   check('...A/B/C builds are excluded from candidates this turn', board.getBuildCandidates(state, index, 'P1', ['A', 'B', 'C'], 8).length, 0);
