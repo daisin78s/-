@@ -398,6 +398,33 @@ function dominate(state, mapId, playerId) {
 }
 
 // ---------------------------------------------------------------------------
+// Already-banked usage fee on an owned map (2026-10-11, per user follow-up: "2Kたまっていれば、その支配
+// を獲得すれば即座に2K余分に手に入ることを認識できるようにして" -- see evaluator.js's own doc just above
+// the FEE_OPPORTUNITY_GROUP block for the full reasoning). Uses MAP001 (not a FEE_OPPORTUNITY_GROUP member
+// card, to keep this isolated) via a bare dominate() + accumulatedFee override, no real card ownership
+// needed since this term only reads map.feeOwnerId/accumulatedFee, not player.ownedCardPhysicalIds.
+// ---------------------------------------------------------------------------
+{
+  const state = freshState(1);
+  dominate(state, 'MAP001', 'P1');
+  state.maps['MAP001'].accumulatedFee = 2;
+  check('Owning a map with 2K already banked scores +2K on top of everything else', round6(evaluator.score(state, 'P1')), round6(2 * evalTable[1].K));
+}
+{
+  const state = freshState(1);
+  dominate(state, 'MAP001', 'P1'); // accumulatedFee defaults to 0
+  check('Owning a map with nothing banked (the default) credits no extra score', evaluator.score(state, 'P1'), 0);
+}
+{
+  const state = freshState(2);
+  const p2 = createPlayer('P2', 'Bob');
+  state.players.push(p2);
+  dominate(state, 'MAP001', 'P2'); // owned by an OPPONENT, not the scored player
+  state.maps['MAP001'].accumulatedFee = 5;
+  check('A banked fee on a map owned by someone ELSE credits nothing for this player', evaluator.score(state, 'P1'), 0);
+}
+
+// ---------------------------------------------------------------------------
 // Round sensitivity: the same holdings score differently across rounds, since weights (esp. D and VP)
 // are round-dependent -- this is the whole point of a per-round eval table.
 // ---------------------------------------------------------------------------

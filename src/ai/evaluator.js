@@ -297,6 +297,22 @@ class Evaluator {
       }
     }
 
+    // Already-banked usage fee on an owned map (2026-10-11, per user question: "AIは例えば訓練場に使用料
+    // が2Kたまっていて訓練場の支配がまだ誰も持っていないとき それを認識できますか" -> confirmed no, then
+    // "2Kたまっていれば、その支配を獲得すれば即座に2K余分に手に入ることを認識できるようにして"). Whoever
+    // owns a map (feeOwnerId===playerId) can freely COLLECT_FEE it any time, no cap at all (see
+    // executor.collectUsageFee's own doc: "使用料回収は未回収の使用料がある限り何回でも使える"), so a
+    // balance already sitting there is worth exactly as much as that much K already in hand -- same v('K')
+    // weight, not a separate constant. Scored here (not just left to move-generator's own COLLECT_FEE move)
+    // specifically so an UPGRADE/BUILD move that CLAIMS a map someone (typically 異端者/JOB006B, see
+    // board.chargeHereticFee's own doc) had already banked K into scores higher than claiming an otherwise-
+    // identical map with nothing banked, even in a single-ply evaluation with no lookahead needed:
+    // runSetCurrentArea sets feeOwnerId to the acting player synchronously and never touches
+    // accumulatedFee, so the very state this function scores right after that move already reflects it.
+    for (const mapState of Object.values(state.maps)) {
+      if (mapState.feeOwnerId === playerId && mapState.accumulatedFee > 0) total += mapState.accumulatedFee * v('K');
+    }
+
     // conBuildAware (2026-08-28, "AI LV4" only -- see this class's own constructor doc and
     // con-build-synergy.js's doc for the motivating bug report): the player's own chosen CON face's
     // NAME (e.g. "憤怒"), looked up once here rather than per owned card below. null whenever the
