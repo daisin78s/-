@@ -4816,7 +4816,13 @@ body.tutorial-mode .change-highlight {
      を経て、背景を直接のbackgroundプロパティではなく::before疑似要素に分離(下記)。padding/margin-left
      はテキストの現在位置を決めている値なので触らず、::beforeのinsetだけ調整すれば文字を動かさずに
      背景の見た目だけ左右に広げられる。 */
+  /* 2026-10-11, per user報告「黒いのが消えた」の修正: position:relativeだけではz-indexを指定しない限り
+     新しいスタッキングコンテキストができず、::beforeのz-index:-1がこの要素の背後ではなく、さらに上位
+     (#entry-banner__hero-wrap等、どれもposition:relative/absoluteのみでz-index未指定)まで突き抜けて
+     背景写真(img)の裏に回り込んでしまっていた(=見えなくなっていた)。z-index:0を明示してここで
+     スタッキングコンテキストを確立し、::beforeを正しくこの要素内(文字の背後/写真の手前)に収める。 */
   position: relative;
+  z-index: 0;
   padding: 14px 18px;
   margin-left: -32px;
 }
