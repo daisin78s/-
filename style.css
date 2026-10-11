@@ -4826,7 +4826,8 @@ body.tutorial-mode .change-highlight {
   font-size: clamp(34px, 8vw, 70px);
 }
 #entry-banner__tagline-sub {
-  font-size: clamp(12px, 1.8vw, 16px);
+  /* 2026-10-11, per user request: "サイズ少し大きく" */
+  font-size: clamp(14px, 2.2vw, 19px);
   font-weight: 600;
   max-width: 420px;
   color: #f4f4f0;
