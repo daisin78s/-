@@ -4834,32 +4834,26 @@ body.tutorial-mode .change-highlight {
   align-items: stretch;
 }
 
-/* 青地+太めの金縁+金の▶アイコン+白文字の錠剤ボタン (2026-10-11, per user request: "可能な限り前に
-   近づけて 手は抜かないでね" -- 旧画像の実物を拡大して正確に配色を取り直した: 地は紺ではなく明るめの
-   ロイヤルブルー、縁は太め(4px)の金、▶アイコンは金、文字は白)。 */
+/* ユーザー提供の専用素材(assets/entry-banner-cta.png)を使用 (2026-10-11, per user request: "今すぐ
+   プレイのボタンはこちらで作るので"/「前の画像を参考に位置と大きさ調整して」) -- 旧
+   assets/entry-banner-hero.jpgでの実測位置(左4.9%・上49.7%・幅22.1%、index.html own doc参照)を
+   hero-wrap基準の絶対位置として再現。以前ここにあったCSSのみの錠剤ボタン再現は不要になり撤去。 */
 .entry-banner__cta {
+  position: absolute;
+  left: 4.9%;
+  top: 49.7%;
+  width: 22.1%;
   display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 32px;
-  border: 4px solid #e2b24f;
-  border-radius: 999px;
-  background: linear-gradient(180deg, #1f55b0, #0f2f6e);
-  color: #fff;
-  font-size: clamp(15px, 2vw, 19px);
-  font-weight: 800;
-  letter-spacing: 0.04em;
+  border: none;
+  background: transparent;
+  padding: 0;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  line-height: 0;
 }
-.entry-banner__cta::before {
-  content: '';
-  display: inline-block;
-  width: 0;
-  height: 0;
-  border-top: 7px solid transparent;
-  border-bottom: 7px solid transparent;
-  border-left: 11px solid #e2b24f;
+.entry-banner__cta img {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
 /* 下部の帯は画像端いっぱいに敷く (旧画像のボタン行が画面端まで続いていた見た目に合わせる)。 */

@@ -15,7 +15,7 @@
        古ければ、ブラウザがキャッシュした古いファイルを見ている/pushがまだ反映されていないと一目で
        わかるようにするための目印(実際の挙動には一切影響しない、純粋な表示用の目印)。main.js/index.html/
        data/をpushするたびにここをインクリメントすること。 -->
-  <div id="copyright-notice">© 2026 higebucho Ver.1.035</div>
+  <div id="copyright-notice">© 2026 higebucho Ver.1.036</div>
 
   <!-- 入口バナー (2026-10-04, per user request: "HPに入ったときに大き目バナーを用意して導線をわかりやすく
        したい") -- #app/#weekly-seat-pickerと同じ「画面を丸ごと差し替える」パターン(main.jsのrender()
@@ -38,7 +38,7 @@
         <!-- バージョン表示 (2026-10-08, per user request: "セリフで見えにくいので トップ画像の右下にも") --
              #copyright-noticeはゲーム中のセリフ吹き出しに隠れて見えにくいため、入口バナー(トップ画像)の
              右下にも同じ番号を複製表示する。中身は#copyright-noticeと手動で同期させること。 -->
-        <div id="entry-banner__version">Ver.1.035</div>
+        <div id="entry-banner__version">Ver.1.036</div>
         <!-- 見出し文言+CTA (2026-10-11, per user request: "ダイスで築く、あなただけの王国。などの文言も
              前と同じように表示して 今すぐプレイボタンも" -- 旧画像に焼き込まれていたキャッチコピーを、
              新背景では実テキストとして表示(per user: "文言は後から変更できるように" -- 画像ではなく
@@ -48,8 +48,13 @@
             <span id="entry-banner__tagline-title">ダイスで築く、<br>あなただけの<br><span id="entry-banner__tagline-title-accent">王国。</span></span>
             <span id="entry-banner__tagline-sub">ダイスをワーカーとして配置し、4ラウンドで最高得点を目指す本格ワーカープレイスメントゲーム。</span>
           </div>
-          <button type="button" id="entry-banner-hero-cta" class="entry-banner__cta">今すぐプレイ</button>
         </div>
+        <!-- 2026-10-11, per user request: "今すぐプレイのボタンはこちらで作るので"(素材差し替え)+
+             「前の画像を参考に位置と大きさ調整して」-- 旧assets/entry-banner-hero.jpgでのCTA実測位置
+             ((75,476)-(414,563)、1534x957基準 -- 左4.9%・上49.7%・幅22.1%)を新背景(1536x1024)にも
+             同じ比率で適用。見出し文言の自然な流れ(flex column)から外し、hero-wrap基準の絶対位置に
+             個別配置。 -->
+        <button type="button" id="entry-banner-hero-cta" class="entry-banner__cta"><img src="assets/entry-banner-cta.png" alt="今すぐプレイ"></button>
         <div id="entry-banner__overlay-panel">
           <div id="entry-banner__button-row">
             <!-- 並び順 (2026-10-11, per user spec): チュートリアル/ローカル対戦/オンライン対戦/
