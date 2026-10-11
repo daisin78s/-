@@ -4810,7 +4810,9 @@ body.tutorial-mode .change-highlight {
      変更(Webフォントは読み込まず、既存のfont-family慣習(system-ui中心)を踏襲しつつこの見出しだけ
      明朝体を明示指定)。 */
   font-family: "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", "MS PMincho", serif;
-  font-size: clamp(30px, 6.8vw, 58px);
+  /* 2026-10-11, per user request: "ダイスで築く、あなただけの...フォントサイズ少し小さく 王国は少し
+     大きく" -- 1-2行目はここ(縮小)、3行目「王国。」だけ.tagline-title-accent側で別途拡大。 */
+  font-size: clamp(26px, 6vw, 50px);
   font-weight: 900;
   line-height: 1.25;
   color: #fff;
@@ -4821,6 +4823,7 @@ body.tutorial-mode .change-highlight {
 }
 #entry-banner__tagline-title-accent {
   color: #e9c164;
+  font-size: clamp(34px, 8vw, 70px);
 }
 #entry-banner__tagline-sub {
   font-size: clamp(12px, 1.8vw, 16px);
