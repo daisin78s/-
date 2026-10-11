@@ -12,7 +12,7 @@ const path = require('path');
 const { loadGameData, buildDataIndex } = require('../src/data-loader');
 const { buildEvalTable } = require('../src/ai/eval-table');
 const { playGame, driveTurn, driveOnboarding } = require('../src/ai/game-runner');
-const { createEmptyGameState, createDie, createCardInstance } = require('../src/game-state');
+const { createEmptyGameState, createDie, createCardInstance, splitCardId } = require('../src/game-state');
 const setup = require('../src/setup');
 const { Evaluator } = require('../src/ai/evaluator');
 const { MoveGenerator } = require('../src/ai/move-generator');
@@ -58,7 +58,8 @@ check('A full game reaches GAME_END, not stuck at MAX_ITERATIONS', state1.phase,
 }
 
 // ---------------------------------------------------------------------------
-// JOB010/革命家's PICK_JOB_REPLACEMENT (2026-08-21): driveOnboarding must resolve this synchronously
+// 革命家(JOB001B, physical id JOB001 -- renamed from the old bare JOB010 by the 2026-10-11 JOB A/B
+// redesign)'s PICK_JOB_REPLACEMENT (2026-08-21): driveOnboarding must resolve this synchronously
 // (random pick, same policy as its UNTAP_CHOICE handling in driveTurn) rather than leaving it dangling
 // in state.pendingChoices -- an AI player has no other code path that would ever surface/resolve it.
 // ---------------------------------------------------------------------------
@@ -70,12 +71,12 @@ check('A full game reaches GAME_END, not stuck at MAX_ITERATIONS', state1.phase,
   setup.rollInitialColorDice(state);
   setup.dealConCards(state);
   state.cards.B005.ownerId = 'P2'; // simulate 革命の兆し already taken, forcing the replacement-choice branch (2026-08-24 rework: this used to be B007)
-  state.jobPool = ['JOB010']; // force driveOnboarding's random JOB pick to land on JOB010
+  state.jobPool = ['JOB001B']; // force driveOnboarding's random JOB pick to land on 革命家
   driveOnboarding(state, index, 'P1', evalTable);
   check('driveOnboarding leaves no dangling PICK_JOB_REPLACEMENT choice for the AI player', state.pendingChoices.some((c) => c.kind === 'PICK_JOB_REPLACEMENT'), false);
   const p1 = state.players.find((p) => p.id === 'P1');
-  assertTrue('P1 ends up with some job (the replacement, not JOB010)', !!p1.jobCardId && p1.jobCardId !== 'JOB010');
-  check('...and it is actually owned', p1.ownedCardPhysicalIds.includes(p1.jobCardId), true);
+  assertTrue('P1 ends up with some job (the replacement, not 革命家/JOB001B)', !!p1.jobCardId && p1.jobCardId !== 'JOB001B');
+  check('...and it is actually owned', p1.ownedCardPhysicalIds.includes(splitCardId(p1.jobCardId).physicalId), true);
 }
 
 // ---------------------------------------------------------------------------
@@ -91,9 +92,9 @@ check('A full game reaches GAME_END, not stuck at MAX_ITERATIONS', state1.phase,
     const h = history1[playerId];
     check(`${playerId}: history has exactly the 6 specified fields`, Object.keys(h).sort(), ['conFaceId', 'finalScore', 'firstRound1BuildFaceId', 'jobFaceId', 'rank', 'round1DDiceGained'].sort());
     assertTrue(`${playerId}: conFaceId looks like a CON face ID`, /^CON\d+[AB]$/.test(h.conFaceId));
-    // JOB ids dropped their trailing tier letter (2026-08-0X) -- unlike CON/firstRound1BuildFaceId
-    // below (still real A/B-tiered decks), a JOB id is now always bare, e.g. "JOB005".
-    assertTrue(`${playerId}: jobFaceId looks like a JOB face ID`, /^JOB\d+$/.test(h.jobFaceId));
+    // JOB ids regained a real A/B tier on 2026-10-11 (see game-state.js's splitCardId doc on the
+    // redesign) -- same shape as CON's own face IDs now, e.g. "JOB005B".
+    assertTrue(`${playerId}: jobFaceId looks like a JOB face ID`, /^JOB\d+[AB]$/.test(h.jobFaceId));
     // Tier suffix is optional (2026-08-05, fix: this regex never actually allowed a Monument build --
     // M-series cards have no A/B tier at all, e.g. "M002", unlike A/B/C decks which always have one --
     // this just hadn't been exercised by this seed's history until the usage-fee softlock fix below let
@@ -176,8 +177,8 @@ check('A full game reaches GAME_END, not stuck at MAX_ITERATIONS', state1.phase,
     setup.prepareMaps(state, index);
     setup.prepareShops(state, index);
     const p1 = state.players.find((p) => p.id === 'P1');
-    p1.jobCardId = 'JOB003';
-    const jobInst = createCardInstance('JOB003');
+    p1.jobCardId = 'JOB003A';
+    const jobInst = createCardInstance('JOB003A');
     jobInst.ownerId = 'P1';
     state.cards[jobInst.physicalId] = jobInst;
     p1.ownedCardPhysicalIds.push(jobInst.physicalId);

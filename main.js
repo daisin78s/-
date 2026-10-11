@@ -220,10 +220,10 @@ function createInitialState(plan, forcedSeed) {
   } else {
     setupMod.dealResourceCandidates(state, INDEX);
   }
-  // チュートリアルでは一般市民(JOB001)が必ずJOBプールに入るようにする (2026-09-26, per user request:
-  // "チュートリアルでは町人は必ず出てくる") -- dealJobPoolの既存のpreferredFaceIds機能(元々はデバッグ
-  // セットアップの「テストゲーム開始」用)をそのまま流用する。
-  const preferredJobs = [...(tutorialModeActive ? ['JOB001'] : []), ...(plan ? plan.job : [])];
+  // チュートリアルでは一般市民(JOB001A, 2026-10-11redesign前はJOB001)が必ずJOBプールに入るようにする
+  // (2026-09-26, per user request: "チュートリアルでは町人は必ず出てくる") -- dealJobPoolの既存の
+  // preferredFaceIds機能(元々はデバッグセットアップの「テストゲーム開始」用)をそのまま流用する。
+  const preferredJobs = [...(tutorialModeActive ? ['JOB001A'] : []), ...(plan ? plan.job : [])];
   setupMod.dealJobPool(state, INDEX, preferredJobs.length ? preferredJobs : undefined);
   qstMod.setupQuests(state, plan ? plan.qst : undefined);
   return state;
@@ -1156,10 +1156,11 @@ function driveOneAiStepInner(state) {
     // own doc for why).
     const isLv3 = playerRoles.get(ctx.playerId) === 'AI_LV3';
     if (!ctx.player.jobCardId) {
-      // チュートリアル中はAIに一般市民(JOB001)を選ばせない (2026-09-26, per user request: "チュートリアルでは
-      // AIは町人は選ばない" -- 一般市民はdealJobPool側でJOBプールに必ず入れているぶん、あなた/P1が確実に選べる
-      // ようAIの候補からは除外する)。両方の分岐(LV3のsmartOnboarding、それ以外の完全ランダム)に適用。
-      const tutorialExcludedJobs = tutorialModeActive ? ['JOB001'] : undefined;
+      // チュートリアル中はAIに一般市民(JOB001A, 2026-10-11redesign前はJOB001)を選ばせない (2026-09-26,
+      // per user request: "チュートリアルではAIは町人は選ばない" -- 一般市民はdealJobPool側でJOBプールに
+      // 必ず入れているぶん、あなた/P1が確実に選べるようAIの候補からは除外する)。両方の分岐(LV3の
+      // smartOnboarding、それ以外の完全ランダム)に適用。
+      const tutorialExcludedJobs = tutorialModeActive ? ['JOB001A'] : undefined;
       const randomPoolChoices = tutorialExcludedJobs
         ? state.jobPool.filter((id) => !tutorialExcludedJobs.includes(id))
         : state.jobPool;
@@ -1376,14 +1377,14 @@ function renderWhiteOverflowConfirmModal() {
 // the placement itself.
 let pendingJob007TapPrompt = null;
 
-/** True if playerId's own JOB is 宮廷人/JOB007 and it isn't currently tapped -- see
- * pendingJob007TapPrompt's own doc. JOB has no A/B tier the way CON does, so 'JOB007' is a stable
- * physical id (matching how it's already referenced literally elsewhere, e.g. scoring.js's Q004A/
- * CON004A handling), no NAME-matching indirection needed the way board.js's CON-facing bespoke checks
- * (hasPioneerAbility etc.) use. */
+/** True if playerId's own JOB is 宮廷人(JOB004B) and it isn't currently tapped -- see
+ * pendingJob007TapPrompt's own doc. 2026-10-11 redesign: JOB regained a real A/B tier (see
+ * game-state.js's splitCardId doc), so unlike before, player.jobCardId is now a FACE id (JOB004B) while
+ * state.cards is keyed by the untiered PHYSICAL id (JOB004) -- this still just compares the exact face
+ * id directly (cheaper than a NAME lookup, and 宮廷人's own face id is as stable as any other card's). */
 function hasUntappedJob007(state, playerId) {
   const player = state.players.find((p) => p.id === playerId);
-  return player.jobCardId === 'JOB007' && !state.cards.JOB007.tapped;
+  return player.jobCardId === 'JOB004B' && !state.cards.JOB004.tapped;
 }
 
 /** Predicts whether running `action` (a function taking a GameState and returning a placeDice-shaped
@@ -1401,7 +1402,7 @@ function hasUntappedJob007(state, playerId) {
  * under-predict (never offer the prompt in exactly the cases where the +2 is what unlocks a candidate). */
 function wouldOfferUpgradeOrMonument(state, playerId, dieId, action) {
   const clone = gameStateMod.cloneState(state);
-  if (dieId !== null) boardMod.useBareTapAbility(clone, INDEX, { playerId, chosenDieId: dieId }, 'JOB007');
+  if (dieId !== null) boardMod.useBareTapAbility(clone, INDEX, { playerId, chosenDieId: dieId }, 'JOB004');
   const result = action(clone);
   const candidates = result && result.actionResult && result.actionResult.pendingBuild && result.actionResult.pendingBuild.candidates;
   if (!candidates) return false;
@@ -3269,12 +3270,15 @@ function buildAddWdIcon(actionText) {
  * no icon at all -- buildAddMultiResourceIcon's own per-item regex didn't recognize "wD" as a token, so
  * it silently bailed (returned null) on the whole icon instead of just that one item. */
 // 効果アイコン(resourceItemNodes)側で1〜2個アイコン反復の対象から除外したいカード (2026-09-27, per user
-// request: "強欲 憂鬱 嫉妬 策士は戻して" -- 策士/JOB004のTAP="CHANGE(3K,2Z)"が2Zの部分で反復アイコンに
-// なってしまったのを元(アイコン1個+数字)に戻す指定。強欲/憂鬱/嫉妬(CON002B/003B/004B)はCONの「アイコン
-// 欄」テキスト表示に完全に置き換わっており実際にはresourceItemNodes経由の表示自体が無い(=このリストに
-// 入れても見た目の変化は無い)が、指定された通り念のため含めておく)。currentCardVisualFaceId(fillCardFace
-// が呼ばれるたびにセットする、そのカードのfaceId)を見て判定する。
-const NO_ICON_REPEAT_PHYSICAL_IDS = ['JOB004', 'CON002', 'CON003', 'CON004'];
+// request: "強欲 憂鬱 嫉妬 策士は戻して" -- 策士(2026-10-11redesignで物理id JOB004→JOB005、現在の面id
+// はJOB005B)のTAP="CHANGE(3K,2Z)"が2Zの部分で反復アイコンになってしまったのを元(アイコン1個+数字)に
+// 戻す指定。現在の策士のTAPは既にCHANGE(4K,(A,B,C))に変わっていて別のアイコンビルダー
+// (buildChangeGroupGainIcon)経由になっているためこの指定は実質使われていない可能性があるが、念のため
+// 新しい物理idに合わせておく。強欲/憂鬱/嫉妬(CON002B/003B/004B)はCONの「アイコン欄」テキスト表示に
+// 完全に置き換わっており実際にはresourceItemNodes経由の表示自体が無い(=このリストに入れても見た目の
+// 変化は無い)が、指定された通り念のため含めておく)。currentCardVisualFaceId(fillCardFaceが呼ばれる
+// たびにセットする、そのカードのfaceId)を見て判定する。
+const NO_ICON_REPEAT_PHYSICAL_IDS = ['JOB005', 'CON002', 'CON003', 'CON004'];
 let currentCardVisualFaceId = null;
 
 function resourceItemNodes(countStr, resource) {
@@ -4477,7 +4481,11 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
  * which have no sibling face at all. Used by both buildCardVisual (shop-card flip) and
  * buildQstCardVisual (QST's own flip, see [[project-dice-wp-qst-spec]]). */
 function siblingFaceId(faceId) {
-  if (!isNormalDeckCard(faceId) && !/^CON\d/.test(faceId) && !/^Q\d/.test(faceId)) return null;
+  // JOB added 2026-10-11 (regained a real A/B tier -- see game-state.js's splitCardId doc on the
+  // redesign): every JOB face now has a real sibling the same way CON does, so a plain card-enlarge
+  // click shows both faces (pure curiosity -- unlike CON's player-triggered flip, a JOB slot's face was
+  // already fixed randomly when the pool was dealt, nothing here lets the player actually switch it).
+  if (!isNormalDeckCard(faceId) && !/^CON\d/.test(faceId) && !/^Q\d/.test(faceId) && !/^JOB\d/.test(faceId)) return null;
   if (faceId.endsWith('A')) return `${faceId.slice(0, -1)}B`;
   if (faceId.endsWith('B')) return `${faceId.slice(0, -1)}A`;
   return null;
@@ -7324,11 +7332,11 @@ function attachTapToggle(cardNode, cardState, faceId, canAct, physicalId) {
       if (result.success) actionCheckpoints.push({ state: preSnapshot, turnActionTaken: preTurnActionTaken });
       placementMessage = result.success ? '' : `カードを使用できません（${result.reason}）`;
       // free_action_hintの「一般市民をクリック」演出 (2026-09-26, per user request: "この時増えた資源が
-      // 光る") -- 一般市民(JOB001)のTAPが成功した瞬間に次のセリフへ切り替え、増えたK/Zを光らせる。
-      // renderPlayers/renderPlayerCardsがrenderTutorialOverlayより先に呼ばれるため(tutorialConCardGlowing
-      // 系と同じ理由)、render()を呼ぶ前にここでフラグを立てる必要がある -- 詳細はtutorialResourceGainGlowing
-      // 自身のdoc参照。
-      if (tutorialCurrentStepId === 'free_action_hint' && result.success && faceId === 'JOB001') {
+      // 光る") -- 一般市民(JOB001A, 2026-10-11redesign前はJOB001)のTAPが成功した瞬間に次のセリフへ切り替え、
+      // 増えたK/Zを光らせる。renderPlayers/renderPlayerCardsがrenderTutorialOverlayより先に呼ばれるため
+      // (tutorialConCardGlowing系と同じ理由)、render()を呼ぶ前にここでフラグを立てる必要がある -- 詳細は
+      // tutorialResourceGainGlowing自身のdoc参照。
+      if (tutorialCurrentStepId === 'free_action_hint' && result.success && faceId === 'JOB001A') {
         tutorialCurrentStepId = null;
         tutorialJobCardGlowing = false;
         tutorialResourceGainGlowing = true;
@@ -7408,12 +7416,13 @@ function attachTapToggle(cardNode, cardState, faceId, canAct, physicalId) {
  */
 function attachPickableEnlarge(cardNode, faceId, pickAction) {
   cardNode.addEventListener('click', () => {
-    // 革命家(JOB010)だけ、拡大時に右側へ実際に獲得する革命の兆し(B005A)を並べて表示する (2026-10-10, per
+    // 革命家(JOB001B)だけ、拡大時に右側へ実際に獲得する革命の兆し(B005A)を並べて表示する (2026-10-10, per
     // user request: "革命家 クリックして拡大した時 革命家の拡大画像を左に寄せて 右側に 革命の兆しを
-    // 表示して") -- siblingFaceId自体はJOB010に対して何も返さない(A/B面の裏表関係ではないため)が、
-    // 既存のcard-enlarge-row(front/backスロットを並べて表示する、二面カード用の仕組み)をそのまま
-    // 再利用すれば、front=JOB010(左)/back=B005A(右)の並びがそのまま得られる。
-    const sibling = faceId === 'JOB010' ? 'B005A' : siblingFaceId(faceId);
+    // 表示して") -- 2026-10-11のJOB再編(物理id JOB010->JOB001)でJOB001Bは本物のA/B表裏を持つように
+    // なったが、ここでは汎用のsiblingFaceId(JOB001Aの一般市民)より、実際に獲得する革命の兆しを優先して
+    // 表示する(ユーザーの元の要望どおり)。既存のcard-enlarge-row(front/backスロットを並べて表示する、
+    // 二面カード用の仕組み)をそのまま再利用すれば、front=革命家(左)/back=B005A(右)の並びがそのまま得られる。
+    const sibling = faceId === 'JOB001B' ? 'B005A' : siblingFaceId(faceId);
     const hasSiblingData = sibling && cardFaceExists(sibling);
     const visualNode = buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true });
     const siblingVisualNode = hasSiblingData
@@ -7422,7 +7431,7 @@ function attachPickableEnlarge(cardNode, faceId, pickAction) {
     // 右側の革命の兆し自体をクリックしたら、それ単独の拡大表示(本当にB005Aをクリックしたのと同じ)に
     // 切り替える (2026-10-11, per user request) -- B005Aは自分のsiblingFaceId(B005B)を持つ本物の
     // 二面カードなので、この再帰呼び出しでA/B面が並ぶ普通の拡大表示に自然に切り替わる。
-    if (faceId === 'JOB010' && hasSiblingData) attachPickableEnlarge(siblingVisualNode, sibling, null);
+    if (faceId === 'JOB001B' && hasSiblingData) attachPickableEnlarge(siblingVisualNode, sibling, null);
     showCardEnlargeModal(faceId, visualNode, hasSiblingData ? sibling : null, siblingVisualNode, pickAction);
   });
 }
@@ -7560,17 +7569,17 @@ function renderJobPool(state, next) {
     // 2026-08-0X, per user feedback (JOB cards weren't tappable to enlarge at all): tapping the card
     // now always opens the enlarge modal; drafting it happens via the modal's pick button instead of
     // a plain tap on the cell -- see attachPickableEnlarge's own doc.
-    // チュートリアル中は一般市民(JOB001)しか選べない (2026-09-26, per user request: "JOBカードは町人しか
-    // 選べない JOB選択時 町人だけ光らせて ほかのJOBは選べないように...クリックすると拡大はするが
-    // 「このJOBを選ぶ」を「チュートリアルではこのJOBは選べません」となって選べないように") -- 一般市民
-    // 以外は拡大表示(カードの中身を見る)自体は普通にできるが、ピックボタンが無効化された
-    // 「チュートリアルではこのJOBは選べません」に置き換わる。tutorialModeActiveがfalseの通常プレイでは
-    // isTutorialLockedは常にfalseになり、以前と全く同じ挙動のまま。faceIdでの比較なのでJOB001のNAMEが
-    // 今後また改名されても(社交家→遊び人→町人→一般市民と改名済み)ここは影響を受けない。
-    const isTutorialLocked = tutorialModeActive && !!draftingPlayerId && faceId !== 'JOB001';
+    // チュートリアル中は一般市民(JOB001A, 2026-10-11redesign前はJOB001)しか選べない (2026-09-26, per
+    // user request: "JOBカードは町人しか選べない JOB選択時 町人だけ光らせて ほかのJOBは選べないように
+    // ...クリックすると拡大はするが「このJOBを選ぶ」を「チュートリアルではこのJOBは選べません」となって
+    // 選べないように") -- 一般市民以外は拡大表示(カードの中身を見る)自体は普通にできるが、ピックボタンが
+    // 無効化された「チュートリアルではこのJOBは選べません」に置き換わる。tutorialModeActiveがfalseの
+    // 通常プレイではisTutorialLockedは常にfalseになり、以前と全く同じ挙動のまま。faceIdでの比較なので
+    // JOB001AのNAMEが今後また改名されても(社交家→遊び人→町人→一般市民と改名済み)ここは影響を受けない。
+    const isTutorialLocked = tutorialModeActive && !!draftingPlayerId && faceId !== 'JOB001A';
     const canReallyPick = !!draftingPlayerId && !isTutorialLocked;
     if (canReallyPick) cell.classList.add('owned-card-cell--selectable');
-    if (tutorialModeActive && draftingPlayerId && faceId === 'JOB001') cell.classList.add('change-highlight');
+    if (tutorialModeActive && draftingPlayerId && faceId === 'JOB001A') cell.classList.add('change-highlight');
     attachPickableEnlarge(cardNode, faceId, draftingPlayerId ? (canReallyPick ? {
       label: 'このジョブを選ぶ',
       onPick: () => {
@@ -13489,7 +13498,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('job007-tap-prompt-yes').addEventListener('click', () => {
     const { playerId, dieId, onProceed } = pendingJob007TapPrompt;
     pendingJob007TapPrompt = null;
-    boardMod.useBareTapAbility(STATE, INDEX, { playerId, chosenDieId: dieId }, 'JOB007');
+    boardMod.useBareTapAbility(STATE, INDEX, { playerId, chosenDieId: dieId }, 'JOB004');
     onProceed();
   });
 

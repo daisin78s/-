@@ -63,11 +63,12 @@ function isMonumentUnclaimed(state, faceId) {
   return !inst || inst.ownerId === null;
 }
 
-/** The owned CardInstance whose currentFaceId is exactly faceId, or null. Works uniformly for a JOB
- * (physicalId===faceId, e.g. "JOB007") and an A/B-tiered card (physicalId is the untiered id, e.g. "B003"
- * for both "B003A" and "B003B") since it matches on currentFaceId, not physicalId -- an LV2-upgraded
- * card's own row never separately matches its LV1 name here, unlike con-build-synergy's
- * normalizeToLv1Name, since every row below already names a specific tier explicitly (LV1 vs LV2). */
+/** The owned CardInstance whose currentFaceId is exactly faceId, or null. Works uniformly for any
+ * A/B-tiered card (physicalId is the untiered id, e.g. "B003" for both "B003A" and "B003B", or "JOB004"
+ * for both "JOB004A" and "JOB004B" since the 2026-10-11 JOB redesign) since it matches on currentFaceId,
+ * not physicalId -- an LV2-upgraded card's own row never separately matches its LV1 name here, unlike
+ * con-build-synergy's normalizeToLv1Name, since every row below already names a specific tier explicitly
+ * (LV1 vs LV2). */
 function findOwnedCardInstance(state, player, faceId) {
   const physicalId = player.ownedCardPhysicalIds.find((pid) => {
     const inst = state.cards[pid];
@@ -121,7 +122,7 @@ function monumentAtRiskFromOpponents(state, index, playerId, monumentFaceId) {
 // say "+1"/"+3" (the old values) since they're 評価値_戦略's own sheet-authored labels, not live-computed
 // -- cosmetic only, doesn't affect scoring.
 const SINGLE_DIE_ROWS = [
-  { name: '宮廷人が+1能力で施療院を獲得', ownedFaceId: 'JOB007', bonus: 4, targetFaceId: 'M006' },
+  { name: '宮廷人が+1能力で施療院を獲得', ownedFaceId: 'JOB004B', bonus: 4, targetFaceId: 'M006' },
   { name: '運命の導きLV1が+2能力で施療院を獲得', ownedFaceId: 'B003A', bonus: 2, targetFaceId: 'M006' },
   { name: '運命の導きLV1が+2能力で宮殿を獲得', ownedFaceId: 'B003A', bonus: 2, targetFaceId: 'M005' },
   { name: '運命の導きLV2が+3能力で施療院を獲得', ownedFaceId: 'B003B', bonus: 4, targetFaceId: 'M006' },
@@ -158,7 +159,7 @@ const SINGLE_DIE_ROWS = [
  * finished as ONE of them, not both -- listed here in descending target-value order so the credited one is
  * whichever the player would actually pursue. */
 const DELTA_ABILITIES = [
-  { faceId: 'JOB007', delta: 4 },
+  { faceId: 'JOB004B', delta: 4 },
   { faceId: 'B003A', delta: 2 },
   { faceId: 'B003B', delta: 4 },
 ];

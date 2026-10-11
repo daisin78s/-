@@ -636,13 +636,19 @@ class MoveGenerator {
    * player.lockedK reservation this used to also check was removed -- see board.js's
    * chargeUsageFeeIfOwed's own doc -- so this is now just the plain pendingFee amount). */
   forcedJob004ConversionMove(state, index, playerId) {
+    // Cost is 4K, not 3 (2026-10-11 found via a real stuck-game regression: 策士's own TAP cost grew
+    // 3K->4K earlier this session, CHANGE(3K,2Z)->CHANGE(4K,(A,B,C)), but this affordability pre-check
+    // was never updated to match -- a player with exactly 3K passed this stale "< 3" gate as
+    // "affordable", so the forced move got selected every turn, failed to actually apply (truly needs
+    // 4K), and the AI got stuck re-selecting the same doomed forced move forever, never reaching
+    // END_TURN). See forcedJob004ConversionMove's own doc for the rest of this gate's reasoning.
     const player = state.players.find((p) => p.id === playerId);
-    if (!player || (player.resources.K || 0) < 3) return null;
+    if (!player || (player.resources.K || 0) < 4) return null;
     const reservedK = player.pendingFee ? player.pendingFee.amount : 0;
-    if ((player.resources.K || 0) - 3 < reservedK) return null;
+    if ((player.resources.K || 0) - 4 < reservedK) return null;
     for (const physicalId of player.ownedCardPhysicalIds) {
       const cardState = state.cards[physicalId];
-      if (!cardState || cardState.tapped || cardState.currentFaceId !== 'JOB004') continue;
+      if (!cardState || cardState.tapped || cardState.currentFaceId !== 'JOB005B') continue; // 策士 (2026-10-11 redesign renamed the physical id from JOB004 to JOB005; function name kept as-is)
       return { type: 'BARE_TAP', playerId, physicalId };
     }
     return null;

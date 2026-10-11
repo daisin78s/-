@@ -145,11 +145,11 @@ function giveDie(state, playerId, value) {
 // ---------------------------------------------------------------------------
 function giveJob002(state, playerId) {
   const p = player(state, playerId);
-  const inst = createCardInstance('JOB002');
+  const inst = createCardInstance('JOB002B');
   inst.ownerId = playerId;
   state.cards[inst.physicalId] = inst;
   p.ownedCardPhysicalIds.push(inst.physicalId);
-  p.jobCardId = 'JOB002';
+  p.jobCardId = 'JOB002B';
   return inst;
 }
 {
@@ -1119,7 +1119,7 @@ function giveJob002(state, playerId) {
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  const jobInst = createCardInstance('JOB004');
+  const jobInst = createCardInstance('JOB005B');
   jobInst.ownerId = 'P1';
   state.cards[jobInst.physicalId] = jobInst;
   p1.ownedCardPhysicalIds.push(jobInst.physicalId);
@@ -1157,7 +1157,7 @@ function giveJob002(state, playerId) {
   // executor.runMonumentChangeDieValue's own docs.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  const jobInst = createCardInstance('JOB007');
+  const jobInst = createCardInstance('JOB004B');
   jobInst.ownerId = 'P1';
   state.cards[jobInst.physicalId] = jobInst;
   p1.ownedCardPhysicalIds.push(jobInst.physicalId);
@@ -1203,10 +1203,10 @@ function giveJob002(state, playerId) {
   // permanently patched here would silently corrupt any LATER block that exercises the real card
   // (confirmed the hard way: this exact leak broke the 道化 self-stack exploit tests further down,
   // which need JOB003's real, un-patched TAP text).
-  const originalJob003 = index.byId.get('JOB003');
-  index.byId.set('JOB003', { sheet: 'JOB', row: { ...originalJob003.row, TAP: 'ADD(K);UNTAP()' } });
+  const originalJob003 = index.byId.get('JOB003A');
+  index.byId.set('JOB003A', { sheet: 'JOB', row: { ...originalJob003.row, TAP: 'ADD(K);UNTAP()' } });
   try {
-    const jobInst = createCardInstance('JOB003');
+    const jobInst = createCardInstance('JOB003A');
     jobInst.ownerId = 'P1';
     state.cards[jobInst.physicalId] = jobInst;
     p1.ownedCardPhysicalIds.push(jobInst.physicalId);
@@ -1221,7 +1221,7 @@ function giveJob002(state, playerId) {
     check('...granting another 1K (2 total)', p1.resources.K, 2);
     check('...still not tapped after the 2nd use either', state.cards[jobInst.physicalId].tapped, false);
   } finally {
-    index.byId.set('JOB003', originalJob003);
+    index.byId.set('JOB003A', originalJob003);
   }
 }
 {
@@ -1229,7 +1229,7 @@ function giveJob002(state, playerId) {
   // this feature existed -- confirms the new check doesn't affect the common case.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  const jobInst = createCardInstance('JOB007'); // real TAP has no UNTAP()
+  const jobInst = createCardInstance('JOB004B'); // real TAP has no UNTAP()
   jobInst.ownerId = 'P1';
   state.cards[jobInst.physicalId] = jobInst;
   p1.ownedCardPhysicalIds.push(jobInst.physicalId);
@@ -2182,11 +2182,11 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
 // ---------------------------------------------------------------------------
 function giveJob009(state, playerId) {
   const p = player(state, playerId);
-  const inst = createCardInstance('JOB009');
+  const inst = createCardInstance('JOB006A');
   inst.ownerId = playerId;
   state.cards[inst.physicalId] = inst;
   p.ownedCardPhysicalIds.push(inst.physicalId);
-  p.jobCardId = 'JOB009';
+  p.jobCardId = 'JOB006A';
   return inst;
 }
 {
@@ -2337,7 +2337,7 @@ function giveJob009(state, playerId) {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   giveJob009(state, 'P1');
-  const wildInst = createCardInstance('JOB003');
+  const wildInst = createCardInstance('JOB003A');
   wildInst.ownerId = 'P1';
   state.cards[wildInst.physicalId] = wildInst;
   p1.ownedCardPhysicalIds.push(wildInst.physicalId);
@@ -2495,7 +2495,7 @@ function withPatchedTap(physicalFaceId, tap, fn) {
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  p1.jobCardId = 'JOB011';
+  p1.jobCardId = 'JOB003B';
   state.maps['MAP001'].currentAreaId = 'AREA001B'; // "LVアップされた" (tier B, not the base tier A)
 
   const d1 = giveDie(state, 'P1', 1); // AREA001B SLOT1=1 (SLOT2 is ANY, but the numbered slot is preferred)
@@ -2515,7 +2515,7 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   // Base (not-yet-upgraded) tier: no 地主 bonus at all, only the AREA's own ADD(3K).
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  p1.jobCardId = 'JOB011';
+  p1.jobCardId = 'JOB003B';
   const d1 = giveDie(state, 'P1', 1); // AREA001A (base tier) SLOT1=1
   board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
   check('地主: no bonus on a not-yet-upgraded (base tier) AREA -- only the area\'s own 3K', p1.resources.K, 3);
@@ -2530,7 +2530,7 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   // ADD(2K) actually ran -- same reasoning the pre-2026-09-07 version of this test already relied on.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  p1.jobCardId = 'JOB011';
+  p1.jobCardId = 'JOB003B';
   p1.resources.K = 20; p1.resources.A = 20; p1.resources.B = 20; p1.resources.C = 20;
   state.maps['MAP009'].currentAreaId = 'AREA009B'; // 元老院LV1, ACTION=BUILD();ADD(2K)
   const d1 = giveDie(state, 'P1', 1); // AREA009B SLOT1=ANY
@@ -2555,7 +2555,7 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   // for what kind of die newly triggers it).
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  p1.jobCardId = 'JOB011';
+  p1.jobCardId = 'JOB003B';
   state.maps['MAP001'].currentAreaId = 'AREA001B';
   const wd = createDie('test-wd', 'WHITE');
   wd.value = 1; // AREA001B SLOT1=1 (SLOT2 is ANY, but the numbered slot is preferred)
@@ -2579,7 +2579,7 @@ function withPatchedTap(physicalFaceId, tap, fn) {
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  p1.jobCardId = 'JOB011';
+  p1.jobCardId = 'JOB003B';
   p1.resources.K = 1;
   state.maps['MAP001'] = mapWithArea('MAP001', 'AREA010B', 6, 'P1'); // P1 owns it -- no usage fee here
   const d1 = giveDie(state, 'P1', 2); // SLOT1=2
@@ -2601,7 +2601,7 @@ function withPatchedTap(physicalFaceId, tap, fn) {
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  p1.jobCardId = 'JOB011';
+  p1.jobCardId = 'JOB003B';
   p1.resources.K = 1; // 1 short of the 2K fee on its own
   state.maps['MAP001'] = mapWithArea('MAP001', 'AREA999C', 6, 'P2'); // P2 owns it -- usage fee applies to P1
   const d1 = giveDie(state, 'P1', 3); // SLOT1=ANY
@@ -2619,7 +2619,7 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   // slot 0.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  p1.jobCardId = 'JOB011';
+  p1.jobCardId = 'JOB003B';
   p1.resources.K = 1;
   state.maps['MAP001'] = mapWithArea('MAP001', 'AREA999C', 6, 'P2');
   const earlierDie = giveDie(state, 'P1', 5);
@@ -2641,7 +2641,7 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   // slots" technique the single-prior-die test just above already uses) should grant 2VP, not 1.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  p1.jobCardId = 'JOB011';
+  p1.jobCardId = 'JOB003B';
   state.maps['MAP001'] = mapWithArea('MAP001', 'AREA999C', 6, 'P2');
   const earlierDie1 = giveDie(state, 'P1', 5);
   const earlierDie2 = giveDie(state, 'P1', 6);
@@ -2669,7 +2669,7 @@ function withPatchedTap(physicalFaceId, tap, fn) {
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  p1.jobCardId = 'JOB011';
+  p1.jobCardId = 'JOB003B';
   // M006 (DICE>=7, COST=2B,C) -- neither die alone reaches 7 (would get excluded as "overfunded" by a
   // single die, like M012 would be at DICE>=1), so this group's combined 3+4=7 is genuinely needed.
   // Forced into a known shop slot (like the AREA009C/A001A test above) rather than relying on
@@ -2803,11 +2803,11 @@ function withPatchedTap(physicalFaceId, tap, fn) {
 // ---------------------------------------------------------------------------
 function withWildcardOwner(state) {
   const p1 = player(state, 'P1');
-  const jobInst = createCardInstance('JOB003');
+  const jobInst = createCardInstance('JOB003A');
   jobInst.ownerId = 'P1';
   state.cards[jobInst.physicalId] = jobInst;
   p1.ownedCardPhysicalIds.push(jobInst.physicalId);
-  p1.jobCardId = 'JOB003';
+  p1.jobCardId = 'JOB003A';
   return p1;
 }
 {

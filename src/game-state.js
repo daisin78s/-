@@ -27,15 +27,18 @@ const { createRng } = require('./rng');
 
 /**
  * Splits a data-sheet card ID into its physical identity and tier letter.
- * Tiered cards (A/B/C/CON decks) are named e.g. "A001A" / "A001B" -- two rows
+ * Tiered cards (A/B/C/CON/JOB decks) are named e.g. "A001A" / "A001B" -- two rows
  * in the data that represent the *same physical card*, face-up on tier A or
- * flipped to tier B. Non-tiered cards (M, JOB, RESOURCE) have no trailing
+ * flipped to tier B. Non-tiered cards (M, RESOURCE) have no trailing
  * letter after the digits and are returned with tier: null.
  *
  * splitCardId('A001A') -> { physicalId: 'A001', tier: 'A' }
  * splitCardId('CON002B') -> { physicalId: 'CON002', tier: 'B' }
  * splitCardId('M001') -> { physicalId: 'M001', tier: null }
- * splitCardId('JOB001A') -> { physicalId: 'JOB001', tier: 'A' } // never has a 'B' sibling
+ * splitCardId('JOB001A') -> { physicalId: 'JOB001', tier: 'A' } // JOB (2026-10-11 redesign, per user
+ *   spec: "単にランダムに出てくる 表裏を選べない") -- JOB001A/JOB001B are the SAME physical draft slot's
+ *   2 abilities; dealJobPool always deals all 6 physical slots, each showing a randomly-chosen face
+ *   (the player never sees/picks between a slot's own A/B, unlike CON's own trigger-based flip)
  *
  * @param {string} cardId
  * @returns {{physicalId: string, tier: string|null}}

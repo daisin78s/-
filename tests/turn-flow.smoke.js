@@ -411,7 +411,7 @@ check('startRound(2) itself does not touch dice (already rerolled at the previou
   const die = createDie('pass-test-die', 'COLOR');
   die.value = 4;
   p1.dice.push(die);
-  p1.jobCardId = 'JOB001'; // finished onboarding, so getNextTurn reports TURN not ONBOARDING_NEEDED
+  p1.jobCardId = 'JOB001A'; // finished onboarding, so getNextTurn reports TURN not ONBOARDING_NEEDED
 
   check('isRoundOver is false while the die is still unplaced/unpassed', turnFlow.isRoundOver(s), false);
   check('getNextTurn reports P1s real TURN', turnFlow.getNextTurn(s), { type: 'TURN', playerId: 'P1', playerIndex: 0 });
@@ -442,7 +442,7 @@ check('startRound(2) itself does not touch dice (already rerolled at the previou
   setup.prepareShops(s, index);
   s.turnOrder = ['P1'];
   const p1 = s.players[0];
-  p1.jobCardId = 'JOB008';
+  p1.jobCardId = 'JOB002A';
 
   const m004 = createCardInstance('M004'); // 地1,天1,人1 -- exactly 3 emblems
   m004.ownerId = 'P1';

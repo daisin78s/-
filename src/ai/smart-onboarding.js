@@ -148,8 +148,9 @@ function simulateOnboardingChoice(state, index, playerId, jobId, face) {
  * @param {GameState} state - state.jobPool populated, playerId not yet onboarded.
  * @param {string[]} [excludeFaceIds] - optional, JOB faces to never consider even if present in
  *   state.jobPool (2026-09-26, per user request: "チュートリアルではAIは町人は選ばない" -- main.js's own
- *   ONBOARDING branch passes ['JOB001'] here only while tutorialModeActive; every other caller (including
- *   src/ai/game-runner.js's own CLI battle driver) omits this and sees identical behavior to before).
+ *   ONBOARDING branch passes ['JOB001A'] (一般市民, 2026-10-11 redesign renamed from the old bare
+ *   'JOB001') here only while tutorialModeActive; every other caller (including src/ai/game-runner.js's
+ *   own CLI battle driver) omits this and sees identical behavior to before).
  * @returns {string} the chosen jobId.
  */
 function pickJob(state, index, playerId, synergyTable2, moveGenerator, simulator, rngState, excludeFaceIds) {

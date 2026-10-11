@@ -22,7 +22,7 @@
 
 'use strict';
 
-const { shuffle, rollDie } = require('./rng');
+const { shuffle, rollDie, next: rngNext } = require('./rng');
 const {
   createPlayer,
   createCardInstance,
@@ -42,12 +42,14 @@ const MONUMENT_SHOP_SLOT_IDS = ['SHOP001', 'SHOP002', 'SHOP003', 'SHOP004', 'SHO
 const NORMAL_SHOP_SLOT_IDS = ['SHOP101', 'SHOP102', 'SHOP103', 'SHOP104', 'SHOP105', 'SHOP106'];
 const SPECIAL_SHOP_SLOT_IDS = ['SHOP201', 'SHOP202', 'SHOP203'];
 const CON_PHYSICAL_IDS = ['CON001', 'CON002', 'CON003', 'CON004', 'CON005', 'CON006'];
-// JOB ids dropped their trailing tier letter (2026-08-0X, per user edit to game.xlsx -- JOB never had
-// a real B-tier sibling anyway, so the "A" was just a leftover from the {physicalId}{tier} pattern
-// every other tiered deck uses; JOB is now bare, same shape as M). See game-state.js's splitCardId,
-// which already treats a bare id (no trailing letter) as {tier: null} without any change needed here.
-// (No fixed JOB_FACE_IDS list here -- unlike CON_PHYSICAL_IDS above, the JOB sheet's own row count isn't
-// fixed by the game's rules; dealJobPool reads index.raw.JOB directly instead, see its own doc for why.)
+// JOB ids dropped their trailing tier letter on 2026-08-0X (JOB never had a real B-tier sibling back
+// then, so the "A" was just a leftover from the {physicalId}{tier} pattern every other tiered deck
+// uses), then grew a REAL A/B tier pair again on 2026-10-11 (per user redesign: 11 independent JOB
+// faces consolidated onto 6 physical draft slots, each now with its own A/B ability pair -- see
+// dealJobPool's own doc). Unlike CON's player-triggered flip, a JOB slot's face is decided once,
+// randomly, when the pool is dealt ("単にランダムに出てくる 表裏を選べない") -- the player never flips
+// it themselves. (No fixed JOB_FACE_IDS/JOB_PHYSICAL_IDS list here -- unlike CON_PHYSICAL_IDS above,
+// dealJobPool derives the 6 physical ids directly from index.raw.JOB, see its own doc for why.)
 
 // ---------------------------------------------------------------------------
 // Steps 1-2: players, board, shop
@@ -449,30 +451,40 @@ function computeStartOrder(state, index) {
 // ---------------------------------------------------------------------------
 
 /**
- * Reveals 6 of the 8 JOB cards as a shared draft pool (confirmed
- * 2026-07-29): the other 2 are never revealed and go unused for the whole
- * game. Players draft one each from this pool, in start-play order, during
- * round-1 onboarding (see chooseJob()); after all 4 have drafted, the 2
- * left in the pool plus the original 2 never-revealed ones (4 total) go
- * unused. Call once, before the first player's onboarding.
+ * Reveals all 6 physical JOB slots as a shared draft pool, each showing exactly one of its own A/B
+ * faces, chosen uniformly at random (2026-10-11 redesign, replacing the old "11 independent JOB faces,
+ * reveal 6 of them" draw -- per user spec: "はじめに6枚出てくるのですべて出てきて表裏はランダム" /
+ * "単にランダムに出てくる 表裏を選べない" / "表と裏が同時に出なくなるだけ" -- every physical slot is
+ * always present now, just with its face randomized; a slot's OTHER face can never also appear in the
+ * same pool). Players draft one physical slot each from this pool, in start-play order, during round-1
+ * onboarding (see chooseJob()) -- with exactly 6 slots and 4 players, 2 always go undrafted. Call once,
+ * before the first player's onboarding.
  *
- * preferredFaceIds (optional, up to 6, deduped, 2026-08-13 debug-setup feature): those are guaranteed
- * in the revealed pool, the remaining slots filled by the usual random draw from whatever's left. Who
- * actually drafts which one out of the pool is still each player's own normal chooseJob() pick, exactly
- * as before. Every other caller passes no 3rd argument and sees identical behavior to before.
+ * preferredFaceIds (optional, deduped, 2026-08-13 debug-setup feature, updated 2026-10-11 for the A/B
+ * redesign): each entry is a specific FACE id (e.g. "JOB001A") that forces that physical slot to show
+ * exactly that face instead of a random one; any physical slot not covered by a preferred entry still
+ * gets a random face as usual. At most one preferred entry per physical id is honored (a later one for
+ * the same physical id is ignored, same spirit as the old de-duplication). Who actually drafts which
+ * slot out of the pool is still each player's own normal chooseJob() pick, exactly as before. Every
+ * other caller passes no 3rd argument and sees identical (fully random) behavior to before.
  *
- * Reads the live JOB sheet (index.raw.JOB) rather than the old hardcoded JOB_FACE_IDS list (2026-08-17
- * fix, per user report: "開拓者出てきません テストゲームで選んでも出てきません") -- that list was
- * defined before JOB009 existed, so both the random draw AND the debug picker's preferredFaceIds filter
- * silently excluded it entirely, the same class of "stale hardcoded list" bug the CON-sheet-reorg
- * incident already caught elsewhere. index is now a required 2nd argument -- see this function's 4 call
- * sites (game-runner.js, main.js, tests) for the matching update.
+ * Reads the live JOB sheet (index.raw.JOB) rather than any hardcoded id list (2026-08-17 fix, per user
+ * report: "開拓者出てきません テストゲームで選んでも出てきません" -- a hardcoded list silently excluding
+ * a real face was exactly this class of bug) -- index is a required 2nd argument.
  */
 function dealJobPool(state, index, preferredFaceIds) {
   const allJobFaceIds = index.raw.JOB.map((r) => r.ID);
-  const preferred = [...new Set(preferredFaceIds || [])].filter((id) => allJobFaceIds.includes(id)).slice(0, 6);
-  const rest = shuffle(state.rng, allJobFaceIds.filter((id) => !preferred.includes(id)));
-  state.jobPool = [...preferred, ...rest].slice(0, 6);
+  const physicalIds = [...new Set(allJobFaceIds.map((id) => splitCardId(id).physicalId))];
+  const preferredFaceByPhysicalId = new Map();
+  for (const faceId of preferredFaceIds || []) {
+    if (!allJobFaceIds.includes(faceId)) continue;
+    const { physicalId } = splitCardId(faceId);
+    if (!preferredFaceByPhysicalId.has(physicalId)) preferredFaceByPhysicalId.set(physicalId, faceId);
+  }
+  state.jobPool = shuffle(state.rng, physicalIds).map((physicalId) => {
+    if (preferredFaceByPhysicalId.has(physicalId)) return preferredFaceByPhysicalId.get(physicalId);
+    return `${physicalId}${rngNext(state.rng) < 0.5 ? 'A' : 'B'}`;
+  });
 }
 
 /** Drafts jobFaceId out of state.jobPool for playerId (must currently be in the pool). */
@@ -535,13 +547,17 @@ function grantRevolutionaryBonusIfEarned(state, index, playerId) {
 }
 
 /** Resolves a player's PICK_JOB_REPLACEMENT choice (see grantRevolutionaryBonusIfEarned's own doc):
- * chosenFaceId must be one of choice.context.candidates. The pick REPLACES JOB010 entirely (2026-08-21,
- * per user decision) -- JOB010 is removed from the player's owned cards and its state.cards entry
- * released (ownerId: null, left in state rather than deleted, same convention as every other card-
- * removal in this codebase), then the new JOB is drafted via the same steps chooseJob itself uses
- * (own state.cards entry, ownedCardPhysicalIds, jobCardId, run its ONCE). Deliberately does not call
- * chooseJob() itself, since chosenFaceId is never in state.jobPool (this is a private 3-card draw, not
- * the shared pool -- see grantRevolutionaryBonusIfEarned's own doc) and chooseJob would reject that. */
+ * chosenFaceId must be one of choice.context.candidates. The pick REPLACES 革命家(JOB001B) entirely
+ * (2026-08-21, per user decision; 2026-10-11 redesign renamed the physical id from JOB010 to JOB001,
+ * see dealJobPool's own doc) -- the player's current JOB physical slot is removed from their owned
+ * cards and its state.cards entry released (ownerId: null, left in state rather than deleted, same
+ * convention as every other card-removal in this codebase), then the new JOB is drafted via the same
+ * steps chooseJob itself uses (own state.cards entry, ownedCardPhysicalIds, jobCardId, run its ONCE).
+ * Deliberately does not call chooseJob() itself, since chosenFaceId is never in state.jobPool (this is
+ * a private 3-card draw, not the shared pool -- see grantRevolutionaryBonusIfEarned's own doc) and
+ * chooseJob would reject that. player.jobCardId/state.cards are keyed differently (face id vs physical
+ * id respectively, since the 2026-10-11 redesign made jobCardId a real face id again) -- splitCardId
+ * bridges the two, same pattern every other tiered deck's own card-removal code already uses. */
 function resolveJobReplacementChoice(state, index, playerId, chosenFaceId) {
   const choiceIndex = state.pendingChoices.findIndex((c) => c.playerId === playerId && c.kind === 'PICK_JOB_REPLACEMENT');
   if (choiceIndex === -1) return { success: false, reason: 'NO_PENDING_CHOICE' };
@@ -549,7 +565,7 @@ function resolveJobReplacementChoice(state, index, playerId, chosenFaceId) {
   if (!choice.context.candidates.includes(chosenFaceId)) return { success: false, reason: 'INVALID_SELECTION' };
 
   const player = state.players.find((p) => p.id === playerId);
-  const oldJobPhysicalId = player.jobCardId;
+  const oldJobPhysicalId = splitCardId(player.jobCardId).physicalId;
   player.ownedCardPhysicalIds = player.ownedCardPhysicalIds.filter((id) => id !== oldJobPhysicalId);
   state.cards[oldJobPhysicalId].ownerId = null;
 
