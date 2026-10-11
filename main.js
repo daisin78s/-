@@ -164,6 +164,109 @@ function tutorialPreferredNormalFaceIds(state) {
  * 通常通りランダム。 */
 const TUTORIAL_SHOP_MONUMENT_FACE_IDS = ['M001'];
 
+// 実績記録 (2026-10-03, per user request: "実績解除を記録したい") -- オンラインランキング(Firebase)とは
+// 別物の、このブラウザだけのlocalStorage自己ベスト記録(per user回答: "個々人のブラウザに記録するように
+// したい")。カテゴリはgame.xlsxの「実績記録」シート(2026-10-03、「実績解除」シートからリネーム+拡張)を
+// そのまま反映: モード6種(チュートリアル/ウィークリーチャレンジ/ウィークリーランキング順位/オンライン/
+// デバッグあり/デバッグなし) + CON12種(`con_<faceId>`キー) + JOB11種(`job_<id>`キー) + 1ゲーム単位の
+// 累計系5種(カード/LV2カード/モニュメント枚数、モニュメントVP、孤児院メインアクションVP)。CON/JOBの表示
+// 名はgame.xlsx側の名前変更に追従するようハードコードせずINDEX.raw.CON/JOBから都度組み立てる。
+//
+// この一式はcomputeLockedFaceIds(その先のcreateInitialState経由のSTATE初期化)より前に置く必要がある
+// (2026-10-11 -- 以前main.js下部にあった時、createInitialStateのSTATE初期化がこれらのconstより先に
+// 実行され、未初期化のまま参照される実行時エラーになっていた。see computeLockedFaceIdsの呼び出し順)。
+const ACHIEVEMENT_STORAGE_KEY = 'diceWpAchievements';
+// unit: 表示用の単位(VP/枚/位)。betterIsLower: 既定は「大きいほど良い(VP/枚数)」、ウィークリーランキング
+// 順位だけ「小さいほど良い」(per user: "はい その後記録が抜かれても１位は１位で" -- 登録した瞬間の順位を
+// 以後ずっと保持し、ランキングから後で消えても記録は変わらない)。
+const ACHIEVEMENT_MODE_DEFS = [
+  ['mode_tutorial', 'チュートリアル最高獲得点数', 'VP'],
+  ['mode_weekly', 'ウィークリーチャレンジ最高点数', 'VP'],
+  ['weekly_rank', 'ウィークリーランキング最高順位', '位', true],
+  ['mode_online', 'オンライン対戦最高点数', 'VP'],
+  // 2026-10-11, per user data edit: 旧来の mode_debug_on/mode_debug_off/mode_round3_start (デバッグ系を
+  // 3つに分けていた) をgame.xlsxの「実績解除」シートから削除し、デバッグ利用の有無やラウンド開始位置に
+  // 関わらず(チュートリアル/ウィークリー/オンライン以外の)ローカル対戦をひとまとめにした「ローカル対戦
+  // 最高点数」に統合 -- maybeRecordAchievementsのmodeKey算出もそれに合わせて単純化(usedDebugOrTest
+  // GameThisGame/startedFromRound3自体は削除していない -- 3-way ranking submission categoryなど、
+  // 実績記録とは別の用途でまだ使われている、各フラグ自身のdoc参照)。
+  ['mode_local', 'ローカル対戦最高点数', 'VP'],
+];
+// 1ゲーム単位の累計系 (2026-10-03, per user confirmation): カード獲得枚数/LV2カード獲得枚数はA/B/Cカード
+// +Mカード(モニュメント)の合計、JOB/CON/RESOURCEは含まない。「メインアクションでの獲得点数」(2026-10-04に
+// 「カード以外の獲得点数」からラベルのみ改名、定義は変わらず)は当初「最終得点-カードVP」の想定だったが、
+// per user訂正で「孤児院のみメインアクションでの獲得点数」に変更 --
+// PlayerState.orphanageVpGained(2026-08-28からAI集計用に既にある、孤児院LV1/LV2のCHANGE(...,VP,...)累計)
+// をそのまま流用する。
+const ACHIEVEMENT_PER_GAME_DEFS = [
+  // 2026-10-11, per user data edit: ラベルの「（１ゲーム）」を削除(定義は変わらず、表示名のみ短縮)。
+  ['card_count', 'カード獲得枚数', '枚'],
+  // 2026-10-11, per user data edit: 「LV2カード獲得枚数（１ゲーム）」->「レベルアップ数」へラベルのみ
+  // 改名(QST Q003A「LEVEL_COUNT(2)」のINST文言に合わせた統一 -- 定義は変わらず、所有カードのうち現在
+  // B面(tier===LV2)のものの枚数)。
+  ['lv2_card_count', 'レベルアップ数', '枚'],
+  ['monument_count', 'モニュメント獲得枚数（１ゲーム）', '枚'],
+  ['monument_vp', 'モニュメント獲得点数（１ゲーム）', 'VP'],
+  ['orphanage_vp', 'メインアクションでの獲得点数（１ゲーム）', 'VP'],
+  // 2026-10-05, per user request: "ダイス3個で終わったゲーム（追加ダイスなし）の最高得点" -- 他の
+  // per-gameカテゴリと違い、条件を満たさないゲームでは更新しない(CON/JOB系と同じ"該当したときだけ"
+  // パターン、maybeRecordAchievements参照)。訓練場等で色ダイスを1個でも増やしたら対象外になる。
+  ['dice3_score', 'ダイス３個最高得点', 'VP'],
+  // 2026-10-11, per user data edit: 新規追加された5カテゴリ -- 対応するQST GOALの各メトリクスを
+  // executorMod.evalMetricでそのまま再利用(maybeRecordAchievements参照、QSTの判定ロジックと絶対に
+  // 乖離しないようにするため)。QSTカード自体を今回引いていなくても、ゲーム終了時点の生の値を毎回
+  // 計算して記録する(QSTの達成有無とは無関係)。
+  ['max_emblem_count', '最多エンブレムの数', '個'], // Q002AのGOAL=MAX_EMBLEM_COUNTと同じメトリクス
+  ['area_count', '所有エリア数', '個'], // Q004AのGOAL=AREA_COUNTと同じメトリクス
+  ['emblem_set_count', '天地人セット数', '個'], // Q002BのGOAL=EMBLEM_SET_COUNTと同じメトリクス
+  ['emblem_count', 'エンブレム総数', '個'], // Q003BのGOAL=EMBLEM_COUNTと同じメトリクス
+  ['lv2_area_count', '所有LV2エリア数', '個'], // Q004BのGOAL=AREA_COUNT(2)と同じメトリクス
+];
+function buildAchievementCategories() {
+  const categories = [
+    ...ACHIEVEMENT_MODE_DEFS.map(([key, label, unit, betterIsLower]) => ({ key, label, unit, betterIsLower: !!betterIsLower })),
+  ];
+  for (const row of INDEX.raw.CON) categories.push({ key: `con_${row.ID}`, label: `${row.NAME}最高点数`, unit: 'VP' });
+  for (const row of INDEX.raw.JOB) categories.push({ key: `job_${row.ID}`, label: `${row.NAME}最高点数`, unit: 'VP' });
+  for (const [key, label, unit] of ACHIEVEMENT_PER_GAME_DEFS) categories.push({ key, label, unit });
+  return categories;
+}
+const ACHIEVEMENT_CATEGORIES = buildAchievementCategories();
+const ACHIEVEMENT_CATEGORY_BY_KEY = new Map(ACHIEVEMENT_CATEGORIES.map((c) => [c.key, c]));
+
+// 実績記録の合計点数 (2026-10-08, per user request: "合計点数を出せるようにする") -- game.xlsxの「実績解除」
+// シートに追加されたpoint列(各カテゴリの記録値にかける倍率)をラベル名でひも付け、全カテゴリの
+// (記録値×倍率)を合計する。ほぼ全カテゴリは単純な"*N"倍率だが、ウィークリーランキング最高順位だけ
+// 「（１０－順位）*10」という専用の計算式(順位が低い=良い記録ほど高得点になる、10位で0点)。式の種類は
+// この2パターンしかないため、汎用の数式パーサーは作らずその場で判定する。
+const ACHIEVEMENT_POINT_FORMULA_BY_LABEL = new Map(
+  (INDEX.raw['実績解除'] || []).map((row) => [row.NAME, row.point])
+);
+/** Full-width digits (０-９) -> plain ASCII, so achievementPointsForCategory's own regex below doesn't
+ * care whether game.xlsxの「実績解除」シート's point column was typed with full-width or half-width (or
+ * mixed, e.g. "１1") digits (2026-10-11, found while investigating a user data edit that changed
+ * "（１０－順位）*10" to "（１1－順位）*10" -- the OLD code matched that formula via an exact string
+ * literal, so this digit-width mismatch alone would have silently zeroed out ウィークリーランキング's
+ * entire point category). */
+function normalizeFullWidthDigits(text) {
+  return text.replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
+}
+function achievementPointsForCategory(label, value) {
+  const formula = ACHIEVEMENT_POINT_FORMULA_BY_LABEL.get(label);
+  if (!formula) return 0;
+  const rankMatch = /^（(\d+)－順位）\*10$/.exec(normalizeFullWidthDigits(formula));
+  if (rankMatch) return (Number(rankMatch[1]) - value) * 10;
+  const multiplierMatch = /^\*(\d+)$/.exec(formula);
+  return multiplierMatch ? value * Number(multiplierMatch[1]) : 0;
+}
+function achievementTotalPoints(store) {
+  let total = 0;
+  for (const { key, label } of ACHIEVEMENT_CATEGORIES) {
+    if (store[key] !== undefined) total += achievementPointsForCategory(label, store[key]);
+  }
+  return total;
+}
+
 /** The CON/JOB 裏面(B面) faceIds currently locked for a genuine local game, per game.xlsxの「実績解除2」
  * シート (ID=faceId, 必要point=解禁に必要な実績合計点数, 2026-10-11 per user spec) -- computed ONCE, from
  * this device's own localStorage achievement total (loadAchievements/achievementTotalPoints, see their
@@ -175,13 +278,57 @@ const TUTORIAL_SHOP_MONUMENT_FACE_IDS = ['M001'];
  *
  * The sheet also has some non-faceId rows (カードリスト/ランキング/ウィークリーチャレンジ -- feature/menu
  * unlocks, not cards) that this function returns unfiltered alongside real faceIds; setup.dealJobPool/
- * chooseConFace only ever look up specific JOB*/CON* ids, so these extra strings sitting unused in the
- * array are harmless there, but no code yet actually gates those 3 menu features themselves -- flagged to
- * the user, not yet implemented (would need its own separate design/confirmation). */
+ * chooseConFace only ever look up specific JOB.../CON... ids, so these extra strings sitting unused in the
+ * array are harmless there. See lockedMenuFeatureIds/isMenuFeatureLocked just below for how those 3 menu
+ * rows are actually consumed (a completely separate timing/scope from this function's own CON/JOB use). */
 function computeLockedFaceIds() {
   const total = achievementTotalPoints(loadAchievements());
   const rows = INDEX.raw['実績解除2'] || [];
   return rows.filter((row) => total < Number(row['必要point'] || 0)).map((row) => row.ID);
+}
+
+/** The 3 top-screen (entry banner) feature kickers -- IDs as they appear in game.xlsxの「実績解除2」。
+ * Unlike CON/JOBの裏面(decided once per actual GameState, inside createInitialState), these gate access
+ * BEFORE any game/mode has even been chosen, so they're tracked as a plain top-level variable instead of
+ * a state field -- see lockedMenuFeatureIds's own doc just below. */
+const MENU_FEATURE_IDS = ['カードリスト', 'ランキング', 'ウィークリーチャレンジ'];
+
+/** Which of MENU_FEATURE_IDS are currently locked for this device, per user spec (design discussion,
+ * 2026-10-11): computed once at page load (no `state` exists yet at that point), and re-computed only
+ * when a just-finished game's own achievement recording actually raised the total (per user follow-up:
+ * "それでいいですが ゲーム終了後 点数が増えたら もう一度チェック" -- see maybeRecordAchievements' own
+ * call to refreshLockedMenuFeatureIds). Reuses computeLockedFaceIds wholesale (same 実績解除2 lookup CON/
+ * JOB faces use) and just filters down to the 3 menu ids -- the function itself doesn't distinguish
+ * "kind" of id at all, so this filter is the only thing that separates the two uses. */
+let lockedMenuFeatureIds = computeLockedFaceIds().filter((id) => MENU_FEATURE_IDS.includes(id));
+function refreshLockedMenuFeatureIds() {
+  lockedMenuFeatureIds = computeLockedFaceIds().filter((id) => MENU_FEATURE_IDS.includes(id));
+}
+function isMenuFeatureLocked(featureId) {
+  return lockedMenuFeatureIds.includes(featureId);
+}
+/** Shown when the player taps a still-locked entry-banner kicker (2026-10-11, per design discussion: "ロック中
+ * は...タップで『まだ解禁されていません、実績ポイントが○点必要です』のようなメッセージを出す") -- reads
+ * the row's own 必要point directly from 実績解除2 (not re-derived from lockedMenuFeatureIds, which only
+ * tracks the locked/unlocked boolean) and the device's current total, same window.alert() convention every
+ * other simple blocking message in this file already uses. */
+function showMenuFeatureLockedMessage(featureId) {
+  const row = (INDEX.raw['実績解除2'] || []).find((r) => r.ID === featureId);
+  const required = row ? Number(row['必要point'] || 0) : 0;
+  const current = achievementTotalPoints(loadAchievements());
+  window.alert(`まだ解禁されていません\n実績ポイントが${required}点必要です(現在${current}点)`);
+}
+/** Wraps a plain click handler with the locked-feature check for one of MENU_FEATURE_IDS (2026-10-11) --
+ * used only by the 3 entry-banner hotspot buttons below; every OTHER caller of openWeeklyChallenge/
+ * openCardListOverlay/openRankingOverlay (in-game nav buttons, session resume, etc. -- see each handler's
+ * own other addEventListener call sites) must stay unaffected, since this is a top-screen onboarding-pacing
+ * gate, not a real feature-level restriction (confirmed: the same 3 features are always freely reachable
+ * once a game is already in progress). */
+function gatedEntryBannerHandler(featureId, handler) {
+  return () => {
+    if (isMenuFeatureLocked(featureId)) { showMenuFeatureLockedMessage(featureId); return; }
+    handler();
+  };
 }
 
 /** skipAchievementLock (2026-10-11, per user spec: "オンライン対戦は対象外（すべて解除済み）") -- set by
@@ -8317,92 +8464,14 @@ function rankingCardDisplayName(faceId) {
   return row.NAME && row.NAME !== faceId ? row.NAME : faceId;
 }
 
-// 実績記録 (2026-10-03, per user request: "実績解除を記録したい") -- オンラインランキング(Firebase)とは
-// 別物の、このブラウザだけのlocalStorage自己ベスト記録(per user回答: "個々人のブラウザに記録するように
-// したい")。カテゴリはgame.xlsxの「実績記録」シート(2026-10-03、「実績解除」シートからリネーム+拡張)を
-// そのまま反映: モード6種(チュートリアル/ウィークリーチャレンジ/ウィークリーランキング順位/オンライン/
-// デバッグあり/デバッグなし) + CON12種(`con_<faceId>`キー) + JOB11種(`job_<id>`キー) + 1ゲーム単位の
-// 累計系5種(カード/LV2カード/モニュメント枚数、モニュメントVP、孤児院メインアクションVP)。CON/JOBの表示
-// 名はgame.xlsx側の名前変更に追従するようハードコードせずINDEX.raw.CON/JOBから都度組み立てる。
-const ACHIEVEMENT_STORAGE_KEY = 'diceWpAchievements';
-// unit: 表示用の単位(VP/枚/位)。betterIsLower: 既定は「大きいほど良い(VP/枚数)」、ウィークリーランキング
-// 順位だけ「小さいほど良い」(per user: "はい その後記録が抜かれても１位は１位で" -- 登録した瞬間の順位を
-// 以後ずっと保持し、ランキングから後で消えても記録は変わらない)。
-const ACHIEVEMENT_MODE_DEFS = [
-  ['mode_tutorial', 'チュートリアル最高獲得点数', 'VP'],
-  ['mode_weekly', 'ウィークリーチャレンジ最高点数', 'VP'],
-  ['weekly_rank', 'ウィークリーランキング最高順位', '位', true],
-  ['mode_online', 'オンライン対戦最高点数', 'VP'],
-  ['mode_debug_on', 'デバッグあり最高点数', 'VP'],
-  ['mode_debug_off', 'デバッグなし最高点数', 'VP'],
-  // 2026-10-04, per user request ("3Rから最高点数 追加しました"): 「3Rから」デバッグボタン(1R/2RをAI
-  // LV4同士で生成し、3R開始時点でP1を人間に差し替える実験用機能、handleStartFromRound3Click参照)専用の
-  // カテゴリ。このボタン使用時はusedDebugOrTestGameThisGameも trueになる(デバッグ系の一種)が、
-  // mode_debug_onとは別枠で記録したいので、startedFromRound3が立っているときはそちらを優先する
-  // (maybeRecordAchievementsのmodeKey算出を参照)。
-  ['mode_round3_start', '3Rから最高点数', 'VP'],
-];
-// 1ゲーム単位の累計系 (2026-10-03, per user confirmation): カード獲得枚数/LV2カード獲得枚数はA/B/Cカード
-// +Mカード(モニュメント)の合計、JOB/CON/RESOURCEは含まない。「メインアクションでの獲得点数」(2026-10-04に
-// 「カード以外の獲得点数」からラベルのみ改名、定義は変わらず)は当初「最終得点-カードVP」の想定だったが、
-// per user訂正で「孤児院のみメインアクションでの獲得点数」に変更 --
-// PlayerState.orphanageVpGained(2026-08-28からAI集計用に既にある、孤児院LV1/LV2のCHANGE(...,VP,...)累計)
-// をそのまま流用する。
-const ACHIEVEMENT_PER_GAME_DEFS = [
-  ['card_count', 'カード獲得枚数（１ゲーム）', '枚'],
-  ['lv2_card_count', 'LV2カード獲得枚数（１ゲーム）', '枚'],
-  ['monument_count', 'モニュメント獲得枚数（１ゲーム）', '枚'],
-  ['monument_vp', 'モニュメント獲得点数（１ゲーム）', 'VP'],
-  ['orphanage_vp', 'メインアクションでの獲得点数（１ゲーム）', 'VP'],
-  // 2026-10-05, per user request: "ダイス3個で終わったゲーム（追加ダイスなし）の最高得点" -- 他の
-  // per-gameカテゴリと違い、条件を満たさないゲームでは更新しない(CON/JOB系と同じ"該当したときだけ"
-  // パターン、maybeRecordAchievements参照)。訓練場等で色ダイスを1個でも増やしたら対象外になる。
-  ['dice3_score', 'ダイス３個最高得点', 'VP'],
-];
-function buildAchievementCategories() {
-  const categories = [
-    ...ACHIEVEMENT_MODE_DEFS.map(([key, label, unit, betterIsLower]) => ({ key, label, unit, betterIsLower: !!betterIsLower })),
-  ];
-  for (const row of INDEX.raw.CON) categories.push({ key: `con_${row.ID}`, label: `${row.NAME}最高点数`, unit: 'VP' });
-  for (const row of INDEX.raw.JOB) categories.push({ key: `job_${row.ID}`, label: `${row.NAME}最高点数`, unit: 'VP' });
-  for (const [key, label, unit] of ACHIEVEMENT_PER_GAME_DEFS) categories.push({ key, label, unit });
-  return categories;
-}
-const ACHIEVEMENT_CATEGORIES = buildAchievementCategories();
-const ACHIEVEMENT_CATEGORY_BY_KEY = new Map(ACHIEVEMENT_CATEGORIES.map((c) => [c.key, c]));
-
-// 実績記録の合計点数 (2026-10-08, per user request: "合計点数を出せるようにする") -- game.xlsxの「実績解除」
-// シートに追加されたpoint列(各カテゴリの記録値にかける倍率)をラベル名でひも付け、全カテゴリの
-// (記録値×倍率)を合計する。ほぼ全カテゴリは単純な"*N"倍率だが、ウィークリーランキング最高順位だけ
-// 「（１０－順位）*10」という専用の計算式(順位が低い=良い記録ほど高得点になる、10位で0点)。式の種類は
-// この2パターンしかないため、汎用の数式パーサーは作らずその場で判定する。
-const ACHIEVEMENT_POINT_FORMULA_BY_LABEL = new Map(
-  (INDEX.raw['実績解除'] || []).map((row) => [row.NAME, row.point])
-);
-/** Full-width digits (０-９) -> plain ASCII, so achievementPointsForCategory's own regex below doesn't
- * care whether game.xlsxの「実績解除」シート's point column was typed with full-width or half-width (or
- * mixed, e.g. "１1") digits (2026-10-11, found while investigating a user data edit that changed
- * "（１０－順位）*10" to "（１1－順位）*10" -- the OLD code matched that formula via an exact string
- * literal, so this digit-width mismatch alone would have silently zeroed out ウィークリーランキング's
- * entire point category). */
-function normalizeFullWidthDigits(text) {
-  return text.replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
-}
-function achievementPointsForCategory(label, value) {
-  const formula = ACHIEVEMENT_POINT_FORMULA_BY_LABEL.get(label);
-  if (!formula) return 0;
-  const rankMatch = /^（(\d+)－順位）\*10$/.exec(normalizeFullWidthDigits(formula));
-  if (rankMatch) return (Number(rankMatch[1]) - value) * 10;
-  const multiplierMatch = /^\*(\d+)$/.exec(formula);
-  return multiplierMatch ? value * Number(multiplierMatch[1]) : 0;
-}
-function achievementTotalPoints(store) {
-  let total = 0;
-  for (const { key, label } of ACHIEVEMENT_CATEGORIES) {
-    if (store[key] !== undefined) total += achievementPointsForCategory(label, store[key]);
-  }
-  return total;
-}
+// 実績記録の定義一式(ACHIEVEMENT_STORAGE_KEY/ACHIEVEMENT_MODE_DEFS/ACHIEVEMENT_PER_GAME_DEFS/
+// buildAchievementCategories/ACHIEVEMENT_CATEGORIES/ACHIEVEMENT_CATEGORY_BY_KEY/
+// ACHIEVEMENT_POINT_FORMULA_BY_LABEL/normalizeFullWidthDigits/achievementPointsForCategory/
+// achievementTotalPoints) は、computeLockedFaceIds直前(createInitialStateより上)へ丸ごと移動した
+// (2026-10-11 -- createInitialStateがSTATE初期化時にcomputeLockedFaceIds経由でachievementTotalPoints/
+// loadAchievementsを呼ぶようになったため、これらのconstがまだ未初期化のまま参照される実行時エラーに
+// なっていた。loadAchievements/saveAchievements/recordAchievementIfNew/achievementLabel等、残りの
+// 関連関数は関数宣言でhoistされるのでこの下(元の位置)のままで問題ない)。
 
 // 実績合計点数のランキング同期 (2026-10-08, per user request: "誰かの得点が増えたら 総得点だけ記録して
 // ランキングを作る" + "ただし非公開") -- 合計点数が過去の同期済み最高値より増えた時だけ、Firestoreの
@@ -8483,11 +8552,12 @@ function maybeRecordAchievements(state) {
   const candidates = rankingCandidatesForGameEnd(state)
     .filter((c) => !onlineRoomCode || localSeatId === c.playerId);
   if (candidates.length === 0) return;
+  // 2026-10-11, per user data edit: デバッグ利用の有無/3Rからの区別なく、チュートリアル/ウィークリー/
+  // オンライン以外は全部「ローカル対戦最高点数」にまとめる (ACHIEVEMENT_MODE_DEFSの own doc参照)。
   const modeKey = onlineRoomCode ? 'mode_online'
     : tutorialModeActive ? 'mode_tutorial'
     : weeklyChallengeActive ? 'mode_weekly'
-    : startedFromRound3 ? 'mode_round3_start'
-    : (usedDebugOrTestGameThisGame ? 'mode_debug_on' : 'mode_debug_off');
+    : 'mode_local';
   const store = loadAchievements();
   // 実績ポイントの増加表示 (2026-10-09, per user request: "実績ポイント 100→125 のように表示して") --
   // カテゴリ更新で値が書き換わる前の合計点数を先に控えておく。
@@ -8513,12 +8583,24 @@ function maybeRecordAchievements(state) {
     if (colorDiceCount === gameStateMod.INITIAL_COLOR_DICE) {
       recordAchievementIfNew(store, updatedKeys, 'dice3_score', c.totalScore);
     }
+    // 2026-10-11, per user data edit: 新規5カテゴリ -- 対応するQST GOALと同じメトリクスをそのまま
+    // evalMetricで評価(QSTカード自体を引いたかどうかとは無関係に、ゲーム終了時点の生の値を毎回記録)。
+    recordAchievementIfNew(store, updatedKeys, 'max_emblem_count', executorMod.evalMetric(state, INDEX, c.playerId, { name: 'MAX_EMBLEM_COUNT', args: [] }));
+    recordAchievementIfNew(store, updatedKeys, 'area_count', executorMod.evalMetric(state, INDEX, c.playerId, { name: 'AREA_COUNT', args: [] }));
+    recordAchievementIfNew(store, updatedKeys, 'emblem_set_count', executorMod.evalMetric(state, INDEX, c.playerId, { name: 'EMBLEM_SET_COUNT', args: [] }));
+    recordAchievementIfNew(store, updatedKeys, 'emblem_count', executorMod.evalMetric(state, INDEX, c.playerId, { name: 'EMBLEM_COUNT', args: [] }));
+    recordAchievementIfNew(store, updatedKeys, 'lv2_area_count', executorMod.evalMetric(state, INDEX, c.playerId, { name: 'AREA_COUNT', args: [2] }));
   }
   saveAchievements(store);
   if (updatedKeys.length > 0) {
     showAchievementPopup(updatedKeys, store, totalBefore);
     syncAchievementTotalIfIncreased(store);
   }
+  // 実績解除2(トップ画面のカードリスト/ランキング/ウィークリーチャレンジのロック)再判定 (2026-10-11,
+  // per user request: "ゲーム終了後 点数が増えたら もう一度チェック") -- ゲーム開始時に1回だけ見る
+  // CON/JOBの裏面ロックと違い、こちらはこのゲーム終了の結果で合計点数が実際に増えた場合だけ、次に
+  // トップ画面へ戻った時のボタン有効/無効がすぐ反映されるよう再計算する。
+  if (achievementTotalPoints(store) > totalBefore) refreshLockedMenuFeatureIds();
 }
 
 // ウィークリーランキングへの登録成功時にだけ呼ばれる (2026-10-03, per user: "ウィークリーランキングに
@@ -13427,9 +13509,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // プレイはローカル対戦に飛ぶ") -- ローカル対戦ボタンと全く同じ処理。
   document.getElementById('entry-banner-hero-cta').addEventListener('click', dismissEntryBanner);
   document.getElementById('entry-banner-online-button').addEventListener('click', () => { dismissEntryBanner(); openOnlineLobby(); });
-  document.getElementById('entry-banner-weekly-button').addEventListener('click', openWeeklyChallenge);
-  document.getElementById('entry-banner-cardlist-button').addEventListener('click', () => { dismissEntryBanner(); openCardListOverlay(); });
-  document.getElementById('entry-banner-ranking-button').addEventListener('click', () => { dismissEntryBanner(); openRankingOverlay(); });
+  // gatedEntryBannerHandler (2026-10-11, see its own doc): only these 3 entry-banner kickers are gated --
+  // the SAME functions called from in-game nav buttons elsewhere (anytime-ranking-button/card-list-open-
+  // button/weekly-challenge-button) stay ungated.
+  document.getElementById('entry-banner-weekly-button').addEventListener('click', gatedEntryBannerHandler('ウィークリーチャレンジ', openWeeklyChallenge));
+  document.getElementById('entry-banner-cardlist-button').addEventListener('click', gatedEntryBannerHandler('カードリスト', () => { dismissEntryBanner(); openCardListOverlay(); }));
+  document.getElementById('entry-banner-ranking-button').addEventListener('click', gatedEntryBannerHandler('ランキング', () => { dismissEntryBanner(); openRankingOverlay(); }));
   document.getElementById('entry-banner-achievement-button').addEventListener('click', () => { dismissEntryBanner(); openAchievementOverlay(); });
   // 更新しても進行中のゲームが消えないように (2026-10-11) -- sessionResumeChoicePendingの doc参照。
   document.getElementById('session-resume-continue-button').addEventListener('click', resumeSavedSession);
