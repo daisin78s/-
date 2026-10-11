@@ -4868,6 +4868,7 @@ body.tutorial-mode .change-highlight {
    colorの手動指定/デザイナーズノート用テキストボタン/アイコン単体+HTMLラベル方式は全て不要になり撤去 --
    画像自身がカードの見た目を完結して持っているので、ボタン要素側はレイアウトと当たり判定だけ。 */
 .entry-banner__feature-button {
+  position: relative;
   flex: 1 1 0;
   min-width: 0;
   height: clamp(64px, 11vw, 100px);
@@ -4888,8 +4889,18 @@ body.tutorial-mode .change-highlight {
   height: auto;
   object-fit: contain;
 }
-/* ロック中(実績解除2、2026-10-11) -- main.jsがページ読込時/ゲーム終了後に付け外しするクラス。 */
-.entry-banner__feature-button--locked {
-  opacity: 0.45;
-  filter: grayscale(70%);
+/* ロック中(実績解除2、2026-10-11) -- main.jsがページ読込時/ゲーム終了後に付け外しするクラス。
+   2026-10-11、per user request: "透けさせるのではなく鍵アイコン" -- 透明度を下げるとボタン画像が壊れて
+   見える(ユーザー自身が誤認した実例あり)ため、ボタン自体は等倍のまま、🔒バッジを中央に重ねる方式に
+   変更。 */
+.entry-banner__feature-button--locked::after {
+  content: '🔒';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(20px, 3.2vw, 32px);
+  background: rgba(0, 0, 0, 0.55);
+  pointer-events: none;
 }
