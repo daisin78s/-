@@ -4756,10 +4756,9 @@ body.tutorial-mode .change-highlight {
   border-color: var(--accent);
 }
 
-/* トップ画像 (2026-10-11, per user提供の新背景画像に差し替え+「以前のボタンを組み合わせて前と同じような
-   ものを再現してほしい」own doc -- index.htmlのentry-banner own doc参照) -- 新背景写真にはボタン用の
-   余白が無いため、画像下部に半透明の帯(#entry-banner__overlay-panel)を敷いて、その上に実在のボタンを
-   並べる方式に変更(旧来のpixel位置合わせでの透明ボタン重ねは廃止)。 */
+/* トップ画像 (2026-10-11, per user提供の新背景画像に差し替え -- index.htmlのentry-banner own doc参照)。
+   旧来のpixel位置合わせでの透明ボタン重ねは廃止し、実在のボタン要素を配置する方式に変更。各ブロックの
+   own docも参照 (#entry-banner__top-panel/CTA/#entry-banner__button-row)。 */
 #entry-banner__hero-wrap {
   position: relative;
   line-height: 0;
@@ -4773,9 +4772,10 @@ body.tutorial-mode .change-highlight {
   max-height: 100vh;
 }
 
-/* 見出し文言+CTA (2026-10-11, per user request -- index.htmlのentry-banner own doc参照): 画像上部に
-   半透明の帯を敷いて、その上にキャッチコピー+「今すぐプレイ」を配置(line-height:0の#entry-banner__
-   hero-wrap内でも通常のテキスト行間に戻すため、ここだけline-height明示)。 */
+/* 見出し文言+CTA (2026-10-11, per user request -- index.htmlのentry-banner own doc参照、2026-10-11
+   「かなり前と違っているので前の感じにちかづけて」を受けて旧assets/entry-banner-hero.jpg(焼き込み版)の
+   見た目に寄せて再調整: 背景の帯は廃止して写真に直接文字を置く(旧画像もタイトル部分に帯は無かった)、
+   タイトルは金色+大きめサイズ、CTAは紺地+金縁+▶アイコンの錠剤ボタンに変更。 */
 #entry-banner__top-panel {
   position: absolute;
   left: 0;
@@ -4785,27 +4785,30 @@ body.tutorial-mode .change-highlight {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 14px;
-  padding: 24px 24px calc(24px + env(safe-area-inset-top, 0px));
-  background: linear-gradient(to bottom, rgba(20, 14, 8, 0.82) 0%, rgba(20, 14, 8, 0.6) 55%, rgba(20, 14, 8, 0) 100%);
+  gap: 18px;
+  padding: clamp(20px, 5vw, 56px) clamp(16px, 4vw, 48px);
+  /* 写真の明るい部分(新背景の左上は観葉植物のボケで明るい)でも文字が読めるよう、テキスト裏だけに
+     自然な影を敷く(旧画像の帯のような矩形ではなく、左上を起点にしたvignette)。 */
+  background: radial-gradient(ellipse 70% 60% at 0% 0%, rgba(10, 7, 4, 0.55) 0%, rgba(10, 7, 4, 0) 70%);
 }
 #entry-banner__tagline {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  color: #fff;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+  gap: 10px;
+  color: #f3dca3;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.75), 0 0 2px rgba(0, 0, 0, 0.6);
 }
 #entry-banner__tagline-title {
-  font-size: clamp(20px, 4vw, 32px);
-  font-weight: 800;
-  line-height: 1.35;
+  font-size: clamp(26px, 6vw, 52px);
+  font-weight: 900;
+  line-height: 1.25;
 }
 #entry-banner__tagline-sub {
-  font-size: clamp(11px, 1.6vw, 14px);
-  font-weight: 500;
+  font-size: clamp(12px, 1.8vw, 16px);
+  font-weight: 600;
   max-width: 420px;
-  opacity: 0.92;
+  color: #f1e6c8;
+  opacity: 0.95;
 }
 
 #entry-banner__overlay-panel {
@@ -4815,61 +4818,69 @@ body.tutorial-mode .change-highlight {
   bottom: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
-  background: linear-gradient(to top, rgba(20, 14, 8, 0.88) 0%, rgba(20, 14, 8, 0.72) 60%, rgba(20, 14, 8, 0) 100%);
+  align-items: stretch;
 }
 
+/* 紺地+金縁+▶アイコンの錠剤ボタン (旧画像のCTA見た目を再現)。 */
 .entry-banner__cta {
-  padding: 12px 40px;
-  border: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 32px;
+  border: 2px solid #d9b25c;
   border-radius: 999px;
-  background: linear-gradient(180deg, #e8b84b, #c8912a);
-  color: #2a1c08;
-  font-size: 17px;
+  background: linear-gradient(180deg, #1c2c4a, #101a30);
+  color: #e9c977;
+  font-size: clamp(15px, 2vw, 19px);
   font-weight: 800;
   letter-spacing: 0.04em;
   cursor: pointer;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+.entry-banner__cta::before {
+  content: '';
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  border-left: 11px solid #fff;
 }
 
+/* 下部の帯は画像端いっぱいに敷く (旧画像のボタン行が画面端まで続いていた見た目に合わせる)。 */
 #entry-banner__button-row {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-  max-width: 900px;
+  width: 100%;
 }
 
+/* 画面端いっぱいに8等分 (旧画像の7ボタンが端から端まで隙間なく並んでいた見た目に合わせる)。 */
 .entry-banner__feature-button {
+  flex: 1 1 0;
+  min-width: 0;
+  height: clamp(64px, 11vw, 100px);
   border: none;
-  background: transparent;
+  border-top: 2px solid rgba(217, 178, 92, 0.55);
+  background: rgba(16, 12, 8, 0.82);
   padding: 0;
   cursor: pointer;
   line-height: 0;
 }
 .entry-banner__feature-button img {
   display: block;
-  width: 92px;
-  height: auto;
-  border-radius: 10px;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
-/* デザイナーズノート (2026-10-11) -- 専用素材が無いテキストのみのボタン。他7個の切り出し画像と同じ
-   見た目(角丸カード、暖色の濃い茶〜焦げ茶背景+白文字)をCSSで再現して馴染ませる。 */
+/* デザイナーズノート (2026-10-11) -- 専用素材が無いテキストのみのボタン。他7個と同じセル寸法+
+   暖色の濃い茶〜焦げ茶背景+白文字で馴染ませる。 */
 .entry-banner__feature-button--text {
-  width: 92px;
-  height: 92px;
   display: flex;
   align-items: center;
   justify-content: center;
   text-align: center;
   padding: 6px;
-  border-radius: 10px;
-  background: rgba(58, 38, 18, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.15);
   color: #fff;
-  font-size: 12px;
+  font-size: clamp(11px, 1.3vw, 13px);
   font-weight: 700;
   line-height: 1.3;
 }
