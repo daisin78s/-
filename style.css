@@ -4825,8 +4825,9 @@ body.tutorial-mode .change-highlight {
 }
 #entry-banner__tagline-title-accent {
   color: #e9c164;
-  /* 2026-10-11, per user request: "さいず2ずつおおきく" -- min/max両方+2px。 */
-  font-size: clamp(36px, 8vw, 72px);
+  /* 2026-10-11, per user request: "さいず2ずつおおきく" -- min/max両方+2px。さらに「王国。さいず4
+     おおきく」で+4px。 */
+  font-size: clamp(40px, 8vw, 76px);
 }
 #entry-banner__tagline-sub {
   /* 2026-10-11, per user request: "サイズ少し大きく" -> さらに「もう少し大きく フォント NOTO SANS JP
