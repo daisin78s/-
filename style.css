@@ -4831,7 +4831,8 @@ body.tutorial-mode .change-highlight {
      MEDIUM」-- Google Fontsから読み込んだNoto Sans JPのweight 500(Medium)を指定(index.htmlのlink own
      doc参照)、読み込み前/オフライン時は既存のsystem-uiスタックにフォールバック。 */
   font-family: "Noto Sans JP", "Hiragino Sans", "Yu Gothic UI", "Segoe UI", system-ui, -apple-system, sans-serif;
-  font-size: clamp(16px, 2.6vw, 22px);
+  /* 2026-10-11, per user request: "サイズ1小さく" -- 直前のclamp(16px,2.6vw,22px)から一段縮小。 */
+  font-size: clamp(15px, 2.4vw, 20px);
   font-weight: 500;
   max-width: 420px;
   color: #f4f4f0;
