@@ -4805,6 +4805,14 @@ body.tutorial-mode .change-highlight {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  /* 2026-10-11, per user request: "文字の下に半透明の黒っぽいのを入れて文字を読みやすくできますか
+     戻せるように" -- タイトル+説明文のブロック全体の裏に専用の半透明パネルを追加(#entry-banner__
+     top-panel側の広いvignetteとは別の、文字に密着した読みやすさ目的の背景)。元に戻す場合はこの
+     background/padding/border-radius/margin-leftの4行を削除するだけでよい。 */
+  background: rgba(8, 6, 4, 0.4);
+  padding: 14px 18px;
+  border-radius: 10px;
+  margin-left: -18px;
 }
 #entry-banner__tagline-title {
   /* 2026-10-11, per user request: "少し大きく...明朝に" -- サイズを拡大し、OS標準の明朝体フォントに
