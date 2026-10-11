@@ -4816,7 +4816,9 @@ body.tutorial-mode .change-highlight {
   background: rgba(8, 6, 4, 0.4);
   padding: 14px 18px;
   border-radius: 10px;
-  margin-left: -18px;
+  /* 2026-10-11, per user request: "黒いの もう少し左に" -- -18px(paddingと相殺するだけ)からさらに
+     左へ。 */
+  margin-left: -32px;
 }
 #entry-banner__tagline-title {
   /* 2026-10-11, per user request: "少し大きく...明朝に" -- サイズを拡大し、OS標準の明朝体フォントに
