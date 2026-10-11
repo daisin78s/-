@@ -8,10 +8,14 @@ CONJOB sheet: two pairs of 8x9 tables sharing the same layout (CON001A/002A/003A
 excluded -- see report['conjob'][].avgScore's own doc in ai_data_report.js), (2026-08-09, per user
 request) "QST平均得点" (QST's own average VP contribution, same row/col layout, a separate table further
 down the sheet -- report['conjob'][].avgQstScore), and (2026-08-20, per user request) "平均順位" (average
-final placement 1-4, same row/col layout again -- report['conjob'][].avgRank). The JOB column headers have no tier suffix (JOB cards
-only ever have an 'A' face -- see game-state.js's splitCardId), so a jobFaceId like "JOB005A" is matched
-by stripping the trailing letter. A fifth, single-row table (2026-08-07, per user spec) lives at row 30
-("使用回数" in column A, JOB001..JOB008 in B:I, the user's own pre-existing layout -- found by
+final placement 1-4, same row/col layout again -- report['conjob'][].avgRank).
+2026-10-12 correction: the JOB column headers used to have no tier suffix (JOB cards only ever had an 'A'
+face), so a jobFaceId like "JOB005A" was matched by stripping the trailing letter -- but the 2026-10-11
+JOB A/B redesign gave JOB real A/B tiers just like CON, so jobFaceId is now matched directly, same as
+conFaceId (stripping would look up a physical id ("JOB005") that no longer exists as its own row in
+game.json's JOB sheet at all, silently skipping every single JOB/CONJOB entry -- found via a real
+1000-game run that came back entirely blank). A fifth, single-row table (2026-08-07, per user spec) lives
+at row 30 ("使用回数" in column A, JOB001..JOB008 in B:I, the user's own pre-existing layout -- found by
 inspection, same as the tables above): one aggregate "usage" value per JOB (not per-round) -- see
 report['job']'s own meaning, set by tools/ai_data_report.js's jobEntry doc.
 
@@ -48,7 +52,6 @@ rather than silently mis-filed).
 """
 
 import json
-import re
 import sys
 import openpyxl
 
@@ -72,8 +75,9 @@ wb = openpyxl.load_workbook(XLSX_PATH)
 ws = wb['CONJOB']
 
 def find_table(header_row):
-    """Given the row index of a table's own header row, returns {con_face_id: row_idx} and
-    {job_physical_id: col_idx} (job ids stripped to e.g. "JOB005", matching the sheet's own headers)."""
+    """Given the row index of a table's own header row, returns {con_name: row_idx} and
+    {job_name: col_idx} (row/column labels are read verbatim from the sheet -- 2026-10-12: these are
+    Japanese card NAMEs, not ids at all, see this file's own top-of-file doc)."""
     row_map = {}
     r = header_row + 1
     while ws.cell(row=r, column=1).value:
@@ -147,9 +151,17 @@ for entry in report['conjob']:
     if not entry['job']:
         skipped.append((con_face_id, entry['job']))
         continue
-    job_physical_id = re.sub(r'[A-Z]$', '', entry['job'])  # "JOB005A" -> "JOB005"
+    # 2026-10-12, per user report ("空白なので直して" -- AIDATA20261012-1.xlsx, 1000-game real run, all
+    # 118 CONJOB combinations skipped): this used to strip JOB ids down to their physical id (e.g.
+    # "JOB005A" -> "JOB005") on the assumption JOB only ever had one real face (see this file's own
+    # top-of-file doc, now stale) -- but the 2026-10-11 JOB A/B redesign gave JOB real tiers just like
+    # CON, so game.json's JOB sheet (and NAME_BY_JOB below) is now keyed by the FULL face id
+    # ("JOB005A"/"JOB005B" as separate rows with separate NAMEs), never by the bare physical id. Stripping
+    # the trailing letter therefore looked up a physical id that no longer exists in NAME_BY_JOB at all,
+    # silently fell back to the unmatched raw id, and skipped every single entry. Use the face id directly
+    # now, same as con_face_id just above.
     con_name = NAME_BY_CON_FACE.get(con_face_id, con_face_id)
-    job_name = NAME_BY_JOB.get(job_physical_id, job_physical_id)
+    job_name = NAME_BY_JOB.get(entry['job'], entry['job'])
     if con_name not in count_rows or job_name not in count_cols:
         skipped.append((con_face_id, entry['job']))
         continue
@@ -242,8 +254,9 @@ for c in range(2, last_job_col + 1):
 job_written = 0
 job_skipped = []
 for job_face_id, entry in report.get('job', {}).items():
-    job_physical_id = re.sub(r'[A-Z]$', '', job_face_id)
-    job_name = NAME_BY_JOB.get(job_physical_id, job_physical_id)
+    # 2026-10-12, see the conjob loop's own doc above (same JOB A/B redesign fix) -- use the face id
+    # directly, NAME_BY_JOB is keyed by face id now, not physical id.
+    job_name = NAME_BY_JOB.get(job_face_id, job_face_id)
     if job_name not in count_cols:
         job_skipped.append(job_face_id)
         continue
@@ -266,8 +279,9 @@ for c in range(2, last_job_col + 1):
 
 trial_total_written = 0
 for job_face_id, entry in report.get('job', {}).items():
-    job_physical_id = re.sub(r'[A-Z]$', '', job_face_id)
-    job_name = NAME_BY_JOB.get(job_physical_id, job_physical_id)
+    # 2026-10-12, see the conjob loop's own doc above (same JOB A/B redesign fix) -- use the face id
+    # directly, NAME_BY_JOB is keyed by face id now, not physical id.
+    job_name = NAME_BY_JOB.get(job_face_id, job_face_id)
     if job_name not in count_cols:
         continue
     ws.cell(row=TRIAL_TOTAL_ROW, column=count_cols[job_name], value=entry['count'])
@@ -294,8 +308,9 @@ for r in (job_score_row, job_qst_score_row, job_rank_row):
 job_avg_written = 0
 job_avg_skipped = []
 for job_face_id, entry in report.get('job', {}).items():
-    job_physical_id = re.sub(r'[A-Z]$', '', job_face_id)
-    job_name = NAME_BY_JOB.get(job_physical_id, job_physical_id)
+    # 2026-10-12, see the conjob loop's own doc above (same JOB A/B redesign fix) -- use the face id
+    # directly, NAME_BY_JOB is keyed by face id now, not physical id.
+    job_name = NAME_BY_JOB.get(job_face_id, job_face_id)
     if job_name not in count_cols:
         job_avg_skipped.append(job_face_id)
         continue
