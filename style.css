@@ -4812,8 +4812,9 @@ body.tutorial-mode .change-highlight {
      明朝体を明示指定)。 */
   font-family: "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", "MS PMincho", serif;
   /* 2026-10-11, per user request: "ダイスで築く、あなただけの...フォントサイズ少し小さく 王国は少し
-     大きく" -- 1-2行目はここ(縮小)、3行目「王国。」だけ.tagline-title-accent側で別途拡大。 */
-  font-size: clamp(26px, 6vw, 50px);
+     大きく" -- 1-2行目はここ(縮小)、3行目「王国。」だけ.tagline-title-accent側で別途拡大。
+     さらに「さいず2ずつおおきく」でmin/max両方+2px。 */
+  font-size: clamp(28px, 6vw, 52px);
   font-weight: 900;
   line-height: 1.25;
   color: #fff;
@@ -4824,7 +4825,8 @@ body.tutorial-mode .change-highlight {
 }
 #entry-banner__tagline-title-accent {
   color: #e9c164;
-  font-size: clamp(34px, 8vw, 70px);
+  /* 2026-10-11, per user request: "さいず2ずつおおきく" -- min/max両方+2px。 */
+  font-size: clamp(36px, 8vw, 72px);
 }
 #entry-banner__tagline-sub {
   /* 2026-10-11, per user request: "サイズ少し大きく" -> さらに「もう少し大きく フォント NOTO SANS JP
