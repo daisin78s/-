@@ -363,8 +363,9 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
   // 異端者 (2026-10-11): computed before trainingGroundColorDieCapOnce/the NO_EFFECT prediction below --
   // see hereticBorrowedAreaRow's own doc. resolvedAreaRow (not areaRow) must feed both of those so a
   // borrowed 訓練場LV1 row's own raised color-die cap applies consistently to 異端者's placement too, not
-  // just a real tier-B placement's own.
-  const hereticRow = hereticBorrowedAreaRow(state, index, context, map);
+  // just a real tier-B placement's own. die.kind === 'COLOR' (per user follow-up: "色ダイス配置時に変更
+  // できますか") gates this the same way pioneerEligible below gates 宣教師's own color-die-only ability.
+  const hereticRow = die.kind === 'COLOR' ? hereticBorrowedAreaRow(state, index, context, map) : null;
   const resolvedAreaRow = hereticRow || areaRow;
 
   const actionContext = context;
@@ -900,6 +901,18 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   }
   const newValues = dice.map((d) => (dieIsWildcard ? 6 : d.value));
 
+  // 異端者 (2026-10-11, per user follow-up: "元老院にダイスを２個置いても 2Kもらって 1Kエリアに置くだけ"
+  // -- confirming the ability also applies to a group placement, firing exactly ONCE for the whole group
+  // action, never scaled by how many dice it contains, same "once per placement action" convention
+  // chargeUsageFeeIfOwed/grantLandlordBonusIfEarned already use here) -- see hereticBorrowedAreaRow's own
+  // doc. resolvedAreaRow (not areaRow) must feed areaTrailingAdds just below so a qualifying group
+  // placement's borrowed tier-B bonus (e.g. 元老院LV1's own trailing ADD(2K)) actually lands.
+  // dice.some(COLOR) (per user follow-up: "色ダイス配置時に変更できますか") -- same .some() shape
+  // pioneerEligible uses just below for 宣教師's own color-die-only check in this same function: the
+  // group only needs at least one color die in it, not every die.
+  const hereticRow = dice.some((d) => d.kind === 'COLOR') ? hereticBorrowedAreaRow(state, index, context, map) : null;
+  const resolvedAreaRow = hereticRow || areaRow;
+
   // AREA009C/B's own ACTION grants a trailing bonus after BUILD() (e.g. "BUILD();ADD(2K,BZ)" at LV2) --
   // same shape resolveProgramOrBuild/wouldAreaActionHaveEffect already special-case for the single-die
   // path (2026-08-07, per user feedback on 元老院LV2: "BZをもらえるので本来建築できるものが表示されません
@@ -910,7 +923,7 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   // single-die split exactly -- applied to a throwaway clone for the predicted-affordability gate below
   // (never mutates real state on a placement that might still be refused), then for real, once, right
   // before the final post-commit candidate list further down.
-  const areaTrailingAdds = buildTrailingAdds(lowerProgram(parse(areaRow.ACTION)), 0);
+  const areaTrailingAdds = buildTrailingAdds(lowerProgram(parse(resolvedAreaRow.ACTION)), 0);
 
   // Predict the resulting buildValue *before* touching anything -- lets this whole group placement be
   // refused outright if it couldn't possibly reach any monument (2026-08-0X, per user feedback: "建築す
@@ -978,6 +991,13 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
     executor.emitAndResolve(state, index, actionContext, 'PLACE', mapId);
   }
   chargeUsageFeeIfOwed(state, index, map, playerId);
+  // 異端者 (2026-10-11, see hereticBorrowedAreaRow/chargeHereticFee's own docs): never both this and the
+  // normal usage fee just above -- same mutual-exclusion reasoning as placeDice's own matching call.
+  // Charged once for the whole group action, not per die (see hereticRow's own doc just above).
+  if (hereticRow) {
+    chargeHereticFee(state, actionContext, mapId, hereticRow);
+    executor.notifyActivation(state, playerId, player.jobCardId, player.jobCardId, 'PASSIVE');
+  }
   // 開拓者's own bonus already landed earlier (see preJobBonusSnapshot above) -- not called again here;
   // it needed to be pre-commit (unlike 地主 just below) specifically because it must feed this function's
   // own build-affordability gate, which 地主's bonus never needs to.
@@ -1652,6 +1672,12 @@ function grantLandlordBonusIfEarned(state, index, context, mapId, ownColorDiceAl
  * bespoke abilities. Matched by NAME not physical id, same exception as hasLandlordAbility/
  * hasPioneerAbility. Every AREA except the untiered 王宮/AREA008 has a real tier-B row to borrow (tier
  * null !== 'A' already excludes AREA008 here, same as isLandlordEligibleArea's own !tier check).
+ *
+ * This function itself is die-kind-agnostic -- callers gate the COLOR-die-only restriction (per user
+ * follow-up: "異端者 色ダイス配置時に変更できますか", confirmed via the card-note mockup "色ダイス配置時
+ * / LV0▷LV1") themselves before calling this, same convention as hasPioneerAbility's own callers (see
+ * placeDice's pioneerEligible/placeDiceGroup's own matching check) -- a solo white die, or a group with
+ * no color die in it at all, never triggers this ability.
  */
 function hereticBorrowedAreaRow(state, index, context, map) {
   const player = state.players.find((p) => p.id === context.playerId);

@@ -2623,6 +2623,53 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   check('異端者 on an already-upgraded AREA: just the real tier-B action (6K), no double effect', p1.resources.K - beforeK, 6);
   check('...pays the REAL usage fee (owed to P2) instead, same as any non-異端者 visitor', p1.pendingFee, { mapId: 'MAP001', amount: 1 });
 }
+{
+  // Color-die-only restriction (2026-10-11, per user follow-up: "異端者 色ダイス配置時に変更できますか"):
+  // a WHITE die placement on the same qualifying AREA gets no override at all, only the real tier-A action.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.jobCardId = 'JOB006B';
+  const wd = createDie('test-heretic-wd', 'WHITE');
+  wd.value = 1; // AREA001A SLOT1=1
+  p1.dice.push(wd);
+  const beforeK = p1.resources.K || 0;
+  board.placeDice(state, index, { playerId: 'P1' }, wd.id, 'MAP001', 0);
+  check('異端者: a WHITE die placement gets only AREA001A\'s own 3K, no LV1 override', p1.resources.K - beforeK, 3);
+  check('...and no self-charged fee either', p1.pendingFee, null);
+}
+{
+  // Group placement (2026-10-11, per user follow-up: "元老院にダイスを２個置いても 2Kもらって 1Kエリアに
+  // 置くだけ" -- confirming the override fires exactly ONCE for the whole group action regardless of dice
+  // count, same as chargeUsageFeeIfOwed/grantLandlordBonusIfEarned's own "once per placement action"
+  // convention). 元老院/AREA009A (tier A) borrows AREA009B's own "BUILD();ADD(2K)"/fee=1.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.jobCardId = 'JOB006B';
+  p1.resources.K = 20; p1.resources.A = 20; p1.resources.B = 20; p1.resources.C = 20;
+  const d1 = giveDie(state, 'P1', 6); // AREA009A SLOT1-6 are all ANY
+  const d2 = giveDie(state, 'P1', 6);
+  const beforeK = p1.resources.K;
+  const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], 'MAP009');
+  check('異端者: group placement (2 dice) at 元老院 succeeds (needed an affordable BUILD candidate)', result.success, true);
+  check('...grants AREA009B\'s own ADD(2K) exactly ONCE, not once per die (would be 4K)', p1.resources.K - beforeK, 2);
+  check('...self-charges AREA009B\'s own fee (1K) exactly ONCE, not once per die', p1.pendingFee, { mapId: 'MAP009', amount: 1 });
+}
+{
+  // Group placement, no color die at all in the group: no override (same .some(COLOR) gate as placeDice's
+  // own die.kind==='COLOR' check, just per-group instead of per-die).
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.jobCardId = 'JOB006B';
+  p1.resources.K = 20; p1.resources.A = 20; p1.resources.B = 20; p1.resources.C = 20;
+  const w1 = createDie('test-heretic-group-wd1', 'WHITE'); w1.value = 6;
+  const w2 = createDie('test-heretic-group-wd2', 'WHITE'); w2.value = 6;
+  p1.dice.push(w1, w2);
+  const beforeK = p1.resources.K;
+  const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [w1.id, w2.id], 'MAP009');
+  check('異端者: an all-WHITE-dice group at 元老院 gets no override (only AREA009A\'s own bare BUILD())', result.success, true);
+  check('...no K granted at all (AREA009A\'s ACTION is bare BUILD(), nothing else)', p1.resources.K - beforeK, 0);
+  check('...no self-charged fee either', p1.pendingFee, null);
+}
 
 // ---------------------------------------------------------------------------
 // 地主's bonus is usable immediately by the *same* placement it comes from (2026-08-18, per user

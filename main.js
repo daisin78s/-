@@ -4441,6 +4441,21 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     }
     noteEl.appendChild(iconRow);
     q('.shop-card__effect').appendChild(noteEl);
+  } else if (options.showEffect && facts.name === '異端者') {
+    // JOB006B/異端者 (2026-10-11, per user mockup: "色ダイス配置時 / LV0▷LV1" -- 色ダイス限定, per user
+    // follow-up: "異端者 色ダイス配置時に変更できますか") -- this ability has no DSL representation either
+    // (bespoke -- see board.hereticBorrowedAreaRow's own doc). "▷" reuses actionTrigger()'s existing ▶
+    // glyph, same mapping confirmed for 料理人's own card-note just above.
+    tall = true;
+    const noteEl = el('div', 'card-note');
+    noteEl.appendChild(document.createTextNode('色ダイス配置時\n'));
+    noteEl.appendChild(actionTrigger());
+    const iconRow = el('span', 'job-note-icon-row');
+    iconRow.appendChild(document.createTextNode('LV0'));
+    iconRow.appendChild(actionTrigger());
+    iconRow.appendChild(document.createTextNode('LV1'));
+    noteEl.appendChild(iconRow);
+    q('.shop-card__effect').appendChild(noteEl);
   } else if (options.showEffect && facts.name === '料理人') {
     // JOB002/料理人 (2026-09-24, per user mockup: "1VP　▷　〇 / MAX5 / 毎ターン"; 2026-10-10, per user
     // request "料理人のアイコン MAX5 毎ターンを消して": MAX5/毎ターン removed since the 2026-10-10 ability
