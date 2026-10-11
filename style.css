@@ -4829,11 +4829,12 @@ body.tutorial-mode .change-highlight {
 #entry-banner__tagline::before {
   content: '';
   position: absolute;
+  /* 2026-10-11, per user request: "黒いの 縦はそのまま 左右を短く" -- top/bottomは変更せず、
+     right/leftだけ内側に詰める。 */
   top: 0;
-  right: 0;
+  right: 10px;
   bottom: 0;
-  /* 2026-10-11, per user request: "黒いのだけ もう少し左に" -- 0(パネル本来の左端)からさらに左へ。 */
-  left: -14px;
+  left: -4px;
   background: rgba(8, 6, 4, 0.4);
   border-radius: 10px;
   z-index: -1;
