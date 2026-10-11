@@ -2566,6 +2566,65 @@ function withPatchedTap(physicalFaceId, tap, fn) {
 }
 
 // ---------------------------------------------------------------------------
+// 異端者/JOB006B (2026-10-11, brand-new card, no DSL -- INST: "支配者のいないエリアにダイスを置いたとき
+// そのエリアがレベル１であるように効果を得る 使用料はそのエリアに置き後で支配者ができたときそれを回収
+// できる"). AREA001A ("小麦畑", tier A, ACTION=ADD(3K)) / AREA001B ("小麦畑LV1", ACTION=ADD(6K), fee=1)
+// is the user's own worked example ("小麦畑にダイスを置く 6Kもらって1Kはらう 1Kはエリアに置かれ 誰かが
+// こむぎ畑の支配を獲得したら回収できる").
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.jobCardId = 'JOB006B';
+  // AREA001A is the default face MAP001 starts at -- no explicit currentAreaId override needed.
+  const d1 = giveDie(state, 'P1', 1); // AREA001A SLOT1=1
+  const beforeK = p1.resources.K || 0;
+  const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
+  check('異端者: placement on an unowned, still-base-tier AREA succeeds', result.success, true);
+  check('...grants AREA001B\'s own ADD(6K) (the borrowed LV1 action), not AREA001A\'s own ADD(3K)', p1.resources.K - beforeK, 6);
+  check('...self-charges AREA001B\'s own fee (1K) via pendingFee, not an immediate deduction', p1.pendingFee, { mapId: 'MAP001', amount: 1 });
+  check('...map.accumulatedFee is untouched until TURNEND actually pays it', state.maps['MAP001'].accumulatedFee, 0);
+
+  executor.applyTurnEnd(state, index, 'P1');
+  check('TURNEND: pendingFee is paid from K (6-1=5) and cleared', p1.resources.K, 5);
+  check('...and credited into map.accumulatedFee -- banked for whoever becomes the real owner later', state.maps['MAP001'].accumulatedFee, 1);
+  check('...pendingFee itself is cleared', p1.pendingFee, null);
+
+  // Hand-off: a real owner now appears (simulating a genuine tier upgrade's own feeOwnerId grant) --
+  // confirmed this requires no extra code at all, since runSetCurrentArea never touches accumulatedFee.
+  state.maps['MAP001'].feeOwnerId = 'P2';
+  state.maps['MAP001'].currentAreaId = 'AREA001B';
+  const p2 = player(state, 'P2');
+  const collectResult = executor.collectUsageFee(state, index, { playerId: 'P2' }, 'MAP001');
+  check('...the new owner collects 異端者\'s banked 1K via the ordinary collectUsageFee button', collectResult, { success: true, amount: 1 });
+  check('...P2 actually receives the 1K', p2.resources.K || 0, 1);
+}
+{
+  // Control: a player without 異端者 gets only the base tier's own ADD(3K), no override, no fee.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const d1 = giveDie(state, 'P1', 1); // AREA001A SLOT1=1
+  board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
+  check('A player without 異端者 gets only AREA001A\'s own 3K, no LV1 override', p1.resources.K, 3);
+  check('...and no self-charged fee either', p1.pendingFee, null);
+}
+{
+  // Already-upgraded (tier B) AREA: 異端者's own override never fires -- the player just resolves the
+  // real tier-B action normally, no self-charge on top of it (confirmed via hereticBorrowedAreaRow's own
+  // tier==='A' gate).
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.jobCardId = 'JOB006B';
+  state.maps['MAP001'].currentAreaId = 'AREA001B';
+  state.maps['MAP001'].feeOwnerId = 'P2'; // already has a real owner, same as any genuine tier-B map
+  const d1 = giveDie(state, 'P1', 1); // AREA001B SLOT1=1
+  const beforeK = p1.resources.K || 0;
+  board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
+  check('異端者 on an already-upgraded AREA: just the real tier-B action (6K), no double effect', p1.resources.K - beforeK, 6);
+  check('...pays the REAL usage fee (owed to P2) instead, same as any non-異端者 visitor', p1.pendingFee, { mapId: 'MAP001', amount: 1 });
+}
+
+// ---------------------------------------------------------------------------
 // 地主's bonus is usable immediately by the *same* placement it comes from (2026-08-18, per user
 // worked examples): AREA010B (孤児院LV1)'s own ACTION is CHANGE(K,VP,3) (2026-08-30 data edit "孤児院
 // 再び変えました" -- switched from a fixed CHANGE(3K,3VP) cost to the same capped-conversion shape

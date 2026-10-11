@@ -360,14 +360,22 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
   // castle investment" behavior is ever needed again.
   const buildValue = die.value;
 
+  // 異端者 (2026-10-11): computed before trainingGroundColorDieCapOnce/the NO_EFFECT prediction below --
+  // see hereticBorrowedAreaRow's own doc. resolvedAreaRow (not areaRow) must feed both of those so a
+  // borrowed 訓練場LV1 row's own raised color-die cap applies consistently to 異端者's placement too, not
+  // just a real tier-B placement's own.
+  const hereticRow = hereticBorrowedAreaRow(state, index, context, map);
+  const resolvedAreaRow = hereticRow || areaRow;
+
   const actionContext = context;
   // 訓練場LV1/LV2 (2026-08-25) -- see TRAINING_GROUND_COLOR_DIE_CAP's own doc. Set on actionContext (not
   // a fresh object) so it reaches both wouldAreaActionHaveEffect's prediction below (which runs this
   // AREA's own DSL once more, on a throwaway clone, before the real run) AND the real grant later via
   // resolveAreaAction -- always assigned unconditionally here (undefined for any other AREA), so this is
   // already scoped to exactly this one placement attempt; see executor.grantResource's own doc for why
-  // it's deliberately never cleared mid-flight.
-  actionContext.trainingGroundColorDieCapOnce = TRAINING_GROUND_COLOR_DIE_CAP[areaRow.ID];
+  // it's deliberately never cleared mid-flight. Reads resolvedAreaRow.ID (2026-10-11), not areaRow.ID, so
+  // 異端者 borrowing AREA007B's row from AREA007A gets that same raised cap too.
+  actionContext.trainingGroundColorDieCapOnce = TRAINING_GROUND_COLOR_DIE_CAP[resolvedAreaRow.ID];
 
   // 地主/開拓者 (2026-08-18/2026-08-20, see grantLandlordBonusIfEarned/grantPioneerBonusIfEarned's own
   // docs): granted speculatively *before* the NO_EFFECT prediction and the usage-fee check below, so
@@ -396,7 +404,7 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
   // AREA007's CHANGE((A,B,C),D) when A/B/C can't be paid, or AREA008/009's BUILD() with no buildable
   // candidate at all) -- see wouldAreaActionHaveEffect's own doc for exactly what "no effect" means.
   // Deliberately checked *before* any mutation below so a doomed placement never burns the die.
-  const prediction = wouldAreaActionHaveEffect(state, index, actionContext, areaRow, buildValue);
+  const prediction = wouldAreaActionHaveEffect(state, index, actionContext, resolvedAreaRow, buildValue);
   if (!prediction.ok) {
     if (preJobBonusSnapshot) {
       Object.keys(state).forEach((k) => delete state[k]);
@@ -430,17 +438,24 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
     countsForTurnOrder: !joinedOccupiedSlot && die.kind !== 'WHITE',
   });
   chargeUsageFeeIfOwed(state, index, map, context.playerId);
+  // 異端者 (2026-10-11, see hereticBorrowedAreaRow/chargeHereticFee's own docs): never both this and the
+  // normal usage fee just above -- hereticRow is only ever non-null while map.feeOwnerId===null, which is
+  // exactly when chargeUsageFeeIfOwed's own wouldOweFee check is always a no-op.
+  if (hereticRow) {
+    chargeHereticFee(state, actionContext, mapId, hereticRow);
+    executor.notifyActivation(state, context.playerId, player.jobCardId, player.jobCardId, 'PASSIVE');
+  }
 
   // 孤児院(AREA010B/AREA010C)-only, reporting use only (2026-08-28, see game-state.js's
   // PlayerState.orphanageVpGained doc): snapshotted before resolveAreaAction runs so the delta below
   // reflects exactly what THIS placement's own CHANGE(...,VP,...) granted, diffed the same before/after
   // style wouldAreaActionHaveEffect already uses elsewhere in this file, rather than special-casing
   // CHANGE's own math here.
-  const isOrphanageChangeVp = areaRow.ID === 'AREA010B' || areaRow.ID === 'AREA010C';
+  const isOrphanageChangeVp = resolvedAreaRow.ID === 'AREA010B' || resolvedAreaRow.ID === 'AREA010C';
   const vpBeforeAreaAction = isOrphanageChangeVp ? (player.resources.VP || 0) : null;
 
   executor.emitAndResolve(state, index, actionContext, 'PLACE', mapId);
-  const actionResult = resolveAreaAction(state, index, actionContext, areaRow, buildValue);
+  const actionResult = resolveAreaAction(state, index, actionContext, resolvedAreaRow, buildValue);
 
   // 2026-09-06, per user request: placement used to be rolled back entirely here when the resulting fee
   // was judged totally unpayable (canAffordFee) -- removed. That pre-check predates executor.canEndTurn's
@@ -1621,6 +1636,51 @@ function grantLandlordBonusIfEarned(state, index, context, mapId, ownColorDiceAl
   if (ownColorDiceAlreadyThere > 0) executor.grantResourceAndEmitGet(state, index, context, 'VP', ownColorDiceAlreadyThere);
   const player = state.players.find((p) => p.id === context.playerId);
   executor.notifyActivation(state, context.playerId, player.jobCardId, player.jobCardId, 'PASSIVE');
+}
+
+/** The AREA row 異端者/JOB006B's own bespoke ability (added 2026-10-11, brand-new card, no DSL
+ * representation -- same class of exception as hasLandlordAbility/hasPioneerAbility above) borrows for
+ * mapId's CURRENT area, or null if not eligible. Eligible only while the area is still at its base
+ * (tier-A) face with no real owner yet (map.feeOwnerId===null -- confirmed these two conditions always
+ * coincide: runSetCurrentArea is the only thing that ever sets feeOwnerId, and it always also advances
+ * currentAreaId past tier A in the same stroke, so a tier-A map can never already have a real owner).
+ * While eligible, 異端者's OWN placement there runs the borrowed tier-B ("LV1") row's ACTION instead of
+ * the area's own real tier-A one -- for 異端者's benefit only; the AREA's actual tier/slots/ownership are
+ * completely untouched for every other player (confirmed with the user: "異端者自身の配置時だけ、その
+ * エリアの本来のACTIONの代わりにLV1(B面)のACTIONが発動する"). No TAP/cooldown gating at all (per user:
+ * "この能力は毎ターン使えます") -- fires on every qualifying placement, same as 地主/宣教師's own no-TAP
+ * bespoke abilities. Matched by NAME not physical id, same exception as hasLandlordAbility/
+ * hasPioneerAbility. Every AREA except the untiered 王宮/AREA008 has a real tier-B row to borrow (tier
+ * null !== 'A' already excludes AREA008 here, same as isLandlordEligibleArea's own !tier check).
+ */
+function hereticBorrowedAreaRow(state, index, context, map) {
+  const player = state.players.find((p) => p.id === context.playerId);
+  if (!player.jobCardId || getCardRow(index, player.jobCardId).NAME !== '異端者') return null;
+  if (map.feeOwnerId !== null) return null;
+  const { physicalId, tier } = splitCardId(map.currentAreaId);
+  if (tier !== 'A') return null;
+  return getAreaRow(index, `${physicalId}B`);
+}
+
+/** Self-charges 異端者's own fee for a borrowed row (see hereticBorrowedAreaRow's own doc) -- confirmed
+ * via a worked user example (小麦畑/AREA001A -> "6Kもらって1Kはらう", matching AREA001B's own
+ * ACTION=ADD(6K)/fee=1 exactly): 異端者 pays the borrowed row's own `fee` (K) from their own resources
+ * every time the ability fires. Implemented via player.pendingFee/executor.applyTurnEnd -- the exact same
+ * deferred-payment mechanism every other usage fee in the engine already goes through (see
+ * chargeUsageFeeIfOwed's own doc), rather than a hard immediate block, so an unaffordable self-charge
+ * degrades the same way (K first, then -1VP per any K still missing, see canEndTurn/applyTurnEnd's own
+ * USAGE_FEE VP-escape) instead of ever refusing the placement. Reusing this exact mechanism is also what
+ * makes the eventual hand-off automatic (per user: "自動的にその人のaccumulatedFeeに引き継がれる（普通
+ * の使用料回収ボタンで回収）") -- applyTurnEnd credits map.accumulatedFee directly with no feeOwnerId
+ * check at all, so whoever later becomes the area's real owner (via a genuine tier upgrade) collects
+ * whatever 異端者 banked, through the ordinary collectUsageFee button -- no extra hand-off code needed
+ * (confirmed: runSetCurrentArea never touches accumulatedFee). A no-op if the borrowed row happens to
+ * carry no fee at all (falsy `fee`, same convention as every area row's blank fee column).
+ */
+function chargeHereticFee(state, context, mapId, hereticRow) {
+  if (!hereticRow.fee) return;
+  const player = state.players.find((p) => p.id === context.playerId);
+  player.pendingFee = { mapId, amount: hereticRow.fee };
 }
 
 /** The minimum round a SHOP201-203 (SPECIAL) card becomes purchasable, derived from its own ID's number
