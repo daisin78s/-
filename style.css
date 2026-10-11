@@ -4830,11 +4830,11 @@ body.tutorial-mode .change-highlight {
   content: '';
   position: absolute;
   /* 2026-10-11, per user request: "黒いの 縦はそのまま 左右を短く" -- top/bottomは変更せず、
-     right/leftだけ内側に詰める。さらに「今と同じだけ 左右短く」で同幅(10px)もう一段。 */
+     right/leftだけ内側に詰める。さらに「今と同じだけ 左右短く」で同幅(10px)を2回繰り返し。 */
   top: 0;
-  right: 20px;
+  right: 30px;
   bottom: 0;
-  left: 6px;
+  left: 16px;
   background: rgba(8, 6, 4, 0.4);
   border-radius: 10px;
   z-index: -1;
