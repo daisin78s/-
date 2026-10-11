@@ -4836,6 +4836,8 @@ body.tutorial-mode .change-highlight {
   font-weight: 500;
   max-width: 420px;
   color: #f4f4f0;
+  /* 2026-10-11, per user request: "わずかに下に" */
+  margin-top: 8px;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.75), 0 1px 2px rgba(0, 0, 0, 0.6);
 }
 
