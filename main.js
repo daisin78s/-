@@ -165,17 +165,23 @@ function tutorialPreferredNormalFaceIds(state) {
 const TUTORIAL_SHOP_MONUMENT_FACE_IDS = ['M001'];
 
 /** The CON/JOB 裏面(B面) faceIds currently locked for a genuine local game, per game.xlsxの「実績解除2」
- * シート (ID=faceId, 必要点数=解禁に必要な実績合計点数, 2026-10-11 per user spec) -- computed ONCE, from
+ * シート (ID=faceId, 必要point=解禁に必要な実績合計点数, 2026-10-11 per user spec) -- computed ONCE, from
  * this device's own localStorage achievement total (loadAchievements/achievementTotalPoints, see their
  * own docs), never re-derived mid-game ("ローカル対戦のみ... 判定はゲーム開始時に1回だけ" per the design
  * discussion). A faceId with no row in 実績解除2 is never locked (no threshold defined = always
  * available), so populating that sheet gradually never retroactively locks a card no threshold was ever
  * set for. See createInitialState's own call site for which modes skip this entirely (everything
- * unlocked: ウィークリーチャレンジ/チュートリアル/オンライン対戦). */
+ * unlocked: ウィークリーチャレンジ/チュートリアル/オンライン対戦).
+ *
+ * The sheet also has some non-faceId rows (カードリスト/ランキング/ウィークリーチャレンジ -- feature/menu
+ * unlocks, not cards) that this function returns unfiltered alongside real faceIds; setup.dealJobPool/
+ * chooseConFace only ever look up specific JOB*/CON* ids, so these extra strings sitting unused in the
+ * array are harmless there, but no code yet actually gates those 3 menu features themselves -- flagged to
+ * the user, not yet implemented (would need its own separate design/confirmation). */
 function computeLockedFaceIds() {
   const total = achievementTotalPoints(loadAchievements());
   const rows = INDEX.raw['実績解除2'] || [];
-  return rows.filter((row) => total < Number(row['必要点数'] || 0)).map((row) => row.ID);
+  return rows.filter((row) => total < Number(row['必要point'] || 0)).map((row) => row.ID);
 }
 
 /** skipAchievementLock (2026-10-11, per user spec: "オンライン対戦は対象外（すべて解除済み）") -- set by

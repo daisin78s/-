@@ -1186,6 +1186,15 @@ const EXTRA_D = { name: 'EXTRA_D_PLUS_ABC_COUNT', args: [] };
   getPlayerRef(state, 'P1').dice.push(createDie('lonely', 'COLOR'));
   check('Fewer color dice than the starting count floors at 0 rather than going negative', executor.evalMetric(state, index, 'P1', EXTRA_D), 0);
 }
+{
+  // 強化カード(アップグレード済み、tier!=='A')除外 (2026-10-11, per user request: "通常カード枚数+追加
+  // 色ダイス 強化カードはカウントしなくなりました") -- a card already upgraded to its tier-B face no
+  // longer contributes to this metric at all, unlike CARD_COUNT(A,B,C) (which is tier-agnostic).
+  const state = freshState();
+  giveCard(state, 'A001A', 'P1'); // still base tier -- counts
+  giveCard(state, 'A002B', 'P1'); // already upgraded -- excluded
+  check('An upgraded (tier-B) card no longer counts, only the still-base-tier one does', executor.evalMetric(state, index, 'P1', EXTRA_D), 1);
+}
 
 // ---------------------------------------------------------------------------
 // 23. UNTAP_CHOICE(SELF,3) (2026-08-15, replacing what were then C004B/C005B/C006B/C007B/C008A/C008B's

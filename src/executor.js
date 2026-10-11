@@ -598,9 +598,11 @@ function evalMetric(state, index, playerId, metric) {
       const player = getPlayer(state, playerId);
       return Math.floor((player.resources[resource] || 0) / n);
     }
-    // "ABC建築数+追加色ダイス" (Q001B GOAL, 2026-08-11): CARD_COUNT(A,B,C) plus the player's *additional*
-    // color dice -- how many they've gained BEYOND their starting hand, i.e. colorDiceCount minus
-    // INITIAL_COLOR_DICE, floored at 0. Range 0..2 (starting 3, colorDiceCap 5).
+    // "通常カード枚数+追加色ダイス" (Q001B GOAL, renamed 2026-10-11 from "ABC建築数+追加色ダイス" -- see
+    // this case's own filter doc below for the matching rule change): the player's own A/B/C-sheet cards
+    // still at their base (tier-A, "通常") face, plus their *additional* color dice -- how many they've
+    // gained BEYOND their starting hand, i.e. colorDiceCount minus INITIAL_COLOR_DICE, floored at 0.
+    // Dice range 0..2 (starting 3, colorDiceCap 5).
     //
     // Replaces 2026-08-10's D_PLUS_ABC_COUNT, which counted ALL color dice and so started every game at 3
     // while every other QST goal started at 0 (per user: "QSTの初期状態をすべて０にするため"). Floored
@@ -609,12 +611,21 @@ function evalMetric(state, index, playerId, metric) {
     // so the floor is purely defensive.
     //
     // Counts placed/passed dice too, not just unplaced ones (confirmed with the user when this metric was
-    // first added): a color die stays in player.dice for the whole round wherever it sits. Delegates the
-    // ABC half to CARD_COUNT(A,B,C) rather than re-deriving its filter, so the two can't drift.
+    // first added): a color die stays in player.dice for the whole round wherever it sits.
     case 'EXTRA_D_PLUS_ABC_COUNT': {
       const colorDiceCount = getPlayer(state, playerId).dice.filter((d) => d.kind === 'COLOR').length;
       const extraColorDice = Math.max(0, colorDiceCount - INITIAL_COLOR_DICE);
-      return extraColorDice + evalMetric(state, index, playerId, { name: 'CARD_COUNT', args: ['A', 'B', 'C'] });
+      // 強化カード(アップグレード済み、tier!=='A')除外 (2026-10-11, per user request: "通常カード枚数+
+      // 追加色ダイス 強化カードはカウントしなくなりました" -- Q001Bのこの名前変更に合わせたルール変更).
+      // 以前はCARD_COUNT(A,B,C)にそのまま委譲していた(現在のtierを問わず、A/B/C各シートの所有カード数を
+      // 全てカウント)が、今は現在のface tierが'A'(未アップグレード、"通常")のものだけを数える。tierの
+      // ないカード(CARD_COUNT_SHEETSのMシートなど)はそもそもここでは対象外(A,B,Cのみ指定)なので、
+      // splitCardIdがnullを返すケースは発生しない。
+      const abcBaseTierCount = owned.filter((c) => {
+        const sheet = index.byId.get(c.row.ID).sheet;
+        return ['A', 'B', 'C'].includes(sheet) && splitCardId(c.row.ID).tier === 'A';
+      }).length;
+      return extraColorDice + abcBaseTierCount;
     }
     default:
       throw new NotImplementedError(`Unknown condition metric: ${metric.name}`);
