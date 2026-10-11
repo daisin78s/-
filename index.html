@@ -15,7 +15,7 @@
        古ければ、ブラウザがキャッシュした古いファイルを見ている/pushがまだ反映されていないと一目で
        わかるようにするための目印(実際の挙動には一切影響しない、純粋な表示用の目印)。main.js/index.html/
        data/をpushするたびにここをインクリメントすること。 -->
-  <div id="copyright-notice">© 2026 higebucho Ver.1.033</div>
+  <div id="copyright-notice">© 2026 higebucho Ver.1.034</div>
 
   <!-- 入口バナー (2026-10-04, per user request: "HPに入ったときに大き目バナーを用意して導線をわかりやすく
        したい") -- #app/#weekly-seat-pickerと同じ「画面を丸ごと差し替える」パターン(main.jsのrender()
@@ -40,7 +40,7 @@
         <!-- バージョン表示 (2026-10-08, per user request: "セリフで見えにくいので トップ画像の右下にも") --
              #copyright-noticeはゲーム中のセリフ吹き出しに隠れて見えにくいため、入口バナー(トップ画像)の
              右下にも同じ番号を複製表示する。中身は#copyright-noticeと手動で同期させること。 -->
-        <div id="entry-banner__version">Ver.1.033</div>
+        <div id="entry-banner__version">Ver.1.034</div>
         <!-- 見出し文言+CTA (2026-10-11, per user request: "ダイスで築く、あなただけの王国。などの文言も
              前と同じように表示して 今すぐプレイボタンも" -- 旧画像に焼き込まれていたキャッチコピーを、
              新背景では実テキストとして表示(per user: "文言は後から変更できるように" -- 画像ではなく
@@ -56,8 +56,16 @@
           <div id="entry-banner__button-row">
             <!-- 並び順 (2026-10-11, per user spec): チュートリアル/ローカル対戦/オンライン対戦/
                  ウィークリーチャレンジ/カードリスト/ランキング/実績解除/デザイナーズノート。 -->
-            <button type="button" class="entry-banner__feature-button" id="entry-banner-tutorial-button" aria-label="チュートリアル"><img src="assets/entry-banner-button-tutorial.png" alt=""></button>
-            <button type="button" class="entry-banner__feature-button" id="entry-banner-local-button" aria-label="ローカル対戦"><img src="assets/entry-banner-button-local.png" alt=""></button>
+            <!-- アイコン単体+HTML側ラベル (2026-10-11, per user提供のレイヤー分け素材に差し替え -- 残り
+                 5個は旧来の文字焼き込み済みクロップ画像のまま、素材が届き次第同じ形に揃える)。 -->
+            <button type="button" class="entry-banner__feature-button entry-banner__feature-button--icon-label" id="entry-banner-tutorial-button" aria-label="チュートリアル">
+              <img src="assets/entry-banner-icon-tutorial.png" alt="">
+              <span class="entry-banner__feature-button-label">チュートリアル</span>
+            </button>
+            <button type="button" class="entry-banner__feature-button entry-banner__feature-button--icon-label" id="entry-banner-local-button" aria-label="ローカル対戦">
+              <img src="assets/entry-banner-icon-local.png" alt="">
+              <span class="entry-banner__feature-button-label">ローカル対戦</span>
+            </button>
             <button type="button" class="entry-banner__feature-button" id="entry-banner-online-button" aria-label="オンライン対戦"><img src="assets/entry-banner-button-online.png" alt=""></button>
             <button type="button" class="entry-banner__feature-button" id="entry-banner-weekly-button" aria-label="ウィークリーチャレンジ"><img src="assets/entry-banner-button-weekly.png" alt=""></button>
             <button type="button" class="entry-banner__feature-button" id="entry-banner-cardlist-button" aria-label="カードリスト"><img src="assets/entry-banner-button-cardlist.png" alt=""></button>
