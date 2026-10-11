@@ -4868,70 +4868,31 @@ body.tutorial-mode .change-highlight {
   width: 100%;
 }
 
-/* 画面端いっぱいに8等分 (旧画像の7ボタンが端から端まで隙間なく並んでいた見た目に合わせる)。 */
+/* 画面端いっぱいに8等分 (旧画像の7ボタンが端から端まで隙間なく並んでいた見た目に合わせる)。2026-10-11
+   更新: 8個ともユーザー提供のレイヤー分け素材(アイコン+ラベル+ボタンごとの専用配色が最初から
+   バッキングされた透過PNG)に統一したため、以前ここにあった共通背景/縁取り/ボタンごとのborder-top-
+   colorの手動指定/デザイナーズノート用テキストボタン/アイコン単体+HTMLラベル方式は全て不要になり撤去 --
+   画像自身がカードの見た目を完結して持っているので、ボタン要素側はレイアウトと当たり判定だけ。 */
 .entry-banner__feature-button {
   flex: 1 1 0;
   min-width: 0;
   height: clamp(64px, 11vw, 100px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: none;
-  border-top: 3px solid rgba(217, 178, 92, 0.55);
-  background: rgba(16, 12, 8, 0.82);
-  padding: 0;
+  background: transparent;
+  padding: 2px;
   cursor: pointer;
   line-height: 0;
 }
-/* ボタンごとの縁色 (2026-10-11, per user request: "可能な限り前に近づけて 手は抜かないでね") -- 旧画像の
-   実物をPillowでサンプリングして取り直した各ボタンのアクセント色(チュートリアル=グレー、ローカル対戦=
-   マゼンタ、ウィークリーチャレンジ=緑、オンライン対戦=青、カードリスト=茶、ランキング=紫、実績解除=
-   オリーブ金。デザイナーズノートは旧画像に無いため、既存7色と被らないテラコッタを新規に割り当て)。 */
-#entry-banner-tutorial-button { border-top-color: #8a8f99; }
-#entry-banner-local-button { border-top-color: #d6577f; }
-#entry-banner-weekly-button { border-top-color: #4caf6a; }
-#entry-banner-online-button { border-top-color: #3f8ce0; }
-#entry-banner-cardlist-button { border-top-color: #b4733a; }
-#entry-banner-ranking-button { border-top-color: #a85fc2; }
-#entry-banner-achievement-button { border-top-color: #9a8a2e; }
-#entry-banner-designer-notes-button { border-top-color: #c0674a; }
 .entry-banner__feature-button img {
   display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-/* デザイナーズノート (2026-10-11) -- 専用素材が無いテキストのみのボタン。他7個と同じセル寸法+
-   暖色の濃い茶〜焦げ茶背景+白文字で馴染ませる。 */
-.entry-banner__feature-button--text {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 6px;
-  color: #fff;
-  font-size: clamp(11px, 1.3vw, 13px);
-  font-weight: 700;
-  line-height: 1.3;
-}
-/* アイコン単体+HTML側ラベル (2026-10-11, per userのレイヤー分け素材) -- 旧来の文字焼き込み済み
-   クロップ(.entry-banner__feature-button img の基本ルール、width/height:100%)を上書きし、アイコンを
-   上寄せcontainで縮小表示+下にラベルテキストを独立して置く。 */
-.entry-banner__feature-button--icon-label {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  line-height: normal;
-}
-.entry-banner__feature-button--icon-label img {
+  max-width: 100%;
+  max-height: 100%;
   width: auto;
-  height: 55%;
+  height: auto;
   object-fit: contain;
-}
-.entry-banner__feature-button-label {
-  color: #fff;
-  font-size: clamp(10px, 1.2vw, 13px);
-  font-weight: 700;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
 }
 /* ロック中(実績解除2、2026-10-11) -- main.jsがページ読込時/ゲーム終了後に付け外しするクラス。 */
 .entry-banner__feature-button--locked {
