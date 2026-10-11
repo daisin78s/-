@@ -2632,6 +2632,31 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   check('...ADD(2VP) granted 2VP, plus 1 more from 地主\'s own bonus (already had a color die here) = 3', p1.resources.VP, 3);
   check('...the usage fee is now pending, not yet deducted', p1.pendingFee, { mapId: 'MAP001', amount: 2 });
 }
+{
+  // 2026-10-11 ability redesign (per user edit: "そのエリアに自分の色ダイスがすでにあるならさらに1VPを
+  // 得る" -> "...さらにその数だけVPを得る") -- the VP bonus now scales with however many of the player's
+  // own COLOR dice were already there, not a flat +1VP. 2 pre-existing dice both pushed into AREA999C's
+  // only other ANY slot (slots[1] -- real placement never stacks 2 dice into 1 ANY slot, but this is
+  // purely exercising countOwnColorDiceInMapSlots' own counting logic directly, same "manually fabricate
+  // slots" technique the single-prior-die test just above already uses) should grant 2VP, not 1.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.jobCardId = 'JOB011';
+  state.maps['MAP001'] = mapWithArea('MAP001', 'AREA999C', 6, 'P2');
+  const earlierDie1 = giveDie(state, 'P1', 5);
+  const earlierDie2 = giveDie(state, 'P1', 6);
+  state.maps['MAP001'].slots[1].push({ playerId: 'P1', dieId: earlierDie1.id, value: 5, seq: 1, countsForTurnOrder: true });
+  state.maps['MAP001'].slots[1].push({ playerId: 'P1', dieId: earlierDie2.id, value: 6, seq: 2, countsForTurnOrder: true });
+  earlierDie1.placedMapId = 'MAP001';
+  earlierDie2.placedMapId = 'MAP001';
+  const beforeVp = p1.resources.VP || 0;
+  const d1 = giveDie(state, 'P1', 3);
+  const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
+  check('地主: placement with 2 pre-existing own color dice succeeds', result.success, true);
+  // Total VP = AREA999C's own ACTION=ADD(2VP) (always) + 地主's bonus now scaled to the 2 pre-existing
+  // own color dice (2, not the old flat 1) = 4.
+  check('...grants 4VP total: 2 (area\'s own ADD(2VP)) + 2 (地主, matching the 2 pre-existing own color dice, not a flat 1)', p1.resources.VP - beforeVp, 4);
+}
 // placeDiceGroup x 地主 (2026-09-07): group placement only ever succeeds against a monument-buildable
 // candidate (confirmed empirically -- getBuildCandidates(['M'],...) gates it), and of the only 2 maps
 // that support stacking multiple dice at all, the castle (MAP008/AREA008) has no LVUP tier at all --

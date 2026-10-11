@@ -270,7 +270,7 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
   // isMapEmptyOfDice/grantPioneerBonusIfEarned's own doc.
   const mapWasEmptyOfDice = isMapEmptyOfDice(map);
   // 地主 (2026-08-17): same "read before mutation" requirement -- see grantLandlordBonusIfEarned's own doc.
-  const hadOwnColorDieThereAlready = playerHasOwnColorDieInMapSlots(state, map, context.playerId);
+  const ownColorDiceAlreadyThere = countOwnColorDiceInMapSlots(state, map, context.playerId);
   const areaRow = getAreaRow(index, map.currentAreaId);
   const requirements = getSlotRequirements(areaRow);
 
@@ -385,7 +385,7 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
   // wD no longer qualifies.
   const pioneerEligible = hasPioneerAbility(state, index, context.playerId) && mapWasEmptyOfDice && die.kind === 'COLOR';
   const preJobBonusSnapshot = (landlordEligible || pioneerEligible) ? structuredClone(state) : null;
-  if (landlordEligible) grantLandlordBonusIfEarned(state, index, actionContext, mapId, hadOwnColorDieThereAlready);
+  if (landlordEligible) grantLandlordBonusIfEarned(state, index, actionContext, mapId, ownColorDiceAlreadyThere);
   if (pioneerEligible) {
     grantPioneerBonusIfEarned(state, index, actionContext, mapWasEmptyOfDice, [die.value],
       (candidateState) => wouldAreaActionHaveEffect(candidateState, index, actionContext, areaRow, buildValue));
@@ -802,7 +802,7 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   // isMapEmptyOfDice/grantPioneerBonusIfEarned's own doc.
   const mapWasEmptyOfDice = isMapEmptyOfDice(map);
   // 地主 (2026-08-17): same "read before mutation" requirement -- see grantLandlordBonusIfEarned's own doc.
-  const hadOwnColorDieThereAlready = playerHasOwnColorDieInMapSlots(state, map, playerId);
+  const ownColorDiceAlreadyThere = countOwnColorDiceInMapSlots(state, map, playerId);
   const areaRow = getAreaRow(index, map.currentAreaId);
   const requirements = getSlotRequirements(areaRow);
   // JOB003/道化 (2026-08-19): every die in this group is this player's own, so wildcard-ness is a single
@@ -973,7 +973,7 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   // 元老院 (MAP009/AREA009, excluded by name outright) -- so 地主's bonus never actually fires via this
   // path today, and the extra pre-grant/rollback complexity placeDice needed isn't worth adding here for
   // a currently-unreachable case. Revisit if a future group-placement target is ever added elsewhere.
-  grantLandlordBonusIfEarned(state, index, actionContext, mapId, hadOwnColorDieThereAlready);
+  grantLandlordBonusIfEarned(state, index, actionContext, mapId, ownColorDiceAlreadyThere);
   // Real grant now (see areaTrailingAdds' own doc above) -- must land before the final candidates list
   // below is computed, same ordering resolveProgramOrBuild uses for the single-die path.
   if (areaTrailingAdds) {
@@ -1057,7 +1057,7 @@ function placeWildcardDie(state, index, context, dieId, mapId, preferredSlotInde
   // isMapEmptyOfDice/grantPioneerBonusIfEarned's own doc.
   const mapWasEmptyOfDice = isMapEmptyOfDice(map);
   // 地主 (2026-08-17): same "read before mutation" requirement -- see grantLandlordBonusIfEarned's own doc.
-  const hadOwnColorDieThereAlready = playerHasOwnColorDieInMapSlots(state, map, context.playerId);
+  const ownColorDiceAlreadyThere = countOwnColorDiceInMapSlots(state, map, context.playerId);
   const areaRow = getAreaRow(index, map.currentAreaId);
   const requirements = getSlotRequirements(areaRow);
 
@@ -1113,7 +1113,7 @@ function placeWildcardDie(state, index, context, dieId, mapId, preferredSlotInde
   // grantPioneerBonusIfEarned's own doc for the color-die-only restriction (2026-08-27).
   const pioneerEligible = hasPioneerAbility(state, index, context.playerId) && mapWasEmptyOfDice && die.kind === 'COLOR';
   const preJobBonusSnapshot = (landlordEligible || pioneerEligible) ? structuredClone(state) : null;
-  if (landlordEligible) grantLandlordBonusIfEarned(state, index, actionContext, mapId, hadOwnColorDieThereAlready);
+  if (landlordEligible) grantLandlordBonusIfEarned(state, index, actionContext, mapId, ownColorDiceAlreadyThere);
   if (pioneerEligible) {
     grantPioneerBonusIfEarned(state, index, actionContext, mapWasEmptyOfDice, [die.value],
       (candidateState) => wouldAreaActionHaveEffect(candidateState, index, actionContext, areaRow, abcBuildValue, monumentBuildValue));
@@ -1440,6 +1440,23 @@ function playerHasOwnColorDieInMapSlots(state, map, playerId) {
   return player.dice.some((d) => d.kind === 'COLOR' && ownDieIdsInSlots.has(d.id));
 }
 
+/** Same scan as playerHasOwnColorDieInMapSlots just above, but the actual count instead of a bare
+ * boolean (2026-10-11, for 地主/JOB011's own VP bonus -- see grantLandlordBonusIfEarned's own doc on the
+ * ability redesign this was added for: "そのエリアに自分の色ダイスがすでにあるならさらに1VPを得る" ->
+ * "...さらにその数だけVPを得る"). Kept as a separate function rather than changing
+ * playerHasOwnColorDieInMapSlots's own return type, since that one's other 2 callers (isColorDieReuseBlocked
+ * checks) only ever need the boolean. */
+function countOwnColorDiceInMapSlots(state, map, playerId) {
+  const player = state.players.find((p) => p.id === playerId);
+  const ownDieIdsInSlots = new Set();
+  for (const occupants of map.slots) {
+    for (const o of occupants) {
+      if (o.playerId === playerId) ownDieIdsInSlots.add(o.dieId);
+    }
+  }
+  return player.dice.filter((d) => d.kind === 'COLOR' && ownDieIdsInSlots.has(d.id)).length;
+}
+
 /** True if playerId's own JOB is 宣教師/JOB009 (renamed from 開拓者 2026-09-20, same physical card/ability
  * slot -- see PIONEER_RAW_RESOURCE's own doc for the ability redesign that came with the rename). Bespoke,
  * no DSL representation -- same class of exception as isColorDieReuseBlocked above, or executor.js's
@@ -1574,17 +1591,20 @@ function isLandlordEligibleArea(mapCurrentAreaId) {
   return !!tier && tier !== 'A';
 }
 
-/** Grants 地主's bonus if earned by this placement: 1K always, PLUS 1VP more (2026-08-20, changed from
- * "1VP instead" to "1VP in addition to" the K, per user request) if the player already had one of their
- * own COLOR dice sitting in this map from an earlier placement action
- * (alreadyHadOwnColorDieThere -- captured by the caller via playerHasOwnColorDieInMapSlots *before* this
- * action's own die(s) are committed, same "read before mutation" requirement as grantPioneerBonusIfEarned's
- * own wasEmpty). No hasColorDie gate unlike grantPioneerBonusIfEarned above -- JOB011's own text has no
- * "ｗDでは発動しない" carve-out the way JOB009's did, so a white-die placement triggers this too (only the
- * *pre-existing* die checked for the bonus-VP branch must be a color one). Called once per placement
- * action (placeDice: once per die; placeDiceGroup: once for the whole group), same convention as
- * grantPioneerBonusIfEarned. Reports through executor.notifyActivation for the same AI.DATA "使用回数"
- * reason documented on grantPioneerBonusIfEarned.
+/** Grants 地主's bonus if earned by this placement: 1K always, PLUS VP equal to however many of the
+ * player's own COLOR dice were already sitting in this map from an earlier placement action (2026-10-11,
+ * per user edit: "そのエリアに自分の色ダイスがすでにあるならさらに1VPを得る" -> "...さらにその数だけVP
+ * を得る" -- was a flat +1VP before, now scales with the count; 2026-08-20 had changed it from "1VP
+ * instead of K" to "1VP in addition to" the K). ownColorDiceAlreadyThere (the count, not a boolean --
+ * captured by the caller via countOwnColorDiceInMapSlots *before* this action's own die(s) are committed,
+ * same "read before mutation" requirement as grantPioneerBonusIfEarned's own wasEmpty) is granted
+ * directly as that many VP; 0 means no bonus at all, same as the old boolean's false case. No hasColorDie
+ * gate unlike grantPioneerBonusIfEarned above -- JOB011's own text has no "ｗDでは発動しない" carve-out
+ * the way JOB009's did, so a white-die placement triggers this too (only the *pre-existing* dice counted
+ * for the bonus-VP branch must be color ones). Called once per placement action (placeDice: once per
+ * die; placeDiceGroup: once for the whole group), same convention as grantPioneerBonusIfEarned. Reports
+ * through executor.notifyActivation for the same AI.DATA "使用回数" reason documented on
+ * grantPioneerBonusIfEarned.
  *
  * 2026-08-18 (per user request: "地主がLVアップされたAREAにダイスを置いてもらえるKをそのまますぐに使え
  * るようにして欲しい", worked examples: paying 孤児院LV2's own CHANGE(2K,VP) with the just-granted K,
@@ -1593,12 +1613,12 @@ function isLandlordEligibleArea(mapCurrentAreaId) {
  * check, not after, specifically so the granted K is already in state.players[...].resources by the time
  * either one reads it. See placeDice's own preLandlordSnapshot for how a placement that turns out illegal
  * anyway (for an unrelated reason) still gets this speculative grant rolled back cleanly. */
-function grantLandlordBonusIfEarned(state, index, context, mapId, alreadyHadOwnColorDieThere) {
+function grantLandlordBonusIfEarned(state, index, context, mapId, ownColorDiceAlreadyThere) {
   if (!hasLandlordAbility(state, index, context.playerId)) return;
   const map = state.maps[mapId];
   if (!isLandlordEligibleArea(map.currentAreaId)) return;
   executor.grantResourceAndEmitGet(state, index, context, 'K', 1);
-  if (alreadyHadOwnColorDieThere) executor.grantResourceAndEmitGet(state, index, context, 'VP', 1);
+  if (ownColorDiceAlreadyThere > 0) executor.grantResourceAndEmitGet(state, index, context, 'VP', ownColorDiceAlreadyThere);
   const player = state.players.find((p) => p.id === context.playerId);
   executor.notifyActivation(state, context.playerId, player.jobCardId, player.jobCardId, 'PASSIVE');
 }
