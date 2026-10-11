@@ -303,9 +303,27 @@ const MENU_FEATURE_IDS = ['カードリスト', 'ランキング', 'ウィーク
 let lockedMenuFeatureIds = computeLockedFaceIds().filter((id) => MENU_FEATURE_IDS.includes(id));
 function refreshLockedMenuFeatureIds() {
   lockedMenuFeatureIds = computeLockedFaceIds().filter((id) => MENU_FEATURE_IDS.includes(id));
+  applyLockedMenuFeatureStyling();
 }
 function isMenuFeatureLocked(featureId) {
   return lockedMenuFeatureIds.includes(featureId);
+}
+// MENU_FEATURE_IDS(実績解除2側のID文字列) -> entry-banner側の実DOM id (2026-10-11).
+const MENU_FEATURE_BUTTON_ELEMENT_IDS = {
+  'カードリスト': 'entry-banner-cardlist-button',
+  'ランキング': 'entry-banner-ranking-button',
+  'ウィークリーチャレンジ': 'entry-banner-weekly-button',
+};
+/** Toggles .entry-banner__feature-button--locked (CSS: dimmed+grayscale, see style.css own doc) on each
+ * of the 3 gated entry-banner buttons to match lockedMenuFeatureIds -- called once at initial button
+ * wiring (see wireUpButtons's own call) and again whenever refreshLockedMenuFeatureIds recomputes the
+ * list after a game ends. Purely visual -- gatedEntryBannerHandler is what actually enforces the lock
+ * regardless of whether this styling ran. */
+function applyLockedMenuFeatureStyling() {
+  for (const [featureId, elementId] of Object.entries(MENU_FEATURE_BUTTON_ELEMENT_IDS)) {
+    const el = document.getElementById(elementId);
+    if (el) el.classList.toggle('entry-banner__feature-button--locked', isMenuFeatureLocked(featureId));
+  }
 }
 /** Shown when the player taps a still-locked entry-banner kicker (2026-10-11, per design discussion: "ロック中
  * は...タップで『まだ解禁されていません、実績ポイントが○点必要です』のようなメッセージを出す") -- reads
@@ -13516,6 +13534,12 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('entry-banner-cardlist-button').addEventListener('click', gatedEntryBannerHandler('カードリスト', () => { dismissEntryBanner(); openCardListOverlay(); }));
   document.getElementById('entry-banner-ranking-button').addEventListener('click', gatedEntryBannerHandler('ランキング', () => { dismissEntryBanner(); openRankingOverlay(); }));
   document.getElementById('entry-banner-achievement-button').addEventListener('click', () => { dismissEntryBanner(); openAchievementOverlay(); });
+  // デザイナーズノート (2026-10-11, per user request) -- リンク先はまだ無い("まだできていないので
+  // 飛ばない") -- 準備中メッセージのみ、他の簡易ブロッキングメッセージと同じwindow.alert()の慣習。
+  document.getElementById('entry-banner-designer-notes-button').addEventListener('click', () => {
+    window.alert('デザイナーズノートは準備中です。');
+  });
+  applyLockedMenuFeatureStyling();
   // 更新しても進行中のゲームが消えないように (2026-10-11) -- sessionResumeChoicePendingの doc参照。
   document.getElementById('session-resume-continue-button').addEventListener('click', resumeSavedSession);
   document.getElementById('session-resume-new-button').addEventListener('click', startNewSessionDiscardingSaved);

@@ -15,35 +15,60 @@
        古ければ、ブラウザがキャッシュした古いファイルを見ている/pushがまだ反映されていないと一目で
        わかるようにするための目印(実際の挙動には一切影響しない、純粋な表示用の目印)。main.js/index.html/
        data/をpushするたびにここをインクリメントすること。 -->
-  <div id="copyright-notice">© 2026 higebucho Ver.1.030</div>
+  <div id="copyright-notice">© 2026 higebucho Ver.1.031</div>
 
   <!-- 入口バナー (2026-10-04, per user request: "HPに入ったときに大き目バナーを用意して導線をわかりやすく
        したい") -- #app/#weekly-seat-pickerと同じ「画面を丸ごと差し替える」パターン(main.jsのrender()
        冒頭、entryBannerDismissedの分岐参照)。真っさらな新規ロードのときだけ表示し、チュートリアル/
        ウィークリーチャレンジ/テストゲームのpendingフラグ経由でのreload後や、一度バナーを閉じた後は
        スキップする。
-       2026-10-05、per user提供のトップ画像(S__35725317)にまるごと差し替え(「青い四角のボタンはいらない」
-       per user -- 独自スタイルのボタン行は撤去): 画像自体に「今すぐプレイ」CTA+7つのボタン
-       (チュートリアル/ローカル対戦/ウィークリーチャレンジ/オンライン対戦/カードリスト/ランキング/
-       実績解除)が絵として描かれており、assets/entry-banner-hero.jpgはそれを含む元画像(1536x957)その
-       まま。見た目のボタンの上に透明な実ボタンを8個、それぞれの実ピクセル位置を%換算して重ねる
-       (座標の出し方・各ボタンの実際の処理はmain.jsの配線コメント参照)。 -->
+       2026-10-11、per user提供の新背景画像(assets/entry-banner-hero-bg.png、1536x1024、ボタン無し)に
+       差し替え、per user request「以前のボタンを組み合わせて前と同じようなものを再現してほしい」: 旧
+       assets/entry-banner-hero.jpg(2026-10-05版)は「今すぐプレイ」CTA+7つのボタンが絵として焼き込まれて
+       いたため、その実ピクセル位置に透明ボタンを重ねる方式だったが、新背景の写真はボタン用の余白が
+       無いため、代わりに画像下部に半透明の帯(#entry-banner__overlay-panel)をCSSで敷き、その上にCTA+
+       ボタン行を実在の見えるボタン要素として配置(どんな背景写真でも馴染む、旧来のpixel位置合わせが
+       不要になった)。7ボタンの中身は旧画像からPillowで切り出した素材(assets/entry-banner-button-*.png、
+       各自ラベル・アイコン込み)をそのまま再利用。8個目の「デザイナーズノート」ボタンは新規追加
+       (per user request、リンク先はまだ無いのでクリックしても準備中メッセージのみ -- main.js参照)、
+       素材画像が無いためCSSスタイルのみのボタン。id/クリック処理(main.js)は既存7個とも変更なし --
+       マークアップと見た目だけの変更。 -->
   <div id="entry-banner">
     <div id="entry-banner__box">
       <div id="entry-banner__hero-wrap">
-        <img id="entry-banner__hero" src="assets/entry-banner-hero.jpg" alt="ダイスで築く、あなただけの王国。ダイスをワーカーとして配置し、4ラウンドで最高得点を目指す本格ワーカープレイスメントゲーム。">
+        <img id="entry-banner__hero" src="assets/entry-banner-hero-bg.png" alt="ダイスで築く、あなただけの王国。ダイスをワーカーとして配置し、4ラウンドで最高得点を目指す本格ワーカープレイスメントゲーム。">
         <!-- バージョン表示 (2026-10-08, per user request: "セリフで見えにくいので トップ画像の右下にも") --
              #copyright-noticeはゲーム中のセリフ吹き出しに隠れて見えにくいため、入口バナー(トップ画像)の
              右下にも同じ番号を複製表示する。中身は#copyright-noticeと手動で同期させること。 -->
-        <div id="entry-banner__version">Ver.1.030</div>
-        <button type="button" class="entry-banner__hotspot" id="entry-banner-hero-cta" aria-label="今すぐプレイ"></button>
-        <button type="button" class="entry-banner__hotspot" id="entry-banner-tutorial-button" aria-label="チュートリアル"></button>
-        <button type="button" class="entry-banner__hotspot" id="entry-banner-local-button" aria-label="ローカル対戦"></button>
-        <button type="button" class="entry-banner__hotspot" id="entry-banner-weekly-button" aria-label="ウィークリーチャレンジ"></button>
-        <button type="button" class="entry-banner__hotspot" id="entry-banner-online-button" aria-label="オンライン対戦"></button>
-        <button type="button" class="entry-banner__hotspot" id="entry-banner-cardlist-button" aria-label="カードリスト"></button>
-        <button type="button" class="entry-banner__hotspot" id="entry-banner-ranking-button" aria-label="ランキング"></button>
-        <button type="button" class="entry-banner__hotspot" id="entry-banner-achievement-button" aria-label="実績解除"></button>
+        <div id="entry-banner__version">Ver.1.031</div>
+        <!-- 見出し文言+CTA (2026-10-11, per user request: "ダイスで築く、あなただけの王国。などの文言も
+             前と同じように表示して 今すぐプレイボタンも" -- 旧画像に焼き込まれていたキャッチコピーを、
+             新背景では実テキストとして表示(per user: "文言は後から変更できるように" -- 画像ではなく
+             ここのプレーンテキストを直接編集すればよい)。 -->
+        <div id="entry-banner__top-panel">
+          <div id="entry-banner__tagline">
+            <span id="entry-banner__tagline-title">ダイスで築く、<br>あなただけの<br>王国。</span>
+            <span id="entry-banner__tagline-sub">ダイスをワーカーとして配置し、4ラウンドで最高得点を目指す本格ワーカープレイスメントゲーム。</span>
+          </div>
+          <button type="button" id="entry-banner-hero-cta" class="entry-banner__cta">今すぐプレイ</button>
+        </div>
+        <div id="entry-banner__overlay-panel">
+          <div id="entry-banner__button-row">
+            <!-- 並び順 (2026-10-11, per user spec): チュートリアル/ローカル対戦/オンライン対戦/
+                 ウィークリーチャレンジ/カードリスト/ランキング/実績解除/デザイナーズノート。 -->
+            <button type="button" class="entry-banner__feature-button" id="entry-banner-tutorial-button" aria-label="チュートリアル"><img src="assets/entry-banner-button-tutorial.png" alt=""></button>
+            <button type="button" class="entry-banner__feature-button" id="entry-banner-local-button" aria-label="ローカル対戦"><img src="assets/entry-banner-button-local.png" alt=""></button>
+            <button type="button" class="entry-banner__feature-button" id="entry-banner-online-button" aria-label="オンライン対戦"><img src="assets/entry-banner-button-online.png" alt=""></button>
+            <button type="button" class="entry-banner__feature-button" id="entry-banner-weekly-button" aria-label="ウィークリーチャレンジ"><img src="assets/entry-banner-button-weekly.png" alt=""></button>
+            <button type="button" class="entry-banner__feature-button" id="entry-banner-cardlist-button" aria-label="カードリスト"><img src="assets/entry-banner-button-cardlist.png" alt=""></button>
+            <button type="button" class="entry-banner__feature-button" id="entry-banner-ranking-button" aria-label="ランキング"><img src="assets/entry-banner-button-ranking.png" alt=""></button>
+            <button type="button" class="entry-banner__feature-button" id="entry-banner-achievement-button" aria-label="実績解除"><img src="assets/entry-banner-button-achievement.png" alt=""></button>
+            <!-- デザイナーズノート (2026-10-11, per user request) -- 専用の素材画像が無いため、CSSのみの
+                 テキストボタン(.entry-banner__feature-button--text)。リンク先URLはまだ無い(per user:
+                 "まだできていないので飛ばない") -- クリックすると準備中メッセージを出すだけ、main.js参照。 -->
+            <button type="button" class="entry-banner__feature-button entry-banner__feature-button--text" id="entry-banner-designer-notes-button" aria-label="デザイナーズノート">デザイナーズノート</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>

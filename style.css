@@ -4756,21 +4756,16 @@ body.tutorial-mode .change-highlight {
   border-color: var(--accent);
 }
 
-/* トップ画像 (2026-10-05, per user提供、"青い四角のボタンはいらない"per user訂正後の最終形) --
-   index.htmlの#entry-banner__hero-wrap/__hero/各.entry-banner__hotspotの own doc参照。画像自体に
-   「今すぐプレイ」CTA+7つのボタンが絵として描かれているので、それぞれの実ピクセル位置(元画像
-   1536x957基準)を%換算した透明ボタンを重ねる。座標はassets/entry-banner-hero.jpgの元になった
-   PNGにPillowでグリッド線を引いて目視で特定したもの(ボタン行はy:783-955、各ボタンはx方向に
-   ほぼ等間隔で幅199px・間隔8px、左端44pxから)。 */
+/* トップ画像 (2026-10-11, per user提供の新背景画像に差し替え+「以前のボタンを組み合わせて前と同じような
+   ものを再現してほしい」own doc -- index.htmlのentry-banner own doc参照) -- 新背景写真にはボタン用の
+   余白が無いため、画像下部に半透明の帯(#entry-banner__overlay-panel)を敷いて、その上に実在のボタンを
+   並べる方式に変更(旧来のpixel位置合わせでの透明ボタン重ねは廃止)。 */
 #entry-banner__hero-wrap {
   position: relative;
   line-height: 0;
 }
 
 #entry-banner__hero {
-  /* アスペクト比(1536x957)を保ったまま、画面に収まる最大サイズまで拡大 -- object-fit:coverで切り抜く
-     とホットスポットの%座標がずれるため、widthとheightどちらも100vw/100vhを上限にしてcontain相当の
-     挙動にする(.entry-banner__hotspotの%位置は常にこの画像自身のレンダリングサイズを基準にできる)。 */
   display: block;
   width: auto;
   height: auto;
@@ -4778,38 +4773,108 @@ body.tutorial-mode .change-highlight {
   max-height: 100vh;
 }
 
-.entry-banner__hotspot {
+/* 見出し文言+CTA (2026-10-11, per user request -- index.htmlのentry-banner own doc参照): 画像上部に
+   半透明の帯を敷いて、その上にキャッチコピー+「今すぐプレイ」を配置(line-height:0の#entry-banner__
+   hero-wrap内でも通常のテキスト行間に戻すため、ここだけline-height明示)。 */
+#entry-banner__top-panel {
   position: absolute;
-  background: transparent;
+  left: 0;
+  right: 0;
+  top: 0;
+  line-height: normal;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 24px 24px calc(24px + env(safe-area-inset-top, 0px));
+  background: linear-gradient(to bottom, rgba(20, 14, 8, 0.82) 0%, rgba(20, 14, 8, 0.6) 55%, rgba(20, 14, 8, 0) 100%);
+}
+#entry-banner__tagline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #fff;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+}
+#entry-banner__tagline-title {
+  font-size: clamp(20px, 4vw, 32px);
+  font-weight: 800;
+  line-height: 1.35;
+}
+#entry-banner__tagline-sub {
+  font-size: clamp(11px, 1.6vw, 14px);
+  font-weight: 500;
+  max-width: 420px;
+  opacity: 0.92;
+}
+
+#entry-banner__overlay-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(to top, rgba(20, 14, 8, 0.88) 0%, rgba(20, 14, 8, 0.72) 60%, rgba(20, 14, 8, 0) 100%);
+}
+
+.entry-banner__cta {
+  padding: 12px 40px;
   border: none;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #e8b84b, #c8912a);
+  color: #2a1c08;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+#entry-banner__button-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  max-width: 900px;
+}
+
+.entry-banner__feature-button {
+  border: none;
+  background: transparent;
   padding: 0;
   cursor: pointer;
+  line-height: 0;
 }
-
-/* 今すぐプレイ CTA -- 元画像中の(75,476)-(414,563)を%換算。 */
-#entry-banner-hero-cta {
-  left: 4.88%;
-  top: 49.74%;
-  width: 22.07%;
-  height: 9.09%;
+.entry-banner__feature-button img {
+  display: block;
+  width: 92px;
+  height: auto;
+  border-radius: 10px;
 }
-
-/* 下部の7ボタン行 -- 全ボタン共通でtop:81.82%/height:17.97%/width:12.96%、leftだけ等間隔にずらす。 */
-#entry-banner-tutorial-button,
-#entry-banner-local-button,
-#entry-banner-weekly-button,
-#entry-banner-online-button,
-#entry-banner-cardlist-button,
-#entry-banner-ranking-button,
-#entry-banner-achievement-button {
-  top: 81.82%;
-  height: 17.97%;
-  width: 12.96%;
+/* デザイナーズノート (2026-10-11) -- 専用素材が無いテキストのみのボタン。他7個の切り出し画像と同じ
+   見た目(角丸カード、暖色の濃い茶〜焦げ茶背景+白文字)をCSSで再現して馴染ませる。 */
+.entry-banner__feature-button--text {
+  width: 92px;
+  height: 92px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 6px;
+  border-radius: 10px;
+  background: rgba(58, 38, 18, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
 }
-#entry-banner-tutorial-button { left: 2.86%; }
-#entry-banner-local-button { left: 16.34%; }
-#entry-banner-weekly-button { left: 29.82%; }
-#entry-banner-online-button { left: 43.29%; }
-#entry-banner-cardlist-button { left: 56.77%; }
-#entry-banner-ranking-button { left: 70.25%; }
-#entry-banner-achievement-button { left: 83.72%; }
+/* ロック中(実績解除2、2026-10-11) -- main.jsがページ読込時/ゲーム終了後に付け外しするクラス。 */
+.entry-banner__feature-button--locked {
+  opacity: 0.45;
+  filter: grayscale(70%);
+}
