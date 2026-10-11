@@ -135,6 +135,18 @@ written = 0
 skipped = []
 for entry in report['conjob']:
     con_face_id = entry['con']
+    # entry['job'] can be None (2026-10-11, found via a real 500-game run: one player's historyByPlayerId
+    # ended up with jobFaceId=null, i.e. player.jobCardId was never set -- a genuine, presumably very rare
+    # onboarding edge case, not something this write step should try to diagnose). re.sub() on None used
+    # to throw here, which aborted the WHOLE script before it ever reached the ABCM/HighScores sheets
+    # below -- CONJOB itself had already been written to `ws` in memory by this point but wb.save() never
+    # ran, so the xlsx silently kept whatever ABCM data an earlier checkpoint had (frequently none at all,
+    # if this was the very first checkpoint) while CONJOB looked current. Skipping just this one
+    # malformed entry (same pattern as the "name not found" skip below) lets every other entry, and both
+    # other sheets, still get written normally.
+    if not entry['job']:
+        skipped.append((con_face_id, entry['job']))
+        continue
     job_physical_id = re.sub(r'[A-Z]$', '', entry['job'])  # "JOB005A" -> "JOB005"
     con_name = NAME_BY_CON_FACE.get(con_face_id, con_face_id)
     job_name = NAME_BY_JOB.get(job_physical_id, job_physical_id)
