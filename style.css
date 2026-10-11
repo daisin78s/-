@@ -4786,8 +4786,10 @@ body.tutorial-mode .change-highlight {
   flex-direction: column;
   align-items: flex-start;
   gap: 18px;
-  /* 位置合わせ (2026-10-11, per user request: "残りの文字は位置も前と同じように") -- 旧画像実測で
-     タイトル開始位置は左上から縦約6%・横約2%とタイトで、それに合わせた。 */
+  /* 位置合わせ (2026-10-11, per user request: "残りの文字は位置も前と同じように" -- 旧画像実測で
+     タイトル開始位置は左上から縦約6%・横約2%とタイトで、それに合わせた。同日「少し大きく右に寄せる」
+     で左の余白を2%→10%に拡大したが、新背景写真のタブレット(黒い画面)にかかってしまったため、
+     「モニター画面の黒いところにかからないように左に戻して」で2%に戻した)。 */
   padding: 6% 2% 0;
   /* 写真の明るい部分(新背景の左上は観葉植物のボケで明るい)でも文字が読めるよう、テキスト裏だけに
      自然な影を敷く(旧画像の帯のような矩形ではなく、左上を起点にしたvignette)。 */
@@ -4804,7 +4806,11 @@ body.tutorial-mode .change-highlight {
   gap: 10px;
 }
 #entry-banner__tagline-title {
-  font-size: clamp(26px, 6vw, 52px);
+  /* 2026-10-11, per user request: "少し大きく...明朝に" -- サイズを拡大し、OS標準の明朝体フォントに
+     変更(Webフォントは読み込まず、既存のfont-family慣習(system-ui中心)を踏襲しつつこの見出しだけ
+     明朝体を明示指定)。 */
+  font-family: "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", "MS PMincho", serif;
+  font-size: clamp(30px, 6.8vw, 58px);
   font-weight: 900;
   line-height: 1.25;
   color: #fff;
@@ -4895,16 +4901,14 @@ body.tutorial-mode .change-highlight {
 }
 /* ロック中(実績解除2、2026-10-11) -- main.jsがページ読込時/ゲーム終了後に付け外しするクラス。
    2026-10-11、per user request: "透けさせるのではなく鍵アイコン" -- 透明度を下げるとボタン画像が壊れて
-   見える(ユーザー自身が誤認した実例あり)ため、ボタン自体は等倍のまま、🔒バッジを中央に重ねる方式に
-   変更。 */
+   見える(ユーザー自身が誤認した実例あり)ため🔒バッジに変更、さらに「黒く変色させずに 鍵アイコンのみ
+   右下に表示」との追加要望で、ボタン全体を覆う暗い背景を撤去し、右下に小さくアイコンのみ置く形に
+   調整。 */
 .entry-banner__feature-button--locked::after {
   content: '🔒';
   position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: clamp(20px, 3.2vw, 32px);
-  background: rgba(0, 0, 0, 0.55);
+  right: 4px;
+  bottom: 4px;
+  font-size: clamp(14px, 2vw, 20px);
   pointer-events: none;
 }
