@@ -291,6 +291,51 @@ function forceB005ALocation(state, location) {
   setup.dealJobPool(state, index, ['JOB006B']);
   check('dealJobPool includes a newly-added JOB face when explicitly preferred', state.jobPool.includes('JOB006B'), true);
 }
+
+// ---------------------------------------------------------------------------
+// state.lockedFaceIds (2026-10-11, per user spec: "制約とジョブの裏面" are achievement-gated via
+// game.xlsxの「実績解除2」-- see main.js's own computeLockedFaceIds/createInitialState doc for how this
+// field actually gets populated for a real local game; these tests only exercise the 2 enforcement
+// points themselves, setup.dealJobPool/chooseConFace, against a directly-set state.lockedFaceIds).
+// ---------------------------------------------------------------------------
+{
+  // dealJobPool: a locked B face is never dealt randomly -- that physical slot always shows A instead,
+  // no 50/50 at all (per user spec: "ジョブはアンロックされていなければ必ず表面になる"). Repeated across
+  // several seeds to rule out the lock just "winning the coin flip" by chance.
+  for (let i = 0; i < 20; i++) {
+    const state = createEmptyGameState(`lockedfaceids-job-${i}`);
+    state.lockedFaceIds = ['JOB001B'];
+    setup.dealJobPool(state, index);
+    check(`dealJobPool (seed ${i}): JOB001's physical slot is forced to A while JOB001B is locked`, state.jobPool.includes('JOB001A') && !state.jobPool.includes('JOB001B'), true);
+  }
+}
+{
+  // preferredFaceIds still wins over a lock (debug-setup/tutorial callers asking for a specific B face
+  // by name get it even if that face happens to also be in lockedFaceIds).
+  const state = createEmptyGameState('lockedfaceids-job-preferred-override');
+  state.lockedFaceIds = ['JOB001B'];
+  setup.dealJobPool(state, index, ['JOB001B']);
+  check('An explicit preferredFaceIds entry overrides a lock', state.jobPool.includes('JOB001B'), true);
+}
+{
+  // chooseConFace: picking a locked B face fails outright (FACE_LOCKED), same as any other invalid pick.
+  const state = createEmptyGameState('lockedfaceids-con');
+  setup.createPlayers(state, ['Alice', 'Bob', 'Carol', 'Dan']);
+  setup.dealConCards(state, { P1: 'CON001' });
+  state.lockedFaceIds = ['CON001B'];
+  const result = setup.chooseConFace(state, index, 'P1', 'B');
+  check('chooseConFace refuses a locked B face', result, { success: false, reason: 'FACE_LOCKED' });
+  check('...no card was actually granted', state.players[0].ownedCardPhysicalIds.includes('CON001'), false);
+}
+{
+  // Control: the SAME physical CON card's A face is unaffected by a lock that only names its B face.
+  const state = createEmptyGameState('lockedfaceids-con-a-unaffected');
+  setup.createPlayers(state, ['Alice', 'Bob', 'Carol', 'Dan']);
+  setup.dealConCards(state, { P1: 'CON001' });
+  state.lockedFaceIds = ['CON001B'];
+  const result = setup.chooseConFace(state, index, 'P1', 'A');
+  check('chooseConFace still succeeds for the A face while only B is locked', result.success, true);
+}
 {
   const state = createEmptyGameState('debug-setup-resource');
   setup.createPlayers(state, ['Alice', 'Bob', 'Carol', 'Dan']);

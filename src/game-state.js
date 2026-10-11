@@ -451,6 +451,13 @@ function createEmptyGameState(seed) {
     quests: {},
     qstRewardsGranted: null,
     whiteOverflowEvents: [],
+    // CON/JOB 裏面(B面) faceIds locked for THIS game by game.xlsxの「実績解除2」(実績合計点数のしきい値)
+    // -- empty by default (nothing locked), same permissive-by-default convention as every other
+    // rarely-restrictive field here. Only main.js's createInitialState ever populates this with a real
+    // list, and only for a genuine local game (never weekly challenge/tutorial/online -- see its own doc).
+    // Checked by setup.dealJobPool (locked B face -> always deals A instead) and setup.chooseConFace
+    // (locked B face -> FACE_LOCKED failure) -- 2026-10-11, per user spec.
+    lockedFaceIds: [],
   };
 }
 

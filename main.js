@@ -164,8 +164,29 @@ function tutorialPreferredNormalFaceIds(state) {
  * 通常通りランダム。 */
 const TUTORIAL_SHOP_MONUMENT_FACE_IDS = ['M001'];
 
-function createInitialState(plan, forcedSeed) {
+/** The CON/JOB 裏面(B面) faceIds currently locked for a genuine local game, per game.xlsxの「実績解除2」
+ * シート (ID=faceId, 必要点数=解禁に必要な実績合計点数, 2026-10-11 per user spec) -- computed ONCE, from
+ * this device's own localStorage achievement total (loadAchievements/achievementTotalPoints, see their
+ * own docs), never re-derived mid-game ("ローカル対戦のみ... 判定はゲーム開始時に1回だけ" per the design
+ * discussion). A faceId with no row in 実績解除2 is never locked (no threshold defined = always
+ * available), so populating that sheet gradually never retroactively locks a card no threshold was ever
+ * set for. See createInitialState's own call site for which modes skip this entirely (everything
+ * unlocked: ウィークリーチャレンジ/チュートリアル/オンライン対戦). */
+function computeLockedFaceIds() {
+  const total = achievementTotalPoints(loadAchievements());
+  const rows = INDEX.raw['実績解除2'] || [];
+  return rows.filter((row) => total < Number(row['必要点数'] || 0)).map((row) => row.ID);
+}
+
+/** skipAchievementLock (2026-10-11, per user spec: "オンライン対戦は対象外（すべて解除済み）") -- set by
+ * handleStartRoomClick's own online-room-creation call only; every other caller omits it, so whether
+ * state.lockedFaceIds ends up populated for them still depends purely on weeklyChallengeActive/
+ * tutorialModeActive below (both already unlocked-by-default for their own, separate reasons). */
+function createInitialState(plan, forcedSeed, skipAchievementLock) {
   const state = gameStateMod.createEmptyGameState(forcedSeed || randomSeed());
+  if (!skipAchievementLock && !weeklyChallengeActive && !tutorialModeActive) {
+    state.lockedFaceIds = computeLockedFaceIds();
+  }
   // P1's own display name (2026-09-07, per user request: "ランキングに名前を入力したら...次回以降その人
   // (その端末)では入ったときにALICEの代わりにその名前が表示される") -- reuses the same
   // RANKING_PLAYER_NAME_KEY localStorage value the ranking registration form remembers, falling back to
@@ -7779,7 +7800,11 @@ function renderConFacesRow(container, player, onPick) {
   // のではなく、そもそも裏面のカード自体を出さない。表面(怠惰)だけが並ぶので、選択画面(タップ→「表面を
   // 選ぶ」ボタン)自体は従来通り体験できる)。読み取り専用のプレビュー(renderConPreview)と実際の選択
   // (renderConChoice)の両方がこの関数を共有しているので、ここ一箇所で両方に効く。
-  const faces = (tutorialModeActive && player.id === 'P1') ? ['A'] : ['A', 'B'];
+  // 実績解除2でロック中の裏面は、チュートリアルの憤怒除外と同じ「そもそも出さない」方式で隠す
+  // (2026-10-11, per user spec) -- setup.chooseConFace側の本当の拒否(FACE_LOCKED)が正のルールで、
+  // ここはそれと矛盾しないようあらかじめ選択肢自体を見せないための表示側の対応。
+  const conBFaceLocked = (STATE.lockedFaceIds || []).includes(`${player.conPhysicalId}B`);
+  const faces = (tutorialModeActive && player.id === 'P1') || conBFaceLocked ? ['A'] : ['A', 'B'];
   for (const face of faces) {
     const faceId = `${player.conPhysicalId}${face}`;
     const cardNode = buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true });
@@ -8979,7 +9004,9 @@ function subscribeToOnlineRoom(code) {
 function handleStartRoomClick() {
   const seatIsHuman = {};
   for (const seatId of ['P1', 'P2', 'P3', 'P4']) seatIsHuman[seatId] = !!(onlineLobbyRoomData.seats[seatId]);
-  const freshState = createInitialState(null);
+  // skipAchievementLock=true (2026-10-11, per user spec: "オンライン対戦は対象外（すべて解除済み）") --
+  // this room's CON/JOB 裏面 must never depend on the HOST's own device achievement progress.
+  const freshState = createInitialState(null, undefined, true);
   OnlineSync.startRoom(onlineRoomCode, JSON.stringify(freshState), seatIsHuman);
 }
 

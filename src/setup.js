@@ -471,6 +471,14 @@ function computeStartOrder(state, index) {
  * Reads the live JOB sheet (index.raw.JOB) rather than any hardcoded id list (2026-08-17 fix, per user
  * report: "開拓者出てきません テストゲームで選んでも出てきません" -- a hardcoded list silently excluding
  * a real face was exactly this class of bug) -- index is a required 2nd argument.
+ *
+ * state.lockedFaceIds (2026-10-11, per user spec: "ジョブはアンロックされていなければ必ず表面になる") --
+ * a physical slot whose B face appears there is forced to A instead of the normal random 50/50, same
+ * early-return-before-the-rng-draw shape preferredFaceByPhysicalId already uses just below (locked status
+ * is checked first specifically so it never burns a random draw on a foregone conclusion). Takes priority
+ * over the random pick but NOT over preferredFaceIds -- a debug-setup/tutorial caller asking for a
+ * specific B face by name still gets it even if that face happens to also be achievement-locked, same as
+ * today's behavior for every other preferredFaceIds override in this engine.
  */
 function dealJobPool(state, index, preferredFaceIds) {
   const allJobFaceIds = index.raw.JOB.map((r) => r.ID);
@@ -481,8 +489,10 @@ function dealJobPool(state, index, preferredFaceIds) {
     const { physicalId } = splitCardId(faceId);
     if (!preferredFaceByPhysicalId.has(physicalId)) preferredFaceByPhysicalId.set(physicalId, faceId);
   }
+  const lockedFaceIds = state.lockedFaceIds || [];
   state.jobPool = shuffle(state.rng, physicalIds).map((physicalId) => {
     if (preferredFaceByPhysicalId.has(physicalId)) return preferredFaceByPhysicalId.get(physicalId);
+    if (lockedFaceIds.includes(`${physicalId}B`)) return `${physicalId}A`;
     return `${physicalId}${rngNext(state.rng) < 0.5 ? 'A' : 'B'}`;
   });
 }
@@ -581,10 +591,18 @@ function resolveJobReplacementChoice(state, index, playerId, chosenFaceId) {
   return { success: true, onceResult };
 }
 
-/** @param {'A'|'B'} face */
+/** @param {'A'|'B'} face
+ *
+ * state.lockedFaceIds (2026-10-11, per user spec: "制約とジョブの裏面" are achievement-gated) -- picking
+ * a locked B face fails outright here, same FACE_LOCKED-shaped refusal every other setup choice function
+ * in this file uses for an invalid pick (see resolveJobReplacementChoice's own NO_PENDING_CHOICE/
+ * INVALID_SELECTION for the pattern). main.js is expected to also hide/disable the 裏面 button client-side
+ * once locked, but this check is the actual rule enforcement -- never trust the UI alone.
+ */
 function chooseConFace(state, index, playerId, face) {
   const player = state.players.find((p) => p.id === playerId);
   const faceId = `${player.conPhysicalId}${face}`;
+  if ((state.lockedFaceIds || []).includes(faceId)) return { success: false, reason: 'FACE_LOCKED' };
   const inst = createCardInstance(faceId);
   inst.ownerId = playerId;
   state.cards[inst.physicalId] = inst;
