@@ -4851,9 +4851,9 @@ body.tutorial-mode .change-highlight {
   font-weight: 500;
   max-width: 420px;
   color: #f4f4f0;
-  /* 2026-10-11, per user request: "わずかに下に" -> さらに「今と同じくらい わずかにしたに」で同程度
-     もう一段階追加(8px→16px)。 */
-  margin-top: 16px;
+  /* 2026-10-11, per user request: "わずかに下に" -> 「今と同じくらい わずかにしたに」で8px→16px ->
+     「少し上に」で16px→10pxに戻す。 */
+  margin-top: 10px;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.75), 0 1px 2px rgba(0, 0, 0, 0.6);
 }
 
