@@ -4443,16 +4443,18 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     q('.shop-card__effect').appendChild(noteEl);
   } else if (options.showEffect && facts.name === '異端者') {
     // JOB006B/異端者 (2026-10-11, per user mockup: "色ダイス配置時 / LV0▷LV1" -- 色ダイス限定, per user
-    // follow-up: "異端者 色ダイス配置時に変更できますか") -- this ability has no DSL representation either
-    // (bespoke -- see board.hereticBorrowedAreaRow's own doc). "▷" reuses actionTrigger()'s existing ▶
-    // glyph, same mapping confirmed for 料理人's own card-note just above.
+    // follow-up: "異端者 色ダイス配置時に変更できますか"; icon tweak per user follow-up "LV０→LV1" --
+    // the LV0->LV1 half specifically uses actionArrow()'s plain → (a value changing from one to another),
+    // not actionTrigger()'s ▶ (condition->consequence, kept for "色ダイス配置時" leading into the icon
+    // row)) -- this ability has no DSL representation either (bespoke -- see
+    // board.hereticBorrowedAreaRow's own doc).
     tall = true;
     const noteEl = el('div', 'card-note');
     noteEl.appendChild(document.createTextNode('色ダイス配置時\n'));
     noteEl.appendChild(actionTrigger());
     const iconRow = el('span', 'job-note-icon-row');
     iconRow.appendChild(document.createTextNode('LV0'));
-    iconRow.appendChild(actionTrigger());
+    iconRow.appendChild(actionArrow());
     iconRow.appendChild(document.createTextNode('LV1'));
     noteEl.appendChild(iconRow);
     q('.shop-card__effect').appendChild(noteEl);
