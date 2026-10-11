@@ -4896,10 +4896,11 @@ body.tutorial-mode .change-highlight {
    プレイのボタンはこちらで作るので"/「前の画像を参考に位置と大きさ調整して」) -- 旧
    assets/entry-banner-hero.jpgでの実測位置(左4.9%・上49.7%・幅22.1%、index.html own doc参照)を
    hero-wrap基準の絶対位置として再現。以前ここにあったCSSのみの錠剤ボタン再現は不要になり撤去。
-   2026-10-11、per user request「今と同じだけ 文字と今すぐプレイを左に」で4.9%→3.9%。 */
+   2026-10-11、per user request「今と同じだけ 文字と今すぐプレイを左に」で4.9%→3.9%、さらに
+   「今と同じだけ 今すぐプレイを左に」で3.9%→2.9%。 */
 .entry-banner__cta {
   position: absolute;
-  left: 3.9%;
+  left: 2.9%;
   top: 49.7%;
   width: 22.1%;
   display: inline-flex;
