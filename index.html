@@ -21,7 +21,7 @@
        古ければ、ブラウザがキャッシュした古いファイルを見ている/pushがまだ反映されていないと一目で
        わかるようにするための目印(実際の挙動には一切影響しない、純粋な表示用の目印)。main.js/index.html/
        data/をpushするたびにここをインクリメントすること。 -->
-  <div id="copyright-notice">© 2026 higebucho Ver.1.066</div>
+  <div id="copyright-notice">© 2026 higebucho Ver.1.067</div>
 
   <!-- 入口バナー (2026-10-04, per user request: "HPに入ったときに大き目バナーを用意して導線をわかりやすく
        したい") -- #app/#weekly-seat-pickerと同じ「画面を丸ごと差し替える」パターン(main.jsのrender()
@@ -44,7 +44,7 @@
         <!-- バージョン表示 (2026-10-08, per user request: "セリフで見えにくいので トップ画像の右下にも") --
              #copyright-noticeはゲーム中のセリフ吹き出しに隠れて見えにくいため、入口バナー(トップ画像)の
              右下にも同じ番号を複製表示する。中身は#copyright-noticeと手動で同期させること。 -->
-        <div id="entry-banner__version">Ver.1.066</div>
+        <div id="entry-banner__version">Ver.1.067</div>
         <!-- 見出し文言+CTA (2026-10-11, per user request: "ダイスで築く、あなただけの王国。などの文言も
              前と同じように表示して 今すぐプレイボタンも" -- 旧画像に焼き込まれていたキャッチコピーを、
              新背景では実テキストとして表示(per user: "文言は後から変更できるように" -- 画像ではなく
@@ -237,31 +237,38 @@
            follow-up, reversing the original 2026-09-07 spec: "デバッグモードのターンまたいでの巻き戻しは
            できるようにしてください テストプレイは絶対ダメ") -- its own turn/round-crossing rewind never
            touches the initial setup, only this seat's own later decisions, so it's allowed mid-attempt. -->
+      <!-- 以下7個、入口バナー(#entry-banner__button-row)のアイコン8個のうち、デザイナーズノート以外の
+           並び順に揃えてある(2026-10-12, per user request: "並び順をデスクトップのアイコンと同じ順に")。 -->
+      <!-- チュートリアル (2026-09-23, per user request: "チュートリアルモードを作りたい") -- 通常のランダム
+           ゲーム(P1=人間、P2-4=AI LV1)を新しく開始し、各フェーズの初回だけ#tutorial-bubbleでその場解説を
+           挟む。ウィークリーチャレンジと同じ「フラグを立てて再読み込み」方式 -- see main.js's
+           openTutorialMode/tutorialModeActive。 -->
+      <button type="button" id="tutorial-mode-button" class="debug-panel__toggle">チュートリアル</button>
       <!-- ローカル対戦 (2026-10-04, per user request: 入口バナーの「ローカル対戦」と同じ役割を、ゲーム中
            のボタン列からも押せるように。チュートリアル/ウィークリーチャレンジと同じ「フラグを立てて
            再読み込み」方式だが、こちらは何も特別な状態を作らない(普通の新規ローカルゲーム)ので、
            再読み込み後に入口バナーへ戻らず直接ゲーム画面へ行く、という違いだけがある -- see main.js's
            startLocalBattle/entryBannerDismissed。 -->
       <button type="button" id="local-battle-button" class="debug-panel__toggle">ローカル対戦</button>
-      <button type="button" id="weekly-challenge-button" class="debug-panel__toggle">ウィークリーチャレンジ</button>
-      <!-- チュートリアル (2026-09-23, per user request: "チュートリアルモードを作りたい") -- 通常のランダム
-           ゲーム(P1=人間、P2-4=AI LV1)を新しく開始し、各フェーズの初回だけ#tutorial-bubbleでその場解説を
-           挟む。ウィークリーチャレンジと同じ「フラグを立てて再読み込み」方式 -- see main.js's
-           openTutorialMode/tutorialModeActive。 -->
-      <button type="button" id="tutorial-mode-button" class="debug-panel__toggle">チュートリアル</button>
       <!-- オンライン対戦 (2026-08-29, per user request: "2〜4人の友人同士(合言葉/ルームコードで合流)"、
            空席はAI LV4で埋める -- see main.js's openOnlineLobby/DEFAULT_AI_ROLE). Opens #online-lobby-overlay
            (create/join a room, then a live waiting-room seat list -- see main.js's renderOnlineLobbyOverlay). -->
       <button type="button" id="online-lobby-open-button" class="debug-panel__toggle">オンライン対戦</button>
+      <button type="button" id="weekly-challenge-button" class="debug-panel__toggle">ウィークリーチャレンジ</button>
+      <!-- カードリスト (2026-08-22, per user request): 全カード種別を閲覧専用（タップで拡大のみ、選択
+           ボタンなし）で見られる画面 -- see main.js's openCardListOverlay/renderCardListOverlay。
+           デバッグモードのON/OFFとは無関係、テストゲーム開始ボタンと同じく常時表示。 -->
+      <button type="button" id="card-list-open-button" class="debug-panel__toggle">カードリスト</button>
       <!-- ランキング (2026-08-29, per user request: "ランキングやリプレイをゲーム終了後だけでなくいつでも
            見れるように") -- opens the same #game-end-overlay (current standings + 🏆歴代ランキング/▶リプレイ)
            used at GAME_END, but usable mid-game too -- see main.js's openLiveRankingOverlay/
            renderGameEndOverlay. Always visible, same as テストゲーム開始/カードリスト. -->
       <button type="button" id="anytime-ranking-button" class="debug-panel__toggle">ランキング</button>
-      <!-- カードリスト (2026-08-22, per user request): 全カード種別を閲覧専用（タップで拡大のみ、選択
-           ボタンなし）で見られる画面 -- see main.js's openCardListOverlay/renderCardListOverlay。
-           デバッグモードのON/OFFとは無関係、テストゲーム開始ボタンと同じく常時表示。 -->
-      <button type="button" id="card-list-open-button" class="debug-panel__toggle">カードリスト</button>
+      <!-- 実績記録 (2026-10-03, per user request: "実績解除を記録したい" -- 各端末のブラウザだけに保存する
+           個人の自己ベスト記録。オンラインランキングとは別物で、Firebaseには一切保存しない。game.xlsxの
+           「実績解除」シート(モード5種+CON12種+JOB11種)をそのまま反映。see main.js's
+           openAchievementOverlay/maybeRecordAchievements。) -->
+      <button type="button" id="achievement-open-button" class="debug-panel__toggle">実績解除</button>
       <!-- リプレイダウンロード (2026-08-31, per user request: "リプレイを渡す方法はありますか") -- removed
            2026-09-07, per user request: was originally for handing over a replay when online sync failed,
            which rarely happens any more. downloadReplayAsJson itself stays (still used by the ranking
@@ -276,11 +283,6 @@
            人間の癖が一切入らないよう4人ともAI LV4だけで進め、3R開始時点でP1(Alice固定)を人間に差し替える。
            see main.js's handleStartFromRound3Click.) -->
       <button type="button" id="start-from-round3-button" class="debug-panel__toggle">3Rから</button>
-      <!-- 実績記録 (2026-10-03, per user request: "実績解除を記録したい" -- 各端末のブラウザだけに保存する
-           個人の自己ベスト記録。オンラインランキングとは別物で、Firebaseには一切保存しない。game.xlsxの
-           「実績解除」シート(モード5種+CON12種+JOB11種)をそのまま反映。see main.js's
-           openAchievementOverlay/maybeRecordAchievements。) -->
-      <button type="button" id="achievement-open-button" class="debug-panel__toggle">実績解除</button>
       <!-- 生成中オーバーレイ (2026-09-14, per user request: "待つのが長いので生成中をいうアニメーションが
            欲しい" -- handleStartFromRound3Click's own 1R/2R AI-vs-AI simulation runs synchronously on the
            main thread and can take several seconds with nothing else on screen changing in the meantime.

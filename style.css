@@ -3897,6 +3897,13 @@ body.tutorial-mode .change-highlight {
   justify-content: center;
 }
 
+/* 2026-10-12, per user request: "初期説明を飛ばす は一番左 次へは一番右に" -- 一番最初のステップ
+   (game_rules_intro_1)だけ中央寄せではなく両端に離して配置する(main.jsのown doc参照、他のrowステップは
+   対象外)。 */
+.tutorial-bubble__choices--spread {
+  justify-content: space-between;
+}
+
 .tutorial-bubble__choice-button {
   background: var(--surface);
   border: 2px solid var(--accent);

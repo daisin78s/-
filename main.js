@@ -336,12 +336,14 @@ function showMenuFeatureLockedMessage(featureId) {
   const current = achievementTotalPoints(loadAchievements());
   window.alert(`まだ解禁されていません\n実績ポイントが${required}点必要です(現在${current}点)`);
 }
-/** Wraps a plain click handler with the locked-feature check for one of MENU_FEATURE_IDS (2026-10-11) --
- * used only by the 3 entry-banner hotspot buttons below; every OTHER caller of openWeeklyChallenge/
- * openCardListOverlay/openRankingOverlay (in-game nav buttons, session resume, etc. -- see each handler's
- * own other addEventListener call sites) must stay unaffected, since this is a top-screen onboarding-pacing
- * gate, not a real feature-level restriction (confirmed: the same 3 features are always freely reachable
- * once a game is already in progress). */
+/** Wraps a plain click handler with the locked-feature check for one of MENU_FEATURE_IDS (2026-10-11,
+ * widened 2026-10-12 per user report: the in-game nav buttons for these same 3 features -- anytime-
+ * ranking-button/card-list-open-button/weekly-challenge-button -- used to stay ungated, letting a locked
+ * feature be reached mid-game even though its top-screen kicker was locked; now both are gated the same
+ * way). An in-progress session's own RESUME path (e.g. reloading mid-weekly-challenge, line ~584) still
+ * calls openWeeklyChallenge() directly, unwrapped -- a feature the player already legitimately entered
+ * must never be blocked by a later re-check, only the fresh "open this feature's menu" entry points are
+ * gated. */
 function gatedEntryBannerHandler(featureId, handler) {
   return () => {
     if (isMenuFeatureLocked(featureId)) { showMenuFeatureLockedMessage(featureId); return; }
@@ -2928,9 +2930,17 @@ function renderDebugPanel(state) {
   toggleBtn.textContent = `デバッグモード: ${debugMode ? 'ON' : 'OFF'}`;
   toggleBtn.classList.toggle('debug-panel__toggle--on', debugMode);
   toggleBtn.disabled = debugMode; // one-way -- see toggleDebugMode's own doc; avoids a silent no-op click
+  // TURN/ROUND巻き戻し欄の表示条件 (2026-10-12, per user report: 普通のローカル対戦なのにこの欄が見えて
+  // いた) -- 単純に`debugMode`だけを見ると、resumeSavedSession()が保存済みウィークリーチャレンジを
+  // 「ゲームに戻る」で復元する際にweeklyChallengeActiveをtrueへ更新する一方、debugModeは最初の読み込み
+  // 時点のweeklyChallengeActiveをコピーした(line ~1758)だけの古い値のまま追従しないため、本来表示すべき/
+  // 隠すべき場面とズレうる(ずれた状態がそのままタブを閉じるまで残ってしまう)。表示条件は常にこの3つの
+  // 「本当にトリガーとなる状態」を毎回直接見るようにし、debugModeという複製されたスナップショットには
+  // 頼らない。
+  const showHistoryControls = debugMode || weeklyChallengeActive || startedFromRound3;
   const controls = document.getElementById('debug-history-controls');
-  controls.hidden = !debugMode;
-  if (!debugMode) return;
+  controls.hidden = !showHistoryControls;
+  if (!showHistoryControls) return;
 
   document.getElementById('debug-turn-back').disabled = historyCursor <= 0;
   document.getElementById('debug-turn-forward').disabled = historyCursor >= turnHistory.length - 1;
@@ -9548,9 +9558,11 @@ const TUTORIAL_STEPS = [
     // まとめてseen扱いにする簡易実装。「初期説明を飛ばす」を選ぶと、ワーカープレイスメント/カード獲得の
     // 実演一式を飛ばしてresource_choice_con_introへ直接進み、そこから先(JOBドラフト/CON選択含む)は
     // 通常通りプレイヤー自身が手動で行う("そのため そこからは手動でやります")。
+    // 2026-10-12, per user request: 「初期説明を飛ばす」が左、「次へ」が右になるよう順序入れ替え
+    // (choicesLayout:'row'は配列の並び順＝横並びの左から右の順)。
     choices: [
-      { label: '次へ', targetStepId: 'worker_placement_example_intro' },
       { label: '初期説明を飛ばす', targetStepId: 'resource_choice_con_intro' },
+      { label: '次へ', targetStepId: 'worker_placement_example_intro' },
     ],
     choicesLayout: 'row',
   },
@@ -11236,6 +11248,9 @@ function renderTutorialOverlay(state) {
     // レベルアップ説明の分岐(choicesLayout:'row'を付けたステップ)だけ横1列、他(resource_choiceの長い文言の
     // 分岐)は従来通り縦積みのまま。
     choicesEl.classList.toggle('tutorial-bubble__choices--row', step.choicesLayout === 'row');
+    // 2026-10-12, per user request: "初期説明を飛ばす は一番左 次へは一番右に" -- 一番最初のステップだけ、
+    // 中央寄せではなく両端に離して配置する(他の row レイアウトのステップは未変更、中央寄せのまま)。
+    choicesEl.classList.toggle('tutorial-bubble__choices--spread', step.id === 'game_rules_intro_1');
     for (const choice of step.choices) {
       const btn = el('button', 'tutorial-bubble__choice-button', choice.label);
       btn.type = 'button';
@@ -13644,7 +13659,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 2026-09-07, per user request: この「ランキング」ボタンは以前「現在の順位」(mid-game live standings)
   // へ遷移していたが、それはプレイ画面上ですでに確認できるので、ボタンの名前通り歴代ランキングへ直行させる。
-  document.getElementById('anytime-ranking-button').addEventListener('click', openRankingOverlay);
+  // gatedEntryBannerHandler (2026-10-12, per user report: トップ画面ではロックされているのに、この
+  // ゲーム中のボタンからなら素通りできてしまっていた -- see gatedEntryBannerHandlerの自身own doc参照、
+  // entry-banner-ranking-buttonと同じゲートを共有させるよう変更) -- もとの名前は
+  // "entry-banner-...kickers only" だったが今はこちらも対象。
+  document.getElementById('anytime-ranking-button').addEventListener('click', gatedEntryBannerHandler('ランキング', openRankingOverlay));
   document.getElementById('game-end-close-button').addEventListener('click', closeLiveRankingOverlay);
 
   document.getElementById('game-end-replay-button').addEventListener('click', () => enterReplayMode());
@@ -13666,7 +13685,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('debug-mode-toggle').addEventListener('click', toggleDebugMode);
   document.getElementById('local-battle-button').addEventListener('click', startLocalBattle);
-  document.getElementById('weekly-challenge-button').addEventListener('click', openWeeklyChallenge);
+  document.getElementById('weekly-challenge-button').addEventListener('click', gatedEntryBannerHandler('ウィークリーチャレンジ', openWeeklyChallenge));
   document.getElementById('tutorial-mode-button').addEventListener('click', openTutorialMode);
 
   // 入口バナー (2026-10-04, per user request) -- 4つの大ボタンはそれぞれ既存の入り口関数をそのまま呼ぶ
@@ -13679,9 +13698,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // プレイはローカル対戦に飛ぶ") -- ローカル対戦ボタンと全く同じ処理。
   document.getElementById('entry-banner-hero-cta').addEventListener('click', dismissEntryBanner);
   document.getElementById('entry-banner-online-button').addEventListener('click', () => { dismissEntryBanner(); openOnlineLobby(); });
-  // gatedEntryBannerHandler (2026-10-11, see its own doc): only these 3 entry-banner kickers are gated --
-  // the SAME functions called from in-game nav buttons elsewhere (anytime-ranking-button/card-list-open-
-  // button/weekly-challenge-button) stay ungated.
+  // gatedEntryBannerHandler (2026-10-11, see its own doc; widened 2026-10-12 per user report -- the SAME
+  // functions called from in-game nav buttons (anytime-ranking-button/card-list-open-button/
+  // weekly-challenge-button) used to stay ungated, letting a locked feature be reached mid-game even
+  // though the top-screen kicker for it was locked -- those 3 are now gated too, see their own call sites).
   document.getElementById('entry-banner-weekly-button').addEventListener('click', gatedEntryBannerHandler('ウィークリーチャレンジ', openWeeklyChallenge));
   document.getElementById('entry-banner-cardlist-button').addEventListener('click', gatedEntryBannerHandler('カードリスト', () => { dismissEntryBanner(); openCardListOverlay(); }));
   document.getElementById('entry-banner-ranking-button').addEventListener('click', gatedEntryBannerHandler('ランキング', () => { dismissEntryBanner(); openRankingOverlay(); }));
@@ -13734,7 +13754,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('debug-setup-end-button').addEventListener('click', advanceDebugSetupFlow);
   document.getElementById('debug-setup-cancel-button').addEventListener('click', cancelDebugSetupFlow);
 
-  document.getElementById('card-list-open-button').addEventListener('click', openCardListOverlay);
+  document.getElementById('card-list-open-button').addEventListener('click', gatedEntryBannerHandler('カードリスト', openCardListOverlay));
   document.getElementById('card-list-close-button').addEventListener('click', closeCardListOverlay);
   document.getElementById('replay-upload-button').addEventListener('click', () => document.getElementById('replay-upload-input').click());
   document.getElementById('replay-upload-input').addEventListener('change', handleReplayUploadChange);
