@@ -7633,7 +7633,13 @@ function attachTapToggle(cardNode, cardState, faceId, canAct, physicalId) {
  * プで本選択"). cardNode itself must be built with noInteraction:true by the caller (so buildCardVisual
  * doesn't *also* attach its own generic enlarge-on-tap listener underneath this one).
  */
-function attachPickableEnlarge(cardNode, faceId, pickAction) {
+/** @param {boolean} [hideSibling] - 2026-10-12, per user request: "すべてのゲームでジョブを選ぶとき拡大
+ *   しても裏面のカードは出てこないように" -- JOBドラフト(renderJobPool/renderJobReplacementChoice)では、
+ *   拡大表示に通常のsiblingFaceId(A/Bの裏面)を一切出さない。CONの表裏選択(どちらを選ぶか本人が承知の上で
+ *   比較するためのもの)やカード一覧ブラウザ等、他の呼び出し元はこれまで通り裏面も並べて表示する(省略時は
+ *   false=従来通り)。JOB001B(革命家)の右側プレビュー(実際に得る革命の兆しB005A、A/Bの裏面とは別物)は
+ *   この抑制の対象外 -- 下のtrue分岐で先に判定されるため、hideSiblingがtrueでもそちらは変わらず出る。 */
+function attachPickableEnlarge(cardNode, faceId, pickAction, hideSibling) {
   cardNode.addEventListener('click', () => {
     // 革命家(JOB001B)だけ、拡大時に右側へ実際に獲得する革命の兆し(B005A)を並べて表示する (2026-10-10, per
     // user request: "革命家 クリックして拡大した時 革命家の拡大画像を左に寄せて 右側に 革命の兆しを
@@ -7641,7 +7647,7 @@ function attachPickableEnlarge(cardNode, faceId, pickAction) {
     // なったが、ここでは汎用のsiblingFaceId(JOB001Aの一般市民)より、実際に獲得する革命の兆しを優先して
     // 表示する(ユーザーの元の要望どおり)。既存のcard-enlarge-row(front/backスロットを並べて表示する、
     // 二面カード用の仕組み)をそのまま再利用すれば、front=革命家(左)/back=B005A(右)の並びがそのまま得られる。
-    const sibling = faceId === 'JOB001B' ? 'B005A' : siblingFaceId(faceId);
+    const sibling = faceId === 'JOB001B' ? 'B005A' : (hideSibling ? null : siblingFaceId(faceId));
     const hasSiblingData = sibling && cardFaceExists(sibling);
     const visualNode = buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true });
     const siblingVisualNode = hasSiblingData
@@ -7821,7 +7827,7 @@ function renderJobPool(state, next) {
         }
         commit();
       },
-    } : { label: 'チュートリアルではこのジョブは選べません', disabled: true }) : null);
+    } : { label: 'チュートリアルではこのジョブは選べません', disabled: true }) : null, true);
     container.appendChild(cell);
   }
 }
@@ -7874,7 +7880,7 @@ function renderJobReplacementChoice(state) {
         }
         commit();
       },
-    });
+    }, true);
     group.appendChild(cell);
   }
 }
