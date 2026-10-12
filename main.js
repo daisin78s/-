@@ -2561,14 +2561,14 @@ function setCardListView(key) {
  * marks "ゲームに戻る" (closes the overlay instead of switching view). */
 const CARD_LIST_NAV = [
   { key: 'resource', label: '資源や用語一覧' },
-  { key: 'con', label: 'CON一覧' },
+  { key: 'con', label: '制約一覧' },
   { key: 'job', label: 'ジョブ一覧' },
   { key: 'initialResource', label: '初期資源一覧' },
   { key: 'A', label: '領地カード一覧' },
   { key: 'B', label: '天運カード一覧' },
   { key: 'C', label: '人材カード一覧' },
   { key: 'monument', label: 'モニュメントカード一覧' },
-  { key: 'qst', label: 'QSTカード一覧' },
+  { key: 'qst', label: 'クエスト一覧' },
   { key: null, label: 'ゲームに戻る' },
 ];
 
@@ -2586,7 +2586,7 @@ const CARD_LIST_FLAT_CATEGORIES = {
   // on 2026-08-22).
   initialResource: { label: '初期資源一覧', columns: 6, isQst: false, faceIds: () => INDEX.raw.RESOURCE.map((r) => r.ID) },
   monument: { label: 'モニュメントカード一覧', columns: 6, isQst: false, faceIds: () => INDEX.raw.M.map((r) => r.ID) },
-  qst: { label: 'QSTカード一覧', columns: 4, isQst: true, faceIds: () => INDEX.raw.QST.map((r) => r.ID) },
+  qst: { label: 'クエスト一覧', columns: 4, isQst: true, faceIds: () => INDEX.raw.QST.map((r) => r.ID) },
 };
 
 /** Builds one read-only grid cell for カードリスト -- a fresh noInteraction card/QST visual, wired for
@@ -2874,7 +2874,7 @@ function renderCardListOverlay() {
     document.getElementById('card-list-title').textContent = CARD_LIST_NAV.find((n) => n.key === cardListView).label;
     renderCardListAbcCategory(cardListView, body);
   } else if (cardListView === 'con') {
-    document.getElementById('card-list-title').textContent = 'CON一覧';
+    document.getElementById('card-list-title').textContent = '制約一覧';
     renderCardListConCategory(body);
   } else if (cardListView === 'monument') {
     document.getElementById('card-list-title').textContent = CARD_LIST_FLAT_CATEGORIES.monument.label;
