@@ -229,6 +229,12 @@ function buildAchievementCategories() {
   for (const row of INDEX.raw.CON) categories.push({ key: `con_${row.ID}`, label: `${row.NAME}最高点数`, unit: 'VP' });
   for (const row of INDEX.raw.JOB) categories.push({ key: `job_${row.ID}`, label: `${row.NAME}最高点数`, unit: 'VP' });
   for (const [key, label, unit] of ACHIEVEMENT_PER_GAME_DEFS) categories.push({ key, label, unit });
+  // 2026-10-13, per user request: "実績解除の表示順 エクセルの表示順にして" -- game.xlsxの「実績解除」
+  // シートの行順に並び替える。ACHIEVEMENT_POINT_FORMULA_BY_LABELと同じく、キーではなくlabel(NAME列)で
+  // 対応付ける(このシートにプログラム用のキー列が無いため)。シートに無いlabelはInfinityで末尾へ(今の
+  // ところ発生しないはずだが、安全側に倒す)。
+  const orderByLabel = new Map((INDEX.raw['実績解除'] || []).map((row, i) => [row.NAME, i]));
+  categories.sort((a, b) => (orderByLabel.has(a.label) ? orderByLabel.get(a.label) : Infinity) - (orderByLabel.has(b.label) ? orderByLabel.get(b.label) : Infinity));
   return categories;
 }
 const ACHIEVEMENT_CATEGORIES = buildAchievementCategories();
