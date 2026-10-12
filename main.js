@@ -8475,11 +8475,26 @@ const registeredRankingPlayerIds = new Set();
 const ROLE_LABELS = new Map(PLAYER_ROLE_OPTIONS);
 
 /** @returns {string} a card face's own NAME column, falling back to the raw id if it has none (mirrors
- * the `row.NAME && row.NAME !== row.ID ? row.NAME : ''` fallback pattern used elsewhere, e.g. line ~1058). */
+ * the `row.NAME && row.NAME !== row.ID ? row.NAME : ''` fallback pattern used elsewhere, e.g. line ~1058).
+ * Also falls back to the raw id if the id isn't found in the CURRENT data at all (2026-10-12 fix --
+ * getCardRow throws on an unknown id, which used to propagate up through renderRankingList's per-entry
+ * forEach with no catch around it, rejecting the whole column's Promise and showing "読み込みに失敗
+ * しました" for every entry, not just the unrecognized one. Reproduced live: the JOB A/B tier redesign
+ * renamed every JOB id to carry a tier suffix (e.g. "JOB007"->"JOB007A"/"JOB007B"), so every ranking
+ * entry saved before that redesign still has the old bare id, which getCardRow no longer recognizes --
+ * confirmed via direct Firestore reads that 100% of the live "ultimate"/"standard" collections' entries
+ * predate the redesign, which is why those two columns always failed while "weekly" (time-scoped, only
+ * ever holds recent entries) didn't. Old entries now just display their raw old-style id instead of a
+ * resolved name -- the specific A/B face they were played with is genuinely no longer knowable from a
+ * bare pre-redesign id, same as how the fallback above already handles "no NAME at all"). */
 function rankingCardDisplayName(faceId) {
   if (!faceId) return '—';
-  const row = dataLoaderMod.getCardRow(INDEX, faceId);
-  return row.NAME && row.NAME !== faceId ? row.NAME : faceId;
+  try {
+    const row = dataLoaderMod.getCardRow(INDEX, faceId);
+    return row.NAME && row.NAME !== faceId ? row.NAME : faceId;
+  } catch (e) {
+    return faceId;
+  }
 }
 
 // 実績記録の定義一式(ACHIEVEMENT_STORAGE_KEY/ACHIEVEMENT_MODE_DEFS/ACHIEVEMENT_PER_GAME_DEFS/
