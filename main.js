@@ -11676,8 +11676,17 @@ function handleTutorialChoiceClick(targetStepId) {
         selectedDieIds = [];
       }
     }
-    // targetStepId === 'worker_placement_example_intro'(「次へ」)のときは何もしない -- 通常の直線探索に
-    // そのまま任せる。
+    // targetStepId === 'worker_placement_example_intro'(「次へ」) (2026-10-12 bug fix, per user report:
+    // "例えばダイスをエリア「農園」のスロットに置けば のセリフが2回続く") -- このbranch自体は「何もしない」
+    // つもりだったが、下のtutorialCurrentStepId = targetStepId(このif/else全体の外、どちらの分岐でも
+    // 必ず実行される)がtutorialSeenStepIdsへの追加を伴わずに直接ステップを切り替えてしまうため、結果的に
+    // worker_placement_example_intro自身が一度もseen扱いにならないまま表示されていた。次にdismiss
+    // されてtutorialCurrentStepIdがnullに戻ると、renderTutorialOverlayの「次の未見ステップ」探索が
+    // (まだseenでないため)同じworker_placement_example_introを再度拾ってしまい、もう一度全く同じ文面が
+    // 表示されていた(2回目のdismissでようやくここでseen追加され、正しくworker_placement_example_resultへ
+    // 進んでいた)。他のchoicesステップのgeneral分岐(下のelse if)がcurrentStep.choices全部を無条件で
+    // seen化しているのと同じ理由で、ここでも明示的に追加する。
+    if (targetStepId === 'worker_placement_example_intro') tutorialSeenStepIds.add(targetStepId);
   } else if (currentStep) {
     for (const choice of currentStep.choices) tutorialSeenStepIds.add(choice.targetStepId);
   }
