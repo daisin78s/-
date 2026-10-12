@@ -8992,10 +8992,13 @@ function renderRankingRegisterList(state) {
         opponents: c.opponents,
         playerColor: c.playerColor,
         // 3-way ranking split (2026-09-07, per user spec): ウィークリーチャレンジ games always register
-        // as 'weekly' (デバッグモード/テストゲーム are both forced unavailable for the whole attempt
-        // anyway -- see renderDebugPanel -- so usedDebugOrTestGameThisGame is moot here); otherwise
-        // 'standard' only if neither was ever used this whole game, 'ultimate' if either was.
-        category: weeklyChallengeActive ? 'weekly' : (usedDebugOrTestGameThisGame ? 'ultimate' : 'standard'),
+        // as 'weekly'; otherwise 'standard' for an online-room game, 'ultimate' for a local one.
+        // 2026-10-12, per user request ("デバッグありランキング→ローカル対戦ランキング でばっぐなし
+        // ランキング→オンライン対戦ランキングにかえたい", confirmed to also change the underlying split
+        // itself, not just the label) -- replaces the old usedDebugOrTestGameThisGame-based split (デバッグ
+        // 使用有無は、デバッグモードボタン自体が2026-10-04に非表示化済みでほぼ意味を失っていた一方、
+        // ローカル/オンラインという実際にユーザーが気にする区別とは無関係だった)。
+        category: weeklyChallengeActive ? 'weekly' : (onlineRoomCode ? 'standard' : 'ultimate'),
         // weekId (2026-09-14, per user request: ウィークリーランキングを毎週リセットしたい): stamped only
         // for 'weekly' entries -- the SAME id currentWeeklyChallengeId() used to seed this very game's
         // board, so an entry always lands in the week it was actually played, not whatever week it happens
@@ -9029,14 +9032,14 @@ function renderRankingRegisterList(state) {
   }
 }
 
-// 3-way ranking split (2026-09-07, per user spec -- see usedDebugOrTestGameThisGame's own doc):
-// 'ultimate' (デバッグ/テストゲーム有, and every pre-existing entry from before this split existed),
-// 'standard' (通常プレイでデバッグ/テストゲーム一切なし), 'weekly' (ウィークリーチャレンジ -- not built
-// yet, always empty for now). All 3 show AT ONCE, side by side (per user correction: "３つのランキングを
-// ボタンで切り替えるのではなく３つ同時に表示して" -- this was originally a tab switcher, corrected the
-// same day), in this fixed left-to-right order.
+// 3-way ranking split (2026-09-07, per user spec; re-split 2026-10-12 from デバッグ有無 to ローカル/
+// オンライン -- see this category's own assignment at RankingStorage.save's call site for why):
+// 'ultimate' (ローカル対戦, and every pre-existing entry from before this split existed), 'standard'
+// (オンライン対戦), 'weekly' (ウィークリーチャレンジ). All 3 show AT ONCE, side by side (per user
+// correction: "３つのランキングをボタンで切り替えるのではなく３つ同時に表示して" -- this was originally a
+// tab switcher, corrected the same day), in this fixed left-to-right order.
 const RANKING_CATEGORIES = ['ultimate', 'standard', 'weekly'];
-const RANKING_CATEGORY_LABELS = { ultimate: 'デバッグあり\nランキング', standard: 'デバッグなし\nランキング', weekly: 'ウィークリー\nランキング' };
+const RANKING_CATEGORY_LABELS = { ultimate: 'ローカル対戦\nランキング', standard: 'オンライン対戦\nランキング', weekly: 'ウィークリー\nランキング' };
 let rankingListRequestId = 0;
 // ウィークリーランキングの週送り (2026-09-14, per user request: "毎週変わるようにしてほしい...先週、先々週
 // と戻ってみることができる"): 0 = 今週 (always what a fresh openRankingOverlay shows -- see its own reset),
