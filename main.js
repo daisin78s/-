@@ -353,11 +353,18 @@ function gatedEntryBannerHandler(featureId, handler) {
 
 /** skipAchievementLock (2026-10-11, per user spec: "オンライン対戦は対象外（すべて解除済み）") -- set by
  * handleStartRoomClick's own online-room-creation call only; every other caller omits it, so whether
- * state.lockedFaceIds ends up populated for them still depends purely on weeklyChallengeActive/
- * tutorialModeActive below (both already unlocked-by-default for their own, separate reasons). */
+ * state.lockedFaceIds ends up populated for them still depends purely on weeklyChallengeActive below
+ * (unlocked-by-default for its own separate reason). tutorialModeActive used to be excluded here too
+ * (2026-10-11 original spec), removed 2026-10-12 per user request: "チュートリアル ローカル対戦と同じで
+ * 解禁されていないジョブや制約は出ないようにできますか" -- チュートリアルもローカル対戦と同じロックを
+ * 受けるようになり、state.lockedFaceIdsが埋まる。実際の制限はsetup.dealJobPool/chooseConFaceという
+ * プレイヤーの種類を問わないエンジン側ロジックなので、チュートリアル中のAI(P2〜P4)も自動的に対象になる
+ * (追加のコード不要、per user confirmation)。チュートリアル自身のジョブ選択はもともと一般市民のみに
+ * 固定されているため、この変更で実際に影響するのはジョブ置き場/制約プレビューに並ぶ「選べない他の
+ * 候補」の見た目(裏面が出るかどうか)のみ。 */
 function createInitialState(plan, forcedSeed, skipAchievementLock) {
   const state = gameStateMod.createEmptyGameState(forcedSeed || randomSeed());
-  if (!skipAchievementLock && !weeklyChallengeActive && !tutorialModeActive) {
+  if (!skipAchievementLock && !weeklyChallengeActive) {
     state.lockedFaceIds = computeLockedFaceIds();
   }
   // P1's own display name (2026-09-07, per user request: "ランキングに名前を入力したら...次回以降その人
