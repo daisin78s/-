@@ -8792,6 +8792,9 @@ function maybeRecordAchievements(state) {
   // 実績ポイントの増加表示 (2026-10-09, per user request: "実績ポイント 100→125 のように表示して") --
   // カテゴリ更新で値が書き換わる前の合計点数を先に控えておく。
   const totalBefore = achievementTotalPoints(store);
+  // アンロック通知 (2026-10-13, see showUnlockPopupsの own doc) -- saveAchievements前(=localStorageが
+  // まだ古いまま)の時点でロック中のIDを控えておき、保存後のスナップショットと比較する。
+  const lockedBefore = new Set(computeLockedFaceIds());
   const updatedKeys = [];
   for (const c of candidates) {
     const player = state.players.find((p) => p.id === c.playerId);
@@ -8832,7 +8835,14 @@ function maybeRecordAchievements(state) {
   // per user request: "ゲーム終了後 点数が増えたら もう一度チェック") -- ゲーム開始時に1回だけ見る
   // CON/JOBの裏面ロックと違い、こちらはこのゲーム終了の結果で合計点数が実際に増えた場合だけ、次に
   // トップ画面へ戻った時のボタン有効/無効がすぐ反映されるよう再計算する。
-  if (achievementTotalPoints(store) > totalBefore) refreshLockedMenuFeatureIds();
+  if (achievementTotalPoints(store) > totalBefore) {
+    refreshLockedMenuFeatureIds();
+    // アンロック通知 (2026-10-13) -- lockedBeforeにあって今はロックされていないIDが、まさに今回の
+    // ポイント加算でアンロックされたもの。
+    const lockedAfter = new Set(computeLockedFaceIds());
+    const newlyUnlocked = [...lockedBefore].filter((id) => !lockedAfter.has(id));
+    if (newlyUnlocked.length > 0) showUnlockPopups(newlyUnlocked);
+  }
 }
 
 // ウィークリーランキングへの登録成功時にだけ呼ばれる (2026-10-03, per user: "ウィークリーランキングに
@@ -8841,6 +8851,7 @@ function maybeRecordAchievements(state) {
 function recordWeeklyRankAchievement(rank) {
   const store = loadAchievements();
   const totalBefore = achievementTotalPoints(store);
+  const lockedBefore = new Set(computeLockedFaceIds());
   const updatedKeys = [];
   recordAchievementIfNew(store, updatedKeys, 'weekly_rank', rank);
   if (updatedKeys.length > 0) {
@@ -8848,6 +8859,12 @@ function recordWeeklyRankAchievement(rank) {
     showAchievementPopup(updatedKeys, store, totalBefore);
     syncAchievementTotalIfIncreased(store);
     syncAchievementBackupIfConfigured(store);
+    if (achievementTotalPoints(store) > totalBefore) {
+      refreshLockedMenuFeatureIds();
+      const lockedAfter = new Set(computeLockedFaceIds());
+      const newlyUnlocked = [...lockedBefore].filter((id) => !lockedAfter.has(id));
+      if (newlyUnlocked.length > 0) showUnlockPopups(newlyUnlocked);
+    }
   }
 }
 
@@ -8869,6 +8886,42 @@ function showAchievementPopup(updatedKeys, store, totalBefore) {
 
 function closeAchievementPopup() {
   document.getElementById('achievement-popup-overlay').hidden = true;
+}
+
+/** 実績解除2のアンロック通知 (2026-10-13, per user request: 「実績解除　500点\n制約カード\n色欲が
+ * アンロックされました」のように表示) -- maybeRecordAchievements/recordWeeklyRankAchievementが、実績
+ * ポイント加算の前後でcomputeLockedFaceIdsのスナップショットを比較し、ロック中→解除に変わったIDだけを
+ * ここへ渡す。CON/JOB裏面(IDがそれぞれ"CON"/"JOB"始まり)はカード名をdataLoaderMod.getCardRowで引き、
+ * 3つのメニュー機能(カードリスト/ランキング/ウィークリーチャレンジ)はID自体が表示名なのでカード検索は
+ * 行わず、カテゴリ行も出さない(名前だけで何を指すか自明なため)。*/
+function unlockNoticeInfo(id) {
+  if (id.startsWith('CON')) return { category: '制約カード', name: dataLoaderMod.getCardRow(INDEX, id).NAME };
+  if (id.startsWith('JOB')) return { category: 'ジョブカード', name: dataLoaderMod.getCardRow(INDEX, id).NAME };
+  return { category: null, name: id };
+}
+
+/** @param {string[]} ids - computeLockedFaceIdsのスナップショット比較で見つかった、ロック中→解除に
+ *   変わったIDの配列(1件以上であることは呼び出し元が保証する)。複数同時解除時は1つのポップアップ内に
+ *   行を積み重ねて全部まとめて表示する(達成ポップアップ同様、1件ずつ送る方式は取らない)。*/
+function showUnlockPopups(ids) {
+  const list = document.getElementById('unlock-popup-list');
+  list.innerHTML = '';
+  const rows = (INDEX.raw['実績解除2'] || []);
+  for (const id of ids) {
+    const row = rows.find((r) => r.ID === id);
+    const required = row ? Number(row['必要point'] || 0) : 0;
+    const { category, name } = unlockNoticeInfo(id);
+    const block = el('div', 'unlock-popup-item');
+    block.appendChild(el('div', 'achievement-row achievement-row--total', `実績解除　${required}点`));
+    if (category) block.appendChild(el('div', 'achievement-row', category));
+    block.appendChild(el('div', 'achievement-row', `${name}がアンロックされました`));
+    list.appendChild(block);
+  }
+  document.getElementById('unlock-popup-overlay').hidden = false;
+}
+
+function closeUnlockPopup() {
+  document.getElementById('unlock-popup-overlay').hidden = true;
 }
 
 function renderAchievementOverlay() {
@@ -13861,6 +13914,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('achievement-backup-setup-button').addEventListener('click', handleAchievementBackupSetupClick);
   document.getElementById('achievement-backup-change-button').addEventListener('click', handleAchievementBackupChangeClick);
   document.getElementById('achievement-popup-close-button').addEventListener('click', closeAchievementPopup);
+  document.getElementById('unlock-popup-close-button').addEventListener('click', closeUnlockPopup);
   document.getElementById('achievement-ranking-close-button').addEventListener('click', closeAchievementRankingOverlay);
   // 2026-10-08, per user request: "歴代ランキングのアイコンを押すとパスワード画面になる" -- 新しい
   // ボタンではなく#ranking-overlayの既存タイトル自体を隠し入口にする(index.htmlのown doc参照)。

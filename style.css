@@ -4706,6 +4706,12 @@ body.tutorial-mode .change-highlight {
   flex-shrink: 0;
 }
 
+/* アンロック通知ポップアップ (2026-10-13) -- 複数同時解除時、1件ずつの3行ブロックの間を少し空ける
+   (.achievement-rowが持つ1px下線だけだと区切りが弱いため)。 */
+.unlock-popup-item + .unlock-popup-item {
+  margin-top: 14px;
+}
+
 /* #achievement-popup-overlay は#game-end-overlay(ゲーム終了直後)の上に出したいが、どちらも
    .card-inst-overlayのz-index:100を共有しておりDOM順(game-end-overlayの方が後)で負けてしまうため、
    明示的に高くする。 */
