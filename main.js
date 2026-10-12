@@ -218,6 +218,10 @@ const ACHIEVEMENT_PER_GAME_DEFS = [
   // 計算して記録する(QSTの達成有無とは無関係)。
   ['max_emblem_count', '最多エンブレムの数', '個'], // Q002AのGOAL=MAX_EMBLEM_COUNTと同じメトリクス
   ['area_count', '所有エリア数', '個'], // Q004AのGOAL=AREA_COUNTと同じメトリクス
+  // 2026-10-13, per user request ("A29からA36まで クエスト同じです" -- 実績解除シートのこの並びはQSTの
+  // Q001A〜Q004A,Q001B〜Q004Bの8個と1:1対応しており、このカテゴリだけ未実装だった) -- Q001BのGOAL=
+  // EXTRA_D_PLUS_ABC_COUNTと同じメトリクス(既にdice3_score算出のコメントでも触れている既存の評価軸)。
+  ['extra_d_plus_abc_count', '通常カード枚数+追加色ダイス', '個'],
   ['emblem_set_count', '天地人セット数', '個'], // Q002BのGOAL=EMBLEM_SET_COUNTと同じメトリクス
   ['emblem_count', 'エンブレム総数', '個'], // Q003BのGOAL=EMBLEM_COUNTと同じメトリクス
   ['lv2_area_count', '所有LV2エリア数', '個'], // Q004BのGOAL=AREA_COUNT(2)と同じメトリクス
@@ -8787,6 +8791,7 @@ function maybeRecordAchievements(state) {
     // evalMetricで評価(QSTカード自体を引いたかどうかとは無関係に、ゲーム終了時点の生の値を毎回記録)。
     recordAchievementIfNew(store, updatedKeys, 'max_emblem_count', executorMod.evalMetric(state, INDEX, c.playerId, { name: 'MAX_EMBLEM_COUNT', args: [] }));
     recordAchievementIfNew(store, updatedKeys, 'area_count', executorMod.evalMetric(state, INDEX, c.playerId, { name: 'AREA_COUNT', args: [] }));
+    recordAchievementIfNew(store, updatedKeys, 'extra_d_plus_abc_count', executorMod.evalMetric(state, INDEX, c.playerId, { name: 'EXTRA_D_PLUS_ABC_COUNT', args: [] }));
     recordAchievementIfNew(store, updatedKeys, 'emblem_set_count', executorMod.evalMetric(state, INDEX, c.playerId, { name: 'EMBLEM_SET_COUNT', args: [] }));
     recordAchievementIfNew(store, updatedKeys, 'emblem_count', executorMod.evalMetric(state, INDEX, c.playerId, { name: 'EMBLEM_COUNT', args: [] }));
     recordAchievementIfNew(store, updatedKeys, 'lv2_area_count', executorMod.evalMetric(state, INDEX, c.playerId, { name: 'AREA_COUNT', args: [2] }));
