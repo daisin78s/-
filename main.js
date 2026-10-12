@@ -5273,11 +5273,15 @@ function buildShopSlotNode(slotId, faceId, showReqCaption, locked, faceDown = fa
     // caption (corrected 2026-07-29).
     ? buildCardVisual(faceId, { req: facts.req, showEffect: true })
     : buildCardVisual(faceId, { showEffect: true });
-  // ワンクリック獲得ショートカット (2026-10-09, per user request) -- チュートリアル中は既存の台本演出を
-  // 乱さないよう対象外。拡大表示自体は常に可能(attachPickableEnlarge)、pickActionは今すぐ獲得できる手が
-  // 見つかった時だけ付く(findBestAcquireMoveがnullを返せばpickBtn自体が非表示になる、showCardEnlargeModal
-  // 参照)。
-  if (!tutorialModeActive) {
+  // ワンクリック獲得ショートカット (2026-10-09, per user request) -- チュートリアル中の最初の台本演出
+  // (game_rules_intro_1〜resource_choice_introの「それではゲームを始めましょう」まで)だけは乱さないよう
+  // 対象外。2026-10-12、per user request: "それではゲームを始めましょう...こっから先はチェックが出るように"
+  // -- tutorialJobPoolRevealed(resource_choice_introを閉じた瞬間にtrueになる、renderJobPoolの own doc参照)
+  // が立って以降、つまり台本の巻き戻しが終わり実際のプレイが始まって以降は、チュートリアル中でも通常プレイ
+  // と同じくショートカット+✓バッジの両方を有効にする。拡大表示自体は常に可能(attachPickableEnlarge)、
+  // pickActionは今すぐ獲得できる手が見つかった時だけ付く(findBestAcquireMoveがnullを返せばpickBtn自体が
+  // 非表示になる、showCardEnlargeModal参照)。
+  if (!tutorialModeActive || tutorialJobPoolRevealed) {
     const acquireMove = findBestAcquireMove(faceId);
     attachPickableEnlarge(cardVisual, faceId, acquireMove ? {
       label: 'このカードを獲得する',
