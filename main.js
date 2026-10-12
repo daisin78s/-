@@ -8535,6 +8535,135 @@ function syncAchievementTotalIfIncreased(store) {
   window.OnlineSync.saveRankingEntry(achievementRankingId(), { name, totalScore: total }, 'achievement').catch(() => { /* best-effort, offline等は無視 */ });
 }
 
+// 実績バックアップ (2026-10-12, per user request: "実績解除のポイントをリセットするにはどうすればいい？"
+// -> 「逆にうっかり消さないようにするには」-> 名前+パスワードでの復元案に発展、「めーるまで求めたくない」
+// のでメールアドレス不要、「名前は後から変えれるように」「パスワードも変更できるように」「パスワードは
+// 数字４桁以上１０桁未満」)。online-sync.jsのachievement_backupコレクション(own doc参照)にプレイヤー
+// 自身が決めた名前をキーとして1件だけ保存/上書きする -- ランキング登録の名前(毎回のプレイごとに変わり
+// うる)とは別の、端末を識別するための一度きりの設定。実績ポイントが増えるたび自動で上書き保存される
+// (syncAchievementTotalIfIncreasedと同じ「増えた時だけ」トリガー、maybeRecordAchievements/
+// recordWeeklyRankAchievementの両方の呼び出し箇所から呼ばれる)。データが消えた端末で同じ名前+パスワード
+// を再入力すれば、最後に自動保存された時点のポイントへ復元できる。
+//
+// パスワードはmain.js側でのクライアント側ハッシュ比較のみ(RANKING_RESET_PASSWORD_HASHと同じ「カジュアル
+// な誤操作防止」の脅威モデル、本物のアクセス制御ではない -- このアプリには認証機構が無い)。
+const ACHIEVEMENT_BACKUP_NAME_KEY = 'diceWpAchievementBackupName';
+const ACHIEVEMENT_BACKUP_PASSWORD_HASH_KEY = 'diceWpAchievementBackupPasswordHash';
+const ACHIEVEMENT_BACKUP_PASSWORD_PATTERN = /^\d{4,9}$/; // per user: "パスワードは数字４桁以上１０桁未満"
+
+/** @returns {{name:string, passwordHash:string}|null} this device's remembered backup identity, or null
+ *   if never configured (or localStorage unavailable -- same "wrap every access" convention as elsewhere). */
+function loadAchievementBackupIdentity() {
+  try {
+    const name = localStorage.getItem(ACHIEVEMENT_BACKUP_NAME_KEY);
+    const passwordHash = localStorage.getItem(ACHIEVEMENT_BACKUP_PASSWORD_HASH_KEY);
+    return name && passwordHash ? { name, passwordHash } : null;
+  } catch (e) { return null; }
+}
+
+function saveAchievementBackupIdentity(name, passwordHash) {
+  try {
+    localStorage.setItem(ACHIEVEMENT_BACKUP_NAME_KEY, name);
+    localStorage.setItem(ACHIEVEMENT_BACKUP_PASSWORD_HASH_KEY, passwordHash);
+  } catch (e) { /* ignore */ }
+}
+
+/** Prompts for a password and validates it against ACHIEVEMENT_BACKUP_PASSWORD_PATTERN, alerting and
+ * returning null on either cancel or an invalid value (same "just abort, no retry loop" simplicity as
+ * checkRankingResetPassword -- the caller's own button can just be pressed again). */
+function readValidAchievementBackupPassword(promptText) {
+  const entered = window.prompt(promptText);
+  if (entered === null) return null;
+  if (!ACHIEVEMENT_BACKUP_PASSWORD_PATTERN.test(entered)) {
+    window.alert('パスワードは数字4〜9桁で入力してください。');
+    return null;
+  }
+  return entered;
+}
+
+/** Called from maybeRecordAchievements/recordWeeklyRankAchievement, same call sites and "only when
+ * updatedKeys.length > 0" gating as syncAchievementTotalIfIncreased just above -- auto-backs-up the FULL
+ * achievements store (not just the total) under this device's configured identity. A no-op until the
+ * player has actually set one up via handleAchievementBackupSetupClick. Best-effort (offline etc. is
+ * silently ignored, same as every other OnlineSync write in this file). */
+function syncAchievementBackupIfConfigured(store) {
+  const identity = loadAchievementBackupIdentity();
+  if (!identity || !window.OnlineSync) return;
+  window.OnlineSync.saveAchievementBackup(identity.name, identity.passwordHash, store).catch(() => { /* best-effort */ });
+}
+
+/** Sets up (first use) or restores (re-entering an existing name+password, e.g. after this device's data
+ * was lost) this device's achievement backup identity. An existing name with a MATCHING password pulls
+ * that record's points down onto this device (restore); a brand-new name instead uploads this device's
+ * CURRENT points as the new record (first-time setup). Also feeds the chosen name into
+ * RANKING_PLAYER_NAME_KEY (rememberRankingName) so it shows up as the default ranking-registration name
+ * too, per user confirmation ("そこで名前を保存したら自動でプレイヤーネームとして出てくるのね"). */
+async function handleAchievementBackupSetupClick() {
+  if (!window.OnlineSync) { window.alert('オフラインのため利用できません。'); return; }
+  const name = (window.prompt('バックアップ用の名前を入力してください。') || '').trim();
+  if (!name) return;
+  if (name.indexOf('/') !== -1) { window.alert('名前に「/」は使用できません。'); return; }
+  const password = readValidAchievementBackupPassword('パスワード(数字4〜9桁)を入力してください。');
+  if (password === null) return;
+  const passwordHash = await sha256Hex(password);
+  let existing;
+  try { existing = await window.OnlineSync.loadAchievementBackup(name); } catch (e) { window.alert('通信に失敗しました。'); return; }
+  if (existing) {
+    if (existing.passwordHash !== passwordHash) { window.alert('その名前は別のパスワードで登録されています。'); return; }
+    saveAchievements(existing.achievements || {});
+    saveAchievementBackupIdentity(name, passwordHash);
+    rememberRankingName(name);
+    refreshLockedMenuFeatureIds();
+    renderAchievementOverlay();
+    window.alert(`復元しました(実績ポイント合計${achievementTotalPoints(existing.achievements || {})}点)`);
+    return;
+  }
+  const store = loadAchievements();
+  try { await window.OnlineSync.saveAchievementBackup(name, passwordHash, store); } catch (e) { window.alert('保存に失敗しました。'); return; }
+  saveAchievementBackupIdentity(name, passwordHash);
+  rememberRankingName(name);
+  renderAchievementOverlay();
+  window.alert('設定しました。以降、実績ポイントが増えるたびに自動でバックアップされます。');
+}
+
+/** Renames this device's backup identity and/or changes its password, keeping the SAME backed-up points
+ * (2026-10-12, per user confirmation: "同じデータのまま改名" -- not a fresh second identity). Requires
+ * the CURRENT password first (casual-tap prevention, same threat model as the rest of this feature).
+ * Writes the new name's doc first, then deletes the old one, so a failure partway never loses data under
+ * either key. */
+async function handleAchievementBackupChangeClick() {
+  if (!window.OnlineSync) { window.alert('オフラインのため利用できません。'); return; }
+  const identity = loadAchievementBackupIdentity();
+  if (!identity) return; // button is hidden in this state (see renderAchievementOverlay), but guard anyway
+  const currentPassword = readValidAchievementBackupPassword('現在のパスワードを入力してください。');
+  if (currentPassword === null) return;
+  if ((await sha256Hex(currentPassword)) !== identity.passwordHash) { window.alert('パスワードが違います。'); return; }
+  const newName = (window.prompt('新しい名前を入力してください(変えない場合はそのままOK)。', identity.name) || '').trim();
+  if (!newName) return;
+  if (newName.indexOf('/') !== -1) { window.alert('名前に「/」は使用できません。'); return; }
+  const newPasswordInput = window.prompt('新しいパスワード(数字4〜9桁、変えない場合は空のままでOK)。');
+  if (newPasswordInput === null) return;
+  let newPasswordHash = identity.passwordHash;
+  if (newPasswordInput !== '') {
+    if (!ACHIEVEMENT_BACKUP_PASSWORD_PATTERN.test(newPasswordInput)) { window.alert('パスワードは数字4〜9桁で入力してください。'); return; }
+    newPasswordHash = await sha256Hex(newPasswordInput);
+  }
+  const nameChanged = newName !== identity.name;
+  if (nameChanged) {
+    let existing;
+    try { existing = await window.OnlineSync.loadAchievementBackup(newName); } catch (e) { window.alert('通信に失敗しました。'); return; }
+    if (existing && existing.passwordHash !== newPasswordHash) { window.alert('その名前は別のパスワードで登録されています。'); return; }
+  }
+  try {
+    await window.OnlineSync.saveAchievementBackup(newName, newPasswordHash, loadAchievements());
+    if (nameChanged) await window.OnlineSync.deleteAchievementBackup(identity.name);
+  } catch (e) { window.alert('変更に失敗しました。'); return; }
+  saveAchievementBackupIdentity(newName, newPasswordHash);
+  if (nameChanged) rememberRankingName(newName);
+  renderAchievementOverlay();
+  window.alert('変更しました。');
+}
+
 function achievementLabel(key) {
   const found = ACHIEVEMENT_CATEGORY_BY_KEY.get(key);
   return found ? found.label : key;
@@ -8628,6 +8757,7 @@ function maybeRecordAchievements(state) {
   if (updatedKeys.length > 0) {
     showAchievementPopup(updatedKeys, store, totalBefore);
     syncAchievementTotalIfIncreased(store);
+    syncAchievementBackupIfConfigured(store);
   }
   // 実績解除2(トップ画面のカードリスト/ランキング/ウィークリーチャレンジのロック)再判定 (2026-10-11,
   // per user request: "ゲーム終了後 点数が増えたら もう一度チェック") -- ゲーム開始時に1回だけ見る
@@ -8648,6 +8778,7 @@ function recordWeeklyRankAchievement(rank) {
     saveAchievements(store);
     showAchievementPopup(updatedKeys, store, totalBefore);
     syncAchievementTotalIfIncreased(store);
+    syncAchievementBackupIfConfigured(store);
   }
 }
 
@@ -8673,7 +8804,13 @@ function closeAchievementPopup() {
 
 function renderAchievementOverlay() {
   const store = loadAchievements();
-  document.getElementById('achievement-total-score').textContent = `合計点数: ${achievementTotalPoints(store)}点`;
+  document.getElementById('achievement-total-score').textContent = `実績ポイント: ${achievementTotalPoints(store)}点`;
+  const identity = loadAchievementBackupIdentity();
+  document.getElementById('achievement-backup-status').textContent = identity
+    ? `バックアップ設定: ${identity.name}`
+    : 'バックアップ未設定(端末のデータが消えると実績ポイントも消えます)';
+  document.getElementById('achievement-backup-setup-button').textContent = identity ? '別の名前で設定/復元' : '名前とパスワードを設定/復元';
+  document.getElementById('achievement-backup-change-button').hidden = !identity;
   const list = document.getElementById('achievement-list');
   list.innerHTML = '';
   for (const { key, label } of ACHIEVEMENT_CATEGORIES) {
@@ -13604,6 +13741,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('start-from-round3-button').addEventListener('click', handleStartFromRound3Click);
   document.getElementById('achievement-open-button').addEventListener('click', openAchievementOverlay);
   document.getElementById('achievement-close-button').addEventListener('click', closeAchievementOverlay);
+  document.getElementById('achievement-backup-setup-button').addEventListener('click', handleAchievementBackupSetupClick);
+  document.getElementById('achievement-backup-change-button').addEventListener('click', handleAchievementBackupChangeClick);
   document.getElementById('achievement-popup-close-button').addEventListener('click', closeAchievementPopup);
   document.getElementById('achievement-ranking-close-button').addEventListener('click', closeAchievementRankingOverlay);
   // 2026-10-08, per user request: "歴代ランキングのアイコンを押すとパスワード画面になる" -- 新しい

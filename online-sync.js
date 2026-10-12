@@ -281,6 +281,40 @@ function pushRoomState(code, stateJson) {
   return db().collection(ROOM_COLLECTION).doc(code).update({ state: stateJson });
 }
 
+// 実績バックアップ (2026-10-12, per user request: "実績解除のポイントをリセットするにはどうすればいい？"
+// -> 「逆にうっかり消さないようにするには」-> 名前+パスワードでの復元案に発展)。プレイヤー自身が決めた
+// 名前をドキュメントidとして1件だけ保存/上書きする(ランキングのような複数件の一覧ではない) -- このアプリに
+// 認証機構が無い(このファイル冒頭own doc参照)のと同じ事情で、パスワードはmain.js側でのクライアント側
+// ハッシュ比較のみ(RANKING_RESET_PASSWORD_HASHと同じ「カジュアルな誤操作防止」の脅威モデル、本物のアクセス
+// 制御ではない)。ドキュメント自体にもpasswordHashを保存しておき、復元/改名時にmain.js側で突き合わせる。
+var ACHIEVEMENT_BACKUP_COLLECTION = 'achievement_backup';
+
+/** @returns {Promise<{passwordHash:string, achievements:object, updatedAt:string}|null>} null if no
+ *   backup exists yet under this name. */
+function loadAchievementBackup(name) {
+  return db().collection(ACHIEVEMENT_BACKUP_COLLECTION).doc(name).get().then(function (doc) {
+    return doc.exists ? doc.data() : null;
+  });
+}
+
+/** Overwrites (or creates) the backup doc for `name` with the device's current achievements store --
+ * called both for first-time setup and for every later auto-sync (main.js's
+ * syncAchievementBackupIfIncreased, same "increase only" trigger as the existing achievement-ranking
+ * total sync just above). */
+function saveAchievementBackup(name, passwordHash, achievements) {
+  return db().collection(ACHIEVEMENT_BACKUP_COLLECTION).doc(name).set({
+    passwordHash: passwordHash,
+    achievements: achievements,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+/** Used by the rename flow (main.js's handleAchievementBackupChangeClick): the new name's doc is written
+ * first (via saveAchievementBackup), then the old one is deleted -- same data, new key. */
+function deleteAchievementBackup(name) {
+  return db().collection(ACHIEVEMENT_BACKUP_COLLECTION).doc(name).delete();
+}
+
 window.OnlineSync = {
   listRanking: listRanking,
   saveRankingEntry: saveRankingEntry,
@@ -298,5 +332,8 @@ window.OnlineSync = {
   subscribeToRoom: subscribeToRoom,
   startRoom: startRoom,
   pushRoomState: pushRoomState,
+  loadAchievementBackup: loadAchievementBackup,
+  saveAchievementBackup: saveAchievementBackup,
+  deleteAchievementBackup: deleteAchievementBackup,
 };
 })();
