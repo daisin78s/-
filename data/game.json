@@ -1756,11 +1756,11 @@
       "VP": "",
       "ONCE": "",
       "TAP": "",
-      "PASSIVE": "ON(GET(K),CHANGE(K,A))",
+      "PASSIVE": "ON(GET(K),CHANGE(K,A,ALL))",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "そのうちの1個をAに変える\n初期資源含む"
+      "INST": "〇を得たときそれは赤〇になる（赤〇→〇は例外）\n初期資源含む"
     },
     {
       "ID": "JOB006A",

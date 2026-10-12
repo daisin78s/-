@@ -800,8 +800,21 @@ function runChange(state, index, context, cmd) {
     //     the same example. The flag is gone entirely -- every ALL-based CHANGE is capped now.
     // 'literal'/'capped'-kind CHANGEs and the built-in free actions remain unaffected: this PASSIVE only
     // ever reads the 'all' branch (see this rule's own loop, right here), never runs for the other two.
-    for (const rule of getPassiveRules(state, index, context.playerId, 'CONVERT_LIMIT')) {
-      times = Math.min(times, Math.max(0, rule.limit));
+    // 権力者/JOB005A's own exemption (2026-10-12, per user request: "権力者の能力は憂鬱で阻害されない") --
+    // 権力者's PASSIVE (ON(GET(K),CHANGE(K,A,ALL))) is itself an 'all'-kind CHANGE, so without this it
+    // would get swept into 憂鬱/CON003B's CONVERT_LIMIT(ALL,4) cap along with every other ALL-based
+    // CHANGE, capping a reactive per-GET conversion that's supposed to always convert everything. Checked
+    // via context.sourcePhysicalId (see emit()'s own doc -- only set for a PASSIVE reaction's own effect,
+    // tagging which card's PASSIVE fired it) rather than NAME-matching the acting player's whole JOB, since
+    // this must exempt 権力者's OWN conversion specifically, not every ALL-CHANGE a 権力者-holding player
+    // happens to trigger (e.g. still capped at 城下町/大聖堂/ギルド, or via another owned card's own
+    // ALL-CHANGE TAP).
+    const isPowerBrokerOwnConversion = context.sourcePhysicalId
+      && getCardRow(index, state.cards[context.sourcePhysicalId].currentFaceId).NAME === '権力者';
+    if (!isPowerBrokerOwnConversion) {
+      for (const rule of getPassiveRules(state, index, context.playerId, 'CONVERT_LIMIT')) {
+        times = Math.min(times, Math.max(0, rule.limit));
+      }
     }
   }
 
@@ -1605,7 +1618,12 @@ function emit(state, index, playerId, eventName, actualValue, context) {
   for (const { physicalId, inst, row } of ownedCardRows(state, index, playerId)) {
     for (const cmd of findOnHandlers(row, 'PASSIVE', eventName)) {
       if (!eventArgsMatch(cmd.event.args, actualValue)) continue;
-      const result = runCommand(state, index, context, cmd.effect);
+      // sourcePhysicalId (2026-10-12, per user request: "権力者の能力は憂鬱で阻害されない") -- same
+      // tagging resolveTapReaction already does for a TAP reaction's own effect, now added here too so a
+      // PASSIVE reaction's own CHANGE can identify which card triggered it (see runChange's own
+      // CONVERT_LIMIT exemption for 権力者/JOB005A, which needs this to distinguish "権力者's own reactive
+      // conversion" from any other ALL-based CHANGE).
+      const result = runCommand(state, index, { ...context, sourcePhysicalId: physicalId }, cmd.effect);
       fired.push({ physicalId, cmd, result });
       notifyActivation(state, playerId, physicalId, inst.currentFaceId, 'PASSIVE');
     }

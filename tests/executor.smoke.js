@@ -850,6 +850,43 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 }
 
 // ---------------------------------------------------------------------------
+// 14c. 権力者/JOB005A's own PASSIVE (ON(GET(K),CHANGE(K,A,ALL))) is exempt from 憂鬱/CON003B's
+//     CONVERT_LIMIT(ALL,4) (2026-10-12, per user request: "権力者の能力は憂鬱で阻害されない") -- without
+//     the sourcePhysicalId-based exemption in runChange, a reactive per-GET conversion that's supposed to
+//     always convert everything would get capped at 4 like any other ALL-based CHANGE. Fired via the real
+//     emit() path (grantResourceAndEmitGet), not a hand-built CHANGE command, so this also exercises
+//     emit()'s own sourcePhysicalId tagging (see that function's own doc).
+// ---------------------------------------------------------------------------
+{
+  // The module-level index.byId.set('JOB005A', ...) patch near the top of this file (for test block 4's
+  // old-TAP-reaction coverage) overwrites JOB005A's real PASSIVE with '' for the rest of this file's run --
+  // restore the real row just for this block so it actually exercises ON(GET(K),CHANGE(K,A,ALL)), then put
+  // the test-4 patch back so nothing after this block is affected.
+  const patchedJob005A = index.byId.get('JOB005A');
+  index.byId.set('JOB005A', { sheet: 'JOB', row: { ...patchedJob005A.row, TAP: '', TURNEND: '', PASSIVE: 'ON(GET(K),CHANGE(K,A,ALL))' } });
+  const state = freshState();
+  giveCard(state, 'JOB005A', 'P1'); // PASSIVE=ON(GET(K),CHANGE(K,A,ALL))
+  giveCard(state, 'CON003B', 'P1'); // PASSIVE=CONVERT_LIMIT(ALL,4)
+  const player = getPlayerRef(state, 'P1');
+  executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'K', 10);
+  check('権力者\'s own reactive conversion is NOT capped by 憂鬱\'s CONVERT_LIMIT(ALL,4) -- all 10K converts', player.resources.A, 10);
+  check('...no K left over', player.resources.K || 0, 0);
+  index.byId.set('JOB005A', patchedJob005A);
+}
+{
+  // Control: an UNRELATED ALL-based CHANGE triggered by the SAME 権力者+憂鬱-holding player (not sourced
+  // from 権力者's own PASSIVE) still gets capped normally -- the exemption is narrowly scoped to 権力者's
+  // own conversion, not a blanket "this player ignores CONVERT_LIMIT" effect.
+  const state = freshState();
+  giveCard(state, 'JOB005A', 'P1');
+  giveCard(state, 'CON003B', 'P1');
+  getPlayerRef(state, 'P1').resources.K = 20;
+  const changeAllK2A = { type: 'CHANGE', pay: [{ resource: 'K', count: { kind: 'literal', value: 1 } }], gain: [{ resource: 'A', count: { kind: 'literal', value: 1 } }], times: { kind: 'all' } };
+  const result = executor.runCommand(state, index, { playerId: 'P1' }, changeAllK2A); // no sourcePhysicalId -- not from 権力者's own PASSIVE
+  check('An unrelated ALL-CHANGE from the same player still gets capped at 4 (exemption is 権力者-specific, not player-wide)', result.timesExecuted, 4);
+}
+
+// ---------------------------------------------------------------------------
 // 15. EMBLEM_COUNT/EMBLEM_SET_COUNT with multi-emblem monuments (2026-07-30: game.xlsx's M sheet
 // split EMBLEM into per-type EMBLEM_A/EMBLEM_B/EMBLEM_C counts, so a single monument can now count
 // toward more than one emblem -- e.g. M004 has EMBLEM_A=1,EMBLEM_B=1,EMBLEM_C=1, i.e. one each of
