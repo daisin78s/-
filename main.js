@@ -5291,7 +5291,12 @@ function buildShopSlotNode(slotId, faceId, showReqCaption, locked, faceDown = fa
     // あえてカードから少しはみ出すように（カードの能力ではないことをアピールするため）") -- カード本体の
     // 印刷された効果アイコンと混同されないよう、.shop-card自体(position:relativeが要る、style.css参照)の
     // 右下から意図的にはみ出す位置に絶対配置する。
-    if (acquireMove) cardVisual.appendChild(el('span', 'shop-card__acquirable-badge', '✓'));
+    if (acquireMove) {
+      const badge = el('span', 'shop-card__acquirable-badge', '✓');
+      // tutorialAcquirableBadgeGlowing own doc参照 (2026-10-12, Excel T084)。
+      if (tutorialAcquirableBadgeGlowing) badge.classList.add('change-highlight');
+      cardVisual.appendChild(badge);
+    }
   }
   // 2026-10-03 (Excel T095, wave2_special_unlock_hint): 複数の接頭辞(元老院/王女/栄光の証=A301/B301/C301)
   // を同時に光らせたいケース用に、配列も渡せるよう拡張(既存のA/B/C/'M001'のような単一文字列指定はそのまま)。
@@ -10408,7 +10413,21 @@ const TUTORIAL_STEPS = [
   },
   // 2026-09-30: training_ground_hint〜shop_cost_intro(訓練場/王宮元老院/SHOPカード/ダイス目/支払い資源の
   // 説明、計6画面)はExcelから削除された(制約カードを選ぶ前の段階に統合されたため)。
-  // first_turn_recommendation_hintの次は通常の直線探索でused_card_immediately_hintが見つかる。
+  // first_turn_recommendation_hintの次は通常の直線探索でacquirable_badge_hintが見つかる。
+  // 2026-10-12、per user request (Excelの新しい行T083) -- ✓バッジ(獲得可能ショートカット)の紹介。
+  // first_turn_recommendation_hintと同じmatch条件(T082〜T083はまとめて1つの地続きの案内)。
+  {
+    id: 'acquirable_badge_hint',
+    match: (state) => {
+      const next = turnFlowMod.getNextTurn(state);
+      if (next.playerId !== 'P1') return false;
+      const player = state.players.find((p) => p.id === 'P1');
+      return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
+    },
+    body: 'ショップのカードが獲得可能であればチェックアイコンが表示され、カードをクリックするとショートカットで獲得できます',
+    nextLabel: '次へ',
+  },
+  // acquirable_badge_hintの次は通常の直線探索でused_card_immediately_hintが見つかる。
   {
     id: 'used_card_immediately_hint',
     match: (state) => {
@@ -10417,9 +10436,12 @@ const TUTORIAL_STEPS = [
       const player = state.players.find((p) => p.id === 'P1');
       return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
     },
-    body: 'ここからはあなたが自由にプレイしてください',
+    body: 'この時どこにどんなダイスを置くかはAIが最善と思われるものを自動で選びます\n気に入らなければ「直前の行動をキャンセル」でキャンセルできます',
     // 2026-10-02, per user request (Excelの選択肢1列を「閉じる」に変更): nextLabelを外すとdismissBtnの
-    // デフォルト文言(「閉じる」)になる -- renderTutorialOverlay's own doc参照。
+    // デフォルト文言(「閉じる」)になる -- renderTutorialOverlay's own doc参照。2026-10-12のExcel更新
+    // (T084)は選択肢2「あなたに２ターン目が回ってくる」→T085も書かれているが、per user confirmation、
+    // これはsecond_turn_intro_hint(T085)が既に自分自身のmatch条件(実際の2ターン目到来)で自動発見される
+    // ことの説明メモであり、実際にクリックできる2つ目のボタンとしては実装しない(「閉じる」のみ)。
   },
   // 2026-10-02, per user request (Excelの新しい行T081): used_card_immediately_hint(T080)を閉じた後、
   // あなたの2回目の手番(=本物の「ターン終了」ボタンを押し、ほかのプレイヤーの行動が終わってから、
@@ -11822,8 +11844,12 @@ function dismissTutorialStep() {
   if (tutorialCurrentStepId === 'job_tap_resource_intro') tutorialResourceGainGlowing = false;
   // 2026-09-30: training_ground_hint〜shop_cost_intro(訓練場/王宮元老院/SHOPカード/ダイス目/支払い資源の
   // 説明、計6画面)はExcelから削除された(制約カードを選ぶ前の段階に統合されたため) -- first_turn_
-  // recommendation_hintの次は通常の直線探索でused_card_immediately_hintが見つかる、専用の光る演出は不要。
+  // recommendation_hintの次は通常の直線探索でacquirable_badge_hintが見つかる、専用の光る演出は不要。
   // tutorialShopCostGlowingはbuild_cost_hint(カード獲得デモ)で引き続き使われるため、フラグ自体は残す。
+  // ✓獲得可能バッジの「光る」演出 (2026-10-12, Excel T084) -- acquirable_badge_hintが閉じられた瞬間に
+  // ONにし、used_card_immediately_hint自身が閉じられたらOFFにする(他の継続フラグと同じ形)。
+  if (tutorialCurrentStepId === 'acquirable_badge_hint') tutorialAcquirableBadgeGlowing = true;
+  if (tutorialCurrentStepId === 'used_card_immediately_hint') tutorialAcquirableBadgeGlowing = false;
   // 2026-09-30: resource_icon_explanation〜resource_icon_area_card_hint(初期資源アイコン/変換/城下町/
   // 領地カードの説明、計4画面)も同じ理由でExcelから削除された -- resource_choiceの次は通常の直線探索で
   // resource_pick_hintが見つかる。
@@ -12282,6 +12308,11 @@ let tutorialPlacedDiceGlowing = false;
 // ONにする必要があるため、con_face_choice_intro/tutorialInitialResourcesGlowingと同じ理由でautoDismissWhen
 // は使わず、attachTapToggleのTAP成功時に直接render()を呼ぶ前にセットする(そちらの doc 参照)。
 let tutorialResourceGainGlowing = false;
+// ✓獲得可能バッジの「光る」演出 (2026-10-12, Excel T084/used_card_immediately_hintの光る欄「チェック
+// アイコン」) -- used_card_immediately_hintが表示され続けている間ずっとtrueになる継続フラグ、他の継続
+// フラグと同じ形。buildCardVisual側の.shop-card__acquirable-badge(5290行目付近)に change-highlight を
+// 付け外しする。
+let tutorialAcquirableBadgeGlowing = false;
 // 「直前のアクションをキャンセル」ボタンの「光る」演出 (2026-09-26, per user request: "この時直前のアクション
 // をキャンセルボタンを光らせる") -- cancel_action_hint/dice_misclick_hint(意図した配置先以外への誤配置の
 // 救済セリフ、汎用)が表示され続けている間ずっとtrueになる継続フラグ。このボタン自体はrenderUndoButtonsが
