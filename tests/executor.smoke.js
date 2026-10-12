@@ -850,40 +850,63 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 }
 
 // ---------------------------------------------------------------------------
-// 14c. 権力者/JOB005A's own PASSIVE (ON(GET(K),CHANGE(K,A,ALL))) is exempt from 憂鬱/CON003B's
-//     CONVERT_LIMIT(ALL,4) (2026-10-12, per user request: "権力者の能力は憂鬱で阻害されない") -- without
-//     the sourcePhysicalId-based exemption in runChange, a reactive per-GET conversion that's supposed to
-//     always convert everything would get capped at 4 like any other ALL-based CHANGE. Fired via the real
-//     emit() path (grantResourceAndEmitGet), not a hand-built CHANGE command, so this also exercises
-//     emit()'s own sourcePhysicalId tagging (see that function's own doc).
+// 14c. 権力者/JOB005A's bespoke "half (round up) of the K you just got becomes A" ability (2026-10-12
+//     redesign, replacing the old PASSIVE=ON(GET(K),CHANGE(K,A,ALL)) DSL text, per user request: "〇を
+//     得たときその半数は赤〇になる（端数切り上げ）" -- implemented as a bespoke grantResourceAndEmitGet
+//     hook (grantPowerBrokerConversionIfEarned), same class as grantChefBonusIfEarned, since the DSL's
+//     ON(GET(x),...) dispatch can't see HOW MUCH was granted. Checked via player.jobCardId (NAME match),
+//     not an owned-card scan -- see hasPowerBrokerAbility's own doc.
 // ---------------------------------------------------------------------------
 {
-  // The module-level index.byId.set('JOB005A', ...) patch near the top of this file (for test block 4's
-  // old-TAP-reaction coverage) overwrites JOB005A's real PASSIVE with '' for the rest of this file's run --
-  // restore the real row just for this block so it actually exercises ON(GET(K),CHANGE(K,A,ALL)), then put
-  // the test-4 patch back so nothing after this block is affected.
-  const patchedJob005A = index.byId.get('JOB005A');
-  index.byId.set('JOB005A', { sheet: 'JOB', row: { ...patchedJob005A.row, TAP: '', TURNEND: '', PASSIVE: 'ON(GET(K),CHANGE(K,A,ALL))' } });
   const state = freshState();
-  giveCard(state, 'JOB005A', 'P1'); // PASSIVE=ON(GET(K),CHANGE(K,A,ALL))
-  giveCard(state, 'CON003B', 'P1'); // PASSIVE=CONVERT_LIMIT(ALL,4)
   const player = getPlayerRef(state, 'P1');
-  executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'K', 10);
-  check('権力者\'s own reactive conversion is NOT capped by 憂鬱\'s CONVERT_LIMIT(ALL,4) -- all 10K converts', player.resources.A, 10);
-  check('...no K left over', player.resources.K || 0, 0);
-  index.byId.set('JOB005A', patchedJob005A);
+  player.jobCardId = 'JOB005A';
+  executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'K', 5);
+  check('権力者: getting 5K converts ceil(5/2)=3 to A', player.resources.A, 3);
+  check('権力者: ...leaving 2K', player.resources.K, 2);
 }
 {
-  // Control: an UNRELATED ALL-based CHANGE triggered by the SAME 権力者+憂鬱-holding player (not sourced
-  // from 権力者's own PASSIVE) still gets capped normally -- the exemption is narrowly scoped to 権力者's
-  // own conversion, not a blanket "this player ignores CONVERT_LIMIT" effect.
+  // User-confirmed worked example ("初期資源などで 3 3 1 得たとすると 2 2 1 赤になる") -- three separate
+  // grants, each computed independently (confirmed "得るたびに別計算"): NOT ceil((3+3+1)/2)=4 on the
+  // combined total.
   const state = freshState();
-  giveCard(state, 'JOB005A', 'P1');
-  giveCard(state, 'CON003B', 'P1');
-  getPlayerRef(state, 'P1').resources.K = 20;
-  const changeAllK2A = { type: 'CHANGE', pay: [{ resource: 'K', count: { kind: 'literal', value: 1 } }], gain: [{ resource: 'A', count: { kind: 'literal', value: 1 } }], times: { kind: 'all' } };
-  const result = executor.runCommand(state, index, { playerId: 'P1' }, changeAllK2A); // no sourcePhysicalId -- not from 権力者's own PASSIVE
-  check('An unrelated ALL-CHANGE from the same player still gets capped at 4 (exemption is 権力者-specific, not player-wide)', result.timesExecuted, 4);
+  const player = getPlayerRef(state, 'P1');
+  player.jobCardId = 'JOB005A';
+  executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'K', 3);
+  executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'K', 3);
+  executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'K', 1);
+  check('権力者: three separate grants of 3,3,1 convert 2,2,1 respectively (2+2+1=5A), not ceil(7/2) on the combined total', player.resources.A, 5);
+  check('権力者: ...leaving (3-2)+(3-2)+(1-1)=2 K', player.resources.K, 2);
+}
+{
+  // User-confirmed to also apply via the 使用料回収 button (collectUsageFee), one call per map even when
+  // collecting from several maps back to back: fees of 3,2,1 convert 2,1,1, not a combined ceil(6/2)=3.
+  const state = freshState();
+  const player = getPlayerRef(state, 'P1');
+  player.jobCardId = 'JOB005A';
+  state.maps.MAP001 = createMapState('MAP001', 'AREA001A');
+  state.maps.MAP002 = createMapState('MAP002', 'AREA002A');
+  state.maps.MAP003 = createMapState('MAP003', 'AREA003A');
+  state.maps.MAP001.feeOwnerId = 'P1';
+  state.maps.MAP001.accumulatedFee = 3;
+  state.maps.MAP002.feeOwnerId = 'P1';
+  state.maps.MAP002.accumulatedFee = 2;
+  state.maps.MAP003.feeOwnerId = 'P1';
+  state.maps.MAP003.accumulatedFee = 1;
+  executor.collectUsageFee(state, index, { playerId: 'P1' }, 'MAP001');
+  executor.collectUsageFee(state, index, { playerId: 'P1' }, 'MAP002');
+  executor.collectUsageFee(state, index, { playerId: 'P1' }, 'MAP003');
+  check('権力者: collecting fees of 3,2,1 from 3 maps back to back converts 2,1,1 respectively (2+1+1=4A)', player.resources.A, 4);
+  check('権力者: ...leaving (3-2)+(2-1)+(1-1)=2 K', player.resources.K, 2);
+}
+{
+  // A player without 権力者 as their JOB is completely unaffected -- confirms this is gated on
+  // player.jobCardId (NAME match), not some global always-on engine rule.
+  const state = freshState();
+  const player = getPlayerRef(state, 'P1');
+  executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'K', 5);
+  check('Without 権力者 as JOB, a 5K grant stays as plain K (no conversion)', player.resources.K, 5);
+  check('...no A at all', player.resources.A || 0, 0);
 }
 
 // ---------------------------------------------------------------------------
