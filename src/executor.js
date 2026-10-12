@@ -939,6 +939,17 @@ function runSetCurrentArea(state, index, context, cmd) {
   if (!state.maps[cmd.mapId]) throw new ExecutionError(`Unknown map in state: ${cmd.mapId}`);
   const map = state.maps[cmd.mapId];
   map.currentAreaId = cmd.value;
+  // 異端者/JOB006B (2026-10-12, per user data edit -- INST文言変更: "あなたがその支配者になったときその
+  // 使用料は捨てられ あなた以外のプレイヤーが支配者になったときそれは回収できる") -- if the player who
+  // just became this map's real owner is the SAME player who self-charged map.hereticBankerId (see
+  // board.chargeHereticFee's own doc), their own banked fee is discarded here rather than staying
+  // collectible -- "支配を手助けしただけ" for themselves, no self-benefit. Only ever non-null while
+  // feeOwnerId was null (異端者's own eligibility gate), so this can never discard a REAL usage fee someone
+  // else is owed; cleared unconditionally below since the old banked-fee tracking is resolved either way
+  // (discarded here, or left in accumulatedFee for THIS new owner -- a different player -- to collect
+  // normally via collectUsageFee).
+  if (map.hereticBankerId === context.playerId) map.accumulatedFee = 0;
+  map.hereticBankerId = null;
   // Every "MAP{n}.CURRENT_AREA=..." assignment in the data is a tier upgrade (A->B or B->C)
   // triggered by the card the acting player just built/upgraded, so they become the fee owner.
   map.feeOwnerId = context.playerId;

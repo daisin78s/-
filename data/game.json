@@ -1879,7 +1879,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "支配者のいないエリアに色ダイスを置いたとき\nそのエリアがレベル１であるように効果を得る\n使用料はそのエリアに置き後で支配者ができたときそれを回収できる"
+      "INST": "支配者のいないエリアに色ダイスを置いたとき\nそのエリアがレベル１であるように効果を得る\n使用料はそのエリアに置く\nあなたがその支配者になったときその使用料は捨てられ\nあなた以外のプレイヤーが支配者になったときそれは回収できる"
     }
   ],
   "QST": [
@@ -2226,8 +2226,8 @@
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
-      "ACTION": "CHANGE(K,D)",
-      "fee": 2,
+      "ACTION": "CHANGE(2K,D)",
+      "fee": 1,
       "INST": "色ダイスの上限は5個\nこのエリアにダイスを置くと怠惰の制約は解除される"
     },
     {
@@ -2252,8 +2252,8 @@
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
-      "ACTION": "CHANGE(K,VP,3)",
-      "fee": 2,
+      "ACTION": "CHANGE(K,VP,4)",
+      "fee": 1,
       "INST": ""
     },
     {
@@ -2262,7 +2262,7 @@
       "SLOT1": 1,
       "SLOT2": "ANY",
       "SLOT3": "EX",
-      "SLOT4": "NONE",
+      "SLOT4": "EX",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "ADD(7K)",
@@ -2275,7 +2275,7 @@
       "SLOT1": 6,
       "SLOT2": "ANY",
       "SLOT3": "EX",
-      "SLOT4": "NONE",
+      "SLOT4": "EX",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "ADD(9K)",
@@ -2287,7 +2287,7 @@
       "NAME": "城下町LV2",
       "SLOT1": "ANY",
       "SLOT2": "EX",
-      "SLOT3": "NONE",
+      "SLOT3": "EX",
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
@@ -2300,7 +2300,7 @@
       "NAME": "大聖堂LV2",
       "SLOT1": "ANY",
       "SLOT2": "EX",
-      "SLOT3": "NONE",
+      "SLOT3": "EX",
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
@@ -2313,7 +2313,7 @@
       "NAME": "ギルドLV2",
       "SLOT1": "ANY",
       "SLOT2": "EX",
-      "SLOT3": "NONE",
+      "SLOT3": "EX",
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
@@ -2344,7 +2344,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "ADD(D)",
-      "fee": 3,
+      "fee": 2,
       "INST": "色ダイスの上限は６個"
     },
     {
@@ -2369,9 +2369,9 @@
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
-      "ACTION": "CHANGE(K,VP,5)",
-      "fee": 3,
-      "INST": "KをVPに変えるMAX5"
+      "ACTION": "CHANGE(K,VP,6)",
+      "fee": 2,
+      "INST": "KをVPに変えるMAX6"
     }
   ],
   "SHOP": [

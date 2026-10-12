@@ -320,7 +320,14 @@ function createCardInstance(faceCardId) {
  * @returns {MapState}
  */
 function createMapState(mapId, initialAreaId) {
-  return { mapId, currentAreaId: initialAreaId, slots: [], accumulatedFee: 0, feeOwnerId: null, discardedTurnOrderEntries: [] };
+  return {
+    mapId, currentAreaId: initialAreaId, slots: [], accumulatedFee: 0, feeOwnerId: null, discardedTurnOrderEntries: [],
+    // 異端者/JOB006B (2026-10-12) -- playerId of whoever most recently self-charged into accumulatedFee
+    // via board.chargeHereticFee, or null if the current accumulatedFee (if any) isn't from that ability.
+    // Checked/cleared by executor.runSetCurrentArea: if a NEW real owner turns out to be this same player,
+    // their own banked fee is discarded instead of staying collectible -- see that function's own doc.
+    hereticBankerId: null,
+  };
 }
 
 /**

@@ -1695,18 +1695,26 @@ function hereticBorrowedAreaRow(state, index, context, map) {
  * deferred-payment mechanism every other usage fee in the engine already goes through (see
  * chargeUsageFeeIfOwed's own doc), rather than a hard immediate block, so an unaffordable self-charge
  * degrades the same way (K first, then -1VP per any K still missing, see canEndTurn/applyTurnEnd's own
- * USAGE_FEE VP-escape) instead of ever refusing the placement. Reusing this exact mechanism is also what
- * makes the eventual hand-off automatic (per user: "自動的にその人のaccumulatedFeeに引き継がれる（普通
- * の使用料回収ボタンで回収）") -- applyTurnEnd credits map.accumulatedFee directly with no feeOwnerId
- * check at all, so whoever later becomes the area's real owner (via a genuine tier upgrade) collects
- * whatever 異端者 banked, through the ordinary collectUsageFee button -- no extra hand-off code needed
- * (confirmed: runSetCurrentArea never touches accumulatedFee). A no-op if the borrowed row happens to
- * carry no fee at all (falsy `fee`, same convention as every area row's blank fee column).
+ * USAGE_FEE VP-escape) instead of ever refusing the placement. applyTurnEnd credits map.accumulatedFee
+ * directly with no feeOwnerId check at all, so whoever later becomes the area's real owner (via a genuine
+ * tier upgrade) collects whatever 異端者 banked, through the ordinary collectUsageFee button.
+ *
+ * map.hereticBankerId (2026-10-12, per user data edit -- INST文言変更: "あなたがその支配者になったとき
+ * その使用料は捨てられ あなた以外のプレイヤーが支配者になったときそれは回収できる") -- records WHO is
+ * self-charging, so executor.runSetCurrentArea can later tell whether the new real owner is this SAME
+ * player (discard, per the new rule) or someone else (stays collectible, unchanged from before). Set
+ * every time this fires (not just once) -- harmless to overwrite with the same playerId on repeat
+ * self-charges, since only 異端者 themselves can ever trigger this for their own map.
+ *
+ * A no-op if the borrowed row happens to carry no fee at all (falsy `fee`, same convention as every area
+ * row's blank fee column) -- hereticBankerId is deliberately NOT set in that case either, matching
+ * "nothing was actually banked this time".
  */
 function chargeHereticFee(state, context, mapId, hereticRow) {
   if (!hereticRow.fee) return;
   const player = state.players.find((p) => p.id === context.playerId);
   player.pendingFee = { mapId, amount: hereticRow.fee };
+  state.maps[mapId].hereticBankerId = context.playerId;
 }
 
 /** The minimum round a SHOP201-203 (SPECIAL) card becomes purchasable, derived from its own ID's number

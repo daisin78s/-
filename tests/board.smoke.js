@@ -1525,15 +1525,16 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   // uses, reversing the all-EX shape a 2026-08-25/28 edit had given it (this test used to be a regression
   // guard for that all-EX shape -- see this file's own synthetic AREA999C above for why the fee-isolation
   // tests just above still use that stand-in rather than the real, now-differently-shaped AREA010C). A
-  // non-owner can reach the ANY slot now, owing the AREA row's own 3K fee (getAreaRow(...).fee, not a
+  // non-owner can reach the ANY slot now, owing the AREA row's own fee (getAreaRow(...).fee, not a
   // flat per-tier constant -- see board.wouldOweFee's own doc) -- but the EX slots stay owner-only.
+  // fee lowered 3->2 (2026-10-12, per user data edit).
   const state = freshStateWithShops();
   state.maps['MAP010'] = mapWithArea('MAP010', 'AREA010C', 3, 'P1');
   player(state, 'P2').resources.K = 20;
   const die = giveDie(state, 'P2', 1);
   const result = board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP010', 0);
   check('孤児院LV2 (AREA010C): a non-owner can now place at its ANY slot (slot 0)', result.success, true);
-  check('...and owes the AREA row\'s own 3K fee', player(state, 'P2').pendingFee, { mapId: 'MAP010', amount: 3 });
+  check('...and owes the AREA row\'s own 2K fee', player(state, 'P2').pendingFee, { mapId: 'MAP010', amount: 2 });
 }
 {
   const state = freshStateWithShops();
@@ -2669,6 +2670,48 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   check('異端者: an all-WHITE-dice group at 元老院 gets no override (only AREA009A\'s own bare BUILD())', result.success, true);
   check('...no K granted at all (AREA009A\'s ACTION is bare BUILD(), nothing else)', p1.resources.K - beforeK, 0);
   check('...no self-charged fee either', p1.pendingFee, null);
+}
+
+// ---------------------------------------------------------------------------
+// 異端者's own self-charged fee is discarded if 異端者 THEMSELVES later become the real owner (2026-10-12,
+// per user data edit -- INST文言変更: "あなたがその支配者になったときその使用料は捨てられ あなた以外の
+// プレイヤーが支配者になったときそれは回収できる"). map.hereticBankerId tracks who self-charged;
+// executor.runSetCurrentArea discards accumulatedFee only when the new owner matches that player.
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.jobCardId = 'JOB006B';
+  const d1 = giveDie(state, 'P1', 1); // AREA001A SLOT1=1
+  board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
+  check('異端者 self-charges and banks hereticBankerId=P1', state.maps['MAP001'].hereticBankerId, 'P1');
+  executor.applyTurnEnd(state, index, 'P1');
+  check('...fee actually banked into accumulatedFee (1K)', state.maps['MAP001'].accumulatedFee, 1);
+
+  // P1 (the SAME 異端者 who banked it) now becomes the real owner -- the banked fee is discarded.
+  executor.runCommand(state, index, { playerId: 'P1' }, { type: 'SET_CURRENT_AREA', mapId: 'MAP001', value: 'AREA001B' });
+  check('異端者 becoming the real owner of their own self-charged map discards the banked fee', state.maps['MAP001'].accumulatedFee, 0);
+  check('...hereticBankerId is cleared', state.maps['MAP001'].hereticBankerId, null);
+  check('...P1 is still recorded as the real owner as normal', state.maps['MAP001'].feeOwnerId, 'P1');
+}
+{
+  // Control: a DIFFERENT player becoming the owner still collects it normally (unchanged behavior).
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.jobCardId = 'JOB006B';
+  const d1 = giveDie(state, 'P1', 1);
+  board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
+  executor.applyTurnEnd(state, index, 'P1');
+  check('Banked before ownership change (1K)', state.maps['MAP001'].accumulatedFee, 1);
+
+  // P2 (a DIFFERENT player) becomes the real owner -- the banked fee stays collectible.
+  executor.runCommand(state, index, { playerId: 'P2' }, { type: 'SET_CURRENT_AREA', mapId: 'MAP001', value: 'AREA001B' });
+  check('A different new owner (P2) does NOT discard 異端者\'s banked fee', state.maps['MAP001'].accumulatedFee, 1);
+  check('...hereticBankerId is still cleared regardless (old tracking resolved either way)', state.maps['MAP001'].hereticBankerId, null);
+  const p2 = player(state, 'P2');
+  const collectResult = executor.collectUsageFee(state, index, { playerId: 'P2' }, 'MAP001');
+  check('...P2 can collect it normally via collectUsageFee', collectResult, { success: true, amount: 1 });
+  check('...P2 actually receives the 1K', p2.resources.K || 0, 1);
 }
 
 // ---------------------------------------------------------------------------
