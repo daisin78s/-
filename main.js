@@ -2599,6 +2599,22 @@ const CARD_LIST_FLAT_CATEGORIES = {
   qst: { label: 'クエスト一覧', columns: 4, isQst: true, faceIds: () => INDEX.raw.QST.map((r) => r.ID) },
 };
 
+/** Lock status for a CON/JOB face in the カードリスト browser (2026-10-13, per user request: "カード
+ * リストでロックされているものはロックされていることが分かるように鍵アイコンをつけて それからあと何点で
+ * アンロックされるか表示") -- reuses the LIVE achievement total (computeLockedFaceIds's own source), not
+ * any particular game's frozen state.lockedFaceIds, since カードリスト is reachable from the top screen
+ * before any game/STATE exists at all. Returns null if faceId has no 実績解除2 row, or the current total
+ * already meets its threshold (nothing to show either way).
+ * @returns {{remaining: number}|null} */
+function cardListLockInfo(faceId) {
+  const row = (INDEX.raw['実績解除2'] || []).find((r) => r.ID === faceId);
+  if (!row) return null;
+  const required = Number(row['必要point'] || 0);
+  const current = achievementTotalPoints(loadAchievements());
+  if (current >= required) return null;
+  return { remaining: required - current };
+}
+
 /** Builds one read-only grid cell for カードリスト -- a fresh noInteraction card/QST visual, wired for
  * tap-to-enlarge only. Non-QST faces use attachPickableEnlarge(..., null) (no pick button, see that
  * function's own doc: pickAction:null is exactly the "read-only preview" case it already supports) --
@@ -2630,6 +2646,16 @@ function buildCardListCell(faceId, isQst) {
       : 'owned-card-cell';
   const cell = el('div', cellClass);
   cell.appendChild(cardNode);
+  // ロック表示 (2026-10-13, per user request -- cardListLockInfo's own doc) -- QSTは実績解除2の対象外
+  // (CON/JOB裏面のみロック対象)なので、isQstの間は常にnull。
+  if (!isQst) {
+    const lockInfo = cardListLockInfo(faceId);
+    if (lockInfo) {
+      cell.classList.add('card-list-cell--locked');
+      cell.appendChild(el('span', 'card-list-cell__lock-badge', '🔒'));
+      cell.appendChild(el('div', 'card-list-cell__lock-caption', `あと${lockInfo.remaining}点`));
+    }
+  }
   if (isQst) {
     cell.addEventListener('click', () => {
       const sibling = siblingFaceId(faceId);

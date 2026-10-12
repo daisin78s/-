@@ -552,6 +552,34 @@ h1, h2, h3 { margin: 0; }
   z-index: 2;
 }
 
+/* カードリストの実績解除2ロック表示 (2026-10-13, per user request: "ロックされていることが分かるように
+   鍵アイコンをつけて それからあと何点でアンロックされるか表示") -- 実績解除2の既存ロック(entry-banner__
+   feature-button--locked)と同じ「暗くせず🔒アイコンのみ」方針(透明度を下げるとボタン画像が壊れて見える、
+   というその時のユーザー報告を踏襲)。あと何点かは、カード下端に小さな半透明の帯で表示する(カード本体は
+   暗くしない)。 */
+.card-list-cell__lock-badge {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  font-size: 16px;
+  pointer-events: none;
+  z-index: 2;
+}
+.card-list-cell__lock-caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: center;
+  padding: 2px 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
 /* SHOP201-203の「見えるが2R/3R/4Rまで買えない」カード用のロック表示 (2026-08-24, per user spec:
    「赤線2本で獲得できないことを視覚的にもわかるように」) -- .shop-card自体はposition:relative済みなので
    ::before/::afterで赤い斜線2本をX字に重ねる。main.jsのbuildShopSlotNode(locked引数)が.shop-slotに
