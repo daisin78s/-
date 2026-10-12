@@ -207,33 +207,6 @@ function isAllowedSlotForValue(requirements, slots, slotIndex, value, dieIsWildc
   return slotIndex === leftmostAnyIndex;
 }
 
-// 王宮 (CASTLE_MAP_ID) and 元老院 (AREA009_MAP_ID) -- the only 2 maps that support multi-die combined
-// buildValue at all (see placeDiceGroup's own doc), and so the only 2 where this exploit is reachable.
-const CHANGED_DIE_SELF_STACK_BLOCKED_MAPS = new Set([CASTLE_MAP_ID, AREA009_MAP_ID]);
-
-/** True if `die` may NOT join targetOccupants here -- 2026-08-18, per user report: 道化/JOB003's "ダイス
- * 目を変える" (SET_DICE_ANY, also usable via SET_DIE_VALUE/CHANGE_DIE_VALUE on other cards) combined with
- * its own GRANT_PLACE_ANYWHERE let a player set a die to whatever value exactly completes a stack with
- * their OWN already-placed die at 王宮/元老院, summing buildValue as if 2 genuinely-earned dice were
- * involved when really only 1 fresh, naturally-rolled placement happened -- e.g. a real 3 already on the
- * castle, then a JOB003-set 4 stacked onto it, reaching a DICE>=7 monument for what's really a single
- * die's worth of investment. Especially severe once JOB003 became unlimited-use/no-tap (see
- * board.useBareTapAbility's own doc) -- previously rate-limited by the tap itself.
- *
- * Deliberately narrow, confirmed with the user: only blocks a die whose value was JUST changed this same
- * turn (die.valueChangedThisTurn) from joining a slot that already holds this SAME player's own die, and
- * only at these 2 maps -- a naturally-rolled die joining an earlier one (via any GRANT_PLACE_ANYWHERE-
- * granting card) is untouched (2026-08-21: that join now EVICTS the earlier occupant rather than
- * stacking onto it, see evictSlotOccupants -- still legitimate, still only 1 fresh die's worth of
- * investment, just no longer literally sharing the slot), as is a value-changed die joining another
- * PLAYER's slot, or an empty slot, or any placement anywhere else on the board. Applies to WHITE dice
- * too, not just COLOR (confirmed with the user: "wDも含む") -- die.kind is never checked here on
- * purpose. */
-function isChangedDieSelfStackBlocked(mapId, playerId, valueChanged, targetOccupants) {
-  if (!valueChanged) return false;
-  if (!CHANGED_DIE_SELF_STACK_BLOCKED_MAPS.has(mapId)) return false;
-  return targetOccupants.some((o) => o.playerId === playerId);
-}
 
 /** Evicts every existing occupant of `occupants` (2026-08-21, per user request, replacing the old
  * "stacking" model for GRANT_PLACE_ANYWHERE joins and JOB003/道化's ☆ forced-fallback: "GRANT_PLACE_
@@ -297,12 +270,16 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
     // Occupied: blocked without GRANT_PLACE_ANYWHERE (2026-08-06) -- but bypass DOES waive this,
     // value-independent ("値の一致は不問"), letting the die join whichever occupied slot the player
     // targets. See this function's own doc.
+    // 2026-08-18〜2026-10-12: a die whose value was just changed this same turn used to be blocked from
+    // joining (evicting) this same player's own die at 王宮/元老院 (isChangedDieSelfStackBlocked), to
+    // prevent "stacking" 2 dice's values into 1 slot for an inflated combined buildValue off a single
+    // fresh die's worth of real investment. Removed 2026-10-12, per user report ("元老院の支配者で
+    // すべてのスロットに自分がダイスを置くと ダイス目変換5-6を使ってもそれ以上置けなくなる") -- the
+    // 2026-08-21 eviction redesign (see evictSlotOccupants' own doc) already made the original exploit
+    // structurally impossible (an evicted die's value no longer contributes to buildValue at all, so
+    // there is nothing left to stack), leaving this block as a pure inconvenience with no exploit left to
+    // prevent.
     if (!bypass) return { success: false, reason: 'SLOT_OCCUPIED' };
-    // 2026-08-18: even with bypass, a die whose value was just conjured this same turn still can't stack
-    // onto this same player's own die at 王宮/元老院 -- see isChangedDieSelfStackBlocked's own doc.
-    if (isChangedDieSelfStackBlocked(mapId, context.playerId, die.valueChangedThisTurn, targetOccupants)) {
-      return { success: false, reason: 'CHANGED_DIE_CANNOT_SELF_STACK' };
-    }
   } else if (!isExSlot) {
     // Empty target slot: blocked if this die's value duplicates one already sitting elsewhere in the
     // AREA -- and, unlike the occupied-slot branch above, NEVER waived by GRANT_PLACE_ANYWHERE
@@ -882,15 +859,11 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
     // and wrongly win that comparison. This virtual view marks usedSlots members occupied for that check
     // only, without touching the real (not-yet-committed) map.slots array itself.
     const slotsForAllowedCheck = map.slots.map((occ, i) => (usedSlots.has(i) ? [{ virtual: true }] : occ));
-    // 2026-08-18: same "conjured value can't stack onto this player's own die at 王宮/元老院" restriction
-    // placeDice enforces -- see isChangedDieSelfStackBlocked's own doc. Never trips for a wildcard-owning
-    // player -- ☆ dice never run SET_DICE_ANY/valueChangedThisTurn at all.
     let targetSlot = null;
     for (let i = 0; i < requirements.length; i++) {
       if (usedSlots.has(i)) continue;
       if (!bypass && !isAllowedSlotForValue(requirements, slotsForAllowedCheck, i, value, dieIsWildcard)) continue;
       if (!slotAcceptsValue(map, mapId, playerId, requirements[i], map.slots[i], value, bypass, dieIsWildcard)) continue;
-      if (isChangedDieSelfStackBlocked(mapId, playerId, die.valueChangedThisTurn, map.slots[i])) continue;
       targetSlot = i;
       break;
     }
@@ -1069,7 +1042,8 @@ function previewPlaceDiceGroup(state, index, context, dieIds, mapId) {
  * on an empty slot would, matching how a normal die placed via GRANT_PLACE_ANYWHERE onto an occupied slot
  * (placeDice's own bypass branch) always contributes its own real die.value there too, never 0. Zeroing it
  * was originally meant to prevent the same "1 die's worth of investment reaching a DICE>=7 monument via
- * stacking" abuse this whole doc's 2026-08-18 CHANGED_DIE_SELF_STACK_BLOCKED_MAPS section describes, but
+ * stacking" abuse the 2026-08-18 isChangedDieSelfStackBlocked restriction (removed 2026-10-12, see
+ * placeDice's own doc) targeted, but
  * that abuse is fully closed already by the 2026-08-20 "a solo placement is only ever this one die THIS
  * turn, so it can never combine with whatever else is sitting in the slot" rule below -- so the extra
  * zeroing was leftover redundancy that only had the effect of making a forced-fallback ☆ placement (a

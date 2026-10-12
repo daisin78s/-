@@ -1841,13 +1841,18 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
 // 王宮/元老院, summing buildValue as if 2 genuinely-earned dice were involved -- e.g. a real 3 already on
 // the castle, then a set-to-4 die stacked onto it, reaching a DICE>=7 monument off what's really 1 fresh
 // placement. JOB003 has since been redesigned (2026-08-18/19) into a PASSIVE wildcard-die ability with no
-// TAP at all, so this shared exploit-fix mechanism (which also still protects B001A/B001B, B002A/B002B,
+// TAP at all, so this shared exploit-fix mechanism (which also still protected B001A/B001B, B002A/B002B,
 // B003A/B003B -- the "導き" family, each with its own SET_DIE_VALUE/CHANGE_DIE_VALUE + GRANT_PLACE_ANYWHERE
-// TAP) is now exercised below via B001A ("小さな導き", TAP="SET_DIE_VALUE(SELF2|3);
-// GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN)") instead. Confirmed with the user: block only a
-// value-changed die stacking onto the SAME player's own die, only at these 2 maps -- every other
-// GRANT_PLACE_ANYWHERE use (another player's die, an empty slot, a naturally-rolled die, anywhere else on
-// the board) stays untouched.
+// TAP) was exercised below via B001A ("小さな導き", TAP="SET_DIE_VALUE(SELF2|3);
+// GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN)") instead.
+//
+// Removed 2026-10-12, per user report: "元老院の支配者ですべてのスロットに自分がダイスを置くと ダイス目
+// 変換5-6を使ってもそれ以上置けなくなる" -- the 2026-08-21 eviction redesign (GRANT_PLACE_ANYWHERE joining
+// an occupied slot now EVICTS the earlier occupant instead of summing values with it) already made the
+// original "stack 2 dice's worth of value into 1 slot" exploit structurally impossible -- an evicted die's
+// value never contributes to buildValue at all -- leaving this restriction as a pure inconvenience with no
+// remaining exploit to prevent. The tests below now confirm a value-changed die CAN evict the player's own
+// die at 王宮/元老院, same as any other GRANT_PLACE_ANYWHERE join.
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
@@ -1866,13 +1871,22 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   check('B001A (小さな導き) sets d2 to 2', tapResult, { success: true });
   check('...and grants d2 placeAnywhereThisTurn', d2.placeAnywhereThisTurn, true);
 
-  const exploit = board.placeDice(state, index, { playerId: 'P1' }, d2.id, board.CASTLE_MAP_ID, 0);
-  check('Stacking the B001A-changed d2 onto P1\'s own d1 is blocked', exploit, { success: false, reason: 'CHANGED_DIE_CANNOT_SELF_STACK' });
-  check('...d1 is still the only occupant (nothing leaked through)', state.maps[board.CASTLE_MAP_ID].slots[0].length, 1);
+  const joined = board.placeDice(state, index, { playerId: 'P1' }, d2.id, board.CASTLE_MAP_ID, 0);
+  check('The B001A-changed d2 CAN join (evict) P1\'s own occupied slot 0', joined.success, true);
+  check('...d2 is now the sole occupant', state.maps[board.CASTLE_MAP_ID].slots[0], [{ playerId: 'P1', dieId: d2.id, value: 2, seq: 2, countsForTurnOrder: false }]);
+  check('...d1 was evicted (no longer sitting in the slot)', state.maps[board.CASTLE_MAP_ID].slots[0].some((o) => o.dieId === d1.id), false);
 
-  // Control: the exact same change, but targeting an EMPTY slot instead -- never blocked by this rule.
-  const emptySlotResult = board.placeDice(state, index, { playerId: 'P1' }, d2.id, board.CASTLE_MAP_ID, 1);
-  check('...but placing the same changed die into an EMPTY slot still succeeds normally', emptySlotResult.success, true);
+  // Control: the exact same change, but targeting an EMPTY slot instead -- always worked, still does.
+  // chosenValue 3 (not 2) so this doesn't trip the ordinary "no duplicate value per AREA" rule against
+  // d2, already sitting on the castle with value 2.
+  const d3 = giveDie(state, 'P1', 1);
+  const b2Inst = createCardInstance('B001A');
+  b2Inst.ownerId = 'P1';
+  state.cards[b2Inst.physicalId] = b2Inst;
+  p1.ownedCardPhysicalIds.push(b2Inst.physicalId);
+  board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: d3.id, chosenValue: 3 }, b2Inst.physicalId);
+  const emptySlotResult = board.placeDice(state, index, { playerId: 'P1' }, d3.id, board.CASTLE_MAP_ID, 1);
+  check('...and placing a changed die into an EMPTY slot still succeeds normally', emptySlotResult.success, true);
 }
 {
   // Control: a value-changed die CAN still stack onto a DIFFERENT player's die (only same-player self-
@@ -1911,8 +1925,9 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   check('...buildValue is just this 2nd die\'s own value (5), NOT summed with the 1st', result.actionResult.pendingBuild.buildValue, 5);
 }
 {
-  // Group-placement path (placeDiceGroup) needs the same protection -- same exploit, different entry
-  // point (e.g. stacking a changed die together with a 2nd die in one group action).
+  // Group-placement path (placeDiceGroup) -- same entry point the single-die test above exercises, now
+  // confirming a value-changed die CAN join (evict) the player's own already-occupied slot 0 here too,
+  // same as placeDice's own behavior (2026-10-12, see this file's own section doc above).
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   p1.resources = { K: 0, A: 20, B: 20, C: 20, Z: 20, VP: 0, BZ: 0 };
@@ -1927,10 +1942,9 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: d2.id, chosenValue: 2 }, b1Inst.physicalId);
 
   const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d2.id], board.CASTLE_MAP_ID);
-  // The castle has other empty slots too, so the group still finds a legal (fresh, non-stacking) home
-  // for d2 rather than failing outright -- what matters is it's NOT allowed to join d1's occupied slot.
-  check('placeDiceGroup succeeds by finding a different, empty slot', result.success, true);
-  check('...but d2 did NOT join d1\'s occupied slot 0 (self-stacking still blocked)', state.maps[board.CASTLE_MAP_ID].slots[0], [{ playerId: 'P1', dieId: d1.id, value: 3, seq: 1, countsForTurnOrder: true }]);
+  check('placeDiceGroup succeeds, joining (evicting) d1\'s occupied slot 0', result.success, true);
+  check('...d2 is now the sole occupant of slot 0', state.maps[board.CASTLE_MAP_ID].slots[0].some((o) => o.dieId === d2.id), true);
+  check('...d1 was evicted (no longer sitting in the slot)', state.maps[board.CASTLE_MAP_ID].slots[0].some((o) => o.dieId === d1.id), false);
 }
 
 // ---------------------------------------------------------------------------
