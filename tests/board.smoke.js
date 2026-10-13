@@ -1112,8 +1112,8 @@ function giveJob002(state, playerId) {
 }
 
 // ---------------------------------------------------------------------------
-// JOB004.TAP=CHANGE(4K,(A,B,C)) (2026-10-10 data edit: was CHANGE(3K,2Z) -- pay 4 food, gain 1 each of
-// A/B/C instead of 2 wildcard Z). Still a bare (non-reactive) TAP ability, usable any time during the
+// JOB011.TAP=CHANGE(4K,3Z) (2026-10-13 data edit: was CHANGE(4K,(A,B,C)) -- pay 4 food, gain 3 wildcard
+// Z instead of 1 each of A/B/C). Still a bare (non-reactive) TAP ability, usable any time during the
 // player's own turn, same as C001A's CHANGE(K,A,7).
 // ---------------------------------------------------------------------------
 {
@@ -1126,18 +1126,18 @@ function giveJob002(state, playerId) {
   p1.resources.K = 4;
 
   const result = board.useBareTapAbility(state, index, { playerId: 'P1' }, jobInst.physicalId);
-  check('JOB004.TAP=CHANGE(4K,(A,B,C)) succeeds as a direct (non-reactive) TAP', result, { success: true });
-  check('...paid 4K, gained 1A/1B/1C', { K: p1.resources.K, A: p1.resources.A, B: p1.resources.B, C: p1.resources.C }, { K: 0, A: 1, B: 1, C: 1 });
+  check('JOB011.TAP=CHANGE(4K,3Z) succeeds as a direct (non-reactive) TAP', result, { success: true });
+  check('...paid 4K, gained 3Z', { K: p1.resources.K, Z: p1.resources.Z }, { K: 0, Z: 3 });
   check('...the card is now tapped', state.cards[jobInst.physicalId].tapped, true);
 
-  // The A/B/C gained this way directly cover a real-resource shortfall -- no special bzDiscount
-  // plumbing needed, unlike the old BZ version of this same TAP.
-  p1.resources.A += 1; // A004A costs "2A,B" -- was 1 short of the 2A needed before this TAP's own +1A
+  // Z is a wildcard payment resource (resolvePayment falls back to it for any A/B/C shortfall) -- no
+  // special bzDiscount plumbing needed, same spirit as the old A/B/C-granting version of this TAP.
+  p1.resources.A = 2; // A004A costs "2A,B" -- real A covers the 2A entirely, leaving the B as the gap
   state.shops.NORMAL.slots.SHOP101 = 'A004A'; // force a known slot, regardless of this seed's shuffle
   const candidate = { type: 'BUILD_NEW', faceId: 'A004A', shopKey: 'NORMAL', slotId: 'SHOP101' };
   const buildResult = board.resolveBuild(state, index, { playerId: 'P1' }, candidate);
-  check('The A/B JOB004 just granted covers the build that would otherwise be unaffordable', buildResult.success, true);
-  check('...the extra C from JOB004 is untouched (A004A never needed it)', p1.resources.C, 1);
+  check('The Z JOB011 just granted covers the 1B shortfall A004A would otherwise lack', buildResult.success, true);
+  check('...1 of the 3 Z was spent on the B shortfall, 2 remain', p1.resources.Z, 2);
 }
 {
   // JOB007.TAP=ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+4);BLOCK_BUILD(A,THIS_TURN);BLOCK_BUILD(B,
