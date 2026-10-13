@@ -5055,8 +5055,12 @@ body.tutorial-mode .change-highlight {
 .entry-banner__feature-button--locked::after {
   content: '🔒';
   position: absolute;
-  right: 4px;
-  bottom: 4px;
+  /* 2026-10-14, per user report: 鍵アイコンがボタンの画像(カード部分)にかかっておらず浮いて見える --
+     ボタン画像はobject-fit:containで中央寄せされ、ボタン自身の箱(.entry-banner__feature-buttonの
+     height/幅)より実際の画像の方が一回り小さい(右/下に実測7〜9px程度の余白ができる、どのボタンでも
+     ほぼ同じ)。right/bottomをその分だけ内側に詰め、画像の右下角に重なるようにする。 */
+  right: 12px;
+  bottom: 12px;
   font-size: clamp(14px, 2vw, 20px);
   pointer-events: none;
 }
