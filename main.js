@@ -8798,8 +8798,10 @@ function maybeRecordAchievements(state) {
   const updatedKeys = [];
   for (const c of candidates) {
     const player = state.players.find((p) => p.id === c.playerId);
-    const cardRows = executorMod.ownedCardRows(state, INDEX, c.playerId).filter((r) => /^[ABCM]/.test(r.physicalId));
-    const monumentRows = cardRows.filter((r) => r.physicalId.startsWith('M'));
+    // 2026-10-13: cardRows(/^[ABCM]/の正規表現フィルタ)は廃止 -- CON...も'C'始まりとして誤って拾って
+    // いた(card_countのバグの原因、このブロック上のown doc参照)。monumentRowsだけなら'M'始まりの
+    // physicalIdで十分、CONとの混同は起きない。
+    const monumentRows = executorMod.ownedCardRows(state, INDEX, c.playerId).filter((r) => r.physicalId.startsWith('M'));
     recordAchievementIfNew(store, updatedKeys, modeKey, c.totalScore);
     if (c.conFaceId) recordAchievementIfNew(store, updatedKeys, `con_${c.conFaceId}`, c.totalScore);
     if (c.jobCardId) recordAchievementIfNew(store, updatedKeys, `job_${c.jobCardId}`, c.totalScore);
@@ -8815,15 +8817,20 @@ function maybeRecordAchievements(state) {
       recordAchievementIfNew(store, updatedKeys, 'dice3_score', c.totalScore);
     }
     // 2026-10-11, per user data edit: QST Q001A〜Q004A/Q001B〜Q004Bの8枚と1:1対応する8カテゴリ -- 対応
-    // するQST GOALと同じメトリクスをそのままevalMetricで評価。2026-10-13、per user request ("A29から
-    // A36まで クエスト同じです そのクエストが出たときのみ実績ポイントが付くように") -- 以前はQSTカード
-    // 自体を今回引いていなくても常に記録していたが、1ゲームに実際に登場するQSTは8枚中3枚だけ
-    // (state.quests、src/game-state.jsのown doc参照)なので、出ていないQSTの分まで実績が付いてしまって
-    // いた。対応するQSTが実際にこのゲームに登場した場合だけ記録するよう変更。
+    // するQST GOALと同じメトリクスをそのままevalMetricで評価(QSTの判定ロジックと絶対に乖離しないように
+    // するため -- 2026-10-13、per user report「カード獲得枚数だけクエストに表示されている数と違う」で
+    // 判明: card_count/lv2_card_count だけ手組みのcardRows.length/currentFaceId.endsWith('B')を使って
+    // いたのが原因。前者はphysicalId先頭文字の正規表現/^[ABCM]/がCON...も誤って拾っていた(CARD_COUNT
+    // 本来の判定はsheet===A/B/C/Mで、CONは対象外)。両方とも他6カテゴリと同じevalMetric経由に統一)。
+    // 2026-10-13、per user request ("A29からA36まで クエスト同じです そのクエストが出たときのみ実績
+    // ポイントが付くように") -- 以前はQSTカード自体を今回引いていなくても常に記録していたが、1ゲームに
+    // 実際に登場するQSTは8枚中3枚だけ(state.quests、src/game-state.jsのown doc参照)なので、出ていない
+    // QSTの分まで実績が付いてしまっていた。対応するQSTが実際にこのゲームに登場した場合だけ記録するよう
+    // 変更。
     const qstGatedAchievements = [
-      ['Q001A', 'card_count', () => cardRows.length],
+      ['Q001A', 'card_count', () => executorMod.evalMetric(state, INDEX, c.playerId, { name: 'CARD_COUNT', args: [] })],
       ['Q002A', 'max_emblem_count', () => executorMod.evalMetric(state, INDEX, c.playerId, { name: 'MAX_EMBLEM_COUNT', args: [] })],
-      ['Q003A', 'lv2_card_count', () => cardRows.filter((r) => r.inst.currentFaceId.endsWith('B')).length],
+      ['Q003A', 'lv2_card_count', () => executorMod.evalMetric(state, INDEX, c.playerId, { name: 'LEVEL_COUNT', args: [2] })],
       ['Q004A', 'area_count', () => executorMod.evalMetric(state, INDEX, c.playerId, { name: 'AREA_COUNT', args: [] })],
       ['Q001B', 'extra_d_plus_abc_count', () => executorMod.evalMetric(state, INDEX, c.playerId, { name: 'EXTRA_D_PLUS_ABC_COUNT', args: [] })],
       ['Q002B', 'emblem_set_count', () => executorMod.evalMetric(state, INDEX, c.playerId, { name: 'EMBLEM_SET_COUNT', args: [] })],
