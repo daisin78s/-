@@ -1679,7 +1679,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
 {
   const state = freshStateWithShops();
   state.round = 2; // SHOP001-006 round-gated to round>=2 now (2026-09-14) -- this test is about castle group placement, not the gate.
-  player(state, 'P1').resources.BZ = 20; // see the earlier castle blocks' comment on the affordability gate (max monument COST is M012's 13 units)
+  player(state, 'P1').resources.BZ = 20; // see the earlier castle blocks' comment on the affordability gate (max monument COST is M012's 14 units)
   const d1 = giveDie(state, 'P1', 6);
   const d2 = giveDie(state, 'P1', 3);
   const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);

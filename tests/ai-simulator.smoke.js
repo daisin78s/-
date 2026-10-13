@@ -295,14 +295,14 @@ function giveDie(state, playerId, value) {
 // ---------------------------------------------------------------------------
 // BUILD_NEW always pays using as much held BZ as the candidate's own COST can absorb (2026-08-04, per
 // user feedback: "3K→2BZその2BZも必ず使う" -- see maxBzDiscount's own doc). M012 (DICE=">=1", COST=
-// "13C", confirmed present in this seed's M shop) is used since a single die (max 6) already meets its
+// "14C", confirmed present in this seed's M shop) is used since a single die (max 6) already meets its
 // threshold, isolating the payment behavior from castle-stacking.
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   p1.resources.C = 10;
-  p1.resources.BZ = 3; // 10 real C + 3 BZ-discounted = 13, exactly M012's COST
+  p1.resources.BZ = 4; // 10 real C + 4 BZ-discounted = 14, exactly M012's COST
   const die = giveDie(state, 'P1', 1); // castle SLOTs are all ANY; die value 1 meets M012's DICE">=1"
 
   const probe = applyInPlace(require('../src/game-state').cloneState(state), index, { type: 'PLACE_DIE', playerId: 'P1', dieId: die.id, mapId: 'MAP008', slotIndex: 0 });
@@ -311,14 +311,14 @@ function giveDie(state, playerId, value) {
 
   const move = { type: 'PLACE_DIE', playerId: 'P1', dieId: die.id, mapId: 'MAP008', slotIndex: 0, buildCandidateIndex: m012Index };
   const { state: resultState, result } = simulator.apply(state, index, move);
-  check('M012 (13C) is buildable with only 10 real C, using 3 held BZ to cover the rest', result.success, true);
+  check('M012 (14C) is buildable with only 10 real C, using 4 held BZ to cover the rest', result.success, true);
   const p1After = resultState.players.find((p) => p.id === 'P1');
   check('All 10 real C were spent', p1After.resources.C, 0);
-  check('All 3 BZ were spent as the discount', p1After.resources.BZ, 0);
+  check('All 4 BZ were spent as the discount', p1After.resources.BZ, 0);
   check('M012 was actually built', p1After.ownedCardPhysicalIds.length, 1);
 }
 {
-  // Same setup but with NO held BZ -- confirms 10 C alone genuinely isn't enough for M012's 13C cost,
+  // Same setup but with NO held BZ -- confirms 10 C alone genuinely isn't enough for M012's 14C cost,
   // proving the discount above was actually necessary, not incidental.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
@@ -328,7 +328,7 @@ function giveDie(state, playerId, value) {
   const m012Index = probe.pendingBuild.candidates.findIndex((c) => c.faceId === 'M012');
   const move = { type: 'PLACE_DIE', playerId: 'P1', dieId: die.id, mapId: 'MAP008', slotIndex: 0, buildCandidateIndex: m012Index };
   const result = applyInPlace(state, index, move);
-  check('Without any held BZ, 10 C alone is not enough for M012 (13C)', result.success, false);
+  check('Without any held BZ, 10 C alone is not enough for M012 (14C)', result.success, false);
 }
 {
   // UPGRADE now receives the same auto-maxed BZ discount as BUILD_NEW (2026-08-06, per user feedback --

@@ -448,7 +448,7 @@ function dominate(state, mapId, playerId) {
 // Monument-sniping risk (2026-08-04, per user feedback: "そのモニュメントとられるかもは相手のダイス
 // と資源が今足りているかで判断するようにしてください"): a monument still in the M shop that an
 // opponent can already build right now (die value >= its DICE threshold, resources >= its COST)
-// subtracts its would-be-owned value from this player's score. M012 (DICE=">=1", COST="13C", VP=6) is
+// subtracts its would-be-owned value from this player's score. M012 (DICE=">=1", COST="14C", VP=7) is
 // used since its threshold-1 requirement is satisfiable by any real die value (1-6) without needing the
 // castle's multi-die accumulation this simple check doesn't model.
 // ---------------------------------------------------------------------------
@@ -465,10 +465,10 @@ function stateWithM012InShop(round) {
   const die = createDie('d1', 'COLOR');
   die.value = 3; // >= M012's threshold of 1
   p2.dice.push(die);
-  p2.resources.C = 13; // M012's full COST
+  p2.resources.C = 14; // M012's full COST
   const withoutM012Risk = evaluator.score(freshState(1), 'P1'); // 0, no cards/resources/dice at all
   const withM012Risk = evaluator.score(state, 'P1');
-  check('An opponent who can already afford M012 right now subtracts its would-be value from the score', withM012Risk, withoutM012Risk - (evalTable[1].M012 + 6 * evalTable[1].VP));
+  check('An opponent who can already afford M012 right now subtracts its would-be value from the score', withM012Risk, withoutM012Risk - (evalTable[1].M012 + 7 * evalTable[1].VP));
 }
 {
   const state = stateWithM012InShop(1);
@@ -514,7 +514,7 @@ function stateWithM012InShop(round) {
 // a value) for every M-shop monument this player could already build that NO opponent could also grab.
 // Reuses stateWithM012InShop (round argument now matters, unlike the round-1-only risk tests above).
 // ---------------------------------------------------------------------------
-// stateWithP1QualifyingHand(round, includeMonument) always gives P1 the same die+13C -- whether M012
+// stateWithP1QualifyingHand(round, includeMonument) always gives P1 the same die+14C -- whether M012
 // actually sits in the shop is the ONLY thing that differs, so the score difference isolates exactly the
 // securing bonus (or lack of it), never conflated with P1's own die/resource contribution to the score.
 function stateWithP1QualifyingHand(round, includeMonument) {
@@ -523,7 +523,7 @@ function stateWithP1QualifyingHand(round, includeMonument) {
   const die = createDie('d1', 'COLOR');
   die.value = 3; // >= M012's threshold of 1
   p1.dice.push(die);
-  p1.resources.C = 13; // M012's full COST
+  p1.resources.C = 14; // M012's full COST
   return state;
 }
 {
@@ -561,29 +561,29 @@ function stateWithP1QualifyingHand(round, includeMonument) {
     const p1Die = createDie('d1', 'COLOR');
     p1Die.value = 3;
     p1.dice.push(p1Die);
-    p1.resources.C = 13;
+    p1.resources.C = 14;
     if (p2AlsoQualifies) {
       const p2 = state.players[1];
       const p2Die = createDie('d2', 'COLOR');
       p2Die.value = 3;
       p2.dice.push(p2Die);
-      p2.resources.C = 13;
+      p2.resources.C = 14;
     }
     return state;
   }
   // Exclusive (P2 doesn't qualify): +50 bonus, no penalty. At risk (P2 also qualifies): no bonus, a
-  // -(M012's own eval-table value + VP=6 * round-3 VP weight) sniping-risk penalty instead -- both
+  // -(M012's own eval-table value + VP=7 * round-3 VP weight) sniping-risk penalty instead -- both
   // genome-dependent (see this file's own top-of-file note), so computed dynamically via evalTable[].
   // Rounded to 6 decimals (same float-noise reasoning as the ラウンドタップ check further down).
   check(
     'Losing exclusivity (an opponent starts also qualifying) swings the score by bonus-lost + penalty-gained',
     Math.round(evaluator.score(stateWithP1Qualifying(false), 'P1') * 1e6) / 1e6,
-    Math.round((evaluator.score(stateWithP1Qualifying(true), 'P1') + 50 + (evalTable[3].M012 + 6 * evalTable[3].VP)) * 1e6) / 1e6,
+    Math.round((evaluator.score(stateWithP1Qualifying(true), 'P1') + 50 + (evalTable[3].M012 + 7 * evalTable[3].VP)) * 1e6) / 1e6,
   );
 }
 {
   // Multiple simultaneously-securable exclusive monuments accumulate, not just the single best one.
-  // Both states give P1 the identical die + C=13 + A=7 holdings; only whether M010 (COST="7A", DICE=">=3"
+  // Both states give P1 the identical die + C=14 + A=8 holdings; only whether M010 (COST="8A", DICE=">=3"
   // -- also satisfied by this same die=3) additionally sits in the shop differs, isolating exactly its
   // own bonus contribution.
   function stateWithTwoMonumentCandidates(includeM010) {
@@ -593,8 +593,8 @@ function stateWithP1QualifyingHand(round, includeMonument) {
     const die = createDie('d1', 'COLOR');
     die.value = 3;
     p1.dice.push(die);
-    p1.resources.C = 13; // covers M012
-    p1.resources.A = 7; // covers M010 too
+    p1.resources.C = 14; // covers M012
+    p1.resources.A = 8; // covers M010 too
     return state;
   }
   check(

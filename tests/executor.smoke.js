@@ -957,13 +957,13 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   check('TOTAL_EMBLEM_COUNT sums all three types: 1+1+1', executor.evalMetric(state, index, 'P1', { name: 'TOTAL_EMBLEM_COUNT', args: [] }), 3);
   check('COST_TOTAL reads M004\'s printed COST (2A+2B+2C)', executor.evalMetric(state, index, 'P1', { name: 'COST_TOTAL', args: [] }), 6);
 
-  giveCard(state, 'M012', 'P1'); // COST=13C (total 13); EMBLEM 人4 (no 天/地)
+  giveCard(state, 'M012', 'P1'); // COST=14C (total 14); EMBLEM 人4 (no 天/地)
   check('MAX_EMBLEM_COUNT now follows 人 (1+4=5), ahead of 天/地 (1 each)', executor.evalMetric(state, index, 'P1', { name: 'MAX_EMBLEM_COUNT', args: [] }), 5);
   check('TOTAL_EMBLEM_COUNT sums across cards too: (1+1+1) + 4', executor.evalMetric(state, index, 'P1', { name: 'TOTAL_EMBLEM_COUNT', args: [] }), 7);
-  check('COST_TOTAL sums across cards: M004\'s 6 + M012\'s 13', executor.evalMetric(state, index, 'P1', { name: 'COST_TOTAL', args: [] }), 19);
+  check('COST_TOTAL sums across cards: M004\'s 6 + M012\'s 14', executor.evalMetric(state, index, 'P1', { name: 'COST_TOTAL', args: [] }), 20);
 
   giveCard(state, 'A001A', 'P1'); // COST=2A (total 2)
-  check('COST_TOTAL keeps summing a 3rd card: 19 + 2', executor.evalMetric(state, index, 'P1', { name: 'COST_TOTAL', args: [] }), 21);
+  check('COST_TOTAL keeps summing a 3rd card: 20 + 2', executor.evalMetric(state, index, 'P1', { name: 'COST_TOTAL', args: [] }), 22);
 }
 
 // ---------------------------------------------------------------------------
