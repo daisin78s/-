@@ -4846,6 +4846,19 @@ body.tutorial-mode .change-highlight {
 #entry-banner__hero-wrap {
   position: relative;
   line-height: 0;
+  /* --hero-w: 画像(#entry-banner__hero, 幅1535px/縦横比1535:955)の実際の描画幅を、CSSだけで近似する
+     カスタムプロパティ (2026-10-13, per user report: タブレットで「今すぐプレイ」ボタンと見出し文言が
+     重なる) -- 画像はmax-width:100vw/max-height:100vhのどちらか狭い方+自然サイズ(1535px)で頭打ちに
+     なるため、画面の縦横比次第で画面幅いっぱいにならないことがある(例: 横長なPC画面ではmax-widthが
+     効いて画像が画面幅いっぱいになるが、iPadの画面比率ではmax-heightが先に効いて画像自体が画面幅より
+     小さく表示される)。CTAボタン(.entry-banner__cta)はこのhero-wrap自身への%指定なので常に画像に
+     追従するが、見出し文言のfont-sizeは従来vw(画面幅)基準だったため、画像が画面幅より小さく表示される
+     端末では文字だけが画像に対して相対的に大きくなり、ボタンの領域まで食い込んでいた。下のtagline系の
+     vw指定をこの--hero-w基準のcalc()に置き換えることで、画像がどんな比率で縮小されても文字とボタンの
+     位置関係が常に一定に保たれるようにする。(container-type:inline-sizeも検討したが、hero-wrapは
+     flexアイテムとして画像の自然サイズにshrink-to-fitしているため、サイズコンテインメントがその
+     shrink-to-fit自体を壊してしまい不採用。) */
+  --hero-w: min(1535px, 100vw, calc(100vh * 1.60733));
 }
 
 #entry-banner__hero {
@@ -4933,7 +4946,7 @@ body.tutorial-mode .change-highlight {
   /* 2026-10-11, per user request: "ダイスで築く、あなただけの...フォントサイズ少し小さく 王国は少し
      大きく" -- 1-2行目はここ(縮小)、3行目「王国。」だけ.tagline-title-accent側で別途拡大。
      さらに「さいず2ずつおおきく」でmin/max両方+2px。 */
-  font-size: clamp(28px, 6vw, 52px);
+  font-size: clamp(28px, calc(var(--hero-w) * 0.06), 52px);
   font-weight: 900;
   line-height: 1.25;
   color: #fff;
@@ -4946,7 +4959,7 @@ body.tutorial-mode .change-highlight {
   color: #e9c164;
   /* 2026-10-11, per user request: "さいず2ずつおおきく" -- min/max両方+2px。さらに「王国。さいず4
      おおきく」で+4px。 */
-  font-size: clamp(40px, 8vw, 76px);
+  font-size: clamp(40px, calc(var(--hero-w) * 0.08), 76px);
 }
 #entry-banner__tagline-sub {
   /* 2026-10-11, per user request: "サイズ少し大きく" -> さらに「もう少し大きく フォント NOTO SANS JP
@@ -4954,7 +4967,7 @@ body.tutorial-mode .change-highlight {
      doc参照)、読み込み前/オフライン時は既存のsystem-uiスタックにフォールバック。 */
   font-family: "Noto Sans JP", "Hiragino Sans", "Yu Gothic UI", "Segoe UI", system-ui, -apple-system, sans-serif;
   /* 2026-10-11, per user request: "サイズ1小さく" -- 直前のclamp(16px,2.6vw,22px)から一段縮小。 */
-  font-size: clamp(15px, 2.4vw, 20px);
+  font-size: clamp(15px, calc(var(--hero-w) * 0.024), 20px);
   font-weight: 500;
   max-width: 420px;
   color: #f4f4f0;
