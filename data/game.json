@@ -1739,11 +1739,11 @@
       "VP": "",
       "ONCE": "",
       "TAP": "",
-      "PASSIVE": "ON(GET(D),ADD(Z,VP));ON(GET(wD),ADD(K))",
+      "PASSIVE": "ON(GET(D),ADD(Z,K));ON(GET(wD),ADD(K))",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "追加色ダイスを得たときZ〇と1VPを得る\n🎲を得たときその数だけ〇を得る\n初期資源含む\n毎ターンアンタップする"
+      "INST": "追加色ダイスを得たときZ〇と〇を得る\n🎲を得たときその数だけ〇を得る\n初期資源含む\n毎ターンアンタップする"
     },
     {
       "ID": "JOB005",
