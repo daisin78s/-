@@ -8803,8 +8803,6 @@ function maybeRecordAchievements(state) {
     recordAchievementIfNew(store, updatedKeys, modeKey, c.totalScore);
     if (c.conFaceId) recordAchievementIfNew(store, updatedKeys, `con_${c.conFaceId}`, c.totalScore);
     if (c.jobCardId) recordAchievementIfNew(store, updatedKeys, `job_${c.jobCardId}`, c.totalScore);
-    recordAchievementIfNew(store, updatedKeys, 'card_count', cardRows.length);
-    recordAchievementIfNew(store, updatedKeys, 'lv2_card_count', cardRows.filter((r) => r.inst.currentFaceId.endsWith('B')).length);
     recordAchievementIfNew(store, updatedKeys, 'monument_count', monumentRows.length);
     recordAchievementIfNew(store, updatedKeys, 'monument_vp', monumentRows.reduce((sum, r) => sum + (typeof r.row.VP === 'number' ? r.row.VP : 0), 0));
     recordAchievementIfNew(store, updatedKeys, 'orphanage_vp', player.orphanageVpGained || 0);
@@ -8816,14 +8814,25 @@ function maybeRecordAchievements(state) {
     if (colorDiceCount === gameStateMod.INITIAL_COLOR_DICE) {
       recordAchievementIfNew(store, updatedKeys, 'dice3_score', c.totalScore);
     }
-    // 2026-10-11, per user data edit: 新規5カテゴリ -- 対応するQST GOALと同じメトリクスをそのまま
-    // evalMetricで評価(QSTカード自体を引いたかどうかとは無関係に、ゲーム終了時点の生の値を毎回記録)。
-    recordAchievementIfNew(store, updatedKeys, 'max_emblem_count', executorMod.evalMetric(state, INDEX, c.playerId, { name: 'MAX_EMBLEM_COUNT', args: [] }));
-    recordAchievementIfNew(store, updatedKeys, 'area_count', executorMod.evalMetric(state, INDEX, c.playerId, { name: 'AREA_COUNT', args: [] }));
-    recordAchievementIfNew(store, updatedKeys, 'extra_d_plus_abc_count', executorMod.evalMetric(state, INDEX, c.playerId, { name: 'EXTRA_D_PLUS_ABC_COUNT', args: [] }));
-    recordAchievementIfNew(store, updatedKeys, 'emblem_set_count', executorMod.evalMetric(state, INDEX, c.playerId, { name: 'EMBLEM_SET_COUNT', args: [] }));
-    recordAchievementIfNew(store, updatedKeys, 'emblem_count', executorMod.evalMetric(state, INDEX, c.playerId, { name: 'EMBLEM_COUNT', args: [] }));
-    recordAchievementIfNew(store, updatedKeys, 'lv2_area_count', executorMod.evalMetric(state, INDEX, c.playerId, { name: 'AREA_COUNT', args: [2] }));
+    // 2026-10-11, per user data edit: QST Q001A〜Q004A/Q001B〜Q004Bの8枚と1:1対応する8カテゴリ -- 対応
+    // するQST GOALと同じメトリクスをそのままevalMetricで評価。2026-10-13、per user request ("A29から
+    // A36まで クエスト同じです そのクエストが出たときのみ実績ポイントが付くように") -- 以前はQSTカード
+    // 自体を今回引いていなくても常に記録していたが、1ゲームに実際に登場するQSTは8枚中3枚だけ
+    // (state.quests、src/game-state.jsのown doc参照)なので、出ていないQSTの分まで実績が付いてしまって
+    // いた。対応するQSTが実際にこのゲームに登場した場合だけ記録するよう変更。
+    const qstGatedAchievements = [
+      ['Q001A', 'card_count', () => cardRows.length],
+      ['Q002A', 'max_emblem_count', () => executorMod.evalMetric(state, INDEX, c.playerId, { name: 'MAX_EMBLEM_COUNT', args: [] })],
+      ['Q003A', 'lv2_card_count', () => cardRows.filter((r) => r.inst.currentFaceId.endsWith('B')).length],
+      ['Q004A', 'area_count', () => executorMod.evalMetric(state, INDEX, c.playerId, { name: 'AREA_COUNT', args: [] })],
+      ['Q001B', 'extra_d_plus_abc_count', () => executorMod.evalMetric(state, INDEX, c.playerId, { name: 'EXTRA_D_PLUS_ABC_COUNT', args: [] })],
+      ['Q002B', 'emblem_set_count', () => executorMod.evalMetric(state, INDEX, c.playerId, { name: 'EMBLEM_SET_COUNT', args: [] })],
+      ['Q003B', 'emblem_count', () => executorMod.evalMetric(state, INDEX, c.playerId, { name: 'EMBLEM_COUNT', args: [] })],
+      ['Q004B', 'lv2_area_count', () => executorMod.evalMetric(state, INDEX, c.playerId, { name: 'AREA_COUNT', args: [2] })],
+    ];
+    for (const [qstFaceId, key, computeValue] of qstGatedAchievements) {
+      if (state.quests[qstFaceId]) recordAchievementIfNew(store, updatedKeys, key, computeValue());
+    }
   }
   saveAchievements(store);
   if (updatedKeys.length > 0) {
