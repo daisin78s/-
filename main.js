@@ -2973,14 +2973,15 @@ function renderDebugPanel(state) {
   toggleBtn.textContent = `デバッグモード: ${debugMode ? 'ON' : 'OFF'}`;
   toggleBtn.classList.toggle('debug-panel__toggle--on', debugMode);
   toggleBtn.disabled = debugMode; // one-way -- see toggleDebugMode's own doc; avoids a silent no-op click
-  // TURN/ROUND巻き戻し欄の表示条件 (2026-10-12, per user report: 普通のローカル対戦なのにこの欄が見えて
-  // いた) -- 単純に`debugMode`だけを見ると、resumeSavedSession()が保存済みウィークリーチャレンジを
-  // 「ゲームに戻る」で復元する際にweeklyChallengeActiveをtrueへ更新する一方、debugModeは最初の読み込み
-  // 時点のweeklyChallengeActiveをコピーした(line ~1758)だけの古い値のまま追従しないため、本来表示すべき/
-  // 隠すべき場面とズレうる(ずれた状態がそのままタブを閉じるまで残ってしまう)。表示条件は常にこの3つの
-  // 「本当にトリガーとなる状態」を毎回直接見るようにし、debugModeという複製されたスナップショットには
-  // 頼らない。
-  const showHistoryControls = debugMode || weeklyChallengeActive || startedFromRound3;
+  // TURN/ROUND巻き戻し欄の表示条件 (2026-10-12、再び2026-10-13per user report: 普通の新規ローカル対戦
+  // (特別な操作は一切していない)なのにこの欄が見えていた、スクリーンショット付き) -- 2026-10-12の時点で
+  // debugMode/weeklyChallengeActive/startedFromRound3の3条件化までは行ったが、ヘッドレスブラウザで
+  // 複数パターン再現を試みても原因は特定できなかった(通常の1人プレイ+AI3人、2人人間のどちらも正しく
+  // 隠れたまま)。per user request: "ウィークリー以外で使わないので見えないようにできないかな" -- 原因が
+  // 掴めない以上、実際にこの欄が必要なのはウィークリーチャレンジだけという利用実態に合わせ、判定条件を
+  // weeklyChallengeActive単独に単純化した(debugMode/startedFromRound3由来の表示は廃止 -- 開発用に必要な
+  // 時はtoggleDebugMode()等をコンソールから直接呼べば従来通り動作する、表示条件からは外すだけ)。
+  const showHistoryControls = weeklyChallengeActive;
   const controls = document.getElementById('debug-history-controls');
   controls.hidden = !showHistoryControls;
   if (!showHistoryControls) return;
