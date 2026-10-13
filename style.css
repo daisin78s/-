@@ -677,10 +677,17 @@ h1, h2, h3 { margin: 0; }
 .shop-card__emblem-char[data-emblem="地"], .action-emblem[data-emblem="地"] { color: var(--emblem-chi); }
 .shop-card__emblem-char[data-emblem="人"], .action-emblem[data-emblem="人"] { color: var(--emblem-jin); }
 
-.shop-card:not(.shop-card--empty):hover {
-  box-shadow: var(--shadow-lg);
-  transform: translateY(-1px);
-  cursor: pointer;
+/* (hover: hover) and (pointer: fine)で実際にホバー操作可能な環境(マウス/トラックパッド)だけに限定
+   (2026-10-13, per user report) -- タッチ環境では外さない場合、タップ直後にiPad Safariが合成する
+   「スティッキーhover」状態(別の場所をタップするまで残り続ける既知の挙動)がこのtransformで
+   .shop-card--tappedのrotate(90deg)を上書きしてしまい、「タップ後一瞬横向きになってすぐ縦に戻る」
+   不具合の原因になっていた。 */
+@media (hover: hover) and (pointer: fine) {
+  .shop-card:not(.shop-card--empty):hover {
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-1px);
+    cursor: pointer;
+  }
 }
 
 /* Thematic title, above the id (2026-08-05, per user feedback: "AC系のカード NAMEをカード上部に反映
