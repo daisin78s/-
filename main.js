@@ -11462,7 +11462,10 @@ function renderTutorialOverlay(state) {
       const visibleHeight = (bubbleWrap && !bubbleWrap.hidden) ? bubbleWrap.getBoundingClientRect().top : window.innerHeight;
       const rect = jobPool.getBoundingClientRect();
       const desiredTop = Math.max(0, (visibleHeight - rect.height) / 2);
-      window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
+      // requestAnimationFrame (2026-10-13, per user report: "PCはスクロールする" -- タブレットでは
+      // 効かなかった。タップイベントのハンドラ内で同期的にwindow.scrollByを呼ぶとiOS Safariでは無視
+      // されることがある既知の挙動のため、次のフレームまで遅らせる -- 以下の全スクロール箇所で同様)。
+      requestAnimationFrame(() => window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' }));
     }
     // con_face_choice_introが見えるようにスクロール (2026-09-26, per user request: "セリフので制約カードが
     // 隠れないようにスクロールさせてください") -- job_draft_introと同じ考え方。.card-group__onboard-conは
@@ -11480,7 +11483,7 @@ function renderTutorialOverlay(state) {
         const visibleHeight = (bubbleWrap && !bubbleWrap.hidden) ? bubbleWrap.getBoundingClientRect().top : window.innerHeight;
         const rect = conContainer.getBoundingClientRect();
         const desiredTop = Math.max(0, (visibleHeight - rect.height) / 2);
-        window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
+        requestAnimationFrame(() => window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' }));
       }
     }
     // initial_resources_revealが見えるようにスクロール (2026-09-26, per user request: "この時 初期資源が
@@ -11494,7 +11497,7 @@ function renderTutorialOverlay(state) {
         const visibleHeight = (bubbleWrap && !bubbleWrap.hidden) ? bubbleWrap.getBoundingClientRect().top : window.innerHeight;
         const rect = resourcesEl.getBoundingClientRect();
         const desiredTop = Math.max(0, (visibleHeight - rect.height) / 2);
-        window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
+        requestAnimationFrame(() => window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' }));
       }
     }
     // main_action_introが見えるようにスクロール (2026-09-26, per user request: "必要であればスクロール
@@ -11507,7 +11510,7 @@ function renderTutorialOverlay(state) {
         const visibleHeight = (bubbleWrap && !bubbleWrap.hidden) ? bubbleWrap.getBoundingClientRect().top : window.innerHeight;
         const rect = boardEl.getBoundingClientRect();
         const desiredTop = Math.max(0, (visibleHeight - rect.height) / 2);
-        window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
+        requestAnimationFrame(() => window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' }));
       }
     }
     // dice_misclick_hintが見えるようにスクロール (2026-09-27, per user request: 誤配置救済セリフでも
@@ -11521,7 +11524,7 @@ function renderTutorialOverlay(state) {
         const visibleHeight = (bubbleWrap && !bubbleWrap.hidden) ? bubbleWrap.getBoundingClientRect().top : window.innerHeight;
         const rect = cancelBtn.getBoundingClientRect();
         const desiredTop = Math.max(0, (visibleHeight - rect.height) / 2);
-        window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
+        requestAnimationFrame(() => window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' }));
       }
     }
     // カード獲得の説明のスクロール (2026-09-29, Excel T022/T024〜T027) -- 🔨は盤面(main_action_introと同じ考え方)、
@@ -11533,7 +11536,7 @@ function renderTutorialOverlay(state) {
         const visibleHeight = (bubbleWrap && !bubbleWrap.hidden) ? bubbleWrap.getBoundingClientRect().top : window.innerHeight;
         const rect = boardEl.getBoundingClientRect();
         const desiredTop = Math.max(0, (visibleHeight - rect.height) / 2);
-        window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
+        requestAnimationFrame(() => window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' }));
       }
     }
     if (step.id === 'castletown_territory_cards_hint'
@@ -11551,7 +11554,7 @@ function renderTutorialOverlay(state) {
         const visibleHeight = (bubbleWrap && !bubbleWrap.hidden) ? bubbleWrap.getBoundingClientRect().top : window.innerHeight;
         const rect = shopsEl.getBoundingClientRect();
         const desiredTop = Math.max(0, (visibleHeight - rect.height) / 2);
-        window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
+        requestAnimationFrame(() => window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' }));
       }
     }
     // card_acquisition_placement_introが見えるようにスクロール (2026-09-29) -- 直前のダイス目別SHOP説明(T024〜T027)で
@@ -11563,7 +11566,7 @@ function renderTutorialOverlay(state) {
         const bubbleWrap = document.getElementById('tutorial-bubble-wrap');
         const visibleHeight = (bubbleWrap && !bubbleWrap.hidden) ? bubbleWrap.getBoundingClientRect().top : window.innerHeight;
         const rect = diceRowEl.getBoundingClientRect();
-        window.scrollBy({ top: rect.bottom - (visibleHeight - 8), behavior: 'auto' });
+        requestAnimationFrame(() => window.scrollBy({ top: rect.bottom - (visibleHeight - 8), behavior: 'auto' }));
       }
     }
     // card_untap_intro_hintが見えるようにスクロール (2026-10-07, Excel T096「スクロールする」) --
@@ -11576,7 +11579,7 @@ function renderTutorialOverlay(state) {
         const visibleHeight = (bubbleWrap && !bubbleWrap.hidden) ? bubbleWrap.getBoundingClientRect().top : window.innerHeight;
         const rect = cardGroupEl.getBoundingClientRect();
         const desiredTop = Math.max(0, (visibleHeight - rect.height) / 2);
-        window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
+        requestAnimationFrame(() => window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' }));
       }
     }
     // castletown_alt_cathedral_hint/castletown_alt_guild_hintが見えるようにスクロール (2026-09-29) -- 直前のカード説明
@@ -11590,7 +11593,7 @@ function renderTutorialOverlay(state) {
         const rect = resourcesEl.getBoundingClientRect();
         // 中央寄せではなく資源欄を見える範囲の下端に寄せる -- 同じく光る、大聖堂/ギルドに置かれたダイス(盤面、
         // 資源欄より上)も一緒に画面内に残すため。
-        window.scrollBy({ top: rect.bottom - (visibleHeight - 8), behavior: 'auto' });
+        requestAnimationFrame(() => window.scrollBy({ top: rect.bottom - (visibleHeight - 8), behavior: 'auto' }));
       }
     }
     // game_rules_intro_1が見えるようにスクロール (2026-09-27, per user request: "必要ならすクロール") --
@@ -11603,7 +11606,7 @@ function renderTutorialOverlay(state) {
         const visibleHeight = (bubbleWrap && !bubbleWrap.hidden) ? bubbleWrap.getBoundingClientRect().top : window.innerHeight;
         const rect = diceRowEl.getBoundingClientRect();
         const desiredTop = Math.max(0, (visibleHeight - rect.height) / 2);
-        window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
+        requestAnimationFrame(() => window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' }));
       }
     }
     // round_pass_leftover_dice_hint(2026-10-02, Excel T059)が見えるようにスクロール (per user request:
@@ -11616,7 +11619,7 @@ function renderTutorialOverlay(state) {
         const visibleHeight = (bubbleWrap && !bubbleWrap.hidden) ? bubbleWrap.getBoundingClientRect().top : window.innerHeight;
         const rect = roundPassBtnEl.getBoundingClientRect();
         const desiredTop = Math.max(0, (visibleHeight - rect.height) / 2);
-        window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
+        requestAnimationFrame(() => window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' }));
       }
     }
     // castle_turn_order_hint(2026-09-30, Excel T050/T061)が見えるようにスクロール (2026-10-02, per user
@@ -11628,7 +11631,7 @@ function renderTutorialOverlay(state) {
         const visibleHeight = (bubbleWrap && !bubbleWrap.hidden) ? bubbleWrap.getBoundingClientRect().top : window.innerHeight;
         const rect = turnOrderEl.getBoundingClientRect();
         const desiredTop = Math.max(0, (visibleHeight - rect.height) / 2);
-        window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' });
+        requestAnimationFrame(() => window.scrollBy({ top: rect.top - desiredTop, behavior: 'auto' }));
       }
     }
   }
