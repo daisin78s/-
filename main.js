@@ -12952,49 +12952,58 @@ function render(state) {
   } else {
     lastTurnPlayerId = null;
   }
-  renderShops(state);
-  renderBoard(state, next);
-  renderPlayers(state, next);
-  renderJobPool(state, next);
-  renderJobReplacementChoice(state);
-  renderResourceConfirmOverlay(state);
-  renderPlayerCards(state, next);
-  // Drains GameState.whiteOverflowEvents into whatever placementMessage this render's own action
-  // already produced (2026-08-11, per user request) -- appended, not replacing, so a placement that
-  // both fails/succeeds AND happens to overflow a white die (e.g. a CHANGE granting several wD at once,
-  // one of which overflows) still shows both. Reuses placementMessage's own display slot/lifecycle
-  // rather than a separate one: it already persists across unrelated re-renders (nothing here clears it
-  // early) and naturally gets replaced the next time any action sets a new message -- exactly the
-  // "shown until something else happens" behaviour this warning wants, for free.
-  if (state.whiteOverflowEvents.length > 0) {
-    placementMessage = placementMessage ? `${placementMessage}　${WHITE_OVERFLOW_WARNING_TEXT}` : WHITE_OVERFLOW_WARNING_TEXT;
-    state.whiteOverflowEvents = [];
-  }
-  document.getElementById('board-message').textContent = placementMessage;
-  renderBuildChoiceModal();
-  renderTapChoiceModal();
-  renderAutoModeChoiceModal();
-  renderTurnEndWarningModal();
-  renderUndoButtons(state);
-  renderRoundPassButton(state, next);
-  renderRoundPassConfirmModal();
-  renderWhiteOverflowConfirmModal();
-  renderJob007TapPromptModal();
-  renderPlayerRoleControl(state);
-  renderAiPacingControl(state);
-  renderGameEndOverlay(state);
-  renderTutorialTurnOrderOverlay(state);
-  renderTutorialOverlay(state);
-  renderTutorialLogOverlay();
-  renderDebugPanel(state);
-  renderDebugSetupOverlay();
-  renderCardListOverlay();
-  // Hides #replay-controls again once back on the normal live path (found via headless testing,
-  // 2026-08-1X: renderReplayControls is otherwise only ever called from renderReplayFrame, so exiting
-  // replay via exitReplayMode -- which just flips replayMode off and calls this render(state) -- left
-  // the control bar's `hidden` attribute exactly as replay last set it, showing it stacked right on top
-  // of the game-end overlay it's supposed to have been replaced by).
-  renderReplayControls();
+  // requestAnimationFrame (2026-10-13, per user report: タブレットでは全てのタップ操作で、能力/状態は
+  // 正しく変化しているのに画面(見た目)の更新が反映されず、別の場所をタップしてやっと反映される -- タップ
+  // イベントのハンドラ内で同期的に行ったDOM更新がタブレットでは描画されず、次の操作まで反映が遅延する
+  // 既知の挙動のため、実際の画面更新(以下のrenderShops〜renderReplayControls)だけを次フレームまで遅らせる。
+  // この行より前(オンライン同期のpushOnlineStateIfChanged、セーブ、AI進行など)は今まで通り同期的に実行
+  // されるので、例えばapplyIncomingRoomStateのapplyingRemoteStateガード(render()呼び出し直後にfalseへ戻す)
+  // の順序には影響しない。
+  requestAnimationFrame(() => {
+    renderShops(state);
+    renderBoard(state, next);
+    renderPlayers(state, next);
+    renderJobPool(state, next);
+    renderJobReplacementChoice(state);
+    renderResourceConfirmOverlay(state);
+    renderPlayerCards(state, next);
+    // Drains GameState.whiteOverflowEvents into whatever placementMessage this render's own action
+    // already produced (2026-08-11, per user request) -- appended, not replacing, so a placement that
+    // both fails/succeeds AND happens to overflow a white die (e.g. a CHANGE granting several wD at once,
+    // one of which overflows) still shows both. Reuses placementMessage's own display slot/lifecycle
+    // rather than a separate one: it already persists across unrelated re-renders (nothing here clears it
+    // early) and naturally gets replaced the next time any action sets a new message -- exactly the
+    // "shown until something else happens" behaviour this warning wants, for free.
+    if (state.whiteOverflowEvents.length > 0) {
+      placementMessage = placementMessage ? `${placementMessage}　${WHITE_OVERFLOW_WARNING_TEXT}` : WHITE_OVERFLOW_WARNING_TEXT;
+      state.whiteOverflowEvents = [];
+    }
+    document.getElementById('board-message').textContent = placementMessage;
+    renderBuildChoiceModal();
+    renderTapChoiceModal();
+    renderAutoModeChoiceModal();
+    renderTurnEndWarningModal();
+    renderUndoButtons(state);
+    renderRoundPassButton(state, next);
+    renderRoundPassConfirmModal();
+    renderWhiteOverflowConfirmModal();
+    renderJob007TapPromptModal();
+    renderPlayerRoleControl(state);
+    renderAiPacingControl(state);
+    renderGameEndOverlay(state);
+    renderTutorialTurnOrderOverlay(state);
+    renderTutorialOverlay(state);
+    renderTutorialLogOverlay();
+    renderDebugPanel(state);
+    renderDebugSetupOverlay();
+    renderCardListOverlay();
+    // Hides #replay-controls again once back on the normal live path (found via headless testing,
+    // 2026-08-1X: renderReplayControls is otherwise only ever called from renderReplayFrame, so exiting
+    // replay via exitReplayMode -- which just flips replayMode off and calls this render(state) -- left
+    // the control bar's `hidden` attribute exactly as replay last set it, showing it stacked right on top
+    // of the game-end overlay it's supposed to have been replaced by).
+    renderReplayControls();
+  });
 }
 
 /** Reverts to the start of the current player's turn (2026-07-30, per user feedback -- see the
