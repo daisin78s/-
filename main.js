@@ -9088,8 +9088,14 @@ function renderRankingRegisterList(state) {
       registerButton.appendChild(document.createTextNode('登録中…'));
       const name = input.value.trim() || c.defaultName;
       rememberRankingName(name);
+      // チュートリアル中のスコアもローカル対戦('ultimate')ランキングにそのまま含める(カテゴリ分けは
+      // 変えない)が、名前の右に（チュートリアル）を付けて区別できるようにする (2026-10-13, per user
+      // report: "チュートリアルで高得点をとってランキング入りした場合ローカル対戦ランキングに入る" ->
+      // "ローカル対戦ランキングに入れる 名前の右に（チュートリアル）といれる"で確定)。rememberRankingName
+      // 自身は素の名前のまま(次回以降の非チュートリアル登録でサフィックスが残らないように)。
+      const registeredName = tutorialModeActive ? `${name}（チュートリアル）` : name;
       RankingStorage.save({
-        name,
+        name: registeredName,
         rawScore: c.rawScore,
         qstScore: c.qstScore,
         totalScore: c.totalScore,
