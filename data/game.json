@@ -1256,7 +1256,7 @@
       "EMBLEM_B": 1,
       "EMBLEM_C": 1,
       "VP": "",
-      "ONCE": "ADD(3Z)",
+      "ONCE": "ADD(3Z,K)",
       "TAP": "",
       "PASSIVE": "",
       "TURNEND": "",
