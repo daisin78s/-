@@ -122,6 +122,16 @@ body {
   line-height: 1.5;
 }
 
+/* モーダルが開いている間の背景スクロールロック (2026-10-13) -- main.jsのsetupOverlayScrollLock own doc
+   参照。position:fixedでbody自体の高さをビューポートに固定し、iOS Safariでの背後ページのタッチ
+   スクロール漏れを防ぐ。leftはtopと違いJS側で動かす必要が無い(横スクロールはそもそも想定外)ので0固定。 */
+body.body--overlay-open {
+  position: fixed;
+  left: 0;
+  right: 0;
+  overflow: hidden;
+}
+
 h1, h2, h3 { margin: 0; }
 
 #app {

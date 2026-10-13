@@ -13794,10 +13794,43 @@ function autoScrollToBottomOnStart() {
   requestAnimationFrame(step);
 }
 
+/** iPad Safariで、.card-inst-overlay系モーダル(実績解除/カードリスト/ランキング等、ほぼ全モーダルが
+ * 共有するクラス)を開いた状態で中身をスクロールしようとすると、モーダル自身ではなく背後のページ全体が
+ * スクロールしてしまう不具合の対策 (2026-10-13, per user report with screenshot -- 実績解除画面で発生、
+ * 確認の上「カードリストやランキングなど他のモーダルでも起こりうる共通の問題」としてモーダル個別対応
+ * ではなく全体対応に)。.card-inst-overlayはposition:fixedで画面全体を覆っているが、それだけではiOS
+ * Safariの既知の挙動として背後のbody自体のタッチスクロールまでは防げない -- bodyにposition:fixedを
+ * 適用して完全にロックする、一般的な対策パターン。
+ *
+ * 個々のモーダルのopen/close関数(数十箇所に分散)を1つずつ直す代わりに、MutationObserverで
+ * .card-inst-overlayの[hidden]属性の変化をDOM全体から汎用的に監視し、1つでも表示中のモーダルがあれば
+ * bodyをロックする -- 今後追加される新しいモーダルにも自動的に対応する。bodyをposition:fixedにすると
+ * 見た目上スクロール位置が0に戻ってしまうため、ロック時のwindow.scrollYをtopへ逃がし、解除時に
+ * window.scrollToで元の位置へ戻す(標準的なiOS対応パターン)。 */
+function setupOverlayScrollLock() {
+  let savedScrollY = 0;
+  function updateLock() {
+    const anyOverlayOpen = Array.from(document.querySelectorAll('.card-inst-overlay')).some((el) => !el.hidden);
+    const isLocked = document.body.classList.contains('body--overlay-open');
+    if (anyOverlayOpen && !isLocked) {
+      savedScrollY = window.scrollY;
+      document.body.style.top = `-${savedScrollY}px`;
+      document.body.classList.add('body--overlay-open');
+    } else if (!anyOverlayOpen && isLocked) {
+      document.body.classList.remove('body--overlay-open');
+      document.body.style.top = '';
+      window.scrollTo(0, savedScrollY);
+    }
+  }
+  new MutationObserver(updateLock).observe(document.body, { attributes: true, attributeFilter: ['hidden'], subtree: true });
+  updateLock();
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   seedDebugHistoryIfNeeded();
   // チュートリアル中だけ「光る」を強調する(style.cssのbody.tutorial-mode .change-highlight参照)。
   if (tutorialModeActive) document.body.classList.add('tutorial-mode');
+  setupOverlayScrollLock();
   render(STATE);
   autoScrollToBottomOnStart();
 
