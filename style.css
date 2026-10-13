@@ -4740,6 +4740,14 @@ body.tutorial-mode .change-highlight {
   z-index: 200;
 }
 
+/* 実績解除2アンロック通知 (2026-10-13) -- 新記録ポップアップ(#achievement-popup-overlay、上)と同じ
+   ゲーム終了イベントで同時に表示されうるが、明示的なz-indexが無いと.card-inst-overlayの既定値100の
+   ままとなり、200の新記録ポップアップに裏から完全に隠れてしまっていた(ユーザー報告:「カードリストが
+   解禁されたのにポップアップが出なかった」)。新記録ポップアップより手前に出す。 */
+#unlock-popup-overlay {
+  z-index: 220;
+}
+
 /* 入口バナー (2026-10-04, per user request) -- #app/#weekly-seat-pickerと同じ「画面を丸ごと差し替える」
    フルスクリーン表示。z-indexは他の全オーバーレイより上(ゲーム開始前の最初の画面なので常に最前面)。 */
 #entry-banner {
