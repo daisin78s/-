@@ -4846,18 +4846,17 @@ body.tutorial-mode .change-highlight {
 #entry-banner__hero-wrap {
   position: relative;
   line-height: 0;
-  /* --hero-w: 画像(#entry-banner__hero, 幅1535px/縦横比1535:955)の実際の描画幅を、CSSだけで近似する
-     カスタムプロパティ (2026-10-13, per user report: タブレットで「今すぐプレイ」ボタンと見出し文言が
-     重なる) -- 画像はmax-width:100vw/max-height:100vhのどちらか狭い方+自然サイズ(1535px)で頭打ちに
-     なるため、画面の縦横比次第で画面幅いっぱいにならないことがある(例: 横長なPC画面ではmax-widthが
-     効いて画像が画面幅いっぱいになるが、iPadの画面比率ではmax-heightが先に効いて画像自体が画面幅より
-     小さく表示される)。CTAボタン(.entry-banner__cta)はこのhero-wrap自身への%指定なので常に画像に
-     追従するが、見出し文言のfont-sizeは従来vw(画面幅)基準だったため、画像が画面幅より小さく表示される
-     端末では文字だけが画像に対して相対的に大きくなり、ボタンの領域まで食い込んでいた。下のtagline系の
-     vw指定をこの--hero-w基準のcalc()に置き換えることで、画像がどんな比率で縮小されても文字とボタンの
-     位置関係が常に一定に保たれるようにする。(container-type:inline-sizeも検討したが、hero-wrapは
-     flexアイテムとして画像の自然サイズにshrink-to-fitしているため、サイズコンテインメントがその
-     shrink-to-fit自体を壊してしまい不採用。) */
+  /* --hero-w: 画像(#entry-banner__hero, 幅1535px/縦横比1535:955)の実際の描画幅を表すカスタムプロパティ
+     (2026-10-13, per user report: タブレットで「今すぐプレイ」ボタンと見出し文言が重なる) -- 画像は
+     max-width:100vw/max-height:100vhのどちらか狭い方+自然サイズ(1535px)で頭打ちになるため、画面の
+     縦横比次第で画面幅いっぱいにならないことがある。CTAボタン(.entry-banner__cta)はこのhero-wrap
+     自身への%指定なので常に画像に追従するが、見出し文言のfont-sizeは従来vw(画面幅)基準だったため、
+     画像が画面幅より小さく表示される端末では文字だけが画像に対して相対的に大きくなり、ボタンの領域
+     まで食い込んでいた。
+     ここでのmin(1535px,100vw,calc(100vh*1.60733))はJS実行前(初回ペイント)だけの暫定値 -- 実機
+     iPadで検証したところこの近似だけでは直らなかった(iOS Safariのvh基準がアドレスバーの表示状態に
+     よって変わる影響と思われる)ため、setupHeroWidthObserver(main.js)がResizeObserverで画像の実際の
+     描画幅をpx単位で測り、この値をインラインstyleで上書きする -- そちらが実際の基準になる。 */
   --hero-w: min(1535px, 100vw, calc(100vh * 1.60733));
 }
 

@@ -13846,11 +13846,31 @@ function setupOverlayScrollLock() {
   updateLock();
 }
 
+/** style.cssの--hero-w(#entry-banner__hero-wrap)をJSで実測値に上書きする (2026-10-13, per user report
+ * with screenshot: タブレットで「今すぐプレイ」ボタンと見出し文言が重なる、CSSだけの近似
+ * (min(1535px,100vw,calc(100vh*1.60733))、style.cssの--hero-w own doc参照)では実機のiPadで直らなかった
+ * と報告された後の対応) -- #entry-banner__heroの実際の描画幅(getBoundingClientRect().width)を
+ * ResizeObserverで監視し、hero-wrap自身のインラインstyleに--hero-wとして書き込む。インラインstyleは
+ * スタイルシート側の--hero-w宣言より優先されるため、これ以降は常にこの実測値が使われる。iOS Safariの
+ * vh基準がアドレスバーの表示状態で変わる、画面回転、ウィンドウリサイズなど、CSSの静的な近似では
+ * カバーしきれないあらゆるケースに対応できる(実測なので近似誤差が原理的に発生しない)。 */
+function setupHeroWidthObserver() {
+  const heroWrap = document.getElementById('entry-banner__hero-wrap');
+  const heroImg = document.getElementById('entry-banner__hero');
+  if (!heroWrap || !heroImg) return;
+  const observer = new ResizeObserver(() => {
+    const width = heroImg.getBoundingClientRect().width;
+    if (width > 0) heroWrap.style.setProperty('--hero-w', `${width}px`);
+  });
+  observer.observe(heroImg);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   seedDebugHistoryIfNeeded();
   // チュートリアル中だけ「光る」を強調する(style.cssのbody.tutorial-mode .change-highlight参照)。
   if (tutorialModeActive) document.body.classList.add('tutorial-mode');
   setupOverlayScrollLock();
+  setupHeroWidthObserver();
   render(STATE);
   autoScrollToBottomOnStart();
 
