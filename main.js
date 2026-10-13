@@ -11588,6 +11588,21 @@ function renderTutorialOverlay(state) {
         requestAnimationFrame(() => window.scrollBy({ top: rect.bottom - (visibleHeight - 8), behavior: 'auto' }));
       }
     }
+    // kabukicho_placement_introが見えるようにスクロール (2026-10-13, per user report: "このとき
+    // スクロールするのですが歓楽街のスロットにスクロールされます ダイスにスクロールするようにして
+    // ください") -- 直前のギルド説明(castletown_talent_cards_hint等)でプレイヤーの資源欄付近へ
+    // スクロールしたままのため、実際に最初にクリックする対象(あなたのダイス行)が画面外または
+    // 見えにくい位置になっていた。card_acquisition_placement_introと同じ考え方で、ダイス行を見える
+    // 範囲の下端に寄せる(中央寄せではなく下端寄せ -- 歓楽街のスロット自体もそのまま見えるように)。
+    if (step.id === 'kabukicho_placement_intro') {
+      const diceRowEl = document.querySelector('.player-panel[data-player-id="P1"] .player-panel__dice-row--color');
+      if (diceRowEl) {
+        const bubbleWrap = document.getElementById('tutorial-bubble-wrap');
+        const visibleHeight = (bubbleWrap && !bubbleWrap.hidden) ? bubbleWrap.getBoundingClientRect().top : window.innerHeight;
+        const rect = diceRowEl.getBoundingClientRect();
+        requestAnimationFrame(() => window.scrollBy({ top: rect.bottom - (visibleHeight - 8), behavior: 'auto' }));
+      }
+    }
     // card_untap_intro_hintが見えるようにスクロール (2026-10-07, Excel T096「スクロールする」) --
     // あなたの持ちカード欄(.card-group[data-player-id="P1"])を見える範囲の中央に寄せる、他のグループと
     // 同じ考え方。
