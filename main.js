@@ -13862,21 +13862,30 @@ function setupOverlayScrollLock() {
   updateLock();
 }
 
-/** style.cssの--hero-w(#entry-banner__hero-wrap)をJSで実測値に上書きする (2026-10-13, per user report
- * with screenshot: タブレットで「今すぐプレイ」ボタンと見出し文言が重なる、CSSだけの近似
- * (min(1535px,100vw,calc(100vh*1.60733))、style.cssの--hero-w own doc参照)では実機のiPadで直らなかった
- * と報告された後の対応) -- #entry-banner__heroの実際の描画幅(getBoundingClientRect().width)を
- * ResizeObserverで監視し、hero-wrap自身のインラインstyleに--hero-wとして書き込む。インラインstyleは
- * スタイルシート側の--hero-w宣言より優先されるため、これ以降は常にこの実測値が使われる。iOS Safariの
- * vh基準がアドレスバーの表示状態で変わる、画面回転、ウィンドウリサイズなど、CSSの静的な近似では
- * カバーしきれないあらゆるケースに対応できる(実測なので近似誤差が原理的に発生しない)。 */
+/** #entry-banner__heroの実際の描画幅(getBoundingClientRect().width)を見出し文言の各font-sizeに直接
+ * 反映する (2026-10-13, per user report with screenshot: タブレットで「今すぐプレイ」ボタンと見出し
+ * 文言が重なる、何度直しても実機のiPadで直らないと報告が続いた後の対応)。
+ * 最初はstyle.cssの--hero-wカスタムプロパティをJSで上書きし、font-size:clamp(min,calc(var(--hero-w)*N),max)
+ * という形でCSS側に計算させていたが、これはWebKitの既知の不具合(カスタムプロパティの値をJS側から
+ * 更新しても、それを参照するcalc()入りのfont-sizeが再計算されないことがある -- 類似例:
+ * https://bugs.webkit.org/show_bug.cgi?id=224614 、https://bugs.webkit.org/show_bug.cgi?id=170783)
+ * に該当していた可能性が高く、実機のiPad Safariで何度プッシュしても見た目が一切変わらない(=CSS側の
+ * 初期見積もり値のまま固定されている)という報告と一致する。CSSのcalc()/カスタムプロパティ経由の
+ * 再計算に一切頼らず、計測結果をfont-sizeとして各要素へ直接書き込む(clamp相当の上下限はJS側で計算)
+ * ことで、この種のブラウザ側の再計算バグの影響を受けないようにする。 */
 function setupHeroWidthObserver() {
-  const heroWrap = document.getElementById('entry-banner__hero-wrap');
   const heroImg = document.getElementById('entry-banner__hero');
-  if (!heroWrap || !heroImg) return;
+  const titleEl = document.getElementById('entry-banner__tagline-title');
+  const accentEl = document.getElementById('entry-banner__tagline-title-accent');
+  const subEl = document.getElementById('entry-banner__tagline-sub');
+  if (!heroImg || !titleEl || !accentEl || !subEl) return;
+  const clamp = (min, value, max) => Math.min(Math.max(value, min), max);
   const observer = new ResizeObserver(() => {
     const width = heroImg.getBoundingClientRect().width;
-    if (width > 0) heroWrap.style.setProperty('--hero-w', `${width}px`);
+    if (width <= 0) return;
+    titleEl.style.fontSize = `${clamp(28, width * 0.06, 52)}px`;
+    accentEl.style.fontSize = `${clamp(40, width * 0.08, 76)}px`;
+    subEl.style.fontSize = `${clamp(15, width * 0.024, 20)}px`;
   });
   observer.observe(heroImg);
 }
