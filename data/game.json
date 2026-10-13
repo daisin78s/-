@@ -764,12 +764,12 @@
       "VP": 1,
       "LEVEL": 2,
       "ONCE": "",
-      "TAP": "BUILD(U);ADD(BZ)",
+      "TAP": "BUILD(U);ADD(2BZ)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "M",
-      "INST": "⤵LVアップする\n獲得に必要な１資源軽減する"
+      "INST": "⤵LVアップする\n獲得に必要な2資源軽減する"
     },
     {
       "ID": "B006B",
