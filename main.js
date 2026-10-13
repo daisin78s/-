@@ -3435,17 +3435,21 @@ function extractBuildValue(actionText) {
 }
 
 /**
- * BUILD(...);ADD(BZ) (confirmed 2026-07-29): BZ is a discount resource, not a normal resource dot,
- * so it's shown as plain text "軽減Z" on its own line under the BUILD icon rather than a dot. Returns
- * an .action-icons-stack (a column of rows) instead of a single row when this trailing ADD(BZ) is
- * present; buildEffectRow() knows to keep the two rows stacked instead of flattening them together.
+ * BUILD(...);ADD(nBZ) (confirmed 2026-07-29, count support added 2026-10-13 -- 革命の兆しLV2's own BZ
+ * grant went from ADD(BZ) to ADD(2BZ), which this function's old bare-"BZ"-only regex silently dropped
+ * entirely since it never matched a counted form): BZ is a discount resource, not a normal resource dot,
+ * so it's shown as plain text "軽減{n}Z" on its own line under the BUILD icon rather than a dot (n
+ * omitted -- i.e. just "軽減Z" -- when the count is exactly 1, same convention as buildChefChangeIcon's
+ * own `軽減${bzCount}Z`). Returns an .action-icons-stack (a column of rows) instead of a single row when
+ * this trailing ADD(nBZ) is present; buildEffectRow() knows to keep the two rows stacked instead of
+ * flattening them together.
  *
  * A general trailing ADD(...) list -- any mix of real resources and/or BZ, e.g. AREA009B's bare
  * "BUILD();ADD(2K)" or AREA009C's "BUILD();ADD(2K,BZ)" (2026-08-05, per user feedback with a worked
  * example: "AREA009C ハンマーアイコン 雷アイコン 2K BZ") -- is handled separately from the bare-BZ case
  * above: real resources render as normal dots (⚡ prefix, same "gain" convention as buildAddResourceIcon
- * elsewhere). A bare BZ item used to render as plain "BZ" text, but 2026-10-01 per user request
- * ("元老院LV2 BZを軽減Zにして")、ここも他のBZ表示と同じ"軽減Z"に統一した -- この行だけ
+ * elsewhere). A BZ item (counted or bare) used to render as plain "BZ" text, but 2026-10-01 per user
+ * request ("元老院LV2 BZを軽減Zにして")、ここも他のBZ表示と同じ"軽減{n}Z"に統一した -- この行だけ
  * .action-icons--nowrap(style.css参照)でflex-wrapを止め、文字が増えて横に長くなっても行が増えず
  * はみ出すだけにしている(2026-10-01, per user request: "はみ出てもいいから行は増やさないように")。
  */
@@ -3473,17 +3477,19 @@ function buildBuildIcon(actionText) {
     children.push(actionSuffix(categories));
   }
   const buildRow = actionRow(children);
-  if (/;ADD\(BZ\)$/.test(actionText)) {
+  const bzOnlyMatch = /;ADD\((\d*)BZ\)$/.exec(actionText);
+  if (bzOnlyMatch) {
     const stack = el('div', 'action-icons-stack');
     stack.appendChild(buildRow);
-    stack.appendChild(actionRow([actionSuffix('軽減Z')]));
+    stack.appendChild(actionRow([actionSuffix(`軽減${bzOnlyMatch[1]}Z`)]));
     return stack;
   }
   const addMatch = /;ADD\(([^)]+)\)$/.exec(actionText);
   if (addMatch) {
     const addChildren = [actionEmoji('⚡')];
     for (const item of addMatch[1].split(',').map((s) => s.trim())) {
-      if (item === 'BZ') { addChildren.push(actionSuffix('軽減Z')); continue; }
+      const bzItemMatch = /^(\d*)BZ$/.exec(item);
+      if (bzItemMatch) { addChildren.push(actionSuffix(`軽減${bzItemMatch[1]}Z`)); continue; }
       const m = /^(\d*)(K|A|B|C|Z)$/.exec(item);
       if (m) addChildren.push(...resourceItemNodes(m[1], m[2]));
     }
