@@ -575,10 +575,12 @@ h1, h2, h3 { margin: 0; }
   pointer-events: none;
   z-index: 2;
 }
+/* 2026-10-13, per user request: "左右に長すぎるので今の半分の長さにして" -- 幅をカード全体(left:0;
+   right:0)から中央50%幅へ縮小。 */
 .card-list-cell__lock-caption {
   position: absolute;
-  left: 0;
-  right: 0;
+  left: 25%;
+  right: 25%;
   bottom: 0;
   background: rgba(0, 0, 0, 0.65);
   color: #fff;

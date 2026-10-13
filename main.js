@@ -4703,6 +4703,19 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     iconRow.appendChild(document.createTextNode('LV1'));
     noteEl.appendChild(iconRow);
     q('.shop-card__effect').appendChild(noteEl);
+  } else if (options.showEffect && facts.name === '権力者') {
+    // JOB005A/権力者 (2026-10-13, per user request: "権力者のアイコン 〇→赤〇") -- この能力も
+    // executor.grantPowerBrokerConversionIfEarnedによる bespoke実装(PASSIVE欄は空欄)でDSL表現が無いため、
+    // 料理人と同じ「NAME指定でアイコンを手組みする」パターンを踏襲。半分/端数切り上げという詳細はINSTの
+    // 文章に譲り、アイコン自体は他の〇→資源変換アイコン(色欲のZ→〇等)と同じ簡潔な表記に揃える。
+    tall = true;
+    const noteEl = el('div', 'card-note');
+    const iconRow = el('span', 'job-note-icon-row');
+    iconRow.appendChild(actionDot('K'));
+    iconRow.appendChild(actionArrow());
+    iconRow.appendChild(actionDot('A'));
+    noteEl.appendChild(iconRow);
+    q('.shop-card__effect').appendChild(noteEl);
   } else if (options.showEffect && facts.name === '料理人') {
     // JOB002/料理人 (2026-09-24, per user mockup: "1VP　▷　〇 / MAX5 / 毎ターン"; 2026-10-10, per user
     // request "料理人のアイコン MAX5 毎ターンを消して": MAX5/毎ターン removed since the 2026-10-10 ability
