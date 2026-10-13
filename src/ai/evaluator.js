@@ -50,8 +50,8 @@ const UNTAP_SYNERGY_FACE_IDS = new Set([
  * feeding the 晩餐会(M401) synergy bonus in score(). */
 const FARM_SYNERGY_FACE_IDS = new Set(['A004A', 'A004B', 'A005A', 'A005B', 'C201A', 'C201B']);
 
-/** 導き(B001-B003, either tier) + 双星の加護(B201, either tier) + 料理人(JOB002B) + 教師(JOB004A) +
- * 宮廷人(JOB004B) -- the user's own 元老院の支配(A301) synergy group (2026-09-07: "元老院はただとっても
+/** 導き(B001-B003, either tier) + 双星の加護(B201, either tier) + 料理人(JOB008) + 教師(JOB004) +
+ * 宮廷人(JOB010) -- the user's own 元老院の支配(A301) synergy group (2026-09-07: "元老院はただとっても
  * それなりに強いが、導きや双星をすでに獲得していたりJOBが実業家、宮廷人、育成者だったりすると尚いい" --
  * 実業家/育成者 are 料理人/教師's own old names from before later renames),
  * each reaching 元老院's own BUILD() usefulness via a different mechanism -- 導き boosts the die value
@@ -59,13 +59,11 @@ const FARM_SYNERGY_FACE_IDS = new Set(['A004A', 'A004B', 'A005A', 'A005B', 'C201
  * BUILD/dice-gain events into more resources, 宮廷人 boosts the die value for a MONUMENT candidate
  * specifically (see monument-incentive.js's own DELTA_ABILITIES for that narrower, already-existing
  * mechanism -- this row is a separate, broader "元老院 ownership is generally more valuable" credit,
- * not a duplicate of it). JOBs gained a real A/B tier again on 2026-10-11 (see game-state.js's
- * splitCardId doc on the redesign) -- each of these 3 abilities lives on one specific face of its own
- * physical slot, listed here by that exact face id (not physicalId, since a JOB slot's OTHER face is a
- * completely different ability). */
+ * not a duplicate of it). JOB reverted to independent single-face cards on 2026-10-13 (see setup.js's
+ * dealJobPool doc) -- each of these 3 abilities is listed here by its own current id. */
 const SENATE_SYNERGY_FACE_IDS = new Set([
   'B001A', 'B001B', 'B002A', 'B002B', 'B003A', 'B003B',
-  'B201A', 'B201B', 'JOB002B', 'JOB004A', 'JOB004B',
+  'B201A', 'B201B', 'JOB008', 'JOB004', 'JOB010',
 ]);
 
 /** Same-role redundancy penalty groups (2026-09-14, per user report: watching a 3Rから replay, the AI

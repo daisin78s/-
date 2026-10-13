@@ -26,14 +26,14 @@ index.byId.set('CON005B', { sheet: 'CON', row: { ...index.byId.get('CON005B').ro
 // so this patches the old text back onto B006A's row (every other field left as-is) purely so the tests
 // below can keep exercising it against an actual ownable card id.
 index.byId.set('B006A', { sheet: 'B', row: { ...index.byId.get('B006A').row, TAP: 'PAY(K);BUILD((A,B,C,M),6)' } });
-// 権力者(JOB005A)'s own TAP used to be ON(GET(K),CHANGE(K,A)) -- a reactive ability offered as an
+// 権力者(JOB005)'s own TAP used to be ON(GET(K),CHANGE(K,A)) -- a reactive ability offered as an
 // optional TAP_REACTION choice -- until the 2026-10-10 data edit moved it to PASSIVE (auto-fires
 // unconditionally, no choice/tap at all; confirmed generic via executor.emit, no code change needed).
 // No card in the current dataset has an ON(...) reaction in its TAP field any more, but TAP_REACTION
 // choice-queuing is still real, still-used engine behavior, so this patches the old text back onto
 // 権力者's row (every other field left as-is) purely so the test below can keep exercising it against
 // an actual ownable card id.
-index.byId.set('JOB005A', { sheet: 'JOB', row: { ...index.byId.get('JOB005A').row, TAP: 'ON(GET(K),CHANGE(K,A))', PASSIVE: '' } });
+index.byId.set('JOB005', { sheet: 'JOB', row: { ...index.byId.get('JOB005').row, TAP: 'ON(GET(K),CHANGE(K,A))', PASSIVE: '' } });
 const simulator = new Simulator();
 
 let passCount = 0;
@@ -245,7 +245,7 @@ function giveDie(state, playerId, value) {
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  const jobInst = createCardInstance('JOB005A');
+  const jobInst = createCardInstance('JOB005');
   jobInst.ownerId = 'P1';
   state.cards[jobInst.physicalId] = jobInst;
   p1.ownedCardPhysicalIds.push(jobInst.physicalId);

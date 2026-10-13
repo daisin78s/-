@@ -122,7 +122,7 @@ check('turnOrder contains all 4 players exactly once', new Set(state.turnOrder).
   const p1 = state.turnOrder[0];
   const beforeK = state.players.find((p) => p.id === p1).resources.K;
 
-  setup.dealJobPool(state, index); // reveals all 6 physical JOB slots, each a random A/B face; must run before chooseJob
+  setup.dealJobPool(state, index); // reveals 6 of the 12 independent JOB cards at random; must run before chooseJob
   check('dealJobPool reveals exactly 6 JOB cards', state.jobPool.length, 6);
   const draftedJob = state.jobPool[0];
 
@@ -147,8 +147,8 @@ check('turnOrder contains all 4 players exactly once', new Set(state.turnOrder).
 }
 
 // ---------------------------------------------------------------------------
-// 革命家(JOB001B, physical id JOB001 -- renamed from the old bare JOB010 by the 2026-10-11 JOB A/B
-// redesign, see setup.js's dealJobPool doc)'s bespoke ability (2026-08-21, no DSL behind it -- see
+// 革命家(JOB007, an independent single-face JOB card since the 2026-10-13 A/B-pairing revert, see
+// setup.js's dealJobPool doc)'s bespoke ability (2026-08-21, no DSL behind it -- see
 // setup.grantRevolutionaryBonusIfEarned/resolveJobReplacementChoice's own docs): drafting it grants
 // B005A/革命の兆し directly (from wherever it currently sits -- SHOP slot or draw pile) if nobody's
 // claimed it yet, or offers a private 3-JOB replacement choice (outside the shared jobPool) if someone
@@ -167,9 +167,9 @@ function forceB005ALocation(state, location) {
   setup.createPlayers(state, ['Alice', 'Bob', 'Carol', 'Dan']);
   setup.prepareShops(state, index);
   forceB005ALocation(state, 'slot');
-  setup.dealJobPool(state, index, ['JOB001B']);
+  setup.dealJobPool(state, index, ['JOB007']);
   const beforeResources = state.players[0].resources;
-  setup.chooseJob(state, index, 'P1', 'JOB001B');
+  setup.chooseJob(state, index, 'P1', 'JOB007');
   check('革命家 draft grants B005A directly when it is sitting in a SHOP slot', state.players[0].ownedCardPhysicalIds.includes('B005'), true);
   check('...at no resource cost', state.players[0].resources, beforeResources);
   check('...B005 is now owned by P1', state.cards.B005.ownerId, 'P1');
@@ -181,8 +181,8 @@ function forceB005ALocation(state, location) {
   setup.createPlayers(state, ['Alice', 'Bob', 'Carol', 'Dan']);
   setup.prepareShops(state, index);
   forceB005ALocation(state, 'drawpile');
-  setup.dealJobPool(state, index, ['JOB001B']);
-  setup.chooseJob(state, index, 'P1', 'JOB001B');
+  setup.dealJobPool(state, index, ['JOB007']);
+  setup.chooseJob(state, index, 'P1', 'JOB007');
   check('革命家 draft grants B005A directly when it is sitting in the draw pile', state.players[0].ownedCardPhysicalIds.includes('B005'), true);
   check('...B005A is no longer in the draw pile', state.shops.NORMAL.drawPile.includes('B005A'), false);
 }
@@ -191,13 +191,13 @@ function forceB005ALocation(state, location) {
   setup.createPlayers(state, ['Alice', 'Bob', 'Carol', 'Dan']);
   setup.prepareShops(state, index);
   state.cards.B005.ownerId = 'P2'; // simulate someone else already owning 革命の兆し
-  setup.dealJobPool(state, index, ['JOB001B']);
-  setup.chooseJob(state, index, 'P1', 'JOB001B');
+  setup.dealJobPool(state, index, ['JOB007']);
+  setup.chooseJob(state, index, 'P1', 'JOB007');
   const choice = state.pendingChoices.find((c) => c.playerId === 'P1' && c.kind === 'PICK_JOB_REPLACEMENT');
   assertTrue('A PICK_JOB_REPLACEMENT choice is queued when B005A is already owned by someone else', !!choice);
   check('...offering exactly 3 candidates', choice.context.candidates.length, 3);
   check('...none of them are still sitting in the job pool', choice.context.candidates.some((id) => state.jobPool.includes(id)), false);
-  check('...none of them equal 革命家(JOB001B) itself', choice.context.candidates.includes('JOB001B'), false);
+  check('...none of them equal 革命家(JOB007) itself', choice.context.candidates.includes('JOB007'), false);
   check('...candidates are unique', new Set(choice.context.candidates).size, 3);
 
   const bad = setup.resolveJobReplacementChoice(state, index, 'P1', 'JOB999');
@@ -208,8 +208,8 @@ function forceB005ALocation(state, location) {
   check('resolveJobReplacementChoice succeeds for an offered candidate', result.success, true);
   check('P1.jobCardId is now the picked replacement', state.players[0].jobCardId, pickedFaceId);
   check('P1 owns the picked replacement job', state.players[0].ownedCardPhysicalIds.includes(splitCardId(pickedFaceId).physicalId), true);
-  check("革命家 is no longer among P1's owned cards", state.players[0].ownedCardPhysicalIds.includes('JOB001'), false);
-  check("革命家's own card entry is released (ownerId null)", state.cards.JOB001.ownerId, null);
+  check("革命家 is no longer among P1's owned cards", state.players[0].ownedCardPhysicalIds.includes('JOB007'), false);
+  check("革命家's own card entry is released (ownerId null)", state.cards.JOB007.ownerId, null);
   check('The pendingChoice is resolved/removed', state.pendingChoices.some((c) => c.kind === 'PICK_JOB_REPLACEMENT'), false);
 }
 
@@ -225,9 +225,9 @@ function forceB005ALocation(state, location) {
   setup.createPlayers(state, ['Alice', 'Bob', 'Carol', 'Dan']);
   setup.prepareShops(state, index);
   setup.dealConCards(state, { P1: 'CON005' });
-  setup.dealJobPool(state, index, ['JOB003A']);
+  setup.dealJobPool(state, index, ['JOB003']);
 
-  setup.chooseJob(state, index, 'P1', 'JOB003A');
+  setup.chooseJob(state, index, 'P1', 'JOB003');
   const p1 = state.players[0];
   check('道化\'s own ONCE=ADD(wD) grants a real wD before CON is even chosen', p1.dice.filter((d) => d.kind === 'WHITE').length, 1);
 
@@ -241,9 +241,9 @@ function forceB005ALocation(state, location) {
   setup.createPlayers(state, ['Alice', 'Bob', 'Carol', 'Dan']);
   setup.prepareShops(state, index);
   setup.dealConCards(state, { P1: 'CON005' });
-  setup.dealJobPool(state, index, ['JOB003A']);
+  setup.dealJobPool(state, index, ['JOB003']);
 
-  setup.chooseJob(state, index, 'P1', 'JOB003A');
+  setup.chooseJob(state, index, 'P1', 'JOB003');
   setup.chooseConFace(state, index, 'P1', 'A'); // CON005A/怠惰 -- no WHITE_DICE_CAP
   const p1 = state.players[0];
   check('Choosing the OTHER face (no WHITE_DICE_CAP) leaves the earlier wD untouched', p1.dice.filter((d) => d.kind === 'WHITE').length, 1);
@@ -265,31 +265,29 @@ function forceB005ALocation(state, location) {
 }
 {
   const state = createEmptyGameState('debug-setup-job');
-  setup.dealJobPool(state, index, ['JOB002B', 'JOB005A']);
-  check('dealJobPool includes both preferred JOB faces', ['JOB002B', 'JOB005A'].every((id) => state.jobPool.includes(id)), true);
+  setup.dealJobPool(state, index, ['JOB008', 'JOB005']);
+  check('dealJobPool includes both preferred JOB faces', ['JOB008', 'JOB005'].every((id) => state.jobPool.includes(id)), true);
   check('...and still reveals exactly 6 total (4 more filled randomly)', state.jobPool.length, 6);
 }
 {
-  // Duplicate-physical preferred entries are deduped (first one wins per physical id) rather than
-  // breaking the pool size -- unlike the old 11-independent-face scheme, every physical id is always
-  // in the pool now (2026-10-11 redesign), so "over-long" no longer applies the same way; this instead
-  // exercises "2 preferred faces for the SAME physical id" (JOB001A listed before JOB001B -- only
-  // JOB001A should actually win).
-  const state = createEmptyGameState('debug-setup-job-duplicate-physical');
-  setup.dealJobPool(state, index, ['JOB001A', 'JOB001B', 'JOB002A', 'JOB003A']);
-  check('dealJobPool still reveals exactly 6 total despite a duplicate-physical preferred entry', state.jobPool.length, 6);
-  check('...JOB001 physical slot took the FIRST-listed preferred face (JOB001A), not JOB001B', state.jobPool.includes('JOB001A') && !state.jobPool.includes('JOB001B'), true);
-  check('...the other 2 preferred faces are also both included', ['JOB002A', 'JOB003A'].every((id) => state.jobPool.includes(id)), true);
+  // 2026-10-13 A/B-pairing revert: every JOB id is now independent (no shared physical slot to collide
+  // on), so this instead exercises "a duplicate id is deduped, not double-counted" and "more than 6
+  // preferredFaceIds are capped to the first 6 distinct ones".
+  const state = createEmptyGameState('debug-setup-job-over-6-preferred');
+  setup.dealJobPool(state, index, ['JOB001', 'JOB001', 'JOB002', 'JOB003', 'JOB004', 'JOB005', 'JOB006', 'JOB007']);
+  check('dealJobPool still reveals exactly 6 total despite 8 listed (1 duplicate + over-6)', state.jobPool.length, 6);
+  check('...only the first 6 distinct preferred ids are honored, not the 7th (JOB007)', state.jobPool.includes('JOB007'), false);
+  check('...all of the first 6 distinct preferred ids are included', ['JOB001', 'JOB002', 'JOB003', 'JOB004', 'JOB005', 'JOB006'].every((id) => state.jobPool.includes(id)), true);
 }
 {
-  // 宣教師/JOB006A (2026-08-17 regression test, per user report about the then-newest JOB009:
+  // 宣教師/JOB006 (2026-08-17 regression test, per user report about the then-newest JOB009:
   // "開拓者出てきません テストゲームで選んでも出てきません" -- the old hardcoded JOB_FACE_IDS list silently
   // dropped it from both the random draw AND the preferredFaceIds filter, since it was defined before
   // that face existed; this now exercises the same "newly-added face must still work" guarantee against
-  // the current scheme's own newest face, 異端者/JOB006B).
+  // the current scheme's own newest face, 異端者/JOB012).
   const state = createEmptyGameState('debug-setup-job006b');
-  setup.dealJobPool(state, index, ['JOB006B']);
-  check('dealJobPool includes a newly-added JOB face when explicitly preferred', state.jobPool.includes('JOB006B'), true);
+  setup.dealJobPool(state, index, ['JOB012']);
+  check('dealJobPool includes a newly-added JOB face when explicitly preferred', state.jobPool.includes('JOB012'), true);
 }
 
 // ---------------------------------------------------------------------------
@@ -299,23 +297,23 @@ function forceB005ALocation(state, location) {
 // points themselves, setup.dealJobPool/chooseConFace, against a directly-set state.lockedFaceIds).
 // ---------------------------------------------------------------------------
 {
-  // dealJobPool: a locked B face is never dealt randomly -- that physical slot always shows A instead,
-  // no 50/50 at all (per user spec: "ジョブはアンロックされていなければ必ず表面になる"). Repeated across
-  // several seeds to rule out the lock just "winning the coin flip" by chance.
+  // dealJobPool: a locked JOB id is simply excluded from the pool entirely -- no "falls back to another
+  // face" concept now that every id is independent (2026-10-13 A/B-pairing revert). Repeated across
+  // several seeds to rule out it just "losing the random draw" by chance.
   for (let i = 0; i < 20; i++) {
     const state = createEmptyGameState(`lockedfaceids-job-${i}`);
-    state.lockedFaceIds = ['JOB001B'];
+    state.lockedFaceIds = ['JOB007'];
     setup.dealJobPool(state, index);
-    check(`dealJobPool (seed ${i}): JOB001's physical slot is forced to A while JOB001B is locked`, state.jobPool.includes('JOB001A') && !state.jobPool.includes('JOB001B'), true);
+    check(`dealJobPool (seed ${i}): locked JOB007 never appears in the pool`, state.jobPool.includes('JOB007'), false);
   }
 }
 {
   // preferredFaceIds still wins over a lock (debug-setup/tutorial callers asking for a specific B face
   // by name get it even if that face happens to also be in lockedFaceIds).
   const state = createEmptyGameState('lockedfaceids-job-preferred-override');
-  state.lockedFaceIds = ['JOB001B'];
-  setup.dealJobPool(state, index, ['JOB001B']);
-  check('An explicit preferredFaceIds entry overrides a lock', state.jobPool.includes('JOB001B'), true);
+  state.lockedFaceIds = ['JOB007'];
+  setup.dealJobPool(state, index, ['JOB007']);
+  check('An explicit preferredFaceIds entry overrides a lock', state.jobPool.includes('JOB007'), true);
 }
 {
   // chooseConFace: picking a locked B face fails outright (FACE_LOCKED), same as any other invalid pick.

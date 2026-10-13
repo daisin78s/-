@@ -811,7 +811,7 @@ index.raw.QST = [
   // +3 -> +4, same fix re-applied) -- needs an unplaced die showing exactly 3 (3+4=7=施療院/M006's own
   // DICE threshold).
   const state = freshState(3);
-  giveCard(state, 'JOB004B', 'P1');
+  giveCard(state, 'JOB010', 'P1');
   const d1 = createDie('d1', 'COLOR');
   d1.value = 3;
   state.players[0].dice.push(d1);
@@ -822,7 +822,7 @@ index.raw.QST = [
 {
   // Same setup, but die=2 -- 2+4=6, doesn't reach 施療院's >=7 -- no credit.
   const state = freshState(3);
-  giveCard(state, 'JOB004B', 'P1');
+  giveCard(state, 'JOB010', 'P1');
   const d1 = createDie('d1', 'COLOR');
   d1.value = 2;
   state.players[0].dice.push(d1);
@@ -831,7 +831,7 @@ index.raw.QST = [
 {
   // Same setup (die=3), but 宮廷人 already tapped this round -- the ability isn't available, no credit.
   const state = freshState(3);
-  const inst = giveCard(state, 'JOB004B', 'P1');
+  const inst = giveCard(state, 'JOB010', 'P1');
   inst.tapped = true;
   const d1 = createDie('d1', 'COLOR');
   d1.value = 3;
@@ -841,7 +841,7 @@ index.raw.QST = [
 {
   // Same setup (die=3, untapped), but 施療院 has already been built by someone -- no longer unclaimed.
   const state = freshState(3);
-  giveCard(state, 'JOB004B', 'P1');
+  giveCard(state, 'JOB010', 'P1');
   const d1 = createDie('d1', 'COLOR');
   d1.value = 3;
   state.players[0].dice.push(d1);
@@ -854,7 +854,7 @@ index.raw.QST = [
   // Same setup (die=3), but at round 1 -- 評価値_戦略's own 1R column is blank(0) for this row, so the
   // condition being true still contributes nothing (round-gating lives in the sheet, not extra code).
   const state = freshState(1);
-  giveCard(state, 'JOB004B', 'P1');
+  giveCard(state, 'JOB010', 'P1');
   const d1 = createDie('d1', 'COLOR');
   d1.value = 3;
   state.players[0].dice.push(d1);
@@ -887,7 +887,7 @@ index.raw.QST = [
   // >=9: 5+4=9) -- SINGLE_DIE_ROWS and COMBO_TARGETS aren't mutually exclusive (no shared-die gate
   // between them), so both credit here: +999 (combo) and +300 (round4's 運命の導きLV2+3凱旋門 single row).
   const state = freshState(4);
-  giveCard(state, 'JOB004B', 'P1');
+  giveCard(state, 'JOB010', 'P1');
   giveCard(state, 'B003B', 'P1');
   const d1 = createDie('d1', 'COLOR');
   d1.value = 5;
@@ -900,7 +900,7 @@ index.raw.QST = [
   // the combo gate (needs 2+) blocks it entirely. (宮廷人 alone would need die=3 for its own M006 row --
   // die=5 doesn't satisfy that either, so this is a clean "no credit anywhere" case.)
   const state = freshState(4);
-  giveCard(state, 'JOB004B', 'P1');
+  giveCard(state, 'JOB010', 'P1');
   const d1 = createDie('d1', 'COLOR');
   d1.value = 5;
   state.players[0].dice.push(d1);
@@ -937,7 +937,7 @@ index.raw.QST = [
   // Same combo (宮廷人+運命の導きLV2, die=6, reaches 天空の塔) but the monument was already claimed --
   // no longer unclaimed, no credit.
   const state = freshState(4);
-  giveCard(state, 'JOB004B', 'P1');
+  giveCard(state, 'JOB010', 'P1');
   giveCard(state, 'B003B', 'P1');
   const d1 = createDie('d1', 'COLOR');
   d1.value = 6;
@@ -1151,16 +1151,16 @@ index.raw.QST = [
   const round = 3;
   const base = () => { const state = freshState(round); giveCard(state, 'A301A', 'P1'); return state; }; // 元老院の支配LV1 alone
   const withMichibiki = () => { const state = base(); giveCard(state, 'B003A', 'P1'); return state; }; // 運命の導きLV1
-  const withJob007 = () => { const state = base(); giveCard(state, 'JOB004B', 'P1'); return state; }; // 宮廷人
+  const withJob007 = () => { const state = base(); giveCard(state, 'JOB010', 'P1'); return state; }; // 宮廷人
   check(
     '元老院 + 導き(運命の導きLV1) credits the synergy bonus once (+15)',
     evaluator.score(withMichibiki(), 'P1') - evaluator.score(base(), 'P1'),
     evalTable[round].B003A + 15,
   );
   check(
-    '元老院 + JOB004B/宮廷人 credits the synergy bonus once (+15)',
+    '元老院 + JOB010/宮廷人 credits the synergy bonus once (+15)',
     evaluator.score(withJob007(), 'P1') - evaluator.score(base(), 'P1'),
-    (evalTable[round].JOB004B || 0) + 15, // JOB002B/JOB004A/JOB004B have no row in the main 評価値 sheet (0 base)
+    (evalTable[round].JOB010 || 0) + 15, // JOB008/JOB004/JOB010 have no row in the main 評価値 sheet (0 base)
   );
 }
 {
@@ -1178,14 +1178,14 @@ index.raw.QST = [
   const state = freshState(3);
   giveCard(state, 'A301B', 'P1'); // 元老院の支配LV2
   giveCard(state, 'B201A', 'P1'); // 双星の加護LV1
-  giveCard(state, 'JOB002B', 'P1'); // 実業家
-  giveCard(state, 'JOB004A', 'P1'); // 育成者/教師
+  giveCard(state, 'JOB008', 'P1'); // 実業家
+  giveCard(state, 'JOB004', 'P1'); // 育成者/教師
   const baseline = freshState(3);
   giveCard(baseline, 'A301B', 'P1');
   check(
     '元老院 + 双星 + 実業家 + 育成者 credits the synergy bonus 3 times (+45)',
     evaluator.score(state, 'P1') - evaluator.score(baseline, 'P1'),
-    evalTable[3].B201A + (evalTable[3].JOB002B || 0) + (evalTable[3].JOB004A || 0) + 3 * 15, // JOB002B/JOB004A have no row in the main 評価値 sheet (0 base)
+    evalTable[3].B201A + (evalTable[3].JOB008 || 0) + (evalTable[3].JOB004 || 0) + 3 * 15, // JOB008/JOB004 have no row in the main 評価値 sheet (0 base)
   );
 }
 

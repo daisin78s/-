@@ -20,23 +20,23 @@ const index = buildDataIndex(loadGameData(path.join(__dirname, '..', 'data', 'ga
 // as-is) purely so the tests below can keep exercising that still-real, still-used generic engine
 // mechanism (END_TURN/FREE_ACTION gating) against an actual ownable card id.
 index.byId.set('CON005B', { sheet: 'CON', row: { ...index.byId.get('CON005B').row, TURNEND: 'RESOURCE_TOTAL_LIMIT((A,B,C),7)' } });
-// 策士(JOB005B, physical id JOB005 -- renamed from the old bare JOB004 by the 2026-10-11 JOB A/B
+// 策士(JOB011, physical id JOB005 -- renamed from the old bare JOB004 by the 2026-10-11 JOB A/B
 // redesign)'s own TAP used to be CHANGE(3K,2BZ);BLOCK_BUILD(M,THIS_TURN) -- the original real-data
-// vehicle for bzConversionTap's CHANGE-based (as opposed to ADD-based, like 宮廷人/JOB004B) detection
+// vehicle for bzConversionTap's CHANGE-based (as opposed to ADD-based, like 宮廷人/JOB010) detection
 // branch -- until later reworks changed it to CHANGE(3K,2Z), then CHANGE(4K,(A,B,C)) (a genuinely
 // different resource/mechanic each time). No card in the current dataset grants BZ via CHANGE any
 // more, but bzConversionTap is meant to recognize that *shape* generically (see its own doc), so this
 // patches the old text back onto 策士's row (every other field left as-is) purely so the tests below
 // can keep exercising that still-real, still-used CHANGE branch against an actual ownable card id.
-index.byId.set('JOB005B', { sheet: 'JOB', row: { ...index.byId.get('JOB005B').row, TAP: 'CHANGE(3K,2BZ);BLOCK_BUILD(M,THIS_TURN)' } });
-// 権力者(JOB005A, the OTHER face of 策士's same physical slot)'s own TAP used to be
+index.byId.set('JOB011', { sheet: 'JOB', row: { ...index.byId.get('JOB011').row, TAP: 'CHANGE(3K,2BZ);BLOCK_BUILD(M,THIS_TURN)' } });
+// 権力者(JOB005, the OTHER face of 策士's same physical slot)'s own TAP used to be
 // ON(GET(K),CHANGE(K,A)) -- a reactive ability offered as an optional TAP_REACTION choice -- until the
 // 2026-10-10 data edit moved it to PASSIVE (auto-fires unconditionally, no choice/tap at all; confirmed
 // generic via executor.emit, no code change needed). No card in the current dataset has an ON(...)
 // reaction in its TAP field any more, but TAP_REACTION move generation is still a real, used generic
 // engine mechanism, so this patches the old text back onto 権力者's row (every other field left as-is)
 // purely so the test below can keep exercising it against an actual ownable card id.
-index.byId.set('JOB005A', { sheet: 'JOB', row: { ...index.byId.get('JOB005A').row, TAP: 'ON(GET(K),CHANGE(K,A))', PASSIVE: '' } });
+index.byId.set('JOB005', { sheet: 'JOB', row: { ...index.byId.get('JOB005').row, TAP: 'ON(GET(K),CHANGE(K,A))', PASSIVE: '' } });
 const moveGenerator = new MoveGenerator();
 // Generic avoidMapIdFromRound policy exercise (2026-08-28: no longer used by any AI level -- LV3's own
 // MAP007/round-3 usage of this was removed per user request "3Rから訓練場を避けるは削除してください" --
@@ -157,8 +157,8 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
   // pairs that would always fail.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  p1.jobCardId = 'JOB003A';
-  const jobInst = createCardInstance('JOB003A');
+  p1.jobCardId = 'JOB003';
+  const jobInst = createCardInstance('JOB003');
   jobInst.ownerId = 'P1';
   state.cards[jobInst.physicalId] = jobInst;
   p1.ownedCardPhysicalIds.push(jobInst.physicalId);
@@ -285,7 +285,7 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  const jobInst = createCardInstance('JOB005A');
+  const jobInst = createCardInstance('JOB005');
   jobInst.ownerId = 'P1';
   state.cards[jobInst.physicalId] = jobInst;
   p1.ownedCardPhysicalIds.push(jobInst.physicalId);
@@ -299,7 +299,7 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
 
 // ---------------------------------------------------------------------------
 // bzConversionTap / forcedBzConversionMove (2026-08-04, per user feedback: "JOB004の効果は使えるときは
-// 必ず使う") -- 策士(JOB005B)'s patched TAP="CHANGE(3K,2BZ)" is detected as a forced BZ conversion; a
+// 必ず使う") -- 策士(JOB011)'s patched TAP="CHANGE(3K,2BZ)" is detected as a forced BZ conversion; a
 // card with no such ability, or 策士 itself when unaffordable/already tapped, is not.
 //
 // 2026-08-0X update (per user feedback: "BZはターン終了時に無くなります...AIもBZを作る→無くなるという
@@ -308,15 +308,15 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
 // just evaporate at TURNEND for nothing. context is now a required 4th argument.
 // ---------------------------------------------------------------------------
 {
-  check('bzConversionTap detects 策士/JOB005B ("CHANGE(3K,2BZ)")', !!bzConversionTap(index, 'JOB005B'), true);
-  check('bzConversionTap detects 宮廷人/JOB004B ("ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+4);BLOCK_BUILD(A/B/C,THIS_TURN)", 2026-08-24)', !!bzConversionTap(index, 'JOB004B'), true);
+  check('bzConversionTap detects 策士/JOB011 ("CHANGE(3K,2BZ)")', !!bzConversionTap(index, 'JOB011'), true);
+  check('bzConversionTap detects 宮廷人/JOB010 ("ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+4);BLOCK_BUILD(A/B/C,THIS_TURN)", 2026-08-24)', !!bzConversionTap(index, 'JOB010'), true);
   check('bzConversionTap is null for a card with no TAP field at all (M001, printed VP only)', bzConversionTap(index, 'M001'), null);
   check('bzConversionTap is null for a bare TAP that does not produce BZ (C001A)', bzConversionTap(index, 'C001A'), null);
 }
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  const jobInst = createCardInstance('JOB005B');
+  const jobInst = createCardInstance('JOB011');
   jobInst.ownerId = 'P1';
   state.cards[jobInst.physicalId] = jobInst;
   p1.ownedCardPhysicalIds.push(jobInst.physicalId);
@@ -351,11 +351,11 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  const jobInst = createCardInstance('JOB004B');
+  const jobInst = createCardInstance('JOB010');
   jobInst.ownerId = 'P1';
   state.cards[jobInst.physicalId] = jobInst;
   p1.ownedCardPhysicalIds.push(jobInst.physicalId);
-  // die value=6 (not a low value like 3): 宮廷人/JOB004B's own BLOCK_BUILD(A/B/C,THIS_TURN) always fires as
+  // die value=6 (not a low value like 3): 宮廷人/JOB010's own BLOCK_BUILD(A/B/C,THIS_TURN) always fires as
   // part of this same TAP regardless of skip, so the ONLY outlet either candidate could ever find
   // post-tap is a monument -- die=6 already reaches DICE>=6 monuments even WITHOUT the +3 (the skip
   // path), and die=9 (die-based, +3'd) reaches them too, so both paths get a genuine outlet to check
@@ -380,7 +380,7 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
   // genuinely worth using, never bypasses that existing safety check.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  const jobInst = createCardInstance('JOB004B');
+  const jobInst = createCardInstance('JOB010');
   jobInst.ownerId = 'P1';
   state.cards[jobInst.physicalId] = jobInst;
   p1.ownedCardPhysicalIds.push(jobInst.physicalId);
@@ -410,7 +410,7 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
   // round-0 default this fixture used before 2026-09-14's SHOP001-006 gate existed at all).
   state.round = 1;
   const p1 = player(state, 'P1');
-  const jobInst = createCardInstance('JOB005B');
+  const jobInst = createCardInstance('JOB011');
   jobInst.ownerId = 'P1';
   state.cards[jobInst.physicalId] = jobInst;
   p1.ownedCardPhysicalIds.push(jobInst.physicalId);
@@ -433,7 +433,7 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
 
 // ---------------------------------------------------------------------------
 // forcedJob004ConversionMove (2026-08-28, per user request/experiment: "策士は3K以上あれば基本的に毎ターン
-// 使うでどうでしょうか") -- unconditional: forces 策士(JOB005B)'s real current TAP whenever the player
+// 使うでどうでしょうか") -- unconditional: forces 策士(JOB011)'s real current TAP whenever the player
 // owns an untapped 策士 with enough K, with no build-outlet check at all (unlike forcedBzConversionMove
 // above). This function hardcodes the K threshold rather than reading it from the TAP text (see its own
 // doc) -- 4, not 3, since 2026-10-11 (found via a real stuck-game regression: 策士's own TAP cost grew
@@ -444,7 +444,7 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  const jobInst = createCardInstance('JOB005B');
+  const jobInst = createCardInstance('JOB011');
   jobInst.ownerId = 'P1';
   state.cards[jobInst.physicalId] = jobInst;
   p1.ownedCardPhysicalIds.push(jobInst.physicalId);
@@ -673,7 +673,7 @@ function giveTrainingGroundControl(state, playerId, faceId) {
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  const jobInst = createCardInstance('JOB005B');
+  const jobInst = createCardInstance('JOB011');
   jobInst.ownerId = 'P1';
   state.cards[jobInst.physicalId] = jobInst;
   p1.ownedCardPhysicalIds.push(jobInst.physicalId);
@@ -818,7 +818,7 @@ function offersMapId(moves, dieId, mapId) { return moves.some((m) => m.dieId ===
   // currently-empty one, for the pioneer bonus), drops 王宮 -- the OPPOSITE of the plain preference.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  p1.jobCardId = 'JOB006A'; // hasPioneerAbility only reads this field -- see board.js's own doc
+  p1.jobCardId = 'JOB006'; // hasPioneerAbility only reads this field -- see board.js's own doc
   p1.resources.BZ = 20;
   state.maps['MAP008'].slots[0].push({ playerId: 'P2', dieId: 'occupant', value: 3, seq: 1, countsForTurnOrder: true });
   const die = giveDie(state, 'P1', 5);
@@ -832,7 +832,7 @@ function offersMapId(moves, dieId, mapId) { return moves.some((m) => m.dieId ===
   // preference here, but for the pioneer-bonus reason, not the default fallback).
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  p1.jobCardId = 'JOB006A';
+  p1.jobCardId = 'JOB006';
   p1.resources.BZ = 20;
   state.maps['MAP009'].slots[0].push({ playerId: 'P2', dieId: 'occupant', value: 3, seq: 1, countsForTurnOrder: true });
   const die = giveDie(state, 'P1', 5);
@@ -846,7 +846,7 @@ function offersMapId(moves, dieId, mapId) { return moves.some((m) => m.dieId ===
   // 王宮 preference.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  p1.jobCardId = 'JOB006A';
+  p1.jobCardId = 'JOB006';
   p1.resources.BZ = 20;
   state.maps['MAP008'].slots[0].push({ playerId: 'P2', dieId: 'occupant8', value: 3, seq: 1, countsForTurnOrder: true });
   state.maps['MAP009'].slots[0].push({ playerId: 'P2', dieId: 'occupant9', value: 3, seq: 1, countsForTurnOrder: true });
@@ -878,7 +878,7 @@ function offersMapId(moves, dieId, mapId) { return moves.some((m) => m.dieId ===
 {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  const wildInst = createCardInstance('JOB003A');
+  const wildInst = createCardInstance('JOB003');
   wildInst.ownerId = 'P1';
   state.cards[wildInst.physicalId] = wildInst;
   p1.ownedCardPhysicalIds.push(wildInst.physicalId);

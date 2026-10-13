@@ -27,7 +27,7 @@ index.byId.set('CON005B', { sheet: 'CON', row: { ...index.byId.get('CON005B').ro
 // TAP-reaction mechanism is still real, still-used engine behavior, so this patches the old text back
 // onto JOB005's row (every other field left as-is) purely so test block 4 below can keep exercising it
 // against an actual ownable card id.
-index.byId.set('JOB005A', { sheet: 'JOB', row: { ...index.byId.get('JOB005A').row, TAP: 'ON(GET(K),CHANGE(K,A))', TURNEND: 'UNTAP()', PASSIVE: '' } });
+index.byId.set('JOB005', { sheet: 'JOB', row: { ...index.byId.get('JOB005').row, TAP: 'ON(GET(K),CHANGE(K,A))', TURNEND: 'UNTAP()', PASSIVE: '' } });
 
 let passCount = 0;
 let failCount = 0;
@@ -311,7 +311,7 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
-  const physicalId = giveCard(state, 'JOB005A', 'P1');
+  const physicalId = giveCard(state, 'JOB005', 'P1');
   const player = getPlayerRef(state, 'P1');
   player.resources.K = 5;
 
@@ -458,7 +458,7 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
   executor.setFreeActionAutoMode(state, 'P1', 'A_K', true);
   check('Free action auto mode can be switched to auto', executor.isFreeActionAutoMode(state, 'P1', 'A_K'), true);
 
-  const jobPhysicalId = giveCard(state, 'JOB005A', 'P1'); // AUTO="A" in game.xlsx
+  const jobPhysicalId = giveCard(state, 'JOB005', 'P1'); // AUTO="A" in game.xlsx
   check('JOB005 defaults to auto per its AUTO column', executor.isCardAutoMode(state, index, 'P1', jobPhysicalId), true);
 
   const cPhysicalId = giveCard(state, 'C001A', 'P1'); // AUTO="M" in game.xlsx
@@ -475,7 +475,7 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
-  const jobPhysicalId = giveCard(state, 'JOB005A', 'P1'); // TAP=ON(GET(K),CHANGE(K,A)), AUTO="A"
+  const jobPhysicalId = giveCard(state, 'JOB005', 'P1'); // TAP=ON(GET(K),CHANGE(K,A)), AUTO="A"
   const player = getPlayerRef(state, 'P1');
 
   // AREA001A.ACTION = ADD(3K) -- simulate resolving that AREA action directly via runCommand.
@@ -487,7 +487,7 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 }
 {
   const state = freshState();
-  const jobPhysicalId = giveCard(state, 'JOB005A', 'P1');
+  const jobPhysicalId = giveCard(state, 'JOB005', 'P1');
   executor.setCardAutoMode(state, 'P1', jobPhysicalId, false); // force manual for this test
   const player = getPlayerRef(state, 'P1');
 
@@ -517,7 +517,7 @@ console.log(`\n${passCount} passed, ${failCount} failed`);
   // throw if run bare like this. Decoupling from JOB003's exact current text also means this unit test
   // can't break again the next time that field's shape changes for an unrelated reason.
   const state = freshState();
-  giveCard(state, 'JOB003A', 'P1');
+  giveCard(state, 'JOB003', 'P1');
   const player = getPlayerRef(state, 'P1');
   const die = createDie('d1', 'COLOR');
   die.value = 4;
@@ -650,7 +650,7 @@ console.log(`\n${passCount} passed, ${failCount} failed`);
 {
   const state = freshState();
   const target = giveCard(state, 'B004A', 'P1');
-  const row = getCardRow(index, 'JOB004B'); // TAP=ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+4);BLOCK_BUILD(...) (2026-08-25: was +2/+1, 2026-09-01: +3, 2026-10-10: +4)
+  const row = getCardRow(index, 'JOB010'); // TAP=ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+4);BLOCK_BUILD(...) (2026-08-25: was +2/+1, 2026-09-01: +3, 2026-10-10: +4)
   const result = executor.runProgram(state, index, { playerId: 'P1', chosenCardPhysicalId: target }, row.TAP);
   check('MONUMENT_CHANGE_DIE_VALUE targeting a card succeeds with no chosenValue/chosenDelta needed (delta is fixed)', result.success, true);
   check('...buildValueOverride is 1+4=5', state.cards[target].buildValueOverride, 5);
@@ -850,7 +850,7 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 }
 
 // ---------------------------------------------------------------------------
-// 14c. 権力者/JOB005A's bespoke "half (round up) of the K you just got becomes A" ability (2026-10-12
+// 14c. 権力者/JOB005's bespoke "half (round up) of the K you just got becomes A" ability (2026-10-12
 //     redesign, replacing the old PASSIVE=ON(GET(K),CHANGE(K,A,ALL)) DSL text, per user request: "〇を
 //     得たときその半数は赤〇になる（端数切り上げ）" -- implemented as a bespoke grantResourceAndEmitGet
 //     hook (grantPowerBrokerConversionIfEarned), same class as grantChefBonusIfEarned, since the DSL's
@@ -860,7 +860,7 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 {
   const state = freshState();
   const player = getPlayerRef(state, 'P1');
-  player.jobCardId = 'JOB005A';
+  player.jobCardId = 'JOB005';
   executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'K', 5);
   check('権力者: getting 5K converts ceil(5/2)=3 to A', player.resources.A, 3);
   check('権力者: ...leaving 2K', player.resources.K, 2);
@@ -871,7 +871,7 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   // combined total.
   const state = freshState();
   const player = getPlayerRef(state, 'P1');
-  player.jobCardId = 'JOB005A';
+  player.jobCardId = 'JOB005';
   executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'K', 3);
   executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'K', 3);
   executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'K', 1);
@@ -883,7 +883,7 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   // collecting from several maps back to back: fees of 3,2,1 convert 2,1,1, not a combined ceil(6/2)=3.
   const state = freshState();
   const player = getPlayerRef(state, 'P1');
-  player.jobCardId = 'JOB005A';
+  player.jobCardId = 'JOB005';
   state.maps.MAP001 = createMapState('MAP001', 'AREA001A');
   state.maps.MAP002 = createMapState('MAP002', 'AREA002A');
   state.maps.MAP003 = createMapState('MAP003', 'AREA003A');
@@ -1111,7 +1111,7 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   // MONUMENT_DICE_DISCOUNT(2,THIS_TURN); +2 -> +1 on 2026-08-25 -> +3 on 2026-09-01 -> +4 on
   // 2026-10-10), which needs a chosenDieId same as CHANGE_DIE_VALUE.
   const state = freshState();
-  const row = getCardRow(index, 'JOB004B');
+  const row = getCardRow(index, 'JOB010');
   const player = getPlayerRef(state, 'P1');
   const die = createDie('d1', 'COLOR');
   die.value = 4;
@@ -1127,7 +1127,7 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   // atomic TAP program used to fail outright with CHOICE_REQUIRED, discarding the ADD(BZ)/BLOCK_BUILD
   // that ran before it -- an explicit skip now lets those still commit, leaving every die untouched.
   const state = freshState();
-  const row = getCardRow(index, 'JOB004B');
+  const row = getCardRow(index, 'JOB010');
   const player = getPlayerRef(state, 'P1');
   const die = createDie('d1', 'COLOR');
   die.value = 4;
@@ -1141,7 +1141,7 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   // Without EITHER chosenDieId/chosenCardPhysicalId OR an explicit skipDieChange, this still fails with
   // CHOICE_REQUIRED exactly as before -- skipping must be a deliberate choice, never the silent default.
   const state = freshState();
-  const row = getCardRow(index, 'JOB004B');
+  const row = getCardRow(index, 'JOB010');
   const result = executor.runProgram(state, index, { playerId: 'P1' }, row.TAP);
   check('JOB007\'s TAP with no target and no skipDieChange still fails with CHOICE_REQUIRED', result.reason, 'CHOICE_REQUIRED');
   // Re-fetched by id, not a pre-call reference -- a rollback replaces state.players' contents wholesale
@@ -1159,7 +1159,7 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
-  giveCard(state, 'JOB004A', 'P1'); // PASSIVE=ON(GET(D),ADD(Z,VP));ON(GET(wD),ADD(K))
+  giveCard(state, 'JOB004', 'P1'); // PASSIVE=ON(GET(D),ADD(Z,VP));ON(GET(wD),ADD(K))
   const player = getPlayerRef(state, 'P1');
   const before = player.dice.filter((d) => d.kind === 'COLOR').length;
   const result = executor.runCommand(state, index, { playerId: 'P1' }, { type: 'CHANGE', pay: [], gain: [{ resource: 'D', count: { kind: 'literal', value: 1 } }], times: { kind: 'literal', value: 1 } });
@@ -1173,7 +1173,7 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   // ONCE=ADD(2wD) only triggered JOB006's ON(GET(wD),ADD(K)) once instead of twice). Mirrors
   // board.placeDiceGroup's own PLACE(mapId), which already emits once per die in a multi-die placement.
   const state = freshState();
-  giveCard(state, 'JOB004A', 'P1'); // PASSIVE=ON(GET(D),ADD(Z,VP));ON(GET(wD),ADD(K))
+  giveCard(state, 'JOB004', 'P1'); // PASSIVE=ON(GET(D),ADD(Z,VP));ON(GET(wD),ADD(K))
   const player = getPlayerRef(state, 'P1');
   const result = executor.runProgram(state, index, { playerId: 'P1' }, 'ADD(2wD)'); // B004A's real ONCE
   check('ADD(2wD) succeeds and grants both white dice', { success: result.success, wD: player.dice.filter((d) => d.kind === 'WHITE').length }, { success: true, wD: 2 });
@@ -1181,7 +1181,7 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 }
 {
   const state = freshState();
-  const jobPhysicalId = giveCard(state, 'JOB005A', 'P1'); // TAP=ON(GET(K),CHANGE(K,A)), AUTO="A"
+  const jobPhysicalId = giveCard(state, 'JOB005', 'P1'); // TAP=ON(GET(K),CHANGE(K,A)), AUTO="A"
   const player = getPlayerRef(state, 'P1');
   player.resources.A = 1;
   const result = executor.tryFreeAction(state, index, 'P1', 'A_K');
@@ -1202,7 +1202,7 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   state.maps['MAP001'] = createMapState('MAP001', 'AREA001B');
   state.maps['MAP001'].feeOwnerId = 'P1';
   state.maps['MAP001'].accumulatedFee = 3;
-  giveCard(state, 'JOB005A', 'P1'); // TAP=ON(GET(K),CHANGE(K,A)), AUTO="A"
+  giveCard(state, 'JOB005', 'P1'); // TAP=ON(GET(K),CHANGE(K,A)), AUTO="A"
   const player = getPlayerRef(state, 'P1');
   const result = executor.collectUsageFee(state, index, { playerId: 'P1' }, 'MAP001');
   check('Fee collection still succeeds', result, { success: true, amount: 3 });

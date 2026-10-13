@@ -648,7 +648,7 @@ class MoveGenerator {
     if ((player.resources.K || 0) - 4 < reservedK) return null;
     for (const physicalId of player.ownedCardPhysicalIds) {
       const cardState = state.cards[physicalId];
-      if (!cardState || cardState.tapped || cardState.currentFaceId !== 'JOB005B') continue; // 策士 (2026-10-11 redesign renamed the physical id from JOB004 to JOB005; function name kept as-is)
+      if (!cardState || cardState.tapped || cardState.currentFaceId !== 'JOB011') continue; // 策士 (2026-10-13 A/B-revert renamed the id to JOB011; function name kept as-is)
       return { type: 'BARE_TAP', playerId, physicalId };
     }
     return null;
