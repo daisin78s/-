@@ -55,7 +55,7 @@ function incentiveValue(table, name, round) {
 }
 
 /** True if faceId (an M-family monument, physicalId===faceId since monuments have no tier) has not yet
- * been built by anyone. Every monument face -- including M401-403, held in state.extraMonumentPool until
+ * been built by anyone. Every monument face -- including M401-404, held in state.extraMonumentPool until
  * revealed -- has a state.cards entry from setup.prepareShops' own registerCardPool calls, so this never
  * needs a null-instance fallback. */
 function isMonumentUnclaimed(state, faceId) {
@@ -133,7 +133,7 @@ const SINGLE_DIE_ROWS = [
 
 /** Stacking 2+ die-boosting TAPs onto the SAME die (2026-09-03, per user request: "大いなる導きLV2 や
  * 運命の導きLV1 2 宮廷人 などの複合でもAIが判断できるように" -- e.g. 宮廷人's own +4 (2026-10-10: was +3)
- * plus 運命の導きLV2's own +4 turning a real die=5 into 13, reaching 天空の塔/M403's DICE>=13, which no
+ * plus 運命の導きLV2's own +4 turning a real die=5 into 13, reaching 天空の塔/M402's DICE>=13, which no
  * single ability above
  * gets remotely close to alone). Unlike SINGLE_DIE_ROWS above (one row per owning-card+target pair, since
  * the user wanted that fine-grained control there), this is one row PER TARGET only (per user decision,
@@ -171,7 +171,7 @@ const SET_ABILITIES = [
   { faceId: 'B002B', values: [6, 7] },
 ];
 const COMBO_TARGETS = [
-  { name: '複合ダイス強化で天空の塔を獲得', targetFaceId: 'M403' },
+  { name: '複合ダイス強化で天空の塔を獲得', targetFaceId: 'M402' },
   { name: '複合ダイス強化で凱旋門を獲得', targetFaceId: 'M004' },
   { name: '複合ダイス強化で騎士像を獲得', targetFaceId: 'M003' },
   { name: '複合ダイス強化で鐘楼を獲得', targetFaceId: 'M002' },
@@ -225,7 +225,7 @@ function ownedDeltaSum(state, player) {
  * "他プレイヤーの動向も見るようにしたい" applies to exactly this group of 5 -- see monumentAtRiskFromOpponents. */
 const ENTERTAINMENT_DISTRICT_FACE_ID = 'A006B';
 const ENTERTAINMENT_DISTRICT_ROWS = [
-  { name: '歓楽街の支配LV2で王都建設を獲得(3R以降)', targetFaceId: 'M402' },
+  { name: '歓楽街の支配LV2で王都建設を獲得(3R以降)', targetFaceId: 'M404' },
   { name: '歓楽街の支配LV2で中央広場を獲得(3R以降)', targetFaceId: 'M007' },
   { name: '歓楽街の支配LV2で凱旋門を獲得(3R以降)', targetFaceId: 'M004' },
   { name: '歓楽街の支配LV2で聖王城を獲得(3R以降)', targetFaceId: 'M008' },

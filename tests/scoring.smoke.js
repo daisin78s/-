@@ -50,22 +50,24 @@ function giveCard(state, faceCardId, ownerId) {
 }
 
 // ---------------------------------------------------------------------------
-// M401/晩餐会's own VP_MODIFIER_FINAL(PER(K,1),10) (2026-09-01) -- computeFinalScore must include it
-// once the game has actually ended, and NOT before (see executor.collectFinalOnlyVpModifiers's own doc
-// for why this is gated on state.phase==='GAME_END' rather than being a plain VP_MODIFIER).
+// 晩餐会(物理id M401->M403、2026-10-13の宝物庫追加に伴うモニュメント再編で移動)自身の
+// VP_MODIFIER_FINAL(PER(K,1),9) (2026-09-01, cap raised from... lowered from 10 to 9 in the same
+// re-numbering) -- computeFinalScore must include it once the game has actually ended, and NOT before
+// (see executor.collectFinalOnlyVpModifiers's own doc for why this is gated on
+// state.phase==='GAME_END' rather than being a plain VP_MODIFIER).
 // ---------------------------------------------------------------------------
 {
-  const state = createEmptyGameState('scoring-smoke-M401');
+  const state = createEmptyGameState('scoring-smoke-M403');
   state.players.push(createPlayer('P1', 'Alice'));
   state.turnOrder = ['P1'];
-  giveCard(state, 'M401', 'P1');
+  giveCard(state, 'M403', 'P1');
   state.players[0].resources.K = 9;
 
   state.phase = 'ROUND';
-  check('Mid-game: M401\'s own VP_MODIFIER_FINAL contributes nothing yet', scoring.computeFinalScore(state, index, 'P1'), 0);
+  check('Mid-game: 晩餐会\'s own VP_MODIFIER_FINAL contributes nothing yet', scoring.computeFinalScore(state, index, 'P1'), 0);
 
   state.phase = 'GAME_END';
-  check('At the real GAME_END: 9K -> 9VP added', scoring.computeFinalScore(state, index, 'P1'), 9);
+  check('At the real GAME_END: 9K -> 9VP added (exactly at the cap)', scoring.computeFinalScore(state, index, 'P1'), 9);
 }
 
 // ---------------------------------------------------------------------------
@@ -89,11 +91,11 @@ function giveCard(state, faceCardId, ownerId) {
 // ---------------------------------------------------------------------------
 // VP_PENALTY_IF_BELOW: the general "○○が必要" shortfall rule (2026-08-15, per user spec: "ゲーム終了時
 // ○○が必要　足りない１個につき-1VP"). 強欲 uses it as real PASSIVE data now --
-// "VP_PENALTY_IF_BELOW(RESOURCE(A,B,C,Z),5)" (threshold raised from 3 to 5, 2026-08-19, per user edit to
-// game.xlsx) -- rather than the bespoke conCardVpAdjustment code this used to be (see that function's own
-// updated doc), so it's exercised here via the generic executor.collectVpModifiers path, same as any
-// other VP_MODIFIER-bearing card. 強欲 lived at CON005B until the user reorganized game.xlsx's CON sheet
-// by START_ORDER (2026-08-17); it's CON002B now.
+// "VP_PENALTY_IF_BELOW(RESOURCE(A,B,C,Z),7)" (threshold raised 3->5->7, most recently 2026-10-13, per
+// user edit to game.xlsx) -- rather than the bespoke conCardVpAdjustment code this used to be (see that
+// function's own updated doc), so it's exercised here via the generic executor.collectVpModifiers path,
+// same as any other VP_MODIFIER-bearing card. 強欲 lived at CON005B until the user reorganized
+// game.xlsx's CON sheet by START_ORDER (2026-08-17); it's CON002B now.
 // ---------------------------------------------------------------------------
 {
   const state = createEmptyGameState('scoring-smoke-con005b');
@@ -101,14 +103,14 @@ function giveCard(state, faceCardId, ownerId) {
   giveCard(state, 'CON002B', 'P1');
   const p1 = state.players[0];
 
-  p1.resources.A = 1; p1.resources.B = 1; p1.resources.C = 0; p1.resources.Z = 0; // total 2, short 3
-  check('CON002B: total=2 (short 3 of 5) -> -3VP', executor.collectVpModifiers(state, index, 'P1'), -3);
+  p1.resources.A = 1; p1.resources.B = 1; p1.resources.C = 0; p1.resources.Z = 0; // total 2, short 5
+  check('CON002B: total=2 (short 5 of 7) -> -5VP', executor.collectVpModifiers(state, index, 'P1'), -5);
 
-  p1.resources.A = 0; p1.resources.B = 0; p1.resources.C = 0; p1.resources.Z = 0; // total 0, short 5
-  check('CON002B: total=0 (short 5 of 5) -> -5VP', executor.collectVpModifiers(state, index, 'P1'), -5);
+  p1.resources.A = 0; p1.resources.B = 0; p1.resources.C = 0; p1.resources.Z = 0; // total 0, short 7
+  check('CON002B: total=0 (short 7 of 7) -> -7VP', executor.collectVpModifiers(state, index, 'P1'), -7);
 
-  p1.resources.A = 2; p1.resources.B = 1; p1.resources.C = 1; p1.resources.Z = 1; // total 5, at/above 5
-  check('CON002B: total=5 (at/above 5) -> 0VP, no bonus for the surplus', executor.collectVpModifiers(state, index, 'P1'), 0);
+  p1.resources.A = 2; p1.resources.B = 2; p1.resources.C = 2; p1.resources.Z = 1; // total 7, at/above 7
+  check('CON002B: total=7 (at/above 7) -> 0VP, no bonus for the surplus', executor.collectVpModifiers(state, index, 'P1'), 0);
 
   p1.resources.K = 100; // K is deliberately excluded from the A/B/C/Z total ("資源とはA,B,C,Zのこと")
   check('CON002B: K holdings never count toward the total', executor.collectVpModifiers(state, index, 'P1'), 0);
@@ -142,18 +144,18 @@ function giveCard(state, faceCardId, ownerId) {
 // apart per face without double- or under-counting either one.
 // ---------------------------------------------------------------------------
 {
-  // 強欲 (VP_PENALTY_IF_BELOW(RESOURCE(A,B,C,Z),5), threshold raised from 3 to 5 -- see the earlier test
+  // 強欲 (VP_PENALTY_IF_BELOW(RESOURCE(A,B,C,Z),7), threshold raised 3->5->7 -- see the earlier test
   // block's own doc) lived at CON005B until the user reorganized game.xlsx's CON sheet by START_ORDER
   // (2026-08-17, matching physical slot number to START_ORDER for both A/B tiers); it's CON002B now.
   const state = createEmptyGameState('scoring-smoke-own-vp-effect');
   state.players.push(createPlayer('P1', 'Alice'));
   giveCard(state, 'CON003A', 'P1'); // no monuments -> -2 on its own
-  giveCard(state, 'CON002B', 'P1'); // A+B+C+Z total 0, short 5 -> -5 on its own
+  giveCard(state, 'CON002B', 'P1'); // A+B+C+Z total 0, short 7 -> -7 on its own
   const p1 = state.players[0];
   p1.resources.A = 0; p1.resources.B = 0; p1.resources.C = 0; p1.resources.Z = 0;
 
   check('conCardOwnVpEffect(CON003A) reports only its own -2, not CON002B\'s share', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON003A'), -2);
-  check('conCardOwnVpEffect(CON002B) reports only its own -5, not CON003A\'s share', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON002B'), -5);
+  check('conCardOwnVpEffect(CON002B) reports only its own -7, not CON003A\'s share', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON002B'), -7);
   check('...and the two sum to the same combined total collectVpModifiers reports', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON003A') + scoring.conCardOwnVpEffect(state, index, 'P1', 'CON002B'), executor.collectVpModifiers(state, index, 'P1'));
   check('conCardOwnVpEffect returns 0 for a card this player does not actually own', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON001A'), 0);
 }

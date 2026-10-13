@@ -2681,11 +2681,13 @@ function renderCardListFlatCategory(key, container) {
 }
 
 /** モニュメント一覧だけの特別扱い (2026-10-10, per user request: "モニュメントカード一覧 晩餐会の左側に
- * いずれかのショップが売り切れたら登場 と記載して") -- M401-403(晩餐会/王都建設/天空の塔)はboard.
+ * いずれかのショップが売り切れたら登場 と記載して") -- M401-404(2026-10-13の宝物庫追加でM401-403の3枚
+ * からM401-404の4枚に拡張、現在の中身は宝物庫/天空の塔/晩餐会/王都建設)はboard.
  * revealExtraMonumentsIfAnyShopEmptied により、いずれかのショップが空になった時点でまとめて登場する
  * (setup.js/board.jsの同名処理参照、M001-012とは別枠のextraMonumentPool)。renderCardListFlatCategory
- * と同じ6列グリッドのまま、M401の直前にキャプション用のテキストセルだけ挿入する(そのままM401が1つ
- * 右にずれ、「晩餐会の左側」に文言が来る)。*/
+ * と同じ6列グリッドのまま、このグループの先頭(今はM401)の直前にキャプション用のテキストセルだけ挿入する
+ * (そのままM401が1つ右にずれ、グループの左側に文言が来る -- どのカードがM401に割り当たるかが変わっても
+ * この位置関係自体は保たれる)。*/
 function renderCardListMonumentCategory(container) {
   const grid = el('div', 'card-list-grid');
   grid.style.gridTemplateColumns = 'repeat(6, 122px)';
@@ -3912,17 +3914,29 @@ function buildMaxEmblemVpModifierIcon(actionText) {
   return stack;
 }
 
-/** VP_MODIFIER_FINAL(PER(K,1),10): M401/晩餐会's own PASSIVE (2026-09-01, per user spec, verbatim line
- * breaks: "1Kにつき1VP/（MAX10）" -- two lines at a smaller size than the base .action-suffix, since this
- * is flavor-text rather than a short label -- see .action-suffix--small in style.css). Exact-match on
+/** VP_MODIFIER_FINAL(PER(K,1),9): 晩餐会(物理id M401->M403、2026-10-13の宝物庫追加に伴うモニュメント
+ * 再編で移動)自身のPASSIVE (2026-09-01, per user spec, verbatim line breaks: "1Kにつき1VP/（MAX9）" -- 再編
+ * 前はMAX10 -- 両方とも二行に、ベースの.action-suffixより小さいサイズで、これはラベルというよりフレーバー
+ * テキストのため -- see .action-suffix--small in style.css). Exact-match on
  * this one card's own current parameters, same convention as buildMaxEmblemVpModifierIcon above (a
  * bespoke icon for one specific PASSIVE string, not a generic PER(...)/cap renderer) -- would need
- * updating if M401's own K-ratio/cap numbers ever change again. */
+ * updating if 晩餐会's own K-ratio/cap numbers ever change again. */
 function buildBanquetFinalVpModifierIcon(actionText) {
-  if (actionText !== 'VP_MODIFIER_FINAL(PER(K,1),10)') return null;
+  if (actionText !== 'VP_MODIFIER_FINAL(PER(K,1),9)') return null;
   const stack = el('div', 'action-icons-stack');
   stack.appendChild(actionRow([el('span', 'action-suffix action-suffix--small', '1Kにつき1VP')]));
-  stack.appendChild(actionRow([el('span', 'action-suffix action-suffix--small', '（MAX10）')]));
+  stack.appendChild(actionRow([el('span', 'action-suffix action-suffix--small', '（MAX9）')]));
+  return stack;
+}
+
+/** VP_MODIFIER_FINAL(RESOURCE(A,B,C,Z),7): 宝物庫(M401, 2026-10-13追加)自身のPASSIVE -- INST文言
+ * 「ゲーム終了時持っている〇以外の資源１個につき1VP（MAX7VP)」の verbatim line breaks を再現。
+ * buildBanquetFinalVpModifierIconと同じ、一枚のカード専用のexact-matchアイコン。 */
+function buildTreasuryFinalVpModifierIcon(actionText) {
+  if (actionText !== 'VP_MODIFIER_FINAL(RESOURCE(A,B,C,Z),7)') return null;
+  const stack = el('div', 'action-icons-stack');
+  stack.appendChild(actionRow([el('span', 'action-suffix action-suffix--small', '〇以外の資源1個につき1VP')]));
+  stack.appendChild(actionRow([el('span', 'action-suffix action-suffix--small', '（MAX7）')]));
   return stack;
 }
 
@@ -4162,6 +4176,8 @@ function buildActionIcons(actionText) {
   if (maxEmblemVpModifierIcon) return maxEmblemVpModifierIcon;
   const banquetFinalVpModifierIcon = buildBanquetFinalVpModifierIcon(actionText);
   if (banquetFinalVpModifierIcon) return banquetFinalVpModifierIcon;
+  const treasuryFinalVpModifierIcon = buildTreasuryFinalVpModifierIcon(actionText);
+  if (treasuryFinalVpModifierIcon) return treasuryFinalVpModifierIcon;
   const cardCountVpModifierIcon = buildCardCountVpModifierIcon(actionText);
   if (cardCountVpModifierIcon) return cardCountVpModifierIcon;
   const emblemSetVpModifierIcon = buildEmblemSetVpModifierIcon(actionText);
@@ -6375,13 +6391,13 @@ function advanceTurnIfPossible(state, playerId) {
   if (!isAiPlayer(playerId)) changeHighlightBaseline = structuredClone(state);
   if (turnFlowMod.isRoundOver(state)) {
     turnFlowMod.endRound(state, INDEX);
-    // M401/晩餐会 auto-conversion notice (2026-09-14, per user request: "自動でa→kなどがあった場合 警告文
-    // 資源を自動で食料に変換します と出るようにしてください") -- state.m401AutoConvertedPlayerIds (see
+    // 晩餐会(M403)自動変換の警告 (2026-09-14, per user request: "自動でa→kなどがあった場合 警告文
+    // 資源を自動で食料に変換します と出るようにしてください") -- state.banquetAutoConvertedPlayerIds (see
     // turn-flow.js's own doc) lists everyone endRound just converted; only alert for THIS device's own
     // human seat, same "!onlineRoomCode || localSeatId === X" scoping every other local-seat-only UI
     // reaction in this file already uses, so an online co-player's own conversion doesn't pop an
     // unrelated alert on this browser.
-    if (state.m401AutoConvertedPlayerIds && state.m401AutoConvertedPlayerIds.some((id) => !isAiPlayer(id) && (!onlineRoomCode || localSeatId === id))) {
+    if (state.banquetAutoConvertedPlayerIds && state.banquetAutoConvertedPlayerIds.some((id) => !isAiPlayer(id) && (!onlineRoomCode || localSeatId === id))) {
       window.alert('資源を自動で食料に変換します');
     }
     if (state.phase !== 'GAME_END') turnFlowMod.startRound(state);

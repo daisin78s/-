@@ -279,26 +279,27 @@ function endRound(state, index) {
   if (state.round < 4) rerollDiceForNextRound(state);
   if (state.round >= 4) {
     state.phase = 'GAME_END';
-    // M401/晩餐会's own "ゲーム終了時持っている1Kにつき1VP(MAX10VP)" (2026-09-14, per user request:
-    // "晩餐会を持っているときにゲームエンドしたとき A→KやZ→Kなどをk=10まで自動でやるようにしてほしい"):
-    // auto-converts A/B/C/Z into K, up to K=10, for every player who owns M401 -- reusing
+    // 晩餐会(物理id M401->M403, 2026-10-13の宝物庫追加に伴うモニュメント再編で移動)自身の「ゲーム終了時
+    // 持っている1Kにつき1VP(MAX9VP、再編前はMAX10VP)」(2026-09-14, per user request: "晩餐会を持っている
+    // ときにゲームエンドしたとき A→KやZ→Kなどをk=9まで自動でやるようにしてほしい"):
+    // auto-converts A/B/C/Z into K, up to K=9, for every player who owns M403 -- reusing
     // board.planFeeConversion's own "most-plentiful-of-ABC first, then Z" ordering (the same plan used to
-    // cover a pendingFee shortfall) for a shortfall against 10 instead. There is never a reason to hold
+    // cover a pendingFee shortfall) for a shortfall against 9 instead. There is never a reason to hold
     // A/B/C/Z back at this exact point (the game is over, nothing else can spend them), so this is a pure
     // convenience/correctness fix, not a strategic choice left to the player -- and it applies uniformly to
     // every player (AI included), closing the same gap for AI opponents whose own move-generator might
     // never have been offered these free-action conversions at exactly the right moment (see
     // move-generator.js's own doc on why free actions are normally withheld unless canEndTurn needs them).
-    // Never exceeds K=10 (extra K past that has no further value from this card) and never touches K
-    // already at/above 10.
+    // Never exceeds K=9 (extra K past that has no further value from this card) and never touches K
+    // already at/above 9.
     // Stashed on state the same way qstRewardsGranted just below is (2026-09-14, per user request: a
     // UI warning -- "資源を自動で食料に変換します" -- should show whenever this actually fires): the
     // list of playerIds this conversion actually moved any resource for, so a caller (main.js) can tell
-    // apart "converted something" from "owns M401 but was already at/above 10K, nothing to do".
-    state.m401AutoConvertedPlayerIds = [];
+    // apart "converted something" from "owns M403 but was already at/above 9K, nothing to do".
+    state.banquetAutoConvertedPlayerIds = [];
     for (const player of state.players) {
-      if (!player.ownedCardPhysicalIds.includes('M401')) continue;
-      const shortfall = Math.max(0, 10 - (player.resources.K || 0));
+      if (!player.ownedCardPhysicalIds.includes('M403')) continue;
+      const shortfall = Math.max(0, 9 - (player.resources.K || 0));
       if (shortfall <= 0) continue;
       const plan = planFeeConversion(player.resources, shortfall);
       if (plan.length === 0) continue;
@@ -306,7 +307,7 @@ function endRound(state, index) {
         player.resources[resource] -= count;
         player.resources.K = (player.resources.K || 0) + count;
       }
-      state.m401AutoConvertedPlayerIds.push(player.id);
+      state.banquetAutoConvertedPlayerIds.push(player.id);
     }
     // QST's rank-based rewards (2026-08-09, see qst.js's own doc) settle exactly here, exactly once --
     // nothing after this point can trigger another round-4 endRound (the game loop stops advancing

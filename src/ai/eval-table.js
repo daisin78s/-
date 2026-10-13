@@ -60,16 +60,17 @@ function evalValue(table, round, id) {
  *    This function's own doc already claimed this convention existed (see buildEvalTable's header comment)
  *    -- it just wasn't actually enforced anywhere until now, which is how A202A's 1R cell drifted to a
  *    nonzero value over many generations of training/mutation despite being structurally unreachable.
- *  - M401/M402/M403 (晩餐会/王都建設/天空の塔): no hard round gate in code (setup.js's prepareShops holds
- *    them back in state.extraMonumentPool until any shop's own pool empties, not a fixed round), but per
- *    the user's own observation from real games, that practically never happens before round 3 -- treated
- *    the same as wave 2 here (no 1R or 2R value) on that basis.
+ *  - M401-404 (宝物庫/天空の塔/晩餐会/王都建設, 2026-10-13の宝物庫追加でM401-403の3枚からM401-404の
+ *    4枚に拡張): no hard round gate in code (setup.js's prepareShops holds them back in
+ *    state.extraMonumentPool until any shop's own pool empties, not a fixed round), but per the user's own
+ *    observation from real games, that practically never happens before round 3 -- treated the same as
+ *    wave 2 here (no 1R or 2R value) on that basis.
  * Used by ga.js's randomGenome/mutateGenome/mutateGenomePercent to keep these cells pinned at exactly 0
  * through every generation, rather than wasting genome search space (and, once written back into
  * game.xlsx by tools/apply_evolved_genome.py, spreadsheet clarity) mutating a value nothing can ever
  * actually query in a real game. */
 function isStructurallyBlankRound(id, round) {
-  if (id === 'M401' || id === 'M402' || id === 'M403') return round <= 2;
+  if (id === 'M401' || id === 'M402' || id === 'M403' || id === 'M404') return round <= 2;
   const match = /^[A-Z]+(\d+)[A-Z]$/.exec(id);
   if (!match) return false;
   const num = Number(match[1]);

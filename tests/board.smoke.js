@@ -374,15 +374,15 @@ function giveJob002(state, playerId) {
   check('Round 2: the same M-shop candidate is offered once the gate lifts', candidates.some((c) => c.faceId === 'M012' && c.shopKey === 'M'), true);
 }
 {
-  // M401-403 sitting in a NORMAL slot (via revealExtraMonumentsIfAnyShopEmptied) are unaffected by the
+  // M401-404 sitting in a NORMAL slot (via revealExtraMonumentsIfAnyShopEmptied) are unaffected by the
   // M-shop-specific gate above -- NORMAL never round-gates monuments at all (unchanged from before this
   // feature).
   const state = freshStateWithShops();
   state.round = 1;
   const normalSlotId = Object.keys(state.shops.NORMAL.slots)[0];
-  state.shops.NORMAL.slots[normalSlotId] = 'M401'; // DICE>=1
+  state.shops.NORMAL.slots[normalSlotId] = 'M403'; // 晩餐会, DICE>=1
   const candidates = board.getBuildCandidates(state, index, 'P1', ['M'], 6);
-  check('Round 1: a monument sitting in a NORMAL slot is still offered (the M-shop gate does not apply there)', candidates.some((c) => c.faceId === 'M401' && c.shopKey === 'NORMAL'), true);
+  check('Round 1: a monument sitting in a NORMAL slot is still offered (the M-shop gate does not apply there)', candidates.some((c) => c.faceId === 'M403' && c.shopKey === 'NORMAL'), true);
 }
 
 // ---------------------------------------------------------------------------
@@ -863,13 +863,14 @@ function giveJob002(state, playerId) {
 }
 {
   // setup.prepareShops (2026-08-29, per user spec: "SHOP006 106 203のいずれかが空になったときそこに出て
-  // くる"): M401-403 start in state.extraMonumentPool, not in any of the 3 shops' own slots/drawPiles.
+  // くる"): M401-404 (extended from M401-403 by the 2026-10-13 宝物庫 addition) start in
+  // state.extraMonumentPool, not in any of the 3 shops' own slots/drawPiles.
   const state = freshStateWithShops();
   const isExtraMonument = (faceId) => faceId && Number(faceId.replace(/\D/g, '')) >= 400;
-  check('extraMonumentPool starts with all 3', [...state.extraMonumentPool].sort(), ['M401', 'M402', 'M403']);
+  check('extraMonumentPool starts with all 4', [...state.extraMonumentPool].sort(), ['M401', 'M402', 'M403', 'M404']);
   for (const shopKey of ['M', 'NORMAL', 'SPECIAL']) {
-    check(`${shopKey} shop slots hold no M401-403`, Object.values(state.shops[shopKey].slots).some(isExtraMonument), false);
-    check(`${shopKey} shop drawPile holds no M401-403`, state.shops[shopKey].drawPile.some(isExtraMonument), false);
+    check(`${shopKey} shop slots hold no M401-404`, Object.values(state.shops[shopKey].slots).some(isExtraMonument), false);
+    check(`${shopKey} shop drawPile holds no M401-404`, state.shops[shopKey].drawPile.some(isExtraMonument), false);
   }
 }
 {
@@ -877,7 +878,7 @@ function giveJob002(state, playerId) {
   // its own drawPile, so nothing happens.
   const state = freshStateWithShops();
   board.revealExtraMonumentsIfAnyShopEmptied(state);
-  check('No-op while every shop still has its own drawPile cards left', state.extraMonumentPool.length, 3);
+  check('No-op while every shop still has its own drawPile cards left', state.extraMonumentPool.length, 4);
 }
 {
   // Buy out SHOP201-203 entirely (both waves) so its own drawPile hits 0 -- the first restock that then
@@ -885,7 +886,9 @@ function giveJob002(state, playerId) {
   // Per user spec (revised 2026-08-29: "強化モニュメントがまだある限りSHOPは空にならないように...強化
   // モニュメントもなくなったら空になる"), this gets exactly ONE random monument per call -- SPECIAL still
   // has 2 more empty slots afterward, so a 2nd call (simulating the next endTurn) gives it ANOTHER one
-  // (no per-shop cap), continuing until either SPECIAL is full or the shared pool runs out.
+  // (no per-shop cap), continuing until either SPECIAL is full or the shared pool runs out. SPECIAL only
+  // has 3 slots total, so (since the pool now holds 4, not 3, after the 2026-10-13 宝物庫 addition) it
+  // fills up at the 3rd call with 1 still left over in the pool, unlike before when both hit 0 together.
   const state = freshStateWithShops();
   const isExtraMonument = (faceId) => faceId && Number(faceId.replace(/\D/g, '')) >= 400;
   while (state.shops.SPECIAL.drawPile.length > 0 || Object.values(state.shops.SPECIAL.slots).some(Boolean)) {
@@ -897,24 +900,26 @@ function giveJob002(state, playerId) {
   check('SPECIAL fully drained: drawPile empty', state.shops.SPECIAL.drawPile.length, 0);
   check('...and every slot null (nothing left to draw M/NORMAL are untouched by the loop above)', Object.values(state.shops.SPECIAL.slots).every((v) => v === null), true);
   board.revealExtraMonumentsIfAnyShopEmptied(state);
-  check('Pool now holds 2 (SPECIAL drew exactly 1 this call)', state.extraMonumentPool.length, 2);
-  check('Exactly 1 of M401-403 sits in SPECIAL so far', Object.values(state.shops.SPECIAL.slots).filter(isExtraMonument).length, 1);
+  check('Pool now holds 3 (SPECIAL drew exactly 1 this call)', state.extraMonumentPool.length, 3);
+  check('Exactly 1 of M401-404 sits in SPECIAL so far', Object.values(state.shops.SPECIAL.slots).filter(isExtraMonument).length, 1);
   check('M shop received none (only SPECIAL emptied)', Object.values(state.shops.M.slots).some(isExtraMonument), false);
   check('NORMAL shop received none either', Object.values(state.shops.NORMAL.slots).some(isExtraMonument), false);
   // SPECIAL still has 2 empty slots and the pool isn't empty -- the SAME shop draws again.
   board.revealExtraMonumentsIfAnyShopEmptied(state);
   check('A 2nd call gives SPECIAL a 2nd extra monument (no per-shop cap)', Object.values(state.shops.SPECIAL.slots).filter(isExtraMonument).length, 2);
-  check('Pool now holds 1', state.extraMonumentPool.length, 1);
-  // ...and a 3rd call fills SPECIAL's last empty slot, exhausting the pool entirely.
+  check('Pool now holds 2', state.extraMonumentPool.length, 2);
+  // ...and a 3rd call fills SPECIAL's last empty slot -- SPECIAL only has 3 slots, so this caps out here
+  // even though the pool still has 1 left over (unlike before the 宝物庫 addition, when pool size exactly
+  // matched SPECIAL's slot count).
   board.revealExtraMonumentsIfAnyShopEmptied(state);
   check('A 3rd call fills SPECIAL\'s last slot', Object.values(state.shops.SPECIAL.slots).filter(isExtraMonument).length, 3);
-  check('Pool is now empty', state.extraMonumentPool.length, 0);
-  check('...specifically all 3 of M401/M402/M403, each exactly once', [...Object.values(state.shops.SPECIAL.slots)].sort(), ['M401', 'M402', 'M403']);
-  // A 4th call is a genuine no-op -- SPECIAL is full and the pool is empty, so it can finally sit as an
-  // ordinary fully-stocked shop (or, if bought down again from here, actually go empty for good).
+  check('Pool still holds 1 (SPECIAL is full, one extra monument has nowhere to go yet)', state.extraMonumentPool.length, 1);
+  check('...SPECIAL holds 3 distinct extra monuments, each exactly once', new Set(Object.values(state.shops.SPECIAL.slots)).size, 3);
+  // A 4th call is a genuine no-op -- SPECIAL is full (M/NORMAL untouched in this test), so there's no
+  // empty slot left anywhere for the pool's remaining 1 to land in.
   const before = { ...state.shops.SPECIAL.slots };
   board.revealExtraMonumentsIfAnyShopEmptied(state);
-  check('Calling it again once both SPECIAL is full and the pool is empty changes nothing', state.shops.SPECIAL.slots, before);
+  check('Calling it again once SPECIAL is full changes nothing', state.shops.SPECIAL.slots, before);
 }
 {
   // Draining BOTH the M shop and the NORMAL shop in the same check gives each its own distinct monument
@@ -932,7 +937,7 @@ function giveJob002(state, playerId) {
   drainShop('M');
   drainShop('NORMAL');
   board.revealExtraMonumentsIfAnyShopEmptied(state);
-  check('Pool now holds 1 (M and NORMAL each drew 1 this call)', state.extraMonumentPool.length, 1);
+  check('Pool now holds 2 (M and NORMAL each drew 1 this call)', state.extraMonumentPool.length, 2);
   const mExtra = Object.values(state.shops.M.slots).filter(isExtraMonument);
   const normalExtra = Object.values(state.shops.NORMAL.slots).filter(isExtraMonument);
   check('M shop got exactly 1', mExtra.length, 1);
@@ -942,15 +947,15 @@ function giveJob002(state, playerId) {
 }
 {
   // Monuments ignore the shop slot's own dice-value requirement (2026-08-29, per user spec: "モニュメン
-  // トはSHOPのダイス目は無視する") -- getBuildCandidates checks M401-403's own DICE>=threshold even when
+  // トはSHOPのダイス目は無視する") -- getBuildCandidates checks M401-404's own DICE>=threshold even when
   // sitting in a NORMAL slot, never that slot's DICE_MIN/MAX (which governs A/B/C cards only).
   const state = freshStateWithShops();
-  // Force M401 (晩餐会, DICE>=1, COST=15K) directly into a NORMAL slot to simulate having landed there
+  // Force M403 (晩餐会, DICE>=1, COST=9K) directly into a NORMAL slot to simulate having landed there
   // via revealExtraMonumentsIfAnyShopEmptied, regardless of that slot's own DICE_MIN/MAX range.
   const normalSlotId = Object.keys(state.shops.NORMAL.slots)[0];
-  state.shops.NORMAL.slots[normalSlotId] = 'M401';
+  state.shops.NORMAL.slots[normalSlotId] = 'M403';
   const candidates = board.getBuildCandidates(state, index, 'P1', ['M'], 1);
-  check('M401 buildable from a NORMAL slot at die value 1 (its own DICE>=1), regardless of that slot\'s own DICE_MIN/MAX', candidates.some((c) => c.faceId === 'M401' && c.shopKey === 'NORMAL'), true);
+  check('M403 buildable from a NORMAL slot at die value 1 (its own DICE>=1), regardless of that slot\'s own DICE_MIN/MAX', candidates.some((c) => c.faceId === 'M403' && c.shopKey === 'NORMAL'), true);
 }
 {
   // A hole at the far right (the common case: the rightmost occupied card is the one built) needs no

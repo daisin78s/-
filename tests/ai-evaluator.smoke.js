@@ -881,7 +881,7 @@ index.raw.QST = [
 // ---------------------------------------------------------------------------
 {
   // The user's own headline example, updated for 2026-10-10's 宮廷人 +3->+4 change: 宮廷人(+4) +
-  // 運命の導きLV2(+4) = +8, on a real die=5 -> 13, exactly 天空の塔/M403's own DICE threshold, firing the
+  // 運命の導きLV2(+4) = +8, on a real die=5 -> 13, exactly 天空の塔/M402's own DICE threshold, firing the
   // combo path. Unlike the old die=6 (which cleared both single-ability thresholds too), die=5 also
   // happens to independently satisfy 運命の導きLV2's OWN SINGLE_DIE_ROWS entry (bonus4, 凱旋門/M004's
   // >=9: 5+4=9) -- SINGLE_DIE_ROWS and COMBO_TARGETS aren't mutually exclusive (no shared-die gate
@@ -942,14 +942,16 @@ index.raw.QST = [
   const d1 = createDie('d1', 'COLOR');
   d1.value = 6;
   state.players[0].dice.push(d1);
-  const built = createCardInstance('M403');
+  const built = createCardInstance('M402');
   built.ownerId = 'P1';
   state.cards[built.physicalId] = built;
   check('No combo credit once 天空の塔 is already claimed (by anyone)', evaluatorMonumentIncentiveAware.score(state, 'P1'), evaluator.score(state, 'P1'));
 }
 
 {
-  // 歓楽街の支配LV2(A006B) + 王都建設(M402, COST=5A,5B,5C -> 15 units -> needs 2*15=30K held).
+  // 歓楽街の支配LV2(A006B) + 王都建設(物理id M402->M404、2026-10-13の宝物庫追加に伴うモニュメント再編で
+  // 移動、COST=5A,5B,5C -> 15 units -> needs 2*15=30K held, unchanged by the move -- only its DICE
+  // threshold (5->7) changed, and this K-based credit path never reads DICE at all).
   const state = freshState(3);
   giveCard(state, 'A006B', 'P1');
   state.players[0].resources.K = 30;
@@ -966,21 +968,22 @@ index.raw.QST = [
 }
 {
   // 30K clears every target's threshold at once, but an opponent can already snipe 王都建設 (and, at
-  // this die value, also 聖王城/円形闘技場 -- die>=their own lower thresholds too) right now -- per user
-  // spec ("他プレイヤーの動向も見る"), this suppresses 王都建設's own credit specifically. Per priority
-  // order, the group then falls back to 中央広場 (DICE>=6, the opponent's die=5 doesn't reach it -- not
-  // at risk), the next-highest-priority target P1's own 30K still clears -- "そうでなければとれるものを
-  // とる": a target actually safe to hold for still credits, even though the very top choice doesn't.
+  // this die value, also 聖王城/円形闘技場/中央広場 -- die>=their own lower thresholds too) right now --
+  // per user spec ("他プレイヤーの動向も見る"), this suppresses 王都建設's own credit specifically. Per
+  // priority order, the group then falls back to 凱旋門 -- except the opponent's die (value=7, the
+  // minimum that still reaches 王都建設's own re-numbered DICE>=7) does NOT reach 凱旋門's own DICE>=9, so
+  // that's the one safe-to-hold-for target that still credits -- "そうでなければとれるものをとる": a
+  // target actually safe to hold for still credits, even though the very top choice doesn't.
   const state = freshState(3);
   state.players.push(createPlayer('P2', 'Bob'));
   giveCard(state, 'A006B', 'P1');
   state.players[0].resources.K = 30;
   const opponentDie = createDie('opp-d1', 'COLOR');
-  opponentDie.value = 5; // meets M402/M008/M009's own DICE thresholds (5/5/4), not M007's (6) or M004's (9)
+  opponentDie.value = 7; // meets M404/M008/M009/M007's own DICE thresholds (7/5/4/6), not M004's (9)
   state.players[1].dice.push(opponentDie);
   state.players[1].resources = { ...state.players[1].resources, A: 5, B: 5, C: 5 };
   const plainScore = evaluator.score(state, 'P1');
-  check('王都建設 itself gets no credit while at risk, but the group falls back to 中央広場 (round3=300)', evaluatorMonumentIncentiveAware.score(state, 'P1'), plainScore + 300);
+  check('王都建設 itself gets no credit while at risk, but the group falls back to 凱旋門 (round3=200)', evaluatorMonumentIncentiveAware.score(state, 'P1'), plainScore + 200);
 }
 {
   // Same risk, but P1 only holds 18K -- exactly enough for 中央広場 (2*9), not for anything above it in
@@ -1038,7 +1041,8 @@ index.raw.QST = [
 }
 
 // ---------------------------------------------------------------------------
-// M401/晩餐会's own VP_MODIFIER_FINAL(PER(K,1),10) (2026-09-01, per user spec: "ゲーム終了時にVPが
+// 晩餐会(物理id M401->M403、2026-10-13の宝物庫追加に伴うモニュメント再編で移動)自身の
+// VP_MODIFIER_FINAL(PER(K,1),9) (2026-09-01, per user spec: "ゲーム終了時にVPが
 // プラスされることはAIが把握できるようにしてください" while also confirming a mid-game hoarding
 // incentive should NOT exist) -- the Evaluator must score this as exactly 0 for any non-GAME_END state
 // (no reward for holding K early) but the real, round-4-VP-weighted value once state.phase is actually
@@ -1046,7 +1050,7 @@ index.raw.QST = [
 // ---------------------------------------------------------------------------
 {
   const state = freshState(4);
-  giveCard(state, 'M401', 'P1');
+  giveCard(state, 'M403', 'P1');
   state.players[0].resources.K = 9;
 
   state.phase = 'ROUND';
@@ -1055,7 +1059,7 @@ index.raw.QST = [
   state.phase = 'GAME_END';
   const atEndScore = evaluator.score(state, 'P1');
 
-  const bonusVp = 9; // well under the 10VP cap
+  const bonusVp = 9; // exactly at the 9VP cap
   check('Reaching the real GAME_END adds exactly 9K -> 9VP, weighted by round 4\'s own VP weight', atEndScore - midGameScore, bonusVp * evalTable[4].VP);
 }
 
@@ -1125,11 +1129,11 @@ index.raw.QST = [
   giveCard(state, 'C201A', 'P1');
   const p2 = createPlayer('P2', 'Bob');
   state.players.push(p2);
-  giveCard(state, 'M401', 'P2');
+  giveCard(state, 'M403', 'P2');
   const withoutFarm = freshState(3);
   const p2Only = createPlayer('P2', 'Bob');
   withoutFarm.players.push(p2Only);
-  giveCard(withoutFarm, 'M401', 'P2');
+  giveCard(withoutFarm, 'M403', 'P2');
   check(
     '農夫 owned but 晩餐会 already claimed (by anyone) credits nothing',
     evaluator.score(state, 'P1') - evaluator.score(withoutFarm, 'P1'),

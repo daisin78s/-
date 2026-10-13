@@ -49,16 +49,17 @@ check('MAP003 starts at AREA003A (2 numbered + 1 ANY slot)', state.maps['MAP003'
 check('MAP008 (castle) starts with 6 ANY slots', state.maps['MAP008'].slots.length, 6);
 
 check('Monument shop has 6 slots filled', Object.values(state.shops.M.slots).filter(Boolean).length, 6);
-check('Monument shop draw pile has 6 left (12 base monuments - 6 shown, M401-403 excluded)', state.shops.M.drawPile.length, 6);
+check('Monument shop draw pile has 6 left (12 base monuments - 6 shown, M401-404 excluded)', state.shops.M.drawPile.length, 6);
 check('Normal shop has 6 slots filled', Object.values(state.shops.NORMAL.slots).filter(Boolean).length, 6);
 check('Normal shop draw pile has 12 left (18 - 6 shown)', state.shops.NORMAL.drawPile.length, 12);
 // SHOP201-203 (2026-08-24 rework): visible from setup itself, no round-2 reveal step any more -- see
 // setup.prepareShops' own doc on the 2-wave concatenated drawPile.
 check('Special shop IS already visible at setup (wave 1)', Object.values(state.shops.SPECIAL.slots).filter(Boolean).length, 3);
 check('...its drawPile holds the other 6 (3 wave-1 + 3 wave-2, waiting behind wave 1)', state.shops.SPECIAL.drawPile.length, 6);
-// M401-403 (2026-08-29 rework): held back in extraMonumentPool, not in any shop's own pool -- see
-// setup.prepareShops' own doc and board.revealExtraMonumentsIfAnyShopEmptied.
-check('extraMonumentPool starts with all 3 (M401-403)', [...state.extraMonumentPool].sort(), ['M401', 'M402', 'M403']);
+// M401-404 (2026-08-29 rework, extended from M401-403 to M401-404 by the 2026-10-13 宝物庫 addition):
+// held back in extraMonumentPool, not in any shop's own pool -- see setup.prepareShops' own doc and
+// board.revealExtraMonumentsIfAnyShopEmptied.
+check('extraMonumentPool starts with all 4 (M401-404)', [...state.extraMonumentPool].sort(), ['M401', 'M402', 'M403', 'M404']);
 
 const allShopFaceIds = [
   ...Object.values(state.shops.M.slots),
@@ -69,7 +70,7 @@ const allShopFaceIds = [
   ...state.shops.SPECIAL.drawPile,
 ];
 check('No duplicate cards across shop slots+drawPiles', new Set(allShopFaceIds).size, allShopFaceIds.length);
-check('Shop card pool size is 12 (M) + 18 (normal) + 9 (special: 6+3 across 2 waves) = 39 (M401-403 held in extraMonumentPool, not any shop)', allShopFaceIds.length, 39);
+check('Shop card pool size is 12 (M) + 18 (normal) + 9 (special: 6+3 across 2 waves) = 39 (M401-404 held in extraMonumentPool, not any shop)', allShopFaceIds.length, 39);
 
 // ---------------------------------------------------------------------------
 // Dice

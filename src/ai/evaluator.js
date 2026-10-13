@@ -478,15 +478,16 @@ class Evaluator {
       if (ownsFairyOrPrincess) {
         total += tappedUntapSynergyCount * v('聖女王女ラウンドタップ相性');
       }
-      // 農園/小麦畑/農夫(A004/A005/C201, either tier) x 晩餐会(M401, COST=10K, final VP_MODIFIER per K
-      // held): a K-stockpiling economy already in place makes 晩餐会 both easier to afford and more
-      // valuable once owned -- credited once while 晩餐会 is still unclaimed by anyone (same
-      // isMonumentUnclaimed convention monument-incentive.js's own FARM_ROW_NAME check uses).
+      // 農園/小麦畑/農夫(A004/A005/C201, either tier) x 晩餐会(物理id M401->M403、2026-10-13の宝物庫追加
+      // に伴うモニュメント再編で移動, COST=9K, final VP_MODIFIER per K held): a K-stockpiling economy
+      // already in place makes 晩餐会 both easier to afford and more valuable once owned -- credited once
+      // while 晩餐会 is still unclaimed by anyone (same isMonumentUnclaimed convention
+      // monument-incentive.js's own FARM_ROW_NAME check uses).
       const ownsFarmSynergy = player.ownedCardPhysicalIds.some((pid) => {
         const inst = state.cards[pid];
         return inst && FARM_SYNERGY_FACE_IDS.has(inst.currentFaceId);
       });
-      const banquetHallInst = state.cards['M401'];
+      const banquetHallInst = state.cards['M403'];
       const banquetHallUnclaimed = !banquetHallInst || banquetHallInst.ownerId === null;
       if (ownsFarmSynergy && banquetHallUnclaimed) {
         total += v('晩餐会食料生産相性');
