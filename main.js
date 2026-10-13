@@ -9260,7 +9260,7 @@ function renderRankingList(highlightId, highlightCategory) {
         row.appendChild(swatch);
         row.appendChild(el('span', 'ranking-row__name', entry.name));
         row.appendChild(el('span', 'ranking-row__score', `総合 ${entry.totalScore}VP（素点${entry.rawScore} + QST${entry.qstScore}）`));
-        row.appendChild(el('span', 'ranking-row__con', `CON: ${rankingCardDisplayName(entry.conFaceId)}`));
+        row.appendChild(el('span', 'ranking-row__con', `制約: ${rankingCardDisplayName(entry.conFaceId)}`));
         row.appendChild(el('span', 'ranking-row__job', `ジョブ: ${rankingCardDisplayName(entry.jobCardId)}`));
         row.appendChild(el('span', 'ranking-row__opponents', entry.opponents.join('　')));
         // 最新版でないリプレイの目印 (2026-09-07, per user request: "この〇は最新版でないリプレイデータを
