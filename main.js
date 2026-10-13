@@ -13887,7 +13887,14 @@ function setupOverlayScrollLock() {
  * に該当していた可能性が高く、実機のiPad Safariで何度プッシュしても見た目が一切変わらない(=CSS側の
  * 初期見積もり値のまま固定されている)という報告と一致する。CSSのcalc()/カスタムプロパティ経由の
  * 再計算に一切頼らず、計測結果をfont-sizeとして各要素へ直接書き込む(clamp相当の上下限はJS側で計算)
- * ことで、この種のブラウザ側の再計算バグの影響を受けないようにする。 */
+ * ことで、この種のブラウザ側の再計算バグの影響を受けないようにする。
+ * 2026-10-13追記: この直接指定に変えても実機でまだ重なるという報告が続いたため、検証用のヘッドレス
+ * Chromiumで確認したところ、実はどのテストケースでもclampの上限値(当時52/76/20px)に張り付いて
+ * いただけだった(=動的な計算部分は一度も実際の表示に影響していなかった)と判明。Chromiumではその
+ * 上限値でもボタンと重ならずに収まっていたが、実機のSafariはフォントの行間などの描画差でギリギリ
+ * 収まらなかったと考えられる -- 「1つの環境でギリギリ重ならない値」を正解とみなしていたこと自体が
+ * 誤りだったため、上限値を明確に余裕を持たせた値(40/58/16px)まで下げた(style.cssの同じ3箇所と
+ * 揃えること)。 */
 function setupHeroWidthObserver() {
   const heroImg = document.getElementById('entry-banner__hero');
   const titleEl = document.getElementById('entry-banner__tagline-title');
@@ -13898,9 +13905,9 @@ function setupHeroWidthObserver() {
   const observer = new ResizeObserver(() => {
     const width = heroImg.getBoundingClientRect().width;
     if (width <= 0) return;
-    titleEl.style.fontSize = `${clamp(28, width * 0.06, 52)}px`;
-    accentEl.style.fontSize = `${clamp(40, width * 0.08, 76)}px`;
-    subEl.style.fontSize = `${clamp(15, width * 0.024, 20)}px`;
+    titleEl.style.fontSize = `${clamp(28, width * 0.06, 40)}px`;
+    accentEl.style.fontSize = `${clamp(40, width * 0.08, 58)}px`;
+    subEl.style.fontSize = `${clamp(15, width * 0.024, 16)}px`;
   });
   observer.observe(heroImg);
 }

@@ -4945,7 +4945,7 @@ body.tutorial-mode .change-highlight {
   /* 2026-10-11, per user request: "ダイスで築く、あなただけの...フォントサイズ少し小さく 王国は少し
      大きく" -- 1-2行目はここ(縮小)、3行目「王国。」だけ.tagline-title-accent側で別途拡大。
      さらに「さいず2ずつおおきく」でmin/max両方+2px。 */
-  font-size: clamp(28px, calc(var(--hero-w) * 0.06), 52px);
+  font-size: clamp(28px, calc(var(--hero-w) * 0.06), 40px);
   font-weight: 900;
   line-height: 1.25;
   color: #fff;
@@ -4958,7 +4958,7 @@ body.tutorial-mode .change-highlight {
   color: #e9c164;
   /* 2026-10-11, per user request: "さいず2ずつおおきく" -- min/max両方+2px。さらに「王国。さいず4
      おおきく」で+4px。 */
-  font-size: clamp(40px, calc(var(--hero-w) * 0.08), 76px);
+  font-size: clamp(40px, calc(var(--hero-w) * 0.08), 58px);
 }
 #entry-banner__tagline-sub {
   /* 2026-10-11, per user request: "サイズ少し大きく" -> さらに「もう少し大きく フォント NOTO SANS JP
@@ -4966,7 +4966,7 @@ body.tutorial-mode .change-highlight {
      doc参照)、読み込み前/オフライン時は既存のsystem-uiスタックにフォールバック。 */
   font-family: "Noto Sans JP", "Hiragino Sans", "Yu Gothic UI", "Segoe UI", system-ui, -apple-system, sans-serif;
   /* 2026-10-11, per user request: "サイズ1小さく" -- 直前のclamp(16px,2.6vw,22px)から一段縮小。 */
-  font-size: clamp(15px, calc(var(--hero-w) * 0.024), 20px);
+  font-size: clamp(15px, calc(var(--hero-w) * 0.024), 16px);
   font-weight: 500;
   max-width: 420px;
   color: #f4f4f0;
