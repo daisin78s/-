@@ -380,7 +380,7 @@ function giveJob002(state, playerId) {
   const state = freshStateWithShops();
   state.round = 1;
   const normalSlotId = Object.keys(state.shops.NORMAL.slots)[0];
-  state.shops.NORMAL.slots[normalSlotId] = 'M403'; // 晩餐会, DICE>=1
+  state.shops.NORMAL.slots[normalSlotId] = 'M403'; // 晩餐会, DICE>=2
   const candidates = board.getBuildCandidates(state, index, 'P1', ['M'], 6);
   check('Round 1: a monument sitting in a NORMAL slot is still offered (the M-shop gate does not apply there)', candidates.some((c) => c.faceId === 'M403' && c.shopKey === 'NORMAL'), true);
 }
@@ -950,12 +950,12 @@ function giveJob002(state, playerId) {
   // トはSHOPのダイス目は無視する") -- getBuildCandidates checks M401-404's own DICE>=threshold even when
   // sitting in a NORMAL slot, never that slot's DICE_MIN/MAX (which governs A/B/C cards only).
   const state = freshStateWithShops();
-  // Force M403 (晩餐会, DICE>=1, COST=9K) directly into a NORMAL slot to simulate having landed there
+  // Force M403 (晩餐会, DICE>=2, COST=10K) directly into a NORMAL slot to simulate having landed there
   // via revealExtraMonumentsIfAnyShopEmptied, regardless of that slot's own DICE_MIN/MAX range.
   const normalSlotId = Object.keys(state.shops.NORMAL.slots)[0];
   state.shops.NORMAL.slots[normalSlotId] = 'M403';
-  const candidates = board.getBuildCandidates(state, index, 'P1', ['M'], 1);
-  check('M403 buildable from a NORMAL slot at die value 1 (its own DICE>=1), regardless of that slot\'s own DICE_MIN/MAX', candidates.some((c) => c.faceId === 'M403' && c.shopKey === 'NORMAL'), true);
+  const candidates = board.getBuildCandidates(state, index, 'P1', ['M'], 2);
+  check('M403 buildable from a NORMAL slot at die value 2 (its own DICE>=2), regardless of that slot\'s own DICE_MIN/MAX', candidates.some((c) => c.faceId === 'M403' && c.shopKey === 'NORMAL'), true);
 }
 {
   // A hole at the far right (the common case: the rightmost occupied card is the one built) needs no

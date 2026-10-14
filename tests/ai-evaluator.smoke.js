@@ -1042,7 +1042,7 @@ index.raw.QST = [
 
 // ---------------------------------------------------------------------------
 // 晩餐会(物理id M401->M403、2026-10-13の宝物庫追加に伴うモニュメント再編で移動)自身の
-// VP_MODIFIER_FINAL(PER(K,1),9) (2026-09-01, per user spec: "ゲーム終了時にVPが
+// VP_MODIFIER_FINAL(PER(K,1),8) (2026-09-01, per user spec: "ゲーム終了時にVPが
 // プラスされることはAIが把握できるようにしてください" while also confirming a mid-game hoarding
 // incentive should NOT exist) -- the Evaluator must score this as exactly 0 for any non-GAME_END state
 // (no reward for holding K early) but the real, round-4-VP-weighted value once state.phase is actually
@@ -1051,7 +1051,7 @@ index.raw.QST = [
 {
   const state = freshState(4);
   giveCard(state, 'M403', 'P1');
-  state.players[0].resources.K = 9;
+  state.players[0].resources.K = 8;
 
   state.phase = 'ROUND';
   const midGameScore = evaluator.score(state, 'P1');
@@ -1059,8 +1059,8 @@ index.raw.QST = [
   state.phase = 'GAME_END';
   const atEndScore = evaluator.score(state, 'P1');
 
-  const bonusVp = 9; // exactly at the 9VP cap
-  check('Reaching the real GAME_END adds exactly 9K -> 9VP, weighted by round 4\'s own VP weight', atEndScore - midGameScore, bonusVp * evalTable[4].VP);
+  const bonusVp = 8; // exactly at the 8VP cap
+  check('Reaching the real GAME_END adds exactly 8K -> 8VP, weighted by round 4\'s own VP weight', atEndScore - midGameScore, bonusVp * evalTable[4].VP);
 }
 
 // ---------------------------------------------------------------------------

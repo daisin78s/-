@@ -51,8 +51,8 @@ function giveCard(state, faceCardId, ownerId) {
 
 // ---------------------------------------------------------------------------
 // 晩餐会(物理id M401->M403、2026-10-13の宝物庫追加に伴うモニュメント再編で移動)自身の
-// VP_MODIFIER_FINAL(PER(K,1),9) (2026-09-01, cap raised from... lowered from 10 to 9 in the same
-// re-numbering) -- computeFinalScore must include it once the game has actually ended, and NOT before
+// VP_MODIFIER_FINAL(PER(K,1),8) (2026-09-01, cap most recently lowered from 9 to 8) --
+// computeFinalScore must include it once the game has actually ended, and NOT before
 // (see executor.collectFinalOnlyVpModifiers's own doc for why this is gated on
 // state.phase==='GAME_END' rather than being a plain VP_MODIFIER).
 // ---------------------------------------------------------------------------
@@ -61,13 +61,13 @@ function giveCard(state, faceCardId, ownerId) {
   state.players.push(createPlayer('P1', 'Alice'));
   state.turnOrder = ['P1'];
   giveCard(state, 'M403', 'P1');
-  state.players[0].resources.K = 9;
+  state.players[0].resources.K = 8;
 
   state.phase = 'ROUND';
   check('Mid-game: 晩餐会\'s own VP_MODIFIER_FINAL contributes nothing yet', scoring.computeFinalScore(state, index, 'P1'), 0);
 
   state.phase = 'GAME_END';
-  check('At the real GAME_END: 9K -> 9VP added (exactly at the cap)', scoring.computeFinalScore(state, index, 'P1'), 9);
+  check('At the real GAME_END: 8K -> 8VP added (exactly at the cap)', scoring.computeFinalScore(state, index, 'P1'), 8);
 }
 
 // ---------------------------------------------------------------------------

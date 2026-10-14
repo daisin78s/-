@@ -229,7 +229,7 @@
       "EMBLEM_A": 1,
       "EMBLEM_B": 1,
       "EMBLEM_C": 1,
-      "VP": 8,
+      "VP": 9,
       "ONCE": "",
       "TAP": "",
       "PASSIVE": "",
@@ -241,19 +241,19 @@
     {
       "ID": "M403",
       "NAME": "晩餐会",
-      "DICE": ">=1",
-      "COST": "9K",
+      "DICE": ">=2",
+      "COST": "10K",
       "EMBLEM_A": "",
       "EMBLEM_B": "",
       "EMBLEM_C": "",
       "VP": "",
       "ONCE": "",
       "TAP": "",
-      "PASSIVE": "VP_MODIFIER_FINAL(PER(K,1),9)",
+      "PASSIVE": "VP_MODIFIER_FINAL(PER(K,1),8)",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "ゲーム終了時持っている〇につき1VP\n（MAX9VP)"
+      "INST": "ゲーム終了時持っている〇につき1VP\n（MAX8VP)"
     },
     {
       "ID": "M404",
@@ -797,12 +797,12 @@
       "VP": 1,
       "LEVEL": 2,
       "ONCE": "",
-      "TAP": "BUILD((M),9)",
+      "TAP": "BUILD((M),8)",
       "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "⤵カード一枚を獲得する\nダイス目は9\n通常通り資源は必要"
+      "INST": "⤵カード一枚を獲得する\nダイス目は8\n通常通り資源は必要"
     },
     {
       "ID": "B201B",
