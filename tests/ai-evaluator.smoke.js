@@ -949,35 +949,37 @@ index.raw.QST = [
 }
 
 {
-  // 歓楽街の支配LV2(A006B) + 王都建設(物理id M402->M404、2026-10-13の宝物庫追加に伴うモニュメント再編で
-  // 移動、COST=5A,5B,5C -> 15 units -> needs 2*15=30K held, unchanged by the move -- only its DICE
-  // threshold (5->7) changed, and this K-based credit path never reads DICE at all).
+  // 歓楽街の支配LV2(A006B) + 王都建設 (COST=5A,5B,5C -> 15 units). 2026-10-15 fix: this path now reads
+  // AREA006C's real ACTION (CHANGE(2K,7Z), not the old wrong "2K per unit" assumption) and only
+  // requires funding unitCount-1 via conversion (per user spec: "15単位必要 14もあれば まず獲得できる
+  // ので 2K→7Z 2回で十分") -- ceil((15-1)/7)*2 = 4K, not the old formula's 30K.
   const state = freshState(3);
   giveCard(state, 'A006B', 'P1');
-  state.players[0].resources.K = 30;
+  state.players[0].resources.K = 4;
   const plainScore = evaluator.score(state, 'P1');
-  check('monumentIncentiveAware credits 歓楽街LV2+王都建設 (round3=500) with exactly 30K held', evaluatorMonumentIncentiveAware.score(state, 'P1'), plainScore + 500);
+  check('monumentIncentiveAware credits 歓楽街LV2+王都建設 (round3=500) with exactly 4K held', evaluatorMonumentIncentiveAware.score(state, 'P1'), plainScore + 500);
 }
 {
-  // Same setup, but only 11K -- below even the group's cheapest threshold (凱旋門's own 2*6=12) -- no
-  // row in the group can possibly credit anything.
+  // Same setup, but only 1K -- below even the group's cheapest threshold (凱旋門/円形闘技場, both now
+  // ceil((unitCount-1)/7)*2 = 2K) -- no row in the group can possibly credit anything.
   const state = freshState(3);
   giveCard(state, 'A006B', 'P1');
-  state.players[0].resources.K = 11;
+  state.players[0].resources.K = 1;
   check('No credit anywhere in the 歓楽街LV2 group with K below every target\'s own threshold', evaluatorMonumentIncentiveAware.score(state, 'P1'), evaluator.score(state, 'P1'));
 }
 {
-  // 30K clears every target's threshold at once, but an opponent can already snipe 王都建設 (and, at
-  // this die value, also 聖王城/円形闘技場/中央広場 -- die>=their own lower thresholds too) right now --
-  // per user spec ("他プレイヤーの動向も見る"), this suppresses 王都建設's own credit specifically. Per
-  // priority order, the group then falls back to 凱旋門 -- except the opponent's die (value=7, the
-  // minimum that still reaches 王都建設's own re-numbered DICE>=7) does NOT reach 凱旋門's own DICE>=9, so
-  // that's the one safe-to-hold-for target that still credits -- "そうでなければとれるものをとる": a
-  // target actually safe to hold for still credits, even though the very top choice doesn't.
+  // 10K clears every target's threshold at once (all are now 2K or 4K), but an opponent can already
+  // snipe 王都建設 (and, at this die value, also 聖王城/円形闘技場/中央広場 -- die>=their own lower
+  // thresholds too) right now -- per user spec ("他プレイヤーの動向も見る"), this suppresses 王都建設's
+  // own credit specifically. Per priority order, the group then falls back to 凱旋門 -- except the
+  // opponent's die (value=7, the minimum that still reaches 王都建設's own DICE>=7) does NOT reach
+  // 凱旋門's own DICE>=9, so that's the one safe-to-hold-for target that still credits -- "そうでなければ
+  // とれるものをとる": a target actually safe to hold for still credits, even though the very top choice
+  // doesn't.
   const state = freshState(3);
   state.players.push(createPlayer('P2', 'Bob'));
   giveCard(state, 'A006B', 'P1');
-  state.players[0].resources.K = 30;
+  state.players[0].resources.K = 10;
   const opponentDie = createDie('opp-d1', 'COLOR');
   opponentDie.value = 7; // meets M404/M008/M009/M007's own DICE thresholds (7/5/4/6), not M004's (9)
   state.players[1].dice.push(opponentDie);
@@ -986,23 +988,23 @@ index.raw.QST = [
   check('王都建設 itself gets no credit while at risk, but the group falls back to 凱旋門 (round3=200)', evaluatorMonumentIncentiveAware.score(state, 'P1'), plainScore + 200);
 }
 {
-  // Same risk, but P1 only holds 18K -- exactly enough for 中央広場 (2*9), not for anything above it in
-  // priority order that could have masked the fallback. Isolates the fallback-credit path more directly.
+  // No opponent this time -- isolates plain priority ordering among several directly K-reachable
+  // targets, rather than risk-based suppression (2026-10-15 rewrite: 王都建設 and 中央広場 now tie at
+  // the same 4K threshold under the corrected formula, so they can no longer be isolated from each
+  // other by K amount alone the way the old, differently-valued thresholds allowed). Exactly 2K reaches
+  // ONLY 凱旋門 and 円形闘技場 (both 2K), not 王都建設/中央広場/聖王城 (all 4K) -- of the two reachable
+  // ones, 凱旋門 is earlier in priority order (王都建設 > 中央広場 > 凱旋門 > 聖王城 > 円形闘技場), so it
+  // credits, not 円形闘技場.
   const state = freshState(3);
-  state.players.push(createPlayer('P2', 'Bob'));
   giveCard(state, 'A006B', 'P1');
-  state.players[0].resources.K = 18;
-  const opponentDie = createDie('opp-d1', 'COLOR');
-  opponentDie.value = 5;
-  state.players[1].dice.push(opponentDie);
-  state.players[1].resources = { ...state.players[1].resources, A: 5, B: 5, C: 5 };
+  state.players[0].resources.K = 2;
   const plainScore = evaluator.score(state, 'P1');
-  check('With exactly 18K (only 中央広場 reachable), credits 中央広場 (round3=300) directly', evaluatorMonumentIncentiveAware.score(state, 'P1'), plainScore + 300);
+  check('With exactly 2K (only 凱旋門/円形闘技場 reachable), credits 凱旋門 (round3=200) by priority order', evaluatorMonumentIncentiveAware.score(state, 'P1'), plainScore + 200);
 }
 {
-  // Same 18K, but the opponent's die is 9 -- meets every one of the group's 5 own DICE thresholds at
-  // once (max is 凱旋門's own >=9) -- combined with A=5,B=5,C=5 covering every target's own COST too,
-  // every target P1's 18K could otherwise reach (中央広場 directly, 凱旋門 as a would-be fallback) is at
+  // 18K clears every target's threshold (all are now 2K or 4K), and the opponent's die is 9 -- meets
+  // every one of the group's 5 own DICE thresholds at once (max is 凱旋門's own >=9) -- combined with
+  // A=5,B=5,C=5 covering every target's own COST too, every target P1's 18K could otherwise reach is at
   // risk simultaneously -- no credit anywhere in the group.
   const state = freshState(3);
   state.players.push(createPlayer('P2', 'Bob'));

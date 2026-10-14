@@ -17,8 +17,9 @@
  * group sum), which isn't the scenario this sheet is meant to reward.
  */
 
-const { getCardRow } = require('../data-loader');
-const { lowerCostList } = require('../command-builder');
+const { getCardRow, getAreaRow } = require('../data-loader');
+const { lowerCostList, lowerProgram } = require('../command-builder');
+const { parse } = require('../dsl-parser');
 
 const SHEET_NAME = '評価値_戦略';
 
@@ -238,16 +239,47 @@ function ownedDeltaSum(state, player) {
   return { sum, count };
 }
 
-/** 歓楽街の支配LV2 (A006B)'s own CHANGE(2K,(A,B,C,Z)) converts 2K into 1 unit of any chosen color, so the
- * K needed to fully fund a target's COST is 2x its total unit count (confirmed by the same ratio the
- * user's own "農園または小麦畑の支配で13Kいじょうためる" row uses for 大交易所's COST=13C via a 1:1
- * ALL-conversion area instead -- see FARM_K_THRESHOLD below). Per user spec, in strict priority order
+/** 歓楽街の支配LV2 (A006B)'s own AREA006C ACTION is CHANGE(2K,7Z) (pay 2K, gain 7Z -- confirmed in
+ * data/game.json, NOT the 2K-for-1-unit rate this code originally assumed before 2026-10-15), and Z
+ * freely substitutes for any A/B/C unit at payment time (see executor.resolvePayment's zPool). Read
+ * live via getAreaRowConversionRatio below (parsing AREA006C's own ACTION) rather than hardcoding the
+ * 2:7 numbers directly -- this exact kind of stale hardcoded ratio (written against an old version of a
+ * card's own ACTION, never updated when the user later retuned it) is the same bug class as this
+ * session's FARM_K_THRESHOLD fix just below; reading it from the row instead of a constant means a
+ * future retune of AREA006C's CHANGE can never silently desync this heuristic again. The original
+ * "2x total unit count" formula (bugged at `*2`, several times too strict -- e.g. required 30K for
+ * 王都建設's 15 units when 3 applications of CHANGE(2K,7Z) = 6K would do) is corrected to
+ * `ceil(unitCount / gainTotal) * payK`. Per user spec, in strict priority order
  * (王都建設 > 中央広場 > 凱旋門 > 聖王城 > 円形闘技場: "左が最優先で資源をためて取りに行く（見えている場
  * 合） そうでなければとれるものをとる") -- ONLY the single highest-priority currently-reachable target
  * credits anything (see the `break` in the loop below): held K commonly clears more than one target's
  * threshold at once (e.g. 30K clears all 5), and awarding every one of those simultaneously would credit
  * a pile of K as if it could fund all 5 monuments at once, when in reality spending it funds only one.
  * "他プレイヤーの動向も見るようにしたい" applies to exactly this group of 5 -- see monumentAtRiskFromOpponents. */
+/** Lazily parses AREA006C's own ACTION (CHANGE(2K,7Z) as of this writing) into {payK, gainTotal} --
+ * memoized module-wide since `index` never changes mid-process and this is cheap to compute once.
+ * Defensively falls back to the pre-2026-10-15 {payK:2, gainTotal:1} assumption if AREA006C's ACTION
+ * is ever something other than a single plain CHANGE(K,...) (e.g. mid-redesign) -- same conservative
+ * "don't crash, just under-credit" posture every other NAME-matched bespoke check in this file takes. */
+let cachedEntertainmentConversionRatio = null;
+function getEntertainmentDistrictConversionRatio(index) {
+  if (cachedEntertainmentConversionRatio) return cachedEntertainmentConversionRatio;
+  cachedEntertainmentConversionRatio = { payK: 2, gainTotal: 1 };
+  try {
+    const row = getAreaRow(index, 'AREA006C');
+    const commands = lowerProgram(parse(row.ACTION));
+    const changeCmd = commands.find((c) => c.type === 'CHANGE');
+    const payK = changeCmd.pay.find((p) => p.resource === 'K');
+    const gainTotal = changeCmd.gain.reduce((sum, g) => sum + g.count.value, 0);
+    if (payK && payK.count.kind === 'literal' && gainTotal > 0) {
+      cachedEntertainmentConversionRatio = { payK: payK.count.value, gainTotal };
+    }
+  } catch {
+    // Keep the conservative fallback above.
+  }
+  return cachedEntertainmentConversionRatio;
+}
+
 const ENTERTAINMENT_DISTRICT_FACE_ID = 'A006B';
 const ENTERTAINMENT_DISTRICT_ROWS = [
   { name: '歓楽街の支配LV2で王都建設を獲得(3R以降)', targetFaceId: 'M404' },
@@ -332,10 +364,17 @@ function monumentIncentiveScore(state, index, playerId, table) {
 
   if (findOwnedCardInstance(state, player, ENTERTAINMENT_DISTRICT_FACE_ID)) {
     const heldK = player.resources.K || 0;
+    const { payK, gainTotal } = getEntertainmentDistrictConversionRatio(index);
     for (const { name, targetFaceId } of ENTERTAINMENT_DISTRICT_ROWS) {
       if (!isMonumentUnclaimed(state, targetFaceId)) continue;
       const unitCount = lowerCostList(getCardRow(index, targetFaceId).COST).reduce((sum, item) => sum + item.count, 0);
-      if (heldK < unitCount * 2) continue;
+      // -1 (2026-10-15, per user spec: "15単位必要、14もあれば まず獲得できるので" -- a round-3+ player
+      // realistically already holds at least 1 real A/B/C/Z unit from elsewhere, so funding the K-via-Z
+      // conversion route for only unitCount-1 of the total is close enough to credit; the real build
+      // check (board.getBuildCandidates/isCandidateAffordable) still enforces exact affordability at
+      // decision time regardless -- this is only the forward-looking incentive signal, not a promise).
+      const requiredK = Math.ceil(Math.max(0, unitCount - 1) / gainTotal) * payK;
+      if (heldK < requiredK) continue;
       if (monumentAtRiskFromOpponents(state, index, playerId, targetFaceId)) continue;
       total += incentiveValue(table, name, round);
       break; // only the single highest-priority reachable target credits anything -- see this const's own doc
