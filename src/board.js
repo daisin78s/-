@@ -1961,6 +1961,30 @@ function revealExtraMonumentsIfAnyShopEmptied(state) {
   }
 }
 
+/** Round-4-start special rule (2026-10-14, per user request: "4Rのはじめにショップの強化カードは捨て札に
+ * される" -> confirmed effect: "強化モニュメントがSHOP201 202 203にならぶ") -- empties SHOP201-203
+ * entirely, BOTH its 3 visible slots and whatever's still left in its own drawPile (any as-yet-unbought
+ * wave1/wave2 SPECIAL card -- see setup.prepareShops' own doc on the 2-wave drawPile -- is permanently
+ * discarded here, never buildable again), then immediately fills as many of its 3 slots as
+ * state.extraMonumentPool still has left (up to 3; fewer if some were already revealed earlier in the
+ * game via the ordinary revealExtraMonumentsIfAnyShopEmptied dribble). Unlike that function (which draws
+ * one extra monument per endTurn call, only once a shop is already empty), this reveals every available
+ * one at once, right as round 4 begins -- the whole point being to guarantee players see them with a
+ * full round's worth of dice still ahead of them, rather than depending on when/whether a shop happens to
+ * empty on its own. Reuses revealExtraMonumentsIfAnyShopEmptied's own push-then-restockShop pattern for
+ * the actual fill, just batched upfront instead of one id at a time. Called once from turnFlow.startRound,
+ * exactly when state.round becomes 4. */
+function forceRevealExtraMonumentsAtRound4(state) {
+  const shop = state.shops.SPECIAL;
+  shop.drawPile = [];
+  for (const slotId of Object.keys(shop.slots)) shop.slots[slotId] = null;
+  const slotCount = Object.keys(shop.slots).length;
+  for (let i = 0; i < slotCount && state.extraMonumentPool.length > 0; i++) {
+    shop.drawPile.push(state.extraMonumentPool.shift());
+  }
+  restockShop(state, 'SPECIAL');
+}
+
 module.exports = {
   CASTLE_MAP_ID,
   AREA009_MAP_ID,
@@ -1993,6 +2017,7 @@ module.exports = {
   restockShop,
   compactShop,
   revealExtraMonumentsIfAnyShopEmptied,
+  forceRevealExtraMonumentsAtRound4,
 };
 
 })();

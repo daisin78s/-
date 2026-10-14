@@ -10,7 +10,7 @@
  * Move shapes (a plain discriminated union, matching what simulator.js's applyInPlace expects):
  *   { type:'PLACE_DIE', playerId, dieId, mapId, slotIndex, buildCandidateIndex? }
  *   { type:'PLACE_WILDCARD_DIE', playerId, dieId, mapId, slotIndex?, buildCandidateIndex? }
- *   { type:'PLACE_DICE_GROUP', playerId, dieIds:[id,id], mapId, buildCandidateIndex? }
+ *   { type:'PLACE_DICE_GROUP', playerId, dieIds:[id,id] or [id,id,id], mapId, buildCandidateIndex? }
  *   { type:'PASS_DIE', playerId, dieId }
  *   { type:'BARE_TAP', playerId, physicalId, chosenDieId?, chosenValue?, chosenDelta?, buildCandidateIndex? }
  *   { type:'FREE_ACTION', playerId, freeActionId }
@@ -43,10 +43,11 @@
  * slotIndex) instead of the usual single slotIndex-less Move.
  *
  * PLACE_DICE_GROUP (2026-08-21, per user request "AIがダイスを２個使ってモニュメントを獲得できるように
- * してほしい"): #placeDiceGroupMoves enumerates 2-die pairs (never 3+) at 王宮/元老院 only -- the only 2
- * maps board.placeDiceGroup supports -- and only pairs summing to >6 (a single die already covers <=6 via
- * #placeDieMoves). No multi-turn "hold a die back hoping for a better pair" strategy -- this only offers
- * moves that are legal *right now*, same greedy-per-turn scope as every other Move here.
+ * してほしい"): #placeDiceGroupMoves enumerates 2-die pairs, and (2026-10-15, see its own doc for why)
+ * 3-die triples too, at 王宮/元老院 only -- the only 2 maps board.placeDiceGroup supports -- skipping any
+ * combo whose sum a smaller combo could already reach (pairs: sum >6; triples: sum >12). No multi-turn
+ * "hold a die back hoping for a better combo" strategy -- this only offers moves that are legal *right
+ * now*, same greedy-per-turn scope as every other Move here.
  */
 
 const { getAreaRow, getCardRow } = require('../data-loader');
@@ -290,16 +291,27 @@ class MoveGenerator {
   }
 
   /** PLACE_DICE_GROUP (2026-08-21, per user request -- see board.placeDiceGroup's own doc): AI-side
-   * enumeration of 2-die monument-building placements at 王宮(CASTLE_MAP_ID)/元老院(AREA009_MAP_ID),
-   * the only 2 maps board.placeDiceGroup supports. Deliberately pairs-only (never 3+ dice, per user
-   * decision) and skips any pair whose combined value is <=6 (a single die could already reach that on
-   * its own via #placeDieMoves, so there is no reason to ever spend 2 dice on it) -- this is a
-   * MoveGenerator-side filter distinct from board.placeDiceGroup's own excludeOverfundedMonuments (which
-   * only filters which monuments are offered for a pair that DOES get dry-run, not whether the pair is
-   * tried at all). A 道化 (JOB003, hasWildcardDice) player can never use this path at all (see
-   * board.placeDiceGroup's own WILDCARD_GROUP_NOT_ALLOWED refusal), so this returns early for them
-   * rather than wasting dry-run clones that would always fail. Mirrors #placeDieMoves' own
-   * pendingBuild/buildCandidateIndex handling exactly, just for a die *pair* instead of a single die. */
+   * enumeration of multi-die monument-building placements at 王宮(CASTLE_MAP_ID)/元老院(AREA009_MAP_ID),
+   * the only 2 maps board.placeDiceGroup supports.
+   *
+   * Pairs (sum > 6, since a single die already reaches <=6 via #placeDieMoves) plus, as of 2026-10-15,
+   * triples (sum > 12, since a pair already reaches up to 12 via the loop just above) -- per user
+   * request, after discovering board.placeDiceGroup itself (and main.js's own human-facing selection UI,
+   * whose doc comment already says "2+ selected dice") never actually capped group size at 2 -- only
+   * this AI move generator had singled out pairs-only, a 2026-08-21 implementation choice that simply
+   * never grew past its own original "let the AI place 2 dice together" request, leaving the AI unable
+   * to reach M402/天空の塔's DICE>=13 at all without a die-boosting ability (max pair = 12, one short).
+   * Capped at triples, not arbitrary N: 13 is the single highest DICE threshold across every monument in
+   * the current data (data/game.json's own M sheet), and 3 dice already reach up to 18, so a 4th die
+   * could never help any monument that exists today -- and would only add combinatorial cost for no
+   * benefit. Triples are deliberately never tried for a sum a pair already covers (<=12), same "don't
+   * spend more dice than needed" filter the pair loop already applies relative to a single die -- this
+   * keeps the added cost bounded to just the specific 13-18 range pairs can't reach, not every possible
+   * triple (addressing the user's own concern about this growing the search space needlessly).
+   *
+   * A 道化 (JOB003, hasWildcardDice) player can never use this path at all (see board.placeDiceGroup's
+   * own WILDCARD_GROUP_NOT_ALLOWED refusal), so this returns early for them rather than wasting dry-run
+   * clones that would always fail. */
   #placeDiceGroupMoves(state, index, playerId, player) {
     const moves = [];
     if (board.hasWildcardDice(state, index, playerId)) return moves;
@@ -309,27 +321,47 @@ class MoveGenerator {
         const dieA = unplacedDice[i];
         const dieB = unplacedDice[j];
         if (dieA.value + dieB.value <= 6) continue;
-        for (const mapId of [board.CASTLE_MAP_ID, board.AREA009_MAP_ID]) {
-          const clone = cloneState(state);
-          const result = board.placeDiceGroup(clone, index, { playerId }, [dieA.id, dieB.id], mapId);
-          if (!result.success) continue;
-          const dieIds = [dieA.id, dieB.id];
-          if (result.actionResult && result.actionResult.pendingBuild) {
-            const candidates = result.actionResult.pendingBuild.candidates;
-            for (let buildCandidateIndex = 0; buildCandidateIndex < candidates.length; buildCandidateIndex++) {
-              moves.push({ type: 'PLACE_DICE_GROUP', playerId, dieIds, mapId, buildCandidateIndex });
-            }
-            // Same "also offer the build left unresolved" fallback as #placeDieMoves -- see its own
-            // comment for why (candidates aren't affordability-filtered here, only category/dice-value
-            // eligible).
-            moves.push({ type: 'PLACE_DICE_GROUP', playerId, dieIds, mapId });
-          } else {
-            moves.push({ type: 'PLACE_DICE_GROUP', playerId, dieIds, mapId });
-          }
+        this.#tryDiceGroupCombo(state, index, playerId, [dieA, dieB], moves);
+      }
+    }
+    for (let i = 0; i < unplacedDice.length; i++) {
+      for (let j = i + 1; j < unplacedDice.length; j++) {
+        for (let k = j + 1; k < unplacedDice.length; k++) {
+          const dieA = unplacedDice[i];
+          const dieB = unplacedDice[j];
+          const dieC = unplacedDice[k];
+          if (dieA.value + dieB.value + dieC.value <= 12) continue;
+          this.#tryDiceGroupCombo(state, index, playerId, [dieA, dieB, dieC], moves);
         }
       }
     }
     return moves;
+  }
+
+  /** Shared dry-run/candidate-enumeration body for #placeDiceGroupMoves's pair and triple loops
+   * (factored out 2026-10-15 when triples were added, to avoid duplicating this between them) -- tries
+   * `dice` (2 or 3 Die objects) as one PLACE_DICE_GROUP at each of the 2 maps board.placeDiceGroup
+   * supports, pushing one Move per affordability-unfiltered build candidate (plus the unresolved-build
+   * fallback), same as #placeDieMoves' own pendingBuild/buildCandidateIndex handling -- byte-for-byte
+   * the same logic the old inline pair-only version had, just reusable for either group size now. */
+  #tryDiceGroupCombo(state, index, playerId, dice, moves) {
+    const dieIds = dice.map((d) => d.id);
+    for (const mapId of [board.CASTLE_MAP_ID, board.AREA009_MAP_ID]) {
+      const clone = cloneState(state);
+      const result = board.placeDiceGroup(clone, index, { playerId }, dieIds, mapId);
+      if (!result.success) continue;
+      if (result.actionResult && result.actionResult.pendingBuild) {
+        const candidates = result.actionResult.pendingBuild.candidates;
+        for (let buildCandidateIndex = 0; buildCandidateIndex < candidates.length; buildCandidateIndex++) {
+          moves.push({ type: 'PLACE_DICE_GROUP', playerId, dieIds, mapId, buildCandidateIndex });
+        }
+        // Same "also offer the build left unresolved" fallback as #placeDieMoves -- see its own comment
+        // for why (candidates aren't affordability-filtered here, only category/dice-value eligible).
+        moves.push({ type: 'PLACE_DICE_GROUP', playerId, dieIds, mapId });
+      } else {
+        moves.push({ type: 'PLACE_DICE_GROUP', playerId, dieIds, mapId });
+      }
+    }
   }
 
   #freeActionMoves(state, index, playerId, player) {

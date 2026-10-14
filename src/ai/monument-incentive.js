@@ -148,10 +148,16 @@ const SINGLE_DIE_ROWS = [
  * benefit stacking 2 SET abilities on one die; whichever is applied last just overwrites the other), taken
  * as its higher of the 2 choices being the interesting one for reaching a threshold.
  *
- * A combo only counts once at least 2 of these sources are actually owned+untapped together (totalSources
- * check in monumentIncentiveScore below) -- exactly 1 source is already SINGLE_DIE_ROWS' own territory, so
- * this must not also fire for that case (would double-count the same real scenario under 2 different
- * names).
+ * A "2 abilities on 1 die" combo only counts once at least 2 of these sources are actually owned+untapped
+ * together -- exactly 1 source is already SINGLE_DIE_ROWS' own territory, so this must not also fire for
+ * that case (would double-count the same real scenario under 2 different names). 2026-10-14 added a
+ * second, more common path reusing these same COMBO_TARGETS rows: just 1 owned+untapped DELTA_ABILITIES
+ * entry PLUS a 2-dice GROUP placement whose combined value (before the ability) plus that one ability's
+ * delta reaches the threshold (see hasQualifyingDiePair's own doc for why this was missing -- per user
+ * report, 天空の塔/王都建設's real acquisition rate stayed low even once revealed in a shop, and a live
+ * AIPlayer.selectMove check confirmed the executor already correctly taps+group-places once the exact
+ * dice/ability line up, so the gap was purely this module never giving the AI a reason to hold dice/an
+ * ability in reserve anticipating that moment).
  *
  * Only the single highest-priority reachable target below credits anything (same "break after first
  * match" reasoning ENTERTAINMENT_DISTRICT_ROWS' own doc already explains) -- a SET ability only fixes ONE
@@ -183,6 +189,25 @@ const COMBO_TARGETS = [
  * for a SET_DIE_VALUE-based combo, where the die's starting value doesn't matter (it gets overwritten). */
 function hasAnyQualifyingDie(player) {
   return player.dice.some((d) => d.placedMapId === null && !d.passed);
+}
+
+/** True if player holds 2 DISTINCT unplaced/not-passed dice (own, either kind) whose values sum to
+ * exactly `requiredSum` -- the "2-dice GROUP placement" counterpart to hasQualifyingDie's single-die
+ * check, used by the "1 ability + dice-group" combo path below (2026-10-14, per user report: 天空の塔/
+ * 王都建設の実際の獲得率が、SHOPに出現した後でも低すぎる -- live AIPlayer.selectMoveで検証したところ、
+ * 宮廷人未タップ+ダイス2個+資源が揃っている状況では実際に「タップ→グループ配置」を正しく選んで建築
+ * できることを確認済みなので、実行側(MoveGenerator/Evaluator)は問題ない。欠けていたのは「あらかじめ
+ * ダイスや能力を温存しておく」という先読みの動機付けで、SINGLE_DIE_ROWSは意図的にグループ配置を対象外に
+ * しており、COMBO_TARGETSは能力2枚同時所持が条件だったため、「能力1枚+ダイス2個の合計」というより
+ * 一般的なルートには何の加点も無かった)。 */
+function hasQualifyingDiePair(player, requiredSum) {
+  const dice = player.dice.filter((d) => d.placedMapId === null && !d.passed && d.value !== null);
+  for (let i = 0; i < dice.length; i++) {
+    for (let j = i + 1; j < dice.length; j++) {
+      if (dice[i].value + dice[j].value === requiredSum) return true;
+    }
+  }
+  return false;
 }
 
 /** The single owned+untapped SET_ABILITIES entry with the highest top value, or null. Comparing by top
@@ -233,12 +258,18 @@ const ENTERTAINMENT_DISTRICT_ROWS = [
 ];
 
 /** 農園/小麦畑の支配 (either tier, either card -- "小麦畑も農園と同じ扱い" per user spec): a flat "held
- * enough K to fully fund 大交易所 (COST=13C, the heaviest of its 3 reachable targets -- 大城塞/聖域 need
- * less) via 城下町/大聖堂/ギルド's own 1:1 ALL-conversion" check, rather than 3 separate per-target rows
- * (simplified by the user from the original per-target design). */
+ * enough K to fully fund 大交易所 (COST=14C as of 2026-10-13, the heaviest of its 3 reachable targets --
+ * 大城塞/聖域 need less) via 城下町/大聖堂/ギルド's own 1:1 ALL-conversion" check, rather than 3 separate
+ * per-target rows (simplified by the user from the original per-target design). FARM_ROW_NAME's own "13K"
+ * text is stale (大交易所's COST was 13C when this row was named, now 14C) -- left as-is rather than
+ * renamed, since renaming it would also require renaming the matching row in 評価値_戦略 or this bonus
+ * would silently stop looking up any value at all; same "label is cosmetic, doesn't affect scoring"
+ * precedent as SINGLE_DIE_ROWS' own stale "+1"/"+3" row names elsewhere in this file. 2026-10-14 bug fix:
+ * FARM_K_THRESHOLD itself (the actual number this code checks against) had drifted to 13 and was never
+ * updated when the cost changed to 14 -- fixed here. */
 const FARM_ROW_NAME = '農園または小麦畑の支配で13Kいじょうためる';
 const FARM_FACE_IDS = ['A005A', 'A005B', 'A004A', 'A004B'];
-const FARM_K_THRESHOLD = 13;
+const FARM_K_THRESHOLD = 14;
 
 /** @returns {number} the total 評価値_戦略 incentive bonus for playerId in state, at state's current round. */
 function monumentIncentiveScore(state, index, playerId, table) {
@@ -262,18 +293,35 @@ function monumentIncentiveScore(state, index, playerId, table) {
   const setAbility = bestOwnedSetAbility(state, player);
   const { sum: deltaSum, count: deltaCount } = ownedDeltaSum(state, player);
   const totalDieBoostSources = deltaCount + (setAbility ? 1 : 0);
-  if (totalDieBoostSources >= 2) {
+  // 2026-10-14追加: 能力1個+ダイス2個のグループ配置合計というルート(hasQualifyingDiePair's own doc参照)
+  // は、既存の「同じダイスに能力2個以上」ルートより条件が緩い(能力1個だけで良い)ので、所有+未タップの
+  // DELTA_ABILITIESが1個でもあれば下のループ自体には入る(SET_ABILITIESは対象外、スコープを絞るため)。
+  const ownedUntappedDeltaAbilities = DELTA_ABILITIES.filter((ability) => {
+    const inst = findOwnedCardInstance(state, player, ability.faceId);
+    return inst && !inst.tapped;
+  });
+  if (totalDieBoostSources >= 2 || ownedUntappedDeltaAbilities.length >= 1) {
     for (const { name, targetFaceId } of COMBO_TARGETS) {
       if (!isMonumentUnclaimed(state, targetFaceId)) continue;
       const threshold = parseMonumentThreshold(getCardRow(index, targetFaceId).DICE);
       if (threshold === null) continue;
       let reachable = false;
-      if (deltaSum > 0) {
-        const requiredDieValue = threshold - deltaSum;
-        reachable = requiredDieValue >= 1 && requiredDieValue <= 6 && hasQualifyingDie(player, requiredDieValue);
+      // 同じダイス1個に能力2個以上を重ねる(既存)。
+      if (totalDieBoostSources >= 2) {
+        if (deltaSum > 0) {
+          const requiredDieValue = threshold - deltaSum;
+          reachable = requiredDieValue >= 1 && requiredDieValue <= 6 && hasQualifyingDie(player, requiredDieValue);
+        }
+        if (!reachable && setAbility && hasAnyQualifyingDie(player)) {
+          reachable = setAbility.values.some((v) => v + deltaSum === threshold);
+        }
       }
-      if (!reachable && setAbility && hasAnyQualifyingDie(player)) {
-        reachable = setAbility.values.some((v) => v + deltaSum === threshold);
+      // 能力1個+ダイス2個のグループ配置合計(新規)。
+      if (!reachable) {
+        for (const ability of ownedUntappedDeltaAbilities) {
+          const requiredSum = threshold - ability.delta;
+          if (requiredSum >= 2 && requiredSum <= 12 && hasQualifyingDiePair(player, requiredSum)) { reachable = true; break; }
+        }
       }
       if (reachable) {
         total += incentiveValue(table, name, round);

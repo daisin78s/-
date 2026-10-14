@@ -33,7 +33,7 @@
 
 const { rollDie } = require('./rng');
 const { getAreaRow, getCardRow } = require('./data-loader');
-const { getSlotRequirements, restockShop, CASTLE_MAP_ID, revealExtraMonumentsIfAnyShopEmptied, planFeeConversion } = require('./board');
+const { getSlotRequirements, restockShop, CASTLE_MAP_ID, revealExtraMonumentsIfAnyShopEmptied, forceRevealExtraMonumentsAtRound4, planFeeConversion } = require('./board');
 const { recordCheckpoint } = require('./undo');
 const setup = require('./setup');
 // Named executorApi, not executor, just to disambiguate from board.js's own `const executor` at a
@@ -66,13 +66,21 @@ function rerollDiceForNextRound(state) {
  * 2 -- setup.prepareShops now fills it from the very start, see its own doc; only *purchasing* from it
  * stays round-gated, per board.specialShopMinRound, checked at build-candidate time instead.)
  *
- * Never force-clears SHOP201-203 for any reason (confirmed with the user, 2026-08-29) -- its cards just
- * sit there like any other shop's until bought; see board.revealExtraMonumentsIfAnyShopEmptied for how
- * M401-403 (previously a round-4-only SHOP201-203 wave) surface now instead.
+ * Never force-clears SHOP201-203 on its own at round 2/3 (confirmed with the user, 2026-08-29) -- its
+ * cards just sit there like any other shop's until bought; see board.revealExtraMonumentsIfAnyShopEmptied
+ * for how M401-404 ordinarily surface (one per endTurn, only once some shop empties on its own).
+ *
+ * Round 4 is the one exception (2026-10-14, per user request: "4Rのはじめにショップの強化カードは捨て札に
+ * される" -> confirmed effect: "強化モニュメントがSHOP201 202 203にならぶ") -- board.
+ * forceRevealExtraMonumentsAtRound4 empties SHOP201-203 entirely and immediately fills its 3 slots with
+ * whatever's left of state.extraMonumentPool, all at once, rather than waiting for the ordinary one-per-
+ * endTurn dribble -- see that function's own doc for why (guaranteeing a full round's worth of dice to
+ * try for them, instead of depending on when/whether a shop happens to empty).
  */
 function startRound(state) {
   state.round += 1;
   state.phase = 'ROUND';
+  if (state.round === 4) forceRevealExtraMonumentsAtRound4(state);
   return state.round;
 }
 

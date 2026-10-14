@@ -1015,20 +1015,21 @@ index.raw.QST = [
   check('No credit anywhere once the opponent can snipe every target P1\'s K could reach', evaluatorMonumentIncentiveAware.score(state, 'P1'), evaluator.score(state, 'P1'));
 }
 {
-  // 農園または小麦畑の支配(いずれか) + 13K以上保有 (round3=100). Confirms 小麦畑 (A004A) counts the same
-  // as 農園 itself, per "小麦畑も農園と同じ扱い".
+  // 農園または小麦畑の支配(いずれか) + 14K以上保有 (round3=100, 大交易所のCOSTが13C->14Cに変更された
+  // ことに伴いFARM_K_THRESHOLDも13->14へ修正). Confirms 小麦畑 (A004A) counts the same as 農園 itself,
+  // per "小麦畑も農園と同じ扱い".
+  const state = freshState(3);
+  giveCard(state, 'A004A', 'P1');
+  state.players[0].resources.K = 14;
+  const plainScore = evaluator.score(state, 'P1');
+  check('monumentIncentiveAware credits the 14K row via 小麦畑の支配LV1 (round3=100)', evaluatorMonumentIncentiveAware.score(state, 'P1'), plainScore + 100);
+}
+{
+  // Same setup, but only 13K -- 1 short -- no credit.
   const state = freshState(3);
   giveCard(state, 'A004A', 'P1');
   state.players[0].resources.K = 13;
-  const plainScore = evaluator.score(state, 'P1');
-  check('monumentIncentiveAware credits the 13K row via 小麦畑の支配LV1 (round3=100)', evaluatorMonumentIncentiveAware.score(state, 'P1'), plainScore + 100);
-}
-{
-  // Same setup, but only 12K -- 1 short -- no credit.
-  const state = freshState(3);
-  giveCard(state, 'A004A', 'P1');
-  state.players[0].resources.K = 12;
-  check('No credit for the 13K row with 1K short', evaluatorMonumentIncentiveAware.score(state, 'P1'), evaluator.score(state, 'P1'));
+  check('No credit for the 14K row with 1K short', evaluatorMonumentIncentiveAware.score(state, 'P1'), evaluator.score(state, 'P1'));
 }
 {
   // monumentIncentiveAware is a genuine no-op with none of the qualifying cards owned at all.

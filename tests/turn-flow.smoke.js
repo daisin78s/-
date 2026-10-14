@@ -608,5 +608,29 @@ function giveM403(s, playerId) {
   check('Round < 4 (no real game end yet) -- no auto-conversion', [p1.resources.K, p1.resources.A], [2, 5]);
 }
 
+{
+  // Round 4 special rule (2026-10-14, per user request): SHOP201-203 gets entirely emptied (both its
+  // 3 visible slots and its own remaining drawPile) and immediately refilled with whatever's left of
+  // state.extraMonumentPool, all at once -- unlike the ordinary one-per-endTurn dribble
+  // revealExtraMonumentsIfAnyShopEmptied does elsewhere in the game.
+  const { createEmptyGameState: freshEmptyState } = require('../src/game-state');
+  const s = freshEmptyState('round4-special-shop-smoke');
+  setup.createPlayers(s, ['Alice']);
+  setup.prepareMaps(s, index);
+  setup.prepareShops(s, index);
+  const poolBefore = [...s.extraMonumentPool];
+  const specialDrawPileBefore = [...s.shops.SPECIAL.drawPile];
+  check('Extra monument pool has something to reveal before round 4', poolBefore.length > 0, true);
+  check('SPECIAL shop still has its own undrawn cards before round 4', specialDrawPileBefore.length > 0, true);
+
+  s.round = 3;
+  turnFlow.startRound(s);
+  check('startRound crossing into round 4 sets round=4', s.round, 4);
+  check('SPECIAL shop drawPile no longer holds any of its own original cards', s.shops.SPECIAL.drawPile.every((id) => !specialDrawPileBefore.includes(id)), true);
+  const filledSlots = Object.values(s.shops.SPECIAL.slots).filter(Boolean);
+  check('Every now-filled SPECIAL slot holds an extra monument (M4xx) from the pre-round-4 pool', filledSlots.every((id) => poolBefore.includes(id)), true);
+  check('extraMonumentPool shrank by exactly however many slots got filled', s.extraMonumentPool.length, poolBefore.length - filledSlots.length);
+}
+
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);
