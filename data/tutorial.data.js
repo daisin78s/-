@@ -6,7 +6,7 @@ window.TUTORIAL_SERIFU = {
   "worker_placement_turn_end_hint": "ダイスを置いたらターン終了\n次のプレイヤーのターンになります",
   "castletown_placement_intro": "あなたのターンが回ってきました\n今度は🎲を「城下町」に置いてみます",
   "castletown_placement_result": "あなたの持っている食料〇すべてが権力赤〇に変換されました\n〇→赤〇　は　食料〇1個を　権力赤〇に変換\nALLは　それをすべてするという意味です",
-  "castletown_free_action_hint": "変換された赤〇はフリーアクションでターン中いつでも〇に戻せます",
+  "castletown_free_action_hint": "変換された赤〇はこのボタンを押すとターン中いつでも〇に戻せます\nこの行動はフリーアクションと呼ばれメインアクションの前後に何度でもおこなえます",
   "castletown_territory_cards_hint": "権力赤〇は領地カードを獲得するのに使います\n領地カードはエリアを支配して強化したりそのエリアを使ったプレイヤーから使用料をとることができます",
   "castletown_alt_cathedral_hint": "「城下町」に置く代わりに「大聖堂」に置けば\nあなたの持っている食料〇すべてが信心青〇に変換されます",
   "castletown_fortune_cards_hint": "信心青〇は天運カードを獲得するのに使います\n天運カードはダイスなしでカードを獲得できるようになったり\nダイス目を変更したりすることができます",
