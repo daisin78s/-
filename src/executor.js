@@ -1691,10 +1691,33 @@ function notifyActivation(state, playerId, physicalId, faceId, kind) {
   if (activationListener) activationListener(state, playerId, physicalId, faceId, kind);
 }
 
-/** Player elects to tap physicalId to resolve a previously-offered TAP reaction (see emit()). */
+/** Player elects to tap physicalId to resolve a previously-offered TAP reaction (see emit()). Normal
+ * order: run the effect, THEN mark tapped only once it succeeds -- so a failed effect never leaves the
+ * card wrongly tapped.
+ *
+ * 栄光の証 (2026-10-15, per user spec: "VPを得たとき必ずタップする タップした後1VPを得る 毎ターン
+ * アンタップする") is a deliberate, NAME-matched exception to that order: its own effect is ADD(VP),
+ * which re-emits a GET(VP) event (see runAdd/grantResourceAndEmitGet) -- with the normal order, this
+ * card would STILL be untapped at that re-entrant moment (tapping only happens after runCommand
+ * returns), so the re-emitted GET(VP) would match this same still-untapped reaction again, recursing
+ * until emitAndResolve's MAX_EVENT_CHAIN_DEPTH cycle guard throws (the exact "ON(GET(K),ADD(K))"
+ * scenario that guard's own doc already calls out). Tapping BEFORE running the effect, for this one
+ * card only, means the re-emitted GET(VP) correctly sees it as already tapped and skips re-firing --
+ * giving a clean, bounded +1VP (or +2VP for B301B) instead of a runaway cascade/crash. Every other
+ * card keeps the normal, safer-by-default order; this never generalizes past this one NAME match. */
 function resolveTapReaction(state, index, context, physicalId, effect) {
   const inst = state.cards[physicalId];
   if (inst.tapped) return { success: false, reason: 'ALREADY_TAPPED' };
+  if (getCardRow(index, inst.currentFaceId).NAME.startsWith('栄光の証')) {
+    inst.tapped = true;
+    const result = runCommand(state, index, { ...context, sourcePhysicalId: physicalId }, effect);
+    if (!result.success) {
+      inst.tapped = false; // defensive -- ADD never actually fails, but never leave it wrongly tapped if it somehow did
+      return result;
+    }
+    notifyActivation(state, context.playerId, physicalId, inst.currentFaceId, 'TAP');
+    return result;
+  }
   const result = runCommand(state, index, { ...context, sourcePhysicalId: physicalId }, effect);
   if (result.success) {
     inst.tapped = true;

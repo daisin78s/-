@@ -227,7 +227,11 @@ function giveNCards(state, ownerId, n, offset) {
 
   qst.resolveEndGameRewards(state, index);
   check('Both rank-1-tied players get the FULL REWARD1 (3VP each, not split)', [player(state, 'P1').resources.VP, player(state, 'P2').resources.VP], [3, 3]);
-  check('Both rank-3-tied players get the FULL REWARD3 (1VP each) -- REWARD2 goes unawarded', [player(state, 'P3').resources.VP, player(state, 'P4').resources.VP], [1, 1]);
+  // P3's own cards (offset 16-22) happen to include B301A/栄光の証LV1 (index 17 in the shared pool) --
+  // its own TAP=ON(GET(VP),ADD(VP)) reaction (2026-10-15) fires on this very REWARD3 grant, adding its
+  // own +1VP on top, so P3 ends up with 2 (1 reward + 1 reaction), not a plain 1 like P4 (who owns no
+  // card in this pool with a VP-reactive ability).
+  check('Both rank-3-tied players get the FULL REWARD3 (1VP each) -- REWARD2 goes unawarded', [player(state, 'P3').resources.VP, player(state, 'P4').resources.VP], [2, 1]);
 }
 {
   // Everyone on 0 (nobody built anything relevant) -- nobody is rewarded at all, since a GOAL value of 0
