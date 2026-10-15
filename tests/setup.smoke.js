@@ -56,10 +56,10 @@ check('Normal shop draw pile has 12 left (18 - 6 shown)', state.shops.NORMAL.dra
 // setup.prepareShops' own doc on the 2-wave concatenated drawPile.
 check('Special shop IS already visible at setup (wave 1)', Object.values(state.shops.SPECIAL.slots).filter(Boolean).length, 3);
 check('...its drawPile holds the other 6 (3 wave-1 + 3 wave-2, waiting behind wave 1)', state.shops.SPECIAL.drawPile.length, 6);
-// M401-404 (2026-08-29 rework, extended from M401-403 to M401-404 by the 2026-10-13 宝物庫 addition):
-// held back in extraMonumentPool, not in any shop's own pool -- see setup.prepareShops' own doc and
-// board.revealExtraMonumentsIfAnyShopEmptied.
-check('extraMonumentPool starts with all 4 (M401-404)', [...state.extraMonumentPool].sort(), ['M401', 'M402', 'M403', 'M404']);
+// M401-405 (2026-08-29 rework, extended from M401-403 to M401-404 by the 2026-10-13 宝物庫 addition,
+// then to M401-405 by the 2026-10-15 M405/巨大石像 addition): held back in extraMonumentPool, not in
+// any shop's own pool -- see setup.prepareShops' own doc and board.revealExtraMonumentsIfAnyShopEmptied.
+check('extraMonumentPool starts with all 5 (M401-405)', [...state.extraMonumentPool].sort(), ['M401', 'M402', 'M403', 'M404', 'M405']);
 
 const allShopFaceIds = [
   ...Object.values(state.shops.M.slots),

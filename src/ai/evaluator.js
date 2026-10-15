@@ -19,7 +19,7 @@
  */
 
 const { getCardRow, getQstRow } = require('../data-loader');
-const { lowerCostList, lowerProgram } = require('../command-builder');
+const { lowerCostList, lowerProgram, isChoiceCost, lowerChoiceCostOptions } = require('../command-builder');
 const { parse } = require('../dsl-parser');
 const executor = require('../executor');
 const board = require('../board');
@@ -151,6 +151,17 @@ function playerQualifiesForMonument(player, threshold, costItems) {
   return costItems.every((item) => (player.resources[item.resource] || 0) >= item.count);
 }
 
+/** Choice-COST-aware wrapper (2026-10-15, "15A/15B/15C" -- see command-builder.isChoiceCost's own doc,
+ * M405/巨大石像): qualifies if ANY ONE option alone passes playerQualifiesForMonument, not the sum of
+ * every option (lowerCostList can't even parse a choice-COST string directly). Normal, non-choice COST
+ * strings behave exactly as before. */
+function qualifiesForMonumentCost(player, threshold, costString) {
+  if (isChoiceCost(costString)) {
+    return lowerChoiceCostOptions(costString).some((opt) => playerQualifiesForMonument(player, threshold, [opt]));
+  }
+  return playerQualifiesForMonument(player, threshold, lowerCostList(costString));
+}
+
 /** Whether some OTHER player already qualifies (playerQualifiesForMonument) to build monumentFaceId right
  * now (2026-08-04, per user feedback: "そのモニュメントとられるかもは相手のダイスと資源が今足りているか
  * で判断するようにしてください フリーアクションやJOBは現在は考慮しなくていいです") -- a cheap
@@ -159,8 +170,7 @@ function monumentAtRiskFromOpponents(state, index, playerId, monumentFaceId) {
   const row = getCardRow(index, monumentFaceId);
   const threshold = parseMonumentThreshold(row.DICE);
   if (threshold === null) return false;
-  const costItems = lowerCostList(row.COST);
-  return state.players.some((opponent) => opponent.id !== playerId && playerQualifiesForMonument(opponent, threshold, costItems));
+  return state.players.some((opponent) => opponent.id !== playerId && qualifiesForMonumentCost(opponent, threshold, row.COST));
 }
 
 /** Whether playerId THEMSELVES already qualifies (playerQualifiesForMonument) to build monumentFaceId
@@ -171,9 +181,8 @@ function monumentSecurableByPlayer(state, index, playerId, monumentFaceId) {
   const row = getCardRow(index, monumentFaceId);
   const threshold = parseMonumentThreshold(row.DICE);
   if (threshold === null) return false;
-  const costItems = lowerCostList(row.COST);
   const player = state.players.find((p) => p.id === playerId);
-  return !!player && playerQualifiesForMonument(player, threshold, costItems);
+  return !!player && qualifiesForMonumentCost(player, threshold, row.COST);
 }
 
 class Evaluator {

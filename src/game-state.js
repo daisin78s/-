@@ -267,7 +267,12 @@ function createPlayer(id, name, color = null) {
  */
 function createCardInstance(faceCardId) {
   const { physicalId } = splitCardId(faceCardId);
-  return { physicalId, currentFaceId: faceCardId, ownerId: null, tapped: false, buildValueOverride: null };
+  // paidChoiceResource (2026-10-15, for M405/巨大石像's "15A/15B/15C" choice COST -- see
+  // command-builder.isChoiceCost/board.resolveBuildNew's own docs): which resource ('A'/'B'/'C') was
+  // actually spent to pay a choice-cost card's COST, recorded at build time. Stays null for every
+  // ordinary card (a fixed, non-choice COST never needs it) -- only read by
+  // executor.emblemCountsForRow to resolve a "/N" conditional EMBLEM_A/B/C value.
+  return { physicalId, currentFaceId: faceCardId, ownerId: null, tapped: false, buildValueOverride: null, paidChoiceResource: null };
 }
 
 /**

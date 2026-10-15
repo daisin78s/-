@@ -4437,7 +4437,19 @@ const EMBLEM_ORDER = ['天', '地', '人'];
 // spec "王都建設のエンブレム３行にして　重なってもいい" -- 3 per row (3 rows of 3), explicitly allowed
 // to overlap adjacent card content rather than needing extra vertical space reserved for it.
 const EMBLEM_ROW_CHUNK_SIZE = { M007: 2, M008: 2, M009: 2, M011: 2, M012: 2, M402: 3 };
-function emblemForFaceId(faceId) {
+// A "/N" EMBLEM_A/B/C value (2026-10-15, M405/巨大石像's own choice-COST -- see
+// src/command-builder.isChoiceCost's own doc) is conditional on which resource was actually paid
+// (inst.paidChoiceResource, set at build time) -- same resolution src/executor.js's own
+// resolveEmblemValue does for real scoring; mirrored here so this UI-only copy can't drift. Returns 0
+// (not counted) if `inst` is omitted (e.g. a shop/hand preview, before any payment choice exists) or
+// doesn't match this column's own letter.
+function resolveEmblemValueUi(value, resourceLetter, inst) {
+  if (typeof value === 'string' && value.startsWith('/')) {
+    return inst && inst.paidChoiceResource === resourceLetter ? Number(value.slice(1)) : 0;
+  }
+  return Number(value) || 0;
+}
+function emblemForFaceId(faceId, inst) {
   if (isNormalDeckCard(faceId)) return { [EMBLEM_BY_DECK[faceId[0]]]: 1 };
   // Not restricted to M any more (2026-08-16, per user report: CON006B「祝福」has real EMBLEM_A/B/C
   // data (1,1,1) that wasn't showing up in the player stats panel) -- reads any row's own EMBLEM_A/B/C
@@ -4450,9 +4462,12 @@ function emblemForFaceId(faceId) {
     return null;
   }
   const counts = {};
-  if (Number(row.EMBLEM_A)) counts['地'] = Number(row.EMBLEM_A);
-  if (Number(row.EMBLEM_B)) counts['天'] = Number(row.EMBLEM_B);
-  if (Number(row.EMBLEM_C)) counts['人'] = Number(row.EMBLEM_C);
+  const a = resolveEmblemValueUi(row.EMBLEM_A, 'A', inst);
+  const b = resolveEmblemValueUi(row.EMBLEM_B, 'B', inst);
+  const c = resolveEmblemValueUi(row.EMBLEM_C, 'C', inst);
+  if (a) counts['地'] = a;
+  if (b) counts['天'] = b;
+  if (c) counts['人'] = c;
   return Object.keys(counts).length ? counts : null;
 }
 
@@ -6422,9 +6437,22 @@ function advanceTurnIfPossible(state, playerId) {
 function bzOutcomesForCandidate(candidate, playerId) {
   const costFaceId = candidate.type === 'UPGRADE' ? candidate.fromFaceId : candidate.faceId;
   const row = dataLoaderMod.getCardRow(INDEX, costFaceId);
-  const items = commandBuilderMod.lowerCostList(row.COST);
   const player = STATE.players.find((p) => p.id === playerId);
   const bzAvailable = player.resources.BZ || 0;
+  // Choice-COST (2026-10-15, "15A/15B/15C" -- see src/command-builder.isChoiceCost's own doc, M405/
+  // 巨大石像): lowerCostList can't parse this directly (it isn't a normal comma-separated cost) --
+  // affordability/BZ-outcomes are checked against whichever single option is actually affordable, same
+  // auto-pick board.resolveBuildNew itself commits to at build time (no human choice UI -- confirmed
+  // with the user, both AI and human just get the automatic "一番多く持っている資源を使う" pick).
+  if (commandBuilderMod.isChoiceCost(row.COST)) {
+    const options = commandBuilderMod.lowerChoiceCostOptions(row.COST);
+    for (const opt of options) {
+      const outcomes = executorMod.enumerateBzOutcomes(STATE, playerId, [opt], bzAvailable);
+      if (outcomes.length > 0) return outcomes;
+    }
+    return [];
+  }
+  const items = commandBuilderMod.lowerCostList(row.COST);
   return executorMod.enumerateBzOutcomes(STATE, playerId, items, bzAvailable);
 }
 
@@ -7766,7 +7794,7 @@ function computePlayerBuildStats(player, state) {
     // goals) never restricted this to "built" cards either, only this UI stat did). A monument/CON card
     // can carry 0-3 emblems, each type possibly repeated (see emblemForFaceId) -- every one counts
     // separately, same as if the card had that many individual emblems.
-    const emblem = emblemForFaceId(faceId);
+    const emblem = emblemForFaceId(faceId, cardState);
     if (emblem) {
       for (const char of emblemChars(emblem)) {
         if (char in emblemCounts) emblemCounts[char]++;

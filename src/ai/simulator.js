@@ -31,7 +31,7 @@
  */
 
 const { getCardRow } = require('../data-loader');
-const { lowerCostList } = require('../command-builder');
+const { lowerCostList, isChoiceCost, lowerChoiceCostOptions } = require('../command-builder');
 const board = require('../board');
 const executor = require('../executor');
 const turnFlow = require('../turn-flow');
@@ -50,7 +50,18 @@ function maxBzDiscount(state, index, playerId, candidate) {
   const costFaceId = candidate.type === 'UPGRADE' ? candidate.fromFaceId : candidate.faceId;
   const row = getCardRow(index, costFaceId);
   const discount = {};
-  for (const item of lowerCostList(row.COST)) {
+  // Choice-COST (2026-10-15, "15A/15B/15C" -- see command-builder.isChoiceCost's own doc, M405/巨大石像):
+  // pre-resolve to whichever single option board.resolveBuildNew's own pickChoiceCostResource would
+  // actually pick, using the SAME helper (reused here rather than re-deriving it), so this discount
+  // pre-computation never disagrees with the real resolution that follows it.
+  const items = isChoiceCost(row.COST)
+    ? (() => {
+        const options = lowerChoiceCostOptions(row.COST);
+        const resource = board.pickChoiceCostResource(state, playerId, options, remaining);
+        return [options.find((opt) => opt.resource === resource)];
+      })()
+    : lowerCostList(row.COST);
+  for (const item of items) {
     if (remaining <= 0) break;
     const use = Math.min(item.count, remaining);
     if (use > 0) {

@@ -229,7 +229,7 @@
       "EMBLEM_A": 1,
       "EMBLEM_B": 1,
       "EMBLEM_C": 1,
-      "VP": 9,
+      "VP": 8,
       "ONCE": "",
       "TAP": "",
       "PASSIVE": "",
@@ -263,7 +263,7 @@
       "EMBLEM_A": 3,
       "EMBLEM_B": 3,
       "EMBLEM_C": 3,
-      "VP": 10,
+      "VP": 12,
       "ONCE": "",
       "TAP": "",
       "PASSIVE": "",
@@ -271,6 +271,23 @@
       "START_ORDER": "",
       "AUTO": "",
       "INST": ""
+    },
+    {
+      "ID": "M405",
+      "NAME": "巨大石像",
+      "DICE": ">=3",
+      "COST": "15A/15B/15C",
+      "EMBLEM_A": "/3",
+      "EMBLEM_B": "/3",
+      "EMBLEM_C": "/3",
+      "VP": "",
+      "ONCE": "",
+      "TAP": "",
+      "PASSIVE": "VP_MODIFIER(MAX_EMBLEM_COUNT)",
+      "TURNEND": "",
+      "START_ORDER": "",
+      "AUTO": "",
+      "INST": "ゲーム終了時\n最多エンブレム　×　VP"
     }
   ],
   "A": [
@@ -701,12 +718,12 @@
       "VP": 0,
       "LEVEL": 1,
       "ONCE": "",
-      "TAP": "",
+      "TAP": "ADD(VP)",
       "PASSIVE": "",
-      "TURNEND": "",
+      "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "表面能力なし\n裏面　最多エンブレム　×　VP"
+      "INST": "VPを得る\n毎ターンアンタップする"
     },
     {
       "ID": "B001B",
@@ -845,12 +862,12 @@
       "VP": 1,
       "LEVEL": 2,
       "ONCE": "",
-      "TAP": "",
-      "PASSIVE": "VP_MODIFIER(MAX_EMBLEM_COUNT)",
-      "TURNEND": "",
+      "TAP": "ADD(2VP)",
+      "PASSIVE": "",
+      "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "最多エンブレム　×　VP"
+      "INST": "2VPを得る\n毎ターンアンタップする"
     }
   ],
   "C": [

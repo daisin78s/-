@@ -94,6 +94,18 @@ for (let i = 0; i < state.turnOrder.length; i++) {
   const placement = placeFirstLegalDie(state, expectedPlayerId);
   assertTrue(`${expectedPlayerId} found a legal first placement`, placement !== null);
 
+  // Defensive K top-up (2026-10-15, added once M405 grew extraMonumentPool from 4 to 5 ids -- shifting
+  // every subsequent RNG draw on this fixed seed, including which AREA placeFirstLegalDie happens to
+  // land a non-owner on): this loop's own point is "onboarding + a first turn works end to end", not
+  // "this specific seed never incurs a usage fee" -- a non-owner's placement can always owe a small
+  // fee they can't yet afford this early in onboarding, unrelated to whatever's actually being tested
+  // here. Grants exactly the owed amount (never more) only if canEndTurn is actually blocked by one.
+  const gate = require('../src/executor').canEndTurn(state, index, expectedPlayerId);
+  if (!gate.ok) {
+    const feeViolation = gate.violations.find((v) => v.type === 'USAGE_FEE');
+    if (feeViolation) state.players.find((p) => p.id === expectedPlayerId).resources.K += feeViolation.amount;
+  }
+
   const endResult = turnFlow.endTurn(state, index, expectedPlayerId);
   check(`endTurn succeeds for ${expectedPlayerId}`, endResult.success, true);
 }

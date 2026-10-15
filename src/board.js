@@ -28,7 +28,7 @@ const {
   splitCardId,
 } = require('./data-loader');
 const { parse } = require('./dsl-parser');
-const { lowerProgram, lowerCostList } = require('./command-builder');
+const { lowerProgram, lowerCostList, isChoiceCost, lowerChoiceCostOptions } = require('./command-builder');
 const { createCardInstance } = require('./game-state');
 const executor = require('./executor');
 // Only for BLOCK_UPGRADE_UNLESS_QST_RANK (CON004A, see isUpgradeBlockedByQstRank) -- qst.js sits above
@@ -473,7 +473,28 @@ function isCandidateAffordable(state, index, playerId, candidate) {
   const row = getCardRow(index, costFaceId);
   const player = state.players.find((p) => p.id === playerId);
   const bzAvailable = (player && player.resources.BZ) || 0;
+  // Choice-COST (2026-10-15, "15A/15B/15C" -- see isChoiceCost's own doc): affordable if ANY ONE of the
+  // options alone is, not the sum of all of them (that would be the ordinary, non-choice meaning).
+  if (isChoiceCost(row.COST)) {
+    return lowerChoiceCostOptions(row.COST).some((opt) => executor.enumerateBzOutcomes(state, playerId, [opt], bzAvailable).length > 0);
+  }
   return executor.enumerateBzOutcomes(state, playerId, lowerCostList(row.COST), bzAvailable).length > 0;
+}
+
+/** Which resource a choice-COST card's payment should actually use, among `options` (2026-10-15, for
+ * M405/巨大石像 -- see isChoiceCost's own doc). No player-facing choice UI (confirmed with the user: AI
+ * and human both just get this same automatic pick, "一番多く持っている資源を使う") -- picks whichever
+ * AFFORDABLE option's resource the player currently holds the most real (non-Z/BZ) units of, falling
+ * back to comparing every option if somehow none individually resolve as affordable here (shouldn't
+ * happen -- the caller already checked isCandidateAffordable first). */
+function pickChoiceCostResource(state, playerId, options, bzAvailable) {
+  const player = state.players.find((p) => p.id === playerId);
+  const affordable = options.filter((opt) => executor.enumerateBzOutcomes(state, playerId, [opt], bzAvailable).length > 0);
+  const pool = affordable.length > 0 ? affordable : options;
+  return pool.reduce((best, opt) => {
+    const held = player.resources[opt.resource] || 0;
+    return !best || held > best.held ? { resource: opt.resource, held } : best;
+  }, null).resource;
 }
 
 /** If commands (whose [0] is already known to be a BUILD) is followed by nothing but ADD statements --
@@ -1808,7 +1829,20 @@ function getBuildCandidates(state, index, playerId, categories, buildValue, monu
  * unreachable; category is the built card's own sheet letter, A/B/C/M). */
 function resolveBuildNew(state, index, context, candidate) {
   const row = getCardRow(index, candidate.faceId);
-  const discount = executor.applyBzDiscount(lowerCostList(row.COST), context.bzDiscount);
+  // Choice-COST (2026-10-15, "15A/15B/15C" -- see isChoiceCost's own doc): auto-pick one option (same
+  // rule for AI and human, no choice UI) and pay exactly that single-resource cost -- everything past
+  // this point (BZ discount, actual payment) runs completely unmodified against that resolved,
+  // ordinary-looking cost string.
+  let chosenResource = null;
+  let costString = row.COST;
+  if (isChoiceCost(row.COST)) {
+    const options = lowerChoiceCostOptions(row.COST);
+    const bzAvailable = (state.players.find((p) => p.id === context.playerId).resources.BZ) || 0;
+    chosenResource = pickChoiceCostResource(state, context.playerId, options, bzAvailable);
+    const chosen = options.find((opt) => opt.resource === chosenResource);
+    costString = `${chosen.count}${chosen.resource}`;
+  }
+  const discount = executor.applyBzDiscount(lowerCostList(costString), context.bzDiscount);
   if (!discount) return { success: false, reason: 'INVALID_BZ_DISCOUNT' };
   const payItems = discount.bzUsed > 0 ? [...discount.items, { resource: 'BZ', count: discount.bzUsed }] : discount.items;
   const payResult = executor.payCostList(state, context.playerId, payItems);
@@ -1822,6 +1856,7 @@ function resolveBuildNew(state, index, context, candidate) {
 
   const inst = createCardInstance(candidate.faceId);
   inst.ownerId = context.playerId;
+  inst.paidChoiceResource = chosenResource;
   state.cards[inst.physicalId] = inst;
   const player = state.players.find((p) => p.id === context.playerId);
   player.ownedCardPhysicalIds.push(inst.physicalId);
@@ -1988,6 +2023,7 @@ function forceRevealExtraMonumentsAtRound4(state) {
 module.exports = {
   CASTLE_MAP_ID,
   AREA009_MAP_ID,
+  pickChoiceCostResource,
   getSlotRequirements,
   slotAcceptsValue,
   placeDice,

@@ -255,28 +255,35 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 }
 
 // ---------------------------------------------------------------------------
-// 3b. B301B/栄光の証LV2 (2026-08-24 SHOP201-203 rework renumbered the B-deck -- this used to be B008B):
-//     PASSIVE=VP_MODIFIER(MAX_EMBLEM_COUNT) -- persistent, not a one-time ONCE snapshot (2026-08-12, per
-//     user request: "即時ではなく永続効果にしたい" -- moved off ONCE precisely so it keeps recomputing).
-//     Recomputed live from currently-owned emblem cards every time collectVpModifiers is called, same as
-//     computeFinalScore recomputes card VP live. Metric changed 2026-08-17 from VP_MODIFIER(COUNT(天))
-//     (天 emblems only) to VP_MODIFIER(MAX_EMBLEM_COUNT) (whichever of 天/地/人 the player has the most
-//     of), per user request ("エンブレム天の数*VPを最多エンブレムの数*VPにしたい").
+// 3b. M405/巨大石像 (2026-10-15 -- carries PASSIVE=VP_MODIFIER(MAX_EMBLEM_COUNT), the same persistent,
+//     live-recomputed formula B301B/栄光の証LV2 used to have before its own 2026-10-15 rework replaced
+//     it with a plain repeatable TAP=ADD(VP)/ADD(2VP) instead -- see command-builder.isChoiceCost's own
+//     doc for M405's new "15A/15B/15C" choice COST). M405's own EMBLEM_A/B/C are each "/3" -- conditional
+//     on inst.paidChoiceResource (which single resource was actually spent to pay that choice COST, set
+//     at build time by board.resolveBuildNew), not a flat per-card count -- see
+//     executor.resolveEmblemValue's own doc. Recomputed live from currently-owned emblem cards every
+//     time collectVpModifiers is called, same as computeFinalScore recomputes card VP live.
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
-  giveCard(state, 'B301B', 'P1'); // EMBLEM_B=1 -> 天=1, the only emblem type owned so far
-  check('B301B: VP_MODIFIER(MAX_EMBLEM_COUNT) starts at 1 (from B301B\'s own 1 EMBLEM_B, 天 is the only/max type)', executor.collectVpModifiers(state, index, 'P1'), 1);
+  const m405Id = giveCard(state, 'M405', 'P1');
+  state.cards[m405Id].paidChoiceResource = 'B'; // pretend 15B was the resource actually paid
+  check('M405 (paid with B): its own "/3" EMBLEM_B resolves -> 天=3, the only/max type so far', executor.collectVpModifiers(state, index, 'P1'), 3);
+  check('...EMBLEM_COUNT(天) is exactly 3 (only EMBLEM_B\'s "/3" counted)', executor.evalMetric(state, index, 'P1', { name: 'EMBLEM_COUNT', args: ['天'] }), 3);
+  check('...EMBLEM_COUNT(地)/EMBLEM_COUNT(人) stay 0 -- the OTHER two "/3" values never resolve for this instance', executor.evalMetric(state, index, 'P1', { name: 'EMBLEM_COUNT', args: ['地'] }) + executor.evalMetric(state, index, 'P1', { name: 'EMBLEM_COUNT', args: ['人'] }), 0);
 
-  giveCard(state, 'B001A', 'P1'); // EMBLEM_B=1 -> 天 rises to 2, still the max
-  check('B301B: VP_MODIFIER(MAX_EMBLEM_COUNT) rises to 2 as soon as another 天-emblem card is owned (live, not frozen at LVUP time)', executor.collectVpModifiers(state, index, 'P1'), 2);
-
-  giveCard(state, 'A001A', 'P1'); // EMBLEM_A=1 -> 地=1 (still behind 天=2)
-  giveCard(state, 'A002A', 'P1'); // EMBLEM_A=1 -> 地=2 (ties 天=2)
-  check('...stays at 2 while 地 only ties 天, not yet exceeding it', executor.collectVpModifiers(state, index, 'P1'), 2);
-
-  giveCard(state, 'A003A', 'P1'); // EMBLEM_A=1 -> 地=3, now overtaking 天=2
-  check('...rises to 3 once 地 (not 天) becomes the highest emblem type -- confirms this tracks the max across all 3 types, not just 天', executor.collectVpModifiers(state, index, 'P1'), 3);
+  giveCard(state, 'B001A', 'P1'); // EMBLEM_B=1 -> 天 rises to 4, still the max
+  check('VP_MODIFIER(MAX_EMBLEM_COUNT) rises to 4 as soon as another 天-emblem card is owned (live, not frozen at build time)', executor.collectVpModifiers(state, index, 'P1'), 4);
+}
+{
+  // A different M405 instance that paid with a DIFFERENT resource resolves its OWN matching EMBLEM
+  // only, confirming the conditional is genuinely per-instance (per paidChoiceResource), not a flat
+  // "always grant all 3" fallback.
+  const state = freshState();
+  const m405Id = giveCard(state, 'M405', 'P1');
+  state.cards[m405Id].paidChoiceResource = 'C';
+  check('M405 (paid with C): only EMBLEM_C\'s "/3" resolves -> 人=3, VP_MODIFIER(MAX_EMBLEM_COUNT)=3', executor.collectVpModifiers(state, index, 'P1'), 3);
+  check('...TOTAL_EMBLEM_COUNT is exactly 3 (not 9 -- only the one matching EMBLEM_C counted)', executor.evalMetric(state, index, 'P1', { name: 'TOTAL_EMBLEM_COUNT', args: [] }), 3);
 }
 
 // ---------------------------------------------------------------------------

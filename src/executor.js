@@ -36,7 +36,7 @@
 'use strict';
 
 const { parse } = require('./dsl-parser');
-const { lowerProgram, lowerCall, lowerCostList } = require('./command-builder');
+const { lowerProgram, lowerCall, lowerCostList, isChoiceCost, lowerChoiceCostOptions } = require('./command-builder');
 const { getCardRow, getAreaRow, findCardFace, getCardAutoDefault } = require('./data-loader');
 const { splitCardId, createDie, INITIAL_COLOR_DICE } = require('./game-state');
 const { rollDie } = require('./rng');
@@ -493,12 +493,31 @@ function evalCountNode(state, index, playerId, countSpec) {
  * game.xlsx's M sheet split EMBLEM into per-type EMBLEM_A/EMBLEM_B/EMBLEM_C count columns, same A=地/
  * B=天/C=人 letter convention as the decks) can carry 0-3, one card contributing to multiple emblem
  * types at once. JOB/CON/RESOURCE have neither populated, so return {} for those. */
-function emblemCountsForRow(row) {
+/** A bare EMBLEM_A/B/C value is an unconditional flat count, same as always. A "/N" value (2026-10-15,
+ * for M405/巨大石像's own choice-COST -- "15Aなら地3 15Bなら天3" per user spec) is conditional instead:
+ * it only counts if `inst.paidChoiceResource` (recorded at build time, see board.resolveBuildNew's own
+ * doc) matches this column's own letter -- e.g. EMBLEM_A="/3" grants 3 only when A was the resource
+ * actually paid, 0 if B or C was paid instead. `inst` is optional (every non-choice-COST card's
+ * EMBLEM_A/B/C never uses "/" at all, so omitting it there is harmless -- resolveEmblemValue just
+ * returns 0 for a "/N" value with no inst to check, same as "never matched"). */
+function resolveEmblemValue(value, resourceLetter, inst) {
+  if (!value) return 0;
+  if (typeof value === 'string' && value.startsWith('/')) {
+    if (!inst || inst.paidChoiceResource !== resourceLetter) return 0;
+    return Number(value.slice(1));
+  }
+  return value;
+}
+
+function emblemCountsForRow(row, inst) {
   if (row.EMBLEM) return { [row.EMBLEM]: 1 };
   const counts = {};
-  if (row.EMBLEM_A) counts['地'] = row.EMBLEM_A;
-  if (row.EMBLEM_B) counts['天'] = row.EMBLEM_B;
-  if (row.EMBLEM_C) counts['人'] = row.EMBLEM_C;
+  const a = resolveEmblemValue(row.EMBLEM_A, 'A', inst);
+  const b = resolveEmblemValue(row.EMBLEM_B, 'B', inst);
+  const c = resolveEmblemValue(row.EMBLEM_C, 'C', inst);
+  if (a) counts['地'] = a;
+  if (b) counts['天'] = b;
+  if (c) counts['人'] = c;
   return counts;
 }
 
@@ -507,7 +526,7 @@ function emblemCountsForRow(row) {
 function emblemTotalsByType(owned) {
   const totals = { 天: 0, 地: 0, 人: 0 };
   for (const e of ['天', '地', '人']) {
-    totals[e] = owned.reduce((sum, c) => sum + (emblemCountsForRow(c.row)[e] || 0), 0);
+    totals[e] = owned.reduce((sum, c) => sum + (emblemCountsForRow(c.row, c.inst)[e] || 0), 0);
   }
   return totals;
 }
@@ -566,7 +585,7 @@ function evalMetric(state, index, playerId, metric) {
       // union-of-sheets convention CARD_COUNT(M) etc. already uses above.
       const sheetScope = metric.args[1];
       const scopedOwned = sheetScope ? owned.filter((c) => index.byId.get(c.row.ID).sheet === sheetScope) : owned;
-      return scopedOwned.reduce((sum, c) => sum + (emblemCountsForRow(c.row)[emblem] || 0), 0);
+      return scopedOwned.reduce((sum, c) => sum + (emblemCountsForRow(c.row, c.inst)[emblem] || 0), 0);
     }
     case 'EMBLEM_SET_COUNT': {
       const totals = emblemTotalsByType(owned);
@@ -589,7 +608,17 @@ function evalMetric(state, index, playerId, metric) {
     // itself a COST entry on any card, so a build paid for (partly) with BZ still counts at the
     // card's full face-value COST here, matching the "資源(BZ含む)" wording.
     case 'COST_TOTAL':
-      return owned.reduce((sum, c) => sum + lowerCostList(c.row.COST).reduce((s, item) => s + item.count, 0), 0);
+      // Choice-COST (2026-10-15, "15A/15B/15C" -- see command-builder.isChoiceCost's own doc, M405/
+      // 巨大石像): an owned instance only ever actually paid ONE option (c.inst.paidChoiceResource,
+      // set at build time), not every option summed -- lowerCostList can't even parse the raw string.
+      return owned.reduce((sum, c) => {
+        if (isChoiceCost(c.row.COST)) {
+          const options = lowerChoiceCostOptions(c.row.COST);
+          const chosen = options.find((opt) => opt.resource === c.inst.paidChoiceResource) || options[0];
+          return sum + chosen.count;
+        }
+        return sum + lowerCostList(c.row.COST).reduce((s, item) => s + item.count, 0);
+      }, 0);
     // Confirmed 2026-07-30 for QST GOAL conditions: reads a raw player resource (e.g. RESOURCE(VP))
     // directly, rather than counting owned cards like every other metric above -- the only metric
     // that looks at PlayerState.resources instead of ownedCardRows. Multi-arg form (2026-08-15, per

@@ -364,6 +364,29 @@ function lowerCostList(costString) {
     });
 }
 
+/** True if costString uses the "/"-separated choice-COST notation (2026-10-15, added for M405/
+ * 巨大石像: "15A/15B/15C" -- per user spec, pay the full amount in ANY ONE of these resources, player's
+ * choice -- not "," which means "pay all of these together", lowerCostList's own normal meaning). Kept
+ * general (not M405-specific) per user request ("今のところ増やす予定はないが増やせるようにしておいて")
+ * so a future card can reuse the same notation without new plumbing. */
+function isChoiceCost(costString) {
+  return !!costString && costString.includes('/');
+}
+
+/** Splits a choice-COST string into its options, each lowered via the ordinary lowerCostList (every
+ * option is just a single plain resource+count on its own, e.g. "15A" -- the same syntax a normal,
+ * non-choice COST cell already uses, just picked one at a time here instead of summed together).
+ * @returns {{resource:string, count:number}[]} one entry per option, in the sheet's own left-to-right order */
+function lowerChoiceCostOptions(costString) {
+  return costString.split('/').map((segment) => {
+    const items = lowerCostList(segment.trim());
+    if (items.length !== 1) {
+      throw new CommandBuildError(`Choice-COST option must be exactly one resource+count, got "${segment}" in "${costString}"`);
+    }
+    return items[0];
+  });
+}
+
 module.exports = {
   CommandBuildError,
   lowerProgram,
@@ -372,6 +395,8 @@ module.exports = {
   lowerCondition,
   lowerMetric,
   lowerCostList,
+  isChoiceCost,
+  lowerChoiceCostOptions,
 };
 
 })();
