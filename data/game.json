@@ -718,12 +718,12 @@
       "VP": 0,
       "LEVEL": 1,
       "ONCE": "",
-      "TAP": "ON(GET(VP),ADD(VP))",
+      "TAP": "CHANGE(K,VP)",
       "PASSIVE": "",
       "TURNEND": "UNTAP()",
       "START_ORDER": "",
-      "AUTO": "A",
-      "INST": "VPを得たとき必ずタップする\n1VPを得る\n毎ターンアンタップする"
+      "AUTO": "",
+      "INST": "タップすると〇をVPに変換する\n毎ターンアンタップする"
     },
     {
       "ID": "B001B",
@@ -862,12 +862,12 @@
       "VP": 1,
       "LEVEL": 2,
       "ONCE": "",
-      "TAP": "ON(GET(VP),ADD(2VP))",
+      "TAP": "CHANGE(K,VP,2)",
       "PASSIVE": "",
       "TURNEND": "UNTAP()",
       "START_ORDER": "",
-      "AUTO": "A",
-      "INST": "VPを得たとき必ずタップする\n2VPを得る\n毎ターンアンタップする"
+      "AUTO": "",
+      "INST": "タップすると2〇を2VPに変換する\n毎ターンアンタップする"
     }
   ],
   "C": [
