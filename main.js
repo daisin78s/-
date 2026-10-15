@@ -2681,8 +2681,9 @@ function renderCardListFlatCategory(key, container) {
 }
 
 /** モニュメント一覧だけの特別扱い (2026-10-10, per user request: "モニュメントカード一覧 晩餐会の左側に
- * いずれかのショップが売り切れたら登場 と記載して") -- M401-404(2026-10-13の宝物庫追加でM401-403の3枚
- * からM401-404の4枚に拡張、現在の中身は宝物庫/天空の塔/晩餐会/王都建設)はboard.
+ * いずれかのショップが売り切れたら登場 と記載して"; 文言は2026-10-16に「強化カードがなくなってくると
+ * 登場」へ変更) -- M401-405(2026-10-13の宝物庫追加でM401-403の3枚からM401-404の4枚に、2026-10-15の
+ * 巨大石像追加でM401-405の5枚に拡張、現在の中身は宝物庫/天空の塔/晩餐会/王都建設/巨大石像)はboard.
  * revealExtraMonumentsIfAnyShopEmptied により、いずれかのショップが空になった時点でまとめて登場する
  * (setup.js/board.jsの同名処理参照、M001-012とは別枠のextraMonumentPool)。renderCardListFlatCategory
  * と同じ6列グリッドのまま、このグループの先頭(今はM401)の直前にキャプション用のテキストセルだけ挿入する
@@ -2693,7 +2694,7 @@ function renderCardListMonumentCategory(container) {
   grid.style.gridTemplateColumns = 'repeat(6, 122px)';
   for (const row of INDEX.raw.M) {
     if (row.ID === 'M401') {
-      grid.appendChild(el('div', 'card-list-monument-note', 'いずれかのショップが\n売り切れたら登場'));
+      grid.appendChild(el('div', 'card-list-monument-note', '強化カードが\nなくなってくると登場'));
     }
     grid.appendChild(buildCardListCell(row.ID, false));
   }
