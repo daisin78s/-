@@ -4481,6 +4481,17 @@ function emblemChars(emblemCounts) {
   return chars;
 }
 
+/** {天:1,地:4} -> [{char:'天',count:1},{char:'地',count:4}], in EMBLEM_ORDER's fixed order -- one
+ * segment per emblem type actually present (2026-10-16, per user spec: "地/地地/地3/地4" -- same
+ * "1-2 repeat the icon, 3+ switch to icon+number" convention resourceCountIconNodes already uses for
+ * resource dots, applied here to emblem types too). Each segment's own count decides how
+ * fillCardFace's own rendering loop below builds it (count<=2: that many individual
+ * .shop-card__emblem-char spans, same as always; count>=3: one icon span + a plain count text node,
+ * mirroring resourceCountIconNodes' own actionDot()+textNode shape). */
+function emblemSegments(emblemCounts) {
+  return EMBLEM_ORDER.filter((e) => emblemCounts[e] > 0).map((e) => ({ char: e, count: emblemCounts[e] }));
+}
+
 /** A/B/C decks' LEVEL column tracks the tier suffix letter 1:1 (confirmed 2026-07-29 from
  * data/game.json: tier A -> LEVEL 1, tier B -> LEVEL 2) -- derived from the faceId's own tier suffix
  * rather than hardcoded per card. M/JOB/CON/RESOURCE have no LEVEL at all, so no badge for those
@@ -4543,7 +4554,25 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
   const emblem = emblemForFaceId(faceId);
   const emblemEl = q('.shop-card__emblem');
   if (emblem) {
-    const chars = emblemChars(emblem);
+    // 2026-10-16, per user spec ("地/地地/地3/地4") -- 1-2個はアイコンをそのまま個数分並べる、3個以上は
+    // アイコン1個+数字にする(resourceCountIconNodesがresource-badgeで既にやっているのと同じ考え方)。
+    // appendEmblemSegment一つがEMBLEM_ROW_CHUNK_SIZE基準の「1マス」になる -- 3+で1個のspanにまとまる分、
+    // 同じchunkSizeでも実際に並ぶマス数が減る(例: 聖域の地4は以前は4マスだったが今は1マスの"地4")。
+    const appendEmblemSegment = (container, { char, count }) => {
+      if (count <= 2) {
+        for (let i = 0; i < count; i++) {
+          const charEl = el('span', 'shop-card__emblem-char', char);
+          charEl.dataset.emblem = char;
+          container.appendChild(charEl);
+        }
+      } else {
+        const charEl = el('span', 'shop-card__emblem-char', char);
+        charEl.dataset.emblem = char;
+        container.appendChild(charEl);
+        container.appendChild(document.createTextNode(String(count)));
+      }
+    };
+    const segments = emblemSegments(emblem);
     // Always one line regardless of count (2026-08-16 for up to 3, widened 2026-08-18 per user request
     // for 祝福 specifically -- "縦に並べると見栄えが悪いので...横にして" -- to every count; see
     // .shop-card__emblem's own doc in style.css) -- EXCEPT 中央広場/聖王城/円形闘技場/聖域/大交易所
@@ -4558,21 +4587,13 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     const chunkSize = EMBLEM_ROW_CHUNK_SIZE[faceId];
     if (chunkSize) {
       emblemEl.classList.add('shop-card__emblem--multi-row');
-      for (let i = 0; i < chars.length; i += chunkSize) {
+      for (let i = 0; i < segments.length; i += chunkSize) {
         const rowEl = el('div', 'shop-card__emblem-row');
-        for (const char of chars.slice(i, i + chunkSize)) {
-          const charEl = el('span', 'shop-card__emblem-char', char);
-          charEl.dataset.emblem = char;
-          rowEl.appendChild(charEl);
-        }
+        for (const segment of segments.slice(i, i + chunkSize)) appendEmblemSegment(rowEl, segment);
         emblemEl.appendChild(rowEl);
       }
     } else {
-      for (const char of chars) {
-        const charEl = el('span', 'shop-card__emblem-char', char);
-        charEl.dataset.emblem = char;
-        emblemEl.appendChild(charEl);
-      }
+      for (const segment of segments) appendEmblemSegment(emblemEl, segment);
     }
   }
 
