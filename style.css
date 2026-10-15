@@ -1329,7 +1329,10 @@ body.tutorial-mode .change-highlight {
   height: 18px;
 }
 .action-dot[data-resource="K"] { background: var(--resource-k-dot); border: 1.5px solid var(--resource-k-dot-border); }
-.action-dot[data-resource="A"] { background: var(--resource-a); }
+/* 権力(A)アイコン画像 (2026-10-15, per user提供の透過PNG、assets/resource-icon-a.png) -- 他の資源
+   (B/C/K)はまだ既存の単色ドットのまま、Aだけ先行して画像に差し替え。background省略時の色フォール
+   バックとしてvar(--resource-a)を残しつつ画像を重ねる(画像読み込み失敗時も色だけは表示される)。 */
+.action-dot[data-resource="A"] { background: var(--resource-a) url('assets/resource-icon-a.png') center / contain no-repeat; }
 .action-dot[data-resource="B"] { background: var(--resource-b); }
 .action-dot[data-resource="C"] { background: var(--resource-c); }
 .action-dot[data-resource="Z"] { background: var(--resource-z-gradient); }
@@ -1621,7 +1624,7 @@ body.tutorial-mode .change-highlight {
 }
 
 .resource-badge[data-resource="K"] .resource-badge__dot { background: var(--resource-k-dot); border: 1.5px solid var(--resource-k-dot-border); }
-.resource-badge[data-resource="A"] .resource-badge__dot { background: var(--resource-a); }
+.resource-badge[data-resource="A"] .resource-badge__dot { background: var(--resource-a) url('assets/resource-icon-a.png') center / contain no-repeat; }
 .resource-badge[data-resource="B"] .resource-badge__dot { background: var(--resource-b); }
 .resource-badge[data-resource="C"] .resource-badge__dot { background: var(--resource-c); }
 .resource-badge[data-resource="Z"] .resource-badge__dot { background: var(--resource-z-gradient); }
