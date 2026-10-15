@@ -7201,8 +7201,9 @@ function renderPlayers(state, next) {
       // slot_any_rule_introの「光る」演出 (2026-09-26, per user request: "自分のすべてのダイスが光る")
       // -- ANYにはどの目でも置けるので、色/白/目の値を問わず全ダイスを光らせる。
       if (tutorialSlotAnyGlowing && player.id === 'P1') dieNode.classList.add('change-highlight');
-      // game_rules_intro_1の「光る」演出 (2026-09-27, per user request: "このときあなたのダイス3つを
-      // 光らせる") -- 自分の色ダイス全部(tutorialGameRulesDiceGlowing's own doc)。
+      // dice_intro(T002)の「光る」演出 (2026-09-27, per user request: "このときあなたのダイス3つを
+      // 光らせる"; 2026-10-16、元はgame_rules_intro_1自身だったがExcelの行分割でdice_introへ移動) --
+      // 自分の色ダイス全部(tutorialGameRulesDiceGlowing's own doc)。
       if (tutorialGameRulesDiceGlowing && player.id === 'P1' && die.kind !== 'WHITE') dieNode.classList.add('change-highlight');
       // worker_placement_example_introの「光る」演出(真ん中のダイス) --
       // tutorialWorkerPlacementExampleDieId's own doc。
@@ -9760,13 +9761,12 @@ const TUTORIAL_STEPS = [
   // 2026-09-26, per user request -- 2 general-rules screens shown before resource_choice_intro's own
   // "それではゲームを始めましょう" (same match condition, same "next unseen step" fall-through pattern as
   // the resource_choice_intro/con_intro/choice split documented just above).
-  // 2026-09-27, per user request -- 「ダイス🎲🎲🎲を「ワーカー」として使う」の説明。🎲🎲🎲はP1の実際の
-  // 色ダイス3個のアイコンに変換される(TUTORIAL_ICON_NOTATIONS参照)。この時プレイヤーパネルの実物のダイス
-  // 3個も光る(tutorialGameRulesDiceGlowing's own doc)。
+  // 2026-09-27, per user request -- ゲーム概要の説明(ダイスの話は2026-10-16にT002/dice_introへ分離 --
+  // 下記own doc参照)。
   {
     id: 'game_rules_intro_1',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: 'このゲームは、ダイス🎲🎲🎲をワーカーとして使う\nワーカープレイスメント系拡大再生産ゲームです',
+    body: 'このゲームは、ダイス（サイコロ）を配置して資源を集めカードを獲得しながら、自分の勢力を発展させていくゲームです',
     // 2026-10-02, per user request (Excelの新しい選択肢2「初期説明を飛ばす」→T063/resource_choice_con_intro):
     // "ショートカットを作りチュートリアル作成を円滑にするためです そのため後で削除すると思います" -- 開発用の
     // 一時的なショートカットなので、handleTutorialChoiceClick内の専用フック(下記)で間の全ステップを
@@ -9775,11 +9775,24 @@ const TUTORIAL_STEPS = [
     // 通常通りプレイヤー自身が手動で行う("そのため そこからは手動でやります")。
     // 2026-10-12, per user request: 「初期説明を飛ばす」が左、「次へ」が右になるよう順序入れ替え
     // (choicesLayout:'row'は配列の並び順＝横並びの左から右の順)。
+    // 2026-10-16, per user spec ("T001ではダイスは光らずT002で光ります"): 「次へ」の遷移先を
+    // worker_placement_example_introから新設のdice_intro(T002)へ変更。
     choices: [
       { label: '初期説明を飛ばす', targetStepId: 'resource_choice_con_intro' },
-      { label: '次へ', targetStepId: 'worker_placement_example_intro' },
+      { label: '次へ', targetStepId: 'dice_intro' },
     ],
     choicesLayout: 'row',
+  },
+  // 2026-10-16, per user spec (Excelの新しい行T002「これがダイス🎲🎲🎲です」、実装ID未設定だったため
+  // 新規追加) -- 「ダイス」そのものの紹介。🎲🎲🎲はP1の実際の色ダイス3個のアイコンに変換される
+  // (TUTORIAL_ICON_NOTATIONS参照)。この時プレイヤーパネルの実物のダイス3個も光る
+  // (tutorialGameRulesDiceGlowing's own doc -- 元はgame_rules_intro_1自身で光らせていたが、Excelで
+  // セリフがT001/T002の2行に分割されたため、光る演出もこちらへ移動)。
+  {
+    id: 'dice_intro',
+    match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
+    body: 'これがダイス🎲🎲🎲です',
+    nextLabel: '次へ',
   },
   // 2026-09-27, per user request -- ワーカープレイスメントの具体例(当初は小麦畑+一番左のダイスだったが、
   // "変更"で農園+真ん中のダイスに差し替え)。真ん中のダイス(index 1、常に目6に固定済み(2026-09-28変更前は
@@ -11183,8 +11196,9 @@ for (let n = 1; n <= 6; n++) {
   TUTORIAL_ICON_NOTATIONS.push({ text: `白${n}⃣`, build: whiteDieBuild });
 }
 // 🎲🎲🎲 (2026-09-27, per user request: "🎲🎲🎲はあなたの色ダイスと同じものを3つ表示してそれも光らせる")
-// -- P1の実際の色ダイス3個(現在の目/色)をそのまま表示し、常に光らせる(この記法が使われるのは
-// game_rules_intro_1一箇所だけで、その場面では常に光っているものとして扱う指示のため)。STATEはグローバル
+// -- P1の実際の色ダイス3個(現在の目/色)をそのまま表示し、常に光らせる(この記法が使われるのはdice_intro
+// 一箇所だけ(2026-10-16、元はgame_rules_intro_1自身だったがExcelの行分割でdice_intro/T002へ移動)で、
+// その場面では常に光っているものとして扱う指示のため)。STATEはグローバル
 // なので、build()が呼ばれる時点(タイプライター表示中)の最新のダイス状態を毎回読み直す。
 TUTORIAL_ICON_NOTATIONS.push({
   text: '🎲🎲🎲',
@@ -11425,7 +11439,6 @@ function renderTutorialOverlay(state) {
       // (tutorialWorkerPlacementDemoSnapshot's own doc、per user request: "この時一度エリアのダイスを
       // すべて元に戻す 増えた資源やカードも元に戻す")。
       if (next.id === 'game_rules_intro_1') {
-        tutorialGameRulesDiceGlowing = true;
         tutorialWorkerPlacementDemoSnapshot = gameStateMod.cloneState(state);
         // dice_misclick_hintは通常の直線探索では絶対に自然発見されてはならない (2026-09-27 bug fix) --
         // 配列上ではcastletown_placement_intro/card_acquisition_placement_introより手前に置かれているため、
@@ -11916,17 +11929,18 @@ function handleTutorialChoiceClick(targetStepId) {
         selectedDieIds = [];
       }
     }
-    // targetStepId === 'worker_placement_example_intro'(「次へ」) (2026-10-12 bug fix, per user report:
-    // "例えばダイスをエリア「農園」のスロットに置けば のセリフが2回続く") -- このbranch自体は「何もしない」
+    // targetStepId === 'dice_intro'(「次へ」) (2026-10-12 bug fix, per user report:
+    // "例えばダイスをエリア「農園」のスロットに置けば のセリフが2回続く"; 2026-10-16, 遷移先がdice_intro
+    // 新設に伴いworker_placement_example_introから変更) -- このbranch自体は「何もしない」
     // つもりだったが、下のtutorialCurrentStepId = targetStepId(このif/else全体の外、どちらの分岐でも
     // 必ず実行される)がtutorialSeenStepIdsへの追加を伴わずに直接ステップを切り替えてしまうため、結果的に
-    // worker_placement_example_intro自身が一度もseen扱いにならないまま表示されていた。次にdismiss
+    // dice_intro自身が一度もseen扱いにならないまま表示されていた。次にdismiss
     // されてtutorialCurrentStepIdがnullに戻ると、renderTutorialOverlayの「次の未見ステップ」探索が
-    // (まだseenでないため)同じworker_placement_example_introを再度拾ってしまい、もう一度全く同じ文面が
-    // 表示されていた(2回目のdismissでようやくここでseen追加され、正しくworker_placement_example_resultへ
+    // (まだseenでないため)同じdice_introを再度拾ってしまい、もう一度全く同じ文面が
+    // 表示されていた(2回目のdismissでようやくここでseen追加され、正しくworker_placement_example_introへ
     // 進んでいた)。他のchoicesステップのgeneral分岐(下のelse if)がcurrentStep.choices全部を無条件で
     // seen化しているのと同じ理由で、ここでも明示的に追加する。
-    if (targetStepId === 'worker_placement_example_intro') tutorialSeenStepIds.add(targetStepId);
+    if (targetStepId === 'dice_intro') tutorialSeenStepIds.add(targetStepId);
   } else if (currentStep) {
     for (const choice of currentStep.choices) tutorialSeenStepIds.add(choice.targetStepId);
   }
@@ -12072,9 +12086,15 @@ function dismissTutorialStep() {
   // 領地カードの説明、計4画面)も同じ理由でExcelから削除された -- resource_choiceの次は通常の直線探索で
   // resource_pick_hintが見つかる。
   if (tutorialCurrentStepId === 'resource_choice') tutorialResourceCandidatesGlowing = true;
-  // worker_placement_example_introの「光る」演出(真ん中のダイス+農園のスロット3) -- game_rules_intro_1
-  // が閉じられた瞬間にONにする。
-  if (tutorialCurrentStepId === 'game_rules_intro_1') { tutorialGameRulesDiceGlowing = false; tutorialWorkerPlacementExampleGlowing = true; }
+  // dice_intro(T002「これがダイス🎲🎲🎲です」)の「光る」演出(自分の色ダイス3個) -- 2026-10-16,
+  // per user spec ("T001ではダイスは光らずT002で光ります") -- 以前はgame_rules_intro_1自身の本文に
+  // 🎲🎲🎲があったため、そのステップの発見時に直接ONにしていたが、Excelの行分割でセリフが2ステップに
+  // 分かれた(T001=ルール説明のみ/T002=ダイスの紹介+発光)ため、game_rules_intro_1が閉じられた瞬間に
+  // ONにする、他のステップ同様の遷移チェーン方式に変更。
+  if (tutorialCurrentStepId === 'game_rules_intro_1') { tutorialGameRulesDiceGlowing = true; }
+  // worker_placement_example_introの「光る」演出(真ん中のダイス+農園のスロット3) -- dice_introが
+  // 閉じられた瞬間にONにする(以前はgame_rules_intro_1の直後だったが、間にdice_introが挟まったため)。
+  if (tutorialCurrentStepId === 'dice_intro') { tutorialGameRulesDiceGlowing = false; tutorialWorkerPlacementExampleGlowing = true; }
   // worker_placement_example_resultの「光る」演出(増えた食料+置かれたダイス) -- worker_placement_example_
   // introが閉じられた瞬間にONにし、同時に実際にダイスを1個農園へ置く
   // (forcePlaceMiddleDieOnFarmForTutorial's own doc)。
@@ -12600,7 +12620,8 @@ let tutorialAreaExSlotGlowMapId = null;
 // する(renderTutorialOverlay自身のdoc参照、dismissTutorialStepを経由しないため専用の分岐が必要)。
 let tutorialResourceCandidatesGlowing = false;
 // 自分の色ダイス3個(プレイヤーパネル本物)の「光る」演出 (2026-09-27, per user request: "このときあなたの
-// ダイス3つを光らせる") -- game_rules_intro_1が表示され続けている間ずっとtrueになる継続フラグ。
+// ダイス3つを光らせる") -- dice_intro(T002、2026-10-16、元はgame_rules_intro_1)が表示され続けている間
+// ずっとtrueになる継続フラグ。
 // 🎲🎲🎲(TUTORIAL_ICON_NOTATIONS)側の光る演出は常時ONで別管理、こちらはrenderPlayers側の実物のダイス用。
 let tutorialGameRulesDiceGlowing = false;
 // 真ん中のダイス+農園のスロット3(index 2)の「光る」演出 (2026-09-27, per user request: 当初は"一番左の
