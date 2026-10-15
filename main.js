@@ -13272,6 +13272,30 @@ function renderUndoButtons(state) {
   }
 }
 
+/** How many of the board's maps currently have at least one legal slot for at least one of playerId's
+ * own unplaced/unpassed dice (2026-10-16, per user spec: "ダイスを置けるエリアが0か1になったらラウンド
+ * パスボタンを光らせる" -- every game, not tutorial-only). Reuses board.previewPlaceDice (same
+ * clone-and-try check candidateAffordable-style UI code already relies on elsewhere) for each
+ * (die, slotIndex) pair, short-circuiting to the next map as soon as one placement succeeds -- worst
+ * case (nothing placeable anywhere) is still bounded by board size (maps × slots × dice, all small),
+ * cheap enough to run every render. */
+function countPlaceableMapsForPlayer(state, playerId) {
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player) return 0;
+  const unplacedDice = player.dice.filter((d) => d.placedMapId === null && !d.passed);
+  if (unplacedDice.length === 0) return 0;
+  let count = 0;
+  for (const mapId of Object.keys(state.maps)) {
+    const map = state.maps[mapId];
+    const areaRow = dataLoaderMod.getAreaRow(INDEX, map.currentAreaId);
+    const requirements = boardMod.getSlotRequirements(areaRow);
+    const placeable = unplacedDice.some((die) => requirements.some((req, slotIndex) =>
+      boardMod.previewPlaceDice(state, INDEX, { playerId }, die.id, mapId, slotIndex)));
+    if (placeable) count++;
+  }
+  return count;
+}
+
 /** "ラウンドパス" header button (2026-08-02, per user feedback: pinned above player-role-control,
  * always in the DOM -- see index.html's own comment). Enabled only for the player whose TURN it
  * actually is right now (same actingHumanPlayerId gate as die selection/free actions) AND who still
@@ -13291,7 +13315,11 @@ function renderRoundPassButton(state, next) {
   btn.dataset.playerId = hasDiceLeftThisRound && !blockedByTutorial ? playerId : '';
   // round_pass_leftover_dice_hintの「光る」演出 (2026-10-02, per user request: "このときラウンドパス
   // ボタンを光らせて") -- tutorialRoundPassButtonGlowing's own doc。
-  btn.classList.toggle('change-highlight', tutorialRoundPassButtonGlowing);
+  // 2026-10-16, per user spec: "ダイスを置けるエリアが0か1になったらラウンドパスボタンを光らせる"(全ての
+  // ゲームで、チュートリアル限定ではない) -- countPlaceableMapsForPlayerが0/1の時も同じchange-highlight
+  // を立てる。hasDiceLeftThisRoundがfalseの時(置くダイスが無い)は無駄な計算を避ける。
+  const fewPlaceableAreas = hasDiceLeftThisRound && countPlaceableMapsForPlayer(state, playerId) <= 1;
+  btn.classList.toggle('change-highlight', tutorialRoundPassButtonGlowing || fewPlaceableAreas);
 }
 
 function handleRoundPassClick() {
