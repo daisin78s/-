@@ -5329,6 +5329,11 @@ function buildShopSlotNode(slotId, faceId, showReqCaption, locked, faceDown = fa
     // here now; the card's own face-down label is the only place it's shown.
     if (faceDown) return '';
     if (locked) return `${boardMod.specialShopMinRound(faceId)}Rから`;
+    // SHOP201-203 cards get force-discarded the instant round 4 begins (2026-10-14 rule, see
+    // board.forceRevealExtraMonumentsAtRound4's own doc) -- warn the player one round ahead, starting
+    // round 3 (per user request), rather than letting it be a surprise once it actually happens.
+    // SHOP201-203-only (slotId prefix "SHOP2"; M=SHOP001-006, NORMAL=SHOP101-106 never apply here).
+    if (faceId && slotId.startsWith('SHOP2') && STATE.round >= 3) return '4Rに捨て札';
     return showReqCaption ? shopReqForSlotId(slotId) : '';
   };
   // build_dice_value_intro系の「光る」演出(SHOPのダイス目キャプション) -- 実カードの有無に関わらず
