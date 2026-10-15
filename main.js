@@ -8826,6 +8826,18 @@ function saveAchievements(store) {
   try { localStorage.setItem(ACHIEVEMENT_STORAGE_KEY, JSON.stringify(store)); } catch (e) { /* ignore */ }
 }
 
+/** 入口バナーの「初めての方はチュートリアルをクリック」吹き出し (2026-10-15, per user spec: "チュートリ
+ * アル最高得点が未記録なら表示") -- ACHIEVEMENT_MODE_DEFSの'mode_tutorial'(「チュートリアル最高獲得点数」)
+ * がまだ一度も記録されていない(=このプレイヤーはチュートリアルを最後までクリアしたことがない)間だけ
+ * 表示する。呼び出し側(DOMContentLoadedの初期化)が1回呼ぶだけで、チュートリアル中/ゲーム中は入口バナー
+ * 自体が隠れているので再評価の必要はない -- 次に入口バナーへ戻ってきたとき(ページ再読み込み)には改めて
+ * この関数がまた呼ばれる。 */
+function updateTutorialCalloutVisibility() {
+  const el = document.getElementById('entry-banner__tutorial-callout');
+  if (!el) return;
+  el.hidden = loadAchievements().mode_tutorial !== undefined;
+}
+
 function recordAchievementIfNew(store, updatedKeys, key, value) {
   if (isNewAchievementRecord(key, value, store[key])) {
     store[key] = value;
@@ -14018,6 +14030,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // dismissEntryBannerで裏にある普通のゲーム画面を見せてからそれぞれの処理に入る)。下の3つの小ボタンも
   // 同様にバナーを閉じてから、ゲーム中のボタン列と全く同じ関数を呼ぶ。
   document.getElementById('entry-banner-tutorial-button').addEventListener('click', openTutorialMode);
+  updateTutorialCalloutVisibility();
   document.getElementById('entry-banner-local-button').addEventListener('click', dismissEntryBanner);
   // トップ画像に焼き込み済みの「今すぐプレイ」ボタンの上に重ねた透明ボタン (2026-10-05, per user: "今すぐ
   // プレイはローカル対戦に飛ぶ") -- ローカル対戦ボタンと全く同じ処理。

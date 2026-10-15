@@ -5016,6 +5016,47 @@ body.tutorial-mode .change-highlight {
 #entry-banner__button-row {
   display: flex;
   width: 100%;
+  position: relative;
+}
+
+/* 初回案内の吹き出し (2026-10-15) -- チュートリアルボタン(先頭、8等分の1列目)の真上に重ねる。列幅は
+   他の7ボタンと同じflex:1 1 0の均等割りなので、絶対配置でも同じ12.5%幅を使えば水平位置が揃う。 */
+.entry-banner__tutorial-callout {
+  position: absolute;
+  left: 0;
+  width: 12.5%;
+  bottom: 100%;
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 10px 6px 16px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #fdf1d0, #f3d98a);
+  border: 2px solid #c9a227;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
+  color: #1b3a8a;
+  font-weight: 700;
+  line-height: 1.3;
+  pointer-events: none;
+  z-index: 5;
+}
+.entry-banner__tutorial-callout::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -10px;
+  transform: translateX(-50%);
+  border: 10px solid transparent;
+  border-top-color: #f3d98a;
+  border-bottom: 0;
+}
+.entry-banner__tutorial-callout-line {
+  font-size: clamp(10px, 1.3vw, 14px);
+}
+.entry-banner__tutorial-callout-main {
+  font-size: clamp(14px, 2vw, 20px);
 }
 
 /* 画面端いっぱいに8等分 (旧画像の7ボタンが端から端まで隙間なく並んでいた見た目に合わせる)。2026-10-11
