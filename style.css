@@ -3367,22 +3367,6 @@ body.tutorial-mode .change-highlight {
   white-space: pre-line;
 }
 
-/* 領地/天運/人材一覧のINST説明文 (2026-08-22, per user request: "カード一覧とほかの一覧に飛ぶボタン
-   との間にINSTシートのそれぞれの説明文を表示") -- instDescriptionText() reads INDEX.raw.INSTの
-   "Aカード"/"Bカード"/"Cカード"行。現状は説明列が空なので:emptyで消える(データ投入待ち)。 */
-.card-list-abc-inst {
-  margin-top: 16px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--text);
-  white-space: pre-line;
-}
-.card-list-abc-inst:empty {
-  display: none;
-}
-
 /* 資源や用語一覧 (2026-08-22, per user request: "横長ではなくほかのカードのように表示") -- each term
    is its own square tile, same footprint as .owned-card-cell (122x122) so it sits consistently
    alongside every other カードリスト grid. Tap opens showCardListTermModal's plain-text detail popup
