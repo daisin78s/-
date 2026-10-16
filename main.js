@@ -1443,6 +1443,17 @@ function driveOneAiStepInner(state) {
         const picked = jobReplacementChoice.context.candidates[Math.floor(rngMod.next(state.rng) * jobReplacementChoice.context.candidates.length)];
         setupMod.resolveJobReplacementChoice(state, INDEX, ctx.playerId, picked);
       }
+    } else if (ctx.player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'))) {
+      // Idempotency guard (2026-10-16, per user priority: "再発防止を優先" after an unexplained live bug
+      // where an AI player's resources climbed without bound, with no corresponding board/dice/shop
+      // change -- the AI_ONBOARDING_SAFETY_CAP guard above only CAPS how many times resolveAiTurnContext
+      // can wrongly keep reporting ONBOARDING for an already-onboarded player before stopping; this makes
+      // each individual re-entry genuinely harmless instead, regardless of why that ever happens --
+      // skipping straight past chooseConFace/receiveInitialResources (which would otherwise re-grant the
+      // player's CON ONCE + both RESOURCE cards' ONCE all over again) whenever a CON-prefixed card is
+      // already owned. Defensive only -- under normal play this branch is never reached a 2nd time for
+      // the same player, since hasFinishedOnboarding's own matching check (via next.type/resolveAiTurnContext)
+      // should already route them to the TURN branch by then.
     } else {
       const face = isLv3
         ? smartOnboardingMod.pickConFace(state, INDEX, ctx.playerId, ctx.player.jobCardId, aiConJobSynergyTable, state.rng)
