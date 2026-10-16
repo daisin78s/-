@@ -2400,28 +2400,20 @@ body.tutorial-mode .change-highlight {
 }
 
 /* 2026-10-16, per user request: "カードの大きさ プレイと同じに" -- 108px(カードリスト専用の縮小)から
-   112px(.shop-cardの基本幅、実際のショップ/手札と同じ)へ。文章を消した(buildCardListCell's own
-   showEffect:false)ことで、A/B/C/CON/JOBがshop-card--tallにならなくなった(.owned-card-cell--tall
-   .shop-cardの128px上書きも実質発生しなくなった)ため、どのカードもこの基本幅のまま崩れずに収まる。 */
+   112px(.shop-cardの基本幅、実際のショップ/手札と同じ)へ。アイコン類は引き続き表示する(長文のINST
+   説明文だけ消す、per user follow-up)ため、.owned-card-cell--tallの128px幅上書きは撤去 -- 112px幅の
+   まま、アイコン行が必要なら2行に折り返す(プレイ中の実際のカードも幅は常に112pxで変わらず、縦に
+   伸びるだけなのと同じ挙動)。 */
 .owned-card-cell .shop-card {
   width: 112px;
-}
-
-.owned-card-cell--tall .shop-card {
-  /* 2026-07-30: widened from 118px -- JOB004A/007A's ON(BUILD(...),...) effect icons (⤵️⚒️ + cost +
-     ▶ + "軽減nZ") didn't fit on one line even at 118px with minimal gaps, per user feedback ("◯3→軽減
-     2Zにしてください", not wrapped across 2 lines). Still comfortably under the 150px
-     .owned-card-cell--tall cell size (incl. rotated/TAP orientation). */
-  width: 128px;
 }
 
 /* M401/晩餐会 (2026-09-01, per user spec: "横幅はほかのモニュメントと同じ幅にして") -- gaining its own
    PASSIVE effect (VP_MODIFIER_FINAL, see buildBanquetFinalVpModifierIcon) makes fillCardFace mark it
    shop-card--tall the same as any other card with a non-empty effect row (see that function's own
-   .tall doc), which would otherwise widen it via .owned-card-cell--tall above -- but its own
-   .action-suffix--small text is narrow enough to fit the normal monument width, so this overrides back
-   down to it specifically, keeping every monument card the same width regardless of which ones happen
-   to carry an effect. */
+   .tall doc) -- harmless now that .owned-card-cell--tall .shop-card no longer widens at all (both
+   already land on the same 112px), kept only so a future re-introduction of a tall-width override
+   doesn't silently widen monuments again without this explicit override here too. */
 .owned-card-cell--tall .shop-card--monument {
   width: 108px;
 }

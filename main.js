@@ -2635,12 +2635,13 @@ function buildCardListCell(faceId, isQst) {
     // every other caller passes req: factsForFaceId(faceId).req explicitly (e.g. buildShopSlotNode),
     // which this had omitted. Harmless for non-monument sheets, where .req is just '' (row has no DICE
     // column) and .shop-card__req collapses away via its own :empty rule.
-    // showEffect:false (2026-10-16, per user request: "カードリストの文章を消して...同じ大きさで表示
-    // できそう") -- dropping the effect-text row is what lets every カードリスト card render at the
-    // same uniform size as an in-play shop card (no more shop-card--tall widening for A/B/C/CON/JOB
-    // faces that happen to carry TAP/PASSIVE text -- see fillCardFace's own .tall doc for how that
-    // flag is driven by whether effect content was actually rendered).
-    : buildCardVisual(faceId, { req: factsForFaceId(faceId).req, showEffect: false, allowTextFallback: false, noInteraction: true });
+    // showEffect:true -- keep every icon row (JOB/CON bespoke ability icons, generic DSL effect icons
+    // via buildEffectRow) exactly as in-play shows them (2026-10-16, per user clarification: "文章
+    // 消しては…長文のこと アイコンなどのことではないです" -- only the AREA-ownership cards' own long
+    // INST prose (城下町LV1の支配 etc, via fillCardFace's isAreaOwnershipCard branch) is text in the
+    // "文章" sense the original "カードリストの文章を消して" request meant; hideAreaOwnershipText:true
+    // suppresses just that one branch, see fillCardFace's own doc).
+    : buildCardVisual(faceId, { req: factsForFaceId(faceId).req, showEffect: true, hideAreaOwnershipText: true, allowTextFallback: false, noInteraction: true });
   const tall = cardNode.classList.contains('shop-card--tall');
   const cellClass = isQst
     ? 'owned-card-cell owned-card-cell--qst'
@@ -4689,7 +4690,12 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     // Falls back to the auto-generated "{AREA}の所有" (areaOwnershipLabel) for any card whose INST
     // hasn't been filled in yet, same graceful-degradation reasoning as NAME's own fallback.
     const effectText = facts.inst || areaOwnershipLabel(faceId, facts.effects);
-    if (options.showEffect && effectText) {
+    // hideAreaOwnershipText (2026-10-16, per user spec: "領地カード自体のINST説明の長文は消す 城下町
+    // などのINST説明は必要" -- the 長文/long text the user means is specifically this area-ownership
+    // INST line ("城下町LV1の支配" etc), and only in カードリスト -- every other place this card's
+    // visual renders (shop slot, hand, enlarge modal, ...) still needs it exactly as before, so this
+    // defaults to false/unset everywhere except buildCardListCell's own explicit true). */
+    if (options.showEffect && effectText && !options.hideAreaOwnershipText) {
       tall = true;
       renderAreaOwnershipEffectText(q('.shop-card__effect'), effectText);
     }
@@ -4854,7 +4860,7 @@ function buildCardVisual(faceId, options = {}) {
   let backTall = false;
   if (sibling && cardFaceExists(sibling)) {
     backEl.classList.add('shop-card__back--face');
-    backTall = fillCardFace(backEl, sibling, { showEffect: options.showEffect, allowTextFallback: options.allowTextFallback }, false).tall;
+    backTall = fillCardFace(backEl, sibling, { showEffect: options.showEffect, allowTextFallback: options.allowTextFallback, hideAreaOwnershipText: options.hideAreaOwnershipText }, false).tall;
   }
   if (front.tall || backTall) node.classList.add('shop-card--tall');
   // Fixed (not just min-) height for CON cards specifically (2026-08-13, per user request: "CONの
