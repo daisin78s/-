@@ -2399,8 +2399,12 @@ body.tutorial-mode .change-highlight {
   height: 100%;
 }
 
+/* 2026-10-16, per user request: "カードの大きさ プレイと同じに" -- 108px(カードリスト専用の縮小)から
+   112px(.shop-cardの基本幅、実際のショップ/手札と同じ)へ。文章を消した(buildCardListCell's own
+   showEffect:false)ことで、A/B/C/CON/JOBがshop-card--tallにならなくなった(.owned-card-cell--tall
+   .shop-cardの128px上書きも実質発生しなくなった)ため、どのカードもこの基本幅のまま崩れずに収まる。 */
 .owned-card-cell .shop-card {
-  width: 108px;
+  width: 112px;
 }
 
 .owned-card-cell--tall .shop-card {
@@ -3331,32 +3335,24 @@ body.tutorial-mode .change-highlight {
   gap: 8px;
 }
 
-/* 領地(A)/天運(B)/人材(C)一覧 (2026-08-22, per user request): LV1(表)を上段・LV2(裏)を下段に並べた
-   通常カードのグリッドと、008(特殊枠、2ラウンドから登場)を縦積みにした列を横並びにする -- 008を
-   「一番右」に独立配置する、という要望をそのまま構造化したもの。card-list-grid側の行数はDOM順
-   （tierA全部→tierB全部）とgrid-template-columnsの列数だけで自動的に2行に折り返す。 */
+/* 領地(A)/天運(B)/人材(C)一覧 (2026-10-16、4段構成に作り直し -- renderCardListAbcCategory's own doc)
+   -- 表6枚/裏6枚/特別枠表3枚/特別枠裏3枚の4つのcard-list-gridを縦に積む(以前はメイングリッド+特別枠を
+   横並びにしていたため、display:flexはそのままflex-directionをcolumnに変更)。 */
 .card-list-abc-wrap {
   display: flex;
+  flex-direction: column;
   gap: 16px;
-  align-items: flex-start;
-  justify-content: center;
+  align-items: center;
 }
-/* Wraps every SHOP201-203 special column (孤児院/訓練場/元老院 etc, one per family -- see
-   renderCardListAbcCategory) as a single flex child of .card-list-abc-wrap, so its own tighter gap
-   between those columns doesn't also apply to the wider mainGrid<->special-columns gap (2026-08-25, per
-   user request: "孤児院の支配と訓練場の支配と元老院の支配の間が空きすぎなので詰めて"; gap dropped to 0,
-   per user follow-up: "すべてくっつくぐらい詰めてほしい" -- their borders now sit directly against each
-   other). */
-.card-list-abc-special-group {
-  display: flex;
-  gap: 0;
-  align-items: flex-start;
-}
+/* 特別枠(201/202/301)の1マス分 -- カード本体の下に"2Rから登場"/"3Rから登場"のラベルを添える
+   (2026-10-16、4段構成への作り直しでrenderCardListAbcCategoryのbuildSpecialRowが使う単位がファミリー
+   列からこの1カード単位に変わった)。 */
 .card-list-abc-special {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   align-items: center;
+  justify-content: center;
 }
 .card-list-abc-special__label {
   font-size: 12px;

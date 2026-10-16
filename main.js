@@ -2635,7 +2635,12 @@ function buildCardListCell(faceId, isQst) {
     // every other caller passes req: factsForFaceId(faceId).req explicitly (e.g. buildShopSlotNode),
     // which this had omitted. Harmless for non-monument sheets, where .req is just '' (row has no DICE
     // column) and .shop-card__req collapses away via its own :empty rule.
-    : buildCardVisual(faceId, { req: factsForFaceId(faceId).req, showEffect: true, allowTextFallback: false, noInteraction: true });
+    // showEffect:false (2026-10-16, per user request: "カードリストの文章を消して...同じ大きさで表示
+    // できそう") -- dropping the effect-text row is what lets every カードリスト card render at the
+    // same uniform size as an in-play shop card (no more shop-card--tall widening for A/B/C/CON/JOB
+    // faces that happen to carry TAP/PASSIVE text -- see fillCardFace's own .tall doc for how that
+    // flag is driven by whether effect content was actually rendered).
+    : buildCardVisual(faceId, { req: factsForFaceId(faceId).req, showEffect: false, allowTextFallback: false, noInteraction: true });
   const tall = cardNode.classList.contains('shop-card--tall');
   const cellClass = isQst
     ? 'owned-card-cell owned-card-cell--qst'
@@ -2729,19 +2734,19 @@ function buildCardListConRow(label, faceIds) {
   return row;
 }
 
-/** 領地(A)/天運(B)/人材(C)一覧, per user request: same-numbered LV1(表/A面) on top, LV2(裏/B面) on the
- * bottom, with each SHOP201-203 special-shop family (200-299 = wave 1, ROUND_MIN=2; 300-399 = wave 2,
- * round 3+ -- see setup.prepareShops/board.specialShopMinRound) pulled out to its own column at the far
- * right, one column per family (e.g. A201/A202 each get their own wave-1 column, A301 its own wave-2
- * column), labeled "2ラウンドから登場"/"3ラウンドから登場" above each (2026-08-25, per user request:
- * "2R　3Rから出てくるカードも表示して可能な限り　今と同じ列で" -- this replaces the old single-008-pair
- * column from before the SHOP201-203 rework, which silently showed nothing for any of these ids since
- * none of them is literally numbered "008" any more). Sheet's NAME column confirms the A/B/C=領地/天運/
- * 人材 mapping (see plan file), not otherwise recorded anywhere in code. */
+/** 領地(A)/天運(B)/人材(C)一覧 (2026-10-16, per user spec: "一段目001A-006A 二段目001B-006B 三段目
+ * 201A202A301A 四段目201B202B301B" -- replaces the old "本編6/9列メイングリッド+特別枠は右の独立した
+ * 縦積みカラム" レイアウト、文章を消して(buildCardListCell's own showEffect:false) 全カード同じ大きさに
+ * なったのに合わせ、横6枚で統一した4段構成に作り直した)。3/4段目は201/202/301の3枚だけだが、1/2段目と
+ * 同じrepeat(6,122px)グリッドのまま(左詰め、残り3マスは空)にして列位置を揃える。各特別枠カードの直下に
+ * 元の"2Rから登場"/"3Rから登場"キャプションをそのまま残す(201/202=2R、301=3R、
+ * board.specialShopMinRoundの実際の値と一致、per 2026-08-25 doc)。Sheet's NAME column confirms the
+ * A/B/C=領地/天運/人材 mapping (see plan file), not otherwise recorded anywhere in code. */
 function renderCardListAbcCategory(sheet, container) {
   const tierA = [];
   const tierB = [];
-  const specialFamilies = new Map(); // physicalId -> {num, a, b}
+  const specialTierA = []; // [{faceId, num}], sorted by num (201,202,301 order)
+  const specialTierB = [];
   for (const row of INDEX.raw[sheet]) {
     const { physicalId, tier } = gameStateMod.splitCardId(row.ID);
     const num = Number(physicalId.slice(1));
@@ -2749,35 +2754,36 @@ function renderCardListAbcCategory(sheet, container) {
       if (tier === 'A') tierA.push(row.ID); else if (tier === 'B') tierB.push(row.ID);
       continue;
     }
-    if (!specialFamilies.has(physicalId)) specialFamilies.set(physicalId, { num, a: null, b: null });
-    const fam = specialFamilies.get(physicalId);
-    if (tier === 'A') fam.a = row.ID; else if (tier === 'B') fam.b = row.ID;
+    (tier === 'A' ? specialTierA : specialTierB).push({ faceId: row.ID, num });
   }
+  specialTierA.sort((x, y) => x.num - y.num);
+  specialTierB.sort((x, y) => x.num - y.num);
+
   const wrap = el('div', 'card-list-abc-wrap');
-
-  const mainGrid = el('div', 'card-list-grid');
-  mainGrid.style.gridTemplateColumns = `repeat(${tierA.length}, 122px)`;
-  for (const faceId of tierA) mainGrid.appendChild(buildCardListCell(faceId, false));
-  for (const faceId of tierB) mainGrid.appendChild(buildCardListCell(faceId, false));
-  wrap.appendChild(mainGrid);
-
-  // Grouped in their own row (2026-08-25, per user request: "孤児院の支配と訓練場の支配と元老院の支配の
-  // 間が空きすぎなので詰めて") so a tighter gap can apply between the special columns themselves without
-  // touching the wider gap that separates them from mainGrid -- see .card-list-abc-special-group in
-  // style.css.
-  const specialGroup = el('div', 'card-list-abc-special-group');
-  const sortedFamilies = [...specialFamilies.values()].sort((x, y) => x.num - y.num);
-  for (const fam of sortedFamilies) {
-    // "2Rから登場"/"3Rから登場" (2026-08-25, per user request, shortened from "2ラウンドから登場"/
-    // "3ラウンドから登場").
-    const label = fam.num < 300 ? '2Rから登場' : '3Rから登場';
-    const specialCol = el('div', 'card-list-abc-special');
-    specialCol.appendChild(el('div', 'card-list-abc-special__label', label));
-    if (fam.a) specialCol.appendChild(buildCardListCell(fam.a, false));
-    if (fam.b) specialCol.appendChild(buildCardListCell(fam.b, false));
-    specialGroup.appendChild(specialCol);
-  }
-  if (sortedFamilies.length > 0) wrap.appendChild(specialGroup);
+  const buildRow = (faceIds) => {
+    const grid = el('div', 'card-list-grid');
+    grid.style.gridTemplateColumns = 'repeat(6, 122px)';
+    for (const faceId of faceIds) grid.appendChild(buildCardListCell(faceId, false));
+    return grid;
+  };
+  const buildSpecialRow = (entries) => {
+    const grid = el('div', 'card-list-grid');
+    grid.style.gridTemplateColumns = 'repeat(6, 122px)';
+    for (const { faceId, num } of entries) {
+      const col = el('div', 'card-list-abc-special');
+      // "2Rから登場"/"3Rから登場" (2026-08-25, per user request, shortened from "2ラウンドから登場"/
+      // "3ラウンドから登場") -- num<300 (200番台=wave1) is always ROUND_MIN 2, num>=300 (300番台=wave2)
+      // is always 3, matching board.specialShopMinRound's own wave split exactly.
+      col.appendChild(buildCardListCell(faceId, false));
+      col.appendChild(el('div', 'card-list-abc-special__label', num < 300 ? '2Rから登場' : '3Rから登場'));
+      grid.appendChild(col);
+    }
+    return grid;
+  };
+  wrap.appendChild(buildRow(tierA));
+  wrap.appendChild(buildRow(tierB));
+  if (specialTierA.length > 0) wrap.appendChild(buildSpecialRow(specialTierA));
+  if (specialTierB.length > 0) wrap.appendChild(buildSpecialRow(specialTierB));
 
   container.appendChild(wrap);
 
