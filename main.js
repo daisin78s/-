@@ -3921,27 +3921,31 @@ function buildMaxEmblemVpModifierIcon(actionText) {
 
 /** VP_MODIFIER_FINAL(PER(K,1),9): 晩餐会(物理id M401->M403、2026-10-13の宝物庫追加に伴うモニュメント
  * 再編で移動)自身のPASSIVE (2026-09-01, per user spec, verbatim line breaks: "1Kにつき1VP/（MAX9）" -- 再編
- * 前はMAX10 -- 両方とも二行に、ベースの.action-suffixより小さいサイズで、これはラベルというよりフレーバー
- * テキストのため -- see .action-suffix--small in style.css). Exact-match on
+ * 前はMAX10。文字サイズ/濃さは2026-10-16、per user request: "文字の大きさを大きく濃く　はみ出たりぎりぎり
+ * になってもいい" -- action-suffix--large (B301B/栄光の証LV2の最多エンブレム表記と同じ、14px/var(--text))
+ * に変更、はみ出し許容。Exact-match on
  * this one card's own current parameters, same convention as buildMaxEmblemVpModifierIcon above (a
  * bespoke icon for one specific PASSIVE string, not a generic PER(...)/cap renderer) -- would need
  * updating if 晩餐会's own K-ratio/cap numbers ever change again. */
 function buildBanquetFinalVpModifierIcon(actionText) {
   if (actionText !== 'VP_MODIFIER_FINAL(PER(K,1),9)') return null;
   const stack = el('div', 'action-icons-stack');
-  stack.appendChild(actionRow([el('span', 'action-suffix action-suffix--small', '1Kにつき1VP')]));
-  stack.appendChild(actionRow([el('span', 'action-suffix action-suffix--small', '（MAX9）')]));
+  stack.appendChild(actionRow([el('span', 'action-suffix action-suffix--large', '1Kにつき1VP')]));
+  stack.appendChild(actionRow([el('span', 'action-suffix action-suffix--large', '（MAX9）')]));
   return stack;
 }
 
 /** VP_MODIFIER_FINAL(RESOURCE(A,B,C,Z),7): 宝物庫(M401, 2026-10-13追加)自身のPASSIVE -- INST文言
- * 「ゲーム終了時持っている〇以外の資源１個につき1VP（MAX7VP)」の verbatim line breaks を再現。
- * buildBanquetFinalVpModifierIconと同じ、一枚のカード専用のexact-matchアイコン。 */
+ * 「ゲーム終了時持っている〇以外の資源１個につき1VP（MAX7VP)」の verbatim line breaksを再現 -- ただし
+ * 改行位置は2026-10-16、per user request: "〇以外の資源1個につき1VP/（MAX7）"を"〇以外の資源1個/につき
+ * 1VP（MAX7）"に変更。文字サイズ/濃さも同リクエストの"大きく濃く　はみ出たりぎりぎりになってもいい"に
+ * 合わせてaction-suffix--large(14px/var(--text))に変更。buildBanquetFinalVpModifierIconと同じ、一枚の
+ * カード専用のexact-matchアイコン。 */
 function buildTreasuryFinalVpModifierIcon(actionText) {
   if (actionText !== 'VP_MODIFIER_FINAL(RESOURCE(A,B,C,Z),7)') return null;
   const stack = el('div', 'action-icons-stack');
-  stack.appendChild(actionRow([el('span', 'action-suffix action-suffix--small', '〇以外の資源1個につき1VP')]));
-  stack.appendChild(actionRow([el('span', 'action-suffix action-suffix--small', '（MAX7）')]));
+  stack.appendChild(actionRow([el('span', 'action-suffix action-suffix--large', '〇以外の資源1個')]));
+  stack.appendChild(actionRow([el('span', 'action-suffix action-suffix--large', 'につき1VP（MAX7）')]));
   return stack;
 }
 
