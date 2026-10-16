@@ -3923,29 +3923,48 @@ function buildMaxEmblemVpModifierIcon(actionText) {
  * 再編で移動)自身のPASSIVE (2026-09-01, per user spec, verbatim line breaks: "1Kにつき1VP/（MAX9）" -- 再編
  * 前はMAX10。文字サイズ/濃さは2026-10-16、per user request: "文字の大きさを大きく濃く　はみ出たりぎりぎり
  * になってもいい" -- action-suffix--large (B301B/栄光の証LV2の最多エンブレム表記と同じ、14px/var(--text))
- * に変更、はみ出し許容。Exact-match on
+ * に変更、はみ出し許容。1行目の"1K"はさらに2026-10-16、per user request: "1Kにつき1VP を 〇につき1VP に"
+ * -- 実際のKアイコン(actionDot('K'))に置き換え(他のK表記と同じ"〇"見た目)。Exact-match on
  * this one card's own current parameters, same convention as buildMaxEmblemVpModifierIcon above (a
  * bespoke icon for one specific PASSIVE string, not a generic PER(...)/cap renderer) -- would need
  * updating if 晩餐会's own K-ratio/cap numbers ever change again. */
 function buildBanquetFinalVpModifierIcon(actionText) {
   if (actionText !== 'VP_MODIFIER_FINAL(PER(K,1),9)') return null;
   const stack = el('div', 'action-icons-stack');
-  stack.appendChild(actionRow([el('span', 'action-suffix action-suffix--large', '1Kにつき1VP')]));
+  stack.appendChild(actionRow([actionDot('K'), el('span', 'action-suffix action-suffix--large', 'につき1VP')]));
   stack.appendChild(actionRow([el('span', 'action-suffix action-suffix--large', '（MAX9）')]));
   return stack;
+}
+
+/** Appends text to container, wrapping every occurrence of smallChar in its own smaller span (2026-10-16,
+ * per user request for 宝物庫's "〇以外の資源1個/につき1VP（MAX7）": "このアイコンの文字サイズ　1　だけ
+ * 小さく" -- every "1" in this two-line text goes small while the rest stays at the surrounding
+ * action-suffix--large size, same per-character override idea as fillCardNoteContent's own ✖/Z handling
+ * above). */
+function appendTextWithSmallChar(container, text, smallChar) {
+  const parts = text.split(smallChar);
+  parts.forEach((part, i) => {
+    if (part) container.appendChild(document.createTextNode(part));
+    if (i < parts.length - 1) container.appendChild(el('span', 'action-suffix-num-small', smallChar));
+  });
 }
 
 /** VP_MODIFIER_FINAL(RESOURCE(A,B,C,Z),7): 宝物庫(M401, 2026-10-13追加)自身のPASSIVE -- INST文言
  * 「ゲーム終了時持っている〇以外の資源１個につき1VP（MAX7VP)」の verbatim line breaksを再現 -- ただし
  * 改行位置は2026-10-16、per user request: "〇以外の資源1個につき1VP/（MAX7）"を"〇以外の資源1個/につき
  * 1VP（MAX7）"に変更。文字サイズ/濃さも同リクエストの"大きく濃く　はみ出たりぎりぎりになってもいい"に
- * 合わせてaction-suffix--large(14px/var(--text))に変更。buildBanquetFinalVpModifierIconと同じ、一枚の
- * カード専用のexact-matchアイコン。 */
+ * 合わせてaction-suffix--large(14px/var(--text))に変更、ただしその後の追加リクエストで"1"だけは逆に
+ * 小さく(appendTextWithSmallChar、.action-suffix-num-small)。buildBanquetFinalVpModifierIconと同じ、
+ * 一枚のカード専用のexact-matchアイコン。 */
 function buildTreasuryFinalVpModifierIcon(actionText) {
   if (actionText !== 'VP_MODIFIER_FINAL(RESOURCE(A,B,C,Z),7)') return null;
   const stack = el('div', 'action-icons-stack');
-  stack.appendChild(actionRow([el('span', 'action-suffix action-suffix--large', '〇以外の資源1個')]));
-  stack.appendChild(actionRow([el('span', 'action-suffix action-suffix--large', 'につき1VP（MAX7）')]));
+  const row1 = el('span', 'action-suffix action-suffix--large');
+  appendTextWithSmallChar(row1, '〇以外の資源1個', '1');
+  stack.appendChild(actionRow([row1]));
+  const row2 = el('span', 'action-suffix action-suffix--large');
+  appendTextWithSmallChar(row2, 'につき1VP（MAX7）', '1');
+  stack.appendChild(actionRow([row2]));
   return stack;
 }
 
@@ -4321,6 +4340,19 @@ function renderCostBadges(container, costString, faceId) {
     if (faceId && faceId.startsWith('M')) container.appendChild(el('span', 'shop-card__cost-empty', '必要資源なし'));
     return;
   }
+  // Choice-COST (2026-10-15, "15A/15B/15C" -- see src/command-builder.isChoiceCost's own doc, M405/
+  // 巨大石像): the normal comma-split/regex loop below can't parse this ("/"-separated, not ","), so it
+  // silently rendered nothing at all -- fixed 2026-10-16, per user spec: "赤〇15/青〇15/黄〇15" (every
+  // option shown, "/"-separated, same as the data's own notation) rather than only whichever single
+  // option ends up actually paid.
+  if (commandBuilderMod.isChoiceCost(costString)) {
+    const options = commandBuilderMod.lowerChoiceCostOptions(costString);
+    options.forEach((opt, i) => {
+      if (i > 0) container.appendChild(document.createTextNode('/'));
+      container.appendChild(renderResourceBadge(opt.resource, opt.count));
+    });
+    return;
+  }
   const ownColor = faceId && /^[ABC]/.test(faceId) ? faceId[0] : null;
   const parts = costString.split(',');
   if (ownColor) parts.sort((a, b) => (b.trim().endsWith(ownColor) ? 1 : 0) - (a.trim().endsWith(ownColor) ? 1 : 0));
@@ -4458,6 +4490,22 @@ function resolveEmblemValueUi(value, resourceLetter, inst) {
   }
   return Number(value) || 0;
 }
+/** M405/巨大石像 (choice-COST, EMBLEM_A/B/C all "/3") with no inst to resolve against -- a shop/hand/
+ * card-list preview, before any payment choice exists, where every option would otherwise just read as
+ * 0 and the card showed no emblem info at all. Returns [{emblem,count}] for every "/N" column present,
+ * in A/B/C order (2026-10-16, per user spec: "地3/天3/人3" -- lists every possible outcome instead of
+ * a single resolved count), or null if the row has no "/"-format column. */
+function emblemChoiceOptionsForRow(row) {
+  const options = [];
+  for (const letter of ['A', 'B', 'C']) {
+    const value = row[`EMBLEM_${letter}`];
+    if (typeof value === 'string' && value.startsWith('/')) {
+      options.push({ emblem: EMBLEM_BY_DECK[letter], count: Number(value.slice(1)) });
+    }
+  }
+  return options.length ? options : null;
+}
+
 function emblemForFaceId(faceId, inst) {
   if (isNormalDeckCard(faceId)) return { [EMBLEM_BY_DECK[faceId[0]]]: 1 };
   // Not restricted to M any more (2026-08-16, per user report: CON006B「祝福」has real EMBLEM_A/B/C
@@ -4469,6 +4517,16 @@ function emblemForFaceId(faceId, inst) {
     row = dataLoaderMod.getCardRow(INDEX, faceId);
   } catch (e) {
     return null;
+  }
+  // 2026-10-16: fillCardFace's own call never passes inst (the card face visual is shared by shop/hand/
+  // card-list/enlarge-modal, none of which have a specific built instance's paidChoiceResource to
+  // resolve against) -- without this, M405's conditional EMBLEM_A/B/C always resolved to 0/empty on the
+  // card face itself. Show every possible option instead (emblemChoiceOptionsForRow); the real resolved
+  // total for an actually-owned instance is tracked separately (computePlayerBuildStats's own inst-aware
+  // call below, unaffected by this).
+  if (!inst) {
+    const choiceOptions = emblemChoiceOptionsForRow(row);
+    if (choiceOptions) return { choice: choiceOptions };
   }
   const counts = {};
   const a = resolveEmblemValueUi(row.EMBLEM_A, 'A', inst);
@@ -4562,7 +4620,18 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
   // emblem (EMBLEM_BY_DECK, wrapped to the same {emblem:1} shape by emblemForFaceId).
   const emblem = emblemForFaceId(faceId);
   const emblemEl = q('.shop-card__emblem');
-  if (emblem) {
+  if (emblem && emblem.choice) {
+    // M405/巨大石像 choice-COST preview (2026-10-16, per user spec: "地3/天3/人3") -- emblemForFaceId's
+    // own doc. Each option's own emblem char stays individually colored (same dataset.emblem convention
+    // as appendEmblemSegment below), joined by plain "/" text nodes between them.
+    emblem.choice.forEach((opt, i) => {
+      if (i > 0) emblemEl.appendChild(document.createTextNode('/'));
+      const charEl = el('span', 'shop-card__emblem-char', opt.emblem);
+      charEl.dataset.emblem = opt.emblem;
+      emblemEl.appendChild(charEl);
+      emblemEl.appendChild(document.createTextNode(String(opt.count)));
+    });
+  } else if (emblem) {
     // 2026-10-16, per user spec ("地/地地/地3/地4") -- 1-2個はアイコンをそのまま個数分並べる、3個以上は
     // アイコン1個+数字にする(resourceCountIconNodesがresource-badgeで既にやっているのと同じ考え方)。
     // appendEmblemSegment一つがEMBLEM_ROW_CHUNK_SIZE基準の「1マス」になる -- 3+で1個のspanにまとまる分、

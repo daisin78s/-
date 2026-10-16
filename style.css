@@ -1380,10 +1380,23 @@ body.tutorial-mode .change-highlight {
 
 /* B008B/栄光の証LV2's own "最多エンブレム / × VP" (2026-08-21, per user request: "文字は大きめ濃く") --
    bigger than the base .action-suffix (10px, var(--text-muted)) and pinned to the theme's strongest text
-   color, same "large" naming convention as .action-emoji--large/.card-note--large elsewhere. */
+   color, same "large" naming convention as .action-emoji--large/.card-note--large elsewhere.
+   white-space:nowrap (2026-10-16, per user report: "最多エンブレ/ム"のように単語の途中で改行されてしまう
+   -- "最多エンブレム"を1行のテキストノードとして渡しているのに、CJK文字は空白なしでも行間で折り返せる
+   ため、コンテナ幅が足りないとその途中で折り返っていた。per user request: "横にはみ出してもギリギリに
+   なってもいい" -- 折り返さず、必要なら横にはみ出す形に。このクラスは現在B301B/晩餐会/宝物庫の専用
+   フレーバーテキスト行でのみ使われており、どれも同じ「はみ出し許容」前提のため影響範囲は安全。 */
 .action-suffix--large {
   font-size: 14px;
   color: var(--text);
+  white-space: nowrap;
+}
+
+/* 宝物庫の"〇以外の資源1個/につき1VP（MAX7）"内の"1"だけ小さく (2026-10-16, per user request:
+   "このアイコンの文字サイズ　1　だけ小さく") -- 周りのaction-suffix--large(14px)に対して、見た目の単位
+   扱いの"1"だけ元の.action-suffixサイズ(10px)に戻す。main.jsのappendTextWithSmallChar参照。 */
+.action-suffix-num-small {
+  font-size: 10px;
 }
 
 /* Plain-text card caption. Originally added for CON003A/CON005B's own one-off reminder notes; now also
@@ -3269,10 +3282,14 @@ body.tutorial-mode .change-highlight {
    the address/tab bar can cover part of a plain 100vh's own viewport -- 100vh there is the LARGEST
    possible viewport, taller than what's actually visible whenever that chrome is on-screen, which is
    exactly a "見切れる" symptom a plain vh can't self-correct for; dvh tracks the real visible area).
-   Unsupported browsers simply ignore the 2nd declaration and keep the vh one. */
+   Unsupported browsers simply ignore the 2nd declaration and keep the vh one.
+   98vh/98dvh (2026-10-16, per user report: "ジョブ一覧とモニュメント一覧だけ 画面の縦幅が足りず
+   スクロールするようになっています 縦幅もう少し長くして" -- same symptom/fix pattern as the 90->95
+   bump above, these two categories' own cards (multi-row ability/PASSIVE icon stacks) are tall enough
+   to still need the body scroll at 95). */
 .card-list-modal {
-  max-height: 95vh;
-  max-height: 95dvh;
+  max-height: 98vh;
+  max-height: 98dvh;
   display: flex;
   flex-direction: column;
 }
