@@ -1034,7 +1034,6 @@ let aiOpenTurnHasPlacedDie = false;
 // resetting to 0 on END_TURN or whenever a genuinely different player's turn starts.
 let aiOpenTurnMoveCount = 0;
 const AI_TURN_MOVE_SAFETY_CAP = 80; // generous headroom over game-runner.js's own 50 -- a real turn never remotely approaches either
-let aiRunawayAlertShown = false; // one-shot per page load -- the alert is a diagnostic, not a recurring nag
 // Matching safety valve for the ONBOARDING branch (2026-10-16, same incident): onboarding only ever
 // legitimately visits a given player twice (once to draft JOB, once to pick CON face + receive initial
 // resources) before hasFinishedOnboarding(player) should read true and route them to the TURN branch
@@ -1046,14 +1045,50 @@ let aiOnboardingPlayerId = null;
 let aiOnboardingCount = 0;
 const AI_ONBOARDING_SAFETY_CAP = 5; // real onboarding never exceeds 2 visits per player
 
-/** Compact state dump for the two runaway-AI alerts just above/below (2026-10-16) -- with no devtools
- * console available on the reporting device (iPad Safari, no Mac for Web Inspector), a window.alert() the
- * user can read/photograph directly is the only diagnostic channel there is. Keeps it to plain
- * resources/cards/round, not a full state dump (unreadable in an alert box anyway). */
-function aiStuckDiagnosticText(state, playerId) {
-  const player = state.players.find((p) => p.id === playerId);
-  if (!player) return `(player ${playerId} not found)`;
-  return `round=${state.round} resources=${JSON.stringify(player.resources)} jobCardId=${player.jobCardId} conFace=${player.conFace} ownedCardPhysicalIds=${JSON.stringify(player.ownedCardPhysicalIds)}`;
+let bugReportShown = false; // one-shot per page load -- the alert is a diagnostic, not a recurring nag
+
+/** Plain, Firestore-safe diagnostic object for a detected-bug incident (2026-10-16) -- shared by
+ * reportDetectedBugAndFreeze's 3 call sites (an AI-selected move failing to apply / an AI turn's own move
+ * count exceeding AI_TURN_MOVE_SAFETY_CAP / AI onboarding re-entering past AI_ONBOARDING_SAFETY_CAP).
+ * Every field is a concrete value, never undefined -- Firestore's .set() rejects undefined field values
+ * (see ranking.js's own doc on this exact gotcha). */
+function buildAiBugReportInfo(state, playerId, reason, extra) {
+  const player = state.players.find((p) => p.id === playerId) || null;
+  return Object.assign({
+    reason,
+    playerId: playerId || null,
+    detectedAt: new Date().toISOString(),
+    round: state.round,
+    phase: state.phase,
+    resources: player ? player.resources : null,
+    jobCardId: player ? player.jobCardId : null,
+    conFace: player ? player.conFace : null,
+    ownedCardPhysicalIds: player ? player.ownedCardPhysicalIds : null,
+  }, extra || {});
+}
+
+/** AI自動進行が異常を検知して止まる時の共通処理 (2026-10-16, per user request: 「バグが起きた可能性が
+ * あります ゲームを中断し運営に報告されます 原因究明にご協力ください」と表示し、バグ専用のリプレイ置き場
+ * (online-sync.js's saveBugReport/saveBugReplay -- ランキング用のreplays/とは別のbugReports/
+ * コレクション+bugReplays/の置き場)に自動保存する) -- driveOneAiStepInnerの3つの検知箇所すべてで共有:
+ * 不正な手の選択(applyInPlaceがresult.success:falseを返した)/ターン内の異常な手数(AI_TURN_MOVE_SAFETY_
+ * CAP超過)/オンボーディングの異常な再突入(AI_ONBOARDING_SAFETY_CAP超過)。保存はbest-effort -- Firebase
+ * コンソール側のセキュリティルール次第で失敗する可能性があるが(未確認)、失敗してもアラート自体は必ず出す
+ * (ranking.js/online-sync.jsの他の書き込みが失敗を握りつぶす既存の流儀と同じ)。one-shot per page load
+ * (bugReportShown) -- 一度出たら繰り返し煩わせない。保存先が後から直接読めるので、画面アラートには診断
+ * テキストをもう表示しない(2026-10-16以前はJSON文言をアラートに出していたが、コンソールの見えない端末
+ * では結局ユーザーに書き写してもらう必要があったため、クラウド保存に置き換えた)。*/
+function reportDetectedBugAndFreeze(state, playerId, reason, extra) {
+  if (bugReportShown) return;
+  bugReportShown = true;
+  const info = buildAiBugReportInfo(state, playerId, reason, extra);
+  console.error(`driveOneAiStepInner: bug detected (${reason}) -- stopping AI auto-play here.`, info);
+  if (window.OnlineSync) {
+    const id = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    window.OnlineSync.saveBugReport(id, info).catch(() => {});
+    window.OnlineSync.saveBugReplay(id, replayHistory).catch(() => {});
+  }
+  window.alert('バグが起きた可能性があります\nゲームを中断し運営に報告されます\n原因究明にご協力ください');
 }
 // Set to playerId exactly when that AI's own END_TURN move succeeds (alongside aiOpenTurnPlayerId being
 // reset to null there), consumed by driveOneAiStepInner's very next call regardless of which player it's
@@ -1401,12 +1436,7 @@ function driveOneAiStepInner(state) {
       aiOnboardingCount = 1;
     }
     if (aiOnboardingCount > AI_ONBOARDING_SAFETY_CAP) {
-      if (!aiRunawayAlertShown) {
-        aiRunawayAlertShown = true;
-        const diag = aiStuckDiagnosticText(state, ctx.playerId);
-        console.error(`driveOneAiStepInner: ${ctx.playerId} has re-entered ONBOARDING ${aiOnboardingCount} times in a row -- likely a runaway/looping bug (hasFinishedOnboarding not staying true after onboarding completed). Stopping AI auto-play here. ${diag}`);
-        window.alert(`バグ検知: ${ctx.playerId}のオンボーディング処理が${aiOnboardingCount}回繰り返されました。AIの自動進行をここで止めました。この画面のまま開発者に伝えてください（「ターン開始に戻す」は押さないでください）。\n\n${diag}`);
-      }
+      reportDetectedBugAndFreeze(state, ctx.playerId, 'AI_ONBOARDING_REENTRY_EXCEEDED', { onboardingCount: aiOnboardingCount });
       return false;
     }
     // AI LV3 (2026-08-28, LV5 added 2026-09-16, merged into the single AI_LV3 role by the 2026-10-04
@@ -1484,12 +1514,7 @@ function driveOneAiStepInner(state) {
   // since it never actually stops anything) error logged each time. Stopping here instead means a tripped
   // cap costs nothing and mutates nothing on every subsequent call -- genuinely frozen, not just noisy.
   if (isContinuingOpenTurn && aiOpenTurnMoveCount >= AI_TURN_MOVE_SAFETY_CAP) {
-    if (!aiRunawayAlertShown) {
-      aiRunawayAlertShown = true;
-      const diag = aiStuckDiagnosticText(state, ctx.playerId);
-      console.error(`driveOneAiStepInner: ${ctx.playerId}'s turn has taken ${aiOpenTurnMoveCount}+ moves without ending -- likely a runaway/looping bug (see src/ai/game-runner.js's own MAX_MOVES=50 for the same class of guard offline). Stopping AI auto-play here. ${diag}`);
-      window.alert(`バグ検知: ${ctx.playerId}のターンが${aiOpenTurnMoveCount}手を超えても終わりません。AIの自動進行をここで止めました。この画面のまま開発者に伝えてください（「ターン開始に戻す」は押さないでください）。\n\n${diag}`);
-    }
+    reportDetectedBugAndFreeze(state, ctx.playerId, 'AI_TURN_MOVE_COUNT_EXCEEDED', { moveCount: aiOpenTurnMoveCount });
     return false;
   }
   noteActiveTurnPlayerForJobPool(state, ctx.playerId, forceNewTurn);
@@ -1506,7 +1531,7 @@ function driveOneAiStepInner(state) {
   // just above) surfaces the stuck turn immediately rather than burning tens of thousands of iterations
   // first.
   if (!result.success) {
-    console.error(`driveOneAiStepInner: ${move.type} for ${ctx.playerId} failed to apply (${JSON.stringify(result)}) -- stopping AI auto-play here instead of retrying forever.`);
+    reportDetectedBugAndFreeze(state, ctx.playerId, 'AI_MOVE_APPLY_FAILED', { moveType: move.type, moveResult: result });
     return false;
   }
   if (move.type === 'END_TURN' && result.success) {

@@ -315,6 +315,29 @@ function deleteAchievementBackup(name) {
   return db().collection(ACHIEVEMENT_BACKUP_COLLECTION).doc(name).delete();
 }
 
+// バグ自動検知レポート (2026-10-16, per user request: AIの自動進行が異常(不正な手の選択/ターン内の異常な
+// 手数/オンボーディングの異常な再突入)を検知して止まった時、ランキング用のreplays/とは別の専用置き場に
+// 自動保存してほしい -- "バグ用のリプレイ置き場を作り そこに保存する"). Same 2-part split as ranking
+// entries (small structured doc in Firestore + the big replay blob in Storage), just under its own
+// collection/prefix so these never mix with (or get pruned alongside) ordinary ranking replays. See
+// main.js's reportDetectedBugAndFreeze for the one place that calls both of these together.
+var BUG_REPORT_COLLECTION = 'bugReports';
+var BUG_REPLAY_STORAGE_PREFIX = 'bugReplays/';
+
+/** Saves one bug-report's own diagnostic metadata (reason/playerId/round/resources/etc -- NOT the replay
+ * itself, see saveBugReplay) as its own Firestore doc, keyed by the same id the replay blob uses. */
+function saveBugReport(id, reportWithoutId) {
+  return db().collection(BUG_REPORT_COLLECTION).doc(id).set(reportWithoutId);
+}
+
+/** Uploads replayHistory for a detected-bug incident -- same shape/format as saveReplay, just a separate
+ * Storage prefix (bugReplays/ instead of replays/) so these never collide with or get swept up in
+ * ranking-replay eviction/pruning. */
+function saveBugReplay(id, replayHistory) {
+  return storage().ref(BUG_REPLAY_STORAGE_PREFIX + id + '.json')
+    .putString(JSON.stringify(replayHistory), 'raw', { contentType: 'application/json' });
+}
+
 window.OnlineSync = {
   listRanking: listRanking,
   saveRankingEntry: saveRankingEntry,
@@ -335,5 +358,7 @@ window.OnlineSync = {
   loadAchievementBackup: loadAchievementBackup,
   saveAchievementBackup: saveAchievementBackup,
   deleteAchievementBackup: deleteAchievementBackup,
+  saveBugReport: saveBugReport,
+  saveBugReplay: saveBugReplay,
 };
 })();
