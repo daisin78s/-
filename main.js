@@ -1022,6 +1022,39 @@ let aiPumpTimer = null;
 // AI) simply misses and starts fresh.
 let aiOpenTurnPlayerId = null;
 let aiOpenTurnHasPlacedDie = false;
+// Safety valve against a runaway/looping AI turn (2026-10-16, per user report: an AI player's resources
+// climbed without bound, once per AI step, with no corresponding board/dice/shop change -- i.e. some
+// move kept legitimately succeeding (applyInPlace's own result.success guard just above doesn't catch
+// this) without the engine ever making it illegal again, so selectMove just kept re-offering it forever.
+// src/ai/game-runner.js's own driveTurn already guards the equivalent offline loop with its own
+// MAX_MOVES=50 "safety valve against a runaway/looping bug, not a real game limit" -- this is main.js's
+// own separate copy of that same turn-driving loop (see driveOneAiStepInner's own doc), paced one call
+// per render/timer-tick instead of a tight while-loop, so it had no matching cap at all. Counts
+// consecutive successful moves for whichever AI player's turn is still open (aiOpenTurnPlayerId),
+// resetting to 0 on END_TURN or whenever a genuinely different player's turn starts.
+let aiOpenTurnMoveCount = 0;
+const AI_TURN_MOVE_SAFETY_CAP = 80; // generous headroom over game-runner.js's own 50 -- a real turn never remotely approaches either
+let aiRunawayAlertShown = false; // one-shot per page load -- the alert is a diagnostic, not a recurring nag
+// Matching safety valve for the ONBOARDING branch (2026-10-16, same incident): onboarding only ever
+// legitimately visits a given player twice (once to draft JOB, once to pick CON face + receive initial
+// resources) before hasFinishedOnboarding(player) should read true and route them to the TURN branch
+// instead -- if something keeps that check failing for an already-onboarded player (e.g. re-entering
+// ONBOARDING re-runs chooseConFace+receiveInitialResources, re-granting that CON's initial resource
+// bundle every single call, with no board/dice/shop footprint at all -- the exact "resources climb with
+// nothing else visibly happening" symptom reported), this branch would otherwise have no cap of its own.
+let aiOnboardingPlayerId = null;
+let aiOnboardingCount = 0;
+const AI_ONBOARDING_SAFETY_CAP = 5; // real onboarding never exceeds 2 visits per player
+
+/** Compact state dump for the two runaway-AI alerts just above/below (2026-10-16) -- with no devtools
+ * console available on the reporting device (iPad Safari, no Mac for Web Inspector), a window.alert() the
+ * user can read/photograph directly is the only diagnostic channel there is. Keeps it to plain
+ * resources/cards/round, not a full state dump (unreadable in an alert box anyway). */
+function aiStuckDiagnosticText(state, playerId) {
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player) return `(player ${playerId} not found)`;
+  return `round=${state.round} resources=${JSON.stringify(player.resources)} jobCardId=${player.jobCardId} conFace=${player.conFace} ownedCardPhysicalIds=${JSON.stringify(player.ownedCardPhysicalIds)}`;
+}
 // Set to playerId exactly when that AI's own END_TURN move succeeds (alongside aiOpenTurnPlayerId being
 // reset to null there), consumed by driveOneAiStepInner's very next call regardless of which player it's
 // for (2026-08-17 fix, replacing the `ctx.playerId !== aiOpenTurnPlayerId` forceNewTurn signal that
@@ -1359,6 +1392,23 @@ function driveOneAiStepInner(state) {
   }
 
   if (ctx.type === 'ONBOARDING') {
+    // AI_ONBOARDING_SAFETY_CAP's own doc (just above its declaration) -- checked before doing any real
+    // work, same "before, not after" reasoning as the TURN branch's matching cap below.
+    if (ctx.playerId === aiOnboardingPlayerId) {
+      aiOnboardingCount++;
+    } else {
+      aiOnboardingPlayerId = ctx.playerId;
+      aiOnboardingCount = 1;
+    }
+    if (aiOnboardingCount > AI_ONBOARDING_SAFETY_CAP) {
+      if (!aiRunawayAlertShown) {
+        aiRunawayAlertShown = true;
+        const diag = aiStuckDiagnosticText(state, ctx.playerId);
+        console.error(`driveOneAiStepInner: ${ctx.playerId} has re-entered ONBOARDING ${aiOnboardingCount} times in a row -- likely a runaway/looping bug (hasFinishedOnboarding not staying true after onboarding completed). Stopping AI auto-play here. ${diag}`);
+        window.alert(`バグ検知: ${ctx.playerId}のオンボーディング処理が${aiOnboardingCount}回繰り返されました。AIの自動進行をここで止めました。この画面のまま開発者に伝えてください（「ターン開始に戻す」は押さないでください）。\n\n${diag}`);
+      }
+      return false;
+    }
     // AI LV3 (2026-08-28, LV5 added 2026-09-16, merged into the single AI_LV3 role by the 2026-10-04
     // LV1/2/3 consolidation -- see levels.js's own doc): reachability/synergy-based JOB draft + CON face
     // pick via smart-onboarding.js instead of the uniform-random default below in both branches -- see
@@ -1412,6 +1462,25 @@ function driveOneAiStepInner(state) {
   // ordinary first move of an already-render()-noted fresh turn, which isn't a repeat at all).
   const forceNewTurn = ctx.playerId === lastEndedAiTurnPlayerId;
   lastEndedAiTurnPlayerId = null;
+  // aiOpenTurnMoveCount's own doc (just above its declaration) -- captured before aiOpenTurnPlayerId is
+  // reassigned below, same "was this already open" read as forceNewTurn's own comment describes.
+  const isContinuingOpenTurn = ctx.playerId === aiOpenTurnPlayerId;
+  // Checked BEFORE selectMove/applyInPlace, not after (2026-10-16 fix during the same incident this cap
+  // was added for): checking only after applying would still let every later pumpAiDelayed/pumpAiInstant
+  // tick select-and-apply ONE MORE move before returning false each time -- aiOpenTurnPlayerId stays
+  // non-null (hasAiWorkPending keeps reporting true), so the pump just keeps calling back in forever,
+  // still granting whatever the runaway move grants once per call, with only a (correct but useless,
+  // since it never actually stops anything) error logged each time. Stopping here instead means a tripped
+  // cap costs nothing and mutates nothing on every subsequent call -- genuinely frozen, not just noisy.
+  if (isContinuingOpenTurn && aiOpenTurnMoveCount >= AI_TURN_MOVE_SAFETY_CAP) {
+    if (!aiRunawayAlertShown) {
+      aiRunawayAlertShown = true;
+      const diag = aiStuckDiagnosticText(state, ctx.playerId);
+      console.error(`driveOneAiStepInner: ${ctx.playerId}'s turn has taken ${aiOpenTurnMoveCount}+ moves without ending -- likely a runaway/looping bug (see src/ai/game-runner.js's own MAX_MOVES=50 for the same class of guard offline). Stopping AI auto-play here. ${diag}`);
+      window.alert(`バグ検知: ${ctx.playerId}のターンが${aiOpenTurnMoveCount}手を超えても終わりません。AIの自動進行をここで止めました。この画面のまま開発者に伝えてください（「ターン開始に戻す」は押さないでください）。\n\n${diag}`);
+    }
+    return false;
+  }
   noteActiveTurnPlayerForJobPool(state, ctx.playerId, forceNewTurn);
   const move = aiPlayerFor(ctx.playerId).selectMove(state, ctx.playerId, { hasPlacedDieThisTurn: ctx.hasPlacedDieThisTurn });
   if (!move) return false; // defensive -- canEndTurn should always eventually free this up
@@ -1431,8 +1500,10 @@ function driveOneAiStepInner(state) {
   }
   if (move.type === 'END_TURN' && result.success) {
     aiOpenTurnPlayerId = null;
+    aiOpenTurnMoveCount = 0;
     lastEndedAiTurnPlayerId = ctx.playerId;
   } else {
+    aiOpenTurnMoveCount = isContinuingOpenTurn ? aiOpenTurnMoveCount + 1 : 1;
     aiOpenTurnPlayerId = ctx.playerId;
     // JOB003/道化 (2026-08-20 fix, per user bug report: "AIが道化を選んだ時...すべてのダイス4個をいきな
     // り使ってスタートしました") -- PLACE_WILDCARD_DIE is JOB003's own die-placement move type (see
