@@ -70,25 +70,29 @@ async function main() {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const lineIterator = rl[Symbol.asyncIterator]();
 
+  // 2026-10-17, per user request: 未入力時の既定値を500に (呼び出し元のrun_ai_battle.bat参照)。
   let n;
   while (true) {
-    const answer = await ask(lineIterator, '対戦数を入力してください: ');
-    n = Number(answer.trim());
-    if (Number.isInteger(n) && n >= 1) break;
-    console.log('1以上の整数を入力してください。');
+    const answer = (await ask(lineIterator, '対戦数を入力してください（未入力で既定値500）: ')).trim();
+    if (answer === '') { n = 500; break; }
+    const num = Number(answer);
+    if (Number.isInteger(num) && num >= 1) { n = num; break; }
+    console.log('1以上の整数を入力するか、何も入力せず既定値500を使ってください。');
   }
 
   // 2026-10-11, per user report ("AILVの変更が反映されていません"): main.jsの2026-10-04 LV1/2/3統合
   // (旧LV1→新LV1、旧LV3→新LV2、旧LV5→新LV3、旧LV2/旧LV4は選べなくなった -- levels.jsの own doc参照)に
   // 合わせ、ここも本物のゲーム画面と同じ1〜3の3択に揃えた(旧4/5は削除)。
+  // 2026-10-17, per user request: 未入力時の既定値を3(LV3、最大LV)に。
   let aiLevel;
   while (true) {
-    const answer = (await ask(lineIterator, 'AIレベルを選んでください（0: レベル混合(比較用) / 1: LV1 速い / 2: LV2 先読みあり・遅い / 3: LV3 先読み+ダイス優先度+スマートオンボーディング・さらに遅い）: ')).trim();
+    const answer = (await ask(lineIterator, 'AIレベルを選んでください（未入力で既定値3: LV3 最大 / 0: レベル混合(比較用) / 1: LV1 速い / 2: LV2 先読みあり・遅い / 3: LV3 先読み+ダイス優先度+スマートオンボーディング・さらに遅い）: ')).trim();
+    if (answer === '') { aiLevel = 'LV3'; break; }
     if (answer === '0') { aiLevel = 'MIX'; break; }
     if (answer === '1') { aiLevel = 'LV1'; break; }
     if (answer === '2') { aiLevel = 'LV2'; break; }
     if (answer === '3') { aiLevel = 'LV3'; break; }
-    console.log('0 か 1 か 2 か 3 を入力してください。');
+    console.log('0 か 1 か 2 か 3 を入力するか、何も入力せず既定値3(LV3)を使ってください。');
   }
 
   // "0: レベル混合" (2026-08-10, per user request: "LV1 2 3をランダムで入れる対戦ができるようにしたい"):
@@ -127,17 +131,17 @@ async function main() {
   }
 
   // Concurrency (2026-09-16, per user request: "4戦同時にできるようにしてほしい") -- how many games
-  // tools/ai_data_report.js plays at once across worker threads instead of strictly one at a time. 1
-  // (blank input) keeps the original single-threaded behavior; capped at 8 (per user spec) since this
-  // machine's own CPU core count is the real ceiling anyway (see ai_data_report.js's own
-  // Math.min(concurrency, n) besides).
+  // tools/ai_data_report.js plays at once across worker threads instead of strictly one at a time.
+  // Capped at 8 (per user spec) since this machine's own CPU core count is the real ceiling anyway (see
+  // ai_data_report.js's own Math.min(concurrency, n) besides). 2026-10-17, per user request: 未入力時の
+  // 既定値を1→8に(上限と同じ値)。
   let concurrency;
   while (true) {
-    const answer = (await ask(lineIterator, '何戦同時に対戦させますか？（未入力で既定値1、最大8）: ')).trim();
-    if (answer === '') { concurrency = 1; break; }
+    const answer = (await ask(lineIterator, '何戦同時に対戦させますか？（未入力で既定値8、最大8）: ')).trim();
+    if (answer === '') { concurrency = 8; break; }
     const num = Number(answer);
     if (Number.isInteger(num) && num >= 1 && num <= 8) { concurrency = num; break; }
-    console.log('1以上8以下の整数を入力するか、何も入力せず既定値1を使ってください。');
+    console.log('1以上8以下の整数を入力するか、何も入力せず既定値8を使ってください。');
   }
 
   rl.close();
