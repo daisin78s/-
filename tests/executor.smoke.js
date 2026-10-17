@@ -1432,7 +1432,9 @@ const UNTAP_CHOICE_3 = { type: 'UNTAP_CHOICE', scope: 'SELF', count: 3 };
   check('0 with 色欲 but a COLOR die still unplaced (not this player\'s last turn yet)', executor.colorConvertLastTurnAmount(state, 'P1'), 0);
 
   player.dice[0].placedMapId = 'MAP001'; // that same die placed -- now genuinely the last turn
-  check('All 3 Z would convert once every COLOR die is placed', executor.colorConvertLastTurnAmount(state, 'P1'), 3);
+  // Feature disabled (2026-10-17, per user request -- see executor.colorConvertLastTurnAmount's own doc,
+  // kept commented out rather than deleted for an easy revert): expected 3 while the feature was live.
+  check('All 3 Z would convert once every COLOR die is placed (feature disabled -- always 0)', executor.colorConvertLastTurnAmount(state, 'P1'), 0);
 
   player.resources.Z = 0;
   check('0 once Z itself is already empty, even on the last turn', executor.colorConvertLastTurnAmount(state, 'P1'), 0);
@@ -1450,7 +1452,8 @@ const UNTAP_CHOICE_3 = { type: 'UNTAP_CHOICE', scope: 'SELF', count: 3 };
   check('0 with 色欲, no COLOR die left, but a WHITE die still unplaced (not this player\'s last turn yet)', executor.colorConvertLastTurnAmount(state, 'P1'), 0);
 
   player.dice[0].placedMapId = 'MAP001'; // that WHITE die placed -- now genuinely the last turn
-  check('All 3 Z would convert once every die (COLOR and WHITE) is placed', executor.colorConvertLastTurnAmount(state, 'P1'), 3);
+  // Feature disabled (2026-10-17) -- see the matching note a few tests up.
+  check('All 3 Z would convert once every die (COLOR and WHITE) is placed (feature disabled -- always 0)', executor.colorConvertLastTurnAmount(state, 'P1'), 0);
 }
 {
   // applyTurnEnd actually performs the conversion when colorConvertLastTurnAmount says it should.
@@ -1460,7 +1463,9 @@ const UNTAP_CHOICE_3 = { type: 'UNTAP_CHOICE', scope: 'SELF', count: 3 };
   player.resources.Z = 4;
   player.resources.K = 1;
   executor.applyTurnEnd(state, index, 'P1'); // no COLOR dice at all -- already this player's last turn
-  check('applyTurnEnd converts every Z into K on the last turn of the round', player.resources, { K: 5, A: 0, B: 0, C: 0, Z: 0, VP: 0, BZ: 0 });
+  // Feature disabled (2026-10-17) -- see colorConvertLastTurnAmount's own doc. Z/K now stay exactly as
+  // set above, untouched by applyTurnEnd.
+  check('applyTurnEnd converts every Z into K on the last turn of the round (feature disabled -- no-op)', player.resources, { K: 1, A: 0, B: 0, C: 0, Z: 4, VP: 0, BZ: 0 });
 }
 {
   // ...but leaves Z untouched while a COLOR die is still unplaced.

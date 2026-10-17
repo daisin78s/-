@@ -283,13 +283,20 @@ function hasPaymentChoiceAbility(state, playerId) {
  * this round) was wrongly treated as being on their last turn -- firing the conversion early, and then
  * leaving the pre-TURNEND warning showing on every later turn this round too (same bespoke check, so both
  * symptoms shared this one root cause). Now checks every die, matching turn-flow's own definition of
- * "no turn left this round". */
+ * "no turn left this round".
+ * Disabled (2026-10-17, per user request: "ラウンド終了時のZ→Kやめたいが 戻す可能性があるため 削除はしない
+ * で") -- always returns 0 now, so main.js's turnEndWarnings preview and applyTurnEnd's real mutation
+ * below (both of which read only this function, never recompute it themselves) both agree there's nothing
+ * to convert, with no changes needed at either call site. The real logic is kept below, commented out, so
+ * re-enabling is just uncommenting it and deleting the `return 0;` above it. 色欲's OTHER ability
+ * (hasPaymentChoiceAbility, auto-preferring Z when paying) is untouched by this and still fully active. */
 function colorConvertLastTurnAmount(state, playerId) {
-  if (!hasPaymentChoiceAbility(state, playerId)) return 0;
-  const player = getPlayer(state, playerId);
-  const hasRemainingTurnThisRound = player.dice.some((d) => d.placedMapId === null && !d.passed);
-  if (hasRemainingTurnThisRound) return 0;
-  return player.resources.Z || 0;
+  return 0;
+  // if (!hasPaymentChoiceAbility(state, playerId)) return 0;
+  // const player = getPlayer(state, playerId);
+  // const hasRemainingTurnThisRound = player.dice.some((d) => d.placedMapId === null && !d.passed);
+  // if (hasRemainingTurnThisRound) return 0;
+  // return player.resources.Z || 0;
 }
 
 /** True if playerId's own JOB is 料理人/JOB002 (renamed from 実業家 2026-09-20, alongside a full ability
