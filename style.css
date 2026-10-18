@@ -4348,7 +4348,8 @@ body.tutorial-mode .change-highlight {
 
 .ranking-row__con,
 .ranking-row__job,
-.ranking-row__opponents {
+.ranking-row__opponents,
+.ranking-row__date {
   color: var(--text-muted);
 }
 

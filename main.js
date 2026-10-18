@@ -9492,6 +9492,15 @@ function weeklyRankingWeekLabel(offset) {
  *   its list scrolls from the top down to that entry's own row and pulses it
  *   (.ranking-row--just-registered, auto-removed after a few seconds) -- "上からスクロールされて今入力し
  *   た名前のところで光る" per the user's own spec. */
+/** "YYYY/MM/DD" from entry.savedAt's own ISO string (2026-10-18, per user request: "ランキングに年月日が
+ * 入るようにしてほしい"). '' (renders nothing) for a missing/unparseable value, rather than showing
+ * "Invalid Date" -- defensive only, every entry ranking.js's save() has ever written includes this field. */
+function formatRankingDate(isoString) {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+}
 function renderRankingList(highlightId, highlightCategory) {
   const columnsContainer = document.getElementById('ranking-columns');
   columnsContainer.innerHTML = '';
@@ -9572,6 +9581,12 @@ function renderRankingList(highlightId, highlightCategory) {
         row.appendChild(el('span', 'ranking-row__con', `制約: ${rankingCardDisplayName(entry.conFaceId)}`));
         row.appendChild(el('span', 'ranking-row__job', `ジョブ: ${rankingCardDisplayName(entry.jobCardId)}`));
         row.appendChild(el('span', 'ranking-row__opponents', entry.opponents.join('　')));
+        // 登録日(2026-10-18, per user request: "ランキングに年月日が入るようにしてほしい") -- entry.savedAt
+        // (ISO文字列、ranking.js's save()が登録時に自動付与、昔から全エントリーに存在) をYYYY/MM/DD表示に
+        // する。ローカル時刻基準(端末ごとに見え方が変わり得るが、他の日時表示がこのアプリに無いため
+        // 単純な方を採用)。
+        const dateText = formatRankingDate(entry.savedAt);
+        if (dateText) row.appendChild(el('span', 'ranking-row__date', dateText));
         // 最新版でないリプレイの目印 (2026-09-07, per user request: "この〇は最新版でないリプレイデータを
         // 間違えて学習させないためのものです") -- set via 選択した項目を削除's own "印をつける" choice
         // (see handleRankingDeleteSelectedClick/ranking.js's markOutdated), shown right before 再生.
