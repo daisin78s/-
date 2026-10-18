@@ -3763,6 +3763,8 @@ function buildChangeToColorDieIcon(actionText) {
  * from buildChangeQuantityIcon above (single resource on both sides) and the AREA007-only exact-match
  * 'CHANGE((A,B,C),D)' entry in ACTION_ICON_BUILDERS (group on the PAY side instead, labelled 追加色ダイス
  * rather than plain resource dots). */
+// 2026-10-18, per user spec (策士/JOB011's own CHANGE(4K,(A,B,C)), currently the only card matching this
+// pattern): 2行に分割("⤵〇4→" の行と "赤〇青〇黄〇" の行)。pay+矢印を1行目、gain群を2行目にする。
 function buildChangeGroupGainIcon(actionText) {
   const match = /^CHANGE\((\d*)(K|A|B|C|Z),\(([A-Z0-9,]+)\)\)$/.exec(actionText || '');
   if (!match) return null;
@@ -3772,11 +3774,10 @@ function buildChangeGroupGainIcon(actionText) {
     return itemMatch ? resourceItemNodes(itemMatch[1], itemMatch[2]) : [];
   });
   if (gainNodes.length === 0) return null;
-  return actionRow([
-    ...resourceItemNodes(payCount, payResource),
-    actionArrow(),
-    ...gainNodes,
-  ]);
+  const stack = el('div', 'action-icons-stack');
+  stack.appendChild(actionRow([...resourceItemNodes(payCount, payResource), actionArrow()]));
+  stack.appendChild(actionRow(gainNodes));
+  return stack;
 }
 
 /** CHANGE(X,Y,n) -- the count-argument form (command-builder.js's lowerChange: pay X get Y, up to n
