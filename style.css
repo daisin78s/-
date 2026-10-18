@@ -1171,21 +1171,6 @@ h1, h2, h3 { margin: 0; }
   50% { box-shadow: 0 0 0 3px var(--nav-highlight-soft), 0 0 10px 3px var(--nav-highlight); }
 }
 
-/* ナビ機能 (2026-10-18) -- 汎用版。「獲得予定カード」(ショップのカード本体)のような、.slotとは違う形の
-   要素に直接付けられるよう、.change-highlight(アンバー系)と同じ構造を緑系で用意。 */
-.nav-highlight {
-  border-style: solid;
-  border-color: var(--nav-highlight);
-  background: var(--nav-highlight-soft);
-  box-shadow: 0 0 0 2px var(--nav-highlight-soft), 0 0 6px 1px var(--nav-highlight);
-  animation: nav-highlight-pulse 1.4s ease-in-out infinite;
-}
-
-/* .change-highlight--pending(ダイス用、形は変えずアニメーションだけ付ける)と同じ考え方の緑版。 */
-.nav-highlight--pending {
-  animation: nav-highlight-pulse 1.4s ease-in-out infinite;
-}
-
 /* JOB003/道化 (2026-08-19): with a single ☆ die selected, the whole tile is clickable (the engine picks
    the slot, not the player -- see main.js's attemptPlaceSelectedWildcardDie) -- .slot--highlight above
    still marks the specific slot it would land on, this just gives the tile itself a pointer cursor. */
@@ -1207,6 +1192,24 @@ h1, h2, h3 { margin: 0; }
 @keyframes change-highlight-pulse {
   0%, 100% { box-shadow: 0 0 0 2px var(--change-highlight-soft), 0 0 6px 1px var(--change-highlight); }
   50% { box-shadow: 0 0 0 3px var(--change-highlight-soft), 0 0 12px 4px var(--change-highlight); }
+}
+
+/* ナビ機能 (2026-10-18) -- 汎用版。「獲得予定カード」(ショップのカード本体)のような、.slotとは違う形の
+   要素に直接付けられるよう、.change-highlight(アンバー系)と同じ構造を緑系で用意。.change-highlightより
+   あとに定義している(2026-10-18、per user request: "ターン終了もおねがい" -- ターン終了ボタンは常時
+   change-highlightが付く作りのため、navSuggestedMoveがEND_TURNの時だけ.nav-highlightを重ねて緑を
+   優先させたい。CSSの詳細度は同じクラス1つ分同士なので、後に書かれている方が勝つ)。 */
+.nav-highlight {
+  border-style: solid;
+  border-color: var(--nav-highlight);
+  background: var(--nav-highlight-soft);
+  box-shadow: 0 0 0 2px var(--nav-highlight-soft), 0 0 6px 1px var(--nav-highlight);
+  animation: nav-highlight-pulse 1.4s ease-in-out infinite;
+}
+
+/* .change-highlight--pending(ダイス用、形は変えずアニメーションだけ付ける)と同じ考え方の緑版。 */
+.nav-highlight--pending {
+  animation: nav-highlight-pulse 1.4s ease-in-out infinite;
 }
 
 /* チュートリアル中の「光る」をもっと目立たせる (2026-09-29, per user request: "光るアニメーションもう少し目立つように

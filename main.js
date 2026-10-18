@@ -7806,6 +7806,13 @@ function renderTurnEndButton(container, state, player, canAct) {
   // (このアプリ共通の「光る」演出、.change-highlight参照)を付ける。
   const btn = el('button', 'free-action-button turn-end-button change-highlight', 'ターン終了');
   btn.type = 'button';
+  // ナビ機能 (2026-10-18, per user request: "ターン終了もおねがい") -- navSuggestedMoveがEND_TURNなら
+  // 専用クラスも重ねる(style.css側でchange-highlightより後に定義されているため、両方付いている間は
+  // 緑のナビ色が優先して見える -- 「出現した時点で常に光る」amberの既定動作を壊さず、かつAIがこの手を
+  // 推奨している時だけ区別がつくようにする)。
+  if (navSuggestedMove && navSuggestedMove.type === 'END_TURN' && navSuggestedMove.playerId === player.id) {
+    btn.classList.add('nav-highlight');
+  }
   btn.addEventListener('click', () => {
     attemptAdvanceTurn(state, player.id);
     render(STATE);
