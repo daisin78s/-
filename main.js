@@ -1485,9 +1485,26 @@ function driveOneAiStepInner(state) {
       // the same player, since hasFinishedOnboarding's own matching check (via next.type/resolveAiTurnContext)
       // should already route them to the TURN branch by then.
     } else {
-      const face = isLv3
+      let face = isLv3
         ? smartOnboardingMod.pickConFace(state, INDEX, ctx.playerId, ctx.player.jobCardId, aiConJobSynergyTable, state.rng)
         : (rngMod.next(state.rng) < 0.5 ? 'A' : 'B');
+      // Root cause of the 2026-10 infinite-resource bug, found 2026-10-18 (per user report: "本来選べない
+      // 制約カードの裏面をAIが選んだのではないか" -- confirmed correct): neither pickConFace above nor the
+      // plain 50/50 random fallback has ever been aware of state.lockedFaceIds, unlike renderConChoice's
+      // own matching conBFaceLocked check (which simply never shows a locked B face as pickable at all,
+      // for the human path -- see its own doc: "setup.chooseConFace側の本当の拒否(FACE_LOCKED)が正のルール
+      // で、ここはそれと矛盾しないよう..."). If an AI ever picked a locked B face, setupMod.chooseConFace
+      // below silently returns {success:false, reason:'FACE_LOCKED'} WITHOUT adding any CON-prefixed card
+      // to ownedCardPhysicalIds -- a return value this call site never checked -- so
+      // receiveInitialResources still ran right after (re-granting the player's 2 RESOURCE cards' ONCE),
+      // and because no CON card was ever actually owned, hasFinishedOnboarding kept reporting false on
+      // every subsequent call, routing this exact player back into this exact branch forever: the real
+      // mechanism behind "AIスタート→資源を得る→(制約カードは得られない)→また最初に戻る" the user
+      // described, now confirmed down to the literal condition rather than trusting Ver.1.139's guard
+      // (which never helped here, since it only skips this branch once a CON card IS actually owned --
+      // exactly the case this bug prevents) to mask it indefinitely. Fixed the same way the human path
+      // already is: force the unlocked face instead, rather than ever attempting the locked one.
+      if (face === 'B' && (state.lockedFaceIds || []).includes(`${ctx.player.conPhysicalId}B`)) face = 'A';
       setupMod.chooseConFace(state, INDEX, ctx.playerId, face);
       setupMod.receiveInitialResources(state, INDEX, ctx.playerId);
     }
