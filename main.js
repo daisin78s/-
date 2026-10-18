@@ -1000,6 +1000,59 @@ function aiPlayerFor(playerId) {
   return (weeklyChallengeActive && aiPlayerLv3Weekly) || aiPlayerLv3; // AI_LV3 (and any other value, as the strongest/default fallback)
 }
 
+/** Cheap fingerprint of everything a nav suggestion for playerId could depend on (2026-10-18) -- used by
+ * updateNavSuggestionIfNeeded below to skip recomputing an expensive LV3 selectMove() call on every
+ * render() (which fires after nearly every UI interaction, including ones that change nothing about this
+ * player's own decision, e.g. opening/closing an unrelated modal) -- only a REAL change to what this
+ * player could legally do (dice, resources, owned cards, tapped state, round) invalidates the cache. Not
+ * exhaustive (doesn't cover every possible PASSIVE-driven edge case another player's action could affect),
+ * but good enough for a navigation hint, not a scoring-critical computation. */
+function navSignatureFor(state, playerId) {
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player) return null;
+  return JSON.stringify({
+    round: state.round,
+    playerId,
+    resources: player.resources,
+    dice: player.dice.map((d) => `${d.id}:${d.placedMapId}:${d.passed}:${d.value}`),
+    owned: player.ownedCardPhysicalIds,
+    tapped: player.ownedCardPhysicalIds.map((id) => (state.cards[id] ? state.cards[id].tapped : null)),
+  });
+}
+
+/** ナビ機能(navModeEnabled)の中心処理 (2026-10-18) -- eligiblePlayerId(actingHumanPlayerId(state, next)、
+ * 「今まさに自分でクリック操作できる人間プレイヤー」)がいて、かつナビがオンの間、aiPlayerFor(そのプレイヤー
+ * のロールがHUMANなので常にLV3)のselectMoveで候補手を1つ求め、navSuggestedMove/navSuggestedAcquireFaceId
+ * を更新する。render()の、next確定後・各render*呼び出し前に呼ばれる想定。 */
+function updateNavSuggestionIfNeeded(state, eligiblePlayerId) {
+  if (!navModeEnabled || !eligiblePlayerId) {
+    navSuggestedMove = null;
+    navSuggestedAcquireFaceId = null;
+    navSuggestionSignature = null;
+    return;
+  }
+  const signature = navSignatureFor(state, eligiblePlayerId);
+  if (signature === navSuggestionSignature) return; // nothing relevant changed -- keep the cached suggestion
+  navSuggestionSignature = signature;
+  navSuggestedMove = aiPlayerFor(eligiblePlayerId).selectMove(state, eligiblePlayerId, { hasPlacedDieThisTurn: turnActionTaken });
+  navSuggestedAcquireFaceId = null;
+  if (navSuggestedMove && navSuggestedMove.buildCandidateIndex !== undefined && navSuggestedMove.buildCandidateIndex !== null) {
+    // The actual acquired/upgraded faceId only exists once the move is really applied (board.placeDice/
+    // placeDiceGroup/useBareTapAbility compute pendingBuild.candidates live, not something move-generator.js
+    // precomputes -- see src/ai/simulator.js's own buildCandidateIndex handling) -- dry-run on a disposable
+    // clone, same "never touches the real state" pattern as board.previewPlaceDice.
+    try {
+      const clone = gameStateMod.cloneState(state);
+      const result = simulatorMod.applyInPlace(clone, INDEX, navSuggestedMove);
+      if (result.success && result.candidate) {
+        navSuggestedAcquireFaceId = result.candidate.faceId || result.candidate.toFaceId || null;
+      }
+    } catch (e) {
+      // Defensive only -- a failed dry-run just means no card gets highlighted, never a crash.
+    }
+  }
+}
+
 // 'instant' (AI plays out immediately, no visible pause) | 'delayed' (one Move every AI_STEP_DELAY_MS,
 // so the board visibly updates step by step) | 'manual' (only advances on the "次のAI行動へ" button
 // click) -- all 3 selectable per user feedback ("上記3をえらべるように"), see renderAiPacingControl.
@@ -1132,6 +1185,21 @@ let changeHighlightPainted = false;
 // covers ends up somewhere else on screen, see its own doc) -- renderPlayers' own check doesn't care which
 // caller set it.
 let aiPreHighlightMove = null;
+// ナビ機能 (2026-10-18, per user request: "オンオフできてオンにするとAIが候補手をひとつ教えてくれる" --
+// フォローアップで仕様確定: 常にLV3(最強)ロジック、盤面上を光らせる(位置のみ)、ダイス配置以外の手(フリー
+// アクション/TAP/BUILD選択/ターン終了等)もすべて対象、ダイスとスロットが光り、場合によっては獲得予定
+// カードも光る) -- navModeEnabled: トグル状態(#nav-toggle-button)。navSuggestedMove: aiPlayerFor(自分の
+// id)がLV3ロジックで選んだMoveそのもの(src/ai/move-generator.jsのMove形状、PLACE_DIE/PLACE_WILDCARD_DIE/
+// PLACE_DICE_GROUP/FREE_ACTION/COLLECT_FEE/BARE_TAP/PASS_DIE/END_TURN等)。navSuggestedAcquireFaceId:
+// その手がBUILD/UPGRADE候補を伴う場合(move.buildCandidateIndexがある場合)、実際に獲得/LVアップされる
+// カードのfaceId -- move-generator.js自身はこれを静的に持たない(board.placeDice等が実際に配置して初めて
+// pendingBuild.candidatesが決まる)ため、updateNavSuggestionIfNeededが使い捨てのcloneに対して実際に
+// applyInPlaceした結果から読み取る。navSuggestionSignature: 再計算が必要かどうかの安価な判定用キャッシュ
+// キー(毎回のrender()でLV3の思考をフルに回すと重いため、関係する状態が実際に変わった時だけ再計算する)。
+let navModeEnabled = false;
+let navSuggestedMove = null;
+let navSuggestedAcquireFaceId = null;
+let navSuggestionSignature = null;
 // {dieId, dicePlayerId, slotKeys, cardKeys, resourceKeys, feeMapIds} | null -- リプレイの変化ハイライト
 // (2026-09-09, per user request, revised same day after seeing the first version in action: "進を押して
 // 変わった個所が次のボタン（進むなど）を押すまで光るようにしてほしい 例 獲得したカード／使用料をもらった
@@ -5623,6 +5691,10 @@ function buildShopSlotNode(slotId, faceId, showReqCaption, locked, faceDown = fa
     const prefixes = Array.isArray(tutorialShopCardTypeGlow) ? tutorialShopCardTypeGlow : [tutorialShopCardTypeGlow];
     if (prefixes.some((p) => faceId.startsWith(p))) cardVisual.classList.add('change-highlight');
   }
+  // ナビ機能 (2026-10-18, per user follow-up: "場合によっては獲得予定カードが") -- navSuggestedMoveが
+  // BUILD/UPGRADEを伴う手の場合、実際に獲得/LVアップされるカードそのものを光らせる(updateNavSuggestionIfNeeded
+  // がcloneへの実適用結果から求める、navSuggestedAcquireFaceId参照)。
+  if (navSuggestedAcquireFaceId && navSuggestedAcquireFaceId === faceId) cardVisual.classList.add('nav-highlight');
   // カード獲得の説明(T024〜T027)のダイス目別「光る」 -- そのスロットのカードも光らせる。
   if (tutorialBuildShopGlowSlots && tutorialBuildShopGlowSlots.includes(slotId)) cardVisual.classList.add('change-highlight');
   // shop_cost_introの「光る」演出 (2026-09-27, per user request: "ショップにあるすべてのカードの支払い
@@ -5974,6 +6046,15 @@ function renderBoard(state, next) {
       // build_candidate_a005a_levelup_hintの「光る」演出(農園のタイル全体) (2026-09-30, Excel T037) --
       // tutorialAreaTileGlowMapId's own doc。
       if (tutorialAreaTileGlowMapId === mapId) node.classList.add('change-highlight');
+      // ナビ機能 (2026-10-18) -- 個別スロットを特定できない種類の手(グループ配置/スロット自動割り当ての
+      // ☆ダイス配置/使用料回収)は、タイル全体を光らせる形でカバーする(単体PLACE_DIE/PLACE_WILDCARD_DIEの
+      // 個別スロットハイライトは上のslotsEl構築ループ側、slot--nav-highlight参照)。
+      if (navSuggestedMove && navSuggestedMove.mapId === mapId
+        && (navSuggestedMove.type === 'PLACE_DICE_GROUP'
+          || (navSuggestedMove.type === 'PLACE_WILDCARD_DIE' && navSuggestedMove.slotIndex === undefined)
+          || navSuggestedMove.type === 'COLLECT_FEE')) {
+        node.classList.add('change-highlight');
+      }
 
       const tier = mapState.currentAreaId.match(/([ABC])$/);
       if (tier) {
@@ -6069,6 +6150,15 @@ function renderBoard(state, next) {
         // "you can try clicking here" .slot--selectable affordance every slot gets while any die is
         // selected, regardless of whether it would actually work.
         if (highlightedSlots && highlightedSlots.has(i)) slotEl.classList.add('slot--highlight');
+        // ナビ機能 (2026-10-18) -- navSuggestedMoveがPLACE_DIE/PLACE_WILDCARD_DIEで、かつこのスロットが
+        // その対象そのものの場合だけ、専用クラスで光らせる(selectedDieIdsの有無に関わらず常に出る、
+        // slot--highlightとは別物)。slotIndexを持たない(＝自動割り当ての)PLACE_WILDCARD_DIEやグループ
+        // 配置(PLACE_DICE_GROUP)はここでは個別スロットを特定できないため対象外 -- タイル全体を光らせる
+        // 側(下のnode.classList.add('change-highlight')相当)で代わりにカバーする。
+        if (navSuggestedMove && navSuggestedMove.mapId === mapId && navSuggestedMove.slotIndex === i
+          && (navSuggestedMove.type === 'PLACE_DIE' || navSuggestedMove.type === 'PLACE_WILDCARD_DIE')) {
+          slotEl.classList.add('slot--nav-highlight');
+        }
         // 変化ハイライト (2026-08-16) -- a die landed here since the viewing human's last turn ended.
         // Separate class/color from .slot--highlight just above (that one means "you could place here
         // right now"; this one means "something already happened here").
@@ -7353,6 +7443,15 @@ function renderPlayers(state, next) {
       // what the AI is about to place, shown during the existing pre-placement wait.
       if (aiPreHighlightMove && aiPreHighlightMove.playerId === player.id && aiPreHighlightMove.dieId === die.id) {
         dieNode.classList.add('change-highlight--pending');
+      }
+      // ナビ機能 (2026-10-18) -- navSuggestedMoveがこの(人間の)プレイヤー自身の、このダイスを対象とする
+      // 手(配置/グループ配置/パス)なら光らせる。navSuggestedMove自体はupdateNavSuggestionIfNeededが
+      // actingHumanPlayerIdの持ち主(=操作中の本人)に対してしか計算しないので、playerIdの一致確認は
+      // 実質常に真だが、aiPreHighlightMove側の慣習に合わせて明示的にチェックしておく。
+      if (navSuggestedMove && navSuggestedMove.playerId === player.id
+        && ((navSuggestedMove.dieId === die.id)
+          || (navSuggestedMove.dieIds && navSuggestedMove.dieIds.includes(die.id)))) {
+        dieNode.classList.add('nav-highlight--pending');
       }
       // Click to select a die for placement (2026-07-30, real engine wiring pass 2) -- see
       // placeSelectedDie/renderBoard's slot click handler, the other half of this interaction.
@@ -13321,6 +13420,7 @@ function render(state) {
   } else {
     lastTurnPlayerId = null;
   }
+  updateNavSuggestionIfNeeded(state, actingHumanPlayerId(state, next));
   renderShops(state);
   renderBoard(state, next);
   renderPlayers(state, next);
@@ -13346,6 +13446,7 @@ function render(state) {
   renderTurnEndWarningModal();
   renderUndoButtons(state);
   renderRoundPassButton(state, next);
+  renderNavToggleButton();
   renderRoundPassConfirmModal();
   renderWhiteOverflowConfirmModal();
   renderJob007TapPromptModal();
@@ -13563,6 +13664,14 @@ function countPlaceableMapsForPlayer(state, playerId) {
     if (placeable) count++;
   }
   return count;
+}
+
+/** ナビ機能のトグルボタン表示更新 (2026-10-18) -- オンの間、テキストと押下状態(見た目のON/OFF)を切り替える。
+ * 計算自体(updateNavSuggestionIfNeeded)とは別 -- こちらは純粋にボタンの見た目だけ。 */
+function renderNavToggleButton() {
+  const btn = document.getElementById('nav-toggle-button');
+  btn.textContent = navModeEnabled ? '🧭 ナビ: ON' : '🧭 ナビ: OFF';
+  btn.classList.toggle('nav-toggle-button--on', navModeEnabled);
 }
 
 /** "ラウンドパス" header button (2026-08-02, per user feedback: pinned above player-role-control,
@@ -14427,6 +14536,13 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('ranking-overlay-title').addEventListener('click', openAchievementRankingOverlay);
 
   document.getElementById('round-pass-button').addEventListener('click', handleRoundPassClick);
+  // ナビ機能 (2026-10-18, per user request: "オンオフできてオンにするとAIが候補手をひとつ教えてくれる")
+  // -- see navModeEnabled/updateNavSuggestionIfNeeded's own doc.
+  document.getElementById('nav-toggle-button').addEventListener('click', () => {
+    navModeEnabled = !navModeEnabled;
+    navSuggestionSignature = null; // force a fresh computation (or a fresh clear) on the next render
+    render(STATE);
+  });
   document.getElementById('round-pass-confirm-no').addEventListener('click', () => {
     pendingRoundPassConfirm = null;
     render(STATE);

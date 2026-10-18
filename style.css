@@ -65,6 +65,11 @@
   --change-highlight: #d97706;
   --change-highlight-soft: #fde68a;
 
+  /* ナビ機能 (2026-10-18) -- AIのおすすめ手の表示。--accent(配置可能プレビュー)/--change-highlight(変化
+     ハイライト)のどちらとも別の色にして混同を防ぐ。緑系(「これがおすすめ」の意味合いにも合う)。 */
+  --nav-highlight: #0f9d58;
+  --nav-highlight-soft: #c8f0d8;
+
   /* デッキ識別カラー (2026-08-16) -- ABCカード/モニュメントがEMBLEMバッジだけでは判別しにくいという
      フィードバックを受け、背景タイント+枠線カラーのモックアップ比較を経て採用。ABCの背景/枠線色は
      既存のEMBLEM色を再利用(枠線はそのままだと主張が強すぎたため--border-strongと混ぜてトーンを
@@ -101,6 +106,8 @@
     --qst-band-3: rgba(117, 144, 255, 0.07);
     --change-highlight: #f0a030;
     --change-highlight-soft: #4a3a1a;
+    --nav-highlight: #34c77b;
+    --nav-highlight-soft: #1a3a28;
     --monument: #6fae80;
     --monument-soft: #23342a;
   }
@@ -1149,6 +1156,36 @@ h1, h2, h3 { margin: 0; }
   50% { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 10px 3px var(--accent); }
 }
 
+/* ナビ機能 (2026-10-18, per user request: "オンにするとAIが候補手をひとつ教えてくれる...ダイスとスロットが
+   光る") -- AIのおすすめ手の対象スロット。.slot--highlight(配置可能プレビュー、青)とは別物・別色(緑)。 */
+.slot--nav-highlight {
+  border-style: solid;
+  border-color: var(--nav-highlight);
+  background: var(--nav-highlight-soft);
+  box-shadow: 0 0 0 2px var(--nav-highlight-soft), 0 0 6px 1px var(--nav-highlight);
+  animation: nav-highlight-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes nav-highlight-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px var(--nav-highlight-soft), 0 0 6px 1px var(--nav-highlight); }
+  50% { box-shadow: 0 0 0 3px var(--nav-highlight-soft), 0 0 10px 3px var(--nav-highlight); }
+}
+
+/* ナビ機能 (2026-10-18) -- 汎用版。「獲得予定カード」(ショップのカード本体)のような、.slotとは違う形の
+   要素に直接付けられるよう、.change-highlight(アンバー系)と同じ構造を緑系で用意。 */
+.nav-highlight {
+  border-style: solid;
+  border-color: var(--nav-highlight);
+  background: var(--nav-highlight-soft);
+  box-shadow: 0 0 0 2px var(--nav-highlight-soft), 0 0 6px 1px var(--nav-highlight);
+  animation: nav-highlight-pulse 1.4s ease-in-out infinite;
+}
+
+/* .change-highlight--pending(ダイス用、形は変えずアニメーションだけ付ける)と同じ考え方の緑版。 */
+.nav-highlight--pending {
+  animation: nav-highlight-pulse 1.4s ease-in-out infinite;
+}
+
 /* JOB003/道化 (2026-08-19): with a single ☆ die selected, the whole tile is clickable (the engine picks
    the slot, not the player -- see main.js's attemptPlaceSelectedWildcardDie) -- .slot--highlight above
    still marks the specific slot it would land on, this just gives the tile itself a pointer cursor. */
@@ -2103,6 +2140,14 @@ body.tutorial-mode .change-highlight {
 .undo-button:not(:disabled):hover {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+/* ナビ機能トグル (2026-10-18, per user request) -- オンの間、他の#undo-buttonクラスのボタンと見分けが
+   つくよう常時アクセントカラーで塗りつぶす(他はhover時だけ縁取りが変わる控えめな見た目のため)。 */
+.nav-toggle-button--on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast, #fff);
 }
 
 .player-cards__title {
