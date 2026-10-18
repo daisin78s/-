@@ -7967,6 +7967,14 @@ function reactiveTapKind(faceId) {
  * (source:'TAP', see renderBuildChoiceModal); everything else runs immediately on tap.
  */
 function attachTapToggle(cardNode, cardState, faceId, canAct, physicalId) {
+  // ナビ機能 (2026-10-18, per user request: "メインアクションなしの時も タップアクション ラウンドパス
+  // なども候補手として表示されるようにして") -- navSuggestedMoveがこのカードを対象とするBARE_TAPなら
+  // カード自体を光らせる。canAct/bareTapKindの早期returnより前に置く必要はない(どちらも偽ならそもそも
+  // このカードはTAPできない=navSuggestedMoveがそれを指すこともあり得ないので、位置はどこでも実質同じ
+  // だが、わかりやすさのため早期returnと同じガード内で先に判定しておく)。
+  if (navSuggestedMove && navSuggestedMove.type === 'BARE_TAP' && navSuggestedMove.physicalId === physicalId) {
+    cardNode.classList.add('nav-highlight');
+  }
   if (!canAct) return;
   const bareTap = bareTapKind(faceId);
   if (!bareTap) return;
@@ -13698,6 +13706,11 @@ function renderRoundPassButton(state, next) {
   // を立てる。hasDiceLeftThisRoundがfalseの時(置くダイスが無い)は無駄な計算を避ける。
   const fewPlaceableAreas = hasDiceLeftThisRound && countPlaceableMapsForPlayer(state, playerId) <= 1;
   btn.classList.toggle('change-highlight', tutorialRoundPassButtonGlowing || fewPlaceableAreas);
+  // ナビ機能 (2026-10-18, per user request: "メインアクションなしの時も タップアクション ラウンドパス
+  // なども候補手として表示されるようにして") -- navSuggestedMoveがPASS_DIE(このボタンがまとめて行う
+  // board.passDieの1個分)の場合、ボタン自体も光らせる。ダイス側(nav-highlight--pending)はすでに光って
+  // いるが、それだけでは「配置すべき」なのか「パスすべき」なのか区別がつかないため、こちらも合わせて示す。
+  btn.classList.toggle('nav-highlight', !!(navSuggestedMove && navSuggestedMove.type === 'PASS_DIE' && navSuggestedMove.playerId === playerId));
 }
 
 function handleRoundPassClick() {
