@@ -8856,6 +8856,37 @@ function rankingCardDisplayName(faceId) {
   }
 }
 
+/** CON card NAME -> its own adjective-form prefix (2026-10-18, per user request: "制約 嫉妬 / ジョブ：
+ * 異端者" の2行を "嫉妬深い異端者" のような1つの肩書きにまとめたい -- exact phrasing given verbatim by the
+ * user for all 12 CON names, not derived algorithmically (裏切 -> 裏切り者の isn't a simple suffix-append,
+ * so this is a literal lookup, not a rule). Used by rankingConJobTitle below; falls back to the bare CON
+ * name (no adjective suffix) for anything not in this table (shouldn't happen with the current 12 CON
+ * cards, but keeps a future 13th card from silently vanishing instead of just looking slightly off). */
+const CON_ADJECTIVE_BY_NAME = {
+  祝福: '祝福された',
+  潔癖: '潔癖な',
+  狂信: '狂信的な',
+  傲慢: '傲慢な',
+  怠惰: '怠惰な',
+  裏切: '裏切り者の',
+  色欲: '色欲の',
+  強欲: '強欲な',
+  憂鬱: '憂鬱な',
+  嫉妬: '嫉妬深い',
+  憤怒: '憤怒の',
+  暴食: '暴食な',
+};
+
+/** "嫉妬深い異端者" -- combines conFaceId's own adjective form (CON_ADJECTIVE_BY_NAME) with jobCardId's
+ * plain NAME, replacing the old separate "制約: X" / "ジョブ: Y" lines in the ranking list. '—' (matching
+ * rankingCardDisplayName's own missing-value convention) if either id is missing. */
+function rankingConJobTitle(conFaceId, jobCardId) {
+  if (!conFaceId || !jobCardId) return '—';
+  const conName = rankingCardDisplayName(conFaceId);
+  const jobName = rankingCardDisplayName(jobCardId);
+  return `${CON_ADJECTIVE_BY_NAME[conName] || conName}${jobName}`;
+}
+
 // 実績記録の定義一式(ACHIEVEMENT_STORAGE_KEY/ACHIEVEMENT_MODE_DEFS/ACHIEVEMENT_PER_GAME_DEFS/
 // buildAchievementCategories/ACHIEVEMENT_CATEGORIES/ACHIEVEMENT_CATEGORY_BY_KEY/
 // ACHIEVEMENT_POINT_FORMULA_BY_LABEL/normalizeFullWidthDigits/achievementPointsForCategory/
@@ -9578,8 +9609,7 @@ function renderRankingList(highlightId, highlightCategory) {
         row.appendChild(swatch);
         row.appendChild(el('span', 'ranking-row__name', entry.name));
         row.appendChild(el('span', 'ranking-row__score', `総合 ${entry.totalScore}VP（素点${entry.rawScore} + QST${entry.qstScore}）`));
-        row.appendChild(el('span', 'ranking-row__con', `制約: ${rankingCardDisplayName(entry.conFaceId)}`));
-        row.appendChild(el('span', 'ranking-row__job', `ジョブ: ${rankingCardDisplayName(entry.jobCardId)}`));
+        row.appendChild(el('span', 'ranking-row__con-job', rankingConJobTitle(entry.conFaceId, entry.jobCardId)));
         row.appendChild(el('span', 'ranking-row__opponents', entry.opponents.join('　')));
         // 登録日(2026-10-18, per user request: "ランキングに年月日が入るようにしてほしい") -- entry.savedAt
         // (ISO文字列、ranking.js's save()が登録時に自動付与、昔から全エントリーに存在) をYYYY/MM/DD表示に

@@ -4346,8 +4346,7 @@ body.tutorial-mode .change-highlight {
   color: var(--resource-vp);
 }
 
-.ranking-row__con,
-.ranking-row__job,
+.ranking-row__con-job,
 .ranking-row__opponents,
 .ranking-row__date {
   color: var(--text-muted);
