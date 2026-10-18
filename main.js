@@ -7725,6 +7725,12 @@ function renderFreeActionButtons(container, state, player, canAct) {
     if (tutorialModeActive && player.id === 'P1' && tutorialFreeActionGlowId === freeActionId) {
       btn.classList.add('change-highlight');
     }
+    // ナビ機能 (2026-10-18, per user request: "フリーアクションは AIは今は使えないかもしれませんが
+    // それでも念のため") -- navSuggestedMoveがこのfreeActionIdを対象とするFREE_ACTIONなら光らせる。
+    if (navSuggestedMove && navSuggestedMove.type === 'FREE_ACTION' && navSuggestedMove.playerId === player.id
+      && navSuggestedMove.freeActionId === freeActionId) {
+      btn.classList.add('nav-highlight');
+    }
     if (tutorialShowDisabled) {
       btn.disabled = true;
       container.appendChild(btn);
