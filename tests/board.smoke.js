@@ -1118,9 +1118,9 @@ function giveJob002(state, playerId) {
 }
 
 // ---------------------------------------------------------------------------
-// JOB011.TAP=CHANGE(4K,3Z) (2026-10-13 data edit: was CHANGE(4K,(A,B,C)) -- pay 4 food, gain 3 wildcard
-// Z instead of 1 each of A/B/C). Still a bare (non-reactive) TAP ability, usable any time during the
-// player's own turn, same as C001A's CHANGE(K,A,7).
+// JOB011.TAP=CHANGE(4K,(A,B,C)) (2026-10-18 data edit: back from CHANGE(4K,3Z) -- pay 4 food, gain 1
+// each of A/B/C instead of 3 wildcard Z). Still a bare (non-reactive) TAP ability, usable any time
+// during the player's own turn, same as C001A's CHANGE(K,A,7).
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
@@ -1132,18 +1132,18 @@ function giveJob002(state, playerId) {
   p1.resources.K = 4;
 
   const result = board.useBareTapAbility(state, index, { playerId: 'P1' }, jobInst.physicalId);
-  check('JOB011.TAP=CHANGE(4K,3Z) succeeds as a direct (non-reactive) TAP', result, { success: true });
-  check('...paid 4K, gained 3Z', { K: p1.resources.K, Z: p1.resources.Z }, { K: 0, Z: 3 });
+  check('JOB011.TAP=CHANGE(4K,(A,B,C)) succeeds as a direct (non-reactive) TAP', result, { success: true });
+  check('...paid 4K, gained 1 each of A/B/C', { K: p1.resources.K, A: p1.resources.A, B: p1.resources.B, C: p1.resources.C }, { K: 0, A: 1, B: 1, C: 1 });
   check('...the card is now tapped', state.cards[jobInst.physicalId].tapped, true);
 
-  // Z is a wildcard payment resource (resolvePayment falls back to it for any A/B/C shortfall) -- no
-  // special bzDiscount plumbing needed, same spirit as the old A/B/C-granting version of this TAP.
-  p1.resources.A = 2; // A004A costs "2A,B" -- real A covers the 2A entirely, leaving the B as the gap
+  // The 1B JOB011 just granted covers A004A's own "2A,B" cost's B requirement directly (real resource,
+  // not a Z-wildcard substitution).
+  p1.resources.A += 2; // A004A costs "2A,B" -- real A covers the 2A entirely, on top of JOB011's own 1A
   state.shops.NORMAL.slots.SHOP101 = 'A004A'; // force a known slot, regardless of this seed's shuffle
   const candidate = { type: 'BUILD_NEW', faceId: 'A004A', shopKey: 'NORMAL', slotId: 'SHOP101' };
   const buildResult = board.resolveBuild(state, index, { playerId: 'P1' }, candidate);
-  check('The Z JOB011 just granted covers the 1B shortfall A004A would otherwise lack', buildResult.success, true);
-  check('...1 of the 3 Z was spent on the B shortfall, 2 remain', p1.resources.Z, 2);
+  check('The B JOB011 just granted covers A004A\'s own B requirement', buildResult.success, true);
+  check('...A004A\'s "2A,B" cost paid (1A left from the combined 3, B exactly covered, C untouched)', { A: p1.resources.A, B: p1.resources.B, C: p1.resources.C }, { A: 1, B: 0, C: 1 });
 }
 {
   // JOB007.TAP=ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+4);BLOCK_BUILD(A,THIS_TURN);BLOCK_BUILD(B,
@@ -2598,9 +2598,11 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   const p1 = player(state, 'P1');
   p1.jobCardId = 'JOB012';
   // AREA001A is the default face MAP001 starts at -- no explicit currentAreaId override needed.
-  const d1 = giveDie(state, 'P1', 1); // AREA001A SLOT1=1
+  // die value 3 at SLOT3 (2026-10-18: 異端者 now requires a die showing 3-6, not any value -- see
+  // hereticBorrowedAreaRow's own call-site doc).
+  const d1 = giveDie(state, 'P1', 3); // AREA001A SLOT3=3
   const beforeK = p1.resources.K || 0;
-  const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
+  const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 2);
   check('異端者: placement on an unowned, still-base-tier AREA succeeds', result.success, true);
   check('...grants AREA001B\'s own ADD(6K) (the borrowed LV1 action), not AREA001A\'s own ADD(3K)', p1.resources.K - beforeK, 6);
   check('...self-charges AREA001B\'s own fee (1K) via pendingFee, not an immediate deduction', p1.pendingFee, { mapId: 'MAP001', amount: 1 });
@@ -2702,8 +2704,8 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   p1.jobCardId = 'JOB012';
-  const d1 = giveDie(state, 'P1', 1); // AREA001A SLOT1=1
-  board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
+  const d1 = giveDie(state, 'P1', 3); // AREA001A SLOT3=3 -- see 異端者's die-value>=3 gate, above
+  board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 2);
   check('異端者 self-charges and banks hereticBankerId=P1', state.maps['MAP001'].hereticBankerId, 'P1');
   executor.applyTurnEnd(state, index, 'P1');
   check('...fee actually banked into accumulatedFee (1K)', state.maps['MAP001'].accumulatedFee, 1);
@@ -2719,8 +2721,8 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   p1.jobCardId = 'JOB012';
-  const d1 = giveDie(state, 'P1', 1);
-  board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
+  const d1 = giveDie(state, 'P1', 3); // AREA001A SLOT3=3 -- see 異端者's die-value>=3 gate, above
+  board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 2);
   executor.applyTurnEnd(state, index, 'P1');
   check('Banked before ownership change (1K)', state.maps['MAP001'].accumulatedFee, 1);
 

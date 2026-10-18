@@ -858,10 +858,10 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 }
 
 // ---------------------------------------------------------------------------
-// 14c. 権力者/JOB005's bespoke "half (round up) of the K you just got becomes A" ability (2026-10-12
-//     redesign, replacing the old PASSIVE=ON(GET(K),CHANGE(K,A,ALL)) DSL text, per user request: "〇を
-//     得たときその半数は赤〇になる（端数切り上げ）" -- implemented as a bespoke grantResourceAndEmitGet
-//     hook (grantPowerBrokerConversionIfEarned), same class as grantChefBonusIfEarned, since the DSL's
+// 14c. 権力者/JOB005's bespoke "all of the K you just got becomes A" ability (2026-10-18 redesign, per
+//     user's own INST text update: "〇を得たときすべて赤〇になる" -- replacing the 2026-10-12 version's
+//     "half, rounded up" (ceil(n/2)). Still implemented as a bespoke grantResourceAndEmitGet hook
+//     (grantPowerBrokerConversionIfEarned), same class as grantChefBonusIfEarned, since the DSL's
 //     ON(GET(x),...) dispatch can't see HOW MUCH was granted. Checked via player.jobCardId (NAME match),
 //     not an owned-card scan -- see hasPowerBrokerAbility's own doc.
 // ---------------------------------------------------------------------------
@@ -870,25 +870,24 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   const player = getPlayerRef(state, 'P1');
   player.jobCardId = 'JOB005';
   executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'K', 5);
-  check('権力者: getting 5K converts ceil(5/2)=3 to A', player.resources.A, 3);
-  check('権力者: ...leaving 2K', player.resources.K, 2);
+  check('権力者: getting 5K converts all 5 to A', player.resources.A, 5);
+  check('権力者: ...leaving 0K', player.resources.K, 0);
 }
 {
-  // User-confirmed worked example ("初期資源などで 3 3 1 得たとすると 2 2 1 赤になる") -- three separate
-  // grants, each computed independently (confirmed "得るたびに別計算"): NOT ceil((3+3+1)/2)=4 on the
-  // combined total.
+  // Per-grant independence is unchanged from the 2026-10-12 version (confirmed "得るたびに別計算"):
+  // three separate grants, each computed independently -- still not one combined-total conversion.
   const state = freshState();
   const player = getPlayerRef(state, 'P1');
   player.jobCardId = 'JOB005';
   executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'K', 3);
   executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'K', 3);
   executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'K', 1);
-  check('権力者: three separate grants of 3,3,1 convert 2,2,1 respectively (2+2+1=5A), not ceil(7/2) on the combined total', player.resources.A, 5);
-  check('権力者: ...leaving (3-2)+(3-2)+(1-1)=2 K', player.resources.K, 2);
+  check('権力者: three separate grants of 3,3,1 convert 3,3,1 respectively (3+3+1=7A)', player.resources.A, 7);
+  check('権力者: ...leaving 0K', player.resources.K, 0);
 }
 {
-  // User-confirmed to also apply via the 使用料回収 button (collectUsageFee), one call per map even when
-  // collecting from several maps back to back: fees of 3,2,1 convert 2,1,1, not a combined ceil(6/2)=3.
+  // Also applies via the 使用料回収 button (collectUsageFee), one call per map even when collecting from
+  // several maps back to back: fees of 3,2,1 each convert in full, independently.
   const state = freshState();
   const player = getPlayerRef(state, 'P1');
   player.jobCardId = 'JOB005';
@@ -904,8 +903,8 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   executor.collectUsageFee(state, index, { playerId: 'P1' }, 'MAP001');
   executor.collectUsageFee(state, index, { playerId: 'P1' }, 'MAP002');
   executor.collectUsageFee(state, index, { playerId: 'P1' }, 'MAP003');
-  check('権力者: collecting fees of 3,2,1 from 3 maps back to back converts 2,1,1 respectively (2+1+1=4A)', player.resources.A, 4);
-  check('権力者: ...leaving (3-2)+(2-1)+(1-1)=2 K', player.resources.K, 2);
+  check('権力者: collecting fees of 3,2,1 from 3 maps back to back converts 3,2,1 respectively (3+2+1=6A)', player.resources.A, 6);
+  check('権力者: ...leaving 0K', player.resources.K, 0);
 }
 {
   // A player without 権力者 as their JOB is completely unaffected -- confirms this is gated on

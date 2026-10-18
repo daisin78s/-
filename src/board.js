@@ -342,7 +342,11 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
   // borrowed 訓練場LV1 row's own raised color-die cap applies consistently to 異端者's placement too, not
   // just a real tier-B placement's own. die.kind === 'COLOR' (per user follow-up: "色ダイス配置時に変更
   // できますか") gates this the same way pioneerEligible below gates 宣教師's own color-die-only ability.
-  const hereticRow = die.kind === 'COLOR' ? hereticBorrowedAreaRow(state, index, context, map) : null;
+  // die.value >= 3 (2026-10-18, per user's own INST text update: "目3，4，5，6の色ダイスを置いたとき" --
+  // narrows the color-die gate to only faces 3-6, excluding 1/2) -- same call-site gating convention as
+  // the kind check just above (see hereticBorrowedAreaRow's own doc on why value/kind filtering lives at
+  // the call site, not inside that function).
+  const hereticRow = (die.kind === 'COLOR' && die.value >= 3) ? hereticBorrowedAreaRow(state, index, context, map) : null;
   const resolvedAreaRow = hereticRow || areaRow;
 
   const actionContext = context;
@@ -903,8 +907,10 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   // placement's borrowed tier-B bonus (e.g. 元老院LV1's own trailing ADD(2K)) actually lands.
   // dice.some(COLOR) (per user follow-up: "色ダイス配置時に変更できますか") -- same .some() shape
   // pioneerEligible uses just below for 宣教師's own color-die-only check in this same function: the
-  // group only needs at least one color die in it, not every die.
-  const hereticRow = dice.some((d) => d.kind === 'COLOR') ? hereticBorrowedAreaRow(state, index, context, map) : null;
+  // group only needs at least one color die in it, not every die. && d.value >= 3 (2026-10-18, see
+  // placeDice's own matching comment) -- same "at least one qualifying die" shape, now also requiring
+  // that color die to show 3-6.
+  const hereticRow = dice.some((d) => d.kind === 'COLOR' && d.value >= 3) ? hereticBorrowedAreaRow(state, index, context, map) : null;
   const resolvedAreaRow = hereticRow || areaRow;
 
   // AREA009C/B's own ACTION grants a trailing bonus after BUILD() (e.g. "BUILD();ADD(2K,BZ)" at LV2) --

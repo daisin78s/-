@@ -1813,12 +1813,14 @@ function grantChefBonusIfEarned(state, index, context, vpCount) {
 /** Grants 権力者/JOB005A's bonus if earned (2026-10-12 redesign, replacing the old
  * PASSIVE=ON(GET(K),CHANGE(K,A,ALL)) DSL text -- per user request: "〇を得たときその半数は赤〇になる
  * （端数切り上げ）", worked example confirmed (1->1, 2->1, 3->2, 4->2, 5->3, i.e. ceil(n/2)) and explicitly
- * confirmed "得るたびに別計算" -- each separate K grant computes its own ceil(half) independently, never
- * touching K already held from an earlier grant (so e.g. three separate grants of 3,3,1 convert 2,2,1
- * respectively, not ceil(7/2)=4 on the combined total). Needs the SAME bespoke, non-DSL treatment as
+ * confirmed "得るたびに別計算" -- each separate K grant computes its own conversion independently, never
+ * touching K already held from an earlier grant. Needs the SAME bespoke, non-DSL treatment as
  * grantChefBonusIfEarned just above -- the DSL's generic ON(GET(x),...) dispatch never conveys HOW MUCH
  * was granted, only which resource, and this ability specifically needs that count. PASSIVE field is
  * blank for this reason, same as 料理人's TAP field.
+ * 2026-10-18 redesign (per user's own INST text update: "〇を得たときすべて赤〇になる" -- "すべて", not
+ * half) -- convertAmount is now the FULL count, not ceil(count/2). The "得るたびに別計算" per-grant
+ * independence from the 2026-10-12 version is unchanged (still not a combined-total conversion).
  *
  * Deliberately no longer a CHANGE(...,ALL) command at all, so 憂鬱/CON003B's CONVERT_LIMIT(ALL,4) (which
  * only ever reads 'all'-kind CHANGE commands run through runChange) can no longer reach it either -- the
@@ -1828,12 +1830,12 @@ function grantChefBonusIfEarned(state, index, context, vpCount) {
  * Fires on every grantResourceAndEmitGet('K', count) call regardless of source -- confirmed via the
  * user's own examples to include initial-resource grants (setup) and usage-fee collection (the
  * 使用料回収 button's own collectUsageFee, one call per map even when collecting from several maps back
- * to back: fees of 3,2,1 convert 2,1,1, not a combined ceil(6/2)=3), same as every other live K grant. */
+ * to back), same as every other live K grant. */
 function grantPowerBrokerConversionIfEarned(state, index, context, count) {
   if (count <= 0) return;
   if (!hasPowerBrokerAbility(state, index, context.playerId)) return;
   const player = getPlayer(state, context.playerId);
-  const convertAmount = Math.ceil(count / 2);
+  const convertAmount = count;
   player.resources.K -= convertAmount;
   grantResourceAndEmitGet(state, index, context, 'A', convertAmount);
   notifyActivation(state, context.playerId, player.jobCardId, player.jobCardId, 'PASSIVE');
