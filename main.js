@@ -3637,9 +3637,9 @@ function extractBuildValue(actionText) {
  * BUILD(...);ADD(nBZ) (confirmed 2026-07-29, count support added 2026-10-13 -- 革命の兆しLV2's own BZ
  * grant went from ADD(BZ) to ADD(2BZ), which this function's old bare-"BZ"-only regex silently dropped
  * entirely since it never matched a counted form): BZ is a discount resource, not a normal resource dot,
- * so it's shown as plain text "軽減{n}Z" on its own line under the BUILD icon rather than a dot (n
- * omitted -- i.e. just "軽減Z" -- when the count is exactly 1, same convention as buildChefChangeIcon's
- * own `軽減${bzCount}Z`). Returns an .action-icons-stack (a column of rows) instead of a single row when
+ * so it's shown as plain text "軽減{n}Z〇" on its own line under the BUILD icon rather than a dot (n
+ * omitted -- i.e. just "軽減Z〇" -- when the count is exactly 1, same convention as buildChefChangeIcon's
+ * own `軽減${bzCount}Z〇`; the trailing 〇 added 2026-10-19 per user report on 交渉術LV2/B004B's icon). Returns an .action-icons-stack (a column of rows) instead of a single row when
  * this trailing ADD(nBZ) is present; buildEffectRow() knows to keep the two rows stacked instead of
  * flattening them together.
  *
@@ -3680,7 +3680,7 @@ function buildBuildIcon(actionText) {
   if (bzOnlyMatch) {
     const stack = el('div', 'action-icons-stack');
     stack.appendChild(buildRow);
-    stack.appendChild(actionRow([actionSuffix(`軽減${bzOnlyMatch[1]}Z`)]));
+    stack.appendChild(actionRow([actionSuffix(`軽減${bzOnlyMatch[1]}Z〇`)]));
     return stack;
   }
   const addMatch = /;ADD\(([^)]+)\)$/.exec(actionText);
@@ -3688,7 +3688,7 @@ function buildBuildIcon(actionText) {
     const addChildren = [actionEmoji('⚡')];
     for (const item of addMatch[1].split(',').map((s) => s.trim())) {
       const bzItemMatch = /^(\d*)BZ$/.exec(item);
-      if (bzItemMatch) { addChildren.push(actionSuffix(`軽減${bzItemMatch[1]}Z`)); continue; }
+      if (bzItemMatch) { addChildren.push(actionSuffix(`軽減${bzItemMatch[1]}Z〇`)); continue; }
       const m = /^(\d*)(K|A|B|C|Z)$/.exec(item);
       if (m) addChildren.push(...resourceItemNodes(m[1], m[2]));
     }
@@ -4025,26 +4025,27 @@ function buildEmblemStepVpModifierIcon(actionText) {
 
 /** SET_WILDCARD(SELF,THIS_TURN): B001B's TAP (2026-10-19) -- turns one of this player's own dice into a
  * ☆ wildcard die, same engine mechanic as JOB003/道化's WILDCARD_DICE() PASSIVE (see that icon's own
- * entry in ACTION_ICON_BUILDERS) but scoped to just one die rather than all of them, so the label says
- * "ダイス1個" rather than 道化's "オールマイティ". Matches at the start since it's followed by
+ * entry in ACTION_ICON_BUILDERS). Matches at the start since it's followed by
  * ;GRANT_PLACE_ANYWHERE(...), which isn't shown as its own icon (same convention as buildSetDieValueIcon
- * just below). */
+ * just below). No "1個" row (2026-10-19, per user follow-up report: "の1個はいらない") -- just the star. */
 function buildSetWildcardIcon(actionText) {
   if (!/^SET_WILDCARD\(SELF,THIS_TURN\)/.test(actionText || '')) return null;
   const star = actionEmoji('☆');
   star.classList.add('action-emoji--large');
-  const stack = el('div', 'action-icons-stack');
-  stack.appendChild(actionRow([star, actionSuffix('ダイス')]));
-  stack.appendChild(actionRow([actionSuffix('1個')]));
-  return stack;
+  return actionRow([star, actionSuffix('ダイス')]);
 }
 
 /** SET_DIE_VALUE(SELFx|y): player picks one of two fixed values -- shown as the two numbers, no arrow
  * (confirmed 2026-07-29). Matches at the start since it's usually followed by ;GRANT_PLACE_ANYWHERE(...),
- * which isn't shown as an icon. */
+ * which isn't shown as an icon.
+ * SELFx|x (2026-10-19, per user bug report: 高等学問/B002's icon showed "⚅⚅"/"7　7" -- a single die face
+ * twice): a card with only ONE real value has no genuine choice at all, but still needs the "|x" suffix
+ * to parse as a choice list in the first place (bare "SELF6" would misparse as a literal, unrelated
+ * identifier -- see dsl-parser.js's parseIdentTail doc). Shown as just the one face, not duplicated. */
 function buildSetDieValueIcon(actionText) {
   const match = /^SET_DIE_VALUE\(SELF(\d)\|(\d)\)/.exec(actionText || '');
   if (!match) return null;
+  if (match[1] === match[2]) return actionRow([dieFace(match[1])]);
   return actionRow([dieFace(match[1]), dieFace(match[2])]);
 }
 
@@ -4291,7 +4292,7 @@ function buildOnBuildChangeDiscountIcon(actionText) {
   const match = /^ON\(BUILD\([^)]*\),CHANGE\((\d*)(K|A|B|C|Z),(\d*)BZ\)\)$/.exec(actionText || '');
   if (!match) return null;
   const [, payCount, payResource, bzCount] = match;
-  return actionRow([actionEmoji('⚒️'), ...resourceItemNodes(payCount, payResource), actionTrigger(), actionSuffix(`軽減${bzCount}Z`)]);
+  return actionRow([actionEmoji('⚒️'), ...resourceItemNodes(payCount, payResource), actionTrigger(), actionSuffix(`軽減${bzCount}Z〇`)]);
 }
 
 /** ON(GET(x),CHANGE(a,b)): "getting x lets you convert a to b" (2026-07-30, added for JOB005A) --
