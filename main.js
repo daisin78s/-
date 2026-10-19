@@ -3007,7 +3007,7 @@ const CARD_LIST_RESOURCE_GLOSSARY = [
   { code: 'A', name: '権力' },
   { code: 'B', name: '信心' },
   { code: 'C', name: '金貨' },
-  { code: 'Z', name: 'コネ' },
+  { code: 'Z', name: '人脈' },
   { code: 'BZ', name: '口利き' },
   { code: 'D', name: '色ダイス' }, // 2026-09-24「行動力→追加ダイス」、2026-09-26「追加ダイス→色ダイス」に改名(per user requests)
   { code: 'wD', name: '白ダイス' }, // 2026-10-02「恩寵→白ダイス」に改名(per user request: "恩寵ダイス　正式名称を　白ダイスに変更します")
@@ -10313,7 +10313,7 @@ const TUTORIAL_STEPS = [
   {
     id: 'kabukicho_result_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: '「歓楽街」にダイスが置かれると食料〇2がコネZ〇3に変換されます\nコネZ〇は権力赤〇、信心青〇、金貨黄〇のどれとしても使うことのできる万能資源です',
+    body: '「歓楽街」にダイスが置かれると食料〇2が人脈Z〇3に変換されます\n人脈Z〇は権力赤〇、信心青〇、金貨黄〇のどれとしても使うことのできる万能資源です',
     nextLabel: '次へ',
   },
   // T011: ボタンは出さず、あなたが(チュートリアル専用の)ターン終了ボタンを押すと次へ進む
@@ -10427,7 +10427,7 @@ const TUTORIAL_STEPS = [
   {
     id: 'build_cost_z_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: '今は万能資源\u3000コネZ〇\u3000が3個あるためすべてのカードが獲得可能ですね',
+    body: '今は万能資源\u3000人脈Z〇\u3000が3個あるためすべてのカードが獲得可能ですね',
     nextLabel: '次へ',
   },
   // 2026-09-27, per user request -- カード獲得の実クリック操作。城下町デモ(castletown_placement_intro)と
@@ -10658,7 +10658,7 @@ const TUTORIAL_STEPS = [
   {
     id: 'build_candidate_c002a_levelup_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: 'レベルが上がると信心青〇ではなくコネZ〇に変換できるようになります\n持っている食料〇の数によって強さが変わりますがはまったときはものすごい威力なのでぜひ使ってみてください',
+    body: 'レベルが上がると信心青〇ではなく人脈Z〇に変換できるようになります\n持っている食料〇の数によって強さが変わりますがはまったときはものすごい威力なのでぜひ使ってみてください',
     choicesLayout: 'row',
     choices: [
       { label: 'レベルのあげ方を教えて', targetStepId: 'build_candidate_a005a_levelup_howto_hint' },
@@ -10903,7 +10903,7 @@ const TUTORIAL_STEPS = [
       if (r.A) parts.push(`（権力）赤〇${r.A}`);
       if (r.B) parts.push(`（信心）青〇${r.B}`);
       if (r.C) parts.push(`（金貨）黄〇${r.C}`);
-      if (r.Z) parts.push(`（コネ）Z〇${r.Z}`);
+      if (r.Z) parts.push(`（人脈）Z〇${r.Z}`);
       if (r.BZ) parts.push(`口利き${r.BZ}`);
       // VPは含めない (2026-09-26, per user request: "VPは初期資源とは別枠扱いにしたいので...セリフに表示
       // しなくていい") -- 光らせない対応(renderPlayersのVP除外)と対になっている。
@@ -11478,7 +11478,7 @@ const TUTORIAL_TEXT_RESOLVERS = {
     if (r.A) parts.push(`（権力）赤〇${r.A}`);
     if (r.B) parts.push(`（信心）青〇${r.B}`);
     if (r.C) parts.push(`（金貨）黄〇${r.C}`);
-    if (r.Z) parts.push(`（コネ）Z〇${r.Z}`);
+    if (r.Z) parts.push(`（人脈）Z〇${r.Z}`);
     if (r.BZ) parts.push(`口利き${r.BZ}`);
     return fillTutorialPlaceholders(template, { '持っている初期資源を1行ずつ': parts.join('\n') });
   },
@@ -11538,7 +11538,7 @@ const TUTORIAL_TERM_ALIASES = [
   { code: 'A', aliases: ['権力'] },
   { code: 'B', aliases: ['信心'] },
   { code: 'C', aliases: ['金貨'] },
-  { code: 'Z', aliases: ['コネ'] },
+  { code: 'Z', aliases: ['人脈'] },
   { code: 'BZ', aliases: ['口利き'] },
   { code: 'D', aliases: ['追加色ダイス', '追加ダイス', '色ダイス'] },
   { code: 'wD', aliases: ['白ダイス', '恩寵ダイス'] },
