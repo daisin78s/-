@@ -1007,33 +1007,22 @@ function aiPlayerFor(playerId) {
  * player could legally do (dice, resources, owned cards, tapped state, round) invalidates the cache. Not
  * exhaustive (doesn't cover every possible PASSIVE-driven edge case another player's action could affect),
  * but good enough for a navigation hint, not a scoring-critical computation. */
-function navSignatureFor(state, playerId) {
-  const player = state.players.find((p) => p.id === playerId);
-  if (!player) return null;
-  return JSON.stringify({
-    round: state.round,
-    playerId,
-    resources: player.resources,
-    dice: player.dice.map((d) => `${d.id}:${d.placedMapId}:${d.passed}:${d.value}`),
-    owned: player.ownedCardPhysicalIds,
-    tapped: player.ownedCardPhysicalIds.map((id) => (state.cards[id] ? state.cards[id].tapped : null)),
-  });
-}
-
 /** ナビ機能(navModeEnabled)の中心処理 (2026-10-18) -- eligiblePlayerId(actingHumanPlayerId(state, next)、
  * 「今まさに自分でクリック操作できる人間プレイヤー」)がいて、かつナビがオンの間、aiPlayerFor(そのプレイヤー
  * のロールがHUMANなので常にLV3)のselectMoveで候補手を1つ求め、navSuggestedMove/navSuggestedAcquireFaceId
- * を更新する。render()の、next確定後・各render*呼び出し前に呼ばれる想定。 */
+ * を更新する。render()の、next確定後・各render*呼び出し前に呼ばれる想定。
+ * 再計算は「同じ人間の同じターンが続いている間はしない」(2026-10-19, per user report: 重い/一度だけで
+ * 良い) -- eligiblePlayerId自身が前回と変わった時だけ(別の人間に替わった、または一旦nullを経由して
+ * 再び同じ人間の番に戻ってきた時)再計算する。navSuggestionPlayerId自身のdocも参照。 */
 function updateNavSuggestionIfNeeded(state, eligiblePlayerId) {
   if (!navModeEnabled || !eligiblePlayerId) {
     navSuggestedMove = null;
     navSuggestedAcquireFaceId = null;
-    navSuggestionSignature = null;
+    navSuggestionPlayerId = null;
     return;
   }
-  const signature = navSignatureFor(state, eligiblePlayerId);
-  if (signature === navSuggestionSignature) return; // nothing relevant changed -- keep the cached suggestion
-  navSuggestionSignature = signature;
+  if (eligiblePlayerId === navSuggestionPlayerId) return; // same human's same turn -- keep the cached suggestion
+  navSuggestionPlayerId = eligiblePlayerId;
   navSuggestedMove = aiPlayerFor(eligiblePlayerId).selectMove(state, eligiblePlayerId, { hasPlacedDieThisTurn: turnActionTaken });
   navSuggestedAcquireFaceId = null;
   if (navSuggestedMove && navSuggestedMove.buildCandidateIndex !== undefined && navSuggestedMove.buildCandidateIndex !== null) {
@@ -1194,12 +1183,16 @@ let aiPreHighlightMove = null;
 // その手がBUILD/UPGRADE候補を伴う場合(move.buildCandidateIndexがある場合)、実際に獲得/LVアップされる
 // カードのfaceId -- move-generator.js自身はこれを静的に持たない(board.placeDice等が実際に配置して初めて
 // pendingBuild.candidatesが決まる)ため、updateNavSuggestionIfNeededが使い捨てのcloneに対して実際に
-// applyInPlaceした結果から読み取る。navSuggestionSignature: 再計算が必要かどうかの安価な判定用キャッシュ
-// キー(毎回のrender()でLV3の思考をフルに回すと重いため、関係する状態が実際に変わった時だけ再計算する)。
+// applyInPlaceした結果から読み取る。navSuggestionPlayerId: 直前に計算した時のeligiblePlayerId -- 毎回の
+// render()でLV3の思考をフルに回すと重いため(2026-10-19, per user report: "ナビ機能重いです")、同じ人間の
+// 同じターンが続いている間は(フリーアクション/TAPで資源やダイスが変わっても)再計算しない。ターンの主体
+// 自体が変わった時(次の人間の番になった、または一度AIに移ってから再び自分の番に戻ってきた等)だけ
+// 再計算する、という割り切った判定 -- ターン内で状況が変わって最善手がずれても、次にこの人間の番が
+// 来るまで更新されない。
 let navModeEnabled = false;
 let navSuggestedMove = null;
 let navSuggestedAcquireFaceId = null;
-let navSuggestionSignature = null;
+let navSuggestionPlayerId = null;
 // {dieId, dicePlayerId, slotKeys, cardKeys, resourceKeys, feeMapIds} | null -- リプレイの変化ハイライト
 // (2026-09-09, per user request, revised same day after seeing the first version in action: "進を押して
 // 変わった個所が次のボタン（進むなど）を押すまで光るようにしてほしい 例 獲得したカード／使用料をもらった
@@ -14784,7 +14777,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // -- see navModeEnabled/updateNavSuggestionIfNeeded's own doc.
   document.getElementById('nav-toggle-button').addEventListener('click', () => {
     navModeEnabled = !navModeEnabled;
-    navSuggestionSignature = null; // force a fresh computation (or a fresh clear) on the next render
+    navSuggestionPlayerId = null; // force a fresh computation (or a fresh clear) on the next render
     render(STATE);
   });
   document.getElementById('round-pass-confirm-no').addEventListener('click', () => {
