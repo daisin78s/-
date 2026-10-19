@@ -83,6 +83,10 @@ function bareTapKind(index, faceId) {
   if (first.type === 'SET_DICE_ANY') return { kind: 'SET_DICE_ANY' };
   if (first.type === 'SET_DIE_VALUE') return { kind: 'SET_DIE_VALUE', choices: first.choices };
   if (first.type === 'CHANGE_DIE_VALUE') return { kind: 'CHANGE_DIE_VALUE', choices: first.choices };
+  // SET_WILDCARD(SELF,THIS_TURN) (B001B, 2026-10-19): needs a die choice same as SET_DIE_VALUE/
+  // CHANGE_DIE_VALUE just above, but no value/delta dimension at all -- its own #bareTapMoves branch
+  // handles it separately rather than reusing the `choices`-iterating one those share.
+  if (first.type === 'SET_WILDCARD') return { kind: 'SET_WILDCARD' };
   // MONUMENT_CHANGE_DIE_VALUE(SELF+2) (2026-08-24, JOB007/宮廷人's revised TAP) -- same die-choice
   // requirement as CHANGE_DIE_VALUE, but the delta is a single fixed number baked in at DSL-lowering
   // time (cmd.delta), never a player-picked one of several choices, so no `choices` value here.
@@ -205,10 +209,12 @@ class MoveGenerator {
     const moves = [];
     const unplacedDice = player.dice.filter((d) => d.placedMapId === null && !d.passed);
     const diceWithAPlacement = new Set();
-    // JOB003/道化 (2026-08-19): a wildcard-owning player never uses placeDice's own slotIndex-based path
-    // -- see #wildcardPlaceDieMoves' own doc.
-    const dieIsWildcard = board.hasWildcardDice(state, index, playerId);
     for (const die of unplacedDice) {
+      // JOB003/道化 (2026-08-19) or B001B's SET_WILDCARD (2026-10-19, per-die): a wildcard die never uses
+      // placeDice's own slotIndex-based path -- see #wildcardPlaceDieMoves' own doc. Checked per-die
+      // (not hoisted above the loop) so a B001B-flagged die among otherwise-normal dice only diverts
+      // itself, not every other die this same player still places normally.
+      const dieIsWildcard = board.isDieWildcard(state, index, playerId, die);
       for (const mapId of Object.keys(state.maps)) {
         if (this.#isMapIdAvoided(state, mapId)) continue;
         if (dieIsWildcard) {
@@ -311,11 +317,13 @@ class MoveGenerator {
    *
    * A 道化 (JOB003, hasWildcardDice) player can never use this path at all (see board.placeDiceGroup's
    * own WILDCARD_GROUP_NOT_ALLOWED refusal), so this returns early for them rather than wasting dry-run
-   * clones that would always fail. */
+   * clones that would always fail. A B001B-flagged die (SET_WILDCARD, per-die, 2026-10-19) gets the same
+   * refusal but only for itself -- excluded from unplacedDice below rather than bailing the whole player,
+   * so their other, still-normal dice can still group-place together. */
   #placeDiceGroupMoves(state, index, playerId, player) {
     const moves = [];
     if (board.hasWildcardDice(state, index, playerId)) return moves;
-    const unplacedDice = player.dice.filter((d) => d.placedMapId === null && !d.passed);
+    const unplacedDice = player.dice.filter((d) => d.placedMapId === null && !d.passed && !d.isWildcardThisTurn);
     for (let i = 0; i < unplacedDice.length; i++) {
       for (let j = i + 1; j < unplacedDice.length; j++) {
         const dieA = unplacedDice[i];
@@ -462,6 +470,21 @@ class MoveGenerator {
           if (result.success && !(isBz && !this.#hasAffordableBuildOutlet(clone, index, playerId, context))) {
             moves.push({ type: 'BARE_TAP', playerId, physicalId, skipDieChange: true });
           }
+        }
+      } else if (bareTap.kind === 'SET_WILDCARD') {
+        // B001B's SET_WILDCARD(SELF,THIS_TURN) (2026-10-19): just a die choice, no value dimension at all
+        // (unlike SET_DICE_ANY/SET_DIE_VALUE/CHANGE_DIE_VALUE just below, which all iterate bareTap.choices
+        // -- bareTap.choices is undefined here, so falling through to that shared branch would throw).
+        // Offered for every unplaced die unconditionally rather than trying to reuse #dieReachableOutcomes'
+        // "only if it's a genuinely new outcome" filter (that helper assumes board.placeDice, which a
+        // wildcarded die never goes through -- see the hasWildcardDice branch's own doc just below): making
+        // a die wildcard always meaningfully changes what it can reach, so there's no no-op case to skip.
+        for (const die of unplacedDice) {
+          const tapContext = { playerId, chosenDieId: die.id };
+          const clone = cloneState(state);
+          const result = board.useBareTapAbility(clone, index, tapContext, physicalId);
+          if (!result.success) continue;
+          moves.push({ type: 'BARE_TAP', playerId, physicalId, chosenDieId: die.id });
         }
       } else if (board.hasWildcardDice(state, index, playerId)) {
         // 道化(JOB003)'s own ☆ dice ignore VALUE_MISMATCH entirely and their buildValue is category-fixed
@@ -783,7 +806,11 @@ class MoveGenerator {
     const reservedK = player.pendingFee ? player.pendingFee.amount : 0;
     if (kCost > 0 && (player.resources.K || 0) - kCost < reservedK) return null;
     const beforeColorCount = player.dice.filter((d) => d.kind === 'COLOR').length;
-    const unplacedDice = player.dice.filter((d) => d.placedMapId === null && !d.passed);
+    // Excludes a B001B-flagged die too (per-die SET_WILDCARD, 2026-10-19) -- same reasoning as the
+    // player-wide hasWildcardDice bail just above, just scoped to this one die instead of the whole
+    // player (board.placeDice below doesn't apply to it; board.placeWildcardDie would, but that's not
+    // this heuristic's concern -- see this function's own top doc).
+    const unplacedDice = player.dice.filter((d) => d.placedMapId === null && !d.passed && !d.isWildcardThisTurn);
     const areaRow = getAreaRow(index, state.maps.MAP007.currentAreaId);
     const slotCount = board.getSlotRequirements(areaRow).length;
     for (const die of unplacedDice) {
@@ -826,7 +853,8 @@ class MoveGenerator {
     if (!ownsControl) return null;
     const kNeeded = this.#trainingGroundKCost(index, state);
     if (kNeeded === 0 || (player.resources.K || 0) >= kNeeded) return null;
-    const unplacedDice = player.dice.filter((d) => d.placedMapId === null && !d.passed);
+    // Excludes a B001B-flagged die too -- same reasoning as forcedTrainingGroundMove's own matching doc.
+    const unplacedDice = player.dice.filter((d) => d.placedMapId === null && !d.passed && !d.isWildcardThisTurn);
     if (unplacedDice.length === 0) return null;
     if (unplacedDice.length >= 2) {
       if (context.hasPlacedDieThisTurn) return null;

@@ -4023,6 +4023,22 @@ function buildEmblemStepVpModifierIcon(actionText) {
   return stack;
 }
 
+/** SET_WILDCARD(SELF,THIS_TURN): B001B's TAP (2026-10-19) -- turns one of this player's own dice into a
+ * ☆ wildcard die, same engine mechanic as JOB003/道化's WILDCARD_DICE() PASSIVE (see that icon's own
+ * entry in ACTION_ICON_BUILDERS) but scoped to just one die rather than all of them, so the label says
+ * "ダイス1個" rather than 道化's "オールマイティ". Matches at the start since it's followed by
+ * ;GRANT_PLACE_ANYWHERE(...), which isn't shown as its own icon (same convention as buildSetDieValueIcon
+ * just below). */
+function buildSetWildcardIcon(actionText) {
+  if (!/^SET_WILDCARD\(SELF,THIS_TURN\)/.test(actionText || '')) return null;
+  const star = actionEmoji('☆');
+  star.classList.add('action-emoji--large');
+  const stack = el('div', 'action-icons-stack');
+  stack.appendChild(actionRow([star, actionSuffix('ダイス')]));
+  stack.appendChild(actionRow([actionSuffix('1個')]));
+  return stack;
+}
+
 /** SET_DIE_VALUE(SELFx|y): player picks one of two fixed values -- shown as the two numbers, no arrow
  * (confirmed 2026-07-29). Matches at the start since it's usually followed by ;GRANT_PLACE_ANYWHERE(...),
  * which isn't shown as an icon. */
@@ -4429,6 +4445,8 @@ function buildActionIcons(actionText) {
   if (onBuildAddResourceIcon) return onBuildAddResourceIcon;
   const modifyConvertValueIcon = buildModifyConvertValueIcon(actionText);
   if (modifyConvertValueIcon) return modifyConvertValueIcon;
+  const setWildcardIcon = buildSetWildcardIcon(actionText);
+  if (setWildcardIcon) return setWildcardIcon;
   const setDieValueIcon = buildSetDieValueIcon(actionText);
   if (setDieValueIcon) return setDieValueIcon;
   const changeDieValueIcon = buildChangeDieValueIcon(actionText);
@@ -5979,10 +5997,14 @@ function renderBoard(state, next) {
   const highlightOwner = selectedDieIds.length > 0
     ? state.players.find((p) => p.dice.some((d) => d.id === selectedDieIds[0]))
     : null;
-  // JOB003/道化 (2026-08-19): a single selected ☆ die never uses the per-slot preview loop below --
-  // board.placeWildcardDie auto-assigns its own slot, so there's nothing for the player to click among
-  // (see attemptPlaceSelectedWildcardDie's own doc for the whole-tile click wiring this drives).
-  const highlightOwnerIsWildcard = highlightOwner ? boardMod.hasWildcardDice(state, INDEX, highlightOwner.id) : false;
+  // JOB003/道化 (2026-08-19) or B001B/SET_WILDCARD (2026-10-19, per-die): a single selected ☆ die never
+  // uses the per-slot preview loop below -- board.placeWildcardDie auto-assigns its own slot, so there's
+  // nothing for the player to click among (see attemptPlaceSelectedWildcardDie's own doc for the
+  // whole-tile click wiring this drives). Checked per-die (selectedDieIds[0] itself, not just the owning
+  // player) so a lone B001B-flagged die routes here even for a non-道化 owner.
+  const highlightOwnerIsWildcard = highlightOwner
+    ? boardMod.isDieWildcard(state, INDEX, highlightOwner.id, highlightOwner.dice.find((d) => d.id === selectedDieIds[0]))
+    : false;
 
   // Two independent rows (see .board-row in style.css) so the castle tile can be wider than the
   // other bottom-row tiles without pushing anything into an orphan third row.
@@ -7188,7 +7210,10 @@ function renderTapChoiceModal() {
   const hasSingleFixedValue = !!bareTap.choices && bareTap.choices.length === 1;
   const valuesEl = document.getElementById('tap-choice-values');
   valuesEl.innerHTML = '';
-  if (bareTap.kind !== 'MONUMENT_CHANGE_DIE_VALUE' && !hasSingleFixedValue) {
+  // SET_WILDCARD (B001B, 2026-10-19): no value dimension at all (unlike SET_DIE_VALUE/CHANGE_DIE_VALUE,
+  // which always have bareTap.choices) -- excluded here the same way MONUMENT_CHANGE_DIE_VALUE is, and
+  // below in needsValue too, or valueOptions would be undefined and the loop below would throw.
+  if (bareTap.kind !== 'MONUMENT_CHANGE_DIE_VALUE' && bareTap.kind !== 'SET_WILDCARD' && !hasSingleFixedValue) {
     const valueOptions = bareTap.kind === 'SET_DICE_ANY' ? [1, 2, 3, 4, 5, 6] : bareTap.choices;
     for (const option of valueOptions) {
       const label = bareTap.kind === 'CHANGE_DIE_VALUE' ? (option > 0 ? `+${option}` : `${option}`) : `${option}`;
@@ -7201,7 +7226,7 @@ function renderTapChoiceModal() {
   }
 
   const hasTarget = dieId !== null || cardPhysicalId !== null || !!skip;
-  const needsValue = bareTap.kind !== 'MONUMENT_CHANGE_DIE_VALUE' && !hasSingleFixedValue;
+  const needsValue = bareTap.kind !== 'MONUMENT_CHANGE_DIE_VALUE' && bareTap.kind !== 'SET_WILDCARD' && !hasSingleFixedValue;
   document.getElementById('tap-choice-confirm').disabled = !hasTarget || (needsValue && value === null);
 }
 
@@ -7435,7 +7460,10 @@ function renderPlayers(state, next) {
     for (const die of player.dice) {
       if (die.placedMapId) continue; // dice on the board are shown on the board, not in-hand
       const rowEl = die.kind === 'WHITE' ? whiteDiceEl : colorDiceEl;
-      const dieNode = renderDie({ ...die, color: player.color, wildcard: playerIsWildcard });
+      // Per-die (2026-10-19, B001B/SET_WILDCARD): playerIsWildcard (JOB003) already covers every die
+      // uniformly, but a B001B-flagged die is wildcard on its own even for a non-道化 player.
+      const dieWildcard = boardMod.isDieWildcard(state, INDEX, player.id, die);
+      const dieNode = renderDie({ ...die, color: player.color, wildcard: dieWildcard });
       // Passed (2026-08-03, see board.passDie) -- stays visible in hand so it's clear where it went,
       // but not selectable again until next round's reset.
       if (die.passed) dieNode.classList.add('die--passed');
@@ -7498,9 +7526,14 @@ function renderPlayers(state, next) {
         // hasQualifyingProperSubset's own doc.
         dieNode.addEventListener('click', () => {
           const idx = selectedDieIds.indexOf(die.id);
+          // 2026-10-19 (B001B/SET_WILDCARD, per-die): also replaces when some ALREADY-selected die is
+          // wildcard -- playerIsWildcard (JOB003) already means every die is, but a lone B001B-flagged die
+          // selected first needs this checked explicitly per-die too.
+          const anySelectedIsWildcard = playerIsWildcard
+            || selectedDieIds.some((id) => player.dice.find((d) => d.id === id).isWildcardThisTurn);
           if (idx !== -1) {
             selectedDieIds.splice(idx, 1);
-          } else if (selectedDieIds.length === 0 || playerIsWildcard) {
+          } else if (selectedDieIds.length === 0 || dieWildcard || anySelectedIsWildcard) {
             // ☆ dice are solo-only (2026-08-20, per user request: "道化の☆ダイスは1個でしか使えない
             // （ダイス目7以上は獲得できない）" -- board.placeDiceGroup now refuses outright for a
             // wildcard-owning player, see that function's own doc). Clicking a different die while one is
@@ -7508,8 +7541,9 @@ function renderPlayers(state, next) {
             // player build toward a 2-die group placement that would only fail at commit time.
             selectedDieIds = [die.id];
           } else {
-            // Never reached for a wildcard player (the branch above always replaces instead, so
-            // selectedDieIds can never exceed length 1 for them) -- real dice values only.
+            // Never reached when either die involved is wildcard (a branch above always replaces
+            // instead, so selectedDieIds can never mix a wildcard die with another) -- real dice values
+            // only.
             const prospectiveValues = [...selectedDieIds, die.id].map((id) => player.dice.find((d) => d.id === id).value);
             if (!hasQualifyingProperSubset(prospectiveValues, MAX_MONUMENT_DICE_THRESHOLD)) selectedDieIds.push(die.id);
           }
@@ -7922,6 +7956,10 @@ function bareTapKind(faceId) {
   if (first.type === 'SET_DICE_ANY') return { kind: 'SET_DICE_ANY' };
   if (first.type === 'SET_DIE_VALUE') return { kind: 'SET_DIE_VALUE', choices: first.choices };
   if (first.type === 'CHANGE_DIE_VALUE') return { kind: 'CHANGE_DIE_VALUE', choices: first.choices };
+  // SET_WILDCARD(SELF,THIS_TURN) (B001B, 2026-10-19): needs the same die-picker modal as SET_DIE_VALUE/
+  // CHANGE_DIE_VALUE just above, but no value picker at all -- see this file's own TAP_KINDS/
+  // renderTapChoiceModal doc for how that distinction is actually rendered.
+  if (first.type === 'SET_WILDCARD') return { kind: 'SET_WILDCARD' };
   // MONUMENT_CHANGE_DIE_VALUE(SELF+2) (2026-08-24, JOB007/宮廷人's revised TAP) -- same die-choice
   // modal as CHANGE_DIE_VALUE, but the delta is a single fixed number baked in at DSL-lowering time
   // (cmd.delta), never a player-picked one of several choices, so renderTapChoiceModal skips the value
@@ -14659,7 +14697,7 @@ document.addEventListener('DOMContentLoaded', () => {
     else if (cardPhysicalId !== null) context.chosenCardPhysicalId = cardPhysicalId;
     else context.chosenDieId = dieId;
     if (bareTap.kind === 'CHANGE_DIE_VALUE') context.chosenDelta = value;
-    else if (bareTap.kind !== 'MONUMENT_CHANGE_DIE_VALUE') context.chosenValue = value;
+    else if (bareTap.kind !== 'MONUMENT_CHANGE_DIE_VALUE' && bareTap.kind !== 'SET_WILDCARD') context.chosenValue = value;
     // Pushed onto actionCheckpoints (2026-08-30, see attachTapToggle's own matching doc) only once this
     // actually succeeds -- the die/card+value picker above this button never itself mutates STATE, so this
     // confirm click is the real commit moment for this bareTap kind.

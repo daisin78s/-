@@ -1458,6 +1458,17 @@ function hasWildcardDice(state, index, playerId) {
   return executor.getPassiveRules(state, index, playerId, 'WILDCARD_DICE').length > 0;
 }
 
+/** True if `die` specifically should get the ☆ wildcard treatment -- either because playerId has
+ * hasWildcardDice (JOB003/道化, every die) or because this one die carries SET_WILDCARD(SELF,THIS_TURN)
+ * (B001B, 2026-10-19, just this die). Callers that loop per-die (move-generator.js/main.js's own
+ * placement routing) should use this instead of hasWildcardDice directly, so a B001B-flagged die among a
+ * player's otherwise-normal dice is routed to placeWildcardDie while the rest keep using placeDice/
+ * placeDiceGroup as usual -- unlike hasWildcardDice, which is correct exactly as a whole-player gate (no
+ * caller needs "is ANY of my dice wildcard" as a player-wide fact on its own). */
+function isDieWildcard(state, index, playerId, die) {
+  return hasWildcardDice(state, index, playerId) || die.isWildcardThisTurn;
+}
+
 /** True if playerId currently has one of their own COLOR dice actually sitting in one of map's slots
  * (2026-08-16, bug fix per user report: "CON憤怒 現在AREAがLVUPしても前の情報が残りダイスが置けません" --
  * once the AREA LVUPs, the previously-placed die there should no longer block a new one). Deliberately
@@ -2054,6 +2065,7 @@ module.exports = {
   hasAnyUpgradeEligibleCard,
   isColorDieReuseBlocked,
   hasWildcardDice,
+  isDieWildcard,
   hasPioneerAbility,
   isMapEmptyOfDice,
   isCandidateAffordable,
