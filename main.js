@@ -2765,7 +2765,7 @@ const CARD_LIST_NAV = [
   { key: 'job', label: 'ジョブ一覧' },
   { key: 'initialResource', label: '初期資源一覧' },
   { key: 'A', label: '領地カード一覧' },
-  { key: 'B', label: '天運カード一覧' },
+  { key: 'B', label: '学問カード一覧' },
   { key: 'C', label: '人材カード一覧' },
   { key: 'monument', label: 'モニュメントカード一覧' },
   { key: 'qst', label: 'クエスト一覧' },
@@ -10280,7 +10280,7 @@ const TUTORIAL_STEPS = [
   {
     id: 'castletown_fortune_cards_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: '信心青〇は天運カードを獲得するのに使います\n天運カードはダイスなしでカードを獲得できるようになったり\nダイス目を変更したりすることができます',
+    body: '信心青〇は学問カードを獲得するのに使います\n学問カードはダイスなしでカードを獲得できるようになったり\nダイス目を変更したりすることができます',
     nextLabel: '次へ',
   },
   // 同上、「ギルド」版。castletown_fortune_cards_hintが閉じられた瞬間に、大聖堂への配置を取り消して同じダイスを

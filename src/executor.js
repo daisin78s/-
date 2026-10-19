@@ -882,19 +882,25 @@ function runUntap(state, context, cmd) {
   return { success: true };
 }
 
+// The "兆し系" card family UNTAP_ALL(SELF) excludes just below -- originally 始まりの兆し/革命の兆し/
+// 移ろいの兆し/終わりの兆し (B004/B005/B006/B202). Switched from a NAME.includes('兆し') match to this
+// fixed physical-id list (2026-10-19) after the Roman/thematic renaming pass renamed every one of these
+// 4 cards away from containing "兆し" at all (B004→交渉術, B005→研究, B006→土木技術, B202→測量術),
+// silently making that match stop excluding anything -- physical ids are immune to a flavor-text rename
+// the way NAME never was, see this file's own git history for the exact cards this broke.
+const SIGN_FAMILY_PHYSICAL_IDS = new Set(['B004', 'B005', 'B006', 'B202']);
+
 /** UNTAP_ALL(SELF) (2026-08-28, per user request: "王女 聖女のUNTAP_ALL(SELF) 兆しカード以外に設定お願
- * いします") -- excludes 兆し-named cards (始まりの兆し/革命の兆し/移ろいの兆し/終わりの兆し, matched by
- * NAME rather than a hardcoded physical-id list, same resilience-to-reorg reasoning as
- * untapChoiceWeight's own doc), matching what 王女LV1/LV2 and 聖女LV2's own INST text has always claimed
- * ("カードをすべてアンタップする\n兆しカード以外") but this command never actually enforced until now.
- * Every current UNTAP_ALL usage wants this exclusion (confirmed via a full-data grep, 2026-08-28) --
- * baked in directly rather than a new DSL parameter, since there is no card that wants the un-excluded
- * behavior to fall back to. */
+ * いします") -- excludes the 兆し系 card family above, matching what 王女LV1/LV2 and 聖女LV2's own INST
+ * text has always claimed ("カードをすべてアンタップする\n兆しカード以外") but this command never actually
+ * enforced until now. Every current UNTAP_ALL usage wants this exclusion (confirmed via a full-data grep,
+ * 2026-08-28) -- baked in directly rather than a new DSL parameter, since there is no card that wants the
+ * un-excluded behavior to fall back to. */
 function runUntapAll(state, index, context, cmd) {
   for (const physicalId of Object.keys(state.cards)) {
     const cardState = state.cards[physicalId];
     if (cardState.ownerId !== context.playerId) continue;
-    if (getCardRow(index, cardState.currentFaceId).NAME.includes('兆し')) continue;
+    if (SIGN_FAMILY_PHYSICAL_IDS.has(physicalId)) continue;
     cardState.tapped = false;
   }
   return { success: true };
@@ -1207,6 +1213,33 @@ function runGrantPlaceAnywhere(state, context, cmd) {
   return { success: true };
 }
 
+/** SET_WILDCARD(SELF,THIS_TURN) or SET_WILDCARD(THIS_DICE,THIS_TURN) (B001B's TAP, 2026-10-19) -- grants
+ * one die the same ☆ treatment JOB003/道化's hasWildcardDice gives every die a 道化 player owns (see
+ * board.placeWildcardDie/placeDiceGroup's own doc on what that actually means for placement). Unlike
+ * SET_DIE_VALUE there is no value to choose, so SELF only ever needs context.chosenDieId (which of the
+ * player's own unplaced dice), never a chosenValue -- this is the standalone, first-command form.
+ * THIS_DICE instead reuses context.lastTargetedDieId set by a PRECEDING SET_DIE_VALUE/CHANGE_DIE_VALUE/
+ * MONUMENT_CHANGE_DIE_VALUE in the same TAP field, same resolution as runGrantPlaceAnywhere just above
+ * (including that function's "no die to grant it to" no-op when the preceding command targeted a card's
+ * build value instead of a real die). */
+function runSetWildcard(state, context, cmd) {
+  if (cmd.target === 'SELF') {
+    if (context.chosenDieId === undefined) return { success: false, reason: 'CHOICE_REQUIRED', need: ['chosenDieId'] };
+    const die = requireOwnDie(state, context, context.chosenDieId);
+    die.isWildcardThisTurn = true;
+    context.lastTargetedDieId = die.id;
+    return { success: true };
+  }
+  if (cmd.target === 'THIS_DICE' && context.chosenCardPhysicalId !== undefined) {
+    return { success: true };
+  }
+  const dieId = cmd.target === 'THIS_DICE' ? context.lastTargetedDieId : undefined;
+  if (!dieId) return { success: false, reason: 'NO_TARGET_DICE' };
+  const die = requireOwnDie(state, context, dieId);
+  die.isWildcardThisTurn = true;
+  return { success: true };
+}
+
 /** BLOCK_BUILD(category,THIS_TURN) -- confirmed 2026-08-04: using JOB004's TAP (CHANGE(3K,2BZ)) blocks
  * that player from building a monument for the rest of the turn. Only THIS_TURN scope exists today;
  * board.getBuildCandidates is the single choke point that reads this list, so every BUILD(M) path
@@ -1375,6 +1408,7 @@ function runCommand(state, index, context, cmd) {
     case 'CHANGE_DIE_VALUE': return runChangeDieValue(state, index, context, cmd);
     case 'MONUMENT_CHANGE_DIE_VALUE': return runMonumentChangeDieValue(state, index, context, cmd);
     case 'GRANT_PLACE_ANYWHERE': return runGrantPlaceAnywhere(state, context, cmd);
+    case 'SET_WILDCARD': return runSetWildcard(state, context, cmd);
     case 'BLOCK_BUILD': return runBlockBuild(state, context, cmd);
     case 'MONUMENT_DICE_DISCOUNT': return runMonumentDiceDiscount(state, context, cmd);
     case 'IF':
@@ -1558,6 +1592,8 @@ function applyTurnEnd(state, index, playerId) {
   }
   // GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN)'s flag is turn-scoped.
   for (const die of player.dice) die.placeAnywhereThisTurn = false;
+  // SET_WILDCARD(THIS_DICE,THIS_TURN)'s flag is turn-scoped too (same lifetime as placeAnywhereThisTurn).
+  for (const die of player.dice) die.isWildcardThisTurn = false;
   // SET_DICE_ANY/SET_DIE_VALUE/CHANGE_DIE_VALUE's own value change is turn-scoped too (2026-08-24, per
   // user request: "すべてのダイス目変更はターン終了時に変えた目が元に戻る") -- but only for a die still
   // UNPLACED at this point: one that was actually placed this turn already has its own independent value

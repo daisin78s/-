@@ -88,6 +88,10 @@ function splitCardId(cardId) {
  *   showing its changed value, since the slot's own occupant record already holds an independent copy
  *   of it (see board.placeDice's own `value: die.value` snapshot), untouched by whatever this live Die
  *   object does afterward. null whenever valueChangedThisTurn is false.
+ * @property {boolean} isWildcardThisTurn - set by SET_WILDCARD(THIS_DICE,THIS_TURN) (B001B's TAP,
+ *   2026-10-19) -- grants THIS ONE die the same ☆ treatment JOB003/道化's hasWildcardDice gives every
+ *   die a 道化 player owns (ignores value-match entirely, must be placed solo via board.placeWildcardDie,
+ *   never board.placeDice/placeDiceGroup). Cleared at TURNEND, same lifetime as placeAnywhereThisTurn.
  */
 
 /**
@@ -96,7 +100,7 @@ function splitCardId(cardId) {
  * @returns {DieState}
  */
 function createDie(id, kind) {
-  return { id, kind, value: null, placedMapId: null, placeAnywhereThisTurn: false, passed: false, valueChangedThisTurn: false, valueBeforeChangeThisTurn: null };
+  return { id, kind, value: null, placedMapId: null, placeAnywhereThisTurn: false, passed: false, valueChangedThisTurn: false, valueBeforeChangeThisTurn: null, isWildcardThisTurn: false };
 }
 
 /**

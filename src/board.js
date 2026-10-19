@@ -837,6 +837,10 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   // repeated onto the same slot -- see that function's own doc and evictSlotOccupants -- so this refusal
   // is now more about keeping the atomic-2-dice-at-once shortcut closed than about a remaining loophole.)
   if (dieIsWildcard) return { success: false, reason: 'WILDCARD_GROUP_NOT_ALLOWED' };
+  // SET_WILDCARD(THIS_DICE,THIS_TURN) (B001B, 2026-10-19): same solo-only rule as JOB003's ☆ above, but
+  // per-die rather than per-player -- only the one flagged die must go solo via placeWildcardDie, so this
+  // refuses the group ONLY when it actually contains that die, unlike the player-wide check above.
+  if (dice.some((d) => d.isWildcardThisTurn)) return { success: false, reason: 'WILDCARD_GROUP_NOT_ALLOWED' };
   // Moved up from the commit section further down (2026-08-20) -- 開拓者's speculative grant below needs
   // this in scope earlier than the commit phase did.
   const actionContext = context;
@@ -1503,7 +1507,7 @@ function countOwnColorDiceInMapSlots(state, map, playerId) {
 function hasPioneerAbility(state, index, playerId) {
   const player = state.players.find((p) => p.id === playerId);
   if (!player.jobCardId) return false;
-  return getCardRow(index, player.jobCardId).NAME === '宣教師';
+  return getCardRow(index, player.jobCardId).NAME === '開拓者';
 }
 
 // 開拓者/JOB009 (2026-09-20 redesign, per user spec: die value no longer matters, every qualifying die

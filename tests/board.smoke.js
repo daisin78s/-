@@ -1057,7 +1057,7 @@ function giveJob002(state, playerId) {
 }
 
 // ---------------------------------------------------------------------------
-// B001A.TAP=SET_DIE_VALUE(SELF1|2);GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN) -- needs the caller to
+// B001A.TAP=SET_DIE_VALUE(SELF1);GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN) -- needs the caller to
 // supply context.chosenDieId/chosenValue *before* calling (the whole TAP field runs as one atomic
 // program, so there's no mid-run prompt). context.lastTargetedDieId propagates SET_DIE_VALUE's choice
 // of die into GRANT_PLACE_ANYWHERE(THIS_DICE,...) automatically (same context object throughout).
@@ -1075,13 +1075,13 @@ function giveJob002(state, playerId) {
   check('Without chosenDieId/chosenValue, fails with CHOICE_REQUIRED (nothing mutated)', missingChoice.success, false);
   check('...and the card stays untapped after a failed attempt', state.cards[inst.physicalId].tapped, false);
 
-  const result = board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: die.id, chosenValue: 2 }, inst.physicalId);
-  check('With a valid choice (2, one of SELF1|2), succeeds', result, { success: true });
+  const result = board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: die.id, chosenValue: 1 }, inst.physicalId);
+  check('With a valid choice (1, the only one of SELF1), succeeds', result, { success: true });
   // The earlier failed CHOICE_REQUIRED attempt rolled back via runProgram's snapshot-replace, which
   // stales any player/die reference grabbed before it (see tests/executor.smoke.js's getDieRef
   // comment for the same trap) -- re-fetch fresh from state rather than reusing `p1`/`die`.
   const dieAfter = player(state, 'P1').dice.find((d) => d.id === die.id);
-  check('...the die\'s value is now 2', dieAfter.value, 2);
+  check('...the die\'s value is now 1', dieAfter.value, 1);
   check('...and it\'s flagged placeAnywhereThisTurn (GRANT_PLACE_ANYWHERE(THIS_DICE,...) followed it)', dieAfter.placeAnywhereThisTurn, true);
   check('...the card is now tapped', state.cards[inst.physicalId].tapped, true);
 }
@@ -1872,25 +1872,25 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   b1Inst.ownerId = 'P1';
   state.cards[b1Inst.physicalId] = b1Inst;
   p1.ownedCardPhysicalIds.push(b1Inst.physicalId);
-  const d2 = giveDie(state, 'P1', 1);
-  const tapResult = board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: d2.id, chosenValue: 2 }, b1Inst.physicalId);
-  check('B001A (小さな導き) sets d2 to 2', tapResult, { success: true });
+  const d2 = giveDie(state, 'P1', 5);
+  const tapResult = board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: d2.id, chosenValue: 1 }, b1Inst.physicalId);
+  check('B001A (基礎学問) sets d2 to 1', tapResult, { success: true });
   check('...and grants d2 placeAnywhereThisTurn', d2.placeAnywhereThisTurn, true);
 
   const joined = board.placeDice(state, index, { playerId: 'P1' }, d2.id, board.CASTLE_MAP_ID, 0);
   check('The B001A-changed d2 CAN join (evict) P1\'s own occupied slot 0', joined.success, true);
-  check('...d2 is now the sole occupant', state.maps[board.CASTLE_MAP_ID].slots[0], [{ playerId: 'P1', dieId: d2.id, value: 2, seq: 2, countsForTurnOrder: false }]);
+  check('...d2 is now the sole occupant', state.maps[board.CASTLE_MAP_ID].slots[0], [{ playerId: 'P1', dieId: d2.id, value: 1, seq: 2, countsForTurnOrder: false }]);
   check('...d1 was evicted (no longer sitting in the slot)', state.maps[board.CASTLE_MAP_ID].slots[0].some((o) => o.dieId === d1.id), false);
 
   // Control: the exact same change, but targeting an EMPTY slot instead -- always worked, still does.
-  // chosenValue 3 (not 2) so this doesn't trip the ordinary "no duplicate value per AREA" rule against
-  // d2, already sitting on the castle with value 2.
-  const d3 = giveDie(state, 'P1', 1);
-  const b2Inst = createCardInstance('B001A');
+  // Uses B002A (fixed SELF6) rather than a 2nd B001A so this lands on 6, not 1 -- avoiding the ordinary
+  // "no duplicate value per AREA" rule against d2, already sitting on the castle with value 1.
+  const d3 = giveDie(state, 'P1', 5);
+  const b2Inst = createCardInstance('B002A');
   b2Inst.ownerId = 'P1';
   state.cards[b2Inst.physicalId] = b2Inst;
   p1.ownedCardPhysicalIds.push(b2Inst.physicalId);
-  board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: d3.id, chosenValue: 3 }, b2Inst.physicalId);
+  board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: d3.id, chosenValue: 6 }, b2Inst.physicalId);
   const emptySlotResult = board.placeDice(state, index, { playerId: 'P1' }, d3.id, board.CASTLE_MAP_ID, 1);
   check('...and placing a changed die into an EMPTY slot still succeeds normally', emptySlotResult.success, true);
 }
@@ -1909,8 +1909,8 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   b1Inst.ownerId = 'P1';
   state.cards[b1Inst.physicalId] = b1Inst;
   p1.ownedCardPhysicalIds.push(b1Inst.physicalId);
-  const d2 = giveDie(state, 'P1', 1);
-  board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: d2.id, chosenValue: 2 }, b1Inst.physicalId);
+  const d2 = giveDie(state, 'P1', 5);
+  board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: d2.id, chosenValue: 1 }, b1Inst.physicalId);
   const result = board.placeDice(state, index, { playerId: 'P1' }, d2.id, board.CASTLE_MAP_ID, 0);
   check('A B001A-changed die CAN still join a DIFFERENT player\'s occupied slot (only self-stacking is blocked)', result.success, true);
 }
@@ -1940,12 +1940,15 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   const d1 = giveDie(state, 'P1', 3);
   board.placeDice(state, index, { playerId: 'P1' }, d1.id, board.CASTLE_MAP_ID, 0);
 
-  const b1Inst = createCardInstance('B001A');
+  // Uses B002A (fixed SELF6), not B001A (fixed SELF1) -- the castle's own BUILD action has no
+  // buildable candidate at buildValue=1, which would fail this with NO_BUILDABLE_CARD for reasons
+  // unrelated to what this block actually tests (group-placement eviction mechanics).
+  const b1Inst = createCardInstance('B002A');
   b1Inst.ownerId = 'P1';
   state.cards[b1Inst.physicalId] = b1Inst;
   p1.ownedCardPhysicalIds.push(b1Inst.physicalId);
-  const d2 = giveDie(state, 'P1', 1);
-  board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: d2.id, chosenValue: 2 }, b1Inst.physicalId);
+  const d2 = giveDie(state, 'P1', 5);
+  board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: d2.id, chosenValue: 6 }, b1Inst.physicalId);
 
   const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d2.id], board.CASTLE_MAP_ID);
   check('placeDiceGroup succeeds, joining (evicting) d1\'s occupied slot 0', result.success, true);

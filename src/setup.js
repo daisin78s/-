@@ -494,7 +494,7 @@ function chooseJob(state, index, playerId, jobFaceId) {
   player.jobCardId = jobFaceId;
   const row = getCardRow(index, jobFaceId);
   const onceResult = runProgram(state, index, { playerId, sourcePhysicalId: inst.physicalId }, row.ONCE);
-  if (row.NAME === '革命家') grantRevolutionaryBonusIfEarned(state, index, playerId);
+  if (row.NAME === '研究者') grantRevolutionaryBonusIfEarned(state, index, playerId);
   return onceResult;
 }
 

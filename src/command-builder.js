@@ -309,6 +309,12 @@ function lowerCall(node) {
         target: identLikeName(node.args[0]),
         duration: identLikeName(node.args[1]),
       };
+    case 'SET_WILDCARD':
+      return {
+        type: 'SET_WILDCARD',
+        target: identLikeName(node.args[0]),
+        duration: identLikeName(node.args[1]),
+      };
     case 'BLOCK_BUILD':
       return {
         type: 'BLOCK_BUILD',

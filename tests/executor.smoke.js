@@ -540,25 +540,25 @@ console.log(`\n${passCount} passed, ${failCount} failed`);
 }
 {
   const state = freshState();
-  giveCard(state, 'B001A', 'P1'); // TAP=SET_DIE_VALUE(SELF1|2);GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN)
+  giveCard(state, 'B001A', 'P1'); // TAP=SET_DIE_VALUE(SELF1);GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN)
   const player = getPlayerRef(state, 'P1');
   const die = createDie('d1', 'COLOR');
-  die.value = 1;
+  die.value = 3;
   player.dice.push(die);
 
   const row = getCardRow(index, 'B001A');
   const badChoice = executor.runProgram(state, index, { playerId: 'P1', chosenDieId: 'd1', chosenValue: 5 }, row.TAP);
-  check('SET_DIE_VALUE(SELF1|2) rejects a value outside {1,2}', badChoice.reason, 'INVALID_CHOICE');
+  check('SET_DIE_VALUE(SELF1) rejects a value outside {1}', badChoice.reason, 'INVALID_CHOICE');
 
-  const context = { playerId: 'P1', chosenDieId: 'd1', chosenValue: 2 };
+  const context = { playerId: 'P1', chosenDieId: 'd1', chosenValue: 1 };
   const result = executor.runProgram(state, index, context, row.TAP);
-  check('SET_DIE_VALUE(SELF1|2) with chosenValue=2 succeeds', result.success, true);
-  check('...sets the die to 2', getDieRef(state, 'P1', 'd1').value, 2);
+  check('SET_DIE_VALUE(SELF1) with chosenValue=1 succeeds', result.success, true);
+  check('...sets the die to 1', getDieRef(state, 'P1', 'd1').value, 1);
   check('...and GRANT_PLACE_ANYWHERE(THIS_DICE,...) found it via context.lastTargetedDieId', getDieRef(state, 'P1', 'd1').placeAnywhereThisTurn, true);
 
   executor.applyTurnEnd(state, index, 'P1');
   check('placeAnywhereThisTurn is cleared at TURNEND (THIS_TURN scope)', getDieRef(state, 'P1', 'd1').placeAnywhereThisTurn, false);
-  check('The still-unplaced die\'s value reverts to 1 (its value before SET_DIE_VALUE) at TURNEND', getDieRef(state, 'P1', 'd1').value, 1);
+  check('The still-unplaced die\'s value reverts to 3 (its value before SET_DIE_VALUE) at TURNEND', getDieRef(state, 'P1', 'd1').value, 3);
   check('valueChangedThisTurn is cleared too', getDieRef(state, 'P1', 'd1').valueChangedThisTurn, false);
 }
 {
@@ -637,11 +637,11 @@ console.log(`\n${passCount} passed, ${failCount} failed`);
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
-  const target = giveCard(state, 'B004A', 'P1'); // 始まりの兆し, own fixed buildValue=1
-  const row = getCardRow(index, 'B001A'); // TAP=SET_DIE_VALUE(SELF1|2);GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN)
-  const result = executor.runProgram(state, index, { playerId: 'P1', chosenCardPhysicalId: target, chosenValue: 2 }, row.TAP);
+  const target = giveCard(state, 'B004A', 'P1'); // 交渉術, own fixed buildValue=1
+  const row = getCardRow(index, 'B001A'); // TAP=SET_DIE_VALUE(SELF1);GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN)
+  const result = executor.runProgram(state, index, { playerId: 'P1', chosenCardPhysicalId: target, chosenValue: 1 }, row.TAP);
   check('SET_DIE_VALUE targeting a card succeeds -- including the chained GRANT_PLACE_ANYWHERE(THIS_DICE,...), which no-ops instead of failing', result.success, true);
-  check('...the card\'s own buildValueOverride is now 2 (replaced, not added, same as a die)', state.cards[target].buildValueOverride, 2);
+  check('...the card\'s own buildValueOverride is now 1 (replaced, not added, same as a die)', state.cards[target].buildValueOverride, 1);
 }
 {
   const state = freshState();
