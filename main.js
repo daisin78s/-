@@ -8952,16 +8952,17 @@ const LIFE_STORY_RANK_PREFIX = { 1: 'ローマで一番', 2: 'ローマで二番
 // 地=ユピテル/天=ミネルヴァ/人=メルクリウス, per user spec.
 const EMBLEM_GOD_BY_TYPE = { 地: 'ユピテル', 天: 'ミネルヴァ', 人: 'メルクリウス' };
 
-// QST GOAL text -> life-story phrase, per user spec (2026-10-19). CARD_COUNT/EXTRA_D_PLUS_ABC_COUNT are
-// deliberately absent -- the user hasn't decided their wording yet ("言葉がない部分は後で考えます"), so
-// buildLifeStoryQstLines skips those QST cards entirely rather than showing a blank/placeholder line.
-// MAX_EMBLEM_COUNT isn't here either -- it needs its own branch (see buildLifeStoryQstLines) since the
-// god named depends on live per-type emblem totals, not a fixed phrase.
+// QST GOAL text -> life-story phrase, per user spec (2026-10-19) -- covers all 8 of the current data's
+// distinct QST GOAL metrics except MAX_EMBLEM_COUNT, which isn't here since it needs its own branch (see
+// buildLifeStoryQstLines) -- the god named depends on live per-type emblem totals, not a fixed phrase.
 const QST_METRIC_PHRASE_BY_GOAL = {
   AREA_COUNT: '領地を支配し',
   'AREA_COUNT(2)': '発展した領地を支配し',
+  EMBLEM_COUNT: '神の加護を受け',
   EMBLEM_SET_COUNT: '三神の加護を受け',
   'LEVEL_COUNT(2)': '研究にいそしみ',
+  CARD_COUNT: '多くの力を蓄え',
+  EXTRA_D_PLUS_ABC_COUNT: '勢力を築き',
 };
 
 /** Strips a card face's own tier suffix to its base flavor name -- "小麦畑の支配LV1"->"小麦畑" (A-tier
