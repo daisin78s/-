@@ -9160,6 +9160,7 @@ function renderGameEndOverlay(state) {
   if (isRealGameEnd) maybeRecordAchievements(state);
   document.getElementById('game-end-title').textContent = isRealGameEnd ? 'ゲーム終了 — 最終結果' : '現在の順位';
   document.getElementById('game-end-close-button').hidden = isRealGameEnd;
+  document.getElementById('game-end-restart-button').hidden = !isRealGameEnd;
   const list = document.getElementById('game-end-list');
   list.innerHTML = '';
   scoringMod.rankPlayers(state, INDEX).forEach((entry, i) => {
@@ -14705,6 +14706,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('game-end-close-button').addEventListener('click', closeLiveRankingOverlay);
+  document.getElementById('game-end-restart-button').addEventListener('click', () => location.reload());
 
   document.getElementById('game-end-replay-button').addEventListener('click', () => enterReplayMode());
   document.getElementById('replay-back').addEventListener('click', handleReplayBack);
