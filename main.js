@@ -10391,7 +10391,7 @@ const TUTORIAL_STEPS = [
   {
     id: 'training_ground_placement_intro',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: 'ダイスを獲得するには練兵場にダイスを置きます そうすれば赤〇青〇黄〇と引き換えに追加の色ダイスを獲得します そのダイスは即座に振り、このラウンドからすぐに使えます',
+    body: 'ダイスを獲得するには訓練場にダイスを置きます そうすれば赤〇青〇黄〇と引き換えに追加の色ダイスを獲得します そのダイスは即座に振り、このラウンドからすぐに使えます',
     noManualDismiss: true,
   },
   {
