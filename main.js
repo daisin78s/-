@@ -8930,6 +8930,141 @@ function renderPlayerCards(state, next) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// 人生の歩み (life story, 2026-10-19, per user request) -- shown once at real GAME_END, before
+// achievement-unlock popups. See PlayerState.lifeStoryLog's own doc (game-state.js) for how the raw
+// ACQUIRE/LEVELUP/DONATE entries are recorded, and board.resolveBuild/placeDice for where.
+// ---------------------------------------------------------------------------
+
+const LIFE_STAGE_LABEL_BY_ROUND = { 1: '若かりし頃より', 2: '青年期には', 3: '壮年期には', 4: '晩年には' };
+
+// 総督/貴族/皇女 (C001/C004/C301) -- can't be "hired" like an ordinary 人材 card, per user spec: "は雇えな
+// いので...と親交を深め" instead. Keyed by physicalId (no tier letter), matching entry.faceId with its
+// trailing A/B stripped.
+const LIFE_STORY_RELATIONSHIP_PHYSICAL_IDS = new Set(['C001', 'C004', 'C301']);
+
+// 1位だけ「ローマで一番」(「目」なし)、2〜4位は「ローマで二番目に」のように「目」が付く -- user's own
+// examples use both forms side by side ("ローマで一番領地を支配し" / "ローマで二番目に発展した領地を
+// 支配し"), not a uniform "N番目に" template.
+const LIFE_STORY_RANK_PREFIX = { 1: 'ローマで一番', 2: 'ローマで二番目に', 3: 'ローマで三番目に', 4: 'ローマで四番目に' };
+
+// MAX_EMBLEM_COUNT's QST line names whichever god matches the winner's own highest emblem type --
+// 地=ユピテル/天=ミネルヴァ/人=メルクリウス, per user spec.
+const EMBLEM_GOD_BY_TYPE = { 地: 'ユピテル', 天: 'ミネルヴァ', 人: 'メルクリウス' };
+
+// QST GOAL text -> life-story phrase, per user spec (2026-10-19). CARD_COUNT/EXTRA_D_PLUS_ABC_COUNT are
+// deliberately absent -- the user hasn't decided their wording yet ("言葉がない部分は後で考えます"), so
+// buildLifeStoryQstLines skips those QST cards entirely rather than showing a blank/placeholder line.
+// MAX_EMBLEM_COUNT isn't here either -- it needs its own branch (see buildLifeStoryQstLines) since the
+// god named depends on live per-type emblem totals, not a fixed phrase.
+const QST_METRIC_PHRASE_BY_GOAL = {
+  AREA_COUNT: '領地を支配し',
+  'AREA_COUNT(2)': '発展した領地を支配し',
+  EMBLEM_SET_COUNT: '三神の加護を受け',
+  'LEVEL_COUNT(2)': '研究にいそしみ',
+};
+
+/** Strips a card face's own tier suffix to its base flavor name -- "小麦畑の支配LV1"->"小麦畑" (A-tier
+ * area-ownership cards), "基礎学問LV2"->"基礎学問" (B/C-tier). Monuments (M-tier) have no suffix at all,
+ * so this is a harmless no-op for them; relies on every A/B/C NAME in the current data following one of
+ * these two literal patterns (confirmed, not derived from DICE/COST/etc). */
+function lifeStoryBaseName(faceId) {
+  const row = dataLoaderMod.getCardRow(INDEX, faceId);
+  const name = row.NAME || faceId;
+  return name.replace(/の支配LV[12]$/, '').replace(/LV[12]$/, '');
+}
+
+/** One lifeStoryLog entry -> its narrative phrase, per the user-authored verb table (2026-10-19, still
+ * growing -- see this file's own top-of-section comment). Returns null for a combination with no agreed
+ * phrase yet, so the caller skips the line instead of showing a blank one. */
+function lifeStoryPhrase(entry) {
+  if (entry.type === 'DONATE') return '民に食料を施し';
+  const name = lifeStoryBaseName(entry.faceId);
+  const sheet = entry.faceId[0];
+  const physicalId = entry.faceId.replace(/[AB]$/, '');
+  if (entry.type === 'ACQUIRE') {
+    if (sheet === 'A') return `${name}を支配し`;
+    if (sheet === 'B') return `${name}を学び`;
+    if (sheet === 'C') {
+      return LIFE_STORY_RELATIONSHIP_PHYSICAL_IDS.has(physicalId) ? `${name}と親交を深め` : `${name}を雇い`;
+    }
+    if (sheet === 'M') {
+      if (physicalId === 'M403') return `${name}の開催に尽力し`; // 晩餐会 -- an event, not a building
+      if (physicalId === 'M404') return `${name}に尽力し`; // 帝都建設 already contains "建設"
+      return `${name}の建築に尽力し`;
+    }
+    return null;
+  }
+  // LEVELUP -- M-tier monuments have no 2nd tier, so never reaches here for sheet==='M'.
+  if (sheet === 'A') return `${name}を発展させ`;
+  if (sheet === 'B') return `${name}を極め`;
+  if (sheet === 'C') return `${name}を支援し`;
+  return null;
+}
+
+/** The QST section of playerId's life story -- one line per revealed QST card they placed 1st-4th on,
+ * "ローマで{rank}番目に{action}". Order follows Object.keys(state.quests) (reveal order), not rank. */
+function buildLifeStoryQstLines(state, playerId) {
+  const lines = [];
+  for (const questFaceId of Object.keys(state.quests)) {
+    const row = dataLoaderMod.getQstRow(INDEX, questFaceId);
+    const ranked = qstMod.rankPlayersForQuest(state, INDEX, questFaceId);
+    const entry = ranked.find((r) => r.playerId === playerId);
+    if (!entry || entry.rank > 4) continue;
+    const rankPrefix = LIFE_STORY_RANK_PREFIX[entry.rank];
+    if (row.GOAL === 'MAX_EMBLEM_COUNT') {
+      const totals = executorMod.emblemTotalsForPlayer(state, INDEX, playerId);
+      const maxType = ['地', '天', '人'].reduce((best, t) => (totals[t] > totals[best] ? t : best), '地');
+      lines.push(`${rankPrefix}${EMBLEM_GOD_BY_TYPE[maxType]}の加護を受け`);
+      continue;
+    }
+    const phrase = QST_METRIC_PHRASE_BY_GOAL[row.GOAL];
+    if (phrase) lines.push(`${rankPrefix}${phrase}`);
+  }
+  return lines;
+}
+
+// Set once the player dismisses the life-story overlay this game (2026-10-19) -- gates
+// renderGameEndOverlay's own maybeRecordAchievements call, per user spec: shown "before achievement-
+// unlock popups". UI-scratch, like liveRankingOverlayOpen -- a fresh page load (the only way this app
+// ever starts a new game) resets it for free.
+let lifeStoryDismissed = false;
+
+/** Renders the life-story overlay (winner only, per user spec), hidden once dismissed or if GAME_END
+ * hasn't actually been reached yet (mid-game 🏆ランキング button never shows this, unlike
+ * renderGameEndOverlay's own live-preview reuse -- a life story only makes sense once the game is truly
+ * over). scoringMod.rankPlayers' own entry 0 is the winner, same convention renderGameEndOverlay uses. */
+function renderLifeStoryOverlay(state) {
+  const overlay = document.getElementById('life-story-overlay');
+  if (state.phase !== 'GAME_END' || lifeStoryDismissed) {
+    overlay.hidden = true;
+    return;
+  }
+  overlay.hidden = false;
+  const winnerId = scoringMod.rankPlayers(state, INDEX)[0].playerId;
+  const player = state.players.find((p) => p.id === winnerId);
+  const conFaceId = player.conPhysicalId && player.conFace ? `${player.conPhysicalId}${player.conFace}` : null;
+  document.getElementById('life-story-title').textContent = `${rankingConJobTitle(conFaceId, player.jobCardId)}の${player.name}`;
+
+  const body = document.getElementById('life-story-body');
+  body.innerHTML = '';
+  const byRound = { 1: [], 2: [], 3: [], 4: [] };
+  for (const entry of player.lifeStoryLog) {
+    const phrase = lifeStoryPhrase(entry);
+    if (phrase && byRound[entry.round]) byRound[entry.round].push(phrase);
+  }
+  for (const round of [1, 2, 3, 4]) {
+    if (byRound[round].length === 0) continue;
+    body.appendChild(el('div', 'life-story-stage', `${LIFE_STAGE_LABEL_BY_ROUND[round]}（${round}R）`));
+    for (const phrase of byRound[round]) body.appendChild(el('div', 'life-story-line', phrase));
+  }
+  const qstLines = buildLifeStoryQstLines(state, winnerId);
+  if (qstLines.length > 0) {
+    body.appendChild(el('div', 'life-story-stage', 'そして、ローマの歴史に名を残した'));
+    for (const line of qstLines) body.appendChild(el('div', 'life-story-line', line));
+  }
+}
+
 /** GAME_END screen (2026-07-31): state.phase becomes 'GAME_END' inside turn-flow's endRound once
  * round 4 ends (see advanceTurnIfPossible) -- board.js/executor.js keep working normally after that
  * (nothing gates on phase elsewhere), so this is purely an overlay on top of the final board state,
@@ -8946,6 +9081,13 @@ function renderPlayerCards(state, next) {
 function renderGameEndOverlay(state) {
   const overlay = document.getElementById('game-end-overlay');
   const isRealGameEnd = state.phase === 'GAME_END';
+  // 人生の歩み (2026-10-19, see renderLifeStoryOverlay's own doc): at real GAME_END, this whole overlay
+  // -- including the maybeRecordAchievements call just below, which is what actually triggers
+  // achievement-unlock popups -- waits until the life-story overlay has been shown and dismissed.
+  if (isRealGameEnd && !lifeStoryDismissed) {
+    overlay.hidden = true;
+    return;
+  }
   if (!isRealGameEnd && !liveRankingOverlayOpen) {
     overlay.hidden = true;
     return;
@@ -13511,6 +13653,7 @@ function render(state) {
   renderJob007TapPromptModal();
   renderPlayerRoleControl(state);
   renderAiPacingControl(state);
+  renderLifeStoryOverlay(state);
   renderGameEndOverlay(state);
   renderTutorialTurnOrderOverlay(state);
   renderTutorialOverlay(state);
@@ -14492,6 +14635,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // entry-banner-ranking-buttonと同じゲートを共有させるよう変更) -- もとの名前は
   // "entry-banner-...kickers only" だったが今はこちらも対象。
   document.getElementById('anytime-ranking-button').addEventListener('click', gatedEntryBannerHandler('ランキング', openRankingOverlay));
+  document.getElementById('life-story-close-button').addEventListener('click', () => {
+    lifeStoryDismissed = true;
+    render(STATE);
+  });
+
   document.getElementById('game-end-close-button').addEventListener('click', closeLiveRankingOverlay);
 
   document.getElementById('game-end-replay-button').addEventListener('click', () => enterReplayMode());

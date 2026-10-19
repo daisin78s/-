@@ -185,6 +185,18 @@ function createDie(id, kind) {
  *   consistent with the pre-existing penalty if it ever does). Never re-derived from the player's current
  *   dice count afterward -- see evaluator.js's own doc for why a live re-check defeats the card's entire
  *   purpose. Survives the A202A->A202B upgrade unchanged (same physical card, not a new acquisition).
+ * @property {{round: number, type: 'ACQUIRE'|'LEVELUP'|'DONATE', faceId: string}[]} lifeStoryLog -
+ *   chronological record of notable events for this player, for the game-end "人生の歩み" (life story)
+ *   narrative screen shown to the winner before achievement-unlock popups (2026-10-19, per user request).
+ *   ACQUIRE/LEVELUP: faceId is candidate.faceId / candidate.toFaceId (the face actually reached, same
+ *   convention every other build-candidate consumer already uses), appended once per successful
+ *   board.resolveBuild call (both resolveBuildNew and resolveUpgrade), covering every path a build can
+ *   come from (AREA action, bare TAP, QST reward) uniformly, same as that function's own existing role as
+ *   the single commit choke point. DONATE: 配給所(AREA010B/C)'s own CHANGE(...,VP,...) action, faceId is
+ *   the MAP id (not a card face) -- same event PlayerState.orphanageVpGained already tracks as a running
+ *   total, only via board.placeDice's solo path (see that field's own doc on why group/wildcard
+ *   placement was never covered either). Never read mid-game -- purely a presentation log, not consulted
+ *   by any rule.
  */
 
 /** Fixed palette, assigned in player order (player 1 = PINK, ...). Provisional -- see PlayerState.color. */
@@ -241,6 +253,7 @@ function createPlayer(id, name, color = null) {
     bardEmblemUnitsGranted: 0,
     orphanageVpGained: 0,
     trainingGroundDominationOk: null,
+    lifeStoryLog: [],
   };
 }
 

@@ -3301,6 +3301,19 @@ body.tutorial-mode .change-highlight {
   white-space: pre-line;
 }
 
+/* 人生の歩み (2026-10-19) -- see main.js's renderLifeStoryOverlay. */
+.life-story-stage {
+  margin-top: 14px;
+  font-weight: bold;
+  color: var(--accent);
+}
+.life-story-stage:first-child {
+  margin-top: 0;
+}
+.life-story-line {
+  margin-left: 8px;
+}
+
 /* BUILD/UPGRADE candidate selection (2026-07-30, real engine wiring pass 3) -- reuses the card-inst
    overlay/modal shell, but needs to be wide enough for a row of card-sized candidates rather than a
    narrow paragraph of text. */

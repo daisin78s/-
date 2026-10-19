@@ -538,6 +538,15 @@ function emblemTotalsByType(owned) {
   return totals;
 }
 
+/** emblemTotalsByType(ownedCardRows(...)), as one call -- convenience wrapper for callers outside this
+ * file that just want playerId's {天,地,人} totals without reaching into ownedCardRows themselves
+ * (2026-10-19, main.js's life-story MAX_EMBLEM_COUNT phrase: picks ユピテル/ミネルヴァ/メルクリウス by
+ * whichever of the 3 was actually the winner's own max, so it needs the raw per-type totals, not just
+ * the already-exported MAX_EMBLEM_COUNT number). */
+function emblemTotalsForPlayer(state, index, playerId) {
+  return emblemTotalsByType(ownedCardRows(state, index, playerId));
+}
+
 // ---------------------------------------------------------------------------
 // IF condition metrics
 // ---------------------------------------------------------------------------
@@ -1910,6 +1919,7 @@ module.exports = {
   hasPaymentChoiceAbility,
   colorConvertLastTurnAmount,
   ownedCardRows,
+  emblemTotalsForPlayer,
   tryFreeAction,
   collectUsageFee,
   resetFreeActionsForNewRound,

@@ -454,7 +454,14 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
 
   if (vpBeforeAreaAction !== null && actionResult.success) {
     const vpGained = (player.resources.VP || 0) - vpBeforeAreaAction;
-    if (vpGained > 0) player.orphanageVpGained += vpGained;
+    if (vpGained > 0) {
+      player.orphanageVpGained += vpGained;
+      // PlayerState.lifeStoryLog (2026-10-19): same donation event this stat already tracks, recorded as
+      // its own life-story entry too. mapId (not a card faceId) identifies it -- DONATE is the only
+      // lifeStoryLog type keyed by map rather than card, see renderLifeStory's own doc for how it's told
+      // apart from ACQUIRE/LEVELUP.
+      player.lifeStoryLog.push({ round: state.round, type: 'DONATE', faceId: mapId });
+    }
   }
 
   return { success: true, actionResult };
@@ -1939,9 +1946,19 @@ function resolveUpgrade(state, index, context, candidate) {
 
 /** Commits a candidate returned by getBuildCandidates(). */
 function resolveBuild(state, index, context, candidate) {
-  if (candidate.type === 'BUILD_NEW') return resolveBuildNew(state, index, context, candidate);
-  if (candidate.type === 'UPGRADE') return resolveUpgrade(state, index, context, candidate);
-  throw new executor.ExecutionError(`Unknown build candidate type: ${candidate.type}`);
+  let result;
+  if (candidate.type === 'BUILD_NEW') result = resolveBuildNew(state, index, context, candidate);
+  else if (candidate.type === 'UPGRADE') result = resolveUpgrade(state, index, context, candidate);
+  else throw new executor.ExecutionError(`Unknown build candidate type: ${candidate.type}`);
+  // PlayerState.lifeStoryLog (2026-10-19, see its own doc in game-state.js): recorded here rather than
+  // inside resolveBuildNew/resolveUpgrade separately, since this is the single point both already funnel
+  // through regardless of which path triggered the build (AREA action, bare TAP, QST reward).
+  if (result.success) {
+    const player = state.players.find((p) => p.id === context.playerId);
+    const faceId = candidate.type === 'BUILD_NEW' ? candidate.faceId : candidate.toFaceId;
+    player.lifeStoryLog.push({ round: state.round, type: candidate.type === 'BUILD_NEW' ? 'ACQUIRE' : 'LEVELUP', faceId });
+  }
+  return result;
 }
 
 // ---------------------------------------------------------------------------
