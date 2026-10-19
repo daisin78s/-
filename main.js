@@ -4992,7 +4992,7 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
       fillCardNoteContent(noteEl, facts.iconText);
       q('.shop-card__effect').appendChild(noteEl);
     }
-  } else if (options.showEffect && facts.name === '革命家') {
+  } else if (options.showEffect && facts.name === '研究者') {
     // JOB010/革命家 (2026-08-21, per user spec: "革命の兆しを / 獲得する" in larger, bolder text than the
     // other bespoke JOB notes below -- this ability has no DSL representation at all either (see setup.
     // grantRevolutionaryBonusIfEarned's own doc), same class of exception, but reusing plain .card-note
@@ -5002,7 +5002,7 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     const noteEl = el('div', 'card-note card-note--large');
     noteEl.appendChild(document.createTextNode('革命の兆しを\n獲得する'));
     q('.shop-card__effect').appendChild(noteEl);
-  } else if (options.showEffect && (facts.name === '宣教師' || facts.name === '吟遊詩人' || facts.name === '地主')) {
+  } else if (options.showEffect && (facts.name === '開拓者' || facts.name === '詩人' || facts.name === '地主')) {
     // Bespoke JOB card-notes (宣教師/JOB009, renamed from 開拓者 2026-09-20 alongside its ability redesign
     // -- fixed 1B per qualifying die now, no longer die-value-dependent, per user mockup: "無人AREAに色D /
     // ▽ / B"; 吟遊詩人/JOB008 and 地主/JOB011 2026-08-17, per user mockups: "エンブレム３個 / ▽ / Z　1VP"
@@ -5016,10 +5016,10 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     tall = true;
     const noteEl = el('div', 'card-note');
     const iconRow = el('span', 'job-note-icon-row');
-    if (facts.name === '宣教師') {
+    if (facts.name === '開拓者') {
       noteEl.appendChild(document.createTextNode('無人エリアに色D\n▽\n'));
       iconRow.appendChild(actionDot('B'));
-    } else if (facts.name === '吟遊詩人') {
+    } else if (facts.name === '詩人') {
       noteEl.appendChild(document.createTextNode('エンブレム３個\n▽\n'));
       iconRow.appendChild(actionDot('C'));
       iconRow.appendChild(actionCount('1VP'));
