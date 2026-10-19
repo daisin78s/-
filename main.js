@@ -5000,7 +5000,7 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     // class the other 3 bespoke notes use.
     tall = true;
     const noteEl = el('div', 'card-note card-note--large');
-    noteEl.appendChild(document.createTextNode('革命の兆しを\n獲得する'));
+    noteEl.appendChild(document.createTextNode('研究を\n獲得する'));
     q('.shop-card__effect').appendChild(noteEl);
   } else if (options.showEffect && (facts.name === '開拓者' || facts.name === '詩人' || facts.name === '地主')) {
     // Bespoke JOB card-notes (宣教師/JOB009, renamed from 開拓者 2026-09-20 alongside its ability redesign
@@ -10260,7 +10260,7 @@ const TUTORIAL_STEPS = [
     // 「今度は3を「城下町」に置いてみます」+次への自動実演に戻した(クリック操作はこの後の歓楽街
     // (kabukicho_placement_intro)に移った)。このステップが閉じられた瞬間に実際にダイスを城下町へ
     // 強制的に置く(dismissTutorialStep内、forcePlaceRightmostDieForTutorial's own doc)。
-    body: 'あなたのターンが回ってきました\n今度は🎲を「城下町」に置いてみます',
+    body: 'あなたのターンが回ってきました\n今度は🎲を「ローマ市街」に置いてみます',
     nextLabel: '次へ',
   },
   // 2026-09-27, per user request -- 意図した配置先(城下町/王宮/元老院)以外のスロットに誤って置いてしまった
@@ -10312,7 +10312,7 @@ const TUTORIAL_STEPS = [
   {
     id: 'castletown_alt_cathedral_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: '「城下町」に置く代わりに「大聖堂」に置けば\nあなたの持っている食料〇すべてが信心青〇に変換されます',
+    body: '「ローマ市街」に置く代わりに「図書館」に置けば\nあなたの持っている食料〇すべてが信心青〇に変換されます',
     nextLabel: '次へ',
   },
   {
@@ -10326,7 +10326,7 @@ const TUTORIAL_STEPS = [
   {
     id: 'castletown_alt_guild_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: '「ギルド」なら\nあなたの持っている食料〇すべてが金貨黄〇に変換されます',
+    body: '「市場」なら\nあなたの持っている食料〇すべてが金貨黄〇に変換されます',
     nextLabel: '次へ',
   },
   {
@@ -10342,7 +10342,7 @@ const TUTORIAL_STEPS = [
   {
     id: 'kabukicho_placement_intro',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: '今度はあなたが「歓楽街」にダイスを置いてください',
+    body: '今度はあなたが「酒場」にダイスを置いてください',
     noManualDismiss: true,
   },
   // 2026-09-29, per user request (Excelの新しい行T010・T011: "セリフと分岐はエクセル通りに") -- 歓楽街に置いた後の
@@ -10351,7 +10351,7 @@ const TUTORIAL_STEPS = [
   {
     id: 'kabukicho_result_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: '「歓楽街」にダイスが置かれると食料〇2が人脈Z〇3に変換されます\n人脈Z〇は権力赤〇、信心青〇、金貨黄〇のどれとしても使うことのできる万能資源です',
+    body: '「酒場」にダイスが置かれると食料〇2が人脈Z〇3に変換されます\n人脈Z〇は権力赤〇、信心青〇、金貨黄〇のどれとしても使うことのできる万能資源です',
     nextLabel: '次へ',
   },
   // T011: ボタンは出さず、あなたが(チュートリアル専用の)ターン終了ボタンを押すと次へ進む
@@ -10391,7 +10391,7 @@ const TUTORIAL_STEPS = [
   {
     id: 'training_ground_placement_intro',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: 'ダイスを獲得するには訓練場にダイスを置きます そうすれば赤〇青〇黄〇と引き換えに追加の色ダイスを獲得します そのダイスは即座に振り、このラウンドからすぐに使えます',
+    body: 'ダイスを獲得するには練兵場にダイスを置きます そうすれば赤〇青〇黄〇と引き換えに追加の色ダイスを獲得します そのダイスは即座に振り、このラウンドからすぐに使えます',
     noManualDismiss: true,
   },
   {
@@ -10479,7 +10479,7 @@ const TUTORIAL_STEPS = [
   {
     id: 'card_acquisition_placement_intro',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: 'ダイスを「王宮」か「元老院」に置いてください\nそうすると獲得可能なカードのリストが出てきます',
+    body: 'ダイスを「皇帝宮殿」か「元老院」に置いてください\nそうすると獲得可能なカードのリストが出てきます',
     noManualDismiss: true,
   },
   // 2026-09-29, per user request (Excel変更) -- 旧build_candidate_pick_hintを実装ID 'build_candidates_hint'に
@@ -10536,7 +10536,7 @@ const TUTORIAL_STEPS = [
   {
     id: 'build_candidate_a005a_levelup_howto_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: '自分のカードのレベルを上げたいときはハンマーアイコンのある「王宮」か「元老院」にダイスを置いて資源を払えばOKです\nこの時のダイス目はなんでもよく、払う資源は獲得資源と同じです',
+    body: '自分のカードのレベルを上げたいときはハンマーアイコンのある「皇帝宮殿」か「元老院」にダイスを置いて資源を払えばOKです\nこの時のダイス目はなんでもよく、払う資源は獲得資源と同じです',
     nextLabel: '次へ',
   },
   {
@@ -10548,7 +10548,7 @@ const TUTORIAL_STEPS = [
   {
     id: 'build_candidate_a001a_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: '城下町の支配ですね\nこのカードを獲得すると城下町のレベルが上がりダイスを置いたときの効果が強化されます',
+    body: 'ローマ市街の支配ですね\nこのカードを獲得するとローマ市街のレベルが上がりダイスを置いたときの効果が強化されます',
     nextLabel: '次へ',
   },
   // 2026-09-30, per user request (Excelの新しい行T039〜T041、城下町の支配を選んだ時だけの追加説明) --
@@ -10622,7 +10622,7 @@ const TUTORIAL_STEPS = [
   {
     id: 'build_candidate_b001a_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: '小さな導きですね\nこのカードは',
+    body: '基礎学問ですね\nこのカードは',
     nextLabel: '次へ',
   },
   // 2026-09-30, per user request (Excelの新しい行T047〜T049、小さな導しを選んだ時だけの追加説明) --
@@ -10674,7 +10674,7 @@ const TUTORIAL_STEPS = [
   {
     id: 'build_candidate_c002a_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: '修道士ですね\nこのカードは',
+    body: '学者ですね\nこのカードは',
     nextLabel: '次へ',
   },
   // 2026-09-30, per user request (Excelの新しい行T054〜T056、修道士を選んだ時だけの追加説明) -- 小さな導き/
@@ -10737,7 +10737,7 @@ const TUTORIAL_STEPS = [
   {
     id: 'castle_turn_order_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: '次のラウンドの手番はこの順番になります\n王宮の後ろのスロットに置いた順から先の手番になります',
+    body: '次のラウンドの手番はこの順番になります\n皇帝宮殿の後ろのスロットに置いた順から先の手番になります',
     nextLabel: '次へ',
   },
   // 2026-10-08 bug fix (per user report: "T062〜T066が出ない") -- Excelの実装ID列の並び順を確認したところ、
@@ -10898,7 +10898,7 @@ const TUTORIAL_STEPS = [
       const next = turnFlowMod.getNextTurn(state);
       return next.type === 'ONBOARDING_NEEDED' && next.playerId === 'P1';
     },
-    body: '今回はこの中で比較的使いやすい一般市民にしてみましょう\nカードをクリックすると拡大され選ぶことができます',
+    body: '今回はこの中で比較的使いやすいローマ市民にしてみましょう\nカードをクリックすると拡大され選ぶことができます',
     // 2026-09-26, per user request: "一般市民を選んだら自動的に次のセリフに行ってください" -- once P1
     // actually commits their JOB pick, jobCardId flips non-null (setup.chooseJob), so this closes itself
     // immediately instead of waiting for a manual 閉じる tap, flowing straight into con_face_choice_intro
@@ -11015,7 +11015,7 @@ const TUTORIAL_STEPS = [
       const player = state.players.find((p) => p.id === 'P1');
       return !!player.jobCardId && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
     },
-    body: '自分のターン中メインアクションの前後にフリーアクションを行うことができます\n試しにあなたのジョブ一般市民の⤵（タップアイコン）をクリックしてみてください',
+    body: '自分のターン中メインアクションの前後にフリーアクションを行うことができます\n試しにあなたのジョブローマ市民の⤵（タップアイコン）をクリックしてみてください',
     // 2026-09-27, per user request: "この時 次へ と消す" -- 一般市民の⤵をクリックすること以外に先へ進む
     // 手段が無いようにする(resource_choiceと同じnoManualDismissパターン)。実際の遷移はattachTapToggleの
     // TAP成功時に直接行われる(そちらのdoc参照)。
@@ -11214,7 +11214,7 @@ const TUTORIAL_STEPS = [
       const next = turnFlowMod.getNextTurn(state);
       return next.type === 'TURN' && next.playerId === 'P1' && state.round === 2;
     },
-    body: 'ショップの位置は関係なく、「王宮」か「元老院」に置かれたダイスがモニュメントカードに書かれた「ダイス目〇以上」のダイスである必要があります',
+    body: 'ショップの位置は関係なく、「皇帝宮殿」か「元老院」に置かれたダイスがモニュメントカードに書かれた「ダイス目〇以上」のダイスである必要があります',
     nextLabel: '次へ',
   },
   {
