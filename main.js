@@ -9060,8 +9060,16 @@ function renderLifeStoryOverlay(state) {
     return;
   }
   overlay.hidden = false;
-  const winnerEntry = scoringMod.rankPlayers(state, INDEX)[0];
-  const player = state.players.find((p) => p.id === winnerEntry.playerId);
+  // 人間がいれば必ず人間の成績を表示 (2026-10-19, per user request: "AI対人間は必ず人間の成績の表示を
+  // して" / オンライン対戦は "人間の1位（上位）を表示") -- 優勝者ではなく人間プレイヤー自身の歩みを見せる
+  // (優勝していなくても)。オンライン対戦のように人間が複数いる場合は、その中で最も順位が高い人を採用
+  // (playerRolesはオンラインの各シートのseatIsHumanと同期される、isAiPlayerと同じ前提)。人間が1人も
+  // いない(AI対AI観戦)場合のみ、元の「優勝者を表示」に戻る。
+  const rankedEntries = scoringMod.rankPlayers(state, INDEX);
+  const rankedHumanEntries = rankedEntries.filter((e) => playerRoles.get(e.playerId) === 'HUMAN');
+  const featuredEntry = rankedHumanEntries[0] || rankedEntries[0];
+  const player = state.players.find((p) => p.id === featuredEntry.playerId);
+  const finalScore = scoringMod.computeFinalScore(state, INDEX, player.id);
   const conFaceId = player.conPhysicalId && player.conFace ? `${player.conPhysicalId}${player.conFace}` : null;
   document.getElementById('life-story-title').textContent = `${rankingConJobTitle(conFaceId, player.jobCardId)}の${player.name}`;
 
@@ -9069,7 +9077,7 @@ function renderLifeStoryOverlay(state) {
   body.innerHTML = '';
   // 称号 (2026-10-19, per user request: "最終VPによって人生の歩みに称号を"): shown as its own line right
   // under the modal title, ahead of the round-by-round narrative.
-  const title = lifeStoryTitleForFinalVp(winnerEntry.score);
+  const title = lifeStoryTitleForFinalVp(finalScore);
   if (title) body.appendChild(el('div', 'life-story-honorific', `称号：${title}`));
   const byRound = { 1: [], 2: [], 3: [], 4: [] };
   for (const entry of player.lifeStoryLog) {
@@ -9081,7 +9089,7 @@ function renderLifeStoryOverlay(state) {
     body.appendChild(el('div', 'life-story-stage', `${LIFE_STAGE_LABEL_BY_ROUND[round]}（${round}R）`));
     for (const phrase of byRound[round]) body.appendChild(el('div', 'life-story-line', phrase));
   }
-  const qstLines = buildLifeStoryQstLines(state, winnerId);
+  const qstLines = buildLifeStoryQstLines(state, player.id);
   if (qstLines.length > 0) {
     body.appendChild(el('div', 'life-story-stage', 'そして、ローマの歴史に名を残した'));
     for (const line of qstLines) body.appendChild(el('div', 'life-story-line', line));
