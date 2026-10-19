@@ -9024,6 +9024,24 @@ function buildLifeStoryQstLines(state, playerId) {
   return lines;
 }
 
+/** Parses 称号 sheet's "最終VP" column ("0～9", "80～") into {min, max} (max=Infinity for the open-ended
+ * top tier, 2026-10-19, per user request: "最終VPによって人生の歩みに称号をつけて"). */
+function parseLifeStoryTitleRange(rangeText) {
+  const [minText, maxText] = String(rangeText).split('～');
+  return { min: Number(minText), max: maxText === '' ? Infinity : Number(maxText) };
+}
+
+/** finalVp -> 称号 sheet's own title text (奴隷/平民/.../神君), or null if somehow no row matches (the
+ * sheet's own 0～9...80～ coverage should make that unreachable, but null is a safe no-display fallback
+ * rather than a crash, same convention as this file's other data-driven lookups). */
+function lifeStoryTitleForFinalVp(finalVp) {
+  for (const row of INDEX.raw['称号'] || []) {
+    const { min, max } = parseLifeStoryTitleRange(row['最終VP']);
+    if (finalVp >= min && finalVp <= max) return row['称号'];
+  }
+  return null;
+}
+
 // Set once the player dismisses the life-story overlay this game (2026-10-19) -- gates
 // renderGameEndOverlay's own maybeRecordAchievements call, per user spec: shown "before achievement-
 // unlock popups". UI-scratch, like liveRankingOverlayOpen -- a fresh page load (the only way this app
@@ -9041,13 +9059,17 @@ function renderLifeStoryOverlay(state) {
     return;
   }
   overlay.hidden = false;
-  const winnerId = scoringMod.rankPlayers(state, INDEX)[0].playerId;
-  const player = state.players.find((p) => p.id === winnerId);
+  const winnerEntry = scoringMod.rankPlayers(state, INDEX)[0];
+  const player = state.players.find((p) => p.id === winnerEntry.playerId);
   const conFaceId = player.conPhysicalId && player.conFace ? `${player.conPhysicalId}${player.conFace}` : null;
   document.getElementById('life-story-title').textContent = `${rankingConJobTitle(conFaceId, player.jobCardId)}の${player.name}`;
 
   const body = document.getElementById('life-story-body');
   body.innerHTML = '';
+  // 称号 (2026-10-19, per user request: "最終VPによって人生の歩みに称号を"): shown as its own line right
+  // under the modal title, ahead of the round-by-round narrative.
+  const title = lifeStoryTitleForFinalVp(winnerEntry.score);
+  if (title) body.appendChild(el('div', 'life-story-honorific', `称号：${title}`));
   const byRound = { 1: [], 2: [], 3: [], 4: [] };
   for (const entry of player.lifeStoryLog) {
     const phrase = lifeStoryPhrase(entry);
