@@ -9068,6 +9068,21 @@ function parseLifeStoryTitleRange(rangeText) {
 /** finalVp -> 称号 sheet's own title text (奴隷/平民/.../神君), or null if somehow no row matches (the
  * sheet's own 0～9...80～ coverage should make that unreachable, but null is a safe no-display fallback
  * rather than a crash, same convention as this file's other data-driven lookups). */
+// 称号ごとの締めの1文(2026-10-19, per user request: "QSTの後に...の様にVPに応じて表示") -- 実際の
+// 最終VPそのものではなく、その称号の等級に固定で結びついた数字/文言(称号自体と同じ、tierごとの
+// flavor文であり厳密な実値ではない)。lifeStoryTitleForFinalVpが返す称号文字列をそのままキーにする。
+const LIFE_STORY_CLOSING_LINE_BY_TITLE = {
+  奴隷: 'ローマの栄光を9VPしか集められず奴隷となった',
+  平民: 'ローマの栄光を19VP集め平民として生涯を閉じた',
+  富豪: 'ローマの栄光を29VP集め富豪として名を馳せた',
+  百人隊長: 'ローマの栄光を39VP集め百人隊長として軍を率いた',
+  元老院議員: 'ローマの栄光を49VPも集め元老院議員にまで上り詰めた',
+  執政官: 'ローマの栄光を59VPも集め執政官の座を手に入れた',
+  凱旋将軍: 'ローマの栄光を69VPも集め凱旋将軍として帝都に迎えられた',
+  皇帝: 'ローマの栄光を79VPも集め皇帝として帝国に君臨した',
+  神君: 'ローマの栄光を80VP以上集め死後は神君として崇められた',
+};
+
 function lifeStoryTitleForFinalVp(finalVp) {
   for (const row of INDEX.raw['称号'] || []) {
     const { min, max } = parseLifeStoryTitleRange(row['最終VP']);
@@ -9127,6 +9142,9 @@ function renderLifeStoryOverlay(state) {
     body.appendChild(el('div', 'life-story-stage', 'そして、ローマの歴史に名を残した'));
     for (const line of qstLines) body.appendChild(el('div', 'life-story-line', line));
   }
+  // 称号ベースの締めの1文 (2026-10-19, per user request): QSTの後、最後に表示。
+  const closingLine = title && LIFE_STORY_CLOSING_LINE_BY_TITLE[title];
+  if (closingLine) body.appendChild(el('div', 'life-story-closing', closingLine));
 }
 
 /** GAME_END screen (2026-07-31): state.phase becomes 'GAME_END' inside turn-flow's endRound once

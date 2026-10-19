@@ -3318,6 +3318,10 @@ body.tutorial-mode .change-highlight {
 .life-story-line {
   margin-left: 8px;
 }
+.life-story-closing {
+  margin-top: 16px;
+  font-weight: bold;
+}
 
 /* BUILD/UPGRADE candidate selection (2026-07-30, real engine wiring pass 3) -- reuses the card-inst
    overlay/modal shell, but needs to be wide enough for a row of card-sized candidates rather than a
