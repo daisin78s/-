@@ -1000,13 +1000,43 @@ function aiPlayerFor(playerId) {
   return (weeklyChallengeActive && aiPlayerLv3Weekly) || aiPlayerLv3; // AI_LV3 (and any other value, as the strongest/default fallback)
 }
 
-/** Cheap fingerprint of everything a nav suggestion for playerId could depend on (2026-10-18) -- used by
- * updateNavSuggestionIfNeeded below to skip recomputing an expensive LV3 selectMove() call on every
- * render() (which fires after nearly every UI interaction, including ones that change nothing about this
- * player's own decision, e.g. opening/closing an unrelated modal) -- only a REAL change to what this
- * player could legally do (dice, resources, owned cards, tapped state, round) invalidates the cache. Not
- * exhaustive (doesn't cover every possible PASSIVE-driven edge case another player's action could affect),
- * but good enough for a navigation hint, not a scoring-critical computation. */
+/** Cheap (no AI search) legality re-check for a cached navSuggestedMove, within the same turn it was
+ * computed for (2026-10-19, per user request: "フリーアクションやその他の行動の結果できなくなった行動
+ * は光らせないで") -- covers the moves a free action/TAP/die-placement taken since could plausibly have
+ * invalidated. Not exhaustive (e.g. a PASSIVE rule change from another player's own action mid-round
+ * isn't checked), but good enough for a navigation hint, not a scoring-critical computation. Returns
+ * true (assume still possible) for any move type not specifically handled below. */
+function isNavSuggestedMoveStillPossible(state, move) {
+  const player = state.players.find((p) => p.id === move.playerId);
+  if (!player) return false;
+  if (move.type === 'PLACE_DIE' || move.type === 'PLACE_WILDCARD_DIE' || move.type === 'PASS_DIE') {
+    const die = player.dice.find((d) => d.id === move.dieId);
+    return !!die && die.placedMapId === null && !die.passed;
+  }
+  if (move.type === 'PLACE_DICE_GROUP') {
+    return move.dieIds.every((dieId) => {
+      const die = player.dice.find((d) => d.id === dieId);
+      return !!die && die.placedMapId === null && !die.passed;
+    });
+  }
+  if (move.type === 'BARE_TAP') {
+    const cardState = state.cards[move.physicalId];
+    return !!cardState && !cardState.tapped;
+  }
+  if (move.type === 'FREE_ACTION') {
+    const payResource = move.freeActionId.split('_')[0]; // 'A_K'/'B_K'/'C_K'/'Z_K' -- always pays 1 of this
+    return (player.resources[payResource] || 0) >= 1;
+  }
+  if (move.type === 'COLLECT_FEE') {
+    const map = state.maps[move.mapId];
+    return !!map && map.feeOwnerId === move.playerId && map.accumulatedFee > 0;
+  }
+  if (move.type === 'TAP_REACTION') {
+    return state.pendingChoices.some((c) => c.id === move.choiceId);
+  }
+  return true; // END_TURN and anything else not specifically covered above
+}
+
 /** ナビ機能(navModeEnabled)の中心処理 (2026-10-18) -- eligiblePlayerId(actingHumanPlayerId(state, next)、
  * 「今まさに自分でクリック操作できる人間プレイヤー」)がいて、かつナビがオンの間、aiPlayerFor(そのプレイヤー
  * のロールがHUMANなので常にLV3)のselectMoveで候補手を1つ求め、navSuggestedMove/navSuggestedAcquireFaceId
@@ -1021,7 +1051,16 @@ function updateNavSuggestionIfNeeded(state, eligiblePlayerId) {
     navSuggestionPlayerId = null;
     return;
   }
-  if (eligiblePlayerId === navSuggestionPlayerId) return; // same human's same turn -- keep the cached suggestion
+  if (eligiblePlayerId === navSuggestionPlayerId) {
+    // 同じターン中でも、フリーアクション等の別の行動で既にできなくなった手は光らせない (2026-10-19,
+    // per user request) -- 再計算(重い)はせず、キャッシュ済みの提案が今も現実に可能かだけ安く確認する。
+    // 不可能になっていたらnullにして、どのハイライト箇所も自然に何も光らせなくなる。
+    if (navSuggestedMove && !isNavSuggestedMoveStillPossible(state, navSuggestedMove)) {
+      navSuggestedMove = null;
+      navSuggestedAcquireFaceId = null;
+    }
+    return; // same human's same turn -- keep (or just-cleared) the cached suggestion, never recompute
+  }
   navSuggestionPlayerId = eligiblePlayerId;
   navSuggestedMove = aiPlayerFor(eligiblePlayerId).selectMove(state, eligiblePlayerId, { hasPlacedDieThisTurn: turnActionTaken });
   navSuggestedAcquireFaceId = null;
