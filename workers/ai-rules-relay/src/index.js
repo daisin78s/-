@@ -18,7 +18,9 @@
 const CACHE_TTL_SECONDS = 300; // 参照データ/仕様書のキャッシュ有効期間(5分) -- xlsx編集直後の反映ラグはこの範囲
 const MAX_QUESTION_LENGTH = 500;
 const MAX_OUTPUT_TOKENS = 1024;
-const GEMINI_TIMEOUT_MS = 20000;
+// 20秒だと、Gemini側が混雑している時に間に合わず"The operation was aborted"で失敗することが確認された
+// (2026-10-20、実際のユーザー報告: "うまく回答できませんでした"が頻発)。35秒に延長。
+const GEMINI_TIMEOUT_MS = 35000;
 
 const SYSTEM_PROMPT_HEADER = `あなたは「ローマの野望」というボードゲームのルールAI(ルール相談員)です。
 以下に与えられた「DSL命令仕様書」と「カード参照データ」だけを根拠に、プレイヤーの質問に日本語で答えてください。
