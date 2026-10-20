@@ -14,6 +14,30 @@ window.AiRulesChat = (function () {
 
   const WORKER_URL = 'https://ai-rules-relay.aged-hat-0d63.workers.dev';
 
+  // Gemini APIの混雑状況を示す公式なリアルタイムAPIは存在しない(2026-10-20、調査済み)。非公式だが、
+  // 太平洋時間(アメリカ西海岸、Geminiの運用拠点)の9-11時/13-15時/18-22時が混雑のピーク、2-7時が比較的
+  // 空いている、という複数の利用者報告がある(per user request: "公表されている混雑状況から推測して")。
+  // 断定はできないため、あくまで「可能性」としての案内に留める。Intl.DateTimeFormatでタイムゾーン変換
+  // すれば、夏時間(PDT/PST)の切り替えも自動で正しく扱える(自前でオフセット計算するより確実)。
+  function currentPacificHour() {
+    const formatter = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', hourCycle: 'h23' });
+    return Number(formatter.format(new Date()));
+  }
+
+  const HIGH_CONGESTION_HOURS = new Set([9, 10, 13, 14, 18, 19, 20, 21]);
+  const LOW_CONGESTION_HOURS = new Set([2, 3, 4, 5, 6]);
+
+  function congestionNoticeText() {
+    const hour = currentPacificHour();
+    if (HIGH_CONGESTION_HOURS.has(hour)) {
+      return 'この時間帯はAIの利用状況が高いため、大変混雑している可能性があります。質問の返答に時間がかかる場合があります。';
+    }
+    if (LOW_CONGESTION_HOURS.has(hour)) {
+      return 'この時間帯は比較的空いている可能性が高く、スムーズに回答できると思われます。';
+    }
+    return null;
+  }
+
   function el(tag, className, text) {
     const node = document.createElement(tag);
     if (className) node.className = className;
@@ -93,6 +117,8 @@ window.AiRulesChat = (function () {
       if (!greeted) {
         greeted = true;
         appendMessage(logEl, 'assistant', 'こんにちは。ローマの野望のルールやカードについて質問してください。');
+        const notice = congestionNoticeText();
+        if (notice) appendMessage(logEl, 'assistant', notice);
       }
       input.focus();
     });
