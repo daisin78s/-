@@ -578,7 +578,14 @@ async function main() {
     // locked) must NOT kill the still-running game loop -- it's a nice-to-have refresh, not something
     // worth losing hours of AI-vs-AI progress over -- so it's caught and just logged.
     try {
-      const out = execFileSync('python', [XLSX_WRITE_SCRIPT, outputPath, XLSX_PATH], { encoding: 'utf8' });
+      // PYTHONIOENCODING forces python's stdout to actual UTF-8 bytes regardless of the console's own
+      // codepage (defaults to the Japanese system codepage/cp932 otherwise) -- without it, the bytes
+      // python emits don't match the 'utf8' decode below, and console.log prints mojibake (2026-10-20,
+      // per user report: "見慣れない文字が出ていますが").
+      const out = execFileSync('python', [XLSX_WRITE_SCRIPT, outputPath, XLSX_PATH], {
+        encoding: 'utf8',
+        env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
+      });
       console.log(out.trim());
     } catch (e) {
       console.error(`AI.DATA.xlsx auto-write failed (will retry at the next checkpoint): ${e.message}`);
