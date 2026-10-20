@@ -18,9 +18,11 @@
 const CACHE_TTL_SECONDS = 300; // 参照データ/仕様書のキャッシュ有効期間(5分) -- xlsx編集直後の反映ラグはこの範囲
 const MAX_QUESTION_LENGTH = 500;
 const MAX_OUTPUT_TOKENS = 1024;
-// 20秒だと、Gemini側が混雑している時に間に合わず"The operation was aborted"で失敗することが確認された
-// (2026-10-20、実際のユーザー報告: "うまく回答できませんでした"が頻発)。35秒に延長。
-const GEMINI_TIMEOUT_MS = 35000;
+// 20秒→35秒に延長後も、Gemini側の混雑時に35秒を超えて失敗するケースを確認(2026-10-20)。Cloudflare
+// Worker自体には待機時間の実質上限が無い(クライアントの接続が切れない限り待てる)ことを確認済みなので、
+// さらに60秒に延長。フロントエンド側(ai-rules-chat.js)の最大3回再試行と合わせ、合計で最大3分程度は
+// 粘れる計算になる。
+const GEMINI_TIMEOUT_MS = 60000;
 
 const SYSTEM_PROMPT_HEADER = `あなたは「ローマの野望」というボードゲームのルールAI(ルール相談員)です。
 以下に与えられた「DSL命令仕様書」と「カード参照データ」だけを根拠に、プレイヤーの質問に日本語で答えてください。
@@ -87,6 +89,45 @@ async function checkMonthlyBudget(kv, env) {
   if (count >= Number(env.MONTHLY_BUDGET_REQUESTS)) return { ok: false };
   await kv.put(monthKey, String(count + 1), { expirationTtl: 60 * 60 * 24 * 35 });
   return { ok: true };
+}
+
+// AREA系カードの"XXXの支配LV1"/"XXXLV2"のような接尾辞を外した「素の名前」を返す -- 質問文には
+// 「小麦畑」とだけ書かれ、「小麦畑の支配LV1」とは書かれないのが普通なので、この正規化をしないと
+// 一致しない。末尾パターンのどれにも当てはまらなければそのまま返す。
+const NAME_SUFFIX_PATTERNS = [/の支配LV[12]$/, /LV[12]$/];
+function baseCardName(name) {
+  for (const pattern of NAME_SUFFIX_PATTERNS) {
+    if (pattern.test(name)) return name.replace(pattern, '');
+  }
+  return name;
+}
+
+/** 質問文に名前が直接出てくるカードだけに絞り込む(2026-10-20、プロンプトを軽量化してGemini混雑時の
+ * タイムアウトを減らすため -- per user request)。「常に最新データを参照する」という大前提(カード能力を
+ * AIに固定で覚えさせない)はそのまま保ち、1回のリクエストで送るデータ量だけを減らす。
+ *
+ * 単純な部分文字列一致(質問文.includes(カード名)) -- 誤マッチ(例えば説明文の一部が別のカード名と
+ * たまたま一致する)はほぼ起きない想定(カード名はどれも固有の単語のため)。LV1/LV2の接尾辞を外した
+ * 「素の名前」でも照合するので、「小麦畑」とだけ聞かれても該当するLV1/LV2両方のカードがヒットする。
+ *
+ * 1件もヒットしない場合(カード名を含まない、幅広い/一般的な質問)は、安全側に倒してフィルタせず全カード
+ * をそのまま返す -- 「VPを得る方法を全部教えて」のような、特定カード名を挙げない横断的な質問で情報が
+ * 欠けるのを防ぐため。 */
+function filterRelevantCards(referenceData, question) {
+  const matched = {};
+  for (const [id, card] of Object.entries(referenceData.cards)) {
+    if (!card.name) continue;
+    if (question.includes(card.name) || question.includes(baseCardName(card.name))) {
+      matched[id] = card;
+    }
+  }
+  const matchedCount = Object.keys(matched).length;
+  return {
+    cards: matchedCount > 0 ? matched : referenceData.cards,
+    filtered: matchedCount > 0,
+    matchedCount,
+    totalCount: Object.keys(referenceData.cards).length,
+  };
 }
 
 async function callGemini(env, question, referenceData, commandSpec) {
@@ -176,7 +217,15 @@ export default {
         fetchJsonCached(env.REFERENCE_DATA_URL),
         fetchJsonCached(env.COMMAND_SPEC_URL),
       ]);
-      const answer = await callGemini(env, question, referenceData, commandSpec);
+      // issuesはビルドスクリプト向けの開発用メタ情報(プレイヤーの質問には無関係)なので、
+      // プロンプトには最初から含めない。cardsだけ質問内容で絞り込む(filterRelevantCardsの doc 参照)。
+      const { cards } = filterRelevantCards(referenceData, question);
+      const trimmedReferenceData = {
+        gameDataVersion: referenceData.gameDataVersion,
+        cardCount: Object.keys(cards).length,
+        cards,
+      };
+      const answer = await callGemini(env, question, trimmedReferenceData, commandSpec);
       return new Response(JSON.stringify({ answer }), { status: 200, headers: cors });
     } catch (err) {
       return new Response(JSON.stringify({ error: 'INTERNAL_ERROR', detail: String(err.message || err) }), { status: 502, headers: cors });
