@@ -1,6 +1,7 @@
 {
   "_meta": {
-    "purpose": "AIルール相談機能が参照する、ダイスWPのDSL命令・判定メトリック・基本用語の正式仕様。カード個別のINST文に頼らず、この文書とdata/ai-reference.jsonのカードデータだけで正確に回答できることを目標に、実装コード(src/command-builder.js, src/executor.js, src/board.js, src/setup.js)を直接確認して書いた。カード個別のINST列は信頼できる補足として併用可。古いINSTシート(game.xlsx内、概念別17項目: VP/K/A/B/C/Z/BZ/D/wD/E/SLOT/Aカード/Bカード/Cカード/TAP/CON/JOB)はシート自体は削除されていないが、内容が古いため参照しない(2026-10-20) -- この文書の`glossary`セクションが、その17項目を現在のルールに基づいて書き直したもの。",
+    "gameTitle": "ローマの野望 (開発コードネーム: ダイスWP)",
+    "purpose": "AIルール相談機能が参照する、ローマの野望のDSL命令・判定メトリック・基本用語の正式仕様。カード個別のINST文に頼らず、この文書とdata/ai-reference.jsonのカードデータだけで正確に回答できることを目標に、実装コード(src/command-builder.js, src/executor.js, src/board.js, src/setup.js)を直接確認して書いた。カード個別のINST列は信頼できる補足として併用可。古いINSTシート(game.xlsx内、概念別17項目: VP/K/A/B/C/Z/BZ/D/wD/E/SLOT/Aカード/Bカード/Cカード/TAP/CON/JOB)はシート自体は削除されていないが、内容が古いため参照しない(2026-10-20) -- この文書の`glossary`セクションが、その17項目を現在のルールに基づいて書き直したもの。",
     "version": 1,
     "sourceFiles": ["src/dsl-parser.js", "src/command-builder.js", "src/executor.js", "src/board.js"]
   },

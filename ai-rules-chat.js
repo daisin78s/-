@@ -66,7 +66,7 @@ window.AiRulesChat = (function () {
       overlay.hidden = false;
       if (!greeted) {
         greeted = true;
-        appendMessage(logEl, 'assistant', 'こんにちは。ダイスWPのルールやカードについて質問してください。');
+        appendMessage(logEl, 'assistant', 'こんにちは。ローマの野望のルールやカードについて質問してください。');
       }
       input.focus();
     });
