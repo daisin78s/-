@@ -5129,3 +5129,75 @@ body.tutorial-mode .change-highlight {
   font-size: clamp(14px, 2vw, 20px);
   pointer-events: none;
 }
+
+/* AIルール相談 (2026-10-20) -- see ai-rules-chat.js. .card-inst-modal's own default width (280px) is
+   sized for plain AREA instruction text, far too narrow for a chat log -- widened here the same way
+   .ranking-modal already widens itself for its own content. */
+.ai-rules-chat-modal {
+  width: min(480px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  max-height: 80vh;
+}
+
+.ai-rules-chat-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.ai-rules-chat-log {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  max-height: 50vh;
+  min-height: 160px;
+  padding: 4px 2px;
+}
+
+.ai-rules-chat-message {
+  display: flex;
+}
+
+.ai-rules-chat-message--user {
+  justify-content: flex-end;
+}
+
+.ai-rules-chat-message--assistant {
+  justify-content: flex-start;
+}
+
+.ai-rules-chat-message__bubble {
+  max-width: 85%;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  white-space: pre-wrap;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.ai-rules-chat-message--user .ai-rules-chat-message__bubble {
+  background: var(--accent);
+  color: #fff;
+}
+
+.ai-rules-chat-message--assistant .ai-rules-chat-message__bubble {
+  background: var(--surface-sunken);
+  color: inherit;
+}
+
+.ai-rules-chat-form {
+  display: flex;
+  gap: 8px;
+}
+
+.ai-rules-chat-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  font-size: 14px;
+}

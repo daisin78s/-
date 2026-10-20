@@ -1,0 +1,21 @@
+name = "ai-rules-relay"
+main = "src/index.js"
+compatibility_date = "2026-10-20"
+
+# Non-secret config. The Gemini API key itself NEVER goes here -- see this folder's own README.md for
+# how to set it via `wrangler secret put GEMINI_API_KEY` instead, so it never touches the repo/Git history.
+[vars]
+ALLOWED_ORIGIN = "https://daisin78s.github.io"
+REFERENCE_DATA_URL = "https://daisin78s.github.io/-/data/ai-reference.json"
+COMMAND_SPEC_URL = "https://daisin78s.github.io/-/data/dsl-command-spec.json"
+GEMINI_MODEL = "gemini-flash-lite-latest"
+# 1人のIPあたりの上限(乱用防止)。実際の運用を見てから調整する想定の初期値。
+MINUTE_LIMIT_PER_IP = "5"
+DAILY_LIMIT_PER_IP = "50"
+# 月間の総リクエスト数(全員合計)がこれを超えたら、Geminiを呼ばずに固定の案内文を返す。
+MONTHLY_BUDGET_REQUESTS = "2000"
+
+# `wrangler kv namespace create ai-rules-relay-ratelimit` で作成した実際のIDに置き換える(README参照)。
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
