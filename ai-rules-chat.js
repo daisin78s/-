@@ -29,7 +29,7 @@ window.AiRulesChat = (function () {
     return row;
   }
 
-  async function sendQuestion(question) {
+  async function sendQuestionOnce(question) {
     const res = await fetch(WORKER_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -38,9 +38,23 @@ window.AiRulesChat = (function () {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       const reason = data.error || `HTTP ${res.status}`;
-      throw new Error(reason);
+      const err = new Error(reason);
+      err.status = res.status;
+      throw err;
     }
     return data.answer || '(回答が空でした)';
+  }
+
+  // Gemini側の一時的な混雑(503/タイムアウト)でWorkerが502を返すことがある(2026-10-20、実際のユーザー
+  // 報告で確認済み) -- レート制限(429)等、再試行しても解決しないエラーはそのまま投げ、502(INTERNAL_ERROR)
+  // だけ1回だけ自動再試行する。
+  async function sendQuestion(question) {
+    try {
+      return await sendQuestionOnce(question);
+    } catch (err) {
+      if (err.status !== 502) throw err;
+      return await sendQuestionOnce(question);
+    }
   }
 
   function errorMessageFor(err) {
@@ -90,7 +104,7 @@ window.AiRulesChat = (function () {
       input.value = '';
       input.disabled = true;
       sendButton.disabled = true;
-      const pendingRow = appendMessage(logEl, 'assistant', '考え中...');
+      const pendingRow = appendMessage(logEl, 'assistant', '考え中...(混雑時は30秒ほどかかることがあります)');
 
       try {
         const answer = await sendQuestion(question);
