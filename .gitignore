@@ -16,3 +16,6 @@ MAP.xlsx
 # Tutorial script spreadsheet (source for data/tutorial.data.js via tools/tutorial_xlsx_to_js.py) --
 # kept local only, like data/game.xlsx; the compiled data/tutorial.data.js stays tracked.
 data/tutorial.xlsx
+
+# Cloudflare Workers local build cache (wrangler deploy/dev) -- machine-local, regenerated every run.
+workers/*/.wrangler/

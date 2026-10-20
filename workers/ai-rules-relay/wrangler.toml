@@ -18,4 +18,4 @@ MONTHLY_BUDGET_REQUESTS = "2000"
 # `wrangler kv namespace create ai-rules-relay-ratelimit` で作成した実際のIDに置き換える(README参照)。
 [[kv_namespaces]]
 binding = "RATE_LIMIT_KV"
-id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+id = "d13f544b98bc42019543fb48a24372f1"
