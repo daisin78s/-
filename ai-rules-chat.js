@@ -12,8 +12,7 @@
 window.AiRulesChat = (function () {
   'use strict';
 
-  // TODO: `wrangler deploy`後に表示される実際のWorker URLに置き換える (workers/ai-rules-relay/README.md参照)。
-  const WORKER_URL = '';
+  const WORKER_URL = 'https://ai-rules-relay.aged-hat-0d63.workers.dev';
 
   function el(tag, className, text) {
     const node = document.createElement(tag);
