@@ -402,13 +402,13 @@ function applyPowerBrokerGameEndTopUp(state, index) {
  * history/PR discussion -- because actually hoarding 12 real K takes exactly the kind of multi-turn
  * foresight the AI's shallow search keeps failing at for the same reason the old 権力者 K->A conversion
  * did; an automatic PAYMENT-TIME substitution needs no such foresight, same as Z->ABC/権力者's A<-K
- * above): real K first, then A/B/C cover any shortfall -- Z is deliberately NOT part of this fallback
- * (per user's own explicit scope: "ABCのほかの資源で"), only A/B/C. Non-権力者 players drain whichever of
- * A/B/C they currently hold the MOST of first ("多い資源から使われる"); 権力者 owners drain A first
- * specifically (symmetric with their own A<-K substitution just above), falling back to the same
- * most-first order for any shortfall still remaining after A runs out. 配給所/AREA010's own
- * CHANGE(K,VP,n) action spends K through this exact path (see runChange's own scaledPay), so this also
- * lets a player sitting on plenty of A/B/C but little K actually use it.
+ * above): real K first, then A/B/C/Z cover any shortfall (Z included same day, per user follow-up:
+ * "Zも同様にして"). Non-権力者 players drain whichever of A/B/C/Z they currently hold the MOST of first
+ * ("多い資源から使われる"); 権力者 owners drain A first specifically (symmetric with their own A<-K
+ * substitution just above), falling back to the same most-first order (among B/C/Z) for any shortfall
+ * still remaining after A runs out. 配給所/AREA010's own CHANGE(K,VP,n) action spends K through this
+ * exact path (see runChange's own scaledPay), so this also lets a player sitting on plenty of A/B/C/Z
+ * but little K actually use it.
  * @returns {{ok:true, items:{resource:string,count:number}[]}|{ok:false, resource:string}}
  */
 function resolvePayment(state, index, playerId, items) {
@@ -420,11 +420,12 @@ function resolvePayment(state, index, playerId, items) {
   let aPool = player.resources.A || 0;
   let bPool = player.resources.B || 0;
   let cPool = player.resources.C || 0;
-  const colorPool = { A: () => aPool, B: () => bPool, C: () => cPool };
+  const colorPool = { A: () => aPool, B: () => bPool, C: () => cPool, Z: () => zPool };
   const spendColor = (r, n) => {
     if (r === 'A') aPool -= n;
     else if (r === 'B') bPool -= n;
-    else cPool -= n;
+    else if (r === 'C') cPool -= n;
+    else zPool -= n;
   };
   const resolved = [];
   for (const item of items) {
@@ -435,8 +436,8 @@ function resolvePayment(state, index, playerId, items) {
       let shortfall = item.count - kUsed;
       if (shortfall > 0) {
         const order = powerBroker
-          ? ['A', ...['B', 'C'].sort((a, b) => colorPool[b]() - colorPool[a]())]
-          : ['A', 'B', 'C'].sort((a, b) => colorPool[b]() - colorPool[a]());
+          ? ['A', ...['B', 'C', 'Z'].sort((a, b) => colorPool[b]() - colorPool[a]())]
+          : ['A', 'B', 'C', 'Z'].sort((a, b) => colorPool[b]() - colorPool[a]());
         for (const r of order) {
           if (shortfall <= 0) break;
           const used = Math.min(colorPool[r](), shortfall);

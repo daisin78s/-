@@ -912,18 +912,18 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 }
 
 // ---------------------------------------------------------------------------
-// 14d. K's shortfall covered by A/B/C, for EVERY player (2026-10-20, per user request: 晩餐会/M403's own
+// 14d. K's shortfall covered by A/B/C/Z, for EVERY player (2026-10-20, per user request: 晩餐会/M403's own
 //     12K cost was never once reached across a whole batch of AI games -- hoarding 12 real K takes the
 //     same kind of multi-turn foresight the AI's shallow search already fails at for other reasons (see
 //     14c's own doc), so an automatic payment-time substitution (no foresight needed, same mechanism
-//     class as Z->ABC/権力者's own A<-K) was added instead of a proactive "convert to K" action. Z is
-//     deliberately NOT part of this fallback -- only A/B/C, per the user's own explicit scope. Non-権力者
-//     players drain whichever of A/B/C they currently hold the MOST of first; 権力者 owners drain A first
-//     specifically (symmetric with their own A<-K substitution in 14c), falling back to the same
-//     most-first order for any shortfall still remaining after A runs out.
+//     class as Z->ABC/権力者's own A<-K) was added instead of a proactive "convert to K" action. Z was
+//     added to the fallback set the same day, per a user follow-up ("Zも同様にして") -- initially scoped
+//     to A/B/C only. Non-権力者 players drain whichever of A/B/C/Z they currently hold the MOST of first;
+//     権力者 owners drain A first specifically (symmetric with their own A<-K substitution in 14c), falling
+//     back to the same most-first order (among B/C/Z) for any shortfall still remaining after A runs out.
 // ---------------------------------------------------------------------------
 {
-  // Non-権力者: K shortfall drained from whichever of A/B/C currently holds the most, not a fixed order.
+  // Non-権力者: K shortfall drained from whichever of A/B/C/Z currently holds the most, not a fixed order.
   const state = freshState();
   const player = getPlayerRef(state, 'P1');
   player.resources.K = 2;
@@ -935,7 +935,7 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   check('...final resources', player.resources, { K: 0, A: 1, B: 0, C: 0, Z: 0, VP: 0, BZ: 0 });
 }
 {
-  // 権力者: K shortfall drains A first specifically, then falls back to most-first among B/C.
+  // 権力者: K shortfall drains A first specifically, then falls back to most-first among B/C/Z.
   const state = freshState();
   const player = getPlayerRef(state, 'P1');
   player.jobCardId = 'JOB005';
@@ -948,8 +948,8 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   check('...final resources', player.resources, { K: 0, A: 0, B: 0, C: 1, Z: 0, VP: 0, BZ: 0 });
 }
 {
-  // Z is deliberately excluded from covering a K shortfall (scope is A/B/C only) -- real K + A/B/C
-  // combined still fall short, payment fails atomically even though Z alone would have been plenty.
+  // Z now covers a K shortfall too, same "whichever is largest" rule as A/B/C -- here Z is the biggest
+  // pile, so it gets drained before the smaller A/B/C (all tied at 1).
   const state = freshState();
   const player = getPlayerRef(state, 'P1');
   player.resources.K = 5;
@@ -958,18 +958,18 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   player.resources.C = 1;
   player.resources.Z = 20;
   const result = executor.payCostList(state, index, 'P1', [{ resource: 'K', count: 10 }]);
-  check('K shortfall not covered by Z (out of scope), even with plenty of it', result, { success: false, reason: 'INSUFFICIENT_RESOURCES', resource: 'K' });
-  check('...nothing was paid on failure (atomic)', player.resources, { K: 5, A: 1, B: 1, C: 1, Z: 20, VP: 0, BZ: 0 });
+  check('K shortfall (5) covered by Z (largest pile), A/B/C left untouched', result.success, true);
+  check('...final resources', player.resources, { K: 0, A: 1, B: 1, C: 1, Z: 15, VP: 0, BZ: 0 });
 }
 {
-  // Real K alone already covers the cost -- A/B/C stay untouched (real-first, same order as every other
-  // substitution in this function).
+  // Real K alone already covers the cost -- A/B/C/Z stay untouched (real-first, same order as every
+  // other substitution in this function).
   const state = freshState();
   const player = getPlayerRef(state, 'P1');
   player.resources.K = 10;
   player.resources.A = 5;
   const result = executor.payCostList(state, index, 'P1', [{ resource: 'K', count: 10 }]);
-  check('Real K alone already affordable -- A/B/C stay untouched', result.success, true);
+  check('Real K alone already affordable -- A/B/C/Z stay untouched', result.success, true);
   check('...final resources', player.resources, { K: 0, A: 5, B: 0, C: 0, Z: 0, VP: 0, BZ: 0 });
 }
 
