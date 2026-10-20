@@ -8,6 +8,7 @@ compatibility_date = "2026-10-20"
 ALLOWED_ORIGIN = "https://daisin78s.github.io"
 REFERENCE_DATA_URL = "https://daisin78s.github.io/-/data/ai-reference.json"
 COMMAND_SPEC_URL = "https://daisin78s.github.io/-/data/dsl-command-spec.json"
+STRENGTH_SUMMARY_URL = "https://daisin78s.github.io/-/data/ai-strength-summary.json"
 GEMINI_MODEL = "gemini-flash-lite-latest"
 # 1人のIPあたりの上限(乱用防止)。実際の運用を見てから調整する想定の初期値。
 MINUTE_LIMIT_PER_IP = "5"

@@ -7,7 +7,8 @@
  *  2. 入力の検証(空/長すぎる質問を拒否)
  *  3. レート制限(IPごとに1分間隔・1日の上限、KVで管理)
  *  4. 月間予算チェック(全員合計のリクエスト数がMONTHLY_BUDGET_REQUESTSを超えたら固定の案内文で応答)
- *  5. data/ai-reference.json + data/dsl-command-spec.json をGitHub Pagesから取得(Cache APIで短時間キャッシュ)
+ *  5. data/ai-reference.json + data/dsl-command-spec.json + data/ai-strength-summary.json を
+ *     GitHub Pagesから取得(Cache APIで短時間キャッシュ)
  *  6. それらをシステム指示に埋め込み、Gemini APIを呼んで回答を生成
  *  7. 回答をそのままブラウザに返す
  *
@@ -25,14 +26,22 @@ const MAX_OUTPUT_TOKENS = 1024;
 const GEMINI_TIMEOUT_MS = 60000;
 
 const SYSTEM_PROMPT_HEADER = `あなたは「ローマの野望」というボードゲームのルールAI(ルール相談員)です。
-以下に与えられた「DSL命令仕様書」と「カード参照データ」だけを根拠に、プレイヤーの質問に日本語で答えてください。
+以下に与えられた「DSL命令仕様書」「カード参照データ」「AI対戦データ」だけを根拠に、プレイヤーの質問に
+日本語で答えてください。
 
 厳守事項:
 - 根拠がない、または仕様書/参照データに載っていない内容は、絶対に推測で答えないでください。わからない場合は
   はっきり「現在のデータには載っていないので確認できません」のように答えてください。
 - 参照データに載っているカード名・資源名・数値を優先し、記憶や一般的なボードゲームの知識で補完しないでください。
 - ローマの野望に全く関係のない質問には「その質問はローマの野望のルールとは関係がないようです」と答え、それ以外には応じないでください。
-- 回答は簡潔に、プレイヤーが読みやすい日本語でお願いします。`;
+- 回答は簡潔に、プレイヤーが読みやすい日本語でお願いします。
+
+「おすすめのジョブは?」「このCONは強い?」のような、ルール説明ではなく強さ・傾向についての質問には:
+- 「AI対戦データ」のavgScore(平均得点、高いほど良い)・avgRank(平均順位、1位に近いほど良い)を根拠に、
+  傾向として答えてよい。
+- ただし必ず「AI対戦データによると」のように出典を明示し、「絶対にこれが最強」のような断定は避けること。
+  あくまで傾向・参考情報として伝えること。
+- AI対戦データに載っていないJOB/CONについては「AI対戦データがありません」と答えること。`;
 
 function corsHeaders(origin, allowedOrigin) {
   if (origin !== allowedOrigin) return null;
@@ -130,14 +139,17 @@ function filterRelevantCards(referenceData, question) {
   };
 }
 
-async function callGemini(env, question, referenceData, commandSpec) {
+async function callGemini(env, question, referenceData, commandSpec, strengthSummary) {
   const systemInstruction = `${SYSTEM_PROMPT_HEADER}
 
 ### DSL命令仕様書
 ${JSON.stringify(commandSpec)}
 
 ### カード参照データ
-${JSON.stringify(referenceData)}`;
+${JSON.stringify(referenceData)}
+
+### AI対戦データ(JOB/CONそれぞれの平均得点・平均順位。組み合わせ別ではなく単体の平均)
+${JSON.stringify(strengthSummary)}`;
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${env.GEMINI_MODEL}:generateContent?key=${env.GEMINI_API_KEY}`;
   const body = {
@@ -213,9 +225,10 @@ export default {
     }
 
     try {
-      const [referenceData, commandSpec] = await Promise.all([
+      const [referenceData, commandSpec, strengthSummary] = await Promise.all([
         fetchJsonCached(env.REFERENCE_DATA_URL),
         fetchJsonCached(env.COMMAND_SPEC_URL),
+        fetchJsonCached(env.STRENGTH_SUMMARY_URL),
       ]);
       // issuesはビルドスクリプト向けの開発用メタ情報(プレイヤーの質問には無関係)なので、
       // プロンプトには最初から含めない。cardsだけ質問内容で絞り込む(filterRelevantCardsの doc 参照)。
@@ -225,7 +238,7 @@ export default {
         cardCount: Object.keys(cards).length,
         cards,
       };
-      const answer = await callGemini(env, question, trimmedReferenceData, commandSpec);
+      const answer = await callGemini(env, question, trimmedReferenceData, commandSpec, strengthSummary);
       return new Response(JSON.stringify({ answer }), { status: 200, headers: cors });
     } catch (err) {
       return new Response(JSON.stringify({ error: 'INTERNAL_ERROR', detail: String(err.message || err) }), { status: 502, headers: cors });

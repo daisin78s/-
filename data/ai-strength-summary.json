@@ -1,0 +1,129 @@
+{
+ "_comment": "avgScore/avgQstScore=平均得点(高いほど良い)、avgRank=平均順位(低いほど良い、1位に近いほど良い)。JOB/CONはそれぞれ単体の平均で、組み合わせ(例: 特定JOB×特定CON)ごとの数値ではない。",
+ "sourceFile": "AIDATA20261020-1.xlsx",
+ "generatedAt": "2026-10-20T15:12:11.101006+00:00",
+ "job": {
+  "ローマ市民": {
+   "avgScore": 19.78,
+   "avgQstScore": 7.53,
+   "avgRank": 2.35
+  },
+  "詩人": {
+   "avgScore": 22.36,
+   "avgQstScore": 7.49,
+   "avgRank": 2.01
+  },
+  "道化師": {
+   "avgScore": 21.95,
+   "avgQstScore": 6.5,
+   "avgRank": 2.37
+  },
+  "パトロン": {
+   "avgScore": 18.43,
+   "avgQstScore": 7.43,
+   "avgRank": 2.62
+  },
+  "権力者": {
+   "avgScore": 17.54,
+   "avgQstScore": 7.15,
+   "avgRank": 2.82
+  },
+  "開拓者": {
+   "avgScore": 21.55,
+   "avgQstScore": 7.19,
+   "avgRank": 2.2
+  },
+  "研究者": {
+   "avgScore": 21.08,
+   "avgQstScore": 7.42,
+   "avgRank": 2.26
+  },
+  "料理人": {
+   "avgScore": 21.99,
+   "avgQstScore": 7.24,
+   "avgRank": 2.11
+  },
+  "地主": {
+   "avgScore": 20.03,
+   "avgQstScore": 6.62,
+   "avgRank": 2.57
+  },
+  "宮廷人": {
+   "avgScore": 20.13,
+   "avgQstScore": 4.46,
+   "avgRank": 3.01
+  },
+  "策士": {
+   "avgScore": 16.59,
+   "avgQstScore": 7.43,
+   "avgRank": 2.87
+  },
+  "異端者": {
+   "avgScore": 19.75,
+   "avgQstScore": 6.98,
+   "avgRank": 2.47
+  }
+ },
+ "con": {
+  "祝福": {
+   "avgScore": 21.21,
+   "avgQstScore": 7.18,
+   "avgRank": 2.25
+  },
+  "潔癖": {
+   "avgScore": 17.78,
+   "avgQstScore": 6.25,
+   "avgRank": 2.89
+  },
+  "狂信": {
+   "avgScore": 18.58,
+   "avgQstScore": 7.43,
+   "avgRank": 2.57
+  },
+  "傲慢": {
+   "avgScore": 18.7,
+   "avgQstScore": 7.22,
+   "avgRank": 2.64
+  },
+  "怠惰": {
+   "avgScore": 19.96,
+   "avgQstScore": 7.3,
+   "avgRank": 2.32
+  },
+  "暴食": {
+   "avgScore": 19.04,
+   "avgQstScore": 6.92,
+   "avgRank": 2.63
+  },
+  "色欲": {
+   "avgScore": 20.58,
+   "avgQstScore": 8.06,
+   "avgRank": 2.31
+  },
+  "強欲": {
+   "avgScore": 18.04,
+   "avgQstScore": 7.4,
+   "avgRank": 2.68
+  },
+  "憂鬱": {
+   "avgScore": 19.99,
+   "avgQstScore": 7.32,
+   "avgRank": 2.43
+  },
+  "嫉妬": {
+   "avgScore": 19.12,
+   "avgQstScore": 6.78,
+   "avgRank": 2.6
+  },
+  "憤怒": {
+   "avgScore": 22.87,
+   "avgQstScore": 6.41,
+   "avgRank": 2.29
+  },
+  "裏切": {
+   "avgScore": 20.21,
+   "avgQstScore": 7.46,
+   "avgRank": 2.34
+  }
+ }
+}
