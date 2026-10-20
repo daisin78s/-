@@ -35,7 +35,7 @@ window.AiRulesChat = (function () {
     if (LOW_CONGESTION_HOURS.has(hour)) {
       return 'この時間帯は比較的空いている可能性が高く、スムーズに回答できると思われます。';
     }
-    return 'この時間帯の混雑状況ははっきりしませんが、通常程度と思われます。';
+    return 'この時間帯は通常程度の混雑と思われます。';
   }
 
   function el(tag, className, text) {
