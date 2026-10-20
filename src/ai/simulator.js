@@ -57,7 +57,7 @@ function maxBzDiscount(state, index, playerId, candidate) {
   const items = isChoiceCost(row.COST)
     ? (() => {
         const options = lowerChoiceCostOptions(row.COST);
-        const resource = board.pickChoiceCostResource(state, playerId, options, remaining);
+        const resource = board.pickChoiceCostResource(state, index, playerId, options, remaining);
         return [options.find((opt) => opt.resource === resource)];
       })()
     : lowerCostList(row.COST);

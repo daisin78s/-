@@ -326,6 +326,10 @@ function endRound(state, index) {
       }
       state.banquetAutoConvertedPlayerIds.push(player.id);
     }
+    // 権力者(JOB005)+強欲/宝物庫 (2026-10-20, per user request: "強欲や宝物庫のため...能力が変わったら
+    // それに合わせて変換数を変える") -- same end-of-game "no reason to hold back" conversion as 晩餐会's
+    // own block just above, see executor.applyPowerBrokerGameEndTopUp's own doc for the dynamic target.
+    executorApi.applyPowerBrokerGameEndTopUp(state, index);
     // QST's rank-based rewards (2026-08-09, see qst.js's own doc) settle exactly here, exactly once --
     // nothing after this point can trigger another round-4 endRound (the game loop stops advancing
     // turns once phase is GAME_END, both in main.js's UI and src/ai/game-runner.js), so this needs no

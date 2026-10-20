@@ -310,13 +310,75 @@ function hasChefAbility(state, index, playerId) {
   return getCardRow(index, player.jobCardId).NAME === '料理人';
 }
 
-/** True if playerId's own JOB is 権力者/JOB005A (2026-10-12 redesign, replacing the old
- * PASSIVE=ON(GET(K),CHANGE(K,A,ALL)) DSL text -- see grantPowerBrokerConversionIfEarned's own doc for
- * why). Same bespoke, no-DSL-representation treatment as hasChefAbility just above. */
+/** True if playerId's own JOB is 権力者/JOB005 (2026-10-20 redesign, replacing the old automatic
+ * K->A conversion on every K gain -- see this file's own git history for grantPowerBrokerConversionIfEarned,
+ * since removed. That design forced ALL gained K into A unconditionally, including resources the player
+ * needed to spend as K immediately -- getting any real K back required proactively spending a free
+ * action, a kind of forward planning the AI's shallow search consistently failed at (per user report:
+ * win rate collapsed once the conversion became 100% of gained K instead of half). The new ability
+ * instead lets A stand in for K specifically at PAYMENT time (see resolvePayment's own K branch below) --
+ * the same kind of automatic, no-foresight-needed substitution Z already provides for A/B/C, so the AI
+ * benefits from it with no extra decision-making required. Same bespoke, no-DSL-representation
+ * treatment as hasChefAbility just above. */
 function hasPowerBrokerAbility(state, index, playerId) {
   const player = getPlayer(state, playerId);
   if (!player.jobCardId) return false;
   return getCardRow(index, player.jobCardId).NAME === '権力者';
+}
+
+/** True if cmd (a lowered VP_MODIFIER_FINAL or VP_PENALTY_IF_BELOW command) is keyed on exactly the
+ * RESOURCE(...) metric -- see powerBrokerGameEndTopUpTarget's own doc for why this can't just accept any
+ * VP_MODIFIER_FINAL/VP_PENALTY_IF_BELOW at face value (M403/晩餐会's own VP_MODIFIER_FINAL(PER(K,1),N)
+ * counts K, the opposite of what 権力者's top-up should chase toward; CON003A/狂信's own
+ * VP_PENALTY_IF_BELOW counts EMBLEM_COUNT, unrelated to resources entirely). The two commands' lowered
+ * shapes differ (VP_MODIFIER_FINAL's count goes through lowerCount -- {kind:'expr',node:{type:'Call',
+ * name:...}} -- while VP_PENALTY_IF_BELOW's metric goes through the separate lowerMetric -- a plain
+ * {name:...} -- see command-builder.js's own two cases), so this checks each shape separately. */
+function isResourceMetricCommand(cmd) {
+  if (cmd.type === 'VP_PENALTY_IF_BELOW') return cmd.metric.name === 'RESOURCE';
+  if (cmd.type === 'VP_MODIFIER_FINAL') return cmd.count.kind === 'expr' && cmd.count.node.type === 'Call' && cmd.count.node.name === 'RESOURCE';
+  return false;
+}
+
+/** 権力者/JOB005's GAME_END top-up target (2026-10-20, per user request: "強欲や宝物庫のため...万一強欲や
+ * 宝物庫の能力が変わったらそれに合わせて変換数を変えるように") -- the highest RESOURCE(...)-keyed
+ * VP_PENALTY_IF_BELOW threshold or VP_MODIFIER_FINAL cap among this player's own owned cards. Currently
+ * only 強欲/CON002B and 宝物庫/M401 use this shape, but matched generically by shape (isResourceMetricCommand)
+ * rather than by name/id, so a future card sharing it is picked up automatically, and any tuning to
+ * either of the current two's own number is read live here rather than duplicated. Owning BOTH simply
+ * takes the larger of the two (per user confirmation: "両方持っていても資源が7になればいい", not additive)
+ * -- today they share the same 7, but this stays correct if that ever diverges. 0 if the player owns
+ * neither (or any future card sharing neither's exact shape). */
+function powerBrokerGameEndTopUpTarget(state, index, playerId) {
+  let target = 0;
+  for (const rule of getPassiveRules(state, index, playerId, 'VP_PENALTY_IF_BELOW')) {
+    if (isResourceMetricCommand(rule)) target = Math.max(target, rule.threshold);
+  }
+  for (const rule of getPassiveRules(state, index, playerId, 'VP_MODIFIER_FINAL')) {
+    if (rule.cap !== null && isResourceMetricCommand(rule)) target = Math.max(target, rule.cap);
+  }
+  return target;
+}
+
+/** Converts a 権力者 owner's leftover K into A at GAME_END, up to powerBrokerGameEndTopUpTarget's own
+ * dynamic target (2026-10-20, per user request) -- a plain, silent resource shift with no GET(A) event
+ * emitted, same convention as turn-flow.js's own 晩餐会 end-of-game conversion right next to this one's
+ * call site (the game is over, nothing left to react to it). Never exceeds the target, and never touches
+ * K once already at/above it (e.g. the player already held enough real A/B/C/Z on their own). Called
+ * once, from turn-flow.js's endRound, for every player uniformly (AI included). */
+function applyPowerBrokerGameEndTopUp(state, index) {
+  for (const player of state.players) {
+    if (!hasPowerBrokerAbility(state, index, player.id)) continue;
+    const target = powerBrokerGameEndTopUpTarget(state, index, player.id);
+    if (target <= 0) continue;
+    const currentNonK = (player.resources.A || 0) + (player.resources.B || 0) + (player.resources.C || 0) + (player.resources.Z || 0);
+    const shortfall = Math.max(0, target - currentNonK);
+    if (shortfall <= 0) continue;
+    const convertAmount = Math.min(player.resources.K || 0, shortfall);
+    if (convertAmount <= 0) continue;
+    player.resources.K -= convertAmount;
+    player.resources.A = (player.resources.A || 0) + convertAmount;
+  }
 }
 
 /**
@@ -328,16 +390,39 @@ function hasPowerBrokerAbility(state, index, playerId) {
  * choice presented at all -- see main.js's own removal of the "支払いに使う資源を選択" toggle). Either
  * way affordability is identical (real+Z combined must cover the count) -- this only changes *which* is
  * drained first, never whether the payment succeeds.
+ *
+ * K items get an analogous substitution for 権力者/hasPowerBrokerAbility owners (2026-10-20 redesign,
+ * see that function's own doc): real K first, A covers any shortfall -- same real-first-then-fallback
+ * order resolvePayment already uses for everyone else's Z, just A standing in for K specifically rather
+ * than Z standing in for A/B/C. No "prefer the substitute" branch exists for this one (unlike 色欲's
+ * preferZ) -- there's no reported need for a 権力者 owner to deliberately burn A before K the way 色欲
+ * burns Z before A/B/C for its own round-end conversion.
  * @returns {{ok:true, items:{resource:string,count:number}[]}|{ok:false, resource:string}}
  */
-function resolvePayment(state, playerId, items) {
+function resolvePayment(state, index, playerId, items) {
   const player = getPlayer(state, playerId);
   const preferZ = hasPaymentChoiceAbility(state, playerId);
+  const powerBroker = hasPowerBrokerAbility(state, index, playerId);
   let zPool = player.resources.Z || 0;
+  let aPool = player.resources.A || 0;
   const resolved = [];
   for (const item of items) {
+    if (item.resource === 'K' && powerBroker) {
+      const haveK = player.resources.K || 0;
+      const kUsed = Math.min(haveK, item.count);
+      const aUsed = item.count - kUsed;
+      if (kUsed > haveK || aUsed > aPool) return { ok: false, resource: item.resource };
+      aPool -= aUsed;
+      if (kUsed > 0) resolved.push({ resource: 'K', count: kUsed });
+      if (aUsed > 0) resolved.push({ resource: 'A', count: aUsed });
+      continue;
+    }
     if (COLOR_RESOURCES.has(item.resource)) {
-      const haveReal = player.resources[item.resource] || 0;
+      // item.resource === 'A' here shares aPool with a 権力者 owner's own K-substitution above -- an A
+      // item appearing in the SAME cost list as a K item (e.g. a card costing both) would otherwise let
+      // the same physical A units get double-counted as available for both. Harmless for non-権力者
+      // players, where aPool is simply never touched by the K branch above.
+      const haveReal = item.resource === 'A' ? aPool : (player.resources[item.resource] || 0);
       let realUsed;
       let zUsed;
       if (preferZ) {
@@ -349,6 +434,7 @@ function resolvePayment(state, playerId, items) {
       }
       if (realUsed > haveReal || zUsed > zPool) return { ok: false, resource: item.resource };
       zPool -= zUsed;
+      if (item.resource === 'A') aPool -= realUsed;
       if (realUsed > 0) resolved.push({ resource: item.resource, count: realUsed });
       if (zUsed > 0) resolved.push({ resource: 'Z', count: zUsed });
       continue;
@@ -370,8 +456,8 @@ function resolvePayment(state, playerId, items) {
  * from command-builder's lowerCostList) -- all items must be affordable or
  * nothing is paid. Used by board.js for BUILD/UPGRADE costs.
  */
-function payCostList(state, playerId, items) {
-  const resolution = resolvePayment(state, playerId, items);
+function payCostList(state, index, playerId, items) {
+  const resolution = resolvePayment(state, index, playerId, items);
   if (!resolution.ok) return { success: false, reason: 'INSUFFICIENT_RESOURCES', resource: resolution.resource };
   for (const item of resolution.items) tryPay(state, playerId, item.resource, item.count);
   return { success: true };
@@ -428,7 +514,7 @@ function applyBzDiscount(items, bzDiscount) {
  *   One entry per distinct affordable outcome. Empty array means unaffordable (no valid distribution
  *   the player can actually pay for) -- same meaning as candidateAffordable's old false.
  */
-function enumerateBzOutcomes(state, playerId, items, bzAvailable) {
+function enumerateBzOutcomes(state, index, playerId, items, bzAvailable) {
   const total = items.reduce((sum, item) => sum + item.count, 0);
   const maxBz = Math.max(0, Math.min(bzAvailable, total));
   const distributions = [];
@@ -452,7 +538,7 @@ function enumerateBzOutcomes(state, playerId, items, bzAvailable) {
     const discount = applyBzDiscount(items, bzDiscount);
     if (!discount) continue; // pragma: shouldn't happen, distributions are already capped per-item
     const payItems = discount.bzUsed > 0 ? [...discount.items, { resource: 'BZ', count: discount.bzUsed }] : discount.items;
-    const resolution = resolvePayment(state, playerId, payItems);
+    const resolution = resolvePayment(state, index, playerId, payItems);
     if (!resolution.ok) continue;
     const key = resolution.items.map((i) => `${i.resource}:${i.count}`).sort().join(',');
     if (!seen.has(key)) seen.set(key, { bzDiscount, resolvedItems: resolution.items });
@@ -793,7 +879,7 @@ function runAdd(state, index, context, cmd) {
  * than a bespoke check, so e.g. Z-substitution for K works identically here too. */
 function runPay(state, index, context, cmd) {
   const items = cmd.items.map((item) => ({ resource: item.resource, count: evalCountNode(state, index, context.playerId, item.count) }));
-  return payCostList(state, context.playerId, items);
+  return payCostList(state, index, context.playerId, items);
 }
 
 function runChange(state, index, context, cmd) {
@@ -861,9 +947,9 @@ function runChange(state, index, context, cmd) {
 
   if (times <= 0) return { success: true, timesExecuted: 0 };
 
-  // Substitutes Z for any A/B/C item per resolvePayment's own doc (auto-prefers Z for 色欲 owners).
+  // Substitutes Z for any A/B/C item, and A for K (権力者), per resolvePayment's own doc.
   const scaledPay = pay.map((item) => ({ resource: item.resource, count: item.count * times }));
-  const resolution = resolvePayment(state, context.playerId, scaledPay);
+  const resolution = resolvePayment(state, index, context.playerId, scaledPay);
   if (!resolution.ok) return { success: false, reason: 'INSUFFICIENT_RESOURCES', resource: resolution.resource };
   for (const item of resolution.items) {
     const ok = tryPay(state, context.playerId, item.resource, item.count);
@@ -1817,7 +1903,6 @@ function grantResourceAndEmitGet(state, index, context, resource, count) {
     // actually granted) is still available -- emitAndResolve's own GET dispatch above only ever conveys
     // WHICH resource, never how much.
     if (effectiveResource === 'VP') grantChefBonusIfEarned(state, index, context, count);
-    if (effectiveResource === 'K') grantPowerBrokerConversionIfEarned(state, index, context, count);
   }
   return effectiveResource;
 }
@@ -1855,40 +1940,10 @@ function grantChefBonusIfEarned(state, index, context, vpCount) {
   notifyActivation(state, context.playerId, player.jobCardId, player.jobCardId, 'PASSIVE');
 }
 
-/** Grants 権力者/JOB005A's bonus if earned (2026-10-12 redesign, replacing the old
- * PASSIVE=ON(GET(K),CHANGE(K,A,ALL)) DSL text -- per user request: "〇を得たときその半数は赤〇になる
- * （端数切り上げ）", worked example confirmed (1->1, 2->1, 3->2, 4->2, 5->3, i.e. ceil(n/2)) and explicitly
- * confirmed "得るたびに別計算" -- each separate K grant computes its own conversion independently, never
- * touching K already held from an earlier grant. Needs the SAME bespoke, non-DSL treatment as
- * grantChefBonusIfEarned just above -- the DSL's generic ON(GET(x),...) dispatch never conveys HOW MUCH
- * was granted, only which resource, and this ability specifically needs that count. PASSIVE field is
- * blank for this reason, same as 料理人's TAP field.
- * 2026-10-18 redesign (per user's own INST text update: "〇を得たときすべて赤〇になる" -- "すべて", not
- * half) -- convertAmount is now the FULL count, not ceil(count/2). The "得るたびに別計算" per-grant
- * independence from the 2026-10-12 version is unchanged (still not a combined-total conversion).
- *
- * Deliberately no longer a CHANGE(...,ALL) command at all, so 憂鬱/CON003B's CONVERT_LIMIT(ALL,4) (which
- * only ever reads 'all'-kind CHANGE commands run through runChange) can no longer reach it either -- the
- * earlier sourcePhysicalId-based exemption added for the old DSL version was removed as dead code once
- * this bespoke version made it unreachable.
- *
- * Fires on every grantResourceAndEmitGet('K', count) call regardless of source -- confirmed via the
- * user's own examples to include initial-resource grants (setup) and usage-fee collection (the
- * 使用料回収 button's own collectUsageFee, one call per map even when collecting from several maps back
- * to back), same as every other live K grant. */
-function grantPowerBrokerConversionIfEarned(state, index, context, count) {
-  if (count <= 0) return;
-  if (!hasPowerBrokerAbility(state, index, context.playerId)) return;
-  const player = getPlayer(state, context.playerId);
-  const convertAmount = count;
-  player.resources.K -= convertAmount;
-  grantResourceAndEmitGet(state, index, context, 'A', convertAmount);
-  notifyActivation(state, context.playerId, player.jobCardId, player.jobCardId, 'PASSIVE');
-}
-
 module.exports = {
   NotImplementedError,
   ExecutionError,
+  applyPowerBrokerGameEndTopUp,
   runCommand,
   runProgram,
   evalCondition,

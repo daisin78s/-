@@ -5083,15 +5083,16 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     noteEl.appendChild(iconRow);
     q('.shop-card__effect').appendChild(noteEl);
   } else if (options.showEffect && facts.name === '権力者') {
-    // JOB005A/権力者 (2026-10-13, per user request: "権力者のアイコン 〇→赤〇") -- この能力も
-    // executor.grantPowerBrokerConversionIfEarnedによる bespoke実装(PASSIVE欄は空欄)でDSL表現が無いため、
-    // 料理人と同じ「NAME指定でアイコンを手組みする」パターンを踏襲。半分/端数切り上げという詳細はINSTの
-    // 文章に譲り、アイコン自体は他の〇→資源変換アイコン(色欲のZ→〇等)と同じ簡潔な表記に揃える。
+    // JOB005/権力者 (2026-10-20 redesign, replacing the old "〇→赤〇" conversion icon -- see
+    // executor.resolvePayment's own K-branch doc for the ability itself) -- bespoke, no DSL
+    // representation (PASSIVE欄は空欄), same "NAME指定でアイコンを手組みする" pattern as 料理人.
+    // "=" (not an arrow) since this is a payment-time substitution, not a one-way transformation --
+    // the player's own K is never actually taken away the way the old icon's "→" implied.
     tall = true;
     const noteEl = el('div', 'card-note');
     const iconRow = el('span', 'job-note-icon-row');
     iconRow.appendChild(actionDot('K'));
-    iconRow.appendChild(actionArrow());
+    iconRow.appendChild(actionSuffix('='));
     iconRow.appendChild(actionDot('A'));
     noteEl.appendChild(iconRow);
     q('.shop-card__effect').appendChild(noteEl);
@@ -6821,13 +6822,13 @@ function bzOutcomesForCandidate(candidate, playerId) {
   if (commandBuilderMod.isChoiceCost(row.COST)) {
     const options = commandBuilderMod.lowerChoiceCostOptions(row.COST);
     for (const opt of options) {
-      const outcomes = executorMod.enumerateBzOutcomes(STATE, playerId, [opt], bzAvailable);
+      const outcomes = executorMod.enumerateBzOutcomes(STATE, INDEX, playerId, [opt], bzAvailable);
       if (outcomes.length > 0) return outcomes;
     }
     return [];
   }
   const items = commandBuilderMod.lowerCostList(row.COST);
-  return executorMod.enumerateBzOutcomes(STATE, playerId, items, bzAvailable);
+  return executorMod.enumerateBzOutcomes(STATE, INDEX, playerId, items, bzAvailable);
 }
 
 /** Whether playerId can currently pay candidate's COST (real + Z + auto-maxed BZ combined). Used to

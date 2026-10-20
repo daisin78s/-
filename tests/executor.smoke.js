@@ -858,62 +858,56 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 }
 
 // ---------------------------------------------------------------------------
-// 14c. 権力者/JOB005's bespoke "all of the K you just got becomes A" ability (2026-10-18 redesign, per
-//     user's own INST text update: "〇を得たときすべて赤〇になる" -- replacing the 2026-10-12 version's
-//     "half, rounded up" (ceil(n/2)). Still implemented as a bespoke grantResourceAndEmitGet hook
-//     (grantPowerBrokerConversionIfEarned), same class as grantChefBonusIfEarned, since the DSL's
-//     ON(GET(x),...) dispatch can't see HOW MUCH was granted. Checked via player.jobCardId (NAME match),
-//     not an owned-card scan -- see hasPowerBrokerAbility's own doc.
+// 14c. 権力者/JOB005's bespoke payment-time K<-A substitution (2026-10-20 redesign, replacing the old
+//     automatic "all gained K becomes A" conversion -- per user report, that design made the AI's win
+//     rate collapse: converting 100% of gained K away left the AI needing to proactively spend a free
+//     action to get any real K back, a kind of forward planning its shallow search consistently failed
+//     at. The new ability instead lets A cover a K-cost shortfall automatically at PAYMENT time, same
+//     mechanism Z already provides for A/B/C (see resolvePayment's own doc) -- real K drained first, A
+//     only as a fallback, no AI foresight required.
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
   const player = getPlayerRef(state, 'P1');
   player.jobCardId = 'JOB005';
-  executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'K', 5);
-  check('権力者: getting 5K converts all 5 to A', player.resources.A, 5);
-  check('権力者: ...leaving 0K', player.resources.K, 0);
+  player.resources.K = 1;
+  player.resources.A = 5;
+  const result = executor.payCostList(state, index, 'P1', [{ resource: 'K', count: 3 }]);
+  check('権力者: payCostList succeeds when real K + A combined cover the cost', result.success, true);
+  check('...real K drained first (all 1 used)', player.resources.K, 0);
+  check('...A covers the remaining shortfall (2 of the needed 3)', player.resources.A, 3);
 }
 {
-  // Per-grant independence is unchanged from the 2026-10-12 version (confirmed "得るたびに別計算"):
-  // three separate grants, each computed independently -- still not one combined-total conversion.
+  // Real K alone already covers the cost -- A is untouched (real-first, same order as Z for A/B/C).
   const state = freshState();
   const player = getPlayerRef(state, 'P1');
   player.jobCardId = 'JOB005';
-  executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'K', 3);
-  executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'K', 3);
-  executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'K', 1);
-  check('権力者: three separate grants of 3,3,1 convert 3,3,1 respectively (3+3+1=7A)', player.resources.A, 7);
-  check('権力者: ...leaving 0K', player.resources.K, 0);
+  player.resources.K = 5;
+  player.resources.A = 5;
+  executor.payCostList(state, index, 'P1', [{ resource: 'K', count: 3 }]);
+  check('権力者: real K alone already affordable -- A stays untouched', player.resources, { K: 2, A: 5, B: 0, C: 0, Z: 0, VP: 0, BZ: 0 });
 }
 {
-  // Also applies via the 使用料回収 button (collectUsageFee), one call per map even when collecting from
-  // several maps back to back: fees of 3,2,1 each convert in full, independently.
+  // Real K + A combined still fall short -- payment fails atomically, nothing is spent.
   const state = freshState();
   const player = getPlayerRef(state, 'P1');
   player.jobCardId = 'JOB005';
-  state.maps.MAP001 = createMapState('MAP001', 'AREA001A');
-  state.maps.MAP002 = createMapState('MAP002', 'AREA002A');
-  state.maps.MAP003 = createMapState('MAP003', 'AREA003A');
-  state.maps.MAP001.feeOwnerId = 'P1';
-  state.maps.MAP001.accumulatedFee = 3;
-  state.maps.MAP002.feeOwnerId = 'P1';
-  state.maps.MAP002.accumulatedFee = 2;
-  state.maps.MAP003.feeOwnerId = 'P1';
-  state.maps.MAP003.accumulatedFee = 1;
-  executor.collectUsageFee(state, index, { playerId: 'P1' }, 'MAP001');
-  executor.collectUsageFee(state, index, { playerId: 'P1' }, 'MAP002');
-  executor.collectUsageFee(state, index, { playerId: 'P1' }, 'MAP003');
-  check('権力者: collecting fees of 3,2,1 from 3 maps back to back converts 3,2,1 respectively (3+2+1=6A)', player.resources.A, 6);
-  check('権力者: ...leaving 0K', player.resources.K, 0);
+  player.resources.K = 1;
+  player.resources.A = 1;
+  const result = executor.payCostList(state, index, 'P1', [{ resource: 'K', count: 3 }]);
+  check('権力者: payCostList fails when real K + A combined still fall short', result, { success: false, reason: 'INSUFFICIENT_RESOURCES', resource: 'K' });
+  check('...nothing was paid on failure (atomic)', player.resources, { K: 1, A: 1, B: 0, C: 0, Z: 0, VP: 0, BZ: 0 });
 }
 {
-  // A player without 権力者 as their JOB is completely unaffected -- confirms this is gated on
-  // player.jobCardId (NAME match), not some global always-on engine rule.
+  // A player without 権力者 as their JOB gets no substitution at all -- a K shortfall simply fails, A is
+  // never touched. Confirms this is gated on player.jobCardId (NAME match), not a global engine rule.
   const state = freshState();
   const player = getPlayerRef(state, 'P1');
-  executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'K', 5);
-  check('Without 権力者 as JOB, a 5K grant stays as plain K (no conversion)', player.resources.K, 5);
-  check('...no A at all', player.resources.A || 0, 0);
+  player.resources.K = 1;
+  player.resources.A = 5;
+  const result = executor.payCostList(state, index, 'P1', [{ resource: 'K', count: 3 }]);
+  check('Without 権力者 as JOB, a K shortfall is NOT covered by A', result, { success: false, reason: 'INSUFFICIENT_RESOURCES', resource: 'K' });
+  check('...nothing was paid', player.resources, { K: 1, A: 5, B: 0, C: 0, Z: 0, VP: 0, BZ: 0 });
 }
 
 // ---------------------------------------------------------------------------
@@ -995,7 +989,7 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   const state = freshState();
   getPlayerRef(state, 'P1').resources.A = 1;
   getPlayerRef(state, 'P1').resources.Z = 5;
-  const result = executor.payCostList(state, 'P1', [{ resource: 'A', count: 3 }]);
+  const result = executor.payCostList(state, index, 'P1', [{ resource: 'A', count: 3 }]);
   check('payCostList succeeds when real+Z combined cover the cost', result.success, true);
   check('...real A drained first (all 1 used)', getPlayerRef(state, 'P1').resources.A, 0);
   check('...Z covers the remaining shortfall (2 of the needed 3)', getPlayerRef(state, 'P1').resources.Z, 3);
@@ -1004,7 +998,7 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   const state = freshState();
   getPlayerRef(state, 'P1').resources.A = 1;
   getPlayerRef(state, 'P1').resources.Z = 1;
-  const result = executor.payCostList(state, 'P1', [{ resource: 'A', count: 3 }]);
+  const result = executor.payCostList(state, index, 'P1', [{ resource: 'A', count: 3 }]);
   check('payCostList fails when real+Z combined still fall short', result, { success: false, reason: 'INSUFFICIENT_RESOURCES', resource: 'A' });
   check('...nothing was paid on failure (atomic)', getPlayerRef(state, 'P1').resources, { K: 0, A: 1, B: 0, C: 0, Z: 1, VP: 0, BZ: 0 });
 }
@@ -1026,7 +1020,7 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   const state = freshState();
   getPlayerRef(state, 'P1').resources.B = 5;
   getPlayerRef(state, 'P1').resources.Z = 5;
-  executor.payCostList(state, 'P1', [{ resource: 'B', count: 2 }]);
+  executor.payCostList(state, index, 'P1', [{ resource: 'B', count: 2 }]);
   check('Without 色欲, real B is drained first (Z untouched)', getPlayerRef(state, 'P1').resources, { K: 0, A: 0, B: 3, C: 0, Z: 5, VP: 0, BZ: 0 });
 }
 {
@@ -1037,7 +1031,7 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   giveCard(state, 'CON001B', 'P1');
   getPlayerRef(state, 'P1').resources.B = 5;
   getPlayerRef(state, 'P1').resources.Z = 5;
-  executor.payCostList(state, 'P1', [{ resource: 'B', count: 2 }]);
+  executor.payCostList(state, index, 'P1', [{ resource: 'B', count: 2 }]);
   check('With 色欲, Z is auto-drained first (real B untouched)', getPlayerRef(state, 'P1').resources, { K: 0, A: 0, B: 5, C: 0, Z: 3, VP: 0, BZ: 0 });
 }
 

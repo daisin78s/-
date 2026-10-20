@@ -487,9 +487,9 @@ function isCandidateAffordable(state, index, playerId, candidate) {
   // Choice-COST (2026-10-15, "15A/15B/15C" -- see isChoiceCost's own doc): affordable if ANY ONE of the
   // options alone is, not the sum of all of them (that would be the ordinary, non-choice meaning).
   if (isChoiceCost(row.COST)) {
-    return lowerChoiceCostOptions(row.COST).some((opt) => executor.enumerateBzOutcomes(state, playerId, [opt], bzAvailable).length > 0);
+    return lowerChoiceCostOptions(row.COST).some((opt) => executor.enumerateBzOutcomes(state, index, playerId, [opt], bzAvailable).length > 0);
   }
-  return executor.enumerateBzOutcomes(state, playerId, lowerCostList(row.COST), bzAvailable).length > 0;
+  return executor.enumerateBzOutcomes(state, index, playerId, lowerCostList(row.COST), bzAvailable).length > 0;
 }
 
 /** Which resource a choice-COST card's payment should actually use, among `options` (2026-10-15, for
@@ -498,9 +498,9 @@ function isCandidateAffordable(state, index, playerId, candidate) {
  * AFFORDABLE option's resource the player currently holds the most real (non-Z/BZ) units of, falling
  * back to comparing every option if somehow none individually resolve as affordable here (shouldn't
  * happen -- the caller already checked isCandidateAffordable first). */
-function pickChoiceCostResource(state, playerId, options, bzAvailable) {
+function pickChoiceCostResource(state, index, playerId, options, bzAvailable) {
   const player = state.players.find((p) => p.id === playerId);
-  const affordable = options.filter((opt) => executor.enumerateBzOutcomes(state, playerId, [opt], bzAvailable).length > 0);
+  const affordable = options.filter((opt) => executor.enumerateBzOutcomes(state, index, playerId, [opt], bzAvailable).length > 0);
   const pool = affordable.length > 0 ? affordable : options;
   return pool.reduce((best, opt) => {
     const held = player.resources[opt.resource] || 0;
@@ -1866,14 +1866,14 @@ function resolveBuildNew(state, index, context, candidate) {
   if (isChoiceCost(row.COST)) {
     const options = lowerChoiceCostOptions(row.COST);
     const bzAvailable = (state.players.find((p) => p.id === context.playerId).resources.BZ) || 0;
-    chosenResource = pickChoiceCostResource(state, context.playerId, options, bzAvailable);
+    chosenResource = pickChoiceCostResource(state, index, context.playerId, options, bzAvailable);
     const chosen = options.find((opt) => opt.resource === chosenResource);
     costString = `${chosen.count}${chosen.resource}`;
   }
   const discount = executor.applyBzDiscount(lowerCostList(costString), context.bzDiscount);
   if (!discount) return { success: false, reason: 'INVALID_BZ_DISCOUNT' };
   const payItems = discount.bzUsed > 0 ? [...discount.items, { resource: 'BZ', count: discount.bzUsed }] : discount.items;
-  const payResult = executor.payCostList(state, context.playerId, payItems);
+  const payResult = executor.payCostList(state, index, context.playerId, payItems);
   if (!payResult.success) return payResult;
 
   state.shops[candidate.shopKey].slots[candidate.slotId] = null;
@@ -1932,7 +1932,7 @@ function resolveUpgrade(state, index, context, candidate) {
   const discount = executor.applyBzDiscount(lowerCostList(fromRow.COST), context.bzDiscount);
   if (!discount) return { success: false, reason: 'INVALID_BZ_DISCOUNT' };
   const payItems = discount.bzUsed > 0 ? [...discount.items, { resource: 'BZ', count: discount.bzUsed }] : discount.items;
-  const payResult = executor.payCostList(state, context.playerId, payItems);
+  const payResult = executor.payCostList(state, index, context.playerId, payItems);
   if (!payResult.success) return payResult;
 
   const inst = state.cards[candidate.physicalId];
