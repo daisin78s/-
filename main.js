@@ -5084,7 +5084,7 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     q('.shop-card__effect').appendChild(noteEl);
   } else if (options.showEffect && facts.name === '権力者') {
     // JOB005/権力者 (2026-10-20 redesign, replacing the old "〇→赤〇" conversion icon -- see
-    // executor.resolvePayment's own K-branch doc for the ability itself) -- bespoke, no DSL
+    // executor.resolvePayment's own A-branch doc for the ability itself) -- bespoke, no DSL
     // representation (PASSIVE欄は空欄), same "NAME指定でアイコンを手組みする" pattern as 料理人.
     // "=" (not an arrow) since this is a payment-time substitution, not a one-way transformation --
     // the player's own K is never actually taken away the way the old icon's "→" implied.

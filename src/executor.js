@@ -316,7 +316,7 @@ function hasChefAbility(state, index, playerId) {
  * needed to spend as K immediately -- getting any real K back required proactively spending a free
  * action, a kind of forward planning the AI's shallow search consistently failed at (per user report:
  * win rate collapsed once the conversion became 100% of gained K instead of half). The new ability
- * instead lets A stand in for K specifically at PAYMENT time (see resolvePayment's own K branch below) --
+ * instead lets K stand in for A specifically at PAYMENT time (see resolvePayment's own A branch below) --
  * the same kind of automatic, no-foresight-needed substitution Z already provides for A/B/C, so the AI
  * benefits from it with no extra decision-making required. Same bespoke, no-DSL-representation
  * treatment as hasChefAbility just above. */
@@ -391,12 +391,13 @@ function applyPowerBrokerGameEndTopUp(state, index) {
  * way affordability is identical (real+Z combined must cover the count) -- this only changes *which* is
  * drained first, never whether the payment succeeds.
  *
- * K items get an analogous substitution for 権力者/hasPowerBrokerAbility owners (2026-10-20 redesign,
- * see that function's own doc): real K first, A covers any shortfall -- same real-first-then-fallback
- * order resolvePayment already uses for everyone else's Z, just A standing in for K specifically rather
- * than Z standing in for A/B/C. No "prefer the substitute" branch exists for this one (unlike 色欲's
- * preferZ) -- there's no reported need for a 権力者 owner to deliberately burn A before K the way 色欲
- * burns Z before A/B/C for its own round-end conversion.
+ * A items get an analogous substitution for 権力者/hasPowerBrokerAbility owners (2026-10-20 redesign,
+ * see that function's own doc; direction corrected same day -- the ability is "A's shortfall may be
+ * covered by K", not the other way around): real A first, K covers any shortfall -- same
+ * real-first-then-fallback order resolvePayment already uses for everyone else's Z, just K standing in
+ * for A specifically rather than Z standing in for A/B/C. No "prefer the substitute" branch exists for
+ * this one (unlike 色欲's preferZ) -- there's no reported need for a 権力者 owner to deliberately burn K
+ * before A the way 色欲 burns Z before A/B/C for its own round-end conversion.
  * @returns {{ok:true, items:{resource:string,count:number}[]}|{ok:false, resource:string}}
  */
 function resolvePayment(state, index, playerId, items) {
@@ -404,25 +405,21 @@ function resolvePayment(state, index, playerId, items) {
   const preferZ = hasPaymentChoiceAbility(state, playerId);
   const powerBroker = hasPowerBrokerAbility(state, index, playerId);
   let zPool = player.resources.Z || 0;
-  let aPool = player.resources.A || 0;
+  let kPool = player.resources.K || 0;
   const resolved = [];
   for (const item of items) {
-    if (item.resource === 'K' && powerBroker) {
-      const haveK = player.resources.K || 0;
-      const kUsed = Math.min(haveK, item.count);
-      const aUsed = item.count - kUsed;
-      if (kUsed > haveK || aUsed > aPool) return { ok: false, resource: item.resource };
-      aPool -= aUsed;
-      if (kUsed > 0) resolved.push({ resource: 'K', count: kUsed });
+    if (item.resource === 'A' && powerBroker) {
+      const haveA = player.resources.A || 0;
+      const aUsed = Math.min(haveA, item.count);
+      const kUsed = item.count - aUsed;
+      if (aUsed > haveA || kUsed > kPool) return { ok: false, resource: item.resource };
+      kPool -= kUsed;
       if (aUsed > 0) resolved.push({ resource: 'A', count: aUsed });
+      if (kUsed > 0) resolved.push({ resource: 'K', count: kUsed });
       continue;
     }
     if (COLOR_RESOURCES.has(item.resource)) {
-      // item.resource === 'A' here shares aPool with a 権力者 owner's own K-substitution above -- an A
-      // item appearing in the SAME cost list as a K item (e.g. a card costing both) would otherwise let
-      // the same physical A units get double-counted as available for both. Harmless for non-権力者
-      // players, where aPool is simply never touched by the K branch above.
-      const haveReal = item.resource === 'A' ? aPool : (player.resources[item.resource] || 0);
+      const haveReal = player.resources[item.resource] || 0;
       let realUsed;
       let zUsed;
       if (preferZ) {
@@ -434,7 +431,6 @@ function resolvePayment(state, index, playerId, items) {
       }
       if (realUsed > haveReal || zUsed > zPool) return { ok: false, resource: item.resource };
       zPool -= zUsed;
-      if (item.resource === 'A') aPool -= realUsed;
       if (realUsed > 0) resolved.push({ resource: item.resource, count: realUsed });
       if (zUsed > 0) resolved.push({ resource: 'Z', count: zUsed });
       continue;
@@ -443,9 +439,15 @@ function resolvePayment(state, index, playerId, items) {
     const have = dieKind
       ? player.dice.filter((d) => d.kind === dieKind).length
       : item.resource === 'Z' ? zPool
-      : (player.resources[item.resource] || 0); // K no longer reserved against a pending fee -- see tryPay's own doc
+      // K here shares kPool with a 権力者 owner's own A-substitution above -- a literal K item appearing
+      // in the SAME cost list as an A item (e.g. a card costing both) would otherwise let the same
+      // physical K units get double-counted as available for both. Harmless for non-権力者 players, where
+      // kPool is simply never touched by the A branch above.
+      : item.resource === 'K' ? kPool
+      : (player.resources[item.resource] || 0);
     if (have < item.count) return { ok: false, resource: item.resource };
     if (item.resource === 'Z') zPool -= item.count;
+    if (item.resource === 'K') kPool -= item.count;
     resolved.push(item);
   }
   return { ok: true, items: resolved };

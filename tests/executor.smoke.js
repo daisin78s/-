@@ -858,56 +858,57 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 }
 
 // ---------------------------------------------------------------------------
-// 14c. 権力者/JOB005's bespoke payment-time K<-A substitution (2026-10-20 redesign, replacing the old
+// 14c. 権力者/JOB005's bespoke payment-time A<-K substitution (2026-10-20 redesign, replacing the old
 //     automatic "all gained K becomes A" conversion -- per user report, that design made the AI's win
 //     rate collapse: converting 100% of gained K away left the AI needing to proactively spend a free
 //     action to get any real K back, a kind of forward planning its shallow search consistently failed
-//     at. The new ability instead lets A cover a K-cost shortfall automatically at PAYMENT time, same
-//     mechanism Z already provides for A/B/C (see resolvePayment's own doc) -- real K drained first, A
-//     only as a fallback, no AI foresight required.
+//     at. The new ability instead lets K cover an A-cost shortfall automatically at PAYMENT time, same
+//     mechanism Z already provides for A/B/C (see resolvePayment's own doc) -- real A drained first, K
+//     only as a fallback, no AI foresight required. (Direction corrected same day: the ability covers
+//     A's shortfall with K, not the other way around.)
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
   const player = getPlayerRef(state, 'P1');
   player.jobCardId = 'JOB005';
-  player.resources.K = 1;
-  player.resources.A = 5;
-  const result = executor.payCostList(state, index, 'P1', [{ resource: 'K', count: 3 }]);
-  check('権力者: payCostList succeeds when real K + A combined cover the cost', result.success, true);
-  check('...real K drained first (all 1 used)', player.resources.K, 0);
-  check('...A covers the remaining shortfall (2 of the needed 3)', player.resources.A, 3);
-}
-{
-  // Real K alone already covers the cost -- A is untouched (real-first, same order as Z for A/B/C).
-  const state = freshState();
-  const player = getPlayerRef(state, 'P1');
-  player.jobCardId = 'JOB005';
-  player.resources.K = 5;
-  player.resources.A = 5;
-  executor.payCostList(state, index, 'P1', [{ resource: 'K', count: 3 }]);
-  check('権力者: real K alone already affordable -- A stays untouched', player.resources, { K: 2, A: 5, B: 0, C: 0, Z: 0, VP: 0, BZ: 0 });
-}
-{
-  // Real K + A combined still fall short -- payment fails atomically, nothing is spent.
-  const state = freshState();
-  const player = getPlayerRef(state, 'P1');
-  player.jobCardId = 'JOB005';
-  player.resources.K = 1;
   player.resources.A = 1;
-  const result = executor.payCostList(state, index, 'P1', [{ resource: 'K', count: 3 }]);
-  check('権力者: payCostList fails when real K + A combined still fall short', result, { success: false, reason: 'INSUFFICIENT_RESOURCES', resource: 'K' });
+  player.resources.K = 5;
+  const result = executor.payCostList(state, index, 'P1', [{ resource: 'A', count: 3 }]);
+  check('権力者: payCostList succeeds when real A + K combined cover the cost', result.success, true);
+  check('...real A drained first (all 1 used)', player.resources.A, 0);
+  check('...K covers the remaining shortfall (2 of the needed 3)', player.resources.K, 3);
+}
+{
+  // Real A alone already covers the cost -- K is untouched (real-first, same order as Z for A/B/C).
+  const state = freshState();
+  const player = getPlayerRef(state, 'P1');
+  player.jobCardId = 'JOB005';
+  player.resources.A = 5;
+  player.resources.K = 5;
+  executor.payCostList(state, index, 'P1', [{ resource: 'A', count: 3 }]);
+  check('権力者: real A alone already affordable -- K stays untouched', player.resources, { K: 5, A: 2, B: 0, C: 0, Z: 0, VP: 0, BZ: 0 });
+}
+{
+  // Real A + K combined still fall short -- payment fails atomically, nothing is spent.
+  const state = freshState();
+  const player = getPlayerRef(state, 'P1');
+  player.jobCardId = 'JOB005';
+  player.resources.A = 1;
+  player.resources.K = 1;
+  const result = executor.payCostList(state, index, 'P1', [{ resource: 'A', count: 3 }]);
+  check('権力者: payCostList fails when real A + K combined still fall short', result, { success: false, reason: 'INSUFFICIENT_RESOURCES', resource: 'A' });
   check('...nothing was paid on failure (atomic)', player.resources, { K: 1, A: 1, B: 0, C: 0, Z: 0, VP: 0, BZ: 0 });
 }
 {
-  // A player without 権力者 as their JOB gets no substitution at all -- a K shortfall simply fails, A is
+  // A player without 権力者 as their JOB gets no substitution at all -- an A shortfall simply fails, K is
   // never touched. Confirms this is gated on player.jobCardId (NAME match), not a global engine rule.
   const state = freshState();
   const player = getPlayerRef(state, 'P1');
-  player.resources.K = 1;
-  player.resources.A = 5;
-  const result = executor.payCostList(state, index, 'P1', [{ resource: 'K', count: 3 }]);
-  check('Without 権力者 as JOB, a K shortfall is NOT covered by A', result, { success: false, reason: 'INSUFFICIENT_RESOURCES', resource: 'K' });
-  check('...nothing was paid', player.resources, { K: 1, A: 5, B: 0, C: 0, Z: 0, VP: 0, BZ: 0 });
+  player.resources.A = 1;
+  player.resources.K = 5;
+  const result = executor.payCostList(state, index, 'P1', [{ resource: 'A', count: 3 }]);
+  check('Without 権力者 as JOB, an A shortfall is NOT covered by K', result, { success: false, reason: 'INSUFFICIENT_RESOURCES', resource: 'A' });
+  check('...nothing was paid', player.resources, { K: 5, A: 1, B: 0, C: 0, Z: 0, VP: 0, BZ: 0 });
 }
 
 // ---------------------------------------------------------------------------
