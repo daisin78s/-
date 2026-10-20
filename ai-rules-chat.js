@@ -46,15 +46,27 @@ window.AiRulesChat = (function () {
   }
 
   // Gemini側の一時的な混雑(503/タイムアウト)でWorkerが502を返すことがある(2026-10-20、実際のユーザー
-  // 報告で確認済み) -- レート制限(429)等、再試行しても解決しないエラーはそのまま投げ、502(INTERNAL_ERROR)
-  // だけ1回だけ自動再試行する。
-  async function sendQuestion(question) {
-    try {
-      return await sendQuestionOnce(question);
-    } catch (err) {
-      if (err.status !== 502) throw err;
-      return await sendQuestionOnce(question);
+  // 報告で確認済み、1回だけの再試行では不十分なケースも確認されたため最大2回(計3回試行)に強化)。
+  // レート制限(429)やそもそもアクセスが許可されていない(403)等、再試行しても解決しないエラーは即座に
+  //投げる。err.statusが無い(fetch自体が失敗した、ネットワーク瞬断など)場合も再試行対象に含める --
+  // Cloudflare Worker自体には待機時間の実質上限が無いことを確認済み(2026-10-20)なので、再試行を増やす
+  // こと自体に新たなコストは無い。
+  const MAX_ATTEMPTS = 3;
+  function isRetryableStatus(status) {
+    return status === undefined || status === 502;
+  }
+  async function sendQuestion(question, onRetry) {
+    let lastErr;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        return await sendQuestionOnce(question);
+      } catch (err) {
+        lastErr = err;
+        if (!isRetryableStatus(err.status) || attempt === MAX_ATTEMPTS) throw err;
+        if (onRetry) onRetry(attempt + 1, MAX_ATTEMPTS);
+      }
     }
+    throw lastErr;
   }
 
   function errorMessageFor(err) {
@@ -105,12 +117,15 @@ window.AiRulesChat = (function () {
       input.disabled = true;
       sendButton.disabled = true;
       const pendingRow = appendMessage(logEl, 'assistant', '考え中...(混雑時は30秒ほどかかることがあります)');
+      const pendingBubble = pendingRow.querySelector('.ai-rules-chat-message__bubble');
 
       try {
-        const answer = await sendQuestion(question);
-        pendingRow.querySelector('.ai-rules-chat-message__bubble').textContent = answer;
+        const answer = await sendQuestion(question, (attempt, max) => {
+          pendingBubble.textContent = `考え中...(少し時間がかかっています、再試行中 ${attempt}/${max})`;
+        });
+        pendingBubble.textContent = answer;
       } catch (err) {
-        pendingRow.querySelector('.ai-rules-chat-message__bubble').textContent = errorMessageFor(err);
+        pendingBubble.textContent = errorMessageFor(err);
       } finally {
         input.disabled = false;
         sendButton.disabled = false;
