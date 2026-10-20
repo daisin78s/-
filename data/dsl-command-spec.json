@@ -1,0 +1,195 @@
+{
+  "_meta": {
+    "purpose": "AIルール相談機能が参照する、ダイスWPのDSL命令・判定メトリックの正式仕様。カード個別のINST文に頼らず、この文書とdata/ai-reference.jsonのカードデータだけで正確に回答できることを目標に、実装コード(src/command-builder.js, src/executor.js, src/board.js)を直接確認して書いた。カード個別のINST列は信頼できる補足として併用可。古いINSTシート(概念別の17項目: VP/K/A/B/C/Z/BZ/D/wD/E/SLOT/Aカード/Bカード/Cカード/TAP/CON/JOB)は参照しない(2026-10-20、内容が古いため)。",
+    "version": 1,
+    "sourceFiles": ["src/dsl-parser.js", "src/command-builder.js", "src/executor.js", "src/board.js"]
+  },
+
+  "fields": {
+    "_comment": "カードデータの列名。それぞれ「いつ発動するか」を表す。中に入っているDSL文字列が実際の命令。",
+    "ONCE": "そのカードを獲得/LVUPした瞬間に1回だけ実行される。",
+    "TAP": "プレイヤーが能動的にそのカードをTAP(使用済みにする)ことで発動する。多くはON(event,effect)で特定イベントへの反応として書かれ、AUTO=Aのカードは自動発動、それ以外は都度手動で使うか選べる(TAP_REACTION_AVAILABLEという保留中の選択として提示される)。TAPしたカードはラウンド開始時または特定の効果でアンタップされるまで再使用できない。",
+    "PASSIVE": "常時有効な効果、または条件(IF)を満たす限り常時有効な効果。ON(event,effect)で書かれている場合は、そのイベントが起きると自動的に(TAPなしで)発動する。VP_MODIFIER系やRESOURCE_LIMIT系などの「制限・補正ルール」もここに置かれることが多い。",
+    "TURNEND": "そのプレイヤーのターン終了時に毎回チェックされるルール(RESOURCE_LIMIT/RESOURCE_TOTAL_LIMIT/FORCE_CONVERT、または単純なUNTAP)。",
+    "AUTO": "TAP能力の既定動作。'A'なら自動発動(オート)、空欄ならプレイヤーが都度オート/マニュアルを選べる。",
+    "COST": "そのカードを獲得/LVUPするのに必要な資源。「2A,2B」のように','区切りは全部必要、「15A/15B/15C」のように'/'区切りはどれか1つを選んで払う(選択式COST)。",
+    "fee": "そのAREAを支配しているプレイヤーが、他プレイヤーがそのAREAにダイスを置くたびに得る使用料(K)。使用料回収は専用のフリーアクションで、回数制限なし。"
+  },
+
+  "freeActions": {
+    "_comment": "DSL/カード効果ではなく、全プレイヤーが常に使える固定の仕組み。回数制限は一切ない(資源が尽きるまで何度でも使える)。",
+    "A_TO_K": "A(権力)1個 -> K(食料)1個",
+    "B_TO_K": "B(信心)1個 -> K(食料)1個",
+    "C_TO_K": "C(金貨)1個 -> K(食料)1個",
+    "Z_TO_K": "Z(人脈)1個 -> K(食料)1個",
+    "FEE_COLLECT": "支配しているAREAに溜まった使用料(K)を回収する。使用料が残っている限り何度でも使える。唯一、この回収だけはON(GET(K),...)のような反応を誘発する(他の4つのフリーアクションは反応を誘発しない)。",
+    "note": "wD(ホワイトダイス)をKに変換するフリーアクションは廃止済み(存在しない)。wDは所持上限5個を超えると自動的に2Kになる(フリーアクションではなく常時ルール)。"
+  },
+
+  "commands": {
+    "ADD": {
+      "syntax": "ADD(resource[,resource...])  例: ADD(3K), ADD(A,B)",
+      "semantics": "指定した資源をその場で獲得する。資源ごとにON(GET(resource),...)反応を誘発する。DとwDはダイスそのものを新しく得る(本数分、個別にGETイベントが発火する)。",
+      "notes": "複数資源をまとめて書いた場合、それぞれ別個の獲得として扱われる。"
+    },
+    "PAY": {
+      "syntax": "PAY(resource[,resource...])  例: PAY(2K)",
+      "semantics": "指定した資源を支払うだけで、何も得ない。主にTAP効果の冒頭で「追加コストを払ってから本体の効果(BUILDなど)を行う」形で使われる。支払いにはZ->ABCやA<->K(権力者)などの通常の代用ルールが適用される。支払えなければその効果全体が失敗する。"
+    },
+    "CHANGE": {
+      "syntax": "CHANGE(pay,gain[,times])  例: CHANGE(K,A), CHANGE(K,A,2), CHANGE((A,B,C),D,ALL)",
+      "semantics": "payを払ってgainを得る、資源変換効果。第3引数(times)の有無と種類で動作が変わる: (1) 省略時は必ず1回、払えなければ全体が失敗する。(2) 数値を指定すると「その回数まで、手持ちで払える分だけ」実行する(全額払えなくても一部だけ実行される、例: CHANGE(K,A,2)で1Kしか持っていなければ1回だけ実行)。(3) ALLを指定すると、今払える最大回数を実行する(CONVERT_LIMITで上限がかかる場合がある)。",
+      "notes": "payがA/B/Cの場合、通常の代用ルール(Z->ABC、権力者のA<->K)が適用される。MODIFY_CONVERT_VALUEのPASSIVEルールがあれば、times(省略時/数値指定の両方)に加減算される。"
+    },
+    "BUILD": {
+      "syntax": "BUILD(categories,buildValue)  例: BUILD(U), BUILD(A,B,C,U,M,1)",
+      "semantics": "カードの獲得/LVUPを実行する。categoriesは対象カテゴリ(A=領地,B=天運,C=人材,U=所有カードのLVUP,M=モニュメント、省略時は全部)。buildValueは「ダイス目に相当する値」で、省略時はTAPしたダイスそのものの目を使うが、数値を明示すると(例: 始まりの兆しの1、終わりの兆しの6/12)ダイスなしでその値として扱う。",
+      "notes": "buildValueはSET_DIE_VALUE/CHANGE_DIE_VALUE/MONUMENT_CHANGE_DIE_VALUEで後から上書き/加算できる(カード自体を対象にした場合)。候補の絞り込みと実際の支払い処理はboard.js側が担当する(executor.js単体では実行できない)。"
+    },
+    "UNTAP": {
+      "syntax": "UNTAP()",
+      "semantics": "そのカード自身をアンタップ(再使用可能に)する。TURNEND列に単体で書かれている場合は毎ターン終了時に無条件でアンタップする。"
+    },
+    "UNTAP_ALL": {
+      "syntax": "UNTAP_ALL(SELF)",
+      "semantics": "自分の所有カードを全てアンタップする。",
+      "notes": "「交渉術」「研究」「土木技術」「測量術」(旧:兆し系4種)は常にこの対象から除外される(カード固有の例外)。"
+    },
+    "UNTAP_CHOICE": {
+      "syntax": "UNTAP_CHOICE(SELF,n)",
+      "semantics": "自分のタップ済みカードのうち、最大n枚を選んでアンタップする。タップ済みがn枚以下ならそのまま全部アンタップし、選択は発生しない。n枚より多ければ、プレイヤー(またはAI)がどのn枚をアンタップするか選ぶ。全部アンタップしなくてもよい(予算を余らせてもよい)。"
+    },
+    "REPLACE_ADD": {
+      "syntax": "REPLACE_ADD(from,to)  例: REPLACE_ADD(D,wD)",
+      "semantics": "PASSIVEルール。'from'資源を獲得しようとするたびに、代わりに'to'資源を獲得する強制置換。ADD/CHANGE/フリーアクションなど、資源獲得のあらゆる経路に適用される。"
+    },
+    "RESOURCE_LIMIT": {
+      "syntax": "RESOURCE_LIMIT(resource,n)",
+      "semantics": "TURNENDルール。ターン終了時にその資源がnを超えていたら、1個だけ減らす(nまで一気に減らすのではなく、1個ずつ)。複数ターンに渡って超え続けていれば毎ターン1個ずつ減っていく。"
+    },
+    "RESOURCE_TOTAL_LIMIT": {
+      "syntax": "RESOURCE_TOTAL_LIMIT((resource,resource,...),n)",
+      "semantics": "TURNENDルール。指定した複数資源の合計がnを超えている場合、ターンを終了できない(超えた状態のままでは進めない、超えないよう資源を使い切る必要がある)。RESOURCE_LIMITとは違い自動で減らされるのではなく、ターン終了そのものがブロックされる。"
+    },
+    "FORCE_CONVERT": {
+      "syntax": "FORCE_CONVERT(from,to,n)",
+      "semantics": "TURNENDルール。ターン終了時に、from資源をn個(手持ちがn未満ならその全部)、to資源に強制変換する。"
+    },
+    "VP_MODIFIER": {
+      "syntax": "VP_MODIFIER(count)  countは数値または動的な式(例: COUNT(天))",
+      "semantics": "常時有効なVP補正。countの値が毎ターン・毎判断ごとにリアルタイムで評価され、最終得点に加算される(AIの評価関数にも常に反映される、ゲーム終了を待たない)。"
+    },
+    "VP_MODIFIER_FINAL": {
+      "syntax": "VP_MODIFIER_FINAL(count,cap?)",
+      "semantics": "VP_MODIFIERと同じ式評価だが、実際にゲームが終了した瞬間(最終ラウンド終了時)にしか加算されない。cap(上限)を指定すると、その値を超えて加算されない。",
+      "notes": "VP_MODIFIERとの違いは重要: これはゲーム終了時専用で、ゲーム中にAIが『このVPはもう確定した』と早まって評価しないようにするためにある。"
+    },
+    "VP_PENALTY_IF_BELOW": {
+      "syntax": "VP_PENALTY_IF_BELOW(metric,threshold)",
+      "semantics": "ゲーム終了時、metricの値がthresholdに届かない分、1につき-1VP。届いていれば(threshold以上なら)ペナルティ0。"
+    },
+    "VP_PENALTY_PER": {
+      "syntax": "VP_PENALTY_PER(metric)",
+      "semantics": "ゲーム終了時、metricの値そのものの数だけ-1VP(しきい値なし、1個につき-1VP)。"
+    },
+    "CONVERT_LIMIT": {
+      "syntax": "CONVERT_LIMIT(ALL,n)",
+      "semantics": "PASSIVEルール。CHANGE(...,ALL)形式(第3引数がALL)の変換1回あたりの実行回数の上限をnに制限する。ゲーム中に溜まっていく回数制限ではなく、CHANGEを実行するたびにリセットされる(1回のCHANGEごとの上限)。数値指定/省略時のCHANGE(1回または指定回数まで)には影響しない。"
+    },
+    "BLOCK_UPGRADE_UNLESS_QST_RANK": {
+      "syntax": "BLOCK_UPGRADE_UNLESS_QST_RANK(questFaceId,rank)",
+      "semantics": "その対象QSTカード(questFaceId)の目標における自分の現在順位がrankと一致しない限り、カードのLVUPができない。そのQSTカードが実際に今回のゲームで公開されているかどうかに関係なく、常に裏で判定される(非公開のQST基準でも有効)。"
+    },
+    "BLOCK_COLOR_DIE_REUSE": {
+      "syntax": "BLOCK_COLOR_DIE_REUSE()",
+      "semantics": "自分のカラーダイス(ホワイトダイスではない)が既に置かれているAREA/マップには、別のカラーダイスを置けなくなる。1回の複数ダイス同時配置(グループ配置)の中で置く分同士は対象外(今回のアクションより前に置かれていたダイスだけが対象)。GRANT_PLACE_ANYWHEREの効果でこの制限は回避できる。"
+    },
+    "WILDCARD_DICE": {
+      "syntax": "WILDCARD_DICE()",
+      "semantics": "そのカードを所有している間、自分の全てのダイス(カラー・ホワイト問わず)が☆(ワイルドカード)扱いになる。スロットの目・ANY指定を無視して自動的に配置される(空いている通常スロットに左詰め、満員なら一番左のスロットに重ねて置かれる)。配置時の『同じ目重複禁止』やBLOCK_COLOR_DIE_REUSEの制限も受けない。"
+    },
+    "PASS_COLOR_DIE_BONUS": {
+      "syntax": "PASS_COLOR_DIE_BONUS(amount)",
+      "semantics": "ラウンド終了時、使わなかった(置かれなかった、またはパスした)カラーダイス1個につき通常もらえる3Kの代わりに、amountKをもらう。"
+    },
+    "WHITE_DICE_CAP": {
+      "syntax": "WHITE_DICE_CAP(n)",
+      "semantics": "ホワイトダイス(wD)の所持上限を、通常の5からnに変更する。上限を超えて得たwDはKに変換される(通常ルールと同じ仕組み、上限の数値だけが変わる)。"
+    },
+    "MODIFY_CONVERT_VALUE": {
+      "syntax": "MODIFY_CONVERT_VALUE(scope1,scope2,delta)",
+      "semantics": "PASSIVEルール。CHANGE命令の実行回数(times)にdeltaを加減算する(実行時に数値を書き換えるのではなく、呼ばれるたびにdeltaを足す)。"
+    },
+    "IF": {
+      "syntax": "IF(condition,effect)  例: IF(CARD_COUNT>=3,VP_MODIFIER(2))",
+      "semantics": "conditionが真の場合のみ、effectを(あたかもそのまま書かれていたかのように)実行/適用する。PASSIVEで使われることが多く、毎回評価が更新される(状態が変われば適用/非適用も変わる)。"
+    },
+    "ON": {
+      "syntax": "ON(event(args),effect)  例: ON(GET(K),ADD(Z)), ON(BUILD(A,B,C),ADD(VP))",
+      "semantics": "イベント駆動の反応。eventが実際に発生し、かつargsに指定した値と一致する(argsを省略すれば種類を問わず全部一致)場合に、effectを実行する。PASSIVE列に書けば自動発動(TAP不要)、TAP列に書けばプレイヤーがそのカードをTAPして使う選択制の反応になる(AUTO=Aなら自動発動)。",
+      "events": {
+        "GET(resource)": "その資源を1個獲得した瞬間(ADD/CHANGE/フリーアクションの一部などで発生。フリーアクションのうちA/B/C/Z->Kと通常のCHANGEは反応を誘発しない設計のものもあるので注意、使用料回収は誘発する)。ダイス(D/wD)は複数個獲得時、1個ずつ個別に発生する。",
+        "BUILD(categories)": "カード/モニュメントの獲得・LVUPが成立した瞬間。"
+      },
+      "notes": "ON反応の連鎖(反応がさらに別の反応を誘発する)は最大8段階まで許容され、それを超えるとエラーになる(無限ループ対策)。"
+    },
+    "SET_DICE_ANY": {
+      "syntax": "SET_DICE_ANY()",
+      "semantics": "自分のダイス1個を選び、好きな目(1-6)に変更する。ターン終了時、変更前の目に戻る(そのターンの間だけの変更)。"
+    },
+    "SET_DIE_VALUE": {
+      "syntax": "SET_DIE_VALUE(SELFn|n[,...])  例: SET_DIE_VALUE(SELF1|1), SET_DIE_VALUE(SELF2|2,SELF5|5)",
+      "semantics": "自分のダイス1個を選び、指定された選択肢の中から1つの目に変更する(自由な値ではなく、あらかじめ決められた候補からの選択)。ターン終了時、変更前の目に戻る。",
+      "notes": "ダイスの代わりに、固定ダイス目を持つ自分の所有カード(例: 旧「兆し系」カード)を対象にすることもでき、その場合はカード自体の実効値を書き換える(ターン終了でも戻らない、永続的な上書き)。"
+    },
+    "CHANGE_DIE_VALUE": {
+      "syntax": "CHANGE_DIE_VALUE(SELF±n)  例: CHANGE_DIE_VALUE(SELF±1)、または CHANGE_DIE_VALUE(SELF+2)",
+      "semantics": "自分のダイス1個を選び、その目に+n/-nする(±nなら符号をプレイヤーが選ぶ、+n/-nのみの場合は固定)。6を超えても/0未満になっても構わない(循環しない、そのままの数値として扱われ、配置先候補が単に見つからなくなるだけ)。ターン終了時、変更前の目に戻る。",
+      "notes": "固定ダイス目カードを対象にする場合は永続的な上書き(SET_DIE_VALUEの注記と同様)。"
+    },
+    "MONUMENT_CHANGE_DIE_VALUE": {
+      "syntax": "MONUMENT_CHANGE_DIE_VALUE(SELF+n)",
+      "semantics": "CHANGE_DIE_VALUEの固定delta版(選択肢はなく、常に決まった+n)。宮廷人のTAP効果専用。対象のダイス/カードがない場合はスキップしてもよい(残りの効果は実行される)。"
+    },
+    "GRANT_PLACE_ANYWHERE": {
+      "syntax": "GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN)",
+      "semantics": "直前のSET_DIE_VALUE/CHANGE_DIE_VALUE/MONUMENT_CHANGE_DIE_VALUEで対象にしたダイスに対し、そのターンだけ『どのAREA/スロットにも配置できる』権利を与える(通常のスロット条件やBLOCK_COLOR_DIE_REUSEを無視できる)。直前の効果がカード(ダイスではない)を対象にしていた場合は何もしない。"
+    },
+    "SET_WILDCARD": {
+      "syntax": "SET_WILDCARD(SELF,THIS_TURN) または SET_WILDCARD(THIS_DICE,THIS_TURN)",
+      "semantics": "自分のダイス1個(SELF)または直前の効果が対象にしたダイス(THIS_DICE)に、そのターンだけ☆(ワイルドカード)扱いを与える。WILDCARD_DICE常時効果と同じ配置ルールが、このダイス1個にだけ一時的に適用される。"
+    },
+    "BLOCK_BUILD": {
+      "syntax": "BLOCK_BUILD(category,THIS_TURN)",
+      "semantics": "そのターンの残り、指定カテゴリ(例: M=モニュメント)の獲得/LVUPができなくなる。どの経路(AREA行動、カードのTAP、QST報酬)でも一律に適用される。"
+    },
+    "MONUMENT_DICE_DISCOUNT": {
+      "syntax": "MONUMENT_DICE_DISCOUNT(n,THIS_TURN)",
+      "semantics": "そのターンの残り、モニュメントの必要ダイス目がn下がる(0未満にはならない)。複数回重ねがけされた場合は合計される。"
+    },
+    "SET_CURRENT_AREA (代入文)": {
+      "syntax": "MAP00n.CURRENT_AREA=AREA0nnX",
+      "semantics": "AREAのLVが上がったこと(A面→B面など)をそのマップに反映する。使用料の所有者をそのプレイヤーに変更し、スロット構成を新しいAREAのものに作り直す(古いスロットに置かれていたダイスは既に効果を発動済みなので失われない)。カードのONCE列で使われる、カード効果そのものではなく付随処理。"
+    }
+  },
+
+  "metrics": {
+    "_comment": "IF/VP_PENALTY_IF_BELOW/VP_PENALTY_PER/VP_MODIFIER_FINALなどのcount/metric引数として使われる、値を計算する関数群。",
+    "CARD_COUNT": "所有しているA/B/C/Mカードの枚数(JOB/CONは含まない)。CARD_COUNT(M)のように引数を指定すると、そのシートだけに絞る。複数指定(CARD_COUNT(A,B,C))も可。",
+    "AREA_COUNT": "所有しているAREA支配カードの枚数(9種類のAREAのうちいくつ支配しているか)。AREA_COUNT(2)でLV2(アップグレード済み)のみに絞れる。",
+    "LEVEL_COUNT": "指定したLEVEL値のカードを何枚所有しているか。",
+    "EMBLEM_COUNT / COUNT": "引数なしなら天地人の合計エンブレム数。引数を1つ(天/地/人)指定すると、その種類のエンブレム数。2つ目の引数でシート(例: M)に絞れる。",
+    "EMBLEM_SET_COUNT": "天・地・人のうち最も少ない種類の数(3種類そろったセットが何組あるか)。",
+    "MAX_EMBLEM_COUNT": "天・地・人のうち最も多い種類の数。",
+    "TOTAL_EMBLEM_COUNT": "天地人の合計(EMBLEM_COUNT無引数と同じ値)。",
+    "COST_TOTAL": "所有している全カードの、獲得時に実際に払ったコストの合計(資源の種類を問わず合計数)。選択式COST(例: 15A/15B/15C)のカードは、実際に選んで払った方だけを数える。",
+    "RESOURCE": "現在手持ちの資源の数。RESOURCE(A,B,C,Z)のように複数指定すると合計。",
+    "PER": "PER(resource,n) = 手持ちのresourceをnで割った商(切り捨て)。例: PER(K,1)は手持ちのK数そのもの。",
+    "EXTRA_D_PLUS_ABC_COUNT": "初期手持ち数より増えたカラーダイスの本数 + 現在『通常』(未アップグレード)のA/B/Cカードの所有枚数。"
+  },
+
+  "knownLimitations": [
+    "色欲/権力者/異端者/料理人/開拓者/地主など、一部のJOB/CON能力はDSLで表現されておらず、コード側に直接埋め込まれたハードコード実装(PASSIVE/TAP列が空欄、またはDSLと実際の挙動が完全には一致しない)。これらはdata/ai-reference.jsonの個別フラグで補う必要がある。",
+    "本仕様書に載っていないDSL命令名が将来追加された場合、AIは『仕様未確認』と答えるべきで、推測で回答してはならない。"
+  ]
+}

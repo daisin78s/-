@@ -233,8 +233,6 @@ function lowerCall(node) {
       return { type: 'VP_PENALTY_PER', metric: lowerMetric(node.args[0]) };
     case 'CONVERT_LIMIT':
       return { type: 'CONVERT_LIMIT', scope: identLikeName(node.args[0]), limit: numberValue(node.args[1]) };
-    case 'UPGRADE_LIMIT':
-      return { type: 'UPGRADE_LIMIT', limit: numberValue(node.args[0]) };
     // BLOCK_UPGRADE_UNLESS_QST_RANK(questFaceId,rank) -- CON004A (2026-08-13, per user spec: "QSTカード
     // Q004Aで1位でなければLVUPできない"): always checked against questFaceId's GOAL, whether or not that
     // exact face is actually revealed this game (see board.isUpgradeBlockedByQstRank), so PASSIVE just

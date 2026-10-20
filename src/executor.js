@@ -7,7 +7,7 @@
  * Scope: resource/dice grants (which roll new dice immediately and record
  * an undo checkpoint first -- see grantOneDie), CHANGE, UNTAP(_ALL),
  * PASSIVE-rule queries (REPLACE_ADD/VP_MODIFIER/CONVERT_LIMIT/
- * UPGRADE_LIMIT/MODIFY_CONVERT_VALUE), IF condition evaluation, TURNEND
+ * MODIFY_CONVERT_VALUE), IF condition evaluation, TURNEND
  * rules (RESOURCE_LIMIT/RESOURCE_TOTAL_LIMIT/FORCE_CONVERT), MAP.CURRENT_AREA
  * assignment (which also records who owns that map's usage fee), the
  * ON(event,effect) dispatch bus, the dice-value DSLs (SET_DICE_ANY/
@@ -1508,7 +1508,6 @@ const RULE_ONLY_TYPES = new Set([
   'REPLACE_ADD',
   'VP_MODIFIER',
   'CONVERT_LIMIT',
-  'UPGRADE_LIMIT',
   'MODIFY_CONVERT_VALUE',
   'RESOURCE_LIMIT',
   'RESOURCE_TOTAL_LIMIT',

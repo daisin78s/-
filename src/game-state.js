@@ -425,9 +425,8 @@ function createShopDeck(drawPile, slotIds) {
  * @property {Object<string, number>} passiveCounters - cumulative counters for PASSIVE limits that need
  *   to remember usage across separate effects. Currently EMPTY in every game: its only writer was
  *   CONVERT_LIMIT, which stopped accumulating on 2026-08-11 when that limit was corrected to a per-CHANGE
- *   cap (see executor.js's runChange), and UPGRADE_LIMIT -- the other limit that would need a counter --
- *   is parsed but not yet enforced anywhere. Kept as the place for that enforcement to land rather than
- *   removed and re-added later; nothing reads it today, so an empty object is the correct state.
+ *   cap (see executor.js's runChange). Kept as the place for a future limit's enforcement to land rather
+ *   than removed and re-added later; nothing reads it today, so an empty object is the correct state.
  * @property {Object<string, true>} quests - the 3 QST cards revealed at setup (confirmed 2026-07-30:
  *   fixed for the whole game, no restock), keyed by the specific face ID that was revealed (e.g.
  *   "Q002B") -> true. QST has no in-game tier-flip the way CON/A/B/C do, so there's no need to track

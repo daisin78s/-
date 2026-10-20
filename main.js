@@ -4277,15 +4277,6 @@ function buildConvertLimitIcon(actionText) {
   return actionRow([actionEmoji('🔄'), actionSuffix(`MAX${match[1]}`)]);
 }
 
-/** UPGRADE_LIMIT(n): caps how many UPGRADEs (BUILD(U)) a player can do, game-wide (2026-07-30, added
- * for CON004B) -- reuses the ⚒️ BUILD glyph with a "U" suffix (matching buildBuildIcon's own
- * category-letter convention) plus a MAX badge. */
-function buildUpgradeLimitIcon(actionText) {
-  const match = /^UPGRADE_LIMIT\((\d+)\)$/.exec(actionText || '');
-  if (!match) return null;
-  return actionRow([actionEmoji('⚒️'), actionSuffix('U'), actionSuffix(`MAX${match[1]}`)]);
-}
-
 /** RESOURCE_TOTAL_LIMIT((res,res,...),n): a TURNEND gate blocking TURNEND until the combined total of
  * the listed resources is <=n (2026-07-30, added for CON005B) -- each resource's dot, then a
  * "合計MAX{n}" ("total max") suffix. */
@@ -4460,8 +4451,6 @@ function buildActionIcons(actionText) {
   if (forceConvertIcon) return forceConvertIcon;
   const convertLimitIcon = buildConvertLimitIcon(actionText);
   if (convertLimitIcon) return convertLimitIcon;
-  const upgradeLimitIcon = buildUpgradeLimitIcon(actionText);
-  if (upgradeLimitIcon) return upgradeLimitIcon;
   const resourceTotalLimitIcon = buildResourceTotalLimitIcon(actionText);
   if (resourceTotalLimitIcon) return resourceTotalLimitIcon;
   const onPlaceAddIcon = buildOnPlaceAddIcon(actionText);
