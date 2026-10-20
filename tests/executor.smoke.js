@@ -912,6 +912,68 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 }
 
 // ---------------------------------------------------------------------------
+// 14d. K's shortfall covered by A/B/C, for EVERY player (2026-10-20, per user request: 晩餐会/M403's own
+//     12K cost was never once reached across a whole batch of AI games -- hoarding 12 real K takes the
+//     same kind of multi-turn foresight the AI's shallow search already fails at for other reasons (see
+//     14c's own doc), so an automatic payment-time substitution (no foresight needed, same mechanism
+//     class as Z->ABC/権力者's own A<-K) was added instead of a proactive "convert to K" action. Z is
+//     deliberately NOT part of this fallback -- only A/B/C, per the user's own explicit scope. Non-権力者
+//     players drain whichever of A/B/C they currently hold the MOST of first; 権力者 owners drain A first
+//     specifically (symmetric with their own A<-K substitution in 14c), falling back to the same
+//     most-first order for any shortfall still remaining after A runs out.
+// ---------------------------------------------------------------------------
+{
+  // Non-権力者: K shortfall drained from whichever of A/B/C currently holds the most, not a fixed order.
+  const state = freshState();
+  const player = getPlayerRef(state, 'P1');
+  player.resources.K = 2;
+  player.resources.A = 1;
+  player.resources.B = 5;
+  player.resources.C = 3;
+  const result = executor.payCostList(state, index, 'P1', [{ resource: 'K', count: 10 }]);
+  check('Non-権力者: K shortfall (8) covered by B (most, 5) then C (3), A untouched', result.success, true);
+  check('...final resources', player.resources, { K: 0, A: 1, B: 0, C: 0, Z: 0, VP: 0, BZ: 0 });
+}
+{
+  // 権力者: K shortfall drains A first specifically, then falls back to most-first among B/C.
+  const state = freshState();
+  const player = getPlayerRef(state, 'P1');
+  player.jobCardId = 'JOB005';
+  player.resources.K = 2;
+  player.resources.A = 1;
+  player.resources.B = 5;
+  player.resources.C = 3;
+  const result = executor.payCostList(state, index, 'P1', [{ resource: 'K', count: 10 }]);
+  check('権力者: K shortfall (8) drains A (1) first, then B (most, 5), then C (2 of 3)', result.success, true);
+  check('...final resources', player.resources, { K: 0, A: 0, B: 0, C: 1, Z: 0, VP: 0, BZ: 0 });
+}
+{
+  // Z is deliberately excluded from covering a K shortfall (scope is A/B/C only) -- real K + A/B/C
+  // combined still fall short, payment fails atomically even though Z alone would have been plenty.
+  const state = freshState();
+  const player = getPlayerRef(state, 'P1');
+  player.resources.K = 5;
+  player.resources.A = 1;
+  player.resources.B = 1;
+  player.resources.C = 1;
+  player.resources.Z = 20;
+  const result = executor.payCostList(state, index, 'P1', [{ resource: 'K', count: 10 }]);
+  check('K shortfall not covered by Z (out of scope), even with plenty of it', result, { success: false, reason: 'INSUFFICIENT_RESOURCES', resource: 'K' });
+  check('...nothing was paid on failure (atomic)', player.resources, { K: 5, A: 1, B: 1, C: 1, Z: 20, VP: 0, BZ: 0 });
+}
+{
+  // Real K alone already covers the cost -- A/B/C stay untouched (real-first, same order as every other
+  // substitution in this function).
+  const state = freshState();
+  const player = getPlayerRef(state, 'P1');
+  player.resources.K = 10;
+  player.resources.A = 5;
+  const result = executor.payCostList(state, index, 'P1', [{ resource: 'K', count: 10 }]);
+  check('Real K alone already affordable -- A/B/C stay untouched', result.success, true);
+  check('...final resources', player.resources, { K: 0, A: 5, B: 0, C: 0, Z: 0, VP: 0, BZ: 0 });
+}
+
+// ---------------------------------------------------------------------------
 // 15. EMBLEM_COUNT/EMBLEM_SET_COUNT with multi-emblem monuments (2026-07-30: game.xlsx's M sheet
 // split EMBLEM into per-type EMBLEM_A/EMBLEM_B/EMBLEM_C counts, so a single monument can now count
 // toward more than one emblem -- e.g. M004 has EMBLEM_A=1,EMBLEM_B=1,EMBLEM_C=1, i.e. one each of

@@ -395,9 +395,20 @@ function applyPowerBrokerGameEndTopUp(state, index) {
  * see that function's own doc; direction corrected same day -- the ability is "A's shortfall may be
  * covered by K", not the other way around): real A first, K covers any shortfall -- same
  * real-first-then-fallback order resolvePayment already uses for everyone else's Z, just K standing in
- * for A specifically rather than Z standing in for A/B/C. No "prefer the substitute" branch exists for
- * this one (unlike 色欲's preferZ) -- there's no reported need for a 権力者 owner to deliberately burn K
- * before A the way 色欲 burns Z before A/B/C for its own round-end conversion.
+ * for A specifically rather than Z standing in for A/B/C.
+ *
+ * K items get the mirror-image substitution for EVERY player (2026-10-20, per user request: 晩餐会/M403's
+ * 12K cost was never once reached by the AI across a whole batch of games -- see this function's own git
+ * history/PR discussion -- because actually hoarding 12 real K takes exactly the kind of multi-turn
+ * foresight the AI's shallow search keeps failing at for the same reason the old 権力者 K->A conversion
+ * did; an automatic PAYMENT-TIME substitution needs no such foresight, same as Z->ABC/権力者's A<-K
+ * above): real K first, then A/B/C cover any shortfall -- Z is deliberately NOT part of this fallback
+ * (per user's own explicit scope: "ABCのほかの資源で"), only A/B/C. Non-権力者 players drain whichever of
+ * A/B/C they currently hold the MOST of first ("多い資源から使われる"); 権力者 owners drain A first
+ * specifically (symmetric with their own A<-K substitution just above), falling back to the same
+ * most-first order for any shortfall still remaining after A runs out. 配給所/AREA010's own
+ * CHANGE(K,VP,n) action spends K through this exact path (see runChange's own scaledPay), so this also
+ * lets a player sitting on plenty of A/B/C but little K actually use it.
  * @returns {{ok:true, items:{resource:string,count:number}[]}|{ok:false, resource:string}}
  */
 function resolvePayment(state, index, playerId, items) {
@@ -406,20 +417,51 @@ function resolvePayment(state, index, playerId, items) {
   const powerBroker = hasPowerBrokerAbility(state, index, playerId);
   let zPool = player.resources.Z || 0;
   let kPool = player.resources.K || 0;
+  let aPool = player.resources.A || 0;
+  let bPool = player.resources.B || 0;
+  let cPool = player.resources.C || 0;
+  const colorPool = { A: () => aPool, B: () => bPool, C: () => cPool };
+  const spendColor = (r, n) => {
+    if (r === 'A') aPool -= n;
+    else if (r === 'B') bPool -= n;
+    else cPool -= n;
+  };
   const resolved = [];
   for (const item of items) {
+    if (item.resource === 'K') {
+      const kUsed = Math.min(kPool, item.count);
+      kPool -= kUsed;
+      if (kUsed > 0) resolved.push({ resource: 'K', count: kUsed });
+      let shortfall = item.count - kUsed;
+      if (shortfall > 0) {
+        const order = powerBroker
+          ? ['A', ...['B', 'C'].sort((a, b) => colorPool[b]() - colorPool[a]())]
+          : ['A', 'B', 'C'].sort((a, b) => colorPool[b]() - colorPool[a]());
+        for (const r of order) {
+          if (shortfall <= 0) break;
+          const used = Math.min(colorPool[r](), shortfall);
+          if (used > 0) {
+            spendColor(r, used);
+            shortfall -= used;
+            resolved.push({ resource: r, count: used });
+          }
+        }
+      }
+      if (shortfall > 0) return { ok: false, resource: 'K' };
+      continue;
+    }
     if (item.resource === 'A' && powerBroker) {
-      const haveA = player.resources.A || 0;
-      const aUsed = Math.min(haveA, item.count);
+      const aUsed = Math.min(aPool, item.count);
+      aPool -= aUsed;
       const kUsed = item.count - aUsed;
-      if (aUsed > haveA || kUsed > kPool) return { ok: false, resource: item.resource };
+      if (kUsed > kPool) return { ok: false, resource: item.resource };
       kPool -= kUsed;
       if (aUsed > 0) resolved.push({ resource: 'A', count: aUsed });
       if (kUsed > 0) resolved.push({ resource: 'K', count: kUsed });
       continue;
     }
     if (COLOR_RESOURCES.has(item.resource)) {
-      const haveReal = player.resources[item.resource] || 0;
+      const haveReal = colorPool[item.resource]();
       let realUsed;
       let zUsed;
       if (preferZ) {
@@ -431,6 +473,7 @@ function resolvePayment(state, index, playerId, items) {
       }
       if (realUsed > haveReal || zUsed > zPool) return { ok: false, resource: item.resource };
       zPool -= zUsed;
+      if (realUsed > 0) spendColor(item.resource, realUsed);
       if (realUsed > 0) resolved.push({ resource: item.resource, count: realUsed });
       if (zUsed > 0) resolved.push({ resource: 'Z', count: zUsed });
       continue;
@@ -439,15 +482,9 @@ function resolvePayment(state, index, playerId, items) {
     const have = dieKind
       ? player.dice.filter((d) => d.kind === dieKind).length
       : item.resource === 'Z' ? zPool
-      // K here shares kPool with a 権力者 owner's own A-substitution above -- a literal K item appearing
-      // in the SAME cost list as an A item (e.g. a card costing both) would otherwise let the same
-      // physical K units get double-counted as available for both. Harmless for non-権力者 players, where
-      // kPool is simply never touched by the A branch above.
-      : item.resource === 'K' ? kPool
       : (player.resources[item.resource] || 0);
     if (have < item.count) return { ok: false, resource: item.resource };
     if (item.resource === 'Z') zPool -= item.count;
-    if (item.resource === 'K') kPool -= item.count;
     resolved.push(item);
   }
   return { ok: true, items: resolved };
