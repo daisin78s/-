@@ -305,7 +305,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "城下町LV1の支配"
+      "INST": "ローマ市街LV1の支配"
     },
     {
       "ID": "A002A",
@@ -321,7 +321,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "大聖堂LV1の支配"
+      "INST": "図書館LV1の支配"
     },
     {
       "ID": "A003A",
@@ -337,7 +337,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "ギルドLV1の支配"
+      "INST": "市場LV1の支配"
     },
     {
       "ID": "A004A",
@@ -385,7 +385,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "歓楽街LV1の支配"
+      "INST": "酒場LV1の支配"
     },
     {
       "ID": "A201A",
@@ -401,7 +401,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "孤児院LV1の支配"
+      "INST": "配給所LV1の支配"
     },
     {
       "ID": "A202A",
@@ -449,7 +449,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "城下町LV2の支配"
+      "INST": "ローマ市街LV2の支配"
     },
     {
       "ID": "A002B",
@@ -465,7 +465,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "大聖堂LV2の支配"
+      "INST": "図書館LV2の支配"
     },
     {
       "ID": "A003B",
@@ -481,7 +481,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "ギルドLV2の支配"
+      "INST": "市場LV2の支配"
     },
     {
       "ID": "A004B",
@@ -529,7 +529,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "歓楽街LV2の支配"
+      "INST": "酒場LV2の支配"
     },
     {
       "ID": "A201B",
@@ -545,7 +545,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "孤児院LV2の支配"
+      "INST": "配給所LV2の支配"
     },
     {
       "ID": "A202B",

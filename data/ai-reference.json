@@ -1,0 +1,1404 @@
+{
+ "gameDataVersion": "2890a3e4f0100a6f",
+ "generatedAt": "2026-10-20T13:06:43.098Z",
+ "commandSpecFile": "dsl-command-spec.json",
+ "cardCount": 149,
+ "cards": {
+  "M001": {
+   "sheet": "M",
+   "name": "オベリスク",
+   "DICE": ">=12",
+   "EMBLEM_C": 1,
+   "VP": 4
+  },
+  "M002": {
+   "sheet": "M",
+   "name": "オスティア灯台",
+   "DICE": ">=11",
+   "COST": "B",
+   "EMBLEM_B": 1,
+   "VP": 4
+  },
+  "M003": {
+   "sheet": "M",
+   "name": "トラヤヌス騎馬像",
+   "DICE": ">=10",
+   "COST": "3A,B",
+   "EMBLEM_A": 2,
+   "EMBLEM_B": 1,
+   "VP": 5
+  },
+  "M004": {
+   "sheet": "M",
+   "name": "ティトゥス凱旋門",
+   "DICE": ">=9",
+   "COST": "2A,2B,2C",
+   "EMBLEM_A": 1,
+   "EMBLEM_B": 1,
+   "EMBLEM_C": 1,
+   "VP": 6
+  },
+  "M005": {
+   "sheet": "M",
+   "name": "黄金宮殿",
+   "DICE": ">=8",
+   "COST": "5A,2C",
+   "EMBLEM_A": 2,
+   "EMBLEM_C": 1,
+   "VP": 6
+  },
+  "M006": {
+   "sheet": "M",
+   "name": "テルマエ（公衆浴場）",
+   "DICE": ">=7",
+   "COST": "2B,C",
+   "EMBLEM_B": 1,
+   "EMBLEM_C": 1,
+   "VP": 4
+  },
+  "M007": {
+   "sheet": "M",
+   "name": "フォルム（中央広場）",
+   "DICE": ">=6",
+   "COST": "3A,3B,3C",
+   "EMBLEM_A": 2,
+   "EMBLEM_B": 2,
+   "EMBLEM_C": 2,
+   "VP": 6
+  },
+  "M008": {
+   "sheet": "M",
+   "name": "パンテオン神殿",
+   "DICE": ">=5",
+   "COST": "5A,5B",
+   "EMBLEM_A": 2,
+   "EMBLEM_B": 2,
+   "VP": 6
+  },
+  "M009": {
+   "sheet": "M",
+   "name": "コロッセオ",
+   "DICE": ">=4",
+   "COST": "4A,4C",
+   "EMBLEM_A": 2,
+   "EMBLEM_C": 2,
+   "VP": 5
+  },
+  "M010": {
+   "sheet": "M",
+   "name": "ハドリアヌス長城",
+   "DICE": ">=3",
+   "COST": "8A",
+   "EMBLEM_A": 2,
+   "VP": 5
+  },
+  "M011": {
+   "sheet": "M",
+   "name": "アレクサンドリア図書館",
+   "DICE": ">=2",
+   "COST": "11B",
+   "EMBLEM_B": 4,
+   "VP": 6
+  },
+  "M012": {
+   "sheet": "M",
+   "name": "トラヤヌス市場",
+   "DICE": ">=1",
+   "COST": "14C",
+   "EMBLEM_C": 4,
+   "VP": 7
+  },
+  "M401": {
+   "sheet": "M",
+   "name": "宝物庫",
+   "DICE": ">=9",
+   "COST": "A",
+   "PASSIVE": "VP_MODIFIER_FINAL(RESOURCE(A,B,C,Z),7)",
+   "inst": "ゲーム終了時持っている〇以外の資源１個につき1VP （MAX7VP)"
+  },
+  "M402": {
+   "sheet": "M",
+   "name": "水道橋",
+   "DICE": ">=13",
+   "COST": "1A,1B,1C",
+   "EMBLEM_A": 1,
+   "EMBLEM_B": 1,
+   "EMBLEM_C": 1,
+   "VP": 8
+  },
+  "M403": {
+   "sheet": "M",
+   "name": "晩餐会",
+   "DICE": ">=2",
+   "COST": "12K",
+   "PASSIVE": "VP_MODIFIER_FINAL(PER(K,1),9)",
+   "inst": "ゲーム終了時持っている〇につき1VP\n（MAX9VP)"
+  },
+  "M404": {
+   "sheet": "M",
+   "name": "帝都建設",
+   "DICE": ">=7",
+   "COST": "5A,5B,5C",
+   "EMBLEM_A": 3,
+   "EMBLEM_B": 3,
+   "EMBLEM_C": 3,
+   "VP": 12
+  },
+  "M405": {
+   "sheet": "M",
+   "name": "巨神像",
+   "DICE": ">=3",
+   "COST": "15A/15B/15C",
+   "EMBLEM_A": "/3",
+   "EMBLEM_B": "/3",
+   "EMBLEM_C": "/3",
+   "PASSIVE": "VP_MODIFIER(MAX_EMBLEM_COUNT)",
+   "inst": "ゲーム終了時\n最多エンブレム　×　VP"
+  },
+  "A001A": {
+   "sheet": "A",
+   "name": "ローマ市街の支配LV1",
+   "COST": "2A",
+   "EMBLEM_A": 1,
+   "VP": 0,
+   "LEVEL": 1,
+   "ONCE": "MAP003.CURRENT_AREA=AREA003B",
+   "inst": "ローマ市街LV1の支配"
+  },
+  "A002A": {
+   "sheet": "A",
+   "name": "図書館の支配LV1",
+   "COST": "2A",
+   "EMBLEM_A": 1,
+   "VP": 0,
+   "LEVEL": 1,
+   "ONCE": "MAP004.CURRENT_AREA=AREA004B",
+   "inst": "図書館LV1の支配"
+  },
+  "A003A": {
+   "sheet": "A",
+   "name": "市場の支配LV1",
+   "COST": "2A",
+   "EMBLEM_A": 1,
+   "VP": 0,
+   "LEVEL": 1,
+   "ONCE": "MAP005.CURRENT_AREA=AREA005B",
+   "inst": "市場LV1の支配"
+  },
+  "A004A": {
+   "sheet": "A",
+   "name": "小麦畑の支配LV1",
+   "COST": "2A,B",
+   "EMBLEM_A": 1,
+   "VP": 0,
+   "LEVEL": 1,
+   "ONCE": "MAP001.CURRENT_AREA=AREA001B",
+   "inst": "小麦畑LV1の支配"
+  },
+  "A005A": {
+   "sheet": "A",
+   "name": "農園の支配LV1",
+   "COST": "2A,B",
+   "EMBLEM_A": 1,
+   "VP": 0,
+   "LEVEL": 1,
+   "ONCE": "MAP002.CURRENT_AREA=AREA002B",
+   "inst": "農園LV1の支配"
+  },
+  "A006A": {
+   "sheet": "A",
+   "name": "酒場の支配LV1",
+   "COST": "2A,B",
+   "EMBLEM_A": 1,
+   "VP": 0,
+   "LEVEL": 1,
+   "ONCE": "MAP006.CURRENT_AREA=AREA006B",
+   "inst": "酒場LV1の支配"
+  },
+  "A201A": {
+   "sheet": "A",
+   "name": "配給所の支配LV1",
+   "COST": "A,B",
+   "EMBLEM_A": 1,
+   "VP": 0,
+   "LEVEL": 1,
+   "ONCE": "MAP010.CURRENT_AREA=AREA010B",
+   "inst": "配給所LV1の支配"
+  },
+  "A202A": {
+   "sheet": "A",
+   "name": "訓練場の支配LV1",
+   "COST": "2A,B",
+   "EMBLEM_A": 1,
+   "VP": 0,
+   "LEVEL": 1,
+   "ONCE": "MAP007.CURRENT_AREA=AREA007B",
+   "inst": "訓練場LV1の支配"
+  },
+  "A301A": {
+   "sheet": "A",
+   "name": "元老院の支配LV1",
+   "COST": "3A,B",
+   "EMBLEM_A": 1,
+   "VP": 0,
+   "LEVEL": 1,
+   "ONCE": "MAP009.CURRENT_AREA=AREA009B",
+   "inst": "元老院LV1の支配"
+  },
+  "A001B": {
+   "sheet": "A",
+   "name": "ローマ市街の支配LV2",
+   "COST": "2A",
+   "EMBLEM_A": 1,
+   "VP": 1,
+   "LEVEL": 2,
+   "ONCE": "MAP003.CURRENT_AREA=AREA003C",
+   "inst": "ローマ市街LV2の支配"
+  },
+  "A002B": {
+   "sheet": "A",
+   "name": "図書館の支配LV2",
+   "COST": "2A",
+   "EMBLEM_A": 1,
+   "VP": 1,
+   "LEVEL": 2,
+   "ONCE": "MAP004.CURRENT_AREA=AREA004C",
+   "inst": "図書館LV2の支配"
+  },
+  "A003B": {
+   "sheet": "A",
+   "name": "市場の支配LV2",
+   "COST": "2A",
+   "EMBLEM_A": 1,
+   "VP": 1,
+   "LEVEL": 2,
+   "ONCE": "MAP005.CURRENT_AREA=AREA005C",
+   "inst": "市場LV2の支配"
+  },
+  "A004B": {
+   "sheet": "A",
+   "name": "小麦畑の支配LV2",
+   "COST": "2A,B",
+   "EMBLEM_A": 1,
+   "VP": 1,
+   "LEVEL": 2,
+   "ONCE": "MAP001.CURRENT_AREA=AREA001C",
+   "inst": "小麦畑LV2の支配"
+  },
+  "A005B": {
+   "sheet": "A",
+   "name": "農園の支配LV2",
+   "COST": "2A,B",
+   "EMBLEM_A": 1,
+   "VP": 1,
+   "LEVEL": 2,
+   "ONCE": "MAP002.CURRENT_AREA=AREA002C",
+   "inst": "農園LV2の支配"
+  },
+  "A006B": {
+   "sheet": "A",
+   "name": "酒場の支配LV2",
+   "COST": "2A,B",
+   "EMBLEM_A": 1,
+   "VP": 1,
+   "LEVEL": 2,
+   "ONCE": "MAP006.CURRENT_AREA=AREA006C",
+   "inst": "酒場LV2の支配"
+  },
+  "A201B": {
+   "sheet": "A",
+   "name": "配給所の支配LV2",
+   "COST": "A,B",
+   "EMBLEM_A": 1,
+   "VP": 1,
+   "LEVEL": 2,
+   "ONCE": "MAP010.CURRENT_AREA=AREA010C",
+   "inst": "配給所LV2の支配"
+  },
+  "A202B": {
+   "sheet": "A",
+   "name": "訓練場の支配LV2",
+   "COST": "2A,B",
+   "EMBLEM_A": 1,
+   "VP": 1,
+   "LEVEL": 2,
+   "ONCE": "MAP007.CURRENT_AREA=AREA007C",
+   "inst": "訓練場LV2の支配"
+  },
+  "A301B": {
+   "sheet": "A",
+   "name": "元老院の支配LV2",
+   "COST": "3A,B",
+   "EMBLEM_A": 1,
+   "VP": 1,
+   "LEVEL": 2,
+   "ONCE": "MAP009.CURRENT_AREA=AREA009C",
+   "inst": "元老院LV2の支配"
+  },
+  "B001A": {
+   "sheet": "B",
+   "name": "基礎学問LV1",
+   "COST": "2B",
+   "EMBLEM_B": 1,
+   "VP": 0,
+   "LEVEL": 1,
+   "ONCE": "ADD(wD)",
+   "TAP": "SET_DIE_VALUE(SELF1|1);GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN)",
+   "inst": "自分のダイス目１個を1に変える\nこのターンそれはどのエリアにも置ける"
+  },
+  "B002A": {
+   "sheet": "B",
+   "name": "高等学問LV1",
+   "COST": "2B",
+   "EMBLEM_B": 1,
+   "VP": 0,
+   "LEVEL": 1,
+   "ONCE": "ADD(wD)",
+   "TAP": "SET_DIE_VALUE(SELF6|6);GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN)",
+   "inst": "自分のダイス目１個を6に変える\nこのターンそれはどのエリアにも置ける"
+  },
+  "B003A": {
+   "sheet": "B",
+   "name": "幾何学LV1",
+   "COST": "2B",
+   "EMBLEM_B": 1,
+   "VP": 0,
+   "LEVEL": 1,
+   "ONCE": "ADD(wD)",
+   "TAP": "CHANGE_DIE_VALUE(SELF+2)",
+   "inst": "自分のダイス目１個を+2する"
+  },
+  "B004A": {
+   "sheet": "B",
+   "name": "交渉術LV1",
+   "COST": "2B,1C",
+   "EMBLEM_B": 1,
+   "VP": 0,
+   "LEVEL": 1,
+   "AUTO": "M",
+   "TAP": "BUILD((A,B,C,M),1)",
+   "inst": "⤵カード一枚を獲得する\nダイス目は1\n通常通り資源は必要"
+  },
+  "B005A": {
+   "sheet": "B",
+   "name": "研究LV1",
+   "COST": "2B,1C",
+   "EMBLEM_B": 1,
+   "VP": 0,
+   "LEVEL": 1,
+   "AUTO": "M",
+   "TAP": "BUILD(U)",
+   "inst": "⤵LVアップする\n通常通り資源は必要"
+  },
+  "B006A": {
+   "sheet": "B",
+   "name": "土木技術LV1",
+   "COST": "2B,1C",
+   "EMBLEM_B": 1,
+   "VP": 0,
+   "LEVEL": 1,
+   "TAP": "BUILD((A,B,C,M),4)",
+   "inst": "⤵カード一枚を獲得する\nダイス目は4\n通常通り資源は必要"
+  },
+  "B201A": {
+   "sheet": "B",
+   "name": "天文学LV1",
+   "COST": "1B,1C",
+   "EMBLEM_B": 1,
+   "VP": 0,
+   "LEVEL": 1,
+   "ONCE": "ADD(2wD)",
+   "inst": "即時ｗDを2個得る"
+  },
+  "B202A": {
+   "sheet": "B",
+   "name": "測量術LV1",
+   "COST": "2B,1C",
+   "EMBLEM_B": 1,
+   "VP": 0,
+   "LEVEL": 1,
+   "AUTO": "M",
+   "TAP": "BUILD((A,B,C,M),6)",
+   "inst": "⤵カード一枚を獲得する\nダイス目は6\n通常通り資源は必要"
+  },
+  "B301A": {
+   "sheet": "B",
+   "name": "パンとサーカスLV1",
+   "COST": "3B,1C",
+   "EMBLEM_B": 1,
+   "VP": 0,
+   "LEVEL": 1,
+   "TAP": "CHANGE(K,VP)",
+   "TURNEND": "UNTAP()",
+   "inst": "タップすると〇をVPに変換する\n毎ターンアンタップする"
+  },
+  "B001B": {
+   "sheet": "B",
+   "name": "基礎学問LV2",
+   "COST": "2B",
+   "EMBLEM_B": 1,
+   "VP": 1,
+   "LEVEL": 2,
+   "ONCE": "ADD(wD)",
+   "TAP": "SET_WILDCARD(SELF,THIS_TURN);GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN)",
+   "inst": "即時ｗDを１個得る\n自分のダイス目１個を☆に変える\nこのターンそれはどのエリアにも置ける"
+  },
+  "B002B": {
+   "sheet": "B",
+   "name": "高等学問LV2",
+   "COST": "2B",
+   "EMBLEM_B": 1,
+   "VP": 1,
+   "LEVEL": 2,
+   "ONCE": "ADD(wD)",
+   "TAP": "SET_DIE_VALUE(SELF7|7);GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN)",
+   "inst": "即時ｗDを１個得る\n自分のダイス目１個を7に変える\nこのターンそれはどのエリアにも置ける"
+  },
+  "B003B": {
+   "sheet": "B",
+   "name": "幾何学LV2",
+   "COST": "2B",
+   "EMBLEM_B": 1,
+   "VP": 1,
+   "LEVEL": 2,
+   "ONCE": "ADD(wD)",
+   "TAP": "CHANGE_DIE_VALUE(SELF+4)",
+   "inst": "即時ｗDを１個得る\n自分のダイス目１個を+4する"
+  },
+  "B004B": {
+   "sheet": "B",
+   "name": "交渉術LV2",
+   "COST": "2B,1C",
+   "EMBLEM_B": 1,
+   "VP": 1,
+   "LEVEL": 2,
+   "AUTO": "M",
+   "TAP": "BUILD((A,B,C,M),1);ADD(BZ)",
+   "inst": "⤵カード一枚を獲得する\nダイス目は1\n獲得に必要な１資源軽減する"
+  },
+  "B005B": {
+   "sheet": "B",
+   "name": "研究LV2",
+   "COST": "2B,1C",
+   "EMBLEM_B": 1,
+   "VP": 1,
+   "LEVEL": 2,
+   "AUTO": "M",
+   "TAP": "BUILD(U);ADD(2BZ)",
+   "inst": "⤵LVアップする\n獲得に必要な2資源軽減する"
+  },
+  "B006B": {
+   "sheet": "B",
+   "name": "土木技術LV2",
+   "COST": "2B,1C",
+   "EMBLEM_B": 1,
+   "VP": 1,
+   "LEVEL": 2,
+   "TAP": "BUILD((M),8)",
+   "inst": "⤵カード一枚を獲得する\nダイス目は8\n通常通り資源は必要"
+  },
+  "B201B": {
+   "sheet": "B",
+   "name": "天文学LV2",
+   "COST": "1B,1C",
+   "EMBLEM_B": 1,
+   "VP": 1,
+   "LEVEL": 2,
+   "ONCE": "ADD(2wD)",
+   "inst": "即時ｗDを2個得る"
+  },
+  "B202B": {
+   "sheet": "B",
+   "name": "測量術LV2",
+   "COST": "2B,1C",
+   "EMBLEM_B": 1,
+   "VP": 1,
+   "LEVEL": 2,
+   "AUTO": "M",
+   "TAP": "BUILD(M,12)",
+   "inst": "⤵カード一枚を獲得する\nダイス目は12\n通常通り資源は必要"
+  },
+  "B301B": {
+   "sheet": "B",
+   "name": "パンとサーカスLV2",
+   "COST": "3B,1C",
+   "EMBLEM_B": 1,
+   "VP": 1,
+   "LEVEL": 2,
+   "TAP": "CHANGE(K,VP,2)",
+   "TURNEND": "UNTAP()",
+   "inst": "タップすると2〇を2VPに変換する\n毎ターンアンタップする"
+  },
+  "C001A": {
+   "sheet": "C",
+   "name": "総督LV1",
+   "COST": "2C",
+   "EMBLEM_C": 1,
+   "VP": 0,
+   "LEVEL": 1,
+   "AUTO": "M",
+   "TAP": "CHANGE(K,A,7)",
+   "inst": "タップすると〇７個を赤〇７個に変換する\n〇が７個に満たないときはあるだけ変換する"
+  },
+  "C002A": {
+   "sheet": "C",
+   "name": "学者LV1",
+   "COST": "2C",
+   "EMBLEM_C": 1,
+   "VP": 0,
+   "LEVEL": 1,
+   "AUTO": "M",
+   "TAP": "CHANGE(K,B,7)",
+   "inst": "タップすると〇７個を青〇７個に変換する\n〇が７個に満たないときはあるだけ変換する"
+  },
+  "C003A": {
+   "sheet": "C",
+   "name": "商人LV1",
+   "COST": "2C",
+   "EMBLEM_C": 1,
+   "VP": 0,
+   "LEVEL": 1,
+   "AUTO": "M",
+   "TAP": "CHANGE(K,C,7)",
+   "inst": "タップすると〇７個を黄〇７個に変換する\n〇が７個に満たないときはあるだけ変換する"
+  },
+  "C004A": {
+   "sheet": "C",
+   "name": "貴族LV1",
+   "COST": "1A,2C",
+   "EMBLEM_C": 1,
+   "VP": 0,
+   "LEVEL": 1,
+   "AUTO": "A",
+   "TAP": "ADD(A,K)",
+   "inst": "タップすると赤〇１個〇１個を得る"
+  },
+  "C005A": {
+   "sheet": "C",
+   "name": "哲学者LV1",
+   "COST": "1A,2C",
+   "EMBLEM_C": 1,
+   "VP": 0,
+   "LEVEL": 1,
+   "AUTO": "A",
+   "TAP": "ADD(B,K)",
+   "inst": "タップすると青〇１個〇１個を得る"
+  },
+  "C006A": {
+   "sheet": "C",
+   "name": "金貸しLV1",
+   "COST": "1A,2C",
+   "EMBLEM_C": 1,
+   "VP": 0,
+   "LEVEL": 1,
+   "AUTO": "A",
+   "TAP": "ADD(C,K)",
+   "inst": "タップすると黄〇１個〇１個を得る"
+  },
+  "C201A": {
+   "sheet": "C",
+   "name": "農夫LV1",
+   "COST": "1A,1C",
+   "EMBLEM_C": 1,
+   "VP": 0,
+   "LEVEL": 1,
+   "AUTO": "A",
+   "TAP": "ADD(3K)",
+   "inst": "タップすると〇３個を得る"
+  },
+  "C202A": {
+   "sheet": "C",
+   "name": "弁論家LV1",
+   "COST": "1A,2C",
+   "EMBLEM_C": 1,
+   "VP": 0,
+   "LEVEL": 1,
+   "AUTO": "A",
+   "TAP": "ADD(wD)",
+   "inst": "タップすると🎲を得る"
+  },
+  "C301A": {
+   "sheet": "C",
+   "name": "皇女LV1",
+   "COST": "1A,3C",
+   "EMBLEM_C": 1,
+   "VP": 0,
+   "LEVEL": 1,
+   "AUTO": "A",
+   "ONCE": "UNTAP_CHOICE(SELF,3)",
+   "TAP": "ADD(VP)",
+   "inst": "即座にカードを3枚選んでアンタップする\nタップすると１VP得る"
+  },
+  "C001B": {
+   "sheet": "C",
+   "name": "総督LV2",
+   "COST": "2C",
+   "EMBLEM_C": 1,
+   "VP": 1,
+   "LEVEL": 2,
+   "AUTO": "M",
+   "TAP": "CHANGE(K,Z,7)",
+   "inst": "タップすると〇７個をZ〇７個に変換する\n〇が７個に満たないときはあるだけ変換する"
+  },
+  "C002B": {
+   "sheet": "C",
+   "name": "学者LV2",
+   "COST": "2C",
+   "EMBLEM_C": 1,
+   "VP": 1,
+   "LEVEL": 2,
+   "AUTO": "M",
+   "TAP": "CHANGE(K,Z,7)",
+   "inst": "タップすると〇７個をZ〇７個に変換する\n〇が７個に満たないときはあるだけ変換する"
+  },
+  "C003B": {
+   "sheet": "C",
+   "name": "商人LV2",
+   "COST": "2C",
+   "EMBLEM_C": 1,
+   "VP": 1,
+   "LEVEL": 2,
+   "AUTO": "M",
+   "TAP": "CHANGE(K,Z,7)",
+   "inst": "タップすると〇７個をZ〇７個に変換する\n〇が７個に満たないときはあるだけ変換する"
+  },
+  "C004B": {
+   "sheet": "C",
+   "name": "貴族LV2",
+   "COST": "1A,2C",
+   "EMBLEM_C": 1,
+   "VP": 1,
+   "LEVEL": 2,
+   "AUTO": "A",
+   "TAP": "ADD(2A,2K)",
+   "inst": "タップすると赤〇2個〇2個を得る"
+  },
+  "C005B": {
+   "sheet": "C",
+   "name": "哲学者LV2",
+   "COST": "1A,2C",
+   "EMBLEM_C": 1,
+   "VP": 1,
+   "LEVEL": 2,
+   "AUTO": "A",
+   "TAP": "ADD(2B,2K)",
+   "inst": "タップすると青〇2個〇2個を得る"
+  },
+  "C006B": {
+   "sheet": "C",
+   "name": "金貸しLV2",
+   "COST": "1A,2C",
+   "EMBLEM_C": 1,
+   "VP": 1,
+   "LEVEL": 2,
+   "AUTO": "A",
+   "TAP": "ADD(2C,2K)",
+   "inst": "タップすると黄〇2個〇2個を得る"
+  },
+  "C201B": {
+   "sheet": "C",
+   "name": "農夫LV2",
+   "COST": "1A,1C",
+   "EMBLEM_C": 1,
+   "VP": 1,
+   "LEVEL": 2,
+   "AUTO": "A",
+   "TAP": "ADD(6K)",
+   "inst": "タップすると〇6個を得る"
+  },
+  "C202B": {
+   "sheet": "C",
+   "name": "弁論家LV2",
+   "COST": "1A,2C",
+   "EMBLEM_C": 1,
+   "VP": 1,
+   "LEVEL": 2,
+   "AUTO": "A",
+   "ONCE": "UNTAP_CHOICE(SELF,3)",
+   "TAP": "ADD(wD)",
+   "inst": "即座にカードを3枚選んでアンタップする\nタップすると🎲を得る"
+  },
+  "C301B": {
+   "sheet": "C",
+   "name": "皇女LV2",
+   "COST": "1A,3C",
+   "EMBLEM_C": 1,
+   "VP": 1,
+   "LEVEL": 2,
+   "AUTO": "A",
+   "ONCE": "UNTAP_CHOICE(SELF,3)",
+   "TAP": "ADD(2VP)",
+   "inst": "即座にカードを3枚選んでアンタップする\nタップすると2VP得る"
+  },
+  "CON001A": {
+   "sheet": "CON",
+   "name": "祝福",
+   "EMBLEM_A": 2,
+   "EMBLEM_B": 2,
+   "EMBLEM_C": 2,
+   "ONCE": "ADD(3VP)",
+   "inst": "制約なし"
+  },
+  "CON002A": {
+   "sheet": "CON",
+   "name": "潔癖",
+   "EMBLEM_C": 2,
+   "ONCE": "ADD(K,3C)",
+   "PASSIVE": "VP_PENALTY_PER(LEVEL_COUNT(1))",
+   "inst": "ゲーム終了時LV1カード１枚につき-1VP"
+  },
+  "CON003A": {
+   "sheet": "CON",
+   "name": "狂信",
+   "EMBLEM_B": 2,
+   "ONCE": "ADD(K,3B)",
+   "PASSIVE": "VP_PENALTY_IF_BELOW(EMBLEM_COUNT(天,M),2)",
+   "inst": "ゲーム終了時モニュメントのエンブレム天が\n２個必要　足りない１個につき-1VP"
+  },
+  "CON004A": {
+   "sheet": "CON",
+   "name": "傲慢",
+   "EMBLEM_A": 2,
+   "ONCE": "ADD(K,3A)",
+   "PASSIVE": "BLOCK_UPGRADE_UNLESS_QST_RANK(Q004A,1)",
+   "inst": "自分よりエリア数の多いプレイヤーがいると\nレベルアップできない\n最多エリアが必要　足りない１個につき-1VP"
+  },
+  "CON005A": {
+   "sheet": "CON",
+   "name": "怠惰",
+   "EMBLEM_A": 1,
+   "EMBLEM_B": 1,
+   "EMBLEM_C": 1,
+   "ONCE": "ADD(A,B,C)",
+   "PASSIVE": "REPLACE_ADD(D,wD)",
+   "inst": "レベルの上がっていない訓練場のスロットにダイスを置けない\n訓練場LV1　LV2は支配者に関係なくダイスを置ける"
+  },
+  "CON006A": {
+   "sheet": "CON",
+   "name": "裏切",
+   "ONCE": "ADD(3wD)",
+   "inst": "ゲーム終了時\nクエストカードから得るVPのうち、\n最も大きいVP　1つを失う"
+  },
+  "CON001B": {
+   "sheet": "CON",
+   "name": "色欲",
+   "EMBLEM_A": 1,
+   "EMBLEM_B": 1,
+   "EMBLEM_C": 1,
+   "ONCE": "ADD(3Z)",
+   "inst": "資源の支払い時Z〇から優先的に使うようになる"
+  },
+  "CON002B": {
+   "sheet": "CON",
+   "name": "強欲",
+   "EMBLEM_A": 1,
+   "EMBLEM_B": 1,
+   "ONCE": "ADD(2A,2B)",
+   "PASSIVE": "VP_PENALTY_IF_BELOW(RESOURCE(A,B,C,Z),7)",
+   "inst": "ゲーム終了時食料以外の資源7個が必要\n足りない１個につき-1VP\n食料以外の資源とは赤〇青〇黄〇Z〇のいずれか"
+  },
+  "CON003B": {
+   "sheet": "CON",
+   "name": "憂鬱",
+   "EMBLEM_C": 1,
+   "ONCE": "ADD(2C,3K)",
+   "PASSIVE": "CONVERT_LIMIT(ALL,4)",
+   "inst": "城下町　大聖堂　ギルドで４個までしか変換できない"
+  },
+  "CON004B": {
+   "sheet": "CON",
+   "name": "嫉妬",
+   "ONCE": "ADD(2Z,3K)",
+   "inst": "ゲーム終了時一番上のクエストカードの順位に応じて\n（順位-1）VP失う\n１位→0VP　２位→-1VP　３位→-2VP　４位→-3VP"
+  },
+  "CON005B": {
+   "sheet": "CON",
+   "name": "憤怒",
+   "ONCE": "ADD(D)",
+   "PASSIVE": "BLOCK_COLOR_DIE_REUSE();WHITE_DICE_CAP(0)",
+   "inst": "自分の色ダイスが置かれているエリアにはダイスを配置できない。EXスロットは制約と関係なく置ける。\n🎲上限0　上限を超えた🎲は失われる\n道化やダイス変換と組み合わせると制約に関係なく置けるようになるが、🎲は得ることができない。"
+  },
+  "CON006B": {
+   "sheet": "CON",
+   "name": "暴食",
+   "WARNING": "食料が7個を超えています。\nターン終了時に1個消費します。\nよろしいですか？",
+   "ONCE": "ADD(8K)",
+   "TURNEND": "RESOURCE_LIMIT(K,7)",
+   "inst": "◯の上限7個\nターン終了時にそれを超えていたら1個消費します"
+  },
+  "JOB001": {
+   "sheet": "JOB",
+   "name": "ローマ市民",
+   "AUTO": "A",
+   "TAP": "ADD(Z,K)",
+   "inst": "タップするとZ〇と〇を得る"
+  },
+  "JOB002": {
+   "sheet": "JOB",
+   "name": "詩人",
+   "inst": "エンブレムが3個増えるごとにそのターン終了時1VPとCを得る"
+  },
+  "JOB003": {
+   "sheet": "JOB",
+   "name": "道化師",
+   "AUTO": "M",
+   "ONCE": "ADD(wD)",
+   "PASSIVE": "WILDCARD_DICE()",
+   "inst": "このカードを取った時🎲を得る\nすべてのダイスの目は☆になる\n☆ダイスはほかのプレイヤーのEXにはおけない\nスロットが空いているなら左詰めで配置\nEX以外のスロットが埋まっていたなら一番左のダイスの下に置く\nABCカードを獲得時☆はダイス目１として扱う\nモニュメント獲得時☆はダイス目６として扱う\n☆ダイスは1回の配置で1個までしか使えない（同時に2個以上は配置できない）"
+  },
+  "JOB004": {
+   "sheet": "JOB",
+   "name": "パトロン",
+   "PASSIVE": "ON(GET(D),ADD(Z,K));ON(GET(wD),ADD(K))",
+   "inst": "追加色ダイスを得たときZ〇と〇を得る\n🎲を得たときその数だけ〇を得る\n初期資源含む\n毎ターンアンタップする"
+  },
+  "JOB005": {
+   "sheet": "JOB",
+   "name": "権力者",
+   "AUTO": "A",
+   "inst": "支払い時、赤〇の不足分を〇で代用できる\nゲーム終了時〇→赤〇を自由に行ってもいい"
+  },
+  "JOB006": {
+   "sheet": "JOB",
+   "name": "開拓者",
+   "inst": "まだダイスが１個も置かれていないエリアに色ダイスを配置したときBを得る"
+  },
+  "JOB007": {
+   "sheet": "JOB",
+   "name": "研究者",
+   "AUTO": "M",
+   "inst": "研究をショップか山札から探して獲得する\n研究がいずれかのプレイヤーに先に獲得されていたならば\n代わりに山札からジョブを３枚引きその中からジョブを選ぶ"
+  },
+  "JOB008": {
+   "sheet": "JOB",
+   "name": "料理人",
+   "AUTO": "A",
+   "inst": "得たVPと同じ数の〇を得る\n初期資源含む"
+  },
+  "JOB009": {
+   "sheet": "JOB",
+   "name": "地主",
+   "inst": "レベルアップされたエリアにダイスを配置した時〇を得る\nそのエリアに自分の色ダイスがすでにあるならさらにその数だけVPを得る"
+  },
+  "JOB010": {
+   "sheet": "JOB",
+   "name": "宮廷人",
+   "AUTO": "A",
+   "TAP": "ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+4);BLOCK_BUILD(A,THIS_TURN);BLOCK_BUILD(B,THIS_TURN);BLOCK_BUILD(C,THIS_TURN)",
+   "TURNEND": "UNTAP()",
+   "inst": "タップすると１資源軽減を得る\nこのターン自分のダイス目１個を+4する\nこのターン通常カードと強化カードを建築できない"
+  },
+  "JOB011": {
+   "sheet": "JOB",
+   "name": "策士",
+   "AUTO": "A",
+   "TAP": "CHANGE(4K,(A,B,C))",
+   "TURNEND": "UNTAP()",
+   "inst": "タップすると〇4を赤〇青〇黄〇に変換する\n毎ターンアンタップする"
+  },
+  "JOB012": {
+   "sheet": "JOB",
+   "name": "異端者",
+   "inst": "支配者のいないエリアに目3，4，5，6の色ダイスを置いたとき\nそのエリアがレベル１であるように効果を得る\n使用料はそのエリアに置く\nあなたがその支配者になったときその使用料は捨てられ\nあなた以外のプレイヤーが支配者になったときそれは回収できる"
+  },
+  "R001": {
+   "sheet": "RESOURCE",
+   "name": "wD",
+   "ONCE": "ADD(wD)"
+  },
+  "R002": {
+   "sheet": "RESOURCE",
+   "name": "wD",
+   "ONCE": "ADD(wD)"
+  },
+  "R003": {
+   "sheet": "RESOURCE",
+   "name": "wD",
+   "ONCE": "ADD(wD)"
+  },
+  "R004": {
+   "sheet": "RESOURCE",
+   "name": "2VP,Z",
+   "VP": 2,
+   "ONCE": "ADD(K,Z)"
+  },
+  "R005": {
+   "sheet": "RESOURCE",
+   "name": "2VP,Z",
+   "VP": 2,
+   "ONCE": "ADD(K,Z)"
+  },
+  "R006": {
+   "sheet": "RESOURCE",
+   "name": "2VP,Z",
+   "VP": 2,
+   "ONCE": "ADD(K,Z)"
+  },
+  "R007": {
+   "sheet": "RESOURCE",
+   "name": "A,B",
+   "ONCE": "ADD(A,B)"
+  },
+  "R008": {
+   "sheet": "RESOURCE",
+   "name": "A,C",
+   "ONCE": "ADD(A,C)"
+  },
+  "R009": {
+   "sheet": "RESOURCE",
+   "name": "B,C",
+   "ONCE": "ADD(B,C)"
+  },
+  "R010": {
+   "sheet": "RESOURCE",
+   "name": "1VP,3K",
+   "VP": 1,
+   "ONCE": "ADD(3K)"
+  },
+  "R011": {
+   "sheet": "RESOURCE",
+   "name": "1VP,3K",
+   "VP": 1,
+   "ONCE": "ADD(3K)"
+  },
+  "R012": {
+   "sheet": "RESOURCE",
+   "name": "1VP,3K",
+   "VP": 1,
+   "ONCE": "ADD(3K)"
+  },
+  "R013": {
+   "sheet": "RESOURCE",
+   "name": "2A",
+   "ONCE": "ADD(2A)"
+  },
+  "R014": {
+   "sheet": "RESOURCE",
+   "name": "2B",
+   "ONCE": "ADD(2B)"
+  },
+  "R015": {
+   "sheet": "RESOURCE",
+   "name": "2C",
+   "ONCE": "ADD(2C)"
+  },
+  "R016": {
+   "sheet": "RESOURCE",
+   "name": "A,2K",
+   "ONCE": "ADD(A,2K)"
+  },
+  "R017": {
+   "sheet": "RESOURCE",
+   "name": "B,2K",
+   "ONCE": "ADD(B,2K)"
+  },
+  "R018": {
+   "sheet": "RESOURCE",
+   "name": "C,2K",
+   "ONCE": "ADD(C,2K)"
+  },
+  "Q001A": {
+   "sheet": "QST",
+   "name": "Q001A",
+   "GOAL": "CARD_COUNT",
+   "REWARD1": "ADD(4VP)",
+   "REWARD2": "ADD(2VP)",
+   "REWARD3": "ADD(VP)",
+   "inst": "カード獲得枚数"
+  },
+  "Q002A": {
+   "sheet": "QST",
+   "name": "Q002A",
+   "GOAL": "MAX_EMBLEM_COUNT",
+   "REWARD1": "ADD(4VP)",
+   "REWARD2": "ADD(2VP)",
+   "REWARD3": "ADD(VP)",
+   "inst": "最多エンブレムの数"
+  },
+  "Q003A": {
+   "sheet": "QST",
+   "name": "Q003A",
+   "GOAL": "LEVEL_COUNT(2)",
+   "REWARD1": "ADD(4VP)",
+   "REWARD2": "ADD(2VP)",
+   "REWARD3": "ADD(VP)",
+   "inst": "レベルアップ数"
+  },
+  "Q004A": {
+   "sheet": "QST",
+   "name": "Q004A",
+   "GOAL": "AREA_COUNT",
+   "REWARD1": "ADD(4VP)",
+   "REWARD2": "ADD(2VP)",
+   "REWARD3": "ADD(VP)",
+   "inst": "所有エリア数"
+  },
+  "Q001B": {
+   "sheet": "QST",
+   "name": "Q001B",
+   "GOAL": "EXTRA_D_PLUS_ABC_COUNT",
+   "REWARD1": "ADD(4VP)",
+   "REWARD2": "ADD(2VP)",
+   "REWARD3": "ADD(VP)",
+   "inst": "通常カード枚数+追加色ダイス"
+  },
+  "Q002B": {
+   "sheet": "QST",
+   "name": "Q002B",
+   "GOAL": "EMBLEM_SET_COUNT",
+   "REWARD1": "ADD(4VP)",
+   "REWARD2": "ADD(2VP)",
+   "REWARD3": "ADD(VP)",
+   "inst": "天地人セット数"
+  },
+  "Q003B": {
+   "sheet": "QST",
+   "name": "Q003B",
+   "GOAL": "EMBLEM_COUNT",
+   "REWARD1": "ADD(4VP)",
+   "REWARD2": "ADD(2VP)",
+   "REWARD3": "ADD(VP)",
+   "inst": "エンブレム総数"
+  },
+  "Q004B": {
+   "sheet": "QST",
+   "name": "Q004B",
+   "GOAL": "AREA_COUNT(2)",
+   "REWARD1": "ADD(4VP)",
+   "REWARD2": "ADD(2VP)",
+   "REWARD3": "ADD(VP)",
+   "inst": "所有LV2エリア数"
+  },
+  "AREA001A": {
+   "sheet": "AREA",
+   "name": "小麦畑",
+   "SLOT1": 1,
+   "SLOT2": 2,
+   "SLOT3": 3,
+   "SLOT4": "NONE",
+   "SLOT5": "NONE",
+   "SLOT6": "NONE",
+   "ACTION": "ADD(3K)"
+  },
+  "AREA002A": {
+   "sheet": "AREA",
+   "name": "農園",
+   "SLOT1": 4,
+   "SLOT2": 5,
+   "SLOT3": 6,
+   "SLOT4": "NONE",
+   "SLOT5": "NONE",
+   "SLOT6": "NONE",
+   "ACTION": "ADD(3K)"
+  },
+  "AREA003A": {
+   "sheet": "AREA",
+   "name": "ローマ市街",
+   "SLOT1": 2,
+   "SLOT2": "ANY",
+   "SLOT3": "NONE",
+   "SLOT4": "NONE",
+   "SLOT5": "NONE",
+   "SLOT6": "NONE",
+   "ACTION": "CHANGE(K,A,ALL)"
+  },
+  "AREA004A": {
+   "sheet": "AREA",
+   "name": "図書館",
+   "SLOT1": 4,
+   "SLOT2": "ANY",
+   "SLOT3": "NONE",
+   "SLOT4": "NONE",
+   "SLOT5": "NONE",
+   "SLOT6": "NONE",
+   "ACTION": "CHANGE(K,B,ALL)"
+  },
+  "AREA005A": {
+   "sheet": "AREA",
+   "name": "市場",
+   "SLOT1": 6,
+   "SLOT2": "ANY",
+   "SLOT3": "NONE",
+   "SLOT4": "NONE",
+   "SLOT5": "NONE",
+   "SLOT6": "NONE",
+   "ACTION": "CHANGE(K,C,ALL)"
+  },
+  "AREA006A": {
+   "sheet": "AREA",
+   "name": "酒場",
+   "SLOT1": 1,
+   "SLOT2": 3,
+   "SLOT3": "ANY",
+   "SLOT4": "NONE",
+   "SLOT5": "NONE",
+   "SLOT6": "NONE",
+   "ACTION": "CHANGE(2K,3Z)"
+  },
+  "AREA007A": {
+   "sheet": "AREA",
+   "name": "訓練場",
+   "SLOT1": "ANY",
+   "SLOT2": "ANY",
+   "SLOT3": "ANY",
+   "SLOT4": "NONE",
+   "SLOT5": "NONE",
+   "SLOT6": "NONE",
+   "ACTION": "CHANGE((A,B,C),D)",
+   "inst": "色ダイスの上限は５個"
+  },
+  "AREA008": {
+   "sheet": "AREA",
+   "name": "皇帝宮殿",
+   "SLOT1": "ANY",
+   "SLOT2": "ANY",
+   "SLOT3": "ANY",
+   "SLOT4": "ANY",
+   "SLOT5": "ANY",
+   "SLOT6": "ANY",
+   "ACTION": "BUILD()"
+  },
+  "AREA009A": {
+   "sheet": "AREA",
+   "name": "元老院",
+   "SLOT1": "ANY",
+   "SLOT2": "ANY",
+   "SLOT3": "ANY",
+   "SLOT4": "ANY",
+   "SLOT5": "ANY",
+   "SLOT6": "ANY",
+   "ACTION": "BUILD()"
+  },
+  "AREA010A": {
+   "sheet": "AREA",
+   "name": "配給所",
+   "SLOT1": 2,
+   "SLOT2": 4,
+   "SLOT3": 6,
+   "SLOT4": "NONE",
+   "SLOT5": "NONE",
+   "SLOT6": "NONE",
+   "ACTION": "CHANGE(K,VP,2)"
+  },
+  "AREA001B": {
+   "sheet": "AREA",
+   "name": "小麦畑LV1",
+   "SLOT1": 1,
+   "SLOT2": "ANY",
+   "SLOT3": "EX",
+   "SLOT4": "NONE",
+   "SLOT5": "NONE",
+   "SLOT6": "NONE",
+   "fee": 1,
+   "ACTION": "ADD(6K)"
+  },
+  "AREA002B": {
+   "sheet": "AREA",
+   "name": "農園LV1",
+   "SLOT1": 6,
+   "SLOT2": "ANY",
+   "SLOT3": "EX",
+   "SLOT4": "NONE",
+   "SLOT5": "NONE",
+   "SLOT6": "NONE",
+   "fee": 1,
+   "ACTION": "ADD(5K)"
+  },
+  "AREA003B": {
+   "sheet": "AREA",
+   "name": "ローマ市街LV1",
+   "SLOT1": "ANY",
+   "SLOT2": "EX",
+   "SLOT3": "NONE",
+   "SLOT4": "NONE",
+   "SLOT5": "NONE",
+   "SLOT6": "NONE",
+   "fee": 1,
+   "ACTION": "CHANGE(K,A,ALL);ADD(2B)"
+  },
+  "AREA004B": {
+   "sheet": "AREA",
+   "name": "図書館LV1",
+   "SLOT1": "ANY",
+   "SLOT2": "EX",
+   "SLOT3": "NONE",
+   "SLOT4": "NONE",
+   "SLOT5": "NONE",
+   "SLOT6": "NONE",
+   "fee": 1,
+   "ACTION": "CHANGE(K,B,ALL);ADD(2C)"
+  },
+  "AREA005B": {
+   "sheet": "AREA",
+   "name": "市場LV1",
+   "SLOT1": "ANY",
+   "SLOT2": "EX",
+   "SLOT3": "NONE",
+   "SLOT4": "NONE",
+   "SLOT5": "NONE",
+   "SLOT6": "NONE",
+   "fee": 1,
+   "ACTION": "CHANGE(K,C,ALL);ADD(2A)"
+  },
+  "AREA006B": {
+   "sheet": "AREA",
+   "name": "酒場LV1",
+   "SLOT1": 3,
+   "SLOT2": "ANY",
+   "SLOT3": "EX",
+   "SLOT4": "NONE",
+   "SLOT5": "NONE",
+   "SLOT6": "NONE",
+   "fee": 1,
+   "ACTION": "CHANGE(2K,5Z)"
+  },
+  "AREA007B": {
+   "sheet": "AREA",
+   "name": "訓練場LV1",
+   "SLOT1": "ANY",
+   "SLOT2": "EX",
+   "SLOT3": "EX",
+   "SLOT4": "NONE",
+   "SLOT5": "NONE",
+   "SLOT6": "NONE",
+   "fee": 1,
+   "ACTION": "CHANGE(2K,D)",
+   "inst": "色ダイスの上限は5個\nこのエリアにダイスを置くと怠惰の制約は解除される"
+  },
+  "AREA009B": {
+   "sheet": "AREA",
+   "name": "元老院LV1",
+   "SLOT1": "ANY",
+   "SLOT2": "ANY",
+   "SLOT3": "ANY",
+   "SLOT4": "ANY",
+   "SLOT5": "EX",
+   "SLOT6": "EX",
+   "fee": 1,
+   "ACTION": "BUILD();ADD(2K)"
+  },
+  "AREA010B": {
+   "sheet": "AREA",
+   "name": "配給所LV1",
+   "SLOT1": 2,
+   "SLOT2": 4,
+   "SLOT3": "EX",
+   "SLOT4": "NONE",
+   "SLOT5": "NONE",
+   "SLOT6": "NONE",
+   "fee": 1,
+   "ACTION": "CHANGE(K,VP,4)"
+  },
+  "AREA001C": {
+   "sheet": "AREA",
+   "name": "小麦畑LV2",
+   "SLOT1": 1,
+   "SLOT2": "ANY",
+   "SLOT3": "EX",
+   "SLOT4": "EX",
+   "SLOT5": "NONE",
+   "SLOT6": "NONE",
+   "fee": 2,
+   "ACTION": "ADD(7K)"
+  },
+  "AREA002C": {
+   "sheet": "AREA",
+   "name": "農園LV2",
+   "SLOT1": 6,
+   "SLOT2": "ANY",
+   "SLOT3": "EX",
+   "SLOT4": "EX",
+   "SLOT5": "NONE",
+   "SLOT6": "NONE",
+   "fee": 2,
+   "ACTION": "ADD(9K)"
+  },
+  "AREA003C": {
+   "sheet": "AREA",
+   "name": "ローマ市街LV2",
+   "SLOT1": "ANY",
+   "SLOT2": "EX",
+   "SLOT3": "EX",
+   "SLOT4": "NONE",
+   "SLOT5": "NONE",
+   "SLOT6": "NONE",
+   "fee": 2,
+   "ACTION": "CHANGE(K,A,ALL);ADD(4B)"
+  },
+  "AREA004C": {
+   "sheet": "AREA",
+   "name": "図書館LV2",
+   "SLOT1": "ANY",
+   "SLOT2": "EX",
+   "SLOT3": "EX",
+   "SLOT4": "NONE",
+   "SLOT5": "NONE",
+   "SLOT6": "NONE",
+   "fee": 2,
+   "ACTION": "CHANGE(K,B,ALL);ADD(4C)"
+  },
+  "AREA005C": {
+   "sheet": "AREA",
+   "name": "市場LV2",
+   "SLOT1": "ANY",
+   "SLOT2": "EX",
+   "SLOT3": "EX",
+   "SLOT4": "NONE",
+   "SLOT5": "NONE",
+   "SLOT6": "NONE",
+   "fee": 2,
+   "ACTION": "CHANGE(K,C,ALL);ADD(4A)"
+  },
+  "AREA006C": {
+   "sheet": "AREA",
+   "name": "酒場LV2",
+   "SLOT1": 3,
+   "SLOT2": "ANY",
+   "SLOT3": "EX",
+   "SLOT4": "NONE",
+   "SLOT5": "NONE",
+   "SLOT6": "NONE",
+   "fee": 2,
+   "ACTION": "CHANGE(2K,7Z)"
+  },
+  "AREA007C": {
+   "sheet": "AREA",
+   "name": "訓練場LV2",
+   "SLOT1": "ANY",
+   "SLOT2": "EX",
+   "SLOT3": "EX",
+   "SLOT4": "NONE",
+   "SLOT5": "NONE",
+   "SLOT6": "NONE",
+   "fee": 2,
+   "ACTION": "ADD(D)",
+   "inst": "色ダイスの上限は６個"
+  },
+  "AREA009C": {
+   "sheet": "AREA",
+   "name": "元老院LV2",
+   "SLOT1": "ANY",
+   "SLOT2": "ANY",
+   "SLOT3": "ANY",
+   "SLOT4": "ANY",
+   "SLOT5": "EX",
+   "SLOT6": "EX",
+   "fee": 2,
+   "ACTION": "BUILD();ADD(2K,BZ)"
+  },
+  "AREA010C": {
+   "sheet": "AREA",
+   "name": "配給所LV2",
+   "SLOT1": "ANY",
+   "SLOT2": "EX",
+   "SLOT3": "EX",
+   "SLOT4": "NONE",
+   "SLOT5": "NONE",
+   "SLOT6": "NONE",
+   "fee": 2,
+   "ACTION": "CHANGE(K,VP,6)",
+   "inst": "KをVPに変えるMAX6"
+  }
+ },
+ "issues": []
+}
