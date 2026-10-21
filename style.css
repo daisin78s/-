@@ -4961,9 +4961,10 @@ body.tutorial-mode .change-highlight {
 /* 半透明の黒背景 (2026-10-11、per user request: 読みやすさ用、当初はタイトル+説明文ブロック全体の裏に
    1枚の::before疑似要素として追加していたが、2026-10-21、per user request「背景の黒いの、タイトル/
    ダイスでつかめローマの頂点/ダイスをはいちしの3つにそれぞれ分ける」でロゴ/キャッチコピー/説明文の
-   3要素それぞれに個別の背景を持たせる形に変更。box-shadow(blur:0, spread指定)はレイアウトに一切
-   影響しない(position/widthなどを使わないため、既存のテキスト位置調整値に触れずに済む)ので、
-   background-colorではなくこちらを採用。 */
+   3要素それぞれに個別の背景を持たせる形に変更。当初box-shadow(blur:0, spread指定、レイアウトに
+   影響しない)を試したが、per user報告「黒背景が枠になり塗りつぶされていない」の通り実機/実ブラウザ
+   では縁取りのみ描画され中が塗りつぶされない現象を確認したため、確実に塗りつぶされるbackground-color
+   +padding+相殺の負marginに統一した(4要素とも同じ方式)。 */
 /* タイトルロゴ (2026-10-21, per user提供の透過PNG -- 「PCのトップがの変更です」との指定通り、幅の
    広い本物のPC/ノートPC画面限定(下の@media (min-width:1400px)参照)。iPad Pro横向き(1366px)を含む
    タブレット幅では非表示のまま、既存レイアウト(ロゴ追加前の状態)を完全に維持する -- タイトル/
@@ -4980,8 +4981,13 @@ body.tutorial-mode .change-highlight {
     display: block;
     width: clamp(208px, calc(var(--hero-w) * 0.286), 364px);
     height: auto;
-    margin-bottom: 2px;
-    box-shadow: 0 0 0 8px rgba(5, 4, 2, 0.82);
+    /* 2026-10-21、per user報告: box-shadowのspreadは実機/実ブラウザで縁取りのみ描画され中が塗り
+       つぶされない現象を確認(#entry-banner__tagline-title/-sub側own doc参照)、こちらも同じ理由で
+       background-colorに変更。padding分は負のmarginで打ち消し、画像自体の描画幅(clampで決まる)や
+       隣接要素との間隔は変えていない。 */
+    background: rgba(5, 4, 2, 0.82);
+    padding: 8px;
+    margin: -8px -8px -6px -8px;
     border-radius: 10px;
   }
 }
@@ -4996,7 +5002,9 @@ body.tutorial-mode .change-highlight {
     display: block;
     width: clamp(290px, calc(var(--hero-w) * 0.232), 355px);
     height: auto;
-    box-shadow: 0 0 0 8px rgba(5, 4, 2, 0.82);
+    background: rgba(5, 4, 2, 0.82);
+    padding: 8px;
+    margin: -8px;
     border-radius: 10px;
   }
   #entry-banner__tagline-title {
