@@ -4981,7 +4981,7 @@ body.tutorial-mode .change-highlight {
     width: clamp(208px, calc(var(--hero-w) * 0.286), 364px);
     height: auto;
     margin-bottom: 2px;
-    box-shadow: 0 0 0 5px rgba(8, 6, 4, 0.4);
+    box-shadow: 0 0 0 8px rgba(5, 4, 2, 0.82);
     border-radius: 10px;
   }
 }
@@ -4996,7 +4996,7 @@ body.tutorial-mode .change-highlight {
     display: block;
     width: clamp(290px, calc(var(--hero-w) * 0.232), 355px);
     height: auto;
-    box-shadow: 0 0 0 5px rgba(8, 6, 4, 0.4);
+    box-shadow: 0 0 0 8px rgba(5, 4, 2, 0.82);
     border-radius: 10px;
   }
   #entry-banner__tagline-title {
@@ -5019,7 +5019,13 @@ body.tutorial-mode .change-highlight {
     -1.5px -1.5px 0 rgba(0, 0, 0, 0.75), 1.5px -1.5px 0 rgba(0, 0, 0, 0.75),
     -1.5px 1.5px 0 rgba(0, 0, 0, 0.75), 1.5px 1.5px 0 rgba(0, 0, 0, 0.75),
     0 3px 12px rgba(0, 0, 0, 0.6);
-  box-shadow: 0 0 0 5px rgba(8, 6, 4, 0.4);
+  /* 2026-10-21、per user報告: box-shadowのspread(縁取りのみ描画、中が塗りつぶされない)はテキスト系
+     要素(span)では中身が塗りつぶされない現象を確認(画像要素では問題なく塗りつぶされた)ため、こちらは
+     確実に塗りつぶされるbackground-colorを採用。padding分だけ同じ値の負のmarginで打ち消し、見た目の
+     位置/隣接要素との間隔(flex gap)は変えていない。 */
+  background: rgba(5, 4, 2, 0.82);
+  padding: 8px;
+  margin: -8px;
   border-radius: 8px;
 }
 #entry-banner__tagline-title-accent {
@@ -5039,10 +5045,12 @@ body.tutorial-mode .change-highlight {
   max-width: 420px;
   color: #f4f4f0;
   /* 2026-10-11, per user request: "わずかに下に" -> 「今と同じくらい わずかにしたに」で8px→16px ->
-     「少し上に」で16px→10pxに戻す。 */
-  margin-top: 10px;
+     「少し上に」で16px→10pxに戻す。margin-topの10pxはpaddingを引いた後の値(下のbox-shadow->background
+     変更own doc参照、#entry-banner__tagline-title側と同じ理由)。 */
+  margin: 2px -8px -8px -8px;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.75), 0 1px 2px rgba(0, 0, 0, 0.6);
-  box-shadow: 0 0 0 5px rgba(8, 6, 4, 0.4);
+  background: rgba(5, 4, 2, 0.82);
+  padding: 8px;
   border-radius: 8px;
 }
 
@@ -5269,7 +5277,9 @@ body.tutorial-mode .change-highlight {
     font-size: clamp(24px, 7vw, 32px);
     color: var(--text);
     text-shadow: none;
-    box-shadow: none;
+    background: none;
+    padding: 0;
+    margin: 0;
   }
   #entry-banner__tagline-title-accent {
     font-size: clamp(32px, 9vw, 42px);
@@ -5279,7 +5289,9 @@ body.tutorial-mode .change-highlight {
     font-size: 14px;
     color: var(--text-muted);
     text-shadow: none;
-    box-shadow: none;
+    background: none;
+    padding: 0;
+    margin: 10px 0 0 0;
     max-width: none;
   }
 
