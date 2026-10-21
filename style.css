@@ -4979,7 +4979,7 @@ body.tutorial-mode .change-highlight {
 @media (min-width: 1400px) {
   #entry-banner__logo {
     display: block;
-    width: clamp(208px, calc(var(--hero-w) * 0.286), 364px);
+    width: clamp(229px, calc(var(--hero-w) * 0.3146), 400px);
     height: auto;
     /* 2026-10-21、per user報告: box-shadowのspreadは実機/実ブラウザで縁取りのみ描画され中が塗り
        つぶされない現象を確認(#entry-banner__tagline-title/-sub側own doc参照)、こちらも同じ理由で
