@@ -5000,7 +5000,7 @@ body.tutorial-mode .change-highlight {
 @media (min-width: 1400px) {
   #entry-banner__logo {
     display: block;
-    width: clamp(160px, calc(var(--hero-w) * 0.22), 280px);
+    width: clamp(208px, calc(var(--hero-w) * 0.286), 364px);
     height: auto;
     margin-bottom: 2px;
   }
