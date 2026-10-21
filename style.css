@@ -4978,11 +4978,13 @@ body.tutorial-mode .change-highlight {
     display: block;
     /* 2026-10-21、per user request「タブレット版もこれと同じように表示して」で追加したタブレット
        向けサイズ(481px以上の既定値)。PC版(min-width:1400px、下の2つ目のメディアクエリで上書き)より
-       かなり小さい -- タブレット幅はhero-wrapの高さが画面の縦横比次第で大きく変動する一方、吹き出し
+       小さい -- タブレット幅はhero-wrapの高さが画面の縦横比次第で大きく変動する一方、吹き出し
        (.entry-banner__tutorial-callout、top:65%)との間に収まる余白は実測で最も厳しいケース(768px幅
-       縦持ち)で約264px/600px幅で約207pxしかなく、PC版の大きさのままでは収まらない(実機検証で確認)。
-       ロゴ/キャッチコピー画像/説明文を合計しても余白内に収まるよう、このサイズに抑えた。 */
-    width: clamp(80px, calc(var(--hero-w) * 0.17), 200px);
+       縦持ち)で約264pxしかなく、PC版の大きさのままでは収まらない(実機iPad検証で確認)。当初さらに
+       一段小さいサイズ(0.17/200px上限)で実装したが、per user報告(実機スクリーンショット付き)
+       「タイトルやキャッチコピーが小さすぎる」でこのサイズまで拡大(768px幅での吹き出しとの余白が
+       約21pxになるまで、実機検証の768px幅に相当するビューポートで確認)。 */
+    width: clamp(96px, calc(var(--hero-w) * 0.204), 240px);
     height: auto;
     /* 2026-10-21、per user報告: box-shadowのspreadは実機/実ブラウザで縁取りのみ描画され中が塗り
        つぶされない現象を確認(#entry-banner__tagline-title/-sub側own doc参照)、こちらも同じ理由で
@@ -5011,7 +5013,7 @@ body.tutorial-mode .change-highlight {
     display: block;
     /* タブレット向けサイズ(own doc、#entry-banner__logo側参照)。PC版は下の2つ目のメディアクエリで
        上書き。 */
-    width: clamp(104px, calc(var(--hero-w) * 0.21), 260px);
+    width: clamp(125px, calc(var(--hero-w) * 0.252), 312px);
     height: auto;
     background: linear-gradient(180deg, rgba(28, 20, 12, 0.88) 0%, rgba(5, 4, 2, 0.78) 100%);
     padding: 8px;
