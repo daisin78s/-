@@ -14655,6 +14655,17 @@ function setupHeroWidthObserver() {
   if (!heroImg || !titleEl || !accentEl || !subEl) return;
   const clamp = (min, value, max) => Math.min(Math.max(value, min), max);
   const observer = new ResizeObserver(() => {
+    // スマホ用レイアウト(style.cssの@media (max-width:480px)参照、2026-10-21)は画像を重ねる方式
+    // ではなく通常の流れで文字サイズをCSS側(vw基準)で決めるため、ここでインラインstyleを設定すると
+    // (インラインstyleはどんなCSS側の指定より優先されてしまうため)その指定を上書きしてしまう。
+    // 幅がブレークポイント以下の間は何もしない(既存のインラインstyleも消しておく -- PC/タブレット幅
+    // からリサイズ/回転でスマホ幅に変わった場合に、古い値が残り続けないように)。
+    if (window.innerWidth <= 480) {
+      titleEl.style.fontSize = '';
+      accentEl.style.fontSize = '';
+      subEl.style.fontSize = '';
+      return;
+    }
     const width = heroImg.getBoundingClientRect().width;
     if (width <= 0) return;
     titleEl.style.fontSize = `${clamp(28, width * 0.06, 40)}px`;
