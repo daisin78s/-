@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1.192">
+<link rel="stylesheet" href="style.css?v=1.193">
 </head>
 <body>
   <!-- 著作権表示 (2026-10-03, per user request) -- 常時表示だが画面右下に小さく/控えめに配置し、
@@ -25,7 +25,7 @@
        取得させる効果は無かった(iPad Safariがそれらをキャッシュしたまま使い続けていたと判明) --
        今後はこの番号と合わせて、下の全<script src>/<link>に付けた?v=X.XXXクエリ文字列も必ず
        同じ値に更新すること(実際にURLを変えることでキャッシュを回避する、こちらが本体)。 -->
-  <div id="copyright-notice">© 2026 higebucho Ver.1.192</div>
+  <div id="copyright-notice">© 2026 higebucho Ver.1.193</div>
 
   <!-- 入口バナー (2026-10-04, per user request: "HPに入ったときに大き目バナーを用意して導線をわかりやすく
        したい") -- #app/#weekly-seat-pickerと同じ「画面を丸ごと差し替える」パターン(main.jsのrender()
@@ -44,11 +44,11 @@
   <div id="entry-banner">
     <div id="entry-banner__box">
       <div id="entry-banner__hero-wrap">
-        <img id="entry-banner__hero" src="assets/entry-banner-hero-bg.png" alt="ダイスで築く、あなただけの王国。ダイスをワーカーとして配置し、4ラウンドで最高得点を目指す本格ワーカープレイスメントゲーム">
+        <img id="entry-banner__hero" src="assets/entry-banner-hero-bg.png" alt="ダイスで掴め、ローマの頂点。ダイスを配置し、権力と富を築け。4ラウンドで栄光を競う戦略ボードゲーム。">
         <!-- バージョン表示 (2026-10-08, per user request: "セリフで見えにくいので トップ画像の右下にも") --
              #copyright-noticeはゲーム中のセリフ吹き出しに隠れて見えにくいため、入口バナー(トップ画像)の
              右下にも同じ番号を複製表示する。中身は#copyright-noticeと手動で同期させること。 -->
-        <div id="entry-banner__version">Ver.1.192</div>
+        <div id="entry-banner__version">Ver.1.193</div>
         <!-- 見出し文言+CTA (2026-10-11, per user request: "ダイスで築く、あなただけの王国。などの文言も
              前と同じように表示して 今すぐプレイボタンも" -- 旧画像に焼き込まれていたキャッチコピーを、
              新背景では実テキストとして表示(per user: "文言は後から変更できるように" -- 画像ではなく
@@ -59,9 +59,10 @@
                  限定、スマホ版は対象外per user: "PCのトップがの変更です") -- 既存のタイトル文言(tagline-title)
                  の上に表示する。 -->
             <img id="entry-banner__logo" class="entry-banner__logo" src="assets/entry-banner-logo.png" alt="ローマの野望 Cursus Honorum">
-            <span id="entry-banner__tagline-title">ダイスで築く、<br>あなただけの<br><span id="entry-banner__tagline-title-accent">王国。</span></span>
-            <!-- 改行位置 (2026-10-11, per user spec) -->
-            <span id="entry-banner__tagline-sub">ダイスをワーカーとして配置し、<br>4ラウンドで最高得点を目指す<br>本格ワーカープレイスメントゲーム</span>
+            <!-- 文言変更 (2026-10-21, per user提供の完成予想図通り -- 旧「ダイスで築く、あなただけの王国。」
+                 から「ダイスで掴め、ローマの頂点。」に変更、2行構成(旧は3行)。 -->
+            <span id="entry-banner__tagline-title">ダイスで掴め、<br><span id="entry-banner__tagline-title-accent">ローマの頂点。</span></span>
+            <span id="entry-banner__tagline-sub">ダイスを配置し、権力と富を築け。<br>4ラウンドで栄光を競う戦略ボードゲーム。</span>
           </div>
         </div>
         <!-- 2026-10-11, per user request: "今すぐプレイのボタンはこちらで作るので"(素材差し替え)+
@@ -79,20 +80,22 @@
         <img id="entry-banner__tutorial-callout" class="entry-banner__tutorial-callout" src="assets/entry-banner-tutorial-callout.png" alt="初めての方はチュートリアルをクリック" hidden>
         <div id="entry-banner__overlay-panel">
           <div id="entry-banner__button-row">
-            <!-- 並び順 (2026-10-11, per user spec): チュートリアル/ローカル対戦/オンライン対戦/
-                 ウィークリーチャレンジ/カードリスト/ランキング/実績解除/デザイナーズノート。
+            <!-- 並び順 (2026-10-21、per user提供の完成予想図通りに変更): チュートリアル/ローカル対戦/
+                 ウィークリーチャレンジ/オンライン対戦/カードリスト/デザイナーズノート/ランキング/実績解除
+                 (旧順 2026-10-11: チュートリアル/ローカル対戦/オンライン対戦/ウィークリーチャレンジ/
+                 カードリスト/ランキング/実績解除/デザイナーズノート)。
                  8個ともユーザー提供のレイヤー分け素材(アイコン+ラベル込み、ボタンごとに専用配色、
                  透過PNG、assets/entry-banner-icon-*.png)に統一(2026-10-11)。デザイナーズノートの
                  リンク先はまだ無い(per user: "まだできていないので飛ばない") -- クリックすると
                  準備中メッセージを出すだけ、main.js参照。 -->
             <button type="button" class="entry-banner__feature-button" id="entry-banner-tutorial-button" aria-label="チュートリアル"><img src="assets/entry-banner-icon-tutorial.png" alt=""></button>
             <button type="button" class="entry-banner__feature-button" id="entry-banner-local-button" aria-label="ローカル対戦"><img src="assets/entry-banner-icon-local.png" alt=""></button>
-            <button type="button" class="entry-banner__feature-button" id="entry-banner-online-button" aria-label="オンライン対戦"><img src="assets/entry-banner-icon-online.png" alt=""></button>
             <button type="button" class="entry-banner__feature-button" id="entry-banner-weekly-button" aria-label="ウィークリーチャレンジ"><img src="assets/entry-banner-icon-weekly.png" alt=""></button>
+            <button type="button" class="entry-banner__feature-button" id="entry-banner-online-button" aria-label="オンライン対戦"><img src="assets/entry-banner-icon-online.png" alt=""></button>
             <button type="button" class="entry-banner__feature-button" id="entry-banner-cardlist-button" aria-label="カードリスト"><img src="assets/entry-banner-icon-cardlist.png" alt=""></button>
+            <button type="button" class="entry-banner__feature-button" id="entry-banner-designer-notes-button" aria-label="デザイナーズノート"><img src="assets/entry-banner-icon-designer-notes.png" alt=""></button>
             <button type="button" class="entry-banner__feature-button" id="entry-banner-ranking-button" aria-label="ランキング"><img src="assets/entry-banner-icon-ranking.png" alt=""></button>
             <button type="button" class="entry-banner__feature-button" id="entry-banner-achievement-button" aria-label="実績解除"><img src="assets/entry-banner-icon-achievement.png" alt=""></button>
-            <button type="button" class="entry-banner__feature-button" id="entry-banner-designer-notes-button" aria-label="デザイナーズノート"><img src="assets/entry-banner-icon-designer-notes.png" alt=""></button>
           </div>
         </div>
       </div>
@@ -1030,53 +1033,53 @@
   </script>
 
   <!-- Leaf: no src/*.js dependencies. -->
-  <script src="src/rng.js?v=1.192"></script>
+  <script src="src/rng.js?v=1.193"></script>
   <script>__captureModule('rng');</script>
 
   <!-- Depends on: rng -->
-  <script src="src/game-state.js?v=1.192"></script>
+  <script src="src/game-state.js?v=1.193"></script>
   <script>__captureModule('game-state');</script>
 
   <!-- Leaf: no src/*.js dependencies. -->
-  <script src="src/dsl-parser.js?v=1.192"></script>
+  <script src="src/dsl-parser.js?v=1.193"></script>
   <script>__captureModule('dsl-parser');</script>
 
   <!-- Depends on: game-state (fs is only required lazily, on the Node path -- never called here). -->
-  <script src="src/data-loader.js?v=1.192"></script>
+  <script src="src/data-loader.js?v=1.193"></script>
   <script>__captureModule('data-loader');</script>
 
   <!-- Depends on: dsl-parser -->
-  <script src="src/command-builder.js?v=1.192"></script>
+  <script src="src/command-builder.js?v=1.193"></script>
   <script>__captureModule('command-builder');</script>
 
   <!-- Depends on: game-state -->
-  <script src="src/undo.js?v=1.192"></script>
+  <script src="src/undo.js?v=1.193"></script>
   <script>__captureModule('undo');</script>
 
   <!-- Depends on: dsl-parser, command-builder, data-loader, game-state, rng, undo -->
-  <script src="src/executor.js?v=1.192"></script>
+  <script src="src/executor.js?v=1.193"></script>
   <script>__captureModule('executor');</script>
 
   <!-- Depends on: data-loader, dsl-parser, command-builder, rng, executor. Loaded here (before
        board/turn-flow), not after turn-flow like before 2026-08-09 -- turn-flow.js's endRound now
        calls qst.resolveEndGameRewards (see that function's own doc), so qst must load first. -->
-  <script src="src/qst.js?v=1.192"></script>
+  <script src="src/qst.js?v=1.193"></script>
   <script>__captureModule('qst');</script>
 
   <!-- Depends on: data-loader, dsl-parser, command-builder, game-state, executor -->
-  <script src="src/board.js?v=1.192"></script>
+  <script src="src/board.js?v=1.193"></script>
   <script>__captureModule('board');</script>
 
   <!-- Depends on: rng, game-state, data-loader, executor, undo -->
-  <script src="src/setup.js?v=1.192"></script>
+  <script src="src/setup.js?v=1.193"></script>
   <script>__captureModule('setup');</script>
 
   <!-- Depends on: data-loader, executor -->
-  <script src="src/scoring.js?v=1.192"></script>
+  <script src="src/scoring.js?v=1.193"></script>
   <script>__captureModule('scoring');</script>
 
   <!-- Depends on: rng, data-loader, board, undo, setup, executor, qst -->
-  <script src="src/turn-flow.js?v=1.192"></script>
+  <script src="src/turn-flow.js?v=1.193"></script>
   <script>__captureModule('turn-flow');</script>
 
   <!-- AI player (2026-08-03, per user feedback: "プレイヤー1は人間 プレイヤー2 3 4はAIの対戦を実装
@@ -1085,51 +1088,51 @@
        Simulator/AIPlayer classes, no browser-only reimplementation. Order matches each file's own
        "Depends on" comment (see src/ai/*.js). -->
   <!-- Leaf: no src/*.js dependencies. -->
-  <script src="src/ai/eval-table.js?v=1.192"></script>
+  <script src="src/ai/eval-table.js?v=1.193"></script>
   <script>__captureModule('eval-table');</script>
 
   <!-- Depends on: board, executor, turn-flow, game-state -->
-  <script src="src/ai/simulator.js?v=1.192"></script>
+  <script src="src/ai/simulator.js?v=1.193"></script>
   <script>__captureModule('simulator');</script>
 
   <!-- Depends on: data-loader, dsl-parser, command-builder, game-state, board, executor -->
-  <script src="src/ai/move-generator.js?v=1.192"></script>
+  <script src="src/ai/move-generator.js?v=1.193"></script>
   <script>__captureModule('move-generator');</script>
 
   <!-- Leaf: no src/*.js dependencies. -->
-  <script src="src/ai/con-build-synergy.js?v=1.192"></script>
+  <script src="src/ai/con-build-synergy.js?v=1.193"></script>
   <script>__captureModule('con-build-synergy');</script>
 
   <!-- Depends on: data-loader, command-builder -->
-  <script src="src/ai/monument-incentive.js?v=1.192"></script>
+  <script src="src/ai/monument-incentive.js?v=1.193"></script>
   <script>__captureModule('monument-incentive');</script>
 
   <!-- Depends on: data-loader, command-builder, dsl-parser, executor, board, qst, eval-table, con-build-synergy, monument-incentive -->
-  <script src="src/ai/evaluator.js?v=1.192"></script>
+  <script src="src/ai/evaluator.js?v=1.193"></script>
   <script>__captureModule('evaluator');</script>
 
   <!-- Leaf: no src/*.js dependencies. -->
-  <script src="src/ai/die-priority.js?v=1.192"></script>
+  <script src="src/ai/die-priority.js?v=1.193"></script>
   <script>__captureModule('die-priority');</script>
 
   <!-- Depends on: data-loader, board. -->
-  <script src="src/ai/slot-priority.js?v=1.192"></script>
+  <script src="src/ai/slot-priority.js?v=1.193"></script>
   <script>__captureModule('slot-priority');</script>
 
   <!-- Depends on: die-priority, slot-priority (takes the other 4 AI classes as constructor args instead). -->
-  <script src="src/ai/ai-player.js?v=1.192"></script>
+  <script src="src/ai/ai-player.js?v=1.193"></script>
   <script>__captureModule('ai-player');</script>
 
   <!-- AI LV4 smart onboarding (2026-08-27/28). Leaf: no src/*.js dependencies. -->
-  <script src="src/ai/resource-card-synergy.js?v=1.192"></script>
+  <script src="src/ai/resource-card-synergy.js?v=1.193"></script>
   <script>__captureModule('resource-card-synergy');</script>
 
   <!-- Leaf: no src/*.js dependencies. -->
-  <script src="src/ai/con-job-synergy.js?v=1.192"></script>
+  <script src="src/ai/con-job-synergy.js?v=1.193"></script>
   <script>__captureModule('con-job-synergy');</script>
 
   <!-- Depends on: data-loader, resource-card-synergy, con-job-synergy, rng, setup, game-state -->
-  <script src="src/ai/smart-onboarding.js?v=1.192"></script>
+  <script src="src/ai/smart-onboarding.js?v=1.193"></script>
   <script>__captureModule('smart-onboarding');</script>
 
   <!-- Depends on: rng, setup, turn-flow, qst, scoring, executor, game-state, and (lazily, inside
@@ -1138,18 +1141,18 @@
        (2026-09-13, per user request) to synchronously generate an AI-LV4-vs-AI-LV4 round-1/2 board
        offline (no per-move animation) before the human takes over at round 3 -- every CLI tool under
        tools/ uses this same module under plain Node. -->
-  <script src="src/ai/game-runner.js?v=1.192"></script>
+  <script src="src/ai/game-runner.js?v=1.193"></script>
   <script>__captureModule('game-runner');</script>
 
   <!-- Game master data, embedded as window.GAME_DATA by tools/xlsx_to_json.py (see that file's and
        data-loader.js's comments -- file:// pages can't fetch() game.json, so this is a plain global
        instead, loaded the same way as everything else here). -->
-  <script src="data/game.data.js?v=1.192"></script>
+  <script src="data/game.data.js?v=1.193"></script>
 
   <!-- チュートリアルのセリフ (2026-09-28, per user request: "まずはセリフだけ反映されるようにしてください") --
        チュートリアル.xlsx を tools/tutorial_xlsx_to_js.py で変換した window.TUTORIAL_SERIFU。無くても
        main.js の実装側の本文にフォールバックするだけで動く。main.js より前に読み込むこと。 -->
-  <script src="data/tutorial.data.js?v=1.192"></script>
+  <script src="data/tutorial.data.js?v=1.193"></script>
 
   <!-- Firebase (2026-08-29, online multiplayer + cloud ranking/replay -- see the "オンライン対戦 +
        ランキング/リプレイのクラウド共有" plan). Compat build (namespaced firebase.* API, not the modular
@@ -1160,12 +1163,12 @@
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-storage-compat.js"></script>
-  <script src="firebase-config.js?v=1.192"></script>
-  <script src="online-sync.js?v=1.192"></script>
+  <script src="firebase-config.js?v=1.193"></script>
+  <script src="online-sync.js?v=1.193"></script>
 
-  <script src="ranking.js?v=1.192"></script>
-  <script src="main.js?v=1.192"></script>
+  <script src="ranking.js?v=1.193"></script>
+  <script src="main.js?v=1.193"></script>
   <!-- AIルール相談 (2026-10-20) -- main.jsとは独立、GameStateに触れない。see ai-rules-chat.js。 -->
-  <script src="ai-rules-chat.js?v=1.192"></script>
+  <script src="ai-rules-chat.js?v=1.193"></script>
 </body>
 </html>
