@@ -4955,37 +4955,15 @@ body.tutorial-mode .change-highlight {
      タイトルの実際の文字幅より右に広がっていた。flex-startで各行とも自身のコンテンツ幅に縮める。 */
   align-items: flex-start;
   gap: 10px;
-  /* 2026-10-11, per user request: "文字の下に半透明の黒っぽいのを入れて文字を読みやすくできますか
-     戻せるように" -- タイトル+説明文のブロック全体の裏に専用の半透明パネルを追加(#entry-banner__
-     top-panel側の広いvignetteとは別の、文字に密着した読みやすさ目的の背景)。
-     2026-10-11、per user request「黒いの もう少し左に」→「黒いのだけ もう少し左に 文字は動かさない」
-     を経て、背景を直接のbackgroundプロパティではなく::before疑似要素に分離(下記)。padding/margin-left
-     はテキストの現在位置を決めている値なので触らず、::beforeのinsetだけ調整すれば文字を動かさずに
-     背景の見た目だけ左右に広げられる。 */
-  /* 2026-10-11, per user報告「黒いのが消えた」の修正: position:relativeだけではz-indexを指定しない限り
-     新しいスタッキングコンテキストができず、::beforeのz-index:-1がこの要素の背後ではなく、さらに上位
-     (#entry-banner__hero-wrap等、どれもposition:relative/absoluteのみでz-index未指定)まで突き抜けて
-     背景写真(img)の裏に回り込んでしまっていた(=見えなくなっていた)。z-index:0を明示してここで
-     スタッキングコンテキストを確立し、::beforeを正しくこの要素内(文字の背後/写真の手前)に収める。 */
-  position: relative;
-  z-index: 0;
   padding: 14px 18px;
   margin-left: -32px;
 }
-#entry-banner__tagline::before {
-  content: '';
-  position: absolute;
-  /* 2026-10-11, per user request: "黒いの 縦はそのまま 左右を短く" -- top/bottomは変更せず、
-     right/leftだけ内側に詰める。さらに「今と同じだけ 左右短く」で同幅(10px)を2回繰り返し。
-     その後「今短くしたのと同じだけ 左に」で幅はそのまま(right+10px/left-10px)平行移動。 */
-  top: 0;
-  right: 40px;
-  bottom: 0;
-  left: 6px;
-  background: rgba(8, 6, 4, 0.4);
-  border-radius: 10px;
-  z-index: -1;
-}
+/* 半透明の黒背景 (2026-10-11、per user request: 読みやすさ用、当初はタイトル+説明文ブロック全体の裏に
+   1枚の::before疑似要素として追加していたが、2026-10-21、per user request「背景の黒いの、タイトル/
+   ダイスでつかめローマの頂点/ダイスをはいちしの3つにそれぞれ分ける」でロゴ/キャッチコピー/説明文の
+   3要素それぞれに個別の背景を持たせる形に変更。box-shadow(blur:0, spread指定)はレイアウトに一切
+   影響しない(position/widthなどを使わないため、既存のテキスト位置調整値に触れずに済む)ので、
+   background-colorではなくこちらを採用。 */
 /* タイトルロゴ (2026-10-21, per user提供の透過PNG -- 「PCのトップがの変更です」との指定通り、幅の
    広い本物のPC/ノートPC画面限定(下の@media (min-width:1400px)参照)。iPad Pro横向き(1366px)を含む
    タブレット幅では非表示のまま、既存レイアウト(ロゴ追加前の状態)を完全に維持する -- タイトル/
@@ -5003,6 +4981,8 @@ body.tutorial-mode .change-highlight {
     width: clamp(208px, calc(var(--hero-w) * 0.286), 364px);
     height: auto;
     margin-bottom: 2px;
+    box-shadow: 0 0 0 5px rgba(8, 6, 4, 0.4);
+    border-radius: 10px;
   }
 }
 /* キャッチコピー画像 (2026-10-21, per user提供の透過PNG) -- タイトルロゴと同じ理由でPCトップ画面限定
@@ -5014,8 +4994,10 @@ body.tutorial-mode .change-highlight {
 @media (min-width: 1400px) {
   #entry-banner__tagline-title-img {
     display: block;
-    width: clamp(200px, calc(var(--hero-w) * 0.16), 245px);
+    width: clamp(290px, calc(var(--hero-w) * 0.232), 355px);
     height: auto;
+    box-shadow: 0 0 0 5px rgba(8, 6, 4, 0.4);
+    border-radius: 10px;
   }
   #entry-banner__tagline-title {
     display: none;
@@ -5037,6 +5019,8 @@ body.tutorial-mode .change-highlight {
     -1.5px -1.5px 0 rgba(0, 0, 0, 0.75), 1.5px -1.5px 0 rgba(0, 0, 0, 0.75),
     -1.5px 1.5px 0 rgba(0, 0, 0, 0.75), 1.5px 1.5px 0 rgba(0, 0, 0, 0.75),
     0 3px 12px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 0 0 5px rgba(8, 6, 4, 0.4);
+  border-radius: 8px;
 }
 #entry-banner__tagline-title-accent {
   color: #e9c164;
@@ -5058,6 +5042,8 @@ body.tutorial-mode .change-highlight {
      「少し上に」で16px→10pxに戻す。 */
   margin-top: 10px;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.75), 0 1px 2px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 0 0 5px rgba(8, 6, 4, 0.4);
+  border-radius: 8px;
 }
 
 #entry-banner__overlay-panel {
@@ -5072,40 +5058,6 @@ body.tutorial-mode .change-highlight {
   align-items: stretch;
 }
 
-/* ユーザー提供の専用素材(assets/entry-banner-cta.png)を使用 (2026-10-11, per user request: "今すぐ
-   プレイのボタンはこちらで作るので"/「前の画像を参考に位置と大きさ調整して」) -- 旧
-   assets/entry-banner-hero.jpgでの実測位置(左4.9%・上49.7%・幅22.1%、index.html own doc参照)を
-   hero-wrap基準の絶対位置として再現。以前ここにあったCSSのみの錠剤ボタン再現は不要になり撤去。
-   2026-10-11、per user request「今と同じだけ 文字と今すぐプレイを左に」で4.9%→3.9%、さらに
-   「今と同じだけ 今すぐプレイを左に」で3.9%→2.9%。
-   2026-10-21、min-width:1400px(タイトルロゴ表示時)だけ、下のメディアクエリでtopを54%に上書きする
-   (ロゴ追加でtagline全体の高さが増え、49.7%のままだとサブタイトル文言に重なってしまうため -- 実測:
-   サブタイトル下端53.70%、CTA自身の高さ約9.35%なので54%開始なら63.35%終了、吹き出し(.entry-banner__
-   tutorial-callout、top:65%)開始までに約1.65%の余白が残る)。ロゴ非表示のタブレット幅以下では、
-   この49.7%が従来通りそのまま使われる。 */
-.entry-banner__cta {
-  position: absolute;
-  left: 2.9%;
-  top: 49.7%;
-  width: 22.1%;
-  display: inline-flex;
-  border: none;
-  background: transparent;
-  padding: 0;
-  cursor: pointer;
-  line-height: 0;
-}
-@media (min-width: 1400px) {
-  .entry-banner__cta {
-    top: 54%;
-  }
-}
-.entry-banner__cta img {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
 /* 下部の帯は画像端いっぱいに敷く (旧画像のボタン行が画面端まで続いていた見た目に合わせる)。 */
 #entry-banner__button-row {
   display: flex;
@@ -5114,10 +5066,9 @@ body.tutorial-mode .change-highlight {
 }
 
 /* 初回案内の吹き出し (2026-10-15, per user提供の透過PNG -- テキスト込みで画像自身に焼き込み済みなので
-   img要素をそのまま表示するだけ) -- .entry-banner__cta(今すぐプレイボタン)と同じ考え方で、
-   #entry-banner__hero-wrap直下に絶対配置。ユーザー提供の参考画像(1536x1024基準)でチュートリアル
-   ボタンの少し上の吹き出し位置を実測: 左65px/上590px/幅355px -> 4.2%/57.6%/23.1%。元画像比率を
-   保つためheight:autoのみ指定(幅から自動算出)。 */
+   img要素をそのまま表示するだけ) -- #entry-banner__hero-wrap直下に絶対配置。ユーザー提供の参考画像
+   (1536x1024基準)でチュートリアルボタンの少し上の吹き出し位置を実測: 左65px/上590px/幅355px ->
+   4.2%/57.6%/23.1%。元画像比率を保つためheight:autoのみ指定(幅から自動算出)。 */
 .entry-banner__tutorial-callout {
   position: absolute;
   left: 4.2%;
@@ -5309,9 +5260,6 @@ body.tutorial-mode .change-highlight {
     margin-left: 0;
     padding: 0;
   }
-  #entry-banner__tagline::before {
-    content: none;
-  }
   /* タイトルロゴ(entry-banner__logo)はPCトップ画面限定(per user request: "PCのトップがの変更です")
      なので、スマホ用レイアウトでは非表示にする。 */
   #entry-banner__logo {
@@ -5321,6 +5269,7 @@ body.tutorial-mode .change-highlight {
     font-size: clamp(24px, 7vw, 32px);
     color: var(--text);
     text-shadow: none;
+    box-shadow: none;
   }
   #entry-banner__tagline-title-accent {
     font-size: clamp(32px, 9vw, 42px);
@@ -5330,13 +5279,8 @@ body.tutorial-mode .change-highlight {
     font-size: 14px;
     color: var(--text-muted);
     text-shadow: none;
+    box-shadow: none;
     max-width: none;
-  }
-
-  .entry-banner__cta {
-    position: static;
-    width: min(260px, 70%);
-    margin: 16px auto 0;
   }
 
   /* 吹き出し(チュートリアル誘導)は画像上の特定ボタン位置を指して絶対配置されており、並び順が

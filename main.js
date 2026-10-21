@@ -14757,9 +14757,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('entry-banner-tutorial-button').addEventListener('click', openTutorialMode);
   updateTutorialCalloutVisibility();
   document.getElementById('entry-banner-local-button').addEventListener('click', dismissEntryBanner);
-  // トップ画像に焼き込み済みの「今すぐプレイ」ボタンの上に重ねた透明ボタン (2026-10-05, per user: "今すぐ
-  // プレイはローカル対戦に飛ぶ") -- ローカル対戦ボタンと全く同じ処理。
-  document.getElementById('entry-banner-hero-cta').addEventListener('click', dismissEntryBanner);
   document.getElementById('entry-banner-online-button').addEventListener('click', () => { dismissEntryBanner(); openOnlineLobby(); });
   // gatedEntryBannerHandler (2026-10-11, see its own doc; widened 2026-10-12 per user report -- the SAME
   // functions called from in-game nav buttons (anytime-ranking-button/card-list-open-button/
