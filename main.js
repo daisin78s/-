@@ -14655,12 +14655,13 @@ function setupHeroWidthObserver() {
   if (!heroImg || !titleEl || !accentEl || !subEl) return;
   const clamp = (min, value, max) => Math.min(Math.max(value, min), max);
   const observer = new ResizeObserver(() => {
-    // スマホ用レイアウト(style.cssの@media (max-width:480px)参照、2026-10-21)は画像を重ねる方式
-    // ではなく通常の流れで文字サイズをCSS側(vw基準)で決めるため、ここでインラインstyleを設定すると
-    // (インラインstyleはどんなCSS側の指定より優先されてしまうため)その指定を上書きしてしまう。
-    // 幅がブレークポイント以下の間は何もしない(既存のインラインstyleも消しておく -- PC/タブレット幅
-    // からリサイズ/回転でスマホ幅に変わった場合に、古い値が残り続けないように)。
-    if (window.innerWidth <= 480) {
+    // スマホ用レイアウト(style.cssの@media (max-width:480px), (max-height:480px)参照、2026-10-21、
+    // 横持ち対応で高さ条件も追加)は画像を重ねる方式ではなく通常の流れで文字サイズをCSS側(vw基準)で
+    // 決めるため、ここでインラインstyleを設定すると(インラインstyleはどんなCSS側の指定より優先されて
+    // しまうため)その指定を上書きしてしまう。ブレークポイント内(幅または高さが480px以下)の間は
+    // 何もしない(既存のインラインstyleも消しておく -- PC/タブレット幅からリサイズ/回転でスマホ幅に
+    // 変わった場合に、古い値が残り続けないように)。CSS側のmax-height条件と揃える。
+    if (window.innerWidth <= 480 || window.innerHeight <= 480) {
       titleEl.style.fontSize = '';
       accentEl.style.fontSize = '';
       subEl.style.fontSize = '';

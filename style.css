@@ -5217,7 +5217,10 @@ body.tutorial-mode .change-highlight {
    PC/タブレット幅(480pxより広い画面)は上のルールのまま一切変更しない(per user request:
    "PCは絶対に変わらないように" / "タブレットも" -- 480pxはiPadの最小幅768pxより十分小さく、
    タブレットには絶対に適用されない)。 */
-@media (max-width: 480px) {
+/* 幅480px以下(スマホ縦持ち) OR 高さ480px以下(スマホ横持ち -- 回転すると幅がこのブレークポイントを
+   超えてしまうため、高さ基準でも拾う。タブレットの横向き(例: iPad landscape 1024x768)は幅・高さ
+   どちらも480pxを超えるので誤って適用されない、2026-10-21に確認済み)。 */
+@media (max-width: 480px), (max-height: 480px) {
   #entry-banner__box {
     justify-content: flex-start;
     overflow-y: auto;
