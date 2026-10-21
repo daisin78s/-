@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1.200">
+<link rel="stylesheet" href="style.css?v=1.201">
 </head>
 <body>
   <!-- 著作権表示 (2026-10-03, per user request) -- 常時表示だが画面右下に小さく/控えめに配置し、
@@ -25,7 +25,7 @@
        取得させる効果は無かった(iPad Safariがそれらをキャッシュしたまま使い続けていたと判明) --
        今後はこの番号と合わせて、下の全<script src>/<link>に付けた?v=X.XXXクエリ文字列も必ず
        同じ値に更新すること(実際にURLを変えることでキャッシュを回避する、こちらが本体)。 -->
-  <div id="copyright-notice">© 2026 higebucho Ver.1.200</div>
+  <div id="copyright-notice">© 2026 higebucho Ver.1.201</div>
 
   <!-- 入口バナー (2026-10-04, per user request: "HPに入ったときに大き目バナーを用意して導線をわかりやすく
        したい") -- #app/#weekly-seat-pickerと同じ「画面を丸ごと差し替える」パターン(main.jsのrender()
@@ -48,7 +48,7 @@
         <!-- バージョン表示 (2026-10-08, per user request: "セリフで見えにくいので トップ画像の右下にも") --
              #copyright-noticeはゲーム中のセリフ吹き出しに隠れて見えにくいため、入口バナー(トップ画像)の
              右下にも同じ番号を複製表示する。中身は#copyright-noticeと手動で同期させること。 -->
-        <div id="entry-banner__version">Ver.1.200</div>
+        <div id="entry-banner__version">Ver.1.201</div>
         <!-- 見出し文言+CTA (2026-10-11, per user request: "ダイスで築く、あなただけの王国。などの文言も
              前と同じように表示して 今すぐプレイボタンも" -- 旧画像に焼き込まれていたキャッチコピーを、
              新背景では実テキストとして表示(per user: "文言は後から変更できるように" -- 画像ではなく
@@ -1031,53 +1031,53 @@
   </script>
 
   <!-- Leaf: no src/*.js dependencies. -->
-  <script src="src/rng.js?v=1.200"></script>
+  <script src="src/rng.js?v=1.201"></script>
   <script>__captureModule('rng');</script>
 
   <!-- Depends on: rng -->
-  <script src="src/game-state.js?v=1.200"></script>
+  <script src="src/game-state.js?v=1.201"></script>
   <script>__captureModule('game-state');</script>
 
   <!-- Leaf: no src/*.js dependencies. -->
-  <script src="src/dsl-parser.js?v=1.200"></script>
+  <script src="src/dsl-parser.js?v=1.201"></script>
   <script>__captureModule('dsl-parser');</script>
 
   <!-- Depends on: game-state (fs is only required lazily, on the Node path -- never called here). -->
-  <script src="src/data-loader.js?v=1.200"></script>
+  <script src="src/data-loader.js?v=1.201"></script>
   <script>__captureModule('data-loader');</script>
 
   <!-- Depends on: dsl-parser -->
-  <script src="src/command-builder.js?v=1.200"></script>
+  <script src="src/command-builder.js?v=1.201"></script>
   <script>__captureModule('command-builder');</script>
 
   <!-- Depends on: game-state -->
-  <script src="src/undo.js?v=1.200"></script>
+  <script src="src/undo.js?v=1.201"></script>
   <script>__captureModule('undo');</script>
 
   <!-- Depends on: dsl-parser, command-builder, data-loader, game-state, rng, undo -->
-  <script src="src/executor.js?v=1.200"></script>
+  <script src="src/executor.js?v=1.201"></script>
   <script>__captureModule('executor');</script>
 
   <!-- Depends on: data-loader, dsl-parser, command-builder, rng, executor. Loaded here (before
        board/turn-flow), not after turn-flow like before 2026-08-09 -- turn-flow.js's endRound now
        calls qst.resolveEndGameRewards (see that function's own doc), so qst must load first. -->
-  <script src="src/qst.js?v=1.200"></script>
+  <script src="src/qst.js?v=1.201"></script>
   <script>__captureModule('qst');</script>
 
   <!-- Depends on: data-loader, dsl-parser, command-builder, game-state, executor -->
-  <script src="src/board.js?v=1.200"></script>
+  <script src="src/board.js?v=1.201"></script>
   <script>__captureModule('board');</script>
 
   <!-- Depends on: rng, game-state, data-loader, executor, undo -->
-  <script src="src/setup.js?v=1.200"></script>
+  <script src="src/setup.js?v=1.201"></script>
   <script>__captureModule('setup');</script>
 
   <!-- Depends on: data-loader, executor -->
-  <script src="src/scoring.js?v=1.200"></script>
+  <script src="src/scoring.js?v=1.201"></script>
   <script>__captureModule('scoring');</script>
 
   <!-- Depends on: rng, data-loader, board, undo, setup, executor, qst -->
-  <script src="src/turn-flow.js?v=1.200"></script>
+  <script src="src/turn-flow.js?v=1.201"></script>
   <script>__captureModule('turn-flow');</script>
 
   <!-- AI player (2026-08-03, per user feedback: "プレイヤー1は人間 プレイヤー2 3 4はAIの対戦を実装
@@ -1086,51 +1086,51 @@
        Simulator/AIPlayer classes, no browser-only reimplementation. Order matches each file's own
        "Depends on" comment (see src/ai/*.js). -->
   <!-- Leaf: no src/*.js dependencies. -->
-  <script src="src/ai/eval-table.js?v=1.200"></script>
+  <script src="src/ai/eval-table.js?v=1.201"></script>
   <script>__captureModule('eval-table');</script>
 
   <!-- Depends on: board, executor, turn-flow, game-state -->
-  <script src="src/ai/simulator.js?v=1.200"></script>
+  <script src="src/ai/simulator.js?v=1.201"></script>
   <script>__captureModule('simulator');</script>
 
   <!-- Depends on: data-loader, dsl-parser, command-builder, game-state, board, executor -->
-  <script src="src/ai/move-generator.js?v=1.200"></script>
+  <script src="src/ai/move-generator.js?v=1.201"></script>
   <script>__captureModule('move-generator');</script>
 
   <!-- Leaf: no src/*.js dependencies. -->
-  <script src="src/ai/con-build-synergy.js?v=1.200"></script>
+  <script src="src/ai/con-build-synergy.js?v=1.201"></script>
   <script>__captureModule('con-build-synergy');</script>
 
   <!-- Depends on: data-loader, command-builder -->
-  <script src="src/ai/monument-incentive.js?v=1.200"></script>
+  <script src="src/ai/monument-incentive.js?v=1.201"></script>
   <script>__captureModule('monument-incentive');</script>
 
   <!-- Depends on: data-loader, command-builder, dsl-parser, executor, board, qst, eval-table, con-build-synergy, monument-incentive -->
-  <script src="src/ai/evaluator.js?v=1.200"></script>
+  <script src="src/ai/evaluator.js?v=1.201"></script>
   <script>__captureModule('evaluator');</script>
 
   <!-- Leaf: no src/*.js dependencies. -->
-  <script src="src/ai/die-priority.js?v=1.200"></script>
+  <script src="src/ai/die-priority.js?v=1.201"></script>
   <script>__captureModule('die-priority');</script>
 
   <!-- Depends on: data-loader, board. -->
-  <script src="src/ai/slot-priority.js?v=1.200"></script>
+  <script src="src/ai/slot-priority.js?v=1.201"></script>
   <script>__captureModule('slot-priority');</script>
 
   <!-- Depends on: die-priority, slot-priority (takes the other 4 AI classes as constructor args instead). -->
-  <script src="src/ai/ai-player.js?v=1.200"></script>
+  <script src="src/ai/ai-player.js?v=1.201"></script>
   <script>__captureModule('ai-player');</script>
 
   <!-- AI LV4 smart onboarding (2026-08-27/28). Leaf: no src/*.js dependencies. -->
-  <script src="src/ai/resource-card-synergy.js?v=1.200"></script>
+  <script src="src/ai/resource-card-synergy.js?v=1.201"></script>
   <script>__captureModule('resource-card-synergy');</script>
 
   <!-- Leaf: no src/*.js dependencies. -->
-  <script src="src/ai/con-job-synergy.js?v=1.200"></script>
+  <script src="src/ai/con-job-synergy.js?v=1.201"></script>
   <script>__captureModule('con-job-synergy');</script>
 
   <!-- Depends on: data-loader, resource-card-synergy, con-job-synergy, rng, setup, game-state -->
-  <script src="src/ai/smart-onboarding.js?v=1.200"></script>
+  <script src="src/ai/smart-onboarding.js?v=1.201"></script>
   <script>__captureModule('smart-onboarding');</script>
 
   <!-- Depends on: rng, setup, turn-flow, qst, scoring, executor, game-state, and (lazily, inside
@@ -1139,18 +1139,18 @@
        (2026-09-13, per user request) to synchronously generate an AI-LV4-vs-AI-LV4 round-1/2 board
        offline (no per-move animation) before the human takes over at round 3 -- every CLI tool under
        tools/ uses this same module under plain Node. -->
-  <script src="src/ai/game-runner.js?v=1.200"></script>
+  <script src="src/ai/game-runner.js?v=1.201"></script>
   <script>__captureModule('game-runner');</script>
 
   <!-- Game master data, embedded as window.GAME_DATA by tools/xlsx_to_json.py (see that file's and
        data-loader.js's comments -- file:// pages can't fetch() game.json, so this is a plain global
        instead, loaded the same way as everything else here). -->
-  <script src="data/game.data.js?v=1.200"></script>
+  <script src="data/game.data.js?v=1.201"></script>
 
   <!-- チュートリアルのセリフ (2026-09-28, per user request: "まずはセリフだけ反映されるようにしてください") --
        チュートリアル.xlsx を tools/tutorial_xlsx_to_js.py で変換した window.TUTORIAL_SERIFU。無くても
        main.js の実装側の本文にフォールバックするだけで動く。main.js より前に読み込むこと。 -->
-  <script src="data/tutorial.data.js?v=1.200"></script>
+  <script src="data/tutorial.data.js?v=1.201"></script>
 
   <!-- Firebase (2026-08-29, online multiplayer + cloud ranking/replay -- see the "オンライン対戦 +
        ランキング/リプレイのクラウド共有" plan). Compat build (namespaced firebase.* API, not the modular
@@ -1161,12 +1161,12 @@
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-storage-compat.js"></script>
-  <script src="firebase-config.js?v=1.200"></script>
-  <script src="online-sync.js?v=1.200"></script>
+  <script src="firebase-config.js?v=1.201"></script>
+  <script src="online-sync.js?v=1.201"></script>
 
-  <script src="ranking.js?v=1.200"></script>
-  <script src="main.js?v=1.200"></script>
+  <script src="ranking.js?v=1.201"></script>
+  <script src="main.js?v=1.201"></script>
   <!-- AIルール相談 (2026-10-20) -- main.jsとは独立、GameStateに触れない。see ai-rules-chat.js。 -->
-  <script src="ai-rules-chat.js?v=1.200"></script>
+  <script src="ai-rules-chat.js?v=1.201"></script>
 </body>
 </html>

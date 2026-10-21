@@ -4965,21 +4965,24 @@ body.tutorial-mode .change-highlight {
    影響しない)を試したが、per user報告「黒背景が枠になり塗りつぶされていない」の通り実機/実ブラウザ
    では縁取りのみ描画され中が塗りつぶされない現象を確認したため、確実に塗りつぶされるbackground-color
    +padding+相殺の負marginに統一した(4要素とも同じ方式)。 */
-/* タイトルロゴ (2026-10-21, per user提供の透過PNG -- 「PCのトップがの変更です」との指定通り、幅の
-   広い本物のPC/ノートPC画面限定(下の@media (min-width:1400px)参照)。iPad Pro横向き(1366px)を含む
-   タブレット幅では非表示のまま、既存レイアウト(ロゴ追加前の状態)を完全に維持する -- タイトル/
-   サブタイトル文言の実際の高さがhero-wrap高さに比例せず、clamp()の上限/下限に張り付く形でほぼ一定の
-   px値になる(実測: 1440px幅で481px、1024px幅で436px、768px幅で400px -- hero-wrap自体の高さは895px
-   /637px/478pxと大きく変わるのに文言の高さはほぼ変わらない)ため、%指定のCTAボタン位置がどの画面幅
-   でも共通して破綻なく収まる単一の値を作れず、極端に広い画面(min-width:1400px、タブレットより
-   明確に広い)だけに絞って個別調整する方が安全と判断。 */
+/* タイトルロゴ (2026-10-21, per user提供の透過PNG -- 当初は「PCのトップがの変更です」との指定で
+   min-width:1400px(PC限定、CTAボタンとの重なり回避のため)だったが、同日中にper user request
+   「タブレット版もこれと同じように表示して」でタブレット幅にも拡大。CTAボタンは既に削除済みのため、
+   当時の重なり問題(旧コメント参照)は解消済み。スマホ用レイアウト(@media (max-width:480px),
+   (max-height:480px)参照)の直後、481px以上は全てこちらを表示する。 */
 #entry-banner__logo {
   display: none;
 }
-@media (min-width: 1400px) {
+@media (min-width: 481px) {
   #entry-banner__logo {
     display: block;
-    width: clamp(229px, calc(var(--hero-w) * 0.3146), 400px);
+    /* 2026-10-21、per user request「タブレット版もこれと同じように表示して」で追加したタブレット
+       向けサイズ(481px以上の既定値)。PC版(min-width:1400px、下の2つ目のメディアクエリで上書き)より
+       かなり小さい -- タブレット幅はhero-wrapの高さが画面の縦横比次第で大きく変動する一方、吹き出し
+       (.entry-banner__tutorial-callout、top:65%)との間に収まる余白は実測で最も厳しいケース(768px幅
+       縦持ち)で約264px/600px幅で約207pxしかなく、PC版の大きさのままでは収まらない(実機検証で確認)。
+       ロゴ/キャッチコピー画像/説明文を合計しても余白内に収まるよう、このサイズに抑えた。 */
+    width: clamp(80px, calc(var(--hero-w) * 0.17), 200px);
     height: auto;
     /* 2026-10-21、per user報告: box-shadowのspreadは実機/実ブラウザで縁取りのみ描画され中が塗り
        つぶされない現象を確認(#entry-banner__tagline-title/-sub側own doc参照)、こちらも同じ理由で
@@ -4991,16 +4994,24 @@ body.tutorial-mode .change-highlight {
     border-radius: 10px;
   }
 }
-/* キャッチコピー画像 (2026-10-21, per user提供の透過PNG) -- タイトルロゴと同じ理由でPCトップ画面限定
-   (min-width:1400px)。表示時は文字版(#entry-banner__tagline-title)を隠す。幅はロゴと同系統のclamp
-   (画像自体は1774x887=2:1比率)。 */
+@media (min-width: 1400px) {
+  #entry-banner__logo {
+    /* PC版(タブレットより明確に広い画面)はこちらでタブレット向けサイズを上書き、従来通りの大きさに。 */
+    width: clamp(229px, calc(var(--hero-w) * 0.3146), 400px);
+  }
+}
+/* キャッチコピー画像 (2026-10-21, per user提供の透過PNG) -- タイトルロゴと同じ理由で481px以上
+   (スマホ以外)全てに表示(own doc参照)。表示時は文字版(#entry-banner__tagline-title)を隠す。幅は
+   ロゴと同系統のclamp(画像自体は1774x887=2:1比率)。 */
 #entry-banner__tagline-title-img {
   display: none;
 }
-@media (min-width: 1400px) {
+@media (min-width: 481px) {
   #entry-banner__tagline-title-img {
     display: block;
-    width: clamp(290px, calc(var(--hero-w) * 0.232), 355px);
+    /* タブレット向けサイズ(own doc、#entry-banner__logo側参照)。PC版は下の2つ目のメディアクエリで
+       上書き。 */
+    width: clamp(104px, calc(var(--hero-w) * 0.21), 260px);
     height: auto;
     background: linear-gradient(180deg, rgba(28, 20, 12, 0.88) 0%, rgba(5, 4, 2, 0.78) 100%);
     padding: 8px;
@@ -5009,6 +5020,11 @@ body.tutorial-mode .change-highlight {
   }
   #entry-banner__tagline-title {
     display: none;
+  }
+}
+@media (min-width: 1400px) {
+  #entry-banner__tagline-title-img {
+    width: clamp(290px, calc(var(--hero-w) * 0.232), 355px);
   }
 }
 #entry-banner__tagline-title {
