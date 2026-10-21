@@ -4986,6 +4986,25 @@ body.tutorial-mode .change-highlight {
   border-radius: 10px;
   z-index: -1;
 }
+/* タイトルロゴ (2026-10-21, per user提供の透過PNG -- 「PCのトップがの変更です」との指定通り、幅の
+   広い本物のPC/ノートPC画面限定(下の@media (min-width:1400px)参照)。iPad Pro横向き(1366px)を含む
+   タブレット幅では非表示のまま、既存レイアウト(ロゴ追加前の状態)を完全に維持する -- タイトル/
+   サブタイトル文言の実際の高さがhero-wrap高さに比例せず、clamp()の上限/下限に張り付く形でほぼ一定の
+   px値になる(実測: 1440px幅で481px、1024px幅で436px、768px幅で400px -- hero-wrap自体の高さは895px
+   /637px/478pxと大きく変わるのに文言の高さはほぼ変わらない)ため、%指定のCTAボタン位置がどの画面幅
+   でも共通して破綻なく収まる単一の値を作れず、極端に広い画面(min-width:1400px、タブレットより
+   明確に広い)だけに絞って個別調整する方が安全と判断。 */
+#entry-banner__logo {
+  display: none;
+}
+@media (min-width: 1400px) {
+  #entry-banner__logo {
+    display: block;
+    width: clamp(160px, calc(var(--hero-w) * 0.22), 280px);
+    height: auto;
+    margin-bottom: 2px;
+  }
+}
 #entry-banner__tagline-title {
   /* 2026-10-11, per user request: "少し大きく...明朝に" -- サイズを拡大し、OS標準の明朝体フォントに
      変更(Webフォントは読み込まず、既存のfont-family慣習(system-ui中心)を踏襲しつつこの見出しだけ
@@ -5042,7 +5061,12 @@ body.tutorial-mode .change-highlight {
    assets/entry-banner-hero.jpgでの実測位置(左4.9%・上49.7%・幅22.1%、index.html own doc参照)を
    hero-wrap基準の絶対位置として再現。以前ここにあったCSSのみの錠剤ボタン再現は不要になり撤去。
    2026-10-11、per user request「今と同じだけ 文字と今すぐプレイを左に」で4.9%→3.9%、さらに
-   「今と同じだけ 今すぐプレイを左に」で3.9%→2.9%。 */
+   「今と同じだけ 今すぐプレイを左に」で3.9%→2.9%。
+   2026-10-21、min-width:1400px(タイトルロゴ表示時)だけ、下のメディアクエリでtopを54%に上書きする
+   (ロゴ追加でtagline全体の高さが増え、49.7%のままだとサブタイトル文言に重なってしまうため -- 実測:
+   サブタイトル下端53.70%、CTA自身の高さ約9.35%なので54%開始なら63.35%終了、吹き出し(.entry-banner__
+   tutorial-callout、top:65%)開始までに約1.65%の余白が残る)。ロゴ非表示のタブレット幅以下では、
+   この49.7%が従来通りそのまま使われる。 */
 .entry-banner__cta {
   position: absolute;
   left: 2.9%;
@@ -5054,6 +5078,11 @@ body.tutorial-mode .change-highlight {
   padding: 0;
   cursor: pointer;
   line-height: 0;
+}
+@media (min-width: 1400px) {
+  .entry-banner__cta {
+    top: 54%;
+  }
 }
 .entry-banner__cta img {
   display: block;
@@ -5266,6 +5295,11 @@ body.tutorial-mode .change-highlight {
   }
   #entry-banner__tagline::before {
     content: none;
+  }
+  /* タイトルロゴ(entry-banner__logo)はPCトップ画面限定(per user request: "PCのトップがの変更です")
+     なので、スマホ用レイアウトでは非表示にする。 */
+  #entry-banner__logo {
+    display: none;
   }
   #entry-banner__tagline-title {
     font-size: clamp(24px, 7vw, 32px);
