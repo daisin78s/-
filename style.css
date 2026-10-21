@@ -5005,6 +5005,22 @@ body.tutorial-mode .change-highlight {
     margin-bottom: 2px;
   }
 }
+/* キャッチコピー画像 (2026-10-21, per user提供の透過PNG) -- タイトルロゴと同じ理由でPCトップ画面限定
+   (min-width:1400px)。表示時は文字版(#entry-banner__tagline-title)を隠す。幅はロゴと同系統のclamp
+   (画像自体は1774x887=2:1比率)。 */
+#entry-banner__tagline-title-img {
+  display: none;
+}
+@media (min-width: 1400px) {
+  #entry-banner__tagline-title-img {
+    display: block;
+    width: clamp(200px, calc(var(--hero-w) * 0.16), 245px);
+    height: auto;
+  }
+  #entry-banner__tagline-title {
+    display: none;
+  }
+}
 #entry-banner__tagline-title {
   /* 2026-10-11, per user request: "少し大きく...明朝に" -- サイズを拡大し、OS標準の明朝体フォントに
      変更(Webフォントは読み込まず、既存のfont-family慣習(system-ui中心)を踏襲しつつこの見出しだけ
