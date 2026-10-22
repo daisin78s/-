@@ -5956,3 +5956,15 @@ body.tutorial-mode .change-highlight {
     height: 76px;
   }
 }
+
+/* スマホ版: エリア/領地カードの拡大画面では一番上のタイトル(エリア名/カード名)を出さない (2026-10-22,
+   per user request「スマホ版 エリアと領地カードの拡大画面 1画面で収まらないので NAMEを表示しない」、
+   赤丸で示された左上のタイトル) -- 名前は中のエリア枠・カードにも書いてあるため。×ボタンは右上に残す。 */
+@media (max-width: 760px) {
+  .card-inst-modal--area-wide .card-inst-modal__title {
+    display: none;
+  }
+  .card-inst-modal--area-wide .card-inst-modal__header {
+    justify-content: flex-end;
+  }
+}
