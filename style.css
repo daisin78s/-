@@ -5316,6 +5316,12 @@ body.tutorial-mode .change-highlight {
   #app:not([data-mobile-active-tab="cards"]) [data-mobile-tab="cards"] { display: none; }
   #app:not([data-mobile-active-tab="settings"]) [data-mobile-tab="settings"] { display: none; }
   #app:not([data-mobile-active-tab="quest"]) [data-mobile-tab="quest"] { display: none; }
+  /* per user request「(中身の無い白い枠を)けして」-- #player-cardsは中身(.player-cards__header=設定、
+     #job-pool/#player-cards-groups=獲得カード)がタブで全部隠れても外枠(背景/padding)だけ残っていた。
+     その2タブ以外では外枠ごと隠す。#mobile-own-row(エリアタブ)も、操作中のプレイヤーがいない時は
+     空になり同じく枠だけが残るため:emptyで隠す。 */
+  #app:not([data-mobile-active-tab="cards"]):not([data-mobile-active-tab="settings"]) #player-cards { display: none; }
+  .mobile-own-row:empty { display: none; }
 
   /* クエストタブ (per user request: "ショップ エリア...の左にクエストを作り そこからクエストが見れる
      ように ショップの上にあるクエスト確認はとる" -- 以前のボタン+モーダル方式から独立タブへ変更)。
