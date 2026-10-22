@@ -14577,13 +14577,30 @@ function showCardEnlargeModal(faceId, visualNode, sibling, siblingVisualNode, pi
       visualNode.style.width = `${QST_PRE_SCALE_WIDTH}px`;
       if (siblingVisualNode) siblingVisualNode.style.width = `${QST_PRE_SCALE_WIDTH}px`;
     }
-    const scale = isQst ? ENLARGE_SCALE_QST : ENLARGE_SCALE;
+    let scale = isQst ? ENLARGE_SCALE_QST : ENLARGE_SCALE;
     // Measured (both faces' natural, pre-transform rects) before either is transformed -- getBoundingClientRect
     // only reports real sizes for nodes already attached to the live document (overlay.hidden=false above
     // put visualContainer itself there), and measuring face A before face B has joined the row risks a
     // stale reading if adding B reflows A (row is a flex container).
     const frontRect = visualNode.getBoundingClientRect();
     const backRect = siblingVisualNode ? siblingVisualNode.getBoundingClientRect() : null;
+    // スマホ版: カード(表裏2枚なら両方)と獲得ボタンが画面に収まる倍率まで下げる (2026-10-22, per user
+    // report「学問カード 人材カード 制約カード ジョブカード モニュメント 拡大すると大きすぎて見えません」
+    // -- 固定3倍だとスマホ横向きの高さ約360pxにカード1枚(約118px×3)すら入らなかった)。等倍未満にはしない。
+    // 判定はモーダルのスマホ用CSS(@media (max-width:760px),(max-height:500px))と同じ基準。PC/タブレットは従来通り。
+    if (window.innerWidth <= 760 || window.innerHeight <= 500) {
+      const modalStyle = getComputedStyle(modal);
+      const padX = parseFloat(modalStyle.paddingLeft) + parseFloat(modalStyle.paddingRight);
+      const padY = parseFloat(modalStyle.paddingTop) + parseFloat(modalStyle.paddingBottom);
+      const headerH = modal.querySelector('.card-inst-modal__header').getBoundingClientRect().height + 8;
+      const pickH = pickAction ? 56 : 0;
+      const gap = backRect ? 10 : 0;
+      const availW = window.innerWidth - 32 - padX - gap;
+      const availH = window.innerHeight - 24 - padY - headerH - pickH;
+      const naturalW = frontRect.width + (backRect ? backRect.width : 0);
+      const naturalH = Math.max(frontRect.height, backRect ? backRect.height : 0);
+      scale = Math.max(1, Math.min(scale, availW / naturalW, availH / naturalH));
+    }
     visualNode.style.transform = `scale(${scale})`;
     visualNode.style.transformOrigin = 'top left';
     frontSlot.style.width = `${frontRect.width * scale}px`;
