@@ -5763,6 +5763,20 @@ body.tutorial-mode .change-highlight {
   .card-inst-overlay > .card-inst-modal {
     margin: auto;
   }
+  /* per user報告(スクリーンショット付き)「カードリスト下に謎の余白があるので余白消して」-- iPhone横向きで
+     半透明の背景が画面下端まで届かず、下に明るい帯(ページの背景)が見えていた(Safariのツールバーの出し
+     入れに対し、position:fixed;inset:0の要素の大きさが追従しきれないことがあるため、と推測。Chromium
+     では再現せず)。背景色を要素の外側にもbox-shadowで大きく塗り広げ、帯が出ても覆う(レイアウトには
+     影響しない)。 */
+  .card-inst-overlay {
+    box-shadow: 0 0 0 100vmax rgba(16, 24, 40, 0.45);
+  }
+  /* カードリスト本体は98dvhが上限だったが、スマホ用に足したオーバーレイの上下12pxの余白分だけ画面から
+     はみ出し、下端が切れていた。 */
+  .card-list-modal {
+    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
+  }
   .resource-confirm-buttons {
     position: sticky;
     bottom: 0;
