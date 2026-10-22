@@ -7686,6 +7686,16 @@ function renderMobileOwnDiceRow(state, next) {
   const turnEndEl = el('div', 'mobile-own-row__turn-end');
   if (tutorialTurnEndButtonShown && player.id === 'P1') renderTutorialTurnEndButton(turnEndEl);
   else renderTurnEndButton(turnEndEl, state, player, true);
+  // 1手戻るボタン (2026-10-22, per user request: "ターン終了ボタンの上に1手戻るボタンも表示") -- サイド
+  // バーの#dice-cancel-buttonと同じ条件(isDiceCancelDisabled)・同じ処理・同じ光る演出。押せない間は場所を
+  // 取らないよう出さない。ターン終了と同じ入れ物の先頭に入れる(=ターン終了の上、縦向きのバーでは左)。
+  if (!isDiceCancelDisabled()) {
+    const cancelBtn = el('button', 'undo-button mobile-own-row__cancel', '↩️ 1手戻る');
+    cancelBtn.type = 'button';
+    cancelBtn.classList.toggle('change-highlight', tutorialCancelButtonGlowing);
+    cancelBtn.addEventListener('click', handleCancelPreviousActionClick);
+    turnEndEl.prepend(cancelBtn);
+  }
   container.appendChild(colorDiceEl);
   if (whiteDiceEl.childElementCount > 0) container.appendChild(whiteDiceEl);
   container.appendChild(resourcesEl);
@@ -10563,7 +10573,7 @@ const TUTORIAL_STEPS = [
   {
     id: 'dice_misclick_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: 'おっと、別のスロットに置いてしまいましたね\nそういう時は「直前のアクションをキャンセル」ボタンを押してください',
+    body: 'おっと、別のスロットに置いてしまいましたね\nそういう時は「1手戻る」ボタンを押してください',
     noManualDismiss: true,
   },
   // 2026-09-27, per user request -- プレイヤー自身が実際に一番右のダイスを城下町のスロットANY(index 1)へ
@@ -10694,7 +10704,7 @@ const TUTORIAL_STEPS = [
   {
     id: 'cancel_training_ground_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: '行動をキャンセルしたいときは「直前のアクションをキャンセル」を押せばキャンセルすることができます\n「直前のアクションをキャンセル」ボタンを押してください',
+    body: '行動をキャンセルしたいときは「1手戻る」を押せばキャンセルすることができます\n「1手戻る」ボタンを押してください',
     noManualDismiss: true,
   },
   // 2026-09-29, per user request (Excelの新しい行T021〜T027) -- 訓練場のキャンセルの後、カードの獲得の仕方の
@@ -11004,7 +11014,7 @@ const TUTORIAL_STEPS = [
   {
     id: 'build_candidate_summary_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: '他のカードの説明も見たいのなら「直前のアクションをキャンセル」ボタンを押せば見ることができます\nこれでよければ「ターン終了」ボタンを押してください',
+    body: '他のカードの説明も見たいのなら「1手戻る」ボタンを押せば見ることができます\nこれでよければ「ターン終了」ボタンを押してください',
     noManualDismiss: true,
   },
   // 2026-10-02, per user request (Excelの新しい行T059) -- ラウンドパスで余ったダイスの扱い(色ダイス1個に
@@ -13889,6 +13899,13 @@ function handleUndoClick() {
  * re-record undoMod's own turn-start checkpoint -- that one still points further back (start of turn),
  * which remains exactly correct after this narrower rollback. Each click pops exactly one entry; calling
  * it repeatedly walks back through the whole stack, one action per click. */
+/** 「1手戻る」(#dice-cancel-button等)を押せない状態か -- 戻せる行動が無い、またはチュートリアルの誘導中で
+ * キャンセルを指示していない間。サイドバーのボタン(renderUndoButtons側)とスマホ版のダイス置き場の
+ * ボタン(renderMobileOwnDiceRow)が同じ条件を使うよう共通化 (2026-10-22)。 */
+function isDiceCancelDisabled() {
+  return actionCheckpoints.length === 0 || (tutorialModeActive && tutorialGuidedDemoActive && !tutorialCancelButtonGlowing);
+}
+
 function handleCancelPreviousActionClick() {
   if (actionCheckpoints.length === 0) return;
   const checkpoint = actionCheckpoints.pop();
@@ -13983,7 +14000,7 @@ function renderUndoButtons(state) {
   // キャンセルボタンもチュートリアル中は使えないようにしてください おっと別の… ダイスが別のエリアに置かれた が
   // あるときは使えるように")。ステップIDではなく光るフラグで判定するのは、renderがrenderTutorialOverlayより先に
   // 走るため(tutorialCancelButtonGlowing's own docの通り、どの場合もrender()の前に立つ)。
-  const diceCancelDisabled = actionCheckpoints.length === 0 || (tutorialModeActive && tutorialGuidedDemoActive && !tutorialCancelButtonGlowing);
+  const diceCancelDisabled = isDiceCancelDisabled();
   for (const id of ['dice-cancel-button', 'dice-cancel-button-build']) {
     const btn = document.getElementById(id);
     btn.disabled = diceCancelDisabled;

@@ -5468,11 +5468,21 @@ body.tutorial-mode .change-highlight {
     right: 0;
     background: var(--surface);
     padding-left: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
   .mobile-own-row__turn-end .turn-end-button {
     white-space: nowrap;
     padding: 8px 14px;
     font-size: 14px;
+  }
+  /* 1手戻るボタン (per user request「ターン終了ボタンの上に1手戻るボタンも表示」) -- 横向きの右欄では
+     ターン終了の上(下の@media参照)、縦向きの下バーでは横幅節約のためターン終了の左に並べる。 */
+  .mobile-own-row__cancel {
+    white-space: nowrap;
+    padding: 8px 8px;
+    font-size: 13px;
   }
   /* 33px→30px (2026-10-22, per user request「ダイスのサイズ10%小さくして」)、数字も同じ割合で16px→14px。 */
   .mobile-own-row .die {
@@ -5565,8 +5575,11 @@ body.tutorial-mode .change-highlight {
     bottom: 0;
     padding-left: 0;
     padding-top: 6px;
+    flex-direction: column;
+    align-items: stretch;
   }
-  .mobile-own-row__turn-end .turn-end-button {
+  .mobile-own-row__turn-end .turn-end-button,
+  .mobile-own-row__cancel {
     width: 100%;
   }
   #app[data-mobile-active-tab="board"] {
