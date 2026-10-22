@@ -7742,10 +7742,119 @@ function renderMobileOwnDiceRow(state, next) {
     cancelBtn.addEventListener('click', handleCancelPreviousActionClick);
     turnEndEl.prepend(cancelBtn);
   }
+  // フリーアクションボタン (2026-10-22, per user request: "エリアのダイス置き場にフリーアクションという
+  // ボタンを作りたい" + 選択「使える物がある時だけ」) -- 1手戻るのさらに上。押すと全画面の一覧
+  // (renderMobileFreeActionOverlay)を開く。チュートリアル中は台本の演出(資源タブのA→K等を光らせる等)と
+  // ぶつからないよう出さない。
+  if (!aiView && !tutorialModeActive && mobileFreeActionsAvailable(state, player, canPlaceDiceFor)) {
+    const freeBtn = el('button', 'undo-button mobile-own-row__free-action', 'フリーアクション');
+    freeBtn.type = 'button';
+    freeBtn.addEventListener('click', () => { mobileFreeActionOpen = true; render(STATE); });
+    turnEndEl.prepend(freeBtn);
+  }
   container.appendChild(colorDiceEl);
   if (whiteDiceEl.childElementCount > 0) container.appendChild(whiteDiceEl);
   container.appendChild(resourcesEl);
   if (turnEndEl.childElementCount > 0) container.appendChild(turnEndEl);
+}
+
+/** スマホ版フリーアクション画面 (2026-10-22, per user request: "エリアのダイス置き場にフリーアクションと
+ * いうボタンを作りたい 押すと全画面で今可能なフリーアクションがすべて表示される 右上に大き目の✖があり
+ * おすとエリア画面に戻る"、選択: 表示=資源交換+使用料回収+TAPで使えるカード全部 / 実行できる物だけ /
+ * 1つ実行しても画面に残る / ボタンは使える物がある時だけ)。実行処理はPC版と同じ既存の部品をそのまま使う
+ * (資源交換=executor.tryFreeAction、使用料=renderFeeCollectButton、カード=attachTapToggleでカード下半分を
+ * タップ)。「実行できるか」は状態のコピーで試しに実行して判定する(本物の状態は変えない)。 */
+let mobileFreeActionOpen = false;
+
+/** このプレイヤーが今フリーアクションを使える立場か -- 資源タブのA→K等(renderFreeActionButtons)/獲得カードの
+ * TAP(renderPlayerCardsのcanUseTap)と同じ条件: 実際の手番の人間プレイヤー、オンボーディング完了済み、
+ * アンタップ選択待ちでない。 */
+function mobileFreeActionCanAct(state, player, canPlaceDiceFor) {
+  return !!player && player.id === canPlaceDiceFor && hasFinishedOnboarding(player) && !isAiPlayer(player.id)
+    && (!onlineRoomCode || localSeatId === player.id)
+    && !state.pendingChoices.some((c) => c.playerId === player.id && c.kind === 'UNTAP_CHOICE');
+}
+
+/** 今実行できるフリーアクションの一覧。exchanges=資源交換ID(A_K等)、feeTotal=回収できる使用料の合計、
+ * cards=TAPで使えるカード(physicalId)。 */
+function computeMobileFreeActions(state, player) {
+  const exchanges = ['A_K', 'B_K', 'C_K', 'Z_K'].filter((freeActionId) => {
+    const trial = gameStateMod.cloneState(state);
+    return executorMod.tryFreeAction(trial, INDEX, player.id, freeActionId).success;
+  });
+  const feeTotal = Object.values(state.maps)
+    .filter((map) => map.feeOwnerId === player.id && map.accumulatedFee > 0)
+    .reduce((sum, map) => sum + map.accumulatedFee, 0);
+  const cards = player.ownedCardPhysicalIds.filter((physicalId) => {
+    const cardState = state.cards[physicalId];
+    if (!cardState || cardState.tapped) return false;
+    const bareTap = bareTapKind(cardState.currentFaceId);
+    if (!bareTap) return false;
+    // ダイス/値を選ぶ種類(ダイス目変更など)は選ぶ画面で決まるので、未TAPなら出す。それ以外はコピーで試す。
+    if (bareTap.kind !== 'IMMEDIATE' && bareTap.kind !== 'BUILD') return true;
+    const trial = gameStateMod.cloneState(state);
+    return boardMod.useBareTapAbility(trial, INDEX, { playerId: player.id }, physicalId).success;
+  });
+  return { exchanges, feeTotal, cards };
+}
+
+function mobileFreeActionsAvailable(state, player, canPlaceDiceFor) {
+  if (!mobileFreeActionCanAct(state, player, canPlaceDiceFor)) return false;
+  const actions = computeMobileFreeActions(state, player);
+  return actions.exchanges.length > 0 || actions.feeTotal > 0 || actions.cards.length > 0;
+}
+
+function renderMobileFreeActionOverlay(state, next) {
+  const overlay = document.getElementById('mobile-free-action-overlay');
+  const body = document.getElementById('mobile-free-action-body');
+  const canPlaceDiceFor = actingHumanPlayerId(state, next);
+  const player = state.players.find((p) => p.id === canPlaceDiceFor);
+  // 手番が終わった/スマホ幅でなくなった等で使えなくなったら自動で閉じる。
+  if (!mobileFreeActionOpen || window.innerWidth > 760 || !mobileFreeActionCanAct(state, player, canPlaceDiceFor)) {
+    mobileFreeActionOpen = false;
+    overlay.hidden = true;
+    body.innerHTML = '';
+    return;
+  }
+  overlay.hidden = false;
+  body.innerHTML = '';
+  const actions = computeMobileFreeActions(state, player);
+  if (actions.exchanges.length > 0 || actions.feeTotal > 0) {
+    const buttonsEl = el('div', 'mobile-free-action-overlay__buttons');
+    if (actions.exchanges.length > 0) {
+      // renderFreeActionButtonsは4つ全部を作るので、作った後に実行できない物だけ取り除く。
+      const exchangeEl = el('div', 'mobile-free-action-overlay__exchanges');
+      renderFreeActionButtons(exchangeEl, state, player, true);
+      ['A_K', 'B_K', 'C_K', 'Z_K'].forEach((freeActionId, i) => {
+        if (!actions.exchanges.includes(freeActionId)) exchangeEl.children[i].dataset.remove = '1';
+      });
+      exchangeEl.querySelectorAll('[data-remove]').forEach((btn) => btn.remove());
+      buttonsEl.appendChild(exchangeEl);
+    }
+    if (actions.feeTotal > 0) {
+      const feeEl = el('div', 'mobile-free-action-overlay__fee');
+      renderFeeCollectButton(feeEl, state, player, true);
+      buttonsEl.appendChild(feeEl);
+    }
+    body.appendChild(buttonsEl);
+  }
+  if (actions.cards.length > 0) {
+    body.appendChild(el('div', 'mobile-free-action-overlay__hint', 'カードの下半分をタップで使用'));
+    const cardsEl = el('div', 'mobile-free-action-overlay__cards');
+    for (const physicalId of actions.cards) {
+      const cardState = state.cards[physicalId];
+      const cardNode = buildCardVisual(cardState.currentFaceId, { tapped: false, showEffect: true, allowTextFallback: false });
+      attachTapToggle(cardNode, cardState, cardState.currentFaceId, true, physicalId);
+      const cell = el('div', 'owned-card-cell');
+      cell.appendChild(cardNode);
+      cardsEl.appendChild(cell);
+    }
+    body.appendChild(cardsEl);
+  }
+  if (body.childElementCount === 0) {
+    body.appendChild(el('div', 'mobile-free-action-overlay__empty', '今できるフリーアクションはありません'));
+  }
+  if (placementMessage) body.appendChild(el('div', 'mobile-free-action-overlay__message', placementMessage));
 }
 
 /** スマホ版「獲得カード」タブ: 1人分だけ表示 (2026-10-22, per user request: "獲得カードの画面 基本的に
@@ -13889,6 +13998,7 @@ function render(state) {
   renderResourceConfirmOverlay(state);
   renderPlayerCards(state, next);
   renderMobileCardsView(state, next);
+  renderMobileFreeActionOverlay(state, next);
   // Drains GameState.whiteOverflowEvents into whatever placementMessage this render's own action
   // already produced (2026-08-11, per user request) -- appended, not replacing, so a placement that
   // both fails/succeeds AND happens to overflow a white die (e.g. a CHANGE granting several wD at once,
@@ -15026,6 +15136,11 @@ document.addEventListener('DOMContentLoaded', () => {
   setupMobileTabSystem();
   setupMobileQuestTab();
   window.addEventListener('resize', fitMobileShopWidth);
+  document.getElementById('mobile-free-action-close').addEventListener('click', () => {
+    mobileFreeActionOpen = false;
+    applyMobileActiveTab('board');
+    render(STATE);
+  });
   render(STATE);
   autoScrollToBottomOnStart();
 

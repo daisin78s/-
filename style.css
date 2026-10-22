@@ -5638,7 +5638,8 @@ body.tutorial-mode .change-highlight {
   }
   /* 1手戻るボタン (per user request「ターン終了ボタンの上に1手戻るボタンも表示」) -- 横向きの右欄では
      ターン終了の上(下の@media参照)、縦向きの下バーでは横幅節約のためターン終了の左に並べる。 */
-  .mobile-own-row__cancel {
+  .mobile-own-row__cancel,
+  .mobile-own-row__free-action {
     white-space: nowrap;
     padding: 8px 8px;
     font-size: 13px;
@@ -5791,7 +5792,8 @@ body.tutorial-mode .change-highlight {
     align-items: stretch;
   }
   .mobile-own-row__turn-end .turn-end-button,
-  .mobile-own-row__cancel {
+  .mobile-own-row__cancel,
+  .mobile-own-row__free-action {
     width: 100%;
   }
   #app[data-mobile-active-tab="board"] {
@@ -6035,4 +6037,69 @@ body.tutorial-mode .change-highlight {
     flex: 0 0 auto;
     gap: 8px;
   }
+}
+
+/* スマホ版フリーアクション画面 (2026-10-22, per user request「押すと全画面で今可能なフリーアクションが
+   すべて表示される 右上に大き目の✖があり おすとエリア画面に戻る」) -- main.jsの
+   renderMobileFreeActionOverlay参照。z-index:90は他のモーダル(.card-inst-overlay=100)より下なので、ここから
+   開いたカード拡大/建築選択/ダイス選択はこの上に出る。PC/タブレットでは開く手段(ボタン)が無い。 */
+.mobile-free-action-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: var(--surface);
+  overflow-y: auto;
+  padding: 12px calc(16px + env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
+}
+.mobile-free-action-overlay[hidden] {
+  display: none;
+}
+.mobile-free-action-overlay__close {
+  position: fixed;
+  top: 8px;
+  right: calc(8px + env(safe-area-inset-right));
+  z-index: 1;
+  width: 48px;
+  height: 48px;
+  border: none;
+  border-radius: 50%;
+  background: var(--surface-sunken);
+  color: var(--text);
+  font-size: 34px;
+  line-height: 1;
+  cursor: pointer;
+}
+.mobile-free-action-overlay__body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding-right: 56px; /* ✖ボタンと重ならないように */
+}
+.mobile-free-action-overlay__buttons,
+.mobile-free-action-overlay__exchanges,
+.mobile-free-action-overlay__fee {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.mobile-free-action-overlay__buttons .free-action-button {
+  font-size: 16px;
+  padding: 8px 14px;
+}
+.mobile-free-action-overlay__hint,
+.mobile-free-action-overlay__empty {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.mobile-free-action-overlay__message {
+  font-size: 13px;
+  color: var(--danger, #c0392b);
+}
+.mobile-free-action-overlay__cards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
 }
