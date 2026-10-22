@@ -13877,6 +13877,7 @@ function render(state) {
   }
   updateNavSuggestionIfNeeded(state, actingHumanPlayerId(state, next));
   renderShops(state);
+  fitMobileShopWidth();
   renderBoard(state, next);
   renderPlayers(state, next);
   renderMobileOwnDiceRow(state, next);
@@ -14884,6 +14885,25 @@ function applyMobileActiveTab(tab) {
   document.querySelectorAll('.mobile-tab-switcher__btn').forEach((btn) => {
     btn.classList.toggle('mobile-tab-switcher__btn--active', btn.dataset.tabTarget === tab);
   });
+  if (tab === 'shop') fitMobileShopWidth();
+}
+
+/** スマホ横向き: ショップの横幅をちょうど1画面に収める (2026-10-22, per user request「ショップ 横幅が
+ * ちょうど1画面に収まるように少しだけ画面全体を小さくできますか」→ショップタブだけ縮める案を選択、
+ * 「縦向きの時は今までと同じサイズで どうせ横に収まらない」) -- ショップの中身(カード列+残り枚数)は
+ * 約750px固定幅のため、それより狭い横向き画面では.shop-rowをCSS zoomで「画面幅÷中身の幅」に縮める
+ * (大きくはしない)。縦向き・PC/タブレット・ショップタブ非表示中(測れない)はzoomを外して何もしない。 */
+function fitMobileShopWidth() {
+  const row = document.querySelector('#shops .shop-row');
+  if (!row) return;
+  row.style.zoom = '';
+  if (!window.matchMedia('(max-width: 760px) and (orientation: landscape)').matches) return;
+  if (mobileActiveTab !== 'shop') return;
+  const combined = row.querySelector('.shop-row__combined');
+  if (!combined || combined.clientWidth === 0) return;
+  const need = combined.scrollWidth;
+  const avail = combined.clientWidth;
+  if (need > avail) row.style.zoom = String(Math.floor((avail / need) * 1000) / 1000);
 }
 function setupMobileTabSystem() {
   document.querySelectorAll('.mobile-tab-switcher__btn').forEach((btn) => {
@@ -15004,6 +15024,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupHeroWidthObserver();
   setupMobileTabSystem();
   setupMobileQuestTab();
+  window.addEventListener('resize', fitMobileShopWidth);
   render(STATE);
   autoScrollToBottomOnStart();
 
