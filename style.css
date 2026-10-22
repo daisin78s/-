@@ -5404,17 +5404,44 @@ body.tutorial-mode .change-highlight {
   html:has(#app[data-mobile-active-tab="cards"]) {
     overscroll-behavior-y: none;
   }
+  /* 画面の高さに合わせる (2026-10-22, per user request「クエスト画面 横幅にそろえるのではなく必ず1画面で
+     見えるように縦幅でそろえる その結果左右が開いてもいい」) -- 入れ物の高さを「画面の高さ-上のタブ
+     バー等」に固定し、パネルはその高さいっぱい・横幅は高さの4/3倍(当初PC版と同じ2:3にしたが、横向きで幅約190pxと狭すぎクエスト名が折り返して数字や凡例が欠けたため広げた)で
+     中央寄せ(左右は余白)。3行はPC版と同じくパネルの高さを等分する(.qst-panel .qst-cardのflex:1 1 0)。
+     以前(Ver.1.212〜)はパネルに高さが無く3行が潰れたため各行を本来の高さにしていたが、高さを与えたので
+     PC版の等分方式に戻した。画面がさらに細い場合はmax-width:100%で横幅に収める。 */
+  #mobile-quest-tab {
+    height: calc(100vh - 76px);
+    height: calc(100dvh - 76px);
+    justify-content: center;
+  }
+  #app[data-mobile-active-tab="quest"] #mobile-quest-tab {
+    display: flex;
+  }
   #mobile-quest-tab .qst-panel {
     display: flex;
-    width: 100%;
+    height: 100%;
+    width: auto;
+    aspect-ratio: 4 / 3;
+    max-width: 100%;
   }
-  /* per user報告(スクリーンショット付き)「クエストが表示されません」-- .qst-panel .qst-cardは
-     flex:1 1 0+min-height:0で「パネルの高さを3行で等分」する作りで、その高さはPCでは隣のショップ行
-     (align-items:stretch)から来ている。クエストタブには隣が無いためパネルの高さが0になり、3行とも
-     潰れて(overflow:hiddenで)ほぼ見えなくなっていた。タブ内では各行を本来の高さで表示する。 */
-  #mobile-quest-tab #qst-slots,
+  /* 横向きは1行あたり約85pxしか無く、色丸が各行の枠で数px切れていたため、タブ内だけ行の中身を詰める
+     (行間4px→2px、順位の数字24px→20px、色丸18px→14px)。 */
   #mobile-quest-tab .qst-panel .qst-card {
-    flex: 0 0 auto;
+    gap: 2px;
+  }
+  #mobile-quest-tab .qst-card__rank-col {
+    gap: 2px;
+  }
+  #mobile-quest-tab .qst-card__rank-value {
+    font-size: 20px;
+  }
+  #mobile-quest-tab .qst-card__rank-players {
+    min-height: 14px;
+  }
+  #mobile-quest-tab .qst-card__rank-player {
+    width: 14px;
+    height: 14px;
   }
 
   /* エリアタブ: 盤面を横一列に (per user request: "エリアの上段 スロットをすべて横一列にする
