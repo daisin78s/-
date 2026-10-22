@@ -13760,6 +13760,7 @@ function render(state) {
   renderBoard(state, next);
   renderPlayers(state, next);
   renderMobileOwnDiceRow(state, next);
+  queueMobileOnboardingFocus(state, next);
   renderJobPool(state, next);
   renderJobReplacementChoice(state);
   renderResourceConfirmOverlay(state);
@@ -14795,6 +14796,39 @@ function setupMobileTabSystem() {
  * (760px超)では何もせず、.qst-panelは従来通り#shops内のインライン位置に留まる。ページ読み込み後の
  * ビューポート幅を基準に一度だけ判定する(フルスクリーンPCブラウザをスマホ幅までリサイズし直す、という
  * まれなケースはカバーしない -- 他の幅依存セットアップ処理と同じ割り切り)。 */
+/** スマホ版: 自分が初期資源/ジョブ/制約(CON)を選ぶ番になった瞬間だけ「獲得カード」タブへ自動で切り替え、
+ * 選ぶ場所(.onboard-panel--active)までスクロールする (2026-10-22, per user request: "その後の制約や
+ * ジョブを選ぶときもスマホ対応させて" -- スマホでは開始直後にショップタブが表示されるが、選ぶ場所は
+ * 獲得カードタブ内にあり、かつ横向き等では画面外にはみ出していて、何をすればいいか分からなかった)。
+ * 「どの選択の番か」をキー化して前回と変わった時だけ動かすので、その後プレイヤーが自分で別タブへ移っても
+ * 毎回のrenderで引き戻されることはない。PC/タブレット(幅761px以上)では何もしない。
+ * renderの途中で呼ばれる(この時点ではまだ.onboard-panel--active等が今回のrender分で描き終わっていない)
+ * ため、実際の切り替え/スクロールはsetTimeout(0)で描画完了後に行う。 */
+let lastMobileOnboardingKey = null;
+function queueMobileOnboardingFocus(state, next) {
+  if (window.innerWidth > 760) return;
+  const isLocalHuman = (pid) => !isAiPlayer(pid) && (!onlineRoomCode || localSeatId === pid);
+  let key = null;
+  const resourceChoice = state.pendingChoices.find((c) => c.kind === 'SELECT_RESOURCE_CARDS' && isLocalHuman(c.playerId));
+  if (resourceChoice) {
+    key = `resource:${resourceChoice.playerId}`;
+  } else if (next && next.type === 'ONBOARDING_NEEDED' && isLocalHuman(next.playerId)) {
+    key = `job:${next.playerId}`;
+  } else {
+    const conPending = state.round >= 1 && state.players.find((p) => isLocalHuman(p.id) && p.jobCardId !== null && !hasFinishedOnboarding(p));
+    if (conPending) key = `con:${conPending.id}`;
+  }
+  if (key === lastMobileOnboardingKey) return;
+  lastMobileOnboardingKey = key;
+  if (!key) return;
+  setTimeout(() => {
+    applyMobileActiveTab('cards');
+    const target = [...document.querySelectorAll('.onboard-panel--active')]
+      .find((node) => node.getBoundingClientRect().height > 0);
+    if (target) target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, 0);
+}
+
 function setupMobileQuestTab() {
   if (window.innerWidth > 760) return;
   const questTab = document.getElementById('mobile-quest-tab');
