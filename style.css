@@ -5266,6 +5266,17 @@ body.tutorial-mode .change-highlight {
   #game-layout {
     grid-template-columns: minmax(0, 1fr);
   }
+  /* per user報告(スクリーンショット付き)「横に無意味な空白があるため画面が狭い」-- #app自身の左右
+     padding(24px、PC向けに大きめに取られていた)と、#shops/#board/#players/#player-cards各パネルの
+     padding(16px)が、ただでさえ狭いスマホ幅でカード等の実際に使える横幅を大きく削っていた。スマホ幅
+     限定でどちらも詰める。 */
+  #app {
+    padding: 0 2px 20px;
+  }
+  #board-area > section,
+  #player-cards {
+    padding: 6px;
+  }
   #mobile-tab-switcher[hidden] {
     display: flex;
     gap: 4px;
@@ -5325,25 +5336,44 @@ body.tutorial-mode .change-highlight {
     width: 100%;
   }
 
-  /* エリアタブ: 盤面上段を横一列に (per user request: "エリアの上段 スロットをすべて横一列にする
+  /* エリアタブ: 盤面を横一列に (per user request: "エリアの上段 スロットをすべて横一列にする
      それで縦幅が短くなるはず 横は画面からはみ出してもいい") -- flex-wrap:nowrap+overflow-x:autoで
      画面からはみ出た分は横スクロールに回す。隙間も詰めて少しでも多くのタイルを一度に見せる。
-     #board/#board-areaにmin-width:0が必要 (このままだと.board-rowの中身(固定width92px×5枚)の
+     上段だけでなく下段(.board-row全体)も同じ扱いにする -- per user報告の通り、下段も同じ理由で
+     SLOTが縦に折り返していたため。
+     #board/#board-areaにmin-width:0が必要 (このままだと.board-rowの中身(固定width110px×5枚)の
      本来の内容幅がそのまま親へ伝わってしまい、overflow-x:autoが効かずに#board-area自体(ひいては
      兄弟の#players/#shopsまで)が画面幅を超えて広がってしまう、という典型的なflexboxの罠の対策)。 */
   #board,
   #board-area {
     min-width: 0;
   }
-  .board-row:first-child {
+  .board-row {
     flex-wrap: nowrap;
     overflow-x: auto;
     gap: 4px;
     min-width: 0;
   }
-  .board-row:first-child > .map-tile {
+  .board-row > .map-tile {
     flex: 0 0 auto;
-    width: 92px;
+    width: 110px;
+  }
+  /* per user request「スロットは縦1列ではなく横一列に」-- .map-tile__slots自体は元々flex-wrap:wrapで
+     幅が足りると横一列になる作りだが、.slotが51x51px固定のため110px幅のタイルでは2-3個並べきれず
+     縦に折り返していた。タイル幅を無理に広げる(=一度に見える枚数が減る)代わりに、スロット自体を
+     小さくしてflex-wrap:nowrapで強制的に横一列にする。flex-shrink:0が必須 -- これが無いと(flex
+     アイテムは既定でshrink:1のため)幅の厳しいタイルの中でさらに潰れて"ANY"等の文字が折り返され、
+     結局縦に積まれて見えてしまう(実機で発見)。 */
+  .map-tile__slots {
+    flex-wrap: nowrap;
+  }
+  .slot {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    border-radius: 5px;
+    font-size: 9px;
+    white-space: nowrap;
   }
 
   /* 自分のダイス/資源の1列表示 (per user request: "エリアの下に自分のダイスと資源を1列に表示して") */
