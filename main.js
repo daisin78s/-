@@ -4694,12 +4694,13 @@ function renderAreaOwnershipEffectText(container, text) {
     container.appendChild(document.createTextNode(text || ''));
     return;
   }
+  // 2行目を「LV1　の支配」に (2026-10-22, per user request「ローマ市街の支配LV1のアイコン ローマ市街／LV1／
+  // の支配 となっているのを ローマ市街／LV1　の支配 にして 類似するものがあればすべて」、全端末) -- 以前は
+  // 1行目「エリア名+LV1」・2行目「　　の支配」だったが、ローマ市街のような長い名前ではLV1が1行目に入らず
+  // 3行に折り返していた。1行目はエリア名だけにし、LVは2行目の先頭へ。全ての支配カードに共通。
   const [, areaLabel, lv, suffix] = match;
-  const line1 = document.createElement('div');
-  line1.appendChild(el('span', 'area-ownership-name', areaLabel));
-  line1.appendChild(document.createTextNode(lv));
-  container.appendChild(line1);
-  container.appendChild(el('div', null, `　　${suffix}`));
+  container.appendChild(el('div', 'area-ownership-name', areaLabel));
+  container.appendChild(el('div', null, `${lv}　${suffix}`));
 }
 
 /**
