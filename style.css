@@ -5376,6 +5376,17 @@ body.tutorial-mode .change-highlight {
   #app[data-mobile-active-tab="cards"] #player-cards {
     margin-right: 86px;
   }
+  /* 初期資源カードの候補4枚は必ず1行 (2026-10-22, per user request「初期資源カードが2行になってしまいました
+     1行にして」「初期資源カード選択時です」) -- 右の名前欄の分だけ横幅が減って折り返していた。候補カードは
+     TAPで横に倒すことが無いので、倒した時用の正方形の枠(150px)をやめてカードの大きさ(幅112px)まで縮め、
+     折り返さず1行に。カード横の説明文(onboard-hint)はカードの下の段へ回す。 */
+  .card-group__onboard-resources .owned-card-cell {
+    width: auto;
+    height: auto;
+  }
+  .card-group__onboard-resources .onboard-hint {
+    flex-basis: 100%;
+  }
   .mobile-cards-player-switcher__btn {
     flex: 0 0 auto;
     display: flex;
