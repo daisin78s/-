@@ -5390,6 +5390,11 @@ body.tutorial-mode .change-highlight {
     content: attr(data-mobile-text);
     font-size: 10px;
   }
+  /* data-mobile-text=""はスマホ幅で丸ごと非表示 (per user request「〇→赤〇 ALL のALLを3つとって
+     それで1行詰めれるはず」 -- 城下町/大聖堂/ギルドのCHANGE(K,A/B/C,ALL)アイコン)。 */
+  .action-suffix[data-mobile-text=""] {
+    display: none;
+  }
 
   /* 自分のダイス/資源の1列表示 (per user request: "エリアの下に自分のダイスと資源を1列に表示して") */
   .mobile-own-row {

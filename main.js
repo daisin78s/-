@@ -3500,7 +3500,8 @@ function actionSuffix(text, mobileText) {
   // mobileText (2026-10-22, per user request: "スマホ版 赤青黄→追加色ダイス を 赤青黄→追加色D に") --
   // CSS側(@media (max-width:760px)参照)がdata-mobile-text付きの要素だけ元のテキストを隠し、こちらを
   // 代わりに表示する。PC/タブレットは常にtext(元の文言)のまま。
-  if (mobileText) node.dataset.mobileText = mobileText;
+  // 空文字列''はスマホ幅で非表示の意味 (2026-10-22, per user request: "〇→赤〇 ALL のALLを3つとって")。
+  if (mobileText !== undefined) node.dataset.mobileText = mobileText;
   return node;
 }
 const DIE_FACES = { 1: '⚀', 2: '⚁', 3: '⚂', 4: '⚃', 5: '⚄', 6: '⚅' };
@@ -3526,9 +3527,9 @@ function actionRow(children) {
 const ACTION_ICON_BUILDERS = {
   // 2026-09-30, per user request: "〇→赤〇ALL を 〇→赤〇　ALL に変更したい" -- ALLの前に全角スペースを
   // 入れて資源アイコンと離す。
-  'CHANGE(K,A,ALL)': () => actionRow([actionDot('K'), actionArrow(), actionDot('A'), actionSuffix('　ALL')]),
-  'CHANGE(K,B,ALL)': () => actionRow([actionDot('K'), actionArrow(), actionDot('B'), actionSuffix('　ALL')]),
-  'CHANGE(K,C,ALL)': () => actionRow([actionDot('K'), actionArrow(), actionDot('C'), actionSuffix('　ALL')]),
+  'CHANGE(K,A,ALL)': () => actionRow([actionDot('K'), actionArrow(), actionDot('A'), actionSuffix('　ALL', '')]),
+  'CHANGE(K,B,ALL)': () => actionRow([actionDot('K'), actionArrow(), actionDot('B'), actionSuffix('　ALL', '')]),
+  'CHANGE(K,C,ALL)': () => actionRow([actionDot('K'), actionArrow(), actionDot('C'), actionSuffix('　ALL', '')]),
   // 2026-09-07, per user data edit ("Cカード能力変えました"): 代官/修道士/商人LV2 all converged onto this
   // same CHANGE(K,Z,ALL) TAP -- the K,A/B,C,ALL siblings just above already had their own icon entries
   // from this shape's earlier 2026-08-05 use, this one didn't exist yet.
