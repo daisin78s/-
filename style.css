@@ -5443,8 +5443,8 @@ body.tutorial-mode .change-highlight {
     gap: 6px;
   }
   .mobile-own-row .die {
-    width: 34px;
-    height: 34px;
+    width: 33px;
+    height: 33px;
     font-size: 16px;
     flex-shrink: 0;
   }
@@ -5493,6 +5493,43 @@ body.tutorial-mode .change-highlight {
   .player-role-control {
     flex-wrap: wrap;
     gap: 8px;
+  }
+}
+
+/* スマホ横向き: 自分のダイス/資源を画面右に縦並びで表示 (2026-10-22, per user request with screenshot:
+   "下に表示しましたが思ったより狭いので 赤で囲った右側に表示して" -> 相談の上 "ダイス横に3個並べれますか"
+   "それでお願い") -- 横向きでは盤面の右側が空いており、下端のバーは貴重な縦幅を削っていたため。上から
+   色ダイス→白ダイス→資源の順に段を作り、各段の中は横に並べて折り返す(ダイスは1段に3個、色ダイスが
+   4個以上なら2段目へ)。欄の幅は33pxのダイス3個+すき間+左右の余白+左の区切り線=134px(当初34pxだと区切り線の1px分足りず2個で折り返したため、per user request「ダイスを1小さくして」で33pxに)、ノッチが右側に来る向きでも
+   隠れないようenv(safe-area-inset-right)分だけ内側へ寄せる。縦向き(portrait)は従来通り下端のバー。 */
+@media (max-width: 760px) and (orientation: landscape) {
+  .mobile-own-row {
+    top: 0;
+    bottom: 0;
+    left: auto;
+    right: 0;
+    width: calc(134px + env(safe-area-inset-right));
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 10px calc(10px + env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) 10px;
+    border-top: none;
+    border-left: 1px solid var(--border);
+    box-shadow: -2px 0 8px rgba(16, 24, 40, 0.12);
+  }
+  .mobile-own-row__dice,
+  .mobile-own-row__resources {
+    flex-wrap: wrap;
+  }
+  #app[data-mobile-active-tab="board"] {
+    padding-bottom: 20px;
+    padding-right: calc(134px + env(safe-area-inset-right));
+  }
+  body:has(#app[data-mobile-active-tab="board"] .mobile-own-row:not(:empty)) #copyright-notice {
+    bottom: 2px;
+    right: calc(140px + env(safe-area-inset-right));
   }
 }
 

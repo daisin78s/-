@@ -7640,7 +7640,11 @@ function renderMobileOwnDiceRow(state, next) {
   // 並び順: 色ダイス→白ダイス→資源 を横一列 (2026-10-22, per user request: "エリアの画面のときだけ
   // 一番下に自分の色ダイス 白ダイス 資源を横一列に表示 ...上に出ているクエスト ショップの様に常に
   // 出ている" -- 画面下端に固定、style.cssの.mobile-own-row参照)。
-  const diceEl = el('div', 'mobile-own-row__dice');
+  // 色ダイス/白ダイス/資源を別々の入れ物に分ける (2026-10-22, per user request: "思ったより狭いので
+  // 右側に表示して 左から色ダイス 白ダイス 資源 縦に並べる" -- スマホ横向きでは画面右に3列の縦並びで
+  // 表示(style.css参照)、縦向きは従来通り下端のバーに1列で並ぶ)。
+  const colorDiceEl = el('div', 'mobile-own-row__dice mobile-own-row__dice--color');
+  const whiteDiceEl = el('div', 'mobile-own-row__dice mobile-own-row__dice--white');
   const resourcesEl = el('div', 'mobile-own-row__resources');
   for (const resource of ['K', 'A', 'B', 'C', 'Z', 'BZ', 'VP']) {
     const count = player.resources[resource] || 0;
@@ -7671,9 +7675,10 @@ function renderMobileOwnDiceRow(state, next) {
         render(STATE);
       });
     }
-    diceEl.appendChild(dieNode);
+    (die.kind === 'WHITE' ? whiteDiceEl : colorDiceEl).appendChild(dieNode);
   }
-  container.appendChild(diceEl);
+  container.appendChild(colorDiceEl);
+  if (whiteDiceEl.childElementCount > 0) container.appendChild(whiteDiceEl);
   container.appendChild(resourcesEl);
 }
 
