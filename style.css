@@ -5458,10 +5458,11 @@ body.tutorial-mode .change-highlight {
     padding: 8px 14px;
     font-size: 14px;
   }
+  /* 33px→30px (2026-10-22, per user request「ダイスのサイズ10%小さくして」)、数字も同じ割合で16px→14px。 */
   .mobile-own-row .die {
-    width: 33px;
-    height: 33px;
-    font-size: 16px;
+    width: 30px;
+    height: 30px;
+    font-size: 14px;
     flex-shrink: 0;
   }
   #app[data-mobile-active-tab="board"] {
