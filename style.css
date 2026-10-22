@@ -5968,3 +5968,15 @@ body.tutorial-mode .change-highlight {
     justify-content: flex-end;
   }
 }
+
+/* スマホ版: エリア拡大画面のエリア枠どうしの間隔を広げる (2026-10-22, per user request「黒丸つけた箇所の
+   隙間を開けて スロットが重なって表示されてしまっているため」) -- スマホ版はスロットを横一列(nowrap)に
+   しているため6個のスロットが枠から右に約22pxはみ出し、隣のエリア枠に重なっていた。間隔10px→最大32px。
+   ただし画面幅が足りないと3つ目の枠が下の段に落ちるため、横1列に収まる範囲で広げる(エリア枠184px×3、
+   表示欄=画面幅-68px)。幅約665px未満の画面では間隔が22px未満になり少し重なりが残る。
+   下の矢印コネクタは枠の位置を実測して置くので(buildAreaTierUpConnectorsRow)ずれない。 */
+@media (max-width: 760px) {
+  .area-enlarge-row {
+    gap: clamp(10px, calc((100vw - 622px) / 2), 32px);
+  }
+}
