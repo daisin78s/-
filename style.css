@@ -5584,12 +5584,56 @@ body.tutorial-mode .change-highlight {
      240pxが「高さ」の基準になり、中身が少なくても1人240pxの縦長パネル(大きな空白)になっていた。
      gridにして高さは中身なり、横向き等で幅に余裕があれば2列以上に並べる(元の最小幅220pxより少し
      広い260pxを1列の目安に)。 */
+  /* 4人分を1画面に (2026-10-22, per user request「資源の画面 4人のプレイヤーのダイスや資源が1画面で
+     収まるようにして」) -- 縦向きは2人×2段(横向きは下の@mediaで4人横1列)、ダイス40px→26px・資源の
+     文字20px→13pxなどパネルの中身を詰める。フリーアクション/ターン終了等のボタンは押しやすさを保つため
+     大きさを変えない。 */
   #players {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
   }
   .player-panel {
     min-width: 0;
+    padding: 6px;
+    gap: 4px;
+  }
+  .player-panel__header {
+    gap: 4px;
+  }
+  .player-panel__header .player-panel__swatch {
+    width: 10px;
+    height: 10px;
+  }
+  .player-panel__name,
+  .player-panel__score {
+    font-size: 12px;
+  }
+  .player-panel__resources {
+    gap: 3px;
+  }
+  .player-panel__resources .resource-badge {
+    font-size: 13px;
+    padding: 2px 5px;
+    gap: 3px;
+    border-radius: 6px;
+  }
+  .player-panel__resources .resource-badge__dot {
+    width: 10px;
+    height: 10px;
+  }
+  .player-panel__dice {
+    gap: 4px;
+  }
+  .player-panel__dice-row {
+    gap: 4px;
+  }
+  .player-panel__dice-row .die {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    font-size: 14px;
+    box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.15);
   }
 
   /* 所持カードサイドバー: #game-layoutは既存の1400px以下ルールで1カラム化済み、ここでは内部の余白のみ
@@ -5645,6 +5689,10 @@ body.tutorial-mode .change-highlight {
   .mobile-own-row__dice,
   .mobile-own-row__resources {
     flex-wrap: wrap;
+  }
+  /* 資源タブ: 横向きは4人を横1列に(高さが足りないため、per user request「4人...1画面で収まるように」)。 */
+  #players {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
   .mobile-own-row__turn-end {
     margin-left: 0;
