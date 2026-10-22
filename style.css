@@ -5442,6 +5442,22 @@ body.tutorial-mode .change-highlight {
     align-items: center;
     gap: 6px;
   }
+  /* ターン終了ボタン (per user request「スロットにダイスを置いた後ターン終了ボタンが出てくるように」、
+     置き場所はper user選択「最後(下端に固定)」) -- 縦向きのバーでは右端に固定(margin-left:autoで右へ
+     寄せ、横スクロールしても見えるようsticky)。横向きの右欄は下の@media側で下端に固定。 */
+  .mobile-own-row__turn-end {
+    flex-shrink: 0;
+    margin-left: auto;
+    position: sticky;
+    right: 0;
+    background: var(--surface);
+    padding-left: 6px;
+  }
+  .mobile-own-row__turn-end .turn-end-button {
+    white-space: nowrap;
+    padding: 8px 14px;
+    font-size: 14px;
+  }
   .mobile-own-row .die {
     width: 33px;
     height: 33px;
@@ -5522,6 +5538,17 @@ body.tutorial-mode .change-highlight {
   .mobile-own-row__dice,
   .mobile-own-row__resources {
     flex-wrap: wrap;
+  }
+  .mobile-own-row__turn-end {
+    margin-left: 0;
+    margin-top: auto;
+    right: auto;
+    bottom: 0;
+    padding-left: 0;
+    padding-top: 6px;
+  }
+  .mobile-own-row__turn-end .turn-end-button {
+    width: 100%;
   }
   #app[data-mobile-active-tab="board"] {
     padding-bottom: 20px;

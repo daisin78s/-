@@ -7677,9 +7677,19 @@ function renderMobileOwnDiceRow(state, next) {
     }
     (die.kind === 'WHITE' ? whiteDiceEl : colorDiceEl).appendChild(dieNode);
   }
+  // ターン終了ボタン (2026-10-22, per user request: "スロットにダイスを置いた後ターン終了ボタンが出てくる
+  // ようにしてほしい" -- スマホではターン終了ボタンが資源タブの#players内にしか無く、エリアタブでダイスを
+  // 置いた後に押せなかった)。renderPlayers側と同じ関数をそのまま使うので、出る条件(ダイス配置などで
+  // turnActionTakenがtrueになった後)・光る演出・押した時の処理は全く同じ。欄の最後に置き、CSS側で欄の
+  // 下端(横向き)/右端(縦向き)に固定する(per user選択「最後(下端に固定)」-- 親指が届きやすく、ダイスや
+  // 資源の数が増えても押し出されて見えなくならない)。
+  const turnEndEl = el('div', 'mobile-own-row__turn-end');
+  if (tutorialTurnEndButtonShown && player.id === 'P1') renderTutorialTurnEndButton(turnEndEl);
+  else renderTurnEndButton(turnEndEl, state, player, true);
   container.appendChild(colorDiceEl);
   if (whiteDiceEl.childElementCount > 0) container.appendChild(whiteDiceEl);
   container.appendChild(resourcesEl);
+  if (turnEndEl.childElementCount > 0) container.appendChild(turnEndEl);
 }
 
 /** Pending manual-mode TAP reactions (2026-07-30, real engine wiring pass 6): whenever a GET event
