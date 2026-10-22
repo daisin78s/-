@@ -671,7 +671,51 @@ let startedFromRound3 = false;
 let entryBannerDismissed = tutorialModeActive || weeklyChallengeActive || !!debugSetupPlanAtLoad || localBattlePending;
 function dismissEntryBanner() {
   entryBannerDismissed = true;
+  startOpeningDeal();
   render(STATE);
+}
+
+/** オープニングアニメーション (2026-10-22, per user request: "オープニングアニメーションを作れますか 空の
+ * ショップに上から1枚づつカードが素早くスライドしてきてSHOP101-106に配られる" + 回答「まずはオープニング
+ * だけ」「すべての端末」「とりあえずチュートリアルも」「SHOP201-203もお願い」「短いので操作不能で」) --
+ * 新しいローカル対戦/チュートリアルの開始時だけ、SHOP101-106→SHOP201-203の順に1枚ずつ、カードが画面の
+ * 上から各枠へスライドして入る。見た目だけの演出でゲームの状態は一切変えない。再生中は透明な幕で画面全体の
+ * 操作を止める。途中でrender()が呼ばれて枠が作り直されても、開始時刻からの経過時間でアニメーションの
+ * 位置を合わせる(負のanimation-delay)ので、続きから再生される(renderShopGrid参照)。 */
+const OPENING_DEAL_CARD_MS = 260;
+const OPENING_DEAL_STEP_MS = 110;
+const OPENING_DEAL_CARD_COUNT = 9; // SHOP101-106 + SHOP201-203
+let openingDealStartedAt = null;
+function openingDealTotalMs() {
+  return OPENING_DEAL_STEP_MS * (OPENING_DEAL_CARD_COUNT - 1) + OPENING_DEAL_CARD_MS;
+}
+function openingDealRemainingMs() {
+  if (openingDealStartedAt === null) return 0;
+  return Math.max(0, openingDealTotalMs() - (performance.now() - openingDealStartedAt));
+}
+function startOpeningDeal() {
+  openingDealStartedAt = performance.now();
+  let blocker = document.getElementById('opening-deal-blocker');
+  if (!blocker) {
+    blocker = document.createElement('div');
+    blocker.id = 'opening-deal-blocker';
+    document.body.appendChild(blocker);
+  }
+  blocker.hidden = false;
+  setTimeout(() => {
+    openingDealStartedAt = null;
+    blocker.hidden = true;
+  }, openingDealTotalMs() + 50);
+}
+/** renderShopGridから、order番目(0始まり)に配るカードの枠へ演出を付ける。 */
+function applyOpeningDealAnimation(slotNode, order) {
+  if (openingDealStartedAt === null) return;
+  const delay = order * OPENING_DEAL_STEP_MS - (performance.now() - openingDealStartedAt);
+  if (delay + OPENING_DEAL_CARD_MS <= 0) return; // もう配り終わっている
+  const cardEl = slotNode.querySelector('.shop-slot__card');
+  if (!cardEl) return;
+  cardEl.classList.add('shop-slot__card--deal');
+  cardEl.style.animationDelay = `${Math.round(delay)}ms`;
 }
 
 // ---------------------------------------------------------------------------
@@ -5873,6 +5917,7 @@ function renderShopGrid(state) {
     const node = buildShopSlotNode(slotId, faceId, true);
     node.style.gridRow = '2';
     node.style.gridColumn = String(i + 1);
+    applyOpeningDealAnimation(node, i);
     container.appendChild(node);
   });
   container.appendChild(buildShopRemainingCountNode(state.shops.NORMAL.drawPile.length, 2));
@@ -5885,6 +5930,7 @@ function renderShopGrid(state) {
     node.style.gridColumn = String(specialSlotGridColumn(state, slotId) || (i + 1));
     node.style.gridRow = '3';
     specialColumns.push(Number(node.style.gridColumn));
+    applyOpeningDealAnimation(node, Object.keys(state.shops.NORMAL.slots).length + i);
     container.appendChild(node);
   });
   container.appendChild(buildShopRemainingCountNode(state.shops.SPECIAL.drawPile.length, 3));
@@ -15157,6 +15203,7 @@ function queueMobileOnboardingFocus(state, next) {
   if (key === lastMobileOnboardingKey) return;
   lastMobileOnboardingKey = key;
   if (!key) return;
+  // オープニングアニメーション中は、ショップが見えるよう終わってから獲得カードタブへ切り替える。
   setTimeout(() => {
     applyMobileActiveTab('cards');
     // 獲得カードタブは1人分だけ表示するので、選ぶ番の人(初期資源/CONの選択欄はその人のカード群の中)を表示する。
@@ -15164,7 +15211,7 @@ function queueMobileOnboardingFocus(state, next) {
     const target = [...document.querySelectorAll('.onboard-panel--active')]
       .find((node) => node.getBoundingClientRect().height > 0);
     if (target) target.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  }, 0);
+  }, openingDealRemainingMs());
 }
 
 /** スマホ版: AIの手番になった瞬間にエリアタブへ移動 (2026-10-22, per user request: "AIの手番になったら
@@ -15195,6 +15242,9 @@ document.addEventListener('DOMContentLoaded', () => {
   setupHeroWidthObserver();
   setupMobileTabSystem();
   setupMobileQuestTab();
+  // 再読み込みで始まる新しいゲーム(ゲーム中の「新しいローカル対戦」/チュートリアル開始)もオープニングを
+  // 流す。続きからの再開(resumeSavedSession)はこの時点ではtutorialModeActive等がまだ立っていないので対象外。
+  if (localBattlePending || (tutorialModeActive && !sessionResumeChoicePending)) startOpeningDeal();
   window.addEventListener('resize', fitMobileShopWidth);
   document.getElementById('mobile-free-action-close').addEventListener('click', () => {
     mobileFreeActionOpen = false;

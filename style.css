@@ -6176,3 +6176,26 @@ body.tutorial-mode .change-highlight {
     height: auto;
   }
 }
+
+/* オープニングアニメーション (2026-10-22) -- main.jsのstartOpeningDeal/applyOpeningDealAnimation参照。
+   ショップのカードが画面の上から1枚ずつすばやくスライドして各枠に入る。fill-mode:bothで、自分の番が来る
+   まではカードは画面の上の外に待機(=空のショップに見える)。全端末共通。 */
+@keyframes shop-deal-in {
+  from { transform: translateY(-110vh); }
+  to { transform: translateY(0); }
+}
+.shop-slot__card--deal {
+  animation: shop-deal-in 260ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  position: relative;
+  z-index: 5; /* 移動中のカードが上の段(モニュメントの「2Rから」等)の下に潜らないように */
+}
+/* 再生中は画面全体の操作を止める透明な幕(短いので操作不能、per user)。 */
+#opening-deal-blocker {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: transparent;
+}
+#opening-deal-blocker[hidden] {
+  display: none;
+}
