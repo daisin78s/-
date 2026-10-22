@@ -2913,7 +2913,7 @@ function buildCardListCell(faceId, isQst) {
 function renderCardListFlatCategory(key, container) {
   const config = CARD_LIST_FLAT_CATEGORIES[key];
   const grid = el('div', 'card-list-grid');
-  grid.style.gridTemplateColumns = config.isQst ? `repeat(${config.columns}, 244px)` : `repeat(${config.columns}, 122px)`;
+  grid.style.gridTemplateColumns = config.isQst ? `repeat(${config.columns}, 244px)` : `repeat(${config.columns}, auto)`;
   for (const faceId of config.faceIds()) {
     grid.appendChild(buildCardListCell(faceId, config.isQst));
   }
@@ -2931,7 +2931,7 @@ function renderCardListFlatCategory(key, container) {
  * この位置関係自体は保たれる)。*/
 function renderCardListMonumentCategory(container) {
   const grid = el('div', 'card-list-grid');
-  grid.style.gridTemplateColumns = 'repeat(6, 122px)';
+  grid.style.gridTemplateColumns = 'repeat(6, auto)';
   for (const row of INDEX.raw.M) {
     if (row.ID === 'M401') {
       grid.appendChild(el('div', 'card-list-monument-note', '強化カードが\nなくなってくると登場'));
@@ -2997,13 +2997,13 @@ function renderCardListAbcCategory(sheet, container) {
   const wrap = el('div', 'card-list-abc-wrap');
   const buildRow = (faceIds) => {
     const grid = el('div', 'card-list-grid');
-    grid.style.gridTemplateColumns = 'repeat(6, 122px)';
+    grid.style.gridTemplateColumns = 'repeat(6, auto)';
     for (const faceId of faceIds) grid.appendChild(buildCardListCell(faceId, false));
     return grid;
   };
   const buildSpecialRow = (entries) => {
     const grid = el('div', 'card-list-grid');
-    grid.style.gridTemplateColumns = 'repeat(6, 122px)';
+    grid.style.gridTemplateColumns = 'repeat(6, auto)';
     for (const { faceId, num } of entries) {
       const col = el('div', 'card-list-abc-special');
       // "2Rから登場"/"3Rから登場" (2026-08-25, per user request, shortened from "2ラウンドから登場"/
@@ -3080,7 +3080,7 @@ function cardListResourceIcon(code) {
  * that term via showCardListTermModal below. */
 function renderCardListResourceCategory(container) {
   const grid = el('div', 'card-list-grid');
-  grid.style.gridTemplateColumns = `repeat(5, 122px)`;
+  grid.style.gridTemplateColumns = `repeat(5, auto)`;
   for (const { code, name } of CARD_LIST_RESOURCE_GLOSSARY) {
     grid.appendChild(buildCardListTermCell(code, name));
   }

@@ -6137,3 +6137,26 @@ body.tutorial-mode .change-highlight {
     letter-spacing: -0.5px;
   }
 }
+
+/* カードリスト: カード同士の隙間を詰め、上のタイトル(「人材カード一覧」など)を消す (2026-10-22, per user
+   request「カードリスト タップされることはないので青まる部分の隙間詰めて 紫まるの人材カード一覧など
+   不要なので消して この2つはすべてのバージョンで」) -- PC/タブレット/スマホ共通。
+   ・カードの枠はTAPで横に倒した時用の正方形(150px/122px)だったが、カードリストでは倒さないのでカードの
+     大きさまで縮める。列の幅もmain.js側で固定122px→中身の幅(auto)に変更、隙間8→6px。
+   ・タイトルを消し、×ボタンだけ右上に残す。 */
+#card-list-overlay .card-list-body .owned-card-cell:not(.owned-card-cell--qst) {
+  width: auto;
+  height: auto;
+}
+#card-list-overlay .card-list-grid {
+  gap: 6px;
+}
+#card-list-overlay .card-list-con-row__cards {
+  gap: 6px;
+}
+#card-list-title {
+  display: none;
+}
+#card-list-overlay .card-inst-modal__header {
+  justify-content: flex-end;
+}
