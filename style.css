@@ -5304,15 +5304,18 @@ body.tutorial-mode .change-highlight {
     top: 0;
     z-index: 15;
     background: var(--surface);
-    padding: 6px;
-    margin-bottom: 6px;
+    /* 縦幅を20%詰める (2026-10-22, per user request「クエスト ショップ エリア と書いてあるバー 縦幅を
+       20%詰めて」) -- 46px→36px(上下余白6→4px・ボタン上下8→5px)、下の隙間6→2px。この高さに合わせて
+       獲得カードの名前欄(top)とクエストタブ(height)の数値も14px詰めている。 */
+    padding: 4px;
+    margin-bottom: 2px;
     border-radius: 8px;
   }
   .mobile-tab-switcher__btn {
     flex: 1 1 0;
     min-width: 0;
     font-size: 12px;
-    padding: 8px 2px;
+    padding: 5px 2px;
     border: none;
     border-radius: 6px;
     background: var(--surface-sunken);
@@ -5361,7 +5364,7 @@ body.tutorial-mode .change-highlight {
     flex-direction: column;
     gap: 4px;
     position: fixed;
-    top: 58px;
+    top: 44px;
     right: 0;
     width: 84px;
     padding: 6px;
@@ -5439,8 +5442,8 @@ body.tutorial-mode .change-highlight {
      以前(Ver.1.212〜)はパネルに高さが無く3行が潰れたため各行を本来の高さにしていたが、高さを与えたので
      PC版の等分方式に戻した。画面がさらに細い場合はmax-width:100%で横幅に収める。 */
   #mobile-quest-tab {
-    height: calc(100vh - 76px);
-    height: calc(100dvh - 76px);
+    height: calc(100vh - 62px);
+    height: calc(100dvh - 62px);
     justify-content: center;
   }
   #app[data-mobile-active-tab="quest"] #mobile-quest-tab {
@@ -5487,8 +5490,12 @@ body.tutorial-mode .change-highlight {
   /* 横スクロールは#board全体で1つ (2026-10-22, per user報告「エリア上段と下段でスクロールが分かれて
      います 別れないように」) -- 当初は.board-rowごとにoverflow-x:autoで上段/下段が別々にスクロール
      していた。各段はwidth:max-contentで中身の幅のまま広げ、はみ出し分は親の#boardがまとめてスクロール。 */
-  #board {
+  #board-area > #board {
     overflow-x: auto;
+    /* エリアの上と上段・下段の間をわずかな隙間を残して詰める (2026-10-22, per user request「エリアの上と
+       真ん中 わずかな隙間を残して詰めて」) -- 上の余白6→2px、段の間10→3px。 */
+    padding-top: 2px;
+    gap: 3px;
   }
   .board-row {
     flex-wrap: nowrap;
@@ -5736,10 +5743,15 @@ body.tutorial-mode .change-highlight {
     gap: 10px;
     overflow-x: hidden;
     overflow-y: auto;
-    padding: 10px 10px calc(10px + env(safe-area-inset-bottom)) 10px;
+    /* 中身をほんの少し右へ (2026-10-22, per user request「右側のダイス置き場ほんの少し右に寄せれますか」)
+       -- 欄自体は既に画面右端に接しているので、左右の余白を10/10px→14/6pxにして中身だけ4px右へ。 */
+    padding: 10px 6px calc(10px + env(safe-area-inset-bottom)) 14px;
     border-top: none;
     border-left: 1px solid var(--border);
     box-shadow: -2px 0 8px rgba(16, 24, 40, 0.12);
+    /* 左側の角をわずかに丸く (2026-10-22, per user request「右側のダイス置き場 可能ならわずかに丸く縁取り」)
+       -- 右端は画面の端に接しているので左上・左下の角だけ丸める。 */
+    border-radius: 10px 0 0 10px;
   }
   .mobile-own-row__dice,
   .mobile-own-row__resources {
