@@ -5453,8 +5453,14 @@ body.tutorial-mode .change-highlight {
   }
 
   /* 資源置き場タブ: 4人分を横並びでなく縦積みに(各パネルのmin-width:220pxがスマホ幅と衝突するため)。 */
+  /* 資源タブ (2026-10-22, per user報告(スクリーンショット付き)「スマホに最適化されていない」) --
+     当初は#playersをflex-direction:columnにしただけだったため、.player-panelのflex:1 1 240pxの
+     240pxが「高さ」の基準になり、中身が少なくても1人240pxの縦長パネル(大きな空白)になっていた。
+     gridにして高さは中身なり、横向き等で幅に余裕があれば2列以上に並べる(元の最小幅220pxより少し
+     広い260pxを1列の目安に)。 */
   #players {
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   }
   .player-panel {
     min-width: 0;
@@ -5464,6 +5470,24 @@ body.tutorial-mode .change-highlight {
      スマホ幅向けに詰める。 */
   .player-cards__header {
     flex-wrap: wrap;
+  }
+  /* 設定タブ (2026-10-22, per user報告「スマホに最適化されていない」) -- PCのサイドバー向けに右寄せ
+     だったボタン群を左詰めで画面幅いっぱいに使い、4人分の人間/AI切替は1行に収まらず右端の人(Dan)が
+     画面外にはみ出していたため折り返す。「所持カード」見出しは設定タブ(ここにしか出ない)の中身と
+     合わないため非表示。 */
+  .player-cards__title {
+    display: none;
+  }
+  .player-cards__header-right {
+    align-items: stretch;
+    width: 100%;
+  }
+  .player-cards__header-buttons {
+    justify-content: flex-start;
+  }
+  .player-role-control {
+    flex-wrap: wrap;
+    gap: 8px;
   }
 }
 
