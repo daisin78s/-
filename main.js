@@ -3969,7 +3969,7 @@ function buildChangeAllThenAddIcon(actionText) {
   if (!match) return null;
   const [, payResource, gainResource, addCount, addResource] = match;
   const stack = el('div', 'action-icons-stack');
-  stack.appendChild(actionRow([actionDot(payResource), actionArrow(), actionDot(gainResource), actionSuffix('　ALL')]));
+  stack.appendChild(actionRow([actionDot(payResource), actionArrow(), actionDot(gainResource), actionSuffix('　ALL', '')]));
   stack.appendChild(actionRow([actionEmoji('⚡'), ...resourceItemNodes(addCount, addResource)]));
   return stack;
 }
