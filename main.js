@@ -7702,6 +7702,56 @@ function renderMobileOwnDiceRow(state, next) {
   if (turnEndEl.childElementCount > 0) container.appendChild(turnEndEl);
 }
 
+/** スマホ版「獲得カード」タブ: 1人分だけ表示 (2026-10-22, per user request: "獲得カードの画面 基本的に
+ * 1人のプレイヤーのみ出てくる 縦スワイプでプレイヤーの切り替え プレイヤーがジョブをとった後は残りの
+ * ジョブは表示しない")。
+ * - 表示する人はmobileCardsPlayerId。未設定なら「自分」(操作中の人間、per user選択) -- 一度自分で
+ *   切り替えたらその人のまま(毎render引き戻さない)。自分が選ぶ番(初期資源/CON)になった時は
+ *   queueMobileOnboardingFocusがその人に切り替える。
+ * - 実際の出し分けはCSS(#player-cards-groups[data-mobile-player]、@media (max-width:760px))。
+ * - 切り替えは名前ボタンのタップ(ここで描画)と、端まで来てからの縦スワイプ(setupMobileTabSystem)。
+ * - 残りのジョブ(#job-pool)は、操作中の人間が全員ジョブを取り終えたら隠す(job-pool--mobile-done)。
+ * PC/タブレット(761px以上)では何もしない(関連CSSも全てスマホ幅限定)。 */
+let mobileCardsPlayerId = null;
+function mobileLocalHumanIds(state) {
+  return state.players.filter((p) => !isAiPlayer(p.id) && (!onlineRoomCode || localSeatId === p.id)).map((p) => p.id);
+}
+function applyMobileCardsPlayer(playerId) {
+  mobileCardsPlayerId = playerId;
+  document.getElementById('player-cards-groups').dataset.mobilePlayer = playerId;
+  document.querySelectorAll('.mobile-cards-player-switcher__btn').forEach((btn) => {
+    btn.classList.toggle('mobile-cards-player-switcher__btn--active', btn.dataset.playerId === playerId);
+  });
+}
+function switchMobileCardsPlayer(delta) {
+  const ids = STATE.players.map((p) => p.id);
+  const idx = Math.max(0, ids.indexOf(mobileCardsPlayerId));
+  applyMobileCardsPlayer(ids[(idx + delta + ids.length) % ids.length]);
+  window.scrollTo(0, 0);
+}
+function renderMobileCardsView(state, next) {
+  if (window.innerWidth > 760) return;
+  if (!state.players.some((p) => p.id === mobileCardsPlayerId)) {
+    mobileCardsPlayerId = actingHumanPlayerId(state, next) || mobileLocalHumanIds(state)[0] || state.players[0].id;
+  }
+  const switcher = document.getElementById('mobile-cards-player-switcher');
+  switcher.innerHTML = '';
+  for (const player of state.players) {
+    const btn = el('button', 'mobile-cards-player-switcher__btn');
+    btn.type = 'button';
+    btn.dataset.playerId = player.id;
+    const swatch = el('span', 'mobile-cards-player-switcher__swatch');
+    swatch.dataset.color = player.color;
+    btn.appendChild(swatch);
+    btn.appendChild(document.createTextNode(player.name));
+    btn.addEventListener('click', () => applyMobileCardsPlayer(player.id));
+    switcher.appendChild(btn);
+  }
+  applyMobileCardsPlayer(mobileCardsPlayerId);
+  const localNeedsJob = mobileLocalHumanIds(state).some((id) => state.players.find((p) => p.id === id).jobCardId === null);
+  document.getElementById('job-pool').classList.toggle('job-pool--mobile-done', !localNeedsJob);
+}
+
 /** Pending manual-mode TAP reactions (2026-07-30, real engine wiring pass 6): whenever a GET event
  * fires (e.g. from a die placement's ADD effect, or a free action's own gain), executor.
  * emitAndResolve auto-resolves any auto-mode card's ON(GET(...),...) TAP reaction but queues a
@@ -13790,6 +13840,7 @@ function render(state) {
   renderJobReplacementChoice(state);
   renderResourceConfirmOverlay(state);
   renderPlayerCards(state, next);
+  renderMobileCardsView(state, next);
   // Drains GameState.whiteOverflowEvents into whatever placementMessage this render's own action
   // already produced (2026-08-11, per user request) -- appended, not replacing, so a placement that
   // both fails/succeeds AND happens to overflow a white die (e.g. a CHANGE granting several wD at once,
@@ -14798,13 +14849,24 @@ function setupMobileTabSystem() {
   // 瞬間(touchend)に横移動量が縦移動量より明確に大きい場合だけタブを切り替える、という後判定方式。
   // 横スクロール専用のコンテナを新設してoverflow/touch-actionを個別に制御する方式より実装がシンプルで、
   // ページスクロールとの competing gesture 問題が原理的に起きない。
-  const swipeTarget = document.getElementById('board-area');
+  // 受け付ける範囲は#app全体 (2026-10-22, per user request: "獲得カードの画面から右スワイプで設定に
+  // 行けるようにして" -- 当初は#board-area(ショップ/エリア/資源)だけに付けていたため、#board-areaの外に
+  // ある獲得カード/設定/クエストのタブではスワイプが一切反応していなかった)。モーダルは#appの外なので対象外。
+  const swipeTarget = document.getElementById('app');
   let touchStartX = null;
   let touchStartY = null;
+  let touchStartAtTop = false;
+  let touchStartAtBottom = false;
   swipeTarget.addEventListener('touchstart', (e) => {
     if (e.touches.length !== 1) { touchStartX = null; return; }
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
+    // 縦スワイプでのプレイヤー切り替え用 (獲得カードタブのみ、renderMobileCardsView参照) -- 縦スクロールと
+    // ぶつからないよう、指を置いた時点で既に一番上/一番下までスクロールしていた時だけ切り替える(per user
+    // 選択「端まで来てからの縦スワイプ」)。中身が画面に収まっていれば両方trueなのでそのまま切り替わる。
+    const doc = document.documentElement;
+    touchStartAtTop = window.scrollY <= 1;
+    touchStartAtBottom = window.innerHeight + window.scrollY >= doc.scrollHeight - 2;
   }, { passive: true });
   swipeTarget.addEventListener('touchend', (e) => {
     if (touchStartX === null) return;
@@ -14814,6 +14876,11 @@ function setupMobileTabSystem() {
     touchStartX = null;
     touchStartY = null;
     const MIN_SWIPE_PX = 60;
+    if (mobileActiveTab === 'cards' && Math.abs(dy) >= MIN_SWIPE_PX && Math.abs(dy) > Math.abs(dx) * 1.5) {
+      if (dy < 0 && touchStartAtBottom) switchMobileCardsPlayer(1);
+      else if (dy > 0 && touchStartAtTop) switchMobileCardsPlayer(-1);
+      return;
+    }
     if (Math.abs(dx) < MIN_SWIPE_PX || Math.abs(dx) < Math.abs(dy) * 1.5) return;
     const currentIdx = MOBILE_TAB_ORDER.indexOf(mobileActiveTab);
     if (dx < 0 && currentIdx < MOBILE_TAB_ORDER.length - 1) applyMobileActiveTab(MOBILE_TAB_ORDER[currentIdx + 1]);
@@ -14855,6 +14922,8 @@ function queueMobileOnboardingFocus(state, next) {
   if (!key) return;
   setTimeout(() => {
     applyMobileActiveTab('cards');
+    // 獲得カードタブは1人分だけ表示するので、選ぶ番の人(初期資源/CONの選択欄はその人のカード群の中)を表示する。
+    applyMobileCardsPlayer(key.split(':')[1]);
     const target = [...document.querySelectorAll('.onboard-panel--active')]
       .find((node) => node.getBoundingClientRect().height > 0);
     if (target) target.scrollIntoView({ block: 'center', behavior: 'smooth' });

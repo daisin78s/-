@@ -5254,6 +5254,10 @@ body.tutorial-mode .change-highlight {
 #mobile-quest-tab {
   display: none;
 }
+/* 獲得カードタブのプレイヤー切り替えボタンもスマホ版専用(PCサイドバーには出さない)。 */
+#mobile-cards-player-switcher {
+  display: none;
+}
 
 /* ===== スマホ版ゲーム画面 (2026-10-22, per user request: "スマホ版にゲームを対応させたい フル操作希望
    前提条件 PC版を変えない") =====
@@ -5336,6 +5340,62 @@ body.tutorial-mode .change-highlight {
      main.jsのsetupMobileQuestTabが.qst-panel実物を#mobile-quest-tabへ移動してくる、その見た目調整。 */
   #mobile-quest-tab {
     display: block;
+  }
+
+  /* 獲得カードタブ: 1人分だけ表示 (2026-10-22, per user request: "基本的に1人のプレイヤーのみ出てくる
+     縦スワイプでプレイヤーの切り替え プレイヤーがジョブをとった後は残りのジョブは表示しない"、
+     main.jsのrenderMobileCardsView参照)。名前ボタンは入りきらなければ2行に折り返して小さく(per user
+     「枠に入らなくなったら2行にしてサイズを小さくすれば」)。 */
+  #mobile-cards-player-switcher {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 8px;
+  }
+  .mobile-cards-player-switcher__btn {
+    flex: 1 1 70px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 6px 4px;
+    font-size: 12px;
+    font-weight: 700;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface-sunken);
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .mobile-cards-player-switcher__btn--active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .mobile-cards-player-switcher__swatch {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex: 0 0 auto;
+  }
+  .mobile-cards-player-switcher__swatch[data-color="PINK"] { background: var(--player-pink); }
+  .mobile-cards-player-switcher__swatch[data-color="PURPLE"] { background: var(--player-purple); }
+  .mobile-cards-player-switcher__swatch[data-color="GREEN"] { background: var(--player-green); }
+  .mobile-cards-player-switcher__swatch[data-color="ORANGE"] { background: var(--player-orange); }
+  #player-cards-groups[data-mobile-player="P1"] .card-group:not([data-player-id="P1"]),
+  #player-cards-groups[data-mobile-player="P2"] .card-group:not([data-player-id="P2"]),
+  #player-cards-groups[data-mobile-player="P3"] .card-group:not([data-player-id="P3"]),
+  #player-cards-groups[data-mobile-player="P4"] .card-group:not([data-player-id="P4"]) {
+    display: none;
+  }
+  .job-pool.job-pool--mobile-done {
+    display: none;
+  }
+  /* 一番上でさらに下へスワイプ=前のプレイヤー、だがSafariではページ最上部での下スワイプが「引っ張って
+     再読み込み」になってしまうため、獲得カードタブを開いている間だけページ全体の引っ張り動作を止める。 */
+  html:has(#app[data-mobile-active-tab="cards"]) {
+    overscroll-behavior-y: none;
   }
   #mobile-quest-tab .qst-panel {
     display: flex;
