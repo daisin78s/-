@@ -5330,6 +5330,14 @@ body.tutorial-mode .change-highlight {
     display: flex;
     width: 100%;
   }
+  /* per user報告(スクリーンショット付き)「クエストが表示されません」-- .qst-panel .qst-cardは
+     flex:1 1 0+min-height:0で「パネルの高さを3行で等分」する作りで、その高さはPCでは隣のショップ行
+     (align-items:stretch)から来ている。クエストタブには隣が無いためパネルの高さが0になり、3行とも
+     潰れて(overflow:hiddenで)ほぼ見えなくなっていた。タブ内では各行を本来の高さで表示する。 */
+  #mobile-quest-tab #qst-slots,
+  #mobile-quest-tab .qst-panel .qst-card {
+    flex: 0 0 auto;
+  }
 
   /* エリアタブ: 盤面を横一列に (per user request: "エリアの上段 スロットをすべて横一列にする
      それで縦幅が短くなるはず 横は画面からはみ出してもいい") -- flex-wrap:nowrap+overflow-x:autoで
