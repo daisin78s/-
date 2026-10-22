@@ -5389,6 +5389,11 @@ body.tutorial-mode .change-highlight {
   .map-tile__inst {
     display: none;
   }
+  /* per user request「エリア 皇帝宮殿の次ラウンド スマホでは消して」-- 狭いタイルで縦書き状態に
+     折り返して縦幅を取っていた「次ラウンド」の文字だけ消す(右の手番順の色丸は残す)。 */
+  .map-tile__turnorder-label {
+    display: none;
+  }
   /* per user request「赤青黄→追加色ダイス を 赤青黄→追加色D に」(.action-suffixのdata-mobile-text、
      main.jsのactionSuffix own doc参照) -- 元のテキストをfont-size:0で消し、::afterで短縮版を表示する。 */
   .action-suffix[data-mobile-text] {
