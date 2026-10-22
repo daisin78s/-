@@ -6339,7 +6339,18 @@ function renderBoard(state, next) {
       } else {
         const feeRate = areaRow.fee || 0;
         renderUsageFeeLabel(feeEl.querySelector('.map-tile__fee-rate'), feeRate);
-        feeEl.querySelector('.map-tile__fee-amount').textContent = `${mapState.accumulatedFee} K`;
+        // たまっている使用料は「○N」(白資源アイコン+数)で表示、0の時は非表示 (2026-10-22, per user
+        // request「0KがOKに見える 0Kのときは非表示 1Kは○1 2Kは○2」、スマホ/PC/タブレット共通)。
+        // 使用料の設定も無いエリアで0の時は、空の枠が残らないよう表示ごと消す。
+        const feeAmountEl = feeEl.querySelector('.map-tile__fee-amount');
+        if (mapState.accumulatedFee > 0) {
+          feeAmountEl.textContent = '';
+          feeAmountEl.appendChild(actionDot('K'));
+          feeAmountEl.appendChild(document.createTextNode(String(mapState.accumulatedFee)));
+        } else {
+          feeAmountEl.remove();
+          if (feeRate <= 0 && tutorialAreaFeeGlowMapId !== mapId) feeEl.remove();
+        }
         // replayHighlight (2026-09-09, per user request: "使用料をもらったときその使用料の箇所") -- see
         // computeReplayChangeHighlight's own doc.
         if (replayHighlight && replayHighlight.feeMapIds.has(mapId)) feeEl.classList.add('change-highlight');
