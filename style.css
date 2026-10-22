@@ -5247,6 +5247,14 @@ body.tutorial-mode .change-highlight {
    PC/タブレット幅(480pxより広い画面)は上のルールのまま一切変更しない(per user request:
    "PCは絶対に変わらないように" / "タブレットも" -- 480pxはiPadの最小幅768pxより十分小さく、
    タブレットには絶対に適用されない)。 */
+/* クエストタブの入れ物はスマホ版専用 (2026-10-22, PCレイアウト崩れの修正) -- #mobile-quest-tabは
+   #game-layout(PCでは2列グリッド)の直接の子なので、空の<div>のままでもグリッドの1マス(左の1fr列)を
+   占領してしまい、#board-areaが右の680px列へ、#player-cardsが次の行へずれていた(Ver.1.205〜1.219の
+   幅1401px以上のPCで発生、タブレットは1列表示のため見た目に影響なし)。スマホ幅以外では完全に消す。 */
+#mobile-quest-tab {
+  display: none;
+}
+
 /* ===== スマホ版ゲーム画面 (2026-10-22, per user request: "スマホ版にゲームを対応させたい フル操作希望
    前提条件 PC版を変えない") =====
    #app本編(盤面/ショップ/プレイヤー/所持カード)を、幅760px以下でショップ/エリア/資源/獲得カード/設定の
@@ -5326,6 +5334,9 @@ body.tutorial-mode .change-highlight {
   /* クエストタブ (per user request: "ショップ エリア...の左にクエストを作り そこからクエストが見れる
      ように ショップの上にあるクエスト確認はとる" -- 以前のボタン+モーダル方式から独立タブへ変更)。
      main.jsのsetupMobileQuestTabが.qst-panel実物を#mobile-quest-tabへ移動してくる、その見た目調整。 */
+  #mobile-quest-tab {
+    display: block;
+  }
   #mobile-quest-tab .qst-panel {
     display: flex;
     width: 100%;
@@ -5351,11 +5362,16 @@ body.tutorial-mode .change-highlight {
   #board-area {
     min-width: 0;
   }
+  /* 横スクロールは#board全体で1つ (2026-10-22, per user報告「エリア上段と下段でスクロールが分かれて
+     います 別れないように」) -- 当初は.board-rowごとにoverflow-x:autoで上段/下段が別々にスクロール
+     していた。各段はwidth:max-contentで中身の幅のまま広げ、はみ出し分は親の#boardがまとめてスクロール。 */
+  #board {
+    overflow-x: auto;
+  }
   .board-row {
     flex-wrap: nowrap;
-    overflow-x: auto;
     gap: 4px;
-    min-width: 0;
+    width: max-content;
   }
   .board-row > .map-tile {
     flex: 0 0 auto;
