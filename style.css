@@ -6003,7 +6003,9 @@ body.tutorial-mode .change-highlight {
    (2026-10-22, per user request「スマホ版 赤丸部分削除して」、赤丸はこの2か所)。タイトルの行にある
    ターン開始に戻す/1手戻るボタンは残す。「LVアップ」の見出し(区切り線つき)は赤丸の対象外なので残す。 */
 @media (max-width: 760px) {
-  .build-choice-modal .card-inst-modal__title,
+  /* #build-choice-overlayに限定 -- カードリスト(#card-list-overlay)も.build-choice-modalクラスを使い
+     回しているため、限定しないとカードリストのタイトルまで消えていた(Ver.1.240〜1.243)。 */
+  #build-choice-overlay .card-inst-modal__title,
   .build-choice-section-header--build {
     display: none;
   }
@@ -6102,4 +6104,36 @@ body.tutorial-mode .change-highlight {
   flex-wrap: wrap;
   justify-content: center;
   gap: 8px;
+}
+
+/* カードリストを全画面表示に (2026-10-22, per user request「カードリスト 赤丸部分の隙間いらないので
+   全画面表示にして これはすべてのバージョンで」) -- PC/タブレット/スマホ共通。周りの半透明の余白を無くし、
+   モーダル自体を画面いっぱい(角丸なし)にする。iPhoneの切り欠き部分にはsafe-areaの分だけ内側に余白をとる。
+   中身のスクロール(.card-list-body)と下のボタン列の固定は従来通り。 */
+#card-list-overlay {
+  padding: 0;
+  overflow: hidden;
+}
+#card-list-overlay > .card-list-modal {
+  width: 100vw;
+  max-width: none;
+  height: 100vh;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  border-radius: 0;
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+
+/* フリーアクションボタンの文字が右欄(幅124px)からはみ出していた(Ver.1.242)ため、このボタンだけ文字を
+   少し小さく・左右の余白を詰めて1行に収める。 */
+@media (max-width: 760px) {
+  .mobile-own-row__free-action {
+    font-size: 12px;
+    padding-left: 2px;
+    padding-right: 2px;
+    letter-spacing: -0.5px;
+  }
 }
