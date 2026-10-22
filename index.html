@@ -23,7 +23,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1.204">
+<link rel="stylesheet" href="style.css?v=1.205">
 </head>
 <body>
   <!-- 著作権表示 (2026-10-03, per user request) -- 常時表示だが画面右下に小さく/控えめに配置し、
@@ -37,7 +37,7 @@
        取得させる効果は無かった(iPad Safariがそれらをキャッシュしたまま使い続けていたと判明) --
        今後はこの番号と合わせて、下の全<script src>/<link>に付けた?v=X.XXXクエリ文字列も必ず
        同じ値に更新すること(実際にURLを変えることでキャッシュを回避する、こちらが本体)。 -->
-  <div id="copyright-notice">© 2026 higebucho Ver.1.204</div>
+  <div id="copyright-notice">© 2026 higebucho Ver.1.205</div>
 
   <!-- 入口バナー (2026-10-04, per user request: "HPに入ったときに大き目バナーを用意して導線をわかりやすく
        したい") -- #app/#weekly-seat-pickerと同じ「画面を丸ごと差し替える」パターン(main.jsのrender()
@@ -60,7 +60,7 @@
         <!-- バージョン表示 (2026-10-08, per user request: "セリフで見えにくいので トップ画像の右下にも") --
              #copyright-noticeはゲーム中のセリフ吹き出しに隠れて見えにくいため、入口バナー(トップ画像)の
              右下にも同じ番号を複製表示する。中身は#copyright-noticeと手動で同期させること。 -->
-        <div id="entry-banner__version">Ver.1.204</div>
+        <div id="entry-banner__version">Ver.1.205</div>
         <!-- 見出し文言+CTA (2026-10-11, per user request: "ダイスで築く、あなただけの王国。などの文言も
              前と同じように表示して 今すぐプレイボタンも" -- 旧画像に焼き込まれていたキャッチコピーを、
              新背景では実テキストとして表示(per user: "文言は後から変更できるように" -- 画像ではなく
@@ -164,18 +164,29 @@
            表示切り替え自体は#app[data-mobile-active-tab]とdata-mobile-tab属性の組み合わせでCSS側が行う
            (下の@media (max-width:760px)参照)、クリック/スワイプのハンドラはmain.jsのsetupMobileTabSystem。 -->
       <div id="mobile-tab-switcher" class="mobile-tab-switcher" hidden>
-        <button type="button" class="mobile-tab-switcher__btn" data-tab-target="shop">SHOP</button>
+        <!-- クエストタブ (2026-10-22, per user request: "ショップ エリア...の左にクエストを作り そこから
+             クエストが見れるように ショップの上にあるクエスト確認はとる") -- 以前は別ボタン+モーダルで
+             表示していたが(クエスト確認ボタンは削除)、独立タブに変更。#mobile-quest-tab(空のコンテナ、
+             #board-areaの子)参照、main.jsのsetupMobileTabSystemが.qst-panel実物をここへ一度だけ移動する。 -->
+        <button type="button" class="mobile-tab-switcher__btn" data-tab-target="quest">クエスト</button>
+        <button type="button" class="mobile-tab-switcher__btn" data-tab-target="shop">ショップ</button>
         <button type="button" class="mobile-tab-switcher__btn" data-tab-target="board">エリア</button>
-        <button type="button" class="mobile-tab-switcher__btn" data-tab-target="players">資源置き場</button>
+        <button type="button" class="mobile-tab-switcher__btn" data-tab-target="players">資源</button>
         <button type="button" class="mobile-tab-switcher__btn" data-tab-target="cards">獲得カード</button>
+        <!-- 設定タブ (2026-10-22, per user request: "これらの情報は設定として...右に設定という項目を作り
+             そこに置く") -- .player-cards__header(AI進行/ターン開始に戻す/直前キャンセル/ラウンドパス/
+             ナビ/人間-AI切替)はこれまでどのタブでも常時表示にしていたが、縦幅を大きく占有するため
+             専用タブへ移動する。 -->
+        <button type="button" class="mobile-tab-switcher__btn" data-tab-target="settings">設定</button>
       </div>
+      <!-- クエストタブの入れ物 (2026-10-22, per user request: own doc on #mobile-tab-switcherのクエスト
+           ボタン参照) -- PC/タブレットでは常に空、main.jsがスマホ幅の時だけ.qst-panel本体(#shops内、
+           元の位置から)をここへ移動する。#shopsの子にしてしまうとshopタブ以外で#shops自体がdisplay:none
+           になった時に.qst-panel側のdata-mobile-tab="quest"を上書きできない(親が非表示だと子はどうやっても
+           表示されない)ため、#shops/#board-areとは独立した、常に非表示にならない場所に置く必要がある。 -->
+      <div id="mobile-quest-tab" data-mobile-tab="quest"></div>
       <div id="board-area">
         <section id="shops" aria-label="ショップ" data-mobile-tab="shop">
-          <!-- クエスト確認ボタン (2026-10-22, per user request: "クエストは ボタンで別に表示") -- スマホ幅の
-               みで表示、タップで#mobile-qst-overlayに.qst-panelを移動して表示する(main.jsのopenMobileQst/
-               closeMobileQst参照)。PC/タブレットでは無害なdisplay:noneのまま、.qst-panelは従来通りインライン
-               表示。 -->
-          <button type="button" id="mobile-qst-button" class="mobile-qst-button" hidden>🏆 クエスト確認</button>
           <div class="shop-row">
             <div class="shop-row__combined">
               <div class="shop-row__grid" id="shop-combined-slots"></div>
@@ -219,7 +230,7 @@
       </div>
 
       <section id="player-cards" aria-label="所持カード">
-        <div class="player-cards__header">
+        <div class="player-cards__header" data-mobile-tab="settings">
           <h2 class="player-cards__title">所持カード</h2>
           <div class="player-cards__header-right">
             <!-- Pinned above player-role-control (2026-08-02, per user feedback: "ターンの最初に戻す
@@ -364,19 +375,6 @@
     </section>
   </div>
 
-  <!-- クエスト確認モーダル (2026-10-22, per user request: "クエストは ボタンで別に表示") -- 中身は空のまま、
-       #mobile-qst-buttonがクリックされた時に.qst-panel実物をここへ移動してくる(main.jsのopenMobileQst
-       参照)。.card-inst-overlayクラスを使うことで、既存のsetupOverlayScrollLock(iPad Safariのスクロール
-       固定対策、MutationObserverで.card-inst-overlayの[hidden]変化を自動監視)をそのまま流用できる。 -->
-  <div id="mobile-qst-overlay" class="card-inst-overlay" hidden>
-    <div class="card-inst-modal">
-      <div class="card-inst-modal__header">
-        <span class="card-inst-modal__title">クエスト</span>
-        <button type="button" class="card-inst-modal__close" id="mobile-qst-close-button" aria-label="閉じる">&times;</button>
-      </div>
-      <div id="mobile-qst-overlay-slot"></div>
-    </div>
-  </div>
 
   <div id="card-inst-overlay" class="card-inst-overlay" hidden>
     <div class="card-inst-modal">
@@ -1080,53 +1078,53 @@
   </script>
 
   <!-- Leaf: no src/*.js dependencies. -->
-  <script src="src/rng.js?v=1.204"></script>
+  <script src="src/rng.js?v=1.205"></script>
   <script>__captureModule('rng');</script>
 
   <!-- Depends on: rng -->
-  <script src="src/game-state.js?v=1.204"></script>
+  <script src="src/game-state.js?v=1.205"></script>
   <script>__captureModule('game-state');</script>
 
   <!-- Leaf: no src/*.js dependencies. -->
-  <script src="src/dsl-parser.js?v=1.204"></script>
+  <script src="src/dsl-parser.js?v=1.205"></script>
   <script>__captureModule('dsl-parser');</script>
 
   <!-- Depends on: game-state (fs is only required lazily, on the Node path -- never called here). -->
-  <script src="src/data-loader.js?v=1.204"></script>
+  <script src="src/data-loader.js?v=1.205"></script>
   <script>__captureModule('data-loader');</script>
 
   <!-- Depends on: dsl-parser -->
-  <script src="src/command-builder.js?v=1.204"></script>
+  <script src="src/command-builder.js?v=1.205"></script>
   <script>__captureModule('command-builder');</script>
 
   <!-- Depends on: game-state -->
-  <script src="src/undo.js?v=1.204"></script>
+  <script src="src/undo.js?v=1.205"></script>
   <script>__captureModule('undo');</script>
 
   <!-- Depends on: dsl-parser, command-builder, data-loader, game-state, rng, undo -->
-  <script src="src/executor.js?v=1.204"></script>
+  <script src="src/executor.js?v=1.205"></script>
   <script>__captureModule('executor');</script>
 
   <!-- Depends on: data-loader, dsl-parser, command-builder, rng, executor. Loaded here (before
        board/turn-flow), not after turn-flow like before 2026-08-09 -- turn-flow.js's endRound now
        calls qst.resolveEndGameRewards (see that function's own doc), so qst must load first. -->
-  <script src="src/qst.js?v=1.204"></script>
+  <script src="src/qst.js?v=1.205"></script>
   <script>__captureModule('qst');</script>
 
   <!-- Depends on: data-loader, dsl-parser, command-builder, game-state, executor -->
-  <script src="src/board.js?v=1.204"></script>
+  <script src="src/board.js?v=1.205"></script>
   <script>__captureModule('board');</script>
 
   <!-- Depends on: rng, game-state, data-loader, executor, undo -->
-  <script src="src/setup.js?v=1.204"></script>
+  <script src="src/setup.js?v=1.205"></script>
   <script>__captureModule('setup');</script>
 
   <!-- Depends on: data-loader, executor -->
-  <script src="src/scoring.js?v=1.204"></script>
+  <script src="src/scoring.js?v=1.205"></script>
   <script>__captureModule('scoring');</script>
 
   <!-- Depends on: rng, data-loader, board, undo, setup, executor, qst -->
-  <script src="src/turn-flow.js?v=1.204"></script>
+  <script src="src/turn-flow.js?v=1.205"></script>
   <script>__captureModule('turn-flow');</script>
 
   <!-- AI player (2026-08-03, per user feedback: "プレイヤー1は人間 プレイヤー2 3 4はAIの対戦を実装
@@ -1135,51 +1133,51 @@
        Simulator/AIPlayer classes, no browser-only reimplementation. Order matches each file's own
        "Depends on" comment (see src/ai/*.js). -->
   <!-- Leaf: no src/*.js dependencies. -->
-  <script src="src/ai/eval-table.js?v=1.204"></script>
+  <script src="src/ai/eval-table.js?v=1.205"></script>
   <script>__captureModule('eval-table');</script>
 
   <!-- Depends on: board, executor, turn-flow, game-state -->
-  <script src="src/ai/simulator.js?v=1.204"></script>
+  <script src="src/ai/simulator.js?v=1.205"></script>
   <script>__captureModule('simulator');</script>
 
   <!-- Depends on: data-loader, dsl-parser, command-builder, game-state, board, executor -->
-  <script src="src/ai/move-generator.js?v=1.204"></script>
+  <script src="src/ai/move-generator.js?v=1.205"></script>
   <script>__captureModule('move-generator');</script>
 
   <!-- Leaf: no src/*.js dependencies. -->
-  <script src="src/ai/con-build-synergy.js?v=1.204"></script>
+  <script src="src/ai/con-build-synergy.js?v=1.205"></script>
   <script>__captureModule('con-build-synergy');</script>
 
   <!-- Depends on: data-loader, command-builder -->
-  <script src="src/ai/monument-incentive.js?v=1.204"></script>
+  <script src="src/ai/monument-incentive.js?v=1.205"></script>
   <script>__captureModule('monument-incentive');</script>
 
   <!-- Depends on: data-loader, command-builder, dsl-parser, executor, board, qst, eval-table, con-build-synergy, monument-incentive -->
-  <script src="src/ai/evaluator.js?v=1.204"></script>
+  <script src="src/ai/evaluator.js?v=1.205"></script>
   <script>__captureModule('evaluator');</script>
 
   <!-- Leaf: no src/*.js dependencies. -->
-  <script src="src/ai/die-priority.js?v=1.204"></script>
+  <script src="src/ai/die-priority.js?v=1.205"></script>
   <script>__captureModule('die-priority');</script>
 
   <!-- Depends on: data-loader, board. -->
-  <script src="src/ai/slot-priority.js?v=1.204"></script>
+  <script src="src/ai/slot-priority.js?v=1.205"></script>
   <script>__captureModule('slot-priority');</script>
 
   <!-- Depends on: die-priority, slot-priority (takes the other 4 AI classes as constructor args instead). -->
-  <script src="src/ai/ai-player.js?v=1.204"></script>
+  <script src="src/ai/ai-player.js?v=1.205"></script>
   <script>__captureModule('ai-player');</script>
 
   <!-- AI LV4 smart onboarding (2026-08-27/28). Leaf: no src/*.js dependencies. -->
-  <script src="src/ai/resource-card-synergy.js?v=1.204"></script>
+  <script src="src/ai/resource-card-synergy.js?v=1.205"></script>
   <script>__captureModule('resource-card-synergy');</script>
 
   <!-- Leaf: no src/*.js dependencies. -->
-  <script src="src/ai/con-job-synergy.js?v=1.204"></script>
+  <script src="src/ai/con-job-synergy.js?v=1.205"></script>
   <script>__captureModule('con-job-synergy');</script>
 
   <!-- Depends on: data-loader, resource-card-synergy, con-job-synergy, rng, setup, game-state -->
-  <script src="src/ai/smart-onboarding.js?v=1.204"></script>
+  <script src="src/ai/smart-onboarding.js?v=1.205"></script>
   <script>__captureModule('smart-onboarding');</script>
 
   <!-- Depends on: rng, setup, turn-flow, qst, scoring, executor, game-state, and (lazily, inside
@@ -1188,18 +1186,18 @@
        (2026-09-13, per user request) to synchronously generate an AI-LV4-vs-AI-LV4 round-1/2 board
        offline (no per-move animation) before the human takes over at round 3 -- every CLI tool under
        tools/ uses this same module under plain Node. -->
-  <script src="src/ai/game-runner.js?v=1.204"></script>
+  <script src="src/ai/game-runner.js?v=1.205"></script>
   <script>__captureModule('game-runner');</script>
 
   <!-- Game master data, embedded as window.GAME_DATA by tools/xlsx_to_json.py (see that file's and
        data-loader.js's comments -- file:// pages can't fetch() game.json, so this is a plain global
        instead, loaded the same way as everything else here). -->
-  <script src="data/game.data.js?v=1.204"></script>
+  <script src="data/game.data.js?v=1.205"></script>
 
   <!-- チュートリアルのセリフ (2026-09-28, per user request: "まずはセリフだけ反映されるようにしてください") --
        チュートリアル.xlsx を tools/tutorial_xlsx_to_js.py で変換した window.TUTORIAL_SERIFU。無くても
        main.js の実装側の本文にフォールバックするだけで動く。main.js より前に読み込むこと。 -->
-  <script src="data/tutorial.data.js?v=1.204"></script>
+  <script src="data/tutorial.data.js?v=1.205"></script>
 
   <!-- Firebase (2026-08-29, online multiplayer + cloud ranking/replay -- see the "オンライン対戦 +
        ランキング/リプレイのクラウド共有" plan). Compat build (namespaced firebase.* API, not the modular
@@ -1210,13 +1208,13 @@
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-storage-compat.js"></script>
-  <script src="firebase-config.js?v=1.204"></script>
-  <script src="online-sync.js?v=1.204"></script>
+  <script src="firebase-config.js?v=1.205"></script>
+  <script src="online-sync.js?v=1.205"></script>
 
-  <script src="ranking.js?v=1.204"></script>
-  <script src="main.js?v=1.204"></script>
+  <script src="ranking.js?v=1.205"></script>
+  <script src="main.js?v=1.205"></script>
   <!-- AIルール相談 (2026-10-20) -- main.jsとは独立、GameStateに触れない。see ai-rules-chat.js。 -->
-  <script src="ai-rules-chat.js?v=1.204"></script>
+  <script src="ai-rules-chat.js?v=1.205"></script>
   <!-- PWA Service Worker登録 (2026-10-22, per user request: "PWA対応させて...オフラインプレイ可能に") --
        'serviceWorker' in navigator でのfeature-detectionのみ(file://で開いた場合、file:オリジンは
        Service Worker登録自体をブラウザが拒否するため、.register()呼び出し自体がrejectされるだけで

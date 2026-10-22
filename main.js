@@ -3495,8 +3495,13 @@ function actionTriggerDown() {
 function actionCount(n) {
   return el('span', 'action-count', String(n));
 }
-function actionSuffix(text) {
-  return el('span', 'action-suffix', text);
+function actionSuffix(text, mobileText) {
+  const node = el('span', 'action-suffix', text);
+  // mobileText (2026-10-22, per user request: "スマホ版 赤青黄→追加色ダイス を 赤青黄→追加色D に") --
+  // CSS側(@media (max-width:760px)参照)がdata-mobile-text付きの要素だけ元のテキストを隠し、こちらを
+  // 代わりに表示する。PC/タブレットは常にtext(元の文言)のまま。
+  if (mobileText) node.dataset.mobileText = mobileText;
+  return node;
 }
 const DIE_FACES = { 1: '⚀', 2: '⚁', 3: '⚂', 4: '⚃', 5: '⚄', 6: '⚅' };
 /** A die-face glyph (⚀-⚅) instead of a plain digit, for anywhere a die's VALUE is shown (as opposed
@@ -3536,7 +3541,7 @@ const ACTION_ICON_BUILDERS = {
   // matches Q001B's own "追加色ダイス" goal (executor.js's EXTRA_D_PLUS_ABC_COUNT) and reads as "this is
   // how you get one". Deliberately scoped to this entry: ADD(D) elsewhere keeps saying 色D (see
   // buildAddResourceIcon), since those cards are about the die itself, not about growing past the start.
-  'CHANGE((A,B,C),D)': () => actionRow([actionDot('A'), actionDot('B'), actionDot('C'), actionArrow(), actionSuffix('追加色ダイス')]),
+  'CHANGE((A,B,C),D)': () => actionRow([actionDot('A'), actionDot('B'), actionDot('C'), actionArrow(), actionSuffix('追加色ダイス', '追加色D')]),
   // 訓練場LV1 (AREA007B)'s own ACTION, "CHANGE(K,D)" or "CHANGE(nK,D)" (2026-08-30, per user request:
   // "訓練場のアイコン ○2→追加色ダイス にして", after the K cost changed from 1 to 2 -- see
   // forcedTrainingGroundMove's own doc for the matching AI-side change) -- used to be a plain exact-match
@@ -3853,7 +3858,7 @@ function buildChangeQuantityIcon(actionText) {
 function buildChangeToColorDieIcon(actionText) {
   const match = /^CHANGE\((\d*)K,D\)$/.exec(actionText || '');
   if (!match) return null;
-  return actionRow([...resourceItemNodes(match[1], 'K'), actionArrow(), actionSuffix('追加色ダイス')]);
+  return actionRow([...resourceItemNodes(match[1], 'K'), actionArrow(), actionSuffix('追加色ダイス', '追加色D')]);
 }
 
 /** CHANGE(nX,(item1,item2,...)) -- pay a single resource, gain a fixed GROUP of resources all at once
@@ -14736,7 +14741,7 @@ function setupHeroWidthObserver() {
  * active表示、スワイプ検出だけを担当する。PC/タブレット(#mobile-tab-switcherがhidden)では
  * タブボタン自体が存在しないクリックも発生せず、呼ばれても実質無害。 */
 let mobileActiveTab = 'shop';
-const MOBILE_TAB_ORDER = ['shop', 'board', 'players', 'cards'];
+const MOBILE_TAB_ORDER = ['quest', 'shop', 'board', 'players', 'cards', 'settings'];
 function applyMobileActiveTab(tab) {
   if (!MOBILE_TAB_ORDER.includes(tab)) return;
   mobileActiveTab = tab;
@@ -14778,28 +14783,18 @@ function setupMobileTabSystem() {
   }, { passive: true });
 }
 
-/** クエスト確認モーダル (2026-10-22, per user request: "クエストは ボタンで別に表示") -- #mobile-qst-button
- * タップで.qst-panel実物(#qst-slots/#qst-legendを含む、renderQstsが毎回ここへ直接書き込んでいる)を
- * #mobile-qst-overlay-slotへ移動して表示、閉じる時は元の位置(.shop-row__combined)へ戻す。クラスに
- * .card-inst-overlayを使うことで、既存のsetupOverlayScrollLock(iPad Safariのスクロール固定対策)が
- * MutationObserver経由で自動的に効く。 */
-function setupMobileQstModal() {
-  const overlay = document.getElementById('mobile-qst-overlay');
-  const slot = document.getElementById('mobile-qst-overlay-slot');
-  const qstPanelHomeParent = document.querySelector('.shop-row__combined');
-  function openMobileQst() {
-    const qstPanel = document.querySelector('.qst-panel');
-    if (qstPanel) slot.appendChild(qstPanel);
-    overlay.hidden = false;
-  }
-  function closeMobileQst() {
-    const qstPanel = slot.querySelector('.qst-panel');
-    if (qstPanel && qstPanelHomeParent) qstPanelHomeParent.appendChild(qstPanel);
-    overlay.hidden = true;
-  }
-  document.getElementById('mobile-qst-button').addEventListener('click', openMobileQst);
-  document.getElementById('mobile-qst-close-button').addEventListener('click', closeMobileQst);
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) closeMobileQst(); });
+/** クエストタブ (2026-10-22, per user request: "ショップ エリア...の左にクエストを作り そこから
+ * クエストが見れるように ショップの上にあるクエスト確認はとる" -- 以前の別ボタン+モーダル方式から
+ * 独立タブへ変更) -- .qst-panel実物(#qst-slots/#qst-legendを含む、renderQstsが毎回ここへ直接書き込んで
+ * いる)を、スマホ幅の時だけ#mobile-quest-tab(#shopsの外、own doc参照)へ一度だけ移動する。PC/タブレット
+ * (760px超)では何もせず、.qst-panelは従来通り#shops内のインライン位置に留まる。ページ読み込み後の
+ * ビューポート幅を基準に一度だけ判定する(フルスクリーンPCブラウザをスマホ幅までリサイズし直す、という
+ * まれなケースはカバーしない -- 他の幅依存セットアップ処理と同じ割り切り)。 */
+function setupMobileQuestTab() {
+  if (window.innerWidth > 760) return;
+  const questTab = document.getElementById('mobile-quest-tab');
+  const qstPanel = document.querySelector('.qst-panel');
+  if (questTab && qstPanel) questTab.appendChild(qstPanel);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -14809,7 +14804,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupOverlayScrollLock();
   setupHeroWidthObserver();
   setupMobileTabSystem();
-  setupMobileQstModal();
+  setupMobileQuestTab();
   render(STATE);
   autoScrollToBottomOnStart();
 
