@@ -5980,3 +5980,11 @@ body.tutorial-mode .change-highlight {
     gap: clamp(10px, calc((100vw - 622px) / 2), 32px);
   }
 }
+
+/* スマホ版: エリア拡大画面の赤い矢印と支配カードの間の隙間を半分に (2026-10-22, per user request「青まる
+   つけた部分の隙間を半分に」) -- 隙間は約12px(矢印SVG下部の余白約11px+gap)、カードを6px上へ寄せる。 */
+@media (max-width: 760px) {
+  .area-tier-up-connector__arrow {
+    margin-bottom: -6px;
+  }
+}
