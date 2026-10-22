@@ -7616,6 +7616,57 @@ function renderPlayers(state, next) {
   });
 }
 
+/** スマホ版「エリア」タブ専用、盤面の下に自分のダイス/資源を1列表示する (2026-10-22, per user request:
+ * "エリアの下に自分のダイスと資源を1列に表示して" -- 「そうすればそのダイスをクリックしてスロットに
+ * おける」per user説明通り、#playersの中のパネルとは別に、本物の(クリックで選択できる)ダイス要素を
+ * ここにも描画する。#playersはスマホではタブ切り替えで隠れるが、盤面にダイスを置くにはタブを切り替えず
+ * ここから直接選択できる必要があるため。renderDie/renderResourceBadgeはrenderPlayersと共通の再利用可能な
+ * ヘルパー関数(renderPlayers自身は個別チュートリアル演出が大量に絡むため、全体を使い回さずこちらは
+ * ダイス選択の核となる部分だけを簡略に再実装している -- selectedDieIdsは共有のグローバル状態なので、
+ * ここでの選択は#players側の表示/盤面プレビューと常に整合する)。PC/タブレットでも常時呼ばれるが、
+ * #mobile-own-row自体がdisplay:noneなので見た目には一切影響しない。 */
+function renderMobileOwnDiceRow(state, next) {
+  const container = document.getElementById('mobile-own-row');
+  container.innerHTML = '';
+  const canPlaceDiceFor = actingHumanPlayerId(state, next);
+  const player = state.players.find((p) => p.id === canPlaceDiceFor);
+  if (!player) return;
+  const resourcesEl = el('div', 'mobile-own-row__resources');
+  for (const resource of ['K', 'A', 'B', 'C', 'Z', 'BZ', 'VP']) {
+    const count = player.resources[resource] || 0;
+    if (count > 0) resourcesEl.appendChild(renderResourceBadge(resource, count, false, true));
+  }
+  container.appendChild(resourcesEl);
+  const diceEl = el('div', 'mobile-own-row__dice');
+  const playerIsWildcard = boardMod.hasWildcardDice(state, INDEX, player.id);
+  for (const die of player.dice) {
+    if (die.placedMapId) continue;
+    const dieWildcard = boardMod.isDieWildcard(state, INDEX, player.id, die);
+    const dieNode = renderDie({ ...die, color: player.color, wildcard: dieWildcard });
+    if (die.passed) dieNode.classList.add('die--passed');
+    if (player.id === canPlaceDiceFor && !turnActionTaken && !die.passed) {
+      dieNode.classList.add('die--selectable');
+      if (selectedDieIds.includes(die.id)) dieNode.classList.add('die--selected');
+      dieNode.addEventListener('click', () => {
+        const idx = selectedDieIds.indexOf(die.id);
+        const anySelectedIsWildcard = playerIsWildcard
+          || selectedDieIds.some((id) => player.dice.find((d) => d.id === id).isWildcardThisTurn);
+        if (idx !== -1) {
+          selectedDieIds.splice(idx, 1);
+        } else if (selectedDieIds.length === 0 || dieWildcard || anySelectedIsWildcard) {
+          selectedDieIds = [die.id];
+        } else {
+          const prospectiveValues = [...selectedDieIds, die.id].map((id) => player.dice.find((d) => d.id === id).value);
+          if (!hasQualifyingProperSubset(prospectiveValues, MAX_MONUMENT_DICE_THRESHOLD)) selectedDieIds.push(die.id);
+        }
+        render(STATE);
+      });
+    }
+    diceEl.appendChild(dieNode);
+  }
+  container.appendChild(diceEl);
+}
+
 /** Pending manual-mode TAP reactions (2026-07-30, real engine wiring pass 6): whenever a GET event
  * fires (e.g. from a die placement's ADD effect, or a free action's own gain), executor.
  * emitAndResolve auto-resolves any auto-mode card's ON(GET(...),...) TAP reaction but queues a
@@ -13698,6 +13749,7 @@ function render(state) {
   renderShops(state);
   renderBoard(state, next);
   renderPlayers(state, next);
+  renderMobileOwnDiceRow(state, next);
   renderJobPool(state, next);
   renderJobReplacementChoice(state);
   renderResourceConfirmOverlay(state);
@@ -14676,12 +14728,88 @@ function setupHeroWidthObserver() {
   observer.observe(heroImg);
 }
 
+/** スマホ版ゲーム画面の4タブ切り替え (2026-10-22, per user request: "スマホ版にゲームを対応させたい
+ * フル操作希望 前提条件 PC版を変えない" -- SHOP/エリア/資源置き場/獲得カードの4つ、per user request
+ * "すわいぷで切り替える"+"タップ切り替えも入れたいが...まずはスワイプ前提で作って 場所に余裕がありそうなら
+ * タップ切り替えも作る")。実際の表示切り替えはCSS側(#app[data-mobile-active-tab]、@media
+ * (max-width:760px)参照)が行う -- ここではmobileActiveTab状態の更新と#mobile-tab-switcherボタンの
+ * active表示、スワイプ検出だけを担当する。PC/タブレット(#mobile-tab-switcherがhidden)では
+ * タブボタン自体が存在しないクリックも発生せず、呼ばれても実質無害。 */
+let mobileActiveTab = 'shop';
+const MOBILE_TAB_ORDER = ['shop', 'board', 'players', 'cards'];
+function applyMobileActiveTab(tab) {
+  if (!MOBILE_TAB_ORDER.includes(tab)) return;
+  mobileActiveTab = tab;
+  document.getElementById('app').dataset.mobileActiveTab = tab;
+  document.querySelectorAll('.mobile-tab-switcher__btn').forEach((btn) => {
+    btn.classList.toggle('mobile-tab-switcher__btn--active', btn.dataset.tabTarget === tab);
+  });
+}
+function setupMobileTabSystem() {
+  document.querySelectorAll('.mobile-tab-switcher__btn').forEach((btn) => {
+    btn.addEventListener('click', () => applyMobileActiveTab(btn.dataset.tabTarget));
+  });
+  applyMobileActiveTab(mobileActiveTab);
+  // スワイプ検出 (2026-10-22, per user request「すわいぷで切り替える」) -- {passive:true}のみ使い、
+  // preventDefault()は一切呼ばない -- ページの縦スクロール(本来の挙動)をタッチ中は一切妨げず、指を離した
+  // 瞬間(touchend)に横移動量が縦移動量より明確に大きい場合だけタブを切り替える、という後判定方式。
+  // 横スクロール専用のコンテナを新設してoverflow/touch-actionを個別に制御する方式より実装がシンプルで、
+  // ページスクロールとの competing gesture 問題が原理的に起きない。
+  const swipeTarget = document.getElementById('board-area');
+  let touchStartX = null;
+  let touchStartY = null;
+  swipeTarget.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) { touchStartX = null; return; }
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+  }, { passive: true });
+  swipeTarget.addEventListener('touchend', (e) => {
+    if (touchStartX === null) return;
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - touchStartX;
+    const dy = touch.clientY - touchStartY;
+    touchStartX = null;
+    touchStartY = null;
+    const MIN_SWIPE_PX = 60;
+    if (Math.abs(dx) < MIN_SWIPE_PX || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    const currentIdx = MOBILE_TAB_ORDER.indexOf(mobileActiveTab);
+    if (dx < 0 && currentIdx < MOBILE_TAB_ORDER.length - 1) applyMobileActiveTab(MOBILE_TAB_ORDER[currentIdx + 1]);
+    else if (dx > 0 && currentIdx > 0) applyMobileActiveTab(MOBILE_TAB_ORDER[currentIdx - 1]);
+  }, { passive: true });
+}
+
+/** クエスト確認モーダル (2026-10-22, per user request: "クエストは ボタンで別に表示") -- #mobile-qst-button
+ * タップで.qst-panel実物(#qst-slots/#qst-legendを含む、renderQstsが毎回ここへ直接書き込んでいる)を
+ * #mobile-qst-overlay-slotへ移動して表示、閉じる時は元の位置(.shop-row__combined)へ戻す。クラスに
+ * .card-inst-overlayを使うことで、既存のsetupOverlayScrollLock(iPad Safariのスクロール固定対策)が
+ * MutationObserver経由で自動的に効く。 */
+function setupMobileQstModal() {
+  const overlay = document.getElementById('mobile-qst-overlay');
+  const slot = document.getElementById('mobile-qst-overlay-slot');
+  const qstPanelHomeParent = document.querySelector('.shop-row__combined');
+  function openMobileQst() {
+    const qstPanel = document.querySelector('.qst-panel');
+    if (qstPanel) slot.appendChild(qstPanel);
+    overlay.hidden = false;
+  }
+  function closeMobileQst() {
+    const qstPanel = slot.querySelector('.qst-panel');
+    if (qstPanel && qstPanelHomeParent) qstPanelHomeParent.appendChild(qstPanel);
+    overlay.hidden = true;
+  }
+  document.getElementById('mobile-qst-button').addEventListener('click', openMobileQst);
+  document.getElementById('mobile-qst-close-button').addEventListener('click', closeMobileQst);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) closeMobileQst(); });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   seedDebugHistoryIfNeeded();
   // チュートリアル中だけ「光る」を強調する(style.cssのbody.tutorial-mode .change-highlight参照)。
   if (tutorialModeActive) document.body.classList.add('tutorial-mode');
   setupOverlayScrollLock();
   setupHeroWidthObserver();
+  setupMobileTabSystem();
+  setupMobileQstModal();
   render(STATE);
   autoScrollToBottomOnStart();
 

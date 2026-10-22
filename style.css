@@ -5247,6 +5247,137 @@ body.tutorial-mode .change-highlight {
    PC/タブレット幅(480pxより広い画面)は上のルールのまま一切変更しない(per user request:
    "PCは絶対に変わらないように" / "タブレットも" -- 480pxはiPadの最小幅768pxより十分小さく、
    タブレットには絶対に適用されない)。 */
+/* ===== スマホ版ゲーム画面 (2026-10-22, per user request: "スマホ版にゲームを対応させたい フル操作希望
+   前提条件 PC版を変えない") =====
+   #app本編(盤面/ショップ/プレイヤー/所持カード)を、幅760px以下でSHOP/エリア/資源置き場/獲得カードの
+   4タブに切り替える形に再構成する。PC/タブレット(761px以上)はこの@media自体が適用されないため完全に
+   無変更 -- 既存の#game-layoutの1400px以下スタック化(L319付近)や各要素のCSSは一切触っていない。
+   表示切替は data-mobile-tab属性を持つ要素を #app[data-mobile-active-tab] の値で出し分けるだけで、
+   main.js側(setupMobileTabSystem/applyMobileActiveTab)はクラス/属性の更新のみ担当し、DOM構造自体は
+   変えない(#job-pool/#player-cards-groupsはそのまま#player-cardsの子、.player-cards__header(ターン
+   開始に戻す/直前キャンセル/ラウンドパス/ナビ/AI進行/役職トグル)は data-mobile-tab属性を持たないため
+   常にどのタブでも表示されたままになる)。 */
+@media (max-width: 760px) {
+  /* #game-layoutは1400px以下でgrid-template-columns:1frに切り替わる(既存ルール)が、1fr単独だと
+     グリッドトラックの自動最小サイズが「中身のmin-content幅」になり、子孫の誰かが画面幅を超える
+     intrinsic widthを持つと#board-area/#player-cardsどちらもその幅までグリッドごと広がってしまう
+     (スマホ幅で初めて顕在化した、minmax(0,1fr)を使わない1fr単体トラックの既知の罠)。minmax(0,1fr)に
+     変えることでトラックが画面幅に正しく収まるようになる。 */
+  #game-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  #mobile-tab-switcher[hidden] {
+    display: flex;
+    gap: 4px;
+    position: sticky;
+    top: 0;
+    z-index: 15;
+    background: var(--surface);
+    padding: 6px;
+    margin-bottom: 6px;
+    border-radius: 8px;
+  }
+  .mobile-tab-switcher__btn {
+    flex: 1 1 0;
+    min-width: 0;
+    font-size: 12px;
+    padding: 8px 2px;
+    border: none;
+    border-radius: 6px;
+    background: var(--surface-sunken);
+    color: var(--text, #eee);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .mobile-tab-switcher__btn--active {
+    background: var(--accent, #4a90d9);
+    color: #fff;
+    font-weight: 700;
+  }
+
+  /* タブ切替本体 -- 4つの値それぞれについて、アクティブでないタブのdata-mobile-tab要素を隠す。 */
+  #app:not([data-mobile-active-tab="shop"]) [data-mobile-tab="shop"] { display: none; }
+  #app:not([data-mobile-active-tab="board"]) [data-mobile-tab="board"] { display: none; }
+  #app:not([data-mobile-active-tab="players"]) [data-mobile-tab="players"] { display: none; }
+  #app:not([data-mobile-active-tab="cards"]) [data-mobile-tab="cards"] { display: none; }
+
+  /* クエスト確認ボタン (per user request: "クエストは ボタンで別に表示") -- インラインの.qst-panelは
+     隠し、ボタン経由のモーダル(#mobile-qst-overlay、main.jsのsetupMobileQstModal)に差し替える。 */
+  .mobile-qst-button[hidden] {
+    display: block;
+    width: 100%;
+    margin-bottom: 8px;
+    padding: 10px;
+    border: none;
+    border-radius: 8px;
+    background: var(--accent, #4a90d9);
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .shop-row__combined .qst-panel {
+    display: none;
+  }
+  #mobile-qst-overlay .qst-panel {
+    display: flex;
+    width: 100%;
+  }
+
+  /* エリアタブ: 盤面上段を横一列に (per user request: "エリアの上段 スロットをすべて横一列にする
+     それで縦幅が短くなるはず 横は画面からはみ出してもいい") -- flex-wrap:nowrap+overflow-x:autoで
+     画面からはみ出た分は横スクロールに回す。隙間も詰めて少しでも多くのタイルを一度に見せる。
+     #board/#board-areaにmin-width:0が必要 (このままだと.board-rowの中身(固定width92px×5枚)の
+     本来の内容幅がそのまま親へ伝わってしまい、overflow-x:autoが効かずに#board-area自体(ひいては
+     兄弟の#players/#shopsまで)が画面幅を超えて広がってしまう、という典型的なflexboxの罠の対策)。 */
+  #board,
+  #board-area {
+    min-width: 0;
+  }
+  .board-row:first-child {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 4px;
+    min-width: 0;
+  }
+  .board-row:first-child > .map-tile {
+    flex: 0 0 auto;
+    width: 92px;
+  }
+
+  /* 自分のダイス/資源の1列表示 (per user request: "エリアの下に自分のダイスと資源を1列に表示して") */
+  .mobile-own-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px;
+    margin-top: 8px;
+    background: var(--surface-sunken);
+    border-radius: 8px;
+  }
+  .mobile-own-row__resources,
+  .mobile-own-row__dice {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  /* 資源置き場タブ: 4人分を横並びでなく縦積みに(各パネルのmin-width:220pxがスマホ幅と衝突するため)。 */
+  #players {
+    flex-direction: column;
+  }
+  .player-panel {
+    min-width: 0;
+  }
+
+  /* 所持カードサイドバー: #game-layoutは既存の1400px以下ルールで1カラム化済み、ここでは内部の余白のみ
+     スマホ幅向けに詰める。 */
+  .player-cards__header {
+    flex-wrap: wrap;
+  }
+}
+
 /* 幅480px以下(スマホ縦持ち) OR 高さ480px以下(スマホ横持ち -- 回転すると幅がこのブレークポイントを
    超えてしまうため、高さ基準でも拾う。タブレットの横向き(例: iPad landscape 1024x768)は幅・高さ
    どちらも480pxを超えるので誤って適用されない、2026-10-21に確認済み)。 */
