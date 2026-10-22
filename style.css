@@ -6219,3 +6219,10 @@ body.tutorial-mode .change-highlight {
   zoom: 1.6;
   filter: drop-shadow(0 6px 16px rgba(16, 24, 40, 0.35));
 }
+
+/* AIのダイス移動演出で飛んでいる複製 (2026-10-22, main.jsのanimateAiDiceMoves参照)。 */
+.die--flying {
+  z-index: 260;
+  pointer-events: none;
+  box-sizing: border-box;
+}

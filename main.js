@@ -6240,6 +6240,7 @@ function renderBoard(state, next) {
             color: colorForPlayer(state, topOccupant.playerId),
             wildcard: !!topOccupant.isWildcard,
           });
+          occupantDieNode.dataset.dieKey = `${topOccupant.playerId}:${topOccupant.dieId}`;
           // slot_dice_value_rule_intro_2の「光る」演出 (2026-09-27, per user request: "スロットに置かれて
           // いるダイスをすべて光らせる") -- どのプレイヤーが置いたかは問わず、盤面上のすべての配置済み
           // ダイスを光らせる(tutorialPlacedDiceGlowing's own doc)。
@@ -7593,6 +7594,7 @@ function renderPlayers(state, next) {
       // uniformly, but a B001B-flagged die is wildcard on its own even for a non-道化 player.
       const dieWildcard = boardMod.isDieWildcard(state, INDEX, player.id, die);
       const dieNode = renderDie({ ...die, color: player.color, wildcard: dieWildcard });
+      dieNode.dataset.dieKey = `${player.id}:${die.id}`; // AIのダイス移動演出用(animateAiDiceMoves参照)
       // Passed (2026-08-03, see board.passDie) -- stays visible in hand so it's clear where it went,
       // but not selectable again until next round's reset.
       if (die.passed) dieNode.classList.add('die--passed');
@@ -7773,6 +7775,7 @@ function renderMobileOwnDiceRow(state, next) {
     if (die.placedMapId) continue;
     const dieWildcard = boardMod.isDieWildcard(state, INDEX, player.id, die);
     const dieNode = renderDie({ ...die, color: player.color, wildcard: dieWildcard });
+    dieNode.dataset.dieKey = `${player.id}:${die.id}`; // AIのダイス移動演出用(animateAiDiceMoves参照)
     if (die.passed) dieNode.classList.add('die--passed');
     if (aiView && aiPreHighlightMove && aiPreHighlightMove.playerId === player.id && aiPreHighlightMove.dieId === die.id) {
       dieNode.classList.add('change-highlight--pending');
@@ -13968,7 +13971,68 @@ function renderTutorialLogOverlay() {
   nextBtn.disabled = tutorialLogViewIndex <= 0;
 }
 
+/** AIがダイスを置いた時、手元のダイスからスロットまでダイスがすばやく移動する演出 (2026-10-22, per user
+ * request: "AIの手番でダイスを置くとき同じ要領でダイスがスロットまで素早く移動するようにできますか" +
+ * 回答「すべて(の端末)」「スロットが見える位置まで自動でスクロールしてから動かす」「複数のダイスは全部
+ * 同時に」「0.25秒」) -- render()の前に画面上の手元ダイス(data-die-key付き)の位置を覚え、描き終わった後に
+ * 新しくスロットへ入ったAIのダイスがあれば、元の位置から複製を飛ばしてスロットへ着地させる(本物は着地まで
+ * 隠す)。見た目だけの演出で、ゲームの状態は変えない。人間のダイス・リプレイ表示中は対象外。 */
+const AI_DIE_MOVE_MS = 250;
+function captureDieRects() {
+  const handRects = new Map();
+  const placedKeys = new Set();
+  document.querySelectorAll('.die[data-die-key]').forEach((node) => {
+    if (node.closest('.slot')) { placedKeys.add(node.dataset.dieKey); return; }
+    const rect = node.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0 && !handRects.has(node.dataset.dieKey)) handRects.set(node.dataset.dieKey, rect);
+  });
+  return { handRects, placedKeys };
+}
+function animateAiDiceMoves(before) {
+  if (replayMode) return;
+  document.querySelectorAll('.slot .die[data-die-key]').forEach((target) => {
+    const key = target.dataset.dieKey;
+    if (before.placedKeys.has(key) || !before.handRects.has(key)) return;
+    if (!isAiPlayer(key.split(':')[0])) return;
+    const from = before.handRects.get(key);
+    // スロットが横スクロールの外にあれば見える位置までスクロールしてから測る。
+    const board = target.closest('#board');
+    if (board && board.scrollWidth > board.clientWidth) {
+      const boardRect = board.getBoundingClientRect();
+      const slotRect = target.getBoundingClientRect();
+      if (slotRect.left < boardRect.left) board.scrollLeft -= boardRect.left - slotRect.left + 8;
+      else if (slotRect.right > boardRect.right) board.scrollLeft += slotRect.right - boardRect.right + 8;
+    }
+    const to = target.getBoundingClientRect();
+    if (to.width === 0) return;
+    const flyer = target.cloneNode(true);
+    flyer.classList.add('die--flying');
+    Object.assign(flyer.style, {
+      position: 'fixed', left: `${to.left}px`, top: `${to.top}px`, width: `${to.width}px`, height: `${to.height}px`, margin: '0',
+    });
+    document.body.appendChild(flyer);
+    target.style.visibility = 'hidden';
+    const dx = from.left + from.width / 2 - (to.left + to.width / 2);
+    const dy = from.top + from.height / 2 - (to.top + to.height / 2);
+    const scale = from.width / to.width;
+    const animation = flyer.animate([
+      { transform: `translate(${dx}px, ${dy}px) scale(${scale})` },
+      { transform: 'translate(0, 0) scale(1)' },
+    ], { duration: AI_DIE_MOVE_MS, easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)' });
+    animation.onfinish = () => {
+      flyer.remove();
+      target.style.visibility = '';
+    };
+  });
+}
+
 function render(state) {
+  const diceBefore = captureDieRects();
+  renderCore(state);
+  animateAiDiceMoves(diceBefore);
+}
+
+function renderCore(state) {
   // Replay mode takes over the whole screen with its own render path -- see this file's "Move-by-move
   // game replay" section for why that's a separate function rather than a branch further down (render()
   // itself is full of live-play-only side effects -- AI pumping, checkpoint recording, turn bookkeeping
