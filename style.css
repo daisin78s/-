@@ -5353,14 +5353,31 @@ body.tutorial-mode .change-highlight {
      縦スワイプでプレイヤーの切り替え プレイヤーがジョブをとった後は残りのジョブは表示しない"、
      main.jsのrenderMobileCardsView参照)。名前ボタンは入りきらなければ2行に折り返して小さく(per user
      「枠に入らなくなったら2行にしてサイズを小さくすれば」)。 */
+  /* 名前ボタンは画面右端に縦並びで固定 (2026-10-22, per user request「獲得カードのプレイヤー名 上では
+     なく右に表示して」) -- エリアタブのダイス置き場と同じく画面右端に固定し、カードをスクロールしても
+     常に見える。上のタブバーの下から始め、獲得カードタブの間だけ#appの右に欄の幅分の余白をとる。 */
   #mobile-cards-player-switcher {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     gap: 4px;
-    margin-bottom: 8px;
+    position: fixed;
+    top: 58px;
+    right: 0;
+    width: 84px;
+    padding: 6px;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    border-bottom-left-radius: 8px;
+    z-index: 20;
+  }
+  /* 余白は#player-cards(カード側)だけに付ける -- #app全体に付けると上のタブバーまで狭くなり、ラベルが
+     「クエ…」のように切れてしまったため。 */
+  #app[data-mobile-active-tab="cards"] #player-cards {
+    margin-right: 86px;
   }
   .mobile-cards-player-switcher__btn {
-    flex: 1 1 70px;
+    flex: 0 0 auto;
     display: flex;
     align-items: center;
     justify-content: center;
