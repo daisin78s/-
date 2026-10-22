@@ -2918,6 +2918,35 @@ function renderCardListFlatCategory(key, container) {
     grid.appendChild(buildCardListCell(faceId, config.isQst));
   }
   container.appendChild(grid);
+  if (config.isQst) setTimeout(() => fitCardListQstGridToScreen(grid), 0);
+}
+
+/** スマホ版: クエスト一覧を1画面に収める (2026-10-22, per user request「スマホのクエスト一覧 ... 3枚並べると
+ * 今も画面の左右からはみ出します 1画面になるように直して」) -- クエストカードは1枚244px幅と広く、4列×2段の
+ * ままではスマホの幅に入らない。列数を1〜枚数で全部試し、表示欄(.card-list-body)にスクロール無しで収まる
+ * 倍率が一番大きくなる列数を選んで、CSS zoomでその倍率に縮める(横向きなら4列×2段、縦向きなら2列×4段
+ * 程度になる)。大きくはしない。PC/タブレット(幅761px以上)は従来通り。描画完了後に測るためsetTimeoutから呼ぶ。 */
+function fitCardListQstGridToScreen(grid) {
+  if (window.innerWidth > 760 || !grid.isConnected) return;
+  const body = grid.closest('.card-list-body');
+  const cells = [...grid.children];
+  if (!body || cells.length === 0) return;
+  grid.style.zoom = '';
+  const cardW = 244;
+  const cardH = Math.max(...cells.map((c) => c.getBoundingClientRect().height));
+  const gap = parseFloat(getComputedStyle(grid).columnGap) || 0;
+  const availW = body.clientWidth - 2;
+  const availH = body.clientHeight - 2;
+  let best = { cols: cells.length, scale: 0 };
+  for (let cols = 1; cols <= cells.length; cols++) {
+    const rows = Math.ceil(cells.length / cols);
+    const w = cols * cardW + (cols - 1) * gap;
+    const h = rows * cardH + (rows - 1) * gap;
+    const scale = Math.min(1, availW / w, availH / h);
+    if (scale > best.scale) best = { cols, scale };
+  }
+  grid.style.gridTemplateColumns = `repeat(${best.cols}, ${cardW}px)`;
+  if (best.scale < 1) grid.style.zoom = String(Math.floor(best.scale * 1000) / 1000);
 }
 
 /** モニュメント一覧だけの特別扱い (2026-10-10, per user request: "モニュメントカード一覧 晩餐会の左側に
@@ -9018,6 +9047,17 @@ function maybeStartRound1(state) {
   // next render after this call returns, so no need to record one here too.
 }
 
+/** TAPで横に倒れることが無いカードか (2026-10-22, per user「タップできないカードの隣は開ける必要がない
+ * のでは」→「不揃いでもいい スマホのみ詰めて」) -- カードデータにTAP欄が無い(自分でTAPする能力も、条件で
+ * 自動的に倒れるON(...)型の能力も無い)、かつ今倒れていないカード。スマホ版ではこのカードの枠を、倒した時用の
+ * 正方形(150px)からカードの大きさまで縮める(style.cssの.owned-card-cell--untappable参照)。 */
+function isNeverTappedCard(cardState) {
+  if (!cardState || cardState.tapped) return false;
+  let row;
+  try { row = dataLoaderMod.getCardRow(INDEX, cardState.currentFaceId); } catch (e) { return false; }
+  return !row.TAP;
+}
+
 function renderPlayerCards(state, next) {
   const activePlayerId = next ? next.playerId : null;
   const container = document.getElementById('player-cards-groups');
@@ -9095,6 +9135,7 @@ function renderPlayerCards(state, next) {
         tapped: cardState.tapped, showEffect: true, allowTextFallback: false, suppressConNote,
       });
       const cell = el('div', cardNode.classList.contains('shop-card--tall') ? 'owned-card-cell owned-card-cell--tall' : 'owned-card-cell');
+      if (isNeverTappedCard(cardState)) cell.classList.add('owned-card-cell--untappable');
       // 変化ハイライト (2026-08-16) -- this JOB/CON was drafted since the viewing human's last turn ended.
       // replayHighlight (2026-09-09) -- the リプレイ変化ハイライト, see computeReplayChangeHighlight's own
       // doc; independent of changeHighlightDiff (live-only) so both can be checked unconditionally here
@@ -9202,6 +9243,7 @@ function renderPlayerCards(state, next) {
       if (!cardState) continue;
       const tall = isNormalDeckCard(physicalId); // A/B/C decks: taller, with effect text (confirmed)
       const cell = el('div', tall ? 'owned-card-cell owned-card-cell--tall' : 'owned-card-cell');
+      if (isNeverTappedCard(cardState)) cell.classList.add('owned-card-cell--untappable');
       // 変化ハイライト (2026-08-16) -- this card was built/acquired since the viewing human's last turn ended.
       // replayHighlight (2026-09-09) -- the リプレイ変化ハイライト, see computeReplayChangeHighlight's own
       // doc; independent of changeHighlightDiff (live-only) so both can be checked unconditionally here

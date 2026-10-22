@@ -6160,3 +6160,19 @@ body.tutorial-mode .change-highlight {
 #card-list-overlay .card-inst-modal__header {
   justify-content: flex-end;
 }
+
+/* 制約一覧を中央寄せに (2026-10-22, per user request「PCの制約一覧 ...制約一覧だけ左寄せです 中央に」) --
+   表/裏の2段(.card-list-con-row)が左詰めだったので、段ごと画面の中央に寄せる(他の一覧と同じ見た目)。 */
+.card-list-con-wrap {
+  align-items: center;
+}
+
+/* スマホ版: TAPで倒れることが無いカードは、倒した時用の正方形の枠をやめてカードの大きさまで詰める
+   (2026-10-22, per user「タップできないカードの隣は開ける必要がないのでは」「不揃いでもいい スマホのみ
+   詰めて」) -- main.jsのisNeverTappedCard参照。TAPできるカードは従来通り正方形の枠のまま。 */
+@media (max-width: 760px) {
+  #player-cards .owned-card-cell.owned-card-cell--untappable {
+    width: auto;
+    height: auto;
+  }
+}
