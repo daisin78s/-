@@ -5777,6 +5777,20 @@ body.tutorial-mode .change-highlight {
     max-height: calc(100vh - 24px);
     max-height: calc(100dvh - 24px);
   }
+  /* カードリスト下のボタン列を1行に (2026-10-22, per user request: "スマホ版 資源や用語一覧 制約一覧など
+     からすべて一覧をとる ゲームに戻るも削除" "モニュメントカード→モニュメント"、余白を詰めるのはper user
+     選択「余白も詰める」) -- 横向き幅740px程度以上なら1行、それより狭い機種は2行に折り返す。ゲームへは
+     右上の×で戻れる。 */
+  .card-list-nav__mobile-hide,
+  .card-list-nav__button--exit {
+    display: none;
+  }
+  .card-list-nav {
+    gap: 4px;
+  }
+  .card-list-nav__button {
+    padding: 8px 6px;
+  }
   .resource-confirm-buttons {
     position: sticky;
     bottom: 0;

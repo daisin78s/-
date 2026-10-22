@@ -2791,18 +2791,29 @@ function setCardListView(key) {
 
 /** Bottom nav bar order, per user request. 'resource' is also the view opened by default. null key
  * marks "ゲームに戻る" (closes the overlay instead of switching view). */
+// labelの中の[]で囲んだ部分はスマホでは隠す (2026-10-22, per user request: "スマホ版 資源や用語一覧
+// 制約一覧などからすべて一覧をとる ゲームに戻るも削除" "モニュメントカード→モニュメント" -- 下のボタン
+// 列を1行に収めるため。隠すのはCSS(.card-list-nav__mobile-hide、スマホ幅/低い画面のみ)なので、PC/
+// タブレットの表示は変わらず、スマホを回転させてもその場で切り替わる)。
 const CARD_LIST_NAV = [
-  { key: 'resource', label: '資源や用語一覧' },
-  { key: 'con', label: '制約一覧' },
-  { key: 'job', label: 'ジョブ一覧' },
-  { key: 'initialResource', label: '初期資源一覧' },
-  { key: 'A', label: '領地カード一覧' },
-  { key: 'B', label: '学問カード一覧' },
-  { key: 'C', label: '人材カード一覧' },
-  { key: 'monument', label: 'モニュメントカード一覧' },
-  { key: 'qst', label: 'クエスト一覧' },
+  { key: 'resource', label: '資源や用語[一覧]' },
+  { key: 'con', label: '制約[一覧]' },
+  { key: 'job', label: 'ジョブ[一覧]' },
+  { key: 'initialResource', label: '初期資源[一覧]' },
+  { key: 'A', label: '領地カード[一覧]' },
+  { key: 'B', label: '学問カード[一覧]' },
+  { key: 'C', label: '人材カード[一覧]' },
+  { key: 'monument', label: 'モニュメント[カード一覧]' },
+  { key: 'qst', label: 'クエスト[一覧]' },
   { key: null, label: 'ゲームに戻る' },
 ];
+function buildCardListNavLabel(btn, label) {
+  for (const part of label.split(/(\[[^\]]*\])/)) {
+    if (!part) continue;
+    if (part.startsWith('[')) btn.appendChild(el('span', 'card-list-nav__mobile-hide', part.slice(1, -1)));
+    else btn.appendChild(document.createTextNode(part));
+  }
+}
 
 /** JOB/初期資源(RESOURCE)/モニュメント(M)/QST -- each sheet's rows already ARE the individual faces to
  * show (unlike A/B/C, see collectNormalShopFaceIds's own doc), so a single flat grid per category is
@@ -3136,7 +3147,7 @@ function renderCardListOverlay() {
     document.getElementById('card-list-title').textContent = '資源や用語一覧';
     renderCardListResourceCategory(body);
   } else if (cardListView === 'A' || cardListView === 'B' || cardListView === 'C') {
-    document.getElementById('card-list-title').textContent = CARD_LIST_NAV.find((n) => n.key === cardListView).label;
+    document.getElementById('card-list-title').textContent = CARD_LIST_NAV.find((n) => n.key === cardListView).label.replace(/[[\]]/g, '');
     renderCardListAbcCategory(cardListView, body);
   } else if (cardListView === 'con') {
     document.getElementById('card-list-title').textContent = '制約一覧';
@@ -3153,7 +3164,8 @@ function renderCardListOverlay() {
   const nav = document.getElementById('card-list-nav');
   nav.innerHTML = '';
   for (const entry of CARD_LIST_NAV) {
-    const btn = el('button', 'card-list-nav__button', entry.label);
+    const btn = el('button', 'card-list-nav__button');
+    buildCardListNavLabel(btn, entry.label);
     btn.type = 'button';
     if (entry.key === cardListView) btn.classList.add('card-list-nav__button--active');
     // 2026-09-26, per user request: "カードリストの右下のゲームに戻るボタン目立つように色を変えて"
