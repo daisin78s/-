@@ -5518,6 +5518,14 @@ body.tutorial-mode .change-highlight {
   .map-tile__slots {
     flex-wrap: nowrap;
   }
+  /* スロット3個の行を左右中央に (2026-10-22, per user request「エリアの中のスロット 左に隙間があるが
+     右にない 中央ぞろえに」) -- タイル内幅88pxに対しスロット3個+隙間で98px必要なため、右に10px
+     はみ出して右の隙間が無かった。3個以上の行だけ左右に5pxずつ広げて(98px)左右均等にする。
+     2個の行は今まで通り左寄せのまま。 */
+  .map-tile__slots:has(> :nth-child(3)) {
+    margin-left: -5px;
+    margin-right: -5px;
+  }
   .slot {
     flex-shrink: 0;
     width: 30px;
