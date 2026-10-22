@@ -7834,6 +7834,69 @@ function renderMobileOwnDiceRow(state, next) {
   if (turnEndEl.childElementCount > 0) container.appendChild(turnEndEl);
 }
 
+/** スマホ版: AIの手番でカードを獲得したら、そのカードを画面に流して知らせる (2026-10-22, per user request:
+ * "スマホ版 AIの手番の時にカードを獲得したらそれが分かるように 素早く左からカードが流れてきて真ん中で停止
+ * 0.7秒 その後それが素早く右に流れる") -- AIプレイヤーの獲得済みカード(建築で得たA/B/C/モニュメント)を
+ * render毎に前回と比べ、新しく増えたカード、またはLVアップで面が変わったカードを順番に流す(複数なら1枚ずつ
+ * 続けて)。見た目だけの演出で、画面の操作は妨げない(pointer-events:none)。PC/タブレット(幅761px以上)・
+ * リプレイ表示中は流さない。最初のrender(新規/再開直後)は比較の基準を作るだけ。 */
+let lastAiCardFaces = null; // Map playerId -> Map physicalId -> faceId
+const mobileAiCardGainQueue = [];
+let mobileAiCardGainPlaying = false;
+const AI_CARD_GAIN_IN_MS = 200;
+const AI_CARD_GAIN_HOLD_MS = 700;
+const AI_CARD_GAIN_OUT_MS = 200;
+function queueMobileAiCardGainAnimation(state, next) {
+  const current = new Map();
+  for (const player of state.players) {
+    if (!isAiPlayer(player.id)) continue;
+    const faces = new Map();
+    for (const physicalId of player.ownedCardPhysicalIds) {
+      if (!isBuiltCardPhysicalId(physicalId) || !state.cards[physicalId]) continue;
+      faces.set(physicalId, state.cards[physicalId].currentFaceId);
+    }
+    current.set(player.id, faces);
+  }
+  const previous = lastAiCardFaces;
+  lastAiCardFaces = current;
+  if (!previous || replayMode || window.innerWidth > 760 || state.round < 1) return;
+  for (const [playerId, faces] of current) {
+    const before = previous.get(playerId);
+    if (!before) continue;
+    for (const [physicalId, faceId] of faces) {
+      if (before.get(physicalId) !== faceId) mobileAiCardGainQueue.push(faceId);
+    }
+  }
+  playNextMobileAiCardGain();
+}
+function playNextMobileAiCardGain() {
+  if (mobileAiCardGainPlaying || mobileAiCardGainQueue.length === 0) return;
+  mobileAiCardGainPlaying = true;
+  const faceId = mobileAiCardGainQueue.shift();
+  let layer = document.getElementById('ai-card-gain-layer');
+  if (!layer) {
+    layer = el('div', 'ai-card-gain-layer');
+    layer.id = 'ai-card-gain-layer';
+    document.body.appendChild(layer);
+  }
+  layer.innerHTML = '';
+  const holder = el('div', 'ai-card-gain-layer__card');
+  holder.appendChild(buildCardVisual(faceId, { req: factsForFaceId(faceId).req, showEffect: true, allowTextFallback: false, noInteraction: true }));
+  layer.appendChild(holder);
+  const total = AI_CARD_GAIN_IN_MS + AI_CARD_GAIN_HOLD_MS + AI_CARD_GAIN_OUT_MS;
+  const animation = holder.animate([
+    { transform: 'translateX(-100vw)', easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)' },
+    { transform: 'translateX(0)', offset: AI_CARD_GAIN_IN_MS / total },
+    { transform: 'translateX(0)', offset: (AI_CARD_GAIN_IN_MS + AI_CARD_GAIN_HOLD_MS) / total, easing: 'cubic-bezier(0.7, 0, 0.8, 0.2)' },
+    { transform: 'translateX(100vw)' },
+  ], { duration: total, fill: 'forwards' });
+  animation.onfinish = () => {
+    layer.innerHTML = '';
+    mobileAiCardGainPlaying = false;
+    playNextMobileAiCardGain();
+  };
+}
+
 /** スマホ版フリーアクション画面 (2026-10-22, per user request: "エリアのダイス置き場にフリーアクションと
  * いうボタンを作りたい 押すと全画面で今可能なフリーアクションがすべて表示される 右上に大き目の✖があり
  * おすとエリア画面に戻る"、選択: 表示=資源交換+使用料回収+TAPで使えるカード全部 / 実行できる物だけ /
@@ -14088,6 +14151,7 @@ function render(state) {
   renderPlayerCards(state, next);
   renderMobileCardsView(state, next);
   renderMobileFreeActionOverlay(state, next);
+  queueMobileAiCardGainAnimation(state, next);
   // Drains GameState.whiteOverflowEvents into whatever placementMessage this render's own action
   // already produced (2026-08-11, per user request) -- appended, not replacing, so a placement that
   // both fails/succeeds AND happens to overflow a white die (e.g. a CHANGE granting several wD at once,

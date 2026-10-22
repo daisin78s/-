@@ -6199,3 +6199,23 @@ body.tutorial-mode .change-highlight {
 #opening-deal-blocker[hidden] {
   display: none;
 }
+
+/* スマホ版: AIがカードを獲得した時に流れるカード (2026-10-22) -- main.jsのqueueMobileAiCardGainAnimation
+   参照。画面中央に大きめに表示、操作は妨げない。 */
+.ai-card-gain-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 250;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  overflow: hidden;
+}
+.ai-card-gain-layer:empty {
+  display: none;
+}
+.ai-card-gain-layer__card {
+  zoom: 1.6;
+  filter: drop-shadow(0 6px 16px rgba(16, 24, 40, 0.35));
+}
