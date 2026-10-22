@@ -5474,6 +5474,14 @@ body.tutorial-mode .change-highlight {
     width: 14px;
     height: 14px;
   }
+  /* クエスト名の上下の隙間を詰める (2026-10-22, per user request「赤丸の隙間詰めて」、クエスト名の文字の
+     上下) -- 白い帯の高さ約36px→約24px(上6px/下4px→各2px、行の高さ25.5px→文字の1.15倍)。
+     空いた分は下の順位欄(数字と色丸)に回る。 */
+  #mobile-quest-tab .qst-panel .qst-card__goal-line {
+    padding-top: 2px;
+    padding-bottom: 2px;
+    line-height: 1.15;
+  }
 
   /* エリアタブ: 盤面を横一列に (per user request: "エリアの上段 スロットをすべて横一列にする
      それで縦幅が短くなるはず 横は画面からはみ出してもいい") -- flex-wrap:nowrap+overflow-x:autoで
