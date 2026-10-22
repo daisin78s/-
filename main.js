@@ -7635,8 +7635,25 @@ function renderMobileOwnDiceRow(state, next) {
   const container = document.getElementById('mobile-own-row');
   container.innerHTML = '';
   const canPlaceDiceFor = actingHumanPlayerId(state, next);
-  const player = state.players.find((p) => p.id === canPlaceDiceFor);
+  let player = state.players.find((p) => p.id === canPlaceDiceFor);
+  // AIの手番はそのAIのダイス/資源を表示 (2026-10-22, per user request: "AIの手番になったらすぐにエリア
+  // 画面に移動 右側にそのAIのダイス資源を表示 こうすればそのAIがなにをしたのかわかりやすい") -- 見るだけ
+  // (ダイスは選択不可、ターン終了/1手戻るも出さない)。誰のものか分かるよう名前を付け、置く直前のダイスには
+  // renderPlayersと同じ「1手ずつ表示」の事前ハイライト(aiPreHighlightMove)を付ける。
+  let aiView = false;
+  if (!player && state.round >= 1 && next && next.type === 'TURN' && isAiPlayer(next.playerId)) {
+    player = state.players.find((p) => p.id === next.playerId);
+    aiView = !!player;
+  }
   if (!player) return;
+  if (aiView) {
+    const ownerEl = el('div', 'mobile-own-row__owner');
+    const swatch = el('span', 'mobile-cards-player-switcher__swatch');
+    swatch.dataset.color = player.color;
+    ownerEl.appendChild(swatch);
+    ownerEl.appendChild(document.createTextNode(player.name));
+    container.appendChild(ownerEl);
+  }
   // 並び順: 色ダイス→白ダイス→資源 を横一列 (2026-10-22, per user request: "エリアの画面のときだけ
   // 一番下に自分の色ダイス 白ダイス 資源を横一列に表示 ...上に出ているクエスト ショップの様に常に
   // 出ている" -- 画面下端に固定、style.cssの.mobile-own-row参照)。
@@ -7657,6 +7674,9 @@ function renderMobileOwnDiceRow(state, next) {
     const dieWildcard = boardMod.isDieWildcard(state, INDEX, player.id, die);
     const dieNode = renderDie({ ...die, color: player.color, wildcard: dieWildcard });
     if (die.passed) dieNode.classList.add('die--passed');
+    if (aiView && aiPreHighlightMove && aiPreHighlightMove.playerId === player.id && aiPreHighlightMove.dieId === die.id) {
+      dieNode.classList.add('change-highlight--pending');
+    }
     if (player.id === canPlaceDiceFor && !turnActionTaken && !die.passed) {
       dieNode.classList.add('die--selectable');
       if (selectedDieIds.includes(die.id)) dieNode.classList.add('die--selected');
@@ -7684,12 +7704,14 @@ function renderMobileOwnDiceRow(state, next) {
   // 下端(横向き)/右端(縦向き)に固定する(per user選択「最後(下端に固定)」-- 親指が届きやすく、ダイスや
   // 資源の数が増えても押し出されて見えなくならない)。
   const turnEndEl = el('div', 'mobile-own-row__turn-end');
-  if (tutorialTurnEndButtonShown && player.id === 'P1') renderTutorialTurnEndButton(turnEndEl);
+  if (aiView) {
+    // AIの手番は見るだけ -- ターン終了/1手戻るは出さない。
+  } else if (tutorialTurnEndButtonShown && player.id === 'P1') renderTutorialTurnEndButton(turnEndEl);
   else renderTurnEndButton(turnEndEl, state, player, true);
   // 1手戻るボタン (2026-10-22, per user request: "ターン終了ボタンの上に1手戻るボタンも表示") -- サイド
   // バーの#dice-cancel-buttonと同じ条件(isDiceCancelDisabled)・同じ処理・同じ光る演出。押せない間は場所を
   // 取らないよう出さない。ターン終了と同じ入れ物の先頭に入れる(=ターン終了の上、縦向きのバーでは左)。
-  if (!isDiceCancelDisabled()) {
+  if (!aiView && !isDiceCancelDisabled()) {
     const cancelBtn = el('button', 'undo-button mobile-own-row__cancel', '↩️ 1手戻る');
     cancelBtn.type = 'button';
     cancelBtn.classList.toggle('change-highlight', tutorialCancelButtonGlowing);
@@ -13836,6 +13858,7 @@ function render(state) {
   renderPlayers(state, next);
   renderMobileOwnDiceRow(state, next);
   queueMobileOnboardingFocus(state, next);
+  queueMobileAiTurnFocus(state, next);
   renderJobPool(state, next);
   renderJobReplacementChoice(state);
   renderResourceConfirmOverlay(state);
@@ -14928,6 +14951,19 @@ function queueMobileOnboardingFocus(state, next) {
       .find((node) => node.getBoundingClientRect().height > 0);
     if (target) target.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }, 0);
+}
+
+/** スマホ版: AIの手番になった瞬間にエリアタブへ移動 (2026-10-22, per user request: "AIの手番になったら
+ * すぐにエリア画面に移動 右側にそのAIのダイス資源を表示")。表示自体はrenderMobileOwnDiceRow(aiView)。
+ * 手番のAIが変わった時だけ動くので、同じAIの手番中に自分で別タブへ移っても引き戻さない。チュートリアル中は
+ * 台本の進行(光る演出/スクロール等)とぶつからないよう動かさない。PC/タブレットでは何もしない。 */
+let lastMobileAiTurnPlayerId = null;
+function queueMobileAiTurnFocus(state, next) {
+  if (window.innerWidth > 760 || tutorialModeActive) return;
+  const aiTurnPlayerId = (state.round >= 1 && next && next.type === 'TURN' && isAiPlayer(next.playerId)) ? next.playerId : null;
+  if (aiTurnPlayerId === lastMobileAiTurnPlayerId) return;
+  lastMobileAiTurnPlayerId = aiTurnPlayerId;
+  if (aiTurnPlayerId) setTimeout(() => applyMobileActiveTab('board'), 0);
 }
 
 function setupMobileQuestTab() {

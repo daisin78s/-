@@ -5258,6 +5258,13 @@ body.tutorial-mode .change-highlight {
 #mobile-cards-player-switcher {
   display: none;
 }
+/* 自分(AIの手番中はそのAI)のダイス/資源の行もスマホ版専用 (2026-10-22、PC/タブレットの表示崩れの修正) --
+   renderMobileOwnDiceRowは画面幅に関係なく毎回中身を描くが、表示用のCSSがスマホ幅のメディアクエリ内に
+   しか無く、PC/タブレット(761px以上)では手番中に盤面の下へ小さなダイス/資源が余分に表示されていた
+   (Ver.1.203〜1.222)。スマホ幅以外では非表示にする(スマホ側は下の@media内の.mobile-own-rowで再表示)。 */
+.mobile-own-row {
+  display: none;
+}
 
 /* ===== スマホ版ゲーム画面 (2026-10-22, per user request: "スマホ版にゲームを対応させたい フル操作希望
    前提条件 PC版を変えない") =====
@@ -5521,6 +5528,17 @@ body.tutorial-mode .change-highlight {
   /* ターン終了ボタン (per user request「スロットにダイスを置いた後ターン終了ボタンが出てくるように」、
      置き場所はper user選択「最後(下端に固定)」) -- 縦向きのバーでは右端に固定(margin-left:autoで右へ
      寄せ、横スクロールしても見えるようsticky)。横向きの右欄は下の@media側で下端に固定。 */
+  /* AIの手番に表示している時の持ち主の名前 (per user request「AIの手番になったら...右側にそのAIの
+     ダイス資源を表示」、main.jsのrenderMobileOwnDiceRow(aiView)参照)。 */
+  .mobile-own-row__owner {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
   .mobile-own-row__turn-end {
     flex-shrink: 0;
     margin-left: auto;
