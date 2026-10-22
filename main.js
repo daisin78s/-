@@ -7168,7 +7168,8 @@ function renderBuildChoiceModal() {
   const newBuildCandidates = affordableCandidates.filter((c) => c.type !== 'UPGRADE');
   const upgradeCandidates = affordableCandidates.filter((c) => c.type === 'UPGRADE');
   if (newBuildCandidates.length > 0) {
-    list.appendChild(el('div', 'build-choice-section-header', '建築'));
+    // --buildはスマホ版でこの見出しだけ消すための目印(style.css参照)。
+    list.appendChild(el('div', 'build-choice-section-header build-choice-section-header--build', '建築'));
     const group = el('div', 'build-choice-group');
     for (const candidate of newBuildCandidates) group.appendChild(buildCandidateCell(candidate));
     list.appendChild(group);

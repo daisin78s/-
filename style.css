@@ -5988,3 +5988,43 @@ body.tutorial-mode .change-highlight {
     margin-bottom: -6px;
   }
 }
+
+/* スマホ版: 建築/LVアップ選択画面の上のタイトル「建築 / LVアップを選択」と「建築」の見出しを消す
+   (2026-10-22, per user request「スマホ版 赤丸部分削除して」、赤丸はこの2か所)。タイトルの行にある
+   ターン開始に戻す/1手戻るボタンは残す。「LVアップ」の見出し(区切り線つき)は赤丸の対象外なので残す。 */
+@media (max-width: 760px) {
+  .build-choice-modal .card-inst-modal__title,
+  .build-choice-section-header--build {
+    display: none;
+  }
+}
+
+/* スマホ版: 建築/LVアップ選択画面の隙間を詰める (2026-10-22, per user request「青まる部分の隙間を詰めて」
+   「みどり丸部分の隙間も詰めて この画面でタップすることはないはず」) --
+   ・候補カードの枠は、カードを横に倒した(TAP)時用の150px正方形だったが、この画面では倒さないので
+     カードの大きさまで縮める(カードの左右・上下の余白が減る)。
+   ・タイトルを消して空いた上の行に所持資源を並べ、ボタン(ターン開始に戻す/1手戻る)はその右に寄せる。 */
+@media (max-width: 760px) {
+  #build-choice-overlay .owned-card-cell {
+    width: auto;
+    height: auto;
+  }
+  #build-choice-overlay .build-choice-modal {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 8px;
+  }
+  #build-choice-overlay .build-choice-modal > * {
+    flex: 0 0 100%;
+  }
+  #build-choice-overlay .build-choice-resources {
+    order: -1;
+    flex: 1 1 auto;
+    margin-bottom: 8px;
+  }
+  #build-choice-overlay .card-inst-modal__header {
+    flex: 0 0 auto;
+    gap: 8px;
+  }
+}
