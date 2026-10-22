@@ -5397,20 +5397,51 @@ body.tutorial-mode .change-highlight {
   }
 
   /* 自分のダイス/資源の1列表示 (per user request: "エリアの下に自分のダイスと資源を1列に表示して") */
+  /* 画面下端に固定 (2026-10-22, per user request: "エリアの画面のときだけ一番下に自分の色ダイス 白ダイス
+     資源を横一列に表示 ...上に出ているクエスト ショップの様に常に出ている")。色ダイス→白ダイス→資源の
+     順(main.jsのrenderMobileOwnDiceRow参照)で1列、収まらない分はバー内で横スクロール。
+     - 下端のiPhoneホームバー(viewport-fit=coverで描画領域がそこまで広がっている)に重ならないよう
+       env(safe-area-inset-bottom)分だけ内側に余白をとる。
+     - バーが盤面の下端を隠さないよう、エリアタブの時だけ#appの下にバーの高さ分の余白をとる(下記)。
+     - ダイスはタップで選択→スロットで配置するため、通常(22px)より大きめにする。 */
   .mobile-own-row {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
     display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 10px;
-    margin-top: 8px;
-    background: var(--surface-sunken);
-    border-radius: 8px;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 12px;
+    overflow-x: auto;
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -2px 8px rgba(16, 24, 40, 0.12);
   }
   .mobile-own-row__resources,
   .mobile-own-row__dice {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    flex-shrink: 0;
+    align-items: center;
     gap: 6px;
+  }
+  .mobile-own-row .die {
+    width: 34px;
+    height: 34px;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  #app[data-mobile-active-tab="board"] {
+    padding-bottom: calc(70px + env(safe-area-inset-bottom));
+  }
+  /* 右下のバージョン表示(#copyright-notice、position:fixedで#appの外)がこのバーに重なるため、バーが
+     出ている間だけバーの上へ逃がす。 */
+  body:has(#app[data-mobile-active-tab="board"] .mobile-own-row:not(:empty)) #copyright-notice {
+    bottom: calc(56px + env(safe-area-inset-bottom));
   }
 
   /* 資源置き場タブ: 4人分を横並びでなく縦積みに(各パネルのmin-width:220pxがスマホ幅と衝突するため)。 */

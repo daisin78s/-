@@ -7637,15 +7637,18 @@ function renderMobileOwnDiceRow(state, next) {
   const canPlaceDiceFor = actingHumanPlayerId(state, next);
   const player = state.players.find((p) => p.id === canPlaceDiceFor);
   if (!player) return;
+  // 並び順: 色ダイス→白ダイス→資源 を横一列 (2026-10-22, per user request: "エリアの画面のときだけ
+  // 一番下に自分の色ダイス 白ダイス 資源を横一列に表示 ...上に出ているクエスト ショップの様に常に
+  // 出ている" -- 画面下端に固定、style.cssの.mobile-own-row参照)。
+  const diceEl = el('div', 'mobile-own-row__dice');
   const resourcesEl = el('div', 'mobile-own-row__resources');
   for (const resource of ['K', 'A', 'B', 'C', 'Z', 'BZ', 'VP']) {
     const count = player.resources[resource] || 0;
     if (count > 0) resourcesEl.appendChild(renderResourceBadge(resource, count, false, true));
   }
-  container.appendChild(resourcesEl);
-  const diceEl = el('div', 'mobile-own-row__dice');
   const playerIsWildcard = boardMod.hasWildcardDice(state, INDEX, player.id);
-  for (const die of player.dice) {
+  const orderedDice = [...player.dice.filter((d) => d.kind !== 'WHITE'), ...player.dice.filter((d) => d.kind === 'WHITE')];
+  for (const die of orderedDice) {
     if (die.placedMapId) continue;
     const dieWildcard = boardMod.isDieWildcard(state, INDEX, player.id, die);
     const dieNode = renderDie({ ...die, color: player.color, wildcard: dieWildcard });
@@ -7671,6 +7674,7 @@ function renderMobileOwnDiceRow(state, next) {
     diceEl.appendChild(dieNode);
   }
   container.appendChild(diceEl);
+  container.appendChild(resourcesEl);
 }
 
 /** Pending manual-mode TAP reactions (2026-07-30, real engine wiring pass 6): whenever a GET event
