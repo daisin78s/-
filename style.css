@@ -5505,6 +5505,9 @@ body.tutorial-mode .change-highlight {
   .board-row > .map-tile {
     flex: 0 0 auto;
     width: 110px;
+    /* 効果の枠とエリアの枠(下端)の隙間を半分に (2026-10-22, per user request「エリアの効果の枠と
+       エリアの枠の隙間半分にして」) -- 10px→5px。 */
+    padding-bottom: 5px;
   }
   /* per user request「スロットは縦1列ではなく横一列に」-- .map-tile__slots自体は元々flex-wrap:wrapで
      幅が足りると横一列になる作りだが、.slotが51x51px固定のため110px幅のタイルでは2-3個並べきれず
