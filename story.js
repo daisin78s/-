@@ -89,7 +89,8 @@ function storySay(id, onTyped) {
   let i = 0;
   const step = () => {
     i++;
-    body.textContent = text.slice(0, i);
+    body.textContent = '';
+    body.appendChild(conJobColoredFragment(text.slice(0, i))); // 制約・ジョブの名前は色付き
     if (i < text.length) run.typeTimer = storyLater(step, STORY_TYPE_MS_PER_CHAR);
     else { run.typeTimer = null; if (onTyped) onTyped(text); }
   };
@@ -500,7 +501,7 @@ function toggleStoryLog() {
   for (const id of run.log) {
     const row = el('div', 'story-log__line');
     row.appendChild(el('span', 'story-log__speaker', 'アレク'));
-    row.appendChild(el('span', 'story-log__text', storyLine(id).text));
+    row.appendChild(elConJob('span', 'story-log__text', storyLine(id).text));
     list.appendChild(row);
   }
   logPanel.appendChild(list);

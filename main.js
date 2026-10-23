@@ -5180,7 +5180,7 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     // directly under the icon, instead of overlapping the corner. Moved (not cloned) so there's still
     // only one emblemEl in the DOM.
     const nameEl = q('.shop-card__name');
-    if (facts.name) nameEl.appendChild(el('span', 'shop-card__name-text', facts.name));
+    if (facts.name) nameEl.appendChild(el('span', 'shop-card__name-text con-name', facts.name));
     if (onceIcon) nameEl.appendChild(onceIcon);
     if (emblem) nameEl.appendChild(emblemEl);
   } else if (/^R\d/.test(faceId)) {
@@ -5189,6 +5189,7 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     // idEl is simply left empty; its own :empty{display:none} rule collapses it with no layout gap.
   } else if (facts.name) {
     idEl.textContent = facts.name;
+    if (faceId.startsWith('JOB')) idEl.classList.add('job-name'); // ジョブの名前の文字色(conJobColoredFragment参照)
   } else {
     idEl.textContent = faceId;
   }
@@ -10142,7 +10143,9 @@ function renderLifeStoryOverlay(state) {
   const player = state.players.find((p) => p.id === featuredEntry.playerId);
   const finalScore = scoringMod.computeFinalScore(state, INDEX, player.id);
   const conFaceId = player.conPhysicalId && player.conFace ? `${player.conPhysicalId}${player.conFace}` : null;
-  document.getElementById('life-story-title').textContent = `${rankingConJobTitle(conFaceId, player.jobCardId)}の${player.name}`;
+  const lifeStoryTitleEl = document.getElementById('life-story-title');
+  lifeStoryTitleEl.textContent = '';
+  lifeStoryTitleEl.appendChild(conJobColoredFragment(`${rankingConJobTitle(conFaceId, player.jobCardId)}の${player.name}`));
 
   const body = document.getElementById('life-story-body');
   body.innerHTML = '';
@@ -10158,16 +10161,16 @@ function renderLifeStoryOverlay(state) {
   for (const round of [1, 2, 3, 4]) {
     if (byRound[round].length === 0) continue;
     body.appendChild(el('div', 'life-story-stage', `${LIFE_STAGE_LABEL_BY_ROUND[round]}（${round}R）`));
-    for (const phrase of byRound[round]) body.appendChild(el('div', 'life-story-line', phrase));
+    for (const phrase of byRound[round]) body.appendChild(elConJob('div', 'life-story-line', phrase));
   }
   const qstLines = buildLifeStoryQstLines(state, player.id);
   if (qstLines.length > 0) {
     body.appendChild(el('div', 'life-story-stage', 'そして、ローマの歴史に名を残した'));
-    for (const line of qstLines) body.appendChild(el('div', 'life-story-line', line));
+    for (const line of qstLines) body.appendChild(elConJob('div', 'life-story-line', line));
   }
   // 称号ベースの締めの1文 (2026-10-19, per user request): QSTの後、最後に表示。
   const closingLine = title && LIFE_STORY_CLOSING_LINE_BY_TITLE[title];
-  if (closingLine) body.appendChild(el('div', 'life-story-closing', closingLine));
+  if (closingLine) body.appendChild(elConJob('div', 'life-story-closing', closingLine));
   // 最終順位と他のプレイヤー (2026-10-23, per user request: "人生 ...の後さらに下にスクロールし 最終順位
   // 2位(大きく)(文字は素早く左から飛んでくる) その後クラッカー的な演出 その後小さくほかのプレイヤーの情報
   // も表示 自分が1位ならほかのプレイヤーの情報は小さく右側に 他に上位のプレイヤーがいればそのプレイヤーは
@@ -10208,7 +10211,7 @@ function buildLifeStoryPlayerInfo(state, playerId, rank, finalScore, featured) {
   const baseVp = finalScore - questVp - conVp;
   const box = el('div', featured ? 'life-story-player life-story-player--featured' : 'life-story-player');
   const prefix = title && title !== '—' ? `${title}の` : '';
-  box.appendChild(el('div', 'life-story-player__name', prefix + p.name));
+  box.appendChild(elConJob('div', 'life-story-player__name', prefix + p.name));
   box.appendChild(el('div', 'life-story-player__score', `${rank}位　最終獲得点数${finalScore}VP`));
   box.appendChild(el('div', 'life-story-player__detail', `（素点${baseVp}VP　クエスト${questVp}VP　制約${conVp}VP）`));
   return box;
@@ -10412,6 +10415,43 @@ const CON_ADJECTIVE_BY_NAME = {
   憤怒: '憤怒の',
   暴食: '暴食な',
 };
+
+/** 制約・ジョブの名前の文字色 (2026-10-24, per user request: "制約カードの怠惰 憂鬱 裏切などの文字はすべて
+ * 同じ色で統一 / ジョブのローマ市民 百人隊長 料理人なども フォントの色を変えそろえよう" + 色は制約=紫・
+ * ジョブ=ティール、"人生やランキングも"、ストーリーのセリフも) -- 文章の中に出てくる制約の名前(怠惰など、
+ * 「怠惰な」の形でも名前の部分)とジョブの名前を、.con-name / .job-name の<span>で囲む。色そのものは
+ * style.cssの--con-name-color/--job-name-colorで一括管理(読みにくければそこだけ戻せばいい)。 */
+let conJobNameRegexCache = null;
+function conJobNameRegex() {
+  if (conJobNameRegexCache) return conJobNameRegexCache;
+  const kinds = new Map();
+  for (const row of INDEX.raw.CON) if (row.NAME) kinds.set(row.NAME, 'con-name');
+  for (const row of INDEX.raw.JOB) if (row.NAME) kinds.set(row.NAME, 'job-name');
+  const names = [...kinds.keys()].sort((a, b) => b.length - a.length)
+    .map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  conJobNameRegexCache = { regex: new RegExp(names.join('|'), 'g'), kinds };
+  return conJobNameRegexCache;
+}
+/** textを、制約・ジョブの名前だけ色付きの<span>にしたDocumentFragmentにして返す。 */
+function conJobColoredFragment(text) {
+  const frag = document.createDocumentFragment();
+  const { regex, kinds } = conJobNameRegex();
+  let last = 0;
+  regex.lastIndex = 0;
+  for (let m = regex.exec(text); m; m = regex.exec(text)) {
+    if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+    frag.appendChild(el('span', kinds.get(m[0]), m[0]));
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+  return frag;
+}
+/** el()と同じだが、中の文章の制約・ジョブの名前に色を付ける。 */
+function elConJob(tag, className, text) {
+  const node = el(tag, className);
+  node.appendChild(conJobColoredFragment(text));
+  return node;
+}
 
 /** "嫉妬深い異端者" -- combines conFaceId's own adjective form (CON_ADJECTIVE_BY_NAME) with jobCardId's
  * plain NAME, replacing the old separate "制約: X" / "ジョブ: Y" lines in the ranking list. '—' (matching
@@ -11145,7 +11185,7 @@ function renderRankingList(highlightId, highlightCategory) {
         row.appendChild(swatch);
         row.appendChild(el('span', 'ranking-row__name', entry.name));
         row.appendChild(el('span', 'ranking-row__score', `総合 ${entry.totalScore}VP（素点${entry.rawScore} + QST${entry.qstScore}）`));
-        row.appendChild(el('span', 'ranking-row__con-job', rankingConJobTitle(entry.conFaceId, entry.jobCardId)));
+        row.appendChild(elConJob('span', 'ranking-row__con-job', rankingConJobTitle(entry.conFaceId, entry.jobCardId)));
         row.appendChild(el('span', 'ranking-row__opponents', entry.opponents.join('　')));
         // 登録日(2026-10-18, per user request: "ランキングに年月日が入るようにしてほしい") -- entry.savedAt
         // (ISO文字列、ranking.js's save()が登録時に自動付与、昔から全エントリーに存在) をYYYY/MM/DD表示に

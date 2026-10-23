@@ -75,6 +75,9 @@
      既存のEMBLEM色を再利用(枠線はそのままだと主張が強すぎたため--border-strongと混ぜてトーンを
      落とす)。モニュメントだけ新規に緑系を割り当てる。 */
   --monument: #4d8a5e;
+  /* 制約・ジョブの名前の文字色 (2026-10-24、main.jsのconJobColoredFragment参照)。読みにくければここだけ戻す。 */
+  --con-name-color: #9b4dca;
+  --job-name-color: #138a8a;
   --monument-soft: #e3efe4;
   --border-a: color-mix(in srgb, var(--emblem-chi) 55%, var(--border-strong));
   --border-b: color-mix(in srgb, var(--emblem-ten) 55%, var(--border-strong));
@@ -109,6 +112,8 @@
     --nav-highlight: #34c77b;
     --nav-highlight-soft: #1a3a28;
     --monument: #6fae80;
+    --con-name-color: #c08af0;
+    --job-name-color: #45c9c9;
     --monument-soft: #23342a;
   }
 }
@@ -6800,3 +6805,9 @@ body.story-mode #build-choice-close-button { display: none; }
   z-index: 6;
 }
 .story-overlay:has(.story-log:not([hidden])) .story-dialog { visibility: hidden; }
+/* 制約・ジョブの名前の文字色 (main.jsのconJobColoredFragment / カードの名前)。暗い背景(ストーリーのセリフ欄・
+   ログ)では同じ色の明るい版。 */
+.con-name { color: var(--con-name-color); }
+.job-name { color: var(--job-name-color); }
+.story-dialog .con-name, .story-log .con-name { color: #c08af0; }
+.story-dialog .job-name, .story-log .job-name { color: #45c9c9; }
