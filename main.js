@@ -16686,11 +16686,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('entry-banner-cardlist-button').addEventListener('click', gatedEntryBannerHandler('カードリスト', () => { dismissEntryBanner(); openCardListOverlay(); }));
   document.getElementById('entry-banner-ranking-button').addEventListener('click', gatedEntryBannerHandler('ランキング', () => { dismissEntryBanner(); openRankingOverlay(); }));
   document.getElementById('entry-banner-achievement-button').addEventListener('click', () => { dismissEntryBanner(); openAchievementOverlay(); });
-  // デザイナーズノート (2026-10-11, per user request) -- リンク先はまだ無い("まだできていないので
-  // 飛ばない") -- 準備中メッセージのみ、他の簡易ブロッキングメッセージと同じwindow.alert()の慣習。
-  document.getElementById('entry-banner-designer-notes-button').addEventListener('click', () => {
-    window.alert('デザイナーズノートは準備中です。');
-  });
+  // 元デザイナーズノートのボタンは「ストーリー」になった (2026-10-23) -- 押した時の処理はstory.js側。
   applyLockedMenuFeatureStyling();
   // 更新しても進行中のゲームが消えないように (2026-10-11) -- sessionResumeChoicePendingの doc参照。
   document.getElementById('session-resume-continue-button').addEventListener('click', resumeSavedSession);
