@@ -6642,6 +6642,7 @@ function renderBoard(state, next) {
           if (e.target.closest('.map-tile__fee')) return;
           attemptPlaceSelectedWildcardDie(state, mapId);
         });
+        node.dataset.mapId = mapId; // ダイス獲得演出の転がる位置(皇帝宮殿と元老院の間)を探すための目印
         rowEl.appendChild(node);
         continue;
       }
@@ -6658,6 +6659,7 @@ function renderBoard(state, next) {
         showAreaEnlargeModal(mapState.currentAreaId);
       });
 
+      node.dataset.mapId = mapId; // ダイス獲得演出の転がる位置(皇帝宮殿と元老院の間)を探すための目印
       rowEl.appendChild(node);
     }
     board.appendChild(rowEl);
@@ -14477,6 +14479,32 @@ function playNewDiceRolls(state, before) {
   if (targets.length === 0) return;
   diceRollSequenceActive = true;
   setDiceRollBlocker(true);
+  // スマホ版: エリア画面の右欄に増えたダイスは、皇帝宮殿と元老院の間あたりで転がってから右欄へ戻る
+  // (2026-10-23, per user request: "追加色ダイス白ダイスを獲得した時 もう少し真ん中 元老院と皇帝宮殿の間
+  // くらいにダイスが振られて右に戻るようにして")。それ以外(PC/タブレット、他の場所)は従来通りその場で転がる。
+  const rollCenter = mobileNewDieRollCenter();
+  if (rollCenter) {
+    for (const target of targets) {
+      if (!target.closest('#mobile-own-row')) continue;
+      diceRollHiddenKeys.add(target.dataset.dieKey);
+      const { flyer, rect } = makeDieFlyer(target);
+      target.style.visibility = 'hidden';
+      const dx = rollCenter.x - (rect.left + rect.width / 2);
+      const dy = rollCenter.y - (rect.top + rect.height / 2);
+      const dir = Math.random() < 0.5 ? -1 : 1;
+      const total = DICE_ROLL_MS + DICE_SETTLE_MS;
+      const r = DICE_ROLL_MS / total;
+      flyer.animate([
+        { transform: `translate(${dx - dir * 40}px, ${dy - 30}px) rotate(0deg) scale(1.5)`, offset: 0 },
+        { transform: `translate(${dx + dir * 10}px, ${dy}px) rotate(${dir * 400}deg) scale(1.35)`, offset: r * 0.45 },
+        { transform: `translate(${dx + dir * 4}px, ${dy - 18}px) rotate(${dir * 620}deg) scale(1.45)`, offset: r * 0.72 },
+        { transform: `translate(${dx}px, ${dy}px) rotate(${dir * 720}deg) scale(1.4)`, offset: r },
+        { transform: `translate(0, 0) rotate(${dir * 720}deg) scale(1)`, offset: 1 },
+      ], { duration: total, easing: 'ease-out', fill: 'forwards' });
+      flickerDieValue(flyer, DICE_ROLL_MS);
+    }
+    targets.splice(0, targets.length, ...targets.filter((t) => !t.closest('#mobile-own-row')));
+  }
   for (const target of targets) {
     diceRollHiddenKeys.add(target.dataset.dieKey);
     const { flyer } = makeDieFlyer(target);
@@ -14498,7 +14526,19 @@ function playNewDiceRolls(state, before) {
     diceRollSequenceActive = false;
     setDiceRollBlocker(false);
     render(STATE);
-  }, DICE_ROLL_MS + 30);
+  }, (rollCenter ? DICE_ROLL_MS + DICE_SETTLE_MS : DICE_ROLL_MS) + 30);
+}
+
+/** スマホ版: 皇帝宮殿と元老院のタイルの中間点(画面座標)。エリア画面が出ていない/タイルが見えない時はnull。 */
+function mobileNewDieRollCenter() {
+  if (window.innerWidth > 760 || mobileActiveTab !== 'board') return null;
+  const castle = document.querySelector(`#board .map-tile[data-map-id="${boardMod.CASTLE_MAP_ID}"]`);
+  const senate = document.querySelector(`#board .map-tile[data-map-id="${boardMod.AREA009_MAP_ID}"]`);
+  if (!castle || !senate) return null;
+  const a = castle.getBoundingClientRect();
+  const b = senate.getBoundingClientRect();
+  if (a.width === 0 || b.width === 0) return null;
+  return { x: (a.left + a.right + b.left + b.right) / 4, y: (a.top + a.bottom + b.top + b.bottom) / 4 };
 }
 
 function renderCore(state) {
