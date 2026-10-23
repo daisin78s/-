@@ -5824,7 +5824,12 @@ function computeShopAcquirableMoveCache() {
   // ショートカットも提供しない(renderPlayers等の既存クリック可否ゲートと同じ考え方)。
   if (!playerId || pendingBuildChoice || pendingTurnEndWarning || pendingWhiteOverflowConfirm) return new Map();
   const context = { hasPlacedDieThisTurn: turnActionTaken };
-  const candidateMoves = aiMoveGeneratorLv3.generateMoves(STATE, INDEX, playerId, context)
+  // 方針なしのaiMoveGeneratorを使う (2026-10-23, per user report: "たまに皇帝宮殿にすでにダイスが置いてある
+  // ため獲得できないが元老院では獲得できるカードがチェックが表示されないことがあります 皇帝宮殿か元老院
+  // どちらかででも獲得できるようならチェックマーク表示するように") -- aiMoveGeneratorLv3は計算量削減のため
+  // 1-2Rは「皇帝宮殿に置ける手が1つでもあれば元老院の手をすべて捨てる」(preferCastleOverSenate)ので、
+  // 元老院でしか取れないカードがここで見落とされていた。AI自身の手の選び方(driveOneAiStepInner)は変えない。
+  const candidateMoves = aiMoveGenerator.generateMoves(STATE, INDEX, playerId, context)
     .filter((m) => m.buildCandidateIndex !== undefined && m.buildCandidateIndex !== null);
   const bestByFaceId = new Map();
   for (const move of candidateMoves) {
