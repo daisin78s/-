@@ -10148,10 +10148,85 @@ function renderLifeStoryOverlay(state) {
   // 称号ベースの締めの1文 (2026-10-19, per user request): QSTの後、最後に表示。
   const closingLine = title && LIFE_STORY_CLOSING_LINE_BY_TITLE[title];
   if (closingLine) body.appendChild(el('div', 'life-story-closing', closingLine));
-  if (mobileIntro && lifeStoryIntroState === 'lines') {
+  // 最終順位と他のプレイヤー (2026-10-23, per user request: "人生 ...の後さらに下にスクロールし 最終順位
+  // 2位(大きく)(文字は素早く左から飛んでくる) その後クラッカー的な演出 その後小さくほかのプレイヤーの情報
+  // も表示 自分が1位ならほかのプレイヤーの情報は小さく右側に 他に上位のプレイヤーがいればそのプレイヤーは
+  // 左側に(文字の大きさは一緒) プレイヤーの情報は 怠惰なローマ人のhigebucho/1位 最終獲得点数51VP/(素点45VP
+  // クエスト8VP 制約-2VP)" + 回答: クラッカーは順位で変える、全端末、自分の情報も大きな順位の下に)。
+  const myRank = rankedEntries.findIndex((e) => e.playerId === player.id) + 1;
+  body.appendChild(el('div', 'life-story-rank-label', '最終順位'));
+  const rankEl = el('div', 'life-story-rank', `${myRank}位`);
+  rankEl.dataset.rank = String(myRank);
+  body.appendChild(rankEl);
+  body.appendChild(buildLifeStoryPlayerInfo(state, player.id, myRank, finalScore, true));
+  const others = el('div', 'life-story-others');
+  const leftCol = el('div', 'life-story-others__col life-story-others__col--left');
+  const rightCol = el('div', 'life-story-others__col life-story-others__col--right');
+  rankedEntries.forEach((entry, i) => {
+    if (entry.playerId === player.id) return;
+    (i + 1 < myRank ? leftCol : rightCol).appendChild(buildLifeStoryPlayerInfo(state, entry.playerId, i + 1, entry.score, false));
+  });
+  others.appendChild(leftCol);
+  others.appendChild(rightCol);
+  body.appendChild(others);
+  // 文章を上から順に飛ばす演出: スマホは「ゲーム終了」の文字の後、PC/タブレットは表示してすぐ。
+  if (!mobileIntro || lifeStoryIntroState === 'lines') {
     lifeStoryIntroState = 'done';
     animateLifeStoryLines(overlay, [document.getElementById('life-story-title'), ...body.children]);
   }
+}
+
+/** 最終順位の欄の1人分: 「怠惰なローマ人のhigebucho」「1位 最終獲得点数51VP」「(素点45VP クエスト8VP
+ * 制約-2VP)」。クエストはゲーム終了時に配られたVP(state.qstRewardsGranted)、制約は制約カードによる増減
+ * (scoring.conCardVpAdjustment)、素点はその残り。 */
+function buildLifeStoryPlayerInfo(state, playerId, rank, finalScore, featured) {
+  const p = state.players.find((x) => x.id === playerId);
+  const conFaceId = p.conPhysicalId && p.conFace ? `${p.conPhysicalId}${p.conFace}` : null;
+  const title = rankingConJobTitle(conFaceId, p.jobCardId);
+  const questVp = (state.qstRewardsGranted && state.qstRewardsGranted[playerId]) || 0;
+  const conVp = scoringMod.conCardVpAdjustment(state, INDEX, playerId);
+  const baseVp = finalScore - questVp - conVp;
+  const box = el('div', featured ? 'life-story-player life-story-player--featured' : 'life-story-player');
+  const prefix = title && title !== '—' ? `${title}の` : '';
+  box.appendChild(el('div', 'life-story-player__name', prefix + p.name));
+  box.appendChild(el('div', 'life-story-player__score', `${rank}位　最終獲得点数${finalScore}VP`));
+  box.appendChild(el('div', 'life-story-player__detail', `（素点${baseVp}VP　クエスト${questVp}VP　制約${conVp}VP）`));
+  return box;
+}
+
+/** 紙吹雪(クラッカー)。1位は多め、2位は少なめ、3位以下はなし(per user選択「順位で変える」)。画面の左右下から
+ * 斜め上に弾けて、くるくる回りながら落ちる。 */
+function launchLifeStoryConfetti(rank) {
+  const count = rank === 1 ? 70 : rank === 2 ? 28 : 0;
+  if (!count) return;
+  const layer = el('div', 'confetti-layer');
+  document.body.appendChild(layer);
+  const colors = ['#e53935', '#1e88e5', '#fdd835', '#43a047', '#8e24aa', '#fb8c00', '#ec407a'];
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  let longest = 0;
+  for (let i = 0; i < count; i++) {
+    const fromLeft = i % 2 === 0;
+    const piece = el('div', 'confetti-piece');
+    piece.style.background = colors[i % colors.length];
+    piece.style.left = `${fromLeft ? 0 : W}px`;
+    piece.style.top = `${H}px`;
+    layer.appendChild(piece);
+    const dir = fromLeft ? 1 : -1;
+    const peakX = dir * (W * (0.15 + Math.random() * 0.45));
+    const peakY = -H * (0.55 + Math.random() * 0.4);
+    const endX = peakX + dir * (Math.random() * W * 0.15);
+    const endY = H * 0.15;
+    const spin = (Math.random() < 0.5 ? -1 : 1) * (360 + Math.random() * 720);
+    const duration = 1800 + Math.random() * 900;
+    longest = Math.max(longest, duration);
+    piece.animate([
+      { transform: 'translate(0, 0) rotate(0deg)', opacity: 1 },
+      { transform: `translate(${peakX}px, ${peakY}px) rotate(${spin * 0.4}deg)`, opacity: 1, offset: 0.35, easing: 'ease-in' },
+      { transform: `translate(${endX}px, ${endY}px) rotate(${spin}deg)`, opacity: 0.2 },
+    ], { duration, easing: 'cubic-bezier(0.1, 0.7, 0.3, 1)', fill: 'forwards', delay: Math.random() * 150 });
+  }
+  setTimeout(() => layer.remove(), longest + 300);
 }
 
 let lifeStoryIntroState = 'pending'; // pending -> banner(「ゲーム終了」の演出中) -> lines -> done
@@ -10178,18 +10253,30 @@ function playGameEndBanner(done) {
 
 /** 人生の各行を上から順に、左からすばやく飛ばして出す。行が画面の真ん中あたりまで来たら、その速さに
  * 合わせて画面(スクロールする入れ物=オーバーレイ)を上にスクロールする。 */
-function animateLifeStoryLines(scroller, lines) {
+function animateLifeStoryLines(overlay, lines) {
   lines.forEach((line) => { line.style.opacity = '0'; });
-  scroller.scrollTop = 0;
-  lines.forEach((line, i) => {
+  // 実際にスクロールしている入れ物を探す(スマホはオーバーレイ自体、PC等はモーダルや本文のことがある)。
+  const findScroller = () => [overlay, overlay.querySelector('.card-inst-modal'), overlay.querySelector('.card-inst-modal__body')]
+    .find((n) => n && n.scrollHeight > n.clientHeight + 2 && /(auto|scroll)/.test(getComputedStyle(n).overflowY));
+  const first = findScroller();
+  if (first) first.scrollTop = 0;
+  let delay = 0;
+  lines.forEach((line) => {
+    // 最終順位の大きな文字の後はクラッカーの分だけ間を空ける。
+    const isRank = !!(line.classList && line.classList.contains('life-story-rank'));
     setTimeout(() => {
       line.style.opacity = '';
       line.animate([{ transform: 'translateX(-100vw)' }, { transform: 'translateX(0)' }],
         { duration: LIFE_STORY_LINE_IN_MS, easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)' });
-      const rect = line.getBoundingClientRect();
-      const middle = window.innerHeight * 0.5;
-      if (rect.bottom > middle) scroller.scrollTo({ top: scroller.scrollTop + (rect.bottom - middle), behavior: 'smooth' });
-    }, i * LIFE_STORY_LINE_INTERVAL_MS);
+      const scroller = findScroller();
+      if (scroller) {
+        const rect = line.getBoundingClientRect();
+        const middle = window.innerHeight * 0.5;
+        if (rect.bottom > middle) scroller.scrollTo({ top: scroller.scrollTop + (rect.bottom - middle), behavior: 'smooth' });
+      }
+      if (isRank) setTimeout(() => launchLifeStoryConfetti(Number(line.dataset.rank)), LIFE_STORY_LINE_IN_MS);
+    }, delay);
+    delay += isRank ? LIFE_STORY_LINE_INTERVAL_MS + 1600 : LIFE_STORY_LINE_INTERVAL_MS;
   });
 }
 
