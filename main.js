@@ -5833,9 +5833,61 @@ function computeShopAcquirableMoveCache() {
     const builtFaceId = result.candidate.type === 'UPGRADE' ? result.candidate.toFaceId : result.candidate.faceId;
     const score = aiEvaluator.score(resultState, playerId);
     const existing = bestByFaceId.get(builtFaceId);
-    if (!existing || score > existing.score) bestByFaceId.set(builtFaceId, { playerId, move, score });
+    if (!existing || score > existing.score) bestByFaceId.set(builtFaceId, { playerId, move, score, isUpgrade: result.candidate.type === 'UPGRADE' });
   }
   return bestByFaceId;
+}
+
+/** 皇帝宮殿をタップした時の一覧 (2026-10-23, per user request: "スマホ版 PC版 皇帝宮殿のエリアをクリックして
+ * 拡大したら皇帝宮殿の説明ではなく獲得可能/LVUP可能カード一覧が出るようにして" + 回答「チェックマークが
+ * 出ているもの+LVUP可能なもの」「そのまま獲得できる」「ありませんと表示」) -- ショップの✓と同じ
+ * shopAcquirableMoveCache(今すぐ獲得できるカード、LVアップ後の面も含む)をそのまま並べる。カードをタップすると
+ * 拡大画面に「このカードを獲得する」/「LVアップする」ボタンが出て、押すとショップの✓と同じ最善手で獲得する。
+ * 自分の手番でない時や1枚も無い時は「ありません」を表示。 */
+function showCastleAcquirableModal() {
+  const overlay = document.getElementById('card-inst-overlay');
+  const modal = overlay.querySelector('.card-inst-modal');
+  const visualContainer = overlay.querySelector('.card-inst-modal__visual');
+  overlay.hidden = false;
+  overlay.classList.toggle('card-inst-overlay--tutorial-raised', tutorialModeActive);
+  modal.classList.remove('card-inst-modal--dual', 'card-inst-modal--area-wide', 'card-inst-modal--term');
+  modal.classList.add('card-inst-modal--wide');
+  overlay.querySelector('.card-inst-modal__title').textContent = '獲得 / LVアップできるカード';
+  overlay.querySelector('.card-inst-modal__flip-button').hidden = true;
+  overlay.querySelector('.card-inst-modal__pick-button').hidden = true;
+  visualContainer.innerHTML = '';
+  visualContainer.style.width = '';
+  visualContainer.style.height = '';
+  const body = overlay.querySelector('.card-inst-modal__body');
+  body.innerHTML = '';
+  const entries = [...shopAcquirableMoveCache.entries()];
+  const sections = [
+    ['獲得', entries.filter(([, found]) => !found.isUpgrade)],
+    ['LVアップ', entries.filter(([, found]) => found.isUpgrade)],
+  ];
+  // 拡大表示用の欄(.card-inst-modal__visual)は横並びなので、見出し→カードの縦積みにする入れ物で包む。
+  const wrap = el('div', 'castle-acquirable');
+  visualContainer.appendChild(wrap);
+  if (entries.length === 0) {
+    wrap.appendChild(el('div', 'castle-acquirable__empty', 'いま獲得 / LVアップできるカードはありません'));
+    return;
+  }
+  for (const [label, list] of sections) {
+    if (list.length === 0) continue;
+    wrap.appendChild(el('div', 'build-choice-section-header', label));
+    const group = el('div', 'build-choice-group');
+    for (const [faceId, found] of list) {
+      const cardNode = buildCardVisual(faceId, { req: factsForFaceId(faceId).req, showEffect: true, allowTextFallback: false, noInteraction: true });
+      attachPickableEnlarge(cardNode, faceId, {
+        label: found.isUpgrade ? 'LVアップする' : 'このカードを獲得する',
+        onPick: () => executeAcquireCardShortcut(faceId),
+      });
+      const cell = el('div', 'owned-card-cell castle-acquirable__cell');
+      cell.appendChild(cardNode);
+      group.appendChild(cell);
+    }
+    wrap.appendChild(group);
+  }
 }
 
 function findBestAcquireMove(faceId) {
@@ -6593,6 +6645,8 @@ function renderBoard(state, next) {
       // child element of this same tile and would otherwise also pop this modal open underneath them.
       node.addEventListener('click', (e) => {
         if (e.target.closest('.slot, .map-tile__fee')) return;
+        // 皇帝宮殿だけは説明の代わりに「今獲得/LVアップできるカード」の一覧 (showCastleAcquirableModal参照)。
+        if (isCastle) { showCastleAcquirableModal(); return; }
         showAreaEnlargeModal(mapState.currentAreaId);
       });
 

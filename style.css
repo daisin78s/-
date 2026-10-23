@@ -6285,3 +6285,23 @@ body.opening-hide-res .card-group__onboard-resources > .owned-card-cell {
 .action-suffix--nowrap {
   white-space: nowrap;
 }
+
+/* 皇帝宮殿の「獲得 / LVアップできるカード」一覧 (2026-10-23、main.jsのshowCastleAcquirableModal参照) --
+   一覧ではカードを倒さないので枠はカードの大きさのまま。 */
+.castle-acquirable__cell {
+  width: auto;
+  height: auto;
+}
+.castle-acquirable__empty {
+  padding: 24px 8px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.castle-acquirable {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
