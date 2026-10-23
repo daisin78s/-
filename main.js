@@ -8094,9 +8094,19 @@ function queueMobileAiCardGainAnimation(state, next) {
   queueMobileUntapEffects(state, gainedPlayerIds, compare);
   if (compare) playNextMobileAiCardGain();
 }
+// 安全装置 (2026-10-23, per user report「AIがLVアップした時アニメーションがないときがある」) -- 何らかの理由で
+// 1つの演出の終了が来ないと、以降の演出がすべて止まってしまうため、8秒以上終わらない演出は止まったものとみなして
+// 次へ進める(アンタップの選択中は人の操作待ちなので除く)。
+let mobileAiCardGainStartedAt = 0;
 function playNextMobileAiCardGain() {
+  if (mobileAiCardGainPlaying && !mobileUntapChoiceActive && performance.now() - mobileAiCardGainStartedAt > 8000) {
+    const layer = document.getElementById('ai-card-gain-layer');
+    if (layer) layer.innerHTML = '';
+    mobileAiCardGainPlaying = false;
+  }
   if (mobileAiCardGainPlaying || mobileAiCardGainQueue.length === 0) return;
   mobileAiCardGainPlaying = true;
+  mobileAiCardGainStartedAt = performance.now();
   const item = mobileAiCardGainQueue.shift();
   if (item.type === 'untapAuto') { playMobileUntapAuto(item); return; }
   if (item.type === 'untapChoice') { startMobileUntapChoice(item); return; }
@@ -8292,6 +8302,8 @@ function applyMobileUntapChoiceUi(state) {
     const isSelected = selected.includes(id);
     cell.classList.add('owned-card-cell--selectable');
     cell.classList.toggle('owned-card-cell--selected', isSelected);
+    // 選べる(タップしている)カードを光らせる (2026-10-23, per user request)。選んだカードは選択の枠で示す。
+    cell.classList.toggle('change-highlight', !isSelected && !full);
     cell.addEventListener('click', (e) => {
       e.stopImmediatePropagation();
       e.stopPropagation();
