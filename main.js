@@ -8074,24 +8074,33 @@ function queueMobileAiCardGainAnimation(state, next) {
   }
   const previous = lastAiCardFaces;
   lastAiCardFaces = current;
-  if (!previous || replayMode || window.innerWidth > 760 || state.round < 1) return;
-  for (const [playerId, faces] of current) {
-    const before = previous.get(playerId);
-    if (!before) continue;
-    for (const [physicalId, faceId] of faces) {
-      const beforeFaceId = before.get(physicalId);
-      // 前から持っていて面だけ変わった = LVアップ(別の演出、playNextMobileAiCardGain参照)。
-      if (beforeFaceId !== faceId) {
-        mobileAiCardGainQueue.push({ faceId, fromFaceId: beforeFaceId || null, tapped: !!(beforeFaceId && state.cards[physicalId].tapped) });
+  const compare = !!previous && !replayMode && window.innerWidth <= 760 && state.round >= 1;
+  const gainedPlayerIds = new Set();
+  if (compare) {
+    for (const [playerId, faces] of current) {
+      const before = previous.get(playerId);
+      if (!before) continue;
+      for (const [physicalId, faceId] of faces) {
+        const beforeFaceId = before.get(physicalId);
+        // 前から持っていて面だけ変わった = LVアップ(別の演出、playNextMobileAiCardGain参照)。
+        if (beforeFaceId !== faceId) {
+          mobileAiCardGainQueue.push({ faceId, fromFaceId: beforeFaceId || null, tapped: !!(beforeFaceId && state.cards[physicalId].tapped) });
+          gainedPlayerIds.add(playerId);
+        }
       }
     }
   }
-  playNextMobileAiCardGain();
+  // 皇女などの効果によるアンタップ(獲得演出の後に続けて見せる、queueMobileUntapEffects参照)。
+  queueMobileUntapEffects(state, gainedPlayerIds, compare);
+  if (compare) playNextMobileAiCardGain();
 }
 function playNextMobileAiCardGain() {
   if (mobileAiCardGainPlaying || mobileAiCardGainQueue.length === 0) return;
   mobileAiCardGainPlaying = true;
-  const { faceId, fromFaceId, tapped } = mobileAiCardGainQueue.shift();
+  const item = mobileAiCardGainQueue.shift();
+  if (item.type === 'untapAuto') { playMobileUntapAuto(item); return; }
+  if (item.type === 'untapChoice') { startMobileUntapChoice(item); return; }
+  const { faceId, fromFaceId, tapped } = item;
   if (fromFaceId) { playMobileCardUpgrade(fromFaceId, faceId, tapped); return; }
   let layer = document.getElementById('ai-card-gain-layer');
   if (!layer) {
@@ -8167,6 +8176,156 @@ function playMobileCardUpgrade(fromFaceId, toFaceId, tapped) {
       };
     };
   };
+}
+
+/** スマホ版: 皇女などの効果でアンタップする時の演出と選び方 (2026-10-23, per user request: "皇女などの
+ * こうかでアンタップするときもアニメーションが欲しい 獲得かLVアップしてアニメーションで右に移動した直後
+ * 獲得カード画面に切り替わる いまの3枚選ぶは廃止し 画面上部クエストショップなどのタブの部分に左から
+ * 「アンタップするカードを選んでください」と流れてくる アンタップしているカード3枚を選ぶと これでいいですか
+ * これでいい 選びなおす これでいいを選ぶと素早く3枚がアンタップ エリア画面に戻る アンタップするカードが
+ * 3枚までなら(選ぶ流れは)不要") --
+ * ・3枚以下: ゲーム側(executor.runUntapChoice)が全部その場でアンタップ済み。獲得演出の後に獲得カード画面へ
+ *   切り替え、そのカードが倒れた状態から起き上がる演出を見せてエリア画面へ戻る(playMobileUntapAuto)。
+ * ・4枚以上: 獲得演出の後に獲得カード画面へ切り替え、タブバーの所に案内を流し、倒れているカードをタップして
+ *   選ぶ。所定の枚数になると「これでいいですか」(これでいい/選びなおす)。これでいい→起き上がる演出→エリア画面。
+ * 人間のプレイヤーのみ(AIは従来通り自動)。資源タブの旧「アンタップするカードを選んでください」欄はスマホ版
+ * では非表示(style.css)。PC/タブレットは従来通り。 */
+let mobileUntapChoiceActive = null; // { playerId } 選択中
+let lastHumanTapped = null; // Map playerId -> Set(physicalId) 前回renderでタップされていたカード
+const mobileUntapChoiceQueuedFor = new Set();
+
+/** queueMobileAiCardGainAnimationから毎回呼ぶ: このrenderで獲得/LVアップがあった人間のプレイヤーについて、
+ * 同時に起き上がった(アンタップされた)カードと、新しく発生したアンタップ選択を演出キューに積む。 */
+function queueMobileUntapEffects(state, gainedPlayerIds, compare) {
+  const current = new Map();
+  for (const player of state.players) {
+    current.set(player.id, new Set(player.ownedCardPhysicalIds.filter((id) => state.cards[id] && state.cards[id].tapped)));
+  }
+  const previous = lastHumanTapped;
+  lastHumanTapped = current;
+  if (!compare || !previous) return;
+  for (const player of state.players) {
+    if (isAiPlayer(player.id) || (onlineRoomCode && localSeatId !== player.id)) continue;
+    if (gainedPlayerIds.has(player.id)) {
+      const before = previous.get(player.id) || new Set();
+      const untapped = [...before].filter((id) => !current.get(player.id).has(id));
+      if (untapped.length > 0) mobileAiCardGainQueue.push({ type: 'untapAuto', playerId: player.id, physicalIds: untapped });
+    }
+    const pending = state.pendingChoices.some((c) => c.playerId === player.id && c.kind === 'UNTAP_CHOICE');
+    if (pending && !mobileUntapChoiceQueuedFor.has(player.id)) {
+      mobileUntapChoiceQueuedFor.add(player.id);
+      mobileAiCardGainQueue.push({ type: 'untapChoice', playerId: player.id });
+    }
+    if (!pending) mobileUntapChoiceQueuedFor.delete(player.id);
+  }
+}
+
+function finishMobileGainItem() {
+  mobileAiCardGainPlaying = false;
+  playNextMobileAiCardGain();
+}
+
+/** 獲得カード画面で、physicalIdsのカードが倒れた状態から起き上がる演出。終わったらエリア画面へ。 */
+function animateMobileUntapAndReturn(playerId, physicalIds, done) {
+  applyMobileActiveTab('cards');
+  applyMobileCardsPlayer(playerId);
+  window.scrollTo(0, 0);
+  nextFrames(2, () => {
+    for (const id of physicalIds) {
+      const card = document.querySelector(`#player-cards [data-physical-id="${id}"] .shop-card`);
+      if (card) {
+        card.animate([{ transform: 'rotate(90deg)' }, { transform: 'rotate(0deg)' }],
+          { duration: 320, easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)' });
+      }
+    }
+    setTimeout(() => {
+      applyMobileActiveTab('board');
+      done();
+    }, 750);
+  });
+}
+
+function playMobileUntapAuto(item) {
+  animateMobileUntapAndReturn(item.playerId, item.physicalIds, finishMobileGainItem);
+}
+
+function startMobileUntapChoice(item) {
+  const pending = STATE.pendingChoices.find((c) => c.playerId === item.playerId && c.kind === 'UNTAP_CHOICE');
+  if (!pending) { finishMobileGainItem(); return; }
+  mobileUntapChoiceActive = { playerId: item.playerId, bannerShown: false };
+  pending.context.selected = [];
+  applyMobileActiveTab('cards');
+  applyMobileCardsPlayer(item.playerId);
+  window.scrollTo(0, 0);
+  render(STATE);
+}
+
+/** render()の最後に呼ぶ: 選択中なら、倒れているカードを選べるようにし、タブバーの所の案内/確認を出す。 */
+function applyMobileUntapChoiceUi(state) {
+  let banner = document.getElementById('mobile-untap-banner');
+  if (!mobileUntapChoiceActive) {
+    if (banner) banner.hidden = true;
+    return;
+  }
+  const { playerId } = mobileUntapChoiceActive;
+  const choice = state.pendingChoices.find((c) => c.playerId === playerId && c.kind === 'UNTAP_CHOICE');
+  if (!choice) {
+    mobileUntapChoiceActive = null;
+    if (banner) banner.hidden = true;
+    finishMobileGainItem();
+    return;
+  }
+  if (!banner) {
+    banner = el('div', 'mobile-untap-banner');
+    banner.id = 'mobile-untap-banner';
+    document.body.appendChild(banner);
+  }
+  banner.hidden = false;
+  if (!choice.context.selected) choice.context.selected = [];
+  const selected = choice.context.selected;
+  const count = choice.context.count;
+  const full = selected.length >= Math.min(count, choice.context.candidates.length);
+  // 倒れているカードを選べるように(カード自身のタップアクション/拡大より先に受け取る)。
+  for (const id of choice.context.candidates) {
+    const cell = document.querySelector(`#player-cards [data-physical-id="${id}"]`);
+    if (!cell) continue;
+    const isSelected = selected.includes(id);
+    cell.classList.add('owned-card-cell--selectable');
+    cell.classList.toggle('owned-card-cell--selected', isSelected);
+    cell.addEventListener('click', (e) => {
+      e.stopImmediatePropagation();
+      e.stopPropagation();
+      if (isSelected) choice.context.selected = selected.filter((x) => x !== id);
+      else if (!full) choice.context.selected = [...selected, id];
+      render(STATE);
+    }, true);
+  }
+  banner.innerHTML = '';
+  if (full) {
+    banner.appendChild(el('span', 'mobile-untap-banner__text', 'これでいいですか'));
+    const ok = el('button', 'mobile-untap-banner__button mobile-untap-banner__button--ok', 'これでいい');
+    ok.type = 'button';
+    ok.onclick = () => {
+      const chosen = [...choice.context.selected];
+      executorMod.resolveUntapChoice(state, playerId, chosen);
+      mobileUntapChoiceActive = null;
+      banner.hidden = true;
+      render(STATE);
+      animateMobileUntapAndReturn(playerId, chosen, finishMobileGainItem);
+    };
+    const redo = el('button', 'mobile-untap-banner__button', '選びなおす');
+    redo.type = 'button';
+    redo.onclick = () => { choice.context.selected = []; render(STATE); };
+    banner.appendChild(ok);
+    banner.appendChild(redo);
+  } else {
+    banner.appendChild(el('span', 'mobile-untap-banner__text', `アンタップするカードを選んでください（${selected.length}/${Math.min(count, choice.context.candidates.length)}）`));
+  }
+  if (!mobileUntapChoiceActive.bannerShown) {
+    mobileUntapChoiceActive.bannerShown = true;
+    banner.animate([{ transform: 'translateX(-100%)' }, { transform: 'translateX(0)' }],
+      { duration: 350, easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)' });
+  }
 }
 
 /** スマホ版フリーアクション画面 (2026-10-22, per user request: "エリアのダイス置き場にフリーアクションと
@@ -9550,6 +9709,7 @@ function renderPlayerCards(state, next) {
         tapped: cardState.tapped, showEffect: true, allowTextFallback: false, suppressConNote,
       });
       const cell = el('div', cardNode.classList.contains('shop-card--tall') ? 'owned-card-cell owned-card-cell--tall' : 'owned-card-cell');
+      cell.dataset.physicalId = physicalId; // スマホ版アンタップ選択/演出用(applyMobileUntapChoiceUi参照)
       if (isNeverTappedCard(cardState)) cell.classList.add('owned-card-cell--untappable');
       // 変化ハイライト (2026-08-16) -- this JOB/CON was drafted since the viewing human's last turn ended.
       // replayHighlight (2026-09-09) -- the リプレイ変化ハイライト, see computeReplayChangeHighlight's own
@@ -9658,6 +9818,7 @@ function renderPlayerCards(state, next) {
       if (!cardState) continue;
       const tall = isNormalDeckCard(physicalId); // A/B/C decks: taller, with effect text (confirmed)
       const cell = el('div', tall ? 'owned-card-cell owned-card-cell--tall' : 'owned-card-cell');
+      cell.dataset.physicalId = physicalId; // スマホ版アンタップ選択/演出用(applyMobileUntapChoiceUi参照)
       if (isNeverTappedCard(cardState)) cell.classList.add('owned-card-cell--untappable');
       // 変化ハイライト (2026-08-16) -- this card was built/acquired since the viewing human's last turn ended.
       // replayHighlight (2026-09-09) -- the リプレイ変化ハイライト, see computeReplayChangeHighlight's own
@@ -13166,7 +13327,7 @@ function revertLastPlacementForTutorial() {
   if (actionCheckpoints.length === 0) return;
   const checkpoint = actionCheckpoints.pop();
   undoMod.restoreSnapshot(STATE, checkpoint.state);
-  lastAiCardFaces = null; // 取り消し後は獲得演出の比較基準を作り直す(LV1へ戻ったカード等を流さない)
+  lastAiCardFaces = null; lastHumanTapped = null; // 取り消し後は獲得演出の比較基準を作り直す(LV1へ戻ったカード等を流さない)
   turnActionTaken = checkpoint.turnActionTaken;
   selectedDieIds = [];
   pendingBuildChoice = null;
@@ -14769,6 +14930,7 @@ function renderCore(state) {
   renderMobileCardsView(state, next);
   renderMobileFreeActionOverlay(state, next);
   queueMobileAiCardGainAnimation(state, next);
+  applyMobileUntapChoiceUi(state);
   // Drains GameState.whiteOverflowEvents into whatever placementMessage this render's own action
   // already produced (2026-08-11, per user request) -- appended, not replacing, so a placement that
   // both fails/succeeds AND happens to overflow a white die (e.g. a CHANGE granting several wD at once,
@@ -14825,7 +14987,7 @@ function handleTutorialCardAcquisitionRestartClick() {
   const snapshot = tutorialCardAcquisitionRestartSnapshot;
   if (!snapshot) return;
   undoMod.restoreSnapshot(STATE, snapshot.state);
-  lastAiCardFaces = null; // 取り消し後は獲得演出の比較基準を作り直す(LV1へ戻ったカード等を流さない)
+  lastAiCardFaces = null; lastHumanTapped = null; // 取り消し後は獲得演出の比較基準を作り直す(LV1へ戻ったカード等を流さない)
   turnActionTaken = snapshot.turnActionTaken;
   pendingBuildChoice = snapshot.pendingBuildChoice;
   actionCheckpoints.length = snapshot.checkpointDepth;
@@ -14890,7 +15052,7 @@ function handleCancelPreviousActionClick() {
   if (actionCheckpoints.length === 0) return;
   const checkpoint = actionCheckpoints.pop();
   undoMod.restoreSnapshot(STATE, checkpoint.state);
-  lastAiCardFaces = null; // 取り消し後は獲得演出の比較基準を作り直す(LV1へ戻ったカード等を流さない)
+  lastAiCardFaces = null; lastHumanTapped = null; // 取り消し後は獲得演出の比較基準を作り直す(LV1へ戻ったカード等を流さない)
   turnActionTaken = checkpoint.turnActionTaken;
   selectedDieIds = [];
   pendingBuildChoice = null;

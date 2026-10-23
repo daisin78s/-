@@ -6448,3 +6448,46 @@ body.opening-hide-res .card-group__onboard-resources > .owned-card-cell {
   45% { background-position: -20% 0, 0 0; }
   100% { background-position: -20% 0, 0 0; }
 }
+
+/* スマホ版: アンタップするカードを選ぶ時の案内/確認 (2026-10-23、main.jsのapplyMobileUntapChoiceUi参照) --
+   タブバーの位置に重ねて表示(左から流れてくる)。資源タブの旧アンタップ選択欄はスマホ版では使わない。 */
+.mobile-untap-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 4px calc(8px + env(safe-area-inset-right)) 4px calc(8px + env(safe-area-inset-left));
+  background: var(--accent, #4a90d9);
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  box-shadow: 0 2px 8px rgba(16, 24, 40, 0.3);
+}
+.mobile-untap-banner[hidden] {
+  display: none;
+}
+.mobile-untap-banner__button {
+  border: none;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-weight: 700;
+  font-size: 14px;
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+  cursor: pointer;
+}
+.mobile-untap-banner__button--ok {
+  background: #fff;
+  color: var(--accent, #4a90d9);
+}
+@media (max-width: 760px) {
+  .player-panel__untap-choice {
+    display: none;
+  }
+}
