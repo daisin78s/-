@@ -6742,3 +6742,61 @@ body.story-hide-dice #players .player-panel .die {
 body.story-mode:has(#build-choice-overlay:not([hidden])) .story-overlay { display: none; }
 body.story-mode #undo-button-build,
 body.story-mode #build-choice-close-button { display: none; }
+/* ストーリーの会話ログ (story.jsのtoggleStoryLog)。セリフ欄と同じ横幅・同じ見た目で、上に広げて出す。 */
+.story-log {
+  position: absolute;
+  left: 22%;
+  right: 22%;
+  top: 14%;
+  bottom: 3%;
+  padding: 16px 0 8px;
+  border-radius: 12px;
+  background: rgba(30, 20, 24, 0.92);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  pointer-events: auto;
+  z-index: 4;
+}
+.story-log[hidden] { display: none; }
+.story-log__list {
+  height: 100%;
+  overflow-y: auto;
+  padding: 0 16px;
+  -webkit-overflow-scrolling: touch;
+}
+.story-log__line {
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.story-log__line:last-child { border-bottom: none; }
+.story-log__speaker {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: #f2b6c0;
+}
+.story-log__text {
+  white-space: pre-wrap;
+  font-weight: 600;
+}
+.story-log-button {
+  position: absolute;
+  bottom: 46px;
+  right: 6px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 7px;
+  white-space: nowrap;
+  border: none;
+  border-radius: 17px;
+  background: rgba(0, 0, 0, 0.15);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  pointer-events: auto;
+  z-index: 6;
+}
+.story-overlay:has(.story-log:not([hidden])) .story-dialog { visibility: hidden; }

@@ -30,20 +30,43 @@ function storyLine(id) {
   return script[id] || { text: '' };
 }
 
+/** ストーリーの時間待ちは全部これを通す。会話ログを開いている間(run.paused)は止まり、閉じると残り時間から
+ * 再開する(storyPause/storyResume)。戻り値はstoryCancelに渡す札。 */
 function storyLater(fn, ms) {
   if (!storyRun) return null;
   const run = storyRun;
-  const t = setTimeout(() => {
-    run.timers.delete(t);
-    if (storyRun === run) fn();
-  }, ms);
-  run.timers.add(t);
-  return t;
+  const token = { fn, remaining: ms, due: 0, handle: null };
+  run.timers.add(token);
+  if (!run.paused) storyStartTimer(run, token);
+  return token;
 }
-function storyCancel(t) {
-  if (!t || !storyRun) return;
-  clearTimeout(t);
-  storyRun.timers.delete(t);
+function storyStartTimer(run, token) {
+  token.due = performance.now() + token.remaining;
+  token.handle = setTimeout(() => {
+    run.timers.delete(token);
+    if (storyRun === run) token.fn();
+  }, token.remaining);
+}
+function storyCancel(token) {
+  if (!token || !storyRun) return;
+  clearTimeout(token.handle);
+  storyRun.timers.delete(token);
+}
+function storyPause() {
+  const run = storyRun;
+  if (!run || run.paused) return;
+  run.paused = true;
+  const now = performance.now();
+  run.timers.forEach((token) => {
+    clearTimeout(token.handle);
+    token.remaining = Math.max(0, token.due - now);
+  });
+}
+function storyResume() {
+  const run = storyRun;
+  if (!run || !run.paused) return;
+  run.paused = false;
+  run.timers.forEach((token) => storyStartTimer(run, token));
 }
 
 function storyHoldMs(text) {
@@ -55,6 +78,8 @@ function storySay(id, onTyped) {
   const run = storyRun;
   if (!run) return;
   const text = storyLine(id).text;
+  // 会話ログ用に記録(5秒ごとに出るヒントなど、同じセリフは1回だけ)。
+  if (text && !run.log.includes(id)) run.log.push(id);
   const box = run.dom.dialog;
   const body = run.dom.dialogText;
   box.hidden = false;
@@ -456,6 +481,34 @@ function storyEndOfScript() {
   end.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 400, easing: 'ease-out' });
 }
 
+/* ---------- 会話ログ ---------- */
+
+function toggleStoryLog() {
+  const run = storyRun;
+  if (!run) return;
+  const { logPanel, logButton } = run.dom;
+  if (!logPanel.hidden) {
+    logPanel.hidden = true;
+    logButton.textContent = 'ログ';
+    storyResume();
+    return;
+  }
+  storyPause();
+  logPanel.innerHTML = '';
+  logPanel.appendChild(el('div', 'story-dialog__name', 'ログ'));
+  const list = el('div', 'story-log__list');
+  for (const id of run.log) {
+    const row = el('div', 'story-log__line');
+    row.appendChild(el('span', 'story-log__speaker', 'アレク'));
+    row.appendChild(el('span', 'story-log__text', storyLine(id).text));
+    list.appendChild(row);
+  }
+  logPanel.appendChild(list);
+  logPanel.hidden = false;
+  logButton.textContent = 'とじる';
+  list.scrollTop = list.scrollHeight; // 新しいセリフが見える位置から
+}
+
 /* ---------- 開く/閉じる ---------- */
 
 function openStoryMode() {
@@ -477,12 +530,21 @@ function openStoryMode() {
   close.type = 'button';
   close.setAttribute('aria-label', 'ストーリーをやめる');
   close.addEventListener('click', closeStoryMode);
-  root.append(alek, dialog, goal, close);
+  // 会話ログ (2026-10-24, per user request: "会話ログを見れるボタンが欲しい 会話ログは新しいウィンドウが開く
+  // のではなくセリフ部分にでる") -- ✖の上の「ログ」ボタンで、セリフ欄の所が上に広がってこれまでのセリフを
+  // 一覧表示(新しい物が下)。開いている間はストーリーの自動送りを止める。もう一度押すか一覧を押すと閉じる。
+  const logButton = el('button', 'story-log-button', 'ログ');
+  logButton.type = 'button';
+  logButton.addEventListener('click', toggleStoryLog);
+  const logPanel = el('div', 'story-log');
+  logPanel.hidden = true;
+  logPanel.addEventListener('click', toggleStoryLog);
+  root.append(alek, dialog, logPanel, goal, logButton, close);
   document.body.appendChild(root);
   storyRun = {
     timers: new Set(), typeTimer: null, diceShown: false, glowDieValues: [], onRender: null, onTap: null,
     resourceOverride: null,
-    visibleMapIds: [], dom: { root, goal, dialog, dialogText },
+    visibleMapIds: [], log: [], paused: false, dom: { root, goal, dialog, dialogText, logPanel, logButton },
   };
   document.body.classList.add('story-mode', 'story-hide-dice');
   entryBannerDismissed = true;
@@ -491,7 +553,7 @@ function openStoryMode() {
 
 function closeStoryMode() {
   if (!storyRun) return;
-  storyRun.timers.forEach((t) => clearTimeout(t));
+  storyRun.timers.forEach((token) => clearTimeout(token.handle));
   storyRun = null;
   location.reload(); // 練習用の盤面を捨ててトップ画面へ
 }
