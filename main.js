@@ -8054,7 +8054,9 @@ function queueMobileAiCardGainAnimation(state, next) {
     for (const [physicalId, faceId] of faces) {
       const beforeFaceId = before.get(physicalId);
       // 前から持っていて面だけ変わった = LVアップ(別の演出、playNextMobileAiCardGain参照)。
-      if (beforeFaceId !== faceId) mobileAiCardGainQueue.push({ faceId, fromFaceId: beforeFaceId || null });
+      if (beforeFaceId !== faceId) {
+        mobileAiCardGainQueue.push({ faceId, fromFaceId: beforeFaceId || null, tapped: !!(beforeFaceId && state.cards[physicalId].tapped) });
+      }
     }
   }
   playNextMobileAiCardGain();
@@ -8062,8 +8064,8 @@ function queueMobileAiCardGainAnimation(state, next) {
 function playNextMobileAiCardGain() {
   if (mobileAiCardGainPlaying || mobileAiCardGainQueue.length === 0) return;
   mobileAiCardGainPlaying = true;
-  const { faceId, fromFaceId } = mobileAiCardGainQueue.shift();
-  if (fromFaceId) { playMobileCardUpgrade(fromFaceId, faceId); return; }
+  const { faceId, fromFaceId, tapped } = mobileAiCardGainQueue.shift();
+  if (fromFaceId) { playMobileCardUpgrade(fromFaceId, faceId, tapped); return; }
   let layer = document.getElementById('ai-card-gain-layer');
   if (!layer) {
     layer = el('div', 'ai-card-gain-layer');
@@ -8095,7 +8097,12 @@ const CARD_UPGRADE_IN_MS = 200;
 const CARD_UPGRADE_FLIP_HALF_MS = 160;
 const CARD_UPGRADE_HOLD_MS = 350;
 const CARD_UPGRADE_OUT_MS = 200;
-function playMobileCardUpgrade(fromFaceId, toFaceId) {
+/* タップ状態(横に倒れた)カードのLVアップ (2026-10-23, per user request: "タップ状態のカードをLVUPしたとき
+ * タップ状態で右から真ん中に移動 ひっくり返る(この時ひっくり返る方向に注意) 右に素早く移動" + 回答「カード
+ * 自身の左右方向」) -- 倒れたまま(rotate 90deg)の面を使い、裏返しはカード要素自身の変形として
+ * rotate(90deg) scaleX(...)で行う。scaleXが回転より先(カード自身の座標)に効くので、カード自身の左右方向に
+ * 裏返る(画面上では上下に薄くなって見える)。 */
+function playMobileCardUpgrade(fromFaceId, toFaceId, tapped) {
   let layer = document.getElementById('ai-card-gain-layer');
   if (!layer) {
     layer = el('div', 'ai-card-gain-layer');
@@ -8103,7 +8110,12 @@ function playMobileCardUpgrade(fromFaceId, toFaceId) {
     document.body.appendChild(layer);
   }
   layer.innerHTML = '';
-  const buildFace = (faceId) => buildCardVisual(faceId, { req: factsForFaceId(faceId).req, showEffect: true, allowTextFallback: false, noInteraction: true });
+  const buildFace = (faceId) => buildCardVisual(faceId, { req: factsForFaceId(faceId).req, showEffect: true, allowTextFallback: false, noInteraction: true, tapped: !!tapped });
+  // 裏返しの変形: 倒れていればカード要素自身にrotate付きで、そうでなければ入れ物ごと横に縮める。
+  const flipTarget = () => (tapped ? holder.firstElementChild : holder);
+  const flipFrames = (from, to) => (tapped
+    ? [{ transform: `rotate(90deg) scaleX(${from})` }, { transform: `rotate(90deg) scaleX(${to})` }]
+    : [{ transform: `scaleX(${from})` }, { transform: `scaleX(${to})` }]);
   const holder = el('div', 'ai-card-gain-layer__card');
   holder.appendChild(buildFace(fromFaceId));
   layer.appendChild(holder);
@@ -8116,11 +8128,11 @@ function playMobileCardUpgrade(fromFaceId, toFaceId) {
   holder.animate([{ transform: 'translateX(100vw)' }, { transform: 'translateX(0)' }],
     { duration: CARD_UPGRADE_IN_MS, easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)', fill: 'forwards' }).onfinish = () => {
     // 2) ひっくり返る: 横に縮んで消える → LVアップ後の面に差し替え → 広がる
-    holder.animate([{ transform: 'scaleX(1)' }, { transform: 'scaleX(0)' }],
+    flipTarget().animate(flipFrames(1, 0),
       { duration: CARD_UPGRADE_FLIP_HALF_MS, easing: 'ease-in', fill: 'forwards' }).onfinish = () => {
       holder.innerHTML = '';
       holder.appendChild(buildFace(toFaceId));
-      holder.animate([{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }],
+      flipTarget().animate(flipFrames(0, 1),
         { duration: CARD_UPGRADE_FLIP_HALF_MS, easing: 'ease-out', fill: 'forwards' }).onfinish = () => {
         // 3) 少し見せてから、すばやく右へ
         holder.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(100vw)' }],
