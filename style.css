@@ -6253,3 +6253,30 @@ body.opening-hide-res .card-group__onboard-resources > .owned-card-cell {
   pointer-events: none;
   box-sizing: border-box;
 }
+
+/* 初期資源の確認画面を2つのウィンドウに分ける (2026-10-23, per user request、スマホ/PC共通) -- 外側の
+   モーダル自体は透明な入れ物にし、左(制約カード)と右(この2枚でよろしいですか?+選んだ2枚+ボタン)を
+   それぞれ白い独立したウィンドウとして横に並べる。index.htmlの#resource-confirm-overlay参照。 */
+#resource-confirm-overlay > .resource-confirm-modal {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  background: transparent;
+  box-shadow: none;
+  border: none;
+  padding: 0;
+}
+.resource-confirm-panel {
+  background: var(--surface);
+  border-radius: var(--radius, 12px);
+  box-shadow: 0 10px 30px rgba(16, 24, 40, 0.25);
+  padding: 16px;
+}
+.resource-confirm-panel--con {
+  display: flex;
+  align-items: center;
+}
+.resource-confirm-panel--res {
+  display: flex;
+  flex-direction: column;
+}

@@ -8997,6 +8997,7 @@ function renderResourceConfirmOverlay(state) {
     // 意図せず光って見えるバグの元になる)。隠す瞬間に明示的に空にする/消す。
     document.getElementById('resource-confirm-start-order').classList.remove('change-highlight');
     document.getElementById('resource-confirm-visual').innerHTML = '';
+    document.getElementById('resource-confirm-con').innerHTML = '';
     return;
   }
   overlay.hidden = false;
@@ -9009,6 +9010,9 @@ function renderResourceConfirmOverlay(state) {
   startOrderBadge.textContent = `スタプレ合計 ${resourceChoiceStartOrderTotal(state, choice.playerId, choice.context.selected)}`;
   const visual = document.getElementById('resource-confirm-visual');
   visual.innerHTML = '';
+  // 制約カードは左側の別ウィンドウへ (2026-10-23、index.htmlの#resource-confirm-overlay参照)。
+  const conVisual = document.getElementById('resource-confirm-con');
+  conVisual.innerHTML = '';
   // 制約カード(表裏)も並べて表示 (2026-09-26, per user request with an iPad screenshot: "ウィンドウを左に
   // 伸ばして 制約カードも表示 そのうち一枚の先行順も光らせる") -- .build-choice-modal自身はwidth:autoな
   // ので、ここで並べるカードが増えるだけでモーダルは自動的に(左右へ)広がる。先行順合計に実際に使われるのは
@@ -9022,7 +9026,7 @@ function renderResourceConfirmOverlay(state) {
     const cardNode = buildCardVisual(`${conPhysicalId}${face}`, { showEffect: true, allowTextFallback: false, noInteraction: true });
     const cell = el('div', cardNode.classList.contains('shop-card--tall') ? 'owned-card-cell owned-card-cell--tall' : 'owned-card-cell');
     cell.appendChild(cardNode);
-    visual.appendChild(cell);
+    conVisual.appendChild(cell);
     // .shop-card > .shop-card__start-order (子コンビネータ) で、.shop-card__backの中にある同名要素
     // (CONにはA/B面同士のホバー反転プレビュー用に裏面データが入っている -- 2026-09-26、実機確認で発覚:
     // querySelector単体だとDOM順で先に出てくる.shop-card__back側(非表示)を誤って掴んでいた)を除外する。
