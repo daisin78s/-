@@ -212,14 +212,16 @@ function randomRoomCode() {
 /** Generates a fresh 4-char code, retrying on the extremely unlikely chance it's already taken, creates
  * "rooms/{code}" with P1 (the creator) as the only occupied seat, and returns it.
  * @returns {Promise<{code:string, seatId:'P1'}>} */
-function createRoom() {
+// appVersion (2026-10-23, per user request「バージョンが違う場合対戦できないように」) -- 部屋を作った端末の
+// バージョン(例 "Ver.1.285")を部屋に記録し、joinRoomで参加する端末のバージョンと比べる。
+function createRoom(appVersion) {
   var ref = db().collection(ROOM_COLLECTION).doc(randomRoomCode());
   return ref.get().then(function (snap) {
-    if (snap.exists) return createRoom(); // collision (rare) -- just try a new random code
+    if (snap.exists) return createRoom(appVersion); // collision (rare) -- just try a new random code
     var seats = {};
     SEAT_IDS.forEach(function (id) { seats[id] = null; });
     seats.P1 = { joinedAt: Date.now() };
-    return ref.set({ hostSeatId: 'P1', seats: seats, phase: 'lobby', createdAt: Date.now() }).then(function () {
+    return ref.set({ hostSeatId: 'P1', seats: seats, phase: 'lobby', createdAt: Date.now(), appVersion: appVersion || null }).then(function () {
       return { code: ref.id, seatId: 'P1' };
     });
   });
@@ -229,13 +231,19 @@ function createRoom() {
  * transaction, so two people joining at the exact same moment can never both claim the same seat.
  * @returns {Promise<{code:string, seatId:string}>}
  * @throws {Error} with .message one of ROOM_NOT_FOUND / ROOM_ALREADY_STARTED / ROOM_FULL */
-function joinRoom(code) {
+function joinRoom(code, appVersion) {
   var normalizedCode = code.trim();
   var ref = db().collection(ROOM_COLLECTION).doc(normalizedCode);
   return db().runTransaction(function (tx) {
     return tx.get(ref).then(function (snap) {
       if (!snap.exists) throw new Error('ROOM_NOT_FOUND');
       var data = snap.data();
+      // バージョンが違えば参加させない(部屋にバージョンの記録が無い古い部屋は従来通り)。
+      if (data.appVersion && appVersion && data.appVersion !== appVersion) {
+        var err = new Error('VERSION_MISMATCH');
+        err.roomVersion = data.appVersion;
+        throw err;
+      }
       if (data.phase !== 'lobby') throw new Error('ROOM_ALREADY_STARTED');
       var openSeatId = null;
       for (var i = 0; i < SEAT_IDS.length; i++) {

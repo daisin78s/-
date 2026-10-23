@@ -11068,8 +11068,14 @@ function closeOnlineLobby() {
   document.getElementById('online-lobby-overlay').hidden = true;
 }
 
+/** この端末のバージョン(例 "Ver.1.285") -- 入口バナーの表示から読む(更新のたびに書き換わる所)。 */
+function appVersionLabel() {
+  const node = document.getElementById('entry-banner__version');
+  return node ? node.textContent.trim() : null;
+}
+
 function handleCreateRoomClick() {
-  OnlineSync.createRoom().then(({ code, seatId }) => {
+  OnlineSync.createRoom(appVersionLabel()).then(({ code, seatId }) => {
     onlineRoomCode = code;
     localSeatId = seatId;
     isOnlineHost = true;
@@ -11081,7 +11087,7 @@ function handleCreateRoomClick() {
 function handleJoinRoomSubmit(codeInput) {
   const code = codeInput.trim();
   if (!code) return;
-  OnlineSync.joinRoom(code).then(({ code: normalizedCode, seatId }) => {
+  OnlineSync.joinRoom(code, appVersionLabel()).then(({ code: normalizedCode, seatId }) => {
     onlineRoomCode = normalizedCode;
     localSeatId = seatId;
     isOnlineHost = false;
@@ -11089,7 +11095,10 @@ function handleJoinRoomSubmit(codeInput) {
     onlineLobbyView = 'waiting';
     subscribeToOnlineRoom(normalizedCode);
   }).catch((e) => {
-    onlineLobbyError = e.message; // ROOM_NOT_FOUND / ROOM_ALREADY_STARTED / ROOM_FULL
+    onlineLobbyError = e.message; // ROOM_NOT_FOUND / ROOM_ALREADY_STARTED / ROOM_FULL / VERSION_MISMATCH
+    if (e.message === 'VERSION_MISMATCH') {
+      onlineLobbyError = `バージョンが違うため対戦できません（部屋: ${e.roomVersion} / この端末: ${appVersionLabel()}）。両方の端末でページを再読み込みして、同じバージョンにしてください`;
+    }
     renderOnlineLobbyOverlay();
   });
 }
