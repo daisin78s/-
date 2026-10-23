@@ -13981,12 +13981,22 @@ const AI_DIE_MOVE_MS = 250;
 function captureDieRects() {
   const handRects = new Map();
   const placedKeys = new Set();
+  const allKeys = new Set();
+  const placedDice = []; // ラウンド開始演出用: スロット上のダイス(見えているもの)の位置と見た目の複製
   document.querySelectorAll('.die[data-die-key]').forEach((node) => {
-    if (node.closest('.slot')) { placedKeys.add(node.dataset.dieKey); return; }
+    allKeys.add(node.dataset.dieKey);
+    if (node.closest('.slot')) {
+      placedKeys.add(node.dataset.dieKey);
+      const rect = node.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        placedDice.push({ rect, node: node.cloneNode(true), white: node.classList.contains('die--WHITE') });
+      }
+      return;
+    }
     const rect = node.getBoundingClientRect();
     if (rect.width > 0 && rect.height > 0 && !handRects.has(node.dataset.dieKey)) handRects.set(node.dataset.dieKey, rect);
   });
-  return { handRects, placedKeys };
+  return { handRects, placedKeys, allKeys, placedDice };
 }
 function animateAiDiceMoves(before) {
   if (replayMode) return;
@@ -14026,10 +14036,202 @@ function animateAiDiceMoves(before) {
   });
 }
 
+/** ダイスを振るアニメーション (2026-10-22, per user request: "ダイスを振るアニメーション作れますか" -> 相談の
+ * 結果: 「ラウンド開始は全員分 訓練場などは1個」「エリアから白ダイスが上に色ダイスが右に素早く移動(白ダイスは
+ * 捨てられるのをわかりやすくするため) その後資源画面に切り替わってすべて一斉に振ってそれがダイス置き場に
+ * 素早く移動」「操作不能」「全端末」「転がる時間は0.5〜0.8秒」「回転しながら跳ねる」「終わったらエリアに
+ * 戻る」「訓練場などはその場で振る」、転がる経路は per user提案「1番手のプレイヤーの1番目のダイスの
+ * アニメーション2パターン...パターン1と2はランダム ...11x2x4人=88通り ダイス置き場のダイスの位置は
+ * 変わらないように」 -- 88通りを手で書く代わりに、(手番順, そのプレイヤーの何番目のダイスか, パターン1/2)
+ * から毎回同じ経路を作る乱数(diceRollPathRng)で生成している。見た目だけの演出で、出目そのものはゲーム側が
+ * 既に決めた値(=最後に表示する数字)。再生中は操作不能・AIの進行も止める(renderCoreのpump条件参照)。 */
+const DICE_EXIT_MS = 300;
+const DICE_ROLL_MS = 600;
+const DICE_SETTLE_MS = 250;
+let diceRollSequenceActive = false;
+let lastRenderedRound = null;
+const diceRollHiddenKeys = new Set(); // 演出中、着地前の本物のダイスを隠しておくキー
+
 function render(state) {
   const diceBefore = captureDieRects();
   renderCore(state);
+  const previousRound = lastRenderedRound;
+  lastRenderedRound = state.round;
+  if (diceRollHiddenKeys.size > 0) hideDiceByKeys(diceRollHiddenKeys);
+  if (replayMode) return;
+  if (previousRound !== null && state.round === previousRound + 1 && state.round >= 2) {
+    playRoundStartDiceSequence(state, diceBefore);
+    return;
+  }
   animateAiDiceMoves(diceBefore);
+  if (previousRound !== null && state.round === previousRound && !diceRollSequenceActive) playNewDiceRolls(state, diceBefore);
+}
+
+function hideDiceByKeys(keys) {
+  document.querySelectorAll('.die[data-die-key]').forEach((node) => {
+    if (keys.has(node.dataset.dieKey) && !node.closest('.slot')) node.style.visibility = 'hidden';
+  });
+}
+function setDiceRollBlocker(on) {
+  let blocker = document.getElementById('dice-roll-blocker');
+  if (!blocker) {
+    blocker = document.createElement('div');
+    blocker.id = 'dice-roll-blocker';
+    document.body.appendChild(blocker);
+  }
+  blocker.hidden = !on;
+}
+/** 同じseedから毎回同じ数列を返す小さな乱数 (mulberry32)。ゲーム本体の乱数(state.rng)は使わない。 */
+function diceRollPathRng(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+/** targetの位置(着地点)に、飛ばす用の複製を重ねて作る。 */
+function makeDieFlyer(target) {
+  const rect = target.getBoundingClientRect();
+  const flyer = target.cloneNode(true);
+  flyer.classList.add('die--flying');
+  flyer.style.visibility = '';
+  Object.assign(flyer.style, {
+    position: 'fixed', left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px`, margin: '0',
+  });
+  document.body.appendChild(flyer);
+  return { flyer, rect };
+}
+/** 転がっている間、数字を高速で切り替え、最後に本当の目に戻す。 */
+function flickerDieValue(flyer, durationMs) {
+  const valueEl = flyer.querySelector('.die__value');
+  if (!valueEl) return;
+  const finalText = valueEl.textContent;
+  if (finalText === '☆' || finalText === '') return;
+  const timer = setInterval(() => { valueEl.textContent = String(1 + Math.floor(Math.random() * 6)); }, 60);
+  setTimeout(() => { clearInterval(timer); valueEl.textContent = finalText; }, durationMs);
+}
+function nextFrames(n, fn) {
+  if (n <= 0) { fn(); return; }
+  requestAnimationFrame(() => nextFrames(n - 1, fn));
+}
+
+function playRoundStartDiceSequence(state, before) {
+  diceRollSequenceActive = true;
+  setDiceRollBlocker(true);
+  // 1) スロットのダイス: 白は上へ(捨てられる)、色は右へ、すばやく退場。
+  for (const placed of before.placedDice) {
+    const flyer = placed.node;
+    flyer.classList.add('die--flying');
+    Object.assign(flyer.style, {
+      position: 'fixed', left: `${placed.rect.left}px`, top: `${placed.rect.top}px`, width: `${placed.rect.width}px`, height: `${placed.rect.height}px`, margin: '0', visibility: '',
+    });
+    document.body.appendChild(flyer);
+    const to = placed.white
+      ? `translate(0, ${-(placed.rect.bottom + 40)}px)`
+      : `translate(${window.innerWidth - placed.rect.left + 40}px, 0)`;
+    flyer.animate([{ transform: 'translate(0, 0)' }, { transform: to }], { duration: DICE_EXIT_MS, easing: 'cubic-bezier(0.5, 0, 0.9, 0.4)', fill: 'forwards' })
+      .onfinish = () => flyer.remove();
+  }
+  const exitWait = before.placedDice.length > 0 ? DICE_EXIT_MS : 0;
+  setTimeout(() => {
+    // 2) スマホは資源タブへ。PC/タブレットは1画面なのでそのまま。
+    if (window.innerWidth <= 760) applyMobileActiveTab('players');
+    nextFrames(2, () => rollAllHandDice(state));
+  }, exitWait);
+}
+
+function rollAllHandDice(state) {
+  const targets = [...document.querySelectorAll('#players .die[data-die-key]')].filter((node) => {
+    const rect = node.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  });
+  const indexByPlayer = new Map();
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  for (const target of targets) {
+    const key = target.dataset.dieKey;
+    const playerId = key.split(':')[0];
+    const dieIndex = indexByPlayer.get(playerId) || 0;
+    indexByPlayer.set(playerId, dieIndex + 1);
+    const orderIndex = Math.max(0, (state.turnOrder || []).indexOf(playerId));
+    const pattern = Math.random() < 0.5 ? 0 : 1;
+    const rng = diceRollPathRng(((orderIndex * 11 + dieIndex) * 2 + pattern) * 7919 + 17);
+    diceRollHiddenKeys.add(key);
+    const { flyer, rect } = makeDieFlyer(target);
+    target.style.visibility = 'hidden';
+    // 画面上のいろいろな所を、出発点→跳ね2回→止まる点 の順に転がり、最後に自分のダイス置き場へ。
+    const pt = () => ({ x: W * (0.12 + 0.76 * rng()), y: H * (0.15 + 0.7 * rng()) });
+    const points = [pt(), pt(), pt(), pt()];
+    const spins = (2 + Math.floor(rng() * 3)) * 360 * (rng() < 0.5 ? -1 : 1);
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const at = (p, rot, scale) => ({ transform: `translate(${p.x - cx}px, ${p.y - cy}px) rotate(${rot}deg) scale(${scale})` });
+    const total = DICE_ROLL_MS + DICE_SETTLE_MS;
+    const r = DICE_ROLL_MS / total;
+    const frames = [
+      { ...at(points[0], 0, 1.5), offset: 0 },
+      { ...at(points[1], spins * 0.45, 1.25), offset: r * 0.4 },
+      { ...at(points[2], spins * 0.8, 1.4), offset: r * 0.72 },
+      { ...at(points[3], spins, 1.3), offset: r },
+      { transform: 'translate(0, 0) rotate(0deg) scale(1)', offset: 1 },
+    ];
+    flyer.animate(frames, { duration: total, easing: 'ease-out', fill: 'forwards' });
+    flickerDieValue(flyer, DICE_ROLL_MS);
+  }
+  setTimeout(finishDiceSequence, DICE_ROLL_MS + DICE_SETTLE_MS + 30);
+}
+
+function finishDiceSequence() {
+  document.querySelectorAll('.die--flying').forEach((node) => node.remove());
+  diceRollHiddenKeys.clear();
+  document.querySelectorAll('.die[data-die-key]').forEach((node) => { node.style.visibility = ''; });
+  diceRollSequenceActive = false;
+  setDiceRollBlocker(false);
+  if (window.innerWidth <= 760) applyMobileActiveTab('board');
+  render(STATE); // 止めていたAIの進行を再開
+}
+
+/** 訓練場などで手元にダイスが増えた時、その場で転がす。 */
+function playNewDiceRolls(state, before) {
+  if (before.allKeys.size === 0) return;
+  const seen = new Set();
+  const targets = [];
+  document.querySelectorAll('.die[data-die-key]').forEach((node) => {
+    const key = node.dataset.dieKey;
+    if (before.allKeys.has(key) || seen.has(key) || node.closest('.slot')) return;
+    const rect = node.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    seen.add(key);
+    targets.push(node);
+  });
+  if (targets.length === 0) return;
+  diceRollSequenceActive = true;
+  setDiceRollBlocker(true);
+  for (const target of targets) {
+    diceRollHiddenKeys.add(target.dataset.dieKey);
+    const { flyer } = makeDieFlyer(target);
+    target.style.visibility = 'hidden';
+    const dir = Math.random() < 0.5 ? -1 : 1;
+    flyer.animate([
+      { transform: 'translate(0, 0) rotate(0deg) scale(1.3)' },
+      { transform: `translate(${dir * 12}px, -36px) rotate(${dir * 400}deg) scale(1.45)`, offset: 0.35 },
+      { transform: `translate(${dir * 6}px, 0) rotate(${dir * 620}deg) scale(1.3)`, offset: 0.6 },
+      { transform: `translate(${dir * 3}px, -12px) rotate(${dir * 690}deg) scale(1.2)`, offset: 0.8 },
+      { transform: `translate(0, 0) rotate(${dir * 720}deg) scale(1)` },
+    ], { duration: DICE_ROLL_MS, easing: 'ease-out', fill: 'forwards' });
+    flickerDieValue(flyer, DICE_ROLL_MS - 80);
+  }
+  setTimeout(() => {
+    document.querySelectorAll('.die--flying').forEach((node) => node.remove());
+    diceRollHiddenKeys.clear();
+    document.querySelectorAll('.die[data-die-key]').forEach((node) => { node.style.visibility = ''; });
+    diceRollSequenceActive = false;
+    setDiceRollBlocker(false);
+    render(STATE);
+  }, DICE_ROLL_MS + 30);
 }
 
 function renderCore(state) {
@@ -14102,7 +14304,7 @@ function renderCore(state) {
   // 画面を消すとゲームが進むように" -- closeTutorialTurnOrderOverlay's own render(STATE) call, right
   // after flipping this flag off, is what actually lets the AI pump resume, with no separate trigger
   // needed.
-  if (!tutorialTurnOrderOverlayOpen) {
+  if (!tutorialTurnOrderOverlayOpen && !diceRollSequenceActive) {
     if (aiPacingMode === 'instant') pumpAiInstant(state);
     else if (aiPacingMode === 'delayed') pumpAiDelayed();
   }

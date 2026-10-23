@@ -6226,3 +6226,14 @@ body.tutorial-mode .change-highlight {
   pointer-events: none;
   box-sizing: border-box;
 }
+
+/* ダイスを振るアニメーション中の操作止め(透明な幕、main.jsのsetDiceRollBlocker参照)。 */
+#dice-roll-blocker {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: transparent;
+}
+#dice-roll-blocker[hidden] {
+  display: none;
+}
