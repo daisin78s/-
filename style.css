@@ -6481,3 +6481,26 @@ body.opening-hide-res .card-group__onboard-resources > .owned-card-cell {
     display: none;
   }
 }
+
+/* オンライン対戦: ほかのプレイヤーの手番の再生中(main.jsのstartRemotePlayback参照) -- 操作止めの幕と、資源交換の
+   演出で飛ぶ資源バッジ。上の「…がプレイしました」はアンタップ選択と同じ帯(.mobile-untap-banner)を使う。 */
+#remote-playback-blocker {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: transparent;
+}
+#remote-playback-blocker[hidden],
+.remote-playback-banner[hidden] {
+  display: none;
+}
+.remote-playback-banner {
+  z-index: 10001;
+}
+.resource-exchange-flyer {
+  position: fixed;
+  margin: 0;
+  z-index: 280;
+  pointer-events: none;
+  box-sizing: border-box;
+}

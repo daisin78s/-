@@ -2525,6 +2525,8 @@ function recordReplaySnapshotIfChanged(state, effectiveTurnPlayerId) {
  * an incoming update, not causing a new one). */
 function pushOnlineStateIfChanged(state) {
   if (!onlineRoomCode || !onlineGameStarted || applyingRemoteState) return;
+  // ほかのプレイヤーの手番をためている間/再生中は送らない(画面の状態が古いため、相手の進行を上書きしてしまう)。
+  if (remotePlayback || remoteTurnBuffer.length > 0) return;
   const json = JSON.stringify(state);
   if (json === lastPushedOnlineStateJson) return;
   lastPushedOnlineStateJson = json;
@@ -7974,7 +7976,7 @@ function renderMobileOwnDiceRow(state, next) {
   // (ダイスは選択不可、ターン終了/1手戻るも出さない)。誰のものか分かるよう名前を付け、置く直前のダイスには
   // renderPlayersと同じ「1手ずつ表示」の事前ハイライト(aiPreHighlightMove)を付ける。
   let aiView = false;
-  if (!player && state.round >= 1 && next && next.type === 'TURN' && isAiPlayer(next.playerId)) {
+  if (!player && state.round >= 1 && next && next.type === 'TURN' && isAiOrRemotePlayer(next.playerId)) {
     player = state.players.find((p) => p.id === next.playerId);
     aiView = !!player;
   }
@@ -8151,7 +8153,7 @@ function playNextMobileAiCardGain() {
   const holder = el('div', 'ai-card-gain-layer__card');
   holder.appendChild(buildCardVisual(faceId, { req: factsForFaceId(faceId).req, showEffect: true, allowTextFallback: false, noInteraction: true }));
   layer.appendChild(holder);
-  const total = AI_CARD_GAIN_IN_MS + AI_CARD_GAIN_HOLD_MS + AI_CARD_GAIN_OUT_MS;
+  const total = animMs(AI_CARD_GAIN_IN_MS + AI_CARD_GAIN_HOLD_MS + AI_CARD_GAIN_OUT_MS);
   const animation = holder.animate([
     { transform: 'translateX(-100vw)', easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)' },
     { transform: 'translateX(0)', offset: AI_CARD_GAIN_IN_MS / total },
@@ -8201,17 +8203,17 @@ function playMobileCardUpgrade(fromFaceId, toFaceId, tapped) {
   };
   // 1) 右から中央へ
   holder.animate([{ transform: 'translateX(100vw)' }, { transform: 'translateX(0)' }],
-    { duration: CARD_UPGRADE_IN_MS, easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)', fill: 'forwards' }).onfinish = () => {
+    { duration: animMs(CARD_UPGRADE_IN_MS), easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)', fill: 'forwards' }).onfinish = () => {
     // 2) ひっくり返る: 横に縮んで消える → LVアップ後の面に差し替え → 広がる
     flipTarget().animate(flipFrames(1, 0),
-      { duration: CARD_UPGRADE_FLIP_HALF_MS, easing: 'ease-in', fill: 'forwards' }).onfinish = () => {
+      { duration: animMs(CARD_UPGRADE_FLIP_HALF_MS), easing: 'ease-in', fill: 'forwards' }).onfinish = () => {
       holder.innerHTML = '';
       holder.appendChild(buildFace(toFaceId));
       flipTarget().animate(flipFrames(0, 1),
-        { duration: CARD_UPGRADE_FLIP_HALF_MS, easing: 'ease-out', fill: 'forwards' }).onfinish = () => {
+        { duration: animMs(CARD_UPGRADE_FLIP_HALF_MS), easing: 'ease-out', fill: 'forwards' }).onfinish = () => {
         // 3) 少し見せてから、すばやく右へ
         holder.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(100vw)' }],
-          { duration: CARD_UPGRADE_OUT_MS, delay: CARD_UPGRADE_HOLD_MS, easing: 'cubic-bezier(0.7, 0, 0.8, 0.2)', fill: 'forwards' }).onfinish = finish;
+          { duration: animMs(CARD_UPGRADE_OUT_MS), delay: animMs(CARD_UPGRADE_HOLD_MS), easing: 'cubic-bezier(0.7, 0, 0.8, 0.2)', fill: 'forwards' }).onfinish = finish;
       };
     };
   };
@@ -8249,7 +8251,7 @@ function queueMobileUntapEffects(state, gainedPlayerIds, compare, queueLenBefore
   // カードでは、タップ→獲得の順に見せる)。playMobileAiTap参照。
   const aiTapItems = [];
   for (const player of state.players) {
-    if (!isAiPlayer(player.id)) continue;
+    if (!isAiOrRemotePlayer(player.id)) continue;
     const before = previous.get(player.id) || new Set();
     const newlyTapped = [...current.get(player.id)].filter((id) => !before.has(id));
     if (newlyTapped.length > 0) aiTapItems.push({ type: 'aiTap', playerId: player.id, physicalIds: newlyTapped });
@@ -8308,7 +8310,7 @@ function playMobileAiTap(item) {
       const card = document.querySelector(`#player-cards [data-physical-id="${id}"] .shop-card`);
       if (card) {
         card.animate([{ transform: 'rotate(0deg)' }, { transform: 'rotate(90deg)' }],
-          { duration: 320, easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)' });
+          { duration: animMs(320), easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)' });
       }
     }
     setTimeout(() => {
@@ -8325,7 +8327,7 @@ function playMobileAiTap(item) {
       mobileAiTapAnimating = false;
       finishMobileGainItem();
       render(STATE); // 止めていたAIの進行を再開
-    }, 750);
+    }, animMs(750));
   });
 }
 
@@ -11138,7 +11140,173 @@ function handleStartRoomClick() {
  * subscribeToOnlineRoom) sets playerRoles for all 4 seats at once; every other update leaves playerRoles
  * untouched since it never changes mid-game. applyingRemoteState guards pushOnlineStateIfChanged against
  * re-broadcasting a state this device just received rather than caused itself. */
+/** オンライン対戦: ほかの人間のプレイヤーの手番は、終わってからまとめて再生する (2026-10-23, per user
+ * request: "オンライン対戦の時ほかのプレイヤーのターン中はフリーアクションなどをしても変わらない ターンが
+ * 終わったら「アンタップするカードを3枚選んでください」と同じように「怠惰なローマ人のhigebuchoがプレイ
+ * しました」とでて AIの時の様にアニメーション表示 アニメーションの長さはAIの時よりゆっくり フリーアクション
+ * なども全部表示する A→Kなども" + 回答: 呼び名は人生の画面と同じ(rankingConJobTitle)、全端末、資源交換は
+ * 「資源置き場のAが光り1個Kのところに移動して数字が変わる」、再生中に自分の手番が来たら再生が終わるまで待つ) --
+ * ・相手の手番中に届いた状態(applyIncomingRoomState)は画面に反映せずためておく(remoteTurnBuffer)。
+ * ・相手の手番が終わった状態が届いたら、ためた状態を1つずつ順番に反映して(=普段のrenderの差分演出がそのまま
+ *   動く: ダイスが飛ぶ、カードの獲得/LVアップ/タップ等)、AIの時よりゆっくり(animSpeedFactor)再生する。
+ *   資源交換(A→K等)は反映する前に、資源置き場で減る資源が光って1個Kへ移動する演出を入れる。
+ * ・再生中は操作不能、タブバーの所に「…がプレイしました」を出す。再生中に届いた状態は再生後に順に処理する。
+ * ・ためている間/再生中は自分の状態を送らない(古い状態で相手の進行を上書きしないため、pushOnlineStateIfChanged)。 */
+let animSpeedFactor = 1;
+function animMs(ms) { return Math.round(ms * animSpeedFactor); }
+const REMOTE_PLAYBACK_SPEED = 1.6;
+const REMOTE_PLAYBACK_STEP_GAP_MS = 700;
+let remoteTurnBuffer = []; // 相手の手番中に届いた状態(JSON文字列)
+let remotePlayback = null; // { playerId, queue: [json], after: [json] }
+
+function isRemoteHumanPlayer(playerId) {
+  return !!onlineRoomCode && !isAiPlayer(playerId) && localSeatId !== playerId;
+}
+function isAiOrRemotePlayer(playerId) {
+  return isAiPlayer(playerId) || isRemoteHumanPlayer(playerId);
+}
+/** stateで今まさに進行中の、ほかの人間のプレイヤーの手番(TURN)のplayerId、無ければnull。 */
+function remoteHumanTurnPlayerOf(state) {
+  if (!onlineRoomCode || !state || state.round < 1 || state.phase === 'GAME_END') return null;
+  let next = null;
+  try { next = turnFlowMod.getNextTurn(state); } catch (e) { return null; }
+  return next && next.type === 'TURN' && isRemoteHumanPlayer(next.playerId) ? next.playerId : null;
+}
+/** applyIncomingRoomStateの最初で呼ぶ。trueを返したらその状態はここで引き受けた(画面にはまだ反映しない)。 */
+function interceptIncomingRemoteState(stateJson) {
+  if (remotePlayback) { remotePlayback.after.push(stateJson); return true; }
+  const shownTurnPlayer = remoteHumanTurnPlayerOf(STATE);
+  if (!shownTurnPlayer) return false;
+  let incoming;
+  try { incoming = JSON.parse(stateJson); } catch (e) { return false; }
+  if (remoteHumanTurnPlayerOf(incoming) === shownTurnPlayer && incoming.round === STATE.round) {
+    remoteTurnBuffer.push(stateJson); // まだ相手の手番中 -- ためておく
+    return true;
+  }
+  // 相手の手番が終わった -- ためた分+今回の状態を順番に再生する。
+  const queue = [...remoteTurnBuffer, stateJson];
+  remoteTurnBuffer = [];
+  startRemotePlayback(shownTurnPlayer, queue);
+  return true;
+}
+
+function applyRemoteStateNow(incoming) {
+  applyingRemoteState = true;
+  Object.keys(STATE).forEach((k) => delete STATE[k]);
+  Object.assign(STATE, incoming);
+  render(STATE);
+  // 描画で端末側が書き換えた分(ターン開始に戻す用の記録など)を送り返さないよう、描画後の状態を送り済み扱いに。
+  lastPushedOnlineStateJson = JSON.stringify(STATE);
+  applyingRemoteState = false;
+}
+
+function setRemotePlaybackUi(on, playerId) {
+  let blocker = document.getElementById('remote-playback-blocker');
+  if (!blocker) {
+    blocker = document.createElement('div');
+    blocker.id = 'remote-playback-blocker';
+    document.body.appendChild(blocker);
+  }
+  blocker.hidden = !on;
+  let banner = document.getElementById('remote-playback-banner');
+  if (!banner) {
+    banner = el('div', 'mobile-untap-banner remote-playback-banner');
+    banner.id = 'remote-playback-banner';
+    document.body.appendChild(banner);
+  }
+  banner.hidden = !on;
+  if (!on) return;
+  const player = STATE.players.find((p) => p.id === playerId);
+  const conFaceId = player && player.conPhysicalId && player.conFace ? `${player.conPhysicalId}${player.conFace}` : null;
+  const title = player ? rankingConJobTitle(conFaceId, player.jobCardId) : '';
+  banner.textContent = `${title && title !== '—' ? `${title}の` : ''}${player ? player.name : ''}がプレイしました`;
+  banner.animate([{ transform: 'translateX(-100%)' }, { transform: 'translateX(0)' }],
+    { duration: 350, easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)' });
+}
+
+function startRemotePlayback(playerId, queue) {
+  remotePlayback = { playerId, queue, after: [] };
+  animSpeedFactor = REMOTE_PLAYBACK_SPEED;
+  setRemotePlaybackUi(true, playerId);
+  if (window.innerWidth <= 760) applyMobileActiveTab('board');
+  setTimeout(stepRemotePlayback, 600);
+}
+
+function stepRemotePlayback() {
+  if (!remotePlayback) return;
+  if (aiVisualsBusy()) { setTimeout(stepRemotePlayback, 120); return; }
+  const json = remotePlayback.queue.shift();
+  if (json === undefined) { finishRemotePlayback(); return; }
+  let incoming;
+  try { incoming = JSON.parse(json); } catch (e) { setTimeout(stepRemotePlayback, 0); return; }
+  animateResourceExchanges(STATE, incoming, remotePlayback.playerId, () => {
+    applyRemoteStateNow(incoming);
+    setTimeout(stepRemotePlayback, REMOTE_PLAYBACK_STEP_GAP_MS);
+  });
+}
+
+function finishRemotePlayback() {
+  const after = remotePlayback ? remotePlayback.after : [];
+  remotePlayback = null;
+  animSpeedFactor = 1;
+  setRemotePlaybackUi(false);
+  // 再生中に届いた状態を先に順に処理(また別の人の手番なら、そこからためる/再生する) -- 先に古い状態を描いて
+  // 送ってしまうと、相手の新しい進行を上書きしてしまうため。
+  if (after.length > 0) {
+    for (const json of after) applyIncomingRoomState(json, null);
+    return;
+  }
+  applyingRemoteState = true;
+  render(STATE);
+  lastPushedOnlineStateJson = JSON.stringify(STATE);
+  applyingRemoteState = false;
+}
+
+/** 資源交換の演出: playerIdの資源で、減った資源(A/B/C/Z)があってKが増え、ダイスの配置が変わっていなければ
+ * 資源交換(フリーアクション)とみなし、資源置き場の減る資源のバッジを光らせて、1個Kのバッジへ飛ばす。 */
+function animateResourceExchanges(before, after, playerId, done) {
+  const pb = before.players.find((p) => p.id === playerId);
+  const pa = after.players.find((p) => p.id === playerId);
+  if (!pb || !pa) { done(); return; }
+  const diceKey = (p) => p.dice.map((d) => `${d.id}:${d.placedMapId || ''}`).join(',');
+  const kGain = (pa.resources.K || 0) - (pb.resources.K || 0);
+  const spent = ['A', 'B', 'C', 'Z'].filter((r) => (pa.resources[r] || 0) < (pb.resources[r] || 0));
+  if (kGain <= 0 || spent.length === 0 || diceKey(pa) !== diceKey(pb)) { done(); return; }
+  const root = [...document.querySelectorAll(`#mobile-own-row, .player-panel[data-player-id="${playerId}"]`)]
+    .find((n) => n.getBoundingClientRect().height > 0);
+  const findBadge = (r) => (root ? [...root.querySelectorAll(`.resource-badge[data-resource="${r}"]`)].find((b) => b.getBoundingClientRect().width > 0) : null);
+  const kBadge = findBadge('K');
+  const flights = [];
+  for (const r of spent) {
+    const from = findBadge(r);
+    if (!from) continue;
+    from.classList.add('change-highlight');
+    if (!kBadge) continue;
+    const a = from.getBoundingClientRect();
+    const b = kBadge.getBoundingClientRect();
+    const dot = from.cloneNode(true);
+    dot.classList.add('resource-exchange-flyer');
+    Object.assign(dot.style, { left: `${a.left}px`, top: `${a.top}px`, width: `${a.width}px`, height: `${a.height}px` });
+    flights.push({ dot, dx: b.left - a.left, dy: b.top - a.top });
+  }
+  const glowMs = animMs(450);
+  const flyMs = animMs(450);
+  setTimeout(() => {
+    for (const f of flights) {
+      document.body.appendChild(f.dot);
+      f.dot.animate([{ transform: 'translate(0, 0) scale(1)' }, { transform: `translate(${f.dx}px, ${f.dy}px) scale(0.7)`, opacity: 0.6 }],
+        { duration: flyMs, easing: 'cubic-bezier(0.4, 0, 0.2, 1)', fill: 'forwards' });
+    }
+    setTimeout(() => {
+      flights.forEach((f) => f.dot.remove());
+      done();
+    }, flights.length ? flyMs : 0);
+  }, glowMs);
+}
+
 function applyIncomingRoomState(stateJson, seatIsHuman) {
+  // ほかの人間のプレイヤーの手番中/再生中はここで引き受ける(上のinterceptIncomingRemoteState参照)。
+  if (!seatIsHuman && interceptIncomingRemoteState(stateJson)) return;
   const incoming = JSON.parse(stateJson);
   applyingRemoteState = true;
   if (seatIsHuman) {
@@ -11147,6 +11315,9 @@ function applyIncomingRoomState(stateJson, seatIsHuman) {
   Object.keys(STATE).forEach((k) => delete STATE[k]);
   Object.assign(STATE, incoming);
   render(STATE);
+  // 受け取った状態(+描画で端末側が書き換えた分)を「送り済み」として覚える -- 以後の何気ない再描画で
+  // 同じ状態を送り返さないように。
+  lastPushedOnlineStateJson = JSON.stringify(STATE);
   applyingRemoteState = false;
 }
 
@@ -14553,7 +14724,7 @@ function animateAiDiceMoves(before) {
   document.querySelectorAll('.slot .die[data-die-key]').forEach((target) => {
     const key = target.dataset.dieKey;
     if (before.placedKeys.has(key) || !before.handRects.has(key)) return;
-    if (!isAiPlayer(key.split(':')[0])) return;
+    if (!isAiOrRemotePlayer(key.split(':')[0])) return;
     const from = before.handRects.get(key);
     // スロットが横スクロールの外にあれば見える位置までスクロールしてから測る。
     const board = target.closest('#board');
@@ -14578,7 +14749,7 @@ function animateAiDiceMoves(before) {
     const animation = flyer.animate([
       { transform: `translate(${dx}px, ${dy}px) scale(${scale})` },
       { transform: 'translate(0, 0) scale(1)' },
-    ], { duration: AI_DIE_MOVE_MS, easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)' });
+    ], { duration: animMs(AI_DIE_MOVE_MS), easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)' });
     animation.onfinish = () => {
       flyer.remove();
       target.style.visibility = '';
