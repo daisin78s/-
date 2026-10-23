@@ -106,6 +106,13 @@ function bareTapKind(index, faceId) {
   return { kind: 'IMMEDIATE' };
 }
 
+/** 建築候補の識別キー: 新規獲得ならそのカードの面ID、LVアップなら"U:"+LVアップ後の面ID。皇帝宮殿/元老院の
+ * どちらで取れる手かを比べるため(#applyCastleSenatePreference参照)。 */
+function buildCandidateKey(candidate) {
+  if (!candidate) return null;
+  return candidate.type === 'UPGRADE' ? `U:${candidate.toFaceId}` : candidate.faceId;
+}
+
 class MoveGenerator {
   /**
    * @param {{avoidMapIdFromRound?: {mapId: string, round: number}}} [policy] - optional strategy knob
@@ -161,7 +168,13 @@ class MoveGenerator {
       // else: castle-only-empty, or a tie (both/neither empty) -- dropMapId stays SENATE (plain
       // preference, see this method's own doc).
     }
-    return moves.filter((m) => m.mapId !== dropMapId);
+    // 優先しない側でしか取れないカードの手は残す (2026-10-23, per user request: "皇帝宮殿で獲得可能なカードは
+    // 元老院でとることを考えなくてもいいが 元老院でしか取れないカードはちゃんと候補に残してほしい") -- 以前は
+    // 優先しない側(通常は元老院)の手をすべて捨てていたため、皇帝宮殿では取れないが元老院なら取れるカードが
+    // AIの候補から消えていた。捨てるのは「優先する側でも同じカード(buildCandidateKey)が取れる手」と、建築を
+    // 伴わない手(置くだけ)だけ。
+    const keptKeys = new Set(moves.filter((m) => m.mapId !== dropMapId && m.buildCandidateKey).map((m) => m.buildCandidateKey));
+    return moves.filter((m) => m.mapId !== dropMapId || (m.buildCandidateKey && !keptKeys.has(m.buildCandidateKey)));
   }
 
   /** True once state.round has reached the policy's avoidMapIdFromRound.round threshold for this exact
@@ -231,7 +244,7 @@ class MoveGenerator {
           if (result.actionResult && result.actionResult.pendingBuild) {
             const candidates = result.actionResult.pendingBuild.candidates;
             for (let buildCandidateIndex = 0; buildCandidateIndex < candidates.length; buildCandidateIndex++) {
-              moves.push({ type: 'PLACE_DIE', playerId, dieId: die.id, mapId, slotIndex, buildCandidateIndex });
+              moves.push({ type: 'PLACE_DIE', playerId, dieId: die.id, mapId, slotIndex, buildCandidateIndex, buildCandidateKey: buildCandidateKey(candidates[buildCandidateIndex]) });
             }
             // Always also offer "place the die, leave the build unresolved" -- getBuildCandidates only
             // checks dice/category eligibility, not affordability, so every candidate above can turn out
@@ -286,7 +299,7 @@ class MoveGenerator {
       if (result.actionResult && result.actionResult.pendingBuild) {
         const candidates = result.actionResult.pendingBuild.candidates;
         for (let buildCandidateIndex = 0; buildCandidateIndex < candidates.length; buildCandidateIndex++) {
-          moves.push({ ...moveBase, buildCandidateIndex });
+          moves.push({ ...moveBase, buildCandidateIndex, buildCandidateKey: buildCandidateKey(candidates[buildCandidateIndex]) });
         }
         moves.push({ ...moveBase });
       } else {
@@ -361,7 +374,7 @@ class MoveGenerator {
       if (result.actionResult && result.actionResult.pendingBuild) {
         const candidates = result.actionResult.pendingBuild.candidates;
         for (let buildCandidateIndex = 0; buildCandidateIndex < candidates.length; buildCandidateIndex++) {
-          moves.push({ type: 'PLACE_DICE_GROUP', playerId, dieIds, mapId, buildCandidateIndex });
+          moves.push({ type: 'PLACE_DICE_GROUP', playerId, dieIds, mapId, buildCandidateIndex, buildCandidateKey: buildCandidateKey(candidates[buildCandidateIndex]) });
         }
         // Same "also offer the build left unresolved" fallback as #placeDieMoves -- see its own comment
         // for why (candidates aren't affordability-filtered here, only category/dice-value eligible).
