@@ -5444,6 +5444,8 @@ body.tutorial-mode .change-highlight {
   #mobile-quest-tab {
     height: calc(100vh - 62px);
     height: calc(100dvh - 62px);
+    /* 実際に測った高さを優先(main.jsのsetupAppHeightVar参照、iPhone全画面アプリで100dvhが小さくなる対策)。 */
+    height: calc(var(--app-height, 100dvh) - 62px);
     justify-content: center;
   }
   #app[data-mobile-active-tab="quest"] #mobile-quest-tab {

@@ -580,6 +580,8 @@ function resumeSavedSession() {
     }
     entryBannerDismissed = true;
     sessionResumeChoicePending = false;
+    // スマホ版: 「ゲームに戻る」で再開した時はショップではなくエリア画面から (2026-10-23, per user request)。
+    if (window.innerWidth <= 760) applyMobileActiveTab('board');
     render(STATE);
   } else if (pendingOnlineSession) {
     onlineRoomCode = pendingOnlineSession.roomCode;
@@ -15898,6 +15900,18 @@ function queueMobileAiTurnFocus(state, next) {
  * 起動直後とアプリに戻ってきた時に、表示範囲の高さが画面の短い辺より明らかに短ければ、viewportの設定を
  * 一瞬書き換えて元に戻すことでiOSに計算し直させる(回転し直すのと同じ効果を狙う)。全画面アプリ以外では
  * 何もしない。実機でしか起きないため、効果は実機で要確認。 */
+/** 実際に測った画面の高さをCSS変数--app-heightに入れる (2026-10-23, per user report「クエスト画面 一瞬大きく
+ * 表示され縮みます(縮まない時もあります)」) -- iPhoneの全画面アプリではCSSの100dvhが実際の表示範囲より小さく
+ * なることがあり、それを基準にしているクエストタブの高さが縮んでいた。window.innerHeightを測り直して使う
+ * (style.cssの#mobile-quest-tab参照)。 */
+function setupAppHeightVar() {
+  const update = () => document.documentElement.style.setProperty('--app-height', `${window.innerHeight}px`);
+  update();
+  window.addEventListener('resize', update);
+  window.addEventListener('orientationchange', () => setTimeout(update, 300));
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', update);
+}
+
 function setupIosStandaloneViewportFix() {
   const standalone = window.navigator.standalone === true
     || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
@@ -15952,6 +15966,7 @@ document.addEventListener('DOMContentLoaded', () => {
     applyMobileActiveTab('board');
     render(STATE);
   });
+  setupAppHeightVar();
   setupIosStandaloneViewportFix();
   if (playOpeningOnLoad) startOpeningSequence();
   render(STATE);
