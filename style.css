@@ -6305,3 +6305,11 @@ body.opening-hide-res .card-group__onboard-resources > .owned-card-cell {
   gap: 8px;
   width: 100%;
 }
+
+/* スマホ版: 獲得カード画面の「建築数 1 LV1 1 天 2 ...」の行を消して場所を空ける (2026-10-23, per user
+   request「スマホ版 獲得カード画面の建築数1 LV1 1 天2 など場所を開けるために消して」)。 */
+@media (max-width: 760px) {
+  #player-cards .card-group__stats {
+    display: none;
+  }
+}
