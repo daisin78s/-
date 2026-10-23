@@ -8032,8 +8032,9 @@ const AI_CARD_GAIN_HOLD_MS = 700;
 const AI_CARD_GAIN_OUT_MS = 200;
 function queueMobileAiCardGainAnimation(state, next) {
   const current = new Map();
+  // AIだけでなく人間のプレイヤーの獲得でも流す (2026-10-23, per user request「AIだけではなくプレイヤーが
+  // カードを獲得した時もアニメーション出るようにして」)。
   for (const player of state.players) {
-    if (!isAiPlayer(player.id)) continue;
     const faces = new Map();
     for (const physicalId of player.ownedCardPhysicalIds) {
       if (!isBuiltCardPhysicalId(physicalId) || !state.cards[physicalId]) continue;
@@ -13056,6 +13057,7 @@ function revertLastPlacementForTutorial() {
   if (actionCheckpoints.length === 0) return;
   const checkpoint = actionCheckpoints.pop();
   undoMod.restoreSnapshot(STATE, checkpoint.state);
+  lastAiCardFaces = null; // 取り消し後は獲得演出の比較基準を作り直す(LV1へ戻ったカード等を流さない)
   turnActionTaken = checkpoint.turnActionTaken;
   selectedDieIds = [];
   pendingBuildChoice = null;
@@ -14676,6 +14678,7 @@ function handleTutorialCardAcquisitionRestartClick() {
   const snapshot = tutorialCardAcquisitionRestartSnapshot;
   if (!snapshot) return;
   undoMod.restoreSnapshot(STATE, snapshot.state);
+  lastAiCardFaces = null; // 取り消し後は獲得演出の比較基準を作り直す(LV1へ戻ったカード等を流さない)
   turnActionTaken = snapshot.turnActionTaken;
   pendingBuildChoice = snapshot.pendingBuildChoice;
   actionCheckpoints.length = snapshot.checkpointDepth;
@@ -14740,6 +14743,7 @@ function handleCancelPreviousActionClick() {
   if (actionCheckpoints.length === 0) return;
   const checkpoint = actionCheckpoints.pop();
   undoMod.restoreSnapshot(STATE, checkpoint.state);
+  lastAiCardFaces = null; // 取り消し後は獲得演出の比較基準を作り直す(LV1へ戻ったカード等を流さない)
   turnActionTaken = checkpoint.turnActionTaken;
   selectedDieIds = [];
   pendingBuildChoice = null;
