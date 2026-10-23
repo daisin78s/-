@@ -27,7 +27,7 @@
  * キャッシュ任せだと「一度もオンラインでreloadせずオフラインになった」場合、index.html以外
  * (main.js/data/game.data.js等)が1つもキャッシュされておらずオフライン起動できない、という事態に
  * なることを実機/自動テストで確認した。 */
-const CACHE_NAME = 'dice-wp-v1.275';
+const CACHE_NAME = 'dice-wp-v1.276';
 const APP_SHELL = ['./', './manifest.json'];
 
 self.addEventListener('install', (event) => {

@@ -6381,3 +6381,38 @@ body.opening-hide-res .card-group__onboard-resources > .owned-card-cell {
     background: color-mix(in srgb, var(--bg) 55%, rgb(16, 24, 40));
   }
 }
+
+/* 建築 / LVアップ選択画面 (皇帝宮殿・元老院にダイスを置いた時など) -- 全端末 (2026-10-23, per user request
+   「この画面も全画面に」「1手戻るの代わりに右上に✖」「赤丸部分(LVアップの見出し)とる」→「すべてで」)。 */
+#build-choice-overlay {
+  padding: 0;
+  align-items: stretch;
+}
+#build-choice-overlay > .build-choice-modal {
+  width: 100vw;
+  max-width: none;
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0;
+  border-radius: 0;
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+#dice-cancel-button-build {
+  display: none;
+}
+#build-choice-overlay .build-choice-close {
+  font-size: 30px;
+  margin-left: auto;
+}
+#build-choice-overlay .build-choice-close:disabled {
+  visibility: hidden;
+}
+.build-choice-section-header--upgrade {
+  font-size: 0;
+}
+/* 全画面にした分、段が上下に広がらないよう上に詰める(スマホの横並びレイアウト用、上の@media参照)。 */
+#build-choice-overlay > .build-choice-modal {
+  align-content: flex-start;
+}

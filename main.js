@@ -7441,7 +7441,9 @@ function renderBuildChoiceModal() {
     const upgradeHeaderClass = newBuildCandidates.length > 0
       ? 'build-choice-section-header build-choice-section-header--divider'
       : 'build-choice-section-header';
-    list.appendChild(el('div', upgradeHeaderClass, 'LVアップ'));
+    // 見出しの文字は出さない (2026-10-23, per user request「赤丸部分とる 結局二重に表示される」、全端末) --
+    // 各カードの上に「LVアップ」が付くため二重になっていた。建築との間の区切り線(--divider)は残す。
+    list.appendChild(el('div', `${upgradeHeaderClass} build-choice-section-header--upgrade`, 'LVアップ'));
     const group = el('div', 'build-choice-group');
     for (const candidate of upgradeCandidates) group.appendChild(buildCandidateCell(candidate));
     list.appendChild(group);
@@ -14938,7 +14940,7 @@ function renderUndoButtons(state) {
   // あるときは使えるように")。ステップIDではなく光るフラグで判定するのは、renderがrenderTutorialOverlayより先に
   // 走るため(tutorialCancelButtonGlowing's own docの通り、どの場合もrender()の前に立つ)。
   const diceCancelDisabled = isDiceCancelDisabled();
-  for (const id of ['dice-cancel-button', 'dice-cancel-button-build']) {
+  for (const id of ['dice-cancel-button', 'dice-cancel-button-build', 'build-choice-close-button']) {
     const btn = document.getElementById(id);
     btn.disabled = diceCancelDisabled;
     // cancel_action_hintの「光る」演出 (2026-09-26, per user request: "この時直前のアクションをキャンセル
@@ -15979,6 +15981,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('undo-button-build').addEventListener('click', handleUndoClick);
   document.getElementById('dice-cancel-button').addEventListener('click', handleCancelPreviousActionClick);
   document.getElementById('dice-cancel-button-build').addEventListener('click', handleCancelPreviousActionClick);
+  document.getElementById('build-choice-close-button').addEventListener('click', handleCancelPreviousActionClick);
 
   document.getElementById('online-lobby-open-button').addEventListener('click', openOnlineLobby);
   document.getElementById('online-lobby-close-button').addEventListener('click', closeOnlineLobby);
