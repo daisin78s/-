@@ -12,7 +12,7 @@
  * 部品(tpl-map-tile / renderDie / dieFace / buildActionIcons、main.jsのグローバル)で描く、独立した全画面
  * オーバーレイ。トップ画面(入口バナー)の上に開き、✖で閉じればトップ画面に戻る。main.jsの後に読み込む。 */
 
-const STORY_TYPE_MS_PER_CHAR = 55; // 1文字ずつ出る速さ
+const STORY_TYPE_MS_PER_CHAR = 37; // 1文字ずつ出る速さ (2026-10-23 per user "セリフの表示速度1.5倍に": 55ms→37ms)
 const STORY_HOLD_BASE_MS = 1400; // 全文出てから次へ進むまでの待ち(+文字数ぶん)
 const STORY_HOLD_PER_CHAR_MS = 45;
 const STORY_HINT_IDLE_MS = 5000; // S005: 何もしない場合5秒ごとに出る
