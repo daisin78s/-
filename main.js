@@ -8131,7 +8131,7 @@ function playMobileCardUpgrade(fromFaceId, toFaceId) {
  * いうボタンを作りたい 押すと全画面で今可能なフリーアクションがすべて表示される 右上に大き目の✖があり
  * おすとエリア画面に戻る"、選択: 表示=資源交換+使用料回収+TAPで使えるカード全部 / 実行できる物だけ /
  * 1つ実行しても画面に残る / ボタンは使える物がある時だけ)。実行処理はPC版と同じ既存の部品をそのまま使う
- * (資源交換=executor.tryFreeAction、使用料=renderFeeCollectButton、カード=attachTapToggleでカード下半分を
+ * (資源交換=executor.tryFreeAction、使用料=renderFeeCollectButton、カード=attachTapToggleでカードを
  * タップ)。「実行できるか」は状態のコピーで試しに実行して判定する(本物の状態は変えない)。 */
 let mobileFreeActionOpen = false;
 
@@ -8208,7 +8208,7 @@ function renderMobileFreeActionOverlay(state, next) {
     body.appendChild(buttonsEl);
   }
   if (actions.cards.length > 0) {
-    body.appendChild(el('div', 'mobile-free-action-overlay__hint', 'カードの下半分をタップで使用'));
+    body.appendChild(el('div', 'mobile-free-action-overlay__hint', 'カードをタップで使用'));
     const cardsEl = el('div', 'mobile-free-action-overlay__cards');
     for (const physicalId of actions.cards) {
       const cardState = state.cards[physicalId];
@@ -8712,11 +8712,14 @@ function attachTapToggle(cardNode, cardState, faceId, canAct, physicalId) {
   if (!canAct) return;
   const bareTap = bareTapKind(faceId);
   if (!bareTap) return;
-  const effectEl = cardNode.querySelector(':scope > .shop-card__effect');
-  if (!effectEl) return;
-  effectEl.addEventListener('click', (e) => {
-    e.stopPropagation();
+  // カードのどこを押してもタップアクション (2026-10-23, per user request: "すべての版で タップアクションを
+  // 使おうとしてクリックすると拡大してしまうことが結構あります 獲得したカードをタップするとタップアクション
+  // タップ状態でもう一度タップすると拡大にしたい") -- 以前は下半分(効果欄)だけがタップアクションで、それ以外を
+  // 押すと拡大だった。カード全体にcapture段階で付け、未タップならここで処理して拡大(buildCardVisualが付ける
+  // カード自身のクリック)を止める。タップ済みなら何もせず、そのまま拡大が動く。
+  cardNode.addEventListener('click', (e) => {
     if (cardState.tapped) return;
+    e.stopImmediatePropagation();
     // No longer blocked while a usage fee is owed (2026-08-10 -- see board.useBareTapAbility's own doc
     // on why that gate was removed there; mirrored here since this used to pre-empt it before the picker
     // modal even opened).
@@ -8801,7 +8804,7 @@ function attachTapToggle(cardNode, cardState, faceId, canAct, physicalId) {
       pendingTapChoice = { physicalId, playerId: cardState.ownerId, bareTap, dieId: null, cardPhysicalId: null, skip: false, value: preselectedValue };
     }
     render(STATE);
-  });
+  }, true);
 }
 
 /**
