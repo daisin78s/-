@@ -6313,3 +6313,35 @@ body.opening-hide-res .card-group__onboard-resources > .owned-card-cell {
     display: none;
   }
 }
+
+/* スマホ版(横画面前提): 1人分の獲得カードをできるだけ1画面に (2026-10-23, per user「1プレイヤーのカードは
+   可能な限り1画面ですませたい」→ 案1+2+3を選択) --
+   1) 制約・ジョブと獲得カードを同じ段に続けて並べる(各入れ物をdisplay:contentsにしてカードを直接並べ、
+      空いている初期資源/制約選択の欄は消す)。
+   2) 名前の行(「Alice」)を消す -- 右の名前ボタンで誰のカードか分かるため。
+   3) TAPできるカードの正方形の枠(倒した時用)もやめ、全カードをカードの大きさに。倒したカードは隣に
+      少し重なって見える。 */
+@media (max-width: 760px) {
+  #player-cards .card-group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 16px 6px; /* 段の間は、制約カードの下にはみ出す「スタプレ」の文字が次の段に重ならない分だけ空ける */
+  }
+  #player-cards .card-group > * {
+    flex: 0 0 100%;
+  }
+  #player-cards .card-group > .card-group__jobcon,
+  #player-cards .card-group > .card-group__list {
+    display: contents;
+  }
+  #player-cards .card-group > .card-group__onboard-con:empty,
+  #player-cards .card-group > .card-group__onboard-resources:empty,
+  #player-cards .card-group__header {
+    display: none;
+  }
+  #player-cards .card-group .owned-card-cell {
+    width: auto;
+    height: auto;
+  }
+}
