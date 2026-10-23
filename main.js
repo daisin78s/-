@@ -1799,7 +1799,7 @@ function driveOneAiStepInner(state) {
     return false;
   }
   noteActiveTurnPlayerForJobPool(state, ctx.playerId, forceNewTurn);
-  const move = aiPlayerFor(ctx.playerId).selectMove(state, ctx.playerId, { hasPlacedDieThisTurn: ctx.hasPlacedDieThisTurn });
+  const move = selectAiMoveMemo(state, ctx.playerId, { hasPlacedDieThisTurn: ctx.hasPlacedDieThisTurn });
   if (!move) return false; // defensive -- canEndTurn should always eventually free this up
   const result = simulatorMod.applyInPlace(state, INDEX, move);
   // 2026-08-30, per user bug report (AI froze the browser tab): unlike game-runner.js's own driveTurn
@@ -1871,20 +1871,44 @@ function pumpAiInstant(state) {
  * before that in-progress render() has painted the *current* move's result yet. Rendering the next move's
  * pre-highlight synchronously at that point would paint it before the current result ever appeared,
  * showing them in the wrong order. Deferring to a fresh tick lets the in-progress render() finish first. */
+/** AIの手を「考える」のと「盤面に反映する」のを分ける (2026-10-23, per user request: "できればAIの思考は
+ * 止めずエリアに戻ってからダイスが移動するようにして 今はリアルタイムでダイスを置いたらアニメーションだけど
+ * 思考結果が先に終わってアニメーションは後からついていく感じ そのためカード獲得中に次のダイスが来るなども
+ * カード獲得が終わった直後に次のダイス") --
+ * ・考える: 演出の再生中も、pumpAiDelayedの事前ハイライト用の先読み(selectAiMoveMemo)で次の手を考えておく。
+ * ・反映: 演出(カードの獲得/LVアップ/タップ/アンタップ、飛んでいるダイス、ダイスを振る演出等)がすべて
+ *   終わるまで待ってから盤面に反映する(aiVisualsBusy)。反映時は同じ盤面ならさっき考えた手をそのまま使い、
+ *   二重に考えない。 */
+let aiMoveMemo = null; // { key, move }
+function selectAiMoveMemo(state, playerId, options) {
+  const key = `${playerId}|${options.hasPlacedDieThisTurn ? 1 : 0}|${JSON.stringify(state)}`;
+  if (aiMoveMemo && aiMoveMemo.key === key) return aiMoveMemo.move;
+  const move = aiPlayerFor(playerId).selectMove(state, playerId, options);
+  aiMoveMemo = { key, move };
+  return move;
+}
+function aiVisualsBusy() {
+  return mobileAiCardGainPlaying || mobileAiCardGainQueue.length > 0 || diceRollSequenceActive
+    || openingSequenceActive || mobileAiTapAnimating || !!document.querySelector('.die--flying');
+}
+const AI_VISUALS_WAIT_POLL_MS = 120;
 function pumpAiDelayed() {
   if (aiPumpTimer !== null) return;
-  aiPumpTimer = setTimeout(() => {
+  const step = () => {
     aiPumpTimer = null;
+    if (!hasAiWorkPending(STATE)) { aiPreHighlightMove = null; return; }
+    // 演出中は反映を待つ(次の手はすでに考え済み)。
+    if (aiVisualsBusy()) { aiPumpTimer = setTimeout(step, AI_VISUALS_WAIT_POLL_MS); return; }
     aiPreHighlightMove = null;
-    if (!hasAiWorkPending(STATE)) return;
     driveOneAiStep(STATE);
     render(STATE);
-  }, AI_STEP_DELAY_MS);
+  };
+  aiPumpTimer = setTimeout(step, AI_STEP_DELAY_MS);
   setTimeout(() => {
     if (aiPumpTimer === null) return; // fired, or canceled by a mode switch, before this tick ran
     const ctx = resolveAiTurnContext(STATE);
     if (ctx && ctx.type === 'TURN') {
-      const move = aiPlayerFor(ctx.playerId).selectMove(STATE, ctx.playerId, { hasPlacedDieThisTurn: ctx.hasPlacedDieThisTurn });
+      const move = selectAiMoveMemo(STATE, ctx.playerId, { hasPlacedDieThisTurn: ctx.hasPlacedDieThisTurn });
       // PLACE_WILDCARD_DIE (2026-08-20) included alongside PLACE_DIE -- see aiOpenTurnHasPlacedDie's own
       // comment above for the main bug; this one is cosmetic only (which die glows before "1手ずつ"
       // places it), but the same move type was missing here too. PLACE_DICE_GROUP (2026-08-21) has 2
@@ -8076,6 +8100,7 @@ function queueMobileAiCardGainAnimation(state, next) {
   lastAiCardFaces = current;
   const compare = !!previous && !replayMode && window.innerWidth <= 760 && state.round >= 1;
   const gainedPlayerIds = new Set();
+  const queueLenBeforeGains = mobileAiCardGainQueue.length;
   if (compare) {
     for (const [playerId, faces] of current) {
       const before = previous.get(playerId);
@@ -8091,8 +8116,9 @@ function queueMobileAiCardGainAnimation(state, next) {
     }
   }
   // 皇女などの効果によるアンタップ(獲得演出の後に続けて見せる、queueMobileUntapEffects参照)。
-  queueMobileUntapEffects(state, gainedPlayerIds, compare);
-  if (compare) playNextMobileAiCardGain();
+  queueMobileUntapEffects(state, gainedPlayerIds, compare, queueLenBeforeGains);
+  // 描き終わった後(=同じ手で飛ぶダイスの演出が作られた後)に始める -- ダイスが着いてからカードの演出、の順にするため。
+  if (compare) setTimeout(playNextMobileAiCardGain, 0);
 }
 // 安全装置 (2026-10-23, per user report「AIがLVアップした時アニメーションがないときがある」) -- 何らかの理由で
 // 1つの演出の終了が来ないと、以降の演出がすべて止まってしまうため、8秒以上終わらない演出は止まったものとみなして
@@ -8105,10 +8131,13 @@ function playNextMobileAiCardGain() {
     mobileAiCardGainPlaying = false;
   }
   if (mobileAiCardGainPlaying || mobileAiCardGainQueue.length === 0) return;
+  // 同じ手でダイスを置いてカードを取った時は、ダイスがスロットに着いてからカードの演出を始める(ダイス→カードの順)。
+  if (document.querySelector('.die--flying')) { setTimeout(playNextMobileAiCardGain, 60); return; }
   mobileAiCardGainPlaying = true;
   mobileAiCardGainStartedAt = performance.now();
   const item = mobileAiCardGainQueue.shift();
   if (item.type === 'untapAuto') { playMobileUntapAuto(item); return; }
+  if (item.type === 'aiTap') { playMobileAiTap(item); return; }
   if (item.type === 'untapChoice') { startMobileUntapChoice(item); return; }
   const { faceId, fromFaceId, tapped } = item;
   if (fromFaceId) { playMobileCardUpgrade(fromFaceId, faceId, tapped); return; }
@@ -8206,7 +8235,7 @@ const mobileUntapChoiceQueuedFor = new Set();
 
 /** queueMobileAiCardGainAnimationから毎回呼ぶ: このrenderで獲得/LVアップがあった人間のプレイヤーについて、
  * 同時に起き上がった(アンタップされた)カードと、新しく発生したアンタップ選択を演出キューに積む。 */
-function queueMobileUntapEffects(state, gainedPlayerIds, compare) {
+function queueMobileUntapEffects(state, gainedPlayerIds, compare, queueLenBeforeGains) {
   const current = new Map();
   for (const player of state.players) {
     current.set(player.id, new Set(player.ownedCardPhysicalIds.filter((id) => state.cards[id] && state.cards[id].tapped)));
@@ -8214,6 +8243,18 @@ function queueMobileUntapEffects(state, gainedPlayerIds, compare) {
   const previous = lastHumanTapped;
   lastHumanTapped = current;
   if (!compare || !previous) return;
+  // AIのタップアクション (2026-10-23, per user request: "AIのアニメーション タップアクションも出るようにして
+  // ほしい AIがタップしたとき 獲得カードに移動 タップする メインアクションならエリアにもどる") -- AIのカードが
+  // このrenderで新しく倒れたら、このrenderの獲得演出より前に「タップ」の演出を差し込む(タップしてから獲得する
+  // カードでは、タップ→獲得の順に見せる)。playMobileAiTap参照。
+  const aiTapItems = [];
+  for (const player of state.players) {
+    if (!isAiPlayer(player.id)) continue;
+    const before = previous.get(player.id) || new Set();
+    const newlyTapped = [...current.get(player.id)].filter((id) => !before.has(id));
+    if (newlyTapped.length > 0) aiTapItems.push({ type: 'aiTap', playerId: player.id, physicalIds: newlyTapped });
+  }
+  if (aiTapItems.length > 0) mobileAiCardGainQueue.splice(queueLenBeforeGains, 0, ...aiTapItems);
   for (const player of state.players) {
     if (isAiPlayer(player.id) || (onlineRoomCode && localSeatId !== player.id)) continue;
     if (gainedPlayerIds.has(player.id)) {
@@ -8251,6 +8292,39 @@ function animateMobileUntapAndReturn(playerId, physicalIds, done) {
     setTimeout(() => {
       applyMobileActiveTab('board');
       done();
+    }, 750);
+  });
+}
+
+/** AIのタップ演出中フラグ -- この間は次の手の反映を待つ(aiVisualsBusy参照、考えるのは止めない)。 */
+let mobileAiTapAnimating = false;
+function playMobileAiTap(item) {
+  mobileAiTapAnimating = true;
+  applyMobileActiveTab('cards');
+  applyMobileCardsPlayer(item.playerId);
+  window.scrollTo(0, 0);
+  nextFrames(2, () => {
+    for (const id of item.physicalIds) {
+      const card = document.querySelector(`#player-cards [data-physical-id="${id}"] .shop-card`);
+      if (card) {
+        card.animate([{ transform: 'rotate(0deg)' }, { transform: 'rotate(90deg)' }],
+          { duration: 320, easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)' });
+      }
+    }
+    setTimeout(() => {
+      // 次のAIの手がまたタップアクションなら獲得カード画面のまま、それ以外(メインアクション等)はエリア画面へ。
+      let nextIsTap = false;
+      try {
+        const ctx = resolveAiTurnContext(STATE);
+        if (ctx && ctx.type === 'TURN' && ctx.playerId === item.playerId) {
+          const move = selectAiMoveMemo(STATE, ctx.playerId, { hasPlacedDieThisTurn: ctx.hasPlacedDieThisTurn });
+          nextIsTap = !!move && move.type === 'BARE_TAP';
+        }
+      } catch (e) { nextIsTap = false; }
+      if (!nextIsTap) applyMobileActiveTab('board');
+      mobileAiTapAnimating = false;
+      finishMobileGainItem();
+      render(STATE); // 止めていたAIの進行を再開
     }, 750);
   });
 }
