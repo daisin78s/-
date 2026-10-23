@@ -3811,7 +3811,11 @@ const ACTION_ICON_BUILDERS = {
     star.classList.add('action-emoji--large');
     const stack = el('div', 'action-icons-stack');
     stack.appendChild(actionRow([star, actionSuffix('ダイス')]));
-    stack.appendChild(actionRow([actionSuffix('オールマイティ')]));
+    // 折り返さず1行に (2026-10-23, per user request「道化師のアイコン オールマイテ/ィ となっています
+    // オールマイティ にしてください 文字がわずかに左右にはみ出してもいい」)。
+    const allMighty = actionSuffix('オールマイティ');
+    allMighty.classList.add('action-suffix--nowrap');
+    stack.appendChild(actionRow([allMighty]));
     return stack;
   },
 };
