@@ -9158,6 +9158,13 @@ function renderConChoice(container, state, player) {
     // own doc。制約カードを選んだ瞬間、以降「直前のアクションをキャンセル」/「ラウンドパス」をチュートリアル
     // 専用に無効化するのをやめる。
     tutorialGuidedDemoActive = false;
+    // スマホ版: 制約を選んだら即エリア画面へ (2026-10-23, per user request「スマホ版 制約選択後に即エリア
+    // 画面へ」) -- これでオンボーディングが終わり、次はダイスを置く手番になるため。チュートリアル中は、この
+    // 直後の「初期資源が光る」説明を見せるため移動しない。
+    if (window.innerWidth <= 760 && !tutorialModeActive) {
+      applyMobileActiveTab('board');
+      window.scrollTo(0, 0);
+    }
     render(STATE);
   });
 }
