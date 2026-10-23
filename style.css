@@ -6476,10 +6476,9 @@ body.opening-hide-res .card-group__onboard-resources > .owned-card-cell {
   background: #fff;
   color: var(--accent, #4a90d9);
 }
-@media (max-width: 760px) {
-  .player-panel__untap-choice {
-    display: none;
-  }
+/* 全端末でタブバー位置の帯+獲得カード欄で選ぶ方式にしたので、資源欄の旧選択欄はすべての端末で使わない。 */
+.player-panel__untap-choice {
+  display: none;
 }
 
 /* オンライン対戦: ほかのプレイヤーの手番の再生中(main.jsのstartRemotePlayback参照) -- 操作止めの幕と、資源交換の

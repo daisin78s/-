@@ -8100,7 +8100,8 @@ function queueMobileAiCardGainAnimation(state, next) {
   }
   const previous = lastAiCardFaces;
   lastAiCardFaces = current;
-  const compare = !!previous && !replayMode && window.innerWidth <= 760 && state.round >= 1;
+  // 全端末 (2026-10-23, per user request「すべての版で」 -- 以前はスマホのみ)。
+  const compare = !!previous && !replayMode && state.round >= 1;
   const gainedPlayerIds = new Set();
   const queueLenBeforeGains = mobileAiCardGainQueue.length;
   if (compare) {
@@ -8279,10 +8280,30 @@ function finishMobileGainItem() {
 }
 
 /** 獲得カード画面で、physicalIdsのカードが倒れた状態から起き上がる演出。終わったらエリア画面へ。 */
+/** タップ/アンタップ演出の見せ方を端末で切り替える (2026-10-23, per user request「タップ・アンタップの演出も
+ * 含めて全部(すべての版で)」) -- スマホは獲得カードタブへ切り替え、PC/タブレット(獲得カード欄が常に出ている)
+ * はそのカードが見える位置まで自動でスクロールする。終わったら、スマホはエリアタブ、PC/タブレットはエリアが
+ * 見える位置へ戻す。 */
+function showCardsForEffect(playerId, physicalIds) {
+  if (window.innerWidth <= 760) {
+    applyMobileActiveTab('cards');
+    applyMobileCardsPlayer(playerId);
+    window.scrollTo(0, 0);
+    return;
+  }
+  nextFrames(1, () => {
+    const cell = physicalIds.map((id) => document.querySelector(`#player-cards [data-physical-id="${id}"]`)).find(Boolean);
+    if (cell) cell.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  });
+}
+function returnToBoardAfterEffect() {
+  if (window.innerWidth <= 760) { applyMobileActiveTab('board'); return; }
+  const board = document.getElementById('board');
+  if (board) board.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
 function animateMobileUntapAndReturn(playerId, physicalIds, done) {
-  applyMobileActiveTab('cards');
-  applyMobileCardsPlayer(playerId);
-  window.scrollTo(0, 0);
+  showCardsForEffect(playerId, physicalIds);
   nextFrames(2, () => {
     for (const id of physicalIds) {
       const card = document.querySelector(`#player-cards [data-physical-id="${id}"] .shop-card`);
@@ -8292,9 +8313,9 @@ function animateMobileUntapAndReturn(playerId, physicalIds, done) {
       }
     }
     setTimeout(() => {
-      applyMobileActiveTab('board');
+      returnToBoardAfterEffect();
       done();
-    }, 750);
+    }, animMs(750));
   });
 }
 
@@ -8302,9 +8323,7 @@ function animateMobileUntapAndReturn(playerId, physicalIds, done) {
 let mobileAiTapAnimating = false;
 function playMobileAiTap(item) {
   mobileAiTapAnimating = true;
-  applyMobileActiveTab('cards');
-  applyMobileCardsPlayer(item.playerId);
-  window.scrollTo(0, 0);
+  showCardsForEffect(item.playerId, item.physicalIds);
   nextFrames(2, () => {
     for (const id of item.physicalIds) {
       const card = document.querySelector(`#player-cards [data-physical-id="${id}"] .shop-card`);
@@ -8323,7 +8342,7 @@ function playMobileAiTap(item) {
           nextIsTap = !!move && move.type === 'BARE_TAP';
         }
       } catch (e) { nextIsTap = false; }
-      if (!nextIsTap) applyMobileActiveTab('board');
+      if (!nextIsTap) returnToBoardAfterEffect();
       mobileAiTapAnimating = false;
       finishMobileGainItem();
       render(STATE); // 止めていたAIの進行を再開
@@ -8340,10 +8359,8 @@ function startMobileUntapChoice(item) {
   if (!pending) { finishMobileGainItem(); return; }
   mobileUntapChoiceActive = { playerId: item.playerId, bannerShown: false };
   pending.context.selected = [];
-  applyMobileActiveTab('cards');
-  applyMobileCardsPlayer(item.playerId);
-  window.scrollTo(0, 0);
   render(STATE);
+  showCardsForEffect(item.playerId, pending.context.candidates);
 }
 
 /** render()の最後に呼ぶ: 選択中なら、倒れているカードを選べるようにし、タブバーの所の案内/確認を出す。 */
@@ -10099,7 +10116,8 @@ function renderLifeStoryOverlay(state) {
   // ぐらいまで文章が来たらその速度に合わせて上にスクロール") -- 「ゲーム終了」の文字の演出中は人生の画面を
   // 隠しておき、終わったら行ごとに飛ばして出す(animateLifeStoryLines)。中身はゲーム終了後は変わらないので
   // 1回だけ作る(描画のたびに作り直すと演出がやり直しになるため)。
-  const mobileIntro = window.innerWidth <= 760;
+  // 「ゲーム終了」の文字の演出も全端末に (2026-10-23, per user request「すべての版で」)。
+  const mobileIntro = true;
   if (mobileIntro && lifeStoryIntroState === 'pending') {
     lifeStoryIntroState = 'banner';
     playGameEndBanner(() => { lifeStoryIntroState = 'lines'; render(STATE); });
