@@ -6737,3 +6737,8 @@ body.story-hide-dice #players .player-panel .die {
   font-weight: 700;
   cursor: pointer;
 }
+/* ストーリー中のカードを選ぶ画面: アレク・✖(ストーリーをやめる)は隠し、戻す系のボタン(ターン開始に戻す/
+   ✖=1手戻る)は出さない(台本の盤面を戻せないように)。 */
+body.story-mode:has(#build-choice-overlay:not([hidden])) .story-overlay { display: none; }
+body.story-mode #undo-button-build,
+body.story-mode #build-choice-close-button { display: none; }

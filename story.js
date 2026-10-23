@@ -105,10 +105,18 @@ function storyShowGoal(text) {
 /** 練習用のGameStateを作る: プレイヤーはP1(あなた)だけが動く(他の3人はダイスを全部パス済みにして手番が
  * 来ないようにする)。P1は1ラウンド目の自分の手番から。JOB/制約は効果の無いものを持たせ、資源は0から。 */
 function storyBuildState(diceValues) {
-  const state = gameStateMod.createEmptyGameState(`story-${Date.now()}`);
+  const state = gameStateMod.createEmptyGameState('story-fixed-1');
   setupMod.createPlayers(state, [loadRememberedRankingName() || 'Alice', 'Bob', 'Carol', 'Dan']);
   setupMod.prepareMaps(state, INDEX);
   setupMod.prepareShops(state, INDEX);
+  // ショップに並ぶのは「ローマ市街の支配LV1」(A001A)だけ、他は無し (2026-10-24, per user: "ローマ市街の支配"
+  // "他はなし")。モニュメント・SHOP201〜203・山札・追加モニュメントも空にする。
+  for (const shop of Object.values(state.shops)) {
+    Object.keys(shop.slots).forEach((slotId) => { shop.slots[slotId] = null; });
+    shop.drawPile = [];
+  }
+  state.shops.NORMAL.slots.SHOP101 = 'A001A';
+  state.extraMonumentPool = [];
   setupMod.rollInitialColorDice(state, { P1: diceValues });
   setupMod.dealConCards(state, { P1: 'CON005' });
   state.jobPool = ['JOB001'];
@@ -373,13 +381,50 @@ function storySceneCity() {
         onPlaced: () => {
           storyFanfare(STORY_CITY_MAP_ID, () => storySayThen('S011', () => {
             storySay('S012', (text12) => {
-              storyShowResourceChange('K', 'A', () => storyLater(() => storySayThen('S013', storyEndOfScript), storyHoldMs(text12)));
+              storyShowResourceChange('K', 'A', () => storyLater(() => storySayThen('S013', storySceneCastle), storyHoldMs(text12)));
             });
           }));
         },
       });
     }, Math.min(900, storyHoldMs(text))));
   });
+}
+
+/* ---------- 場面3: 皇帝宮殿 (S014〜S016) ---------- */
+
+const STORY_CASTLE_MAP_ID = 'MAP008'; // 皇帝宮殿
+
+/** S014 そのまま
+ *  S015 皇帝宮殿が出てくる。残りのダイスが光る。上に「「皇帝宮殿」にダイスを置く」
+ *  S016 何もしない場合5秒ごとに出てきてすぐ消える
+ *  置くと本物のゲーム通り獲得するカードを選ぶ画面が出て、選んだら獲得(per user回答「本物通りカードを選ぶ
+ *  画面を出す」)。獲得の演出が終わったら台本の終わり。 */
+function storySceneCastle() {
+  storySayThen('S014', () => {
+    storyRevealMap(STORY_CASTLE_MAP_ID);
+    storySay('S015', (text) => storyLater(() => {
+      const p1 = STATE.players.find((p) => p.id === 'P1');
+      const remaining = p1.dice.filter((d) => !d.placedMapId && !d.passed).map((d) => d.value);
+      storyWaitForPlacement({
+        mapId: STORY_CASTLE_MAP_ID,
+        dieValues: remaining,
+        goalText: '「皇帝宮殿」にダイスを置く',
+        hintLineId: 'S016',
+        onPlaced: () => storyWhenVisualsIdle(() => storyLater(storyEndOfScript, 600)),
+      });
+    }, Math.min(900, storyHoldMs(text))));
+  });
+}
+
+/** カードを選ぶ画面が閉じて、カード獲得などの演出が全部終わったらfn()。 */
+function storyWhenVisualsIdle(fn) {
+  const check = () => {
+    const choosing = typeof pendingBuildChoice !== 'undefined' && pendingBuildChoice;
+    const busy = typeof aiVisualsBusy === 'function' && aiVisualsBusy();
+    if (choosing || busy) storyLater(check, 150);
+    else fn();
+  };
+  check();
 }
 
 /** 見せるエリア以外は枠だけ(中身を隠す)。 */
