@@ -6504,3 +6504,24 @@ body.opening-hide-res .card-group__onboard-resources > .owned-card-cell {
   pointer-events: none;
   box-sizing: border-box;
 }
+
+/* スマホ版: ゲーム終了時の「ゲーム終了」の文字 (2026-10-23、main.jsのplayGameEndBanner参照)。 */
+.game-end-banner-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  overflow: hidden;
+  background: rgba(16, 24, 40, 0.35);
+}
+.game-end-banner-layer__text {
+  font-size: 56px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.1em;
+  text-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+}

@@ -10094,7 +10094,23 @@ function renderLifeStoryOverlay(state) {
     overlay.hidden = true;
     return;
   }
+  // スマホ版のゲーム終了演出 (2026-10-23, per user request: "スマホ版 ゲーム終了時 左から「ゲーム終了」の文字が
+  // 飛んできて真ん中で止まりまた素早く右に その後人生 上の行から順番に左から素早く文章が飛んでくる 真ん中
+  // ぐらいまで文章が来たらその速度に合わせて上にスクロール") -- 「ゲーム終了」の文字の演出中は人生の画面を
+  // 隠しておき、終わったら行ごとに飛ばして出す(animateLifeStoryLines)。中身はゲーム終了後は変わらないので
+  // 1回だけ作る(描画のたびに作り直すと演出がやり直しになるため)。
+  const mobileIntro = window.innerWidth <= 760;
+  if (mobileIntro && lifeStoryIntroState === 'pending') {
+    lifeStoryIntroState = 'banner';
+    playGameEndBanner(() => { lifeStoryIntroState = 'lines'; render(STATE); });
+  }
+  if (mobileIntro && lifeStoryIntroState === 'banner') {
+    overlay.hidden = true;
+    return;
+  }
   overlay.hidden = false;
+  if (lifeStoryBuilt) return;
+  lifeStoryBuilt = true;
   // 人間がいれば必ず人間の成績を表示 (2026-10-19, per user request: "AI対人間は必ず人間の成績の表示を
   // して" / オンライン対戦は "人間の1位（上位）を表示") -- 優勝者ではなく人間プレイヤー自身の歩みを見せる
   // (優勝していなくても)。オンライン対戦のように人間が複数いる場合は、その中で最も順位が高い人を採用
@@ -10132,6 +10148,49 @@ function renderLifeStoryOverlay(state) {
   // 称号ベースの締めの1文 (2026-10-19, per user request): QSTの後、最後に表示。
   const closingLine = title && LIFE_STORY_CLOSING_LINE_BY_TITLE[title];
   if (closingLine) body.appendChild(el('div', 'life-story-closing', closingLine));
+  if (mobileIntro && lifeStoryIntroState === 'lines') {
+    lifeStoryIntroState = 'done';
+    animateLifeStoryLines(overlay, [document.getElementById('life-story-title'), ...body.children]);
+  }
+}
+
+let lifeStoryIntroState = 'pending'; // pending -> banner(「ゲーム終了」の演出中) -> lines -> done
+let lifeStoryBuilt = false;
+const LIFE_STORY_LINE_IN_MS = 280;
+const LIFE_STORY_LINE_INTERVAL_MS = 320;
+
+/** 「ゲーム終了」の文字が左から飛んできて中央で止まり、すばやく右へ去る。終わったらdone()。 */
+function playGameEndBanner(done) {
+  // 最後の手のカード獲得などの演出が残っていれば、終わってから始める。
+  if (aiVisualsBusy()) { setTimeout(() => playGameEndBanner(done), 150); return; }
+  const layer = el('div', 'game-end-banner-layer');
+  const text = el('div', 'game-end-banner-layer__text', 'ゲーム終了');
+  layer.appendChild(text);
+  document.body.appendChild(layer);
+  const total = 300 + 900 + 300;
+  text.animate([
+    { transform: 'translateX(-100vw)', easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)' },
+    { transform: 'translateX(0)', offset: 300 / total },
+    { transform: 'translateX(0)', offset: 1200 / total, easing: 'cubic-bezier(0.7, 0, 0.8, 0.2)' },
+    { transform: 'translateX(100vw)' },
+  ], { duration: total, fill: 'forwards' }).onfinish = () => { layer.remove(); done(); };
+}
+
+/** 人生の各行を上から順に、左からすばやく飛ばして出す。行が画面の真ん中あたりまで来たら、その速さに
+ * 合わせて画面(スクロールする入れ物=オーバーレイ)を上にスクロールする。 */
+function animateLifeStoryLines(scroller, lines) {
+  lines.forEach((line) => { line.style.opacity = '0'; });
+  scroller.scrollTop = 0;
+  lines.forEach((line, i) => {
+    setTimeout(() => {
+      line.style.opacity = '';
+      line.animate([{ transform: 'translateX(-100vw)' }, { transform: 'translateX(0)' }],
+        { duration: LIFE_STORY_LINE_IN_MS, easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)' });
+      const rect = line.getBoundingClientRect();
+      const middle = window.innerHeight * 0.5;
+      if (rect.bottom > middle) scroller.scrollTo({ top: scroller.scrollTop + (rect.bottom - middle), behavior: 'smooth' });
+    }, i * LIFE_STORY_LINE_INTERVAL_MS);
+  });
 }
 
 /** GAME_END screen (2026-07-31): state.phase becomes 'GAME_END' inside turn-flow's endRound once
