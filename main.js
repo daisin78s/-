@@ -15890,6 +15890,42 @@ function queueMobileAiTurnFocus(state, next) {
   if (aiTurnPlayerId) setTimeout(() => applyMobileActiveTab('board'), 0);
 }
 
+/** iPhone全画面(ホーム画面から起動したPWA)の横向き起動直後、画面下に明るい帯が出る対策 (2026-10-23, per
+ * user report「起動した直後に出ることが多い 一度縦にして横に戻すと消える」) -- iOSが表示範囲(画面の縦の
+ * 長さ)を実際より短く計算したままになり、回転し直すと計算し直されて直る、という端末側の不具合と思われる。
+ * 起動直後とアプリに戻ってきた時に、表示範囲の高さが画面の短い辺より明らかに短ければ、viewportの設定を
+ * 一瞬書き換えて元に戻すことでiOSに計算し直させる(回転し直すのと同じ効果を狙う)。全画面アプリ以外では
+ * 何もしない。実機でしか起きないため、効果は実機で要確認。 */
+function setupIosStandaloneViewportFix() {
+  const standalone = window.navigator.standalone === true
+    || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  if (!standalone) return;
+  const meta = document.querySelector('meta[name="viewport"]');
+  if (!meta) return;
+  const original = meta.getAttribute('content');
+  let attempts = 0;
+  const looksTooShort = () => {
+    const shortSide = Math.min(window.screen.width, window.screen.height);
+    const landscape = window.innerWidth > window.innerHeight;
+    return landscape && window.innerHeight < shortSide - 2;
+  };
+  const refresh = () => {
+    if (!looksTooShort() || attempts >= 3) return;
+    attempts++;
+    meta.setAttribute('content', `${original}, maximum-scale=1.0`);
+    setTimeout(() => {
+      meta.setAttribute('content', original);
+      window.scrollTo(window.scrollX, window.scrollY);
+      setTimeout(refresh, 400);
+    }, 60);
+  };
+  setTimeout(refresh, 300);
+  window.addEventListener('pageshow', () => { attempts = 0; setTimeout(refresh, 300); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') { attempts = 0; setTimeout(refresh, 300); }
+  });
+}
+
 function setupMobileQuestTab() {
   if (window.innerWidth > 760) return;
   const questTab = document.getElementById('mobile-quest-tab');
@@ -15914,6 +15950,7 @@ document.addEventListener('DOMContentLoaded', () => {
     applyMobileActiveTab('board');
     render(STATE);
   });
+  setupIosStandaloneViewportFix();
   if (playOpeningOnLoad) startOpeningSequence();
   render(STATE);
   autoScrollToBottomOnStart();
