@@ -791,13 +791,26 @@ function startOpeningSequence() {
   setDiceRollBlocker(true);
   document.body.classList.add(...OPENING_HIDE_CLASSES);
   const isMobile = window.innerWidth <= 760;
+  // タブレット(1列配置で縦にスクロールする幅、761〜1400px)はスマホと同じく「切り替え方式」 (2026-10-23,
+  // per user request: "タブレット版だけスクロールとアニメーションがあっていないためスクロールなし スマホ版と
+  // 同じで切り替え方式 1 エリア画面でダイスとショップ 2 下に画面を切り替えて残りのカード") -- 開始時の
+  // ゆっくりスクロール(autoScrollToBottomOnStart)はオープニング中は動かさず、1)ダイス・ショップは一番上、
+  // 2)ジョブ・制約・初期資源は獲得カードの欄へ、それぞれ一瞬で表示位置を切り替える。PCはそのまま。
+  const isTablet = !isMobile && window.innerWidth <= 1400;
+  // ダイス置き場(#players)が画面に入る位置へ(描き終わってから測る)。画面が縦に十分長ければ一番上のまま。
+  const showDiceAreaOnTablet = () => {
+    if (!isTablet) return;
+    window.scrollTo(0, 0);
+    const playersBottom = document.getElementById('players').getBoundingClientRect().bottom;
+    if (playersBottom > window.innerHeight) window.scrollTo(0, playersBottom - window.innerHeight + 12);
+  };
   const after = (ms, fn) => setTimeout(fn, ms);
   // 1) ダイス: 全員分が転がってダイス置き場へ(ラウンド開始の演出と同じ動き)。
   if (isMobile) applyMobileActiveTab('players');
-  nextFrames(2, () => rollAllHandDice(STATE, () => after(OPENING_STEP_GAP_MS, () => {
+  nextFrames(2, () => { showDiceAreaOnTablet(); rollAllHandDice(STATE, () => after(OPENING_STEP_GAP_MS, () => {
     // 2) ショップ: SHOP101-106→SHOP201-203を上から1枚ずつ。
     if (isMobile) applyMobileActiveTab('shop');
-    window.scrollTo(0, 0);
+    if (isMobile || isTablet) window.scrollTo(0, 0);
     document.body.classList.remove('opening-hide-shop');
     openingDealStartedAt = performance.now();
     render(STATE);
@@ -805,6 +818,10 @@ function startOpeningSequence() {
       openingDealStartedAt = null;
       // 3) ジョブ6枚 → 4) 制約 → 5) 初期資源 (スマホは獲得カードタブ)。
       if (isMobile) applyMobileActiveTab('cards');
+      if (isTablet) {
+        const cardsTop = document.getElementById('player-cards').getBoundingClientRect().top + window.scrollY;
+        window.scrollTo(0, cardsTop);
+      }
       nextFrames(2, () => dealCardsFromTop(visibleElements('#job-pool .owned-card-cell'), 'opening-hide-jobs', () => after(OPENING_STEP_GAP_MS, () => {
         dealConCards(() => after(OPENING_STEP_GAP_MS, () => {
           dealCardsFromTop(visibleElements('.card-group__onboard-resources > .owned-card-cell'), 'opening-hide-res', () => {
@@ -816,7 +833,7 @@ function startOpeningSequence() {
         }));
       })));
     });
-  })));
+  })); });
 }
 
 // ---------------------------------------------------------------------------
@@ -15427,6 +15444,8 @@ function showAreaEnlargeModal(areaId, pickAction, titleOverride) {
  * (not from render(), which re-runs on every state change) -- a page reload is the only way this app
  * ever "starts" a game, so DOMContentLoaded already means "game start" here. */
 function autoScrollToBottomOnStart() {
+  // オープニング中(タブレットの切り替え方式など)は、オープニング側が表示位置を決めるので動かさない。
+  if (openingSequenceActive) return;
   const startY = window.scrollY;
   const endY = document.documentElement.scrollHeight - window.innerHeight;
   if (endY <= startY) return; // page doesn't even overflow -- nothing to scroll
