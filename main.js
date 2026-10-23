@@ -671,7 +671,8 @@ let startedFromRound3 = false;
 let entryBannerDismissed = tutorialModeActive || weeklyChallengeActive || !!debugSetupPlanAtLoad || localBattlePending;
 function dismissEntryBanner() {
   entryBannerDismissed = true;
-  startOpeningDeal();
+  // 先にオープニングを始めてから描く(このrenderでスマホの初期資源選択タブへの自動切り替えが走らないように)。
+  startOpeningSequence();
   render(STATE);
 }
 
@@ -679,36 +680,32 @@ function dismissEntryBanner() {
  * ショップに上から1枚づつカードが素早くスライドしてきてSHOP101-106に配られる" + 回答「まずはオープニング
  * だけ」「すべての端末」「とりあえずチュートリアルも」「SHOP201-203もお願い」「短いので操作不能で」) --
  * 新しいローカル対戦/チュートリアルの開始時だけ、SHOP101-106→SHOP201-203の順に1枚ずつ、カードが画面の
- * 上から各枠へスライドして入る。見た目だけの演出でゲームの状態は一切変えない。再生中は透明な幕で画面全体の
- * 操作を止める。途中でrender()が呼ばれて枠が作り直されても、開始時刻からの経過時間でアニメーションの
- * 位置を合わせる(負のanimation-delay)ので、続きから再生される(renderShopGrid参照)。 */
+ * 上から各枠へスライドして入る。見た目だけの演出でゲームの状態は一切変えない。途中でrender()が呼ばれて枠が
+ * 作り直されても、開始時刻からの経過時間でアニメーションの位置を合わせる(負のanimation-delay)ので、続きから
+ * 再生される(renderShopGrid参照)。
+ *
+ * 続き (2026-10-23, per user request: "オープニングアニメーションの続きがしたい ショップのカードの次に
+ * ジョブカード6枚が配置され 制約カードが配られ 制約カードは表裏なので同時に来て 解放されてない場合は1枚だけ
+ * 初期資源カードが配られる その後ダイスが振られる" + 回答「制約カード1枚上から飛んできて おかれたら素早く
+ * めくられて隣へ この時表はそのままにして分裂したように見える」「画面に見えている分だけ」「ショップと同じく
+ * 上から」「最後を初期資源にしたいのでダイスは一番初めのほうがいい」) -- 全体の流れ(startOpeningSequence):
+ * ダイス(全員分が転がってダイス置き場へ) → ショップ → ジョブ6枚 → 制約(表が来て、解放済みなら裏へ分裂) →
+ * 初期資源の候補4枚。スマホは資源→ショップ→獲得カードとタブを自動で切り替え、最後は初期資源を選ぶ獲得カード
+ * タブ。配られる前のカードは隠しておく(body.opening-hide-*、style.css参照)。再生中は操作不能・AIも止める。 */
 const OPENING_DEAL_CARD_MS = 260;
 const OPENING_DEAL_STEP_MS = 110;
 const OPENING_DEAL_CARD_COUNT = 9; // SHOP101-106 + SHOP201-203
+const OPENING_STEP_GAP_MS = 150;
+const OPENING_CON_FLIP_MS = 320;
+const OPENING_HIDE_CLASSES = ['opening-hide-shop', 'opening-hide-jobs', 'opening-hide-con', 'opening-hide-res'];
 let openingDealStartedAt = null;
+let openingSequenceActive = false;
 function openingDealTotalMs() {
   return OPENING_DEAL_STEP_MS * (OPENING_DEAL_CARD_COUNT - 1) + OPENING_DEAL_CARD_MS;
 }
-function openingDealRemainingMs() {
-  if (openingDealStartedAt === null) return 0;
-  return Math.max(0, openingDealTotalMs() - (performance.now() - openingDealStartedAt));
-}
-function startOpeningDeal() {
-  openingDealStartedAt = performance.now();
-  let blocker = document.getElementById('opening-deal-blocker');
-  if (!blocker) {
-    blocker = document.createElement('div');
-    blocker.id = 'opening-deal-blocker';
-    document.body.appendChild(blocker);
-  }
-  blocker.hidden = false;
-  setTimeout(() => {
-    openingDealStartedAt = null;
-    blocker.hidden = true;
-  }, openingDealTotalMs() + 50);
-}
 /** renderShopGridから、order番目(0始まり)に配るカードの枠へ演出を付ける。 */
 function applyOpeningDealAnimation(slotNode, order) {
+  slotNode.dataset.openingDeal = '1';
   if (openingDealStartedAt === null) return;
   const delay = order * OPENING_DEAL_STEP_MS - (performance.now() - openingDealStartedAt);
   if (delay + OPENING_DEAL_CARD_MS <= 0) return; // もう配り終わっている
@@ -716,6 +713,110 @@ function applyOpeningDealAnimation(slotNode, order) {
   if (!cardEl) return;
   cardEl.classList.add('shop-slot__card--deal');
   cardEl.style.animationDelay = `${Math.round(delay)}ms`;
+}
+
+function visibleElements(selector) {
+  return [...document.querySelectorAll(selector)].filter((node) => {
+    const rect = node.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  });
+}
+/** 隠れている(body.opening-hide-*)カードの枠に重ねて複製を作り、画面の上から1枚ずつ落とす。全部着いたら
+ * 複製を消し、隠していたクラスを外して本物を見せる。 */
+function dealCardsFromTop(targets, hideClass, onDone) {
+  if (targets.length === 0) { document.body.classList.remove(hideClass); onDone(); return; }
+  targets[0].scrollIntoView({ block: 'nearest' });
+  const flyers = targets.map((target, i) => {
+    const rect = target.getBoundingClientRect();
+    const flyer = target.cloneNode(true);
+    flyer.classList.add('opening-card-flyer');
+    Object.assign(flyer.style, { left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px` });
+    document.body.appendChild(flyer);
+    flyer.animate([
+      { transform: `translateY(${-(rect.bottom + 30)}px)` },
+      { transform: 'translateY(0)' },
+    ], { duration: OPENING_DEAL_CARD_MS, delay: i * OPENING_DEAL_STEP_MS, easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)', fill: 'both' });
+    return flyer;
+  });
+  setTimeout(() => {
+    document.body.classList.remove(hideClass);
+    flyers.forEach((flyer) => flyer.remove());
+    onDone();
+  }, (targets.length - 1) * OPENING_DEAL_STEP_MS + OPENING_DEAL_CARD_MS + 20);
+}
+/** 制約カード: 表が上から来て、置かれたら素早くめくられて隣(裏の枠)へ -- 表はその場に残り、分裂したように
+ * 見せる。裏が未解放(枠が1つ)なら表が来るだけ。 */
+function dealConCards(onDone) {
+  const cells = visibleElements('.card-group__onboard-con > .owned-card-cell');
+  if (cells.length === 0) { document.body.classList.remove('opening-hide-con'); onDone(); return; }
+  const [front, back] = cells;
+  // 表が着いた時点で表だけ見せ、裏の枠はめくれて来るまで個別に隠しておく。
+  if (back) back.style.visibility = 'hidden';
+  dealCardsFromTop([front], 'opening-hide-con', () => {
+    if (!back) { onDone(); return; }
+    const fromRect = front.getBoundingClientRect();
+    const toRect = back.getBoundingClientRect();
+    const dx = fromRect.left - toRect.left;
+    const dy = fromRect.top - toRect.top;
+    // 前半: 表の複製が表の位置で横に縮む(めくれ始め)。後半: 裏の複製が縮んだ状態から広がりつつ裏の枠へ移動。
+    const half = OPENING_CON_FLIP_MS / 2;
+    const frontFlyer = front.cloneNode(true);
+    frontFlyer.classList.add('opening-card-flyer');
+    Object.assign(frontFlyer.style, { left: `${fromRect.left}px`, top: `${fromRect.top}px`, width: `${fromRect.width}px`, height: `${fromRect.height}px`, visibility: 'visible' });
+    document.body.appendChild(frontFlyer);
+    frontFlyer.animate([
+      { transform: 'translateX(0) scaleX(1)' },
+      { transform: `translateX(${-dx * 0.25}px) scaleX(0)` },
+    ], { duration: half, easing: 'ease-in', fill: 'forwards' });
+    const backFlyer = back.cloneNode(true);
+    backFlyer.classList.add('opening-card-flyer');
+    backFlyer.style.visibility = 'visible';
+    Object.assign(backFlyer.style, { left: `${toRect.left}px`, top: `${toRect.top}px`, width: `${toRect.width}px`, height: `${toRect.height}px`, visibility: 'visible' });
+    document.body.appendChild(backFlyer);
+    backFlyer.animate([
+      { transform: `translate(${dx * 0.75}px, ${dy * 0.75}px) scaleX(0)` },
+      { transform: 'translate(0, 0) scaleX(1)' },
+    ], { duration: half, delay: half, easing: 'ease-out', fill: 'both' });
+    setTimeout(() => {
+      back.style.visibility = '';
+      frontFlyer.remove();
+      backFlyer.remove();
+      onDone();
+    }, OPENING_CON_FLIP_MS + 20);
+  });
+}
+
+function startOpeningSequence() {
+  openingSequenceActive = true;
+  setDiceRollBlocker(true);
+  document.body.classList.add(...OPENING_HIDE_CLASSES);
+  const isMobile = window.innerWidth <= 760;
+  const after = (ms, fn) => setTimeout(fn, ms);
+  // 1) ダイス: 全員分が転がってダイス置き場へ(ラウンド開始の演出と同じ動き)。
+  if (isMobile) applyMobileActiveTab('players');
+  nextFrames(2, () => rollAllHandDice(STATE, () => after(OPENING_STEP_GAP_MS, () => {
+    // 2) ショップ: SHOP101-106→SHOP201-203を上から1枚ずつ。
+    if (isMobile) applyMobileActiveTab('shop');
+    window.scrollTo(0, 0);
+    document.body.classList.remove('opening-hide-shop');
+    openingDealStartedAt = performance.now();
+    render(STATE);
+    after(openingDealTotalMs() + OPENING_STEP_GAP_MS, () => {
+      openingDealStartedAt = null;
+      // 3) ジョブ6枚 → 4) 制約 → 5) 初期資源 (スマホは獲得カードタブ)。
+      if (isMobile) applyMobileActiveTab('cards');
+      nextFrames(2, () => dealCardsFromTop(visibleElements('#job-pool .owned-card-cell'), 'opening-hide-jobs', () => after(OPENING_STEP_GAP_MS, () => {
+        dealConCards(() => after(OPENING_STEP_GAP_MS, () => {
+          dealCardsFromTop(visibleElements('.card-group__onboard-resources > .owned-card-cell'), 'opening-hide-res', () => {
+            openingSequenceActive = false;
+            document.body.classList.remove(...OPENING_HIDE_CLASSES);
+            setDiceRollBlocker(false);
+            render(STATE); // 止めていたAIの進行・スマホの初期資源選択への移動を再開
+          });
+        }));
+      })));
+    });
+  })));
 }
 
 // ---------------------------------------------------------------------------
@@ -14143,7 +14244,7 @@ function playRoundStartDiceSequence(state, before) {
   }, exitWait);
 }
 
-function rollAllHandDice(state) {
+function rollAllHandDice(state, onDone) {
   const targets = [...document.querySelectorAll('#players .die[data-die-key]')].filter((node) => {
     const rect = node.getBoundingClientRect();
     return rect.width > 0 && rect.height > 0;
@@ -14181,7 +14282,17 @@ function rollAllHandDice(state) {
     flyer.animate(frames, { duration: total, easing: 'ease-out', fill: 'forwards' });
     flickerDieValue(flyer, DICE_ROLL_MS);
   }
-  setTimeout(finishDiceSequence, DICE_ROLL_MS + DICE_SETTLE_MS + 30);
+  setTimeout(() => {
+    if (!onDone) { finishDiceSequence(); return; }
+    clearDiceFlyers();
+    onDone();
+  }, DICE_ROLL_MS + DICE_SETTLE_MS + 30);
+}
+
+function clearDiceFlyers() {
+  document.querySelectorAll('.die--flying').forEach((node) => node.remove());
+  diceRollHiddenKeys.clear();
+  document.querySelectorAll('.die[data-die-key]').forEach((node) => { node.style.visibility = ''; });
 }
 
 function finishDiceSequence() {
@@ -14304,7 +14415,7 @@ function renderCore(state) {
   // 画面を消すとゲームが進むように" -- closeTutorialTurnOrderOverlay's own render(STATE) call, right
   // after flipping this flag off, is what actually lets the AI pump resume, with no separate trigger
   // needed.
-  if (!tutorialTurnOrderOverlayOpen && !diceRollSequenceActive) {
+  if (!tutorialTurnOrderOverlayOpen && !diceRollSequenceActive && !openingSequenceActive) {
     if (aiPacingMode === 'instant') pumpAiInstant(state);
     else if (aiPacingMode === 'delayed') pumpAiDelayed();
   }
@@ -15519,6 +15630,8 @@ function setupMobileTabSystem() {
 let lastMobileOnboardingKey = null;
 function queueMobileOnboardingFocus(state, next) {
   if (window.innerWidth > 760) return;
+  // オープニング中はその流れ(最後に獲得カードタブ)に任せ、終わった後のrenderで改めて判定する。
+  if (openingSequenceActive) return;
   const isLocalHuman = (pid) => !isAiPlayer(pid) && (!onlineRoomCode || localSeatId === pid);
   let key = null;
   const resourceChoice = state.pendingChoices.find((c) => c.kind === 'SELECT_RESOURCE_CARDS' && isLocalHuman(c.playerId));
@@ -15541,7 +15654,7 @@ function queueMobileOnboardingFocus(state, next) {
     const target = [...document.querySelectorAll('.onboard-panel--active')]
       .find((node) => node.getBoundingClientRect().height > 0);
     if (target) target.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  }, openingDealRemainingMs());
+  }, 0);
 }
 
 /** スマホ版: AIの手番になった瞬間にエリアタブへ移動 (2026-10-22, per user request: "AIの手番になったら
@@ -15574,13 +15687,14 @@ document.addEventListener('DOMContentLoaded', () => {
   setupMobileQuestTab();
   // 再読み込みで始まる新しいゲーム(ゲーム中の「新しいローカル対戦」/チュートリアル開始)もオープニングを
   // 流す。続きからの再開(resumeSavedSession)はこの時点ではtutorialModeActive等がまだ立っていないので対象外。
-  if (localBattlePending || (tutorialModeActive && !sessionResumeChoicePending)) startOpeningDeal();
+  const playOpeningOnLoad = localBattlePending || (tutorialModeActive && !sessionResumeChoicePending);
   window.addEventListener('resize', fitMobileShopWidth);
   document.getElementById('mobile-free-action-close').addEventListener('click', () => {
     mobileFreeActionOpen = false;
     applyMobileActiveTab('board');
     render(STATE);
   });
+  if (playOpeningOnLoad) startOpeningSequence();
   render(STATE);
   autoScrollToBottomOnStart();
 
