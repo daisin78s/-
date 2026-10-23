@@ -6588,3 +6588,10 @@ body.opening-hide-res .card-group__onboard-resources > .owned-card-cell {
   border-radius: 2px;
   margin-left: -4px;
 }
+
+/* 人生の画面の横幅を広げる (2026-10-23, per user request「広げて」) -- 最終順位の欄でほかのプレイヤーの
+   情報が細かく折り返していたため。最大720px、それより狭い画面では左右に少し余白を残していっぱいに。 */
+#life-story-overlay > .card-inst-modal {
+  width: min(720px, calc(100vw - 32px));
+  max-width: none;
+}
