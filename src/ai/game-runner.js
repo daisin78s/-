@@ -505,7 +505,7 @@ function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorO
     // grant (see turn-flow.grantBardBonusIfEarned) -- player.bardEmblemUnitsGranted (1 unit = 1 VP, by
     // then fully caught up since every player's last turn has already gone through endTurn once GAME_END
     // is reached) is now the exact same number this used to compute by summing VP_MODIFIER clauses.
-    const job008BonusVp = player.jobCardId === 'JOB002' ? player.bardEmblemUnitsGranted : null; // 吟遊詩人 (JOB002 since the 2026-10-13 A/B-revert)
+    const job008BonusVp = player.jobCardId === 'JOB002' ? player.bardEmblemUnitsGranted : null; // 神官 (JOB002 since the 2026-10-13 A/B-revert)
     roundDetailByPlayerId[player.id] = {
       buildsByRound: buildsByRound[player.id],
       colorDiceGainedByRound: colorDiceGainedByRound[player.id],

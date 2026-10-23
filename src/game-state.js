@@ -158,12 +158,12 @@ function createDie(id, kind) {
  *   executor.applyTurnEnd deducts K from the player and adds it to the map's accumulatedFee, then clears
  *   this back to null. At most one is ever pending at a time ("1ターン=ダイス1個の配置" means at most one
  *   placement per turn); Undo clears it for free since it's plain GameState.
- * @property {number} bardEmblemUnitsGranted - 吟遊詩人/JOB008's own watermark (2026-08-17, replacing its
+ * @property {number} bardEmblemUnitsGranted - 神官/JOB008's own watermark (2026-08-17, replacing its
  *   old live VP_MODIFIER(TOTAL_EMBLEM_COUNT) formula per user request: "エンブレムが3個増えるごとにターン
  *   終了時1VPとZを得る"): how many complete 3-emblem groups this player has already been credited for.
  *   Checked/incremented once per TURNEND (see turn-flow.grantBardBonusIfEarned) -- floor(current
  *   TOTAL_EMBLEM_COUNT / 3) minus this value is how many new units to grant (1VP+1Z each) right now.
- *   Irrelevant for a player without 吟遊詩人 (stays 0, never read).
+ *   Irrelevant for a player without 神官 (stays 0, never read).
  * @property {number} orphanageVpGained - 孤児院(MAP010)-only, reporting use only, no gameplay effect
  *   (2026-08-28, replacing the old per-map MapState.changeVpUses/changeVpTotal this player's own live
  *   board-tile "平均XVP" display used to read -- removed per user request, "孤児院LV2に出てくるアイコン

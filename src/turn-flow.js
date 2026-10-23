@@ -124,7 +124,7 @@ function getNextTurn(state) {
  * restockShop's own doc -- 2026-08-07 added SPECIAL here too, since it now also compacts/shifts left on
  * a build even though it still never refills).
  */
-/** 吟遊詩人/JOB008 (2026-08-17, replacing its old live VP_MODIFIER(TOTAL_EMBLEM_COUNT) PASSIVE formula
+/** 神官/JOB008 (2026-08-17, replacing its old live VP_MODIFIER(TOTAL_EMBLEM_COUNT) PASSIVE formula
  * per user request: "エンブレムが3個増えるごとにターン終了時1VPとZを得る" -- confirmed with the user this
  * is a full switch-over, not an additional/toggleable variant; granted resource changed from Z to C,
  * 2026-08-18, per user request: "もらえる資源をZからCに変更したい"). Bespoke, no DSL representation (no

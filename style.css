@@ -795,7 +795,7 @@ h1, h2, h3 { margin: 0; }
    .action-icons' own defaults (14px emoji, 11px dot) are sized for the taller .shop-card__effect row
    below, not here; without this the icon alone left too little room for the NAME text beside it and
    forced an ellipsis-truncated name even for a plain 2-character one (found via screenshot verification). */
-/* 2026-08-21: briefly enlarged to match 吟遊詩人(JOB008)'s own 18px C dot, then reverted -- per user
+/* 2026-08-21: briefly enlarged to match 神官(JOB008)'s own 18px C dot, then reverted -- per user
    report 4 faces with 2+ resource items broke at that size (too wide for this compact single-line row),
    and per their explicit follow-up ("CONの必要資源の箇所は大きくする必要がないので...ひとつ前のバージョン
    に戻せますか") this whole context stays at its original compact size for every CON face, not just
@@ -1353,10 +1353,10 @@ body.tutorial-mode .change-highlight {
   display: inline-block;
 }
 
-/* Bespoke JOB card-note icon rows (開拓者/吟遊詩人/地主, 2026-08-17, per user request: "ABCはアイコンで
+/* Bespoke JOB card-note icon rows (開拓者/神官/地主, 2026-08-17, per user request: "ABCはアイコンで
    大きめに" / "ABCZはアイコンで表記") -- larger than .action-dot's 11px base, with some breathing room
    between them since they're the sole content of their own line rather than squeezed alongside text/
-   other icons. Originally 開拓者-only (.job009-abc-dots); generalized once 吟遊詩人/地主 reused the same
+   other icons. Originally 開拓者-only (.job009-abc-dots); generalized once 神官/地主 reused the same
    "▽ then an icon row" card-note shape. */
 .job-note-icon-row {
   display: inline-flex;
@@ -2288,7 +2288,7 @@ body.tutorial-mode .change-highlight {
 .card-group__onboard-resources .action-suffix { font-size: 14px; }
 
 /* 2026-08-21, per user request -- see .shop-card__name's matching comment above (same target ensemble,
-   matched to 吟遊詩人's own 18px C dot): this is the main in-play view of a player's owned CON+JOB pair,
+   matched to 神官's own 18px C dot): this is the main in-play view of a player's owned CON+JOB pair,
    so it's the primary place this request is actually about. */
 .card-group__jobcon .action-emoji { font-size: 22px; }
 .card-group__jobcon .action-dot { width: 18px; height: 18px; }

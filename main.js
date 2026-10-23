@@ -5119,10 +5119,10 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
   } else if (options.showEffect && (facts.name === '開拓者' || facts.name === '神官' || facts.name === '地主')) {
     // Bespoke JOB card-notes (宣教師/JOB009, renamed from 開拓者 2026-09-20 alongside its ability redesign
     // -- fixed 1B per qualifying die now, no longer die-value-dependent, per user mockup: "無人AREAに色D /
-    // ▽ / B"; 吟遊詩人/JOB008 and 地主/JOB011 2026-08-17, per user mockups: "エンブレム３個 / ▽ / Z　1VP"
+    // ▽ / B"; 神官/JOB008 and 地主/JOB011 2026-08-17, per user mockups: "エンブレム３個 / ▽ / Z　1VP"
     // and "LVアップAREA / ▽ / 〇/1VP", both "ABCZはアイコンで表記") -- none of these 3 abilities have any
     // DSL representation at all (see hasPioneerAbility/hasLandlordAbility's own docs in board.js, and
-    // turn-flow.grantBardBonusIfEarned's for 吟遊詩人), so each is a one-off hand-built display, the same
+    // turn-flow.grantBardBonusIfEarned's for 神官), so each is a one-off hand-built display, the same
     // class of exception CON003A/CON005B used to each get their own ad-hoc .card-note patch for before
     // the general CON アイコン column existed. "▽" is plain text (matching CON004A's own literal "▽" in
     // its card-note text), not actionTriggerDown()'s 🔽 emoji -- 開拓者/宣教師's own mockup used the plain

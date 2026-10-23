@@ -45,7 +45,7 @@ const CON_PHYSICAL_IDS = ['CON001', 'CON002', 'CON003', 'CON004', 'CON005', 'CON
 // JOB ids dropped their trailing tier letter on 2026-08-0X, briefly grew a real A/B tier pair on
 // 2026-10-11 (12 faces paired onto 6 physical draft slots, each showing only one randomly-chosen face
 // per game), then reverted back to 12 independent single-face physical cards on 2026-10-13 (per user
-// report: pairing 吟遊詩人/食料長官 onto one physical slot meant 祝福, which synergizes with either face,
+// report: pairing 神官/食料長官 onto one physical slot meant 祝福, which synergizes with either face,
 // was always the better CON pick, starving its sibling 色欲 of ever being chosen -- see dealJobPool's
 // own doc for the mechanics of the revert). No fixed JOB_FACE_IDS/JOB_PHYSICAL_IDS list here -- dealJobPool
 // derives all 12 ids directly from index.raw.JOB.
@@ -452,7 +452,7 @@ function computeStartOrder(state, index) {
 /**
  * Reveals 6 of the 12 independent JOB cards as a shared draft pool, shuffled and sliced (2026-10-13
  * revert of the 2026-10-11 A/B-pairing redesign -- see this file's own top-of-file doc on why: pairing
- * e.g. 吟遊詩人/食料長官 onto one physical slot meant 祝福, which synergizes with either, was always the
+ * e.g. 神官/食料長官 onto one physical slot meant 祝福, which synergizes with either, was always the
  * better CON pick, starving 色欲 of ever being chosen). Players draft one card each from this pool, in
  * start-play order, during round-1 onboarding (see chooseJob()) -- with 6 slots and 4 players, 2 always
  * go undrafted. Call once, before the first player's onboarding.

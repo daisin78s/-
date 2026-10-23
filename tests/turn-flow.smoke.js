@@ -439,7 +439,7 @@ check('startRound(2) itself does not touch dice (already rerolled at the previou
 }
 
 // ---------------------------------------------------------------------------
-// 吟遊詩人/JOB008 (2026-08-17, replacing its old live VP_MODIFIER(TOTAL_EMBLEM_COUNT) PASSIVE formula
+// 神官/JOB008 (2026-08-17, replacing its old live VP_MODIFIER(TOTAL_EMBLEM_COUNT) PASSIVE formula
 // per user request: "エンブレムが3個増えるごとにターン終了時1VPとZを得る"; granted resource changed from
 // Z to C, 2026-08-18, per user request: "もらえる資源をZからCに変更したい") -- checked once per TURNEND,
 // catch-up-safe via player.bardEmblemUnitsGranted's watermark. M004 has EMBLEM_A=1,EMBLEM_B=1,EMBLEM_C=1
@@ -465,7 +465,7 @@ check('startRound(2) itself does not touch dice (already rerolled at the previou
   const beforeC = p1.resources.C || 0;
   const result = turnFlow.endTurn(s, index, 'P1');
   check('endTurn succeeds', result.success, true);
-  check('吟遊詩人: exactly 3 emblems -> 1 unit -> +1VP', p1.resources.VP - beforeVp, 1);
+  check('神官: exactly 3 emblems -> 1 unit -> +1VP', p1.resources.VP - beforeVp, 1);
   check('...and +1C', p1.resources.C - beforeC, 1);
   check('...watermark now at 1', p1.bardEmblemUnitsGranted, 1);
 
@@ -482,7 +482,7 @@ check('startRound(2) itself does not touch dice (already rerolled at the previou
   p1.ownedCardPhysicalIds.push(m012.physicalId);
   const beforeVp3 = p1.resources.VP;
   turnFlow.endTurn(s, index, 'P1');
-  check('吟遊詩人: 6 emblems total -> 2 units -> +1 more VP (2-1) this time', p1.resources.VP - beforeVp3, 1);
+  check('神官: 6 emblems total -> 2 units -> +1 more VP (2-1) this time', p1.resources.VP - beforeVp3, 1);
   check('...watermark now at 2', p1.bardEmblemUnitsGranted, 2);
 
   // Jump straight to 15 emblems (5 units) in one shot -- catch-up must grant all 3 newly-earned units
@@ -499,12 +499,12 @@ check('startRound(2) itself does not touch dice (already rerolled at the previou
   const beforeVp4 = p1.resources.VP;
   const beforeC4 = p1.resources.C;
   turnFlow.endTurn(s, index, 'P1');
-  check('吟遊詩人: jumping to 15 emblems (5 units) grants all 3 newly-earned units (5-2) at once', p1.resources.VP - beforeVp4, 3);
+  check('神官: jumping to 15 emblems (5 units) grants all 3 newly-earned units (5-2) at once', p1.resources.VP - beforeVp4, 3);
   check('...same for C', p1.resources.C - beforeC4, 3);
   check('...watermark now at 5', p1.bardEmblemUnitsGranted, 5);
 }
 {
-  // A player without 吟遊詩人 gets nothing, even with plenty of emblems (control).
+  // A player without 神官 gets nothing, even with plenty of emblems (control).
   const { createEmptyGameState: freshEmptyState, createCardInstance } = require('../src/game-state');
   const s = freshEmptyState('job008-bard-control-smoke');
   setup.createPlayers(s, ['Alice']);
@@ -518,7 +518,7 @@ check('startRound(2) itself does not touch dice (already rerolled at the previou
   p1.ownedCardPhysicalIds.push(m004.physicalId);
 
   turnFlow.endTurn(s, index, 'P1');
-  check('No 吟遊詩人 -> no VP/C bonus despite 3 emblems', [p1.resources.VP || 0, p1.resources.C || 0], [0, 0]);
+  check('No 神官 -> no VP/C bonus despite 3 emblems', [p1.resources.VP || 0, p1.resources.C || 0], [0, 0]);
 }
 
 // ---------------------------------------------------------------------------
