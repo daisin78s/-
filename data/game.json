@@ -401,7 +401,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "配給所LV1の支配"
+      "INST": "孤児院LV1の支配"
     },
     {
       "ID": "A202A",
@@ -545,7 +545,7 @@
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "配給所LV2の支配"
+      "INST": "孤児院LV2の支配"
     },
     {
       "ID": "A202B",
