@@ -15685,7 +15685,27 @@ function applyMobileActiveTab(tab) {
   document.querySelectorAll('.mobile-tab-switcher__btn').forEach((btn) => {
     btn.classList.toggle('mobile-tab-switcher__btn--active', btn.dataset.tabTarget === tab);
   });
-  if (tab === 'shop') fitMobileShopWidth();
+  if (tab === 'shop') {
+    fitMobileShopWidth();
+    if (window.innerWidth <= 760 && !openingSequenceActive) requestAnimationFrame(scrollMobileShopToNormalRow);
+  }
+}
+
+/** スマホ版: ショップタブを開いた時の初期位置 (2026-10-23, per user request with screenshot: "スマホ版ショップ
+ * 画面 画面位置を上にそろえると重要な情報が見えない スワイプした時初期位置は画像くらいの位置にしたい") --
+ * 一番上のモニュメントの段は下端が少し見えるだけにし、通常カード(SHOP101-106)の段がタブバーのすぐ下に来る
+ * ようにスクロールする。 */
+function scrollMobileShopToNormalRow() {
+  if (mobileActiveTab !== 'shop') return;
+  const firstNormal = document.querySelector('#shop-combined-slots [data-opening-deal]');
+  const tabBar = document.getElementById('mobile-tab-switcher');
+  if (!firstNormal || !tabBar) return;
+  // 通常カードの段の上に残す、モニュメントの段の見える分(「2Rから」の文字が見えるくらい、per user「ていせい
+  // このくらいに」のスクリーンショット)。ショップを横幅に合わせて縮めている分(zoom)だけ一緒に縮める。
+  const zoom = parseFloat(document.querySelector('#shops .shop-row').style.zoom) || 1;
+  const PEEK_PX = 52 * zoom;
+  const target = window.scrollY + firstNormal.getBoundingClientRect().top - tabBar.getBoundingClientRect().bottom - PEEK_PX;
+  window.scrollTo(0, Math.max(0, target));
 }
 
 /** スマホ横向き: ショップの横幅をちょうど1画面に収める (2026-10-22, per user request「ショップ 横幅が
