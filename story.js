@@ -148,12 +148,14 @@ function storyAfterRender(state) {
   const run = storyRun;
   if (!run) return;
   document.body.classList.toggle('story-hide-dice', !run.diceShown);
-  if (run.glowDieValue !== null) {
+  // 先に進行条件を確かめる(置き終わった瞬間に残りのダイスの光を消すため)。
+  if (run.onRender) run.onRender(state);
+  if (run.glowDieValues.length > 0) {
     for (const node of storyHandDiceNodes()) {
-      if (node.textContent.trim() === String(run.glowDieValue)) node.classList.add('change-highlight');
+      if (run.glowDieValues.includes(Number(node.textContent.trim()))) node.classList.add('change-highlight');
     }
   }
-  if (run.onRender) run.onRender(state);
+  if (run.resourceOverride) storyApplyResourceOverride(run.resourceOverride);
 }
 
 /** ダイスをその場で振る演出(回転しながら跳ねる、目がくるくる変わって決まった目で止まる)。 */
@@ -211,30 +213,20 @@ function storyFanfare(mapId, onDone) {
   }, 2000);
 }
 
-/* ---------- 場面1: 農園 (S001〜S006) ---------- */
+/* ---------- 場面の共通部品 ---------- */
 
-const STORY_FARM_MAP_ID = 'MAP002'; // 農園
-
-/** S001 エリアから始まる / クエスト・ショップなどに行けない / 農園以外のエリアは見えない
- *  S002, S003 そのまま自動で進む
- *  S004 ダイスが振られ1 6 3の目が出る → 6のダイスが光る。選択肢1「「農園」にダイスを置く」→ S006
- *  S005 何もしない場合5秒ごとに出てきてすぐ消える
- *  S006 ファンファーレの演出の後にセリフ */
-function storySceneFarm() {
+/** 「エリアにダイスを置く」場面: dieValuesのダイスを光らせ、上に「今やること」(goalText)を出し、何もしない
+ * 場合はhintLineIdのセリフを5秒ごとに出してすぐ消す。P1のダイスがmapIdに置かれたらonPlaced()。
+ * 1ターンに置けるダイスは1個(turnActionTaken)なので、場面ごとに置ける状態に戻す。 */
+function storyWaitForPlacement({ mapId, dieValues, goalText, hintLineId, onPlaced }) {
   const run = storyRun;
-  run.visibleMapIds = [STORY_FARM_MAP_ID];
-  storyUseState(storyBuildState([1, 6, 3]));
-  storyApplyVisibleMaps();
-  applyMobileActiveTab('board');
-  render(STATE);
   let placed = false;
   let hintTimer = null;
-
   const armHint = () => {
     storyCancel(hintTimer);
     hintTimer = storyLater(() => {
       if (placed) return;
-      storySay('S005', () => {
+      storySay(hintLineId, () => {
         hintTimer = storyLater(() => {
           if (placed) return;
           storyHideDialog();
@@ -243,32 +235,151 @@ function storySceneFarm() {
       });
     }, STORY_HINT_IDLE_MS);
   };
-
+  const countOn = (state) => state.maps[mapId].slots.reduce((n, occ) => n + occ.filter((o) => o.playerId === 'P1').length, 0);
+  const before = countOn(STATE);
   run.onRender = (state) => {
-    if (placed) return;
-    const onFarm = state.maps[STORY_FARM_MAP_ID].slots.some((occ) => occ.some((o) => o.playerId === 'P1'));
-    if (!onFarm) return;
+    if (placed || countOn(state) <= before) return;
     placed = true;
-    run.glowDieValue = null;
-    storyCancel(hintTimer);
+    run.glowDieValues = [];
+    run.onRender = null;
     run.onTap = null;
+    storyCancel(hintTimer);
     storyShowGoal('');
     storyHideDialog();
-    storyLater(() => storyFanfare(STORY_FARM_MAP_ID, () => storySayThen('S006', storyEndOfScript)), 350);
+    storyLater(onPlaced, 350);
   };
+  turnActionTaken = false;
+  selectedDieIds = [];
+  run.glowDieValues = dieValues;
+  render(STATE);
+  storyShowGoal(goalText);
+  run.onTap = armHint; // 何か触ったら「何もしない」5秒を数え直す
+  armHint();
+}
 
+/** 見せるエリアを1つ増やす(枠だけだったタイルの中身がふわっと出てくる)。 */
+function storyRevealMap(mapId) {
+  storyRun.visibleMapIds.push(mapId);
+  storyApplyVisibleMaps();
+  const tile = storyTileNode(mapId);
+  if (tile) {
+    [...tile.children].forEach((child) => child.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 500, easing: 'ease-out' }));
+    tile.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.06)' }, { transform: 'scale(1)' }], { duration: 500, easing: 'ease-out' });
+  }
+}
+
+/** 右側の資源の表示だけを一時的に別の数に見せる(ゲームの状態は変えない)。 */
+function storyApplyResourceOverride(override) {
+  const resourcesEl = document.querySelector('#mobile-own-row .mobile-own-row__resources');
+  if (!resourcesEl) return;
+  resourcesEl.innerHTML = '';
+  for (const resource of ['K', 'A', 'B', 'C', 'Z', 'BZ', 'VP']) {
+    const count = override[resource] || 0;
+    if (count > 0) resourcesEl.appendChild(renderResourceBadge(resource, count, false, true));
+  }
+}
+function storyResourceBadge(resource) {
+  return document.querySelector(`#mobile-own-row .mobile-own-row__resources .resource-badge[data-resource="${resource}"]`);
+}
+
+/** 表示を止めていた資源の変化を見せる: fromの資源が光って、toの資源の所へ飛んでいき、本当の数に変わる。 */
+function storyShowResourceChange(from, to, onDone) {
+  const run = storyRun;
+  const fromBadge = storyResourceBadge(from);
+  if (fromBadge) fromBadge.classList.add('change-highlight');
+  storyLater(() => {
+    const a = fromBadge ? fromBadge.getBoundingClientRect() : null;
+    run.resourceOverride = null;
+    render(STATE);
+    const toBadge = storyResourceBadge(to);
+    if (!a || !toBadge) { onDone(); return; }
+    const b = toBadge.getBoundingClientRect();
+    const flyer = fromBadge.cloneNode(true);
+    flyer.classList.remove('change-highlight');
+    flyer.classList.add('resource-exchange-flyer');
+    Object.assign(flyer.style, { left: `${a.left}px`, top: `${a.top}px`, width: `${a.width}px`, height: `${a.height}px` });
+    document.body.appendChild(flyer);
+    toBadge.style.visibility = 'hidden';
+    const anim = flyer.animate([{ transform: 'translate(0, 0)' }, { transform: `translate(${b.left - a.left}px, ${b.top - a.top}px)` }],
+      { duration: 450, easing: 'cubic-bezier(0.4, 0, 0.2, 1)', fill: 'forwards' });
+    anim.onfinish = () => {
+      flyer.remove();
+      const target = storyResourceBadge(to);
+      if (target) {
+        target.style.visibility = '';
+        target.classList.add('change-highlight');
+        storyLater(() => target.classList.remove('change-highlight'), 900);
+      }
+      onDone();
+    };
+  }, 600);
+}
+
+/* ---------- 場面1: 農園 (S001〜S007) ---------- */
+
+const STORY_FARM_MAP_ID = 'MAP002'; // 農園
+const STORY_CITY_MAP_ID = 'MAP003'; // ローマ市街
+
+/** S001 エリアから始まる / クエスト・ショップなどに行けない / 農園以外のエリアは見えない
+ *  S002, S003 そのまま自動で進む
+ *  S004 ダイスが振られ1 6 3の目が出る → 6のダイスが光る。選択肢1「「農園」にダイスを置く」→ S006
+ *  S005 何もしない場合5秒ごとに出てきてすぐ消える
+ *  S006 ファンファーレの演出の後にセリフ
+ *  S007 そのまま → 場面2(ローマ市街) */
+function storySceneFarm() {
+  const run = storyRun;
+  run.visibleMapIds = [STORY_FARM_MAP_ID];
+  storyUseState(storyBuildState([1, 6, 3]));
+  storyApplyVisibleMaps();
+  applyMobileActiveTab('board');
+  render(STATE);
   storySayThen('S001', () => storySayThen('S002', () => storySayThen('S003', () => {
     storySay('S004', (text) => {
       storyLater(() => storyRollHandDice(() => {
-        run.glowDieValue = 6;
-        render(STATE);
         const choice = (storyLine('S004').choices || [])[0];
-        storyShowGoal(choice ? choice.label : '');
-        run.onTap = armHint; // 何か触ったら「何もしない」5秒を数え直す
-        armHint();
+        storyWaitForPlacement({
+          mapId: STORY_FARM_MAP_ID,
+          dieValues: [6],
+          goalText: choice ? choice.label : '',
+          hintLineId: 'S005',
+          onPlaced: () => storyFanfare(STORY_FARM_MAP_ID, () => storySayThen('S006', () => storySayThen('S007', storySceneCity))),
+        });
       }), Math.min(900, storyHoldMs(text)));
     });
   })));
+}
+
+/* ---------- 場面2: ローマ市街 (S008〜S013) ---------- */
+
+/** S008 ローマ市街が現れる(per user回答「S008で現れる」)
+ *  S009 ダイス1と3が光る。上に「「ローマ市街」にダイスを置く」(per user回答「出す」)
+ *  S010 何もしない場合5秒ごとに出てきてすぐ消える
+ *  S011 ファンファーレの演出の後にセリフ
+ *  S012 食料→権力(ローマ市街のCHANGE(K,A,ALL))。ゲームでは置いた瞬間に変わるが、表示はS012の後に
+ *       変わって見せる(per user回答「S012の後に変わって見える」)
+ *  S013 → 台本の終わり */
+function storySceneCity() {
+  const run = storyRun;
+  storyRevealMap(STORY_CITY_MAP_ID);
+  storySayThen('S008', () => {
+    storySay('S009', (text) => storyLater(() => {
+      // 表示だけS012まで今の数のまま(置いた瞬間のrenderで一瞬変わって見えないよう、置く前から固定しておく)。
+      run.resourceOverride = { ...STATE.players.find((p) => p.id === 'P1').resources };
+      storyWaitForPlacement({
+        mapId: STORY_CITY_MAP_ID,
+        dieValues: [1, 3],
+        goalText: '「ローマ市街」にダイスを置く',
+        hintLineId: 'S010',
+        onPlaced: () => {
+          storyFanfare(STORY_CITY_MAP_ID, () => storySayThen('S011', () => {
+            storySay('S012', (text12) => {
+              storyShowResourceChange('K', 'A', () => storyLater(() => storySayThen('S013', storyEndOfScript), storyHoldMs(text12)));
+            });
+          }));
+        },
+      });
+    }, Math.min(900, storyHoldMs(text))));
+  });
 }
 
 /** 見せるエリア以外は枠だけ(中身を隠す)。 */
@@ -324,7 +435,8 @@ function openStoryMode() {
   root.append(alek, dialog, goal, close);
   document.body.appendChild(root);
   storyRun = {
-    timers: new Set(), typeTimer: null, diceShown: false, glowDieValue: null, onRender: null, onTap: null,
+    timers: new Set(), typeTimer: null, diceShown: false, glowDieValues: [], onRender: null, onTap: null,
+    resourceOverride: null,
     visibleMapIds: [], dom: { root, goal, dialog, dialogText },
   };
   document.body.classList.add('story-mode', 'story-hide-dice');
