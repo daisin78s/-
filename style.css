@@ -6418,3 +6418,11 @@ body.opening-hide-res .card-group__onboard-resources > .owned-card-cell {
 #build-choice-overlay > .build-choice-modal {
   align-content: flex-start;
 }
+
+/* スマホ版: エリアのタイルの「使用料○○」は「使用料」の文字を消して○だけに (2026-10-23, per user request
+   「使用料はとって 画面節約のため」)。フリーアクション画面の使用料回収ボタンは文字を残す。 */
+@media (max-width: 760px) {
+  .map-tile .usage-fee-label__text {
+    display: none;
+  }
+}

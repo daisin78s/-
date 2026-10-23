@@ -3671,7 +3671,9 @@ function resourceCountIconNodes(resource, count) {
 function renderUsageFeeLabel(container, amount) {
   container.innerHTML = '';
   if (amount <= 0) return;
-  container.appendChild(document.createTextNode('使用料'));
+  // 文字部分はspanで包む -- スマホ版のエリアのタイルでは画面節約のため「使用料」の文字を消して○だけにする
+  // (2026-10-23, per user request、style.cssの.usage-fee-label__text参照)。
+  container.appendChild(el('span', 'usage-fee-label__text', '使用料'));
   for (const node of resourceCountIconNodes('K', amount)) container.appendChild(node);
 }
 function actionEmoji(char) {
@@ -8018,7 +8020,11 @@ function renderMobileOwnDiceRow(state, next) {
   if (!aiView && !tutorialModeActive && mobileFreeActionsAvailable(state, player, canPlaceDiceFor)) {
     const freeBtn = el('button', 'undo-button mobile-own-row__free-action', 'フリーアクション');
     freeBtn.type = 'button';
-    freeBtn.addEventListener('click', () => { mobileFreeActionOpen = true; render(STATE); });
+    freeBtn.addEventListener('click', () => {
+      mobileFreeActionOpen = true;
+      mobileFreeActionBaseline = mobileFreeActionSignature(STATE, player);
+      render(STATE);
+    });
     turnEndEl.prepend(freeBtn);
   }
   container.appendChild(colorDiceEl);
@@ -8155,6 +8161,16 @@ function playMobileCardUpgrade(fromFaceId, toFaceId, tapped) {
  * (資源交換=executor.tryFreeAction、使用料=renderFeeCollectButton、カード=attachTapToggleでカードを
  * タップ)。「実行できるか」は状態のコピーで試しに実行して判定する(本物の状態は変えない)。 */
 let mobileFreeActionOpen = false;
+// 開いた時点の資源/カードの状態 -- これと変わった(=何か使った)後、タップできるカードが残っていなければ
+// 自動で閉じてエリア画面へ戻る (2026-10-23, per user request: "フリーアクション使った後 タップできるカードが
+// なければ自動でエリア画面に戻って")。
+let mobileFreeActionBaseline = null;
+function mobileFreeActionSignature(state, player) {
+  if (!player) return '';
+  const tapped = player.ownedCardPhysicalIds.map((id) => (state.cards[id] && state.cards[id].tapped ? 1 : 0)).join('');
+  const fees = Object.values(state.maps).map((m) => m.accumulatedFee || 0).join(',');
+  return `${JSON.stringify(player.resources)}|${tapped}|${fees}`;
+}
 
 /** このプレイヤーが今フリーアクションを使える立場か -- 資源タブのA→K等(renderFreeActionButtons)/獲得カードの
  * TAP(renderPlayerCardsのcanUseTap)と同じ条件: 実際の手番の人間プレイヤー、オンボーディング完了済み、
@@ -8206,9 +8222,18 @@ function renderMobileFreeActionOverlay(state, next) {
     body.innerHTML = '';
     return;
   }
+  const actions = computeMobileFreeActions(state, player);
+  const used = mobileFreeActionBaseline !== null && mobileFreeActionSignature(state, player) !== mobileFreeActionBaseline;
+  if (used && actions.cards.length === 0 && !pendingTapChoice && !pendingBuildChoice) {
+    mobileFreeActionOpen = false;
+    mobileFreeActionBaseline = null;
+    overlay.hidden = true;
+    body.innerHTML = '';
+    applyMobileActiveTab('board');
+    return;
+  }
   overlay.hidden = false;
   body.innerHTML = '';
-  const actions = computeMobileFreeActions(state, player);
   if (actions.exchanges.length > 0 || actions.feeTotal > 0) {
     const buttonsEl = el('div', 'mobile-free-action-overlay__buttons');
     if (actions.exchanges.length > 0) {
