@@ -6595,44 +6595,40 @@ body.opening-hide-res .card-group__onboard-resources > .owned-card-cell {
   max-width: none;
 }
 
-/* ストーリーモード (2026-10-23、story.js参照) -- スマホ横向き全画面が前提。トップ画面(#entry-banner、
-   z-index 300)の上に開き、紙吹雪(.confetti-layer、450)はさらにその上。左にアレク、中央にエリア、右に
-   手元のダイス、下に会話ウインドウ、上に今やること。PC/タブレットは後で調整(per user)。 */
+/* ストーリーモード (2026-10-23、story.js参照) -- ローカル対戦の本物のエリア画面(body.story-mode)の上に、
+   透明なオーバーレイ(アレク・会話ウインドウ・今やること・✖)を重ねる。スマホ横向き全画面が前提、PC/
+   タブレットは後で調整(per user)。見せるエリア以外の中身はstory.jsが場面ごとに<style>で隠す(枠だけ残す)。 */
+body.story-mode .mobile-tab-switcher {
+  pointer-events: none; /* エリア以外(クエスト・ショップなど)には行けない */
+  opacity: 0.35;
+}
+body.story-mode .mobile-own-row__turn-end,
+body.story-mode .mobile-own-row__owner {
+  display: none;
+}
+body.story-hide-dice #mobile-own-row .die,
+body.story-hide-dice #players .player-panel .die {
+  visibility: hidden;
+}
 .story-overlay {
   position: fixed;
   inset: 0;
   z-index: 400;
-  background: var(--bg);
+  pointer-events: none;
   overflow: hidden;
   -webkit-user-select: none;
   user-select: none;
 }
 .story-alek {
   position: absolute;
-  left: 1%;
+  left: 0;
   bottom: 0;
-  height: 96%;
-  max-width: 34%;
+  height: 62%;
   object-fit: contain;
   object-position: left bottom;
-  pointer-events: none;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.25));
   z-index: 2;
 }
-.story-stage {
-  position: absolute;
-  left: 28%;
-  right: 17%;
-  top: 14%;
-  bottom: 33%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1;
-}
-.story-area.map-tile {
-  width: min(250px, 100%);
-}
-.story-area .map-tile__fee { display: none; }
 .story-area--success {
   animation: story-area-success 0.5s ease-out 3;
 }
@@ -6640,52 +6636,20 @@ body.opening-hide-res .card-group__onboard-resources > .owned-card-cell {
   0%, 100% { box-shadow: 0 0 0 0 rgba(255, 196, 0, 0); }
   50% { box-shadow: 0 0 0 5px rgba(255, 196, 0, 0.55), 0 0 22px 8px rgba(255, 196, 0, 0.6); }
 }
-.story-dice {
-  position: absolute;
-  right: 3%;
-  top: 16%;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 12px 10px;
-  border-radius: 14px;
-  background: var(--surface);
-  box-shadow: var(--shadow-lg);
-  z-index: 1;
-}
-.story-dice[hidden] { display: none; }
-.story-dice .die {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  font-size: 19px;
-}
-.story-die--tappable { cursor: pointer; }
-.story-die--selected {
-  outline: 3px solid var(--accent);
-  outline-offset: 2px;
-}
-.story-die-flyer {
-  position: fixed;
-  margin: 0;
-  z-index: 5;
-  pointer-events: none;
-}
 .story-dialog {
   position: absolute;
-  left: 24%;
-  right: 2%;
+  left: 22%;
+  right: 22%;
   bottom: 3%;
-  min-height: 25%;
-  padding: 18px 16px 10px;
+  min-height: 22%;
+  padding: 16px 16px 10px;
   border-radius: 12px;
-  background: rgba(30, 20, 24, 0.86);
+  background: rgba(30, 20, 24, 0.88);
   color: #fff;
   font-size: 16px;
   line-height: 1.5;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
   z-index: 3;
-  pointer-events: none;
 }
 .story-dialog[hidden] { display: none; }
 .story-dialog__name {
@@ -6705,9 +6669,9 @@ body.opening-hide-res .card-group__onboard-resources > .owned-card-cell {
 }
 .story-goal {
   position: absolute;
-  top: 3%;
+  top: 2px;
   left: 0;
-  padding: 6px 18px 6px 14px;
+  padding: 5px 18px 5px 14px;
   border-radius: 0 10px 10px 0;
   background: var(--accent);
   color: #fff;
@@ -6719,16 +6683,17 @@ body.opening-hide-res .card-group__onboard-resources > .owned-card-cell {
 .story-goal[hidden] { display: none; }
 .story-close {
   position: absolute;
-  top: 8px;
-  right: 10px;
-  width: 40px;
-  height: 40px;
+  bottom: 6px;
+  right: 6px;
+  width: 34px;
+  height: 34px;
   border: none;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.12);
+  background: rgba(0, 0, 0, 0.15);
   color: var(--text);
-  font-size: 20px;
+  font-size: 17px;
   cursor: pointer;
+  pointer-events: auto;
   z-index: 6;
 }
 .story-reward {
@@ -6753,6 +6718,7 @@ body.opening-hide-res .card-group__onboard-resources > .owned-card-cell {
   justify-content: center;
   gap: 14px;
   background: rgba(0, 0, 0, 0.62);
+  pointer-events: auto;
   z-index: 7;
 }
 .story-end__text {

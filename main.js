@@ -540,6 +540,8 @@ function clearOnlineSession() {
 function saveGameSessionIfApplicable(state) {
   try {
     if (replayMode || !entryBannerDismissed) return;
+    // ストーリーモード(story.js)の練習用の盤面は「進行中のゲーム」として保存しない(本物の保存を上書きしないため)。
+    if (typeof storyRun !== 'undefined' && storyRun) return;
     if (onlineRoomCode) {
       if (state.phase === 'GAME_END') { clearOnlineSession(); return; }
       localStorage.setItem(ONLINE_SESSION_STORAGE_KEY, JSON.stringify({ roomCode: onlineRoomCode, localSeatId, isOnlineHost }));
@@ -14949,6 +14951,8 @@ const diceRollHiddenKeys = new Set(); // 演出中、着地前の本物のダイ
 function render(state) {
   const diceBefore = captureDieRects();
   renderCore(state);
+  // ストーリーモード(story.js)は本物のエリア画面を使うので、描き直すたびに光る演出などを付け直す。
+  if (typeof storyAfterRender === 'function') storyAfterRender(state);
   const previousRound = lastRenderedRound;
   lastRenderedRound = state.round;
   if (diceRollHiddenKeys.size > 0) hideDiceByKeys(diceRollHiddenKeys);

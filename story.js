@@ -6,11 +6,16 @@
  *
  * セリフ本文は data/story.data.js (window.STORY_SCRIPT、tools/story_xlsx_to_js.py が デスクトップの
  * ストーリー.xlsx から生成) を S001 などの行IDで引く。Excelの光る/動く/メモ列の指示はこのファイルの
- * 場面ごとの台本(STORY_SCENES)にコードとして書く。
+ * 場面ごとの関数(storySceneFarmなど)にコードとして書く。
  *
- * 本物のGameStateには一切触れない: 場面ごとに必要な分(エリア1枚、手元のダイスなど)だけを、ゲームと同じ
- * 部品(tpl-map-tile / renderDie / dieFace / buildActionIcons、main.jsのグローバル)で描く、独立した全画面
- * オーバーレイ。トップ画面(入口バナー)の上に開き、✖で閉じればトップ画面に戻る。main.jsの後に読み込む。 */
+ * 画面はローカル対戦の本物のエリア画面を使う (2026-10-23, per user request: "基本的にローカル対戦のエリア
+ * 画面を使ってください エリアの農園の位置 右側もダイス置き場と同じ 他のエリアは枠だけ見えてそれ以外は
+ * 見えない") -- 場面ごとに練習用のGameStateを作ってSTATEと入れ替え、普段のrender()で描く(ダイスの選択・
+ * スロットへの配置・資源の増加は本物のゲームの処理そのまま)。その上に透明なオーバーレイ(アレク・会話
+ * ウインドウ・今やること・✖)を重ねる。見せないもの(他のエリアの中身、タブ、ターン終了ボタン等)は
+ * body.story-modeのCSSで隠す。描き直されるたびにmain.jsのrender()からstoryAfterRender()が呼ばれ、光る演出
+ * などを付け直す。練習用の盤面は「進行中のゲーム」として保存しない(saveGameSessionIfApplicable参照)。
+ * ✖/トップに戻るは再読み込みでトップ画面へ(STATEを元に戻す手間を省く)。main.jsの後に読み込む。 */
 
 const STORY_TYPE_MS_PER_CHAR = 37; // 1文字ずつ出る速さ (2026-10-23 per user "セリフの表示速度1.5倍に": 55ms→37ms)
 const STORY_HOLD_BASE_MS = 930; // 全文出てから次へ進むまでの待ち(+文字数ぶん) (2026-10-23 per user "それも1.5倍に": 1400→930、1文字45→30ms)
@@ -18,7 +23,7 @@ const STORY_HOLD_PER_CHAR_MS = 30;
 const STORY_HINT_IDLE_MS = 5000; // S005: 何もしない場合5秒ごとに出る
 const STORY_HINT_SHOW_MS = 2600; // 出てすぐ消える(全文が出てからこの時間で消える)
 
-let storyRun = null; // 実行中の場面 { timers:Set, ... }。nullなら閉じている。
+let storyRun = null; // 実行中の場面。nullなら閉じている。
 
 function storyLine(id) {
   const script = window.STORY_SCRIPT || {};
@@ -78,6 +83,7 @@ function storyHideDialog() {
   if (!storyRun) return;
   const box = storyRun.dom.dialog;
   if (box.hidden) return;
+  storyCancel(storyRun.typeTimer);
   const a = box.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: 'ease-in' });
   a.onfinish = () => { if (storyRun) box.hidden = true; };
 }
@@ -94,102 +100,99 @@ function storyShowGoal(text) {
   }
 }
 
-/* ---------- 場面の部品 ---------- */
+/* ---------- 本物の画面との橋渡し ---------- */
 
-/** ゲームと同じ見た目のエリアタイル(スロットは空)。 */
-function storyBuildAreaTile(areaId) {
-  const areaRow = dataLoaderMod.getAreaRow(INDEX, areaId);
-  const node = document.getElementById('tpl-map-tile').content.firstElementChild.cloneNode(true);
-  node.classList.add('story-area');
-  node.querySelector('.map-tile__id').textContent = areaRow.NAME;
-  const slotsEl = node.querySelector('.map-tile__slots');
-  const slots = boardMod.getSlotRequirements(areaRow);
-  const slotEls = slots.map((requirement, i) => {
-    const slotEl = el('div', 'slot');
-    slotEl.dataset.slotIndex = String(i);
-    slotEl.dataset.requirement = String(requirement);
-    if (typeof requirement === 'number') slotEl.appendChild(dieFace(requirement));
-    else slotEl.textContent = requirement;
-    slotsEl.appendChild(slotEl);
-    return slotEl;
-  });
-  const actionEl = node.querySelector('.map-tile__action');
-  const icons = buildActionIcons(areaRow.ACTION);
-  if (icons) actionEl.appendChild(icons);
-  else actionEl.textContent = areaRow.ACTION;
-  return { node, slotEls, slots, areaRow };
+/** 練習用のGameStateを作る: プレイヤーはP1(あなた)だけが動く(他の3人はダイスを全部パス済みにして手番が
+ * 来ないようにする)。P1は1ラウンド目の自分の手番から。JOB/制約は効果の無いものを持たせ、資源は0から。 */
+function storyBuildState(diceValues) {
+  const state = gameStateMod.createEmptyGameState(`story-${Date.now()}`);
+  setupMod.createPlayers(state, [loadRememberedRankingName() || 'Alice', 'Bob', 'Carol', 'Dan']);
+  setupMod.prepareMaps(state, INDEX);
+  setupMod.prepareShops(state, INDEX);
+  setupMod.rollInitialColorDice(state, { P1: diceValues });
+  setupMod.dealConCards(state, { P1: 'CON005' });
+  state.jobPool = ['JOB001'];
+  setupMod.chooseJob(state, INDEX, 'P1', 'JOB001');
+  setupMod.chooseConFace(state, INDEX, 'P1', 'A');
+  qstMod.setupQuests(state);
+  const p1 = state.players.find((p) => p.id === 'P1');
+  Object.keys(p1.resources).forEach((r) => { p1.resources[r] = 0; });
+  for (const player of state.players) {
+    if (player.id !== 'P1') player.dice.forEach((d) => { d.passed = true; });
+  }
+  state.turnOrder = state.players.map((p) => p.id);
+  state.currentPlayerIndex = 0;
+  turnFlowMod.startRound(state);
+  return state;
 }
 
-const STORY_DIE_COLOR = 'PINK';
+function storyUseState(state) {
+  Object.keys(STATE).forEach((k) => delete STATE[k]);
+  Object.assign(STATE, state);
+  selectedDieIds = [];
+  turnActionTaken = false;
+}
 
-/** 手元のダイス置き場に、ダイスをその場で振る演出(回転しながら跳ねる)。終わったらonDone(dieNodes)。 */
-function storyRollDice(values, onDone) {
+/** 手元のダイス置き場(スマホは画面右)にある、P1のダイスの要素。 */
+function storyHandDiceNodes() {
+  return [...document.querySelectorAll('#mobile-own-row .die[data-die-key^="P1:"], #players .player-panel[data-player-id="P1"] .die')]
+    .filter((n) => n.getBoundingClientRect().width > 0);
+}
+function storyTileNode(mapId) {
+  return document.querySelector(`#board .map-tile[data-map-id="${mapId}"]`);
+}
+
+/** main.jsのrender()から毎回呼ばれる: 描き直された画面に、場面の演出(ダイスを隠す/光らせる等)を付け直し、
+ * 場面の進行条件(ダイスが置かれた等)を確かめる。 */
+function storyAfterRender(state) {
   const run = storyRun;
-  const panel = run.dom.dice;
-  panel.innerHTML = '';
-  panel.hidden = false;
-  const nodes = values.map((v) => {
-    const node = renderDie({ kind: 'COLOR', value: v, color: STORY_DIE_COLOR });
-    node.classList.add('story-die');
-    node.dataset.value = String(v);
-    panel.appendChild(node);
-    return node;
-  });
+  if (!run) return;
+  document.body.classList.toggle('story-hide-dice', !run.diceShown);
+  if (run.glowDieValue !== null) {
+    for (const node of storyHandDiceNodes()) {
+      if (node.textContent.trim() === String(run.glowDieValue)) node.classList.add('change-highlight');
+    }
+  }
+  if (run.onRender) run.onRender(state);
+}
+
+/** ダイスをその場で振る演出(回転しながら跳ねる、目がくるくる変わって決まった目で止まる)。 */
+function storyRollHandDice(onDone) {
+  storyRun.diceShown = true;
+  document.body.classList.remove('story-hide-dice');
+  const nodes = storyHandDiceNodes();
   const ROLL_MS = 900;
   nodes.forEach((node, i) => {
     const valueEl = node.querySelector('.die__value');
-    const finalValue = values[i];
+    const finalText = valueEl.textContent;
     const spin = (i % 2 ? -1 : 1) * 720;
+    const duration = ROLL_MS + i * 120;
     node.animate([
       { transform: 'translateY(0) rotate(0deg)' },
       { transform: `translateY(-26px) rotate(${spin * 0.35}deg)`, offset: 0.25 },
       { transform: `translateY(0) rotate(${spin * 0.6}deg)`, offset: 0.5 },
       { transform: `translateY(-10px) rotate(${spin * 0.85}deg)`, offset: 0.72 },
       { transform: `translateY(0) rotate(${spin}deg)` },
-    ], { duration: ROLL_MS + i * 120, easing: 'ease-out' });
-    // 振っている間は目がくるくる変わり、止まったら決まった目に。
-    const flicker = () => { valueEl.textContent = String(1 + Math.floor(Math.random() * 6)); };
-    for (let t = 0; t < ROLL_MS + i * 120 - 90; t += 90) storyLater(flicker, t);
-    storyLater(() => { valueEl.textContent = String(finalValue); }, ROLL_MS + i * 120);
+    ], { duration, easing: 'ease-out' });
+    for (let t = 0; t < duration - 90; t += 90) {
+      storyLater(() => { valueEl.textContent = String(1 + Math.floor(Math.random() * 6)); }, t);
+    }
+    storyLater(() => { valueEl.textContent = finalText; }, duration);
   });
-  storyLater(() => onDone(nodes), ROLL_MS + (values.length - 1) * 120 + 150);
-}
-
-/** ダイスを手元からスロットへ素早く飛ばす。 */
-function storyFlyDieToSlot(dieNode, slotEl, onDone) {
-  const a = dieNode.getBoundingClientRect();
-  const b = slotEl.getBoundingClientRect();
-  const clone = dieNode.cloneNode(true);
-  clone.classList.remove('change-highlight', 'die--selected', 'story-die--selected');
-  clone.classList.add('story-die-flyer');
-  Object.assign(clone.style, { left: `${a.left}px`, top: `${a.top}px`, width: `${a.width}px`, height: `${a.height}px` });
-  storyRun.dom.root.appendChild(clone);
-  dieNode.style.visibility = 'hidden';
-  const dx = b.left + b.width / 2 - (a.left + a.width / 2);
-  const dy = b.top + b.height / 2 - (a.top + a.height / 2);
-  const anim = clone.animate([{ transform: 'translate(0, 0)' }, { transform: `translate(${dx}px, ${dy}px)` }],
-    { duration: 300, easing: 'cubic-bezier(0.4, 0, 0.2, 1)', fill: 'forwards' });
-  anim.onfinish = () => {
-    clone.remove();
-    dieNode.remove();
-    slotEl.innerHTML = '';
-    slotEl.classList.add('slot--filled');
-    const stack = el('div', 'slot__stack');
-    stack.appendChild(renderDie({ kind: 'COLOR', value: Number(dieNode.dataset.value), color: STORY_DIE_COLOR }));
-    slotEl.appendChild(stack);
-    onDone();
-  };
+  storyLater(onDone, ROLL_MS + Math.max(0, nodes.length - 1) * 120 + 150);
 }
 
 /** ファンファーレ(見た目だけ): エリアが光り、もらえる物(アクションのアイコン)がエリアから飛び出し、紙吹雪。 */
-function storyFanfare(tile, onDone) {
+function storyFanfare(mapId, onDone) {
   const run = storyRun;
-  tile.node.classList.add('story-area--success');
-  const rect = tile.node.getBoundingClientRect();
-  const icons = buildActionIcons(tile.areaRow.ACTION);
+  const tile = storyTileNode(mapId);
+  const areaRow = dataLoaderMod.getAreaRow(INDEX, STATE.maps[mapId].currentAreaId);
+  if (tile) tile.classList.add('story-area--success');
+  const rect = tile ? tile.getBoundingClientRect() : { left: window.innerWidth / 2, top: window.innerHeight / 2, width: 0, height: 0 };
+  const icons = buildActionIcons(areaRow.ACTION);
   const reward = el('div', 'story-reward');
   if (icons) reward.appendChild(icons);
-  else reward.textContent = tile.areaRow.ACTION;
+  else reward.textContent = areaRow.ACTION;
   reward.style.left = `${rect.left + rect.width / 2}px`;
   reward.style.top = `${rect.top + rect.height * 0.4}px`;
   run.dom.root.appendChild(reward);
@@ -200,10 +203,17 @@ function storyFanfare(tile, onDone) {
     { transform: 'translate(-50%, -150%) scale(1)', opacity: 0 },
   ], { duration: 1900, easing: 'ease-out', fill: 'forwards' });
   if (typeof launchLifeStoryConfetti === 'function') launchLifeStoryConfetti(1);
-  storyLater(() => { reward.remove(); onDone(); }, 2000);
+  storyLater(() => {
+    reward.remove();
+    const t = storyTileNode(mapId);
+    if (t) t.classList.remove('story-area--success');
+    onDone();
+  }, 2000);
 }
 
 /* ---------- 場面1: 農園 (S001〜S006) ---------- */
+
+const STORY_FARM_MAP_ID = 'MAP002'; // 農園
 
 /** S001 エリアから始まる / クエスト・ショップなどに行けない / 農園以外のエリアは見えない
  *  S002, S003 そのまま自動で進む
@@ -212,9 +222,11 @@ function storyFanfare(tile, onDone) {
  *  S006 ファンファーレの演出の後にセリフ */
 function storySceneFarm() {
   const run = storyRun;
-  const tile = storyBuildAreaTile('AREA002A');
-  run.dom.stage.appendChild(tile.node);
-  let selectedDie = null;
+  run.visibleMapIds = [STORY_FARM_MAP_ID];
+  storyUseState(storyBuildState([1, 6, 3]));
+  storyApplyVisibleMaps();
+  applyMobileActiveTab('board');
+  render(STATE);
   let placed = false;
   let hintTimer = null;
 
@@ -232,55 +244,46 @@ function storySceneFarm() {
     }, STORY_HINT_IDLE_MS);
   };
 
-  const refreshSlots = () => {
-    tile.slotEls.forEach((slotEl, i) => {
-      const ok = !!selectedDie && !slotEl.classList.contains('slot--filled')
-        && tile.slots[i] === Number(selectedDie.dataset.value);
-      slotEl.classList.toggle('slot--highlight', ok);
-      slotEl.classList.toggle('slot--selectable', !!selectedDie);
-    });
-  };
-
-  const onPlaced = () => {
+  run.onRender = (state) => {
+    if (placed) return;
+    const onFarm = state.maps[STORY_FARM_MAP_ID].slots.some((occ) => occ.some((o) => o.playerId === 'P1'));
+    if (!onFarm) return;
+    placed = true;
+    run.glowDieValue = null;
+    storyCancel(hintTimer);
+    run.onTap = null;
     storyShowGoal('');
     storyHideDialog();
-    storyFanfare(tile, () => {
-      storySayThen('S006', storyEndOfScript);
-    });
-  };
-
-  const enableDice = (nodes) => {
-    const six = nodes.find((n) => n.dataset.value === '6');
-    if (six) six.classList.add('change-highlight');
-    storyShowGoal((storyLine('S004').choices || [])[0] ? storyLine('S004').choices[0].label : '');
-    armHint();
-    nodes.forEach((node) => {
-      node.classList.add('story-die--tappable');
-      node.addEventListener('click', () => {
-        if (placed) return;
-        selectedDie = selectedDie === node ? null : node;
-        nodes.forEach((n) => n.classList.toggle('story-die--selected', n === selectedDie));
-        refreshSlots();
-        armHint();
-      });
-    });
-    tile.slotEls.forEach((slotEl, i) => {
-      slotEl.addEventListener('click', () => {
-        if (placed || !selectedDie || slotEl.classList.contains('slot--filled')) return;
-        if (tile.slots[i] !== Number(selectedDie.dataset.value)) return; // 目が合わないスロットには置けない
-        placed = true;
-        storyCancel(hintTimer);
-        tile.slotEls.forEach((s) => s.classList.remove('slot--highlight', 'slot--selectable'));
-        storyFlyDieToSlot(selectedDie, slotEl, onPlaced);
-      });
-    });
+    storyLater(() => storyFanfare(STORY_FARM_MAP_ID, () => storySayThen('S006', storyEndOfScript)), 350);
   };
 
   storySayThen('S001', () => storySayThen('S002', () => storySayThen('S003', () => {
     storySay('S004', (text) => {
-      storyLater(() => storyRollDice([1, 6, 3], enableDice), Math.min(900, storyHoldMs(text)));
+      storyLater(() => storyRollHandDice(() => {
+        run.glowDieValue = 6;
+        render(STATE);
+        const choice = (storyLine('S004').choices || [])[0];
+        storyShowGoal(choice ? choice.label : '');
+        run.onTap = armHint; // 何か触ったら「何もしない」5秒を数え直す
+        armHint();
+      }), Math.min(900, storyHoldMs(text)));
     });
   })));
+}
+
+/** 見せるエリア以外は枠だけ(中身を隠す)。 */
+function storyApplyVisibleMaps() {
+  const visible = storyRun.visibleMapIds || [];
+  let style = document.getElementById('story-visible-maps-style');
+  if (!style) {
+    style = document.createElement('style');
+    style.id = 'story-visible-maps-style';
+    document.head.appendChild(style);
+  }
+  const not = visible.map((id) => `:not([data-map-id="${id}"])`).join('');
+  style.textContent = `body.story-mode #board .map-tile${not} > * { visibility: hidden; }
+`
+    + `body.story-mode #board .map-tile${not} { background: var(--surface-sunken) !important; border-color: var(--border) !important; box-shadow: none !important; }`;
 }
 
 /** 台本の終わり(続きはExcelが増えたら追加)。 */
@@ -307,9 +310,6 @@ function openStoryMode() {
   alek.className = 'story-alek';
   alek.src = 'assets/story-alek.png';
   alek.alt = 'アレク';
-  const stage = el('div', 'story-stage');
-  const dice = el('div', 'story-dice');
-  dice.hidden = true;
   const goal = el('div', 'story-goal');
   goal.hidden = true;
   const dialog = el('div', 'story-dialog');
@@ -321,18 +321,32 @@ function openStoryMode() {
   close.type = 'button';
   close.setAttribute('aria-label', 'ストーリーをやめる');
   close.addEventListener('click', closeStoryMode);
-  root.append(stage, dice, alek, dialog, goal, close);
+  root.append(alek, dialog, goal, close);
   document.body.appendChild(root);
-  storyRun = { timers: new Set(), typeTimer: null, dom: { root, stage, dice, goal, dialog, dialogText } };
+  storyRun = {
+    timers: new Set(), typeTimer: null, diceShown: false, glowDieValue: null, onRender: null, onTap: null,
+    visibleMapIds: [], dom: { root, goal, dialog, dialogText },
+  };
+  document.body.classList.add('story-mode', 'story-hide-dice');
+  entryBannerDismissed = true;
   storySceneFarm();
 }
 
 function closeStoryMode() {
   if (!storyRun) return;
   storyRun.timers.forEach((t) => clearTimeout(t));
-  storyRun.dom.root.remove();
-  document.querySelectorAll('.confetti-layer').forEach((n) => n.remove());
   storyRun = null;
+  location.reload(); // 練習用の盤面を捨ててトップ画面へ
 }
+
+// ストーリー中はエリアのタイルを押しても拡大画面を開かない(スロットへの配置だけ)。何か触ったら場面に知らせる。
+document.addEventListener('click', (e) => {
+  if (!storyRun) return;
+  if (storyRun.onTap) storyRun.onTap();
+  if (e.target.closest('#board .map-tile') && !e.target.closest('.slot')) {
+    e.stopPropagation();
+    e.preventDefault();
+  }
+}, true);
 
 document.getElementById('entry-banner-story-button').addEventListener('click', openStoryMode);
