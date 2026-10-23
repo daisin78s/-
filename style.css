@@ -6427,26 +6427,16 @@ body.opening-hide-res .card-group__onboard-resources > .owned-card-cell {
   }
 }
 
-/* 強化カードの見た目 (2026-10-23、全端末、main.jsのenhancedCardTier参照) -- 種類の色の枠はそのまま残し、
-   外側の縁・背景のグラデーション・(3Rのみ)光で格を足す。印(★)は付けない(per user)。
-   2R: 細い銀の縁 + うっすら銀色の背景。3R: 少し太い金の縁 + うっすら金色の背景 + ときどき光が流れる。 */
-.shop-card--tier2 {
-  box-shadow: 0 0 0 2px #b9c0cc, 0 2px 6px rgba(120, 130, 150, 0.35);
-  background-image: linear-gradient(135deg, rgba(255, 255, 255, 0) 30%, rgba(176, 186, 202, 0.38) 100%);
+/* 通常カード/強化カードの見分け (2026-10-23, per user request: 銀/金の縁・背景・光の試作は「見た目微妙でした
+   戻して」→「通常カードの背景色を少し薄く 2Rそのまま 3R少し濃く」、全端末) -- 種類(天地人)ごとの背景色の上に
+   薄い白/黒を重ねて濃さだけ変える。main.jsのenhancedCardTier参照(A/B/Cカードのみ)。 */
+/* [data-deck]付きで指定 -- 種類ごとの背景色(.shop-card[data-deck="A"]等のbackgroundショートハンド)に
+   上書きされないよう、同じかそれ以上の優先度にする。 */
+.shop-card.shop-card--tier1[data-deck] {
+  background-image: linear-gradient(rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.4));
 }
-.shop-card--tier3 {
-  box-shadow: 0 0 0 3px #d4a72c, 0 0 10px rgba(230, 180, 40, 0.55);
-  background-image:
-    linear-gradient(115deg, transparent 40%, rgba(255, 255, 255, 0.7) 50%, transparent 60%),
-    linear-gradient(135deg, rgba(255, 240, 190, 0) 25%, rgba(222, 175, 50, 0.38) 100%);
-  background-size: 300% 100%, 100% 100%;
-  background-repeat: no-repeat;
-  animation: shop-card-tier3-shine 3.2s ease-in-out infinite;
-}
-@keyframes shop-card-tier3-shine {
-  0% { background-position: 120% 0, 0 0; }
-  45% { background-position: -20% 0, 0 0; }
-  100% { background-position: -20% 0, 0 0; }
+.shop-card.shop-card--tier3[data-deck] {
+  background-image: linear-gradient(rgba(0, 0, 0, 0.07), rgba(0, 0, 0, 0.07));
 }
 
 /* スマホ版: アンタップするカードを選ぶ時の案内/確認 (2026-10-23、main.jsのapplyMobileUntapChoiceUi参照) --

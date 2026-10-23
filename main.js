@@ -5360,14 +5360,14 @@ function deckForFaceId(faceId) {
   return null;
 }
 
-/** 強化カードの段階: 2(2Rから)/3(3Rから)、通常カード・モニュメント・ジョブ等はnull。 */
+/** カードの段階: 1(通常カード)/2(2Rから)/3(3Rから)、モニュメント・ジョブ・制約等はnull。 */
 function enhancedCardTier(faceId) {
   const match = /^([ABC])(\d+)/.exec(faceId || '');
   if (!match) return null;
   const num = Number(match[2]);
   if (num >= 300) return 3;
   if (num >= 200) return 2;
-  return null;
+  return 1; // 1R通常カード
 }
 
 function buildCardVisual(faceId, options = {}) {
@@ -5375,9 +5375,9 @@ function buildCardVisual(faceId, options = {}) {
   const node = tpl.content.firstElementChild.cloneNode(true);
   const deck = deckForFaceId(faceId);
   if (deck) node.dataset.deck = deck;
-  // 強化カードの見た目 (2026-10-23, per user request: "すべての版で強化カードの見た目を少し変えて強そうに
-  // したい 1R通常カード 2R強化カード 3R強化カード すべて少しづつ変えたい" -> 枠・背景・光、印はなし) --
-  // A/B/Cカードの番号200番台=2Rから(銀)、300番台=3Rから(金・光る)。style.cssの.shop-card--tier2/3参照。
+  // 通常カード/強化カードで背景の濃さを変える (2026-10-23, per user request -- 銀/金の試作は取りやめ、
+  // 「通常カードの背景色を少し薄く 2Rそのまま 3R少し濃く」)。A/B/Cカードの番号200番台=2Rから、300番台=
+  // 3Rから、それ未満=通常カード。style.cssの.shop-card--tier1/3参照。
   const tier = enhancedCardTier(faceId);
   if (tier) node.classList.add(`shop-card--tier${tier}`);
 
