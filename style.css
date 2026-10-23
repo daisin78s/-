@@ -6353,3 +6353,31 @@ body.opening-hide-res .card-group__onboard-resources > .owned-card-cell {
   font-size: 12px;
   color: var(--text-muted);
 }
+
+/* スマホ版: 皇帝宮殿の「獲得 / LVアップできるカード」一覧は全画面 (2026-10-23, per user request)。 */
+@media (max-width: 760px), (max-height: 500px) {
+  #card-inst-overlay:has(> .card-inst-modal--castle) {
+    padding: 0;
+  }
+  #card-inst-overlay > .card-inst-modal--castle {
+    width: 100vw;
+    max-width: none;
+    min-height: 100vh;
+    min-height: 100dvh;
+    margin: 0;
+    border-radius: 0;
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+}
+
+/* スマホ版: 画面下に明るい帯が出る対策 (2026-10-23, per user report「下の赤丸のバーがなぜか出ます 縦画面にして
+   もう一度横画面にすると消えます」) -- iPhoneの全画面(PWA)横向きで、ページの表示範囲が実際の画面より短く
+   なることがあり(回転し直すと直る)、その外側はhtmlの背景色で塗られる。モーダルが開いている間はhtmlの背景を
+   モーダル背後の暗い色と同じにして、帯が出ても目立たないようにする(根本原因は端末側の表示範囲の問題)。 */
+@media (max-width: 760px), (max-height: 500px) {
+  html:has(.card-inst-overlay:not([hidden])) {
+    background: color-mix(in srgb, var(--bg) 55%, rgb(16, 24, 40));
+  }
+}

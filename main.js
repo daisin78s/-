@@ -3309,7 +3309,7 @@ function showCardListTermModal(title, instId) {
   // overlay's 150) when an auto-linked term span in the bubble's own text is tapped, and its own centered
   // position would otherwise sit right under/behind that still-open bubble.
   overlay.classList.toggle('card-inst-overlay--tutorial-raised', tutorialModeActive);
-  modal.classList.remove('card-inst-modal--wide', 'card-inst-modal--area-wide');
+  modal.classList.remove('card-inst-modal--wide', 'card-inst-modal--area-wide', 'card-inst-modal--castle');
   modal.classList.add('card-inst-modal--term');
   flipBtn.hidden = true;
   pickBtn.hidden = true;
@@ -5856,7 +5856,9 @@ function showCastleAcquirableModal() {
   overlay.hidden = false;
   overlay.classList.toggle('card-inst-overlay--tutorial-raised', tutorialModeActive);
   modal.classList.remove('card-inst-modal--dual', 'card-inst-modal--area-wide', 'card-inst-modal--term');
-  modal.classList.add('card-inst-modal--wide');
+  // --castle: スマホ版はこの一覧だけ全画面表示 (2026-10-23, per user request「皇帝宮殿をタップしたとき全画面に
+  // して」、style.css参照)。他の拡大表示を開く/閉じる時に外す(各classList.remove参照)。
+  modal.classList.add('card-inst-modal--wide', 'card-inst-modal--castle');
   overlay.querySelector('.card-inst-modal__title').textContent = '獲得 / LVアップできるカード';
   overlay.querySelector('.card-inst-modal__flip-button').hidden = true;
   overlay.querySelector('.card-inst-modal__pick-button').hidden = true;
@@ -5866,8 +5868,9 @@ function showCastleAcquirableModal() {
   const body = overlay.querySelector('.card-inst-modal__body');
   body.innerHTML = '';
   const entries = [...shopAcquirableMoveCache.entries()];
+  // 「獲得」の見出しは出さない (2026-10-23, per user request「赤丸の獲得をとる」) -- LVアップの見出しは残す。
   const sections = [
-    ['獲得', entries.filter(([, found]) => !found.isUpgrade)],
+    [null, entries.filter(([, found]) => !found.isUpgrade)],
     ['LVアップ', entries.filter(([, found]) => found.isUpgrade)],
   ];
   // 拡大表示用の欄(.card-inst-modal__visual)は横並びなので、見出し→カードの縦積みにする入れ物で包む。
@@ -5879,7 +5882,7 @@ function showCastleAcquirableModal() {
   }
   for (const [label, list] of sections) {
     if (list.length === 0) continue;
-    wrap.appendChild(el('div', 'build-choice-section-header', label));
+    if (label) wrap.appendChild(el('div', 'build-choice-section-header', label));
     const group = el('div', 'build-choice-group');
     for (const [faceId, found] of list) {
       const cardNode = buildCardVisual(faceId, { req: factsForFaceId(faceId).req, showEffect: true, allowTextFallback: false, noInteraction: true });
@@ -15224,7 +15227,7 @@ function showCardEnlargeModal(faceId, visualNode, sibling, siblingVisualNode, pi
   // The overlay/modal DOM is shared and reused across calls, so leftover modifiers from a previous
   // showAreaEnlargeModal/showCardListTermModal call must be cleared here too, or they'd stick around on
   // every later card modal.
-  modal.classList.remove('card-inst-modal--area-wide', 'card-inst-modal--term');
+  modal.classList.remove('card-inst-modal--area-wide', 'card-inst-modal--term', 'card-inst-modal--castle');
 
   if (visualNode) {
     // transform:scale() only changes how a node PAINTS -- it reserves no extra LAYOUT space, so two
@@ -15513,7 +15516,7 @@ function showAreaEnlargeModal(areaId, pickAction, titleOverride) {
   // screens; --area-wide's own 500px gives enough headroom that 3 tiles fit without it. Removes --wide
   // too, in case a previous showCardEnlargeModal/showCardListTermModal call left it (or --term) on
   // this same shared modal element.
-  modal.classList.remove('card-inst-modal--wide', 'card-inst-modal--term');
+  modal.classList.remove('card-inst-modal--wide', 'card-inst-modal--term', 'card-inst-modal--castle');
   modal.classList.add('card-inst-modal--area-wide');
   flipBtn.hidden = true;
   // pickAction (2026-10-10, per user request: 領地カードの拡大表示をエリア拡大表示と完全に統一し、唯一の
