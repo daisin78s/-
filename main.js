@@ -8049,7 +8049,9 @@ function queueMobileAiCardGainAnimation(state, next) {
     const before = previous.get(playerId);
     if (!before) continue;
     for (const [physicalId, faceId] of faces) {
-      if (before.get(physicalId) !== faceId) mobileAiCardGainQueue.push(faceId);
+      const beforeFaceId = before.get(physicalId);
+      // 前から持っていて面だけ変わった = LVアップ(別の演出、playNextMobileAiCardGain参照)。
+      if (beforeFaceId !== faceId) mobileAiCardGainQueue.push({ faceId, fromFaceId: beforeFaceId || null });
     }
   }
   playNextMobileAiCardGain();
@@ -8057,7 +8059,8 @@ function queueMobileAiCardGainAnimation(state, next) {
 function playNextMobileAiCardGain() {
   if (mobileAiCardGainPlaying || mobileAiCardGainQueue.length === 0) return;
   mobileAiCardGainPlaying = true;
-  const faceId = mobileAiCardGainQueue.shift();
+  const { faceId, fromFaceId } = mobileAiCardGainQueue.shift();
+  if (fromFaceId) { playMobileCardUpgrade(fromFaceId, faceId); return; }
   let layer = document.getElementById('ai-card-gain-layer');
   if (!layer) {
     layer = el('div', 'ai-card-gain-layer');
@@ -8079,6 +8082,48 @@ function playNextMobileAiCardGain() {
     layer.innerHTML = '';
     mobileAiCardGainPlaying = false;
     playNextMobileAiCardGain();
+  };
+}
+
+/** LVアップの演出 (2026-10-23, per user request: "LVUPの時は獲得とは別の演出が欲しい 右から素早く中央へ
+ * ひっくり返る 素早く右に移動") -- LVアップ前の面が右からすばやく中央へ来て、裏返ってLVアップ後の面になり、
+ * すばやく右へ去る。獲得の演出(左→中央→右)と同じ層・同じ大きさを使う。 */
+const CARD_UPGRADE_IN_MS = 200;
+const CARD_UPGRADE_FLIP_HALF_MS = 160;
+const CARD_UPGRADE_HOLD_MS = 350;
+const CARD_UPGRADE_OUT_MS = 200;
+function playMobileCardUpgrade(fromFaceId, toFaceId) {
+  let layer = document.getElementById('ai-card-gain-layer');
+  if (!layer) {
+    layer = el('div', 'ai-card-gain-layer');
+    layer.id = 'ai-card-gain-layer';
+    document.body.appendChild(layer);
+  }
+  layer.innerHTML = '';
+  const buildFace = (faceId) => buildCardVisual(faceId, { req: factsForFaceId(faceId).req, showEffect: true, allowTextFallback: false, noInteraction: true });
+  const holder = el('div', 'ai-card-gain-layer__card');
+  holder.appendChild(buildFace(fromFaceId));
+  layer.appendChild(holder);
+  const finish = () => {
+    layer.innerHTML = '';
+    mobileAiCardGainPlaying = false;
+    playNextMobileAiCardGain();
+  };
+  // 1) 右から中央へ
+  holder.animate([{ transform: 'translateX(100vw)' }, { transform: 'translateX(0)' }],
+    { duration: CARD_UPGRADE_IN_MS, easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)', fill: 'forwards' }).onfinish = () => {
+    // 2) ひっくり返る: 横に縮んで消える → LVアップ後の面に差し替え → 広がる
+    holder.animate([{ transform: 'scaleX(1)' }, { transform: 'scaleX(0)' }],
+      { duration: CARD_UPGRADE_FLIP_HALF_MS, easing: 'ease-in', fill: 'forwards' }).onfinish = () => {
+      holder.innerHTML = '';
+      holder.appendChild(buildFace(toFaceId));
+      holder.animate([{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }],
+        { duration: CARD_UPGRADE_FLIP_HALF_MS, easing: 'ease-out', fill: 'forwards' }).onfinish = () => {
+        // 3) 少し見せてから、すばやく右へ
+        holder.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(100vw)' }],
+          { duration: CARD_UPGRADE_OUT_MS, delay: CARD_UPGRADE_HOLD_MS, easing: 'cubic-bezier(0.7, 0, 0.8, 0.2)', fill: 'forwards' }).onfinish = finish;
+      };
+    };
   };
 }
 
