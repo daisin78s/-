@@ -137,7 +137,7 @@ function getNextTurn(state) {
  * regardless of how many groups completed since the last check. */
 function grantBardBonusIfEarned(state, index, playerId) {
   const player = state.players.find((p) => p.id === playerId);
-  if (!player.jobCardId || getCardRow(index, player.jobCardId).NAME !== '詩人') return;
+  if (!player.jobCardId || getCardRow(index, player.jobCardId).NAME !== '神官') return;
   const totalEmblemCount = executorApi.evalMetric(state, index, playerId, { name: 'TOTAL_EMBLEM_COUNT', args: [] });
   const earnedUnits = Math.floor(totalEmblemCount / 3);
   const newUnits = earnedUnits - player.bardEmblemUnitsGranted;

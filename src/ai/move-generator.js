@@ -669,9 +669,9 @@ class MoveGenerator {
     return null;
   }
 
-  /** 策士/JOB004 (2026-08-28, per user request/experiment: "策士は3K以上あれば基本的に毎ターン使うでどう
+  /** 料理人/JOB004 (2026-08-28, per user request/experiment: "料理人は3K以上あれば基本的に毎ターン使うでどう
    * でしょうか これで逆に弱くなるようなら戻します" -- prompted by a report that AI LV4 passed up a
-   * 策士→終わりの兆しLV2→鐘楼 combo because the immediate score of converting 3K->2Z alone doesn't reflect
+   * 料理人→終わりの兆しLV2→鐘楼 combo because the immediate score of converting 3K->2Z alone doesn't reflect
    * the build it can enable 1-2 moves later, so a beam/rollout search can prune it before ever discovering
    * that value): forces CHANGE(3K,2Z) unconditionally whenever the player owns an untapped JOB004 with
    * >=3K, with NO build-outlet check -- deliberately simpler than forcedBzConversionMove's own gating.
@@ -691,7 +691,7 @@ class MoveGenerator {
    * player.lockedK reservation this used to also check was removed -- see board.js's
    * chargeUsageFeeIfOwed's own doc -- so this is now just the plain pendingFee amount). */
   forcedJob004ConversionMove(state, index, playerId) {
-    // Cost is 4K, not 3 (2026-10-11 found via a real stuck-game regression: 策士's own TAP cost grew
+    // Cost is 4K, not 3 (2026-10-11 found via a real stuck-game regression: 料理人's own TAP cost grew
     // 3K->4K earlier this session, CHANGE(3K,2Z)->CHANGE(4K,(A,B,C)), but this affordability pre-check
     // was never updated to match -- a player with exactly 3K passed this stale "< 3" gate as
     // "affordable", so the forced move got selected every turn, failed to actually apply (truly needs
@@ -703,7 +703,7 @@ class MoveGenerator {
     if ((player.resources.K || 0) - 4 < reservedK) return null;
     for (const physicalId of player.ownedCardPhysicalIds) {
       const cardState = state.cards[physicalId];
-      if (!cardState || cardState.tapped || cardState.currentFaceId !== 'JOB011') continue; // 策士 (2026-10-13 A/B-revert renamed the id to JOB011; function name kept as-is)
+      if (!cardState || cardState.tapped || cardState.currentFaceId !== 'JOB011') continue; // 料理人 (2026-10-13 A/B-revert renamed the id to JOB011; function name kept as-is)
       return { type: 'BARE_TAP', playerId, physicalId };
     }
     return null;

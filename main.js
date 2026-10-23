@@ -3842,9 +3842,9 @@ function buildAddWdIcon(actionText) {
  * no icon at all -- buildAddMultiResourceIcon's own per-item regex didn't recognize "wD" as a token, so
  * it silently bailed (returned null) on the whole icon instead of just that one item. */
 // 効果アイコン(resourceItemNodes)側で1〜2個アイコン反復の対象から除外したいカード (2026-09-27, per user
-// request: "強欲 憂鬱 嫉妬 策士は戻して" -- 策士(2026-10-13のA/B再編revertで物理id JOB011)のTAP=
+// request: "強欲 憂鬱 嫉妬 料理人は戻して" -- 料理人(2026-10-13のA/B再編revertで物理id JOB011)のTAP=
 // "CHANGE(3K,2Z)"が2Zの部分で反復アイコンになってしまったのを元(アイコン1個+数字)に戻す指定。現在の
-// 策士のTAPは既にCHANGE(4K,(A,B,C))に変わっていて別のアイコンビルダー(buildChangeGroupGainIcon)経由に
+// 料理人のTAPは既にCHANGE(4K,(A,B,C))に変わっていて別のアイコンビルダー(buildChangeGroupGainIcon)経由に
 // なっているためこの指定は実質使われていない可能性があるが、念のため新しい物理idに合わせておく。
 // 強欲/憂鬱/嫉妬(CON002B/003B/004B)はCONの「アイコン欄」テキスト表示に完全に置き換わっており実際には
 // resourceItemNodes経由の表示自体が無い(=このリストに入れても見た目の変化は無い)が、指定された通り
@@ -3954,7 +3954,7 @@ function buildChangeToColorDieIcon(actionText) {
  * from buildChangeQuantityIcon above (single resource on both sides) and the AREA007-only exact-match
  * 'CHANGE((A,B,C),D)' entry in ACTION_ICON_BUILDERS (group on the PAY side instead, labelled 追加色ダイス
  * rather than plain resource dots). */
-// 2026-10-18, per user spec (策士/JOB011's own CHANGE(4K,(A,B,C)), currently the only card matching this
+// 2026-10-18, per user spec (料理人/JOB011's own CHANGE(4K,(A,B,C)), currently the only card matching this
 // pattern): 2行に分割("⤵〇4→" の行と "赤〇青〇黄〇" の行)。pay+矢印を1行目、gain群を2行目にする。
 function buildChangeGroupGainIcon(actionText) {
   const match = /^CHANGE\((\d*)(K|A|B|C|Z),\(([A-Z0-9,]+)\)\)$/.exec(actionText || '');
@@ -5116,7 +5116,7 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     const noteEl = el('div', 'card-note card-note--large');
     noteEl.appendChild(document.createTextNode('研究を\n獲得する'));
     q('.shop-card__effect').appendChild(noteEl);
-  } else if (options.showEffect && (facts.name === '開拓者' || facts.name === '詩人' || facts.name === '地主')) {
+  } else if (options.showEffect && (facts.name === '開拓者' || facts.name === '神官' || facts.name === '地主')) {
     // Bespoke JOB card-notes (宣教師/JOB009, renamed from 開拓者 2026-09-20 alongside its ability redesign
     // -- fixed 1B per qualifying die now, no longer die-value-dependent, per user mockup: "無人AREAに色D /
     // ▽ / B"; 吟遊詩人/JOB008 and 地主/JOB011 2026-08-17, per user mockups: "エンブレム３個 / ▽ / Z　1VP"
@@ -5133,7 +5133,7 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     if (facts.name === '開拓者') {
       noteEl.appendChild(document.createTextNode('無人エリアに色D\n▽\n'));
       iconRow.appendChild(actionDot('B'));
-    } else if (facts.name === '詩人') {
+    } else if (facts.name === '神官') {
       noteEl.appendChild(document.createTextNode('エンブレム３個\n▽\n'));
       iconRow.appendChild(actionDot('C'));
       iconRow.appendChild(actionCount('1VP'));
@@ -5166,7 +5166,7 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
   } else if (options.showEffect && facts.name === '権力者') {
     // JOB005/権力者 (2026-10-20 redesign, replacing the old "〇→赤〇" conversion icon -- see
     // executor.resolvePayment's own A-branch doc for the ability itself) -- bespoke, no DSL
-    // representation (PASSIVE欄は空欄), same "NAME指定でアイコンを手組みする" pattern as 料理人.
+    // representation (PASSIVE欄は空欄), same "NAME指定でアイコンを手組みする" pattern as 食料長官.
     // "=" (not an arrow) since this is a payment-time substitution, not a one-way transformation --
     // the player's own K is never actually taken away the way the old icon's "→" implied.
     tall = true;
@@ -5177,9 +5177,9 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     iconRow.appendChild(actionDot('A'));
     noteEl.appendChild(iconRow);
     q('.shop-card__effect').appendChild(noteEl);
-  } else if (options.showEffect && facts.name === '料理人') {
-    // JOB002/料理人 (2026-09-24, per user mockup: "1VP　▷　〇 / MAX5 / 毎ターン"; 2026-10-10, per user
-    // request "料理人のアイコン MAX5 毎ターンを消して": MAX5/毎ターン removed since the 2026-10-10 ability
+  } else if (options.showEffect && facts.name === '食料長官') {
+    // JOB002/食料長官 (2026-09-24, per user mockup: "1VP　▷　〇 / MAX5 / 毎ターン"; 2026-10-10, per user
+    // request "食料長官のアイコン MAX5 毎ターンを消して": MAX5/毎ターン removed since the 2026-10-10 ability
     // redesign dropped both the cap and the tap-gate -- see executor.grantChefBonusIfEarned's own doc,
     // now uncapped and fires every time with no tap at all) -- this ability has no DSL representation
     // either (bespoke -- TAP field is blank in the data). Reuses actionTrigger()'s existing ▶

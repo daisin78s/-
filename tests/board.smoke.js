@@ -133,7 +133,7 @@ function giveDie(state, playerId, value) {
 }
 
 // ---------------------------------------------------------------------------
-// 料理人/JOB002 (renamed from 実業家 2026-09-20, alongside a full ability redesign replacing its old
+// 食料長官/JOB002 (renamed from 実業家 2026-09-20, alongside a full ability redesign replacing its old
 // TAP=ON(BUILD(),ADD(K))): reacts to ANY live VP-resource grant (executor.grantResourceAndEmitGet('VP',
 // ...), from any card or bespoke bonus) by granting that same amount of K -- see
 // executor.grantChefBonusIfEarned's own doc for the full worked-through trigger scope (confirmed with the
@@ -158,7 +158,7 @@ function giveJob002(state, playerId) {
   giveJob002(state, 'P1');
   const beforeK = p1.resources.K || 0;
   executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'VP', 2);
-  check('料理人: a live 2VP grant grants 2K', (p1.resources.K || 0) - beforeK, 2);
+  check('食料長官: a live 2VP grant grants 2K', (p1.resources.K || 0) - beforeK, 2);
 }
 {
   // No cap (2026-10-10 redesign) -- a single grant of 7VP now yields the full 7K, not capped at 5.
@@ -167,7 +167,7 @@ function giveJob002(state, playerId) {
   giveJob002(state, 'P1');
   const beforeK = p1.resources.K || 0;
   executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'VP', 7);
-  check('料理人: a single 7VP grant is uncapped, grants the full 7K', (p1.resources.K || 0) - beforeK, 7);
+  check('食料長官: a single 7VP grant is uncapped, grants the full 7K', (p1.resources.K || 0) - beforeK, 7);
 }
 {
   // No tap-gating (2026-10-10 redesign) -- multiple separate VP grants in a row each trigger their own
@@ -178,7 +178,7 @@ function giveJob002(state, playerId) {
   executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'VP', 1);
   const afterFirstK = p1.resources.K || 0;
   executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'VP', 1);
-  check('料理人: a 2nd VP grant in the same turn still triggers fully', (p1.resources.K || 0) - afterFirstK, 1);
+  check('食料長官: a 2nd VP grant in the same turn still triggers fully', (p1.resources.K || 0) - afterFirstK, 1);
   check('...and never taps the card at all', state.cards[jobInst.physicalId].tapped, false);
 }
 {
@@ -186,7 +186,7 @@ function giveJob002(state, playerId) {
   const p1 = player(state, 'P1'); // no jobCardId set at all
   const beforeK = p1.resources.K || 0;
   executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'VP', 2);
-  check('A player without 料理人 gets no bonus from a live VP grant', (p1.resources.K || 0) - beforeK, 0);
+  check('A player without 食料長官 gets no bonus from a live VP grant', (p1.resources.K || 0) - beforeK, 0);
 }
 {
   // Monument BUILD trigger (2026-09-20, confirmed with the user): a monument's own printed VP is never a
@@ -200,14 +200,14 @@ function giveJob002(state, playerId) {
   const beforeK = p1.resources.K || 0;
   const result = board.resolveBuild(state, index, { playerId: 'P1' }, { type: 'BUILD_NEW', faceId: 'M001', shopKey: 'M', slotId: 'SHOP001' });
   check('Building M001 (記念碑) succeeds', result.success, true);
-  check('料理人: building a monument grants K matching its printed VP (4)', (p1.resources.K || 0) - beforeK, 4);
+  check('食料長官: building a monument grants K matching its printed VP (4)', (p1.resources.K || 0) - beforeK, 4);
 }
 {
   // Initial-RESOURCE-card printed VP is now a LIVE grant (2026-09-23, per user request: "初期資源のVPも
   // バッジで表示されるように" -- see setup.receiveInitialResources' own doc for the full design/tradeoff).
   // R004 ("2VP,Z", ONCE=ADD(K,Z)) should: (1) show up as an ordinary resources.VP badge increase, (2) NOT
   // be double-counted by scoring.computeFinalScore's cardVp sum (which now skips RESOURCE-card ids), and
-  // (3) still trigger 料理人's chef bonus the same live-GET(VP) way any other VP grant does.
+  // (3) still trigger 食料長官's chef bonus the same live-GET(VP) way any other VP grant does.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   giveJob002(state, 'P1');
@@ -220,7 +220,7 @@ function giveJob002(state, playerId) {
   check('R004: its printed 2VP is now a live resources.VP grant (badge-visible)', p1.resources.VP || 0, 2);
   check('...computeFinalScore counts it exactly once (2), not double-counted via cardVp', scoring.computeFinalScore(state, index, 'P1'), 2);
   // Total K delta = R004's own ONCE=ADD(K,Z) (1K) + the chef bonus matching its printed VP (2) = 3.
-  check('料理人: receiving R004 (2VP) grants K = ONCE\'s own 1K + a chef bonus matching its printed VP (2)', (p1.resources.K || 0) - beforeK, 3);
+  check('食料長官: receiving R004 (2VP) grants K = ONCE\'s own 1K + a chef bonus matching its printed VP (2)', (p1.resources.K || 0) - beforeK, 3);
 }
 
 // ---------------------------------------------------------------------------

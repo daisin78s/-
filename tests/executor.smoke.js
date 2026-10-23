@@ -1169,7 +1169,7 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   check('blockedBuildCategoriesThisTurn is cleared at TURNEND', getPlayerRef(state, 'P1').blockedBuildCategoriesThisTurn, []);
 }
 {
-  // 2026-08-20: JOB004/策士's own TAP dropped its BLOCK_BUILD(M,THIS_TURN) clause (per user edit), so
+  // 2026-08-20: JOB004/料理人's own TAP dropped its BLOCK_BUILD(M,THIS_TURN) clause (per user edit), so
   // this real-data vehicle moved to JOB007/宮廷人, whose TAP still carries BLOCK_BUILD (now A/B/C, not M).
   // The middle line is now MONUMENT_CHANGE_DIE_VALUE(SELF+n) (2026-08-24 data edit, replacing
   // MONUMENT_DICE_DISCOUNT(2,THIS_TURN); +2 -> +1 on 2026-08-25 -> +3 on 2026-09-01 -> +4 on

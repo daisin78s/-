@@ -50,12 +50,12 @@ const UNTAP_SYNERGY_FACE_IDS = new Set([
  * feeding the 晩餐会(M401) synergy bonus in score(). */
 const FARM_SYNERGY_FACE_IDS = new Set(['A004A', 'A004B', 'A005A', 'A005B', 'C201A', 'C201B']);
 
-/** 導き(B001-B003, either tier) + 双星の加護(B201, either tier) + 料理人(JOB008) + 教師(JOB004) +
+/** 導き(B001-B003, either tier) + 双星の加護(B201, either tier) + 食料長官(JOB008) + 教師(JOB004) +
  * 宮廷人(JOB010) -- the user's own 元老院の支配(A301) synergy group (2026-09-07: "元老院はただとっても
  * それなりに強いが、導きや双星をすでに獲得していたりJOBが実業家、宮廷人、育成者だったりすると尚いい" --
- * 実業家/育成者 are 料理人/教師's own old names from before later renames),
+ * 実業家/育成者 are 食料長官/教師's own old names from before later renames),
  * each reaching 元老院's own BUILD() usefulness via a different mechanism -- 導き boosts the die value
- * placed there, 双星(ONCE=ADD(2wD)) grants extra dice to spend there, 料理人/教師 turn the resulting
+ * placed there, 双星(ONCE=ADD(2wD)) grants extra dice to spend there, 食料長官/教師 turn the resulting
  * BUILD/dice-gain events into more resources, 宮廷人 boosts the die value for a MONUMENT candidate
  * specifically (see monument-incentive.js's own DELTA_ABILITIES for that narrower, already-existing
  * mechanism -- this row is a separate, broader "元老院 ownership is generally more valuable" credit,

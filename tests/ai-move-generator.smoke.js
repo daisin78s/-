@@ -20,16 +20,16 @@ const index = buildDataIndex(loadGameData(path.join(__dirname, '..', 'data', 'ga
 // as-is) purely so the tests below can keep exercising that still-real, still-used generic engine
 // mechanism (END_TURN/FREE_ACTION gating) against an actual ownable card id.
 index.byId.set('CON005B', { sheet: 'CON', row: { ...index.byId.get('CON005B').row, TURNEND: 'RESOURCE_TOTAL_LIMIT((A,B,C),7)' } });
-// 策士(JOB011, physical id JOB005 -- renamed from the old bare JOB004 by the 2026-10-11 JOB A/B
+// 料理人(JOB011, physical id JOB005 -- renamed from the old bare JOB004 by the 2026-10-11 JOB A/B
 // redesign)'s own TAP used to be CHANGE(3K,2BZ);BLOCK_BUILD(M,THIS_TURN) -- the original real-data
 // vehicle for bzConversionTap's CHANGE-based (as opposed to ADD-based, like 宮廷人/JOB010) detection
 // branch -- until later reworks changed it to CHANGE(3K,2Z), then CHANGE(4K,(A,B,C)) (a genuinely
 // different resource/mechanic each time). No card in the current dataset grants BZ via CHANGE any
 // more, but bzConversionTap is meant to recognize that *shape* generically (see its own doc), so this
-// patches the old text back onto 策士's row (every other field left as-is) purely so the tests below
+// patches the old text back onto 料理人's row (every other field left as-is) purely so the tests below
 // can keep exercising that still-real, still-used CHANGE branch against an actual ownable card id.
 index.byId.set('JOB011', { sheet: 'JOB', row: { ...index.byId.get('JOB011').row, TAP: 'CHANGE(3K,2BZ);BLOCK_BUILD(M,THIS_TURN)' } });
-// 権力者(JOB005, the OTHER face of 策士's same physical slot)'s own TAP used to be
+// 権力者(JOB005, the OTHER face of 料理人's same physical slot)'s own TAP used to be
 // ON(GET(K),CHANGE(K,A)) -- a reactive ability offered as an optional TAP_REACTION choice -- until the
 // 2026-10-10 data edit moved it to PASSIVE (auto-fires unconditionally, no choice/tap at all; confirmed
 // generic via executor.emit, no code change needed). No card in the current dataset has an ON(...)
@@ -299,8 +299,8 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
 
 // ---------------------------------------------------------------------------
 // bzConversionTap / forcedBzConversionMove (2026-08-04, per user feedback: "JOB004の効果は使えるときは
-// 必ず使う") -- 策士(JOB011)'s patched TAP="CHANGE(3K,2BZ)" is detected as a forced BZ conversion; a
-// card with no such ability, or 策士 itself when unaffordable/already tapped, is not.
+// 必ず使う") -- 料理人(JOB011)'s patched TAP="CHANGE(3K,2BZ)" is detected as a forced BZ conversion; a
+// card with no such ability, or 料理人 itself when unaffordable/already tapped, is not.
 //
 // 2026-08-0X update (per user feedback: "BZはターン終了時に無くなります...AIもBZを作る→無くなるという
 // ことをしないようにしてください"): forcing this conversion is now ALSO gated on there being a reachable
@@ -308,7 +308,7 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
 // just evaporate at TURNEND for nothing. context is now a required 4th argument.
 // ---------------------------------------------------------------------------
 {
-  check('bzConversionTap detects 策士/JOB011 ("CHANGE(3K,2BZ)")', !!bzConversionTap(index, 'JOB011'), true);
+  check('bzConversionTap detects 料理人/JOB011 ("CHANGE(3K,2BZ)")', !!bzConversionTap(index, 'JOB011'), true);
   check('bzConversionTap detects 宮廷人/JOB010 ("ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+4);BLOCK_BUILD(A/B/C,THIS_TURN)", 2026-08-24)', !!bzConversionTap(index, 'JOB010'), true);
   check('bzConversionTap is null for a card with no TAP field at all (M001, printed VP only)', bzConversionTap(index, 'M001'), null);
   check('bzConversionTap is null for a bare TAP that does not produce BZ (C001A)', bzConversionTap(index, 'C001A'), null);
@@ -362,7 +362,7 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
   // against, unlike a low die value that would only become monument-reachable via the +3 itself.
   giveDie(state, 'P1', 6);
   // Generous real resources (not relying on 宮廷人's own single BZ covering a whole cost alone, unlike
-  // the 策士 test above which grants 2 BZ) so SOME reachable monument is affordable regardless of the
+  // the 料理人 test above which grants 2 BZ) so SOME reachable monument is affordable regardless of the
   // current shop's exact costs.
   p1.resources.A = 5; p1.resources.B = 5; p1.resources.C = 5;
 
@@ -375,7 +375,7 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
   // With zero unplaced dice AND no build outlet reachable any other way, skipDieChange is NOT offered
   // either -- it shares the exact same isBz/hasAffordableBuildOutlet gate the per-die candidates already
   // had (2026-08-06, per user diagnosis: offering a BZ-granting tap with nothing to spend the BZ on just
-  // wastes it and still pays the BLOCK_BUILD downside for nothing -- confirmed harmful for 策士 via
+  // wastes it and still pays the BLOCK_BUILD downside for nothing -- confirmed harmful for 料理人 via
   // tools/ai_batch_run.js). The skip option only ever ADDS a way to use this TAP when it's still
   // genuinely worth using, never bypasses that existing safety check.
   const state = freshStateWithShops();
@@ -414,7 +414,7 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
   jobInst.ownerId = 'P1';
   state.cards[jobInst.physicalId] = jobInst;
   p1.ownedCardPhysicalIds.push(jobInst.physicalId);
-  p1.resources.K = 3; // covers 策士's own (patched) CHANGE(3K,2BZ) cost
+  p1.resources.K = 3; // covers 料理人's own (patched) CHANGE(3K,2BZ) cost
   const context = { hasPlacedDieThisTurn: false };
 
   giveDie(state, 'P1', 6); // castle BUILD() at buildValue=6 -- cheapest reachable candidate costs 3 units
@@ -432,11 +432,11 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
 }
 
 // ---------------------------------------------------------------------------
-// forcedJob004ConversionMove (2026-08-28, per user request/experiment: "策士は3K以上あれば基本的に毎ターン
-// 使うでどうでしょうか") -- unconditional: forces 策士(JOB011)'s real current TAP whenever the player
-// owns an untapped 策士 with enough K, with no build-outlet check at all (unlike forcedBzConversionMove
+// forcedJob004ConversionMove (2026-08-28, per user request/experiment: "料理人は3K以上あれば基本的に毎ターン
+// 使うでどうでしょうか") -- unconditional: forces 料理人(JOB011)'s real current TAP whenever the player
+// owns an untapped 料理人 with enough K, with no build-outlet check at all (unlike forcedBzConversionMove
 // above). This function hardcodes the K threshold rather than reading it from the TAP text (see its own
-// doc) -- 4, not 3, since 2026-10-11 (found via a real stuck-game regression: 策士's own TAP cost grew
+// doc) -- 4, not 3, since 2026-10-11 (found via a real stuck-game regression: 料理人's own TAP cost grew
 // 3K->4K earlier that session, but this threshold was never updated to match, so a player with exactly
 // 3K wrongly passed this gate as "affordable" and the AI got stuck forever re-selecting a forced move
 // that always failed to actually apply).
@@ -663,7 +663,7 @@ function giveTrainingGroundControl(state, playerId, faceId) {
 
 // ---------------------------------------------------------------------------
 // Regression (2026-08-06, per user feedback: "AIは建築しないときはJOB004をTAPしない（できない）"):
-// forcedBzConversionMove already declined to *force* 策士's tap with no build outlet (previous
+// forcedBzConversionMove already declined to *force* 料理人's tap with no build outlet (previous
 // block), but #bareTapMoves still offered the same tap as a normal generateMoves candidate regardless
 // -- letting the Evaluator's flat per-unit BZ weight (which doesn't know BZ evaporates at TURNEND) pick
 // it anyway and waste 3K. generateMoves must now omit it entirely with no outlet, and still include it
@@ -682,14 +682,14 @@ function giveTrainingGroundControl(state, playerId, faceId) {
 
   const movesNoOutlet = moveGenerator.generateMoves(state, index, 'P1', context);
   assertTrue(
-    'generateMoves omits the 策士 BARE_TAP candidate entirely when no build outlet exists (no dice at all)',
+    'generateMoves omits the 料理人 BARE_TAP candidate entirely when no build outlet exists (no dice at all)',
     !movesNoOutlet.some((m) => m.type === 'BARE_TAP' && m.physicalId === jobInst.physicalId)
   );
 
   giveDie(state, 'P1', 3); // same affordable-with-just-2-BZ setup as the earlier forced-conversion test.
   const movesWithOutlet = moveGenerator.generateMoves(state, index, 'P1', context);
   assertTrue(
-    'generateMoves still includes the 策士 BARE_TAP candidate once a build outlet exists',
+    'generateMoves still includes the 料理人 BARE_TAP candidate once a build outlet exists',
     movesWithOutlet.some((m) => m.type === 'BARE_TAP' && m.physicalId === jobInst.physicalId)
   );
 }

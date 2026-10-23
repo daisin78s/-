@@ -299,7 +299,7 @@ function colorConvertLastTurnAmount(state, playerId) {
   // return player.resources.Z || 0;
 }
 
-/** True if playerId's own JOB is 料理人/JOB002 (renamed from 実業家 2026-09-20, alongside a full ability
+/** True if playerId's own JOB is 食料長官/JOB002 (renamed from 実業家 2026-09-20, alongside a full ability
  * redesign -- see grantChefBonusIfEarned's own doc). Bespoke, no DSL representation -- same class of
  * exception as hasPaymentChoiceAbility above, or board.js's hasPioneerAbility/hasLandlordAbility. Matched
  * by NAME rather than physical id, for the same JOB-sheet-reorg-safety reason those two cite. JOB has no
@@ -307,7 +307,7 @@ function colorConvertLastTurnAmount(state, playerId) {
 function hasChefAbility(state, index, playerId) {
   const player = getPlayer(state, playerId);
   if (!player.jobCardId) return false;
-  return getCardRow(index, player.jobCardId).NAME === '料理人';
+  return getCardRow(index, player.jobCardId).NAME === '食料長官';
 }
 
 /** True if playerId's own JOB is 権力者/JOB005 (2026-10-20 redesign, replacing the old automatic
@@ -406,7 +406,7 @@ function applyPowerBrokerGameEndTopUp(state, index) {
  * "Zも同様にして"). Non-権力者 players drain whichever of A/B/C/Z they currently hold the MOST of first
  * ("多い資源から使われる"); 権力者 owners drain A first specifically (symmetric with their own A<-K
  * substitution just above), falling back to the same most-first order (among B/C/Z) for any shortfall
- * still remaining after A runs out. 配給所/AREA010's own CHANGE(K,VP,n) action spends K through this
+ * still remaining after A runs out. 孤児院/AREA010's own CHANGE(K,VP,n) action spends K through this
  * exact path (see runChange's own scaledPay), so this also lets a player sitting on plenty of A/B/C/Z
  * but little K actually use it.
  * @returns {{ok:true, items:{resource:string,count:number}[]}|{ok:false, resource:string}}
@@ -1936,7 +1936,7 @@ function grantResourceAndEmitGet(state, index, context, resource, count) {
     } else {
       emitAndResolve(state, index, context, 'GET', effectiveResource);
     }
-    // 料理人(JOB002) (2026-09-20) -- see grantChefBonusIfEarned's own doc for why this lives HERE rather
+    // 食料長官(JOB002) (2026-09-20) -- see grantChefBonusIfEarned's own doc for why this lives HERE rather
     // than as an ON(GET(VP),...) TAP-field DSL entry: this is the one function every live VP grant, from
     // ANY card or bespoke bonus, already funnels through, and it's the only place `count` (how much was
     // actually granted) is still available -- emitAndResolve's own GET dispatch above only ever conveys
@@ -1946,7 +1946,7 @@ function grantResourceAndEmitGet(state, index, context, resource, count) {
   return effectiveResource;
 }
 
-/** Grants 料理人(旧実業家)/JOB002's bonus if earned (2026-09-20 redesign, replacing the old
+/** Grants 食料長官(旧実業家)/JOB002's bonus if earned (2026-09-20 redesign, replacing the old
  * "ON(BUILD(),ADD(K))" DSL-driven ability -- its TAP field is blank, same "bespoke, no DSL representation"
  * treatment as hasChefAbility's own doc cites, since the DSL's generic ON(GET(x),...) dispatch never
  * conveys HOW MUCH was granted, only which resource -- see grantResourceAndEmitGet's own call-site

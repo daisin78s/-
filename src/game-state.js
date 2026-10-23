@@ -192,7 +192,7 @@ function createDie(id, kind) {
  *   convention every other build-candidate consumer already uses), appended once per successful
  *   board.resolveBuild call (both resolveBuildNew and resolveUpgrade), covering every path a build can
  *   come from (AREA action, bare TAP, QST reward) uniformly, same as that function's own existing role as
- *   the single commit choke point. DONATE: 配給所(AREA010B/C)'s own CHANGE(...,VP,...) action, faceId is
+ *   the single commit choke point. DONATE: 孤児院(AREA010B/C)'s own CHANGE(...,VP,...) action, faceId is
  *   the MAP id (not a card face) -- same event PlayerState.orphanageVpGained already tracks as a running
  *   total, only via board.placeDice's solo path (see that field's own doc on why group/wildcard
  *   placement was never covered either). Never read mid-game -- purely a presentation log, not consulted
