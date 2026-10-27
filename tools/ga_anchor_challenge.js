@@ -13,7 +13,7 @@
  * 全試合をカード相性表(tools/card_pair_stats.js)にも数える(--no-pair-statsで無効)。
  *
  * Usage: node tools/ga_anchor_challenge.js <gaDir> <outDir> [--candidates=8] [--boards=50] [--min-games=16]
- *        [--from-gen=2892] [--ai-level=LV5] [--no-pair-stats]
+ *        [--from-gen=2892] [--ai-level=LV3] [--no-pair-stats]
  */
 
 'use strict';
@@ -39,7 +39,7 @@ function parseArgs(argv) {
     return hit ? hit.slice(name.length + 3) : def;
   };
   if (positional.length < 2) {
-    console.error('Usage: node tools/ga_anchor_challenge.js <gaDir> <outDir> [--candidates=8] [--boards=50] [--min-games=16] [--from-gen=2892] [--ai-level=LV5] [--no-pair-stats]');
+    console.error('Usage: node tools/ga_anchor_challenge.js <gaDir> <outDir> [--candidates=8] [--boards=50] [--min-games=16] [--from-gen=2892] [--ai-level=LV3] [--no-pair-stats]');
     process.exit(1);
   }
   return {
@@ -49,7 +49,7 @@ function parseArgs(argv) {
     boards: Number(flag('boards', 50)),
     minGames: Number(flag('min-games', 16)),
     fromGen: Number(flag('from-gen', 2892)),
-    aiLevel: flag('ai-level', 'LV5'),
+    aiLevel: flag('ai-level', 'LV3'),
     pairStats: !argv.includes('--no-pair-stats'),
   };
 }

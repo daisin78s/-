@@ -63,7 +63,7 @@ function loadIndex() {
 }
 
 function buildAiContext(raw, index) {
-  const lv4 = getLevel('LV4');
+  const lv4 = getLevel('LV3'); // was 'LV4' (retired 2026-10-27, see src/ai/levels.js)
   const evalTable = buildEvalTable(raw);
   const evaluator = new Evaluator(index, evalTable, lv4.evaluatorOptions);
   const moveGenerator = new MoveGenerator(lv4.moveGeneratorOptions);

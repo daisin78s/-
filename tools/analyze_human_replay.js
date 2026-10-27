@@ -24,7 +24,7 @@
  * smart-onboarding.js's own picks depend on tie-broken randomness; left as a possible follow-up rather
  * than guessed at here.
  *
- * Usage: node tools/analyze_human_replay.js <replayJsonPath> [playerId=P1] [aiLevel=LV4] [topN=15]
+ * Usage: node tools/analyze_human_replay.js <replayJsonPath> [playerId=P1] [aiLevel=LV3] [topN=15]
  */
 
 'use strict';
@@ -153,11 +153,11 @@ function analyzeOneReplay(replayPath, playerId, index, level, evaluator, moveGen
 function main() {
   const [playerIdArg, aiLevelArg, topNArg, ...replaySpecs] = process.argv.slice(2);
   if (replaySpecs.length === 0) {
-    console.error('Usage: node tools/analyze_human_replay.js <defaultPlayerId=P1> <aiLevel=LV4> <topN=15> <replayJsonPath>[=playerId] [replayJsonPath[=playerId]...]');
+    console.error('Usage: node tools/analyze_human_replay.js <defaultPlayerId=P1> <aiLevel=LV3> <topN=15> <replayJsonPath>[=playerId] [replayJsonPath[=playerId]...]');
     process.exit(1);
   }
   const defaultPlayerId = playerIdArg || 'P1';
-  const levelName = aiLevelArg || 'LV4';
+  const levelName = aiLevelArg || 'LV3';
   const topN = topNArg ? Number(topNArg) : 15;
   // Per-replay =playerId suffix (2026-09-12 fix, same reasoning/convention as
   // tools/train_from_human_replay.js's own fix: earlier replay batches all happened to have the human at

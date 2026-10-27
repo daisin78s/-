@@ -103,7 +103,7 @@ const PROJECT_ROOT = path.resolve(__dirname, '..');
 const DATA_PATH = path.join(PROJECT_ROOT, 'data', 'game.json');
 const WORKER_SCRIPT = path.join(PROJECT_ROOT, 'tools', 'train_from_human_replay_worker.js');
 const DEFAULT_PLAYER_ID = 'P1'; // default when a replay arg omits an explicit =playerId suffix
-const AI_LEVEL = 'LV4';
+const AI_LEVEL = 'LV3'; // was 'LV4' (retired 2026-10-27, see src/ai/levels.js)
 const ROUNDS_TO_USE = [3, 4];
 // 2026-09-11, per user request ("並列でお願い" / "いくつ並列にするかはお任せ") after a timing test showed
 // 81s/generation single-threaded at population=100 (1000 generations would've taken ~22.5h) -- same

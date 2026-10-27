@@ -25,7 +25,7 @@
  * aiOptions (policy + search depth) unchanged -- isolates "which weights" as the only variable, same
  * pattern tools/lv4_depth_experiment.js already uses.
  *
- * Usage: node tools/replay_ai_takeover.js <replayJsonPath> [humanPlayerId=P1] [aiLevel=LV4] [--start-round=N] [--genome=<path>]
+ * Usage: node tools/replay_ai_takeover.js <replayJsonPath> [humanPlayerId=P1] [aiLevel=LV3] [--start-round=N] [--genome=<path>]
  */
 
 'use strict';
@@ -60,10 +60,10 @@ function parseArgs() {
   }
   const [replayPathArg, humanPlayerIdArg, aiLevelArg] = positional;
   if (!replayPathArg) {
-    console.error('Usage: node tools/replay_ai_takeover.js <replayJsonPath> [humanPlayerId=P1] [aiLevel=LV4] [--start-round=N] [--genome=<path>]');
+    console.error('Usage: node tools/replay_ai_takeover.js <replayJsonPath> [humanPlayerId=P1] [aiLevel=LV3] [--start-round=N] [--genome=<path>]');
     process.exit(1);
   }
-  return { replayPathArg, humanPlayerId: humanPlayerIdArg || 'P1', levelName: aiLevelArg || 'LV4', startRound, genomePath };
+  return { replayPathArg, humanPlayerId: humanPlayerIdArg || 'P1', levelName: aiLevelArg || 'LV3', startRound, genomePath };
 }
 
 function main() {

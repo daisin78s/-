@@ -14,7 +14,7 @@
  *   out: { jobId, rankByPlayerId, scoreByPlayerId, qstScoreByPlayerId, holdingsByPlayerId }
  *
  * aiLevel (2026-09-17, per user request: "現在の最良データをもとにAILV5で...進めてください" -- see
- * ga_train.js's own --ai-level doc): when present (e.g. "LV5"), each seat's Evaluator/AIPlayer/
+ * ga_train.js's own --ai-level doc): when present (e.g. "LV3", the strongest level -- "LV5" before 2026-10-27, same settings), each seat's Evaluator/AIPlayer/
  * MoveGenerator get that src/ai/levels.js entry's own evaluatorOptions/aiOptions/moveGeneratorOptions,
  * so fitness is measured through that level's actual full search instead of the plain bare, no-lookahead
  * default every prior run used. Omitted (undefined): byte-for-byte the original behavior.

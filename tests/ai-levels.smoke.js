@@ -16,7 +16,8 @@ function check(label, actual, expected) {
   if (ok) passCount++; else failCount++;
 }
 
-check('LEVELS lists LV1/LV2/LV3/LV4/LV5, in that order', LEVELS.map((l) => l.name), ['LV1', 'LV2', 'LV3', 'LV4', 'LV5']);
+// 2026-10-27: LV4 (retired) / LV5 (same as LV3) removed so the names match the game's own LV1/LV2/LV3.
+check('LEVELS lists exactly the game\'s LV1/LV2/LV3, in that order', LEVELS.map((l) => l.name), ['LV1', 'LV2', 'LV3']);
 check('getLevel("LV2") returns the matching registry entry', getLevel('LV2'), LEVELS[1]);
 // 2026-10-11: LV1/LV2/LV3 updated to mirror main.js's 2026-10-04 LV1/2/3 consolidation (旧LV1→LV1、
 // 旧LV3→LV2、旧LV5→LV3 -- see levels.js's own doc) -- every level now shares the SAME full evaluator
@@ -27,10 +28,8 @@ check('getLevel("LV1") shares the unified evaluatorOptions', getLevel('LV1').eva
 check('getLevel("LV2") shares the unified evaluatorOptions', getLevel('LV2').evaluatorOptions, UNIFIED_EVALUATOR_OPTIONS);
 check('getLevel("LV3") shares the unified evaluatorOptions', getLevel('LV3').evaluatorOptions, UNIFIED_EVALUATOR_OPTIONS);
 check('getLevel("LV3") uses preferCastleOverSenate moveGeneratorOptions (matching main.js\'s aiPlayerLv3)', getLevel('LV3').moveGeneratorOptions, { preferCastleOverSenate: true });
-check('getLevel("LV4") includes dieScarcityTieBreak aiOptions', getLevel('LV4').aiOptions.dieScarcityTieBreak, true);
-check('getLevel("LV5") includes crossRoundLookahead aiOptions', getLevel('LV5').aiOptions.crossRoundLookahead, true);
-check('getLevel("LV5") uses beamWidth 3 (vs LV4\'s default 6)', getLevel('LV5').aiOptions.beamWidth, 3);
-check('getLevel("LV5") shares LV4\'s own evaluatorOptions (same real 評価値 table)', getLevel('LV5').evaluatorOptions, getLevel('LV4').evaluatorOptions);
+check('getLevel("LV3") includes crossRoundLookahead aiOptions', getLevel('LV3').aiOptions.crossRoundLookahead, true);
+check('getLevel("LV3") uses beamWidth 3', getLevel('LV3').aiOptions.beamWidth, 3);
 {
   let threw = false;
   try { getLevel('LV99'); } catch (e) { threw = true; }

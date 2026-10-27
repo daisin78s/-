@@ -117,6 +117,8 @@ const SEED_REAL_FLAG = '--seed-real';
 // see ai-player.js's own crossRoundLookahead doc and the 2026-09-16 LV4-vs-LV5 tournament that motivated
 // this). Omitted (the default): every job leaves `aiLevel` undefined and ga_worker.js's own fitness
 // AIPlayer stays exactly the bare, no-lookahead one every prior run used -- fully backward compatible.
+// 2026-10-27: LV5 was renamed LV3 (identical settings, see src/ai/levels.js) -- use --ai-level=LV3 from now on;
+// output/ga_train_lv5_* folders were trained with this same search.
 const AI_LEVEL_FLAG_PREFIX = '--ai-level=';
 // --progress-prefix=A (2026-09-17, per user request for this run's own progress workbook naming: "A1-500
 // という名前のエクセルで500まで その後A501-1000という風に") -- see ga_progress_to_xlsx.py's own doc for
