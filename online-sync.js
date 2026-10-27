@@ -355,6 +355,23 @@ function saveBugReplay(id, replayHistory) {
     .putString(JSON.stringify(replayHistory), 'raw', { contentType: 'application/json' });
 }
 
+/** バグ報告の掲示板 (2026-10-27、bug-board.js参照) -- 手で書いた報告と自動の報告を、新しい順に最大50件。
+ * 自動の報告(main.jsのbuildAiBugReportInfo)も手で書いた報告もdetectedAt(ISO文字列)を持つので、それで並べる。 */
+function listBugReports() {
+  return db().collection(BUG_REPORT_COLLECTION).orderBy('detectedAt', 'desc').limit(50).get().then(function (snapshot) {
+    return snapshot.docs.map(function (doc) { return Object.assign({ id: doc.id }, doc.data()); });
+  });
+}
+
+/** @returns {Promise<object[]|null>} 報告に付いているリプレイ(無ければnull) -- loadReplayと同じ読み方。 */
+function loadBugReplay(id) {
+  var ref = storage().ref(BUG_REPLAY_STORAGE_PREFIX + id + '.json');
+  return ref.getDownloadURL()
+    .then(function (url) { return fetch(url); })
+    .then(function (res) { return res.json(); })
+    .catch(function () { return null; });
+}
+
 window.OnlineSync = {
   listRanking: listRanking,
   saveRankingEntry: saveRankingEntry,
@@ -378,5 +395,7 @@ window.OnlineSync = {
   deleteAchievementBackup: deleteAchievementBackup,
   saveBugReport: saveBugReport,
   saveBugReplay: saveBugReplay,
+  listBugReports: listBugReports,
+  loadBugReplay: loadBugReplay,
 };
 })();
