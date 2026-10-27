@@ -6887,3 +6887,13 @@ body.story-mode #mobile-cards-player-switcher { display: none !important; }
     right: 130px;
   }
 }
+/* スマホ版: 画面の下の空いた所でもフリックでタブを切り替えられるように (2026-10-27, per user request with
+   screenshot: "赤で囲った部分をフリックしても動かないので...動くようにしてほしい") -- スワイプの検出は
+   #appに付いている(main.jsのsetupMobileTabSystem)が、中身が短いタブでは#appが画面の途中で終わり、その下の
+   空白はbody(#appの外)だった。#appを常に画面の高さいっぱいにする(border-boxなので余計なスクロールは出ない)。 */
+@media (max-width: 760px) {
+  #app {
+    min-height: 100vh;
+    min-height: var(--app-height, 100dvh);
+  }
+}

@@ -6701,7 +6701,13 @@ function renderBoard(state, next) {
       // .map-tile__fee (usage-fee collection, its own click handler above) -- both bubble up from a
       // child element of this same tile and would otherwise also pop this modal open underneath them.
       node.addEventListener('click', (e) => {
-        if (e.target.closest('.slot, .map-tile__fee')) return;
+        if (e.target.closest('.map-tile__fee')) return;
+        // スロットはダイスを選んでいる時だけ「置く」操作。選んでいない時はタイルの他の場所と同じく拡大表示
+        // (2026-10-27, per user request: "エリアを拡大表示するときスロットをクリックすると拡大されない
+        // ダイスをクリックしていないときはスロットをクリックしても拡大されるようにしてほしい"、すべての版)。
+        // 判定はタップした時点のスロットの印(.slot--selectable=ダイスを選んでいた)で。置いた直後は選択が
+        // 消えているので、selectedDieIdsを見ると置いた同じタップで拡大まで開いてしまう。
+        if (e.target.closest('.slot--selectable')) return;
         // 皇帝宮殿だけは説明の代わりに「今獲得/LVアップできるカード」の一覧 (showCastleAcquirableModal参照)。
         if (isCastle) { showCastleAcquirableModal(); return; }
         showAreaEnlargeModal(mapState.currentAreaId);

@@ -980,7 +980,8 @@ function closeStoryMode() {
 document.addEventListener('click', (e) => {
   if (!storyRun) return;
   if (storyRun.onTap) storyRun.onTap();
-  const blockedTile = e.target.closest('#board .map-tile') && !e.target.closest('.slot, .map-tile__fee');
+  const onSlotToPlace = !!e.target.closest('.slot--selectable');
+  const blockedTile = e.target.closest('#board .map-tile') && !onSlotToPlace && !e.target.closest('.map-tile__fee');
   const blockedChoice = storyRun.blockBuildChoice && e.target.closest('#build-choice-overlay .owned-card-cell, #build-choice-overlay .shop-card');
   if (blockedTile || blockedChoice) {
     e.stopPropagation();
