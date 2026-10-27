@@ -50,6 +50,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 const { execFileSync } = require('child_process');
 const { Worker } = require('worker_threads');
 const { loadGameData, buildDataIndex } = require('../src/data-loader');
@@ -89,6 +90,15 @@ const BIG_MUTATION_CHANCE = 0.1; // fraction of mutating cells that get the bigg
 const BIG_MUTATION_PERCENT = 0.3; // that jump's own +/- spread
 const ELITE_FRACTION = 0.2; // top fraction of the population carried over unchanged each generation
 const BASELINE_GAMES = 20; // one-time Generation-0 (pure random) measurement sample size
+// 成績の引き継ぎ (2026-10-27, per user decision "aで" on: "残った個体は、それまでの試合の成績を全部足して平均を
+// とります。数試合の運で上位に来た個体は、試合が増えるほど平均が下がって自然に落ちます") -- every genome that
+// survives (elites, the anchor) keeps adding each generation's games to its own running total instead of
+// being re-judged on just that generation's 4 games, and the population is ranked by that running total.
+// A brand-new mutant has only 4 games, so its average is pulled toward the neutral 2.5 by PRIOR_GAMES
+// imaginary average games (a 4-game 1.25 counts as ~2.08, a 40-game 1.90 as ~1.99) -- otherwise one lucky
+// 4-game streak would still beat a genuinely strong 40-game veteran every time, the very problem this fixes.
+const PRIOR_GAMES = 8;
+const PRIOR_AVG_RANK = 2.5;
 
 /** --seed-real (2026-09-04, per user request: "それを０からやると時間がかかるので　今ある評価値から進め
  * たらどうかと思う") -- a bare flag, not tied to a positional slot, so it can be dropped in anywhere on
@@ -200,7 +210,28 @@ function loadResumePopulation(resumeFromDir, currentIds, realTable) {
   if (addedIds.length > 0) {
     console.log(`Resumed population was missing ${addedIds.length} current eval-table id(s), backfilled from the real table's own current value: ${addedIds.join(', ')}`);
   }
-  return { startGeneration: generation, population: backfilled };
+  // Running totals (成績の引き継ぎ, see PRIOR_GAMES) -- keyed by the BACKFILLED genome, since that's what
+  // the resumed run actually plays. gen files from before 2026-10-27 have no `record`: those genomes simply
+  // start counting from 0 again.
+  const records = new Map();
+  population.forEach((p, i) => { if (p.record) records.set(genomeKey(backfilled[i]), { ...p.record }); });
+  return { startGeneration: generation, population: backfilled, records };
+}
+
+const genomeKey = (genome) => crypto.createHash('md5').update(JSON.stringify(genome)).digest('hex');
+const emptyRecord = () => ({ games: 0, rankSum: 0, scoreSum: 0, qstScoreSum: 0, wins: 0 });
+/** Running-total record -> the same {avgRank, avgScore, ...} shape evaluatePopulationFitness returns, plus
+ * rankingRank (the PRIOR_GAMES-shrunk avgRank the population is actually sorted by). */
+function recordStats(r) {
+  return {
+    avgRank: r.rankSum / r.games,
+    avgScore: r.scoreSum / r.games,
+    avgQstScore: r.qstScoreSum / r.games,
+    avgRawScore: (r.scoreSum - r.qstScoreSum) / r.games,
+    winRate: r.wins / r.games,
+    gamesPlayed: r.games,
+    rankingRank: (r.rankSum + PRIOR_GAMES * PRIOR_AVG_RANK) / (r.games + PRIOR_GAMES),
+  };
 }
 
 /** Spawns WORKER_COUNT persistent tools/ga_worker.js threads (2026-09-05, per user request:
@@ -445,11 +476,13 @@ async function main() {
 
   let population;
   let startGeneration;
-  let bestEver = { avgRank: Infinity };
+  let bestEver = { rankingRank: Infinity };
+  let records = new Map(); // genomeKey -> running-total record (成績の引き継ぎ, see PRIOR_GAMES)
   if (resumeFromDir) {
     const resumed = loadResumePopulation(resumeFromDir, ids, realTable);
     population = withAnchors(resumed.population);
     startGeneration = resumed.startGeneration;
+    records = resumed.records;
     console.log(`Resuming from ${resumeFromDir} at generation ${startGeneration} (population size ${population.length}, ${ANCHOR_COUNT} anchor slot(s) (re-)inserted) for ${generations} more generations.`);
   } else if (seedFromReal) {
     console.log(`Real 評価値 table baseline (self-play, ${BASELINE_GAMES} games)...`);
@@ -472,18 +505,37 @@ async function main() {
     const t0 = Date.now();
     const fitness = await evaluatePopulationFitness(pool, population, runRng, gamesPerIndividual, runId, gen, aiLevel, pairStats);
     cardPairStats.save(pairStats);
-    const ranked = fitness
-      .map((f, i) => ({ ...f, genome: population[i] }))
-      .sort((a, b) => a.avgRank - b.avgRank);
+    // Add this generation's games to each genome's running total (a genome present twice, e.g. the
+    // anchor also kept as an elite copy, gets both slots' games), then keep only genomes still alive.
+    const nextRecords = new Map();
+    fitness.forEach((f, i) => {
+      const key = genomeKey(population[i]);
+      const r = nextRecords.get(key) || records.get(key) || emptyRecord();
+      nextRecords.set(key, {
+        games: r.games + f.gamesPlayed,
+        rankSum: r.rankSum + f.avgRank * f.gamesPlayed,
+        scoreSum: r.scoreSum + f.avgScore * f.gamesPlayed,
+        qstScoreSum: r.qstScoreSum + f.avgQstScore * f.gamesPlayed,
+        wins: r.wins + f.winRate * f.gamesPlayed,
+      });
+    });
+    records = nextRecords;
+    const ranked = population
+      .map((genome, i) => {
+        const record = records.get(genomeKey(genome));
+        return { ...recordStats(record), genome, thisGen: fitness[i], record };
+      })
+      .sort((a, b) => a.rankingRank - b.rankingRank);
     const anchor = findAnchor(ranked);
 
     const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
-    const anchorSummary = anchor ? `, anchor avgRank=${anchor.avgRank.toFixed(2)} (avgScore=${anchor.avgScore.toFixed(1)}, winRate=${(anchor.winRate * 100).toFixed(0)}%)` : '';
-    console.log(`Generation ${gen}/${finalGeneration}: best avgRank=${ranked[0].avgRank.toFixed(2)} (avgScore=${ranked[0].avgScore.toFixed(1)}, winRate=${(ranked[0].winRate * 100).toFixed(0)}%), worst avgRank=${ranked[ranked.length - 1].avgRank.toFixed(2)}${anchorSummary} (${elapsed}s)`);
+    // All numbers are running totals (成績の引き継ぎ) -- "over N games" says how many games each average is over.
+    const anchorSummary = anchor ? `, anchor avgRank=${anchor.avgRank.toFixed(2)} over ${anchor.gamesPlayed} games (avgScore=${anchor.avgScore.toFixed(1)}, winRate=${(anchor.winRate * 100).toFixed(0)}%)` : '';
+    console.log(`Generation ${gen}/${finalGeneration}: best avgRank=${ranked[0].avgRank.toFixed(2)} over ${ranked[0].gamesPlayed} games (avgScore=${ranked[0].avgScore.toFixed(1)}, winRate=${(ranked[0].winRate * 100).toFixed(0)}%), worst avgRank=${ranked[ranked.length - 1].avgRank.toFixed(2)}${anchorSummary} (${elapsed}s)`);
 
     fs.writeFileSync(
       path.join(outputDir, `gen_${String(gen).padStart(4, '0')}.json`),
-      JSON.stringify({ generation: gen, population: ranked.map(({ genome, avgRank, avgScore, avgRawScore, avgQstScore, winRate, gamesPlayed }) => ({ genome, avgRank, avgScore, avgRawScore, avgQstScore, winRate, gamesPlayed })) }, null, 2)
+      JSON.stringify({ generation: gen, population: ranked.map(({ genome, avgRank, avgScore, avgRawScore, avgQstScore, winRate, gamesPlayed, rankingRank, thisGen, record }) => ({ genome, avgRank, avgScore, avgRawScore, avgQstScore, winRate, gamesPlayed, rankingRank, thisGen, record })) }, null, 2)
     );
     fs.appendFileSync(progressCsvPath, [
       gen,
@@ -508,9 +560,9 @@ async function main() {
       console.error(`  (progress.xlsx update failed, continuing anyway: ${e.message})`);
     }
 
-    if (ranked[0].avgRank < bestEver.avgRank) {
+    if (ranked[0].rankingRank < bestEver.rankingRank) {
       bestEver = ranked[0];
-      fs.writeFileSync(path.join(outputDir, 'best_genome.json'), JSON.stringify({ generation: gen, avgRank: bestEver.avgRank, avgScore: bestEver.avgScore, avgRawScore: bestEver.avgRawScore, avgQstScore: bestEver.avgQstScore, winRate: bestEver.winRate, genome: bestEver.genome }, null, 2));
+      fs.writeFileSync(path.join(outputDir, 'best_genome.json'), JSON.stringify({ generation: gen, avgRank: bestEver.avgRank, gamesPlayed: bestEver.gamesPlayed, rankingRank: bestEver.rankingRank, avgScore: bestEver.avgScore, avgRawScore: bestEver.avgRawScore, avgQstScore: bestEver.avgQstScore, winRate: bestEver.winRate, genome: bestEver.genome }, null, 2));
     }
 
     if (gen === finalGeneration) break; // no need to breed a generation nobody will evaluate
@@ -528,7 +580,7 @@ async function main() {
     population = withAnchors(nextPopulation);
   }
 
-  console.log(`Done. Best genome (avgRank=${bestEver.avgRank.toFixed(2)}) written to ${path.join(outputDir, 'best_genome.json')}`);
+  console.log(`Done. Best genome (avgRank=${bestEver.avgRank.toFixed(2)} over ${bestEver.gamesPlayed} games) written to ${path.join(outputDir, 'best_genome.json')}`);
   } // end runMain()
 }
 
