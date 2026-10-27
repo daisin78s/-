@@ -6231,6 +6231,13 @@ body.tutorial-mode .change-highlight {
   zoom: 1.6;
   filter: drop-shadow(0 6px 16px rgba(16, 24, 40, 0.35));
 }
+/* タップアクションの演出で、同時にタップした複数枚を横に並べる (2026-10-27、main.jsのplayMobileAiTap参照)。
+   倒れた時に重ならないよう、カードの縦の長さ分あける。 */
+.ai-card-gain-layer__card--row {
+  display: flex;
+  gap: 80px;
+  align-items: center;
+}
 
 /* AIのダイス移動演出で飛んでいる複製 (2026-10-22, main.jsのanimateAiDiceMoves参照)。 */
 .die--flying {
@@ -6447,10 +6454,18 @@ body.opening-hide-res .card-group__onboard-resources > .owned-card-cell {
   background-image: linear-gradient(rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.5));
 }
 /* 3R: 黒を重ねて暗くするのをやめ、種類の色を濃くする (2026-10-27, per user request: "強化カード3R 色が汚い
-   色を暗くするのではなく 濃くして") -- 2Rの各種類の色の割合(A/B 8%、C 10%)を倍以上に。 */
-.shop-card.shop-card--tier3[data-deck="A"] { background: color-mix(in srgb, var(--emblem-chi) 20%, var(--surface-sunken)); }
-.shop-card.shop-card--tier3[data-deck="B"] { background: color-mix(in srgb, var(--emblem-ten) 20%, var(--surface-sunken)); }
-.shop-card.shop-card--tier3[data-deck="C"] { background: color-mix(in srgb, var(--emblem-jin) 22%, var(--surface-sunken)); }
+   色を暗くするのではなく 濃くして") -- さらに "暗く汚く見えるので 彩度上げて" (同日): 灰色の地(--surface-sunken)
+   に混ぜると黄色などがくすむため、灰色を混ぜない鮮やかな淡い色にする。ダーク表示は暗い地に混ぜる。 */
+.shop-card.shop-card--tier3[data-deck="A"] { background: #ffcccc; }
+.shop-card.shop-card--tier3[data-deck="B"] { background: #cddfff; }
+.shop-card.shop-card--tier3[data-deck="C"] { background: #fff0a0; }
+/* 強化モニュメント(M400番台)は通常のモニュメント(緑12%)より緑を濃く (2026-10-27, main.jsのbuildCardVisual参照)。 */
+.shop-card.shop-card--enhanced-monument[data-deck="M"] { background: color-mix(in srgb, var(--monument) 30%, var(--surface-sunken)); }
+@media (prefers-color-scheme: dark) {
+  .shop-card.shop-card--tier3[data-deck="A"] { background: color-mix(in srgb, var(--emblem-chi) 30%, var(--surface-sunken)); }
+  .shop-card.shop-card--tier3[data-deck="B"] { background: color-mix(in srgb, var(--emblem-ten) 30%, var(--surface-sunken)); }
+  .shop-card.shop-card--tier3[data-deck="C"] { background: color-mix(in srgb, var(--emblem-jin) 30%, var(--surface-sunken)); }
+}
 
 /* スマホ版: アンタップするカードを選ぶ時の案内/確認 (2026-10-23、main.jsのapplyMobileUntapChoiceUi参照) --
    タブバーの位置に重ねて表示(左から流れてくる)。資源タブの旧アンタップ選択欄はスマホ版では使わない。 */

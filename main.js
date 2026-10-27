@@ -5739,6 +5739,9 @@ function buildCardVisual(faceId, options = {}) {
   // 3Rから、それ未満=通常カード。style.cssの.shop-card--tier1/3参照。
   const tier = enhancedCardTier(faceId);
   if (tier) node.classList.add(`shop-card--tier${tier}`);
+  // 強化モニュメント(M400番台、4Rに出る)は背景の緑を濃く (2026-10-27, per user request: "強化モニュメント 背景の色
+  // 緑を濃く変えて")。style.cssの.shop-card--enhanced-monument参照。
+  if (/^M4\d\d$/.test(faceId || '')) node.classList.add('shop-card--enhanced-monument');
 
   const front = fillCardFace(node, faceId, options, true);
   if (options.tapped) node.classList.add('shop-card--tapped');
@@ -8674,41 +8677,60 @@ function animateMobileUntapAndReturn(playerId, physicalIds, done) {
 
 /** AIのタップ演出中フラグ -- この間は次の手の反映を待つ(aiVisualsBusy参照、考えるのは止めない)。 */
 let mobileAiTapAnimating = false;
+/** タップアクションの演出 (2026-10-27, per user request: "タップアクションを使ったときのアニメーション 画面が
+ * 動くと何が起きたかわからなくなるので 画面は動かさず 下からカードが素早く出てきて 真ん中で止まる タップする
+ * カードが素早く 下に移動 にしたい") -- 以前は獲得カード画面へ切り替えて(PC/タブレットはスクロールして)その場の
+ * カードを倒していた。今は画面はそのままで、獲得の演出と同じ層(#ai-card-gain-layer)に、タップしたカード(同時に
+ * 複数なら横に並べて)を下から出し、中央で倒し、下へ戻す。リプレイ(queueReplayCardEffects)も同じ。 */
+const CARD_TAP_IN_MS = 200;
+const CARD_TAP_TURN_MS = 320;
+const CARD_TAP_HOLD_MS = 350;
+const CARD_TAP_OUT_MS = 200;
 function playMobileAiTap(item) {
   mobileAiTapAnimating = true;
-  showCardsForEffect(item.playerId, item.physicalIds);
-  nextFrames(2, () => {
-    for (const id of item.physicalIds) {
-      const card = document.querySelector(`#player-cards [data-physical-id="${id}"] .shop-card`);
-      if (card) {
-        card.animate([{ transform: 'rotate(0deg)' }, { transform: 'rotate(90deg)' }],
-          { duration: animMs(320), easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)' });
-      }
+  const token = mobileAiCardGainToken;
+  let layer = document.getElementById('ai-card-gain-layer');
+  if (!layer) {
+    layer = el('div', 'ai-card-gain-layer');
+    layer.id = 'ai-card-gain-layer';
+    document.body.appendChild(layer);
+  }
+  layer.innerHTML = '';
+  const holder = el('div', 'ai-card-gain-layer__card ai-card-gain-layer__card--row');
+  const source = replayMode ? replayHistory[replayCursor] : STATE;
+  const faces = [];
+  for (const id of item.physicalIds) {
+    const card = source.cards[id];
+    if (!card) continue;
+    const face = buildCardVisual(card.currentFaceId, { req: factsForFaceId(card.currentFaceId).req, showEffect: true, allowTextFallback: false, noInteraction: true });
+    holder.appendChild(face);
+    faces.push(face);
+  }
+  const finish = () => {
+    if (token !== mobileAiCardGainToken) return; // もう次の演出に切り替わっている
+    layer.innerHTML = '';
+    mobileAiTapAnimating = false;
+    finishMobileGainItem();
+    if (!replayMode) render(STATE); // 止めていたAIの進行を再開
+  };
+  if (faces.length === 0) { finish(); return; }
+  layer.appendChild(holder);
+  // 1) 下から中央へ
+  holder.animate([{ transform: 'translateY(100vh)' }, { transform: 'translateY(0)' }],
+    { duration: animMs(CARD_TAP_IN_MS), easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)', fill: 'forwards' }).onfinish = () => {
+    if (token !== mobileAiCardGainToken) return;
+    // 2) タップする(横に倒れる)
+    let pending = faces.length;
+    for (const face of faces) {
+      face.animate([{ transform: 'rotate(0deg)' }, { transform: 'rotate(90deg)' }],
+        { duration: animMs(CARD_TAP_TURN_MS), easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)', fill: 'forwards' }).onfinish = () => {
+        if (--pending > 0 || token !== mobileAiCardGainToken) return;
+        // 3) 少し見せてから、すばやく下へ
+        holder.animate([{ transform: 'translateY(0)' }, { transform: 'translateY(100vh)' }],
+          { duration: animMs(CARD_TAP_OUT_MS), delay: animMs(CARD_TAP_HOLD_MS), easing: 'cubic-bezier(0.7, 0, 0.8, 0.2)', fill: 'forwards' }).onfinish = finish;
+      };
     }
-    setTimeout(() => {
-      // 次のAIの手がまたタップアクションなら獲得カード画面のまま、それ以外(メインアクション等)はエリア画面へ。
-      let nextIsTap = false;
-      if (replayMode) {
-        // リプレイ(queueReplayCardEffects): AIの次の手は読まない。続けてタップの演出があれば獲得カード画面のまま。
-        nextIsTap = mobileAiCardGainQueue.length > 0 && mobileAiCardGainQueue[0].type === 'aiTap';
-        if (!nextIsTap) returnToBoardAfterEffect();
-        mobileAiTapAnimating = false;
-        finishMobileGainItem();
-        return;
-      }
-      try {
-        const ctx = resolveAiTurnContext(STATE);
-        if (ctx && ctx.type === 'TURN' && ctx.playerId === item.playerId) {
-          const move = selectAiMoveMemo(STATE, ctx.playerId, { hasPlacedDieThisTurn: ctx.hasPlacedDieThisTurn });
-          nextIsTap = !!move && move.type === 'BARE_TAP';
-        }
-      } catch (e) { nextIsTap = false; }
-      if (!nextIsTap) returnToBoardAfterEffect();
-      mobileAiTapAnimating = false;
-      finishMobileGainItem();
-      render(STATE); // 止めていたAIの進行を再開
-    }, animMs(750));
-  });
+  };
 }
 
 function playMobileUntapAuto(item) {
