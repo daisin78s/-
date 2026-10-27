@@ -4446,7 +4446,9 @@ body.tutorial-mode .change-highlight {
      moved from top-center to bottom-right. */
   bottom: 12px;
   right: 12px;
-  z-index: 200;
+  /* 200 -> 10001 (2026-10-27): リプレイの演出中もダイスを振る時の操作止め(#dice-roll-blocker、10000)より上に
+     出して、自動再生の「停止」などを押せるように。 */
+  z-index: 10001;
   display: flex;
   align-items: center;
   gap: 10px;

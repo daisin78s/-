@@ -2699,6 +2699,8 @@ function clearReplayHighlight() {
 }
 
 function exitReplayMode() {
+  stopReplayAuto();
+  cancelReplayAnimations();
   clearReplayHighlight();
   replayMode = false;
   if (liveReplayBackup) {
@@ -2789,16 +2791,162 @@ function replayHighlightIsEmpty(highlight) {
     && highlight.resourceKeys.size === 0 && highlight.feeMapIds.size === 0;
 }
 
-function handleReplayForward() {
-  if (replayCursor >= replayHistory.length - 1) return;
-  const highlight = computeReplayChangeHighlight(replayHistory[replayCursor], replayHistory[replayCursor + 1]);
+/* リプレイのアニメーションと自動再生 (2026-10-27, per user request: "リプレイにアニメーションを表示してほしい"
+ * + 回答「対戦中と同じもの全部」「自動再生も追加」 + "リプレイにオート（自動で進む）を作ってほしい" +
+ * "自動再生は アニメーションが終わったら 次の手") --
+ * ・「進む」(手で押した時も自動再生の時も)で1手進むたびに、その1手の前後の状態を比べて、対戦中と同じ演出を出す:
+ *   資源交換(光って〇へ飛ぶ)→ダイスが手元からエリアへ飛ぶ/ラウンドの始めのダイスの退場と振り直し/増えたダイスを
+ *   振る→カードのタップ・獲得・LVアップ・アンタップ。対戦中はAI(と他の端末の人)の手だけだが、リプレイでは全員。
+ * ・「戻る」「R1〜R4」「リプレイ終了」では出さず、演出中なら打ち切る(自動再生も止める)。
+ * ・自動再生: 演出が全部終わったら、REPLAY_AUTO_GAP_MS置いて次の手へ。最後まで行くか、ほかのボタンで止まる。 */
+const REPLAY_AUTO_GAP_MS = 500;
+let replayStepAnim = null; // { before, after } -- 次のrender()で演出を出す1手
+let replayExchangeAnimating = false;
+let replayAutoPlaying = false;
+let replayAutoTimer = null;
+
+function replayAnimationsBusy() {
+  return replayExchangeAnimating || !!replayStepAnim || aiVisualsBusy();
+}
+
+/** 演出の途中で別の場所へ移る時: 流れている演出を消して、待ちの演出も捨てる。 */
+function cancelReplayAnimations() {
+  replayStepAnim = null;
+  replayExchangeAnimating = false;
+  mobileAiCardGainQueue.length = 0;
+  mobileAiCardGainPlaying = false;
+  mobileAiTapAnimating = false;
+  const layer = document.getElementById('ai-card-gain-layer');
+  if (layer) layer.innerHTML = '';
+  document.querySelectorAll('.die--flying, .resource-exchange-flyer').forEach((node) => node.remove());
+  diceRollHiddenKeys.clear();
+  document.querySelectorAll('.die[data-die-key]').forEach((node) => { node.style.visibility = ''; });
+  diceRollSequenceActive = false;
+  setDiceRollBlocker(false);
+}
+
+function stopReplayAuto() {
+  replayAutoPlaying = false;
+  if (replayAutoTimer !== null) { clearTimeout(replayAutoTimer); replayAutoTimer = null; }
+}
+
+/** 資源交換の演出をする人: 〇が増えてA/B/C/Zが減った人(ダイスの置き場所は変わらない)。 */
+function replayExchangePlayerId(before, after) {
+  const saved = after.__replayTurnPlayerId || before.__replayTurnPlayerId;
+  const candidates = saved ? [saved, ...after.players.map((p) => p.id)] : after.players.map((p) => p.id);
+  return candidates.find((id) => {
+    const pb = before.players.find((p) => p.id === id);
+    const pa = after.players.find((p) => p.id === id);
+    return pb && pa && (pa.resources.K || 0) > (pb.resources.K || 0)
+      && ['A', 'B', 'C', 'Z'].some((r) => (pa.resources[r] || 0) < (pb.resources[r] || 0));
+  }) || null;
+}
+
+function stepReplayForward(animate) {
+  if (replayCursor >= replayHistory.length - 1) return false;
+  const before = replayHistory[replayCursor];
+  const after = replayHistory[replayCursor + 1];
+  const highlight = computeReplayChangeHighlight(before, after);
   replayCursor++;
   aiPreHighlightMove = highlight.dieId ? { playerId: highlight.dicePlayerId, dieId: highlight.dieId } : null;
   replayHighlight = replayHighlightIsEmpty(highlight) ? null : highlight;
-  render(STATE);
+  if (!animate) { render(STATE); return true; }
+  // スマホ: ダイスを置いた手/ラウンドが変わる手はエリア画面で見せる(対戦中のAIの手番と同じ)。
+  if (isMobileLayout() && (highlight.slotKeys.size > 0 || after.round !== before.round)) applyMobileActiveTab('board');
+  const draw = () => {
+    replayExchangeAnimating = false;
+    replayStepAnim = { before, after };
+    render(STATE);
+  };
+  const exchangePlayerId = replayExchangePlayerId(before, after);
+  if (exchangePlayerId) {
+    replayExchangeAnimating = true;
+    animateResourceExchanges(before, after, exchangePlayerId, () => { if (replayExchangeAnimating) draw(); });
+  } else {
+    draw();
+  }
+  return true;
+}
+
+/** render()から(リプレイ中、replayStepAnimがある時だけ)。対戦中のrender()の後半と同じ順に演出を出す。 */
+function playReplayStepAnimations(before, after, diceBefore) {
+  if (after.round === before.round + 1 && after.round >= 2) {
+    playRoundStartDiceSequence(after, diceBefore);
+    return;
+  }
+  animateAiDiceMoves(diceBefore);
+  if (after.round === before.round) playNewDiceRolls(after, diceBefore);
+  queueReplayCardEffects(before, after);
+}
+
+/** queueMobileAiCardGainAnimation/queueMobileUntapEffectsのリプレイ版: 前後の状態を比べて、タップ→獲得/
+ * LVアップ→アンタップの順に演出を積む(全員分)。 */
+function queueReplayCardEffects(before, after) {
+  const tapItems = [];
+  const gainItems = [];
+  const untapItems = [];
+  for (const pa of after.players) {
+    const pb = before.players.find((p) => p.id === pa.id);
+    if (!pb) continue;
+    const newlyTapped = [];
+    const untapped = [];
+    for (const physicalId of pa.ownedCardPhysicalIds) {
+      const ca = after.cards[physicalId];
+      const cb = before.cards[physicalId];
+      if (!ca) continue;
+      const owned = pb.ownedCardPhysicalIds.includes(physicalId);
+      if (isBuiltCardPhysicalId(physicalId) && (!owned || !cb || cb.currentFaceId !== ca.currentFaceId)) {
+        gainItems.push({ faceId: ca.currentFaceId, fromFaceId: owned && cb ? cb.currentFaceId : null, tapped: !!(owned && ca.tapped) });
+      }
+      if (owned && cb) {
+        if (!cb.tapped && ca.tapped) newlyTapped.push(physicalId);
+        if (cb.tapped && !ca.tapped) untapped.push(physicalId);
+      }
+    }
+    if (newlyTapped.length > 0) tapItems.push({ type: 'aiTap', playerId: pa.id, physicalIds: newlyTapped });
+    // ラウンドの始めの一斉アンタップは演出しない(ダイスの振り直しの演出があるため)。
+    if (untapped.length > 0 && after.round === before.round) untapItems.push({ type: 'untapAuto', playerId: pa.id, physicalIds: untapped });
+  }
+  const items = [...tapItems, ...gainItems, ...untapItems];
+  if (items.length === 0) return;
+  mobileAiCardGainQueue.push(...items);
+  setTimeout(playNextMobileAiCardGain, 0);
+}
+
+function scheduleReplayAutoStep() {
+  if (!replayAutoPlaying) return;
+  replayAutoTimer = setTimeout(function wait() {
+    replayAutoTimer = null;
+    if (!replayAutoPlaying) return;
+    if (replayAnimationsBusy()) { replayAutoTimer = setTimeout(wait, AI_VISUALS_WAIT_POLL_MS); return; }
+    if (!stepReplayForward(true)) { stopReplayAuto(); renderReplayControls(); return; }
+    scheduleReplayAutoStep();
+  }, REPLAY_AUTO_GAP_MS);
+}
+
+function handleReplayAutoToggle() {
+  if (replayAutoPlaying) {
+    stopReplayAuto();
+    renderReplayControls();
+    return;
+  }
+  if (replayCursor >= replayHistory.length - 1) return;
+  replayAutoPlaying = true;
+  renderReplayControls();
+  if (!replayAnimationsBusy()) stepReplayForward(true);
+  scheduleReplayAutoStep();
+}
+
+function handleReplayForward() {
+  // 手で押した時: 自動再生は止め、まだ演出中ならそれを打ち切ってから進む。
+  stopReplayAuto();
+  if (replayAnimationsBusy()) cancelReplayAnimations();
+  stepReplayForward(true);
 }
 
 function handleReplayBack() {
+  stopReplayAuto();
+  cancelReplayAnimations();
   if (replayCursor <= 0) return;
   const after = replayHistory[replayCursor];
   replayCursor--;
@@ -2818,6 +2966,8 @@ function handleReplayBack() {
 function jumpToReplayRound(round) {
   const idx = replayHistory.findIndex((s) => s.round === round);
   if (idx === -1) return;
+  stopReplayAuto();
+  cancelReplayAnimations();
   clearReplayHighlight();
   replayCursor = idx;
   render(STATE);
@@ -2875,6 +3025,9 @@ function renderReplayControls() {
   }
   document.getElementById('replay-back').disabled = replayCursor <= 0;
   document.getElementById('replay-forward').disabled = replayCursor >= replayHistory.length - 1;
+  const autoButton = document.getElementById('replay-auto');
+  autoButton.textContent = replayAutoPlaying ? '■ 停止' : '自動 ▶▶';
+  autoButton.disabled = !replayAutoPlaying && replayCursor >= replayHistory.length - 1;
   document.getElementById('replay-position').textContent = `手 ${replayCursor + 1} / ${replayHistory.length}`;
   // R1-R4 jump buttons (see jumpToReplayRound's own doc) -- disabled for any round this particular
   // history never actually reached, same "don't offer a jump with nowhere to land" reasoning as
@@ -8473,6 +8626,14 @@ function playMobileAiTap(item) {
     setTimeout(() => {
       // 次のAIの手がまたタップアクションなら獲得カード画面のまま、それ以外(メインアクション等)はエリア画面へ。
       let nextIsTap = false;
+      if (replayMode) {
+        // リプレイ(queueReplayCardEffects): AIの次の手は読まない。続けてタップの演出があれば獲得カード画面のまま。
+        nextIsTap = mobileAiCardGainQueue.length > 0 && mobileAiCardGainQueue[0].type === 'aiTap';
+        if (!nextIsTap) returnToBoardAfterEffect();
+        mobileAiTapAnimating = false;
+        finishMobileGainItem();
+        return;
+      }
       try {
         const ctx = resolveAiTurnContext(STATE);
         if (ctx && ctx.type === 'TURN' && ctx.playerId === item.playerId) {
@@ -15448,11 +15609,11 @@ function captureDieRects() {
   return { handRects, placedKeys, allKeys, placedDice };
 }
 function animateAiDiceMoves(before) {
-  if (replayMode) return;
+  // リプレイ中はplayReplayStepAnimationsからだけ呼ばれ、全員のダイスを飛ばす。
   document.querySelectorAll('.slot .die[data-die-key]').forEach((target) => {
     const key = target.dataset.dieKey;
     if (before.placedKeys.has(key) || !before.handRects.has(key)) return;
-    if (!isAiOrRemotePlayer(key.split(':')[0])) return;
+    if (!replayMode && !isAiOrRemotePlayer(key.split(':')[0])) return;
     const from = before.handRects.get(key);
     // スロットが横スクロールの外にあれば見える位置までスクロールしてから測る。
     const board = target.closest('#board');
@@ -15509,7 +15670,15 @@ function render(state) {
   const previousRound = lastRenderedRound;
   lastRenderedRound = state.round;
   if (diceRollHiddenKeys.size > 0) hideDiceByKeys(diceRollHiddenKeys);
-  if (replayMode) return;
+  if (replayMode) {
+    // リプレイで「進む」した1手の演出 (stepReplayForward参照)。それ以外の描き直しでは何もしない。
+    if (replayStepAnim) {
+      const { before, after } = replayStepAnim;
+      replayStepAnim = null;
+      playReplayStepAnimations(before, after, diceBefore);
+    }
+    return;
+  }
   if (previousRound !== null && state.round === previousRound + 1 && state.round >= 2) {
     playRoundStartDiceSequence(state, diceBefore);
     return;
@@ -17220,6 +17389,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('game-end-replay-button').addEventListener('click', () => enterReplayMode());
   document.getElementById('replay-back').addEventListener('click', handleReplayBack);
   document.getElementById('replay-forward').addEventListener('click', handleReplayForward);
+  document.getElementById('replay-auto').addEventListener('click', handleReplayAutoToggle);
   for (let round = 1; round <= 4; round++) {
     document.getElementById(`replay-round-${round}`).addEventListener('click', () => jumpToReplayRound(round));
   }
