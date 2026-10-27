@@ -16442,7 +16442,10 @@ function scrollMobileShopToNormalRow() {
   // このくらいに」のスクリーンショット)。ショップを横幅に合わせて縮めている分(zoom)だけ一緒に縮める。
   const zoom = parseFloat(document.querySelector('#shops .shop-row').style.zoom) || 1;
   const PEEK_PX = 52 * zoom;
-  const target = window.scrollY + firstNormal.getBoundingClientRect().top - tabBar.getBoundingClientRect().bottom - PEEK_PX;
+  // タブバーが上にある時はその下端、下にある時(2026-10-27〜、スマホ版はタブバーが画面下端)は画面の上端が基準。
+  const barRect = tabBar.getBoundingClientRect();
+  const contentTop = barRect.top < window.innerHeight / 2 ? barRect.bottom : 0;
+  const target = window.scrollY + firstNormal.getBoundingClientRect().top - contentTop - PEEK_PX;
   window.scrollTo(0, Math.max(0, target));
 }
 
