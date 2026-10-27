@@ -16465,7 +16465,11 @@ function fitMobileShopWidth() {
 }
 function setupMobileTabSystem() {
   document.querySelectorAll('.mobile-tab-switcher__btn').forEach((btn) => {
-    btn.addEventListener('click', () => applyMobileActiveTab(btn.dataset.tabTarget));
+    btn.addEventListener('click', () => {
+      // ストーリーモード中は台本が許したタブにしか行けない(story.jsのstoryTabAllowed)。
+      if (typeof storyTabAllowed === 'function' && !storyTabAllowed(btn.dataset.tabTarget)) return;
+      applyMobileActiveTab(btn.dataset.tabTarget);
+    });
   });
   applyMobileActiveTab(mobileActiveTab);
   // スワイプ検出 (2026-10-22, per user request「すわいぷで切り替える」) -- {passive:true}のみ使い、
@@ -16500,15 +16504,20 @@ function setupMobileTabSystem() {
     touchStartX = null;
     touchStartY = null;
     const MIN_SWIPE_PX = 60;
+    // ストーリーモード中は、台本が許したタブ以外へはスワイプでも行けない・プレイヤーも切り替えない。
+    const storyActive = typeof storyRun !== 'undefined' && !!storyRun;
     if (mobileActiveTab === 'cards' && Math.abs(dy) >= MIN_SWIPE_PX && Math.abs(dy) > Math.abs(dx) * 1.5) {
+      if (storyActive) return;
       if (dy < 0 && touchStartAtBottom) switchMobileCardsPlayer(1);
       else if (dy > 0 && touchStartAtTop) switchMobileCardsPlayer(-1);
       return;
     }
     if (Math.abs(dx) < MIN_SWIPE_PX || Math.abs(dx) < Math.abs(dy) * 1.5) return;
     const currentIdx = MOBILE_TAB_ORDER.indexOf(mobileActiveTab);
-    if (dx < 0 && currentIdx < MOBILE_TAB_ORDER.length - 1) applyMobileActiveTab(MOBILE_TAB_ORDER[currentIdx + 1]);
-    else if (dx > 0 && currentIdx > 0) applyMobileActiveTab(MOBILE_TAB_ORDER[currentIdx - 1]);
+    const swipeTo = dx < 0 ? MOBILE_TAB_ORDER[currentIdx + 1] : MOBILE_TAB_ORDER[currentIdx - 1];
+    if (!swipeTo) return;
+    if (storyActive && !storyTabAllowed(swipeTo)) return;
+    applyMobileActiveTab(swipeTo);
   }, { passive: true });
 }
 

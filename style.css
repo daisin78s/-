@@ -6603,14 +6603,28 @@ body.opening-hide-res .card-group__onboard-resources > .owned-card-cell {
 /* ストーリーモード (2026-10-23、story.js参照) -- ローカル対戦の本物のエリア画面(body.story-mode)の上に、
    透明なオーバーレイ(アレク・会話ウインドウ・今やること・✖)を重ねる。スマホ横向き全画面が前提、PC/
    タブレットは後で調整(per user)。見せるエリア以外の中身はstory.jsが場面ごとに<style>で隠す(枠だけ残す)。 */
-body.story-mode .mobile-tab-switcher {
-  pointer-events: none; /* エリア以外(クエスト・ショップなど)には行けない */
+/* タブは場面ごとに許したもの(.story-tab-allowed、story.jsのstorySetAllowedTabs)だけ押せる。 */
+body.story-mode .mobile-tab-switcher__btn:not(.story-tab-allowed) {
+  pointer-events: none;
   opacity: 0.35;
 }
-body.story-mode .mobile-own-row__turn-end,
-body.story-mode .mobile-own-row__owner {
+body.story-mode .mobile-own-row__turn-end {
   display: none;
 }
+/* パトラの手番の間は、パトラのダイスをあなたが動かせない。 */
+body.story-lock-hand #mobile-own-row .die {
+  pointer-events: none;
+}
+/* フリーアクションの画面: 台本で押すのはA→K/B→Kだけなので、カード(基礎学問)と閉じるボタンは出さない。 */
+body.story-mode .mobile-free-action-overlay__hint,
+body.story-mode .mobile-free-action-overlay__cards,
+body.story-mode #mobile-free-action-close {
+  display: none;
+}
+body.story-mode #ai-manual-step-button {
+  display: none !important;
+}
+.story-alek[hidden] { display: none; }
 body.story-hide-dice #mobile-own-row .die,
 body.story-hide-dice #players .player-panel .die {
   visibility: hidden;
@@ -6742,9 +6756,8 @@ body.story-hide-dice #players .player-panel .die {
   font-weight: 700;
   cursor: pointer;
 }
-/* ストーリー中のカードを選ぶ画面: アレク・✖(ストーリーをやめる)は隠し、戻す系のボタン(ターン開始に戻す/
-   ✖=1手戻る)は出さない(台本の盤面を戻せないように)。 */
-body.story-mode:has(#build-choice-overlay:not([hidden])) .story-overlay { display: none; }
+/* ストーリー中のカードを選ぶ画面: 戻す系のボタン(ターン開始に戻す/✖=1手戻る)は出さない(台本の盤面を
+   戻せないように)。立ち絵とセリフはこの画面の上に出す(S017〜S020)。 */
 body.story-mode #undo-button-build,
 body.story-mode #build-choice-close-button { display: none; }
 /* ストーリーの会話ログ (story.jsのtoggleStoryLog)。セリフ欄と同じ横幅・同じ見た目で、上に広げて出す。 */
@@ -6811,3 +6824,5 @@ body.story-mode #build-choice-close-button { display: none; }
 .job-name { color: var(--job-name-color); }
 .story-dialog .con-name, .story-log .con-name { color: #c08af0; }
 .story-dialog .job-name, .story-log .job-name { color: #45c9c9; }
+/* ストーリー中の獲得カードタブ: プレイヤーの切り替え(Carol/Dan等、ストーリーに出てこない人も並ぶ)は出さない。 */
+body.story-mode #mobile-cards-player-switcher { display: none !important; }

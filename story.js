@@ -1,27 +1,36 @@
 /* ストーリーモード (2026-10-23, per user request: "ストーリーモードを実装したい ... スマホだとチュートリアルが
  * ほぼできない そのためスマホに特化したストーリーモードを作る PCやタブレットは後で対応させる" + 回答:
- * 入口の「デザイナーズノート」ボタンを「ストーリー」に、セリフはストーリー専用の表示(アレクの絵+名前付きの
+ * 入口の「デザイナーズノート」ボタンを「ストーリー」に、セリフはストーリー専用の表示(立ち絵+名前付きの
  * 会話ウインドウ)、全体の形は「小さな場面の連続」、ファンファーレは見た目だけ、"セリフは基本的にボタンを
  * 押さずに自動で進む")。
  *
- * セリフ本文は data/story.data.js (window.STORY_SCRIPT、tools/story_xlsx_to_js.py が デスクトップの
- * ストーリー.xlsx から生成) を S001 などの行IDで引く。Excelの光る/動く/メモ列の指示はこのファイルの
- * 場面ごとの関数(storySceneFarmなど)にコードとして書く。
+ * 台本: data/story.data.js (window.STORY_SCRIPT)。2026-10-27からTwineのストーリー「怠惰なローマ人アレク」が
+ * 元(per user「Twineを元にする」、tools/story_twine_to_js.pyで変換)。S001などのパッセージ番号で引く。
+ * デスクトップのストーリー.xlsxの光る/メモ列の指示は、このファイルの場面ごとの関数にコードとして書く。
  *
  * 画面はローカル対戦の本物のエリア画面を使う (2026-10-23, per user request: "基本的にローカル対戦のエリア
  * 画面を使ってください エリアの農園の位置 右側もダイス置き場と同じ 他のエリアは枠だけ見えてそれ以外は
- * 見えない") -- 場面ごとに練習用のGameStateを作ってSTATEと入れ替え、普段のrender()で描く(ダイスの選択・
- * スロットへの配置・資源の増加は本物のゲームの処理そのまま)。その上に透明なオーバーレイ(アレク・会話
- * ウインドウ・今やること・✖)を重ねる。見せないもの(他のエリアの中身、タブ、ターン終了ボタン等)は
- * body.story-modeのCSSで隠す。描き直されるたびにmain.jsのrender()からstoryAfterRender()が呼ばれ、光る演出
- * などを付け直す。練習用の盤面は「進行中のゲーム」として保存しない(saveGameSessionIfApplicable参照)。
- * ✖/トップに戻るは再読み込みでトップ画面へ(STATEを元に戻す手間を省く)。main.jsの後に読み込む。 */
+ * 見えない") -- 練習用のGameStateを作ってSTATEと入れ替え、普段のrender()で描く(ダイスの選択・スロットへの
+ * 配置・資源の増加・カードの獲得・使用料・フリーアクションは本物のゲームの処理そのまま)。その上に透明な
+ * オーバーレイ(立ち絵・会話ウインドウ・今やること・ログ・✖)を重ねる。見せないもの(他のエリアの中身、
+ * ターン終了ボタン等)はbody.story-modeのCSSで隠し、タブは場面ごとに許したものだけ押せる/スワイプできる
+ * (storyTabAllowed、main.jsのタブ切り替えから呼ばれる)。描き直されるたびにmain.jsのrender()から
+ * storyAfterRender()が呼ばれ、光る演出などを付け直す。練習用の盤面は「進行中のゲーム」として保存しない
+ * (saveGameSessionIfApplicable参照)。AIは自動では動かさない(aiPacingMode='manual')-- パトラ(P2)の手は
+ * この台本が本物のゲームの処理を直接呼んで進める。✖/トップに戻るは再読み込みでトップ画面へ。
+ * main.jsの後に読み込む。 */
 
 const STORY_TYPE_MS_PER_CHAR = 37; // 1文字ずつ出る速さ (2026-10-23 per user "セリフの表示速度1.5倍に": 55ms→37ms)
 const STORY_HOLD_BASE_MS = 930; // 全文出てから次へ進むまでの待ち(+文字数ぶん) (2026-10-23 per user "それも1.5倍に": 1400→930、1文字45→30ms)
 const STORY_HOLD_PER_CHAR_MS = 30;
-const STORY_HINT_IDLE_MS = 5000; // S005: 何もしない場合5秒ごとに出る
+const STORY_HINT_IDLE_MS = 5000; // 何もしない場合5秒ごとに出る
 const STORY_HINT_SHOW_MS = 2600; // 出てすぐ消える(全文が出てからこの時間で消える)
+
+const STORY_SPEAKERS = {
+  alek: { name: 'アレク', img: 'assets/story-alek.png' },
+  unknown: { name: '？？？', img: null },
+  patra: { name: 'パトラ', img: 'assets/story-patra.png' },
+};
 
 let storyRun = null; // 実行中の場面。nullなら閉じている。
 
@@ -29,9 +38,14 @@ function storyLine(id) {
   const script = window.STORY_SCRIPT || {};
   return script[id] || { text: '' };
 }
+/** そのパッセージの最初の選択肢の文言(上に出す「今やること」に使う)。「次へ」は使わない。 */
+function storyGoalOf(id) {
+  const choice = (storyLine(id).choices || []).find((c) => c.label !== '次へ' && !/秒経過/.test(c.label));
+  return choice ? choice.label : '';
+}
 
-/** ストーリーの時間待ちは全部これを通す。会話ログを開いている間(run.paused)は止まり、閉じると残り時間から
- * 再開する(storyPause/storyResume)。戻り値はstoryCancelに渡す札。 */
+/* ---------- 時間待ち(会話ログを開いている間は止まる) ---------- */
+
 function storyLater(fn, ms) {
   if (!storyRun) return null;
   const run = storyRun;
@@ -73,13 +87,41 @@ function storyHoldMs(text) {
   return STORY_HOLD_BASE_MS + text.length * STORY_HOLD_PER_CHAR_MS;
 }
 
-/** 会話ウインドウにセリフを1文字ずつ出す。全部出たらonTyped()。 */
-function storySay(id, onTyped) {
+/* ---------- 会話ウインドウ・立ち絵 ---------- */
+
+/** 話している人を変える(名前と立ち絵)。立ち絵が変わる時は、今の絵が消えて新しい絵が下から出てくる。 */
+function storySetSpeaker(key) {
+  const run = storyRun;
+  if (!run || run.speaker === key) return;
+  run.speaker = key;
+  const speaker = STORY_SPEAKERS[key];
+  run.dom.dialogName.textContent = speaker.name;
+  const portrait = run.dom.portrait;
+  const currentSrc = portrait.dataset.src || '';
+  const nextSrc = speaker.img || '';
+  if (currentSrc === nextSrc) return;
+  portrait.dataset.src = nextSrc;
+  const show = () => {
+    if (!nextSrc) { portrait.hidden = true; return; }
+    portrait.src = nextSrc;
+    portrait.alt = speaker.name;
+    portrait.hidden = false;
+    portrait.animate([{ opacity: 0, transform: 'translateY(30px)' }, { opacity: 1, transform: 'translateY(0)' }],
+      { duration: 400, easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)' });
+  };
+  if (portrait.hidden || !currentSrc) { show(); return; }
+  const a = portrait.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 250, easing: 'ease-in', fill: 'forwards' });
+  a.onfinish = () => { a.cancel(); show(); };
+}
+
+/** 会話ウインドウにセリフを1文字ずつ出す。全部出たらonTyped()。textを渡すとそちらを出す(差し込みあり等)。 */
+function storySay(id, onTyped, textOverride) {
   const run = storyRun;
   if (!run) return;
-  const text = storyLine(id).text;
+  const text = textOverride !== undefined ? textOverride : storyLine(id).text;
   // 会話ログ用に記録(5秒ごとに出るヒントなど、同じセリフは1回だけ)。
-  if (text && !run.log.includes(id)) run.log.push(id);
+  if (text && !run.log.some((e) => e.id === id)) run.log.push({ id, text, speaker: STORY_SPEAKERS[run.speaker].name });
+  if (!text) { if (onTyped) onTyped(text); return; }
   const box = run.dom.dialog;
   const body = run.dom.dialogText;
   box.hidden = false;
@@ -94,15 +136,20 @@ function storySay(id, onTyped) {
     if (i < text.length) run.typeTimer = storyLater(step, STORY_TYPE_MS_PER_CHAR);
     else { run.typeTimer = null; if (onTyped) onTyped(text); }
   };
-  if (!text) { if (onTyped) onTyped(text); return; }
   box.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'translateY(0)' }],
     { duration: 220, easing: 'ease-out' });
   run.typeTimer = storyLater(step, 120);
 }
 
-/** セリフを出して、読み終わる頃に自動で次へ(ボタン無し)。 */
-function storySayThen(id, next) {
-  storySay(id, (text) => storyLater(next, storyHoldMs(text)));
+/** セリフを出して、読み終わる頃に自動で次へ(ボタン無し)。extraMsで待ちを延ばせる。 */
+function storySayThen(id, next, extraMs, textOverride) {
+  storySay(id, (text) => storyLater(next, (text ? storyHoldMs(text) : 0) + (extraMs || 0)), textOverride);
+}
+
+/** 続けて出すセリフを順番に。最後にnext()。 */
+function storySaySeq(ids, next) {
+  if (ids.length === 0) { next(); return; }
+  storySayThen(ids[0], () => storySaySeq(ids.slice(1), next));
 }
 
 function storyHideDialog() {
@@ -114,7 +161,7 @@ function storyHideDialog() {
   a.onfinish = () => { if (storyRun) box.hidden = true; };
 }
 
-/** 画面上部に、今やること(Excelの選択肢の文言)を左から流して出す。空文字で消す。 */
+/** 画面上部に、今やること(台本の選択肢の文言)を左から流して出す。空文字で消す。 */
 function storyShowGoal(text) {
   if (!storyRun) return;
   const goal = storyRun.dom.goal;
@@ -128,11 +175,11 @@ function storyShowGoal(text) {
 
 /* ---------- 本物の画面との橋渡し ---------- */
 
-/** 練習用のGameStateを作る: プレイヤーはP1(あなた)だけが動く(他の3人はダイスを全部パス済みにして手番が
- * 来ないようにする)。P1は1ラウンド目の自分の手番から。JOB/制約は効果の無いものを持たせ、資源は0から。 */
+/** 練習用のGameStateを作る: あなた(P1)と、後で登場するパトラ(P2)。P2〜P4のダイスはパス済みにして手番が
+ * 来ないようにしておく(パトラは登場時に戻す)。JOB/制約は効果の少ないものを持たせ、資源は0から。 */
 function storyBuildState(diceValues) {
   const state = gameStateMod.createEmptyGameState('story-fixed-1');
-  setupMod.createPlayers(state, [loadRememberedRankingName() || 'Alice', 'Bob', 'Carol', 'Dan']);
+  setupMod.createPlayers(state, [loadRememberedRankingName() || 'Alice', 'パトラ', 'Carol', 'Dan']);
   setupMod.prepareMaps(state, INDEX);
   setupMod.prepareShops(state, INDEX);
   // ショップに並ぶのは「ローマ市街の支配LV1」(A001A)だけ、他は無し (2026-10-24, per user: "ローマ市街の支配"
@@ -144,14 +191,18 @@ function storyBuildState(diceValues) {
   state.shops.NORMAL.slots.SHOP101 = 'A001A';
   state.extraMonumentPool = [];
   setupMod.rollInitialColorDice(state, { P1: diceValues });
-  setupMod.dealConCards(state, { P1: 'CON005' });
-  state.jobPool = ['JOB001'];
+  setupMod.dealConCards(state, { P1: 'CON005', P2: 'CON001' });
+  state.jobPool = ['JOB001', 'JOB002'];
   setupMod.chooseJob(state, INDEX, 'P1', 'JOB001');
+  setupMod.chooseJob(state, INDEX, 'P2', 'JOB002');
   setupMod.chooseConFace(state, INDEX, 'P1', 'A');
+  setupMod.chooseConFace(state, INDEX, 'P2', 'A');
+  // パトラの所有カード「基礎学問LV1」(Excel S041メモ)。ONCE(白ダイス)は使わず持っているだけ。
+  state.cards.B001.ownerId = 'P2';
+  state.players.find((p) => p.id === 'P2').ownedCardPhysicalIds.push('B001');
   qstMod.setupQuests(state);
-  const p1 = state.players.find((p) => p.id === 'P1');
-  Object.keys(p1.resources).forEach((r) => { p1.resources[r] = 0; });
   for (const player of state.players) {
+    Object.keys(player.resources).forEach((r) => { player.resources[r] = 0; });
     if (player.id !== 'P1') player.dice.forEach((d) => { d.passed = true; });
   }
   state.turnOrder = state.players.map((p) => p.id);
@@ -165,15 +216,26 @@ function storyUseState(state) {
   Object.assign(STATE, state);
   selectedDieIds = [];
   turnActionTaken = false;
+  // カード獲得などの演出の比較の基準を作り直す(トップ画面の空の状態と比べて「獲得した」と出ないように)。
+  lastAiCardFaces = null;
+  lastHumanTapped = null;
 }
 
-/** 手元のダイス置き場(スマホは画面右)にある、P1のダイスの要素。 */
-function storyHandDiceNodes() {
-  return [...document.querySelectorAll('#mobile-own-row .die[data-die-key^="P1:"], #players .player-panel[data-player-id="P1"] .die')]
+function storyPlayer(id) {
+  return STATE.players.find((p) => p.id === id);
+}
+
+/** 手元のダイス置き場(スマホは画面右)にある、そのプレイヤーのダイスの要素。 */
+function storyHandDiceNodes(playerId) {
+  const id = playerId || 'P1';
+  return [...document.querySelectorAll(`#mobile-own-row .die[data-die-key^="${id}:"], #players .player-panel[data-player-id="${id}"] .die`)]
     .filter((n) => n.getBoundingClientRect().width > 0);
 }
 function storyTileNode(mapId) {
   return document.querySelector(`#board .map-tile[data-map-id="${mapId}"]`);
+}
+function storyTileSelector(mapId, inner) {
+  return `#board .map-tile[data-map-id="${mapId}"]${inner ? ` ${inner}` : ''}`;
 }
 
 /** main.jsのrender()から毎回呼ばれる: 描き直された画面に、場面の演出(ダイスを隠す/光らせる等)を付け直し、
@@ -185,18 +247,49 @@ function storyAfterRender(state) {
   // 先に進行条件を確かめる(置き終わった瞬間に残りのダイスの光を消すため)。
   if (run.onRender) run.onRender(state);
   if (run.glowDieValues.length > 0) {
-    for (const node of storyHandDiceNodes()) {
+    for (const node of storyHandDiceNodes('P1')) {
       if (run.glowDieValues.includes(Number(node.textContent.trim()))) node.classList.add('change-highlight');
     }
   }
+  storyApplyGlow();
   if (run.resourceOverride) storyApplyResourceOverride(run.resourceOverride);
 }
 
+/** 光らせる場所(CSSセレクタ)を決める。描き直されても付け直す。 */
+function storySetGlow(selectors) {
+  const run = storyRun;
+  if (!run) return;
+  document.querySelectorAll('.story-glow').forEach((n) => n.classList.remove('story-glow', 'change-highlight'));
+  run.glowSelectors = selectors || [];
+  storyApplyGlow();
+}
+function storyApplyGlow() {
+  const run = storyRun;
+  if (!run) return;
+  for (const selector of run.glowSelectors) {
+    document.querySelectorAll(selector).forEach((n) => n.classList.add('story-glow', 'change-highlight'));
+  }
+}
+
+/** 押せる(スワイプで行ける)タブを決める。それ以外のタブは薄く表示され押せない。 */
+function storySetAllowedTabs(tabs) {
+  const run = storyRun;
+  if (!run) return;
+  run.allowedTabs = new Set(tabs);
+  document.querySelectorAll('.mobile-tab-switcher__btn').forEach((btn) => {
+    btn.classList.toggle('story-tab-allowed', run.allowedTabs.has(btn.dataset.tabTarget));
+  });
+}
+/** main.jsのタブ切り替え(ボタン/スワイプ)から呼ばれる。ストーリー中は許したタブにしか行けない。 */
+function storyTabAllowed(tab) {
+  return !storyRun || storyRun.allowedTabs.has(tab);
+}
+
 /** ダイスをその場で振る演出(回転しながら跳ねる、目がくるくる変わって決まった目で止まる)。 */
-function storyRollHandDice(onDone) {
+function storyRollHandDice(onDone, playerId) {
   storyRun.diceShown = true;
   document.body.classList.remove('story-hide-dice');
-  const nodes = storyHandDiceNodes();
+  const nodes = storyHandDiceNodes(playerId);
   const ROLL_MS = 900;
   nodes.forEach((node, i) => {
     const valueEl = node.querySelector('.die__value');
@@ -249,46 +342,83 @@ function storyFanfare(mapId, onDone) {
 
 /* ---------- 場面の共通部品 ---------- */
 
-/** 「エリアにダイスを置く」場面: dieValuesのダイスを光らせ、上に「今やること」(goalText)を出し、何もしない
- * 場合はhintLineIdのセリフを5秒ごとに出してすぐ消す。P1のダイスがmapIdに置かれたらonPlaced()。
- * 1ターンに置けるダイスは1個(turnActionTaken)なので、場面ごとに置ける状態に戻す。 */
-function storyWaitForPlacement({ mapId, dieValues, goalText, hintLineId, onPlaced }) {
+/** 「何もしない場合N秒ごとにhintLineIdのセリフが出てきてすぐ消える」の繰り返し。画面を触ると数え直す。
+ * 戻り値のstop()で止める。 */
+function storyStartHint(hintLineId, idleMs) {
   const run = storyRun;
-  let placed = false;
-  let hintTimer = null;
-  const armHint = () => {
-    storyCancel(hintTimer);
-    hintTimer = storyLater(() => {
-      if (placed) return;
+  let stopped = false;
+  let timer = null;
+  const arm = () => {
+    if (stopped) return;
+    storyCancel(timer);
+    timer = storyLater(() => {
+      if (stopped) return;
       storySay(hintLineId, () => {
-        hintTimer = storyLater(() => {
-          if (placed) return;
+        timer = storyLater(() => {
+          if (stopped) return;
           storyHideDialog();
-          armHint();
+          arm();
         }, STORY_HINT_SHOW_MS);
       });
-    }, STORY_HINT_IDLE_MS);
+    }, idleMs || STORY_HINT_IDLE_MS);
   };
-  const countOn = (state) => state.maps[mapId].slots.reduce((n, occ) => n + occ.filter((o) => o.playerId === 'P1').length, 0);
-  const before = countOn(STATE);
+  run.onTap = arm;
+  arm();
+  return () => {
+    stopped = true;
+    storyCancel(timer);
+    if (run.onTap === arm) run.onTap = null;
+  };
+}
+
+/** 条件がそろうまで待つ(150msごとに確かめる)。そろったらonDone()。 */
+function storyWaitUntil(check, onDone) {
+  const loop = () => {
+    if (check()) onDone();
+    else storyLater(loop, 150);
+  };
+  loop();
+}
+
+/** 全エリアについて、あなた(P1)のダイスが今いくつ置かれているか。 */
+function storyPlacementCounts(state) {
+  return Object.fromEntries(Object.keys(state.maps).map((m) => [m, storyP1DiceCount(state, [m])]));
+}
+
+function storyP1DiceCount(state, mapIds) {
+  return mapIds.reduce((n, mapId) => n + state.maps[mapId].slots.reduce((m, occ) => m + occ.filter((o) => o.playerId === 'P1').length, 0), 0);
+}
+
+/** 「エリアにダイスを置く」場面: dieValuesのダイスを光らせ、上に「今やること」(goalText)を出し、何もしない
+ * 場合はhintLineIdのセリフを出してすぐ消す。P1のダイスがmapIds(省略時は見えている全エリア)のどこかに
+ * 置かれたらonPlaced(mapId)。extraDetect(state)がtrueでも置いた扱い(皇帝宮殿のカードを選ぶ画面が開いた等)。
+ * 1ターンに置けるダイスは1個(turnActionTaken)なので、場面ごとに置ける状態に戻す。 */
+function storyWaitForPlacement({ mapIds, dieValues, goalText, hintLineId, hintIdleMs, extraDetect, onPlaced }) {
+  const run = storyRun;
+  const targets = mapIds || run.visibleMapIds.slice();
+  // 比べる基準は「前の場面が終わった時」の数(run.placementBaseline)。セリフが出ている途中に先に置いても
+  // 見逃さないように(このあとのrender()ですぐ「置いた」と判定される)。
+  const beforeByMap = Object.fromEntries(targets.map((m) => [m, run.placementBaseline[m] || 0]));
+  let placed = false;
+  const stopHint = hintLineId ? storyStartHint(hintLineId, hintIdleMs) : () => {};
   run.onRender = (state) => {
-    if (placed || countOn(state) <= before) return;
+    if (placed) return;
+    const placedMap = targets.find((m) => storyP1DiceCount(state, [m]) > beforeByMap[m]);
+    if (!placedMap && !(extraDetect && extraDetect(state))) return;
     placed = true;
+    run.placementBaseline = storyPlacementCounts(state);
     run.glowDieValues = [];
     run.onRender = null;
-    run.onTap = null;
-    storyCancel(hintTimer);
+    stopHint();
     storyShowGoal('');
     storyHideDialog();
-    storyLater(onPlaced, 350);
+    storyLater(() => onPlaced(placedMap || targets[0]), 350);
   };
   turnActionTaken = false;
   selectedDieIds = [];
-  run.glowDieValues = dieValues;
+  run.glowDieValues = dieValues || [];
   render(STATE);
   storyShowGoal(goalText);
-  run.onTap = armHint; // 何か触ったら「何もしない」5秒を数え直す
-  armHint();
 }
 
 /** 見せるエリアを1つ増やす(枠だけだったタイルの中身がふわっと出てくる)。 */
@@ -300,6 +430,20 @@ function storyRevealMap(mapId) {
     [...tile.children].forEach((child) => child.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 500, easing: 'ease-out' }));
     tile.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.06)' }, { transform: 'scale(1)' }], { duration: 500, easing: 'ease-out' });
   }
+}
+
+/** 見せるエリア以外は枠だけ(中身を隠す)。 */
+function storyApplyVisibleMaps() {
+  const visible = storyRun.visibleMapIds || [];
+  let style = document.getElementById('story-visible-maps-style');
+  if (!style) {
+    style = document.createElement('style');
+    style.id = 'story-visible-maps-style';
+    document.head.appendChild(style);
+  }
+  const not = visible.map((id) => `:not([data-map-id="${id}"])`).join('');
+  style.textContent = `body.story-mode #board .map-tile${not} > * { visibility: hidden; }\n`
+    + `body.story-mode #board .map-tile${not} { background: var(--surface-sunken) !important; border-color: var(--border) !important; box-shadow: none !important; }`;
 }
 
 /** 右側の資源の表示だけを一時的に別の数に見せる(ゲームの状態は変えない)。 */
@@ -349,14 +493,25 @@ function storyShowResourceChange(from, to, onDone) {
   }, 600);
 }
 
+/** カードを選ぶ画面が閉じて、カード獲得などの演出が全部終わったらfn()。 */
+function storyWhenVisualsIdle(fn) {
+  storyWaitUntil(() => {
+    const choosing = typeof pendingBuildChoice !== 'undefined' && pendingBuildChoice;
+    const busy = typeof aiVisualsBusy === 'function' && aiVisualsBusy();
+    return !choosing && !busy;
+  }, fn);
+}
+
 /* ---------- 場面1: 農園 (S001〜S007) ---------- */
 
+const STORY_WHEAT_MAP_ID = 'MAP001'; // 小麦畑
 const STORY_FARM_MAP_ID = 'MAP002'; // 農園
 const STORY_CITY_MAP_ID = 'MAP003'; // ローマ市街
+const STORY_CASTLE_MAP_ID = 'MAP008'; // 皇帝宮殿
 
 /** S001 エリアから始まる / クエスト・ショップなどに行けない / 農園以外のエリアは見えない
  *  S002, S003 そのまま自動で進む
- *  S004 ダイスが振られ1 6 3の目が出る → 6のダイスが光る。選択肢1「「農園」にダイスを置く」→ S006
+ *  S004 ダイスが振られ1 6 3の目が出る → 6のダイスが光る。選択肢「「農園」にダイスを置く」→ S006
  *  S005 何もしない場合5秒ごとに出てきてすぐ消える
  *  S006 ファンファーレの演出の後にセリフ
  *  S007 そのまま → 場面2(ローマ市街) */
@@ -364,43 +519,43 @@ function storySceneFarm() {
   const run = storyRun;
   run.visibleMapIds = [STORY_FARM_MAP_ID];
   storyUseState(storyBuildState([1, 6, 3]));
+  run.placementBaseline = storyPlacementCounts(STATE);
   storyApplyVisibleMaps();
   applyMobileActiveTab('board');
   render(STATE);
-  storySayThen('S001', () => storySayThen('S002', () => storySayThen('S003', () => {
+  storySaySeq(['S001', 'S002', 'S003'], () => {
     storySay('S004', (text) => {
       storyLater(() => storyRollHandDice(() => {
-        const choice = (storyLine('S004').choices || [])[0];
         storyWaitForPlacement({
-          mapId: STORY_FARM_MAP_ID,
+          mapIds: [STORY_FARM_MAP_ID],
           dieValues: [6],
-          goalText: choice ? choice.label : '',
+          goalText: storyGoalOf('S004'),
           hintLineId: 'S005',
-          onPlaced: () => storyFanfare(STORY_FARM_MAP_ID, () => storySayThen('S006', () => storySayThen('S007', storySceneCity))),
+          onPlaced: () => storyFanfare(STORY_FARM_MAP_ID, () => storySaySeq(['S006', 'S007'], storySceneCity)),
         });
       }), Math.min(900, storyHoldMs(text)));
     });
-  })));
+  });
 }
 
 /* ---------- 場面2: ローマ市街 (S008〜S013) ---------- */
 
-/** S008 ローマ市街が現れる(per user回答「S008で現れる」)
- *  S009 ダイス1と3が光る。上に「「ローマ市街」にダイスを置く」(per user回答「出す」)
+/** S008 ローマ市街が現れる
+ *  S009 ダイス1と3が光る。上に「「ローマ市街」にダイスを置く」
  *  S010 何もしない場合5秒ごとに出てきてすぐ消える
  *  S011 ファンファーレの演出の後にセリフ
  *  S012 食料→権力(ローマ市街のCHANGE(K,A,ALL))。ゲームでは置いた瞬間に変わるが、表示はS012の後に
  *       変わって見せる(per user回答「S012の後に変わって見える」)
- *  S013 → 台本の終わり */
+ *  S013 → 場面3 */
 function storySceneCity() {
   const run = storyRun;
   storyRevealMap(STORY_CITY_MAP_ID);
   storySayThen('S008', () => {
     storySay('S009', (text) => storyLater(() => {
       // 表示だけS012まで今の数のまま(置いた瞬間のrenderで一瞬変わって見えないよう、置く前から固定しておく)。
-      run.resourceOverride = { ...STATE.players.find((p) => p.id === 'P1').resources };
+      run.resourceOverride = { ...storyPlayer('P1').resources };
       storyWaitForPlacement({
-        mapId: STORY_CITY_MAP_ID,
+        mapIds: [STORY_CITY_MAP_ID],
         dieValues: [1, 3],
         goalText: '「ローマ市街」にダイスを置く',
         hintLineId: 'S010',
@@ -416,59 +571,316 @@ function storySceneCity() {
   });
 }
 
-/* ---------- 場面3: 皇帝宮殿 (S014〜S016) ---------- */
-
-const STORY_CASTLE_MAP_ID = 'MAP008'; // 皇帝宮殿
+/* ---------- 場面3: 皇帝宮殿でローマ市街の支配を獲得 (S014〜S023) ---------- */
 
 /** S014 そのまま
  *  S015 皇帝宮殿が出てくる。残りのダイスが光る。上に「「皇帝宮殿」にダイスを置く」
  *  S016 何もしない場合5秒ごとに出てきてすぐ消える
- *  置くと本物のゲーム通り獲得するカードを選ぶ画面が出て、選んだら獲得(per user回答「本物通りカードを選ぶ
- *  画面を出す」)。獲得の演出が終わったら台本の終わり。 */
+ *  置くと本物のゲーム通りカードを選ぶ画面が出る(per user回答「本物通りカードを選ぶ画面を出す」)。
+ *  S017〜S020はその画面の上で出す。S018でローマ市街の支配のコストが光る。S020まではカードを押せない。
+ *  S020「そのカードをクリックしてみてよ」→ 押すと獲得(本物のカード獲得の演出) → S021〜S023 */
 function storySceneCastle() {
+  const run = storyRun;
   storySayThen('S014', () => {
     storyRevealMap(STORY_CASTLE_MAP_ID);
     storySay('S015', (text) => storyLater(() => {
-      const p1 = STATE.players.find((p) => p.id === 'P1');
-      const remaining = p1.dice.filter((d) => !d.placedMapId && !d.passed).map((d) => d.value);
+      const remaining = storyPlayer('P1').dice.filter((d) => !d.placedMapId && !d.passed).map((d) => d.value);
+      run.blockBuildChoice = true; // S020まではカードを押せない
       storyWaitForPlacement({
-        mapId: STORY_CASTLE_MAP_ID,
+        mapIds: [STORY_CASTLE_MAP_ID],
         dieValues: remaining,
         goalText: '「皇帝宮殿」にダイスを置く',
         hintLineId: 'S016',
-        onPlaced: () => storyWhenVisualsIdle(() => storyLater(storyEndOfScript, 600)),
+        extraDetect: () => typeof pendingBuildChoice !== 'undefined' && !!pendingBuildChoice,
+        onPlaced: storySceneAcquire,
       });
     }, Math.min(900, storyHoldMs(text))));
   });
 }
 
-/** カードを選ぶ画面が閉じて、カード獲得などの演出が全部終わったらfn()。 */
-function storyWhenVisualsIdle(fn) {
-  const check = () => {
-    const choosing = typeof pendingBuildChoice !== 'undefined' && pendingBuildChoice;
-    const busy = typeof aiVisualsBusy === 'function' && aiVisualsBusy();
-    if (choosing || busy) storyLater(check, 150);
-    else fn();
-  };
-  check();
+function storySceneAcquire() {
+  const run = storyRun;
+  storySayThen('S017', () => {
+    storySetGlow(['#build-choice-overlay .shop-card__cost']);
+    storySayThen('S018', () => {
+      storySetGlow([]);
+      storySayThen('S019', () => {
+        storySay('S020', () => {
+          run.blockBuildChoice = false;
+          storyShowGoal('カードをクリックする');
+          storyWhenVisualsIdle(() => {
+            storyShowGoal('');
+            storyLater(() => {
+              storySetGlow([storyTileSelector(STORY_CITY_MAP_ID)]);
+              storySayThen('S021', () => {
+                storySetGlow([storyTileSelector(STORY_CITY_MAP_ID, '.map-tile__id')]);
+                storySayThen('S022', () => {
+                  storySetGlow([storyTileSelector(STORY_CITY_MAP_ID, '.map-tile__action')]);
+                  storySayThen('S023', () => { storySetGlow([]); storySceneCardsTab(); });
+                });
+              });
+            }, 400);
+          });
+        });
+      });
+    });
+  });
 }
 
-/** 見せるエリア以外は枠だけ(中身を隠す)。 */
-function storyApplyVisibleMaps() {
-  const visible = storyRun.visibleMapIds || [];
-  let style = document.getElementById('story-visible-maps-style');
-  if (!style) {
-    style = document.createElement('style');
-    style.id = 'story-visible-maps-style';
-    document.head.appendChild(style);
+/* ---------- 場面4: 獲得カードの画面 (S024〜S027) ---------- */
+
+/** S024 下部帯の「獲得カード」が光る。選択肢「「獲得カード」を押す」。何もしない場合5秒ごとにS024
+ *  S025 獲得したカードが光る
+ *  S026 選択肢「「エリア」に移動」(ボタンかフリック)。何もしない場合5秒ごとにS026
+ *  S027 */
+function storySceneCardsTab() {
+  storySetAllowedTabs(['board', 'cards']);
+  storySetGlow(['.mobile-tab-switcher__btn[data-tab-target="cards"]']);
+  storySay('S024', () => {
+    storyShowGoal(storyGoalOf('S024'));
+    const stopHint = storyStartHint('S024');
+    storyWaitUntil(() => mobileActiveTab === 'cards', () => {
+      stopHint();
+      storyShowGoal('');
+      applyMobileCardsPlayer('P1');
+      render(STATE);
+      storySetGlow(['#player-cards [data-physical-id="A001"] .shop-card']);
+      storySayThen('S025', () => {
+        storySetGlow(['.mobile-tab-switcher__btn[data-tab-target="board"]']);
+        // スワイプで戻る時は資源タブを通るので、資源タブも通れるようにしておく。
+        storySetAllowedTabs(['board', 'players', 'cards']);
+        storySay('S026', () => {
+          storyShowGoal(storyGoalOf('S026'));
+          const stopHint2 = storyStartHint('S026');
+          storyWaitUntil(() => mobileActiveTab === 'board', () => {
+            stopHint2();
+            storyShowGoal('');
+            storySetGlow([]);
+            storySetAllowedTabs(['board']);
+            storySayThen('S027', storySceneRound2);
+          });
+        });
+      });
+    });
+  });
+}
+
+/* ---------- 場面5: ラウンド2 (S028〜S035) ---------- */
+
+/** S028〜S032 そのまま
+ *  S033 ラウンド2が始まりダイスが回収される(per user回答: ダイスの目はランダム)
+ *  S034 小麦畑も出てくる(per user回答「小麦畑追加」)。選択肢「ダイスをエリアに置く」、何もしない場合10秒ごとにS034
+ *  S035 『行ったエリア』はダイスのおかれたエリア */
+function storySceneRound2() {
+  storySaySeq(['S028', 'S029', 'S030', 'S031', 'S032'], () => {
+    storyStartNextRound(() => {
+      storySayThen('S033', () => {
+        storyRevealMap(STORY_WHEAT_MAP_ID);
+        storySay('S034', () => {
+          storyWaitForPlacement({
+            goalText: storyGoalOf('S034'),
+            hintLineId: 'S034',
+            hintIdleMs: 10000,
+            onPlaced: (mapId) => {
+              const areaName = dataLoaderMod.getAreaRow(INDEX, STATE.maps[mapId].currentAreaId).NAME;
+              const text = storyLine('S035').text.replace('『行ったエリア』', `「${areaName}」`);
+              storySayThen('S035', storyScenePatra, 0, text);
+            },
+          });
+        });
+      });
+    });
+  });
+}
+
+/** 次のラウンドへ: 置いてあったダイスが右へ退場 → ゲームのラウンド終了/開始の処理 → あなたのダイスを
+ * その場で振る。普段のラウンド開始の演出(資源タブで全員のダイスを転がす)は使わない(他のプレイヤーが
+ * まだ登場していないため)。 */
+function storyStartNextRound(onDone) {
+  const placed = [...document.querySelectorAll('#board .slot .die')];
+  for (const node of placed) {
+    const rect = node.getBoundingClientRect();
+    const flyer = node.cloneNode(true);
+    Object.assign(flyer.style, { position: 'fixed', left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px`, margin: '0', zIndex: 5 });
+    document.body.appendChild(flyer);
+    node.style.visibility = 'hidden';
+    flyer.animate([{ transform: 'translate(0, 0)' }, { transform: `translate(${window.innerWidth - rect.left + 40}px, 0)` }],
+      { duration: 380, easing: 'cubic-bezier(0.5, 0, 0.9, 0.4)', fill: 'forwards' }).onfinish = () => flyer.remove();
   }
-  const not = visible.map((id) => `:not([data-map-id="${id}"])`).join('');
-  style.textContent = `body.story-mode #board .map-tile${not} > * { visibility: hidden; }
-`
-    + `body.story-mode #board .map-tile${not} { background: var(--surface-sunken) !important; border-color: var(--border) !important; box-shadow: none !important; }`;
+  storyLater(() => {
+    turnFlowMod.endRound(STATE, INDEX);
+    turnFlowMod.startRound(STATE);
+    for (const player of STATE.players) {
+      if (player.id === 'P1') player.dice.forEach((d) => { d.value = 1 + Math.floor(Math.random() * 6); });
+      else player.dice.forEach((d) => { d.passed = true; });
+    }
+    STATE.turnOrder = STATE.players.map((p) => p.id);
+    STATE.currentPlayerIndex = 0;
+    storyRun.placementBaseline = storyPlacementCounts(STATE);
+    lastRenderedRound = STATE.round; // 普段のラウンド開始の演出を出さない
+    turnActionTaken = false;
+    selectedDieIds = [];
+    render(STATE);
+    storyRollHandDice(onDone, 'P1');
+  }, placed.length ? 420 : 0);
 }
 
-/** 台本の終わり(続きはExcelが増えたら追加)。 */
+/* ---------- 場面6: パトラ (S036〜S053) ---------- */
+
+/** S036 アレク / S037 「ララララ～～♪」(まだ姿は見えない、名前は？？？) / S038 立ち絵がパトラに
+ *  S041 プレイヤー2(パトラ)登場、ダイスが振られる。所有資源食料5、所有カード基礎学問LV1
+ *  S042 ダイスを「ローマ市街LV1」に置く(ANYスロット)
+ *  S043 / S044(次のセリフに行くのに他より1秒長い) → 分岐: ANYスロットが埋まっていたらS055〜S057(基礎学問で
+ *       ダイス目を1にして、元のダイスを追い出して置く) → S045
+ *  S045〜S047 / S048 フリーアクションA→KとB→Kが出て来て光る / S049 選択肢「A→KかB→Kを押す」
+ *  S050〜S053 → 場面7
+ *  ANYが埋まっていた時の順番(S043→S044→S055→S056→S057→S045)はTwineの通り(2026-10-27時点、userが
+ *  Twineを見て確認予定)。 */
+function storyScenePatra() {
+  storySayThen('S036', () => {
+    storySetSpeaker('unknown');
+    storySayThen('S037', () => {
+      storySetSpeaker('patra');
+      storySaySeq(['S038', 'S039', 'S040'], () => {
+        storyPatraEnters(() => storyPatraPlaces((anyWasTaken) => {
+          storySayThen('S043', () => storySayThen('S044', () => {
+            if (anyWasTaken) {
+              storySaySeq(['S055', 'S056'], () => {
+                storySay('S057', (text57) => {
+                  storyPatraUsesBasicStudy();
+                  storyLater(() => storyWhenVisualsIdle(storyPatraFee), storyHoldMs(text57));
+                });
+              });
+            } else {
+              storyPatraFee();
+            }
+          }, 1000));
+        }));
+      });
+    });
+  });
+}
+
+/** S041: パトラ(P2)登場。あなたの手番を終わらせて、パトラの手番にし、パトラのダイスを振る。 */
+function storyPatraEnters(onDone) {
+  const p2 = storyPlayer('P2');
+  Object.keys(p2.resources).forEach((r) => { p2.resources[r] = 0; });
+  p2.resources.K = 5;
+  p2.dice.forEach((d) => { d.passed = false; d.value = 1 + Math.floor(Math.random() * 6); });
+  storyEndTurnOf('P1');
+  document.body.classList.add('story-lock-hand'); // パトラのダイスはあなたが動かせない
+  render(STATE);
+  storyLater(() => storyRollHandDice(onDone, 'P2'), 300);
+}
+
+/** ゲームの手番終了の処理(使用料の支払いなど)をして、次の人の手番にする。画面側の「この人の手番はまだ
+ * 続いている」という印(turnActionTaken)も、普段のターン終了ボタンと同じように下ろす。 */
+function storyEndTurnOf(playerId) {
+  turnFlowMod.endTurn(STATE, INDEX, playerId);
+  turnActionTaken = false;
+  turnJustEnded = true;
+  selectedDieIds = [];
+  // 他の人の手番の間に盤面が変わる(パトラにダイスを追い出される等)ので、置いた数の基準もここで取り直す。
+  storyRun.placementBaseline = storyPlacementCounts(STATE);
+}
+
+function storyCityAnySlotIndex() {
+  const requirements = boardMod.getSlotRequirements(dataLoaderMod.getAreaRow(INDEX, STATE.maps[STORY_CITY_MAP_ID].currentAreaId));
+  return requirements.indexOf('ANY');
+}
+
+/** S042: パトラがローマ市街LV1のANYスロットにダイスを置く。埋まっていたら置かずにonDone(true)。 */
+function storyPatraPlaces(onDone) {
+  const anyIdx = storyCityAnySlotIndex();
+  if (anyIdx < 0 || STATE.maps[STORY_CITY_MAP_ID].slots[anyIdx].length > 0) { onDone(true); return; }
+  const die = storyPlayer('P2').dice.find((d) => !d.placedMapId && !d.passed);
+  boardMod.placeDice(STATE, INDEX, { playerId: 'P2' }, die.id, STORY_CITY_MAP_ID, anyIdx);
+  render(STATE);
+  storyLater(() => storyWhenVisualsIdle(() => onDone(false)), 200);
+}
+
+/** S057: ANYが埋まっていた時、パトラが基礎学問(ダイス目を1に変えて、どこにでも置ける)を使い、元のダイスを
+ * 追い出して置く。 */
+function storyPatraUsesBasicStudy() {
+  const anyIdx = storyCityAnySlotIndex();
+  const die = storyPlayer('P2').dice.find((d) => !d.placedMapId && !d.passed);
+  boardMod.useBareTapAbility(STATE, INDEX, { playerId: 'P2', chosenDieId: die.id, chosenValue: 1 }, 'B001');
+  boardMod.placeDice(STATE, INDEX, { playerId: 'P2' }, die.id, STORY_CITY_MAP_ID, anyIdx);
+  render(STATE);
+}
+
+/** S045〜S053: 使用料が払えないので、フリーアクション(A→K/B→K)を、あなたがパトラの代わりに押す。 */
+function storyPatraFee() {
+  storySaySeq(['S045', 'S046', 'S047'], () => {
+    // パトラの手番を、この画面で操作できる形(人間)にして、フリーアクションの画面を開く。
+    playerRoles.set('P2', 'HUMAN');
+    turnActionTaken = true; // ダイスはもう置いた
+    mobileFreeActionOpen = true;
+    mobileFreeActionBaseline = mobileFreeActionSignature(STATE, storyPlayer('P2'));
+    render(STATE);
+    storySetGlow(['#mobile-free-action-body .mobile-free-action-overlay__exchanges > *']);
+    storySayThen('S048', () => {
+      storySay('S049', () => {
+        storyShowGoal(storyGoalOf('S049'));
+        storyWaitUntil(() => (storyPlayer('P2').resources.K || 0) >= 1, () => {
+          storyShowGoal('');
+          storySetGlow([]);
+          mobileFreeActionOpen = false;
+          mobileFreeActionBaseline = null;
+          playerRoles.set('P2', DEFAULT_AI_ROLE);
+          render(STATE);
+          applyMobileActiveTab('board');
+          storySaySeq(['S050', 'S051', 'S052', 'S053'], storySceneFeeCollect);
+        });
+      });
+    });
+  });
+}
+
+/* ---------- 場面7: 使用料の回収とEXスロット (S054〜S064) ---------- */
+
+/** S054 アレク「君の番だよ でもその前に使用料をもらっておこう」(パトラの手番が終わり、使用料が
+ *       ローマ市街に置かれる)
+ *  S058 「ここをクリックしてみて」使用料が光る。選択肢「使用料をクリックする」
+ *  S059〜S061 S061でEXスロットが光る
+ *  S062 「今度はどこにダイスを置く？」何もしない場合5秒ごと。ローマ市街→S063 / それ以外→S064
+ *  S063はまだ空、S064の続き(S028へ戻る)はまだ作っていないので、どちらも「つづく」。 */
+function storySceneFeeCollect() {
+  storySetSpeaker('alek');
+  storyEndTurnOf('P2');
+  document.body.classList.remove('story-lock-hand');
+  render(STATE);
+  storySayThen('S054', () => {
+    storySetGlow([storyTileSelector(STORY_CITY_MAP_ID, '.map-tile__fee')]);
+    storySay('S058', () => {
+      storyShowGoal(storyGoalOf('S058'));
+      const kBefore = storyPlayer('P1').resources.K || 0;
+      storyWaitUntil(() => (storyPlayer('P1').resources.K || 0) > kBefore, () => {
+        storyShowGoal('');
+        storySetGlow([]);
+        storySaySeq(['S059', 'S060'], () => {
+          const exIdx = boardMod.getSlotRequirements(dataLoaderMod.getAreaRow(INDEX, STATE.maps[STORY_CITY_MAP_ID].currentAreaId)).indexOf('EX');
+          storySetGlow([storyTileSelector(STORY_CITY_MAP_ID, `.slot:nth-child(${exIdx + 1})`)]);
+          storySayThen('S061', () => {
+            storySetGlow([]);
+            storySay('S062', () => {
+              storyWaitForPlacement({
+                goalText: '',
+                hintLineId: 'S062',
+                onPlaced: (mapId) => {
+                  if (mapId === STORY_CITY_MAP_ID) storySayThen('S063', storyEndOfScript);
+                  else storySayThen('S064', storyEndOfScript);
+                },
+              });
+            });
+          });
+        });
+      });
+    });
+  });
+}
+
+/** 台本の終わり(続きはTwineが増えたら追加)。 */
 function storyEndOfScript() {
   if (!storyRun) return;
   storyHideDialog();
@@ -498,10 +910,10 @@ function toggleStoryLog() {
   logPanel.innerHTML = '';
   logPanel.appendChild(el('div', 'story-dialog__name', 'ログ'));
   const list = el('div', 'story-log__list');
-  for (const id of run.log) {
+  for (const entry of run.log) {
     const row = el('div', 'story-log__line');
-    row.appendChild(el('span', 'story-log__speaker', 'アレク'));
-    row.appendChild(elConJob('span', 'story-log__text', storyLine(id).text));
+    row.appendChild(el('span', 'story-log__speaker', entry.speaker));
+    row.appendChild(elConJob('span', 'story-log__text', entry.text));
     list.appendChild(row);
   }
   logPanel.appendChild(list);
@@ -516,15 +928,15 @@ function openStoryMode() {
   if (storyRun) return;
   const root = el('div', 'story-overlay');
   root.id = 'story-overlay';
-  const alek = document.createElement('img');
-  alek.className = 'story-alek';
-  alek.src = 'assets/story-alek.png';
-  alek.alt = 'アレク';
+  const portrait = document.createElement('img');
+  portrait.className = 'story-alek';
+  portrait.hidden = true;
   const goal = el('div', 'story-goal');
   goal.hidden = true;
   const dialog = el('div', 'story-dialog');
   dialog.hidden = true;
-  dialog.appendChild(el('div', 'story-dialog__name', 'アレク'));
+  const dialogName = el('div', 'story-dialog__name', '');
+  dialog.appendChild(dialogName);
   const dialogText = el('div', 'story-dialog__text');
   dialog.appendChild(dialogText);
   const close = el('button', 'story-close', '✖');
@@ -540,15 +952,19 @@ function openStoryMode() {
   const logPanel = el('div', 'story-log');
   logPanel.hidden = true;
   logPanel.addEventListener('click', toggleStoryLog);
-  root.append(alek, dialog, logPanel, goal, logButton, close);
+  root.append(portrait, dialog, logPanel, goal, logButton, close);
   document.body.appendChild(root);
   storyRun = {
-    timers: new Set(), typeTimer: null, diceShown: false, glowDieValues: [], onRender: null, onTap: null,
-    resourceOverride: null,
-    visibleMapIds: [], log: [], paused: false, dom: { root, goal, dialog, dialogText, logPanel, logButton },
+    timers: new Set(), typeTimer: null, diceShown: false, glowDieValues: [], glowSelectors: [], onRender: null, onTap: null,
+    resourceOverride: null, blockBuildChoice: false, allowedTabs: new Set(['board']), speaker: null, placementBaseline: {},
+    visibleMapIds: [], log: [], paused: false,
+    dom: { root, portrait, goal, dialog, dialogName, dialogText, logPanel, logButton },
   };
   document.body.classList.add('story-mode', 'story-hide-dice');
   entryBannerDismissed = true;
+  aiPacingMode = 'manual'; // パトラなどAIの手は台本が進める
+  storySetSpeaker('alek');
+  storySetAllowedTabs(['board']);
   storySceneFarm();
 }
 
@@ -559,11 +975,14 @@ function closeStoryMode() {
   location.reload(); // 練習用の盤面を捨ててトップ画面へ
 }
 
-// ストーリー中はエリアのタイルを押しても拡大画面を開かない(スロットへの配置だけ)。何か触ったら場面に知らせる。
+// ストーリー中はエリアのタイルを押しても拡大画面を開かない(スロットへの配置と使用料の回収だけ)。カードを
+// 選ぶ画面は台本が許すまで押せない。何か触ったら場面に知らせる(「何もしない場合」の数え直し)。
 document.addEventListener('click', (e) => {
   if (!storyRun) return;
   if (storyRun.onTap) storyRun.onTap();
-  if (e.target.closest('#board .map-tile') && !e.target.closest('.slot')) {
+  const blockedTile = e.target.closest('#board .map-tile') && !e.target.closest('.slot, .map-tile__fee');
+  const blockedChoice = storyRun.blockBuildChoice && e.target.closest('#build-choice-overlay .owned-card-cell, #build-choice-overlay .shop-card');
+  if (blockedTile || blockedChoice) {
     e.stopPropagation();
     e.preventDefault();
   }
