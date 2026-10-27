@@ -1891,12 +1891,12 @@
       "EMBLEM_C": "",
       "VP": "",
       "ONCE": "",
-      "TAP": "CHANGE(4K,(A,B,C))",
+      "TAP": "CHANGE(3K,2Z)",
       "PASSIVE": "",
       "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "タップすると〇4を赤〇青〇黄〇に変換する\n毎ターンアンタップする"
+      "INST": "タップすると〇3をZ2に変換する\n毎ターンアンタップする"
     },
     {
       "ID": "JOB012",

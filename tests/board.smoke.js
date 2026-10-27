@@ -1118,9 +1118,9 @@ function giveJob002(state, playerId) {
 }
 
 // ---------------------------------------------------------------------------
-// JOB011.TAP=CHANGE(4K,(A,B,C)) (2026-10-18 data edit: back from CHANGE(4K,3Z) -- pay 4 food, gain 1
-// each of A/B/C instead of 3 wildcard Z). Still a bare (non-reactive) TAP ability, usable any time
-// during the player's own turn, same as C001A's CHANGE(K,A,7).
+// JOB011.TAP=CHANGE(3K,2Z) (2026-10-27 data edit "料理人変更しました": back from CHANGE(4K,(A,B,C)) -- pay
+// 3 food, gain 2 wildcard Z). Still a bare (non-reactive) TAP ability, usable any time during the
+// player's own turn, same as C001A's CHANGE(K,A,7).
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
@@ -1132,18 +1132,9 @@ function giveJob002(state, playerId) {
   p1.resources.K = 4;
 
   const result = board.useBareTapAbility(state, index, { playerId: 'P1' }, jobInst.physicalId);
-  check('JOB011.TAP=CHANGE(4K,(A,B,C)) succeeds as a direct (non-reactive) TAP', result, { success: true });
-  check('...paid 4K, gained 1 each of A/B/C', { K: p1.resources.K, A: p1.resources.A, B: p1.resources.B, C: p1.resources.C }, { K: 0, A: 1, B: 1, C: 1 });
+  check('JOB011.TAP=CHANGE(3K,2Z) succeeds as a direct (non-reactive) TAP', result, { success: true });
+  check('...paid 3K, gained 2Z', { K: p1.resources.K, Z: p1.resources.Z }, { K: 1, Z: 2 });
   check('...the card is now tapped', state.cards[jobInst.physicalId].tapped, true);
-
-  // The 1B JOB011 just granted covers A004A's own "2A,B" cost's B requirement directly (real resource,
-  // not a Z-wildcard substitution).
-  p1.resources.A += 2; // A004A costs "2A,B" -- real A covers the 2A entirely, on top of JOB011's own 1A
-  state.shops.NORMAL.slots.SHOP101 = 'A004A'; // force a known slot, regardless of this seed's shuffle
-  const candidate = { type: 'BUILD_NEW', faceId: 'A004A', shopKey: 'NORMAL', slotId: 'SHOP101' };
-  const buildResult = board.resolveBuild(state, index, { playerId: 'P1' }, candidate);
-  check('The B JOB011 just granted covers A004A\'s own B requirement', buildResult.success, true);
-  check('...A004A\'s "2A,B" cost paid (1A left from the combined 3, B exactly covered, C untouched)', { A: p1.resources.A, B: p1.resources.B, C: p1.resources.C }, { A: 1, B: 0, C: 1 });
 }
 {
   // JOB007.TAP=ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+4);BLOCK_BUILD(A,THIS_TURN);BLOCK_BUILD(B,

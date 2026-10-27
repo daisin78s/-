@@ -710,10 +710,16 @@ class MoveGenerator {
     // "affordable", so the forced move got selected every turn, failed to actually apply (truly needs
     // 4K), and the AI got stuck re-selecting the same doomed forced move forever, never reaching
     // END_TURN). See forcedJob004ConversionMove's own doc for the rest of this gate's reasoning.
+    // 2026-10-27: the K cost is now read from JOB011's own TAP text (CHANGE(4K,(A,B,C)) -> CHANGE(3K,2Z), per
+    // user's game.xlsx edit "料理人変更しました") instead of a hardcoded number, so a future cost edit can't
+    // leave this gate stale again.
+    const costMatch = /^CHANGE\((\d*)K,/.exec(getCardRow(index, 'JOB011').TAP || '');
+    if (!costMatch) return null;
+    const costK = costMatch[1] ? Number(costMatch[1]) : 1;
     const player = state.players.find((p) => p.id === playerId);
-    if (!player || (player.resources.K || 0) < 4) return null;
+    if (!player || (player.resources.K || 0) < costK) return null;
     const reservedK = player.pendingFee ? player.pendingFee.amount : 0;
-    if ((player.resources.K || 0) - 4 < reservedK) return null;
+    if ((player.resources.K || 0) - costK < reservedK) return null;
     for (const physicalId of player.ownedCardPhysicalIds) {
       const cardState = state.cards[physicalId];
       if (!cardState || cardState.tapped || cardState.currentFaceId !== 'JOB011') continue; // 料理人 (2026-10-13 A/B-revert renamed the id to JOB011; function name kept as-is)

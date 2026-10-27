@@ -449,12 +449,14 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
   state.cards[jobInst.physicalId] = jobInst;
   p1.ownedCardPhysicalIds.push(jobInst.physicalId);
 
-  p1.resources.K = 3;
-  check('forcedJob004ConversionMove is null with less than 4K', moveGenerator.forcedJob004ConversionMove(state, index, 'P1'), null);
+  // 2026-10-27: the threshold is now read from JOB011's own TAP text (currently CHANGE(3K,2Z)).
+  const costK = Number(/^CHANGE\((\d+)K,/.exec(require('../src/data-loader').getCardRow(index, 'JOB011').TAP)[1]);
+  p1.resources.K = costK - 1;
+  check('forcedJob004ConversionMove is null with less K than the TAP cost', moveGenerator.forcedJob004ConversionMove(state, index, 'P1'), null);
 
-  p1.resources.K = 4;
+  p1.resources.K = costK;
   check(
-    'forcedJob004ConversionMove forces the tap at exactly 4K, with no build outlet needed at all',
+    'forcedJob004ConversionMove forces the tap at exactly the TAP cost in K, with no build outlet needed at all',
     moveGenerator.forcedJob004ConversionMove(state, index, 'P1'),
     { type: 'BARE_TAP', playerId: 'P1', physicalId: jobInst.physicalId }
   );
