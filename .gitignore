@@ -19,3 +19,6 @@ data/tutorial.xlsx
 
 # Cloudflare Workers local build cache (wrangler deploy/dev) -- machine-local, regenerated every run.
 workers/*/.wrangler/
+
+# カード相性表 (tools/card_pair_stats.js) -- regenerated from output/card_pair_stats.json, dev-only like AI.DATA.xlsx
+カード相性.xlsx

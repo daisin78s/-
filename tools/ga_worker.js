@@ -11,7 +11,7 @@
  * Message protocol (plain objects, structured-clone-safe -- genomes are plain {round:{id:value}}
  * objects, nothing exotic):
  *   in:  { jobId, genomes: [g0,g1,g2,g3], seed, aiLevel? }
- *   out: { jobId, rankByPlayerId, scoreByPlayerId, qstScoreByPlayerId }
+ *   out: { jobId, rankByPlayerId, scoreByPlayerId, qstScoreByPlayerId, holdingsByPlayerId }
  *
  * aiLevel (2026-09-17, per user request: "現在の最良データをもとにAILV5で...進めてください" -- see
  * ga_train.js's own --ai-level doc): when present (e.g. "LV5"), each seat's Evaluator/AIPlayer/
@@ -32,6 +32,7 @@ const { getLevel } = require('../src/ai/levels');
 const { buildResourceSynergyTable } = require('../src/ai/resource-card-synergy');
 const { buildConJobSynergyTable } = require('../src/ai/con-job-synergy');
 const { pickResourceCards } = require('../src/ai/smart-onboarding');
+const { holdingUnits } = require('./card_pair_stats');
 
 const DATA_PATH = path.join(__dirname, '..', 'data', 'game.json');
 const PLAYER_NAMES = ['Alice', 'Bob', 'Carol', 'Dan'];
@@ -51,9 +52,12 @@ parentPort.on('message', (job) => {
     evaluatorByPlayerId[`P${seat + 1}`] = new Evaluator(index, genome, level ? level.evaluatorOptions : undefined);
   });
   const moveGenerator = level ? new MoveGenerator(level.moveGeneratorOptions) : undefined;
-  const { rankByPlayerId, scoreByPlayerId, qstScoreByPlayerId } = playGameForFitness(
+  const { state, rankByPlayerId, scoreByPlayerId, qstScoreByPlayerId } = playGameForFitness(
     seed, PLAYER_NAMES, index, evaluatorByPlayerId, moveGenerator, resourceCardPicker, synergyTable2,
     level ? level.aiOptions : undefined,
   );
-  parentPort.postMessage({ jobId, rankByPlayerId, scoreByPlayerId, qstScoreByPlayerId });
+  // カード相性表 (2026-10-27, see tools/card_pair_stats.js) -- every seat's final holdings, tallied by the main thread.
+  const holdingsByPlayerId = {};
+  for (const player of state.players) holdingsByPlayerId[player.id] = holdingUnits(state, index, player);
+  parentPort.postMessage({ jobId, rankByPlayerId, scoreByPlayerId, qstScoreByPlayerId, holdingsByPlayerId });
 });

@@ -63,6 +63,7 @@ const { buildConJobSynergyTable } = require('../src/ai/con-job-synergy');
 const { pickResourceCards } = require('../src/ai/smart-onboarding');
 const { LEVELS } = require('../src/ai/levels');
 const rng = require('../src/rng');
+const cardPairStats = require('./card_pair_stats');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const DATA_PATH = path.join(PROJECT_ROOT, 'data', 'game.json');
@@ -273,7 +274,7 @@ function runJobsOnPool(pool, jobs) {
  * other job) that runJobsOnPool then fans out across every worker; resourceCardPicker/synergyTable2 no
  * longer need to be passed in at all -- each worker builds its own copy once at its own startup (see
  * ga_worker.js's own doc) instead of the main thread building one shared copy every call. */
-async function evaluatePopulationFitness(pool, population, runRng, gamesPerIndividual, runId, generationLabel, aiLevel) {
+async function evaluatePopulationFitness(pool, population, runRng, gamesPerIndividual, runId, generationLabel, aiLevel, pairStats) {
   const roundsNeeded = gamesPerIndividual / 4;
   const jobs = [];
   for (let round = 0; round < roundsNeeded; round++) {
@@ -298,7 +299,8 @@ async function evaluatePopulationFitness(pool, population, runRng, gamesPerIndiv
   const winCountByIndex = new Array(population.length).fill(0);
   const gamesPlayedByIndex = new Array(population.length).fill(0);
   jobs.forEach((job, i) => {
-    const { rankByPlayerId, scoreByPlayerId, qstScoreByPlayerId } = results[i];
+    const { rankByPlayerId, scoreByPlayerId, qstScoreByPlayerId, holdingsByPlayerId } = results[i];
+    if (pairStats) cardPairStats.addGame(pairStats, holdingsByPlayerId, rankByPlayerId);
     job.seatIndices.forEach((idx, seat) => {
       const playerId = `P${seat + 1}`;
       rankSumByIndex[idx] += rankByPlayerId[playerId];
@@ -389,6 +391,12 @@ async function main() {
   const realTable = buildEvalTable(raw);
   const ids = Object.keys(realTable[1]);
 
+  // カード相性表 (2026-10-27, see tools/card_pair_stats.js) -- one tally shared by every GA run, saved
+  // (JSON + カード相性.xlsx) after every generation.
+  const { stats: pairStats, dropped: droppedUnits } = cardPairStats.load(raw);
+  if (droppedUnits.length) console.log(`カード相性表: 能力が変わった/無くなったため、行と列を削除: ${droppedUnits.join(', ')}`);
+  console.log(`カード相性表: これまで${pairStats.games}試合分 -> ${cardPairStats.XLSX_PATH}`);
+
   // "AI LV4" smart onboarding (2026-08-27/28, see smart-onboarding.js's own doc) -- every training game
   // from here on picks resource cards/JOB/CON the same way LV4 actually plays, not randomly. Generation
   // 0's own baseline (measureBaseline) deliberately stays fully random (RandomEvaluator's whole point is
@@ -460,7 +468,8 @@ async function main() {
 
   for (let gen = startGeneration + 1; gen <= finalGeneration; gen++) {
     const t0 = Date.now();
-    const fitness = await evaluatePopulationFitness(pool, population, runRng, gamesPerIndividual, runId, gen, aiLevel);
+    const fitness = await evaluatePopulationFitness(pool, population, runRng, gamesPerIndividual, runId, gen, aiLevel, pairStats);
+    cardPairStats.save(pairStats);
     const ranked = fitness
       .map((f, i) => ({ ...f, genome: population[i] }))
       .sort((a, b) => a.avgRank - b.avgRank);
