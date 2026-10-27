@@ -2527,6 +2527,8 @@ function recordReplaySnapshotIfChanged(state, effectiveTurnPlayerId) {
  * an incoming update, not causing a new one). */
 function pushOnlineStateIfChanged(state) {
   if (!onlineRoomCode || !onlineGameStarted || applyingRemoteState) return;
+  // 初期資源を選んでいる間(round 0)は、状態を書き換えて送るのはホストだけ(applyOnlineResourcePicks参照)。
+  if (!isOnlineHost && state.round === 0) return;
   // ほかのプレイヤーの手番をためている間/再生中は送らない(画面の状態が古いため、相手の進行を上書きしてしまう)。
   if (remotePlayback || remoteTurnBuffer.length > 0) return;
   const json = JSON.stringify(state);
@@ -8602,6 +8604,14 @@ function renderMobileCardsView(state, next) {
     swatch.dataset.color = player.color;
     btn.appendChild(swatch);
     btn.appendChild(document.createTextNode(player.name));
+    // オンライン対戦の初期資源: 誰がまだ選んでいないか分かるように (2026-10-27, per user request: "初期資源
+    // 選択時右側のプレイヤータブに選択中 完了などと表示して")。
+    const pickStatus = onlineResourcePickStatus(state, player.id);
+    if (pickStatus) {
+      const badge = el('span', 'online-pick-status', pickStatus);
+      badge.dataset.status = pickStatus === '完了' ? 'done' : 'choosing';
+      btn.appendChild(badge);
+    }
     btn.addEventListener('click', () => applyMobileCardsPlayer(player.id));
     switcher.appendChild(btn);
   }
@@ -9430,7 +9440,7 @@ function resourceChoiceStartOrderTotal(state, playerId, selectedFaceIds) {
 
 function renderResourceConfirmOverlay(state) {
   const overlay = document.getElementById('resource-confirm-overlay');
-  const choice = state.pendingChoices.find((c) => c.kind === 'SELECT_RESOURCE_CARDS' && !isAiPlayer(c.playerId)
+  const choice = !onlineResourcePickSent && state.pendingChoices.find((c) => c.kind === 'SELECT_RESOURCE_CARDS' && !isAiPlayer(c.playerId)
     && (!onlineRoomCode || localSeatId === c.playerId)
     && c.context.selected && c.context.selected.length === (c.context.count || 2));
   if (!choice) {
@@ -9658,6 +9668,11 @@ function renderResourceChoice(container, state, player) {
   if (onlineRoomCode && localSeatId !== player.id) return;
   const choice = state.pendingChoices.find((c) => c.playerId === player.id && c.kind === 'SELECT_RESOURCE_CARDS');
   if (!choice) return;
+  // オンライン対戦で選択を送った後(ホストが反映するまで): 候補の代わりに待っている案内だけ出す。
+  if (onlineResourcePickSent && player.id === localSeatId) {
+    container.appendChild(buildOnboardHint(['初期資源カードを選びました', 'ほかのプレイヤーが選び終わるのを待っています']));
+    return;
+  }
   // Highlight this player's own panel only (2026-07-30, per user feedback) -- container is a
   // freshly-cloned template node per player per render (see renderPlayerCards), so each player's
   // highlight is naturally independent even though several can be mid-choice at once.
@@ -9716,8 +9731,46 @@ function renderResourceChoice(container, state, player) {
  * AI pump regardless of pacing mode, so their slot in this order clears on its own with nothing for a
  * human to see. Returns null once nobody has a pending choice left (nothing to show either way). */
 function currentResourceChooserId(state) {
+  // オンライン対戦は全員同時に選ぶ (2026-10-27, per user request: "初期資源カードを選ぶのは全プレイヤー同時に
+  // 選べるように") -- 各端末は自分の席の分だけを出す(他の人の候補は元々どの端末にも出ない)。
+  if (onlineRoomCode) {
+    const mine = state.pendingChoices.some((c) => c.playerId === localSeatId && c.kind === 'SELECT_RESOURCE_CARDS');
+    return mine ? localSeatId : null;
+  }
   const player = state.players.find((p) => state.pendingChoices.some((c) => c.playerId === p.id && c.kind === 'SELECT_RESOURCE_CARDS'));
   return player ? player.id : null;
+}
+
+/** オンライン対戦の初期資源を全員同時に選ぶための仕組み (2026-10-27) -- 盤面の状態(state)はまるごと上書きで
+ * 同期しているため、2人が同時に選んで同時に送ると、後から届いた方が先の人の選択を消してしまう。そこで
+ * 初期資源を選んでいる間(round 0)は、状態を書き換えるのはホストだけにする:
+ * ・ホスト以外は「OK」を押すと、自分の選択だけを部屋の別の欄(resourcePicks.{席})に送る(submitResourcePick)。
+ *   自分の端末の状態は変えず、「選択済み・ほかの人を待っています」を出す(onlineResourcePickSent)。
+ * ・ホストはその欄を見て、まだ選んでいない席の選択をゲームの処理(chooseResourceCards)で反映し、全員分
+ *   そろったら1ラウンド目を始めて、状態を送る(applyOnlineResourcePicks)。
+ * ・round 0の間、ホスト以外は状態を送らない(pushOnlineStateIfChanged)。選んでいる途中の印(selected)は
+ *   届いた状態で消えないように引き継ぐ(applyIncomingRoomState)。 */
+let onlineResourcePickSent = null; // この端末が送った初期資源の選択(送った後〜ホストが反映するまで)
+function applyOnlineResourcePicks(picks) {
+  if (!picks || STATE.round > 0) return;
+  let changed = false;
+  for (const [seatId, ids] of Object.entries(picks)) {
+    const pending = STATE.pendingChoices.some((c) => c.playerId === seatId && c.kind === 'SELECT_RESOURCE_CARDS');
+    if (!pending || !Array.isArray(ids)) continue;
+    if (setupMod.chooseResourceCards(STATE, seatId, ids).success) changed = true;
+  }
+  if (!changed) return;
+  maybeStartRound1(STATE);
+  render(STATE);
+}
+
+/** 初期資源の進み具合(オンライン対戦のround 0だけ): '完了' / '選択中'、それ以外はnull。 */
+function onlineResourcePickStatus(state, playerId) {
+  if (!onlineRoomCode || state.round > 0) return null;
+  const pending = state.pendingChoices.some((c) => c.playerId === playerId && c.kind === 'SELECT_RESOURCE_CARDS');
+  const picks = (onlineLobbyRoomData && onlineLobbyRoomData.resourcePicks) || {};
+  if (!pending || picks[playerId] || (playerId === localSeatId && onlineResourcePickSent)) return '完了';
+  return '選択中';
 }
 
 /** Once every player has committed their 2 RESOURCE cards (no SELECT_RESOURCE_CARDS pendingChoice
@@ -9786,6 +9839,13 @@ function renderPlayerCards(state, next) {
     if (isSelf && hasFinishedOnboarding(player)) node.classList.add('card-group--active');
     node.querySelector('.card-group__swatch').dataset.color = player.color;
     node.querySelector('.card-group__name').textContent = player.name;
+    // オンライン対戦の初期資源の進み具合(PC/タブレットはここ、スマホは右の名前欄 -- renderMobileCardsView)。
+    const pickStatus = onlineResourcePickStatus(state, player.id);
+    if (pickStatus) {
+      const badge = el('span', 'online-pick-status', pickStatus);
+      badge.dataset.status = pickStatus === '完了' ? 'done' : 'choosing';
+      node.querySelector('.card-group__name').appendChild(badge);
+    }
     // Confirmed 2026-07-30: the header's separate "手番 {name}" chip was removed -- this group is
     // always sorted turn-order-first (turnOrderedPlayers), so "手番" here on the top player's own
     // name row says the same thing in place.
@@ -11286,11 +11346,22 @@ function appVersionLabel() {
   return node ? node.textContent.trim() : null;
 }
 
+/** オンライン対戦の部屋が開始するのを待っている間(部屋を作った/入った後、ホストが開始するまで) --
+ * この端末の裏の盤面(ショップ/ジョブ/制約/初期資源/クエストのカードとダイス)はまだ決まっていない仮のもの
+ * なので隠す(body.online-waiting + オープニングと同じ隠し方)。部屋の状態を受け取ったらオープニングを流す。 */
+let onlineAwaitingStartOpening = false;
+function setOnlineWaitingForStart(on) {
+  onlineAwaitingStartOpening = on;
+  document.body.classList.toggle('online-waiting', on);
+  if (on) document.body.classList.add(...OPENING_HIDE_CLASSES);
+}
+
 function handleCreateRoomClick() {
   OnlineSync.createRoom(appVersionLabel()).then(({ code, seatId }) => {
     onlineRoomCode = code;
     localSeatId = seatId;
     isOnlineHost = true;
+    setOnlineWaitingForStart(true);
     onlineLobbyView = 'waiting';
     subscribeToOnlineRoom(code);
   });
@@ -11304,6 +11375,7 @@ function handleJoinRoomSubmit(codeInput) {
     localSeatId = seatId;
     isOnlineHost = false;
     onlineLobbyError = null;
+    setOnlineWaitingForStart(true);
     onlineLobbyView = 'waiting';
     subscribeToOnlineRoom(normalizedCode);
   }).catch((e) => {
@@ -11326,12 +11398,21 @@ function subscribeToOnlineRoom(code) {
     onlineLobbyRoomData = roomData;
     if (!roomData) return; // room doc briefly not-yet-visible right after create/join; next snapshot has it
     if (roomData.phase === 'playing') {
+      const justStarted = !onlineGameStarted;
       applyIncomingRoomState(roomData.state, onlineGameStarted ? null : roomData.seatIsHuman);
-      if (!onlineGameStarted) {
+      if (justStarted) {
         onlineGameStarted = true;
         onlineLobbyView = null;
         document.getElementById('online-lobby-overlay').hidden = true;
+        // 開始を待っていた端末だけ、ここでオープニング(ダイス→ショップ→ジョブ→制約→初期資源)を流す。
+        // 途中から入り直した端末(resumeSavedSession)は流さない。
+        if (onlineAwaitingStartOpening) {
+          setOnlineWaitingForStart(false);
+          startOpeningSequence();
+          render(STATE);
+        }
       }
+      if (isOnlineHost) applyOnlineResourcePicks(roomData.resourcePicks);
       return;
     }
     renderOnlineLobbyOverlay(); // still in the lobby -- e.g. another seat just joined
@@ -11532,6 +11613,17 @@ function applyIncomingRoomState(stateJson, seatIsHuman) {
   applyingRemoteState = true;
   if (seatIsHuman) {
     for (const seatId of ['P1', 'P2', 'P3', 'P4']) playerRoles.set(seatId, seatIsHuman[seatId] ? 'HUMAN' : DEFAULT_AI_ROLE);
+  }
+  // 初期資源を選んでいる途中の印(selected)は、届いた状態で消えないように引き継ぐ(全員同時に選ぶため、
+  // 自分が選んでいる最中にもほかの人の選択の反映が届く)。自分の選択がもう反映されていたら送った印を下ろす。
+  if (incoming.round === 0 && localSeatId) {
+    const mine = (st) => st.pendingChoices.find((c) => c.playerId === localSeatId && c.kind === 'SELECT_RESOURCE_CARDS');
+    const before = STATE.pendingChoices ? mine(STATE) : null;
+    const after = mine(incoming);
+    if (before && after && before.context.selected) after.context.selected = before.context.selected;
+  }
+  if (onlineResourcePickSent && !incoming.pendingChoices.some((c) => c.playerId === localSeatId && c.kind === 'SELECT_RESOURCE_CARDS')) {
+    onlineResourcePickSent = null;
   }
   Object.keys(STATE).forEach((k) => delete STATE[k]);
   Object.assign(STATE, incoming);
@@ -16739,7 +16831,18 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('entry-banner-tutorial-button').addEventListener('click', openTutorialMode);
   updateTutorialCalloutVisibility();
   document.getElementById('entry-banner-local-button').addEventListener('click', dismissEntryBanner);
-  document.getElementById('entry-banner-online-button').addEventListener('click', () => { dismissEntryBanner(); openOnlineLobby(); });
+  // オンライン対戦はオープニングを部屋が開始してから流す (2026-10-27, per user request: "オープニング
+  // アニメーションの表示のタイミングを変更してほしい 例えばオンライン対戦だとメンバー確定前にアニメーションが
+  // 出てきます メンバー確定して対戦が始まるときに変えて") -- ここでは入口バナーを閉じるだけ(オープニングは
+  // 流さない)。待っている間に見える裏の盤面のカード/ダイスは、この端末だけの仮のものなので隠しておく
+  // (setOnlineWaitingForStart)。実際のオープニングはsubscribeToOnlineRoomが、開始された部屋の状態を
+  // 受け取った時に流す。
+  document.getElementById('entry-banner-online-button').addEventListener('click', () => {
+    entryBannerDismissed = true;
+    setOnlineWaitingForStart(true);
+    render(STATE);
+    openOnlineLobby();
+  });
   // gatedEntryBannerHandler (2026-10-11, see its own doc; widened 2026-10-12 per user report -- the SAME
   // functions called from in-game nav buttons (anytime-ranking-button/card-list-open-button/
   // weekly-challenge-button) used to stay ungated, letting a locked feature be reached mid-game even
@@ -16833,6 +16936,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const choice = STATE.pendingChoices.find((c) => c.kind === 'SELECT_RESOURCE_CARDS'
       && c.context.selected && c.context.selected.length === (c.context.count || 2));
     if (!choice) return;
+    // オンライン対戦のホスト以外: 自分の選択だけを送り、反映はホストに任せる(applyOnlineResourcePicks参照)。
+    if (onlineRoomCode && !isOnlineHost) {
+      onlineResourcePickSent = [...choice.context.selected];
+      OnlineSync.submitResourcePick(onlineRoomCode, localSeatId, onlineResourcePickSent);
+      render(STATE);
+      return;
+    }
     setupMod.chooseResourceCards(STATE, choice.playerId, choice.context.selected);
     maybeStartRound1(STATE);
     render(STATE);

@@ -289,6 +289,15 @@ function pushRoomState(code, stateJson) {
   return db().collection(ROOM_COLLECTION).doc(code).update({ state: stateJson });
 }
 
+/** オンライン対戦の初期資源の選択を送る (2026-10-27、全員同時に選ぶため -- main.jsの
+ * applyOnlineResourcePicks参照)。盤面の状態(state)ではなく、席ごとの別の欄(resourcePicks.P2 等)に書くので、
+ * 何人が同時に送っても互いに消し合わない。反映するのはホストの端末。 */
+function submitResourcePick(code, seatId, faceIds) {
+  var update = {};
+  update['resourcePicks.' + seatId] = faceIds;
+  return db().collection(ROOM_COLLECTION).doc(code).update(update);
+}
+
 // 実績バックアップ (2026-10-12, per user request: "実績解除のポイントをリセットするにはどうすればいい？"
 // -> 「逆にうっかり消さないようにするには」-> 名前+パスワードでの復元案に発展)。プレイヤー自身が決めた
 // 名前をドキュメントidとして1件だけ保存/上書きする(ランキングのような複数件の一覧ではない) -- このアプリに
@@ -363,6 +372,7 @@ window.OnlineSync = {
   subscribeToRoom: subscribeToRoom,
   startRoom: startRoom,
   pushRoomState: pushRoomState,
+  submitResourcePick: submitResourcePick,
   loadAchievementBackup: loadAchievementBackup,
   saveAchievementBackup: saveAchievementBackup,
   deleteAchievementBackup: deleteAchievementBackup,

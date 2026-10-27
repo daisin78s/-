@@ -6897,3 +6897,38 @@ body.story-mode #mobile-cards-player-switcher { display: none !important; }
     min-height: var(--app-height, 100dvh);
   }
 }
+
+/* オンライン対戦: 部屋の開始を待っている間は、この端末だけの仮の盤面のダイス/クエストも隠す(ショップ/ジョブ/
+   制約/初期資源はオープニングと同じbody.opening-hide-*で隠す、main.jsのsetOnlineWaitingForStart参照)。 */
+body.online-waiting #players .die,
+body.online-waiting #mobile-own-row .die,
+body.online-waiting #qst-slots {
+  visibility: hidden;
+}
+/* オンライン対戦の初期資源の進み具合(main.jsのonlineResourcePickStatus)。 */
+.online-pick-status {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.6;
+  vertical-align: middle;
+  color: #fff;
+  background: #d97706;
+}
+.online-pick-status[data-status="done"] {
+  background: #16a34a;
+}
+@media (max-width: 760px) {
+  /* 名前欄は幅84pxしかないので、名前の下の段に出す。 */
+  .mobile-cards-player-switcher__btn:has(.online-pick-status) {
+    flex-wrap: wrap;
+  }
+  .mobile-cards-player-switcher__btn .online-pick-status {
+    flex-basis: 100%;
+    margin: 2px 0 0;
+    text-align: center;
+  }
+}
