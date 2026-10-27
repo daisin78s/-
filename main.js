@@ -10548,6 +10548,7 @@ let lifeStoryDismissed = false;
  * over). scoringMod.rankPlayers' own entry 0 is the winner, same convention renderGameEndOverlay uses. */
 function renderLifeStoryOverlay(state) {
   const overlay = document.getElementById('life-story-overlay');
+  if (rankingLifeStoryOpen) return; // ランキングから開いている間はそちらの表示のまま(openRankingLifeStory参照)
   if (state.phase !== 'GAME_END' || lifeStoryDismissed) {
     overlay.hidden = true;
     return;
@@ -10579,6 +10580,65 @@ function renderLifeStoryOverlay(state) {
   const rankedHumanEntries = rankedEntries.filter((e) => playerRoles.get(e.playerId) === 'HUMAN');
   const featuredEntry = rankedHumanEntries[0] || rankedEntries[0];
   const player = state.players.find((p) => p.id === featuredEntry.playerId);
+  const body = fillLifeStoryContent(state, player, rankedEntries);
+  // 文章を上から順に飛ばす演出: スマホは「ゲーム終了」の文字の後、PC/タブレットは表示してすぐ。
+  if (!mobileIntro || lifeStoryIntroState === 'lines') {
+    lifeStoryIntroState = 'done';
+    animateLifeStoryLines(overlay, [document.getElementById('life-story-title'), ...body.children]);
+  }
+}
+
+let rankingLifeStoryOpen = false;
+/** ランキングの「人生」ボタン: 登録されたリプレイの最後の状態(ゲーム終了時)から、その登録のプレイヤー(色で
+ * 見分ける -- 登録にはプレイヤーの番号が無いため)の人生の画面を、ランキングの上に開く。人生の記録が無い
+ * 古い登録や、今のカードのデータで作れないリプレイは、その旨を知らせる。 */
+function openRankingLifeStory(entry, history) {
+  const finalState = history && history.length ? structuredClone(history[history.length - 1]) : null;
+  // 今のデータに無くなったカード(例: 2026-10-27に消した初期資源R003/R012)は除いて計算する -- 初期資源の効果
+  // (資源/VP)はもう資源として受け取り済みなので、点数は変わらない。
+  if (finalState) {
+    for (const [id, card] of Object.entries(finalState.cards)) {
+      try { dataLoaderMod.getCardRow(INDEX, card.currentFaceId); } catch (e) { delete finalState.cards[id]; }
+    }
+    for (const p of finalState.players) {
+      p.ownedCardPhysicalIds = p.ownedCardPhysicalIds.filter((id) => {
+        const card = finalState.cards[id];
+        try { dataLoaderMod.getCardRow(INDEX, card ? card.currentFaceId : id); return true; } catch (e) { return false; }
+      });
+    }
+  }
+  const player = finalState && (finalState.players.find((p) => p.color === entry.playerColor)
+    || finalState.players.find((p) => p.name === entry.name));
+  if (!finalState || finalState.phase !== 'GAME_END' || !player || !Array.isArray(player.lifeStoryLog)) {
+    window.alert('この記録には人生のデータがありません（人生の機能ができる前の記録か、ゲームの最後まで記録されていません）。');
+    return;
+  }
+  const overlay = document.getElementById('life-story-overlay');
+  try {
+    fillLifeStoryContent(finalState, player, scoringMod.rankPlayers(finalState, INDEX));
+  } catch (e) {
+    console.error('openRankingLifeStory failed:', e);
+    window.alert('この記録の人生は表示できませんでした（データの更新により古い記録と互換性がなくなった可能性があります）。');
+    return;
+  }
+  rankingLifeStoryOpen = true;
+  overlay.style.zIndex = '1000'; // ランキングの画面より上に
+  overlay.hidden = false;
+  const body = document.getElementById('life-story-body');
+  animateLifeStoryLines(overlay, [document.getElementById('life-story-title'), ...body.children]);
+}
+function closeRankingLifeStory() {
+  rankingLifeStoryOpen = false;
+  const overlay = document.getElementById('life-story-overlay');
+  overlay.hidden = true;
+  overlay.style.zIndex = '';
+  lifeStoryBuilt = false; // ゲーム終了時の人生の画面を作り直す(ランキングの人生で中身を上書きしたため)
+  render(STATE);
+}
+
+/** 人生の画面の中身(題名と本文)を作る -- ゲーム終了時(renderLifeStoryOverlay)と、ランキングの「人生」ボタン
+ * (openRankingLifeStory)の両方から使う。@returns 本文の要素(#life-story-body) */
+function fillLifeStoryContent(state, player, rankedEntries) {
   const finalScore = scoringMod.computeFinalScore(state, INDEX, player.id);
   const conFaceId = player.conPhysicalId && player.conFace ? `${player.conPhysicalId}${player.conFace}` : null;
   const lifeStoryTitleEl = document.getElementById('life-story-title');
@@ -10630,11 +10690,7 @@ function renderLifeStoryOverlay(state) {
   others.appendChild(leftCol);
   others.appendChild(rightCol);
   body.appendChild(others);
-  // 文章を上から順に飛ばす演出: スマホは「ゲーム終了」の文字の後、PC/タブレットは表示してすぐ。
-  if (!mobileIntro || lifeStoryIntroState === 'lines') {
-    lifeStoryIntroState = 'done';
-    animateLifeStoryLines(overlay, [document.getElementById('life-story-title'), ...body.children]);
-  }
+  return body;
 }
 
 /** 最終順位の欄の1人分: 「怠惰なローマ人のhigebucho」「1位 最終獲得点数51VP」「(素点45VP クエスト8VP
@@ -11646,6 +11702,19 @@ function renderRankingList(highlightId, highlightCategory) {
           });
         });
         row.appendChild(replayButton);
+        // 人生 (2026-10-27, per user request: "ランキングから リプレイ 以外に 人生 が見れる ボタンが欲しい") --
+        // リプレイの最後(ゲーム終了時)の状態から、そのプレイヤーの人生の画面を作って見せる。
+        const lifeButton = el('button', 'undo-button', '人生');
+        lifeButton.type = 'button';
+        lifeButton.disabled = !entry.hasReplay;
+        lifeButton.addEventListener('click', () => {
+          lifeButton.disabled = true;
+          RankingStorage.loadReplay(entry.id).then((history) => {
+            lifeButton.disabled = false;
+            openRankingLifeStory(entry, history);
+          });
+        });
+        row.appendChild(lifeButton);
         // Per-row ダウンロード button removed 2026-09-07, per user request, replaced by the shared
         // checkbox-selection "選択した項目をダウンロード" button below (same selection mechanism 削除
         // already used) -- see handleRankingDownloadSelectedClick.
@@ -17465,6 +17534,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // "entry-banner-...kickers only" だったが今はこちらも対象。
   document.getElementById('anytime-ranking-button').addEventListener('click', gatedEntryBannerHandler('ランキング', openRankingOverlay));
   document.getElementById('life-story-close-button').addEventListener('click', () => {
+    if (rankingLifeStoryOpen) { closeRankingLifeStory(); return; }
     lifeStoryDismissed = true;
     render(STATE);
   });
