@@ -1464,8 +1464,35 @@ function computeChangeDiff(baseline, state) {
  * turnActionTaken stuck true forever, which is what made every later round's dice unselectable (see
  * renderPlayers' own `!turnActionTaken` gate). */
 function openTurnPlayerId() {
+  const local = localOpenTurnPlayerId();
+  if (local) return local;
+  // オンライン対戦: ほかの端末のプレイヤー(またはホストが動かしているAI)がまだ手番中(STATE.onlineOpenTurnPlayerId、
+  // pushOnlineStateIfChanged参照)。
+  const remote = onlineRoomCode && STATE.onlineOpenTurnPlayerId;
+  return remote && remote !== localSeatId ? remote : null;
+}
+
+/** この端末の上で分かる「まだ手番中の人」(建築の選択中/ダイスを使ったがターン終了を押していない)。 */
+function localOpenTurnPlayerId() {
   if (pendingBuildChoice) return pendingBuildChoice.playerId;
   return turnActionTaken ? lastTurnPlayerId : null;
+}
+
+/** オンライン対戦の「まだ手番中」の印 (2026-10-27, per user bug report: "オンライン対戦で カードをLVUPしたのに
+ * 資源も減らずLVUPもしませんでした ダイスは置かれたままです そのプレイヤー以外のプレイヤーにはLVUPアニメー
+ * ションもありませんでした") -- ラウンド最後のダイスを置いた人は、getNextTurnの上では「もう番が終わった」に見える
+ * (置けるダイスが無いので次の人へ飛ぶ)。まだ手番中なのはその人の端末のローカルな変数(pendingBuildChoice/
+ * turnActionTaken)にしか無かったため、ホストは次のAIを動かし始め、LVアップを選ぶ前の状態にAIの手を足して送り返し、
+ * 後から届いたその状態がLVアップを上書きしていた。送る状態にこの印を入れ、どの端末もopenTurnPlayerId()で同じ
+ * 「まだ手番中」を見るようにする(AIの手を止める、手番の表示、相手の手番をためて再生する区切り)。 */
+function onlineOpenTurnMarker(state) {
+  const local = localOpenTurnPlayerId();
+  if (local && local === localSeatId) return local;
+  if (isOnlineHost && aiOpenTurnPlayerId) return aiOpenTurnPlayerId;
+  const current = state.onlineOpenTurnPlayerId || null;
+  // ほかの人間の席の印は、その人の端末が下ろすまで残す。自分の席の印/AIの席の印(AIの手番が終わった)は下ろす。
+  if (current && current !== localSeatId && !isAiPlayer(current)) return current;
+  return null;
 }
 
 /** True if some AI-controlled player has an immediately-actionable decision pending right now (a
@@ -2537,6 +2564,9 @@ function pushOnlineStateIfChanged(state) {
   if (!isOnlineHost && state.round === 0) return;
   // ほかのプレイヤーの手番をためている間/再生中は送らない(画面の状態が古いため、相手の進行を上書きしてしまう)。
   if (remotePlayback || remoteTurnBuffer.length > 0) return;
+  const marker = onlineOpenTurnMarker(state);
+  if (marker) state.onlineOpenTurnPlayerId = marker;
+  else delete state.onlineOpenTurnPlayerId;
   const json = JSON.stringify(state);
   if (json === lastPushedOnlineStateJson) return;
   lastPushedOnlineStateJson = json;
@@ -11480,7 +11510,16 @@ function updateOnlineHostAndTakeover(roomData) {
     if (!connected && !takeover[seatId]) OnlineSync.setAiTakeover(onlineRoomCode, seatId, true).catch(() => {});
     else if (connected && takeover[seatId] && aiOpenTurnPlayerId !== seatId) OnlineSync.setAiTakeover(onlineRoomCode, seatId, false).catch(() => {});
   }
-  if (!wasHost) render(STATE); // ホストになった -- AIを動かし始める(render()がAIを進める)
+  if (!wasHost) {
+    // 前のホストが動かしていたAIの手番の途中なら、その続きから(ダイスはもう置いてある)。
+    const open = STATE.onlineOpenTurnPlayerId;
+    if (open && isAiPlayer(open) && !aiOpenTurnPlayerId) {
+      aiOpenTurnPlayerId = open;
+      aiOpenTurnHasPlacedDie = true;
+      aiOpenTurnMoveCount = 0;
+    }
+    render(STATE); // ホストになった -- AIを動かし始める(render()がAIを進める)
+  }
 }
 
 /** 手番の途中でAIに交代した席: 手番の初め(turnStart)より、その席の置いたダイスが増えていれば、AIはもう
@@ -11490,7 +11529,7 @@ function inheritTakenOverTurn(turnStart, latest, seatId) {
     const p = st.players.find((x) => x.id === seatId);
     return p ? p.dice.filter((d) => d.placedMapId !== null).length : 0;
   };
-  if (placed(latest) > placed(turnStart)) {
+  if (placed(latest) > placed(turnStart) || latest.onlineOpenTurnPlayerId === seatId) {
     aiOpenTurnPlayerId = seatId;
     aiOpenTurnHasPlacedDie = true;
     aiOpenTurnMoveCount = 0;
@@ -11641,6 +11680,8 @@ function isAiOrRemotePlayer(playerId) {
 /** stateで今まさに進行中の、ほかの人間のプレイヤーの手番(TURN)のplayerId、無ければnull。 */
 function remoteHumanTurnPlayerOf(state) {
   if (!onlineRoomCode || !state || state.round < 1 || state.phase === 'GAME_END') return null;
+  // まだ手番中の印がある間は、その人の手番(onlineOpenTurnMarker参照)。
+  if (state.onlineOpenTurnPlayerId) return isRemoteHumanPlayer(state.onlineOpenTurnPlayerId) ? state.onlineOpenTurnPlayerId : null;
   let next = null;
   try { next = turnFlowMod.getNextTurn(state); } catch (e) { return null; }
   return next && next.type === 'TURN' && isRemoteHumanPlayer(next.playerId) ? next.playerId : null;
