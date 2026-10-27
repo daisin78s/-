@@ -584,7 +584,7 @@ function resumeSavedSession() {
     entryBannerDismissed = true;
     sessionResumeChoicePending = false;
     // スマホ版: 「ゲームに戻る」で再開した時はショップではなくエリア画面から (2026-10-23, per user request)。
-    if (window.innerWidth <= 760) applyMobileActiveTab('board');
+    if (isMobileLayout()) applyMobileActiveTab('board');
     render(STATE);
   } else if (pendingOnlineSession) {
     onlineRoomCode = pendingOnlineSession.roomCode;
@@ -792,11 +792,19 @@ function dealConCards(onDone) {
   });
 }
 
+/* スマホ版の画面にするか (2026-10-27, per user report: "iphone16で下部のエリア ショップ と書いてある バーがみえない") --
+ * 横幅760px以下に加えて、縦の高さ500px以下(横向きのスマホ)もスマホ版。iPhone 16(横852px)/Pro/Pro Maxは横幅が760pxを
+ * 超えてタブレット扱いになり、タブバーが出ていなかった。iPadは横向きでも高さ700px以上なので今まで通り。
+ * style.cssの@media (max-width: 760px), (max-height: 500px)と同じ基準。 */
+function isMobileLayout() {
+  return window.innerWidth <= 760 || window.innerHeight <= 500;
+}
+
 function startOpeningSequence() {
   openingSequenceActive = true;
   setDiceRollBlocker(true);
   document.body.classList.add(...OPENING_HIDE_CLASSES);
-  const isMobile = window.innerWidth <= 760;
+  const isMobile = isMobileLayout();
   // タブレット(1列配置で縦にスクロールする幅、761〜1400px)はスマホと同じく「切り替え方式」 (2026-10-23,
   // per user request: "タブレット版だけスクロールとアニメーションがあっていないためスクロールなし スマホ版と
   // 同じで切り替え方式 1 エリア画面でダイスとショップ 2 下に画面を切り替えて残りのカード") -- 開始時の
@@ -3231,7 +3239,7 @@ function renderCardListFlatCategory(key, container) {
  * 倍率が一番大きくなる列数を選んで、CSS zoomでその倍率に縮める(横向きなら4列×2段、縦向きなら2列×4段
  * 程度になる)。大きくはしない。PC/タブレット(幅761px以上)は従来通り。描画完了後に測るためsetTimeoutから呼ぶ。 */
 function fitCardListQstGridToScreen(grid) {
-  if (window.innerWidth > 760 || !grid.isConnected) return;
+  if (!isMobileLayout() || !grid.isConnected) return;
   const body = grid.closest('.card-list-body');
   const cells = [...grid.children];
   if (!body || cells.length === 0) return;
@@ -8407,7 +8415,7 @@ function finishMobileGainItem() {
  * はそのカードが見える位置まで自動でスクロールする。終わったら、スマホはエリアタブ、PC/タブレットはエリアが
  * 見える位置へ戻す。 */
 function showCardsForEffect(playerId, physicalIds) {
-  if (window.innerWidth <= 760) {
+  if (isMobileLayout()) {
     applyMobileActiveTab('cards');
     applyMobileCardsPlayer(playerId);
     window.scrollTo(0, 0);
@@ -8419,7 +8427,7 @@ function showCardsForEffect(playerId, physicalIds) {
   });
 }
 function returnToBoardAfterEffect() {
-  if (window.innerWidth <= 760) { applyMobileActiveTab('board'); return; }
+  if (isMobileLayout()) { applyMobileActiveTab('board'); return; }
   const board = document.getElementById('board');
   if (board) board.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
@@ -8617,7 +8625,7 @@ function renderMobileFreeActionOverlay(state, next) {
   const canPlaceDiceFor = actingHumanPlayerId(state, next);
   const player = state.players.find((p) => p.id === canPlaceDiceFor);
   // 手番が終わった/スマホ幅でなくなった等で使えなくなったら自動で閉じる。
-  if (!mobileFreeActionOpen || window.innerWidth > 760 || !mobileFreeActionCanAct(state, player, canPlaceDiceFor)) {
+  if (!mobileFreeActionOpen || !isMobileLayout() || !mobileFreeActionCanAct(state, player, canPlaceDiceFor)) {
     mobileFreeActionOpen = false;
     overlay.hidden = true;
     body.innerHTML = '';
@@ -8701,7 +8709,7 @@ function switchMobileCardsPlayer(delta) {
   window.scrollTo(0, 0);
 }
 function renderMobileCardsView(state, next) {
-  if (window.innerWidth > 760) return;
+  if (!isMobileLayout()) return;
   if (!state.players.some((p) => p.id === mobileCardsPlayerId)) {
     mobileCardsPlayerId = actingHumanPlayerId(state, next) || mobileLocalHumanIds(state)[0] || state.players[0].id;
   }
@@ -9724,7 +9732,7 @@ function renderConChoice(container, state, player) {
     // スマホ版: 制約を選んだら即エリア画面へ (2026-10-23, per user request「スマホ版 制約選択後に即エリア
     // 画面へ」) -- これでオンボーディングが終わり、次はダイスを置く手番になるため。チュートリアル中は、この
     // 直後の「初期資源が光る」説明を見せるため移動しない。
-    if (window.innerWidth <= 760 && !tutorialModeActive) {
+    if (isMobileLayout() && !tutorialModeActive) {
       applyMobileActiveTab('board');
       window.scrollTo(0, 0);
     }
@@ -11903,7 +11911,7 @@ function startRemotePlayback(playerId, queue) {
   remotePlayback = { playerId, queue, after: [] };
   animSpeedFactor = REMOTE_PLAYBACK_SPEED;
   setRemotePlaybackUi(true, playerId);
-  if (window.innerWidth <= 760) applyMobileActiveTab('board');
+  if (isMobileLayout()) applyMobileActiveTab('board');
   setTimeout(stepRemotePlayback, 600);
 }
 
@@ -15573,7 +15581,7 @@ function playRoundStartDiceSequence(state, before) {
   const exitWait = before.placedDice.length > 0 ? DICE_EXIT_MS : 0;
   setTimeout(() => {
     // 2) スマホは資源タブへ。PC/タブレットは1画面なのでそのまま。
-    if (window.innerWidth <= 760) applyMobileActiveTab('players');
+    if (isMobileLayout()) applyMobileActiveTab('players');
     nextFrames(2, () => rollAllHandDice(state));
   }, exitWait);
 }
@@ -15635,7 +15643,7 @@ function finishDiceSequence() {
   document.querySelectorAll('.die[data-die-key]').forEach((node) => { node.style.visibility = ''; });
   diceRollSequenceActive = false;
   setDiceRollBlocker(false);
-  if (window.innerWidth <= 760) applyMobileActiveTab('board');
+  if (isMobileLayout()) applyMobileActiveTab('board');
   render(STATE); // 止めていたAIの進行を再開
 }
 
@@ -15707,7 +15715,7 @@ function playNewDiceRolls(state, before) {
 
 /** スマホ版: 皇帝宮殿と元老院のタイルの中間点(画面座標)。エリア画面が出ていない/タイルが見えない時はnull。 */
 function mobileNewDieRollCenter() {
-  if (window.innerWidth > 760 || mobileActiveTab !== 'board') return null;
+  if (!isMobileLayout() || mobileActiveTab !== 'board') return null;
   const castle = document.querySelector(`#board .map-tile[data-map-id="${boardMod.CASTLE_MAP_ID}"]`);
   const senate = document.querySelector(`#board .map-tile[data-map-id="${boardMod.AREA009_MAP_ID}"]`);
   if (!castle || !senate) return null;
@@ -16493,7 +16501,7 @@ function showCardEnlargeModal(faceId, visualNode, sibling, siblingVisualNode, pi
     // report「学問カード 人材カード 制約カード ジョブカード モニュメント 拡大すると大きすぎて見えません」
     // -- 固定3倍だとスマホ横向きの高さ約360pxにカード1枚(約118px×3)すら入らなかった)。等倍未満にはしない。
     // 判定はモーダルのスマホ用CSS(@media (max-width:760px),(max-height:500px))と同じ基準。PC/タブレットは従来通り。
-    if (window.innerWidth <= 760 || window.innerHeight <= 500) {
+    if (isMobileLayout()) {
       const modalStyle = getComputedStyle(modal);
       const padX = parseFloat(modalStyle.paddingLeft) + parseFloat(modalStyle.paddingRight);
       const padY = parseFloat(modalStyle.paddingTop) + parseFloat(modalStyle.paddingBottom);
@@ -16922,7 +16930,7 @@ function applyMobileActiveTab(tab) {
   });
   if (tab === 'shop') {
     fitMobileShopWidth();
-    if (window.innerWidth <= 760 && !openingSequenceActive) requestAnimationFrame(scrollMobileShopToNormalRow);
+    if (isMobileLayout() && !openingSequenceActive) requestAnimationFrame(scrollMobileShopToNormalRow);
   }
 }
 
@@ -16955,7 +16963,7 @@ function fitMobileShopWidth() {
   const row = document.querySelector('#shops .shop-row');
   if (!row) return;
   row.style.zoom = '';
-  if (!window.matchMedia('(max-width: 760px) and (orientation: landscape)').matches) return;
+  if (!window.matchMedia('(max-width: 760px) and (orientation: landscape), (max-height: 500px) and (orientation: landscape)').matches) return;
   if (mobileActiveTab !== 'shop') return;
   const combined = row.querySelector('.shop-row__combined');
   if (!combined || combined.clientWidth === 0) return;
@@ -17038,7 +17046,7 @@ function setupMobileTabSystem() {
  * ため、実際の切り替え/スクロールはsetTimeout(0)で描画完了後に行う。 */
 let lastMobileOnboardingKey = null;
 function queueMobileOnboardingFocus(state, next) {
-  if (window.innerWidth > 760) return;
+  if (!isMobileLayout()) return;
   // オープニング中はその流れ(最後に獲得カードタブ)に任せ、終わった後のrenderで改めて判定する。
   if (openingSequenceActive) return;
   const isLocalHuman = (pid) => !isAiPlayer(pid) && (!onlineRoomCode || localSeatId === pid);
@@ -17072,7 +17080,7 @@ function queueMobileOnboardingFocus(state, next) {
  * 台本の進行(光る演出/スクロール等)とぶつからないよう動かさない。PC/タブレットでは何もしない。 */
 let lastMobileAiTurnPlayerId = null;
 function queueMobileAiTurnFocus(state, next) {
-  if (window.innerWidth > 760 || tutorialModeActive) return;
+  if (!isMobileLayout() || tutorialModeActive) return;
   const aiTurnPlayerId = (state.round >= 1 && next && next.type === 'TURN' && isAiPlayer(next.playerId)) ? next.playerId : null;
   if (aiTurnPlayerId === lastMobileAiTurnPlayerId) return;
   lastMobileAiTurnPlayerId = aiTurnPlayerId;
@@ -17128,7 +17136,7 @@ function setupIosStandaloneViewportFix() {
 }
 
 function setupMobileQuestTab() {
-  if (window.innerWidth > 760) return;
+  if (!isMobileLayout()) return;
   const questTab = document.getElementById('mobile-quest-tab');
   const qstPanel = document.querySelector('.qst-panel');
   if (questTab && qstPanel) questTab.appendChild(qstPanel);

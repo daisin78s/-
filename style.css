@@ -5282,7 +5282,7 @@ body.tutorial-mode .change-highlight {
    開始に戻す/直前キャンセル/ラウンドパス/ナビ/AI進行/役職トグル)は当初data-mobile-tab属性を持たせず
    常時表示にしていたが、per user報告(スクリーンショット付き)「これらの情報は設定として...右に設定
    という項目を作りそこに置く」で専用の"settings"タブへ移動した(縦幅を大きく占有していたため)。 */
-@media (max-width: 760px) {
+@media (max-width: 760px), (max-height: 500px) {
   /* #game-layoutは1400px以下でgrid-template-columns:1frに切り替わる(既存ルール)が、1fr単独だと
      グリッドトラックの自動最小サイズが「中身のmin-content幅」になり、子孫の誰かが画面幅を超える
      intrinsic widthを持つと#board-area/#player-cardsどちらもその幅までグリッドごと広がってしまう
@@ -5758,7 +5758,7 @@ body.tutorial-mode .change-highlight {
    当初はノッチを避けてenv(safe-area-inset-right)分内側へ寄せていたが、per user request「もっと右に寄せて」
    (ノッチが右側に来る向きでは右端が一部欠けうる点を説明の上「両方やる」)で画面右端ぴったりに。
    縦向き(portrait)は従来通り下端のバー。 */
-@media (max-width: 760px) and (orientation: landscape) {
+@media (max-width: 760px) and (orientation: landscape), (max-height: 500px) and (orientation: landscape) {
   .mobile-own-row {
     top: 0;
     bottom: 0;
@@ -5977,7 +5977,7 @@ body.tutorial-mode .change-highlight {
 /* スマホ版: エリア/領地カードの拡大画面では一番上のタイトル(エリア名/カード名)を出さない (2026-10-22,
    per user request「スマホ版 エリアと領地カードの拡大画面 1画面で収まらないので NAMEを表示しない」、
    赤丸で示された左上のタイトル) -- 名前は中のエリア枠・カードにも書いてあるため。×ボタンは右上に残す。 */
-@media (max-width: 760px) {
+@media (max-width: 760px), (max-height: 500px) {
   .card-inst-modal--area-wide .card-inst-modal__title {
     display: none;
   }
@@ -5992,7 +5992,7 @@ body.tutorial-mode .change-highlight {
    ただし画面幅が足りないと3つ目の枠が下の段に落ちるため、横1列に収まる範囲で広げる(エリア枠184px×3、
    表示欄=画面幅-68px)。幅約665px未満の画面では間隔が22px未満になり少し重なりが残る。
    下の矢印コネクタは枠の位置を実測して置くので(buildAreaTierUpConnectorsRow)ずれない。 */
-@media (max-width: 760px) {
+@media (max-width: 760px), (max-height: 500px) {
   .area-enlarge-row {
     gap: clamp(10px, calc((100vw - 622px) / 2), 32px);
   }
@@ -6000,7 +6000,7 @@ body.tutorial-mode .change-highlight {
 
 /* スマホ版: エリア拡大画面の赤い矢印と支配カードの間の隙間を半分に (2026-10-22, per user request「青まる
    つけた部分の隙間を半分に」) -- 隙間は約12px(矢印SVG下部の余白約11px+gap)、カードを6px上へ寄せる。 */
-@media (max-width: 760px) {
+@media (max-width: 760px), (max-height: 500px) {
   .area-tier-up-connector__arrow {
     margin-bottom: -6px;
   }
@@ -6009,7 +6009,7 @@ body.tutorial-mode .change-highlight {
 /* スマホ版: 建築/LVアップ選択画面の上のタイトル「建築 / LVアップを選択」と「建築」の見出しを消す
    (2026-10-22, per user request「スマホ版 赤丸部分削除して」、赤丸はこの2か所)。タイトルの行にある
    ターン開始に戻す/1手戻るボタンは残す。「LVアップ」の見出し(区切り線つき)は赤丸の対象外なので残す。 */
-@media (max-width: 760px) {
+@media (max-width: 760px), (max-height: 500px) {
   /* #build-choice-overlayに限定 -- カードリスト(#card-list-overlay)も.build-choice-modalクラスを使い
      回しているため、限定しないとカードリストのタイトルまで消えていた(Ver.1.240〜1.243)。 */
   #build-choice-overlay .card-inst-modal__title,
@@ -6023,7 +6023,7 @@ body.tutorial-mode .change-highlight {
    ・候補カードの枠は、カードを横に倒した(TAP)時用の150px正方形だったが、この画面では倒さないので
      カードの大きさまで縮める(カードの左右・上下の余白が減る)。
    ・タイトルを消して空いた上の行に所持資源を並べ、ボタン(ターン開始に戻す/1手戻る)はその右に寄せる。 */
-@media (max-width: 760px) {
+@media (max-width: 760px), (max-height: 500px) {
   #build-choice-overlay .owned-card-cell {
     width: auto;
     height: auto;
@@ -6136,7 +6136,7 @@ body.tutorial-mode .change-highlight {
 
 /* フリーアクションボタンの文字が右欄(幅124px)からはみ出していた(Ver.1.242)ため、このボタンだけ文字を
    少し小さく・左右の余白を詰めて1行に収める。 */
-@media (max-width: 760px) {
+@media (max-width: 760px), (max-height: 500px) {
   .mobile-own-row__free-action {
     font-size: 12px;
     padding-left: 2px;
@@ -6177,7 +6177,7 @@ body.tutorial-mode .change-highlight {
 /* スマホ版: TAPで倒れることが無いカードは、倒した時用の正方形の枠をやめてカードの大きさまで詰める
    (2026-10-22, per user「タップできないカードの隣は開ける必要がないのでは」「不揃いでもいい スマホのみ
    詰めて」) -- main.jsのisNeverTappedCard参照。TAPできるカードは従来通り正方形の枠のまま。 */
-@media (max-width: 760px) {
+@media (max-width: 760px), (max-height: 500px) {
   #player-cards .owned-card-cell.owned-card-cell--untappable {
     width: auto;
     height: auto;
@@ -6315,7 +6315,7 @@ body.opening-hide-res .card-group__onboard-resources > .owned-card-cell {
 
 /* スマホ版: 獲得カード画面の「建築数 1 LV1 1 天 2 ...」の行を消して場所を空ける (2026-10-23, per user
    request「スマホ版 獲得カード画面の建築数1 LV1 1 天2 など場所を開けるために消して」)。 */
-@media (max-width: 760px) {
+@media (max-width: 760px), (max-height: 500px) {
   #player-cards .card-group__stats {
     display: none;
   }
@@ -6328,7 +6328,7 @@ body.opening-hide-res .card-group__onboard-resources > .owned-card-cell {
    2) 名前の行(「Alice」)を消す -- 右の名前ボタンで誰のカードか分かるため。
    3) TAPできるカードの正方形の枠(倒した時用)もやめ、全カードをカードの大きさに。倒したカードは隣に
       少し重なって見える。 */
-@media (max-width: 760px) {
+@media (max-width: 760px), (max-height: 500px) {
   #player-cards .card-group {
     display: flex;
     flex-wrap: wrap;
@@ -6426,7 +6426,7 @@ body.opening-hide-res .card-group__onboard-resources > .owned-card-cell {
 
 /* スマホ版: エリアのタイルの「使用料○○」は「使用料」の文字を消して○だけに (2026-10-23, per user request
    「使用料はとって 画面節約のため」)。フリーアクション画面の使用料回収ボタンは文字を残す。 */
-@media (max-width: 760px) {
+@media (max-width: 760px), (max-height: 500px) {
   .map-tile .usage-fee-label__text {
     display: none;
   }
@@ -6833,7 +6833,7 @@ body.story-mode #mobile-cards-player-switcher { display: none !important; }
    バーの下に隠れないよう#appの下に余白を取り、右下のバージョン表示・タブバーの所に出していた案内の帯
    (.mobile-untap-banner: アンタップ選択/「…がプレイしました」)も一緒に下へ。エリアタブ(横向き)は右の
    ダイス置き場が画面の上から下まであるので、バーはその左までにする。PC/タブレットは変更なし。 */
-@media (max-width: 760px) {
+@media (max-width: 760px), (max-height: 500px) {
   #mobile-tab-switcher[hidden] {
     position: fixed;
     top: auto;
@@ -6879,7 +6879,7 @@ body.story-mode #mobile-cards-player-switcher { display: none !important; }
     bottom: calc(86px + env(safe-area-inset-bottom));
   }
 }
-@media (max-width: 760px) and (orientation: landscape) {
+@media (max-width: 760px) and (orientation: landscape), (max-height: 500px) and (orientation: landscape) {
   body:has(#app[data-mobile-active-tab="board"] .mobile-own-row:not(:empty)) #mobile-tab-switcher[hidden] {
     right: 126px;
   }
@@ -6891,7 +6891,7 @@ body.story-mode #mobile-cards-player-switcher { display: none !important; }
    screenshot: "赤で囲った部分をフリックしても動かないので...動くようにしてほしい") -- スワイプの検出は
    #appに付いている(main.jsのsetupMobileTabSystem)が、中身が短いタブでは#appが画面の途中で終わり、その下の
    空白はbody(#appの外)だった。#appを常に画面の高さいっぱいにする(border-boxなので余計なスクロールは出ない)。 */
-@media (max-width: 760px) {
+@media (max-width: 760px), (max-height: 500px) {
   #app {
     min-height: 100vh;
     min-height: var(--app-height, 100dvh);
@@ -6921,7 +6921,7 @@ body.online-waiting #qst-slots {
 .online-pick-status[data-status="done"] {
   background: #16a34a;
 }
-@media (max-width: 760px) {
+@media (max-width: 760px), (max-height: 500px) {
   /* 名前欄は幅84pxしかないので、名前の下の段に出す。 */
   .mobile-cards-player-switcher__btn:has(.online-pick-status) {
     flex-wrap: wrap;
@@ -7060,7 +7060,7 @@ body.online-spectator #online-spectator-badge {
   color: #fff;
   border-color: var(--accent);
 }
-@media (max-width: 760px) {
+@media (max-width: 760px), (max-height: 500px) {
   /* スマホはタブバーの上 */
   body.online-spectator #online-spectator-badge {
     bottom: calc(46px + env(safe-area-inset-bottom));
