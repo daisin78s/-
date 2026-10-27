@@ -558,7 +558,9 @@ h1, h2, h3 { margin: 0; }
    カードの枠から意図的にはみ出す位置に絶対配置する。 */
 .shop-card__acquirable-badge {
   position: absolute;
-  right: -6px;
+  /* -6px -> -16px (2026-10-27, per user request: "チェックマークはエンブレムと かぶらないように 表示位置を
+     もう少し右へ" -- エンブレムを右下へ移したため)。 */
+  right: -16px;
   bottom: -6px;
   width: 18px;
   height: 18px;
@@ -642,7 +644,8 @@ h1, h2, h3 { margin: 0; }
    the row, rather than a fixed px guess. */
 .shop-card__emblem {
   position: absolute;
-  top: 4px;
+  /* 右上→右下 (2026-10-27, per user request: "エンブレム 名前と被るため 表示位置を 右下に変更")。 */
+  bottom: 4px;
   right: 6px;
   font-size: 10px;
   font-weight: 700;
@@ -6440,11 +6443,14 @@ body.opening-hide-res .card-group__onboard-resources > .owned-card-cell {
 /* [data-deck]付きで指定 -- 種類ごとの背景色(.shop-card[data-deck="A"]等のbackgroundショートハンド)に
    上書きされないよう、同じかそれ以上の優先度にする。 */
 .shop-card.shop-card--tier1[data-deck] {
-  background-image: linear-gradient(rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.4));
+  /* 0.4 -> 0.5 (2026-10-27, per user request: "まだ 見分けがつきにくいので 通常カード ほんの少し色を薄く")。 */
+  background-image: linear-gradient(rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.5));
 }
-.shop-card.shop-card--tier3[data-deck] {
-  background-image: linear-gradient(rgba(0, 0, 0, 0.07), rgba(0, 0, 0, 0.07));
-}
+/* 3R: 黒を重ねて暗くするのをやめ、種類の色を濃くする (2026-10-27, per user request: "強化カード3R 色が汚い
+   色を暗くするのではなく 濃くして") -- 2Rの各種類の色の割合(A/B 8%、C 10%)を倍以上に。 */
+.shop-card.shop-card--tier3[data-deck="A"] { background: color-mix(in srgb, var(--emblem-chi) 20%, var(--surface-sunken)); }
+.shop-card.shop-card--tier3[data-deck="B"] { background: color-mix(in srgb, var(--emblem-ten) 20%, var(--surface-sunken)); }
+.shop-card.shop-card--tier3[data-deck="C"] { background: color-mix(in srgb, var(--emblem-jin) 22%, var(--surface-sunken)); }
 
 /* スマホ版: アンタップするカードを選ぶ時の案内/確認 (2026-10-23、main.jsのapplyMobileUntapChoiceUi参照) --
    タブバーの位置に重ねて表示(左から流れてくる)。資源タブの旧アンタップ選択欄はスマホ版では使わない。 */
