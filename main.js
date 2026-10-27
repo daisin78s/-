@@ -4201,11 +4201,17 @@ function buildChangeQuantityIcon(actionText) {
   const match = /^CHANGE\((\d*)(K|A|B|C|Z),(\d*)(K|A|B|C|Z)\)$/.exec(actionText || '');
   if (!match) return null;
   const [, payCount, payResource, getCount, getResource] = match;
-  return actionRow([
+  const row = actionRow([
     ...resourceItemNodes(payCount, payResource),
     actionArrow(),
     ...resourceItemNodes(getCount, getResource),
   ]);
+  // 料理人(JOB011)の"⤵〇3→Z2" (2026-10-27, per user request: "料理人のアイコン１行に 少しはみ出てもいい") --
+  // 幅の狭いジョブカードでは最後の"2"だけが次の行へ折り返していたので、この1枚だけ折り返さない。
+  if (currentCardVisualFaceId && gameStateMod.splitCardId(currentCardVisualFaceId).physicalId === 'JOB011') {
+    row.classList.add('action-icons--nowrap');
+  }
+  return row;
 }
 
 /** CHANGE(nK,D)/CHANGE(K,D) -- 訓練場LV1 (AREA007B)'s own ACTION (2026-08-30, per user request:
@@ -5050,6 +5056,8 @@ function buildEffectRow(effect, allowTextFallback = true) {
     return wrapper;
   }
   const row = el('div', 'action-icons');
+  // Flattening drops the builder's own row element, so carry its "don't wrap" modifier over (料理人, see buildChangeQuantityIcon).
+  if (icons && icons.classList.contains('action-icons--nowrap')) row.classList.add('action-icons--nowrap');
   if (effect.source === 'TAP' && !tapPrefixEmbedded) row.appendChild(actionEmoji(TAP_COST_ICON));
   if (icons) {
     Array.from(icons.childNodes).forEach((child) => row.appendChild(child));
