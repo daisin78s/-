@@ -291,6 +291,7 @@ function startRoom(code, initialStateJson, seatIsHuman) {
     phase: 'playing',
     seatIsHuman: seatIsHuman,
     state: initialStateJson,
+    stateRev: 1,
   });
 }
 
@@ -298,8 +299,26 @@ function startRoom(code, initialStateJson, seatIsHuman) {
  * why: real GameState JSON is ~27KB even at round 4, comfortably inside Firestore's 1MiB/doc cap, so
  * broadcasting the whole thing after every move is simpler and more robust than reconstructing individual
  * Move objects from main.js's ~20 scattered human-action handlers). */
-function pushRoomState(code, stateJson) {
-  return db().collection(ROOM_COLLECTION).doc(code).update({ state: stateJson });
+/** 通し番号 (2026-10-27, per user request -- 同期ミスへの備え「古い状態での上書きを受け付けない」): 部屋の
+ * stateRevが、この端末が元にした状態の番号(baseRev)と同じ時だけ書き、番号を1つ進める(トランザクション)。
+ * 違えば(=その間にほかの端末が新しい状態を書いていた)書かずに、Error('STALE_STATE')で今の部屋の状態を返す。
+ * stateRevの無い古い部屋は0扱い。
+ * @returns {Promise<number>} 書いた状態の番号 */
+function pushRoomState(code, stateJson, baseRev) {
+  var ref = db().collection(ROOM_COLLECTION).doc(code);
+  return db().runTransaction(function (tx) {
+    return tx.get(ref).then(function (snap) {
+      var data = snap.data() || {};
+      var rev = data.stateRev || 0;
+      if (rev !== (baseRev || 0)) {
+        var err = new Error('STALE_STATE');
+        err.current = { state: data.state || null, stateRev: rev };
+        throw err;
+      }
+      tx.update(ref, { state: stateJson, stateRev: rev + 1 });
+      return rev + 1;
+    });
+  });
 }
 
 /** 回線が落ちたらAI (2026-10-27, per user request: "回線が落ちたらAI最高レベルがプレイの続きをして再接続したら

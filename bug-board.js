@@ -35,6 +35,13 @@
     AI_MOVE_APPLY_FAILED: 'AIが不正な手を選んだ',
     AI_TURN_MOVE_COUNT_EXCEEDED: 'AIのターン内の手数が異常に多い',
     AI_ONBOARDING_REENTRY_EXCEEDED: 'AIのジョブ/制約選択が終わらない',
+    // オンライン対戦の同期ミスの自動検知(main.jsのcheckIncomingOnlineState)。
+    ONLINE_OWN_TURN_OVERWRITTEN: 'オンライン: 自分の手番中に、ほかの端末の状態で上書きされた',
+    ONLINE_CARD_LOST: 'オンライン: 手番でない人のカードが消えた',
+    ONLINE_CARD_DOWNGRADED: 'オンライン: 手番でない人のカードのLVが下がった',
+    ONLINE_DIE_UNPLACED: 'オンライン: 手番でない人の置いたダイスが戻った/消えた',
+    ONLINE_RESOURCE_DECREASED: 'オンライン: 手番でない人の資源が減った',
+    ONLINE_STALE_PUSH_REJECTED: 'オンライン: 古い状態からの送信を受け付けなかった(その端末の操作は取り消し)',
   };
 
   function renderList(listEl) {
@@ -57,7 +64,7 @@
         row.appendChild(head);
         const text = report.kind === 'manual'
           ? report.text
-          : `${AUTO_REASON_LABELS[report.reason] || report.reason || '不明'}${report.playerId ? `（${report.playerId}）` : ''}`;
+          : `${AUTO_REASON_LABELS[report.reason] || report.reason || '不明'}${report.playerId ? `（${report.playerId}）` : ''}${report.detail ? ` ${report.detail}` : ''}`;
         row.appendChild(el('div', 'bug-board__text', text || ''));
         if (report.hasReplay !== false) {
           const play = el('button', 'undo-button bug-board__replay', '▶ リプレイ');

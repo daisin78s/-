@@ -1504,6 +1504,7 @@ function hasAiWorkPending(state) {
   // device never drives AI itself, so it should never claim AI work is "pending" either (e.g. the manual-
   // pacing mode's "次のAI行動へ" button would otherwise show up doing nothing on that device).
   if (onlineRoomCode && !isOnlineHost) return false;
+  if (onlineRoomCode && (remotePlayback || remoteTurnBuffer.length > 0)) return false; // resolveAiTurnContext参照
   // A BUILD/UPGRADE candidate choice is always mid-resolution for the human (AI moves never go through
   // this UI-only flow -- see pendingBuildChoice's own comment) -- found 2026-08-06, per user report:
   // "最後の1個のダイスで建築するとき　どれを選ぶか考えてる間にAIプレイヤーが次のターンを始めました".
@@ -1566,7 +1567,9 @@ function hasAiWorkPending(state) {
  * move game replay" section for the full picture. */
 function driveOneAiStep(state) {
   const did = driveOneAiStepInner(state);
-  if (did) { recordReplaySnapshotIfChanged(state, aiOpenTurnPlayerId); pushOnlineStateIfChanged(state); }
+  // fromAi: 届いた状態を反映している最中の描画(applyingRemoteState)の中で'instant'のAIがまとめて動いた時も、
+  // AIの手は新しい変化なので送る(2026-10-27 fix -- 以前はそこで送られず、ほかの端末に届かなかった)。
+  if (did) { recordReplaySnapshotIfChanged(state, aiOpenTurnPlayerId); pushOnlineStateIfChanged(state, true); }
   return did;
 }
 
@@ -1586,6 +1589,8 @@ function resolveAiTurnContext(state) {
   // independently drive the SAME AI seats off its own (necessarily out-of-sync-by-a-render-tick) local
   // copy of STATE, racing to push conflicting results.
   if (onlineRoomCode && !isOnlineHost) return null;
+  // ほかの人の手番をためている間/再生の途中は、画面の状態が最新ではないのでAIを動かさない(再生が終わってから)。
+  if (onlineRoomCode && (remotePlayback || remoteTurnBuffer.length > 0)) return null;
   // The real block -- see hasAiWorkPending's matching guard for the full story. pumpAiInstant's while
   // loop calls driveOneAiStepInner directly (not hasAiWorkPending) each iteration, so the guard has to
   // live here too, not just in hasAiWorkPending, or 'instant' mode would still blow straight through the
@@ -2557,8 +2562,8 @@ function recordReplaySnapshotIfChanged(state, effectiveTurnPlayerId) {
  * this device's own human moves), same "only once per real change" dedup convention. A no-op before
  * onlineGameStarted (still mid-lobby -- see that flag's own doc) or while applyingRemoteState (adopting
  * an incoming update, not causing a new one). */
-function pushOnlineStateIfChanged(state) {
-  if (!onlineRoomCode || !onlineGameStarted || applyingRemoteState) return;
+function pushOnlineStateIfChanged(state, fromAi) {
+  if (!onlineRoomCode || !onlineGameStarted || (applyingRemoteState && !fromAi)) return;
   if (onlineSpectator) return; // 観戦している端末は送らない
   // 初期資源を選んでいる間(round 0)は、状態を書き換えて送るのはホストだけ(applyOnlineResourcePicks参照)。
   if (!isOnlineHost && state.round === 0) return;
@@ -2571,7 +2576,75 @@ function pushOnlineStateIfChanged(state) {
   if (json === lastPushedOnlineStateJson) return;
   lastPushedOnlineStateJson = json;
   lastIncomingRoomStateJson = json; // 自分が送った状態が返ってきても描き直さない
-  OnlineSync.pushRoomState(onlineRoomCode, json);
+  queueOnlineStatePush(json);
+}
+
+/** 通し番号つきの送信 (2026-10-27, per user request -- 同期ミスへの備え「古い状態での上書きを受け付けない」、
+ * online-sync.jsのpushRoomState参照)。onlineStateRev = この端末の画面の状態の元になっている、部屋の状態の番号
+ * (実際に反映した届いた状態/自分が書いた状態の番号。届いてもためているだけ(相手の手番の再生待ち)の状態の番号は
+ * 含めない -- それを元にしていないので)。送信は1つずつ順番に(前の送信が終わってから、その番号を元に次を送る)。
+ * ・部屋の番号と合わない(=その間にほかの端末が新しい状態を書いた)時は書かれない。その時は、この端末の操作を
+ *   捨てて部屋の状態に合わせ直し、まだ送っていない分も捨てて(onlinePushEpoch)、自動でバグ報告を送る。
+ * ・回線の一時的な切断などで送れなかった時は、少し待って送り直す(以前のupdate()が持っていた「つながったら
+ *   送る」の代わり。トランザクションはつながっていないと失敗するため)。 */
+let onlineStateRev = 0;
+let onlinePushChain = Promise.resolve();
+let onlinePushEpoch = 0;
+const ONLINE_PUSH_RETRY_MS = 1500;
+const ONLINE_PUSH_MAX_TRIES = 40;
+
+// 届いた状態(JSON) -> その番号。画面に反映する時(adoptOnlineStateRev)に引く。
+const onlineRevByStateJson = new Map();
+function noteOnlineStateRev(json, rev) {
+  onlineRevByStateJson.set(json, rev);
+  if (onlineRevByStateJson.size > 200) onlineRevByStateJson.delete(onlineRevByStateJson.keys().next().value);
+}
+function adoptOnlineStateRev(json) {
+  const rev = onlineRevByStateJson.get(json);
+  if (typeof rev === 'number') onlineStateRev = Math.max(onlineStateRev, rev);
+}
+
+// 元の番号は「送ると決めた時」に決まる: 送信待ちが無ければ今の番号、あれば1つ前の送信が書いた番号(=その状態の続き)。
+// (送る時の番号を使うと、待っている間に反映したほかの端末の新しい状態の番号で、古い中身を送れてしまうため。)
+// 送信待ちの数は、取り消し(onlinePushEpoch)ごとに数え直す(捨てた送信の続きを元にしないため)。
+let onlinePendingPushes = { epoch: -1, count: 0 };
+let onlineLastPushedRev = 0;
+
+function queueOnlineStatePush(json) {
+  const epoch = onlinePushEpoch;
+  const code = onlineRoomCode;
+  if (onlinePendingPushes.epoch !== epoch) onlinePendingPushes = { epoch, count: 0 };
+  const pending = onlinePendingPushes;
+  const fixedBase = pending.count === 0 ? onlineStateRev : null;
+  pending.count++;
+  const attempt = (tries) => {
+    if (epoch !== onlinePushEpoch || code !== onlineRoomCode) return undefined;
+    const base = fixedBase !== null ? fixedBase : onlineLastPushedRev;
+    return OnlineSync.pushRoomState(code, json, base).then((rev) => {
+      if (code === onlineRoomCode && typeof rev === 'number') {
+        onlineLastPushedRev = rev;
+        onlineStateRev = Math.max(onlineStateRev, rev);
+      }
+    }).catch((e) => {
+      if (e && e.message === 'STALE_STATE') { handleStaleOnlinePush(e.current, json); return undefined; }
+      if (tries >= ONLINE_PUSH_MAX_TRIES) { console.error('online push failed', e); return undefined; }
+      return new Promise((resolve) => setTimeout(resolve, ONLINE_PUSH_RETRY_MS)).then(() => attempt(tries + 1));
+    });
+  };
+  onlinePushChain = onlinePushChain.then(() => attempt(1)).finally(() => { pending.count--; });
+}
+
+function handleStaleOnlinePush(current, rejectedJson) {
+  onlinePushEpoch++; // まだ送っていない分(捨てた操作の続き)は送らない
+  if (!current || !current.state) return;
+  let rejected = null;
+  let latest = null;
+  try { rejected = JSON.parse(rejectedJson); latest = JSON.parse(current.state); } catch (e) { return; }
+  reportOnlineSyncAnomaly({ reason: 'ONLINE_STALE_PUSH_REJECTED', playerId: localSeatId || null,
+    detail: `この端末が送った状態(元の番号${onlineStateRev})より新しい状態(番号${current.stateRev})を、ほかの端末がすでに書いていたため受け付けられなかった` }, rejected, latest);
+  noteOnlineStateRev(current.state, current.stateRev);
+  lastIncomingRoomStateJson = current.state;
+  applyIncomingRoomState(current.state, null);
 }
 
 // Set only while viewing a saved ranking entry's replay (2026-08-16) -- see enterReplayMode's
@@ -11580,11 +11653,14 @@ function handleSpectateRoomSubmit(codeInput) {
  * from whichever device made it. Still-in-'lobby' updates (a new seat joining) just re-render the
  * waiting-room list. */
 function subscribeToOnlineRoom(code) {
+  onlineStateRev = 0;
+  onlinePushEpoch++;
   onlineRoomUnsubscribe = OnlineSync.subscribeToRoom(code, (roomData) => {
     onlineLobbyRoomData = roomData;
     if (!roomData) return; // room doc briefly not-yet-visible right after create/join; next snapshot has it
     if (roomData.phase === 'playing') {
       const justStarted = !onlineGameStarted;
+      if (typeof roomData.stateRev === 'number' && roomData.state) noteOnlineStateRev(roomData.state, roomData.stateRev);
       noteOnlineClockOffset(roomData);
       // 回線が落ちた席のAI交代(aiTakeover)を、どの端末でも同じ扱いに。手番の途中の人がAIに代わったら、その人の
       // 手番をためていた分(remoteTurnBuffer)は捨てて最新の状態にする(AIの手番として続く)。
@@ -11704,7 +11780,92 @@ function interceptIncomingRemoteState(stateJson) {
   return true;
 }
 
-function applyRemoteStateNow(incoming) {
+/** オンライン対戦の同期ミスの自動検知 (2026-10-27, per user request: "おかしな状態を見つけたら、自動でバグ報告に
+ * 送る 例えば、手番でない人の資源やカードが減った、置いたダイスが消えた、などです 見つけた時は直さずに、その時点
+ * までのリプレイを付けて...いれてほしい") -- 届いた状態(after)を画面に反映する直前に、今の状態(before)と比べる。
+ * 直さない・止めない(ゲームはそのまま続く)。見つけたらbug-board.jsの掲示板と同じ置き場(bugReports+bugReplays)へ、
+ * この端末のリプレイ+届いた状態を付けて送る。同じ理由×同じプレイヤーは1回だけ。ラウンドをまたぐ変化(ダイスが
+ * 戻る、ラウンド終わりの変換など)は正しい変化なので比べない。
+ * ・自分の手番中(ダイスを使った後/建築の選択中)に、ほかの端末から自分の資源/カード/ダイスが違う状態が届いた
+ *   (=古い状態で上書きされた。Ver.1.306で直した不具合と同じ種類)。
+ * ・手番でない人(この間に動いた人以外)のカードが消えた/LVが下がった/置いたダイスが手元に戻った・消えた/資源が減った。 */
+const onlineSyncReportedKeys = new Set();
+
+function onlinePlayerSyncSig(state, playerId) {
+  const p = state.players.find((x) => x.id === playerId);
+  if (!p) return '';
+  return JSON.stringify([p.resources, p.ownedCardPhysicalIds, p.ownedCardPhysicalIds.map((id) => state.cards[id] && state.cards[id].currentFaceId),
+    p.dice.map((d) => `${d.id}:${d.placedMapId || ''}:${d.passed ? 1 : 0}`)]);
+}
+
+/** この2つの状態の間に動いた(動いてよい)プレイヤー。 */
+function onlineActingPlayersBetween(before, after) {
+  const acting = new Set();
+  const local = openTurnPlayerId();
+  if (local) acting.add(local);
+  if (isOnlineHost && aiOpenTurnPlayerId) acting.add(aiOpenTurnPlayerId);
+  for (const s of [before, after]) {
+    if (s.onlineOpenTurnPlayerId) acting.add(s.onlineOpenTurnPlayerId);
+    try { const next = turnFlowMod.getNextTurn(s); if (next.playerId) acting.add(next.playerId); } catch (e) { /* 判定できない時は足さない */ }
+  }
+  const used = (p) => p.dice.filter((d) => d.placedMapId !== null || d.passed).length;
+  for (const pb of before.players) {
+    const pa = after.players.find((x) => x.id === pb.id);
+    if (pa && used(pa) !== used(pb)) acting.add(pb.id);
+  }
+  return acting;
+}
+
+function checkIncomingOnlineState(before, after) {
+  if (!onlineRoomCode || !before || !before.players || !after || !after.players) return;
+  if (before.round < 1 || before.round !== after.round || before.phase !== after.phase) return;
+  const problems = [];
+  if (localSeatId && !onlineSpectator && localOpenTurnPlayerId() === localSeatId
+      && onlinePlayerSyncSig(before, localSeatId) !== onlinePlayerSyncSig(after, localSeatId)) {
+    problems.push({ reason: 'ONLINE_OWN_TURN_OVERWRITTEN', playerId: localSeatId, detail: '自分の手番中に、ほかの端末から自分の資源/カード/ダイスが違う状態が届いた' });
+  }
+  const acting = onlineActingPlayersBetween(before, after);
+  for (const pb of before.players) {
+    if (acting.has(pb.id)) continue;
+    const pa = after.players.find((x) => x.id === pb.id);
+    if (!pa) continue;
+    const lost = pb.ownedCardPhysicalIds.filter((id) => !pa.ownedCardPhysicalIds.includes(id));
+    if (lost.length) problems.push({ reason: 'ONLINE_CARD_LOST', playerId: pb.id, detail: lost.join(',') });
+    const downgraded = pb.ownedCardPhysicalIds.filter((id) => pa.ownedCardPhysicalIds.includes(id) && before.cards[id] && after.cards[id]
+      && /B$/.test(before.cards[id].currentFaceId) && /A$/.test(after.cards[id].currentFaceId));
+    if (downgraded.length) problems.push({ reason: 'ONLINE_CARD_DOWNGRADED', playerId: pb.id, detail: downgraded.join(',') });
+    const unplaced = pb.dice.filter((d) => d.placedMapId !== null).filter((d) => {
+      const da = pa.dice.find((x) => x.id === d.id);
+      return !da || da.placedMapId === null;
+    });
+    if (unplaced.length) problems.push({ reason: 'ONLINE_DIE_UNPLACED', playerId: pb.id, detail: unplaced.map((d) => `${d.id}@${d.placedMapId}`).join(',') });
+    const decreased = Object.keys(pb.resources).filter((r) => (pa.resources[r] || 0) < (pb.resources[r] || 0));
+    if (decreased.length) problems.push({ reason: 'ONLINE_RESOURCE_DECREASED', playerId: pb.id, detail: decreased.map((r) => `${r}:${pb.resources[r]}→${pa.resources[r] || 0}`).join(',') });
+  }
+  for (const problem of problems) reportOnlineSyncAnomaly(problem, before, after);
+}
+
+function reportOnlineSyncAnomaly(problem, before, after) {
+  const key = `${problem.reason}|${problem.playerId}`;
+  if (onlineSyncReportedKeys.has(key) || !window.OnlineSync || !window.OnlineSync.saveBugReport) return;
+  onlineSyncReportedKeys.add(key);
+  const id = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const info = buildAiBugReportInfo(after, problem.playerId, problem.reason, {
+    detail: problem.detail,
+    appVersion: appVersionLabel(),
+    mode: 'オンライン対戦',
+    localSeatId: localSeatId || null,
+    isHost: !!isOnlineHost,
+    hasReplay: true,
+  });
+  console.error('online sync anomaly', info);
+  window.OnlineSync.saveBugReport(id, info).catch(() => {});
+  window.OnlineSync.saveBugReplay(id, [...replayHistory, structuredClone(before), structuredClone(after)]).catch(() => {});
+}
+
+function applyRemoteStateNow(incoming, json) {
+  checkIncomingOnlineState(STATE, incoming);
+  adoptOnlineStateRev(json);
   applyingRemoteState = true;
   Object.keys(STATE).forEach((k) => delete STATE[k]);
   Object.assign(STATE, incoming);
@@ -11754,7 +11915,7 @@ function stepRemotePlayback() {
   let incoming;
   try { incoming = JSON.parse(json); } catch (e) { setTimeout(stepRemotePlayback, 0); return; }
   animateResourceExchanges(STATE, incoming, remotePlayback.playerId, () => {
-    applyRemoteStateNow(incoming);
+    applyRemoteStateNow(incoming, json);
     setTimeout(stepRemotePlayback, REMOTE_PLAYBACK_STEP_GAP_MS);
   });
 }
@@ -11837,6 +11998,8 @@ function applyIncomingRoomState(stateJson, seatIsHuman) {
   if (onlineResourcePickSent && !incoming.pendingChoices.some((c) => c.playerId === localSeatId && c.kind === 'SELECT_RESOURCE_CARDS')) {
     onlineResourcePickSent = null;
   }
+  if (!seatIsHuman) checkIncomingOnlineState(STATE, incoming);
+  adoptOnlineStateRev(stateJson);
   Object.keys(STATE).forEach((k) => delete STATE[k]);
   Object.assign(STATE, incoming);
   render(STATE);
