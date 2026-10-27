@@ -681,6 +681,14 @@ function dismissEntryBanner() {
   startOpeningSequence();
   render(STATE);
 }
+// カードリスト/ランキング/実績解除をトップ画面から開いた時は、オープニングを流さない (2026-10-27, per user
+// request: "ランキング チュートリアル カードリスト 実績解除 リプレイを読み込む AIルール相談 バグ報告 オープニング
+// アニメーション不要" + 回答「ページを読み込んだ時」) -- オープニングは実際に対戦を始めた時(ローカル対戦/
+// オンライン対戦)だけ。
+function dismissEntryBannerWithoutOpening() {
+  entryBannerDismissed = true;
+  render(STATE);
+}
 
 /** オープニングアニメーション (2026-10-22, per user request: "オープニングアニメーションを作れますか 空の
  * ショップに上から1枚づつカードが素早くスライドしてきてSHOP101-106に配られる" + 回答「まずはオープニング
@@ -17329,7 +17337,8 @@ document.addEventListener('DOMContentLoaded', () => {
   setupMobileQuestTab();
   // 再読み込みで始まる新しいゲーム(ゲーム中の「新しいローカル対戦」/チュートリアル開始)もオープニングを
   // 流す。続きからの再開(resumeSavedSession)はこの時点ではtutorialModeActive等がまだ立っていないので対象外。
-  const playOpeningOnLoad = localBattlePending || (tutorialModeActive && !sessionResumeChoicePending);
+  // チュートリアルは流さない (2026-10-27, dismissEntryBannerWithoutOpening参照)。
+  const playOpeningOnLoad = localBattlePending;
   window.addEventListener('resize', fitMobileShopWidth);
   document.getElementById('mobile-free-action-close').addEventListener('click', () => {
     mobileFreeActionOpen = false;
@@ -17433,9 +17442,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // weekly-challenge-button) used to stay ungated, letting a locked feature be reached mid-game even
   // though the top-screen kicker for it was locked -- those 3 are now gated too, see their own call sites).
   document.getElementById('entry-banner-weekly-button').addEventListener('click', gatedEntryBannerHandler('ウィークリーチャレンジ', openWeeklyChallenge));
-  document.getElementById('entry-banner-cardlist-button').addEventListener('click', gatedEntryBannerHandler('カードリスト', () => { dismissEntryBanner(); openCardListOverlay(); }));
-  document.getElementById('entry-banner-ranking-button').addEventListener('click', gatedEntryBannerHandler('ランキング', () => { dismissEntryBanner(); openRankingOverlay(); }));
-  document.getElementById('entry-banner-achievement-button').addEventListener('click', () => { dismissEntryBanner(); openAchievementOverlay(); });
+  document.getElementById('entry-banner-cardlist-button').addEventListener('click', gatedEntryBannerHandler('カードリスト', () => { dismissEntryBannerWithoutOpening(); openCardListOverlay(); }));
+  document.getElementById('entry-banner-ranking-button').addEventListener('click', gatedEntryBannerHandler('ランキング', () => { dismissEntryBannerWithoutOpening(); openRankingOverlay(); }));
+  document.getElementById('entry-banner-achievement-button').addEventListener('click', () => { dismissEntryBannerWithoutOpening(); openAchievementOverlay(); });
   // 元デザイナーズノートのボタンは「ストーリー」になった (2026-10-23) -- 押した時の処理はstory.js側。
   applyLockedMenuFeatureStyling();
   // 更新しても進行中のゲームが消えないように (2026-10-11) -- sessionResumeChoicePendingの doc参照。
