@@ -289,6 +289,29 @@ function pushRoomState(code, stateJson) {
   return db().collection(ROOM_COLLECTION).doc(code).update({ state: stateJson });
 }
 
+/** 観戦モード (2026-10-27, per user request: "観戦モードが欲しい 部屋のオーナーがOK NG選べて 第三者が
+ * プレイを観戦できるように" + 回答「部屋の設定で決める」) -- 部屋の作成者が待ち合い画面で切り替える。 */
+function setSpectatorsAllowed(code, allowed) {
+  return db().collection(ROOM_COLLECTION).doc(code).update({ spectatorsAllowed: !!allowed });
+}
+
+/** 観戦できる部屋か確かめる(席は取らない)。
+ * @throws {Error} .message: ROOM_NOT_FOUND / VERSION_MISMATCH / SPECTATE_NOT_ALLOWED */
+function spectateRoom(code, appVersion) {
+  var normalizedCode = code.trim();
+  return db().collection(ROOM_COLLECTION).doc(normalizedCode).get().then(function (snap) {
+    if (!snap.exists) throw new Error('ROOM_NOT_FOUND');
+    var data = snap.data();
+    if (data.appVersion && appVersion && data.appVersion !== appVersion) {
+      var err = new Error('VERSION_MISMATCH');
+      err.roomVersion = data.appVersion;
+      throw err;
+    }
+    if (!data.spectatorsAllowed) throw new Error('SPECTATE_NOT_ALLOWED');
+    return { code: normalizedCode, phase: data.phase };
+  });
+}
+
 /** オンライン対戦の初期資源の選択を送る (2026-10-27、全員同時に選ぶため -- main.jsの
  * applyOnlineResourcePicks参照)。盤面の状態(state)ではなく、席ごとの別の欄(resourcePicks.P2 等)に書くので、
  * 何人が同時に送っても互いに消し合わない。反映するのはホストの端末。 */
@@ -390,6 +413,8 @@ window.OnlineSync = {
   startRoom: startRoom,
   pushRoomState: pushRoomState,
   submitResourcePick: submitResourcePick,
+  setSpectatorsAllowed: setSpectatorsAllowed,
+  spectateRoom: spectateRoom,
   loadAchievementBackup: loadAchievementBackup,
   saveAchievementBackup: saveAchievementBackup,
   deleteAchievementBackup: deleteAchievementBackup,

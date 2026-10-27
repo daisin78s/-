@@ -7022,3 +7022,47 @@ body.online-waiting #qst-slots {
   font-size: 12px;
   padding: 4px 10px;
 }
+
+/* 観戦モード (main.jsのhandleSpectateRoomSubmit) -- 観戦中の目印と、待ち合い画面の観戦OK/NG切り替え。 */
+#online-spectator-badge {
+  display: none;
+}
+body.online-spectator #online-spectator-badge {
+  display: block;
+  position: fixed;
+  bottom: 8px;
+  left: 8px;
+  z-index: 60;
+  padding: 2px 12px;
+  border-radius: 10px;
+  background: rgba(220, 38, 38, 0.9);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  pointer-events: none;
+}
+.online-spectate-setting {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0;
+}
+.online-spectate-setting__label {
+  font-size: 13px;
+  font-weight: 700;
+}
+.online-spectate-setting__btn {
+  padding: 4px 14px;
+}
+.undo-button.online-spectate-setting__btn--active,
+.undo-button.online-spectate-setting__btn--active:not(:disabled):hover {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+@media (max-width: 760px) {
+  /* スマホはタブバーの上 */
+  body.online-spectator #online-spectator-badge {
+    bottom: calc(46px + env(safe-area-inset-bottom));
+  }
+}

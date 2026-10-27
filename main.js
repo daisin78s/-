@@ -543,6 +543,7 @@ function saveGameSessionIfApplicable(state) {
     // ストーリーモード(story.js)の練習用の盤面は「進行中のゲーム」として保存しない(本物の保存を上書きしないため)。
     if (typeof storyRun !== 'undefined' && storyRun) return;
     if (onlineRoomCode) {
+      if (onlineSpectator) return; // 観戦は保存しない(再読み込みしたら観戦は終わり)
       if (state.phase === 'GAME_END') { clearOnlineSession(); return; }
       localStorage.setItem(ONLINE_SESSION_STORAGE_KEY, JSON.stringify({ roomCode: onlineRoomCode, localSeatId, isOnlineHost }));
       return;
@@ -1072,6 +1073,9 @@ let localSeatId = null;
 let isOnlineHost = false;
 let applyingRemoteState = false;
 let onlineGameStarted = false;
+// 観戦モード (2026-10-27) -- この端末は席を持たずに部屋を見ているだけ(localSeatIdはnull)。状態は送らない、
+// 保存もしない。操作できる席が無いので、画面はすべての席が「ほかの人/AI」の見え方になる。
+let onlineSpectator = false;
 // null | 'choice' | 'join' | 'waiting' -- see renderOnlineLobbyOverlay. null means the overlay is closed.
 let onlineLobbyView = null;
 let onlineLobbyRoomData = null; // latest "rooms/{code}" snapshot, for rendering the waiting-room seat list
@@ -2527,6 +2531,7 @@ function recordReplaySnapshotIfChanged(state, effectiveTurnPlayerId) {
  * an incoming update, not causing a new one). */
 function pushOnlineStateIfChanged(state) {
   if (!onlineRoomCode || !onlineGameStarted || applyingRemoteState) return;
+  if (onlineSpectator) return; // 観戦している端末は送らない
   // 初期資源を選んでいる間(round 0)は、状態を書き換えて送るのはホストだけ(applyOnlineResourcePicks参照)。
   if (!isOnlineHost && state.round === 0) return;
   // ほかのプレイヤーの手番をためている間/再生中は送らない(画面の状態が古いため、相手の進行を上書きしてしまう)。
@@ -9766,7 +9771,7 @@ function applyOnlineResourcePicks(picks) {
 
 /** 初期資源の進み具合(オンライン対戦のround 0だけ): '完了' / '選択中'、それ以外はnull。 */
 function onlineResourcePickStatus(state, playerId) {
-  if (!onlineRoomCode || state.round > 0) return null;
+  if (!onlineRoomCode || !onlineGameStarted || state.round > 0) return null;
   const pending = state.pendingChoices.some((c) => c.playerId === playerId && c.kind === 'SELECT_RESOURCE_CARDS');
   const picks = (onlineLobbyRoomData && onlineLobbyRoomData.resourcePicks) || {};
   if (!pending || picks[playerId] || (playerId === localSeatId && onlineResourcePickSent)) return '完了';
@@ -11387,6 +11392,30 @@ function handleJoinRoomSubmit(codeInput) {
   });
 }
 
+/** 観戦する (2026-10-27) -- 部屋が観戦OKなら、席を取らずに部屋を見るだけの形で入る。開始前に入った時は、
+ * 開始した時にプレイヤーと同じくオープニングが流れる。 */
+function handleSpectateRoomSubmit(codeInput) {
+  const code = codeInput.trim();
+  if (!code) return;
+  OnlineSync.spectateRoom(code, appVersionLabel()).then(({ code: normalizedCode, phase }) => {
+    onlineRoomCode = normalizedCode;
+    localSeatId = null;
+    isOnlineHost = false;
+    onlineSpectator = true;
+    onlineLobbyError = null;
+    document.body.classList.add('online-spectator');
+    if (phase === 'lobby') setOnlineWaitingForStart(true);
+    onlineLobbyView = 'waiting';
+    subscribeToOnlineRoom(normalizedCode);
+  }).catch((e) => {
+    onlineLobbyError = e.message;
+    if (e.message === 'VERSION_MISMATCH') {
+      onlineLobbyError = `バージョンが違うため観戦できません（部屋: ${e.roomVersion} / この端末: ${appVersionLabel()}）。ページを再読み込みして、同じバージョンにしてください`;
+    }
+    renderOnlineLobbyOverlay();
+  });
+}
+
 /** Subscribes once, for the lifetime of this room membership. Handles 2 distinct kinds of update:
  * the FIRST time phase becomes 'playing' (the host just clicked 開始, or this device joined a room that
  * had already started -- see below) is the lobby-to-live-game hand-off, via applyIncomingRoomState;
@@ -11643,6 +11672,7 @@ const ONLINE_LOBBY_ERROR_MESSAGES = {
   ROOM_NOT_FOUND: 'その合言葉の部屋は見つかりませんでした',
   ROOM_ALREADY_STARTED: 'その部屋はすでに開始されています',
   ROOM_FULL: 'その部屋はすでに満員です',
+  SPECTATE_NOT_ALLOWED: 'その部屋は観戦できない設定になっています',
 };
 
 function renderOnlineLobbyOverlay() {
@@ -11679,6 +11709,11 @@ function renderOnlineLobbyOverlay() {
     submitButton.type = 'button';
     submitButton.addEventListener('click', () => handleJoinRoomSubmit(input.value));
     body.appendChild(submitButton);
+    // 観戦モード (2026-10-27) -- 席を取らずに見るだけ。部屋が観戦OKの時だけ入れる。
+    const spectateButton = el('button', 'undo-button', '観戦する');
+    spectateButton.type = 'button';
+    spectateButton.addEventListener('click', () => handleSpectateRoomSubmit(input.value));
+    body.appendChild(spectateButton);
     return;
   }
 
@@ -11695,7 +11730,25 @@ function renderOnlineLobbyOverlay() {
       list.appendChild(el('div', 'ranking-row__opponents', label));
     }
     body.appendChild(list);
+    // 観戦OK/NG (2026-10-27, per user回答「部屋の設定で決める」) -- 部屋の作成者だけが切り替えられる。
+    const spectatorsAllowed = !!onlineLobbyRoomData.spectatorsAllowed;
     if (isOnlineHost) {
+      const spectateRow = el('div', 'online-spectate-setting');
+      spectateRow.appendChild(el('span', 'online-spectate-setting__label', '観戦:'));
+      for (const [label, value] of [['OK', true], ['NG', false]]) {
+        const btn = el('button', 'undo-button online-spectate-setting__btn', label);
+        btn.type = 'button';
+        btn.classList.toggle('online-spectate-setting__btn--active', spectatorsAllowed === value);
+        btn.addEventListener('click', () => OnlineSync.setSpectatorsAllowed(onlineRoomCode, value));
+        spectateRow.appendChild(btn);
+      }
+      body.appendChild(spectateRow);
+    } else {
+      body.appendChild(el('div', 'ranking-row__opponents', `観戦: ${spectatorsAllowed ? 'OK' : 'NG'}`));
+    }
+    if (onlineSpectator) {
+      body.appendChild(el('div', 'ranking-empty', '観戦します。ホストが開始するのを待っています...'));
+    } else if (isOnlineHost) {
       const startButton = el('button', 'undo-button', '開始');
       startButton.type = 'button';
       startButton.disabled = onlineRoomOccupiedSeatCount(onlineLobbyRoomData) < 2;
