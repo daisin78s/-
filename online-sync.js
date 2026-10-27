@@ -265,7 +265,20 @@ function joinRoom(code, appVersion) {
  * @returns {function()} unsubscribe */
 function subscribeToRoom(code, onUpdate) {
   return db().collection(ROOM_COLLECTION).doc(code).onSnapshot(function (snap) {
-    onUpdate(snap.exists ? snap.data() : null);
+    if (!snap.exists) { onUpdate(null); return; }
+    // presence(接続の合図、heartbeat参照)はサーバーの時刻(Timestamp)で入っているので、比べやすいようミリ秒の数に
+    // 直して渡す。自分が書いた直後でまだサーバーの時刻が決まっていない時は推定値('estimate')。
+    var data = snap.data({ serverTimestamps: 'estimate' });
+    if (data.presence) {
+      var presence = {};
+      Object.keys(data.presence).forEach(function (seatId) {
+        var v = data.presence[seatId];
+        presence[seatId] = v && typeof v.toMillis === 'function' ? v.toMillis() : v;
+      });
+      data.presence = presence;
+    }
+    data.__hasPendingWrites = snap.metadata.hasPendingWrites;
+    onUpdate(data);
   });
 }
 
@@ -287,6 +300,25 @@ function startRoom(code, initialStateJson, seatIsHuman) {
  * Move objects from main.js's ~20 scattered human-action handlers). */
 function pushRoomState(code, stateJson) {
   return db().collection(ROOM_COLLECTION).doc(code).update({ state: stateJson });
+}
+
+/** 回線が落ちたらAI (2026-10-27, per user request: "回線が落ちたらAI最高レベルがプレイの続きをして再接続したら
+ * プレイに戻れるように" + 回答: 30秒、ホストが落ちたら別の人が引き継ぐ) -- main.jsのupdateOnlineHostAndTakeover参照。
+ * heartbeat: 席ごとの「今つながっている」合図(サーバーの時刻)。10秒ごとに書く。 */
+function heartbeat(code, seatId) {
+  var update = {};
+  update['presence.' + seatId] = firebase.firestore.FieldValue.serverTimestamp();
+  return db().collection(ROOM_COLLECTION).doc(code).update(update);
+}
+/** その席を今AIが代わりにプレイしているか(全端末がこれを見て、その席をAI扱いにする)。書くのはホストだけ。 */
+function setAiTakeover(code, seatId, on) {
+  var update = {};
+  update['aiTakeover.' + seatId] = !!on;
+  return db().collection(ROOM_COLLECTION).doc(code).update(update);
+}
+/** ホスト(AIを動かす・初期資源の選択を反映する端末)の引き継ぎ。 */
+function setHostSeat(code, seatId) {
+  return db().collection(ROOM_COLLECTION).doc(code).update({ hostSeatId: seatId });
 }
 
 /** 観戦モード (2026-10-27, per user request: "観戦モードが欲しい 部屋のオーナーがOK NG選べて 第三者が
@@ -414,6 +446,9 @@ window.OnlineSync = {
   pushRoomState: pushRoomState,
   submitResourcePick: submitResourcePick,
   setSpectatorsAllowed: setSpectatorsAllowed,
+  heartbeat: heartbeat,
+  setAiTakeover: setAiTakeover,
+  setHostSeat: setHostSeat,
   spectateRoom: spectateRoom,
   loadAchievementBackup: loadAchievementBackup,
   saveAchievementBackup: saveAchievementBackup,

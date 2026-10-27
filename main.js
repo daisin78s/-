@@ -593,6 +593,7 @@ function resumeSavedSession() {
     entryBannerDismissed = true;
     sessionResumeChoicePending = false;
     subscribeToOnlineRoom(onlineRoomCode);
+    startOnlinePresence(); // 戻ってきた合図 -- AIが代わっていたら、次の手番から本人に戻る
     render(STATE);
   }
 }
@@ -2539,6 +2540,7 @@ function pushOnlineStateIfChanged(state) {
   const json = JSON.stringify(state);
   if (json === lastPushedOnlineStateJson) return;
   lastPushedOnlineStateJson = json;
+  lastIncomingRoomStateJson = json; // 自分が送った状態が返ってきても描き直さない
   OnlineSync.pushRoomState(onlineRoomCode, json);
 }
 
@@ -11370,6 +11372,7 @@ function handleCreateRoomClick() {
     setOnlineWaitingForStart(true);
     onlineLobbyView = 'waiting';
     subscribeToOnlineRoom(code);
+    startOnlinePresence();
   });
 }
 
@@ -11384,6 +11387,7 @@ function handleJoinRoomSubmit(codeInput) {
     setOnlineWaitingForStart(true);
     onlineLobbyView = 'waiting';
     subscribeToOnlineRoom(normalizedCode);
+    startOnlinePresence();
   }).catch((e) => {
     onlineLobbyError = e.message; // ROOM_NOT_FOUND / ROOM_ALREADY_STARTED / ROOM_FULL / VERSION_MISMATCH
     if (e.message === 'VERSION_MISMATCH') {
@@ -11391,6 +11395,119 @@ function handleJoinRoomSubmit(codeInput) {
     }
     renderOnlineLobbyOverlay();
   });
+}
+
+/** 回線が落ちたらAI (2026-10-27, per user request: "回線が落ちたらAI最高レベルがプレイの続きをして再接続したら
+ * プレイに戻れるように" + 回答: 30秒つながらなかったら交代、ホストが落ちたら別の人が引き継ぐ) --
+ * ・参加している端末は10秒ごとに部屋へ「つながっている」合図(presence.{席}、サーバーの時刻)を書く
+ *   (startOnlinePresence)。アプリに戻った瞬間(visibilitychange)にもすぐ書く。
+ * ・30秒以上合図の無い人間の席は「回線が落ちた」とみなす(onlineSeatConnected)。各端末の時計のずれは、自分が
+ *   書いた合図のサーバー時刻から見積もって補正する(onlineServerClockOffset)。
+ * ・ホスト: 部屋のhostSeatIdの人がつながっていればその人。落ちていたら、つながっている人間の席のうち一番前の
+ *   人が引き継ぎ、hostSeatIdを書き換える(元のホストが戻っても普通の参加者として戻る)。ホストの端末がAIを動かし、
+ *   初期資源の選択を反映する(既存の仕組み)。
+ * ・ホストは、落ちた席をaiTakeover.{席}=trueにする -- 全端末がその席をAI(最高レベル=DEFAULT_AI_ROLE)扱いにし、
+ *   ホストのAIが続きをプレイする。手番の途中で落ちた場合、すでにダイスを置いていたかを手番の初めの状態と比べて
+ *   引き継ぐ(2個目を置かないように)。
+ * ・合図が戻ったら、AIがその人の手番の途中でなければaiTakeoverを下ろす(=次の手番から本人に戻る)。
+ *   戻ってきた本人の画面には、その間「AIが代わりにプレイしています」を出す。
+ * ・観戦の端末は合図を書かない・判定もしない。 */
+const ONLINE_DISCONNECT_MS = 30000;
+const ONLINE_HEARTBEAT_MS = 10000;
+const ONLINE_SEAT_IDS = ['P1', 'P2', 'P3', 'P4'];
+let onlineServerClockOffset = 0;
+let onlineLastOwnPresence = null;
+let onlineHeartbeatTimer = null;
+let lastIncomingRoomStateJson = null;
+
+function startOnlinePresence() {
+  if (onlineHeartbeatTimer || !onlineRoomCode || !localSeatId || onlineSpectator) return;
+  const beat = () => { if (onlineRoomCode && localSeatId) OnlineSync.heartbeat(onlineRoomCode, localSeatId).catch(() => {}); };
+  beat();
+  onlineHeartbeatTimer = setInterval(() => {
+    beat();
+    if (onlineLobbyRoomData) updateOnlineHostAndTakeover(onlineLobbyRoomData);
+  }, ONLINE_HEARTBEAT_MS);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) beat(); });
+}
+
+function onlineServerNow() { return Date.now() + onlineServerClockOffset; }
+
+/** 自分が書いた合図がサーバーの時刻で返ってきたら、端末の時計とのずれを見積もる。 */
+function noteOnlineClockOffset(roomData) {
+  if (!localSeatId || roomData.__hasPendingWrites || !roomData.presence) return;
+  const mine = roomData.presence[localSeatId];
+  if (typeof mine !== 'number' || mine === onlineLastOwnPresence) return;
+  onlineLastOwnPresence = mine;
+  onlineServerClockOffset = mine - Date.now();
+}
+
+function onlineSeatConnected(roomData, seatId) {
+  if (seatId === localSeatId && !onlineSpectator) return true; // 自分はつながっている
+  const t = roomData.presence && roomData.presence[seatId];
+  return typeof t === 'number' && onlineServerNow() - t < ONLINE_DISCONNECT_MS;
+}
+
+/** 全端末: 各席を人間/AIのどちらとして扱うか(aiTakeoverの席はAI)。変わったらtrue。 */
+function applyOnlineSeatRoles(roomData) {
+  if (!roomData.seatIsHuman) return false;
+  const takeover = roomData.aiTakeover || {};
+  let changed = false;
+  for (const seatId of ONLINE_SEAT_IDS) {
+    const role = roomData.seatIsHuman[seatId] && !takeover[seatId] ? 'HUMAN' : DEFAULT_AI_ROLE;
+    if (playerRoles.get(seatId) !== role) { playerRoles.set(seatId, role); changed = true; }
+  }
+  return changed;
+}
+
+/** ホストの決定と、落ちた席のAI交代/戻ってきた席の返却(書くのはホストだけ)。 */
+function updateOnlineHostAndTakeover(roomData) {
+  if (!onlineRoomCode || onlineSpectator || roomData.phase !== 'playing' || !roomData.seatIsHuman) return;
+  const humans = ONLINE_SEAT_IDS.filter((seatId) => roomData.seatIsHuman[seatId]);
+  let host = roomData.hostSeatId;
+  if (!onlineSeatConnected(roomData, host)) host = humans.find((seatId) => onlineSeatConnected(roomData, seatId)) || host;
+  const wasHost = isOnlineHost;
+  isOnlineHost = host === localSeatId;
+  if (!isOnlineHost) {
+    if (wasHost) render(STATE);
+    return;
+  }
+  if (roomData.hostSeatId !== localSeatId) OnlineSync.setHostSeat(onlineRoomCode, localSeatId).catch(() => {});
+  const takeover = roomData.aiTakeover || {};
+  for (const seatId of humans) {
+    if (seatId === localSeatId) continue;
+    const connected = onlineSeatConnected(roomData, seatId);
+    if (!connected && !takeover[seatId]) OnlineSync.setAiTakeover(onlineRoomCode, seatId, true).catch(() => {});
+    else if (connected && takeover[seatId] && aiOpenTurnPlayerId !== seatId) OnlineSync.setAiTakeover(onlineRoomCode, seatId, false).catch(() => {});
+  }
+  if (!wasHost) render(STATE); // ホストになった -- AIを動かし始める(render()がAIを進める)
+}
+
+/** 手番の途中でAIに交代した席: 手番の初め(turnStart)より、その席の置いたダイスが増えていれば、AIはもう
+ * ダイスを置いた続きとして引き継ぐ(ホストだけ)。 */
+function inheritTakenOverTurn(turnStart, latest, seatId) {
+  const placed = (st) => {
+    const p = st.players.find((x) => x.id === seatId);
+    return p ? p.dice.filter((d) => d.placedMapId !== null).length : 0;
+  };
+  if (placed(latest) > placed(turnStart)) {
+    aiOpenTurnPlayerId = seatId;
+    aiOpenTurnHasPlacedDie = true;
+    aiOpenTurnMoveCount = 0;
+  }
+}
+
+/** 戻ってきた本人の画面: AIが代わりにプレイしている間の案内(タブバーの所の帯)。 */
+function renderOnlineTakeoverBanner(roomData) {
+  let banner = document.getElementById('online-takeover-banner');
+  const mine = !!(localSeatId && roomData && roomData.aiTakeover && roomData.aiTakeover[localSeatId]);
+  if (!banner) {
+    if (!mine) return;
+    banner = el('div', 'mobile-untap-banner online-takeover-banner', '通信が切れていた間はAIが代わりにプレイしています。次の手番から戻ります');
+    banner.id = 'online-takeover-banner';
+    document.body.appendChild(banner);
+  }
+  banner.hidden = !mine;
 }
 
 /** 観戦する (2026-10-27) -- 部屋が観戦OKなら、席を取らずに部屋を見るだけの形で入る。開始前に入った時は、
@@ -11429,7 +11546,31 @@ function subscribeToOnlineRoom(code) {
     if (!roomData) return; // room doc briefly not-yet-visible right after create/join; next snapshot has it
     if (roomData.phase === 'playing') {
       const justStarted = !onlineGameStarted;
+      noteOnlineClockOffset(roomData);
+      // 回線が落ちた席のAI交代(aiTakeover)を、どの端末でも同じ扱いに。手番の途中の人がAIに代わったら、その人の
+      // 手番をためていた分(remoteTurnBuffer)は捨てて最新の状態にする(AIの手番として続く)。
+      let rolesChanged = false;
+      if (!justStarted) {
+        const turnStart = remoteTurnBuffer.length > 0 ? JSON.parse(JSON.stringify(STATE)) : null;
+        const bufferedPlayer = turnStart ? remoteHumanTurnPlayerOf(STATE) : null;
+        rolesChanged = applyOnlineSeatRoles(roomData);
+        if (rolesChanged && bufferedPlayer && !isRemoteHumanPlayer(bufferedPlayer)) {
+          remoteTurnBuffer = [];
+          lastIncomingRoomStateJson = null;
+          if (isOnlineHost) inheritTakenOverTurn(turnStart, JSON.parse(roomData.state), bufferedPlayer);
+        }
+      }
+      updateOnlineHostAndTakeover(roomData);
+      renderOnlineTakeoverBanner(roomData);
+      // 状態が変わっていない更新(接続の合図など)は描き直さない。
+      if (!justStarted && roomData.state === lastIncomingRoomStateJson) {
+        if (isOnlineHost) applyOnlineResourcePicks(roomData.resourcePicks);
+        if (rolesChanged) render(STATE);
+        return;
+      }
+      lastIncomingRoomStateJson = roomData.state;
       applyIncomingRoomState(roomData.state, onlineGameStarted ? null : roomData.seatIsHuman);
+      if (justStarted) applyOnlineSeatRoles(roomData);
       if (justStarted) {
         onlineGameStarted = true;
         onlineLobbyView = null;

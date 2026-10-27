@@ -7066,3 +7066,9 @@ body.online-spectator #online-spectator-badge {
     bottom: calc(46px + env(safe-area-inset-bottom));
   }
 }
+
+/* 回線が落ちてAIが代わりにプレイしている間、戻ってきた本人に出す帯(main.jsのrenderOnlineTakeoverBanner)。 */
+.online-takeover-banner {
+  background: #b45309;
+  font-size: 13px;
+}
