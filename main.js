@@ -2480,77 +2480,107 @@ function hideRound3GeneratingOverlay() {
   document.getElementById('start-from-round3-button').disabled = false;
 }
 
+/* 3Rから: 1R・2RをAIが打つところを見せる (2026-10-27, per user request: "3Rから ただ待っているのも暇なので
+ * AIがプレイしているところを見たい アニメーションも表示 アニメーションによって時間がかかるのも微妙なので
+ * アニメーション途中でも つぎのAIが１手 進めたら そのアニメーションも表示" + 回答「待たない」「AIが考えている
+ * 間にアニメが表示されるので 時間は増えないのでは」) -- 以前は1R・2Rを画面に出さずにまとめて計算していた
+ * (生成中の表示だけ)。今は4人ともAI(DEFAULT_AI_ROLE、P1も)にして、対戦中と同じdriveOneAiStepで1手ずつ進め、
+ * 1手ごとに描く(ダイスが飛ぶ・カード獲得などの演出も出る)。1手ごとの待ち時間は無し、演出の終わりも待たない
+ * (round3WatchStep)。3ラウンド目に入った所でP1を人間に戻して今まで通り始める(finishRound3Watch)。
+ * 見ている間は操作できない(#dice-roll-blockerと同じ透明な幕)。 */
+let round3WatchActive = false;
+let round3WatchIterations = 0;
+let round3WatchIdleSteps = 0;
+const ROUND3_WATCH_MAX_ITERATIONS = 5000;
+
+function setRound3WatchUi(on) {
+  let banner = document.getElementById('round3-watch-banner');
+  if (!banner) {
+    banner = el('div', 'mobile-untap-banner round3-watch-banner', 'AIが1R・2Rをプレイ中…3Rからあなたの番です');
+    banner.id = 'round3-watch-banner';
+    document.body.appendChild(banner);
+  }
+  banner.hidden = !on;
+  let blocker = document.getElementById('round3-watch-blocker');
+  if (!blocker) {
+    blocker = el('div', 'round3-watch-blocker');
+    blocker.id = 'round3-watch-blocker';
+    document.body.appendChild(blocker);
+  }
+  blocker.hidden = !on;
+}
+
 function handleStartFromRound3Click() {
   showRound3GeneratingOverlay();
   setTimeout(() => {
     const seed = `start-from-round3-${Date.now()}`;
     // resourceCardPicker (2026-09-15, per the same request as driveOneAiStepInner's own
-    // RESOURCE_SYNERGY_PICK_ENABLED flag just above): this function's own 1R/2R AI-vs-AI simulation
-    // loop calls setupGame directly, bypassing that flag entirely -- every player here is played by
-    // aiPlayerLv3 (the human hasn't taken over yet, 2026-10-04: formerly aiPlayerLv4), so all 4 should
-    // use the same START_ORDER/ID-based pick, not setupGame's own random default.
+    // RESOURCE_SYNERGY_PICK_ENABLED flag just above): setupGame bypasses that flag entirely -- every player
+    // here is played by the AI until round 3, so all 4 use the same START_ORDER/ID-based pick, not
+    // setupGame's own random default.
     const round3ResourceCardPicker = (candidateIds, state, idx, player) => smartOnboardingMod.pickResourceCards(candidateIds, state, idx, aiResourceSynergyTable, player.conPhysicalId);
     const state = gameRunnerMod.setupGame(seed, ['Alice', 'Bob', 'Carol', 'Dan'], INDEX, aiEvaluator, round3ResourceCardPicker);
-
-    let openTurnPlayerId = null;
-    let openTurnHasPlacedDie = false;
-    const MAX_ITERATIONS = 1000; // safety valve, mirrors game-runner.js's own playGame
-    let iterations = 0;
-    while (state.round < 3 && state.phase !== 'GAME_END' && iterations < MAX_ITERATIONS) {
-      iterations++;
-      const next = turnFlowMod.getNextTurn(state);
-      if (next.type === 'ROUND_OVER') {
-        // Defensive fallback only -- round transitions actually happen inside driveTurn itself, see
-        // game-runner.js's own playGame doc on why this essentially never fires in practice.
-        turnFlowMod.endRound(state, INDEX);
-        if (state.phase !== 'GAME_END') turnFlowMod.startRound(state);
-        openTurnPlayerId = null;
-        continue;
-      }
-      if (next.type === 'ONBOARDING_NEEDED') {
-        gameRunnerMod.driveSmartOnboarding(state, INDEX, next.playerId, aiConJobSynergyTable, aiMoveGeneratorLv3, aiSimulator);
-        continue;
-      }
-      const roundBeforeTurn = state.round;
-      const initialHasPlacedDie = next.playerId === openTurnPlayerId ? openTurnHasPlacedDie : false;
-      const moves = gameRunnerMod.driveTurn(state, INDEX, next.playerId, aiPlayerLv3, initialHasPlacedDie);
-      const endedTurn = moves.some((m) => m.move.type === 'END_TURN' && m.result.success);
-      if (endedTurn || state.round > roundBeforeTurn) {
-        openTurnPlayerId = null;
-      } else {
-        openTurnPlayerId = next.playerId;
-        openTurnHasPlacedDie = initialHasPlacedDie || moves.some((m) => ['PLACE_DIE', 'PLACE_WILDCARD_DIE', 'PLACE_DICE_GROUP', 'PASS_DIE'].includes(m.move.type) && m.result.success);
-      }
-    }
-    if (state.round < 3) {
-      hideRound3GeneratingOverlay();
-      window.alert('3R開始盤面の生成に失敗しました（安全上限に到達）。もう一度お試しください。');
-      return;
-    }
-
+    // setupGameは初期資源の選択と手番順まで済ませた所(round 0)で返す -- 1ラウンド目を始める(maybeStartRound1と同じ)。
+    if (state.round === 0) turnFlowMod.startRound(state);
     Object.keys(STATE).forEach((k) => delete STATE[k]);
     Object.assign(STATE, state);
-    playerRoles.set('P1', 'HUMAN');
-    playerRoles.set('P2', DEFAULT_AI_ROLE);
-    playerRoles.set('P3', DEFAULT_AI_ROLE);
-    playerRoles.set('P4', DEFAULT_AI_ROLE);
-    usedDebugOrTestGameThisGame = true;
-    startedFromRound3 = true; // 実績記録の「3Rから最高点数」専用カテゴリ(maybeRecordAchievements参照)
-
-    // Turn/round rewind from round 3 onward, but NEVER back into round 1/2 (2026-09-13, per user request:
-    // "3Rからターンをまたいで戻れるようにして ただし1R2Rには戻れない") -- rounds 1-2 were bulk-resolved
-    // offline above with no incremental per-turn snapshots at all, so the natural way to guarantee this is
-    // to make sure turnHistory contains NOTHING before this round-3 handoff point: reset it first (in case
-    // stale entries exist from browsing an earlier game this same page load, e.g. debugMode was already on)
-    // before seeding it fresh from the just-swapped-in STATE -- seedDebugHistoryIfNeeded's own
-    // `turnHistory.length > 0` guard would otherwise silently refuse to reseed over old entries.
-    turnHistory = [];
-    historyCursor = -1;
-    debugMode = true;
-    seedDebugHistoryIfNeeded();
+    for (const seatId of ['P1', 'P2', 'P3', 'P4']) playerRoles.set(seatId, DEFAULT_AI_ROLE);
+    // 新しいゲームなので、前のゲームのリプレイ/演出の比較の基準は捨てる(1R・2Rもリプレイに残る)。
+    replayHistory = [];
+    lastReplaySnapshotJson = null;
+    lastAiCardFaces = null;
+    lastHumanTapped = null;
+    mobileAiCardGainQueue.length = 0;
+    round3WatchActive = true;
+    round3WatchIterations = 0;
+    round3WatchIdleSteps = 0;
     hideRound3GeneratingOverlay();
+    setRound3WatchUi(true);
+    if (isMobileLayout()) applyMobileActiveTab('board');
     render(STATE);
+    setTimeout(round3WatchStep, 0);
   }, 0);
+}
+
+/** 1手進めて描く。待ち時間は無し(次の手はすぐ考え始める)、演出の終わりも待たない。 */
+function round3WatchStep() {
+  if (!round3WatchActive) return;
+  if (STATE.round >= 3 || STATE.phase === 'GAME_END') { finishRound3Watch(); return; }
+  round3WatchIterations++;
+  const did = driveOneAiStep(STATE);
+  render(STATE);
+  // 何も進まない状態が続いたら(本来は起きない)、以前と同じく失敗として知らせる。
+  round3WatchIdleSteps = did ? 0 : round3WatchIdleSteps + 1;
+  if (round3WatchIterations > ROUND3_WATCH_MAX_ITERATIONS || round3WatchIdleSteps > 50) {
+    round3WatchActive = false;
+    setRound3WatchUi(false);
+    window.alert('3R開始盤面の生成に失敗しました（安全上限に到達）。もう一度お試しください。');
+    return;
+  }
+  setTimeout(round3WatchStep, 0);
+}
+
+function finishRound3Watch() {
+  round3WatchActive = false;
+  setRound3WatchUi(false);
+  playerRoles.set('P1', 'HUMAN');
+  playerRoles.set('P2', DEFAULT_AI_ROLE);
+  playerRoles.set('P3', DEFAULT_AI_ROLE);
+  playerRoles.set('P4', DEFAULT_AI_ROLE);
+  usedDebugOrTestGameThisGame = true;
+  startedFromRound3 = true; // 実績記録の「3Rから最高点数」専用カテゴリ(maybeRecordAchievements参照)
+
+  // Turn/round rewind from round 3 onward, but NEVER back into round 1/2 (2026-09-13, per user request:
+  // "3Rからターンをまたいで戻れるようにして ただし1R2Rには戻れない") -- make sure turnHistory contains
+  // NOTHING before this round-3 handoff point: reset it first (rounds 1-2 were played by the AI just now
+  // and may have left entries, or stale ones from an earlier game this same page load) before seeding it
+  // fresh from the current STATE -- seedDebugHistoryIfNeeded's own `turnHistory.length > 0` guard would
+  // otherwise silently refuse to reseed over old entries.
+  turnHistory = [];
+  historyCursor = -1;
+  debugMode = true;
+  seedDebugHistoryIfNeeded();
+  render(STATE);
 }
 
 /** effectiveTurnPlayerId (2026-09-10, per user bug report: viewing a saved replay at move 50, the turn
@@ -8426,7 +8456,15 @@ function queueMobileAiCardGainAnimation(state, next) {
 // 1つの演出の終了が来ないと、以降の演出がすべて止まってしまうため、8秒以上終わらない演出は止まったものとみなして
 // 次へ進める(アンタップの選択中は人の操作待ちなので除く)。
 let mobileAiCardGainStartedAt = 0;
+// 演出ごとの番号 -- 途中で打ち切られた演出の終わりの処理(onfinish)が、次の演出を消さないように。
+let mobileAiCardGainToken = 0;
 function playNextMobileAiCardGain() {
+  // 3Rからの1R・2R(round3WatchStep)では、演出の途中でも次の演出が来たらすぐそちらに切り替える。
+  if (round3WatchActive && mobileAiCardGainPlaying && mobileAiCardGainQueue.length > 0) {
+    const layer = document.getElementById('ai-card-gain-layer');
+    if (layer) layer.innerHTML = '';
+    mobileAiCardGainPlaying = false;
+  }
   if (mobileAiCardGainPlaying && !mobileUntapChoiceActive && performance.now() - mobileAiCardGainStartedAt > 8000) {
     const layer = document.getElementById('ai-card-gain-layer');
     if (layer) layer.innerHTML = '';
@@ -8437,12 +8475,13 @@ function playNextMobileAiCardGain() {
   if (document.querySelector('.die--flying')) { setTimeout(playNextMobileAiCardGain, 60); return; }
   mobileAiCardGainPlaying = true;
   mobileAiCardGainStartedAt = performance.now();
+  const token = ++mobileAiCardGainToken;
   const item = mobileAiCardGainQueue.shift();
   if (item.type === 'untapAuto') { playMobileUntapAuto(item); return; }
   if (item.type === 'aiTap') { playMobileAiTap(item); return; }
   if (item.type === 'untapChoice') { startMobileUntapChoice(item); return; }
   const { faceId, fromFaceId, tapped } = item;
-  if (fromFaceId) { playMobileCardUpgrade(fromFaceId, faceId, tapped); return; }
+  if (fromFaceId) { playMobileCardUpgrade(fromFaceId, faceId, tapped, token); return; }
   let layer = document.getElementById('ai-card-gain-layer');
   if (!layer) {
     layer = el('div', 'ai-card-gain-layer');
@@ -8461,6 +8500,7 @@ function playNextMobileAiCardGain() {
     { transform: 'translateX(100vw)' },
   ], { duration: total, fill: 'forwards' });
   animation.onfinish = () => {
+    if (token !== mobileAiCardGainToken) return; // もう次の演出に切り替わっている
     layer.innerHTML = '';
     mobileAiCardGainPlaying = false;
     playNextMobileAiCardGain();
@@ -8479,7 +8519,7 @@ const CARD_UPGRADE_OUT_MS = 200;
  * 自身の左右方向」) -- 倒れたまま(rotate 90deg)の面を使い、裏返しはカード要素自身の変形として
  * rotate(90deg) scaleX(...)で行う。scaleXが回転より先(カード自身の座標)に効くので、カード自身の左右方向に
  * 裏返る(画面上では上下に薄くなって見える)。 */
-function playMobileCardUpgrade(fromFaceId, toFaceId, tapped) {
+function playMobileCardUpgrade(fromFaceId, toFaceId, tapped, token) {
   let layer = document.getElementById('ai-card-gain-layer');
   if (!layer) {
     layer = el('div', 'ai-card-gain-layer');
@@ -8497,6 +8537,7 @@ function playMobileCardUpgrade(fromFaceId, toFaceId, tapped) {
   holder.appendChild(buildFace(fromFaceId));
   layer.appendChild(holder);
   const finish = () => {
+    if (token !== undefined && token !== mobileAiCardGainToken) return; // もう次の演出に切り替わっている
     layer.innerHTML = '';
     mobileAiCardGainPlaying = false;
     playNextMobileAiCardGain();
@@ -8507,6 +8548,7 @@ function playMobileCardUpgrade(fromFaceId, toFaceId, tapped) {
     // 2) ひっくり返る: 横に縮んで消える → LVアップ後の面に差し替え → 広がる
     flipTarget().animate(flipFrames(1, 0),
       { duration: animMs(CARD_UPGRADE_FLIP_HALF_MS), easing: 'ease-in', fill: 'forwards' }).onfinish = () => {
+      if (token !== undefined && token !== mobileAiCardGainToken) return;
       holder.innerHTML = '';
       holder.appendChild(buildFace(toFaceId));
       flipTarget().animate(flipFrames(0, 1),
@@ -8545,6 +8587,8 @@ function queueMobileUntapEffects(state, gainedPlayerIds, compare, queueLenBefore
   const previous = lastHumanTapped;
   lastHumanTapped = current;
   if (!compare || !previous) return;
+  // 3Rからの1R・2Rは、獲得カード画面へ切り替えるタップ/アンタップの演出は出さない(1手ごとに画面が行き来するため)。
+  if (round3WatchActive) return;
   // AIのタップアクション (2026-10-23, per user request: "AIのアニメーション タップアクションも出るようにして
   // ほしい AIがタップしたとき 獲得カードに移動 タップする メインアクションならエリアにもどる") -- AIのカードが
   // このrenderで新しく倒れたら、このrenderの獲得演出より前に「タップ」の演出を差し込む(タップしてから獲得する
@@ -15980,7 +16024,8 @@ function renderCore(state) {
   // 画面を消すとゲームが進むように" -- closeTutorialTurnOrderOverlay's own render(STATE) call, right
   // after flipping this flag off, is what actually lets the AI pump resume, with no separate trigger
   // needed.
-  if (!tutorialTurnOrderOverlayOpen && !diceRollSequenceActive && !openingSequenceActive) {
+  // 3Rからの1R・2R(round3WatchStep)は自分で1手ずつ進めるので、ここでは進めない。
+  if (!tutorialTurnOrderOverlayOpen && !diceRollSequenceActive && !openingSequenceActive && !round3WatchActive) {
     if (aiPacingMode === 'instant') pumpAiInstant(state);
     else if (aiPacingMode === 'delayed') pumpAiDelayed();
   }

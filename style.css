@@ -7080,3 +7080,19 @@ body.online-spectator #online-spectator-badge {
   background: #b45309;
   font-size: 13px;
 }
+
+/* 3Rから: AIが1R・2Rをプレイしている間の操作止め(透明な幕)と案内 (2026-10-27、main.jsのsetRound3WatchUi参照)。 */
+.round3-watch-blocker {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: transparent;
+}
+.round3-watch-blocker[hidden],
+.round3-watch-banner[hidden] {
+  display: none;
+}
+.round3-watch-banner {
+  z-index: 9001;
+  pointer-events: none;
+}
