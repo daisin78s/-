@@ -3330,7 +3330,9 @@ const CARD_LIST_FLAT_CATEGORIES = {
   // 24 rows -> columns:6 gives a clean 6x4 grid (2026-08-25, per user spec: "初期資源カード一覧
   // 横６枚　縦４枚の配置にして" -- was columns:8/8x3 since the RESOURCE sheet grew from 18 to 24
   // on 2026-08-22).
-  initialResource: { label: '初期資源一覧', columns: 6, isQst: false, faceIds: () => INDEX.raw.RESOURCE.map((r) => r.ID) },
+  // keepIdHoles (2026-10-27, per user request: "初期資源カード ２枚 減らしました" + "カードリストは 詰めずに 今までの
+  // 表示 穴あきになってもいい"): 消したカード(R003/R012)の場所は空けたまま、残りのカードは元の位置に並べる。
+  initialResource: { label: '初期資源一覧', columns: 6, isQst: false, keepIdHoles: true, faceIds: () => INDEX.raw.RESOURCE.map((r) => r.ID) },
   monument: { label: 'モニュメントカード一覧', columns: 6, isQst: false, faceIds: () => INDEX.raw.M.map((r) => r.ID) },
   qst: { label: 'クエスト一覧', columns: 4, isQst: true, faceIds: () => INDEX.raw.QST.map((r) => r.ID) },
 };
@@ -3417,8 +3419,16 @@ function renderCardListFlatCategory(key, container) {
   const config = CARD_LIST_FLAT_CATEGORIES[key];
   const grid = el('div', 'card-list-grid');
   grid.style.gridTemplateColumns = config.isQst ? `repeat(${config.columns}, 244px)` : `repeat(${config.columns}, auto)`;
-  for (const faceId of config.faceIds()) {
-    grid.appendChild(buildCardListCell(faceId, config.isQst));
+  const faceIds = config.faceIds();
+  if (config.keepIdHoles) {
+    // ID番号(R001の1など)の位置に置く。抜けている番号は空のマス。
+    const byNumber = new Map(faceIds.map((id) => [Number((/(\d+)/.exec(id) || [])[1]), id]));
+    const maxNumber = Math.max(...byNumber.keys());
+    for (let n = 1; n <= maxNumber; n++) {
+      grid.appendChild(byNumber.has(n) ? buildCardListCell(byNumber.get(n), config.isQst) : el('div', 'card-list-cell--hole'));
+    }
+  } else {
+    for (const faceId of faceIds) grid.appendChild(buildCardListCell(faceId, config.isQst));
   }
   container.appendChild(grid);
   if (config.isQst) setTimeout(() => fitCardListQstGridToScreen(grid), 0);

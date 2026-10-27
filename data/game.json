@@ -1438,23 +1438,6 @@
       "INST": ""
     },
     {
-      "ID": "R003",
-      "NAME": "wD",
-      "DICE": "",
-      "COST": "",
-      "EMBLEM_A": "",
-      "EMBLEM_B": "",
-      "EMBLEM_C": "",
-      "VP": "",
-      "ONCE": "ADD(wD)",
-      "TAP": "",
-      "PASSIVE": "",
-      "TURNEND": "",
-      "START_ORDER": 0,
-      "AUTO": "",
-      "INST": ""
-    },
-    {
       "ID": "R004",
       "NAME": "2VP,Z",
       "DICE": "",
@@ -1575,23 +1558,6 @@
     },
     {
       "ID": "R011",
-      "NAME": "1VP,3K",
-      "DICE": "",
-      "COST": "",
-      "EMBLEM_A": "",
-      "EMBLEM_B": "",
-      "EMBLEM_C": "",
-      "VP": 1,
-      "ONCE": "ADD(3K)",
-      "TAP": "",
-      "PASSIVE": "",
-      "TURNEND": "",
-      "START_ORDER": 3,
-      "AUTO": "",
-      "INST": ""
-    },
-    {
-      "ID": "R012",
       "NAME": "1VP,3K",
       "DICE": "",
       "COST": "",
