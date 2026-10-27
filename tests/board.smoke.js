@@ -158,7 +158,7 @@ function giveJob002(state, playerId) {
   giveJob002(state, 'P1');
   const beforeK = p1.resources.K || 0;
   executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'VP', 2);
-  check('食料長官: a live 2VP grant grants 2K', (p1.resources.K || 0) - beforeK, 2);
+  check('食料長官: a live 2VP grant grants half (1K)', (p1.resources.K || 0) - beforeK, 1);
 }
 {
   // No cap (2026-10-10 redesign) -- a single grant of 7VP now yields the full 7K, not capped at 5.
@@ -167,7 +167,7 @@ function giveJob002(state, playerId) {
   giveJob002(state, 'P1');
   const beforeK = p1.resources.K || 0;
   executor.grantResourceAndEmitGet(state, index, { playerId: 'P1' }, 'VP', 7);
-  check('食料長官: a single 7VP grant is uncapped, grants the full 7K', (p1.resources.K || 0) - beforeK, 7);
+  check('食料長官: a single 7VP grant grants half rounded up (4K)', (p1.resources.K || 0) - beforeK, 4);
 }
 {
   // No tap-gating (2026-10-10 redesign) -- multiple separate VP grants in a row each trigger their own
@@ -200,7 +200,7 @@ function giveJob002(state, playerId) {
   const beforeK = p1.resources.K || 0;
   const result = board.resolveBuild(state, index, { playerId: 'P1' }, { type: 'BUILD_NEW', faceId: 'M001', shopKey: 'M', slotId: 'SHOP001' });
   check('Building M001 (記念碑) succeeds', result.success, true);
-  check('食料長官: building a monument grants K matching its printed VP (4)', (p1.resources.K || 0) - beforeK, 4);
+  check('食料長官: building a monument grants half its printed VP (4 -> 2K)', (p1.resources.K || 0) - beforeK, 2);
 }
 {
   // Initial-RESOURCE-card printed VP is now a LIVE grant (2026-09-23, per user request: "初期資源のVPも
@@ -219,8 +219,8 @@ function giveJob002(state, playerId) {
   setup.receiveInitialResources(state, index, 'P1');
   check('R004: its printed 2VP is now a live resources.VP grant (badge-visible)', p1.resources.VP || 0, 2);
   check('...computeFinalScore counts it exactly once (2), not double-counted via cardVp', scoring.computeFinalScore(state, index, 'P1'), 2);
-  // Total K delta = R004's own ONCE=ADD(K,Z) (1K) + the chef bonus matching its printed VP (2) = 3.
-  check('食料長官: receiving R004 (2VP) grants K = ONCE\'s own 1K + a chef bonus matching its printed VP (2)', (p1.resources.K || 0) - beforeK, 3);
+  // Total K delta = R004's own ONCE=ADD(K,Z) (1K) + the chef bonus, half its printed VP (2 -> 1) = 2.
+  check('食料長官: receiving R004 (2VP) grants K = ONCE\'s own 1K + a chef bonus of half its printed VP (1)', (p1.resources.K || 0) - beforeK, 2);
 }
 
 // ---------------------------------------------------------------------------

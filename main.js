@@ -5350,7 +5350,8 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     tall = true;
     const noteEl = el('div', 'card-note');
     const iconRow = el('span', 'job-note-icon-row');
-    iconRow.appendChild(actionCount('1VP'));
+    // 2026-10-27: 得たVPの半分(切り上げ)のKに変わったので「2VP ▶ 〇」(per user回答)。
+    iconRow.appendChild(actionCount('2VP'));
     iconRow.appendChild(actionTrigger());
     iconRow.appendChild(actionDot('K'));
     noteEl.appendChild(iconRow);
