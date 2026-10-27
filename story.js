@@ -132,7 +132,7 @@ function storySay(id, onTyped, textOverride) {
   const step = () => {
     i++;
     body.textContent = '';
-    body.appendChild(conJobColoredFragment(text.slice(0, i))); // 制約・ジョブの名前は色付き
+    body.appendChild(conJobColoredFragment(text.slice(0, i))); // 性格・ジョブの名前は色付き
     if (i < text.length) run.typeTimer = storyLater(step, STORY_TYPE_MS_PER_CHAR);
     else { run.typeTimer = null; if (onTyped) onTyped(text); }
   };

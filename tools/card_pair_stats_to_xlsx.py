@@ -25,7 +25,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 
 MIN_GAMES = 30
 UNIT_SHEETS = ['A', 'B', 'C', 'M', 'JOB', 'CON']
-KIND_LABEL = {'A': 'A', 'B': 'B', 'C': 'C', 'M': 'モニュメント', 'JOB': 'ジョブ', 'CON': '制約'}
+KIND_LABEL = {'A': 'A', 'B': 'B', 'C': 'C', 'M': 'モニュメント', 'JOB': 'ジョブ', 'CON': '性格'}
 
 stats_path, game_path, xlsx_path = sys.argv[1], sys.argv[2], sys.argv[3]
 with open(stats_path, encoding='utf-8') as f:
@@ -137,7 +137,7 @@ ws.append([])
 ws.append(['見方'])
 ws.append([f'相性: 2枚を一緒に持っていた時の平均順位が、それぞれ単独の平均順位から予想される値より、どれだけ良いか(+ほど良い)。{MIN_GAMES}試合未満は空欄'])
 ws.append(['平均順位: 2枚とも持っていたプレイヤーの最終順位の平均(1位が一番良い)。斜めのマスはそのカード単独の平均順位'])
-ws.append(['数え方: 進化AIの対戦の終了時に持っていたカード(初期資源は除く)。A/B/CはLV1とLV2を同じカードとして数える。制約は選んだ面ごと'])
+ws.append(['数え方: 進化AIの対戦の終了時に持っていたカード(初期資源は除く)。A/B/CはLV1とLV2を同じカードとして数える。性格は選んだ面ごと'])
 ws.append([])
 ws.append(['削除の履歴(能力が変わったカードは、その行と列の数字を消して0から数え直す)'])
 for entry in stats.get('resetLog', []):

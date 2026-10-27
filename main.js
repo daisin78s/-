@@ -3300,7 +3300,7 @@ function setCardListView(key) {
 // タブレットの表示は変わらず、スマホを回転させてもその場で切り替わる)。
 const CARD_LIST_NAV = [
   { key: 'resource', label: '資源や用語[一覧]' },
-  { key: 'con', label: '制約[一覧]' },
+  { key: 'con', label: '性格[一覧]' },
   { key: 'job', label: 'ジョブ[一覧]' },
   { key: 'initialResource', label: '初期資源[一覧]' },
   { key: 'A', label: '領地カード[一覧]' },
@@ -3692,7 +3692,7 @@ function renderCardListOverlay() {
     document.getElementById('card-list-title').textContent = CARD_LIST_NAV.find((n) => n.key === cardListView).label.replace(/[[\]]/g, '');
     renderCardListAbcCategory(cardListView, body);
   } else if (cardListView === 'con') {
-    document.getElementById('card-list-title').textContent = '制約一覧';
+    document.getElementById('card-list-title').textContent = '性格一覧';
     renderCardListConCategory(body);
   } else if (cardListView === 'monument') {
     document.getElementById('card-list-title').textContent = CARD_LIST_FLAT_CATEGORIES.monument.label;
@@ -9921,7 +9921,7 @@ function renderConFacesRow(container, player, onPick) {
   container.appendChild(buildOnboardHint(
     [
       'ジョブ選択後　CONカードの表面か裏面を選んでください',
-      'CONカードは制約カードです。表面より裏面のほうが獲得資源が大きい代わりに制約が厳しくなります',
+      'CONカードは性格カードです。表面より裏面のほうが獲得資源が大きい代わりに性格が厳しくなります',
     ],
     '詳しくはカードをタップ（クリック）してください',
   ));
@@ -10707,7 +10707,7 @@ function buildLifeStoryPlayerInfo(state, playerId, rank, finalScore, featured) {
   const prefix = title && title !== '—' ? `${title}の` : '';
   box.appendChild(elConJob('div', 'life-story-player__name', prefix + p.name));
   box.appendChild(el('div', 'life-story-player__score', `${rank}位　最終獲得点数${finalScore}VP`));
-  box.appendChild(el('div', 'life-story-player__detail', `（素点${baseVp}VP　クエスト${questVp}VP　制約${conVp}VP）`));
+  box.appendChild(el('div', 'life-story-player__detail', `（素点${baseVp}VP　クエスト${questVp}VP　性格${conVp}VP）`));
   return box;
 }
 
@@ -10896,7 +10896,7 @@ function rankingCardDisplayName(faceId) {
  * name (no adjective suffix) for anything not in this table (shouldn't happen with the current 12 CON
  * cards, but keeps a future 13th card from silently vanishing instead of just looking slightly off). */
 const CON_ADJECTIVE_BY_NAME = {
-  祝福: '祝福された',
+  幸運: '幸運な',
   潔癖: '潔癖な',
   狂信: '狂信的な',
   傲慢: '傲慢な',
@@ -11315,7 +11315,7 @@ function closeAchievementPopup() {
  * 3つのメニュー機能(カードリスト/ランキング/ウィークリーチャレンジ)はID自体が表示名なのでカード検索は
  * 行わず、カテゴリ行も出さない(名前だけで何を指すか自明なため)。*/
 function unlockNoticeInfo(id) {
-  if (id.startsWith('CON')) return { category: '制約カード', name: dataLoaderMod.getCardRow(INDEX, id).NAME };
+  if (id.startsWith('CON')) return { category: '性格カード', name: dataLoaderMod.getCardRow(INDEX, id).NAME };
   if (id.startsWith('JOB')) return { category: 'ジョブカード', name: dataLoaderMod.getCardRow(INDEX, id).NAME };
   return { category: null, name: id };
 }
@@ -13190,7 +13190,7 @@ const TUTORIAL_STEPS = [
   {
     id: 'resource_choice_con_intro',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: 'あなたにランダムな制約カード1枚が配られました\nこれはあなたの性格や特性を表しています\n制約カードには表面と裏面があり得られる初期資源や制約が違います\n表面裏面どちらを使うかあとで選ぶことができます\nカードをクリックすることで拡大され詳細が表示されますが今は気にせず先に進みましょう',
+    body: 'あなたにランダムな性格カード1枚が配られました\nこれはあなたの性格や特性を表しています\n性格カードには表面と裏面があり得られる初期資源や性格が違います\n表面裏面どちらを使うかあとで選ぶことができます\nカードをクリックすることで拡大され詳細が表示されますが今は気にせず先に進みましょう',
     nextLabel: '次へ',
   },
   // 2026-09-30: 「初期資源のアイコンの意味を知りたい」の分岐(資源アイコン/変換/城下町/領地カードの説明、
@@ -13246,7 +13246,7 @@ const TUTORIAL_STEPS = [
     body: (state) => {
       const choice = state.pendingChoices.find((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS');
       const total = resourceChoiceStartOrderTotal(state, 'P1', choice.context.selected);
-      return `あなたが選んだカードはこちら\n制約カードに書かれたスタプレ（スタートプレイヤー）と足された合計は${total}です\nこの数字が大きいほど得られる資源が多くなり、小さいほど先にジョブや行動を選ぶことができます`;
+      return `あなたが選んだカードはこちら\n性格カードに書かれたスタプレ（スタートプレイヤー）と足された合計は${total}です\nこの数字が大きいほど得られる資源が多くなり、小さいほど先にジョブや行動を選ぶことができます`;
     },
     autoDismissWhen: (state) => !state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
   },
@@ -13281,7 +13281,7 @@ const TUTORIAL_STEPS = [
         const player = state.players.find((p) => p.id === playerId);
         return `${i + 1}番手は${player.name}`;
       });
-      return `${lines.join('\n')}\nに決まりました\n数字が同じときは制約カードのスタプレの数字が大きいほうが先攻になります`;
+      return `${lines.join('\n')}\nに決まりました\n数字が同じときは性格カードのスタプレの数字が大きいほうが先攻になります`;
     },
     // 2026-09-24, per user request: "次へを押したとき一緒に右上の✖も押されて次の画面にいき" -- dismissing
     // this one also closes the turn-order overlay itself (see dismissTutorialStep's own doc), so a single
@@ -13341,7 +13341,7 @@ const TUTORIAL_STEPS = [
       const player = state.players.find((p) => p.id === 'P1');
       return !!player.jobCardId && !player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
     },
-    body: 'ジョブを選んだら制約カードを表面にするか裏面にするか選びます\n基本的に表面に比べて裏面のほうが得られる初期資源が多い代わりにプレイにかかる制約が厳しいものになります\n初回プレイでは表面をお勧めしますが、自己責任で裏面を選んでも大丈夫です',
+    body: 'ジョブを選んだら性格カードを表面にするか裏面にするか選びます\n基本的に表面に比べて裏面のほうが得られる初期資源が多い代わりにプレイにかかる性格が厳しいものになります\n初回プレイでは表面をお勧めしますが、自己責任で裏面を選んでも大丈夫です',
   },
   // 2026-09-26, per user request -- shown once P1 has actually committed a CON face (renderConChoiceの
   // onPickがtutorialInitialResourcesGlowingと一緒にこの状態へ直接遷移させる、上のcon_face_choice_intro
@@ -13855,7 +13855,7 @@ const TUTORIAL_STEPS = [
         && tutorialP1RealTurnEndCountAtRound3Start !== null
         && tutorialP1RealTurnEndCount === tutorialP1RealTurnEndCountAtRound3Start + 1;
     },
-    body: 'カッコ内のマイナスの数字は制約によるペナルティです',
+    body: 'カッコ内のマイナスの数字は性格によるペナルティです',
     nextLabel: '次へ',
   },
   // 2026-10-03, per user request (Excelの新しい行T110・T111) -- standings_con_penalty_hint(T109)に続く、

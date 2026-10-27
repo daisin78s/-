@@ -34,7 +34,7 @@
   const AUTO_REASON_LABELS = {
     AI_MOVE_APPLY_FAILED: 'AIが不正な手を選んだ',
     AI_TURN_MOVE_COUNT_EXCEEDED: 'AIのターン内の手数が異常に多い',
-    AI_ONBOARDING_REENTRY_EXCEEDED: 'AIのジョブ/制約選択が終わらない',
+    AI_ONBOARDING_REENTRY_EXCEEDED: 'AIのジョブ/性格選択が終わらない',
     // オンライン対戦の同期ミスの自動検知(main.jsのcheckIncomingOnlineState)。
     ONLINE_OWN_TURN_OVERWRITTEN: 'オンライン: 自分の手番中に、ほかの端末の状態で上書きされた',
     ONLINE_CARD_LOST: 'オンライン: 手番でない人のカードが消えた',
