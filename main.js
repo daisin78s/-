@@ -5391,7 +5391,7 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     const noteEl = el('div', 'card-note card-note--large');
     noteEl.appendChild(document.createTextNode('研究を\n獲得する'));
     q('.shop-card__effect').appendChild(noteEl);
-  } else if (options.showEffect && (facts.name === '開拓者' || facts.name === '神官' || facts.name === '地主')) {
+  } else if (options.showEffect && (facts.name === '開拓者' || facts.name === '巫女' || facts.name === '地主')) {
     // Bespoke JOB card-notes (宣教師/JOB009, renamed from 開拓者 2026-09-20 alongside its ability redesign
     // -- fixed 1B per qualifying die now, no longer die-value-dependent, per user mockup: "無人AREAに色D /
     // ▽ / B"; 神官/JOB008 and 地主/JOB011 2026-08-17, per user mockups: "エンブレム３個 / ▽ / Z　1VP"
@@ -5408,7 +5408,7 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     if (facts.name === '開拓者') {
       noteEl.appendChild(document.createTextNode('無人エリアに色D\n▽\n'));
       iconRow.appendChild(actionDot('B'));
-    } else if (facts.name === '神官') {
+    } else if (facts.name === '巫女') {
       noteEl.appendChild(document.createTextNode('エンブレム３個\n▽\n'));
       iconRow.appendChild(actionDot('C'));
       iconRow.appendChild(actionCount('1VP'));
