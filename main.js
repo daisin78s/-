@@ -2294,8 +2294,16 @@ function recordTurnHistorySnapshot(state, playerId) {
  * from here (matching handleUndoClick's own post-undo re-arm). */
 function jumpToHistoryIndex(idx) {
   if (idx < 0 || idx >= turnHistory.length) return;
-  historyCursor = idx;
-  const restored = structuredClone(turnHistory[idx].snapshot);
+  // オンライン対戦は、ほかの人間全員の同意を取ってから全員で一緒に戻す(requestOnlineRewind参照)。
+  if (onlineRoomCode) { requestOnlineRewind(idx); return; }
+  restoreHistoryPoint(idx, structuredClone(turnHistory[idx].snapshot), turnHistory[idx].playerId);
+}
+
+/** turnHistory[idx]の時点(restored = その時点の状態)へ画面とSTATEを戻す。オンラインでほかの端末が巻き戻した時は、
+ * 部屋から届いた状態をrestoredにし、idxはこの端末の履歴で同じ時点に当たる位置(見つからなければ-1: 履歴の位置は
+ * 変えずに状態だけ戻す)。turnPlayerId = その時点の手番のプレイヤー。 */
+function restoreHistoryPoint(idx, restored, turnPlayerId) {
+  if (idx >= 0) historyCursor = idx;
   Object.keys(STATE).forEach((k) => delete STATE[k]);
   Object.assign(STATE, restored);
   selectedDieIds = [];
@@ -2327,8 +2335,8 @@ function jumpToHistoryIndex(idx) {
   // historyCursor already sits before the end of turnHistory whenever jumping backward -- would truncate
   // and immediately re-append an entry, silently overwriting whatever was really there. Pre-seeding both
   // with this entry's own playerId makes render() correctly recognize "already noted" and skip that.
-  lastNotedActiveTurnPlayerId = turnHistory[idx].playerId;
-  lastTurnPlayerId = turnHistory[idx].playerId;
+  lastNotedActiveTurnPlayerId = turnPlayerId;
+  lastTurnPlayerId = turnPlayerId;
   // onboardingCheckpointPlayerId (2026-08-30): same class of stale-UI-var bug as everything else reset in
   // this function -- null is always a safe reset regardless of where the jump landed, since the explicit
   // recordCheckpoint(STATE) a few lines down already gets *this* moment's checkpoint right either way; this
@@ -2345,8 +2353,11 @@ function jumpToHistoryIndex(idx) {
   // one per real turn boundary -- see its own doc -- so this reproduces exactly what live play would
   // have counted by this point) rather than just zeroing it, since a jump *forward* past round 1's 2nd
   // turn must still correctly keep the pool hidden.
-  round1FirstPlayerId = null;
-  round1FirstPlayerTurnStartCount = 0;
+  // (idx=-1 = この端末の履歴に同じ時点が無い時は、数え直せないので今の値のまま。)
+  if (idx >= 0) {
+    round1FirstPlayerId = null;
+    round1FirstPlayerTurnStartCount = 0;
+  }
   for (let i = 0; i <= idx; i++) {
     const entry = turnHistory[i];
     if (!entry.playerId) continue; // the pre-onboarding seed entry (turnHistory[0] before round 1 starts)
@@ -2727,6 +2738,16 @@ function queueOnlineStatePush(json) {
 function handleStaleOnlinePush(current, rejectedJson) {
   onlinePushEpoch++; // まだ送っていない分(捨てた操作の続き)は送らない
   if (!current || !current.state) return;
+  // 巻き戻しで部屋の状態が戻った(のと行き違いで送った)時は、おかしな状態ではない -- 報告しない。まだ反映して
+  // いない巻き戻しは部屋の更新(handleRewindRoomUpdate)で反映する。
+  if (current.lastRewindId && current.lastRewindId !== handledRewindId) return;
+  if (current.lastRewindId && Date.now() - lastRewindHandledAt < 30000) {
+    if (current.state === lastIncomingRoomStateJson) return;
+    noteOnlineStateRev(current.state, current.stateRev);
+    lastIncomingRoomStateJson = current.state;
+    applyIncomingRoomState(current.state, null);
+    return;
+  }
   let rejected = null;
   let latest = null;
   try { rejected = JSON.parse(rejectedJson); latest = JSON.parse(current.state); } catch (e) { return; }
@@ -3811,7 +3832,8 @@ function renderDebugPanel(state) {
   // 2026-10-28, per user request ("すべての版で 赤い部分を隠したい 設定に 巻き戻しOK 巻き戻しNG をえらべて"、
   // 最初はNG): 設定の「巻き戻し」がOKの時だけ表示する(ウィークリーに限らず、ローカル対戦でも)。オンライン対戦
   // (観戦含む)はまだ全員の画面を一緒に戻す仕組みが無いので出さない(全員の同意で戻す形を後で作る予定)。
-  const showHistoryControls = rewindAllowed && !onlineRoomCode && !onlineSpectator;
+  const showHistoryControls = rewindAllowed && (!onlineRoomCode
+    || (onlineGameStarted && !onlineSpectator && onlineRewindEnabled(onlineLobbyRoomData)));
   const controls = document.getElementById('debug-history-controls');
   controls.hidden = !showHistoryControls;
   if (!showHistoryControls) return;
@@ -12085,6 +12107,11 @@ function subscribeToOnlineRoom(code) {
       }
       updateOnlineHostAndTakeover(roomData);
       renderOnlineTakeoverBanner(roomData);
+      // 巻き戻し(全員の同意で全員一緒に戻す) -- 戻した状態はここで反映済み。
+      if (handleRewindRoomUpdate(roomData, justStarted)) {
+        if (isOnlineHost) applyOnlineResourcePicks(roomData.resourcePicks);
+        return;
+      }
       // 状態が変わっていない更新(接続の合図など)は描き直さない。
       if (!justStarted && roomData.state === lastIncomingRoomStateJson) {
         if (isOnlineHost) applyOnlineResourcePicks(roomData.resourcePicks);
@@ -12415,6 +12442,194 @@ function applyIncomingRoomState(stateJson, seatIsHuman) {
   // 同じ状態を送り返さないように。
   lastPushedOnlineStateJson = JSON.stringify(STATE);
   applyingRemoteState = false;
+}
+
+// ---------------------------------------------------------------------------
+// オンライン対戦の巻き戻し (2026-10-28, per user request: 設定の「巻き戻し OK/NG」について「すべての人間が
+// 巻き戻しOKだと巻き戻しできるようになる」+ オンラインは「戻す前に全員の同意」) --
+// ・各端末の設定(rewindAllowed)を部屋のrewindOk.{席}へ書く(syncOwnRewindOk)。人間の席(AIが代わりにプレイ
+//   している席は除く)が全員OKの時だけ、全員にTURN/ROUNDの巻き戻し欄が出る(renderDebugPanel)。
+// ・巻き戻しを押すと、部屋にお願い(rewindRequest、戻す先の状態ごと)を出す。ほかの人間全員に「戻してもいいか」が
+//   出て、全員OKならお願いした端末が部屋の状態を戻す(OnlineSync.applyRewind)。1人でもNGなら取り消し。
+// ・部屋のlastRewindが変わったら、どの端末(お願いした端末も)も、届いた状態を相手の手番の再生なしで、すぐ反映
+//   する(applyRewoundRoomState)。各端末の履歴は「同じラウンド・同じ手番の人の何回目か」で同じ時点を探す。
+let handledRewindId = null;
+let lastRewindHandledAt = 0;
+let rewindApplyingId = null;
+let rewindNoticeTimer = null;
+let lastOnlineRewindEnabled = false;
+
+/** 巻き戻しの同意が要る席: 人間で、AIが代わりにプレイしていない席。 */
+function onlineRewindSeats(roomData) {
+  if (!roomData || !roomData.seatIsHuman) return [];
+  const takeover = roomData.aiTakeover || {};
+  return ONLINE_SEAT_IDS.filter((id) => roomData.seatIsHuman[id] && !takeover[id]);
+}
+function onlineRewindEnabled(roomData) {
+  const ok = (roomData && roomData.rewindOk) || {};
+  const seats = onlineRewindSeats(roomData);
+  return seats.length > 0 && seats.every((id) => ok[id] === true);
+}
+function syncOwnRewindOk(roomData) {
+  if (!onlineRoomCode || onlineSpectator || !localSeatId || !roomData) return;
+  const ok = roomData.rewindOk || {};
+  if (ok[localSeatId] !== rewindAllowed) OnlineSync.setRewindOk(onlineRoomCode, localSeatId, rewindAllowed).catch(() => {});
+}
+function onlineSeatName(seatId) {
+  const player = STATE.players && STATE.players.find((p) => p.id === seatId);
+  return player ? player.name : seatId;
+}
+function historyEntryLabel(idx) {
+  return historyTurnLabel(STATE, idx);
+}
+function historyKeyAt(idx) {
+  const entry = turnHistory[idx];
+  let nth = 0;
+  for (let i = 0; i < idx; i++) if (turnHistory[i].round === entry.round && turnHistory[i].playerId === entry.playerId) nth++;
+  return { round: entry.round, playerId: entry.playerId || null, nth };
+}
+function historyIndexOfKey(key) {
+  if (!key) return -1;
+  let nth = 0;
+  for (let i = 0; i < turnHistory.length; i++) {
+    const entry = turnHistory[i];
+    if (entry.round !== key.round || (entry.playerId || null) !== key.playerId) continue;
+    if (nth === key.nth) return i;
+    nth++;
+  }
+  return -1;
+}
+
+function showRewindNotice(text) {
+  let banner = document.getElementById('online-rewind-notice');
+  if (!banner) {
+    banner = el('div', 'mobile-untap-banner online-rewind-notice');
+    banner.id = 'online-rewind-notice';
+    document.body.appendChild(banner);
+  }
+  banner.textContent = text;
+  banner.hidden = false;
+  if (rewindNoticeTimer) clearTimeout(rewindNoticeTimer);
+  rewindNoticeTimer = setTimeout(() => { banner.hidden = true; }, 4000);
+}
+
+function requestOnlineRewind(idx) {
+  const roomData = onlineLobbyRoomData;
+  if (!onlineGameStarted || onlineSpectator || !localSeatId || !onlineRewindEnabled(roomData)) return;
+  if (roomData.rewindRequest) { showRewindNotice('ほかの巻き戻しのお願いが出ています'); return; }
+  const id = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const request = { id, fromSeat: localSeatId, label: historyEntryLabel(idx), key: historyKeyAt(idx),
+    state: JSON.stringify(turnHistory[idx].snapshot), votes: {}, createdAt: Date.now() };
+  OnlineSync.requestRewind(onlineRoomCode, request).catch((e) => {
+    showRewindNotice(e && e.message === 'REWIND_BUSY' ? 'ほかの巻き戻しのお願いが出ています' : '巻き戻しのお願いを送れませんでした');
+  });
+}
+
+/** 部屋の更新ごとに(playing中)。巻き戻した状態をここで反映したらtrue(呼び出し元は普段の反映をしない)。 */
+function handleRewindRoomUpdate(roomData, justStarted) {
+  syncOwnRewindOk(roomData);
+  const rw = roomData.lastRewind;
+  let applied = false;
+  if (justStarted) {
+    handledRewindId = rw ? rw.id : null;
+  } else if (rw && rw.id !== handledRewindId) {
+    handledRewindId = rw.id;
+    if (roomData.state) { applyRewoundRoomState(roomData.state, rw); applied = true; }
+  }
+  // 誰かがOK/NGを変えた時は、盤面が変わらなくても巻き戻し欄を出し直す/隠す。
+  const enabled = onlineRewindEnabled(roomData);
+  if (enabled !== lastOnlineRewindEnabled) {
+    lastOnlineRewindEnabled = enabled;
+    if (!applied && !justStarted) renderDebugPanel(STATE);
+  }
+  const req = roomData.rewindRequest;
+  if (req && localSeatId && !onlineSpectator) {
+    const seats = onlineRewindSeats(roomData);
+    const voters = seats.filter((id) => id !== req.fromSeat);
+    const votes = req.votes || {};
+    if (req.fromSeat === localSeatId) {
+      const ng = voters.find((id) => votes[id] === 'ng');
+      if (ng || !onlineRewindEnabled(roomData)) {
+        OnlineSync.cancelRewind(onlineRoomCode, req.id).catch(() => {});
+        showRewindNotice(ng ? `${onlineSeatName(ng)}がNGしたので巻き戻しませんでした` : '巻き戻しNGの人がいるので取り消しました');
+      } else if (voters.every((id) => votes[id] === 'ok') && rewindApplyingId !== req.id) {
+        rewindApplyingId = req.id;
+        OnlineSync.applyRewind(onlineRoomCode, req.id).catch(() => { rewindApplyingId = null; });
+      }
+    } else if (isOnlineHost && !seats.includes(req.fromSeat)) {
+      // お願いした人の回線が落ちた(AIが代わった) -- 取り消す。
+      OnlineSync.cancelRewind(onlineRoomCode, req.id).catch(() => {});
+    }
+  }
+  renderRewindRequestOverlay(roomData);
+  return applied;
+}
+
+function applyRewoundRoomState(json, rw) {
+  let incoming;
+  try { incoming = JSON.parse(json); } catch (e) { return; }
+  remoteTurnBuffer = [];
+  if (remotePlayback) {
+    remotePlayback = null;
+    animSpeedFactor = 1;
+    setRemotePlaybackUi(false);
+  }
+  onlinePushEpoch++; // 巻き戻す前の操作の、まだ送っていない分は送らない
+  adoptOnlineStateRev(json);
+  lastIncomingRoomStateJson = json;
+  lastRewindHandledAt = Date.now();
+  applyingRemoteState = true;
+  const key = rw.key || {};
+  restoreHistoryPoint(historyIndexOfKey(key), incoming, key.playerId || null);
+  lastPushedOnlineStateJson = JSON.stringify(STATE);
+  applyingRemoteState = false;
+  showRewindNotice(`${onlineSeatName(rw.fromSeat)}が「${rw.label}」まで巻き戻しました`);
+}
+
+/** 巻き戻しのお願いの画面: ほかの人のお願いにはOK/NG、自分のお願いは返事待ち(取り消せる)。 */
+function renderRewindRequestOverlay(roomData) {
+  let overlay = document.getElementById('online-rewind-overlay');
+  const req = roomData && roomData.rewindRequest;
+  const seats = onlineRewindSeats(roomData);
+  const mine = !!(req && req.fromSeat === localSeatId);
+  const mustVote = !!(req && !mine && localSeatId && !onlineSpectator && seats.includes(localSeatId) && !(req.votes || {})[localSeatId]);
+  if (!mine && !mustVote) { if (overlay) overlay.hidden = true; return; }
+  if (!overlay) {
+    overlay = el('div', 'card-inst-overlay');
+    overlay.id = 'online-rewind-overlay';
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = '';
+  overlay.hidden = false;
+  const modal = el('div', 'card-inst-modal placement-choice-modal');
+  const header = el('div', 'card-inst-modal__header');
+  header.appendChild(el('span', 'card-inst-modal__title', '巻き戻し'));
+  modal.appendChild(header);
+  const body = el('div', 'card-inst-modal__body');
+  const actions = el('div', 'placement-choice-actions');
+  if (mine) {
+    const voters = seats.filter((id) => id !== req.fromSeat);
+    const okCount = voters.filter((id) => (req.votes || {})[id] === 'ok').length;
+    body.appendChild(el('p', 'turn-end-warning__text', `「${req.label}」まで巻き戻すお願いを出しました\nほかの人の返事を待っています(OK ${okCount}/${voters.length})`));
+    const cancel = el('button', '', '取り消す');
+    cancel.type = 'button';
+    cancel.addEventListener('click', () => OnlineSync.cancelRewind(onlineRoomCode, req.id).catch(() => {}));
+    actions.appendChild(cancel);
+  } else {
+    body.appendChild(el('p', 'turn-end-warning__text', `${onlineSeatName(req.fromSeat)}が「${req.label}」まで巻き戻したいと言っています\n巻き戻しますか？`));
+    for (const [label, vote] of [['NG', 'ng'], ['OK', 'ok']]) {
+      const btn = el('button', '', label);
+      btn.type = 'button';
+      btn.addEventListener('click', () => {
+        overlay.hidden = true;
+        OnlineSync.voteRewind(onlineRoomCode, req.id, localSeatId, vote).catch(() => {});
+      });
+      actions.appendChild(btn);
+    }
+  }
+  modal.appendChild(body);
+  modal.appendChild(actions);
+  overlay.appendChild(modal);
 }
 
 /** @returns {number} how many of the 4 seats are currently occupied. */
@@ -17863,6 +18078,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('rewind-setting-select').addEventListener('change', (e) => {
     rewindAllowed = e.target.value === 'ok';
     try { localStorage.setItem(REWIND_SETTING_STORAGE_KEY, rewindAllowed ? 'ok' : 'ng'); } catch (err) { /* ignore */ }
+    syncOwnRewindOk(onlineLobbyRoomData);
     render(STATE);
   });
   document.getElementById('ai-manual-step-button').addEventListener('click', () => {

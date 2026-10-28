@@ -342,7 +342,7 @@ function pushRoomState(code, stateJson, baseRev) {
       var rev = data.stateRev || 0;
       if (rev !== (baseRev || 0)) {
         var err = new Error('STALE_STATE');
-        err.current = { state: data.state || null, stateRev: rev };
+        err.current = { state: data.state || null, stateRev: rev, lastRewindId: (data.lastRewind && data.lastRewind.id) || null };
         throw err;
       }
       tx.update(ref, { state: stateJson, stateRev: rev + 1 });
@@ -400,6 +400,72 @@ function submitResourcePick(code, seatId, faceIds) {
   var update = {};
   update['resourcePicks.' + seatId] = faceIds;
   return db().collection(ROOM_COLLECTION).doc(code).update(update);
+}
+
+/** オンライン対戦の巻き戻し (2026-10-28, per user request: 設定の「巻き戻しOK/NG」を「すべての人間が巻き戻しOKだと
+ * 巻き戻しできるようになる」+ オンラインは「戻す前に全員の同意」) -- main.jsのrequestOnlineRewind等を参照。
+ * rewindOk.{席}: その席の設定(OK=true)。rewindRequest: 今出ている巻き戻しのお願い(1つだけ)
+ *   { id, fromSeat, label, key:{round,playerId,nth}, state(戻す先の状態JSON), votes:{席:'ok'|'ng'}, createdAt }。
+ * lastRewind: 最後に行った巻き戻し { id, fromSeat, label, key } -- 各端末はこれが変わったのを見て、届いた状態を
+ * 相手の手番の再生なしで、すぐ反映する。 */
+function setRewindOk(code, seatId, ok) {
+  var update = {};
+  update['rewindOk.' + seatId] = !!ok;
+  return db().collection(ROOM_COLLECTION).doc(code).update(update);
+}
+/** @throws {Error} REWIND_BUSY (ほかのお願いがもう出ている) */
+function requestRewind(code, request) {
+  var ref = db().collection(ROOM_COLLECTION).doc(code);
+  return db().runTransaction(function (tx) {
+    return tx.get(ref).then(function (snap) {
+      var data = snap.data() || {};
+      if (data.rewindRequest) throw new Error('REWIND_BUSY');
+      tx.update(ref, { rewindRequest: request });
+    });
+  });
+}
+function voteRewind(code, requestId, seatId, vote) {
+  var ref = db().collection(ROOM_COLLECTION).doc(code);
+  return db().runTransaction(function (tx) {
+    return tx.get(ref).then(function (snap) {
+      var data = snap.data() || {};
+      if (!data.rewindRequest || data.rewindRequest.id !== requestId) return;
+      var update = {};
+      update['rewindRequest.votes.' + seatId] = vote;
+      tx.update(ref, update);
+    });
+  });
+}
+function cancelRewind(code, requestId) {
+  var ref = db().collection(ROOM_COLLECTION).doc(code);
+  return db().runTransaction(function (tx) {
+    return tx.get(ref).then(function (snap) {
+      var data = snap.data() || {};
+      if (!data.rewindRequest || data.rewindRequest.id !== requestId) return;
+      tx.update(ref, { rewindRequest: null });
+    });
+  });
+}
+/** お願いした端末が、全員のOKを確認してから呼ぶ: 部屋の状態を戻す先の状態にし(番号を1つ進める)、お願いを消して
+ * lastRewindに記録する。お願いが既に無い/別のものなら何もしない(null)。
+ * @returns {Promise<number|null>} 書いた状態の番号 */
+function applyRewind(code, requestId) {
+  var ref = db().collection(ROOM_COLLECTION).doc(code);
+  return db().runTransaction(function (tx) {
+    return tx.get(ref).then(function (snap) {
+      var data = snap.data() || {};
+      var req = data.rewindRequest;
+      if (!req || req.id !== requestId) return null;
+      var rev = (data.stateRev || 0) + 1;
+      tx.update(ref, {
+        state: req.state,
+        stateRev: rev,
+        rewindRequest: null,
+        lastRewind: { id: req.id, fromSeat: req.fromSeat, label: req.label, key: req.key },
+      });
+      return rev;
+    });
+  });
 }
 
 // 実績バックアップ (2026-10-12, per user request: "実績解除のポイントをリセットするにはどうすればいい？"
@@ -497,6 +563,11 @@ window.OnlineSync = {
   pushRoomState: pushRoomState,
   submitResourcePick: submitResourcePick,
   setSpectatorsAllowed: setSpectatorsAllowed,
+  setRewindOk: setRewindOk,
+  requestRewind: requestRewind,
+  voteRewind: voteRewind,
+  cancelRewind: cancelRewind,
+  applyRewind: applyRewind,
   heartbeat: heartbeat,
   setAiTakeover: setAiTakeover,
   setHostSeat: setHostSeat,
