@@ -6543,6 +6543,17 @@ body.opening-hide-res .card-group__onboard-resources > .owned-card-cell {
   .map-tile .usage-fee-label__text {
     display: none;
   }
+  /* 使用料の札が光る時(チュートリアル「使用料をクリックする」等)、見切れないように (2026-10-28, per user report
+     with screenshot「使用料見切れているので見切れないように」) -- 光る時の枠線(.change-highlightのborder、札には
+     元々枠線が無いので既定の太さ3pxになる)で札が太くなってエリアの右端からはみ出し、右どなりのエリアの下に
+     隠れていた。枠線は付けず(光の輪はbox-shadowのまま)、光っている札のエリアをとなりより手前に出す。 */
+  .map-tile__fee.change-highlight {
+    border-width: 0;
+  }
+  .map-tile:has(.map-tile__fee.change-highlight) {
+    position: relative;
+    z-index: 2;
+  }
 }
 
 /* 通常カード/強化カードの見分け (2026-10-23, per user request: 銀/金の縁・背景・光の試作は「見た目微妙でした
