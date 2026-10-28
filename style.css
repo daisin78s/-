@@ -7357,6 +7357,16 @@ body.online-spectator #online-spectator-badge {
   font-weight: 700;
   white-space: nowrap;
 }
+/* 「怠惰なローマ市民の」+改行+「●higebucho」の2行(main.jsのrenderProgressOverlay)。 */
+.progress-row__name--titled {
+  display: block;
+  line-height: 1.4;
+}
+.progress-row__name--titled .standings-panel__swatch {
+  display: inline-block;
+  margin-right: 4px;
+  vertical-align: -1px;
+}
 .progress-row__text {
   color: var(--text);
 }

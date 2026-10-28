@@ -2763,16 +2763,26 @@ function renderProgressOverlay(state) {
   let lastPlayer = null;
   let n = 0;
   let groupHasMain = false;
+  let groupCount = 0;
   for (const entry of log) {
     if (entry.r !== lastRound) n = 0;
     const newGroup = entry.r !== lastRound || entry.p !== lastPlayer || (entry.m && groupHasMain);
-    if (newGroup) { n++; groupHasMain = false; }
+    if (newGroup) { n++; groupHasMain = false; groupCount++; }
+    const firstGroup = groupCount === 1;
     if (entry.m) groupHasMain = true;
     const row = el('div', `progress-row${newGroup ? ' progress-row--first' : ''}`);
     row.appendChild(el('span', 'progress-row__turn', newGroup ? `R${entry.r}-${n}` : ''));
     const nameEl = el('span', 'progress-row__name');
     if (newGroup) {
       const player = state.players.find((p) => p.id === entry.p);
+      // 2行目以降の手番は「怠惰なローマ市民の / higebucho」の2行 (2026-10-28, per user request: "進捗の左側も
+      // R1-1以外は 怠惰なローマ市民の higebucho の様に表示して")。一番初めの手番(R1-1)は名前だけ。
+      const conFaceId = player && player.conPhysicalId && player.conFace ? `${player.conPhysicalId}${player.conFace}` : null;
+      if (!firstGroup && conFaceId && player.jobCardId) {
+        nameEl.classList.add('progress-row__name--titled');
+        nameEl.appendChild(conJobColoredFragment(`${rankingConJobTitle(conFaceId, player.jobCardId)}の`));
+        nameEl.appendChild(document.createElement('br'));
+      }
       const swatch = el('span', 'standings-panel__swatch');
       if (player) swatch.dataset.color = player.color;
       nameEl.appendChild(swatch);
