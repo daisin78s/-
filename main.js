@@ -2653,6 +2653,8 @@ function finishRound3Watch() {
 let progressBaseline = null;
 let progressPendingVia = {}; // playerId -> { gain, up }: タップしたが、まだ獲得/LVアップに結びついていないカードの名前
 const PROGRESS_TAP_GAIN_CARD_RE = /^(交渉術|土木技術|測量術)/;
+// 性格の「○○になる」の○○が名前と違うもの(それ以外は名前のまま、例: 幸運になる)。
+const PROGRESS_CON_BECOME_BY_NAME = { 裏切: '裏切者', 嫉妬: '嫉妬深く' };
 const PROGRESS_TAP_LVUP_CARD_RE = /^研究/;
 let progressRenderedLength = -1;
 
@@ -2696,8 +2698,13 @@ function noteProgress(state, canLog) {
       }
       const mainTexts = newMaps.map((mapId) => `${areaName(before.maps[mapId] || now.maps[mapId])}に行く`);
       if (newMaps.length) delete progressPendingVia[pid];
-      if (a.job && a.job !== b.job) texts.push(`${cardDisplayName(a.job)}を獲得`);
-      if (a.con && a.con !== b.con) texts.push(`${cardDisplayName(a.con)}を獲得`);
+      // ジョブ・性格は「○○になる」 (2026-10-28, per user request: "ジョブは 百人隊長になる ローマ市民になる 性格は
+      // 幸運になる 裏切者になる 嫉妬深くなる 何も書いてないものはすべて○○になる")。
+      if (a.job && a.job !== b.job) texts.push(`${cardDisplayName(a.job)}になる`);
+      if (a.con && a.con !== b.con) {
+        const conName = cardDisplayName(a.con);
+        texts.push(`${PROGRESS_CON_BECOME_BY_NAME[conName] || conName}になる`);
+      }
       // 「○○で」を付けるのは、タップでカードを獲得できる交渉術・土木技術・測量術(獲得の時)と、タップでLVアップ
       // できる研究(LVアップの時)だけ (2026-10-28, per user: "タップしてカードを獲得できるのは交渉術 土木技術 測量術
       // のみで LVUPできるのは研究のみです") -- ほかのカードのタップ(資源をもらう等)を、後の獲得に結びつけないため。
@@ -9256,7 +9263,7 @@ function renderMobileCardsView(state, next) {
     btn.dataset.playerId = player.id;
     const swatch = el('span', 'mobile-cards-player-switcher__swatch');
     swatch.dataset.color = player.color;
-    // 性格とジョブが決まったら3行「裏切り者の / ローマ市民の / ●higebucho」 (2026-10-28, per user request:
+    // 性格とジョブが決まったら3行「裏切者の / ローマ市民の / ●higebucho」 (2026-10-28, per user request:
     // "いま並び替えたプレイヤーネーム 2行にしたら性格とジョブはいるかな" -> 幅が足りないので3行・小さめの文字に
     // (回答「おねがい」))。決まる前は今まで通り「●名前」の1行。
     const conFaceId = player.conPhysicalId && player.conFace ? `${player.conPhysicalId}${player.conFace}` : null;
@@ -11201,7 +11208,7 @@ function rankingCardDisplayName(faceId) {
 
 /** CON card NAME -> its own adjective-form prefix (2026-10-18, per user request: "制約 嫉妬 / ジョブ：
  * 異端者" の2行を "嫉妬深い異端者" のような1つの肩書きにまとめたい -- exact phrasing given verbatim by the
- * user for all 12 CON names, not derived algorithmically (裏切 -> 裏切り者の isn't a simple suffix-append,
+ * user for all 12 CON names, not derived algorithmically (裏切 -> 裏切者の isn't a simple suffix-append,
  * so this is a literal lookup, not a rule). Used by rankingConJobTitle below; falls back to the bare CON
  * name (no adjective suffix) for anything not in this table (shouldn't happen with the current 12 CON
  * cards, but keeps a future 13th card from silently vanishing instead of just looking slightly off). */
@@ -11211,7 +11218,7 @@ const CON_ADJECTIVE_BY_NAME = {
   狂信: '狂信的な',
   傲慢: '傲慢な',
   怠惰: '怠惰な',
-  裏切: '裏切り者の',
+  裏切: '裏切者の', // 2026-10-28, per user request「裏切り者と書いてある箇所はすべて裏切者になおして」
   色欲: '色欲の',
   強欲: '強欲な',
   憂鬱: '憂鬱な',
