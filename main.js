@@ -6654,8 +6654,28 @@ function specialSlotGridColumn(state, slotId) {
 
 /** One shop row's own remaining-card-count badge (2026-08-27, per user request), placed in the grid's
  * 7th column at `gridRow`, right of that row's own last slot. */
-function buildShopRemainingCountNode(count, gridRow) {
-  const node = el('div', 'shop-remaining-count', `残り${count}枚`);
+/** ショップ3段目(SHOP201-203)の残り枚数の表示 (2026-10-28, per user request: "ショップ3段目のあと3枚と書かれている
+ * 部分 2Rなら2Rのかーどがあと○枚 3Rなら3Rのカードがあと○枚 強化モニュメントが1枚でも見えたら強化モニュメントが
+ * あと○枚として") -- どれも、まだ出ていない(山札/強化モニュメントの控えにある)枚数。
+ * ・強化モニュメント(M401-403)がどこかのショップに1枚でも見えていたら: 控え(extraMonumentPool)の枚数。
+ * ・3R以降: 山札の3Rのカード(SHOP3xx)の枚数。それより前(1R・2R): 山札の2Rのカード(SHOP2xx)の枚数。 */
+function specialShopRemaining(state) {
+  const visible = ['M', 'NORMAL', 'SPECIAL'].some((key) => Object.values(state.shops[key].slots)
+    .some((faceId) => faceId && faceId[0] === 'M' && Number(faceId.slice(1, 4)) >= 400));
+  if (visible) return { subject: '強化モニュメント', count: state.extraMonumentPool.length };
+  const round = state.round >= 3 ? 3 : 2;
+  const count = state.shops.SPECIAL.drawPile.filter((faceId) => boardMod.specialShopMinRound(faceId) === round).length;
+  return { subject: `${round}Rのカード`, count };
+}
+
+/** subject: 何の残りか(3段目だけ、specialShopRemaining参照)。あれば「○○が」「あと○枚」の2列(縦書き)。 */
+function buildShopRemainingCountNode(count, gridRow, subject) {
+  const node = el('div', 'shop-remaining-count', subject ? '' : `残り${count}枚`);
+  if (subject) {
+    node.appendChild(document.createTextNode(`${subject}が`));
+    node.appendChild(document.createElement('br'));
+    node.appendChild(document.createTextNode(`あと${count}枚`));
+  }
   node.style.gridColumn = '7';
   node.style.gridRow = String(gridRow);
   // shop_remaining_count_hint(2026-10-03, Excel T097)の「光る」演出(ショップの右の残り枚数欄) --
@@ -6708,7 +6728,8 @@ function renderShopGrid(state) {
     applyOpeningDealAnimation(node, Object.keys(state.shops.NORMAL.slots).length + i);
     container.appendChild(node);
   });
-  container.appendChild(buildShopRemainingCountNode(state.shops.SPECIAL.drawPile.length, 3));
+  const specialRemaining = specialShopRemaining(state);
+  container.appendChild(buildShopRemainingCountNode(specialRemaining.count, 3, specialRemaining.subject));
 
   // Standings panel fills whatever's left of row 3, up to (not including) the 7th column reserved for
   // the remaining-count badge above (2026-08-27) -- previously spanned to the grid's own literal end
