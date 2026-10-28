@@ -5978,6 +5978,10 @@ body.tutorial-mode .change-highlight {
     align-self: flex-end;
     margin: 4px 8px 0 0;
     font-size: 11px;
+    /* 黒い帯の高さが約6pxしかなく、文字が上下にはみ出て読みにくかった (2026-10-28, per user report
+       「Ver.1.328と書いてある箇所の背景の黒の幅が狭くみにくい」) -- 親(#entry-banner__hero-wrap)の
+       line-height:0を受け継いでいたため。行の高さを戻して、帯が文字を包むように。 */
+    line-height: 1.4;
   }
 
   /* 写真の上に重ねる前提の半透明パネル/縁取り影は、写真から離れた普通の背景の上では不要かつ
