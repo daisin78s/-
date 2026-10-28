@@ -24,19 +24,16 @@ const table = buildEvalTable(raw);
 // ---------------------------------------------------------------------------
 // buildEvalTable: one entry per ID per round, straight from the "評価値" sheet's 1R/2R/3R/4R columns.
 // ---------------------------------------------------------------------------
-// 2026-09-14: values below are pulled straight from the current sheet (a tools/ga_train.js-evolved
-// genome as of this date, see CLAUDE.md/git log -- these are no longer the original hand-tuned round
-// numbers) -- re-check whenever the sheet changes, same as any other data-driven test in this project.
-check('D (colored die) 1R value', evalValue(table, 1, 'D'), 58.9686);
-check('D 2R value', evalValue(table, 2, 'D'), 68.9825);
-check('D 3R value', evalValue(table, 3, 'D'), 22.1421);
-check('D 4R value', evalValue(table, 4, 'D'), 31.1914);
-check('VP 1R value', evalValue(table, 1, 'VP'), 1.0344);
-check('VP 4R value (endgame VP weighted highest)', evalValue(table, 4, 'VP'), 1017.9637);
-// K is no longer round-independent post-evolution (was a flat hand-tuned 3 every round before) -- this
-// now just spot-checks the current 4 values come through unchanged from the sheet, not a "same every
-// round" invariant the code actually enforces anywhere.
-check('K value per round comes through unchanged from the sheet', [1, 2, 3, 4].map((r) => evalValue(table, r, 'K')), [3.8855, 4.2285, 3.0657, 2.2745]);
+// 2026-10-28: compared against the sheet row itself rather than hard-coded numbers -- the sheet is now
+// rewritten automatically whenever the 進化AI anchor challenge promotes a new genome (tools/
+// ga_anchor_promote.js, which runs this suite before shipping), so fixed values here would block every
+// promotion. What's checked is unchanged: each value comes through from the sheet's 1R-4R columns as-is.
+const sheetRow = (id) => raw['評価値'].find((row) => row.ID === id);
+const sheetValues = (id) => ['1R', '2R', '3R', '4R'].map((c) => sheetRow(id)[c]);
+check('D (colored die) value per round comes through unchanged from the sheet', [1, 2, 3, 4].map((r) => evalValue(table, r, 'D')), sheetValues('D'));
+check('VP value per round comes through unchanged from the sheet', [1, 2, 3, 4].map((r) => evalValue(table, r, 'VP')), sheetValues('VP'));
+check('VP 4R value (endgame VP weighted highest)', evalValue(table, 4, 'VP') > evalValue(table, 1, 'VP'), true);
+check('K value per round comes through unchanged from the sheet', [1, 2, 3, 4].map((r) => evalValue(table, r, 'K')), sheetValues('K'));
 
 // ---------------------------------------------------------------------------
 // evalValue: missing IDs/blank cells default to 0, never throw.

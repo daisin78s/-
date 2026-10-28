@@ -1159,15 +1159,16 @@ index.raw.QST = [
   const base = () => { const state = freshState(round); giveCard(state, 'A301A', 'P1'); return state; }; // 元老院の支配LV1 alone
   const withMichibiki = () => { const state = base(); giveCard(state, 'B003A', 'P1'); return state; }; // 運命の導きLV1
   const withJob007 = () => { const state = base(); giveCard(state, 'JOB010', 'P1'); return state; }; // 宮廷人
+  // 評価値の小数(進化AIの値)によっては引き算で末尾に誤差が出る(19.9115 vs 19.91149999...)ので、比べる前に丸める。
   check(
     '元老院 + 導き(運命の導きLV1) credits the synergy bonus once (+15)',
-    evaluator.score(withMichibiki(), 'P1') - evaluator.score(base(), 'P1'),
-    evalTable[round].B003A + 15,
+    round6(evaluator.score(withMichibiki(), 'P1') - evaluator.score(base(), 'P1')),
+    round6(evalTable[round].B003A + 15),
   );
   check(
     '元老院 + JOB010/宮廷人 credits the synergy bonus once (+15)',
-    evaluator.score(withJob007(), 'P1') - evaluator.score(base(), 'P1'),
-    (evalTable[round].JOB010 || 0) + 15, // JOB008/JOB004/JOB010 have no row in the main 評価値 sheet (0 base)
+    round6(evaluator.score(withJob007(), 'P1') - evaluator.score(base(), 'P1')),
+    round6((evalTable[round].JOB010 || 0) + 15), // JOB008/JOB004/JOB010 have no row in the main 評価値 sheet (0 base)
   );
 }
 {
@@ -1191,8 +1192,8 @@ index.raw.QST = [
   giveCard(baseline, 'A301B', 'P1');
   check(
     '元老院 + 双星 + 実業家 + 育成者 credits the synergy bonus 3 times (+45)',
-    evaluator.score(state, 'P1') - evaluator.score(baseline, 'P1'),
-    evalTable[3].B201A + (evalTable[3].JOB008 || 0) + (evalTable[3].JOB004 || 0) + 3 * 15, // JOB008/JOB004 have no row in the main 評価値 sheet (0 base)
+    round6(evaluator.score(state, 'P1') - evaluator.score(baseline, 'P1')),
+    round6(evalTable[3].B201A + (evalTable[3].JOB008 || 0) + (evalTable[3].JOB004 || 0) + 3 * 15), // JOB008/JOB004 have no row in the main 評価値 sheet (0 base)
   );
 }
 
