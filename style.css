@@ -215,6 +215,12 @@ h1, h2, h3 { margin: 0; }
   flex-direction: column;
   gap: 8px;
 }
+/* 巻き戻しNGの時に◀TURN〜ROUND▶が見えていた (2026-10-28, per user report with screenshot「巻き戻しNGのときは
+   出ないように」) -- main.jsのrenderDebugPanelはhidden属性で隠していたが、上のdisplay:flexがhidden属性より
+   優先されて表示されたままだった(2026-10-13の「普通のローカル対戦なのにこの欄が見えていた、原因不明」も同じ)。 */
+.debug-history-controls[hidden] {
+  display: none;
+}
 
 .debug-history-controls__nav {
   display: flex;
