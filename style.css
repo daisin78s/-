@@ -5465,6 +5465,32 @@ body.tutorial-mode .change-highlight {
     border-color: var(--accent);
     color: #fff;
   }
+  /* 性格・ジョブ付きの3行 (2026-10-28、main.jsのrenderMobileCardsView参照)。 */
+  .mobile-cards-player-switcher__btn--titled {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: 4px;
+    font-size: 10px;
+    line-height: 1.25;
+    text-align: center;
+  }
+  .mobile-cards-player-switcher__title-line {
+    white-space: nowrap;
+  }
+  .mobile-cards-player-switcher__name-line {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  /* 選んでいるボタン(青地)の上では、性格・ジョブの色文字は読みにくいので白に。 */
+  .mobile-cards-player-switcher__btn--active .con-name,
+  .mobile-cards-player-switcher__btn--active .job-name {
+    color: inherit;
+  }
   .mobile-cards-player-switcher__swatch {
     width: 9px;
     height: 9px;

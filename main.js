@@ -9256,8 +9256,23 @@ function renderMobileCardsView(state, next) {
     btn.dataset.playerId = player.id;
     const swatch = el('span', 'mobile-cards-player-switcher__swatch');
     swatch.dataset.color = player.color;
-    btn.appendChild(swatch);
-    btn.appendChild(document.createTextNode(player.name));
+    // 性格とジョブが決まったら3行「裏切り者の / ローマ市民の / ●higebucho」 (2026-10-28, per user request:
+    // "いま並び替えたプレイヤーネーム 2行にしたら性格とジョブはいるかな" -> 幅が足りないので3行・小さめの文字に
+    // (回答「おねがい」))。決まる前は今まで通り「●名前」の1行。
+    const conFaceId = player.conPhysicalId && player.conFace ? `${player.conPhysicalId}${player.conFace}` : null;
+    if (conFaceId && player.jobCardId) {
+      btn.classList.add('mobile-cards-player-switcher__btn--titled');
+      const conName = rankingCardDisplayName(conFaceId);
+      btn.appendChild(elConJob('span', 'mobile-cards-player-switcher__title-line', CON_ADJECTIVE_BY_NAME[conName] || conName));
+      btn.appendChild(elConJob('span', 'mobile-cards-player-switcher__title-line', `${rankingCardDisplayName(player.jobCardId)}の`));
+      const nameLine = el('span', 'mobile-cards-player-switcher__name-line');
+      nameLine.appendChild(swatch);
+      nameLine.appendChild(document.createTextNode(player.name));
+      btn.appendChild(nameLine);
+    } else {
+      btn.appendChild(swatch);
+      btn.appendChild(document.createTextNode(player.name));
+    }
     // オンライン対戦の初期資源: 誰がまだ選んでいないか分かるように (2026-10-27, per user request: "初期資源
     // 選択時右側のプレイヤータブに選択中 完了などと表示して")。
     const pickStatus = onlineResourcePickStatus(state, player.id);
