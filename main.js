@@ -3518,6 +3518,32 @@ const CARD_LIST_NAV = [
   { key: 'qst', label: 'クエスト[一覧]' },
   { key: null, label: 'ゲームに戻る' },
 ];
+/** カードリストをフリックで移動 (2026-10-28, per user request: "カードリスト フリックで移動できるようにして") --
+ * 左へ払う=下のボタン列の次の一覧、右へ払う=前の一覧(「ゲームに戻る」は除く、端では何もしない)。スマホ版の
+ * タブのスワイプ(setupMobileTabSystem)と同じ後判定方式: {passive:true}で縦スクロールは妨げず、指を離した時に
+ * 横の移動が縦より明確に大きい時だけ切り替える。カードを拡大した画面などが上に開いている間は反応しない。 */
+function setupCardListSwipe() {
+  const overlay = document.getElementById('card-list-overlay');
+  let startX = null;
+  let startY = null;
+  overlay.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) { startX = null; return; }
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+  }, { passive: true });
+  overlay.addEventListener('touchend', (e) => {
+    if (startX === null || !cardListView) return;
+    const dx = e.changedTouches[0].clientX - startX;
+    const dy = e.changedTouches[0].clientY - startY;
+    startX = null;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    if (!document.getElementById('card-inst-overlay').hidden) return;
+    const keys = CARD_LIST_NAV.map((entry) => entry.key).filter((key) => key !== null);
+    const next = keys[keys.indexOf(cardListView) + (dx < 0 ? 1 : -1)];
+    if (next) setCardListView(next);
+  }, { passive: true });
+}
+
 function buildCardListNavLabel(btn, label) {
   for (const part of label.split(/(\[[^\]]*\])/)) {
     if (!part) continue;
@@ -18153,6 +18179,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('card-list-open-button').addEventListener('click', gatedEntryBannerHandler('カードリスト', openCardListOverlay));
   document.getElementById('card-list-close-button').addEventListener('click', closeCardListOverlay);
+  setupCardListSwipe();
   document.getElementById('replay-upload-button').addEventListener('click', () => document.getElementById('replay-upload-input').click());
   document.getElementById('replay-upload-input').addEventListener('change', handleReplayUploadChange);
   document.getElementById('start-from-round3-button').addEventListener('click', handleStartFromRound3Click);
