@@ -2651,7 +2651,9 @@ function finishRound3Watch() {
 //   状態と一緒に全員に届き、リプレイ・ターン開始に戻す・巻き戻しでも一緒に戻る。
 // ・表示の「R1-1」はラウンド-そのラウンドで何番目の手番か(進捗の中で、プレイヤーが変わるごとに1つ進む)。
 let progressBaseline = null;
-let progressPendingVia = {}; // playerId -> タップしたが、まだ獲得に結びついていないカードの名前
+let progressPendingVia = {}; // playerId -> { gain, up }: タップしたが、まだ獲得/LVアップに結びついていないカードの名前
+const PROGRESS_TAP_GAIN_CARD_RE = /^(交渉術|土木技術|測量術)/;
+const PROGRESS_TAP_LVUP_CARD_RE = /^研究/;
 let progressRenderedLength = -1;
 
 function progressSummaryOf(state) {
@@ -2666,10 +2668,8 @@ function progressSummaryOf(state) {
     }
     const placed = {};
     for (const d of p.dice || []) if (d.placedMapId) placed[d.id] = d.placedMapId;
-    const jobCard = p.jobCardId ? state.cards[p.jobCardId] : null;
     players[p.id] = {
       job: p.jobCardId || null,
-      jobTapped: !!(jobCard && jobCard.tapped),
       con: p.conPhysicalId && p.conFace ? `${p.conPhysicalId}${p.conFace}` : null,
       cards,
       placed,
@@ -2698,22 +2698,35 @@ function noteProgress(state, canLog) {
       if (newMaps.length) delete progressPendingVia[pid];
       if (a.job && a.job !== b.job) texts.push(`${cardDisplayName(a.job)}を獲得`);
       if (a.con && a.con !== b.con) texts.push(`${cardDisplayName(a.con)}を獲得`);
-      const tapped = Object.keys(a.cards).filter((id) => a.cards[id].tapped && b.cards[id] && !b.cards[id].tapped)
+      // 「○○で」を付けるのは、タップでカードを獲得できる交渉術・土木技術・測量術(獲得の時)と、タップでLVアップ
+      // できる研究(LVアップの時)だけ (2026-10-28, per user: "タップしてカードを獲得できるのは交渉術 土木技術 測量術
+      // のみで LVUPできるのは研究のみです") -- ほかのカードのタップ(資源をもらう等)を、後の獲得に結びつけないため。
+      const tappedNames = Object.keys(a.cards).filter((id) => a.cards[id].tapped && b.cards[id] && !b.cards[id].tapped)
         .map((id) => cardDisplayName(b.cards[id].face));
-      if (a.job && a.job === b.job && a.jobTapped && !b.jobTapped) tapped.push(cardDisplayName(a.job));
-      const gains = [];
+      const tappedGain = tappedNames.filter((name) => PROGRESS_TAP_GAIN_CARD_RE.test(name));
+      const tappedUp = tappedNames.filter((name) => PROGRESS_TAP_LVUP_CARD_RE.test(name));
+      const pending = (!newMaps.length && progressPendingVia[pid]) || {};
+      const viaText = (names) => (names && names.length ? `${names.join('・')}で` : '');
+      let usedGain = false;
+      let usedUp = false;
       for (const [id, card] of Object.entries(a.cards)) {
-        if (!b.cards[id]) gains.push(`${cardDisplayName(card.face)}を獲得`);
-        else if (b.cards[id].face !== card.face) gains.push(`${cardDisplayName(card.face)}にLVアップ`);
+        if (!b.cards[id]) {
+          const names = tappedGain.length ? tappedGain : pending.gain;
+          if (names && names.length) usedGain = true;
+          texts.push(`${viaText(names)}${cardDisplayName(card.face)}を獲得`);
+        } else if (b.cards[id].face !== card.face) {
+          const names = tappedUp.length ? tappedUp : pending.up;
+          if (names && names.length) usedUp = true;
+          texts.push(`${viaText(names)}${cardDisplayName(card.face)}にLVアップ`);
+        }
       }
-      if (gains.length) {
-        const viaNames = tapped.length ? tapped : (newMaps.length ? [] : (progressPendingVia[pid] || []));
-        const via = viaNames.length ? `${viaNames.join('・')}で` : '';
-        for (const g of gains) texts.push(`${via}${g}`);
-        delete progressPendingVia[pid];
-      } else if (tapped.length && !newMaps.length) {
-        progressPendingVia[pid] = tapped;
-      }
+      // タップだけ先に起きた(選ぶ画面が出た)時は覚えておき、その人の次の獲得/LVアップに付ける。使ったら忘れる。
+      const nextPending = {
+        gain: usedGain ? null : (tappedGain.length ? tappedGain : pending.gain),
+        up: usedUp ? null : (tappedUp.length ? tappedUp : pending.up),
+      };
+      if (newMaps.length || (!nextPending.gain && !nextPending.up)) delete progressPendingVia[pid];
+      else progressPendingVia[pid] = nextPending;
       // m: メインアクション(エリアに行く) -- 表示で、同じプレイヤーが続けて手番をした時も別の手番として数えるため。
       mainTexts.forEach((t, i) => entries.push(i === 0 ? { r: state.round, p: pid, t, m: 1 } : { r: state.round, p: pid, t }));
       for (const t of texts) entries.push({ r: state.round, p: pid, t });
