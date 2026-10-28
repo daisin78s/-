@@ -698,19 +698,29 @@ h1, h2, h3 { margin: 0; }
    「とりあえず10にして」、以前は文字の0.9倍=9px)。 */
 .shop-card__emblem-char[data-emblem="地"], .action-emblem[data-emblem="地"] {
   color: transparent;
-  background: url("assets/emblem-chi.png") center / 10px 10px no-repeat;
+  background: url("assets/emblem-chi.png") center / 13px 13px no-repeat;
   image-rendering: pixelated;
+}
+/* 絵を13px角に (2026-10-28, per user request「これを15*15で表示してみて」→「13で」) -- 文字(10-12px)の幅のままだと
+   となりの印に重なるので、印の入れ物自体を13px角にする(透明な文字はその中に収まる)。 */
+.shop-card__emblem-char[data-emblem], .action-emblem[data-emblem] {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  line-height: 13px;
+  text-align: center;
+  vertical-align: middle;
 }
 /* 天=フクロウ(assets/emblem-ten.png)、人=コイン(assets/emblem-jin.png)も同じ形で (2026-10-28, per user request:
    "minerva_owl_10x10.png 天のかわり / mercury_coin_10x10.png 人の代わり")。 */
 .shop-card__emblem-char[data-emblem="天"], .action-emblem[data-emblem="天"] {
   color: transparent;
-  background: url("assets/emblem-ten.png") center / 10px 10px no-repeat;
+  background: url("assets/emblem-ten.png") center / 13px 13px no-repeat;
   image-rendering: pixelated;
 }
 .shop-card__emblem-char[data-emblem="人"], .action-emblem[data-emblem="人"] {
   color: transparent;
-  background: url("assets/emblem-jin.png") center / 10px 10px no-repeat;
+  background: url("assets/emblem-jin.png") center / 13px 13px no-repeat;
   image-rendering: pixelated;
 }
 
