@@ -3105,6 +3105,38 @@ body.tutorial-mode .change-highlight {
 .card-enlarge-row__slot {
   flex: 0 0 auto;
 }
+/* 性格(CON)の表裏を選ぶ時の拡大画面 (2026-10-28、main.jsのshowCardEnlargeModal参照) -- 選ぶ面は青い枠と
+   「選ぶカード」の札、もう一方の面は薄く。 */
+.card-enlarge-row__slot--picking {
+  position: relative;
+}
+/* 枠と札はカードの内側に重ねる(外側に出すと拡大画面の入れ物で上と左が切れるため)。 */
+.card-enlarge-row__slot--picking::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 4px solid var(--accent);
+  border-radius: 14px;
+  pointer-events: none;
+}
+.card-enlarge-row__slot--picking::before {
+  content: '選ぶカード';
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.card-enlarge-row__slot--other {
+  opacity: 0.4;
+}
 
 /* Small id label above each face's own INST section when both are shown at once (2026-08-25, same
    change as .card-enlarge-row). */

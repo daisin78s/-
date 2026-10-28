@@ -10190,7 +10190,7 @@ function renderConFacesRow(container, player, onPick) {
     // 2026-08-0X, per user feedback (CON cards weren't tappable to enlarge at all, in either the
     // read-only preview or the real choice): tapping the card now always opens the enlarge modal;
     // committing the choice happens via the modal's pick button -- see attachPickableEnlarge's own doc.
-    attachPickableEnlarge(cardNode, faceId, onPick ? { label: `${face === 'A' ? '表面' : '裏面'}を選ぶ`, onPick: () => onPick(face) } : null);
+    attachPickableEnlarge(cardNode, faceId, onPick ? { label: `${cardDisplayName(faceId)}（${face === 'A' ? '表面' : '裏面'}）を選ぶ`, onPick: () => onPick(face) } : null);
     container.appendChild(cell);
   }
   // Explanatory hint to the right of the two CON faces (2026-08-0X, per user request) -- shown in both
@@ -17369,6 +17369,14 @@ function showCardEnlargeModal(faceId, visualNode, sibling, siblingVisualNode, pi
       backSlot.style.height = `${backRect.height * scale}px`;
       totalWidth += backRect.width * scale + 10; // .card-enlarge-row's own gap
       maxHeight = Math.max(maxHeight, backRect.height * scale);
+    }
+    // 性格(CON)の表裏を選ぶ時、タップした面(=ボタンで選ばれる面)を分かりやすく (2026-10-28, per user request:
+    // "一番初めの性格選択時 選んだカードの裏側も表示するとどっちを選んだのかわかりにくいので 選んだほうを選んだ
+    // ことが分かりやすいようにして") -- 選ぶ面は青い枠+「選ぶカード」、もう一方の面は薄く。ボタンの文も
+    // renderConFacesRowで「憂鬱（裏面）を選ぶ」のようにカード名入りにしている。
+    if (pickAction && backSlot && /^CON/.test(faceId)) {
+      frontSlot.classList.add('card-enlarge-row__slot--picking');
+      backSlot.classList.add('card-enlarge-row__slot--other');
     }
     // visualContainer itself still needs this too, same reason the old single-visual design set it.
     visualContainer.style.width = `${totalWidth}px`;
