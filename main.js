@@ -11732,10 +11732,14 @@ function renderRankingList(highlightId, highlightCategory) {
         lifeButton.disabled = !entry.hasReplay;
         lifeButton.addEventListener('click', () => {
           lifeButton.disabled = true;
-          RankingStorage.loadReplay(entry.id).then((history) => {
-            lifeButton.disabled = false;
-            openRankingLifeStory(entry, history);
-          });
+          // 最後の場面だけの小さなファイル(online-sync.jsのloadReplayFinal)を先に読む。無い古い記録だけ
+          // リプレイ全体を読む(per user「人生を見るとき結構重い」)。
+          window.OnlineSync.loadReplayFinal(entry.id)
+            .then((finalState) => finalState || RankingStorage.loadReplay(entry.id))
+            .then((loaded) => {
+              lifeButton.disabled = false;
+              openRankingLifeStory(entry, Array.isArray(loaded) ? loaded : (loaded ? [loaded] : null));
+            });
         });
         row.appendChild(lifeButton);
         // Per-row ダウンロード button removed 2026-09-07, per user request, replaced by the shared

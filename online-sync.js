@@ -136,7 +136,35 @@ function clearAllRanking(category) {
  * storage, it doesn't parse JSON. */
 function saveReplay(id, replayHistory) {
   return storage().ref(REPLAY_STORAGE_PREFIX + id + '.json')
-    .putString(JSON.stringify(replayHistory), 'raw', { contentType: 'application/json' });
+    .putString(JSON.stringify(replayHistory), 'raw', { contentType: 'application/json' })
+    .then(function (result) {
+      // 最後の場面だけの小さなファイルも一緒に(失敗してもリプレイ本体の保存は成功扱い -- 人生ボタンは
+      // 無ければリプレイ本体を読むので困らない)。
+      var last = replayHistory && replayHistory[replayHistory.length - 1];
+      if (!last) return result;
+      return saveReplayFinal(id, last).catch(function () {}).then(function () { return result; });
+    });
+}
+
+// リプレイの最後の場面(ゲーム終了時の盤面1つ)だけを別に保存する (2026-10-28, per user report: "ランキングで
+// 人生を見るとき結構重い") -- ランキングの「人生」ボタンが使うのは最後の場面だけなのに、全部の手の入った
+// リプレイ(8〜13MB)を丸ごと読んでいた。こちらは数十KB。置き場はリプレイと同じreplays/で、名前は
+// "{id}-final.json"(replays/の外の新しい置き場はFirebase Storageの許可設定で書き込めなかったため)。
+function replayFinalRef(id) {
+  return storage().ref(REPLAY_STORAGE_PREFIX + id + '-final.json');
+}
+
+function saveReplayFinal(id, finalState) {
+  return replayFinalRef(id)
+    .putString(JSON.stringify(finalState), 'raw', { contentType: 'application/json' });
+}
+
+/** @returns {Promise<object|null>} 最後の場面。この仕組みより前の記録などで無ければnull。 */
+function loadReplayFinal(id) {
+  return replayFinalRef(id).getDownloadURL()
+    .then(function (url) { return fetch(url); })
+    .then(function (res) { return res.json(); })
+    .catch(function () { return null; });
 }
 
 /** @returns {Promise<object[]|null>} the saved replayHistory array, or null if unavailable (missing, or
@@ -151,6 +179,8 @@ function loadReplay(id) {
 }
 
 function deleteReplay(id) {
+  // 最後の場面のファイルも一緒に消す(無いこともあるので失敗は無視)。
+  replayFinalRef(id).delete().catch(function () {});
   return storage().ref(REPLAY_STORAGE_PREFIX + id + '.json').delete();
 }
 
@@ -457,6 +487,8 @@ window.OnlineSync = {
   saveReplay: saveReplay,
   loadReplay: loadReplay,
   deleteReplay: deleteReplay,
+  saveReplayFinal: saveReplayFinal,
+  loadReplayFinal: loadReplayFinal,
   pruneOldWeeklyReplays: pruneOldWeeklyReplays,
   createRoom: createRoom,
   joinRoom: joinRoom,
