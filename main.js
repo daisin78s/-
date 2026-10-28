@@ -8076,7 +8076,7 @@ function renderPlayers(state, next) {
     if (tutorialNextPlayerGlowing && player.id === 'P2') node.classList.add('change-highlight');
 
     node.querySelector('.player-panel__swatch').dataset.color = player.color;
-    node.querySelector('.player-panel__name').textContent = player.name;
+    fillPlayerTitledName(node.querySelector('.player-panel__name'), player);
     // Live running score (2026-08-04, per user feedback: "プレイ中もカードVP込みの合計得点をリアルタイ
     // ム表示するように") -- previously this header badge showed only player.resources.VP, the raw "VP
     // as a resource" pool that ADD(VP) grants into (only C301A's TAP does this in the current data --
@@ -8343,7 +8343,9 @@ function renderMobileOwnDiceRow(state, next) {
     const swatch = el('span', 'mobile-cards-player-switcher__swatch');
     swatch.dataset.color = player.color;
     ownerEl.appendChild(swatch);
-    ownerEl.appendChild(document.createTextNode(player.name));
+    const ownerNameEl = el('span');
+    fillPlayerTitledName(ownerNameEl, player);
+    ownerEl.appendChild(ownerNameEl);
     container.appendChild(ownerEl);
   }
   // 並び順: 色ダイス→白ダイス→資源 を横一列 (2026-10-22, per user request: "エリアの画面のときだけ
@@ -10227,7 +10229,7 @@ function renderPlayerCards(state, next) {
     // highlight (.onboard-panel--active) already covers those moments on its own.
     if (isSelf && hasFinishedOnboarding(player)) node.classList.add('card-group--active');
     node.querySelector('.card-group__swatch').dataset.color = player.color;
-    node.querySelector('.card-group__name').textContent = player.name;
+    fillPlayerTitledName(node.querySelector('.card-group__name'), player);
     // オンライン対戦の初期資源の進み具合(PC/タブレットはここ、スマホは右の名前欄 -- renderMobileCardsView)。
     const pickStatus = onlineResourcePickStatus(state, player.id);
     if (pickStatus) {
@@ -10983,6 +10985,18 @@ function rankingConJobTitle(conFaceId, jobCardId) {
   const conName = rankingCardDisplayName(conFaceId);
   const jobName = rankingCardDisplayName(jobCardId);
   return `${CON_ADJECTIVE_BY_NAME[conName] || conName}${jobName}`;
+}
+
+/** ゲーム中の名前欄(プレイヤー欄・カード欄)に「怠惰なローマ市民のhigebucho」の形で表示する (2026-10-28, per user
+ * request: "ゲーム中の プレイヤーネームの箇所 性格とジョブ選択後はそれも表示するようにして") -- 性格(制約)と
+ * ジョブの両方が決まるまでは名前だけ。呼び名の部分は人生の画面と同じく制約・ジョブの名前に色を付ける。 */
+function fillPlayerTitledName(nameEl, player) {
+  nameEl.textContent = '';
+  const conFaceId = player.conPhysicalId && player.conFace ? `${player.conPhysicalId}${player.conFace}` : null;
+  if (conFaceId && player.jobCardId) {
+    nameEl.appendChild(conJobColoredFragment(`${rankingConJobTitle(conFaceId, player.jobCardId)}の`));
+  }
+  nameEl.appendChild(document.createTextNode(player.name));
 }
 
 // 実績記録の定義一式(ACHIEVEMENT_STORAGE_KEY/ACHIEVEMENT_MODE_DEFS/ACHIEVEMENT_PER_GAME_DEFS/

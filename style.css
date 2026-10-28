@@ -5789,6 +5789,16 @@ body.tutorial-mode .change-highlight {
   .mobile-own-row__resources {
     flex-wrap: wrap;
   }
+  /* AIの手番の持ち主の名前: 「裏切り者のローマ市民のCarol」のように長くなるので、細い右欄では折り返す
+     (2026-10-28, per user request「エリア画面の自分以外のプレイヤーネーム出たとき」も性格とジョブを表示)。 */
+  .mobile-own-row__owner {
+    white-space: normal;
+    align-items: flex-start;
+    line-height: 1.35;
+  }
+  .mobile-own-row__owner .mobile-cards-player-switcher__swatch {
+    margin-top: 3px;
+  }
   /* 資源タブ: 横向きは4人を横1列に(高さが足りないため、per user request「4人...1画面で収まるように」)。 */
   #players {
     grid-template-columns: repeat(4, minmax(0, 1fr));
