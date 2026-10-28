@@ -1585,7 +1585,7 @@ function driveOneAiStep(state) {
   const did = driveOneAiStepInner(state);
   // fromAi: 届いた状態を反映している最中の描画(applyingRemoteState)の中で'instant'のAIがまとめて動いた時も、
   // AIの手は新しい変化なので送る(2026-10-27 fix -- 以前はそこで送られず、ほかの端末に届かなかった)。
-  if (did) { recordReplaySnapshotIfChanged(state, aiOpenTurnPlayerId); pushOnlineStateIfChanged(state, true); }
+  if (did) { noteProgress(state, true); recordReplaySnapshotIfChanged(state, aiOpenTurnPlayerId); pushOnlineStateIfChanged(state, true); }
   return did;
 }
 
@@ -2304,6 +2304,7 @@ function jumpToHistoryIndex(idx) {
  * 変えずに状態だけ戻す)。turnPlayerId = その時点の手番のプレイヤー。 */
 function restoreHistoryPoint(idx, restored, turnPlayerId) {
   if (idx >= 0) historyCursor = idx;
+  progressBaseline = null; // 戻した先の状態を進捗の比べる元にする(前へ進めた時に同じ進捗を二重に書かない)
   Object.keys(STATE).forEach((k) => delete STATE[k]);
   Object.assign(STATE, restored);
   selectedDieIds = [];
@@ -2636,6 +2637,135 @@ function finishRound3Watch() {
   debugMode = true;
   seedDebugHistoryIfNeeded();
   render(STATE);
+}
+
+// ---------------------------------------------------------------------------
+// 進捗 (2026-10-28, per user request: "ナビ：オフの隣に進捗ボタンを作りたい 押すとウィンドウが開いて
+// R1-1 higebucho 巫女を獲得 / 幸運を獲得 / 図書館の支配LV1を獲得 / R1-1 BOB 権力者を獲得 / 暴食を獲得 / 図書館LV1に
+// 行く のように進捗が見れるように 基本はメインアクションと獲得カードのみ 例 交渉術LV1で元老院の支配LV1を獲得" +
+// 回答: カードのLVアップも載せる、古い順(下が最新)、すべての版) --
+// ・状態が変わるたびに(render/driveOneAiStep)、前の状態(progressBaseline)と比べて、ダイスを置いたエリア(「○○に
+//   行く」)、ジョブ・制約の獲得、カードの獲得/LVアップを、STATE.progressLogに足す。カードをタップして獲得した時は
+//   「交渉術LV1で○○を獲得」(タップだけ先に起きた時は、そのプレイヤーの次の獲得まで覚えておく)。
+// ・書くのはその手を打った端末だけ(届いた状態の反映では書かない) -- 記録はゲームの状態の一部なので、オンラインでは
+//   状態と一緒に全員に届き、リプレイ・ターン開始に戻す・巻き戻しでも一緒に戻る。
+// ・表示の「R1-1」はラウンド-そのラウンドで何番目の手番か(進捗の中で、プレイヤーが変わるごとに1つ進む)。
+let progressBaseline = null;
+let progressPendingVia = {}; // playerId -> タップしたが、まだ獲得に結びついていないカードの名前
+let progressRenderedLength = -1;
+
+function progressSummaryOf(state) {
+  const maps = {};
+  for (const [mapId, mapState] of Object.entries(state.maps || {})) maps[mapId] = mapState.currentAreaId;
+  const players = {};
+  for (const p of state.players) {
+    const cards = {};
+    for (const id of p.ownedCardPhysicalIds || []) {
+      const c = state.cards[id];
+      if (c && isBuiltCardPhysicalId(id)) cards[id] = { face: c.currentFaceId, tapped: !!c.tapped };
+    }
+    const placed = {};
+    for (const d of p.dice || []) if (d.placedMapId) placed[d.id] = d.placedMapId;
+    const jobCard = p.jobCardId ? state.cards[p.jobCardId] : null;
+    players[p.id] = {
+      job: p.jobCardId || null,
+      jobTapped: !!(jobCard && jobCard.tapped),
+      con: p.conPhysicalId && p.conFace ? `${p.conPhysicalId}${p.conFace}` : null,
+      cards,
+      placed,
+    };
+  }
+  return { round: state.round, maps, players };
+}
+
+function noteProgress(state, canLog) {
+  if (replayMode || !state || !Array.isArray(state.players)) return;
+  const now = progressSummaryOf(state);
+  const before = progressBaseline;
+  progressBaseline = now;
+  if (canLog && before) {
+    if (now.round !== before.round) progressPendingVia = {};
+    const entries = [];
+    for (const [pid, a] of Object.entries(now.players)) {
+      const b = before.players[pid];
+      if (!b) continue;
+      const texts = [];
+      const newMaps = [];
+      for (const [dieId, mapId] of Object.entries(a.placed)) {
+        if (b.placed[dieId] !== mapId && !newMaps.includes(mapId)) newMaps.push(mapId);
+      }
+      const mainTexts = newMaps.map((mapId) => `${areaName(before.maps[mapId] || now.maps[mapId])}に行く`);
+      if (newMaps.length) delete progressPendingVia[pid];
+      if (a.job && a.job !== b.job) texts.push(`${cardDisplayName(a.job)}を獲得`);
+      if (a.con && a.con !== b.con) texts.push(`${cardDisplayName(a.con)}を獲得`);
+      const tapped = Object.keys(a.cards).filter((id) => a.cards[id].tapped && b.cards[id] && !b.cards[id].tapped)
+        .map((id) => cardDisplayName(b.cards[id].face));
+      if (a.job && a.job === b.job && a.jobTapped && !b.jobTapped) tapped.push(cardDisplayName(a.job));
+      const gains = [];
+      for (const [id, card] of Object.entries(a.cards)) {
+        if (!b.cards[id]) gains.push(`${cardDisplayName(card.face)}を獲得`);
+        else if (b.cards[id].face !== card.face) gains.push(`${cardDisplayName(card.face)}にLVアップ`);
+      }
+      if (gains.length) {
+        const viaNames = tapped.length ? tapped : (newMaps.length ? [] : (progressPendingVia[pid] || []));
+        const via = viaNames.length ? `${viaNames.join('・')}で` : '';
+        for (const g of gains) texts.push(`${via}${g}`);
+        delete progressPendingVia[pid];
+      } else if (tapped.length && !newMaps.length) {
+        progressPendingVia[pid] = tapped;
+      }
+      // m: メインアクション(エリアに行く) -- 表示で、同じプレイヤーが続けて手番をした時も別の手番として数えるため。
+      mainTexts.forEach((t, i) => entries.push(i === 0 ? { r: state.round, p: pid, t, m: 1 } : { r: state.round, p: pid, t }));
+      for (const t of texts) entries.push({ r: state.round, p: pid, t });
+    }
+    if (entries.length) state.progressLog = [...(state.progressLog || []), ...entries];
+  }
+  const overlay = document.getElementById('progress-overlay');
+  if (overlay && !overlay.hidden && (state.progressLog || []).length !== progressRenderedLength) renderProgressOverlay(state);
+}
+
+function openProgressOverlay() {
+  document.getElementById('progress-overlay').hidden = false;
+  renderProgressOverlay(STATE);
+}
+
+function renderProgressOverlay(state) {
+  const body = document.getElementById('progress-body');
+  const log = state.progressLog || [];
+  progressRenderedLength = log.length;
+  body.innerHTML = '';
+  if (log.length === 0) {
+    body.appendChild(el('div', 'progress-empty', 'まだ進捗はありません'));
+    return;
+  }
+  const list = el('div', 'progress-list');
+  let lastRound = null;
+  let lastPlayer = null;
+  let n = 0;
+  let groupHasMain = false;
+  for (const entry of log) {
+    if (entry.r !== lastRound) n = 0;
+    const newGroup = entry.r !== lastRound || entry.p !== lastPlayer || (entry.m && groupHasMain);
+    if (newGroup) { n++; groupHasMain = false; }
+    if (entry.m) groupHasMain = true;
+    const row = el('div', `progress-row${newGroup ? ' progress-row--first' : ''}`);
+    row.appendChild(el('span', 'progress-row__turn', newGroup ? `R${entry.r}-${n}` : ''));
+    const nameEl = el('span', 'progress-row__name');
+    if (newGroup) {
+      const player = state.players.find((p) => p.id === entry.p);
+      const swatch = el('span', 'standings-panel__swatch');
+      if (player) swatch.dataset.color = player.color;
+      nameEl.appendChild(swatch);
+      nameEl.appendChild(document.createTextNode(player ? player.name : entry.p));
+    }
+    row.appendChild(nameEl);
+    row.appendChild(elConJob('span', 'progress-row__text', entry.t));
+    list.appendChild(row);
+    lastRound = entry.r;
+    lastPlayer = entry.p;
+  }
+  body.appendChild(list);
+  body.scrollTop = body.scrollHeight;
 }
 
 /** effectiveTurnPlayerId (2026-09-10, per user bug report: viewing a saved replay at move 50, the turn
@@ -16401,6 +16531,9 @@ function renderCore(state) {
   // openTurnPlayerId() here (2026-09-10) -- NOT the `next` computed further below, which intentionally
   // reflects the POST-pumpAiInstant state -- reads the CURRENT (pre-pump) human mid-turn signal, matching
   // exactly what this specific snapshot (state as of right now, before any AI moves run this tick) needs.
+  // 進捗の記録(noteProgress参照) -- リプレイの記録/オンラインの送信より先に、それらに含まれるように。届いた状態を
+  // 反映している描画では書かない(書いたのはその手を打った端末)。
+  noteProgress(state, !applyingRemoteState);
   recordReplaySnapshotIfChanged(state, openTurnPlayerId());
   pushOnlineStateIfChanged(state);
   saveGameSessionIfApplicable(state);
@@ -17993,6 +18126,10 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('round-pass-button').addEventListener('click', handleRoundPassClick);
   // ナビ機能 (2026-10-18, per user request: "オンオフできてオンにするとAIが候補手をひとつ教えてくれる")
   // -- see navModeEnabled/updateNavSuggestionIfNeeded's own doc.
+  document.getElementById('progress-open-button').addEventListener('click', openProgressOverlay);
+  document.getElementById('progress-close-button').addEventListener('click', () => {
+    document.getElementById('progress-overlay').hidden = true;
+  });
   document.getElementById('nav-toggle-button').addEventListener('click', () => {
     navModeEnabled = !navModeEnabled;
     navSuggestionPlayerId = null; // force a fresh computation (or a fresh clear) on the next render

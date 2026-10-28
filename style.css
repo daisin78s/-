@@ -7203,3 +7203,55 @@ body.online-spectator #online-spectator-badge {
   z-index: 9001;
   pointer-events: none;
 }
+
+/* 進捗 (2026-10-28、main.jsのrenderProgressOverlay参照) -- 「R1-1 / 名前 / 内容」の3列。手番が変わる行
+   (progress-row--first)の上に区切り線。中身が長い時はウィンドウの中だけスクロール(開いた時は一番下=最新)。 */
+.progress-modal {
+  width: min(560px, calc(100vw - 32px));
+}
+.progress-modal .card-inst-modal__body {
+  max-height: min(70vh, 640px);
+  overflow-y: auto;
+}
+.progress-list {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  column-gap: 12px;
+  font-size: 13px;
+}
+.progress-row {
+  display: contents;
+}
+.progress-row > span {
+  padding: 2px 0;
+}
+.progress-row--first > span {
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+  margin-top: 4px;
+}
+.progress-list > .progress-row--first:first-child > span {
+  border-top: none;
+  margin-top: 0;
+  padding-top: 2px;
+}
+.progress-row__turn {
+  font-weight: 700;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.progress-row__name {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.progress-row__text {
+  color: var(--text);
+}
+.progress-empty {
+  color: var(--text-muted);
+  font-size: 13px;
+}
