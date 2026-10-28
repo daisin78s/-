@@ -2238,6 +2238,11 @@ function noteActiveTurnPlayerForJobPool(state, playerId, forceNewTurn) {
 // either way (see renderDebugPanel) -- only the turn/round-crossing rewind toggling this on unlocks, which
 // the 2026-09-08 follow-up explicitly allowed mid-attempt.
 let debugMode = weeklyChallengeActive;
+/** 設定の「巻き戻し OK/NG」(2026-10-28) -- OKの時だけTURN/ROUND巻き戻し欄を出す(renderDebugPanel参照)。
+ * 端末ごとに覚えておく。最初はNG。 */
+const REWIND_SETTING_STORAGE_KEY = 'diceWpRewindSetting';
+let rewindAllowed = false;
+try { rewindAllowed = localStorage.getItem(REWIND_SETTING_STORAGE_KEY) === 'ok'; } catch (e) { /* ignore */ }
 /** @type {{round:number, playerId:string, snapshot:Object}[]} */
 let turnHistory = [];
 /** Index into turnHistory currently being viewed. -1 means "no history recorded yet". */
@@ -3779,7 +3784,10 @@ function renderDebugPanel(state) {
   // 掴めない以上、実際にこの欄が必要なのはウィークリーチャレンジだけという利用実態に合わせ、判定条件を
   // weeklyChallengeActive単独に単純化した(debugMode/startedFromRound3由来の表示は廃止 -- 開発用に必要な
   // 時はtoggleDebugMode()等をコンソールから直接呼べば従来通り動作する、表示条件からは外すだけ)。
-  const showHistoryControls = weeklyChallengeActive;
+  // 2026-10-28, per user request ("すべての版で 赤い部分を隠したい 設定に 巻き戻しOK 巻き戻しNG をえらべて"、
+  // 最初はNG): 設定の「巻き戻し」がOKの時だけ表示する(ウィークリーに限らず、ローカル対戦でも)。オンライン対戦
+  // (観戦含む)はまだ全員の画面を一緒に戻す仕組みが無いので出さない(全員の同意で戻す形を後で作る予定)。
+  const showHistoryControls = rewindAllowed && !onlineRoomCode && !onlineSpectator;
   const controls = document.getElementById('debug-history-controls');
   controls.hidden = !showHistoryControls;
   if (!showHistoryControls) return;
@@ -16699,6 +16707,7 @@ function renderPlayerRoleControl(state) {
  * (see pumpAiDelayed) so a stray callback never keeps pumping under the old mode's semantics. */
 function renderAiPacingControl(state) {
   document.getElementById('ai-pacing-select').value = aiPacingMode;
+  document.getElementById('rewind-setting-select').value = rewindAllowed ? 'ok' : 'ng';
   const manualBtn = document.getElementById('ai-manual-step-button');
   const showManualBtn = aiPacingMode === 'manual' && hasAiWorkPending(state);
   manualBtn.hidden = !showManualBtn;
@@ -17820,6 +17829,11 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('ai-pacing-select').addEventListener('change', (e) => {
     if (aiPumpTimer !== null) { clearTimeout(aiPumpTimer); aiPumpTimer = null; }
     aiPacingMode = e.target.value;
+    render(STATE);
+  });
+  document.getElementById('rewind-setting-select').addEventListener('change', (e) => {
+    rewindAllowed = e.target.value === 'ok';
+    try { localStorage.setItem(REWIND_SETTING_STORAGE_KEY, rewindAllowed ? 'ok' : 'ng'); } catch (err) { /* ignore */ }
     render(STATE);
   });
   document.getElementById('ai-manual-step-button').addEventListener('click', () => {
