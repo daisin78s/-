@@ -10736,6 +10736,9 @@ function launchLifeStoryConfetti(rank) {
   const count = rank === 1 ? 70 : rank === 2 ? 28 : 0;
   if (!count) return;
   const layer = el('div', 'confetti-layer');
+  // ランキングから開いた人生(z-index 1000、openRankingLifeStory)の時は、その上に出す(per user report「ランキングで
+  // 人生を見ると クラッカーが画面の後ろで出て見えない」)。
+  if (rankingLifeStoryOpen) layer.style.zIndex = '1001';
   document.body.appendChild(layer);
   const colors = ['#e53935', '#1e88e5', '#fdd835', '#43a047', '#8e24aa', '#fb8c00', '#ec407a'];
   const W = window.innerWidth;
