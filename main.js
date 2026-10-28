@@ -2359,6 +2359,16 @@ function jumpToHistoryIndex(idx) {
   render(STATE);
 }
 
+/** 巻き戻し欄のボタンの表示「R3-1/Bob」 (2026-10-28, per user request: "R3/BOB/Turn1の書き方をR3-1/BOBに変えたい")
+ * -- ラウンド-そのラウンドの何番目の手番か/手番のプレイヤー(以前のTurnNは、ゲーム全体の通し番号だった)。 */
+function historyTurnLabel(state, idx) {
+  const entry = turnHistory[idx];
+  let nth = 0;
+  for (let i = 0; i <= idx; i++) if (turnHistory[i].round === entry.round) nth++;
+  const player = entry.playerId ? state.players.find((p) => p.id === entry.playerId) : null;
+  return `R${entry.round}-${nth}/${player ? player.name : '-'}`;
+}
+
 function handleDebugTurnBack() { jumpToHistoryIndex(historyCursor - 1); }
 function handleDebugTurnForward() { jumpToHistoryIndex(historyCursor + 1); }
 /** ROUND back/forward (spec items 7-8): jump to the *first* recorded entry of the previous/next round
@@ -3825,8 +3835,7 @@ function renderDebugPanel(state) {
   listEl.innerHTML = '';
   let currentItem = null;
   turnHistory.forEach((entry, i) => {
-    const activePlayer = entry.playerId ? state.players.find((p) => p.id === entry.playerId) : null;
-    const item = el('button', 'debug-history-list__item', `R${entry.round} / ${activePlayer ? activePlayer.name : '-'} / Turn${i + 1}`);
+    const item = el('button', 'debug-history-list__item', historyTurnLabel(state, i));
     item.type = 'button';
     const isCurrent = i === historyCursor;
     item.classList.toggle('debug-history-list__item--current', isCurrent);
