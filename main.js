@@ -9235,7 +9235,8 @@ function applyMobileCardsPlayer(playerId) {
   });
 }
 function switchMobileCardsPlayer(delta) {
-  const ids = STATE.players.map((p) => p.id);
+  // 名前ボタンと同じ手番順で隣へ (2026-10-28、renderMobileCardsView参照)。
+  const ids = roundOrderedPlayers(STATE).map((p) => p.id);
   const idx = Math.max(0, ids.indexOf(mobileCardsPlayerId));
   applyMobileCardsPlayer(ids[(idx + delta + ids.length) % ids.length]);
   window.scrollTo(0, 0);
@@ -9247,7 +9248,9 @@ function renderMobileCardsView(state, next) {
   }
   const switcher = document.getElementById('mobile-cards-player-switcher');
   switcher.innerHTML = '';
-  for (const player of state.players) {
+  // 手番順が決まったら資源画面と同じ手番順に並べる (2026-10-28, per user request: "手番が決まったら赤丸部分も
+  // その手番順に並び替えた方がいい" -- roundOrderedPlayersは決まる前はP1〜P4の順、ラウンドごとに並べ直し)。
+  for (const player of roundOrderedPlayers(state)) {
     const btn = el('button', 'mobile-cards-player-switcher__btn');
     btn.type = 'button';
     btn.dataset.playerId = player.id;
