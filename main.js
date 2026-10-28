@@ -4891,7 +4891,7 @@ function buildChangeDieValueIcon(actionText) {
 function buildCountEmblemWdIcon(actionText) {
   const match = /^ADD\(COUNT\(([天地人])\)\*wD\)$/.exec(actionText || '');
   if (!match) return null;
-  const emblemSpan = el('span', 'action-emblem', match[1]);
+  const emblemSpan = el('span', 'action-emblem', emblemDisplayChar(match[1]));
   emblemSpan.dataset.emblem = match[1];
   return actionRow([actionEmoji('🎲'), actionTimes(), emblemSpan]);
 }
@@ -4925,7 +4925,7 @@ function buildVpModifierIcon(actionText) {
 function buildCountEmblemVpModifierIcon(actionText) {
   const match = /^VP_MODIFIER\(COUNT\(([天地人])\)\)$/.exec(actionText || '');
   if (!match) return null;
-  const emblemSpan = el('span', 'action-emblem', match[1]);
+  const emblemSpan = el('span', 'action-emblem', emblemDisplayChar(match[1]));
   emblemSpan.dataset.emblem = match[1];
   return actionRow([emblemSpan, actionTimes(), actionSuffix('VP')]);
 }
@@ -5014,7 +5014,7 @@ function buildEmblemSetVpModifierIcon(actionText) {
   if (!match) return null;
   const [, modifier] = match;
   const emblemChildren = EMBLEM_ORDER.map((e) => {
-    const span = el('span', 'action-emblem', e);
+    const span = el('span', 'action-emblem', emblemDisplayChar(e));
     span.dataset.emblem = e;
     return span;
   });
@@ -5491,6 +5491,12 @@ const EMBLEM_BY_DECK = { A: '地', B: '天', C: '人' };
 // 表示の並び順。2026-10-28, per user request (天地人の代わりに王知金、並びは「王・知・金の順」) -- 地(王)・天(知)・
 // 人(金)の順に。データ・計算で使う字は天地人のまま(表示の並びだけ)。
 const EMBLEM_ORDER = ['地', '天', '人'];
+/** 印として画面に出す字 (2026-10-28, per user request: "アイコンを王知金にしたかった") -- データ・計算・
+ * data-emblem(色分け)は天地人のまま、表示の字だけ地→王、天→知、人→金。 */
+const EMBLEM_DISPLAY_CHAR = { 地: '王', 天: '知', 人: '金' };
+function emblemDisplayChar(e) {
+  return EMBLEM_DISPLAY_CHAR[e] || e;
+}
 // 2026-08-21, per user request: M007/中央広場(2,2,2=6 chars -> 3 rows), M008/聖王城(2,2,0=4 chars -> 2
 // rows), M009/円形闘技場(2,0,2=4 chars -> 2 rows), M011/聖域(4,0,0=4 chars -> 2 rows), M012/大交易所
 // (0,0,4=4 chars -> 2 rows) -- all happen to want exactly "2 per row", so one shared chunk size covers
@@ -5648,7 +5654,7 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     // as appendEmblemSegment below), joined by plain "/" text nodes between them.
     emblem.choice.forEach((opt, i) => {
       if (i > 0) emblemEl.appendChild(document.createTextNode('/'));
-      const charEl = el('span', 'shop-card__emblem-char', opt.emblem);
+      const charEl = el('span', 'shop-card__emblem-char', emblemDisplayChar(opt.emblem));
       charEl.dataset.emblem = opt.emblem;
       emblemEl.appendChild(charEl);
       emblemEl.appendChild(document.createTextNode(String(opt.count)));
@@ -5661,12 +5667,12 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     const appendEmblemSegment = (container, { char, count }) => {
       if (count <= 2) {
         for (let i = 0; i < count; i++) {
-          const charEl = el('span', 'shop-card__emblem-char', char);
+          const charEl = el('span', 'shop-card__emblem-char', emblemDisplayChar(char));
           charEl.dataset.emblem = char;
           container.appendChild(charEl);
         }
       } else {
-        const charEl = el('span', 'shop-card__emblem-char', char);
+        const charEl = el('span', 'shop-card__emblem-char', emblemDisplayChar(char));
         charEl.dataset.emblem = char;
         container.appendChild(charEl);
         container.appendChild(document.createTextNode(String(count)));
