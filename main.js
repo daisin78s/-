@@ -5190,6 +5190,7 @@ function renderCostBadges(container, costString, faceId) {
 function renderShops(state) {
   renderShopGrid(state);
   renderQsts(state);
+  renderMobileQuestStandings(state);
 }
 
 /**
@@ -17518,6 +17519,43 @@ function setupMobileQuestTab() {
   const questTab = document.getElementById('mobile-quest-tab');
   const qstPanel = document.querySelector('.qst-panel');
   if (questTab && qstPanel) questTab.appendChild(qstPanel);
+  if (questTab) {
+    const standings = el('div', 'mobile-quest-standings');
+    standings.id = 'mobile-quest-standings';
+    questTab.appendChild(standings);
+  }
+}
+
+/** スマホ版クエストタブの右側の順位 (2026-10-28, per user request: "クエスト画面 クエストの右側に順位を
+ * 表示するようにして 順位はショップ画面にある順位と同じものを見やすく表示" + "ショップ画面のプレイヤー
+ * ネームはそのままでいいが クエスト画面のプレイヤーネームは 怠惰なローマ市民などと表示") -- 中身は
+ * ショップの順位表(buildStandingsPanelNode)と同じstandingsRowsで、縦1列・大きめの文字。名前は性格と
+ * ジョブ付き(fillPlayerTitledName、決まるまでは名前だけ)で、長いので順位/VPの下の行に置く。
+ * ショップと同じくラウンド1が始まるまでは出さない。 */
+function renderMobileQuestStandings(state) {
+  const container = document.getElementById('mobile-quest-standings');
+  if (!container) return;
+  container.innerHTML = '';
+  container.hidden = state.round < 1;
+  if (state.round < 1) return;
+  container.appendChild(el('div', 'mobile-quest-standings__round', `ラウンド ${state.round}/4`));
+  for (const row of standingsRows(state)) {
+    const item = el('div', 'mobile-quest-standings__row');
+    item.dataset.place = String(row.place);
+    const top = el('div', 'mobile-quest-standings__top');
+    top.appendChild(el('span', 'mobile-quest-standings__place', `${row.place}位`));
+    const swatch = el('span', 'standings-panel__swatch');
+    swatch.dataset.color = row.color;
+    top.appendChild(swatch);
+    top.appendChild(el('span', 'mobile-quest-standings__vp', `${row.vp}VP`));
+    top.appendChild(el('span', 'standings-panel__qst', `（+${row.qstVp}）`));
+    if (row.conPenalty !== 0) top.appendChild(el('span', 'standings-panel__con-penalty', `（${row.conPenalty}）`));
+    item.appendChild(top);
+    const nameEl = el('div', 'mobile-quest-standings__name');
+    fillPlayerTitledName(nameEl, state.players.find((p) => p.id === row.playerId));
+    item.appendChild(nameEl);
+    container.appendChild(item);
+  }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
