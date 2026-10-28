@@ -5980,6 +5980,34 @@ body.tutorial-mode .change-highlight {
     padding: 8px 0 calc(4px + env(safe-area-inset-bottom));
     z-index: 2;
   }
+  /* 初期資源の確認画面が横向きのスマホの高さに収まらず、下に固定したボタンが選んだ2枚の上に重なって
+     見えなかった (2026-10-28, per user report with screenshot「スマホ版 資源を選ぶとき みえない」) --
+     ボタン(約97px)と上下の余白を詰め、選んだ2枚は上に寄せる。 */
+  .resource-confirm-button {
+    padding: 8px 10px;
+    font-size: 16px;
+    white-space: nowrap;
+  }
+  .resource-confirm-buttons {
+    margin-top: 6px;
+  }
+  .resource-confirm-panel {
+    padding: 10px 12px;
+  }
+  .resource-confirm-panel--res .card-inst-modal__body {
+    margin-top: 0;
+    padding-top: 0;
+  }
+  /* 選んだ2枚は必ず横に並べる(幅の狭い機種で縦に折り返して下に隠れていた)。 */
+  #resource-confirm-visual {
+    flex-wrap: nowrap;
+  }
+}
+/* 幅の狭いスマホ(横向きで幅800px未満)は、性格の2枚+選んだ2枚が横に収まるようカードを少し小さく。 */
+@media (max-width: 800px) and (max-height: 500px) {
+  #resource-confirm-overlay .owned-card-cell {
+    zoom: 0.8;
+  }
   /* ジョブ/制約(CON)の拡大画面の「このジョブを選ぶ」「表面を選ぶ」等も同じく下端に固定 (per user
      request「その後の制約やジョブを選ぶときもスマホ対応させて」)。 */
   .card-inst-modal__pick-button {
