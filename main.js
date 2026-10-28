@@ -2016,6 +2016,20 @@ let actionCheckpoints = []; // { state: GameState, turnActionTaken: boolean }[]
 // 2K, 2026-08-19) until 2026-08-20, per user request: the overflow die is now simply lost, no resource
 // granted at all -- see executor.grantOneDie's own doc.
 const WHITE_OVERFLOW_WARNING_TEXT = '白ダイスの所有上限は5個です。それを超えたものは失われます。';
+/** 白ダイスが上限を超えて失われた時の警告 (2026-10-28, per user request: "道化師が憤怒を選ぶと ずっと出ています
+ * 憤怒の白ダイス上限は0個です。それを超えたものは失われます。と直して この警告は憤怒のプレイヤーのターンにはでて
+ * ほかのプレイヤーのターンには出ないように") -- 以前はplacementMessageに足していたので、次に何か別の文が出るまで
+ * 誰の手番でも出たままだった。今は失ったプレイヤーごとに覚え、そのプレイヤーの番(手番/ジョブ・制約選び)の間だけ
+ * 出し、ほかのプレイヤーの番になったら消す。 { playerId, text } | null */
+let whiteOverflowWarning = null;
+/** 制約(憤怒など)で白ダイスの上限が変わっているプレイヤーは「憤怒の白ダイス上限は0個です。…」、それ以外は従来の文。 */
+function whiteOverflowWarningText(state, playerId) {
+  const player = state.players.find((p) => p.id === playerId);
+  const faceId = player && player.conPhysicalId && player.conFace ? `${player.conPhysicalId}${player.conFace}` : null;
+  const row = faceId ? dataLoaderMod.getCardRow(INDEX, faceId) : null;
+  const cap = row && /WHITE_DICE_CAP\((\d+)\)/.exec(row.PASSIVE || '');
+  return cap ? `${row.NAME}の白ダイス上限は${cap[1]}個です。それを超えたものは失われます。` : WHITE_OVERFLOW_WARNING_TEXT;
+}
 // { onConfirm: () => void } | null -- set by placeSelectedDie/placeSelectedDiceGroup/
 // commitBuildCandidate/the JOB-draft pick handler (2026-08-19, per user request: "上限を超えた🎲はKに
 // なります よろしいですか" -- cancelable, unlike the passive WHITE_OVERFLOW_WARNING_TEXT notice above)
@@ -16303,11 +16317,17 @@ function renderCore(state) {
   // rather than a separate one: it already persists across unrelated re-renders (nothing here clears it
   // early) and naturally gets replaced the next time any action sets a new message -- exactly the
   // "shown until something else happens" behaviour this warning wants, for free.
+  // 2026-10-28: placementMessageに足すのをやめ、失ったプレイヤーの番の間だけ出す(whiteOverflowWarning参照)。
   if (state.whiteOverflowEvents.length > 0) {
-    placementMessage = placementMessage ? `${placementMessage}　${WHITE_OVERFLOW_WARNING_TEXT}` : WHITE_OVERFLOW_WARNING_TEXT;
+    const playerId = state.whiteOverflowEvents[state.whiteOverflowEvents.length - 1];
+    whiteOverflowWarning = { playerId, text: whiteOverflowWarningText(state, playerId) };
     state.whiteOverflowEvents = [];
   }
-  document.getElementById('board-message').textContent = placementMessage;
+  const currentTurnPlayerId = openTurnPlayerId() || (next ? next.playerId : null);
+  if (whiteOverflowWarning && currentTurnPlayerId && currentTurnPlayerId !== whiteOverflowWarning.playerId) whiteOverflowWarning = null;
+  const overflowText = whiteOverflowWarning ? whiteOverflowWarning.text : '';
+  document.getElementById('board-message').textContent = placementMessage && overflowText
+    ? `${placementMessage}　${overflowText}` : (placementMessage || overflowText);
   renderBuildChoiceModal();
   renderTapChoiceModal();
   renderAutoModeChoiceModal();
