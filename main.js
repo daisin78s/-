@@ -2536,10 +2536,25 @@ function handleStartFromRound3Click() {
     round3WatchIdleSteps = 0;
     hideRound3GeneratingOverlay();
     setRound3WatchUi(true);
-    if (isMobileLayout()) applyMobileActiveTab('board');
     render(STATE);
+    showRound3WatchArea();
     setTimeout(round3WatchStep, 0);
   }, 0);
+}
+
+/** 見ている間はエリアを見せる (2026-10-28, per user request: "3Rから 盤面作っているときは エリア画面にして
+ * スマホ版 タブレット版は エリア画面の上端が画面の上端になるように")。スマホはエリアタブ(見ている間は
+ * applyMobileActiveTabが他のタブへ移らない)、タブレットは#boardの上端が画面の上端に来る位置へ。PCはそのまま。 */
+function showRound3WatchArea() {
+  if (isMobileLayout()) { applyMobileActiveTab('board'); return; }
+  if (window.innerWidth > 1400) return;
+  nextFrames(1, () => {
+    const board = document.getElementById('board');
+    // 画面上端の帯(#round3-watch-banner、position:fixed)にエリアの上の段が隠れないよう、帯の下端に合わせる。
+    const banner = document.getElementById('round3-watch-banner');
+    const bannerBottom = banner && !banner.hidden ? banner.getBoundingClientRect().bottom : 0;
+    if (board) window.scrollTo(0, board.getBoundingClientRect().top + window.scrollY - bannerBottom);
+  });
 }
 
 /** 1手進めて描く。待ち時間は無し(次の手はすぐ考え始める)、演出の終わりも待たない。 */
@@ -8641,6 +8656,7 @@ function finishMobileGainItem() {
  * はそのカードが見える位置まで自動でスクロールする。終わったら、スマホはエリアタブ、PC/タブレットはエリアが
  * 見える位置へ戻す。 */
 function showCardsForEffect(playerId, physicalIds) {
+  if (round3WatchActive) return; // 3Rからの1R・2Rを見ている間はエリアから動かさない(showRound3WatchArea)
   if (isMobileLayout()) {
     applyMobileActiveTab('cards');
     applyMobileCardsPlayer(playerId);
@@ -8653,6 +8669,7 @@ function showCardsForEffect(playerId, physicalIds) {
   });
 }
 function returnToBoardAfterEffect() {
+  if (round3WatchActive) return;
   if (isMobileLayout()) { applyMobileActiveTab('board'); return; }
   const board = document.getElementById('board');
   if (board) board.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -17254,6 +17271,7 @@ let mobileActiveTab = 'shop';
 const MOBILE_TAB_ORDER = ['quest', 'shop', 'board', 'players', 'cards', 'settings'];
 function applyMobileActiveTab(tab) {
   if (!MOBILE_TAB_ORDER.includes(tab)) return;
+  if (round3WatchActive && tab !== 'board') return; // 3Rからの1R・2Rを見ている間はエリアのまま(showRound3WatchArea)
   mobileActiveTab = tab;
   document.getElementById('app').dataset.mobileActiveTab = tab;
   document.querySelectorAll('.mobile-tab-switcher__btn').forEach((btn) => {
