@@ -2372,11 +2372,13 @@ function restoreHistoryPoint(idx, restored, turnPlayerId) {
 }
 
 /** 巻き戻し欄のボタンの表示「R3-1/Bob」 (2026-10-28, per user request: "R3/BOB/Turn1の書き方をR3-1/BOBに変えたい")
- * -- ラウンド-そのラウンドの何番目の手番か/手番のプレイヤー(以前のTurnNは、ゲーム全体の通し番号だった)。 */
+ * -- ラウンド-そのラウンドでのその人の何回目の手番か/手番のプレイヤー(以前のTurnNは、ゲーム全体の通し番号だった)。 */
 function historyTurnLabel(state, idx) {
   const entry = turnHistory[idx];
+  // 番号は「そのラウンドで、その人の何回目の手番か」 (2026-10-28, per user: "R1-1 R1-1 R1-1 R1-1 R1-2のように
+  // なると思ってた" + "進捗と巻き戻しおなじになるようにして" -- 以前はラウンド内の通し番号)。
   let nth = 0;
-  for (let i = 0; i <= idx; i++) if (turnHistory[i].round === entry.round) nth++;
+  for (let i = 0; i <= idx; i++) if (turnHistory[i].round === entry.round && turnHistory[i].playerId === entry.playerId) nth++;
   const player = entry.playerId ? state.players.find((p) => p.id === entry.playerId) : null;
   return `R${entry.round}-${nth}/${player ? player.name : '-'}`;
 }
@@ -2761,13 +2763,20 @@ function renderProgressOverlay(state) {
   const list = el('div', 'progress-list');
   let lastRound = null;
   let lastPlayer = null;
+  // 「R1-1」の番号はそのラウンドでその人の何回目の手番か(巻き戻し欄のhistoryTurnLabelと同じ数え方、2026-10-28)。
+  let turnsByPlayer = {};
   let n = 0;
   let groupHasMain = false;
   let groupCount = 0;
   for (const entry of log) {
-    if (entry.r !== lastRound) n = 0;
+    if (entry.r !== lastRound) turnsByPlayer = {};
     const newGroup = entry.r !== lastRound || entry.p !== lastPlayer || (entry.m && groupHasMain);
-    if (newGroup) { n++; groupHasMain = false; groupCount++; }
+    if (newGroup) {
+      turnsByPlayer[entry.p] = (turnsByPlayer[entry.p] || 0) + 1;
+      n = turnsByPlayer[entry.p];
+      groupHasMain = false;
+      groupCount++;
+    }
     const firstGroup = groupCount === 1;
     if (entry.m) groupHasMain = true;
     const row = el('div', `progress-row${newGroup ? ' progress-row--first' : ''}`);
