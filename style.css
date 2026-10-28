@@ -693,22 +693,23 @@ h1, h2, h3 { margin: 0; }
 /* 地のエンブレムを画像に (2026-10-28, per user request: "エンブレム地に代わってこの画像使います 王の加護"
    + 回答「まずは見た目の確認をしたいので画像だけ差し替え」) -- 10x10のドット絵(assets/emblem-chi.png、王冠)。
    文字「地」は残したまま透明にして(並び・大きさは文字のときと同じ)、その場所に画像を描く。ドットがぼやけない
-   ようpixelated。名前(文章中の「地」)はまだ変えていない。 */
+   ようpixelated。名前(文章中の「地」)はまだ変えていない。絵の大きさは10px角(元の絵と同じ、2026-10-28 per user
+   「とりあえず10にして」、以前は文字の0.9倍=9px)。 */
 .shop-card__emblem-char[data-emblem="地"], .action-emblem[data-emblem="地"] {
   color: transparent;
-  background: url("assets/emblem-chi.png") center / 0.9em 0.9em no-repeat;
+  background: url("assets/emblem-chi.png") center / 10px 10px no-repeat;
   image-rendering: pixelated;
 }
 /* 天=フクロウ(assets/emblem-ten.png)、人=コイン(assets/emblem-jin.png)も同じ形で (2026-10-28, per user request:
    "minerva_owl_10x10.png 天のかわり / mercury_coin_10x10.png 人の代わり")。 */
 .shop-card__emblem-char[data-emblem="天"], .action-emblem[data-emblem="天"] {
   color: transparent;
-  background: url("assets/emblem-ten.png") center / 0.9em 0.9em no-repeat;
+  background: url("assets/emblem-ten.png") center / 10px 10px no-repeat;
   image-rendering: pixelated;
 }
 .shop-card__emblem-char[data-emblem="人"], .action-emblem[data-emblem="人"] {
   color: transparent;
-  background: url("assets/emblem-jin.png") center / 0.9em 0.9em no-repeat;
+  background: url("assets/emblem-jin.png") center / 10px 10px no-repeat;
   image-rendering: pixelated;
 }
 .shop-card__emblem-char[data-emblem="人"], .action-emblem[data-emblem="人"] { color: var(--emblem-jin); }
