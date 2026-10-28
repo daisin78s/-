@@ -10787,8 +10787,10 @@ function playGameEndBanner(done) {
 
 /** 人生の各行を上から順に、左からすばやく飛ばして出す。行が画面の真ん中あたりまで来たら、その速さに
  * 合わせて画面(スクロールする入れ物=オーバーレイ)を上にスクロールする。 */
+let lifeStoryAnimToken = 0; // 前に開いた時の「出終わった」タイマーが、開き直した後に効かないように
 function animateLifeStoryLines(overlay, lines) {
   lines.forEach((line) => { line.style.opacity = '0'; });
+  overlay.classList.remove('life-story-overlay--done');
   // 実際にスクロールしている入れ物を探す(スマホはオーバーレイ自体、PC等はモーダルや本文のことがある)。
   const findScroller = () => [overlay, overlay.querySelector('.card-inst-modal'), overlay.querySelector('.card-inst-modal__body')]
     .find((n) => n && n.scrollHeight > n.clientHeight + 2 && /(auto|scroll)/.test(getComputedStyle(n).overflowY));
@@ -10812,6 +10814,10 @@ function animateLifeStoryLines(overlay, lines) {
     }, delay);
     delay += isRank ? LIFE_STORY_LINE_INTERVAL_MS + 1600 : LIFE_STORY_LINE_INTERVAL_MS;
   });
+  // 全部の行が出て画面が止まったら、✖ボタンの段を画面の上端に付いてこさせる(style.cssの
+  // .life-story-overlay--done参照)。最後の行の飛び込み+スクロールが終わる頃。
+  const token = ++lifeStoryAnimToken;
+  setTimeout(() => { if (token === lifeStoryAnimToken) overlay.classList.add('life-story-overlay--done'); }, delay + LIFE_STORY_LINE_IN_MS + 600);
 }
 
 /** GAME_END screen (2026-07-31): state.phase becomes 'GAME_END' inside turn-flow's endRound once

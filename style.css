@@ -6622,6 +6622,29 @@ body.opening-hide-res .card-group__onboard-resources > .owned-card-cell {
   width: min(720px, calc(100vw - 32px));
   max-width: none;
 }
+/* 人生の画面をすべての版でスクロールできるように (2026-10-28, per user report「ランキングで人生を見たとき
+   スクロールしないので上の方が見れない 自動スクロールさせて」) -- .card-inst-overlayはタブレット/PCでは
+   中央寄せ・スクロール無しのため、縦に長い人生は上下がはみ出して見えず、自動スクロール(animateLifeStoryLines)
+   も効かなかった。スマホ版の.card-inst-overlayと同じ形(上から並べてオーバーレイ自体をスクロール)にする。 */
+#life-story-overlay {
+  align-items: flex-start;
+  overflow-y: auto;
+  padding: 12px 0;
+}
+#life-story-overlay > .card-inst-modal {
+  margin: auto;
+}
+/* 文章が出終わって画面が止まったら、題名と✖ボタンの段を画面の上端に付いてくるようにして、✖を見える位置へ
+   (per user「✖ボタンが上にあって押せないので 画面が止まったら✖ボタンもスクロールさせて見える位置に」)。 */
+#life-story-overlay.life-story-overlay--done .card-inst-modal__header {
+  position: sticky;
+  top: -12px; /* #life-story-overlay自身の上の余白(padding 12px)の分だけ上へ -- 画面の一番上に付ける */
+  z-index: 1;
+  background: var(--surface);
+  margin: -16px -18px 8px;
+  padding: 12px 18px 8px;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
 
 /* ストーリーモード (2026-10-23、story.js参照) -- ローカル対戦の本物のエリア画面(body.story-mode)の上に、
    透明なオーバーレイ(アレク・会話ウインドウ・今やること・✖)を重ねる。スマホ横向き全画面が前提、PC/
