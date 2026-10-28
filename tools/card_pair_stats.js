@@ -34,8 +34,11 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
-const STATS_PATH = path.join(PROJECT_ROOT, 'output', 'card_pair_stats.json');
-const XLSX_PATH = path.join(PROJECT_ROOT, 'カード相性.xlsx');
+// CARD_PAIR_STATS_ROOT (2026-10-28): デスクトップの「進化AI」フォルダ(このリポジトリのコピーで進化AIを動かす
+// 場所)からも、ゲームのフォルダの同じ相性表に足し込めるようにする -- 指定が無ければ今まで通りこのフォルダ。
+const STATS_ROOT = process.env.CARD_PAIR_STATS_ROOT ? path.resolve(process.env.CARD_PAIR_STATS_ROOT) : PROJECT_ROOT;
+const STATS_PATH = path.join(STATS_ROOT, 'output', 'card_pair_stats.json');
+const XLSX_PATH = path.join(STATS_ROOT, 'カード相性.xlsx');
 const XLSX_SCRIPT = path.join(PROJECT_ROOT, 'tools', 'card_pair_stats_to_xlsx.py');
 const DATA_PATH = path.join(PROJECT_ROOT, 'data', 'game.json');
 
