@@ -3808,8 +3808,16 @@ function renderCardListAbcCategory(sheet, container) {
  * renderCardListResourceCategory's own INST loop, since the sheet currently only has an ID column
  * populated; whatever description column the user adds later is picked up automatically. '' (renders
  * nothing, collapses via :empty) if the row doesn't exist or has no other fields yet. */
+/** 資源・用語の記号 -> INSTシートのID (2026-10-28, per user: INSTシートのIDを日本語(食料/権力/知識/…)に直した) --
+ * 呼び出し側は今まで通り記号(K/A/B/…)で探し、ここで新しいIDに読み替える。D/wDは以前からIDが「色ダイス」
+ * 「白ダイス」で一致せず、説明が出ていなかったのもこれで直る。表に無いIDはそのまま探す。 */
+const INST_ID_BY_CODE = {
+  K: '食料', A: '権力', B: '知識', C: '金貨', Z: '人脈', BZ: '軽減',
+  D: '色ダイス', wD: '白ダイス', TAP: 'タップ', CON: '性格', JOB: 'ジョブ',
+};
 function instDescriptionText(instId) {
-  const row = (INDEX.raw.INST || []).find((r) => r.ID === instId);
+  const rows = INDEX.raw.INST || [];
+  const row = rows.find((r) => r.ID === (INST_ID_BY_CODE[instId] || instId)) || rows.find((r) => r.ID === instId);
   if (!row) return '';
   return Object.entries(row)
     .filter(([column, value]) => column !== 'ID' && value !== '' && value !== undefined && value !== null)
@@ -3824,10 +3832,10 @@ const CARD_LIST_RESOURCE_GLOSSARY = [
   { code: 'VP', name: '名声' },
   { code: 'K', name: '食料' },
   { code: 'A', name: '権力' },
-  { code: 'B', name: '信心' },
+  { code: 'B', name: '知識' },
   { code: 'C', name: '金貨' },
   { code: 'Z', name: '人脈' },
-  { code: 'BZ', name: '口利き' },
+  { code: 'BZ', name: '軽減' },
   { code: 'D', name: '色ダイス' }, // 2026-09-24「行動力→追加ダイス」、2026-09-26「追加ダイス→色ダイス」に改名(per user requests)
   { code: 'wD', name: '白ダイス' }, // 2026-10-02「恩寵→白ダイス」に改名(per user request: "恩寵ダイス　正式名称を　白ダイスに変更します")
   { code: 'TAP', name: 'タップ' },
@@ -13228,13 +13236,13 @@ const TUTORIAL_STEPS = [
   {
     id: 'castletown_alt_cathedral_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: '「ローマ市街」に置く代わりに「図書館」に置けば\nあなたの持っている食料〇すべてが信心青〇に変換されます',
+    body: '「ローマ市街」に置く代わりに「図書館」に置けば\nあなたの持っている食料〇すべてが知識青〇に変換されます',
     nextLabel: '次へ',
   },
   {
     id: 'castletown_fortune_cards_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: '信心青〇は学問カードを獲得するのに使います\n学問カードはダイスなしでカードを獲得できるようになったり\nダイス目を変更したりすることができます',
+    body: '知識青〇は学問カードを獲得するのに使います\n学問カードはダイスなしでカードを獲得できるようになったり\nダイス目を変更したりすることができます',
     nextLabel: '次へ',
   },
   // 同上、「ギルド」版。castletown_fortune_cards_hintが閉じられた瞬間に、大聖堂への配置を取り消して同じダイスを
@@ -13267,7 +13275,7 @@ const TUTORIAL_STEPS = [
   {
     id: 'kabukicho_result_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: '「酒場」にダイスが置かれると食料〇2が人脈Z〇3に変換されます\n人脈Z〇は権力赤〇、信心青〇、金貨黄〇のどれとしても使うことのできる万能資源です',
+    body: '「酒場」にダイスが置かれると食料〇2が人脈Z〇3に変換されます\n人脈Z〇は権力赤〇、知識青〇、金貨黄〇のどれとしても使うことのできる万能資源です',
     nextLabel: '次へ',
   },
   // T011: ボタンは出さず、あなたが(チュートリアル専用の)ターン終了ボタンを押すと次へ進む
@@ -13606,13 +13614,13 @@ const TUTORIAL_STEPS = [
   {
     id: 'build_candidate_c002a_try_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: 'タップしてみてください\n一気に信心が増えますでしょう\n食料〇が７に満たないときはあるだけ変換します',
+    body: 'タップしてみてください\n一気に知識が増えますでしょう\n食料〇が７に満たないときはあるだけ変換します',
     nextLabel: '次へ',
   },
   {
     id: 'build_candidate_c002a_levelup_hint',
     match: (state) => state.pendingChoices.some((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS'),
-    body: 'レベルが上がると信心青〇ではなく人脈Z〇に変換できるようになります\n持っている食料〇の数によって強さが変わりますがはまったときはものすごい威力なのでぜひ使ってみてください',
+    body: 'レベルが上がると知識青〇ではなく人脈Z〇に変換できるようになります\n持っている食料〇の数によって強さが変わりますがはまったときはものすごい威力なのでぜひ使ってみてください',
     choicesLayout: 'row',
     choices: [
       { label: 'レベルのあげ方を教えて', targetStepId: 'build_candidate_a005a_levelup_howto_hint' },
@@ -13855,10 +13863,10 @@ const TUTORIAL_STEPS = [
       const parts = [];
       if (r.K) parts.push(`（食料）〇${r.K}`);
       if (r.A) parts.push(`（権力）赤〇${r.A}`);
-      if (r.B) parts.push(`（信心）青〇${r.B}`);
+      if (r.B) parts.push(`（知識）青〇${r.B}`);
       if (r.C) parts.push(`（金貨）黄〇${r.C}`);
       if (r.Z) parts.push(`（人脈）Z〇${r.Z}`);
-      if (r.BZ) parts.push(`口利き${r.BZ}`);
+      if (r.BZ) parts.push(`軽減${r.BZ}`);
       // VPは含めない (2026-09-26, per user request: "VPは初期資源とは別枠扱いにしたいので...セリフに表示
       // しなくていい") -- 光らせない対応(renderPlayersのVP除外)と対になっている。
       return ['これがあなたの初期資源です', ...parts, 'これらの資源でカードやダイスを獲得していきます'].join('\n');
@@ -14430,10 +14438,10 @@ const TUTORIAL_TEXT_RESOLVERS = {
     const parts = [];
     if (r.K) parts.push(`（食料）〇${r.K}`);
     if (r.A) parts.push(`（権力）赤〇${r.A}`);
-    if (r.B) parts.push(`（信心）青〇${r.B}`);
+    if (r.B) parts.push(`（知識）青〇${r.B}`);
     if (r.C) parts.push(`（金貨）黄〇${r.C}`);
     if (r.Z) parts.push(`（人脈）Z〇${r.Z}`);
-    if (r.BZ) parts.push(`口利き${r.BZ}`);
+    if (r.BZ) parts.push(`軽減${r.BZ}`);
     return fillTutorialPlaceholders(template, { '持っている初期資源を1行ずつ': parts.join('\n') });
   },
 };
@@ -14490,10 +14498,10 @@ const TUTORIAL_TERM_ALIASES = [
   { code: 'VP', aliases: ['VP'] },
   { code: 'K', aliases: ['食料'] },
   { code: 'A', aliases: ['権力'] },
-  { code: 'B', aliases: ['信心'] },
+  { code: 'B', aliases: ['知識'] },
   { code: 'C', aliases: ['金貨'] },
   { code: 'Z', aliases: ['人脈'] },
-  { code: 'BZ', aliases: ['口利き'] },
+  { code: 'BZ', aliases: ['軽減'] },
   { code: 'D', aliases: ['追加色ダイス', '追加ダイス', '色ダイス'] },
   { code: 'wD', aliases: ['白ダイス', '恩寵ダイス'] },
   { code: 'TAP', aliases: [{ text: 'タップ', excludePrecededBy: ['アン'] }, 'TAP'] },
