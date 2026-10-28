@@ -5013,7 +5013,7 @@ function buildEmblemSetVpModifierIcon(actionText) {
   const match = /^IF\(EMBLEM_SET_COUNT<=3,VP_MODIFIER\((-?\d+)\)\)$/.exec(actionText || '');
   if (!match) return null;
   const [, modifier] = match;
-  const emblemChildren = ['天', '地', '人'].map((e) => {
+  const emblemChildren = EMBLEM_ORDER.map((e) => {
     const span = el('span', 'action-emblem', e);
     span.dataset.emblem = e;
     return span;
@@ -5488,7 +5488,9 @@ function buildEffectRow(effect, allowTextFallback = true) {
  * CARD_FACTS[faceId].emblem hand-transcription). Return shape is always a {天?,地?,人?: count} object
  * -- emblemChars() below turns it into an ordered, one-char-per-emblem list for rendering/counting. */
 const EMBLEM_BY_DECK = { A: '地', B: '天', C: '人' };
-const EMBLEM_ORDER = ['天', '地', '人'];
+// 表示の並び順。2026-10-28, per user request (天地人の代わりに王知金、並びは「王・知・金の順」) -- 地(王)・天(知)・
+// 人(金)の順に。データ・計算で使う字は天地人のまま(表示の並びだけ)。
+const EMBLEM_ORDER = ['地', '天', '人'];
 // 2026-08-21, per user request: M007/中央広場(2,2,2=6 chars -> 3 rows), M008/聖王城(2,2,0=4 chars -> 2
 // rows), M009/円形闘技場(2,0,2=4 chars -> 2 rows), M011/聖域(4,0,0=4 chars -> 2 rows), M012/大交易所
 // (0,0,4=4 chars -> 2 rows) -- all happen to want exactly "2 per row", so one shared chunk size covers
@@ -9881,9 +9883,11 @@ function renderPlayerStats(container, stats, extraStats) {
   addStat('LV1', stats.lv1);
   addStat('LV2', stats.lv2);
   addStat('モニュメント', stats.monuments);
-  addStat('天', stats.emblemCounts.天);
-  addStat('地', stats.emblemCounts.地);
-  addStat('人', stats.emblemCounts.人);
+  // 表示の字は王知金 (2026-10-28, per user request: "天地人の代わりに王知金にしようか" + 回答: 絵に合わせる
+  // (地=王冠→王、天=フクロウ→知、人=コイン→金)、王・知・金の順、まずは見た目だけ)。
+  addStat('王', stats.emblemCounts.地);
+  addStat('知', stats.emblemCounts.天);
+  addStat('金', stats.emblemCounts.人);
   for (const { label, value } of extraStats) addStat(label, value);
 }
 
