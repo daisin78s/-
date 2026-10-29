@@ -387,6 +387,11 @@ function setClock(code, clock) {
   return db().collection(ROOM_COLLECTION).doc(code).update({ clock: clock });
 }
 
+/** 部屋の今の中身を1回だけ読む(無ければnull)。「ゲームに戻る」で、保存してある部屋がまだ続いているかの確認用。 */
+function getRoom(code) {
+  return db().collection(ROOM_COLLECTION).doc(code).get().then(function (snap) { return snap.exists ? snap.data() : null; });
+}
+
 /** 観戦できる部屋か確かめる(席は取らない)。
  * @throws {Error} .message: ROOM_NOT_FOUND / VERSION_MISMATCH / SPECTATE_NOT_ALLOWED */
 function spectateRoom(code, appVersion) {
@@ -575,6 +580,7 @@ window.OnlineSync = {
   submitResourcePick: submitResourcePick,
   setSpectatorsAllowed: setSpectatorsAllowed,
   setTimeControl: setTimeControl,
+  getRoom: getRoom,
   setClock: setClock,
   setRewindOk: setRewindOk,
   requestRewind: requestRewind,

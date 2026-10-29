@@ -520,6 +520,48 @@ try {
   const raw = localStorage.getItem(ONLINE_SESSION_STORAGE_KEY);
   if (raw) pendingOnlineSession = JSON.parse(raw);
 } catch (e) { pendingOnlineSession = null; }
+// ローカルとオンラインの両方の続きが残っている時は、オンラインを再開する (2026-10-29, per user request:
+// "オンライン対戦 一度回線が落ちて復帰した時 ゲームに戻るで復帰できるように" + "オンラインを優先して復帰
+// できるように" -- 以前はローカルの続きが常に優先され、オンライン対戦の途中で開き直すと、前に遊んだローカル
+// 対戦の方が再開されていた)。ローカルの方は再開の対象から外すだけで、保存データ自体は残す(オンラインの続きは
+// 対局が終われば消えるので、その後はまたローカルの続きが出る)。
+// そのオンラインの部屋がもう残っていない(終わっている・消えている)時はローカルを再開する (per user: "その
+// オンラインが残っていなければ ローカル") -- 端末が離れている間に対局が終わった時など。部屋の確認は
+// checkPendingOnlineSession(読み込み時に始め、「ゲームに戻る」はその結果を待つ)。
+let fallbackGameSession = null;
+if (pendingGameSession && pendingOnlineSession) {
+  fallbackGameSession = pendingGameSession;
+  pendingGameSession = null;
+}
+let pendingOnlineSessionCheck = null;
+/** 保存してあるオンラインの部屋がまだ続いているか。分からない時(通信できない・時間切れ)は続いている扱い
+ * (オンラインを優先)。続いていなければ保存データを消し、ローカルの続きがあればそちらに切り替える。 */
+function checkPendingOnlineSession() {
+  if (!pendingOnlineSession) return Promise.resolve();
+  if (pendingOnlineSessionCheck) return pendingOnlineSessionCheck;
+  const code = pendingOnlineSession.roomCode;
+  const alive = (room) => {
+    if (!room) return false;
+    if (room.phase === 'lobby') return true;
+    if (room.phase !== 'playing' || !room.state) return false;
+    try { return JSON.parse(room.state).phase !== 'GAME_END'; } catch (e) { return true; }
+  };
+  const lookup = typeof OnlineSync !== 'undefined' && OnlineSync.getRoom ? OnlineSync.getRoom(code) : Promise.reject(new Error('NO_SYNC'));
+  const timeout = new Promise((resolve) => setTimeout(() => resolve('TIMEOUT'), 5000));
+  pendingOnlineSessionCheck = Promise.race([lookup, timeout]).then((room) => {
+    if (room === 'TIMEOUT' || alive(room)) return;
+    clearOnlineSession();
+    pendingOnlineSession = null;
+    pendingGameSession = fallbackGameSession;
+    fallbackGameSession = null;
+    if (!pendingGameSession) sessionResumeChoicePending = false;
+    if (!document.getElementById('session-resume-overlay').hidden) {
+      if (pendingGameSession) renderSessionResumeOverlay();
+      else { document.getElementById('session-resume-overlay').hidden = true; render(STATE); }
+    }
+  }).catch(() => {});
+  return pendingOnlineSessionCheck;
+}
 // Computed further below (right after debugSetupPlanAtLoad/STATE, which this depends on -- see that
 // line's own placement) rather than here, to avoid a TDZ ReferenceError at load.
 let sessionResumeChoicePending = false;
@@ -569,6 +611,11 @@ function saveGameSessionIfApplicable(state) {
  * `const`, only its *contents* can be replaced) from the saved local/weekly/tutorial snapshot, or
  * re-subscribes to the saved online room. */
 function resumeSavedSession() {
+  // オンラインの部屋がまだ続いているかの確認を待ってから(終わっていればローカルの続きへ切り替わる)。
+  if (pendingOnlineSession && !resumeSavedSession.checked) {
+    checkPendingOnlineSession().then(() => { resumeSavedSession.checked = true; resumeSavedSession(); });
+    return;
+  }
   if (pendingGameSession) {
     const session = pendingGameSession;
     Object.keys(STATE).forEach((k) => delete STATE[k]);
@@ -625,6 +672,7 @@ function returnToTopDiscardingSaved() {
  * buttons themselves are static markup (see index.html), wired once in the DOM-ready block. */
 function renderSessionResumeOverlay() {
   document.getElementById('session-resume-overlay').hidden = false;
+  checkPendingOnlineSession();
   const message = pendingOnlineSession && !pendingGameSession
     ? 'オンライン対戦の続きがあります。'
     : '進行中のゲームがあります。';
