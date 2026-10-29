@@ -6424,6 +6424,25 @@ body.tutorial-mode .change-highlight {
   display: none;
 }
 
+/* ラウンド開始の「ラウンド2」 (main.jsのplayRoundBanner参照) -- 画面上部を左→中央→右へ流れる。 */
+.round-banner {
+  position: fixed;
+  top: 12vh;
+  left: 50%;
+  transform: translate(-50%, 0);
+  z-index: 10002;
+  pointer-events: none;
+  white-space: nowrap;
+  font-size: clamp(32px, 7vw, 64px);
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: #fff;
+  background: rgba(20, 24, 40, 0.85);
+  padding: 0.12em 1.2em;
+  border-radius: 999px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
 /* オープニングの続き (2026-10-23) -- 配られる前のカードを隠す(main.jsのstartOpeningSequence参照)。
    飛んでくる複製(.opening-card-flyer)はbody直下に置くのでこれらの指定には当たらない。 */
 body.opening-hide-shop #shop-combined-slots [data-opening-deal] .shop-slot__card,

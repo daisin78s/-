@@ -697,6 +697,9 @@ function storySceneRound2() {
  * その場で振る。普段のラウンド開始の演出(資源タブで全員のダイスを転がす)は使わない(他のプレイヤーが
  * まだ登場していないため)。 */
 function storyStartNextRound(onDone) {
+  // 普段のラウンド開始と同じ「ラウンド2」の文字の演出 (2026-10-29, per user request: "その演出は ストーリーの
+  // ダイスを 回収した時も欲しい")。流れ終わってからダイスを振る。
+  playRoundBanner(STATE.round + 1);
   const placed = [...document.querySelectorAll('#board .slot .die')];
   for (const node of placed) {
     const rect = node.getBoundingClientRect();
@@ -722,7 +725,7 @@ function storyStartNextRound(onDone) {
     selectedDieIds = [];
     render(STATE);
     storyRollHandDice(onDone, 'P1');
-  }, placed.length ? 420 : 0);
+  }, Math.max(placed.length ? 420 : 0, ROUND_BANNER_MS));
 }
 
 /* ---------- 場面6: パトラ (S036〜S053) ---------- */

@@ -16453,12 +16453,31 @@ function playRoundStartDiceSequence(state, before) {
     flyer.animate([{ transform: 'translate(0, 0)' }, { transform: to }], { duration: DICE_EXIT_MS, easing: 'cubic-bezier(0.5, 0, 0.9, 0.4)', fill: 'forwards' })
       .onfinish = () => flyer.remove();
   }
-  const exitWait = before.placedDice.length > 0 ? DICE_EXIT_MS : 0;
+  // 「ラウンド2」の文字が画面上部を左→中央で一瞬止まる→右へ流れる (2026-10-29, per user request:
+  // "ラウンド2になって ダイスが回収されるとき ラウンド2 という文字が画面上部 左から中央にきて 中央で一瞬
+  // 止まって そのまま右へ行くという演出が欲しい ラウンド3 4 も")。流れ終わってからダイスを振る。
+  playRoundBanner(state.round);
+  const exitWait = Math.max(before.placedDice.length > 0 ? DICE_EXIT_MS : 0, ROUND_BANNER_MS);
   setTimeout(() => {
     // 2) スマホは資源タブへ。PC/タブレットは1画面なのでそのまま。
     if (isMobileLayout()) applyMobileActiveTab('players');
     nextFrames(2, () => rollAllHandDice(state));
   }, exitWait);
+}
+
+const ROUND_BANNER_MS = 1300;
+function playRoundBanner(round) {
+  const banner = document.createElement('div');
+  banner.className = 'round-banner';
+  banner.textContent = `ラウンド${round}`;
+  document.body.appendChild(banner);
+  const W = window.innerWidth;
+  banner.animate([
+    { transform: `translate(calc(-50% - ${W}px), 0)`, offset: 0, easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)' },
+    { transform: 'translate(-50%, 0)', offset: 0.3 },
+    { transform: 'translate(-50%, 0)', offset: 0.7, easing: 'cubic-bezier(0.7, 0, 0.8, 0.2)' },
+    { transform: `translate(calc(-50% + ${W}px), 0)`, offset: 1 },
+  ], { duration: ROUND_BANNER_MS, fill: 'forwards' }).onfinish = () => banner.remove();
 }
 
 function rollAllHandDice(state, onDone) {
