@@ -7488,3 +7488,15 @@ body.online-spectator #online-spectator-badge {
   font-size: 16px;
   font-weight: 700;
 }
+.online-public-room--other-version {
+  opacity: 0.7;
+}
+.online-public-room__version {
+  font-size: 12px;
+  color: #c0392b;
+  margin-top: 2px;
+}
+.undo-button.online-leave-button {
+  display: block;
+  margin-top: 14px;
+}

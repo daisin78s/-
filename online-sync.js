@@ -325,16 +325,17 @@ function listPublicRooms(appVersion) {
       if (!room) return;
       var data = room.data;
       if (!data.isPublic || data.phase !== 'lobby') return;
-      if ((data.appVersion || null) !== (appVersion || null)) return;
       var seats = data.seats || {};
       var occupied = SEAT_IDS.filter(function (id) { return !!seats[id]; }).length;
       if (occupied >= SEAT_IDS.length) return;
       var hostBeat = data.presence && data.presence[data.hostSeatId || 'P1'];
       var hostMs = hostBeat && typeof hostBeat.toMillis === 'function' ? hostBeat.toMillis() : 0;
       if (now - hostMs > 60000) return; // 部屋を作った人がもういない
-      result.push({ code: room.code, occupied: occupied, createdAt: data.createdAt || 0, timeControl: data.timeControl || null, spectatorsAllowed: !!data.spectatorsAllowed });
+      // バージョンが違う部屋も「入れない部屋」として返す(一覧に出して理由を見せる)。
+      var otherVersion = (data.appVersion || null) !== (appVersion || null) ? (data.appVersion || '?') : null;
+      result.push({ code: room.code, occupied: occupied, createdAt: data.createdAt || 0, timeControl: data.timeControl || null, spectatorsAllowed: !!data.spectatorsAllowed, otherVersion: otherVersion });
     });
-    result.sort(function (a, b) { return b.occupied - a.occupied || a.createdAt - b.createdAt; });
+    result.sort(function (a, b) { return (a.otherVersion ? 1 : 0) - (b.otherVersion ? 1 : 0) || b.occupied - a.occupied || a.createdAt - b.createdAt; });
     return result;
   });
 }
@@ -352,6 +353,24 @@ function createPublicRoom(appVersion, settings, profile) {
         tx.set(lobbyRef, { rooms: list.slice(-30) });
       });
     }).then(function () { return r; });
+  });
+}
+
+/** 開始前の部屋から出る (2026-10-29, per user report: スマホで部屋から出て、もう一度ランダムマッチを見ると部屋が
+ * 無い -- それまで「出る」仕組みが無く、閉じても席を取ったままだった) -- 自分の席を空ける。部屋を作った人(ホスト)
+ * が出た時は部屋を閉じる(phase 'closed'、一覧にも出なくなる)。開始後の部屋は何もしない。 */
+function leaveRoom(code, seatId) {
+  var ref = db().collection(ROOM_COLLECTION).doc(code);
+  return db().runTransaction(function (tx) {
+    return tx.get(ref).then(function (snap) {
+      if (!snap.exists) return;
+      var data = snap.data();
+      if (data.phase !== 'lobby') return;
+      var update = {};
+      update['seats.' + seatId] = null;
+      if ((data.hostSeatId || 'P1') === seatId) update.phase = 'closed';
+      tx.update(ref, update);
+    });
   });
 }
 
@@ -647,6 +666,7 @@ window.OnlineSync = {
   setTimeControl: setTimeControl,
   getRoom: getRoom,
   listPublicRooms: listPublicRooms,
+  leaveRoom: leaveRoom,
   createPublicRoom: createPublicRoom,
   setClock: setClock,
   setRewindOk: setRewindOk,

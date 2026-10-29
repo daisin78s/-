@@ -12169,7 +12169,8 @@ function openRankingOverlay() {
 // ---------------------------------------------------------------------------
 
 function openOnlineLobby() {
-  onlineLobbyView = 'choice';
+  // 開始前の部屋に入ったまま閉じていた時は、その部屋の待ち合い画面に戻る(もう一度入って2つ目の席を取らないように)。
+  onlineLobbyView = onlineRoomCode && !onlineGameStarted ? 'waiting' : 'choice';
   onlineLobbyError = null;
   document.getElementById('online-lobby-overlay').hidden = false;
   renderOnlineLobbyOverlay();
@@ -12287,6 +12288,27 @@ function handlePublicRoomCreate() {
     onlineLobbyError = `部屋を作れませんでした（${e.message}）`;
     renderOnlineLobbyOverlay();
   });
+}
+
+/** 開始前の部屋から出る (2026-10-29) -- 部屋の席を空け(OnlineSync.leaveRoom)、この端末を部屋に入る前の状態に
+ * 戻して最初の選択画面へ。部屋が閉じられた時(部屋を作った人が出た)の「戻る」も同じ後片付け。 */
+function leaveOnlineLobbyRoom(writeToRoom) {
+  const code = onlineRoomCode;
+  const seatId = localSeatId;
+  if (writeToRoom && code && seatId && !onlineSpectator) OnlineSync.leaveRoom(code, seatId).catch(() => {});
+  if (onlineRoomUnsubscribe) { onlineRoomUnsubscribe(); onlineRoomUnsubscribe = null; }
+  if (onlineHeartbeatTimer) { clearInterval(onlineHeartbeatTimer); onlineHeartbeatTimer = null; }
+  onlineRoomCode = null;
+  localSeatId = null;
+  isOnlineHost = false;
+  onlineLobbyRoomData = null;
+  if (onlineSpectator) { onlineSpectator = false; document.body.classList.remove('online-spectator'); }
+  setOnlineWaitingForStart(false);
+  document.body.classList.remove(...OPENING_HIDE_CLASSES);
+  clearOnlineSession();
+  onlineLobbyError = null;
+  onlineLobbyView = 'choice';
+  renderOnlineLobbyOverlay();
 }
 
 function onlineRoomSettingsText(settings) {
@@ -13288,11 +13310,17 @@ function renderOnlineLobbyOverlay() {
         const text = el('div', 'online-public-room__text');
         text.appendChild(el('div', 'online-public-room__people', `${room.occupied}/4人`));
         text.appendChild(el('div', 'online-public-room__settings', onlineRoomSettingsText(room)));
+        if (room.otherVersion) {
+          text.appendChild(el('div', 'online-public-room__version', `バージョンが違うため入れません（部屋: ${room.otherVersion} / この端末: ${appVersionLabel()}）。ページを再読み込みして同じバージョンにしてください`));
+          row.classList.add('online-public-room--other-version');
+        }
         row.appendChild(text);
-        const joinBtn = el('button', 'undo-button online-public-room__join', '入る');
-        joinBtn.type = 'button';
-        joinBtn.addEventListener('click', () => handlePublicRoomJoin(room.code));
-        row.appendChild(joinBtn);
+        if (!room.otherVersion) {
+          const joinBtn = el('button', 'undo-button online-public-room__join', '入る');
+          joinBtn.type = 'button';
+          joinBtn.addEventListener('click', () => handlePublicRoomJoin(room.code));
+          row.appendChild(joinBtn);
+        }
         body.appendChild(row);
       }
     }
@@ -13383,6 +13411,14 @@ function renderOnlineLobbyOverlay() {
       body.appendChild(el('div', 'ranking-row__opponents', `観戦: ${roomSettings.spectatorsAllowed ? 'OK' : 'NG'}`));
       body.appendChild(el('div', 'ranking-row__opponents', `持ち時間: ${onlineTimeControlText(roomSettings.timeControl)}`));
     }
+    if (onlineLobbyRoomData.phase === 'closed') {
+      body.appendChild(el('div', 'ranking-empty', '部屋を作った人が部屋を閉じました'));
+      const backBtn = el('button', 'undo-button', '戻る');
+      backBtn.type = 'button';
+      backBtn.addEventListener('click', () => leaveOnlineLobbyRoom(false));
+      body.appendChild(backBtn);
+      return;
+    }
     if (onlineSpectator) {
       body.appendChild(el('div', 'ranking-empty', '観戦します。ホストが開始するのを待っています...'));
     } else if (isOnlineHost) {
@@ -13394,6 +13430,11 @@ function renderOnlineLobbyOverlay() {
     } else {
       body.appendChild(el('div', 'ranking-empty', 'ホストが開始するのを待っています...'));
     }
+    // 部屋から出る (2026-10-29) -- 席を空ける。部屋を作った人が出ると部屋を閉じる。
+    const leaveBtn = el('button', 'undo-button online-leave-button', isOnlineHost && !onlineSpectator ? '部屋を閉じて出る' : '部屋から出る');
+    leaveBtn.type = 'button';
+    leaveBtn.addEventListener('click', () => leaveOnlineLobbyRoom(true));
+    body.appendChild(leaveBtn);
   }
 }
 
