@@ -1840,12 +1840,12 @@
       "EMBLEM_C": "",
       "VP": "",
       "ONCE": "",
-      "TAP": "ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+4);BLOCK_BUILD(A,THIS_TURN);BLOCK_BUILD(B,THIS_TURN);BLOCK_BUILD(C,THIS_TURN)",
+      "TAP": "ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+6);BLOCK_BUILD(A,THIS_TURN);BLOCK_BUILD(B,THIS_TURN);BLOCK_BUILD(C,THIS_TURN)",
       "PASSIVE": "",
       "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "A",
-      "INST": "タップすると１資源軽減を得る\nこのターン自分のダイス目１個を+4する\nこのターン通常カードと強化カードを建築できない"
+      "INST": "タップすると１資源軽減を得る\nこのターン自分のダイス目１個を+6する\nこのターン通常カードと強化カードを建築できない"
     },
     {
       "ID": "JOB011",

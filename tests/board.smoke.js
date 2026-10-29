@@ -1163,7 +1163,7 @@ function giveJob002(state, playerId) {
   const result = board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: die.id }, jobInst.physicalId);
   check('JOB007.TAP=ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(...);BLOCK_BUILD(...) succeeds as a direct (non-reactive) TAP', result, { success: true });
   check('...gained 1 BZ for free', p1.resources.BZ, 1);
-  check('...the chosen die is now +4 (5 -> 9, no wrap)', die.value, 9);
+  check('...the chosen die is now +6 (5 -> 11, no wrap)', die.value, 11);
   check('...the card is now tapped', state.cards[jobInst.physicalId].tapped, true);
   check('...A/B/C builds are blocked this turn', p1.blockedBuildCategoriesThisTurn.slice().sort(), ['A', 'B', 'C']);
   check('...A/B/C builds are excluded from candidates this turn', board.getBuildCandidates(state, index, 'P1', ['A', 'B', 'C'], 8).length, 0);
