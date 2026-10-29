@@ -383,14 +383,15 @@ function subscribeToRoom(code, onUpdate) {
     // presence(接続の合図、heartbeat参照)はサーバーの時刻(Timestamp)で入っているので、比べやすいようミリ秒の数に
     // 直して渡す。自分が書いた直後でまだサーバーの時刻が決まっていない時は推定値('estimate')。
     var data = snap.data({ serverTimestamps: 'estimate' });
-    if (data.presence) {
-      var presence = {};
-      Object.keys(data.presence).forEach(function (seatId) {
-        var v = data.presence[seatId];
-        presence[seatId] = v && typeof v.toMillis === 'function' ? v.toMillis() : v;
+    ['presence', 'animating'].forEach(function (field) {
+      if (!data[field]) return;
+      var converted = {};
+      Object.keys(data[field]).forEach(function (seatId) {
+        var v = data[field][seatId];
+        converted[seatId] = v && typeof v.toMillis === 'function' ? v.toMillis() : v;
       });
-      data.presence = presence;
-    }
+      data[field] = converted;
+    });
     data.__hasPendingWrites = snap.metadata.hasPendingWrites;
     onUpdate(data);
   });
@@ -469,6 +470,13 @@ function setTimeControl(code, timeControl) {
 }
 function setClock(code, clock) {
   return db().collection(ROOM_COLLECTION).doc(code).update({ clock: clock });
+}
+/** その席の端末が今アニメーション中か (2026-10-29, per user request: "プレイヤーのターンになってもアニメーションが
+ * 動いているうちは時間が減らないように") -- 中の間はサーバーの時刻(始まった時刻)、終わったらnull。 */
+function setAnimating(code, seatId, on) {
+  var update = {};
+  update['animating.' + seatId] = on ? firebase.firestore.FieldValue.serverTimestamp() : null;
+  return db().collection(ROOM_COLLECTION).doc(code).update(update);
 }
 
 /** 部屋の今の中身を1回だけ読む(無ければnull)。「ゲームに戻る」で、保存してある部屋がまだ続いているかの確認用。 */
@@ -669,6 +677,7 @@ window.OnlineSync = {
   leaveRoom: leaveRoom,
   createPublicRoom: createPublicRoom,
   setClock: setClock,
+  setAnimating: setAnimating,
   setRewindOk: setRewindOk,
   requestRewind: requestRewind,
   voteRewind: voteRewind,

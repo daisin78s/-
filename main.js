@@ -12521,6 +12521,43 @@ let onlineClockObs = null; // ホスト: 前回見た {active, open}(手番の�
 let onlineClockLastWritten = null; // ホスト: 最後に書いたclock(届く前に次を書いても数え直さないように)
 let onlineClockParsedJson = null;
 let onlineClockParsedState = null;
+let onlineOwnAnimatingSent = false; // この端末が部屋に「アニメーション中」と書いてあるか
+const ONLINE_ANIMATING_MAX_MS = 60000; // これより長く「アニメーション中」のままなら無視する(書いた端末が落ちた時など)
+
+/** この端末が今、操作できない状態か、アニメーションが動いているか (per user: "操作不能の時は時間が減らない" +
+ * "操作不能でなくてもアニメーション動いている間は時間減らない") -- 手番の人の端末がこの間は、その人の持ち時間を
+ * 減らさない(updateOnlineClock)。
+ * ・操作できない: ダイスを振る演出(ラウンド開始・訓練場など)、ほかの人の手番の再生、オープニングなど、操作を止める
+ *   透明なカバー(#dice-roll-blocker / #remote-playback-blocker)が出ている間。
+ * ・アニメーション: 画面で動いている、終わりのあるアニメーション(手番の文字、ダイスが飛ぶ、カード獲得の演出など。
+ *   document.getAnimations)。ずっと繰り返す光り方(点滅など、終わりが無いもの)は数えない(いつまでも止まってしまうため)。 */
+function localBlockingAnimationActive() {
+  if (diceRollSequenceActive || remotePlayback || openingSequenceActive) return true;
+  const blocked = ['dice-roll-blocker', 'remote-playback-blocker'].some((id) => {
+    const node = document.getElementById(id);
+    return !!(node && !node.hidden);
+  });
+  if (blocked) return true;
+  if (typeof document.getAnimations !== 'function') return false;
+  return document.getAnimations().some((animation) => {
+    if (animation.playState !== 'running' || !animation.effect) return false;
+    const end = animation.effect.getComputedTiming().endTime;
+    return Number.isFinite(end) && end > 0;
+  });
+}
+
+/** 全端末(観戦以外): アニメーション中かどうかが変わったら部屋に書く。 */
+let onlineOwnAnimatingLastSeen = 0;
+function syncOwnAnimatingFlag() {
+  if (!onlineRoomCode || !localSeatId || onlineSpectator) return;
+  const now = Date.now();
+  if (localBlockingAnimationActive()) onlineOwnAnimatingLastSeen = now;
+  // 続けて起きる短いアニメーションのたびに書かないよう、止まってから0.5秒たって「終わった」と書く。
+  const on = now - onlineOwnAnimatingLastSeen < 500;
+  if (on === onlineOwnAnimatingSent) return;
+  onlineOwnAnimatingSent = on;
+  OnlineSync.setAnimating(onlineRoomCode, localSeatId, on).catch(() => {});
+}
 
 function onlineTimeControlText(tc) {
   if (!tc) return '時間制限なし';
@@ -12546,6 +12583,7 @@ function startOnlineClockTimer() {
   if (onlineClockTimer) return;
   onlineClockTimer = setInterval(() => {
     if (!onlineRoomCode || !onlineGameStarted || !onlineLobbyRoomData) return;
+    syncOwnAnimatingFlag();
     if (isOnlineHost && !onlineSpectator) updateOnlineClock(onlineLobbyRoomData);
     renderOnlineClock(onlineLobbyRoomData);
   }, 250);
@@ -12636,7 +12674,15 @@ function updateOnlineClock(roomData) {
   for (const seatId of Object.keys(clock.timedOut)) {
     if (clock.timedOut[seatId] && !waiting.includes(seatId) && aiOpenTurnPlayerId !== seatId) { clock.timedOut[seatId] = false; changed = true; }
   }
-  const running = waiting.filter((seatId) => clock.started[seatId]).sort();
+  // 手番の人の端末がまだアニメーション中(ダイスを振る演出・ほかの人の手番の再生など)の間は、その人の時間を減らさない
+  // (2026-10-29, per user request)。自分の端末の分は部屋の値を待たずにその場で見る。
+  const animating = roomData.animating || {};
+  const isAnimating = (seatId) => {
+    if (seatId === localSeatId) return localBlockingAnimationActive();
+    const t = animating[seatId];
+    return typeof t === 'number' && now - t < ONLINE_ANIMATING_MAX_MS;
+  };
+  const running = waiting.filter((seatId) => clock.started[seatId] && !isAnimating(seatId)).sort();
   if (JSON.stringify(running) !== JSON.stringify([...clock.running].sort())) changed = true;
   if (!changed) return;
   clock.running = running;
