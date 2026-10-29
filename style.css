@@ -7307,6 +7307,31 @@ body.online-spectator #online-spectator-badge {
   color: #fff;
   border-color: var(--accent);
 }
+/* ランダムマッチの待っている部屋の一覧 (main.jsのrenderOnlineLobbyOverlay 'public') */
+.online-public-room {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border, #d0d4dc);
+  border-radius: 8px;
+}
+.online-public-room__text {
+  flex: 1;
+  min-width: 0;
+}
+.online-public-room__people {
+  font-weight: 700;
+  font-size: 14px;
+}
+.online-public-room__settings {
+  font-size: 12px;
+  opacity: 0.8;
+}
+.online-public-room__join {
+  flex: none;
+}
 /* 持ち時間の設定(待ち合い画面) -- タイムスタートは4つあるので折り返す */
 .online-time-setting {
   flex-wrap: wrap;

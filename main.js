@@ -12213,29 +12213,111 @@ function handleCreateRoomClick() {
   });
 }
 
-/** 公開部屋で自動的に相手を探す (2026-10-29、OnlineSync.findOrCreatePublicRoom参照) -- 入れる部屋があれば参加者として、
- * 無ければ自分で作った部屋のホスト(持ち時間を決めて開始ボタンを押す人)として待ち合い画面へ。 */
-let onlinePublicSearching = false;
+/** ランダムマッチ (2026-10-29、OnlineSync.listPublicRooms参照) -- 待っている公開部屋を、設定(人数・持ち時間・観戦)
+ * つきで一覧にし、よければ「入る」、無ければ/いやなら設定を決めてから自分で公開部屋を作る。公開部屋の設定は
+ * 作った後は変えない(入った人が見た設定のまま始まるように)。一覧は開いている間5秒ごとに読み直す。 */
 const ONLINE_PUBLIC_MATCH_LABEL = 'ランダムマッチ';
-function handlePublicMatchClick() {
-  if (onlinePublicSearching) return;
-  onlinePublicSearching = true;
+let onlinePublicRooms = null; // null=読み込み中
+let onlinePublicRefreshTimer = null;
+let onlinePublicBusy = false;
+let onlinePublicDraft = { spectatorsAllowed: true, timeControl: null };
+
+function openPublicMatchList() {
+  onlineLobbyView = 'public';
   onlineLobbyError = null;
+  onlinePublicRooms = null;
   renderOnlineLobbyOverlay();
-  OnlineSync.findOrCreatePublicRoom(appVersionLabel()).then(({ code, seatId, created }) => {
-    onlinePublicSearching = false;
-    onlineRoomCode = code;
-    localSeatId = seatId;
-    isOnlineHost = created;
-    setOnlineWaitingForStart(true);
-    onlineLobbyView = 'waiting';
-    subscribeToOnlineRoom(code);
-    startOnlinePresence();
+  refreshPublicRooms();
+  if (!onlinePublicRefreshTimer) onlinePublicRefreshTimer = setInterval(refreshPublicRooms, 5000);
+}
+
+function stopPublicRoomsRefresh() {
+  if (onlinePublicRefreshTimer) clearInterval(onlinePublicRefreshTimer);
+  onlinePublicRefreshTimer = null;
+}
+
+function refreshPublicRooms() {
+  if (onlineLobbyView !== 'public') { stopPublicRoomsRefresh(); return; }
+  OnlineSync.listPublicRooms(appVersionLabel()).then((rooms) => {
+    if (onlineLobbyView !== 'public') return;
+    onlinePublicRooms = rooms;
+    renderOnlineLobbyOverlay();
   }).catch((e) => {
-    onlinePublicSearching = false;
-    onlineLobbyError = `相手を探せませんでした（${e.message}）`;
+    if (onlineLobbyView !== 'public') return;
+    onlinePublicRooms = [];
+    onlineLobbyError = `部屋を読めませんでした（${e.message}）`;
     renderOnlineLobbyOverlay();
   });
+}
+
+function enterOnlineRoomAsSeat(code, seatId, host) {
+  stopPublicRoomsRefresh();
+  onlineRoomCode = code;
+  localSeatId = seatId;
+  isOnlineHost = host;
+  onlineLobbyError = null;
+  setOnlineWaitingForStart(true);
+  onlineLobbyView = 'waiting';
+  subscribeToOnlineRoom(code);
+  startOnlinePresence();
+}
+
+function handlePublicRoomJoin(code) {
+  if (onlinePublicBusy) return;
+  onlinePublicBusy = true;
+  OnlineSync.joinRoom(code, appVersionLabel()).then(({ code: joined, seatId }) => {
+    onlinePublicBusy = false;
+    enterOnlineRoomAsSeat(joined, seatId, false);
+  }).catch((e) => {
+    onlinePublicBusy = false;
+    onlineLobbyError = ONLINE_LOBBY_ERROR_MESSAGES[e.message] || e.message;
+    refreshPublicRooms();
+  });
+}
+
+function handlePublicRoomCreate() {
+  if (onlinePublicBusy) return;
+  onlinePublicBusy = true;
+  renderOnlineLobbyOverlay();
+  OnlineSync.createPublicRoom(appVersionLabel(), onlinePublicDraft).then(({ code, seatId }) => {
+    onlinePublicBusy = false;
+    enterOnlineRoomAsSeat(code, seatId, true);
+  }).catch((e) => {
+    onlinePublicBusy = false;
+    onlineLobbyError = `部屋を作れませんでした（${e.message}）`;
+    renderOnlineLobbyOverlay();
+  });
+}
+
+function onlineRoomSettingsText(settings) {
+  return `持ち時間: ${onlineTimeControlText(settings.timeControl || null)} ・ 観戦: ${settings.spectatorsAllowed ? 'OK' : 'NG'}`;
+}
+
+/** 観戦OK/NGと持ち時間を選ぶボタンの行(待ち合い画面のホスト用と、ランダムマッチの部屋を作る前の設定用)。
+ * onChange({spectatorsAllowed} または {timeControl})。 */
+function appendOnlineRoomSettingRows(body, settings, onChange) {
+  const addRow = (label, options, current, onPick, extraClass) => {
+    const row = el('div', `online-spectate-setting${extraClass ? ` ${extraClass}` : ''}`);
+    row.appendChild(el('span', 'online-spectate-setting__label', label));
+    for (const [text, value] of options) {
+      const btn = el('button', 'undo-button online-spectate-setting__btn', text);
+      btn.type = 'button';
+      btn.classList.toggle('online-spectate-setting__btn--active', current === value);
+      btn.addEventListener('click', () => onPick(value));
+      row.appendChild(btn);
+    }
+    body.appendChild(row);
+  };
+  addRow('観戦:', [['OK', true], ['NG', false]], !!settings.spectatorsAllowed, (value) => onChange({ spectatorsAllowed: value }));
+  const tc = settings.timeControl || null;
+  const setTc = (patch) => onChange({ timeControl: patch === null ? null : Object.assign({ initialSec: 300, earlySec: 30, lateSec: 10, start: 'game' }, tc || {}, patch) });
+  addRow('持ち時間:', [['なし', null], ['3分', 180], ['5分', 300], ['10分', 600]], tc ? tc.initialSec : null,
+    (value) => setTc(value === null ? null : { initialSec: value }), 'online-time-setting');
+  if (tc) {
+    addRow('ターン1〜3:', [['+30秒', 30], ['+60秒', 60], ['+90秒', 90]], tc.earlySec, (value) => setTc({ earlySec: value }), 'online-time-setting');
+    addRow('ターン4〜:', [['+10秒', 10], ['+30秒', 30], ['+60秒', 60]], tc.lateSec, (value) => setTc({ lateSec: value }), 'online-time-setting');
+    addRow('タイムスタート:', Object.entries(ONLINE_TIME_START_LABELS).map(([value, text]) => [text, value]), tc.start, (value) => setTc({ start: value }), 'online-time-setting');
+  }
 }
 
 function handleJoinRoomSubmit(codeInput) {
@@ -12415,7 +12497,7 @@ let onlineClockParsedState = null;
 
 function onlineTimeControlText(tc) {
   if (!tc) return '時間制限なし';
-  return `持ち時間${tc.initialSec / 60}分 / ターン1〜3 +${tc.earlySec}秒 / ターン4〜 +${tc.lateSec}秒 / ${ONLINE_TIME_START_LABELS[tc.start] || ''}`;
+  return `${tc.initialSec / 60}分 / ターン1〜3 +${tc.earlySec}秒 / ターン4〜 +${tc.lateSec}秒 / ${ONLINE_TIME_START_LABELS[tc.start] || ''}`;
 }
 
 function formatClockMs(ms) {
@@ -13180,13 +13262,60 @@ function renderOnlineLobbyOverlay() {
     joinButton.type = 'button';
     joinButton.addEventListener('click', () => { onlineLobbyView = 'join'; renderOnlineLobbyOverlay(); });
     body.appendChild(joinButton);
-    // 誰でも入れる公開部屋で自動的に相手を探す (2026-10-29)。
-    const publicButton = el('button', 'undo-button', onlinePublicSearching ? '相手を探しています...' : ONLINE_PUBLIC_MATCH_LABEL);
+    // 誰でも入れる部屋 (2026-10-29) -- 待っている部屋の一覧へ。
+    const publicButton = el('button', 'undo-button', ONLINE_PUBLIC_MATCH_LABEL);
     publicButton.type = 'button';
-    publicButton.disabled = onlinePublicSearching;
-    publicButton.addEventListener('click', handlePublicMatchClick);
+    publicButton.addEventListener('click', openPublicMatchList);
     body.appendChild(publicButton);
+    return;
+  }
+
+  if (onlineLobbyView === 'public') {
+    body.appendChild(el('div', 'ranking-row__score', `${ONLINE_PUBLIC_MATCH_LABEL}: 待っている部屋`));
     if (onlineLobbyError) body.appendChild(el('div', 'ranking-empty', onlineLobbyError));
+    if (onlinePublicRooms === null) {
+      body.appendChild(el('div', 'ranking-empty', '探しています...'));
+    } else if (onlinePublicRooms.length === 0) {
+      body.appendChild(el('div', 'ranking-empty', '今待っている部屋はありません。自分で部屋を作って待つこともできます'));
+    } else {
+      for (const room of onlinePublicRooms) {
+        const row = el('div', 'online-public-room');
+        const text = el('div', 'online-public-room__text');
+        text.appendChild(el('div', 'online-public-room__people', `${room.occupied}/4人`));
+        text.appendChild(el('div', 'online-public-room__settings', onlineRoomSettingsText(room)));
+        row.appendChild(text);
+        const joinBtn = el('button', 'undo-button online-public-room__join', '入る');
+        joinBtn.type = 'button';
+        joinBtn.addEventListener('click', () => handlePublicRoomJoin(room.code));
+        row.appendChild(joinBtn);
+        body.appendChild(row);
+      }
+    }
+    const createBtn = el('button', 'undo-button', '自分で部屋を作る');
+    createBtn.type = 'button';
+    createBtn.addEventListener('click', () => { stopPublicRoomsRefresh(); onlineLobbyError = null; onlineLobbyView = 'publicCreate'; renderOnlineLobbyOverlay(); });
+    body.appendChild(createBtn);
+    const backBtn = el('button', 'undo-button', '戻る');
+    backBtn.type = 'button';
+    backBtn.addEventListener('click', () => { stopPublicRoomsRefresh(); onlineLobbyError = null; onlineLobbyView = 'choice'; renderOnlineLobbyOverlay(); });
+    body.appendChild(backBtn);
+    return;
+  }
+
+  if (onlineLobbyView === 'publicCreate') {
+    body.appendChild(el('div', 'ranking-row__score', `${ONLINE_PUBLIC_MATCH_LABEL}: 部屋の設定`));
+    body.appendChild(el('div', 'ranking-empty', 'この設定は部屋の一覧に表示されます。部屋を作った後は変えられません'));
+    if (onlineLobbyError) body.appendChild(el('div', 'ranking-empty', onlineLobbyError));
+    appendOnlineRoomSettingRows(body, onlinePublicDraft, (patch) => { onlinePublicDraft = Object.assign({}, onlinePublicDraft, patch); renderOnlineLobbyOverlay(); });
+    const makeBtn = el('button', 'undo-button', onlinePublicBusy ? '作っています...' : 'この設定で部屋を作る');
+    makeBtn.type = 'button';
+    makeBtn.disabled = onlinePublicBusy;
+    makeBtn.addEventListener('click', handlePublicRoomCreate);
+    body.appendChild(makeBtn);
+    const backBtn = el('button', 'undo-button', '戻る');
+    backBtn.type = 'button';
+    backBtn.addEventListener('click', openPublicMatchList);
+    body.appendChild(backBtn);
     return;
   }
 
@@ -13229,50 +13358,17 @@ function renderOnlineLobbyOverlay() {
       list.appendChild(el('div', 'ranking-row__opponents', label));
     }
     body.appendChild(list);
-    // 観戦OK/NG (2026-10-27, per user回答「部屋の設定で決める」) -- 部屋の作成者だけが切り替えられる。
-    const spectatorsAllowed = !!onlineLobbyRoomData.spectatorsAllowed;
-    if (isOnlineHost) {
-      const spectateRow = el('div', 'online-spectate-setting');
-      spectateRow.appendChild(el('span', 'online-spectate-setting__label', '観戦:'));
-      for (const [label, value] of [['OK', true], ['NG', false]]) {
-        const btn = el('button', 'undo-button online-spectate-setting__btn', label);
-        btn.type = 'button';
-        btn.classList.toggle('online-spectate-setting__btn--active', spectatorsAllowed === value);
-        btn.addEventListener('click', () => OnlineSync.setSpectatorsAllowed(onlineRoomCode, value));
-        spectateRow.appendChild(btn);
-      }
-      body.appendChild(spectateRow);
+    // 観戦OK/NG (2026-10-27, per user回答「部屋の設定で決める」)と持ち時間 (2026-10-29) -- 部屋の作成者だけが切り替え
+    // られ、入る人は開始前にここで見られる。ランダムマッチの部屋は、作る前に決めた設定のまま(変えられない)。
+    const roomSettings = { spectatorsAllowed: !!onlineLobbyRoomData.spectatorsAllowed, timeControl: onlineLobbyRoomData.timeControl || null };
+    if (isOnlineHost && !onlineSpectator && !onlineLobbyRoomData.isPublic) {
+      appendOnlineRoomSettingRows(body, roomSettings, (patch) => {
+        if ('spectatorsAllowed' in patch) OnlineSync.setSpectatorsAllowed(onlineRoomCode, patch.spectatorsAllowed);
+        if ('timeControl' in patch) OnlineSync.setTimeControl(onlineRoomCode, patch.timeControl);
+      });
     } else {
-      body.appendChild(el('div', 'ranking-row__opponents', `観戦: ${spectatorsAllowed ? 'OK' : 'NG'}`));
-    }
-    // 持ち時間 (2026-10-29) -- 部屋の作成者が決め、入る人は開始前にここで見られる。
-    const tc = onlineLobbyRoomData.timeControl || null;
-    if (isOnlineHost && !onlineSpectator) {
-      const setTc = (patch) => {
-        const next = patch === null ? null : Object.assign({ initialSec: 300, earlySec: 30, lateSec: 10, start: 'game' }, tc || {}, patch);
-        OnlineSync.setTimeControl(onlineRoomCode, next);
-      };
-      const addRow = (label, options, current, onPick) => {
-        const row = el('div', 'online-spectate-setting online-time-setting');
-        row.appendChild(el('span', 'online-spectate-setting__label', label));
-        for (const [text, value] of options) {
-          const btn = el('button', 'undo-button online-spectate-setting__btn', text);
-          btn.type = 'button';
-          btn.classList.toggle('online-spectate-setting__btn--active', current === value);
-          btn.addEventListener('click', () => onPick(value));
-          row.appendChild(btn);
-        }
-        body.appendChild(row);
-      };
-      addRow('持ち時間:', [['なし', null], ['3分', 180], ['5分', 300], ['10分', 600]], tc ? tc.initialSec : null,
-        (value) => setTc(value === null ? null : { initialSec: value }));
-      if (tc) {
-        addRow('ターン1〜3:', [['+30秒', 30], ['+60秒', 60], ['+90秒', 90]], tc.earlySec, (value) => setTc({ earlySec: value }));
-        addRow('ターン4〜:', [['+10秒', 10], ['+30秒', 30], ['+60秒', 60]], tc.lateSec, (value) => setTc({ lateSec: value }));
-        addRow('タイムスタート:', Object.entries(ONLINE_TIME_START_LABELS).map(([value, text]) => [text, value]), tc.start, (value) => setTc({ start: value }));
-      }
-    } else {
-      body.appendChild(el('div', 'ranking-row__opponents', `持ち時間: ${onlineTimeControlText(tc)}`));
+      body.appendChild(el('div', 'ranking-row__opponents', `観戦: ${roomSettings.spectatorsAllowed ? 'OK' : 'NG'}`));
+      body.appendChild(el('div', 'ranking-row__opponents', `持ち時間: ${onlineTimeControlText(roomSettings.timeControl)}`));
     }
     if (onlineSpectator) {
       body.appendChild(el('div', 'ranking-empty', '観戦します。ホストが開始するのを待っています...'));
