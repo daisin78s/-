@@ -12337,7 +12337,7 @@ function appendOnlineRoomSettingRows(body, settings, onChange) {
   const tc = settings.timeControl || null;
   addRow('持ち時間:', [['なし', null], ...Object.entries(ONLINE_TIME_MODES).map(([mode, def]) => [def.label, mode])], tc ? (tc.mode || 'custom') : null,
     (mode) => onChange({ timeControl: mode === null ? null : onlineTimeControlForMode(mode) }), 'online-time-setting');
-  if (tc && tc.mode && ONLINE_TIME_MODES[tc.mode]) body.appendChild(el('div', 'online-time-setting__detail', onlineTimeControlText(tc)));
+  if (tc && tc.mode && ONLINE_TIME_MODES[tc.mode]) body.appendChild(el('div', 'online-time-setting__detail', `${onlineTimeControlText(tc)}　※持ち時間のある部屋では巻き戻しはできません`));
 }
 
 /** 部屋に入る時に席へ書く、この端末のプレイヤーネーム(ランキングに登録した名前)と実績ポイント (2026-10-29)。 */
@@ -13160,6 +13160,9 @@ function onlineRewindSeats(roomData) {
   return ONLINE_SEAT_IDS.filter((id) => roomData.seatIsHuman[id] && !takeover[id]);
 }
 function onlineRewindEnabled(roomData) {
+  // 持ち時間のある部屋では巻き戻しできない (2026-10-29, per user回答「3」 -- 巻き戻しても時間は戻らず、やり直した手番では
+  // 時間も足されないため不公平になる)。
+  if (roomData && roomData.timeControl) return false;
   const ok = (roomData && roomData.rewindOk) || {};
   const seats = onlineRewindSeats(roomData);
   return seats.length > 0 && seats.every((id) => ok[id] === true);
