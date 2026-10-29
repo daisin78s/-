@@ -655,8 +655,16 @@ class MoveGenerator {
    * that ALSO needs a chosenDieId; the single `{playerId}`-only attempt below always failed for it with
    * no die ever supplied, so this force could never fire (per user report: "宮廷人 AIの使用回数が0です")):
    * tries every unplaced die in turn for a MONUMENT_CHANGE_DIE_VALUE-shaped tap, `[null]` (a single
-   * no-choice attempt, unchanged) for every other bzConversionTap shape. */
-  forcedBzConversionMove(state, index, playerId, context) {
+   * no-choice attempt, unchanged) for every other bzConversionTap shape.
+   *
+   * chooseDieTap (2026-10-29, per user request "AIが宮廷人を正しく使えるように" + "2Rいこうで 同じモニュメント
+   * を選ぶなら小さい目から使う" + "資源軽減があるので建てられるときは使った方がいいに決まっている"): optional.
+   * When given, a MONUMENT_CHANGE_DIE_VALUE-shaped tap (宮廷人) no longer takes the FIRST die that yields a
+   * build outlet -- every working die choice (plus skipDieChange) is collected as
+   * {move, clone(after the tap)} and chooseDieTap(state, candidates) picks one (AIPlayer#chooseCourtierTap:
+   * best resulting build, smaller die for the same build from round 2). Whether to tap at all is unchanged
+   * (still forced whenever a build outlet exists). Without it, the old first-match behavior stays. */
+  forcedBzConversionMove(state, index, playerId, context, chooseDieTap) {
     const player = state.players.find((p) => p.id === playerId);
     if (!player) return null;
     for (const physicalId of player.ownedCardPhysicalIds) {
@@ -669,15 +677,19 @@ class MoveGenerator {
       // skipping it outright -- but this force should still fire (for the sake of ADD(BZ) alone) when no
       // die is worth it or none exists at all, rather than never firing for this card the way it used to.
       const dieCandidates = needsDieChoice ? [...player.dice.filter((d) => d.placedMapId === null), null] : [null];
+      const working = [];
       for (const die of dieCandidates) {
         const tapContext = die ? { playerId, chosenDieId: die.id } : needsDieChoice ? { playerId, skipDieChange: true } : { playerId };
         const clone = cloneState(state);
         const result = board.useBareTapAbility(clone, index, tapContext, physicalId);
         if (!result.success) continue;
         if (this.#hasAffordableBuildOutlet(clone, index, playerId, context)) {
-          return { type: 'BARE_TAP', playerId, physicalId, ...(die ? { chosenDieId: die.id } : needsDieChoice ? { skipDieChange: true } : {}) };
+          const move = { type: 'BARE_TAP', playerId, physicalId, ...(die ? { chosenDieId: die.id } : needsDieChoice ? { skipDieChange: true } : {}) };
+          if (!(needsDieChoice && chooseDieTap)) return move;
+          working.push({ move, clone });
         }
       }
+      if (working.length > 0) return chooseDieTap(state, working) || working[0].move;
     }
     return null;
   }

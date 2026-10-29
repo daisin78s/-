@@ -153,7 +153,8 @@ class AIPlayer {
     if (forcedPureGainC) return forcedPureGainC;
     const forcedFeeConversion = this.moveGenerator.forcedFeeConversionMove(state, this.index, playerId);
     if (forcedFeeConversion) return forcedFeeConversion;
-    const forced = this.moveGenerator.forcedBzConversionMove(state, this.index, playerId, context);
+    const forced = this.moveGenerator.forcedBzConversionMove(state, this.index, playerId, context,
+      (before, candidates) => this.#chooseCourtierTap(before, playerId, context, candidates));
     if (forced) return forced;
     const forcedJob004 = this.moveGenerator.forcedJob004ConversionMove(state, this.index, playerId);
     if (forcedJob004) return forcedJob004;
@@ -166,6 +167,54 @@ class AIPlayer {
     return null;
   }
 
+  /** 宮廷人(MONUMENT_CHANGE_DIE_VALUE-shaped BZ tap) -- which die to +6 (2026-10-29, per user request:
+   * "AIが宮廷人を正しく使えるように" -> agreed: pick the die whose tap leads to the best build, and "2Rいこうで
+   * 同じモニュメントを選ぶなら小さい目から使う" -- keep the big dice for later). For every candidate tap
+   * (each die, or skipDieChange) and every affordable build move after it, the build's result is scored
+   * by this.evaluator; the best-scoring build's outcome (which card gets built/upgraded) is the target.
+   * From round 2, among every (tap, build) pair reaching that same outcome, the one spending the die(s)
+   * with the smallest ORIGINAL value wins (round 1: the best-scoring pair). At the top level the chosen
+   * build is remembered as #plannedCourtierBuild so selectMove's very next call places that exact die
+   * (otherwise the normal search could put a different, bigger die on the same card). */
+  #chooseCourtierTap(before, playerId, context, candidates) {
+    const player = before.players.find((p) => p.id === playerId);
+    const originalValue = (dieId) => {
+      const die = player && player.dice.find((d) => d.id === dieId);
+      return die && typeof die.value === 'number' ? die.value : 99;
+    };
+    const facesOf = (st) => {
+      const p = st.players.find((pl) => pl.id === playerId);
+      return p.ownedCardPhysicalIds.map((id) => `${id}:${st.cards[id] && st.cards[id].currentFaceId}`);
+    };
+    const pairs = [];
+    for (const candidate of candidates) {
+      const facesBefore = new Set(facesOf(candidate.clone));
+      const buildMoves = this.moveGenerator.generateMoves(candidate.clone, this.index, playerId, context)
+        .filter((m) => m.buildCandidateIndex !== undefined);
+      for (const buildMove of buildMoves) {
+        const { state: resultState, result } = this.simulator.apply(candidate.clone, this.index, buildMove);
+        if (!result.success) continue;
+        const outcome = facesOf(resultState).filter((f) => !facesBefore.has(f)).map((f) => f.split(':')[1]).sort().join(',');
+        const dieIds = buildMove.dieIds || (buildMove.dieId ? [buildMove.dieId] : []);
+        const spent = dieIds.reduce((sum, id) => sum + originalValue(id), 0);
+        pairs.push({ candidate, buildMove, outcome, spent, score: this.evaluator.score(resultState, playerId) });
+      }
+    }
+    if (pairs.length === 0) return null;
+    let best = pairs[0];
+    for (const pair of pairs) if (pair.score > best.score) best = pair;
+    if (before.round >= 2) {
+      for (const pair of pairs) {
+        if (pair.outcome === best.outcome && pair.spent < best.spent) best = pair;
+      }
+    }
+    if (this.#topLevelDecision) this.#plannedCourtierBuild = { playerId, tapMove: best.candidate.move, buildMove: best.buildMove };
+    return best.candidate.move;
+  }
+
+  #topLevelDecision = false;
+  #plannedCourtierBuild = null;
+
   /**
    * @param {GameState} state
    * @param {string} playerId
@@ -173,7 +222,17 @@ class AIPlayer {
    * @returns {Object|null} the single best legal Move, or null if none exist
    */
   selectMove(state, playerId, context) {
-    const forcedAtTop = this.#checkForcedMoves(state, playerId, context);
+    // 宮廷人をタップした直後: その時に決めたダイスで建てる(#chooseCourtierTap参照)。タップ済みで、その手が
+    // 今も成功する時だけ(違う局面なら捨てて普通に考える)。
+    const planned = this.#plannedCourtierBuild;
+    this.#plannedCourtierBuild = null;
+    if (planned && planned.playerId === playerId) {
+      const card = state.cards[planned.tapMove.physicalId];
+      if (card && card.tapped && this.simulator.apply(state, this.index, planned.buildMove).result.success) return planned.buildMove;
+    }
+    this.#topLevelDecision = true;
+    let forcedAtTop;
+    try { forcedAtTop = this.#checkForcedMoves(state, playerId, context); } finally { this.#topLevelDecision = false; }
     if (forcedAtTop) return forcedAtTop;
     const moves = this.moveGenerator.generateMoves(state, this.index, playerId, context);
     const scored = [];
