@@ -2282,6 +2282,9 @@ function recordTurnHistorySnapshot(state, playerId) {
   if (historyCursor < turnHistory.length - 1) turnHistory = turnHistory.slice(0, historyCursor + 1);
   turnHistory.push({ round: state.round, playerId, snapshot: structuredClone(state) });
   historyCursor = turnHistory.length - 1;
+  if (turnHistory.length === 1) shownTurnBannerKeys.clear(); // 新しいゲームの最初の手番
+  // 番号は手番の始まりの時点で決める(この時点では前の手番までが進捗に載っていて、この手番の分はまだ)。
+  pendingTurnBanner = { playerId, round: state.round, nth: progressNextTurnNumber(state, playerId) };
 }
 
 /** Restores turnHistory[idx]'s snapshot as the live STATE (spec items 11 & 13: a fresh deep copy, no
@@ -2304,6 +2307,7 @@ function jumpToHistoryIndex(idx) {
  * 変えずに状態だけ戻す)。turnPlayerId = その時点の手番のプレイヤー。 */
 function restoreHistoryPoint(idx, restored, turnPlayerId) {
   if (idx >= 0) historyCursor = idx;
+  shownTurnBannerKeys.clear();
   progressBaseline = null; // 戻した先の状態を進捗の比べる元にする(前へ進めた時に同じ進捗を二重に書かない)
   Object.keys(STATE).forEach((k) => delete STATE[k]);
   Object.assign(STATE, restored);
@@ -16383,6 +16387,7 @@ function render(state) {
   }
   animateAiDiceMoves(diceBefore);
   if (previousRound !== null && state.round === previousRound && !diceRollSequenceActive) playNewDiceRolls(state, diceBefore);
+  playPendingTurnBanner(state);
 }
 
 function hideDiceByKeys(keys) {
@@ -16466,10 +16471,10 @@ function playRoundStartDiceSequence(state, before) {
 }
 
 const ROUND_BANNER_MS = 1300;
-function playRoundBanner(round) {
+function playRoundBanner(round, text, extraClass) {
   const banner = document.createElement('div');
-  banner.className = 'round-banner';
-  banner.textContent = `ラウンド${round}`;
+  banner.className = extraClass ? `round-banner ${extraClass}` : 'round-banner';
+  banner.textContent = text || `ラウンド${round}`;
   document.body.appendChild(banner);
   const W = window.innerWidth;
   banner.animate([
@@ -16478,6 +16483,53 @@ function playRoundBanner(round) {
     { transform: 'translate(-50%, 0)', offset: 0.7, easing: 'cubic-bezier(0.7, 0, 0.8, 0.2)' },
     { transform: `translate(calc(-50% + ${W}px), 0)`, offset: 1 },
   ], { duration: ROUND_BANNER_MS, fill: 'forwards' }).onfinish = () => banner.remove();
+  return banner;
+}
+
+/** 手番が回ってきた時の「怠惰なローマ市民higebucho ターン2」 (2026-10-29, per user request: "ターンが回って
+ * きたときに ターン2のように表示" + 相談の結果「操作を止めない」「AIの番も進行が止まらないなら出す」
+ * 「怠惰なローマ市民higebucho ターン2 の様に表示」「ターン1もでるように")。番号は巻き戻し欄・進捗と同じ
+ * 「そのラウンドでその人の何回目の手番か」。見た目だけで、操作もAIの進行も止めない。前の文字が流れ
+ * きる前に次の手番が来たら入れ替える。ラウンド開始のダイスの演出中は、それが終わってから出す。 */
+let pendingTurnBanner = null;
+/** これから始まるplayerIdの手番が、進捗(renderProgressOverlay)で「R○-何」になるか -- 進捗と同じまとめ方
+ * (per user: "手番の数え方は 進捗とおなじ")。同じ人が続けて手番を持ち、まだメインアクションをしていない
+ * 時は進捗でも同じ行にまとまるので、番号は増えない。 */
+function progressNextTurnNumber(state, playerId) {
+  const turnsByPlayer = {};
+  let lastPlayer = null;
+  let groupHasMain = false;
+  for (const entry of state.progressLog || []) {
+    if (entry.r !== state.round) continue;
+    if (entry.p !== lastPlayer || (entry.m && groupHasMain)) {
+      turnsByPlayer[entry.p] = (turnsByPlayer[entry.p] || 0) + 1;
+      groupHasMain = false;
+    }
+    lastPlayer = entry.p;
+    if (entry.m) groupHasMain = true;
+  }
+  const done = turnsByPlayer[playerId] || 0;
+  return lastPlayer === playerId && !groupHasMain && done > 0 ? done : done + 1;
+}
+let currentTurnBanner = null;
+const shownTurnBannerKeys = new Set();
+function playPendingTurnBanner(state) {
+  if (!pendingTurnBanner || diceRollSequenceActive) return;
+  const { playerId, round, nth } = pendingTurnBanner;
+  pendingTurnBanner = null;
+  if (round !== state.round) return;
+  if (replayMode || (typeof storyRun !== 'undefined' && storyRun) || state.phase === 'GAME_END') return;
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player) return;
+  const conFaceId = player.conPhysicalId && player.conFace ? `${player.conPhysicalId}${player.conFace}` : null;
+  const title = conFaceId && player.jobCardId ? rankingConJobTitle(conFaceId, player.jobCardId) : '';
+  // 一度出した「その人のターン○」はそのラウンドでもう出さない(進捗で同じ行にまとまる手番の区切り、
+  // ほかの人がパスした後の区切りなど)。巻き戻しで戻った時はもう一度出す(restoreHistoryPoint参照)。
+  const key = `${state.round}/${playerId}/${nth}`;
+  if (shownTurnBannerKeys.has(key)) return;
+  shownTurnBannerKeys.add(key);
+  if (currentTurnBanner) currentTurnBanner.remove();
+  currentTurnBanner = playRoundBanner(state.round, `${title && title !== '—' ? title : ''}${player.name} ターン${nth}`, 'round-banner--turn');
 }
 
 function rollAllHandDice(state, onDone) {

@@ -6442,6 +6442,10 @@ body.tutorial-mode .change-highlight {
   border-radius: 999px;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
 }
+.round-banner--turn {
+  font-size: clamp(18px, 3.2vw, 34px);
+  letter-spacing: 0.04em;
+}
 
 /* オープニングの続き (2026-10-23) -- 配られる前のカードを隠す(main.jsのstartOpeningSequence参照)。
    飛んでくる複製(.opening-card-flyer)はbody直下に置くのでこれらの指定には当たらない。 */
