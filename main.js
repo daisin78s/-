@@ -13307,7 +13307,7 @@ function renderOnlineLobbyOverlay() {
     body.appendChild(el('div', 'ranking-empty', 'この設定は部屋の一覧に表示されます。部屋を作った後は変えられません'));
     if (onlineLobbyError) body.appendChild(el('div', 'ranking-empty', onlineLobbyError));
     appendOnlineRoomSettingRows(body, onlinePublicDraft, (patch) => { onlinePublicDraft = Object.assign({}, onlinePublicDraft, patch); renderOnlineLobbyOverlay(); });
-    const makeBtn = el('button', 'undo-button', onlinePublicBusy ? '作っています...' : 'この設定で部屋を作る');
+    const makeBtn = el('button', 'undo-button online-public-create-button', onlinePublicBusy ? '作っています...' : 'この設定で部屋を作る');
     makeBtn.type = 'button';
     makeBtn.disabled = onlinePublicBusy;
     makeBtn.addEventListener('click', handlePublicRoomCreate);

@@ -7478,3 +7478,13 @@ body.online-spectator #online-spectator-badge {
   color: var(--text-muted);
   font-size: 13px;
 }
+
+/* ランダムマッチ「この設定で部屋を作る」 (2026-10-29, per user request: "ターン2からとこの設定で部屋を作るを離して
+   この設定で部屋を作るをおおきく") */
+.undo-button.online-public-create-button {
+  display: block;
+  margin-top: 18px;
+  padding: 10px 28px;
+  font-size: 16px;
+  font-weight: 700;
+}
