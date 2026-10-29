@@ -457,10 +457,16 @@ async function main() {
   // is a live, continuously-refreshed "is anything actually beating the real table right now" signal --
   // more direct than comparing against an isolated one-time baseline measurement, and self-correcting in
   // the same way the rest of the population is (each generation plays fresh games/opponents).
+  // 2026-10-29 fix (found via the user's question "1位のはその後急落したの？"): the anchor used to overwrite
+  // slot 0 -- but nextPopulation's slot 0 is the generation's #1 elite (ranked.slice(0, eliteCount)), so
+  // every genome that reached #1 was deleted the very next generation (and when the anchor itself was an
+  // elite, it ended up in the population twice). Now the anchor only goes in when it isn't already there,
+  // replacing the LAST slots (freshly bred mutants) instead, so every elite survives.
   const ANCHOR_COUNT = 1;
   const withAnchors = (pop) => {
     const result = pop.slice();
-    for (let i = 0; i < ANCHOR_COUNT && i < result.length; i++) result[i] = realTable;
+    const present = result.filter((genome) => JSON.stringify(genome) === realTableStr).length;
+    for (let k = 0; k < ANCHOR_COUNT - present && k < result.length; k++) result[result.length - 1 - k] = realTable;
     return result;
   };
   const realTableStr = JSON.stringify(realTable);

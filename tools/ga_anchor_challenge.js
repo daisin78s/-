@@ -67,7 +67,10 @@ function pickCandidates(gaDir, fromGen, minGames, count) {
       const h = hashOf(ind.genome);
       let e = byHash.get(h);
       if (!e) { e = { hash: h, firstGen: gen, lastGen: gen, gens: 0, games: 0, rankSum: 0, genome: ind.genome }; byHash.set(h, e); }
-      e.lastGen = gen; e.gens++; e.games += ind.gamesPlayed; e.rankSum += ind.avgRank * ind.gamesPlayed;
+      // gamesPlayed/avgRank in each gen file are already that genome's running total over every generation
+      // it survived (ga_train.js, since 2026-10-27), so the latest generation's numbers are the whole record
+      // -- summing them across generations counted the early games again and again (2026-10-29 fix).
+      e.lastGen = gen; e.gens++; e.games = ind.gamesPlayed; e.rankSum = ind.avgRank * ind.gamesPlayed;
     }
   }
   const all = [...byHash.values()];
