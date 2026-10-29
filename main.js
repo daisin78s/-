@@ -17889,6 +17889,7 @@ const MOBILE_TAB_ORDER = ['quest', 'shop', 'board', 'players', 'cards', 'setting
 function applyMobileActiveTab(tab) {
   if (!MOBILE_TAB_ORDER.includes(tab)) return;
   if (round3WatchActive && tab !== 'board') return; // 3Rからの1R・2Rを見ている間はエリアのまま(showRound3WatchArea)
+  const previousTab = mobileActiveTab;
   mobileActiveTab = tab;
   document.getElementById('app').dataset.mobileActiveTab = tab;
   document.querySelectorAll('.mobile-tab-switcher__btn').forEach((btn) => {
@@ -17898,6 +17899,20 @@ function applyMobileActiveTab(tab) {
     fitMobileShopWidth();
     if (isMobileLayout() && !openingSequenceActive) requestAnimationFrame(scrollMobileShopToNormalRow);
   }
+  // エリアへ切り替えた時は、エリアの上端を画面の上端に合わせる (2026-10-29, per user report: "エリア画面 右から
+  // フリックしてきたときと左からフリックしてきたときで画面の表示位置が違います 画面上端とエリアの上端を合わせる
+  // ようにして" -- 前のタブのスクロール位置が残っていた)。もともとエリアにいる時は動かさない。
+  if (tab === 'board' && previousTab !== 'board' && isMobileLayout() && !openingSequenceActive) requestAnimationFrame(scrollMobileBoardToTop);
+}
+
+function scrollMobileBoardToTop() {
+  if (mobileActiveTab !== 'board') return;
+  const board = document.getElementById('board');
+  const tabBar = document.getElementById('mobile-tab-switcher');
+  if (!board) return;
+  const barRect = tabBar ? tabBar.getBoundingClientRect() : null;
+  const contentTop = barRect && barRect.height > 0 && barRect.top < window.innerHeight / 2 ? barRect.bottom : 0;
+  window.scrollTo(0, Math.max(0, window.scrollY + board.getBoundingClientRect().top - contentTop));
 }
 
 /** スマホ版: ショップタブを開いた時の初期位置 (2026-10-23, per user request with screenshot: "スマホ版ショップ
