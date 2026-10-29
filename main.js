@@ -12558,9 +12558,9 @@ function syncOwnAnimatingFlag() {
 }
 
 const ONLINE_TIME_MODES = {
-  quick: { label: 'クイック', initialSec: 180, earlySec: 30, lateSec: 10 },
+  quick: { label: 'クイック', initialSec: 180, earlySec: 30, lateSec: 15 },
   standard: { label: 'スタンダード', initialSec: 300, earlySec: 60, lateSec: 30 },
-  long: { label: 'ロング', initialSec: 600, earlySec: 90, lateSec: 60 },
+  long: { label: 'ロング', initialSec: 600, earlySec: 90, lateSec: 45 },
 };
 function onlineTimeControlForMode(mode) {
   const def = ONLINE_TIME_MODES[mode];
