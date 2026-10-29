@@ -7500,3 +7500,8 @@ body.online-spectator #online-spectator-badge {
   display: block;
   margin-top: 14px;
 }
+.online-time-setting__detail {
+  font-size: 12px;
+  opacity: 0.8;
+  margin: -2px 0 6px;
+}

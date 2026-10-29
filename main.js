@@ -12331,15 +12331,13 @@ function appendOnlineRoomSettingRows(body, settings, onChange) {
     body.appendChild(row);
   };
   addRow('観戦:', [['OK', true], ['NG', false]], !!settings.spectatorsAllowed, (value) => onChange({ spectatorsAllowed: value }));
+  // 持ち時間は3つのモードから (2026-10-29, per user request: "すべて一番短いクイックと すべて真ん中 すべて一番長いの
+  // 3モードにしようかと思う" + 回答: 名前はクイック/スタンダード/ロング、時間制限なしも残す、タイムスタートは「ゲーム
+  // 開始から」に固定、合言葉の部屋もランダムマッチも同じ)。
   const tc = settings.timeControl || null;
-  const setTc = (patch) => onChange({ timeControl: patch === null ? null : Object.assign({ initialSec: 300, earlySec: 30, lateSec: 10, start: 'game' }, tc || {}, patch) });
-  addRow('持ち時間:', [['なし', null], ['3分', 180], ['5分', 300], ['10分', 600]], tc ? tc.initialSec : null,
-    (value) => setTc(value === null ? null : { initialSec: value }), 'online-time-setting');
-  if (tc) {
-    addRow('ターン1〜3:', [['+30秒', 30], ['+60秒', 60], ['+90秒', 90]], tc.earlySec, (value) => setTc({ earlySec: value }), 'online-time-setting');
-    addRow('ターン4〜:', [['+10秒', 10], ['+30秒', 30], ['+60秒', 60]], tc.lateSec, (value) => setTc({ lateSec: value }), 'online-time-setting');
-    addRow('タイムスタート:', Object.entries(ONLINE_TIME_START_LABELS).map(([value, text]) => [text, value]), tc.start, (value) => setTc({ start: value }), 'online-time-setting');
-  }
+  addRow('持ち時間:', [['なし', null], ...Object.entries(ONLINE_TIME_MODES).map(([mode, def]) => [def.label, mode])], tc ? (tc.mode || 'custom') : null,
+    (mode) => onChange({ timeControl: mode === null ? null : onlineTimeControlForMode(mode) }), 'online-time-setting');
+  if (tc && tc.mode && ONLINE_TIME_MODES[tc.mode]) body.appendChild(el('div', 'online-time-setting__detail', onlineTimeControlText(tc)));
 }
 
 /** 部屋に入る時に席へ書く、この端末のプレイヤーネーム(ランキングに登録した名前)と実績ポイント (2026-10-29)。 */
@@ -12559,8 +12557,21 @@ function syncOwnAnimatingFlag() {
   OnlineSync.setAnimating(onlineRoomCode, localSeatId, on).catch(() => {});
 }
 
+const ONLINE_TIME_MODES = {
+  quick: { label: 'クイック', initialSec: 180, earlySec: 30, lateSec: 10 },
+  standard: { label: 'スタンダード', initialSec: 300, earlySec: 60, lateSec: 30 },
+  long: { label: 'ロング', initialSec: 600, earlySec: 90, lateSec: 60 },
+};
+function onlineTimeControlForMode(mode) {
+  const def = ONLINE_TIME_MODES[mode];
+  return { mode, initialSec: def.initialSec, earlySec: def.earlySec, lateSec: def.lateSec, start: 'game' };
+}
+
 function onlineTimeControlText(tc) {
   if (!tc) return '時間制限なし';
+  if (tc.mode && ONLINE_TIME_MODES[tc.mode]) {
+    return `${ONLINE_TIME_MODES[tc.mode].label}（${tc.initialSec / 60}分 / ターン1〜3 +${tc.earlySec}秒 / ターン4〜 +${tc.lateSec}秒）`;
+  }
   return `${tc.initialSec / 60}分 / ターン1〜3 +${tc.earlySec}秒 / ターン4〜 +${tc.lateSec}秒 / ${ONLINE_TIME_START_LABELS[tc.start] || ''}`;
 }
 
