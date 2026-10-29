@@ -471,6 +471,12 @@ function setTimeControl(code, timeControl) {
 function setClock(code, clock) {
   return db().collection(ROOM_COLLECTION).doc(code).update({ clock: clock });
 }
+/** 時間切れの後に本人が操作した (2026-10-29) -- clock.idle.{席}の値をそのまま返す(ホストがそれを見てAIを下ろす)。 */
+function setTimeoutAck(code, seatId, token) {
+  var update = {};
+  update['timeoutAck.' + seatId] = token;
+  return db().collection(ROOM_COLLECTION).doc(code).update(update);
+}
 /** その席の端末が今アニメーション中か (2026-10-29, per user request: "プレイヤーのターンになってもアニメーションが
  * 動いているうちは時間が減らないように") -- 中の間はサーバーの時刻(始まった時刻)、終わったらnull。 */
 function setAnimating(code, seatId, on) {
@@ -677,6 +683,7 @@ window.OnlineSync = {
   leaveRoom: leaveRoom,
   createPublicRoom: createPublicRoom,
   setClock: setClock,
+  setTimeoutAck: setTimeoutAck,
   setAnimating: setAnimating,
   setRewindOk: setRewindOk,
   requestRewind: requestRewind,

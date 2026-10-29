@@ -12488,11 +12488,58 @@ function renderOnlineTakeoverBanner(roomData) {
     banner.id = 'online-takeover-banner';
     document.body.appendChild(banner);
   }
+  const warn = !disconnected && onlineTimeoutWarningActive(roomData);
   banner.textContent = disconnected
     ? '通信が切れていた間はAIが代わりにプレイしています。次の手番から戻ります'
-    : '持ち時間が切れたので、この手番はAIが代わりにプレイしています。次の手番から戻ります';
+    : warn ? '何か操作をしてください。操作がなければ引き続きAIがプレイします'
+      : onlineTimeoutIdle(roomData) ? '持ち時間が切れたので、AIが代わりにプレイしています'
+        : '持ち時間が切れたので、この手番はAIが代わりにプレイしています。次の手番から戻ります';
+  banner.classList.toggle('online-takeover-banner--warn', warn);
   banner.hidden = !mine;
 }
+
+/** 時間切れの後、本人がまだ操作していない (2026-10-29, per user request: "時間が無くなってAIになったとき 操作がない
+ * ようなら そのままAIに / 他のプレイヤーのターンに 何か操作をしてください 操作がなければ引き続きAIがプレイします と
+ * 警告文 / 操作がなければAIがプレイ その場合タイムも増えない / 操作したら 次のターン 時間が増える") --
+ * clock.idle.{席}(時間切れになった時刻)がある間は、その席の手番が終わってもAIのまま、手番が来ても時間を足さない。
+ * 本人の端末は、ほかの人の手番の間に警告を出し、何か操作(タップ・キー)したらtimeoutAck.{席}に同じ値を書く
+ * (OnlineSync.setTimeoutAck)。ホストがそれを見てidleを消す -- 次の手番から本人に戻り、時間も足される。 */
+function onlineTimeoutIdle(roomData) {
+  return !!(localSeatId && roomData && roomData.clock && roomData.clock.idle && roomData.clock.idle[localSeatId]);
+}
+
+/** その時に手番(または初期資源の選択)で待っている席(部屋の最新の状態で見る)。 */
+function onlineWaitingSeatsOf(st) {
+  if (!st || st.phase === 'GAME_END') return [];
+  if (st.round === 0) {
+    return ONLINE_SEAT_IDS.filter((seatId) => (st.pendingChoices || []).some((c) => c.playerId === seatId && c.kind === 'SELECT_RESOURCE_CARDS'));
+  }
+  if (st.onlineOpenTurnPlayerId) return [st.onlineOpenTurnPlayerId];
+  let next = null;
+  try { next = turnFlowMod.getNextTurn(st); } catch (e) { next = null; }
+  return next && (next.type === 'TURN' || next.type === 'ONBOARDING_NEEDED') ? [next.playerId] : [];
+}
+
+/** 本人の端末に「何か操作をしてください」を出す時か -- 時間切れのまま、ほかの人の手番の間。 */
+function onlineTimeoutWarningActive(roomData) {
+  if (!onlineTimeoutIdle(roomData) || onlineSpectator) return false;
+  const ack = roomData.timeoutAck && roomData.timeoutAck[localSeatId];
+  if (ack === roomData.clock.idle[localSeatId]) return false; // もう操作した(ホストが消すのを待っている)
+  return !onlineWaitingSeatsOf(onlineLatestRoomState(roomData)).includes(localSeatId);
+}
+
+let onlineTimeoutAckSent = null;
+function handleOnlineTimeoutActivity() {
+  const roomData = onlineLobbyRoomData;
+  if (!onlineRoomCode || !onlineTimeoutWarningActive(roomData)) return;
+  const token = roomData.clock.idle[localSeatId];
+  if (onlineTimeoutAckSent === token) return;
+  onlineTimeoutAckSent = token;
+  OnlineSync.setTimeoutAck(onlineRoomCode, localSeatId, token).catch(() => { onlineTimeoutAckSent = null; });
+  renderOnlineTakeoverBanner(Object.assign({}, roomData, { timeoutAck: Object.assign({}, roomData.timeoutAck, { [localSeatId]: token }) }));
+}
+document.addEventListener('pointerdown', handleOnlineTimeoutActivity, true);
+document.addEventListener('keydown', handleOnlineTimeoutActivity, true);
 
 /** オンライン対戦の持ち時間 (2026-10-29, per user request: "オンライン対戦 持ち時間を設定したい 部屋を作った人が
  * 設定できて 入る人は先に見れる 持ち時間 3分 5分 10分 / ターン1～3 +30秒 +60秒 +90秒 / ターン4～ +10秒 +30秒
@@ -12609,7 +12656,7 @@ function updateOnlineClock(roomData) {
   const roomClock = roomData.clock || null;
   const base = onlineClockLastWritten && (!roomClock || (onlineClockLastWritten.v || 0) > (roomClock.v || 0)) ? onlineClockLastWritten : roomClock;
   const clock = base ? JSON.parse(JSON.stringify(base)) : { v: 0, remaining: {}, started: {}, granted: {}, timedOut: {}, running: [], since: null };
-  for (const k of ['remaining', 'started', 'granted', 'timedOut']) if (!clock[k]) clock[k] = {};
+  for (const k of ['remaining', 'started', 'granted', 'timedOut', 'idle']) if (!clock[k]) clock[k] = {};
   if (!Array.isArray(clock.running)) clock.running = [];
   const now = onlineServerNow();
   const takeover = roomData.aiTakeover || {};
@@ -12643,7 +12690,12 @@ function updateOnlineClock(roomData) {
   }
   // 時間切れ
   for (const seatId of clock.running) {
-    if (clock.remaining[seatId] <= 0 && !clock.timedOut[seatId]) { clock.timedOut[seatId] = true; changed = true; }
+    if (clock.remaining[seatId] <= 0 && !clock.timedOut[seatId]) { clock.timedOut[seatId] = true; clock.idle[seatId] = now; changed = true; }
+  }
+  // 時間切れの後に本人が操作した -- 次の手番から本人に戻す(onlineTimeoutIdle参照)
+  const acks = roomData.timeoutAck || {};
+  for (const seatId of Object.keys(clock.idle)) {
+    if (clock.idle[seatId] && acks[seatId] === clock.idle[seatId]) { delete clock.idle[seatId]; changed = true; }
   }
 
   // 時計が動き始める
@@ -12674,16 +12726,17 @@ function updateOnlineClock(roomData) {
     if (code > prevCode) {
       clock.granted[active] = code;
       if (tc.start === 'turn2' && st.round === 1 && nth >= 2) startSeat(active);
-      if (clock.started[active]) clock.remaining[active] = (clock.remaining[active] || 0) + (nth <= 3 ? tc.earlySec : tc.lateSec) * 1000;
+      // 時間切れの後まだ操作していない人は、時間を足さずにAIのまま。
+      if (clock.started[active] && !clock.idle[active]) clock.remaining[active] = (clock.remaining[active] || 0) + (nth <= 3 ? tc.earlySec : tc.lateSec) * 1000;
       // 時間切れでAIが打った手番の後、同じ人の手番が続いた時も、新しい手番は本人に戻す。
-      if (clock.timedOut[active] && aiOpenTurnPlayerId !== active) clock.timedOut[active] = false;
+      if (clock.timedOut[active] && !clock.idle[active] && aiOpenTurnPlayerId !== active) clock.timedOut[active] = false;
       changed = true;
     }
   }
 
   // 時間切れの手番が終わった -- 次の手番から本人
   for (const seatId of Object.keys(clock.timedOut)) {
-    if (clock.timedOut[seatId] && !waiting.includes(seatId) && aiOpenTurnPlayerId !== seatId) { clock.timedOut[seatId] = false; changed = true; }
+    if (clock.timedOut[seatId] && !clock.idle[seatId] && !waiting.includes(seatId) && aiOpenTurnPlayerId !== seatId) { clock.timedOut[seatId] = false; changed = true; }
   }
   // 手番の人の端末がまだアニメーション中(ダイスを振る演出・ほかの人の手番の再生など)の間は、その人の時間を減らさない
   // (2026-10-29, per user request)。自分の端末の分は部屋の値を待たずにその場で見る。
