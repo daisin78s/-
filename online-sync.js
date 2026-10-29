@@ -376,6 +376,17 @@ function setSpectatorsAllowed(code, allowed) {
   return db().collection(ROOM_COLLECTION).doc(code).update({ spectatorsAllowed: !!allowed });
 }
 
+/** 持ち時間 (2026-10-29, per user request: "オンライン対戦 持ち時間を設定したい 部屋を作った人が設定できて
+ * 入る人は先に見れる") -- timeControl: 部屋の作成者が待ち合い画面で決める設定
+ *   { initialSec, earlySec(ターン1〜3の加算), lateSec(ターン4〜の加算), start('game'|'onePick'|'allPicked'|'turn2') }、
+ *   時間制限なしはnull。clock: 対局中の残り時間(書くのはホストだけ、main.jsのupdateOnlineClock参照)。 */
+function setTimeControl(code, timeControl) {
+  return db().collection(ROOM_COLLECTION).doc(code).update({ timeControl: timeControl || null });
+}
+function setClock(code, clock) {
+  return db().collection(ROOM_COLLECTION).doc(code).update({ clock: clock });
+}
+
 /** 観戦できる部屋か確かめる(席は取らない)。
  * @throws {Error} .message: ROOM_NOT_FOUND / VERSION_MISMATCH / SPECTATE_NOT_ALLOWED */
 function spectateRoom(code, appVersion) {
@@ -563,6 +574,8 @@ window.OnlineSync = {
   pushRoomState: pushRoomState,
   submitResourcePick: submitResourcePick,
   setSpectatorsAllowed: setSpectatorsAllowed,
+  setTimeControl: setTimeControl,
+  setClock: setClock,
   setRewindOk: setRewindOk,
   requestRewind: requestRewind,
   voteRewind: voteRewind,

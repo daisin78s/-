@@ -7307,6 +7307,62 @@ body.online-spectator #online-spectator-badge {
   color: #fff;
   border-color: var(--accent);
 }
+/* 持ち時間の設定(待ち合い画面) -- タイムスタートは4つあるので折り返す */
+.online-time-setting {
+  flex-wrap: wrap;
+}
+.online-time-setting .online-spectate-setting__btn {
+  padding: 4px 10px;
+}
+
+/* オンライン対戦の持ち時間の表示 (main.jsのrenderOnlineClock参照) -- 画面上部中央の小さな帯 */
+#online-clock {
+  position: fixed;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9000;
+  display: flex;
+  gap: 10px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: rgba(20, 24, 40, 0.82);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  pointer-events: none;
+  white-space: nowrap;
+}
+#online-clock[hidden] {
+  display: none;
+}
+.online-clock__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0.75;
+}
+.online-clock__item--running {
+  opacity: 1;
+  color: #ffe08a;
+}
+.online-clock__item--low .online-clock__time {
+  color: #ff6b6b;
+}
+.online-clock__item--idle {
+  opacity: 0.5;
+}
+.online-clock__time {
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 760px), (max-height: 500px) {
+  #online-clock {
+    font-size: 11px;
+    gap: 8px;
+    padding: 2px 10px;
+    top: 2px;
+  }
+}
 @media (max-width: 760px), (max-height: 500px) {
   /* スマホはタブバーの上 */
   body.online-spectator #online-spectator-badge {

@@ -12241,9 +12241,10 @@ function onlineSeatConnected(roomData, seatId) {
 function applyOnlineSeatRoles(roomData) {
   if (!roomData.seatIsHuman) return false;
   const takeover = roomData.aiTakeover || {};
+  const timedOut = (roomData.clock && roomData.clock.timedOut) || {};
   let changed = false;
   for (const seatId of ONLINE_SEAT_IDS) {
-    const role = roomData.seatIsHuman[seatId] && !takeover[seatId] ? 'HUMAN' : DEFAULT_AI_ROLE;
+    const role = roomData.seatIsHuman[seatId] && !takeover[seatId] && !timedOut[seatId] ? 'HUMAN' : DEFAULT_AI_ROLE;
     if (playerRoles.get(seatId) !== role) { playerRoles.set(seatId, role); changed = true; }
   }
   return changed;
@@ -12298,14 +12299,205 @@ function inheritTakenOverTurn(turnStart, latest, seatId) {
 /** 戻ってきた本人の画面: AIが代わりにプレイしている間の案内(タブバーの所の帯)。 */
 function renderOnlineTakeoverBanner(roomData) {
   let banner = document.getElementById('online-takeover-banner');
-  const mine = !!(localSeatId && roomData && roomData.aiTakeover && roomData.aiTakeover[localSeatId]);
+  const disconnected = !!(localSeatId && roomData && roomData.aiTakeover && roomData.aiTakeover[localSeatId]);
+  const timedOut = !!(localSeatId && roomData && roomData.clock && roomData.clock.timedOut && roomData.clock.timedOut[localSeatId]);
+  const mine = disconnected || timedOut;
   if (!banner) {
     if (!mine) return;
-    banner = el('div', 'mobile-untap-banner online-takeover-banner', '通信が切れていた間はAIが代わりにプレイしています。次の手番から戻ります');
+    banner = el('div', 'mobile-untap-banner online-takeover-banner', '');
     banner.id = 'online-takeover-banner';
     document.body.appendChild(banner);
   }
+  banner.textContent = disconnected
+    ? '通信が切れていた間はAIが代わりにプレイしています。次の手番から戻ります'
+    : '持ち時間が切れたので、この手番はAIが代わりにプレイしています。次の手番から戻ります';
   banner.hidden = !mine;
+}
+
+/** オンライン対戦の持ち時間 (2026-10-29, per user request: "オンライン対戦 持ち時間を設定したい 部屋を作った人が
+ * 設定できて 入る人は先に見れる 持ち時間 3分 5分 10分 / ターン1～3 +30秒 +60秒 +90秒 / ターン4～ +10秒 +30秒
+ * +60秒 / タイムスタート ゲーム開始から 1人が初期資源を確定してから 全員が初期資源を確定してから ターン2から /
+ * 時間制限なしも選べる" + 回答: 時間切れは「その手番だけAIが代わりに打つ」、ターンは「ラウンドごと」(進捗・手番の
+ * 文字と同じ番号)、3つは別々に選ぶ、減るのは「待たせている人全員」(初期資源を選んでいる間はまだ確定していない
+ * 人全員、手番中はジョブ・性格選びも含めて手番の人)、「ターン2から」は各自のターン2から)。
+ * ・設定は部屋のtimeControl、残り時間は部屋のclock({v, remaining, started, granted, timedOut, running, since})。
+ *   時刻はサーバーの時刻(onlineServerNow)。runningの席は「remaining - (今 - since)」が今の残り。
+ * ・clockを書くのはホストだけ(updateOnlineClock、0.25秒ごと)。待たせている人が変わった時・手番が来て時間を足す時・
+ *   時間切れの時だけ書く。手番の判定は部屋の最新の状態(ためて再生している途中の画面ではなく)で行う。
+ * ・時間切れ: clock.timedOut.{席}=true -- 全端末がその席をAI扱いにし(applyOnlineSeatRoles)、ホストのAIがその
+ *   手番(初期資源の選択・ジョブ/性格選びを含む)を代わりに進める。その手番が終わったら下ろす(次の手番から本人)。
+ *   残りは0のまま、次からは手番ごとに足される分だけで打つ。
+ * ・回線が落ちてAIが代わっている席(aiTakeover)の時間は減らさない。 */
+const ONLINE_TIME_START_LABELS = {
+  game: 'ゲーム開始から',
+  onePick: '1人が初期資源を確定してから',
+  allPicked: '全員が初期資源を確定してから',
+  turn2: 'ターン2から',
+};
+let onlineClockTimer = null;
+let onlineClockObs = null; // ホスト: 前回見た {active, open}(手番の切り替わりの判定用)
+let onlineClockLastWritten = null; // ホスト: 最後に書いたclock(届く前に次を書いても数え直さないように)
+let onlineClockParsedJson = null;
+let onlineClockParsedState = null;
+
+function onlineTimeControlText(tc) {
+  if (!tc) return '時間制限なし';
+  return `持ち時間${tc.initialSec / 60}分 / ターン1〜3 +${tc.earlySec}秒 / ターン4〜 +${tc.lateSec}秒 / ${ONLINE_TIME_START_LABELS[tc.start] || ''}`;
+}
+
+function formatClockMs(ms) {
+  const sec = Math.max(0, Math.ceil(ms / 1000));
+  return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+}
+
+/** 部屋の最新の状態(JSONを読み直すのは変わった時だけ)。 */
+function onlineLatestRoomState(roomData) {
+  if (!roomData || !roomData.state) return null;
+  if (roomData.state !== onlineClockParsedJson) {
+    onlineClockParsedJson = roomData.state;
+    try { onlineClockParsedState = JSON.parse(roomData.state); } catch (e) { onlineClockParsedState = null; }
+  }
+  return onlineClockParsedState;
+}
+
+function startOnlineClockTimer() {
+  if (onlineClockTimer) return;
+  onlineClockTimer = setInterval(() => {
+    if (!onlineRoomCode || !onlineGameStarted || !onlineLobbyRoomData) return;
+    if (isOnlineHost && !onlineSpectator) updateOnlineClock(onlineLobbyRoomData);
+    renderOnlineClock(onlineLobbyRoomData);
+  }, 250);
+}
+
+/** ホストだけ: 残り時間を進め、変わった所があれば部屋に書く。 */
+function updateOnlineClock(roomData) {
+  const tc = roomData.timeControl;
+  if (!tc || roomData.phase !== 'playing' || !roomData.seatIsHuman) return;
+  const st = onlineLatestRoomState(roomData);
+  if (!st) return;
+  const roomClock = roomData.clock || null;
+  const base = onlineClockLastWritten && (!roomClock || (onlineClockLastWritten.v || 0) > (roomClock.v || 0)) ? onlineClockLastWritten : roomClock;
+  const clock = base ? JSON.parse(JSON.stringify(base)) : { v: 0, remaining: {}, started: {}, granted: {}, timedOut: {}, running: [], since: null };
+  for (const k of ['remaining', 'started', 'granted', 'timedOut']) if (!clock[k]) clock[k] = {};
+  if (!Array.isArray(clock.running)) clock.running = [];
+  const now = onlineServerNow();
+  const takeover = roomData.aiTakeover || {};
+  const humans = ONLINE_SEAT_IDS.filter((seatId) => roomData.seatIsHuman[seatId] && !takeover[seatId]);
+  const pendingPick = (seatId) => (st.pendingChoices || []).some((c) => c.playerId === seatId && c.kind === 'SELECT_RESOURCE_CARDS');
+  const picks = roomData.resourcePicks || {};
+  let changed = false;
+
+  // 待たせている人
+  let waiting = [];
+  let active = null;
+  let open = false;
+  if (st.phase !== 'GAME_END') {
+    if (st.round === 0) {
+      waiting = humans.filter((seatId) => !picks[seatId] && pendingPick(seatId));
+    } else {
+      open = !!st.onlineOpenTurnPlayerId;
+      if (open) active = st.onlineOpenTurnPlayerId;
+      else {
+        let next = null;
+        try { next = turnFlowMod.getNextTurn(st); } catch (e) { next = null; }
+        if (next && (next.type === 'TURN' || next.type === 'ONBOARDING_NEEDED')) active = next.playerId;
+      }
+      if (active && humans.includes(active)) waiting = [active];
+    }
+  }
+
+  // 今までの分を減らす(このclockは写しなので、書かなければ何も変わらない。書く時にsinceを今にする)
+  for (const seatId of clock.running) {
+    clock.remaining[seatId] = Math.max(0, (clock.remaining[seatId] || 0) - (clock.since ? now - clock.since : 0));
+  }
+  // 時間切れ
+  for (const seatId of clock.running) {
+    if (clock.remaining[seatId] <= 0 && !clock.timedOut[seatId]) { clock.timedOut[seatId] = true; changed = true; }
+  }
+
+  // 時計が動き始める
+  const someonePicked = st.round > 0 || humans.some((seatId) => picks[seatId] || !pendingPick(seatId));
+  const startSeat = (seatId) => {
+    if (clock.started[seatId]) return;
+    clock.started[seatId] = true;
+    clock.remaining[seatId] = tc.initialSec * 1000;
+    changed = true;
+  };
+  for (const seatId of humans) {
+    if (tc.start === 'game') startSeat(seatId);
+    else if (tc.start === 'onePick' && someonePicked) startSeat(seatId);
+    else if (tc.start === 'allPicked' && st.round > 0) startSeat(seatId);
+    else if (tc.start === 'turn2' && st.round > 1) startSeat(seatId);
+  }
+
+  // 手番が来た: その手番の番号(進捗・手番の文字と同じ)で時間を足す。ホストになったばかりの最初の1回は数えない。
+  const prevObs = onlineClockObs;
+  onlineClockObs = { active, open };
+  const newTurn = prevObs && active && (prevObs.active !== active || (prevObs.open && !open));
+  if (newTurn && humans.includes(active) && st.round > 0) {
+    // 前の手番が何も進捗に残らなかった時(パスだけ等)は進捗の番号が増えないが、手番は来ているので1つ進める。
+    const prevCode = clock.granted[active] || 0;
+    const prevNth = Math.floor(prevCode / 1000) === st.round ? prevCode % 1000 : 0;
+    const nth = Math.max(progressNextTurnNumber(st, active), prevNth + 1);
+    const code = st.round * 1000 + nth;
+    if (code > prevCode) {
+      clock.granted[active] = code;
+      if (tc.start === 'turn2' && st.round === 1 && nth >= 2) startSeat(active);
+      if (clock.started[active]) clock.remaining[active] = (clock.remaining[active] || 0) + (nth <= 3 ? tc.earlySec : tc.lateSec) * 1000;
+      // 時間切れでAIが打った手番の後、同じ人の手番が続いた時も、新しい手番は本人に戻す。
+      if (clock.timedOut[active] && aiOpenTurnPlayerId !== active) clock.timedOut[active] = false;
+      changed = true;
+    }
+  }
+
+  // 時間切れの手番が終わった -- 次の手番から本人
+  for (const seatId of Object.keys(clock.timedOut)) {
+    if (clock.timedOut[seatId] && !waiting.includes(seatId) && aiOpenTurnPlayerId !== seatId) { clock.timedOut[seatId] = false; changed = true; }
+  }
+  const running = waiting.filter((seatId) => clock.started[seatId]).sort();
+  if (JSON.stringify(running) !== JSON.stringify([...clock.running].sort())) changed = true;
+  if (!changed) return;
+  clock.running = running;
+  clock.since = now;
+  clock.v = (clock.v || 0) + 1;
+  onlineClockLastWritten = clock;
+  OnlineSync.setClock(onlineRoomCode, clock).catch(() => {});
+}
+
+/** 全端末: 残り時間の表示(画面上部の小さな帯)。 */
+function renderOnlineClock(roomData) {
+  let box = document.getElementById('online-clock');
+  const tc = roomData && roomData.timeControl;
+  const show = !!(tc && onlineGameStarted && roomData.phase === 'playing' && roomData.seatIsHuman && STATE.phase !== 'GAME_END');
+  if (!box) {
+    if (!show) return;
+    box = el('div', '');
+    box.id = 'online-clock';
+    document.body.appendChild(box);
+  }
+  box.hidden = !show;
+  if (!show) return;
+  const clock = roomData.clock || {};
+  const now = onlineServerNow();
+  const order = (STATE.turnOrder && STATE.turnOrder.length ? STATE.turnOrder : ONLINE_SEAT_IDS).filter((seatId) => roomData.seatIsHuman[seatId]);
+  box.innerHTML = '';
+  for (const seatId of order) {
+    const player = STATE.players.find((p) => p.id === seatId);
+    const running = (clock.running || []).includes(seatId);
+    const started = !!(clock.started && clock.started[seatId]);
+    let ms = started ? ((clock.remaining && clock.remaining[seatId]) || 0) : tc.initialSec * 1000;
+    if (running && clock.since) ms -= now - clock.since;
+    const item = el('span', 'online-clock__item');
+    if (running) item.classList.add('online-clock__item--running');
+    if (started && ms < 30000) item.classList.add('online-clock__item--low');
+    if (!started) item.classList.add('online-clock__item--idle');
+    const swatch = el('span', 'standings-panel__swatch');
+    if (player) swatch.dataset.color = player.color;
+    item.appendChild(swatch);
+    item.appendChild(el('span', 'online-clock__name', player ? player.name : seatId));
+    item.appendChild(el('span', 'online-clock__time', formatClockMs(ms)));
+    box.appendChild(item);
+  }
 }
 
 /** 観戦する (2026-10-27) -- 部屋が観戦OKなら、席を取らずに部屋を見るだけの形で入る。開始前に入った時は、
@@ -12363,6 +12555,7 @@ function subscribeToOnlineRoom(code) {
       }
       updateOnlineHostAndTakeover(roomData);
       renderOnlineTakeoverBanner(roomData);
+      if (roomData.timeControl) startOnlineClockTimer();
       // 巻き戻し(全員の同意で全員一緒に戻す) -- 戻した状態はここで反映済み。
       if (handleRewindRoomUpdate(roomData, justStarted)) {
         if (isOnlineHost) applyOnlineResourcePicks(roomData.resourcePicks);
@@ -12970,6 +13163,35 @@ function renderOnlineLobbyOverlay() {
       body.appendChild(spectateRow);
     } else {
       body.appendChild(el('div', 'ranking-row__opponents', `観戦: ${spectatorsAllowed ? 'OK' : 'NG'}`));
+    }
+    // 持ち時間 (2026-10-29) -- 部屋の作成者が決め、入る人は開始前にここで見られる。
+    const tc = onlineLobbyRoomData.timeControl || null;
+    if (isOnlineHost && !onlineSpectator) {
+      const setTc = (patch) => {
+        const next = patch === null ? null : Object.assign({ initialSec: 300, earlySec: 30, lateSec: 10, start: 'game' }, tc || {}, patch);
+        OnlineSync.setTimeControl(onlineRoomCode, next);
+      };
+      const addRow = (label, options, current, onPick) => {
+        const row = el('div', 'online-spectate-setting online-time-setting');
+        row.appendChild(el('span', 'online-spectate-setting__label', label));
+        for (const [text, value] of options) {
+          const btn = el('button', 'undo-button online-spectate-setting__btn', text);
+          btn.type = 'button';
+          btn.classList.toggle('online-spectate-setting__btn--active', current === value);
+          btn.addEventListener('click', () => onPick(value));
+          row.appendChild(btn);
+        }
+        body.appendChild(row);
+      };
+      addRow('持ち時間:', [['なし', null], ['3分', 180], ['5分', 300], ['10分', 600]], tc ? tc.initialSec : null,
+        (value) => setTc(value === null ? null : { initialSec: value }));
+      if (tc) {
+        addRow('ターン1〜3:', [['+30秒', 30], ['+60秒', 60], ['+90秒', 90]], tc.earlySec, (value) => setTc({ earlySec: value }));
+        addRow('ターン4〜:', [['+10秒', 10], ['+30秒', 30], ['+60秒', 60]], tc.lateSec, (value) => setTc({ lateSec: value }));
+        addRow('タイムスタート:', Object.entries(ONLINE_TIME_START_LABELS).map(([value, text]) => [text, value]), tc.start, (value) => setTc({ start: value }));
+      }
+    } else {
+      body.appendChild(el('div', 'ranking-row__opponents', `持ち時間: ${onlineTimeControlText(tc)}`));
     }
     if (onlineSpectator) {
       body.appendChild(el('div', 'ranking-empty', '観戦します。ホストが開始するのを待っています...'));
