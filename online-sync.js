@@ -245,13 +245,20 @@ function randomRoomCode() {
 // appVersion (2026-10-23, per user request「バージョンが違う場合対戦できないように」) -- 部屋を作った端末の
 // バージョン(例 "Ver.1.285")を部屋に記録し、joinRoomで参加する端末のバージョンと比べる。
 // extraFields (2026-10-29): 公開部屋(isPublic)など、作る時に一緒に書く欄。
-function createRoom(appVersion, extraFields) {
+// profile (2026-10-29, per user request: "P1 参加済み ではなくプレイヤーネームを表示 それから実績ポイントも表示"):
+// 席に一緒に書く {name, points}(待ち合い画面に出す)。
+function seatEntry(profile) {
+  var entry = { joinedAt: Date.now() };
+  if (profile) { entry.name = profile.name || null; entry.points = typeof profile.points === 'number' ? profile.points : null; }
+  return entry;
+}
+function createRoom(appVersion, extraFields, profile) {
   var ref = db().collection(ROOM_COLLECTION).doc(randomRoomCode());
   return ref.get().then(function (snap) {
-    if (snap.exists) return createRoom(appVersion, extraFields); // collision (rare) -- just try a new random code
+    if (snap.exists) return createRoom(appVersion, extraFields, profile); // collision (rare) -- just try a new random code
     var seats = {};
     SEAT_IDS.forEach(function (id) { seats[id] = null; });
-    seats.P1 = { joinedAt: Date.now() };
+    seats.P1 = seatEntry(profile);
     var data = Object.assign({ hostSeatId: 'P1', seats: seats, phase: 'lobby', createdAt: Date.now(), appVersion: appVersion || null }, extraFields || {});
     return ref.set(data).then(function () {
       return { code: ref.id, seatId: 'P1' };
@@ -263,7 +270,7 @@ function createRoom(appVersion, extraFields) {
  * transaction, so two people joining at the exact same moment can never both claim the same seat.
  * @returns {Promise<{code:string, seatId:string}>}
  * @throws {Error} with .message one of ROOM_NOT_FOUND / ROOM_ALREADY_STARTED / ROOM_FULL */
-function joinRoom(code, appVersion) {
+function joinRoom(code, appVersion, profile) {
   var normalizedCode = code.trim();
   var ref = db().collection(ROOM_COLLECTION).doc(normalizedCode);
   return db().runTransaction(function (tx) {
@@ -283,7 +290,7 @@ function joinRoom(code, appVersion) {
       }
       if (!openSeatId) throw new Error('ROOM_FULL');
       var seats = Object.assign({}, data.seats);
-      seats[openSeatId] = { joinedAt: Date.now() };
+      seats[openSeatId] = seatEntry(profile);
       tx.update(ref, { seats: seats });
       return openSeatId;
     });
@@ -334,10 +341,10 @@ function listPublicRooms(appVersion) {
 
 /** 設定(持ち時間・観戦)を決めた公開部屋を作り、一覧に載せる。
  * @returns {Promise<{code:string, seatId:'P1'}>} */
-function createPublicRoom(appVersion, settings) {
+function createPublicRoom(appVersion, settings, profile) {
   var lobbyRef = db().collection(ROOM_COLLECTION).doc(PUBLIC_LOBBY_DOC);
   var extra = { isPublic: true, spectatorsAllowed: !!(settings && settings.spectatorsAllowed), timeControl: (settings && settings.timeControl) || null };
-  return createRoom(appVersion, extra).then(function (r) {
+  return createRoom(appVersion, extra, profile).then(function (r) {
     return db().runTransaction(function (tx) {
       return tx.get(lobbyRef).then(function (snap) {
         var list = ((snap.exists && snap.data().rooms) || []).filter(function (x) { return x && Date.now() - (x.at || 0) < PUBLIC_LOBBY_KEEP_MS; });

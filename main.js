@@ -12202,7 +12202,7 @@ function setOnlineWaitingForStart(on) {
 }
 
 function handleCreateRoomClick() {
-  OnlineSync.createRoom(appVersionLabel()).then(({ code, seatId }) => {
+  OnlineSync.createRoom(appVersionLabel(), null, onlineOwnProfile()).then(({ code, seatId }) => {
     onlineRoomCode = code;
     localSeatId = seatId;
     isOnlineHost = true;
@@ -12265,7 +12265,7 @@ function enterOnlineRoomAsSeat(code, seatId, host) {
 function handlePublicRoomJoin(code) {
   if (onlinePublicBusy) return;
   onlinePublicBusy = true;
-  OnlineSync.joinRoom(code, appVersionLabel()).then(({ code: joined, seatId }) => {
+  OnlineSync.joinRoom(code, appVersionLabel(), onlineOwnProfile()).then(({ code: joined, seatId }) => {
     onlinePublicBusy = false;
     enterOnlineRoomAsSeat(joined, seatId, false);
   }).catch((e) => {
@@ -12279,7 +12279,7 @@ function handlePublicRoomCreate() {
   if (onlinePublicBusy) return;
   onlinePublicBusy = true;
   renderOnlineLobbyOverlay();
-  OnlineSync.createPublicRoom(appVersionLabel(), onlinePublicDraft).then(({ code, seatId }) => {
+  OnlineSync.createPublicRoom(appVersionLabel(), onlinePublicDraft, onlineOwnProfile()).then(({ code, seatId }) => {
     onlinePublicBusy = false;
     enterOnlineRoomAsSeat(code, seatId, true);
   }).catch((e) => {
@@ -12320,10 +12320,15 @@ function appendOnlineRoomSettingRows(body, settings, onChange) {
   }
 }
 
+/** 部屋に入る時に席へ書く、この端末のプレイヤーネーム(ランキングに登録した名前)と実績ポイント (2026-10-29)。 */
+function onlineOwnProfile() {
+  return { name: loadRememberedRankingName() || null, points: achievementTotalPoints(loadAchievements()) };
+}
+
 function handleJoinRoomSubmit(codeInput) {
   const code = codeInput.trim();
   if (!code) return;
-  OnlineSync.joinRoom(code, appVersionLabel()).then(({ code: normalizedCode, seatId }) => {
+  OnlineSync.joinRoom(code, appVersionLabel(), onlineOwnProfile()).then(({ code: normalizedCode, seatId }) => {
     onlineRoomCode = normalizedCode;
     localSeatId = seatId;
     isOnlineHost = false;
@@ -13353,8 +13358,16 @@ function renderOnlineLobbyOverlay() {
     }
     const list = el('div', '');
     for (const seatId of ['P1', 'P2', 'P3', 'P4']) {
-      const occupied = !!onlineLobbyRoomData.seats[seatId];
-      const label = seatId === localSeatId ? `${seatId}: あなた` : occupied ? `${seatId}: 参加済み` : `${seatId}: 空席(未参加ならAI LV3)`;
+      // 「参加済み」の代わりにプレイヤーネームと実績ポイント (2026-10-29, per user request)。名前を登録していない人は
+      // 「名前未登録」、名前の記録が無い古い部屋は従来通り「参加済み」。
+      const seat = onlineLobbyRoomData.seats[seatId];
+      let label;
+      if (!seat) label = `${seatId}: 空席(未参加ならAI LV3)`;
+      else if (!('name' in seat)) label = seatId === localSeatId ? `${seatId}: あなた` : `${seatId}: 参加済み`;
+      else {
+        const points = typeof seat.points === 'number' ? `（実績ポイント${seat.points}点）` : '';
+        label = `${seatId}: ${seat.name || '名前未登録'}${points}${seatId === localSeatId ? '　← あなた' : ''}`;
+      }
       list.appendChild(el('div', 'ranking-row__opponents', label));
     }
     body.appendChild(list);
