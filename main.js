@@ -2789,7 +2789,7 @@ function renderProgressOverlay(state) {
       const conFaceId = player && player.conPhysicalId && player.conFace ? `${player.conPhysicalId}${player.conFace}` : null;
       if (!firstGroup && conFaceId && player.jobCardId) {
         nameEl.classList.add('progress-row__name--titled');
-        nameEl.appendChild(conJobColoredFragment(`${rankingConJobTitle(conFaceId, player.jobCardId)}の`));
+        nameEl.appendChild(conJobColoredFragment(`${rankingConJobTitle(conFaceId, player.jobCardId)}`));
         nameEl.appendChild(document.createElement('br'));
       }
       const swatch = el('span', 'standings-panel__swatch');
@@ -9290,7 +9290,7 @@ function renderMobileCardsView(state, next) {
       btn.classList.add('mobile-cards-player-switcher__btn--titled');
       const conName = rankingCardDisplayName(conFaceId);
       btn.appendChild(elConJob('span', 'mobile-cards-player-switcher__title-line', CON_ADJECTIVE_BY_NAME[conName] || conName));
-      btn.appendChild(elConJob('span', 'mobile-cards-player-switcher__title-line', `${rankingCardDisplayName(player.jobCardId)}の`));
+      btn.appendChild(elConJob('span', 'mobile-cards-player-switcher__title-line', `${rankingCardDisplayName(player.jobCardId)}`));
       const nameLine = el('span', 'mobile-cards-player-switcher__name-line');
       nameLine.appendChild(swatch);
       nameLine.appendChild(document.createTextNode(player.name));
@@ -10969,7 +10969,7 @@ function fillLifeStoryContent(state, player, rankedEntries) {
   const conFaceId = player.conPhysicalId && player.conFace ? `${player.conPhysicalId}${player.conFace}` : null;
   const lifeStoryTitleEl = document.getElementById('life-story-title');
   lifeStoryTitleEl.textContent = '';
-  lifeStoryTitleEl.appendChild(conJobColoredFragment(`${rankingConJobTitle(conFaceId, player.jobCardId)}の${player.name}`));
+  lifeStoryTitleEl.appendChild(conJobColoredFragment(`${rankingConJobTitle(conFaceId, player.jobCardId)}${player.name}`));
 
   const body = document.getElementById('life-story-body');
   body.innerHTML = '';
@@ -11031,7 +11031,7 @@ function buildLifeStoryPlayerInfo(state, playerId, rank, finalScore, featured) {
   const conVp = scoringMod.conCardVpAdjustment(state, INDEX, playerId);
   const baseVp = finalScore - questVp - conVp;
   const box = el('div', featured ? 'life-story-player life-story-player--featured' : 'life-story-player');
-  const prefix = title && title !== '—' ? `${title}の` : '';
+  const prefix = title && title !== '—' ? title : '';
   box.appendChild(elConJob('div', 'life-story-player__name', prefix + p.name));
   box.appendChild(el('div', 'life-story-player__score', `${rank}位　最終獲得点数${finalScore}VP`));
   box.appendChild(el('div', 'life-story-player__detail', `（素点${baseVp}VP　クエスト${questVp}VP　性格${conVp}VP）`));
@@ -11300,7 +11300,7 @@ function fillPlayerTitledName(nameEl, player) {
   nameEl.textContent = '';
   const conFaceId = player.conPhysicalId && player.conFace ? `${player.conPhysicalId}${player.conFace}` : null;
   if (conFaceId && player.jobCardId) {
-    nameEl.appendChild(conJobColoredFragment(`${rankingConJobTitle(conFaceId, player.jobCardId)}の`));
+    nameEl.appendChild(conJobColoredFragment(`${rankingConJobTitle(conFaceId, player.jobCardId)}`));
   }
   nameEl.appendChild(document.createTextNode(player.name));
 }
@@ -12581,7 +12581,7 @@ function setRemotePlaybackUi(on, playerId) {
   const player = STATE.players.find((p) => p.id === playerId);
   const conFaceId = player && player.conPhysicalId && player.conFace ? `${player.conPhysicalId}${player.conFace}` : null;
   const title = player ? rankingConJobTitle(conFaceId, player.jobCardId) : '';
-  banner.textContent = `${title && title !== '—' ? `${title}の` : ''}${player ? player.name : ''}がプレイしました`;
+  banner.textContent = `${title && title !== '—' ? title : ''}${player ? player.name : ''}がプレイしました`;
   banner.animate([{ transform: 'translateX(-100%)' }, { transform: 'translateX(0)' }],
     { duration: 350, easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)' });
 }
