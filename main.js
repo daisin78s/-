@@ -12213,6 +12213,31 @@ function handleCreateRoomClick() {
   });
 }
 
+/** 公開部屋で自動的に相手を探す (2026-10-29、OnlineSync.findOrCreatePublicRoom参照) -- 入れる部屋があれば参加者として、
+ * 無ければ自分で作った部屋のホスト(持ち時間を決めて開始ボタンを押す人)として待ち合い画面へ。 */
+let onlinePublicSearching = false;
+const ONLINE_PUBLIC_MATCH_LABEL = 'ランダムマッチ';
+function handlePublicMatchClick() {
+  if (onlinePublicSearching) return;
+  onlinePublicSearching = true;
+  onlineLobbyError = null;
+  renderOnlineLobbyOverlay();
+  OnlineSync.findOrCreatePublicRoom(appVersionLabel()).then(({ code, seatId, created }) => {
+    onlinePublicSearching = false;
+    onlineRoomCode = code;
+    localSeatId = seatId;
+    isOnlineHost = created;
+    setOnlineWaitingForStart(true);
+    onlineLobbyView = 'waiting';
+    subscribeToOnlineRoom(code);
+    startOnlinePresence();
+  }).catch((e) => {
+    onlinePublicSearching = false;
+    onlineLobbyError = `相手を探せませんでした（${e.message}）`;
+    renderOnlineLobbyOverlay();
+  });
+}
+
 function handleJoinRoomSubmit(codeInput) {
   const code = codeInput.trim();
   if (!code) return;
@@ -13155,6 +13180,13 @@ function renderOnlineLobbyOverlay() {
     joinButton.type = 'button';
     joinButton.addEventListener('click', () => { onlineLobbyView = 'join'; renderOnlineLobbyOverlay(); });
     body.appendChild(joinButton);
+    // 誰でも入れる公開部屋で自動的に相手を探す (2026-10-29)。
+    const publicButton = el('button', 'undo-button', onlinePublicSearching ? '相手を探しています...' : ONLINE_PUBLIC_MATCH_LABEL);
+    publicButton.type = 'button';
+    publicButton.disabled = onlinePublicSearching;
+    publicButton.addEventListener('click', handlePublicMatchClick);
+    body.appendChild(publicButton);
+    if (onlineLobbyError) body.appendChild(el('div', 'ranking-empty', onlineLobbyError));
     return;
   }
 
@@ -13184,6 +13216,7 @@ function renderOnlineLobbyOverlay() {
   }
 
   if (onlineLobbyView === 'waiting') {
+    if (onlineLobbyRoomData && onlineLobbyRoomData.isPublic) body.appendChild(el('div', 'ranking-row__score', `${ONLINE_PUBLIC_MATCH_LABEL}（誰でも入れる部屋）`));
     body.appendChild(el('div', 'ranking-row__score', `合言葉: ${onlineRoomCode}`));
     if (!onlineLobbyRoomData) {
       body.appendChild(el('div', 'ranking-empty', '読み込み中...')); // the brief window before the first onSnapshot fires

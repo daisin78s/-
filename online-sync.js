@@ -244,14 +244,16 @@ function randomRoomCode() {
  * @returns {Promise<{code:string, seatId:'P1'}>} */
 // appVersion (2026-10-23, per user request「バージョンが違う場合対戦できないように」) -- 部屋を作った端末の
 // バージョン(例 "Ver.1.285")を部屋に記録し、joinRoomで参加する端末のバージョンと比べる。
-function createRoom(appVersion) {
+// extraFields (2026-10-29): 公開部屋(isPublic)など、作る時に一緒に書く欄。
+function createRoom(appVersion, extraFields) {
   var ref = db().collection(ROOM_COLLECTION).doc(randomRoomCode());
   return ref.get().then(function (snap) {
-    if (snap.exists) return createRoom(appVersion); // collision (rare) -- just try a new random code
+    if (snap.exists) return createRoom(appVersion, extraFields); // collision (rare) -- just try a new random code
     var seats = {};
     SEAT_IDS.forEach(function (id) { seats[id] = null; });
     seats.P1 = { joinedAt: Date.now() };
-    return ref.set({ hostSeatId: 'P1', seats: seats, phase: 'lobby', createdAt: Date.now(), appVersion: appVersion || null }).then(function () {
+    var data = Object.assign({ hostSeatId: 'P1', seats: seats, phase: 'lobby', createdAt: Date.now(), appVersion: appVersion || null }, extraFields || {});
+    return ref.set(data).then(function () {
       return { code: ref.id, seatId: 'P1' };
     });
   });
@@ -287,6 +289,60 @@ function joinRoom(code, appVersion) {
     });
   }).then(function (seatId) {
     return { code: normalizedCode, seatId: seatId };
+  });
+}
+
+/** 公開部屋で自動的に相手を探す (2026-10-29, per user request: "部屋を作る以外に誰でもはいれる対戦を実装したい"
+ * + 回答: 自動で相手を探す / 開始は部屋を作った人が開始ボタン / 持ち時間は部屋を作った人が決める / 観戦OK) --
+ * 待っている公開部屋の合言葉は rooms/PUBLIC_LOBBY_DOC の rooms 欄に並べておく(部屋の一覧を検索で読むことは
+ * Firestoreのルールで許されていないため、合言葉が分かっている1つの記録を読む形)。そこに載っている部屋のうち、
+ * 開始前で同じバージョン、空席があり、部屋を作った人(ホスト)が今もつながっている(60秒以内に合図がある)部屋に
+ * 入る。人の多い部屋から順に試し、入れなければ(満席になった等)次へ。どこにも入れなければ、自分で新しい公開部屋
+ * (観戦OK)を作って一覧に載せる。一覧からは30分より古いものを消す。
+ * @returns {Promise<{code:string, seatId:string, created:boolean}>} */
+var PUBLIC_LOBBY_DOC = 'PUBLIC_LOBBY';
+var PUBLIC_LOBBY_KEEP_MS = 30 * 60 * 1000;
+function findOrCreatePublicRoom(appVersion) {
+  var lobbyRef = db().collection(ROOM_COLLECTION).doc(PUBLIC_LOBBY_DOC);
+  return lobbyRef.get().then(function (lobbySnap) {
+    var listed = (lobbySnap.exists && lobbySnap.data().rooms) || [];
+    var fresh = listed.filter(function (r) { return r && r.code && Date.now() - (r.at || 0) < PUBLIC_LOBBY_KEEP_MS; });
+    return Promise.all(fresh.map(function (r) {
+      return db().collection(ROOM_COLLECTION).doc(r.code).get().then(function (snap) { return snap.exists ? { code: r.code, data: snap.data() } : null; }).catch(function () { return null; });
+    }));
+  }).then(function (rooms) {
+    var now = Date.now();
+    var candidates = [];
+    rooms.forEach(function (room) {
+      if (!room) return;
+      var data = room.data;
+      if (!data.isPublic || data.phase !== 'lobby') return;
+      if ((data.appVersion || null) !== (appVersion || null)) return;
+      var seats = data.seats || {};
+      var occupied = SEAT_IDS.filter(function (id) { return !!seats[id]; }).length;
+      if (occupied >= SEAT_IDS.length) return;
+      var hostBeat = data.presence && data.presence[data.hostSeatId || 'P1'];
+      var hostMs = hostBeat && typeof hostBeat.toMillis === 'function' ? hostBeat.toMillis() : 0;
+      if (now - hostMs > 60000) return; // 部屋を作った人がもういない
+      candidates.push({ code: room.code, occupied: occupied, createdAt: data.createdAt || 0 });
+    });
+    candidates.sort(function (a, b) { return b.occupied - a.occupied || a.createdAt - b.createdAt; });
+    var tryNext = function (i) {
+      if (i >= candidates.length) {
+        return createRoom(appVersion, { isPublic: true, spectatorsAllowed: true }).then(function (r) {
+          return db().runTransaction(function (tx) {
+            return tx.get(lobbyRef).then(function (snap) {
+              var list = ((snap.exists && snap.data().rooms) || []).filter(function (x) { return x && Date.now() - (x.at || 0) < PUBLIC_LOBBY_KEEP_MS; });
+              list.push({ code: r.code, at: Date.now() });
+              tx.set(lobbyRef, { rooms: list.slice(-30) });
+            });
+          }).then(function () { return { code: r.code, seatId: r.seatId, created: true }; });
+        });
+      }
+      return joinRoom(candidates[i].code, appVersion).then(function (r) { return { code: r.code, seatId: r.seatId, created: false }; })
+        .catch(function () { return tryNext(i + 1); });
+    };
+    return tryNext(0);
   });
 }
 
@@ -581,6 +637,7 @@ window.OnlineSync = {
   setSpectatorsAllowed: setSpectatorsAllowed,
   setTimeControl: setTimeControl,
   getRoom: getRoom,
+  findOrCreatePublicRoom: findOrCreatePublicRoom,
   setClock: setClock,
   setRewindOk: setRewindOk,
   requestRewind: requestRewind,
