@@ -12784,6 +12784,12 @@ function handleStartRoomClick() {
   // skipAchievementLock=true (2026-10-11, per user spec: "オンライン対戦は対象外（すべて解除済み）") --
   // this room's CON/JOB 裏面 must never depend on the HOST's own device achievement progress.
   const freshState = createInitialState(null, undefined, true);
+  // 待ち合い画面のプレイヤーネームをゲーム中の名前にも使う (2026-10-29, per user「はい」 -- 以前はホスト以外の人間の
+  // 席もBob/Carol/Danのままだった)。名前を登録していない人(name無し)はそのまま。
+  for (const player of freshState.players) {
+    const seat = onlineLobbyRoomData.seats[player.id];
+    if (seat && seat.name) player.name = seat.name;
+  }
   OnlineSync.startRoom(onlineRoomCode, JSON.stringify(freshState), seatIsHuman);
 }
 
