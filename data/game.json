@@ -2226,7 +2226,7 @@
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
-      "ACTION": "CHANGE(2K,D)",
+      "ACTION": "CHANGE(K,D)",
       "fee": 1,
       "INST": "色ダイスの上限は5個\nこのエリアにダイスを置くと怠惰の性格は解除される"
     },
