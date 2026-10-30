@@ -2,6 +2,8 @@
 'use strict';
 
 /**
+ * (2026-10-30: the table now comes from 評価値ALL instead -- see buildConJobSynergyTable below. The history
+ * of the original 評価値_JOB design follows.)
  * Synergy lookup for game.xlsx's 評価値_JOB sheet (added 2026-08-27, for "AI LV4"'s JOB/CON selection --
  * per user design: "評価値2で マイナスのついている組み合わせは選ばない プラスの組み合わせは積極的に選
  * ぶ"). Rows are one of three kinds:
@@ -17,29 +19,20 @@
  * Blank cells mean 0 (no opinion), same convention as eval-table.js's own buildEvalTable.
  */
 
-const COLOR_DICE_ROW_NAME = 'D';
+const evalAll = require('./eval-all');
 
-/** table[rowName][jobId], defaulting to 0 for an unknown row/job or a blank cell. */
+const COLOR_DICE_ROW_NAME = evalAll.COLOR_DICE_NAME;
+
+/** 2026-10-30: now built from 評価値ALL (see eval-all.js) -- 評価値_JOB itself is no longer read (per user:
+ * "c" = everything in one sheet). The row kinds pickJob/pickConFace look up are unchanged (a CON face name,
+ * an LV1 card name, or "D"), they're just answered from 評価値ALL's JOB column for that row now. */
 function buildConJobSynergyTable(rawData) {
-  const rows = rawData['評価値_JOB'] || [];
-  const table = {};
-  for (const row of rows) {
-    const name = row.ID; // 評価値_JOB's own header column is literally "ID", holding each row's NAME text
-    if (!name || name === 'NAME') continue; // the "NAME" row is 評価値_JOB's own JOB-id-to-JOB-name legend, not real data
-    const entry = {};
-    for (const [key, value] of Object.entries(row)) {
-      if (key === 'ID') continue;
-      if (typeof value === 'number') entry[key] = value;
-    }
-    table[name] = entry;
-  }
-  return table;
+  return evalAll.buildEvalAllTable(rawData);
 }
 
 function synergyValue(table, rowName, jobId) {
-  const row = table[rowName];
-  if (!row) return 0;
-  return row[jobId] || 0;
+  const unit = table.unitByName[String(rowName).replace(/LV\d+$/, '')];
+  return unit ? evalAll.pairValue(table, unit, jobId) : 0;
 }
 
 /** NAME -> faceId for every CON face (2026-08-27, for matching 評価値_JOB's CON-face rows back to a real

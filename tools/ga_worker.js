@@ -37,14 +37,22 @@ const { holdingUnits } = require('./card_pair_stats');
 const DATA_PATH = path.join(__dirname, '..', 'data', 'game.json');
 const PLAYER_NAMES = ['Alice', 'Bob', 'Carol', 'Dan'];
 
-const raw = loadGameData(DATA_PATH);
-const index = buildDataIndex(raw);
-const synergyTable3 = buildResourceSynergyTable(raw);
-const synergyTable2 = buildConJobSynergyTable(raw);
+let index;
+let synergyTable3;
+let synergyTable2;
+function loadData() {
+  const raw = loadGameData(DATA_PATH);
+  index = buildDataIndex(raw);
+  synergyTable3 = buildResourceSynergyTable(raw);
+  synergyTable2 = buildConJobSynergyTable(raw);
+}
+loadData();
 const resourceCardPicker = (candidateIds, state, idx, player) =>
   pickResourceCards(candidateIds, state, idx, synergyTable3, player.conPhysicalId);
 
 parentPort.on('message', (job) => {
+  // 評価値ALLの自動更新の後 (2026-10-30, see tools/eval_all_update.js): game.json を読み直す。返事はしない。
+  if (job.reloadData) { loadData(); return; }
   const { jobId, genomes, seed, aiLevel } = job;
   const level = aiLevel ? getLevel(aiLevel) : null;
   const evaluatorByPlayerId = {};

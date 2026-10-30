@@ -44,6 +44,7 @@ def load_sheet(ws):
 
     header_row = ws[header_row_num]
     columns = []  # list of (index, name)
+    seen_names = set()
     for idx, cell in enumerate(header_row):
         name = cell.value
         if name is None:
@@ -51,6 +52,12 @@ def load_sheet(ws):
             if override is None:
                 continue
             name = override
+        # A repeated header name is a second table placed to the right of the real one (2026-10-30: the
+        # 確認用 tables in 評価値_JOB / 評価値_CON, see write_eval_all_sheet.py) -- keep only the first
+        # occurrence, so that table never overwrites the real columns' values.
+        if name in seen_names:
+            continue
+        seen_names.add(name)
         columns.append((idx, name))
 
     rows = []

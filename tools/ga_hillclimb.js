@@ -29,7 +29,14 @@
  * 全試合をカード相性表(tools/card_pair_stats.js)にも数える(--no-pair-statsで無効)。
  *
  * Usage: node tools/ga_hillclimb.js <outDir> [--ai-level=LV3] [--game-dir=<ゲームのフォルダ>] [--parallel=4]
- *        [--gate-every=3] [--gate-boards=100] [--no-gate] [--no-push] [--no-pair-stats]
+ *        [--gate-every=3] [--gate-boards=100] [--no-gate] [--no-push] [--no-pair-stats] [--eval-all-every=500]
+ *
+ * 評価値ALLの自動更新 (2026-10-30, per user request "500ごとに更新"): 通算試合数が eval-all-every の倍数を
+ * 越えるたびに、カード相性のデータを保存して tools/eval_all_update.js を裏で動かす(game.xlsx の評価値ALLを
+ * 書き直してゲームに入れてプッシュ、このフォルダの game.json も更新)。終わったら各スレッドに game.json を
+ * 読み直させるので、次の試合から新しい評価値ALLで打つ。評価値ALLはルールの指紋(rulesHash)に入れない --
+ * 挑戦者もチャンピオンも同じ評価値ALLで打つので、変わっても成績を捨てる必要は無い。
+ * (--no-pair-stats の時は相性のデータが増えないので、自動更新もしない。0で無効。)
  */
 
 'use strict';
@@ -38,7 +45,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
-const { spawnSync } = require('child_process');
+const { spawnSync, execFile } = require('child_process');
 const { Worker } = require('worker_threads');
 const { loadGameData } = require('../src/data-loader');
 const { buildEvalTable, isStructurallyBlankRound } = require('../src/ai/eval-table');
@@ -76,6 +83,7 @@ function parseArgs(argv) {
     gate: !argv.includes('--no-gate'),
     push: !argv.includes('--no-push'),
     pairStats: !argv.includes('--no-pair-stats'),
+    evalAllEvery: Number(opt('eval-all-every', 500)),
   };
 }
 
@@ -98,6 +106,7 @@ const md5 = (s) => crypto.createHash('md5').update(s).digest('hex');
 function rulesHash(raw) {
   const rest = { ...raw };
   delete rest['評価値'];
+  delete rest['評価値ALL']; // 自動更新される -- 上の説明を参照
   const parts = [JSON.stringify(rest)];
   const walk = (dir) => {
     for (const name of fs.readdirSync(dir).sort()) {
@@ -296,6 +305,25 @@ async function climb(state, raw) {
     while (state.challengers.length < args.parallel) newChallenger();
   };
 
+  let evalAllRunning = false;
+  const startEvalAllUpdate = () => {
+    if (evalAllRunning) return;
+    evalAllRunning = true;
+    cardPairStats.save(pairStats);
+    log(`通算${state.totalGames}試合: 評価値ALLを更新します`);
+    const updateArgs = [path.join(PROJECT_ROOT, 'tools', 'eval_all_update.js'), `--game-dir=${args.gameDir}`, `--stats=${cardPairStats.STATS_PATH}`];
+    if (!args.push) updateArgs.push('--no-push');
+    execFile('node', updateArgs, { cwd: PROJECT_ROOT, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }, (err, stdout) => {
+      evalAllRunning = false;
+      let result = null;
+      try { result = JSON.parse(String(stdout).trim().split('\n').pop()); } catch (e) { result = null; }
+      if (!result) { log(`評価値ALLの更新が途中で止まりました: ${err ? err.message : '結果がありません'}`); return; }
+      if (!result.updated) { log(`評価値ALLは更新しませんでした (${result.skippedReason})`); return; }
+      log(`評価値ALLを更新しました (Ver.${result.version}${result.pushed ? '、プッシュ済み' : ''}、${result.games}試合分、データから${result.evalAllCells}マス)。次の試合から使います。`);
+      for (const worker of pool) worker.postMessage({ reloadData: true });
+    });
+  };
+
   for (const worker of pool) {
     worker.on('error', (e) => rejectDone(e));
     worker.on('message', (msg) => {
@@ -304,6 +332,7 @@ async function climb(state, raw) {
       idle.push(worker);
       if (pairStats) cardPairStats.addGame(pairStats, msg.holdingsByPlayerId, msg.rankByPlayerId);
       state.totalGames++;
+      if (pairStats && args.evalAllEvery > 0 && state.totalGames % args.evalAllEvery === 0) startEvalAllUpdate();
       const c = state.challengers.find((x) => x.id === job.challengerId);
       const pb = pendingBatch.get(job.challengerId);
       if (c && pb) {

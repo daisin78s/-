@@ -24,18 +24,14 @@ Usage: python tools/card_pair_stats_to_xlsx.py <statsJson> <gameJson> <xlsxOut>
 """
 
 import json
-import re
+import os
 import sys
 import openpyxl
 from openpyxl.formatting.rule import ColorScaleRule
 from openpyxl.styles import Alignment, Font, PatternFill
 
-MIN_GAMES = 30
-BASELINE_MIN_GAMES = 100
-UNIT_SHEETS = ['A', 'B', 'C', 'M', 'JOB', 'CON']
-KIND_LABEL = {'A': 'A', 'B': 'B', 'C': 'C', 'M': 'モニュメント', 'JOB': 'ジョブ', 'CON': '性格'}
-# Pair-type grouping for 補正後の相性: A/B/C are all area cards, one group.
-GROUP_LABEL = {'A': 'エリア', 'B': 'エリア', 'C': 'エリア', 'M': 'モニュメント', 'JOB': 'ジョブ', 'CON': '性格'}
+sys.path.insert(0, os.path.dirname(__file__))
+from card_pair_synergy import MIN_GAMES, BASELINE_MIN_GAMES, KIND_LABEL, PairSynergy  # noqa: E402
 
 stats_path, game_path, xlsx_path = sys.argv[1], sys.argv[2], sys.argv[3]
 with open(stats_path, encoding='utf-8') as f:
@@ -43,30 +39,17 @@ with open(stats_path, encoding='utf-8') as f:
 with open(game_path, encoding='utf-8') as f:
     game = json.load(f)
 
-# Same unit rule as card_pair_stats.js's unitIdOfFace (A/B/C physical card; M/JOB/CON face id as-is).
-units = []
-seen = set()
-for sheet in UNIT_SHEETS:
-    for row in game.get(sheet, []):
-        uid = row['ID'] if sheet in ('M', 'JOB', 'CON') else re.sub(r'[AB]$', '', row['ID'])
-        if uid in seen:
-            continue
-        seen.add(uid)
-        units.append((uid, sheet, re.sub(r'LV\d$', '', row.get('NAME') or uid)))
-
-solo = stats.get('solo', {})
-pair = stats.get('pair', {})
-total_n = sum(s['n'] for s in solo.values())
-overall = (sum(s['rankSum'] for s in solo.values()) / total_n) if total_n else 2.5
-
-
-def solo_avg(u):
-    s = solo.get(u)
-    return s['rankSum'] / s['n'] if s and s['n'] else None
-
-
-def pair_cell(a, b):
-    return pair.get(f'{a}|{b}' if a < b else f'{b}|{a}')
+# The numbers themselves are computed in card_pair_synergy.py (shared with write_eval_all_sheet.py).
+ps = PairSynergy(stats, game)
+units = ps.units
+solo = ps.solo
+overall = ps.overall
+solo_avg = ps.solo_avg
+pair_cell = ps.pair_cell
+name_of = ps.name_of
+pair_type = ps.pair_type
+baseline = ps.baseline
+baseline_n = ps.baseline_n
 
 
 wb = openpyxl.Workbook()
@@ -103,13 +86,7 @@ def matrix_sheet(title, value_of, number_format, color_rule=None):
 
 
 def synergy(a, b, diag):
-    if diag:
-        return None
-    p = pair_cell(a, b)
-    sa, sb = solo_avg(a), solo_avg(b)
-    if not p or p['n'] < MIN_GAMES or sa is None or sb is None:
-        return None
-    return round((sa + sb - overall) - p['rankSum'] / p['n'], 3)
+    return None if diag else ps.synergy(a, b)
 
 
 def avg_rank(a, b, diag):
@@ -128,33 +105,8 @@ def count(a, b, diag):
     return p['n'] if p else None
 
 
-group_of = {uid: GROUP_LABEL[sheet] for uid, sheet, _ in units}
-name_of = {uid: name for uid, _, name in units}
-
-
-def pair_type(a, b):
-    return '×'.join(sorted([group_of[a], group_of[b]]))
-
-
-baseline_sum = {}
-baseline_n = {}
-for i, (a, _, _) in enumerate(units):
-    for b, _, _ in units[i + 1:]:
-        p = pair_cell(a, b)
-        v = synergy(a, b, False)
-        if v is None or p['n'] < BASELINE_MIN_GAMES:
-            continue
-        t = pair_type(a, b)
-        baseline_sum[t] = baseline_sum.get(t, 0) + v
-        baseline_n[t] = baseline_n.get(t, 0) + 1
-baseline = {t: baseline_sum[t] / baseline_n[t] for t in baseline_sum}
-
-
 def adjusted_synergy(a, b, diag):
-    v = synergy(a, b, diag)
-    if v is None:
-        return None
-    return round(v - baseline.get(pair_type(a, b), 0), 3)
+    return None if diag else ps.adjusted_synergy(a, b)
 
 
 synergy_colors = dict(start_type='num', start_value=-0.5, start_color='F8696B',

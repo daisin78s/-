@@ -22,12 +22,16 @@ const index = buildDataIndex(raw);
 // as-is) purely so the lockout-penalty tests below can keep exercising that still-real, still-used
 // generic engine mechanism against an actual ownable card id.
 index.byId.set('CON005B', { sheet: 'CON', row: { ...index.byId.get('CON005B').row, TURNEND: 'RESOURCE_TOTAL_LIMIT((A,B,C),7)' } });
-// 評価値_CON's real "D"(追加色ダイス, renamed from "色ダイス" 2026-08-28)x"憤怒" cell is currently blank --
-// patches a synthetic non-zero value onto that one cell (every other cell left as-is) purely so the
-// conBuildAware color-dice test below can exercise that row at all; the card-row ("双星の加護LV1"x
-// "憤怒") test doesn't need a patch since that cell is already the real -200 that motivated wiring
-// 評価値_CON in to begin with.
-raw['評価値_CON'].find((r) => r.NAME === 'D').憤怒 = -7;
+// 評価値ALL (2026-10-30, replaces 評価値_CON/評価値_JOB for conBuildAware -- see eval-all.js): its real cells are
+// rewritten automatically from the カード相性 data every 500 進化AI games, so the conBuildAware tests below
+// run against a fixed synthetic sheet instead of pinning whatever the real one holds today. Only the
+// cells listed here are non-blank.
+raw['評価値ALL'] = [
+  { NAME: 'D', 憤怒: -7 },
+  { NAME: '天文学', 憤怒: -100 },
+  { NAME: '訓練場の支配', 基礎学問: 25 }, // one triangle only -- read symmetrically
+  { NAME: '道化師', 訓練場の支配: 12 },
+];
 // monument-incentive.js's COMBO_TARGETS rows (2026-09-03, per user request: "大いなる導きLV2 や 運命の
 // 導きLV1 2 宮廷人 などの複合でもAIが判断できるように") don't exist in the real 評価値_戦略 sheet yet (the
 // user still needs to add them in game.xlsx with real per-round point values) -- synthetic placeholder
@@ -737,11 +741,9 @@ index.raw.QST = [
 // own separate `node` process, so this mutation can't leak into any other test file either).
 
 // ---------------------------------------------------------------------------
-// conBuildAware (2026-08-28, "AI LV4" only -- see Evaluator's own doc and con-build-synergy.js for the
-// motivating bug report): 評価値_CON's real "双星の加護LV1"x"憤怒" cell is -1000 (2026-08-30, raised from
-// -200 as part of a broader spreadsheet rebalance -- see 評価値 round-3 weights' own comment further down
-// for the sibling change from that same pass); a 憤怒 (CON005B) player owning B201A (双星の加護LV1,
-// eval=50 round2 -- lowered from 100 on 2026-09-03, VP=0) should score 50 + (-1000), not just 50.
+// conBuildAware (2026-08-28; since 2026-10-30 backed by 評価値ALL -- see the synthetic sheet patched in at
+// the top of this file): a 憤怒 (CON005B) player owning B201A (天文学LV1) gets the sheet's 天文学 x 憤怒
+// cell (-100) on top of the card's normal eval-table value.
 // ---------------------------------------------------------------------------
 {
   const state = freshState(2);
@@ -750,13 +752,13 @@ index.raw.QST = [
   p1.conFace = 'B'; // CON005B/憤怒
   giveCard(state, 'B201A', 'P1');
   const plainScore = evaluator.score(state, 'P1');
-  check('The plain (non-conBuildAware) Evaluator ignores 評価値_CON entirely (control)', plainScore, evalTable[2].B201A);
-  check('conBuildAware applies 評価値_CON\'s -1000 for 憤怒 x 双星の加護LV1 on top of the normal eval-table value', evaluatorConBuildAware.score(state, 'P1'), evalTable[2].B201A - 1000);
+  check('The plain (non-conBuildAware) Evaluator ignores 評価値ALL entirely (control)', plainScore, evalTable[2].B201A);
+  check('conBuildAware applies 評価値ALL\'s -100 for 憤怒 x 天文学 on top of the normal eval-table value', evaluatorConBuildAware.score(state, 'P1'), evalTable[2].B201A - 100);
 }
 
 {
-  // Same pairing, but the LV2-upgraded face (B201B, printed VP=1) -- still matches 評価値_CON's LV1-named
-  // row via normalizeToLv1Name (per user confirmation: the penalty is just as real post-upgrade).
+  // Same pairing, but the LV2-upgraded face (B201B, printed VP=1) -- 評価値ALL counts A/B/C by physical
+  // card, so the LV1 pairing still applies (per user confirmation: the penalty is just as real post-upgrade).
   const state = freshState(2);
   const p1 = state.players[0];
   p1.conPhysicalId = 'CON005';
@@ -764,13 +766,13 @@ index.raw.QST = [
   giveCard(state, 'B201B', 'P1');
   const plainScore = evaluator.score(state, 'P1');
   check('Control: plain Evaluator score for the LV2 face', plainScore, evalTable[2].B201B + 1 * evalTable[2].VP);
-  check('conBuildAware still applies the LV1 row\'s -1000 to the LV2-upgraded card', evaluatorConBuildAware.score(state, 'P1'), (evalTable[2].B201B + 1 * evalTable[2].VP) - 1000);
+  check('conBuildAware still applies the -100 to the LV2-upgraded card', evaluatorConBuildAware.score(state, 'P1'), (evalTable[2].B201B + 1 * evalTable[2].VP) - 100);
 }
 
 {
   // "色ダイス" row = "追加色ダイス" (2026-08-28, per user clarification: "色ダイスは追加色ダイスのこと
   // です" -- only color dice PAST the 5-die baseline count, "何で得た分か追跡不要です"). Patched to -7
-  // for 憤怒 (see this file's own raw['評価値_CON'] patch near the top -- the real cell is blank). 6 total
+  // for 憤怒 (see this file's own raw['評価値ALL'] patch near the top). 6 total
   // color dice = 1 additional (6-5) -- contributes 1 * -7, not 6 * -7.
   const state = freshState(2);
   const p1 = state.players[0];
@@ -797,6 +799,18 @@ index.raw.QST = [
   const state = freshState(2);
   giveCard(state, 'B201A', 'P1');
   check('conBuildAware with no CON face chosen yet behaves exactly like the plain Evaluator', evaluatorConBuildAware.score(state, 'P1'), evaluator.score(state, 'P1'));
+}
+
+{
+  // 評価値ALL card x card and card x JOB pairs (2026-10-30): 訓練場の支配 x 基礎学問 (+25, typed into one
+  // triangle only) and 道化師 x 訓練場の支配 (+12) both count; 道化師 x 基礎学問 is blank (0).
+  const state = freshState(2);
+  const p1 = state.players[0];
+  giveCard(state, 'A202A', 'P1');
+  giveCard(state, 'B001A', 'P1');
+  check('評価値ALL card x card pair is added, read from either triangle', evaluatorConBuildAware.score(state, 'P1'), evaluator.score(state, 'P1') + 25);
+  p1.jobCardId = 'JOB003';
+  check('評価値ALL card x JOB pair is added too', evaluatorConBuildAware.score(state, 'P1'), evaluator.score(state, 'P1') + 25 + 12);
 }
 
 // ---------------------------------------------------------------------------

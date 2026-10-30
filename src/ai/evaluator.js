@@ -25,7 +25,7 @@ const executor = require('../executor');
 const board = require('../board');
 const qst = require('../qst');
 const { evalValue } = require('./eval-table');
-const conBuildSynergy = require('./con-build-synergy');
+const evalAll = require('./eval-all');
 const monumentIncentive = require('./monument-incentive');
 
 /** Same regex board.js's own (unexported) parseMonumentThreshold uses, e.g. ">=12" -> 12. Duplicated
@@ -193,6 +193,9 @@ class Evaluator {
    *   い"). Default {} (qstAware unset/falsy) -- LV1/LV2 keep using an Evaluator built with no policy, so
    *   their behavior is byte-for-byte unchanged; LV3 gets its own instance constructed with qstAware:true
    *   (see main.js's aiEvaluatorLv3). See score()'s own QST block for what this actually adds.
+   *   conBuildAware -- since 2026-10-30 this reads game.xlsx's 評価値ALL (see eval-all.js) instead of
+   *   評価値_CON: every pair of units the player holds (cards, JOB, CON face) adds its cell, plus the D row
+   *   for 追加色ダイス x CON face. The flag name is kept from its original 評価値_CON-only form:
    *   conBuildAware (2026-08-28, "AI LV4" only, per user bug report -- see con-build-synergy.js's own
    *   doc for the motivating incident): builds a game.xlsx 評価値_CON lookup table once here (from
    *   index.raw) and applies it in score()'s own per-owned-card loop and color-dice section -- see those
@@ -207,7 +210,7 @@ class Evaluator {
     this.index = index;
     this.evalTable = evalTable;
     this.policy = policy || {};
-    this.conBuildSynergyTable = this.policy.conBuildAware ? conBuildSynergy.buildConBuildSynergyTable(index.raw) : null;
+    this.evalAllTable = this.policy.conBuildAware ? evalAll.buildEvalAllTable(index.raw) : null;
     this.monumentIncentiveTable = this.policy.monumentIncentiveAware ? monumentIncentive.buildMonumentIncentiveTable(index.raw) : null;
   }
 
@@ -324,11 +327,9 @@ class Evaluator {
     // con-build-synergy.js's doc for the motivating bug report): the player's own chosen CON face's
     // NAME (e.g. "憤怒"), looked up once here rather than per owned card below. null whenever the
     // policy is off, or CON hasn't been chosen yet (conPhysicalId/conFace still unset, e.g. mid-onboarding).
-    let conBuildFaceName = null;
-    if (this.conBuildSynergyTable && player.conPhysicalId && player.conFace) {
-      try { conBuildFaceName = getCardRow(this.index, `${player.conPhysicalId}${player.conFace}`).NAME; } catch (e) { conBuildFaceName = null; }
-    }
-    if (conBuildFaceName) {
+    // (2026-10-30: the CON face is now looked up as its 評価値ALL unit id, e.g. "CON005B", not its NAME.)
+    const conBuildFaceUnit = this.evalAllTable && player.conPhysicalId && player.conFace ? `${player.conPhysicalId}${player.conFace}` : null;
+    if (conBuildFaceUnit) {
       // "色ダイス" row (2026-08-28, per user clarification: "色ダイスは追加色ダイスのことです" -- 訓練場
       // (AREA007)'s own ADD(D)/CHANGE(...,D) actions raising a player's color-die count past the normal
       // 5-die baseline, not their total color-die count outright; confirmed no per-die acquisition
@@ -336,7 +337,7 @@ class Evaluator {
       // counts the same): a per-extra-color-die bonus/penalty specific to this CON face.
       const ADDITIONAL_COLOR_DICE_BASELINE = 5;
       const additionalColorDiceCount = Math.max(0, totalColorDiceCount - ADDITIONAL_COLOR_DICE_BASELINE);
-      total += additionalColorDiceCount * conBuildSynergy.synergyValue(this.conBuildSynergyTable, conBuildSynergy.COLOR_DICE_ROW_NAME, conBuildFaceName);
+      total += additionalColorDiceCount * evalAll.pairValue(this.evalAllTable, evalAll.COLOR_DICE_NAME, conBuildFaceUnit);
     }
 
     for (const physicalId of player.ownedCardPhysicalIds) {
@@ -354,13 +355,13 @@ class Evaluator {
         if (player.trainingGroundDominationOk === false) total -= TRAINING_GROUND_DOMINATION_PENALTY;
         if (hasNoDiceLeftThisRound) total -= TRAINING_GROUND_UNUSABLE_THIS_ROUND_PENALTY;
       }
-      // 評価値_CON card-row synergy (2026-08-28): an LV2 upgrade still matches its base card's own LV1 row
-      // (see con-build-synergy.js's normalizeToLv1Name) -- e.g. 憤怒 owning either tier of 双星の加護
-      // (ADD(2wD), immediately lost to WHITE_DICE_CAP(0)) gets the same penalty either way.
-      if (conBuildFaceName) {
-        total += conBuildSynergy.synergyValue(this.conBuildSynergyTable, conBuildSynergy.normalizeToLv1Name(row.NAME), conBuildFaceName);
-      }
     }
+
+    // 評価値ALL (2026-10-30, replaces the old per-card 評価値_CON lookup that used to sit in the loop just
+    // above): every pair among the units this player holds -- card x card, card x JOB, card x CON face,
+    // JOB x CON face. A/B/C cards count by physical card, so an LV2 upgrade keeps its LV1 pairings (e.g.
+    // 憤怒 owning either tier of 基礎学問 gets the same fixed penalty either way).
+    if (this.evalAllTable) total += evalAll.heldPairSum(this.evalAllTable, evalAll.heldUnits(state, this.index, player));
 
     total += executor.collectVpModifiers(state, this.index, playerId) * v('VP');
     // 2026-09-01, M401/晩餐会's own "ゲーム終了時持っている2Kにつき1VP(MAX10VP)" -- see
