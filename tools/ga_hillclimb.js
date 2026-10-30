@@ -26,7 +26,8 @@
  *
  * 途中で止めても続きから(<outDir>/state.json に、チャンピオンと途中の挑戦者の成績を16試合ごとに保存)。
  * 記録: <outDir>/challengers.csv(挑戦者1体ごとに1行)、accepted.jsonl(採用した変更)、hillclimb.log。
- * 全試合をカード相性表(tools/card_pair_stats.js)にも数える(--no-pair-statsで無効)。
+ * 全試合をカード相性表(tools/card_pair_stats.js)にも数える(--no-pair-statsで無効)。LV1/LV2を分けた表(カード相性LV別.xlsx、
+ * 2026-10-30)にも並行して数える -- こちらはまだ評価値ALLには使わない。
  *
  * Usage: node tools/ga_hillclimb.js <outDir> [--ai-level=LV3] [--game-dir=<ゲームのフォルダ>] [--parallel=4]
  *        [--gate-every=3] [--gate-boards=100] [--no-gate] [--no-push] [--no-pair-stats] [--eval-all-every=500]
@@ -249,6 +250,7 @@ function runGate(state) {
 /** 挑戦者を並べて打つ。採用が gateEvery 回たまったら(関門ありの時)戻る。 */
 async function climb(state, raw) {
   const pairStats = args.pairStats ? cardPairStats.load(raw).stats : null;
+  const pairStatsLv = args.pairStats ? cardPairStats.load(raw, true).stats : null;
   const aiData = args.aiData ? gaAiData.open(raw, buildDataIndex(raw), args.aiLevel, log) : null;
   const pool = Array.from({ length: WORKER_COUNT }, () => new Worker(WORKER_SCRIPT));
   const idle = [...pool];
@@ -340,6 +342,7 @@ async function climb(state, raw) {
       inFlight.delete(msg.jobId);
       idle.push(worker);
       if (pairStats) cardPairStats.addGame(pairStats, msg.holdingsByPlayerId, msg.rankByPlayerId);
+      if (pairStatsLv && msg.holdingsByLevelByPlayerId) cardPairStats.addGame(pairStatsLv, msg.holdingsByLevelByPlayerId, msg.rankByPlayerId);
       if (aiData && msg.aiData) {
         aiData.addPart(msg.aiData);
         if (args.aiDataEvery > 0 && aiData.gamesRun % args.aiDataEvery === 0) { aiData.save(); aiData.writeXlsx(); }
@@ -358,6 +361,7 @@ async function climb(state, raw) {
           onBatchDone(c, pb.games);
           saveState(state);
           if (pairStats) cardPairStats.save(pairStats);
+          if (pairStatsLv) cardPairStats.save(pairStatsLv);
           if (aiData) aiData.save();
         }
       }
@@ -379,6 +383,7 @@ async function climb(state, raw) {
     for (const worker of pool) worker.terminate();
     saveState(state);
     if (pairStats) cardPairStats.save(pairStats);
+    if (pairStatsLv) cardPairStats.save(pairStatsLv);
     if (aiData) { aiData.save(); aiData.writeXlsx(); }
   }
 }

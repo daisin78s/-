@@ -18,15 +18,18 @@ class PairSynergy:
     def __init__(self, stats, game):
         self.stats = stats
         # Same unit rule as card_pair_stats.js's unitIdOfFace (A/B/C physical card; M/JOB/CON face id as-is).
+        # perFace (the LV別 table, 2026-10-30): A/B/C are counted per face too, and keep their LV in the name.
+        self.per_face = bool(stats.get('perFace'))
         self.units = []
         seen = set()
         for sheet in UNIT_SHEETS:
             for row in game.get(sheet, []):
-                uid = row['ID'] if sheet in ('M', 'JOB', 'CON') else re.sub(r'[AB]$', '', row['ID'])
+                uid = row['ID'] if self.per_face or sheet in ('M', 'JOB', 'CON') else re.sub(r'[AB]$', '', row['ID'])
                 if uid in seen:
                     continue
                 seen.add(uid)
-                self.units.append((uid, sheet, re.sub(r'LV\d$', '', row.get('NAME') or uid)))
+                name = row.get('NAME') or uid
+                self.units.append((uid, sheet, name if self.per_face else re.sub(r'LV\d$', '', name)))
         self.group_of = {uid: GROUP_LABEL[sheet] for uid, sheet, _ in self.units}
         self.name_of = {uid: name for uid, _, name in self.units}
         self.solo = stats.get('solo', {})

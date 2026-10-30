@@ -11,7 +11,8 @@
  * Message protocol (plain objects, structured-clone-safe -- genomes are plain {round:{id:value}}
  * objects, nothing exotic):
  *   in:  { jobId, genomes: [g0,g1,g2,g3], seed, aiLevel?, aiData? }
- *   out: { jobId, rankByPlayerId, scoreByPlayerId, qstScoreByPlayerId, holdingsByPlayerId, aiData? }
+ *   out: { jobId, rankByPlayerId, scoreByPlayerId, qstScoreByPlayerId, holdingsByPlayerId, holdingsByLevelByPlayerId, aiData? }
+ *   holdingsByLevelByPlayerId (2026-10-30): the same holdings counted per face, for the カード相性LV別 table.
  *   aiData (2026-10-30, tools/ga_ai_data.js): when asked, this one game's AIDATA sums (ai_data_aggregate.js toJSON).
  *
  * aiLevel (2026-09-17, per user request: "現在の最良データをもとにAILV5で...進めてください" -- see
@@ -70,12 +71,16 @@ parentPort.on('message', (job) => {
   const { state, rankByPlayerId, scoreByPlayerId, qstScoreByPlayerId } = result;
   // カード相性表 (2026-10-27, see tools/card_pair_stats.js) -- every seat's final holdings, tallied by the main thread.
   const holdingsByPlayerId = {};
-  for (const player of state.players) holdingsByPlayerId[player.id] = holdingUnits(state, index, player);
+  const holdingsByLevelByPlayerId = {};
+  for (const player of state.players) {
+    holdingsByPlayerId[player.id] = holdingUnits(state, index, player);
+    holdingsByLevelByPlayerId[player.id] = holdingUnits(state, index, player, true);
+  }
   let aiDataPart;
   if (aiData) {
     const one = createAggregate(index, HIGH_SCORE_THRESHOLD);
     one.addGame(seed, state, result.historyByPlayerId, result.roundDetailByPlayerId, result.activationCounts);
     aiDataPart = one.toJSON();
   }
-  parentPort.postMessage({ jobId, rankByPlayerId, scoreByPlayerId, qstScoreByPlayerId, holdingsByPlayerId, aiData: aiDataPart });
+  parentPort.postMessage({ jobId, rankByPlayerId, scoreByPlayerId, qstScoreByPlayerId, holdingsByPlayerId, holdingsByLevelByPlayerId, aiData: aiDataPart });
 });
