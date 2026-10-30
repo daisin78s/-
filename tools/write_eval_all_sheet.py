@@ -188,7 +188,9 @@ def write_check_table(sheet_name):
                 v = fixed[(a, b)]
             if v is None and row_label in (None, 'NAME'):
                 v = src.cell(row=r, column=idx + 1).value  # 評価値_JOB's JOB-name legend row
-            src.cell(row=r, column=start + idx + 1, value=v)
+            # .value directly: ws.cell(..., value=None) leaves the old value in place, which kept the
+            # hand values copied from the left table showing in cells that have no data yet.
+            src.cell(row=r, column=start + idx + 1).value = v
             if p:
                 count += 1
     return count
