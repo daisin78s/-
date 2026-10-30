@@ -86,10 +86,15 @@ if (!fs.existsSync(args.stats)) finish({ updated: false, skippedReason: `カー�
 
 try {
   // game.xlsx に未反映の編集が無いか: 書き換える前に変換して、game.json が今のままか確かめる。
+  // 評価値ALLだけの違いは、このあと全部書き直すので気にしない(古い game.xlsx を保存し直した時など)。
+  const committed = JSON.parse(fs.readFileSync(gameJsonPath, 'utf8'));
   python('xlsx_to_json.py');
-  if (git('status', '--porcelain', '--', 'data/game.json').trim()) restore('game.xlsx にまだゲームに反映していない編集があります');
+  const converted = JSON.parse(fs.readFileSync(gameJsonPath, 'utf8'));
+  const unreleased = [...new Set([...Object.keys(committed), ...Object.keys(converted)])]
+    .filter((k) => k !== '評価値ALL' && JSON.stringify(committed[k]) !== JSON.stringify(converted[k]));
+  if (unreleased.length) restore(`game.xlsx にまだゲームに反映していない編集があります (${unreleased.join(', ')})`);
 
-  const before = JSON.parse(fs.readFileSync(gameJsonPath, 'utf8'));
+  const before = committed;
   fs.copyFileSync(xlsxPath, xlsxBackup);
   xlsxTouched = true;
   const written = JSON.parse(python('write_eval_all_sheet.py', args.stats, gameJsonPath, xlsxPath, ...(args.seedFixed ? ['--seed-fixed'] : [])).trim().split('\n').pop());
