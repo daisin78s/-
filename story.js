@@ -960,7 +960,10 @@ function storyPatraPlacesOnField(onDone) {
 function storyFinishFreePlay() {
   const city = STATE.cards.A001;
   const hasLv2 = !!city && city.ownerId === 'P1' && city.currentFaceId === 'A001B';
-  if (hasLv2) storySayThen('S064', () => storyEndOfScript('第2章へつづく'));
+  if (hasLv2) {
+    storyMarkChapterCleared(1);
+    storySayThen('S064', () => storyEndOfScript('第2章へつづく'));
+  }
   else storySayThen('S065', storyRewindToRound2);
 }
 
@@ -1094,4 +1097,51 @@ document.addEventListener('click', (e) => {
   }
 }, true);
 
-document.getElementById('entry-banner-story-button').addEventListener('click', openStoryMode);
+/* ---------- 章を選ぶ画面 ---------- */
+
+// 2026-10-31, per user: "第２章のストーリーに行った後 また ストーリー に入ったら 第１章 怠惰なローマ市民アレク
+// 第２章 ○○○の百人隊長スパル という風に選べるように" + 回答: 第1章をクリアする前は今まで通りそのまま第1章、
+// 第2章は「今作成中」、題名の○○○は仮でそのまま。クリアの記録はこの端末だけ(localStorage)。
+const STORY_CLEARED_KEY = 'diceWpStoryChaptersCleared';
+const STORY_CHAPTERS = [
+  { no: 1, title: '第１章　怠惰なローマ市民アレク', start: openStoryMode },
+  { no: 2, title: '第２章　○○○の百人隊長スパル', start: null }, // 作成中
+];
+
+function storyClearedChapters() {
+  try { return JSON.parse(localStorage.getItem(STORY_CLEARED_KEY) || '[]'); } catch (e) { return []; }
+}
+function storyMarkChapterCleared(no) {
+  const cleared = storyClearedChapters();
+  if (cleared.includes(no)) return;
+  try { localStorage.setItem(STORY_CLEARED_KEY, JSON.stringify([...cleared, no])); } catch (e) { /* 保存できなくても続ける */ }
+}
+
+function openStoryChapterSelect() {
+  if (storyRun || document.getElementById('story-chapters')) return;
+  if (!storyClearedChapters().includes(1)) { openStoryMode(); return; }
+  const root = el('div', 'story-chapters');
+  root.id = 'story-chapters';
+  const panel = el('div', 'story-chapters__panel');
+  panel.appendChild(el('div', 'story-chapters__heading', 'ストーリー'));
+  const note = el('div', 'story-chapters__note', '');
+  for (const chapter of STORY_CHAPTERS) {
+    const button = el('button', 'story-chapters__chapter', chapter.title);
+    button.type = 'button';
+    button.addEventListener('click', () => {
+      if (!chapter.start) { note.textContent = `第${chapter.no}章は今作成中です`; return; }
+      root.remove();
+      chapter.start();
+    });
+    panel.appendChild(button);
+  }
+  panel.appendChild(note);
+  const back = el('button', 'story-end__button', '戻る');
+  back.type = 'button';
+  back.addEventListener('click', () => root.remove());
+  panel.appendChild(back);
+  root.appendChild(panel);
+  document.body.appendChild(root);
+}
+
+document.getElementById('entry-banner-story-button').addEventListener('click', openStoryChapterSelect);
