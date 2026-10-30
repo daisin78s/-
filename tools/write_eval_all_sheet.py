@@ -29,6 +29,7 @@ import re
 import sys
 import openpyxl
 from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.worksheet.views import Selection
 
 sys.path.insert(0, __import__('os').path.dirname(__file__))
 from card_pair_synergy import PairSynergy  # noqa: E402
@@ -159,6 +160,10 @@ for i, a in enumerate(order):
         if v is not None:
             ws.cell(row=2 + i, column=2 + j, value=v)
             written += 1
+# Reset the saved scroll position first: the sheet keeps whatever row the viewer last scrolled to (e.g. A108),
+# and with the top row frozen LibreOffice then shows THAT row as the frozen header instead of the names in row 1.
+ws.sheet_view.topLeftCell = 'A1'
+ws.sheet_view.selection = [Selection()]
 ws.freeze_panes = 'B2'
 ws.column_dimensions['A'].width = 18
 for j in range(len(order)):
