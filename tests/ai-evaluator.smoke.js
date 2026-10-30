@@ -37,7 +37,7 @@ raw['評価値ALL'] = [
 // user still needs to add them in game.xlsx with real per-round point values) -- synthetic placeholder
 // rows patched in here (same pattern as 評価値_CON's own patch just above) purely so the combo tests below
 // can exercise the new reachability logic against a real, nonzero incentive value.
-for (const name of ['複合ダイス強化で天空の塔を獲得', '複合ダイス強化で凱旋門を獲得', '複合ダイス強化で騎士像を獲得', '複合ダイス強化で鐘楼を獲得', '複合ダイス強化で宮殿を獲得', '複合ダイス強化で施療院を獲得']) {
+for (const name of ['複合ダイス強化で水道橋を獲得', '複合ダイス強化でティトゥス凱旋門を獲得', '複合ダイス強化でトラヤヌス騎馬像を獲得', '複合ダイス強化でオスティア灯台を獲得', '複合ダイス強化で黄金宮殿を獲得', '複合ダイス強化でテルマエ（公衆浴場）を獲得']) {
   raw['評価値_戦略'].push({ NAME: name, '1R': '', '2R': '', '3R': '', '4R': 999 });
 }
 // 評価値's own 'モニュメント確保ボーナス' row (2026-09-06, per user report: AI skipping reachable, exclusive

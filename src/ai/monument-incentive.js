@@ -124,12 +124,12 @@ function monumentAtRiskFromOpponents(state, index, playerId, monumentFaceId) {
 // say "+1"/"+3" (the old values) since they're 評価値_戦略's own sheet-authored labels, not live-computed
 // -- cosmetic only, doesn't affect scoring.
 const SINGLE_DIE_ROWS = [
-  { name: '宮廷人が+1能力で施療院を獲得', ownedFaceId: 'JOB010', bonus: 6, targetFaceId: 'M006' },
-  { name: '運命の導きLV1が+2能力で施療院を獲得', ownedFaceId: 'B003A', bonus: 2, targetFaceId: 'M006' },
-  { name: '運命の導きLV1が+2能力で宮殿を獲得', ownedFaceId: 'B003A', bonus: 2, targetFaceId: 'M005' },
-  { name: '運命の導きLV2が+3能力で施療院を獲得', ownedFaceId: 'B003B', bonus: 4, targetFaceId: 'M006' },
-  { name: '運命の導きLV2が+3能力で宮殿を獲得', ownedFaceId: 'B003B', bonus: 4, targetFaceId: 'M005' },
-  { name: '運命の導きLV2が+3能力で凱旋門を獲得', ownedFaceId: 'B003B', bonus: 4, targetFaceId: 'M004' },
+  { name: '宮廷人が+1能力でテルマエ（公衆浴場）を獲得', ownedFaceId: 'JOB010', bonus: 6, targetFaceId: 'M006' },
+  { name: '幾何学LV1が+2能力でテルマエ（公衆浴場）を獲得', ownedFaceId: 'B003A', bonus: 2, targetFaceId: 'M006' },
+  { name: '幾何学LV1が+2能力で黄金宮殿を獲得', ownedFaceId: 'B003A', bonus: 2, targetFaceId: 'M005' },
+  { name: '幾何学LV2が+3能力でテルマエ（公衆浴場）を獲得', ownedFaceId: 'B003B', bonus: 4, targetFaceId: 'M006' },
+  { name: '幾何学LV2が+3能力で黄金宮殿を獲得', ownedFaceId: 'B003B', bonus: 4, targetFaceId: 'M005' },
+  { name: '幾何学LV2が+3能力でティトゥス凱旋門を獲得', ownedFaceId: 'B003B', bonus: 4, targetFaceId: 'M004' },
 ];
 
 /** Stacking 2+ die-boosting TAPs onto the SAME die (2026-09-03, per user request: "大いなる導きLV2 や
@@ -178,12 +178,12 @@ const SET_ABILITIES = [
   { faceId: 'B002B', values: [6, 7] },
 ];
 const COMBO_TARGETS = [
-  { name: '複合ダイス強化で天空の塔を獲得', targetFaceId: 'M402' },
-  { name: '複合ダイス強化で凱旋門を獲得', targetFaceId: 'M004' },
-  { name: '複合ダイス強化で騎士像を獲得', targetFaceId: 'M003' },
-  { name: '複合ダイス強化で鐘楼を獲得', targetFaceId: 'M002' },
-  { name: '複合ダイス強化で宮殿を獲得', targetFaceId: 'M005' },
-  { name: '複合ダイス強化で施療院を獲得', targetFaceId: 'M006' },
+  { name: '複合ダイス強化で水道橋を獲得', targetFaceId: 'M402' },
+  { name: '複合ダイス強化でティトゥス凱旋門を獲得', targetFaceId: 'M004' },
+  { name: '複合ダイス強化でトラヤヌス騎馬像を獲得', targetFaceId: 'M003' },
+  { name: '複合ダイス強化でオスティア灯台を獲得', targetFaceId: 'M002' },
+  { name: '複合ダイス強化で黄金宮殿を獲得', targetFaceId: 'M005' },
+  { name: '複合ダイス強化でテルマエ（公衆浴場）を獲得', targetFaceId: 'M006' },
 ];
 
 /** True if player holds any own unplaced/not-passed die at all, regardless of its current value -- used
@@ -282,11 +282,11 @@ function getEntertainmentDistrictConversionRatio(index) {
 
 const ENTERTAINMENT_DISTRICT_FACE_ID = 'A006B';
 const ENTERTAINMENT_DISTRICT_ROWS = [
-  { name: '歓楽街の支配LV2で王都建設を獲得(3R以降)', targetFaceId: 'M404' },
-  { name: '歓楽街の支配LV2で中央広場を獲得(3R以降)', targetFaceId: 'M007' },
-  { name: '歓楽街の支配LV2で凱旋門を獲得(3R以降)', targetFaceId: 'M004' },
-  { name: '歓楽街の支配LV2で聖王城を獲得(3R以降)', targetFaceId: 'M008' },
-  { name: '歓楽街の支配LV2で円形闘技場を獲得(3R以降)', targetFaceId: 'M009' },
+  { name: '酒場の支配LV2で帝都建設を獲得(3R以降)', targetFaceId: 'M404' },
+  { name: '酒場の支配LV2でフォルム（中央広場）を獲得(3R以降)', targetFaceId: 'M007' },
+  { name: '酒場の支配LV2でティトゥス凱旋門を獲得(3R以降)', targetFaceId: 'M004' },
+  { name: '酒場の支配LV2でパンテオン神殿を獲得(3R以降)', targetFaceId: 'M008' },
+  { name: '酒場の支配LV2でコロッセオを獲得(3R以降)', targetFaceId: 'M009' },
 ];
 
 /** 農園/小麦畑の支配 (either tier, either card -- "小麦畑も農園と同じ扱い" per user spec): a flat "held
