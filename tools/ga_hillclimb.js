@@ -30,6 +30,7 @@
  *
  * Usage: node tools/ga_hillclimb.js <outDir> [--ai-level=LV3] [--game-dir=<ゲームのフォルダ>] [--parallel=4]
  *        [--gate-every=3] [--gate-boards=100] [--no-gate] [--no-push] [--no-pair-stats] [--eval-all-every=500]
+ *        [--no-ai-data] [--ai-data-every=100]
  *
  * 評価値ALLの自動更新 (2026-10-30, per user request "500ごとに更新"): 通算試合数が eval-all-every の倍数を
  * 越えるたびに、カード相性のデータを保存して tools/eval_all_update.js を裏で動かす(game.xlsx の評価値ALLを
@@ -37,6 +38,10 @@
  * 読み直させるので、次の試合から新しい評価値ALLで打つ。評価値ALLはルールの指紋(rulesHash)に入れない --
  * 挑戦者もチャンピオンも同じ評価値ALLで打つので、変わっても成績を捨てる必要は無い。
  * (--no-pair-stats の時は相性のデータが増えないので、自動更新もしない。0で無効。)
+ *
+ * AIDATA (2026-10-30, per user request "進化AIを進めると 自動で生成"): 全試合を AI対戦と同じ CONJOB/ABCM/HighScores
+ * にも数え(tools/ga_ai_data.js)、ai-data-every 試合ごとにゲームのフォルダの AIDATA進化AI-日付-N.xlsx に書く。
+ * カードのデータ・プログラム・AIレベルが変わると新しいファイルに移る(評価値の変更では移らない)。--no-ai-data で無効。
  */
 
 'use strict';
@@ -47,10 +52,11 @@ const os = require('os');
 const crypto = require('crypto');
 const { spawnSync, execFile } = require('child_process');
 const { Worker } = require('worker_threads');
-const { loadGameData } = require('../src/data-loader');
+const { loadGameData, buildDataIndex } = require('../src/data-loader');
 const { buildEvalTable, isStructurallyBlankRound } = require('../src/ai/eval-table');
 const rng = require('../src/rng');
 const cardPairStats = require('./card_pair_stats');
+const gaAiData = require('./ga_ai_data');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const DATA_PATH = path.join(PROJECT_ROOT, 'data', 'game.json');
@@ -84,6 +90,8 @@ function parseArgs(argv) {
     push: !argv.includes('--no-push'),
     pairStats: !argv.includes('--no-pair-stats'),
     evalAllEvery: Number(opt('eval-all-every', 500)),
+    aiData: !argv.includes('--no-ai-data'),
+    aiDataEvery: Number(opt('ai-data-every', 100)),
   };
 }
 
@@ -241,6 +249,7 @@ function runGate(state) {
 /** 挑戦者を並べて打つ。採用が gateEvery 回たまったら(関門ありの時)戻る。 */
 async function climb(state, raw) {
   const pairStats = args.pairStats ? cardPairStats.load(raw).stats : null;
+  const aiData = args.aiData ? gaAiData.open(raw, buildDataIndex(raw), args.aiLevel, log) : null;
   const pool = Array.from({ length: WORKER_COUNT }, () => new Worker(WORKER_SCRIPT));
   const idle = [...pool];
   const queue = []; // { challengerId, batch, board, rotation, seed, genomes }
@@ -277,7 +286,7 @@ async function climb(state, raw) {
       const job = queue.shift();
       const seq = jobSeq++;
       inFlight.set(seq, job);
-      worker.postMessage({ jobId: seq, genomes: job.genomes, seed: job.seed, aiLevel: args.aiLevel });
+      worker.postMessage({ jobId: seq, genomes: job.genomes, seed: job.seed, aiLevel: args.aiLevel, aiData: !!aiData });
     }
     if (stopRequested && inFlight.size === 0) resolveDone();
   };
@@ -331,6 +340,10 @@ async function climb(state, raw) {
       inFlight.delete(msg.jobId);
       idle.push(worker);
       if (pairStats) cardPairStats.addGame(pairStats, msg.holdingsByPlayerId, msg.rankByPlayerId);
+      if (aiData && msg.aiData) {
+        aiData.addPart(msg.aiData);
+        if (args.aiDataEvery > 0 && aiData.gamesRun % args.aiDataEvery === 0) { aiData.save(); aiData.writeXlsx(); }
+      }
       state.totalGames++;
       if (pairStats && args.evalAllEvery > 0 && state.totalGames % args.evalAllEvery === 0) startEvalAllUpdate();
       const c = state.challengers.find((x) => x.id === job.challengerId);
@@ -345,6 +358,7 @@ async function climb(state, raw) {
           onBatchDone(c, pb.games);
           saveState(state);
           if (pairStats) cardPairStats.save(pairStats);
+          if (aiData) aiData.save();
         }
       }
       if (++gamesSinceSave % 50 === 0) {
@@ -365,6 +379,7 @@ async function climb(state, raw) {
     for (const worker of pool) worker.terminate();
     saveState(state);
     if (pairStats) cardPairStats.save(pairStats);
+    if (aiData) { aiData.save(); aiData.writeXlsx(); }
   }
 }
 

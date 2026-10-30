@@ -208,6 +208,180 @@ function driveTurn(state, index, playerId, aiPlayer, initialHasPlacedDieThisTurn
 }
 
 /**
+ * The per-game history playGame collects for AI.DATA.xlsx (historyByPlayerId / roundDetailByPlayerId /
+ * activationCounts -- see playGame's own doc for every field), factored out 2026-10-30 so
+ * playGameForFitness can collect the exact same thing when asked (per user request: the 進化AI's own games
+ * should fill an AIDATA workbook too, see tools/ai_data_aggregate.js). Call afterTurn after every driveTurn,
+ * finish once GAME_END is reached, and stop in a finally (it registers executor's activation listener).
+ */
+function createGameRecorder(state, index) {
+  const round1ColorDiceBefore = {};
+  const buildsByRound = {};
+  const colorDiceCountAtRoundStart = {};
+  const colorDiceGainedByRound = {};
+  const areaFeeByPlayerAndCard = {}; // playerId -> {faceId: totalAmountThisGame}, see AREA_CARD_BY_MAP
+  for (const player of state.players) {
+    round1ColorDiceBefore[player.id] = player.dice.filter((d) => d.kind === 'COLOR').length;
+    buildsByRound[player.id] = { 1: [], 2: [], 3: [], 4: [] };
+    colorDiceGainedByRound[player.id] = { 1: 0, 2: 0, 3: 0, 4: 0 };
+    colorDiceCountAtRoundStart[player.id] = round1ColorDiceBefore[player.id];
+    areaFeeByPlayerAndCard[player.id] = {};
+  }
+  const round1ColorDiceAfter = {};
+  const firstRound1BuildFaceId = {};
+
+  // See playGame's own doc on activationCounts -- registered for the duration of this one game
+  // only, and always cleared by stop() (in the caller's finally) so a crash mid-game (or the next playGame() call in the
+  // same process, e.g. tools/ai_data_report.js's own loop) never leaks a stale listener. Filters on
+  // `receivedState === state` (see executor.notifyActivation's own doc, corrected 2026-08-07): AIPlayer/
+  // Simulator score candidate moves by running this same code against throwaway cloneState(state) clones
+  // -- without this check, every speculative, never-committed evaluation would count too, wildly
+  // overcounting (confirmed while testing: JOB005 showed 2000+ "activations" in one 4-round game before
+  // this filter was added).
+  const activationCounts = {};
+  executor.setActivationListener((receivedState, playerId, physicalId, faceId, kind) => {
+    if (receivedState !== state) return;
+    // 'UNTAP_ONLY' (2026-08-22, JOB009/開拓者's own bespoke "no resource granted this time" half of its
+    // alternating ability -- see notifyActivation's own doc) is deliberately excluded here: this counter
+    // feeds AI.DATA.xlsx's "使用回数" column, which for JOB009 specifically means "times a resource was
+    // actually gained", not "times the ability fired at all".
+    if (kind === 'UNTAP_ONLY') return;
+    activationCounts[faceId] = (activationCounts[faceId] || 0) + 1;
+  });
+
+  // Round transitions actually happen *inside* driveTurn (applyInPlace's END_TURN case calls
+  // turnFlow.endRound/startRound itself, same as main.js's UI does) -- getNextTurn() in this outer
+  // loop essentially never observes ROUND_OVER directly (by the time control returns here, whichever
+  // move ended the round already advanced state.round/started the next one). round1EndCaptured tracks
+  // whether we've already snapshotted post-round-1 dice counts, checked right after every driveTurn
+  // call since that's the only place the round-1->2 transition can actually happen.
+  let round1EndCaptured = false;
+
+  return {
+    afterTurn(playerId, roundBeforeTurn, moves) {
+      // Re-checks every round-1 turn for this player (not just their first) until a build is actually
+      // found -- a player typically gets *several* separate turns during round 1 (one per die, per
+      // "1ターン＝ダイス1個の配置"), so their first build easily happens on turn 2, 3, etc., not
+      // necessarily turn 1.
+      if (roundBeforeTurn === 1 && (firstRound1BuildFaceId[playerId] === undefined || firstRound1BuildFaceId[playerId] === 'NONE')) {
+        const build = moves.find((m) => m.move.buildCandidateIndex !== undefined && m.result.success && m.result.buildResult && m.result.buildResult.physicalId);
+        firstRound1BuildFaceId[playerId] = build ? state.cards[build.result.buildResult.physicalId].currentFaceId : 'NONE';
+      }
+      // Every build/upgrade this turn, for every round (not just round 1's first) -- see this function's
+      // own doc on why candidate (not buildResult) is the reliable source of the resulting faceId.
+      for (const m of moves) {
+        if (m.move.buildCandidateIndex === undefined || !m.result.success || !m.result.candidate) continue;
+        const c = m.result.candidate;
+        const faceId = c.type === 'BUILD_NEW' ? c.faceId : c.toFaceId;
+        buildsByRound[playerId][roundBeforeTurn].push(faceId);
+      }
+      // Usage-fee collection, attributed to the A-deck card that made this player the fee owner in the
+      // first place (2026-08-07, per user spec: "Aカードは該当AREAで得た使用料の合計です アップグレード
+      // したあとに得た資源も含みます" -- summed across the whole game regardless of round, then matched to
+      // whichever round buildsByRound says that card was actually built in, once the game ends below).
+      for (const m of moves) {
+        if (m.move.type !== 'COLLECT_FEE' || !m.result.success) continue;
+        const cardFaceId = AREA_CARD_BY_MAP[m.move.mapId];
+        if (!cardFaceId) continue; // defensive -- every real MAP with a fee-collectible AREA is in the table
+        const byCard = areaFeeByPlayerAndCard[playerId];
+        byCard[cardFaceId] = (byCard[cardFaceId] || 0) + m.result.amount;
+      }
+      if (!round1EndCaptured && roundBeforeTurn === 1 && state.round > 1) {
+        for (const player of state.players) {
+          round1ColorDiceAfter[player.id] = player.dice.filter((d) => d.kind === 'COLOR').length;
+        }
+        round1EndCaptured = true;
+      }
+      // Color-dice-gained accounting, generalized to every round (round1ColorDiceBefore/After above stay
+      // as the original round-1-only fields historyByPlayerId exposes; this is the same idea per round).
+      // Dice counts are monotonically non-decreasing across a game (nothing ever removes an owned die),
+      // so "gained this round" is always current-count-so-far minus whatever it was at this round's start.
+      if (state.round > roundBeforeTurn) {
+        for (const player of state.players) {
+          const countNow = player.dice.filter((d) => d.kind === 'COLOR').length;
+          colorDiceGainedByRound[player.id][roundBeforeTurn] = countNow - colorDiceCountAtRoundStart[player.id];
+          colorDiceCountAtRoundStart[player.id] = countNow;
+        }
+      }
+    },
+    finish() {
+      // Final round's gains never get captured by the "state.round > roundBeforeTurn" check above (there's
+      // no round 5 to transition into) -- captured once more here after the loop exits.
+      for (const player of state.players) {
+        const countNow = player.dice.filter((d) => d.kind === 'COLOR').length;
+        colorDiceGainedByRound[player.id][state.round] = countNow - colorDiceCountAtRoundStart[player.id];
+      }
+
+      const rankings = scoring.rankPlayers(state, index);
+      const scoreByPlayerId = {};
+      for (const r of rankings) scoreByPlayerId[r.playerId] = r.score;
+      // Final placement (1-4), same winner-first/turn-order-tie-break ordering rankPlayers itself defines --
+      // not re-derived, just read back as this player's own position in that already-sorted array (2026-08-20,
+      // for tools/ai_data_report.js's new "平均順位" metric; same rank-from-index pattern
+      // tools/ai_level_comparison.js already uses for its own avgRank).
+      const rankByPlayerId = {};
+      rankings.forEach((r, i) => { rankByPlayerId[r.playerId] = i + 1; });
+      // VP actually gained from QST's rank-based rewards, per player (2026-08-09, see turn-flow.js's own
+      // comment on where this gets set -- always populated by now, since this function only reaches here
+      // once state.phase is GAME_END, which is exactly when endRound sets it). Exposed alongside finalScore
+      // (which already includes it) so tools/ai_data_report.js can report both the existing "平均得点"
+      // metric with QST *excluded* (per user request: "QSTカードなしの今までの得点で平均を出してください",
+      // i.e. finalScore - qstScore) and a new QST-only "QST平均得点" metric, without either one needing to
+      // re-derive the split itself.
+      const qstScoreByPlayerId = state.qstRewardsGranted || {};
+
+      const historyByPlayerId = {};
+      const roundDetailByPlayerId = {};
+      for (const player of state.players) {
+        historyByPlayerId[player.id] = {
+          conFaceId: `${player.conPhysicalId}${player.conFace}`,
+          jobFaceId: player.jobCardId,
+          firstRound1BuildFaceId: firstRound1BuildFaceId[player.id] || 'NONE',
+          round1DDiceGained: (round1ColorDiceAfter[player.id] || 0) - round1ColorDiceBefore[player.id],
+          finalScore: scoreByPlayerId[player.id],
+          rank: rankByPlayerId[player.id],
+        };
+        // Which round each fee-generating A-card was built in (see AREA_CARD_BY_MAP's own doc) -- the same
+        // buildsByRound this function already tracks for the ABCM sheet's own 試行回数/平均得点 columns, just
+        // used here as a lookup instead of a list. A card whose fee total is nonzero but was never found in
+        // buildsByRound (shouldn't happen -- collecting a fee requires having been feeOwnerId, which requires
+        // having built or upgraded it) is defensively dropped rather than guessed at.
+        const areaFeeByRoundAndCard = { 1: {}, 2: {}, 3: {}, 4: {} };
+        for (const [cardFaceId, amount] of Object.entries(areaFeeByPlayerAndCard[player.id])) {
+          const round = [1, 2, 3, 4].find((r) => buildsByRound[player.id][r].includes(cardFaceId));
+          if (round) areaFeeByRoundAndCard[round][cardFaceId] = amount;
+        }
+        // JOB008's own bonus VP only (2026-08-07, per user spec: "JOB008は最終的に得たVP" -> clarified as
+        // "JOB008自体のVP_MODIFIER効果で加算された分だけ", not the player's overall finalScore). 2026-08-17:
+        // JOB008 switched from a live PASSIVE=VP_MODIFIER(TOTAL_EMBLEM_COUNT) formula to a real per-TURNEND
+        // grant (see turn-flow.grantBardBonusIfEarned) -- player.bardEmblemUnitsGranted (1 unit = 1 VP, by
+        // then fully caught up since every player's last turn has already gone through endTurn once GAME_END
+        // is reached) is now the exact same number this used to compute by summing VP_MODIFIER clauses.
+        const job008BonusVp = player.jobCardId === 'JOB002' ? player.bardEmblemUnitsGranted : null; // 神官 (JOB002 since the 2026-10-13 A/B-revert)
+        roundDetailByPlayerId[player.id] = {
+          buildsByRound: buildsByRound[player.id],
+          colorDiceGainedByRound: colorDiceGainedByRound[player.id],
+          areaFeeByRoundAndCard,
+          job008BonusVp,
+          // 孤児院(A201A/A201B) AIDATA.xlsx column, 2026-08-28 (see PlayerState.orphanageVpGained's own doc)
+          // -- this player's own cumulative VP from 孤児院's CHANGE(...,VP,...) ACTION, whole game. Paired
+          // with buildsByRound above (which round A201A/A201B was built in, if at all) by
+          // tools/ai_data_report.js to fill in the ABCM sheet's "孤児院の支配LV1/LV2" rows.
+          orphanageVpGained: player.orphanageVpGained,
+          finalScore: scoreByPlayerId[player.id],
+          qstScore: qstScoreByPlayerId[player.id] || 0,
+          rank: rankByPlayerId[player.id],
+        };
+      }
+      return { historyByPlayerId, roundDetailByPlayerId, activationCounts };
+    },
+    stop() {
+      executor.setActivationListener(null);
+    },
+  };
+}
+
+/**
  * Plays one full game from scratch to GAME_END using aiPlayersByPlayerId (one AIPlayer per seat, all
  * sharing the same Evaluator so onboarding/turn decisions are consistent). Returns
  * {state, historyByPlayerId, roundDetailByPlayerId, activationCounts}.
@@ -324,51 +498,11 @@ function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorO
     }
   }
 
-  const round1ColorDiceBefore = {};
-  const buildsByRound = {};
-  const colorDiceCountAtRoundStart = {};
-  const colorDiceGainedByRound = {};
-  const areaFeeByPlayerAndCard = {}; // playerId -> {faceId: totalAmountThisGame}, see AREA_CARD_BY_MAP
-  for (const player of state.players) {
-    round1ColorDiceBefore[player.id] = player.dice.filter((d) => d.kind === 'COLOR').length;
-    buildsByRound[player.id] = { 1: [], 2: [], 3: [], 4: [] };
-    colorDiceGainedByRound[player.id] = { 1: 0, 2: 0, 3: 0, 4: 0 };
-    colorDiceCountAtRoundStart[player.id] = round1ColorDiceBefore[player.id];
-    areaFeeByPlayerAndCard[player.id] = {};
-  }
-  const round1ColorDiceAfter = {};
-  const firstRound1BuildFaceId = {};
-
-  // See this function's own doc on activationCounts -- registered for the duration of this one game
-  // only, and always cleared in a finally below so a crash mid-game (or the next playGame() call in the
-  // same process, e.g. tools/ai_data_report.js's own loop) never leaks a stale listener. Filters on
-  // `receivedState === state` (see executor.notifyActivation's own doc, corrected 2026-08-07): AIPlayer/
-  // Simulator score candidate moves by running this same code against throwaway cloneState(state) clones
-  // -- without this check, every speculative, never-committed evaluation would count too, wildly
-  // overcounting (confirmed while testing: JOB005 showed 2000+ "activations" in one 4-round game before
-  // this filter was added).
-  const activationCounts = {};
-  executor.setActivationListener((receivedState, playerId, physicalId, faceId, kind) => {
-    if (receivedState !== state) return;
-    // 'UNTAP_ONLY' (2026-08-22, JOB009/開拓者's own bespoke "no resource granted this time" half of its
-    // alternating ability -- see notifyActivation's own doc) is deliberately excluded here: this counter
-    // feeds AI.DATA.xlsx's "使用回数" column, which for JOB009 specifically means "times a resource was
-    // actually gained", not "times the ability fired at all".
-    if (kind === 'UNTAP_ONLY') return;
-    activationCounts[faceId] = (activationCounts[faceId] || 0) + 1;
-  });
-
+  const recorder = createGameRecorder(state, index);
   try {
 
   turnFlow.startRound(state);
 
-  // Round transitions actually happen *inside* driveTurn (applyInPlace's END_TURN case calls
-  // turnFlow.endRound/startRound itself, same as main.js's UI does) -- getNextTurn() in this outer
-  // loop essentially never observes ROUND_OVER directly (by the time control returns here, whichever
-  // move ended the round already advanced state.round/started the next one). round1EndCaptured tracks
-  // whether we've already snapshotted post-round-1 dice counts, checked right after every driveTurn
-  // call since that's the only place the round-1->2 transition can actually happen.
-  let round1EndCaptured = false;
   // Tracks "has this player already placed their die for the turn that's still open" across repeated
   // TURN dispatches to the same playerId (getNextTurn returns the same player again whenever their
   // endTurn hasn't actually succeeded yet, e.g. blocked by RESOURCE_TOTAL_LIMIT) -- reset once a
@@ -381,7 +515,7 @@ function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorO
     iterations++;
     const next = turnFlow.getNextTurn(state);
     if (next.type === 'ROUND_OVER') {
-      // Defensive fallback (see this block's comment above) -- not expected to fire in practice.
+      // Defensive fallback (see createGameRecorder's round1EndCaptured comment) -- not expected to fire in practice.
       turnFlow.endRound(state, index);
       if (state.phase !== 'GAME_END') turnFlow.startRound(state);
       openTurnPlayerId = null;
@@ -408,124 +542,13 @@ function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorO
       // a SEPARATE recomputation of the same "did this still-open turn place a die" fact.
       openTurnHasPlacedDie = initialHasPlacedDie || moves.some((m) => (m.move.type === 'PLACE_DIE' || m.move.type === 'PLACE_WILDCARD_DIE' || m.move.type === 'PLACE_DICE_GROUP' || m.move.type === 'PASS_DIE') && m.result.success);
     }
-    // Re-checks every round-1 turn for this player (not just their first) until a build is actually
-    // found -- a player typically gets *several* separate turns during round 1 (one per die, per
-    // "1ターン＝ダイス1個の配置"), so their first build easily happens on turn 2, 3, etc., not
-    // necessarily turn 1.
-    if (roundBeforeTurn === 1 && (firstRound1BuildFaceId[next.playerId] === undefined || firstRound1BuildFaceId[next.playerId] === 'NONE')) {
-      const build = moves.find((m) => m.move.buildCandidateIndex !== undefined && m.result.success && m.result.buildResult && m.result.buildResult.physicalId);
-      firstRound1BuildFaceId[next.playerId] = build ? state.cards[build.result.buildResult.physicalId].currentFaceId : 'NONE';
-    }
-    // Every build/upgrade this turn, for every round (not just round 1's first) -- see this function's
-    // own doc on why candidate (not buildResult) is the reliable source of the resulting faceId.
-    for (const m of moves) {
-      if (m.move.buildCandidateIndex === undefined || !m.result.success || !m.result.candidate) continue;
-      const c = m.result.candidate;
-      const faceId = c.type === 'BUILD_NEW' ? c.faceId : c.toFaceId;
-      buildsByRound[next.playerId][roundBeforeTurn].push(faceId);
-    }
-    // Usage-fee collection, attributed to the A-deck card that made this player the fee owner in the
-    // first place (2026-08-07, per user spec: "Aカードは該当AREAで得た使用料の合計です アップグレード
-    // したあとに得た資源も含みます" -- summed across the whole game regardless of round, then matched to
-    // whichever round buildsByRound says that card was actually built in, once the game ends below).
-    for (const m of moves) {
-      if (m.move.type !== 'COLLECT_FEE' || !m.result.success) continue;
-      const cardFaceId = AREA_CARD_BY_MAP[m.move.mapId];
-      if (!cardFaceId) continue; // defensive -- every real MAP with a fee-collectible AREA is in the table
-      const byCard = areaFeeByPlayerAndCard[next.playerId];
-      byCard[cardFaceId] = (byCard[cardFaceId] || 0) + m.result.amount;
-    }
-    if (!round1EndCaptured && roundBeforeTurn === 1 && state.round > 1) {
-      for (const player of state.players) {
-        round1ColorDiceAfter[player.id] = player.dice.filter((d) => d.kind === 'COLOR').length;
-      }
-      round1EndCaptured = true;
-    }
-    // Color-dice-gained accounting, generalized to every round (round1ColorDiceBefore/After above stay
-    // as the original round-1-only fields historyByPlayerId exposes; this is the same idea per round).
-    // Dice counts are monotonically non-decreasing across a game (nothing ever removes an owned die),
-    // so "gained this round" is always current-count-so-far minus whatever it was at this round's start.
-    if (state.round > roundBeforeTurn) {
-      for (const player of state.players) {
-        const countNow = player.dice.filter((d) => d.kind === 'COLOR').length;
-        colorDiceGainedByRound[player.id][roundBeforeTurn] = countNow - colorDiceCountAtRoundStart[player.id];
-        colorDiceCountAtRoundStart[player.id] = countNow;
-      }
-    }
-  }
-  // Final round's gains never get captured by the "state.round > roundBeforeTurn" check above (there's
-  // no round 5 to transition into) -- captured once more here after the loop exits.
-  for (const player of state.players) {
-    const countNow = player.dice.filter((d) => d.kind === 'COLOR').length;
-    colorDiceGainedByRound[player.id][state.round] = countNow - colorDiceCountAtRoundStart[player.id];
+    recorder.afterTurn(next.playerId, roundBeforeTurn, moves);
   }
 
-  const rankings = scoring.rankPlayers(state, index);
-  const scoreByPlayerId = {};
-  for (const r of rankings) scoreByPlayerId[r.playerId] = r.score;
-  // Final placement (1-4), same winner-first/turn-order-tie-break ordering rankPlayers itself defines --
-  // not re-derived, just read back as this player's own position in that already-sorted array (2026-08-20,
-  // for tools/ai_data_report.js's new "平均順位" metric; same rank-from-index pattern
-  // tools/ai_level_comparison.js already uses for its own avgRank).
-  const rankByPlayerId = {};
-  rankings.forEach((r, i) => { rankByPlayerId[r.playerId] = i + 1; });
-  // VP actually gained from QST's rank-based rewards, per player (2026-08-09, see turn-flow.js's own
-  // comment on where this gets set -- always populated by now, since this function only reaches here
-  // once state.phase is GAME_END, which is exactly when endRound sets it). Exposed alongside finalScore
-  // (which already includes it) so tools/ai_data_report.js can report both the existing "平均得点"
-  // metric with QST *excluded* (per user request: "QSTカードなしの今までの得点で平均を出してください",
-  // i.e. finalScore - qstScore) and a new QST-only "QST平均得点" metric, without either one needing to
-  // re-derive the split itself.
-  const qstScoreByPlayerId = state.qstRewardsGranted || {};
-
-  const historyByPlayerId = {};
-  const roundDetailByPlayerId = {};
-  for (const player of state.players) {
-    historyByPlayerId[player.id] = {
-      conFaceId: `${player.conPhysicalId}${player.conFace}`,
-      jobFaceId: player.jobCardId,
-      firstRound1BuildFaceId: firstRound1BuildFaceId[player.id] || 'NONE',
-      round1DDiceGained: (round1ColorDiceAfter[player.id] || 0) - round1ColorDiceBefore[player.id],
-      finalScore: scoreByPlayerId[player.id],
-      rank: rankByPlayerId[player.id],
-    };
-    // Which round each fee-generating A-card was built in (see AREA_CARD_BY_MAP's own doc) -- the same
-    // buildsByRound this function already tracks for the ABCM sheet's own 試行回数/平均得点 columns, just
-    // used here as a lookup instead of a list. A card whose fee total is nonzero but was never found in
-    // buildsByRound (shouldn't happen -- collecting a fee requires having been feeOwnerId, which requires
-    // having built or upgraded it) is defensively dropped rather than guessed at.
-    const areaFeeByRoundAndCard = { 1: {}, 2: {}, 3: {}, 4: {} };
-    for (const [cardFaceId, amount] of Object.entries(areaFeeByPlayerAndCard[player.id])) {
-      const round = [1, 2, 3, 4].find((r) => buildsByRound[player.id][r].includes(cardFaceId));
-      if (round) areaFeeByRoundAndCard[round][cardFaceId] = amount;
-    }
-    // JOB008's own bonus VP only (2026-08-07, per user spec: "JOB008は最終的に得たVP" -> clarified as
-    // "JOB008自体のVP_MODIFIER効果で加算された分だけ", not the player's overall finalScore). 2026-08-17:
-    // JOB008 switched from a live PASSIVE=VP_MODIFIER(TOTAL_EMBLEM_COUNT) formula to a real per-TURNEND
-    // grant (see turn-flow.grantBardBonusIfEarned) -- player.bardEmblemUnitsGranted (1 unit = 1 VP, by
-    // then fully caught up since every player's last turn has already gone through endTurn once GAME_END
-    // is reached) is now the exact same number this used to compute by summing VP_MODIFIER clauses.
-    const job008BonusVp = player.jobCardId === 'JOB002' ? player.bardEmblemUnitsGranted : null; // 神官 (JOB002 since the 2026-10-13 A/B-revert)
-    roundDetailByPlayerId[player.id] = {
-      buildsByRound: buildsByRound[player.id],
-      colorDiceGainedByRound: colorDiceGainedByRound[player.id],
-      areaFeeByRoundAndCard,
-      job008BonusVp,
-      // 孤児院(A201A/A201B) AIDATA.xlsx column, 2026-08-28 (see PlayerState.orphanageVpGained's own doc)
-      // -- this player's own cumulative VP from 孤児院's CHANGE(...,VP,...) ACTION, whole game. Paired
-      // with buildsByRound above (which round A201A/A201B was built in, if at all) by
-      // tools/ai_data_report.js to fill in the ABCM sheet's "孤児院の支配LV1/LV2" rows.
-      orphanageVpGained: player.orphanageVpGained,
-      finalScore: scoreByPlayerId[player.id],
-      qstScore: qstScoreByPlayerId[player.id] || 0,
-      rank: rankByPlayerId[player.id],
-    };
-  }
-
-  return { state, historyByPlayerId, roundDetailByPlayerId, activationCounts };
+  return { state, ...recorder.finish() };
 
   } finally {
-    executor.setActivationListener(null);
+    recorder.stop();
   }
 }
 
@@ -555,9 +578,12 @@ function playGame(seed, playerNames, index, evalTable, aiOptions, moveGeneratorO
  *   always the bare no-options/no-lookahead AIPlayer every prior caller relied on). Omitted (undefined)
  *   by every existing caller, which keeps this byte-for-byte the original plain-1-ply behavior -- see
  *   ai-player.js's own constructor doc for what an empty options object defaults to.
+ * @param {boolean} [recordHistory] - (2026-10-30, for the 進化AI's own AIDATA workbook, see
+ *   tools/ai_data_aggregate.js) also collect playGame's historyByPlayerId/roundDetailByPlayerId/
+ *   activationCounts (createGameRecorder) and return them too. Omitted by every older caller.
  * @returns {{state: GameState, scoreByPlayerId: Object<string,number>, rankByPlayerId: Object<string,number>}}
  */
-function playGameForFitness(seed, playerNames, index, evaluatorByPlayerId, moveGenerator, resourceCardPicker, synergyTable2, aiOptions) {
+function playGameForFitness(seed, playerNames, index, evaluatorByPlayerId, moveGenerator, resourceCardPicker, synergyTable2, aiOptions, recordHistory) {
   const { Simulator } = require('./simulator');
   const { AIPlayer } = require('./ai-player');
   const { MoveGenerator } = require('./move-generator');
@@ -575,6 +601,8 @@ function playGameForFitness(seed, playerNames, index, evaluatorByPlayerId, moveG
   // Same call playGame makes before its own loop -- without startRound, state.round/phase never leave
   // their pre-game defaults. (dealJobPool now happens inside setupGame itself, before resource-card
   // dealing -- see its own doc; calling it again here would silently re-shuffle the pool a 2nd time.)
+  const recorder = recordHistory ? createGameRecorder(state, index) : null;
+  try {
   turnFlow.startRound(state);
 
   let openTurnPlayerId = null;
@@ -608,6 +636,7 @@ function playGameForFitness(seed, playerNames, index, evaluatorByPlayerId, moveG
       openTurnPlayerId = next.playerId;
       openTurnHasPlacedDie = initialHasPlacedDie || moves.some((m) => (m.move.type === 'PLACE_DIE' || m.move.type === 'PLACE_WILDCARD_DIE' || m.move.type === 'PLACE_DICE_GROUP' || m.move.type === 'PASS_DIE') && m.result.success);
     }
+    if (recorder) recorder.afterTurn(next.playerId, roundBeforeTurn, moves);
   }
 
   const rankings = scoring.rankPlayers(state, index);
@@ -620,9 +649,12 @@ function playGameForFitness(seed, playerNames, index, evaluatorByPlayerId, moveG
   // surfaced separately here purely so a caller can report "素点"(score-qstScore)/QST/合計(score) apart,
   // matching tools/ai_data_report.js's existing 平均得点/QST平均得点 split.
   const qstScoreByPlayerId = state.qstRewardsGranted || {};
-  return { state, scoreByPlayerId, rankByPlayerId, qstScoreByPlayerId };
+  return { state, scoreByPlayerId, rankByPlayerId, qstScoreByPlayerId, ...(recorder ? recorder.finish() : {}) };
+  } finally {
+    if (recorder) recorder.stop();
+  }
 }
 
-module.exports = { setupGame, driveOnboarding, driveSmartOnboarding, driveTurn, playGame, playGameForFitness, AREA_CARD_BY_MAP };
+module.exports = { setupGame, driveOnboarding, driveSmartOnboarding, driveTurn, createGameRecorder, playGame, playGameForFitness, AREA_CARD_BY_MAP };
 
 })();

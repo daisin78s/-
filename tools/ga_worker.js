@@ -10,8 +10,9 @@
  *
  * Message protocol (plain objects, structured-clone-safe -- genomes are plain {round:{id:value}}
  * objects, nothing exotic):
- *   in:  { jobId, genomes: [g0,g1,g2,g3], seed, aiLevel? }
- *   out: { jobId, rankByPlayerId, scoreByPlayerId, qstScoreByPlayerId, holdingsByPlayerId }
+ *   in:  { jobId, genomes: [g0,g1,g2,g3], seed, aiLevel?, aiData? }
+ *   out: { jobId, rankByPlayerId, scoreByPlayerId, qstScoreByPlayerId, holdingsByPlayerId, aiData? }
+ *   aiData (2026-10-30, tools/ga_ai_data.js): when asked, this one game's AIDATA sums (ai_data_aggregate.js toJSON).
  *
  * aiLevel (2026-09-17, per user request: "現在の最良データをもとにAILV5で...進めてください" -- see
  * ga_train.js's own --ai-level doc): when present (e.g. "LV3", the strongest level -- "LV5" before 2026-10-27, same settings), each seat's Evaluator/AIPlayer/
@@ -33,6 +34,8 @@ const { buildResourceSynergyTable } = require('../src/ai/resource-card-synergy')
 const { buildConJobSynergyTable } = require('../src/ai/con-job-synergy');
 const { pickResourceCards } = require('../src/ai/smart-onboarding');
 const { holdingUnits } = require('./card_pair_stats');
+const { createAggregate } = require('./ai_data_aggregate');
+const { HIGH_SCORE_THRESHOLD } = require('./ga_ai_data');
 
 const DATA_PATH = path.join(__dirname, '..', 'data', 'game.json');
 const PLAYER_NAMES = ['Alice', 'Bob', 'Carol', 'Dan'];
@@ -53,19 +56,26 @@ const resourceCardPicker = (candidateIds, state, idx, player) =>
 parentPort.on('message', (job) => {
   // 評価値ALLの自動更新の後 (2026-10-30, see tools/eval_all_update.js): game.json を読み直す。返事はしない。
   if (job.reloadData) { loadData(); return; }
-  const { jobId, genomes, seed, aiLevel } = job;
+  const { jobId, genomes, seed, aiLevel, aiData } = job;
   const level = aiLevel ? getLevel(aiLevel) : null;
   const evaluatorByPlayerId = {};
   genomes.forEach((genome, seat) => {
     evaluatorByPlayerId[`P${seat + 1}`] = new Evaluator(index, genome, level ? level.evaluatorOptions : undefined);
   });
   const moveGenerator = level ? new MoveGenerator(level.moveGeneratorOptions) : undefined;
-  const { state, rankByPlayerId, scoreByPlayerId, qstScoreByPlayerId } = playGameForFitness(
+  const result = playGameForFitness(
     seed, PLAYER_NAMES, index, evaluatorByPlayerId, moveGenerator, resourceCardPicker, synergyTable2,
-    level ? level.aiOptions : undefined,
+    level ? level.aiOptions : undefined, !!aiData,
   );
+  const { state, rankByPlayerId, scoreByPlayerId, qstScoreByPlayerId } = result;
   // カード相性表 (2026-10-27, see tools/card_pair_stats.js) -- every seat's final holdings, tallied by the main thread.
   const holdingsByPlayerId = {};
   for (const player of state.players) holdingsByPlayerId[player.id] = holdingUnits(state, index, player);
-  parentPort.postMessage({ jobId, rankByPlayerId, scoreByPlayerId, qstScoreByPlayerId, holdingsByPlayerId });
+  let aiDataPart;
+  if (aiData) {
+    const one = createAggregate(index, HIGH_SCORE_THRESHOLD);
+    one.addGame(seed, state, result.historyByPlayerId, result.roundDetailByPlayerId, result.activationCounts);
+    aiDataPart = one.toJSON();
+  }
+  parentPort.postMessage({ jobId, rankByPlayerId, scoreByPlayerId, qstScoreByPlayerId, holdingsByPlayerId, aiData: aiDataPart });
 });
