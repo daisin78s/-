@@ -672,6 +672,10 @@ function storySceneCardsTab() {
  *  S034 小麦畑も出てくる(per user回答「小麦畑追加」)。選択肢「ダイスをエリアに置く」、何もしない場合10秒ごとにS034
  *  S035 『行ったエリア』はダイスのおかれたエリア */
 function storySceneRound2() {
+  // S065「残念…」で戻ってくる時のために、S028の時の盤面を1回だけ取っておく(storyRewindToRound2)。
+  if (!storyRun.round2Snapshot) {
+    storyRun.round2Snapshot = { state: gameStateMod.cloneState(STATE), visibleMapIds: storyRun.visibleMapIds.slice(), diceShown: storyRun.diceShown };
+  }
   storySaySeq(['S028', 'S029', 'S030', 'S031', 'S032'], () => {
     storyStartNextRound(() => {
       storySayThen('S033', () => {
@@ -840,14 +844,13 @@ function storyPatraFee() {
   });
 }
 
-/* ---------- 場面7: 使用料の回収とEXスロット (S054〜S064) ---------- */
+/* ---------- 場面7: 使用料の回収とEXスロット (S054〜S065) ---------- */
 
 /** S054 アレク「君の番だよ でもその前に使用料をもらっておこう」(パトラの手番が終わり、使用料が
  *       ローマ市街に置かれる)
  *  S058 「ここをクリックしてみて」使用料が光る。選択肢「使用料をクリックする」
  *  S059〜S061 S061でEXスロットが光る
- *  S062 「今度はどこにダイスを置く？」何もしない場合5秒ごと。ローマ市街→S063 / それ以外→S064
- *  S063はまだ空、S064の続き(S028へ戻る)はまだ作っていないので、どちらも「つづく」。 */
+ *  S062〜S065 → storyFreePlay */
 function storySceneFeeCollect() {
   storySetSpeaker('alek');
   storyEndTurnOf('P2');
@@ -866,16 +869,7 @@ function storySceneFeeCollect() {
           storySetGlow([storyTileSelector(STORY_CITY_MAP_ID, `.slot:nth-child(${exIdx + 1})`)]);
           storySayThen('S061', () => {
             storySetGlow([]);
-            storySay('S062', () => {
-              storyWaitForPlacement({
-                goalText: '',
-                hintLineId: 'S062',
-                onPlaced: (mapId) => {
-                  if (mapId === STORY_CITY_MAP_ID) storySayThen('S063', storyEndOfScript);
-                  else storySayThen('S064', storyEndOfScript);
-                },
-              });
-            });
+            storySay('S062', storyFreePlay);
           });
         });
       });
@@ -883,12 +877,120 @@ function storySceneFeeCollect() {
   });
 }
 
-/** 台本の終わり(続きはTwineが増えたら追加)。 */
-function storyEndOfScript() {
+/* ---------- 場面8: ダイスを使い切るまで (S062〜S065) ---------- */
+
+/** 2026-10-31, per user (Twine更新 + 回答):
+ *  S062 「今度はどこにダイスを置く？」選択肢「ダイスを置く」(何もしない場合5秒ごと)
+ *  S063 「それからどうするの？」(最初に置いた後)。ここからはパトラと交互に(per user「パトラと交互に」): あなたが
+ *       1個置く(皇帝宮殿ならカードも選ぶ) → パトラが小麦畑か農園に1個置く(per user「パトラは小麦畑か農園に
+ *       ダイスを置く」) → … あなたのダイスが無くなるまで。
+ *  ダイスを使い切った時、ローマ市街の支配LV2(A001B)を持っていれば S064「やったぁ！…第2章へつづく」→ 終わりの
+ *  画面「第2章へつづく」/ 持っていなければ S065「残念…」→ S028の時の盤面に巻き戻してS028から(per user
+ *  「S028の時点に巻き戻す」)。 */
+function storyFreePlay() {
+  const loop = (first) => {
+    if (!storyRun) return;
+    storyPassUnplaceableDice('P1', storyRun.visibleMapIds);
+    if (!storyHasDiceLeft('P1')) { storyFinishFreePlay(); return; }
+    storyWaitForPlacement({
+      goalText: storyGoalOf('S062'),
+      hintLineId: first ? 'S062' : null,
+      extraDetect: () => typeof pendingBuildChoice !== 'undefined' && !!pendingBuildChoice,
+      onPlaced: () => {
+        const afterTurn = () => storyWhenVisualsIdle(() => {
+          storyEndTurnOf('P1');
+          storyPatraPlacesOnField(() => loop(false));
+        });
+        if (first) storySay('S063', afterTurn);
+        else afterTurn();
+      },
+    });
+  };
+  loop(true);
+}
+
+function storyHasDiceLeft(playerId) {
+  return storyPlayer(playerId).dice.some((d) => !d.placedMapId && !d.passed);
+}
+
+/** そのダイスを mapIds のどこかに置けるスロットの一覧 [{mapId, slotIndex}](コピーした盤面で試して確かめる)。 */
+function storyPlaceableSlots(playerId, dieId, mapIds) {
+  const result = [];
+  for (const mapId of mapIds) {
+    const count = boardMod.getSlotRequirements(dataLoaderMod.getAreaRow(INDEX, STATE.maps[mapId].currentAreaId)).length;
+    for (let slotIndex = 0; slotIndex < count; slotIndex++) {
+      const trial = gameStateMod.cloneState(STATE);
+      if (boardMod.placeDice(trial, INDEX, { playerId }, dieId, mapId, slotIndex).success) result.push({ mapId, slotIndex });
+    }
+  }
+  return result;
+}
+
+/** どこにも置けないダイスは、そのラウンドはパスにする(ターン終了ボタンが無いので、置けないまま止まらないように)。 */
+function storyPassUnplaceableDice(playerId, mapIds) {
+  for (const die of storyPlayer(playerId).dice) {
+    if (die.placedMapId || die.passed) continue;
+    if (storyPlaceableSlots(playerId, die.id, mapIds).length === 0) boardMod.passDie(STATE, INDEX, { playerId }, die.id);
+  }
+}
+
+/** パトラの手番: 小麦畑か農園(置ける方、両方置けるならランダム)にダイスを1個置いて手番を終える。ダイスが
+ * 無ければ何もしない。 */
+function storyPatraPlacesOnField(onDone) {
+  const die = storyPlayer('P2').dice.find((d) => !d.placedMapId && !d.passed);
+  if (!die) { onDone(); return; }
+  const byMap = [STORY_WHEAT_MAP_ID, STORY_FARM_MAP_ID]
+    .map((mapId) => storyPlaceableSlots('P2', die.id, [mapId]))
+    .filter((slots) => slots.length > 0);
+  if (byMap.length === 0) {
+    boardMod.passDie(STATE, INDEX, { playerId: 'P2' }, die.id);
+  } else {
+    const slots = byMap[Math.floor(Math.random() * byMap.length)];
+    const { mapId, slotIndex } = slots[Math.floor(Math.random() * slots.length)];
+    boardMod.placeDice(STATE, INDEX, { playerId: 'P2' }, die.id, mapId, slotIndex);
+  }
+  render(STATE);
+  storyLater(() => storyWhenVisualsIdle(() => {
+    storyEndTurnOf('P2');
+    render(STATE);
+    onDone();
+  }), 700);
+}
+
+function storyFinishFreePlay() {
+  const city = STATE.cards.A001;
+  const hasLv2 = !!city && city.ownerId === 'P1' && city.currentFaceId === 'A001B';
+  if (hasLv2) storySayThen('S064', () => storyEndOfScript('第2章へつづく'));
+  else storySayThen('S065', storyRewindToRound2);
+}
+
+/** S065 → S028: 盤面・資源・見えているエリアを S028 の時に戻して、そこからやり直す。 */
+function storyRewindToRound2() {
+  const run = storyRun;
+  if (!run) return;
+  const snap = run.round2Snapshot;
+  storyUseState(gameStateMod.cloneState(snap.state));
+  run.visibleMapIds = snap.visibleMapIds.slice();
+  run.diceShown = snap.diceShown;
+  run.placementBaseline = storyPlacementCounts(STATE);
+  run.glowDieValues = [];
+  playerRoles.set('P2', DEFAULT_AI_ROLE);
+  document.body.classList.remove('story-lock-hand');
+  lastRenderedRound = STATE.round;
+  storySetSpeaker('alek');
+  storySetAllowedTabs(['board']);
+  storySetGlow([]);
+  storyApplyVisibleMaps();
+  render(STATE);
+  storySceneRound2();
+}
+
+/** 台本の終わり。text は終わりの画面の文字(省略時「つづく」)。 */
+function storyEndOfScript(text) {
   if (!storyRun) return;
   storyHideDialog();
   const end = el('div', 'story-end');
-  end.appendChild(el('div', 'story-end__text', 'つづく'));
+  end.appendChild(el('div', 'story-end__text', text || 'つづく'));
   const back = el('button', 'story-end__button', 'トップに戻る');
   back.type = 'button';
   back.addEventListener('click', closeStoryMode);
