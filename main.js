@@ -18576,10 +18576,15 @@ function setupMobileTabSystem() {
       return;
     }
     if (Math.abs(dx) < MIN_SWIPE_PX || Math.abs(dx) < Math.abs(dy) * 1.5) return;
-    const currentIdx = MOBILE_TAB_ORDER.indexOf(mobileActiveTab);
-    const swipeTo = dx < 0 ? MOBILE_TAB_ORDER[currentIdx + 1] : MOBILE_TAB_ORDER[currentIdx - 1];
+    // ストーリー中は行けないタブを飛ばして、その向きで次に行けるタブへ (2026-10-31, per user report:
+    // 獲得カードからフリックで戻ると資源タブに行けてしまい、ターン終了ボタンを押せた)。
+    let idx = MOBILE_TAB_ORDER.indexOf(mobileActiveTab);
+    let swipeTo;
+    do {
+      idx += dx < 0 ? 1 : -1;
+      swipeTo = MOBILE_TAB_ORDER[idx];
+    } while (swipeTo && storyActive && !storyTabAllowed(swipeTo));
     if (!swipeTo) return;
-    if (storyActive && !storyTabAllowed(swipeTo)) return;
     applyMobileActiveTab(swipeTo);
   }, { passive: true });
 }

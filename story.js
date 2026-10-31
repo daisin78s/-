@@ -676,8 +676,8 @@ function storySceneCardsTab() {
       storySetGlow(['#player-cards [data-physical-id="A001"] .shop-card']);
       storySayThen('S025', () => {
         storySetGlow(['.mobile-tab-switcher__btn[data-tab-target="board"]']);
-        // スワイプで戻る時は資源タブを通るので、資源タブも通れるようにしておく。
-        storySetAllowedTabs(['board', 'players', 'cards']);
+        // 資源タブは許さない(フリックで戻る時は資源タブを飛ばしてエリアへ -- main.jsのスワイプ処理)。
+        storySetAllowedTabs(['board', 'cards']);
         storySay('S026', () => {
           storyShowGoal(storyGoalOf('S026'));
           const stopHint2 = storyStartHint('S026');
