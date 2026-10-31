@@ -8744,9 +8744,20 @@ function renderMobileOwnDiceRow(state, next) {
   // 1手戻るボタン (2026-10-22, per user request: "ターン終了ボタンの上に1手戻るボタンも表示") -- サイド
   // バーの#dice-cancel-buttonと同じ条件(isDiceCancelDisabled)・同じ処理・同じ光る演出。押せない間は場所を
   // 取らないよう出さない。ターン終了と同じ入れ物の先頭に入れる(=ターン終了の上、縦向きのバーでは左)。
-  if (!aiView && !isDiceCancelDisabled()) {
+  // ストーリー第2章の「ターン開始時に戻るボタンと１手戻るボタンが出てくる」から先(body.story-undo-shown)だけは、
+  // ターン開始時に戻るも並べ、押せない間も(押せない表示で)出しておく。普段の対戦は今まで通り。
+  const storyUndoShown = typeof storyRun !== 'undefined' && !!storyRun && document.body.classList.contains('story-undo-shown');
+  if (!aiView && storyUndoShown) {
+    const undoBtn = el('button', 'undo-button mobile-own-row__cancel mobile-own-row__undo', '↩️ ターン開始時に戻る');
+    undoBtn.type = 'button';
+    undoBtn.disabled = !state.undoCheckpoint || state.round === 0;
+    undoBtn.addEventListener('click', handleUndoClick);
+    turnEndEl.prepend(undoBtn);
+  }
+  if (!aiView && (storyUndoShown || !isDiceCancelDisabled())) {
     const cancelBtn = el('button', 'undo-button mobile-own-row__cancel', '↩️ 1手戻る');
     cancelBtn.type = 'button';
+    cancelBtn.disabled = isDiceCancelDisabled();
     cancelBtn.classList.toggle('change-highlight', tutorialCancelButtonGlowing);
     cancelBtn.addEventListener('click', handleCancelPreviousActionClick);
     turnEndEl.prepend(cancelBtn);

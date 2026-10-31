@@ -6857,17 +6857,30 @@ body.story-mode .mobile-tab-switcher__btn:not(.story-tab-allowed) {
   pointer-events: none;
   opacity: 0.35;
 }
-body.story-mode .mobile-own-row__turn-end {
+body.story-mode:not(.story-free-action):not(.story-undo-shown) .mobile-own-row__turn-end {
   display: none;
+}
+/* 第2章の「フリーアクションボタンが出てくる」から先(body.story-free-action): フリーアクションと1手戻るは出すが、
+   ターン終了は出さない(ストーリーは置いたら自動で次の手番)。 */
+body.story-mode .mobile-own-row__turn-end .turn-end-button {
+  display: none;
+}
+/* 右下のログ/✖(.story-log-button/.story-close)と重ならないよう、その上に並べる。長い「ターン開始時に戻る」は折り返す。 */
+body.story-mode .mobile-own-row__turn-end {
+  padding-bottom: 128px;
+}
+body.story-mode .mobile-own-row__turn-end .undo-button {
+  white-space: normal;
+  line-height: 1.2;
 }
 /* パトラの手番の間は、パトラのダイスをあなたが動かせない。 */
 body.story-lock-hand #mobile-own-row .die {
   pointer-events: none;
 }
 /* フリーアクションの画面: 台本で押すのはA→K/B→Kだけなので、カード(基礎学問)と閉じるボタンは出さない。 */
-body.story-mode .mobile-free-action-overlay__hint,
-body.story-mode .mobile-free-action-overlay__cards,
-body.story-mode #mobile-free-action-close {
+body.story-mode:not(.story-free-action) .mobile-free-action-overlay__hint,
+body.story-mode:not(.story-free-action) .mobile-free-action-overlay__cards,
+body.story-mode:not(.story-free-action) #mobile-free-action-close {
   display: none;
 }
 body.story-mode #ai-manual-step-button {
