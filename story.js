@@ -116,6 +116,31 @@ function storySetSpeaker(key) {
   a.onfinish = () => { a.cancel(); show(); };
 }
 
+/* セリフの中の資源の文字 A/B/C/Z/K は資源のアイコンで出す (2026-10-31, per user「これから ABCZKは そのアイコンを
+ * 表示するように」)。前後に英字が続く所(ANY、LVなど)はそのまま。1文字ずつ出す時にアイコン1個を1文字として
+ * 数えるよう、先に私用文字(+番号)に置き換えておき、表示の時にアイコンへ戻す。 */
+const STORY_ICON_RESOURCES = ['A', 'B', 'C', 'Z', 'K'];
+function storyIconize(text) {
+  return text.replace(/(?<![A-Za-z])[ABCZK](?![A-Za-z])/g, (ch) => String.fromCharCode(0xE000 + STORY_ICON_RESOURCES.indexOf(ch)));
+}
+/** storyIconizeした文章 -> 資源アイコン + 性格・ジョブの名前に色を付けた文章。 */
+function storyLineFragment(text) {
+  const frag = document.createDocumentFragment();
+  let plain = '';
+  const flush = () => { if (plain) { frag.appendChild(conJobColoredFragment(plain)); plain = ''; } };
+  for (const ch of text) {
+    const code = ch.charCodeAt(0) - 0xE000;
+    if (code >= 0 && code < STORY_ICON_RESOURCES.length) {
+      flush();
+      frag.appendChild(actionDot(STORY_ICON_RESOURCES[code]));
+    } else {
+      plain += ch;
+    }
+  }
+  flush();
+  return frag;
+}
+
 /** 会話ウインドウにセリフを1文字ずつ出す。全部出たらonTyped()。textを渡すとそちらを出す(差し込みあり等)。 */
 function storySay(id, onTyped, textOverride) {
   const run = storyRun;
@@ -131,11 +156,12 @@ function storySay(id, onTyped, textOverride) {
   body.textContent = '';
   storyCancel(run.typeTimer);
   let i = 0;
+  const shown = storyIconize(text);
   const step = () => {
     i++;
     body.textContent = '';
-    body.appendChild(conJobColoredFragment(text.slice(0, i))); // 性格・ジョブの名前は色付き
-    if (i < text.length) run.typeTimer = storyLater(step, STORY_TYPE_MS_PER_CHAR);
+    body.appendChild(storyLineFragment(shown.slice(0, i))); // 資源はアイコン、性格・ジョブの名前は色付き
+    if (i < shown.length) run.typeTimer = storyLater(step, STORY_TYPE_MS_PER_CHAR);
     else { run.typeTimer = null; if (onTyped) onTyped(text); }
   };
   box.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'translateY(0)' }],
@@ -1025,7 +1051,9 @@ function toggleStoryLog() {
   for (const entry of run.log) {
     const row = el('div', 'story-log__line');
     row.appendChild(el('span', 'story-log__speaker', entry.speaker));
-    row.appendChild(elConJob('span', 'story-log__text', entry.text));
+    const text = el('span', 'story-log__text');
+    text.appendChild(storyLineFragment(storyIconize(entry.text)));
+    row.appendChild(text);
     list.appendChild(row);
   }
   logPanel.appendChild(list);
