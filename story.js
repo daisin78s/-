@@ -1522,9 +1522,18 @@ function story2DoEvent(row, i, onDone) {
       start();
     });
   } else if (/減る|増える/.test(e)) {
-    // 「食料2減る」「人脈3増える」: 資源はもう本物のゲームの処理で変わっているので、その資源を光らせるだけ。
+    // 「食料2減る」「人脈3増える」: 資源はもう本物のゲームの処理で変わっているが、表示は置く前の数のままに
+    // してある(story2FreePlayのresourceOverride)ので、ここでその資源だけ本当の数に変えて光らせる (per user
+    // 「酒場に行ったとき 会話に合わせて 食料を減らして 人脈を増やして」)。
     const names = { 食料: 'K', 権力: 'A', 知識: 'B', 金貨: 'C', 人脈: 'Z' };
     const key = Object.keys(names).find((n) => e.includes(n));
+    if (key && run.resourceOverride) {
+      const resource = names[key];
+      run.resourceOverride = { ...run.resourceOverride, [resource]: storyPlayer('P1').resources[resource] || 0 };
+      const actual = storyPlayer('P1').resources;
+      if (Object.keys(run.resourceOverride).every((r) => (run.resourceOverride[r] || 0) === (actual[r] || 0))) run.resourceOverride = null;
+      render(STATE);
+    }
     const badge = key && storyResourceBadge(names[key]);
     if (badge) badge.classList.add('change-highlight');
     storyLater(() => { if (badge) badge.classList.remove('change-highlight'); onDone(); }, 1200);
@@ -1612,6 +1621,7 @@ function story2FreePlay() {
   const ch = run.chapter2;
   storySetSpeaker('spalAway');
   storyHideDialog();
+  if (run.resourceOverride) { run.resourceOverride = null; render(STATE); } // 酒場の表示合わせが残っていたら本当の数に
   if (storyForcePassIfStuck('P1', run.visibleMapIds, story2Finish)) return;
   if (!storyHasDiceLeft('P1')) { story2Finish(); return; }
   if (ch.unusedCardDue && !ch.unusedCardDone && storyPlayer('P1').ownedCardPhysicalIds.length > ch.unusedCardOwnedBefore) {
@@ -1622,6 +1632,7 @@ function story2FreePlay() {
   const ownedBefore = storyPlayer('P1').ownedCardPhysicalIds.length;
   const colorBefore = story2ColorDiceCount();
   const zBefore = storyPlayer('P1').resources.Z || 0;
+  const resourcesBefore = { ...storyPlayer('P1').resources };
   const placedBefore = storyP1DiceCount(STATE, Object.keys(STATE.maps));
   storyWaitForPlacement({
     goalText: '',
@@ -1663,6 +1674,9 @@ function story2FreePlay() {
       } else if (mapId === STORY_TAVERN_MAP_ID && (storyPlayer('P1').resources.Z || 0) > zBefore && !ch.tavernDone) {
         ch.tavernDone = true;
         block = ch.blocks.tavern;
+        // 食料・人脈の表示はセリフ(「食料2減る」「人脈3増える」)に合わせて変える: それまでは置く前の数を見せる。
+        run.resourceOverride = resourcesBefore;
+        render(STATE);
       }
       if (block) story2Play(block, 0, story2FreePlay);
       else story2FreePlay();
@@ -1704,6 +1718,7 @@ function story2Rewind(snap, rows) {
   if (!run) return;
   const ch = run.chapter2;
   story2HideCallout();
+  run.resourceOverride = null;
   document.body.classList.remove('story-undo-shown');
   run.shopOverrides = null;
   if (snap.allowedTabs) storySetAllowedTabs(snap.allowedTabs);
