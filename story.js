@@ -285,8 +285,30 @@ function storyAfterRender(state) {
       if (run.glowDieValues.includes(Number(node.textContent.trim()))) node.classList.add('change-highlight');
     }
   }
+  if (run.shopOverrides) storyApplyShopOverrides(run.shopOverrides);
   storyApplyGlow();
   if (run.resourceOverride) storyApplyResourceOverride(run.resourceOverride);
+}
+
+/** 第2章のショップの見た目 (story2DoEventの「次のラウンドから」「SHOP201、202、203見えなくする」): 描き直す
+ * たびにショップの1段目(SHOP001-006)を裏向き+文字に、3段目(SHOP201-203とその残り枚数)を隠す。見た目だけ。 */
+function storyApplyShopOverrides(overrides) {
+  const grid = document.getElementById('shop-combined-slots');
+  if (!grid) return;
+  for (const node of grid.children) {
+    const row = node.style.gridRow;
+    if (overrides.monumentLabel && row === '1' && node.classList.contains('shop-slot')) {
+      const card = node.querySelector('.shop-slot__card');
+      card.innerHTML = '';
+      const facedown = el('div', 'shop-card shop-card--facedown');
+      facedown.appendChild(el('span', null, overrides.monumentLabel));
+      card.appendChild(facedown);
+      node.querySelector('.shop-slot__req').textContent = '';
+    }
+    if (overrides.hideSpecial && row === '3' && (node.classList.contains('shop-slot') || node.classList.contains('shop-remaining-count'))) {
+      node.style.visibility = 'hidden';
+    }
+  }
 }
 
 /** 「ターン2」「ターン3」 (2026-10-31, per user「ダイスを置いたあと ターン2 ターン3 とだして」+ 回答: 普段の
@@ -1263,8 +1285,47 @@ function story2Play(rows, i, onDone) {
 
 function story2DoEvent(row, i, onDone) {
   const run = storyRun;
-  const e = row.event;
-  if (/配られる/.test(e)) {
+  const e = row.event.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)); // 全角数字も読む
+  const seconds = (/(\d+)秒/.exec(e) || [])[1];
+  if (/消え/.test(e) && /光る/.test(e)) {
+    // 「セルフとスパルが5秒間消えて「目1-6」や「目1-5」と書いてあるところがすべて光る」: ショップのダイス目の
+    // キャプションを光らせ、その間スパルとセリフを隠す。光はこの部分が終わるまで残す。
+    storyHideDialog();
+    storySetSpeaker('spalAway');
+    if (/目/.test(e)) storySetGlow(['#shop-combined-slots .shop-slot__req']);
+    storyLater(onDone, (Number(seconds) || 1) * 1000);
+  } else if (/ショップ/.test(e) && /光る/.test(e)) {
+    storySetAllowedTabs([...run.allowedTabs, 'shop']);
+    storySetGlow(['.mobile-tab-switcher__btn[data-tab-target="shop"]']);
+    onDone();
+  } else if (/ショップ/.test(e) && /クリック/.test(e)) {
+    storySetAllowedTabs([...run.allowedTabs, 'shop']);
+    storyShowGoal(e);
+    storyWaitUntil(() => mobileActiveTab === 'shop', () => {
+      storyShowGoal('');
+      storySetGlow([]);
+      onDone();
+    });
+  } else if (/次のラウンドから/.test(e)) {
+    // 「SHOP001-006の2Rからの文字→次のラウンドから」: モニュメントの段を裏向きにして「次のラウンドから」と書く。
+    run.shopOverrides = { ...(run.shopOverrides || {}), monumentLabel: '次のラウンドから' };
+    render(STATE);
+    onDone();
+  } else if (/SHOP2/.test(e) && /見えなく/.test(e)) {
+    run.shopOverrides = { ...(run.shopOverrides || {}), hideSpecial: true };
+    render(STATE);
+    onDone();
+  } else if (/人材カード/.test(e)) {
+    // 「SHOP101-106すべて人材カード」: 人材(C)の通常の6枚(総督・学者・商人・貴族・哲学者・金貸し)のLV1。
+    const slots = Object.keys(STATE.shops.NORMAL.slots);
+    ['C001A', 'C002A', 'C003A', 'C004A', 'C005A', 'C006A'].forEach((faceId, k) => { if (slots[k]) STATE.shops.NORMAL.slots[slots[k]] = faceId; });
+    STATE.shops.NORMAL.drawPile = [];
+    render(STATE);
+    onDone();
+  } else if (/出てくる/.test(e)) {
+    // 「３秒後スパルが出てくる」
+    storyLater(() => { storySetSpeaker('spal'); onDone(); }, (Number(seconds) || 0) * 1000);
+  } else if (/配られる/.test(e)) {
     // ここが「やり直し」の戻り先(配られる直前の盤面)。
     if (!run.chapter2.snapshot) {
       run.chapter2.snapshot = { state: gameStateMod.cloneState(STATE), visibleMapIds: run.visibleMapIds.slice(), rowIndex: i };
@@ -1287,10 +1348,11 @@ function story2DoEvent(row, i, onDone) {
     });
     mapIds.forEach((mapId, k) => storyLater(() => storyRevealMap(mapId), k * 250));
     storyLater(onDone, mapIds.length * 250 + 500);
-  } else if (/消える/.test(e)) {
+  } else if (/消え/.test(e)) {
+    // 「セルフとスパルが１秒間消える」「スパルとセリフが消える」: 秒数があればその間待つ。
     storyHideDialog();
     storySetSpeaker('spalAway');
-    storyLater(onDone, 1000);
+    storyLater(onDone, (Number(seconds) || 0) * 1000);
   } else if (/次のラウンド/.test(e)) {
     storyStartNextRound(onDone);
   } else if (/減る|増える/.test(e)) {
