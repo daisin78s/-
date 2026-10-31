@@ -7105,9 +7105,10 @@ body.story-hide-dice #players .player-panel .die {
 }
 /* ストーリー中のカードを選ぶ画面: 戻す系のボタン(ターン開始に戻す/✖=1手戻る)は出さない(台本の盤面を
    戻せないように)。立ち絵とセリフはこの画面の上に出す(S017〜S020)。 */
-/* 第2章の「ターン開始時に戻るボタンと１手戻るボタンが出てくる」から先は出す(body.story-undo-shown)。 */
+/* 第2章の「ターン開始時に戻るボタンと１手戻るボタンが出てくる」から先は、ターン開始時に戻るだけ出す
+   (body.story-undo-shown)。✖(1手戻る)はストーリーでは出さない(per user「Xボタンは不要」)。 */
 body.story-mode:not(.story-undo-shown) #undo-button-build,
-body.story-mode:not(.story-undo-shown) #build-choice-close-button { display: none; }
+body.story-mode #build-choice-close-button { display: none; }
 /* ストーリーの会話ログ (story.jsのtoggleStoryLog)。セリフ欄と同じ横幅・同じ見た目で、上に広げて出す。 */
 .story-log {
   position: absolute;

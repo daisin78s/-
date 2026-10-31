@@ -1366,16 +1366,12 @@ function story2DoEvent(row, i, onDone) {
     storyWaitUntil(() => mobileFreeActionOpen, () => { storySetGlow([]); onDone(); });
   } else if (/カードをクリック/.test(e)) {
     // 「カードをクリックする」: フリーアクションの画面でカードを1枚使う(タップされる)まで待つ。使えるカードが
-    // 無ければ待たない。使ったら画面を閉じてエリアに戻す(このあと1手戻るボタンを光らせるため)。
+    // 無ければ待たない。使うと0.5秒後に画面が閉じてエリアに戻る(main.jsのmobileFreeActionTappedCardId、全モード
+    // 共通)ので、それを待って次へ(このあと1手戻るボタンを光らせる)。
     if (computeMobileFreeActions(STATE, storyPlayer('P1')).cards.length === 0) { onDone(); return; }
     const tapped = () => storyPlayer('P1').ownedCardPhysicalIds.filter((id) => STATE.cards[id] && STATE.cards[id].tapped).length;
     const before = tapped();
-    storyWaitUntil(() => tapped() > before && !pendingTapChoice && !pendingBuildChoice, () => {
-      mobileFreeActionOpen = false;
-      applyMobileActiveTab('board');
-      render(STATE);
-      onDone();
-    });
+    storyWaitUntil(() => tapped() > before && !pendingTapChoice && !pendingBuildChoice && !mobileFreeActionOpen, onDone);
   } else if (/1手戻る/.test(e) && /光る/.test(e)) {
     storySetGlow(['.mobile-own-row__cancel']); // 次にダイスを置くまで光らせる
     onDone();
@@ -1514,9 +1510,8 @@ function story2DoEvent(row, i, onDone) {
     // 2ラウンド目の最後のダイスの手番はまだ終えていない(story2FreePlay): 「今のうちに獲得したカードを使っときな」
     // -> タップできるカードで未タップの物が無くなったら(per user)手番を終えて次のラウンドへ。
     storySetGlow(['.mobile-own-row__free-action']);
-    storyWaitUntil(() => computeMobileFreeActions(STATE, storyPlayer('P1')).cards.length === 0 && !pendingTapChoice && !pendingBuildChoice, () => {
+    storyWaitUntil(() => computeMobileFreeActions(STATE, storyPlayer('P1')).cards.length === 0 && !pendingTapChoice && !pendingBuildChoice && !mobileFreeActionOpen, () => {
       storySetGlow([]);
-      mobileFreeActionOpen = false;
       applyMobileActiveTab('board');
       ch.turnOpen = false;
       storyEndTurnOf('P1');

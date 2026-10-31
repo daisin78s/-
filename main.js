@@ -9189,6 +9189,13 @@ let mobileFreeActionOpen = false;
 // 自動で閉じてエリア画面へ戻る (2026-10-23, per user request: "フリーアクション使った後 タップできるカードが
 // なければ自動でエリア画面に戻って")。
 let mobileFreeActionBaseline = null;
+// フリーアクションの画面からカードを使った時 (2026-11-01, per user request「すべてのゲームで フリーアクションから
+// タップするカードを使った場合 タップして0.5秒後にエリア画面に行く」): 使ったカード(physicalId)。そのカードが
+// 倒れる(タップされる)のを画面の上で見せ、0.5秒後に閉じてエリア画面へ。ほかに使えるカードが残っていても戻る。
+let mobileFreeActionTappedCardId = null;
+let mobileFreeActionCloseTimer = null;
+let mobileFreeActionTapAnimatedId = null;
+const MOBILE_FREE_ACTION_TAP_CLOSE_MS = 500;
 function mobileFreeActionSignature(state, player) {
   if (!player) return '';
   const tapped = player.ownedCardPhysicalIds.map((id) => (state.cards[id] && state.cards[id].tapped ? 1 : 0)).join('');
@@ -9242,13 +9249,35 @@ function renderMobileFreeActionOverlay(state, next) {
   // 手番が終わった/スマホ幅でなくなった等で使えなくなったら自動で閉じる。
   if (!mobileFreeActionOpen || !isMobileLayout() || !mobileFreeActionCanAct(state, player, canPlaceDiceFor)) {
     mobileFreeActionOpen = false;
+    mobileFreeActionTappedCardId = null;
+    clearTimeout(mobileFreeActionCloseTimer);
+    mobileFreeActionCloseTimer = null;
     overlay.hidden = true;
     body.innerHTML = '';
     return;
   }
   const actions = computeMobileFreeActions(state, player);
+  // カードを使った(タップされ、選ぶ画面も残っていない): そのカードを倒して見せ、0.5秒後にエリア画面へ。
+  // 選ぶ画面で取りやめてタップされなかった時は何もしない(いつもの画面に戻る)。
+  let tappingCard = null;
+  if (mobileFreeActionTappedCardId) {
+    const cardState = state.cards[mobileFreeActionTappedCardId];
+    if (cardState && cardState.tapped && !pendingTapChoice && !pendingBuildChoice) tappingCard = cardState;
+    else if (!cardState || (!pendingTapChoice && !pendingBuildChoice)) mobileFreeActionTappedCardId = null;
+  }
+  if (tappingCard && !mobileFreeActionCloseTimer) {
+    mobileFreeActionCloseTimer = setTimeout(() => {
+      mobileFreeActionCloseTimer = null;
+      mobileFreeActionTappedCardId = null;
+      mobileFreeActionTapAnimatedId = null;
+      mobileFreeActionOpen = false;
+      mobileFreeActionBaseline = null;
+      applyMobileActiveTab('board');
+      render(STATE);
+    }, MOBILE_FREE_ACTION_TAP_CLOSE_MS);
+  }
   const used = mobileFreeActionBaseline !== null && mobileFreeActionSignature(state, player) !== mobileFreeActionBaseline;
-  if (used && actions.cards.length === 0 && !pendingTapChoice && !pendingBuildChoice) {
+  if (!tappingCard && used && actions.cards.length === 0 && !pendingTapChoice && !pendingBuildChoice) {
     mobileFreeActionOpen = false;
     mobileFreeActionBaseline = null;
     overlay.hidden = true;
@@ -9277,14 +9306,27 @@ function renderMobileFreeActionOverlay(state, next) {
     }
     body.appendChild(buttonsEl);
   }
-  if (actions.cards.length > 0) {
+  if (actions.cards.length > 0 || tappingCard) {
     body.appendChild(el('div', 'mobile-free-action-overlay__hint', 'カードをタップで使用'));
     const cardsEl = el('div', 'mobile-free-action-overlay__cards');
-    for (const physicalId of actions.cards) {
+    if (tappingCard) {
+      // 使ったカード: 縦のまま置いてから倒す(.shop-card--tappedのtransitionで回る)。押しても何もしない。
+      // 0.5秒の間に描き直されても、回るのは最初の1回だけ(2回目からは倒れた状態で描く)。
+      const animate = mobileFreeActionTapAnimatedId !== mobileFreeActionTappedCardId;
+      mobileFreeActionTapAnimatedId = mobileFreeActionTappedCardId;
+      const cardNode = buildCardVisual(tappingCard.currentFaceId, { tapped: !animate, showEffect: true, allowTextFallback: false, noInteraction: true });
+      const cell = el('div', 'owned-card-cell');
+      cell.appendChild(cardNode);
+      cardsEl.appendChild(cell);
+      if (animate) requestAnimationFrame(() => requestAnimationFrame(() => cardNode.classList.add('shop-card--tapped')));
+    }
+    for (const physicalId of tappingCard ? [] : actions.cards) {
       const cardState = state.cards[physicalId];
       const cardNode = buildCardVisual(cardState.currentFaceId, { tapped: false, showEffect: true, allowTextFallback: false });
       attachTapToggle(cardNode, cardState, cardState.currentFaceId, true, physicalId);
       const cell = el('div', 'owned-card-cell');
+      // attachTapToggleより先に(capture段階で外側から)「このカードを使おうとした」と覚える。
+      cell.addEventListener('click', () => { if (!cardState.tapped) mobileFreeActionTappedCardId = physicalId; }, true);
       cell.appendChild(cardNode);
       cardsEl.appendChild(cell);
     }
