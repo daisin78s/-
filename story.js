@@ -279,6 +279,7 @@ function storyAfterRender(state) {
   document.body.classList.toggle('story-hide-dice', !run.diceShown);
   // 先に進行条件を確かめる(置き終わった瞬間に残りのダイスの光を消すため)。
   if (run.onRender) run.onRender(state);
+  storyMaybeTurnBanner(state);
   if (run.glowDieValues.length > 0) {
     for (const node of storyHandDiceNodes('P1')) {
       if (run.glowDieValues.includes(Number(node.textContent.trim()))) node.classList.add('change-highlight');
@@ -286,6 +287,27 @@ function storyAfterRender(state) {
   }
   storyApplyGlow();
   if (run.resourceOverride) storyApplyResourceOverride(run.resourceOverride);
+}
+
+/** 「ターン2」「ターン3」 (2026-10-31, per user「ダイスを置いたあと ターン2 ターン3 とだして」+ 回答: 普段の
+ * 対戦と同じ演出、ラウンドごとに1から、ターン1は出さない)。普段の対戦の手番の表示(main.jsの
+ * playPendingTurnBanner)はストーリーでは出さないので、ここで出す: 次の手番の人が、このラウンドで何個目の
+ * ダイスを置く番か(置いた/パスしたダイスの数+1)。同じ表示は一度だけ(巻き戻すと数え直す)。 */
+function storyMaybeTurnBanner(state) {
+  const run = storyRun;
+  if (!run.diceShown || state.phase === 'GAME_END') return;
+  const next = turnFlowMod.getNextTurn(state);
+  if (next.type !== 'TURN') return;
+  const player = state.players.find((p) => p.id === next.playerId);
+  const nth = player.dice.filter((d) => d.placedMapId || d.passed).length + 1;
+  if (nth < 2) return;
+  const key = `${state.round}/${player.id}/${nth}`;
+  run.turnBannerKeys = run.turnBannerKeys || new Set();
+  if (run.turnBannerKeys.has(key)) return;
+  run.turnBannerKeys.add(key);
+  const conFaceId = player.conPhysicalId && player.conFace ? `${player.conPhysicalId}${player.conFace}` : null;
+  const title = conFaceId && player.jobCardId ? rankingConJobTitle(conFaceId, player.jobCardId) : '';
+  playRoundBanner(state.round, `${title && title !== '—' ? title : ''}${player.name} ターン${nth}`, 'round-banner--turn');
 }
 
 /** 光らせる場所(CSSセレクタ)を決める。描き直されても付け直す。 */
@@ -1018,6 +1040,7 @@ function storyRewindToRound2() {
   if (!run) return;
   const snap = run.round2Snapshot;
   storyUseState(gameStateMod.cloneState(snap.state));
+  run.turnBannerKeys = new Set(); // 巻き戻したら「ターン○」も数え直す
   run.visibleMapIds = snap.visibleMapIds.slice();
   run.diceShown = snap.diceShown;
   run.placementBaseline = storyPlacementCounts(STATE);
@@ -1399,6 +1422,7 @@ function story2Rewind() {
   const ch = run.chapter2;
   const snap = ch.snapshot;
   storyUseState(gameStateMod.cloneState(snap.state));
+  run.turnBannerKeys = new Set(); // 巻き戻したら「ターン○」も数え直す
   story2LockPlacement();
   run.visibleMapIds = snap.visibleMapIds.slice();
   run.placementBaseline = storyPlacementCounts(STATE);
