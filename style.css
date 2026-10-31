@@ -7003,6 +7003,38 @@ body.story-hide-dice #players .player-panel .die {
   font-weight: 700;
   cursor: pointer;
 }
+/* 第2章: 初期資源カードを並べる/2枚選ぶ (story.js story2ShowResourceCards) */
+.story2-cards {
+  position: absolute;
+  left: 50%;
+  top: 8px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+  z-index: 6;
+}
+.story2-cards__row {
+  display: flex;
+  gap: 8px;
+}
+.story2-cards__card {
+  width: 92px;
+  border-radius: 8px;
+  outline: 3px solid transparent;
+  transition: outline-color 0.15s, transform 0.15s;
+}
+.story2-cards__card .shop-card { width: 100%; }
+.story2-cards__card--selectable { cursor: pointer; }
+.story2-cards__card--selected {
+  outline-color: #ffc400;
+  transform: translateY(-4px);
+}
 /* 章を選ぶ画面 (第1章をクリアした後、ストーリーを押すと出る -- story.js openStoryChapterSelect) */
 .story-chapters {
   position: fixed;

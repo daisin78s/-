@@ -30,6 +30,8 @@ const STORY_SPEAKERS = {
   alek: { name: 'アレク', img: 'assets/story-alek.png' },
   unknown: { name: '？？？', img: null },
   patra: { name: 'パトラ', img: 'assets/story-patra.png' },
+  spal: { name: 'スパル', img: 'assets/story-spal.png' },
+  spalAway: { name: 'スパル', img: null }, // 第2章: スパルが立ち去っている間(立ち絵を消す)
 };
 
 let storyRun = null; // 実行中の場面。nullなら閉じている。
@@ -177,7 +179,8 @@ function storyShowGoal(text) {
 
 /** 練習用のGameStateを作る: あなた(P1)と、後で登場するパトラ(P2)。P2〜P4のダイスはパス済みにして手番が
  * 来ないようにしておく(パトラは登場時に戻す)。JOB/制約は効果の少ないものを持たせ、資源は0から。 */
-function storyBuildState(diceValues) {
+/** cons: 性格の山札 {P1, P2}(省略時は第1章: あなた=怠惰、パトラ=幸運)。 */
+function storyBuildState(diceValues, cons) {
   const state = gameStateMod.createEmptyGameState('story-fixed-1');
   setupMod.createPlayers(state, [loadRememberedRankingName() || 'Alice', 'パトラ', 'Carol', 'Dan']);
   setupMod.prepareMaps(state, INDEX);
@@ -191,7 +194,7 @@ function storyBuildState(diceValues) {
   state.shops.NORMAL.slots.SHOP101 = 'A001A';
   state.extraMonumentPool = [];
   setupMod.rollInitialColorDice(state, { P1: diceValues });
-  setupMod.dealConCards(state, { P1: 'CON005', P2: 'CON001' });
+  setupMod.dealConCards(state, cons || { P1: 'CON005', P2: 'CON001' });
   state.jobPool = ['JOB001', 'JOB002'];
   setupMod.chooseJob(state, INDEX, 'P1', 'JOB001');
   setupMod.chooseJob(state, INDEX, 'P2', 'JOB002');
@@ -899,6 +902,7 @@ function storyFreePlay() {
       onPlaced: () => {
         const afterTurn = () => storyWhenVisualsIdle(() => {
           storyEndTurnOf('P1');
+          turnActionTaken = true; // パトラの手番の間は置けない(次の自分の番でstoryWaitForPlacementが戻す)
           storyPatraPlacesOnField(() => loop(false));
         });
         if (first) storySay('S063', afterTurn);
@@ -1032,7 +1036,8 @@ function toggleStoryLog() {
 
 /* ---------- 開く/閉じる ---------- */
 
-function openStoryMode() {
+/** startScene: 最初の場面(省略時は第1章の農園から)。 */
+function openStoryMode(startScene) {
   if (storyRun) return;
   const root = el('div', 'story-overlay');
   root.id = 'story-overlay';
@@ -1073,7 +1078,7 @@ function openStoryMode() {
   aiPacingMode = 'manual'; // パトラなどAIの手は台本が進める
   storySetSpeaker('alek');
   storySetAllowedTabs(['board']);
-  storySceneFarm();
+  (startScene || storySceneFarm)();
 }
 
 function closeStoryMode() {
@@ -1097,6 +1102,259 @@ document.addEventListener('click', (e) => {
   }
 }, true);
 
+/* ---------- 第2章: ○○○の百人隊長スパル (data/story2.data.js) ---------- */
+
+/** 2026-10-31, per user: 第2章の台本はストーリー.xlsxのSheet2 ("エクセルのほうです"、tools/story2_xlsx_to_js.py
+ * で data/story2.data.js に変換)。1行ずつ順番に、A列=スパルのセリフ、C列=画面で起きること/その部分が始まる
+ * 条件。C列は文言で見分ける(下のstory2DoEvent / STORY2_TRIGGERS)ので、行を足したり順番を変えたりしても
+ * 文言が同じなら動く。
+ *  - 最初から最初の「条件」の行までが導入(ダイスが振られる・訓練場がオープン・1秒消える・初期資源カード4枚
+ *    (C列に書かれたIDのカード)・小麦畑/農園/酒場オープン・2枚選ぶ)。
+ *  - そのあとは自由に置く(ほかのプレイヤーは出ない)。訓練場で色ダイスが増えた1回目/2回目、酒場で人脈が
+ *    増えた時(1回だけ)に、その条件の行から次の条件の行の手前までを出す。
+ *  - ダイスを使い切った時、色ダイスが5個なら「5個」の部分(次のラウンド→セリフ)→「つづく」、4個以下なら
+ *    「4個以下」の部分のあと、初期資源カードが配られる直前の盤面に戻してやり直し(per user「初期資源カードを
+ *    選ぶ所から」)。
+ *  - 最初のダイス3個は、3個とも同じ目にはしない(per user: 同じ目だとクリアできないことがあるため)。 */
+const STORY_TAVERN_MAP_ID = 'MAP006'; // 酒場
+const STORY_TRAINING_MAP_ID = 'MAP007'; // 訓練場
+const STORY2_TRIGGERS = [
+  { key: 'train1', test: (e) => /訓練場/.test(e) && /[1１]回目/.test(e) },
+  { key: 'train2', test: (e) => /訓練場/.test(e) && /[2２]回目/.test(e) },
+  { key: 'tavern', test: (e) => /酒場/.test(e) && /置く/.test(e) },
+  { key: 'fail', test: (e) => /使い切/.test(e) && /以下/.test(e) },
+  { key: 'clear', test: (e) => /使い切/.test(e) && !/以下/.test(e) },
+];
+
+/** 台本を導入と条件ごとの部分に分ける: { intro: [行...], train1: [...], ... }。行は {text, event, index}。 */
+function story2Blocks() {
+  const blocks = { intro: [] };
+  let current = blocks.intro;
+  (window.STORY2_SCRIPT || []).forEach((row, index) => {
+    const trigger = row.event && STORY2_TRIGGERS.find((t) => t.test(row.event));
+    if (trigger) {
+      current = blocks[trigger.key] = [];
+      current.push({ text: row.text, event: '', index }); // 条件の行: 条件はもう満たしているので、セリフだけ
+      return;
+    }
+    current.push({ ...row, index });
+  });
+  return blocks;
+}
+
+function story2DiceValues() {
+  for (;;) {
+    const values = [0, 0, 0].map(() => 1 + Math.floor(Math.random() * 6));
+    if (new Set(values).size > 1) return values;
+  }
+}
+
+function story2BuildState() {
+  // あなたの性格は幸運(性格なし)。第1章の怠惰は「色ダイスが増える代わりに白ダイス」なので訓練場の試練ができない。
+  const state = storyBuildState(story2DiceValues(), { P1: 'CON001', P2: 'CON005' });
+  state.shops.NORMAL.slots.SHOP101 = null; // 第2章はショップに何も並べない
+  return state;
+}
+
+function story2Start() {
+  const run = storyRun;
+  run.visibleMapIds = [];
+  run.chapter2 = { blocks: story2Blocks(), trainCount: 0, tavernDone: false, snapshot: null, cards: [] };
+  storyUseState(story2BuildState());
+  story2LockPlacement();
+  run.placementBaseline = storyPlacementCounts(STATE);
+  storyApplyVisibleMaps();
+  applyMobileActiveTab('board');
+  render(STATE);
+  storySetSpeaker('spal');
+  story2Play(run.chapter2.blocks.intro, 0, story2FreePlay);
+}
+
+/** rowsをi行目から順番に: C列があればその出来事、A列があればスパルのセリフ。終わったらonDone()。 */
+function story2Play(rows, i, onDone) {
+  if (!storyRun) return;
+  if (i >= rows.length) { onDone(); return; }
+  const row = rows[i];
+  const next = () => story2Play(rows, i + 1, onDone);
+  const say = () => {
+    if (!row.text) { next(); return; }
+    storySetSpeaker('spal');
+    storySayThen(`C2-${row.index}`, next, 0, row.text);
+  };
+  if (row.event) story2DoEvent(row, i, say);
+  else say();
+}
+
+function story2DoEvent(row, i, onDone) {
+  const run = storyRun;
+  const e = row.event;
+  if (/配られる/.test(e)) {
+    // ここが「やり直し」の戻り先(配られる直前の盤面)。
+    if (!run.chapter2.snapshot) {
+      run.chapter2.snapshot = { state: gameStateMod.cloneState(STATE), visibleMapIds: run.visibleMapIds.slice(), rowIndex: i };
+    }
+    run.chapter2.cards = e.match(/R\d{3}/g) || [];
+    story2ShowResourceCards(false);
+    storyLater(onDone, 600);
+  } else if (/選ぶ/.test(e)) {
+    story2ShowResourceCards(true, onDone);
+  } else if (/振られる/.test(e)) {
+    storyRollHandDice(onDone, 'P1');
+  } else if (/オープン/.test(e)) {
+    story2HideResourceCards();
+    const mapIds = Object.keys(STATE.maps).filter((mapId) => {
+      const name = dataLoaderMod.getAreaRow(INDEX, STATE.maps[mapId].currentAreaId).NAME;
+      return e.includes(name) && !run.visibleMapIds.includes(mapId);
+    });
+    mapIds.forEach((mapId, k) => storyLater(() => storyRevealMap(mapId), k * 250));
+    storyLater(onDone, mapIds.length * 250 + 500);
+  } else if (/消える/.test(e)) {
+    storyHideDialog();
+    storySetSpeaker('spalAway');
+    storyLater(onDone, 1000);
+  } else if (/次のラウンド/.test(e)) {
+    storyStartNextRound(onDone);
+  } else if (/減る|増える/.test(e)) {
+    // 「食料2減る」「人脈3増える」: 資源はもう本物のゲームの処理で変わっているので、その資源を光らせるだけ。
+    const names = { 食料: 'K', 権力: 'A', 知識: 'B', 金貨: 'C', 人脈: 'Z' };
+    const key = Object.keys(names).find((n) => e.includes(n));
+    const badge = key && storyResourceBadge(names[key]);
+    if (badge) badge.classList.add('change-highlight');
+    storyLater(() => { if (badge) badge.classList.remove('change-highlight'); onDone(); }, 1200);
+  } else {
+    console.warn(`第2章: C列「${e}」はまだ対応していません`);
+    onDone();
+  }
+}
+
+/** 初期資源カード(C列に書かれたIDのカード)を並べる。selectable=trueなら2枚選べて、「この2枚にする」で
+ * 獲得(カードのONCEの資源ももらう)してonPicked()。 */
+function story2ShowResourceCards(selectable, onPicked) {
+  const run = storyRun;
+  story2HideResourceCards();
+  const root = el('div', 'story2-cards');
+  const row = el('div', 'story2-cards__row');
+  const selected = new Set();
+  const confirm = el('button', 'story-end__button story2-cards__confirm', 'この2枚にする');
+  confirm.type = 'button';
+  confirm.hidden = true;
+  for (const faceId of run.chapter2.cards) {
+    const cell = el('div', 'story2-cards__card');
+    cell.appendChild(buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true }));
+    if (selectable) {
+      cell.classList.add('story2-cards__card--selectable');
+      cell.addEventListener('click', () => {
+        if (selected.has(faceId)) selected.delete(faceId);
+        else if (selected.size < 2) selected.add(faceId);
+        cell.classList.toggle('story2-cards__card--selected', selected.has(faceId));
+        confirm.hidden = selected.size !== 2;
+      });
+    }
+    row.appendChild(cell);
+  }
+  root.appendChild(row);
+  if (selectable) {
+    root.appendChild(confirm);
+    confirm.addEventListener('click', () => {
+      story2HideResourceCards();
+      story2GrantResourceCards([...selected]);
+      onPicked();
+    });
+  }
+  run.dom.root.appendChild(root);
+  run.dom.resourceCards = root;
+  root.animate([{ opacity: 0, transform: 'translate(-50%, -12px)' }, { opacity: 1, transform: 'translate(-50%, 0)' }], { duration: 300, easing: 'ease-out' });
+}
+
+function story2HideResourceCards() {
+  const run = storyRun;
+  if (run && run.dom.resourceCards) { run.dom.resourceCards.remove(); run.dom.resourceCards = null; }
+}
+
+function story2GrantResourceCards(faceIds) {
+  const player = storyPlayer('P1');
+  for (const faceId of faceIds) {
+    const inst = gameStateMod.createCardInstance(faceId);
+    inst.ownerId = 'P1';
+    STATE.cards[inst.physicalId] = inst;
+    player.ownedCardPhysicalIds.push(inst.physicalId);
+    const once = dataLoaderMod.getCardRow(INDEX, faceId).ONCE;
+    if (once) executorMod.runProgram(STATE, INDEX, { playerId: 'P1', sourcePhysicalId: inst.physicalId }, once);
+  }
+  render(STATE);
+}
+
+/** 導入やスパルのセリフの間はダイスを置けないようにする(次に置く所でstoryWaitForPlacementが戻す)。
+ * main.jsのrender()は「手番が替わった」(lastTurnPlayerIdが違う/turnJustEnded)と置ける状態に戻すので、
+ * それも今の手番(P1)に合わせておく。 */
+function story2LockPlacement() {
+  turnActionTaken = true;
+  lastTurnPlayerId = 'P1';
+  turnJustEnded = false;
+  selectedDieIds = [];
+}
+
+function story2ColorDiceCount() {
+  return storyPlayer('P1').dice.filter((d) => d.kind === 'COLOR').length;
+}
+
+/** 導入のあと: ダイスを自由に置く。訓練場で色ダイスが増えた/酒場で人脈が増えたら、その部分のセリフ。 */
+function story2FreePlay() {
+  const run = storyRun;
+  if (!run) return;
+  const ch = run.chapter2;
+  storySetSpeaker('spalAway');
+  storyHideDialog();
+  storyPassUnplaceableDice('P1', run.visibleMapIds);
+  if (!storyHasDiceLeft('P1')) { story2Finish(); return; }
+  const colorBefore = story2ColorDiceCount();
+  const zBefore = storyPlayer('P1').resources.Z || 0;
+  storyWaitForPlacement({
+    goalText: '',
+    onPlaced: (mapId) => storyWhenVisualsIdle(() => {
+      storyEndTurnOf('P1');
+      render(STATE); // 手番の切り替わり(置ける状態に戻る)をここで済ませてから、
+      story2LockPlacement(); // スパルのセリフの間は置けないようにする
+      render(STATE);
+      let block = null;
+      if (mapId === STORY_TRAINING_MAP_ID && story2ColorDiceCount() > colorBefore) {
+        ch.trainCount++;
+        if (ch.trainCount <= 2) block = ch.blocks[ch.trainCount === 1 ? 'train1' : 'train2'];
+      } else if (mapId === STORY_TAVERN_MAP_ID && (storyPlayer('P1').resources.Z || 0) > zBefore && !ch.tavernDone) {
+        ch.tavernDone = true;
+        block = ch.blocks.tavern;
+      }
+      if (block) story2Play(block, 0, story2FreePlay);
+      else story2FreePlay();
+    }),
+  });
+}
+
+function story2Finish() {
+  const ch = storyRun.chapter2;
+  if (story2ColorDiceCount() >= 5) story2Play(ch.blocks.clear || [], 0, () => storyEndOfScript('つづく'));
+  else story2Play(ch.blocks.fail || [], 0, story2Rewind);
+}
+
+/** 「やり直し」: 初期資源カードが配られる直前の盤面に戻して、そこから導入の続きを出す。 */
+function story2Rewind() {
+  const run = storyRun;
+  if (!run) return;
+  const ch = run.chapter2;
+  const snap = ch.snapshot;
+  storyUseState(gameStateMod.cloneState(snap.state));
+  story2LockPlacement();
+  run.visibleMapIds = snap.visibleMapIds.slice();
+  run.placementBaseline = storyPlacementCounts(STATE);
+  run.glowDieValues = [];
+  ch.trainCount = 0;
+  ch.tavernDone = false;
+  lastRenderedRound = STATE.round;
+  storyApplyVisibleMaps();
+  render(STATE);
+  story2Play(ch.blocks.intro, snap.rowIndex, story2FreePlay);
+}
+
 /* ---------- 章を選ぶ画面 ---------- */
 
 // 2026-10-31, per user: "第２章のストーリーに行った後 また ストーリー に入ったら 第１章 怠惰なローマ市民アレク
@@ -1105,7 +1363,7 @@ document.addEventListener('click', (e) => {
 const STORY_CLEARED_KEY = 'diceWpStoryChaptersCleared';
 const STORY_CHAPTERS = [
   { no: 1, title: '第１章　怠惰なローマ市民アレク', start: openStoryMode },
-  { no: 2, title: '第２章　○○○の百人隊長スパル', start: null }, // 作成中
+  { no: 2, title: '第２章　○○○の百人隊長スパル', start: () => openStoryMode(story2Start) },
 ];
 
 function storyClearedChapters() {
