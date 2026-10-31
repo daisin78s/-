@@ -2048,11 +2048,18 @@ function revealExtraMonumentsIfAnyShopEmptied(state) {
  * the actual fill, just batched upfront instead of one id at a time. Called once from turnFlow.startRound,
  * exactly when state.round becomes 4. */
 function forceRevealExtraMonumentsAtRound4(state) {
+  // 強化モニュメント(M401-405)は捨て札にしない (2026-10-31, per user request: "4R開始時に 強化モニュメントが
+  // 捨て札になることはありますか？ もしあるなら 強化モニュメントは捨て札にならないようにお願い") -- 3Rまでに
+  // SHOP201-203へ出ていた(またはその山札に入っていた)強化モニュメントはそのまま残し、捨てるのは強化カード
+  // (2R/3Rから出るA/B/Cカード)だけ。空いたスロットの分だけ、残りの強化モニュメントを出す。
   const shop = state.shops.SPECIAL;
-  shop.drawPile = [];
-  for (const slotId of Object.keys(shop.slots)) shop.slots[slotId] = null;
-  const slotCount = Object.keys(shop.slots).length;
-  for (let i = 0; i < slotCount && state.extraMonumentPool.length > 0; i++) {
+  const isExtraMonument = (faceId) => !!faceId && faceId[0] === 'M';
+  shop.drawPile = shop.drawPile.filter(isExtraMonument);
+  for (const slotId of Object.keys(shop.slots)) {
+    if (!isExtraMonument(shop.slots[slotId])) shop.slots[slotId] = null;
+  }
+  const emptySlots = Object.values(shop.slots).filter((faceId) => faceId === null).length;
+  while (shop.drawPile.length < emptySlots && state.extraMonumentPool.length > 0) {
     shop.drawPile.push(state.extraMonumentPool.shift());
   }
   restockShop(state, 'SPECIAL');

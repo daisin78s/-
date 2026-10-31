@@ -2070,6 +2070,26 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   check('After round 2: still exactly 5 color dice in hand, never 6', p1.dice.filter((d) => d.kind === 'COLOR' && d.placedMapId === null).length, 5);
 }
 {
+  // 4R開始時: SHOP201-203の強化カードは捨て札、すでに出ていた強化モニュメントは残す (2026-10-31, per user
+  // request: "強化モニュメントは捨て札にならないようにお願い")。空いたスロットは残りの強化モニュメントで埋める。
+  const state = freshStateWithShops();
+  const special = state.shops.SPECIAL;
+  const slotIds = Object.keys(special.slots);
+  special.slots[slotIds[0]] = 'A202A';
+  special.slots[slotIds[1]] = 'C301A';
+  special.slots[slotIds[2]] = state.extraMonumentPool.shift(); // 3Rまでに出ていた強化モニュメント
+  const alreadyOut = special.slots[slotIds[2]];
+  special.drawPile = ['B201A'];
+  const poolBefore = state.extraMonumentPool.slice();
+  board.forceRevealExtraMonumentsAtRound4(state);
+  const after = Object.values(special.slots);
+  check('Round 4: the already-revealed extra monument stays in SHOP201-203', after.includes(alreadyOut), true);
+  check('Round 4: the special A/B/C cards are discarded', after.some((id) => id && id[0] !== 'M'), false);
+  check('Round 4: the 2 freed slots are filled from the remaining extra monuments', after.filter((id) => id && id[0] === 'M').length, 3);
+  check('Round 4: the special drawPile (A/B/C) is discarded', special.drawPile, []);
+  check('Round 4: exactly 2 more were drawn from the pool', state.extraMonumentPool, poolBefore.slice(2));
+}
+{
   // 怠惰 (PASSIVE=REPLACE_ADD(D,wD)) (2026-08-15, per user follow-up: "CONで上限3個を持つプレ
   // イヤーはダイスを3個持つ限り訓練場にダイス候補が出ないように...現状絶対置けないはずです") -- blocked
   // unconditionally, even with just 1 color die (nowhere near the normal 5-die cap), since REPLACE_ADD
