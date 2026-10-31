@@ -788,7 +788,7 @@ function storySceneRound2() {
 /** 次のラウンドへ: 置いてあったダイスが右へ退場 → ゲームのラウンド終了/開始の処理 → あなたのダイスを
  * その場で振る。普段のラウンド開始の演出(資源タブで全員のダイスを転がす)は使わない(他のプレイヤーが
  * まだ登場していないため)。 */
-function storyStartNextRound(onDone) {
+function storyStartNextRound(onDone, keepLocked) {
   // 普段のラウンド開始と同じ「ラウンド2」の文字の演出 (2026-10-29, per user request: "その演出は ストーリーの
   // ダイスを 回収した時も欲しい")。流れ終わってからダイスを振る。
   playRoundBanner(STATE.round + 1);
@@ -816,6 +816,7 @@ function storyStartNextRound(onDone) {
     turnActionTaken = false;
     selectedDieIds = [];
     render(STATE);
+    if (keepLocked) story2LockPlacement(); // 第2章: このあとスパルのセリフが続くので、振っている間も置けない
     storyRollHandDice(onDone, 'P1');
   }, Math.max(placed.length ? 420 : 0, ROUND_BANNER_MS));
 }
@@ -1224,14 +1225,23 @@ const STORY2_TRIGGERS = [
   { key: 'tavern', test: (e) => /酒場/.test(e) && /置く/.test(e) },
   { key: 'fail', test: (e) => /使い切/.test(e) && /以下/.test(e) },
   { key: 'clear', test: (e) => /使い切/.test(e) && !/以下/.test(e) },
+  // 2ラウンド目: このラウンドで1枚目のカードを獲得したのが何ターン目か / 2枚目を獲得した時。
+  { key: 'card1early', test: (e) => /カード獲得/.test(e) && /1枚目/.test(e) && /1-2ターン/.test(e) },
+  { key: 'card1mid', test: (e) => /カード獲得/.test(e) && /1枚目/.test(e) && /3-4ターン/.test(e) },
+  { key: 'card1late', test: (e) => /カード獲得/.test(e) && /1枚目/.test(e) && /5ターン/.test(e) },
+  { key: 'card2', test: (e) => /カード獲得/.test(e) && /2枚目/.test(e) },
 ];
+/** 全角の数字・ハイフンを半角に(C列の文言を見分ける前に)。 */
+function story2NormalizeEvent(e) {
+  return e.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[－ー−]/g, (c, k, str) => (/\d/.test(str[k - 1] || '') ? '-' : c));
+}
 
 /** 台本を導入と条件ごとの部分に分ける: { intro: [行...], train1: [...], ... }。行は {text, event, index}。 */
 function story2Blocks() {
   const blocks = { intro: [] };
   let current = blocks.intro;
   (window.STORY2_SCRIPT || []).forEach((row, index) => {
-    const trigger = row.event && STORY2_TRIGGERS.find((t) => t.test(row.event));
+    const trigger = row.event && STORY2_TRIGGERS.find((t) => t.test(story2NormalizeEvent(row.event)));
     if (trigger) {
       current = blocks[trigger.key] = [];
       current.push({ text: row.text, event: '', index }); // 条件の行: 条件はもう満たしているので、セリフだけ
@@ -1275,8 +1285,16 @@ function story2Start() {
   storyApplyVisibleMaps();
   applyMobileActiveTab('board');
   render(STATE);
-  storySetSpeaker('spal');
-  story2Play(run.chapter2.blocks.intro, 0, story2FreePlay);
+  // スパルの絵を読み込んでから始める (per user「一番初め…スパルが遅れて出る」: 読み込みが間に合わず、セリフ
+  // だけ先に出ていた)。
+  const img = new Image();
+  img.src = STORY_SPEAKERS.spal.img;
+  const loaded = img.decode ? img.decode() : Promise.resolve();
+  loaded.catch(() => {}).then(() => {
+    if (storyRun !== run) return;
+    storySetSpeaker('spal');
+    story2Play(run.chapter2.blocks.intro, 0, story2FreePlay);
+  });
 }
 
 /** rowsをi行目から順番に: C列があればその出来事、A列があればスパルのセリフ。終わったらonDone()。 */
@@ -1296,7 +1314,7 @@ function story2Play(rows, i, onDone) {
 
 function story2DoEvent(row, i, onDone) {
   const run = storyRun;
-  const e = row.event.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)); // 全角数字も読む
+  const e = story2NormalizeEvent(row.event); // 全角数字も読む
   const seconds = (/(\d+)秒/.exec(e) || [])[1];
   if (/消え/.test(e) && /光る/.test(e)) {
     // 「セルフとスパルが5秒間消えて「目1-6」や「目1-5」と書いてあるところがすべて光る」: ショップのダイス目の
@@ -1308,6 +1326,56 @@ function story2DoEvent(row, i, onDone) {
   } else if (/ショップ/.test(e) && /光る/.test(e)) {
     storySetAllowedTabs([...run.allowedTabs, 'shop']);
     storySetGlow(['.mobile-tab-switcher__btn[data-tab-target="shop"]']);
+    onDone();
+  } else if (/ショップ画面/.test(e)) {
+    // 「ショップ画面に移動」: こちらでショップのタブに切り替える。
+    storySetAllowedTabs([...run.allowedTabs, 'shop']);
+    applyMobileActiveTab('shop');
+    render(STATE);
+    storyLater(onDone, 400);
+  } else if (/エリア画面/.test(e)) {
+    // 「エリア画面に戻る」: こちらでエリアのタブに切り替える。
+    applyMobileActiveTab('board');
+    render(STATE);
+    storyLater(onDone, 400);
+  } else if (/M\d{3}/.test(e) && /ショップ/.test(e)) {
+    // 「ショップ001-006にM007-012がランダムで出てくる」: モニュメントの段を「次のラウンドから」の裏向きから表に
+    // して、書かれた範囲のモニュメントをランダムな順番で並べる。
+    const range = /M(\d{3})(?:\s*[-~〜]\s*M?(\d{3}))?/.exec(e);
+    const from = Number(range[1]);
+    const to = range[2] ? Number(range[2]) : from;
+    const faces = [];
+    for (let n = from; n <= to; n++) faces.push(`M${String(n).padStart(3, '0')}`);
+    for (let k = faces.length - 1; k > 0; k--) {
+      const j = Math.floor(Math.random() * (k + 1));
+      [faces[k], faces[j]] = [faces[j], faces[k]];
+    }
+    const slots = Object.keys(STATE.shops.M.slots);
+    faces.forEach((faceId, k) => { if (slots[k]) STATE.shops.M.slots[slots[k]] = faceId; });
+    STATE.shops.M.drawPile = [];
+    if (run.shopOverrides) delete run.shopOverrides.monumentLabel;
+    render(STATE);
+    const shopSlots = [...document.querySelectorAll('#shop-combined-slots .shop-slot')].filter((n) => n.style.gridRow === '1');
+    shopSlots.forEach((n, k) => n.animate([{ opacity: 0, transform: 'scale(0.9)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 400, delay: k * 120, easing: 'ease-out', fill: 'backwards' }));
+    storyLater(onDone, shopSlots.length * 120 + 500);
+  } else if (/戻る/.test(e) && /ボタン/.test(e)) {
+    // 「ターン開始時に戻るボタンと１手戻るボタンが出てくる」: ストーリーでは置いたらすぐ次の手番になるので、
+    // この2つが押せるのはカードを選ぶ画面(皇帝宮殿・元老院)だけ。ここから先はその画面に出す。
+    document.body.classList.add('story-undo-shown');
+    onDone();
+  } else if (/エリア/.test(e) && /光る/.test(e)) {
+    // 「タブの「エリア」が光る」
+    storySetAllowedTabs([...run.allowedTabs, 'board']);
+    storySetGlow(['.mobile-tab-switcher__btn[data-tab-target="board"]']);
+    onDone();
+  } else if (/エリアに戻る/.test(e)) {
+    storyWaitUntil(() => mobileActiveTab === 'board', () => {
+      storySetGlow([]);
+      onDone();
+    });
+  } else if (/拡大/.test(e)) {
+    // 「セリフの上にカード貴族を拡大で表示してチェックマークをつけそれを光らせる」: 次の「消える」まで出しておく。
+    story2ShowCallout(e);
     onDone();
   } else if (/ショップ/.test(e) && /クリック/.test(e)) {
     storySetAllowedTabs([...run.allowedTabs, 'shop']);
@@ -1367,11 +1435,20 @@ function story2DoEvent(row, i, onDone) {
     storyLater(onDone, mapIds.length * 250 + 500);
   } else if (/消え/.test(e)) {
     // 「セルフとスパルが１秒間消える」「スパルとセリフが消える」: 秒数があればその間待つ。
+    story2HideCallout();
     storyHideDialog();
     storySetSpeaker('spalAway');
     storyLater(onDone, (Number(seconds) || 0) * 1000);
   } else if (/次のラウンド/.test(e)) {
-    storyStartNextRound(onDone);
+    storyStartNextRound(() => {
+      story2LockPlacement(); // スパルのセリフの間は置けない
+      // 2ラウンド目の「やり直し」の戻り先 (per user「43行目「よーし次のラウンドだ」から」)。
+      if (!run.chapter2.round2Snapshot) {
+        run.chapter2.round2Snapshot = { state: gameStateMod.cloneState(STATE), visibleMapIds: run.visibleMapIds.slice(), rowIndex: i + 1, allowedTabs: [...run.allowedTabs] };
+      }
+      run.chapter2.inRound2 = true;
+      onDone();
+    }, true);
   } else if (/減る|増える/.test(e)) {
     // 「食料2減る」「人脈3増える」: 資源はもう本物のゲームの処理で変わっているので、その資源を光らせるだけ。
     const names = { 食料: 'K', 権力: 'A', 知識: 'B', 金貨: 'C', 人脈: 'Z' };
@@ -1467,15 +1544,35 @@ function story2FreePlay() {
   if (!storyHasDiceLeft('P1')) { story2Finish(); return; }
   const colorBefore = story2ColorDiceCount();
   const zBefore = storyPlayer('P1').resources.Z || 0;
+  const placedBefore = storyP1DiceCount(STATE, Object.keys(STATE.maps));
   storyWaitForPlacement({
     goalText: '',
     onPlaced: (mapId) => storyWhenVisualsIdle(() => {
+      // カードを選ぶ画面で「ターン開始時に戻る」「1手戻る」を押してダイスが手元に戻ったら、手番は終えずに置き直し。
+      if (storyP1DiceCount(STATE, Object.keys(STATE.maps)) <= placedBefore) {
+        run.placementBaseline = storyPlacementCounts(STATE);
+        story2FreePlay();
+        return;
+      }
       storyEndTurnOf('P1');
       render(STATE); // 手番の切り替わり(置ける状態に戻る)をここで済ませてから、
       story2LockPlacement(); // スパルのセリフの間は置けないようにする
       render(STATE);
       let block = null;
-      if (mapId === STORY_TRAINING_MAP_ID && story2ColorDiceCount() > colorBefore) {
+      const cardsGot = ch.inRound2 ? storyPlayer('P1').ownedCardPhysicalIds.length - ch.round2Snapshot.state.players.find((p) => p.id === 'P1').ownedCardPhysicalIds.length : 0;
+      if (ch.inRound2 && cardsGot >= 1 && !ch.card1Done) {
+        // 1枚目を獲得したのがこのラウンドの何ターン目か(=このラウンドに置いたダイスの数)。
+        ch.card1Done = true;
+        const turn = storyPlayer('P1').dice.filter((d) => d.placedMapId).length;
+        block = ch.blocks[turn <= 2 ? 'card1early' : turn <= 4 ? 'card1mid' : 'card1late'] || [];
+      }
+      if (ch.inRound2 && cardsGot >= 2 && !ch.card2Done) {
+        ch.card2Done = true;
+        block = [...(block || []), ...(ch.blocks.card2 || [])];
+      }
+      if (block) {
+        // 何枚目かの部分は「消える」で終わっていないので、終わったらスパルとセリフを下げる(story2FreePlay)。
+      } else if (mapId === STORY_TRAINING_MAP_ID && story2ColorDiceCount() > colorBefore) {
         ch.trainCount++;
         if (ch.trainCount <= 2) block = ch.blocks[ch.trainCount === 1 ? 'train1' : 'train2'];
       } else if (mapId === STORY_TAVERN_MAP_ID && (storyPlayer('P1').resources.Z || 0) > zBefore && !ch.tavernDone) {
@@ -1490,28 +1587,70 @@ function story2FreePlay() {
 
 function story2Finish() {
   const ch = storyRun.chapter2;
-  if (story2ColorDiceCount() >= 5) story2Play(ch.blocks.clear || [], 0, () => storyEndOfScript('つづく'));
-  else story2Play(ch.blocks.fail || [], 0, story2Rewind);
+  if (ch.inRound2) {
+    // 2ラウンド目: ダイスを使い切った時、このラウンドでカードを2枚以上獲得していれば合格→「つづく」、
+    // 足りなければ43行目「よーし次のラウンドだ」の盤面に戻してやり直し (per user「ダイスを使い切ってから」)。
+    if (ch.card2Done) storyEndOfScript('つづく');
+    else story2Rewind(ch.round2Snapshot, ch.blocks.clear);
+    return;
+  }
+  if (story2ColorDiceCount() >= 5) story2Play(ch.blocks.clear || [], 0, story2FreePlay);
+  else story2Play(ch.blocks.fail || [], 0, () => story2Rewind(ch.snapshot, ch.blocks.intro));
 }
 
-/** 「やり直し」: 初期資源カードが配られる直前の盤面に戻して、そこから導入の続きを出す。 */
-function story2Rewind() {
+/** 「やり直し」: snapの盤面に戻して、rowsのsnap.rowIndex行目から続きを出す。1ラウンド目は初期資源カードが
+ * 配られる直前(導入の途中)、2ラウンド目は「よーし次のラウンドだ」の直前。 */
+function story2Rewind(snap, rows) {
   const run = storyRun;
   if (!run) return;
   const ch = run.chapter2;
-  const snap = ch.snapshot;
+  story2HideCallout();
+  document.body.classList.remove('story-undo-shown');
+  run.shopOverrides = null;
+  if (snap.allowedTabs) storySetAllowedTabs(snap.allowedTabs);
+  storySetGlow([]);
   storyUseState(gameStateMod.cloneState(snap.state));
   run.turnBannerKeys = new Set(); // 巻き戻したら「ターン○」も数え直す
   story2LockPlacement();
   run.visibleMapIds = snap.visibleMapIds.slice();
   run.placementBaseline = storyPlacementCounts(STATE);
   run.glowDieValues = [];
-  ch.trainCount = 0;
-  ch.tavernDone = false;
+  if (snap === ch.snapshot) { // 1ラウンド目のやり直しだけ、訓練場・酒場のセリフも出し直す
+    ch.trainCount = 0;
+    ch.tavernDone = false;
+  }
+  ch.card1Done = false;
+  ch.card2Done = false;
   lastRenderedRound = STATE.round;
   storyApplyVisibleMaps();
   render(STATE);
-  story2Play(ch.blocks.intro, snap.rowIndex, story2FreePlay);
+  story2Play(rows, snap.rowIndex, story2FreePlay);
+}
+
+/** 「セリフの上にカード貴族を拡大で表示してチェックマークをつけそれを光らせる」: C列に名前が書かれたカード
+ * (LV1)を、セリフの上に大きく出す。獲得できる印(✓)を付けて光らせる。次の「消える」で消す。 */
+function story2ShowCallout(eventText) {
+  const run = storyRun;
+  story2HideCallout();
+  let best = null;
+  for (const sheet of ['A', 'B', 'C', 'M']) {
+    for (const row of INDEX.raw[sheet] || []) {
+      const base = String(row.NAME || '').replace(/LV\d+$/, '');
+      if (!base || !eventText.includes(base) || /LV[2-9]$/.test(row.NAME)) continue;
+      if (!best || base.length > best.base.length) best = { faceId: row.ID, base };
+    }
+  }
+  if (!best) { console.warn(`第2章: 「${eventText}」のカードが見つかりません`); return; }
+  const card = buildCardVisual(best.faceId, { showEffect: true, noInteraction: true });
+  card.appendChild(el('span', 'shop-card__acquirable-badge', '✓'));
+  card.classList.add('change-highlight');
+  const box = el('div', 'story2-callout');
+  box.appendChild(card);
+  run.dom.root.appendChild(box);
+  box.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300, easing: 'ease-out' });
+}
+function story2HideCallout() {
+  document.querySelectorAll('.story2-callout').forEach((n) => n.remove());
 }
 
 /* ---------- 章を選ぶ画面 ---------- */

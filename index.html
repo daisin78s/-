@@ -41,7 +41,7 @@
        取得させる効果は無かった(iPad Safariがそれらをキャッシュしたまま使い続けていたと判明) --
        今後はこの番号と合わせて、下の全<script src>/<link>に付けた?v=X.XXXクエリ文字列も必ず
        同じ値に更新すること(実際にURLを変えることでキャッシュを回避する、こちらが本体)。 -->
-  <div id="copyright-notice">© 2026 higebucho Ver.1.412</div>
+  <div id="copyright-notice">© 2026 higebucho Ver.1.413</div>
 
   <!-- 入口バナー (2026-10-04, per user request: "HPに入ったときに大き目バナーを用意して導線をわかりやすく
        したい") -- #app/#weekly-seat-pickerと同じ「画面を丸ごと差し替える」パターン(main.jsのrender()
@@ -270,7 +270,7 @@
                   <option value="ok">OK</option>
                 </select>
               </div>
-              <button type="button" class="undo-button" id="undo-button" disabled>↩️ ターン開始に戻す</button>
+              <button type="button" class="undo-button" id="undo-button" disabled>↩️ ターン開始時に戻る</button>
               <!-- 直前のアクションをキャンセル (2026-08-10, per user request: "ダイスをSLOTに置いたときに
                    やり直したい時のために...ダイスをキャンセルボタンが欲しい これを押すとダイスを置くのを
                    キャンセルする"; generalized 2026-08-27, per user request: "ダイスをキャンセルを直前の
@@ -535,7 +535,7 @@
              画面でも戻れるように") -- the sidebar one sits behind this modal's backdrop while it's
              open, so a second copy lives here instead of fighting z-index/stacking-context rules to
              surface the same button through the overlay. Same handler (main.js). -->
-        <button type="button" class="undo-button" id="undo-button-build" disabled>↩️ ターン開始に戻す</button>
+        <button type="button" class="undo-button" id="undo-button-build" disabled>↩️ ターン開始時に戻る</button>
         <!-- Duplicate of #dice-cancel-button, same reasoning -- this modal appears exactly when a die
              placement's AREA action turned out to be a BUILD, one of the most useful moments to cancel
              just that placement instead of the whole turn. -->

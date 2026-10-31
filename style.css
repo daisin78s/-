@@ -7006,6 +7006,17 @@ body.story-hide-dice #players .player-panel .die {
   font-weight: 700;
   cursor: pointer;
 }
+/* 第2章: セリフの上にカードを大きく出す (story.js story2ShowCallout) */
+.story2-callout {
+  position: absolute;
+  left: 50%;
+  bottom: 38%;
+  transform: translateX(-50%) scale(1.6);
+  transform-origin: bottom center;
+  z-index: 4;
+  pointer-events: none;
+}
+.story2-callout .shop-card { position: relative; }
 /* 第2章: 初期資源カードを並べる/2枚選ぶ (story.js story2ShowResourceCards) */
 .story2-cards {
   position: absolute;
@@ -7081,8 +7092,9 @@ body.story-hide-dice #players .player-panel .die {
 }
 /* ストーリー中のカードを選ぶ画面: 戻す系のボタン(ターン開始に戻す/✖=1手戻る)は出さない(台本の盤面を
    戻せないように)。立ち絵とセリフはこの画面の上に出す(S017〜S020)。 */
-body.story-mode #undo-button-build,
-body.story-mode #build-choice-close-button { display: none; }
+/* 第2章の「ターン開始時に戻るボタンと１手戻るボタンが出てくる」から先は出す(body.story-undo-shown)。 */
+body.story-mode:not(.story-undo-shown) #undo-button-build,
+body.story-mode:not(.story-undo-shown) #build-choice-close-button { display: none; }
 /* ストーリーの会話ログ (story.jsのtoggleStoryLog)。セリフ欄と同じ横幅・同じ見た目で、上に広げて出す。 */
 .story-log {
   position: absolute;
