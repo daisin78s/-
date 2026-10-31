@@ -1155,20 +1155,18 @@ function openStoryMode(startScene) {
   dialog.appendChild(dialogName);
   const dialogText = el('div', 'story-dialog__text');
   dialog.appendChild(dialogText);
-  const close = el('button', 'story-close', '✖');
-  close.type = 'button';
-  close.setAttribute('aria-label', 'ストーリーをやめる');
-  close.addEventListener('click', closeStoryMode);
+  // ✖(ストーリーをやめる)ボタンは無し (2026-11-01, per user「Xボタン 不要」-- 途中でやめられなくてよいと確認済み)。
   // 会話ログ (2026-10-24, per user request: "会話ログを見れるボタンが欲しい 会話ログは新しいウィンドウが開く
   // のではなくセリフ部分にでる") -- ✖の上の「ログ」ボタンで、セリフ欄の所が上に広がってこれまでのセリフを
   // 一覧表示(新しい物が下)。開いている間はストーリーの自動送りを止める。もう一度押すか一覧を押すと閉じる。
-  const logButton = el('button', 'story-log-button', 'ログ');
+  // 「会話ログ」、一番下(✖があった所)に (2026-11-01, per user「ログは 会話ログ にして 一番下に」)。
+  const logButton = el('button', 'story-log-button', '会話ログ');
   logButton.type = 'button';
   logButton.addEventListener('click', toggleStoryLog);
   const logPanel = el('div', 'story-log');
   logPanel.hidden = true;
   logPanel.addEventListener('click', toggleStoryLog);
-  root.append(portrait, dialog, logPanel, goal, logButton, close);
+  root.append(portrait, dialog, logPanel, goal, logButton);
   document.body.appendChild(root);
   storyRun = {
     timers: new Set(), typeTimer: null, diceShown: false, glowDieValues: [], glowSelectors: [], onRender: null, onTap: null,

@@ -6865,9 +6865,9 @@ body.story-mode:not(.story-free-action):not(.story-undo-shown) .mobile-own-row__
 body.story-mode .mobile-own-row__turn-end .turn-end-button {
   display: none;
 }
-/* 右下のログ/✖(.story-log-button/.story-close)と重ならないよう、その上に並べる。長い「ターン開始時に戻る」は折り返す。 */
+/* 右下の会話ログ(.story-log-button)と重ならないよう、その上に並べる。長い「ターン開始時に戻る」は折り返す。 */
 body.story-mode .mobile-own-row__turn-end {
-  padding-bottom: 128px;
+  padding-bottom: 88px;
 }
 body.story-mode .mobile-own-row__turn-end .undo-button {
   white-space: normal;
@@ -7149,7 +7149,7 @@ body.story-mode:not(.story-undo-shown) #build-choice-close-button { display: non
 }
 .story-log-button {
   position: absolute;
-  bottom: 46px;
+  bottom: 6px;
   right: 6px;
   min-width: 34px;
   height: 34px;
@@ -7224,7 +7224,7 @@ body.story-mode #mobile-cards-player-switcher { display: none !important; }
     bottom: calc(46px + env(safe-area-inset-bottom));
   }
   .story-log-button {
-    bottom: calc(86px + env(safe-area-inset-bottom));
+    bottom: calc(46px + env(safe-area-inset-bottom));
   }
 }
 @media (max-width: 760px) and (orientation: landscape), (max-height: 500px) and (orientation: landscape) {
