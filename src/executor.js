@@ -795,17 +795,16 @@ function evalMetric(state, index, playerId, metric) {
     case 'EXTRA_D_PLUS_ABC_COUNT': {
       const colorDiceCount = getPlayer(state, playerId).dice.filter((d) => d.kind === 'COLOR').length;
       const extraColorDice = Math.max(0, colorDiceCount - INITIAL_COLOR_DICE);
-      // 強化カード(アップグレード済み、tier!=='A')除外 (2026-10-11, per user request: "通常カード枚数+
-      // 追加色ダイス 強化カードはカウントしなくなりました" -- Q001Bのこの名前変更に合わせたルール変更).
-      // 以前はCARD_COUNT(A,B,C)にそのまま委譲していた(現在のtierを問わず、A/B/C各シートの所有カード数を
-      // 全てカウント)が、今は現在のface tierが'A'(未アップグレード、"通常")のものだけを数える。tierの
-      // ないカード(CARD_COUNT_SHEETSのMシートなど)はそもそもここでは対象外(A,B,Cのみ指定)なので、
-      // splitCardIdがnullを返すケースは発生しない。
-      const abcBaseTierCount = owned.filter((c) => {
+      // 「通常カード」= 1Rから獲得できるカード(通常のショップの山札、番号200未満 -- setup.js
+      // collectNormalShopFaceIds)のLV1とLV2 (2026-10-31, per user: "通常カードの定義は 1Rから獲得できる
+      // カードのLV1とLV2です" -- バグ報告「農園を持っているが4ではなく3」から)。2Rから/3Rから出るカード
+      // (SHOP201-203、番号200番台・300番台)は数えない。2026-10-11の「強化カード(LV2)は数えない」は、
+      // 通常カードのLV2まで外していたので取りやめ。
+      const abcNormalCount = owned.filter((c) => {
         const sheet = index.byId.get(c.row.ID).sheet;
-        return ['A', 'B', 'C'].includes(sheet) && splitCardId(c.row.ID).tier === 'A';
+        return ['A', 'B', 'C'].includes(sheet) && Number(splitCardId(c.row.ID).physicalId.slice(1)) < 200;
       }).length;
-      return extraColorDice + abcBaseTierCount;
+      return extraColorDice + abcNormalCount;
     }
     default:
       throw new NotImplementedError(`Unknown condition metric: ${metric.name}`);

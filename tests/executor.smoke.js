@@ -1311,13 +1311,14 @@ const EXTRA_D = { name: 'EXTRA_D_PLUS_ABC_COUNT', args: [] };
   check('Fewer color dice than the starting count floors at 0 rather than going negative', executor.evalMetric(state, index, 'P1', EXTRA_D), 0);
 }
 {
-  // 強化カード(アップグレード済み、tier!=='A')除外 (2026-10-11, per user request: "通常カード枚数+追加
-  // 色ダイス 強化カードはカウントしなくなりました") -- a card already upgraded to its tier-B face no
-  // longer contributes to this metric at all, unlike CARD_COUNT(A,B,C) (which is tier-agnostic).
+  // 「通常カード」= 1Rから獲得できるカードのLV1とLV2 (2026-10-31, per user) -- LV2も数える。2Rから/3Rから
+  // 出るカード(番号200番台・300番台)は、LV1でもLV2でも数えない。
   const state = freshState();
-  giveCard(state, 'A001A', 'P1'); // still base tier -- counts
-  giveCard(state, 'A002B', 'P1'); // already upgraded -- excluded
-  check('An upgraded (tier-B) card no longer counts, only the still-base-tier one does', executor.evalMetric(state, index, 'P1', EXTRA_D), 1);
+  giveCard(state, 'A001A', 'P1'); // 通常 LV1 -- counts
+  giveCard(state, 'A002B', 'P1'); // 通常 LV2 -- counts
+  giveCard(state, 'A202B', 'P1'); // 2Rから(訓練場の支配LV2) -- excluded
+  giveCard(state, 'A301A', 'P1'); // 3Rから(元老院の支配LV1) -- excluded
+  check('Normal (1R) cards count at LV1 and LV2; 2R/3R special-shop cards do not', executor.evalMetric(state, index, 'P1', EXTRA_D), 2);
 }
 
 // ---------------------------------------------------------------------------
