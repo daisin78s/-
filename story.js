@@ -1230,7 +1230,8 @@ const STORY2_TRIGGERS = [
   { key: 'card1mid', test: (e) => /カード獲得/.test(e) && /1枚目/.test(e) && /3-4ターン/.test(e) },
   { key: 'card1late', test: (e) => /カード獲得/.test(e) && /1枚目/.test(e) && /5ターン/.test(e) },
   { key: 'card2', test: (e) => /カード獲得/.test(e) && /2枚目/.test(e) },
-  { key: 'unusedCard', test: (e) => /獲得後/.test(e) && /使わず/.test(e) }, // 出し方は確認中(まだ出さない)
+  // カードを獲得した次のターンの始めに1回だけ (per user「獲得した次のターンの始め」)。
+  { key: 'unusedCard', test: (e) => /獲得後/.test(e) && /使わず/.test(e) },
 ];
 /** 全角の数字・ハイフンを半角に(C列の文言を見分ける前に)。 */
 function story2NormalizeEvent(e) {
@@ -1543,6 +1544,12 @@ function story2FreePlay() {
   storyHideDialog();
   if (storyForcePassIfStuck('P1', run.visibleMapIds, story2Finish)) return;
   if (!storyHasDiceLeft('P1')) { story2Finish(); return; }
+  if (ch.unusedCardDue && !ch.unusedCardDone) {
+    ch.unusedCardDone = true;
+    story2Play(ch.blocks.unusedCard || [], 0, story2FreePlay);
+    return;
+  }
+  const ownedBefore = storyPlayer('P1').ownedCardPhysicalIds.length;
   const colorBefore = story2ColorDiceCount();
   const zBefore = storyPlayer('P1').resources.Z || 0;
   const placedBefore = storyP1DiceCount(STATE, Object.keys(STATE.maps));
@@ -1560,6 +1567,7 @@ function story2FreePlay() {
       story2LockPlacement(); // スパルのセリフの間は置けないようにする
       render(STATE);
       let block = null;
+      if (storyPlayer('P1').ownedCardPhysicalIds.length > ownedBefore) ch.unusedCardDue = true; // 次のターンの始めに
       const cardsGot = ch.inRound2 ? storyPlayer('P1').ownedCardPhysicalIds.length - ch.round2Snapshot.state.players.find((p) => p.id === 'P1').ownedCardPhysicalIds.length : 0;
       if (ch.inRound2 && cardsGot >= 1 && !ch.card1Done) {
         // 1枚目を獲得したのがこのラウンドの何ターン目か(=このラウンドに置いたダイスの数)。
@@ -1622,6 +1630,8 @@ function story2Rewind(snap, rows) {
   }
   ch.card1Done = false;
   ch.card2Done = false;
+  ch.unusedCardDue = false;
+  ch.unusedCardDone = false;
   lastRenderedRound = STATE.round;
   storyApplyVisibleMaps();
   render(STATE);
