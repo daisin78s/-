@@ -1413,8 +1413,9 @@ function story2DoEvent(row, i, onDone) {
     shopSlots.forEach((n, k) => n.animate([{ opacity: 0, transform: 'scale(0.9)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 400, delay: k * 120, easing: 'ease-out', fill: 'backwards' }));
     storyLater(onDone, shopSlots.length * 120 + 500);
   } else if (/戻る/.test(e) && /ボタン/.test(e)) {
-    // 「ターン開始時に戻るボタンと１手戻るボタンが出てくる」: ここから先は、エリアの右下(main.jsの
-    // renderMobileOwnRow、戻せる物が無い間は押せない表示)とカードを選ぶ画面(皇帝宮殿・元老院)に出す。
+    // 「ターン開始時に戻るボタンと１手戻るボタンが出てくる」: ここから先は、エリアの右下に1手戻る(main.jsの
+    // renderMobileOwnRow、戻せる物が無い間は押せない表示。ターン開始時に戻るは場所が狭いので出さない、per user)、
+    // カードを選ぶ画面(皇帝宮殿・元老院)に両方を出す。
     // 戻しても、一度見たセリフ・イベントは出し直さない(per user) -- 見たかどうかはchapter2の印で覚えていて、
     // 盤面と一緒には戻らない。
     document.body.classList.add('story-undo-shown');

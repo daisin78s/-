@@ -8745,15 +8745,9 @@ function renderMobileOwnDiceRow(state, next) {
   // バーの#dice-cancel-buttonと同じ条件(isDiceCancelDisabled)・同じ処理・同じ光る演出。押せない間は場所を
   // 取らないよう出さない。ターン終了と同じ入れ物の先頭に入れる(=ターン終了の上、縦向きのバーでは左)。
   // ストーリー第2章の「ターン開始時に戻るボタンと１手戻るボタンが出てくる」から先(body.story-undo-shown)だけは、
-  // ターン開始時に戻るも並べ、押せない間も(押せない表示で)出しておく。普段の対戦は今まで通り。
+  // 1手戻るを押せない間も(押せない表示で)出しておく。ターン開始時に戻るはエリアには出さない(per user「場所が
+  // 狭いので １手戻るボタンだけで」、カードを選ぶ画面には出る)。普段の対戦は今まで通り。
   const storyUndoShown = typeof storyRun !== 'undefined' && !!storyRun && document.body.classList.contains('story-undo-shown');
-  if (!aiView && storyUndoShown) {
-    const undoBtn = el('button', 'undo-button mobile-own-row__cancel mobile-own-row__undo', '↩️ ターン開始時に戻る');
-    undoBtn.type = 'button';
-    undoBtn.disabled = !state.undoCheckpoint || state.round === 0;
-    undoBtn.addEventListener('click', handleUndoClick);
-    turnEndEl.prepend(undoBtn);
-  }
   if (!aiView && (storyUndoShown || !isDiceCancelDisabled())) {
     const cancelBtn = el('button', 'undo-button mobile-own-row__cancel', '↩️ 1手戻る');
     cancelBtn.type = 'button';
