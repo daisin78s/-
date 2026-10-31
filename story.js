@@ -212,7 +212,8 @@ function storyShowGoal(text) {
 /** cons: 性格の山札 {P1, P2}(省略時は第1章: あなた=怠惰、パトラ=幸運)。 */
 function storyBuildState(diceValues, cons) {
   const state = gameStateMod.createEmptyGameState('story-fixed-1');
-  setupMod.createPlayers(state, [loadRememberedRankingName() || 'Alice', 'パトラ', 'Carol', 'Dan']);
+  // あなたの名前: ランキング登録で使った名前があればそれ、無ければ「あなた」 (2026-10-31, per user)。
+  setupMod.createPlayers(state, [(loadRememberedRankingName() || '').trim() || 'あなた', 'パトラ', 'Carol', 'Dan']);
   setupMod.prepareMaps(state, INDEX);
   setupMod.prepareShops(state, INDEX);
   // ショップに並ぶのは「ローマ市街の支配LV1」(A001A)だけ、他は無し (2026-10-24, per user: "ローマ市街の支配"
