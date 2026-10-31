@@ -568,9 +568,11 @@ h1, h2, h3 { margin: 0; }
 .shop-card__acquirable-badge {
   position: absolute;
   /* -6px -> -16px (2026-10-27, per user request: "チェックマークはエンブレムと かぶらないように 表示位置を
-     もう少し右へ" -- エンブレムを右下へ移したため)。 */
-  right: -16px;
-  bottom: -6px;
+     もう少し右へ" -- エンブレムを右下へ移したため)。2026-10-31, per user request: "右すぎて 隣のカードの
+     チェックに見えてしまう ひだりに戻して その代わり もっと下に" -- 横は-6pxに戻し、エンブレムと重ならない
+     よう下へ(-6px -> -16px)。 */
+  right: -6px;
+  bottom: -16px;
   width: 18px;
   height: 18px;
   border-radius: 50%;
