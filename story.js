@@ -1150,9 +1150,15 @@ function story2DiceValues() {
 }
 
 function story2BuildState() {
-  // あなたの性格は幸運(性格なし)。第1章の怠惰は「色ダイスが増える代わりに白ダイス」なので訓練場の試練ができない。
   const state = storyBuildState(story2DiceValues(), { P1: 'CON001', P2: 'CON005' });
   state.shops.NORMAL.slots.SHOP101 = null; // 第2章はショップに何も並べない
+  // あなたは性格なし (per user「第２章性格はなしでお願い 何も足さない」): 配った性格カードを取り上げる。
+  const p1 = state.players.find((p) => p.id === 'P1');
+  p1.ownedCardPhysicalIds = p1.ownedCardPhysicalIds.filter((id) => id !== p1.conPhysicalId);
+  delete state.cards[p1.conPhysicalId];
+  p1.conPhysicalId = null;
+  p1.conFace = null;
+  p1.noPersonality = true; // main.jsのhasFinishedOnboarding: 性格カードが無くても準備済み
   return state;
 }
 

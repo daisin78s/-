@@ -9706,7 +9706,8 @@ function roundOrderedPlayers(state) {
  * only the specific job-pool/CON-row highlight (.onboard-panel--active) should show, not the whole
  * group, since highlighting both is redundant. */
 function hasFinishedOnboarding(player) {
-  return player.jobCardId !== null && player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'));
+  // noPersonality: ストーリー第2章のあなた(性格カードを持たない、story.js story2BuildState)。
+  return player.jobCardId !== null && (player.noPersonality || player.ownedCardPhysicalIds.some((id) => id.startsWith('CON')));
 }
 
 /**
