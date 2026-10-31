@@ -1314,11 +1314,29 @@ function story2Play(rows, i, onDone) {
   const say = () => {
     if (!row.text) { next(); return; }
     story2HideCallout(); // 拡大したカードはセリフが始まったら消す(セリフが隠れないように、per user)
+    story2TopicGlow(row);
     storySetSpeaker('spal');
     storySayThen(`C2-${row.index}`, next, 0, row.text);
   };
+  if (row.event && storyRun.ch2TopicMapId) story2TopicGlow(row);
   if (row.event) story2DoEvent(row, i, say);
   else say();
+}
+
+/** 「「元老院」とはなにかって？」「「市場」とは何かだと？」: その話の間、そのエリアを光らせる (per user「元老院
+ * とは 市場とは のセリフの時に 該当エリア 光らせて」)。次の「「○○」とは」、C列のある行、「最後に」で始まる
+ * 話の行で消す。 */
+function story2TopicGlow(row) {
+  const run = storyRun;
+  const topic = row.text && /「(.+?)」とは/.exec(row.text);
+  const mapId = topic && Object.keys(STATE.maps).find((m) => dataLoaderMod.getAreaRow(INDEX, STATE.maps[m].currentAreaId).NAME === topic[1]);
+  if (mapId) {
+    run.ch2TopicMapId = mapId;
+    storySetGlow([`#board .map-tile[data-map-id="${mapId}"]`]);
+  } else if (run.ch2TopicMapId && (row.event || /^最後に/.test(row.text || ''))) {
+    run.ch2TopicMapId = null;
+    storySetGlow([]);
+  }
 }
 
 function story2DoEvent(row, i, onDone) {
