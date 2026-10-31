@@ -5,7 +5,7 @@ Input: the argument, otherwise ~/Desktop/ストーリー.xlsx. Sheet "Sheet2" (o
 Output: data/story2.data.js, a plain browser global (window.STORY2_SCRIPT) loaded via a normal <script src>
 tag -- same reasoning as data/game.data.js (index.html must keep working from file://).
 
-2026-10-31, per user: chapter 2 (○○○の百人隊長スパル) is written in Excel instead of Twine ("エクセルのほうです"):
+2026-10-31, per user: chapter 2 (○○の百人隊長スパル) is written in Excel instead of Twine ("エクセルのほうです"):
 one row per step, in order, no IDs -- column A is a line (spoken by スパル), column C is what happens on the
 screen or the condition that starts that part ("ダイスが振られる", "訓練場にダイスを置く（１回目）", ...). Both
 columns are exported as-is ({text, event}); story.js decides what each event means by its wording (see

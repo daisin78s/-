@@ -1203,7 +1203,7 @@ document.addEventListener('click', (e) => {
   }
 }, true);
 
-/* ---------- 第2章: ○○○の百人隊長スパル (data/story2.data.js) ---------- */
+/* ---------- 第2章: ○○の百人隊長スパル (data/story2.data.js) ---------- */
 
 /** 2026-10-31, per user: 第2章の台本はストーリー.xlsxのSheet2 ("エクセルのほうです"、tools/story2_xlsx_to_js.py
  * で data/story2.data.js に変換)。1行ずつ順番に、A列=スパルのセリフ、C列=画面で起きること/その部分が始まる
@@ -1230,6 +1230,7 @@ const STORY2_TRIGGERS = [
   { key: 'card1mid', test: (e) => /カード獲得/.test(e) && /1枚目/.test(e) && /3-4ターン/.test(e) },
   { key: 'card1late', test: (e) => /カード獲得/.test(e) && /1枚目/.test(e) && /5ターン/.test(e) },
   { key: 'card2', test: (e) => /カード獲得/.test(e) && /2枚目/.test(e) },
+  { key: 'unusedCard', test: (e) => /獲得後/.test(e) && /使わず/.test(e) }, // 出し方は確認中(まだ出さない)
 ];
 /** 全角の数字・ハイフンを半角に(C列の文言を見分ける前に)。 */
 function story2NormalizeEvent(e) {
@@ -1656,12 +1657,12 @@ function story2HideCallout() {
 /* ---------- 章を選ぶ画面 ---------- */
 
 // 2026-10-31, per user: "第２章のストーリーに行った後 また ストーリー に入ったら 第１章 怠惰なローマ市民アレク
-// 第２章 ○○○の百人隊長スパル という風に選べるように" + 回答: 第1章をクリアする前は今まで通りそのまま第1章、
-// 第2章は「今作成中」、題名の○○○は仮でそのまま。クリアの記録はこの端末だけ(localStorage)。
+// 第２章 ○○の百人隊長スパル という風に選べるように" + 回答: 第1章をクリアする前は今まで通りそのまま第1章、
+// 第2章は「今作成中」、題名の○○は仮でそのまま。クリアの記録はこの端末だけ(localStorage)。
 const STORY_CLEARED_KEY = 'diceWpStoryChaptersCleared';
 const STORY_CHAPTERS = [
   { no: 1, title: '第１章　怠惰なローマ市民アレク', start: openStoryMode },
-  { no: 2, title: '第２章　○○○の百人隊長スパル', start: () => openStoryMode(story2Start) },
+  { no: 2, title: '第２章　○○の百人隊長スパル', start: () => openStoryMode(story2Start) },
 ];
 
 function storyClearedChapters() {
