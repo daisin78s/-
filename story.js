@@ -286,8 +286,18 @@ function storyAfterRender(state) {
     }
   }
   if (run.shopOverrides) storyApplyShopOverrides(run.shopOverrides);
+  if (run.chapter2) story2SoloStandings();
   storyApplyGlow();
   if (run.resourceOverride) storyApplyResourceOverride(run.resourceOverride);
+}
+
+/** 第2章の順位表は「1位 あなた」だけ (per user「１位あなた ２位以下消す」): ほかの人の欄を消し、自分を1位に。 */
+function story2SoloStandings() {
+  document.querySelectorAll('.standings-panel__cell').forEach((cell) => {
+    if (cell.dataset.playerId !== 'P1') { cell.remove(); return; }
+    const place = cell.querySelector('.standings-panel__place');
+    if (place) place.textContent = '1位';
+  });
 }
 
 /** 第2章のショップの見た目 (story2DoEventの「次のラウンドから」「SHOP201、202、203見えなくする」): 描き直す
@@ -1316,9 +1326,15 @@ function story2DoEvent(row, i, onDone) {
     render(STATE);
     onDone();
   } else if (/人材カード/.test(e)) {
-    // 「SHOP101-106すべて人材カード」: 人材(C)の通常の6枚(総督・学者・商人・貴族・哲学者・金貸し)のLV1。
+    // 「SHOP101-106すべて人材カード」: 人材(C)の通常の6枚(総督・学者・商人・貴族・哲学者・金貸し)のLV1を、
+    // ランダムな順番で (per user「その6まいでOK 順番ランダム」)。
     const slots = Object.keys(STATE.shops.NORMAL.slots);
-    ['C001A', 'C002A', 'C003A', 'C004A', 'C005A', 'C006A'].forEach((faceId, k) => { if (slots[k]) STATE.shops.NORMAL.slots[slots[k]] = faceId; });
+    const faces = ['C001A', 'C002A', 'C003A', 'C004A', 'C005A', 'C006A'];
+    for (let k = faces.length - 1; k > 0; k--) {
+      const j = Math.floor(Math.random() * (k + 1));
+      [faces[k], faces[j]] = [faces[j], faces[k]];
+    }
+    faces.forEach((faceId, k) => { if (slots[k]) STATE.shops.NORMAL.slots[slots[k]] = faceId; });
     STATE.shops.NORMAL.drawPile = [];
     render(STATE);
     onDone();
