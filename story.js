@@ -1076,7 +1076,8 @@ function openStoryMode(startScene) {
   document.body.classList.add('story-mode', 'story-hide-dice');
   entryBannerDismissed = true;
   aiPacingMode = 'manual'; // パトラなどAIの手は台本が進める
-  storySetSpeaker('alek');
+  // 話し手は最初の場面が決める(第2章でアレクが一瞬出ないように)。第1章はアレクから。
+  if (!startScene) storySetSpeaker('alek');
   storySetAllowedTabs(['board']);
   (startScene || storySceneFarm)();
 }
@@ -1206,6 +1207,9 @@ function story2DoEvent(row, i, onDone) {
     story2ShowResourceCards(false);
     storyLater(onDone, 600);
   } else if (/選ぶ/.test(e)) {
+    // 選んでいる間はスパルとセリフを隠す (per user「初期資源選ぶときには スパルとセリフが見えないように」)。
+    storyHideDialog();
+    storySetSpeaker('spalAway');
     story2ShowResourceCards(true, onDone);
   } else if (/振られる/.test(e)) {
     storyRollHandDice(onDone, 'P1');
