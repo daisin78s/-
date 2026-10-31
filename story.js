@@ -32,6 +32,7 @@ const STORY_SPEAKERS = {
   patra: { name: 'パトラ', img: 'assets/story-patra.png' },
   spal: { name: 'スパル', img: 'assets/story-spal.png' },
   spalAway: { name: 'スパル', img: null }, // 第2章: スパルが立ち去っている間(立ち絵を消す)
+  system: { name: '', img: null }, // お知らせ(強制パスなど): 名前も立ち絵も無し
 };
 
 let storyRun = null; // 実行中の場面。nullなら閉じている。
@@ -151,6 +152,7 @@ function storySay(id, onTyped, textOverride) {
   if (!text) { if (onTyped) onTyped(text); return; }
   const box = run.dom.dialog;
   const body = run.dom.dialogText;
+  run.dialogSeq = (run.dialogSeq || 0) + 1; // 隠している途中の storyHideDialog に「また出した」と知らせる
   box.hidden = false;
   box.dataset.lineId = id;
   body.textContent = '';
@@ -185,8 +187,10 @@ function storyHideDialog() {
   const box = storyRun.dom.dialog;
   if (box.hidden) return;
   storyCancel(storyRun.typeTimer);
+  const seq = storyRun.dialogSeq;
   const a = box.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: 'ease-in' });
-  a.onfinish = () => { if (storyRun) box.hidden = true; };
+  // 消している途中に次のセリフが出たら(storySay)、そのセリフは消さない。
+  a.onfinish = () => { if (storyRun && storyRun.dialogSeq === seq) box.hidden = true; };
 }
 
 /** 画面上部に、今やること(台本の選択肢の文言)を左から流して出す。空文字で消す。 */
@@ -919,7 +923,7 @@ function storySceneFeeCollect() {
 function storyFreePlay() {
   const loop = (first) => {
     if (!storyRun) return;
-    storyPassUnplaceableDice('P1', storyRun.visibleMapIds);
+    if (storyForcePassIfStuck('P1', storyRun.visibleMapIds, storyFinishFreePlay)) return;
     if (!storyHasDiceLeft('P1')) { storyFinishFreePlay(); return; }
     storyWaitForPlacement({
       goalText: storyGoalOf('S062'),
@@ -956,12 +960,23 @@ function storyPlaceableSlots(playerId, dieId, mapIds) {
   return result;
 }
 
-/** どこにも置けないダイスは、そのラウンドはパスにする(ターン終了ボタンが無いので、置けないまま止まらないように)。 */
-function storyPassUnplaceableDice(playerId, mapIds) {
-  for (const die of storyPlayer(playerId).dice) {
-    if (die.placedMapId || die.passed) continue;
-    if (storyPlaceableSlots(playerId, die.id, mapIds).length === 0) boardMod.passDie(STATE, INDEX, { playerId }, die.id);
-  }
+/** 残りのダイスがどれもどこにも置けない時は、強制でラウンドパス(残りのダイスを全部パス)にして、お知らせを
+ * 出してからonDone()、trueを返す (2026-10-31, per user: ストーリーではターン終了ボタンが無いので、置けなく
+ * なると進めなくなる -- "その場合 強制でラウンドパスしてください" + お知らせの文言)。使っていない色ダイスの
+ * 3Kは本物のゲームのラウンド終了の処理でもらえる。置けるダイスが1個でもあれば何もせずfalse。 */
+const STORY_FORCE_PASS_TEXT = 'ダイスを置けるスロットがないので強制パスになります\n使っていない色ダイスはK3「食料」になります';
+function storyForcePassIfStuck(playerId, mapIds, onDone) {
+  const remaining = storyPlayer(playerId).dice.filter((d) => !d.placedMapId && !d.passed);
+  if (remaining.length === 0 || remaining.some((d) => storyPlaceableSlots(playerId, d.id, mapIds).length > 0)) return false;
+  for (const die of remaining) boardMod.passDie(STATE, INDEX, { playerId }, die.id);
+  render(STATE);
+  const speakerBefore = storyRun.speaker;
+  storySetSpeaker('system');
+  storySayThen('FORCE_PASS', () => {
+    storySetSpeaker(speakerBefore);
+    onDone();
+  }, 0, STORY_FORCE_PASS_TEXT);
+  return true;
 }
 
 /** パトラの手番: 小麦畑か農園(置ける方、両方置けるならランダム)にダイスを1個置いて手番を終える。ダイスが
@@ -1346,7 +1361,7 @@ function story2FreePlay() {
   const ch = run.chapter2;
   storySetSpeaker('spalAway');
   storyHideDialog();
-  storyPassUnplaceableDice('P1', run.visibleMapIds);
+  if (storyForcePassIfStuck('P1', run.visibleMapIds, story2Finish)) return;
   if (!storyHasDiceLeft('P1')) { story2Finish(); return; }
   const colorBefore = story2ColorDiceCount();
   const zBefore = storyPlayer('P1').resources.Z || 0;

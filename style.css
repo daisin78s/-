@@ -6872,6 +6872,7 @@ body.story-mode #ai-manual-step-button {
   display: none !important;
 }
 .story-alek[hidden] { display: none; }
+.story-dialog__name:empty { display: none; } /* お知らせ(話し手なし) */
 body.story-hide-dice #mobile-own-row .die,
 body.story-hide-dice #players .player-panel .die {
   visibility: hidden;
