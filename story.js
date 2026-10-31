@@ -1152,13 +1152,16 @@ function story2DiceValues() {
 function story2BuildState() {
   const state = storyBuildState(story2DiceValues(), { P1: 'CON001', P2: 'CON005' });
   state.shops.NORMAL.slots.SHOP101 = null; // 第2章はショップに何も並べない
-  // あなたは性格なし (per user「第２章性格はなしでお願い 何も足さない」): 配った性格カードを取り上げる。
+  // あなたは性格もジョブもなし (per user「第２章性格はなしでお願い 何も足さない」「ジョブもまだなしで」):
+  // 配った性格カードとジョブカードを取り上げる(資源はstoryBuildStateで0に戻してある)。
   const p1 = state.players.find((p) => p.id === 'P1');
-  p1.ownedCardPhysicalIds = p1.ownedCardPhysicalIds.filter((id) => id !== p1.conPhysicalId);
+  p1.ownedCardPhysicalIds = p1.ownedCardPhysicalIds.filter((id) => id !== p1.conPhysicalId && id !== p1.jobCardId);
   delete state.cards[p1.conPhysicalId];
+  delete state.cards[p1.jobCardId];
   p1.conPhysicalId = null;
   p1.conFace = null;
-  p1.noPersonality = true; // main.jsのhasFinishedOnboarding: 性格カードが無くても準備済み
+  p1.jobCardId = null;
+  p1.skipOnboarding = true; // turn-flowのgetNextTurn / main.jsのhasFinishedOnboarding: 持っていなくても準備済み
   return state;
 }
 

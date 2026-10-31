@@ -107,7 +107,8 @@ function getNextTurn(state) {
     const playerId = state.turnOrder[idx];
     const player = state.players.find((p) => p.id === playerId);
     if (!player.dice.some((d) => d.placedMapId === null && !d.passed)) continue;
-    if (state.round === 1 && player.jobCardId === null) {
+    // skipOnboarding: ストーリー第2章のあなた(ジョブも性格も持たないまま遊ぶ、story.js story2BuildState)。
+    if (state.round === 1 && player.jobCardId === null && !player.skipOnboarding) {
       return { type: 'ONBOARDING_NEEDED', playerId, playerIndex: idx };
     }
     return { type: 'TURN', playerId, playerIndex: idx };
