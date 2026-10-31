@@ -2708,7 +2708,7 @@ let progressBaseline = null;
 let progressPendingVia = {}; // playerId -> { gain, up }: タップしたが、まだ獲得/LVアップに結びついていないカードの名前
 const PROGRESS_TAP_GAIN_CARD_RE = /^(交渉術|土木技術|測量術)/;
 // 性格の「○○になる」の○○が名前と違うもの(それ以外は名前のまま、例: 幸運になる)。
-const PROGRESS_CON_BECOME_BY_NAME = { 嫉妬: '嫉妬深く' }; // 裏切は「裏切になる」(2026-10-31, per user「裏切者と書かれている箇所 裏切に直します」)
+const PROGRESS_CON_BECOME_BY_NAME = { 裏切: '裏切者', 嫉妬: '嫉妬深く' }; // 「裏切者になる」はそのまま (2026-10-31, per user: 肩書きは「裏切の」に直したが、進捗の文だけ「裏切者になる」に戻して)
 const PROGRESS_TAP_LVUP_CARD_RE = /^研究/;
 let progressRenderedLength = -1;
 
@@ -2753,7 +2753,7 @@ function noteProgress(state, canLog) {
       const mainTexts = newMaps.map((mapId) => `${areaName(before.maps[mapId] || now.maps[mapId])}に行く`);
       if (newMaps.length) delete progressPendingVia[pid];
       // ジョブ・性格は「○○になる」 (2026-10-28, per user request: "ジョブは 百人隊長になる ローマ市民になる 性格は
-      // 幸運になる 裏切になる(10-31に裏切者から) 嫉妬深くなる 何も書いてないものはすべて○○になる")。
+      // 幸運になる 裏切者になる 嫉妬深くなる 何も書いてないものはすべて○○になる")。
       if (a.job && a.job !== b.job) texts.push(`${cardDisplayName(a.job)}になる`);
       if (a.con && a.con !== b.con) {
         const conName = cardDisplayName(a.con);
