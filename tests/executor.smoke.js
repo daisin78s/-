@@ -900,6 +900,27 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   check('...nothing was paid on failure (atomic)', player.resources, { K: 1, A: 1, B: 0, C: 0, Z: 0, VP: 0, BZ: 0 });
 }
 {
+  // 権力者 still gets Z for A (2026-10-31 bug report: A0/K0/Z9 couldn't pay any A cost) -- order A -> K -> Z.
+  const state = freshState();
+  const player = getPlayerRef(state, 'P1');
+  player.jobCardId = 'JOB005';
+  player.resources.A = 1;
+  player.resources.K = 1;
+  player.resources.Z = 5;
+  const result = executor.payCostList(state, index, 'P1', [{ resource: 'A', count: 3 }]);
+  check('権力者: Z covers what real A + K leave short', result.success, true);
+  check('...A first, then K, then Z', player.resources, { K: 0, A: 0, B: 0, C: 0, Z: 4, VP: 0, BZ: 0 });
+}
+{
+  const state = freshState();
+  const player = getPlayerRef(state, 'P1');
+  player.jobCardId = 'JOB005';
+  player.resources.Z = 9;
+  const result = executor.payCostList(state, index, 'P1', [{ resource: 'A', count: 1 }, { resource: 'C', count: 2 }]);
+  check('権力者 with only Z can pay 1A,2C (貴族)', result.success, true);
+  check('...all from Z', player.resources.Z, 6);
+}
+{
   // A player without 権力者 as their JOB gets no substitution at all -- an A shortfall simply fails, K is
   // never touched. Confirms this is gated on player.jobCardId (NAME match), not a global engine rule.
   const state = freshState();

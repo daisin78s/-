@@ -451,14 +451,20 @@ function resolvePayment(state, index, playerId, items) {
       if (shortfall > 0) return { ok: false, resource: 'K' };
       continue;
     }
+    // 権力者のAは 本物のA → K → Z の順 (2026-10-31, バグ報告「3ラウンド目に交渉術で獲得できるカードが
+    // おかしくなった」: 以前はZを全く使わなかったため、A0・K0・Z9の権力者にはAが要るカードが全部払えない
+    // 扱いになっていた。順番はユーザー確認済み「A→K→Z」 -- どれにでも使えるZを最後まで残す)。
     if (item.resource === 'A' && powerBroker) {
       const aUsed = Math.min(aPool, item.count);
       aPool -= aUsed;
-      const kUsed = item.count - aUsed;
-      if (kUsed > kPool) return { ok: false, resource: item.resource };
+      const kUsed = Math.min(kPool, item.count - aUsed);
       kPool -= kUsed;
+      const zUsed = item.count - aUsed - kUsed;
+      if (zUsed > zPool) return { ok: false, resource: item.resource };
+      zPool -= zUsed;
       if (aUsed > 0) resolved.push({ resource: 'A', count: aUsed });
       if (kUsed > 0) resolved.push({ resource: 'K', count: kUsed });
+      if (zUsed > 0) resolved.push({ resource: 'Z', count: zUsed });
       continue;
     }
     if (COLOR_RESOURCES.has(item.resource)) {
