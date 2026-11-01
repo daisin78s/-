@@ -1013,7 +1013,11 @@ function storyPlaceableSlots(playerId, dieId, mapIds) {
     const count = boardMod.getSlotRequirements(dataLoaderMod.getAreaRow(INDEX, STATE.maps[mapId].currentAreaId)).length;
     for (let slotIndex = 0; slotIndex < count; slotIndex++) {
       const trial = gameStateMod.cloneState(STATE);
-      if (boardMod.placeDice(trial, INDEX, { playerId }, dieId, mapId, slotIndex).success) result.push({ mapId, slotIndex });
+      const die = trial.players.find((p) => p.id === playerId).dice.find((d) => d.id === dieId);
+      const placed = die && boardMod.isDieWildcard(trial, INDEX, playerId, die) // ☆は置き場所を自分で決める
+        ? boardMod.placeWildcardDie(trial, INDEX, { playerId }, dieId, mapId, slotIndex)
+        : boardMod.placeDice(trial, INDEX, { playerId }, dieId, mapId, slotIndex);
+      if (placed.success) result.push({ mapId, slotIndex });
     }
   }
   return result;
@@ -1217,13 +1221,16 @@ document.addEventListener('click', (e) => {
  *  - ダイスを使い切った時、色ダイスが5個なら「5個」の部分(次のラウンド→セリフ)→「つづく」、4個以下なら
  *    「4個以下」の部分のあと、初期資源カードが配られる直前の盤面に戻してやり直し(per user「初期資源カードを
  *    選ぶ所から」)。
- *  - 最初のダイス3個は、3個とも同じ目にはしない(per user: 同じ目だとクリアできないことがあるため)。 */
+ *  - 最後のダイスが訓練場の同じ目に阻まれて置けない時は、スパルが☆にしてくれる(per user 救済)。そのため
+ *    最初のダイス3個は完全ランダム(per user「どんなダイス目でもクリアできるようになったので」)。 */
 const STORY_TAVERN_MAP_ID = 'MAP006'; // 酒場
 const STORY_TRAINING_MAP_ID = 'MAP007'; // 訓練場
 const STORY2_TRIGGERS = [
   { key: 'train1', test: (e) => /訓練場/.test(e) && /[1１]回目/.test(e) },
   { key: 'train2', test: (e) => /訓練場/.test(e) && /[2２]回目/.test(e) },
   { key: 'tavern', test: (e) => /酒場/.test(e) && /置く/.test(e) },
+  // 最後のダイスが訓練場に置いてあるダイスと同じ目で置けない(資源は足りている)→ スパルが☆にしてくれる。
+  { key: 'starRescue', test: (e) => /訓練場/.test(e) && /置けない/.test(e) },
   { key: 'fail', test: (e) => /使い切/.test(e) && /以下/.test(e) },
   { key: 'clear', test: (e) => /使い切/.test(e) && /色ダイス/.test(e) && !/以下/.test(e) },
   // 2ラウンド目の終わり: カードを2枚獲得できなかった / できた(+タップしていないカードがある)。
@@ -1259,10 +1266,22 @@ function story2Blocks() {
 }
 
 function story2DiceValues() {
-  for (;;) {
-    const values = [0, 0, 0].map(() => 1 + Math.floor(Math.random() * 6));
-    if (new Set(values).size > 1) return values;
-  }
+  return [0, 0, 0].map(() => 1 + Math.floor(Math.random() * 6));
+}
+
+/** 1ラウンド目の救済の条件: 残りのダイスが最後の1個で、訓練場に同じ目のダイスがあって置けないが、☆なら
+ * 置ける(=資源は足りている)。 */
+function story2NeedsStarRescue() {
+  const ch = storyRun.chapter2;
+  if (ch.inRound2 || ch.inRound3 || !ch.blocks.starRescue || !storyRun.visibleMapIds.includes(STORY_TRAINING_MAP_ID)) return false;
+  const remaining = storyPlayer('P1').dice.filter((d) => !d.placedMapId && !d.passed);
+  if (remaining.length !== 1 || remaining[0].isWildcardThisTurn) return false;
+  const die = remaining[0];
+  const sameValueThere = STATE.maps[STORY_TRAINING_MAP_ID].slots.some((slot) => (slot || []).some((o) => !o.isWildcard && o.value === die.value));
+  if (!sameValueThere || storyPlaceableSlots('P1', die.id, [STORY_TRAINING_MAP_ID]).length > 0) return false;
+  const trial = gameStateMod.cloneState(STATE);
+  trial.players.find((p) => p.id === 'P1').dice.find((d) => d.id === die.id).isWildcardThisTurn = true;
+  return boardMod.placeWildcardDie(trial, INDEX, { playerId: 'P1' }, die.id, STORY_TRAINING_MAP_ID).success;
 }
 
 function story2BuildState() {
@@ -1341,6 +1360,14 @@ function story2DoEvent(row, i, onDone) {
   const run = storyRun;
   const e = story2NormalizeEvent(row.event); // 全角数字も読む
   const seconds = (/(\d+)秒/.exec(e) || [])[1];
+  if (/ダイス目/.test(e) && /星/.test(e)) {
+    // 「ダイス目が星になる」: 残りの最後のダイスを☆に(この手番だけ。B001BのSET_WILDCARDと同じ印)。
+    const die = storyPlayer('P1').dice.find((d) => !d.placedMapId && !d.passed);
+    if (die) die.isWildcardThisTurn = true;
+    render(STATE);
+    storyLater(onDone, 600);
+    return;
+  }
   if (/消え/.test(e) && /光る/.test(e)) {
     // 「セルフとスパルが5秒間消えて「目1-6」や「目1-5」と書いてあるところがすべて光る」: ショップのダイス目の
     // キャプションを光らせ、その間スパルとセリフを隠す。光はこの部分が終わるまで残す。
@@ -1618,6 +1645,7 @@ function story2FreePlay() {
   storySetSpeaker('spalAway');
   storyHideDialog();
   if (run.resourceOverride) { run.resourceOverride = null; render(STATE); } // 酒場の表示合わせが残っていたら本当の数に
+  if (story2NeedsStarRescue()) { story2Play(ch.blocks.starRescue, 0, story2FreePlay); return; }
   if (storyForcePassIfStuck('P1', run.visibleMapIds, story2Finish)) return;
   if (!storyHasDiceLeft('P1')) { story2Finish(); return; }
   if (ch.unusedCardDue && !ch.unusedCardDone && storyPlayer('P1').ownedCardPhysicalIds.length > ch.unusedCardOwnedBefore) {
