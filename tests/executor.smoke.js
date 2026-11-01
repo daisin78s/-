@@ -374,7 +374,7 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
   executor.runProgram(state, index, { playerId: 'P1' }, row.ONCE);
   check('A004A.ONCE flips MAP001 to AREA001B', state.maps['MAP001'].currentAreaId, 'AREA001B');
   check('A004A.ONCE makes P1 the fee owner of MAP001', state.maps['MAP001'].feeOwnerId, 'P1');
-  check('A004A.ONCE resets MAP001.slots to fresh empty slots matching AREA001B (3 active SLOT columns)', state.maps['MAP001'].slots, [[], [], []]);
+  check('A004A.ONCE resets MAP001.slots to fresh empty slots matching AREA001B (4 active SLOT columns: 1/ANY/EX/EX)', state.maps['MAP001'].slots, [[], [], [], []]);
 }
 
 // ---------------------------------------------------------------------------

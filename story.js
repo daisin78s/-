@@ -879,6 +879,11 @@ function storyEndTurnOf(playerId) {
   turnActionTaken = false;
   turnJustEnded = true;
   selectedDieIds = [];
+  // ほかの人はパスしていて自分の手番が続くので、main.jsの「手番が替わった時」の片付けが起きない。ここで
+  // 1手戻るの記録を消し、ターン開始時に戻るの戻り先も今に取り直す(前の手番まで戻せると、置いた数の基準が
+  // ずれて進行不能になる)。
+  actionCheckpoints = [];
+  undoMod.recordCheckpoint(STATE);
   // 他の人の手番の間に盤面が変わる(パトラにダイスを追い出される等)ので、置いた数の基準もここで取り直す。
   storyRun.placementBaseline = storyPlacementCounts(STATE);
 }
@@ -949,6 +954,13 @@ function storySceneFeeCollect() {
   document.body.classList.remove('story-lock-hand');
   render(STATE);
   storySayThen('S054', () => {
+    // 説明の前にもう使用料を回収していたら(回収する物が無いと、待っても進めない): S070 → S062 (per user Twine
+    // 「使用料がない」)。
+    const city = STATE.maps[STORY_CITY_MAP_ID];
+    if (city.feeOwnerId !== 'P1' || !(city.accumulatedFee > 0)) {
+      storySayThen('S070', () => storySay('S062', storyFreePlay));
+      return;
+    }
     storySetGlow([storyTileSelector(STORY_CITY_MAP_ID, '.map-tile__fee')]);
     storySay('S058', () => {
       storyShowGoal(storyGoalOf('S058'));
@@ -985,7 +997,7 @@ function storyFreePlay() {
     if (storyForcePassIfStuck('P1', storyRun.visibleMapIds, storyFinishFreePlay)) return;
     if (!storyHasDiceLeft('P1')) { storyFinishFreePlay(); return; }
     storyWaitForPlacement({
-      goalText: storyGoalOf('S062'),
+      goalText: 'ダイスを置く', // Twineの選択肢は書き換え中なので、今まで通りの文言(STORY_CH1_CLEAR_TEXTの所を参照)
       hintLineId: first ? 'S062' : null,
       extraDetect: () => typeof pendingBuildChoice !== 'undefined' && !!pendingBuildChoice,
       onPlaced: () => {
@@ -994,7 +1006,7 @@ function storyFreePlay() {
           turnActionTaken = true; // パトラの手番の間は置けない(次の自分の番でstoryWaitForPlacementが戻す)
           storyPatraPlacesOnField(() => loop(false));
         });
-        if (first) storySay('S063', afterTurn);
+        if (first) storySay('S063', afterTurn, 'それからどうするの？'); // 同上: Twineでは空になった
         else afterTurn();
       },
     });
@@ -1065,14 +1077,18 @@ function storyPatraPlacesOnField(onDone) {
   }), 700);
 }
 
+// 第1章の終わりのセリフ。Twineでは書き換え中(2026-11-01: S064/S065の中身が変わった)だが、終わり方は今まで
+// 通りにしておく(per user「使用料の分岐のみ それ以外変えないで」)ので、前の文章をここに残しておく。
+const STORY_CH1_CLEAR_TEXT = 'やったぁ！ローマ市街が更な発展したよ\n\n第2章へつづく';
+const STORY_CH1_FAIL_TEXT = '残念……。\n「ローマ市街」はもっと発展すると思っていたのに…。';
 function storyFinishFreePlay() {
   const city = STATE.cards.A001;
   const hasLv2 = !!city && city.ownerId === 'P1' && city.currentFaceId === 'A001B';
   if (hasLv2) {
     storyMarkChapterCleared(1);
-    storySayThen('S064', () => storyEndOfScript('第2章へつづく'));
+    storySayThen('CH1_CLEAR', () => storyEndOfScript('第2章へつづく'), 0, STORY_CH1_CLEAR_TEXT);
   }
-  else storySayThen('S065', storyRewindToRound2);
+  else storySayThen('CH1_FAIL', storyRewindToRound2, 0, STORY_CH1_FAIL_TEXT);
 }
 
 /** S065 → S028: 盤面・資源・見えているエリアを S028 の時に戻して、そこからやり直す。 */

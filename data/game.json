@@ -2145,7 +2145,7 @@
       "SLOT1": 1,
       "SLOT2": "ANY",
       "SLOT3": "EX",
-      "SLOT4": "NONE",
+      "SLOT4": "EX",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "ADD(6K)",
