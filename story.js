@@ -23,6 +23,11 @@
 const STORY_TYPE_MS_PER_CHAR = 37; // 1文字ずつ出る速さ (2026-10-23 per user "セリフの表示速度1.5倍に": 55ms→37ms)
 const STORY_HOLD_BASE_MS = 930; // 全文出てから次へ進むまでの待ち(+文字数ぶん) (2026-10-23 per user "それも1.5倍に": 1400→930、1文字45→30ms)
 const STORY_HOLD_PER_CHAR_MS = 30;
+// 「次へ」(2026-11-01, per user「次へ ボタンを押すと 次に進むように 次へを押しっぱなしで 高速スキップ」):
+// セリフ枠のどこをタップしても次へ(右下に小さく「次へ▷」)。1文字ずつ出ている途中なら、まず全文を出す。
+// STORY_SKIP_HOLD_MS押し続けると高速スキップ(離すまでSTORY_SKIP_STEP_MSごとに次のセリフへ)。
+const STORY_SKIP_HOLD_MS = 400;
+const STORY_SKIP_STEP_MS = 90;
 const STORY_HINT_IDLE_MS = 5000; // 何もしない場合5秒ごとに出る
 const STORY_HINT_SHOW_MS = 2600; // 出てすぐ消える(全文が出てからこの時間で消える)
 
@@ -143,9 +148,12 @@ function storyLineFragment(text) {
 }
 
 /** 会話ウインドウにセリフを1文字ずつ出す。全部出たらonTyped()。textを渡すとそちらを出す(差し込みあり等)。 */
-function storySay(id, onTyped, textOverride) {
+function storySay(id, onTyped, textOverride, waitsForNext) {
   const run = storyRun;
   if (!run) return;
+  run.waitingNext = null;
+  run.typeFinish = null;
+  run.dom.nextHint.hidden = true;
   const text = textOverride !== undefined ? textOverride : storyLine(id).text;
   // 会話ログ用に記録(5秒ごとに出るヒントなど、同じセリフは1回だけ)。
   if (text && !run.log.some((e) => e.id === id)) run.log.push({ id, text, speaker: STORY_SPEAKERS[run.speaker].name });
@@ -155,25 +163,78 @@ function storySay(id, onTyped, textOverride) {
   run.dialogSeq = (run.dialogSeq || 0) + 1; // 隠している途中の storyHideDialog に「また出した」と知らせる
   box.hidden = false;
   box.dataset.lineId = id;
+  // 「次へ」で進むセリフだけタップを受ける(やることを指示するセリフは、下の盤面を押せるよう素通しのまま)。
+  box.classList.toggle('story-dialog--tappable', !!waitsForNext);
   body.textContent = '';
   storyCancel(run.typeTimer);
   let i = 0;
   const shown = storyIconize(text);
   const step = () => {
-    i++;
+    i = run.skipping ? shown.length : i + 1; // 高速スキップ中は全文を一度に
     body.textContent = '';
     body.appendChild(storyLineFragment(shown.slice(0, i))); // 資源はアイコン、性格・ジョブの名前は色付き
     if (i < shown.length) run.typeTimer = storyLater(step, STORY_TYPE_MS_PER_CHAR);
-    else { run.typeTimer = null; if (onTyped) onTyped(text); }
+    else { run.typeTimer = null; run.typeFinish = null; if (onTyped) onTyped(text); }
   };
+  // 途中で「次へ」を押したら全文を出す(per user「全文を一気に出す」)。
+  run.typeFinish = waitsForNext ? () => { storyCancel(run.typeTimer); i = shown.length - 1; step(); } : null;
   box.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'translateY(0)' }],
     { duration: 220, easing: 'ease-out' });
   run.typeTimer = storyLater(step, 120);
 }
 
-/** セリフを出して、読み終わる頃に自動で次へ(ボタン無し)。extraMsで待ちを延ばせる。 */
+/** セリフを出して、「次へ」(セリフ枠のタップ)でnext()。extraMsは昔の自動送りの待ちの延長で、今は使わない。 */
 function storySayThen(id, next, extraMs, textOverride) {
-  storySay(id, (text) => storyLater(next, (text ? storyHoldMs(text) : 0) + (extraMs || 0)), textOverride);
+  storySay(id, (text) => (text ? storyWaitNext(next) : next()), textOverride, true);
+}
+
+/** 全文が出たセリフで「次へ」を待つ。高速スキップ中はすぐ進む。 */
+function storyWaitNext(next) {
+  const run = storyRun;
+  if (!run) return;
+  run.waitingNext = next;
+  run.dom.nextHint.hidden = false;
+  if (run.skipping) storyLater(storyAdvance, STORY_SKIP_STEP_MS);
+}
+
+/** 「次へ」: 1文字ずつ出ている途中なら全文を出す。出終わっていれば次へ。 */
+function storyAdvance() {
+  const run = storyRun;
+  if (!run || run.paused) return;
+  if (run.typeFinish) { run.typeFinish(); return; }
+  const next = run.waitingNext;
+  if (!next) return;
+  run.waitingNext = null;
+  run.dom.nextHint.hidden = true;
+  next();
+}
+
+/** セリフ枠: タップで次へ、押し続けると離すまで高速スキップ。 */
+function storySetupNextTap(box) {
+  let holdTimer = null;
+  let down = false;
+  const release = (tap) => {
+    if (!down || !storyRun) return;
+    down = false;
+    clearTimeout(holdTimer);
+    if (storyRun.skipping) storyRun.skipping = false;
+    else if (tap) storyAdvance();
+  };
+  box.addEventListener('pointerdown', (e) => {
+    if (!storyRun || !box.classList.contains('story-dialog--tappable')) return;
+    e.preventDefault();
+    down = true;
+    clearTimeout(holdTimer);
+    holdTimer = setTimeout(() => {
+      if (!down || !storyRun) return;
+      storyRun.skipping = true;
+      storyAdvance();
+    }, STORY_SKIP_HOLD_MS);
+  });
+  box.addEventListener('pointerup', () => release(true));
+  box.addEventListener('pointercancel', () => release(false));
+  box.addEventListener('pointerleave', () => release(false));
+  box.addEventListener('contextmenu', (e) => e.preventDefault()); // 長押しのメニューを出さない
 }
 
 /** 続けて出すセリフを順番に。最後にnext()。 */
@@ -649,9 +710,9 @@ function storySceneCity() {
         hintLineId: 'S010',
         onPlaced: () => {
           storyFanfare(STORY_CITY_MAP_ID, () => storySayThen('S011', () => {
-            storySay('S012', (text12) => {
-              storyShowResourceChange('K', 'A', () => storyLater(() => storySayThen('S013', storySceneCastle), storyHoldMs(text12)));
-            });
+            storySay('S012', () => {
+              storyShowResourceChange('K', 'A', () => storyWaitNext(() => storySayThen('S013', storySceneCastle)));
+            }, undefined, true);
           }));
         },
       });
@@ -845,10 +906,10 @@ function storyScenePatra() {
           storySayThen('S043', () => storySayThen('S044', () => {
             if (anyWasTaken) {
               storySaySeq(['S055', 'S056'], () => {
-                storySay('S057', (text57) => {
+                storySay('S057', () => {
                   storyPatraUsesBasicStudy();
-                  storyLater(() => storyWhenVisualsIdle(storyPatraFee), storyHoldMs(text57));
-                });
+                  storyWaitNext(() => storyWhenVisualsIdle(storyPatraFee));
+                }, undefined, true);
               });
             } else {
               storyPatraFee();
@@ -1175,6 +1236,10 @@ function openStoryMode(startScene) {
   dialog.appendChild(dialogName);
   const dialogText = el('div', 'story-dialog__text');
   dialog.appendChild(dialogText);
+  const nextHint = el('div', 'story-dialog__next', '次へ▷');
+  nextHint.hidden = true;
+  dialog.appendChild(nextHint);
+  storySetupNextTap(dialog);
   // ✖(ストーリーをやめる)ボタンは無し (2026-11-01, per user「Xボタン 不要」-- 途中でやめられなくてよいと確認済み)。
   // 会話ログ (2026-10-24, per user request: "会話ログを見れるボタンが欲しい 会話ログは新しいウィンドウが開く
   // のではなくセリフ部分にでる") -- ✖の上の「ログ」ボタンで、セリフ欄の所が上に広がってこれまでのセリフを
@@ -1192,7 +1257,8 @@ function openStoryMode(startScene) {
     timers: new Set(), typeTimer: null, diceShown: false, glowDieValues: [], glowSelectors: [], onRender: null, onTap: null,
     resourceOverride: null, blockBuildChoice: false, allowedTabs: new Set(['board']), speaker: null, placementBaseline: {},
     visibleMapIds: [], log: [], paused: false,
-    dom: { root, portrait, goal, dialog, dialogName, dialogText, logPanel, logButton },
+    dom: { root, portrait, goal, dialog, dialogName, dialogText, nextHint, logPanel, logButton },
+    waitingNext: null, typeFinish: null, skipping: false,
   };
   document.body.classList.add('story-mode', 'story-hide-dice');
   entryBannerDismissed = true;
