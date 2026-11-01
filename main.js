@@ -17470,6 +17470,7 @@ function renderCore(state) {
   fitMobileShopWidth();
   renderBoard(state, next);
   renderPlayers(state, next);
+  fitMobileBoard();
   renderMobileOwnDiceRow(state, next);
   queueMobileOnboardingFocus(state, next);
   queueMobileAiTurnFocus(state, next);
@@ -18516,6 +18517,7 @@ function applyMobileActiveTab(tab) {
   document.querySelectorAll('.mobile-tab-switcher__btn').forEach((btn) => {
     btn.classList.toggle('mobile-tab-switcher__btn--active', btn.dataset.tabTarget === tab);
   });
+  fitMobileBoard();
   if (tab === 'shop') {
     fitMobileShopWidth();
     if (isMobileLayout() && !openingSequenceActive) requestAnimationFrame(scrollMobileShopToNormalRow);
@@ -18572,6 +18574,28 @@ function fitMobileShopWidth() {
   const need = combined.scrollWidth;
   const avail = combined.clientWidth;
   if (need > avail) row.style.zoom = String(Math.floor((avail / need) * 1000) / 1000);
+}
+/** スマホ横向きのエリア画面: 盤面(上段・下段)を画面の幅と高さに合わせて拡大・縮小する (2026-11-01, per user
+ * report: iPhone 16では右と下に不要な隙間、iPhone SE3では右の列が切れる -- 「A」画面いっぱいに広げる)。
+ * タイルは固定幅(110px)なので、各段にzoomを掛ける(fitMobileShopWidthと同じやり方)。幅と高さの小さい方の倍率
+ * に合わせるので、はみ出さずに、どちらか一方がちょうど埋まる。 */
+function fitMobileBoard() {
+  const board = document.getElementById('board');
+  if (!board) return;
+  const rows = [...board.querySelectorAll(':scope > .board-row')];
+  rows.forEach((row) => { row.style.zoom = ''; });
+  if (!window.matchMedia('(max-width: 760px) and (orientation: landscape), (max-height: 500px) and (orientation: landscape)').matches) return;
+  if (mobileActiveTab !== 'board' || rows.length === 0 || board.clientWidth === 0) return;
+  const style = getComputedStyle(board);
+  const availW = board.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+  const needW = Math.max(...rows.map((row) => row.scrollWidth));
+  const tabs = document.querySelector('.mobile-tab-switcher');
+  const bottom = tabs && tabs.getBoundingClientRect().height > 0 ? tabs.getBoundingClientRect().top : window.innerHeight;
+  const rowsH = rows.reduce((sum, row) => sum + row.getBoundingClientRect().height, 0);
+  const extraH = board.getBoundingClientRect().height - rowsH; // 余白と段の間(倍率を掛けない分)
+  const availH = bottom - board.getBoundingClientRect().top - extraH - 8; // 下のタブとの間を少し空ける
+  const zoom = Math.floor(Math.min(availW / needW, availH / rowsH) * 1000) / 1000;
+  if (zoom > 0 && Math.abs(zoom - 1) > 0.01) rows.forEach((row) => { row.style.zoom = String(zoom); });
 }
 function setupMobileTabSystem() {
   document.querySelectorAll('.mobile-tab-switcher__btn').forEach((btn) => {
@@ -18799,6 +18823,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // チュートリアルは流さない (2026-10-27, dismissEntryBannerWithoutOpening参照)。
   const playOpeningOnLoad = localBattlePending;
   window.addEventListener('resize', fitMobileShopWidth);
+  window.addEventListener('resize', fitMobileBoard);
   document.getElementById('mobile-free-action-close').addEventListener('click', () => {
     mobileFreeActionOpen = false;
     applyMobileActiveTab('board');
