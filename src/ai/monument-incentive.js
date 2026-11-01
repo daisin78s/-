@@ -120,11 +120,11 @@ function monumentAtRiskFromOpponents(state, index, playerId, monumentFaceId) {
 // both silently understated how close a held die really was to a target's threshold, since
 // requiredDieValue = threshold - bonus overstates the die value actually needed whenever bonus is too
 // low. 2026-10-10: 宮廷人(JOB010, 2026-10-13のA/B再編revertで旧JOB004Bから改ID)'s TAP grew again,
-// +3 -> +4, same fix applied again; 2026-10-29 +4 -> +6 per user's "宮廷人 変更しました"). Row *names* still
+// +3 -> +4, same fix applied again; 2026-10-29 +4 -> +6 per user's "宮廷人 変更しました"; 2026-11-01 +6 -> +5, same phrasing). Row *names* still
 // say "+1"/"+3" (the old values) since they're 評価値_戦略's own sheet-authored labels, not live-computed
 // -- cosmetic only, doesn't affect scoring.
 const SINGLE_DIE_ROWS = [
-  { name: '宮廷人が+1能力でテルマエ（公衆浴場）を獲得', ownedFaceId: 'JOB010', bonus: 6, targetFaceId: 'M006' },
+  { name: '宮廷人が+1能力でテルマエ（公衆浴場）を獲得', ownedFaceId: 'JOB010', bonus: 5, targetFaceId: 'M006' },
   { name: '幾何学LV1が+2能力でテルマエ（公衆浴場）を獲得', ownedFaceId: 'B003A', bonus: 2, targetFaceId: 'M006' },
   { name: '幾何学LV1が+2能力で黄金宮殿を獲得', ownedFaceId: 'B003A', bonus: 2, targetFaceId: 'M005' },
   { name: '幾何学LV2が+3能力でテルマエ（公衆浴場）を獲得', ownedFaceId: 'B003B', bonus: 4, targetFaceId: 'M006' },
@@ -167,7 +167,7 @@ const SINGLE_DIE_ROWS = [
  * finished as ONE of them, not both -- listed here in descending target-value order so the credited one is
  * whichever the player would actually pursue. */
 const DELTA_ABILITIES = [
-  { faceId: 'JOB010', delta: 6 },
+  { faceId: 'JOB010', delta: 5 },
   { faceId: 'B003A', delta: 2 },
   { faceId: 'B003B', delta: 4 },
 ];

@@ -827,18 +827,18 @@ index.raw.QST = [
   const state = freshState(3);
   giveCard(state, 'JOB010', 'P1');
   const d1 = createDie('d1', 'COLOR');
-  d1.value = 1;
+  d1.value = 2; // 2026-11-01: 宮廷人 +6 -> +5, so 2+5=7 is now the qualifying die
   state.players[0].dice.push(d1);
   const plainScore = evaluator.score(state, 'P1');
   check('plain Evaluator ignores 評価値_戦略 entirely (control)', plainScore, evaluator.score(state, 'P1'));
-  check('monumentIncentiveAware credits 宮廷人+1施療院 (round3=200) with a qualifying die=1', evaluatorMonumentIncentiveAware.score(state, 'P1'), plainScore + 200);
+  check('monumentIncentiveAware credits 宮廷人+1施療院 (round3=200) with a qualifying die=2', evaluatorMonumentIncentiveAware.score(state, 'P1'), plainScore + 200);
 }
 {
-  // Same setup, but die=2 -- 2+4=6, doesn't reach 施療院's >=7 -- no credit.
+  // Same setup, but die=1 -- 1+5=6, doesn't reach 施療院's >=7 -- no credit.
   const state = freshState(3);
   giveCard(state, 'JOB010', 'P1');
   const d1 = createDie('d1', 'COLOR');
-  d1.value = 2;
+  d1.value = 1;
   state.players[0].dice.push(d1);
   check('No credit when the die value is 1 short of what 宮廷人\'s +1 needs', evaluatorMonumentIncentiveAware.score(state, 'P1'), evaluator.score(state, 'P1'));
 }
@@ -894,20 +894,20 @@ index.raw.QST = [
 // added to game.xlsx) -- only the reachability logic is under test here.
 // ---------------------------------------------------------------------------
 {
-  // The user's own headline example, updated for 2026-10-29's 宮廷人 +4->+6 change: 宮廷人(+6) +
-  // 運命の導きLV2(+4) = +10, on a real die=3 -> 13, exactly 天空の塔/M402's own DICE threshold, firing the
-  // combo path. die=3 also happens to independently satisfy 運命の導きLV2's OWN SINGLE_DIE_ROWS entry
-  // (bonus4, 施療院/M006's >=7: 3+4=7) -- SINGLE_DIE_ROWS and COMBO_TARGETS aren't mutually exclusive (no
-  // shared-die gate between them), so both credit here: +999 (combo) and +100 (round4's 運命の導きLV2+3施療院
-  // single row).
+  // The user's own headline example, updated for 2026-11-01's 宮廷人 +6->+5 change: 宮廷人(+5) +
+  // 運命の導きLV2(+4) = +9, on a real die=4 -> 13, exactly 天空の塔/M402's own DICE threshold, firing the
+  // combo path. die=4 also independently satisfies 2 of 運命の導きLV2's OWN SINGLE_DIE_ROWS entries
+  // (bonus4: 施療院/M006's >=7 and 黄金宮殿/M005's >=8, 4+4=8) -- SINGLE_DIE_ROWS and COMBO_TARGETS aren't mutually exclusive (no
+  // shared-die gate between them), so all credit here: +999 (combo) and +100 each (round4's 運命の導きLV2 施療院 /
+  // 黄金宮殿 single rows).
   const state = freshState(4);
   giveCard(state, 'JOB010', 'P1');
   giveCard(state, 'B003B', 'P1');
   const d1 = createDie('d1', 'COLOR');
-  d1.value = 3;
+  d1.value = 4;
   state.players[0].dice.push(d1);
   const plainScore = evaluator.score(state, 'P1');
-  check('monumentIncentiveAware credits 宮廷人+運命の導きLV2 combo -> 天空の塔 (die=3, +6+4=13), plus 運命の導きLV2 own single-row credit for 施療院 (3+4=7)', Math.round(evaluatorMonumentIncentiveAware.score(state, 'P1') - plainScore), 999 + 100);
+  check('monumentIncentiveAware credits 宮廷人+運命の導きLV2 combo -> 天空の塔 (die=4, +5+4=13), plus 運命の導きLV2 own single-row credits for 施療院 and 黄金宮殿 (4+4=8)', Math.round(evaluatorMonumentIncentiveAware.score(state, 'P1') - plainScore), 999 + 100 + 100);
 }
 {
   // Same die (=5), but only 宮廷人 owned (no second die-boosting card) -- exactly 1 die-boost source, so

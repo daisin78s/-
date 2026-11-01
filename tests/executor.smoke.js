@@ -658,10 +658,10 @@ console.log(`\n${passCount} passed, ${failCount} failed`);
 {
   const state = freshState();
   const target = giveCard(state, 'B004A', 'P1');
-  const row = getCardRow(index, 'JOB010'); // TAP=ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+4);BLOCK_BUILD(...) (2026-08-25: was +2/+1, 2026-09-01: +3, 2026-10-10: +4, 2026-10-29: +6)
+  const row = getCardRow(index, 'JOB010'); // TAP=ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+4);BLOCK_BUILD(...) (2026-08-25: was +2/+1, 2026-09-01: +3, 2026-10-10: +4, 2026-10-29: +6, 2026-11-01: +5)
   const result = executor.runProgram(state, index, { playerId: 'P1', chosenCardPhysicalId: target }, row.TAP);
   check('MONUMENT_CHANGE_DIE_VALUE targeting a card succeeds with no chosenValue/chosenDelta needed (delta is fixed)', result.success, true);
-  check('...buildValueOverride is 1+6=7', state.cards[target].buildValueOverride, 7);
+  check('...buildValueOverride is 1+5=6', state.cards[target].buildValueOverride, 6);
 }
 {
   // Ineligible targets: not owned by this player, or owned but not a "fixed BUILD value" card at all
@@ -1203,7 +1203,7 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   player.dice.push(die);
   const result = executor.runProgram(state, index, { playerId: 'P1', chosenDieId: die.id }, row.TAP);
   check('JOB007\'s TAP (ADD(BZ);MONUMENT_CHANGE_DIE_VALUE(SELF+4);BLOCK_BUILD(A/B/C,THIS_TURN)) succeeds and grants BZ', { success: result.success, BZ: player.resources.BZ }, { success: true, BZ: 1 });
-  check('...and changes the chosen die by +6 (4 -> 10)', die.value, 10);
+  check('...and changes the chosen die by +5 (4 -> 9)', die.value, 9);
   check('...and blocks A,B,C for this player this turn', player.blockedBuildCategoriesThisTurn, ['A', 'B', 'C']);
 }
 {
