@@ -6282,8 +6282,8 @@ function buildCardVisual(faceId, options = {}) {
   }
   // 研究・パンとサーカスの効果の字は、細くて小さい字ではなく他の字と同じに (2026-11-02, per user「研究 パンとサーカス
   // ほそくて小さい字でなく 他の字と同じように」)。
-  // 交渉術も (per user「交渉術の 軽減 の文字も 他の文字と同じ大きさ濃さ」)。
-  if (/^B(004|005|301)/.test(faceId || '')) node.classList.add('shop-card--plain-effect-text');
+  // 交渉術も (per user「交渉術の 軽減 の文字も 他の文字と同じ大きさ濃さ」)。幾何学・土木技術・測量術の「目」も (per user「幾何学 土木 測量 目 を 交渉術と同じ大きさ濃さに」)。
+  if (/^B(003|004|005|006|202|301)/.test(faceId || '')) node.classList.add('shop-card--plain-effect-text');
 
   const front = fillCardFace(node, faceId, options, true);
   if (options.tapped) node.classList.add('shop-card--tapped');
