@@ -7828,3 +7828,8 @@ body.online-spectator #online-spectator-badge {
   position: relative;
   top: 1px;
 }
+/* 初期資源を選ぶ欄(.card-group__onboard-resources)はもともとアイコンを大きくしているので、上の2倍を重ねない
+   (2026-11-02, per user「初期資源カードPCだと大きくはみ出ました」)。 */
+.card-group__onboard-resources .shop-card--resource .shop-card__effect .action-icons {
+  zoom: 1;
+}
