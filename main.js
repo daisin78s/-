@@ -4382,7 +4382,8 @@ function actionDot(resource) {
  * a real DOM element, not text) -- see appendUsageFeeLabel's own doc for the one existing caller. */
 function resourceCountIconNodes(resource, count) {
   if (count <= 0) return [document.createTextNode('0')];
-  if (count <= 2) return Array.from({ length: count }, () => actionDot(resource));
+  // 2個以上は「赤〇2」の形 (2026-11-02, per user「アイコンの 書き方を 赤赤 ではなく 赤〇2」)。
+  if (count === 1) return [actionDot(resource)];
   return [actionDot(resource), document.createTextNode(String(count))];
 }
 
@@ -4718,7 +4719,8 @@ function resourceItemNodes(countStr, resource) {
   const count = countStr ? parseInt(countStr, 10) : 1;
   const noRepeat = currentCardVisualFaceId
     && NO_ICON_REPEAT_PHYSICAL_IDS.includes(gameStateMod.splitCardId(currentCardVisualFaceId).physicalId);
-  if (!noRepeat && count >= 1 && count <= 2) return Array.from({ length: count }, () => actionDot(resource));
+  // 2個以上は「赤〇2」の形 (2026-11-02, per user「アイコンの 書き方を 赤赤 ではなく 赤〇2」) -- 並べるのは1個の時だけ。
+  if (!noRepeat && count === 1) return [actionDot(resource)];
   const nodes = [actionDot(resource)];
   if (countStr) nodes.push(actionCount(countStr));
   return nodes;
@@ -5511,7 +5513,8 @@ function renderResourceBadge(resource, count, unlimitedRepeat, neverRepeat) {
   // (UNLIMITED_ICON_REPEAT_PHYSICAL_IDS's own doc)。neverRepeat指定時は逆にこの反復自体を一切使わない
   // (2026-09-27, per user request: "プレイヤーの資源置き場のアイコンは赤〇赤〇ではなく赤〇2としてください"
   // -- プレイヤーパネルの資源置き場だけはこの反復ルールの対象外にする)。
-  if (!neverRepeat && ((count >= 1 && count <= 2) || (unlimitedRepeat && count >= 1))) {
+  // 2026-11-02, per user「アイコンの 書き方を 赤赤 ではなく 赤〇2」: 2個も数字表記に(1個はアイコンだけ)。
+  if (!neverRepeat && (Number(count) === 1 || (unlimitedRepeat && count >= 1))) {
     for (let i = 0; i < count; i++) badge.appendChild(el('span', 'resource-badge__dot'));
     return badge;
   }
