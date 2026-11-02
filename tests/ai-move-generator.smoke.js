@@ -629,6 +629,34 @@ function giveTrainingGroundControl(state, playerId, faceId) {
 }
 
 // ---------------------------------------------------------------------------
+// forcedLustPowerBrokerAKMove (2026-11-02, ユーザー指示「AIは自動で」「人間は手動で」) -- 色欲+権力者のAIは
+// 本物のAを1個ずつKに変える。色欲だけ・権力者だけでは何もしない。
+// ---------------------------------------------------------------------------
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.jobCardId = 'JOB005';
+  const lust = createCardInstance('CON001B');
+  lust.ownerId = 'P1';
+  state.cards[lust.physicalId] = lust;
+  p1.ownedCardPhysicalIds.push(lust.physicalId);
+  p1.resources.A = 2;
+  check('色欲+権力者 with real A -> A_K is forced', moveGenerator.forcedLustPowerBrokerAKMove(state, index, 'P1'), { type: 'FREE_ACTION', playerId: 'P1', freeActionId: 'A_K' });
+  p1.resources.A = 0;
+  check('...nothing once A is 0', moveGenerator.forcedLustPowerBrokerAKMove(state, index, 'P1'), null);
+  p1.resources.A = 2;
+  p1.jobCardId = null;
+  check('色欲 only (no 権力者) -> nothing forced', moveGenerator.forcedLustPowerBrokerAKMove(state, index, 'P1'), null);
+}
+{
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.jobCardId = 'JOB005';
+  p1.resources.A = 2;
+  check('権力者 only (no 色欲) -> nothing forced', moveGenerator.forcedLustPowerBrokerAKMove(state, index, 'P1'), null);
+}
+
+// ---------------------------------------------------------------------------
 // forcedFeeConversionMove (2026-08-31, per user spec: "順番は機械的にABCの多い順 一緒ならABCの順 ABCが
 // 足りなければZ それでも足りなければ-1VP...AIがそれを理解したうえでこの順を選ぶのならそれでいい") --
 // forces ONE step at a time of board.planFeeConversion's own order; see that function's own smoke tests

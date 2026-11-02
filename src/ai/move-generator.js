@@ -565,6 +565,19 @@ class MoveGenerator {
    * (nothing left in A/B/C/Z to convert) -- at which point this returns null and the pre-existing TURNEND
    * "missing K -> -1VP" rule (executor.applyTurnEnd, now actually reachable thanks to canEndTurn's
    * matching 2026-08-31 fix excluding K itself from its own USAGE_FEE gate) settles the remainder. */
+  /** 色欲+権力者のAIは、本物のAを全部Kに変える(フリーアクションA→K)(2026-11-02, ユーザー指示「AIは自動で」
+   * 「人間は手動で」)。権力者のAの支払いは 〇→Z〇→赤〇 (色欲あり, executor.resolvePayment) なので、Kが無いと
+   * 本物のAを持っていてもZが先に減る。Kは赤〇の支払いにもKの支払いにも最初に使われるのでAをKにしても払える物は
+   * 変わらず、ゲーム終了時の強欲/宝物庫は applyPowerBrokerGameEndTopUp がKをAに戻して補う。1回に1個ずつ
+   * (ほかの forced move と同じ1手ずつの形)、Aが0になるまで続く。 */
+  forcedLustPowerBrokerAKMove(state, index, playerId) {
+    const player = state.players.find((p) => p.id === playerId);
+    if (!player || !((player.resources.A || 0) > 0)) return null;
+    if (!executor.hasPaymentChoiceAbility(state, playerId) || !executor.hasPowerBrokerAbility(state, index, playerId)) return null;
+    if (player.freeActionTaps && player.freeActionTaps.A_K) return null;
+    return { type: 'FREE_ACTION', playerId, freeActionId: 'A_K' };
+  }
+
   forcedFeeConversionMove(state, index, playerId) {
     const player = state.players.find((p) => p.id === playerId);
     if (!player || !player.pendingFee) return null;

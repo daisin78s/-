@@ -153,6 +153,8 @@ class AIPlayer {
     if (forcedPureGainC) return forcedPureGainC;
     const forcedFeeConversion = this.moveGenerator.forcedFeeConversionMove(state, this.index, playerId);
     if (forcedFeeConversion) return forcedFeeConversion;
+    const forcedLustPowerBrokerAK = this.moveGenerator.forcedLustPowerBrokerAKMove(state, this.index, playerId);
+    if (forcedLustPowerBrokerAK) return forcedLustPowerBrokerAK;
     const forced = this.moveGenerator.forcedBzConversionMove(state, this.index, playerId, context,
       (before, candidates) => this.#chooseCourtierTap(before, playerId, context, candidates));
     if (forced) return forced;

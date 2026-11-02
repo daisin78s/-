@@ -19,6 +19,7 @@ function noForcedMoves() {
   return {
     forcedPureGainCTap: () => null,
     forcedFeeConversionMove: () => null,
+    forcedLustPowerBrokerAKMove: () => null,
     forcedBzConversionMove: () => null,
     forcedJob004ConversionMove: () => null,
     forcedEndSignLv2Move: () => null,
@@ -160,6 +161,7 @@ function makeLookaheadStubs() {
     generateMoves: () => { throw new Error('generateMoves should not be called when a forced move applies'); },
     forcedPureGainCTap: () => null,
     forcedFeeConversionMove: () => null,
+    forcedLustPowerBrokerAKMove: () => null,
     forcedBzConversionMove: () => forcedMove,
   };
   const evaluator = { score: () => { throw new Error('Evaluator.score should not be called when a forced move applies'); } };

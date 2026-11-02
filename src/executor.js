@@ -2029,6 +2029,7 @@ module.exports = {
   enumerateBzOutcomes,
   resolvePayment,
   hasPaymentChoiceAbility,
+  hasPowerBrokerAbility,
   colorConvertLastTurnAmount,
   ownedCardRows,
   emblemTotalsForPlayer,
