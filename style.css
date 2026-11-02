@@ -7894,3 +7894,6 @@ body.online-spectator #online-spectator-badge {
 .shop-card--cost-lowered .shop-card__cost {
   margin-top: 12px;
 }
+.shop-card--name-centered .shop-card__id {
+  text-align: center;
+}
