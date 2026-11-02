@@ -7800,3 +7800,9 @@ body.online-spectator #online-spectator-badge {
   margin-left: auto;
   margin-right: auto;
 }
+/* 初期資源カードのアイコンをすべて2倍に (2026-11-02, per user「初期資源カードのアイコン すべて２倍の大きさに」)。 */
+.shop-card--resource .shop-card__effect .action-icons {
+  zoom: 2;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
