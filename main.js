@@ -5148,7 +5148,7 @@ function buildBanquetFinalVpModifierIcon(actionText) {
   if (actionText !== 'VP_MODIFIER_FINAL(PER(K,1),9)') return null;
   const stack = el('div', 'action-icons-stack');
   stack.appendChild(actionRow([actionDot('K'), el('span', 'action-suffix action-suffix--large', 'につき1VP')]));
-  stack.appendChild(actionRow([el('span', 'action-suffix action-suffix--large', '（MAX9）')]));
+  // MAX9はVPの位置(左下)へ (fillCardFaceのshop-card__vp参照)。
   return stack;
 }
 
@@ -5181,7 +5181,7 @@ function buildTreasuryFinalVpModifierIcon(actionText) {
   stack.appendChild(row1);
   // 「1」もほかの字と同じ大きさに (per user「同じにして」)。
   stack.appendChild(actionRow([el('span', 'action-suffix action-suffix--large', '1個につき1VP')]));
-  stack.appendChild(actionRow([el('span', 'action-suffix action-suffix--large', '（MAX7）')]));
+  // MAX7はVPの位置(左下)へ (fillCardFaceのshop-card__vp参照)。
   return stack;
 }
 
@@ -5964,6 +5964,12 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
 
   renderCostBadges(q('.shop-card__cost'), facts.cost, faceId);
   q('.shop-card__vp').textContent = facts.vp ? `${facts.vp} VP` : '';
+  // 宝物庫・晩餐会(印刷VPなし、ゲーム終了時VPに上限あり)は、上限を他のモニュメントのVPと同じ位置に「MAX7」のように
+  // (カッコなし) (2026-11-02, per user「（MAX７）（MAX9） 他のモニュメントのVPと同じ位置に カッコはとる」)。
+  if (!facts.vp && /^M/.test(faceId)) {
+    const finalCap = /VP_MODIFIER_FINAL\(.*,(\d+)\)$/.exec(dataLoaderMod.getCardRow(INDEX, faceId).PASSIVE || '');
+    if (finalCap) q('.shop-card__vp').textContent = `MAX${finalCap[1]}`;
+  }
   // Corrected 2026-07-29: a monument's req (e.g. "目 >=12") IS part of that specific card (each
   // monument has its own threshold), unlike normal/special cards' req which is a slot property --
   // so only monuments pass req here; everything else's req lives in the slot caption instead.
