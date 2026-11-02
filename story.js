@@ -290,8 +290,11 @@ function storyBuildState(diceValues, cons) {
   state.jobPool = ['JOB001', 'JOB002'];
   setupMod.chooseJob(state, INDEX, 'P1', 'JOB001');
   setupMod.chooseJob(state, INDEX, 'P2', 'JOB002');
-  setupMod.chooseConFace(state, INDEX, 'P1', 'A');
-  setupMod.chooseConFace(state, INDEX, 'P2', 'A');
+  // 2026-11-02の性格の並び替えで、怠惰はCON005A -> CON005Bへ移った(CON005Aは今は憤怒)。ストーリーの動きを変えない
+  // よう、CON005は怠惰の面を使う。
+  const storyConFace = (playerId) => (state.players.find((p) => p.id === playerId).conPhysicalId === 'CON005' ? 'B' : 'A');
+  setupMod.chooseConFace(state, INDEX, 'P1', storyConFace('P1'));
+  setupMod.chooseConFace(state, INDEX, 'P2', storyConFace('P2'));
   // パトラの所有カード「基礎学問LV1」(Excel S041メモ)。ONCE(白ダイス)は使わず持っているだけ。
   state.cards.B001.ownerId = 'P2';
   state.players.find((p) => p.id === 'P2').ownedCardPhysicalIds.push('B001');
