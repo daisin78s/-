@@ -7819,3 +7819,7 @@ body.online-spectator #online-spectator-badge {
   color: var(--text);
   font-weight: 700;
 }
+/* ⚡(絵文字)を濃く (2026-11-02, per user「すべての⚡ 濃くして」) -- 絵文字は文字色が効かないので、色の濃さを上げる。 */
+.action-emoji--bolt {
+  filter: saturate(1.8) brightness(0.85) contrast(1.2);
+}

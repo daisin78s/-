@@ -4401,7 +4401,8 @@ function renderUsageFeeLabel(container, amount) {
   for (const node of resourceCountIconNodes('K', amount)) container.appendChild(node);
 }
 function actionEmoji(char) {
-  return el('span', 'action-emoji', char);
+  // ⚡は濃く (2026-11-02, per user「すべての⚡ 濃くして」) -- style.cssの.action-emoji--bolt。
+  return el('span', char === '⚡' ? 'action-emoji action-emoji--bolt' : 'action-emoji', char);
 }
 function actionArrow() {
   return el('span', 'action-arrow', '→');
