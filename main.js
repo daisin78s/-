@@ -18338,7 +18338,8 @@ function showCardEnlargeModal(faceId, visualNode, sibling, siblingVisualNode, pi
   const body = overlay.querySelector('.card-inst-modal__body');
   body.innerHTML = '';
   overlay.querySelector('.card-inst-modal__title').textContent = cardDisplayName(faceId);
-  if (siblingVisualNode && /^CON/.test(faceId) && visualNode) {
+  // 学問(B)・人材(C)・クエスト(Q)も同じく (2026-11-02, per user「領地カード 学問カード 人材カード クエストも 拡大時 カードの下に説明出るように」)。
+  if (siblingVisualNode && /^(CON|B|C|Q)/.test(faceId) && visualNode) {
     // 性格は表裏それぞれの説明文を、そのカードの真下に並べる (2026-11-02, per user「性格 を拡大した時 説明文が
     // 上下になる 説明文を それぞれの カードの したに」) -- カードの枠(slot)と同じ幅の列を2つ横に並べる。
     const slots = visualContainer.querySelectorAll('.card-enlarge-row__slot');
