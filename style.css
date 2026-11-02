@@ -7868,3 +7868,6 @@ body.online-spectator #online-spectator-badge {
   font-size: 22.1px;
   line-height: 1;
 }
+/* 初期資源カードの🎲を他の資源(〇)と同じ大きさに (2026-11-02, per user「初期資源カードの 🎲 他の資源と同じ大きさに」)。 */
+.shop-card--resource .shop-card__effect .action-emoji:not(.action-emoji--bolt) { font-size: 11px; }
+.card-group__onboard-resources .shop-card--resource .shop-card__effect .action-emoji:not(.action-emoji--bolt) { font-size: 18px; }
