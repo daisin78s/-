@@ -4982,7 +4982,7 @@ function buildBzForBuildIcon(actionText) {
   }
   if (dieValueMatch) {
     const delta = /^MONUMENT_CHANGE_DIE_VALUE\(SELF([+-]\d+)\)$/.exec(dieValueMatch)[1];
-    stack.appendChild(actionRow([actionSuffix(`ダイス目${delta}`)]));
+    stack.appendChild(actionRow([actionSuffix(`目${delta}`)])); // 宮廷人も「目+5」 (2026-11-02, per user「宮廷人も」)
   }
   const isAbcBlock = blockedCats.length === 3 && ['A', 'B', 'C'].every((c) => blockedCats.includes(c));
   if (isAbcBlock) {
