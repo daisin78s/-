@@ -4639,7 +4639,9 @@ function buildBuildIcon(actionText) {
   // rounding. Category letters are dropped entirely since every card with a buildValue in the current
   // data always has them too (redundant with the number itself once the per-die icons are gone).
   if (buildValue !== null) {
-    children.push(actionSuffix('ダイス目　'), el('span', 'action-count action-count--large', String(buildValue)));
+    // 「ダイス目　N」->「目N」 (2026-11-02, per user「交渉術 ダイス目1 を 目1に」「幾何学 土木技術」「測量術も」 --
+    // ダイス目つきのBUILDは今は交渉術・土木技術・測量術だけ)。
+    children.push(actionSuffix('目'), el('span', 'action-count action-count--large', String(buildValue)));
   } else if (categories === 'U') {
     // 'U' alone (only 革命の兆し/B005A-B's BUILD(U)/BUILD(U);ADD(BZ) -- confirmed via data/game.json, no
     // other card combines U with A/B/C/M) reads as "LVアップ" instead of the bare letter (2026-08-25, per
@@ -5061,7 +5063,8 @@ function buildChangeDieValueIcon(actionText) {
   // ⤵をもう少し左に寄せてください") -- a marker distinct from action-count--large (also used by
   // buildBuildIcon's own "ダイス目 N" rows, which this fix must NOT touch) so style.css can nudge just
   // this ⤵-prefixed row's own TAP icon left, narrowly, via .action-icons:has(.action-count--die-delta).
-  return actionRow([actionSuffix('ダイス目　'), el('span', 'action-count action-count--large action-count--die-delta', fixedMatch[1])]);
+  // 幾何学も「目+2」の形 (2026-11-02, per user「幾何学 土木技術」)。
+  return actionRow([actionSuffix('目'), el('span', 'action-count action-count--large action-count--die-delta', fixedMatch[1])]);
 }
 
 /** ADD(COUNT(emblem)*wD): the die count is dynamic (however many of that emblem the player owns),
