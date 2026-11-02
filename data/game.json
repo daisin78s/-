@@ -1073,7 +1073,7 @@
     {
       "ID": "CON003A",
       "NAME": "虚栄",
-      "ONCE": "ADD(Z,K,wD,3VP)",
+      "ONCE": "ADD(3VP,Z,K,wD)",
       "TAP": "",
       "PASSIVE": "VP_PENALTY_IF_BELOW(CARD_COUNT(M),4)",
       "TURNEND": "",
@@ -1129,7 +1129,7 @@
     {
       "ID": "CON001B",
       "NAME": "色欲",
-      "ONCE": "ADD(3Z,3VP)",
+      "ONCE": "ADD(3VP,3Z)",
       "TAP": "",
       "PASSIVE": "",
       "TURNEND": "",
@@ -1171,7 +1171,7 @@
     {
       "ID": "CON004B",
       "NAME": "裏切",
-      "ONCE": "ADD(2C,wD,5VP)",
+      "ONCE": "ADD(5VP,2C,wD)",
       "TAP": "",
       "PASSIVE": "",
       "TURNEND": "",
@@ -1185,7 +1185,7 @@
     {
       "ID": "CON005B",
       "NAME": "怠惰",
-      "ONCE": "ADD(A,B,C,3VP)",
+      "ONCE": "ADD(3VP,A,B,C)",
       "TAP": "",
       "PASSIVE": "",
       "TURNEND": "",

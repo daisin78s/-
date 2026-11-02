@@ -4738,13 +4738,18 @@ function buildAddMultiResourceIcon(actionText) {
     resourceNodes.push(...resourceItemNodes(itemMatch[1], itemMatch[2]));
   }
   // 怠惰 (CON005B) の赤青黄は折り返さず同じ行に (2026-11-02, per user「怠惰 赤青黄を同じ行に はみ出してもいい」)。
-  if (currentCardVisualFaceId === 'CON005B' && /^A,B,C(,|$)/.test(match[1])) {
+  // 並び順に関係なく、続いているA・B・Cのアイコン3つを1つにまとめる(ONCEがADD(3VP,A,B,C)の順でも)。
+  const abcStart = resourceNodes.findIndex((n, i) => ['A', 'B', 'C'].every((r, k) => {
+    const node = resourceNodes[i + k];
+    return node && node.dataset && node.dataset.resource === r;
+  }));
+  if (currentCardVisualFaceId === 'CON005B' && abcStart !== -1) {
     const keepTogether = el('span', 'action-icons-keep-together');
     keepTogether.style.whiteSpace = 'nowrap';
     keepTogether.style.display = 'inline-flex';
     keepTogether.style.alignItems = 'center';
-    resourceNodes.splice(0, 3).forEach((n) => keepTogether.appendChild(n));
-    resourceNodes.unshift(keepTogether);
+    resourceNodes.splice(abcStart, 3).forEach((n) => keepTogether.appendChild(n));
+    resourceNodes.splice(abcStart, 0, keepTogether);
   }
   return gainIconRow(resourceNodes);
 }
