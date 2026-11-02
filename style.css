@@ -7665,3 +7665,5 @@ body.online-spectator #online-spectator-badge {
   font-weight: 700;
   color: var(--text);
 }
+/* 制約カードのもらえる資源: 白ダイスの前にすき間 (2026-11-02, per user「制約カード のアイコン 白ダイスの前に スペース」)。 */
+.con-once-row .action-wd { margin-left: 4px; }

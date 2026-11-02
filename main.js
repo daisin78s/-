@@ -4686,7 +4686,7 @@ function resourceItemNodes(countStr, resource) {
   if (resource === 'D') return [actionSuffix(`${countStr || ''}追加色D`)];
   if (resource === 'wD') {
     const count = countStr ? parseInt(countStr, 10) : 1;
-    return Array.from({ length: count }, () => actionEmoji('🎲'));
+    return Array.from({ length: count }, () => { const n = actionEmoji('🎲'); n.classList.add('action-wd'); return n; });
   }
   // 1〜2個はアイコンをそのまま個数分並べる、3個以上は今まで通りアイコン1個+数字 (2026-09-27, per user
   // request: "初期資源カードもお願い" -- renderResourceBadgeと同じ表示規則を、初期資源カード(R)など
