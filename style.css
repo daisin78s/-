@@ -7833,3 +7833,11 @@ body.online-spectator #online-spectator-badge {
 .card-group__onboard-resources .shop-card--resource .shop-card__effect .action-icons {
   zoom: 1;
 }
+/* 性格カードの一番下の段(VP・表/裏)は、文が長いカード(憤怒・暴食など)でも他のカードと同じ位置に (2026-11-02, per user
+   「憤怒 暴食の 表 裏 も 他のカードと同じ位置にできるよね」) -- 下に固定して置く(文と重なってもよい)。 */
+.shop-card--con .shop-card__start-order.con-footer {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 4px;
+}
