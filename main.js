@@ -5633,7 +5633,11 @@ function renderAreaOwnershipEffectText(container, text) {
   // いがいすべて」) -- 名前が長いローマ市街だけ上の「ローマ市街／LV1　の支配」のまま。
   // ローマ市街も同じ形に (per user「ローマ市街LV1 の支配 アイコン変更」)。
   container.appendChild(el('div', 'area-ownership-name', `${areaLabel}${lv}`));
-  container.appendChild(el('div', null, suffix));
+  const suffixLine = el('div', null, suffix);
+  // 「の支配」はもっと右に (2026-11-02, per user「領地カード の支配 をもっと右に」) -- LV2の左下のVPと離す。
+  suffixLine.style.position = 'relative';
+  suffixLine.style.left = '20px';
+  container.appendChild(suffixLine);
 }
 
 /**
