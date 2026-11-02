@@ -5766,8 +5766,8 @@ function levelForFaceId(faceId) {
 // scoring.js's BESPOKE_QST_RANK_CON_FACES/executor.js's PAYMENT_CHOICE_CON_FACE_ID -- if game.xlsx's CON
 // sheet ever gets reorganized again (see the 2026-08-17 CON-sheet-reorg incident), re-measure and update
 // this to wherever 憤怒 ends up, rather than assuming CON005B forever.
-// 2026-11-02 性格の作り直し後に測り直し: はみ出すのは暴食(CON006B、もらえる資源が文の上に来たため)だけ。
-const CARD_NOTE_COMPACT_FACE_ID = 'CON006B';
+// 2026-11-02: 小さい文字はどの性格にも使わない(per user「暴食 アイコンのいろやサイズ そのままで」「怠惰も 同じ色とサイズにして」「はみだしてもいい」)。
+const CARD_NOTE_COMPACT_FACE_ID = null;
 
 /** Fills container with iconText, swapping in a real icon for two special characters instead of showing
  * them as plain text: every "✖" becomes its own bigger span (2026-08-17, per user request: "✖の大きさ
