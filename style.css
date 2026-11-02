@@ -7715,3 +7715,33 @@ body.online-spectator #online-spectator-badge {
     white-space: nowrap;
   }
 }
+
+/* 正方形のカード (2026-11-02、main.jsのbuildCardVisual参照) -- 領地・学問・人材・ジョブ。縦に伸ばさず118x118に収める。
+   倒しても形が変わらないので、入れ物の枠もカードの大きさまで詰める。 */
+.shop-card.shop-card--square,
+.shop-card.shop-card--square.shop-card--tall,
+.owned-card-cell .shop-card.shop-card--square {
+  width: 118px;  /* per user「118*118」 */
+  height: 118px;
+  min-height: 0;
+  overflow: visible; /* はみ出しても気にしない・文字は小さくしない (per user「はみでてもきにしない」「文字を小さくしないで」) */
+  padding: 6px 8px 4px;
+  gap: 2px;
+}
+.shop-card--square .shop-card__effect {
+  padding-top: 2px;
+  gap: 1px;
+}
+.owned-card-cell:has(> .shop-card--square),
+.owned-card-cell--tall:has(> .shop-card--square) {
+  width: 122px;
+  height: 122px;
+}
+/* 正方形カードのVPは左下の角に重ねて置き、効果の欄の高さを使わない。 */
+.shop-card--square .shop-card__vp {
+  position: absolute;
+  left: 8px;
+  bottom: 3px;
+  margin: 0;
+  line-height: 1;
+}

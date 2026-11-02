@@ -6179,6 +6179,11 @@ function buildCardVisual(faceId, options = {}) {
   // 強化モニュメント(M400番台、4Rに出る)は背景の緑を濃く (2026-10-27, per user request: "強化モニュメント 背景の色
   // 緑を濃く変えて")。style.cssの.shop-card--enhanced-monument参照。
   if (/^M4\d\d$/.test(faceId || '')) node.classList.add('shop-card--enhanced-monument');
+  // 領地・学問・人材・ジョブは正方形 (2026-11-02, per user「カードを 正方形に すれば いいのでは」「正方形にして 縦に
+  // 伸ばすのは やめる 文字を削減するか 無理やり入れる」; モニュメント・性格・クエスト・初期資源は今の形のまま)。
+  if (/^([ABC]\d|JOB)/.test(faceId || '')) {
+    node.classList.add('shop-card--square');
+  }
 
   const front = fillCardFace(node, faceId, options, true);
   if (options.tapped) node.classList.add('shop-card--tapped');
