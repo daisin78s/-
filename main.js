@@ -5971,7 +5971,7 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     // 左にもらえるVP・右に表/裏、スタプレは名前の行の右端へ。
     if (facts.startOrder !== null && facts.startOrder !== undefined) {
       const conStart = el('span', 'shop-card__start-order con-start-order');
-      conStart.appendChild(document.createTextNode('スタプレ '));
+      conStart.appendChild(document.createTextNode('SP')); // 「スタプレ 0」->「SP0」 (2026-11-02, per user「スタプレ0 などを SP0 に 性格と 初期資源」)
       conStart.appendChild(el('span', 'shop-card__start-order-number', String(facts.startOrder)));
       q('.shop-card__name').appendChild(conStart);
     }
@@ -5980,7 +5980,7 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     startOrderEl.appendChild(el('span', 'con-footer__face', conFaceLabel));
   } else {
     if (facts.startOrder !== null && facts.startOrder !== undefined) {
-      startOrderEl.appendChild(document.createTextNode('スタプレ '));
+      startOrderEl.appendChild(document.createTextNode('SP')); // 「スタプレ 0」->「SP0」 (2026-11-02, per user「スタプレ0 などを SP0 に 性格と 初期資源」)
       startOrderEl.appendChild(el('span', 'shop-card__start-order-number', String(facts.startOrder)));
     }
     if (conFaceLabel) {
