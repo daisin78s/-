@@ -7756,3 +7756,10 @@ body.online-spectator #online-spectator-badge {
 .shop-card__req .shop-card__req-number {
   font-size: 22.4px; /* 28px の 80% */
 }
+/* 初期資源カードのスタプレは右上に (2026-11-02, per user「初期資源カード スタプレ0 などをすべて右上に」)。 */
+.shop-card--resource .shop-card__start-order {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  line-height: 1;
+}
