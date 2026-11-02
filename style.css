@@ -7788,5 +7788,6 @@ body.online-spectator #online-spectator-badge {
   color: var(--text);
 }
 /* 人材カードの効果のアイコンの数字を1.2倍に (2026-11-02, per user「アイコンの数字 １．２倍に」)。 */
-.shop-card[data-deck="C"] .shop-card__effect .action-count { font-size: 13.2px; }
-.shop-card[data-deck="C"] .shop-card__effect .action-suffix { font-size: 12px; }
+/* 2026-11-02 追加, per user「人材カードの アイコン 数字も 〇 と同じ大きさに 必要資源はそのまま」 -- 〇(16.5px)と同じに。 */
+.shop-card[data-deck="C"] .shop-card__effect .action-count { font-size: 16.5px; }
+.shop-card[data-deck="C"] .shop-card__effect .action-suffix { font-size: 16.5px; }
