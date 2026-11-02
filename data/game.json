@@ -1073,7 +1073,7 @@
     {
       "ID": "CON003A",
       "NAME": "虚栄",
-      "ONCE": "ADD(3VP,Z,K,wD)",
+      "ONCE": "ADD(2C,3K)",
       "TAP": "",
       "PASSIVE": "VP_PENALTY_IF_BELOW(CARD_COUNT(M),4)",
       "TURNEND": "",
@@ -1115,7 +1115,7 @@
     {
       "ID": "CON006A",
       "NAME": "心配",
-      "ONCE": "ADD(2C,3K)",
+      "ONCE": "ADD(3VP,Z,K,wD)",
       "TAP": "",
       "PASSIVE": "",
       "TURNEND": "",
