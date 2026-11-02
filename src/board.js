@@ -2144,6 +2144,8 @@ module.exports = {
   isColorDieReuseBlocked,
   isLazyTrainingGroundBlocked,
   isMonumentBlockedByCoward,
+  isWrathPenaltyPlacement,
+  WRATH_CON_FACE_ID,
   hasWildcardDice,
   isDieWildcard,
   hasPioneerAbility,

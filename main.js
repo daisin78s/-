@@ -2119,6 +2119,16 @@ function wouldCauseWhiteOverflow(state, action) {
 
 function renderWhiteOverflowConfirmModal() {
   document.getElementById('white-overflow-confirm-overlay').hidden = !pendingWhiteOverflowConfirm;
+  // 同じ確認の窓を憤怒の警告にも使う (2026-11-02) -- text が無ければ元の🎲の文。
+  document.getElementById('white-overflow-confirm-text').textContent =
+    (pendingWhiteOverflowConfirm && pendingWhiteOverflowConfirm.text) || '上限を超えた🎲は失われます。よろしいですか？';
+}
+
+/** 憤怒 (CON005A) の警告文 (2026-11-02, per user「性格の警告文 更新しました」) -- 自分の色ダイスのあるエリアに置こうと
+ * した時、置く前に CON005A の WARNING 欄の文で確認する。null = 確認不要。 */
+function wrathPlacementWarningText(state, playerId, mapId) {
+  if (!boardMod.isWrathPenaltyPlacement(state, state.maps[mapId], playerId)) return null;
+  return dataLoaderMod.getCardRow(INDEX, boardMod.WRATH_CON_FACE_ID).WARNING || null;
 }
 
 // { playerId, dieId, onProceed } | null -- set by withJob007TapPrompt whenever a die placement about to
@@ -7533,7 +7543,13 @@ function placeSelectedDie(state, dieId, mapId, slotIndex) {
   );
 }
 
-function placeSelectedDieAfterJob007Check(state, player, dieId, mapId, slotIndex) {
+function placeSelectedDieAfterJob007Check(state, player, dieId, mapId, slotIndex, wrathConfirmed = false) {
+  const wrathText = wrathConfirmed ? null : wrathPlacementWarningText(state, player.id, mapId);
+  if (wrathText) {
+    pendingWhiteOverflowConfirm = { text: wrathText, onConfirm: () => placeSelectedDieAfterJob007Check(state, player, dieId, mapId, slotIndex, true) };
+    render(STATE);
+    return;
+  }
   // wD-overflow confirm (2026-08-19, per user request) -- checked BEFORE any real mutation, so a
   // declined confirm leaves selectedDieIds/turnActionTaken/actionCheckpoints untouched, same as if
   // the click never happened. See pendingWhiteOverflowConfirm's own doc.
@@ -7640,7 +7656,13 @@ function placeSelectedWildcardDie(state, dieId, mapId, preferredSlotIndex) {
   );
 }
 
-function placeSelectedWildcardDieAfterJob007Check(state, player, dieId, mapId, preferredSlotIndex) {
+function placeSelectedWildcardDieAfterJob007Check(state, player, dieId, mapId, preferredSlotIndex, wrathConfirmed = false) {
+  const wrathText = wrathConfirmed ? null : wrathPlacementWarningText(state, player.id, mapId);
+  if (wrathText) {
+    pendingWhiteOverflowConfirm = { text: wrathText, onConfirm: () => placeSelectedWildcardDieAfterJob007Check(state, player, dieId, mapId, preferredSlotIndex, true) };
+    render(STATE);
+    return;
+  }
   if (wouldCauseWhiteOverflow(state, (clone) => boardMod.placeWildcardDie(clone, INDEX, { playerId: player.id }, dieId, mapId, preferredSlotIndex))) {
     pendingWhiteOverflowConfirm = { onConfirm: () => placeSelectedWildcardDieCommit(state, player, dieId, mapId, preferredSlotIndex) };
     render(STATE);
@@ -7677,7 +7699,13 @@ function placeSelectedDiceGroup(state, mapId) {
   );
 }
 
-function placeSelectedDiceGroupAfterJob007Check(state, player, dieIds, mapId) {
+function placeSelectedDiceGroupAfterJob007Check(state, player, dieIds, mapId, wrathConfirmed = false) {
+  const wrathText = wrathConfirmed ? null : wrathPlacementWarningText(state, player.id, mapId);
+  if (wrathText) {
+    pendingWhiteOverflowConfirm = { text: wrathText, onConfirm: () => placeSelectedDiceGroupAfterJob007Check(state, player, dieIds, mapId, true) };
+    render(STATE);
+    return;
+  }
   // wD-overflow confirm -- see placeSelectedDie's own doc for the pattern.
   if (wouldCauseWhiteOverflow(state, (clone) => boardMod.placeDiceGroup(clone, INDEX, { playerId: player.id }, dieIds, mapId))) {
     pendingWhiteOverflowConfirm = { onConfirm: () => placeSelectedDiceGroupCommit(state, player, dieIds, mapId) };
@@ -7744,6 +7772,14 @@ function turnEndWarnings(state, playerId) {
   // doc) -- bespoke, not covered by the DSL loop above since CON001B's own TURNEND column is now empty
   // (this ability isn't expressible as a plain FORCE_CONVERT: it converts a variable amount, only on this
   // player's own last turn of the round). Reuses that same card's own WARNING text.
+  // 心配 (CON006A, 2026-11-02) -- ターン終了時に〇が0なら-1VP(turn-flow.applyWorryPenalty)。使用料を払った後の〇で
+  // 判定するので、払える使用料はここでも先に引く(足りない分は自動変換で埋まって払うので、その場合も0になる)。
+  const worryInst = player.ownedCardPhysicalIds.map((id) => state.cards[id]).find((c) => c && c.currentFaceId === turnFlowMod.WORRY_CON_FACE_ID);
+  if (worryInst && !player.worryAbilityDisabled) {
+    const kAfterFee = player.pendingFee ? Math.max(0, (player.resources.K || 0) - player.pendingFee.amount) : (player.resources.K || 0);
+    const row = dataLoaderMod.getCardRow(INDEX, turnFlowMod.WORRY_CON_FACE_ID);
+    if (kAfterFee === 0 && row.WARNING) warnings.push({ physicalId: worryInst.physicalId, warningText: row.WARNING, kind: 'WORRY' });
+  }
   const colorConvertAmount = executorMod.colorConvertLastTurnAmount(state, playerId);
   if (colorConvertAmount > 0) {
     const conPhysicalId = player.conPhysicalId;

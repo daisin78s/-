@@ -332,6 +332,7 @@ function endRound(state, index) {
 }
 
 module.exports = {
+  WORRY_CON_FACE_ID,
   rerollDiceForNextRound,
   startRound,
   isRoundOver,
