@@ -4241,11 +4241,9 @@ function renderDiceThresholdReq(container, diceString) {
   container.innerHTML = '';
   const match = /^>=(\d+)$/.exec(diceString || '');
   if (!match) return;
-  container.appendChild(el('div', null, 'ダイス目'));
-  const line2 = el('div');
-  line2.appendChild(el('span', 'shop-card__req-number', match[1]));
-  line2.appendChild(document.createTextNode('以上'));
-  container.appendChild(line2);
+  // 「ダイス目」「以上」は消して数字だけを右上に (2026-11-02, per user「ダイス目 と 以上 を消す 12の表記場所を 右上に
+  // 変更」「数字の 文字サイズは 80％に」「かさなってもいい」) -- 位置と大きさはstyle.cssの.shop-card__req。
+  container.appendChild(el('span', 'shop-card__req-number', match[1]));
 }
 
 /** {cost, vp, req, effects:[{text,source}], inst} for any A/B/C/CON/JOB/M/RESOURCE face id, read

@@ -7745,3 +7745,14 @@ body.online-spectator #online-spectator-badge {
   margin: 0;
   line-height: 1;
 }
+/* モニュメントのダイス目: 数字だけをカードの右上に、元の80%の大きさで(重なってもよい)。 */
+.shop-card__req {
+  position: absolute;
+  top: 2px;
+  right: 6px;
+  line-height: 1;
+  margin: 0 !important;
+}
+.shop-card__req .shop-card__req-number {
+  font-size: 22.4px; /* 28px の 80% */
+}
