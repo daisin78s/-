@@ -7902,3 +7902,13 @@ body.online-spectator #online-spectator-badge {
   font-weight: 400;
   color: var(--text-muted);
 }
+/* ローマ市街の支配・パンとサーカスの「LV1」「LV2」: 必要資源の行の右端に (2026-11-02、main.jsのfillCardFace参照)。 */
+.shop-card__id-lv-corner {
+  position: absolute;
+  right: 8px;
+  top: 24px;
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+}

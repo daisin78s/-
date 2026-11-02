@@ -5985,6 +5985,13 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     // idEl is simply left empty; its own :empty{display:none} rule collapses it with no layout gap.
   } else if (facts.name) {
     idEl.textContent = facts.name;
+    // ローマ市街の支配・パンとサーカスは名前が長いので、「LV1」「LV2」を2行目(必要資源と同じ行)の右端へ
+    // (2026-11-02, per user「こんな感じで２行に」+ 赤線の見本)。必要資源と区切りの線の位置は変えない。
+    const lvMatch = /^(B301|A001)/.test(faceId) ? /^(.*?)(LV\d)$/.exec(facts.name) : null;
+    if (lvMatch) {
+      idEl.textContent = lvMatch[1];
+      root.appendChild(el('span', 'shop-card__id-lv-corner', lvMatch[2]));
+    }
     if (faceId.startsWith('JOB')) idEl.classList.add('job-name'); // ジョブの名前の文字色(conJobColoredFragment参照)
   } else {
     idEl.textContent = faceId;
