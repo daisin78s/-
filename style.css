@@ -7635,3 +7635,15 @@ body.online-spectator #online-spectator-badge {
   0%, 100% { opacity: 0.35; }
   50% { opacity: 0.9; }
 }
+
+/* 性格カードのもらえる資源 (2026-11-02) -- 能力の文の上、真ん中に1行で(main.jsのcon-once-row参照)。 */
+.con-once-row {
+  display: flex;
+  justify-content: center;
+}
+/* 大きさは名前の横にあった時と同じ (.shop-card__name .action-* と同じ値)。 */
+.con-once-row .action-emoji { font-size: 11px; }
+.con-once-row .action-dot { width: 14.4px; height: 14.4px; }
+.con-once-row .action-count { font-size: 12px; }
+.con-once-row .action-arrow { font-size: 9px; }
+.con-once-row .action-suffix { font-size: 12px; color: var(--text); }

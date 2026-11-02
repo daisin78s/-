@@ -5766,7 +5766,8 @@ function levelForFaceId(faceId) {
 // scoring.js's BESPOKE_QST_RANK_CON_FACES/executor.js's PAYMENT_CHOICE_CON_FACE_ID -- if game.xlsx's CON
 // sheet ever gets reorganized again (see the 2026-08-17 CON-sheet-reorg incident), re-measure and update
 // this to wherever 憤怒 ends up, rather than assuming CON005B forever.
-const CARD_NOTE_COMPACT_FACE_ID = 'CON005B';
+// 2026-11-02 性格の作り直し後に測り直し: はみ出すのは暴食(CON006B、もらえる資源が文の上に来たため)だけ。
+const CARD_NOTE_COMPACT_FACE_ID = 'CON006B';
 
 /** Fills container with iconText, swapping in a real icon for two special characters instead of showing
  * them as plain text: every "✖" becomes its own bigger span (2026-08-17, per user request: "✖の大きさ
@@ -5882,7 +5883,8 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     // only one emblemEl in the DOM.
     const nameEl = q('.shop-card__name');
     if (facts.name) nameEl.appendChild(el('span', 'shop-card__name-text con-name', facts.name));
-    if (onceIcon) nameEl.appendChild(onceIcon);
+    // もらえる資源(onceIcon)は名前の横ではなく、能力の文の上(真ん中)に置く (2026-11-02, per user「性格の今あるもらえる
+    // 資源の位置は 必要資源とわかりにくいため 位置を変更したい」->「能力の文の上(真ん中)」) -- 下のCONの効果欄で追加。
     if (emblem) nameEl.appendChild(emblemEl);
   } else if (/^R\d/.test(faceId)) {
     // RESOURCE cards show neither NAME nor ID (2026-08-17, per user request -- see
@@ -5955,6 +5957,12 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     // authoritative summary line for all 12 CON faces instead of patching gaps one at a time).
     // .card-note's white-space:pre-line preserves the column's own \n line breaks as-is.
     // suppressConNote (2026-08-18): 傲慢/CON004A-only, see its own call-site doc in renderPlayerCards.
+    if (onceIcon) {
+      tall = true;
+      const onceRow = el('div', 'con-once-row');
+      onceRow.appendChild(onceIcon);
+      q('.shop-card__effect').appendChild(onceRow);
+    }
     if (options.showEffect && facts.iconText && !options.suppressConNote) {
       tall = true;
       const noteClass = faceId === CARD_NOTE_COMPACT_FACE_ID ? 'card-note card-note--compact' : 'card-note';
@@ -5990,16 +5998,12 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
       noteEl.appendChild(document.createTextNode('無人エリアに色D\n▽\n'));
       iconRow.appendChild(actionDot('C')); // 2026-11-02: B -> C
     } else if (facts.name === '巫女') {
-      // 2026-11-02 new ability (TAP=IF(RESOURCE(K)<=3,ADD(K),CHANGE(K,B)), INST「〇が3以下なら〇を得る ４以上なら〇→B」).
-      const firstRow = actionRow([actionEmoji(TAP_COST_ICON), actionDot('K'), actionSuffix('≦3'), actionTrigger(), actionDot('K')]);
-      firstRow.classList.add('action-icons--nowrap');
-      noteEl.appendChild(firstRow);
+      // 2026-11-02 new ability (TAP=IF(RESOURCE(K)<=3,ADD(K),CHANGE(K,B))) -- icon per user「⤵〇/〇→青〇」.
       iconRow.classList.add('action-icons--nowrap');
+      iconRow.style.gap = '3px'; // 1行に収める
+      iconRow.appendChild(actionEmoji(TAP_COST_ICON));
       iconRow.appendChild(actionDot('K'));
-      const geFour = actionSuffix('≧4');
-      geFour.style.whiteSpace = 'nowrap';
-      iconRow.appendChild(geFour);
-      iconRow.appendChild(actionTrigger());
+      iconRow.appendChild(actionSuffix('/'));
       iconRow.appendChild(actionDot('K'));
       iconRow.appendChild(actionArrow());
       iconRow.appendChild(actionDot('B'));
