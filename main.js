@@ -5211,7 +5211,9 @@ function buildTreasuryFinalVpModifierIcon(actionText) {
   row1.classList.add('action-icons--nowrap');
   stack.appendChild(row1);
   // 「1」もほかの字と同じ大きさに (per user「同じにして」)。
-  stack.appendChild(actionRow([el('span', 'action-suffix action-suffix--large', '1個につき1VP')]));
+  const treasuryRow2 = actionRow([el('span', 'action-suffix action-suffix--large', '1個につき1VP')]);
+  treasuryRow2.style.marginTop = '-5px'; // 上の行との間を詰める (per user「文章の間を詰めたい 1個につき1VPを上に」)
+  stack.appendChild(treasuryRow2);
   // MAX7はVPの位置(左下)へ (fillCardFaceのshop-card__vp参照)。
   return stack;
 }
@@ -6009,7 +6011,11 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
   if (!facts.vp && /^M/.test(faceId)) {
     const finalCap = /VP_MODIFIER_FINAL\(.*,(\d+)\)$/.exec(dataLoaderMod.getCardRow(INDEX, faceId).PASSIVE || '');
     if (finalCap) {
-      q('.shop-card__vp').textContent = `MAX${finalCap[1]}`;
+      // 「MAX」は1.2分の1、数字は1.2倍 (per user「MAX7の MAXを１．２倍小さく ７を１．２倍大きく 晩餐会も」) -- VPと同じ分け方。
+      const capEl = q('.shop-card__vp');
+      capEl.textContent = '';
+      capEl.appendChild(el('span', 'shop-card__vp-unit', 'MAX'));
+      capEl.appendChild(el('span', 'shop-card__vp-number', finalCap[1]));
       q('.shop-card__vp').classList.add('shop-card__vp--cap'); // VPを2倍にする対象から外す
     }
   }
