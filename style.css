@@ -7748,7 +7748,7 @@ body.online-spectator #online-spectator-badge {
 /* モニュメントのダイス目: 数字だけをカードの右上に、元の80%の大きさで(重なってもよい)。 */
 .shop-card__req {
   position: absolute;
-  top: 2px;
+  top: 5px; /* 少し下に (2026-11-02, per user「モニュメントのダイス目 数字を少し下に 必要資源は動かさない」) */
   right: 6px;
   line-height: 1;
   margin: 0 !important;
