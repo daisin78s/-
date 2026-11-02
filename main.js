@@ -5174,16 +5174,15 @@ function appendTextWithSmallChar(container, text, smallChar) {
  * 一枚のカード専用のexact-matchアイコン。 */
 function buildTreasuryFinalVpModifierIcon(actionText) {
   if (actionText !== 'VP_MODIFIER_FINAL(RESOURCE(A,B,C,Z),7)') return null;
+  // 2026-11-02, per user「宝物庫のアイコン 〇以外の資源 / １個につき1VP / （MAX7）」 -- 3行に(〇は食料アイコン)。
   const stack = el('div', 'action-icons-stack');
-  const row1 = el('span', 'action-suffix action-suffix--large');
-  // 〇は食料(K)のアイコンにする (2026-11-02, per user「宝物庫 のアイコン 〇 を アイコンの〇に」)。
-  appendTextWithSmallChar(row1, '以外の資源1個', '1');
-  const treasuryRow1 = actionRow([actionDot('K'), row1]);
-  treasuryRow1.classList.add('action-icons--nowrap');
-  stack.appendChild(treasuryRow1);
+  const row1 = actionRow([actionDot('K'), el('span', 'action-suffix action-suffix--large', '以外の資源')]);
+  row1.classList.add('action-icons--nowrap');
+  stack.appendChild(row1);
   const row2 = el('span', 'action-suffix action-suffix--large');
-  appendTextWithSmallChar(row2, 'につき1VP（MAX7）', '1');
+  appendTextWithSmallChar(row2, '1個につき1VP', '1');
   stack.appendChild(actionRow([row2]));
+  stack.appendChild(actionRow([el('span', 'action-suffix action-suffix--large', '（MAX7）')]));
   return stack;
 }
 
