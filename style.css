@@ -7863,3 +7863,8 @@ body.online-spectator #online-spectator-badge {
 .shop-card.shop-card--square[data-deck] {
   padding-top: 1px;
 }
+/* 宝物庫・晩餐会のMAX7/MAX9をできるだけ大きく、同じ大きさで (2026-11-02, per user「MAX7 可能なだけ大きくして MAX9 同じ大きさに」)。 */
+.shop-card--monument .shop-card__vp.shop-card__vp--cap {
+  font-size: 22.1px;
+  line-height: 1;
+}
