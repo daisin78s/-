@@ -5991,7 +5991,8 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     if (lvMatch) {
       idEl.textContent = lvMatch[1];
       // 名前の中に入れて、名前と同じ字の大きさになるように(位置はカードの右端、style.css参照)。
-      idEl.appendChild(el('span', 'shop-card__id-lv-corner', lvMatch[2]));
+      // パンとサーカスはPC/タブレットでは1行に入るので、右下に動かすのはスマホだけ (per user回答「2」)。
+      idEl.appendChild(el('span', /^B301/.test(faceId) ? 'shop-card__id-lv-corner shop-card__id-lv-corner--mobile-only' : 'shop-card__id-lv-corner', lvMatch[2]));
     }
     if (faceId.startsWith('JOB')) idEl.classList.add('job-name'); // ジョブの名前の文字色(conJobColoredFragment参照)
   } else {

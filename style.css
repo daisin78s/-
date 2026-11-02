@@ -7929,3 +7929,12 @@ body.online-spectator #online-spectator-badge {
     height: auto;
   }
 }
+/* パンとサーカス: PC/タブレットは「パンとサーカスLV1」の1行のまま、スマホだけLVを右下に (2026-11-03)。 */
+.shop-card__id-lv-corner.shop-card__id-lv-corner--mobile-only {
+  position: static;
+}
+@media (max-width: 760px), (max-height: 500px) {
+  .shop-card__id-lv-corner.shop-card__id-lv-corner--mobile-only {
+    position: absolute;
+  }
+}
