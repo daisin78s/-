@@ -1557,8 +1557,8 @@ function hasPioneerAbility(state, index, playerId) {
 // but B_K (executor.js's FREE_ACTION_DEFS) is the exact same 1:1 conversion a player could otherwise
 // trigger manually, so this is unchanged in kind from the old per-value design, just fixed to always
 // start from B. See resolvePioneerGrant's own doc for exactly when that conversion fires.
-const PIONEER_RAW_RESOURCE = 'B';
-const PIONEER_FREE_ACTION_ID = 'B_K';
+const PIONEER_RAW_RESOURCE = 'C'; // 2026-11-02: B -> C (user's INST「…色ダイスを配置したときCを得る」)
+const PIONEER_FREE_ACTION_ID = 'C_K';
 
 /** Resolves one die's worth of 開拓者's bonus (2026-09-20 redesign -- see PIONEER_RAW_RESOURCE's own doc;
  * previously per-die-value, now a flat 1B every time) -- decides whether to grant it raw or auto-convert

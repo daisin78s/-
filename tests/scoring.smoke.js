@@ -43,9 +43,11 @@ function giveCard(state, faceCardId, ownerId) {
   // VP_MODIFIER(-2)) clause was retired, not kept alongside this one -- see executor.smoke.js's own
   // updated doc on CON003A) -- EMBLEM_COUNT(天,M) is 0 (M001 has no 天 emblem) vs a threshold of 2, so
   // this contributes -2.
-  giveCard(state, 'CON003A', 'P1');
+  // 2026-11-02: CON003A's emblem penalty was removed (emblems abolished) -> 強欲/CON002B's
+  // VP_PENALTY_IF_BELOW(RESOURCE(A,B,C,Z),7) instead: A/B/C/Z all 0 -> short 7 -> -7.
+  giveCard(state, 'CON002B', 'P1');
 
-  const expected = 4 + a001Vp + 5 + -2;
+  const expected = 4 + a001Vp + 5 + -7;
   check('computeFinalScore sums card VP + resource VP + active VP_PENALTY_IF_BELOW', scoring.computeFinalScore(state, index, 'P1'), expected);
 }
 
@@ -116,26 +118,7 @@ function giveCard(state, faceCardId, ownerId) {
   check('CON002B: K holdings never count toward the total', executor.collectVpModifiers(state, index, 'P1'), 0);
 }
 
-// ---------------------------------------------------------------------------
-// VP_PENALTY_IF_BELOW via CON003A: "モニュメント天が2個必要" -- EMBLEM_COUNT(天,M) (sheet-scoped emblem
-// count, 2026-08-15) sums 天 emblems from owned M-sheet cards only, ignoring A/B/C-sheet 天 emblems.
-// ---------------------------------------------------------------------------
-{
-  const state = createEmptyGameState('scoring-smoke-con003a-emblem');
-  state.players.push(createPlayer('P1', 'Alice'));
-  giveCard(state, 'CON003A', 'P1');
-  const p1 = state.players[0];
-
-  check('CON003A: no monuments at all -> EMBLEM_COUNT(天,M)=0, short 2 -> -2VP', executor.collectVpModifiers(state, index, 'P1'), -2);
-
-  giveCard(state, 'B001A', 'P1'); // B-sheet card, EMBLEM_B(天)=1 -- does NOT count (wrong sheet)
-  check('CON003A: a B-sheet 天 emblem does not count toward the M-only threshold, still -2VP', executor.collectVpModifiers(state, index, 'P1'), -2);
-
-  const m002Ten = getCardRow(index, 'M002').EMBLEM_B; // whatever M002's own 天 count actually is
-  giveCard(state, 'M002', 'P1');
-  const expectedAfterM002 = -Math.max(0, 2 - (m002Ten || 0));
-  check('CON003A: owning an M-sheet card with its own 天 emblem(s) reduces (or clears) the shortfall', executor.collectVpModifiers(state, index, 'P1'), expectedAfterM002);
-}
+// (CON003A emblem-shortfall test removed 2026-11-02 -- emblems abolished.)
 
 // ---------------------------------------------------------------------------
 // conCardOwnVpEffect: isolates ONE card's own PASSIVE-driven VP effect out of a player who owns
@@ -149,14 +132,14 @@ function giveCard(state, faceCardId, ownerId) {
   // (2026-08-17, matching physical slot number to START_ORDER for both A/B tiers); it's CON002B now.
   const state = createEmptyGameState('scoring-smoke-own-vp-effect');
   state.players.push(createPlayer('P1', 'Alice'));
-  giveCard(state, 'CON003A', 'P1'); // no monuments -> -2 on its own
+  // 2026-11-02: the CON003A half of this split test was dropped (emblems abolished; no other CON with a VP
+  // penalty has its own physical id -- CON002A shares CON002 with CON002B).
   giveCard(state, 'CON002B', 'P1'); // A+B+C+Z total 0, short 7 -> -7 on its own
   const p1 = state.players[0];
   p1.resources.A = 0; p1.resources.B = 0; p1.resources.C = 0; p1.resources.Z = 0;
 
-  check('conCardOwnVpEffect(CON003A) reports only its own -2, not CON002B\'s share', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON003A'), -2);
-  check('conCardOwnVpEffect(CON002B) reports only its own -7, not CON003A\'s share', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON002B'), -7);
-  check('...and the two sum to the same combined total collectVpModifiers reports', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON003A') + scoring.conCardOwnVpEffect(state, index, 'P1', 'CON002B'), executor.collectVpModifiers(state, index, 'P1'));
+  check('conCardOwnVpEffect(CON002B) reports its own -7', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON002B'), -7);
+  check('...matching collectVpModifiers', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON002B'), executor.collectVpModifiers(state, index, 'P1'));
   check('conCardOwnVpEffect returns 0 for a card this player does not actually own', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON001A'), 0);
 }
 

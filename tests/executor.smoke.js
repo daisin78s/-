@@ -219,22 +219,7 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
   check('...recorded on whiteOverflowEvents same as a real cap overflow', state.whiteOverflowEvents, ['P1']);
 }
 
-// ---------------------------------------------------------------------------
-// 3. CON003A: PASSIVE=VP_PENALTY_IF_BELOW(EMBLEM_COUNT(天,M),2) (2026-08-15, per user spec: the card's
-// original IF(CARD_COUNT<=6,VP_MODIFIER(-2)) clause is retired entirely -- "建築数が6以下で-2VPは廃止
-// して" -- replaced outright by this monument-emblem shortfall rule, "モニュメント天エンブレムが2個
-// 未満だと、不足1個につき-1VP" -- not added alongside the old clause). No M-sheet card is ever owned in
-// this block, so EMBLEM_COUNT(天,M) stays 0 -> short 2 -> -2, regardless of how many other (non-M)
-// cards this player owns.
-// ---------------------------------------------------------------------------
-{
-  const state = freshState();
-  giveCard(state, 'CON003A', 'P1');
-  check('CON003A: no monuments -> EMBLEM_COUNT(天,M)=0, short 2 -> -2VP', executor.collectVpModifiers(state, index, 'P1'), -2);
-
-  for (let i = 1; i <= 6; i++) giveCard(state, `A00${i}A`, 'P1'); // owning lots of non-M cards changes nothing (2026-08-24: A-deck now only goes to A006A)
-  check('CON003A: owning 8 more (non-M) cards does not affect the monument-only shortfall, still -2VP', executor.collectVpModifiers(state, index, 'P1'), -2);
-}
+// 3. CON003A (狂信)'s emblem-shortfall test removed 2026-11-02 -- emblems abolished, PASSIVE cleared for now.
 
 // ---------------------------------------------------------------------------
 // 3a. CON002A: PASSIVE=VP_PENALTY_PER(LEVEL_COUNT(1)) (2026-08-15, per user spec: "LV1のカード１枚に
@@ -254,37 +239,7 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
   check('CON002A: 3 LV1 cards -> -3VP (scales per card, not a flat threshold)', executor.collectVpModifiers(state, index, 'P1'), -3);
 }
 
-// ---------------------------------------------------------------------------
-// 3b. M405/巨大石像 (2026-10-15 -- carries PASSIVE=VP_MODIFIER(MAX_EMBLEM_COUNT), the same persistent,
-//     live-recomputed formula B301B/栄光の証LV2 used to have before its own 2026-10-15 rework replaced
-//     it with a plain repeatable TAP=ADD(VP)/ADD(2VP) instead -- see command-builder.isChoiceCost's own
-//     doc for M405's new "15A/15B/15C" choice COST). M405's own EMBLEM_A/B/C are each "/3" -- conditional
-//     on inst.paidChoiceResource (which single resource was actually spent to pay that choice COST, set
-//     at build time by board.resolveBuildNew), not a flat per-card count -- see
-//     executor.resolveEmblemValue's own doc. Recomputed live from currently-owned emblem cards every
-//     time collectVpModifiers is called, same as computeFinalScore recomputes card VP live.
-// ---------------------------------------------------------------------------
-{
-  const state = freshState();
-  const m405Id = giveCard(state, 'M405', 'P1');
-  state.cards[m405Id].paidChoiceResource = 'B'; // pretend 15B was the resource actually paid
-  check('M405 (paid with B): its own "/3" EMBLEM_B resolves -> 天=3, the only/max type so far', executor.collectVpModifiers(state, index, 'P1'), 3);
-  check('...EMBLEM_COUNT(天) is exactly 3 (only EMBLEM_B\'s "/3" counted)', executor.evalMetric(state, index, 'P1', { name: 'EMBLEM_COUNT', args: ['天'] }), 3);
-  check('...EMBLEM_COUNT(地)/EMBLEM_COUNT(人) stay 0 -- the OTHER two "/3" values never resolve for this instance', executor.evalMetric(state, index, 'P1', { name: 'EMBLEM_COUNT', args: ['地'] }) + executor.evalMetric(state, index, 'P1', { name: 'EMBLEM_COUNT', args: ['人'] }), 0);
-
-  giveCard(state, 'B001A', 'P1'); // EMBLEM_B=1 -> 天 rises to 4, still the max
-  check('VP_MODIFIER(MAX_EMBLEM_COUNT) rises to 4 as soon as another 天-emblem card is owned (live, not frozen at build time)', executor.collectVpModifiers(state, index, 'P1'), 4);
-}
-{
-  // A different M405 instance that paid with a DIFFERENT resource resolves its OWN matching EMBLEM
-  // only, confirming the conditional is genuinely per-instance (per paidChoiceResource), not a flat
-  // "always grant all 3" fallback.
-  const state = freshState();
-  const m405Id = giveCard(state, 'M405', 'P1');
-  state.cards[m405Id].paidChoiceResource = 'C';
-  check('M405 (paid with C): only EMBLEM_C\'s "/3" resolves -> 人=3, VP_MODIFIER(MAX_EMBLEM_COUNT)=3', executor.collectVpModifiers(state, index, 'P1'), 3);
-  check('...TOTAL_EMBLEM_COUNT is exactly 3 (not 9 -- only the one matching EMBLEM_C counted)', executor.evalMetric(state, index, 'P1', { name: 'TOTAL_EMBLEM_COUNT', args: [] }), 3);
-}
+// 3b. M405/巨大石像 tests removed 2026-11-02 (card deleted).
 
 // ---------------------------------------------------------------------------
 // 3c. 晩餐会(物理id M401->M403、2026-10-13の宝物庫追加に伴うモニュメント再編で移動)自身の
@@ -1008,42 +963,7 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   check('...final resources', player.resources, { K: 0, A: 5, B: 0, C: 0, Z: 0, VP: 0, BZ: 0 });
 }
 
-// ---------------------------------------------------------------------------
-// 15. EMBLEM_COUNT/EMBLEM_SET_COUNT with multi-emblem monuments (2026-07-30: game.xlsx's M sheet
-// split EMBLEM into per-type EMBLEM_A/EMBLEM_B/EMBLEM_C counts, so a single monument can now count
-// toward more than one emblem -- e.g. M004 has EMBLEM_A=1,EMBLEM_B=1,EMBLEM_C=1, i.e. one each of
-// 地/天/人; M012 has EMBLEM_C=4, i.e. four 人). Regression test for the emblemCountsForRow fix.
-// ---------------------------------------------------------------------------
-{
-  const state = freshState();
-  giveCard(state, 'M004', 'P1'); // EMBLEM_A=1(地), EMBLEM_B=1(天), EMBLEM_C=1(人)
-  check('EMBLEM_COUNT(天) counts M004\'s 天 emblem', executor.evalMetric(state, index, 'P1', { name: 'EMBLEM_COUNT', args: ['天'] }), 1);
-  check('EMBLEM_COUNT(地) counts M004\'s 地 emblem', executor.evalMetric(state, index, 'P1', { name: 'EMBLEM_COUNT', args: ['地'] }), 1);
-  check('COUNT(人) (EMBLEM_COUNT alias) counts M004\'s 人 emblem', executor.evalMetric(state, index, 'P1', { name: 'COUNT', args: ['人'] }), 1);
-  check('EMBLEM_SET_COUNT is 1 with exactly one of each emblem', executor.evalMetric(state, index, 'P1', { name: 'EMBLEM_SET_COUNT', args: [] }), 1);
-
-  giveCard(state, 'M012', 'P1'); // EMBLEM_C=4 (four 人), no 天/地
-  check('EMBLEM_COUNT(人) sums across cards: M004\'s 1 + M012\'s 4', executor.evalMetric(state, index, 'P1', { name: 'EMBLEM_COUNT', args: ['人'] }), 5);
-  check('EMBLEM_SET_COUNT stays capped by the scarcest emblem (天=1, 地=1) despite 人=4', executor.evalMetric(state, index, 'P1', { name: 'EMBLEM_SET_COUNT', args: [] }), 1);
-}
-
-// ---------------------------------------------------------------------------
-// 15b. CON cards' own EMBLEM_A/B/C count too, same as M (2026-08-17: 5 more CON faces gained real
-// emblem values -- 傲慢/CON004A(地2), 狂信/CON003A(天2), 潔癖/CON002A(人2), 強欲/CON002B(地1,天1),
-// 憂鬱/CON003B(人1) -- alongside 祝福/CON001A's pre-existing 地1,天1,人1. Not a new code path (already
-// confirmed generic/sheet-agnostic in 2026-08-16's CON006B fix, see main.js's computePlayerBuildStats
-// doc), just a regression check that a second real CON-emblem card keeps working the same way.
-// ---------------------------------------------------------------------------
-{
-  const state = freshState();
-  giveCard(state, 'CON004A', 'P1'); // 傲慢: EMBLEM_A=2 (地2)
-  check('EMBLEM_COUNT(地) counts CON004A\'s own EMBLEM_A, not just M/A/B/C decks', executor.evalMetric(state, index, 'P1', { name: 'EMBLEM_COUNT', args: ['地'] }), 2);
-  check('MAX_EMBLEM_COUNT follows it too', executor.evalMetric(state, index, 'P1', { name: 'MAX_EMBLEM_COUNT', args: [] }), 2);
-
-  giveCard(state, 'CON002B', 'P1'); // 強欲: EMBLEM_A=1,EMBLEM_B=1 (地1,天1)
-  check('EMBLEM_COUNT(地) sums across CON cards too: CON004A\'s 2 + CON002B\'s 1', executor.evalMetric(state, index, 'P1', { name: 'EMBLEM_COUNT', args: ['地'] }), 3);
-  check('EMBLEM_COUNT(天) picks up CON002B\'s own 1', executor.evalMetric(state, index, 'P1', { name: 'EMBLEM_COUNT', args: ['天'] }), 1);
-}
+// 15/15b. EMBLEM_COUNT tests removed 2026-11-02 (emblems abolished).
 
 // ---------------------------------------------------------------------------
 // 16. MAX_EMBLEM_COUNT/TOTAL_EMBLEM_COUNT/COST_TOTAL (2026-07-30, added for QST GOAL conditions --
@@ -1052,13 +972,9 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 {
   const state = freshState();
   giveCard(state, 'M004', 'P1'); // COST=2A,2B,2C (total 6); EMBLEM 地1,天1,人1
-  check('MAX_EMBLEM_COUNT is 1 with exactly one of each emblem', executor.evalMetric(state, index, 'P1', { name: 'MAX_EMBLEM_COUNT', args: [] }), 1);
-  check('TOTAL_EMBLEM_COUNT sums all three types: 1+1+1', executor.evalMetric(state, index, 'P1', { name: 'TOTAL_EMBLEM_COUNT', args: [] }), 3);
   check('COST_TOTAL reads M004\'s printed COST (2A+2B+2C)', executor.evalMetric(state, index, 'P1', { name: 'COST_TOTAL', args: [] }), 6);
 
   giveCard(state, 'M012', 'P1'); // COST=14C (total 14); EMBLEM 人4 (no 天/地)
-  check('MAX_EMBLEM_COUNT now follows 人 (1+4=5), ahead of 天/地 (1 each)', executor.evalMetric(state, index, 'P1', { name: 'MAX_EMBLEM_COUNT', args: [] }), 5);
-  check('TOTAL_EMBLEM_COUNT sums across cards too: (1+1+1) + 4', executor.evalMetric(state, index, 'P1', { name: 'TOTAL_EMBLEM_COUNT', args: [] }), 7);
   check('COST_TOTAL sums across cards: M004\'s 6 + M012\'s 14', executor.evalMetric(state, index, 'P1', { name: 'COST_TOTAL', args: [] }), 20);
 
   giveCard(state, 'A001A', 'P1'); // COST=2A (total 2)
@@ -1158,14 +1074,14 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 // or go negative, since 0 天-emblem cards minus 1 is a perfectly normal "you get nothing" case, not an
 // error.
 {
-  const bTierACards = ['B001A', 'B002A', 'B003A', 'B004A']; // all EMBLEM_B=天
+  const bTierACards = ['B001A', 'B002A', 'B003A', 'B004A']; // 2026-11-02: emblems abolished -> counts B cards via CARD_COUNT(B) instead of COUNT(天)
   for (const [tenCount, expectedWd] of [[0, 0], [1, 0], [2, 1], [3, 2]]) {
     const state = freshState();
     for (let i = 0; i < tenCount; i++) giveCard(state, bTierACards[i], 'P1');
     const before = getPlayerRef(state, 'P1').dice.filter((d) => d.kind === 'WHITE').length;
-    const result = executor.runProgram(state, index, { playerId: 'P1' }, 'ADD((COUNT(天)-1)*wD)');
+    const result = executor.runProgram(state, index, { playerId: 'P1' }, 'ADD((CARD_COUNT(B)-1)*wD)');
     const after = getPlayerRef(state, 'P1').dice.filter((d) => d.kind === 'WHITE').length;
-    check(`ADD((COUNT(天)-1)*wD) with ${tenCount} 天-emblem cards grants ${expectedWd} wD (nerfed by 1)`, { success: result.success, granted: after - before }, { success: true, granted: expectedWd });
+    check(`ADD((CARD_COUNT(B)-1)*wD) with ${tenCount} B cards grants ${expectedWd} wD (nerfed by 1)`, { success: result.success, granted: after - before }, { success: true, granted: expectedWd });
   }
 }
 

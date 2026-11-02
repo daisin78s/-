@@ -289,9 +289,7 @@ function giveNCards(state, ownerId, n, offset) {
   check('AREA_COUNT counts owned A-series cards at any tier', qst.evalGoalMetric(state, index, 'P1', 'AREA_COUNT'), 2);
   check('AREA_COUNT(2) counts only LEVEL-2 (tier B) A-series cards', qst.evalGoalMetric(state, index, 'P1', 'AREA_COUNT(2)'), 1);
 
-  const totalEmblems = qst.evalGoalMetric(state, index, 'P1', 'TOTAL_EMBLEM_COUNT');
-  check('Bare EMBLEM_COUNT (no args) equals TOTAL_EMBLEM_COUNT', qst.evalGoalMetric(state, index, 'P1', 'EMBLEM_COUNT'), totalEmblems);
-  assertTrue('...and that total is actually positive (sanity, not vacuously equal)', totalEmblems > 0);
+  // (EMBLEM_COUNT check removed 2026-11-02 -- emblems abolished.)
 }
 
 console.log(`\n${passCount} passed, ${failCount} failed`);

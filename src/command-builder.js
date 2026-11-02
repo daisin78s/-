@@ -290,7 +290,14 @@ function lowerCall(node) {
         delta: numberValue(node.args[2]),
       };
     case 'IF':
-      return { type: 'IF', condition: lowerCondition(node.args[0]), effect: lowerCall(node.args[1]) };
+      // Optional 3rd arg = else-effect (2026-11-02, for 巫女's TAP「〇が3以下なら〇を得る 4以上なら〇→B」 --
+      // two separate IFs would re-check the condition after the first effect already changed K).
+      return {
+        type: 'IF',
+        condition: lowerCondition(node.args[0]),
+        effect: lowerCall(node.args[1]),
+        ...(node.args[2] ? { elseEffect: lowerCall(node.args[2]) } : {}),
+      };
     case 'ON':
       return lowerOn(node);
     case 'SET_DICE_ANY':

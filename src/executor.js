@@ -877,6 +877,7 @@ function activePassiveCommands(state, index, playerId, row) {
   for (const cmd of commands) {
     if (cmd.type === 'IF') {
       if (evalCondition(state, index, playerId, cmd.condition)) out.push(cmd.effect);
+      else if (cmd.elseEffect) out.push(cmd.elseEffect);
     } else {
       out.push(cmd);
     }
@@ -1584,7 +1585,7 @@ function runCommand(state, index, context, cmd) {
     case 'IF':
       return evalCondition(state, index, context.playerId, cmd.condition)
         ? runCommand(state, index, context, cmd.effect)
-        : { success: true, skipped: true };
+        : cmd.elseEffect ? runCommand(state, index, context, cmd.elseEffect) : { success: true, skipped: true };
     default:
       if (NOT_IMPLEMENTED_TYPES.has(cmd.type)) {
         throw new NotImplementedError(`${cmd.type} is not implemented yet (needs the board/shop system)`);

@@ -867,7 +867,7 @@ function giveJob002(state, playerId) {
   // 2026-10-15) start in state.extraMonumentPool, not in any of the 3 shops' own slots/drawPiles.
   const state = freshStateWithShops();
   const isExtraMonument = (faceId) => faceId && Number(faceId.replace(/\D/g, '')) >= 400;
-  check('extraMonumentPool starts with all 5', [...state.extraMonumentPool].sort(), ['M401', 'M402', 'M403', 'M404', 'M405']);
+  check('extraMonumentPool starts with all 4 (M405 removed 2026-11-02)', [...state.extraMonumentPool].sort(), ['M401', 'M402', 'M403', 'M404']);
   for (const shopKey of ['M', 'NORMAL', 'SPECIAL']) {
     check(`${shopKey} shop slots hold no M401-404`, Object.values(state.shops[shopKey].slots).some(isExtraMonument), false);
     check(`${shopKey} shop drawPile holds no M401-404`, state.shops[shopKey].drawPile.some(isExtraMonument), false);
@@ -878,7 +878,7 @@ function giveJob002(state, playerId) {
   // its own drawPile, so nothing happens.
   const state = freshStateWithShops();
   board.revealExtraMonumentsIfAnyShopEmptied(state);
-  check('No-op while every shop still has its own drawPile cards left', state.extraMonumentPool.length, 5);
+  check('No-op while every shop still has its own drawPile cards left', state.extraMonumentPool.length, 4);
 }
 {
   // Buy out SHOP201-203 entirely (both waves) so its own drawPile hits 0 -- the first restock that then
@@ -901,20 +901,20 @@ function giveJob002(state, playerId) {
   check('SPECIAL fully drained: drawPile empty', state.shops.SPECIAL.drawPile.length, 0);
   check('...and every slot null (nothing left to draw M/NORMAL are untouched by the loop above)', Object.values(state.shops.SPECIAL.slots).every((v) => v === null), true);
   board.revealExtraMonumentsIfAnyShopEmptied(state);
-  check('Pool now holds 4 (SPECIAL drew exactly 1 this call)', state.extraMonumentPool.length, 4);
+  check('Pool now holds 3 (SPECIAL drew exactly 1 this call)', state.extraMonumentPool.length, 3);
   check('Exactly 1 of M401-404 sits in SPECIAL so far', Object.values(state.shops.SPECIAL.slots).filter(isExtraMonument).length, 1);
   check('M shop received none (only SPECIAL emptied)', Object.values(state.shops.M.slots).some(isExtraMonument), false);
   check('NORMAL shop received none either', Object.values(state.shops.NORMAL.slots).some(isExtraMonument), false);
   // SPECIAL still has 2 empty slots and the pool isn't empty -- the SAME shop draws again.
   board.revealExtraMonumentsIfAnyShopEmptied(state);
   check('A 2nd call gives SPECIAL a 2nd extra monument (no per-shop cap)', Object.values(state.shops.SPECIAL.slots).filter(isExtraMonument).length, 2);
-  check('Pool now holds 3', state.extraMonumentPool.length, 3);
+  check('Pool now holds 2', state.extraMonumentPool.length, 2);
   // ...and a 3rd call fills SPECIAL's last empty slot -- SPECIAL only has 3 slots, so this caps out here
   // even though the pool still has 2 left over (unlike before the 宝物庫/M405 additions, when pool size
   // exactly matched SPECIAL's slot count).
   board.revealExtraMonumentsIfAnyShopEmptied(state);
   check('A 3rd call fills SPECIAL\'s last slot', Object.values(state.shops.SPECIAL.slots).filter(isExtraMonument).length, 3);
-  check('Pool still holds 2 (SPECIAL is full, extra monuments have nowhere to go yet)', state.extraMonumentPool.length, 2);
+  check('Pool still holds 1 (SPECIAL is full, extra monuments have nowhere to go yet)', state.extraMonumentPool.length, 1);
   check('...SPECIAL holds 3 distinct extra monuments, each exactly once', new Set(Object.values(state.shops.SPECIAL.slots)).size, 3);
   // A 4th call is a genuine no-op -- SPECIAL is full (M/NORMAL untouched in this test), so there's no
   // empty slot left anywhere for the pool's remaining 1 to land in.
@@ -938,7 +938,7 @@ function giveJob002(state, playerId) {
   drainShop('M');
   drainShop('NORMAL');
   board.revealExtraMonumentsIfAnyShopEmptied(state);
-  check('Pool now holds 3 (M and NORMAL each drew 1 this call)', state.extraMonumentPool.length, 3);
+  check('Pool now holds 2 (M and NORMAL each drew 1 this call)', state.extraMonumentPool.length, 2);
   const mExtra = Object.values(state.shops.M.slots).filter(isExtraMonument);
   const normalExtra = Object.values(state.shops.NORMAL.slots).filter(isExtraMonument);
   check('M shop got exactly 1', mExtra.length, 1);
@@ -2239,10 +2239,10 @@ function giveJob009(state, playerId) {
     const p1 = player(state, 'P1');
     giveJob009(state, 'P1');
     const d1 = giveDie(state, 'P1', value);
-    const beforeB = p1.resources.B || 0;
+    const beforeB = p1.resources.C || 0;
     const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, mapId, slotIndex);
     check(`宣教師: placement with die value ${value} succeeds`, result.success, true);
-    check(`宣教師: die value ${value} grants a flat 1B regardless of value`, (p1.resources.B || 0) - beforeB, 1);
+    check(`宣教師: die value ${value} grants a flat 1B regardless of value`, (p1.resources.C || 0) - beforeB, 1);
   }
 }
 {
@@ -2251,18 +2251,18 @@ function giveJob009(state, playerId) {
   giveJob009(state, 'P1');
   const d1 = giveDie(state, 'P1', 1); // AREA001A SLOT1=1, a fresh map nobody has touched yet
   const beforeK = p1.resources.K || 0;
-  const beforeB = p1.resources.B || 0;
+  const beforeB = p1.resources.C || 0;
   const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
   check('宣教師: placement on a fresh AREA still succeeds normally', result.success, true);
   check('...grants 3K (AREA001A own ADD(3K)), no more', p1.resources.K - beforeK, 3);
-  check('...grants 1B (宣教師)', (p1.resources.B || 0) - beforeB, 1);
+  check('...grants 1B (宣教師)', (p1.resources.C || 0) - beforeB, 1);
 
   const d2 = giveDie(state, 'P1', 2); // AREA001A SLOT2=2, same (now non-empty) map
   const beforeK2 = p1.resources.K;
-  const beforeB2 = p1.resources.B || 0;
+  const beforeB2 = p1.resources.C || 0;
   board.placeDice(state, index, { playerId: 'P1' }, d2.id, 'MAP001', 1);
   check('宣教師: a 2nd placement on the same (no longer empty) AREA does not trigger again', p1.resources.K - beforeK2, 3);
-  check('...no additional B either', (p1.resources.B || 0) - beforeB2, 0);
+  check('...no additional B either', (p1.resources.C || 0) - beforeB2, 0);
 }
 {
   // wD (color-die-only carve-out, unchanged by the 2026-09-20 redesign) -- a white die on a fresh AREA
@@ -2274,10 +2274,10 @@ function giveJob009(state, playerId) {
   wDie.value = 1;
   p1.dice.push(wDie);
   const beforeK = p1.resources.K || 0;
-  const beforeB = p1.resources.B || 0;
+  const beforeB = p1.resources.C || 0;
   board.placeDice(state, index, { playerId: 'P1' }, wDie.id, 'MAP001', 0);
   check('宣教師: a white die (wD) on a fresh AREA does NOT trigger the bonus (just the AREA\'s own 3K)', p1.resources.K - beforeK, 3);
-  check('...no B granted for the wD either', (p1.resources.B || 0) - beforeB, 0);
+  check('...no B granted for the wD either', (p1.resources.C || 0) - beforeB, 0);
 }
 {
   const state = freshStateWithShops();
@@ -2294,7 +2294,7 @@ function giveJob009(state, playerId) {
   const p1 = player(state, 'P1');
   giveJob009(state, 'P1');
   p1.resources.A = 1;
-  p1.resources.C = 1;
+  p1.resources.B = 1; // 2026-11-02: 開拓者 now grants C, so C is the missing one
   const d1 = giveDie(state, 'P1', 4); // AREA007 is ANY,ANY,ANY -- die value no longer matters
   const diceCountBeforePlace = p1.dice.length;
   const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP007', 0);
@@ -2314,7 +2314,7 @@ function giveJob009(state, playerId) {
   const d1 = giveDie(state, 'P1', 3); // AREA006A SLOT2=3
   const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP006', 1);
   check('宣教師+歓楽街: raw B doesn\'t help (K needed), auto-converts to K', result.success, true);
-  check('...B nets to 0 (granted then converted away)', p1.resources.B || 0, 0);
+  check('...B nets to 0 (granted then converted away)', p1.resources.C || 0, 0);
   check('...K nets to 0 (1 start + 1 from B_K conversion - 2 spent by CHANGE)', p1.resources.K || 0, 0);
   check('...Z increases by 3 (CHANGE(2K,3Z)\'s own gain)', p1.resources.Z || 0, 3);
 }
@@ -2326,9 +2326,9 @@ function giveJob009(state, playerId) {
   giveJob009(state, 'P1');
   const d1 = giveDie(state, 'P1', 5); // AREA002A SLOT2=5 -- die value no longer matters
   const beforeK = p1.resources.K || 0;
-  const beforeB = p1.resources.B || 0;
+  const beforeB = p1.resources.C || 0;
   board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP002', 1);
-  check('宣教師: raw B kept when unneeded, no wasteful conversion', (p1.resources.B || 0) - beforeB, 1);
+  check('宣教師: raw B kept when unneeded, no wasteful conversion', (p1.resources.C || 0) - beforeB, 1);
   check('...K only from the AREA\'s own ADD(3K), not +1 more from a spurious B_K conversion', p1.resources.K - beforeK, 3);
 }
 {
@@ -2342,10 +2342,10 @@ function giveJob009(state, playerId) {
   state.shops.M.slots.SHOP001 = 'M004'; // DICE>=9, reachable by 4+5=9 combined
   const d1 = giveDie(state, 'P1', 4);
   const d2 = giveDie(state, 'P1', 5);
-  const beforeB = p1.resources.B || 0;
+  const beforeB = p1.resources.C || 0;
   const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
   check('宣教師: group placement with different-valued dice succeeds', result.success, true);
-  check('...grants 2B total, one per die', (p1.resources.B || 0) - beforeB, 2);
+  check('...grants 2B total, one per die', (p1.resources.C || 0) - beforeB, 2);
 }
 {
   // A wD mixed into a group placement grants nothing -- only the COLOR die(s) in the group do.
@@ -2360,10 +2360,10 @@ function giveJob009(state, playerId) {
   wDie.value = 6;
   p1.dice.push(wDie);
   const d1 = giveDie(state, 'P1', 4);
-  const beforeB = p1.resources.B || 0;
+  const beforeB = p1.resources.C || 0;
   const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [wDie.id, d1.id], board.CASTLE_MAP_ID);
   check('宣教師: wD in a group placement grants nothing', result.success, true);
-  check('...only 1B total, from the COLOR die alone', (p1.resources.B || 0) - beforeB, 1);
+  check('...only 1B total, from the COLOR die alone', (p1.resources.C || 0) - beforeB, 1);
 }
 {
   // The same flat-1B grant applies via placeWildcardDie too (JOB003's ☆ mechanic) -- a synthetic second
@@ -2377,10 +2377,10 @@ function giveJob009(state, playerId) {
   state.cards[wildInst.physicalId] = wildInst;
   p1.ownedCardPhysicalIds.push(wildInst.physicalId);
   const d1 = giveDie(state, 'P1', 4); // via placeWildcardDie this time (numbered slots ignored)
-  const beforeB = p1.resources.B || 0;
+  const beforeB = p1.resources.C || 0;
   const result = board.placeWildcardDie(state, index, { playerId: 'P1' }, d1.id, 'MAP001');
   check('宣教師+☆: the flat 1B grant applies via placeWildcardDie too', result.success, true);
-  check('...grants 1B', (p1.resources.B || 0) - beforeB, 1);
+  check('...grants 1B', (p1.resources.C || 0) - beforeB, 1);
 }
 {
   // Re-triggers once the AREA LVUPs (map.slots resets), even though this player already placed there
@@ -2392,10 +2392,10 @@ function giveJob009(state, playerId) {
   board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
   const d2 = giveDie(state, 'P1', 2); // AREA001A SLOT2=2, same already-touched map -- no bonus this time
   const beforeSecondK = p1.resources.K;
-  const beforeSecondB = p1.resources.B || 0;
+  const beforeSecondB = p1.resources.C || 0;
   board.placeDice(state, index, { playerId: 'P1' }, d2.id, 'MAP001', 1);
   check('宣教師: no bonus for the 2nd placement before the LVUP (K delta is just the AREA\'s own ADD(3K))', p1.resources.K - beforeSecondK, 3);
-  check('...and no B granted either (the trigger never fired)', (p1.resources.B || 0) - beforeSecondB, 0);
+  check('...and no B granted either (the trigger never fired)', (p1.resources.C || 0) - beforeSecondB, 0);
 
   // A004A.ONCE = 'MAP001.CURRENT_AREA=AREA001B' -- the real LVUP trigger, resets map.slots for real
   // (2026-08-24 SHOP201-203 rework renumbered the A-deck, so this used to be A005A).
@@ -2406,16 +2406,16 @@ function giveJob009(state, playerId) {
   // this isn't a "used up" one-shot.
   const d3 = giveDie(state, 'P1', 1); // AREA001B SLOT1=1 (SLOT2 is ANY, but the numbered slot is preferred)
   const beforeThirdK = p1.resources.K;
-  const beforeThirdB = p1.resources.B || 0;
+  const beforeThirdB = p1.resources.C || 0;
   board.placeDice(state, index, { playerId: 'P1' }, d3.id, 'MAP001', 0);
   // AREA001B.ACTION=ADD(6K) (2026-08-27 data edit, was ADD(5K)) + 1B from the 宣教師 bonus.
-  check('宣教師: the trigger condition re-fires after the LVUP and grants again (6K + 1B)', [p1.resources.K - beforeThirdK, (p1.resources.B || 0) - beforeThirdB], [6, 1]);
+  check('宣教師: the trigger condition re-fires after the LVUP and grants again (6K + 1B)', [p1.resources.K - beforeThirdK, (p1.resources.C || 0) - beforeThirdB], [6, 1]);
 
   // A 4th, unrelated fresh-empty-AREA placement (a different map entirely) grants normally too.
   const d4 = giveDie(state, 'P1', 4); // AREA002A (MAP002, still untouched) SLOT1=4
-  const beforeB4 = p1.resources.B || 0;
+  const beforeB4 = p1.resources.C || 0;
   board.placeDice(state, index, { playerId: 'P1' }, d4.id, 'MAP002', 0);
-  check('宣教師: grants again on the next fresh-AREA trigger too (no per-turn/per-tap limit)', (p1.resources.B || 0) - beforeB4, 1);
+  check('宣教師: grants again on the next fresh-AREA trigger too (no per-turn/per-tap limit)', (p1.resources.C || 0) - beforeB4, 1);
 }
 
 // ---------------------------------------------------------------------------

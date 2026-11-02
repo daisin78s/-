@@ -59,7 +59,7 @@ check('...its drawPile holds the other 6 (3 wave-1 + 3 wave-2, waiting behind wa
 // M401-405 (2026-08-29 rework, extended from M401-403 to M401-404 by the 2026-10-13 宝物庫 addition,
 // then to M401-405 by the 2026-10-15 M405/巨大石像 addition): held back in extraMonumentPool, not in
 // any shop's own pool -- see setup.prepareShops' own doc and board.revealExtraMonumentsIfAnyShopEmptied.
-check('extraMonumentPool starts with all 5 (M401-405)', [...state.extraMonumentPool].sort(), ['M401', 'M402', 'M403', 'M404', 'M405']);
+check('extraMonumentPool starts with all 4 (M401-404; M405 removed 2026-11-02)', [...state.extraMonumentPool].sort(), ['M401', 'M402', 'M403', 'M404']);
 
 const allShopFaceIds = [
   ...Object.values(state.shops.M.slots),
@@ -188,30 +188,19 @@ function forceB005ALocation(state, location) {
   check('...B005A is no longer in the draw pile', state.shops.NORMAL.drawPile.includes('B005A'), false);
 }
 {
+  // 2026-11-02: 研究 already taken -> nothing happens at draft time any more (no 3-JOB pick); the swap
+  // happens at turn end instead (setup.replaceResearcherIfResearchTaken, tested in turn-flow.smoke.js).
   const state = createEmptyGameState('job001b-already-taken');
   setup.createPlayers(state, ['Alice', 'Bob', 'Carol', 'Dan']);
   setup.prepareShops(state, index);
-  state.cards.B005.ownerId = 'P2'; // simulate someone else already owning 革命の兆し
+  state.cards.B005.ownerId = 'P2'; // simulate someone else already owning 研究
   setup.dealJobPool(state, index, ['JOB007']);
   setup.chooseJob(state, index, 'P1', 'JOB007');
-  const choice = state.pendingChoices.find((c) => c.playerId === 'P1' && c.kind === 'PICK_JOB_REPLACEMENT');
-  assertTrue('A PICK_JOB_REPLACEMENT choice is queued when B005A is already owned by someone else', !!choice);
-  check('...offering exactly 3 candidates', choice.context.candidates.length, 3);
-  check('...none of them are still sitting in the job pool', choice.context.candidates.some((id) => state.jobPool.includes(id)), false);
-  check('...none of them equal 革命家(JOB007) itself', choice.context.candidates.includes('JOB007'), false);
-  check('...candidates are unique', new Set(choice.context.candidates).size, 3);
-
-  const bad = setup.resolveJobReplacementChoice(state, index, 'P1', 'JOB999');
-  check('resolveJobReplacementChoice rejects a candidate that was not on offer', bad, { success: false, reason: 'INVALID_SELECTION' });
-
-  const pickedFaceId = choice.context.candidates[0];
-  const result = setup.resolveJobReplacementChoice(state, index, 'P1', pickedFaceId);
-  check('resolveJobReplacementChoice succeeds for an offered candidate', result.success, true);
-  check('P1.jobCardId is now the picked replacement', state.players[0].jobCardId, pickedFaceId);
-  check('P1 owns the picked replacement job', state.players[0].ownedCardPhysicalIds.includes(splitCardId(pickedFaceId).physicalId), true);
-  check("革命家 is no longer among P1's owned cards", state.players[0].ownedCardPhysicalIds.includes('JOB007'), false);
-  check("革命家's own card entry is released (ownerId null)", state.cards.JOB007.ownerId, null);
-  check('The pendingChoice is resolved/removed', state.pendingChoices.some((c) => c.kind === 'PICK_JOB_REPLACEMENT'), false);
+  check('No PICK_JOB_REPLACEMENT choice is queued at draft time any more', state.pendingChoices.some((c) => c.kind === 'PICK_JOB_REPLACEMENT'), false);
+  check('P1 still holds 研究者 until turn end', state.players[0].jobCardId, 'JOB007');
+  setup.replaceResearcherIfResearchTaken(state, index);
+  check('replaceResearcherIfResearchTaken swaps 研究者 for another JOB', state.players[0].jobCardId !== 'JOB007' && !!state.players[0].jobCardId, true);
+  check("研究者's own card entry is released (ownerId null)", state.cards.JOB007.ownerId, null);
 }
 
 // ---------------------------------------------------------------------------

@@ -5652,6 +5652,7 @@ function emblemChoiceOptionsForRow(row) {
 }
 
 function emblemForFaceId(faceId, inst) {
+  return null; // 2026-11-02: エンブレム廃止 (per user「エンブレムも 廃止」) -- no card shows/counts 王知金 any more
   if (isNormalDeckCard(faceId)) return { [EMBLEM_BY_DECK[faceId[0]]]: 1 };
   // Not restricted to M any more (2026-08-16, per user report: CON006B「祝福」has real EMBLEM_A/B/C
   // data (1,1,1) that wasn't showing up in the player stats panel) -- reads any row's own EMBLEM_A/B/C
@@ -5953,11 +5954,21 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     const iconRow = el('span', 'job-note-icon-row');
     if (facts.name === '開拓者') {
       noteEl.appendChild(document.createTextNode('無人エリアに色D\n▽\n'));
-      iconRow.appendChild(actionDot('B'));
+      iconRow.appendChild(actionDot('C')); // 2026-11-02: B -> C
     } else if (facts.name === '巫女') {
-      noteEl.appendChild(document.createTextNode('エンブレム３個\n▽\n'));
-      iconRow.appendChild(actionDot('C'));
-      iconRow.appendChild(actionCount('1VP'));
+      // 2026-11-02 new ability (TAP=IF(RESOURCE(K)<=3,ADD(K),CHANGE(K,B)), INST「〇が3以下なら〇を得る ４以上なら〇→B」).
+      const firstRow = actionRow([actionEmoji(TAP_COST_ICON), actionDot('K'), actionSuffix('≦3'), actionTrigger(), actionDot('K')]);
+      firstRow.classList.add('action-icons--nowrap');
+      noteEl.appendChild(firstRow);
+      iconRow.classList.add('action-icons--nowrap');
+      iconRow.appendChild(actionDot('K'));
+      const geFour = actionSuffix('≧4');
+      geFour.style.whiteSpace = 'nowrap';
+      iconRow.appendChild(geFour);
+      iconRow.appendChild(actionTrigger());
+      iconRow.appendChild(actionDot('K'));
+      iconRow.appendChild(actionArrow());
+      iconRow.appendChild(actionDot('B'));
     } else {
       noteEl.appendChild(document.createTextNode('LVアップエリア\n▽\n'));
       iconRow.appendChild(actionDot('K'));
@@ -10084,9 +10095,7 @@ function renderPlayerStats(container, stats, extraStats) {
   addStat('モニュメント', stats.monuments);
   // 表示の字は王知金 (2026-10-28, per user request: "天地人の代わりに王知金にしようか" + 回答: 絵に合わせる
   // (地=王冠→王、天=フクロウ→知、人=コイン→金)、王・知・金の順、まずは見た目だけ)。
-  addStat('王', stats.emblemCounts.地);
-  addStat('知', stats.emblemCounts.天);
-  addStat('金', stats.emblemCounts.人);
+  // 王/知/金 stats removed 2026-11-02 (エンブレム廃止).
   for (const { label, value } of extraStats) addStat(label, value);
 }
 

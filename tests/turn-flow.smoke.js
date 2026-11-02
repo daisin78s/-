@@ -439,86 +439,37 @@ check('startRound(2) itself does not touch dice (already rerolled at the previou
 }
 
 // ---------------------------------------------------------------------------
-// 神官/JOB008 (2026-08-17, replacing its old live VP_MODIFIER(TOTAL_EMBLEM_COUNT) PASSIVE formula
-// per user request: "エンブレムが3個増えるごとにターン終了時1VPとZを得る"; granted resource changed from
-// Z to C, 2026-08-18, per user request: "もらえる資源をZからCに変更したい") -- checked once per TURNEND,
-// catch-up-safe via player.bardEmblemUnitsGranted's watermark. M004 has EMBLEM_A=1,EMBLEM_B=1,EMBLEM_C=1
-// (3 total); M012 has EMBLEM_C=3 (3 total) -- both used purely as convenient emblem sources, not for any
-// monument-specific behavior.
+// 研究者 (2026-11-02, per user: 「研究が獲得されたターン終了時に 研究者を捨て札に」 + INST「新しいジョブが１枚追加」)
+// -- at turn end, a player holding 研究者 while 研究(B005) belongs to someone else discards 研究者 and gets 1
+// random JOB from the deck. (巫女's old emblem bonus test was removed -- emblems abolished.)
 // ---------------------------------------------------------------------------
 {
   const { createEmptyGameState: freshEmptyState, createCardInstance } = require('../src/game-state');
-  const s = freshEmptyState('job008-bard-smoke');
-  setup.createPlayers(s, ['Alice']);
+  const s = freshEmptyState('researcher-replace-smoke');
+  setup.createPlayers(s, ['Alice', 'Bob']);
   setup.prepareMaps(s, index);
   setup.prepareShops(s, index);
-  s.turnOrder = ['P1'];
-  const p1 = s.players[0];
-  p1.jobCardId = 'JOB002';
-
-  const m004 = createCardInstance('M004'); // 地1,天1,人1 -- exactly 3 emblems
-  m004.ownerId = 'P1';
-  s.cards[m004.physicalId] = m004;
-  p1.ownedCardPhysicalIds.push(m004.physicalId);
-
-  const beforeVp = p1.resources.VP || 0;
-  const beforeC = p1.resources.C || 0;
-  const result = turnFlow.endTurn(s, index, 'P1');
-  check('endTurn succeeds', result.success, true);
-  check('神官: exactly 3 emblems -> 1 unit -> +1VP', p1.resources.VP - beforeVp, 1);
-  check('...and +1C', p1.resources.C - beforeC, 1);
-  check('...watermark now at 1', p1.bardEmblemUnitsGranted, 1);
-
-  const beforeVp2 = p1.resources.VP;
-  const beforeC2 = p1.resources.C;
-  turnFlow.endTurn(s, index, 'P1');
-  check('A 2nd endTurn with no new emblems grants nothing more (idempotent)', p1.resources.VP - beforeVp2, 0);
-  check('...same for C', p1.resources.C - beforeC2, 0);
-  check('...watermark stays at 1', p1.bardEmblemUnitsGranted, 1);
-
-  const m012 = createCardInstance('M012'); // 人3 -- 3 more emblems (total now 6)
-  m012.ownerId = 'P1';
-  s.cards[m012.physicalId] = m012;
-  p1.ownedCardPhysicalIds.push(m012.physicalId);
-  const beforeVp3 = p1.resources.VP;
-  turnFlow.endTurn(s, index, 'P1');
-  check('神官: 6 emblems total -> 2 units -> +1 more VP (2-1) this time', p1.resources.VP - beforeVp3, 1);
-  check('...watermark now at 2', p1.bardEmblemUnitsGranted, 2);
-
-  // Jump straight to 15 emblems (5 units) in one shot -- catch-up must grant all 3 newly-earned units
-  // (5-2) at once, not just 1. 8 distinct A-deck cards (EMBLEM_A=1 each) + 1 C-deck card (EMBLEM_C=1)
-  // takes 6 -> 15; distinct faceIds needed since createCardInstance's physicalId is derived from the
-  // faceId prefix (see its own doc) -- re-using the same faceId would collide on the same state.cards
-  // key and only count once, not once per instance.
-  for (const faceId of ['A001A', 'A002A', 'A003A', 'A004A', 'A005A', 'A006A', 'A201A', 'A202A', 'C001A']) {
-    const inst = createCardInstance(faceId);
-    inst.ownerId = 'P1';
-    s.cards[inst.physicalId] = inst;
-    p1.ownedCardPhysicalIds.push(inst.physicalId);
-  }
-  const beforeVp4 = p1.resources.VP;
-  const beforeC4 = p1.resources.C;
-  turnFlow.endTurn(s, index, 'P1');
-  check('神官: jumping to 15 emblems (5 units) grants all 3 newly-earned units (5-2) at once', p1.resources.VP - beforeVp4, 3);
-  check('...same for C', p1.resources.C - beforeC4, 3);
-  check('...watermark now at 5', p1.bardEmblemUnitsGranted, 5);
-}
-{
-  // A player without 神官 gets nothing, even with plenty of emblems (control).
-  const { createEmptyGameState: freshEmptyState, createCardInstance } = require('../src/game-state');
-  const s = freshEmptyState('job008-bard-control-smoke');
-  setup.createPlayers(s, ['Alice']);
-  setup.prepareMaps(s, index);
-  setup.prepareShops(s, index);
-  s.turnOrder = ['P1'];
-  const p1 = s.players[0]; // no jobCardId set at all
-  const m004 = createCardInstance('M004');
-  m004.ownerId = 'P1';
-  s.cards[m004.physicalId] = m004;
-  p1.ownedCardPhysicalIds.push(m004.physicalId);
+  s.turnOrder = ['P1', 'P2'];
+  s.jobPool = [];
+  const [p1, p2] = s.players;
+  const researcherId = index.raw.JOB.find((r) => r.NAME === '研究者').ID;
+  const job = createCardInstance(researcherId);
+  job.ownerId = 'P1';
+  s.cards[job.physicalId] = job;
+  p1.ownedCardPhysicalIds.push(job.physicalId);
+  p1.jobCardId = researcherId;
 
   turnFlow.endTurn(s, index, 'P1');
-  check('No 神官 -> no VP/C bonus despite 3 emblems', [p1.resources.VP || 0, p1.resources.C || 0], [0, 0]);
+  check('研究者: nobody owns 研究 yet -> 研究者 is kept', p1.jobCardId, researcherId);
+
+  const research = createCardInstance('B005A');
+  research.ownerId = 'P2';
+  s.cards[research.physicalId] = research;
+  p2.ownedCardPhysicalIds.push(research.physicalId);
+  turnFlow.endTurn(s, index, 'P2');
+  check('研究者: someone else owns 研究 -> at turn end 研究者 is replaced by another JOB', p1.jobCardId !== null && p1.jobCardId !== researcherId, true);
+  check('...研究者 is discarded (no owner)', s.cards[researcherId].ownerId, null);
+  check('...the new JOB is owned by P1', s.cards[p1.jobCardId].ownerId, 'P1');
 }
 
 // ---------------------------------------------------------------------------
