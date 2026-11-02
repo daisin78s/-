@@ -7894,13 +7894,6 @@ body.online-spectator #online-spectator-badge {
 .shop-card--cost-lowered .shop-card__cost {
   margin-top: 12px;
 }
-.shop-card--name-centered .shop-card__id {
-  text-align: center;
-  /* 名前がカードの幅より長い時(ローマ市街の支配LV1など)も真ん中に -- はみ出しを左右に均等に分ける。 */
-  display: flex;
-  justify-content: center;
-  white-space: nowrap;
-}
 /* モニュメントのVP: 数字は22.1pxの1.2倍、「VP」は1.2分の1 (2026-11-02)。 */
 .shop-card--monument .shop-card__vp .shop-card__vp-number { font-size: 26.52px; }
 .shop-card--monument .shop-card__vp .shop-card__vp-unit { font-size: 18.42px; }
@@ -7908,17 +7901,4 @@ body.online-spectator #online-spectator-badge {
 .shop-card__cost-empty {
   font-weight: 400;
   color: var(--text-muted);
-}
-/* ローマ市街の支配・パンとサーカスは「LV1」「LV2」だけ次の行に (2026-11-02, per user「フォントサイズ元に戻して
-   LV1 や LV２ だけ 下の行に」) -- 2行とも真ん中にそろえる。 */
-.shop-card--name-centered .shop-card__id {
-  flex-direction: column;
-  align-items: center;
-  line-height: 1;
-  /* 線と必要資源は動かさない (per user「線と 必要資源は 動かさない」) -- 2行になっても名前の欄は1行ぶんの高さのまま、
-     はみ出す分は上へ。 */
-  height: 20px;
-  justify-content: flex-end;
-  margin-top: -3px;
-  margin-bottom: 3px;
 }

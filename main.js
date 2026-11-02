@@ -5985,12 +5985,6 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     // idEl is simply left empty; its own :empty{display:none} rule collapses it with no layout gap.
   } else if (facts.name) {
     idEl.textContent = facts.name;
-    // ローマ市街の支配・パンとサーカスは「LV1」「LV2」の部分だけ小さくするため分ける (style.cssの.shop-card__id-lv)。
-    const lvMatch = /^(B301|A001)/.test(faceId) ? /^(.*?)(LV\d)$/.exec(facts.name) : null;
-    if (lvMatch) {
-      idEl.textContent = lvMatch[1];
-      idEl.appendChild(el('span', 'shop-card__id-lv', lvMatch[2]));
-    }
     if (faceId.startsWith('JOB')) idEl.classList.add('job-name'); // ジョブの名前の文字色(conJobColoredFragment参照)
   } else {
     idEl.textContent = faceId;
@@ -6300,8 +6294,6 @@ function buildCardVisual(faceId, options = {}) {
   // ダイス目を1.2倍にした時、必要資源が右上の数字にかぶりそうなモニュメント(凱旋門・中央広場・帝都建設)だけ必要資源を少し下へ
   // (2026-11-02, per user「モニュメントのダイス目 １．２倍に 必要資源にかぶりそうなら そのカードだけ必要資源を少し下に」)。
   if (['M004', 'M007', 'M404'].includes(faceId)) node.classList.add('shop-card--cost-lowered');
-  // パンとサーカスは名前を中央揃えに (2026-11-02, per user「パンとサーカス NAMEを中央揃えに」)。
-  if (/^(B301|A001)/.test(faceId || '')) node.classList.add('shop-card--name-centered'); // ローマ市街の支配も (per user「ローマ市街の支配も」)
   // 領地・学問・人材・ジョブは正方形 (2026-11-02, per user「カードを 正方形に すれば いいのでは」「正方形にして 縦に
   // 伸ばすのは やめる 文字を削減するか 無理やり入れる」; モニュメント・性格・クエスト・初期資源は今の形のまま)。
   // モニュメント・性格・初期資源も含めてすべて正方形 (2026-11-02, per user「モニュメントも含め すべて同じ大きさ 同じ形に」)。
