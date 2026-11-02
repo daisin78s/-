@@ -216,14 +216,17 @@ const ACHIEVEMENT_PER_GAME_DEFS = [
   // executorMod.evalMetricでそのまま再利用(maybeRecordAchievements参照、QSTの判定ロジックと絶対に
   // 乖離しないようにするため)。QSTカード自体を今回引いていなくても、ゲーム終了時点の生の値を毎回
   // 計算して記録する(QSTの達成有無とは無関係)。
-  ['max_emblem_count', '最多エンブレムの数', '個'], // Q002AのGOAL=MAX_EMBLEM_COUNTと同じメトリクス
+  // 2026-11-02, クエスト変更に合わせて4つを入れ替え (per user「新しいクエストに合わせて、名前と数え方を変える」
+  // 「前の記録 消して」): 最多エンブレムの数/通常カード枚数+追加色ダイス/天地人セット数/エンブレム総数 ->
+  // 下の新しい4つ。キーも新しくしたので前の記録は数えない(合計ポイントからも外れる)。
+  ['cost_total', 'カードの必要資源', '個'], // Q002AのGOAL=COST_TOTALと同じメトリクス
   ['area_count', '所有エリア数', '個'], // Q004AのGOAL=AREA_COUNTと同じメトリクス
   // 2026-10-13, per user request ("A29からA36まで クエスト同じです" -- 実績解除シートのこの並びはQSTの
   // Q001A〜Q004A,Q001B〜Q004Bの8個と1:1対応しており、このカテゴリだけ未実装だった) -- Q001BのGOAL=
   // EXTRA_D_PLUS_ABC_COUNTと同じメトリクス(既にdice3_score算出のコメントでも触れている既存の評価軸)。
-  ['extra_d_plus_abc_count', '通常カード枚数+追加色ダイス', '個'],
-  ['emblem_set_count', '天地人セット数', '個'], // Q002BのGOAL=EMBLEM_SET_COUNTと同じメトリクス
-  ['emblem_count', 'エンブレム総数', '個'], // Q003BのGOAL=EMBLEM_COUNTと同じメトリクス
+  ['extra_d_count', '追加色ダイス数', '個'], // Q001BのGOAL=EXTRA_D_COUNTと同じメトリクス
+  ['monument_cost_total', 'モニュメントの必要資源', '個'], // Q002BのGOAL=COST_TOTAL(M)と同じメトリクス
+  ['normal_card_count', '通常カード枚数', '枚'], // Q003BのGOAL=NORMAL_CARD_COUNTと同じメトリクス
   ['lv2_area_count', '所有LV2エリア数', '個'], // Q004BのGOAL=AREA_COUNT(2)と同じメトリクス
 ];
 function buildAchievementCategories() {
@@ -11688,12 +11691,12 @@ function maybeRecordAchievements(state) {
     // 変更。
     const qstGatedAchievements = [
       ['Q001A', 'card_count', () => executorMod.evalMetric(state, INDEX, c.playerId, { name: 'CARD_COUNT', args: [] })],
-      ['Q002A', 'max_emblem_count', () => executorMod.evalMetric(state, INDEX, c.playerId, { name: 'MAX_EMBLEM_COUNT', args: [] })],
+      ['Q002A', 'cost_total', () => executorMod.evalMetric(state, INDEX, c.playerId, { name: 'COST_TOTAL', args: [] })],
       ['Q003A', 'lv2_card_count', () => executorMod.evalMetric(state, INDEX, c.playerId, { name: 'LEVEL_COUNT', args: [2] })],
       ['Q004A', 'area_count', () => executorMod.evalMetric(state, INDEX, c.playerId, { name: 'AREA_COUNT', args: [] })],
-      ['Q001B', 'extra_d_plus_abc_count', () => executorMod.evalMetric(state, INDEX, c.playerId, { name: 'EXTRA_D_PLUS_ABC_COUNT', args: [] })],
-      ['Q002B', 'emblem_set_count', () => executorMod.evalMetric(state, INDEX, c.playerId, { name: 'EMBLEM_SET_COUNT', args: [] })],
-      ['Q003B', 'emblem_count', () => executorMod.evalMetric(state, INDEX, c.playerId, { name: 'EMBLEM_COUNT', args: [] })],
+      ['Q001B', 'extra_d_count', () => executorMod.evalMetric(state, INDEX, c.playerId, { name: 'EXTRA_D_COUNT', args: [] })],
+      ['Q002B', 'monument_cost_total', () => executorMod.evalMetric(state, INDEX, c.playerId, { name: 'COST_TOTAL', args: ['M'] })],
+      ['Q003B', 'normal_card_count', () => executorMod.evalMetric(state, INDEX, c.playerId, { name: 'NORMAL_CARD_COUNT', args: [] })],
       ['Q004B', 'lv2_area_count', () => executorMod.evalMetric(state, INDEX, c.playerId, { name: 'AREA_COUNT', args: [2] })],
     ];
     for (const [qstFaceId, key, computeValue] of qstGatedAchievements) {
