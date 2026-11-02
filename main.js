@@ -4878,7 +4878,9 @@ function buildUntapChoiceIcon(actionText) {
   const match = /^UNTAP_CHOICE\(SELF,(\d+)\)$/.exec(actionText || '');
   if (!match) return null;
   const [, count] = match;
-  return actionRow([actionEmoji('⚡'), actionEmoji('⤴️'), ...(count === '1' ? [] : [actionSuffix(count)])]);
+  const countEl = actionSuffix(count);
+  countEl.style.color = 'var(--text)'; // 3を濃く (2026-11-02, per user「⚡⤴3 の3 濃く」)
+  return actionRow([actionEmoji('⚡'), actionEmoji('⤴️'), ...(count === '1' ? [] : [countEl])]);
 }
 
 /** UNTAP_ALL(SELF) -- only 王女(C301A)/聖女LV2(C202B)/王女LV2(C301B)'s own ONCE currently, confirmed via
