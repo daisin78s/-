@@ -7906,7 +7906,7 @@ body.online-spectator #online-spectator-badge {
 .shop-card__id-lv-corner {
   position: absolute;
   right: 8px;
-  top: 24px;
+  top: 19px; /* もう少し上に (per user「LV1 LV2を もう少し上にあげてほしい」) */
   /* 字の大きさ・太さは名前(.shop-card__id)と同じものを受け継ぐ (per user「他のフォントと同じ大きさ」)。 */
   font: inherit;
   line-height: 1.5;
