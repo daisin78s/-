@@ -5513,7 +5513,8 @@ function renderDie(die) {
 // おけば表/裏(A301A/A301B)どちらも自動でカバーできる。"栄光の証 王女 騎士像は 赤〇赤〇赤〇方式にして"
 // (2026-09-27)でB301(栄光の証)/C301(王女)/M003(騎士像)を追加。
 // 2026-11-02, per user「元老院とう 3Rカードも アイコンの必要資源 赤3青に」: A301/B301/C301を外す(騎馬像M003はそのまま)。
-const UNLIMITED_ICON_REPEAT_PHYSICAL_IDS = ['M003'];
+// 騎馬像(M003)も「赤3青」に (2026-11-02, per user「騎馬像 赤3青に」) -- 例外はなくなった。
+const UNLIMITED_ICON_REPEAT_PHYSICAL_IDS = [];
 
 function renderResourceBadge(resource, count, unlimitedRepeat, neverRepeat) {
   // Confirmed 2026-07-29: the dot's color alone identifies the resource -- no letter label needed.
