@@ -3704,12 +3704,38 @@ function cardListLockInfo(faceId) {
  * noInteraction is false elsewhere, e.g. the real in-game QST panel) but explicitly carrying
  * showLiveRanking:false through to the enlarged copy too -- otherwise the grid would hide real
  * values/swatches while tapping through to enlarge would leak them right back. */
+/** カードリストのクエスト(118x118)で、長い名前を言葉の切れ目で2行に (2026-11-03, per user「長いNAMEは２行に」) --
+ * 「の」の後、または末尾の「〜数」の言葉の前で分ける(例: カードの/必要資源、追加色/ダイス数、レベル/アップ数)。短い名前はそのまま。 */
+function withQstTitleLineBreak(node, faceId) {
+  const line = node.querySelector('.qst-card__goal-line');
+  const text = line ? line.textContent : '';
+  if (text.length > 6) {
+    const m = /^(.+?の)(.+)$/.exec(text) || /^(.+?)(ダイス数|エリア数|アップ数|枚数|資源)$/.exec(text);
+    if (m) {
+      line.textContent = `${m[1]}
+${m[2]}`;
+      line.style.whiteSpace = 'pre-line';
+    }
+  }
+  // 順位ごとの点を縦に「1位 4VP / 2位 2VP / 3位 1VP」 (2026-11-03, per user「１位4VP ２位2VP の様に 縦に カードリストでは」)。
+  let row = null;
+  try { row = faceId ? dataLoaderMod.getQstRow(INDEX, faceId) : null; } catch (e) { row = null; }
+  if (row) {
+    const list = el('div', 'qst-card__reward-list');
+    ['REWARD1', 'REWARD2', 'REWARD3'].forEach((key, i) => {
+      if (row[key]) list.appendChild(el('div', 'qst-card__reward-list-row', `${i + 1}位 ${questRewardValueText(row[key])}`));
+    });
+    if (line) line.after(list); else node.appendChild(list);
+  }
+  return node;
+}
+
 function buildCardListCell(faceId, isQst) {
   const cardNode = isQst
     // showLiveRanking:false (2026-08-22, per user report: same leak as the テストゲーム開始 QST step's
     // own doc -- カードリスト is meant to be a neutral reference browser, not a leaderboard of the
     // currently-loaded game's real progress. See buildQstCardVisual's own doc.
-    ? buildQstCardVisual(faceId, STATE, { showRankHeaders: false, showLiveRanking: false, noInteraction: true })
+    ? withQstTitleLineBreak(buildQstCardVisual(faceId, STATE, { showRankHeaders: false, showLiveRanking: false, noInteraction: true }), faceId)
     // req (2026-08-22, per user report: "モニュメントカード一覧にダイス目がない") -- buildCardVisual
     // doesn't derive a monument's DICE threshold on its own (see fillCardFace's own options.req use);
     // every other caller passes req: factsForFaceId(faceId).req explicitly (e.g. buildShopSlotNode),
@@ -3769,7 +3795,8 @@ function renderCardListFlatCategory(key, container) {
     }
   } else if (config.isQst) {
     // 性格一覧と同じく、段の左に「表」「裏」 (2026-11-02, per user「クエスト一覧 性格と同じように 表 裏 と書いて」)。
-    grid.style.gridTemplateColumns = `auto repeat(${config.columns}, 244px)`;
+    // カードリストではクエストもほかのカードと同じ118x118の大きさ (2026-11-03, per user「クエスト カードリストでは ほかのカードと 同じサイズにして」)。
+    grid.style.gridTemplateColumns = `auto repeat(${config.columns}, 118px)`;
     grid.dataset.withTierLabels = '1';
     for (const [tier, label] of [['A', '表'], ['B', '裏']]) {
       const tierIds = faceIds.filter((id) => id.endsWith(tier));

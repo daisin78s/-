@@ -7938,3 +7938,33 @@ body.online-spectator #online-spectator-badge {
     position: absolute;
   }
 }
+/* カードリストのクエストはほかのカードと同じ118x118 (2026-11-03)。 */
+#card-list-overlay .card-list-body .owned-card-cell--qst {
+  width: 118px;
+  height: 118px;
+}
+#card-list-overlay .card-list-body .owned-card-cell--qst .qst-card {
+  width: 100% !important;
+  height: 100%;
+  box-sizing: border-box;
+}
+/* カードリストのクエスト: 順位ごとの点を縦に (2026-11-03)。 */
+.qst-card__reward-list {
+  margin-top: 6px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--text);
+}
+#card-list-overlay .card-list-body .owned-card-cell--qst .qst-card {
+  justify-content: flex-start;
+  overflow: visible;
+}
+#card-list-overlay .card-list-body .owned-card-cell--qst .qst-card__goal-line {
+  line-height: 1.25;
+}
+#card-list-overlay .card-list-body .owned-card-cell--qst .qst-card__reward-list {
+  margin-top: 2px;
+  line-height: 1.2;
+}
