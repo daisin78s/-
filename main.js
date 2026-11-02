@@ -5164,8 +5164,11 @@ function buildTreasuryFinalVpModifierIcon(actionText) {
   if (actionText !== 'VP_MODIFIER_FINAL(RESOURCE(A,B,C,Z),7)') return null;
   const stack = el('div', 'action-icons-stack');
   const row1 = el('span', 'action-suffix action-suffix--large');
-  appendTextWithSmallChar(row1, '〇以外の資源1個', '1');
-  stack.appendChild(actionRow([row1]));
+  // 〇は食料(K)のアイコンにする (2026-11-02, per user「宝物庫 のアイコン 〇 を アイコンの〇に」)。
+  appendTextWithSmallChar(row1, '以外の資源1個', '1');
+  const treasuryRow1 = actionRow([actionDot('K'), row1]);
+  treasuryRow1.classList.add('action-icons--nowrap');
+  stack.appendChild(treasuryRow1);
   const row2 = el('span', 'action-suffix action-suffix--large');
   appendTextWithSmallChar(row2, 'につき1VP（MAX7）', '1');
   stack.appendChild(actionRow([row2]));
