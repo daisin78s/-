@@ -4678,7 +4678,7 @@ function buildAddWdIcon(actionText) {
 // resourceItemNodes経由の表示自体が無い(=このリストに入れても見た目の変化は無い)が、指定された通り
 // 念のため含めておく)。currentCardVisualFaceId(fillCardFaceが呼ばれるたびにセットする、そのカードの
 // faceId)を見て判定する。
-const NO_ICON_REPEAT_PHYSICAL_IDS = ['JOB011', 'CON002', 'CON003', 'CON004'];
+const NO_ICON_REPEAT_PHYSICAL_IDS = ['JOB011', 'CON001', 'CON002', 'CON003', 'CON004', 'CON006']; // CON001(強欲)/CON006(心配) added 2026-11-02, per user「表記をそろえるため 赤〇2〇3のように」
 let currentCardVisualFaceId = null;
 
 function resourceItemNodes(countStr, resource) {
@@ -4736,6 +4736,15 @@ function buildAddMultiResourceIcon(actionText) {
     const itemMatch = /^(\d*)(K|A|B|C|Z|VP|D|wD)$/.exec(part.trim());
     if (!itemMatch) return null;
     resourceNodes.push(...resourceItemNodes(itemMatch[1], itemMatch[2]));
+  }
+  // 怠惰 (CON005B) の赤青黄は折り返さず同じ行に (2026-11-02, per user「怠惰 赤青黄を同じ行に はみ出してもいい」)。
+  if (currentCardVisualFaceId === 'CON005B' && /^A,B,C(,|$)/.test(match[1])) {
+    const keepTogether = el('span', 'action-icons-keep-together');
+    keepTogether.style.whiteSpace = 'nowrap';
+    keepTogether.style.display = 'inline-flex';
+    keepTogether.style.alignItems = 'center';
+    resourceNodes.splice(0, 3).forEach((n) => keepTogether.appendChild(n));
+    resourceNodes.unshift(keepTogether);
   }
   return gainIconRow(resourceNodes);
 }
