@@ -6230,7 +6230,8 @@ function buildCardVisual(faceId, options = {}) {
   if (/^M4\d\d$/.test(faceId || '')) node.classList.add('shop-card--enhanced-monument');
   // 領地・学問・人材・ジョブは正方形 (2026-11-02, per user「カードを 正方形に すれば いいのでは」「正方形にして 縦に
   // 伸ばすのは やめる 文字を削減するか 無理やり入れる」; モニュメント・性格・クエスト・初期資源は今の形のまま)。
-  if (/^([ABC]\d|JOB)/.test(faceId || '')) {
+  // モニュメント・性格・初期資源も含めてすべて正方形 (2026-11-02, per user「モニュメントも含め すべて同じ大きさ 同じ形に」)。
+  if (/^([ABC]\d|JOB|M\d|CON|R\d)/.test(faceId || '')) {
     node.classList.add('shop-card--square');
   }
   // 研究・パンとサーカスの効果の字は、細くて小さい字ではなく他の字と同じに (2026-11-02, per user「研究 パンとサーカス
