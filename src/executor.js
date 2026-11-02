@@ -393,9 +393,8 @@ function applyPowerBrokerGameEndTopUp(state, index) {
  *
  * A items get an analogous substitution for 権力者/hasPowerBrokerAbility owners (2026-10-20 redesign,
  * see that function's own doc; direction corrected same day -- the ability is "A's shortfall may be
- * covered by K", not the other way around): real A first, K covers any shortfall -- same
- * real-first-then-fallback order resolvePayment already uses for everyone else's Z, just K standing in
- * for A specifically rather than Z standing in for A/B/C.
+ * covered by K", not the other way around). Since 2026-11-02 K is drained FIRST for an A item (then real
+ * A, then Z -- or Z before real A with 色欲), see the A branch's own comment below.
  *
  * K items get the mirror-image substitution for EVERY player (2026-10-20, per user request: 晩餐会/M403's
  * 12K cost was never once reached by the AI across a whole batch of games -- see this function's own git
@@ -451,19 +450,30 @@ function resolvePayment(state, index, playerId, items) {
       if (shortfall > 0) return { ok: false, resource: 'K' };
       continue;
     }
-    // 権力者のAは 本物のA → K → Z の順 (2026-10-31, バグ報告「3ラウンド目に交渉術で獲得できるカードが
-    // おかしくなった」: 以前はZを全く使わなかったため、A0・K0・Z9の権力者にはAが要るカードが全部払えない
-    // 扱いになっていた。順番はユーザー確認済み「A→K→Z」 -- どれにでも使えるZを最後まで残す)。
+    // 権力者のAにはZも使う (2026-10-31, バグ報告「3ラウンド目に交渉術で獲得できるカードがおかしくなった」:
+    // 以前はZを全く使わなかったため、A0・K0・Z9の権力者にはAが要るカードが全部払えない扱いになっていた)。
+    // 順番はこの時「A→K→Z」だったが、下の 2026-11-02 の変更で〇が先になった。
+    // 2026-11-02 (ユーザー指示「赤〇の支払いを〇で代用できる」+ Q&A「〇から優先的に支払う」): 〇 → 赤〇 → Z〇。
+    // 〇が尽きた後の残りは「〇以外の資源の支払い」なので、色欲(preferZ)なら 〇 → Z〇 → 赤〇 (ユーザー確認済み
+    // 「文面通りならこうなるよね」)。赤〇は〇の不足分にも使える上位の資源なので、〇を先に使って赤〇を残す。
     if (item.resource === 'A' && powerBroker) {
-      const aUsed = Math.min(aPool, item.count);
-      aPool -= aUsed;
-      const kUsed = Math.min(kPool, item.count - aUsed);
+      const kUsed = Math.min(kPool, item.count);
       kPool -= kUsed;
-      const zUsed = item.count - aUsed - kUsed;
-      if (zUsed > zPool) return { ok: false, resource: item.resource };
+      let rest = item.count - kUsed;
+      let aUsed = 0;
+      let zUsed = 0;
+      if (preferZ) {
+        zUsed = Math.min(zPool, rest);
+        aUsed = rest - zUsed;
+      } else {
+        aUsed = Math.min(aPool, rest);
+        zUsed = rest - aUsed;
+      }
+      if (aUsed > aPool || zUsed > zPool) return { ok: false, resource: item.resource };
+      aPool -= aUsed;
       zPool -= zUsed;
-      if (aUsed > 0) resolved.push({ resource: 'A', count: aUsed });
       if (kUsed > 0) resolved.push({ resource: 'K', count: kUsed });
+      if (aUsed > 0) resolved.push({ resource: 'A', count: aUsed });
       if (zUsed > 0) resolved.push({ resource: 'Z', count: zUsed });
       continue;
     }

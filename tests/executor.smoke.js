@@ -875,18 +875,18 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   player.resources.K = 5;
   const result = executor.payCostList(state, index, 'P1', [{ resource: 'A', count: 3 }]);
   check('権力者: payCostList succeeds when real A + K combined cover the cost', result.success, true);
-  check('...real A drained first (all 1 used)', player.resources.A, 0);
-  check('...K covers the remaining shortfall (2 of the needed 3)', player.resources.K, 3);
+  check('...K drained first (2026-11-02: 〇から優先, all 3 from K)', player.resources.K, 2);
+  check('...real A untouched', player.resources.A, 1);
 }
 {
-  // Real A alone already covers the cost -- K is untouched (real-first, same order as Z for A/B/C).
+  // Real A alone could cover the cost, but K is still drained first (2026-11-02: 〇から優先).
   const state = freshState();
   const player = getPlayerRef(state, 'P1');
   player.jobCardId = 'JOB005';
   player.resources.A = 5;
   player.resources.K = 5;
   executor.payCostList(state, index, 'P1', [{ resource: 'A', count: 3 }]);
-  check('権力者: real A alone already affordable -- K stays untouched', player.resources, { K: 5, A: 2, B: 0, C: 0, Z: 0, VP: 0, BZ: 0 });
+  check('権力者: K is drained first even when real A alone is affordable', player.resources, { K: 2, A: 5, B: 0, C: 0, Z: 0, VP: 0, BZ: 0 });
 }
 {
   // Real A + K combined still fall short -- payment fails atomically, nothing is spent.
@@ -900,7 +900,7 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   check('...nothing was paid on failure (atomic)', player.resources, { K: 1, A: 1, B: 0, C: 0, Z: 0, VP: 0, BZ: 0 });
 }
 {
-  // 権力者 still gets Z for A (2026-10-31 bug report: A0/K0/Z9 couldn't pay any A cost) -- order A -> K -> Z.
+  // 権力者 still gets Z for A (2026-10-31 bug report: A0/K0/Z9 couldn't pay any A cost) -- order K -> A -> Z.
   const state = freshState();
   const player = getPlayerRef(state, 'P1');
   player.jobCardId = 'JOB005';
@@ -909,7 +909,21 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   player.resources.Z = 5;
   const result = executor.payCostList(state, index, 'P1', [{ resource: 'A', count: 3 }]);
   check('権力者: Z covers what real A + K leave short', result.success, true);
-  check('...A first, then K, then Z', player.resources, { K: 0, A: 0, B: 0, C: 0, Z: 4, VP: 0, BZ: 0 });
+  check('...K first, then A, then Z', player.resources, { K: 0, A: 0, B: 0, C: 0, Z: 4, VP: 0, BZ: 0 });
+}
+{
+  // 権力者 + 色欲 (2026-11-02, user-confirmed「文面通りならこうなるよね」): once K runs out, the rest is a
+  // non-K payment, so 色欲's Z-first applies -- order K -> Z -> A.
+  const state = freshState();
+  const player = getPlayerRef(state, 'P1');
+  player.jobCardId = 'JOB005';
+  giveCard(state, 'CON001B', 'P1');
+  player.resources.A = 2;
+  player.resources.K = 1;
+  player.resources.Z = 1;
+  const result = executor.payCostList(state, index, 'P1', [{ resource: 'A', count: 3 }]);
+  check('権力者+色欲: payCostList succeeds', result.success, true);
+  check('...K first, then Z, then real A', player.resources, { K: 0, A: 1, B: 0, C: 0, Z: 0, VP: 0, BZ: 0 });
 }
 {
   const state = freshState();
