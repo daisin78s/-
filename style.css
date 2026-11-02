@@ -7912,3 +7912,21 @@ body.online-spectator #online-spectator-badge {
   line-height: 1.5;
   color: var(--text);
 }
+/* スマホ版カードリストを広く (2026-11-02, per user「カードリスト フルスクリーンにできませんか」→「1 2 おねがい」):
+   1) 「×」だけの段をなくし、×は右上の角に重ねる。2) 左右の余白(切り欠きよけ)を詰める。 */
+@media (max-width: 760px), (max-height: 500px) {
+  #card-list-overlay > .card-list-modal {
+    padding-top: 4px;
+    padding-left: max(8px, calc(env(safe-area-inset-left) - 28px));
+    padding-right: max(8px, calc(env(safe-area-inset-right) - 28px));
+  }
+  #card-list-overlay .card-inst-modal__header {
+    position: absolute;
+    top: 2px;
+    right: max(6px, calc(env(safe-area-inset-right) - 28px));
+    z-index: 5;
+    margin: 0;
+    padding: 0;
+    height: auto;
+  }
+}
