@@ -7806,3 +7806,9 @@ body.online-spectator #online-spectator-badge {
   flex-wrap: nowrap;
   white-space: nowrap;
 }
+/* 基礎学問LV2の□の中の☆を少し大きく濃く (2026-11-02)。 */
+.die-face-numeral__digit.die-face-numeral__digit--star {
+  font-size: 19px;
+  color: var(--text);
+  -webkit-text-stroke: 0.8px currentColor;
+}

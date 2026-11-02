@@ -5032,7 +5032,9 @@ function buildSetWildcardIcon(actionText) {
   if (!/^SET_WILDCARD\(SELF,THIS_TURN\)/.test(actionText || '')) return null;
   // □の中に☆、「ダイス」の文字は消す (2026-11-02, per user「基礎学問の アイコン □の中に☆ ダイス は消す」) --
   // ⤵⚀(SET_DIE_VALUE)と同じダイスの枠を使う。
-  return actionRow([dieFace('☆')]);
+  const starBox = dieFace('☆');
+  starBox.querySelector('.die-face-numeral__digit').classList.add('die-face-numeral__digit--star'); // 少し大きく濃く (per user「基礎学問の ☆ 少し大きく 濃く」)
+  return actionRow([starBox]);
 }
 
 /** SET_DIE_VALUE(SELFx|y): player picks one of two fixed values -- shown as the two numbers, no arrow
