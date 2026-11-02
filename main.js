@@ -8808,6 +8808,7 @@ function renderMobileOwnDiceRow(state, next) {
  * 続けて)。見た目だけの演出で、画面の操作は妨げない(pointer-events:none)。PC/タブレット(幅761px以上)・
  * リプレイ表示中は流さない。最初のrender(新規/再開直後)は比較の基準を作るだけ。 */
 let lastAiCardFaces = null; // Map playerId -> Map physicalId -> faceId
+const JOB_FACE_SNAPSHOT_KEY = '__job__'; // lastAiCardFacesの中でジョブ(player.jobCardId)を覚えておくキー
 const mobileAiCardGainQueue = [];
 let mobileAiCardGainPlaying = false;
 const AI_CARD_GAIN_IN_MS = 200;
@@ -8823,6 +8824,7 @@ function queueMobileAiCardGainAnimation(state, next) {
       if (!isBuiltCardPhysicalId(physicalId) || !state.cards[physicalId]) continue;
       faces.set(physicalId, state.cards[physicalId].currentFaceId);
     }
+    faces.set(JOB_FACE_SNAPSHOT_KEY, player.jobCardId || null); // 研究者の演出用 (2026-11-02)
     current.set(player.id, faces);
   }
   const previous = lastAiCardFaces;
@@ -8835,7 +8837,23 @@ function queueMobileAiCardGainAnimation(state, next) {
     for (const [playerId, faces] of current) {
       const before = previous.get(playerId);
       if (!before) continue;
+      // 研究者 (2026-11-02, per user「研究者を獲得して 研究が 獲得されるとき アニメーションを表示して」「研究が獲得され
+      // ターン終了時 研究者が入れ替わるときも アニメーション表示 捨て札は下に」) -- 研究者を取って研究も一緒に来た時は
+      // 研究者 -> 研究 の順に獲得の演出。研究者が別のジョブに入れ替わった時は、研究者が下へ捨てられてから新しいジョブが来る。
+      const beforeJob = before.get(JOB_FACE_SNAPSHOT_KEY) || null;
+      const nowJob = faces.get(JOB_FACE_SNAPSHOT_KEY) || null;
+      if (beforeJob !== nowJob) {
+        const isResearcher = (id) => !!id && factsForFaceId(id).name === '研究者';
+        if (isResearcher(nowJob) && faces.has('B005') && !before.has('B005')) {
+          mobileAiCardGainQueue.push({ faceId: nowJob, fromFaceId: null, tapped: false });
+          gainedPlayerIds.add(playerId);
+        } else if (isResearcher(beforeJob) && nowJob) {
+          mobileAiCardGainQueue.push({ type: 'jobReplace', fromFaceId: beforeJob, toFaceId: nowJob });
+          gainedPlayerIds.add(playerId);
+        }
+      }
       for (const [physicalId, faceId] of faces) {
+        if (physicalId === JOB_FACE_SNAPSHOT_KEY) continue;
         const beforeFaceId = before.get(physicalId);
         // 前から持っていて面だけ変わった = LVアップ(別の演出、playNextMobileAiCardGain参照)。
         if (beforeFaceId !== faceId) {
@@ -8878,6 +8896,7 @@ function playNextMobileAiCardGain() {
   if (item.type === 'untapAuto') { playMobileUntapAuto(item); return; }
   if (item.type === 'aiTap') { playMobileAiTap(item); return; }
   if (item.type === 'untapChoice') { startMobileUntapChoice(item); return; }
+  if (item.type === 'jobReplace') { playJobReplace(item.fromFaceId, item.toFaceId, token); return; }
   const { faceId, fromFaceId, tapped } = item;
   if (fromFaceId) { playMobileCardUpgrade(fromFaceId, faceId, tapped, token); return; }
   let layer = document.getElementById('ai-card-gain-layer');
@@ -8902,6 +8921,34 @@ function playNextMobileAiCardGain() {
     layer.innerHTML = '';
     mobileAiCardGainPlaying = false;
     playNextMobileAiCardGain();
+  };
+}
+
+/** 研究者の入れ替わりの演出 (2026-11-02, per user「研究者が入れ替わるときも アニメーション表示 捨て札は下に」) --
+ * 研究者が左から中央へ来て少し止まり、下へ落ちて捨てられる。続けて新しいジョブが獲得の演出(左→中央→右)で来る。 */
+function playJobReplace(fromFaceId, toFaceId, token) {
+  let layer = document.getElementById('ai-card-gain-layer');
+  if (!layer) {
+    layer = el('div', 'ai-card-gain-layer');
+    layer.id = 'ai-card-gain-layer';
+    document.body.appendChild(layer);
+  }
+  layer.innerHTML = '';
+  const holder = el('div', 'ai-card-gain-layer__card');
+  holder.appendChild(buildCardVisual(fromFaceId, { req: factsForFaceId(fromFaceId).req, showEffect: true, allowTextFallback: false, noInteraction: true }));
+  layer.appendChild(holder);
+  holder.animate([{ transform: 'translateX(-100vw)' }, { transform: 'translateX(0)' }],
+    { duration: animMs(AI_CARD_GAIN_IN_MS), easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)', fill: 'forwards' }).onfinish = () => {
+    if (token !== mobileAiCardGainToken) return;
+    holder.animate([{ transform: 'translateY(0)', opacity: 1 }, { transform: 'translateY(100vh)', opacity: 0.6 }],
+      { duration: animMs(300), delay: animMs(AI_CARD_GAIN_HOLD_MS), easing: 'cubic-bezier(0.7, 0, 0.8, 0.2)', fill: 'forwards' }).onfinish = () => {
+      if (token !== mobileAiCardGainToken) return;
+      layer.innerHTML = '';
+      // 新しいジョブは普通の獲得の演出で(次の演出として先頭に入れる)。
+      mobileAiCardGainQueue.unshift({ faceId: toFaceId, fromFaceId: null, tapped: false });
+      mobileAiCardGainPlaying = false;
+      playNextMobileAiCardGain();
+    };
   };
 }
 
