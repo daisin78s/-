@@ -6213,7 +6213,8 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
         // 全体を もう少しだけ下に」) -- 上の⚡🎲を上げた分(-8px)も含め、どの行も4px下げる。
         if (row && (faceId === 'B001A' || faceId === 'B002A')) {
           row.style.position = 'relative';
-          row.style.top = `${(parseFloat(row.style.top) || 0) + 4}px`;
+          // ⚡🎲(ONCE)の行はさらに少し下に (per user「基礎学問LV1 高等学問LV1 ⚡🎲 少し下に」)。
+          row.style.top = `${(parseFloat(row.style.top) || 0) + (effect.source === 'ONCE' ? 7 : 4)}px`;
         }
         return row;
       })
