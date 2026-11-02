@@ -4655,7 +4655,7 @@ function buildBuildIcon(actionText) {
   if (bzOnlyMatch) {
     const stack = el('div', 'action-icons-stack');
     stack.appendChild(buildRow);
-    stack.appendChild(actionRow([actionSuffix(`軽減${bzOnlyMatch[1]}Z〇`)]));
+    stack.appendChild(actionRow([actionSuffix(`軽減${bzOnlyMatch[1]}`), actionDot('Z')])); // Z〇はアイコンに (2026-11-02, per user「交渉術 研究 のアイコン 軽減Z〇 Z〇を アイコンにして」)
     return stack;
   }
   const addMatch = /;ADD\(([^)]+)\)$/.exec(actionText);
@@ -4663,7 +4663,7 @@ function buildBuildIcon(actionText) {
     const addChildren = [actionEmoji('⚡')];
     for (const item of addMatch[1].split(',').map((s) => s.trim())) {
       const bzItemMatch = /^(\d*)BZ$/.exec(item);
-      if (bzItemMatch) { addChildren.push(actionSuffix(`軽減${bzItemMatch[1]}Z〇`)); continue; }
+      if (bzItemMatch) { addChildren.push(actionSuffix(`軽減${bzItemMatch[1]}`), actionDot('Z')); continue; }
       const m = /^(\d*)(K|A|B|C|Z)$/.exec(item);
       if (m) addChildren.push(...resourceItemNodes(m[1], m[2]));
     }
