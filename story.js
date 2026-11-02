@@ -286,7 +286,8 @@ function storyBuildState(diceValues, cons) {
   state.shops.NORMAL.slots.SHOP101 = 'A001A';
   state.extraMonumentPool = [];
   setupMod.rollInitialColorDice(state, { P1: diceValues });
-  setupMod.dealConCards(state, cons || { P1: 'CON005', P2: 'CON001' });
+  // パトラは「心配性な巫女」(2026-11-02, per user) -- 心配(CON006A)+巫女(JOB002)。
+  setupMod.dealConCards(state, cons || { P1: 'CON005', P2: 'CON006' });
   state.jobPool = ['JOB001', 'JOB002'];
   setupMod.chooseJob(state, INDEX, 'P1', 'JOB001');
   setupMod.chooseJob(state, INDEX, 'P2', 'JOB002');
