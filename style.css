@@ -7844,8 +7844,8 @@ body.online-spectator #online-spectator-badge {
 /* 初期資源カードの数字はアイコンとだいたい同じ、少しだけ小さく (2026-11-02, per user「初期資源カードの数字 アイコンと
    だいたい大きさ 少しだけ 小さく」) -- 2倍表示の中で〇(11px)より少し小さい9px(=18px相当)。選ぶ欄は元の大きさ(16px)のまま。 */
 /* 2026-11-02 追記, per user「同じ大きさに」 -- 数字もアイコンと同じ大きさに。 */
-.shop-card--resource .shop-card__effect .action-count { font-size: 11px; }
-.card-group__onboard-resources .shop-card--resource .shop-card__effect .action-count { font-size: 18px; }
+.shop-card--resource .shop-card__effect .action-count { font-size: 12px; } /* +1 (per user「数字のサイズ１あげて」) */
+.card-group__onboard-resources .shop-card--resource .shop-card__effect .action-count { font-size: 19px; }
 /* 晩餐会・宝物庫以外のモニュメントのVPを2倍の大きさに (2026-11-02, per user「晩餐会と宝物庫以外のモニュメント VPを２倍の大きさに」)。 */
 .shop-card--monument .shop-card__vp:not(.shop-card__vp--cap) {
   font-size: 22.1px; /* 2倍は大きすぎたので元(13px)の1.7倍に (per user「さっきの１．７倍で」) */
