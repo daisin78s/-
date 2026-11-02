@@ -6081,6 +6081,8 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
       tall = true;
       const noteClass = faceId === CARD_NOTE_COMPACT_FACE_ID ? 'card-note card-note--compact' : 'card-note';
       const noteEl = el('div', noteClass);
+      // 嫉妬の「１位でないクエスト」は折り返さない(はみ出してもよい) (2026-11-02, per user回答「1」)。
+      if (faceId === 'CON004A') noteEl.style.whiteSpace = 'pre';
       fillCardNoteContent(noteEl, facts.iconText);
       q('.shop-card__effect').appendChild(noteEl);
     }
