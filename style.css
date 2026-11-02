@@ -7871,3 +7871,10 @@ body.online-spectator #online-spectator-badge {
 /* 初期資源カードの🎲を他の資源(〇)と同じ大きさに (2026-11-02, per user「初期資源カードの 🎲 他の資源と同じ大きさに」)。 */
 .shop-card--resource .shop-card__effect .action-emoji:not(.action-emoji--bolt) { font-size: 11px; }
 .card-group__onboard-resources .shop-card--resource .shop-card__effect .action-emoji:not(.action-emoji--bolt) { font-size: 18px; }
+/* 基礎学問LV1・高等学問LV1の⤵⚀/⤵⚅: ⤵とサイコロの上をそろえる (LV2の⤵□7と同じ並び) (2026-11-02)。 */
+.shop-card__effect .action-icons:has(> .die-face) {
+  align-items: flex-start;
+}
+.shop-card__effect .action-icons:has(> .die-face) > .action-emoji {
+  margin-top: 12px; /* サイコロの絵(文字の箱の上に余白がある)の上の線に⤵の上をそろえる */
+}
