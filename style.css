@@ -7845,3 +7845,8 @@ body.online-spectator #online-spectator-badge {
    だいたい大きさ 少しだけ 小さく」) -- 2倍表示の中で〇(11px)より少し小さい9px(=18px相当)。選ぶ欄は元の大きさ(16px)のまま。 */
 .shop-card--resource .shop-card__effect .action-count { font-size: 9px; }
 .card-group__onboard-resources .shop-card--resource .shop-card__effect .action-count { font-size: 16px; }
+/* 晩餐会・宝物庫以外のモニュメントのVPを2倍の大きさに (2026-11-02, per user「晩餐会と宝物庫以外のモニュメント VPを２倍の大きさに」)。 */
+.shop-card--monument .shop-card__vp:not(.shop-card__vp--cap) {
+  font-size: 26px;
+  line-height: 1;
+}

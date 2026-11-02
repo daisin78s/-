@@ -5156,7 +5156,7 @@ function bigFoodDot() {
 function buildBanquetFinalVpModifierIcon(actionText) {
   if (actionText !== 'VP_MODIFIER_FINAL(PER(K,1),9)') return null;
   const stack = el('div', 'action-icons-stack');
-  stack.appendChild(actionRow([bigFoodDot(), el('span', 'action-suffix action-suffix--large', 'につき1VP')]));
+  stack.appendChild(actionRow([bigFoodDot(), el('span', 'action-suffix action-suffix--large', '1につき1VP')])); // per user「晩餐会 〇1につき1VP」
   // MAX9はVPの位置(左下)へ (fillCardFaceのshop-card__vp参照)。
   return stack;
 }
@@ -5977,7 +5977,10 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
   // (カッコなし) (2026-11-02, per user「（MAX７）（MAX9） 他のモニュメントのVPと同じ位置に カッコはとる」)。
   if (!facts.vp && /^M/.test(faceId)) {
     const finalCap = /VP_MODIFIER_FINAL\(.*,(\d+)\)$/.exec(dataLoaderMod.getCardRow(INDEX, faceId).PASSIVE || '');
-    if (finalCap) q('.shop-card__vp').textContent = `MAX${finalCap[1]}`;
+    if (finalCap) {
+      q('.shop-card__vp').textContent = `MAX${finalCap[1]}`;
+      q('.shop-card__vp').classList.add('shop-card__vp--cap'); // VPを2倍にする対象から外す
+    }
   }
   // Corrected 2026-07-29: a monument's req (e.g. "目 >=12") IS part of that specific card (each
   // monument has its own threshold), unlike normal/special cards' req which is a slot property --
