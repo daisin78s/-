@@ -7782,7 +7782,7 @@ body.online-spectator #online-spectator-badge {
   height: 16.5px;
 }
 .shop-card--plain-effect-text .shop-card__effect .action-suffix,
-.shop-card--plain-effect-text .shop-card__effect .action-count {
+.shop-card--plain-effect-text .shop-card__effect .action-count:not(.action-count--large) {
   font-size: 13px;
   font-weight: 700;
   color: var(--text);
