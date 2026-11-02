@@ -4707,7 +4707,7 @@ let currentCardVisualFaceId = null;
 
 function resourceItemNodes(countStr, resource) {
   if (resource === 'VP') return [actionCount(`${countStr || '1'}VP`)];
-  if (resource === 'D') return [actionSuffix(`${countStr || ''}追加色D`)];
+  if (resource === 'D') return [actionSuffix(`${countStr || ''}追加色ダイス`)]; // 2026-11-02, per user「憤怒 ⚡追加色ダイス」
   if (resource === 'wD') {
     const count = countStr ? parseInt(countStr, 10) : 1;
     return Array.from({ length: count }, () => { const n = actionEmoji('🎲'); n.classList.add('action-wd'); return n; });
