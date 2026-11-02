@@ -10868,7 +10868,11 @@ const QST_METRIC_PHRASE_BY_GOAL = {
   EMBLEM_SET_COUNT: '三神の加護を受け',
   'LEVEL_COUNT(2)': '研究にいそしみ',
   CARD_COUNT: '多くの力を蓄え',
-  EXTRA_D_PLUS_ABC_COUNT: '勢力を築き',
+  // 2026-11-02, クエスト変更に合わせて (per user)。「勢力を築き」は前のQ001B(EXTRA_D_PLUS_ABC_COUNT)の文。
+  COST_TOTAL: '多くの財を投じ',
+  'COST_TOTAL(M)': '偉大な建築に財を投じ',
+  EXTRA_D_COUNT: '多くの鍛錬をし',
+  NORMAL_CARD_COUNT: '勢力を築き',
 };
 
 /** Strips a card face's own tier suffix to its base flavor name -- "小麦畑の支配LV1"->"小麦畑" (A-tier
