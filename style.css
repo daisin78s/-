@@ -7909,7 +7909,8 @@ body.online-spectator #online-spectator-badge {
   font-weight: 400;
   color: var(--text-muted);
 }
-/* ローマ市街の支配・パンとサーカスの名前を1px小さく (2026-11-02, per user「フォントを１小さく」)。 */
-.shop-card--name-centered .shop-card__id {
+/* ローマ市街の支配・パンとサーカスは名前の大きさは元のまま、「LV1」「LV2」の部分だけ1px小さく
+   (2026-11-02, per user「フォントサイズ元に戻して LV1 や LV２ だけ」)。 */
+.shop-card--name-centered .shop-card__id .shop-card__id-lv {
   font-size: 12px;
 }
