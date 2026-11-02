@@ -7914,5 +7914,11 @@ body.online-spectator #online-spectator-badge {
 .shop-card--name-centered .shop-card__id {
   flex-direction: column;
   align-items: center;
-  line-height: 1.15;
+  line-height: 1;
+  /* 線と必要資源は動かさない (per user「線と 必要資源は 動かさない」) -- 2行になっても名前の欄は1行ぶんの高さのまま、
+     はみ出す分は上へ。 */
+  height: 20px;
+  justify-content: flex-end;
+  margin-top: -3px;
+  margin-bottom: 3px;
 }
