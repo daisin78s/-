@@ -3837,17 +3837,40 @@ function renderCardListConCategory(container) {
     if (tier === 'A') tierA.push(row.ID); else if (tier === 'B') tierB.push(row.ID);
   }
   const wrap = el('div', 'card-list-con-wrap');
-  wrap.appendChild(buildCardListConRow('表', tierA));
-  wrap.appendChild(buildCardListConRow('裏', tierB));
+  wrap.appendChild(buildCardListConRow('表', tierA, 'VPペナルティ', false));
+  wrap.appendChild(buildCardListConRow('裏', tierB, 'プレイ制限', true));
   container.appendChild(wrap);
 }
 
-function buildCardListConRow(label, faceIds) {
+/** 性格のコンセプト見出し (2026-11-02, per user「表は VPペナルティ 裏は プレイ制限 でそろえました」「縦軸もコンセプト
+ * 揃えました 色欲の下に 資源 / 傲慢の下に レベル / 臆病の下に モニュメント / 裏切の下に クエスト / 怠惰の下に エリア /
+ * 暴食の下に 食料」) -- 段の右端に横の見出し、裏の段のカードの下に縦の見出し。 */
+const CON_COLUMN_CONCEPT_BY_FACE_ID = {
+  CON001B: '資源',
+  CON002B: 'レベル',
+  CON003B: 'モニュメント',
+  CON004B: 'クエスト',
+  CON005B: 'エリア',
+  CON006B: '食料',
+};
+
+function buildCardListConRow(label, faceIds, rowConcept, withColumnConcepts) {
   const row = el('div', 'card-list-con-row');
   row.appendChild(el('div', 'card-list-con-row__label', label));
   const cards = el('div', 'card-list-con-row__cards');
-  for (const faceId of faceIds) cards.appendChild(buildCardListCell(faceId, false));
+  for (const faceId of faceIds) {
+    const cell = buildCardListCell(faceId, false);
+    if (withColumnConcepts) {
+      const col = el('div', 'card-list-con-row__col');
+      col.appendChild(cell);
+      col.appendChild(el('div', 'card-list-con-row__concept-col', CON_COLUMN_CONCEPT_BY_FACE_ID[faceId] || ''));
+      cards.appendChild(col);
+    } else {
+      cards.appendChild(cell);
+    }
+  }
   row.appendChild(cards);
+  row.appendChild(el('div', 'card-list-con-row__concept-row', rowConcept));
   return row;
 }
 

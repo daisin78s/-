@@ -7678,3 +7678,40 @@ body.online-spectator #online-spectator-badge {
   flex: 0 0 auto;
   min-width: 0;
 }
+/* 性格一覧のコンセプト見出し (2026-11-02、main.jsのbuildCardListConRow参照)。 */
+.card-list-con-row {
+  align-items: flex-start;
+}
+.card-list-con-row__label,
+.card-list-con-row__concept-row {
+  align-self: center;
+}
+.card-list-con-row__concept-row {
+  flex: 0 0 auto;
+  width: 6.5em; /* 上下の段で同じ幅にしてカードの位置をそろえる */
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+.card-list-con-row__col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.card-list-con-row__concept-col {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+/* スマホ版: 右の見出しは縦書きにして、6枚が1行に収まるようにする。 */
+@media (max-width: 760px), (max-height: 500px) {
+  .card-list-con-row__concept-row {
+    width: 1.4em;
+    writing-mode: vertical-rl;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+}
