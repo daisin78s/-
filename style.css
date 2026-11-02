@@ -7791,3 +7791,12 @@ body.online-spectator #online-spectator-badge {
 /* 2026-11-02 追加, per user「人材カードの アイコン 数字も 〇 と同じ大きさに 必要資源はそのまま」 -- 〇(16.5px)と同じに。 */
 .shop-card[data-deck="C"] .shop-card__effect .action-count { font-size: 16.5px; }
 .shop-card[data-deck="C"] .shop-card__effect .action-suffix { font-size: 16.5px; }
+/* カードリストが画面の横幅を超えた時、真ん中寄せのせいで左側がスクロールでも見られなくなっていた (2026-11-02, per user
+   「スマホ版 カードリスト がスクロールできず見えない」) -- 中身の幅に合わせて左右autoの余白で中央に置き、はみ出す時は
+   左から並べて横スクロールで全部見られるようにする。 */
+#card-list-overlay .card-list-body > * {
+  width: max-content;
+  max-width: none;
+  margin-left: auto;
+  margin-right: auto;
+}
