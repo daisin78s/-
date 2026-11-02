@@ -2111,6 +2111,7 @@ module.exports = {
   isUpgradeBlockedByQstRank,
   hasAnyUpgradeEligibleCard,
   isColorDieReuseBlocked,
+  isLazyTrainingGroundBlocked,
   hasWildcardDice,
   isDieWildcard,
   hasPioneerAbility,

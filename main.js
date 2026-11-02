@@ -7097,6 +7097,13 @@ function renderBoard(state, next) {
         const preview = boardMod.previewPlaceDiceGroup(state, INDEX, { playerId: highlightOwner.id }, selectedDieIds, mapId);
         if (preview.ok) highlightedSlots = new Set(preview.touchedSlots);
       }
+      // 怠惰 (2026-11-02, per user「そもそも置けないように」) -- the unleveled 訓練場 isn't even clickable for a
+      // 怠惰 owner's normal (non-☆) die, instead of clicking and getting a refusal message. Only when no slot
+      // previewed as legal (異端者 borrowing 訓練場LV1 can still legally place there) -- see
+      // board.isLazyTrainingGroundBlocked.
+      const lazyTrainingGroundBlocked = !!highlightOwner && !wildcardSingleSelection
+        && boardMod.isLazyTrainingGroundBlocked(state, INDEX, highlightOwner.id, areaRow.ID)
+        && !(highlightedSlots && highlightedSlots.size > 0);
       const tpl = document.getElementById('tpl-map-tile');
       const node = tpl.content.firstElementChild.cloneNode(true);
       if (isCastle) node.classList.add('map-tile--castle');
@@ -7203,7 +7210,7 @@ function renderBoard(state, next) {
         if (wildcardSingleSelection && exAnyChoice) {
           slotEl.classList.add('slot--selectable');
           slotEl.addEventListener('click', () => placeSelectedWildcardDie(state, selectedDieIds[0], mapId, i));
-        } else if (selectedDieIds.length > 0 && !wildcardSingleSelection) {
+        } else if (selectedDieIds.length > 0 && !wildcardSingleSelection && !lazyTrainingGroundBlocked) {
           slotEl.classList.add('slot--selectable');
           slotEl.addEventListener('click', () => attemptPlaceSelectedDie(state, mapId, i));
         }
