@@ -7812,3 +7812,8 @@ body.online-spectator #online-spectator-badge {
   color: var(--text);
   -webkit-text-stroke: 0.8px currentColor;
 }
+/* 人材カードの→を濃く (2026-11-02, per user「人材カードの → 濃くして」)。 */
+.shop-card[data-deck="C"] .shop-card__effect .action-arrow {
+  color: var(--text);
+  font-weight: 700;
+}
