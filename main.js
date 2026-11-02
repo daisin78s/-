@@ -6120,11 +6120,12 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     tall = true;
     const noteEl = el('div', 'card-note');
     const iconRow = el('span', 'job-note-icon-row');
-    // 2026-10-27: 得たVPの半分(切り上げ)のKに変わったので「2VP ▶ 〇」(per user回答)。
-    iconRow.appendChild(actionCount('2VP'));
-    iconRow.appendChild(actionTrigger());
+    // 2026-11-02, per user「食料長官のアイコン VPの半分の / 〇を得る / （端数切り上げ）」 -- 3行で(〇は食料アイコン)。
+    noteEl.appendChild(document.createTextNode('VPの半分の\n'));
     iconRow.appendChild(actionDot('K'));
+    iconRow.appendChild(document.createTextNode('を得る'));
     noteEl.appendChild(iconRow);
+    noteEl.appendChild(document.createTextNode('\n（端数切り上げ）'));
     q('.shop-card__effect').appendChild(noteEl);
   } else if (options.showEffect && facts.effects && facts.effects.length) {
     // allowTextFallback (confirmed 2026-07-30): A/B/C cards fall back to raw DSL text for any
