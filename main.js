@@ -4264,7 +4264,9 @@ function factsForQstFaceId(faceId) {
   } catch (e) {
     return { goal: '', rewards: [] };
   }
-  return { goal: row.GOAL || '', rewards: [row.REWARD1, row.REWARD2, row.REWARD3], inst: row.INST || '' };
+  // icon (2026-11-02, per user: 「今までINSTをアイコンに表示していましたが INSTをつくりました」): QSTシートの
+  // アイコン列 = カードの表に出す短い見出し、INST = 拡大表示の説明文。
+  return { goal: row.GOAL || '', rewards: [row.REWARD1, row.REWARD2, row.REWARD3], inst: row.INST || '', icon: row['アイコン'] || '' };
 }
 
 /** Whether faceId exists in the QST data at all (sibling-flip check, mirrors cardFaceExists). */
@@ -6181,7 +6183,7 @@ function isBuiltCardPhysicalId(physicalId) {
  * back to the raw GOAL DSL text (e.g. "CARD_COUNT(A,B,C)") if INST is missing, so nothing goes blank
  * for data that hasn't been filled in yet. No "目標：" prefix (removed 2026-08-10, per user request). */
 function questGoalDisplayText(facts) {
-  return facts.inst || facts.goal;
+  return facts.icon || facts.inst || facts.goal;
 }
 
 /** Plain-text reward summary (e.g. "ADD(3VP)" -> "3VP", "ADD(2K,BZ)" -> "2K+BZ"). Every QST row's
@@ -10046,7 +10048,7 @@ function computeQstExtraStats(state, player) {
     const m = /^([A-Z_]+)/.exec(goalText);
     if (m && QST_EXTRA_STAT_SKIP_METRICS.has(m[1])) continue;
     try {
-      extras.push({ label: facts.inst || goalText, value: qstMod.evalGoalMetric(state, INDEX, player.id, goalText) });
+      extras.push({ label: facts.icon || facts.inst || goalText, value: qstMod.evalGoalMetric(state, INDEX, player.id, goalText) });
     } catch (e) { /* unparseable/unknown metric -- skip rather than crash the whole player panel */ }
   }
   return extras;

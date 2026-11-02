@@ -198,17 +198,15 @@ function giveCard(state, faceCardId, ownerId) {
 {
   const state = createEmptyGameState('scoring-smoke-con006a');
   state.players.push(createPlayer('P1', 'Alice'), createPlayer('P2', 'Bob'));
-  // Q001A (GOAL=CARD_COUNT): P2 owns more cards, so P1 ranks 2nd. Q002B (GOAL=EMBLEM_SET_COUNT, the
-  // min across 天/地/人): P1 owns one card of each emblem type (地+天+人 -> EMBLEM_SET_COUNT=1) while
-  // P2's cards are all A-sheet (地 only -> EMBLEM_SET_COUNT=0), so P1 ranks 1st there. P1's BEST rank
-  // across both quests is 1st, so 裏切 should apply the rank-1 penalty (-4), not the rank-2 one a
-  // "just look at one quest" implementation would wrongly pick.
+  // Q001A (GOAL=CARD_COUNT): P2 owns more cards, so P1 ranks 2nd. Q002B (GOAL=COST_TOTAL(M) since
+  // 2026-11-02 -- モニュメントの必要資源): P1 owns 灯台/M002 (COST B -> 1) while P2 owns no monument (0 is
+  // never ranked), so P1 ranks 1st there. P1's BEST rank across both quests is 1st, so 裏切 should apply
+  // the rank-1 penalty (-4), not the rank-2 one a "just look at one quest" implementation would wrongly pick.
   state.quests = { Q001A: true, Q002B: true };
   giveCard(state, 'CON006A', 'P1');
-  giveCard(state, 'A001A', 'P1'); // 地
-  giveCard(state, 'B001A', 'P1'); // 天
-  giveCard(state, 'C001A', 'P1'); // 人 -- P1: CARD_COUNT=3, EMBLEM_SET_COUNT=1
-  for (const faceId of ['A002A', 'A003A', 'A004A', 'A005A']) giveCard(state, faceId, 'P2'); // P2: CARD_COUNT=4, EMBLEM_SET_COUNT=0 (地 only)
+  giveCard(state, 'A001A', 'P1');
+  giveCard(state, 'M002', 'P1'); // P1: CARD_COUNT=2, COST_TOTAL(M)=1
+  for (const faceId of ['A002A', 'A003A', 'A004A']) giveCard(state, faceId, 'P2'); // P2: CARD_COUNT=3, COST_TOTAL(M)=0
 
   const result = scoring.conCardVpAdjustment(state, index, 'P1');
   check('裏切 (CON006A): best rank across all revealed quests (not just one) drives the penalty', result, -4);

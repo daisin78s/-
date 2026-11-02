@@ -1890,16 +1890,18 @@
       "REWARD1": "ADD(4VP)",
       "REWARD2": "ADD(2VP)",
       "REWARD3": "ADD(VP)",
-      "INST": "カード獲得枚数"
+      "アイコン": "カード枚数",
+      "INST": "あなたが獲得したカードの枚数の合計\n「性格」「ジョブ」は含めない"
     },
     {
       "ID": "Q002A",
       "NAME": "Q002A",
-      "GOAL": "MAX_EMBLEM_COUNT",
+      "GOAL": "COST_TOTAL",
       "REWARD1": "ADD(4VP)",
       "REWARD2": "ADD(2VP)",
       "REWARD3": "ADD(VP)",
-      "INST": "最多エンブレムの数"
+      "アイコン": "カードの必要資源",
+      "INST": "あなたが獲得したカードに書かれている必要資源の合計\nLV2カードは片側のみ計算\n獲得時に軽減しても考慮しない"
     },
     {
       "ID": "Q003A",
@@ -1908,7 +1910,8 @@
       "REWARD1": "ADD(4VP)",
       "REWARD2": "ADD(2VP)",
       "REWARD3": "ADD(VP)",
-      "INST": "レベルアップ数"
+      "アイコン": "レベルアップ数",
+      "INST": "あなたが獲得したカードのLV2の数の合計"
     },
     {
       "ID": "Q004A",
@@ -1917,34 +1920,38 @@
       "REWARD1": "ADD(4VP)",
       "REWARD2": "ADD(2VP)",
       "REWARD3": "ADD(VP)",
-      "INST": "所有エリア数"
+      "アイコン": "所有エリア数",
+      "INST": "あなたが所有しているエリアの数の合計"
     },
     {
       "ID": "Q001B",
       "NAME": "Q001B",
-      "GOAL": "EXTRA_D_PLUS_ABC_COUNT",
+      "GOAL": "EXTRA_D_COUNT",
       "REWARD1": "ADD(4VP)",
       "REWARD2": "ADD(2VP)",
       "REWARD3": "ADD(VP)",
-      "INST": "通常カード枚数+追加色ダイス"
+      "アイコン": "追加色ダイス数",
+      "INST": "あなたが獲得した追加色ダイス数の合計"
     },
     {
       "ID": "Q002B",
       "NAME": "Q002B",
-      "GOAL": "EMBLEM_SET_COUNT",
+      "GOAL": "COST_TOTAL(M)",
       "REWARD1": "ADD(4VP)",
       "REWARD2": "ADD(2VP)",
       "REWARD3": "ADD(VP)",
-      "INST": "天地人セット数"
+      "アイコン": "モニュメントの必要資源",
+      "INST": "あなたが獲得した「モニュメント」と「強化モニュメント」に書かれている必要資源の合計\n〇も含める\n獲得時に軽減しても考慮しない"
     },
     {
       "ID": "Q003B",
       "NAME": "Q003B",
-      "GOAL": "EMBLEM_COUNT",
+      "GOAL": "NORMAL_CARD_COUNT",
       "REWARD1": "ADD(4VP)",
       "REWARD2": "ADD(2VP)",
       "REWARD3": "ADD(VP)",
-      "INST": "エンブレム総数"
+      "アイコン": "通常カード枚数",
+      "INST": "あなたが獲得した通常カードの枚数の合計\nLV2も１枚として数える\n「強化カード」「モニュメント」「強化モニュメント」「性格」「ジョブ」は含めない"
     },
     {
       "ID": "Q004B",
@@ -1953,7 +1960,8 @@
       "REWARD1": "ADD(4VP)",
       "REWARD2": "ADD(2VP)",
       "REWARD3": "ADD(VP)",
-      "INST": "所有LV2エリア数"
+      "アイコン": "所有LV2エリア数",
+      "INST": "あなたが所有しているLV2エリアの数の合計"
     }
   ],
   "MAP": [
@@ -2337,7 +2345,7 @@
     {
       "ID": "AREA007C",
       "NAME": "訓練場LV2",
-      "SLOT1": "ANY",
+      "SLOT1": "EX",
       "SLOT2": "EX",
       "SLOT3": "EX",
       "SLOT4": "NONE",

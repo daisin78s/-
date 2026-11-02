@@ -1357,6 +1357,27 @@ const EXTRA_D = { name: 'EXTRA_D_PLUS_ABC_COUNT', args: [] };
 }
 
 // ---------------------------------------------------------------------------
+// 22b. QST metrics for the 2026-11-02 QST rework: COST_TOTAL (Q002A, A/B/C/M printed COST, LV2 = only the
+// current face), COST_TOTAL(M) (Q002B, monuments incl. 強化モニュメント, K counted), EXTRA_D_COUNT (Q001B,
+// additional color dice only), NORMAL_CARD_COUNT (Q003B, 1R cards LV1/LV2, 1 each).
+// ---------------------------------------------------------------------------
+{
+  const state = freshState();
+  const player = getPlayerRef(state, 'P1');
+  giveCard(state, 'A004A', 'P1'); // 2A,B -> 3
+  giveCard(state, 'A001B', 'P1'); // LV2 face 2A -> 2 (only the LV2 face, not LV1+LV2)
+  giveCard(state, 'M003', 'P1'); // 3A,B -> 4
+  giveCard(state, 'M403', 'P1'); // 12K -> 12 (〇も含める)
+  giveCard(state, 'M001', 'P1'); // no COST -> 0
+  giveCard(state, 'CON001B', 'P1'); // 性格 -- never counted
+  check('COST_TOTAL = every A/B/C/M card printed COST (3+2+4+12+0)', executor.evalMetric(state, index, 'P1', { name: 'COST_TOTAL', args: [] }), 21);
+  check('COST_TOTAL(M) = monuments only, 強化モニュメント and K included (4+12+0)', executor.evalMetric(state, index, 'P1', { name: 'COST_TOTAL', args: ['M'] }), 16);
+  check('NORMAL_CARD_COUNT = 1R A/B/C cards, LV2 counted once', executor.evalMetric(state, index, 'P1', { name: 'NORMAL_CARD_COUNT', args: [] }), 2);
+  for (let i = 0; i < INITIAL_COLOR_DICE + 1; i++) player.dice.push(createDie(`c-${i}`, 'COLOR'));
+  check('EXTRA_D_COUNT = additional color dice only (cards not added)', executor.evalMetric(state, index, 'P1', { name: 'EXTRA_D_COUNT', args: [] }), 1);
+}
+
+// ---------------------------------------------------------------------------
 // 23. UNTAP_CHOICE(SELF,3) (2026-08-15, replacing what were then C004B/C005B/C006B/C007B/C008A/C008B's
 // old UNTAP_ALL(SELF): "自分のカード3枚をアンタップにする"; briefly a weighted budget from 2026-08-17
 // (started at weight 3, lowered to 2 on 2026-08-21) through 2026-09-04, where a 兆し-named card cost more

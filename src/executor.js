@@ -765,11 +765,20 @@ function evalMetric(state, index, playerId, metric) {
     // equivalent, and this needs no new persistent state (see [[project-dice-wp-qst-spec]]). BZ isn't
     // itself a COST entry on any card, so a build paid for (partly) with BZ still counts at the
     // card's full face-value COST here, matching the "資源(BZ含む)" wording.
-    case 'COST_TOTAL':
+    // 2026-11-02 (QST Q002A「あなたが獲得したカードに書かれている必要資源の合計 獲得時に軽減しても考慮しない」/
+    // Q002B「…モニュメントに書かれている…」): CARD_COUNT と同じく A/B/C/M のカードだけ(性格・ジョブ・初期資源は
+    // 数えない)。COST_TOTAL(M) のようにシートを指定すると、そのシートだけ(ユーザー確認: Q002Aはモニュメントも
+    // 含む、Q002Bは強化モニュメント(M4xx)も含む、LV2のカードは今の面(LV2)の必要資源だけ)。
+    case 'COST_TOTAL': {
+      const costSheets = metric.args.length > 0 ? new Set(metric.args) : null;
+      const costOwned = owned.filter((c) => {
+        const sheet = index.byId.get(c.row.ID).sheet;
+        return costSheets ? costSheets.has(sheet) && CARD_COUNT_SHEETS.has(sheet) : CARD_COUNT_SHEETS.has(sheet);
+      });
       // Choice-COST (2026-10-15, "15A/15B/15C" -- see command-builder.isChoiceCost's own doc, M405/
       // 巨大石像): an owned instance only ever actually paid ONE option (c.inst.paidChoiceResource,
       // set at build time), not every option summed -- lowerCostList can't even parse the raw string.
-      return owned.reduce((sum, c) => {
+      return costOwned.reduce((sum, c) => {
         if (isChoiceCost(c.row.COST)) {
           const options = lowerChoiceCostOptions(c.row.COST);
           const chosen = options.find((opt) => opt.resource === c.inst.paidChoiceResource) || options[0];
@@ -777,6 +786,7 @@ function evalMetric(state, index, playerId, metric) {
         }
         return sum + lowerCostList(c.row.COST).reduce((s, item) => s + item.count, 0);
       }, 0);
+    }
     // Confirmed 2026-07-30 for QST GOAL conditions: reads a raw player resource (e.g. RESOURCE(VP))
     // directly, rather than counting owned cards like every other metric above -- the only metric
     // that looks at PlayerState.resources instead of ownedCardRows. Multi-arg form (2026-08-15, per
@@ -808,6 +818,17 @@ function evalMetric(state, index, playerId, metric) {
     //
     // Counts placed/passed dice too, not just unplaced ones (confirmed with the user when this metric was
     // first added): a color die stays in player.dice for the whole round wherever it sits.
+    // 2026-11-02, QST Q001B「あなたが獲得した追加色ダイス数の合計」/ Q003B「あなたが獲得した通常カードの枚数の合計」:
+    // EXTRA_D_PLUS_ABC_COUNT の2つの部分を、それぞれ単独の数え方として使えるようにしたもの。
+    case 'EXTRA_D_COUNT': {
+      const colorDiceCount = getPlayer(state, playerId).dice.filter((d) => d.kind === 'COLOR').length;
+      return Math.max(0, colorDiceCount - INITIAL_COLOR_DICE);
+    }
+    case 'NORMAL_CARD_COUNT':
+      return owned.filter((c) => {
+        const sheet = index.byId.get(c.row.ID).sheet;
+        return ['A', 'B', 'C'].includes(sheet) && Number(splitCardId(c.row.ID).physicalId.slice(1)) < 200;
+      }).length;
     case 'EXTRA_D_PLUS_ABC_COUNT': {
       const colorDiceCount = getPlayer(state, playerId).dice.filter((d) => d.kind === 'COLOR').length;
       const extraColorDice = Math.max(0, colorDiceCount - INITIAL_COLOR_DICE);
