@@ -5879,7 +5879,14 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
   // this replaced -- broadened to every deck once the separate title was removed, so a deck whose NAME
   // isn't customized yet doesn't go from "shown once, up top" to "not shown anywhere").
   const idEl = q('.shop-card__id');
-  const onceIcon = faceId.startsWith('CON') ? buildActionIcons(facts.once) : null;
+  // 性格のもらえるVPは左下に別に出す (2026-11-02, per user「VPは左下に変更」) -- アイコンの行からはVPを抜く。
+  const conOnceParts = faceId.startsWith('CON') && facts.once ? /^ADD\((.*)\)$/.exec(facts.once) : null;
+  const conOnceItems = conOnceParts ? conOnceParts[1].split(',') : [];
+  const conOnceVpItem = conOnceItems.find((item) => /^\d*VP$/.test(item));
+  const conOnceVp = conOnceVpItem ? (conOnceVpItem.replace('VP', '') || '1') : null;
+  const conOnceRest = conOnceItems.filter((item) => item !== conOnceVpItem);
+  const conOnceWithoutVp = conOnceParts ? (conOnceRest.length ? `ADD(${conOnceRest.join(',')})` : null) : facts.once;
+  const onceIcon = faceId.startsWith('CON') && conOnceWithoutVp ? buildActionIcons(conOnceWithoutVp) : null;
   if (faceId.startsWith('CON')) {
     // NAME + icon + emblem all share this one grid area now (2026-08-17, per user request/mockup:
     // "裏切　⚡🎲🎲 / 　　　　　🎲🎲", "祝福　⚡3VP / 　　　　天地人") -- NAME pinned to column 1/row 1
@@ -5926,12 +5933,26 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
   const startOrderEl = q('.shop-card__start-order');
   startOrderEl.textContent = '';
   const conFaceLabel = faceId.startsWith('CON') ? (faceId.endsWith('A') ? '表' : '裏') : '';
-  if (facts.startOrder !== null && facts.startOrder !== undefined) {
-    startOrderEl.appendChild(document.createTextNode('スタプレ '));
-    startOrderEl.appendChild(el('span', 'shop-card__start-order-number', String(facts.startOrder)));
-  }
-  if (conFaceLabel) {
-    startOrderEl.appendChild(document.createTextNode((startOrderEl.childNodes.length ? '　' : '') + conFaceLabel));
+  if (faceId.startsWith('CON')) {
+    // 性格カード (2026-11-02, per user「VPは左下に変更 / スタプレ 0は右上のNAMEの右 / 表は右下に」) -- 一番下の行は
+    // 左にもらえるVP・右に表/裏、スタプレは名前の行の右端へ。
+    if (facts.startOrder !== null && facts.startOrder !== undefined) {
+      const conStart = el('span', 'shop-card__start-order con-start-order');
+      conStart.appendChild(document.createTextNode('スタプレ '));
+      conStart.appendChild(el('span', 'shop-card__start-order-number', String(facts.startOrder)));
+      q('.shop-card__name').appendChild(conStart);
+    }
+    startOrderEl.classList.add('con-footer');
+    startOrderEl.appendChild(el('span', 'con-footer__vp', conOnceVp ? `${conOnceVp}VP` : ''));
+    startOrderEl.appendChild(el('span', 'con-footer__face', conFaceLabel));
+  } else {
+    if (facts.startOrder !== null && facts.startOrder !== undefined) {
+      startOrderEl.appendChild(document.createTextNode('スタプレ '));
+      startOrderEl.appendChild(el('span', 'shop-card__start-order-number', String(facts.startOrder)));
+    }
+    if (conFaceLabel) {
+      startOrderEl.appendChild(document.createTextNode((startOrderEl.childNodes.length ? '　' : '') + conFaceLabel));
+    }
   }
 
   let tall = false;

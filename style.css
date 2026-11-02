@@ -7647,3 +7647,21 @@ body.online-spectator #online-spectator-badge {
 .con-once-row .action-count { font-size: 12px; }
 .con-once-row .action-arrow { font-size: 9px; }
 .con-once-row .action-suffix { font-size: 12px; color: var(--text); }
+
+/* 性格カードの並び (2026-11-02): スタプレは名前の行の右端、一番下の行は左にもらえるVP・右に表/裏。 */
+.shop-card__name .con-start-order {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  font-weight: 400;
+}
+.shop-card__start-order.con-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.con-footer__vp {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
