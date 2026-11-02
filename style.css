@@ -7968,3 +7968,8 @@ body.online-spectator #online-spectator-badge {
   margin-top: 2px;
   line-height: 1.2;
 }
+/* カードリストの右上の×を2倍に (2026-11-03, per user「カードリスト 右上のXボタン ２倍大きく」)。 */
+#card-list-overlay .card-list-modal__close {
+  font-size: 56px; /* 28pxの2倍 */
+  line-height: 1;
+}
