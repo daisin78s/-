@@ -6153,6 +6153,11 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
         // ⚡🎲 もう少し上に」)。
         // 皇女・弁論家の⚡⤴3(ONCE)の行も同じく行ごと上に (per user「⤴3の行ごと、カードの上の方へ移したい」)。
         // パンとサーカスLV2の「毎ターン」は左下の1 VPと重ならないよう右へ (2026-11-02, per user「パンとサーカスLV2 毎ターンをもっと右に」)。
+        // 皇女LV2・弁論家LV2の⤵の行も右へ (2026-11-02, per user「皇女LV2 弁論家LV2 ⤵⚡🎲 など もっと右に」)。
+        if (row && effect.source === 'TAP' && (faceId === 'C202B' || faceId === 'C301B')) {
+          row.style.position = 'relative';
+          row.style.left = '20px';
+        }
         if (row && effect.source === 'TURNEND' && faceId === 'B301B') {
           row.style.position = 'relative';
           row.style.left = '20px';
