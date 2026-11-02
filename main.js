@@ -5990,7 +5990,8 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     const lvMatch = /^(B301|A001)/.test(faceId) ? /^(.*?)(LV\d)$/.exec(facts.name) : null;
     if (lvMatch) {
       idEl.textContent = lvMatch[1];
-      root.appendChild(el('span', 'shop-card__id-lv-corner', lvMatch[2]));
+      // 名前の中に入れて、名前と同じ字の大きさになるように(位置はカードの右端、style.css参照)。
+      idEl.appendChild(el('span', 'shop-card__id-lv-corner', lvMatch[2]));
     }
     if (faceId.startsWith('JOB')) idEl.classList.add('job-name'); // ジョブの名前の文字色(conJobColoredFragment参照)
   } else {

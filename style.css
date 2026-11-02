@@ -7907,10 +7907,9 @@ body.online-spectator #online-spectator-badge {
   position: absolute;
   right: 8px;
   top: 24px;
-  font-weight: 700;
-  font-size: 13px;
+  /* 字の大きさ・太さは名前(.shop-card__id)と同じものを受け継ぐ (per user「他のフォントと同じ大きさ」)。 */
+  font: inherit;
   line-height: 1.5;
-  color: var(--text);
 }
 /* スマホ版カードリストを広く (2026-11-02, per user「カードリスト フルスクリーンにできませんか」→「1 2 おねがい」):
    1) 「×」だけの段をなくし、×は右上の角に重ねる。2) 左右の余白(切り欠きよけ)を詰める。 */
