@@ -11143,7 +11143,8 @@ const LIFE_STAGE_LABEL_BY_ROUND = { 1: '若かりし頃より', 2: '青年期に
 // 総督/貴族/皇女 (C001/C004/C301) -- can't be "hired" like an ordinary 人材 card, per user spec: "は雇えな
 // いので...と親交を深め" instead. Keyed by physicalId (no tier letter), matching entry.faceId with its
 // trailing A/B stripped.
-const LIFE_STORY_RELATIONSHIP_PHYSICAL_IDS = new Set(['C001', 'C004', 'C301']);
+// 軍団長(C202、旧弁論家)も「と親交を深め」 (2026-11-02, per user「人生 軍団長と親交を深め」)。
+const LIFE_STORY_RELATIONSHIP_PHYSICAL_IDS = new Set(['C001', 'C004', 'C202', 'C301']);
 
 // 1位だけ「ローマで一番」(「目」なし)、2〜4位は「ローマで二番目に」のように「目」が付く -- user's own
 // examples use both forms side by side ("ローマで一番領地を支配し" / "ローマで二番目に発展した領地を
