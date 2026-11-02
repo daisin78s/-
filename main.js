@@ -6076,6 +6076,7 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
       iconRow.appendChild(actionCount('1VP'));
     }
     noteEl.appendChild(iconRow);
+    if (facts.name === '巫女') noteEl.appendChild(actionRow([actionSuffix('毎ターン')])); // per user「巫女のアイコン 毎ターン つけて」(TURNEND=UNTAP())
     q('.shop-card__effect').appendChild(noteEl);
   } else if (options.showEffect && facts.name === '異端者') {
     // JOB006B/異端者 (2026-10-11, per user mockup: "色ダイス配置時 / LV0▷LV1" -- 色ダイス限定, per user
