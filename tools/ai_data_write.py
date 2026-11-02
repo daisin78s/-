@@ -213,6 +213,9 @@ for con_face_id, entry in report.get('con', {}).items():
         ws.cell(row=avg_rows[con_name], column=n_col, value=round(entry['avgScore'], 2))
     if entry.get('avgQstScore') is not None:
         ws.cell(row=qst_avg_rows[con_name], column=n_col, value=round(entry['avgQstScore'], 2))
+        # 平均得点の表のN列(以前のJ列の場所)には、そのCONのクエスト平均点を書く (2026-11-02, per user「AIDATA この場所に
+        # クエストの点数も記載して 合計点が分かるようにしてほしい」) -- 表の右の P列(=N+O)が、クエスト込みの合計になる。
+        ws.cell(row=avg_rows[con_name], column=j_col, value=round(entry['avgQstScore'], 2))
     if entry.get('avgRank') is not None:
         ws.cell(row=rank_avg_rows[con_name], column=n_col, value=round(entry['avgRank'], 2))
     con_avg_written += 1
