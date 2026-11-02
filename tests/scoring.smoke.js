@@ -8,6 +8,8 @@ const path = require('path');
 const { loadGameData, buildDataIndex, getCardRow } = require('../src/data-loader');
 const { createEmptyGameState, createPlayer, createCardInstance } = require('../src/game-state');
 const scoring = require('../src/scoring');
+function getQstRowForTest(faceId) { return require('../src/data-loader').getQstRow(index, faceId); }
+function rewardVpForTest(text) { const m = /ADD\((\d+)VP\)/.exec(text || ''); return m ? Number(m[1]) : 0; }
 const executor = require('../src/executor');
 
 const index = buildDataIndex(loadGameData(path.join(__dirname, '..', 'data', 'game.json')));
@@ -45,7 +47,7 @@ function giveCard(state, faceCardId, ownerId) {
   // this contributes -2.
   // 2026-11-02: CON003A's emblem penalty was removed (emblems abolished) -> 強欲/CON002B's
   // VP_PENALTY_IF_BELOW(RESOURCE(A,B,C,Z),7) instead: A/B/C/Z all 0 -> short 7 -> -7.
-  giveCard(state, 'CON002B', 'P1');
+  giveCard(state, 'CON001A', 'P1');
 
   const expected = 4 + a001Vp + 5 + -7;
   check('computeFinalScore sums card VP + resource VP + active VP_PENALTY_IF_BELOW', scoring.computeFinalScore(state, index, 'P1'), expected);
@@ -102,20 +104,20 @@ function giveCard(state, faceCardId, ownerId) {
 {
   const state = createEmptyGameState('scoring-smoke-con005b');
   state.players.push(createPlayer('P1', 'Alice'));
-  giveCard(state, 'CON002B', 'P1');
+  giveCard(state, 'CON001A', 'P1');
   const p1 = state.players[0];
 
   p1.resources.A = 1; p1.resources.B = 1; p1.resources.C = 0; p1.resources.Z = 0; // total 2, short 5
-  check('CON002B: total=2 (short 5 of 7) -> -5VP', executor.collectVpModifiers(state, index, 'P1'), -5);
+  check('CON001A: total=2 (short 5 of 7) -> -5VP', executor.collectVpModifiers(state, index, 'P1'), -5);
 
   p1.resources.A = 0; p1.resources.B = 0; p1.resources.C = 0; p1.resources.Z = 0; // total 0, short 7
-  check('CON002B: total=0 (short 7 of 7) -> -7VP', executor.collectVpModifiers(state, index, 'P1'), -7);
+  check('CON001A: total=0 (short 7 of 7) -> -7VP', executor.collectVpModifiers(state, index, 'P1'), -7);
 
   p1.resources.A = 2; p1.resources.B = 2; p1.resources.C = 2; p1.resources.Z = 1; // total 7, at/above 7
-  check('CON002B: total=7 (at/above 7) -> 0VP, no bonus for the surplus', executor.collectVpModifiers(state, index, 'P1'), 0);
+  check('CON001A: total=7 (at/above 7) -> 0VP, no bonus for the surplus', executor.collectVpModifiers(state, index, 'P1'), 0);
 
   p1.resources.K = 100; // K is deliberately excluded from the A/B/C/Z total ("資源とはA,B,C,Zのこと")
-  check('CON002B: K holdings never count toward the total', executor.collectVpModifiers(state, index, 'P1'), 0);
+  check('CON001A: K holdings never count toward the total', executor.collectVpModifiers(state, index, 'P1'), 0);
 }
 
 // (CON003A emblem-shortfall test removed 2026-11-02 -- emblems abolished.)
@@ -134,28 +136,28 @@ function giveCard(state, faceCardId, ownerId) {
   state.players.push(createPlayer('P1', 'Alice'));
   // 2026-11-02: the CON003A half of this split test was dropped (emblems abolished; no other CON with a VP
   // penalty has its own physical id -- CON002A shares CON002 with CON002B).
-  giveCard(state, 'CON002B', 'P1'); // A+B+C+Z total 0, short 7 -> -7 on its own
+  giveCard(state, 'CON001A', 'P1'); // A+B+C+Z total 0, short 7 -> -7 on its own
   const p1 = state.players[0];
   p1.resources.A = 0; p1.resources.B = 0; p1.resources.C = 0; p1.resources.Z = 0;
 
-  check('conCardOwnVpEffect(CON002B) reports its own -7', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON002B'), -7);
-  check('...matching collectVpModifiers', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON002B'), executor.collectVpModifiers(state, index, 'P1'));
-  check('conCardOwnVpEffect returns 0 for a card this player does not actually own', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON001A'), 0);
+  check('conCardOwnVpEffect(CON001A) reports its own -7', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON001A'), -7);
+  check('...matching collectVpModifiers', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON001A'), executor.collectVpModifiers(state, index, 'P1'));
+  check('conCardOwnVpEffect returns 0 for a card this player does not actually own', scoring.conCardOwnVpEffect(state, index, 'P1', 'CON006B'), 0);
 }
 
-// ---------------------------------------------------------------------------
-// conCardVpAdjustment: CON004B (嫉妬, 2026-08-13, per user spec: "一番上のQSTカードの順位に応じて
-// (順位-1)VP失う" -- "一番上" confirmed as Object.keys(state.quests)[0], i.e. reveal-shuffle order).
+// conCardVpAdjustment: 嫉妬 (CON004A, 2026-11-02 redesign, per user INST「ゲーム終了時クエスト１位が必要 １位でないクエスト数だけ-1VP」).
+//
+//
 // Q001A's GOAL=CARD_COUNT drives 4 distinct ranks via 4 distinct built-card counts.
 // ---------------------------------------------------------------------------
 {
   const state = createEmptyGameState('scoring-smoke-con004b');
   state.players.push(createPlayer('P1', 'Alice'), createPlayer('P2', 'Bob'), createPlayer('P3', 'Carol'), createPlayer('P4', 'Dan'));
   state.quests = { Q001A: true }; // single revealed quest -- trivially "the first" one
-  giveCard(state, 'CON004B', 'P1');
-  giveCard(state, 'CON004B', 'P2');
-  giveCard(state, 'CON004B', 'P3');
-  giveCard(state, 'CON004B', 'P4');
+  giveCard(state, 'CON004A', 'P1');
+  giveCard(state, 'CON004A', 'P2');
+  giveCard(state, 'CON004A', 'P3');
+  giveCard(state, 'CON004A', 'P4');
   // CARD_COUNT via distinct owned-card totals: P1=3 (rank1), P2=2 (rank2), P3=1 (rank3), P4=0 (rank4, a
   // 0 value is always NO_REWARD_RANK per rankPlayersForQuest's own rule). Disjoint physical A-card ids
   // per player (A001-A006 exist) -- state.cards is keyed by physicalId, so reusing the same one across
@@ -165,68 +167,30 @@ function giveCard(state, faceCardId, ownerId) {
   for (const faceId of ['A004A', 'A005A']) giveCard(state, faceId, 'P2');
   giveCard(state, 'A006A', 'P3');
 
-  check('CON004B: rank 1 in the top QST -> 0VP', scoring.conCardVpAdjustment(state, index, 'P1'), 0);
-  check('CON004B: rank 2 -> -1VP', scoring.conCardVpAdjustment(state, index, 'P2'), -1);
-  check('CON004B: rank 3 -> -2VP', scoring.conCardVpAdjustment(state, index, 'P3'), -2);
-  check('CON004B: rank 4 (CARD_COUNT=0, NO_REWARD_RANK) -> -3VP', scoring.conCardVpAdjustment(state, index, 'P4'), -3);
+  check('嫉妬 (CON004A): rank 1 on the only quest -> 0VP', scoring.conCardVpAdjustment(state, index, 'P1'), 0);
+  check('嫉妬: rank 2 -> -1VP (1 quest not 1st)', scoring.conCardVpAdjustment(state, index, 'P2'), -1);
+  check('嫉妬: rank 3 -> also just -1VP (counts quests, not rank)', scoring.conCardVpAdjustment(state, index, 'P3'), -1);
+  check('嫉妬: rank 4 -> -1VP', scoring.conCardVpAdjustment(state, index, 'P4'), -1);
 }
 
 // ---------------------------------------------------------------------------
-// conCardVpAdjustment: 裏切 (2026-08-13, per user spec: "QSTで1位がある→-4VP、1位がなく2位がある→-2VP、
-// 1-2位がなく3位がある→-1VP、1-2-3位がない→0VP") -- best rank across EVERY revealed quest, not just the
-// first one (unlike CON004B above). 裏切 lived at CON001B until the user reorganized game.xlsx's CON
-// sheet by START_ORDER (2026-08-17), then CON006B; 2026-09-26 it swapped faces with 暴食 again and is
-// now CON006A (see scoring.js's own doc).
+// 裏切 (CON004B, 2026-11-02 redesign, per user INST「クエストからVPを得ることができない」 + answer: still holds
+// its rank, nobody moves up) -- qst.resolveEndGameRewards grants it nothing.
 // ---------------------------------------------------------------------------
 {
-  const state = createEmptyGameState('scoring-smoke-con006a');
+  const qst = require('../src/qst');
+  const state = createEmptyGameState('scoring-smoke-betrayal');
   state.players.push(createPlayer('P1', 'Alice'), createPlayer('P2', 'Bob'));
-  // Q001A (GOAL=CARD_COUNT): P2 owns more cards, so P1 ranks 2nd. Q002B (GOAL=COST_TOTAL(M) since
-  // 2026-11-02 -- モニュメントの必要資源): P1 owns 灯台/M002 (COST B -> 1) while P2 owns no monument (0 is
-  // never ranked), so P1 ranks 1st there. P1's BEST rank across both quests is 1st, so 裏切 should apply
-  // the rank-1 penalty (-4), not the rank-2 one a "just look at one quest" implementation would wrongly pick.
-  state.quests = { Q001A: true, Q002B: true };
-  giveCard(state, 'CON006A', 'P1');
-  giveCard(state, 'A001A', 'P1');
-  giveCard(state, 'M002', 'P1'); // P1: CARD_COUNT=2, COST_TOTAL(M)=1
-  for (const faceId of ['A002A', 'A003A', 'A004A']) giveCard(state, faceId, 'P2'); // P2: CARD_COUNT=3, COST_TOTAL(M)=0
-
-  const result = scoring.conCardVpAdjustment(state, index, 'P1');
-  check('裏切 (CON006A): best rank across all revealed quests (not just one) drives the penalty', result, -4);
-
-  // No revealed quest at all (or none the player ranks well on) -> no penalty.
-  const stateNoQuests = createEmptyGameState('scoring-smoke-con006a-none');
-  stateNoQuests.players.push(createPlayer('P1', 'Alice'));
-  stateNoQuests.quests = {};
-  giveCard(stateNoQuests, 'CON006A', 'P1');
-  check('裏切 (CON006A): no revealed quests at all -> 0VP (nothing to rank against)', scoring.conCardVpAdjustment(stateNoQuests, index, 'P1'), 0);
+  state.quests = { Q001A: true };
+  giveCard(state, 'CON004B', 'P1');
+  for (const faceId of ['A001A', 'A002A']) giveCard(state, faceId, 'P1'); // P1: CARD_COUNT=2 -> rank 1
+  giveCard(state, 'A003A', 'P2'); // P2: CARD_COUNT=1 -> rank 2 (does NOT move up to 1st)
+  const granted = qst.resolveEndGameRewards(state, index);
+  check('裏切: rank-1 player gets no quest VP', granted.P1, 0);
+  const row = getQstRowForTest('Q001A');
+  check('...and the rank-2 player gets the normal 2nd-place reward, not 1st', granted.P2 > 0 && granted.P2 < rewardVpForTest(row.REWARD1), true);
 }
 
-// ---------------------------------------------------------------------------
-// conCardVpAdjustment: CON004A (傲慢, 2026-08-22, per user spec: "最多AREAが必要　足りない１個につき
-// -1VP") -- -1VP per AREA short of whoever owns the most, game-wide (Q004A's GOAL=AREA_COUNT), checked
-// as a hidden yardstick regardless of state.quests (same rule its existing
-// BLOCK_UPGRADE_UNLESS_QST_RANK PASSIVE already uses -- see board.isUpgradeBlockedByQstRank's own
-// doc), so this test never sets state.quests at all. The game-wide leader here is P4 (2 AREAs), who
-// doesn't even own CON004A -- demonstrating the deficit is measured against the actual leader, not just
-// the best among CON004A's own owners.
-// ---------------------------------------------------------------------------
-{
-  const state = createEmptyGameState('scoring-smoke-con004a');
-  state.players.push(createPlayer('P1', 'Alice'), createPlayer('P2', 'Bob'), createPlayer('P3', 'Carol'), createPlayer('P4', 'Dan'));
-  giveCard(state, 'CON004A', 'P1');
-  giveCard(state, 'CON004A', 'P2');
-  giveCard(state, 'CON004A', 'P3');
-  for (const faceId of ['A001A', 'A002A']) giveCard(state, faceId, 'P1'); // P1: 2 AREAs
-  giveCard(state, 'A004A', 'P2'); // P2: 1 AREA
-  // P3: 0 AREAs
-  for (const faceId of ['A005A', 'A006A']) giveCard(state, faceId, 'P4'); // P4: 2 AREAs, but doesn't own CON004A
-
-  check('CON004A: tied for the game-wide max (P1 and P4 both have 2) -> 0VP', scoring.conCardVpAdjustment(state, index, 'P1'), 0);
-  check('CON004A: 1 AREA short of the leader\'s 2 -> -1VP', scoring.conCardVpAdjustment(state, index, 'P2'), -1);
-  check('CON004A: owns no AREAs at all -> short by the leader\'s full count (2) -> -2VP', scoring.conCardVpAdjustment(state, index, 'P3'), -2);
-  check('CON004A: player who doesn\'t own CON004A at all -> 0VP regardless of their own AREA_COUNT', scoring.conCardVpAdjustment(state, index, 'P4'), 0);
-}
 
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);

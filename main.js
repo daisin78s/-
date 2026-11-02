@@ -176,6 +176,21 @@ const TUTORIAL_SHOP_MONUMENT_FACE_IDS = ['M001'];
 // (2026-10-11 -- 以前main.js下部にあった時、createInitialStateのSTATE初期化がこれらのconstより先に
 // 実行され、未初期化のまま参照される実行時エラーになっていた。see computeLockedFaceIdsの呼び出し順)。
 const ACHIEVEMENT_STORAGE_KEY = 'diceWpAchievements';
+// 性格の並び替えの実績引き継ぎ (2026-11-02) -- migrateConAchievementsToNewLayout参照。loadAchievementsより前に
+// 呼ばれても未初期化にならないよう、ここ(ファイル冒頭)に置く。
+const CON_LAYOUT_MARK_KEY = 'conLayout';
+const CON_LAYOUT_VERSION = '2026-11-02';
+const CON_ACHIEVEMENT_MOVES = {
+  CON002B: 'CON001A', // 強欲
+  CON001B: 'CON001B', // 色欲
+  CON002A: 'CON002A', // 潔癖 -> 几帳面
+  CON004A: 'CON002B', // 傲慢
+  CON004B: 'CON004A', // 嫉妬
+  CON006A: 'CON004B', // 裏切
+  CON005B: 'CON005A', // 憤怒
+  CON005A: 'CON005B', // 怠惰
+  CON006B: 'CON006B', // 暴食
+};
 // unit: 表示用の単位(VP/枚/位)。betterIsLower: 既定は「大きいほど良い(VP/枚数)」、ウィークリーランキング
 // 順位だけ「小さいほど良い」(per user: "はい その後記録が抜かれても１位は１位で" -- 登録した瞬間の順位を
 // 以後ずっと保持し、ランキングから後で消えても記録は変わらない)。
@@ -11668,7 +11683,27 @@ function isNewAchievementRecord(key, value, previous) {
  * convention (see loadRememberedRankingName's own doc) -- private browsing/storage-blocked just means
  * no records are shown/updated this session, never a thrown error. */
 function loadAchievements() {
-  try { return JSON.parse(localStorage.getItem(ACHIEVEMENT_STORAGE_KEY)) || {}; } catch (e) { return {}; }
+  let store;
+  try { store = JSON.parse(localStorage.getItem(ACHIEVEMENT_STORAGE_KEY)) || {}; } catch (e) { return {}; }
+  if (store[CON_LAYOUT_MARK_KEY] !== CON_LAYOUT_VERSION) {
+    migrateConAchievementsToNewLayout(store);
+    saveAchievements(store);
+  }
+  return store;
+}
+
+/** 性格の並び替え (2026-11-02, per user「実績の引き継ぎ: B 名前で付け替える」) -- 性格ごとの最高点(con_<faceId>)を、
+ * 同じ名前の性格の新しいIDへ一度だけ移す。新しく来た性格(虚栄/臆病/心配)は0から。印(CON_LAYOUT_MARK_KEY)のない
+ * 記録(古いバックアップから戻した物も)は、読んだ時にここを通る。 */
+function migrateConAchievementsToNewLayout(store) {
+  const old = {};
+  for (const key of Object.keys(store)) {
+    if (/^con_CON\d{3}[AB]$/.test(key)) { old[key.slice(4)] = store[key]; delete store[key]; }
+  }
+  for (const [from, to] of Object.entries(CON_ACHIEVEMENT_MOVES)) {
+    if (old[from] !== undefined) store[`con_${to}`] = old[from];
+  }
+  store[CON_LAYOUT_MARK_KEY] = CON_LAYOUT_VERSION;
 }
 
 function saveAchievements(store) {

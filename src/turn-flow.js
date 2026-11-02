@@ -125,12 +125,24 @@ function getNextTurn(state) {
  * restockShop's own doc -- 2026-08-07 added SPECIAL here too, since it now also compacts/shifts left on
  * a build even though it still never refills).
  */
+/** 心配 (CON006A, 2026-11-02, per user INST「ターン終了時〇がないと-1VP」 + answers: own turn end only, judged on K
+ * after every fee/turn-end effect is paid) -- -1VP when K is 0 at the end of this player's own turn. */
+const WORRY_CON_FACE_ID = 'CON006A';
+function applyWorryPenalty(state, playerId) {
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player.ownedCardPhysicalIds.some((id) => state.cards[id] && state.cards[id].currentFaceId === WORRY_CON_FACE_ID)) return;
+  if ((player.resources.K || 0) > 0) return;
+  player.resources.VP = (player.resources.VP || 0) - 1;
+  executorApi.notifyActivation(state, playerId, 'CON006', WORRY_CON_FACE_ID, 'PASSIVE');
+}
+
 function endTurn(state, index, playerId) {
   const gate = executorApi.canEndTurn(state, index, playerId);
   if (!gate.ok) return { success: false, reason: 'BLOCKED_BY_RESOURCE_TOTAL_LIMIT', violations: gate.violations };
 
   executorApi.applyTurnEnd(state, index, playerId);
   // 巫女's old emblem bonus removed 2026-11-02 (emblems abolished; 巫女 is now a plain TAP card).
+  applyWorryPenalty(state, playerId); // 心配 (2026-11-02), after applyTurnEnd has paid every fee
   setup.replaceResearcherIfResearchTaken(state, index); // 研究者 (2026-11-02), see its own doc
   restockShop(state, 'M');
   restockShop(state, 'NORMAL');

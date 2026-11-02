@@ -49,55 +49,27 @@ const qst = require('./qst');
  * AREA_COUNT goal; the new rule adds an ONGOING VP cost for the same shortfall ("最多AREAが必要　足りない
  * １個につき-1VP"), same qst.rankPlayersForQuest-driven shape as 裏切/嫉妬 below, so it belongs here too
  * rather than as a new generic DSL command -- see con004aVpEffect's own doc. */
-const BESPOKE_QST_RANK_CON_FACES = new Set(['CON006A', 'CON004B', 'CON004A']);
+//
+// 2026-11-02 CON redesign (per user「性格かなり変更しました」): the old 傲慢 VP shortfall, old 裏切 (best-rank
+// penalty) and old 嫉妬 (top-quest rank-1) are gone. 嫉妬 now lives at CON004A with a new rule (see
+// jealousyVpEffect); the new 裏切 (CON004B,「クエストからVPを得ることができない」) is handled where quest rewards are
+// granted (qst.resolveEndGameRewards / qst.forfeitsQuestRewards), not as a VP penalty here.
+const JEALOUSY_CON_FACE_ID = 'CON004A';
+const BESPOKE_QST_RANK_CON_FACES = new Set([JEALOUSY_CON_FACE_ID]);
 
-/** CON004A's own VP effect (傲慢, 2026-08-22, per user spec: "最多AREAが必要　足りない１個につき-1VP") --
- * -1VP for every AREA the player is short of whoever currently ranks 1st on Q004A's AREA_COUNT goal
- * (ties for 1st place have deficit 0, no penalty -- rankPlayersForQuest already gives every tied leader
- * rank 1). Live/dynamic like every other VP_PENALTY_* clause (recomputed at final scoring, not a
- * one-time snapshot). 0 if playerId doesn't actually own CON004A. */
-function con004aVpEffect(state, index, playerId) {
+/** 嫉妬 (CON004A, 2026-11-02, per user INST「ゲーム終了時クエスト１位が必要 １位でないクエスト数だけ-1VP」, tie for
+ * 1st counts as 1st per user「同点の1位でもよい」) -- -1VP per revealed quest this player isn't ranked 1st on.
+ * 0 if playerId doesn't own CON004A. */
+function jealousyVpEffect(state, index, playerId) {
   const player = state.players.find((p) => p.id === playerId);
-  const owned = player.ownedCardPhysicalIds.some((id) => state.cards[id].currentFaceId === 'CON004A');
+  const owned = player.ownedCardPhysicalIds.some((id) => state.cards[id].currentFaceId === JEALOUSY_CON_FACE_ID);
   if (!owned) return 0;
-  const ranked = qst.rankPlayersForQuest(state, index, 'Q004A');
-  const myValue = ranked.find((e) => e.playerId === playerId).value;
-  const leaderValue = Math.max(...ranked.map((e) => e.value));
-  return -Math.max(0, leaderValue - myValue);
-}
-
-/** 裏切's own VP effect (2026-08-13, per user spec): "QSTで1位がある→-4VP、1位がなく2位がある→-2VP、
- * 1-2位がなく3位がある→-1VP、1-2-3位がない→0VP" -- best (lowest-numbered) rank across every currently-
- * revealed quest. 0 if playerId doesn't actually own 裏切. Still named con001bVpEffect after 裏切's
- * ORIGINAL physical id (CON001B) even though it now lives at CON006A (2026-09-26, previously CON006B) --
- * see BESPOKE_QST_RANK_CON_FACES' own doc. */
-function con001bVpEffect(state, index, playerId) {
-  const player = state.players.find((p) => p.id === playerId);
-  const owned = player.ownedCardPhysicalIds.some((id) => state.cards[id].currentFaceId === 'CON006A');
-  if (!owned) return 0;
-  const ranks = Object.keys(state.quests).map((faceId) => {
+  let notFirst = 0;
+  for (const faceId of Object.keys(state.quests)) {
     const entry = qst.rankPlayersForQuest(state, index, faceId).find((e) => e.playerId === playerId);
-    return entry.rank;
-  });
-  const bestRank = ranks.length ? Math.min(...ranks) : Infinity;
-  if (bestRank === 1) return -4;
-  if (bestRank === 2) return -2;
-  if (bestRank === 3) return -1;
-  return 0;
-}
-
-/** CON004B's own VP effect (嫉妬, 2026-08-13, per user spec): "一番上のQSTカードの順位に応じて
- * (順位-1)VP失う" -- "一番上" confirmed 2026-08-13 as whichever quest is first in state.quests' own key
- * order (画面表示順で一番左 -- currently reveal-shuffle order, so this is a different quest each game,
- * by design). 0 if playerId doesn't actually own CON004B. */
-function con004bVpEffect(state, index, playerId) {
-  const player = state.players.find((p) => p.id === playerId);
-  const owned = player.ownedCardPhysicalIds.some((id) => state.cards[id].currentFaceId === 'CON004B');
-  if (!owned) return 0;
-  const firstFaceId = Object.keys(state.quests)[0];
-  if (!firstFaceId) return 0;
-  const entry = qst.rankPlayersForQuest(state, index, firstFaceId).find((e) => e.playerId === playerId);
-  return -(entry.rank - 1);
+    if (entry.rank !== 1) notFirst++;
+  }
+  return -notFirst;
 }
 
 /**
@@ -115,9 +87,7 @@ function con004bVpEffect(state, index, playerId) {
  * @returns {number} a VP delta (0 or negative for every currently-defined case)
  */
 function conCardOwnVpEffect(state, index, playerId, faceId) {
-  if (faceId === 'CON006A') return con001bVpEffect(state, index, playerId);
-  if (faceId === 'CON004B') return con004bVpEffect(state, index, playerId);
-  if (faceId === 'CON004A') return con004aVpEffect(state, index, playerId);
+  if (faceId === JEALOUSY_CON_FACE_ID) return jealousyVpEffect(state, index, playerId);
   const player = state.players.find((p) => p.id === playerId);
   const owned = player.ownedCardPhysicalIds.some((id) => state.cards[id].currentFaceId === faceId);
   if (!owned) return 0;

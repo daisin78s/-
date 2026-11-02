@@ -749,7 +749,7 @@ index.raw.QST = [
   const state = freshState(2);
   const p1 = state.players[0];
   p1.conPhysicalId = 'CON005';
-  p1.conFace = 'B'; // CON005B/憤怒
+  p1.conFace = 'A'; // CON005A/憤怒 (2026-11-02 CON redesign)
   giveCard(state, 'B201A', 'P1');
   const plainScore = evaluator.score(state, 'P1');
   check('The plain (non-conBuildAware) Evaluator ignores 評価値ALL entirely (control)', plainScore, evalTable[2].B201A);
@@ -762,7 +762,7 @@ index.raw.QST = [
   const state = freshState(2);
   const p1 = state.players[0];
   p1.conPhysicalId = 'CON005';
-  p1.conFace = 'B';
+  p1.conFace = 'A'; // 憤怒 is CON005A since 2026-11-02
   giveCard(state, 'B201B', 'P1');
   const plainScore = evaluator.score(state, 'P1');
   check('Control: plain Evaluator score for the LV2 face', plainScore, evalTable[2].B201B + 1 * evalTable[2].VP);
@@ -777,7 +777,7 @@ index.raw.QST = [
   const state = freshState(2);
   const p1 = state.players[0];
   p1.conPhysicalId = 'CON005';
-  p1.conFace = 'B';
+  p1.conFace = 'A'; // 憤怒 is CON005A since 2026-11-02
   for (let i = 0; i < 6; i++) p1.dice.push(createDie(`cd${i}`, 'COLOR'));
   const plainScore = evaluator.score(state, 'P1');
   check('conBuildAware\'s 追加色ダイス penalty applies only to the 1 die past the 5-die baseline', evaluatorConBuildAware.score(state, 'P1'), plainScore - 7);
@@ -788,7 +788,7 @@ index.raw.QST = [
   const state = freshState(2);
   const p1 = state.players[0];
   p1.conPhysicalId = 'CON005';
-  p1.conFace = 'B';
+  p1.conFace = 'A'; // 憤怒 is CON005A since 2026-11-02
   for (let i = 0; i < 5; i++) p1.dice.push(createDie(`cd${i}`, 'COLOR'));
   check('Exactly at the 5-die baseline: no 追加色ダイス adjustment', evaluatorConBuildAware.score(state, 'P1'), evaluator.score(state, 'P1'));
 }

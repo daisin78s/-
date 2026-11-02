@@ -1044,22 +1044,22 @@
   "CON": [
     {
       "ID": "CON001A",
-      "NAME": "幸運",
-      "ONCE": "ADD(3VP)",
+      "NAME": "強欲",
+      "ONCE": "ADD(2A,3K)",
       "TAP": "",
-      "PASSIVE": "",
+      "PASSIVE": "VP_PENALTY_IF_BELOW(RESOURCE(A,B,C,Z),7)",
       "TURNEND": "",
       "START_ORDER": 0,
       "WARNING": "",
       "NOTE": "",
       "AUTO": "",
-      "INST": "性格なし",
-      "アイコン": "性格なし"
+      "INST": "ゲーム終了時〇以外の資源7個が必要\n足りない１個につき-1VP\n食料以外の資源とは赤〇青〇黄〇Z〇のいずれか",
+      "アイコン": "7資源が必要"
     },
     {
       "ID": "CON002A",
-      "NAME": "潔癖",
-      "ONCE": "ADD(K,3C)",
+      "NAME": "几帳面",
+      "ONCE": "ADD(2B,3K)",
       "TAP": "",
       "PASSIVE": "VP_PENALTY_PER(LEVEL_COUNT(1))",
       "TURNEND": "",
@@ -1072,36 +1072,36 @@
     },
     {
       "ID": "CON003A",
-      "NAME": "狂信",
-      "ONCE": "ADD(K,3B)",
+      "NAME": "虚栄",
+      "ONCE": "ADD(Z,K,wD,3VP)",
       "TAP": "",
-      "PASSIVE": "",
+      "PASSIVE": "VP_PENALTY_IF_BELOW(CARD_COUNT(M),4)",
       "TURNEND": "",
       "START_ORDER": 2,
       "WARNING": "",
       "NOTE": "",
       "AUTO": "",
-      "INST": "ゲーム終了時モニュメントのエンブレム天が\n２個必要　足りない１個につき-1VP",
-      "アイコン": "モニュメントの\nエンブレム天が２個必要"
+      "INST": "ゲーム終了時モニュメントが４つ必要\n足りない１つにつき-1VP",
+      "アイコン": "モニュメントが４つ必要"
     },
     {
       "ID": "CON004A",
-      "NAME": "傲慢",
-      "ONCE": "ADD(K,3A)",
+      "NAME": "嫉妬",
+      "ONCE": "ADD(2Z,3K)",
       "TAP": "",
-      "PASSIVE": "BLOCK_UPGRADE_UNLESS_QST_RANK(Q004A,1)",
+      "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": 3,
       "WARNING": "",
       "NOTE": "",
       "AUTO": "",
-      "INST": "自分よりエリア数の多いプレイヤーがいると\nレベルアップできない\n最多エリアが必要　足りない１個につき-1VP",
-      "アイコン": "最多エリア　✖\n　　▽\nLVアップ　✖"
+      "INST": "ゲーム終了時クエスト１位が必要\n１位でないクエスト数だけ-1VP",
+      "アイコン": "クエスト１位が必要"
     },
     {
       "ID": "CON005A",
-      "NAME": "怠惰",
-      "ONCE": "ADD(A,B,C)",
+      "NAME": "憤怒",
+      "ONCE": "ADD(D)",
       "TAP": "",
       "PASSIVE": "",
       "TURNEND": "",
@@ -1109,13 +1109,13 @@
       "WARNING": "",
       "NOTE": "",
       "AUTO": "",
-      "INST": "レベルの上がっていない訓練場のスロットにダイスを置けない\n訓練場LV1　LV2は支配者に関係なくダイスを置ける",
-      "アイコン": "訓練場に\nダイスを置けない"
+      "INST": "自分の色ダイスのあるエリアにダイスを置くたびに-2VP",
+      "アイコン": "自分の色Dがある\nエリアに置く-2VP"
     },
     {
       "ID": "CON006A",
-      "NAME": "裏切",
-      "ONCE": "ADD(3wD)",
+      "NAME": "心配",
+      "ONCE": "ADD(2C,3K)",
       "TAP": "",
       "PASSIVE": "",
       "TURNEND": "",
@@ -1123,13 +1123,13 @@
       "WARNING": "",
       "NOTE": "",
       "AUTO": "",
-      "INST": "ゲーム終了時\nクエストカードから得るVPのうち、\n最も大きいVP　1つを失う",
-      "アイコン": "最高クエストを失う"
+      "INST": "ターン終了時〇がないと-1VP",
+      "アイコン": "ターン終了時\n〇がないと-1VP"
     },
     {
       "ID": "CON001B",
       "NAME": "色欲",
-      "ONCE": "ADD(3Z)",
+      "ONCE": "ADD(3Z,3VP)",
       "TAP": "",
       "PASSIVE": "",
       "TURNEND": "",
@@ -1142,36 +1142,36 @@
     },
     {
       "ID": "CON002B",
-      "NAME": "強欲",
-      "ONCE": "ADD(2A,2B)",
+      "NAME": "傲慢",
+      "ONCE": "ADD(2A,wD)",
       "TAP": "",
-      "PASSIVE": "VP_PENALTY_IF_BELOW(RESOURCE(A,B,C,Z),7)",
+      "PASSIVE": "BLOCK_UPGRADE_UNLESS_QST_RANK(Q004A,1)",
       "TURNEND": "",
       "START_ORDER": 1,
       "WARNING": "",
       "NOTE": "",
       "AUTO": "",
-      "INST": "ゲーム終了時食料以外の資源7個が必要\n足りない１個につき-1VP\n食料以外の資源とは赤〇青〇黄〇Z〇のいずれか",
-      "アイコン": "7資源が必要"
+      "INST": "自分よりエリア数の多いプレイヤーがいるとレベルアップできない",
+      "アイコン": "最多エリアでないと\nLVアップ不可"
     },
     {
       "ID": "CON003B",
-      "NAME": "憂鬱",
-      "ONCE": "ADD(2C,3K)",
+      "NAME": "臆病",
+      "ONCE": "ADD(2B,wD)",
       "TAP": "",
-      "PASSIVE": "CONVERT_LIMIT(ALL,4)",
+      "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": 2,
       "WARNING": "",
       "NOTE": "",
       "AUTO": "",
-      "INST": "城下町　大聖堂　ギルドで４個までしか変換できない",
-      "アイコン": "変換　MAX4"
+      "INST": "別のプレイヤーがモニュメントを獲得するまで、モニュメントを獲得できない",
+      "アイコン": "最初のモニュメント獲得不可"
     },
     {
       "ID": "CON004B",
-      "NAME": "嫉妬",
-      "ONCE": "ADD(2Z,3K)",
+      "NAME": "裏切",
+      "ONCE": "ADD(2C,wD,5VP)",
       "TAP": "",
       "PASSIVE": "",
       "TURNEND": "",
@@ -1179,22 +1179,22 @@
       "WARNING": "",
       "NOTE": "",
       "AUTO": "",
-      "INST": "ゲーム終了時一番上のクエストカードの順位に応じて\n（順位-1）VP失う\n１位→0VP　２位→-1VP　３位→-2VP　４位→-3VP",
-      "アイコン": "上段クエストの\n（順位-1）VP失う"
+      "INST": "クエストからVPを得ることができない",
+      "アイコン": "クエストからVPを得ることができない"
     },
     {
       "ID": "CON005B",
-      "NAME": "憤怒",
-      "ONCE": "ADD(D)",
+      "NAME": "怠惰",
+      "ONCE": "ADD(A,B,C,3VP)",
       "TAP": "",
-      "PASSIVE": "BLOCK_COLOR_DIE_REUSE();WHITE_DICE_CAP(0)",
+      "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": 4,
       "WARNING": "",
       "NOTE": "",
       "AUTO": "",
-      "INST": "自分の色ダイスが置かれているエリアにはダイスを配置できない。EXスロットは性格と関係なく置ける。\n🎲上限0　上限を超えた🎲は失われる\n道化やダイス変換と組み合わせると性格に関係なく置けるようになるが、🎲は得ることができない。",
-      "アイコン": "自分の色Dがあるエリア\nダイス配置不可\n🎲上限0"
+      "INST": "レベルの上がっていない訓練場のスロットにダイスを置けない\n訓練場LV1　LV2は支配者に関係なくダイスを置ける",
+      "アイコン": "訓練場に\nダイスを置けない"
     },
     {
       "ID": "CON006B",
@@ -1207,7 +1207,7 @@
       "WARNING": "食料が7個を超えています。\nターン終了時に1個消費します。\nよろしいですか？",
       "NOTE": "TURNEND時にRESOURCE_LIMIT(K,7)が適用される場合のみWARNINGを表示する。\n「はい」で処理を続行する。\n「いいえ」でTURNENDを取り消す。",
       "AUTO": "",
-      "INST": "◯の上限7個\nターン終了時にそれを超えていたら1個消費します",
+      "INST": "◯の上限7個\nターン終了時にそれを超えていたら1個消費する",
       "アイコン": "〇MAX7\nターン終了時に\n超えたら１個消費"
     }
   ],

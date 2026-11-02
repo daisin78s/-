@@ -509,7 +509,7 @@ function giveJob002(state, playerId) {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   const p2 = player(state, 'P2');
-  const con4 = createCardInstance('CON004A');
+  const con4 = createCardInstance('CON002B');
   con4.ownerId = 'P1';
   state.cards[con4.physicalId] = con4;
   p1.ownedCardPhysicalIds.push(con4.physicalId);
@@ -549,7 +549,7 @@ function giveJob002(state, playerId) {
   const p2 = player(state, 'P2');
   check('False with no owned cards at all', board.hasAnyUpgradeEligibleCard(state, index, 'P1'), false);
 
-  const con4 = createCardInstance('CON004A');
+  const con4 = createCardInstance('CON002B');
   con4.ownerId = 'P1';
   state.cards[con4.physicalId] = con4;
   p1.ownedCardPhysicalIds.push(con4.physicalId);
@@ -572,222 +572,6 @@ function giveJob002(state, playerId) {
   check('P1 is indeed QST-rank-blocked now', board.isUpgradeBlockedByQstRank(state, index, 'P1'), true);
   check('...but hasAnyUpgradeEligibleCard stays true regardless (ignores the block)', board.hasAnyUpgradeEligibleCard(state, index, 'P1'), true);
   check('...unlike getBuildCandidates, which reports none while blocked', board.getBuildCandidates(state, index, 'P1', ['U'], 0), []);
-}
-
-// ---------------------------------------------------------------------------
-// 憤怒: BLOCK_COLOR_DIE_REUSE() (2026-08-15, per user spec: "自分のカラーDが置かれているAREAには
-// 別のカラーDを配置できない") -- blocks placing a 2nd own COLOR die on a map from a SEPARATE, later
-// action, but a single group-placement action stacking 2+ own COLOR dice together (confirmed with the
-// user: "スタッキングは許可") is exempt, and GRANT_PLACE_ANYWHERE waives it entirely (confirmed:
-// "バイパスされる", unlike DUPLICATE_VALUE_IN_AREA). 憤怒 lived at CON006A until the user reorganized
-// game.xlsx's CON sheet by START_ORDER (2026-08-17, matching physical slot number to START_ORDER for
-// both A/B tiers); it's CON005B now -- every CON005B below refers to 憤怒 specifically.
-// ---------------------------------------------------------------------------
-{
-  const state = freshStateWithShops();
-  const p1 = player(state, 'P1');
-  const con6 = createCardInstance('CON005B');
-  con6.ownerId = 'P1';
-  state.cards[con6.physicalId] = con6;
-  p1.ownedCardPhysicalIds.push(con6.physicalId);
-  check('isColorDieReuseBlocked reports true once CON005B is owned', board.isColorDieReuseBlocked(state, index, 'P1'), true);
-
-  // AREA001A: SLOT1=1, SLOT2=2, SLOT3=3 -- placing values 1 then 2 avoids DUPLICATE_VALUE_IN_AREA
-  // interference, isolating this test to the new own-COLOR-die-reuse rule alone.
-  const d1 = giveDie(state, 'P1', 1);
-  const first = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
-  check('First own COLOR die onto AREA001A succeeds', first.success, true);
-
-  const d2 = giveDie(state, 'P1', 2);
-  const second = board.placeDice(state, index, { playerId: 'P1' }, d2.id, 'MAP001', 1);
-  check('A 2nd own COLOR die onto the same AREA, in a later separate action, is blocked', second, { success: false, reason: 'OWN_COLOR_DIE_ALREADY_IN_AREA' });
-
-  // GRANT_PLACE_ANYWHERE waives the rule (confirmed distinct from DUPLICATE_VALUE_IN_AREA's own bypass policy).
-  d2.placeAnywhereThisTurn = true;
-  const bypassed = board.placeDice(state, index, { playerId: 'P1' }, d2.id, 'MAP001', 1);
-  check('...but GRANT_PLACE_ANYWHERE (placeAnywhereThisTurn) waives it', bypassed.success, true);
-}
-{
-  // 憤怒's own-AREA block has an exception for the player's own EX slot (2026-08-29, per user request:
-  // "自分のEXSLOTは例外で置けるようにして") -- reported against 農園LV2 (AREA005-family, same SLOT1=
-  // numbered/SLOT2=ANY/SLOT3=EX shape as AREA001B used here): placing on SLOT1 first, then unable to
-  // reach EX afterward. isExSlot already implies THIS player owns it (a non-owner is refused EX_NOT_OWNER
-  // before this rule is even reached), so the exception is never "someone else's EX".
-  const state = freshStateWithShops();
-  const p1 = player(state, 'P1');
-  const con6 = createCardInstance('CON005B');
-  con6.ownerId = 'P1';
-  state.cards[con6.physicalId] = con6;
-  p1.ownedCardPhysicalIds.push(con6.physicalId);
-  state.maps['MAP001'] = require('../src/game-state').createMapState('MAP001', 'AREA001B');
-  state.maps['MAP001'].slots = [[], [], []];
-  state.maps['MAP001'].feeOwnerId = 'P1'; // AREA001B: SLOT1=1, SLOT2=ANY, SLOT3=EX
-
-  const d1 = giveDie(state, 'P1', 1);
-  const first = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
-  check('First own COLOR die onto AREA001B\'s SLOT1 succeeds', first.success, true);
-
-  const d2 = giveDie(state, 'P1', 2);
-  const blockedOnAny = board.placeDice(state, index, { playerId: 'P1' }, d2.id, 'MAP001', 1);
-  check('A 2nd own COLOR die on the same AREA\'s ANY slot is still blocked as normal', blockedOnAny, { success: false, reason: 'OWN_COLOR_DIE_ALREADY_IN_AREA' });
-
-  const d3 = giveDie(state, 'P1', 6);
-  const onOwnEx = board.placeDice(state, index, { playerId: 'P1' }, d3.id, 'MAP001', 2);
-  check('...but this player\'s own EX slot is exempt -- succeeds despite the earlier SLOT1 die', onOwnEx.success, true);
-}
-{
-  // A player without CON005B is never restricted this way.
-  const state = freshStateWithShops();
-  const d1 = giveDie(state, 'P1', 1);
-  board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
-  const d2 = giveDie(state, 'P1', 2);
-  const second = board.placeDice(state, index, { playerId: 'P1' }, d2.id, 'MAP001', 1);
-  check('Without CON005B, a 2nd own COLOR die onto the same AREA in a separate action is unaffected', second.success, true);
-}
-{
-  // Stacking exemption: placeDiceGroup placing 2 of this player's own COLOR dice together, in ONE
-  // action, onto the castle -- must NOT be blocked even though CON005B is owned, since neither die was
-  // "already there" before this action started.
-  const state = freshStateWithShops();
-  state.round = 2; // placeDiceGroup only ever targets a monument (see its own doc) -- SHOP001-006 round-gated to round>=2 now (2026-09-14).
-  const p1 = player(state, 'P1');
-  p1.resources.BZ = 20;
-  const con6 = createCardInstance('CON005B');
-  con6.ownerId = 'P1';
-  state.cards[con6.physicalId] = con6;
-  p1.ownedCardPhysicalIds.push(con6.physicalId);
-  const d1 = giveDie(state, 'P1', 6);
-  const d2 = giveDie(state, 'P1', 3);
-  const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
-  check('CON005B does not block a single group action stacking 2 own COLOR dice together', result.success, true);
-}
-{
-  // But a group placement reusing a map this player already placed a COLOR die on in an EARLIER,
-  // separate action is blocked, same as the single-die path.
-  const state = freshStateWithShops();
-  const p1 = player(state, 'P1');
-  p1.resources.BZ = 20;
-  const con6 = createCardInstance('CON005B');
-  con6.ownerId = 'P1';
-  state.cards[con6.physicalId] = con6;
-  p1.ownedCardPhysicalIds.push(con6.physicalId);
-  const earlierDie = giveDie(state, 'P1', 5);
-  board.placeDice(state, index, { playerId: 'P1' }, earlierDie.id, board.CASTLE_MAP_ID, 0);
-  const d1 = giveDie(state, 'P1', 1);
-  const d2 = giveDie(state, 'P1', 6);
-  const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
-  check('A group placement reusing a map with an earlier own COLOR die is blocked', result, { success: false, reason: 'OWN_COLOR_DIE_ALREADY_IN_AREA' });
-}
-{
-  // ダイス変換 exception (2026-08-29, per user request: "ダイス変換を使ったときは憤怒の制約関係なしにどこ
-  // にでも置ける") -- a die whose value was changed this turn (die.valueChangedThisTurn, the same generic
-  // flag markDieValueChanged sets for SET_DICE_ANY/SET_DIE_VALUE/CHANGE_DIE_VALUE) is exempt from
-  // OWN_COLOR_DIE_ALREADY_IN_AREA entirely, same as GRANT_PLACE_ANYWHERE.
-  const state = freshStateWithShops();
-  const p1 = player(state, 'P1');
-  const con6 = createCardInstance('CON005B');
-  con6.ownerId = 'P1';
-  state.cards[con6.physicalId] = con6;
-  p1.ownedCardPhysicalIds.push(con6.physicalId);
-  const d1 = giveDie(state, 'P1', 1);
-  board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
-  const d2 = giveDie(state, 'P1', 2);
-  d2.valueChangedThisTurn = true;
-  const result = board.placeDice(state, index, { playerId: 'P1' }, d2.id, 'MAP001', 1);
-  check('A die changed this turn (ダイス変換) is exempt from the same-AREA block', result.success, true);
-}
-{
-  // Same exception via placeDiceGroup: a group where every die not carrying GRANT_PLACE_ANYWHERE was at
-  // least changed this turn is exempt too, individually per die. Forces M006 (DICE>=7) into the shop,
-  // same as the earlier "Every castle slot filled first" block above, since a bare buildValue=7 (1+6)
-  // isn't guaranteed affordable against whatever the deterministic shuffle happens to deal.
-  const state = freshStateWithShops();
-  state.round = 2; // SHOP001-006 round-gated to round>=2 now (2026-09-14) -- this test targets SHOP001 directly.
-  const p1 = player(state, 'P1');
-  p1.resources.BZ = 20;
-  for (const slotId of Object.keys(state.shops.M.slots)) state.shops.M.slots[slotId] = null;
-  state.shops.M.slots.SHOP001 = 'M006'; // DICE>=7 -- exactly this group's own 1+6
-  const con6 = createCardInstance('CON005B');
-  con6.ownerId = 'P1';
-  state.cards[con6.physicalId] = con6;
-  p1.ownedCardPhysicalIds.push(con6.physicalId);
-  const earlierDie = giveDie(state, 'P1', 5);
-  board.placeDice(state, index, { playerId: 'P1' }, earlierDie.id, board.CASTLE_MAP_ID, 0);
-  const d1 = giveDie(state, 'P1', 1);
-  d1.valueChangedThisTurn = true;
-  const d2 = giveDie(state, 'P1', 6);
-  d2.valueChangedThisTurn = true;
-  const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
-  check('A group placement where every die was changed this turn is exempt too', result.success, true);
-}
-{
-  // But a group where only SOME dice were changed this turn still blocks -- every die needs its own
-  // exemption (GRANT_PLACE_ANYWHERE or valueChangedThisTurn), not just one of them.
-  const state = freshStateWithShops();
-  const p1 = player(state, 'P1');
-  p1.resources.BZ = 20;
-  const con6 = createCardInstance('CON005B');
-  con6.ownerId = 'P1';
-  state.cards[con6.physicalId] = con6;
-  p1.ownedCardPhysicalIds.push(con6.physicalId);
-  const earlierDie = giveDie(state, 'P1', 5);
-  board.placeDice(state, index, { playerId: 'P1' }, earlierDie.id, board.CASTLE_MAP_ID, 0);
-  const d1 = giveDie(state, 'P1', 1);
-  d1.valueChangedThisTurn = true;
-  const d2 = giveDie(state, 'P1', 6); // neither GRANT_PLACE_ANYWHERE nor changed this turn
-  const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d1.id, d2.id], board.CASTLE_MAP_ID);
-  check('A group with only SOME dice exempt is still blocked', result, { success: false, reason: 'OWN_COLOR_DIE_ALREADY_IN_AREA' });
-}
-{
-  // Bug fix (2026-08-16, per user report: "CON憤怒 現在AREAがLVUPしても前の情報が残りダイスが置けません"):
-  // once the AREA a player's own COLOR die sat on LVUPs (map.slots resets, see executor.js's own doc on
-  // runSetCurrentArea), that die's old occupancy should no longer count against CON005B's own-color-die
-  // reuse block, even though die.placedMapId itself deliberately stays put (still needed for endRound's
-  // unused-color-die bonus, see playerHasOwnColorDieInMapSlots's own doc).
-  const state = freshStateWithShops();
-  const p1 = player(state, 'P1');
-  const con6 = createCardInstance('CON005B');
-  con6.ownerId = 'P1';
-  state.cards[con6.physicalId] = con6;
-  p1.ownedCardPhysicalIds.push(con6.physicalId);
-
-  const d1 = giveDie(state, 'P1', 1); // AREA001A SLOT1=1
-  board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
-  const d2 = giveDie(state, 'P1', 2); // AREA001A SLOT2=2
-  const blockedBeforeUpgrade = board.placeDice(state, index, { playerId: 'P1' }, d2.id, 'MAP001', 1);
-  check('Still blocked before the AREA LVUPs', blockedBeforeUpgrade, { success: false, reason: 'OWN_COLOR_DIE_ALREADY_IN_AREA' });
-
-  // A004A.ONCE = 'MAP001.CURRENT_AREA=AREA001B' -- the real LVUP trigger (building/owning A004A;
-  // 2026-08-24 SHOP201-203 rework renumbered the A-deck, so this used to be A005A).
-  executor.runProgram(state, index, { playerId: 'P1' }, getCardRow(index, 'A004A').ONCE);
-  check('MAP001 is now AREA001B', state.maps['MAP001'].currentAreaId, 'AREA001B');
-  check('...and die.placedMapId is untouched (still needed for endRound bookkeeping)', d1.placedMapId, 'MAP001');
-
-  const d3 = giveDie(state, 'P1', 1); // AREA001B SLOT1=1 (SLOT2 is ANY, but the numbered slot is preferred)
-  const afterUpgrade = board.placeDice(state, index, { playerId: 'P1' }, d3.id, 'MAP001', 0);
-  check('No longer blocked once the AREA has LVUPed away the old occupancy', afterUpgrade.success, true);
-}
-{
-  // TEST CHANGE (2026-08-16, per user: "自分のカラーダイスがおかれているAREAにカラーダイスもｗDも置け
-  // なくなります", explicitly flagged as trial/revertible) -- wD (WHITE) used to be exempt from CON005B's
-  // own-color-die reuse block; now it's restricted the same as a 2nd COLOR die would be. To revert this
-  // test alongside the board.js change, delete this block and restore the old `die.kind === 'COLOR' &&'
-  // guards there.
-  const state = freshStateWithShops();
-  const p1 = player(state, 'P1');
-  const con6 = createCardInstance('CON005B');
-  con6.ownerId = 'P1';
-  state.cards[con6.physicalId] = con6;
-  p1.ownedCardPhysicalIds.push(con6.physicalId);
-
-  const d1 = giveDie(state, 'P1', 1); // AREA001A SLOT1=1
-  board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
-
-  const wDie = require('../src/game-state').createDie('test-wd-1', 'WHITE');
-  wDie.value = 2; // AREA001A SLOT2=2
-  p1.dice.push(wDie);
-  const wDBlocked = board.placeDice(state, index, { playerId: 'P1' }, wDie.id, 'MAP001', 1);
-  check('A wD is now also blocked from an AREA holding this player\'s own COLOR die', wDBlocked, { success: false, reason: 'OWN_COLOR_DIE_ALREADY_IN_AREA' });
 }
 
 // ---------------------------------------------------------------------------
@@ -999,38 +783,6 @@ function giveJob002(state, playerId) {
   const candidate = board.getBuildCandidates(state, index, 'P1', ['A', 'B', 'C'], require('../src/data-loader').getShopRow(index, slotId).DICE_MIN).find((c) => c.faceId === faceId);
   board.resolveBuild(state, index, { playerId: 'P1' }, candidate);
   check('The built slot is NOT left empty -- it already shows the next slot\'s card, well before TURNEND', state.shops.NORMAL.slots[slotId], nextSlotFaceIdBefore);
-}
-
-// ---------------------------------------------------------------------------
-// CONVERT_LIMIT(ALL,n) actually gets applied end-to-end through placeDice:
-// AREA003A.ACTION=CHANGE(K,A,ALL), CON003B.PASSIVE=CONVERT_LIMIT(ALL,4).
-// (The capping logic itself is covered in executor.smoke.js; this checks it
-// really reaches a CHANGE fired by a die placement.) The cap is per-CHANGE as
-// of 2026-08-11, so a SECOND placement gets its own fresh 4 -- which is the
-// user's own worked example, spread across two AREAs.
-// ---------------------------------------------------------------------------
-{
-  const state = freshStateWithShops();
-  const inst = require('../src/game-state').createCardInstance('CON003B');
-  inst.ownerId = 'P1';
-  state.cards[inst.physicalId] = inst;
-  const p1 = player(state, 'P1');
-  p1.ownedCardPhysicalIds.push(inst.physicalId);
-  p1.resources.K = 20;
-
-  const die = giveDie(state, 'P1', 2); // AREA003A.SLOT1 requires value 2 (SLOT2 is ANY, but the numbered slot is preferred)
-  const result = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP003', 0);
-  check('Placing on MAP003 (CHANGE(K,A,ALL) + CONVERT_LIMIT(4)) succeeds', result.success, true);
-  check('Only 4 conversions happened despite 20K on hand (CONVERT_LIMIT applied via placeDice)', p1.resources.A, 4);
-  check('Nothing accumulated into passiveCounters (the cap is per-CHANGE now)', state.passiveCounters['P1:CONVERT_LIMIT:ALL'], undefined);
-
-  // A second, separate ALL-CHANGE placement -- MAP004 is AREA004A's CHANGE(K,B,ALL), whose SLOT1 wants a 4
-  // (SLOT2 is ANY, but the numbered slot is preferred).
-  const die2 = giveDie(state, 'P1', 4);
-  const result2 = board.placeDice(state, index, { playerId: 'P1' }, die2.id, 'MAP004', 0);
-  check('A second ALL-CHANGE placement also succeeds', result2.success, true);
-  check('...and gets its own full 4 conversions, not 0 (per-CHANGE cap)', p1.resources.B, 4);
-  check('8K total spent across the two placements', p1.resources.K, 12);
 }
 
 // ---------------------------------------------------------------------------
@@ -2033,7 +1785,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   // round 2's placement is refused (5 total already, cap reached), keeping the player at exactly 5 forever.
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  const con6 = createCardInstance('CON005B');
+  const con6 = createCardInstance('CON005A');
   con6.ownerId = 'P1';
   state.cards[con6.physicalId] = con6;
   p1.ownedCardPhysicalIds.push(con6.physicalId);
@@ -2042,7 +1794,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   // path, same as actual onboarding: setup.rollInitialColorDice + chooseConFace's runProgram(ONCE)).
   setup.rollInitialColorDice(state);
   executor.runProgram(state, index, { playerId: 'P1', sourcePhysicalId: con6.physicalId }, 'ADD(D)');
-  check('Starting hand: 3 initial + CON005B ONCE=ADD(D) = 4 color dice', p1.dice.filter((d) => d.kind === 'COLOR').length, 4);
+  check('Starting hand: 3 initial + CON005A ONCE=ADD(D) = 4 color dice', p1.dice.filter((d) => d.kind === 'COLOR').length, 4);
 
   function placeOneOnAreaSeven() {
     const die = p1.dice.find((d) => d.kind === 'COLOR' && d.placedMapId === null);
@@ -2097,14 +1849,14 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   // the user reorganized game.xlsx's CON sheet by START_ORDER (2026-08-17); it's CON005A now.
   const state = freshStateWithShops();
   const p = player(state, 'P1');
-  const con2 = createCardInstance('CON005A');
+  const con2 = createCardInstance('CON005B');
   con2.ownerId = 'P1';
   state.cards[con2.physicalId] = con2;
   p.ownedCardPhysicalIds.push(con2.physicalId);
   p.resources.A = 1; p.resources.B = 1; p.resources.C = 1;
   const die = giveDie(state, 'P1', 3); // just 1 color die on hand, far below the normal cap
   const result = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP007', 0);
-  check('AREA007 is refused for a CON005A owner even at just 1 color die', result, { success: false, reason: 'LAZY_TRAINING_GROUND' });
+  check('AREA007 is refused for a CON005B owner even at just 1 color die', result, { success: false, reason: 'LAZY_TRAINING_GROUND' });
   check('...the die was never actually placed', die.placedMapId, null);
   check('...A/B/C was never spent', [p.resources.A, p.resources.B, p.resources.C], [1, 1, 1]);
 }
@@ -2893,7 +2645,7 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   p1.resources.K = 2; // AREA007B's own ACTION is currently CHANGE(K,D) -- 2 is a generous surplus, not the exact cost
-  const con5a = createCardInstance('CON005A');
+  const con5a = createCardInstance('CON005B');
   con5a.ownerId = 'P1';
   state.cards[con5a.physicalId] = con5a;
   p1.ownedCardPhysicalIds.push(con5a.physicalId);
@@ -2945,7 +2697,7 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   // confirming the bypass is genuinely LV1/LV2-specific, not "any 訓練場 tier".
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
-  const con5a = createCardInstance('CON005A');
+  const con5a = createCardInstance('CON005B');
   con5a.ownerId = 'P1';
   state.cards[con5a.physicalId] = con5a;
   p1.ownedCardPhysicalIds.push(con5a.physicalId);
@@ -2960,7 +2712,7 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   // removed from 怠惰) -- a ☆ die may go to the BASE 訓練場, pays A,B,C and gains a REAL color die.
   const state = freshStateWithShops();
   const p1 = withWildcardOwner(state);
-  const con5a = createCardInstance('CON005A');
+  const con5a = createCardInstance('CON005B');
   con5a.ownerId = 'P1';
   state.cards[con5a.physicalId] = con5a;
   p1.ownedCardPhysicalIds.push(con5a.physicalId);
@@ -2978,7 +2730,7 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   const state = freshStateWithShops();
   const p1 = withWildcardOwner(state);
   p1.resources.K = 2; // AREA007B's own ACTION is currently CHANGE(K,D) -- 2 is a generous surplus, not the exact cost
-  const con5a = createCardInstance('CON005A');
+  const con5a = createCardInstance('CON005B');
   con5a.ownerId = 'P1';
   state.cards[con5a.physicalId] = con5a;
   p1.ownedCardPhysicalIds.push(con5a.physicalId);
@@ -3186,34 +2938,47 @@ function withWildcardOwner(state) {
   check('SHOP106 (DICE_MIN=1,MAX=1) IS offered -- ☆ counts as only 1 for the A/B/C check, not 6', candidates.some((c) => c.slotId === 'SHOP106'), true);
 }
 {
-  // 憤怒/CON005B's BLOCK_COLOR_DIE_REUSE (same-AREA restriction) is negated for a ☆-owning player.
+  // 憤怒 (CON005A, 2026-11-02 redesign, per user INST「自分の色ダイスのあるエリアにダイスを置くたびに-2VP」): a 2nd own
+  // die onto an AREA already holding this player's own COLOR die is allowed but costs 2VP -- ☆ included.
   const state = freshStateWithShops();
   withWildcardOwner(state);
-  const con = createCardInstance('CON005B');
+  const con = createCardInstance('CON005A');
   con.ownerId = 'P1';
   state.cards[con.physicalId] = con;
   player(state, 'P1').ownedCardPhysicalIds.push(con.physicalId);
-
-  const d1 = giveDie(state, 'P1', 1); // AREA001A SLOT1=1
+  const p1 = player(state, 'P1');
+  p1.resources.VP = 10;
+  const d1 = giveDie(state, 'P1', 1);
   board.placeWildcardDie(state, index, { playerId: 'P1' }, d1.id, 'MAP001');
-  const d2 = giveDie(state, 'P1', 2); // AREA001A SLOT2=2, same AREA again
+  check('憤怒: first die on an AREA costs nothing', p1.resources.VP, 10);
+  const d2 = giveDie(state, 'P1', 2);
   const result = board.placeWildcardDie(state, index, { playerId: 'P1' }, d2.id, 'MAP001');
-  check('☆ (道化) is exempt from 憤怒\'s own-color-die-reuse block in the same AREA', result.success, true);
-  check('...both dice ended up on MAP001', state.maps['MAP001'].slots.reduce((sum, s) => sum + s.length, 0), 2);
+  check('憤怒: ☆ die onto the same AREA is allowed', result.success, true);
+  check('...and costs 2VP', p1.resources.VP, 8);
 }
 {
-  // Control: a normal (non-wildcard) player with 憤怒 alone is still blocked exactly as before.
+  // 憤怒 without ☆: normal 2nd placement is allowed now (no more block), -2VP; own WHITE dice already there don't count.
   const state = freshStateWithShops();
-  const con = createCardInstance('CON005B');
+  const con = createCardInstance('CON005A');
   con.ownerId = 'P1';
   state.cards[con.physicalId] = con;
   player(state, 'P1').ownedCardPhysicalIds.push(con.physicalId);
-
+  const p1 = player(state, 'P1');
+  p1.resources.VP = 10;
   const d1 = giveDie(state, 'P1', 1);
   board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
   const d2 = giveDie(state, 'P1', 2);
   const result = board.placeDice(state, index, { playerId: 'P1' }, d2.id, 'MAP001', 1);
-  check('Control: without ☆, 憤怒\'s own-color-die-reuse block still applies normally', result, { success: false, reason: 'OWN_COLOR_DIE_ALREADY_IN_AREA' });
+  check('憤怒: a 2nd own die on the same AREA is no longer blocked', result.success, true);
+  check('...but costs 2VP', p1.resources.VP, 8);
+
+  const wDie = createDie('test-wd-wrath', 'WHITE');
+  wDie.value = 3;
+  p1.dice.push(wDie);
+  board.placeDice(state, index, { playerId: 'P1' }, wDie.id, 'MAP002', 0);
+  const d3 = giveDie(state, 'P1', 5);
+  board.placeDice(state, index, { playerId: 'P1' }, d3.id, 'MAP002', 1);
+  check('憤怒: only an own WHITE die in the AREA -> no penalty', p1.resources.VP, 8);
 }
 {
   // A 2-☆-die group placement is refused the same way regardless of what's in the shop (2026-08-20, same
@@ -3298,6 +3063,25 @@ function withWildcardOwner(state) {
 {
   const plan = board.planFeeConversion({ A: 5, B: 5, C: 5, Z: 5 }, 0);
   check('Zero shortfall needs no conversion at all', plan, []);
+}
+
+{
+  // 臆病 (CON003B, 2026-11-02, per user INST「別のプレイヤーがモニュメントを獲得するまで、モニュメントを獲得できない」).
+  const state = freshStateWithShops();
+  state.round = 2; // M-shop slots open from round 2
+  const con = createCardInstance('CON003B');
+  con.ownerId = 'P1';
+  state.cards[con.physicalId] = con;
+  player(state, 'P1').ownedCardPhysicalIds.push(con.physicalId);
+  for (const slotId of Object.keys(state.shops.M.slots)) state.shops.M.slots[slotId] = null;
+  state.shops.M.slots.SHOP001 = 'M004';
+  const monumentCandidates = () => board.getBuildCandidates(state, index, 'P1', ['M'], 99).filter((c) => c.faceId === 'M004');
+  check('臆病: no monument candidates while nobody else owns a monument', monumentCandidates().length, 0);
+  const m = createCardInstance('M002');
+  m.ownerId = 'P2';
+  state.cards[m.physicalId] = m;
+  player(state, 'P2').ownedCardPhysicalIds.push(m.physicalId);
+  check('臆病: once another player owns a monument, monuments are offered again', monumentCandidates().length, 1);
 }
 
 console.log(`\n${passCount} passed, ${failCount} failed`);

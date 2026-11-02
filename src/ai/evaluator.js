@@ -403,7 +403,7 @@ class Evaluator {
     // behavior, not a split). Deliberately a plain current-snapshot estimate, no discount for how many
     // rounds remain or how likely the ranking is to hold -- same risk-tolerance as the existing
     // monument-sniping-risk heuristic just below, not a probabilistic forecast.
-    if (this.policy.qstAware && state.quests) {
+    if (this.policy.qstAware && state.quests && !qst.forfeitsQuestRewards(state, playerId)) { // 裏切 gets no quest VP (2026-11-02)
       for (const questFaceId of Object.keys(state.quests)) {
         const entry = qst.rankPlayersForQuest(state, this.index, questFaceId).find((e) => e.playerId === playerId);
         if (!entry || entry.rank > qst.REWARD_FIELDS.length) continue;

@@ -239,6 +239,7 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
 
   const map = state.maps[mapId];
   if (!map) throw new executor.ExecutionError(`Unknown map: ${mapId}`);
+  const wrathPenalty = isWrathPenaltyPlacement(state, map, context.playerId); // 憤怒 (2026-11-02), read before map.slots changes
   // 開拓者 (2026-08-17): must be read before anything below touches map.slots -- see
   // isMapEmptyOfDice/grantPioneerBonusIfEarned's own doc.
   const mapWasEmptyOfDice = isMapEmptyOfDice(map);
@@ -471,6 +472,7 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
     }
   }
 
+  if (wrathPenalty) applyWrathPenalty(state, context.playerId);
   return { success: true, actionResult };
 }
 
@@ -830,6 +832,7 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
 
   const map = state.maps[mapId];
   if (!map) throw new executor.ExecutionError(`Unknown map: ${mapId}`);
+  const wrathPenalty = isWrathPenaltyPlacement(state, map, context.playerId); // 憤怒 (2026-11-02), read before map.slots changes
   // 開拓者 (2026-08-17): must be read before anything below touches map.slots -- see
   // isMapEmptyOfDice/grantPioneerBonusIfEarned's own doc.
   const mapWasEmptyOfDice = isMapEmptyOfDice(map);
@@ -1045,8 +1048,10 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
 
   const candidates = excludeOverfundedMonuments(index, getBuildCandidates(state, index, playerId, ['M'], buildValue), newValues, player.monumentDiceDiscountThisTurn);
   if (candidates.length === 0) {
+    if (wrathPenalty) applyWrathPenalty(state, context.playerId);
     return { success: true, actionResult: { success: false, reason: 'NO_BUILDABLE_CARD', categories: ['M'], buildValue } };
   }
+  if (wrathPenalty) applyWrathPenalty(state, context.playerId);
   return { success: true, actionResult: { success: true, pendingBuild: { categories: ['M'], buildValue, candidates, remainingCommands: [] } } };
 }
 
@@ -1109,6 +1114,7 @@ function placeWildcardDie(state, index, context, dieId, mapId, preferredSlotInde
 
   const map = state.maps[mapId];
   if (!map) throw new executor.ExecutionError(`Unknown map: ${mapId}`);
+  const wrathPenalty = isWrathPenaltyPlacement(state, map, context.playerId); // 憤怒 (2026-11-02), read before map.slots changes
   // 開拓者 (2026-08-17): must be read before anything below touches map.slots -- see
   // isMapEmptyOfDice/grantPioneerBonusIfEarned's own doc.
   const mapWasEmptyOfDice = isMapEmptyOfDice(map);
@@ -1215,6 +1221,7 @@ function placeWildcardDie(state, index, context, dieId, mapId, preferredSlotInde
   // VP-escape (2026-08-27) already resolves it gracefully at TURNEND. AI unaffected (move-generator.js's
   // own separate canAffordFee filters, untouched, still keep it from choosing this).
 
+  if (wrathPenalty) applyWrathPenalty(state, context.playerId);
   return { success: true, actionResult };
 }
 
@@ -1794,6 +1801,30 @@ function specialShopMinRound(faceId) {
  *   placeWildcardDie's own abcBuildValue/monumentBuildValue doc)
  * @returns {({type:'BUILD_NEW', faceId:string, shopKey:string, slotId:string}|{type:'UPGRADE', physicalId:string, fromFaceId:string, toFaceId:string})[]}
  */
+/** 憤怒 (CON005A, 2026-11-02, per user INST「自分の色ダイスのあるエリアにダイスを置くたびに-2VP」 + answers: any die
+ * (color or white, EX slot / ☆ included); only the player's own COLOR dice already in the area count, their own
+ * white dice there are ignored) -- -2VP once per placement action. */
+const WRATH_CON_FACE_ID = 'CON005A';
+function isWrathPenaltyPlacement(state, map, playerId) {
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player.ownedCardPhysicalIds.some((id) => state.cards[id] && state.cards[id].currentFaceId === WRATH_CON_FACE_ID)) return false;
+  return playerHasOwnColorDieInMapSlots(state, map, playerId);
+}
+function applyWrathPenalty(state, playerId) {
+  const player = state.players.find((p) => p.id === playerId);
+  player.resources.VP = (player.resources.VP || 0) - 2;
+  executor.notifyActivation(state, playerId, splitCardId(WRATH_CON_FACE_ID).physicalId, WRATH_CON_FACE_ID, 'PASSIVE');
+}
+
+/** 臆病 (CON003B, 2026-11-02, per user INST「別のプレイヤーがモニュメントを獲得するまで、モニュメントを獲得できない」 +
+ * answers: 強化モニュメント(M4xx)も含めて、どのモニュメントでも) -- true while no OTHER player owns any M card yet. */
+const COWARD_CON_FACE_ID = 'CON003B';
+function isMonumentBlockedByCoward(state, playerId) {
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player.ownedCardPhysicalIds.some((id) => state.cards[id] && state.cards[id].currentFaceId === COWARD_CON_FACE_ID)) return false;
+  return !state.players.some((p) => p.id !== playerId && p.ownedCardPhysicalIds.some((id) => id.startsWith('M')));
+}
+
 function getBuildCandidates(state, index, playerId, categories, buildValue, monumentBuildValue = buildValue) {
   const candidates = [];
   const player = state.players.find((p) => p.id === playerId);
@@ -1816,7 +1847,7 @@ function getBuildCandidates(state, index, playerId, categories, buildValue, monu
     }
   }
 
-  if (categories.includes('M') && !blocked.includes('M')) {
+  if (categories.includes('M') && !blocked.includes('M') && !isMonumentBlockedByCoward(state, playerId)) {
     // Discounted by player.monumentDiceDiscountThisTurn if this player has an active MONUMENT_DICE_
     // DISCOUNT(n,THIS_TURN) grant (2026-08-18, JOB007/密使) -- floored at 0 so a large enough discount
     // just makes every monument buildable regardless of dice value, rather than going negative.
@@ -2112,6 +2143,7 @@ module.exports = {
   hasAnyUpgradeEligibleCard,
   isColorDieReuseBlocked,
   isLazyTrainingGroundBlocked,
+  isMonumentBlockedByCoward,
   hasWildcardDice,
   isDieWildcard,
   hasPioneerAbility,

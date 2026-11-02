@@ -595,5 +595,27 @@ function giveM403(s, playerId) {
   check('extraMonumentPool shrank by exactly however many slots got filled', s.extraMonumentPool.length, poolBefore.length - filledSlots.length);
 }
 
+{
+  // 心配 (CON006A, 2026-11-02, per user INST「ターン終了時〇がないと-1VP」): own turn end, K judged after fees.
+  const { createEmptyGameState: freshEmptyState, createCardInstance } = require('../src/game-state');
+  const s = freshEmptyState('worry-smoke');
+  setup.createPlayers(s, ['Alice', 'Bob']);
+  setup.prepareMaps(s, index);
+  setup.prepareShops(s, index);
+  s.turnOrder = ['P1', 'P2'];
+  const p1 = s.players[0];
+  const con = createCardInstance('CON006A');
+  con.ownerId = 'P1';
+  s.cards[con.physicalId] = con;
+  p1.ownedCardPhysicalIds.push(con.physicalId);
+  p1.resources.K = 0; p1.resources.VP = 5;
+  turnFlow.endTurn(s, index, 'P1');
+  check('心配: 0K at own turn end -> -1VP', p1.resources.VP, 4);
+  p1.resources.K = 2;
+  turnFlow.endTurn(s, index, 'P2');
+  turnFlow.endTurn(s, index, 'P1');
+  check('心配: with K left -> no penalty', p1.resources.VP, 4);
+}
+
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);

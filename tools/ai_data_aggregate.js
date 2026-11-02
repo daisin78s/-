@@ -32,7 +32,8 @@ const scoring = require('../src/scoring');
  * (CON003A) and 嫉妬(CON004B) happened to stay put. 傲慢(CON004A) added 2026-08-22 alongside its new
  * "最多AREAが必要　足りない１個につき-1VP" rule. 2026-09-26: 裏切/暴食 swapped which face of CON006 is
  * 表/裏 again -- 裏切 now CON006A (see scoring.js's own doc). */
-const CON_VP_PENALTY_FACES = new Set(['CON006A', 'CON003A', 'CON004B', 'CON002A', 'CON002B', 'CON004A']);
+// 2026-11-02 CON redesign: 強欲 CON001A, 几帳面 CON002A, 虚栄 CON003A, 嫉妬 CON004A (憤怒/心配 lose VP live, not at scoring).
+const CON_VP_PENALTY_FACES = new Set(['CON001A', 'CON002A', 'CON003A', 'CON004A']);
 
 /** The 8 A-deck AREA-ownership faces (see AREA_CARD_BY_MAP's own doc) -- usage = fee collected via their
  * AREA, tracked separately from the generic TAP-count path below since it isn't TAP-driven at all. */

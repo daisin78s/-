@@ -197,29 +197,18 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
     { color: 1, white: 0 }
   );
 }
+// 2a. (old 憤怒 WHITE_DICE_CAP(0) test removed 2026-11-02 -- CON redesign.)
 
-// ---------------------------------------------------------------------------
-// 2a. CON005B/憤怒: PASSIVE=BLOCK_COLOR_DIE_REUSE();WHITE_DICE_CAP(0) (2026-08-18, replacing the earlier
-// PASS_COLOR_DIE_BONUS(2) round-end-only reduction per user spec after further playtesting: "パスをした
-// ときカラーダイスから2Kしか得られない" -> "ｗDの上限0　上限を超えたｗDは2Kになる") -- every ADD(wD) this
-// player would ever gain, from any source, now overflows instead (0 is never > an in-hand count of >=0,
-// so grantOneDie's overflow branch fires unconditionally), same overflow path a normal player only hits
-// once already at their real cap of 5. The overflow branch itself used to grant K (2K, then lowered to
-// 1K on 2026-08-19); as of 2026-08-20, per user request, it grants nothing at all -- the die is simply
-// lost.
-// ---------------------------------------------------------------------------
+// 3. CON003A 虚栄 (2026-11-02, per user INST「ゲーム終了時モニュメントが４つ必要 足りない１つにつき-1VP」):
+// PASSIVE=VP_PENALTY_IF_BELOW(CARD_COUNT(M),4).
 {
   const state = freshState();
-  giveCard(state, 'CON005B', 'P1');
-  const player = getPlayerRef(state, 'P1');
-  const beforeK = player.resources.K;
-  executor.runCommand(state, index, { playerId: 'P1' }, { type: 'ADD', items: [{ resource: 'wD', count: { kind: 'literal', value: 1 } }] });
-  check('CON005B WHITE_DICE_CAP(0): ADD(wD) grants no real white die', player.dice.filter((d) => d.kind === 'WHITE').length, 0);
-  check('...and grants no K either -- the die is simply lost', player.resources.K, beforeK);
-  check('...recorded on whiteOverflowEvents same as a real cap overflow', state.whiteOverflowEvents, ['P1']);
+  giveCard(state, 'CON003A', 'P1');
+  check('虚栄: no monuments -> -4VP', executor.collectVpModifiers(state, index, 'P1'), -4);
+  giveCard(state, 'M002', 'P1');
+  giveCard(state, 'M401', 'P1'); // 強化モニュメント counts too
+  check('虚栄: 2 monuments (incl. a 強化モニュメント) -> -2VP', executor.collectVpModifiers(state, index, 'P1'), -2);
 }
-
-// 3. CON003A (狂信)'s emblem-shortfall test removed 2026-11-02 -- emblems abolished, PASSIVE cleared for now.
 
 // ---------------------------------------------------------------------------
 // 3a. CON002A: PASSIVE=VP_PENALTY_PER(LEVEL_COUNT(1)) (2026-08-15, per user spec: "LV1のカード１枚に
@@ -710,50 +699,7 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   check('A normal (non-overflow) wD grant leaves whiteOverflowEvents empty', state2.whiteOverflowEvents, []);
 }
 
-// ---------------------------------------------------------------------------
-// 14. CONVERT_LIMIT(ALL,n): a PER-CHANGE cap on ALL-based CHANGEs -- each one is measured on its own,
-//     with nothing carried between them, and it applies to EVERY ALL-based CHANGE regardless of what
-//     triggered it (corrected 2026-08-11, per the user: "意図した制限は一回のCHANGEでMAX4個までしか交換
-//     できない" -- it used to subtract a whole-game cumulative counter, and only applied to
-//     AREA003/004/005). Fixed-count CHANGEs stay unaffected.
-// ---------------------------------------------------------------------------
-{
-  const state = freshState();
-  giveCard(state, 'CON003B', 'P1'); // PASSIVE=CONVERT_LIMIT(ALL,4)
-  const player = getPlayerRef(state, 'P1');
-  player.resources.K = 20;
-
-  const changeAllK2A = { type: 'CHANGE', pay: [{ resource: 'K', count: { kind: 'literal', value: 1 } }], gain: [{ resource: 'A', count: { kind: 'literal', value: 1 } }], times: { kind: 'all' } };
-
-  const first = executor.runCommand(state, index, { playerId: 'P1' }, changeAllK2A);
-  check('An ALL-conversion is capped at CONVERT_LIMIT(4) even though 20K is affordable', first.timesExecuted, 4);
-  check('...spending exactly 4K', player.resources.K, 16);
-
-  // The user's own worked example: 10K, same turn, two separate ALL-CHANGEs (C001B's TAP and a die on
-  // AREA003A) -> 4 each, NOT 4 total.
-  const second = executor.runCommand(state, index, { playerId: 'P1' }, changeAllK2A);
-  check('A SECOND ALL-conversion gets its own full 4 (no cumulative carry-over)', second.timesExecuted, 4);
-  const third = executor.runCommand(state, index, { playerId: 'P1' }, changeAllK2A);
-  check('...and so does a third', third.timesExecuted, 4);
-  check('12K spent across the three, 8 left', player.resources.K, 8);
-  check('Nothing is accumulated into passiveCounters any more', state.passiveCounters['P1:CONVERT_LIMIT:ALL'], undefined);
-
-  // Still capped by affordability when that is the smaller of the two.
-  player.resources.K = 3;
-  const short = executor.runCommand(state, index, { playerId: 'P1' }, changeAllK2A);
-  check('Below the cap, affordability still decides (3K -> 3 executions)', short.timesExecuted, 3);
-}
-{
-  // A raw 'literal'-kind CHANGE (always exactly N, all-or-nothing -- see runChange's own doc; command-
-  // builder.js never actually lowers DSL text to 'literal' with N>1 any more, only to this engine-level
-  // shape directly) is never touched by CONVERT_LIMIT either, same as 'capped' below.
-  const state = freshState();
-  giveCard(state, 'CON003B', 'P1');
-  getPlayerRef(state, 'P1').resources.K = 20;
-  const changeSixTimes = { type: 'CHANGE', pay: [{ resource: 'K', count: { kind: 'literal', value: 1 } }], gain: [{ resource: 'A', count: { kind: 'literal', value: 1 } }], times: { kind: 'literal', value: 6 } };
-  const result = executor.runCommand(state, index, { playerId: 'P1' }, changeSixTimes);
-  check('A raw literal-kind CHANGE(K,A,6) is NOT capped by CONVERT_LIMIT(ALL,4)', result.timesExecuted, 6);
-}
+// (CONVERT_LIMIT tests removed 2026-11-02 -- 憂鬱 was redesigned; no card carries CONVERT_LIMIT any more.)
 
 // ---------------------------------------------------------------------------
 // 14b. 'capped'-kind CHANGE (explicit numeric third argument, e.g. CHANGE(K,A,4)): executes up to N

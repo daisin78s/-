@@ -163,6 +163,14 @@ function rankPlayersForQuest(state, index, questFaceId) {
  *   "QST平均得点" columns (see tools/ai_data_report.js) -- turn-flow.js's endRound stashes this return
  *   value on state.qstRewardsGranted for game-runner.js to read back after the game ends.
  */
+/** 裏切 (CON004B, 2026-11-02, per user INST「クエストからVPを得ることができない」+ answer: the player still occupies
+ * their rank -- nobody moves up -- they just get nothing). */
+const QUEST_REWARD_FORFEIT_CON_FACE_ID = 'CON004B';
+function forfeitsQuestRewards(state, playerId) {
+  const player = state.players.find((p) => p.id === playerId);
+  return !!player && player.ownedCardPhysicalIds.some((id) => state.cards[id] && state.cards[id].currentFaceId === QUEST_REWARD_FORFEIT_CON_FACE_ID);
+}
+
 function resolveEndGameRewards(state, index) {
   const vpGranted = {};
   for (const player of state.players) vpGranted[player.id] = 0;
@@ -172,6 +180,7 @@ function resolveEndGameRewards(state, index) {
       if (entry.rank > REWARD_FIELDS.length) continue;
       const rewardText = row[REWARD_FIELDS[entry.rank - 1]];
       if (!rewardText) continue;
+      if (forfeitsQuestRewards(state, entry.playerId)) continue; // 裏切
       const player = state.players.find((p) => p.id === entry.playerId);
       const vpBefore = player.resources.VP || 0;
       executorApi.runProgram(state, index, { playerId: entry.playerId, sourcePhysicalId: questFaceId }, rewardText);
@@ -189,6 +198,7 @@ module.exports = {
   evalGoalMetric,
   rankPlayersForQuest,
   resolveEndGameRewards,
+  forfeitsQuestRewards,
 };
 
 })();
