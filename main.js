@@ -7452,7 +7452,9 @@ function applyPlaceDiceResult(result, playerId) {
     // naming it directly is accurate rather than showing the raw reason code.
     placementMessage = result.reason === 'OWN_COLOR_DIE_ALREADY_IN_AREA'
       ? '憤怒の効果でダイスを置くことができません'
-      : `配置できません（${result.reason}）`;
+      : result.reason === 'LAZY_TRAINING_GROUND' // 2026-11-02, see board.isLazyTrainingGroundBlocked
+        ? '怠惰の効果でダイスを置くことができません'
+        : `配置できません（${result.reason}）`;
     return;
   }
   if (result.actionResult && result.actionResult.pendingBuild) {

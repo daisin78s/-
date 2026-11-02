@@ -386,6 +386,13 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
   // AREA007's CHANGE((A,B,C),D) when A/B/C can't be paid, or AREA008/009's BUILD() with no buildable
   // candidate at all) -- see wouldAreaActionHaveEffect's own doc for exactly what "no effect" means.
   // Deliberately checked *before* any mutation below so a doomed placement never burns the die.
+  if (isLazyTrainingGroundBlocked(state, index, context.playerId, resolvedAreaRow.ID)) {
+    if (preJobBonusSnapshot) {
+      Object.keys(state).forEach((k) => delete state[k]);
+      Object.assign(state, preJobBonusSnapshot);
+    }
+    return { success: false, reason: 'LAZY_TRAINING_GROUND' };
+  }
   const prediction = wouldAreaActionHaveEffect(state, index, actionContext, resolvedAreaRow, buildValue);
   if (!prediction.ok) {
     if (preJobBonusSnapshot) {
@@ -923,6 +930,8 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   // that color die to show 3-6.
   const hereticRow = dice.some((d) => d.kind === 'COLOR' && d.value >= 3) ? hereticBorrowedAreaRow(state, index, context, map) : null;
   const resolvedAreaRow = hereticRow || areaRow;
+  // 怠惰 (2026-11-02) -- see isLazyTrainingGroundBlocked's own doc.
+  if (isLazyTrainingGroundBlocked(state, index, playerId, resolvedAreaRow.ID)) return { success: false, reason: 'LAZY_TRAINING_GROUND' };
 
   // AREA009C/B's own ACTION grants a trailing bonus after BUILD() (e.g. "BUILD();ADD(2K,BZ)" at LV2) --
   // same shape resolveProgramOrBuild/wouldAreaActionHaveEffect already special-case for the single-die
@@ -1425,6 +1434,20 @@ function isUpgradeBlockedByQstRank(state, index, playerId) {
     const entry = qst.rankPlayersForQuest(state, index, rule.questFaceId).find((e) => e.playerId === playerId);
     return entry.rank !== rule.rank;
   });
+}
+
+/** 怠惰 (CON005A, 2026-11-02, per user: 「怠惰には「得た色ダイスは白ダイスに変わる」この能力　外して」 +
+ * 道化師's INST「どのエリアにでも必ず置けるようになる」 -> 「怠惰　道化師　は　訓練場に行けるようになりました」):
+ * PASSIVE=REPLACE_ADD(D,wD) was removed from the data, and with it the COLOR_DIE_REPLACED refusal that had
+ * been enforcing 怠惰's own INST「レベルの上がっていない訓練場のスロットにダイスを置けない」. This takes over
+ * that refusal directly -- only a ☆ die (placeWildcardDie, which never calls this) may go there, and then
+ * it pays A,B,C and gets a real color die like anyone else. 訓練場LV1/LV2 stay open to 怠惰 as before.
+ * Matched by NAME, same reorg-safety convention as hasLandlordAbility. */
+function isLazyTrainingGroundBlocked(state, index, playerId, areaRowId) {
+  if (areaRowId !== 'AREA007A') return false;
+  const player = state.players.find((p) => p.id === playerId);
+  return player.ownedCardPhysicalIds.some((physicalId) => physicalId.startsWith('CON')
+    && getCardRow(index, state.cards[physicalId].currentFaceId).NAME === '怠惰');
 }
 
 /** Whether playerId owns at least one A/B/C card with a valid next-tier face -- the same tier-

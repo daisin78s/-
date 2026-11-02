@@ -1252,7 +1252,7 @@
       "VP": "",
       "ONCE": "ADD(A,B,C)",
       "TAP": "",
-      "PASSIVE": "REPLACE_ADD(D,wD)",
+      "PASSIVE": "",
       "TURNEND": "",
       "START_ORDER": 4,
       "WARNING": "",

@@ -183,7 +183,7 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 }
 
 // ---------------------------------------------------------------------------
-// 2. CON005A: PASSIVE=REPLACE_ADD(D,wD) forces ADD(D) -> ADD(wD)
+// 2. CON005A: PASSIVE=REPLACE_ADD(D,wD) was removed (2026-11-02, per user「この能力　外して」) -- ADD(D) stays a color die
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
@@ -192,9 +192,9 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
   executor.runCommand(state, index, context, { type: 'ADD', items: [{ resource: 'D', count: { kind: 'literal', value: 1 } }] });
   const player = getPlayerRef(state, 'P1');
   check(
-    'CON005A REPLACE_ADD(D,wD) turns ADD(D) into a white die',
+    'CON005A no longer turns ADD(D) into a white die',
     { color: player.dice.filter((d) => d.kind === 'COLOR').length, white: player.dice.filter((d) => d.kind === 'WHITE').length },
-    { color: 0, white: 1 }
+    { color: 1, white: 0 }
   );
 }
 

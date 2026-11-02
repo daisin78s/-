@@ -2104,7 +2104,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   p.resources.A = 1; p.resources.B = 1; p.resources.C = 1;
   const die = giveDie(state, 'P1', 3); // just 1 color die on hand, far below the normal cap
   const result = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP007', 0);
-  check('AREA007 is refused for a CON005A owner even at just 1 color die', result, { success: false, reason: 'COLOR_DIE_REPLACED' });
+  check('AREA007 is refused for a CON005A owner even at just 1 color die', result, { success: false, reason: 'LAZY_TRAINING_GROUND' });
   check('...the die was never actually placed', die.placedMapId, null);
   check('...A/B/C was never spent', [p.resources.A, p.resources.B, p.resources.C], [1, 1, 1]);
 }
@@ -2953,7 +2953,25 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   state.maps['MAP007'] = mapWithArea('MAP007', 'AREA007A', 3, null); // SLOT1-3=ANY, base tier
   const die = giveDie(state, 'P1', 4);
   const result = board.placeDice(state, index, { playerId: 'P1' }, die.id, 'MAP007', 0);
-  check('怠惰 owner at the BASE (untiered) 訓練場 is still blocked outright -- no bypass at this tier', result, { success: false, reason: 'COLOR_DIE_REPLACED' });
+  check('怠惰 owner at the BASE (untiered) 訓練場 is still blocked outright -- no bypass at this tier', result, { success: false, reason: 'LAZY_TRAINING_GROUND' });
+}
+{
+  // 怠惰+道化師 (2026-11-02, per user: 「怠惰　道化師　は　訓練場に行けるようになりました」, REPLACE_ADD(D,wD)
+  // removed from 怠惰) -- a ☆ die may go to the BASE 訓練場, pays A,B,C and gains a REAL color die.
+  const state = freshStateWithShops();
+  const p1 = withWildcardOwner(state);
+  const con5a = createCardInstance('CON005A');
+  con5a.ownerId = 'P1';
+  state.cards[con5a.physicalId] = con5a;
+  p1.ownedCardPhysicalIds.push(con5a.physicalId);
+  p1.resources.A = 1; p1.resources.B = 1; p1.resources.C = 1;
+  state.maps['MAP007'] = mapWithArea('MAP007', 'AREA007A', 3, null);
+  const die = giveDie(state, 'P1', 3);
+  const beforeColor = p1.dice.filter((d) => d.kind === 'COLOR').length;
+  const result = board.placeWildcardDie(state, index, { playerId: 'P1' }, die.id, 'MAP007');
+  check('怠惰+道化師: a ☆ die can be placed on the BASE 訓練場', result.success, true);
+  check('...gains a real color die', p1.dice.filter((d) => d.kind === 'COLOR').length - beforeColor, 1);
+  check('...A/B/C were paid', [p1.resources.A, p1.resources.B, p1.resources.C], [0, 0, 0]);
 }
 {
   // A ☆ die (JOB003/道化) can land on 訓練場LV1/LV2 too ("全AREA共通") -- same bypass applies.
