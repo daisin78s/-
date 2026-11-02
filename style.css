@@ -7808,9 +7808,11 @@ body.online-spectator #online-spectator-badge {
 }
 /* 基礎学問LV2の□の中の☆を少し大きく濃く (2026-11-02)。 */
 .die-face-numeral__digit.die-face-numeral__digit--star {
-  font-size: 19px;
+  font-size: 17px; /* 19pxだと□の上の線に触れたので少し小さく(それでも元の15pxより大きい) */
   color: var(--text);
   -webkit-text-stroke: 0.8px currentColor;
+  position: relative;
+  top: -1px; /* □の中心に (per user「基礎学問の ☆ □の 中心でないので 少しだけ 上に」) */
 }
 /* 人材カードの→を濃く (2026-11-02, per user「人材カードの → 濃くして」)。 */
 .shop-card[data-deck="C"] .shop-card__effect .action-arrow {
