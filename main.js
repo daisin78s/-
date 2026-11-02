@@ -6276,6 +6276,9 @@ function buildCardVisual(faceId, options = {}) {
   // 強化モニュメント(M400番台、4Rに出る)は背景の緑を濃く (2026-10-27, per user request: "強化モニュメント 背景の色
   // 緑を濃く変えて")。style.cssの.shop-card--enhanced-monument参照。
   if (/^M4\d\d$/.test(faceId || '')) node.classList.add('shop-card--enhanced-monument');
+  // ダイス目を1.2倍にした時、必要資源が右上の数字にかぶりそうなモニュメント(凱旋門・中央広場・帝都建設)だけ必要資源を少し下へ
+  // (2026-11-02, per user「モニュメントのダイス目 １．２倍に 必要資源にかぶりそうなら そのカードだけ必要資源を少し下に」)。
+  if (['M004', 'M007', 'M404'].includes(faceId)) node.classList.add('shop-card--cost-lowered');
   // 領地・学問・人材・ジョブは正方形 (2026-11-02, per user「カードを 正方形に すれば いいのでは」「正方形にして 縦に
   // 伸ばすのは やめる 文字を削減するか 無理やり入れる」; モニュメント・性格・クエスト・初期資源は今の形のまま)。
   // モニュメント・性格・初期資源も含めてすべて正方形 (2026-11-02, per user「モニュメントも含め すべて同じ大きさ 同じ形に」)。

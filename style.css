@@ -7754,7 +7754,7 @@ body.online-spectator #online-spectator-badge {
   margin: 0 !important;
 }
 .shop-card__req .shop-card__req-number {
-  font-size: 22.4px; /* 28px の 80% */
+  font-size: 26.88px; /* 28pxの80%(22.4px)をさらに1.2倍 (2026-11-02, per user「モニュメントのダイス目 １．２倍に」) */
 }
 /* 初期資源カードのスタプレは右上に (2026-11-02, per user「初期資源カード スタプレ0 などをすべて右上に」)。 */
 .shop-card--resource .shop-card__start-order {
@@ -7890,4 +7890,7 @@ body.online-spectator #online-spectator-badge {
 .shop-card__cost-empty {
   font-weight: 700; /* 濃く (per user「濃く」) */
   color: var(--text);
+}
+.shop-card--cost-lowered .shop-card__cost {
+  margin-top: 12px;
 }
