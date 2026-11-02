@@ -6142,6 +6142,11 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
         // 基礎学問・高等学問・幾何学の⚡🎲(ONCE)の行を少し上に (2026-11-02, per user「基礎学問 高等学問 幾何学のアイコンの
         // ⚡🎲 もう少し上に」)。
         // 皇女・弁論家の⚡⤴3(ONCE)の行も同じく行ごと上に (per user「⤴3の行ごと、カードの上の方へ移したい」)。
+        // パンとサーカスLV2の「毎ターン」は左下の1 VPと重ならないよう右へ (2026-11-02, per user「パンとサーカスLV2 毎ターンをもっと右に」)。
+        if (row && effect.source === 'TURNEND' && faceId === 'B301B') {
+          row.style.position = 'relative';
+          row.style.left = '20px';
+        }
         if (row && effect.source === 'ONCE' && /^(B00[123]|C202|C301)/.test(faceId)) {
           row.style.position = 'relative';
           row.style.top = '-8px';
