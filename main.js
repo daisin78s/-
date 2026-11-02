@@ -6153,6 +6153,8 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
         // ⚡🎲 もう少し上に」)。
         // 皇女・弁論家の⚡⤴3(ONCE)の行も同じく行ごと上に (per user「⤴3の行ごと、カードの上の方へ移したい」)。
         // パンとサーカスLV2の「毎ターン」は左下の1 VPと重ならないよう右へ (2026-11-02, per user「パンとサーカスLV2 毎ターンをもっと右に」)。
+        // 天文学の⚡🎲🎲(ONCE)は1.3倍 (2026-11-02, per user「天文学 ⚡🎲🎲 １．３倍に」)。
+        if (row && effect.source === 'ONCE' && /^B201/.test(faceId)) row.style.zoom = '1.3';
         // 皇女LV2・弁論家LV2の⤵の行は上へ (2026-11-02, per user「皇女LV2 弁論家LV2 ⤵⚡🎲 など もっと上に」 -- 先に「右に」と
         // 言ったのは間違いだった)。
         if (row && effect.source === 'TAP' && (faceId === 'C202B' || faceId === 'C301B')) {
