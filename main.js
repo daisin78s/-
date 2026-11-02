@@ -5145,10 +5145,18 @@ function buildMaxEmblemVpModifierIcon(actionText) {
  * this one card's own current parameters, same convention as buildMaxEmblemVpModifierIcon above (a
  * bespoke icon for one specific PASSIVE string, not a generic PER(...)/cap renderer) -- would need
  * updating if 晩餐会's own K-ratio/cap numbers ever change again. */
+/** 晩餐会・宝物庫の〇は1.2倍 (2026-11-02, per user「晩餐会と 宝物庫 〇 のアイコンを１．２倍に」)。 */
+function bigFoodDot() {
+  const dot = actionDot('K');
+  dot.style.width = '13.2px';
+  dot.style.height = '13.2px';
+  return dot;
+}
+
 function buildBanquetFinalVpModifierIcon(actionText) {
   if (actionText !== 'VP_MODIFIER_FINAL(PER(K,1),9)') return null;
   const stack = el('div', 'action-icons-stack');
-  stack.appendChild(actionRow([actionDot('K'), el('span', 'action-suffix action-suffix--large', 'につき1VP')]));
+  stack.appendChild(actionRow([bigFoodDot(), el('span', 'action-suffix action-suffix--large', 'につき1VP')]));
   // MAX9はVPの位置(左下)へ (fillCardFaceのshop-card__vp参照)。
   return stack;
 }
@@ -5177,7 +5185,7 @@ function buildTreasuryFinalVpModifierIcon(actionText) {
   if (actionText !== 'VP_MODIFIER_FINAL(RESOURCE(A,B,C,Z),7)') return null;
   // 2026-11-02, per user「宝物庫のアイコン 〇以外の資源 / １個につき1VP / （MAX7）」 -- 3行に(〇は食料アイコン)。
   const stack = el('div', 'action-icons-stack');
-  const row1 = actionRow([actionDot('K'), el('span', 'action-suffix action-suffix--large', '以外の資源')]);
+  const row1 = actionRow([bigFoodDot(), el('span', 'action-suffix action-suffix--large', '以外の資源')]);
   row1.classList.add('action-icons--nowrap');
   stack.appendChild(row1);
   // 「1」もほかの字と同じ大きさに (per user「同じにして」)。
@@ -5638,7 +5646,7 @@ function renderAreaOwnershipEffectText(container, text) {
   const suffixLine = el('div', null, suffix);
   // 「の支配」はもっと右に (2026-11-02, per user「領地カード の支配 をもっと右に」) -- LV2の左下のVPと離す。
   suffixLine.style.position = 'relative';
-  suffixLine.style.left = '20px';
+  suffixLine.style.left = '28px'; // もう少しだけ右に (per user「領地カードの の支配 もう少しだけ右に」)
   container.appendChild(suffixLine);
 }
 
@@ -6174,6 +6182,12 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
         if (row && effect.source === 'ONCE' && /^(B00[123]|C202|C301)/.test(faceId)) {
           row.style.position = 'relative';
           row.style.top = '-8px';
+        }
+        // 基礎学問LV1・高等学問LV1はアイコン全体をもう少しだけ下に (2026-11-02, per user「基礎学問LV1 高等学問LV1 アイコン
+        // 全体を もう少しだけ下に」) -- 上の⚡🎲を上げた分(-8px)も含め、どの行も4px下げる。
+        if (row && (faceId === 'B001A' || faceId === 'B002A')) {
+          row.style.position = 'relative';
+          row.style.top = `${(parseFloat(row.style.top) || 0) + 4}px`;
         }
         return row;
       })
