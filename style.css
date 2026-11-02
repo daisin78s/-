@@ -7787,3 +7787,6 @@ body.online-spectator #online-spectator-badge {
   font-weight: 700;
   color: var(--text);
 }
+/* 人材カードの効果のアイコンの数字を1.2倍に (2026-11-02, per user「アイコンの数字 １．２倍に」)。 */
+.shop-card[data-deck="C"] .shop-card__effect .action-count { font-size: 13.2px; }
+.shop-card[data-deck="C"] .shop-card__effect .action-suffix { font-size: 12px; }
