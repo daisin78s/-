@@ -5064,7 +5064,9 @@ function buildChangeDieValueIcon(actionText) {
   // buildBuildIcon's own "ダイス目 N" rows, which this fix must NOT touch) so style.css can nudge just
   // this ⤵-prefixed row's own TAP icon left, narrowly, via .action-icons:has(.action-count--die-delta).
   // 幾何学も「目+2」の形 (2026-11-02, per user「幾何学 土木技術」)。
-  return actionRow([actionSuffix('目'), el('span', 'action-count action-count--large action-count--die-delta', fixedMatch[1])]);
+  const dieLabel = actionSuffix('目');
+  dieLabel.style.marginLeft = '4px'; // ⤵と目を離す (2026-11-02, per user「幾何学 アイコン ⤵と 目を離して」)
+  return actionRow([dieLabel, el('span', 'action-count action-count--large action-count--die-delta', fixedMatch[1])]);
 }
 
 /** ADD(COUNT(emblem)*wD): the die count is dynamic (however many of that emblem the player owns),
