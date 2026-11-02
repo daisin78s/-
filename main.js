@@ -5779,11 +5779,13 @@ const CARD_NOTE_COMPACT_FACE_ID = null;
  * textContent assignment would -- just split across several text nodes instead of one, plus the icon
  * elements in between. */
 function fillCardNoteContent(container, iconText) {
-  const parts = iconText.split(/(✖|Z)/);
+  // 〇/◯ は食料(K)のアイコンにする (2026-11-02, per user「心配と 暴食 〇 を アイコンの〇にして」)。
+  const parts = iconText.split(/(✖|Z|〇|◯)/);
   for (const part of parts) {
     if (!part) continue;
     if (part === '✖') container.appendChild(el('span', 'card-note__x', '✖'));
     else if (part === 'Z') container.appendChild(actionDot('Z'));
+    else if (part === '〇' || part === '◯') container.appendChild(actionDot('K'));
     else container.appendChild(document.createTextNode(part));
   }
 }
