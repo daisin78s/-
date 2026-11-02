@@ -3645,7 +3645,9 @@ function setupCardListSwipe() {
     if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
     if (!document.getElementById('card-inst-overlay').hidden) return;
     const keys = CARD_LIST_NAV.map((entry) => entry.key).filter((key) => key !== null);
-    const next = keys[keys.indexOf(cardListView) + (dx < 0 ? 1 : -1)];
+    // 端まで行ったら反対の端へ回る -- クエストの次は資源や用語、資源や用語の前はクエスト (2026-11-03, per user
+    // 「カードリストクエストで右にフリックすると…資源や用語に行く」)。
+    const next = keys[(keys.indexOf(cardListView) + (dx < 0 ? 1 : -1) + keys.length) % keys.length];
     if (next) setCardListView(next);
   }, { passive: true });
 }
