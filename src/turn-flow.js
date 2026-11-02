@@ -130,6 +130,7 @@ function getNextTurn(state) {
 const WORRY_CON_FACE_ID = 'CON006A';
 function applyWorryPenalty(state, playerId) {
   const player = state.players.find((p) => p.id === playerId);
+  if (player.worryAbilityDisabled) return; // ストーリー第1章のパトラだけ (story.js, per user「第１章では 能力止めて」)
   if (!player.ownedCardPhysicalIds.some((id) => state.cards[id] && state.cards[id].currentFaceId === WORRY_CON_FACE_ID)) return;
   if ((player.resources.K || 0) > 0) return;
   player.resources.VP = (player.resources.VP || 0) - 1;

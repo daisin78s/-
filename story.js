@@ -296,6 +296,9 @@ function storyBuildState(diceValues, cons) {
   const storyConFace = (playerId) => (state.players.find((p) => p.id === playerId).conPhysicalId === 'CON005' ? 'B' : 'A');
   setupMod.chooseConFace(state, INDEX, 'P1', storyConFace('P1'));
   setupMod.chooseConFace(state, INDEX, 'P2', storyConFace('P2'));
+  // 第1章のパトラ(心配性な巫女)は、心配の能力(ターン終了時〇0で-1VP)を止める (2026-11-02, per user「第１章では 能力止めて」)。
+  const patra = state.players.find((p) => p.id === 'P2');
+  if (patra.conPhysicalId === 'CON006') patra.worryAbilityDisabled = true;
   // パトラの所有カード「基礎学問LV1」(Excel S041メモ)。ONCE(白ダイス)は使わず持っているだけ。
   state.cards.B001.ownerId = 'P2';
   state.players.find((p) => p.id === 'P2').ownedCardPhysicalIds.push('B001');
