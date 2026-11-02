@@ -6209,7 +6209,8 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
         }
         if (row && effect.source === 'ONCE' && /^(B00[123]|C202|C301)/.test(faceId)) {
           row.style.position = 'relative';
-          row.style.top = '-8px';
+          // 皇女だけ少し下げて弁論家と同じくらいの位置に (2026-11-02, per user「皇女の ⚡⤴3 もう少し下に 弁論家くらい」)。
+          row.style.top = /^C301/.test(faceId) ? '-3px' : '-8px';
         }
         // 基礎学問LV1・高等学問LV1はアイコン全体をもう少しだけ下に (2026-11-02, per user「基礎学問LV1 高等学問LV1 アイコン
         // 全体を もう少しだけ下に」) -- 上の⚡🎲を上げた分(-8px)も含め、どの行も4px下げる。
