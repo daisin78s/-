@@ -1516,11 +1516,11 @@
       "VP": "",
       "ONCE": "",
       "TAP": "",
-      "PASSIVE": "ON(GET(D),ADD(Z,K));ON(GET(wD),ADD(K))",
+      "PASSIVE": "ON(GET(D),ADD(Z,K));ON(GET(wD),ADD(2K))",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "追加色ダイスを得たときZ〇と〇を得る\n🎲を得たときその数だけ〇を得る\n初期資源含む"
+      "INST": "追加色ダイスを得たときZ〇と〇を得る\n🎲を得たときその数だけ〇2を得る\n初期資源含む"
     },
     {
       "ID": "JOB005",

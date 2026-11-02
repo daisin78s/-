@@ -7775,3 +7775,9 @@ body.online-spectator #online-spectator-badge {
 .area-ownership-name {
   white-space: nowrap;
 }
+/* 人材カードの効果のアイコン(〇・赤〇など)を1.5倍に。必要資源はそのまま (2026-11-02, per user「人材カード 必要資源はそのままで
+   アイコンの〇や 赤〇を１．５倍の大きなに」)。 */
+.shop-card[data-deck="C"] .shop-card__effect .action-dot {
+  width: 16.5px;
+  height: 16.5px;
+}

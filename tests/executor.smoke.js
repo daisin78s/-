@@ -1138,7 +1138,7 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   const player = getPlayerRef(state, 'P1');
   const result = executor.runProgram(state, index, { playerId: 'P1' }, 'ADD(2wD)'); // B004A's real ONCE
   check('ADD(2wD) succeeds and grants both white dice', { success: result.success, wD: player.dice.filter((d) => d.kind === 'WHITE').length }, { success: true, wD: 2 });
-  check('...and JOB006 reacted to GET(wD) twice, once per die, granting 2K not 1', player.resources.K, 2);
+  check('...and 百人隊長 reacted to GET(wD) twice, once per die, granting 2K each (4K) -- 2026-11-02 ADD(K)->ADD(2K)', player.resources.K, 4);
 }
 {
   const state = freshState();
