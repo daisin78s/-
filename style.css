@@ -7897,3 +7897,11 @@ body.online-spectator #online-spectator-badge {
 .shop-card--name-centered .shop-card__id {
   text-align: center;
 }
+/* モニュメントのVP: 数字は22.1pxの1.2倍、「VP」は1.2分の1 (2026-11-02)。 */
+.shop-card--monument .shop-card__vp .shop-card__vp-number { font-size: 26.52px; }
+.shop-card--monument .shop-card__vp .shop-card__vp-unit { font-size: 18.42px; }
+/* オベリスクの「必要資源なし」を薄く (per user「オベリスクの 必要資源なし 薄く」)。 */
+.shop-card__cost-empty {
+  font-weight: 400;
+  color: var(--text-muted);
+}

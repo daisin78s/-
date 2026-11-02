@@ -5996,6 +5996,14 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
 
   renderCostBadges(q('.shop-card__cost'), facts.cost, faceId);
   q('.shop-card__vp').textContent = facts.vp ? `${facts.vp} VP` : '';
+  // モニュメントのVPは数字と「VP」を分ける -- 数字を1.2倍、VPを1.2分の1に (2026-11-02, per user「モニュメント 4VPの 4を
+  // １．２倍大きく VPを １．２倍 小さく」)。大きさはstyle.cssの.shop-card__vp-number/-unit。
+  if (facts.vp && /^M/.test(faceId)) {
+    const vpEl = q('.shop-card__vp');
+    vpEl.textContent = '';
+    vpEl.appendChild(el('span', 'shop-card__vp-number', String(facts.vp)));
+    vpEl.appendChild(el('span', 'shop-card__vp-unit', ' VP'));
+  }
   // 宝物庫・晩餐会(印刷VPなし、ゲーム終了時VPに上限あり)は、上限を他のモニュメントのVPと同じ位置に「MAX7」のように
   // (カッコなし) (2026-11-02, per user「（MAX７）（MAX9） 他のモニュメントのVPと同じ位置に カッコはとる」)。
   if (!facts.vp && /^M/.test(faceId)) {
