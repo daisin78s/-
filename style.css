@@ -7823,3 +7823,8 @@ body.online-spectator #online-spectator-badge {
 .action-emoji--bolt {
   filter: saturate(1.8) brightness(0.85) contrast(1.2);
 }
+/* □の中の数字(高等学問LV2の7など)をわずかに下へ (2026-11-02, per user「高等学問の□7 ７がずれているのでわずかにした」)。 */
+.die-face-numeral__digit:not(.die-face-numeral__digit--star) {
+  position: relative;
+  top: 1px;
+}
