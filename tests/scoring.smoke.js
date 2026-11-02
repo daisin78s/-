@@ -168,9 +168,9 @@ function giveCard(state, faceCardId, ownerId) {
   giveCard(state, 'A006A', 'P3');
 
   check('嫉妬 (CON004A): rank 1 on the only quest -> 0VP', scoring.conCardVpAdjustment(state, index, 'P1'), 0);
-  check('嫉妬: rank 2 -> -1VP (1 quest not 1st)', scoring.conCardVpAdjustment(state, index, 'P2'), -1);
-  check('嫉妬: rank 3 -> also just -1VP (counts quests, not rank)', scoring.conCardVpAdjustment(state, index, 'P3'), -1);
-  check('嫉妬: rank 4 -> -1VP', scoring.conCardVpAdjustment(state, index, 'P4'), -1);
+  check('嫉妬: rank 2 -> -2VP (1 quest not 1st)', scoring.conCardVpAdjustment(state, index, 'P2'), -2);
+  check('嫉妬: rank 3 -> also just -2VP (counts quests, not rank)', scoring.conCardVpAdjustment(state, index, 'P3'), -2);
+  check('嫉妬: rank 4 -> -2VP', scoring.conCardVpAdjustment(state, index, 'P4'), -2);
 }
 
 // ---------------------------------------------------------------------------

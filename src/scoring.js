@@ -58,7 +58,7 @@ const JEALOUSY_CON_FACE_ID = 'CON004A';
 const BESPOKE_QST_RANK_CON_FACES = new Set([JEALOUSY_CON_FACE_ID]);
 
 /** 嫉妬 (CON004A, 2026-11-02, per user INST「ゲーム終了時クエスト１位が必要 １位でないクエスト数だけ-1VP」, tie for
- * 1st counts as 1st per user「同点の1位でもよい」) -- -1VP per revealed quest this player isn't ranked 1st on.
+ * 1st counts as 1st per user「同点の1位でもよい」) -- -2VP (was -1VP) per revealed quest this player isn't ranked 1st on.
  * 0 if playerId doesn't own CON004A. */
 function jealousyVpEffect(state, index, playerId) {
   const player = state.players.find((p) => p.id === playerId);
@@ -69,7 +69,7 @@ function jealousyVpEffect(state, index, playerId) {
     const entry = qst.rankPlayersForQuest(state, index, faceId).find((e) => e.playerId === playerId);
     if (entry.rank !== 1) notFirst++;
   }
-  return -notFirst;
+  return -2 * notFirst; // -1VP -> -2VP (2026-11-02, per user data edit「嫉妬 変更しました」: INST「１位でないクエスト数だけ-2VP」)
 }
 
 /**
