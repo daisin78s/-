@@ -7855,3 +7855,11 @@ body.online-spectator #online-spectator-badge {
   justify-content: flex-start;
   padding-top: 3px;
 }
+/* 必要資源を1.3倍に (2026-11-02, per user「必要資源すべての大きさを１．３倍くらいに」)。 */
+.shop-card__cost .resource-badge { font-size: 13.65px; }
+.shop-card__cost .resource-badge__dot { width: 13.65px; height: 13.65px; }
+.shop-card__cost-empty { font-size: 13.65px; }
+/* 必要資源が大きくなった分、名前を上へ上げて区切りの線の位置は変えない (per user「その分NAMEをうえにあげて」「線は下げない」)。 */
+.shop-card.shop-card--square[data-deck] {
+  padding-top: 1px;
+}
