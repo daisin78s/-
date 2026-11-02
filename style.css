@@ -7667,3 +7667,14 @@ body.online-spectator #online-spectator-badge {
 }
 /* 制約カードのもらえる資源: 白ダイスの前にすき間 (2026-11-02, per user「制約カード のアイコン 白ダイスの前に スペース」)。 */
 .con-once-row .action-wd { margin-left: 4px; }
+/* 性格の拡大: 表裏それぞれの説明文をカードの真下に (2026-11-02、main.jsのshowCardEnlargeModal参照)。 */
+.card-enlarge-inst-row {
+  display: flex;
+  gap: 10px;
+  margin: 0 auto;
+  align-items: flex-start;
+}
+.card-enlarge-inst-row__col {
+  flex: 0 0 auto;
+  min-width: 0;
+}

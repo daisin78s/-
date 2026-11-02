@@ -18315,7 +18315,21 @@ function showCardEnlargeModal(faceId, visualNode, sibling, siblingVisualNode, pi
   const body = overlay.querySelector('.card-inst-modal__body');
   body.innerHTML = '';
   overlay.querySelector('.card-inst-modal__title').textContent = cardDisplayName(faceId);
-  if (siblingVisualNode) {
+  if (siblingVisualNode && /^CON/.test(faceId) && visualNode) {
+    // 性格は表裏それぞれの説明文を、そのカードの真下に並べる (2026-11-02, per user「性格 を拡大した時 説明文が
+    // 上下になる 説明文を それぞれの カードの したに」) -- カードの枠(slot)と同じ幅の列を2つ横に並べる。
+    const slots = visualContainer.querySelectorAll('.card-enlarge-row__slot');
+    const instRow = el('div', 'card-enlarge-inst-row');
+    instRow.style.width = visualContainer.style.width;
+    [faceId, sibling].forEach((id, i) => {
+      const col = el('div', 'card-enlarge-inst-row__col');
+      if (slots[i]) col.style.width = slots[i].style.width;
+      col.appendChild(el('div', 'card-inst-modal__face-label', cardDisplayName(id)));
+      renderInstBody(col, instForId(id));
+      instRow.appendChild(col);
+    });
+    body.appendChild(instRow);
+  } else if (siblingVisualNode) {
     for (const id of [faceId, sibling]) {
       body.appendChild(el('div', 'card-inst-modal__face-label', cardDisplayName(id)));
       const section = el('div');
