@@ -4873,11 +4873,7 @@ function buildUntapChoiceIcon(actionText) {
   const match = /^UNTAP_CHOICE\(SELF,(\d+)\)$/.exec(actionText || '');
   if (!match) return null;
   const [, count] = match;
-  // 数字は少し上に (2026-11-02, per user「皇女と 弁論家の アイコンの ⤴3 もう少し上に」)。
-  const countEl = actionSuffix(count);
-  countEl.style.position = 'relative';
-  countEl.style.top = '-3px';
-  return actionRow([actionEmoji('⚡'), actionEmoji('⤴️'), ...(count === '1' ? [] : [countEl])]);
+  return actionRow([actionEmoji('⚡'), actionEmoji('⤴️'), ...(count === '1' ? [] : [actionSuffix(count)])]);
 }
 
 /** UNTAP_ALL(SELF) -- only 王女(C301A)/聖女LV2(C202B)/王女LV2(C301B)'s own ONCE currently, confirmed via
@@ -5628,13 +5624,9 @@ function renderAreaOwnershipEffectText(container, text) {
   const [, areaLabel, lv, suffix] = match;
   // ローマ市街以外は「図書館LV1／の支配」 (2026-11-02, per user「図書館の支配のアイコン 図書館LV1 の支配 に ローマ市街
   // いがいすべて」) -- 名前が長いローマ市街だけ上の「ローマ市街／LV1　の支配」のまま。
-  if (areaLabel !== 'ローマ市街') {
-    container.appendChild(el('div', 'area-ownership-name', `${areaLabel}${lv}`));
-    container.appendChild(el('div', null, suffix));
-    return;
-  }
-  container.appendChild(el('div', 'area-ownership-name', areaLabel));
-  container.appendChild(el('div', null, `${lv}　${suffix}`));
+  // ローマ市街も同じ形に (per user「ローマ市街LV1 の支配 アイコン変更」)。
+  container.appendChild(el('div', 'area-ownership-name', `${areaLabel}${lv}`));
+  container.appendChild(el('div', null, suffix));
 }
 
 /**
@@ -6140,7 +6132,17 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     // than showing raw DSL text, per instruction. See [[project-dice-wp-ui-requirements]].
     const allowTextFallback = options.allowTextFallback !== false;
     const rows = facts.effects
-      .map((effect) => buildEffectRow(effect, allowTextFallback))
+      .map((effect) => {
+        const row = buildEffectRow(effect, allowTextFallback);
+        // 基礎学問・高等学問・幾何学の⚡🎲(ONCE)の行を少し上に (2026-11-02, per user「基礎学問 高等学問 幾何学のアイコンの
+        // ⚡🎲 もう少し上に」)。
+        // 皇女・弁論家の⚡⤴3(ONCE)の行も同じく行ごと上に (per user「⤴3の行ごと、カードの上の方へ移したい」)。
+        if (row && effect.source === 'ONCE' && /^(B00[123]|C202|C301)/.test(faceId)) {
+          row.style.position = 'relative';
+          row.style.top = '-8px';
+        }
+        return row;
+      })
       .filter(Boolean);
     if (rows.length) {
       tall = true;

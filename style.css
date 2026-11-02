@@ -7763,3 +7763,15 @@ body.online-spectator #online-spectator-badge {
   right: 6px;
   line-height: 1;
 }
+/* 正方形カードで効果の行どうしが縮んで重ならないように(はみ出す分は下へ)。 */
+.shop-card--square .shop-card__effect > * {
+  flex-shrink: 0;
+}
+/* 正方形カードでは、ダイスの行を上の⚡🎲の行に重ねる量を減らす(高等学問LV2で⚡🎲がダイスに重なっていたため)。 */
+.shop-card--square .shop-card__effect .action-icons:has(.die-face, .die-face-numeral) {
+  margin-top: -2px;
+}
+/* 「ローマ市街LV1」のような名前の行は折り返さない(はみ出してもよい、per user「ローマ市街LV1 の支配」)。 */
+.area-ownership-name {
+  white-space: nowrap;
+}
