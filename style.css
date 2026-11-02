@@ -7879,3 +7879,15 @@ body.online-spectator #online-spectator-badge {
 .shop-card__effect .action-icons:has(> .die-face) > .action-emoji {
   margin-top: 12px; /* サイコロの絵(文字の箱の上に余白がある)の上の線に⤵の上をそろえる */
 }
+/* オベリスクの「必要資源なし」はカードの真ん中に (2026-11-02, per user「オベリスクの必要資源なし 真ん中に」)。 */
+.shop-card__cost:has(> .shop-card__cost-empty) {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+}
+.shop-card__cost-empty {
+  font-weight: 700; /* 濃く (per user「濃く」) */
+  color: var(--text);
+}
