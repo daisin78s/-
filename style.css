@@ -7841,3 +7841,7 @@ body.online-spectator #online-spectator-badge {
   right: 8px;
   bottom: 4px;
 }
+/* 初期資源カードの数字はアイコンとだいたい同じ、少しだけ小さく (2026-11-02, per user「初期資源カードの数字 アイコンと
+   だいたい大きさ 少しだけ 小さく」) -- 2倍表示の中で〇(11px)より少し小さい9px(=18px相当)。選ぶ欄は元の大きさ(16px)のまま。 */
+.shop-card--resource .shop-card__effect .action-count { font-size: 9px; }
+.card-group__onboard-resources .shop-card--resource .shop-card__effect .action-count { font-size: 16px; }

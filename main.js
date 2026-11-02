@@ -4906,7 +4906,8 @@ function buildChangeToVpIcon(actionText) {
   const match = /^CHANGE\((\d*)K,(\d*)VP\)$/.exec(actionText || '');
   if (!match) return null;
   const [, payCount, gainCount] = match;
-  return actionRow([...resourceItemNodes(payCount, 'K'), actionArrow(), actionSuffix(gainCount ? `${gainCount}VP` : 'VP')]);
+  // VPの数は1でも書く (2026-11-02, per user「パンとサーカスのアイコン ⤵〇→1VP に」)。
+  return actionRow([...resourceItemNodes(payCount, 'K'), actionArrow(), actionSuffix(`${gainCount || 1}VP`)]);
 }
 
 /** CHANGE(K,VP,n): a capped-repeat K->VP conversion, usable up to n times -- now all 3 孤児院 tiers
