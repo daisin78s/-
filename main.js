@@ -5622,6 +5622,13 @@ function renderAreaOwnershipEffectText(container, text) {
   // 1行目「エリア名+LV1」・2行目「　　の支配」だったが、ローマ市街のような長い名前ではLV1が1行目に入らず
   // 3行に折り返していた。1行目はエリア名だけにし、LVは2行目の先頭へ。全ての支配カードに共通。
   const [, areaLabel, lv, suffix] = match;
+  // ローマ市街以外は「図書館LV1／の支配」 (2026-11-02, per user「図書館の支配のアイコン 図書館LV1 の支配 に ローマ市街
+  // いがいすべて」) -- 名前が長いローマ市街だけ上の「ローマ市街／LV1　の支配」のまま。
+  if (areaLabel !== 'ローマ市街') {
+    container.appendChild(el('div', 'area-ownership-name', `${areaLabel}${lv}`));
+    container.appendChild(el('div', null, suffix));
+    return;
+  }
   container.appendChild(el('div', 'area-ownership-name', areaLabel));
   container.appendChild(el('div', null, `${lv}　${suffix}`));
 }
