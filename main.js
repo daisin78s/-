@@ -5026,9 +5026,9 @@ function buildEmblemStepVpModifierIcon(actionText) {
  * just below). No "1個" row (2026-10-19, per user follow-up report: "の1個はいらない") -- just the star. */
 function buildSetWildcardIcon(actionText) {
   if (!/^SET_WILDCARD\(SELF,THIS_TURN\)/.test(actionText || '')) return null;
-  const star = actionEmoji('☆');
-  star.classList.add('action-emoji--large');
-  return actionRow([star, actionSuffix('ダイス')]);
+  // □の中に☆、「ダイス」の文字は消す (2026-11-02, per user「基礎学問の アイコン □の中に☆ ダイス は消す」) --
+  // ⤵⚀(SET_DIE_VALUE)と同じダイスの枠を使う。
+  return actionRow([dieFace('☆')]);
 }
 
 /** SET_DIE_VALUE(SELFx|y): player picks one of two fixed values -- shown as the two numbers, no arrow
