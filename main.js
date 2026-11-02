@@ -4655,7 +4655,11 @@ function buildBuildIcon(actionText) {
   if (bzOnlyMatch) {
     const stack = el('div', 'action-icons-stack');
     stack.appendChild(buildRow);
-    stack.appendChild(actionRow([actionSuffix(`軽減${bzOnlyMatch[1]}`), actionDot('Z')])); // Z〇はアイコンに (2026-11-02, per user「交渉術 研究 のアイコン 軽減Z〇 Z〇を アイコンにして」)
+    const bzRow = actionRow([actionSuffix(`軽減${bzOnlyMatch[1]}`), actionDot('Z')]); // Z〇はアイコンに (2026-11-02, per user「交渉術 研究 のアイコン 軽減Z〇 Z〇を アイコンにして」)
+    // 左下のVPと重ならないよう右へ (per user「交渉術 研究 軽減をもっと右に」)。
+    bzRow.style.position = 'relative';
+    bzRow.style.left = '20px';
+    stack.appendChild(bzRow);
     return stack;
   }
   const addMatch = /;ADD\(([^)]+)\)$/.exec(actionText);
