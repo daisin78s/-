@@ -7850,3 +7850,8 @@ body.online-spectator #online-spectator-badge {
   font-size: 22.1px; /* 2倍は大きすぎたので元(13px)の1.7倍に (per user「さっきの１．７倍で」) */
   line-height: 1;
 }
+/* 晩餐会・宝物庫の効果を、上の線にかからない程度に上へ (2026-11-02, per user「晩餐会と宝物庫 上の線にかからない程度に上に」)。 */
+.shop-card--monument:has(.shop-card__vp--cap) .shop-card__effect {
+  justify-content: flex-start;
+  padding-top: 3px;
+}
