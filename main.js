@@ -3767,6 +3767,18 @@ function renderCardListFlatCategory(key, container) {
     for (let n = 1; n <= maxNumber; n++) {
       grid.appendChild(byNumber.has(n) ? buildCardListCell(byNumber.get(n), config.isQst) : el('div', 'card-list-cell--hole'));
     }
+  } else if (config.isQst) {
+    // 性格一覧と同じく、段の左に「表」「裏」 (2026-11-02, per user「クエスト一覧 性格と同じように 表 裏 と書いて」)。
+    grid.style.gridTemplateColumns = `auto repeat(${config.columns}, 244px)`;
+    grid.dataset.withTierLabels = '1';
+    for (const [tier, label] of [['A', '表'], ['B', '裏']]) {
+      const tierIds = faceIds.filter((id) => id.endsWith(tier));
+      if (tierIds.length === 0) continue;
+      const labelEl = el('div', 'card-list-con-row__label', label);
+      labelEl.style.alignSelf = 'center';
+      grid.appendChild(labelEl);
+      for (const faceId of tierIds) grid.appendChild(buildCardListCell(faceId, true));
+    }
   } else {
     for (const faceId of faceIds) grid.appendChild(buildCardListCell(faceId, config.isQst));
   }
@@ -3785,6 +3797,13 @@ function fitCardListQstGridToScreen(grid) {
   const cells = [...grid.children];
   if (!body || cells.length === 0) return;
   grid.style.zoom = '';
+  // 表/裏の見出しつき(4列×2段のまま)は、列を組み替えずに縮めるだけ。
+  if (grid.dataset.withTierLabels) {
+    const rect = grid.getBoundingClientRect();
+    const fit = Math.min(1, (body.clientWidth - 2) / grid.scrollWidth, (body.clientHeight - 2) / rect.height);
+    if (fit < 1) grid.style.zoom = String(Math.floor(fit * 1000) / 1000);
+    return;
+  }
   const cardW = 244;
   const cardH = Math.max(...cells.map((c) => c.getBoundingClientRect().height));
   const gap = parseFloat(getComputedStyle(grid).columnGap) || 0;
