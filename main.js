@@ -5179,9 +5179,8 @@ function buildTreasuryFinalVpModifierIcon(actionText) {
   const row1 = actionRow([actionDot('K'), el('span', 'action-suffix action-suffix--large', '以外の資源')]);
   row1.classList.add('action-icons--nowrap');
   stack.appendChild(row1);
-  const row2 = el('span', 'action-suffix action-suffix--large');
-  appendTextWithSmallChar(row2, '1個につき1VP', '1');
-  stack.appendChild(actionRow([row2]));
+  // 「1」もほかの字と同じ大きさに (per user「同じにして」)。
+  stack.appendChild(actionRow([el('span', 'action-suffix action-suffix--large', '1個につき1VP')]));
   stack.appendChild(actionRow([el('span', 'action-suffix action-suffix--large', '（MAX7）')]));
   return stack;
 }
