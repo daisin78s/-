@@ -9,7 +9,7 @@ value for these from scratch, same mechanism that row already uses).
   - 聖女王女アンタップ相性: credited once per owned untap-worthy B/C card (see UNTAP_SYNERGY_FACE_IDS in
     evaluator.js) while the player owns 聖女 or 王女 (C202/C301, either tier) -- per user: "タップする
     カードで毎ターン使えないカード(兆し/導き/Cカード)があると聖女・王女が強い".
-  - 晩餐会食料生産相性: credited once while the player owns 農園/小麦畑/農夫 (A004/A005/C201, either
+  - 晩餐会食料生産相性: credited once while the player owns 農園/小麦畑/農場主 (A004/A005/C201, either
     tier) and 晩餐会(M401) is still unclaimed -- per user: "農園 小麦畑 農民などがあると...晩餐会...が
     狙いやすい".
   - 元老院支配拡張相性 (2026-09-07 addition): credited once per owned card among 導き(B001-B003)/

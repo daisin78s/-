@@ -587,7 +587,7 @@ function giveTrainingGroundControl(state, playerId, faceId) {
 
 // ---------------------------------------------------------------------------
 // forcedPureGainCTap (2026-08-31, per user request): an untapped pure-ADD(...) C-tier card (貴族/司教/
-// 金貸し/農夫/聖女/王女, both tiers) is always force-tapped, regardless of round/hasPlacedDieThisTurn.
+// 金貸し/農場主/聖女/王女, both tiers) is always force-tapped, regardless of round/hasPlacedDieThisTurn.
 // 代官/修道士/商人 (CHANGE(K,...)-shaped, real K cost) must NOT be forced. A genuine no-op (ADD(wD) at
 // whiteDiceCap) must be skipped rather than forced.
 // ---------------------------------------------------------------------------

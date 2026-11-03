@@ -46,7 +46,7 @@ const UNTAP_SYNERGY_FACE_IDS = new Set([
   'C004A', 'C004B', 'C005A', 'C005B', 'C006A', 'C006B', 'C201A', 'C201B',
 ]);
 
-/** 小麦畑/農園の支配(A004/A005) + 農夫(C201), either tier -- the user's own K-stockpiling-economy group
+/** 小麦畑/農園の支配(A004/A005) + 農場主(C201), either tier -- the user's own K-stockpiling-economy group
  * feeding the 晩餐会(M401) synergy bonus in score(). */
 const FARM_SYNERGY_FACE_IDS = new Set(['A004A', 'A004B', 'A005A', 'A005B', 'C201A', 'C201B']);
 
@@ -488,7 +488,7 @@ class Evaluator {
       if (ownsFairyOrPrincess) {
         total += tappedUntapSynergyCount * v('聖女王女ラウンドタップ相性');
       }
-      // 農園/小麦畑/農夫(A004/A005/C201, either tier) x 晩餐会(物理id M401->M403、2026-10-13の宝物庫追加
+      // 農園/小麦畑/農場主(A004/A005/C201, either tier) x 晩餐会(物理id M401->M403、2026-10-13の宝物庫追加
       // に伴うモニュメント再編で移動, COST=9K, final VP_MODIFIER per K held): a K-stockpiling economy
       // already in place makes 晩餐会 both easier to afford and more valuable once owned -- credited once
       // while 晩餐会 is still unclaimed by anyone (same isMonumentUnclaimed convention

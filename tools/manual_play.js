@@ -151,7 +151,7 @@ function advanceUntilMyDecision(session, index, aiCtx) {
   }
 
   while (state.phase !== 'GAME_END') {
-    // Any other pendingChoice of mine (PICK_JOB_REPLACEMENT, UNTAP_CHOICE -- e.g. 農夫) blocks
+    // Any other pendingChoice of mine (PICK_JOB_REPLACEMENT, UNTAP_CHOICE -- e.g. 農場主) blocks
     // getNextTurn/generateMoves from offering anything at all until resolved, same as the real engine.
     const myPendingChoice = state.pendingChoices.find((c) => c.playerId === MY_PLAYER_ID);
     if (myPendingChoice) return { kind: myPendingChoice.kind, choice: myPendingChoice };

@@ -58,7 +58,7 @@ const board = require('../board');
 const executor = require('../executor');
 const { applyInPlace } = require('./simulator');
 
-/** The 12 C-tier faces (both LV1/LV2 tiers of 貴族/司教/金貸し/農夫/聖女/王女) whose TAP is a pure
+/** The 12 C-tier faces (both LV1/LV2 tiers of 貴族/司教/金貸し/農場主/聖女/王女) whose TAP is a pure
  * ADD(...) resource grant with no cost at all -- see MoveGenerator#forcedPureGainCTap's own doc on why
  * these specifically (and not 代官/修道士/商人's CHANGE(K,...)-shaped taps) are safe to force
  * unconditionally. */
@@ -592,7 +592,7 @@ class MoveGenerator {
    * C-tier card (2026-08-31, per user request, following a replay review where the AI's greedy 1-ply
    * rollout kept passing over 貴族/C004's ADD(A,K) -- ranked outside the beam purely because its own
    * immediate score looked unremarkable, even though tapping it was a free, no-downside prerequisite for
-   * a much better build a few moves later): 貴族/司教/金貸し/農夫/聖女/王女, both LV1 and LV2
+   * a much better build a few moves later): 貴族/司教/金貸し/農場主/聖女/王女, both LV1 and LV2
    * (PURE_GAIN_C_FACES) -- deliberately excludes 代官/修道士/商人 (C001-C003, both tiers), whose
    * CHANGE(K,...)-shaped taps spend real K that some other action this same turn/round might still need;
    * forcing those unconditionally could do real harm, unlike this group's plain ADD(...) grants, which are

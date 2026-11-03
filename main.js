@@ -6245,11 +6245,11 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
         const row = buildEffectRow(effect, allowTextFallback);
         // 基礎学問・高等学問・幾何学の⚡🎲(ONCE)の行を少し上に (2026-11-02, per user「基礎学問 高等学問 幾何学のアイコンの
         // ⚡🎲 もう少し上に」)。
-        // 皇女・弁論家の⚡⤴3(ONCE)の行も同じく行ごと上に (per user「⤴3の行ごと、カードの上の方へ移したい」)。
+        // 皇女・軍団長の⚡⤴3(ONCE)の行も同じく行ごと上に (per user「⤴3の行ごと、カードの上の方へ移したい」)。
         // パンとサーカスLV2の「毎ターン」は左下の1 VPと重ならないよう右へ (2026-11-02, per user「パンとサーカスLV2 毎ターンをもっと右に」)。
         // 天文学の⚡🎲🎲(ONCE)は1.3倍 (2026-11-02, per user「天文学 ⚡🎲🎲 １．３倍に」)。
         if (row && effect.source === 'ONCE' && /^B201/.test(faceId)) row.style.zoom = '1.3';
-        // 皇女LV2・弁論家LV2の⤵の行は上へ (2026-11-02, per user「皇女LV2 弁論家LV2 ⤵⚡🎲 など もっと上に」 -- 先に「右に」と
+        // 皇女LV2・軍団長LV2の⤵の行は上へ (2026-11-02, per user「皇女LV2 弁論家LV2 ⤵⚡🎲 など もっと上に」 -- 先に「右に」と
         // 言ったのは間違いだった)。
         if (row && effect.source === 'TAP' && (faceId === 'C202B' || faceId === 'C301B')) {
           row.style.position = 'relative';
@@ -6261,7 +6261,7 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
         }
         if (row && effect.source === 'ONCE' && /^(B00[123]|C202|C301)/.test(faceId)) {
           row.style.position = 'relative';
-          // 皇女だけ少し下げて弁論家と同じくらいの位置に (2026-11-02, per user「皇女の ⚡⤴3 もう少し下に 弁論家くらい」)。
+          // 皇女だけ少し下げて軍団長と同じくらいの位置に (2026-11-02, per user「皇女の ⚡⤴3 もう少し下に 弁論家くらい」)。
           row.style.top = /^C301/.test(faceId) ? '-3px' : '-8px';
         }
         // 基礎学問LV1・高等学問LV1はアイコン全体をもう少しだけ下に (2026-11-02, per user「基礎学問LV1 高等学問LV1 アイコン

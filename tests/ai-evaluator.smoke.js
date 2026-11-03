@@ -1131,11 +1131,11 @@ index.raw.QST = [
   );
 }
 {
-  // 農夫(C201A) owned, 晩餐会(M401) unclaimed (not in state.cards at all) -- credited.
+  // 農場主(C201A) owned, 晩餐会(M401) unclaimed (not in state.cards at all) -- credited.
   const state = freshState(3);
   giveCard(state, 'C201A', 'P1');
   check(
-    '農夫 owned + 晩餐会 unclaimed credits the synergy bonus (+30)',
+    '農場主 owned + 晩餐会 unclaimed credits the synergy bonus (+30)',
     evaluator.score(state, 'P1'),
     evaluator.score(freshState(3), 'P1') + evalTable[3].C201A + 30,
   );
@@ -1152,7 +1152,7 @@ index.raw.QST = [
   withoutFarm.players.push(p2Only);
   giveCard(withoutFarm, 'M403', 'P2');
   check(
-    '農夫 owned but 晩餐会 already claimed (by anyone) credits nothing',
+    '農場主 owned but 晩餐会 already claimed (by anyone) credits nothing',
     evaluator.score(state, 'P1') - evaluator.score(withoutFarm, 'P1'),
     evalTable[3].C201A,
   );
@@ -1160,7 +1160,7 @@ index.raw.QST = [
 {
   // No farm/farmer card owned at all -- 晩餐会 being unclaimed alone credits nothing.
   const state = freshState(3);
-  check('No 農園/小麦畑/農夫 owned credits nothing toward 晩餐会', evaluator.score(state, 'P1'), evaluator.score(freshState(3), 'P1'));
+  check('No 農園/小麦畑/農場主 owned credits nothing toward 晩餐会', evaluator.score(state, 'P1'), evaluator.score(freshState(3), 'P1'));
 }
 
 // ---------------------------------------------------------------------------

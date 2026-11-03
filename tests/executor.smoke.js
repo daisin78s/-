@@ -1353,7 +1353,7 @@ const UNTAP_CHOICE_3 = { type: 'UNTAP_CHOICE', scope: 'SELF', count: 3 };
   // Regression (2026-08-20, per user bug report: "農夫を獲得した時アンタップするカードを選ばなくても進めて
   // しまう...他の操作（ダイス配置など）ができてしまう") -- canEndTurn used to ignore pendingChoices
   // entirely, so a player could end their turn (and, per main.js's matching UI fix, place dice/use free
-  // actions/bare-TAP) while an UNTAP_CHOICE sat unresolved. C004A/農夫 was the original real-data vehicle
+  // actions/bare-TAP) while an UNTAP_CHOICE sat unresolved. C004A/旧農夫 was the original real-data vehicle
   // for this report; by 2026-08-24 no card in the data carries UNTAP_CHOICE at all any more (C004-C007/
   // C008A/C008B were all reworked away from it across two data edits that same day), so this now
   // constructs the command directly (same style as the runUntapChoice block above) rather than pinning
