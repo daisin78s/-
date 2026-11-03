@@ -1487,12 +1487,12 @@
       "COST": "",
       "VP": "",
       "ONCE": "",
-      "TAP": "IF(RESOURCE(K)<=3,ADD(K),CHANGE(K,B))",
+      "TAP": "IF(RESOURCE(K)<=3,ADD(K),CHANGE(2K,Z))",
       "PASSIVE": "",
       "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "タップしたとき\n〇が3以下なら〇を得る\n４以上なら〇→B\n毎ターンアンタップする"
+      "INST": "タップしたとき\n〇が3以下なら〇を得る\n４以上なら〇2→Z\n毎ターンアンタップする"
     },
     {
       "ID": "JOB003",
@@ -1516,11 +1516,11 @@
       "VP": "",
       "ONCE": "",
       "TAP": "",
-      "PASSIVE": "ON(GET(D),ADD(Z,K));ON(GET(wD),ADD(2K))",
+      "PASSIVE": "ON(GET(D),ADD(2B));ON(GET(wD),ADD(2K))",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "追加色ダイスを得たときZ〇と〇を得る\n🎲を得たときその数だけ〇2を得る\n初期資源含む\n\nラテン名ケントゥリオ"
+      "INST": "追加色ダイスを得たとき青〇2を得る\n🎲を得たときその数だけ〇2を得る\n初期資源含む\n\nラテン名ケントゥリオ"
     },
     {
       "ID": "JOB005",

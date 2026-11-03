@@ -1120,13 +1120,12 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
-  giveCard(state, 'JOB004', 'P1'); // PASSIVE=ON(GET(D),ADD(Z,K));ON(GET(wD),ADD(K))
+  giveCard(state, 'JOB004', 'P1'); // PASSIVE=ON(GET(D),ADD(2B));ON(GET(wD),ADD(2K))
   const player = getPlayerRef(state, 'P1');
   const before = player.dice.filter((d) => d.kind === 'COLOR').length;
   const result = executor.runCommand(state, index, { playerId: 'P1' }, { type: 'CHANGE', pay: [], gain: [{ resource: 'D', count: { kind: 'literal', value: 1 } }], times: { kind: 'literal', value: 1 } });
   check('A bare CHANGE(...,D) succeeds and grants the color die', { success: result.success, diceGained: player.dice.filter((d) => d.kind === 'COLOR').length - before }, { success: true, diceGained: 1 });
-  check('...and JOB006 auto-reacts to the CHANGE-triggered GET(D), granting Z', player.resources.Z, 1);
-  check('...and K (2026-10-13, per user data edit: "Zと1VP"から"Zと〇"に変更)', player.resources.K, 1);
+  check('...and 百人隊長 auto-reacts to the CHANGE-triggered GET(D), granting 2B (2026-11-03, per user data edit: Z〇と〇 -> 青〇2)', player.resources.B, 2);
 }
 {
   // GET fires once *per die* for a multi-die grant, not once for the whole grant (2026-08-06, per user
@@ -1134,7 +1133,7 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   // ONCE=ADD(2wD) only triggered JOB006's ON(GET(wD),ADD(K)) once instead of twice). Mirrors
   // board.placeDiceGroup's own PLACE(mapId), which already emits once per die in a multi-die placement.
   const state = freshState();
-  giveCard(state, 'JOB004', 'P1'); // PASSIVE=ON(GET(D),ADD(Z,K));ON(GET(wD),ADD(K))
+  giveCard(state, 'JOB004', 'P1'); // PASSIVE=ON(GET(D),ADD(2B));ON(GET(wD),ADD(2K))
   const player = getPlayerRef(state, 'P1');
   const result = executor.runProgram(state, index, { playerId: 'P1' }, 'ADD(2wD)'); // B004A's real ONCE
   check('ADD(2wD) succeeds and grants both white dice', { success: result.success, wD: player.dice.filter((d) => d.kind === 'WHITE').length }, { success: true, wD: 2 });
@@ -1452,6 +1451,19 @@ const UNTAP_CHOICE_3 = { type: 'UNTAP_CHOICE', scope: 'SELF', count: 3 };
   player.resources.K = 1;
   executor.applyTurnEnd(state, index, 'P1');
   check('applyTurnEnd leaves Z untouched mid-round (a COLOR die is still unplaced)', player.resources, { K: 1, A: 0, B: 0, C: 0, Z: 4, VP: 0, BZ: 0 });
+}
+
+{
+  // 巫女(JOB002) TAP (2026-11-03, per user data edit: 4以上なら〇→B から 〇2→Z に) -- judged once at tap time.
+  const tap = getCardRow(index, 'JOB002').TAP;
+  const low = freshState();
+  getPlayerRef(low, 'P1').resources.K = 3;
+  executor.runProgram(low, index, { playerId: 'P1' }, tap);
+  check('巫女 TAP with 〇3 gains 〇 (4〇, no further conversion)', [getPlayerRef(low, 'P1').resources.K, getPlayerRef(low, 'P1').resources.Z || 0], [4, 0]);
+  const high = freshState();
+  getPlayerRef(high, 'P1').resources.K = 4;
+  executor.runProgram(high, index, { playerId: 'P1' }, tap);
+  check('巫女 TAP with 〇4 pays 〇2 for Z', [getPlayerRef(high, 'P1').resources.K, getPlayerRef(high, 'P1').resources.Z || 0], [2, 1]);
 }
 
 console.log(`\n${passCount} passed, ${failCount} failed`);
