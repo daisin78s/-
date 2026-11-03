@@ -1901,8 +1901,8 @@ function setActivationListener(fn) {
  * bespoke "just untapped itself, no resource granted this time" half of its alternating ability (see
  * board.grantPioneerBonusIfEarned's own doc) -- distinct from 'PASSIVE' so listeners that only want to
  * count real grants (e.g. src/ai/game-runner.js's activationCounts) can exclude it. */
-function notifyActivation(state, playerId, physicalId, faceId, kind) {
-  if (activationListener) activationListener(state, playerId, physicalId, faceId, kind);
+function notifyActivation(state, playerId, physicalId, faceId, kind, amount = 1) {
+  if (activationListener) activationListener(state, playerId, physicalId, faceId, kind, amount);
 }
 
 /** Player elects to tap physicalId to resolve a previously-offered TAP reaction (see emit()). */
@@ -2015,8 +2015,10 @@ function grantChefBonusIfEarned(state, index, context, vpCount) {
   // 得たVPの半分(端数切り上げ)のK (2026-10-27, per user request: "食料長官の能力 得たVPの半分の数（端数切り
   // 上げ）の〇を得る 初期資源含む" + 回答「VPを得るたびに半分」) -- VPを得る1回ごとに計算する(1VP→1K、2VP→1K、
   // 3VP→2K)。初期資源カードのVPも、この関数を通る普通のVP獲得なので含まれる(setup.receiveInitialResources)。
-  grantResourceAndEmitGet(state, index, context, 'K', Math.ceil(vpCount / 2));
-  notifyActivation(state, context.playerId, player.jobCardId, player.jobCardId, 'PASSIVE');
+  const kGained = Math.ceil(vpCount / 2);
+  grantResourceAndEmitGet(state, index, context, 'K', kGained);
+  // amount = 得た〇の数 (2026-11-03, per user「食料長官は 得たKの合計」 -- AIDATAの使用回数を〇の合計にする)。
+  notifyActivation(state, context.playerId, player.jobCardId, player.jobCardId, 'PASSIVE', kGained);
 }
 
 module.exports = {

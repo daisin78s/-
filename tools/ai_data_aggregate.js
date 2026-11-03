@@ -291,8 +291,11 @@ function createAggregate(index, highScoreThreshold, saved) {
       // JOB "使用回数" (2026-08-07, per user spec) -- see jobEntry's own doc on what "usage" means per
       // JOB face.
       const jobFaceId = h.jobFaceId;
-      const usage = jobFaceId === 'JOB008' ? (detail.job008BonusVp || 0)
-        : jobFaceId === 'JOB010' ? ((activationCounts['B005A'] || 0) + (activationCounts['B005B'] || 0))
+      // 2026-11-03 (per user「食料長官は 得たKの合計」「研究者は 研究をタップした数」): 研究者(JOB007) = 研究
+      // (B005A/B) のタップ回数、食料長官(JOB008) = 得た〇の合計 (notifyActivation の amount で足される)、
+      // 宮廷人(JOB010) など ほかは自分のタップ/発動回数。前は ID を並べ替える前の名残で JOB008 = 巫女の
+      // エンブレムVP、JOB010 = 研究のタップ回数 になっていた。
+      const usage = jobFaceId === 'JOB007' ? ((activationCounts['B005A'] || 0) + (activationCounts['B005B'] || 0))
         : (activationCounts[jobFaceId] || 0);
       const je = jobEntry(jobFaceId);
       je.count++;
