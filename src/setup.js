@@ -528,37 +528,26 @@ function grantRevolutionaryBonusIfEarned(state, index, playerId) {
     return;
   }
 
-  // 研究が先に取られていた場合 (2026-11-02, per user's INST「その場合そのプレイヤーのターン終了時に、研究者を捨て札に
-  // して新しいジョブが１枚追加されます」) -- nothing happens here any more (was: draw 3 JOBs and pick one right away);
-  // replaceResearcherIfResearchTaken does it at turn end instead, so 研究 can't be taken just to peek at the next
-  // JOB and then undone (per user「そうしないと とりあえず 研究を とって 次のジョブを見てからキャンセルできてしまう」).
+  // 研究が先に取られていた場合: 何も起きない(研究者はそのまま)。研究が取られた時に場(ジョブプール)の研究者を入れ替える
+  // のは replaceResearcherIfResearchTaken (ターン終了時、2026-11-03に意図どおりに直した)。
 }
 
-/** 研究者 (2026-11-02) -- called from turn-flow.endTurn at every turn end. Any player whose JOB is 研究者
- * while 研究(B005) belongs to someone else discards 研究者 and gets 1 random JOB from the JOB deck (not in
- * state.jobPool, never dealt before, not locked), running its ONCE like a normal draft. */
+/** 研究者 (2026-11-02; corrected 2026-11-03 per user「研究者がジョブにある時に 研究を いずれかのプレイヤーが とったら
+ * そのプレイヤーの ターン終了後に研究者を 捨て札にして 新しいジョブ が一枚 代わりに増える」) -- about the JOB POOL (the
+ * not-yet-drafted jobs), not a player's own job: called from turn-flow.endTurn at every turn end; if 研究者 is still in
+ * state.jobPool and 研究(B005) now belongs to anyone, 研究者 leaves the pool (discarded) and 1 random JOB from the JOB
+ * deck (never dealt before, not locked) takes its place in the pool. A player who already drafted 研究者 keeps it. */
 function replaceResearcherIfResearchTaken(state, index) {
   const researchOwner = state.cards.B005 && state.cards.B005.ownerId;
-  if (!researchOwner) return;
-  for (const player of state.players) {
-    if (!player.jobCardId || player.id === researchOwner) continue;
-    if (getCardRow(index, player.jobCardId).NAME !== '研究者') continue;
-    const lockedFaceIds = state.lockedFaceIds || [];
-    const deck = index.raw.JOB.map((r) => r.ID)
-      .filter((id) => !state.jobPool.includes(id) && !state.cards[id] && !lockedFaceIds.includes(id));
-    const oldJobPhysicalId = splitCardId(player.jobCardId).physicalId;
-    player.ownedCardPhysicalIds = player.ownedCardPhysicalIds.filter((id) => id !== oldJobPhysicalId);
-    state.cards[oldJobPhysicalId].ownerId = null;
-    player.jobCardId = null;
-    if (deck.length === 0) continue;
-    const newJobId = shuffle(state.rng, deck)[0];
-    const inst = createCardInstance(newJobId);
-    inst.ownerId = player.id;
-    state.cards[inst.physicalId] = inst;
-    player.ownedCardPhysicalIds.push(inst.physicalId);
-    player.jobCardId = newJobId;
-    runProgram(state, index, { playerId: player.id, sourcePhysicalId: inst.physicalId }, getCardRow(index, newJobId).ONCE);
-  }
+  if (!researchOwner || !Array.isArray(state.jobPool)) return;
+  const pos = state.jobPool.findIndex((id) => getCardRow(index, id).NAME === '研究者');
+  if (pos === -1) return;
+  const researcherId = state.jobPool[pos];
+  const lockedFaceIds = state.lockedFaceIds || [];
+  const deck = index.raw.JOB.map((r) => r.ID)
+    .filter((id) => id !== researcherId && !state.jobPool.includes(id) && !state.cards[id] && !lockedFaceIds.includes(id));
+  if (deck.length === 0) { state.jobPool.splice(pos, 1); return; }
+  state.jobPool[pos] = shuffle(state.rng, deck)[0];
 }
 
 /** Resolves a player's PICK_JOB_REPLACEMENT choice (see grantRevolutionaryBonusIfEarned's own doc):

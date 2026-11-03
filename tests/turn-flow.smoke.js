@@ -439,37 +439,29 @@ check('startRound(2) itself does not touch dice (already rerolled at the previou
 }
 
 // ---------------------------------------------------------------------------
-// 研究者 (2026-11-02, per user: 「研究が獲得されたターン終了時に 研究者を捨て札に」 + INST「新しいジョブが１枚追加」)
-// -- at turn end, a player holding 研究者 while 研究(B005) belongs to someone else discards 研究者 and gets 1
-// random JOB from the deck. (巫女's old emblem bonus test was removed -- emblems abolished.)
+// 研究者 (2026-11-03, per user's intended rule「研究者がジョブにある時に 研究を いずれかのプレイヤーが とったら そのプレイヤーの
+// ターン終了後に研究者を 捨て札にして 新しいジョブ が一枚 代わりに増える」) -- about the JOB POOL: at turn end, if 研究 is owned
+// and 研究者 is still in state.jobPool, it is replaced in the pool by a new JOB. A player who already holds 研究者 keeps it.
 // ---------------------------------------------------------------------------
 {
   const { createEmptyGameState: freshEmptyState, createCardInstance } = require('../src/game-state');
-  const s = freshEmptyState('researcher-replace-smoke');
+  const s = freshEmptyState('researcher-pool-smoke');
   setup.createPlayers(s, ['Alice', 'Bob']);
   setup.prepareMaps(s, index);
   setup.prepareShops(s, index);
   s.turnOrder = ['P1', 'P2'];
-  s.jobPool = [];
-  const [p1, p2] = s.players;
   const researcherId = index.raw.JOB.find((r) => r.NAME === '研究者').ID;
-  const job = createCardInstance(researcherId);
-  job.ownerId = 'P1';
-  s.cards[job.physicalId] = job;
-  p1.ownedCardPhysicalIds.push(job.physicalId);
-  p1.jobCardId = researcherId;
-
+  s.jobPool = ['JOB001', researcherId, 'JOB003'];
   turnFlow.endTurn(s, index, 'P1');
-  check('研究者: nobody owns 研究 yet -> 研究者 is kept', p1.jobCardId, researcherId);
-
+  check('研究者 stays in the pool while nobody owns 研究', s.jobPool.includes(researcherId), true);
   const research = createCardInstance('B005A');
   research.ownerId = 'P2';
   s.cards[research.physicalId] = research;
-  p2.ownedCardPhysicalIds.push(research.physicalId);
+  s.players[1].ownedCardPhysicalIds.push(research.physicalId);
   turnFlow.endTurn(s, index, 'P2');
-  check('研究者: someone else owns 研究 -> at turn end 研究者 is replaced by another JOB', p1.jobCardId !== null && p1.jobCardId !== researcherId, true);
-  check('...研究者 is discarded (no owner)', s.cards[researcherId].ownerId, null);
-  check('...the new JOB is owned by P1', s.cards[p1.jobCardId].ownerId, 'P1');
+  check('研究を取られたターン終了時、研究者は場から外れる', s.jobPool.includes(researcherId), false);
+  check('...代わりに新しいジョブが1枚 (場の枚数はそのまま)', s.jobPool.length, 3);
+  check('...同じ位置に入る', s.jobPool[1] !== researcherId && !!s.jobPool[1], true);
 }
 
 // ---------------------------------------------------------------------------

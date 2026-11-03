@@ -199,8 +199,7 @@ function forceB005ALocation(state, location) {
   check('No PICK_JOB_REPLACEMENT choice is queued at draft time any more', state.pendingChoices.some((c) => c.kind === 'PICK_JOB_REPLACEMENT'), false);
   check('P1 still holds 研究者 until turn end', state.players[0].jobCardId, 'JOB007');
   setup.replaceResearcherIfResearchTaken(state, index);
-  check('replaceResearcherIfResearchTaken swaps 研究者 for another JOB', state.players[0].jobCardId !== 'JOB007' && !!state.players[0].jobCardId, true);
-  check("研究者's own card entry is released (ownerId null)", state.cards.JOB007.ownerId, null);
+  check('A player who already holds 研究者 keeps it (only the pool copy would be replaced) -- 2026-11-03', state.players[0].jobCardId, 'JOB007');
 }
 
 // (old 憤怒 WHITE_DICE_CAP(0) + 道化 tests removed 2026-11-02 -- CON redesign.)

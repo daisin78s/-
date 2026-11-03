@@ -75,9 +75,8 @@ check('A full game reaches GAME_END, not stuck at MAX_ITERATIONS', state1.phase,
   driveOnboarding(state, index, 'P1', evalTable);
   check('driveOnboarding leaves no dangling PICK_JOB_REPLACEMENT choice for the AI player', state.pendingChoices.some((c) => c.kind === 'PICK_JOB_REPLACEMENT'), false);
   const p1 = state.players.find((p) => p.id === 'P1');
-  // 2026-11-02: the swap now happens at turn end (setup.replaceResearcherIfResearchTaken), not at draft.
-  setup.replaceResearcherIfResearchTaken(state, index);
-  assertTrue('P1 ends up with some job (the replacement, not 研究者/JOB007)', !!p1.jobCardId && p1.jobCardId !== 'JOB007');
+  // 2026-11-03: a drafted 研究者 is never replaced any more (only the pool copy is, see setup.replaceResearcherIfResearchTaken).
+  assertTrue('P1 ends up with a job', !!p1.jobCardId);
   check('...and it is actually owned', p1.ownedCardPhysicalIds.includes(splitCardId(p1.jobCardId).physicalId), true);
 }
 

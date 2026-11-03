@@ -9086,7 +9086,8 @@ function renderMobileOwnDiceRow(state, next) {
  * 続けて)。見た目だけの演出で、画面の操作は妨げない(pointer-events:none)。PC/タブレット(幅761px以上)・
  * リプレイ表示中は流さない。最初のrender(新規/再開直後)は比較の基準を作るだけ。 */
 let lastAiCardFaces = null; // Map playerId -> Map physicalId -> faceId
-const JOB_FACE_SNAPSHOT_KEY = '__job__'; // lastAiCardFacesの中でジョブ(player.jobCardId)を覚えておくキー
+const JOB_FACE_SNAPSHOT_KEY = '__job__';
+let lastJobPoolSnapshot = null; // 場(ジョブプール)の前回の並び -- 研究者の入れ替わりの演出用 // lastAiCardFacesの中でジョブ(player.jobCardId)を覚えておくキー
 const mobileAiCardGainQueue = [];
 let mobileAiCardGainPlaying = false;
 const AI_CARD_GAIN_IN_MS = 200;
@@ -9125,9 +9126,6 @@ function queueMobileAiCardGainAnimation(state, next) {
         if (isResearcher(nowJob) && faces.has('B005') && !before.has('B005')) {
           mobileAiCardGainQueue.push({ faceId: nowJob, fromFaceId: null, tapped: false });
           gainedPlayerIds.add(playerId);
-        } else if (isResearcher(beforeJob) && nowJob) {
-          mobileAiCardGainQueue.push({ type: 'jobReplace', fromFaceId: beforeJob, toFaceId: nowJob });
-          gainedPlayerIds.add(playerId);
         }
       }
       for (const [physicalId, faceId] of faces) {
@@ -9141,6 +9139,18 @@ function queueMobileAiCardGainAnimation(state, next) {
       }
     }
   }
+  // 場(ジョブプール)の研究者が、研究を取られてターン終了時に別のジョブと入れ替わった時 (2026-11-03, per user の意図「研究者が
+  // ジョブにある時に 研究を…とったら…研究者を捨て札にして 新しいジョブが一枚代わりに増える」) -- 研究者が下へ捨てられ、新しいジョブが来る。
+  const poolNow = Array.isArray(state.jobPool) ? [...state.jobPool] : [];
+  if (compare && lastJobPoolSnapshot) {
+    lastJobPoolSnapshot.forEach((id, i) => {
+      if (id && id !== poolNow[i] && poolNow[i] && !lastJobPoolSnapshot.includes(poolNow[i])
+        && factsForFaceId(id).name === '研究者') {
+        mobileAiCardGainQueue.push({ type: 'jobReplace', fromFaceId: id, toFaceId: poolNow[i] });
+      }
+    });
+  }
+  lastJobPoolSnapshot = poolNow;
   // 皇女などの効果によるアンタップ(獲得演出の後に続けて見せる、queueMobileUntapEffects参照)。
   queueMobileUntapEffects(state, gainedPlayerIds, compare, queueLenBeforeGains);
   // 描き終わった後(=同じ手で飛ぶダイスの演出が作られた後)に始める -- ダイスが着いてからカードの演出、の順にするため。
