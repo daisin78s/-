@@ -6166,7 +6166,7 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
       noteEl.appendChild(document.createTextNode('無人エリアに色D\n▽\n'));
       iconRow.appendChild(actionDot('C')); // 2026-11-02: B -> C
     } else if (facts.name === '巫女') {
-      // 2026-11-02 new ability -- icon per user「⤵〇/〇→青〇」; 2026-11-03 TAP=IF(RESOURCE(K)<=3,ADD(K),CHANGE(2K,Z)) -> 〇2→Z〇.
+      // 2026-11-02 new ability -- icon per user「⤵〇/〇→青〇」; 2026-11-03 TAP=IF(RESOURCE(K)<=5,ADD(K),CHANGE(2K,B)) -> 〇2→青〇.
       iconRow.classList.add('action-icons--nowrap');
       iconRow.style.gap = '3px'; // 1行に収める
       iconRow.appendChild(actionEmoji(TAP_COST_ICON));
@@ -6175,7 +6175,7 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
       iconRow.appendChild(actionDot('K'));
       iconRow.appendChild(actionCount(2));
       iconRow.appendChild(actionArrow());
-      iconRow.appendChild(actionDot('Z'));
+      iconRow.appendChild(actionDot('B'));
     } else {
       noteEl.appendChild(document.createTextNode('LVアップエリア\n▽\n'));
       iconRow.appendChild(actionDot('K'));
