@@ -35,7 +35,7 @@ sys.path.insert(0, __import__('os').path.dirname(__file__))
 from card_pair_synergy import PairSynergy  # noqa: E402
 
 POINTS_PER_RANK = 130
-SHRINK_GAMES = 200
+SHRINK_GAMES = 200  # 2026-11-03から使っていない(points()参照)
 PLUS_MIN = 0.10
 MINUS_MAX = -0.30
 MINUS_MIN_GAMES = 300
@@ -74,7 +74,9 @@ def points(a, b):
     if adj is None:
         return None
     n = ps.pair_cell(a, b)['n']
-    return round(POINTS_PER_RANK * adj * n / (n + SHRINK_GAMES)), n, adj
+    # 試合数での縮め(n/(n+SHRINK_GAMES))はやめた (2026-11-03, per user「さっきの補正なくして」 -- たまたまよく見えた組み合わせも
+    # 選ばれるうちに試合が貯まって本当の強さに戻るので)。マイナスの点の MINUS_MIN_GAMES の条件は残す(悪い方のぶれ対策)。
+    return round(POINTS_PER_RANK * adj), n, adj
 
 
 def ai_points(a, b):
