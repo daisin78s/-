@@ -69,7 +69,7 @@ function jealousyVpEffect(state, index, playerId) {
     const entry = qst.rankPlayersForQuest(state, index, faceId).find((e) => e.playerId === playerId);
     if (entry.rank !== 1) notFirst++;
   }
-  return -2 * notFirst; // -1VP -> -2VP (2026-11-02, per user data edit「嫉妬 変更しました」: INST「１位でないクエスト数だけ-2VP」)
+  return -notFirst; // -1VP -> -2VP (2026-11-02) -> -1VP (2026-11-04, per user data edit「嫉妬変更しました」: INST「１位でないクエスト数だけ-1VP」)
 }
 
 /**
