@@ -507,6 +507,9 @@ h1, h2, h3 { margin: 0; }
   grid-template-columns: repeat(6, 1fr) auto;
   gap: 10px 6px;
   flex: 1 1 auto;
+  /* 3段目(強化カード)の下にキャプションが無くなったので(Ver.1.609)、はみ出す獲得可能チェック
+     (.shop-card__acquirable-badge, bottom:-16px)がスクロール枠(.shop-row__combined)で切れないよう余白を取る。 */
+  padding-bottom: 14px;
 }
 
 /* Remaining-card-count badge, one per shop row (M/NORMAL/SPECIAL), sitting in the 7th grid column just
