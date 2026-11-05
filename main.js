@@ -17919,6 +17919,7 @@ function renderCore(state) {
   updateNavSuggestionIfNeeded(state, actingHumanPlayerId(state, next));
   renderShops(state);
   fitMobileShopWidth();
+  fitDesktopShopCards();
   renderBoard(state, next);
   renderPlayers(state, next);
   fitMobileBoard();
@@ -19032,6 +19033,23 @@ function scrollMobileShopToNormalRow() {
  * 「縦向きの時は今までと同じサイズで どうせ横に収まらない」) -- ショップの中身(カード列+残り枚数)は
  * 約750px固定幅のため、それより狭い横向き画面では.shop-rowをCSS zoomで「画面幅÷中身の幅」に縮める
  * (大きくはしない)。縦向き・PC/タブレット・ショップタブ非表示中(測れない)はzoomを外して何もしない。 */
+/** PC・タブレットのショップ: カードを列の幅いっぱいまで大きくする (2026-11-05, per user「しょっぷの カード どうしの隙間が
+ * 大きい」→「カードを できる限り 大きくしたい」)。列(6等分)はカードより広く、その差が隙間になっていたので、各カード
+ * (.shop-slot__card)に「列の幅÷カードの幅」のzoomを掛ける。カードの中の文字・アイコンも同じ割合で大きくなる。
+ * 幅はどちらもCSSの値(getComputedStyle)で比べるので、#appごと縮めている時(applyDesktopScale)も同じ結果。スマホ版は対象外。 */
+function fitDesktopShopCards() {
+  const grid = document.getElementById('shop-combined-slots');
+  if (!grid) return;
+  const cards = [...grid.querySelectorAll(':scope > .shop-slot > .shop-slot__card')];
+  cards.forEach((card) => { card.style.zoom = ''; });
+  if (isMobileLayout() || cards.length === 0) return;
+  const column = parseFloat(getComputedStyle(grid).gridTemplateColumns.split(' ')[0]);
+  const natural = Math.max(...cards.map((card) => parseFloat(getComputedStyle(card).width) || 0));
+  if (!(column > 0) || !(natural > 0)) return;
+  const scale = Math.floor((column / natural) * 1000) / 1000;
+  if (scale > 1) cards.forEach((card) => { card.style.zoom = String(scale); });
+}
+
 function fitMobileShopWidth() {
   const row = document.querySelector('#shops .shop-row');
   if (!row) return;
@@ -19295,6 +19313,7 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('resize', fitMobileBoard);
   applyDesktopScale();
   window.addEventListener('resize', applyDesktopScale);
+  window.addEventListener('resize', fitDesktopShopCards);
   document.getElementById('mobile-free-action-close').addEventListener('click', () => {
     mobileFreeActionOpen = false;
     applyMobileActiveTab('board');
