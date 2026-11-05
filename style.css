@@ -310,7 +310,9 @@ h1, h2, h3 { margin: 0; }
   /* Confirmed 2026-07-29: widened so the owned-card sidebar can fit 4 tapped (150x150) cards
      side by side in one row: 4*150 + 3*6(gap) + 16*2(panel padding) = 666px, plus a little room. */
   grid-template-columns: 1fr 680px;
-  gap: 20px;
+  /* 0 (2026-11-05, per user request with a screenshot marking this exact gap in red: 左の列(ショップ・エリア)と
+     右の所持カードの間の隙間を詰める) -- was 20px。縦に並んだ時(下の@media)もすでに0。 */
+  gap: 0;
   align-items: start;
 }
 
@@ -1106,6 +1108,7 @@ h1, h2, h3 { margin: 0; }
   grid-template-columns: repeat(3, 1fr);
   flex-wrap: initial;
 }
+
 
 /* Turn-order rows, castle-only -- shows the round's current start-player order above the slots and
    the recomputed next-round order below (see computeNextCastleTurnOrder in main.js). Empty on every
