@@ -550,20 +550,20 @@ body.desktop-scaled #player-cards .player-role-control__option { padding: 3px 4p
    所持カードはその下 (per user「AI進行 巻き戻しOK などは クエストの右に」「名前 いま横一行 を よこ２行に」「他のカードは クエストの したに」)。 */
 body.desktop-scaled .shop-row__divider { display: none; }
 body.desktop-scaled #player-cards .player-cards__header {
-  grid-template-columns: auto minmax(0, 1fr);
+  /* クエスト欄が残りの幅いっぱい、右は4人の名前の幅だけ (per user「名前 伸ばして無駄なスペース使うくらいなら クエスト 横 広げて」) */
+  grid-template-columns: minmax(0, 1fr) max-content;
   grid-template-areas: "qst title" "qst buttons" "qst names";
   grid-template-rows: auto auto 1fr;
 }
-body.desktop-scaled #player-cards .player-cards__header > .qst-panel { grid-area: qst; }
+body.desktop-scaled #player-cards .player-cards__header > .qst-panel { grid-area: qst; width: auto; }
 body.desktop-scaled #player-cards .player-cards__title { grid-area: title; }
-body.desktop-scaled #player-cards .player-cards__header-buttons { grid-area: buttons; justify-self: start; justify-content: flex-start; }
+body.desktop-scaled #player-cards .player-cards__header-buttons { grid-area: buttons; justify-self: start; justify-content: flex-start; width: 0; min-width: 100%; } /* 列の幅は名前で決め、ボタンはその幅で折り返す */
 body.desktop-scaled #player-cards .player-cards__header-row2 { grid-area: names; grid-column: auto; justify-self: stretch; }
 /* 4人は縦に1列、1人分は「名前」と「人間 AI LV1〜3」を横1行に (2026-11-05, per user「この見た目なら 名前は 縦に並べた方がいいかな」→「おねがい」)
    -- クエスト欄の右の、名前の下の空きを使い、名前も最後まで出す。 */
 body.desktop-scaled #player-cards .player-role-control { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; width: 100%; }
 body.desktop-scaled #player-cards .player-role-control__row { flex-direction: row; align-items: center; justify-content: space-between; gap: 6px; }
-body.desktop-scaled #player-cards .player-role-control__name-line { min-width: 0; flex: 1 1 auto; }
-body.desktop-scaled #player-cards .player-role-control__name { width: 100%; min-width: 0; } /* 名前の欄を空いている幅いっぱいに(以前は5.5emで切れていた) */
+body.desktop-scaled #player-cards .player-role-control__name { width: 7em; } /* 名前が切れない程度に(元は5.5em) */
 body.desktop-scaled #player-cards .player-role-control__option { padding: 3px 9px; } /* 2人ずつなので幅に余裕がある、元の余白に */
 
 /* Remaining-card-count badge, one per shop row (M/NORMAL/SPECIAL), sitting in the 7th grid column just
