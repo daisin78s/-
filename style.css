@@ -2076,6 +2076,11 @@ body.tutorial-mode .change-highlight {
   .player-cards__title { white-space: nowrap; }
   .player-cards__header-buttons { justify-self: end; }
   .player-cards__header-row2 { grid-column: 1 / -1; justify-self: start; max-width: 100%; }
+  /* 4人の枠が右の列(680px)に1行で収まるよう、枠の間・枠の内側・「人間/AI LV」ボタンの左右の余白を詰める
+     (per user「1」= 詰めて1行に収める。以前は約730pxで4人目が右にはみ出していた)。 */
+  #player-cards .player-role-control { gap: 4px; }
+  #player-cards .player-role-control__row { padding: 5px 4px; }
+  #player-cards .player-role-control__option { padding: 3px 6px; }
 }
 
 /* 2026-08-04, per user feedback: "人間 AILV1 AILV2 が横に長過ぎるので2行にしてください" -- name+swatch
