@@ -349,6 +349,7 @@ h1, h2, h3 { margin: 0; }
    Revised again 2026-09-23, per user request with a screenshot marking these exact gaps (between
    #shops/#board and between #board/#players) in red -- genuinely zero this time. */
 #board-area {
+  position: relative; /* #onboard-stage(エリアに重ねる選択欄)の基準 */
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -551,8 +552,10 @@ body.desktop-scaled #player-cards .player-role-control__option { padding: 3px 4p
 body.desktop-scaled .shop-row__divider { display: none; }
 body.desktop-scaled #player-cards .player-cards__header {
   /* クエスト欄が残りの幅いっぱい、右は4人の名前の幅だけ (per user「名前 伸ばして無駄なスペース使うくらいなら クエスト 横 広げて」) */
-  grid-template-columns: minmax(0, 1fr) max-content;
-  grid-template-areas: "qst title" "qst buttons" "qst names";
+  /* 左に見出し・ボタン・名前、右にクエスト (per user「クエストと 名前 など 位置 入れ替えて」)。名前の列は、ゲーム中に
+     切り替えボタンが1つだけになっても狭くなりすぎないよう最低220px。 */
+  grid-template-columns: minmax(220px, max-content) minmax(0, 1fr);
+  grid-template-areas: "title qst" "buttons qst" "names qst";
   grid-template-rows: auto auto 1fr;
 }
 body.desktop-scaled #player-cards .player-cards__header > .qst-panel { grid-area: qst; width: auto; }
@@ -602,6 +605,10 @@ body.desktop-scaled #player-cards .player-role-control__option { padding: 3px 9p
   text-align: center;
 }
 .shop-slot__req:empty { display: none; }
+/* PC・タブレットは「目 1-6」などを少し大きく (2026-11-05, per user「目 1-6 目 1-5 など もう少し大きく」)。スマホ版は別の大きさ。 */
+@media (min-width: 761px) and (min-height: 501px) {
+  .shop-slot__req { font-size: 13px; }
+}
 
 .shop-card {
   background: var(--surface-sunken);
@@ -8074,3 +8081,20 @@ body.online-spectator #online-spectator-badge {
   color: #667085;
   pointer-events: none;
 }
+
+/* ジョブ・性格・初期資源カードを選ぶ欄をエリアに重ねて出す (2026-11-05, main.jsのplaceOnboardStage参照)。位置と大きさはJSで
+   エリア(#board)に合わせる。中の欄(#job-pool等)は右の列にあった時と同じ並び方のまま。 */
+.onboard-stage {
+  position: absolute;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+}
+.onboard-stage[hidden] { display: none; }

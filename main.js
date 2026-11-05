@@ -17960,6 +17960,7 @@ function renderCore(state) {
   renderJobReplacementChoice(state);
   renderResourceConfirmOverlay(state);
   renderPlayerCards(state, next);
+  placeOnboardStage();
   fitDesktopOwnedCards();
   renderMobileCardsView(state, next);
   renderMobileFreeActionOverlay(state, next);
@@ -19137,11 +19138,13 @@ function fitDesktopQuestPanelHeight() {
  * 左と同じ大きさにして 4列折り返し に」「狭いとき限定で」)。マス(.owned-card-cell)ごとtransformで大きくし、大きくなった分を
  * 右・下の余白で空ける(タップ済みの横向き(中のカードのrotate)はそのまま)。マスはstyle.cssで122pxにそろえてあるので4列で折り返す。 */
 function fitDesktopOwnedCards() {
-  const cells = [...document.querySelectorAll('#player-cards .owned-card-cell')];
+  const cells = [...document.querySelectorAll('#player-cards .owned-card-cell, #onboard-stage .owned-card-cell')];
   cells.forEach((cell) => { cell.style.transform = ''; cell.style.transformOrigin = ''; cell.style.marginRight = ''; cell.style.marginBottom = ''; });
-  if (!document.body.classList.contains('desktop-scaled') || desktopShopCardScale <= 1) return;
+  if (isMobileLayout() || desktopShopCardScale <= 1) return;
   const scale = desktopShopCardScale;
-  cells.forEach((cell) => {
+  // 右の所持カードは狭い時だけ、エリアに重ねて選ぶカード(placeOnboardStage)はいつもショップのカードと同じ大きさに。
+  const scaled = document.body.classList.contains('desktop-scaled');
+  cells.filter((cell) => scaled || cell.closest('#onboard-stage')).forEach((cell) => {
     const style = getComputedStyle(cell);
     const w = parseFloat(style.width);
     const h = parseFloat(style.height);
@@ -19151,6 +19154,50 @@ function fitDesktopOwnedCards() {
     cell.style.marginRight = `${w * (scale - 1)}px`;
     cell.style.marginBottom = `${h * (scale - 1)}px`;
   });
+}
+
+/** ジョブ・性格(表/裏)・初期資源カードを選ぶ時は、エリアに重ねて並べる (2026-11-05, per user「初期資源カード選ぶとき右側でなくて
+ * エリアの上に並べて そこで選ぶのはどう」→「エリアの上は エリアに重ねてという意味」→「いったん すべてでやってみる」「スマホ版は
+ * 意味ないかな」)。PC・タブレットのすべての幅で、今選んでいる人の選ぶ欄(.onboard-panel--active: #job-pool / その人の
+ * .card-group__onboard-con / .card-group__onboard-resources)を#onboard-stage(エリアと同じ位置・大きさ)へ移す。初期資源カードを
+ * 選ぶ時は、判断に使う性格のプレビュー(同じ人のonboard-con)も一緒に移す。選び終わる(.onboard-panel--activeが無くなる)と
+ * 空になって消え、エリアが見える。#job-poolは毎回描き直さない要素なので元の場所へ戻し、ほかは毎回作り直される。
+ * スマホ版(タブで切り替え)・チュートリアル・ストーリーは、カードの場所を前提にした演出があるので今まで通り。 */
+function placeOnboardStage() {
+  const boardArea = document.getElementById('board-area');
+  const board = document.getElementById('board');
+  const jobPool = document.getElementById('job-pool');
+  if (!boardArea || !board || !jobPool) return;
+  let stage = document.getElementById('onboard-stage');
+  if (!stage) {
+    stage = el('div', 'onboard-stage');
+    stage.id = 'onboard-stage';
+    boardArea.appendChild(stage);
+  }
+  if (!placeOnboardStage.jobPoolHome) placeOnboardStage.jobPoolHome = { parent: jobPool.parentElement, next: jobPool.nextSibling };
+  if (jobPool.parentElement === stage) {
+    const home = placeOnboardStage.jobPoolHome;
+    home.parent.insertBefore(jobPool, home.next && home.next.parentElement === home.parent ? home.next : null);
+  }
+  stage.innerHTML = '';
+  stage.hidden = true;
+  if (isMobileLayout() || tutorialModeActive || (typeof storyRun !== 'undefined' && storyRun)) return;
+  const moving = [];
+  if (jobPool.classList.contains('onboard-panel--active') && jobPool.children.length > 0) moving.push(jobPool);
+  document.querySelectorAll('#player-cards .card-group').forEach((group) => {
+    const con = group.querySelector('.card-group__onboard-con');
+    const res = group.querySelector('.card-group__onboard-resources');
+    const resActive = res && res.classList.contains('onboard-panel--active') && res.children.length > 0;
+    if (con && con.children.length > 0 && (con.classList.contains('onboard-panel--active') || resActive)) moving.push(con);
+    if (resActive) moving.push(res);
+  });
+  if (moving.length === 0) return;
+  moving.forEach((node) => stage.appendChild(node));
+  stage.style.top = `${board.offsetTop}px`;
+  stage.style.left = `${board.offsetLeft}px`;
+  stage.style.width = `${board.offsetWidth}px`;
+  stage.style.minHeight = `${board.offsetHeight}px`;
+  stage.hidden = false;
 }
 
 function fitMobileShopWidth() {
