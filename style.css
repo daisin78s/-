@@ -549,6 +549,7 @@ body.desktop-scaled .player-panel__resources .resource-badge__dot { width: 18px;
 body.desktop-scaled .player-panel__dice-row .die { width: 52px; height: 52px; border-radius: 13px; font-size: 29px; }
 /* 狭い時はエリアのスロットと順位表も大きく (2026-11-05, per user「左側広げたのに エリアのスロット や 順位 が 小さいままです」)。
    スロットはタイルの幅の1/3まで(最大66px=元の約1.3倍)、中のダイス目・置いたダイス・ANYの文字も同じ割合。 */
+body.desktop-scaled .map-tile__id { font-size: 17px; } /* 小麦畑・農園などの名前 13px→17px (per user「小麦畑 農園などの名前も もう少し大きく」) */
 body.desktop-scaled .map-tile__slots { container-type: inline-size; }
 body.desktop-scaled .map-tile__slots .slot {
   --slot-size: min(66px, calc((100cqw - 8px) / 3));
