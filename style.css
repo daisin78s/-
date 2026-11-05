@@ -527,7 +527,7 @@ body.desktop-scaled .shop-row__grid {
 }
 /* 全体を縮めている時は、ほかの隙間も詰める (2026-11-05, per user「狭いとき限定でいいので もっと隙間を詰めたい」) --
    外側の余白・パネルの内側の余白・段やタイルの間。横の隙間が減った分はショップ・エリアの幅(=カード)に回る。 */
-body.desktop-scaled #app { padding: 0 0 8px; } /* 左端・右端の隙間も0 (per user「左端の隙間」「右端の隙間」) */
+body.desktop-scaled #app { padding: 10px 0 8px; } /* 左端・右端の隙間は0 (per user「左端の隙間」「右端の隙間」)、上だけ少し空ける(縮める割合は幅で決まるので上は空いても困らない、per user「上には 少しだけ隙間があった方がいいかな」) */
 body.desktop-scaled #shops,
 body.desktop-scaled #board-area > section,
 body.desktop-scaled #player-cards { padding: 6px; }
