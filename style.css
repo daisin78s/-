@@ -559,10 +559,10 @@ body.desktop-scaled #player-cards .player-cards__header > .qst-panel { grid-area
 body.desktop-scaled #player-cards .player-cards__title { grid-area: title; }
 body.desktop-scaled #player-cards .player-cards__header-buttons { grid-area: buttons; justify-self: start; justify-content: flex-start; width: 0; min-width: 100%; } /* 列の幅は名前で決め、ボタンはその幅で折り返す */
 body.desktop-scaled #player-cards .player-cards__header-row2 { grid-area: names; grid-column: auto; justify-self: stretch; }
-/* 4人は縦に1列、1人分は「名前」と「人間 AI LV1〜3」を横1行に (2026-11-05, per user「この見た目なら 名前は 縦に並べた方がいいかな」→「おねがい」)
+/* 4人は縦に1列 (2026-11-05, per user「この見た目なら 名前は 縦に並べた方がいいかな」→「おねがい」)
    -- クエスト欄の右の、名前の下の空きを使い、名前も最後まで出す。 */
 body.desktop-scaled #player-cards .player-role-control { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; width: 100%; }
-body.desktop-scaled #player-cards .player-role-control__row { flex-direction: row; align-items: center; justify-content: space-between; gap: 6px; }
+/* 1人分は上が名前、下が「人間 AI LV1〜3」の2行(元の形) (per user「名前は 2行にして 縦に並べる」「上が名前 したが人間 AILV1 AILV2」) */
 body.desktop-scaled #player-cards .player-role-control__name { width: 7em; } /* 名前が切れない程度に(元は5.5em) */
 body.desktop-scaled #player-cards .player-role-control__option { padding: 3px 9px; } /* 2人ずつなので幅に余裕がある、元の余白に */
 
