@@ -896,6 +896,7 @@ function applyDesktopScale() {
   // 縮めている時はショップのカードどうしの隙間を1pxに (2026-11-05, per user「狭いときは カードの隙間 1PXじゃダメ？」、style.css)。
   document.body.classList.toggle('desktop-scaled', scale < 1);
   fitDesktopShopCards();
+  fitDesktopOwnedCards();
 }
 
 function startOpeningSequence() {
@@ -3376,6 +3377,7 @@ function renderReplayFrame() {
     renderPlayers(snapshot, next);
     renderJobPool(snapshot, next);
     renderPlayerCards(snapshot, next);
+    fitDesktopOwnedCards();
     document.getElementById('board-message').textContent = '';
     renderReplayControls();
   } catch (e) {
@@ -17942,6 +17944,7 @@ function renderCore(state) {
   renderJobReplacementChoice(state);
   renderResourceConfirmOverlay(state);
   renderPlayerCards(state, next);
+  fitDesktopOwnedCards();
   renderMobileCardsView(state, next);
   renderMobileFreeActionOverlay(state, next);
   queueMobileAiCardGainAnimation(state, next);
@@ -19049,11 +19052,13 @@ function scrollMobileShopToNormalRow() {
  * 大きい」→「カードを できる限り 大きくしたい」)。列(6等分)はカードより広く、その差が隙間になっていたので、各カード
  * (.shop-slot__card)に「列の幅÷カードの幅」のzoomを掛ける。カードの中の文字・アイコンも同じ割合で大きくなる。
  * 幅はどちらもCSSの値(getComputedStyle)で比べるので、#appごと縮めている時(applyDesktopScale)も同じ結果。スマホ版は対象外。 */
+let desktopShopCardScale = 1; // fitDesktopShopCardsが決めたショップのカードの倍率(右の所持カードも同じにする)
 function fitDesktopShopCards() {
   const grid = document.getElementById('shop-combined-slots');
   if (!grid) return;
   // zoomではなくtransform(iPadのSafariではzoomで文字が大きくならない、applyDesktopScale参照): 中のカードをtransformで
   // 大きくし、入れ物(.shop-slot__card)の幅・高さを大きくした後の大きさにして場所を空ける。
+  desktopShopCardScale = 1;
   const wrappers = [...grid.querySelectorAll(':scope > .shop-slot > .shop-slot__card')].filter((w) => w.firstElementChild);
   wrappers.forEach((w) => { w.style.width = ''; w.style.height = ''; w.firstElementChild.style.transform = ''; w.firstElementChild.style.transformOrigin = ''; });
   if (isMobileLayout() || wrappers.length === 0) return;
@@ -19061,6 +19066,7 @@ function fitDesktopShopCards() {
   const natural = Math.max(...wrappers.map((w) => parseFloat(getComputedStyle(w.firstElementChild).width) || 0));
   if (!(column > 0) || !(natural > 0)) return;
   const scale = Math.floor((column / natural) * 1000) / 1000;
+  desktopShopCardScale = scale > 1 ? scale : 1;
   if (scale <= 1) return;
   wrappers.forEach((w) => {
     const card = w.firstElementChild;
@@ -19069,6 +19075,26 @@ function fitDesktopShopCards() {
     w.style.height = `${parseFloat(style.height) * scale}px`;
     card.style.transformOrigin = '0 0';
     card.style.transform = `scale(${scale})`;
+  });
+}
+
+/** 狭い時(全体を縮めている時)は、右の所持カードも左のショップのカードと同じ大きさに (2026-11-05, per user「右側の カード
+ * 左と同じ大きさにして 4列折り返し に」「狭いとき限定で」)。マス(.owned-card-cell)ごとtransformで大きくし、大きくなった分を
+ * 右・下の余白で空ける(タップ済みの横向き(中のカードのrotate)はそのまま)。マスはstyle.cssで122pxにそろえてあるので4列で折り返す。 */
+function fitDesktopOwnedCards() {
+  const cells = [...document.querySelectorAll('#player-cards .owned-card-cell')];
+  cells.forEach((cell) => { cell.style.transform = ''; cell.style.transformOrigin = ''; cell.style.marginRight = ''; cell.style.marginBottom = ''; });
+  if (!document.body.classList.contains('desktop-scaled') || desktopShopCardScale <= 1) return;
+  const scale = desktopShopCardScale;
+  cells.forEach((cell) => {
+    const style = getComputedStyle(cell);
+    const w = parseFloat(style.width);
+    const h = parseFloat(style.height);
+    if (!(w > 0) || !(h > 0)) return;
+    cell.style.transformOrigin = '0 0';
+    cell.style.transform = `scale(${scale})`;
+    cell.style.marginRight = `${w * (scale - 1)}px`;
+    cell.style.marginBottom = `${h * (scale - 1)}px`;
   });
 }
 

@@ -537,6 +537,10 @@ body.desktop-scaled #board,
 body.desktop-scaled .board-row { gap: 4px; }
 body.desktop-scaled #players { gap: 4px; }
 body.desktop-scaled #player-cards-groups { gap: 6px; }
+/* 狭い時は所持カードのマスを122pxにそろえる(A/B/Cの150pxのマスも) -- main.jsのfitDesktopOwnedCardsがショップのカードと同じ倍率で
+   大きくして4列で折り返す (per user「右側の カード 左と同じ大きさにして 4列折り返し」「狭いとき限定で」)。カードは正方形なので
+   タップ済みで横向きになっても122pxに収まる。 */
+body.desktop-scaled #player-cards .owned-card-cell--tall { width: 122px; height: 122px; }
 
 /* Remaining-card-count badge, one per shop row (M/NORMAL/SPECIAL), sitting in the 7th grid column just
    right of that row's last slot (SHOP006/SHOP106/SHOP203 -- see renderShopGrid). Small and muted, same
