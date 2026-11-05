@@ -7064,6 +7064,9 @@ body.story-hide-dice #players .player-panel .die {
   transition: outline-color 0.15s, transform 0.15s;
 }
 .story2-cards__card .shop-card { width: 100%; }
+/* 第2章の初期資源カード選びではSP0などを出さない (2026-11-05, per user「第２章で 初期資源を選ぶとき SP０などを 表示しない
+   まだつかわないので ストーリー でこの先 出てきたときは 表示する」) -- 第2章のこの選択画面(story.jsのstory2ShowResourceCards)だけ。 */
+.story2-cards__card .shop-card__start-order { visibility: hidden; }
 .story2-cards__card--selectable { cursor: pointer; }
 .story2-cards__card--selected {
   outline-color: #ffc400;
