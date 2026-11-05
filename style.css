@@ -546,6 +546,20 @@ body.desktop-scaled #player-cards .card-group__list,
 body.desktop-scaled #player-cards .card-group__jobcon,
 body.desktop-scaled #player-cards .card-group__onboard-resources { gap: 2px; } /* main.jsのDESKTOP_OWNED_GAP_PX */
 body.desktop-scaled #player-cards .player-role-control__option { padding: 3px 4px; } /* 右の列が狭くなる分(4人を1行に) */
+/* 狭い時はクエスト欄を右の列の左上へ(main.jsのplaceDesktopQuestPanel) -- その右に見出し・ボタン・4人の名前(2人ずつ2行)、
+   所持カードはその下 (per user「AI進行 巻き戻しOK などは クエストの右に」「名前 いま横一行 を よこ２行に」「他のカードは クエストの したに」)。 */
+body.desktop-scaled .shop-row__divider { display: none; }
+body.desktop-scaled #player-cards .player-cards__header {
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: "qst title" "qst buttons" "qst names";
+  grid-template-rows: auto auto 1fr;
+}
+body.desktop-scaled #player-cards .player-cards__header > .qst-panel { grid-area: qst; }
+body.desktop-scaled #player-cards .player-cards__title { grid-area: title; }
+body.desktop-scaled #player-cards .player-cards__header-buttons { grid-area: buttons; justify-self: start; justify-content: flex-start; }
+body.desktop-scaled #player-cards .player-cards__header-row2 { grid-area: names; grid-column: auto; justify-self: start; }
+body.desktop-scaled #player-cards .player-role-control { display: grid; grid-template-columns: repeat(2, max-content); gap: 4px; }
+body.desktop-scaled #player-cards .player-role-control__option { padding: 3px 9px; } /* 2人ずつなので幅に余裕がある、元の余白に */
 
 /* Remaining-card-count badge, one per shop row (M/NORMAL/SPECIAL), sitting in the 7th grid column just
    right of that row's last slot (SHOP006/SHOP106/SHOP203 -- see renderShopGrid). Small and muted, same

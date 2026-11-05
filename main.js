@@ -882,7 +882,8 @@ const DESKTOP_BASE_WIDTH = 1860;
 function applyDesktopScale() {
   const app = document.getElementById('app');
   if (!app) return;
-  const scale = isMobileLayout() ? 1 : Math.min(1, window.innerWidth / DESKTOP_BASE_WIDTH);
+  // 幅はスクロールバーを除いた幅(clientWidth) -- innerWidthはPCの縦スクロールバーの分も含むので、その分右がはみ出していた。
+  const scale = isMobileLayout() ? 1 : Math.min(1, document.documentElement.clientWidth / DESKTOP_BASE_WIDTH);
   // zoomではなくtransform (2026-11-05, per user報告(iPadのスクリーンショット): iPadのSafariではzoomで枠は縮んでも文字・
   // 絵文字が縮まなかった)。#appを基準の幅で並べてから、左上を基準に絵のように縮める。#appの中にあった固定表示の
   // 画面(3Rからの生成中)はtransformの中だと画面全体を覆えないので、#appの外(body)へ出しておく。
@@ -895,8 +896,23 @@ function applyDesktopScale() {
   app.style.transform = scale < 1 ? `scale(${scale})` : '';
   // 縮めている時はショップのカードどうしの隙間を1pxに (2026-11-05, per user「狭いときは カードの隙間 1PXじゃダメ？」、style.css)。
   document.body.classList.toggle('desktop-scaled', scale < 1);
+  placeDesktopQuestPanel(scale < 1);
   fitDesktopShopCards();
   fitDesktopOwnedCards();
+}
+
+/** 狭い時(全体を縮めている時)はクエスト欄を右の列の左上へ (2026-11-05, per user「狭いとき限定で クエストを 右側に」
+ * 「AI進行 巻き戻しOK などは クエストの右に」「名前 いま横一行 を よこ２行に」「他のカードは クエストの したに」)。
+ * 中身は#qst-slots等をidで描くので、置き場所を変えても描き方は同じ。広い時はショップの段の右端(元の場所)へ戻す。
+ * スマホ版はsetupMobileQuestTabがクエストタブへ移すので触らない。並び方はstyle.cssのbody.desktop-scaled参照。 */
+function placeDesktopQuestPanel(scaled) {
+  if (isMobileLayout()) return;
+  const panel = document.querySelector('.qst-panel');
+  const header = document.querySelector('#player-cards .player-cards__header');
+  const combined = document.querySelector('#shops .shop-row__combined');
+  if (!panel || !header || !combined) return;
+  if (scaled && panel.parentElement !== header) header.insertBefore(panel, header.firstChild);
+  if (!scaled && panel.parentElement !== combined) combined.appendChild(panel);
 }
 
 function startOpeningSequence() {
@@ -19094,7 +19110,7 @@ function fitDesktopShopCards() {
   if (!(column > 0) || !(natural > 0)) return;
   const scale = Math.floor((column / natural) * 1000) / 1000;
   desktopShopCardScale = scale > 1 ? scale : 1;
-  if (scale <= 1) return;
+  if (scale <= 1) { fitDesktopQuestPanelHeight(); return; }
   wrappers.forEach((w) => {
     const card = w.firstElementChild;
     const style = getComputedStyle(card);
@@ -19103,6 +19119,17 @@ function fitDesktopShopCards() {
     card.style.transformOrigin = '0 0';
     card.style.transform = `scale(${scale})`;
   });
+  fitDesktopQuestPanelHeight();
+}
+
+/** 右の列へ移したクエスト欄(placeDesktopQuestPanel)の高さ: もとはショップの段の高さに合わせて伸び、3段を等分していたので、
+ * 右の列でもショップの段と同じ高さにする。元の場所に戻した時は指定を外す。 */
+function fitDesktopQuestPanelHeight() {
+  const panel = document.querySelector('.qst-panel');
+  const grid = document.getElementById('shop-combined-slots');
+  if (!panel || !grid) return;
+  const moved = !!panel.closest('#player-cards');
+  panel.style.height = moved ? `${parseFloat(getComputedStyle(grid).height)}px` : '';
 }
 
 /** 狭い時(全体を縮めている時)は、右の所持カードも左のショップのカードと同じ大きさに (2026-11-05, per user「右側の カード
@@ -19388,6 +19415,16 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('resize', fitMobileBoard);
   applyDesktopScale();
   window.addEventListener('resize', applyDesktopScale);
+  // 縦スクロールバーが出た/消えた時も(画面の幅が変わるのでresizeは来ない)測り直す。同じ幅なら何もしない。
+  let lastScaleWidth = document.documentElement.clientWidth;
+  if (window.ResizeObserver) {
+    new ResizeObserver(() => {
+      const width = document.documentElement.clientWidth;
+      if (width === lastScaleWidth) return;
+      lastScaleWidth = width;
+      applyDesktopScale();
+    }).observe(document.documentElement);
+  }
   window.addEventListener('resize', fitDesktopShopCards);
   document.getElementById('mobile-free-action-close').addEventListener('click', () => {
     mobileFreeActionOpen = false;
