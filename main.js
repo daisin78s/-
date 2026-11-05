@@ -874,6 +874,18 @@ function isMobileLayout() {
   return window.innerWidth <= 760 || window.innerHeight <= 500;
 }
 
+/* PC・タブレットは画面の幅に関係なく同じ並び(左にショップ・エリア、右に所持カード)にして、基準の幅より狭い時は
+ * #appごと縮める (2026-11-05, per user「ipadもふくめて 同じになるよう」-- 狭い画面でクエスト欄が横スクロールの外に
+ * 隠れたり、エリアのスロットが2列に折り返したりしていたため。基準はユーザーのPC画面の幅)。以前の「1400px以下は
+ * 1列に並べる」切り替え(style.css)はやめた。スマホ版は今まで通り(縮めない)。 */
+const DESKTOP_BASE_WIDTH = 1860;
+function applyDesktopScale() {
+  const app = document.getElementById('app');
+  if (!app) return;
+  const scale = isMobileLayout() ? 1 : Math.min(1, window.innerWidth / DESKTOP_BASE_WIDTH);
+  app.style.zoom = scale < 1 ? String(scale) : '';
+}
+
 function startOpeningSequence() {
   openingSequenceActive = true;
   setDiceRollBlocker(true);
@@ -884,7 +896,7 @@ function startOpeningSequence() {
   // 同じで切り替え方式 1 エリア画面でダイスとショップ 2 下に画面を切り替えて残りのカード") -- 開始時の
   // ゆっくりスクロール(autoScrollToBottomOnStart)はオープニング中は動かさず、1)ダイス・ショップは一番上、
   // 2)ジョブ・制約・初期資源は獲得カードの欄へ、それぞれ一瞬で表示位置を切り替える。PCはそのまま。
-  const isTablet = !isMobile && window.innerWidth <= 1400;
+  const isTablet = false; // 2026-11-05: タブレットもPCと同じ並び(縮めるだけ、applyDesktopScale参照)なので、PCと同じ動き
   // ダイス置き場(#players)が画面に入る位置へ(描き終わってから測る)。画面が縦に十分長ければ一番上のまま。
   const showDiceAreaOnTablet = () => {
     if (!isTablet) return;
@@ -2670,14 +2682,8 @@ function handleStartFromRound3Click() {
  * applyMobileActiveTabが他のタブへ移らない)、タブレットは#boardの上端が画面の上端に来る位置へ。PCはそのまま。 */
 function showRound3WatchArea() {
   if (isMobileLayout()) { applyMobileActiveTab('board'); return; }
-  if (window.innerWidth > 1400) return;
-  nextFrames(1, () => {
-    const board = document.getElementById('board');
-    // 画面上端の帯(#round3-watch-banner、position:fixed)にエリアの上の段が隠れないよう、帯の下端に合わせる。
-    const banner = document.getElementById('round3-watch-banner');
-    const bannerBottom = banner && !banner.hidden ? banner.getBoundingClientRect().bottom : 0;
-    if (board) window.scrollTo(0, board.getBoundingClientRect().top + window.scrollY - bannerBottom);
-  });
+  // タブレットもPCと同じ並び(applyDesktopScale参照、2026-11-05)なので、PCと同じくそのまま(以前はタブレットだけ
+  // #boardの上端へスクロールしていた)。
 }
 
 /** 1手進めて描く。待ち時間は無し(次の手はすぐ考え始める)、演出の終わりも待たない。 */
@@ -19287,6 +19293,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const playOpeningOnLoad = localBattlePending;
   window.addEventListener('resize', fitMobileShopWidth);
   window.addEventListener('resize', fitMobileBoard);
+  applyDesktopScale();
+  window.addEventListener('resize', applyDesktopScale);
   document.getElementById('mobile-free-action-close').addEventListener('click', () => {
     mobileFreeActionOpen = false;
     applyMobileActiveTab('board');
