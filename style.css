@@ -2061,6 +2061,23 @@ body.tutorial-mode .change-highlight {
   gap: 10px;
 }
 
+/* PC・タブレット (2026-11-05, per user「所持カードを 折り返ししないようにして 名前の部分を 左に寄せて」): 見出し「所持カード」
+   は1行のまま、その右にボタン群、4人の名前(人間/AIの切り替え)は次の行で左端から並べる。以前は名前の行も右寄せで、
+   見出しの右の狭い所に押し込まれて見出しが「所持カ/ード」と折り返し、4人目が右にはみ出していた。 */
+@media (min-width: 761px) and (min-height: 501px) {
+  .player-cards__header {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    column-gap: 12px;
+    row-gap: 6px;
+  }
+  .player-cards__header-right { display: contents; }
+  .player-cards__title { white-space: nowrap; }
+  .player-cards__header-buttons { justify-self: end; }
+  .player-cards__header-row2 { grid-column: 1 / -1; justify-self: start; max-width: 100%; }
+}
+
 /* 2026-08-04, per user feedback: "人間 AILV1 AILV2 が横に長過ぎるので2行にしてください" -- name+swatch
    on one line, the 3 role buttons on the line below, instead of all 5 elements in a single wide row. */
 .player-role-control__row {
