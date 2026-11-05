@@ -606,7 +606,7 @@ body.desktop-scaled #player-cards .player-cards__header {
   grid-template-rows: auto auto 1fr;
 }
 body.desktop-scaled #player-cards .player-cards__header > .qst-panel { grid-area: qst; width: auto; }
-body.desktop-scaled #player-cards .player-cards__title { grid-area: title; }
+body.desktop-scaled #player-cards .player-cards__title { grid-area: title; display: none; } /* 狭い時は「所持カード」の見出しを出さない (per user「画面が狭いときは 所持カード 書かなくていい」) */
 body.desktop-scaled #player-cards .player-cards__header-buttons { grid-area: buttons; justify-self: start; justify-content: flex-start; width: 0; min-width: 100%; } /* 列の幅は名前で決め、ボタンはその幅で折り返す */
 body.desktop-scaled #player-cards .player-cards__header-row2 { grid-area: names; grid-column: auto; justify-self: stretch; }
 /* 4人は縦に1列 (2026-11-05, per user「この見た目なら 名前は 縦に並べた方がいいかな」→「おねがい」)

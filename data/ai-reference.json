@@ -1,6 +1,6 @@
 {
- "gameDataVersion": "9d4cf30ab2a06874",
- "generatedAt": "2026-11-03T01:51:13.731Z",
+ "gameDataVersion": "af3d1dfa323a0075",
+ "generatedAt": "2026-11-05T14:56:05.494Z",
  "commandSpecFile": "dsl-command-spec.json",
  "cardCount": 148,
  "cards": {
@@ -663,19 +663,19 @@
    "sheet": "CON",
    "name": "嫉妬",
    "ONCE": "ADD(2Z,3K)",
-   "inst": "ゲーム終了時クエスト１位が必要\n１位でないクエスト数だけ-2VP"
+   "inst": "ゲーム終了時クエスト１位が必要\n１位でないクエスト数だけ-1VP"
   },
   "CON005A": {
    "sheet": "CON",
    "name": "憤怒",
-   "WARNING": "自分の色ダイスのあるエリアに置くと-2VPされます\nいいですか？",
+   "WARNING": "自分の色ダイスのあるエリアに置くと-2VPされます\nよろしいですか？",
    "ONCE": "ADD(D)",
    "inst": "自分の色ダイスのあるエリアにダイスを置くたびに-2VP"
   },
   "CON006A": {
    "sheet": "CON",
    "name": "心配",
-   "WARNING": "〇がありません。\nターン終了時に-1VPされます。\nいいですか？",
+   "WARNING": "〇がありません。\nターン終了時に-1VPされます。\nよろしいですか？",
    "ONCE": "ADD(3VP,Z,K,wD)",
    "inst": "ターン終了時〇がないと-1VP"
   },
@@ -713,7 +713,7 @@
   "CON006B": {
    "sheet": "CON",
    "name": "暴食",
-   "WARNING": "食料が7個を超えています。\nターン終了時に1個消費します。\nいいですか？",
+   "WARNING": "食料が7個を超えています。\nターン終了時に1個消費します。\nよろしいですか？",
    "ONCE": "ADD(8K)",
    "TURNEND": "RESOURCE_LIMIT(K,7)",
    "inst": "◯の上限7個\nターン終了時にそれを超えていたら1個消費する"
@@ -728,9 +728,9 @@
   "JOB002": {
    "sheet": "JOB",
    "name": "巫女",
-   "TAP": "IF(RESOURCE(K)<=3,ADD(K),CHANGE(K,B))",
+   "TAP": "IF(RESOURCE(K)<=5,ADD(K),CHANGE(2K,B))",
    "TURNEND": "UNTAP()",
-   "inst": "タップしたとき\n〇が3以下なら〇を得る\n４以上なら〇→B\n毎ターンアンタップする"
+   "inst": "タップしたとき\n〇が5以下なら〇を得る\n6以上なら〇2→青〇\n毎ターンアンタップする"
   },
   "JOB003": {
    "sheet": "JOB",
@@ -1181,7 +1181,7 @@
    "SLOT5": "NONE",
    "SLOT6": "NONE",
    "fee": 1,
-   "ACTION": "CHANGE(K,VP,3)"
+   "ACTION": "CHANGE(K,VP,4)"
   },
   "AREA001C": {
    "sheet": "AREA",
@@ -1290,7 +1290,7 @@
    "SLOT5": "NONE",
    "SLOT6": "NONE",
    "fee": 2,
-   "ACTION": "CHANGE(K,VP,5)"
+   "ACTION": "CHANGE(K,VP,6)"
   }
  },
  "issues": []
