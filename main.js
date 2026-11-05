@@ -7068,7 +7068,7 @@ function specialSlotGridColumn(state, slotId) {
 function specialShopRemaining(state) {
   const visible = ['M', 'NORMAL', 'SPECIAL'].some((key) => Object.values(state.shops[key].slots)
     .some((faceId) => faceId && faceId[0] === 'M' && Number(faceId.slice(1, 4)) >= 400));
-  if (visible) return { subject: '強化モニュメント', count: state.extraMonumentPool.length };
+  if (visible) return { subject: null, prefix: 'あと', count: state.extraMonumentPool.length }; // 強化モニュメントも「あと○枚」だけ (2026-11-05, per user「すきま詰めるため あと〇枚のみ」)
   const round = state.round >= 3 ? 3 : 2;
   const count = state.shops.SPECIAL.drawPile.filter((faceId) => boardMod.specialShopMinRound(faceId) === round).length;
   // 2R/3Rのカードは「あと○枚」だけ (2026-11-05, per user「2Rのカードが あと3枚 → あと３枚 だけでいい」)。
