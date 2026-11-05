@@ -8177,3 +8177,9 @@ body.online-spectator #online-spectator-badge {
   /* スマホ版は入れ物が無かった時と同じ並び(設定タブ) */
   .desktop-turn-controls, .desktop-settings-controls { display: contents; }
 }
+
+/* クエストの拡大画面の全員分の数 (main.jsのappendQstAllValues) */
+.qst-all-values { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; margin: 8px 0; font-size: 16px; }
+.qst-all-values__item { display: inline-flex; align-items: center; gap: 5px; }
+.qst-all-values__item .standings-panel__swatch { width: 14px; height: 14px; }
+.qst-all-values__value { font-weight: 700; font-size: 18px; }

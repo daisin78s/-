@@ -6670,6 +6670,7 @@ function buildQstCardVisual(faceId, state, options = {}) {
         ? buildQstCardVisual(sibling, state, { noInteraction: true, showRankHeaders: true })
         : null;
       showCardEnlargeModal(faceId, visualNode, hasSiblingData ? sibling : null, siblingVisualNode);
+      appendQstAllValues(faceId, state);
     });
   }
 
@@ -8750,6 +8751,11 @@ const MAX_MONUMENT_DICE_THRESHOLD = INDEX.raw.M.reduce((max, row) => {
 }, 0);
 
 function renderPlayers(state, next) {
+  // 資源置き場に移していた手番の操作のボタン(placeDesktopControls)を、作り直す前に元の場所へ戻しておく(一緒に消えないように)。
+  if (desktopTurnControlsBox && desktopTurnControlsBox.closest('#players')) {
+    const header = document.querySelector('#player-cards .player-cards__header-buttons');
+    if (header) header.appendChild(desktopTurnControlsBox);
+  }
   const container = document.getElementById('players');
   container.innerHTML = '';
   const activePlayerId = next ? next.playerId : null;
@@ -18507,6 +18513,30 @@ function cardDisplayName(faceId) {
   }
 }
 
+/** クエストの拡大画面に、全員分の数(建築数など、そのクエストの順位を決める値)を多い順に出す (2026-11-05, per user「名前の下の
+ * 建築数… 不要」→「クエスト画面で確認できるようにできない？」→ 案1「タップした時の拡大画面に全員分」)。クエスト欄には
+ * 1〜3位の数しか出ないので、4位や0の人の数もここで分かる。showCardEnlargeModalが開くたびに前の一覧は消す。 */
+function appendQstAllValues(faceId, state) {
+  const overlay = document.getElementById('card-inst-overlay');
+  const visual = overlay && overlay.querySelector('.card-inst-modal__visual');
+  if (!visual || !state || !state.players) return;
+  const ranking = qstMod.rankPlayersForQuest(state, INDEX, faceId);
+  const list = el('div', 'qst-all-values');
+  list.id = 'qst-all-values';
+  for (const entry of ranking) {
+    const player = state.players.find((p) => p.id === entry.playerId);
+    if (!player) continue;
+    const item = el('span', 'qst-all-values__item');
+    const swatch = el('span', 'standings-panel__swatch');
+    swatch.dataset.color = player.color;
+    item.appendChild(swatch);
+    item.appendChild(el('span', 'qst-all-values__name', player.name));
+    item.appendChild(el('span', 'qst-all-values__value', String(entry.value)));
+    list.appendChild(item);
+  }
+  visual.after(list);
+}
+
 function showCardEnlargeModal(faceId, visualNode, sibling, siblingVisualNode, pickAction) {
   // 領地(A)カードは2026-10-10の再設計で、board上のAREAタイル拡大(showAreaEnlargeModal)と完全に同じ表示に
   // 統一した(per user: "小麦畑の支配 をクリックすると エリア 小麦畑 をクリックしたときと 全く同じものが
@@ -18523,6 +18553,8 @@ function showCardEnlargeModal(faceId, visualNode, sibling, siblingVisualNode, pi
   const overlay = document.getElementById('card-inst-overlay');
   const modal = overlay.querySelector('.card-inst-modal');
   const visualContainer = overlay.querySelector('.card-inst-modal__visual');
+  const oldQstValues = document.getElementById('qst-all-values'); // クエストの全員分の数(appendQstAllValues)は開くたびに作り直す
+  if (oldQstValues) oldQstValues.remove();
   const flipBtn = overlay.querySelector('.card-inst-modal__flip-button');
   const pickBtn = overlay.querySelector('.card-inst-modal__pick-button');
 
@@ -19206,24 +19238,31 @@ function scaleOwnedCardCell(cell, scale) {
  *    操作している人がいない時(AIの手番など)は元の場所に戻して隠す。
  *  - 設定(AI進行・巻き戻し・ナビ・進捗)は、画面下のボタンの並び(#debug-panel)の先頭へ。
  * ボタン自体(クリックの処理)はそのまま移すだけ。スマホ版は今まで通り(設定タブ)。 */
+// 入れ物は一度作ったらこの変数で持ち続ける -- 資源置き場(#players)は描き直すたびに作り直されるので、その中に入れていた入れ物は
+// 文書から外れてgetElementByIdで見つからなくなり、新しく作り直すと中のボタン(undo-button等)も見つからずrenderUndoButtonsが
+// エラーで止まっていた (2026-11-06, per user報告「2T目に なっても ジョブが消えない」 -- 描き直しが途中で止まっていた)。
+let desktopTurnControlsBox = null;
+let desktopSettingsControlsBox = null;
 function placeDesktopControls(state, next) {
   const header = document.querySelector('#player-cards .player-cards__header-buttons');
   const footer = document.getElementById('debug-panel');
   if (!header || !footer) return;
-  let turnBox = document.getElementById('desktop-turn-controls');
+  let turnBox = desktopTurnControlsBox;
   if (!turnBox) {
     turnBox = el('div', 'desktop-turn-controls');
     turnBox.id = 'desktop-turn-controls';
     ['undo-button', 'dice-cancel-button', 'round-pass-button'].forEach((id) => { const b = document.getElementById(id); if (b) turnBox.appendChild(b); });
     header.appendChild(turnBox);
+    desktopTurnControlsBox = turnBox;
   }
-  let settingsBox = document.getElementById('desktop-settings-controls');
+  let settingsBox = desktopSettingsControlsBox;
   if (!settingsBox) {
     settingsBox = el('div', 'desktop-settings-controls');
     settingsBox.id = 'desktop-settings-controls';
     [...header.querySelectorAll(':scope > .ai-pacing-control')].forEach((n) => settingsBox.appendChild(n));
     ['nav-toggle-button', 'progress-open-button'].forEach((id) => { const b = document.getElementById(id); if (b) settingsBox.appendChild(b); });
     header.appendChild(settingsBox);
+    desktopSettingsControlsBox = settingsBox;
   }
   if (isMobileLayout()) {
     if (settingsBox.parentElement !== header) header.appendChild(settingsBox);
