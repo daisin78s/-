@@ -173,8 +173,8 @@ function prepareShops(state, index, preferredNormalFaceIds, preferredMonumentFac
   // third once wave 1 is fully gone (confirmed by hand-simulating a full buyout sequence). Visible from
   // the very start (fillShopSlots runs immediately, no ROUND_MIN gate any more) -- see
   // board.specialShopMinRound for the separate purchase-round gate (2R/3R) that still applies on top.
-  // SHOP201-203's own cards are never discarded/force-cleared for any reason (confirmed with the user,
-  // 2026-08-29) -- once revealed they just sit there like any other shop until bought.
+  // 3R開始時に残っている2Rの強化カード(ショップと山札)は捨て札になり、4R開始時には強化カードすべてが捨て札になる
+  // (board.discardRound2SpecialCardsAtRound3 / forceRevealExtraMonumentsAtRound4)。
   const wave1Ids = collectSpecialShopWaveIds(index, 200, 299);
   const wave2Ids = collectSpecialShopWaveIds(index, 300, 399);
   registerCardPool(state, [...wave1Ids, ...wave2Ids]);

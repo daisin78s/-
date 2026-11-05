@@ -6408,6 +6408,13 @@ body.tutorial-mode .change-highlight {
   align-items: center;
 }
 
+/* 3R開始時に捨て札になる2Rの強化カードを横に並べる (2026-11-05、main.jsのplayShopDiscard参照)。 */
+.ai-card-gain-layer__card--discard-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
 /* AIのダイス移動演出で飛んでいる複製 (2026-10-22, main.jsのanimateAiDiceMoves参照)。 */
 .die--flying {
   z-index: 260;
@@ -7972,4 +7979,15 @@ body.online-spectator #online-spectator-badge {
 #card-list-overlay .card-list-modal__close {
   font-size: 56px; /* 28pxの2倍 */
   line-height: 1;
+}
+
+/* カード右下の獲得できるラウンド (2026-11-05、main.jsのcardRoundRangeLabel参照)。 */
+.shop-card__round-range {
+  position: absolute;
+  right: 4px;
+  bottom: 2px;
+  font-size: 9px;
+  line-height: 1;
+  color: #667085;
+  pointer-events: none;
 }

@@ -471,6 +471,7 @@ function createEmptyGameState(seed) {
     maps: {},
     shops: {},
     extraMonumentPool: [], // M401-403, held back from every shop's own pool -- see setup.prepareShops
+    specialShopRound3Discards: [], // 3R開始時に捨て札にした2Rの強化カード(画面の演出用) -- see board.discardRound2SpecialCardsAtRound3
     cards: {},
     log: [],
     undoCheckpoint: null,

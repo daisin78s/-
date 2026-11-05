@@ -35,7 +35,7 @@ const { rollDie } = require('./rng');
 const { getAreaRow, getCardRow } = require('./data-loader');
 const { parse } = require('./dsl-parser');
 const { lowerProgram } = require('./command-builder');
-const { getSlotRequirements, restockShop, CASTLE_MAP_ID, revealExtraMonumentsIfAnyShopEmptied, forceRevealExtraMonumentsAtRound4, planFeeConversion } = require('./board');
+const { getSlotRequirements, restockShop, CASTLE_MAP_ID, revealExtraMonumentsIfAnyShopEmptied, forceRevealExtraMonumentsAtRound4, discardRound2SpecialCardsAtRound3, planFeeConversion } = require('./board');
 const { recordCheckpoint } = require('./undo');
 const setup = require('./setup');
 // Named executorApi, not executor, just to disambiguate from board.js's own `const executor` at a
@@ -68,8 +68,9 @@ function rerollDiceForNextRound(state) {
  * 2 -- setup.prepareShops now fills it from the very start, see its own doc; only *purchasing* from it
  * stays round-gated, per board.specialShopMinRound, checked at build-candidate time instead.)
  *
- * Never force-clears SHOP201-203 on its own at round 2/3 (confirmed with the user, 2026-08-29) -- its
- * cards just sit there like any other shop's until bought; see board.revealExtraMonumentsIfAnyShopEmptied
+ * Round 3 (2026-11-05, per user request「強化カード 2R ショップにある時 3Rになったら 捨て札に」) -- 2Rの強化カード
+ * (ショップと山札の両方)を捨て札にして3Rの強化カードで補充する、board.discardRound2SpecialCardsAtRound3参照。
+ * (2026-08-29 の「2R/3Rで強制的に消さない」はこれで変わった。) See board.revealExtraMonumentsIfAnyShopEmptied
  * for how M401-404 ordinarily surface (one per endTurn, only once some shop empties on its own).
  *
  * Round 4 is the one exception (2026-10-14, per user request: "4Rのはじめにショップの強化カードは捨て札に
@@ -82,6 +83,7 @@ function rerollDiceForNextRound(state) {
 function startRound(state) {
   state.round += 1;
   state.phase = 'ROUND';
+  if (state.round === 3) discardRound2SpecialCardsAtRound3(state); // 2Rの強化カードを捨て札に (2026-11-05)
   if (state.round === 4) forceRevealExtraMonumentsAtRound4(state);
   return state.round;
 }

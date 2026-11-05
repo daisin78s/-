@@ -1842,6 +1842,22 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   check('Round 4: exactly 2 more were drawn from the pool', state.extraMonumentPool, poolBefore.slice(2));
 }
 {
+  // 3R開始時: SHOP201-203の2Rの強化カード(ショップと山札)を捨て札にし、3Rの強化カードで補充 (2026-11-05, per user
+  // request「強化カード 2R ショップにある時 3Rになったら 捨て札に」+ 回答「山の2Rも捨てて3Rで補充」)。強化モニュメントは残す。
+  const state = freshStateWithShops();
+  const special = state.shops.SPECIAL;
+  const slotIds = Object.keys(special.slots);
+  special.slots[slotIds[0]] = 'A202A';
+  special.slots[slotIds[1]] = state.extraMonumentPool.shift();
+  const monument = special.slots[slotIds[1]];
+  special.slots[slotIds[2]] = 'B201A';
+  special.drawPile = ['C201A', 'A301A', 'B301A'];
+  board.discardRound2SpecialCardsAtRound3(state);
+  check('Round 3: 2R cards in the shop are discarded and recorded', state.specialShopRound3Discards, ['A202A', 'B201A']);
+  check('Round 3: the extra monument stays, freed slots are filled with 3R cards (2R card in the pile skipped)', Object.values(special.slots), [monument, 'A301A', 'B301A']);
+  check('Round 3: no 2R card is left in the pile', special.drawPile, []);
+}
+{
   // 怠惰 (PASSIVE=REPLACE_ADD(D,wD)) (2026-08-15, per user follow-up: "CONで上限3個を持つプレ
   // イヤーはダイスを3個持つ限り訓練場にダイス候補が出ないように...現状絶対置けないはずです") -- blocked
   // unconditionally, even with just 1 color die (nowhere near the normal 5-die cap), since REPLACE_ADD

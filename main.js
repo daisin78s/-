@@ -6317,6 +6317,20 @@ function enhancedCardTier(faceId) {
   return 1; // 1R通常カード
 }
 
+/** カード右下の「何ラウンドに獲得できるか」 (2026-11-05, per user「カードの 右下に 何ラウンドに 獲得できるか かく
+ * 通常カード 1R～4R / 強化カード2R 2R / 強化カード3R 3R / 強化モニュメント 3R～4R」+ 回答「すべての場所」、続けて
+ * 「強化カード に書くの 2Rのみ 3Rのみ に」「モニュメント 2R～4R」)。
+ * ジョブ・性格・初期資源・クエストには書かない。 */
+function cardRoundRangeLabel(faceId) {
+  if (/^M4\d\d$/.test(faceId || '')) return '3R～4R';
+  if (/^M\d\d\d$/.test(faceId || '')) return '2R～4R'; // per user「モニュメント 2R～4R」
+  const tier = enhancedCardTier(faceId);
+  if (tier === 1) return '1R～4R';
+  if (tier === 2) return '2Rのみ'; // per user「強化カード に書くの 2Rのみ 3Rのみ に」
+  if (tier === 3) return '3Rのみ';
+  return null;
+}
+
 function buildCardVisual(faceId, options = {}) {
   const tpl = document.getElementById('tpl-shop-card');
   const node = tpl.content.firstElementChild.cloneNode(true);
@@ -6346,6 +6360,8 @@ function buildCardVisual(faceId, options = {}) {
 
   const front = fillCardFace(node, faceId, options, true);
   if (options.tapped) node.classList.add('shop-card--tapped');
+  const roundRange = cardRoundRangeLabel(faceId);
+  if (roundRange) node.appendChild(el('span', 'shop-card__round-range', roundRange));
 
   // Confirmed 2026-07-29 (revised): clicking a card flips it to reveal its sibling tier face (e.g.
   // C003A -> C003B) when we have data for it; falls back to a plain/blank back otherwise. Reverts
@@ -6917,12 +6933,13 @@ function buildShopSlotNode(slotId, faceId, showReqCaption, locked, faceDown = fa
     // box, so this caption underneath used to just repeat the exact same text right below it. Left blank
     // here now; the card's own face-down label is the only place it's shown.
     if (faceDown) return '';
-    if (locked) return `${boardMod.specialShopMinRound(faceId)}Rから`;
+    // 強化カードの下の「2Rから」「3Rから」「4Rに捨て札」は出さない (2026-11-05, per user「ショップにある 2Rから を けす」
+    // + 回答「捨て札の表示は出さない」) -- カード右下の獲得できるラウンド(cardRoundRangeLabel)で分かるため。
+    if (locked) return '';
     // SHOP201-203 cards get force-discarded the instant round 4 begins (2026-10-14 rule, see
     // board.forceRevealExtraMonumentsAtRound4's own doc) -- warn the player one round ahead, starting
     // round 3 (per user request), rather than letting it be a surprise once it actually happens.
     // SHOP201-203-only (slotId prefix "SHOP2"; M=SHOP001-006, NORMAL=SHOP101-106 never apply here).
-    if (faceId && slotId.startsWith('SHOP2') && STATE.round >= 3) return '4Rに捨て札';
     return showReqCaption ? shopReqForSlotId(slotId) : '';
   };
   // build_dice_value_intro系の「光る」演出(SHOPのダイス目キャプション) -- 実カードの有無に関わらず
@@ -9088,6 +9105,7 @@ function renderMobileOwnDiceRow(state, next) {
  * リプレイ表示中は流さない。最初のrender(新規/再開直後)は比較の基準を作るだけ。 */
 let lastAiCardFaces = null; // Map playerId -> Map physicalId -> faceId
 const JOB_FACE_SNAPSHOT_KEY = '__job__';
+let lastCardGainRound = null; // 前回renderした時のラウンド -- 3R開始時の強化カード捨て札の演出用
 let lastJobPoolSnapshot = null; // 場(ジョブプール)の前回の並び -- 研究者の入れ替わりの演出用 // lastAiCardFacesの中でジョブ(player.jobCardId)を覚えておくキー
 const mobileAiCardGainQueue = [];
 let mobileAiCardGainPlaying = false;
@@ -9152,6 +9170,13 @@ function queueMobileAiCardGainAnimation(state, next) {
     });
   }
   lastJobPoolSnapshot = poolNow;
+  // 3R開始時に捨て札になった2Rの強化カード (2026-11-05, per user「強化カード 2R ショップにある時 3Rになったら 捨て札に」
+  // + 回答「アニメーションを付ける」) -- 2R→3Rに変わったrenderで1回だけ、捨てたカードが下へ落ちる演出。
+  if (compare && lastCardGainRound === 2 && state.round === 3
+    && Array.isArray(state.specialShopRound3Discards) && state.specialShopRound3Discards.length > 0) {
+    mobileAiCardGainQueue.push({ type: 'shopDiscard', faceIds: [...state.specialShopRound3Discards] });
+  }
+  lastCardGainRound = state.round;
   // 皇女などの効果によるアンタップ(獲得演出の後に続けて見せる、queueMobileUntapEffects参照)。
   queueMobileUntapEffects(state, gainedPlayerIds, compare, queueLenBeforeGains);
   // 描き終わった後(=同じ手で飛ぶダイスの演出が作られた後)に始める -- ダイスが着いてからカードの演出、の順にするため。
@@ -9186,6 +9211,7 @@ function playNextMobileAiCardGain() {
   if (item.type === 'aiTap') { playMobileAiTap(item); return; }
   if (item.type === 'untapChoice') { startMobileUntapChoice(item); return; }
   if (item.type === 'jobReplace') { playJobReplace(item.fromFaceId, item.toFaceId, token); return; }
+  if (item.type === 'shopDiscard') { playShopDiscard(item.faceIds, token); return; }
   const { faceId, fromFaceId, tapped } = item;
   if (fromFaceId) { playMobileCardUpgrade(fromFaceId, faceId, tapped, token); return; }
   let layer = document.getElementById('ai-card-gain-layer');
@@ -9235,6 +9261,34 @@ function playJobReplace(fromFaceId, toFaceId, token) {
       layer.innerHTML = '';
       // 新しいジョブは普通の獲得の演出で(次の演出として先頭に入れる)。
       mobileAiCardGainQueue.unshift({ faceId: toFaceId, fromFaceId: null, tapped: false });
+      mobileAiCardGainPlaying = false;
+      playNextMobileAiCardGain();
+    };
+  };
+}
+
+/** 3R開始時の2R強化カードの捨て札の演出 (2026-11-05) -- 捨てるカードを横に並べて左から中央へ、少し止まってから
+ * 下へ落ちて捨てられる(研究者の入れ替わりの「捨て札は下に」と同じ動き)。 */
+function playShopDiscard(faceIds, token) {
+  let layer = document.getElementById('ai-card-gain-layer');
+  if (!layer) {
+    layer = el('div', 'ai-card-gain-layer');
+    layer.id = 'ai-card-gain-layer';
+    document.body.appendChild(layer);
+  }
+  layer.innerHTML = '';
+  const holder = el('div', 'ai-card-gain-layer__card ai-card-gain-layer__card--discard-row');
+  for (const faceId of faceIds) {
+    holder.appendChild(buildCardVisual(faceId, { req: factsForFaceId(faceId).req, showEffect: true, allowTextFallback: false, noInteraction: true }));
+  }
+  layer.appendChild(holder);
+  holder.animate([{ transform: 'translateX(-100vw)' }, { transform: 'translateX(0)' }],
+    { duration: animMs(AI_CARD_GAIN_IN_MS), easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)', fill: 'forwards' }).onfinish = () => {
+    if (token !== mobileAiCardGainToken) return;
+    holder.animate([{ transform: 'translateY(0)', opacity: 1 }, { transform: 'translateY(100vh)', opacity: 0.6 }],
+      { duration: animMs(300), delay: animMs(AI_CARD_GAIN_HOLD_MS), easing: 'cubic-bezier(0.7, 0, 0.8, 0.2)', fill: 'forwards' }).onfinish = () => {
+      if (token !== mobileAiCardGainToken) return;
+      layer.innerHTML = '';
       mobileAiCardGainPlaying = false;
       playNextMobileAiCardGain();
     };

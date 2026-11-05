@@ -2119,6 +2119,27 @@ function forceRevealExtraMonumentsAtRound4(state) {
   restockShop(state, 'SPECIAL');
 }
 
+/** 3R開始時 (2026-11-05, per user request「強化カード 2R ショップにある時 3Rになったら 捨て札に」+ 回答「山の2Rも
+ * 捨てて3Rで補充」) -- SHOP201-203 に並んでいる2Rの強化カード(200番台のA/B/C)と、山札に残っている2Rの強化カードを
+ * すべて捨て札にし、空いたスロットを3Rの強化カード(300番台)で補充する。強化モニュメント(M)はそのまま。
+ * ショップに並んでいて捨てたカードは state.specialShopRound3Discards に残す(main.js の捨て札の演出用)。 */
+function isRound2SpecialCard(faceId) {
+  return !!faceId && faceId[0] !== 'M' && specialShopMinRound(faceId) === 2;
+}
+function discardRound2SpecialCardsAtRound3(state) {
+  const shop = state.shops.SPECIAL;
+  const discarded = [];
+  for (const slotId of Object.keys(shop.slots)) {
+    if (isRound2SpecialCard(shop.slots[slotId])) {
+      discarded.push(shop.slots[slotId]);
+      shop.slots[slotId] = null;
+    }
+  }
+  shop.drawPile = shop.drawPile.filter((faceId) => !isRound2SpecialCard(faceId));
+  state.specialShopRound3Discards = discarded;
+  restockShop(state, 'SPECIAL');
+}
+
 module.exports = {
   CASTLE_MAP_ID,
   AREA009_MAP_ID,
@@ -2158,6 +2179,7 @@ module.exports = {
   compactShop,
   revealExtraMonumentsIfAnyShopEmptied,
   forceRevealExtraMonumentsAtRound4,
+  discardRound2SpecialCardsAtRound3,
 };
 
 })();
