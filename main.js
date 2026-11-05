@@ -7071,12 +7071,13 @@ function specialShopRemaining(state) {
   if (visible) return { subject: '強化モニュメント', count: state.extraMonumentPool.length };
   const round = state.round >= 3 ? 3 : 2;
   const count = state.shops.SPECIAL.drawPile.filter((faceId) => boardMod.specialShopMinRound(faceId) === round).length;
-  return { subject: `${round}Rのカード`, count };
+  // 2R/3Rのカードは「あと○枚」だけ (2026-11-05, per user「2Rのカードが あと3枚 → あと３枚 だけでいい」)。
+  return { subject: null, prefix: 'あと', count };
 }
 
 /** subject: 何の残りか(3段目だけ、specialShopRemaining参照)。あれば「○○が」「あと○枚」の2列(縦書き)。 */
-function buildShopRemainingCountNode(count, gridRow, subject) {
-  const node = el('div', 'shop-remaining-count', subject ? '' : `残り${count}枚`);
+function buildShopRemainingCountNode(count, gridRow, subject, prefix = '残り') {
+  const node = el('div', 'shop-remaining-count', subject ? '' : `${prefix}${count}枚`);
   if (subject) {
     node.appendChild(document.createTextNode(`${subject}が`));
     node.appendChild(document.createElement('br'));
@@ -7135,7 +7136,7 @@ function renderShopGrid(state) {
     container.appendChild(node);
   });
   const specialRemaining = specialShopRemaining(state);
-  container.appendChild(buildShopRemainingCountNode(specialRemaining.count, 3, specialRemaining.subject));
+  container.appendChild(buildShopRemainingCountNode(specialRemaining.count, 3, specialRemaining.subject, specialRemaining.prefix));
 
   // Standings panel fills whatever's left of row 3, up to (not including) the 7th column reserved for
   // the remaining-count badge above (2026-08-27) -- previously spanned to the grid's own literal end
