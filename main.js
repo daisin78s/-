@@ -19118,7 +19118,10 @@ function fitDesktopShopCards() {
   // 大きくし、入れ物(.shop-slot__card)の幅・高さを大きくした後の大きさにして場所を空ける。
   desktopShopCardScale = 1;
   const wrappers = [...grid.querySelectorAll(':scope > .shop-slot > .shop-slot__card')].filter((w) => w.firstElementChild);
-  wrappers.forEach((w) => { w.style.width = ''; w.style.height = ''; w.firstElementChild.style.transform = ''; w.firstElementChild.style.transformOrigin = ''; });
+  // transition: .shop-cardのtransform 0.15sのアニメーションが、描き直すたびの「元の大きさ→拡大」にもかかって、行動するたびに
+  // カードが一瞬小さく→大きくと動いて見えていた (2026-11-05, per user報告(iPadの動画)「ショップのカードが 少しだけ 大きくなったり
+  // 小さくなったりする」) -- 大きさの変更にはアニメーションをかけない(影だけ残す)。
+  wrappers.forEach((w) => { w.style.width = ''; w.style.height = ''; w.firstElementChild.style.transform = ''; w.firstElementChild.style.transformOrigin = ''; w.firstElementChild.style.transition = 'box-shadow 0.15s ease'; });
   const layout = document.getElementById('game-layout');
   if (layout) layout.style.gridTemplateColumns = '';
   if (isMobileLayout() || wrappers.length === 0) return;
