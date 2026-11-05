@@ -129,6 +129,14 @@ html, body {
   height: 100%;
 }
 
+/* iPad/iPhoneのSafariが文字を自動で大きくするのを止める (2026-11-05, per user報告(iPadのスクリーンショット)「文字サイズが
+   そのままなのでぐちゃぐちゃ」) -- PC・タブレットで#appごと縮める(main.jsのapplyDesktopScale)と、枠は縮むのに
+   文字だけ元の大きさに戻されて枠からはみ出していた。 */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   background: var(--bg);
   color: var(--text);
