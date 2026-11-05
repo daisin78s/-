@@ -883,7 +883,16 @@ function applyDesktopScale() {
   const app = document.getElementById('app');
   if (!app) return;
   const scale = isMobileLayout() ? 1 : Math.min(1, window.innerWidth / DESKTOP_BASE_WIDTH);
-  app.style.zoom = scale < 1 ? String(scale) : '';
+  // zoomではなくtransform (2026-11-05, per user報告(iPadのスクリーンショット): iPadのSafariではzoomで枠は縮んでも文字・
+  // 絵文字が縮まなかった)。#appを基準の幅で並べてから、左上を基準に絵のように縮める。#appの中にあった固定表示の
+  // 画面(3Rからの生成中)はtransformの中だと画面全体を覆えないので、#appの外(body)へ出しておく。
+  const generating = document.getElementById('round3-generating-overlay');
+  if (generating && generating.parentElement !== document.body) document.body.appendChild(generating);
+  app.style.zoom = '';
+  app.style.width = scale < 1 ? `${DESKTOP_BASE_WIDTH}px` : '';
+  app.style.maxWidth = scale < 1 ? 'none' : '';
+  app.style.transformOrigin = scale < 1 ? '0 0' : '';
+  app.style.transform = scale < 1 ? `scale(${scale})` : '';
   // 縮めている時はショップのカードどうしの隙間を1pxに (2026-11-05, per user「狭いときは カードの隙間 1PXじゃダメ？」、style.css)。
   document.body.classList.toggle('desktop-scaled', scale < 1);
   fitDesktopShopCards();
@@ -19043,14 +19052,24 @@ function scrollMobileShopToNormalRow() {
 function fitDesktopShopCards() {
   const grid = document.getElementById('shop-combined-slots');
   if (!grid) return;
-  const cards = [...grid.querySelectorAll(':scope > .shop-slot > .shop-slot__card')];
-  cards.forEach((card) => { card.style.zoom = ''; });
-  if (isMobileLayout() || cards.length === 0) return;
+  // zoomではなくtransform(iPadのSafariではzoomで文字が大きくならない、applyDesktopScale参照): 中のカードをtransformで
+  // 大きくし、入れ物(.shop-slot__card)の幅・高さを大きくした後の大きさにして場所を空ける。
+  const wrappers = [...grid.querySelectorAll(':scope > .shop-slot > .shop-slot__card')].filter((w) => w.firstElementChild);
+  wrappers.forEach((w) => { w.style.width = ''; w.style.height = ''; w.firstElementChild.style.transform = ''; w.firstElementChild.style.transformOrigin = ''; });
+  if (isMobileLayout() || wrappers.length === 0) return;
   const column = parseFloat(getComputedStyle(grid).gridTemplateColumns.split(' ')[0]);
-  const natural = Math.max(...cards.map((card) => parseFloat(getComputedStyle(card).width) || 0));
+  const natural = Math.max(...wrappers.map((w) => parseFloat(getComputedStyle(w.firstElementChild).width) || 0));
   if (!(column > 0) || !(natural > 0)) return;
   const scale = Math.floor((column / natural) * 1000) / 1000;
-  if (scale > 1) cards.forEach((card) => { card.style.zoom = String(scale); });
+  if (scale <= 1) return;
+  wrappers.forEach((w) => {
+    const card = w.firstElementChild;
+    const style = getComputedStyle(card);
+    w.style.width = `${parseFloat(style.width) * scale}px`;
+    w.style.height = `${parseFloat(style.height) * scale}px`;
+    card.style.transformOrigin = '0 0';
+    card.style.transform = `scale(${scale})`;
+  });
 }
 
 function fitMobileShopWidth() {
