@@ -2389,6 +2389,11 @@ body.tutorial-mode .change-highlight {
 }
 
 .card-group__stats:empty { display: none; }
+/* PC・タブレットでは名前の下の「建築数 LV2 通常カード枚数…」の行を出さない (2026-11-05, per user「名前の下の 建築数1 LV2 1
+   通常カード枚数1 など 不要」)。スマホ版は今まで通り。 */
+@media (min-width: 761px) and (min-height: 501px) {
+  #player-cards .card-group__stats { display: none; }
+}
 
 .card-group__stat {
   display: inline-flex;
