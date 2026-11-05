@@ -249,6 +249,21 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
   check('A_K is NOT offered while not blocked, even though affordable', movesOfType(moves, 'FREE_ACTION').length, 0);
 }
 {
+  // 心配 (CON006A) holder with 0K: conversions ARE offered (2026-11-05), so END_TURN's -1VP can be weighed against them.
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  const conInst = createCardInstance('CON006A');
+  conInst.ownerId = 'P1';
+  state.cards[conInst.physicalId] = conInst;
+  p1.ownedCardPhysicalIds.push(conInst.physicalId);
+  p1.resources.A = 1; p1.resources.K = 0;
+  let moves = moveGenerator.generateMoves(state, index, 'P1', { hasPlacedDieThisTurn: true });
+  assertTrue('心配 + 0K: A_K is offered', movesOfType(moves, 'FREE_ACTION').some((m) => m.freeActionId === 'A_K'));
+  p1.resources.K = 1;
+  moves = moveGenerator.generateMoves(state, index, 'P1', { hasPlacedDieThisTurn: true });
+  check('心配 + 1K: no conversion offered', movesOfType(moves, 'FREE_ACTION').length, 0);
+}
+{
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   const conInst = createCardInstance('CON005B'); // TURNEND=RESOURCE_TOTAL_LIMIT((A,B,C),7)

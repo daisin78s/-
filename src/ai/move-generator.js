@@ -206,7 +206,12 @@ class MoveGenerator {
     // could otherwise deadlock the AI) without the otherwise-constant pointless conversions. (2026-08-07:
     // wD->2K, one of the free actions this comment originally listed, was abolished per user request --
     // see game-state.js's FREE_ACTION_IDS.)
-    if (executor.canEndTurn(state, index, playerId).violations.length > 0) {
+    // 心配 (CON006A)を持っていて〇が0個の時も交換を選べるようにする (2026-11-05, per user「AIは心配を持っているとき
+    // a→Kで-1VPされないことを理解していますか」→「1(評価値で比べる) 心配を持っているときのみ」): ターン終了時の-1VPを
+    // 避けるかどうかは、END_TURN(-1VP込み)と交換後の状態を評価値で比べて決める。
+    const worryNeedsK = (player.resources.K || 0) === 0
+      && player.ownedCardPhysicalIds.some((id) => state.cards[id] && state.cards[id].currentFaceId === 'CON006A');
+    if (worryNeedsK || executor.canEndTurn(state, index, playerId).violations.length > 0) {
       moves.push(...this.#freeActionMoves(state, index, playerId, player));
     }
     moves.push(...this.#feeCollectionMoves(state, playerId));
