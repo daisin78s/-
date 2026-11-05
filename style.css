@@ -8149,3 +8149,17 @@ body.online-spectator #online-spectator-badge {
   box-shadow: var(--shadow);
 }
 .onboard-stage[hidden] { display: none; }
+
+/* 名前の後ろのAIのレベル(main.jsのappendPlayerRoleBadge) -- 人間/AI切り替えの選んでいる時のボタンと同じ見た目を小さく。 */
+.player-role-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.7em;
+  font-weight: 700;
+  vertical-align: middle;
+  white-space: nowrap;
+}

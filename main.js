@@ -8773,6 +8773,7 @@ function renderPlayers(state, next) {
 
     node.querySelector('.player-panel__swatch').dataset.color = player.color;
     fillPlayerTitledName(node.querySelector('.player-panel__name'), player);
+    appendPlayerRoleBadge(node.querySelector('.player-panel__name'), state, player);
     // Live running score (2026-08-04, per user feedback: "プレイ中もカードVP込みの合計得点をリアルタイ
     // ム表示するように") -- previously this header badge showed only player.resources.VP, the raw "VP
     // as a resource" pool that ADD(VP) grants into (only C301A's TAP does this in the current data --
@@ -11087,6 +11088,7 @@ function renderPlayerCards(state, next) {
     if (isSelf && hasFinishedOnboarding(player)) node.classList.add('card-group--active');
     node.querySelector('.card-group__swatch').dataset.color = player.color;
     fillPlayerTitledName(node.querySelector('.card-group__name'), player);
+    appendPlayerRoleBadge(node.querySelector('.card-group__name'), state, player);
     // オンライン対戦の初期資源の進み具合(PC/タブレットはここ、スマホは右の名前欄 -- renderMobileCardsView)。
     const pickStatus = onlineResourcePickStatus(state, player.id);
     if (pickStatus) {
@@ -11759,6 +11761,16 @@ function closeLiveRankingOverlay() {
 const registeredRankingPlayerIds = new Set();
 
 const ROLE_LABELS = new Map(PLAYER_ROLE_OPTIONS);
+
+/** ゲームが始まったら(ラウンド1以降)名前の後ろにAIのレベル(「AI LV3」など)を付ける。人間は何も付けない (2026-11-05, per user
+ * 「ゲームが始まったら BOBなどの名前の後ろに AILV3の様に つけて ないのが人間 でいいのでは」→ 右の所持カードと左の資源置き場の
+ * 両方)。表示だけ(ゲーム中は今まで通り切り替えられない)。代わりに右上の人間/AI切り替えの欄はゲームが始まったら消す
+ * (renderPlayerRoleControl)。 */
+function appendPlayerRoleBadge(nameEl, state, player) {
+  if (!nameEl || state.round < 1 || !isAiPlayer(player.id)) return;
+  const role = playerRoles.get(player.id);
+  nameEl.appendChild(el('span', 'player-role-badge', ROLE_LABELS.get(role) || role));
+}
 
 /** @returns {string} a card face's own NAME column, falling back to the raw id if it has none (mirrors
  * the `row.NAME && row.NAME !== row.ID ? row.NAME : ''` fallback pattern used elsewhere, e.g. line ~1058).
@@ -18307,6 +18319,10 @@ function handleRoundPassConfirmed(state, playerId) {
 function renderPlayerRoleControl(state) {
   const container = document.getElementById('player-role-control');
   container.innerHTML = '';
+  // ゲームが始まったら欄ごと消す(AIのレベルは名前の後ろに出す、appendPlayerRoleBadge参照)。CSSのdisplay:flexが[hidden]より
+  // 強いので、style.displayで消す。
+  const row2 = container.closest('.player-cards__header-row2');
+  if (row2) row2.style.display = state.round >= 1 ? 'none' : '';
   for (const player of state.players) {
     const row = el('div', 'player-role-control__row');
 
