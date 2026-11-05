@@ -19053,6 +19053,30 @@ function scrollMobileShopToNormalRow() {
  * (.shop-slot__card)に「列の幅÷カードの幅」のzoomを掛ける。カードの中の文字・アイコンも同じ割合で大きくなる。
  * 幅はどちらもCSSの値(getComputedStyle)で比べるので、#appごと縮めている時(applyDesktopScale)も同じ結果。スマホ版は対象外。 */
 let desktopShopCardScale = 1; // fitDesktopShopCardsが決めたショップのカードの倍率(右の所持カードも同じにする)
+const DESKTOP_OWNED_CELL_PX = 118; // 縮めている時の所持カードのマスの大きさ(style.css、カードと同じ)
+const DESKTOP_OWNED_GAP_PX = 2; // 同じく所持カードどうしの隙間(style.css)
+/** 狭い時(全体を縮めている時)の左右の境界線 (2026-11-05, per user「カードの大きさを 右と左 同じ大きさにした状態で 両方の カードを
+ * 少し大きくして 右は 隙間があるので 隙間を詰める 左を大きくした分は 右と左の境界線を 右にずらす」): 右の列を「ショップと同じ
+ * 倍率の所持カードが4枚ちょうど入る幅」にして、残りを左に回す。左が広がるとショップの列(=カードの倍率)も広がるので、
+ * 両方が釣り合う幅を式で求める: ショップの列の幅 = (左の幅 - K) / 6(Kは列以外の部分、今の並びで測る)、
+ * 右の幅 = 4×マス×倍率 + 隙間3つ + 余白。 */
+function balanceDesktopColumns(grid, layout, wrappers) {
+  const playerCards = document.getElementById('player-cards');
+  const boardArea = document.getElementById('board-area');
+  if (!playerCards || !boardArea) return;
+  const natural = Math.max(...wrappers.map((w) => parseFloat(getComputedStyle(w.firstElementChild).width) || 0));
+  const column = parseFloat(getComputedStyle(grid).gridTemplateColumns.split(' ')[0]);
+  const left = parseFloat(getComputedStyle(boardArea).width);
+  const total = parseFloat(getComputedStyle(layout).width);
+  if (!(natural > 0) || !(column > 0) || !(left > 0) || !(total > 0)) return;
+  const K = left - 6 * column;
+  const pc = getComputedStyle(playerCards);
+  const extra = 3 * DESKTOP_OWNED_GAP_PX + parseFloat(pc.paddingLeft) + parseFloat(pc.paddingRight)
+    + parseFloat(pc.borderLeftWidth) + parseFloat(pc.borderRightWidth) + 20; // 20: プレイヤーごとの枠(.card-group)の内側8px・枠線1pxの左右と少しの余裕
+  const a = (4 * DESKTOP_OWNED_CELL_PX) / (6 * natural);
+  const right = Math.ceil((a * (total - K) + extra) / (1 + a));
+  layout.style.gridTemplateColumns = `minmax(0, 1fr) ${right}px`;
+}
 function fitDesktopShopCards() {
   const grid = document.getElementById('shop-combined-slots');
   if (!grid) return;
@@ -19061,7 +19085,10 @@ function fitDesktopShopCards() {
   desktopShopCardScale = 1;
   const wrappers = [...grid.querySelectorAll(':scope > .shop-slot > .shop-slot__card')].filter((w) => w.firstElementChild);
   wrappers.forEach((w) => { w.style.width = ''; w.style.height = ''; w.firstElementChild.style.transform = ''; w.firstElementChild.style.transformOrigin = ''; });
+  const layout = document.getElementById('game-layout');
+  if (layout) layout.style.gridTemplateColumns = '';
   if (isMobileLayout() || wrappers.length === 0) return;
+  if (layout && document.body.classList.contains('desktop-scaled')) balanceDesktopColumns(grid, layout, wrappers);
   const column = parseFloat(getComputedStyle(grid).gridTemplateColumns.split(' ')[0]);
   const natural = Math.max(...wrappers.map((w) => parseFloat(getComputedStyle(w.firstElementChild).width) || 0));
   if (!(column > 0) || !(natural > 0)) return;
