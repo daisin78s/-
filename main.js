@@ -19139,21 +19139,38 @@ function fitDesktopQuestPanelHeight() {
  * 右・下の余白で空ける(タップ済みの横向き(中のカードのrotate)はそのまま)。マスはstyle.cssで122pxにそろえてあるので4列で折り返す。 */
 function fitDesktopOwnedCards() {
   const cells = [...document.querySelectorAll('#player-cards .owned-card-cell, #onboard-stage .owned-card-cell')];
-  cells.forEach((cell) => { cell.style.transform = ''; cell.style.transformOrigin = ''; cell.style.marginRight = ''; cell.style.marginBottom = ''; });
-  if (isMobileLayout() || desktopShopCardScale <= 1) return;
+  cells.forEach((cell) => scaleOwnedCardCell(cell, 1));
+  if (isMobileLayout()) return;
   const scale = desktopShopCardScale;
   // 右の所持カードは狭い時だけ、エリアに重ねて選ぶカード(placeOnboardStage)はいつもショップのカードと同じ大きさに。
-  const scaled = document.body.classList.contains('desktop-scaled');
-  cells.filter((cell) => scaled || cell.closest('#onboard-stage')).forEach((cell) => {
-    const style = getComputedStyle(cell);
-    const w = parseFloat(style.width);
-    const h = parseFloat(style.height);
-    if (!(w > 0) || !(h > 0)) return;
-    cell.style.transformOrigin = '0 0';
-    cell.style.transform = `scale(${scale})`;
-    cell.style.marginRight = `${w * (scale - 1)}px`;
-    cell.style.marginBottom = `${h * (scale - 1)}px`;
-  });
+  if (document.body.classList.contains('desktop-scaled') && scale > 1) {
+    cells.filter((cell) => cell.closest('#player-cards')).forEach((cell) => scaleOwnedCardCell(cell, scale));
+  }
+  const stage = document.getElementById('onboard-stage');
+  const stageCells = cells.filter((cell) => cell.closest('#onboard-stage'));
+  if (!stage || stage.hidden || stageCells.length === 0) return;
+  // 重ねた欄はエリアの高さまで(ダイス目を隠さない)なので、入りきらない時はカードを小さくして収める(数回で落ち着く)。
+  let stageScale = Math.max(scale, 1);
+  for (let i = 0; i < 4; i++) {
+    stageCells.forEach((cell) => scaleOwnedCardCell(cell, stageScale));
+    const over = stage.scrollHeight - stage.clientHeight;
+    if (over <= 1 || stageScale <= 0.5) break;
+    stageScale = Math.max(0.5, stageScale * (stage.clientHeight / stage.scrollHeight) - 0.01);
+  }
+}
+
+/** 所持カードのマスをtransformで大きく/小さくし、変わった分を右・下の余白で空ける(1で元に戻す)。 */
+function scaleOwnedCardCell(cell, scale) {
+  cell.style.transform = ''; cell.style.transformOrigin = ''; cell.style.marginRight = ''; cell.style.marginBottom = '';
+  if (scale === 1) return;
+  const style = getComputedStyle(cell);
+  const w = parseFloat(style.width);
+  const h = parseFloat(style.height);
+  if (!(w > 0) || !(h > 0)) return;
+  cell.style.transformOrigin = '0 0';
+  cell.style.transform = `scale(${scale})`;
+  cell.style.marginRight = `${w * (scale - 1)}px`;
+  cell.style.marginBottom = `${h * (scale - 1)}px`;
 }
 
 /** ジョブ・性格(表/裏)・初期資源カードを選ぶ時は、エリアに重ねて並べる (2026-11-05, per user「初期資源カード選ぶとき右側でなくて
@@ -19196,7 +19213,9 @@ function placeOnboardStage() {
   stage.style.top = `${board.offsetTop}px`;
   stage.style.left = `${board.offsetLeft}px`;
   stage.style.width = `${board.offsetWidth}px`;
-  stage.style.minHeight = `${board.offsetHeight}px`;
+  // 高さはエリアと同じまで(はみ出す分は欄の中でスクロール) -- 下のダイス置き場(#players)のダイス目を隠さない
+  // (per user「エリアは見えなくてもいいが ダイス目は見えないと困る」)。
+  stage.style.height = `${board.offsetHeight}px`;
   stage.hidden = false;
 }
 

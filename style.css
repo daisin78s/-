@@ -8087,6 +8087,7 @@ body.online-spectator #online-spectator-badge {
 .onboard-stage {
   position: absolute;
   z-index: 5;
+  overflow: auto;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
