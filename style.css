@@ -601,7 +601,7 @@ body.desktop-scaled #player-cards .player-cards__header {
   /* クエスト欄が残りの幅いっぱい、右は4人の名前の幅だけ (per user「名前 伸ばして無駄なスペース使うくらいなら クエスト 横 広げて」) */
   /* 左に見出し・ボタン・名前、右にクエスト (per user「クエストと 名前 など 位置 入れ替えて」)。名前の列は、ゲーム中に
      切り替えボタンが1つだけになっても狭くなりすぎないよう最低220px。 */
-  grid-template-columns: minmax(220px, max-content) minmax(0, 1fr);
+  grid-template-columns: max-content minmax(0, 1fr);
   grid-template-areas: "title qst" "buttons qst" "names qst";
   grid-template-rows: auto auto 1fr;
 }
@@ -8162,4 +8162,13 @@ body.online-spectator #online-spectator-badge {
   font-weight: 700;
   vertical-align: middle;
   white-space: nowrap;
+}
+
+/* 右上から移したボタンの入れ物 (main.jsのplaceDesktopControls)。手番の操作は資源置き場のターン終了の下、設定は画面下のボタンの並び。 */
+.desktop-turn-controls, .desktop-settings-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.player-panel .desktop-turn-controls { margin-top: 6px; }
+#debug-panel .desktop-settings-controls { margin-right: 6px; }
+@media (max-width: 760px), (max-height: 500px) {
+  /* スマホ版は入れ物が無かった時と同じ並び(設定タブ) */
+  .desktop-turn-controls, .desktop-settings-controls { display: contents; }
 }

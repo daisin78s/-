@@ -17964,6 +17964,7 @@ function renderCore(state) {
   fitDesktopShopCards();
   renderBoard(state, next);
   renderPlayers(state, next);
+  placeDesktopControls(state, next);
   fitMobileBoard();
   renderMobileOwnDiceRow(state, next);
   queueMobileOnboardingFocus(state, next);
@@ -19199,6 +19200,50 @@ function scaleOwnedCardCell(cell, scale) {
  * 選ぶ時は、判断に使う性格のプレビュー(同じ人のonboard-con)も一緒に移す。選び終わる(.onboard-panel--activeが無くなる)と
  * 空になって消え、エリアが見える。#job-poolは毎回描き直さない要素なので元の場所へ戻し、ほかは毎回作り直される。
  * スマホ版(タブで切り替え)・チュートリアル・ストーリーは、カードの場所を前提にした演出があるので今まで通り。 */
+/** 右上にあったボタンの置き場所 (2026-11-05, per user「赤丸部分の場所を変えようかと思います」→ 案「手番の操作は資源置き場の
+ * ターン終了の近く、設定は画面下のボタンの並び」→「いちどこれでおねがい」「広いときも」)。PC・タブレットのすべての幅で:
+ *  - 手番の操作(ターン開始時に戻る・1手戻る・ラウンドパス)は、今操作している人の資源置き場(.player-panel)のターン終了の下へ。
+ *    操作している人がいない時(AIの手番など)は元の場所に戻して隠す。
+ *  - 設定(AI進行・巻き戻し・ナビ・進捗)は、画面下のボタンの並び(#debug-panel)の先頭へ。
+ * ボタン自体(クリックの処理)はそのまま移すだけ。スマホ版は今まで通り(設定タブ)。 */
+function placeDesktopControls(state, next) {
+  const header = document.querySelector('#player-cards .player-cards__header-buttons');
+  const footer = document.getElementById('debug-panel');
+  if (!header || !footer) return;
+  let turnBox = document.getElementById('desktop-turn-controls');
+  if (!turnBox) {
+    turnBox = el('div', 'desktop-turn-controls');
+    turnBox.id = 'desktop-turn-controls';
+    ['undo-button', 'dice-cancel-button', 'round-pass-button'].forEach((id) => { const b = document.getElementById(id); if (b) turnBox.appendChild(b); });
+    header.appendChild(turnBox);
+  }
+  let settingsBox = document.getElementById('desktop-settings-controls');
+  if (!settingsBox) {
+    settingsBox = el('div', 'desktop-settings-controls');
+    settingsBox.id = 'desktop-settings-controls';
+    [...header.querySelectorAll(':scope > .ai-pacing-control')].forEach((n) => settingsBox.appendChild(n));
+    ['nav-toggle-button', 'progress-open-button'].forEach((id) => { const b = document.getElementById(id); if (b) settingsBox.appendChild(b); });
+    header.appendChild(settingsBox);
+  }
+  if (isMobileLayout()) {
+    if (settingsBox.parentElement !== header) header.appendChild(settingsBox);
+    if (turnBox.parentElement !== header) header.appendChild(turnBox);
+    turnBox.style.display = '';
+    return;
+  }
+  if (settingsBox.parentElement !== footer) footer.insertBefore(settingsBox, footer.firstChild);
+  const actingId = actingHumanPlayerId(state, next);
+  const panel = actingId ? document.querySelector(`#players .player-panel[data-player-id="${actingId}"]`) : null;
+  if (panel) {
+    const turnEnd = panel.querySelector('.player-panel__turn-end');
+    panel.insertBefore(turnBox, turnEnd ? turnEnd.nextSibling : null);
+    turnBox.style.display = '';
+  } else {
+    if (turnBox.parentElement !== header) header.appendChild(turnBox);
+    turnBox.style.display = 'none';
+  }
+}
+
 function placeOnboardStage() {
   const boardArea = document.getElementById('board-area');
   const board = document.getElementById('board');
