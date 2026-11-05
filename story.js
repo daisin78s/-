@@ -1295,7 +1295,8 @@ function closeStoryMode() {
 document.addEventListener('click', (e) => {
   if (!storyRun) return;
   if (storyRun.onTap) storyRun.onTap();
-  const onSlotToPlace = !!e.target.closest('.slot--selectable');
+  // ☆ダイス(isWildcardThisTurn)はスロットではなくタイルを押して置く(map-tile--wildcard-target)ので通す。
+  const onSlotToPlace = !!e.target.closest('.slot--selectable, #board .map-tile--wildcard-target');
   const blockedTile = e.target.closest('#board .map-tile') && !onSlotToPlace && !e.target.closest('.map-tile__fee');
   const blockedChoice = storyRun.blockBuildChoice && e.target.closest('#build-choice-overlay .owned-card-cell, #build-choice-overlay .shop-card');
   if (blockedTile || blockedChoice) {
