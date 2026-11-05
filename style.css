@@ -519,6 +519,11 @@ h1, h2, h3 { margin: 0; }
   gap: 10px 6px;
   flex: 1 1 auto;
 }
+/* 画面が狭くて全体を縮めている時(main.jsのapplyDesktopScale)は、カードどうしの隙間を1pxに -- その分カードが大きくなる
+   (fitDesktopShopCards) (2026-11-05, per user「狭いときは カードの隙間 1PXじゃダメ？」)。 */
+body.desktop-scaled .shop-row__grid {
+  column-gap: 1px;
+}
 
 /* Remaining-card-count badge, one per shop row (M/NORMAL/SPECIAL), sitting in the 7th grid column just
    right of that row's last slot (SHOP006/SHOP106/SHOP203 -- see renderShopGrid). Small and muted, same

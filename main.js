@@ -884,6 +884,9 @@ function applyDesktopScale() {
   if (!app) return;
   const scale = isMobileLayout() ? 1 : Math.min(1, window.innerWidth / DESKTOP_BASE_WIDTH);
   app.style.zoom = scale < 1 ? String(scale) : '';
+  // 縮めている時はショップのカードどうしの隙間を1pxに (2026-11-05, per user「狭いときは カードの隙間 1PXじゃダメ？」、style.css)。
+  document.body.classList.toggle('desktop-scaled', scale < 1);
+  fitDesktopShopCards();
 }
 
 function startOpeningSequence() {
