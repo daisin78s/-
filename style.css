@@ -639,7 +639,7 @@ body.desktop-scaled #player-cards .player-role-control__option { padding: 3px 9p
   .shop-slot__req { font-size: 13px; }
   /* 「残り○枚」「あと○枚」も少し大きく。列の幅は今のまま(11px分)にして、はみ出た分は隣のカードに重なってよい
      (per user「残り 〇枚 少しだけ大きく かさなってもいい」)。 */
-  .shop-remaining-count { font-size: 14px; width: 13px; overflow: visible; z-index: 1; position: relative; }
+  .shop-remaining-count { font-size: 14px; width: 13px; overflow: visible; z-index: 1; position: relative; left: 3px; } /* left: わずかに右へ (per user「あと 〇 枚 わずかに右に」) */
 }
 
 .shop-card {
