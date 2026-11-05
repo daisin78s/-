@@ -577,6 +577,13 @@ function storyWaitForPlacement({ mapIds, dieValues, goalText, hintLineId, hintId
   storyShowGoal(goalText);
 }
 
+/** 「1手戻る」の後 (main.jsのhandleCancelPreviousActionClickから) -- ダイスを置くのを待っている場面なら、置ける状態の
+ * ままにする。戻した手の記録には「その手を使った時に置けたか」が入っていて、セリフの間(置けない間)にタップを使って
+ * いると、戻した時に置けない状態になってしまうため(置いたらこの待ちは終わるので、待っている間は必ず置ける)。 */
+function storyAfterCancelAction() {
+  if (storyRun && storyRun.onRender) turnActionTaken = false;
+}
+
 /** 見せるエリアを1つ増やす(枠だけだったタイルの中身がふわっと出てくる)。 */
 function storyRevealMap(mapId) {
   storyRun.visibleMapIds.push(mapId);

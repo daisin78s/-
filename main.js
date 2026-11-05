@@ -18053,6 +18053,9 @@ function handleCancelPreviousActionClick() {
   undoMod.restoreSnapshot(STATE, checkpoint.state);
   lastAiCardFaces = null; lastHumanTapped = null; // 取り消し後は獲得演出の比較基準を作り直す(LV1へ戻ったカード等を流さない)
   turnActionTaken = checkpoint.turnActionTaken;
+  // ストーリー: セリフの間(置けない間)に使ったタップを、置ける場面になってから戻すと、置けない印まで戻って
+  // ダイスが置けなくなっていた(per user「タップ能力を使った後 １手戻るを して その後 ダイスが置けなくなります」)。
+  if (typeof storyAfterCancelAction === 'function') storyAfterCancelAction();
   selectedDieIds = [];
   pendingBuildChoice = null;
   pendingTapChoice = null;
