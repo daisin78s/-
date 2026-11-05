@@ -34,6 +34,9 @@ const scoring = require('../src/scoring');
  * 表/裏 again -- 裏切 now CON006A (see scoring.js's own doc). */
 // 2026-11-02 CON redesign: 強欲 CON001A, 几帳面 CON002A, 虚栄 CON003A, 嫉妬 CON004A (憤怒/心配 lose VP live, not at scoring).
 const CON_VP_PENALTY_FACES = new Set(['CON001A', 'CON002A', 'CON003A', 'CON004A']);
+// ゲーム中にその場でVPを引く性格 (2026-11-05, per user「ここには マイナスしたVPが出るように」-- CONJOBの「VPペナルティ平均」に
+// 心配・憤怒も出す)。引いた合計はplayer.liveConVpPenalty(turn-flow.applyWorryPenalty / board.applyWrathPenaltyが記録)。
+const LIVE_CON_VP_PENALTY_FACES = new Set(['CON005A', 'CON006A']); // 憤怒 / 心配
 
 /** The 8 A-deck AREA-ownership faces (see AREA_CARD_BY_MAP's own doc) -- usage = fee collected via their
  * AREA, tracked separately from the generic TAP-count path below since it isn't TAP-driven at all. */
@@ -235,6 +238,11 @@ function createAggregate(index, highScoreThreshold, saved) {
         const vpEntry = conVpPenaltyEntry(h.conFaceId);
         vpEntry.count++;
         vpEntry.sum += scoring.conCardOwnVpEffect(state, index, playerId, h.conFaceId);
+      }
+      if (LIVE_CON_VP_PENALTY_FACES.has(h.conFaceId)) {
+        const vpEntry = conVpPenaltyEntry(h.conFaceId);
+        vpEntry.count++;
+        vpEntry.sum += state.players.find((p) => p.id === playerId).liveConVpPenalty || 0;
       }
 
       for (const round of [1, 2, 3, 4]) {

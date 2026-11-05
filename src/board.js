@@ -1813,6 +1813,7 @@ function isWrathPenaltyPlacement(state, map, playerId) {
 function applyWrathPenalty(state, playerId) {
   const player = state.players.find((p) => p.id === playerId);
   player.resources.VP = (player.resources.VP || 0) - 2;
+  player.liveConVpPenalty = (player.liveConVpPenalty || 0) - 2; // 人生の「性格」・AIDATAのVPペナルティ平均用の記録(表示だけ)
   executor.notifyActivation(state, playerId, splitCardId(WRATH_CON_FACE_ID).physicalId, WRATH_CON_FACE_ID, 'PASSIVE');
 }
 

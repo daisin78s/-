@@ -136,6 +136,7 @@ function applyWorryPenalty(state, playerId) {
   if (!player.ownedCardPhysicalIds.some((id) => state.cards[id] && state.cards[id].currentFaceId === WORRY_CON_FACE_ID)) return;
   if ((player.resources.K || 0) > 0) return;
   player.resources.VP = (player.resources.VP || 0) - 1;
+  player.liveConVpPenalty = (player.liveConVpPenalty || 0) - 1; // 人生の「性格」・AIDATAのVPペナルティ平均用の記録(表示だけ)
   executorApi.notifyActivation(state, playerId, 'CON006', WORRY_CON_FACE_ID, 'PASSIVE');
 }
 

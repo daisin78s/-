@@ -2995,6 +2995,7 @@ function withWildcardOwner(state) {
   const d3 = giveDie(state, 'P1', 5);
   board.placeDice(state, index, { playerId: 'P1' }, d3.id, 'MAP002', 1);
   check('憤怒: only an own WHITE die in the AREA -> no penalty', p1.resources.VP, 8);
+  check('憤怒: penalty recorded in liveConVpPenalty (人生の性格/AIDATA)', p1.liveConVpPenalty, -2);
 }
 {
   // A 2-☆-die group placement is refused the same way regardless of what's in the shop (2026-08-20, same

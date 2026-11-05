@@ -607,6 +607,7 @@ function giveM403(s, playerId) {
   turnFlow.endTurn(s, index, 'P2');
   turnFlow.endTurn(s, index, 'P1');
   check('心配: with K left -> no penalty', p1.resources.VP, 4);
+  check('心配: penalty recorded in liveConVpPenalty (人生の性格/AIDATA)', p1.liveConVpPenalty, -1);
 }
 
 console.log(`\n${passCount} passed, ${failCount} failed`);

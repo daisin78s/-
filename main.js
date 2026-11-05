@@ -11540,14 +11540,16 @@ function fillLifeStoryContent(state, player, rankedEntries) {
 }
 
 /** 最終順位の欄の1人分: 「怠惰なローマ人のhigebucho」「1位 最終獲得点数51VP」「(素点45VP クエスト8VP
- * 制約-2VP)」。クエストはゲーム終了時に配られたVP(state.qstRewardsGranted)、制約は制約カードによる増減
- * (scoring.conCardVpAdjustment)、素点はその残り。 */
+ * 性格-2VP)」。クエストはゲーム終了時に配られたVP(state.qstRewardsGranted)、性格は性格カードによる増減
+ * (下のconVp参照)、素点はその残り。 */
 function buildLifeStoryPlayerInfo(state, playerId, rank, finalScore, featured) {
   const p = state.players.find((x) => x.id === playerId);
   const conFaceId = p.conPhysicalId && p.conFace ? `${p.conPhysicalId}${p.conFace}` : null;
   const title = rankingConJobTitle(conFaceId, p.jobCardId);
   const questVp = (state.qstRewardsGranted && state.qstRewardsGranted[playerId]) || 0;
-  const conVp = scoringMod.conCardVpAdjustment(state, INDEX, playerId);
+  // 性格 = 自分の性格カードのゲーム終了時の増減(強欲・几帳面・虚栄・嫉妬、順位表のカッコと同じconPenaltyForPlayer) +
+  // ゲーム中にその場で引いた分(心配・憤怒、player.liveConVpPenalty) (2026-11-05, per user「人生には出るようにして」)。
+  const conVp = conPenaltyForPlayer(state, playerId) + (p.liveConVpPenalty || 0);
   const baseVp = finalScore - questVp - conVp;
   const box = el('div', featured ? 'life-story-player life-story-player--featured' : 'life-story-player');
   const prefix = title && title !== '—' ? title : '';
