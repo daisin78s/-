@@ -215,8 +215,10 @@ function writeCsvRow(c, result) {
   const wins = c.games.filter((g) => g.rank === 1).length;
   const score = n ? c.games.reduce((s, g) => s + g.score, 0) / n : 0;
   const champScore = n ? c.games.reduce((s, g) => s + g.championScore, 0) / n : 0;
+  // 0試合(作ったばかりで採用の入れ替えで中止になった挑戦者)は平均順位・勝率が無いので空欄 (2026-11-05: avg.toFixedで落ちて
+  // 採用のたびに止まっていた -- 保存前に落ちるので再開しても同じ採用で落ち続けた)。
   const label = { accept: '採用', reject: '不採用' }[result] || result;
-  fs.appendFileSync(csvPath, `${c.id},${new Date().toISOString()},${label},${n},${avg.toFixed(3)},${(wins / n * 100).toFixed(1)}%,${score.toFixed(1)},${champScore.toFixed(1)},"${c.changes.join(' / ')}"\n`);
+  fs.appendFileSync(csvPath, `${c.id},${new Date().toISOString()},${label},${n},${n ? avg.toFixed(3) : ''},${n ? `${(wins / n * 100).toFixed(1)}%` : ''},${score.toFixed(1)},${champScore.toFixed(1)},"${c.changes.join(' / ')}"\n`);
 }
 
 /** ゲームに入れる関門(ga_anchor_promote.jsを、候補をこちらで決めた形で呼ぶ)。true = ゲームに入った。 */
