@@ -506,6 +506,19 @@ h1, h2, h3 { margin: 0; }
   flex: 0 0 auto;
 }
 
+/* 順位表の文字は順位表の幅に合わせて大きく (2026-11-05, per user「順位 スペースが余っているから もっと大きくできるよね すべての版で」) --
+   12px〜22px。カッコの数字と色の丸も同じ割合。 */
+/* 1人分は「1位 ● 名前」と「○VP（+○）」の2行 (per user「２行にしてもいいので」)。大きさは順位表の幅と高さの小さい方に合わせる
+   (container-type: size -- 高さは同じ段のショップのカードで決まるので、中身で伸びない)。 */
+.standings-panel { container-type: size; overflow: hidden; }
+.standings-panel__round,
+.standings-panel__cell { font-size: clamp(12px, min(5cqw, 13cqh), 22px); }
+.standings-panel__cell { flex-wrap: wrap; white-space: normal; row-gap: 0; line-height: 1.35; }
+.standings-panel__name { flex: 1 1 calc(100% - 3.6em); white-space: nowrap; }
+.standings-panel__qst,
+.standings-panel__con-penalty { font-size: 0.85em; }
+.standings-panel__swatch { width: 0.9em; height: 0.9em; }
+
 /* Confirmed 2026-07-30: SHOP101-106 and SHOP201-203 share one 6-column grid (SHOP201-203 sit
    directly under whichever SHOP10x shares their dice range, row 3, via explicit grid-column/grid-row
    set in JS -- see renderShopGrid) instead of the old separate side-by-side layout. The "大型カード
@@ -532,7 +545,7 @@ body.desktop-scaled #shops,
 body.desktop-scaled #board-area > section,
 body.desktop-scaled #player-cards { padding: 6px; }
 body.desktop-scaled #shops { gap: 6px; }
-body.desktop-scaled .shop-row__combined { gap: 2px; margin-bottom: -6px; } /* クエストの両側 (per user「クエストの両サイド」) */ /* 下端はチェックマーク用(上の.shop-row__combined参照)、#shopsの余白6pxの中へ */
+body.desktop-scaled .shop-row__combined { gap: 2px; margin-bottom: -6px; padding-right: 4px; } /* クエストの両側 (per user「クエストの両サイド」)。右の4pxは右へずらした「あと○枚」(.shop-remaining-countのleft)がはみ出して横スクロールが出ないように */ /* 下端はチェックマーク用(上の.shop-row__combined参照)、#shopsの余白6pxの中へ */
 body.desktop-scaled .shop-row__grid { row-gap: 4px; }
 body.desktop-scaled #board,
 body.desktop-scaled .board-row { gap: 4px; }
@@ -556,7 +569,7 @@ body.desktop-scaled .player-panel__dice-row .die { width: 52px; height: 52px; bo
 body.desktop-scaled .player-panel .free-action-button:not(.turn-end-button) { font-size: 15px; padding: 4px 12px; } /* A→Kなどのフリーアクション 11px→15px (per user「A→K などの フリーアクションも もう少し大きく」) */
 body.desktop-scaled .player-panel .free-action-button:not(.turn-end-button) .action-dot { width: 16px; height: 16px; } /* 中の○も 11px→16px */
 body.desktop-scaled .player-panel .free-action-button:not(.turn-end-button) .action-arrow { font-size: 16px; }
-/* 狭い時はエリアのスロットと順位表も大きく (2026-11-05, per user「左側広げたのに エリアのスロット や 順位 が 小さいままです」)。
+/* 狭い時はエリアのスロットも大きく (2026-11-05, per user「左側広げたのに エリアのスロット や 順位 が 小さいままです」、順位表は下の.standings-panel側)。
    スロットはタイルの幅の1/3まで(最大66px=元の約1.3倍)、中のダイス目・置いたダイス・ANYの文字も同じ割合。 */
 body.desktop-scaled .map-tile__id { font-size: 17px; } /* 小麦畑・農園などの名前 13px→17px (per user「小麦畑 農園などの名前も もう少し大きく」) */
 body.desktop-scaled .map-tile__slots { container-type: inline-size; }
@@ -572,11 +585,6 @@ body.desktop-scaled .map-tile__slots .slot .slot__stack .die {
   height: calc(var(--slot-size) * 33 / 51);
   font-size: calc(var(--slot-size) * 18 / 51);
 }
-body.desktop-scaled .standings-panel__round,
-body.desktop-scaled .standings-panel__cell { font-size: 16px; }
-body.desktop-scaled .standings-panel__swatch { width: 16px; height: 16px; }
-body.desktop-scaled .standings-panel__qst,
-body.desktop-scaled .standings-panel__con-penalty { font-size: 14px; }
 /* 狭い時は所持カードのマスを122pxにそろえる(A/B/Cの150pxのマスも) -- main.jsのfitDesktopOwnedCardsがショップのカードと同じ倍率で
    大きくして4列で折り返す (per user「右側の カード 左と同じ大きさにして 4列折り返し」「狭いとき限定で」)。カードは正方形なので
    タップ済みで横向きになっても収まる。 */
