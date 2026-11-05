@@ -538,6 +538,15 @@ body.desktop-scaled #board,
 body.desktop-scaled .board-row { gap: 4px; }
 body.desktop-scaled #players { gap: 4px; }
 body.desktop-scaled #player-cards-groups { gap: 6px; }
+/* 狭い時は資源置き場(4人分のダイス・資源・名前)も約1.3倍に -- 左の列が広くなった分を使う (2026-11-05, per user「せっかく左側が
+   大きくなったので 資源置き場 大きくできませんか ダイスなど」→「せまいとき」)。カードの倍率(約1.3)にそろえた。 */
+body.desktop-scaled .player-panel { min-width: 0; }
+body.desktop-scaled .player-panel__swatch { width: 18px; height: 18px; }
+body.desktop-scaled .player-panel__name { font-size: 18px; }
+body.desktop-scaled .player-panel__score { font-size: 17px; }
+body.desktop-scaled .player-panel__resources .resource-badge { font-size: 26px; padding: 5px 11px; gap: 6px; border-radius: 10px; }
+body.desktop-scaled .player-panel__resources .resource-badge__dot { width: 18px; height: 18px; }
+body.desktop-scaled .player-panel__dice-row .die { width: 52px; height: 52px; border-radius: 13px; font-size: 29px; }
 /* 狭い時は所持カードのマスを122pxにそろえる(A/B/Cの150pxのマスも) -- main.jsのfitDesktopOwnedCardsがショップのカードと同じ倍率で
    大きくして4列で折り返す (per user「右側の カード 左と同じ大きさにして 4列折り返し」「狭いとき限定で」)。カードは正方形なので
    タップ済みで横向きになっても収まる。 */
