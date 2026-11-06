@@ -572,6 +572,17 @@ body.desktop-scaled .player-panel .free-action-button:not(.turn-end-button) .act
 /* 狭い時はエリアのスロットも大きく (2026-11-05, per user「左側広げたのに エリアのスロット や 順位 が 小さいままです」、順位表は下の.standings-panel側)。
    スロットはタイルの幅の1/3まで(最大66px=元の約1.3倍)、中のダイス目・置いたダイス・ANYの文字も同じ割合。 */
 body.desktop-scaled .map-tile__id { font-size: 17px; } /* 小麦畑・農園などの名前 13px→17px (per user「小麦畑 農園などの名前も もう少し大きく」) */
+/* エリアの名前・効果をもう少し大きく (2026-11-06, per user「エリアの 文字もNAME 効果 もう少し大きく」)。狭い時だけ。 */
+body.desktop-scaled .map-tile__id { font-size: 20px; }
+body.desktop-scaled .shop-slot__req { font-size: 18px; } /* 目 1-6 など (per user「目 1-6 1-5 など 残り〇枚 もう少し大きく」) */
+body.desktop-scaled .shop-remaining-count { font-size: 18px; }
+body.desktop-scaled .map-tile__action { font-size: 13px; }
+body.desktop-scaled .map-tile__action .action-emoji { font-size: 26px; }
+body.desktop-scaled .map-tile__action .action-dot { width: 21px; height: 21px; }
+body.desktop-scaled .map-tile__action .action-count { font-size: 19px; }
+body.desktop-scaled .map-tile__action .action-arrow { font-size: 21px; }
+body.desktop-scaled .map-tile__action .action-suffix { font-size: 17px; }
+body.desktop-scaled .map-tile__inst { font-size: 13px; }
 body.desktop-scaled .map-tile__slots { container-type: inline-size; }
 body.desktop-scaled .map-tile__slots .slot {
   --slot-size: min(66px, calc((100cqw - 8px) / 3));
@@ -654,10 +665,10 @@ body.desktop-scaled #player-cards .player-role-control__option { padding: 3px 9p
 .shop-slot__req:empty { display: none; }
 /* PC・タブレットは「目 1-6」などを少し大きく (2026-11-05, per user「目 1-6 目 1-5 など もう少し大きく」)。スマホ版は別の大きさ。 */
 @media (min-width: 761px) and (min-height: 501px) {
-  .shop-slot__req { font-size: 13px; }
+  .shop-slot__req { font-size: 15px; }
   /* 「残り○枚」「あと○枚」も少し大きく。列の幅は今のまま(11px分)にして、はみ出た分は隣のカードに重なってよい
      (per user「残り 〇枚 少しだけ大きく かさなってもいい」)。 */
-  .shop-remaining-count { font-size: 14px; width: 13px; overflow: visible; z-index: 1; position: relative; left: 3px; } /* left: わずかに右へ (per user「あと 〇 枚 わずかに右に」) */
+  .shop-remaining-count { font-size: 16px; width: 15px; overflow: visible; z-index: 1; position: relative; left: 3px; } /* left: わずかに右へ (per user「あと 〇 枚 わずかに右に」) */
 }
 
 .shop-card {
@@ -2951,6 +2962,9 @@ body.tutorial-mode .change-highlight {
      surface every other card uses and still inverts correctly in dark mode (white in light mode, which
      is what "白に" asked for).
    - border-bottom: 1px, matching .qst-panel .qst-card's own outer frame width just below (was 2px). */
+/* 狭い時はクエストの文字を少し大きく (2026-11-06, per user「クエストの文字も もう少し大きく」)。広い時はクエスト欄が細く「1位 4VP…」がはみ出すので今のまま。 */
+body.desktop-scaled .qst-panel .qst-card__goal-line { font-size: 21px; }
+body.desktop-scaled .qst-legend__cell { font-size: 18px; }
 .qst-panel .qst-card__goal-line {
   margin: -6px -4px 0;
   padding: 6px 4px 4px;
