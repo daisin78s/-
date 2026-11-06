@@ -899,6 +899,7 @@ function applyDesktopScale() {
   placeDesktopQuestPanel(scale < 1);
   fitDesktopShopCards();
   fitDesktopOwnedCards();
+  fitDesktopAreaNames();
 }
 
 /** 狭い時(全体を縮めている時)はクエスト欄を右の列の左上へ (2026-11-05, per user「狭いとき限定で クエストを 右側に」
@@ -7742,6 +7743,23 @@ function renderBoard(state, next) {
     }
     board.appendChild(rowEl);
   }
+  fitDesktopAreaNames();
+}
+
+/** 縮小画面で、エリアの名前(ローマ市街LV2など)が使用料と重なる時は、名前の文字を少し小さくして1行に収める
+ * (2026-11-06, per user「重なっても ２行にしない」「そのばあい 文字を 少し小さく」)。 */
+function fitDesktopAreaNames() {
+  document.querySelectorAll('#board .map-tile__header').forEach((header) => {
+    const name = header.querySelector('.map-tile__id');
+    if (!name) return;
+    name.style.fontSize = '';
+    if (!document.body.classList.contains('desktop-scaled')) return;
+    let size = parseFloat(getComputedStyle(name).fontSize);
+    while (header.scrollWidth > header.clientWidth && size > 14) {
+      size -= 1;
+      name.style.fontSize = `${size}px`;
+    }
+  });
 }
 
 /** Entry point for a SLOT click (2026-07-31). 色欲 owners now auto-prefer Z for any A/B/C payment
