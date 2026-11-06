@@ -585,6 +585,7 @@ body.desktop-scaled .map-tile__action .action-arrow { font-size: 21px; }
 body.desktop-scaled .map-tile__action .action-suffix { font-size: 20px; } /* 能力の文字 (per user「エリアの 能力の文字 大きくして」「縮小画面の時」) */
 body.desktop-scaled .map-tile__action .action-suffix--break { flex-basis: 100%; text-align: center; } /* 訓練場の「追加色ダイス」を2行目に */
 body.desktop-scaled .map-tile__inst { font-size: 13px; }
+body.desktop-scaled #board .map-tile__turnorder--current { display: none; } /* 皇帝宮殿の「次ラウンド」は縮小画面では出さない (2026-11-06, per user「皇帝宮殿の 次ラウンド 縮小画面で入らない」「縮小画面ではいらない」) */
 body.desktop-scaled .map-tile__slots { container-type: inline-size; }
 body.desktop-scaled .map-tile__slots .slot {
   --slot-size: min(66px, calc((100cqw - 8px) / 3));
@@ -3316,6 +3317,10 @@ body.desktop-scaled .qst-legend__cell { font-size: 18px; }
   width: 184px;
   flex: 0 0 auto;
 }
+/* 拡大表示の「色ダイスの上限は○個」はエリアの枠の上に書く (2026-11-06, per user「色ダイス上限 赤丸に書いて」)。 */
+.map-tile--preview { position: relative; }
+.map-tile--preview .map-tile__inst { position: absolute; left: 0; right: 0; bottom: 100%; margin: 0 0 4px; padding: 0; font-size: 13px; }
+.area-enlarge-row:has(.map-tile__inst:not(:empty)) { padding-top: 24px; }
 
 .card-inst-modal__flip-button {
   display: block;
