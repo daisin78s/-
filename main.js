@@ -19183,7 +19183,8 @@ function fitDesktopQuestPanelHeight() {
   const grid = document.getElementById('shop-combined-slots');
   if (!panel || !grid) return;
   const moved = !!panel.closest('#player-cards');
-  panel.style.height = moved ? `${parseFloat(getComputedStyle(grid).height)}px` : '';
+  // 狭い時はショップの段の3/4の高さに (2026-11-06, per user「画面が狭いとき クエストの 縦幅を 今の 3/4にして」)。
+  panel.style.height = moved ? `${parseFloat(getComputedStyle(grid).height) * 0.75}px` : '';
 }
 
 /** 狭い時(全体を縮めている時)は、右の所持カードも左のショップのカードと同じ大きさに (2026-11-05, per user「右側の カード
