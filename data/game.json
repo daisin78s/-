@@ -1115,7 +1115,7 @@
     {
       "ID": "CON006A",
       "NAME": "心配",
-      "ONCE": "ADD(3VP,Z,K,wD)",
+      "ONCE": "ADD(Z,K,wD)",
       "TAP": "",
       "PASSIVE": "",
       "TURNEND": "",
@@ -1487,12 +1487,12 @@
       "COST": "",
       "VP": "",
       "ONCE": "",
-      "TAP": "IF(RESOURCE(K)<=5,ADD(K),CHANGE(2K,B))",
+      "TAP": "IF(RESOURCE(K)<=4,ADD(K),CHANGE(2K,B))",
       "PASSIVE": "",
       "TURNEND": "UNTAP()",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "タップしたとき\n〇が5以下なら〇を得る\n6以上なら〇2→青〇\n毎ターンアンタップする"
+      "INST": "タップしたとき\n〇が4以下なら〇を得る\n5以上なら〇2→青〇\n毎ターンアンタップする"
     },
     {
       "ID": "JOB003",

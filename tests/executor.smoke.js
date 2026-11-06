@@ -1455,16 +1455,16 @@ const UNTAP_CHOICE_3 = { type: 'UNTAP_CHOICE', scope: 'SELF', count: 3 };
 }
 
 {
-  // 巫女(JOB002) TAP (2026-11-03, per user data edit: 〇が5以下なら〇を得る / 6以上なら〇2→青〇) -- judged once at tap time.
+  // 巫女(JOB002) TAP (2026-11-06, per user data edit: 〇が4以下なら〇を得る / 5以上なら〇2→青〇) -- judged once at tap time.
   const tap = getCardRow(index, 'JOB002').TAP;
   const low = freshState();
-  getPlayerRef(low, 'P1').resources.K = 5;
+  getPlayerRef(low, 'P1').resources.K = 4;
   executor.runProgram(low, index, { playerId: 'P1' }, tap);
-  check('巫女 TAP with 〇5 gains 〇 (6〇, no further conversion)', [getPlayerRef(low, 'P1').resources.K, getPlayerRef(low, 'P1').resources.B || 0], [6, 0]);
+  check('巫女 TAP with 〇4 gains 〇 (5〇, no further conversion)', [getPlayerRef(low, 'P1').resources.K, getPlayerRef(low, 'P1').resources.B || 0], [5, 0]);
   const high = freshState();
-  getPlayerRef(high, 'P1').resources.K = 6;
+  getPlayerRef(high, 'P1').resources.K = 5;
   executor.runProgram(high, index, { playerId: 'P1' }, tap);
-  check('巫女 TAP with 〇6 pays 〇2 for 青〇', [getPlayerRef(high, 'P1').resources.K, getPlayerRef(high, 'P1').resources.B || 0], [4, 1]);
+  check('巫女 TAP with 〇5 pays 〇2 for 青〇', [getPlayerRef(high, 'P1').resources.K, getPlayerRef(high, 'P1').resources.B || 0], [3, 1]);
 }
 
 console.log(`\n${passCount} passed, ${failCount} failed`);
