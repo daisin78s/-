@@ -574,21 +574,21 @@ body.desktop-scaled .player-panel .free-action-button:not(.turn-end-button) .act
    スロットはタイルの幅の1/3まで(最大66px=元の約1.3倍)、中のダイス目・置いたダイス・ANYの文字も同じ割合。 */
 body.desktop-scaled .map-tile__id { font-size: 17px; } /* 小麦畑・農園などの名前 13px→17px (per user「小麦畑 農園などの名前も もう少し大きく」) */
 /* エリアの名前・効果をもう少し大きく (2026-11-06, per user「エリアの 文字もNAME 効果 もう少し大きく」)。狭い時だけ。 */
-body.desktop-scaled .map-tile__id { font-size: 20px; }
+body.desktop-scaled .map-tile__id { font-size: 27px; } /* 20→27px: 拡大表示の見た目に寄せる (2026-11-06, per user「縮小画面での エリアの見た目 文字が小さく見えにくい」「この拡大画面によせて」) */
 body.desktop-scaled .shop-slot__req { font-size: 18px; } /* 目 1-6 など (per user「目 1-6 1-5 など 残り〇枚 もう少し大きく」) */
 body.desktop-scaled .shop-remaining-count { font-size: 18px; }
-body.desktop-scaled .map-tile__action { font-size: 15px; }
-body.desktop-scaled .map-tile__action .action-emoji { font-size: 26px; }
-body.desktop-scaled .map-tile__action .action-dot { width: 21px; height: 21px; }
-body.desktop-scaled .map-tile__action .action-count { font-size: 21px; }
-body.desktop-scaled .map-tile__action .action-arrow { font-size: 21px; }
-body.desktop-scaled .map-tile__action .action-suffix { font-size: 20px; } /* 能力の文字 (per user「エリアの 能力の文字 大きくして」「縮小画面の時」) */
+body.desktop-scaled .map-tile__action { font-size: 18px; }
+body.desktop-scaled .map-tile__action .action-emoji { font-size: 32px; }
+body.desktop-scaled .map-tile__action .action-dot { width: 27px; height: 27px; }
+body.desktop-scaled .map-tile__action .action-count { font-size: 28px; }
+body.desktop-scaled .map-tile__action .action-arrow { font-size: 26px; }
+body.desktop-scaled .map-tile__action .action-suffix { font-size: 26px; } /* 能力の文字 (per user「エリアの 能力の文字 大きくして」「縮小画面の時」) */
 body.desktop-scaled .map-tile__action .action-suffix--break { flex-basis: 100%; text-align: center; } /* 訓練場の「追加色ダイス」を2行目に */
 body.desktop-scaled .map-tile__inst { font-size: 13px; }
 body.desktop-scaled #board .map-tile__turnorder--current { display: none; } /* 皇帝宮殿の「次ラウンド」は縮小画面では出さない (2026-11-06, per user「皇帝宮殿の 次ラウンド 縮小画面で入らない」「縮小画面ではいらない」) */
 body.desktop-scaled .map-tile__slots { container-type: inline-size; }
 body.desktop-scaled .map-tile__slots .slot {
-  --slot-size: min(66px, calc((100cqw - 8px) / 3));
+  --slot-size: min(72px, calc((100cqw - 8px) / 3));
   width: var(--slot-size);
   height: var(--slot-size);
   font-size: calc(var(--slot-size) * 17 / 51);
@@ -3044,6 +3044,8 @@ body.desktop-scaled .qst-legend__cell { font-size: 18px; }
 .qst-card__rank-player[data-color="PURPLE"] { background: var(--player-purple); }
 .qst-card__rank-player[data-color="GREEN"] { background: var(--player-green); }
 .qst-card__rank-player[data-color="ORANGE"] { background: var(--player-orange); }
+/* 縮小画面ではクエスト欄が広い(右の列)ので、色丸を大きく (2026-11-06, per user「クエストの プレイヤーの いろまる もっと大きく」)。4人同点でも1行に入る大きさ。 */
+body.desktop-scaled .qst-card__rank-player { width: 30px; height: 30px; }
 
 /* ---------------------------------------------------------------------- */
 /* Utility                                                                 */
