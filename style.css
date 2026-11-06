@@ -518,6 +518,7 @@ h1, h2, h3 { margin: 0; }
 .standings-panel__qst,
 .standings-panel__con-penalty { font-size: 0.85em; }
 .standings-panel__swatch { width: 0.9em; height: 0.9em; }
+.standings-panel__vp { margin-left: 1em; } /* 2行目の「0VP」の前に少し空ける (2026-11-06, per user「0VPの前に 少しスペース」) */
 
 /* Confirmed 2026-07-30: SHOP101-106 and SHOP201-203 share one 6-column grid (SHOP201-203 sit
    directly under whichever SHOP10x shares their dice range, row 3, via explicit grid-column/grid-row
