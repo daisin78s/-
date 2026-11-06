@@ -18772,7 +18772,8 @@ function buildAreaTilePreviewNode(areaId) {
   else actionEl.textContent = areaRow.ACTION;
 
   // このtierのINST(色ダイスの上限はN個、など)はボードのエリアには出さず、拡大表示にだけ出す (2026-11-06, per user「エリアでは消して拡大に書く」)。
-  node.querySelector('.map-tile__inst').textContent = areaRow.INST || '';
+  // 怠惰の解除の行は出さない (2026-11-06, per user「このエリアにダイスを置くと怠惰の性格は解除される これはいらない」)。
+  node.querySelector('.map-tile__inst').textContent = String(areaRow.INST || '').split(/\r?\n/).filter((line) => !line.includes('怠惰')).join('\n');
 
   const feeEl = node.querySelector('.map-tile__fee');
   if (!tier) {
