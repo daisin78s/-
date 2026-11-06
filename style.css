@@ -8196,6 +8196,21 @@ body.online-spectator #online-spectator-badge {
 .desktop-turn-controls, .desktop-settings-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .player-panel .desktop-turn-controls { margin-top: 6px; }
 #debug-panel .desktop-settings-controls { margin-right: 6px; }
+/* 縮小画面では下の設定・ボタン欄を大きく (2026-11-06, per user「赤丸部分もっと大きく」(iPadのスクリーンショット: AI進行〜R1-1の欄))。 */
+body.desktop-scaled #debug-panel { padding: 12px 16px; }
+body.desktop-scaled #debug-panel .debug-panel__toggle,
+body.desktop-scaled #debug-panel .undo-button,
+body.desktop-scaled #debug-panel .ai-pacing-control,
+body.desktop-scaled #debug-panel .ai-pacing-control select,
+body.desktop-scaled #debug-panel .debug-history-controls__nav button,
+body.desktop-scaled #debug-panel .debug-history-controls__position,
+body.desktop-scaled #debug-panel .debug-history-list__item { font-size: 22px; }
+body.desktop-scaled #debug-panel .ai-pacing-control .status-label { font-size: 18px; }
+body.desktop-scaled #debug-panel .debug-panel__toggle,
+body.desktop-scaled #debug-panel .undo-button,
+body.desktop-scaled #debug-panel .ai-pacing-control,
+body.desktop-scaled #debug-panel .debug-history-controls__nav button { padding: 8px 18px; }
+body.desktop-scaled #debug-panel .desktop-settings-controls { gap: 10px; margin-bottom: 10px; }
 @media (max-width: 760px), (max-height: 500px) {
   /* スマホ版は入れ物が無かった時と同じ並び(設定タブ) */
   .desktop-turn-controls, .desktop-settings-controls { display: contents; }
