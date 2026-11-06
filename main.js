@@ -4534,6 +4534,11 @@ function dieFace(n) {
   box.appendChild(el('span', 'die-face-numeral__digit', String(n)));
   return box;
 }
+/** 縮小画面の時だけ、この文字の前で改行する (2026-11-06, per user「訓練場 ABC→追加色ダイス を ABC→ / 追加色ダイス のように２行に」「狭いときだけ」)。 */
+function actionSuffixBreak(node) {
+  node.classList.add('action-suffix--break');
+  return node;
+}
 function actionRow(children) {
   const row = el('div', 'action-icons');
   children.forEach((c) => row.appendChild(c));
@@ -4558,7 +4563,7 @@ const ACTION_ICON_BUILDERS = {
   // matches Q001B's own "追加色ダイス" goal (executor.js's EXTRA_D_PLUS_ABC_COUNT) and reads as "this is
   // how you get one". Deliberately scoped to this entry: ADD(D) elsewhere keeps saying 色D (see
   // buildAddResourceIcon), since those cards are about the die itself, not about growing past the start.
-  'CHANGE((A,B,C),D)': () => actionRow([actionDot('A'), actionDot('B'), actionDot('C'), actionArrow(), actionSuffix('追加色ダイス', '追加色D')]),
+  'CHANGE((A,B,C),D)': () => actionRow([actionDot('A'), actionDot('B'), actionDot('C'), actionArrow(), actionSuffixBreak(actionSuffix('追加色ダイス', '追加色D'))]),
   // 訓練場LV1 (AREA007B)'s own ACTION, "CHANGE(K,D)" or "CHANGE(nK,D)" (2026-08-30, per user request:
   // "訓練場のアイコン ○2→追加色ダイス にして", after the K cost changed from 1 to 2 -- see
   // forcedTrainingGroundMove's own doc for the matching AI-side change) -- used to be a plain exact-match
@@ -7642,7 +7647,9 @@ function renderBoard(state, next) {
       // 参照 "エリア訓練場 赤□部分に 色ダイスの上限５個 と表示 赤〇青〇黄〇→追加色ダイス の枠の外になる
       // ように") -- .map-tile__actionの箱の外(下)に赤枠のキャプションとして表示。INSTが無いtierでは
       // :emptyで消える(style.css参照)。
-      node.querySelector('.map-tile__inst').textContent = areaRow.INST || '';
+      // 2026-11-06, per user「訓練場 色ダイスの上限５個 は消す」「エリアでは消して拡大に書く」: ボードのエリアには出さず、
+      // タップした時の拡大表示(buildAreaTilePreviewNode)にだけ出す。
+      node.querySelector('.map-tile__inst').textContent = '';
 
       // Usage-fee display (2026-08-0X, moved into the header, replacing the old "tier A"/"tier B" text
       // badge -- per user request). Two lines: the rate (straight from this AREA row's own `fee` column,
@@ -18763,6 +18770,9 @@ function buildAreaTilePreviewNode(areaId) {
   const icons = buildActionIcons(areaRow.ACTION);
   if (icons) actionEl.appendChild(icons);
   else actionEl.textContent = areaRow.ACTION;
+
+  // このtierのINST(色ダイスの上限はN個、など)はボードのエリアには出さず、拡大表示にだけ出す (2026-11-06, per user「エリアでは消して拡大に書く」)。
+  node.querySelector('.map-tile__inst').textContent = areaRow.INST || '';
 
   const feeEl = node.querySelector('.map-tile__fee');
   if (!tier) {

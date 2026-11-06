@@ -577,12 +577,13 @@ body.desktop-scaled .map-tile__id { font-size: 17px; } /* 小麦畑・農園な�
 body.desktop-scaled .map-tile__id { font-size: 20px; }
 body.desktop-scaled .shop-slot__req { font-size: 18px; } /* 目 1-6 など (per user「目 1-6 1-5 など 残り〇枚 もう少し大きく」) */
 body.desktop-scaled .shop-remaining-count { font-size: 18px; }
-body.desktop-scaled .map-tile__action { font-size: 13px; }
+body.desktop-scaled .map-tile__action { font-size: 15px; }
 body.desktop-scaled .map-tile__action .action-emoji { font-size: 26px; }
 body.desktop-scaled .map-tile__action .action-dot { width: 21px; height: 21px; }
-body.desktop-scaled .map-tile__action .action-count { font-size: 19px; }
+body.desktop-scaled .map-tile__action .action-count { font-size: 21px; }
 body.desktop-scaled .map-tile__action .action-arrow { font-size: 21px; }
-body.desktop-scaled .map-tile__action .action-suffix { font-size: 17px; }
+body.desktop-scaled .map-tile__action .action-suffix { font-size: 20px; } /* 能力の文字 (per user「エリアの 能力の文字 大きくして」「縮小画面の時」) */
+body.desktop-scaled .map-tile__action .action-suffix--break { flex-basis: 100%; text-align: center; } /* 訓練場の「追加色ダイス」を2行目に */
 body.desktop-scaled .map-tile__inst { font-size: 13px; }
 body.desktop-scaled .map-tile__slots { container-type: inline-size; }
 body.desktop-scaled .map-tile__slots .slot {
