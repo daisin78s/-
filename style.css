@@ -585,6 +585,11 @@ body.desktop-scaled .map-tile__action .action-arrow { font-size: 26px; }
 body.desktop-scaled .map-tile__action .action-suffix { font-size: 26px; } /* 能力の文字 (per user「エリアの 能力の文字 大きくして」「縮小画面の時」) */
 body.desktop-scaled .map-tile__action .action-suffix--break { flex-basis: 100%; text-align: center; } /* 訓練場の「追加色ダイス」を2行目に */
 body.desktop-scaled .map-tile__inst { font-size: 13px; }
+body.desktop-scaled #board .map-tile__id { white-space: nowrap; } /* 長い名前(ローマ市街LV2など)が使用料と重なっても2行にしない (per user「重なっても ２行にしない」) */
+body.desktop-scaled #board .map-tile__fee { position: relative; z-index: 1; }
+body.desktop-scaled #board .map-tile__fee { font-size: 18px; } /* 使用料 (2026-11-06, per user「エリア 使用料も おおきく」) */
+body.desktop-scaled #board .map-tile__fee--collectible { font-size: 20px; }
+body.desktop-scaled #board .map-tile__fee .action-dot { width: 18px; height: 18px; }
 body.desktop-scaled #board .map-tile__turnorder--current { display: none; } /* 皇帝宮殿の「次ラウンド」は縮小画面では出さない (2026-11-06, per user「皇帝宮殿の 次ラウンド 縮小画面で入らない」「縮小画面ではいらない」) */
 body.desktop-scaled .map-tile__slots { container-type: inline-size; }
 body.desktop-scaled .map-tile__slots .slot {
