@@ -546,7 +546,7 @@ body.desktop-scaled #shops,
 body.desktop-scaled #board-area > section,
 body.desktop-scaled #player-cards { padding: 6px; }
 body.desktop-scaled #shops { gap: 6px; }
-body.desktop-scaled .shop-row__combined { gap: 2px; margin-bottom: -6px; padding-right: 4px; } /* クエストの両側 (per user「クエストの両サイド」)。右の4pxは右へずらした「あと○枚」(.shop-remaining-countのleft)がはみ出して横スクロールが出ないように */ /* 下端はチェックマーク用(上の.shop-row__combined参照)、#shopsの余白6pxの中へ */
+body.desktop-scaled .shop-row__combined { gap: 2px; margin-bottom: -6px; padding-right: 7px; } /* クエストの両側 (per user「クエストの両サイド」)。右の7pxは右へずらした「あと○枚」(.shop-remaining-countのleft)がはみ出して横スクロールが出ないように */ /* 下端はチェックマーク用(上の.shop-row__combined参照)、#shopsの余白6pxの中へ */
 body.desktop-scaled .shop-row__grid { row-gap: 4px; }
 body.desktop-scaled #board,
 body.desktop-scaled .board-row { gap: 4px; }
@@ -669,7 +669,7 @@ body.desktop-scaled #player-cards .player-role-control__option { padding: 3px 9p
   .shop-slot__req { font-size: 15px; }
   /* 「残り○枚」「あと○枚」も少し大きく。列の幅は今のまま(11px分)にして、はみ出た分は隣のカードに重なってよい
      (per user「残り 〇枚 少しだけ大きく かさなってもいい」)。 */
-  .shop-remaining-count { font-size: 16px; width: 15px; overflow: visible; z-index: 1; position: relative; left: 3px; } /* left: わずかに右へ (per user「あと 〇 枚 わずかに右に」) */
+  .shop-remaining-count { font-size: 16px; width: 15px; overflow: visible; z-index: 1; position: relative; left: 6px; } /* left: 右へ (per user「あと 〇 枚 わずかに右に」→「残り〇枚 もう少し 右に」3px→6px) */
 }
 
 .shop-card {
