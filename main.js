@@ -6293,7 +6293,10 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
     const allowTextFallback = options.allowTextFallback !== false;
     const rows = facts.effects
       .map((effect) => {
-        const row = buildEffectRow(effect, allowTextFallback);
+        // パンとサーカスLV2は「2〇→2VP / ターン終了時」 (2026-11-07, per user; 孤児院と共用の「〇→1VP（MAX2）」は使わない)。
+        const row = effect.source === 'TURNEND' && faceId === 'B301B'
+          ? (() => { const stack = el('div', 'action-icons-stack'); stack.appendChild(actionRow([...resourceItemNodes('2', 'K'), actionArrow(), actionSuffix('2VP')])); stack.appendChild(actionRow([actionSuffix('ターン終了時')])); return stack; })()
+          : buildEffectRow(effect, allowTextFallback);
         // 基礎学問・高等学問・幾何学の⚡🎲(ONCE)の行を少し上に (2026-11-02, per user「基礎学問 高等学問 幾何学のアイコンの
         // ⚡🎲 もう少し上に」)。
         // 皇女・軍団長の⚡⤴3(ONCE)の行も同じく行ごと上に (per user「⤴3の行ごと、カードの上の方へ移したい」)。
