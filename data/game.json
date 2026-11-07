@@ -626,12 +626,12 @@
       "VP": 0,
       "LEVEL": 1,
       "ONCE": "",
-      "TAP": "CHANGE(K,VP)",
+      "TAP": "",
       "PASSIVE": "",
-      "TURNEND": "UNTAP()",
+      "TURNEND": "CHANGE(K,VP)",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "タップすると〇をVPに変換する\n毎ターンアンタップする"
+      "INST": "ターン終了時〇をVPに変換する"
     },
     {
       "ID": "B001B",
@@ -761,12 +761,12 @@
       "VP": 1,
       "LEVEL": 2,
       "ONCE": "",
-      "TAP": "CHANGE(K,VP,2)",
+      "TAP": "",
       "PASSIVE": "",
-      "TURNEND": "UNTAP()",
+      "TURNEND": "CHANGE(K,VP,2)",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "タップすると2〇を2VPに変換する\n毎ターンアンタップする"
+      "INST": "ターン終了時2〇を2VPに変換する"
     }
   ],
   "C": [
@@ -1487,12 +1487,12 @@
       "COST": "",
       "VP": "",
       "ONCE": "",
-      "TAP": "IF(RESOURCE(K)<=4,ADD(K),CHANGE(2K,B))",
+      "TAP": "",
       "PASSIVE": "",
-      "TURNEND": "UNTAP()",
+      "TURNEND": "IF(RESOURCE(K)<=4,ADD(K),CHANGE(2K,B))",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "タップしたとき\n〇が4以下なら〇を得る\n5以上なら〇2→青〇\n毎ターンアンタップする"
+      "INST": "ターン終了時\n〇が4以下なら〇を得る\n5以上なら〇2→青〇\n\nQ.増えた「食料」は使用料に使えますか？\nA.はい　使えます\nQ.「心配」を持っているとき「食料」がない状態でターン終了した場合どうなりますか？\nA.「食料」が1つ増えるため、-1VPされることはありません"
     },
     {
       "ID": "JOB003",

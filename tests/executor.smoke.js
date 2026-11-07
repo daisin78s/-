@@ -1455,16 +1455,21 @@ const UNTAP_CHOICE_3 = { type: 'UNTAP_CHOICE', scope: 'SELF', count: 3 };
 }
 
 {
-  // 巫女(JOB002) TAP (2026-11-06, per user data edit: 〇が4以下なら〇を得る / 5以上なら〇2→青〇) -- judged once at tap time.
-  const tap = getCardRow(index, 'JOB002').TAP;
-  const low = freshState();
-  getPlayerRef(low, 'P1').resources.K = 4;
-  executor.runProgram(low, index, { playerId: 'P1' }, tap);
-  check('巫女 TAP with 〇4 gains 〇 (5〇, no further conversion)', [getPlayerRef(low, 'P1').resources.K, getPlayerRef(low, 'P1').resources.B || 0], [5, 0]);
-  const high = freshState();
-  getPlayerRef(high, 'P1').resources.K = 5;
-  executor.runProgram(high, index, { playerId: 'P1' }, tap);
-  check('巫女 TAP with 〇5 pays 〇2 for 青〇', [getPlayerRef(high, 'P1').resources.K, getPlayerRef(high, 'P1').resources.B || 0], [3, 1]);
+  // 巫女(JOB002) / パンとサーカス(B301) TURNEND (2026-11-07, per user data edit: TAP -> ターン終了時).
+  const run = (faceId, k) => {
+    const s = freshState();
+    giveCard(s, faceId, 'P1');
+    getPlayerRef(s, 'P1').resources.K = k;
+    executor.applyTurnEnd(s, index, 'P1');
+    const p = getPlayerRef(s, 'P1');
+    return [p.resources.K, p.resources.B || 0, p.resources.VP || 0];
+  };
+  check('巫女 turn end with 〇4 gains 〇', run('JOB002', 4), [5, 0, 0]);
+  check('巫女 turn end with 〇5 pays 〇2 for 青〇', run('JOB002', 5), [3, 1, 0]);
+  check('パンとサーカスLV1 turn end converts 〇 to VP', run('B301A', 3), [2, 0, 1]);
+  check('パンとサーカスLV1 turn end with no 〇 does nothing', run('B301A', 0), [0, 0, 0]);
+  check('パンとサーカスLV2 turn end converts 2〇 to 2VP', run('B301B', 3), [1, 0, 2]);
+  check('パンとサーカスLV2 turn end with 1〇 converts 1', run('B301B', 1), [0, 0, 1]);
 }
 
 console.log(`\n${passCount} passed, ${failCount} failed`);

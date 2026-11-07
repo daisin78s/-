@@ -1750,6 +1750,15 @@ function applyTurnEnd(state, index, playerId) {
           const physicalId = splitCardId(row.ID).physicalId;
           state.cards[physicalId].tapped = false;
         }
+      } else {
+        // Ordinary effects in TURNEND (2026-11-07, per user: 巫女/パンとサーカス moved from TAP to
+        // "ターン終了時") -- run like a TAP effect, after the usage fee above and before 心配's K check
+        // (turn-flow.applyWorryPenalty). An unaffordable CHANGE just does nothing (fails before mutating).
+        const physicalId = splitCardId(row.ID).physicalId;
+        const result = runCommand(state, index, { playerId, sourcePhysicalId: physicalId }, cmd);
+        if (result.success && !result.skipped && result.timesExecuted !== 0) {
+          notifyActivation(state, playerId, physicalId, row.ID, 'PASSIVE');
+        }
       }
     }
   }

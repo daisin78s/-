@@ -5774,6 +5774,15 @@ function buildEffectRow(effect, allowTextFallback = true) {
     rows.forEach((r) => wrapper.appendChild(r));
     return wrapper;
   }
+  // ターン終了時に動く効果 (2026-11-07, per user: パンとサーカスがTAPからTURNENDへ) -- アイコンの下に「ターン終了時」。
+  if (effect.source === 'TURNEND' && icons && /^(CHANGE|ADD|IF)\(/.test(effect.text)) {
+    const iconRow = el('div', 'action-icons');
+    Array.from(icons.childNodes).forEach((child) => iconRow.appendChild(child));
+    const wrapper = el('div', 'action-icons-stack');
+    wrapper.appendChild(iconRow);
+    wrapper.appendChild(actionRow([actionSuffix('ターン終了時')]));
+    return wrapper;
+  }
   const row = el('div', 'action-icons');
   // Flattening drops the builder's own row element, so carry its "don't wrap" modifier over (料理人, see buildChangeQuantityIcon).
   if (icons && icons.classList.contains('action-icons--nowrap')) row.classList.add('action-icons--nowrap');
@@ -6211,7 +6220,6 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
       // 2026-11-02 new ability -- icon per user「⤵〇/〇→青〇」; 2026-11-03 TAP=IF(RESOURCE(K)<=5,ADD(K),CHANGE(2K,B)) -> 〇2→青〇.
       iconRow.classList.add('action-icons--nowrap');
       iconRow.style.gap = '3px'; // 1行に収める
-      iconRow.appendChild(actionEmoji(TAP_COST_ICON));
       iconRow.appendChild(actionDot('K'));
       iconRow.appendChild(actionSuffix('/'));
       iconRow.appendChild(actionDot('K'));
@@ -6226,7 +6234,7 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
       iconRow.appendChild(actionCount('1VP'));
     }
     noteEl.appendChild(iconRow);
-    if (facts.name === '巫女') noteEl.appendChild(actionRow([actionSuffix('毎ターン')])); // per user「巫女のアイコン 毎ターン つけて」(TURNEND=UNTAP())
+    if (facts.name === '巫女') noteEl.appendChild(actionRow([actionSuffix('ターン終了時')])); // 2026-11-07: TAPからターン終了時へ (旧「毎ターン」)
     q('.shop-card__effect').appendChild(noteEl);
   } else if (options.showEffect && facts.name === '異端者') {
     // JOB006B/異端者 (2026-10-11, per user mockup: "色ダイス配置時 / LV0▷LV1" -- 色ダイス限定, per user
@@ -6289,7 +6297,6 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
         // 基礎学問・高等学問・幾何学の⚡🎲(ONCE)の行を少し上に (2026-11-02, per user「基礎学問 高等学問 幾何学のアイコンの
         // ⚡🎲 もう少し上に」)。
         // 皇女・軍団長の⚡⤴3(ONCE)の行も同じく行ごと上に (per user「⤴3の行ごと、カードの上の方へ移したい」)。
-        // パンとサーカスLV2の「毎ターン」は左下の1 VPと重ならないよう右へ (2026-11-02, per user「パンとサーカスLV2 毎ターンをもっと右に」)。
         // 天文学の⚡🎲🎲(ONCE)は1.3倍 (2026-11-02, per user「天文学 ⚡🎲🎲 １．３倍に」)。
         if (row && effect.source === 'ONCE' && /^B201/.test(faceId)) row.style.zoom = '1.3';
         // 皇女LV2・軍団長LV2の⤵の行は上へ (2026-11-02, per user「皇女LV2 弁論家LV2 ⤵⚡🎲 など もっと上に」 -- 先に「右に」と
@@ -6297,10 +6304,6 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
         if (row && effect.source === 'TAP' && (faceId === 'C202B' || faceId === 'C301B')) {
           row.style.position = 'relative';
           row.style.top = '-8px';
-        }
-        if (row && effect.source === 'TURNEND' && faceId === 'B301B') {
-          row.style.position = 'relative';
-          row.style.left = '20px';
         }
         if (row && effect.source === 'ONCE' && /^(B00[123]|C202|C301)/.test(faceId)) {
           row.style.position = 'relative';
