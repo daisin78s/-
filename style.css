@@ -8226,3 +8226,24 @@ body.desktop-scaled #debug-panel .desktop-settings-controls { gap: 10px; margin-
 .qst-all-values__item { display: inline-flex; align-items: center; gap: 5px; }
 .qst-all-values__item .standings-panel__swatch { width: 14px; height: 14px; }
 .qst-all-values__value { font-weight: 700; font-size: 18px; }
+
+/* スマホ版: カード/エリアの拡大画面の✖を常に見えるように (2026-11-07, per user「カードや えリアを拡大した後 ✖ が
+   見えなくなることがあるので 常に見えるようにしてほしい」) -- 中身が長くてオーバーレイを下へスクロールした時や、
+   横向きの右側にノッチ(セーフエリア)が来た時に✖が隠れていた。画面右上(セーフエリアの内側)に固定し、
+   背景の丸を付けてどこに重なっても見えるようにする。#card-inst-overlayだけ(建築選択などの他のモーダルは今まで通り)。 */
+@media (max-width: 760px), (max-height: 500px) {
+  #card-inst-overlay .card-inst-modal__close {
+    position: fixed;
+    top: max(8px, env(safe-area-inset-top));
+    right: max(8px, env(safe-area-inset-right));
+    z-index: 1;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border-radius: 50%;
+    background: var(--surface);
+    box-shadow: var(--shadow-lg);
+    font-size: 26px;
+    color: var(--text);
+  }
+}
