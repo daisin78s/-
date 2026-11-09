@@ -2042,6 +2042,35 @@ function senecaDoEvent(row, onDone) {
       render(STATE);
       onDone();
     }), 600);
+  } else if (/食料/.test(e) && /知識/.test(e)) {
+    // 「食料が知識に＋金貨2」: 図書館に置いた時の資源の変化は、ここまで置く前の数で見せている(senecaFreePlay)。
+    // ここで本当の数にして、増えた資源を光らせる。
+    storyShowResourceChange('K', 'B', () => {
+      const badge = storyResourceBadge('C');
+      if (badge) badge.classList.add('change-highlight');
+      storyLater(() => { if (badge) badge.classList.remove('change-highlight'); onDone(); }, 1200);
+    });
+  } else if (/ターンが終了/.test(e)) {
+    // 「ターンが終了し使用料が支払われる」: 手番を終えて(本当のゲームの処理で使用料を払う)、使用料の所を光らせる。
+    storyHideDialog();
+    const feeMapId = STORY_LIBRARY_MAP_ID;
+    storyEndTurnOf('P1');
+    render(STATE);
+    story2LockPlacement();
+    render(STATE);
+    const fee = document.querySelector(storyTileSelector(feeMapId, '.map-tile__fee'));
+    if (fee) fee.classList.add('change-highlight');
+    const badge = storyResourceBadge('B');
+    if (badge) badge.classList.add('change-highlight');
+    storyLater(() => { if (badge) badge.classList.remove('change-highlight'); onDone(); }, 1200);
+  } else if (/使用料/.test(e) && /光る/.test(e)) {
+    storySetGlow([storyTileSelector(STORY_LIBRARY_MAP_ID, '.map-tile__fee')]);
+    run.seneca.glowUntilLineEnd = true;
+    onDone();
+  } else if (/次のターン/.test(e)) {
+    storySetGlow([]);
+    render(STATE);
+    storyLater(onDone, 600);
   } else if (/能力/.test(e) && /光る/.test(e)) {
     // 「図書館の能力部分が光る」: そのセリフの間だけ。
     const mapId = Object.keys(STATE.maps).find((m) => e.includes(dataLoaderMod.getAreaRow(INDEX, STATE.maps[m].currentAreaId).NAME.replace(/LV\d+$/, '')));
@@ -2084,11 +2113,19 @@ function senecaFreePlay() {
   const ch = run.seneca;
   storyHideDialog();
   const mapIds = run.visibleMapIds.filter((m) => m === STORY_LIBRARY_MAP_ID || (m === STORY_FARM_MAP_ID && !ch.farmDone));
+  const resourcesBefore = { ...storyPlayer('P1').resources };
   storyWaitForPlacement({
     mapIds,
     goalText: '',
     onPlaced: (mapId) => storyWhenVisualsIdle(() => {
       if (mapId === STORY_LIBRARY_MAP_ID) {
+        if (ch.blocks.library && ch.blocks.library.some((r) => /食料/.test(r.event || '') && /知識/.test(r.event || ''))) {
+          run.resourceOverride = resourcesBefore;
+          render(STATE);
+        }
+        // 資源の表示は「食料が知識に＋金貨2」の行まで置く前の数のまま(その行で本当の数にする)。手番はまだ終えない
+        // (「ターンが終了し使用料が支払われる」の行で終える)。
+        story2LockPlacement();
         senecaPlay(ch.blocks.library || [], 0, () => storyEndOfScript('つづく'));
         return;
       }
