@@ -9236,7 +9236,10 @@ function queueMobileAiCardGainAnimation(state, next) {
   // 場(ジョブプール)の研究者が、研究を取られてターン終了時に別のジョブと入れ替わった時 (2026-11-03, per user の意図「研究者が
   // ジョブにある時に 研究を…とったら…研究者を捨て札にして 新しいジョブが一枚代わりに増える」) -- 研究者が下へ捨てられ、新しいジョブが来る。
   const poolNow = Array.isArray(state.jobPool) ? [...state.jobPool] : [];
-  if (compare && lastJobPoolSnapshot) {
+  // まだジョブを選んでいない人がいる間(1R1T)だけ (2026-11-07, per user「1R1Tの４人目がジョブをとった後は 残りの２枚の
+  // ジョブは捨て札になるため以降アニメーション不要」)。
+  const jobDraftOpen = state.players.some((p) => !p.jobCardId);
+  if (compare && lastJobPoolSnapshot && jobDraftOpen) {
     lastJobPoolSnapshot.forEach((id, i) => {
       if (id && id !== poolNow[i] && poolNow[i] && !lastJobPoolSnapshot.includes(poolNow[i])
         && factsForFaceId(id).name === '研究者') {
