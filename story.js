@@ -36,6 +36,7 @@ const STORY_SPEAKERS = {
   unknown: { name: '？？？', img: null },
   patra: { name: 'パトラ', img: 'assets/story-patra.webp' },
   spal: { name: 'スパル', img: 'assets/story-spal.webp' },
+  seneca: { name: 'セネカ', img: 'assets/story-seneca.webp' },
   spalAway: { name: 'スパル', img: null }, // 第2章: スパルが立ち去っている間(立ち絵を消す)
   system: { name: '', img: null }, // お知らせ(強制パスなど): 名前も立ち絵も無し
 };
@@ -1307,7 +1308,7 @@ document.addEventListener('click', (e) => {
   }
 }, true);
 
-/* ---------- 第2章: ○○の百人隊長スパル (data/story2.data.js) ---------- */
+/* ---------- 第3章: 傲慢な百人隊長スパル (data/story2.data.js、2026-11-09までは第2章「○○の百人隊長スパル」) ---------- */
 
 /** 2026-10-31, per user: 第2章の台本はストーリー.xlsxのSheet2 ("エクセルのほうです"、tools/story2_xlsx_to_js.py
  * で data/story2.data.js に変換)。1行ずつ順番に、A列=スパルのセリフ、C列=画面で起きること/その部分が始まる
@@ -1898,6 +1899,198 @@ function story2HideCallout() {
   document.querySelectorAll('.story2-callout').forEach((n) => n.remove());
 }
 
+/* ---------- 第2章: 几帳面な研究者セネカ (data/story_seneca.data.js) ---------- */
+
+/** 2026-11-09, per user: ストーリー.xlsxのシート「几帳面な研究者セネカ」(tools/story2_xlsx_to_js.py で変換)。
+ * スパルの章と同じく1行ずつ、A列=セネカのセリフ、C列=画面で起きること/その部分が始まる条件。
+ *  - 「農園にダイスを置く」の行までが導入(ダイス3個・食料5個でスタート、農園/図書館/皇帝宮殿オープン、
+ *    セネカ(P2)がダイスを振って皇帝宮殿に置き、図書館の支配LV1を獲得して図書館がLV1に)。
+ *  - そのあと、あなたが農園か図書館にダイスを置く。先に農園なら「農園にダイスを置く」の部分(最後に農園が消える)
+ *    のあと図書館に置くのを待つ。図書館に置いたら「つづく」(per user回答: いきなり図書館でもそのまま「つづく」)。
+ *    図書館に置いた手番は終えない(使用料の支払いが出ないように、そのまま「つづく」)。 */
+const STORY_LIBRARY_MAP_ID = 'MAP004'; // 図書館
+const SENECA_TRIGGERS = [
+  { key: 'farm', test: (e) => /農園/.test(e) && /置く/.test(e) },
+  { key: 'library', test: (e) => /図書館/.test(e) && /置く/.test(e) },
+];
+
+function senecaBlocks() {
+  const blocks = { intro: [] };
+  let current = blocks.intro;
+  (window.STORY_SENECA_SCRIPT || []).forEach((row, index) => {
+    const e = row.event && story2NormalizeEvent(row.event);
+    const trigger = e && !/セネカが/.test(e) && SENECA_TRIGGERS.find((t) => t.test(e));
+    if (trigger) {
+      current = blocks[trigger.key] = [];
+      current.push({ text: row.text, event: '', index });
+      return;
+    }
+    current.push({ ...row, index });
+  });
+  return blocks;
+}
+
+function senecaBuildState() {
+  const state = storyBuildState(story2DiceValues(), { P1: 'CON001', P2: 'CON005' });
+  // ショップには図書館の支配LV1だけ(セネカが皇帝宮殿で獲得する)。
+  state.shops.NORMAL.slots.SHOP101 = 'A002A';
+  // あなたもセネカも性格・ジョブ・カードなし(第3章スパルと同じく何も足さない)。
+  for (const id of ['P1', 'P2']) {
+    const p = state.players.find((x) => x.id === id);
+    for (const physicalId of p.ownedCardPhysicalIds) {
+      if (physicalId === p.conPhysicalId || physicalId === p.jobCardId) delete state.cards[physicalId];
+      else if (state.cards[physicalId]) state.cards[physicalId].ownerId = null;
+    }
+    p.ownedCardPhysicalIds = [];
+    p.conPhysicalId = null;
+    p.conFace = null;
+    p.jobCardId = null;
+    p.skipOnboarding = true;
+  }
+  const seneca = state.players.find((p) => p.id === 'P2');
+  seneca.name = 'セネカ';
+  seneca.dice = seneca.dice.slice(0, 1); // セネカは皇帝宮殿に1個置くだけ
+  return state;
+}
+
+function senecaStart() {
+  const run = storyRun;
+  run.visibleMapIds = [];
+  run.seneca = { blocks: senecaBlocks(), farmDone: false };
+  storyUseState(senecaBuildState());
+  story2LockPlacement();
+  run.placementBaseline = storyPlacementCounts(STATE);
+  storyApplyVisibleMaps();
+  applyMobileActiveTab('board');
+  render(STATE);
+  const img = new Image();
+  img.src = STORY_SPEAKERS.seneca.img;
+  const loaded = img.decode ? img.decode() : Promise.resolve();
+  loaded.catch(() => {}).then(() => {
+    if (storyRun !== run) return;
+    senecaPlay(run.seneca.blocks.intro, 0, senecaFreePlay);
+  });
+}
+
+/** rowsをi行目から順番に: C列があればその出来事、A列があればセネカのセリフ。 */
+function senecaPlay(rows, i, onDone) {
+  if (!storyRun) return;
+  if (i >= rows.length) { onDone(); return; }
+  const row = rows[i];
+  const next = () => senecaPlay(rows, i + 1, onDone);
+  const say = () => {
+    if (!row.text) { next(); return; }
+    storySetSpeaker('seneca');
+    storySayThen(`CS-${row.index}`, () => {
+      if (storyRun && storyRun.seneca.glowUntilLineEnd) { storyRun.seneca.glowUntilLineEnd = false; storySetGlow([]); }
+      next();
+    }, 0, row.text);
+  };
+  if (row.event) senecaDoEvent(row, say);
+  else say();
+}
+
+function senecaDoEvent(row, onDone) {
+  const run = storyRun;
+  const e = story2NormalizeEvent(row.event);
+  if (/スタート/.test(e)) {
+    // 「ダイス３個食料５個でスタート」
+    const food = Number((/食料(\d+)/.exec(e) || [])[1] || 0);
+    storyPlayer('P1').resources.K = food;
+    render(STATE);
+    storyRollHandDice(onDone, 'P1');
+  } else if (/セネカ/.test(e) && /ふる|振る/.test(e)) {
+    // セネカ(P2)の手番にして、ダイスを振る(第1章のパトラ登場と同じ形)。
+    const p2 = storyPlayer('P2');
+    p2.dice.forEach((d) => { d.passed = false; d.value = 1 + Math.floor(Math.random() * 6); });
+    storyEndTurnOf('P1');
+    document.body.classList.add('story-lock-hand');
+    render(STATE);
+    storyLater(() => storyRollHandDice(onDone, 'P2'), 300);
+  } else if (/セネカ/.test(e) && /皇帝宮殿/.test(e) && /置く/.test(e)) {
+    const p2 = storyPlayer('P2');
+    p2.resources.A = Math.max(p2.resources.A || 0, 2); // 図書館の支配LV1(2A)を買える分
+    const die = p2.dice.find((d) => !d.placedMapId && !d.passed);
+    const slotIndex = STATE.maps[STORY_CASTLE_MAP_ID].slots.findIndex((s) => s.length === 0);
+    const result = boardMod.placeDice(STATE, INDEX, { playerId: 'P2' }, die.id, STORY_CASTLE_MAP_ID, slotIndex);
+    run.seneca.pendingBuild = result.success && result.actionResult && result.actionResult.pendingBuild;
+    render(STATE);
+    storyLater(() => storyWhenVisualsIdle(onDone), 400);
+  } else if (/セネカ/.test(e) && /獲得/.test(e)) {
+    // 「セネカが図書館の支配を獲得」: 皇帝宮殿の建築で図書館の支配LV1を選ぶ(図書館がLV1になる)。
+    const pending = run.seneca.pendingBuild;
+    const candidate = pending && pending.candidates.find((c) => c.faceId === 'A002A');
+    if (candidate) boardMod.completeAreaBuild(STATE, INDEX, { playerId: 'P2' }, candidate, pending.remainingCommands);
+    run.seneca.pendingBuild = null;
+    render(STATE);
+    storyLater(() => storyWhenVisualsIdle(() => {
+      storyEndTurnOf('P2');
+      document.body.classList.remove('story-lock-hand');
+      render(STATE);
+      story2LockPlacement(); // セリフの間は置けない
+      render(STATE);
+      onDone();
+    }), 600);
+  } else if (/能力/.test(e) && /光る/.test(e)) {
+    // 「図書館の能力部分が光る」: そのセリフの間だけ。
+    const mapId = Object.keys(STATE.maps).find((m) => e.includes(dataLoaderMod.getAreaRow(INDEX, STATE.maps[m].currentAreaId).NAME.replace(/LV\d+$/, '')));
+    if (mapId) {
+      storySetGlow([`#board .map-tile[data-map-id="${mapId}"] .map-tile__action`]);
+      run.seneca.glowUntilLineEnd = true;
+    }
+    onDone();
+  } else if (/オープン/.test(e)) {
+    const mapIds = Object.keys(STATE.maps).filter((mapId) => {
+      const name = dataLoaderMod.getAreaRow(INDEX, STATE.maps[mapId].currentAreaId).NAME;
+      return e.includes(name) && !run.visibleMapIds.includes(mapId);
+    });
+    mapIds.forEach((mapId, k) => storyLater(() => storyRevealMap(mapId), k * 250));
+    storyLater(onDone, mapIds.length * 250 + 500);
+  } else if (/消える/.test(e)) {
+    // 「「農園」が消える」: そのエリアを枠だけに戻す。
+    const mapIds = Object.keys(STATE.maps).filter((mapId) => e.includes(dataLoaderMod.getAreaRow(INDEX, STATE.maps[mapId].currentAreaId).NAME));
+    storyHideDialog();
+    mapIds.forEach((mapId) => {
+      const tile = storyTileNode(mapId);
+      const finish = () => {
+        run.visibleMapIds = run.visibleMapIds.filter((m) => m !== mapId);
+        storyApplyVisibleMaps();
+      };
+      if (tile) [...tile.children].forEach((child, k) => { const a = child.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, easing: 'ease-in' }); if (k === 0) a.onfinish = finish; });
+      if (!tile || tile.children.length === 0) finish();
+    });
+    storyLater(onDone, 600);
+  } else {
+    console.warn(`セネカの章: C列「${e}」はまだ対応していません`);
+    onDone();
+  }
+}
+
+/** 導入のあと: 農園か図書館にダイスを置く。農園なら「農園」の部分のあと図書館を待つ。図書館なら「つづく」。 */
+function senecaFreePlay() {
+  const run = storyRun;
+  if (!run) return;
+  const ch = run.seneca;
+  storyHideDialog();
+  const mapIds = run.visibleMapIds.filter((m) => m === STORY_LIBRARY_MAP_ID || (m === STORY_FARM_MAP_ID && !ch.farmDone));
+  storyWaitForPlacement({
+    mapIds,
+    goalText: '',
+    onPlaced: (mapId) => storyWhenVisualsIdle(() => {
+      if (mapId === STORY_LIBRARY_MAP_ID) {
+        senecaPlay(ch.blocks.library || [], 0, () => storyEndOfScript('つづく'));
+        return;
+      }
+      ch.farmDone = true;
+      storyEndTurnOf('P1');
+      render(STATE);
+      story2LockPlacement();
+      render(STATE);
+      senecaPlay(ch.blocks.farm || [], 0, senecaFreePlay);
+    }),
+  });
+}
+
 /* ---------- 章を選ぶ画面 ---------- */
 
 // 2026-10-31, per user: "第２章のストーリーに行った後 また ストーリー に入ったら 第１章 怠惰なローマ市民アレク
@@ -1906,7 +2099,9 @@ function story2HideCallout() {
 const STORY_CLEARED_KEY = 'diceWpStoryChaptersCleared';
 const STORY_CHAPTERS = [
   { no: 1, title: '第１章　怠惰なローマ市民アレク', start: openStoryMode },
-  { no: 2, title: '第２章　○○の百人隊長スパル', start: () => openStoryMode(story2Start) },
+  // 2026-11-09, per user: セネカの章を第2章に、スパルは第3章に(題名も「傲慢な百人隊長スパル」、伏せ字はやめる)。
+  { no: 2, title: '第２章　几帳面な研究者セネカ', start: () => openStoryMode(senecaStart) },
+  { no: 3, title: '第３章　傲慢な百人隊長スパル', start: () => openStoryMode(story2Start) },
 ];
 
 function storyClearedChapters() {
