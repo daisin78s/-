@@ -9187,6 +9187,8 @@ let mobileAiCardGainPlaying = false;
 const AI_CARD_GAIN_IN_MS = 200;
 const AI_CARD_GAIN_HOLD_MS = 700;
 const AI_CARD_GAIN_OUT_MS = 200;
+// ストーリーモードではカード獲得・LVアップの演出を3倍ゆっくりに (2026-11-09, per user「初めての人が 何かわからないので」)。
+function cardGainMs(ms) { return animMs(ms) * (typeof storyRun !== 'undefined' && storyRun ? 3 : 1); }
 function queueMobileAiCardGainAnimation(state, next) {
   const current = new Map();
   // AIだけでなく人間のプレイヤーの獲得でも流す (2026-10-23, per user request「AIだけではなくプレイヤーが
@@ -9273,7 +9275,7 @@ function playNextMobileAiCardGain() {
     if (layer) layer.innerHTML = '';
     mobileAiCardGainPlaying = false;
   }
-  if (mobileAiCardGainPlaying && !mobileUntapChoiceActive && performance.now() - mobileAiCardGainStartedAt > 8000) {
+  if (mobileAiCardGainPlaying && !mobileUntapChoiceActive && performance.now() - mobileAiCardGainStartedAt > cardGainMs(8000)) {
     const layer = document.getElementById('ai-card-gain-layer');
     if (layer) layer.innerHTML = '';
     mobileAiCardGainPlaying = false;
@@ -9302,11 +9304,11 @@ function playNextMobileAiCardGain() {
   const holder = el('div', 'ai-card-gain-layer__card');
   holder.appendChild(buildCardVisual(faceId, { req: factsForFaceId(faceId).req, showEffect: true, allowTextFallback: false, noInteraction: true }));
   layer.appendChild(holder);
-  const total = animMs(AI_CARD_GAIN_IN_MS + AI_CARD_GAIN_HOLD_MS + AI_CARD_GAIN_OUT_MS);
+  const total = cardGainMs(AI_CARD_GAIN_IN_MS + AI_CARD_GAIN_HOLD_MS + AI_CARD_GAIN_OUT_MS);
   const animation = holder.animate([
     { transform: 'translateX(-100vw)', easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)' },
-    { transform: 'translateX(0)', offset: AI_CARD_GAIN_IN_MS / total },
-    { transform: 'translateX(0)', offset: (AI_CARD_GAIN_IN_MS + AI_CARD_GAIN_HOLD_MS) / total, easing: 'cubic-bezier(0.7, 0, 0.8, 0.2)' },
+    { transform: 'translateX(0)', offset: AI_CARD_GAIN_IN_MS / (AI_CARD_GAIN_IN_MS + AI_CARD_GAIN_HOLD_MS + AI_CARD_GAIN_OUT_MS) },
+    { transform: 'translateX(0)', offset: (AI_CARD_GAIN_IN_MS + AI_CARD_GAIN_HOLD_MS) / (AI_CARD_GAIN_IN_MS + AI_CARD_GAIN_HOLD_MS + AI_CARD_GAIN_OUT_MS), easing: 'cubic-bezier(0.7, 0, 0.8, 0.2)' },
     { transform: 'translateX(100vw)' },
   ], { duration: total, fill: 'forwards' });
   animation.onfinish = () => {
@@ -9410,18 +9412,18 @@ function playMobileCardUpgrade(fromFaceId, toFaceId, tapped, token) {
   };
   // 1) 右から中央へ
   holder.animate([{ transform: 'translateX(100vw)' }, { transform: 'translateX(0)' }],
-    { duration: animMs(CARD_UPGRADE_IN_MS), easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)', fill: 'forwards' }).onfinish = () => {
+    { duration: cardGainMs(CARD_UPGRADE_IN_MS), easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)', fill: 'forwards' }).onfinish = () => {
     // 2) ひっくり返る: 横に縮んで消える → LVアップ後の面に差し替え → 広がる
     flipTarget().animate(flipFrames(1, 0),
-      { duration: animMs(CARD_UPGRADE_FLIP_HALF_MS), easing: 'ease-in', fill: 'forwards' }).onfinish = () => {
+      { duration: cardGainMs(CARD_UPGRADE_FLIP_HALF_MS), easing: 'ease-in', fill: 'forwards' }).onfinish = () => {
       if (token !== undefined && token !== mobileAiCardGainToken) return;
       holder.innerHTML = '';
       holder.appendChild(buildFace(toFaceId));
       flipTarget().animate(flipFrames(0, 1),
-        { duration: animMs(CARD_UPGRADE_FLIP_HALF_MS), easing: 'ease-out', fill: 'forwards' }).onfinish = () => {
+        { duration: cardGainMs(CARD_UPGRADE_FLIP_HALF_MS), easing: 'ease-out', fill: 'forwards' }).onfinish = () => {
         // 3) 少し見せてから、すばやく右へ
         holder.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(100vw)' }],
-          { duration: animMs(CARD_UPGRADE_OUT_MS), delay: animMs(CARD_UPGRADE_HOLD_MS), easing: 'cubic-bezier(0.7, 0, 0.8, 0.2)', fill: 'forwards' }).onfinish = finish;
+          { duration: cardGainMs(CARD_UPGRADE_OUT_MS), delay: cardGainMs(CARD_UPGRADE_HOLD_MS), easing: 'cubic-bezier(0.7, 0, 0.8, 0.2)', fill: 'forwards' }).onfinish = finish;
       };
     };
   };
