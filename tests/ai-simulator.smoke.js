@@ -234,7 +234,7 @@ function giveDie(state, playerId, value) {
   state.maps['MAP001'].accumulatedFee = 3;
   const move = { type: 'COLLECT_FEE', playerId: 'P1', mapId: 'MAP001' };
   const { result } = simulator.apply(state, index, move);
-  check('COLLECT_FEE succeeds and returns the collected amount', result, { success: true, amount: 3 });
+  check('COLLECT_FEE succeeds and returns the collected amount', result, { success: true, amount: 3, resource: 'K' });
 }
 
 // ---------------------------------------------------------------------------

@@ -977,8 +977,15 @@ function storyPatraPlaces(onDone) {
   if (anyIdx < 0 || STATE.maps[STORY_CITY_MAP_ID].slots[anyIdx].length > 0) { onDone(true); return; }
   const die = storyPlayer('P2').dice.find((d) => !d.placedMapId && !d.passed);
   boardMod.placeDice(STATE, INDEX, { playerId: 'P2' }, die.id, STORY_CITY_MAP_ID, anyIdx);
+  storyCh1KFee('P2');
   render(STATE);
   storyLater(() => storyWhenVisualsIdle(() => onDone(false)), 200);
+}
+
+/** 第1章: パトラが払う使用料を〇にする(storyRun.ch1KFee参照)。 */
+function storyCh1KFee(playerId) {
+  const fee = storyRun && storyRun.ch1KFee && storyPlayer(playerId).pendingFee;
+  if (fee) fee.resource = 'K';
 }
 
 /** S057: ANYが埋まっていた時、パトラが基礎学問(ダイス目を1に変えて、どこにでも置ける)を使い、元のダイスを
@@ -988,6 +995,7 @@ function storyPatraUsesBasicStudy() {
   const die = storyPlayer('P2').dice.find((d) => !d.placedMapId && !d.passed);
   boardMod.useBareTapAbility(STATE, INDEX, { playerId: 'P2', chosenDieId: die.id, chosenValue: 1 }, 'B001');
   boardMod.placeDice(STATE, INDEX, { playerId: 'P2' }, die.id, STORY_CITY_MAP_ID, anyIdx);
+  storyCh1KFee('P2');
   render(STATE);
 }
 
@@ -1283,6 +1291,9 @@ function openStoryMode(startScene) {
   // 話し手は最初の場面が決める(第2章でアレクが一瞬出ないように)。第1章はアレクから。
   if (!startScene) storySetSpeaker('alek');
   storySetAllowedTabs(['board']);
+  // 第1章は使用料を〇のままにする (2026-11-09: ローマ市街の使用料は赤〇になったが、第1章の台本は〇の使用料で
+  // 「A→Kで払う」「〇を回収する」流れのため)。main.jsのareaRowFees(表示)とstoryCh1KFee(支払い)が見る。
+  storyRun.ch1KFee = !startScene;
   (startScene || storySceneFarm)();
 }
 

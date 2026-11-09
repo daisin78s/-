@@ -387,7 +387,7 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
   check('P2 (not the fee owner) cannot collect', wrongOwner.success, false);
 
   const collected = executor.collectUsageFee(state, index, { playerId: 'P1' }, 'MAP001');
-  check('P1 (the fee owner) collects the accumulated 3K', collected, { success: true, amount: 3 });
+  check('P1 (the fee owner) collects the accumulated 3K', collected, { success: true, amount: 3, resource: 'K' });
   check('Fee is cleared from the map after collection', state.maps['MAP001'].accumulatedFee, 0);
   check('P1 gained the 3K', getPlayerRef(state, 'P1').resources.K, 3);
 
@@ -396,7 +396,7 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
 
   state.maps['MAP001'].accumulatedFee = 2; // more fee accrues later the same round
   const collectedAgain = executor.collectUsageFee(state, index, { playerId: 'P1' }, 'MAP001');
-  check('...but collects again once more fee has accrued, same round, no tap blocking it', collectedAgain, { success: true, amount: 2 });
+  check('...but collects again once more fee has accrued, same round, no tap blocking it', collectedAgain, { success: true, amount: 2, resource: 'K' });
   check('P1 now has 5K total (3 + 2)', getPlayerRef(state, 'P1').resources.K, 5);
 }
 
@@ -1166,7 +1166,7 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   giveCard(state, 'JOB005', 'P1'); // TAP=ON(GET(K),CHANGE(K,A)), AUTO="A"
   const player = getPlayerRef(state, 'P1');
   const result = executor.collectUsageFee(state, index, { playerId: 'P1' }, 'MAP001');
-  check('Fee collection still succeeds', result, { success: true, amount: 3 });
+  check('Fee collection still succeeds', result, { success: true, amount: 3, resource: 'K' });
   check('...and JOB005 auto-reacts to the fee-collection-triggered GET(K), converting 1K into 1A', player.resources.A, 1);
   check('...leaving the other 2K from the fee alone', player.resources.K, 2);
 }
@@ -1470,6 +1470,42 @@ const UNTAP_CHOICE_3 = { type: 'UNTAP_CHOICE', scope: 'SELF', count: 3 };
   check('パンとサーカスLV1 turn end with no 〇 does nothing', run('B301A', 0), [0, 0, 0]);
   check('パンとサーカスLV2 turn end converts 2〇 to 2VP', run('B301B', 3), [1, 0, 2]);
   check('パンとサーカスLV2 turn end with 1〇 converts 1', run('B301B', 1), [0, 0, 1]);
+}
+
+{
+  // 赤〇/青〇/黄〇の使用料 (2026-11-09, per user「使用料 変更しました」+ 回答): その資源 -> Z -> (赤〇なら権力者は〇)、
+  // 足りない1つにつき-1VP、ターン終了は止めない。回収はその資源のまま。
+  const feeState = (res, extra) => {
+    const s = freshState();
+    s.players.push(createPlayer('P2', 'Bob'));
+    s.maps['MAP004'] = createMapState('MAP004', 'AREA004C');
+    s.maps['MAP004'].feeOwnerId = 'P2';
+    const p = getPlayerRef(s, 'P1');
+    Object.assign(p.resources, res);
+    p.pendingFee = { mapId: 'MAP004', resource: 'B', amount: 2 };
+    if (extra) extra(s, p);
+    return s;
+  };
+  const after = (s) => { const p = getPlayerRef(s, 'P1'); return [p.resources.B || 0, p.resources.Z || 0, p.resources.K || 0, p.resources.VP || 0]; };
+  let s = feeState({ B: 3, Z: 1, K: 5 });
+  executor.applyTurnEnd(s, index, 'P1');
+  check('B fee 2 paid from B first', after(s), [1, 1, 5, 0]);
+  s = feeState({ B: 1, Z: 1, K: 5 });
+  executor.applyTurnEnd(s, index, 'P1');
+  check('B fee: missing B covered by Z', after(s), [0, 0, 5, 0]);
+  s = feeState({ B: 0, Z: 0, K: 5, A: 3 });
+  check('B fee short does not block turn end', executor.canEndTurn(s, index, 'P1').ok, true);
+  executor.applyTurnEnd(s, index, 'P1');
+  check('B fee short: -1VP per missing, K untouched', after(s), [0, 0, 5, -2]);
+  check('...map banks the fee as B', [s.maps.MAP004.accumulatedFee, s.maps.MAP004.accumulatedFeeResource], [2, 'B']);
+  const collected = executor.collectUsageFee(s, index, { playerId: 'P2' }, 'MAP004');
+  check('Owner collects the fee as B', [collected.resource, getPlayerRef(s, 'P2').resources.B], ['B', 2]);
+  s = feeState({ K: 5 }, (st, p) => {
+    p.pendingFee = { mapId: 'MAP004', resource: 'A', amount: 2 };
+    p.jobCardId = giveCard(st, 'JOB005', 'P1');
+  });
+  executor.applyTurnEnd(s, index, 'P1');
+  check('A fee: 権力者 pays with 〇', [getPlayerRef(s, 'P1').resources.K, getPlayerRef(s, 'P1').resources.VP || 0], [3, 0]);
 }
 
 console.log(`\n${passCount} passed, ${failCount} failed`);

@@ -1910,7 +1910,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "ADD(6K)",
-      "fee": 1,
+      "fee": "K",
       "INST": ""
     },
     {
@@ -1923,7 +1923,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "ADD(5K)",
-      "fee": 1,
+      "fee": "K",
       "INST": ""
     },
     {
@@ -1936,7 +1936,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "CHANGE(K,A,ALL);ADD(2B)",
-      "fee": 1,
+      "fee": "A",
       "INST": ""
     },
     {
@@ -1949,7 +1949,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "CHANGE(K,B,ALL);ADD(2C)",
-      "fee": 1,
+      "fee": "B",
       "INST": ""
     },
     {
@@ -1962,7 +1962,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "CHANGE(K,C,ALL);ADD(2A)",
-      "fee": 1,
+      "fee": "C",
       "INST": ""
     },
     {
@@ -1975,7 +1975,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "CHANGE(2K,5Z)",
-      "fee": 1,
+      "fee": "K",
       "INST": ""
     },
     {
@@ -1988,7 +1988,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "CHANGE(2K,D)",
-      "fee": 1,
+      "fee": "K",
       "INST": "色ダイスの上限は5個\nこのエリアにダイスを置くと怠惰の性格は解除される"
     },
     {
@@ -2001,7 +2001,7 @@
       "SLOT5": "EX",
       "SLOT6": "EX",
       "ACTION": "BUILD();ADD(2K)",
-      "fee": 1,
+      "fee": "K",
       "INST": ""
     },
     {
@@ -2014,7 +2014,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "CHANGE(K,VP,4)",
-      "fee": 1,
+      "fee": "K",
       "INST": ""
     },
     {
@@ -2027,7 +2027,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "ADD(7K)",
-      "fee": 2,
+      "fee": "2K",
       "INST": ""
     },
     {
@@ -2040,7 +2040,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "ADD(9K)",
-      "fee": 2,
+      "fee": "2K",
       "INST": ""
     },
     {
@@ -2053,7 +2053,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "CHANGE(K,A,ALL);ADD(4B)",
-      "fee": 2,
+      "fee": "2A",
       "INST": ""
     },
     {
@@ -2066,7 +2066,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "CHANGE(K,B,ALL);ADD(4C)",
-      "fee": 2,
+      "fee": "2B",
       "INST": ""
     },
     {
@@ -2079,7 +2079,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "CHANGE(K,C,ALL);ADD(4A)",
-      "fee": 2,
+      "fee": "2C",
       "INST": ""
     },
     {
@@ -2092,7 +2092,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "CHANGE(2K,7Z)",
-      "fee": 2,
+      "fee": "2K",
       "INST": ""
     },
     {
@@ -2105,7 +2105,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "ADD(D)",
-      "fee": 2,
+      "fee": "2K",
       "INST": "色ダイスの上限は６個"
     },
     {
@@ -2118,7 +2118,7 @@
       "SLOT5": "EX",
       "SLOT6": "EX",
       "ACTION": "BUILD();ADD(2K,BZ)",
-      "fee": 2,
+      "fee": "2K",
       "INST": ""
     },
     {
@@ -2131,7 +2131,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "CHANGE(K,VP,6)",
-      "fee": 2,
+      "fee": "2K",
       "INST": ""
     }
   ],

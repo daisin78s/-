@@ -147,7 +147,7 @@ function createDie(id, kind) {
  *   MONUMENT_DICE_DISCOUNT(n,THIS_TURN) (2026-08-18, JOB007/密使's revised TAP). Sums if granted more
  *   than once in the same turn (no card does today, but nothing stops a future one). Turn-scoped, same
  *   reset point as blockedBuildCategoriesThisTurn above.
- * @property {{mapId:string, amount:number}|null} pendingFee - set by board.placeDice/placeDiceGroup
+ * @property {{mapId:string, amount:number, resource?:string}|null} pendingFee - set by board.placeDice/placeDiceGroup
  *   (2026-08-04, fixing a gap where accumulatedFee was never actually charged) when this player places on
  *   a MAP whose feeOwnerId is someone else, amount coming straight from that AREA row's own `fee` column
  *   (2026-08-30 -- previously a flat per-tier constant, board.js's own USAGE_FEE_BY_TIER, but the
@@ -303,7 +303,9 @@ function createCardInstance(faceCardId) {
  *   (THIS_DICE,THIS_TURN) and JOB003/道化's ☆ forced-fallback are the only ways a die can join an
  *   *already-occupied* slot -- doing so EVICTS whatever was there instead of stacking onto it (see
  *   board.js's evictSlotOccupants/placeDice/placeWildcardDie/placeDiceGroup).
- * @property {number} accumulatedFee   - K owed to the tier-B/C owner, collected via the FEE_COLLECT free action
+ * @property {number} accumulatedFee   - fee owed to the tier-B/C owner, collected via the FEE_COLLECT free action
+ * @property {string|null} accumulatedFeeResource - what accumulatedFee is counted in (2026-11-09: 'K'/'A'/'B'/'C',
+ *   from the AREA row's fee column, see board.parseFee); null/absent = K (states saved before that change)
  * @property {string|null} feeOwnerId  - the player who built/upgraded the card that last flipped this
  *   map's tier (set whenever a "MAP{n}.CURRENT_AREA=..." assignment runs, in the context of whoever
  *   triggered it) -- only this player may collect accumulatedFee. Tier-A maps have no owner (no fee).
@@ -343,7 +345,7 @@ function createCardInstance(faceCardId) {
  */
 function createMapState(mapId, initialAreaId) {
   return {
-    mapId, currentAreaId: initialAreaId, slots: [], accumulatedFee: 0, feeOwnerId: null, discardedTurnOrderEntries: [],
+    mapId, currentAreaId: initialAreaId, slots: [], accumulatedFee: 0, accumulatedFeeResource: null, feeOwnerId: null, discardedTurnOrderEntries: [],
     // 異端者/JOB006B (2026-10-12) -- playerId of whoever most recently self-charged into accumulatedFee
     // via board.chargeHereticFee, or null if the current accumulatedFee (if any) isn't from that ability.
     // Checked/cleared by executor.runSetCurrentArea: if a NEW real owner turns out to be this same player,

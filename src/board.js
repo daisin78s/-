@@ -66,8 +66,19 @@ const AREA009_MAP_ID = 'MAP009';
  * ask "how much, if any" without mutating anything. */
 function wouldOweFee(index, map, playerId) {
   if (!map.feeOwnerId || map.feeOwnerId === playerId) return null;
-  const amount = getAreaRow(index, map.currentAreaId).fee;
-  return amount ? { mapId: map.mapId, amount } : null;
+  const fee = parseFee(getAreaRow(index, map.currentAreaId).fee);
+  return fee ? { mapId: map.mapId, ...fee } : null;
+}
+
+/** An AREA row's `fee` cell -> {resource, amount}, or null for no fee. 2026-11-09, per user data edit
+ * (「使用料 変更しました」): the column now names the resource too -- "K", "2K", "A", "2B", ... (ローマ市街=A,
+ * 図書館=B, 市場=C, everything else K). A bare number (the old format) still means that many K. */
+function parseFee(value) {
+  if (typeof value === 'number') return value > 0 ? { resource: 'K', amount: value } : null;
+  const match = /^(\d*)\s*([KABCZ])$/.exec(String(value || '').trim());
+  if (!match) return null;
+  const amount = match[1] ? Number(match[1]) : 1;
+  return amount > 0 ? { resource: match[2], amount } : null;
 }
 
 /** Sets player.pendingFee (see its own doc in game-state.js) if placing on mapId right now means using
@@ -1764,9 +1775,10 @@ function hereticBorrowedAreaRow(state, index, context, map) {
  * "nothing was actually banked this time".
  */
 function chargeHereticFee(state, context, mapId, hereticRow) {
-  if (!hereticRow.fee) return;
+  const fee = parseFee(hereticRow.fee);
+  if (!fee) return;
   const player = state.players.find((p) => p.id === context.playerId);
-  player.pendingFee = { mapId, amount: hereticRow.fee };
+  player.pendingFee = { mapId, ...fee };
   state.maps[mapId].hereticBankerId = context.playerId;
 }
 
@@ -2175,6 +2187,7 @@ module.exports = {
   isCandidateAffordable,
   canAffordFee,
   planFeeConversion,
+  parseFee,
   resolveBuild,
   restockShop,
   compactShop,

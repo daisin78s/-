@@ -133,13 +133,13 @@ for (let i = 0; i < state.turnOrder.length; i++) {
   state.maps['MAP001'].feeOwnerId = p0;
   state.maps['MAP001'].accumulatedFee = 2;
   const firstCollect = executor.collectUsageFee(state, index, { playerId: p0 }, 'MAP001');
-  check('First collection succeeds', firstCollect, { success: true, amount: 2 });
+  check('First collection succeeds', firstCollect, { success: true, amount: 2, resource: 'K' });
   const placement = placeFirstLegalDie(state, p0);
   assertTrue(`${p0} found a legal placement on their 2nd turn`, placement !== null);
   turnFlow.endTurn(state, index, p0);
   state.maps['MAP001'].accumulatedFee = 1; // more fee accrues after that endTurn, same round
   const secondCollect = executor.collectUsageFee(state, index, { playerId: p0 }, 'MAP001');
-  check('Collects again the same round, no tap left over from the first collection', secondCollect, { success: true, amount: 1 });
+  check('Collects again the same round, no tap left over from the first collection', secondCollect, { success: true, amount: 1, resource: 'K' });
 }
 
 // ---------------------------------------------------------------------------

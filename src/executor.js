@@ -320,6 +320,11 @@ function hasChefAbility(state, index, playerId) {
  * the same kind of automatic, no-foresight-needed substitution Z already provides for A/B/C, so the AI
  * benefits from it with no extra decision-making required. Same bespoke, no-DSL-representation
  * treatment as hasChefAbility just above. */
+/** The resource a pendingFee is paid in ('K' for fees recorded before resource-typed fees existed). */
+function feeResource(fee) {
+  return (fee && fee.resource) || 'K';
+}
+
 function hasPowerBrokerAbility(state, index, playerId) {
   const player = getPlayer(state, playerId);
   if (!player.jobCardId) return false;
@@ -1497,9 +1502,10 @@ function collectUsageFee(state, index, context, mapId) {
   if (map.feeOwnerId !== context.playerId) return { success: false, reason: 'NOT_FEE_OWNER' };
   if (map.accumulatedFee <= 0) return { success: false, reason: 'NO_FEE_TO_COLLECT' };
   const amount = map.accumulatedFee;
+  const resource = map.accumulatedFeeResource || 'K';
   map.accumulatedFee = 0;
-  grantResourceAndEmitGet(state, index, context, 'K', amount);
-  return { success: true, amount };
+  grantResourceAndEmitGet(state, index, context, resource, amount);
+  return { success: true, amount, resource };
 }
 
 /** Untaps every free action for every player. Call once at ROUND end (not per-turn). */
@@ -1687,7 +1693,8 @@ function canEndTurn(state, index, playerId) {
   // finding that same leftover K "convertible" and blocking forever -- a genuine softlock, since there was
   // no further action that could ever raise K again this turn. See applyTurnEnd's own doc for how the
   // shortfall actually gets paid via VP instead once this lets TURNEND through.
-  if (player.pendingFee && (player.resources.K || 0) < player.pendingFee.amount) {
+  // 〇以外の使用料(赤〇/青〇/黄〇、2026-11-09)は止めない: 足りない分は-1VP (applyTurnEnd)。
+  if (player.pendingFee && feeResource(player.pendingFee) === 'K' && (player.resources.K || 0) < player.pendingFee.amount) {
     const hasAnyConvertibleResource = ['A', 'B', 'C', 'Z'].some((r) => (player.resources[r] || 0) > 0);
     if (hasAnyConvertibleResource) {
       violations.push({ type: 'USAGE_FEE', ...player.pendingFee });
@@ -1717,11 +1724,21 @@ function applyTurnEnd(state, index, playerId) {
   // missing 1K, per user spec) -- the map's owner still gets the fee's full amount either way.
   if (player.pendingFee) {
     const amount = player.pendingFee.amount;
-    const paidFromK = Math.min(amount, player.resources.K || 0);
-    const shortfall = amount - paidFromK;
-    player.resources.K -= paidFromK;
+    const resource = feeResource(player.pendingFee);
+    let shortfall = amount;
+    // 〇以外の使用料 (2026-11-09, per user: 「使用料 変更しました」+ 回答): その資源 -> 人脈(Z) -> (赤〇の使用料で
+    // 権力者なら)〇 の順に払い、それでも足りない1つにつき-1VP。〇の使用料は今まで通り〇から(足りなければ-1VP)。
+    const payFrom = resource === 'K' ? ['K']
+      : [resource, 'Z', ...(resource === 'A' && hasPowerBrokerAbility(state, index, playerId) ? ['K'] : [])];
+    for (const r of payFrom) {
+      const paid = Math.min(shortfall, player.resources[r] || 0);
+      player.resources[r] -= paid;
+      shortfall -= paid;
+    }
     if (shortfall > 0) player.resources.VP = (player.resources.VP || 0) - shortfall;
-    state.maps[player.pendingFee.mapId].accumulatedFee += amount;
+    const map = state.maps[player.pendingFee.mapId];
+    map.accumulatedFee += amount;
+    map.accumulatedFeeResource = resource; // 回収するとその資源のまま受け取る (per user回答)
     player.pendingFee = null;
   }
   for (const { row } of ownedCardRows(state, index, playerId)) {

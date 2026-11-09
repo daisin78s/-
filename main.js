@@ -4477,13 +4477,23 @@ function resourceCountIconNodes(resource, count) {
  * `container` first (callers used to just set .textContent, so this fully replaces whatever was there);
  * does nothing at all for amount<=0 -- every caller already only invokes this when amount>0 (a 0-fee
  * area/accumulated-total shows nothing, same as before this change). */
-function renderUsageFeeLabel(container, amount) {
+/** fees: [{resource, amount}] -- 2026-11-09から使用料は資源の種類つき(〇/赤〇/青〇/黄〇、board.parseFee)。 */
+function renderUsageFeeLabel(container, fees) {
   container.innerHTML = '';
-  if (amount <= 0) return;
+  const list = (fees || []).filter((f) => f && f.amount > 0);
+  if (list.length === 0) return;
   // 文字部分はspanで包む -- スマホ版のエリアのタイルでは画面節約のため「使用料」の文字を消して○だけにする
   // (2026-10-23, per user request、style.cssの.usage-fee-label__text参照)。
   container.appendChild(el('span', 'usage-fee-label__text', '使用料'));
-  for (const node of resourceCountIconNodes('K', amount)) container.appendChild(node);
+  for (const fee of list) {
+    for (const node of resourceCountIconNodes(fee.resource, fee.amount)) container.appendChild(node);
+  }
+}
+/** エリアの行の使用料 -> renderUsageFeeLabel用のリスト。 */
+function areaRowFees(areaRow) {
+  const fee = boardMod.parseFee(areaRow.fee);
+  if (fee && typeof storyRun !== 'undefined' && storyRun && storyRun.ch1KFee) fee.resource = 'K'; // ストーリー第1章は〇のまま(story.js)
+  return fee ? [fee] : [];
 }
 function actionEmoji(char) {
   // ⚡は濃く (2026-11-02, per user「すべての⚡ 濃くして」) -- style.cssの.action-emoji--bolt。
@@ -7675,19 +7685,19 @@ function renderBoard(state, next) {
       if (!tier) {
         feeEl.remove();
       } else {
-        const feeRate = areaRow.fee || 0;
-        renderUsageFeeLabel(feeEl.querySelector('.map-tile__fee-rate'), feeRate);
+        const feeRates = areaRowFees(areaRow);
+        renderUsageFeeLabel(feeEl.querySelector('.map-tile__fee-rate'), feeRates);
         // たまっている使用料は「○N」(白資源アイコン+数)で表示、0の時は非表示 (2026-10-22, per user
         // request「0KがOKに見える 0Kのときは非表示 1Kは○1 2Kは○2」、スマホ/PC/タブレット共通)。
         // 使用料の設定も無いエリアで0の時は、空の枠が残らないよう表示ごと消す。
         const feeAmountEl = feeEl.querySelector('.map-tile__fee-amount');
         if (mapState.accumulatedFee > 0) {
           feeAmountEl.textContent = '';
-          feeAmountEl.appendChild(actionDot('K'));
+          feeAmountEl.appendChild(actionDot(mapState.accumulatedFeeResource || 'K'));
           feeAmountEl.appendChild(document.createTextNode(String(mapState.accumulatedFee)));
         } else {
           feeAmountEl.remove();
-          if (feeRate <= 0 && tutorialAreaFeeGlowMapId !== mapId) feeEl.remove();
+          if (feeRates.length === 0 && tutorialAreaFeeGlowMapId !== mapId) feeEl.remove();
         }
         // replayHighlight (2026-09-09, per user request: "使用料をもらったときその使用料の箇所") -- see
         // computeReplayChangeHighlight's own doc.
@@ -8073,8 +8083,8 @@ function turnEndWarnings(state, playerId) {
         // an unpayable fee blocks TURNEND entirely via a separate USAGE_FEE gate instead, so this
         // warning becomes moot in that case regardless of what it shows here.
         let amount = player.resources[cmd.resource] || 0;
-        if (cmd.resource === 'K' && player.pendingFee && amount >= player.pendingFee.amount) {
-          amount -= player.pendingFee.amount;
+        if (cmd.resource === 'K' && pendingKFeeAmount(player) && amount >= pendingKFeeAmount(player)) {
+          amount -= pendingKFeeAmount(player);
         }
         if (amount > cmd.limit) warnings.push({ physicalId, warningText: row.WARNING, kind: 'RESOURCE_LIMIT' });
       } else if (cmd.type === 'FORCE_CONVERT' && (player.resources[cmd.from] || 0) > 0) {
@@ -8090,7 +8100,7 @@ function turnEndWarnings(state, playerId) {
   // 判定するので、払える使用料はここでも先に引く(足りない分は自動変換で埋まって払うので、その場合も0になる)。
   const worryInst = player.ownedCardPhysicalIds.map((id) => state.cards[id]).find((c) => c && c.currentFaceId === turnFlowMod.WORRY_CON_FACE_ID);
   if (worryInst && !player.worryAbilityDisabled) {
-    const kAfterFee = player.pendingFee ? Math.max(0, (player.resources.K || 0) - player.pendingFee.amount) : (player.resources.K || 0);
+    const kAfterFee = Math.max(0, (player.resources.K || 0) - pendingKFeeAmount(player) - feeShortfallPaidWithK(state, player));
     const row = dataLoaderMod.getCardRow(INDEX, turnFlowMod.WORRY_CON_FACE_ID);
     if (kAfterFee === 0 && row.WARNING) warnings.push({ physicalId: worryInst.physicalId, warningText: row.WARNING, kind: 'WORRY' });
   }
@@ -8100,7 +8110,32 @@ function turnEndWarnings(state, playerId) {
     const row = dataLoaderMod.getCardRow(INDEX, state.cards[conPhysicalId].currentFaceId);
     warnings.push({ physicalId: conPhysicalId, warningText: row.WARNING, kind: 'FORCE_CONVERT' });
   }
+  // 赤〇/青〇/黄〇の使用料が足りない時 (2026-11-09): 足りない分は-1VPずつになることを知らせる。
+  const feeShort = nonKFeeShortfall(state, player);
+  if (feeShort > 0) {
+    warnings.push({ physicalId: null, warningText: `使用料の${FEE_RESOURCE_NAMES[player.pendingFee.resource]}が${feeShort}つ足りないため、-${feeShort}VPになります`, kind: 'FEE_SHORT' });
+  }
   return warnings;
+}
+
+const FEE_RESOURCE_NAMES = { A: '赤〇', B: '青〇', C: '黄〇', K: '〇' };
+/** 〇で払う使用料の額 (赤〇/青〇/黄〇の使用料なら0)。 */
+function pendingKFeeAmount(player) {
+  return player.pendingFee && (player.pendingFee.resource || 'K') === 'K' ? player.pendingFee.amount : 0;
+}
+/** 赤〇の使用料を権力者が〇で払う分 (executor.applyTurnEndと同じ順: その資源 -> Z -> 〇)。 */
+function feeShortfallPaidWithK(state, player) {
+  const fee = player.pendingFee;
+  if (!fee || fee.resource !== 'A' || !executorMod.hasPowerBrokerAbility(state, INDEX, player.id)) return 0;
+  const rest = Math.max(0, fee.amount - (player.resources.A || 0) - (player.resources.Z || 0));
+  return Math.min(rest, player.resources.K || 0);
+}
+/** 赤〇/青〇/黄〇の使用料で、払えずに-1VPになる数。 */
+function nonKFeeShortfall(state, player) {
+  const fee = player.pendingFee;
+  if (!fee || (fee.resource || 'K') === 'K') return 0;
+  const rest = Math.max(0, fee.amount - (player.resources[fee.resource] || 0) - (player.resources.Z || 0));
+  return rest - feeShortfallPaidWithK(state, player);
 }
 
 /** Whether ending playerId's turn right now needs an automatic usage-fee ABC->Z conversion first, and if
@@ -8111,8 +8146,8 @@ function turnEndWarnings(state, playerId) {
  * confirmation instead of just failing with a message telling the player to go do it manually. */
 function feeConversionPlanForTurnEnd(state, playerId) {
   const player = state.players.find((p) => p.id === playerId);
-  if (!player.pendingFee) return null;
-  const shortfall = player.pendingFee.amount - (player.resources.K || 0);
+  if (!pendingKFeeAmount(player)) return null; // 赤〇/青〇/黄〇の使用料は変換で払えない(足りなければ-1VP)
+  const shortfall = pendingKFeeAmount(player) - (player.resources.K || 0);
   if (shortfall <= 0) return null;
   return boardMod.planFeeConversion(player.resources, shortfall);
 }
@@ -10126,7 +10161,13 @@ function renderFeeCollectButton(container, state, player, canAct) {
   const total = feeMapIds.reduce((sum, mapId) => sum + state.maps[mapId].accumulatedFee, 0);
   if (total <= 0) return;
   const btn = el('button', 'free-action-button');
-  renderUsageFeeLabel(btn, total);
+  // 資源ごとにまとめて表示 (例: 使用料 〇2 青〇1)。
+  const byResource = new Map();
+  for (const mapId of feeMapIds) {
+    const r = state.maps[mapId].accumulatedFeeResource || 'K';
+    byResource.set(r, (byResource.get(r) || 0) + state.maps[mapId].accumulatedFee);
+  }
+  renderUsageFeeLabel(btn, ['K', 'A', 'B', 'C'].filter((r) => byResource.has(r)).map((r) => ({ resource: r, amount: byResource.get(r) })));
   btn.type = 'button';
   btn.addEventListener('click', () => {
     // 複数エリア分をまとめて1回のUndoで取り消せるよう、ループの前に1回だけスナップショットを取る
@@ -18808,8 +18849,7 @@ function buildAreaTilePreviewNode(areaId) {
   if (!tier) {
     feeEl.remove();
   } else {
-    const feeRate = areaRow.fee || 0;
-    renderUsageFeeLabel(feeEl.querySelector('.map-tile__fee-rate'), feeRate);
+    renderUsageFeeLabel(feeEl.querySelector('.map-tile__fee-rate'), areaRowFees(areaRow));
     feeEl.querySelector('.map-tile__fee-amount').remove();
   }
   return node;

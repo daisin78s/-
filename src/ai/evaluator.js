@@ -320,7 +320,7 @@ class Evaluator {
     // runSetCurrentArea sets feeOwnerId to the acting player synchronously and never touches
     // accumulatedFee, so the very state this function scores right after that move already reflects it.
     for (const mapState of Object.values(state.maps)) {
-      if (mapState.feeOwnerId === playerId && mapState.accumulatedFee > 0) total += mapState.accumulatedFee * v('K');
+      if (mapState.feeOwnerId === playerId && mapState.accumulatedFee > 0) total += mapState.accumulatedFee * v(mapState.accumulatedFeeResource || 'K');
     }
 
     // conBuildAware (2026-08-28, "AI LV4" only -- see this class's own constructor doc and

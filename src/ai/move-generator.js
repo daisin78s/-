@@ -113,6 +113,12 @@ function buildCandidateKey(candidate) {
   return candidate.type === 'UPGRADE' ? `U:${candidate.toFaceId}` : candidate.faceId;
 }
 
+/** K the player must keep for a pending usage fee (0 when none, or when the fee is in A/B/C -- 2026-11-09:
+ * those aren't covered by K and just cost -1VP per missing unit). */
+function pendingKFee(player) {
+  return player.pendingFee && (player.pendingFee.resource || 'K') === 'K' ? player.pendingFee.amount : 0;
+}
+
 class MoveGenerator {
   /**
    * @param {{avoidMapIdFromRound?: {mapId: string, round: number}}} [policy] - optional strategy knob
@@ -585,7 +591,7 @@ class MoveGenerator {
 
   forcedFeeConversionMove(state, index, playerId) {
     const player = state.players.find((p) => p.id === playerId);
-    if (!player || !player.pendingFee) return null;
+    if (!player || !player.pendingFee || (player.pendingFee.resource || 'K') !== 'K') return null; // 〇以外の使用料は変換で払えない(足りなければ-1VP)
     const shortfall = player.pendingFee.amount - (player.resources.K || 0);
     if (shortfall <= 0) return null;
     const plan = board.planFeeConversion(player.resources, shortfall);
@@ -748,7 +754,7 @@ class MoveGenerator {
     const costK = costMatch[1] ? Number(costMatch[1]) : 1;
     const player = state.players.find((p) => p.id === playerId);
     if (!player || (player.resources.K || 0) < costK) return null;
-    const reservedK = player.pendingFee ? player.pendingFee.amount : 0;
+    const reservedK = pendingKFee(player);
     if ((player.resources.K || 0) - costK < reservedK) return null;
     for (const physicalId of player.ownedCardPhysicalIds) {
       const cardState = state.cards[physicalId];
@@ -792,7 +798,7 @@ class MoveGenerator {
         const tryClone = cloneState(state);
         if (!applyInPlace(tryClone, index, move).success) continue;
         const afterPlayer = tryClone.players.find((p) => p.id === playerId);
-        if (afterPlayer.pendingFee && !board.canAffordFee(afterPlayer, afterPlayer.pendingFee.amount)) continue;
+        if (pendingKFee(afterPlayer) && !board.canAffordFee(afterPlayer, pendingKFee(afterPlayer))) continue;
         const candidate = result.pendingBuild.candidates[i];
         const faceId = candidate.faceId || candidate.toFaceId;
         const match = /^>=(\d+)$/.exec(getCardRow(index, faceId).DICE || '');
@@ -852,7 +858,7 @@ class MoveGenerator {
     });
     if (!ownsControl) return null;
     const kCost = this.#trainingGroundKCost(index, state);
-    const reservedK = player.pendingFee ? player.pendingFee.amount : 0;
+    const reservedK = pendingKFee(player);
     if (kCost > 0 && (player.resources.K || 0) - kCost < reservedK) return null;
     const beforeColorCount = player.dice.filter((d) => d.kind === 'COLOR').length;
     // Excludes a B001B-flagged die too (per-die SET_WILDCARD, 2026-10-19) -- same reasoning as the
