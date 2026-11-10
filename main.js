@@ -6990,6 +6990,8 @@ function buildShopSlotNode(slotId, faceId, showReqCaption, locked, faceDown = fa
   const slotTpl = document.getElementById('tpl-shop-slot');
   const slotNode = slotTpl.content.firstElementChild.cloneNode(true);
   if (locked) slotNode.classList.add('shop-slot--locked');
+  // 目印だけ(見た目は変わらない) -- ストーリーで「赤いカード(領地)が光る」などカードの種類で選ぶため。
+  if (faceId && !faceDown) slotNode.dataset.faceId = faceId;
   const reqCaption = () => {
     // faceDown (2026-09-23, per user request: "モニュメントの下に書いてある2Rからと SHOPの部分にも2Rから
     // と書いてあるので不要です") -- tpl-shop-card-facedown itself already shows "2Rから" inside the card

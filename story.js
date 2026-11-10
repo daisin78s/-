@@ -2071,6 +2071,33 @@ function senecaDoEvent(row, onDone) {
     storySetGlow([]);
     render(STATE);
     storyLater(onDone, 600);
+  } else if (/ショップ/.test(e) && /オープン/.test(e)) {
+    // 「ショップがオープン左から「交渉術」「農園の支配」…」: 書いてある順にSHOP101-106へLV1を並べる。
+    const names = (e.match(/「[^」]+」/g) || []).map((s) => s.slice(1, -1));
+    const faces = names.map((name) => ['A', 'B', 'C'].map((k) => INDEX.raw[k].find((r) => r.NAME === `${name}LV1`)).find(Boolean)).filter(Boolean).map((r) => r.ID);
+    const slots = Object.keys(STATE.shops.NORMAL.slots);
+    slots.forEach((slotId, k) => { STATE.shops.NORMAL.slots[slotId] = faces[k] || null; });
+    STATE.shops.NORMAL.drawPile = [];
+    render(STATE);
+    const shopSlots = faces.map((f) => document.querySelector(`#shop-combined-slots .shop-slot[data-face-id="${f}"]`)).filter(Boolean);
+    shopSlots.forEach((n, k) => n.animate([{ opacity: 0, transform: 'scale(0.9)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 400, delay: k * 120, easing: 'ease-out', fill: 'backwards' }));
+    storyLater(onDone, shopSlots.length * 120 + 500);
+  } else if (/ショップ/.test(e) && /光る/.test(e)) {
+    // 「タブのショップが光る」
+    storySetAllowedTabs([...run.allowedTabs, 'shop']);
+    storySetGlow(['.mobile-tab-switcher__btn[data-tab-target="shop"]']);
+    onDone();
+  } else if (/ショップ/.test(e) && /押す/.test(e)) {
+    // 「タブのショップを押す（スマホ版）」: スマホは押すまで待つ。PC・タブレットはショップが最初から見えているので待たない。
+    storyHideDialog();
+    const finish = () => { storySetGlow([]); onDone(); };
+    if (isMobileLayout()) storyWaitUntil(() => mobileActiveTab === 'shop', finish);
+    else finish();
+  } else if (/(領地|学問|人材)カード/.test(e) && /光る/.test(e)) {
+    // 「領地カードが光る」(赤=A)「学問カードが光る」(青=B)「人材カードが光る」(黄=C): 次のカードの種類が光るまで光らせておく。
+    const kind = /領地/.test(e) ? 'A' : /学問/.test(e) ? 'B' : 'C';
+    storySetGlow([`#shop-combined-slots .shop-slot[data-face-id^="${kind}"] .shop-card`]);
+    onDone();
   } else if (/能力/.test(e) && /光る/.test(e)) {
     // 「図書館の能力部分が光る」: そのセリフの間だけ。
     const mapId = Object.keys(STATE.maps).find((m) => e.includes(dataLoaderMod.getAreaRow(INDEX, STATE.maps[m].currentAreaId).NAME.replace(/LV\d+$/, '')));
