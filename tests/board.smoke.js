@@ -1169,7 +1169,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
 // ---------------------------------------------------------------------------
 // Usage fee charging (2026-08-04, bug fix -- board.js set nothing toward map.accumulatedFee before this;
 // only executor.collectUsageFee existed, so there was never anything to collect). AREA001B/C are real
-// tier-B/C data rows (1K/2K respectively, confirmed flat-rate, see board.js's USAGE_FEE_BY_TIER).
+// tier-B/C data rows (2K/2K respectively since 2026-11-10, confirmed flat-rate, see board.js's USAGE_FEE_BY_TIER).
 // ---------------------------------------------------------------------------
 {
   const state = freshStateWithShops();
@@ -1177,7 +1177,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   const die = giveDie(state, 'P2', 1); // SLOT1=1 (SLOT2 is ANY, but the numbered slot is preferred)
   const result = board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP001', 0);
   check('A non-owner (P2) placing on a tier-B AREA succeeds', result.success, true);
-  check('...and owes the tier-B flat fee (1K) to the map', player(state, 'P2').pendingFee, { mapId: 'MAP001', resource: 'K', amount: 1 });
+  check('...and owes the tier-B flat fee (2K) to the map', player(state, 'P2').pendingFee, { mapId: 'MAP001', resource: 'K', amount: 2 });
 }
 {
   const state = freshStateWithShops();
@@ -1212,19 +1212,19 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   player(state, 'P2').resources.K = 0;
   player(state, 'P2').resources.A = 1;
 
-  check('canEndTurn blocks P2 while unable to afford the 1K fee (K=0)', executor.canEndTurn(state, index, 'P2').ok, false);
+  check('canEndTurn blocks P2 while unable to afford the 2K fee (K=0)', executor.canEndTurn(state, index, 'P2').ok, false);
   const violations = executor.canEndTurn(state, index, 'P2').violations;
-  check('...citing a USAGE_FEE violation for the right map/amount', violations.some((v) => v.type === 'USAGE_FEE' && v.mapId === 'MAP001' && v.amount === 1), true);
+  check('...citing a USAGE_FEE violation for the right map/amount', violations.some((v) => v.type === 'USAGE_FEE' && v.mapId === 'MAP001' && v.amount === 2), true);
 
-  player(state, 'P2').resources.K = 1;
+  player(state, 'P2').resources.K = 2;
   const endResult = turnFlow.endTurn(state, index, 'P2');
   check('Once affordable, endTurn succeeds', endResult.success, true);
-  check('...P2 paid the 1K', player(state, 'P2').resources.K, 0);
-  check('...which landed on the map as accumulatedFee', state.maps['MAP001'].accumulatedFee, 1);
+  check('...P2 paid the 2K', player(state, 'P2').resources.K, 0);
+  check('...which landed on the map as accumulatedFee', state.maps['MAP001'].accumulatedFee, 2);
   check('...and pendingFee is cleared', player(state, 'P2').pendingFee, null);
 
   const collectResult = executor.collectUsageFee(state, index, { playerId: 'P1' }, 'MAP001');
-  check('The owner (P1) can now collect the accumulated fee', collectResult, { success: true, amount: 1, resource: 'K' });
+  check('The owner (P1) can now collect the accumulated fee', collectResult, { success: true, amount: 2, resource: 'K' });
   check('...map.accumulatedFee is back to 0', state.maps['MAP001'].accumulatedFee, 0);
 }
 {
@@ -1313,7 +1313,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   const state = freshStateWithShops();
   state.maps['MAP001'] = mapWithArea('MAP001', 'AREA001B', 3, 'P1');
   const die = giveDie(state, 'P2', 1); // SLOT1=1 (SLOT2 is ANY, but the numbered slot is preferred)
-  board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP001', 0); // P2 now owes 1K to P1
+  board.placeDice(state, index, { playerId: 'P2' }, die.id, 'MAP001', 0); // P2 now owes 2K to P1
   check('P2 owes a pending fee after placing on P1\'s tiered-up AREA', !!player(state, 'P2').pendingFee, true);
 
   const tapInst = createCardInstance('C001A'); // TAP=CHANGE(2K,2A), IMMEDIATE kind
@@ -1325,7 +1325,7 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   const allowedResult = board.useBareTapAbility(state, index, { playerId: 'P2' }, tapInst.physicalId);
   check('BARE_TAP succeeds even while the fee is still pending', allowedResult.success, true);
   check('...the card was actually tapped', state.cards[tapInst.physicalId].tapped, true);
-  check('...and the pending fee is untouched (still owed, unresolved until TURNEND)', player(state, 'P2').pendingFee, { mapId: 'MAP001', resource: 'K', amount: 1 });
+  check('...and the pending fee is untouched (still owed, unresolved until TURNEND)', player(state, 'P2').pendingFee, { mapId: 'MAP001', resource: 'K', amount: 2 });
 }
 {
   const state = freshStateWithShops();
@@ -2387,12 +2387,12 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 2);
   check('異端者: placement on an unowned, still-base-tier AREA succeeds', result.success, true);
   check('...grants AREA001B\'s own ADD(6K) (the borrowed LV1 action), not AREA001A\'s own ADD(3K)', p1.resources.K - beforeK, 6);
-  check('...self-charges AREA001B\'s own fee (1K) via pendingFee, not an immediate deduction', p1.pendingFee, { mapId: 'MAP001', resource: 'K', amount: 1 });
+  check('...self-charges AREA001B\'s own fee (2K) via pendingFee, not an immediate deduction', p1.pendingFee, { mapId: 'MAP001', resource: 'K', amount: 2 });
   check('...map.accumulatedFee is untouched until TURNEND actually pays it', state.maps['MAP001'].accumulatedFee, 0);
 
   executor.applyTurnEnd(state, index, 'P1');
-  check('TURNEND: pendingFee is paid from K (6-1=5) and cleared', p1.resources.K, 5);
-  check('...and credited into map.accumulatedFee -- banked for whoever becomes the real owner later', state.maps['MAP001'].accumulatedFee, 1);
+  check('TURNEND: pendingFee is paid from K (6-2=4) and cleared', p1.resources.K, 4);
+  check('...and credited into map.accumulatedFee -- banked for whoever becomes the real owner later', state.maps['MAP001'].accumulatedFee, 2);
   check('...pendingFee itself is cleared', p1.pendingFee, null);
 
   // Hand-off: a real owner now appears (simulating a genuine tier upgrade's own feeOwnerId grant) --
@@ -2401,8 +2401,8 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   state.maps['MAP001'].currentAreaId = 'AREA001B';
   const p2 = player(state, 'P2');
   const collectResult = executor.collectUsageFee(state, index, { playerId: 'P2' }, 'MAP001');
-  check('...the new owner collects 異端者\'s banked 1K via the ordinary collectUsageFee button', collectResult, { success: true, amount: 1, resource: 'K' });
-  check('...P2 actually receives the 1K', p2.resources.K || 0, 1);
+  check('...the new owner collects 異端者\'s banked 2K via the ordinary collectUsageFee button', collectResult, { success: true, amount: 2, resource: 'K' });
+  check('...P2 actually receives the 2K', p2.resources.K || 0, 2);
 }
 {
   // Control: a player without 異端者 gets only the base tier's own ADD(3K), no override, no fee.
@@ -2426,7 +2426,7 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   const beforeK = p1.resources.K || 0;
   board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
   check('異端者 on an already-upgraded AREA: just the real tier-B action (6K), no double effect', p1.resources.K - beforeK, 6);
-  check('...pays the REAL usage fee (owed to P2) instead, same as any non-異端者 visitor', p1.pendingFee, { mapId: 'MAP001', resource: 'K', amount: 1 });
+  check('...pays the REAL usage fee (owed to P2) instead, same as any non-異端者 visitor', p1.pendingFee, { mapId: 'MAP001', resource: 'K', amount: 2 });
 }
 {
   // Color-die-only restriction (2026-10-11, per user follow-up: "異端者 色ダイス配置時に変更できますか"):
@@ -2490,7 +2490,7 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 2);
   check('異端者 self-charges and banks hereticBankerId=P1', state.maps['MAP001'].hereticBankerId, 'P1');
   executor.applyTurnEnd(state, index, 'P1');
-  check('...fee actually banked into accumulatedFee (1K)', state.maps['MAP001'].accumulatedFee, 1);
+  check('...fee actually banked into accumulatedFee (2K)', state.maps['MAP001'].accumulatedFee, 2);
 
   // P1 (the SAME 異端者 who banked it) now becomes the real owner -- the banked fee is discarded.
   executor.runCommand(state, index, { playerId: 'P1' }, { type: 'SET_CURRENT_AREA', mapId: 'MAP001', value: 'AREA001B' });
@@ -2506,16 +2506,16 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   const d1 = giveDie(state, 'P1', 3); // AREA001A SLOT3=3 -- see 異端者's die-value>=3 gate, above
   board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 2);
   executor.applyTurnEnd(state, index, 'P1');
-  check('Banked before ownership change (1K)', state.maps['MAP001'].accumulatedFee, 1);
+  check('Banked before ownership change (2K)', state.maps['MAP001'].accumulatedFee, 2);
 
   // P2 (a DIFFERENT player) becomes the real owner -- the banked fee stays collectible.
   executor.runCommand(state, index, { playerId: 'P2' }, { type: 'SET_CURRENT_AREA', mapId: 'MAP001', value: 'AREA001B' });
-  check('A different new owner (P2) does NOT discard 異端者\'s banked fee', state.maps['MAP001'].accumulatedFee, 1);
+  check('A different new owner (P2) does NOT discard 異端者\'s banked fee', state.maps['MAP001'].accumulatedFee, 2);
   check('...hereticBankerId is still cleared regardless (old tracking resolved either way)', state.maps['MAP001'].hereticBankerId, null);
   const p2 = player(state, 'P2');
   const collectResult = executor.collectUsageFee(state, index, { playerId: 'P2' }, 'MAP001');
-  check('...P2 can collect it normally via collectUsageFee', collectResult, { success: true, amount: 1, resource: 'K' });
-  check('...P2 actually receives the 1K', p2.resources.K || 0, 1);
+  check('...P2 can collect it normally via collectUsageFee', collectResult, { success: true, amount: 2, resource: 'K' });
+  check('...P2 actually receives the 2K', p2.resources.K || 0, 2);
 }
 
 // ---------------------------------------------------------------------------

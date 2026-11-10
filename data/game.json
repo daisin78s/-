@@ -1910,7 +1910,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "ADD(6K)",
-      "fee": "K",
+      "fee": "2K",
       "INST": ""
     },
     {
@@ -2040,7 +2040,7 @@
       "SLOT5": "NONE",
       "SLOT6": "NONE",
       "ACTION": "ADD(9K)",
-      "fee": "2K",
+      "fee": "3K",
       "INST": ""
     },
     {
