@@ -2299,19 +2299,19 @@ function withPatchedTap(physicalFaceId, tap, fn) {
   const state = freshStateWithShops();
   const p1 = player(state, 'P1');
   p1.jobCardId = 'JOB009';
-  state.maps['MAP001'].currentAreaId = 'AREA001B'; // "LVアップされた" (tier B, not the base tier A)
+  state.maps['MAP002'].currentAreaId = 'AREA002B'; // "LVアップされた" (tier B, not the base tier A)
 
-  const d1 = giveDie(state, 'P1', 1); // AREA001B SLOT1=1 (SLOT2 is ANY, but the numbered slot is preferred)
+  const d1 = giveDie(state, 'P1', 6); // AREA002B SLOT1=6 (SLOT2 is ANY, but the numbered slot is preferred)
   const beforeK = p1.resources.K || 0;
-  const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP001', 0);
+  const result = board.placeDice(state, index, { playerId: 'P1' }, d1.id, 'MAP002', 0);
   check('地主: placement on an upgraded AREA succeeds normally', result.success, true);
-  check('...grants 6K (AREA001B\'s own ADD(6K)) + 1K (地主, no prior own color die here) = 7', p1.resources.K - beforeK, 7);
+  check('...grants 5K (AREA002B\'s own ADD(5K)) + 1K (地主, no prior own color die here) = 6', p1.resources.K - beforeK, 6);
   check('...no VP granted this time', p1.resources.VP || 0, 0);
 
-  const d2 = giveDie(state, 'P1', 3); // AREA001B SLOT2=ANY -- P1 already has d1 sitting in SLOT1
+  const d2 = giveDie(state, 'P1', 3); // AREA002B SLOT2=ANY -- P1 already has d1 sitting in SLOT1
   const beforeK2 = p1.resources.K;
-  board.placeDice(state, index, { playerId: 'P1' }, d2.id, 'MAP001', 1);
-  check('...2nd placement still grants 6K (area) + 1K (地主, always) = 7', p1.resources.K - beforeK2, 7);
+  board.placeDice(state, index, { playerId: 'P1' }, d2.id, 'MAP002', 1);
+  check('...2nd placement still grants 5K (area) + 1K (地主, always) = 6', p1.resources.K - beforeK2, 6);
   check('...and grants 1VP ADDITIONALLY (2026-08-20: changed from "instead of"), since P1 already had a color die here', p1.resources.VP, 1);
 }
 {
