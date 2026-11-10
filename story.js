@@ -1989,6 +1989,11 @@ function senecaPlay(rows, i, onDone) {
   if (i >= rows.length) { onDone(); return; }
   const row = rows[i];
   const next = () => senecaPlay(rows, i + 1, onDone);
+  // 「置けない場合」で置けた時: skipToReに当たる行まで飛ばす。
+  if (storyRun.seneca.skipToRe) {
+    if (!storyRun.seneca.skipToRe.test(row.event || '')) { next(); return; }
+    storyRun.seneca.skipToRe = null;
+  }
   const say = () => {
     if (!row.text) { next(); return; }
     storySetSpeaker('seneca');
@@ -2012,8 +2017,11 @@ function senecaDoEvent(row, onDone) {
     storyRollHandDice(onDone, 'P1');
   } else if (/セネカ/.test(e) && /ふる|振る/.test(e)) {
     // セネカ(P2)の手番にして、ダイスを振る(第1章のパトラ登場と同じ形)。
+    // 「ダイス目は６以外」: その目は出ない(あとで高等学問で6にした時に皇帝宮殿に置けるように)。
     const p2 = storyPlayer('P2');
-    p2.dice.forEach((d) => { d.passed = false; d.value = 1 + Math.floor(Math.random() * 6); });
+    const excluded = Number((/(\d)以外/.exec(e) || [])[1] || 0);
+    const values = [1, 2, 3, 4, 5, 6].filter((v) => v !== excluded);
+    p2.dice.forEach((d) => { d.passed = false; d.value = values[Math.floor(Math.random() * values.length)]; });
     storyEndTurnOf('P1');
     document.body.classList.add('story-lock-hand');
     render(STATE);
@@ -2071,6 +2079,64 @@ function senecaDoEvent(row, onDone) {
     storySetGlow([]);
     render(STATE);
     storyLater(onDone, 600);
+  } else if (/ショップ画面/.test(e)) {
+    // 「ショップ画面に行く（スマホ版）」: ショップ画面に移ったら(タブを押しても、フリックでも)セリフが続く。
+    // PC・タブレットはショップが最初から見えているので待たない。
+    storyHideDialog();
+    storySetAllowedTabs([...run.allowedTabs, 'shop']);
+    const finish = () => { storySetGlow([]); onDone(); };
+    if (isMobileLayout()) storyWaitUntil(() => mobileActiveTab === 'shop', finish);
+    else finish();
+  } else if (/エリア画面/.test(e)) {
+    // 「エリア画面にもどる」: こちらでエリアのタブに切り替える。
+    storySetGlow([]);
+    if (isMobileLayout()) applyMobileActiveTab('board');
+    render(STATE);
+    storyLater(onDone, 300);
+  } else if (/(\d+)秒/.test(e) && !/セネカ/.test(e)) {
+    // 「１秒間がある」
+    storyHideDialog();
+    storyLater(onDone, Number(/(\d+)秒/.exec(e)[1]) * 1000);
+  } else if (/必要資源/.test(e) && /光る/.test(e)) {
+    storySetGlow(['#shop-combined-slots .shop-slot[data-face-id] .shop-card > .shop-card__cost']);
+    onDone();
+  } else if (/目\s*\d/.test(e) && /光る/.test(e)) {
+    // 「目1-6　目1-5などが光る」(など = ショップの段のダイス目すべて) / 「目1-6が光る」 / 「目1-6　目1-5が光る」。
+    const slots = Object.keys(STATE.shops.NORMAL.slots);
+    const labels = (e.match(/目\s*\d(?:-\d)?/g) || []).map((s) => s.replace(/\s/g, ''));
+    const targets = /など/.test(e) ? slots : slots.filter((slotId) => labels.includes(shopReqForSlotId(slotId).replace(/\s/g, '')));
+    storySetGlow(targets.map((slotId) => `#shop-combined-slots .shop-slot[data-slot-id="${slotId}"] .shop-slot__req`));
+    onDone();
+  } else if (/置けない場合/.test(e)) {
+    // 「もし残ったダイス目が皇帝宮殿に置けない場合セリフが出る」: 置けるダイスが1つでもあれば、このあとのセリフと
+    // 高等学問の演出は飛ばして「ダイスが置けるようになる」へ (per user回答)。
+    const dice = storyPlayer('P1').dice.filter((d) => !d.placedMapId && !d.passed);
+    const placeable = dice.some((d) => storyPlaceableSlots('P1', d.id, [STORY_CASTLE_MAP_ID]).length > 0);
+    if (placeable) run.seneca.skipToRe = /置けるようになる/;
+    onDone();
+  } else if (/高等学問/.test(e) && /アニメーション/.test(e)) {
+    // 演出だけ(知識は払わない、per user回答)。
+    storyHideDialog();
+    mobileAiCardGainQueue.push({ faceId: 'B002A' });
+    playNextMobileAiCardGain();
+    storyLater(() => storyWhenVisualsIdle(onDone), 200);
+  } else if (/ダイス目が(\d)に/.test(e)) {
+    // 「ダイス目が6に」: 皇帝宮殿に置けないダイスの目を変える。
+    const value = Number(/ダイス目が(\d)に/.exec(e)[1]);
+    const die = storyPlayer('P1').dice.find((d) => !d.placedMapId && !d.passed);
+    if (die) die.value = value;
+    run.glowDieValues = [value];
+    render(STATE);
+    storyLater(() => { run.glowDieValues = []; render(STATE); onDone(); }, 1200);
+  } else if (/置けるようになる/.test(e)) {
+    // 「ダイスが置けるようになる」: どこに置いてもよい。交渉術を獲得できたら「つづく」(onDone)、できなければ
+    // 置く前に戻す (per user「交渉術が獲得できれば 続く / できなければ セリフが出て 戻る 後で追加」 -- セリフはまだ無い)。
+    senecaTryNegotiation({ state: gameStateMod.cloneState(STATE), visibleMapIds: run.visibleMapIds.slice() }, onDone);
+  } else if (!/カードが光る/.test(e) && /光る/.test(e) && Object.values(STATE.shops.NORMAL.slots).some((f) => f && e.includes(dataLoaderMod.getCardRow(INDEX, f).NAME.replace(/LV\d+$/, '')))) {
+    // 「交渉術が光る」: ショップのそのカードを光らせる。
+    const faceId = Object.values(STATE.shops.NORMAL.slots).find((f) => f && e.includes(dataLoaderMod.getCardRow(INDEX, f).NAME.replace(/LV\d+$/, '')));
+    storySetGlow([`#shop-combined-slots .shop-slot[data-face-id="${faceId}"] .shop-card`]);
+    onDone();
   } else if (/ショップ/.test(e) && /オープン/.test(e)) {
     // 「ショップがオープン左から「交渉術」「農園の支配」…」: 書いてある順にSHOP101-106へLV1を並べる。
     const names = (e.match(/「[^」]+」/g) || []).map((s) => s.slice(1, -1));
@@ -2131,6 +2197,32 @@ function senecaDoEvent(row, onDone) {
     console.warn(`セネカの章: C列「${e}」はまだ対応していません`);
     onDone();
   }
+}
+
+/** 「ダイスが置けるようになる」: 見えているエリアのどこに置いてもよい。皇帝宮殿で交渉術を獲得したらonDone()。
+ * それ以外(別のエリアに置いた・別のカードを獲得した)は、snap(置く前)に戻してもう一度置かせる。 */
+function senecaTryNegotiation(snap, onDone) {
+  const run = storyRun;
+  if (!run) return;
+  const hasNegotiation = () => storyPlayer('P1').ownedCardPhysicalIds.some((id) => STATE.cards[id] && /^B004/.test(STATE.cards[id].currentFaceId));
+  storyHideDialog();
+  storyWaitForPlacement({
+    mapIds: run.visibleMapIds.slice(),
+    goalText: '',
+    extraDetect: () => typeof pendingBuildChoice !== 'undefined' && !!pendingBuildChoice,
+    onPlaced: () => storyWhenVisualsIdle(() => {
+      if (!storyRun) return;
+      if (hasNegotiation()) { story2LockPlacement(); render(STATE); onDone(); return; }
+      // 獲得できなかった: 置く前に戻す (戻る時のセリフはあとで追加 -- per user)。
+      storySetGlow([]);
+      storyUseState(gameStateMod.cloneState(snap.state));
+      run.visibleMapIds = snap.visibleMapIds.slice();
+      storyApplyVisibleMaps();
+      run.placementBaseline = storyPlacementCounts(STATE);
+      render(STATE);
+      storyLater(() => senecaTryNegotiation(snap, onDone), 400);
+    }),
+  });
 }
 
 /** 導入のあと: 農園か図書館にダイスを置く。農園なら「農園」の部分のあと図書館を待つ。図書館なら「つづく」。 */

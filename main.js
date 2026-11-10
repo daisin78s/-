@@ -6992,6 +6992,7 @@ function buildShopSlotNode(slotId, faceId, showReqCaption, locked, faceDown = fa
   if (locked) slotNode.classList.add('shop-slot--locked');
   // 目印だけ(見た目は変わらない) -- ストーリーで「赤いカード(領地)が光る」などカードの種類で選ぶため。
   if (faceId && !faceDown) slotNode.dataset.faceId = faceId;
+  slotNode.dataset.slotId = slotId; // ストーリーで「目1-6が光る」などダイス目の欄で選ぶため
   const reqCaption = () => {
     // faceDown (2026-09-23, per user request: "モニュメントの下に書いてある2Rからと SHOPの部分にも2Rから
     // と書いてあるので不要です") -- tpl-shop-card-facedown itself already shows "2Rから" inside the card
