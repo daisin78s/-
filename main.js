@@ -4761,6 +4761,7 @@ function buildBuildIcon(actionText) {
     // 左下のVPと重ならないよう右へ (per user「交渉術 研究 軽減をもっと右に」)。
     bzRow.style.position = 'relative';
     bzRow.style.left = '20px';
+    bzRow.style.top = '-4px'; // 少し上に (2026-11-10, per user「研究や 交渉術のアイコン 軽減 を 少し上に」)
     stack.appendChild(bzRow);
     return stack;
   }
@@ -5790,7 +5791,10 @@ function buildEffectRow(effect, allowTextFallback = true) {
     Array.from(icons.childNodes).forEach((child) => iconRow.appendChild(child));
     const wrapper = el('div', 'action-icons-stack');
     wrapper.appendChild(iconRow);
-    wrapper.appendChild(actionRow([actionSuffix('ターン終了時')]));
+    const turnEndRow = actionRow([actionSuffix('ターン終了時')]);
+    turnEndRow.style.position = 'relative';
+    turnEndRow.style.top = '-4px'; // 少し上に (2026-11-10, per user「パンとサーカスのアイコン ターン終了時 を 少し上に」)
+    wrapper.appendChild(turnEndRow);
     return wrapper;
   }
   const row = el('div', 'action-icons');
@@ -6305,7 +6309,7 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
       .map((effect) => {
         // パンとサーカスLV2は「2〇→2VP / ターン終了時」 (2026-11-07, per user; 孤児院と共用の「〇→1VP（MAX2）」は使わない)。
         const row = effect.source === 'TURNEND' && faceId === 'B301B'
-          ? (() => { const stack = el('div', 'action-icons-stack'); stack.appendChild(actionRow([...resourceItemNodes('2', 'K'), actionArrow(), actionSuffix('2VP')])); stack.appendChild(actionRow([actionSuffix('ターン終了時')])); return stack; })()
+          ? (() => { const stack = el('div', 'action-icons-stack'); stack.appendChild(actionRow([...resourceItemNodes('2', 'K'), actionArrow(), actionSuffix('2VP')])); const turnEndRow = actionRow([actionSuffix('ターン終了時')]); turnEndRow.style.position = 'relative'; turnEndRow.style.top = '-4px'; stack.appendChild(turnEndRow); return stack; })()
           : buildEffectRow(effect, allowTextFallback);
         // 基礎学問・高等学問・幾何学の⚡🎲(ONCE)の行を少し上に (2026-11-02, per user「基礎学問 高等学問 幾何学のアイコンの
         // ⚡🎲 もう少し上に」)。
