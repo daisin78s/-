@@ -393,7 +393,8 @@ function storyApplyShopOverrides(overrides) {
   }
 }
 
-/** 「ターン2」「ターン3」 (2026-10-31, per user: 普段の対戦と同じ演出、ラウンドごとに1から、ターン1は出さない)。
+/** 「ターン2」「ターン3」 (2026-10-31, per user: 普段の対戦と同じ演出、ラウンドごとに1から。2026-11-11, per user
+ * 回答「全章でターン1も出す」: ターン1も出す)。
  * 2026-11-11, per user「ダイスが置けるようになったときに ターン〇 と出るようにしてほしい」「それ以外はでない」
  * (全部の章): 置いた直後に次の手番を出すのをやめ、あなたのダイスが置けるようになった時(storyWaitForPlacement)
  * だけ出す。相手の手番には出さない。普段の対戦の手番の表示(main.jsのplayPendingTurnBanner)はストーリーでは
@@ -403,7 +404,6 @@ function storyTurnBannerWhenPlaceable(state) {
   if (!run.diceShown || state.phase === 'GAME_END') return;
   const player = state.players.find((p) => p.id === 'P1');
   const nth = player.dice.filter((d) => d.placedMapId || d.passed).length + 1;
-  if (nth < 2) return;
   const key = `${state.round}/${player.id}/${nth}`;
   run.turnBannerKeys = run.turnBannerKeys || new Set();
   if (run.turnBannerKeys.has(key)) return;
@@ -2028,7 +2028,35 @@ function senecaPlay(rows, i, onDone) {
 function senecaDoEvent(row, onDone) {
   const run = storyRun;
   const e = story2NormalizeEvent(row.event);
-  if (/スタート/.test(e)) {
+  if (/ターン\s*\d+\s*が流れる/.test(e)) {
+    // 「ターン1が流れる」: 「あなた ターン1」を出す(このあと置けるようになった時にもう一度は出ない)。
+    storyTurnBannerWhenPlaceable(STATE);
+    onDone();
+  } else if (/拡大画面/.test(e)) {
+    // 「土木技術の拡大画面が出る」: ショップ等でカードを押した時の拡大表示を出す(「フリーアクションボタンが
+    // 光る」で閉じる、per user回答)。
+    const faceIds = [...storyPlayer('P1').ownedCardPhysicalIds.map((id) => STATE.cards[id] && STATE.cards[id].currentFaceId), ...Object.values(STATE.shops.NORMAL.slots)];
+    const faceId = faceIds.find((f) => f && e.includes(dataLoaderMod.getCardRow(INDEX, f).NAME.replace(/LV\d+$/, '')));
+    if (faceId) showTutorialCardTermModal(faceId);
+    storyLater(onDone, 400);
+  } else if (/⤵/.test(e) && /光る/.test(e)) {
+    // 「⤵が光る」: 拡大画面の中のタップマーク。
+    document.querySelectorAll('#card-inst-overlay .action-emoji').forEach((n) => { if (n.textContent.includes('⤵')) n.dataset.storyTap = '1'; });
+    senecaGlow(['#card-inst-overlay [data-story-tap]']);
+    onDone();
+  } else if (/フリーアクション/.test(e) && /光る/.test(e)) {
+    // 「フリーアクションボタンが光る」: 拡大画面を閉じて、エリアの右下にフリーアクション(と1手戻る)を出して光らせる
+    // (第3章の「フリーアクションボタンが出てくる」と同じ)。
+    hideCardEnlargeModal();
+    document.body.classList.add('story-free-action');
+    render(STATE);
+    senecaGlow(['.mobile-own-row__free-action']);
+    onDone();
+  } else if (/フリック/.test(e) && /獲得カード/.test(e)) {
+    // 「フリックで獲得カードに行けるようになる」
+    storySetAllowedTabs([...run.allowedTabs, 'cards']);
+    onDone();
+  } else if (/スタート/.test(e)) {
     // 「ダイス３個食料５個でスタート」
     const food = Number((/食料(\d+)/.exec(e) || [])[1] || 0);
     storyPlayer('P1').resources.K = food;
@@ -2226,7 +2254,7 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
   const section = (re) => {
     const start = rest.findIndex((r) => re.test(story2NormalizeEvent(r.event || '')));
     if (start < 0) return [];
-    const end = rest.findIndex((r, k) => k > start && r.event && /ダイスがなくなる|以外にダイスを置く|交渉術を獲得する|まで戻る/.test(story2NormalizeEvent(r.event)));
+    const end = rest.findIndex((r, k) => k > start && r.event && /ダイスがなくなる|以外にダイスを置く|を獲得する|まで戻る/.test(story2NormalizeEvent(r.event)));
     return rest.slice(start + 1, end < 0 ? rest.length : end);
   };
   const sayLines = (rows, then) => {
@@ -2239,7 +2267,8 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
     };
     step(0);
   };
-  const hasNegotiation = () => storyPlayer('P1').ownedCardPhysicalIds.some((id) => STATE.cards[id] && /^B004/.test(STATE.cards[id].currentFaceId));
+  const hasCard = (re) => storyPlayer('P1').ownedCardPhysicalIds.some((id) => STATE.cards[id] && re.test(STATE.cards[id].currentFaceId));
+  const hasNegotiation = () => hasCard(/^B004/);
   const diceLeft = () => storyPlayer('P1').dice.filter((d) => !d.placedMapId && !d.passed)
     .some((d) => storyPlaceableSlots('P1', d.id, run.visibleMapIds).length > 0);
   const waitPlacement = () => {
@@ -2255,7 +2284,11 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
         const onCastle = storyP1DiceCount(STATE, [STORY_CASTLE_MAP_ID]) > castleBefore;
         story2LockPlacement();
         render(STATE);
-        if (hasNegotiation()) { sayLines(section(/交渉術を獲得する/), onDone); return; }
+        // 交渉術: 「つづく」(2026-11-11, per user回答「今まで通り」)。
+        if (hasNegotiation()) { sayLines(section(/^交渉術を獲得する/), onDone); return; }
+        // 「土木技術を獲得する（交渉術を獲得していない）」: タップマークとフリーアクションの説明のあと、自由に
+        // 操作できるまま止める(per user回答、続きは後で)。
+        if (hasCard(/^B006/)) { senecaPlay(section(/土木技術を獲得する/), 0, () => storyHideDialog()); return; }
         if (!diceLeft()) {
           // ダイスがなくなった: 残念…のあと、「さあ、あとは自分で考えて行動してみて」の前の盤面まで戻る。
           sayLines(section(/ダイスがなくなる/), () => {
