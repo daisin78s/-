@@ -2358,8 +2358,18 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
     // 「交渉術を獲得する（基礎学問を獲得していない）」「土木技術を獲得する（交渉術を獲得していない）（基礎学問を
     // 獲得していない）」: そのカードでタップマークとフリーアクションの説明。基礎学問も獲得済みなら説明なし。
     const lesson = (re) => senecaPlay(hasCard(/^B001/) ? [] : section(re), 0, () => { hideCardEnlargeModal(); playUntilDiceUsed(onDone); });
-    if (hasNegotiation()) { lesson(/^交渉術を獲得する/); return; }
-    if (hasCard(/^B006/)) { lesson(/^土木技術を獲得する/); return; }
+    // 「交渉術を獲得する（基礎学問を獲得している）」: 先に基礎学問を持っていた時のレッスン。そのあと図書館で会う。
+    if (hasNegotiation() && hasCard(/^B001/)) {
+      run.seneca.basicDone = true; // 基礎学問のセリフ(「よくできました」等)はもう出さない
+      senecaPlay(section(/^交渉術を獲得する.*基礎学問を獲得している/), 0, () => {
+        hideCardEnlargeModal();
+        if (section(/図書館にもう一度行く/).length > 0) run.seneca.libraryBefore = libraryDieIds();
+        playUntilDiceUsed(onDone);
+      });
+      return;
+    }
+    if (hasNegotiation()) { lesson(/^交渉術を獲得する.*基礎学問を獲得していない/); return; }
+    if (hasCard(/^B006/)) { lesson(/^土木技術を獲得する.*基礎学問を獲得していない/); return; }
     // 「基礎学問を獲得する（交渉術も土木技術も獲得していない）」: そのセリフのあと、続けて交渉術を目指す。
     if (hasCard(/^B001/) && !run.seneca.basicDone) {
       run.seneca.basicDone = true;
