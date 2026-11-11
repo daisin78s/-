@@ -1988,11 +1988,15 @@ function senecaStart() {
 function senecaGlow(selectors) {
   const run = storyRun;
   if (!run) return;
+  if (run.showAcquirableBadges && !selectors.some((sel) => sel.includes('acquirable-badge'))) {
+    run.showAcquirableBadges = false;
+    render(STATE);
+  }
   storySetGlow(selectors);
   const firstSlot = Object.keys(STATE.shops.NORMAL.slots)[0];
   const firstFace = STATE.shops.NORMAL.slots[firstSlot];
   run.seneca.hidePortrait = isMobileLayout() && selectors.some((sel) => sel.includes('#shop-combined-slots') && (
-    sel.includes(`"${firstSlot}"`) || sel.includes('[data-face-id]') || (firstFace && (sel.includes(`"${firstFace}"`) || sel.includes(`^="${firstFace[0]}"`)))));
+    sel.includes('acquirable-badge') || sel.includes(`"${firstSlot}"`) || sel.includes('[data-face-id]') || (firstFace && (sel.includes(`"${firstFace}"`) || sel.includes(`^="${firstFace[0]}"`)))));
   storySetSpeaker(run.seneca.hidePortrait ? 'senecaAway' : 'seneca');
 }
 
@@ -2002,6 +2006,9 @@ function senecaPlay(rows, i, onDone) {
   if (i >= rows.length) { onDone(); return; }
   const row = rows[i];
   const next = () => senecaPlay(rows, i + 1, onDone);
+  // チェックマークの説明の間に「このカードを獲得する」で交渉術/土木技術を先に獲得した時も、「ダイスが置ける
+  // ようになる」の行(senecaTryNegotiation)へ飛ばす。
+  if (!storyRun.seneca.negotiationStarted && !storyRun.seneca.skipToRe && senecaHasCard(/^B00[46]/)) storyRun.seneca.skipToRe = /置けるようになる/;
   // 「置けない場合」で置けた時: skipToReに当たる行まで飛ばす。
   if (storyRun.seneca.skipToRe) {
     if (!storyRun.seneca.skipToRe.test(row.event || '')) { next(); return; }
@@ -2015,6 +2022,13 @@ function senecaPlay(rows, i, onDone) {
   }
   const say = () => {
     if (!row.text) { next(); return; }
+    // 「獲得可能なカードはチェックマークがついているのよ」: まだ置けない場面でも、置けるようになったら獲得できる
+    // カードに✓を出して光らせる(2026-11-11, per user「おねがい」)。次にショップの別の所を光らせるまで(「交渉術が光る」)。
+    if (/チェックマーク/.test(row.text) && !storyRun.showAcquirableBadges) {
+      storyRun.showAcquirableBadges = true;
+      render(STATE);
+      senecaGlow(['#shop-combined-slots .shop-card__acquirable-badge']);
+    }
     storySetSpeaker(storyRun.seneca.hidePortrait ? 'senecaAway' : 'seneca');
     storySayThen(`CS-${row.index}`, () => {
       if (storyRun && storyRun.seneca.glowUntilLineEnd) { storyRun.seneca.glowUntilLineEnd = false; storySetGlow([]); }
@@ -2247,9 +2261,15 @@ function senecaDoEvent(row, onDone) {
  *  - 「交渉術を獲得する」: 皇帝宮殿で交渉術を獲得したらその後ろの行を流してonDone()(「つづく」)。
  *  - 「皇帝宮殿以外にダイスを置く（ダイスがまだ残っている）」: そのセリフ(道草…)を出して、続けて置かせる。
  *  - 「ダイスがなくなる（交渉術が獲得できていない）」: そのセリフ(残念…)を出して、rowのセリフの前まで戻る。 */
+function senecaHasCard(re) {
+  return storyPlayer('P1').ownedCardPhysicalIds.some((id) => STATE.cards[id] && re.test(STATE.cards[id].currentFaceId));
+}
+
 function senecaTryNegotiation(row, rest, onDone, snap) {
   const run = storyRun;
   if (!run) return;
+  run.seneca.negotiationStarted = true;
+  if (run.showAcquirableBadges) { run.showAcquirableBadges = false; render(STATE); }
   if (!snap) snap = { state: gameStateMod.cloneState(STATE), visibleMapIds: run.visibleMapIds.slice() };
   const section = (re) => {
     const start = rest.findIndex((r) => re.test(story2NormalizeEvent(r.event || '')));
@@ -2267,10 +2287,24 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
     };
     step(0);
   };
-  const hasCard = (re) => storyPlayer('P1').ownedCardPhysicalIds.some((id) => STATE.cards[id] && re.test(STATE.cards[id].currentFaceId));
+  const hasCard = senecaHasCard;
   const hasNegotiation = () => hasCard(/^B004/);
   const diceLeft = () => storyPlayer('P1').dice.filter((d) => !d.placedMapId && !d.passed)
     .some((d) => storyPlaceableSlots('P1', d.id, run.visibleMapIds).length > 0);
+  const playUntilDiceUsed = (then) => {
+    if (!storyRun) return;
+    if (!diceLeft()) { then(); return; }
+    storyHideDialog();
+    // 自由に遊ぶ間はフリーアクション(カードのタップ)と獲得カードの画面も使える。
+    if (!document.body.classList.contains('story-free-action')) { document.body.classList.add('story-free-action'); render(STATE); }
+    storySetAllowedTabs([...run.allowedTabs, 'shop', 'cards']);
+    storyWaitForPlacement({
+      mapIds: run.visibleMapIds.slice(),
+      goalText: '',
+      extraDetect: () => typeof pendingBuildChoice !== 'undefined' && !!pendingBuildChoice,
+      onPlaced: () => storyWhenVisualsIdle(() => playUntilDiceUsed(then)),
+    });
+  };
   const waitPlacement = () => {
     storyHideDialog();
     // 皇帝宮殿はカードを選ぶ画面が先に出る(extraDetect)ので、置いた場所は皇帝宮殿のダイスの数で見分ける。
@@ -2281,34 +2315,40 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
       extraDetect: () => typeof pendingBuildChoice !== 'undefined' && !!pendingBuildChoice,
       onPlaced: () => storyWhenVisualsIdle(() => {
         if (!storyRun) return;
-        const onCastle = storyP1DiceCount(STATE, [STORY_CASTLE_MAP_ID]) > castleBefore;
-        story2LockPlacement();
-        render(STATE);
-        // 交渉術: 「つづく」(2026-11-11, per user回答「今まで通り」)。
-        if (hasNegotiation()) { sayLines(section(/^交渉術を獲得する/), onDone); return; }
-        // 「土木技術を獲得する（交渉術を獲得していない）」: タップマークとフリーアクションの説明のあと、自由に
-        // 操作できるまま止める(per user回答、続きは後で)。
-        if (hasCard(/^B006/)) { senecaPlay(section(/土木技術を獲得する/), 0, () => storyHideDialog()); return; }
-        if (!diceLeft()) {
-          // ダイスがなくなった: 残念…のあと、「さあ、あとは自分で考えて行動してみて」の前の盤面まで戻る。
-          sayLines(section(/ダイスがなくなる/), () => {
-            storySetGlow([]);
-            storyUseState(gameStateMod.cloneState(snap.state));
-            run.visibleMapIds = snap.visibleMapIds.slice();
-            storyApplyVisibleMaps();
-            run.placementBaseline = storyPlacementCounts(STATE);
-            run.turnBannerKeys = new Set(); // 巻き戻したら「ターン○」も数え直す
-            render(STATE);
-            storyLater(() => senecaTryNegotiation(row, rest, onDone, snap), 400);
-          });
-          return;
-        }
-        if (!onCastle) sayLines(section(/以外にダイスを置く/), waitPlacement);
-        else waitPlacement();
+        judge(storyP1DiceCount(STATE, [STORY_CASTLE_MAP_ID]) > castleBefore);
       }),
     });
   };
+  const judge = (onCastle) => {
+    story2LockPlacement();
+    render(STATE);
+    // 交渉術・土木技術を獲得したら、そのあとは残りのダイスを自由に置いて、置ききったら「つづく」
+    // (2026-11-11, per user「つづくではなく最後までプレイできるようにして すべてのダイスを置ききったら続くに」)。
+    // 「交渉術を獲得する（基礎学問を獲得していない）」「土木技術を獲得する（交渉術を獲得していない）（基礎学問を
+    // 獲得していない）」: そのカードでタップマークとフリーアクションの説明。基礎学問も獲得済みなら説明なし。
+    const lesson = (re) => senecaPlay(hasCard(/^B001/) ? [] : section(re), 0, () => { hideCardEnlargeModal(); playUntilDiceUsed(onDone); });
+    if (hasNegotiation()) { lesson(/^交渉術を獲得する/); return; }
+    if (hasCard(/^B006/)) { lesson(/^土木技術を獲得する/); return; }
+    if (!diceLeft()) {
+      // ダイスがなくなった: 残念…のあと、「さあ、あとは自分で考えて行動してみて」の前の盤面まで戻る。
+      sayLines(section(/ダイスがなくなる/), () => {
+        storySetGlow([]);
+        storyUseState(gameStateMod.cloneState(snap.state));
+        run.visibleMapIds = snap.visibleMapIds.slice();
+        storyApplyVisibleMaps();
+        run.placementBaseline = storyPlacementCounts(STATE);
+        run.turnBannerKeys = new Set(); // 巻き戻したら「ターン○」も数え直す
+        render(STATE);
+        storyLater(() => senecaTryNegotiation(row, rest, onDone, snap), 400);
+      });
+      return;
+    }
+    if (!onCastle) sayLines(section(/以外にダイスを置く/), waitPlacement);
+    else waitPlacement();
+  };
   storySetSpeaker('seneca');
+  // 先にショートカットで獲得していた: 「さあ、あとは…」は出さずにその分かれ道へ。
+  if (hasNegotiation() || hasCard(/^B006/)) { storyWhenVisualsIdle(() => judge(true)); return; }
   if (row.text) storySayThen(`CS-${row.index}`, waitPlacement, 0, row.text);
   else waitPlacement();
 }

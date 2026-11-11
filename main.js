@@ -7162,7 +7162,15 @@ function renderShopGrid(state) {
   container.innerHTML = '';
   // ワンクリック獲得ショートカット (2026-10-09) -- このグリッド全体で1回だけ計算し、各buildShopSlotNode
   // 呼び出しから参照する(shopAcquirableMoveCache/computeShopAcquirableMoveCacheの own doc参照)。
-  shopAcquirableMoveCache = tutorialModeActive ? new Map() : computeShopAcquirableMoveCache();
+  // ストーリー(第2章セネカ)の「獲得可能なカードはチェックマークがついているのよ」: まだダイスを置けない場面
+  // (turnActionTaken)でも、獲得できるカードに✓と「このカードを獲得する」を出す(2026-11-11, per user「あっていい」)。
+  if (!tutorialModeActive && typeof storyRun !== 'undefined' && storyRun && storyRun.showAcquirableBadges) {
+    const savedTurnActionTaken = turnActionTaken;
+    turnActionTaken = false;
+    try { shopAcquirableMoveCache = computeShopAcquirableMoveCache(); } finally { turnActionTaken = savedTurnActionTaken; }
+  } else {
+    shopAcquirableMoveCache = tutorialModeActive ? new Map() : computeShopAcquirableMoveCache();
+  }
   // M/NORMAL now get explicit gridRow/gridColumn too (2026-08-27, needed once a 7th grid column was
   // added for the remaining-count badges below -- relying on implicit 6-wide auto-flow would otherwise
   // let NORMAL's first item spill into row 1's now-available 7th cell instead of starting row 2).
