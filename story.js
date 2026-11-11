@@ -2306,6 +2306,11 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
   // 「「基礎学問」を使って私に会いに来て」のあと: 図書館に(新しく)ダイスを置いたら「図書館にもう一度行く」の
   // 部分を出してすぐ「つづく」(2026-11-11, per user回答)。基礎学問で追い出して置くと数は増えないので、ダイスで見る。
   const libraryDieIds = () => storyPlayer('P1').dice.filter((d) => d.placedMapId === STORY_LIBRARY_MAP_ID).map((d) => d.id);
+  // 図書館で会うのを待ち始める。行かないままダイスがなくなった時に戻る盤面も覚えておく。
+  const awaitLibrary = () => {
+    run.seneca.libraryBefore = libraryDieIds();
+    run.seneca.meetSnap = { state: gameStateMod.cloneState(STATE), visibleMapIds: run.visibleMapIds.slice(), libraryBefore: run.seneca.libraryBefore.slice() };
+  };
   const playUntilDiceUsed = (then) => {
     if (!storyRun) return;
     if (run.seneca.libraryBefore && libraryDieIds().some((id) => !run.seneca.libraryBefore.includes(id))) {
@@ -2316,8 +2321,25 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
     const lines = basicLines();
     if (lines) {
       senecaPlay(lines, 0, () => {
-        if (section(/図書館にもう一度行く/).length > 0) run.seneca.libraryBefore = libraryDieIds();
+        if (section(/図書館にもう一度行く/).length > 0) awaitLibrary();
         playUntilDiceUsed(then);
+      });
+      return;
+    }
+    // 「「基礎学問」を使って私に会いに来て」のあと、図書館に行かないままダイスがなくなった: 残念…のあと、
+    // 「会いに来て」の直後の盤面に戻る(2026-11-12, per user「「基礎学問」を使って私に会いに来て」の直後に戻したい)。
+    if (!diceLeft() && run.seneca.libraryBefore) {
+      const meet = run.seneca.meetSnap;
+      sayLines(section(/ダイスがなくなる/), () => {
+        storySetGlow([]);
+        hideCardEnlargeModal();
+        storyUseState(gameStateMod.cloneState(meet.state));
+        run.visibleMapIds = meet.visibleMapIds.slice();
+        storyApplyVisibleMaps();
+        run.seneca.libraryBefore = meet.libraryBefore.slice();
+        run.turnBannerKeys = new Set();
+        render(STATE);
+        storyLater(() => playUntilDiceUsed(then), 400);
       });
       return;
     }
@@ -2335,6 +2357,22 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
       extraDetect: () => (typeof pendingBuildChoice !== 'undefined' && !!pendingBuildChoice) || storyPlayer('P1').ownedCardPhysicalIds.length !== cardsBefore
         || (!!run.seneca.libraryBefore && libraryDieIds().some((id) => !run.seneca.libraryBefore.includes(id))),
       onPlaced: () => storyWhenVisualsIdle(() => playUntilDiceUsed(then)),
+    });
+  };
+  // ダイスがなくなった: 残念…のあと、「さあ、あとは自分で考えて行動してみて」の前の盤面まで戻る。
+  const failAndRewind = () => {
+    sayLines(section(/ダイスがなくなる/), () => {
+      storySetGlow([]);
+      hideCardEnlargeModal();
+      storyUseState(gameStateMod.cloneState(snap.state));
+      run.visibleMapIds = snap.visibleMapIds.slice();
+      storyApplyVisibleMaps();
+      run.placementBaseline = storyPlacementCounts(STATE);
+      run.turnBannerKeys = new Set(); // 巻き戻したら「ターン○」も数え直す
+      run.seneca.libraryBefore = null;
+      if (!senecaHasCard(/^B001/)) run.seneca.basicDone = false; // 戻した盤面で基礎学問をまだ持っていなければ、また出す
+      render(STATE);
+      storyLater(() => senecaTryNegotiation(row, rest, onDone, snap), 400);
     });
   };
   const waitPlacement = () => {
@@ -2366,7 +2404,7 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
       run.seneca.basicDone = true; // 基礎学問のセリフ(「よくできました」等)はもう出さない
       senecaPlay(section(/^交渉術を獲得する.*基礎学問を獲得している/), 0, () => {
         hideCardEnlargeModal();
-        if (section(/図書館にもう一度行く/).length > 0) run.seneca.libraryBefore = libraryDieIds();
+        if (section(/図書館にもう一度行く/).length > 0) awaitLibrary();
         playUntilDiceUsed(onDone);
       });
       return;
@@ -2379,21 +2417,7 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
       senecaPlay(section(/基礎学問を獲得する.*交渉術も土木技術も/), 0, () => (diceLeft() ? waitPlacement() : judge(onCastle)));
       return;
     }
-    if (!diceLeft()) {
-      // ダイスがなくなった: 残念…のあと、「さあ、あとは自分で考えて行動してみて」の前の盤面まで戻る。
-      sayLines(section(/ダイスがなくなる/), () => {
-        storySetGlow([]);
-        storyUseState(gameStateMod.cloneState(snap.state));
-        run.visibleMapIds = snap.visibleMapIds.slice();
-        storyApplyVisibleMaps();
-        run.placementBaseline = storyPlacementCounts(STATE);
-        run.turnBannerKeys = new Set(); // 巻き戻したら「ターン○」も数え直す
-        if (!senecaHasCard(/^B001/)) run.seneca.basicDone = false; // 戻した盤面で基礎学問をまだ持っていなければ、また出す
-        render(STATE);
-        storyLater(() => senecaTryNegotiation(row, rest, onDone, snap), 400);
-      });
-      return;
-    }
+    if (!diceLeft()) { failAndRewind(); return; }
     if (!onCastle) sayLines(section(/以外にダイスを置く/), waitPlacement);
     else waitPlacement();
   };
