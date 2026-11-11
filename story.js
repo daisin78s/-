@@ -2291,17 +2291,28 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
   const hasNegotiation = () => hasCard(/^B004/);
   const diceLeft = () => storyPlayer('P1').dice.filter((d) => !d.placedMapId && !d.passed)
     .some((d) => storyPlaceableSlots('P1', d.id, run.visibleMapIds).length > 0);
+  // 自由に遊んでいる間に基礎学問を獲得した: 「基礎学問を獲得する（交渉術と土木技術を獲得している）」/
+  // 「…（交渉術か土木技術を獲得している）」の部分を1回だけ出す。
+  const basicLines = () => {
+    if (run.seneca.basicDone || !hasCard(/^B001/)) return null;
+    run.seneca.basicDone = true;
+    return hasNegotiation() && hasCard(/^B006/) ? section(/基礎学問を獲得する.*交渉術と土木技術/) : section(/基礎学問を獲得する.*交渉術か土木技術/);
+  };
   const playUntilDiceUsed = (then) => {
     if (!storyRun) return;
+    const lines = basicLines();
+    if (lines) { senecaPlay(lines, 0, () => playUntilDiceUsed(then)); return; }
     if (!diceLeft()) { then(); return; }
     storyHideDialog();
     // 自由に遊ぶ間はフリーアクション(カードのタップ)と獲得カードの画面も使える。
     if (!document.body.classList.contains('story-free-action')) { document.body.classList.add('story-free-action'); render(STATE); }
+    const cardsBefore = storyPlayer('P1').ownedCardPhysicalIds.length;
     storySetAllowedTabs([...run.allowedTabs, 'shop', 'cards']);
     storyWaitForPlacement({
       mapIds: run.visibleMapIds.slice(),
       goalText: '',
-      extraDetect: () => typeof pendingBuildChoice !== 'undefined' && !!pendingBuildChoice,
+      // カードの獲得(ショートカットでタップを使った時など、ダイスを置かない獲得も)でも見直す。
+      extraDetect: () => (typeof pendingBuildChoice !== 'undefined' && !!pendingBuildChoice) || storyPlayer('P1').ownedCardPhysicalIds.length !== cardsBefore,
       onPlaced: () => storyWhenVisualsIdle(() => playUntilDiceUsed(then)),
     });
   };
