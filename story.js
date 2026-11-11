@@ -2066,6 +2066,11 @@ function senecaDoEvent(row, onDone) {
     render(STATE);
     senecaGlow(['.mobile-own-row__free-action']);
     onDone();
+  } else if (/白ダイス/.test(e) && /光る/.test(e)) {
+    // 「白ダイスが光る」: あなたの白ダイスを、そのセリフの間だけ。
+    storySetGlow(['#mobile-own-row .mobile-own-row__dice--white .die', '#players .player-panel[data-player-id="P1"] .die--WHITE']);
+    run.seneca.glowUntilLineEnd = true;
+    onDone();
   } else if (/フリック/.test(e) && /獲得カード/.test(e)) {
     // 「フリックで獲得カードに行けるようになる」
     storySetAllowedTabs([...run.allowedTabs, 'cards']);
