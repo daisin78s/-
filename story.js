@@ -352,7 +352,6 @@ function storyAfterRender(state) {
   document.body.classList.toggle('story-hide-dice', !run.diceShown);
   // 先に進行条件を確かめる(置き終わった瞬間に残りのダイスの光を消すため)。
   if (run.onRender) run.onRender(state);
-  storyMaybeTurnBanner(state);
   if (run.glowDieValues.length > 0) {
     for (const node of storyHandDiceNodes('P1')) {
       if (run.glowDieValues.includes(Number(node.textContent.trim()))) node.classList.add('change-highlight');
@@ -394,19 +393,15 @@ function storyApplyShopOverrides(overrides) {
   }
 }
 
-/** 「ターン2」「ターン3」 (2026-10-31, per user「ダイスを置いたあと ターン2 ターン3 とだして」+ 回答: 普段の
- * 対戦と同じ演出、ラウンドごとに1から、ターン1は出さない)。普段の対戦の手番の表示(main.jsの
- * playPendingTurnBanner)はストーリーでは出さないので、ここで出す: 次の手番の人が、このラウンドで何個目の
- * ダイスを置く番か(置いた/パスしたダイスの数+1)。同じ表示は一度だけ(巻き戻すと数え直す)。 */
-function storyMaybeTurnBanner(state) {
+/** 「ターン2」「ターン3」 (2026-10-31, per user: 普段の対戦と同じ演出、ラウンドごとに1から、ターン1は出さない)。
+ * 2026-11-11, per user「ダイスが置けるようになったときに ターン〇 と出るようにしてほしい」「それ以外はでない」
+ * (全部の章): 置いた直後に次の手番を出すのをやめ、あなたのダイスが置けるようになった時(storyWaitForPlacement)
+ * だけ出す。相手の手番には出さない。普段の対戦の手番の表示(main.jsのplayPendingTurnBanner)はストーリーでは
+ * 出さない。何個目のダイスを置く番か(置いた/パスしたダイスの数+1)。同じ表示は一度だけ(巻き戻すと数え直す)。 */
+function storyTurnBannerWhenPlaceable(state) {
   const run = storyRun;
   if (!run.diceShown || state.phase === 'GAME_END') return;
-  // 皇帝宮殿のカードを選ぶ画面が開いている間は出さない(閉じた後の描き直しで出る)。2026-11-11, per user
-  // 「皇帝宮殿にダイスを置くと交渉術を獲得する前にターンが流れる」(選ぶ画面の上に「ターン4」が出ていた)。
-  if (typeof pendingBuildChoice !== 'undefined' && pendingBuildChoice) return;
-  const next = turnFlowMod.getNextTurn(state);
-  if (next.type !== 'TURN') return;
-  const player = state.players.find((p) => p.id === next.playerId);
+  const player = state.players.find((p) => p.id === 'P1');
   const nth = player.dice.filter((d) => d.placedMapId || d.passed).length + 1;
   if (nth < 2) return;
   const key = `${state.round}/${player.id}/${nth}`;
@@ -581,6 +576,7 @@ function storyWaitForPlacement({ mapIds, dieValues, goalText, hintLineId, hintId
   selectedDieIds = [];
   run.glowDieValues = dieValues || [];
   render(STATE);
+  storyTurnBannerWhenPlaceable(STATE);
   storyShowGoal(goalText);
 }
 
@@ -2268,6 +2264,7 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
             run.visibleMapIds = snap.visibleMapIds.slice();
             storyApplyVisibleMaps();
             run.placementBaseline = storyPlacementCounts(STATE);
+            run.turnBannerKeys = new Set(); // 巻き戻したら「ターン○」も数え直す
             render(STATE);
             storyLater(() => senecaTryNegotiation(row, rest, onDone, snap), 400);
           });
