@@ -401,6 +401,9 @@ function storyApplyShopOverrides(overrides) {
 function storyMaybeTurnBanner(state) {
   const run = storyRun;
   if (!run.diceShown || state.phase === 'GAME_END') return;
+  // 皇帝宮殿のカードを選ぶ画面が開いている間は出さない(閉じた後の描き直しで出る)。2026-11-11, per user
+  // 「皇帝宮殿にダイスを置くと交渉術を獲得する前にターンが流れる」(選ぶ画面の上に「ターン4」が出ていた)。
+  if (typeof pendingBuildChoice !== 'undefined' && pendingBuildChoice) return;
   const next = turnFlowMod.getNextTurn(state);
   if (next.type !== 'TURN') return;
   const player = state.players.find((p) => p.id === next.playerId);
