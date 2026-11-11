@@ -2008,7 +2008,7 @@ function senecaPlay(rows, i, onDone) {
   const next = () => senecaPlay(rows, i + 1, onDone);
   // チェックマークの説明の間に「このカードを獲得する」で交渉術/土木技術を先に獲得した時も、「ダイスが置ける
   // ようになる」の行(senecaTryNegotiation)へ飛ばす。
-  if (!storyRun.seneca.negotiationStarted && !storyRun.seneca.skipToRe && senecaHasCard(/^B00[46]/)) storyRun.seneca.skipToRe = /置けるようになる/;
+  if (!storyRun.seneca.negotiationStarted && !storyRun.seneca.skipToRe && senecaHasCard(/^B00[146]/)) storyRun.seneca.skipToRe = /置けるようになる/;
   // 「置けない場合」で置けた時: skipToReに当たる行まで飛ばす。
   if (storyRun.seneca.skipToRe) {
     if (!storyRun.seneca.skipToRe.test(row.event || '')) { next(); return; }
@@ -2360,6 +2360,12 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
     const lesson = (re) => senecaPlay(hasCard(/^B001/) ? [] : section(re), 0, () => { hideCardEnlargeModal(); playUntilDiceUsed(onDone); });
     if (hasNegotiation()) { lesson(/^交渉術を獲得する/); return; }
     if (hasCard(/^B006/)) { lesson(/^土木技術を獲得する/); return; }
+    // 「基礎学問を獲得する（交渉術も土木技術も獲得していない）」: そのセリフのあと、続けて交渉術を目指す。
+    if (hasCard(/^B001/) && !run.seneca.basicDone) {
+      run.seneca.basicDone = true;
+      senecaPlay(section(/基礎学問を獲得する.*交渉術も土木技術も/), 0, () => (diceLeft() ? waitPlacement() : judge(onCastle)));
+      return;
+    }
     if (!diceLeft()) {
       // ダイスがなくなった: 残念…のあと、「さあ、あとは自分で考えて行動してみて」の前の盤面まで戻る。
       sayLines(section(/ダイスがなくなる/), () => {
@@ -2369,6 +2375,7 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
         storyApplyVisibleMaps();
         run.placementBaseline = storyPlacementCounts(STATE);
         run.turnBannerKeys = new Set(); // 巻き戻したら「ターン○」も数え直す
+        if (!senecaHasCard(/^B001/)) run.seneca.basicDone = false; // 戻した盤面で基礎学問をまだ持っていなければ、また出す
         render(STATE);
         storyLater(() => senecaTryNegotiation(row, rest, onDone, snap), 400);
       });
@@ -2379,7 +2386,7 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
   };
   storySetSpeaker('seneca');
   // 先にショートカットで獲得していた: 「さあ、あとは…」は出さずにその分かれ道へ。
-  if (hasNegotiation() || hasCard(/^B006/)) { storyWhenVisualsIdle(() => judge(true)); return; }
+  if (hasNegotiation() || hasCard(/^B006/) || hasCard(/^B001/)) { storyWhenVisualsIdle(() => judge(true)); return; }
   if (row.text) storySayThen(`CS-${row.index}`, waitPlacement, 0, row.text);
   else waitPlacement();
 }
