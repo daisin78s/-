@@ -2326,6 +2326,7 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
     // 自由に遊ぶ間はフリーアクション(カードのタップ)と獲得カードの画面も使える。
     if (!document.body.classList.contains('story-free-action')) { document.body.classList.add('story-free-action'); render(STATE); }
     const cardsBefore = storyPlayer('P1').ownedCardPhysicalIds.length;
+    run.placementBaseline = storyPlacementCounts(STATE);
     storySetAllowedTabs([...run.allowedTabs, 'shop', 'cards']);
     storyWaitForPlacement({
       mapIds: run.visibleMapIds.slice(),
@@ -2338,6 +2339,8 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
   };
   const waitPlacement = () => {
     storyHideDialog();
+    // ショートカットで先に置いていた分を「今置いた」と数えないように、ここから数える。
+    run.placementBaseline = storyPlacementCounts(STATE);
     // 皇帝宮殿はカードを選ぶ画面が先に出る(extraDetect)ので、置いた場所は皇帝宮殿のダイスの数で見分ける。
     const castleBefore = storyP1DiceCount(STATE, [STORY_CASTLE_MAP_ID]);
     storyWaitForPlacement({

@@ -6890,8 +6890,11 @@ function computeShopAcquirableMoveCache() {
   // どちらかででも獲得できるようならチェックマーク表示するように") -- aiMoveGeneratorLv3は計算量削減のため
   // 1-2Rは「皇帝宮殿に置ける手が1つでもあれば元老院の手をすべて捨てる」(preferCastleOverSenate)ので、
   // 元老院でしか取れないカードがここで見落とされていた。AI自身の手の選び方(driveOneAiStepInner)は変えない。
+  // ストーリー中は見えているエリアに置く手だけ(見えない元老院に勝手に置かないように、2026-11-12)。
+  const storyVisibleMapIds = typeof storyRun !== 'undefined' && storyRun && storyRun.visibleMapIds;
   const candidateMoves = aiMoveGenerator.generateMoves(STATE, INDEX, playerId, context)
-    .filter((m) => m.buildCandidateIndex !== undefined && m.buildCandidateIndex !== null);
+    .filter((m) => m.buildCandidateIndex !== undefined && m.buildCandidateIndex !== null)
+    .filter((m) => !storyVisibleMapIds || !m.mapId || storyVisibleMapIds.includes(m.mapId));
   const bestByFaceId = new Map();
   for (const move of candidateMoves) {
     const { state: resultState, result } = aiSimulator.apply(STATE, INDEX, move);
