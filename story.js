@@ -2279,7 +2279,7 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
   const section = (re) => {
     const start = rest.findIndex((r) => re.test(story2NormalizeEvent(r.event || '')));
     if (start < 0) return [];
-    const end = rest.findIndex((r, k) => k > start && r.event && /ダイスがなくなる|以外にダイスを置く|を獲得する|まで戻る/.test(story2NormalizeEvent(r.event)));
+    const end = rest.findIndex((r, k) => k > start && r.event && /ダイスがなくなる|以外にダイスを置く|を獲得する|まで戻る|もう一度行く/.test(story2NormalizeEvent(r.event)));
     return rest.slice(start + 1, end < 0 ? rest.length : end);
   };
   const sayLines = (rows, then) => {
@@ -2303,10 +2303,24 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
     run.seneca.basicDone = true;
     return hasNegotiation() && hasCard(/^B006/) ? section(/基礎学問を獲得する.*交渉術と土木技術/) : section(/基礎学問を獲得する.*交渉術か土木技術/);
   };
+  // 「「基礎学問」を使って私に会いに来て」のあと: 図書館に(新しく)ダイスを置いたら「図書館にもう一度行く」の
+  // 部分を出してすぐ「つづく」(2026-11-11, per user回答)。基礎学問で追い出して置くと数は増えないので、ダイスで見る。
+  const libraryDieIds = () => storyPlayer('P1').dice.filter((d) => d.placedMapId === STORY_LIBRARY_MAP_ID).map((d) => d.id);
   const playUntilDiceUsed = (then) => {
     if (!storyRun) return;
+    if (run.seneca.libraryBefore && libraryDieIds().some((id) => !run.seneca.libraryBefore.includes(id))) {
+      run.seneca.libraryBefore = null;
+      senecaPlay(section(/図書館にもう一度行く/), 0, onDone);
+      return;
+    }
     const lines = basicLines();
-    if (lines) { senecaPlay(lines, 0, () => playUntilDiceUsed(then)); return; }
+    if (lines) {
+      senecaPlay(lines, 0, () => {
+        if (section(/図書館にもう一度行く/).length > 0) run.seneca.libraryBefore = libraryDieIds();
+        playUntilDiceUsed(then);
+      });
+      return;
+    }
     if (!diceLeft()) { then(); return; }
     storyHideDialog();
     // 自由に遊ぶ間はフリーアクション(カードのタップ)と獲得カードの画面も使える。
@@ -2317,7 +2331,8 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
       mapIds: run.visibleMapIds.slice(),
       goalText: '',
       // カードの獲得(ショートカットでタップを使った時など、ダイスを置かない獲得も)でも見直す。
-      extraDetect: () => (typeof pendingBuildChoice !== 'undefined' && !!pendingBuildChoice) || storyPlayer('P1').ownedCardPhysicalIds.length !== cardsBefore,
+      extraDetect: () => (typeof pendingBuildChoice !== 'undefined' && !!pendingBuildChoice) || storyPlayer('P1').ownedCardPhysicalIds.length !== cardsBefore
+        || (!!run.seneca.libraryBefore && libraryDieIds().some((id) => !run.seneca.libraryBefore.includes(id))),
       onPlaced: () => storyWhenVisualsIdle(() => playUntilDiceUsed(then)),
     });
   };
