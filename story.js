@@ -1479,11 +1479,16 @@ function story2Start() {
 function story2Play(rows, i, onDone) {
   if (!storyRun) return;
   // ch2SkipBlock: この部分の残りの行は出さない(最高記録がまだ無い時、story2DoEventの「最高記録」)。
-  if (i >= rows.length || storyRun.ch2SkipBlock) { storyRun.ch2SkipBlock = false; onDone(); return; }
+  if (i >= rows.length || storyRun.ch2SkipBlock) { storyRun.ch2SkipBlock = false; storyRun.ch2SkipUntil = null; onDone(); return; }
+  // ch2SkipUntil: その出来事の行まで飛ばす(最高記録を更新した時、「ちなみに今までの…」を出さずに「更新されたとき」へ)。
+  if (storyRun.ch2SkipUntil) {
+    if (!storyRun.ch2SkipUntil.test(story2NormalizeEvent(rows[i].event || ''))) { story2Play(rows, i + 1, onDone); return; }
+    storyRun.ch2SkipUntil = null;
+  }
   const row = rows[i];
   const next = () => story2Play(rows, i + 1, onDone);
   const say = () => {
-    if (!row.text || storyRun.ch2SkipBlock) { next(); return; }
+    if (!row.text || storyRun.ch2SkipBlock || storyRun.ch2SkipUntil || storyRun.ch2SkipLineText) { storyRun.ch2SkipLineText = false; next(); return; }
     story2HideCallout(); // 拡大したカードはセリフが始まったら消す(セリフが隠れないように、per user)
     story2TopicGlow(row);
     storySetSpeaker('spal');
@@ -1533,16 +1538,33 @@ function story2DoEvent(row, i, onDone) {
     storyLater(onDone, 600);
     return;
   }
+  if (/最高記録/.test(e) && /更新されたとき/.test(e)) {
+    // 「最高記録が更新されたとき（過去の記録と同じ点でも）」: 更新していなければ、ここから先(「こいつはスゲーぜ」と
+    // 歴代最高記録の演出)は出さない。
+    if (!run.ch2Best || !run.ch2Best.updated) { run.ch2SkipBlock = true; }
+    onDone();
+    return;
+  }
+  if (/最高記録/.test(e) && /演出/.test(e)) {
+    // 「歴代最高記録っぽい演出を」: 同じ行の「〇VP‼ 歴代最高記録‼」を画面いっぱいに大きく出して紙吹雪。
+    // 文字は演出で出すので、セリフ欄には出さない。
+    run.ch2SkipLineText = true;
+    story2RecordFanfare(row.text || '', onDone);
+    return;
+  }
   if (/最高記録/.test(e)) {
     // 「最高記録が更新されるたびに記録する」(4Rでモニュメント4枚以上の時だけ、2026-11-12 per user回答): 今回より前の
-    // 最高記録を同じ行のセリフ「ちなみに今までの最高記録は〇VP」に出し、今回のVPが上回っていれば記録し直す。
-    // 前の記録が無ければ(初めて)、記録だけしてこの部分の残りのセリフは出さない。
+    // 最高記録と比べて、同じか上回れば(初めての時も)記録し直して「最高記録が更新されたとき」の部分へ(per user回答
+    // 「出さずに入れ替え」「初めてでも出す」)。下回れば、同じ行のセリフ「ちなみに今までの最高記録は〇VP」(〇は前の
+    // 記録)と「お前はこれを更新できるか？」まで。
     const standing = standingsRows(STATE).find((r) => r.playerId === 'P1');
     const vp = standing ? standing.vp : 0;
     let prev = null;
     try { const v = localStorage.getItem(STORY3_BEST_VP_KEY); prev = v === null ? null : Number(v); } catch (err) { /* 読めなければ記録なし */ }
-    try { if (prev === null || vp > prev) localStorage.setItem(STORY3_BEST_VP_KEY, String(vp)); } catch (err) { /* 書けなくても続ける */ }
-    if (prev === null) { run.ch2SkipBlock = true; onDone(); return; }
+    const updated = prev === null || vp >= prev;
+    run.ch2Best = { updated, prev, vp };
+    try { if (updated) localStorage.setItem(STORY3_BEST_VP_KEY, String(vp)); } catch (err) { /* 書けなくても続ける */ }
+    if (updated) { run.ch2SkipUntil = /更新されたとき/; onDone(); return; }
     run.ch2BestText = String(prev);
     onDone();
     return;
@@ -2032,6 +2054,24 @@ function story2Finish() {
 
 /** 第3章クリア: 次の章へ(第2章→第3章と同じ形、per user回答「次の章へ」)。次の章がまだ無ければ「つづく」。 */
 const STORY3_BEST_VP_KEY = 'diceWpStory3BestVP'; // 第3章の最高記録(VP)
+
+/** 「歴代最高記録っぽい演出を」: 「〇VP‼ 歴代最高記録‼」(〇は今回のVP)を金色の大きな文字で画面の真ん中に出し、
+ * 紙吹雪。3.5秒ほどで消えて次へ。 */
+function story2RecordFanfare(text, onDone) {
+  const run = storyRun;
+  storyHideDialog();
+  const vp = run.ch2Best ? run.ch2Best.vp : 0;
+  const box = el('div', 'story2-record');
+  for (const line of String(text).replace(/〇/g, String(vp)).split('\n')) {
+    if (line.trim()) box.appendChild(el('div', 'story2-record__line', line));
+  }
+  run.dom.root.appendChild(box);
+  box.animate([{ opacity: 0, transform: 'translate(-50%, -50%) scale(0.4)' }, { opacity: 1, transform: 'translate(-50%, -50%) scale(1.12)', offset: 0.7 }, { opacity: 1, transform: 'translate(-50%, -50%) scale(1)' }], { duration: 700, easing: 'ease-out' });
+  if (typeof launchLifeStoryConfetti === 'function') launchLifeStoryConfetti(1);
+  storyLater(() => {
+    box.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, fill: 'forwards' }).onfinish = () => { box.remove(); onDone(); };
+  }, 3500);
+}
 function story2GoNextChapter() {
   storyMarkChapterCleared(3);
   const nextChapter = STORY_CHAPTERS.find((c) => c.no === 4);

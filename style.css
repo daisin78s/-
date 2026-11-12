@@ -8291,3 +8291,26 @@ body.desktop-scaled #debug-panel .desktop-settings-controls { gap: 10px; margin-
   font-size: 22px;
   font-weight: 800;
 }
+
+/* ストーリー第3章: 歴代最高記録の演出 (story.jsのstory2RecordFanfare) */
+.story2-record {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 60;
+  padding: 18px 36px;
+  border-radius: 18px;
+  background: radial-gradient(ellipse at center, rgba(60, 30, 0, 0.92), rgba(20, 10, 0, 0.92));
+  box-shadow: 0 0 40px rgba(255, 200, 60, 0.75), 0 8px 24px rgba(0, 0, 0, 0.5);
+  text-align: center;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.story2-record__line {
+  font-size: clamp(28px, 8vw, 64px);
+  font-weight: 900;
+  line-height: 1.2;
+  color: #ffd84a;
+  text-shadow: 0 0 12px rgba(255, 220, 90, 0.9), 0 3px 0 #8a5a00;
+}
