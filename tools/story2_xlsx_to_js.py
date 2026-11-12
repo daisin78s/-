@@ -26,6 +26,7 @@ DEFAULT_XLSX = Path.home() / "Desktop" / "ストーリー.xlsx"
 CHAPTERS = [
     ("スパル", PROJECT_ROOT / "data" / "story2.data.js", "STORY2_SCRIPT"),
     ("セネカ", PROJECT_ROOT / "data" / "story_seneca.data.js", "STORY_SENECA_SCRIPT"),
+    ("４人対戦", PROJECT_ROOT / "data" / "story_ch4.data.js", "STORY_CH4_SCRIPT"),  # 第4章 (2026-11-13)
 ]
 
 

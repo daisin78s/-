@@ -467,7 +467,7 @@ function storySetAllowedTabs(tabs) {
 }
 /** main.jsのタブ切り替え(ボタン/スワイプ)から呼ばれる。ストーリー中は許したタブにしか行けない。 */
 function storyTabAllowed(tab) {
-  return !storyRun || storyRun.allowedTabs.has(tab);
+  return !storyRun || storyRun.normalGame || storyRun.allowedTabs.has(tab);
 }
 
 /** ダイスをその場で振る演出(回転しながら跳ねる、目がくるくる変わって決まった目で止まる)。 */
@@ -1306,7 +1306,7 @@ function closeStoryMode() {
 // ストーリー中はエリアのタイルを押しても拡大画面を開かない(スロットへの配置と使用料の回収だけ)。カードを
 // 選ぶ画面は台本が許すまで押せない。何か触ったら場面に知らせる(「何もしない場合」の数え直し)。
 document.addEventListener('click', (e) => {
-  if (!storyRun) return;
+  if (!storyRun || storyRun.normalGame) return; // 第4章の対戦中は普段のゲームと同じ
   if (storyRun.onTap) storyRun.onTap();
   // ☆ダイス(isWildcardThisTurn)はスロットではなくタイルを押して置く(map-tile--wildcard-target)ので通す。
   const onSlotToPlace = !!e.target.closest('.slot--selectable, #board .map-tile--wildcard-target');
@@ -1798,16 +1798,17 @@ function story2DoEvent(row, i, onDone) {
 
 /** 初期資源カード(C列に書かれたIDのカード)を並べる。selectable=trueなら2枚選べて、「この2枚にする」で
  * 獲得(カードのONCEの資源ももらう)してonPicked()。 */
-function story2ShowResourceCards(selectable, onPicked) {
+function story2ShowResourceCards(selectable, onPicked, cards, extraClass) {
   const run = storyRun;
   story2HideResourceCards();
   const root = el('div', 'story2-cards');
+  if (extraClass) root.classList.add(extraClass);
   const row = el('div', 'story2-cards__row');
   const selected = new Set();
   const confirm = el('button', 'story-end__button story2-cards__confirm', 'この2枚にする');
   confirm.type = 'button';
   confirm.hidden = true;
-  for (const faceId of run.chapter2.cards) {
+  for (const faceId of cards || run.chapter2.cards) {
     const cell = el('div', 'story2-cards__card');
     cell.appendChild(buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true }));
     if (selectable) {
@@ -1826,6 +1827,8 @@ function story2ShowResourceCards(selectable, onPicked) {
     root.appendChild(confirm);
     confirm.addEventListener('click', () => {
       story2HideResourceCards();
+      // cardsを渡した時(第4章)は、受け取り方も呼び出し側(onPicked)で決める。
+      if (cards) { onPicked([...selected]); return; }
       story2GrantResourceCards([...selected]);
       onPicked();
     });
@@ -2825,11 +2828,340 @@ function senecaFreePlay() {
 // 第２章 ○○の百人隊長スパル という風に選べるように" + 回答: 第1章をクリアする前は今まで通りそのまま第1章、
 // 第2章は「今作成中」、題名の○○は仮でそのまま。クリアの記録はこの端末だけ(localStorage)。
 const STORY_CLEARED_KEY = 'diceWpStoryChaptersCleared';
+/* ---------- 第4章: ４人対戦 (data/story_ch4.data.js) ---------- */
+
+/** 2026-11-13, per user: ストーリー.xlsxのシート「４人対戦」(tools/story2_xlsx_to_js.py)。第3章と同じく1行ずつ、
+ * A列=アレクのセリフ、C列=画面で起きること。
+ *  - 性格を4つ(強欲・几帳面・見栄っ張り(虚栄)・嫉妬深い(嫉妬)、どれも表)から1つ選ぶ。「○○を選ぶ」の部分のセリフと、
+ *    その性格の初期資源(性格カードのONCE)。あなたのジョブはローマ市民だけ(per user回答)。
+ *  - 性格のペナルティは「なしでいいや」(per user回答「はい」=本当に効かなくする): あなたの性格カードは持ち札に入れない
+ *    (ペナルティはどれも持ち札の性格カードから数えるため)。名前の呼び名(怠惰な…)は持ち札と別に出る。
+ *  - 初期資源カードは4枚から2枚(per user回答)。
+ *  - そのあと本物の4人対戦(4ラウンド): 敵はAI LV1。几帳面以外を選んだら パトラ(心配性な巫女)・スパル(傲慢な百人隊長)・
+ *    セネカ(几帳面な研究者)、几帳面を選んだら セネカの代わりにネロ(色欲の権力者)(per user)。敵は立ち絵で登場する。
+ *  - あなたの席は各ラウンドの1ターン目だけあなたが操作し、2ターン目からはアレク(一番強いAI、AI_LV3)が打つ(per user)。
+ *  台本の続き(対戦中のセリフ)は後で足す(per user「セリフは後で考えるので最後まで進めれるように」)。 */
+const CH4_CON_CHOICES = [
+  { label: '強欲', faceId: 'CON001A' },
+  { label: '几帳面', faceId: 'CON002A' },
+  { label: '見栄っ張り', faceId: 'CON003A' },
+  { label: '嫉妬深い', faceId: 'CON004A' },
+];
+const CH4_ENEMIES = {
+  normal: [
+    { id: 'P2', name: 'パトラ', con: 'CON006A', job: 'JOB002', img: 'assets/story-patra.webp' },
+    { id: 'P3', name: 'スパル', con: 'CON002B', job: 'JOB004', img: 'assets/story-spal.webp' },
+    { id: 'P4', name: 'セネカ', con: 'CON002A', job: 'JOB007', img: 'assets/story-seneca.webp' },
+  ],
+  // あなたが几帳面を選んだ時: セネカの代わりに色欲の権力者ネロ。
+  kichomen: [
+    { id: 'P2', name: 'パトラ', con: 'CON006A', job: 'JOB002', img: 'assets/story-patra.webp' },
+    { id: 'P3', name: 'スパル', con: 'CON002B', job: 'JOB004', img: 'assets/story-spal.webp' },
+    { id: 'P4', name: 'ネロ', con: 'CON001B', job: 'JOB005', img: 'assets/story-nero.webp' },
+  ],
+};
+const CH4_ALEK_ROLE = 'AI_LV3'; // 2ターン目からあなたの席を打つアレク(一番強いAI)
+const CH4_ENEMY_ROLE = 'AI_LV1';
+
+/** 台本を { intro, branches: {強欲: [...], ...}, common } に分ける。各「○○を選ぶ」の部分は次の「○○を選ぶ」まで。
+ * 最後の部分は、最初の部分の最後のセリフ(「性格によって…違うんだよ」)と同じ行まで。 */
+function ch4Blocks() {
+  const rows = (window.STORY_CH4_SCRIPT || []).map((row, index) => ({ ...row, index }));
+  const choiceAt = rows.findIndex((r) => /から.*選ぶ/.test(r.event || ''));
+  const blocks = { intro: rows.slice(0, Math.max(0, choiceAt)), branches: {}, common: [] };
+  const marks = [];
+  rows.forEach((r, k) => {
+    const m = /^(.+?)を選ぶ$/.exec((r.event || '').trim());
+    if (m && k > choiceAt) marks.push({ k, label: m[1] });
+  });
+  marks.forEach((mark, n) => {
+    let end = n + 1 < marks.length ? marks[n + 1].k : rows.length;
+    if (n + 1 === marks.length && marks.length > 1) {
+      const first = blocks.branches[marks[0].label];
+      const lastText = first.length ? first[first.length - 1].text : '';
+      const sameAt = rows.findIndex((r, k) => k > mark.k && lastText && r.text === lastText);
+      if (sameAt >= 0) end = sameAt + 1;
+    }
+    blocks.branches[mark.label] = rows.slice(mark.k + 1, end);
+    if (n + 1 === marks.length) blocks.common = rows.slice(end);
+  });
+  return blocks;
+}
+
+function ch4BuildState() {
+  const state = gameStateMod.createEmptyGameState(`story-ch4-${Date.now()}`);
+  setupMod.createPlayers(state, [(loadRememberedRankingName() || '').trim() || 'あなた', 'パトラ', 'スパル', 'セネカ']);
+  setupMod.prepareMaps(state, INDEX);
+  setupMod.prepareShops(state, INDEX);
+  setupMod.rollInitialColorDice(state);
+  state.jobPool = [];
+  qstMod.setupQuests(state);
+  for (const player of state.players) player.skipOnboarding = true; // 性格・ジョブ・初期資源は第4章が配る
+  return state;
+}
+
+function ch4Start() {
+  const run = storyRun;
+  run.visibleMapIds = [];
+  run.ch4 = { blocks: ch4Blocks(), conFaceId: null };
+  storyUseState(ch4BuildState());
+  story2LockPlacement();
+  storyApplyVisibleMaps();
+  applyMobileActiveTab('board');
+  render(STATE);
+  storySetSpeaker('alek');
+  ch4Play(run.ch4.blocks.intro, 0, ch4ChooseCon);
+}
+
+/** rowsをi行目から: C列の出来事、A列のアレクのセリフ。 */
+function ch4Play(rows, i, onDone) {
+  const run = storyRun;
+  if (!run) return;
+  if (i >= rows.length) { onDone(); return; }
+  const row = rows[i];
+  const next = () => ch4Play(rows, i + 1, onDone);
+  const say = () => {
+    if (!row.text) { next(); return; }
+    storySetSpeaker('alek');
+    // 「カードをクリックしてみてよ」: 出してある性格カードを押して拡大するまで待つ。
+    if (/クリック/.test(row.text) && run.ch4.callout) {
+      storySay(`C4-${row.index}`, () => {
+        storyWaitUntil(() => !!run.ch4.calloutOpened, next);
+      }, row.text);
+      return;
+    }
+    storySayThen(`C4-${row.index}`, () => {
+      if (storyRun && storyRun.ch4.glowLine) { storyRun.ch4.glowLine = false; storySetGlow([]); }
+      next();
+    }, 0, row.text);
+  };
+  if (!row.event) { say(); return; }
+  const e = story2NormalizeEvent(row.event);
+  const seconds = Number((/(\d+)秒/.exec(e) || [])[1]) || 1;
+  if (/秒間がある/.test(e)) {
+    storyHideDialog();
+    storyLater(say, seconds * 1000);
+  } else if (/初期資源が手に入る/.test(e)) {
+    ch4GrantConResources();
+    storyLater(say, 800);
+  } else if (/光る/.test(e)) {
+    // 「該当部分光る」(この部分が性格のペナルティ): 拡大した性格カードのペナルティの所。
+    storySetGlow(['.story-ch4-callout .card-note']);
+    run.ch4.glowLine = true;
+    say();
+  } else if (/初期資源カード/.test(e) && /配られる/.test(e)) {
+    // 「初期資源カードが４枚配られる（ランダム）」: 4枚を並べて見せる(選ぶのは「…２枚選ぶ」の行で)。
+    ch4HideCallout();
+    ch4DealResourceCards();
+    storyLater(say, 600);
+  } else if (/初期資源カード/.test(e) && /選ぶ/.test(e)) {
+    ch4ChooseResourceCards(say);
+  } else {
+    console.warn(`第4章: C列「${e}」はまだ対応していません`);
+    say();
+  }
+}
+
+/** 「強欲、几帳面、見栄っ張り、嫉妬深いから１つ選ぶ」: 性格カード(表)を4枚並べて1枚選ぶ。 */
+function ch4ChooseCon() {
+  const run = storyRun;
+  storyHideDialog();
+  const root = el('div', 'story2-cards story2-cards--ch4');
+  const row = el('div', 'story2-cards__row');
+  let selected = null;
+  const confirm = el('button', 'story-end__button story2-cards__confirm', 'この性格にする');
+  confirm.type = 'button';
+  confirm.hidden = true;
+  const cells = [];
+  for (const choice of CH4_CON_CHOICES) {
+    const cell = el('div', 'story2-cards__card story2-cards__card--selectable');
+    cell.appendChild(buildCardVisual(choice.faceId, { showEffect: true, allowTextFallback: false, noInteraction: true }));
+    cell.addEventListener('click', () => {
+      selected = choice;
+      cells.forEach((c) => c.classList.toggle('story2-cards__card--selected', c === cell));
+      confirm.hidden = false;
+    });
+    cells.push(cell);
+    row.appendChild(cell);
+  }
+  root.append(row, confirm);
+  confirm.addEventListener('click', () => {
+    root.remove();
+    run.dom.resourceCards = null;
+    run.ch4.conFaceId = selected.faceId;
+    run.ch4.conLabel = selected.label;
+    const branch = run.ch4.blocks.branches[selected.label] || [];
+    ch4Play(branch, 0, () => ch4Play(run.ch4.blocks.common, 0, ch4StartGame));
+  });
+  run.dom.root.appendChild(root);
+  run.dom.resourceCards = root;
+  root.animate([{ opacity: 0, transform: 'translate(-50%, -12px)' }, { opacity: 1, transform: 'translate(-50%, 0)' }], { duration: 300, easing: 'ease-out' });
+}
+
+/** 「○○の初期資源が手に入る」: 選んだ性格の初期資源(性格カードのONCE)をもらう。性格カードは持ち札に入れない
+ * (ペナルティなし、第4章の先頭のdoc参照)。カードはセリフの上に出しておく(「カードをクリックしてみてよ」で押す)。 */
+function ch4GrantConResources() {
+  const run = storyRun;
+  const faceId = run.ch4.conFaceId;
+  const player = storyPlayer('P1');
+  player.conPhysicalId = faceId.slice(0, -1);
+  player.conFace = faceId.slice(-1);
+  const row = dataLoaderMod.getCardRow(INDEX, faceId);
+  if (row.ONCE) executorMod.runProgram(STATE, INDEX, { playerId: 'P1', sourcePhysicalId: player.conPhysicalId }, row.ONCE);
+  render(STATE);
+  for (const r of ['A', 'B', 'C', 'Z', 'K']) { const badge = storyResourceBadge(r); if (badge) badge.classList.add('change-highlight'); }
+  ch4ShowCallout(faceId);
+}
+
+function ch4ShowCallout(faceId) {
+  const run = storyRun;
+  ch4HideCallout();
+  const card = buildCardVisual(faceId, { showEffect: true, noInteraction: true });
+  const box = el('div', 'story2-callout story-ch4-callout');
+  box.style.pointerEvents = 'auto';
+  box.style.cursor = 'pointer';
+  box.appendChild(card);
+  // 押すと、セリフ欄の上でそのまま大きくなる(拡大画面だとセリフ欄にペナルティの所が隠れるため)。
+  box.addEventListener('click', () => {
+    box.classList.add('story-ch4-callout--big');
+    run.ch4.calloutOpened = true;
+  });
+  run.dom.root.appendChild(box);
+  run.ch4.callout = box;
+  box.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300, easing: 'ease-out' });
+}
+function ch4HideCallout() {
+  const run = storyRun;
+  if (run && run.ch4 && run.ch4.callout) { run.ch4.callout.remove(); run.ch4.callout = null; }
+}
+
+/** 「初期資源カードが４枚配られる（ランダム）」: 普段のゲームと同じく4枚配って並べる(まだ選べない)。 */
+function ch4DealResourceCards() {
+  setupMod.dealResourceCandidates(STATE, INDEX);
+  const choice = STATE.pendingChoices.find((c) => c.playerId === 'P1' && c.kind === 'SELECT_RESOURCE_CARDS');
+  storyRun.ch4.resourceCandidates = choice.context.candidates;
+  story2ShowResourceCards(false, null, choice.context.candidates, 'story2-cards--ch4');
+}
+
+/** 「初期資源カードを２枚選ぶ」: 配った4枚から2枚選ぶ(普段のゲームと同じ受け取り方)。 */
+function ch4ChooseResourceCards(onDone) {
+  if (!storyRun.ch4.resourceCandidates) ch4DealResourceCards();
+  storyHideDialog();
+  story2ShowResourceCards(true, (picked) => {
+    setupMod.chooseResourceCards(STATE, 'P1', picked);
+    setupMod.receiveInitialResources(STATE, INDEX, 'P1');
+    render(STATE);
+    onDone();
+  }, storyRun.ch4.resourceCandidates, 'story2-cards--ch4');
+}
+
+/** 台本のあと: 敵3人に性格・ジョブ・初期資源を配り、立ち絵で登場させてから4人対戦を始める。 */
+function ch4StartGame() {
+  const run = storyRun;
+  storyHideDialog();
+  const enemies = run.ch4.conFaceId === 'CON002A' ? CH4_ENEMIES.kichomen : CH4_ENEMIES.normal;
+  const p1 = storyPlayer('P1');
+  // あなたのジョブはローマ市民。
+  STATE.jobPool = ['JOB001', ...enemies.map((x) => x.job)];
+  setupMod.chooseJob(STATE, INDEX, 'P1', 'JOB001');
+  const usedCon = new Set([p1.conPhysicalId]);
+  for (const enemy of enemies) {
+    const player = storyPlayer(enemy.id);
+    player.name = enemy.name;
+    setupMod.chooseJob(STATE, INDEX, enemy.id, enemy.job);
+    // 性格カードは1枚の表裏なので、几帳面(CON002A)と傲慢(CON002B)を2人が持つ時は、ストーリーの中だけ同じカードを
+    // もう1枚作る(持ち札の番号を変える。呼び名は conPhysicalId+conFace で出る)。
+    const physical = enemy.con.slice(0, -1);
+    const inst = gameStateMod.createCardInstance(enemy.con);
+    if (usedCon.has(physical)) inst.physicalId = `${physical}_${enemy.id}`;
+    usedCon.add(physical);
+    inst.ownerId = enemy.id;
+    STATE.cards[inst.physicalId] = inst;
+    player.ownedCardPhysicalIds.push(inst.physicalId);
+    player.conPhysicalId = physical;
+    player.conFace = enemy.con.slice(-1);
+    const row = dataLoaderMod.getCardRow(INDEX, enemy.con);
+    if (row.ONCE) executorMod.runProgram(STATE, INDEX, { playerId: enemy.id, sourcePhysicalId: inst.physicalId }, row.ONCE);
+    // 初期資源カード: 配られた4枚からランダムに2枚。
+    const choice = STATE.pendingChoices.find((c) => c.playerId === enemy.id && c.kind === 'SELECT_RESOURCE_CARDS');
+    if (choice) {
+      const pick = choice.context.candidates.slice().sort(() => Math.random() - 0.5).slice(0, 2);
+      setupMod.chooseResourceCards(STATE, enemy.id, pick);
+      setupMod.receiveInitialResources(STATE, INDEX, enemy.id);
+    }
+    playerRoles.set(enemy.id, CH4_ENEMY_ROLE);
+  }
+  STATE.pendingChoices = STATE.pendingChoices.filter((c) => c.kind !== 'SELECT_RESOURCE_CARDS');
+  setupMod.computeStartOrder(STATE, INDEX);
+  turnFlowMod.startRound(STATE);
+  // 盤面を全部見せる。
+  run.visibleMapIds = Object.keys(STATE.maps);
+  storyApplyVisibleMaps();
+  run.diceShown = true;
+  render(STATE);
+  // 敵の登場(立ち絵、AIの名前が変わる時と同じ演出)。全員出終わってから対戦を始める。
+  for (const enemy of enemies) {
+    const title = rankingConJobTitle(enemy.con, enemy.job);
+    storyCharacterQueue.push({ title, character: { name: enemy.name, img: enemy.img } });
+  }
+  playStoryCharacterIntro();
+  storyWaitUntil(() => !storyCharacterPlaying && storyCharacterQueue.length === 0, ch4BeginPlay);
+}
+
+/** 4人対戦の本番: ストーリーの縛り(タブ・エリアを押せない等)を外して、普段のゲームと同じように進める。 */
+function ch4BeginPlay() {
+  const run = storyRun;
+  if (!run) return;
+  run.normalGame = true;
+  storySetSpeaker('system'); // アレクの立ち絵は下げる(対戦中は盤面に重ならないように)
+  // 準備(性格・初期資源を配った分)が進捗の記録に入っていると、最初の手番が「ターン2」になるので消す。
+  STATE.progressLog = [];
+  // 普段のゲームの画面に戻す(ターン終了ボタン・カードを選ぶ画面の戻る等、story-modeで隠していた物を出す)。
+  document.body.classList.remove('story-mode', 'story-hide-dice', 'story-free-action', 'story-undo-shown', 'story-lock-hand');
+  run.dom.logButton.hidden = true;
+  storySetAllowedTabs([...document.querySelectorAll('.mobile-tab-switcher__btn')].map((b) => b.dataset.tabTarget));
+  storySetGlow([]);
+  aiPacingMode = 'delayed';
+  turnActionTaken = false;
+  lastTurnPlayerId = null;
+  run.onRender = ch4OnRender;
+  render(STATE);
+}
+
+/** 描き直すたび: あなたの席を、そのラウンドの1ターン目ならあなた(人間)、2ターン目からアレク(AI)に。1ターン目は
+ * 手番を終えるまで人間のまま(置いたあとのフリーアクションもできる)。ゲームが終わったら第4章クリア。 */
+function ch4OnRender(state) {
+  const run = storyRun;
+  if (!run || !run.normalGame) return;
+  if (state.phase === 'GAME_END') {
+    if (!run.ch4.cleared) { run.ch4.cleared = true; storyMarkChapterCleared(4); }
+    return;
+  }
+  const ch = run.ch4;
+  const p1 = state.players.find((p) => p.id === 'P1');
+  const used = p1.dice.filter((d) => d.placedMapId || d.passed).length;
+  const next = turnFlowMod.getNextTurn(state);
+  // そのラウンドで、まだダイスを1つも使っていないあなたの番が来たら、その手番は人間。
+  if (ch.humanRound !== state.round && next.type === 'TURN' && next.playerId === 'P1' && used === 0) {
+    ch.humanRound = state.round;
+    ch.humanDone = false;
+  }
+  // 人間の手番が終わった(ダイスを使ってターン終了した=turnActionTakenが戻った、または別の人の番)ら、そのラウンドはもうアレク。
+  if (ch.humanRound === state.round && !ch.humanDone && used > 0
+    && (next.type !== 'TURN' || next.playerId !== 'P1' || !turnActionTaken)) ch.humanDone = true;
+  const role = ch.humanRound === state.round && !ch.humanDone ? 'HUMAN' : CH4_ALEK_ROLE;
+  if (playerRoles.get('P1') !== role) {
+    playerRoles.set('P1', role);
+    setTimeout(() => { if (storyRun === run) render(STATE); }, 0);
+  }
+}
+
 const STORY_CHAPTERS = [
   { no: 1, title: '第１章　怠惰なローマ市民アレク', start: openStoryMode },
   // 2026-11-09, per user: セネカの章を第2章に、スパルは第3章に(題名も「傲慢な百人隊長スパル」、伏せ字はやめる)。
   { no: 2, title: '第２章　几帳面な研究者セネカ', start: () => openStoryMode(senecaStart) },
   { no: 3, title: '第３章　傲慢な百人隊長スパル', start: () => openStoryMode(story2Start) },
+  { no: 4, title: '第４章　４人対戦', start: () => openStoryMode(ch4Start) },
 ];
 
 function storyClearedChapters() {

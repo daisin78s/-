@@ -8316,7 +8316,7 @@ body.desktop-scaled #debug-panel .desktop-settings-controls { gap: 10px; margin-
 }
 
 /* ストーリー第3章の初期資源カード: VPは出さない (2026-11-12, per user「第３章 初期資源カードの VP消して」) */
-.story2-cards .shop-card__vp { visibility: hidden; }
+.story2-cards:not(.story2-cards--ch4) .shop-card__vp { visibility: hidden; }
 
 /* ストーリーの次の章へ続けて始める間(story.jsのstoryGoChapter / index.htmlの<head>): トップ画面を見せない覆い */
 html.story-autostarting::after {
@@ -8332,3 +8332,11 @@ html.story-autostarting::after {
   color: #ff5a5a;
   font-weight: 800;
 }
+
+/* ストーリー第4章の性格・初期資源カードの選択画面: 文字が収まる幅に。先攻順(SP)は普段のゲームと同じく出す
+   (第2章で隠したのは「この先ストーリーで出てきたときは表示する」per user)。 */
+.story2-cards--ch4 .story2-cards__card { width: 132px; }
+.story2-cards--ch4 .story2-cards__card .shop-card__start-order { visibility: visible; }
+/* 第4章「カードをクリックしてみてよ」: セリフの上に出した性格カードを押すと、その場で大きくなる(story.jsのch4ShowCallout)。 */
+.story-ch4-callout { transition: transform 0.3s ease-out; }
+.story2-callout.story-ch4-callout--big { transform: translateX(-50%) scale(2); bottom: 36%; }

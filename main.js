@@ -17808,7 +17808,8 @@ function playPendingTurnBanner(state) {
   const { playerId, round, nth } = pendingTurnBanner;
   pendingTurnBanner = null;
   if (round !== state.round) return;
-  if (replayMode || (typeof storyRun !== 'undefined' && storyRun) || state.phase === 'GAME_END') return;
+  // ストーリーでは出さない(story.jsが自分で出す)。第4章の4人対戦(storyRun.normalGame)は普段のゲームと同じく出す。
+  if (replayMode || (typeof storyRun !== 'undefined' && storyRun && !storyRun.normalGame) || state.phase === 'GAME_END') return;
   const player = state.players.find((p) => p.id === playerId);
   if (!player) return;
   const conFaceId = player.conPhysicalId && player.conFace ? `${player.conPhysicalId}${player.conFace}` : null;
