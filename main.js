@@ -10339,7 +10339,10 @@ function bareTapKind(faceId) {
   if (commands.every((c) => c.type === 'ON')) return null;
   const first = commands[0];
   if (first.type === 'SET_DICE_ANY') return { kind: 'SET_DICE_ANY' };
-  if (first.type === 'SET_DIE_VALUE') return { kind: 'SET_DIE_VALUE', choices: first.choices };
+  // SELF1|1(基礎学問)・SELF6|6(高等学問)のように同じ目が2つ書かれていても、選ぶ目は1つ(2026-11-12, per user
+  // 「ダイス変換時に変換するダイス目が２個出てしまいます 今は１個なので１個にして」)。1つなら最初から選んだ状態
+  // (hasSingleFixedValue / preselectedValue)で、目を選ぶ行は出ない。
+  if (first.type === 'SET_DIE_VALUE') return { kind: 'SET_DIE_VALUE', choices: [...new Set(first.choices)] };
   if (first.type === 'CHANGE_DIE_VALUE') return { kind: 'CHANGE_DIE_VALUE', choices: first.choices };
   // SET_WILDCARD(SELF,THIS_TURN) (B001B, 2026-10-19): needs the same die-picker modal as SET_DIE_VALUE/
   // CHANGE_DIE_VALUE just above, but no value picker at all -- see this file's own TAP_KINDS/
