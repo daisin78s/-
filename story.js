@@ -1367,6 +1367,22 @@ function story2Blocks() {
   const blocks = { intro: [] };
   let current = blocks.intro;
   (window.STORY2_SCRIPT || []).forEach((row, index) => {
+    // モニュメントのラウンド(2026-11-12 作り直し): 「ダイスを使い切る（モニュメントを獲得できていない）2R」→ mfail:2、
+    // 「モニュメントを獲得する 2R 1-2T」→ mget:2:1-2、「3Rはじめ」→ mstart:3。ラウンドの数字で分けておく
+    // (3R・4Rの分を台本に足せば、そのまま出る)。
+    const me = row.event ? story2NormalizeEvent(row.event) : '';
+    const round = (/(\d)\s*R/.exec(me) || [])[1];
+    let mkey = null;
+    if (round && /使い切/.test(me) && /モニュメント/.test(me)) mkey = `mfail:${round}`;
+    else if (round && /モニュメントを獲得する/.test(me)) {
+      const t = /(\d)(?:-(\d))?\s*T/.exec(me);
+      if (t) mkey = `mget:${round}:${t[1]}-${t[2] || t[1]}`;
+    } else if (round && /R\s*はじめ/.test(me)) mkey = `mstart:${round}`;
+    if (mkey) {
+      current = blocks[mkey] = [];
+      current.push({ text: row.text, event: '', index });
+      return;
+    }
     const trigger = row.event && STORY2_TRIGGERS.find((t) => t.test(story2NormalizeEvent(row.event)));
     if (trigger) {
       current = blocks[trigger.key] = [];
@@ -1446,11 +1462,13 @@ function story2Play(rows, i, onDone) {
     story2HideCallout(); // 拡大したカードはセリフが始まったら消す(セリフが隠れないように、per user)
     story2TopicGlow(row);
     storySetSpeaker('spal');
+    let text = row.text;
+    if (storyRun.ch2VpText != null && /〇/.test(text)) { text = text.replace('〇', storyRun.ch2VpText); storyRun.ch2VpText = null; }
     storySayThen(`C2-${row.index}`, () => {
       // 「○○が光る」と同じ行のセリフ: そのセリフの間だけ光らせる。
-      if (storyRun && storyRun.ch2GlowLine) { storyRun.ch2GlowLine = false; storySetGlow([]); }
+      if (storyRun && storyRun.ch2GlowLine) { storyRun.ch2GlowLine = false; storySetGlow([]); document.querySelectorAll('.story-glow').forEach((n) => n.classList.remove('story-glow', 'change-highlight')); }
       next();
-    }, 0, row.text);
+    }, 0, text);
   };
   if (row.event && storyRun.ch2TopicMapId) story2TopicGlow(row);
   if (row.event) story2DoEvent(row, i, say);
@@ -1483,6 +1501,20 @@ function story2DoEvent(row, i, onDone) {
     if (die) die.isWildcardThisTurn = true;
     render(STATE);
     storyLater(onDone, 600);
+    return;
+  }
+  if (/最初に戻る/.test(e)) {
+    // 「2R最初に戻る」: 戻すのはこの部分が終わってから(story2Finish)。
+    onDone();
+    return;
+  }
+  if (/VP/.test(e) && /表示/.test(e)) {
+    // 「獲得したVPを表示」: 同じ行のセリフ「VPの合計は〇VPだ」の〇を今のVPに。VPの表示があれば、そのセリフの間光らせる。
+    const row = standingsRows(STATE).find((r) => r.playerId === 'P1');
+    run.ch2VpText = String(row ? row.vp : 0);
+    const badge = storyResourceBadge('VP');
+    if (badge) { storySetGlow([]); badge.classList.add('story-glow', 'change-highlight'); run.ch2GlowLine = true; }
+    onDone();
     return;
   }
   if (/秒間がある/.test(e)) {
@@ -1862,6 +1894,17 @@ function story2FreePlay() {
         ch.card2Done = true;
         block = [...(block || []), ...(ch.blocks.card2 || [])];
       }
+      // モニュメントのラウンドで、このラウンド初めてモニュメントを獲得した: 何ターン目か(=このラウンドに置いたダイスの
+      // 数)で「モニュメントを獲得する 2R 1-2T / 3-4T / 5T」の部分。
+      if (ch.monumentRound && ch.monumentSnap && ch.monumentGotRound !== STATE.round && story2MonumentCount() > ch.monumentSnap.monuments) {
+        ch.monumentGotRound = STATE.round;
+        const turn = storyPlayer('P1').dice.filter((d) => d.placedMapId).length;
+        const key = Object.keys(ch.blocks).find((k) => {
+          const m = new RegExp(`^mget:${STATE.round}:(\\d)-(\\d)$`).exec(k);
+          return m && turn >= Number(m[1]) && turn <= Number(m[2]);
+        }) || Object.keys(ch.blocks).filter((k) => k.startsWith(`mget:${STATE.round}:`)).pop(); // 範囲外(6個目など)は最後の部分
+        if (key) block = ch.blocks[key];
+      }
       if (block) {
         // 何枚目かの部分は「消える」で終わっていないので、終わったらスパルとセリフを下げる(story2FreePlay)。
       } else if (mapId === STORY_TRAINING_MAP_ID && story2ColorDiceCount() > colorBefore) {
@@ -1885,13 +1928,22 @@ function story2Finish() {
   if (ch.monumentRound) {
     // 2026-11-12 作り直し: 2・3・4ラウンド目は、そのラウンド中にモニュメントを1枚以上獲得できれば次のラウンド
     // (空いた所を補充)、4ラウンド目ならクリアで次の章へ。できなければそのラウンドの始めに戻す(セリフなし、per user回答)。
+    // 失敗のセリフ(「ダイスを使い切る（モニュメントを獲得できていない）2R」)があれば、そのあと戻す。
+    // 次のラウンドの始めのセリフ(「3Rはじめ」)があれば、補充のあとに出す。
     const snap = ch.monumentSnap;
-    if (story2MonumentCount() <= snap.monuments) { story2Rewind(snap, []); return; }
+    if (story2MonumentCount() <= snap.monuments) {
+      const fail = ch.blocks[`mfail:${STATE.round}`];
+      if (fail) story2Play(fail, 0, () => story2Rewind(snap, []));
+      else story2Rewind(snap, []);
+      return;
+    }
     if (STATE.round >= 4) { story2GoNextChapter(); return; }
     storyStartNextRound(() => {
       ch.monumentRound = STATE.round;
       story2FillMonuments(true);
-      story2FreePlay();
+      const start = ch.blocks[`mstart:${STATE.round}`];
+      if (start) story2Play(start, 0, story2FreePlay);
+      else story2FreePlay();
     }, true);
     return;
   }
