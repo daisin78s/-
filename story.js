@@ -1478,16 +1478,18 @@ function story2Start() {
 /** rowsをi行目から順番に: C列があればその出来事、A列があればスパルのセリフ。終わったらonDone()。 */
 function story2Play(rows, i, onDone) {
   if (!storyRun) return;
-  if (i >= rows.length) { onDone(); return; }
+  // ch2SkipBlock: この部分の残りの行は出さない(最高記録がまだ無い時、story2DoEventの「最高記録」)。
+  if (i >= rows.length || storyRun.ch2SkipBlock) { storyRun.ch2SkipBlock = false; onDone(); return; }
   const row = rows[i];
   const next = () => story2Play(rows, i + 1, onDone);
   const say = () => {
-    if (!row.text) { next(); return; }
+    if (!row.text || storyRun.ch2SkipBlock) { next(); return; }
     story2HideCallout(); // 拡大したカードはセリフが始まったら消す(セリフが隠れないように、per user)
     story2TopicGlow(row);
     storySetSpeaker('spal');
     // 「VPの合計は〇VPだ」「お前の成績は〇VP」「モニュメントを〇枚も」: 〇を今のVP/獲得したモニュメントの枚数に。
     let text = row.text;
+    if (storyRun.ch2BestText != null && /〇/.test(text)) { text = text.replace('〇', storyRun.ch2BestText); storyRun.ch2BestText = null; }
     if (/〇/.test(text)) {
       const standing = standingsRows(STATE).find((r) => r.playerId === 'P1');
       text = text.replace(/〇(?=\s*VP)/g, String(standing ? standing.vp : 0)).replace(/〇(?=\s*枚)/g, String(story2MonumentCount()));
@@ -1529,6 +1531,20 @@ function story2DoEvent(row, i, onDone) {
     if (die) die.isWildcardThisTurn = true;
     render(STATE);
     storyLater(onDone, 600);
+    return;
+  }
+  if (/最高記録/.test(e)) {
+    // 「最高記録が更新されるたびに記録する」(4Rでモニュメント4枚以上の時だけ、2026-11-12 per user回答): 今回より前の
+    // 最高記録を同じ行のセリフ「ちなみに今までの最高記録は〇VP」に出し、今回のVPが上回っていれば記録し直す。
+    // 前の記録が無ければ(初めて)、記録だけしてこの部分の残りのセリフは出さない。
+    const standing = standingsRows(STATE).find((r) => r.playerId === 'P1');
+    const vp = standing ? standing.vp : 0;
+    let prev = null;
+    try { const v = localStorage.getItem(STORY3_BEST_VP_KEY); prev = v === null ? null : Number(v); } catch (err) { /* 読めなければ記録なし */ }
+    try { if (prev === null || vp > prev) localStorage.setItem(STORY3_BEST_VP_KEY, String(vp)); } catch (err) { /* 書けなくても続ける */ }
+    if (prev === null) { run.ch2SkipBlock = true; onDone(); return; }
+    run.ch2BestText = String(prev);
+    onDone();
     return;
   }
   if (/最初に戻る/.test(e)) {
@@ -2015,6 +2031,7 @@ function story2Finish() {
 }
 
 /** 第3章クリア: 次の章へ(第2章→第3章と同じ形、per user回答「次の章へ」)。次の章がまだ無ければ「つづく」。 */
+const STORY3_BEST_VP_KEY = 'diceWpStory3BestVP'; // 第3章の最高記録(VP)
 function story2GoNextChapter() {
   storyMarkChapterCleared(3);
   const nextChapter = STORY_CHAPTERS.find((c) => c.no === 4);
