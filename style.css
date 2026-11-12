@@ -8326,3 +8326,9 @@ html.story-autostarting::after {
   z-index: 100000;
   background: var(--bg, #f3f4f6);
 }
+
+/* ストーリーのセリフの強調(赤字) (story.jsのSTORY_EMPH_START/END) */
+.story-emph {
+  color: #ff5a5a;
+  font-weight: 800;
+}

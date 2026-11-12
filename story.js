@@ -132,15 +132,26 @@ function storyIconize(text) {
   return text.replace(/(?<![A-Za-z])[ABCZK](?![A-Za-z])/g, (ch) => String.fromCharCode(0xE000 + STORY_ICON_RESOURCES.indexOf(ch)));
 }
 /** storyIconizeした文章 -> 資源アイコン + 性格・ジョブの名前に色を付けた文章。 */
+// 強調(赤字)の始まり/終わりの印 (第3章「…を強調して赤字で」、story2DoEvent参照)。
+const STORY_EMPH_START = '';
+const STORY_EMPH_END = '';
 function storyLineFragment(text) {
   const frag = document.createDocumentFragment();
+  let target = frag;
   let plain = '';
-  const flush = () => { if (plain) { frag.appendChild(conJobColoredFragment(plain)); plain = ''; } };
+  const flush = () => { if (plain) { target.appendChild(conJobColoredFragment(plain)); plain = ''; } };
   for (const ch of text) {
     const code = ch.charCodeAt(0) - 0xE000;
-    if (code >= 0 && code < STORY_ICON_RESOURCES.length) {
+    if (ch === STORY_EMPH_START) {
       flush();
-      frag.appendChild(actionDot(STORY_ICON_RESOURCES[code]));
+      target = el('span', 'story-emph');
+      frag.appendChild(target);
+    } else if (ch === STORY_EMPH_END) {
+      flush();
+      target = frag;
+    } else if (code >= 0 && code < STORY_ICON_RESOURCES.length) {
+      flush();
+      target.appendChild(actionDot(STORY_ICON_RESOURCES[code]));
     } else {
       plain += ch;
     }
@@ -158,7 +169,7 @@ function storySay(id, onTyped, textOverride, waitsForNext) {
   run.dom.nextHint.hidden = true;
   const text = textOverride !== undefined ? textOverride : storyLine(id).text;
   // 会話ログ用に記録(5秒ごとに出るヒントなど、同じセリフは1回だけ)。
-  if (text && !run.log.some((e) => e.id === id)) run.log.push({ id, text, speaker: STORY_SPEAKERS[run.speaker].name });
+  if (text && !run.log.some((e) => e.id === id)) run.log.push({ id, text: text.replace(/[]/g, ''), speaker: STORY_SPEAKERS[run.speaker].name });
   if (!text) { if (onTyped) onTyped(text); return; }
   const box = run.dom.dialog;
   const body = run.dom.dialogText;
@@ -1466,6 +1477,10 @@ function story2Play(rows, i, onDone) {
     storySetSpeaker('spal');
     // 「VPの合計は〇VPだ」「お前の成績は〇VP」「モニュメントを〇枚も」: 〇を今のVP/獲得したモニュメントの枚数に。
     let text = row.text;
+    if (storyRun.ch2Emph) {
+      if (text.includes(storyRun.ch2Emph)) text = text.replace(storyRun.ch2Emph, STORY_EMPH_START + storyRun.ch2Emph + STORY_EMPH_END);
+      storyRun.ch2Emph = null;
+    }
     if (storyRun.ch2BestText != null && /〇/.test(text)) { text = text.replace('〇', storyRun.ch2BestText); storyRun.ch2BestText = null; }
     if (/〇/.test(text)) {
       const standing = standingsRows(STATE).find((r) => r.playerId === 'P1');
@@ -1508,6 +1523,13 @@ function story2DoEvent(row, i, onDone) {
     if (die) die.isWildcardThisTurn = true;
     render(STATE);
     storyLater(onDone, 600);
+    return;
+  }
+  if (/強調/.test(e) && /赤字/.test(e)) {
+    // 「このゲームは４人で４ラウンドプレイして一番VPの多いやつの勝ちだ　を強調して赤字で」: 同じ行のセリフの中の
+    // その部分を赤字で(story2Play)。全角の数字のまま比べるので、正規化前の文言から取る。
+    run.ch2Emph = String(row.event).split(/を強調/)[0].trim();
+    onDone();
     return;
   }
   if (/最高記録/.test(e) && /更新されたとき/.test(e)) {
