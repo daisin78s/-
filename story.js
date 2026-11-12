@@ -2080,6 +2080,12 @@ function senecaDoEvent(row, onDone) {
     render(STATE);
     senecaGlow(['.mobile-own-row__free-action']);
     onDone();
+  } else if (/自分のダイス/.test(e) && /皇帝宮殿のダイス/.test(e) && /光る/.test(e)) {
+    // 「自分のダイスと皇帝宮殿のダイスが光る」(「すでに置いてあるダイス目と同じダイス目は…置けないわ」): 手元の
+    // ダイスと皇帝宮殿に置いてあるダイスを、そのセリフの間だけ。
+    storySetGlow(['#mobile-own-row .mobile-own-row__dice .die', '#players .player-panel[data-player-id="P1"] .die:not(.die--placed)', storyTileSelector(STORY_CASTLE_MAP_ID, '.die')]);
+    run.seneca.glowUntilLineEnd = true;
+    onDone();
   } else if (/白ダイス/.test(e) && /光る/.test(e)) {
     // 「白ダイスが光る」: あなたの白ダイスを、そのセリフの間だけ。
     storySetGlow(['#mobile-own-row .mobile-own-row__dice--white .die', '#players .player-panel[data-player-id="P1"] .die--WHITE']);
