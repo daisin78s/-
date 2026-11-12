@@ -2514,7 +2514,8 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
       return;
     }
     if (!diceLeft()) { failAndRewind(); return; }
-    if (!onCastle) sayLines(section(/以外にダイスを置く/), waitPlacement);
+    // 「道草を楽しむのも勉強ね」は1回出たらもう出さない(「残念」で戻った後も、2026-11-12 per user)。
+    if (!onCastle && !run.seneca.detourSaid) { run.seneca.detourSaid = true; sayLines(section(/以外にダイスを置く/), waitPlacement); }
     else waitPlacement();
   };
   storySetSpeaker('seneca');
