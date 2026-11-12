@@ -17605,6 +17605,7 @@ const STORY_CHARACTER_BY_TITLE = {
   傲慢な百人隊長: { name: 'スパル', img: 'assets/story-spal.webp' },
   几帳面な研究者: { name: 'セネカ', img: 'assets/story-seneca.webp' },
   心配性な研究者: { name: 'セネカ', img: 'assets/story-seneca-worried.webp' },
+  色欲の権力者: { name: 'ネロ', img: 'assets/story-nero.webp' },
 };
 const storyCharacterShownKeys = new Set();
 const storyCharacterQueue = [];
