@@ -8314,3 +8314,6 @@ body.desktop-scaled #debug-panel .desktop-settings-controls { gap: 10px; margin-
   color: #ffd84a;
   text-shadow: 0 0 12px rgba(255, 220, 90, 0.9), 0 3px 0 #8a5a00;
 }
+
+/* ストーリー第3章の初期資源カード: VPは出さない (2026-11-12, per user「第３章 初期資源カードの VP消して」) */
+.story2-cards .shop-card__vp { visibility: hidden; }
