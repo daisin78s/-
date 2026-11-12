@@ -2092,6 +2092,14 @@ function senecaDoEvent(row, onDone) {
     if (/心配性/.test(name)) senecaSwapPortrait(STORY_SENECA_WORRIED_IMG);
     senecaApplyName();
     onDone();
+  } else if (/(知識|権力|金貨|食料)が(\d+)増える/.test(e)) {
+    // 「知識が2増える」: あなたの資源を増やす。
+    const [, kind, n] = /(知識|権力|金貨|食料)が(\d+)増える/.exec(e);
+    const key = { 知識: 'B', 権力: 'A', 金貨: 'C', 食料: 'K' }[kind];
+    const p1 = storyPlayer('P1');
+    p1.resources[key] = (p1.resources[key] || 0) + Number(n);
+    render(STATE);
+    storyLater(onDone, 400);
   } else if (/分岐に行く/.test(e)) {
     // 「その後獲得したカードの分岐に行く」: 台本の流れの説明(続きはsenecaTryNegotiationが選ぶ)。
     onDone();
@@ -2298,6 +2306,14 @@ function senecaDoEvent(row, onDone) {
  *  - 「交渉術を獲得する」: 皇帝宮殿で交渉術を獲得したらその後ろの行を流してonDone()(「つづく」)。
  *  - 「皇帝宮殿以外にダイスを置く（ダイスがまだ残っている）」: そのセリフ(道草…)を出して、続けて置かせる。
  *  - 「ダイスがなくなる（交渉術が獲得できていない）」: そのセリフ(残念…)を出して、rowのセリフの前まで戻る。 */
+/** 第2章を終えて第3章へ: 第2章をクリア済みにして、ページを読み直してから第3章を始める(盤面や演出の状態を
+ * 持ち越さないように。STORY_AUTO_START_KEY参照)。 */
+function senecaGoChapter3() {
+  storyMarkChapterCleared(2);
+  try { sessionStorage.setItem(STORY_AUTO_START_KEY, '3'); } catch (e) { /* 読めなければ普通にトップへ */ }
+  closeStoryMode();
+}
+
 /** セネカの立ち絵を同じポーズの差分に替える。出ている立ち絵はその場で差し替える(出し直しのアニメーションはしない)。 */
 function senecaSwapPortrait(img) {
   const run = storyRun;
@@ -2329,7 +2345,7 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
     const from = afterRe ? rest.findIndex((r) => afterRe.test(story2NormalizeEvent(r.event || ''))) : -1;
     const start = rest.findIndex((r, k) => k > from && re.test(story2NormalizeEvent(r.event || '')));
     if (start < 0) return [];
-    const end = rest.findIndex((r, k) => k > start && r.event && /ダイスがなくなる|以外にダイスを置く|を獲得する|まで戻る|もう一度行く|タップ状態|ショートカットで獲得/.test(story2NormalizeEvent(r.event)));
+    const end = rest.findIndex((r, k) => k > start && r.event && /ダイスがなくなる|以外にダイスを置く|を獲得する|まで戻る|もう一度行く|タップ状態|ショートカットで獲得|資源がなくて/.test(story2NormalizeEvent(r.event)));
     return rest.slice(start + 1, end < 0 ? rest.length : end);
   };
   const sayLines = (rows, then) => {
@@ -2351,7 +2367,8 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
   const basicLines = () => {
     if (run.seneca.basicDone || !hasCard(/^B001/)) return null;
     run.seneca.basicDone = true;
-    return hasNegotiation() && hasCard(/^B006/) ? section(/基礎学問を獲得する.*交渉術と土木技術/) : section(/基礎学問を獲得する.*交渉術か土木技術/);
+    // 「（セネカに資源をもらっていない）」: もらっていたら「交渉術か土木技術」のほう(よくできました…)。
+    return hasNegotiation() && hasCard(/^B006/) && !run.seneca.gaveResources ? section(/基礎学問を獲得する.*交渉術と土木技術/) : section(/基礎学問を獲得する.*交渉術か土木技術/);
   };
   // 「「基礎学問」を使って私に会いに来て」のあと: 図書館に(新しく)ダイスを置いたら「図書館にもう一度行く」の
   // 部分を出してすぐ「つづく」(2026-11-11, per user回答)。基礎学問で追い出して置くと数は増えないので、ダイスで見る。
@@ -2361,6 +2378,9 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
     run.seneca.libraryBefore = libraryDieIds();
     run.seneca.meetSnap = { state: gameStateMod.cloneState(STATE), visibleMapIds: run.visibleMapIds.slice(), libraryBefore: run.seneca.libraryBefore.slice(), canMeet: diceLeft() || canStillMeet() };
   };
+  // 起きている交渉術・土木技術のタップで、今獲得できるカードがある(ショップの✓と同じ見つけ方)。
+  const canTapToGain = () => storyPlayer('P1').ownedCardPhysicalIds.some((id) => STATE.cards[id] && /^B00[46]/.test(STATE.cards[id].currentFaceId) && !STATE.cards[id].tapped)
+    && [...shopAcquirableMoveCache.values()].some((found) => found && found.move && found.move.type === 'BARE_TAP');
   // 置けるダイスがなくても、起きている基礎学問と手元のダイスがあれば、目を1にして図書館のダイスを追い出して置ける。
   const canStillMeet = () => storyPlayer('P1').dice.some((d) => !d.placedMapId && !d.passed)
     && storyPlayer('P1').ownedCardPhysicalIds.some((id) => STATE.cards[id] && /^B001/.test(STATE.cards[id].currentFaceId) && !STATE.cards[id].tapped);
@@ -2398,7 +2418,21 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
       });
       return;
     }
-    if (!diceLeft() && !(run.seneca.libraryBefore && canStillMeet())) { then(); return; }
+    // ダイスを使い切っても、交渉術か土木技術が起きていて(タップで獲得できるカードがある)なら続ける。それもなければ
+    // 残念…で「さあ、あとは…」まで戻る(2026-11-12, per user「もうつづくは不要」「ダイスを使い切って交渉術か土木技術が
+    // アンタップなら続けれるように」)。
+    if (!diceLeft() && !(run.seneca.libraryBefore && canStillMeet()) && !canTapToGain()) {
+      // 「交渉術か土木技術がアンタップで資源がなくて獲得できるカードがない」: 1回だけセネカが資源をくれる。
+      const untappedTapCard = storyPlayer('P1').ownedCardPhysicalIds.some((id) => STATE.cards[id] && /^B00[46]/.test(STATE.cards[id].currentFaceId) && !STATE.cards[id].tapped);
+      const help = section(/資源がなくて/);
+      if (untappedTapCard && !run.seneca.gaveResources && help.length > 0) {
+        run.seneca.gaveResources = true;
+        senecaPlay(help, 0, () => playUntilDiceUsed(then));
+        return;
+      }
+      failAndRewind();
+      return;
+    }
     storyHideDialog();
     // 自由に遊ぶ間はフリーアクション(カードのタップ)と獲得カードの画面も使える。
     if (!document.body.classList.contains('story-free-action')) { document.body.classList.add('story-free-action'); render(STATE); }
@@ -2425,6 +2459,7 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
       run.placementBaseline = storyPlacementCounts(STATE);
       run.turnBannerKeys = new Set(); // 巻き戻したら「ターン○」も数え直す
       run.seneca.libraryBefore = null;
+      run.seneca.gaveResources = false;
       if (!senecaHasCard(/^B001/)) run.seneca.basicDone = false; // 戻した盤面で基礎学問をまだ持っていなければ、また出す
       senecaApplyName();
       storyLater(() => senecaTryNegotiation(row, rest, onDone, snap), 400);
@@ -2513,7 +2548,8 @@ function senecaFreePlay() {
         // 資源の表示は「食料が知識に＋金貨2」の行まで置く前の数のまま(その行で本当の数にする)。手番はまだ終えない
         // (「ターンが終了し使用料が支払われる」の行で終える)。
         story2LockPlacement();
-        senecaPlay(ch.blocks.library || [], 0, () => storyEndOfScript('つづく'));
+        // 2回目の図書館(レッスン終わり)のあとは「つづく」ではなく第3章へ(2026-11-12, per user)。
+        senecaPlay(ch.blocks.library || [], 0, senecaGoChapter3);
         return;
       }
       ch.farmDone = true;
@@ -2576,3 +2612,13 @@ function openStoryChapterSelect() {
 }
 
 document.getElementById('entry-banner-story-button').addEventListener('click', openStoryChapterSelect);
+
+// 章の終わりから次の章へ(senecaGoChapter3): 読み直した直後にその章を始める。
+const STORY_AUTO_START_KEY = 'diceWpStoryAutoStart';
+(() => {
+  let no = null;
+  try { no = Number(sessionStorage.getItem(STORY_AUTO_START_KEY)); sessionStorage.removeItem(STORY_AUTO_START_KEY); } catch (e) { return; }
+  const chapter = STORY_CHAPTERS.find((c) => c.no === no);
+  // main.jsの初期化(DOMContentLoaded)が終わってから。
+  if (chapter && chapter.start) document.addEventListener('DOMContentLoaded', () => setTimeout(chapter.start, 300));
+})();
