@@ -1371,15 +1371,25 @@ function story2Blocks() {
     // 「モニュメントを獲得する 2R 1-2T」→ mget:2:1-2、「3Rはじめ」→ mstart:3。ラウンドの数字で分けておく
     // (3R・4Rの分を台本に足せば、そのまま出る)。
     const me = row.event ? story2NormalizeEvent(row.event) : '';
-    const round = (/(\d)\s*R/.exec(me) || [])[1];
+    // 「3-4R」のような範囲は、そのラウンドすべてに同じ部分を使う。
+    const rr = /(\d)(?:-(\d))?\s*R/.exec(me);
+    const rounds = [];
+    if (rr) for (let r = Number(rr[1]); r <= Number(rr[2] || rr[1]); r++) rounds.push(r);
+    const round = rounds[0];
     let mkey = null;
-    if (round && /使い切/.test(me) && /モニュメント/.test(me)) mkey = `mfail:${round}`;
+    if (round && /使い切/.test(me) && /モニュメント/.test(me)) mkey = rounds.map((r) => `mfail:${r}`);
     else if (round && /モニュメントを獲得する/.test(me)) {
       const t = /(\d)(?:-(\d))?\s*T/.exec(me);
-      if (t) mkey = `mget:${round}:${t[1]}-${t[2] || t[1]}`;
-    } else if (round && /R\s*はじめ/.test(me)) mkey = `mstart:${round}`;
+      if (t) mkey = rounds.map((r) => `mget:${r}:${t[1]}-${t[2] || t[1]}`);
+    } else if (round && /R\s*はじめ/.test(me)) mkey = rounds.map((r) => `mstart:${r}`);
+    else if (round && /置ききる/.test(me)) {
+      // 「4Rダイスをすべて置ききる（モニュメントを合計３枚獲得できている）」/「…合計4枚以上…」→ mend:4:3 / mend:4:4+
+      const n = /合計(\d)枚(以上)?/.exec(me);
+      if (n) mkey = rounds.map((r) => `mend:${r}:${n[1]}${n[2] ? '+' : ''}`);
+    }
     if (mkey) {
-      current = blocks[mkey] = [];
+      current = [];
+      mkey.forEach((k) => { blocks[k] = current; });
       current.push({ text: row.text, event: '', index });
       return;
     }
@@ -1462,8 +1472,12 @@ function story2Play(rows, i, onDone) {
     story2HideCallout(); // 拡大したカードはセリフが始まったら消す(セリフが隠れないように、per user)
     story2TopicGlow(row);
     storySetSpeaker('spal');
+    // 「VPの合計は〇VPだ」「お前の成績は〇VP」「モニュメントを〇枚も」: 〇を今のVP/獲得したモニュメントの枚数に。
     let text = row.text;
-    if (storyRun.ch2VpText != null && /〇/.test(text)) { text = text.replace('〇', storyRun.ch2VpText); storyRun.ch2VpText = null; }
+    if (/〇/.test(text)) {
+      const standing = standingsRows(STATE).find((r) => r.playerId === 'P1');
+      text = text.replace(/〇(?=\s*VP)/g, String(standing ? standing.vp : 0)).replace(/〇(?=\s*枚)/g, String(story2MonumentCount()));
+    }
     storySayThen(`C2-${row.index}`, () => {
       // 「○○が光る」と同じ行のセリフ: そのセリフの間だけ光らせる。
       if (storyRun && storyRun.ch2GlowLine) { storyRun.ch2GlowLine = false; storySetGlow([]); document.querySelectorAll('.story-glow').forEach((n) => n.classList.remove('story-glow', 'change-highlight')); }
@@ -1509,9 +1523,7 @@ function story2DoEvent(row, i, onDone) {
     return;
   }
   if (/VP/.test(e) && /表示/.test(e)) {
-    // 「獲得したVPを表示」: 同じ行のセリフ「VPの合計は〇VPだ」の〇を今のVPに。VPの表示があれば、そのセリフの間光らせる。
-    const row = standingsRows(STATE).find((r) => r.playerId === 'P1');
-    run.ch2VpText = String(row ? row.vp : 0);
+    // 「獲得したVPを表示」: 同じ行のセリフ「VPの合計は〇VPだ」の〇はstory2Playで今のVPに。VPの表示があれば、そのセリフの間光らせる。
     const badge = storyResourceBadge('VP');
     if (badge) { storySetGlow([]); badge.classList.add('story-glow', 'change-highlight'); run.ch2GlowLine = true; }
     onDone();
@@ -1933,11 +1945,22 @@ function story2Finish() {
     const snap = ch.monumentSnap;
     if (story2MonumentCount() <= snap.monuments) {
       const fail = ch.blocks[`mfail:${STATE.round}`];
-      if (fail) story2Play(fail, 0, () => story2Rewind(snap, []));
+      // 「（ダイスは振りなおす）」と書いてあれば振り直す。
+      const reroll = !!fail && fail.some((r) => /振りなお|振り直/.test(r.event || ''));
+      if (fail) story2Play(fail, 0, () => story2Rewind(snap, [], reroll));
       else story2Rewind(snap, []);
       return;
     }
-    if (STATE.round >= 4) { story2GoNextChapter(); return; }
+    if (STATE.round >= 4) {
+      // 「4Rダイスをすべて置ききる（モニュメントを合計３枚獲得できている）/（…4枚以上…）」のあと次の章へ。
+      const total = story2MonumentCount();
+      const ends = Object.keys(ch.blocks).filter((k) => k.startsWith(`mend:${STATE.round}:`));
+      const key = ends.find((k) => k === `mend:${STATE.round}:${total}`)
+        || ends.filter((k) => k.endsWith('+') && total >= Number(k.split(':')[2].replace('+', ''))).pop();
+      if (key) story2Play(ch.blocks[key], 0, story2GoNextChapter);
+      else story2GoNextChapter();
+      return;
+    }
     storyStartNextRound(() => {
       ch.monumentRound = STATE.round;
       story2FillMonuments(true);
@@ -1983,7 +2006,7 @@ function story2GoNextChapter() {
 
 /** 「やり直し」: snapの盤面に戻して、rowsのsnap.rowIndex行目から続きを出す。1ラウンド目は初期資源カードが
  * 配られる直前(導入の途中)、2ラウンド目は「よーし次のラウンドだ」の直前。 */
-function story2Rewind(snap, rows) {
+function story2Rewind(snap, rows, reroll) {
   const run = storyRun;
   if (!run) return;
   const ch = run.chapter2;
@@ -2016,6 +2039,13 @@ function story2Rewind(snap, rows) {
   lastRenderedRound = STATE.round;
   storyApplyVisibleMaps();
   render(STATE);
+  // 「最初に戻る（ダイスは振りなおす）」: 戻した盤面の手元のダイスを振り直してから。
+  if (reroll) {
+    storyPlayer('P1').dice.filter((d) => !d.placedMapId && !d.passed).forEach((d) => { d.value = 1 + Math.floor(Math.random() * 6); });
+    render(STATE);
+    storyRollHandDice(() => story2Play(rows, snap.rowIndex, story2FreePlay), 'P1');
+    return;
+  }
   story2Play(rows, snap.rowIndex, story2FreePlay);
 }
 
