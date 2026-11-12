@@ -783,10 +783,12 @@ function storySceneCastle() {
 function storySceneAcquire() {
   const run = storyRun;
   storySayThen('S017', () => {
-    storySetGlow(['#build-choice-overlay .shop-card__cost']);
+    // S019「ここの光ってる部分がコストだよ」の間、ローマ市街の支配のコストが光る(2026-11-12 Excelの台本で
+    // S018とS019が入れ替わった)。
     storySayThen('S018', () => {
-      storySetGlow([]);
+      storySetGlow(['#build-choice-overlay .shop-card__cost']);
       storySayThen('S019', () => {
+        storySetGlow([]);
         storySay('S020', () => {
           run.blockBuildChoice = false;
           storyShowGoal('カードをクリックする');
@@ -993,15 +995,8 @@ function storyPatraPlaces(onDone) {
   if (anyIdx < 0 || STATE.maps[STORY_CITY_MAP_ID].slots[anyIdx].length > 0) { onDone(true); return; }
   const die = storyPlayer('P2').dice.find((d) => !d.placedMapId && !d.passed);
   boardMod.placeDice(STATE, INDEX, { playerId: 'P2' }, die.id, STORY_CITY_MAP_ID, anyIdx);
-  storyCh1KFee('P2');
   render(STATE);
   storyLater(() => storyWhenVisualsIdle(() => onDone(false)), 200);
-}
-
-/** 第1章: パトラが払う使用料を〇にする(storyRun.ch1KFee参照)。 */
-function storyCh1KFee(playerId) {
-  const fee = storyRun && storyRun.ch1KFee && storyPlayer(playerId).pendingFee;
-  if (fee) fee.resource = 'K';
 }
 
 /** S057: ANYが埋まっていた時、パトラが基礎学問(ダイス目を1に変えて、どこにでも置ける)を使い、元のダイスを
@@ -1011,36 +1006,13 @@ function storyPatraUsesBasicStudy() {
   const die = storyPlayer('P2').dice.find((d) => !d.placedMapId && !d.passed);
   boardMod.useBareTapAbility(STATE, INDEX, { playerId: 'P2', chosenDieId: die.id, chosenValue: 1 }, 'B001');
   boardMod.placeDice(STATE, INDEX, { playerId: 'P2' }, die.id, STORY_CITY_MAP_ID, anyIdx);
-  storyCh1KFee('P2');
   render(STATE);
 }
 
-/** S045〜S053: 使用料が払えないので、フリーアクション(A→K/B→K)を、あなたがパトラの代わりに押す。 */
+/** S045〜S047: 使用料(ローマ市街は「権力」)の説明。そのまま場面7へ (2026-11-12 Excelの台本: 使用料が「食料」から
+ * 「権力」になり、払えないのでA→Kのフリーアクションをパトラの代わりに押すS048〜S053は無くなった)。 */
 function storyPatraFee() {
-  storySaySeq(['S045', 'S046', 'S047'], () => {
-    // パトラの手番を、この画面で操作できる形(人間)にして、フリーアクションの画面を開く。
-    playerRoles.set('P2', 'HUMAN');
-    turnActionTaken = true; // ダイスはもう置いた
-    mobileFreeActionOpen = true;
-    mobileFreeActionBaseline = mobileFreeActionSignature(STATE, storyPlayer('P2'));
-    render(STATE);
-    storySetGlow(['#mobile-free-action-body .mobile-free-action-overlay__exchanges > *']);
-    storySayThen('S048', () => {
-      storySay('S049', () => {
-        storyShowGoal(storyGoalOf('S049'));
-        storyWaitUntil(() => (storyPlayer('P2').resources.K || 0) >= 1, () => {
-          storyShowGoal('');
-          storySetGlow([]);
-          mobileFreeActionOpen = false;
-          mobileFreeActionBaseline = null;
-          playerRoles.set('P2', DEFAULT_AI_ROLE);
-          render(STATE);
-          applyMobileActiveTab('board');
-          storySaySeq(['S050', 'S051', 'S052', 'S053'], storySceneFeeCollect);
-        });
-      });
-    });
-  });
+  storySaySeq(['S045', 'S046', 'S047'], storySceneFeeCollect);
 }
 
 /* ---------- 場面7: 使用料の回収とEXスロット (S054〜S065) ---------- */
@@ -1066,8 +1038,8 @@ function storySceneFeeCollect() {
     storySetGlow([storyTileSelector(STORY_CITY_MAP_ID, '.map-tile__fee')]);
     storySay('S058', () => {
       storyShowGoal(storyGoalOf('S058'));
-      const kBefore = storyPlayer('P1').resources.K || 0;
-      storyWaitUntil(() => (storyPlayer('P1').resources.K || 0) > kBefore, () => {
+      // 回収したら(使用料は「権力」になったので、資源の種類ではなく、ローマ市街に貯まった使用料が無くなったかで見る)。
+      storyWaitUntil(() => !(STATE.maps[STORY_CITY_MAP_ID].accumulatedFee > 0), () => {
         storyShowGoal('');
         storySetGlow([]);
         storySaySeq(['S059', 'S060'], () => {
@@ -1188,7 +1160,8 @@ function storyFinishFreePlay() {
   const hasLv2 = !!city && city.ownerId === 'P1' && city.currentFaceId === 'A001B';
   if (hasLv2) {
     storyMarkChapterCleared(1);
-    storySayThen('CH1_CLEAR', () => storyEndOfScript('第2章へつづく'), 0, STORY_CH1_CLEAR_TEXT);
+    // トップに戻らず、そのまま第2章へ (2026-11-12, per user「第１章 クリアしたら トップに戻らず そのまま第２章に」)。
+    storySayThen('CH1_CLEAR', () => storyGoChapter(2), 0, STORY_CH1_CLEAR_TEXT);
   }
   else storySayThen('CH1_FAIL', storyRewindToRound2, 0, STORY_CH1_FAIL_TEXT);
 }
@@ -1307,10 +1280,9 @@ function openStoryMode(startScene) {
   // 話し手は最初の場面が決める(第2章でアレクが一瞬出ないように)。第1章はアレクから。
   if (!startScene) storySetSpeaker('alek');
   storySetAllowedTabs(['board']);
-  // 第1章は使用料を〇のままにする (2026-11-09: ローマ市街の使用料は赤〇になったが、第1章の台本は〇の使用料で
-  // 「A→Kで払う」「〇を回収する」流れのため)。main.jsのareaRowFees(表示)とstoryCh1KFee(支払い)が見る。
-  storyRun.ch1KFee = !startScene;
   (startScene || storySceneFarm)();
+  // 前の章から続けて始めた時の覆い(storyGoChapter)は、この章の画面が描けてから外す。
+  setTimeout(() => document.documentElement.classList.remove('story-autostarting'), 500);
 }
 
 function closeStoryMode() {
@@ -2076,8 +2048,7 @@ function story2GoNextChapter() {
   storyMarkChapterCleared(3);
   const nextChapter = STORY_CHAPTERS.find((c) => c.no === 4);
   if (!nextChapter || !nextChapter.start) { storyEndOfScript('つづく'); return; }
-  try { sessionStorage.setItem(STORY_AUTO_START_KEY, '4'); } catch (e) { /* 読めなければ普通にトップへ */ }
-  closeStoryMode();
+  storyGoChapter(4);
 }
 
 /** 「やり直し」: snapの盤面に戻して、rowsのsnap.rowIndex行目から続きを出す。1ラウンド目は初期資源カードが
@@ -2559,7 +2530,15 @@ function senecaDoEvent(row, onDone) {
  * 持ち越さないように。STORY_AUTO_START_KEY参照)。 */
 function senecaGoChapter3() {
   storyMarkChapterCleared(2);
-  try { sessionStorage.setItem(STORY_AUTO_START_KEY, '3'); } catch (e) { /* 読めなければ普通にトップへ */ }
+  storyGoChapter(3);
+}
+
+/** 次の章へ: ページを読み直して(盤面や演出の状態を持ち越さないように)その章を始める。読み直している間はトップ画面を
+ * 見せない(index.htmlのstory-autostartingで覆い、章が始まったら外す、2026-11-12 per user「一瞬トップに戻るので
+ * 戻らずに第３章に」)。 */
+function storyGoChapter(no) {
+  try { sessionStorage.setItem(STORY_AUTO_START_KEY, String(no)); } catch (e) { /* 読めなければ普通にトップへ */ }
+  document.documentElement.classList.add('story-autostarting');
   closeStoryMode();
 }
 
@@ -2877,4 +2856,5 @@ const STORY_AUTO_START_KEY = 'diceWpStoryAutoStart';
   const chapter = STORY_CHAPTERS.find((c) => c.no === no);
   // main.jsの初期化(DOMContentLoaded)が終わってから。
   if (chapter && chapter.start) document.addEventListener('DOMContentLoaded', () => setTimeout(chapter.start, 300));
+  else document.documentElement.classList.remove('story-autostarting'); // 始める章が無ければ覆いを外してトップへ
 })();

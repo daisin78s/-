@@ -4492,7 +4492,6 @@ function renderUsageFeeLabel(container, fees) {
 /** エリアの行の使用料 -> renderUsageFeeLabel用のリスト。 */
 function areaRowFees(areaRow) {
   const fee = boardMod.parseFee(areaRow.fee);
-  if (fee && typeof storyRun !== 'undefined' && storyRun && storyRun.ch1KFee) fee.resource = 'K'; // ストーリー第1章は〇のまま(story.js)
   return fee ? [fee] : [];
 }
 function actionEmoji(char) {

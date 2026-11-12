@@ -8317,3 +8317,12 @@ body.desktop-scaled #debug-panel .desktop-settings-controls { gap: 10px; margin-
 
 /* ストーリー第3章の初期資源カード: VPは出さない (2026-11-12, per user「第３章 初期資源カードの VP消して」) */
 .story2-cards .shop-card__vp { visibility: hidden; }
+
+/* ストーリーの次の章へ続けて始める間(story.jsのstoryGoChapter / index.htmlの<head>): トップ画面を見せない覆い */
+html.story-autostarting::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  background: var(--bg, #f3f4f6);
+}
