@@ -358,6 +358,13 @@ function storyAfterRender(state) {
     }
   }
   if (run.shopOverrides) storyApplyShopOverrides(run.shopOverrides);
+  // 第3章のモニュメントのラウンド(スマホ): ショップはモニュメントの段だけ。下の段(空きの通常カード欄・ラウンドと
+  // 順位)は隠して、背の低い画面でも一番上の段が見切れないように(2026-11-12, per user「下部分いらない情報なので
+  // 一番上も見えるように」)。
+  if (run.chapter2 && run.chapter2.monumentRound && isMobileLayout()) {
+    const grid = document.getElementById('shop-combined-slots');
+    if (grid) for (const node of grid.children) if (node.style.gridRow && node.style.gridRow !== '1') node.style.display = 'none';
+  }
   if (run.chapter2) story2SoloStandings();
   storyApplyGlow();
   if (run.resourceOverride) storyApplyResourceOverride(run.resourceOverride);
@@ -405,7 +412,14 @@ function storyTurnBannerWhenPlaceable(state) {
   const player = state.players.find((p) => p.id === 'P1');
   // 置けるダイスがない時(ダイスを使い切ってカードのタップで続ける時など)は出さない(2026-11-12, per user)。
   if (!player.dice.some((d) => !d.placedMapId && !d.passed && storyPlaceableSlots('P1', d.id, run.visibleMapIds).length > 0)) return;
-  const nth = player.dice.filter((d) => d.placedMapId || d.passed).length + 1;
+  // 何番目の手番か: ダイスの数ではなく置いた回数で数える(2個まとめて置いてモニュメントを獲得しても1回、
+  // 2026-11-12 per user「ダイスを２個使ってモニュメントを獲得するとターン1からターン3に飛びます」)。前に見た時より
+  // 置いたダイスが増えていれば1回分。ラウンドが替わった・巻き戻して減った時は、置いた数から数え直す。
+  const used = player.dice.filter((d) => d.placedMapId || d.passed).length;
+  const tc = run.turnCounter;
+  if (!tc || tc.round !== state.round || used < tc.used) run.turnCounter = { round: state.round, used, nth: used + 1 };
+  else if (used > tc.used) run.turnCounter = { round: state.round, used, nth: tc.nth + 1 };
+  const nth = run.turnCounter.nth;
   const key = `${state.round}/${player.id}/${nth}`;
   run.turnBannerKeys = run.turnBannerKeys || new Set();
   if (run.turnBannerKeys.has(key)) return;
@@ -1858,6 +1872,9 @@ function story2FreePlay() {
   if (run.resourceOverride) { run.resourceOverride = null; render(STATE); } // 酒場の表示合わせが残っていたら本当の数に
   // モニュメントのラウンド: 説明のあと初めて自由に置く時、エリアの画面に戻す。その盤面を「やり直し」の戻り先に。
   if (ch.backToBoard) { ch.backToBoard = false; applyMobileActiveTab('board'); render(STATE); }
+  // 獲得されて空いたモニュメントの所は、普段のゲームと同じく次の手番の初めに補充(2026-11-12, per user
+  // 「モニュメントを獲得するとゲームと同じように次のターンの初めに補充される」)。
+  if (ch.monumentRound && Object.values(STATE.shops.M.slots).some((f) => !f)) story2FillMonuments(true);
   if (ch.monumentRound && (!ch.monumentSnap || ch.monumentSnap.round !== STATE.round)) {
     ch.monumentSnap = { round: STATE.round, state: gameStateMod.cloneState(STATE), visibleMapIds: run.visibleMapIds.slice(), rowIndex: 0, allowedTabs: [...run.allowedTabs], monuments: story2MonumentCount() };
   }
@@ -1910,7 +1927,9 @@ function story2FreePlay() {
       // 数)で「モニュメントを獲得する 2R 1-2T / 3-4T / 5T」の部分。
       if (ch.monumentRound && ch.monumentSnap && ch.monumentGotRound !== STATE.round && story2MonumentCount() > ch.monumentSnap.monuments) {
         ch.monumentGotRound = STATE.round;
-        const turn = storyPlayer('P1').dice.filter((d) => d.placedMapId).length;
+        // 今置いた手番の番号(「ターン○」と同じ数え方、2個まとめて置いても1回)。
+        const tc = run.turnCounter;
+        const turn = tc && tc.round === STATE.round ? tc.nth : storyPlayer('P1').dice.filter((d) => d.placedMapId).length;
         const key = Object.keys(ch.blocks).find((k) => {
           const m = new RegExp(`^mget:${STATE.round}:(\\d)-(\\d)$`).exec(k);
           return m && turn >= Number(m[1]) && turn <= Number(m[2]);
