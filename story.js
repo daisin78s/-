@@ -2016,6 +2016,8 @@ function senecaPlay(rows, i, onDone) {
   if (i >= rows.length) { onDone(); return; }
   const row = rows[i];
   const next = () => senecaPlay(rows, i + 1, onDone);
+  // まだ交渉術・土木技術・基礎学問を持っていない間の盤面を覚えておく(ショートカットで先に獲得した時の「残念」の戻り先)。
+  if (!storyRun.seneca.negotiationStarted && !senecaHasCard(/^B00[146]/)) storyRun.seneca.preAcquireSnap = { state: gameStateMod.cloneState(STATE), visibleMapIds: storyRun.visibleMapIds.slice() };
   // チェックマークの説明の間に「このカードを獲得する」で交渉術/土木技術を先に獲得した時も、「ダイスが置ける
   // ようになる」の行(senecaTryNegotiation)へ飛ばす。
   if (!storyRun.seneca.negotiationStarted && !storyRun.seneca.skipToRe && senecaHasCard(/^B00[146]/)) storyRun.seneca.skipToRe = /置けるようになる/;
@@ -2341,7 +2343,11 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
   if (!run) return;
   run.seneca.negotiationStarted = true;
   if (run.showAcquirableBadges) { run.showAcquirableBadges = false; render(STATE); }
-  if (!snap) snap = { state: gameStateMod.cloneState(STATE), visibleMapIds: run.visibleMapIds.slice() };
+  // 戻る盤面: チェックマークの説明中にショートカットで先に獲得していたら、獲得する前の盤面(senecaPlayが覚えている)。
+  // 獲得した後の盤面に戻ると、また「もう獲得したの」から同じことを繰り返してしまう(2026-11-12, user報告の動画)。
+  if (!snap) snap = senecaHasCard(/^B00[146]/) && run.seneca.preAcquireSnap ? run.seneca.preAcquireSnap
+    : { state: gameStateMod.cloneState(STATE), visibleMapIds: run.visibleMapIds.slice() };
+  run.tapAnyTime = false;
   // afterRe: その区切りより後ろで探す(「上記の続きで基礎学問がタップ状態」が交渉術・土木技術の後ろに1つずつあるため)。
   const section = (re, afterRe) => {
     const from = afterRe ? rest.findIndex((r) => afterRe.test(story2NormalizeEvent(r.event || ''))) : -1;
@@ -2381,13 +2387,15 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
     run.seneca.meetSnap = { state: gameStateMod.cloneState(STATE), visibleMapIds: run.visibleMapIds.slice(), libraryBefore: run.seneca.libraryBefore.slice(), canMeet: diceLeft() || canStillMeet() };
   };
   // 起きている交渉術・土木技術のタップで、今獲得できるカードがある(ショップの✓と同じ見つけ方)。
+  // その場で計算し直す(ダイスを置いた直後はショップの✓がまだ前の盤面のままのことがある)。
   const canTapToGain = () => storyPlayer('P1').ownedCardPhysicalIds.some((id) => STATE.cards[id] && /^B00[46]/.test(STATE.cards[id].currentFaceId) && !STATE.cards[id].tapped)
-    && [...shopAcquirableMoveCache.values()].some((found) => found && found.move && found.move.type === 'BARE_TAP');
+    && [...computeShopAcquirableMoveCache().values()].some((found) => found && found.move && found.move.type === 'BARE_TAP');
   // 置けるダイスがなくても、起きている基礎学問と手元のダイスがあれば、目を1にして図書館のダイスを追い出して置ける。
   const canStillMeet = () => storyPlayer('P1').dice.some((d) => !d.placedMapId && !d.passed)
     && storyPlayer('P1').ownedCardPhysicalIds.some((id) => STATE.cards[id] && /^B001/.test(STATE.cards[id].currentFaceId) && !STATE.cards[id].tapped);
   const playUntilDiceUsed = (then) => {
     if (!storyRun) return;
+    run.tapAnyTime = true; // ダイスを全部置いたあとも交渉術・土木技術をタップできる(main.jsのstoryTapAnyTime)
     if (run.seneca.libraryBefore && libraryDieIds().some((id) => !run.seneca.libraryBefore.includes(id))) {
       run.seneca.libraryBefore = null;
       senecaPlay(section(/図書館にもう一度行く/), 0, onDone);

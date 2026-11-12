@@ -8790,6 +8790,10 @@ function renderTurnEndWarningModal() {
  * turn is driven entirely by driveOneAiStep, never by clicks). Shared by renderPlayers (per-die/per-
  * card action gating) and the header's round-pass button (2026-08-02) so the two can't drift apart. */
 function actingHumanPlayerId(state, next) {
+  // ストーリー第2章の自由に遊ぶ間: ダイスを全部置いて(ROUND_OVER)も、交渉術・土木技術のタップでカードを獲得
+  // できるように、P1を手番の人として扱う(2026-11-12, per user「ダイスを使い切って交渉術か土木技術がアンタップなら
+  // 続けれるように」、story.jsのrun.tapAnyTime)。置けるダイスはもうないので、できるのはタップ(フリーアクション)だけ。
+  if (storyTapAnyTime(next)) return 'P1';
   if (!next) return null;
   const activePlayer = state.players.find((p) => p.id === next.playerId);
   // Online play (2026-08-29): same localSeatId requirement as realTurnPlayerId's own extension -- a
@@ -8804,6 +8808,10 @@ function actingHumanPlayerId(state, next) {
   // callers) forces the choice to be resolved first, same as an unpayable usage fee already does.
   if (state.pendingChoices.some((c) => c.playerId === next.playerId && c.kind === 'UNTAP_CHOICE')) return null;
   return next.playerId;
+}
+
+function storyTapAnyTime(next) {
+  return typeof storyRun !== 'undefined' && !!storyRun && !!storyRun.tapAnyTime && !!next && next.type === 'ROUND_OVER';
 }
 
 /** True if some *proper* (non-empty, not-the-whole-set) subset of `values` already sums to >=cap --
@@ -11172,7 +11180,8 @@ function renderPlayerCards(state, next) {
     // ROUND_OVERを返し、P1自身を含め誰もisSelfにならない(ヘッドレステストで発見)。それ以外の通常プレイ/
     // チュートリアルの他の場面は従来通りisSelf+hasFinishedOnboarding必須のまま。
     const tutorialTapOverride = tutorialModeActive && player.id === 'P1' && TUTORIAL_TAP_ALLOWED_STEP_IDS.has(tutorialCurrentStepId);
-    const canUseTap = (tutorialTapOverride || (isSelf && hasFinishedOnboarding(player))) && !isAiPlayer(player.id)
+    const storyTapOverride = player.id === 'P1' && storyTapAnyTime(next); // story.jsのrun.tapAnyTime(actingHumanPlayerId参照)
+    const canUseTap = (tutorialTapOverride || storyTapOverride || (isSelf && hasFinishedOnboarding(player))) && !isAiPlayer(player.id)
       && (!onlineRoomCode || localSeatId === player.id)
       && !state.pendingChoices.some((c) => c.playerId === player.id && c.kind === 'UNTAP_CHOICE');
     const tpl = document.getElementById('tpl-card-group');
