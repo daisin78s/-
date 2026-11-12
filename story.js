@@ -1967,6 +1967,7 @@ function senecaBuildState() {
 
 const STORY_SENECA_FIRST_NAME = '几帳面な研究者セネカ';
 const STORY_SENECA_WORRIED_IMG = 'assets/story-seneca-worried.webp';
+const STORY_SENECA_HAPPY_IMG = 'assets/story-seneca-happy.webp'; // 喜んでいる几帳面な研究者セネカ.png(「素晴らしいわ！」以降)
 function senecaStart() {
   const run = storyRun;
   STORY_SPEAKERS.seneca.name = STORY_SENECA_FIRST_NAME;
@@ -1979,7 +1980,8 @@ function senecaStart() {
   storyApplyVisibleMaps();
   applyMobileActiveTab('board');
   render(STATE);
-  new Image().src = STORY_SENECA_WORRIED_IMG; // 心配性になった時の差分も先に読んでおく
+  new Image().src = STORY_SENECA_WORRIED_IMG; // 心配性になった時・喜んでいる時の差分も先に読んでおく
+  new Image().src = STORY_SENECA_HAPPY_IMG;
   const img = new Image();
   img.src = STORY_SPEAKERS.seneca.img;
   const loaded = img.decode ? img.decode() : Promise.resolve();
@@ -2036,6 +2038,8 @@ function senecaPlay(rows, i, onDone) {
       senecaGlow(['#shop-combined-slots .shop-card__acquirable-badge']);
     }
     storySetSpeaker(storyRun.seneca.hidePortrait ? 'senecaAway' : 'seneca');
+    // 「素晴らしいわ！」以降は喜んでいる差分(2026-11-12, per user)。
+    if (/^素晴らしいわ/.test(row.text)) senecaSwapPortrait(STORY_SENECA_HAPPY_IMG);
     storySayThen(`CS-${row.index}`, () => {
       if (storyRun && storyRun.seneca.glowUntilLineEnd) { storyRun.seneca.glowUntilLineEnd = false; storySetGlow([]); }
       next();
@@ -2083,15 +2087,9 @@ function senecaDoEvent(row, onDone) {
     const name = /が(.+セネカ)になる/.exec(e)[1];
     STORY_SPEAKERS.seneca.name = name;
     STORY_SPEAKERS.senecaAway.name = name;
-    // 立ち絵も差分(心配性な研究者セネカ.png、2026-11-12 per user「差分画像作りました」)に。
-    if (/心配性/.test(name)) STORY_SPEAKERS.seneca.img = STORY_SENECA_WORRIED_IMG;
     if (run.speaker === 'seneca' || run.speaker === 'senecaAway') run.dom.dialogName.textContent = name;
-    // 同じポーズの差分なので、出ている立ち絵はその場で差し替える(出し直しのアニメーションはしない)。
-    if (run.speaker === 'seneca' && !run.dom.portrait.hidden) {
-      run.dom.portrait.src = STORY_SPEAKERS.seneca.img;
-      run.dom.portrait.dataset.src = STORY_SPEAKERS.seneca.img;
-      run.dom.portrait.alt = name;
-    }
+    // 立ち絵も差分(心配性な研究者セネカ.png、2026-11-12 per user「差分画像作りました」)に。
+    if (/心配性/.test(name)) senecaSwapPortrait(STORY_SENECA_WORRIED_IMG);
     senecaApplyName();
     onDone();
   } else if (/分岐に行く/.test(e)) {
@@ -2300,6 +2298,16 @@ function senecaDoEvent(row, onDone) {
  *  - 「交渉術を獲得する」: 皇帝宮殿で交渉術を獲得したらその後ろの行を流してonDone()(「つづく」)。
  *  - 「皇帝宮殿以外にダイスを置く（ダイスがまだ残っている）」: そのセリフ(道草…)を出して、続けて置かせる。
  *  - 「ダイスがなくなる（交渉術が獲得できていない）」: そのセリフ(残念…)を出して、rowのセリフの前まで戻る。 */
+/** セネカの立ち絵を同じポーズの差分に替える。出ている立ち絵はその場で差し替える(出し直しのアニメーションはしない)。 */
+function senecaSwapPortrait(img) {
+  const run = storyRun;
+  STORY_SPEAKERS.seneca.img = img;
+  if (run.speaker === 'seneca' && !run.dom.portrait.hidden) {
+    run.dom.portrait.src = img;
+    run.dom.portrait.dataset.src = img;
+  }
+}
+
 /** セネカのプレイヤーネームを今の名前(セリフの名前欄と同じ)にする。盤面を巻き戻した後にも呼ぶ。 */
 function senecaApplyName() {
   storyPlayer('P2').name = STORY_SPEAKERS.seneca.name;
