@@ -1386,7 +1386,7 @@ function story2DiceValues() {
  * 置ける(=資源は足りている)。 */
 function story2NeedsStarRescue() {
   const ch = storyRun.chapter2;
-  if (ch.inRound2 || ch.inRound3 || !ch.blocks.starRescue || !storyRun.visibleMapIds.includes(STORY_TRAINING_MAP_ID)) return false;
+  if (ch.inRound2 || ch.inRound3 || ch.monumentRound || !ch.blocks.starRescue || !storyRun.visibleMapIds.includes(STORY_TRAINING_MAP_ID)) return false;
   const remaining = storyPlayer('P1').dice.filter((d) => !d.placedMapId && !d.passed);
   if (remaining.length !== 1 || remaining[0].isWildcardThisTurn) return false;
   const die = remaining[0];
@@ -1446,7 +1446,11 @@ function story2Play(rows, i, onDone) {
     story2HideCallout(); // 拡大したカードはセリフが始まったら消す(セリフが隠れないように、per user)
     story2TopicGlow(row);
     storySetSpeaker('spal');
-    storySayThen(`C2-${row.index}`, next, 0, row.text);
+    storySayThen(`C2-${row.index}`, () => {
+      // 「○○が光る」と同じ行のセリフ: そのセリフの間だけ光らせる。
+      if (storyRun && storyRun.ch2GlowLine) { storyRun.ch2GlowLine = false; storySetGlow([]); }
+      next();
+    }, 0, row.text);
   };
   if (row.event && storyRun.ch2TopicMapId) story2TopicGlow(row);
   if (row.event) story2DoEvent(row, i, say);
@@ -1479,6 +1483,30 @@ function story2DoEvent(row, i, onDone) {
     if (die) die.isWildcardThisTurn = true;
     render(STATE);
     storyLater(onDone, 600);
+    return;
+  }
+  if (/秒間がある/.test(e)) {
+    // 「１秒間がある」: 間を置くだけ。
+    storyLater(onDone, (Number(seconds) || 1) * 1000);
+    return;
+  }
+  if (/モニュメント/.test(e) && /右上/.test(e) && /光る/.test(e)) {
+    // 「モニュメントの右上の数字が光る」(同じ行のセリフ「そのかわりカードの右上に書いてある数字以上の目…」の間だけ)。
+    storySetGlow(['#shop-combined-slots .shop-slot[data-face-id^="M"] .shop-card__req']);
+    run.ch2GlowLine = true;
+    onDone();
+    return;
+  }
+  if (/モニュメント/.test(e) && /ランダム/.test(e) && !/M\d{3}/.test(e)) {
+    // 「ショップ001-006にモニュメントがランダムで出てくる」(2026-11-12 作り直し): M001〜M012からランダムに6枚
+    // (per user回答)。見えるようにショップの画面に切り替える(説明が終わって自由に置く時にエリアに戻す)。
+    storySetAllowedTabs([...run.allowedTabs, 'shop']);
+    applyMobileActiveTab('shop');
+    story2FillMonuments(false);
+    const shopSlots = [...document.querySelectorAll('#shop-combined-slots .shop-slot')].filter((n) => n.style.gridRow === '1');
+    shopSlots.forEach((n, k) => n.animate([{ opacity: 0, transform: 'scale(0.9)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 400, delay: k * 120, easing: 'ease-out', fill: 'backwards' }));
+    run.chapter2.backToBoard = true;
+    storyLater(onDone, shopSlots.length * 120 + 500);
     return;
   }
   if (/消え/.test(e) && /光る/.test(e)) {
@@ -1640,10 +1668,9 @@ function story2DoEvent(row, i, onDone) {
       story2LockPlacement(); // スパルのセリフの間は置けない
       // そのラウンドの「やり直し」の戻り先: 2ラウンド目は43行目「よーし次のラウンドだ」から、3ラウンド目は
       // 最終試験のセリフから。
-      const key = STATE.round === 2 ? 'round2Snapshot' : 'round3Snapshot';
-      if (!ch[key]) ch[key] = { state: gameStateMod.cloneState(STATE), visibleMapIds: run.visibleMapIds.slice(), rowIndex: i + 1, allowedTabs: [...run.allowedTabs] };
-      ch.inRound2 = STATE.round === 2;
-      ch.inRound3 = STATE.round === 3;
+      // 2026-11-12 作り直し: 2ラウンド目からはモニュメントの獲得(2・3・4ラウンド)。やり直しの戻り先は
+      // 自由に置き始める時の盤面(story2FreePlay)。
+      ch.monumentRound = STATE.round;
       onDone();
     }, true);
     if (!ch.turnOpen) { start(); return; }
@@ -1746,6 +1773,33 @@ function story2LockPlacement() {
   selectedDieIds = [];
 }
 
+/** モニュメントの段(ショップ001-006)にM001〜M012からランダムに並べる。onlyEmpty=trueなら空いている所だけ
+ * (3・4ラウンド目の補充、per user回答「空いた所を補充」)。ショップに出ている物・獲得済みの物は出さない。 */
+function story2FillMonuments(onlyEmpty) {
+  const slots = STATE.shops.M.slots;
+  const used = new Set(Object.values(slots).filter(Boolean));
+  for (const player of STATE.players) {
+    for (const id of player.ownedCardPhysicalIds) if (STATE.cards[id] && /^M/.test(STATE.cards[id].currentFaceId || '')) used.add(STATE.cards[id].currentFaceId);
+  }
+  const pool = [];
+  for (let n = 1; n <= 12; n++) { const f = `M${String(n).padStart(3, '0')}`; if (!used.has(f) || !onlyEmpty) pool.push(f); }
+  for (let k = pool.length - 1; k > 0; k--) {
+    const j = Math.floor(Math.random() * (k + 1));
+    [pool[k], pool[j]] = [pool[j], pool[k]];
+  }
+  for (const slotId of Object.keys(slots)) {
+    if (onlyEmpty && slots[slotId]) continue;
+    slots[slotId] = pool.shift() || null;
+  }
+  STATE.shops.M.drawPile = [];
+  if (storyRun.shopOverrides) delete storyRun.shopOverrides.monumentLabel;
+  render(STATE);
+}
+
+function story2MonumentCount() {
+  return storyPlayer('P1').ownedCardPhysicalIds.filter((id) => STATE.cards[id] && /^M/.test(STATE.cards[id].currentFaceId)).length;
+}
+
 function story2ColorDiceCount() {
   return storyPlayer('P1').dice.filter((d) => d.kind === 'COLOR').length;
 }
@@ -1758,6 +1812,11 @@ function story2FreePlay() {
   storySetSpeaker('spalAway');
   storyHideDialog();
   if (run.resourceOverride) { run.resourceOverride = null; render(STATE); } // 酒場の表示合わせが残っていたら本当の数に
+  // モニュメントのラウンド: 説明のあと初めて自由に置く時、エリアの画面に戻す。その盤面を「やり直し」の戻り先に。
+  if (ch.backToBoard) { ch.backToBoard = false; applyMobileActiveTab('board'); render(STATE); }
+  if (ch.monumentRound && (!ch.monumentSnap || ch.monumentSnap.round !== STATE.round)) {
+    ch.monumentSnap = { round: STATE.round, state: gameStateMod.cloneState(STATE), visibleMapIds: run.visibleMapIds.slice(), rowIndex: 0, allowedTabs: [...run.allowedTabs], monuments: story2MonumentCount() };
+  }
   if (story2NeedsStarRescue()) { story2Play(ch.blocks.starRescue, 0, story2FreePlay); return; }
   if (storyForcePassIfStuck('P1', run.visibleMapIds, story2Finish)) return;
   if (!storyHasDiceLeft('P1')) { story2Finish(); return; }
@@ -1823,6 +1882,19 @@ function story2FreePlay() {
 
 function story2Finish() {
   const ch = storyRun.chapter2;
+  if (ch.monumentRound) {
+    // 2026-11-12 作り直し: 2・3・4ラウンド目は、そのラウンド中にモニュメントを1枚以上獲得できれば次のラウンド
+    // (空いた所を補充)、4ラウンド目ならクリアで次の章へ。できなければそのラウンドの始めに戻す(セリフなし、per user回答)。
+    const snap = ch.monumentSnap;
+    if (story2MonumentCount() <= snap.monuments) { story2Rewind(snap, []); return; }
+    if (STATE.round >= 4) { story2GoNextChapter(); return; }
+    storyStartNextRound(() => {
+      ch.monumentRound = STATE.round;
+      story2FillMonuments(true);
+      story2FreePlay();
+    }, true);
+    return;
+  }
   if (ch.inRound3) {
     // 3ラウンド目(最終試験): 6VP以上なら「つづく」、足りなければ3ラウンド目の始めからやり直し (per user)。
     const row = standingsRows(STATE).find((r) => r.playerId === 'P1');
@@ -1846,6 +1918,15 @@ function story2Finish() {
   }
   if (story2ColorDiceCount() >= 5) story2Play(ch.blocks.clear || [], 0, story2FreePlay);
   else story2Play(ch.blocks.fail || [], 0, () => story2Rewind(ch.snapshot, ch.blocks.intro));
+}
+
+/** 第3章クリア: 次の章へ(第2章→第3章と同じ形、per user回答「次の章へ」)。次の章がまだ無ければ「つづく」。 */
+function story2GoNextChapter() {
+  storyMarkChapterCleared(3);
+  const nextChapter = STORY_CHAPTERS.find((c) => c.no === 4);
+  if (!nextChapter || !nextChapter.start) { storyEndOfScript('つづく'); return; }
+  try { sessionStorage.setItem(STORY_AUTO_START_KEY, '4'); } catch (e) { /* 読めなければ普通にトップへ */ }
+  closeStoryMode();
 }
 
 /** 「やり直し」: snapの盤面に戻して、rowsのsnap.rowIndex行目から続きを出す。1ラウンド目は初期資源カードが
