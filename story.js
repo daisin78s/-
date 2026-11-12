@@ -1959,13 +1959,18 @@ function senecaBuildState() {
     p.skipOnboarding = true;
   }
   const seneca = state.players.find((p) => p.id === 'P2');
-  seneca.name = 'セネカ';
+  // 2026-11-12, per user回答「最初から几帳面な研究者セネカ」: プレイヤーネームもセリフの名前欄も(senecaStart)。
+  seneca.name = STORY_SENECA_FIRST_NAME;
   seneca.dice = seneca.dice.slice(0, 1); // セネカは皇帝宮殿に1個置くだけ
   return state;
 }
 
+const STORY_SENECA_FIRST_NAME = '几帳面な研究者セネカ';
+const STORY_SENECA_WORRIED_IMG = 'assets/story-seneca-worried.webp';
 function senecaStart() {
   const run = storyRun;
+  STORY_SPEAKERS.seneca.name = STORY_SENECA_FIRST_NAME;
+  STORY_SPEAKERS.senecaAway.name = STORY_SENECA_FIRST_NAME;
   run.visibleMapIds = [];
   run.seneca = { blocks: senecaBlocks(), farmDone: false };
   storyUseState(senecaBuildState());
@@ -1974,6 +1979,7 @@ function senecaStart() {
   storyApplyVisibleMaps();
   applyMobileActiveTab('board');
   render(STATE);
+  new Image().src = STORY_SENECA_WORRIED_IMG; // 心配性になった時の差分も先に読んでおく
   const img = new Image();
   img.src = STORY_SPEAKERS.seneca.img;
   const loaded = img.decode ? img.decode() : Promise.resolve();
@@ -2070,6 +2076,23 @@ function senecaDoEvent(row, onDone) {
     // 「白ダイスが光る」: あなたの白ダイスを、そのセリフの間だけ。
     storySetGlow(['#mobile-own-row .mobile-own-row__dice--white .die', '#players .player-panel[data-player-id="P1"] .die--WHITE']);
     run.seneca.glowUntilLineEnd = true;
+    onDone();
+  } else if (/セネカ/.test(e) && /が(.+セネカ)になる/.test(e)) {
+    // 「几帳面な研究者セネカが心配性な研究者セネカになる」: 以降のセリフの名前欄とプレイヤーネームを変える(per user回答)。
+    // 巻き戻しても戻さない(senecaApplyName)。
+    const name = /が(.+セネカ)になる/.exec(e)[1];
+    STORY_SPEAKERS.seneca.name = name;
+    STORY_SPEAKERS.senecaAway.name = name;
+    // 立ち絵も差分(心配性な研究者セネカ.png、2026-11-12 per user「差分画像作りました」)に。
+    if (/心配性/.test(name)) STORY_SPEAKERS.seneca.img = STORY_SENECA_WORRIED_IMG;
+    if (run.speaker === 'seneca' || run.speaker === 'senecaAway') run.dom.dialogName.textContent = name;
+    // 同じポーズの差分なので、出ている立ち絵はその場で差し替える(出し直しのアニメーションはしない)。
+    if (run.speaker === 'seneca' && !run.dom.portrait.hidden) {
+      run.dom.portrait.src = STORY_SPEAKERS.seneca.img;
+      run.dom.portrait.dataset.src = STORY_SPEAKERS.seneca.img;
+      run.dom.portrait.alt = name;
+    }
+    senecaApplyName();
     onDone();
   } else if (/分岐に行く/.test(e)) {
     // 「その後獲得したカードの分岐に行く」: 台本の流れの説明(続きはsenecaTryNegotiationが選ぶ)。
@@ -2277,6 +2300,12 @@ function senecaDoEvent(row, onDone) {
  *  - 「交渉術を獲得する」: 皇帝宮殿で交渉術を獲得したらその後ろの行を流してonDone()(「つづく」)。
  *  - 「皇帝宮殿以外にダイスを置く（ダイスがまだ残っている）」: そのセリフ(道草…)を出して、続けて置かせる。
  *  - 「ダイスがなくなる（交渉術が獲得できていない）」: そのセリフ(残念…)を出して、rowのセリフの前まで戻る。 */
+/** セネカのプレイヤーネームを今の名前(セリフの名前欄と同じ)にする。盤面を巻き戻した後にも呼ぶ。 */
+function senecaApplyName() {
+  storyPlayer('P2').name = STORY_SPEAKERS.seneca.name;
+  render(STATE);
+}
+
 function senecaHasCard(re) {
   return storyPlayer('P1').ownedCardPhysicalIds.some((id) => STATE.cards[id] && re.test(STATE.cards[id].currentFaceId));
 }
@@ -2287,8 +2316,10 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
   run.seneca.negotiationStarted = true;
   if (run.showAcquirableBadges) { run.showAcquirableBadges = false; render(STATE); }
   if (!snap) snap = { state: gameStateMod.cloneState(STATE), visibleMapIds: run.visibleMapIds.slice() };
-  const section = (re) => {
-    const start = rest.findIndex((r) => re.test(story2NormalizeEvent(r.event || '')));
+  // afterRe: その区切りより後ろで探す(「上記の続きで基礎学問がタップ状態」が交渉術・土木技術の後ろに1つずつあるため)。
+  const section = (re, afterRe) => {
+    const from = afterRe ? rest.findIndex((r) => afterRe.test(story2NormalizeEvent(r.event || ''))) : -1;
+    const start = rest.findIndex((r, k) => k > from && re.test(story2NormalizeEvent(r.event || '')));
     if (start < 0) return [];
     const end = rest.findIndex((r, k) => k > start && r.event && /ダイスがなくなる|以外にダイスを置く|を獲得する|まで戻る|もう一度行く|タップ状態|ショートカットで獲得/.test(story2NormalizeEvent(r.event)));
     return rest.slice(start + 1, end < 0 ? rest.length : end);
@@ -2354,7 +2385,7 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
         storyApplyVisibleMaps();
         run.seneca.libraryBefore = meet.libraryBefore.slice();
         run.turnBannerKeys = new Set();
-        render(STATE);
+        senecaApplyName();
         storyLater(() => playUntilDiceUsed(then), 400);
       });
       return;
@@ -2387,7 +2418,7 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
       run.turnBannerKeys = new Set(); // 巻き戻したら「ターン○」も数え直す
       run.seneca.libraryBefore = null;
       if (!senecaHasCard(/^B001/)) run.seneca.basicDone = false; // 戻した盤面で基礎学問をまだ持っていなければ、また出す
-      render(STATE);
+      senecaApplyName();
       storyLater(() => senecaTryNegotiation(row, rest, onDone, snap), 400);
     });
   };
@@ -2423,7 +2454,7 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
       senecaPlay(section(re), 0, () => {
         hideCardEnlargeModal();
         const basicTapped = storyPlayer('P1').ownedCardPhysicalIds.some((id) => STATE.cards[id] && /^B001/.test(STATE.cards[id].currentFaceId) && STATE.cards[id].tapped);
-        senecaPlay(basicTapped ? section(/タップ状態/) : [], 0, () => {
+        senecaPlay(basicTapped ? section(/タップ状態/, re) : [], 0, () => {
           if (section(/図書館にもう一度行く/).length > 0) awaitLibrary();
           playUntilDiceUsed(onDone);
         });
