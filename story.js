@@ -2071,6 +2071,17 @@ function senecaDoEvent(row, onDone) {
     storySetGlow(['#mobile-own-row .mobile-own-row__dice--white .die', '#players .player-panel[data-player-id="P1"] .die--WHITE']);
     run.seneca.glowUntilLineEnd = true;
     onDone();
+  } else if (/分岐に行く/.test(e)) {
+    // 「その後獲得したカードの分岐に行く」: 台本の流れの説明(続きはsenecaTryNegotiationが選ぶ)。
+    onDone();
+  } else if (/アンタップ/.test(e)) {
+    // 「基礎学問をアンタップする」: あなたのそのカードを起こす。
+    for (const id of storyPlayer('P1').ownedCardPhysicalIds) {
+      const card = STATE.cards[id];
+      if (card && card.tapped && e.includes(dataLoaderMod.getCardRow(INDEX, card.currentFaceId).NAME.replace(/LV\d+$/, ''))) card.tapped = false;
+    }
+    render(STATE);
+    storyLater(onDone, 400);
   } else if (/フリック/.test(e) && /獲得カード/.test(e)) {
     // 「フリックで獲得カードに行けるようになる」
     storySetAllowedTabs([...run.allowedTabs, 'cards']);
@@ -2279,7 +2290,7 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
   const section = (re) => {
     const start = rest.findIndex((r) => re.test(story2NormalizeEvent(r.event || '')));
     if (start < 0) return [];
-    const end = rest.findIndex((r, k) => k > start && r.event && /ダイスがなくなる|以外にダイスを置く|を獲得する|まで戻る|もう一度行く/.test(story2NormalizeEvent(r.event)));
+    const end = rest.findIndex((r, k) => k > start && r.event && /ダイスがなくなる|以外にダイスを置く|を獲得する|まで戻る|もう一度行く|タップ状態|ショートカットで獲得/.test(story2NormalizeEvent(r.event)));
     return rest.slice(start + 1, end < 0 ? rest.length : end);
   };
   const sayLines = (rows, then) => {
@@ -2309,8 +2320,11 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
   // 図書館で会うのを待ち始める。行かないままダイスがなくなった時に戻る盤面も覚えておく。
   const awaitLibrary = () => {
     run.seneca.libraryBefore = libraryDieIds();
-    run.seneca.meetSnap = { state: gameStateMod.cloneState(STATE), visibleMapIds: run.visibleMapIds.slice(), libraryBefore: run.seneca.libraryBefore.slice() };
+    run.seneca.meetSnap = { state: gameStateMod.cloneState(STATE), visibleMapIds: run.visibleMapIds.slice(), libraryBefore: run.seneca.libraryBefore.slice(), canMeet: diceLeft() || canStillMeet() };
   };
+  // 置けるダイスがなくても、起きている基礎学問と手元のダイスがあれば、目を1にして図書館のダイスを追い出して置ける。
+  const canStillMeet = () => storyPlayer('P1').dice.some((d) => !d.placedMapId && !d.passed)
+    && storyPlayer('P1').ownedCardPhysicalIds.some((id) => STATE.cards[id] && /^B001/.test(STATE.cards[id].currentFaceId) && !STATE.cards[id].tapped);
   const playUntilDiceUsed = (then) => {
     if (!storyRun) return;
     if (run.seneca.libraryBefore && libraryDieIds().some((id) => !run.seneca.libraryBefore.includes(id))) {
@@ -2328,8 +2342,10 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
     }
     // 「「基礎学問」を使って私に会いに来て」のあと、図書館に行かないままダイスがなくなった: 残念…のあと、
     // 「会いに来て」の直後の盤面に戻る(2026-11-12, per user「「基礎学問」を使って私に会いに来て」の直後に戻したい)。
-    if (!diceLeft() && run.seneca.libraryBefore) {
+    if (!diceLeft() && run.seneca.libraryBefore && !canStillMeet()) {
       const meet = run.seneca.meetSnap;
+      // 「会いに来て」の時点ですでに会えない盤面だった(戻しても同じ): 「さあ、あとは…」まで戻る。
+      if (!meet.canMeet) { failAndRewind(); return; }
       sayLines(section(/ダイスがなくなる/), () => {
         storySetGlow([]);
         hideCardEnlargeModal();
@@ -2343,7 +2359,7 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
       });
       return;
     }
-    if (!diceLeft()) { then(); return; }
+    if (!diceLeft() && !(run.seneca.libraryBefore && canStillMeet())) { then(); return; }
     storyHideDialog();
     // 自由に遊ぶ間はフリーアクション(カードのタップ)と獲得カードの画面も使える。
     if (!document.body.classList.contains('story-free-action')) { document.body.classList.add('story-free-action'); render(STATE); }
@@ -2399,16 +2415,22 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
     // 「交渉術を獲得する（基礎学問を獲得していない）」「土木技術を獲得する（交渉術を獲得していない）（基礎学問を
     // 獲得していない）」: そのカードでタップマークとフリーアクションの説明。基礎学問も獲得済みなら説明なし。
     const lesson = (re) => senecaPlay(hasCard(/^B001/) ? [] : section(re), 0, () => { hideCardEnlargeModal(); playUntilDiceUsed(onDone); });
-    // 「交渉術を獲得する（基礎学問を獲得している）」: 先に基礎学問を持っていた時のレッスン。そのあと図書館で会う。
-    if (hasNegotiation() && hasCard(/^B001/)) {
+    // 「交渉術を獲得する（基礎学問を獲得している）」「土木技術を獲得する（基礎学問を獲得している）」: 先に基礎学問を
+    // 持っていた時のレッスン。基礎学問を使ってしまっていたら「上記の続きで基礎学問がタップ状態」の部分(アンタップ)。
+    // そのあと図書館で会う。
+    const basicFirstLesson = (re) => {
       run.seneca.basicDone = true; // 基礎学問のセリフ(「よくできました」等)はもう出さない
-      senecaPlay(section(/^交渉術を獲得する.*基礎学問を獲得している/), 0, () => {
+      senecaPlay(section(re), 0, () => {
         hideCardEnlargeModal();
-        if (section(/図書館にもう一度行く/).length > 0) awaitLibrary();
-        playUntilDiceUsed(onDone);
+        const basicTapped = storyPlayer('P1').ownedCardPhysicalIds.some((id) => STATE.cards[id] && /^B001/.test(STATE.cards[id].currentFaceId) && STATE.cards[id].tapped);
+        senecaPlay(basicTapped ? section(/タップ状態/) : [], 0, () => {
+          if (section(/図書館にもう一度行く/).length > 0) awaitLibrary();
+          playUntilDiceUsed(onDone);
+        });
       });
-      return;
-    }
+    };
+    if (hasNegotiation() && hasCard(/^B001/)) { basicFirstLesson(/^交渉術を獲得する.*基礎学問を獲得している/); return; }
+    if (hasCard(/^B006/) && hasCard(/^B001/)) { basicFirstLesson(/^土木技術を獲得する.*基礎学問を獲得している/); return; }
     if (hasNegotiation()) { lesson(/^交渉術を獲得する.*基礎学問を獲得していない/); return; }
     if (hasCard(/^B006/)) { lesson(/^土木技術を獲得する.*基礎学問を獲得していない/); return; }
     // 「基礎学問を獲得する（交渉術も土木技術も獲得していない）」: そのセリフのあと、続けて交渉術を目指す。
@@ -2422,8 +2444,12 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
     else waitPlacement();
   };
   storySetSpeaker('seneca');
-  // 先にショートカットで獲得していた: 「さあ、あとは…」は出さずにその分かれ道へ。
-  if (hasNegotiation() || hasCard(/^B006/) || hasCard(/^B001/)) { storyWhenVisualsIdle(() => judge(true)); return; }
+  // 先にショートカットで獲得していた: 「さあ、あとは…」は出さずに「チェックマークの説明中にショートカットで獲得」の
+  // 部分(「もう獲得したの」…)のあと、その分かれ道へ。
+  if (hasNegotiation() || hasCard(/^B006/) || hasCard(/^B001/)) {
+    storyWhenVisualsIdle(() => senecaPlay(section(/ショートカットで獲得/), 0, () => judge(true)));
+    return;
+  }
   if (row.text) storySayThen(`CS-${row.index}`, waitPlacement, 0, row.text);
   else waitPlacement();
 }
