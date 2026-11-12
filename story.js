@@ -403,6 +403,8 @@ function storyTurnBannerWhenPlaceable(state) {
   const run = storyRun;
   if (!run.diceShown || state.phase === 'GAME_END') return;
   const player = state.players.find((p) => p.id === 'P1');
+  // 置けるダイスがない時(ダイスを使い切ってカードのタップで続ける時など)は出さない(2026-11-12, per user)。
+  if (!player.dice.some((d) => !d.placedMapId && !d.passed && storyPlaceableSlots('P1', d.id, run.visibleMapIds).length > 0)) return;
   const nth = player.dice.filter((d) => d.placedMapId || d.passed).length + 1;
   const key = `${state.round}/${player.id}/${nth}`;
   run.turnBannerKeys = run.turnBannerKeys || new Set();
