@@ -601,7 +601,11 @@ function enumerateBzOutcomes(state, index, playerId, items, bzAvailable) {
     const payItems = discount.bzUsed > 0 ? [...discount.items, { resource: 'BZ', count: discount.bzUsed }] : discount.items;
     const resolution = resolvePayment(state, index, playerId, payItems);
     if (!resolution.ok) continue;
-    const key = resolution.items.map((i) => `${i.resource}:${i.count}`).sort().join(',');
+    // 資源ごとの合計で見分ける(2026-11-12, per user「Z1Z1 / Z2 の様に結果として同じものが出てきます 結果として
+    // 同じものは複数出ないように」): Zが2つの資源の代わりに1つずつ使われても、Z2と同じ支払い。
+    const totals = {};
+    for (const i of resolution.items) totals[i.resource] = (totals[i.resource] || 0) + i.count;
+    const key = Object.keys(totals).sort().map((r) => `${r}:${totals[r]}`).join(',');
     if (!seen.has(key)) seen.set(key, { bzDiscount, resolvedItems: resolution.items });
   }
   return [...seen.values()];

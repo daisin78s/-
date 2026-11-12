@@ -8326,10 +8326,13 @@ function renderBzOutcomeChoice() {
   for (const outcome of outcomes) {
     const btn = el('button', 'build-choice-payment__option');
     btn.type = 'button';
+    // 同じ資源はまとめて1つの表示に(「Z1 Z1」ではなく「Z2」、2026-11-12 per user)。
+    const totals = new Map();
     for (const item of outcome.resolvedItems) {
       if (item.resource === 'BZ') continue; // BZ is spent in every outcome alike -- not the differentiator
-      btn.appendChild(renderResourceBadge(item.resource, item.count));
+      totals.set(item.resource, (totals.get(item.resource) || 0) + item.count);
     }
+    for (const [resource, count] of totals) btn.appendChild(renderResourceBadge(resource, count));
     btn.addEventListener('click', () => commitBuildCandidate(candidate, outcome.bzDiscount));
     container.appendChild(btn);
   }
