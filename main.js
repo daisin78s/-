@@ -17594,7 +17594,68 @@ let diceRollSequenceActive = false;
 let lastRenderedRound = null;
 const diceRollHiddenKeys = new Set(); // 演出中、着地前の本物のダイスを隠しておくキー
 
+/** ストーリーの登場人物と同じ呼び名になったAI (2026-11-12, per user「ローカル対戦 オンライン対戦などでたまたま
+ * 怠惰なローマ市民…になったときアニメーションがでてAIのプレイヤーネームが怠惰なローマ市民アレク…になる」、回答
+ * 「立ち絵が登場」「AIだけ」): 性格とジョブが決まって呼び名がこの表のどれかになったら、そのAIの名前をその人物の名前に
+ * 変え、立ち絵を出す。名前は表示用だけ(player.nameで何かを見分けている所は無い、プレイヤー名の入力欄参照)。
+ * オンライン対戦は全員の画面でそれぞれ同じ名前に変わる(ホストの盤面にも入る)。立ち絵はこの端末でそのゲームの
+ * そのAIにつき1回だけ(storyCharacterShownKeys)。ストーリー・チュートリアル・リプレイでは何もしない。 */
+const STORY_CHARACTER_BY_TITLE = {
+  怠惰なローマ市民: { name: 'アレク', img: 'assets/story-alek.webp' },
+  心配性な巫女: { name: 'パトラ', img: 'assets/story-patra.webp' },
+  傲慢な百人隊長: { name: 'スパル', img: 'assets/story-spal.webp' },
+  几帳面な研究者: { name: 'セネカ', img: 'assets/story-seneca.webp' },
+  心配性な研究者: { name: 'セネカ', img: 'assets/story-seneca-worried.webp' },
+};
+const storyCharacterShownKeys = new Set();
+const storyCharacterQueue = [];
+let storyCharacterPlaying = false;
+
+function applyStoryCharacterNames(state) {
+  if (replayMode || tutorialModeActive || (typeof storyRun !== 'undefined' && storyRun) || !state || !state.players) return;
+  for (const player of state.players) {
+    if (!isAiPlayer(player.id) || !player.conPhysicalId || !player.conFace || !player.jobCardId) continue;
+    const title = rankingConJobTitle(`${player.conPhysicalId}${player.conFace}`, player.jobCardId);
+    const character = STORY_CHARACTER_BY_TITLE[title];
+    if (!character) continue;
+    if (player.name !== character.name) player.name = character.name;
+    const key = `${state.rng ? state.rng.seed : ''}:${player.id}`;
+    if (storyCharacterShownKeys.has(key)) continue;
+    storyCharacterShownKeys.add(key);
+    storyCharacterQueue.push({ title, character });
+  }
+  playStoryCharacterIntro();
+}
+
+/** 立ち絵の登場: 立ち絵と「怠惰なローマ市民 / アレクがあらわれた！」を少しの間出して消す。押せる物の邪魔はしない。 */
+function playStoryCharacterIntro() {
+  if (storyCharacterPlaying || storyCharacterQueue.length === 0) return;
+  storyCharacterPlaying = true;
+  const { title, character } = storyCharacterQueue.shift();
+  const box = el('div', 'story-character-intro');
+  const img = document.createElement('img');
+  img.className = 'story-character-intro__img';
+  img.src = character.img;
+  img.alt = '';
+  box.appendChild(img);
+  const text = el('div', 'story-character-intro__text');
+  text.appendChild(el('div', 'story-character-intro__title', title));
+  text.appendChild(el('div', 'story-character-intro__name', `${character.name}があらわれた！`));
+  box.appendChild(text);
+  document.body.appendChild(box);
+  img.animate([{ opacity: 0, transform: 'translateX(-40px)' }, { opacity: 1, transform: 'translateX(0)' }], { duration: 450, easing: 'ease-out' });
+  text.animate([{ opacity: 0, transform: 'scale(0.9)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 450, delay: 200, easing: 'ease-out', fill: 'backwards' });
+  setTimeout(() => {
+    box.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, easing: 'ease-in', fill: 'forwards' }).onfinish = () => {
+      box.remove();
+      storyCharacterPlaying = false;
+      playStoryCharacterIntro();
+    };
+  }, animMs(2200));
+}
+
 function render(state) {
+  applyStoryCharacterNames(state);
   const diceBefore = captureDieRects();
   renderCore(state);
   // ストーリーモード(story.js)は本物のエリア画面を使うので、描き直すたびに光る演出などを付け直す。

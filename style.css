@@ -8253,3 +8253,41 @@ body.desktop-scaled #debug-panel .desktop-settings-controls { gap: 10px; margin-
     color: var(--text);
   }
 }
+
+/* ストーリーの登場人物と同じ呼び名になったAIの立ち絵 (main.jsのplayStoryCharacterIntro)。押せる物の邪魔はしない。 */
+.story-character-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 16px;
+  background: rgba(20, 16, 30, 0.45);
+  pointer-events: none;
+}
+.story-character-intro__img {
+  max-height: 72vh;
+  max-width: 40vw;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.45));
+}
+.story-character-intro__text {
+  background: rgba(40, 30, 40, 0.92);
+  color: #fff;
+  border-radius: 14px;
+  padding: 14px 22px;
+  text-align: center;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+.story-character-intro__title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #ffd27a;
+  margin-bottom: 4px;
+}
+.story-character-intro__name {
+  font-size: 22px;
+  font-weight: 800;
+}
