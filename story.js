@@ -2967,6 +2967,18 @@ function ch4Play(rows, i, onDone) {
     ch4EnemyChoosesJob(e, say);
   } else if (/ジョブ選択画面/.test(e)) {
     ch4ShowJobDraft(say);
+  } else if (/皇帝宮殿の手番順/.test(e) && /光る/.test(e)) {
+    // 「皇帝宮殿の手番順が光る」: 皇帝宮殿の「次ラウンド」の手番順(チュートリアルと同じ所)。
+    storySetGlow(['.map-tile--castle .map-tile__turnorder--current']);
+    run.ch4.glowLine = true;
+    const t = document.querySelector('.map-tile--castle .map-tile__turnorder--current');
+    if (t) t.scrollIntoView({ block: 'center' });
+    say();
+  } else if (/手番順の.*光る/.test(e)) {
+    // 「手番順のピンクが光る（プレイヤーがピンクなら）」: その手番順の中の、あなたの色の丸。
+    storySetGlow([`.map-tile--castle .map-tile__turnorder--current .player-panel__swatch[data-color="${colorForPlayer(STATE, 'P1')}"]`]);
+    run.ch4.glowLine = true;
+    say();
   } else if (/光る/.test(e) && /スタプレ/.test(e) && run.ch4.orderOverlay) {
     // 4人の画面の「スタプレ値が光る」: あなたの行のスタプレの数字と合計。
     storySetGlow(['.story-ch4-order__me .shop-card > .shop-card__start-order .shop-card__start-order-number', '.story-ch4-order__me .tutorial-turnorder-total__number']);
@@ -3301,15 +3313,16 @@ function ch4ActionSegments(rows) {
 
 /** AIの1手が、台本のどの行動に当たるか(上から順に最初に当たったもの)。
  * 「訓練場に行く」/「領地(学問・人材)カードを獲得する」/「訓練場、皇帝宮殿、元老院以外のエリアに行く」/「研究を使う」。 */
-function ch4FindActionLine(enemy, move, state) {
-  const actions = ((storyRun.ch4.segs || {}).actions || []).filter((a) => a.name === enemy.name);
+function ch4FindActionLine(enemy, move, state, allActions) {
+  const actions = (allActions || []).filter((a) => a.name === enemy.name);
   if (!actions.length || !move) return null;
   let areaName = '';
   let key = null;
+  let upgrade = false; // LVアップ(2R以降の「獲得かLVUPする」「LVUPする」)
   let usedName = '';
   if (move.mapId !== undefined && /^PLACE_/.test(move.type)) {
-    areaName = String(dataLoaderMod.getAreaRow(INDEX, state.maps[move.mapId].currentAreaId).NAME || '');
-    if (move.buildCandidateKey && !/^U:/.test(move.buildCandidateKey)) key = move.buildCandidateKey;
+    areaName = String(dataLoaderMod.getAreaRow(INDEX, state.maps[move.mapId].currentAreaId).NAME || '').replace(/LV\d+$/, ''); // 発展したエリアの「LV1」は付けない
+    if (move.buildCandidateKey) { upgrade = /^U:/.test(move.buildCandidateKey); key = move.buildCandidateKey.replace(/^U:/, ''); }
   } else if (move.type === 'BARE_TAP' || move.type === 'TAP_REACTION') {
     const card = state.cards[move.physicalId];
     usedName = card ? String(dataLoaderMod.getCardRow(INDEX, card.currentFaceId).NAME || '').replace(/LV\d+$/, '') : '';
@@ -3319,7 +3332,7 @@ function ch4FindActionLine(enemy, move, state) {
         const clone = gameStateMod.cloneState(state);
         const r = boardMod.useBareTapAbility(clone, INDEX, { playerId: enemy.id }, move.physicalId);
         const c = r && r.pendingBuild && r.pendingBuild.candidates[move.buildCandidateIndex];
-        if (c && c.type !== 'UPGRADE') key = c.faceId;
+        if (c) { upgrade = c.type === 'UPGRADE'; key = upgrade ? c.toFaceId : c.faceId; }
       } catch (err) { /* 分からなければ獲得のセリフは無し */ }
     }
   } else {
@@ -3332,8 +3345,12 @@ function ch4FindActionLine(enemy, move, state) {
     if (others) return !!areaName && !key && !others[1].split(/[、,，]/).map((x) => x.trim()).includes(areaName);
     const go = /^(.+)に行く/.exec(a.event);
     if (go) return !!areaName && areaName === go[1].trim();
-    const get = /(領地|学問|人材)カードを獲得/.exec(a.event);
-    if (get) return kind === get[1];
+    const get = /(領地|学問|人材)カードを(獲得か[LV]{2}UP|獲得|[LV]{2}UP)/.exec(a.event);
+    if (get) {
+      if (kind !== get[1]) return false;
+      if (/UP/.test(get[2]) && /獲得/.test(get[2])) return true; // 獲得かLVUP(「VLUP」の書き間違いも)
+      return /UP/.test(get[2]) ? upgrade : !upgrade;
+    }
     const use = /^(.+)を使う/.exec(a.event);
     return !!use && !!usedName && usedName === use[1].trim();
   });
@@ -3353,32 +3370,55 @@ function storyBeforeAiStep(state) {
   const run = storyRun;
   if (!run || !run.ch4 || !run.normalGame || run.holdAi) return false;
   const ch = run.ch4;
-  if (!ch.actionTurn) return false;
+  const segs = ch.segs || {};
   const ctx = resolveAiTurnContext(state);
   if (!ctx || ctx.type !== 'TURN') return false;
-  // セリフは1ラウンド目の自己紹介のすぐあとの手番(1R1T)だけ(2026-11-13, per user「1R1Tのみを想定」)。ほかの人の
-  // 手番になったら、またはその人が2個目のダイスを置く手番になったら終わり。
-  const used = storyPlayer(ch.actionTurn).dice.filter((d) => d.placedMapId || d.passed).length;
-  if (ctx.playerId !== ch.actionTurn || state.round !== 1 || used > 1 || (used === 1 && !ctx.hasPlacedDieThisTurn)) { ch.actionTurn = null; return false; }
-  const enemy = ch4Enemies().find((x) => x.id === ctx.playerId);
-  if (!enemy) return false;
   let move = null;
   try { move = selectAiMoveMemo(state, ctx.playerId, { hasPlacedDieThisTurn: ctx.hasPlacedDieThisTurn }); } catch (err) { return false; }
   const key = `${JSON.stringify(move)}|${JSON.stringify(state).length}|${state.progressLog ? state.progressLog.length : 0}`;
   if (ch.announcedKey === key) return false;
+  // 「1Rの最後　ダイス回収直前」: 1ラウンド目を終わらせるターン終了(このあとダイスを回収)の前に、アレクのセリフ。
+  if (move && move.type === 'END_TURN' && state.round === 1 && turnFlowMod.isRoundOver(state) && !ch.round1EndSaid && (segs.roundEnd1 || []).length) {
+    ch.round1EndSaid = true;
+    ch.announcedKey = key;
+    if (isMobileLayout()) applyMobileActiveTab('board');
+    ch4Talk('alek', segs.roundEnd1);
+    return true;
+  }
+  const enemy = ch4Enemies().find((x) => x.id === ctx.playerId);
+  if (!enemy) return false;
+  const used = storyPlayer(ctx.playerId).dice.filter((d) => d.placedMapId || d.passed).length;
+  const firstTurn = used === 0 || (used === 1 && ctx.hasPlacedDieThisTurn);
+  let actions = null;
+  if (state.round === 1 && ch.actionTurn) {
+    // 1R1T: 自己紹介のすぐあとの手番だけ(2026-11-13, per user「1R1Tのみを想定」)。
+    if (ctx.playerId !== ch.actionTurn || !firstTurn) { ch.actionTurn = null; return false; }
+    actions = segs.actions;
+  } else if (state.round === 2 && firstTurn) {
+    actions = segs.actions2; // 2R1T(各自の最初の手番)だけ
+  }
+  if (!actions || !actions.length) return false;
   ch.announcedKey = key;
-  const rows = ch4FindActionLine(enemy, move, state);
+  const rows = ch4FindActionLine(enemy, move, state, actions);
   if (!rows) return false;
+  ch4Talk(CH4_SPEAKER_BY_NAME[enemy.name] || 'alek', rows);
+  return true;
+}
+
+/** 対戦の途中でセリフを言う(言っている間はAIと盤面の操作を止める)。言い終わったら再開。 */
+function ch4Talk(speaker, rows, onDone) {
+  const run = storyRun;
+  const ch = run.ch4;
   run.holdAi = true;
   run.talking = true;
-  ch.speaker = CH4_SPEAKER_BY_NAME[enemy.name] || 'alek';
+  ch.speaker = speaker;
   ch4Play(rows, 0, () => {
     ch.speaker = null;
     storyHideDialog();
     storySetSpeaker('system');
-    storyLater(() => { run.talking = false; run.holdAi = false; render(STATE); }, 300);
+    storySetGlow([]);
+    storyLater(() => { run.talking = false; run.holdAi = false; render(STATE); if (onDone) onDone(); }, 300);
   });
-  return true;
 }
 
 const CH4_JOB_POOL = ['JOB001', 'JOB007', 'JOB004', 'JOB002', 'JOB005', 'JOB003']; // ローマ市民 研究者 百人隊長 巫女 権力者 道化師
@@ -3409,7 +3449,17 @@ function ch4IntroSegments(rows, i) {
     seg.common = body.slice(1);
   });
   segs.tail = rows.slice(tailAt, Math.max(tailAt, actionAt));
-  segs.actions = ch4ActionSegments(rows.slice(actionAt + 1));
+  // 1ラウンド目の行動(〜「1Rの最後」)、「1Rの最後　ダイス回収直前」、「プレイヤーの2T1T」(2R1Tのあなた)、2つ目の
+  // 「以下セリフ→行動」(2R1Tの敵の行動、「獲得かLVUPする」)。
+  const findAt = (re, from) => rows.findIndex((r, k) => k >= from && re.test(r.event || ''));
+  const endAt = (k) => (k < 0 ? rows.length : k);
+  const r1EndAt = findAt(/1Rの最後/, actionAt);
+  const p2At = findAt(/プレイヤーの2[TR]1T/, Math.max(actionAt, r1EndAt));
+  const act2At = p2At >= 0 ? findAt(/セリフ→行動/, p2At) : -1;
+  segs.actions = ch4ActionSegments(rows.slice(actionAt + 1, endAt(r1EndAt)));
+  segs.roundEnd1 = r1EndAt >= 0 ? rows.slice(r1EndAt + 1, endAt(p2At)) : [];
+  segs.playerRound2 = p2At >= 0 ? rows.slice(p2At + 1, endAt(act2At)).filter((r) => !/セリフ→行動/.test(r.event || '')) : [];
+  segs.actions2 = act2At >= 0 ? ch4ActionSegments(rows.slice(act2At + 1)) : [];
   // 「1R2Tの最初（プレイヤーの番でなくても）」: そのすぐ下のセリフ(アレク)。
   const r2At = rows.findIndex((r, k) => k >= i && /1R2T/.test(r.event || ''));
   segs.round1Turn2 = [];
@@ -3634,6 +3684,13 @@ function ch4OnRender(state) {
   const p1 = state.players.find((p) => p.id === 'P1');
   const used = p1.dice.filter((d) => d.placedMapId || d.passed).length;
   const next = turnFlowMod.getNextTurn(state);
+  // 「プレイヤーの2T1T」: 2ラウンド目のあなたの最初の手番の初め(ダイスを置く前)に、アレクのセリフ。
+  if (state.round === 2 && !ch.round2PlayerSaid && !run.holdAi && ch.segs && (ch.segs.playerRound2 || []).length
+    && upcoming.type === 'TURN' && upcoming.playerId === 'P1' && !p1.dice.some((d) => d.placedMapId || d.passed) && aiOpenTurnPlayerId === null) {
+    ch.round2PlayerSaid = true;
+    run.holdAi = true;
+    setTimeout(() => { if (storyRun === run) ch4Talk('alek', ch.segs.playerRound2); }, 0);
+  }
   // そのラウンドで、まだダイスを1つも使っていないあなたの番が来たら、その手番は人間。
   if (ch.humanRound !== state.round && next.type === 'TURN' && next.playerId === 'P1' && used === 0) {
     ch.humanRound = state.round;
