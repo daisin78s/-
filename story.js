@@ -3585,6 +3585,8 @@ function ch4BeginPlay() {
   storySetAllowedTabs([...document.querySelectorAll('.mobile-tab-switcher__btn')].map((b) => b.dataset.tabTarget));
   storySetGlow([]);
   aiPacingMode = 'delayed';
+  // 1R1T(各自の最初の手番)はアニメーションを1.5倍ゆっくり、1R2Tの最初から普段の速さ(2026-11-13, per user)。
+  animSpeedFactor = 1.5;
   turnActionTaken = false;
   lastTurnPlayerId = null;
   run.onRender = ch4OnRender;
@@ -3603,10 +3605,12 @@ function ch4OnRender(state) {
   const ch = run.ch4;
   // 「1R2Tの最初（プレイヤーの番でなくても）」: 4人とも1ターン目を終えたら、次の人が打つ前にアレクのセリフ。
   // そのあとは普段の対戦の速さで進む(「以降2Rまで通常ゲームの速度で進む」— 今の速さのまま)。
-  if (state.round === 1 && !ch.turn2Said && !ch.segmentRunning && !run.holdAi && ch.segs && (ch.segs.round1Turn2 || []).length
+  if (state.round >= 1 && !ch.turn2Said && !ch.segmentRunning && !run.holdAi && ch.segs
     && state.players.every((p) => p.dice.some((d) => d.placedMapId || d.passed))
     && aiOpenTurnPlayerId === null && !(playerRoles.get('P1') === 'HUMAN' && turnActionTaken)) {
     ch.turn2Said = true;
+    animSpeedFactor = 1; // ここから普段の速さ
+    if (state.round === 1 && (ch.segs.round1Turn2 || []).length) {
     run.holdAi = true;
     run.talking = true;
     setTimeout(() => {
@@ -3619,6 +3623,7 @@ function ch4OnRender(state) {
         storyLater(() => { run.talking = false; run.holdAi = false; render(STATE); }, 300);
       });
     }, 0);
+    }
   }
   // 1ラウンド目: ジョブがまだの人の手番が来たら、その人の自己紹介とジョブ選択(ch4PlayerSegment)。
   const upcoming = turnFlowMod.getNextTurn(state);

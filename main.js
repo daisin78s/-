@@ -9256,7 +9256,8 @@ const AI_CARD_GAIN_IN_MS = 200;
 const AI_CARD_GAIN_HOLD_MS = 700;
 const AI_CARD_GAIN_OUT_MS = 200;
 // ストーリーモードではカード獲得・LVアップの演出を2倍ゆっくりに (2026-11-09, per user「初めての人が 何かわからないので」で3倍 → 2026-11-10「長すぎたんで 元の２倍」で2倍)。
-function cardGainMs(ms) { return animMs(ms) * (typeof storyRun !== 'undefined' && storyRun ? 2 : 1); }
+// ストーリーではカード獲得の演出を2倍ゆっくり。第4章の4人対戦(normalGame)は普段のゲームと同じ(速さはanimSpeedFactorで)。
+function cardGainMs(ms) { return animMs(ms) * (typeof storyRun !== 'undefined' && storyRun && !storyRun.normalGame ? 2 : 1); }
 function queueMobileAiCardGainAnimation(state, next) {
   const current = new Map();
   // AIだけでなく人間のプレイヤーの獲得でも流す (2026-10-23, per user request「AIだけではなくプレイヤーが
