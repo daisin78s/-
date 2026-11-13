@@ -10955,6 +10955,8 @@ function renderConChoice(container, state, player) {
   // their turns for the rest of the game. Once a CON face is actually owned, nothing renders here again,
   // for AI and human alike -- matching the human branch's own pre-existing guard, just applied earlier).
   if (player.ownedCardPhysicalIds.some((id) => id.startsWith('CON'))) return;
+  // ストーリー第4章: あなたの性格はペナルティなしにするため持ち札に入れていないので、ここでは選び直させない。
+  if (typeof storyRun !== 'undefined' && storyRun && storyRun.normalGame) return;
   // Online play (2026-08-29): a HUMAN-role seat that isn't this device's own falls back to the same
   // read-only preview an AI seat gets -- see renderResourceChoice's own matching guard.
   if (!player.jobCardId || isAiPlayer(player.id) || (onlineRoomCode && localSeatId !== player.id)) { renderConPreview(container, player); return; }
