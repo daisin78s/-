@@ -35,6 +35,7 @@ const STORY_SPEAKERS = {
   alek: { name: 'アレク', img: 'assets/story-alek.webp' },
   unknown: { name: '？？？', img: null },
   patra: { name: 'パトラ', img: 'assets/story-patra.webp' },
+  nero: { name: 'ネロ', img: 'assets/story-nero.webp' },
   spal: { name: 'スパル', img: 'assets/story-spal.webp' },
   seneca: { name: 'セネカ', img: 'assets/story-seneca.webp' },
   spalAway: { name: 'スパル', img: null }, // 第2章: スパルが立ち去っている間(立ち絵を消す)
@@ -2922,7 +2923,7 @@ function ch4Play(rows, i, onDone) {
   const next = () => ch4Play(rows, i + 1, onDone);
   const say = () => {
     if (!row.text) { next(); return; }
-    storySetSpeaker('alek');
+    storySetSpeaker(run.ch4.speaker || 'alek');
     // 「カードをクリックしてみてよ」: 出してある性格カードを押して拡大するまで待つ。
     if (/クリック/.test(row.text) && run.ch4.callout) {
       storySay(`C4-${row.index}`, () => {
@@ -2930,15 +2931,32 @@ function ch4Play(rows, i, onDone) {
       }, row.text);
       return;
     }
+    let text = row.text;
+    // 「君のスタプレ合計は〇だね」: 〇はあなたのスタプレ合計。
+    if (/スタプレ合計は〇/.test(text)) {
+      const p1 = storyPlayer('P1');
+      text = text.replace('〇', String(resourceChoiceStartOrderTotal(STATE, 'P1', ch4ResourceIds(p1))));
+    }
+    // 「「ローマ市民」」: ジョブ選択画面で、アレクがあなたのジョブ(ローマ市民)を選ぶ。
+    if (run.ch4.jobPanel && /「ローマ市民」/.test(text)) ch4PickJob('P1', 'JOB001');
     storySayThen(`C4-${row.index}`, () => {
       if (storyRun && storyRun.ch4.glowLine) { storyRun.ch4.glowLine = false; storySetGlow([]); }
       next();
-    }, 0, row.text);
+    }, 0, text);
   };
   if (!row.event) { say(); return; }
   const e = story2NormalizeEvent(row.event);
   const seconds = Number((/(\d+)秒/.exec(e) || [])[1]) || 1;
-  if (/秒間がある/.test(e)) {
+  if (/が[１1]番/.test(e)) {
+    ch4FirstPlayerBlock(rows, i, onDone);
+  } else if (/ジョブ選択画面/.test(e)) {
+    ch4ShowJobDraft(say);
+  } else if (/光る/.test(e) && /スタプレ/.test(e) && run.ch4.orderOverlay) {
+    // 4人の画面の「スタプレ値が光る」: あなたの行のスタプレの数字と合計。
+    storySetGlow(['.story-ch4-order__me .shop-card > .shop-card__start-order .shop-card__start-order-number', '.story-ch4-order__me .tutorial-turnorder-total__number']);
+    run.ch4.glowLine = true;
+    say();
+  } else if (/秒間がある/.test(e)) {
     storyHideDialog();
     storyLater(say, seconds * 1000);
   } else if (/初期資源が手に入る/.test(e)) {
@@ -3165,7 +3183,7 @@ function ch4ShowTurnOrder() {
   STATE.players.forEach((player) => {
     const isSelf = player.id === 'P1';
     const resourceIds = ch4ResourceIds(player);
-    const row = el('div', 'tutorial-turnorder-row');
+    const row = el('div', isSelf ? 'tutorial-turnorder-row story-ch4-order__me' : 'tutorial-turnorder-row');
     const header = el('div', 'tutorial-turnorder-row__header');
     header.appendChild(el('span', 'tutorial-turnorder-rank', `${STATE.turnOrder.indexOf(player.id) + 1}番手`));
     const swatch = el('span', 'player-panel__swatch player-panel__swatch--tiny');
@@ -3209,52 +3227,143 @@ function ch4FitTurnOrder() {
   groups.forEach((g) => { g.style.zoom = String(scale); });
 }
 
-/** 「初期資源カードがすべて表になる」: 他の3人の初期資源カードとスタプレ合計を見せ、✖で閉じたら次へ。 */
-function ch4RevealOthers(onClosed) {
+/** 「初期資源カードがすべて表になる」: 他の3人の初期資源カードとスタプレ合計を見せる。めくり終わったら次へ。
+ * 4人の画面は、そのあとの「…が１番」のセリフが終わると自動で閉じる(ch4FirstPlayerBlock)。 */
+function ch4RevealOthers(onDone) {
   const overlay = storyRun.ch4.orderOverlay;
   overlay.querySelectorAll('.tutorial-card-hidden').forEach((n) => {
     n.classList.remove('tutorial-card-hidden');
     n.animate([{ transform: 'rotateY(90deg)' }, { transform: 'rotateY(0)' }], { duration: 350, easing: 'ease-out' });
   });
   overlay.querySelectorAll('[data-total]').forEach((n) => { n.textContent = n.dataset.total; });
-  const close = el('button', 'tutorial-turnorder-close-x', '×');
-  close.type = 'button';
-  close.setAttribute('aria-label', '閉じる');
-  close.addEventListener('click', () => {
-    overlay.remove();
-    storyRun.ch4.orderOverlay = null;
-    onClosed();
-  });
-  overlay.querySelector('.story-ch4-order__modal').appendChild(close);
+  storyLater(onDone, 900);
 }
 
-/** 台本のあと: 敵3人に性格・ジョブ・初期資源を配り、立ち絵で登場させてから4人対戦を始める。 */
+function ch4CloseTurnOrder() {
+  const run = storyRun;
+  const overlay = run && run.ch4.orderOverlay;
+  if (!overlay) return;
+  run.ch4.orderOverlay = null;
+  overlay.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 250, easing: 'ease-in', fill: 'forwards' }).onfinish = () => overlay.remove();
+}
+
+/** 敵の立ち絵・呼び名(ジョブを選ぶ前なので「性格＋名前」)。 */
+function ch4EnemyTitle(enemy) {
+  const conName = rankingCardDisplayName(enemy.con);
+  return `${CON_ADJECTIVE_BY_NAME[conName] || conName}${enemy.name}`;
+}
+const CH4_SPEAKER_BY_NAME = { スパル: 'spal', セネカ: 'seneca', パトラ: 'patra', ネロ: 'nero' };
+
+/** 「傲慢なスパルが１番」…「プレイヤーが１番」の並び: 本当に1番の人の所だけ、そのすぐ下のセリフ(C列が空の行)を
+ * その人がしゃべる(プレイヤーが1番ならアレク)。最初の「…が１番」の直前で敵3人が立ち絵で登場する。並びが終わったら
+ * 4人の画面を自動で閉じる。 */
+function ch4FirstPlayerBlock(rows, i, onDone) {
+  const run = storyRun;
+  if (!run.ch4.enemiesShown) {
+    run.ch4.enemiesShown = true;
+    storyHideDialog();
+    for (const enemy of ch4Enemies()) storyCharacterQueue.push({ title: ch4EnemyTitle(enemy), character: { name: enemy.name, img: enemy.img } });
+    playStoryCharacterIntro();
+    storyWaitUntil(() => !storyCharacterPlaying && storyCharacterQueue.length === 0, () => ch4FirstPlayerBlock(rows, i, onDone));
+    return;
+  }
+  const e = story2NormalizeEvent(rows[i].event);
+  let end = i + 1;
+  while (end < rows.length && !rows[end].event) end++;
+  const firstId = STATE.turnOrder[0];
+  const enemy = ch4Enemies().find((x) => e.includes(x.name));
+  const mine = /プレイヤー/.test(e) ? firstId === 'P1' : !!(enemy && enemy.id === firstId);
+  const afterBlock = () => {
+    run.ch4.speaker = null;
+    if (end < rows.length && /が[１1]番/.test(rows[end].event || '')) { ch4Play(rows, end, onDone); return; }
+    // 並びの終わり: 4人の画面を閉じて先へ。
+    storyHideDialog();
+    storyLater(() => { ch4CloseTurnOrder(); storyLater(() => ch4Play(rows, end, onDone), 400); }, mine || run.ch4.firstSaid ? 300 : 1200);
+  };
+  if (!mine) { afterBlock(); return; }
+  run.ch4.firstSaid = end > i + 1;
+  run.ch4.speaker = enemy ? CH4_SPEAKER_BY_NAME[enemy.name] || 'alek' : 'alek';
+  ch4Play(rows.slice(i + 1, end), 0, afterBlock);
+}
+
+const CH4_JOB_POOL = ['JOB001', 'JOB007', 'JOB004', 'JOB002', 'JOB005', 'JOB003']; // ローマ市民 研究者 百人隊長 巫女 権力者 道化師
+
+/** 「ジョブ選択画面に行く」: 6枚のジョブを並べ、普段のゲームと同じく手番順に選ぶ。あなたより前の敵は先に自分の
+ * ジョブを取る(1人ずつ間を開けて)。あなたの分はセリフ「「ローマ市民」」でアレクが選ぶ(ch4PickJob)。 */
+function ch4ShowJobDraft(onReady) {
+  const run = storyRun;
+  storyHideDialog();
+  STATE.jobPool = CH4_JOB_POOL.slice();
+  const root = el('div', 'story2-cards story2-cards--ch4 story-ch4-jobs');
+  const row = el('div', 'story2-cards__row');
+  run.ch4.jobCells = {};
+  for (const jobId of CH4_JOB_POOL) {
+    const cell = el('div', 'story2-cards__card');
+    cell.appendChild(buildCardVisual(jobId, { showEffect: true, allowTextFallback: false, noInteraction: true }));
+    cell.appendChild(el('div', 'story-ch4-jobs__owner'));
+    run.ch4.jobCells[jobId] = cell;
+    row.appendChild(cell);
+  }
+  root.appendChild(row);
+  run.dom.root.appendChild(root);
+  run.ch4.jobPanel = root;
+  root.animate([{ opacity: 0, transform: 'translate(-50%, -12px)' }, { opacity: 1, transform: 'translate(-50%, 0)' }], { duration: 300, easing: 'ease-out' });
+  const before = STATE.turnOrder.slice(0, STATE.turnOrder.indexOf('P1'));
+  ch4EnemiesPickJobs(before, () => storyLater(onReady, 400));
+}
+
+/** 1人のジョブを決める(カードに選んだ人の名前を出す。名前の表示にもジョブ名が付く)。 */
+function ch4PickJob(playerId, jobId) {
+  const run = storyRun;
+  const player = storyPlayer(playerId);
+  if (player.jobCardId) return;
+  setupMod.chooseJob(STATE, INDEX, playerId, jobId);
+  const cell = run.ch4.jobCells && run.ch4.jobCells[jobId];
+  if (cell) {
+    cell.classList.add('story2-cards__card--selected', 'story-ch4-jobs__card--taken');
+    cell.querySelector('.story-ch4-jobs__owner').textContent = player.name;
+    cell.animate([{ transform: 'scale(1.08)' }, { transform: 'scale(1)' }], { duration: 300, easing: 'ease-out' });
+  }
+  render(STATE);
+}
+
+function ch4EnemiesPickJobs(playerIds, onDone) {
+  const ids = playerIds.filter((id) => id !== 'P1' && !storyPlayer(id).jobCardId);
+  if (!ids.length) { onDone(); return; }
+  storyLater(() => {
+    const enemy = ch4Enemies().find((x) => x.id === ids[0]);
+    ch4PickJob(enemy.id, enemy.job);
+    ch4EnemiesPickJobs(ids.slice(1), onDone);
+  }, 900);
+}
+
+/** 台本のあと: (まだなら)あなたのジョブはローマ市民、あなたより後の敵もジョブを選んでから4人対戦を始める。 */
 function ch4StartGame() {
   const run = storyRun;
   storyHideDialog();
   story2HideResourceCards();
-  if (run.ch4.orderOverlay) { run.ch4.orderOverlay.remove(); run.ch4.orderOverlay = null; }
-  const enemies = ch4Enemies();
+  ch4CloseTurnOrder();
   ch4SetupEnemies();
-  // あなたのジョブはローマ市民。
-  STATE.jobPool = ['JOB001', ...enemies.map((x) => x.job)];
-  setupMod.chooseJob(STATE, INDEX, 'P1', 'JOB001');
-  for (const enemy of enemies) {
-    setupMod.chooseJob(STATE, INDEX, enemy.id, enemy.job);
-  }
-  turnFlowMod.startRound(STATE);
-  // 盤面を全部見せる。
-  run.visibleMapIds = Object.keys(STATE.maps);
-  storyApplyVisibleMaps();
-  run.diceShown = true;
-  render(STATE);
-  // 敵の登場(立ち絵、AIの名前が変わる時と同じ演出)。全員出終わってから対戦を始める。
-  for (const enemy of enemies) {
-    const title = rankingConJobTitle(enemy.con, enemy.job);
-    storyCharacterQueue.push({ title, character: { name: enemy.name, img: enemy.img } });
-  }
-  playStoryCharacterIntro();
-  storyWaitUntil(() => !storyCharacterPlaying && storyCharacterQueue.length === 0, ch4BeginPlay);
+  if (!run.ch4.jobPanel) STATE.jobPool = CH4_JOB_POOL.slice();
+  ch4PickJob('P1', 'JOB001');
+  ch4EnemiesPickJobs(STATE.turnOrder, () => storyLater(() => {
+    if (run.ch4.jobPanel) { run.ch4.jobPanel.remove(); run.ch4.jobPanel = null; }
+    turnFlowMod.startRound(STATE);
+    // 盤面を全部見せる。
+    run.visibleMapIds = Object.keys(STATE.maps);
+    storyApplyVisibleMaps();
+    run.diceShown = true;
+    render(STATE);
+    // 敵の登場(立ち絵)がまだなら、ここで(ジョブが決まったので「性格＋ジョブ」の呼び名で)。
+    if (!run.ch4.enemiesShown) {
+      run.ch4.enemiesShown = true;
+      for (const enemy of ch4Enemies()) {
+        storyCharacterQueue.push({ title: rankingConJobTitle(enemy.con, enemy.job), character: { name: enemy.name, img: enemy.img } });
+      }
+      playStoryCharacterIntro();
+    }
+    storyWaitUntil(() => !storyCharacterPlaying && storyCharacterQueue.length === 0, ch4BeginPlay);
+  }, 700));
 }
 
 /** 4人対戦の本番: ストーリーの縛り(タブ・エリアを押せない等)を外して、普段のゲームと同じように進める。 */
