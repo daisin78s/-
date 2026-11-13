@@ -130,6 +130,9 @@ function storySetSpeaker(key) {
  * 数えるよう、先に私用文字(+番号)に置き換えておき、表示の時にアイコンへ戻す。 */
 const STORY_ICON_RESOURCES = ['A', 'B', 'C', 'Z', 'K'];
 function storyIconize(text) {
+  // 食料の意味の〇もアイコンで (2026-11-13, per user「基本 食料 という意味で 〇 となっていたら アイコンで」)。
+  // 数字を入れる所の〇(「〇VP」「〇枚」「合計は〇だね」)は、その前に数字に置き換わっているのでそのまま。
+  text = text.replace(/〇(?!\s*(VP|枚|だね))/g, 'K');
   return text.replace(/(?<![A-Za-z])[ABCZK](?![A-Za-z])/g, (ch) => String.fromCharCode(0xE000 + STORY_ICON_RESOURCES.indexOf(ch)));
 }
 /** storyIconizeした文章 -> 資源アイコン + 性格・ジョブの名前に色を付けた文章。 */
@@ -3256,6 +3259,20 @@ function ch4EnemyTitle(enemy) {
   const conName = rankingCardDisplayName(enemy.con);
   return `${CON_ADJECTIVE_BY_NAME[conName] || conName}${enemy.name}`;
 }
+/** 敵の立ち絵の登場(まだ登場していない人だけ、1人ずつ)。終わったらonDone。 */
+function ch4IntroEnemies(enemies, titleOf, onDone) {
+  const run = storyRun;
+  run.ch4.introduced = run.ch4.introduced || new Set();
+  const list = enemies.filter((enemy) => !run.ch4.introduced.has(enemy.id));
+  if (!list.length) { onDone(); return; }
+  storyHideDialog();
+  for (const enemy of list) {
+    run.ch4.introduced.add(enemy.id);
+    storyCharacterQueue.push({ title: titleOf(enemy), character: { name: enemy.name, img: enemy.img } });
+  }
+  playStoryCharacterIntro();
+  storyWaitUntil(() => !storyCharacterPlaying && storyCharacterQueue.length === 0, onDone);
+}
 const CH4_SPEAKER_BY_NAME = { スパル: 'spal', セネカ: 'seneca', パトラ: 'patra', ネロ: 'nero' };
 
 /** 「傲慢なスパルが１番」…「プレイヤーが１番」の並び: 本当に1番の人の所だけ、そのすぐ下のセリフ(C列が空の行)を
@@ -3263,14 +3280,6 @@ const CH4_SPEAKER_BY_NAME = { スパル: 'spal', セネカ: 'seneca', パトラ:
  * 4人の画面を自動で閉じる。 */
 function ch4FirstPlayerBlock(rows, i, onDone) {
   const run = storyRun;
-  if (!run.ch4.enemiesShown) {
-    run.ch4.enemiesShown = true;
-    storyHideDialog();
-    for (const enemy of ch4Enemies()) storyCharacterQueue.push({ title: ch4EnemyTitle(enemy), character: { name: enemy.name, img: enemy.img } });
-    playStoryCharacterIntro();
-    storyWaitUntil(() => !storyCharacterPlaying && storyCharacterQueue.length === 0, () => ch4FirstPlayerBlock(rows, i, onDone));
-    return;
-  }
   const e = story2NormalizeEvent(rows[i].event);
   let end = i + 1;
   // その人のセリフは次の「…が１番」か「ジョブ選択画面に行く」の行の手前まで(「〇とZはアイコン」のような注記の行も含む)。
@@ -3288,7 +3297,10 @@ function ch4FirstPlayerBlock(rows, i, onDone) {
   if (!mine) { afterBlock(); return; }
   run.ch4.firstSaid = end > i + 1;
   run.ch4.speaker = enemy ? CH4_SPEAKER_BY_NAME[enemy.name] || 'alek' : 'alek';
-  ch4Play(rows.slice(i + 1, end), 0, afterBlock);
+  const speak = () => ch4Play(rows.slice(i + 1, end), 0, afterBlock);
+  // 敵の立ち絵の登場は、それぞれのキャラの初めのセリフの直前(まだジョブを選ぶ前なので「性格＋名前」)。
+  if (enemy && run.ch4.firstSaid) ch4IntroEnemies([enemy], ch4EnemyTitle, speak);
+  else speak();
 }
 
 const CH4_JOB_POOL = ['JOB001', 'JOB007', 'JOB004', 'JOB002', 'JOB005', 'JOB003']; // ローマ市民 研究者 百人隊長 巫女 権力者 道化師
@@ -3360,14 +3372,8 @@ function ch4StartGame() {
     run.diceShown = true;
     render(STATE);
     // 敵の登場(立ち絵)がまだなら、ここで(ジョブが決まったので「性格＋ジョブ」の呼び名で)。
-    if (!run.ch4.enemiesShown) {
-      run.ch4.enemiesShown = true;
-      for (const enemy of ch4Enemies()) {
-        storyCharacterQueue.push({ title: rankingConJobTitle(enemy.con, enemy.job), character: { name: enemy.name, img: enemy.img } });
-      }
-      playStoryCharacterIntro();
-    }
-    storyWaitUntil(() => !storyCharacterPlaying && storyCharacterQueue.length === 0, ch4BeginPlay);
+    // まだ登場していない敵は、ここで(ジョブが決まったので「性格＋ジョブ」の呼び名で)。
+    ch4IntroEnemies(ch4Enemies(), (enemy) => rankingConJobTitle(enemy.con, enemy.job), ch4BeginPlay);
   }, 700));
 }
 
