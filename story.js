@@ -2937,6 +2937,8 @@ function ch4Play(rows, i, onDone) {
       const p1 = storyPlayer('P1');
       text = text.replace('〇', String(resourceChoiceStartOrderTotal(STATE, 'P1', ch4ResourceIds(p1))));
     }
+    // C列「〇とZはアイコン」: その行の〇を食料(K)のアイコンで出す(Zはいつもアイコン)。
+    if (/アイコン/.test(row.event || '')) text = text.replace(/〇/g, 'K');
     // 「「ローマ市民」」: ジョブ選択画面で、アレクがあなたのジョブ(ローマ市民)を選ぶ。
     if (run.ch4.jobPanel && /「ローマ市民」/.test(text)) ch4PickJob('P1', 'JOB001');
     storySayThen(`C4-${row.index}`, () => {
@@ -2949,6 +2951,8 @@ function ch4Play(rows, i, onDone) {
   const seconds = Number((/(\d+)秒/.exec(e) || [])[1]) || 1;
   if (/が[１1]番/.test(e)) {
     ch4FirstPlayerBlock(rows, i, onDone);
+  } else if (/アイコン/.test(e)) {
+    say();
   } else if (/ジョブ選択画面/.test(e)) {
     ch4ShowJobDraft(say);
   } else if (/光る/.test(e) && /スタプレ/.test(e) && run.ch4.orderOverlay) {
@@ -3269,7 +3273,8 @@ function ch4FirstPlayerBlock(rows, i, onDone) {
   }
   const e = story2NormalizeEvent(rows[i].event);
   let end = i + 1;
-  while (end < rows.length && !rows[end].event) end++;
+  // その人のセリフは次の「…が１番」か「ジョブ選択画面に行く」の行の手前まで(「〇とZはアイコン」のような注記の行も含む)。
+  while (end < rows.length && !/が[１1]番|ジョブ選択画面/.test(rows[end].event || '')) end++;
   const firstId = STATE.turnOrder[0];
   const enemy = ch4Enemies().find((x) => e.includes(x.name));
   const mine = /プレイヤー/.test(e) ? firstId === 'P1' : !!(enemy && enemy.id === firstId);
