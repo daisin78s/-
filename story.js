@@ -2962,7 +2962,8 @@ function ch4Play(rows, i, onDone) {
     storyLater(say, 500);
   } else if (/表になる/.test(e)) {
     storyHideDialog();
-    ch4RevealOthers(say);
+    // セリフ欄を消してから少し間を開けて(1秒)めくる(セリフ欄が4人の画面に重なったままめくらないように)。
+    storyLater(() => ch4RevealOthers(say), 1000);
   } else if (/光る/.test(e)) {
     // 「該当部分光る」(この部分が性格のペナルティ): 拡大した性格カードのペナルティの所。
     storySetGlow(['.story-ch4-callout .card-note']);
