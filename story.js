@@ -2282,7 +2282,8 @@ function senecaPlay(rows, i, onDone) {
     }
     storySetSpeaker(storyRun.seneca.hidePortrait ? 'senecaAway' : 'seneca');
     // 「素晴らしいわ！」以降は喜んでいる差分(2026-11-12, per user)。
-    if (/^素晴らしいわ/.test(row.text)) senecaSwapPortrait(STORY_SENECA_HAPPY_IMG);
+    // 2026-11-13: セリフが「驚いたわ！」に変わった(同じ場面)。
+    if (/^(素晴らしいわ|驚いたわ)/.test(row.text)) senecaSwapPortrait(STORY_SENECA_HAPPY_IMG);
     storySayThen(`CS-${row.index}`, () => {
       if (storyRun && storyRun.seneca.glowUntilLineEnd) { storyRun.seneca.glowUntilLineEnd = false; storySetGlow([]); }
       next();
@@ -2876,7 +2877,8 @@ function ch4Blocks() {
   const marks = [];
   rows.forEach((r, k) => {
     const m = /^(.+?)を選ぶ$/.exec((r.event || '').trim());
-    if (m && k > choiceAt) marks.push({ k, label: m[1] });
+    // 「スパルが百人隊長を選ぶ」(敵がジョブを選ぶ)は性格の分かれ道ではない。
+    if (m && k > choiceAt && !/が/.test(m[1])) marks.push({ k, label: m[1] });
   });
   marks.forEach((mark, n) => {
     let end = n + 1 < marks.length ? marks[n + 1].k : rows.length;
@@ -2956,6 +2958,8 @@ function ch4Play(rows, i, onDone) {
     ch4FirstPlayerBlock(rows, i, onDone);
   } else if (/アイコン/.test(e)) {
     say();
+  } else if (/が.+を選ぶ/.test(e)) {
+    ch4EnemyChoosesJob(e, say);
   } else if (/ジョブ選択画面/.test(e)) {
     ch4ShowJobDraft(say);
   } else if (/光る/.test(e) && /スタプレ/.test(e) && run.ch4.orderOverlay) {
@@ -3310,7 +3314,8 @@ const CH4_JOB_POOL = ['JOB001', 'JOB007', 'JOB004', 'JOB002', 'JOB005', 'JOB003'
 function ch4ShowJobDraft(onReady) {
   const run = storyRun;
   storyHideDialog();
-  STATE.jobPool = CH4_JOB_POOL.slice();
+  STATE.jobPool = CH4_JOB_POOL.filter((id) => !STATE.players.some((p) => p.jobCardId === id));
+  ch4HideChosenJob();
   const root = el('div', 'story2-cards story2-cards--ch4 story-ch4-jobs');
   const row = el('div', 'story2-cards__row');
   run.ch4.jobCells = {};
@@ -3320,6 +3325,12 @@ function ch4ShowJobDraft(onReady) {
     cell.appendChild(el('div', 'story-ch4-jobs__owner'));
     run.ch4.jobCells[jobId] = cell;
     row.appendChild(cell);
+    // 1番の人が先にしゃべりながら選んでいたジョブ(ch4EnemyChoosesJob)は、取られた形で出す。
+    const owner = STATE.players.find((p) => p.jobCardId === jobId);
+    if (owner) {
+      cell.classList.add('story2-cards__card--selected', 'story-ch4-jobs__card--taken');
+      cell.lastChild.textContent = owner.name;
+    }
   }
   root.appendChild(row);
   run.dom.root.appendChild(root);
@@ -3327,6 +3338,32 @@ function ch4ShowJobDraft(onReady) {
   root.animate([{ opacity: 0, transform: 'translate(-50%, -12px)' }, { opacity: 1, transform: 'translate(-50%, 0)' }], { duration: 300, easing: 'ease-out' });
   const before = STATE.turnOrder.slice(0, STATE.turnOrder.indexOf('P1'));
   ch4EnemiesPickJobs(before, () => storyLater(onReady, 400));
+}
+
+/** 「スパルが百人隊長を選ぶ」: 1番の敵が、しゃべりながら先に自分のジョブを選ぶ。選んだジョブのカードをセリフの上に
+ * 出しておき(説明の間)、ジョブ選択画面に行く時に消す。 */
+function ch4EnemyChoosesJob(e, onDone) {
+  const run = storyRun;
+  const enemy = ch4Enemies().find((x) => e.includes(x.name));
+  if (!enemy) { onDone(); return; }
+  if (!run.ch4.jobPanel) STATE.jobPool = CH4_JOB_POOL.filter((id) => !STATE.players.some((p) => p.jobCardId === id));
+  ch4PickJob(enemy.id, enemy.job);
+  ch4HideChosenJob();
+  const root = el('div', 'story2-cards story2-cards--ch4 story-ch4-chosen-job');
+  const row = el('div', 'story2-cards__row');
+  const cell = el('div', 'story2-cards__card');
+  cell.appendChild(buildCardVisual(enemy.job, { showEffect: true, allowTextFallback: false, noInteraction: true }));
+  cell.appendChild(el('div', 'story-ch4-jobs__owner', enemy.name));
+  row.appendChild(cell);
+  root.appendChild(row);
+  run.dom.root.appendChild(root);
+  run.ch4.chosenJob = root;
+  root.animate([{ opacity: 0, transform: 'translate(-50%, -12px)' }, { opacity: 1, transform: 'translate(-50%, 0)' }], { duration: 300, easing: 'ease-out' });
+  storyLater(onDone, 500);
+}
+function ch4HideChosenJob() {
+  const run = storyRun;
+  if (run && run.ch4.chosenJob) { run.ch4.chosenJob.remove(); run.ch4.chosenJob = null; }
 }
 
 /** 1人のジョブを決める(カードに選んだ人の名前を出す。名前の表示にもジョブ名が付く)。 */
@@ -3361,7 +3398,8 @@ function ch4StartGame() {
   story2HideResourceCards();
   ch4CloseTurnOrder();
   ch4SetupEnemies();
-  if (!run.ch4.jobPanel) STATE.jobPool = CH4_JOB_POOL.slice();
+  ch4HideChosenJob();
+  if (!run.ch4.jobPanel) STATE.jobPool = CH4_JOB_POOL.filter((id) => !STATE.players.some((p) => p.jobCardId === id));
   ch4PickJob('P1', 'JOB001');
   ch4EnemiesPickJobs(STATE.turnOrder, () => storyLater(() => {
     if (run.ch4.jobPanel) { run.ch4.jobPanel.remove(); run.ch4.jobPanel = null; }
