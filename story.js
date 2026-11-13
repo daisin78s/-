@@ -1310,7 +1310,12 @@ function closeStoryMode() {
 // ストーリー中はエリアのタイルを押しても拡大画面を開かない(スロットへの配置と使用料の回収だけ)。カードを
 // 選ぶ画面は台本が許すまで押せない。何か触ったら場面に知らせる(「何もしない場合」の数え直し)。
 document.addEventListener('click', (e) => {
-  if (!storyRun || storyRun.normalGame) return; // 第4章の対戦中は普段のゲームと同じ
+  if (!storyRun) return;
+  if (storyRun.normalGame) {
+    // 第4章の対戦中は普段のゲームと同じ。ただし誰かがしゃべっている間(ch4PlayerSegment)は、セリフ欄以外を押せない。
+    if (storyRun.talking && !e.target.closest('.story-overlay')) { e.stopPropagation(); e.preventDefault(); }
+    return;
+  }
   if (storyRun.onTap) storyRun.onTap();
   // ☆ダイス(isWildcardThisTurn)はスロットではなくタイルを押して置く(map-tile--wildcard-target)ので通す。
   const onSlotToPlace = !!e.target.closest('.slot--selectable, #board .map-tile--wildcard-target');
@@ -2955,7 +2960,7 @@ function ch4Play(rows, i, onDone) {
   const e = story2NormalizeEvent(row.event);
   const seconds = Number((/(\d+)秒/.exec(e) || [])[1]) || 1;
   if (CH4_RANK_EVENT.test(e)) {
-    ch4IntroductionRound(rows, i, onDone);
+    ch4IntroductionRound(rows, i);
   } else if (/アイコン/.test(e)) {
     say();
   } else if (/が.+を選ぶ/.test(e)) {
@@ -3308,37 +3313,59 @@ function ch4IntroSegments(rows, i) {
   return segs;
 }
 
-/** めくり終わったら: 4人の画面を閉じてジョブ6枚の画面を出し、手番順に1人ずつしゃべる。敵はその人の初めのセリフの
- * 直前に立ち絵で登場(まだジョブを選ぶ前なので「性格＋名前」)。あなたの番では「ジョブ選択画面に行く」からのアレクの
- * セリフ(「ローマ市民」でアレクが選ぶ)。 */
-function ch4IntroductionRound(rows, i, onDone) {
+/** めくり終わったら: 4人の画面を閉じて対戦(1ラウンド目)を始める。普段のゲームと同じく、1ラウンド目は各自の最初の
+ * 手番の前にジョブを選ぶ(2026-11-13, per user「スパル→あなた→パトラ→セネカ なら 傲慢なスパルが現れた / 1番手の
+ * セリフ ジョブを選ぶ / ダイスを置いたりする / プレイヤーの2番手のセリフ / ジョブを選ぶ ローマ市民 / ダイスを置く…」)。
+ * その人の手番が来たら(ch4OnRender)、AIを止めて ch4PlayerSegment でしゃべる。 */
+function ch4IntroductionRound(rows, i) {
   const run = storyRun;
-  const segs = ch4IntroSegments(rows, i);
+  run.ch4.segs = ch4IntroSegments(rows, i);
   storyHideDialog();
   storyLater(() => {
     ch4CloseTurnOrder();
     storyLater(() => {
-      ch4ShowJobPanel();
-      const order = STATE.turnOrder.slice();
-      const step = (n) => {
-        if (n >= order.length) { run.ch4.speaker = null; onDone(); return; }
-        const pid = order[n];
-        const enemy = ch4Enemies().find((x) => x.id === pid);
-        const seg = segs[enemy ? enemy.name : 'プレイヤー'] || { ranks: {}, common: [] };
-        const lines = [...(seg.ranks[n + 1] || []), ...seg.common, ...(enemy ? [] : segs.tail)];
-        const done = () => storyLater(() => step(n + 1), 300);
-        run.ch4.speaker = enemy ? CH4_SPEAKER_BY_NAME[enemy.name] || 'alek' : 'alek';
-        const speak = () => ch4Play(lines, 0, () => {
-          // 台本に「…を選ぶ」が無かった敵は、自分の番の終わりに選ぶ。
-          if (enemy && !storyPlayer(pid).jobCardId) ch4PickJob(pid, enemy.job);
-          done();
-        });
-        if (enemy && lines.some((r) => r.text)) ch4IntroEnemies([enemy], ch4EnemyTitle, speak);
-        else speak();
-      };
-      step(0);
+      run.holdAi = true; // 最初の人がしゃべり出すまでAIは動かない
+      turnFlowMod.startRound(STATE);
+      run.visibleMapIds = Object.keys(STATE.maps);
+      storyApplyVisibleMaps();
+      run.diceShown = true;
+      ch4BeginPlay();
     }, 400);
   }, 1500);
+}
+
+/** 1ラウンド目、ジョブがまだの人の手番が来た時: その人の「◯番手」のセリフ・説明・ジョブ選択(あなたならアレクの
+ * 「ジョブ選択画面に行く」から)。敵はその直前に立ち絵で登場。しゃべっている間はAIも盤面の操作も止める。 */
+function ch4PlayerSegment(pid) {
+  const run = storyRun;
+  const ch = run.ch4;
+  ch.segmentRunning = pid;
+  run.holdAi = true;
+  run.talking = true;
+  const rank = STATE.turnOrder.indexOf(pid) + 1;
+  const enemy = ch4Enemies().find((x) => x.id === pid);
+  const segs = ch.segs || { tail: [] };
+  const seg = segs[enemy ? enemy.name : 'プレイヤー'] || { ranks: {}, common: [] };
+  const lines = [...(seg.ranks[rank] || []), ...seg.common, ...(enemy ? [] : segs.tail)];
+  ch4ShowJobPanel();
+  const finish = () => {
+    if (!storyRun) return;
+    if (!storyPlayer(pid).jobCardId) ch4PickJob(pid, enemy ? enemy.job : 'JOB001');
+    ch.speaker = null;
+    storyHideDialog();
+    storySetSpeaker('system');
+    storyLater(() => {
+      if (ch.jobPanel) { ch.jobPanel.remove(); ch.jobPanel = null; }
+      ch.segmentRunning = null;
+      run.talking = false;
+      run.holdAi = false;
+      render(STATE);
+    }, 700);
+  };
+  ch.speaker = enemy ? CH4_SPEAKER_BY_NAME[enemy.name] || 'alek' : 'alek';
+  const speak = () => ch4Play(lines, 0, finish);
+  if (enemy && lines.some((r) => r.text)) ch4IntroEnemies([enemy], ch4EnemyTitle, speak);
+  else speak();
 }
 
 /** ジョブ6枚の画面。もう選ばれているジョブは取られた形(薄く、選んだ人の名前)で出す。 */
@@ -3462,6 +3489,12 @@ function ch4OnRender(state) {
     return;
   }
   const ch = run.ch4;
+  // 1ラウンド目: ジョブがまだの人の手番が来たら、その人の自己紹介とジョブ選択(ch4PlayerSegment)。
+  const upcoming = turnFlowMod.getNextTurn(state);
+  if (state.round === 1 && !ch.segmentRunning && upcoming.type === 'TURN' && !storyPlayer(upcoming.playerId).jobCardId && ch.segs) {
+    ch.segmentRunning = upcoming.playerId;
+    setTimeout(() => { if (storyRun === run) ch4PlayerSegment(upcoming.playerId); }, 0);
+  }
   const p1 = state.players.find((p) => p.id === 'P1');
   const used = p1.dice.filter((d) => d.placedMapId || d.passed).length;
   const next = turnFlowMod.getNextTurn(state);

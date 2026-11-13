@@ -1639,6 +1639,8 @@ function hasAiWorkPending(state) {
   // choice. See driveOneAiStep's matching guard (the one that actually blocks the pump; this one just
   // keeps hasAiWorkPending's own answer -- and therefore the manual-mode button's visibility -- honest).
   if (pendingBuildChoice) return false;
+  // ストーリー第4章: 誰かがしゃべっている間(story.jsのch4PlayerSegment)はAIを動かさない。
+  if (typeof storyRun !== 'undefined' && storyRun && storyRun.holdAi) return false;
   if (state.pendingChoices.some((c) => c.kind === 'SELECT_RESOURCE_CARDS' && isAiPlayer(c.playerId))) return true;
   if (state.pendingChoices.some((c) => c.kind === 'UNTAP_CHOICE' && isAiPlayer(c.playerId))) return true;
   if (state.round === 0) return false; // still waiting on the human's own resource choice
@@ -1720,6 +1722,7 @@ function resolveAiTurnContext(state) {
   // live here too, not just in hasAiWorkPending, or 'instant' mode would still blow straight through the
   // human's still-open BUILD/UPGRADE choice modal.
   if (pendingBuildChoice) return null;
+  if (typeof storyRun !== 'undefined' && storyRun && storyRun.holdAi) return null; // ストーリー第4章: しゃべっている間
   const resourceChoice = state.pendingChoices.find((c) => c.kind === 'SELECT_RESOURCE_CARDS' && isAiPlayer(c.playerId));
   if (resourceChoice) return { type: 'RESOURCE_CHOICE', resourceChoice };
 
