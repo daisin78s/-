@@ -2954,8 +2954,8 @@ function ch4Play(rows, i, onDone) {
   if (!row.event) { say(); return; }
   const e = story2NormalizeEvent(row.event);
   const seconds = Number((/(\d+)秒/.exec(e) || [])[1]) || 1;
-  if (/が[１1]番/.test(e)) {
-    ch4FirstPlayerBlock(rows, i, onDone);
+  if (CH4_RANK_EVENT.test(e)) {
+    ch4IntroductionRound(rows, i, onDone);
   } else if (/アイコン/.test(e)) {
     say();
   } else if (/が.+を選ぶ/.test(e)) {
@@ -3239,7 +3239,7 @@ function ch4FitTurnOrder() {
 }
 
 /** 「初期資源カードがすべて表になる」: 他の3人の初期資源カードとスタプレ合計を見せる。めくり終わったら次へ。
- * 4人の画面は、そのあとの「…が１番」のセリフが終わると自動で閉じる(ch4FirstPlayerBlock)。 */
+ * そのあと4人の画面を閉じて、手番順の自己紹介に進む(ch4IntroductionRound)。 */
 function ch4RevealOthers(onDone) {
   const overlay = storyRun.ch4.orderOverlay;
   overlay.querySelectorAll('.tutorial-card-hidden').forEach((n) => {
@@ -3279,43 +3279,73 @@ function ch4IntroEnemies(enemies, titleOf, onDone) {
 }
 const CH4_SPEAKER_BY_NAME = { スパル: 'spal', セネカ: 'seneca', パトラ: 'patra', ネロ: 'nero' };
 
-/** 「傲慢なスパルが１番」…「プレイヤーが１番」の並び: 本当に1番の人の所だけ、そのすぐ下のセリフ(C列が空の行)を
- * その人がしゃべる(プレイヤーが1番ならアレク)。最初の「…が１番」の直前で敵3人が立ち絵で登場する。並びが終わったら
- * 4人の画面を自動で閉じる。 */
-function ch4FirstPlayerBlock(rows, i, onDone) {
-  const run = storyRun;
-  const e = story2NormalizeEvent(rows[i].event);
-  let end = i + 1;
-  // その人のセリフは次の「…が１番」か「ジョブ選択画面に行く」の行の手前まで(「〇とZはアイコン」のような注記の行も含む)。
-  while (end < rows.length && !/が[１1]番|ジョブ選択画面/.test(rows[end].event || '')) end++;
-  const firstId = STATE.turnOrder[0];
-  const enemy = ch4Enemies().find((x) => e.includes(x.name));
-  const mine = /プレイヤー/.test(e) ? firstId === 'P1' : !!(enemy && enemy.id === firstId);
-  const afterBlock = () => {
-    run.ch4.speaker = null;
-    if (end < rows.length && /が[１1]番/.test(rows[end].event || '')) { ch4Play(rows, end, onDone); return; }
-    // 並びの終わり: 4人の画面を閉じて先へ。
-    storyHideDialog();
-    storyLater(() => { ch4CloseTurnOrder(); storyLater(() => ch4Play(rows, end, onDone), 400); }, mine || run.ch4.firstSaid ? 300 : 1200);
-  };
-  if (!mine) { afterBlock(); return; }
-  run.ch4.firstSaid = end > i + 1;
-  run.ch4.speaker = enemy ? CH4_SPEAKER_BY_NAME[enemy.name] || 'alek' : 'alek';
-  const speak = () => ch4Play(rows.slice(i + 1, end), 0, afterBlock);
-  // 敵の立ち絵の登場は、それぞれのキャラの初めのセリフの直前(まだジョブを選ぶ前なので「性格＋名前」)。
-  if (enemy && run.ch4.firstSaid) ch4IntroEnemies([enemy], ch4EnemyTitle, speak);
-  else speak();
-}
-
+const CH4_RANK_EVENT = /(スパル|セネカ|パトラ|ネロ|プレイヤー)が([１-４1-4])番/;
 const CH4_JOB_POOL = ['JOB001', 'JOB007', 'JOB004', 'JOB002', 'JOB005', 'JOB003']; // ローマ市民 研究者 百人隊長 巫女 権力者 道化師
 
-/** 「ジョブ選択画面に行く」: 6枚のジョブを並べ、普段のゲームと同じく手番順に選ぶ。あなたより前の敵は先に自分の
- * ジョブを取る(1人ずつ間を開けて)。あなたの分はセリフ「「ローマ市民」」でアレクが選ぶ(ch4PickJob)。 */
-function ch4ShowJobDraft(onReady) {
+/** 「傲慢なスパルが１番」〜「ジョブ選択画面に行く」の前までを、人ごとに分ける (2026-11-13, per user: 手番順に1人ずつ
+ * 「◯番手はオレだ」→性格の説明→ジョブを選ぶ→ジョブの説明)。
+ * { スパル: { ranks: {1: [...], ...}, common: [...] }, ..., tail: [「ジョブ選択画面に行く」から最後まで(アレク)] }
+ * 同じ人の「…が◯番」が続く間は、次の「…が◯番」までがその番のセリフ。その人の最後の「…が◯番」だけは、すぐ下の
+ * 1行がその番のセリフで、残り(次の人の「…が◯番」まで)がどの番でも言う共通のセリフ。 */
+function ch4IntroSegments(rows, i) {
+  const segs = {};
+  let tailAt = rows.findIndex((r, k) => k >= i && /ジョブ選択画面/.test(r.event || ''));
+  if (tailAt < 0) tailAt = rows.length;
+  const marks = [];
+  for (let k = i; k < tailAt; k++) {
+    const m = CH4_RANK_EVENT.exec(story2NormalizeEvent(rows[k].event || ''));
+    if (m) marks.push({ k, name: m[1], rank: Number(m[2].replace(/[１-４]/, (c) => '１２３４'.indexOf(c) + 1)) });
+  }
+  marks.forEach((mark, n) => {
+    const seg = segs[mark.name] = segs[mark.name] || { ranks: {}, common: [] };
+    const nextK = n + 1 < marks.length ? marks[n + 1].k : tailAt;
+    const body = rows.slice(mark.k + 1, nextK);
+    if (n + 1 < marks.length && marks[n + 1].name === mark.name) { seg.ranks[mark.rank] = body; return; }
+    seg.ranks[mark.rank] = body.slice(0, 1);
+    seg.common = body.slice(1);
+  });
+  segs.tail = rows.slice(tailAt);
+  return segs;
+}
+
+/** めくり終わったら: 4人の画面を閉じてジョブ6枚の画面を出し、手番順に1人ずつしゃべる。敵はその人の初めのセリフの
+ * 直前に立ち絵で登場(まだジョブを選ぶ前なので「性格＋名前」)。あなたの番では「ジョブ選択画面に行く」からのアレクの
+ * セリフ(「ローマ市民」でアレクが選ぶ)。 */
+function ch4IntroductionRound(rows, i, onDone) {
   const run = storyRun;
+  const segs = ch4IntroSegments(rows, i);
   storyHideDialog();
+  storyLater(() => {
+    ch4CloseTurnOrder();
+    storyLater(() => {
+      ch4ShowJobPanel();
+      const order = STATE.turnOrder.slice();
+      const step = (n) => {
+        if (n >= order.length) { run.ch4.speaker = null; onDone(); return; }
+        const pid = order[n];
+        const enemy = ch4Enemies().find((x) => x.id === pid);
+        const seg = segs[enemy ? enemy.name : 'プレイヤー'] || { ranks: {}, common: [] };
+        const lines = [...(seg.ranks[n + 1] || []), ...seg.common, ...(enemy ? [] : segs.tail)];
+        const done = () => storyLater(() => step(n + 1), 300);
+        run.ch4.speaker = enemy ? CH4_SPEAKER_BY_NAME[enemy.name] || 'alek' : 'alek';
+        const speak = () => ch4Play(lines, 0, () => {
+          // 台本に「…を選ぶ」が無かった敵は、自分の番の終わりに選ぶ。
+          if (enemy && !storyPlayer(pid).jobCardId) ch4PickJob(pid, enemy.job);
+          done();
+        });
+        if (enemy && lines.some((r) => r.text)) ch4IntroEnemies([enemy], ch4EnemyTitle, speak);
+        else speak();
+      };
+      step(0);
+    }, 400);
+  }, 1500);
+}
+
+/** ジョブ6枚の画面。もう選ばれているジョブは取られた形(薄く、選んだ人の名前)で出す。 */
+function ch4ShowJobPanel() {
+  const run = storyRun;
+  if (run.ch4.jobPanel) return;
   STATE.jobPool = CH4_JOB_POOL.filter((id) => !STATE.players.some((p) => p.jobCardId === id));
-  ch4HideChosenJob();
   const root = el('div', 'story2-cards story2-cards--ch4 story-ch4-jobs');
   const row = el('div', 'story2-cards__row');
   run.ch4.jobCells = {};
@@ -3325,7 +3355,6 @@ function ch4ShowJobDraft(onReady) {
     cell.appendChild(el('div', 'story-ch4-jobs__owner'));
     run.ch4.jobCells[jobId] = cell;
     row.appendChild(cell);
-    // 1番の人が先にしゃべりながら選んでいたジョブ(ch4EnemyChoosesJob)は、取られた形で出す。
     const owner = STATE.players.find((p) => p.jobCardId === jobId);
     if (owner) {
       cell.classList.add('story2-cards__card--selected', 'story-ch4-jobs__card--taken');
@@ -3336,34 +3365,23 @@ function ch4ShowJobDraft(onReady) {
   run.dom.root.appendChild(root);
   run.ch4.jobPanel = root;
   root.animate([{ opacity: 0, transform: 'translate(-50%, -12px)' }, { opacity: 1, transform: 'translate(-50%, 0)' }], { duration: 300, easing: 'ease-out' });
-  const before = STATE.turnOrder.slice(0, STATE.turnOrder.indexOf('P1'));
-  ch4EnemiesPickJobs(before, () => storyLater(onReady, 400));
 }
 
-/** 「スパルが百人隊長を選ぶ」: 1番の敵が、しゃべりながら先に自分のジョブを選ぶ。選んだジョブのカードをセリフの上に
- * 出しておき(説明の間)、ジョブ選択画面に行く時に消す。 */
+/** 「ジョブ選択画面に行く」: ジョブの画面はもう出ている(ch4IntroductionRound)。出ていなければ出して、あなたより
+ * 前の敵でまだ選んでいない人は先に選ぶ。あなたの分はセリフ「「ローマ市民」」でアレクが選ぶ(ch4PickJob)。 */
+function ch4ShowJobDraft(onReady) {
+  ch4ShowJobPanel();
+  const before = STATE.turnOrder.slice(0, STATE.turnOrder.indexOf('P1'));
+  ch4EnemiesPickJobs(before, onReady);
+}
+
+/** 「スパルが百人隊長を選ぶ」: しゃべっている敵が自分のジョブを選ぶ(ジョブの画面で取られた形になる)。 */
 function ch4EnemyChoosesJob(e, onDone) {
-  const run = storyRun;
   const enemy = ch4Enemies().find((x) => e.includes(x.name));
   if (!enemy) { onDone(); return; }
-  if (!run.ch4.jobPanel) STATE.jobPool = CH4_JOB_POOL.filter((id) => !STATE.players.some((p) => p.jobCardId === id));
+  ch4ShowJobPanel();
   ch4PickJob(enemy.id, enemy.job);
-  ch4HideChosenJob();
-  const root = el('div', 'story2-cards story2-cards--ch4 story-ch4-chosen-job');
-  const row = el('div', 'story2-cards__row');
-  const cell = el('div', 'story2-cards__card');
-  cell.appendChild(buildCardVisual(enemy.job, { showEffect: true, allowTextFallback: false, noInteraction: true }));
-  cell.appendChild(el('div', 'story-ch4-jobs__owner', enemy.name));
-  row.appendChild(cell);
-  root.appendChild(row);
-  run.dom.root.appendChild(root);
-  run.ch4.chosenJob = root;
-  root.animate([{ opacity: 0, transform: 'translate(-50%, -12px)' }, { opacity: 1, transform: 'translate(-50%, 0)' }], { duration: 300, easing: 'ease-out' });
   storyLater(onDone, 500);
-}
-function ch4HideChosenJob() {
-  const run = storyRun;
-  if (run && run.ch4.chosenJob) { run.ch4.chosenJob.remove(); run.ch4.chosenJob = null; }
 }
 
 /** 1人のジョブを決める(カードに選んだ人の名前を出す。名前の表示にもジョブ名が付く)。 */
@@ -3398,7 +3416,6 @@ function ch4StartGame() {
   story2HideResourceCards();
   ch4CloseTurnOrder();
   ch4SetupEnemies();
-  ch4HideChosenJob();
   if (!run.ch4.jobPanel) STATE.jobPool = CH4_JOB_POOL.filter((id) => !STATE.players.some((p) => p.jobCardId === id));
   ch4PickJob('P1', 'JOB001');
   ch4EnemiesPickJobs(STATE.turnOrder, () => storyLater(() => {

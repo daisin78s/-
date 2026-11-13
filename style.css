@@ -8367,6 +8367,3 @@ html.story-autostarting::after {
 .story-ch4-jobs .story2-cards__card { width: min(112px, calc((100vw - 90px) / 6)); }
 .story-ch4-jobs__owner { min-height: 1.4em; text-align: center; font-size: 12px; font-weight: 700; color: #fff; }
 .story-ch4-jobs__card--taken .shop-card { opacity: 0.55; }
-/* 第4章「スパルが百人隊長を選ぶ」(story.jsのch4EnemyChoosesJob): 選んだジョブのカードを4人の画面より上に。 */
-.story-overlay .story-ch4-chosen-job { z-index: 3; }
-.story-ch4-chosen-job .story2-cards__card { width: 120px; }
