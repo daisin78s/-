@@ -3288,10 +3288,13 @@ const CH4_RANK_EVENT = /(スパル|セネカ|パトラ|ネロ|プレイヤー)�
 /** 「以下セリフ→行動の順番です」より下: [{ name: 'スパル', event: '訓練場に行く', rows: [...] }, ...]。 */
 function ch4ActionSegments(rows) {
   const list = [];
+  let current = null;
   for (const row of rows) {
-    const m = /^(スパル|セネカ|パトラ|ネロ)が(.+)$/.exec(story2NormalizeEvent(row.event || '').trim());
-    if (m) { list.push({ name: m[1], event: m[2], rows: [] }); continue; }
-    if (list.length && row.text) list[list.length - 1].rows.push(row);
+    const e = story2NormalizeEvent(row.event || '').trim();
+    const m = /^(スパル|セネカ|パトラ|ネロ)が(.+)$/.exec(e);
+    if (m) { current = { name: m[1], event: m[2], rows: [] }; list.push(current); continue; }
+    if (e) { current = null; continue; } // 行動ではない出来事(「1R2Tの最初」など)
+    if (current && row.text) current.rows.push(row);
   }
   return list;
 }
@@ -3407,6 +3410,10 @@ function ch4IntroSegments(rows, i) {
   });
   segs.tail = rows.slice(tailAt, Math.max(tailAt, actionAt));
   segs.actions = ch4ActionSegments(rows.slice(actionAt + 1));
+  // 「1R2Tの最初（プレイヤーの番でなくても）」: そのすぐ下のセリフ(アレク)。
+  const r2At = rows.findIndex((r, k) => k >= i && /1R2T/.test(r.event || ''));
+  segs.round1Turn2 = [];
+  for (let k = r2At + 1; r2At >= 0 && k < rows.length && !rows[k].event; k++) segs.round1Turn2.push(rows[k]);
   return segs;
 }
 
@@ -3594,6 +3601,25 @@ function ch4OnRender(state) {
     return;
   }
   const ch = run.ch4;
+  // 「1R2Tの最初（プレイヤーの番でなくても）」: 4人とも1ターン目を終えたら、次の人が打つ前にアレクのセリフ。
+  // そのあとは普段の対戦の速さで進む(「以降2Rまで通常ゲームの速度で進む」— 今の速さのまま)。
+  if (state.round === 1 && !ch.turn2Said && !ch.segmentRunning && !run.holdAi && ch.segs && (ch.segs.round1Turn2 || []).length
+    && state.players.every((p) => p.dice.some((d) => d.placedMapId || d.passed))
+    && aiOpenTurnPlayerId === null && !(playerRoles.get('P1') === 'HUMAN' && turnActionTaken)) {
+    ch.turn2Said = true;
+    run.holdAi = true;
+    run.talking = true;
+    setTimeout(() => {
+      if (storyRun !== run) return;
+      ch.speaker = 'alek';
+      ch4Play(ch.segs.round1Turn2, 0, () => {
+        ch.speaker = null;
+        storyHideDialog();
+        storySetSpeaker('system');
+        storyLater(() => { run.talking = false; run.holdAi = false; render(STATE); }, 300);
+      });
+    }, 0);
+  }
   // 1ラウンド目: ジョブがまだの人の手番が来たら、その人の自己紹介とジョブ選択(ch4PlayerSegment)。
   const upcoming = turnFlowMod.getNextTurn(state);
   if (state.round === 1 && !ch.segmentRunning && upcoming.type === 'TURN' && !storyPlayer(upcoming.playerId).jobCardId && ch.segs) {
