@@ -3296,36 +3296,86 @@ function ch4ActionSegments(rows) {
   return list;
 }
 
-/** AIがこれから置く手(selectAiMoveMemo: このあと実際に打つ手と同じ)が、台本のどの行動に当たるか。当たればその
- * セリフを言ってからonDone(そこでAIが動く)。上から順に最初に当たったもの。
- * 「訓練場に行く」/「領地(学問・人材)カードを獲得する」/「訓練場、皇帝宮殿、元老院以外のエリアに行く」。
- * セリフの「獲得したエリア名」「獲得したカード名」「行ったエリア名」はその名前に置き換える。 */
-function ch4ActionLine(enemy, onDone) {
-  const run = storyRun;
-  const actions = ((run.ch4.segs || {}).actions || []).filter((a) => a.name === enemy.name);
-  if (!actions.length) { onDone(); return; }
-  let move = null;
-  try { move = selectAiMoveMemo(STATE, enemy.id, { hasPlacedDieThisTurn: false }); } catch (err) { move = null; }
-  if (!move || move.mapId === undefined) { onDone(); return; }
-  const areaName = (dataLoaderMod.getAreaRow ? dataLoaderMod.getAreaRow(INDEX, STATE.maps[move.mapId].currentAreaId) : INDEX.raw.AREA.find((a) => a.ID === STATE.maps[move.mapId].currentAreaId) || {}).NAME || '';
-  const key = move.buildCandidateKey && !/^U:/.test(move.buildCandidateKey) ? move.buildCandidateKey : null;
+/** AIの1手が、台本のどの行動に当たるか(上から順に最初に当たったもの)。
+ * 「訓練場に行く」/「領地(学問・人材)カードを獲得する」/「訓練場、皇帝宮殿、元老院以外のエリアに行く」/「研究を使う」。 */
+function ch4FindActionLine(enemy, move, state) {
+  const actions = ((storyRun.ch4.segs || {}).actions || []).filter((a) => a.name === enemy.name);
+  if (!actions.length || !move) return null;
+  let areaName = '';
+  let key = null;
+  let usedName = '';
+  if (move.mapId !== undefined && /^PLACE_/.test(move.type)) {
+    areaName = String(dataLoaderMod.getAreaRow(INDEX, state.maps[move.mapId].currentAreaId).NAME || '');
+    if (move.buildCandidateKey && !/^U:/.test(move.buildCandidateKey)) key = move.buildCandidateKey;
+  } else if (move.type === 'BARE_TAP' || move.type === 'TAP_REACTION') {
+    const card = state.cards[move.physicalId];
+    usedName = card ? String(dataLoaderMod.getCardRow(INDEX, card.currentFaceId).NAME || '').replace(/LV\d+$/, '') : '';
+    // タップでカードを獲得する時(研究など)は、獲得するカードも分かるようにする。
+    if (move.buildCandidateIndex !== undefined) {
+      try {
+        const clone = gameStateMod.cloneState(state);
+        const r = boardMod.useBareTapAbility(clone, INDEX, { playerId: enemy.id }, move.physicalId);
+        const c = r && r.pendingBuild && r.pendingBuild.candidates[move.buildCandidateIndex];
+        if (c && c.type !== 'UPGRADE') key = c.faceId;
+      } catch (err) { /* 分からなければ獲得のセリフは無し */ }
+    }
+  } else {
+    return null;
+  }
   const cardName = key ? String(dataLoaderMod.getCardRow(INDEX, key).NAME || '') : '';
   const kind = key ? { A: '領地', B: '学問', C: '人材' }[key[0]] : null;
   const hit = actions.find((a) => {
     const others = /^(.+)以外のエリアに行く/.exec(a.event);
-    if (others) return !key && !others[1].split(/[、,，]/).map((x) => x.trim()).includes(areaName);
+    if (others) return !!areaName && !key && !others[1].split(/[、,，]/).map((x) => x.trim()).includes(areaName);
     const go = /^(.+)に行く/.exec(a.event);
-    if (go) return areaName === go[1].trim();
+    if (go) return !!areaName && areaName === go[1].trim();
     const get = /(領地|学問|人材)カードを獲得/.exec(a.event);
-    return !!get && kind === get[1];
+    if (get) return kind === get[1];
+    const use = /^(.+)を使う/.exec(a.event);
+    return !!use && !!usedName && usedName === use[1].trim();
   });
-  if (!hit || !hit.rows.length) { onDone(); return; }
+  if (!hit || !hit.rows.length) return null;
   const fill = (text) => text
     .replace(/獲得したエリア名/g, cardName.replace(/の支配.*$/, ''))
     .replace(/獲得したカード名/g, cardName.replace(/LV\d+$/, ''))
-    .replace(/行ったエリア名/g, areaName);
-  run.ch4.speaker = CH4_SPEAKER_BY_NAME[enemy.name] || 'alek';
-  ch4Play(hit.rows.map((r) => ({ ...r, text: fill(r.text) })), 0, () => { run.ch4.speaker = null; onDone(); });
+    .replace(/行ったエリア名/g, areaName)
+    .replace(/使ったカード名/g, usedName);
+  return hit.rows.map((r) => ({ ...r, text: fill(r.text) }));
+}
+
+/** main.jsのpumpAiDelayedが、AIの1手を打つ直前に呼ぶ: 第4章で自己紹介を終えた敵のその手番(ch4.actionTurn)なら、
+ * これから打つ手(selectAiMoveMemo: このあと実際に打つ手と同じ)のセリフを先に言う。言っている間はAIを止め
+ * (trueを返す)、言い終わったらAIを再開して、その手を打つ。1手ごとに1回だけ。 */
+function storyBeforeAiStep(state) {
+  const run = storyRun;
+  if (!run || !run.ch4 || !run.normalGame || run.holdAi) return false;
+  const ch = run.ch4;
+  if (!ch.actionTurn) return false;
+  const ctx = resolveAiTurnContext(state);
+  if (!ctx || ctx.type !== 'TURN') return false;
+  // セリフは1ラウンド目の自己紹介のすぐあとの手番(1R1T)だけ(2026-11-13, per user「1R1Tのみを想定」)。ほかの人の
+  // 手番になったら、またはその人が2個目のダイスを置く手番になったら終わり。
+  const used = storyPlayer(ch.actionTurn).dice.filter((d) => d.placedMapId || d.passed).length;
+  if (ctx.playerId !== ch.actionTurn || state.round !== 1 || used > 1 || (used === 1 && !ctx.hasPlacedDieThisTurn)) { ch.actionTurn = null; return false; }
+  const enemy = ch4Enemies().find((x) => x.id === ctx.playerId);
+  if (!enemy) return false;
+  let move = null;
+  try { move = selectAiMoveMemo(state, ctx.playerId, { hasPlacedDieThisTurn: ctx.hasPlacedDieThisTurn }); } catch (err) { return false; }
+  const key = `${JSON.stringify(move)}|${JSON.stringify(state).length}|${state.progressLog ? state.progressLog.length : 0}`;
+  if (ch.announcedKey === key) return false;
+  ch.announcedKey = key;
+  const rows = ch4FindActionLine(enemy, move, state);
+  if (!rows) return false;
+  run.holdAi = true;
+  run.talking = true;
+  ch.speaker = CH4_SPEAKER_BY_NAME[enemy.name] || 'alek';
+  ch4Play(rows, 0, () => {
+    ch.speaker = null;
+    storyHideDialog();
+    storySetSpeaker('system');
+    storyLater(() => { run.talking = false; run.holdAi = false; render(STATE); }, 300);
+  });
+  return true;
 }
 
 const CH4_JOB_POOL = ['JOB001', 'JOB007', 'JOB004', 'JOB002', 'JOB005', 'JOB003']; // ローマ市民 研究者 百人隊長 巫女 権力者 道化師
@@ -3412,9 +3462,9 @@ function ch4PlayerSegment(pid) {
     storyHideDialog();
     storyLater(() => {
       if (ch.jobPanel) { ch.jobPanel.remove(); ch.jobPanel = null; }
-      // 敵: ダイスを置く前に、これからする行動のセリフ(セリフ→行動の順)。
-      if (enemy) ch4ActionLine(enemy, release);
-      else release();
+      // 敵: このあとの手番の行動それぞれの前に、その行動のセリフ(セリフ→行動の順、storyBeforeAiStep)。
+      if (enemy) ch.actionTurn = pid;
+      release();
     }, 500);
   };
   ch.speaker = enemy ? CH4_SPEAKER_BY_NAME[enemy.name] || 'alek' : 'alek';

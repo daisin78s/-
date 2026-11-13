@@ -2065,6 +2065,8 @@ function pumpAiDelayed() {
     if (!hasAiWorkPending(STATE)) { aiPreHighlightMove = null; return; }
     // 演出中は反映を待つ(次の手はすでに考え済み)。
     if (aiVisualsBusy()) { aiPumpTimer = setTimeout(step, AI_VISUALS_WAIT_POLL_MS); return; }
+    // ストーリー第4章: この手の前にセリフを言う時は、言い終わるまで待つ(story.jsのstoryBeforeAiStep。言い終わると描き直しでまた動く)。
+    if (typeof storyBeforeAiStep === 'function' && storyBeforeAiStep(STATE)) return;
     aiPreHighlightMove = null;
     driveOneAiStep(STATE);
     render(STATE);
