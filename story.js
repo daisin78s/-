@@ -3285,6 +3285,49 @@ function ch4IntroEnemies(enemies, titleOf, onDone) {
 const CH4_SPEAKER_BY_NAME = { スパル: 'spal', セネカ: 'seneca', パトラ: 'patra', ネロ: 'nero' };
 
 const CH4_RANK_EVENT = /(スパル|セネカ|パトラ|ネロ|プレイヤー)が([１-４1-4])番/;
+/** 「以下セリフ→行動の順番です」より下: [{ name: 'スパル', event: '訓練場に行く', rows: [...] }, ...]。 */
+function ch4ActionSegments(rows) {
+  const list = [];
+  for (const row of rows) {
+    const m = /^(スパル|セネカ|パトラ|ネロ)が(.+)$/.exec(story2NormalizeEvent(row.event || '').trim());
+    if (m) { list.push({ name: m[1], event: m[2], rows: [] }); continue; }
+    if (list.length && row.text) list[list.length - 1].rows.push(row);
+  }
+  return list;
+}
+
+/** AIがこれから置く手(selectAiMoveMemo: このあと実際に打つ手と同じ)が、台本のどの行動に当たるか。当たればその
+ * セリフを言ってからonDone(そこでAIが動く)。上から順に最初に当たったもの。
+ * 「訓練場に行く」/「領地(学問・人材)カードを獲得する」/「訓練場、皇帝宮殿、元老院以外のエリアに行く」。
+ * セリフの「獲得したエリア名」「獲得したカード名」「行ったエリア名」はその名前に置き換える。 */
+function ch4ActionLine(enemy, onDone) {
+  const run = storyRun;
+  const actions = ((run.ch4.segs || {}).actions || []).filter((a) => a.name === enemy.name);
+  if (!actions.length) { onDone(); return; }
+  let move = null;
+  try { move = selectAiMoveMemo(STATE, enemy.id, { hasPlacedDieThisTurn: false }); } catch (err) { move = null; }
+  if (!move || move.mapId === undefined) { onDone(); return; }
+  const areaName = (dataLoaderMod.getAreaRow ? dataLoaderMod.getAreaRow(INDEX, STATE.maps[move.mapId].currentAreaId) : INDEX.raw.AREA.find((a) => a.ID === STATE.maps[move.mapId].currentAreaId) || {}).NAME || '';
+  const key = move.buildCandidateKey && !/^U:/.test(move.buildCandidateKey) ? move.buildCandidateKey : null;
+  const cardName = key ? String(dataLoaderMod.getCardRow(INDEX, key).NAME || '') : '';
+  const kind = key ? { A: '領地', B: '学問', C: '人材' }[key[0]] : null;
+  const hit = actions.find((a) => {
+    const others = /^(.+)以外のエリアに行く/.exec(a.event);
+    if (others) return !key && !others[1].split(/[、,，]/).map((x) => x.trim()).includes(areaName);
+    const go = /^(.+)に行く/.exec(a.event);
+    if (go) return areaName === go[1].trim();
+    const get = /(領地|学問|人材)カードを獲得/.exec(a.event);
+    return !!get && kind === get[1];
+  });
+  if (!hit || !hit.rows.length) { onDone(); return; }
+  const fill = (text) => text
+    .replace(/獲得したエリア名/g, cardName.replace(/の支配.*$/, ''))
+    .replace(/獲得したカード名/g, cardName.replace(/LV\d+$/, ''))
+    .replace(/行ったエリア名/g, areaName);
+  run.ch4.speaker = CH4_SPEAKER_BY_NAME[enemy.name] || 'alek';
+  ch4Play(hit.rows.map((r) => ({ ...r, text: fill(r.text) })), 0, () => { run.ch4.speaker = null; onDone(); });
+}
+
 const CH4_JOB_POOL = ['JOB001', 'JOB007', 'JOB004', 'JOB002', 'JOB005', 'JOB003']; // ローマ市民 研究者 百人隊長 巫女 権力者 道化師
 
 /** 「傲慢なスパルが１番」〜「ジョブ選択画面に行く」の前までを、人ごとに分ける (2026-11-13, per user: 手番順に1人ずつ
@@ -3296,6 +3339,9 @@ function ch4IntroSegments(rows, i) {
   const segs = {};
   let tailAt = rows.findIndex((r, k) => k >= i && /ジョブ選択画面/.test(r.event || ''));
   if (tailAt < 0) tailAt = rows.length;
+  // 「以下セリフ→行動の順番です」から下は、ダイスを置く時のセリフ(ch4ActionSegments)。
+  let actionAt = rows.findIndex((r, k) => k >= i && /セリフ→行動/.test(r.event || ''));
+  if (actionAt < 0) actionAt = rows.length;
   const marks = [];
   for (let k = i; k < tailAt; k++) {
     const m = CH4_RANK_EVENT.exec(story2NormalizeEvent(rows[k].event || ''));
@@ -3309,7 +3355,8 @@ function ch4IntroSegments(rows, i) {
     seg.ranks[mark.rank] = body.slice(0, 1);
     seg.common = body.slice(1);
   });
-  segs.tail = rows.slice(tailAt);
+  segs.tail = rows.slice(tailAt, Math.max(tailAt, actionAt));
+  segs.actions = ch4ActionSegments(rows.slice(actionAt + 1));
   return segs;
 }
 
@@ -3348,19 +3395,27 @@ function ch4PlayerSegment(pid) {
   const seg = segs[enemy ? enemy.name : 'プレイヤー'] || { ranks: {}, common: [] };
   const lines = [...(seg.ranks[rank] || []), ...seg.common, ...(enemy ? [] : segs.tail)];
   ch4ShowJobPanel();
-  const finish = () => {
-    if (!storyRun) return;
-    if (!storyPlayer(pid).jobCardId) ch4PickJob(pid, enemy ? enemy.job : 'JOB001');
+  const release = () => {
     ch.speaker = null;
     storyHideDialog();
     storySetSpeaker('system');
     storyLater(() => {
-      if (ch.jobPanel) { ch.jobPanel.remove(); ch.jobPanel = null; }
       ch.segmentRunning = null;
       run.talking = false;
       run.holdAi = false;
       render(STATE);
-    }, 700);
+    }, 500);
+  };
+  const finish = () => {
+    if (!storyRun) return;
+    if (!storyPlayer(pid).jobCardId) ch4PickJob(pid, enemy ? enemy.job : 'JOB001');
+    storyHideDialog();
+    storyLater(() => {
+      if (ch.jobPanel) { ch.jobPanel.remove(); ch.jobPanel = null; }
+      // 敵: ダイスを置く前に、これからする行動のセリフ(セリフ→行動の順)。
+      if (enemy) ch4ActionLine(enemy, release);
+      else release();
+    }, 500);
   };
   ch.speaker = enemy ? CH4_SPEAKER_BY_NAME[enemy.name] || 'alek' : 'alek';
   const speak = () => ch4Play(lines, 0, finish);
