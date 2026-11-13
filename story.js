@@ -2944,6 +2944,25 @@ function ch4Play(rows, i, onDone) {
   } else if (/初期資源が手に入る/.test(e)) {
     ch4GrantConResources();
     storyLater(say, 800);
+  } else if (/光る/.test(e) && /資源/.test(e)) {
+    // 「もらえる資源が光る」: 並べた性格・初期資源カードの資源アイコンの所。
+    storySetGlow(['.story-ch4-mine .shop-card > .shop-card__effect .action-icons']);
+    run.ch4.glowLine = true;
+    say();
+  } else if (/光る/.test(e) && /スタプレ/.test(e)) {
+    // 「スタプレ値が光る」: チュートリアルと同じく、各カードのスタプレの数字と合計。
+    storySetGlow(['.story-ch4-mine .shop-card > .shop-card__start-order .shop-card__start-order-number', '.story-ch4-mine .story-ch4-total__number']);
+    run.ch4.glowLine = true;
+    say();
+  } else if (/並ぶ/.test(e) && /[４4]人/.test(e)) {
+    ch4ShowTurnOrder();
+    storyLater(say, 500);
+  } else if (/並ぶ/.test(e)) {
+    ch4ShowMyCards();
+    storyLater(say, 500);
+  } else if (/表になる/.test(e)) {
+    storyHideDialog();
+    ch4RevealOthers(say);
   } else if (/光る/.test(e)) {
     // 「該当部分光る」(この部分が性格のペナルティ): 拡大した性格カードのペナルティの所。
     storySetGlow(['.story-ch4-callout .card-note']);
@@ -3055,20 +3074,57 @@ function ch4ChooseResourceCards(onDone) {
   }, storyRun.ch4.resourceCandidates, 'story2-cards--ch4');
 }
 
-/** 台本のあと: 敵3人に性格・ジョブ・初期資源を配り、立ち絵で登場させてから4人対戦を始める。 */
-function ch4StartGame() {
+function ch4Enemies() {
+  return storyRun.ch4.conFaceId === 'CON002A' ? CH4_ENEMIES.kichomen : CH4_ENEMIES.normal;
+}
+
+/** P1の初期資源カード2枚(持ち札のR…)。 */
+function ch4ResourceIds(player) {
+  return player.ownedCardPhysicalIds.filter((id) => id.startsWith('R'));
+}
+
+/** カード1枚(チュートリアルの確認画面と同じ見た目)。hiddenなら裏向き(中身を見えなくする)。 */
+function ch4CardCell(faceId, hidden) {
+  const cardNode = buildCardVisual(faceId, { showEffect: true, allowTextFallback: false, noInteraction: true });
+  if (hidden) cardNode.classList.add('tutorial-card-hidden');
+  const cell = el('div', cardNode.classList.contains('shop-card--tall') ? 'owned-card-cell owned-card-cell--tall' : 'owned-card-cell');
+  cell.appendChild(cardNode);
+  return cell;
+}
+
+/** 「選んだ性格と初期資源カードが並ぶ」: チュートリアルの「あなたが選んだカードはこちら」と同じく、選んだ性格と
+ * 初期資源カード2枚、スタプレ合計を並べる。 */
+function ch4ShowMyCards() {
   const run = storyRun;
-  storyHideDialog();
-  const enemies = run.ch4.conFaceId === 'CON002A' ? CH4_ENEMIES.kichomen : CH4_ENEMIES.normal;
+  story2HideResourceCards();
   const p1 = storyPlayer('P1');
-  // あなたのジョブはローマ市民。
-  STATE.jobPool = ['JOB001', ...enemies.map((x) => x.job)];
-  setupMod.chooseJob(STATE, INDEX, 'P1', 'JOB001');
+  const resourceIds = ch4ResourceIds(p1);
+  const root = el('div', 'story2-cards story2-cards--ch4 story-ch4-mine');
+  const row = el('div', 'story2-cards__row');
+  for (const faceId of [run.ch4.conFaceId, ...resourceIds]) {
+    const cell = el('div', 'story2-cards__card');
+    cell.appendChild(ch4CardCell(faceId, false));
+    row.appendChild(cell);
+  }
+  const total = el('div', 'story-ch4-total', 'スタプレ合計 ');
+  total.appendChild(el('span', 'story-ch4-total__number', String(resourceChoiceStartOrderTotal(STATE, 'P1', resourceIds))));
+  root.append(row, total);
+  run.dom.root.appendChild(root);
+  run.dom.resourceCards = root;
+  root.animate([{ opacity: 0, transform: 'translate(-50%, -12px)' }, { opacity: 1, transform: 'translate(-50%, 0)' }], { duration: 300, easing: 'ease-out' });
+}
+
+/** 敵3人の名前・性格・初期資源カード(配られた4枚からランダムに2枚)を決めて、手番の順番も決める(1回だけ)。
+ * 「４人の…並ぶ」の行で見せるため、ジョブより先にここで決める。 */
+function ch4SetupEnemies() {
+  const run = storyRun;
+  if (run.ch4.enemiesReady) return;
+  run.ch4.enemiesReady = true;
+  const p1 = storyPlayer('P1');
   const usedCon = new Set([p1.conPhysicalId]);
-  for (const enemy of enemies) {
+  for (const enemy of ch4Enemies()) {
     const player = storyPlayer(enemy.id);
     player.name = enemy.name;
-    setupMod.chooseJob(STATE, INDEX, enemy.id, enemy.job);
     // 性格カードは1枚の表裏なので、几帳面(CON002A)と傲慢(CON002B)を2人が持つ時は、ストーリーの中だけ同じカードを
     // もう1枚作る(持ち札の番号を変える。呼び名は conPhysicalId+conFace で出る)。
     const physical = enemy.con.slice(0, -1);
@@ -3093,6 +3149,98 @@ function ch4StartGame() {
   }
   STATE.pendingChoices = STATE.pendingChoices.filter((c) => c.kind !== 'SELECT_RESOURCE_CARDS');
   setupMod.computeStartOrder(STATE, INDEX);
+}
+
+/** 「４人の選んだ性格（表示）と初期資源カード（裏）が並ぶ」: チュートリアルの手番順の画面と同じく、4人を1行ずつ
+ * (順番・名前・スタプレ合計、性格カード、初期資源カード2枚)。他の3人の初期資源カードとスタプレ合計は伏せておき、
+ * 「初期資源カードがすべて表になる」で見せる(ch4RevealOthers)。スマホは4行が画面に収まるようにカードを縮める。 */
+function ch4ShowTurnOrder() {
+  const run = storyRun;
+  story2HideResourceCards();
+  ch4SetupEnemies();
+  const overlay = el('div', 'card-inst-overlay story-ch4-order');
+  const modal = el('div', 'card-inst-modal build-choice-modal tutorial-turnorder-modal story-ch4-order__modal');
+  const list = el('div', 'tutorial-turnorder-list story-ch4-order__list');
+  STATE.players.forEach((player) => {
+    const isSelf = player.id === 'P1';
+    const resourceIds = ch4ResourceIds(player);
+    const row = el('div', 'tutorial-turnorder-row');
+    const header = el('div', 'tutorial-turnorder-row__header');
+    header.appendChild(el('span', 'tutorial-turnorder-rank', `${STATE.turnOrder.indexOf(player.id) + 1}番手`));
+    const swatch = el('span', 'player-panel__swatch player-panel__swatch--tiny');
+    swatch.dataset.color = player.color;
+    header.appendChild(swatch);
+    header.appendChild(el('span', 'tutorial-turnorder-name', player.name));
+    const totalEl = el('span', 'tutorial-turnorder-total', 'スタプレ合計 ');
+    const number = el('span', 'tutorial-turnorder-total__number', isSelf ? String(resourceChoiceStartOrderTotal(STATE, player.id, resourceIds)) : '？');
+    if (!isSelf) number.dataset.total = String(resourceChoiceStartOrderTotal(STATE, player.id, resourceIds));
+    totalEl.appendChild(number);
+    header.appendChild(totalEl);
+    row.appendChild(header);
+    const cards = el('div', 'build-choice-group');
+    cards.appendChild(ch4CardCell(`${player.conPhysicalId}${player.conFace}`, false));
+    for (const faceId of resourceIds) cards.appendChild(ch4CardCell(faceId, !isSelf));
+    row.appendChild(cards);
+    list.appendChild(row);
+  });
+  const body = el('div', 'card-inst-modal__body');
+  body.appendChild(list);
+  modal.appendChild(body);
+  overlay.appendChild(modal);
+  run.dom.root.appendChild(overlay);
+  run.ch4.orderOverlay = overlay;
+  ch4FitTurnOrder();
+  overlay.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300, easing: 'ease-out' });
+}
+
+/** スマホ: 4行が縦にスクロールなしで収まる大きさまでカードを縮める(収まるならそのまま=なるべく大きく)。 */
+function ch4FitTurnOrder() {
+  const overlay = storyRun && storyRun.ch4.orderOverlay;
+  if (!overlay) return;
+  const list = overlay.querySelector('.story-ch4-order__list');
+  overlay.querySelectorAll('.build-choice-group').forEach((g) => { g.style.zoom = ''; });
+  if (!window.matchMedia('(max-width: 760px), (max-height: 500px)').matches) return;
+  const rows = [...list.querySelectorAll('.tutorial-turnorder-row')];
+  const groups = rows.map((r) => r.querySelector('.build-choice-group'));
+  const natural = Math.max(...groups.map((g) => g.offsetHeight));
+  const rowHeight = list.clientHeight / rows.length - 6; // 行の上下の余白・枠の分
+  const scale = Math.max(0.3, Math.min(1, rowHeight / natural));
+  groups.forEach((g) => { g.style.zoom = String(scale); });
+}
+
+/** 「初期資源カードがすべて表になる」: 他の3人の初期資源カードとスタプレ合計を見せ、✖で閉じたら次へ。 */
+function ch4RevealOthers(onClosed) {
+  const overlay = storyRun.ch4.orderOverlay;
+  overlay.querySelectorAll('.tutorial-card-hidden').forEach((n) => {
+    n.classList.remove('tutorial-card-hidden');
+    n.animate([{ transform: 'rotateY(90deg)' }, { transform: 'rotateY(0)' }], { duration: 350, easing: 'ease-out' });
+  });
+  overlay.querySelectorAll('[data-total]').forEach((n) => { n.textContent = n.dataset.total; });
+  const close = el('button', 'tutorial-turnorder-close-x', '×');
+  close.type = 'button';
+  close.setAttribute('aria-label', '閉じる');
+  close.addEventListener('click', () => {
+    overlay.remove();
+    storyRun.ch4.orderOverlay = null;
+    onClosed();
+  });
+  overlay.querySelector('.story-ch4-order__modal').appendChild(close);
+}
+
+/** 台本のあと: 敵3人に性格・ジョブ・初期資源を配り、立ち絵で登場させてから4人対戦を始める。 */
+function ch4StartGame() {
+  const run = storyRun;
+  storyHideDialog();
+  story2HideResourceCards();
+  if (run.ch4.orderOverlay) { run.ch4.orderOverlay.remove(); run.ch4.orderOverlay = null; }
+  const enemies = ch4Enemies();
+  ch4SetupEnemies();
+  // あなたのジョブはローマ市民。
+  STATE.jobPool = ['JOB001', ...enemies.map((x) => x.job)];
+  setupMod.chooseJob(STATE, INDEX, 'P1', 'JOB001');
+  for (const enemy of enemies) {
+    setupMod.chooseJob(STATE, INDEX, enemy.id, enemy.job);
+  }
   turnFlowMod.startRound(STATE);
   // 盤面を全部見せる。
   run.visibleMapIds = Object.keys(STATE.maps);

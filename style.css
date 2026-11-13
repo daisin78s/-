@@ -8340,3 +8340,26 @@ html.story-autostarting::after {
 /* 第4章「カードをクリックしてみてよ」: セリフの上に出した性格カードを押すと、その場で大きくなる(story.jsのch4ShowCallout)。 */
 .story-ch4-callout { transition: transform 0.3s ease-out; }
 .story2-callout.story-ch4-callout--big { transform: translateX(-50%) scale(2); bottom: 36%; }
+
+/* 第4章「選んだ性格と初期資源カードが並ぶ」(story.jsのch4ShowMyCards): チュートリアルの確認画面と同じく合計も出す。 */
+.story-ch4-mine .story2-cards__card { width: 112px; }
+.story-ch4-total { text-align: center; font-weight: 700; color: #fff; font-size: 13px; }
+.story-ch4-total__number { font-size: 26px; color: #fff; margin-left: 4px; }
+/* 第4章「４人の…並ぶ」(story.jsのch4ShowTurnOrder): チュートリアルの手番順の画面と同じ。セリフ欄より下に重ねる。 */
+.story-overlay .story-ch4-order {
+  position: absolute;
+  z-index: 2;
+  pointer-events: auto;
+  justify-content: flex-start;
+  padding-left: 16px;
+}
+/* スマホ: 4行をスクロールなしで画面の高さいっぱいに(カードの大きさはch4FitTurnOrderが合わせる)。 */
+@media (max-width: 760px), (max-height: 500px) {
+  .story-overlay .story-ch4-order { padding: 4px 0 4px max(8px, env(safe-area-inset-left, 0px)); align-items: stretch; }
+  .story-ch4-order__modal { width: auto; max-width: calc(100vw - 16px); height: calc(100% - 8px); align-self: center; box-sizing: border-box; padding: 4px 6px; display: flex; flex-direction: column; }
+  .story-ch4-order__modal .card-inst-modal__body { flex: 1 1 auto; min-height: 0; display: flex; }
+  .story-ch4-order__list { padding-top: 0; padding-right: 48px; max-height: none; height: 100%; overflow: hidden; flex: 1 1 auto; }
+  .story-ch4-order__list .tutorial-turnorder-row { flex: 1 1 0; min-height: 0; padding: 2px 6px; }
+  .story-ch4-order__list .build-choice-group { overflow: visible; }
+  .story-ch4-order__list .tutorial-turnorder-total__number { font-size: 18px; }
+}
