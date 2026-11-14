@@ -8370,3 +8370,43 @@ html.story-autostarting::after {
 .story-ch4-jobs .story2-cards__card { width: min(112px, calc((100vw - 90px) / 6)); }
 .story-ch4-jobs__owner { min-height: 1.4em; text-align: center; font-size: 12px; font-weight: 700; color: #fff; }
 .story-ch4-jobs__card--taken .shop-card { filter: brightness(0.7) grayscale(0.5); }
+
+/* 第2章: フクロウの飾り留めを手に入れた時のアニメーション(story.jsのsenecaOwlAnimation)。 */
+.story-owl {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(12, 10, 24, 0.7);
+  pointer-events: none;
+  perspective: 800px;
+}
+.story-owl__glow {
+  position: absolute;
+  width: min(70vh, 420px);
+  height: min(70vh, 420px);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 214, 102, 0.75) 0%, rgba(255, 190, 60, 0.25) 45%, rgba(255, 190, 60, 0) 70%);
+  top: 50%;
+  left: 50%;
+  margin: calc(min(70vh, 420px) / -2 - 24px) 0 0 calc(min(70vh, 420px) / -2);
+}
+.story-owl__img {
+  position: relative;
+  width: min(48vh, 260px);
+  height: auto;
+  filter: drop-shadow(0 0 18px rgba(255, 200, 80, 0.8));
+}
+.story-owl__text {
+  position: relative;
+  color: #ffe9a8;
+  font-size: clamp(16px, 4.5vh, 24px);
+  font-weight: bold;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
+  padding: 0 16px;
+  text-align: center;
+}

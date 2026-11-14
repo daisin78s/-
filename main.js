@@ -17626,6 +17626,12 @@ const STORY_CHARACTER_BY_TITLE = {
   心配性な研究者: { name: 'セネカ', img: 'assets/story-seneca-worried.webp' },
   色欲の権力者: { name: 'ネロ', img: 'assets/story-nero.webp' },
 };
+// 「心配性な研究者セネカ」はストーリー第2章でフクロウの飾り留めを3個集めると解禁(2026-11-14, per user)。それまでは
+// 心配性な研究者になったAIは立ち絵も名前の変更もしない。この端末だけの記録(story.jsも同じ鍵を使う)。
+const STORY_SENECA_WORRIED_UNLOCK_KEY = 'diceWpStorySenecaWorriedUnlocked';
+function storySenecaWorriedUnlocked() {
+  try { return localStorage.getItem(STORY_SENECA_WORRIED_UNLOCK_KEY) === '1'; } catch (err) { return false; }
+}
 const storyCharacterShownKeys = new Set();
 const storyCharacterQueue = [];
 let storyCharacterPlaying = false;
@@ -17637,6 +17643,7 @@ function applyStoryCharacterNames(state) {
     const title = rankingConJobTitle(`${player.conPhysicalId}${player.conFace}`, player.jobCardId);
     const character = STORY_CHARACTER_BY_TITLE[title];
     if (!character) continue;
+    if (title === '心配性な研究者' && !storySenecaWorriedUnlocked()) continue;
     if (player.name !== character.name) player.name = character.name;
     const key = `${state.rng ? state.rng.seed : ''}:${player.id}`;
     if (storyCharacterShownKeys.has(key)) continue;

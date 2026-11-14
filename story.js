@@ -2367,6 +2367,10 @@ function senecaPlay(rows, i, onDone) {
     // 「素晴らしいわ！」以降は喜んでいる差分(2026-11-12, per user)。
     // 2026-11-13: セリフが「驚いたわ！」に変わった(同じ場面)。
     if (/^(素晴らしいわ|驚いたわ)/.test(row.text)) senecaSwapPortrait(STORY_SENECA_HAPPY_IMG);
+    // フクロウの飾り留めのルート(senecaEndingRoute)を見分けるため、見たセリフを覚えておく(巻き戻しても消さない)。
+    if (/このカードを獲得する」ボタンを押せば/.test(row.text)) storyRun.seneca.sawCheckLine = true;
+    if (/^もう獲得したの/.test(row.text)) storyRun.seneca.sawAlready = true;
+    if (/カードを[３3]枚も/.test(row.text)) storyRun.seneca.sawThreeCards = true;
     storySayThen(`CS-${row.index}`, () => {
       if (storyRun && storyRun.seneca.glowUntilLineEnd) { storyRun.seneca.glowUntilLineEnd = false; storySetGlow([]); }
       next();
@@ -2379,7 +2383,10 @@ function senecaPlay(rows, i, onDone) {
 function senecaDoEvent(row, onDone) {
   const run = storyRun;
   const e = story2NormalizeEvent(row.event);
-  if (/ターン\s*\d+\s*が流れる/.test(e)) {
+  const owl = /「(.+?フクロウの飾り留め)」を手に入れる/.exec(e);
+  if (owl) {
+    senecaOwlAnimation(owl[1], onDone);
+  } else if (/ターン\s*\d+\s*が流れる/.test(e)) {
     // 「ターン1が流れる」: 「あなた ターン1」を出す(このあと置けるようになった時にもう一度は出ない)。
     storyTurnBannerWhenPlaceable(STATE);
     onDone();
@@ -2565,7 +2572,8 @@ function senecaDoEvent(row, onDone) {
     if (placeable) run.seneca.skipToRe = /置けるようになる/;
     onDone();
   } else if (/高等学問/.test(e) && /アニメーション/.test(e)) {
-    // 演出だけ(知識は払わない、per user回答)。
+    // 演出だけ(知識は払わない、per user回答)。セネカが高等学問を使った印(フクロウの飾り留めのルートの条件)。
+    run.seneca.usedAdvanced = true;
     storyHideDialog();
     mobileAiCardGainQueue.push({ faceId: 'B002A' });
     playNextMobileAiCardGain();
@@ -2688,6 +2696,109 @@ function senecaHasCard(re) {
   return storyPlayer('P1').ownedCardPhysicalIds.some((id) => STATE.cards[id] && re.test(STATE.cards[id].currentFaceId));
 }
 
+/* ---------- 第2章: フクロウの飾り留め (2026-11-14, per user) ----------
+ * 図書館で会って終わる時、決まったルートでクリアしたら、そのルートの終わり方(「…生徒だったわ」〜飾り留めを贈る)。
+ * 飾り留めはルートごとに1個(3種類)、この端末だけに覚える。同じルートで2回目は数は増えないが、セリフは全部出る
+ * (「○個目のセリフ」も今の数のもの、per user回答)。3個で「心配性な研究者セネカ」を解禁(main.jsの
+ * STORY_SENECA_WORRIED_UNLOCK_KEY: 普通の対戦で心配性な研究者になったAIの立ち絵)。 */
+const SENECA_OWL_KEY = 'diceWpStorySenecaOwls';
+const SENECA_OWL_TOTAL = 3;
+function senecaOwls() {
+  try { const v = JSON.parse(localStorage.getItem(SENECA_OWL_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch (err) { return []; }
+}
+
+/** 基礎学問がタップされていて、交渉術か土木技術の目が変わっている(基礎学問をカードに使った)。 */
+function senecaBasicUsedOnCard() {
+  const p1 = storyPlayer('P1');
+  const cards = p1.ownedCardPhysicalIds.map((id) => STATE.cards[id]).filter(Boolean);
+  return cards.some((c) => /^B001/.test(c.currentFaceId) && c.tapped)
+    && cards.some((c) => /^B00[46]/.test(c.currentFaceId) && c.buildValueOverride !== null && c.buildValueOverride !== undefined);
+}
+
+/** 今の盤面で当てはまるルートの見出し(「…ルートで…クリアする」)を見分ける正規表現。無ければnull。
+ *  - 真面目: 図書館が先→チェックマークの説明(「このカードを獲得する」ボタンを押せば)を見た→交渉術→基礎学問の順で
+ *    獲得(土木技術なし)→図書館、ダイスが1個残っている、セネカが高等学問を使っていない。
+ *  - 聡明: 農園が先→「もう獲得したの」と「カードを３枚も獲得するなんて」を見た、セネカが高等学問を使っていない。
+ *  - 好奇心旺盛: 図書館が先→基礎学問を先に獲得→土木技術、基礎学問をカードに使った(そのセリフを見た)、
+ *    心配性な研究者セネカになっている。 */
+function senecaEndingRoute() {
+  const ch = storyRun.seneca;
+  const p1 = storyPlayer('P1');
+  const order = p1.ownedCardPhysicalIds.map((id) => STATE.cards[id] && STATE.cards[id].currentFaceId).filter((f) => f && /^B00[146]/.test(f)).map((f) => f.slice(0, 4));
+  const diceLeftCount = p1.dice.filter((d) => !d.placedMapId && !d.passed).length;
+  if (!ch.farmDone && ch.sawCheckLine && order.join() === 'B004,B001' && diceLeftCount === 1 && !ch.usedAdvanced) return /図書館→チェックマーク/;
+  if (ch.farmDone && ch.sawAlready && ch.sawThreeCards && !ch.usedAdvanced) return /農園→図書館/;
+  if (!ch.farmDone && order[0] === 'B001' && order.includes('B006') && ch.basicOnCardSaid && /心配性/.test(STORY_SPEAKERS.seneca.name)) return /心配性な研究者セネカの状態/;
+  return null;
+}
+
+/** 図書館で会った時のセリフ: ルートに当てはまればその終わり方(飾り留めを覚えて、「○個目のセリフ」を差し込む)、
+ * 当てはまらなければ今まで通りの「図書館にもう一度行く」の部分(fallback)。 */
+function senecaEndingLines(rest, fallback) {
+  const routeRe = senecaEndingRoute();
+  if (!routeRe) return fallback;
+  const ev = (r) => story2NormalizeEvent(r.event || '');
+  const isHeader = (r) => /ルート/.test(ev(r)) || /飾り留め\d個目のセリフ$/.test(ev(r));
+  const start = rest.findIndex((r) => /ルート/.test(ev(r)) && routeRe.test(ev(r)));
+  if (start < 0) return fallback;
+  const endAt = rest.findIndex((r, k) => k > start && isHeader(r));
+  const rows = rest.slice(start + 1, endAt < 0 ? rest.length : endAt);
+  // 飾り留めを覚える(「「真面目なフクロウの飾り留め」を手に入れる」)。
+  const owls = senecaOwls();
+  for (const r of rows) {
+    const m = /「(.+?)フクロウの飾り留め」を手に入れる/.exec(ev(r));
+    if (m && !owls.includes(m[1])) owls.push(m[1]);
+  }
+  try { localStorage.setItem(SENECA_OWL_KEY, JSON.stringify(owls)); } catch (err) { /* 書けなくても続ける */ }
+  const count = Math.min(owls.length, SENECA_OWL_TOTAL);
+  const countRows = () => {
+    const at = rest.findIndex((r) => new RegExp(`飾り留め${count}個目のセリフ$`).test(ev(r)));
+    if (at < 0) return [];
+    const to = rest.findIndex((r, k) => k > at && isHeader(r));
+    return rest.slice(at + 1, to < 0 ? rest.length : to);
+  };
+  const lines = [];
+  for (const r of rows) {
+    if (/個目のセリフが入る/.test(ev(r))) { lines.push(...countRows()); continue; }
+    lines.push(r);
+  }
+  if (lines.some((r) => /心配性な研究者セネカ」が解禁/.test(ev(r)))) {
+    try { localStorage.setItem(STORY_SENECA_WORRIED_UNLOCK_KEY, '1'); } catch (err) { /* 書けなくても続ける */ }
+  }
+  // 出来事(解禁・章を選ぶ画面の表示)は上で済ませたので、セリフだけ流す。「…を手に入れる」だけは残して、
+  // その行で飾り留めのアニメーション(senecaOwlAnimation)。
+  return lines.filter((r) => r.text).map((r) => ({ ...r, event: /フクロウの飾り留め」を手に入れる/.test(ev(r)) ? r.event : '' }));
+}
+
+/** フクロウの飾り留めを手に入れた時のアニメーション(2026-11-14, per user「この画像でアニメーションお願い」):
+ * 暗くした画面の真ん中に飾り留めが回りながら大きくなって現れ、光って「「○○なフクロウの飾り留め」を手に入れた！」。
+ * 少し見せてから消えてonDone()。 */
+const STORY_OWL_IMG = 'assets/story-owl.webp';
+function senecaOwlAnimation(label, onDone) {
+  storyHideDialog();
+  const box = el('div', 'story-owl');
+  const glow = el('div', 'story-owl__glow');
+  const img = document.createElement('img');
+  img.className = 'story-owl__img';
+  img.src = STORY_OWL_IMG;
+  img.alt = '';
+  const text = el('div', 'story-owl__text', `「${label}」を手に入れた！`);
+  box.append(glow, img, text);
+  document.body.appendChild(box);
+  box.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300, easing: 'ease-out' });
+  glow.animate([{ opacity: 0, transform: 'scale(0.3)' }, { opacity: 1, transform: 'scale(1.1)', offset: 0.6 }, { opacity: 0.85, transform: 'scale(1)' }], { duration: 1100, delay: 300, easing: 'ease-out', fill: 'backwards' });
+  img.animate([
+    { opacity: 0, transform: 'scale(0.2) rotateY(540deg)' },
+    { opacity: 1, transform: 'scale(1.15) rotateY(0deg)', offset: 0.75 },
+    { opacity: 1, transform: 'scale(1) rotateY(0deg)' },
+  ], { duration: 1100, delay: 200, easing: 'ease-out', fill: 'backwards' });
+  img.animate([{ filter: 'brightness(1)' }, { filter: 'brightness(1.6)' }, { filter: 'brightness(1)' }], { duration: 600, delay: 1300 });
+  text.animate([{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 400, delay: 1100, easing: 'ease-out', fill: 'backwards' });
+  storyLater(() => {
+    box.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, easing: 'ease-in', fill: 'forwards' }).onfinish = () => { box.remove(); onDone(); };
+  }, 3000);
+}
+
 function senecaTryNegotiation(row, rest, onDone, snap) {
   const run = storyRun;
   if (!run) return;
@@ -2704,7 +2815,7 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
     const from = afterRe ? rest.findIndex((r) => afterRe.test(story2NormalizeEvent(r.event || ''))) : -1;
     const start = rest.findIndex((r, k) => k > from && re.test(story2NormalizeEvent(r.event || '')));
     if (start < 0) return [];
-    const end = rest.findIndex((r, k) => k > start && r.event && /ダイスがなくなる|以外にダイスを置く|を獲得する|まで戻る|もう一度行く|タップ状態|ショートカットで獲得|資源がなくて/.test(story2NormalizeEvent(r.event)));
+    const end = rest.findIndex((r, k) => k > start && r.event && /ダイスがなくなる|以外にダイスを置く|を獲得する|まで戻る|もう一度行く|タップ状態|ショートカットで獲得|資源がなくて|図書館に行くまえ|ルート|飾り留め\d個目のセリフ$/.test(story2NormalizeEvent(r.event)));
     return rest.slice(start + 1, end < 0 ? rest.length : end);
   };
   const sayLines = (rows, then) => {
@@ -2777,7 +2888,15 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
     run.tapAnyTime = true; // ダイスを全部置いたあとも交渉術・土木技術をタップできる(main.jsのstoryTapAnyTime)
     if (run.seneca.libraryBefore && libraryDieIds().some((id) => !run.seneca.libraryBefore.includes(id))) {
       run.seneca.libraryBefore = null;
-      senecaPlay(section(/図書館にもう一度行く/), 0, onDone);
+      senecaPlay(senecaEndingLines(rest, section(/図書館にもう一度行く/)), 0, onDone);
+      return;
+    }
+    // 「２回目の図書館に行くまえに基礎学問をダイスではなく交渉術か土木技術に使う（１回のみ）」: 基礎学問で
+    // 交渉術・土木技術の目を変えた(カードのbuildValueOverride)。そのセリフのあと基礎学問を起こす(台本の
+    // 「基礎学問がアンタップする」)。2回目からは何も言わない(「もう助けませんからね」)。
+    if (!run.seneca.basicOnCardSaid && senecaBasicUsedOnCard()) {
+      run.seneca.basicOnCardSaid = true;
+      senecaPlay(section(/図書館に行くまえ/), 0, () => playUntilDiceUsed(then));
       return;
     }
     const lines = basicLines();
@@ -2834,7 +2953,8 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
       goalText: '',
       // カードの獲得(ショートカットでタップを使った時など、ダイスを置かない獲得も)でも見直す。
       extraDetect: () => (typeof pendingBuildChoice !== 'undefined' && !!pendingBuildChoice) || storyPlayer('P1').ownedCardPhysicalIds.length !== cardsBefore
-        || (!!run.seneca.libraryBefore && libraryDieIds().some((id) => !run.seneca.libraryBefore.includes(id))),
+        || (!!run.seneca.libraryBefore && libraryDieIds().some((id) => !run.seneca.libraryBefore.includes(id)))
+        || (!run.seneca.basicOnCardSaid && senecaBasicUsedOnCard()),
       onPlaced: () => storyWhenVisualsIdle(() => playUntilDiceUsed(then)),
     });
   };
@@ -3899,6 +4019,12 @@ function openStoryChapterSelect() {
   const note = el('div', 'story-chapters__note', '');
   for (const chapter of STORY_CHAPTERS) {
     const button = el('button', 'story-chapters__chapter', chapter.title);
+    // 第2章: フクロウの飾り留めを1個以上持っていれば右側に「1/3」「2/3」、3個で「「心配性な研究者セネカ」解禁」
+    // (2026-11-14, per user)。
+    if (chapter.no === 2) {
+      const owls = senecaOwls().length;
+      if (owls > 0) button.appendChild(el('span', 'story-chapters__record', owls >= SENECA_OWL_TOTAL && storySenecaWorriedUnlocked() ? '「心配性な研究者セネカ」解禁' : `${Math.min(owls, SENECA_OWL_TOTAL)}/${SENECA_OWL_TOTAL}`));
+    }
     // 第3章: 自分の最高記録があれば右側に「最高記録〇VP」(2026-11-14, per user)。
     if (chapter.no === 3) {
       let best = null;
