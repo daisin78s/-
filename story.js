@@ -2106,7 +2106,7 @@ function story2RecordBlockSplit(rows) {
   return { head: rows.slice(0, worldAt), world: rows.slice(worldAt + 1, personalAt), personal: rows.slice(personalAt) };
 }
 
-/** 第3章の最後(モニュメント4枚以上)。自分の最高記録(この端末)と世界最高記録(Firebase、全員の中で)を比べて
+/** 第3章の最後(モニュメント4枚以上)。自分の最高記録(この端末)と世界最高記録(Firebaseのrooms/STORY_RECORD_ch3、全員の中で)を比べて
  * (2026-11-14, per user回答):
  *  どちらも更新しない → head(「今までの最高記録は〇VP」「世界最高記録は〇VPだ」「更新できるか？」まで)
  *  自分の記録だけ更新 → personal(「最高記録更新だ！」「ちなみに世界最高記録は〇VPだ」…)

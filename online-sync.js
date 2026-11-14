@@ -628,11 +628,14 @@ var BUG_REPLAY_STORAGE_PREFIX = 'bugReplays/';
 /** Saves one bug-report's own diagnostic metadata (reason/playerId/round/resources/etc -- NOT the replay
  * itself, see saveBugReplay) as its own Firestore doc, keyed by the same id the replay blob uses. */
 /** ストーリーの世界最高記録 (2026-11-14, per user: 第3章「世界最高記録はすべてのアカウントの最高記録」、Firebaseに置く)。
- * storyRecords/{chapterKey} = { bestVp, updatedAt }。1章につき1件だけ。 */
-var STORY_RECORD_COLLECTION = 'storyRecords';
+ * rooms/STORY_RECORD_{chapterKey} = { bestVp, updatedAt }。1章につき1件だけ。新しいコレクションはFirestoreのルールで
+ * 読み書きできないため、PUBLIC_LOBBYと同じく部屋のコレクションに専用の1件として置く(per user「ランキングに見えない
+ * ように点数を記録」— roomsは一覧を取り出せないので、どこにも表示されない)。 */
+var STORY_RECORD_COLLECTION = ROOM_COLLECTION;
+function storyRecordDocId(chapterKey) { return 'STORY_RECORD_' + chapterKey; }
 /** @returns {Promise<number|null>} 今の世界最高記録(まだ無ければnull)。 */
 function getStoryWorldRecord(chapterKey) {
-  return db().collection(STORY_RECORD_COLLECTION).doc(chapterKey).get().then(function (snap) {
+  return db().collection(STORY_RECORD_COLLECTION).doc(storyRecordDocId(chapterKey)).get().then(function (snap) {
     var d = snap.exists ? snap.data() : null;
     return d && typeof d.bestVp === 'number' ? d.bestVp : null;
   });
@@ -640,7 +643,7 @@ function getStoryWorldRecord(chapterKey) {
 /** vpが今の世界最高記録より大きければ(まだ無ければ)書き換える。読むのと書くのを1回のトランザクションで。
  * @returns {Promise<{prev: number|null}>} 書き換える前の記録。 */
 function submitStoryWorldRecord(chapterKey, vp) {
-  var ref = db().collection(STORY_RECORD_COLLECTION).doc(chapterKey);
+  var ref = db().collection(STORY_RECORD_COLLECTION).doc(storyRecordDocId(chapterKey));
   return db().runTransaction(function (t) {
     return t.get(ref).then(function (snap) {
       var d = snap.exists ? snap.data() : null;
