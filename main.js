@@ -7065,7 +7065,7 @@ function buildShopSlotNode(slotId, faceId, showReqCaption, locked, faceDown = fa
     // あえてカードから少しはみ出すように（カードの能力ではないことをアピールするため）") -- カード本体の
     // 印刷された効果アイコンと混同されないよう、.shop-card自体(position:relativeが要る、style.css参照)の
     // 右下から意図的にはみ出す位置に絶対配置する。
-    if (acquireMove) {
+    if (acquireMove && !storyHidesAcquirableBadges()) {
       const badge = el('span', 'shop-card__acquirable-badge', '✓');
       // tutorialAcquirableBadgeGlowing own doc参照 (2026-10-12, Excel T084)。
       if (tutorialAcquirableBadgeGlowing) badge.classList.add('change-highlight');
@@ -7164,6 +7164,11 @@ function buildShopRemainingCountNode(count, gridRow, subject, prefix = '残り')
   return node;
 }
 
+/** 第2章セネカ: ショップに行ってからチェックマークの説明までは、獲得はできるが✓はまだ出さない(renderShopGrid参照)。 */
+function storyHidesAcquirableBadges() {
+  return typeof storyRun !== 'undefined' && !!storyRun && !!storyRun.seneca && !!storyRun.seneca.shopShortcut && !storyRun.showAcquirableBadges;
+}
+
 function renderShopGrid(state) {
   const container = document.getElementById('shop-combined-slots');
   container.innerHTML = '';
@@ -7171,7 +7176,10 @@ function renderShopGrid(state) {
   // 呼び出しから参照する(shopAcquirableMoveCache/computeShopAcquirableMoveCacheの own doc参照)。
   // ストーリー(第2章セネカ)の「獲得可能なカードはチェックマークがついているのよ」: まだダイスを置けない場面
   // (turnActionTaken)でも、獲得できるカードに✓と「このカードを獲得する」を出す(2026-11-11, per user「あっていい」)。
-  if (!tutorialModeActive && typeof storyRun !== 'undefined' && storyRun && storyRun.showAcquirableBadges) {
+  // 第2章セネカでショップに行ってから(説明の途中でも)は、カードを拡大して「このカードを獲得する」で獲得できる
+  // (2026-11-14, per user「ショップに行った時点で 説明は続けるが カード拡大して ショートカットで カード獲得できるように」)。
+  // ✓はチェックマークの説明(showAcquirableBadges)までは出さない(storyHidesAcquirableBadges)。
+  if (!tutorialModeActive && typeof storyRun !== 'undefined' && storyRun && (storyRun.showAcquirableBadges || (storyRun.seneca && storyRun.seneca.shopShortcut))) {
     const savedTurnActionTaken = turnActionTaken;
     turnActionTaken = false;
     try { shopAcquirableMoveCache = computeShopAcquirableMoveCache(); } finally { turnActionTaken = savedTurnActionTaken; }
@@ -9212,7 +9220,10 @@ function renderMobileOwnDiceRow(state, next) {
   // 1手戻るを押せない間も(押せない表示で)出しておく。ターン開始時に戻るはエリアには出さない(per user「場所が
   // 狭いので １手戻るボタンだけで」、カードを選ぶ画面には出る)。普段の対戦は今まで通り。
   const storyUndoShown = typeof storyRun !== 'undefined' && !!storyRun && document.body.classList.contains('story-undo-shown');
-  if (!aiView && (storyUndoShown || !isDiceCancelDisabled())) {
+  // ストーリー第2章(セネカ、storyRun.seneca)では1手戻るを出さない(2026-11-14, per user「ストーリでは１手戻るは出ないように」
+  // → 回答「第２章」)。第3章の「…１手戻るボタンが出てくる」から先は今まで通り。
+  const storyHidesUndo = typeof storyRun !== 'undefined' && !!storyRun && !!storyRun.seneca;
+  if (!aiView && !storyHidesUndo && (storyUndoShown || !isDiceCancelDisabled())) {
     const cancelBtn = el('button', 'undo-button mobile-own-row__cancel', '↩️ 1手戻る');
     cancelBtn.type = 'button';
     cancelBtn.disabled = isDiceCancelDisabled();

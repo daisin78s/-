@@ -2395,6 +2395,12 @@ function senecaDoEvent(row, onDone) {
     document.querySelectorAll('#card-inst-overlay .action-emoji').forEach((n) => { if (n.textContent.includes('⤵')) n.dataset.storyTap = '1'; });
     senecaGlow(['#card-inst-overlay [data-story-tap]']);
     onDone();
+  } else if (/フリーアクション/.test(e) && /できるようになる/.test(e)) {
+    // 「フリーアクションができるようになる」(先に基礎学問を獲得した時、2026-11-14 per user): 光らせずに、エリアの右下に
+    // フリーアクション(と1手戻る)を出す。ここから基礎学問などのカードを使える。
+    document.body.classList.add('story-free-action');
+    render(STATE);
+    onDone();
   } else if (/フリーアクション/.test(e) && /光る/.test(e)) {
     // 「フリーアクションボタンが光る」: 拡大画面を閉じて、エリアの右下にフリーアクション(と1手戻る)を出して光らせる
     // (第3章の「フリーアクションボタンが出てくる」と同じ)。
@@ -2526,7 +2532,9 @@ function senecaDoEvent(row, onDone) {
     // PC・タブレットはショップが最初から見えているので待たない。
     storyHideDialog();
     storySetAllowedTabs([...run.allowedTabs, 'shop']);
-    const finish = () => { senecaGlow([]); onDone(); };
+    // ショップに着いたら、説明の途中でもカードを拡大してショートカットで獲得できる(2026-11-14, per user)。
+    // 先に獲得したら、今までの「チェックマークの説明中にショートカットで獲得」と同じ分かれ道へ(senecaPlay)。
+    const finish = () => { run.seneca.shopShortcut = true; senecaGlow([]); render(STATE); onDone(); };
     if (isMobileLayout()) storyWaitUntil(() => mobileActiveTab === 'shop', finish);
     else finish();
   } else if (/エリア画面/.test(e)) {
@@ -2684,6 +2692,7 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
   const run = storyRun;
   if (!run) return;
   run.seneca.negotiationStarted = true;
+  run.seneca.shopShortcut = false; // ここからは普通のプレイと同じ(ダイスを置ける)
   if (run.showAcquirableBadges) { run.showAcquirableBadges = false; render(STATE); }
   // 戻る盤面: チェックマークの説明中にショートカットで先に獲得していたら、獲得する前の盤面(senecaPlayが覚えている)。
   // 獲得した後の盤面に戻ると、また「もう獲得したの」から同じことを繰り返してしまう(2026-11-12, user報告の動画)。
