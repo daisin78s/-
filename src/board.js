@@ -219,6 +219,29 @@ function isAllowedSlotForValue(requirements, slots, slotIndex, value, dieIsWildc
 }
 
 
+/** 「どこにでも置ける」(GRANT_PLACE_ANYWHERE、高等学問など)ダイスの置き場所 (2026-11-14, per user:
+ * 「空いているスロットの一番左 すべて埋まっていたらSLOT001を追い出す」「置ける場所があればそこに置く なければ
+ * 追い出して置ける場所に置く 追い出すとき場所は基本選べない」、普通の対戦もストーリーも): 置き場所は選べない。
+ *  - 普通に置ける空きスロット(値が合う・同じ目がこのエリアに無い、普通の置き方と同じ優先 = 同じ数字のスロット→
+ *    一番左のANY、isAllowedSlotForValue)があれば、そこだけ。
+ *  - 無ければ、追い出して置ける(ANYか同じ数字の)埋まっているスロットのうち一番左だけ。
+ * EXスロットはこの決まりの外(今まで通り、placeDice/slotAcceptsValueのEXの扱い)。slotsは占有の見え方
+ * (placeDiceGroupの仮の占有を含む)。返り値は置いてよいスロット番号の配列(0か1個、EXは含まない)。 */
+function placeAnywhereAllowedSlots(requirements, slots, value) {
+  const hasDuplicate = slots.some((occ) => occ.some((o) => !o.virtual && !o.isWildcard && o.value === value));
+  const normal = [];
+  for (let i = 0; i < requirements.length; i++) {
+    const req = requirements[i];
+    if (req === 'EX' || slots[i].length > 0 || (req !== 'ANY' && req !== value)) continue;
+    if (hasDuplicate || !isAllowedSlotForValue(requirements, slots, i, value)) continue;
+    normal.push(i);
+  }
+  if (normal.length > 0) return normal;
+  // まとめて置く(placeDiceGroup)時、先のダイスが仮に取ったスロット(virtual)は飛ばして、その次の一番左。
+  const evict = requirements.findIndex((req, i) => req !== 'EX' && slots[i].length > 0 && !slots[i].every((o) => o.virtual) && (req === 'ANY' || req === value));
+  return evict >= 0 ? [evict] : [];
+}
+
 /** Evicts every existing occupant of `occupants` (2026-08-21, per user request, replacing the old
  * "stacking" model for GRANT_PLACE_ANYWHERE joins and JOB003/道化's ☆ forced-fallback: "GRANT_PLACE_
  * ANYWHEREや☆の強制フォールバックのみです 通常のダイスはできません" -- ordinary placement, which never
@@ -274,6 +297,9 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
     // 2026-08-06, per user feedback: "SLOTが6とANYの時 ダイス6はANYではなく6に置かなければならない...
     // ANY ANY ANYの時は1番左のANYしか選択できない" -- see isAllowedSlotForValue's own doc. GRANT_PLACE_
     // ANYWHERE waives this the same way it waives everything else in this function.
+    return { success: false, reason: 'SLOT_NOT_PREFERRED' };
+  } else if (bypass && !placeAnywhereAllowedSlots(requirements, map.slots, die.value).includes(slotIndex)) {
+    // 「どこにでも置ける」ダイスも置き場所は選べない(2026-11-14) -- see placeAnywhereAllowedSlots' own doc.
     return { success: false, reason: 'SLOT_NOT_PREFERRED' };
   }
 
@@ -920,6 +946,8 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
     for (let i = 0; i < requirements.length; i++) {
       if (usedSlots.has(i)) continue;
       if (!bypass && !isAllowedSlotForValue(requirements, slotsForAllowedCheck, i, value, dieIsWildcard)) continue;
+      // 「どこにでも置ける」ダイス(☆ではない)も置き場所は選べない(2026-11-14) -- placeAnywhereAllowedSlots.
+      if (bypass && !dieIsWildcard && requirements[i] !== 'EX' && !placeAnywhereAllowedSlots(requirements, slotsForAllowedCheck, value).includes(i)) continue;
       if (!slotAcceptsValue(map, mapId, playerId, requirements[i], map.slots[i], value, bypass, dieIsWildcard)) continue;
       targetSlot = i;
       break;

@@ -278,7 +278,9 @@ function giveJob002(state, playerId) {
   const die2 = giveDie(state, 'P1', 5);
   die2.placeAnywhereThisTurn = true; // GRANT_PLACE_ANYWHERE
   const wrongSlot = board.placeDice(state, index, { playerId: 'P1' }, die2.id, 'MAP008', 1); // slot1, empty
-  check('Placing the duplicate value into a DIFFERENT empty slot is refused even with GRANT_PLACE_ANYWHERE', wrongSlot, { success: false, reason: 'DUPLICATE_VALUE_IN_AREA' });
+  // 2026-11-14: refused earlier now -- a GRANT_PLACE_ANYWHERE die can't pick its slot at all (board.placeAnywhereAllowedSlots:
+  // no normal empty slot for a duplicate 5, so its only legal slot is the leftmost occupied one, slot0).
+  check('Placing the duplicate value into a DIFFERENT empty slot is refused even with GRANT_PLACE_ANYWHERE', wrongSlot, { success: false, reason: 'SLOT_NOT_PREFERRED' });
   check('...the die was never actually placed', player(state, 'P1').dice.find((d) => d.id === die2.id).placedMapId, null);
 
   const rightSlot = board.placeDice(state, index, { playerId: 'P1' }, die2.id, 'MAP008', 0); // slot0, the matching one
@@ -1620,6 +1622,9 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   check('B001A (基礎学問) sets d2 to 1', tapResult, { success: true });
   check('...and grants d2 placeAnywhereThisTurn', d2.placeAnywhereThisTurn, true);
 
+  // 2026-11-14: a GRANT_PLACE_ANYWHERE die only evicts when it has no normal empty slot (board.placeAnywhereAllowedSlots)
+  // -- a 1 already sitting on the castle (slot5, pushed directly so seq numbers stay as before) makes d2's 1 a duplicate.
+  state.maps[board.CASTLE_MAP_ID].slots[5].push({ playerId: 'P3', dieId: 'p3-dummy-1', value: 1, seq: 99, countsForTurnOrder: true });
   const joined = board.placeDice(state, index, { playerId: 'P1' }, d2.id, board.CASTLE_MAP_ID, 0);
   check('The B001A-changed d2 CAN join (evict) P1\'s own occupied slot 0', joined.success, true);
   check('...d2 is now the sole occupant', state.maps[board.CASTLE_MAP_ID].slots[0], [{ playerId: 'P1', dieId: d2.id, value: 1, seq: 2, countsForTurnOrder: false }]);
@@ -1654,6 +1659,9 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   p1.ownedCardPhysicalIds.push(b1Inst.physicalId);
   const d2 = giveDie(state, 'P1', 5);
   board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: d2.id, chosenValue: 1 }, b1Inst.physicalId);
+  // 2026-11-14: a GRANT_PLACE_ANYWHERE die only evicts when it has no normal empty slot (board.placeAnywhereAllowedSlots)
+  // -- a 1 already sitting on the castle (slot5, pushed directly so seq numbers stay as before) makes d2's 1 a duplicate.
+  state.maps[board.CASTLE_MAP_ID].slots[5].push({ playerId: 'P3', dieId: 'p3-dummy-1', value: 1, seq: 99, countsForTurnOrder: true });
   const result = board.placeDice(state, index, { playerId: 'P1' }, d2.id, board.CASTLE_MAP_ID, 0);
   check('A B001A-changed die CAN still join a DIFFERENT player\'s occupied slot (only self-stacking is blocked)', result.success, true);
 }
@@ -1692,6 +1700,9 @@ function mapWithArea(mapId, areaId, slotCount, feeOwnerId) {
   p1.ownedCardPhysicalIds.push(b1Inst.physicalId);
   const d2 = giveDie(state, 'P1', 5);
   board.useBareTapAbility(state, index, { playerId: 'P1', chosenDieId: d2.id, chosenValue: 6 }, b1Inst.physicalId);
+  // 2026-11-14: a 6 already on the castle, so d2 has no normal empty slot and must evict the leftmost (slot0)
+  // -- see board.placeAnywhereAllowedSlots.
+  state.maps[board.CASTLE_MAP_ID].slots[5].push({ playerId: 'P3', dieId: 'p3-dummy-6', value: 6, seq: 99, countsForTurnOrder: true });
 
   const result = board.placeDiceGroup(state, index, { playerId: 'P1' }, [d2.id], board.CASTLE_MAP_ID);
   check('placeDiceGroup succeeds, joining (evicting) d1\'s occupied slot 0', result.success, true);

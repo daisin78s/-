@@ -244,7 +244,9 @@ check('startRound(2) itself does not touch dice (already rerolled at the previou
   board.placeDice(s, index, { playerId: 'P3' }, yellowDie.id, 'MAP008', 1); // seq 2, Yellow's own fresh slot1
 
   const blueDie = gs.createDie('blue-1', 'COLOR');
-  blueDie.value = 5; // different value, would normally need a fresh (empty) slot
+  // 2026-11-14: same value as Red's -- a GRANT_PLACE_ANYWHERE die only evicts when it has no normal empty slot
+  // (board.placeAnywhereAllowedSlots), and then only the leftmost occupied one (slot0).
+  blueDie.value = 1;
   blueDie.placeAnywhereThisTurn = true; // simulates having tapped B001A/etc. this turn
   s.players.find((p) => p.id === 'P2').dice.push(blueDie);
   const forced = board.placeDice(s, index, { playerId: 'P2' }, blueDie.id, 'MAP008', 0); // evicts Red from slot0
@@ -278,14 +280,14 @@ check('startRound(2) itself does not touch dice (already rerolled at the previou
   board.placeDice(s, index, { playerId: 'P1' }, redColorDie.id, 'MAP008', 0);
 
   const redWhiteDie = createDie('red-white-1', 'WHITE');
-  redWhiteDie.value = 2;
+  redWhiteDie.value = 1; // same value (2026-11-14: needed to evict, see board.placeAnywhereAllowedSlots)
   redWhiteDie.placeAnywhereThisTurn = true; // joins Red's own slot0, evicting redColorDie
   s.players.find((p) => p.id === 'P1').dice.push(redWhiteDie);
   board.placeDice(s, index, { playerId: 'P1' }, redWhiteDie.id, 'MAP008', 0);
   check('Red\'s own wD evicts Red\'s own color die from slot0', s.maps['MAP008'].slots[0].map((o) => o.dieId), [redWhiteDie.id]);
 
   const blueColorDie = createDie('blue-color-1', 'COLOR');
-  blueColorDie.value = 3;
+  blueColorDie.value = 1; // same value (2026-11-14: needed to evict)
   blueColorDie.placeAnywhereThisTurn = true; // evicts redWhiteDie from slot0
   s.players.find((p) => p.id === 'P2').dice.push(blueColorDie);
   board.placeDice(s, index, { playerId: 'P2' }, blueColorDie.id, 'MAP008', 0);
