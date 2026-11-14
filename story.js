@@ -2584,7 +2584,15 @@ function senecaDoEvent(row, onDone) {
     const rescue = run.seneca.rescue;
     const value = rescue ? rescue.value : Number(/ダイス目が(\d)に/.exec(e)[1]);
     const die = rescue ? storyPlayer('P1').dice.find((d) => d.id === rescue.dieId) : storyPlayer('P1').dice.find((d) => !d.placedMapId && !d.passed);
-    if (die) die.value = value;
+    // 高等学問を使った扱い(2026-11-14, per user「高等学問を使っているので追い出せるはず」「他の箇所でも追い出せるように」):
+    // 本物の高等学問(B002A: SET_DIE_VALUE→GRANT_PLACE_ANYWHERE)と同じく、このターンはどのエリアにも置けて、
+    // 置いてあるダイスを追い出せる。置かずにターンが終わると元の目に戻る(executorのターン終わりの処理)。
+    if (die) {
+      if (!die.valueChangedThisTurn) die.valueBeforeChangeThisTurn = die.value;
+      die.valueChangedThisTurn = true;
+      die.value = value;
+      die.placeAnywhereThisTurn = true;
+    }
     run.glowDieValues = [value];
     render(STATE);
     storyLater(() => { run.glowDieValues = []; render(STATE); onDone(); }, 1200);
