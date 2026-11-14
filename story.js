@@ -3216,14 +3216,26 @@ function ch4Play(rows, i, onDone) {
     if (run.ch4.jobPanel && /「ローマ市民」/.test(text)) ch4PickJob('P1', 'JOB001');
     storySayThen(`C4-${row.index}`, () => {
       if (storyRun && storyRun.ch4.glowLine) { storyRun.ch4.glowLine = false; storySetGlow([]); }
+      if (storyRun && storyRun.ch4.hideConAfterLine) { storyRun.ch4.hideConAfterLine = false; ch4HideCallout(); }
       next();
     }, 0, text);
   };
   if (!row.event) { say(); return; }
   const e = story2NormalizeEvent(row.event);
   const seconds = Number((/(\d+)秒/.exec(e) || [])[1]) || 1;
+  const conShow = /^(.+?)が出てくる$/.exec(e);
+  const conHide = /^(.+?)が消える$/.exec(e);
   if (CH4_RANK_EVENT.test(e)) {
     ch4IntroductionRound(rows, i);
+  } else if (conShow && ch4ConFaceByName(conShow[1])) {
+    // 「傲慢が出てくる」(2026-11-14, per user「性格の説明の時にカードが見えないので」): その性格のカードをセリフの上に出す
+    // (あなたの性格カードと同じ所、ch4ShowCallout。押しても大きくならない)。
+    ch4ShowCallout(ch4ConFaceByName(conShow[1]), { static: true });
+    storyLater(say, 300);
+  } else if (conHide && ch4ConFaceByName(conHide[1])) {
+    // 「傲慢が消える」: セリフと同じ行に書いてあれば、そのセリフを読み終わってから消す(几帳面・心配性・色欲はセリフの
+    // 行、傲慢は別の行 -- どちらも説明を読んでいる間はカードが見えるように)。
+    if (row.text) { run.ch4.hideConAfterLine = true; say(); } else { ch4HideCallout(); next(); }
   } else if (/アイコン/.test(e)) {
     say();
   } else if (/が.+を選ぶ/.test(e)) {
@@ -3349,19 +3361,34 @@ function ch4GrantConResources() {
   ch4ShowCallout(faceId);
 }
 
-function ch4ShowCallout(faceId) {
+/** 第4章で、名前(「傲慢」など)の性格の、今いるプレイヤー(敵も)の性格カードの面。無ければnull。 */
+function ch4ConFaceByName(name) {
+  for (const p of STATE.players) {
+    if (!p.conPhysicalId || !p.conFace) continue;
+    const faceId = `${p.conPhysicalId}${p.conFace}`;
+    const row = dataLoaderMod.getCardRow(INDEX, faceId);
+    const base = row && row.NAME ? row.NAME.replace(/LV\d+$/, '') : '';
+    if (base && (name === base || name.startsWith(base))) return faceId; // 「心配性」→ 心配
+  }
+  return null;
+}
+
+/** opts.static: 押しても大きくならない(敵の性格の説明で出す時)。 */
+function ch4ShowCallout(faceId, opts = {}) {
   const run = storyRun;
   ch4HideCallout();
   const card = buildCardVisual(faceId, { showEffect: true, noInteraction: true });
   const box = el('div', 'story2-callout story-ch4-callout');
-  box.style.pointerEvents = 'auto';
-  box.style.cursor = 'pointer';
   box.appendChild(card);
-  // 押すと、セリフ欄の上でそのまま大きくなる(拡大画面だとセリフ欄にペナルティの所が隠れるため)。
-  box.addEventListener('click', () => {
-    box.classList.add('story-ch4-callout--big');
-    run.ch4.calloutOpened = true;
-  });
+  if (!opts.static) {
+    box.style.pointerEvents = 'auto';
+    box.style.cursor = 'pointer';
+    // 押すと、セリフ欄の上でそのまま大きくなる(拡大画面だとセリフ欄にペナルティの所が隠れるため)。
+    box.addEventListener('click', () => {
+      box.classList.add('story-ch4-callout--big');
+      run.ch4.calloutOpened = true;
+    });
+  }
   run.dom.root.appendChild(box);
   run.ch4.callout = box;
   // 性格カードを出している間だけ、セリフ欄と立ち絵を下げる(カードとセリフが重なるため、2026-11-14 per user)。
@@ -3570,7 +3597,7 @@ function ch4IntroEnemies(enemies, titleOf, onDone) {
   storyHideDialog();
   for (const enemy of list) {
     run.ch4.introduced.add(enemy.id);
-    storyCharacterQueue.push({ title: titleOf(enemy), character: { name: enemy.name, img: enemy.img } });
+    storyCharacterQueue.push({ title: titleOf(enemy), character: { name: enemy.name, img: enemy.img }, titleOnly: true });
   }
   playStoryCharacterIntro();
   storyWaitUntil(() => !storyCharacterPlaying && storyCharacterQueue.length === 0, onDone);

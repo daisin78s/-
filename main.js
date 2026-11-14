@@ -17659,7 +17659,7 @@ function applyStoryCharacterNames(state) {
 function playStoryCharacterIntro() {
   if (storyCharacterPlaying || storyCharacterQueue.length === 0) return;
   storyCharacterPlaying = true;
-  const { title, character } = storyCharacterQueue.shift();
+  const { title, character, titleOnly } = storyCharacterQueue.shift();
   const box = el('div', 'story-character-intro');
   const img = document.createElement('img');
   img.className = 'story-character-intro__img';
@@ -17668,7 +17668,8 @@ function playStoryCharacterIntro() {
   box.appendChild(img);
   const text = el('div', 'story-character-intro__text');
   text.appendChild(el('div', 'story-character-intro__title', title));
-  text.appendChild(el('div', 'story-character-intro__name', `${character.name}があらわれた！`));
+  // titleOnly: ストーリーの登場は呼び名だけ(「傲慢なスパル」、2026-11-15 per user「スパルが現れた は不要」)。
+  if (!titleOnly) text.appendChild(el('div', 'story-character-intro__name', `${character.name}があらわれた！`));
   box.appendChild(text);
   document.body.appendChild(box);
   img.animate([{ opacity: 0, transform: 'translateX(-40px)' }, { opacity: 1, transform: 'translateX(0)' }], { duration: 450, easing: 'ease-out' });

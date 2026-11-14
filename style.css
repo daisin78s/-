@@ -6914,6 +6914,9 @@ body.opening-hide-res .card-group__onboard-resources > .owned-card-cell {
 /* ストーリー中はセリフ(.story-overlay、400)より上に演出を出す (per user「セリフで アニメーションが見れないので
    アニメーション 上にして」)。 */
 body.story-mode .ai-card-gain-layer { z-index: 470; }
+/* 第4章の対戦中(body.story-modeが外れる)も、ストーリーの画面(#story-overlay)がある間は一番上に(2026-11-15, per user
+   「ジョブ獲得のアニメーション見えないので一番上に」)。 */
+body:has(#story-overlay) .ai-card-gain-layer { z-index: 470; }
 body.story-mode .resource-exchange-flyer { z-index: 480; }
 body.story-mode .opening-card-flyer,
 body.story-mode .die--flying { z-index: 460; }
@@ -8339,7 +8342,7 @@ html.story-autostarting::after {
 .story2-cards--ch4 .story2-cards__card { width: 132px; }
 .story2-cards--ch4 .story2-cards__card .shop-card__start-order { visibility: visible; }
 /* 第4章「カードをクリックしてみてよ」: セリフの上に出した性格カードを押すと、その場で大きくなる(story.jsのch4ShowCallout)。 */
-.story-ch4-callout { transition: transform 0.3s ease-out; }
+.story-ch4-callout { transition: transform 0.3s ease-out; z-index: 7; } /* ジョブの画面(.story2-cards、6)より上に(2026-11-15) */
 .story2-callout.story-ch4-callout--big { transform: translateX(-50%) scale(2); bottom: 36%; }
 
 /* 第4章「選んだ性格と初期資源カードが並ぶ」(story.jsのch4ShowMyCards): チュートリアルの確認画面と同じく合計も出す。 */
