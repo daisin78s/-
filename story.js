@@ -2986,6 +2986,8 @@ function ch4Play(rows, i, onDone) {
     say();
   } else if (/秒間がある/.test(e)) {
     storyHideDialog();
+    // ジョブを選んだあとの「１秒間がある」: ジョブの画面もここで閉じる(「１ターン目は君がプレイしてね」は盤面の上で)。
+    if (run.ch4.jobPanel && run.ch4.segmentRunning === 'P1' && storyPlayer('P1').jobCardId) { run.ch4.jobPanel.remove(); run.ch4.jobPanel = null; }
     storyLater(say, seconds * 1000);
   } else if (/初期資源が手に入る/.test(e)) {
     ch4GrantConResources();
@@ -3450,6 +3452,13 @@ function ch4IntroSegments(rows, i) {
     seg.common = body.slice(1);
   });
   segs.tail = rows.slice(tailAt, Math.max(tailAt, actionAt));
+  // 「ローマ市民を使っていない場合５秒ごとに出る」とすぐ下のセリフ: その場では言わず、あなたの1R1Tの間のヒントにする
+  // (ch4StartRomaHint)。
+  const hintAt = segs.tail.findIndex((r) => /ローマ市民を使っていない/.test(r.event || ''));
+  if (hintAt >= 0) {
+    segs.romaHint = segs.tail[hintAt + 1] && !segs.tail[hintAt + 1].event ? segs.tail[hintAt + 1] : null;
+    segs.tail = segs.tail.filter((r, k) => k !== hintAt && !(segs.romaHint && k === hintAt + 1));
+  }
   // 1ラウンド目の行動(〜「1Rの最後」)、「1Rの最後　ダイス回収直前」、「プレイヤーの2T1T」(2R1Tのあなた)、2つ目の
   // 「以下セリフ→行動」(2R1Tの敵の行動、「獲得かLVUPする」)。
   const findAt = (re, from) => rows.findIndex((r, k) => k >= from && re.test(r.event || ''));
@@ -3466,6 +3475,31 @@ function ch4IntroSegments(rows, i) {
   segs.round1Turn2 = [];
   for (let k = r2At + 1; r2At >= 0 && k < rows.length && !rows[k].event; k++) segs.round1Turn2.push(rows[k]);
   return segs;
+}
+
+/** 「ローマ市民を使っていない場合５秒ごとに出る」: あなたの1R1Tの間、ローマ市民(JOB001)をまだ使っていなければ、
+ * 5秒ごとにアレクのヒントが出てすぐ消える。ローマ市民を使うか、あなたの手番が終わったら止まる。 */
+function ch4StartRomaHint(row) {
+  const run = storyRun;
+  const ch = run.ch4;
+  const active = () => storyRun === run && STATE.round === 1 && !ch.humanDone && playerRoles.get('P1') === 'HUMAN'
+    && !(STATE.cards.JOB001 && STATE.cards.JOB001.tapped);
+  const loop = () => {
+    if (!active()) return;
+    storyLater(() => {
+      if (!active()) return;
+      if (run.talking) { loop(); return; }
+      storySetSpeaker('alek');
+      storySay(`C4-${row.index}`, () => {
+        storyLater(() => {
+          if (storyRun !== run) return;
+          if (!run.talking) { storyHideDialog(); storySetSpeaker('system'); }
+          loop();
+        }, STORY_HINT_SHOW_MS);
+      }, row.text);
+    }, STORY_HINT_IDLE_MS);
+  };
+  loop();
 }
 
 /** めくり終わったら: 4人の画面を閉じて対戦(1ラウンド目)を始める。普段のゲームと同じく、1ラウンド目は各自の最初の
@@ -3512,6 +3546,7 @@ function ch4PlayerSegment(pid) {
       run.talking = false;
       run.holdAi = false;
       render(STATE);
+      if (!enemy && segs.romaHint) ch4StartRomaHint(segs.romaHint);
     }, 500);
   };
   const finish = () => {
@@ -3646,6 +3681,14 @@ function ch4BeginPlay() {
 
 /** 描き直すたび: あなたの席を、そのラウンドの1ターン目ならあなた(人間)、2ターン目からアレク(AI)に。1ターン目は
  * 手番を終えるまで人間のまま(置いたあとのフリーアクションもできる)。ゲームが終わったら第4章クリア。 */
+/** あなた(人間)の手番の途中か: ダイスを置いた(turnActionTaken)、または置いたあとの選択(皇帝宮殿のカード選びなど)が
+ * 開いている間。ここで交代しないよう、アレクへの交代は「ターン終了」を押したあと(per user 2026-11-14「皇帝宮殿に
+ * ダイスを置くと アレクが…変わられる / ターン終了ボタンを押したら アレクに変わる」)。 */
+function ch4HumanMidTurn() {
+  return playerRoles.get('P1') === 'HUMAN' && !!(turnActionTaken || pendingBuildChoice || pendingBzOutcomeChoice || pendingTapChoice
+    || pendingAutoModeChoice || pendingJob007TapPrompt || pendingWhiteOverflowConfirm);
+}
+
 function ch4OnRender(state) {
   const run = storyRun;
   if (!run || !run.normalGame) return;
@@ -3658,7 +3701,7 @@ function ch4OnRender(state) {
   // そのあとは普段の対戦の速さで進む(「以降2Rまで通常ゲームの速度で進む」— 今の速さのまま)。
   if (state.round >= 1 && !ch.turn2Said && !ch.segmentRunning && !run.holdAi && ch.segs
     && state.players.every((p) => p.dice.some((d) => d.placedMapId || d.passed))
-    && aiOpenTurnPlayerId === null && !(playerRoles.get('P1') === 'HUMAN' && turnActionTaken)) {
+    && aiOpenTurnPlayerId === null && !ch4HumanMidTurn()) {
     ch.turn2Said = true;
     animSpeedFactor = 1; // ここから普段の速さ
     if (state.round === 1 && (ch.segs.round1Turn2 || []).length) {
@@ -3699,7 +3742,7 @@ function ch4OnRender(state) {
   }
   // 人間の手番が終わった(ダイスを使ってターン終了した=turnActionTakenが戻った、または別の人の番)ら、そのラウンドはもうアレク。
   if (ch.humanRound === state.round && !ch.humanDone && used > 0
-    && (next.type !== 'TURN' || next.playerId !== 'P1' || !turnActionTaken)) ch.humanDone = true;
+    && (next.type !== 'TURN' || next.playerId !== 'P1' || !ch4HumanMidTurn())) ch.humanDone = true;
   const role = ch.humanRound === state.round && !ch.humanDone ? 'HUMAN' : CH4_ALEK_ROLE;
   if (playerRoles.get('P1') !== role) {
     playerRoles.set('P1', role);
