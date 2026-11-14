@@ -2575,7 +2575,9 @@ function senecaDoEvent(row, onDone) {
     // 演出だけ(知識は払わない、per user回答)。セネカが高等学問を使った印(フクロウの飾り留めのルートの条件)。
     run.seneca.usedAdvanced = true;
     storyHideDialog();
-    mobileAiCardGainQueue.push({ faceId: 'B002A' });
+    // 使った演出(カードが下から出て倒れる、main.jsのplayMobileAiTap)。獲得の演出ではない(2026-11-14, per user
+    // 「使用ではなく獲得になっています」)。
+    mobileAiCardGainQueue.push({ type: 'aiTap', faceIds: ['B002A'] });
     playNextMobileAiCardGain();
     storyLater(() => storyWhenVisualsIdle(onDone), 200);
   } else if (/ダイス目が(\d)に/.test(e)) {

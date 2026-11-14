@@ -9636,10 +9636,10 @@ function playMobileAiTap(item) {
   const holder = el('div', 'ai-card-gain-layer__card ai-card-gain-layer__card--row');
   const source = replayMode ? replayHistory[replayCursor] : STATE;
   const faces = [];
-  for (const id of item.physicalIds) {
-    const card = source.cards[id];
-    if (!card) continue;
-    const face = buildCardVisual(card.currentFaceId, { req: factsForFaceId(card.currentFaceId).req, showEffect: true, allowTextFallback: false, noInteraction: true });
+  // item.faceIds: 持っていないカードの面を直接(ストーリー第2章のセネカの高等学問、2026-11-14)。普段はphysicalIds。
+  const faceIds = item.faceIds || item.physicalIds.map((id) => source.cards[id] && source.cards[id].currentFaceId).filter(Boolean);
+  for (const faceId of faceIds) {
+    const face = buildCardVisual(faceId, { req: factsForFaceId(faceId).req, showEffect: true, allowTextFallback: false, noInteraction: true });
     holder.appendChild(face);
     faces.push(face);
   }
