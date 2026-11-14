@@ -2076,6 +2076,7 @@ function story2Finish() {
 
 /** 第3章クリア: 次の章へ(第2章→第3章と同じ形、per user回答「次の章へ」)。次の章がまだ無ければ「つづく」。 */
 const STORY3_BEST_VP_KEY = 'diceWpStory3BestVP'; // 第3章の最高記録(VP)
+const STORY4_BEST_VP_KEY = 'diceWpStory4BestVP'; // 第4章の最高記録(VP、あなたの席の最終VP)
 
 /** 「歴代最高記録っぽい演出を」: 「〇VP‼ 歴代最高記録‼」(〇は今回のVP)を金色の大きな文字で画面の真ん中に出し、
  * 紙吹雪。3.5秒ほどで消えて次へ。 */
@@ -4013,7 +4014,18 @@ function ch4OnRender(state) {
   const run = storyRun;
   if (!run || !run.normalGame) return;
   if (state.phase === 'GAME_END') {
-    if (!run.ch4.cleared) { run.ch4.cleared = true; storyMarkChapterCleared(4); }
+    if (!run.ch4.cleared) {
+      run.ch4.cleared = true;
+      storyMarkChapterCleared(4);
+      // 第4章の最高記録(あなたの席の最終VP、アレクが打った分も含む。2026-11-15, per user)。同じ点でも更新。
+      const standing = standingsRows(STATE).find((r) => r.playerId === 'P1');
+      const vp = standing ? standing.vp : 0;
+      let prev = null;
+      try { const v = localStorage.getItem(STORY4_BEST_VP_KEY); prev = v === null ? null : Number(v); } catch (err) { /* 読めなければ記録なし */ }
+      const updated = prev === null || vp >= prev;
+      try { if (updated) localStorage.setItem(STORY4_BEST_VP_KEY, String(vp)); } catch (err) { /* 書けなくても続ける */ }
+      run.ch4.best = { updated, prev, vp };
+    }
     return;
   }
   const ch = run.ch4;
@@ -4104,9 +4116,10 @@ function openStoryChapterSelect() {
       if (owls > 0) button.appendChild(el('span', 'story-chapters__record', owls >= SENECA_OWL_TOTAL && storySenecaWorriedUnlocked() ? '「心配性な研究者セネカ」解禁' : `${Math.min(owls, SENECA_OWL_TOTAL)}/${SENECA_OWL_TOTAL}`));
     }
     // 第3章: 自分の最高記録があれば右側に「最高記録〇VP」(2026-11-14, per user)。
-    if (chapter.no === 3) {
+    // 第4章も同じ(2026-11-15, per user「４章も右側に最高得点が出るように」)。
+    if (chapter.no === 3 || chapter.no === 4) {
       let best = null;
-      try { best = localStorage.getItem(STORY3_BEST_VP_KEY); } catch (err) { /* 読めなければ出さない */ }
+      try { best = localStorage.getItem(chapter.no === 3 ? STORY3_BEST_VP_KEY : STORY4_BEST_VP_KEY); } catch (err) { /* 読めなければ出さない */ }
       if (best !== null) button.appendChild(el('span', 'story-chapters__record', `最高記録${best}VP`));
     }
     button.type = 'button';
