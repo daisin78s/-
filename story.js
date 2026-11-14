@@ -715,7 +715,18 @@ const STORY_CASTLE_MAP_ID = 'MAP008'; // 皇帝宮殿
 function storySceneFarm() {
   const run = storyRun;
   run.visibleMapIds = [STORY_FARM_MAP_ID];
-  storyUseState(storyBuildState([1, 6, 3]));
+  const state = storyBuildState([1, 6, 3]);
+  // 第1章のあなたは性格(怠惰)もジョブ(ローマ市民)も持たない (2026-11-14, per user「怠惰とローマ市民を獲得カードから
+  // 消して 使えてしまうので」)。第3章のstory2BuildStateと同じやり方で取り上げる。
+  const p1 = state.players.find((p) => p.id === 'P1');
+  p1.ownedCardPhysicalIds = p1.ownedCardPhysicalIds.filter((id) => id !== p1.conPhysicalId && id !== p1.jobCardId);
+  delete state.cards[p1.conPhysicalId];
+  delete state.cards[p1.jobCardId];
+  p1.conPhysicalId = null;
+  p1.conFace = null;
+  p1.jobCardId = null;
+  p1.skipOnboarding = true;
+  storyUseState(state);
   run.placementBaseline = storyPlacementCounts(STATE);
   storyApplyVisibleMaps();
   applyMobileActiveTab('board');
