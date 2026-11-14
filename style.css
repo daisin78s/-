@@ -8427,3 +8427,16 @@ html.story-autostarting::after {
   .story-overlay.story-ch4-callout-shown .story-dialog { bottom: calc(4px + env(safe-area-inset-bottom)); }
   .story-overlay.story-ch4-callout-shown .story-alek { bottom: calc(-10px + env(safe-area-inset-bottom)); }
 }
+
+/* フリーアクション: 資源の交換以外に使えるもの(カード・使用料回収)がある時は色を変えて光らせる(main.js、2026-11-15)。 */
+.mobile-own-row__free-action.mobile-own-row__free-action--usable {
+  background: #f2b632;
+  border-color: #d08c00;
+  color: #3a2600;
+  font-weight: 700;
+  animation: free-action-usable-pulse 1.4s ease-in-out infinite;
+}
+@keyframes free-action-usable-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 196, 0, 0); }
+  50% { box-shadow: 0 0 0 3px rgba(255, 196, 0, 0.55), 0 0 14px 4px rgba(255, 196, 0, 0.6); }
+}

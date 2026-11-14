@@ -6990,6 +6990,9 @@ function executeAcquireCardShortcut(faceId) {
     turnActionTaken = true;
   }
   placementMessage = '';
+  // スマホ: ショップ画面でカードを拡大して獲得したら、エリア画面へ戻る(2026-11-15, per user「獲得後 ショップ画面から
+  // エリア画面に自動で行くように」、すべてのゲーム)。
+  if (isMobileLayout() && mobileActiveTab === 'shop') applyMobileActiveTab('board');
   render(STATE);
 }
 
@@ -9238,6 +9241,10 @@ function renderMobileOwnDiceRow(state, next) {
   if (!aiView && !tutorialModeActive && mobileFreeActionsAvailable(state, player, canPlaceDiceFor)) {
     const freeBtn = el('button', 'undo-button mobile-own-row__free-action', 'フリーアクション');
     freeBtn.type = 'button';
+    // 資源の交換(A→K等)以外に使えるもの(カードのタップ・使用料回収)がある時は、ボタンの色を変えて光らせる
+    // (2026-11-15, per user「A→Kなど以外に使用可能なフリーアクションがある場合 フリーアクションボタンの色が変わって光る」)。
+    const freeActions = computeMobileFreeActions(state, player);
+    if (freeActions.cards.length > 0 || freeActions.feeTotal > 0) freeBtn.classList.add('mobile-own-row__free-action--usable');
     freeBtn.addEventListener('click', () => {
       mobileFreeActionOpen = true;
       mobileFreeActionBaseline = mobileFreeActionSignature(STATE, player);
