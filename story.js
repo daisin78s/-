@@ -4,8 +4,8 @@
  * 会話ウインドウ)、全体の形は「小さな場面の連続」、ファンファーレは見た目だけ、"セリフは基本的にボタンを
  * 押さずに自動で進む")。
  *
- * 台本: data/story.data.js (window.STORY_SCRIPT)。2026-10-27からTwineのストーリー「怠惰なローマ人アレク」が
- * 元(per user「Twineを元にする」、tools/story_twine_to_js.pyで変換)。S001などのパッセージ番号で引く。
+ * 台本: data/story.data.js (window.STORY_SCRIPT)。2026-11-14から再びデスクトップのストーリー.xlsxの1枚目のシート
+ * (怠惰なローマ市民アレク)が元(per user「エクセルです」、tools/story_xlsx_to_js.pyで変換。2026-10-27〜11-13はTwine)。S001などのパッセージ番号で引く。
  * デスクトップのストーリー.xlsxの光る/メモ列の指示は、このファイルの場面ごとの関数にコードとして書く。
  *
  * 画面はローカル対戦の本物のエリア画面を使う (2026-10-23, per user request: "基本的にローカル対戦のエリア
@@ -759,7 +759,11 @@ function storySceneCity() {
         onPlaced: () => {
           storyFanfare(STORY_CITY_MAP_ID, () => storySayThen('S011', () => {
             storySay('S012', () => {
-              storyShowResourceChange('K', 'A', () => storyWaitNext(() => storySayThen('S013', storySceneCastle)));
+              storyShowResourceChange('K', 'A', () => storyWaitNext(() => storySayThen('S013', () => {
+              // S013とS014の間「１秒間がある」(ストーリー.xlsx、2026-11-14)。
+              storyHideDialog();
+              storyLater(storySceneCastle, 1000);
+            })));
             }, undefined, true);
           }));
         },
