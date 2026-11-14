@@ -2406,7 +2406,10 @@ function senecaDoEvent(row, onDone) {
   } else if (/自分のダイス/.test(e) && /皇帝宮殿のダイス/.test(e) && /光る/.test(e)) {
     // 「自分のダイスと皇帝宮殿のダイスが光る」(「すでに置いてあるダイス目と同じダイス目は…置けないわ」): 手元の
     // ダイスと皇帝宮殿に置いてあるダイスを、そのセリフの間だけ。
-    storySetGlow(['#mobile-own-row .mobile-own-row__dice .die', '#players .player-panel[data-player-id="P1"] .die:not(.die--placed)', storyTileSelector(STORY_CASTLE_MAP_ID, '.die')]);
+    // 置けなくなった時の助けでは、同じ目を置いてあるエリアも(図書館の3など)。
+    const rescue = run.seneca.rescue;
+    const sameMaps = rescue ? [...new Set(storyPlayer('P1').dice.filter((d) => d.placedMapId && d.value === rescue.stuckValue).map((d) => d.placedMapId))] : [];
+    storySetGlow(['#mobile-own-row .mobile-own-row__dice .die', '#players .player-panel[data-player-id="P1"] .die:not(.die--placed)', storyTileSelector(STORY_CASTLE_MAP_ID, '.die'), ...sameMaps.map((m) => storyTileSelector(m, '.die'))]);
     run.seneca.glowUntilLineEnd = true;
     onDone();
   } else if (/白ダイス/.test(e) && /光る/.test(e)) {
@@ -2561,8 +2564,10 @@ function senecaDoEvent(row, onDone) {
     storyLater(() => storyWhenVisualsIdle(onDone), 200);
   } else if (/ダイス目が(\d)に/.test(e)) {
     // 「ダイス目が6に」: 皇帝宮殿に置けないダイスの目を変える。
-    const value = Number(/ダイス目が(\d)に/.exec(e)[1]);
-    const die = storyPlayer('P1').dice.find((d) => !d.placedMapId && !d.passed);
+    // 置けなくなった時の助け(senecaTryNegotiationのrescueStuck)は、選んだダイスを選んだ目に。
+    const rescue = run.seneca.rescue;
+    const value = rescue ? rescue.value : Number(/ダイス目が(\d)に/.exec(e)[1]);
+    const die = rescue ? storyPlayer('P1').dice.find((d) => d.id === rescue.dieId) : storyPlayer('P1').dice.find((d) => !d.placedMapId && !d.passed);
     if (die) die.value = value;
     run.glowDieValues = [value];
     render(STATE);
@@ -2730,6 +2735,34 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
   // 置けるダイスがなくても、起きている基礎学問と手元のダイスがあれば、目を1にして図書館のダイスを追い出して置ける。
   const canStillMeet = () => storyPlayer('P1').dice.some((d) => !d.placedMapId && !d.passed)
     && storyPlayer('P1').ownedCardPhysicalIds.some((id) => STATE.cards[id] && /^B001/.test(STATE.cards[id].currentFaceId) && !STATE.cards[id].tapped);
+  // 手元にダイスが残っているのに、どれもどこにも置けない(例: 図書館に3、手元に3と白ダイスの3)。
+  // 交渉術・土木技術のタップで獲得できる時は、手元のダイス(交渉術なら目1)をタップに使うので助けない。
+  const diceStuck = () => !diceLeft() && storyPlayer('P1').dice.some((d) => !d.placedMapId && !d.passed) && !canTapToGain();
+  // その時はセネカが目を変えて助ける(2026-11-14, per user「セネカが目を変えて助ける」): 「もし残ったダイス目が皇帝宮殿に
+  // 置けない場合」のあとの行(同じダイス目は置けないわ→高等学問の演出→目が変わる→これで問題ないわ)を流して、then()。
+  // 変える目は、皇帝宮殿に置ける目(台本どおり6を先に)、なければどこかに置ける目。
+  const rescueStuck = (then) => {
+    const all = (window.STORY_SENECA_SCRIPT || []).map((r, index) => ({ ...r, index }));
+    const from = all.findIndex((r) => /置けない場合/.test(story2NormalizeEvent(r.event || '')));
+    const to = all.findIndex((r, k) => k > from && /置けるようになる/.test(story2NormalizeEvent(r.event || '')));
+    const rows = from >= 0 && to > from ? all.slice(from + 1, to) : [];
+    const p1 = storyPlayer('P1');
+    const dice = p1.dice.filter((d) => !d.placedMapId && !d.passed);
+    const fits = (die, v, maps) => { const old = die.value; die.value = v; const ok = storyPlaceableSlots('P1', die.id, maps).length > 0; die.value = old; return ok; };
+    const order = [6, 1, 2, 3, 4, 5];
+    let pick = null;
+    for (const maps of [[STORY_CASTLE_MAP_ID], run.visibleMapIds]) {
+      for (const die of [...dice.filter((d) => d.kind !== 'WHITE'), ...dice.filter((d) => d.kind === 'WHITE')]) {
+        const v = order.find((x) => fits(die, x, maps));
+        if (v) { pick = { dieId: die.id, value: v, stuckValue: die.value }; break; }
+      }
+      if (pick) break;
+    }
+    if (!pick || rows.length === 0) return false;
+    run.seneca.rescue = pick;
+    senecaPlay(rows, 0, () => { run.seneca.rescue = null; then(); });
+    return true;
+  };
   const playUntilDiceUsed = (then) => {
     if (!storyRun) return;
     run.tapAnyTime = true; // ダイスを全部置いたあとも交渉術・土木技術をタップできる(main.jsのstoryTapAnyTime)
@@ -2746,6 +2779,7 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
       });
       return;
     }
+    if (diceStuck() && !(run.seneca.libraryBefore && canStillMeet()) && rescueStuck(() => playUntilDiceUsed(then))) return;
     // 「「基礎学問」を使って私に会いに来て」のあと、図書館に行かないままダイスがなくなった: 残念…のあと、
     // 「会いに来て」の直後の盤面に戻る(2026-11-12, per user「「基礎学問」を使って私に会いに来て」の直後に戻したい)。
     if (!diceLeft() && run.seneca.libraryBefore && !canStillMeet()) {
@@ -2860,6 +2894,7 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
       senecaPlay(section(/基礎学問を獲得する.*交渉術も土木技術も/), 0, () => (diceLeft() ? waitPlacement() : judge(onCastle)));
       return;
     }
+    if (diceStuck() && rescueStuck(waitPlacement)) return;
     if (!diceLeft()) { failAndRewind(); return; }
     // 「道草を楽しむのも勉強ね」は1回出たらもう出さない(「残念」で戻った後も、2026-11-12 per user)。
     if (!onCastle && !run.seneca.detourSaid) { run.seneca.detourSaid = true; sayLines(section(/以外にダイスを置く/), waitPlacement); }
