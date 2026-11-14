@@ -2453,13 +2453,24 @@ function senecaDoEvent(row, onDone) {
     // 「その後獲得したカードの分岐に行く」: 台本の流れの説明(続きはsenecaTryNegotiationが選ぶ)。
     onDone();
   } else if (/アンタップ/.test(e)) {
-    // 「基礎学問をアンタップする」: あなたのそのカードを起こす。
+    // 「基礎学問をアンタップする」: あなたのそのカードを起こす。起き上がる演出付き(2026-11-14, per user
+    // 「アンタップしたことが分からないので」): 倒れたカードが下から出てきて、真ん中で起き上がって戻る(main.jsの
+    // playMobileAiTap、untap)。
+    const faceIds = [];
     for (const id of storyPlayer('P1').ownedCardPhysicalIds) {
       const card = STATE.cards[id];
-      if (card && card.tapped && e.includes(dataLoaderMod.getCardRow(INDEX, card.currentFaceId).NAME.replace(/LV\d+$/, ''))) card.tapped = false;
+      if (card && card.tapped && e.includes(dataLoaderMod.getCardRow(INDEX, card.currentFaceId).NAME.replace(/LV\d+$/, ''))) {
+        card.tapped = false;
+        faceIds.push(card.currentFaceId);
+      }
     }
+    storyHideDialog();
     render(STATE);
-    storyLater(onDone, 400);
+    if (faceIds.length > 0) {
+      mobileAiCardGainQueue.push({ type: 'aiTap', faceIds, untap: true });
+      playNextMobileAiCardGain();
+      storyLater(() => storyWhenVisualsIdle(onDone), 200);
+    } else storyLater(onDone, 400);
   } else if (/フリック/.test(e) && /獲得カード/.test(e)) {
     // 「フリックで獲得カードに行けるようになる」
     storySetAllowedTabs([...run.allowedTabs, 'cards']);

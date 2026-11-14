@@ -9652,14 +9652,16 @@ function playMobileAiTap(item) {
   };
   if (faces.length === 0) { finish(); return; }
   layer.appendChild(holder);
+  if (item.untap) for (const face of faces) face.style.transform = 'rotate(90deg)'; // 倒れた状態で出てくる
   // 1) 下から中央へ
   holder.animate([{ transform: 'translateY(100vh)' }, { transform: 'translateY(0)' }],
     { duration: animMs(CARD_TAP_IN_MS), easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)', fill: 'forwards' }).onfinish = () => {
     if (token !== mobileAiCardGainToken) return;
-    // 2) タップする(横に倒れる)
+    // 2) タップする(横に倒れる)。item.untap: 逆に横から起き上がる(ストーリー第2章の「基礎学問をアンタップする」、2026-11-14)。
     let pending = faces.length;
+    const [fromDeg, toDeg] = item.untap ? [90, 0] : [0, 90];
     for (const face of faces) {
-      face.animate([{ transform: 'rotate(0deg)' }, { transform: 'rotate(90deg)' }],
+      face.animate([{ transform: `rotate(${fromDeg}deg)` }, { transform: `rotate(${toDeg}deg)` }],
         { duration: animMs(CARD_TAP_TURN_MS), easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)', fill: 'forwards' }).onfinish = () => {
         if (--pending > 0 || token !== mobileAiCardGainToken) return;
         // 3) 少し見せてから、すばやく下へ
