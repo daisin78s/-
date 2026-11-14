@@ -3762,7 +3762,7 @@ function ch4IntroSegments(rows, i) {
   // (ch4StartRomaHint)。
   const hintAt = segs.tail.findIndex((r) => /ローマ市民を使っていない/.test(r.event || ''));
   if (hintAt >= 0) {
-    segs.romaHint = segs.tail[hintAt + 1] && !segs.tail[hintAt + 1].event ? segs.tail[hintAt + 1] : null;
+    segs.romaHint = segs.tail[hintAt + 1] && !segs.tail[hintAt + 1].event ? [segs.tail[hintAt + 1]] : null;
     segs.tail = segs.tail.filter((r, k) => k !== hintAt && !(segs.romaHint && k === hintAt + 1));
   }
   // 1ラウンド目の行動(〜「1Rの最後」)、「1Rの最後　ダイス回収直前」、「プレイヤーの2T1T」(2R1Tのあなた)、2つ目の
@@ -3775,6 +3775,15 @@ function ch4IntroSegments(rows, i) {
   segs.actions = ch4ActionSegments(rows.slice(actionAt + 1, endAt(r1EndAt)));
   segs.roundEnd1 = r1EndAt >= 0 ? rows.slice(r1EndAt + 1, endAt(p2At)) : [];
   segs.playerRound2 = p2At >= 0 ? rows.slice(p2At + 1, endAt(act2At)).filter((r) => !/セリフ→行動/.test(r.event || '')) : [];
+  // 「2Rローマ市民を使っていない場合５秒ごとに出る」とすぐ下のセリフ(イベントの無い行が続く間、2026-11-15): その場では
+  // 言わず、2ラウンド目のあなたの手番の間のヒントにする(ch4StartRomaHint)。
+  const hint2At = segs.playerRound2.findIndex((r) => /ローマ市民を使っていない/.test(r.event || ''));
+  if (hint2At >= 0) {
+    let to = hint2At + 1;
+    while (to < segs.playerRound2.length && !segs.playerRound2[to].event) to++;
+    segs.romaHint2 = segs.playerRound2.slice(hint2At + 1, to).filter((r) => r.text);
+    segs.playerRound2 = [...segs.playerRound2.slice(0, hint2At), ...segs.playerRound2.slice(to)];
+  }
   segs.actions2 = act2At >= 0 ? ch4ActionSegments(rows.slice(act2At + 1)) : [];
   // 「1R2Tの最初（プレイヤーの番でなくても）」: そのすぐ下のセリフ(アレク)。
   const r2At = rows.findIndex((r, k) => k >= i && /1R2T/.test(r.event || ''));
@@ -3783,26 +3792,31 @@ function ch4IntroSegments(rows, i) {
   return segs;
 }
 
-/** 「ローマ市民を使っていない場合５秒ごとに出る」: あなたの1R1Tの間、ローマ市民(JOB001)をまだ使っていなければ、
- * 5秒ごとにアレクのヒントが出てすぐ消える。ローマ市民を使うか、あなたの手番が終わったら止まる。 */
-function ch4StartRomaHint(row) {
+/** 「ローマ市民を使っていない場合５秒ごとに出る」: あなたのそのラウンド(round)の手番の間、ローマ市民(JOB001)をまだ
+ * 使っていなければ、5秒ごとにアレクのヒント(rowsを順に)が出てすぐ消える。ローマ市民を使うか、あなたの手番が終わったら
+ * 止まる。1ラウンド目(1R1T)と2ラウンド目(「2Rローマ市民を…」、2026-11-15)。 */
+function ch4StartRomaHint(rows, round = 1) {
   const run = storyRun;
   const ch = run.ch4;
-  const active = () => storyRun === run && STATE.round === 1 && !ch.humanDone && playerRoles.get('P1') === 'HUMAN'
+  const active = () => storyRun === run && STATE.round === round && !ch.humanDone && playerRoles.get('P1') === 'HUMAN'
     && !(STATE.cards.JOB001 && STATE.cards.JOB001.tapped);
+  const show = (k) => {
+    if (k >= rows.length || !active() || run.talking) {
+      if (storyRun === run && !run.talking) { storyHideDialog(); storySetSpeaker('system'); }
+      loop();
+      return;
+    }
+    storySetSpeaker('alek');
+    storySay(`C4-${rows[k].index}`, () => {
+      storyLater(() => { if (storyRun === run) show(k + 1); }, STORY_HINT_SHOW_MS);
+    }, rows[k].text);
+  };
   const loop = () => {
     if (!active()) return;
     storyLater(() => {
       if (!active()) return;
       if (run.talking) { loop(); return; }
-      storySetSpeaker('alek');
-      storySay(`C4-${row.index}`, () => {
-        storyLater(() => {
-          if (storyRun !== run) return;
-          if (!run.talking) { storyHideDialog(); storySetSpeaker('system'); }
-          loop();
-        }, STORY_HINT_SHOW_MS);
-      }, row.text);
+      show(0);
     }, STORY_HINT_IDLE_MS);
   };
   loop();
@@ -4039,7 +4053,7 @@ function ch4OnRender(state) {
     && upcoming.type === 'TURN' && upcoming.playerId === 'P1' && !p1.dice.some((d) => d.placedMapId || d.passed) && aiOpenTurnPlayerId === null) {
     ch.round2PlayerSaid = true;
     run.holdAi = true;
-    setTimeout(() => { if (storyRun === run) ch4Talk('alek', ch.segs.playerRound2); }, 0);
+    setTimeout(() => { if (storyRun === run) ch4Talk('alek', ch.segs.playerRound2, () => { if (ch.segs.romaHint2 && ch.segs.romaHint2.length) ch4StartRomaHint(ch.segs.romaHint2, 2); }); }, 0);
   }
   // そのラウンドで、まだダイスを1つも使っていないあなたの番が来たら、その手番は人間。
   if (ch.humanRound !== state.round && next.type === 'TURN' && next.playerId === 'P1' && used === 0) {
