@@ -8363,6 +8363,11 @@ html.story-autostarting::after {
   .story-ch4-order__list .tutorial-turnorder-row { flex: 1 1 0; min-height: 0; padding: 2px 6px; }
   .story-ch4-order__list .build-choice-group { overflow: visible; }
   .story-ch4-order__list .tutorial-turnorder-total__number { font-size: 18px; }
+  /* 名前の欄: 「何番手 ● 名前」を1行に、スタプレ合計は折り返さずに次の行(2行に折り返すと行からはみ出して数字が
+     隠れていた、2026-11-14 per user「プレイヤーのスタプレ合計が隠れている」)。 */
+  .story-ch4-order__list .tutorial-turnorder-row__header { flex-direction: row; flex-wrap: wrap; align-items: center; column-gap: 4px; row-gap: 0; width: 132px; }
+  .story-ch4-order__list .tutorial-turnorder-name { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .story-ch4-order__list .tutorial-turnorder-total { flex-basis: 100%; white-space: nowrap; }
 }
 /* 第4章「ジョブ選択画面に行く」(story.jsのch4ShowJobDraft): 6枚のジョブ。選ばれたカードの下に選んだ人の名前。 */
 /* 右に寄せる: 左側の立ち絵の顔が隠れないように(per user)。 */
@@ -8409,4 +8414,13 @@ html.story-autostarting::after {
   text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
   padding: 0 16px;
   text-align: center;
+}
+
+/* 第4章: 性格カード(.story-ch4-callout)を出している間だけ、セリフ欄と立ち絵を下げる(カードと重なるため、
+   2026-11-14 per user「このときだけセリフとキャラの位置をもう少し下に」)。スマホはタブバーの所まで。 */
+.story-overlay.story-ch4-callout-shown .story-dialog { bottom: 1%; }
+.story-overlay.story-ch4-callout-shown .story-alek { bottom: -2%; }
+@media (max-width: 760px), (max-height: 500px) {
+  .story-overlay.story-ch4-callout-shown .story-dialog { bottom: calc(4px + env(safe-area-inset-bottom)); }
+  .story-overlay.story-ch4-callout-shown .story-alek { bottom: calc(-10px + env(safe-area-inset-bottom)); }
 }

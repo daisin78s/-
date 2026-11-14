@@ -3244,9 +3244,13 @@ function ch4Play(rows, i, onDone) {
     say();
   } else if (/光る/.test(e) && /スタプレ/.test(e) && run.ch4.orderOverlay) {
     // 4人の画面の「スタプレ値が光る」: あなたの行のスタプレの数字と合計。
-    storySetGlow(['.story-ch4-order__me .shop-card > .shop-card__start-order .shop-card__start-order-number', '.story-ch4-order__me .tutorial-turnorder-total__number']);
+    storySetGlow(['.story-ch4-order__me .shop-card > .shop-card__start-order .shop-card__start-order-number', '.story-ch4-order__me .shop-card .con-start-order .shop-card__start-order-number', '.story-ch4-order__me .tutorial-turnorder-total__number']);
     run.ch4.glowLine = true;
     say();
+  } else if (/セリフが/.test(e) && /消える/.test(e)) {
+    // 「セリフが５秒消える」(2026-11-14): 4人の画面などをセリフ欄に邪魔されずに見られるよう、その秒数だけセリフ欄を消す。
+    storyHideDialog();
+    storyLater(say, (seconds || 0) * 1000);
   } else if (/秒間がある/.test(e)) {
     storyHideDialog();
     // ジョブを選んだあとの「１秒間がある」: ジョブの画面もここで閉じる(「１ターン目は君がプレイしてね」は盤面の上で)。
@@ -3262,7 +3266,8 @@ function ch4Play(rows, i, onDone) {
     say();
   } else if (/光る/.test(e) && /スタプレ/.test(e)) {
     // 「スタプレ値が光る」: チュートリアルと同じく、各カードのスタプレの数字と合計。
-    storySetGlow(['.story-ch4-mine .shop-card > .shop-card__start-order .shop-card__start-order-number', '.story-ch4-mine .story-ch4-total__number']);
+    // 性格カードのSPは名前の段の中(.con-start-order)にあるので別に指定する(2026-11-14, per user「性格のSPがひかっていない」)。
+    storySetGlow(['.story-ch4-mine .shop-card > .shop-card__start-order .shop-card__start-order-number', '.story-ch4-mine .shop-card .con-start-order .shop-card__start-order-number', '.story-ch4-mine .story-ch4-total__number']);
     run.ch4.glowLine = true;
     say();
   } else if (/並ぶ/.test(e) && /[４4]人/.test(e)) {
@@ -3359,11 +3364,14 @@ function ch4ShowCallout(faceId) {
   });
   run.dom.root.appendChild(box);
   run.ch4.callout = box;
+  // 性格カードを出している間だけ、セリフ欄と立ち絵を下げる(カードとセリフが重なるため、2026-11-14 per user)。
+  run.dom.root.classList.add('story-ch4-callout-shown');
   box.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300, easing: 'ease-out' });
 }
 function ch4HideCallout() {
   const run = storyRun;
   if (run && run.ch4 && run.ch4.callout) { run.ch4.callout.remove(); run.ch4.callout = null; }
+  if (run && run.dom && run.dom.root) run.dom.root.classList.remove('story-ch4-callout-shown');
 }
 
 /** 「初期資源カードが４枚配られる（ランダム）」: 普段のゲームと同じく4枚配って並べる(まだ選べない)。 */
@@ -3478,7 +3486,11 @@ function ch4ShowTurnOrder() {
     const resourceIds = ch4ResourceIds(player);
     const row = el('div', isSelf ? 'tutorial-turnorder-row story-ch4-order__me' : 'tutorial-turnorder-row');
     const header = el('div', 'tutorial-turnorder-row__header');
-    header.appendChild(el('span', 'tutorial-turnorder-rank', `${STATE.turnOrder.indexOf(player.id) + 1}番手`));
+    // 何番手かは、全員の初期資源カードが表になるまで隠す(2026-11-14, per user「先に１番手２番手が表示されている」)。
+    // 場所は取っておいて(visibility)、ch4RevealOthersで出す。
+    const rank = el('span', 'tutorial-turnorder-rank story-ch4-order__rank', `${STATE.turnOrder.indexOf(player.id) + 1}番手`);
+    rank.style.visibility = 'hidden';
+    header.appendChild(rank);
     const swatch = el('span', 'player-panel__swatch player-panel__swatch--tiny');
     swatch.dataset.color = player.color;
     header.appendChild(swatch);
@@ -3529,6 +3541,10 @@ function ch4RevealOthers(onDone) {
     n.animate([{ transform: 'rotateY(90deg)' }, { transform: 'rotateY(0)' }], { duration: 350, easing: 'ease-out' });
   });
   overlay.querySelectorAll('[data-total]').forEach((n) => { n.textContent = n.dataset.total; });
+  overlay.querySelectorAll('.story-ch4-order__rank').forEach((n) => {
+    n.style.visibility = '';
+    n.animate([{ opacity: 0, transform: 'scale(0.6)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 300, delay: 350, easing: 'ease-out', fill: 'backwards' });
+  });
   storyLater(onDone, 900);
 }
 
