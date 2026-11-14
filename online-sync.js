@@ -633,6 +633,10 @@ var BUG_REPLAY_STORAGE_PREFIX = 'bugReplays/';
  * ように点数を記録」— roomsは一覧を取り出せないので、どこにも表示されない)。 */
 var STORY_RECORD_COLLECTION = ROOM_COLLECTION;
 function storyRecordDocId(chapterKey) { return 'STORY_RECORD_' + chapterKey; }
+/** 記録できる上限 (2026-11-14, per user「１で30VP」)。Firestoreのルールでも同じ上限で止めている(0〜30の整数、
+ * 今の記録より大きいときだけ)。ここは正しく遊んだ人の書き込みがルールに弾かれないための確認。 */
+var STORY_RECORD_MAX_VP = 30;
+function storyRecordAllowed(vp) { return typeof vp === 'number' && Math.floor(vp) === vp && vp >= 0 && vp <= STORY_RECORD_MAX_VP; }
 /** @returns {Promise<number|null>} 今の世界最高記録(まだ無ければnull)。 */
 function getStoryWorldRecord(chapterKey) {
   return db().collection(STORY_RECORD_COLLECTION).doc(storyRecordDocId(chapterKey)).get().then(function (snap) {
@@ -643,6 +647,7 @@ function getStoryWorldRecord(chapterKey) {
 /** vpが今の世界最高記録より大きければ(まだ無ければ)書き換える。読むのと書くのを1回のトランザクションで。
  * @returns {Promise<{prev: number|null}>} 書き換える前の記録。 */
 function submitStoryWorldRecord(chapterKey, vp) {
+  if (!storyRecordAllowed(vp)) return Promise.reject(new Error('story record out of range: ' + vp));
   var ref = db().collection(STORY_RECORD_COLLECTION).doc(storyRecordDocId(chapterKey));
   return db().runTransaction(function (t) {
     return t.get(ref).then(function (snap) {
@@ -726,6 +731,7 @@ window.OnlineSync = {
   deleteAchievementBackup: deleteAchievementBackup,
   getStoryWorldRecord: getStoryWorldRecord,
   submitStoryWorldRecord: submitStoryWorldRecord,
+  storyRecordAllowed: storyRecordAllowed,
   saveBugReport: saveBugReport,
   saveBugReplay: saveBugReplay,
   listBugReports: listBugReports,

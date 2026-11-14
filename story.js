@@ -2129,7 +2129,8 @@ function ch3PlayRecordEnding(rows) {
     if (settled || storyRun !== run) return;
     settled = true;
     // world: { best: 今回より前の世界最高記録(null=まだ無い) } / null=分からない
-    const worldUpdated = !!world && (world.best === null || vp >= world.best);
+    // 上限(30VP)を超えた点は世界記録に書けないので、世界更新にはしない(自分の記録だけ)。
+    const worldUpdated = !!world && worldOk && (world.best === null || vp >= world.best);
     const worldText = world ? String(worldUpdated ? vp : world.best) : null;
     const pick = worldUpdated ? split.world : personalUpdated ? split.personal : split.head;
     const lines = [];
@@ -2143,10 +2144,11 @@ function ch3PlayRecordEnding(rows) {
     }
     story2Play(lines, 0, story2GoNextChapter);
   };
+  const worldOk = !!sync && (!sync.storyRecordAllowed || sync.storyRecordAllowed(vp));
   if (!sync || !sync.getStoryWorldRecord) { go(null); return; }
   storyLater(() => go(null), 6000); // ネットが遅い・つながらない
   sync.getStoryWorldRecord('ch3').then((best) => {
-    if (best === null || vp >= best) {
+    if (worldOk && (best === null || vp > best)) {
       // 書き込みは結果を待たない(書けなくても、読めた記録で進める)。
       sync.submitStoryWorldRecord('ch3', vp).catch((err) => console.warn('世界最高記録を書けませんでした', err));
     }
