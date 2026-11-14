@@ -2035,7 +2035,8 @@ function story2Finish() {
       const ends = Object.keys(ch.blocks).filter((k) => k.startsWith(`mend:${STATE.round}:`));
       const key = ends.find((k) => k === `mend:${STATE.round}:${total}`)
         || ends.filter((k) => k.endsWith('+') && total >= Number(k.split(':')[2].replace('+', ''))).pop();
-      if (key) story2Play(ch.blocks[key], 0, story2GoNextChapter);
+      if (key && story2RecordBlockSplit(ch.blocks[key])) ch3PlayRecordEnding(ch.blocks[key]);
+      else if (key) story2Play(ch.blocks[key], 0, story2GoNextChapter);
       else story2GoNextChapter();
       return;
     }
@@ -2093,6 +2094,66 @@ function story2RecordFanfare(text, onDone) {
     box.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, fill: 'forwards' }).onfinish = () => { box.remove(); onDone(); };
   }, 3500);
 }
+/** 「モニュメントを合計4枚以上」の終わり方(102〜117行目)を、記録の結果ごとの行に分ける。分けられなければnull。
+ *  head: 「よーし…文句なしの合格だ」〜「お前はこれを更新できるか？」(「世界最高記録が更新されたとき」の前まで)
+ *  world: 「こいつはスゲーぜ」と演出(「世界最高記録が更新されたとき」〜「最高記録が更新されたとき（世界…でない）」)
+ *  personal: 「最高記録が更新されたとき（世界最高記録の時はでない）」から最後まで */
+function story2RecordBlockSplit(rows) {
+  const at = (re) => rows.findIndex((r) => re.test(story2NormalizeEvent(r.event || '')));
+  const worldAt = at(/世界最高記録が更新されたとき/);
+  const personalAt = at(/最高記録が更新されたとき.*世界最高記録の時はでない/);
+  if (worldAt < 0 || personalAt < worldAt) return null;
+  return { head: rows.slice(0, worldAt), world: rows.slice(worldAt + 1, personalAt), personal: rows.slice(personalAt) };
+}
+
+/** 第3章の最後(モニュメント4枚以上)。自分の最高記録(この端末)と世界最高記録(Firebase、全員の中で)を比べて
+ * (2026-11-14, per user回答):
+ *  どちらも更新しない → head(「今までの最高記録は〇VP」「世界最高記録は〇VPだ」「更新できるか？」まで)
+ *  自分の記録だけ更新 → personal(「最高記録更新だ！」「ちなみに世界最高記録は〇VPだ」…)
+ *  世界最高記録も更新 → world(「こいつはスゲーぜ」と演出)だけ
+ * 同じ点でも更新(「過去の記録と同じ点でも」)、初めての時も自分の記録は更新。ネットにつながらず世界最高記録が
+ * 分からない時は、世界最高記録の行を出さずに進む。 */
+function ch3PlayRecordEnding(rows) {
+  const run = storyRun;
+  const split = story2RecordBlockSplit(rows);
+  const standing = standingsRows(STATE).find((r) => r.playerId === 'P1');
+  const vp = standing ? standing.vp : 0;
+  let prev = null;
+  try { const v = localStorage.getItem(STORY3_BEST_VP_KEY); prev = v === null ? null : Number(v); } catch (err) { /* 読めなければ記録なし */ }
+  const personalUpdated = prev === null || vp >= prev;
+  try { if (personalUpdated) localStorage.setItem(STORY3_BEST_VP_KEY, String(vp)); } catch (err) { /* 書けなくても続ける */ }
+  run.ch2Best = { updated: personalUpdated, prev, vp };
+  const sync = window.OnlineSync;
+  let settled = false;
+  const go = (world) => {
+    if (settled || storyRun !== run) return;
+    settled = true;
+    // world: { best: 今回より前の世界最高記録(null=まだ無い) } / null=分からない
+    const worldUpdated = !!world && (world.best === null || vp >= world.best);
+    const worldText = world ? String(worldUpdated ? vp : world.best) : null;
+    const pick = worldUpdated ? split.world : personalUpdated ? split.personal : split.head;
+    const lines = [];
+    for (const r of pick) {
+      if (/演出/.test(r.event || '')) { lines.push(r); continue; }
+      if (!r.text) continue;
+      let text = r.text;
+      if (/世界最高記録は〇/.test(text)) { if (worldText === null) continue; text = text.replace('〇', worldText); }
+      else if (/今までの最高記録は〇/.test(text)) text = text.replace('〇', String(prev === null ? vp : prev));
+      lines.push({ ...r, text, event: '' });
+    }
+    story2Play(lines, 0, story2GoNextChapter);
+  };
+  if (!sync || !sync.getStoryWorldRecord) { go(null); return; }
+  storyLater(() => go(null), 6000); // ネットが遅い・つながらない
+  sync.getStoryWorldRecord('ch3').then((best) => {
+    if (best === null || vp >= best) {
+      // 書き込みは結果を待たない(書けなくても、読めた記録で進める)。
+      sync.submitStoryWorldRecord('ch3', vp).catch((err) => console.warn('世界最高記録を書けませんでした', err));
+    }
+    go({ best });
+  }).catch((err) => { console.warn('世界最高記録を読めませんでした', err); go(null); });
+}
+
 function story2GoNextChapter() {
   storyMarkChapterCleared(3);
   const nextChapter = STORY_CHAPTERS.find((c) => c.no === 4);
@@ -3792,6 +3853,12 @@ function openStoryChapterSelect() {
   const note = el('div', 'story-chapters__note', '');
   for (const chapter of STORY_CHAPTERS) {
     const button = el('button', 'story-chapters__chapter', chapter.title);
+    // 第3章: 自分の最高記録があれば右側に「最高記録〇VP」(2026-11-14, per user)。
+    if (chapter.no === 3) {
+      let best = null;
+      try { best = localStorage.getItem(STORY3_BEST_VP_KEY); } catch (err) { /* 読めなければ出さない */ }
+      if (best !== null) button.appendChild(el('span', 'story-chapters__record', `最高記録${best}VP`));
+    }
     button.type = 'button';
     button.addEventListener('click', () => {
       if (!chapter.start) { note.textContent = `第${chapter.no}章は今作成中です`; return; }

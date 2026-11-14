@@ -7284,6 +7284,7 @@ body.story-hide-dice #players .player-panel .die {
   text-align: left;
   cursor: pointer;
 }
+.story-chapters__record { float: right; margin-left: 12px; font-size: 14px; color: var(--accent, #c8902a); }
 .story-chapters__note {
   min-height: 1.4em;
   color: #fff;

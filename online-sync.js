@@ -627,6 +627,30 @@ var BUG_REPLAY_STORAGE_PREFIX = 'bugReplays/';
 
 /** Saves one bug-report's own diagnostic metadata (reason/playerId/round/resources/etc -- NOT the replay
  * itself, see saveBugReplay) as its own Firestore doc, keyed by the same id the replay blob uses. */
+/** ストーリーの世界最高記録 (2026-11-14, per user: 第3章「世界最高記録はすべてのアカウントの最高記録」、Firebaseに置く)。
+ * storyRecords/{chapterKey} = { bestVp, updatedAt }。1章につき1件だけ。 */
+var STORY_RECORD_COLLECTION = 'storyRecords';
+/** @returns {Promise<number|null>} 今の世界最高記録(まだ無ければnull)。 */
+function getStoryWorldRecord(chapterKey) {
+  return db().collection(STORY_RECORD_COLLECTION).doc(chapterKey).get().then(function (snap) {
+    var d = snap.exists ? snap.data() : null;
+    return d && typeof d.bestVp === 'number' ? d.bestVp : null;
+  });
+}
+/** vpが今の世界最高記録より大きければ(まだ無ければ)書き換える。読むのと書くのを1回のトランザクションで。
+ * @returns {Promise<{prev: number|null}>} 書き換える前の記録。 */
+function submitStoryWorldRecord(chapterKey, vp) {
+  var ref = db().collection(STORY_RECORD_COLLECTION).doc(chapterKey);
+  return db().runTransaction(function (t) {
+    return t.get(ref).then(function (snap) {
+      var d = snap.exists ? snap.data() : null;
+      var prev = d && typeof d.bestVp === 'number' ? d.bestVp : null;
+      if (prev === null || vp > prev) t.set(ref, { bestVp: vp, updatedAt: Date.now() });
+      return { prev: prev };
+    });
+  });
+}
+
 function saveBugReport(id, reportWithoutId) {
   return db().collection(BUG_REPORT_COLLECTION).doc(id).set(reportWithoutId);
 }
@@ -697,6 +721,8 @@ window.OnlineSync = {
   loadAchievementBackup: loadAchievementBackup,
   saveAchievementBackup: saveAchievementBackup,
   deleteAchievementBackup: deleteAchievementBackup,
+  getStoryWorldRecord: getStoryWorldRecord,
+  submitStoryWorldRecord: submitStoryWorldRecord,
   saveBugReport: saveBugReport,
   saveBugReplay: saveBugReplay,
   listBugReports: listBugReports,
