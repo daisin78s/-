@@ -3421,7 +3421,8 @@ function ch4Talk(speaker, rows, onDone) {
   });
 }
 
-const CH4_JOB_POOL = ['JOB001', 'JOB007', 'JOB004', 'JOB002', 'JOB005', 'JOB003']; // ローマ市民 研究者 百人隊長 巫女 権力者 道化師
+// 道化師(JOB003)は外した: 6枚だとジョブ選択時に立ち絵の顔が隠れるため(per user「道化師を外して カードを右に寄せて」)。
+const CH4_JOB_POOL = ['JOB001', 'JOB007', 'JOB004', 'JOB002', 'JOB005']; // ローマ市民 研究者 百人隊長 巫女 権力者
 
 /** 「傲慢なスパルが１番」〜「ジョブ選択画面に行く」の前までを、人ごとに分ける (2026-11-13, per user: 手番順に1人ずつ
  * 「◯番手はオレだ」→性格の説明→ジョブを選ぶ→ジョブの説明)。
@@ -3530,7 +3531,7 @@ function ch4PlayerSegment(pid) {
   else speak();
 }
 
-/** ジョブ6枚の画面。もう選ばれているジョブは取られた形(薄く、選んだ人の名前)で出す。 */
+/** ジョブ5枚の画面(右寄せ)。もう選ばれているジョブは取られた形(薄く、選んだ人の名前)で出す。 */
 function ch4ShowJobPanel() {
   const run = storyRun;
   if (run.ch4.jobPanel) return;
@@ -3553,7 +3554,7 @@ function ch4ShowJobPanel() {
   root.appendChild(row);
   run.dom.root.appendChild(root);
   run.ch4.jobPanel = root;
-  root.animate([{ opacity: 0, transform: 'translate(-50%, -12px)' }, { opacity: 1, transform: 'translate(-50%, 0)' }], { duration: 300, easing: 'ease-out' });
+  root.animate([{ opacity: 0, transform: 'translateY(-12px)' }, { opacity: 1, transform: 'none' }], { duration: 300, easing: 'ease-out' });
 }
 
 /** 「ジョブ選択画面に行く」: ジョブの画面はもう出ている(ch4IntroductionRound)。出ていなければ出して、あなたより

@@ -8364,6 +8364,8 @@ html.story-autostarting::after {
   .story-ch4-order__list .tutorial-turnorder-total__number { font-size: 18px; }
 }
 /* 第4章「ジョブ選択画面に行く」(story.jsのch4ShowJobDraft): 6枚のジョブ。選ばれたカードの下に選んだ人の名前。 */
+/* 右に寄せる: 左側の立ち絵の顔が隠れないように(per user)。 */
+.story2-cards.story-ch4-jobs { left: auto; right: max(8px, env(safe-area-inset-right, 0px)); transform: none; }
 .story-ch4-jobs .story2-cards__card { width: min(112px, calc((100vw - 90px) / 6)); }
 .story-ch4-jobs__owner { min-height: 1.4em; text-align: center; font-size: 12px; font-weight: 700; color: #fff; }
 .story-ch4-jobs__card--taken .shop-card { filter: brightness(0.7) grayscale(0.5); }
