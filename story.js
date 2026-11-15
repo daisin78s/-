@@ -3313,6 +3313,21 @@ function ch4Play(rows, i, onDone) {
     ch4EnemyChoosesJob(e, say);
   } else if (/ジョブ選択画面/.test(e)) {
     ch4ShowJobDraft(say);
+  } else if (/モニュメント/.test(e) && /光る/.test(e)) {
+    // 「ショップ画面に行きモニュメントが光る」(2026-11-15): ショップの画面にして、モニュメントの段(SHOP001-006)を
+    // そのセリフの間だけ光らせる。
+    if (/ショップ/.test(e) && isMobileLayout()) applyMobileActiveTab('shop');
+    storySetGlow(['#shop-combined-slots .shop-slot[data-slot-id^="SHOP0"]']);
+    run.ch4.glowLine = true;
+    const t = document.querySelector('#shop-combined-slots .shop-slot[data-slot-id^="SHOP0"]');
+    if (t) t.scrollIntoView({ block: 'center' });
+    say();
+  } else if (/強化カード/.test(e) && /光る/.test(e)) {
+    // 「強化カードが光る」(2026-11-15): ショップの強化カードの段(SHOP201-)のうち、このラウンドで獲得できるもの
+    // (3Rからのカードはまだ伏せてあるので光らせない)。そのセリフの間だけ。
+    storySetGlow(['#shop-combined-slots .shop-slot[data-slot-id^="SHOP2"]:not(.shop-slot--locked)']);
+    run.ch4.glowLine = true;
+    say();
   } else if (/皇帝宮殿の手番順/.test(e) && /光る/.test(e)) {
     // 「皇帝宮殿の手番順が光る」: 皇帝宮殿の「次ラウンド」の手番順(チュートリアルと同じ所)。
     storySetGlow(['.map-tile--castle .map-tile__turnorder--current']);
@@ -3845,17 +3860,24 @@ function ch4IntroSegments(rows, i) {
   const act2At = p2At >= 0 ? findAt(/セリフ→行動/, p2At) : -1;
   segs.actions = ch4ActionSegments(rows.slice(actionAt + 1, endAt(r1EndAt)));
   segs.roundEnd1 = r1EndAt >= 0 ? rows.slice(r1EndAt + 1, endAt(p2At)) : [];
-  segs.playerRound2 = p2At >= 0 ? rows.slice(p2At + 1, endAt(act2At)).filter((r) => !/セリフ→行動/.test(r.event || '')) : [];
-  // 「2Rローマ市民を使っていない場合５秒ごとに出る」とすぐ下のセリフ(イベントの無い行が続く間、2026-11-15): その場では
-  // 言わず、2ラウンド目のあなたの手番の間のヒントにする(ch4StartRomaHint)。
-  const hint2At = segs.playerRound2.findIndex((r) => /ローマ市民を使っていない/.test(r.event || ''));
-  if (hint2At >= 0) {
-    let to = hint2At + 1;
-    while (to < segs.playerRound2.length && !segs.playerRound2[to].event) to++;
-    segs.romaHint2 = segs.playerRound2.slice(hint2At + 1, to).filter((r) => r.text);
-    segs.playerRound2 = [...segs.playerRound2.slice(0, hint2At), ...segs.playerRound2.slice(to)];
-  }
-  segs.actions2 = act2At >= 0 ? ch4ActionSegments(rows.slice(act2At + 1)) : [];
+  // 「プレイヤーの3T1T」(3R1Tのあなた、2026-11-15): 2Rの敵の行動はその手前まで。
+  const p3At = findAt(/プレイヤーの3[TR]1T/, Math.max(act2At, p2At, actionAt));
+  // 「2Rローマ市民を使っていない場合５秒ごとに出る」「3Rローマ市民を…」とすぐ下のセリフ(イベントの無い行が続く間、
+  // 2026-11-15): その場では言わず、そのラウンドのあなたの手番の間のヒントにする(ch4StartRomaHint)。
+  const splitHint = (list) => {
+    const at = list.findIndex((r) => /ローマ市民を使っていない/.test(r.event || ''));
+    if (at < 0) return { talk: list, hint: null };
+    let to = at + 1;
+    while (to < list.length && !list[to].event) to++;
+    return { talk: [...list.slice(0, at), ...list.slice(to)], hint: list.slice(at + 1, to).filter((r) => r.text) };
+  };
+  const r2 = splitHint(p2At >= 0 ? rows.slice(p2At + 1, endAt(act2At)).filter((r) => !/セリフ→行動/.test(r.event || '')) : []);
+  segs.playerRound2 = r2.talk;
+  segs.romaHint2 = r2.hint;
+  segs.actions2 = act2At >= 0 ? ch4ActionSegments(rows.slice(act2At + 1, endAt(p3At))) : [];
+  const r3 = splitHint(p3At >= 0 ? rows.slice(p3At + 1, endAt(findAt(/セリフ→行動/, p3At))) : []);
+  segs.playerRound3 = r3.talk;
+  segs.romaHint3 = r3.hint;
   // 「1R2Tの最初（プレイヤーの番でなくても）」: そのすぐ下のセリフ(アレク)。
   const r2At = rows.findIndex((r, k) => k >= i && /1R2T/.test(r.event || ''));
   segs.round1Turn2 = [];
@@ -4137,6 +4159,13 @@ function ch4OnRender(state) {
     ch.round2PlayerSaid = true;
     run.holdAi = true;
     setTimeout(() => { if (storyRun === run) ch4Talk('alek', ch.segs.playerRound2, () => { if (ch.segs.romaHint2 && ch.segs.romaHint2.length) ch4StartRomaHint(ch.segs.romaHint2, 2); }); }, 0);
+  }
+  // 「プレイヤーの3T1T」(2026-11-15): 3ラウンド目のあなたの最初の手番の初めに、アレクのセリフ(2Rと同じ)。
+  if (state.round === 3 && !ch.round3PlayerSaid && !run.holdAi && ch.segs && ((ch.segs.playerRound3 || []).length || (ch.segs.romaHint3 || []).length)
+    && upcoming.type === 'TURN' && upcoming.playerId === 'P1' && !p1.dice.some((d) => d.placedMapId || d.passed) && aiOpenTurnPlayerId === null) {
+    ch.round3PlayerSaid = true;
+    run.holdAi = true;
+    setTimeout(() => { if (storyRun === run) ch4Talk('alek', ch.segs.playerRound3, () => { if (ch.segs.romaHint3 && ch.segs.romaHint3.length) ch4StartRomaHint(ch.segs.romaHint3, 3); }); }, 0);
   }
   // そのラウンドで、まだダイスを1つも使っていないあなたの番が来たら、その手番は人間。
   if (ch.humanRound !== state.round && next.type === 'TURN' && next.playerId === 'P1' && used === 0) {
