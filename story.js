@@ -615,7 +615,9 @@ function storyWaitForPlacement({ mapIds, dieValues, goalText, hintLineId, hintId
  * ままにする。戻した手の記録には「その手を使った時に置けたか」が入っていて、セリフの間(置けない間)にタップを使って
  * いると、戻した時に置けない状態になってしまうため(置いたらこの待ちは終わるので、待っている間は必ず置ける)。 */
 function storyAfterCancelAction() {
-  if (storyRun && storyRun.onRender) turnActionTaken = false;
+  // 第4章の対戦中(normalGame)は普段のゲームと同じ(戻した手の記録どおり)。ここでfalseにすると、ダイスを置いて
+  // フリーアクションをした後に1手戻ると「手番が終わった」と見なされてアレクに交代していた(2026-11-15, per user)。
+  if (storyRun && storyRun.onRender && !storyRun.normalGame) turnActionTaken = false;
 }
 
 /** 見せるエリアを1つ増やす(枠だけだったタイルの中身がふわっと出てくる)。 */
