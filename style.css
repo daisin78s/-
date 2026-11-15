@@ -8644,10 +8644,14 @@ html.story-autostarting::after {
 
 /* 第4章: 性格カード(.story-ch4-callout)を出している間だけ、セリフ欄と立ち絵を下げる(カードと重なるため、
    2026-11-14 per user「このときだけセリフとキャラの位置をもう少し下に」)。スマホはタブバーの所まで。 */
-.story-overlay.story-ch4-callout-shown .story-dialog { bottom: 1%; }
+/* ジョブを選ぶ画面(.story-ch4-jobs)が出ている間は、性格カードが無い時もセリフ欄は下のまま(上下に何度も動かないように、
+   2026-11-16 per user「セリフが上下に何回も移動するといやなので この時はセリフはずっと下でいい」)。 */
+.story-overlay.story-ch4-callout-shown .story-dialog,
+body:has(.story-ch4-jobs) .story-overlay .story-dialog { bottom: 1%; }
 .story-overlay.story-ch4-callout-shown .story-alek { bottom: -2%; }
 @media (max-width: 760px), (max-height: 500px) {
-  .story-overlay.story-ch4-callout-shown .story-dialog { bottom: calc(4px + env(safe-area-inset-bottom)); }
+  .story-overlay.story-ch4-callout-shown .story-dialog,
+  body:has(.story-ch4-jobs) .story-overlay .story-dialog { bottom: calc(4px + env(safe-area-inset-bottom)); }
   .story-overlay.story-ch4-callout-shown .story-alek { bottom: calc(-10px + env(safe-area-inset-bottom)); }
 }
 
