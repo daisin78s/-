@@ -6506,7 +6506,9 @@ function buildCardVisual(faceId, options = {}) {
           noInteraction: true,
         })
         : null;
-      showCardEnlargeModal(faceId, visualNode, hasSiblingData ? sibling : null, siblingVisualNode);
+      // ownedPhysicalId: 獲得済みカード -- 今すぐLVアップできるなら「LVアップする」ボタン(ownedCardUpgradePickAction)。
+      const upgradePick = options.ownedPhysicalId ? ownedCardUpgradePickAction(options.ownedPhysicalId) : null;
+      showCardEnlargeModal(faceId, visualNode, hasSiblingData ? sibling : null, siblingVisualNode, upgradePick || undefined);
     });
   }
 
@@ -6912,7 +6914,16 @@ function computeShopAcquirableMoveCache() {
     const builtFaceId = result.candidate.type === 'UPGRADE' ? result.candidate.toFaceId : result.candidate.faceId;
     const score = aiEvaluator.score(resultState, playerId);
     const existing = bestByFaceId.get(builtFaceId);
-    if (!existing || score > existing.score) bestByFaceId.set(builtFaceId, { playerId, move, score, isUpgrade: result.candidate.type === 'UPGRADE' });
+    // このターンに目を変えたダイス(宮廷人の+5など)を使う手を先に選ぶ (2026-11-15, per user report「宮廷人でダイス+5を
+    // した後ショートカットで水道橋を獲得しようとすると+5したダイスを使わずに別のダイス3個を選ぶ」) -- 変えた目は
+    // 置かないと手番の終わりに元に戻る(executorのmarkDieValueChanged)のに、評価はそれを知らず、大きい目を残す手を
+    // 選んでいた。同じカードを獲得する手のうち、変えたダイスを使う手があればそちらが優先、その中で評価の高い手。
+    const actingPlayer = STATE.players.find((p) => p.id === playerId);
+    const moveDieIds = move.dieIds || (move.dieId ? [move.dieId] : []);
+    const usesChangedDie = moveDieIds.some((id) => { const d = actingPlayer && actingPlayer.dice.find((x) => x.id === id); return !!(d && d.valueChangedThisTurn); });
+    const better = !existing || (usesChangedDie !== existing.usesChangedDie ? usesChangedDie : score > existing.score);
+    // physicalId: LVアップするカード(獲得済みカードの拡大画面の「LVアップする」、ownedCardUpgradePickAction)。
+    if (better) bestByFaceId.set(builtFaceId, { playerId, move, score, usesChangedDie, isUpgrade: result.candidate.type === 'UPGRADE', physicalId: result.candidate.type === 'UPGRADE' ? result.candidate.physicalId : null });
   }
   return bestByFaceId;
 }
@@ -6974,6 +6985,19 @@ function showCastleAcquirableModal() {
 
 function findBestAcquireMove(faceId) {
   return shopAcquirableMoveCache.get(faceId) || null;
+}
+
+/** 獲得済みカードを拡大した時の「LVアップする」(2026-11-15, per user「ショップのカードを獲得するときのショートカット
+ * と同じように 獲得済みカードをタップして拡大した時 レベルアップする というボタンが欲しい」) -- ショップの✓と同じ
+ * shopAcquirableMoveCache(今すぐLVアップできる手)に、このカードのLVアップがあれば、押すとその最善手でLVアップする。
+ * 無ければnull(ボタンは出ない)。 */
+function ownedCardUpgradePickAction(physicalId) {
+  for (const [toFaceId, found] of shopAcquirableMoveCache) {
+    if (found.isUpgrade && found.physicalId === physicalId) {
+      return { label: 'LVアップする', onPick: () => executeAcquireCardShortcut(toFaceId) };
+    }
+  }
+  return null;
 }
 
 /** findBestAcquireMoveが見つけた手を実際にライブのSTATEへ適用する (2026-10-09) -- AI自身の手番処理
@@ -11413,7 +11437,7 @@ function renderPlayerCards(state, next) {
       // explicitly (e.g. buildShopSlotNode/buildCardListCell). Harmless for non-monument cards, where
       // .req is just '' (row has no DICE column) and .shop-card__req collapses away via its own :empty
       // rule -- so this is safe to pass unconditionally, not just for M-prefixed physicalIds.
-      const cardNode = buildCardVisual(cardState.currentFaceId, { tapped: cardState.tapped, showEffect: tall, req: factsForFaceId(cardState.currentFaceId).req });
+      const cardNode = buildCardVisual(cardState.currentFaceId, { tapped: cardState.tapped, showEffect: tall, req: factsForFaceId(cardState.currentFaceId).req, ownedPhysicalId: physicalId });
       // build_candidate_a005a_levelup_howto_hintの「光る」演出(あなたの持ちカードの獲得必要資源) --
       // tutorialOwnedCardCostGlowing's own doc。.shop-card__backの中の非表示コピーを誤って掴まないよう
       // 子コンビネータで表面側だけに絞る(build_cost_hintと同じ修正パターン)。
