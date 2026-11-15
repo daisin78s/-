@@ -197,8 +197,20 @@ class MoveGenerator {
     if (!player) return moves;
 
     if (!context.hasPlacedDieThisTurn) {
-      moves.push(...this.#placeDieMoves(state, index, playerId, player));
-      moves.push(...this.#placeDiceGroupMoves(state, index, playerId, player));
+      const singleMoves = this.#placeDieMoves(state, index, playerId, player);
+      moves.push(...singleMoves);
+      // 同じモニュメントをもっと少ないダイスで建てられるなら、それより多く使う手は出さない (2026-11-15, per user
+      // 「「6を1個」で建てられたのに「5と5」を使った…これは絶対に直して」-- 1個で足りるのに2個、2個で足りるのに3個。
+      // ダイスを余分に使うだけで得が無い)。
+      const groupMoves = this.#placeDiceGroupMoves(state, index, playerId, player);
+      const isMonumentMove = (m) => typeof m.buildCandidateKey === 'string' && /^M/.test(m.buildCandidateKey);
+      const fewestDice = new Map();
+      for (const m of [...singleMoves, ...groupMoves]) {
+        if (!isMonumentMove(m)) continue;
+        const count = m.dieIds ? m.dieIds.length : 1;
+        if (!fewestDice.has(m.buildCandidateKey) || count < fewestDice.get(m.buildCandidateKey)) fewestDice.set(m.buildCandidateKey, count);
+      }
+      moves.push(...groupMoves.filter((m) => !isMonumentMove(m) || m.dieIds.length <= fewestDice.get(m.buildCandidateKey)));
       moves = this.#applyCastleSenatePreference(state, index, playerId, moves);
     }
     // Only offered while actually needed to unblock a RESOURCE_TOTAL_LIMIT-blocked turn end (2026-08-03,
