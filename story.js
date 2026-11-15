@@ -2377,8 +2377,11 @@ function senecaPlay(rows, i, onDone) {
   }
   // プレイヤーネームの登録(上のstoryAskPlayerName): もう名前があれば、この行は出さない。
   if (SENECA_NAME_EVENT_RE.test(row.event || '')) {
+    // 名前とパスワード(実績のバックアップ)の両方がもうあれば出さない(2026-11-15: パスワードも一緒に登録するように
+    // なったので、名前だけある端末でもパスワードを聞く)。
     const known = typeof loadRememberedRankingName === 'function' ? loadRememberedRankingName() : null;
-    if (known && known.trim()) { next(); return; }
+    const identity = typeof loadAchievementBackupIdentity === 'function' ? loadAchievementBackupIdentity() : null;
+    if (known && known.trim() && identity) { next(); return; }
     storySetSpeaker(storyRun.seneca.hidePortrait ? 'senecaAway' : 'seneca');
     if (!row.text) { storyAskPlayerName(next); return; }
     storySay(`CS-${row.index}`, () => storyAskPlayerName(next), row.text, true);
@@ -2836,30 +2839,89 @@ function senecaEndingLines(rest, fallback) {
  * 普段のランキングの名前の欄に最初から入る。盤面の名前(「あなた」)は変えない(per user回答「ランキングだけ」)。 */
 const SENECA_NAME_EVENT_RE = /プレイヤーネーム登録/;
 
+// パスワードも一緒に登録する (2026-11-15, per user「パスワードも一緒に登録してください データがなくなってもプレイヤー
+// ネームとパスワードがあれば復旧できます」) -- 実績解除の画面の「名前とパスワードを設定/復元」(main.jsの
+// handleAchievementBackupSetupClick)と同じ仕組み: 新しい名前ならこの端末の実績をその名前+パスワードで保存、もうある名前で
+// パスワードが合えば復元、合わなければ「別のパスワードで登録されています」で選び直し。通信できない時は名前だけ覚えて進む
+// (パスワードはあとで実績解除の画面から設定できる)。
+async function storyRegisterNameAndPassword(name, password) {
+  const passwordHash = await sha256Hex(password);
+  let existing;
+  try { existing = await window.OnlineSync.loadAchievementBackup(name); } catch (e) { return { offline: true }; }
+  if (existing) {
+    if (existing.passwordHash !== passwordHash) return { error: 'その名前は別のパスワードで登録されています。別の名前にするか、パスワードを確かめてください' };
+    saveAchievements(existing.achievements || {});
+    saveAchievementBackupIdentity(name, passwordHash);
+    rememberRankingName(name);
+    if (typeof refreshLockedMenuFeatureIds === 'function') refreshLockedMenuFeatureIds();
+    return { restored: true };
+  }
+  try { await window.OnlineSync.saveAchievementBackup(name, passwordHash, loadAchievements()); } catch (e) { return { offline: true }; }
+  saveAchievementBackupIdentity(name, passwordHash);
+  rememberRankingName(name);
+  return { saved: true };
+}
+
 function storyAskPlayerName(onDone) {
   const run = storyRun;
   if (!run) return;
   const box = el('div', 'story-name-entry');
+  const row = el('div', 'story-name-entry__row');
   const input = document.createElement('input');
   input.type = 'text';
   input.className = 'story-name-entry__input';
   input.maxLength = 20;
-  input.placeholder = '名前を入れてください';
+  input.placeholder = 'プレイヤーネーム';
+  const known = typeof loadRememberedRankingName === 'function' ? loadRememberedRankingName() : null;
+  if (known) input.value = known; // 名前だけある端末: その名前でパスワードを足す
+  const pw = document.createElement('input');
+  pw.type = 'password';
+  pw.className = 'story-name-entry__input story-name-entry__input--pw';
+  pw.inputMode = 'numeric';
+  pw.maxLength = 9;
+  pw.placeholder = 'パスワード(数字4〜9桁)';
   const ok = el('button', 'story-name-entry__button', '決定');
   ok.type = 'button';
-  const decide = () => {
+  const message = el('div', 'story-name-entry__message');
+  const shake = () => box.animate([{ transform: 'translateX(-50%)' }, { transform: 'translateX(calc(-50% - 6px))' }, { transform: 'translateX(calc(-50% + 6px))' }, { transform: 'translateX(-50%)' }], { duration: 250 });
+  let busy = false;
+  const finish = () => { box.remove(); if (storyRun === run) onDone(); };
+  const decide = async () => {
+    if (busy) return;
     const name = input.value.trim().slice(0, 20);
-    if (!name) { input.focus(); box.animate([{ transform: 'translateX(-50%)' }, { transform: 'translateX(calc(-50% - 6px))' }, { transform: 'translateX(calc(-50% + 6px))' }, { transform: 'translateX(-50%)' }], { duration: 250 }); return; }
-    if (typeof rememberRankingName === 'function') rememberRankingName(name);
-    box.remove();
-    if (storyRun === run) onDone();
+    const password = pw.value.trim();
+    if (!name) { message.textContent = 'プレイヤーネームを入れてください'; input.focus(); shake(); return; }
+    if (name.indexOf('/') !== -1) { message.textContent = '名前に「/」は使えません'; input.focus(); shake(); return; }
+    if (!ACHIEVEMENT_BACKUP_PASSWORD_PATTERN.test(password)) { message.textContent = 'パスワードは数字4〜9桁で入れてください'; pw.focus(); shake(); return; }
+    busy = true;
+    ok.disabled = true;
+    message.textContent = '登録しています…';
+    const result = window.OnlineSync ? await storyRegisterNameAndPassword(name, password) : { offline: true };
+    busy = false;
+    ok.disabled = false;
+    if (result.error) { message.textContent = result.error; shake(); return; }
+    if (result.offline) {
+      // 通信できない: 名前だけ覚えて進む。
+      rememberRankingName(name);
+      message.textContent = '通信できないため、名前だけ覚えました。パスワードはあとで実績解除の画面から登録できます';
+      setTimeout(finish, 2500);
+      return;
+    }
+    if (result.restored) { message.textContent = '前のデータを復元しました'; setTimeout(finish, 1500); return; }
+    finish();
   };
   ok.addEventListener('click', (e) => { e.stopPropagation(); decide(); });
-  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') decide(); });
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') pw.focus(); });
+  pw.addEventListener('keydown', (e) => { if (e.key === 'Enter') decide(); });
   box.addEventListener('click', (e) => e.stopPropagation());
-  box.append(input, ok);
+  row.append(input, pw, ok);
+  // 注意書き (2026-11-15, per user)。
+  const note = el('div', 'story-name-entry__note');
+  note.appendChild(el('div', '', 'プレイヤーネームは他のプレイヤーに表示されます。けして本名を入れないでください。'));
+  note.appendChild(el('div', '', 'データはブラウザに記憶されます。キャッシュクリア等でデータがなくなるため、パスワードも一緒に登録してください。データがなくなっても、プレイヤーネームとパスワードがあれば復旧できます。'));
+  box.append(row, message, note);
   run.dom.root.appendChild(box);
-  setTimeout(() => input.focus(), 50);
+  setTimeout(() => (known ? pw : input).focus(), 50);
 }
 
 /** フクロウの飾り留めを手に入れた時のアニメーション(2026-11-14, per user「この画像でアニメーションお願い」):
