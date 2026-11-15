@@ -3080,6 +3080,8 @@ let liveReplayBackup = null;
 function enterReplayMode(historyOverride) {
   const history = historyOverride || replayHistory;
   if (history.length === 0) return;
+  // トップ画面から開いたランキングのリプレイ: トップ画面を閉じてからリプレイ(2026-11-15)。
+  if (!entryBannerDismissed) { entryBannerDismissed = true; document.getElementById('entry-banner').hidden = true; document.getElementById('app').hidden = false; }
   // Defensively force every other overlay closed (2026-08-1X) -- GAME_END is only ever reached right
   // after a real END_TURN resolves (see renderGameEndOverlay's own doc), so in practice none of these
   // should ever be open at this point, but renderReplayFrame doesn't render (or re-hide) any of them
@@ -20064,8 +20066,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // though the top-screen kicker for it was locked -- those 3 are now gated too, see their own call sites).
   document.getElementById('entry-banner-weekly-button').addEventListener('click', gatedEntryBannerHandler('ウィークリーチャレンジ', openWeeklyChallenge));
   document.getElementById('entry-banner-cardlist-button').addEventListener('click', gatedEntryBannerHandler('カードリスト', () => { dismissEntryBannerWithoutOpening(); openCardListOverlay(); }));
-  document.getElementById('entry-banner-ranking-button').addEventListener('click', gatedEntryBannerHandler('ランキング', () => { dismissEntryBannerWithoutOpening(); openRankingOverlay(); }));
-  document.getElementById('entry-banner-achievement-button').addEventListener('click', () => { dismissEntryBannerWithoutOpening(); openAchievementOverlay(); });
+  // ランキング・実績解除はトップ画面のまま、その上に出す (2026-11-15, per userのバグ報告「実績解除とランキングは、ゲーム
+  // 画面に遷移せずトップ画のままのほうがよい」) -- トップ画面が出ている間は、開いた画面をトップ画面より上に出す
+  // (style.css)。ランキングからリプレイを開いた時だけ、トップ画面を閉じる(enterReplayMode)。
+  document.getElementById('entry-banner-ranking-button').addEventListener('click', gatedEntryBannerHandler('ランキング', () => { openRankingOverlay(); }));
+  document.getElementById('entry-banner-achievement-button').addEventListener('click', () => { openAchievementOverlay(); });
   // 元デザイナーズノートのボタンは「ストーリー」になった (2026-10-23) -- 押した時の処理はstory.js側。
   applyLockedMenuFeatureStyling();
   // 更新しても進行中のゲームが消えないように (2026-10-11) -- sessionResumeChoicePendingの doc参照。

@@ -3078,6 +3078,9 @@ body.desktop-scaled .qst-card__rank-player { width: 30px; height: 30px; }
   justify-content: center;
   z-index: 100;
 }
+/* トップ画面(#entry-banner、z-index 300)の上に、ランキング・実績解除などの画面を出す(2026-11-15、main.jsの
+   entry-banner-ranking-button参照)。 */
+body:has(#entry-banner:not([hidden])) .card-inst-overlay:not([hidden]) { z-index: 350; }
 
 /* #card-inst-overlay itself always wins the stack (2026-08-22, found while wiring up カードリスト's
    資源や用語一覧 tap-to-detail): every other .card-inst-overlay-classed modal in the DOM comes AFTER it
