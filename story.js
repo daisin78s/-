@@ -2866,7 +2866,23 @@ async function storyRegisterNameAndPassword(name, password) {
 function storyAskPlayerName(onDone) {
   const run = storyRun;
   if (!run) return;
+  const box = buildPlayerNameEntryBox({ onDone: () => { box.remove(); if (storyRun === run) onDone(); } });
+  run.dom.root.appendChild(box);
+}
+
+/** 名前とパスワードの入力画面(ストーリーの外からも使う、2026-11-15 per user「ランキングに入ったとき…名前の入力画面に
+ * ストーリーと同じ入力画面」)。全画面の覆いの上に出し、登録できたら消してonDone。title: 上に出す見出し。 */
+function openPlayerNameEntryOverlay({ title, onDone }) {
+  const wrap = el('div', 'player-name-entry-overlay');
+  const box = buildPlayerNameEntryBox({ title, onDone: () => { wrap.remove(); if (onDone) onDone(); } });
+  wrap.appendChild(box);
+  document.body.appendChild(wrap);
+}
+
+/** 入力欄の箱(storyAskPlayerName / openPlayerNameEntryOverlay)。登録できたら onDone(箱を消すのは呼んだ側)。 */
+function buildPlayerNameEntryBox({ title, onDone }) {
   const box = el('div', 'story-name-entry');
+  if (title) box.appendChild(el('div', 'story-name-entry__title', title));
   const row = el('div', 'story-name-entry__row');
   const input = document.createElement('input');
   input.type = 'text';
@@ -2886,7 +2902,7 @@ function storyAskPlayerName(onDone) {
   const message = el('div', 'story-name-entry__message');
   const shake = () => box.animate([{ transform: 'translateX(-50%)' }, { transform: 'translateX(calc(-50% - 6px))' }, { transform: 'translateX(calc(-50% + 6px))' }, { transform: 'translateX(-50%)' }], { duration: 250 });
   let busy = false;
-  const finish = () => { box.remove(); if (storyRun === run) onDone(); };
+  const finish = () => onDone();
   const decide = async () => {
     if (busy) return;
     const name = input.value.trim().slice(0, 20);
@@ -2920,8 +2936,8 @@ function storyAskPlayerName(onDone) {
   note.appendChild(el('div', '', 'プレイヤーネームは他のプレイヤーに表示されます。けして本名を入れないでください。'));
   note.appendChild(el('div', '', 'データはブラウザに記憶されます。キャッシュクリア等でデータがなくなるため、パスワードも一緒に登録してください。データがなくなっても、プレイヤーネームとパスワードがあれば復旧できます。'));
   box.append(row, message, note);
-  run.dom.root.appendChild(box);
   setTimeout(() => (known ? pw : input).focus(), 50);
+  return box;
 }
 
 /** フクロウの飾り留めを手に入れた時のアニメーション(2026-11-14, per user「この画像でアニメーションお願い」):
@@ -4304,24 +4320,16 @@ function storyShowRanking(opts) {
     const allowed = !!sync && !!sync.storyRankingAllowed && sync.storyRankingAllowed(chapter, opts.vp);
     register.appendChild(el('span', 'story-ranking__score', `今回 ${opts.vp}VP`));
     if (allowed) {
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.className = 'ranking-name-input story-ranking__name';
-      input.maxLength = 20;
-      input.placeholder = '名前';
-      const remembered = typeof loadRememberedRankingName === 'function' ? loadRememberedRankingName() : null;
-      if (remembered) input.value = remembered;
-      const send = el('button', 'undo-button', '登録');
-      send.type = 'button';
-      const status = el('span', 'story-ranking__status', '');
-      send.addEventListener('click', () => {
-        const name = input.value.trim().slice(0, 20);
-        if (!name) { status.textContent = '名前を入れてください'; return; }
-        send.disabled = true;
-        input.disabled = true;
+      // 自動で登録 (2026-11-15, per user「ランキングに入ったときは自動に ランキング対象外ならなし」-- ストーリーも):
+      // 50位以内に入る点数なら、この端末の名前で登録する。第4章(4人対戦)はAIも含めて1位の時だけ(per user回答 b)。
+      // 名前が無ければ名前とパスワードの入力画面(openPlayerNameEntryOverlay)のあとで登録する。
+      const status = el('span', 'story-ranking__status', '確かめています...');
+      register.appendChild(status);
+      const p1 = STATE.players.find((p) => p.id === 'P1');
+      const firstPlace = chapter !== 4 || (typeof standingsRows === 'function' && (standingsRows(STATE)[0] || {}).playerId === 'P1');
+      const save = (rank) => {
+        const name = loadRememberedRankingName();
         status.textContent = '登録中...';
-        if (typeof rememberRankingName === 'function') rememberRankingName(name);
-        const p1 = STATE.players.find((p) => p.id === 'P1');
         sync.saveStoryRankingEntry({
           chapter, name, totalScore: opts.vp,
           conFaceId: p1 && p1.conPhysicalId && p1.conFace ? `${p1.conPhysicalId}${p1.conFace}` : null,
@@ -4329,17 +4337,27 @@ function storyShowRanking(opts) {
           appVersion: typeof appVersionLabel === 'function' ? appVersionLabel() : null,
         }, replayHistory).then((entry) => {
           savedId = entry.id;
-          register.innerHTML = '';
-          register.appendChild(el('span', 'story-ranking__status', `${name} ${opts.vp}VP を登録しました`));
-          refresh();
+          refresh().then((entries) => {
+            const at = (entries || []).findIndex((e) => e.id === entry.id) + 1;
+            status.textContent = `ランキングに入りました（${at > 0 ? at : rank}位）`;
+          });
         }).catch((err) => {
           console.warn('ストーリーのランキングに登録できませんでした', err);
-          status.textContent = '登録に失敗しました。通信状態を確かめて、もう一度お試しください';
-          send.disabled = false;
-          input.disabled = false;
+          status.textContent = 'ランキングに登録できませんでした。通信状態を確かめてください';
         });
-      });
-      register.append(input, send, status);
+      };
+      if (!firstPlace) {
+        status.textContent = '1位ではないので、ランキングには登録されません';
+      } else {
+        sync.listStoryRanking(chapter).then((entries) => {
+          const qualifies = entries.length < 50 || opts.vp > entries[49].totalScore;
+          if (!qualifies) { status.textContent = 'ランキングの50位以内に入らなかったので、登録されません'; return; }
+          const rank = entries.filter((e) => e.totalScore > opts.vp).length + 1;
+          if (loadRememberedRankingName()) { save(rank); return; }
+          status.textContent = '';
+          openPlayerNameEntryOverlay({ title: `ランキングに入りました（${rank}位）`, onDone: () => save(rank) });
+        }).catch(() => { status.textContent = 'ランキングを読み込めませんでした。通信状態を確かめてください'; });
+      }
     } else {
       register.appendChild(el('span', 'story-ranking__status', `${sync && sync.storyRankingMaxVp ? sync.storyRankingMaxVp(chapter) : ''}VPを超える点は登録できません`));
     }
@@ -4365,11 +4383,12 @@ function storyShowRanking(opts) {
     const myRequest = ++requestId;
     list.innerHTML = '';
     list.appendChild(el('div', 'ranking-empty', '読み込み中...'));
-    if (!sync || !sync.listStoryRanking) { list.innerHTML = ''; list.appendChild(el('div', 'ranking-empty', '読み込めませんでした')); return; }
-    sync.listStoryRanking(chapter).then((entries) => {
-      if (myRequest !== requestId) return;
+    if (!sync || !sync.listStoryRanking) { list.innerHTML = ''; list.appendChild(el('div', 'ranking-empty', '読み込めませんでした')); return Promise.resolve([]); }
+    // 読み込んだ一覧を返す(自動登録のあと、自分の順位を出すのに使う)。
+    return sync.listStoryRanking(chapter).then((entries) => {
+      if (myRequest !== requestId) return entries;
       list.innerHTML = '';
-      if (!entries.length) { list.appendChild(el('div', 'ranking-empty', 'まだ登録がありません')); return; }
+      if (!entries.length) { list.appendChild(el('div', 'ranking-empty', 'まだ登録がありません')); return entries; }
       let mine = null;
       entries.forEach((entry, i) => {
         const row = el('div', 'story-ranking__row' + (i === 0 ? ' story-ranking__row--top' : '') + (entry.id === savedId ? ' story-ranking__row--mine' : ''));
@@ -4398,8 +4417,9 @@ function storyShowRanking(opts) {
         list.appendChild(row);
       });
       if (mine) mine.scrollIntoView({ block: 'nearest' });
+      return entries;
     }).catch(() => {
-      if (myRequest !== requestId) return;
+      if (myRequest !== requestId) return [];
       list.innerHTML = '';
       list.appendChild(el('div', 'ranking-empty', '読み込めませんでした'));
     });
@@ -4431,7 +4451,12 @@ function openStoryChapterSelect() {
     // (2026-11-14, per user)。
     if (chapter.no === 2) {
       const owls = senecaOwls().length;
-      if (owls > 0) button.appendChild(el('span', 'story-chapters__record', owls >= SENECA_OWL_TOTAL && storySenecaWorriedUnlocked() ? '「心配性な研究者セネカ」解禁' : `${Math.min(owls, SENECA_OWL_TOTAL)}/${SENECA_OWL_TOTAL}`));
+      // 解禁は「心配性な研究者セネカ / 解禁」の2行、「」なし、ボタンの高さはほかの章と同じ(2026-11-15, per user)。
+      if (owls >= SENECA_OWL_TOTAL && storySenecaWorriedUnlocked()) {
+        const rec = el('span', 'story-chapters__record story-chapters__record--two');
+        rec.append(el('span', '', '心配性な研究者セネカ'), el('span', '', '解禁'));
+        button.appendChild(rec);
+      } else if (owls > 0) button.appendChild(el('span', 'story-chapters__record', `${Math.min(owls, SENECA_OWL_TOTAL)}/${SENECA_OWL_TOTAL}`));
     }
     // 第3章: 自分の最高記録があれば右側に「最高記録〇VP」(2026-11-14, per user)。
     // 第4章も同じ(2026-11-15, per user「４章も右側に最高得点が出るように」)。

@@ -7063,10 +7063,10 @@ body.story-mode .mobile-own-row__turn-end .undo-button {
 body.story-lock-hand #mobile-own-row .die {
   pointer-events: none;
 }
-/* フリーアクションの画面: 台本で押すのはA→K/B→Kだけなので、カード(基礎学問)と閉じるボタンは出さない。 */
+/* フリーアクションの画面: 台本で押すのはA→K/B→Kだけなので、カード(基礎学問)は出さない。閉じる(✖)はいつも出す
+   (2026-11-15, per userのバグ報告「セネカのセリフの途中でフリーアクションボタンを押すと進行不能に」-- ✖が無くて戻れなかった)。 */
 body.story-mode:not(.story-free-action) .mobile-free-action-overlay__hint,
-body.story-mode:not(.story-free-action) .mobile-free-action-overlay__cards,
-body.story-mode:not(.story-free-action) #mobile-free-action-close {
+body.story-mode:not(.story-free-action) .mobile-free-action-overlay__cards {
   display: none;
 }
 body.story-mode #ai-manual-step-button {
@@ -7323,6 +7323,16 @@ body:has(#story-ranking) #story-chapters { visibility: hidden; }
   overflow: auto;
 }
 .story-name-entry__row { display: flex; gap: 10px; }
+.story-name-entry__title { color: #f3c75a; font-size: 24px; font-weight: 800; text-align: center; }
+/* ストーリーの外(ランキングに入った時、main.jsの自動登録)で使う時の覆い。 */
+.player-name-entry-overlay { position: fixed; inset: 0; z-index: 1200; background: rgba(0, 0, 0, 0.6); }
+/* ランキングの自動登録の「ランキングに入りました（○位）」(main.jsのautoRankingHoldsResults)。 */
+.ranking-auto-notice { position: fixed; inset: 0; z-index: 1150; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.55); }
+.ranking-auto-notice__box { min-width: min(360px, calc(100vw - 32px)); padding: 28px 32px; border-radius: 16px; background: rgb(30, 22, 26); color: #fff; text-align: center; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4); }
+.ranking-auto-notice__title { color: #f3c75a; font-size: 24px; font-weight: 800; }
+.ranking-auto-notice__rank { margin-top: 10px; font-size: 44px; font-weight: 900; }
+.ranking-auto-notice__sub { margin-top: 8px; font-size: 15px; }
+.ranking-auto-notice__ok { margin-top: 18px; min-width: 120px; }
 .story-name-entry__input--pw { width: 11em; }
 .story-name-entry__message { color: #ffd98a; font-size: 16px; min-height: 1em; }
 .story-name-entry__message:empty { display: none; }
@@ -7409,6 +7419,9 @@ body:has(#story-ranking) #story-chapters { visibility: hidden; }
 .story-ranking__date { flex: none; font-size: 12px; opacity: 0.6; }
 .story-ranking__replay { flex: none; padding: 2px 10px; }
 .story-chapters__record { float: right; margin-left: 12px; font-size: 14px; color: var(--accent, #c8902a); }
+/* 2行(「心配性な研究者セネカ / 解禁」): ボタンの高さを変えないよう、右に重ねて上下中央。 */
+.story-chapters__chapter { position: relative; }
+.story-chapters__record--two { float: none; position: absolute; right: 18px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; align-items: flex-end; margin: 0; font-size: 13px; line-height: 1.2; }
 .story-chapters__note {
   min-height: 1.4em;
   color: #fff;

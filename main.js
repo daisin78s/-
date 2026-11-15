@@ -11631,6 +11631,11 @@ function renderLifeStoryOverlay(state) {
     overlay.hidden = true;
     return;
   }
+  // ランキングの自動登録: 調べている間と、名前が無くて入力画面を出している間は、人生の前で待つ(autoRankingHoldsLifeStory)。
+  if (autoRankingHoldsLifeStory(state)) {
+    overlay.hidden = true;
+    return;
+  }
   // スマホ版のゲーム終了演出 (2026-10-23, per user request: "スマホ版 ゲーム終了時 左から「ゲーム終了」の文字が
   // 飛んできて真ん中で止まりまた素早く右に その後人生 上の行から順番に左から素早く文章が飛んでくる 真ん中
   // ぐらいまで文章が来たらその速度に合わせて上にスクロール") -- 「ゲーム終了」の文字の演出中は人生の画面を
@@ -11922,8 +11927,16 @@ function renderGameEndOverlay(state) {
     storyChapterGameEnd(state);
     return;
   }
+  // ランキングの自動登録: 人生のあと、実績解除のお知らせの前に「ランキングに入りました（○位）」(autoRankingHoldsResults)。
+  if (isRealGameEnd && autoRankingHoldsResults()) {
+    overlay.hidden = true;
+    return;
+  }
   overlay.hidden = false;
-  if (isRealGameEnd) maybeRecordAchievements(state);
+  if (isRealGameEnd) {
+    maybeRecordAchievements(state);
+    setTimeout(autoRankingOpenRankingIfPending, 0); // 実績解除のお知らせが出ていなければ、すぐランキング画面
+  }
   document.getElementById('game-end-title').textContent = isRealGameEnd ? 'ゲーム終了 — 最終結果' : '現在の順位';
   document.getElementById('game-end-close-button').hidden = isRealGameEnd;
   document.getElementById('game-end-restart-button').hidden = !isRealGameEnd;
@@ -12486,6 +12499,7 @@ function showUnlockPopups(ids) {
 
 function closeUnlockPopup() {
   document.getElementById('unlock-popup-overlay').hidden = true;
+  autoRankingOpenRankingIfPending(); // ランキングに自動で登録した時は、続けてランキング画面
 }
 
 function renderAchievementOverlay() {
@@ -12605,98 +12619,160 @@ function rememberRankingName(name) {
  * last-used name (2026-09-07, per user request: "プレイヤーネームをそれぞれのブラウザに記憶させることは
  * できる？例 私が自分のiPadで入ったときにhigebuchoで登録したら以降それが自動で出てくる") -- a per-browser
  * localStorage convenience, not any kind of account/login; still freely editable/clearable per row. */
-function renderRankingRegisterList(state) {
-  const container = document.getElementById('ranking-register-list');
-  container.innerHTML = '';
-  const rememberedName = loadRememberedRankingName();
-  for (const c of rankingCandidatesForGameEnd(state)) {
-    if (registeredRankingPlayerIds.has(c.playerId)) continue;
-    const row = el('div', 'ranking-register-row');
-    const swatch = el('span', 'player-panel__swatch');
-    swatch.dataset.color = c.playerColor;
-    row.appendChild(swatch);
-    row.appendChild(el('span', 'ranking-register-row__score', `総合 ${c.totalScore}VP（素点${c.rawScore} + QST${c.qstScore}）`));
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.className = 'ranking-name-input';
-    input.placeholder = c.defaultName;
-    input.maxLength = 20;
-    if (rememberedName) input.value = rememberedName;
-    row.appendChild(input);
-    const registerButton = el('button', 'undo-button', '登録');
-    registerButton.type = 'button';
-    registerButton.addEventListener('click', () => {
-      // 登録中アニメーション (2026-09-08, per user request: "登録ボタンを押したとき 登録中とわかるアニメー
-      // ションが欲しい") -- RankingStorage.save is a real network round-trip (Firestore write + replay
-      // upload), so simply disabling the button (the old behavior) left no visible sign anything was
-      // happening until the whole row vanished once registeredRankingPlayerIds picked up the new id. A
-      // small CSS-spin ring + "登録中…" text now fills that gap; .catch (new here too -- this click had no
-      // failure handling at all before) restores the button to its original clickable state and surfaces
-      // the error via window.alert, matching this app's other Firestore-write failure handling (see
-      // handleRankingDeleteSelectedClick).
-      registerButton.disabled = true;
-      registerButton.innerHTML = '';
-      registerButton.appendChild(el('span', 'ranking-register-spinner'));
-      registerButton.appendChild(document.createTextNode('登録中…'));
-      const name = input.value.trim() || c.defaultName;
-      rememberRankingName(name);
-      // チュートリアル中のスコアもローカル対戦('ultimate')ランキングにそのまま含める(カテゴリ分けは
-      // 変えない)が、名前の右に（チュートリアル）を付けて区別できるようにする (2026-10-13, per user
-      // report: "チュートリアルで高得点をとってランキング入りした場合ローカル対戦ランキングに入る" ->
-      // "ローカル対戦ランキングに入れる 名前の右に（チュートリアル）といれる"で確定)。rememberRankingName
-      // 自身は素の名前のまま(次回以降の非チュートリアル登録でサフィックスが残らないように)。
-      const registeredName = tutorialModeActive ? `${name}（チュートリアル）` : name;
-      RankingStorage.save({
-        name: registeredName,
-        rawScore: c.rawScore,
-        qstScore: c.qstScore,
-        totalScore: c.totalScore,
-        conFaceId: c.conFaceId,
-        jobCardId: c.jobCardId,
-        opponents: c.opponents,
-        playerColor: c.playerColor,
-        // 3-way ranking split (2026-09-07, per user spec): ウィークリーチャレンジ games always register
-        // as 'weekly'; otherwise 'standard' for an online-room game, 'ultimate' for a local one.
-        // 2026-10-12, per user request ("デバッグありランキング→ローカル対戦ランキング でばっぐなし
-        // ランキング→オンライン対戦ランキングにかえたい", confirmed to also change the underlying split
-        // itself, not just the label) -- replaces the old usedDebugOrTestGameThisGame-based split (デバッグ
-        // 使用有無は、デバッグモードボタン自体が2026-10-04に非表示化済みでほぼ意味を失っていた一方、
-        // ローカル/オンラインという実際にユーザーが気にする区別とは無関係だった)。
-        category: weeklyChallengeActive ? 'weekly' : (onlineRoomCode ? 'standard' : 'ultimate'),
-        // weekId (2026-09-14, per user request: ウィークリーランキングを毎週リセットしたい): stamped only
-        // for 'weekly' entries -- the SAME id currentWeeklyChallengeId() used to seed this very game's
-        // board, so an entry always lands in the week it was actually played, not whatever week it happens
-        // to get registered in (registration can lag the game itself by a few minutes, never enough to
-        // cross a JST Monday boundary in practice, but this is correct either way). Omitted entirely (not
-        // even as an explicit undefined -- Firestore's .set() rejects undefined field values) for
-        // ultimate/standard entries -- see ranking.js's save()/online-sync.js's listRanking doc for how
-        // this field turns into a per-week Firestore filter.
-        ...(weeklyChallengeActive ? { weekId: currentWeeklyChallengeId() } : {}),
-        // アバター(2026-11-15, avatar.js): 登録した時の顔をランキングの行に出す。
-        ...((state.players.find((p) => p.id === c.playerId) || {}).avatar ? { avatar: state.players.find((p) => p.id === c.playerId).avatar } : {}),
-      }, replayHistory).then((entry) => {
-        registeredRankingPlayerIds.add(c.playerId);
-        if (entry.category === 'weekly' && typeof avatarRecordMyWeeklyEntry === 'function') avatarRecordMyWeeklyEntry(entry);
-        renderRankingOverlay(STATE, entry.id, entry.category);
-        // 実績記録: ウィークリーランキング最高順位 (2026-10-03) -- 登録直後のソート済み一覧から自分の
-        // 順位を1回だけ拾う。以後ランキングが変動/削除されても記録済みの順位はそのまま(recordWeeklyRank
-        // Achievement自身のdoc参照)。
-        if (entry.category === 'weekly') {
-          RankingStorage.list('weekly', entry.weekId).then((entries) => {
-            const rank = entries.findIndex((e) => e.id === entry.id) + 1;
-            if (rank > 0) recordWeeklyRankAchievement(rank);
-          }).catch(() => { /* 実績記録はbest-effort、失敗しても登録自体は成功扱いのまま */ });
-        }
-      }).catch((err) => {
-        registerButton.disabled = false;
-        registerButton.innerHTML = '';
-        registerButton.textContent = '登録';
-        window.alert(`登録に失敗しました: ${err.message || err}`);
+/* ランキングの自動登録 (2026-11-15, per user「ランキングに入ったときは自動に ランキング対象外ならなし」+ 回答:
+ * ローカル・オンライン・ウィークリーすべて / 50位以内に入る点数 / その試合でAIも含めて1位をとった人間だけ(この端末の人:
+ * オンラインは自分の席) / 名前はこの端末の名前)。手で登録する画面(登録ボタン)はなくした。
+ * 順番(per user):
+ *  - 名前がある: ゲーム終了 →「人生」→「ランキングに入りました（○位）」→ 実績解除のお知らせ。
+ *  - 名前が無い: 「ランキングに入りました（○位）」と名前・パスワードの入力画面(ストーリーと同じ、story.jsの
+ *    openPlayerNameEntryOverlay)→ 登録 →「人生」→ 実績解除のお知らせ。
+ * status: idle → checking → none(対象外・失敗) / needName → saving → saved / failed。 */
+const RANKING_AUTO_TOP_N = 50;
+const autoRanking = { status: 'idle', candidate: null, category: null, weekId: undefined, rank: null, noticeDone: false, nameOverlayOpen: false, entry: null, rankingOpened: false };
+
+/** 実績解除のお知らせのあと(無ければ結果の画面が出たあと)、ランキング画面を開いて登録した行を見せる(2026-11-15, per user
+ * 「実績解除のあと ランキング画面 例えば12位なら12位が出てくる 今と同じ」-- 手で登録した時と同じ光り方)。 */
+function autoRankingOpenRankingIfPending() {
+  if (!autoRanking.entry || autoRanking.rankingOpened) return;
+  if (!document.getElementById('unlock-popup-overlay').hidden) return; // 実績解除のお知らせを閉じてから(closeUnlockPopup)
+  autoRanking.rankingOpened = true;
+  weeklyRankingWeekOffset = 0;
+  document.getElementById('ranking-overlay').hidden = false;
+  renderRankingOverlay(STATE, autoRanking.entry.id, autoRanking.entry.category);
+}
+
+function autoRankingCandidate(state) {
+  if (replayMode || (typeof storyRun !== 'undefined' && storyRun) || onlineSpectator) return null;
+  const first = scoringMod.rankPlayers(state, INDEX)[0];
+  if (!first || isAiPlayer(first.playerId)) return null;
+  if (onlineRoomCode && first.playerId !== localSeatId) return null;
+  return rankingCandidatesForGameEnd(state).find((c) => c.playerId === first.playerId) || null;
+}
+
+function startAutoRankingCheck(state) {
+  if (autoRanking.status !== 'idle') return;
+  const c = autoRankingCandidate(state);
+  if (!c || typeof RankingStorage === 'undefined') { autoRanking.status = 'none'; return; }
+  autoRanking.status = 'checking';
+  autoRanking.candidate = c;
+  autoRanking.category = weeklyChallengeActive ? 'weekly' : (onlineRoomCode ? 'standard' : 'ultimate');
+  autoRanking.weekId = weeklyChallengeActive ? currentWeeklyChallengeId() : undefined;
+  // 通信が遅い時にいつまでも人生を止めないよう、8秒で諦める(登録なし)。
+  const timer = setTimeout(() => { if (autoRanking.status === 'checking') { autoRanking.status = 'none'; render(STATE); } }, 8000);
+  RankingStorage.list(autoRanking.category, autoRanking.weekId).then((entries) => {
+    clearTimeout(timer);
+    if (autoRanking.status !== 'checking') return;
+    const qualifies = entries.length < RANKING_AUTO_TOP_N || c.totalScore > entries[RANKING_AUTO_TOP_N - 1].totalScore;
+    if (!qualifies) { autoRanking.status = 'none'; render(STATE); return; }
+    // 登録する前の見込みの順位(名前の入力画面の見出しに出す)。
+    autoRanking.rank = entries.filter((e) => e.totalScore > c.totalScore).length + 1;
+    if (loadRememberedRankingName()) autoRankingSave(); else autoRanking.status = 'needName';
+    render(STATE);
+  }).catch(() => { clearTimeout(timer); autoRanking.status = 'none'; render(STATE); });
+}
+
+/** 1人分をランキングに保存する(もとは「登録」ボタンの中身)。 */
+function saveRankingCandidate(state, c, name) {
+  // チュートリアル中のスコアもローカル対戦('ultimate')ランキングにそのまま含める(カテゴリ分けは変えない)が、名前の
+  // 右に（チュートリアル）を付けて区別できるようにする (2026-10-13, per user)。
+  const registeredName = tutorialModeActive ? `${name}（チュートリアル）` : name;
+  const player = state.players.find((p) => p.id === c.playerId) || {};
+  return RankingStorage.save({
+    name: registeredName,
+    rawScore: c.rawScore,
+    qstScore: c.qstScore,
+    totalScore: c.totalScore,
+    conFaceId: c.conFaceId,
+    jobCardId: c.jobCardId,
+    opponents: c.opponents,
+    playerColor: c.playerColor,
+    // ウィークリーは'weekly'、オンラインの部屋は'standard'、ローカルは'ultimate' (2026-09-07 / 2026-10-12, per user)。
+    category: weeklyChallengeActive ? 'weekly' : (onlineRoomCode ? 'standard' : 'ultimate'),
+    // weekId: 'weekly'だけ、この試合の盤面を作った週(2026-09-14)。ほかでは欄ごと書かない(Firestoreはundefinedを拒む)。
+    ...(weeklyChallengeActive ? { weekId: currentWeeklyChallengeId() } : {}),
+    // アバター(2026-11-15, avatar.js): 登録した時の顔をランキングの行に出す。
+    ...(player.avatar ? { avatar: player.avatar } : {}),
+  }, replayHistory).then((entry) => {
+    registeredRankingPlayerIds.add(c.playerId);
+    if (entry.category === 'weekly' && typeof avatarRecordMyWeeklyEntry === 'function') avatarRecordMyWeeklyEntry(entry);
+    return entry;
+  });
+}
+
+function autoRankingSave() {
+  const c = autoRanking.candidate;
+  const name = loadRememberedRankingName();
+  if (!c || !name) { autoRanking.status = 'none'; return; }
+  autoRanking.status = 'saving';
+  saveRankingCandidate(STATE, c, name).then((entry) => { autoRanking.entry = entry; return entry; }).then((entry) => RankingStorage.list(entry.category, entry.weekId).then((entries) => {
+    const rank = entries.findIndex((e) => e.id === entry.id) + 1;
+    if (rank > 0) {
+      autoRanking.rank = rank;
+      // 実績記録: ウィークリーランキング最高順位 (2026-10-03) -- 登録直後の一覧から自分の順位を1回だけ拾う。
+      if (entry.category === 'weekly') recordWeeklyRankAchievement(rank);
+    }
+  }).catch(() => { /* 順位が読めなくても登録はできている */ })).then(() => {
+    autoRanking.status = 'saved';
+    render(STATE);
+  }).catch((err) => {
+    console.warn('ランキングに自動で登録できませんでした', err);
+    autoRanking.status = 'failed';
+    render(STATE);
+  });
+}
+
+/** renderLifeStoryOverlayから: 人生の前に止めるならtrue(調べている間 / 名前が無くて入力画面を出している間)。 */
+function autoRankingHoldsLifeStory(state) {
+  startAutoRankingCheck(state);
+  if (autoRanking.status === 'checking') return true;
+  if (autoRanking.status === 'needName') {
+    if (!autoRanking.nameOverlayOpen && typeof openPlayerNameEntryOverlay === 'function') {
+      autoRanking.nameOverlayOpen = true;
+      openPlayerNameEntryOverlay({
+        title: autoRanking.rank ? `ランキングに入りました（${autoRanking.rank}位）` : 'ランキングに入りました',
+        onDone: () => {
+          autoRanking.noticeDone = true; // 名前が無い時は、人生のあとに順位はもう出さない(per user)
+          autoRankingSave();
+          render(STATE);
+        },
       });
-    });
-    row.appendChild(registerButton);
-    container.appendChild(row);
+    }
+    return true;
   }
+  return false;
+}
+
+/** renderGameEndOverlayから(人生のあと、実績解除のお知らせの前): 止めるならtrue(登録中 / 「ランキングに入りました」)。 */
+function autoRankingHoldsResults() {
+  if (autoRanking.status === 'checking' || autoRanking.status === 'saving') return true;
+  if ((autoRanking.status === 'saved' || autoRanking.status === 'failed') && !autoRanking.noticeDone) {
+    if (!document.getElementById('ranking-auto-notice')) {
+      const wrap = el('div', 'ranking-auto-notice');
+      wrap.id = 'ranking-auto-notice';
+      const box = el('div', 'ranking-auto-notice__box');
+      if (autoRanking.status === 'saved') {
+        box.appendChild(el('div', 'ranking-auto-notice__title', 'ランキングに入りました'));
+        if (autoRanking.rank) box.appendChild(el('div', 'ranking-auto-notice__rank', `${autoRanking.rank}位`));
+      } else {
+        box.appendChild(el('div', 'ranking-auto-notice__title', 'ランキングに登録できませんでした'));
+        box.appendChild(el('div', 'ranking-auto-notice__sub', '通信状態を確かめてください'));
+      }
+      const ok = el('button', 'undo-button ranking-auto-notice__ok', 'OK');
+      ok.type = 'button';
+      ok.addEventListener('click', () => { wrap.remove(); autoRanking.noticeDone = true; render(STATE); });
+      box.appendChild(ok);
+      wrap.appendChild(box);
+      document.body.appendChild(wrap);
+    }
+    return true;
+  }
+  return false;
+}
+
+/** 手で登録する画面は、自動登録になったのでなくした(2026-11-15)。ランキング画面の登録の欄は空のまま。 */
+function renderRankingRegisterList() {
+  const container = document.getElementById('ranking-register-list');
+  if (container) container.innerHTML = '';
 }
 
 // 3-way ranking split (2026-09-07, per user spec; re-split 2026-10-12 from デバッグ有無 to ローカル/
