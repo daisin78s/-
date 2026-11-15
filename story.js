@@ -2164,17 +2164,16 @@ function ch3PlayRecordEnding(rows) {
       else if (/今までの最高記録は〇/.test(text)) text = text.replace('〇', String(prev === null ? vp : prev));
       lines.push({ ...r, text, event: '' });
     }
-    story2Play(lines, 0, story2GoNextChapter);
+    // セリフのあと、ストーリーのランキング(名前を入れて登録)、閉じたら第4章へ(2026-11-15, per user)。
+    story2Play(lines, 0, () => storyShowRanking({ chapter: 3, vp, onClose: story2GoNextChapter }));
   };
-  const worldOk = !!sync && (!sync.storyRecordAllowed || sync.storyRecordAllowed(vp));
-  if (!sync || !sync.getStoryWorldRecord) { go(null); return; }
+  // 世界最高記録 = 第3章のランキングの1位(2026-11-15, per user回答。前のrooms/STORY_RECORD_ch3は使わない)。
+  // 登録はセリフのあとのランキング画面で。上限(30VP)を超えた点は登録できないので、世界更新にはしない。
+  const worldOk = !!sync && !!sync.storyRankingAllowed && sync.storyRankingAllowed(3, vp);
+  if (!sync || !sync.listStoryRanking) { go(null); return; }
   storyLater(() => go(null), 6000); // ネットが遅い・つながらない
-  sync.getStoryWorldRecord('ch3').then((best) => {
-    if (worldOk && (best === null || vp > best)) {
-      // 書き込みは結果を待たない(書けなくても、読めた記録で進める)。
-      sync.submitStoryWorldRecord('ch3', vp).catch((err) => console.warn('世界最高記録を書けませんでした', err));
-    }
-    go({ best });
+  sync.listStoryRanking(3).then((entries) => {
+    go({ best: entries.length ? entries[0].totalScore : null });
   }).catch((err) => { console.warn('世界最高記録を読めませんでした', err); go(null); });
 }
 
@@ -4121,6 +4120,162 @@ function storyMarkChapterCleared(no) {
   try { localStorage.setItem(STORY_CLEARED_KEY, JSON.stringify([...cleared, no])); } catch (e) { /* 保存できなくても続ける */ }
 }
 
+/* ---------- ストーリーのランキング (2026-11-15, per user「ローカル対戦のランキングと同じように、ストーリーに対戦が
+ * 増えたらそれごとのランキング(第３章のランキング 第４章のランキング…)」+ 回答) ----------
+ * 保存先はonline-sync.jsのranking_story(章はchapterで分ける)。章の最後(第3章の記録のセリフのあと、第4章のゲーム
+ * 終了)は opts.vp ありで開き、名前を入れて「登録」(リプレイも保存)。章を選ぶ画面の「ランキング」からは見るだけ
+ * (上の章のタブで切り替え)。名前はふだんのランキングと同じく、この端末で前に使った名前が最初から入っている。 */
+const STORY_RANKING_CHAPTERS = [3, 4]; // 対戦のある章(章が増えたらここに足す)
+/** 章を選ぶ画面から見られる章(クリアした章だけ)。 */
+function storyRankingViewableChapters() {
+  const cleared = storyClearedChapters();
+  return STORY_RANKING_CHAPTERS.filter((no) => cleared.includes(no));
+}
+
+/** opts: { chapter, vp?(今回の点。あれば登録の欄を出す), onClose?(閉じた後) } */
+function storyShowRanking(opts) {
+  const old = document.getElementById('story-ranking');
+  if (old) old.remove();
+  const sync = window.OnlineSync;
+  const registering = typeof opts.vp === 'number';
+  const playing = !!storyRun; // ストーリーの途中(章の最後)ではリプレイを開かない(盤面を上書きしてしまうため)
+  let chapter = opts.chapter;
+  let savedId = null;
+  if (playing) storyPause();
+  const root = el('div', 'story-ranking');
+  root.id = 'story-ranking';
+  const panel = el('div', 'story-ranking__panel');
+  const heading = el('div', 'story-ranking__heading', '');
+  panel.appendChild(heading);
+  const tabs = el('div', 'story-ranking__tabs');
+  if (!registering) {
+    for (const no of storyRankingViewableChapters()) {
+      const tab = el('button', 'story-ranking__tab', `第${no}章`);
+      tab.type = 'button';
+      tab.dataset.chapter = String(no);
+      tab.addEventListener('click', () => { chapter = no; refresh(); });
+      tabs.appendChild(tab);
+    }
+    panel.appendChild(tabs);
+  }
+  const register = el('div', 'story-ranking__register');
+  if (registering) {
+    const allowed = !!sync && !!sync.storyRankingAllowed && sync.storyRankingAllowed(chapter, opts.vp);
+    register.appendChild(el('span', 'story-ranking__score', `今回 ${opts.vp}VP`));
+    if (allowed) {
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'ranking-name-input story-ranking__name';
+      input.maxLength = 20;
+      input.placeholder = '名前';
+      const remembered = typeof loadRememberedRankingName === 'function' ? loadRememberedRankingName() : null;
+      if (remembered) input.value = remembered;
+      const send = el('button', 'undo-button', '登録');
+      send.type = 'button';
+      const status = el('span', 'story-ranking__status', '');
+      send.addEventListener('click', () => {
+        const name = input.value.trim().slice(0, 20);
+        if (!name) { status.textContent = '名前を入れてください'; return; }
+        send.disabled = true;
+        input.disabled = true;
+        status.textContent = '登録中...';
+        if (typeof rememberRankingName === 'function') rememberRankingName(name);
+        const p1 = STATE.players.find((p) => p.id === 'P1');
+        sync.saveStoryRankingEntry({
+          chapter, name, totalScore: opts.vp,
+          conFaceId: p1 && p1.conPhysicalId && p1.conFace ? `${p1.conPhysicalId}${p1.conFace}` : null,
+          jobCardId: (p1 && p1.jobCardId) || null,
+          appVersion: typeof appVersionLabel === 'function' ? appVersionLabel() : null,
+        }, replayHistory).then((entry) => {
+          savedId = entry.id;
+          register.innerHTML = '';
+          register.appendChild(el('span', 'story-ranking__status', `${name} ${opts.vp}VP を登録しました`));
+          refresh();
+        }).catch((err) => {
+          console.warn('ストーリーのランキングに登録できませんでした', err);
+          status.textContent = '登録に失敗しました。通信状態を確かめて、もう一度お試しください';
+          send.disabled = false;
+          input.disabled = false;
+        });
+      });
+      register.append(input, send, status);
+    } else {
+      register.appendChild(el('span', 'story-ranking__status', `${sync && sync.storyRankingMaxVp ? sync.storyRankingMaxVp(chapter) : ''}VPを超える点は登録できません`));
+    }
+    panel.appendChild(register);
+  }
+  const list = el('div', 'story-ranking__list');
+  panel.appendChild(list);
+  const close = el('button', 'story-end__button', registering ? '次へ' : '閉じる');
+  close.type = 'button';
+  close.addEventListener('click', () => {
+    root.remove();
+    if (playing && storyRun) storyResume();
+    if (opts.onClose) opts.onClose();
+  });
+  panel.appendChild(close);
+  root.appendChild(panel);
+  document.body.appendChild(root);
+
+  let requestId = 0;
+  function refresh() {
+    heading.textContent = `第${chapter}章 ランキング`;
+    [...tabs.children].forEach((t) => t.classList.toggle('story-ranking__tab--active', t.dataset.chapter === String(chapter)));
+    const myRequest = ++requestId;
+    list.innerHTML = '';
+    list.appendChild(el('div', 'ranking-empty', '読み込み中...'));
+    if (!sync || !sync.listStoryRanking) { list.innerHTML = ''; list.appendChild(el('div', 'ranking-empty', '読み込めませんでした')); return; }
+    sync.listStoryRanking(chapter).then((entries) => {
+      if (myRequest !== requestId) return;
+      list.innerHTML = '';
+      if (!entries.length) { list.appendChild(el('div', 'ranking-empty', 'まだ登録がありません')); return; }
+      let mine = null;
+      entries.forEach((entry, i) => {
+        const row = el('div', 'story-ranking__row' + (i === 0 ? ' story-ranking__row--top' : '') + (entry.id === savedId ? ' story-ranking__row--mine' : ''));
+        row.appendChild(el('span', 'story-ranking__rank', `${i + 1}位`));
+        row.appendChild(el('span', 'story-ranking__entry-name', entry.name || ''));
+        row.appendChild(el('span', 'story-ranking__vp', `${entry.totalScore}VP`));
+        row.appendChild(el('span', 'story-ranking__date', typeof formatRankingDate === 'function' ? formatRankingDate(entry.savedAt) : ''));
+        if (entry.hasReplay && !playing) {
+          const play = el('button', 'undo-button story-ranking__replay', '▶');
+          play.type = 'button';
+          play.setAttribute('aria-label', 'リプレイ');
+          play.addEventListener('click', () => {
+            play.disabled = true;
+            sync.loadReplay(entry.id).then((history) => {
+              if (history && history.length) {
+                root.remove();
+                const chapters = document.getElementById('story-chapters');
+                if (chapters) chapters.remove();
+                enterReplayMode(history);
+              } else { play.textContent = '×'; }
+            }).catch(() => { play.textContent = '×'; });
+          });
+          row.appendChild(play);
+        }
+        if (entry.id === savedId) mine = row;
+        list.appendChild(row);
+      });
+      if (mine) mine.scrollIntoView({ block: 'nearest' });
+    }).catch(() => {
+      if (myRequest !== requestId) return;
+      list.innerHTML = '';
+      list.appendChild(el('div', 'ranking-empty', '読み込めませんでした'));
+    });
+  }
+  refresh();
+}
+
+/** main.jsのrenderGameEndOverlayから(第4章の4人対戦が終わった時): 普段のランキング画面の代わりに、ストーリーの
+ * ランキング(名前を入れて登録)。閉じたらトップ画面へ。 */
+function storyChapterGameEnd(state) {
+  const run = storyRun;
+  if (!run || !run.ch4 || run.ch4.rankingShown) return;
+  run.ch4.rankingShown = true;
+  const standing = standingsRows(state).find((r) => r.playerId === 'P1');
+  storyShowRanking({ chapter: 4, vp: standing ? standing.vp : 0, onClose: closeStoryMode });
+}
+
 function openStoryChapterSelect() {
   if (storyRun || document.getElementById('story-chapters')) return;
   if (!storyClearedChapters().includes(1)) { openStoryMode(); return; }
@@ -4153,10 +4308,21 @@ function openStoryChapterSelect() {
     panel.appendChild(button);
   }
   panel.appendChild(note);
+  const buttons = el('div', 'story-chapters__buttons');
+  // ストーリーのランキング (2026-11-15, per user)。その章をクリアするまで、その章のランキングは見られない
+  // (per user「３章をクリアするまで３章のランキングは見れない」)。見られる章が無ければボタンも出さない。
+  const viewable = storyRankingViewableChapters();
+  if (viewable.length) {
+    const ranking = el('button', 'story-end__button', 'ランキング');
+    ranking.type = 'button';
+    ranking.addEventListener('click', () => storyShowRanking({ chapter: viewable[viewable.length - 1] }));
+    buttons.appendChild(ranking);
+  }
   const back = el('button', 'story-end__button', '戻る');
   back.type = 'button';
   back.addEventListener('click', () => root.remove());
-  panel.appendChild(back);
+  buttons.appendChild(back);
+  panel.appendChild(buttons);
   root.appendChild(panel);
   document.body.appendChild(root);
 }

@@ -7287,6 +7287,76 @@ body.story-hide-dice #players .player-panel .die {
   text-align: left;
   cursor: pointer;
 }
+.story-chapters__buttons { display: flex; gap: 12px; }
+/* ストーリーのランキング (story.js storyShowRanking、2026-11-15) */
+.story-ranking {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 16px;
+  background: rgba(0, 0, 0, 0.88);
+  z-index: 1001;
+}
+body:has(#story-ranking) #story-chapters { visibility: hidden; }
+.story-ranking__panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: min(520px, 100%);
+  max-height: 100%;
+}
+.story-ranking__heading { color: #fff; font-size: 20px; font-weight: 800; letter-spacing: 0.1em; }
+.story-ranking__tabs { display: flex; gap: 8px; }
+.story-ranking__tab {
+  padding: 5px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 14px;
+  background: transparent;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.story-ranking__tab--active { background: var(--surface); color: var(--text); }
+.story-ranking__register {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #fff;
+}
+.story-ranking__score { font-size: 17px; font-weight: 800; color: #f3c75a; }
+.story-ranking__name { width: 9em; }
+.story-ranking__status { font-size: 13px; color: #fff; }
+.story-ranking__list {
+  width: 100%;
+  min-height: 60px;
+  overflow-y: auto;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+}
+.story-ranking__list .ranking-empty { padding: 14px; text-align: center; }
+.story-ranking__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  font-size: 15px;
+}
+.story-ranking__row:last-child { border-bottom: none; }
+.story-ranking__row--top { font-weight: 800; }
+.story-ranking__row--mine { background: rgba(243, 199, 90, 0.35); }
+.story-ranking__rank { width: 3em; flex: none; }
+.story-ranking__entry-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.story-ranking__vp { flex: none; font-weight: 700; }
+.story-ranking__date { flex: none; font-size: 12px; opacity: 0.6; }
+.story-ranking__replay { flex: none; padding: 2px 10px; }
 .story-chapters__record { float: right; margin-left: 12px; font-size: 14px; color: var(--accent, #c8902a); }
 .story-chapters__note {
   min-height: 1.4em;

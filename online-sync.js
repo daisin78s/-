@@ -627,6 +627,41 @@ var BUG_REPLAY_STORAGE_PREFIX = 'bugReplays/';
 
 /** Saves one bug-report's own diagnostic metadata (reason/playerId/round/resources/etc -- NOT the replay
  * itself, see saveBugReplay) as its own Firestore doc, keyed by the same id the replay blob uses. */
+/** ストーリーのランキング (2026-11-15, per user「ストーリー用のランキングを新設」「第３章のランキング 第４章の
+ * ランキング…対戦が増えたらそれごとに」+ 回答): 1つのコレクション ranking_story に全部の章を入れ、chapterで分ける
+ * (章が増えてもFirestoreのルールを足さなくて済む)。1件 = { chapter, name, totalScore, savedAt, hasReplay,
+ * conFaceId, jobCardId, appVersion }、リプレイは普段のランキングと同じ replays/{id}.json。
+ * 世界最高記録 = その章のランキングの1位(per user回答)。ずるい点を書かれないよう、Firestoreのルールで
+ * 「作るだけ(書き換え・消すは不可)、点数は章ごとの上限まで」に止めている。ここの上限はそのルールと同じ。 */
+var STORY_RANKING_COLLECTION = 'ranking_story';
+var STORY_RANKING_MAX_ENTRIES = 50;
+var STORY_RANKING_MAX_VP = { 3: 30 }; // 第3章は30VP(前の世界最高記録と同じ)、ほかの章は下の既定値
+var STORY_RANKING_DEFAULT_MAX_VP = 200;
+function storyRankingMaxVp(chapter) { return STORY_RANKING_MAX_VP[chapter] || STORY_RANKING_DEFAULT_MAX_VP; }
+function storyRankingAllowed(chapter, vp) {
+  return typeof vp === 'number' && Math.floor(vp) === vp && vp >= 0 && vp <= storyRankingMaxVp(chapter);
+}
+/** @returns {Promise<object[]>} その章の記録、点数の高い順(上位STORY_RANKING_MAX_ENTRIES件)。chapterで絞るのは
+ *  読んだ後(chapterとtotalScoreを組み合わせた問い合わせは、Firestoreに専用の索引を作らないと失敗するため)。 */
+function listStoryRanking(chapter) {
+  return db().collection(STORY_RANKING_COLLECTION).orderBy('totalScore', 'desc').get().then(function (snapshot) {
+    return snapshot.docs.map(function (doc) { return Object.assign({ id: doc.id }, doc.data()); })
+      .filter(function (e) { return e.chapter === chapter; })
+      .slice(0, STORY_RANKING_MAX_ENTRIES);
+  });
+}
+/** 1件登録してリプレイも保存(リプレイが保存できなくても記録は残す、hasReplay:false)。
+ * @returns {Promise<object>} 保存した記録(idつき)。 */
+function saveStoryRankingEntry(entryWithoutId, history) {
+  if (!storyRankingAllowed(entryWithoutId.chapter, entryWithoutId.totalScore)) return Promise.reject(new Error('story ranking out of range'));
+  var id = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : String(Date.now()) + '-' + Math.random().toString(36).slice(2);
+  var entry = Object.assign({}, entryWithoutId, { savedAt: new Date().toISOString(), hasReplay: true });
+  var replaySave = Array.isArray(history) && history.length ? saveReplay(id, history) : Promise.reject(new Error('no replay'));
+  return replaySave.catch(function () { entry.hasReplay = false; }).then(function () {
+    return db().collection(STORY_RANKING_COLLECTION).doc(id).set(entry);
+  }).then(function () { return Object.assign({ id: id }, entry); });
+}
+
 /** ストーリーの世界最高記録 (2026-11-14, per user: 第3章「世界最高記録はすべてのアカウントの最高記録」、Firebaseに置く)。
  * rooms/STORY_RECORD_{chapterKey} = { bestVp, updatedAt }。1章につき1件だけ。新しいコレクションはFirestoreのルールで
  * 読み書きできないため、PUBLIC_LOBBYと同じく部屋のコレクションに専用の1件として置く(per user「ランキングに見えない
@@ -732,6 +767,10 @@ window.OnlineSync = {
   getStoryWorldRecord: getStoryWorldRecord,
   submitStoryWorldRecord: submitStoryWorldRecord,
   storyRecordAllowed: storyRecordAllowed,
+  listStoryRanking: listStoryRanking,
+  saveStoryRankingEntry: saveStoryRankingEntry,
+  storyRankingAllowed: storyRankingAllowed,
+  storyRankingMaxVp: storyRankingMaxVp,
   saveBugReport: saveBugReport,
   saveBugReplay: saveBugReplay,
   listBugReports: listBugReports,

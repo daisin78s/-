@@ -11863,6 +11863,14 @@ function renderGameEndOverlay(state) {
     overlay.hidden = true;
     return;
   }
+  // ストーリー第4章の4人対戦: 普段のランキング画面の代わりにストーリーのランキング(story.js、2026-11-15, per user
+  // 「最後まで行くとランキング画面に行く…ストーリー用のランキングを新設したい」)。
+  if (isRealGameEnd && typeof storyRun !== 'undefined' && storyRun && storyRun.normalGame && typeof storyChapterGameEnd === 'function') {
+    overlay.hidden = true;
+    maybeRecordAchievements(state);
+    storyChapterGameEnd(state);
+    return;
+  }
   overlay.hidden = false;
   if (isRealGameEnd) maybeRecordAchievements(state);
   document.getElementById('game-end-title').textContent = isRealGameEnd ? 'ゲーム終了 — 最終結果' : '現在の順位';
