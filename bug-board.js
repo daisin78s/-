@@ -62,6 +62,8 @@
         head.appendChild(el('span', 'bug-board__date', formatDate(report.detectedAt)));
         const kind = report.kind === 'manual' ? '報告' : '自動検知';
         head.appendChild(el('span', `bug-board__kind bug-board__kind--${report.kind === 'manual' ? 'manual' : 'auto'}`, kind));
+        // 報告者の名前(2026-11-15, per user「バグ報告 報告者の名前もあるといい」、その端末の名前。前の報告には無い)。
+        if (report.reporter) head.appendChild(el('span', 'bug-board__meta', report.reporter));
         const meta = [report.appVersion, report.mode, report.round !== undefined && report.round !== null ? `${report.round}R` : null].filter(Boolean).join(' / ');
         if (meta) head.appendChild(el('span', 'bug-board__meta', meta));
         row.appendChild(head);
@@ -111,6 +113,9 @@
       phase: STATE ? STATE.phase || null : null,
       hasReplay,
     };
+    // 報告者の名前: この端末の名前(ランキング・ストーリーの名前)。無ければ付けない。
+    const reporter = typeof loadRememberedRankingName === 'function' ? loadRememberedRankingName() : null;
+    if (reporter) report.reporter = reporter;
     // ストーリー中は、その時に出ていたセリフも付ける(2026-11-15, per user「ストーリーにもバグ報告掲示板が欲しい」)。
     if (typeof storyRun !== 'undefined' && storyRun && storyRun.dom && storyRun.dom.dialogText) {
       const line = (storyRun.dom.dialogText.textContent || '').trim().slice(0, 200);

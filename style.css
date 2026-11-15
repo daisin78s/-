@@ -7256,11 +7256,12 @@ body.story-hide-dice #players .player-panel .die {
   position: fixed;
   inset: 0;
   display: flex;
-  align-items: center;
-  justify-content: center;
   padding: 16px;
   background: rgba(0, 0, 0, 0.62);
   z-index: 1000;
+  /* 画面が低いスマホで「ランキング」「戻る」が見切れないよう、入りきらない時はスクロール(2026-11-15, per user)。 */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .story-chapters__panel {
   display: flex;
@@ -7268,6 +7269,14 @@ body.story-hide-dice #players .player-panel .die {
   align-items: center;
   gap: 12px;
   width: min(440px, 100%);
+  margin: auto; /* 入る時は真ん中、入らない時は上から並べてスクロール */
+}
+/* 画面が低い時(スマホの横向き)は詰めて、なるべく1画面に入れる。 */
+@media (max-height: 500px) {
+  .story-chapters { padding: 8px 16px; }
+  .story-chapters__panel { gap: 6px; }
+  .story-chapters__heading { font-size: 18px; }
+  .story-chapters__chapter { padding: 9px 18px; font-size: 15px; }
 }
 .story-chapters__heading {
   color: #fff;
