@@ -1437,6 +1437,14 @@ const AI_TURN_MOVE_SAFETY_CAP = 80; // generous headroom over game-runner.js's o
 let aiOnboardingPlayerId = null;
 let aiOnboardingCount = 0;
 const AI_ONBOARDING_SAFETY_CAP = 5; // real onboarding never exceeds 2 visits per player
+// 前回のオンボーディングの手のあとの、その人の状態(ジョブ・性格・持ちカード)。次に来た時に同じなら「何も進まずにまた
+// 来た」として数える。違えば(巻き戻し・1手戻る・オンラインで届いた状態などで前に戻った)数え直す (2026-11-15, per user
+// のバグ報告: 10/28の「AI_ONBOARDING_REENTRY_EXCEEDED」は、AIがジョブ・性格を選んだあとに何度も巻き戻したため数が
+// 積み上がっただけの誤検知だった)。
+let aiOnboardingLastSignature = null;
+function aiOnboardingSignature(player) {
+  return player ? `${player.id}|${player.jobCardId || ''}|${player.conFace || ''}|${player.ownedCardPhysicalIds.join(',')}` : '';
+}
 
 let bugReportShown = false; // one-shot per page load -- the alert is a diagnostic, not a recurring nag
 
@@ -1876,7 +1884,7 @@ function driveOneAiStepInner(state) {
   if (ctx.type === 'ONBOARDING') {
     // AI_ONBOARDING_SAFETY_CAP's own doc (just above its declaration) -- checked before doing any real
     // work, same "before, not after" reasoning as the TURN branch's matching cap below.
-    if (ctx.playerId === aiOnboardingPlayerId) {
+    if (ctx.playerId === aiOnboardingPlayerId && aiOnboardingSignature(ctx.player) === aiOnboardingLastSignature) {
       aiOnboardingCount++;
     } else {
       aiOnboardingPlayerId = ctx.playerId;
@@ -1955,6 +1963,7 @@ function driveOneAiStepInner(state) {
       setupMod.chooseConFace(state, INDEX, ctx.playerId, face);
       setupMod.receiveInitialResources(state, INDEX, ctx.playerId);
     }
+    aiOnboardingLastSignature = aiOnboardingSignature(state.players.find((p) => p.id === ctx.playerId));
     return true;
   }
 
