@@ -7464,6 +7464,73 @@ body.story-mode #build-choice-close-button { display: none; }
 .story-log-button.story-bug-button { right: 72px; }
 .story-log-button[hidden] { display: none; }
 body:has(#story-overlay) #bug-board-overlay { z-index: 480; }
+/* アバター (2026-11-15, avatar.js) */
+.avatar-face {
+  display: inline-block;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: top;
+  vertical-align: middle;
+  margin-right: 4px;
+  background: #e9e1d3;
+  flex: none;
+}
+.avatar-face--empty {
+  text-align: center;
+  line-height: 26px;
+  font-size: 15px;
+  font-weight: 800;
+  color: #8a7a62;
+  border: 1px dashed #b9a98f;
+  box-sizing: border-box;
+}
+.avatar-face--pickable { cursor: pointer; }
+.avatar-face--pickable:hover { box-shadow: 0 0 0 2px #f3c75a; }
+.avatar-face--ranking { width: 30px; height: 30px; }
+.mobile-cards-player-switcher__btn .avatar-face { width: 20px; height: 20px; line-height: 20px; font-size: 12px; margin-right: 3px; }
+.avatar-lobby-row { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+.avatar-picker {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.avatar-picker__modal {
+  background: #fffaf0;
+  border-radius: 14px;
+  padding: 16px;
+  max-width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+}
+.avatar-picker__title { font-weight: 800; font-size: 17px; margin-bottom: 10px; }
+.avatar-picker__grid { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.avatar-picker__item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 92px;
+  padding: 6px;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  background: #f3ead8;
+  cursor: pointer;
+}
+.avatar-picker__item--current { border-color: #f3c75a; }
+.avatar-picker__item:disabled { opacity: 0.4; cursor: default; }
+.avatar-picker__img { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; object-position: top; background: #e9e1d3; }
+.avatar-picker__name { font-size: 12px; font-weight: 700; text-align: center; line-height: 1.2; }
+.avatar-picker__taken { position: absolute; top: 4px; right: 4px; font-size: 10px; background: #555; color: #fff; padding: 1px 4px; border-radius: 4px; }
+.avatar-picker__buttons { display: flex; gap: 10px; justify-content: center; margin-top: 12px; }
+/* プレイ中のセリフ(ストーリーと同じ形、押せる物の邪魔はしない)。 */
+.avatar-line-overlay { z-index: 390; }
 /* 制約・ジョブの名前の文字色 (main.jsのconJobColoredFragment / カードの名前)。暗い背景(ストーリーのセリフ欄・
    ログ)では同じ色の明るい版。 */
 .con-name { color: var(--con-name-color); }

@@ -1380,7 +1380,9 @@ function updateNavSuggestionIfNeeded(state, eligiblePlayerId) {
 // so the board visibly updates step by step) | 'manual' (only advances on the "次のAI行動へ" button
 // click) -- all 3 selectable per user feedback ("上記3をえらべるように"), see renderAiPacingControl.
 // Defaults to 'delayed' (2026-08-04, per user feedback: "AI進行のデフォルトを1手ずつにして").
-let aiPacingMode = 'delayed';
+// 2026-11-15: 'anim'(アニメーションON = 1手ずつ + アバターのセリフ、avatar.js)を足して最初はこれに。'delayed'は
+// アニメーションOFF。'manual'は設定からは選べない(ストーリーが内部で使う)。
+let aiPacingMode = 'anim';
 const AI_STEP_DELAY_MS = 600;
 // setTimeout handle for 'delayed' mode -- tracked so switching pacing modes mid-flight (or a render
 // triggered by something else while a step is already scheduled) never stacks up duplicate timers.
@@ -2819,7 +2821,9 @@ function noteProgress(state, canLog) {
       for (const [dieId, mapId] of Object.entries(a.placed)) {
         if (b.placed[dieId] !== mapId && !newMaps.includes(mapId)) newMaps.push(mapId);
       }
-      const mainTexts = newMaps.map((mapId) => `${areaName(before.maps[mapId] || now.maps[mapId])}に行く`);
+      const mainAreas = newMaps.map((mapId) => areaName(before.maps[mapId] || now.maps[mapId]));
+      const mainTexts = mainAreas.map((name) => `${name}に行く`);
+      const cardInfos = []; // アバターのセリフ用(avatar.js): { f: 獲得/LVアップしたカード, u: LVアップか, v: 使ったカード }
       if (newMaps.length) delete progressPendingVia[pid];
       // ジョブ・性格は「○○になる」 (2026-10-28, per user request: "ジョブは 百人隊長になる ローマ市民になる 性格は
       // 幸運になる 裏切者になる 嫉妬深くなる 何も書いてないものはすべて○○になる")。
@@ -2844,10 +2848,12 @@ function noteProgress(state, canLog) {
           const names = tappedGain.length ? tappedGain : pending.gain;
           if (names && names.length) usedGain = true;
           texts.push(`${viaText(names)}${cardDisplayName(card.face)}を獲得`);
+          cardInfos[texts.length - 1] = { f: card.face, ...(names && names.length ? { v: names[0] } : {}) };
         } else if (b.cards[id].face !== card.face) {
           const names = tappedUp.length ? tappedUp : pending.up;
           if (names && names.length) usedUp = true;
           texts.push(`${viaText(names)}${cardDisplayName(card.face)}にLVアップ`);
+          cardInfos[texts.length - 1] = { f: card.face, u: 1, ...(names && names.length ? { v: names[0] } : {}) };
         }
       }
       // タップだけ先に起きた(選ぶ画面が出た)時は覚えておき、その人の次の獲得/LVアップに付ける。使ったら忘れる。
@@ -2858,8 +2864,8 @@ function noteProgress(state, canLog) {
       if (newMaps.length || (!nextPending.gain && !nextPending.up)) delete progressPendingVia[pid];
       else progressPendingVia[pid] = nextPending;
       // m: メインアクション(エリアに行く) -- 表示で、同じプレイヤーが続けて手番をした時も別の手番として数えるため。
-      mainTexts.forEach((t, i) => entries.push(i === 0 ? { r: state.round, p: pid, t, m: 1 } : { r: state.round, p: pid, t }));
-      for (const t of texts) entries.push({ r: state.round, p: pid, t });
+      mainTexts.forEach((t, i) => entries.push(i === 0 ? { r: state.round, p: pid, t, m: 1, a: mainAreas[i] } : { r: state.round, p: pid, t, a: mainAreas[i] }));
+      texts.forEach((t, i) => entries.push({ r: state.round, p: pid, t, ...(cardInfos[i] || {}) }));
     }
     if (entries.length) state.progressLog = [...(state.progressLog || []), ...entries];
   }
@@ -8889,6 +8895,7 @@ function renderPlayers(state, next) {
 
     node.querySelector('.player-panel__swatch').dataset.color = player.color;
     fillPlayerTitledName(node.querySelector('.player-panel__name'), player);
+    if (typeof avatarDecorateName === 'function') avatarDecorateName(node.querySelector('.player-panel__name'), state, player); // アバターの顔(avatar.js)
     appendPlayerRoleBadge(node.querySelector('.player-panel__name'), state, player);
     // Live running score (2026-08-04, per user feedback: "プレイ中もカードVP込みの合計得点をリアルタイ
     // ム表示するように") -- previously this header badge showed only player.resources.VP, the raw "VP
@@ -9977,10 +9984,12 @@ function renderMobileCardsView(state, next) {
       const nameLine = el('span', 'mobile-cards-player-switcher__name-line');
       nameLine.appendChild(swatch);
       nameLine.appendChild(document.createTextNode(player.name));
+      if (typeof avatarDecorateName === 'function') avatarDecorateName(nameLine, state, player); // アバターの顔(avatar.js)
       btn.appendChild(nameLine);
     } else {
       btn.appendChild(swatch);
       btn.appendChild(document.createTextNode(player.name));
+      if (typeof avatarDecorateName === 'function') avatarDecorateName(btn, state, player); // アバターの顔(avatar.js)
     }
     // オンライン対戦の初期資源: 誰がまだ選んでいないか分かるように (2026-10-27, per user request: "初期資源
     // 選択時右側のプレイヤータブに選択中 完了などと表示して")。
@@ -11231,6 +11240,7 @@ function renderPlayerCards(state, next) {
     if (isSelf && hasFinishedOnboarding(player)) node.classList.add('card-group--active');
     node.querySelector('.card-group__swatch').dataset.color = player.color;
     fillPlayerTitledName(node.querySelector('.card-group__name'), player);
+    if (typeof avatarDecorateName === 'function') avatarDecorateName(node.querySelector('.card-group__name'), state, player); // アバターの顔(avatar.js)
     appendPlayerRoleBadge(node.querySelector('.card-group__name'), state, player);
     // オンライン対戦の初期資源の進み具合(PC/タブレットはここ、スマホは右の名前欄 -- renderMobileCardsView)。
     const pickStatus = onlineResourcePickStatus(state, player.id);
@@ -12617,8 +12627,11 @@ function renderRankingRegisterList(state) {
         // ultimate/standard entries -- see ranking.js's save()/online-sync.js's listRanking doc for how
         // this field turns into a per-week Firestore filter.
         ...(weeklyChallengeActive ? { weekId: currentWeeklyChallengeId() } : {}),
+        // アバター(2026-11-15, avatar.js): 登録した時の顔をランキングの行に出す。
+        ...((state.players.find((p) => p.id === c.playerId) || {}).avatar ? { avatar: state.players.find((p) => p.id === c.playerId).avatar } : {}),
       }, replayHistory).then((entry) => {
         registeredRankingPlayerIds.add(c.playerId);
+        if (entry.category === 'weekly' && typeof avatarRecordMyWeeklyEntry === 'function') avatarRecordMyWeeklyEntry(entry);
         renderRankingOverlay(STATE, entry.id, entry.category);
         // 実績記録: ウィークリーランキング最高順位 (2026-10-03) -- 登録直後のソート済み一覧から自分の
         // 順位を1回だけ拾う。以後ランキングが変動/削除されても記録済みの順位はそのまま(recordWeeklyRank
@@ -12770,6 +12783,8 @@ function renderRankingList(highlightId, highlightCategory) {
         const swatch = el('span', 'player-panel__swatch');
         swatch.dataset.color = entry.playerColor;
         row.appendChild(swatch);
+        const rankingFace = entry.avatar && typeof avatarFaceImg === 'function' ? avatarFaceImg(entry.avatar, 'avatar-face avatar-face--ranking') : null;
+        if (rankingFace) row.appendChild(rankingFace);
         row.appendChild(el('span', 'ranking-row__name', entry.name));
         row.appendChild(el('span', 'ranking-row__score', `総合 ${entry.totalScore}VP（素点${entry.rawScore} + QST${entry.qstScore}）`));
         row.appendChild(elConJob('span', 'ranking-row__con-job', rankingConJobTitle(entry.conFaceId, entry.jobCardId)));
@@ -13271,6 +13286,7 @@ const ONLINE_ANIMATING_MAX_MS = 60000; // これより長く「アニメーシ�
  *   document.getAnimations)。ずっと繰り返す光り方(点滅など、終わりが無いもの)は数えない(いつまでも止まってしまうため)。 */
 function localBlockingAnimationActive() {
   if (diceRollSequenceActive || remotePlayback || openingSequenceActive) return true;
+  if (typeof avatarLineActive === 'function' && avatarLineActive()) return true; // アバターのセリフ(avatar.js)
   const blocked = ['dice-roll-blocker', 'remote-playback-blocker'].some((id) => {
     const node = document.getElementById(id);
     return !!(node && !node.hidden);
@@ -13592,6 +13608,7 @@ function handleStartRoomClick() {
   for (const player of freshState.players) {
     const seat = onlineLobbyRoomData.seats[player.id];
     if (seat && seat.name) player.name = seat.name;
+    if (seat && seat.avatar) player.avatar = seat.avatar; // アバター(avatar.js、部屋の画面で選ぶ)
   }
   OnlineSync.startRoom(onlineRoomCode, JSON.stringify(freshState), seatIsHuman);
 }
@@ -14208,9 +14225,12 @@ function renderOnlineLobbyOverlay() {
         const points = typeof seat.points === 'number' ? `（実績ポイント${seat.points}点）` : '';
         label = `${seatId}: ${seat.name || '名前未登録'}${points}${seatId === localSeatId ? '　← あなた' : ''}`;
       }
-      list.appendChild(el('div', 'ranking-row__opponents', label));
+      const seatRow = el('div', 'ranking-row__opponents', label);
+      if (seat && seat.avatar && typeof avatarFaceImg === 'function') seatRow.insertBefore(avatarFaceImg(seat.avatar, 'avatar-face avatar-face--lobby'), seatRow.firstChild);
+      list.appendChild(seatRow);
     }
     body.appendChild(list);
+    if (typeof avatarAppendLobbyRow === 'function') avatarAppendLobbyRow(body, onlineLobbyRoomData);
     // 観戦OK/NG (2026-10-27, per user回答「部屋の設定で決める」)と持ち時間 (2026-10-29) -- 部屋の作成者だけが切り替え
     // られ、入る人は開始前にここで見られる。ランダムマッチの部屋は、作る前に決めた設定のまま(変えられない)。
     const roomSettings = { spectatorsAllowed: !!onlineLobbyRoomData.spectatorsAllowed, timeControl: onlineLobbyRoomData.timeControl || null };
@@ -17661,6 +17681,8 @@ function applyStoryCharacterNames(state) {
     const character = STORY_CHARACTER_BY_TITLE[title];
     if (!character) continue;
     if (title === '心配性な研究者' && !storySenecaWorriedUnlocked()) continue;
+    // だれかのアバターと同じ人なら、AIはそのキャラクターにならない(2026-11-15, per user回答、avatar.js)。
+    if (typeof avatarCharacterName === 'function' && state.players.some((p) => p !== player && p.avatar && avatarCharacterName(p.avatar) === character.name)) continue;
     if (player.name !== character.name) player.name = character.name;
     const key = `${state.rng ? state.rng.seed : ''}:${player.id}`;
     if (storyCharacterShownKeys.has(key)) continue;
@@ -18063,6 +18085,7 @@ function renderCore(state) {
   // 進捗の記録(noteProgress参照) -- リプレイの記録/オンラインの送信より先に、それらに含まれるように。届いた状態を
   // 反映している描画では書かない(書いたのはその手を打った端末)。
   noteProgress(state, !applyingRemoteState);
+  if (typeof avatarOnRender === 'function') avatarOnRender(state); // アバターのセリフ(avatar.js)
   recordReplaySnapshotIfChanged(state, openTurnPlayerId());
   pushOnlineStateIfChanged(state);
   saveGameSessionIfApplicable(state);
@@ -18083,7 +18106,7 @@ function renderCore(state) {
   // 3Rからの1R・2R(round3WatchStep)は自分で1手ずつ進めるので、ここでは進めない。
   if (!tutorialTurnOrderOverlayOpen && !diceRollSequenceActive && !openingSequenceActive && !round3WatchActive) {
     if (aiPacingMode === 'instant') pumpAiInstant(state);
-    else if (aiPacingMode === 'delayed') pumpAiDelayed();
+    else if (aiPacingMode === 'delayed' || aiPacingMode === 'anim') pumpAiDelayed();
   }
 
   // turn-flow.getNextTurn needs a real turnOrder, which only exists once maybeStartRound1 has run

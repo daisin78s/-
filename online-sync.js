@@ -374,6 +374,28 @@ function leaveRoom(code, seatId) {
   });
 }
 
+/** アバター (2026-11-15, main.js/avatar.js): 開始前の部屋で、自分の席のアバターを選ぶ。ほかの席が同じ人(セネカと
+ * 心配性なセネカは同じ人)を先に選んでいたら AVATAR_TAKEN(先に選んだ人が優先)。avatarId が null なら外す。 */
+function setSeatAvatar(code, seatId, avatarId) {
+  var ref = db().collection(ROOM_COLLECTION).doc(code);
+  var person = function (id) { return id === 'senecaWorried' ? 'seneca' : id; };
+  return db().runTransaction(function (tx) {
+    return tx.get(ref).then(function (snap) {
+      if (!snap.exists) throw new Error('ROOM_NOT_FOUND');
+      var data = snap.data();
+      if (data.phase !== 'lobby') throw new Error('ROOM_ALREADY_STARTED');
+      var seats = data.seats || {};
+      if (!seats[seatId]) throw new Error('NOT_IN_ROOM');
+      if (avatarId && SEAT_IDS.some(function (id) { return id !== seatId && seats[id] && seats[id].avatar && person(seats[id].avatar) === person(avatarId); })) {
+        throw new Error('AVATAR_TAKEN');
+      }
+      var update = {};
+      update['seats.' + seatId + '.avatar'] = avatarId || null;
+      tx.update(ref, update);
+    });
+  });
+}
+
 /** Subscribes to "rooms/{code}", calling onUpdate(roomData) on the initial read and every change
  * thereafter (roomData is null if the room doc doesn't exist -- e.g. never created, or somehow deleted).
  * @returns {function()} unsubscribe */
@@ -726,6 +748,7 @@ function loadBugReplay(id) {
 window.OnlineSync = {
   listRanking: listRanking,
   saveRankingEntry: saveRankingEntry,
+  setSeatAvatar: setSeatAvatar,
   deleteRankingEntry: deleteRankingEntry,
   markRankingEntryOutdated: markRankingEntryOutdated,
   listAllRankingSorted: listAllRankingSorted,
