@@ -2997,7 +2997,18 @@ function pushOnlineStateIfChanged(state, fromAi) {
   if (json === lastPushedOnlineStateJson) return;
   lastPushedOnlineStateJson = json;
   lastIncomingRoomStateJson = json; // 自分が送った状態が返ってきても描き直さない
+  rememberOwnPushedOnlineState(json);
   queueOnlineStatePush(json);
+}
+
+/** この端末が最近送った状態 (2026-11-15, per userのバグ報告「ONLINE_OWN_TURN_OVERWRITTEN」(11/9)) -- 続けて送った時、
+ * 1つ前に送った状態が部屋から遅れて返ってくることがある。最後に送った1つ(lastIncomingRoomStateJson)としか比べて
+ * いなかったため、それを「ほかの端末からの新しい状態」として反映し、自分の手番の操作(性格の選択・置いたダイス)を
+ * 消していた。最近送った状態は、返ってきても反映しない。 */
+const recentOwnPushedOnlineStates = new Set();
+function rememberOwnPushedOnlineState(json) {
+  recentOwnPushedOnlineStates.add(json);
+  if (recentOwnPushedOnlineStates.size > 30) recentOwnPushedOnlineStates.delete(recentOwnPushedOnlineStates.values().next().value);
 }
 
 /** 通し番号つきの送信 (2026-10-27, per user request -- 同期ミスへの備え「古い状態での上書きを受け付けない」、
@@ -13694,8 +13705,9 @@ function subscribeToOnlineRoom(code) {
         if (isOnlineHost) applyOnlineResourcePicks(roomData.resourcePicks);
         return;
       }
-      // 状態が変わっていない更新(接続の合図など)は描き直さない。
-      if (!justStarted && roomData.state === lastIncomingRoomStateJson) {
+      // 状態が変わっていない更新(接続の合図など)と、この端末が送った状態が遅れて返ってきたもの
+      // (recentOwnPushedOnlineStates)は描き直さない。
+      if (!justStarted && (roomData.state === lastIncomingRoomStateJson || recentOwnPushedOnlineStates.has(roomData.state))) {
         if (isOnlineHost) applyOnlineResourcePicks(roomData.resourcePicks);
         if (rolesChanged) render(STATE);
         return;
