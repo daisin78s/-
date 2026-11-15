@@ -268,19 +268,30 @@ function avatarOnRender(state) {
   const byPlayer = new Map();
   for (const e of fresh) {
     const player = state.players.find((p) => p.id === e.p);
-    if (!player || !player.avatar) continue;
+    if (!player || !avatarSpeakerDef(player)) continue;
     const info = byPlayer.get(player) || { round: e.r || state.round };
     if (e.a && !info.areaName) info.areaName = e.a;
     if (e.f && !info.key) { info.key = e.f; info.upgrade = !!e.u; if (e.v) info.usedName = e.v; }
     byPlayer.set(player, info);
   }
   for (const [player, info] of byPlayer) {
-    const def = avatarDef(player.avatar);
+    const def = avatarSpeakerDef(player);
     if (!def) continue;
     const lines = avatarFindLines(def.lines, info.round, info);
     if (lines && lines.length) avatarLineQueue.push({ def, playerName: player.name, lines });
   }
   avatarPlayNext();
+}
+
+/** セリフを言う人: アバターのある人と、たまたまキャラクターになったAI(main.jsのapplyStoryCharacterNamesで名前が
+ * キャラクターに変わったAI、2026-11-15 per user「AIがたまたまキャラになったときもセリフを言うように」)。
+ * アレク・心配性なセネカのセリフはセネカ(アバターと同じ)。 */
+function avatarSpeakerDef(player) {
+  if (player.avatar) return avatarDef(player.avatar);
+  if (!isAiPlayer(player.id) || !player.conPhysicalId || !player.conFace || !player.jobCardId) return null;
+  const character = STORY_CHARACTER_BY_TITLE[rankingConJobTitle(`${player.conPhysicalId}${player.conFace}`, player.jobCardId)];
+  if (!character || player.name !== character.name) return null;
+  return { name: character.name, img: character.img, lines: character.name === 'アレク' ? 'セネカ' : character.name };
 }
 
 function avatarLineActive() { return avatarLineBusy; }
