@@ -113,10 +113,32 @@ function buildReferenceData() {
   };
 }
 
+/** game.xlsxの「ルール」シート(項目/説明、2026-11-16 per user「エクセルにルールのシートを用意しました ここに可能な限り
+ * 必要なルールを書いてください」)を、data/dsl-command-spec.json の gameRules に写す。ルールAI(Worker)は仕様書を
+ * 質問のたびに丸ごと読む(カード参照データの方は質問に出たカードだけに絞られる)ので、ルールはこちらに入れる。
+ * Excelが正(ここは写すだけ) -- ルールを直す時はExcelを直して xlsx_to_json.py → このスクリプト。 */
+function syncGameRulesIntoSpec() {
+  const game = JSON.parse(fs.readFileSync(GAME_JSON_PATH, 'utf8'));
+  const rows = game['ルール'] || [];
+  const spec = JSON.parse(fs.readFileSync(SPEC_PATH, 'utf8'));
+  const rules = {
+    _comment: 'game.xlsxの「ルール」シートから自動で写したもの(tools/build_ai_reference_data.js)。今のゲームのルールの説明で、glossaryや古い説明と食い違う時はこちらが正しい。',
+  };
+  for (const row of rows) {
+    const key = String(row['項目'] || '').trim();
+    const text = String(row['説明'] || '').trim();
+    if (key && text) rules[key] = text;
+  }
+  spec.gameRules = rules;
+  fs.writeFileSync(SPEC_PATH, `${JSON.stringify(spec, null, 2)}\n`);
+  console.log(`Wrote gameRules (${Object.keys(rules).length - 1} rules) into ${SPEC_PATH}`);
+}
+
 function main() {
   const output = buildReferenceData();
   fs.writeFileSync(OUTPUT_PATH, JSON.stringify(output, null, 1));
   console.log(`Wrote ${OUTPUT_PATH} (${output.cardCount} cards, ${output.issues.length} issues)`);
+  syncGameRulesIntoSpec();
   if (output.issues.length > 0) {
     console.log('Issues:');
     for (const issue of output.issues) console.log(`  [${issue.type}] ${issue.cardId}: ${issue.detail}`);

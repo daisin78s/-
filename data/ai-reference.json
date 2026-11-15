@@ -1,6 +1,6 @@
 {
- "gameDataVersion": "af3d1dfa323a0075",
- "generatedAt": "2026-11-05T14:56:05.494Z",
+ "gameDataVersion": "f1c80f87227ec017",
+ "generatedAt": "2026-11-15T16:44:44.042Z",
  "commandSpecFile": "dsl-command-spec.json",
  "cardCount": 148,
  "cards": {
@@ -363,9 +363,8 @@
    "COST": "3B,1C",
    "VP": 0,
    "LEVEL": 1,
-   "TAP": "CHANGE(K,VP)",
-   "TURNEND": "UNTAP()",
-   "inst": "タップすると〇をVPに変換する\n毎ターンアンタップする"
+   "TURNEND": "CHANGE(K,VP)",
+   "inst": "ターン終了時〇をVPに変換する"
   },
   "B001B": {
    "sheet": "B",
@@ -451,9 +450,8 @@
    "COST": "3B,1C",
    "VP": 1,
    "LEVEL": 2,
-   "TAP": "CHANGE(K,VP,2)",
-   "TURNEND": "UNTAP()",
-   "inst": "タップすると2〇を2VPに変換する\n毎ターンアンタップする"
+   "TURNEND": "CHANGE(K,VP,2)",
+   "inst": "ターン終了時2〇を2VPに変換する"
   },
   "C001A": {
    "sheet": "C",
@@ -676,7 +674,7 @@
    "sheet": "CON",
    "name": "心配",
    "WARNING": "〇がありません。\nターン終了時に-1VPされます。\nよろしいですか？",
-   "ONCE": "ADD(3VP,Z,K,wD)",
+   "ONCE": "ADD(Z,K,wD)",
    "inst": "ターン終了時〇がないと-1VP"
   },
   "CON001B": {
@@ -728,9 +726,8 @@
   "JOB002": {
    "sheet": "JOB",
    "name": "巫女",
-   "TAP": "IF(RESOURCE(K)<=5,ADD(K),CHANGE(2K,B))",
-   "TURNEND": "UNTAP()",
-   "inst": "タップしたとき\n〇が5以下なら〇を得る\n6以上なら〇2→青〇\n毎ターンアンタップする"
+   "TURNEND": "IF(RESOURCE(K)<=4,ADD(K),CHANGE(2K,B))",
+   "inst": "ターン終了時\n〇が4以下なら〇を得る\n5以上なら〇2→青〇\n\nQ.増えた「食料」は使用料に使えますか？\nA.はい　使えます\nQ.「心配」を持っているとき「食料」がない状態でターン終了した場合どうなりますか？\nA.「食料」が1つ増えるため、-1VPされることはありません"
   },
   "JOB003": {
    "sheet": "JOB",
@@ -1078,12 +1075,12 @@
    "sheet": "AREA",
    "name": "小麦畑LV1",
    "SLOT1": 1,
-   "SLOT2": "ANY",
+   "SLOT2": "EX",
    "SLOT3": "EX",
-   "SLOT4": "EX",
+   "SLOT4": "NONE",
    "SLOT5": "NONE",
    "SLOT6": "NONE",
-   "fee": 1,
+   "fee": "2K",
    "ACTION": "ADD(6K)"
   },
   "AREA002B": {
@@ -1095,7 +1092,7 @@
    "SLOT4": "NONE",
    "SLOT5": "NONE",
    "SLOT6": "NONE",
-   "fee": 1,
+   "fee": "K",
    "ACTION": "ADD(5K)"
   },
   "AREA003B": {
@@ -1107,7 +1104,7 @@
    "SLOT4": "NONE",
    "SLOT5": "NONE",
    "SLOT6": "NONE",
-   "fee": 1,
+   "fee": "A",
    "ACTION": "CHANGE(K,A,ALL);ADD(2B)"
   },
   "AREA004B": {
@@ -1119,7 +1116,7 @@
    "SLOT4": "NONE",
    "SLOT5": "NONE",
    "SLOT6": "NONE",
-   "fee": 1,
+   "fee": "B",
    "ACTION": "CHANGE(K,B,ALL);ADD(2C)"
   },
   "AREA005B": {
@@ -1131,7 +1128,7 @@
    "SLOT4": "NONE",
    "SLOT5": "NONE",
    "SLOT6": "NONE",
-   "fee": 1,
+   "fee": "C",
    "ACTION": "CHANGE(K,C,ALL);ADD(2A)"
   },
   "AREA006B": {
@@ -1143,7 +1140,7 @@
    "SLOT4": "NONE",
    "SLOT5": "NONE",
    "SLOT6": "NONE",
-   "fee": 1,
+   "fee": "K",
    "ACTION": "CHANGE(2K,5Z)"
   },
   "AREA007B": {
@@ -1155,7 +1152,7 @@
    "SLOT4": "NONE",
    "SLOT5": "NONE",
    "SLOT6": "NONE",
-   "fee": 1,
+   "fee": "K",
    "ACTION": "CHANGE(2K,D)",
    "inst": "色ダイスの上限は5個\nこのエリアにダイスを置くと怠惰の性格は解除される"
   },
@@ -1168,7 +1165,7 @@
    "SLOT4": "ANY",
    "SLOT5": "EX",
    "SLOT6": "EX",
-   "fee": 1,
+   "fee": "K",
    "ACTION": "BUILD();ADD(2K)"
   },
   "AREA010B": {
@@ -1180,31 +1177,31 @@
    "SLOT4": "NONE",
    "SLOT5": "NONE",
    "SLOT6": "NONE",
-   "fee": 1,
+   "fee": "K",
    "ACTION": "CHANGE(K,VP,4)"
   },
   "AREA001C": {
    "sheet": "AREA",
    "name": "小麦畑LV2",
-   "SLOT1": 1,
-   "SLOT2": "ANY",
+   "SLOT1": "ANY",
+   "SLOT2": "EX",
    "SLOT3": "EX",
-   "SLOT4": "EX",
+   "SLOT4": "NONE",
    "SLOT5": "NONE",
    "SLOT6": "NONE",
-   "fee": 2,
+   "fee": "2K",
    "ACTION": "ADD(7K)"
   },
   "AREA002C": {
    "sheet": "AREA",
    "name": "農園LV2",
-   "SLOT1": 6,
-   "SLOT2": "ANY",
+   "SLOT1": "ANY",
+   "SLOT2": "EX",
    "SLOT3": "EX",
-   "SLOT4": "EX",
+   "SLOT4": "NONE",
    "SLOT5": "NONE",
    "SLOT6": "NONE",
-   "fee": 2,
+   "fee": "3K",
    "ACTION": "ADD(9K)"
   },
   "AREA003C": {
@@ -1216,7 +1213,7 @@
    "SLOT4": "NONE",
    "SLOT5": "NONE",
    "SLOT6": "NONE",
-   "fee": 2,
+   "fee": "2A",
    "ACTION": "CHANGE(K,A,ALL);ADD(4B)"
   },
   "AREA004C": {
@@ -1228,7 +1225,7 @@
    "SLOT4": "NONE",
    "SLOT5": "NONE",
    "SLOT6": "NONE",
-   "fee": 2,
+   "fee": "2B",
    "ACTION": "CHANGE(K,B,ALL);ADD(4C)"
   },
   "AREA005C": {
@@ -1240,7 +1237,7 @@
    "SLOT4": "NONE",
    "SLOT5": "NONE",
    "SLOT6": "NONE",
-   "fee": 2,
+   "fee": "2C",
    "ACTION": "CHANGE(K,C,ALL);ADD(4A)"
   },
   "AREA006C": {
@@ -1252,7 +1249,7 @@
    "SLOT4": "NONE",
    "SLOT5": "NONE",
    "SLOT6": "NONE",
-   "fee": 2,
+   "fee": "2K",
    "ACTION": "CHANGE(2K,7Z)"
   },
   "AREA007C": {
@@ -1264,7 +1261,7 @@
    "SLOT4": "NONE",
    "SLOT5": "NONE",
    "SLOT6": "NONE",
-   "fee": 2,
+   "fee": "2K",
    "ACTION": "ADD(D)",
    "inst": "色ダイスの上限は６個"
   },
@@ -1277,7 +1274,7 @@
    "SLOT4": "ANY",
    "SLOT5": "EX",
    "SLOT6": "EX",
-   "fee": 2,
+   "fee": "2K",
    "ACTION": "BUILD();ADD(2K,BZ)"
   },
   "AREA010C": {
@@ -1289,7 +1286,7 @@
    "SLOT4": "NONE",
    "SLOT5": "NONE",
    "SLOT6": "NONE",
-   "fee": 2,
+   "fee": "2K",
    "ACTION": "CHANGE(K,VP,6)"
   }
  },
