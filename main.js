@@ -8722,7 +8722,9 @@ function renderTapChoiceModal() {
   const skipEl = document.getElementById('tap-choice-skip');
   skipEl.innerHTML = '';
   if (bareTap.kind === 'MONUMENT_CHANGE_DIE_VALUE') {
-    const btn = el('button', 'build-choice-payment__option', '+3しない');
+    // 数はカードのデータ(SELF+5など)から (2026-11-15, per user「宮廷人 +3しない と書かれています」-- +3のまま
+    // 残っていた。宮廷人は今+5)。
+    const btn = el('button', 'build-choice-payment__option', `+${typeof bareTap.delta === 'number' ? bareTap.delta : 5}しない`);
     btn.type = 'button';
     btn.classList.toggle('build-choice-payment__option--active', !!skip);
     btn.addEventListener('click', () => { pendingTapChoice.skip = true; pendingTapChoice.dieId = null; pendingTapChoice.cardPhysicalId = null; render(STATE); });
@@ -10396,7 +10398,7 @@ function bareTapKind(faceId) {
   // act on. ADD(BZ) is an unconditional grant with no choice of its own, same "flat leading effect ahead
   // of the real interactive command" shape BUILD's own check just above already handles for JOB010.
   const monumentChangeDieValue = commands.find((c) => c.type === 'MONUMENT_CHANGE_DIE_VALUE');
-  if (monumentChangeDieValue) return { kind: 'MONUMENT_CHANGE_DIE_VALUE' };
+  if (monumentChangeDieValue) return { kind: 'MONUMENT_CHANGE_DIE_VALUE', delta: monumentChangeDieValue.delta };
   if (commands.some((c) => c.type === 'BUILD')) return { kind: 'BUILD' };
   return { kind: 'IMMEDIATE' };
 }
