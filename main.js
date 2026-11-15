@@ -12497,6 +12497,10 @@ function renderAchievementOverlay() {
     : 'バックアップ未設定(端末のデータが消えると実績ポイントも消えます)';
   document.getElementById('achievement-backup-setup-button').textContent = identity ? '別の名前で設定/復元' : '名前とパスワードを設定/復元';
   document.getElementById('achievement-backup-change-button').hidden = !identity;
+  const rememberedName = loadRememberedRankingName();
+  const resetNameButton = document.getElementById('ranking-name-reset-button');
+  resetNameButton.textContent = rememberedName ? `名前をリセット（今: ${rememberedName}）` : '名前をリセット（名前はありません）';
+  resetNameButton.disabled = !rememberedName;
   const list = document.getElementById('achievement-list');
   list.innerHTML = '';
   for (const { key, label } of ACHIEVEMENT_CATEGORIES) {
@@ -20040,6 +20044,15 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('achievement-close-button').addEventListener('click', closeAchievementOverlay);
   document.getElementById('achievement-backup-setup-button').addEventListener('click', handleAchievementBackupSetupClick);
   document.getElementById('achievement-backup-change-button').addEventListener('click', handleAchievementBackupChangeClick);
+  // 名前をリセット (2026-11-15): ランキング・ストーリーの名前だけ消す(実績のバックアップ設定は残す)。
+  document.getElementById('ranking-name-reset-button').addEventListener('click', () => {
+    const name = loadRememberedRankingName();
+    if (!name) return;
+    if (!window.confirm(`この端末の名前「${name}」を消します（ランキングの名前の欄・ストーリーの名前登録に使う名前）。
+実績のバックアップ設定（名前とパスワード）はそのまま残ります。`)) return;
+    try { localStorage.removeItem(RANKING_PLAYER_NAME_KEY); } catch (e) { /* ignore */ }
+    renderAchievementOverlay();
+  });
   document.getElementById('achievement-popup-close-button').addEventListener('click', closeAchievementPopup);
   document.getElementById('unlock-popup-close-button').addEventListener('click', closeUnlockPopup);
   document.getElementById('achievement-ranking-close-button').addEventListener('click', closeAchievementRankingOverlay);
