@@ -1316,8 +1316,12 @@ function openStoryMode(startScene) {
     storyPause();
     window.BugBoard.open(() => { if (storyRun) storyResume(); });
   });
-  root.append(portrait, dialog, logPanel, goal, logButton, bugButton);
+  root.append(portrait, dialog, logPanel, goal, logButton);
   document.body.appendChild(root);
+  // バグ報告のボタンはストーリーの層(.story-overlay)の外に置き、手番順などの画面(.card-inst-overlay)より後ろにする
+  // (2026-11-15, per user「バグ報告 透けてる」→「レイヤー したでいい」)。ストーリーを閉じる時はページごと読み直す。
+  bugButton.classList.add('story-bug-button--below');
+  document.body.appendChild(bugButton);
   storyRun = {
     timers: new Set(), typeTimer: null, diceShown: false, glowDieValues: [], glowSelectors: [], onRender: null, onTap: null,
     resourceOverride: null, blockBuildChoice: false, allowedTabs: new Set(['board']), speaker: null, placementBaseline: {},
@@ -1349,7 +1353,7 @@ document.addEventListener('click', (e) => {
   if (!storyRun) return;
   if (storyRun.normalGame) {
     // 第4章の対戦中は普段のゲームと同じ。ただし誰かがしゃべっている間(ch4PlayerSegment)は、セリフ欄以外を押せない。
-    if (storyRun.talking && !e.target.closest('.story-overlay')) { e.stopPropagation(); e.preventDefault(); }
+    if (storyRun.talking && !e.target.closest('.story-overlay, .story-bug-button')) { e.stopPropagation(); e.preventDefault(); }
     return;
   }
   if (storyRun.onTap) storyRun.onTap();

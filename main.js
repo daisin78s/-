@@ -19890,22 +19890,30 @@ function setupIosStandaloneViewportFix() {
   if (!meta) return;
   const original = meta.getAttribute('content');
   let attempts = 0;
+  let refreshing = false;
   const looksTooShort = () => {
     const shortSide = Math.min(window.screen.width, window.screen.height);
     const landscape = window.innerWidth > window.innerHeight;
     return landscape && window.innerHeight < shortSide - 2;
   };
   const refresh = () => {
-    if (!looksTooShort() || attempts >= 3) return;
+    if (!looksTooShort()) { attempts = 0; return; } // 直っていれば、次にまた低くなった時のために数え直す
+    if (attempts >= 3 || refreshing) return;
     attempts++;
+    refreshing = true;
     meta.setAttribute('content', `${original}, maximum-scale=1.0`);
     setTimeout(() => {
       meta.setAttribute('content', original);
       window.scrollTo(window.scrollX, window.scrollY);
+      refreshing = false;
       setTimeout(refresh, 400);
     }, 60);
   };
   setTimeout(refresh, 300);
+  // 遊んでいる途中で低くなった時も直す (2026-11-15, per user「下に謎の隙間ができる 画面を上下に動かすと消える」--
+  // ストーリー第4章の途中で起きた。以前は開いた時・戻ってきた時しか直していなかった)。
+  setInterval(refresh, 1500);
+  window.addEventListener('resize', () => setTimeout(refresh, 300));
   window.addEventListener('pageshow', () => { attempts = 0; setTimeout(refresh, 300); });
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') { attempts = 0; setTimeout(refresh, 300); }

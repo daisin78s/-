@@ -7505,6 +7505,8 @@ body.story-mode #build-choice-close-button { display: none; }
 .story-overlay:has(.story-log:not([hidden])) .story-dialog { visibility: hidden; }
 /* ストーリーのバグ報告ボタン(会話ログの左隣、2026-11-15)。掲示板はストーリーの画面より上に出す。 */
 .story-log-button.story-bug-button { right: 72px; }
+/* バグ報告はストーリーの層の外(body直下、story.js)。手番順などの画面(z-index 100)より後ろ、盤面より前。 */
+.story-log-button.story-bug-button--below { position: fixed; z-index: 95; }
 .story-log-button[hidden] { display: none; }
 body:has(#story-overlay) #bug-board-overlay { z-index: 480; }
 /* アバター (2026-11-15, avatar.js) */
