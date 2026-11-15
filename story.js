@@ -2375,6 +2375,15 @@ function senecaPlay(rows, i, onDone) {
     senecaTryNegotiation(row, rows.slice(i + 1), onDone);
     return;
   }
+  // プレイヤーネームの登録(上のstoryAskPlayerName): もう名前があれば、この行は出さない。
+  if (SENECA_NAME_EVENT_RE.test(row.event || '')) {
+    const known = typeof loadRememberedRankingName === 'function' ? loadRememberedRankingName() : null;
+    if (known && known.trim()) { next(); return; }
+    storySetSpeaker(storyRun.seneca.hidePortrait ? 'senecaAway' : 'seneca');
+    if (!row.text) { storyAskPlayerName(next); return; }
+    storySay(`CS-${row.index}`, () => storyAskPlayerName(next), row.text, true);
+    return;
+  }
   const say = () => {
     if (!row.text) { next(); return; }
     // 「獲得可能なカードはチェックマークがついているのよ」: まだ置けない場面でも、置けるようになったら獲得できる
@@ -2809,7 +2818,48 @@ function senecaEndingLines(rest, fallback) {
   }
   // 出来事(解禁・章を選ぶ画面の表示)は上で済ませたので、セリフだけ流す。「…を手に入れる」だけは残して、
   // その行で飾り留めのアニメーション(senecaOwlAnimation)。
-  return lines.filter((r) => r.text).map((r) => ({ ...r, event: /フクロウの飾り留め」を手に入れる/.test(ev(r)) ? r.event : '' }));
+  const out = lines.filter((r) => r.text).map((r) => ({ ...r, event: /フクロウの飾り留め」を手に入れる/.test(ev(r)) ? r.event : '' }));
+  // プレイヤーネームの登録(2026-11-15, per user「ルートでも聞く」): 普通の終わり方の「そういえばまだ名前も聞いて
+  // いなかったわね」の行を、ルートの終わり方でも最後の「さようなら」の前に入れる。
+  const nameRow = rest.find((r) => SENECA_NAME_EVENT_RE.test(r.event || ''));
+  if (nameRow) {
+    const byeAt = out.map((r) => /^さようなら/.test(r.text)).lastIndexOf(true);
+    out.splice(byeAt < 0 ? out.length : byeAt, 0, nameRow);
+  }
+  return out;
+}
+
+/* ---------- 第2章: プレイヤーネームの登録 (2026-11-15, per user) ----------
+ * 台本の「プレイヤーネームがまだ登録していない場合プレイヤーネーム登録のイベント」: この端末にまだ名前が無ければ、
+ * その行のセリフ(「そういえばまだ名前も聞いていなかったわね」)のあと、名前を入れる欄。入れるまで進めない
+ * (per user回答)。名前はランキングの名前(main.jsのrememberRankingName)として覚え、第3章・第4章のランキングや
+ * 普段のランキングの名前の欄に最初から入る。盤面の名前(「あなた」)は変えない(per user回答「ランキングだけ」)。 */
+const SENECA_NAME_EVENT_RE = /プレイヤーネーム登録/;
+
+function storyAskPlayerName(onDone) {
+  const run = storyRun;
+  if (!run) return;
+  const box = el('div', 'story-name-entry');
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'story-name-entry__input';
+  input.maxLength = 20;
+  input.placeholder = '名前を入れてください';
+  const ok = el('button', 'story-name-entry__button', '決定');
+  ok.type = 'button';
+  const decide = () => {
+    const name = input.value.trim().slice(0, 20);
+    if (!name) { input.focus(); box.animate([{ transform: 'translateX(-50%)' }, { transform: 'translateX(calc(-50% - 6px))' }, { transform: 'translateX(calc(-50% + 6px))' }, { transform: 'translateX(-50%)' }], { duration: 250 }); return; }
+    if (typeof rememberRankingName === 'function') rememberRankingName(name);
+    box.remove();
+    if (storyRun === run) onDone();
+  };
+  ok.addEventListener('click', (e) => { e.stopPropagation(); decide(); });
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') decide(); });
+  box.addEventListener('click', (e) => e.stopPropagation());
+  box.append(input, ok);
+  run.dom.root.appendChild(box);
+  setTimeout(() => input.focus(), 50);
 }
 
 /** フクロウの飾り留めを手に入れた時のアニメーション(2026-11-14, per user「この画像でアニメーションお願い」):

@@ -7300,6 +7300,39 @@ body.story-hide-dice #players .player-panel .die {
   z-index: 1001;
 }
 body:has(#story-ranking) #story-chapters { visibility: hidden; }
+/* 第2章のプレイヤーネームの登録(story.js storyAskPlayerName)。セリフ欄の上。 */
+.story-name-entry {
+  position: absolute;
+  left: 50%;
+  bottom: 42%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(40, 32, 36, 0.92);
+  pointer-events: auto;
+  z-index: 8;
+}
+.story-name-entry__input {
+  width: 13em;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.story-name-entry__button {
+  padding: 8px 18px;
+  border: none;
+  border-radius: 8px;
+  background: #f3c75a;
+  color: #2a2024;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+}
 .story-ranking__panel {
   display: flex;
   flex-direction: column;
