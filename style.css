@@ -7765,6 +7765,10 @@ body.online-waiting #qst-slots {
 .bug-board__kind--auto {
   background: #9b4dca;
 }
+/* 対応済み(bug-board.js、tools/mark_bug_resolved.jsが書く)。 */
+.bug-board__kind--resolved { background: #16a34a; }
+.bug-board__row--resolved .bug-board__text { color: var(--text-muted); }
+.bug-board__resolved-note { margin-top: 2px; font-size: 12px; font-weight: 700; color: #16a34a; }
 .bug-board__text {
   margin: 4px 0;
   font-size: 13px;

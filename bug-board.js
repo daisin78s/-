@@ -66,7 +66,14 @@
         if (report.reporter) head.appendChild(el('span', 'bug-board__meta', report.reporter));
         const meta = [report.appVersion, report.mode, report.round !== undefined && report.round !== null ? `${report.round}R` : null].filter(Boolean).join(' / ');
         if (meta) head.appendChild(el('span', 'bug-board__meta', meta));
+        // 対応済み (2026-11-15, per user「対応したら対応済みとクロードコードさんが書いて」) -- tools/mark_bug_resolved.js が
+        // resolved / resolvedNote(どの版で直したか等)を書く。
+        if (report.resolved) {
+          head.appendChild(el('span', 'bug-board__kind bug-board__kind--resolved', '対応済み'));
+          row.classList.add('bug-board__row--resolved');
+        }
         row.appendChild(head);
+        if (report.resolved && report.resolvedNote) row.appendChild(el('div', 'bug-board__resolved-note', `対応: ${report.resolvedNote}`));
         const text = report.kind === 'manual'
           ? report.text
           : `${AUTO_REASON_LABELS[report.reason] || report.reason || '不明'}${report.playerId ? `（${report.playerId}）` : ''}${report.detail ? ` ${report.detail}` : ''}`;
