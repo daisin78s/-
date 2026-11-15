@@ -146,7 +146,11 @@ function estimateRewardVp(rewardText) {
  * castle's own same-value-stacking accumulation), matching the common case of a monument reachable via a
  * normal AREA's own die value. */
 function playerQualifiesForMonument(player, threshold, costItems) {
-  const hasQualifyingDie = player.dice.some((d) => d.kind === 'COLOR' && d.placedMapId === null && !d.passed && d.value !== null && d.value >= threshold);
+  // このターンに目を変えたダイス(宮廷人の+5など)は、置かないと手番の終わりに元の目に戻る(executor.applyTurnEnd)
+  // ので、まだ置いていないなら元の目で見る (2026-11-15, per user「AIが+5はターン終了時に戻ることを認識するように」
+  // -- +5したダイスを残せばあとでモニュメントが取れると勘違いして、使わずに残す手を高く評価していた)。
+  const heldValue = (d) => (d.valueChangedThisTurn && d.valueBeforeChangeThisTurn !== null && d.valueBeforeChangeThisTurn !== undefined ? d.valueBeforeChangeThisTurn : d.value);
+  const hasQualifyingDie = player.dice.some((d) => d.kind === 'COLOR' && d.placedMapId === null && !d.passed && heldValue(d) !== null && heldValue(d) >= threshold);
   if (!hasQualifyingDie) return false;
   return costItems.every((item) => (player.resources[item.resource] || 0) >= item.count);
 }

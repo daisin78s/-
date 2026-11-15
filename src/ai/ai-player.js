@@ -198,6 +198,10 @@ class AIPlayer {
         if (!result.success) continue;
         const outcome = facesOf(resultState).filter((f) => !facesBefore.has(f)).map((f) => f.split(':')[1]).sort().join(',');
         const dieIds = buildMove.dieIds || (buildMove.dieId ? [buildMove.dieId] : []);
+        // +5したダイスを使わずに建てる組み合わせは候補にしない (2026-11-15, per user「なおして」-- +5は置かないと
+        // 手番の終わりに戻るので無駄になる。同じものを別のダイスで建てるなら、+5しない(skipDieChange)の候補が
+        // 同じ手を持っている)。
+        if (candidate.move.chosenDieId && !dieIds.includes(candidate.move.chosenDieId)) continue;
         const spent = dieIds.reduce((sum, id) => sum + originalValue(id), 0);
         pairs.push({ candidate, buildMove, outcome, spent, score: this.evaluator.score(resultState, playerId) });
       }
