@@ -23,7 +23,10 @@
   }
 
   function currentModeLabel() {
-    if (typeof storyRun !== 'undefined' && storyRun) return 'ストーリー';
+    if (typeof storyRun !== 'undefined' && storyRun) {
+      const no = typeof storyChapterNo === 'function' ? storyChapterNo() : null;
+      return no ? `ストーリー第${no}章` : 'ストーリー';
+    }
     if (onlineRoomCode) return 'オンライン対戦';
     if (weeklyChallengeActive) return 'ウィークリーチャレンジ';
     if (tutorialModeActive) return 'チュートリアル';
@@ -66,7 +69,9 @@
           ? report.text
           : `${AUTO_REASON_LABELS[report.reason] || report.reason || '不明'}${report.playerId ? `（${report.playerId}）` : ''}${report.detail ? ` ${report.detail}` : ''}`;
         row.appendChild(el('div', 'bug-board__text', text || ''));
-        if (report.hasReplay !== false) {
+        if (report.storyLine) row.appendChild(el('div', 'bug-board__meta', `セリフ: ${report.storyLine}`));
+        // ストーリーの途中ではリプレイを開かない(ストーリーの盤面に上書きしてしまうため)。
+        if (report.hasReplay !== false && !(typeof storyRun !== 'undefined' && storyRun)) {
           const play = el('button', 'undo-button bug-board__replay', '▶ リプレイ');
           play.type = 'button';
           play.addEventListener('click', () => {
@@ -106,6 +111,11 @@
       phase: STATE ? STATE.phase || null : null,
       hasReplay,
     };
+    // ストーリー中は、その時に出ていたセリフも付ける(2026-11-15, per user「ストーリーにもバグ報告掲示板が欲しい」)。
+    if (typeof storyRun !== 'undefined' && storyRun && storyRun.dom && storyRun.dom.dialogText) {
+      const line = (storyRun.dom.dialogText.textContent || '').trim().slice(0, 200);
+      if (line) report.storyLine = line;
+    }
     sendButton.disabled = true;
     statusEl.textContent = '送信中...';
     const saves = [OnlineSync.saveBugReport(id, report)];
@@ -121,7 +131,16 @@
     });
   }
 
-  function open() {
+  let onClose = null;
+  function close() {
+    overlay().hidden = true;
+    const cb = onClose; onClose = null;
+    if (cb) cb();
+  }
+
+  /** closeCallback: 閉じた時に呼ぶ(ストーリーが止めていた時間を動かす)。 */
+  function open(closeCallback) {
+    onClose = typeof closeCallback === 'function' ? closeCallback : null;
     const ov = overlay();
     ov.hidden = false;
     const body = document.getElementById('bug-board-body');
@@ -155,8 +174,8 @@
     const button = document.getElementById('bug-board-open-button');
     if (!button || !overlay()) return;
     button.addEventListener('click', open);
-    document.getElementById('bug-board-close-button').addEventListener('click', () => { overlay().hidden = true; });
-    overlay().addEventListener('click', (e) => { if (e.target === overlay()) overlay().hidden = true; });
+    document.getElementById('bug-board-close-button').addEventListener('click', close);
+    overlay().addEventListener('click', (e) => { if (e.target === overlay()) close(); });
   }
 
   init();

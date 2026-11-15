@@ -1264,6 +1264,15 @@ function toggleStoryLog() {
   list.scrollTop = list.scrollHeight; // 新しいセリフが見える位置から
 }
 
+/** 今のストーリーの章(バグ報告に書く)。第3章(スパル)の状態は昔の名残でchapter2という名前。 */
+function storyChapterNo() {
+  if (!storyRun) return null;
+  if (storyRun.ch4) return 4;
+  if (storyRun.chapter2) return 3;
+  if (storyRun.seneca) return 2;
+  return 1;
+}
+
 /* ---------- 開く/閉じる ---------- */
 
 /** startScene: 最初の場面(省略時は第1章の農園から)。 */
@@ -1297,13 +1306,23 @@ function openStoryMode(startScene) {
   const logPanel = el('div', 'story-log');
   logPanel.hidden = true;
   logPanel.addEventListener('click', toggleStoryLog);
-  root.append(portrait, dialog, logPanel, goal, logButton);
+  // バグ報告 (2026-11-15, per user「ストーリーにもバグ報告掲示板が欲しい」→「会話ログの隣にボタン」)。いつもの
+  // 掲示板(bug-board.js)を開く。開いている間はストーリーの時間を止める。
+  const bugButton = el('button', 'story-log-button story-bug-button', 'バグ報告');
+  bugButton.type = 'button';
+  bugButton.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!window.BugBoard) return;
+    storyPause();
+    window.BugBoard.open(() => { if (storyRun) storyResume(); });
+  });
+  root.append(portrait, dialog, logPanel, goal, logButton, bugButton);
   document.body.appendChild(root);
   storyRun = {
     timers: new Set(), typeTimer: null, diceShown: false, glowDieValues: [], glowSelectors: [], onRender: null, onTap: null,
     resourceOverride: null, blockBuildChoice: false, allowedTabs: new Set(['board']), speaker: null, placementBaseline: {},
     visibleMapIds: [], log: [], paused: false,
-    dom: { root, portrait, goal, dialog, dialogName, dialogText, nextHint, logPanel, logButton },
+    dom: { root, portrait, goal, dialog, dialogName, dialogText, nextHint, logPanel, logButton, bugButton },
     waitingNext: null, typeFinish: null, skipping: false,
   };
   document.body.classList.add('story-mode', 'story-hide-dice');
@@ -3991,6 +4010,7 @@ function ch4BeginPlay() {
   // 普段のゲームの画面に戻す(ターン終了ボタン・カードを選ぶ画面の戻る等、story-modeで隠していた物を出す)。
   document.body.classList.remove('story-mode', 'story-hide-dice', 'story-free-action', 'story-undo-shown', 'story-lock-hand');
   run.dom.logButton.hidden = true;
+  run.dom.bugButton.hidden = true; // 対戦中は普段の設定タブのバグ報告を使う
   storySetAllowedTabs([...document.querySelectorAll('.mobile-tab-switcher__btn')].map((b) => b.dataset.tabTarget));
   storySetGlow([]);
   aiPacingMode = 'delayed';

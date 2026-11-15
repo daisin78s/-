@@ -7357,6 +7357,10 @@ body.story-mode #build-choice-close-button { display: none; }
   z-index: 6;
 }
 .story-overlay:has(.story-log:not([hidden])) .story-dialog { visibility: hidden; }
+/* ストーリーのバグ報告ボタン(会話ログの左隣、2026-11-15)。掲示板はストーリーの画面より上に出す。 */
+.story-log-button.story-bug-button { right: 72px; }
+.story-log-button[hidden] { display: none; }
+body:has(#story-overlay) #bug-board-overlay { z-index: 480; }
 /* 制約・ジョブの名前の文字色 (main.jsのconJobColoredFragment / カードの名前)。暗い背景(ストーリーのセリフ欄・
    ログ)では同じ色の明るい版。 */
 .con-name { color: var(--con-name-color); }
