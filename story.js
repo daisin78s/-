@@ -2842,8 +2842,9 @@ const SENECA_NAME_EVENT_RE = /プレイヤーネーム登録/;
 // パスワードも一緒に登録する (2026-11-15, per user「パスワードも一緒に登録してください データがなくなってもプレイヤー
 // ネームとパスワードがあれば復旧できます」) -- 実績解除の画面の「名前とパスワードを設定/復元」(main.jsの
 // handleAchievementBackupSetupClick)と同じ仕組み: 新しい名前ならこの端末の実績をその名前+パスワードで保存、もうある名前で
-// パスワードが合えば復元、合わなければ「別のパスワードで登録されています」で選び直し。通信できない時は名前だけ覚えて進む
-// (パスワードはあとで実績解除の画面から設定できる)。
+// パスワードが合えば復元、合わなければ「別のパスワードで登録されています」で選び直し。通信できない時は登録できず、
+// その場にとどまる(2026-11-15 per user「オフラインの時は名前が入れれないでいい」-- 名前だけ覚えて進むと、パスワードも
+// 登録できたと思い込むおそれがあるため)。
 async function storyRegisterNameAndPassword(name, password) {
   const passwordHash = await sha256Hex(password);
   let existing;
@@ -2901,10 +2902,9 @@ function storyAskPlayerName(onDone) {
     ok.disabled = false;
     if (result.error) { message.textContent = result.error; shake(); return; }
     if (result.offline) {
-      // 通信できない: 名前だけ覚えて進む。
-      rememberRankingName(name);
-      message.textContent = '通信できないため、名前だけ覚えました。パスワードはあとで実績解除の画面から登録できます';
-      setTimeout(finish, 2500);
+      // 通信できない: 登録できないので進まない(入れた名前とパスワードは欄に残す)。
+      message.textContent = '通信できないため登録できません。通信できる所で、もう一度「決定」を押してください';
+      shake();
       return;
     }
     if (result.restored) { message.textContent = '前のデータを復元しました'; setTimeout(finish, 1500); return; }
