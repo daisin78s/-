@@ -4407,6 +4407,10 @@ function openStoryChapterSelect() {
 }
 
 document.getElementById('entry-banner-story-button').addEventListener('click', openStoryChapterSelect);
+// ゲーム中のボタン列の「ストーリー」から読み直して来た時(main.jsのopenStoryFromGame): トップ画面で章を選ぶ画面を開く。
+if (typeof storySelectPending !== 'undefined' && storySelectPending) {
+  document.addEventListener('DOMContentLoaded', () => setTimeout(openStoryChapterSelect, 300));
+}
 
 // 章の終わりから次の章へ(senecaGoChapter3): 読み直した直後にその章を始める。
 const STORY_AUTO_START_KEY = 'diceWpStoryAutoStart';

@@ -496,6 +496,21 @@ function openTutorialMode() {
   location.reload();
 }
 
+// ゲーム中のボタン列の「ストーリー」(2026-11-15、もとは「チュートリアル」の所) -- トップ画面から「ストーリー」を押した
+// のと同じにするため、読み直してから章を選ぶ画面を開く(story.jsがstorySelectPendingを見て開く)。続きからの確認は出さない。
+const STORY_SELECT_PENDING_KEY = 'diceWpStorySelectPending';
+function openStoryFromGame() {
+  sessionStorage.setItem(STORY_SELECT_PENDING_KEY, '1');
+  location.reload();
+}
+const storySelectPending = (() => {
+  try {
+    const pending = sessionStorage.getItem(STORY_SELECT_PENDING_KEY) === '1';
+    if (pending) sessionStorage.removeItem(STORY_SELECT_PENDING_KEY);
+    return pending;
+  } catch (e) { return false; }
+})();
+
 // ローカル対戦 (2026-10-04, per user request: ゲーム中のボタン列からも「新しいローカル対戦を始める」が
 // 押せるように) -- 同じ「フラグを立てて再読み込み」方式だが、tutorialModeActive/weeklyChallengeActiveと
 // 違ってこのフラグ自体はcreateInitialStateの挙動を一切変えない(普通の新規ローカルゲームそのもの)。
@@ -719,7 +734,7 @@ if (tutorialModeActive) {
 // sessionResumeChoicePending's real value (see its own declaration further up for why this is split out
 // here instead of computed in place -- debugSetupPlanAtLoad didn't exist yet up there).
 sessionResumeChoicePending = !!(pendingGameSession || pendingOnlineSession)
-  && !weeklyChallengeActive && !tutorialModeActive && !debugSetupPlanAtLoad && !localBattlePending;
+  && !weeklyChallengeActive && !tutorialModeActive && !debugSetupPlanAtLoad && !localBattlePending && !storySelectPending;
 
 // True once this game has used デバッグモード or テストゲーム開始 at any point (2026-09-07, per user
 // spec, for the ranking's 3-way split -- see renderRankingList's own doc): "スタンダード" ranking
@@ -19942,7 +19957,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('debug-mode-toggle').addEventListener('click', toggleDebugMode);
   document.getElementById('local-battle-button').addEventListener('click', startLocalBattle);
   document.getElementById('weekly-challenge-button').addEventListener('click', gatedEntryBannerHandler('ウィークリーチャレンジ', openWeeklyChallenge));
-  document.getElementById('tutorial-mode-button').addEventListener('click', openTutorialMode);
+  document.getElementById('tutorial-mode-button').addEventListener('click', openStoryFromGame); // 「ストーリー」(2026-11-15)
 
   // 入口バナー (2026-10-04, per user request) -- 4つの大ボタンはそれぞれ既存の入り口関数をそのまま呼ぶ
   // (チュートリアル/ウィークリーはpending flag+reloadで戻ってこない、ローカル対戦/オンライン対戦は
