@@ -5451,6 +5451,13 @@ body:has(#entry-banner:not([hidden])) .card-inst-overlay:not([hidden]) { z-index
   display: flex;
   gap: 8px;
 }
+.ai-rules-chat-form[hidden], .ai-rules-chat-log[hidden] { display: none; }
+
+/* ルールQ&A掲示板 (2026-11-16) -- 見た目はバグ報告の掲示板(.bug-board__*)を使う。 */
+.ai-rules-qa-toggle { margin-left: auto; margin-right: 8px; padding: 4px 10px; font-size: 13px; }
+.ai-rules-qa-board { overflow-y: auto; max-height: 60vh; min-height: 160px; }
+.ai-rules-qa-board[hidden] { display: none; }
+.ai-rules-qa-answer { white-space: pre-wrap; color: inherit; font-weight: 400; }
 
 .ai-rules-chat-input {
   flex: 1;

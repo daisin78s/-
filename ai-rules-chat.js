@@ -100,6 +100,73 @@ window.AiRulesChat = (function () {
     return 'うまく回答できませんでした。しばらくしてからもう一度お試しください。';
   }
 
+  // ルールQ&A掲示板 (2026-11-16, per user「AIルール相談で確認できませんと出たとき Q&A掲示板を作ってそこに報告し週に一度
+  // 確認してルールを書き込み 次質問があったときにこたえれるようにしたい」+ 回答「自動で送る」「プレイヤーにも見せる」)。
+  // Workerの指示で、データに無い時のAIの答えは「現在のデータには載っていないので確認できません」の形になる。
+  // 週1回、Claude Codeが答えをExcelの「ルール」シートに足し(→ルールAIが次から答えられる)、tools/rule_questions.jsで
+  // 掲示板にも答えを書く。
+  const UNKNOWN_ANSWER_PATTERN = /確認できません|載っていない|載っておらず|データがありません/;
+  function isUnknownAnswer(answer) {
+    return UNKNOWN_ANSWER_PATTERN.test(String(answer || ''));
+  }
+  function reportUnknownQuestion(question, answer) {
+    if (!window.OnlineSync || !OnlineSync.saveRuleQuestion) return Promise.reject(new Error('no OnlineSync'));
+    const entry = {
+      question: String(question).slice(0, 500),
+      aiAnswer: String(answer || '').slice(0, 1000),
+      askedAt: new Date().toISOString(),
+      appVersion: typeof appVersionLabel === 'function' ? appVersionLabel() : '',
+    };
+    const asker = typeof loadRememberedRankingName === 'function' ? loadRememberedRankingName() : null;
+    if (asker) entry.asker = asker;
+    return OnlineSync.saveRuleQuestion(entry);
+  }
+
+  function formatDate(iso) {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())}`;
+  }
+
+  function renderQaBoard(boardEl) {
+    boardEl.innerHTML = '';
+    boardEl.appendChild(el('div', 'bug-board__note', 'AIルール相談で「確認できません」となった質問です。週に1回、答えを書き足します。答えが付いた質問は、AIルール相談でも答えられるようになります。'));
+    const listEl = el('div', 'bug-board__list');
+    boardEl.appendChild(listEl);
+    listEl.appendChild(el('div', 'bug-board__empty', '読み込み中...'));
+    if (!window.OnlineSync || !OnlineSync.listRuleQuestions) {
+      listEl.innerHTML = '';
+      listEl.appendChild(el('div', 'bug-board__empty', '読み込めませんでした'));
+      return;
+    }
+    OnlineSync.listRuleQuestions().then((items) => {
+      listEl.innerHTML = '';
+      if (items.length === 0) {
+        listEl.appendChild(el('div', 'bug-board__empty', 'まだ質問はありません'));
+        return;
+      }
+      for (const item of items) {
+        const row = el('div', 'bug-board__row');
+        const head = el('div', 'bug-board__row-head');
+        head.appendChild(el('span', 'bug-board__date', formatDate(item.askedAt)));
+        if (item.answered) {
+          head.appendChild(el('span', 'bug-board__kind bug-board__kind--resolved', '回答済み'));
+        } else {
+          head.appendChild(el('span', 'bug-board__kind bug-board__kind--auto', '確認中'));
+        }
+        if (item.asker) head.appendChild(el('span', 'bug-board__meta', item.asker));
+        row.appendChild(head);
+        row.appendChild(el('div', 'bug-board__text', `Q. ${item.question || ''}`));
+        if (item.answered && item.answer) row.appendChild(el('div', 'bug-board__resolved-note ai-rules-qa-answer', `A. ${item.answer}`));
+        listEl.appendChild(row);
+      }
+    }).catch(() => {
+      listEl.innerHTML = '';
+      listEl.appendChild(el('div', 'bug-board__empty', '読み込みに失敗しました'));
+    });
+  }
+
   function init() {
     const openButton = document.getElementById('ai-rules-chat-open-button');
     const closeButton = document.getElementById('ai-rules-chat-close-button');
@@ -112,8 +179,21 @@ window.AiRulesChat = (function () {
 
     let greeted = false;
 
+    const qaToggle = document.getElementById('ai-rules-qa-toggle');
+    const qaBoard = document.getElementById('ai-rules-qa-board');
+    function showQaBoard(show) {
+      if (!qaBoard || !qaToggle) return;
+      qaBoard.hidden = !show;
+      logEl.hidden = show;
+      form.hidden = show;
+      qaToggle.textContent = show ? 'チャットに戻る' : 'Q&A掲示板';
+      if (show) renderQaBoard(qaBoard);
+    }
+    if (qaToggle) qaToggle.addEventListener('click', () => showQaBoard(qaBoard.hidden));
+
     openButton.addEventListener('click', () => {
       overlay.hidden = false;
+      showQaBoard(false);
       if (!greeted) {
         greeted = true;
         appendMessage(logEl, 'assistant', 'こんにちは。ローマの野望のルールやカードについて質問してください。');
@@ -150,6 +230,15 @@ window.AiRulesChat = (function () {
           pendingBubble.textContent = `考え中...(少し時間がかかっています、再試行中 ${attempt}/${max})`;
         });
         pendingBubble.textContent = answer;
+        if (isUnknownAnswer(answer)) {
+          const noticeRow = appendMessage(logEl, 'assistant', 'この質問をQ&A掲示板に送っています...');
+          const noticeBubble = noticeRow.querySelector('.ai-rules-chat-message__bubble');
+          reportUnknownQuestion(question, answer).then(() => {
+            noticeBubble.textContent = 'この質問はQ&A掲示板に送られました。週に1回、答えを書き足します（右上の「Q&A掲示板」で見られます）。';
+          }).catch(() => {
+            noticeBubble.textContent = 'Q&A掲示板に送れませんでした（通信状態を確かめてください）。';
+          });
+        }
       } catch (err) {
         pendingBubble.textContent = errorMessageFor(err);
       } finally {

@@ -745,7 +745,26 @@ function loadBugReplay(id) {
     .catch(function () { return null; });
 }
 
+/** ルールQ&A掲示板 (2026-11-16, per user「AIルール相談で確認できませんと出たとき Q&A掲示板を作ってそこに報告し
+ * 週に一度確認してルールを書き込み 次質問があったときにこたえれるようにしたい」+ 回答: 自動で送る・プレイヤーにも見せる・
+ * 答えはExcelの「ルール」シートに書く・日曜のバグ確認と一緒)。ruleQuestions/{id} = { question, aiAnswer, askedAt,
+ * appVersion, asker? }。答えが付いたら tools/rule_questions.js が answered/answer/answeredAt だけを書き足す
+ * (Firestoreのルールでその3つだけの更新を許す)。 */
+var RULE_QUESTION_COLLECTION = 'ruleQuestions';
+function saveRuleQuestion(entry) {
+  var id = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : String(Date.now()) + '-' + Math.random().toString(36).slice(2);
+  return db().collection(RULE_QUESTION_COLLECTION).doc(id).set(entry);
+}
+/** @returns {Promise<object[]>} 新しい順に最大50件。 */
+function listRuleQuestions() {
+  return db().collection(RULE_QUESTION_COLLECTION).orderBy('askedAt', 'desc').limit(50).get().then(function (snapshot) {
+    return snapshot.docs.map(function (doc) { return Object.assign({ id: doc.id }, doc.data()); });
+  });
+}
+
 window.OnlineSync = {
+  saveRuleQuestion: saveRuleQuestion,
+  listRuleQuestions: listRuleQuestions,
   listRanking: listRanking,
   saveRankingEntry: saveRankingEntry,
   setSeatAvatar: setSeatAvatar,
