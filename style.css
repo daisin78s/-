@@ -8653,14 +8653,17 @@ html.story-autostarting::after {
 /* 第4章: 性格カード(.story-ch4-callout)を出している間だけ、セリフ欄と立ち絵を下げる(カードと重なるため、
    2026-11-14 per user「このときだけセリフとキャラの位置をもう少し下に」)。スマホはタブバーの所まで。 */
 /* ジョブを選ぶ画面(.story-ch4-jobs)が出ている間は、性格カードが無い時もセリフ欄は下のまま(上下に何度も動かないように、
-   2026-11-16 per user「セリフが上下に何回も移動するといやなので この時はセリフはずっと下でいい」)。 */
+   2026-11-16 per user「セリフが上下に何回も移動するといやなので この時はセリフはずっと下でいい」)。立ち絵も同じく下のまま
+   (2026-11-16 per user「第４章 スマホ版 セリフは下だが キャラが上いったり下行ったりする」)。 */
 .story-overlay.story-ch4-callout-shown .story-dialog,
 body:has(.story-ch4-jobs) .story-overlay .story-dialog { bottom: 1%; }
-.story-overlay.story-ch4-callout-shown .story-alek { bottom: -2%; }
+.story-overlay.story-ch4-callout-shown .story-alek,
+body:has(.story-ch4-jobs) .story-overlay .story-alek { bottom: -2%; }
 @media (max-width: 760px), (max-height: 500px) {
   .story-overlay.story-ch4-callout-shown .story-dialog,
   body:has(.story-ch4-jobs) .story-overlay .story-dialog { bottom: calc(4px + env(safe-area-inset-bottom)); }
-  .story-overlay.story-ch4-callout-shown .story-alek { bottom: calc(-10px + env(safe-area-inset-bottom)); }
+  .story-overlay.story-ch4-callout-shown .story-alek,
+  body:has(.story-ch4-jobs) .story-overlay .story-alek { bottom: calc(-10px + env(safe-area-inset-bottom)); }
 }
 
 /* フリーアクション: 資源の交換以外に使えるもの(カード・使用料回収)がある時は色を変えて光らせる(main.js、2026-11-15)。 */
