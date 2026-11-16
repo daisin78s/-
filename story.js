@@ -3392,6 +3392,15 @@ function ch4Play(rows, i, onDone) {
       const order = typeof computeNextCastleTurnOrder === 'function' ? computeNextCastleTurnOrder(STATE) : STATE.turnOrder;
       text = text.replace('〇', String(order.indexOf('P1') + 1));
     }
+    // クエストの説明(2026-11-16): 「君は〇枚で〇位だね」→ 一番上のクエストでのあなたの値(単位は枚か個)と順位、
+    // 「〇位だと〇VPもらえる」→ 今のあなたの順位(4位なら1位の例)とそのVP。
+    if (/〇枚で〇位/.test(text)) {
+      const info = ch4TopQuestInfo();
+      if (info) text = text.replace('〇枚', `${info.value}${info.unit}`).replace('〇位', `${info.rank}位`);
+    } else if (/〇位だと/.test(text)) {
+      const info = ch4TopQuestInfo();
+      if (info) text = text.replace('〇位', `${info.exampleRank}位`).replace(/〇(?=\s*VP)/, info.vp);
+    }
     // C列「〇とZはアイコン」: その行の〇を食料(K)のアイコンで出す(Zはいつもアイコン)。
     if (/アイコン/.test(row.event || '')) text = text.replace(/〇/g, 'K');
     // 「「ローマ市民」」: ジョブ選択画面で、アレクがあなたのジョブ(ローマ市民)を選ぶ。
@@ -3424,6 +3433,39 @@ function ch4Play(rows, i, onDone) {
     ch4EnemyChoosesJob(e, say);
   } else if (/ジョブ選択画面/.test(e)) {
     ch4ShowJobDraft(say);
+  } else if (/強化モニュメント/.test(e) && /光る/.test(e)) {
+    // 「強化モニュメントが光る」(2026-11-16): ショップの画面にして、出ている強化モニュメントを光らせる。
+    if (isMobileLayout()) applyMobileActiveTab('shop');
+    const sel = '#shop-combined-slots .shop-slot:has(.shop-card--enhanced-monument)';
+    storySetGlow([sel]);
+    run.ch4.glowLine = true;
+    const t = document.querySelector(sel);
+    if (t) t.scrollIntoView({ block: 'center' });
+    say();
+  } else if (/一番下/.test(e) && /光る/.test(e) && /位/.test(e)) {
+    // 「一番下の 〇位 〇VPが光る」(2026-11-16): クエストの下の「〇位 〇VP」の、セリフで例にした順位の所。
+    const info = ch4TopQuestInfo();
+    storySetGlow([`#qst-legend .qst-legend__cell:nth-child(${info ? info.exampleRank : 1})`]);
+    run.ch4.glowLine = true;
+    say();
+  } else if (/一番上の目標/.test(e) || (/ピンク/.test(e) && /目標/.test(e))) {
+    // 「…一番上の目標と そこのピンクの〇が光る」(2026-11-16): 一番上のクエストの目標と、その中のあなたの色の丸。
+    storySetGlow(['#qst-slots > .qst-card:first-child > .qst-card__goal-line', `#qst-slots > .qst-card:first-child .qst-card__rank-player[data-color="${colorForPlayer(STATE, 'P1')}"]`]);
+    run.ch4.glowLine = true;
+    say();
+  } else if (/目標が光る/.test(e)) {
+    // 「目標が光る」(2026-11-16): クエストカードの「目標」(3枚とも)。
+    storySetGlow(['#qst-slots .qst-card__goal-line']);
+    run.ch4.glowLine = true;
+    say();
+  } else if (/クエスト画面/.test(e)) {
+    // 「クエスト画面に行って光る」(2026-11-16): スマホはクエストのタブへ。クエストの欄を光らせる。
+    if (isMobileLayout()) applyMobileActiveTab('quest');
+    storySetGlow(['.qst-panel']);
+    run.ch4.glowLine = true;
+    const t = document.querySelector('.qst-panel');
+    if (t && !isMobileLayout()) t.scrollIntoView({ block: 'center' });
+    say();
   } else if (/モニュメント/.test(e) && /光る/.test(e)) {
     // 「ショップ画面に行きモニュメントが光る」(2026-11-15): ショップの画面にして、モニュメントの段(SHOP001-006)を
     // そのセリフの間だけ光らせる。
@@ -3845,7 +3887,16 @@ function ch4FindActionLine(enemy, move, state, allActions) {
   }
   const cardName = key ? String(dataLoaderMod.getCardRow(INDEX, key).NAME || '') : '';
   const kind = key ? { A: '領地', B: '学問', C: '人材' }[key[0]] : null;
-  const hit = actions.find((a) => {
+  // 「ネロが皇女を獲得かLVUPする」のようにカードを名指しした行(2026-11-16 Excel更新)は、「人材カードを…」などより先に見る。
+  const named = (a) => {
+    const m = /^(.+?)を(獲得か[LV]{2}UP|獲得|[LV]{2}UP)する/.exec(a.event);
+    if (!m || /カード$/.test(m[1]) || !key) return false;
+    if (cardName.replace(/LV\d+$/, '') !== m[1].trim()) return false;
+    if (/UP/.test(m[2]) && /獲得/.test(m[2])) return true;
+    return /UP/.test(m[2]) ? upgrade : !upgrade;
+  };
+  const hit = actions.find(named) || actions.find((a) => {
+    if (/^(.+?)を(獲得|[LV]{2}UP)/.test(a.event) && !/カードを/.test(a.event) && !/を使う/.test(a.event)) return false; // 名指しの行は上で見た
     const others = /^(.+)以外のエリアに行く/.exec(a.event);
     if (others) return !!areaName && !key && !others[1].split(/[、,，]/).map((x) => x.trim()).includes(areaName);
     const go = /^(.+)に行く/.exec(a.event);
@@ -3864,7 +3915,9 @@ function ch4FindActionLine(enemy, move, state, allActions) {
     .replace(/獲得したエリア名/g, cardName.replace(/の支配.*$/, ''))
     .replace(/獲得したカード名/g, cardName.replace(/LV\d+$/, ''))
     .replace(/行ったエリア名/g, areaName)
-    .replace(/使ったカード名/g, usedName);
+    .replace(/使ったカード名/g, usedName)
+    // 「レベルを上げたカード名」(2026-11-16 Excel更新、セネカの研究): 研究でLVアップしたカード。
+    .replace(/レベルを上げたカード名/g, cardName.replace(/LV\d+$/, '') || 'カード');
   return hit.rows.map((r) => ({ ...r, text: fill(r.text) }));
 }
 
@@ -3880,6 +3933,7 @@ function storyBeforeAiStep(state) {
   if (!ctx || ctx.type !== 'TURN') return false;
   let move = null;
   try { move = selectAiMoveMemo(state, ctx.playerId, { hasPlacedDieThisTurn: ctx.hasPlacedDieThisTurn }); } catch (err) { return false; }
+  if (ch4MaybeRoundTalk(state, true)) return true;
   const key = `${JSON.stringify(move)}|${JSON.stringify(state).length}|${state.progressLog ? state.progressLog.length : 0}`;
   if (ch.announcedKey === key) return false;
   // 「1Rの最後　ダイス回収直前」: 1ラウンド目を終わらせるターン終了(このあとダイスを回収)の前に、アレクのセリフ。
@@ -3901,6 +3955,8 @@ function storyBeforeAiStep(state) {
     actions = segs.actions;
   } else if (state.round === 2 && firstTurn) {
     actions = segs.actions2; // 2R1T(各自の最初の手番)だけ
+  } else if ((state.round === 3 || state.round === 4) && firstTurn) {
+    actions = segs.actions34; // 「キャラセリフ3-4R」: 3R・4Rの各自の最初の手番だけ(2026-11-16, per user回答)
   }
   if (!actions || !actions.length) return false;
   ch.announcedKey = key;
@@ -3967,12 +4023,28 @@ function ch4IntroSegments(rows, i) {
   const findAt = (re, from) => rows.findIndex((r, k) => k >= from && re.test(r.event || ''));
   const endAt = (k) => (k < 0 ? rows.length : k);
   const r1EndAt = findAt(/1Rの最後/, actionAt);
-  const p2At = findAt(/プレイヤーの2[TR]1T/, Math.max(actionAt, r1EndAt));
+  // 「2R1T」(2026-11-16 Excel更新、前は「プレイヤーの2T1T」): 今まで通りあなたの2ラウンド目の最初の手番の初め。
+  const p2At = findAt(/(プレイヤーの)?2[TR]1T/, Math.max(actionAt, r1EndAt));
   const act2At = p2At >= 0 ? findAt(/セリフ→行動/, p2At) : -1;
   segs.actions = ch4ActionSegments(rows.slice(actionAt + 1, endAt(r1EndAt)));
   segs.roundEnd1 = r1EndAt >= 0 ? rows.slice(r1EndAt + 1, endAt(p2At)) : [];
   // 「プレイヤーの3T1T」(3R1Tのあなた、2026-11-15): 2Rの敵の行動はその手前まで。
-  const p3At = findAt(/プレイヤーの3[TR]1T/, Math.max(act2At, p2At, actionAt));
+  // 「3Rはじめ」(2026-11-16 Excel更新、前は「プレイヤーの3T1T」): 3ラウンド目の最初(だれの手番よりも前、per user回答
+  // 「2Rだけ手番、3R・4Rは最初」)。
+  const p3At = findAt(/プレイヤーの3[TR]1T|3Rはじめ/, Math.max(act2At, p2At, actionAt));
+  // 3R以降の区切り(2026-11-16): 「3R強化モニュメントが出たら」「キャラセリフ3-4R」「4Rはじめ」。
+  const laterFrom = Math.max(p3At, act2At, p2At, actionAt);
+  const nextMarkAt = (from) => {
+    if (from < 0) return rows.length;
+    const k = rows.findIndex((r, j) => j > from && /強化モニュメントが出たら|キャラセリフ|[4４]Rはじめ|セリフ→行動/.test(r.event || ''));
+    return k < 0 ? rows.length : k;
+  };
+  const emAt = findAt(/強化モニュメントが出たら/, laterFrom);
+  segs.enhancedMonument = emAt >= 0 ? rows.slice(emAt + 1, nextMarkAt(emAt)) : [];
+  const act34At = findAt(/キャラセリフ/, laterFrom);
+  segs.actions34 = act34At >= 0 ? ch4ActionSegments(rows.slice(act34At + 1, nextMarkAt(act34At))) : [];
+  const r4At = findAt(/[4４]Rはじめ/, laterFrom);
+  segs.round4 = r4At >= 0 ? rows.slice(r4At + 1, nextMarkAt(r4At)) : [];
   // 「2Rローマ市民を使っていない場合５秒ごとに出る」「3Rローマ市民を…」とすぐ下のセリフ(イベントの無い行が続く間、
   // 2026-11-15): その場では言わず、そのラウンドのあなたの手番の間のヒントにする(ch4StartRomaHint)。
   const splitHint = (list) => {
@@ -3986,7 +4058,7 @@ function ch4IntroSegments(rows, i) {
   segs.playerRound2 = r2.talk;
   segs.romaHint2 = r2.hint;
   segs.actions2 = act2At >= 0 ? ch4ActionSegments(rows.slice(act2At + 1, endAt(p3At))) : [];
-  const r3 = splitHint(p3At >= 0 ? rows.slice(p3At + 1, endAt(findAt(/セリフ→行動/, p3At))) : []);
+  const r3 = splitHint(p3At >= 0 ? rows.slice(p3At + 1, nextMarkAt(p3At)) : []);
   segs.playerRound3 = r3.talk;
   segs.romaHint3 = r3.hint;
   // 「1R2Tの最初（プレイヤーの番でなくても）」: そのすぐ下のセリフ(アレク)。
@@ -4214,6 +4286,50 @@ function ch4HumanMidTurn() {
     || pendingAutoModeChoice || pendingJob007TapPrompt || pendingWhiteOverflowConfirm);
 }
 
+/** 「3Rはじめ」「4Rはじめ」(2026-11-16, per user回答「2Rだけ手番、3R・4Rは最初」): そのラウンドでだれもまだダイスを
+ * 置いていない、ダイスを振る演出も終わった時に、アレクのセリフ(1回だけ)。始めたらtrue。beforeAi: AIの1手の直前から
+ * 呼ばれた時(その時はAI側が演出の終わりを待っている)。 */
+function ch4MaybeRoundTalk(state, beforeAi) {
+  const run = storyRun;
+  const ch = run && run.ch4;
+  if (!ch || !ch.segs || run.holdAi || run.talking) return false;
+  const n = state.round;
+  const rows = n === 3 ? (ch.segs.playerRound3 || []) : n === 4 ? (ch.segs.round4 || []) : [];
+  const hint = n === 3 ? (ch.segs.romaHint3 || []) : [];
+  if ((!rows.length && !hint.length) || ch[`round${n}StartSaid`]) return false;
+  if (state.players.some((p) => p.dice.some((d) => d.placedMapId || d.passed))) return false;
+  if (!beforeAi && (diceRollSequenceActive || lastRenderedRound !== n || aiOpenTurnPlayerId !== null)) {
+    // ラウンドが変わった直後の描き直し/ダイスの演出中: 少しあとにもう一度確かめる(あなたが最初の手番の時はAIが動かないため)。
+    if (!ch.roundTalkRecheck) {
+      ch.roundTalkRecheck = true;
+      setTimeout(() => { ch.roundTalkRecheck = false; if (storyRun === run) render(STATE); }, 400);
+    }
+    return false;
+  }
+  ch[`round${n}StartSaid`] = true;
+  run.holdAi = true;
+  const talk = () => {
+    if (storyRun !== run) return;
+    if (!rows.length) { run.holdAi = false; if (hint.length) ch.pendingRomaHint = { rows: hint, round: n }; render(STATE); return; }
+    ch4Talk('alek', rows, () => { if (hint.length) { ch.pendingRomaHint = { rows: hint, round: n }; render(STATE); } });
+  };
+  if (beforeAi) talk(); else setTimeout(talk, 0);
+  return true;
+}
+
+/** 一番上のクエスト(「クエスト画面」の説明、2026-11-16): あなたの今の値・順位、単位(カードの枚数なら「枚」、それ以外は
+ * 「個」、per user「〇枚は必要におうじて〇個」)、報酬の例にする順位(4位なら1位の例、per user回答)。 */
+function ch4TopQuestInfo() {
+  const faceId = Object.keys(STATE.quests || {})[0];
+  if (!faceId) return null;
+  const facts = factsForQstFaceId(faceId);
+  const me = qstMod.rankPlayersForQuest(STATE, INDEX, faceId).find((r) => r.playerId === 'P1') || { value: 0, rank: 4 };
+  const firstLine = String(facts.inst || '').split('\n')[0];
+  const exampleRank = me.rank >= 1 && me.rank <= 3 ? me.rank : 1;
+  const vp = String((/(\d+)\s*VP/.exec(questRewardValueText(facts.rewards[exampleRank - 1])) || [])[1] || '0');
+  return { faceId, value: me.value, rank: me.rank, unit: /枚/.test(firstLine) ? '枚' : '個', exampleRank, vp };
+}
+
 function ch4OnRender(state) {
   const run = storyRun;
   if (!run || !run.normalGame) return;
@@ -4272,12 +4388,16 @@ function ch4OnRender(state) {
     run.holdAi = true;
     setTimeout(() => { if (storyRun === run) ch4Talk('alek', ch.segs.playerRound2, () => { if (ch.segs.romaHint2 && ch.segs.romaHint2.length) ch4StartRomaHint(ch.segs.romaHint2, 2); }); }, 0);
   }
-  // 「プレイヤーの3T1T」(2026-11-15): 3ラウンド目のあなたの最初の手番の初めに、アレクのセリフ(2Rと同じ)。
-  if (state.round === 3 && !ch.round3PlayerSaid && !run.holdAi && ch.segs && ((ch.segs.playerRound3 || []).length || (ch.segs.romaHint3 || []).length)
-    && upcoming.type === 'TURN' && upcoming.playerId === 'P1' && !p1.dice.some((d) => d.placedMapId || d.passed) && aiOpenTurnPlayerId === null) {
-    ch.round3PlayerSaid = true;
+  // 「3Rはじめ」「4Rはじめ」(2026-11-16): ラウンドの最初(ダイスを振り終わって、だれも置く前)にアレクのセリフ。
+  ch4MaybeRoundTalk(state, false);
+  // 「3R強化モニュメントが出たら」(2026-11-16, per user回答「4Rに出ても説明」): 3R・4Rにショップに強化モニュメントが
+  // 出た瞬間に1回だけ説明する(AIの手番の途中でも、次の手の前で止める)。
+  if (state.round >= 3 && !ch.enhancedSaid && ch.segs && (ch.segs.enhancedMonument || []).length && !run.holdAi && !run.talking
+    && !diceRollSequenceActive && lastRenderedRound === state.round && !pendingBuildChoice
+    && Object.values(state.shops.M.slots).some((f) => /^M4\d\d$/.test(f || ''))) {
+    ch.enhancedSaid = true;
     run.holdAi = true;
-    setTimeout(() => { if (storyRun === run) ch4Talk('alek', ch.segs.playerRound3, () => { if (ch.segs.romaHint3 && ch.segs.romaHint3.length) ch4StartRomaHint(ch.segs.romaHint3, 3); }); }, 0);
+    setTimeout(() => { if (storyRun === run) ch4Talk('alek', ch.segs.enhancedMonument); }, 0);
   }
   // そのラウンドで、まだダイスを1つも使っていないあなたの番が来たら、その手番は人間。
   if (ch.humanRound !== state.round && next.type === 'TURN' && next.playerId === 'P1' && used === 0) {
@@ -4288,6 +4408,12 @@ function ch4OnRender(state) {
   if (ch.humanRound === state.round && !ch.humanDone && used > 0
     && (next.type !== 'TURN' || next.playerId !== 'P1' || !ch4HumanMidTurn())) ch.humanDone = true;
   const role = ch.humanRound === state.round && !ch.humanDone ? 'HUMAN' : CH4_ALEK_ROLE;
+  // 3Rの「ローマ市民を使っていない…」のヒントは、ラウンドの最初のセリフのあと、あなたの手番になってから始める。
+  if (ch.pendingRomaHint && ch.pendingRomaHint.round === state.round && role === 'HUMAN' && !run.talking) {
+    const hint = ch.pendingRomaHint;
+    ch.pendingRomaHint = null;
+    setTimeout(() => { if (storyRun === run) ch4StartRomaHint(hint.rows, hint.round); }, 0);
+  }
   if (playerRoles.get('P1') !== role) {
     playerRoles.set('P1', role);
     setTimeout(() => { if (storyRun === run) render(STATE); }, 0);
