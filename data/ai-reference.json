@@ -1,6 +1,6 @@
 {
- "gameDataVersion": "ccc546aa3af51d39",
- "generatedAt": "2026-11-16T00:09:33.622Z",
+ "gameDataVersion": "eabf0884074f23f1",
+ "generatedAt": "2026-11-16T02:46:03.939Z",
  "commandSpecFile": "dsl-command-spec.json",
  "cardCount": 148,
  "cards": {
@@ -1074,7 +1074,7 @@
   "AREA001B": {
    "sheet": "AREA",
    "name": "小麦畑LV1",
-   "SLOT1": 1,
+   "SLOT1": "ANY",
    "SLOT2": "EX",
    "SLOT3": "EX",
    "SLOT4": "NONE",

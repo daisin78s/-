@@ -1903,7 +1903,7 @@
     {
       "ID": "AREA001B",
       "NAME": "小麦畑LV1",
-      "SLOT1": 1,
+      "SLOT1": "ANY",
       "SLOT2": "EX",
       "SLOT3": "EX",
       "SLOT4": "NONE",
