@@ -12688,6 +12688,56 @@ function rankingNameHasPassword() {
   return !!(name && identity && identity.name === name);
 }
 
+/** 最新版でなければ自動で読み込み直す (2026-11-16, per user「トップ画面で最新版でないときは自動でリロードして最新版に
+ * できる？」→「おねがい」)。iPadのタブを開いたままだと、新しい版を送っても古い版のまま遊んでしまう(1.906のままで
+ * 自動登録が動かなかった)ため。
+ * ・トップ画面(入口バナー)が出ている時だけ。開いた時と、タブ/アプリに戻ってきた時に確かめる(1分に1回まで)。
+ * ・サーバーのindex.htmlの版の番号(#copyright-notice)と比べ、新しければ読み込み直す。
+ * ・GitHub Pagesは届くまで最大10分ほどかかり、読み込み直しても古い版が来ることがあるので、同じ版のための自動の
+ *   読み込み直しは1回だけ(sessionStorage)。止まらなくなるのを防ぐ。
+ * ・名前の入力画面・ランキングなどの画面を開いている間はしない。通信できない時、file://で開いた時は何もしない。 */
+const AUTO_RELOAD_KEY = 'diceWpAutoReloadedFor';
+let autoReloadLastCheck = 0;
+function versionNumberOf(text) {
+  const m = /Ver\.(\d+\.\d+)/.exec(String(text || ''));
+  return m ? Number(m[1]) : null;
+}
+function autoReloadBlocked() {
+  if (entryBannerDismissed || replayMode || sessionResumeChoicePending) return true;
+  if (document.getElementById('entry-banner').hidden) return true;
+  if (document.querySelector('.card-inst-overlay:not([hidden])')) return true;
+  // 名前の入力画面は、何か打ち込んでいる時だけ止める(開いた時のパスワードのお願いが出ているだけなら読み込み直してよい)。
+  const typing = [...document.querySelectorAll('.player-name-entry-overlay input[type=password]')].some((i) => i.value);
+  if (typing) return true;
+  return false;
+}
+function maybeAutoReloadToLatest() {
+  if (!/^https?:$/.test(location.protocol)) return;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+  const now = Date.now();
+  if (now - autoReloadLastCheck < 60000) return;
+  autoReloadLastCheck = now;
+  const current = versionNumberOf(appVersionLabel());
+  if (current === null) return;
+  const url = `${location.pathname}?vcheck=${now}`;
+  fetch(url, { cache: 'no-store' }).then((res) => (res.ok ? res.text() : '')).then((html) => {
+    const m = /id="copyright-notice"[^<]*?Ver\.(\d+\.\d+)/.exec(html);
+    const latest = m ? Number(m[1]) : null;
+    if (latest === null || !(latest > current)) return;
+    let already = null;
+    try { already = sessionStorage.getItem(AUTO_RELOAD_KEY); } catch (e) { /* ignore */ }
+    if (already === String(latest)) return; // この版のためにはもう1回読み込み直した(まだ届いていない)
+    if (autoReloadBlocked()) return;
+    try { sessionStorage.setItem(AUTO_RELOAD_KEY, String(latest)); } catch (e) { /* ignore */ }
+    const params = new URLSearchParams(location.search);
+    params.set('v', String(latest));
+    location.replace(`${location.pathname}?${params.toString()}${location.hash}`);
+  }).catch(() => { /* 通信できなければ何もしない */ });
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && !autoReloadBlocked()) maybeAutoReloadToLatest();
+});
+
 /** 名前だけあってパスワードが無い端末は、ゲームを開いた時(トップ画面)に名前とパスワードの入力画面を出す (2026-11-16,
  * per user「名前だけあってパスワードない人はログイン時にパスワード入れるようにして」+回答「「あとで」ボタンを付ける」)。
  * 名前は入った状態。「あとで」で閉じれば、次に開いた時にまた出す(1回の読み込みにつき1回)。通信できない時は出さない
@@ -18232,6 +18282,7 @@ function renderCore(state) {
     document.getElementById('weekly-seat-picker').hidden = true;
     document.getElementById('entry-banner').hidden = false;
     maybePromptPasswordAtStart();
+    maybeAutoReloadToLatest();
     return;
   }
   document.getElementById('entry-banner').hidden = true;
