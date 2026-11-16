@@ -19996,6 +19996,52 @@ function setupAppHeightVar() {
   if (window.visualViewport) window.visualViewport.addEventListener('resize', update);
 }
 
+/** 一時的な調べ用 (2026-11-16, per user「右側に謎のスペース」→ 調べるための表示を付ける提案に「おねがい」):
+ * スマホ版の設定タブの一番下に、画面の大きさの数字を出す(1秒ごとに更新)。原因がわかって直したら消す。 */
+function setupViewportDiagnostics() {
+  if (!isMobileLayout()) return;
+  const panel = document.getElementById('debug-panel');
+  if (!panel) return;
+  const box = document.createElement('div');
+  box.id = 'viewport-diag';
+  box.style.cssText = 'flex-basis:100%;width:100%;font:11px/1.4 monospace;color:#555;white-space:pre-wrap;margin-top:8px;';
+  panel.appendChild(box);
+  let maxInnerH = 0;
+  let maxInnerW = 0;
+  let lastBoard = '-';
+  const r = (node) => { if (!node) return '-'; const b = node.getBoundingClientRect(); return `${Math.round(b.left)},${Math.round(b.top)} ${Math.round(b.width)}x${Math.round(b.height)}`; };
+  const update = () => {
+    maxInnerH = Math.max(maxInnerH, window.innerHeight);
+    maxInnerW = Math.max(maxInnerW, window.innerWidth);
+    if (mobileActiveTab === 'board') {
+      // エリアを見ている時の数字を覚えておく(設定タブではエリアが隠れて0になるため)。
+      const row0 = document.querySelector('#board > .board-row');
+      const t = document.querySelector('.mobile-tab-switcher');
+      lastBoard = `inner ${window.innerWidth}x${window.innerHeight} board ${r(document.getElementById('board'))} rows ${[...document.querySelectorAll('#board > .board-row')].map((x) => `${x.scrollWidth}/${Math.round(x.getBoundingClientRect().height)}`).join(' ')} zoom ${row0 ? (row0.style.zoom || '1') : '-'} tabs ${r(t)}`;
+    }
+    if (mobileActiveTab !== 'settings') return;
+    const vv = window.visualViewport;
+    const de = document.documentElement;
+    const row = document.querySelector('#board > .board-row');
+    const tabs = document.querySelector('.mobile-tab-switcher');
+    const standalone = window.navigator.standalone === true || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+    box.textContent = [
+      `画面の情報(調べ用) ${appVersionLabel()}`,
+      `inner ${window.innerWidth}x${window.innerHeight} (max ${maxInnerW}x${maxInnerH})`,
+      `screen ${window.screen.width}x${window.screen.height}  dpr ${window.devicePixelRatio}`,
+      `visual ${vv ? `${Math.round(vv.width)}x${Math.round(vv.height)} off ${Math.round(vv.offsetLeft)},${Math.round(vv.offsetTop)} scale ${vv.scale}` : '-'}`,
+      `client ${de.clientWidth}x${de.clientHeight}  scroll ${Math.round(window.scrollX)},${Math.round(window.scrollY)}  doc ${de.scrollWidth}x${de.scrollHeight}`,
+      `app ${r(document.getElementById('app'))}  --app-height ${de.style.getPropertyValue('--app-height') || '-'}`,
+      `board ${r(document.getElementById('board'))}  zoom ${row ? (row.style.zoom || '1') : '-'}`,
+      `tabs ${r(tabs)}`,
+      `エリアを見ていた時: ${lastBoard}`,
+      `standalone ${standalone}  orient ${(screen.orientation && screen.orientation.type) || window.orientation}  bodyLock ${document.body.classList.contains('body--overlay-open')}`,
+    ].join(String.fromCharCode(10));
+  };
+  update();
+  setInterval(update, 1000);
+}
+
 function setupIosStandaloneViewportFix() {
   const standalone = window.navigator.standalone === true
     || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
@@ -20132,6 +20178,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   setupAppHeightVar();
   setupIosStandaloneViewportFix();
+  setupViewportDiagnostics();
   if (playOpeningOnLoad) startOpeningSequence();
   render(STATE);
   autoScrollToBottomOnStart();
