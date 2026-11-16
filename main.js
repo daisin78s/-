@@ -831,6 +831,8 @@ function dealCardsFromTop(targets, hideClass, onDone) {
       { transform: `translateY(${-(rect.bottom + 30)}px)` },
       { transform: 'translateY(0)' },
     ], { duration: OPENING_DEAL_CARD_MS, delay: i * OPENING_DEAL_STEP_MS, easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)', fill: 'both' });
+    // 効果音 (2026-11-16, per user「ジョブ　性格　初期資源カードが配られたときも音が欲しい」): ショップと同じく1枚ごとに。
+    if (window.Sfx) setTimeout(() => Sfx.play('card-deal'), i * OPENING_DEAL_STEP_MS);
     return flyer;
   });
   setTimeout(() => {
@@ -855,6 +857,7 @@ function dealConCards(onDone) {
     const dy = fromRect.top - toRect.top;
     // 前半: 表の複製が表の位置で横に縮む(めくれ始め)。後半: 裏の複製が縮んだ状態から広がりつつ裏の枠へ移動。
     const half = OPENING_CON_FLIP_MS / 2;
+    if (window.Sfx) Sfx.play('card-deal'); // 裏が分かれて来る時も1回(上の効果音と同じ)
     const frontFlyer = front.cloneNode(true);
     frontFlyer.classList.add('opening-card-flyer');
     Object.assign(frontFlyer.style, { left: `${fromRect.left}px`, top: `${fromRect.top}px`, width: `${fromRect.width}px`, height: `${fromRect.height}px`, visibility: 'visible' });
