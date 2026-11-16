@@ -14548,6 +14548,7 @@ async function handleRankingDeleteSelectedClick() {
  * change listener. */
 function updateRankingDownloadSelectedButton() {
   const button = document.getElementById('ranking-download-selected-button');
+  if (!button) return; // 選択ダウンロードは廃止(2026-11-16)、ボタンはもう無い
   const n = selectedRankingEntries.size;
   button.disabled = n === 0;
   button.textContent = n === 0 ? '選択した項目をダウンロード' : `選択した${n}件をダウンロード`;
@@ -14564,19 +14565,6 @@ function rankingEntryLockedThisWeek(entry) {
   return !!entry && entry.category === 'weekly' && entry.weekId === currentWeeklyChallengeId();
 }
 
-async function handleRankingDownloadSelectedClick() {
-  const all = Array.from(selectedRankingEntries.entries()).filter(([, e]) => e.hasReplay);
-  const entries = all.filter(([, e]) => !rankingEntryLockedThisWeek(e));
-  if (entries.length < all.length) window.alert(WEEKLY_LOCKED_MESSAGE);
-  if (entries.length === 0) return; // button is disabled in this state, but guard anyway
-  const button = document.getElementById('ranking-download-selected-button');
-  button.disabled = true;
-  for (const [id, { name }] of entries) {
-    const history = await RankingStorage.loadReplay(id);
-    if (history && history.length) downloadReplayAsJson(history, name.replace(/[\\/:*?"<>|\s]+/g, '_'));
-  }
-  updateRankingDownloadSelectedButton(); // re-enables based on current selection size, same as before the click
-}
 
 // ---------------------------------------------------------------------------
 // チュートリアルモード -- その場解説 (2026-09-23, per user request: "チュートリアルモードを作りたい")
@@ -20077,7 +20065,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('game-end-ranking-button').addEventListener('click', openRankingOverlay);
   document.getElementById('ranking-close-button').addEventListener('click', closeRankingOverlay);
   document.getElementById('ranking-delete-selected-button').addEventListener('click', handleRankingDeleteSelectedClick);
-  document.getElementById('ranking-download-selected-button').addEventListener('click', handleRankingDownloadSelectedClick);
   const rankingOverlayEl = document.getElementById('ranking-overlay');
   rankingOverlayEl.addEventListener('click', (e) => {
     if (e.target === rankingOverlayEl) closeRankingOverlay(); // backdrop click only, matching #card-inst-overlay
