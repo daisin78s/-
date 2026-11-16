@@ -635,6 +635,12 @@ function saveAchievementBackup(name, passwordHash, achievements) {
 
 /** アバターの解禁を端末をまたいで引き継ぐ (2026-11-16, per user: 別の端末で入ったウィークリーの記録でも解禁 → 回答
  * 「名前とパスワードで引き継ぐ」)。この名前の文書に「この人が登録したウィークリーの記録」[{id, weekId}] を書く。 */
+/** ストーリーの進み具合も名前とパスワードで引き継ぐ (2026-11-16, per user「ストーリーも名前とパスワードで引き継げる
+ * ようにしたい」)。story = { cleared:[章], owls:[飾り留め], senecaWorried:bool, best3:number|null, best4:number|null }。 */
+function saveAchievementBackupStory(name, story) {
+  return db().collection(ACHIEVEMENT_BACKUP_COLLECTION).doc(name).set({ story: story }, { merge: true });
+}
+
 function saveAchievementBackupWeekly(name, weeklyEntries) {
   return db().collection(ACHIEVEMENT_BACKUP_COLLECTION).doc(name).set({ weeklyEntries: weeklyEntries }, { merge: true });
 }
@@ -813,6 +819,7 @@ window.OnlineSync = {
   loadAchievementBackup: loadAchievementBackup,
   saveAchievementBackup: saveAchievementBackup,
   saveAchievementBackupWeekly: saveAchievementBackupWeekly,
+  saveAchievementBackupStory: saveAchievementBackupStory,
   deleteAchievementBackup: deleteAchievementBackup,
   getStoryWorldRecord: getStoryWorldRecord,
   submitStoryWorldRecord: submitStoryWorldRecord,

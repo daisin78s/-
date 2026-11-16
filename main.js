@@ -12235,6 +12235,7 @@ async function handleAchievementBackupSetupClick() {
     refreshLockedMenuFeatureIds();
     renderAchievementOverlay();
     if (typeof avatarSyncWeeklyWithBackup === 'function') avatarSyncWeeklyWithBackup().then(() => avatarRefreshUnlock()); // アバターの解禁を引き継ぐ(avatar.js)
+    if (typeof storySyncWithBackup === 'function') storySyncWithBackup(); // ストーリーの進み具合を引き継ぐ(story.js)
     window.alert(`復元しました(実績ポイント合計${achievementTotalPoints(existing.achievements || {})}点)`);
     return;
   }
@@ -12244,6 +12245,7 @@ async function handleAchievementBackupSetupClick() {
   rememberRankingName(name);
   renderAchievementOverlay();
   if (typeof avatarSyncWeeklyWithBackup === 'function') avatarSyncWeeklyWithBackup().then(() => avatarRefreshUnlock()); // アバターの解禁を引き継ぐ(avatar.js)
+  if (typeof storySyncWithBackup === 'function') storySyncWithBackup(); // ストーリーの進み具合を引き継ぐ(story.js)
   window.alert('設定しました。以降、実績ポイントが増えるたびに自動でバックアップされます。');
 }
 
@@ -12282,6 +12284,7 @@ async function handleAchievementBackupChangeClick() {
   saveAchievementBackupIdentity(newName, newPasswordHash);
   if (nameChanged) rememberRankingName(newName);
   if (typeof avatarSyncWeeklyWithBackup === 'function') avatarSyncWeeklyWithBackup().then(() => avatarRefreshUnlock()); // アバターの解禁を引き継ぐ(avatar.js)
+  if (typeof storySyncWithBackup === 'function') storySyncWithBackup(); // ストーリーの進み具合を引き継ぐ(story.js)
   renderAchievementOverlay();
   window.alert('変更しました。');
 }

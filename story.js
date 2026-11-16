@@ -1607,6 +1607,7 @@ function story2DoEvent(row, i, onDone) {
     const updated = prev === null || vp >= prev;
     run.ch2Best = { updated, prev, vp };
     try { if (updated) localStorage.setItem(STORY3_BEST_VP_KEY, String(vp)); } catch (err) { /* 書けなくても続ける */ }
+    if (updated) storyProgressChanged();
     if (updated) { run.ch2SkipUntil = /更新されたとき/; onDone(); return; }
     run.ch2BestText = String(prev);
     onDone();
@@ -2148,6 +2149,7 @@ function ch3PlayRecordEnding(rows) {
   try { const v = localStorage.getItem(STORY3_BEST_VP_KEY); prev = v === null ? null : Number(v); } catch (err) { /* 読めなければ記録なし */ }
   const personalUpdated = prev === null || vp >= prev;
   try { if (personalUpdated) localStorage.setItem(STORY3_BEST_VP_KEY, String(vp)); } catch (err) { /* 書けなくても続ける */ }
+  if (personalUpdated) storyProgressChanged();
   run.ch2Best = { updated: personalUpdated, prev, vp };
   const sync = window.OnlineSync;
   let settled = false;
@@ -2808,6 +2810,7 @@ function senecaEndingLines(rest, fallback) {
     if (m && !owls.includes(m[1])) owls.push(m[1]);
   }
   try { localStorage.setItem(SENECA_OWL_KEY, JSON.stringify(owls)); } catch (err) { /* 書けなくても続ける */ }
+  storyProgressChanged();
   const count = Math.min(owls.length, SENECA_OWL_TOTAL);
   const countRows = () => {
     const at = rest.findIndex((r) => new RegExp(`飾り留め${count}個目のセリフ$`).test(ev(r)));
@@ -2860,12 +2863,14 @@ async function storyRegisterNameAndPassword(name, password) {
     rememberRankingName(name);
     if (typeof refreshLockedMenuFeatureIds === 'function') refreshLockedMenuFeatureIds();
     if (typeof avatarSyncWeeklyWithBackup === 'function') avatarSyncWeeklyWithBackup().then(() => avatarRefreshUnlock()); // アバターの解禁を引き継ぐ(avatar.js)
+    if (typeof storySyncWithBackup === 'function') storySyncWithBackup(); // ストーリーの進み具合を引き継ぐ(story.js)
     return { restored: true };
   }
   try { await window.OnlineSync.saveAchievementBackup(name, passwordHash, loadAchievements()); } catch (e) { return { offline: true }; }
   saveAchievementBackupIdentity(name, passwordHash);
   rememberRankingName(name);
   if (typeof avatarSyncWeeklyWithBackup === 'function') avatarSyncWeeklyWithBackup().then(() => avatarRefreshUnlock()); // アバターの解禁を引き継ぐ(avatar.js)
+  if (typeof storySyncWithBackup === 'function') storySyncWithBackup(); // ストーリーの進み具合を引き継ぐ(story.js)
   return { saved: true };
 }
 
@@ -4201,6 +4206,7 @@ function ch4OnRender(state) {
       try { const v = localStorage.getItem(STORY4_BEST_VP_KEY); prev = v === null ? null : Number(v); } catch (err) { /* 読めなければ記録なし */ }
       const updated = prev === null || vp >= prev;
       try { if (updated) localStorage.setItem(STORY4_BEST_VP_KEY, String(vp)); } catch (err) { /* 書けなくても続ける */ }
+      if (updated) storyProgressChanged();
       run.ch4.best = { updated, prev, vp };
     }
     return;
@@ -4281,7 +4287,63 @@ function storyMarkChapterCleared(no) {
   const cleared = storyClearedChapters();
   if (cleared.includes(no)) return;
   try { localStorage.setItem(STORY_CLEARED_KEY, JSON.stringify([...cleared, no])); } catch (e) { /* 保存できなくても続ける */ }
+  storyProgressChanged();
 }
+
+/* ---------- ストーリーの進み具合を名前とパスワードで引き継ぐ (2026-11-16, per user「ストーリーも名前とパスワードで
+ * 引き継げるようにしたい」) ----------
+ * この端末に名前+パスワード(実績のバックアップ)が登録されていれば、その名前の文書の story とこの端末の進み具合を
+ * 合わせて、両方に書く。合わせ方は「進んでいる方」: クリアした章・飾り留めは両方を足す、心配性なセネカはどちらかで
+ * 解禁なら解禁、自己ベストは高い方。だから進んだ端末も進んでいない端末も、両方とも進んだ方にそろう(減ることはない)。
+ * パスワードが合わない文書からは読まない。 */
+function storyLocalProgress() {
+  const num = (key) => { try { const v = localStorage.getItem(key); return v === null || v === '' || Number.isNaN(Number(v)) ? null : Number(v); } catch (e) { return null; } };
+  let worried = false;
+  try { worried = localStorage.getItem(STORY_SENECA_WORRIED_UNLOCK_KEY) === '1'; } catch (e) { /* ignore */ }
+  return { cleared: storyClearedChapters(), owls: senecaOwls(), senecaWorried: worried, best3: num(STORY3_BEST_VP_KEY), best4: num(STORY4_BEST_VP_KEY) };
+}
+function storyMergeProgress(a, b) {
+  const uniq = (xs) => [...new Set(xs)];
+  const max = (x, y) => (x === null || x === undefined ? (y === undefined ? null : y) : (y === null || y === undefined ? x : Math.max(x, y)));
+  return {
+    cleared: uniq([...(a.cleared || []), ...(b.cleared || [])]).sort((x, y) => x - y),
+    owls: uniq([...(a.owls || []), ...(b.owls || [])]),
+    senecaWorried: !!(a.senecaWorried || b.senecaWorried),
+    best3: max(a.best3, b.best3),
+    best4: max(a.best4, b.best4),
+  };
+}
+function storyWriteLocalProgress(p) {
+  try {
+    localStorage.setItem(STORY_CLEARED_KEY, JSON.stringify(p.cleared));
+    localStorage.setItem(SENECA_OWL_KEY, JSON.stringify(p.owls));
+    if (p.senecaWorried) localStorage.setItem(STORY_SENECA_WORRIED_UNLOCK_KEY, '1');
+    if (p.best3 !== null) localStorage.setItem(STORY3_BEST_VP_KEY, String(p.best3));
+    if (p.best4 !== null) localStorage.setItem(STORY4_BEST_VP_KEY, String(p.best4));
+  } catch (e) { /* 書けなくても続ける */ }
+}
+function storySyncWithBackup() {
+  const identity = typeof loadAchievementBackupIdentity === 'function' ? loadAchievementBackupIdentity() : null;
+  if (!identity || !window.OnlineSync || !OnlineSync.loadAchievementBackup || !OnlineSync.saveAchievementBackupStory) return Promise.resolve(false);
+  return OnlineSync.loadAchievementBackup(identity.name).then((doc) => {
+    if (!doc || doc.passwordHash !== identity.passwordHash) return false;
+    const local = storyLocalProgress();
+    const remote = doc.story || {};
+    const merged = storyMergeProgress(local, remote);
+    const same = (x, y) => JSON.stringify(storyMergeProgress(x, {})) === JSON.stringify(y);
+    const localChanged = !same(local, merged);
+    if (localChanged) storyWriteLocalProgress(merged);
+    if (!same(remote, merged)) OnlineSync.saveAchievementBackupStory(identity.name, merged).catch(() => {});
+    return localChanged;
+  }).catch(() => false);
+}
+/** ストーリーの進み具合を書いた所から呼ぶ(続けて何回呼ばれても1回にまとめる)。 */
+let storyProgressSyncTimer = null;
+function storyProgressChanged() {
+  clearTimeout(storyProgressSyncTimer);
+  storyProgressSyncTimer = setTimeout(() => { storySyncWithBackup(); }, 1000);
+}
+document.addEventListener('DOMContentLoaded', () => { setTimeout(() => { storySyncWithBackup(); }, 500); });
 
 /* ---------- ストーリーのランキング (2026-11-15, per user「ローカル対戦のランキングと同じように、ストーリーに対戦が
  * 増えたらそれごとのランキング(第３章のランキング 第４章のランキング…)」+ 回答) ----------
