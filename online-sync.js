@@ -625,11 +625,18 @@ function loadAchievementBackup(name) {
  * syncAchievementBackupIfIncreased, same "increase only" trigger as the existing achievement-ranking
  * total sync just above). */
 function saveAchievementBackup(name, passwordHash, achievements) {
+  // merge: 同じ文書のweeklyEntries(アバターの解禁用、下のsaveAchievementBackupWeekly)を消さないように(2026-11-16)。
   return db().collection(ACHIEVEMENT_BACKUP_COLLECTION).doc(name).set({
     passwordHash: passwordHash,
     achievements: achievements,
     updatedAt: new Date().toISOString(),
-  });
+  }, { merge: true });
+}
+
+/** アバターの解禁を端末をまたいで引き継ぐ (2026-11-16, per user: 別の端末で入ったウィークリーの記録でも解禁 → 回答
+ * 「名前とパスワードで引き継ぐ」)。この名前の文書に「この人が登録したウィークリーの記録」[{id, weekId}] を書く。 */
+function saveAchievementBackupWeekly(name, weeklyEntries) {
+  return db().collection(ACHIEVEMENT_BACKUP_COLLECTION).doc(name).set({ weeklyEntries: weeklyEntries }, { merge: true });
 }
 
 /** Used by the rename flow (main.js's handleAchievementBackupChangeClick): the new name's doc is written
@@ -805,6 +812,7 @@ window.OnlineSync = {
   spectateRoom: spectateRoom,
   loadAchievementBackup: loadAchievementBackup,
   saveAchievementBackup: saveAchievementBackup,
+  saveAchievementBackupWeekly: saveAchievementBackupWeekly,
   deleteAchievementBackup: deleteAchievementBackup,
   getStoryWorldRecord: getStoryWorldRecord,
   submitStoryWorldRecord: submitStoryWorldRecord,

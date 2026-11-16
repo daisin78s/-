@@ -55,6 +55,31 @@ function avatarRecordMyWeeklyEntry(entry) {
   const list = avatarLoadMyWeekly().filter((e) => e && e.id !== entry.id);
   list.push({ id: entry.id, weekId: entry.weekId });
   try { localStorage.setItem(AVATAR_MY_WEEKLY_KEY, JSON.stringify(list.slice(-40))); } catch (err) { /* 書けなくても続ける */ }
+  avatarSyncWeeklyWithBackup();
+}
+
+/** 名前とパスワードで引き継ぐ (2026-11-16, per user: 別の端末で入ったウィークリーの記録でも解禁 → 回答「名前と
+ * パスワードで引き継ぐ」)。この端末に名前+パスワード(実績のバックアップ)が登録されていれば、その名前の文書の
+ * weeklyEntries とこの端末の記録を合わせ、両方に書く(どの端末で登録した記録でも、同じ名前+パスワードの端末なら解禁)。
+ * パスワードが合わない文書(名前の取り違え)からは読まない。@returns {Promise<boolean>} この端末の記録が増えたか。 */
+function avatarSyncWeeklyWithBackup() {
+  const identity = typeof loadAchievementBackupIdentity === 'function' ? loadAchievementBackupIdentity() : null;
+  if (!identity || !window.OnlineSync || !OnlineSync.loadAchievementBackup || !OnlineSync.saveAchievementBackupWeekly) return Promise.resolve(false);
+  return OnlineSync.loadAchievementBackup(identity.name).then((doc) => {
+    if (!doc || doc.passwordHash !== identity.passwordHash) return false;
+    const local = avatarLoadMyWeekly();
+    const remote = Array.isArray(doc.weeklyEntries) ? doc.weeklyEntries : [];
+    const byId = new Map();
+    for (const e of [...remote, ...local]) if (e && e.id && e.weekId) byId.set(e.id, { id: e.id, weekId: e.weekId });
+    const merged = [...byId.values()].slice(-40);
+    const localGrew = merged.length > local.length;
+    if (localGrew) {
+      try { localStorage.setItem(AVATAR_MY_WEEKLY_KEY, JSON.stringify(merged)); } catch (err) { /* ignore */ }
+    }
+    const remoteIds = new Set(remote.map((e) => e && e.id));
+    if (merged.some((e) => !remoteIds.has(e.id))) OnlineSync.saveAchievementBackupWeekly(identity.name, merged).catch(() => {});
+    return localGrew;
+  }).catch(() => false);
 }
 
 /** 先週のウィークリーの10位以内に、この端末の記録があるか。結果は今週の間だけ覚えておく。 */
@@ -334,4 +359,5 @@ function avatarPlayNext() {
 }
 
 /* ---------- 読み込み時 ---------- */
-try { avatarRefreshUnlock(); } catch (err) { /* オフラインなどでは解禁なしのまま */ }
+// 先に名前+パスワードの記録を合わせてから解禁を調べる(ほかの端末で入った記録も入るように)。
+try { avatarSyncWeeklyWithBackup().then(() => avatarRefreshUnlock()).catch(() => {}); } catch (err) { /* オフラインなどでは解禁なしのまま */ }

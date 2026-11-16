@@ -2859,11 +2859,13 @@ async function storyRegisterNameAndPassword(name, password) {
     saveAchievementBackupIdentity(name, passwordHash);
     rememberRankingName(name);
     if (typeof refreshLockedMenuFeatureIds === 'function') refreshLockedMenuFeatureIds();
+    if (typeof avatarSyncWeeklyWithBackup === 'function') avatarSyncWeeklyWithBackup().then(() => avatarRefreshUnlock()); // アバターの解禁を引き継ぐ(avatar.js)
     return { restored: true };
   }
   try { await window.OnlineSync.saveAchievementBackup(name, passwordHash, loadAchievements()); } catch (e) { return { offline: true }; }
   saveAchievementBackupIdentity(name, passwordHash);
   rememberRankingName(name);
+  if (typeof avatarSyncWeeklyWithBackup === 'function') avatarSyncWeeklyWithBackup().then(() => avatarRefreshUnlock()); // アバターの解禁を引き継ぐ(avatar.js)
   return { saved: true };
 }
 
