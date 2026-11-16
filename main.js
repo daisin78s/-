@@ -12922,7 +12922,7 @@ function renderRankingList(highlightId, highlightCategory) {
         const checkbox = el('input', 'ranking-row__checkbox');
         checkbox.type = 'checkbox';
         checkbox.addEventListener('change', () => {
-          if (checkbox.checked) selectedRankingEntries.set(entry.id, { category, name: entry.name, hasReplay: entry.hasReplay });
+          if (checkbox.checked) selectedRankingEntries.set(entry.id, { category, name: entry.name, hasReplay: entry.hasReplay, weekId: entry.weekId });
           else selectedRankingEntries.delete(entry.id);
           updateRankingDeleteSelectedButton();
           updateRankingDownloadSelectedButton();
@@ -12952,6 +12952,7 @@ function renderRankingList(highlightId, highlightCategory) {
         replayButton.type = 'button';
         replayButton.disabled = !entry.hasReplay;
         replayButton.addEventListener('click', () => {
+          if (rankingEntryLockedThisWeek(entry)) { window.alert(WEEKLY_LOCKED_MESSAGE); return; }
           replayButton.disabled = true;
           RankingStorage.loadReplay(entry.id).then((history) => {
             if (history && history.length) enterReplayMode(history);
@@ -12965,6 +12966,7 @@ function renderRankingList(highlightId, highlightCategory) {
         lifeButton.type = 'button';
         lifeButton.disabled = !entry.hasReplay;
         lifeButton.addEventListener('click', () => {
+          if (rankingEntryLockedThisWeek(entry)) { window.alert(WEEKLY_LOCKED_MESSAGE); return; }
           lifeButton.disabled = true;
           // 最後の場面だけの小さなファイル(online-sync.jsのloadReplayFinal)を先に読む。無い古い記録だけ
           // リプレイ全体を読む(per user「人生を見るとき結構重い」)。
@@ -14554,8 +14556,18 @@ function updateRankingDownloadSelectedButton() {
 /** Downloads every selected entry's own replay as a separate JSON file (one browser download per entry,
  * same downloadReplayAsJson the old per-row button used) -- entries with hasReplay:false are silently
  * skipped (nothing to download), no password/confirm needed since this is non-destructive. */
+/** 今週のウィークリーの記録は、週が終わるまでリプレイ・人生・ダウンロードを見せない (2026-11-16, per user: ウィークリーは
+ * 同じ週なら盤面もダイスの目もAIの動きも同じなので、人のリプレイを真似すると簡単に上回れる → 回答「1で ボタンを押すと
+ * 今週は見れません的なことを書いて」)。週が変われば(月曜0:00 日本時間)そのまま見られる。 */
+const WEEKLY_LOCKED_MESSAGE = '今週のウィークリーチャレンジのリプレイと人生は、公平のため今週の間は見られません。\n週が変わる月曜0:00（日本時間）から見られます。';
+function rankingEntryLockedThisWeek(entry) {
+  return !!entry && entry.category === 'weekly' && entry.weekId === currentWeeklyChallengeId();
+}
+
 async function handleRankingDownloadSelectedClick() {
-  const entries = Array.from(selectedRankingEntries.entries()).filter(([, e]) => e.hasReplay);
+  const all = Array.from(selectedRankingEntries.entries()).filter(([, e]) => e.hasReplay);
+  const entries = all.filter(([, e]) => !rankingEntryLockedThisWeek(e));
+  if (entries.length < all.length) window.alert(WEEKLY_LOCKED_MESSAGE);
   if (entries.length === 0) return; // button is disabled in this state, but guard anyway
   const button = document.getElementById('ranking-download-selected-button');
   button.disabled = true;
