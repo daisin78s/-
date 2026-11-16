@@ -1864,6 +1864,9 @@ function story2ShowResourceCards(selectable, onPicked, cards, extraClass) {
     if (selectable) {
       cell.classList.add('story2-cards__card--selectable');
       cell.addEventListener('click', () => {
+        // 効果音 (2026-11-16, per user「ストーリーで 初期資源選んだ時も同じ音を」): 普段のゲームと同じcard-pick。
+        // 2枚選んだ後に別のカードを押した時(何も変わらない)は鳴らさない。
+        if (window.Sfx && (selected.has(faceId) || selected.size < 2)) Sfx.play('card-pick');
         if (selected.has(faceId)) selected.delete(faceId);
         else if (selected.size < 2) selected.add(faceId);
         cell.classList.toggle('story2-cards__card--selected', selected.has(faceId));
