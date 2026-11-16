@@ -958,6 +958,8 @@ function startOpeningSequence() {
     if (isMobile || isTablet) window.scrollTo(0, 0);
     document.body.classList.remove('opening-hide-shop');
     openingDealStartedAt = performance.now();
+    // 効果音 (2026-11-16, per user「一番初めにカードが配られたときはならせませんか」→「おねがい」): 1枚滑り込むたびに。
+    if (window.Sfx) for (let i = 0; i < OPENING_DEAL_CARD_COUNT; i++) setTimeout(() => Sfx.play('card-deal'), i * OPENING_DEAL_STEP_MS);
     render(STATE);
     after(openingDealTotalMs() + OPENING_STEP_GAP_MS, () => {
       openingDealStartedAt = null;
