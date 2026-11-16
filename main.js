@@ -18159,7 +18159,7 @@ function rollAllHandDice(state, onDone) {
     flickerDieValue(flyer, DICE_ROLL_MS);
   }
   // 効果音 (2026-11-16, per user「ダイスが鳴る場面すべて入れてみて」): たくさん転がるので少しずつずらして重ねる。
-  if (targets.length && window.Sfx) Sfx.play('dice-roll', { count: Math.min(4, targets.length), spread: 150 });
+  if (targets.length && window.Sfx) Sfx.play('dice-roll-many');
   setTimeout(() => {
     if (!onDone) { finishDiceSequence(); return; }
     clearDiceFlyers();
@@ -18200,7 +18200,7 @@ function playNewDiceRolls(state, before) {
   diceRollSequenceActive = true;
   setDiceRollBlocker(true);
   // 効果音 (2026-11-16): ダイスが増えてその場で振る時。
-  if (window.Sfx) Sfx.play('dice-roll', { count: Math.min(4, targets.length), spread: 120 });
+  if (window.Sfx) Sfx.play('dice-roll-one', { count: Math.min(3, targets.length), spread: 120 });
   // スマホ版: エリア画面の右欄に増えたダイスは、皇帝宮殿と元老院の間あたりで転がってから右欄へ戻る
   // (2026-10-23, per user request: "追加色ダイス白ダイスを獲得した時 もう少し真ん中 元老院と皇帝宮殿の間
   // くらいにダイスが振られて右に戻るようにして")。それ以外(PC/タブレット、他の場所)は従来通りその場で転がる。
@@ -18322,6 +18322,7 @@ function renderCore(state) {
   // 反映している描画では書かない(書いたのはその手を打った端末)。
   noteProgress(state, !applyingRemoteState);
   if (typeof avatarOnRender === 'function') avatarOnRender(state); // アバターのセリフ(avatar.js)
+  if (window.Sfx && Sfx.onRender) { try { Sfx.onRender(state, { replay: replayMode }); } catch (err) { /* 音が出せなくてもゲームは続ける */ } } // 効果音(sfx.js)
   recordReplaySnapshotIfChanged(state, openTurnPlayerId());
   pushOnlineStateIfChanged(state);
   saveGameSessionIfApplicable(state);
@@ -20350,6 +20351,13 @@ document.addEventListener('DOMContentLoaded', () => {
     aiPacingMode = e.target.value;
     render(STATE);
   });
+  {
+    const sfxSelect = document.getElementById('sfx-setting-select');
+    if (sfxSelect && window.Sfx) {
+      sfxSelect.value = Sfx.isEnabled() ? 'on' : 'off';
+      sfxSelect.addEventListener('change', (e) => { Sfx.setEnabled(e.target.value === 'on'); });
+    }
+  }
   document.getElementById('rewind-setting-select').addEventListener('change', (e) => {
     rewindAllowed = e.target.value === 'ok';
     try { localStorage.setItem(REWIND_SETTING_STORAGE_KEY, rewindAllowed ? 'ok' : 'ng'); } catch (err) { /* ignore */ }

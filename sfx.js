@@ -59,6 +59,9 @@ window.Sfx = (function () {
   function enabled() {
     try { return localStorage.getItem('diceWpSfxOff') !== '1'; } catch (e) { return true; }
   }
+  function setEnabled(on) {
+    try { if (on) localStorage.removeItem('diceWpSfxOff'); else localStorage.setItem('diceWpSfxOff', '1'); } catch (e) { /* ignore */ }
+  }
 
   function play(name, opts) {
     const c = ctx;
@@ -82,5 +85,56 @@ window.Sfx = (function () {
     });
   }
 
-  return { play };
+  /* ---------- 盤面の変化から鳴らす (2026-11-16, per user「(場面ごとの案)おねがい」) ----------
+   * render()のたびに、前の盤面と比べて:
+   *  ・進捗の記録(main.jsのnoteProgressがSTATE.progressLogに足すもの): カードを獲得 → card-get、LVアップ → card-lvup、
+   *    モニュメント(Mから始まるカード) → monument、カードを取らずにエリアへ行った → dice-place。
+   *  ・だれかの資源が増えた → resource。
+   *  ・ショップの山札が減った(補充された) → shop-restock。
+   *  ・新しいゲームの1ラウンド目になった → game-start。
+   * 1回のrender()で同じ音は1回まで。リプレイ中・巻き戻し・ゲームの読み込み(一度に記録がたくさん増えた時)は鳴らさない。 */
+  let prev = null;
+  function resourceTotals(state) {
+    const out = {};
+    for (const p of state.players || []) {
+      let sum = 0;
+      for (const [k, v] of Object.entries(p.resources || {})) if (k !== 'VP' && typeof v === 'number') sum += v;
+      out[p.id] = sum;
+    }
+    return out;
+  }
+  function drawPileTotal(state) {
+    let n = 0;
+    for (const deck of Object.values(state.shops || {})) n += (deck && deck.drawPile ? deck.drawPile.length : 0);
+    return n;
+  }
+  function onRender(state, opts) {
+    if (!state || !Array.isArray(state.players)) return;
+    const now = {
+      seed: state.rng && state.rng.seed,
+      round: state.round,
+      log: (state.progressLog || []).length,
+      res: resourceTotals(state),
+      pile: drawPileTotal(state),
+    };
+    const before = prev;
+    prev = now;
+    if (!before || (opts && opts.replay) || before.seed !== now.seed) return;
+    if (now.log < before.log) return; // 巻き戻し
+    if (now.round === 1 && before.round !== 1 && now.log <= 1) play('game-start');
+    const fresh = (state.progressLog || []).slice(before.log);
+    if (fresh.length > 8) return; // 途中から読み込んだ時などは鳴らさない
+    const sounds = new Set();
+    for (const e of fresh) {
+      if (e.f) sounds.add(/^M/.test(e.f) ? 'monument' : (e.u ? 'card-lvup' : 'card-get'));
+      else if (e.a) sounds.add('dice-place');
+    }
+    if (Object.keys(now.res).some((pid) => before.res[pid] !== undefined && now.res[pid] > before.res[pid])) sounds.add('resource');
+    if (now.pile < before.pile && now.round === before.round) sounds.add('shop-restock');
+    // カードの音がある時は、置く音・資源の音は重ねない(にぎやかになりすぎるため)。
+    if (sounds.has('card-get') || sounds.has('card-lvup') || sounds.has('monument')) { sounds.delete('dice-place'); sounds.delete('resource'); }
+    for (const name of sounds) play(name);
+  }
+
+  return { play, onRender, isEnabled: enabled, setEnabled };
 })();

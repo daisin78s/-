@@ -18,8 +18,16 @@ def convert(path):
     with wave.open(path, 'rb') as w:
         ch, width, rate, n = w.getnchannels(), w.getsampwidth(), w.getframerate(), w.getnframes()
         raw = w.readframes(n)
-    assert width == 2, 'expects 16-bit wav'
-    data = np.frombuffer(raw, dtype='<i2').astype(np.float32).reshape(-1, ch).mean(axis=1)
+    if width == 2:
+        data = np.frombuffer(raw, dtype='<i2').astype(np.float32)
+    elif width == 3:  # 24bit: 3バイトずつを符号付き整数にして16bitの大きさにそろえる
+        b = np.frombuffer(raw, dtype=np.uint8).reshape(-1, 3).astype(np.int32)
+        v = b[:, 0] | (b[:, 1] << 8) | (b[:, 2] << 16)
+        v = np.where(v >= 1 << 23, v - (1 << 24), v)
+        data = (v / 256.0).astype(np.float32)
+    else:
+        raise ValueError(f'unsupported sample width {width}')
+    data = data.reshape(-1, ch).mean(axis=1)
     if rate != TARGET_RATE:
         t_old = np.arange(len(data)) / rate
         t_new = np.arange(int(len(data) * TARGET_RATE / rate)) / TARGET_RATE
