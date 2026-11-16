@@ -326,11 +326,33 @@ function avatarLinesEnabled() {
 }
 
 /** render()の最後から: 増えた進捗の記録のうち、アバターのある人の行動からセリフを出す。 */
+/* 人が操作するアバターは、ターン終了時にまとめて (2026-11-16, per user「アバターのプレイヤーがターン終了した時に出るように」
+ * +回答「人間のアバターはターン終了時」「(複数の行動は)すべて」): そのターンの行動のセリフをためておき、手番がほかの人に
+ * 移った時(またはゲーム終了)に、行動の順に全部続けて出す。操作の途中でセリフが重ならないように。AIは行動のたびのまま。 */
+const avatarHeldLines = new Map(); // playerId -> [{ def, playerName, lines }]
+let avatarHeldTurnPid = null;
+function avatarFlushHeldLines(state) {
+  const pid = state && (state.turnOrder || [])[state.currentPlayerIndex];
+  const ended = state && state.phase === 'GAME_END';
+  for (const [heldPid, items] of [...avatarHeldLines]) {
+    if (!ended && heldPid === pid) continue; // まだその人の手番
+    avatarHeldLines.delete(heldPid);
+    if (!avatarLinesEnabled()) continue;
+    avatarLineQueue.push(...items);
+  }
+  avatarHeldTurnPid = pid;
+  avatarPlayNext();
+}
+
 function avatarOnRender(state) {
   try { avatarCheckOrderLine(state); } catch (err) { /* セリフが出せなくてもゲームは続ける */ }
   const log = (state && state.progressLog) || [];
-  if (avatarLogSeen === null || log.length < avatarLogSeen || !avatarLinesEnabled()) { avatarLogSeen = log.length; return; }
-  if (log.length === avatarLogSeen) return;
+  if (avatarLogSeen === null || log.length < avatarLogSeen || !avatarLinesEnabled()) {
+    if (avatarLogSeen !== null && log.length < avatarLogSeen) avatarHeldLines.clear(); // 巻き戻し・新しいゲーム
+    avatarLogSeen = log.length;
+    return;
+  }
+  if (log.length === avatarLogSeen) { avatarFlushHeldLines(state); return; }
   const fresh = log.slice(avatarLogSeen);
   avatarLogSeen = log.length;
   // 人ごとに、行ったエリアと獲得したカードをまとめて1つの行動にする(第4章でAIの1手をまとめて見るのと同じ)。
@@ -347,9 +369,12 @@ function avatarOnRender(state) {
     const def = avatarSpeakerDef(player);
     if (!def) continue;
     const lines = avatarFindLines(def.lines, info.round, info);
-    if (lines && lines.length) avatarLineQueue.push({ def, playerName: player.name, lines });
+    if (!lines || !lines.length) continue;
+    const item = { def, playerName: player.name, lines };
+    if (isAiPlayer(player.id)) avatarLineQueue.push(item);
+    else { if (!avatarHeldLines.has(player.id)) avatarHeldLines.set(player.id, []); avatarHeldLines.get(player.id).push(item); }
   }
-  avatarPlayNext();
+  avatarFlushHeldLines(state);
 }
 
 /** セリフを言う人: アバターのある人と、たまたまキャラクターになったAI(main.jsのapplyStoryCharacterNamesで名前が
