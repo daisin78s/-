@@ -8654,7 +8654,9 @@ function renderBuildChoiceModal() {
     list.innerHTML = '';
     const { candidate } = pendingBzOutcomeChoice;
     const faceId = candidate.type === 'UPGRADE' ? candidate.toFaceId : candidate.faceId;
-    const cardNode = buildCardVisual(faceId, { showEffect: true, noInteraction: true });
+    // モニュメントの必要ダイス目(右上)も出す (2026-11-16, per user「土木技術などで カードを獲得しようとするとき 右上の
+    // 必要ダイス目がなくて困る モニュメントの」「ダイスでモニュメントを獲得するときも…出るようにして」)。
+    const cardNode = buildCardVisual(faceId, { showEffect: true, noInteraction: true, req: factsForFaceId(faceId).req });
     const tall = cardNode.classList.contains('shop-card--tall');
     const cell = el('div', tall ? 'owned-card-cell owned-card-cell--tall' : 'owned-card-cell');
     cell.appendChild(cardNode);
@@ -8678,7 +8680,9 @@ function renderBuildChoiceModal() {
   }
   function buildCandidateCell(candidate) {
     const faceId = candidate.type === 'UPGRADE' ? candidate.toFaceId : candidate.faceId;
-    const cardNode = buildCardVisual(faceId, { showEffect: true, noInteraction: true });
+    // モニュメントの必要ダイス目(右上)も出す (2026-11-16, per user「土木技術などで カードを獲得しようとするとき 右上の
+    // 必要ダイス目がなくて困る モニュメントの」「ダイスでモニュメントを獲得するときも…出るようにして」)。
+    const cardNode = buildCardVisual(faceId, { showEffect: true, noInteraction: true, req: factsForFaceId(faceId).req });
     // build_candidates_hint(T030)の「光る」演出(ウィンドウ上の獲得可能なカード) (2026-09-29)。
     if (tutorialBuildCandidatesGlowing) cardNode.classList.add('change-highlight');
     const tall = cardNode.classList.contains('shop-card--tall');
