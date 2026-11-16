@@ -470,6 +470,12 @@ function storySetAllowedTabs(tabs) {
   });
 }
 /** main.jsのタブ切り替え(ボタン/スワイプ)から呼ばれる。ストーリー中は許したタブにしか行けない。 */
+/** スマホのタブ操作(押す・フリック)を待つ所 (2026-11-16, per user「フリックしないと進めない箇所をスマホ版だけにして
+ * PC版はそのまま進めるように」): スマホ版はそのタブになるまで待ち、PC・タブレット(タブが無い)はすぐ進む。 */
+function storyTabReached(tab) {
+  return !isMobileLayout() || mobileActiveTab === tab;
+}
+
 function storyTabAllowed(tab) {
   return !storyRun || storyRun.normalGame || storyRun.allowedTabs.has(tab);
 }
@@ -855,7 +861,7 @@ function storySceneCardsTab() {
   storySay('S024', () => {
     storyShowGoal(storyGoalOf('S024'));
     const stopHint = storyStartHint('S024');
-    storyWaitUntil(() => mobileActiveTab === 'cards', () => {
+    storyWaitUntil(() => storyTabReached('cards'), () => {
       stopHint();
       storyShowGoal('');
       applyMobileCardsPlayer('P1');
@@ -868,7 +874,7 @@ function storySceneCardsTab() {
         storySay('S026', () => {
           storyShowGoal(storyGoalOf('S026'));
           const stopHint2 = storyStartHint('S026');
-          storyWaitUntil(() => mobileActiveTab === 'board', () => {
+          storyWaitUntil(() => storyTabReached('board'), () => {
             stopHint2();
             storyShowGoal('');
             storySetGlow([]);
@@ -1732,7 +1738,7 @@ function story2DoEvent(row, i, onDone) {
     storySetGlow(['.mobile-tab-switcher__btn[data-tab-target="board"]']);
     onDone();
   } else if (/エリアに戻る/.test(e)) {
-    storyWaitUntil(() => mobileActiveTab === 'board', () => {
+    storyWaitUntil(() => storyTabReached('board'), () => {
       storySetGlow([]);
       onDone();
     });
@@ -1743,7 +1749,7 @@ function story2DoEvent(row, i, onDone) {
   } else if (/ショップ/.test(e) && /クリック/.test(e)) {
     storySetAllowedTabs([...run.allowedTabs, 'shop']);
     storyShowGoal(e);
-    storyWaitUntil(() => mobileActiveTab === 'shop', () => {
+    storyWaitUntil(() => storyTabReached('shop'), () => {
       storyShowGoal('');
       storySetGlow([]);
       onDone();
@@ -2595,7 +2601,7 @@ function senecaDoEvent(row, onDone) {
     // ショップに着いたら、説明の途中でもカードを拡大してショートカットで獲得できる(2026-11-14, per user)。
     // 先に獲得したら、今までの「チェックマークの説明中にショートカットで獲得」と同じ分かれ道へ(senecaPlay)。
     const finish = () => { run.seneca.shopShortcut = true; senecaGlow([]); render(STATE); onDone(); };
-    if (isMobileLayout()) storyWaitUntil(() => mobileActiveTab === 'shop', finish);
+    if (isMobileLayout()) storyWaitUntil(() => storyTabReached('shop'), finish);
     else finish();
   } else if (/エリア画面/.test(e)) {
     // 「エリア画面にもどる」: こちらでエリアのタブに切り替える。
@@ -2676,7 +2682,7 @@ function senecaDoEvent(row, onDone) {
     // 「タブのショップを押す（スマホ版）」: スマホは押すまで待つ。PC・タブレットはショップが最初から見えているので待たない。
     storyHideDialog();
     const finish = () => { senecaGlow([]); onDone(); };
-    if (isMobileLayout()) storyWaitUntil(() => mobileActiveTab === 'shop', finish);
+    if (isMobileLayout()) storyWaitUntil(() => storyTabReached('shop'), finish);
     else finish();
   } else if (/(領地|学問|人材)カード/.test(e) && /光る/.test(e)) {
     // 「領地カードが光る」(赤=A)「学問カードが光る」(青=B)「人材カードが光る」(黄=C): 次のカードの種類が光るまで光らせておく。
