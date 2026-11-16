@@ -89,7 +89,6 @@ window.Sfx = (function () {
    * render()のたびに、前の盤面と比べて:
    *  ・進捗の記録(main.jsのnoteProgressがSTATE.progressLogに足すもの): カードを獲得 → card-get、LVアップ → card-lvup、
    *    モニュメント(Mから始まるカード) → monument、カードを取らずにエリアへ行った → dice-place。
-   *  ・だれかの資源が増えた → resource。
    *  ・ショップの山札が減った(補充された) → shop-restock。
    *  ・タップ済みのカードが増えた(TAP効果を使った) → card-tap。
    *  ・新しいゲームの1ラウンド目になった → game-start。
@@ -131,7 +130,7 @@ window.Sfx = (function () {
       if (e.f) sounds.add(/^M/.test(e.f) ? 'monument' : (e.u ? 'card-lvup' : 'card-get'));
       else if (e.a) sounds.add('dice-place');
     }
-    if (Object.keys(now.res).some((pid) => before.res[pid] !== undefined && now.res[pid] > before.res[pid])) sounds.add('resource');
+    // 資源が増えた時の音はやめた (2026-11-16, per user「資源をもらったときの音 微妙なのでなくていい」)。
     if (now.pile < before.pile && now.round === before.round) sounds.add('shop-restock');
     // カードのTAP効果を使った(タップ済みのカードが増えた) → card-tap (2026-11-16, per user「カードのTAP効果を使う」時も音を)。
     // TAPで資源が増えても、資源の音は重ねない。
