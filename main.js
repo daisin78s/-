@@ -20162,6 +20162,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const playOpeningOnLoad = localBattlePending;
   window.addEventListener('resize', fitMobileShopWidth);
   window.addEventListener('resize', fitMobileBoard);
+  // iPhoneは画面の高さが合図(resize)なしに変わることがある(2026-11-16, per user スクリーンショット: 盤面が縮みすぎて右が
+  // 空く/広がりすぎて下がタブに隠れる)ので、エリアを開いている間は1秒ごとに合わせ直す(大きさが同じなら見た目は変わらない)。
+  setInterval(() => { if (mobileActiveTab === 'board' && isMobileLayout() && !document.hidden) fitMobileBoard(); }, 1000);
   applyDesktopScale();
   window.addEventListener('resize', applyDesktopScale);
   // 縦スクロールバーが出た/消えた時も(画面の幅が変わるのでresizeは来ない)測り直す。同じ幅なら何もしない。
