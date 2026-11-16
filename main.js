@@ -11167,6 +11167,8 @@ function renderResourceChoice(container, state, player) {
     const canToggle = isSelected || selected.length < requiredCount;
     if (canToggle) {
       cell.addEventListener('click', () => {
+        // 効果音 (2026-11-16, per user「初期資源カードをクリックしたとき」→「02で」): 02_place_card。
+        if (window.Sfx) Sfx.play('card-pick');
         if (isSelected) {
           choice.context.selected = selected.filter((id) => id !== faceId);
         } else {
