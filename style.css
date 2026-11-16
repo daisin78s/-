@@ -7357,6 +7357,7 @@ body:has(#story-ranking) #story-chapters { visibility: hidden; }
 .story-name-entry__message:empty { display: none; }
 .story-name-entry__note { color: #f1e8ec; font-size: 16px; line-height: 1.6; }
 .story-name-entry__note > div + div { margin-top: 8px; }
+.player-name-entry-later { display: block; margin: 16px auto 0; font-size: 16px; padding: 8px 28px; }
 .story-name-entry .story-name-entry__input { font-size: 20px; padding: 12px 14px; }
 .story-name-entry .story-name-entry__button { font-size: 20px; padding: 12px 24px; }
 .story-name-entry__input {

@@ -2883,9 +2883,16 @@ function storyAskPlayerName(onDone) {
 
 /** 名前とパスワードの入力画面(ストーリーの外からも使う、2026-11-15 per user「ランキングに入ったとき…名前の入力画面に
  * ストーリーと同じ入力画面」)。全画面の覆いの上に出し、登録できたら消してonDone。title: 上に出す見出し。 */
-function openPlayerNameEntryOverlay({ title, onDone }) {
+function openPlayerNameEntryOverlay({ title, onDone, onLater }) {
   const wrap = el('div', 'player-name-entry-overlay');
   const box = buildPlayerNameEntryBox({ title, onDone: () => { wrap.remove(); if (onDone) onDone(); } });
+  // 「あとで」(2026-11-16): onLaterがある時だけ。押すと閉じる(登録しない)。
+  if (onLater) {
+    const later = el('button', 'undo-button player-name-entry-later', 'あとで');
+    later.type = 'button';
+    later.addEventListener('click', (e) => { e.stopPropagation(); wrap.remove(); onLater(); });
+    box.appendChild(later);
+  }
   wrap.appendChild(box);
   document.body.appendChild(wrap);
 }

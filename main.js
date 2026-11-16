@@ -12688,6 +12688,25 @@ function rankingNameHasPassword() {
   return !!(name && identity && identity.name === name);
 }
 
+/** 名前だけあってパスワードが無い端末は、ゲームを開いた時(トップ画面)に名前とパスワードの入力画面を出す (2026-11-16,
+ * per user「名前だけあってパスワードない人はログイン時にパスワード入れるようにして」+回答「「あとで」ボタンを付ける」)。
+ * 名前は入った状態。「あとで」で閉じれば、次に開いた時にまた出す(1回の読み込みにつき1回)。通信できない時は出さない
+ * (登録できず先に進めなくなるため)。 */
+let passwordPromptShownThisLoad = false;
+function maybePromptPasswordAtStart() {
+  if (passwordPromptShownThisLoad) return;
+  if (typeof openPlayerNameEntryOverlay !== 'function' || !window.OnlineSync) return;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+  if (!loadRememberedRankingName() || rankingNameHasPassword()) return;
+  if (document.querySelector('.player-name-entry-overlay')) return;
+  passwordPromptShownThisLoad = true;
+  openPlayerNameEntryOverlay({
+    title: 'パスワードを登録してください',
+    onDone: () => { if (typeof renderAchievementOverlay === 'function') { try { renderAchievementOverlay(); } catch (e) { /* 画面が無ければ何もしない */ } } },
+    onLater: () => {},
+  });
+}
+
 function startAutoRankingCheck(state) {
   if (autoRanking.status !== 'idle') return;
   const c = autoRankingCandidate(state);
@@ -18212,6 +18231,7 @@ function renderCore(state) {
     document.getElementById('app').hidden = true;
     document.getElementById('weekly-seat-picker').hidden = true;
     document.getElementById('entry-banner').hidden = false;
+    maybePromptPasswordAtStart();
     return;
   }
   document.getElementById('entry-banner').hidden = true;
