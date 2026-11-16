@@ -18158,6 +18158,8 @@ function rollAllHandDice(state, onDone) {
     flyer.animate(frames, { duration: total, easing: 'ease-out', fill: 'forwards' });
     flickerDieValue(flyer, DICE_ROLL_MS);
   }
+  // 効果音 (2026-11-16, per user「ダイスが鳴る場面すべて入れてみて」): たくさん転がるので少しずつずらして重ねる。
+  if (targets.length && window.Sfx) Sfx.play('dice-roll', { count: Math.min(4, targets.length), spread: 150 });
   setTimeout(() => {
     if (!onDone) { finishDiceSequence(); return; }
     clearDiceFlyers();
@@ -18197,6 +18199,8 @@ function playNewDiceRolls(state, before) {
   if (targets.length === 0) return;
   diceRollSequenceActive = true;
   setDiceRollBlocker(true);
+  // 効果音 (2026-11-16): ダイスが増えてその場で振る時。
+  if (window.Sfx) Sfx.play('dice-roll', { count: Math.min(4, targets.length), spread: 120 });
   // スマホ版: エリア画面の右欄に増えたダイスは、皇帝宮殿と元老院の間あたりで転がってから右欄へ戻る
   // (2026-10-23, per user request: "追加色ダイス白ダイスを獲得した時 もう少し真ん中 元老院と皇帝宮殿の間
   // くらいにダイスが振られて右に戻るようにして")。それ以外(PC/タブレット、他の場所)は従来通りその場で転がる。
