@@ -18161,7 +18161,12 @@ function rollAllHandDice(state, onDone) {
     flickerDieValue(flyer, DICE_ROLL_MS);
   }
   // 効果音 (2026-11-16, per user「ダイスが鳴る場面すべて入れてみて」): たくさん転がるので少しずつずらして重ねる。
-  if (targets.length && window.Sfx) Sfx.play('dice-roll-many');
+  // ゲームの一番初め(オープニング)のダイスは、最初に録音した音を4つ重ねる(2026-11-16, per user「初めのダイスの音 前の音に
+  // 一度戻して」)。ラウンド開始は 07_dice_roll。
+  if (targets.length && window.Sfx) {
+    if (openingSequenceActive) Sfx.play('dice-roll', { count: Math.min(4, targets.length), spread: 150 });
+    else Sfx.play('dice-roll-many');
+  }
   setTimeout(() => {
     if (!onDone) { finishDiceSequence(); return; }
     clearDiceFlyers();
