@@ -17946,7 +17946,7 @@ function applyStoryCharacterNames(state) {
 function playStoryCharacterIntro() {
   if (storyCharacterPlaying || storyCharacterQueue.length === 0) return;
   storyCharacterPlaying = true;
-  const { title, character, titleOnly } = storyCharacterQueue.shift();
+  const { title, character, titleOnly, normalSpeed } = storyCharacterQueue.shift();
   const box = el('div', 'story-character-intro');
   const img = document.createElement('img');
   img.className = 'story-character-intro__img';
@@ -17967,7 +17967,9 @@ function playStoryCharacterIntro() {
       storyCharacterPlaying = false;
       playStoryCharacterIntro();
     };
-  }, animMs(2200));
+  // normalSpeed: ストーリー第4章の登場はローカル対戦と同じ長さ(1R1Tのゆっくり(animSpeedFactor 1.5)を掛けない、
+  // 2026-11-16 per user「第４章 ローカルと同じ アニメーション スピードに」)。
+  }, normalSpeed ? 2200 : animMs(2200));
 }
 
 function render(state) {

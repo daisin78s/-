@@ -3788,7 +3788,7 @@ function ch4IntroEnemies(enemies, titleOf, onDone) {
   storyHideDialog();
   for (const enemy of list) {
     run.ch4.introduced.add(enemy.id);
-    storyCharacterQueue.push({ title: titleOf(enemy), character: { name: enemy.name, img: enemy.img }, titleOnly: true });
+    storyCharacterQueue.push({ title: titleOf(enemy), character: { name: enemy.name, img: enemy.img }, titleOnly: true, normalSpeed: true });
   }
   playStoryCharacterIntro();
   storyWaitUntil(() => !storyCharacterPlaying && storyCharacterQueue.length === 0, onDone);
