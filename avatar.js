@@ -274,6 +274,49 @@ function avatarFindLines(linesName, round, info) {
   return hit.rows.map((r) => fill(r.text)).filter(Boolean);
 }
 
+/* ---------- 手番の順のセリフ (2026-11-16, per user「アバター １番手などのセリフも出るように 性格や能力の説明はなしで」) ----------
+ * 第4章の台本の「傲慢なスパルが１番」→「一番手はオレだな」のような行を使う。1ラウンド目に、その人の最初の手番が来た時
+ * (ジョブを選ぶ時)に、手番の順(1〜4番)のセリフを1行だけ言う。そのあとに続く性格・能力の説明の行は使わない。 */
+let avatarOrderLinesCache = null; // { 'スパル': { 1: '一番手はオレだな', ... }, ... }
+function avatarOrderLines() {
+  if (avatarOrderLinesCache) return avatarOrderLinesCache;
+  avatarOrderLinesCache = {};
+  const rows = window.STORY_CH4_SCRIPT || [];
+  const toNum = (s) => Number(String(s).replace(/[１-４]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)));
+  rows.forEach((row, i) => {
+    const m = /(スパル|セネカ|パトラ|ネロ)が([1-4１-４])番$/.exec(String(row.event || '').trim());
+    if (!m) return;
+    const next = rows[i + 1];
+    if (!next || !next.text || (next.event && next.event.trim())) return;
+    (avatarOrderLinesCache[m[1]] = avatarOrderLinesCache[m[1]] || {})[toNum(m[2])] = next.text;
+  });
+  return avatarOrderLinesCache;
+}
+const avatarOrderSpoken = new Set(); // このゲームで手番の順のセリフを言った人
+let avatarOrderLastLog = 0;
+let avatarOrderLastSeed = null;
+function avatarCheckOrderLine(state) {
+  if (!state) return;
+  const logLen = (state.progressLog || []).length;
+  const seed = state.rng && state.rng.seed;
+  // 新しいゲーム(または巻き戻し)なら、言った人を忘れる。
+  if (seed !== avatarOrderLastSeed || logLen < avatarOrderLastLog) avatarOrderSpoken.clear();
+  avatarOrderLastSeed = seed;
+  avatarOrderLastLog = logLen;
+  if (!avatarLinesEnabled() || state.round !== 1 || state.phase === 'GAME_END') return;
+  const pid = (state.turnOrder || [])[state.currentPlayerIndex];
+  if (!pid || avatarOrderSpoken.has(pid)) return;
+  const player = state.players.find((p) => p.id === pid);
+  avatarOrderSpoken.add(pid);
+  if (!player || player.jobCardId) return; // ジョブを選ぶ前(1ラウンド目の最初の手番)だけ
+  const def = avatarSpeakerDef(player) || (player.avatar ? avatarDef(player.avatar) : null);
+  if (!def) return;
+  const line = (avatarOrderLines()[def.lines] || {})[state.currentPlayerIndex + 1];
+  if (!line) return;
+  avatarLineQueue.push({ def, playerName: player.name, lines: [line] });
+  avatarPlayNext();
+}
+
 let avatarLogSeen = null; // 読み終えた進捗の記録の長さ
 let avatarLineQueue = [];
 let avatarLineBusy = false;
@@ -284,6 +327,7 @@ function avatarLinesEnabled() {
 
 /** render()の最後から: 増えた進捗の記録のうち、アバターのある人の行動からセリフを出す。 */
 function avatarOnRender(state) {
+  try { avatarCheckOrderLine(state); } catch (err) { /* セリフが出せなくてもゲームは続ける */ }
   const log = (state && state.progressLog) || [];
   if (avatarLogSeen === null || log.length < avatarLogSeen || !avatarLinesEnabled()) { avatarLogSeen = log.length; return; }
   if (log.length === avatarLogSeen) return;
