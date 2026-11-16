@@ -416,7 +416,8 @@ function avatarPlayNext() {
     if (typeof storyIconize === 'function' && typeof storyLineFragment === 'function') text.appendChild(storyLineFragment(storyIconize(line)));
     else text.textContent = line;
     // 言ってすぐに消える(per user「セリフを言ってすぐに消え」): 長さに合わせて1〜2.4秒ほど。
-    const ms = Math.min(2400, 900 + line.length * 70);
+    // 2026-11-16, per user「アバターのセリフが出ている時間を20％短くして」: 0.8倍(約0.7〜1.9秒)。
+    const ms = Math.round(Math.min(2400, 900 + line.length * 70) * 0.8);
     setTimeout(() => {
       i += 1;
       if (i < lines.length) { showLine(); return; }
