@@ -20001,15 +20001,35 @@ function setupIosStandaloneViewportFix() {
     const landscape = window.innerWidth > window.innerHeight;
     return landscape && window.innerHeight < shortSide - 2;
   };
+  // 指で画面を上下に動かすと直る(per user「画面を上下に動かすと消える」)ので、それをまねる: ページを一瞬だけ
+  // 1px長くして1px動かし、すぐ戻す (2026-11-16, per user「下に 謎の空白がある」-- viewportの書き換えだけでは
+  // 直らないことがあった)。
+  const nudgeScroll = () => {
+    const html = document.documentElement;
+    const prevMin = html.style.minHeight;
+    const x = window.scrollX;
+    const y = window.scrollY;
+    html.style.minHeight = `${window.innerHeight + 2}px`;
+    window.scrollTo(x, y + 1);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      window.scrollTo(x, y);
+      html.style.minHeight = prevMin;
+    }));
+  };
+  let lastAttemptAt = 0;
   const refresh = () => {
     if (!looksTooShort()) { attempts = 0; return; } // 直っていれば、次にまた低くなった時のために数え直す
-    if (attempts >= 3 || refreshing) return;
+    if (refreshing) return;
+    // 3回やって直らなければ、あとは10秒に1回だけ試し続ける(以前は3回であきらめていた)。
+    if (attempts >= 3 && Date.now() - lastAttemptAt < 10000) return;
     attempts++;
+    lastAttemptAt = Date.now();
     refreshing = true;
     meta.setAttribute('content', `${original}, maximum-scale=1.0`);
     setTimeout(() => {
       meta.setAttribute('content', original);
-      window.scrollTo(window.scrollX, window.scrollY);
+      if (document.body.classList.contains('body--overlay-open')) window.scrollTo(window.scrollX, window.scrollY);
+      else nudgeScroll();
       refreshing = false;
       setTimeout(refresh, 400);
     }, 60);
