@@ -9929,6 +9929,15 @@ function renderMobileFreeActionOverlay(state, next) {
       mobileFreeActionCloseTimer = null;
       mobileFreeActionTappedCardId = null;
       mobileFreeActionTapAnimatedId = null;
+      // まだ使えるカード・使用料回収があるなら閉じずにこの画面のまま (2026-11-16, per user「スマホ版 フリーアクションを
+      // した後 まだタップできるカード や 行動があるなら（A→Kなどいがい） エリア画面に戻らない」)。資源の交換だけなら今まで通り戻る。
+      const nowPlayer = STATE.players.find((p) => p.id === player.id);
+      const rest = nowPlayer ? computeMobileFreeActions(STATE, nowPlayer) : null;
+      if (rest && (rest.cards.length > 0 || rest.feeTotal > 0)) {
+        mobileFreeActionBaseline = mobileFreeActionSignature(STATE, nowPlayer);
+        render(STATE);
+        return;
+      }
       mobileFreeActionOpen = false;
       mobileFreeActionBaseline = null;
       applyMobileActiveTab('board');
@@ -9936,7 +9945,7 @@ function renderMobileFreeActionOverlay(state, next) {
     }, MOBILE_FREE_ACTION_TAP_CLOSE_MS);
   }
   const used = mobileFreeActionBaseline !== null && mobileFreeActionSignature(state, player) !== mobileFreeActionBaseline;
-  if (!tappingCard && used && actions.cards.length === 0 && !pendingTapChoice && !pendingBuildChoice) {
+  if (!tappingCard && used && actions.cards.length === 0 && actions.feeTotal === 0 && !pendingTapChoice && !pendingBuildChoice) {
     mobileFreeActionOpen = false;
     mobileFreeActionBaseline = null;
     overlay.hidden = true;
