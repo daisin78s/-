@@ -164,6 +164,16 @@ function storyLineFragment(text) {
   return frag;
 }
 
+/** スマホの操作(画面下部のタブ・フリック・フリーアクションのボタン)の説明なので、PC・タブレットでは出さないセリフ
+ * (2026-11-17, per user「スマホ前提のセリフはPCでは飛ばす」)。台本の文と同じ文字で書く(Excelで文を変えたらここも)。 */
+const STORY_MOBILE_ONLY_TEXTS = new Set([
+  '画面下部の「獲得カード」をクリックしてくれないかな', // 第1章
+  '「獲得カード」を押すと獲得したカードが確認できるんだ', // 第1章
+  '「エリア」を押すかフリックでも元に戻れるよ', // 第1章
+  'ここを押して見て', // 第2章(タブのショップが光る)
+  'カードを使うのはフリーアクションといってこのボタンで画面を切り替えて', // 第2章
+]);
+
 /** 会話ウインドウにセリフを1文字ずつ出す。全部出たらonTyped()。textを渡すとそちらを出す(差し込みあり等)。 */
 function storySay(id, onTyped, textOverride, waitsForNext) {
   const run = storyRun;
@@ -171,7 +181,9 @@ function storySay(id, onTyped, textOverride, waitsForNext) {
   run.waitingNext = null;
   run.typeFinish = null;
   run.dom.nextHint.hidden = true;
-  const text = textOverride !== undefined ? textOverride : storyLine(id).text;
+  let text = textOverride !== undefined ? textOverride : storyLine(id).text;
+  // スマホのタブ・フリック・フリーアクションのボタンの話は、PC・タブレットでは出さない(2026-11-17, per user「PCでは飛ばす」)。
+  if (text && !isMobileLayout() && STORY_MOBILE_ONLY_TEXTS.has(String(text).trim())) text = '';
   // 会話ログ用に記録(5秒ごとに出るヒントなど、同じセリフは1回だけ)。
   if (text && !run.log.some((e) => e.id === id)) run.log.push({ id, text: text.replace(/[]/g, ''), speaker: STORY_SPEAKERS[run.speaker].name });
   if (!text) { if (onTyped) onTyped(text); return; }
@@ -365,6 +377,7 @@ function storyAfterRender(state) {
   const run = storyRun;
   if (!run) return;
   document.body.classList.toggle('story-hide-dice', !run.diceShown);
+  storyApplyPcVisibility(); // PC・タブレット: スマホ版で見えない物を隠す
   // 先に進行条件を確かめる(置き終わった瞬間に残りのダイスの光を消すため)。
   if (run.onRender) run.onRender(state);
   if (run.glowDieValues.length > 0) {
@@ -451,6 +464,7 @@ function storySetGlow(selectors) {
   document.querySelectorAll('.story-glow').forEach((n) => n.classList.remove('story-glow', 'change-highlight'));
   run.glowSelectors = selectors || [];
   storyApplyGlow();
+  storyFadeCharacterOverGlow();
 }
 /** PC・タブレットにはスマホ版の下の段(フリーアクション・1手戻る等)が無いので、同じ役目の物を光らせる
  * (2026-11-17, per user「ストーリーをPCやiPadにも対応」): 1手戻る/ターン開始時に戻る → ダイス置き場の同じボタン、
@@ -474,6 +488,45 @@ function storyApplyGlow() {
   for (const selector of storyGlowSelectorsForLayout(run.glowSelectors)) {
     document.querySelectorAll(selector).forEach((n) => n.classList.add('story-glow', 'change-highlight'));
   }
+  storyFadeCharacterOverGlow();
+}
+/** PC・タブレットでは、スマホ版のストーリーで見えない物を隠す (2026-11-17, per user「スマホ版と同じく隠す」)。
+ * スマホ版はタブで見せる所を決めているので、PCでも同じ: 許していないタブの所(ショップ・所持カード・クエスト)と、
+ * まだ登場していないプレイヤーの欄(ダイスを振って登場するまで)を隠す。押せるボタン類はstyle.cssのbody.story-pc。
+ * 第4章の対戦中(normalGame)は普段のゲームと同じなので何も隠さない。 */
+function storyApplyPcVisibility() {
+  const run = storyRun;
+  const on = !!run && !run.normalGame && !isMobileLayout();
+  document.body.classList.toggle('story-pc', on);
+  const tabs = run && run.allowedTabs ? run.allowedTabs : new Set();
+  const hide = (sel, hidden) => document.querySelectorAll(sel).forEach((n) => n.classList.toggle('story-pc-hidden', on && hidden));
+  hide('#shops > :not(.qst-panel)', !tabs.has('shop'));
+  hide('#player-cards', !tabs.has('cards'));
+  hide('.qst-panel', !tabs.has('quest'));
+  const shown = (run && run.shownPlayers) || new Set();
+  document.querySelectorAll('#players .player-panel[data-player-id]').forEach((n) => {
+    const id = n.dataset.playerId;
+    const player = STATE.players.find((p) => p.id === id);
+    const placed = !!player && player.dice.some((d) => d.placedMapId); // ダイスを振らずに置いた人も登場済み
+    n.classList.toggle('story-pc-hidden', on && id !== 'P1' && !shown.has(id) && !placed);
+  });
+}
+
+/** PC・タブレットは右側の立ち絵が所持カードに重なるので、押してほしい物(光っている物)が立ち絵の下にある間だけ立ち絵を
+ * 薄くする (2026-11-17, per user「光っている時だけ薄く」)。スマホ版は何もしない。 */
+function storyFadeCharacterOverGlow() {
+  const img = document.querySelector('.story-overlay .story-alek');
+  if (!img) return;
+  let over = false;
+  if (!isMobileLayout() && !img.hidden) {
+    const a = img.getBoundingClientRect();
+    over = [...document.querySelectorAll('.story-glow')].some((n) => {
+      if (n.closest('.story-overlay')) return false;
+      const b = n.getBoundingClientRect();
+      return b.width > 0 && b.left < a.right && b.right > a.left && b.top < a.bottom && b.bottom > a.top;
+    });
+  }
+  img.classList.toggle('story-alek--faded', over);
 }
 
 /** 押せる(スワイプで行ける)タブを決める。それ以外のタブは薄く表示され押せない。 */
@@ -499,6 +552,8 @@ function storyTabAllowed(tab) {
 /** ダイスをその場で振る演出(回転しながら跳ねる、目がくるくる変わって決まった目で止まる)。 */
 function storyRollHandDice(onDone, playerId) {
   storyRun.diceShown = true;
+  if (playerId) { storyRun.shownPlayers = storyRun.shownPlayers || new Set(); storyRun.shownPlayers.add(playerId); }
+  storyApplyPcVisibility();
   document.body.classList.remove('story-hide-dice');
   const nodes = storyHandDiceNodes(playerId);
   const ROLL_MS = 900;

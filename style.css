@@ -8705,3 +8705,16 @@ body:has(.story-ch4-jobs) .story-overlay .story-alek { bottom: -2%; }
     padding: 22px 22px 14px;
   }
 }
+/* ストーリーのPC・タブレット(body.story-pc、story.jsのstoryApplyPcVisibility): スマホ版で見えない物は隠す (2026-11-17,
+   per user「スマホ版と同じく隠す」)。場所は残したまま見えなくする(並びが動かないように)。押せるボタン類はスマホ版の
+   下の段と同じ決まり: ターン終了は出さない(置いたら自動で次へ)、1手戻る等は「フリーアクションが出てくる」等から。 */
+body.story-pc .story-pc-hidden { visibility: hidden !important; pointer-events: none !important; }
+body.story-pc .turn-end-button,
+body.story-pc #debug-panel,
+body.story-pc #player-role-control { visibility: hidden !important; pointer-events: none !important; }
+body.story-pc:not(.story-free-action):not(.story-undo-shown) #undo-button,
+body.story-pc:not(.story-free-action):not(.story-undo-shown) #dice-cancel-button,
+body.story-pc #round-pass-button { visibility: hidden !important; pointer-events: none !important; }
+/* 押してほしい物(光っている物)が立ち絵の下にある間は立ち絵を薄くする(per user「光っている時だけ薄く」)。 */
+.story-overlay .story-alek { transition: opacity 0.25s; }
+.story-overlay .story-alek.story-alek--faded { opacity: 0.25; }
