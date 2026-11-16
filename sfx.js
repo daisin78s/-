@@ -91,6 +91,7 @@ window.Sfx = (function () {
    *    モニュメント(Mから始まるカード) → monument、カードを取らずにエリアへ行った → dice-place。
    *  ・だれかの資源が増えた → resource。
    *  ・ショップの山札が減った(補充された) → shop-restock。
+   *  ・タップ済みのカードが増えた(TAP効果を使った) → card-tap。
    *  ・新しいゲームの1ラウンド目になった → game-start。
    * 1回のrender()で同じ音は1回まで。リプレイ中・巻き戻し・ゲームの読み込み(一度に記録がたくさん増えた時)は鳴らさない。 */
   let prev = null;
@@ -116,6 +117,7 @@ window.Sfx = (function () {
       log: (state.progressLog || []).length,
       res: resourceTotals(state),
       pile: drawPileTotal(state),
+      tapped: Object.values(state.cards || {}).filter((c) => c && c.tapped).length,
     };
     const before = prev;
     prev = now;
@@ -131,6 +133,9 @@ window.Sfx = (function () {
     }
     if (Object.keys(now.res).some((pid) => before.res[pid] !== undefined && now.res[pid] > before.res[pid])) sounds.add('resource');
     if (now.pile < before.pile && now.round === before.round) sounds.add('shop-restock');
+    // カードのTAP効果を使った(タップ済みのカードが増えた) → card-tap (2026-11-16, per user「カードのTAP効果を使う」時も音を)。
+    // TAPで資源が増えても、資源の音は重ねない。
+    if (now.tapped > before.tapped && now.round === before.round) { sounds.add('card-tap'); sounds.delete('resource'); }
     // カードの音がある時は、置く音・資源の音は重ねない(にぎやかになりすぎるため)。
     if (sounds.has('card-get') || sounds.has('card-lvup') || sounds.has('monument')) { sounds.delete('dice-place'); sounds.delete('resource'); }
     for (const name of sounds) play(name);
