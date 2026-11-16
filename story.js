@@ -452,10 +452,26 @@ function storySetGlow(selectors) {
   run.glowSelectors = selectors || [];
   storyApplyGlow();
 }
+/** PC・タブレットにはスマホ版の下の段(フリーアクション・1手戻る等)が無いので、同じ役目の物を光らせる
+ * (2026-11-17, per user「ストーリーをPCやiPadにも対応」): 1手戻る/ターン開始時に戻る → ダイス置き場の同じボタン、
+ * フリーアクション → 今使えるあなたの所持カード。タブのボタンはPCに無いので光らせない。 */
+function storyGlowSelectorsForLayout(selectors) {
+  if (isMobileLayout()) return selectors;
+  const out = [];
+  for (const sel of selectors) {
+    if (sel === '.mobile-own-row__cancel') out.push('#dice-cancel-button');
+    else if (sel === '.mobile-own-row__undo') out.push('#undo-button');
+    else if (sel === '.mobile-own-row__free-action') {
+      const p1 = STATE.players.find((p) => p.id === 'P1');
+      if (p1) computeMobileFreeActions(STATE, p1).cards.forEach((id) => out.push(`#player-cards [data-physical-id="${id}"] .shop-card`));
+    } else if (!/^\.mobile-tab-switcher__btn/.test(sel)) out.push(sel);
+  }
+  return out;
+}
 function storyApplyGlow() {
   const run = storyRun;
   if (!run) return;
-  for (const selector of run.glowSelectors) {
+  for (const selector of storyGlowSelectorsForLayout(run.glowSelectors)) {
     document.querySelectorAll(selector).forEach((n) => n.classList.add('story-glow', 'change-highlight'));
   }
 }
@@ -1677,6 +1693,8 @@ function story2DoEvent(row, i, onDone) {
   } else if (/フリーアクション/.test(e) && /押す/.test(e)) {
     // 押せるものが何も無い時はボタン自体が出ないので、待たずに進む。
     if (!mobileFreeActionsAvailable(STATE, storyPlayer('P1'), 'P1')) { storySetGlow([]); onDone(); return; }
+    // PC・タブレットにはフリーアクションのボタンが無い(所持カードを直接押して使う)ので待たない。
+    if (!isMobileLayout()) { onDone(); return; }
     storyWaitUntil(() => mobileFreeActionOpen, () => { storySetGlow([]); onDone(); });
   } else if (/カードをクリック/.test(e)) {
     // 「カードをクリックする」: フリーアクションの画面でカードを1枚使う(タップされる)まで待つ。使えるカードが

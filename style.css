@@ -8678,3 +8678,30 @@ body:has(.story-ch4-jobs) .story-overlay .story-alek { bottom: -2%; }
   0%, 100% { box-shadow: 0 0 0 0 rgba(255, 196, 0, 0); }
   50% { box-shadow: 0 0 0 3px rgba(255, 196, 0, 0.55), 0 0 14px 4px rgba(255, 196, 0, 0.6); }
 }
+
+/* ストーリー: PC・タブレット(スマホ版以外)は、キャラ(立ち絵)とセリフ欄を画面の右側に大きく出す (2026-11-17, per user
+   「一番の相談は セリフを キャラの位置を どうするか できれば大きく出したい」→「右側に大きく」)。右の列(所持カード)の上に
+   重ね、左のショップ・エリア・ダイス置き場は隠さない。右下の会話ログ・✖ボタンの上にセリフ欄を置く。
+   第4章の「性格カードを出している間は下げる」等のスマホ用の位置の指定より優先する(!important)。 */
+@media (min-width: 761px) and (min-height: 501px) {
+  .story-overlay .story-alek {
+    left: auto !important;
+    right: 0 !important;
+    bottom: calc(30vh + 64px) !important;
+    width: 36vw;
+    height: calc(70vh - 64px);
+    object-fit: contain;
+    object-position: center bottom;
+  }
+  .story-overlay .story-dialog {
+    left: auto !important;
+    right: 12px !important;
+    width: calc(36vw - 24px);
+    bottom: 64px !important;
+    min-height: 26vh;
+    max-height: 30vh;
+    box-sizing: border-box;
+    font-size: 22px;
+    padding: 22px 22px 14px;
+  }
+}
