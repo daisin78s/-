@@ -371,7 +371,10 @@ function avatarOnRender(state) {
     const lines = avatarFindLines(def.lines, info.round, info);
     if (!lines || !lines.length) continue;
     const item = { def, playerName: player.name, lines };
-    if (isAiPlayer(player.id)) avatarLineQueue.push(item);
+    // ためるのは、オンラインでほかの端末の人が操作している席だけ(2026-11-16, per user「自分で操作しているときはその場で
+    // 出た方がいい」→回答1)。自分の操作(ローカルは全員がこの端末)とAIは、その場で出す。
+    const heldUntilTurnEnd = !isAiPlayer(player.id) && typeof onlineRoomCode !== 'undefined' && onlineRoomCode && player.id !== localSeatId;
+    if (!heldUntilTurnEnd) avatarLineQueue.push(item);
     else { if (!avatarHeldLines.has(player.id)) avatarHeldLines.set(player.id, []); avatarHeldLines.get(player.id).push(item); }
   }
   avatarFlushHeldLines(state);
