@@ -12677,6 +12677,17 @@ function autoRankingCandidate(state) {
   return rankingCandidatesForGameEnd(state).find((c) => c.playerId === first.playerId) || null;
 }
 
+/** ランキングにそのまま登録してよいか (2026-11-16, per user「名前はあるのにパスワードが無い端末では、次にランキングに
+ * 入った時に、名前とパスワードの入力画面を出します。名前は最初から入れておき、パスワードだけ入れれば済むように」):
+ * 名前があり、しかもその名前で名前+パスワード(実績のバックアップ)を登録している端末だけ。名前だけの端末は入力画面
+ * (story.jsのopenPlayerNameEntryOverlay、名前は最初から入っている)を通してから登録する -- 名前を本人のものにして、
+ * ほかの人が同じ名前を名乗れないようにするため。 */
+function rankingNameHasPassword() {
+  const name = loadRememberedRankingName();
+  const identity = typeof loadAchievementBackupIdentity === 'function' ? loadAchievementBackupIdentity() : null;
+  return !!(name && identity && identity.name === name);
+}
+
 function startAutoRankingCheck(state) {
   if (autoRanking.status !== 'idle') return;
   const c = autoRankingCandidate(state);
@@ -12694,7 +12705,7 @@ function startAutoRankingCheck(state) {
     if (!qualifies) { autoRanking.status = 'none'; render(STATE); return; }
     // 登録する前の見込みの順位(名前の入力画面の見出しに出す)。
     autoRanking.rank = entries.filter((e) => e.totalScore > c.totalScore).length + 1;
-    if (loadRememberedRankingName()) autoRankingSave(); else autoRanking.status = 'needName';
+    if (rankingNameHasPassword()) autoRankingSave(); else autoRanking.status = 'needName';
     render(STATE);
   }).catch(() => { clearTimeout(timer); autoRanking.status = 'none'; render(STATE); });
 }

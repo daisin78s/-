@@ -4421,7 +4421,7 @@ function storyShowRanking(opts) {
           const qualifies = entries.length < 50 || opts.vp > entries[49].totalScore;
           if (!qualifies) { status.textContent = 'ランキングの50位以内に入らなかったので、登録されません'; return; }
           const rank = entries.filter((e) => e.totalScore > opts.vp).length + 1;
-          if (loadRememberedRankingName()) { save(rank); return; }
+          if (typeof rankingNameHasPassword === 'function' ? rankingNameHasPassword() : loadRememberedRankingName()) { save(rank); return; }
           status.textContent = '';
           openPlayerNameEntryOverlay({ title: `ランキングに入りました（${rank}位）`, onDone: () => save(rank) });
         }).catch(() => { status.textContent = 'ランキングを読み込めませんでした。通信状態を確かめてください'; });
