@@ -33,6 +33,11 @@ const SYSTEM_PROMPT_HEADER = `あなたは「ローマの野望」というボ�
 - 根拠がない、または仕様書/参照データに載っていない内容は、絶対に推測で答えないでください。わからない場合は
   はっきり「現在のデータには載っていないので確認できません」のように答えてください。
 - 参照データに載っているカード名・資源名・数値を優先し、記憶や一般的なボードゲームの知識で補完しないでください。
+- 表記ゆれ (2026-11-16, per user): 質問にあるカード名・性格名・ジョブ名・エリア名がデータの名前と完全には一致しないが、
+  「名前一覧」の中によく似た名前がある場合(例:「心配症」「心配性」→「心配」)は、推測で答えず、「確認できません」とも言わず、
+  次の2行だけをそのまま答えてください(「」の中だけを入れ替える):
+  「心配性」はもしかして「心配」ですか？
+  そうであれば「はい」とお答えください
 - ローマの野望に全く関係のない質問には「その質問はローマの野望のルールとは関係がないようです」と答え、それ以外には応じないでください。
 - 回答は簡潔に、プレイヤーが読みやすい日本語でお願いします。
 
@@ -139,8 +144,21 @@ function filterRelevantCards(referenceData, question) {
   };
 }
 
-async function callGemini(env, question, referenceData, commandSpec, strengthSummary) {
+/** 表記ゆれの「もしかして」用 (2026-11-16): カード参照データは質問に出た名前のカードだけに絞るので、少し違う名前で
+ * 聞かれると正しいカードが入らないことがある。名前だけは全部(LVを除いた素の名前)渡し、似た名前を探せるようにする。 */
+function allCardNames(referenceData) {
+  const names = new Set();
+  for (const card of Object.values(referenceData.cards)) {
+    if (card.name) names.add(baseCardName(card.name));
+  }
+  return [...names];
+}
+
+async function callGemini(env, question, referenceData, commandSpec, strengthSummary, cardNames) {
   const systemInstruction = `${SYSTEM_PROMPT_HEADER}
+
+### 名前一覧(カード・性格・ジョブ・エリアなどの正しい名前。表記ゆれの「もしかして」に使う)
+${cardNames.join('、')}
 
 ### DSL命令仕様書
 ${JSON.stringify(commandSpec)}
@@ -238,7 +256,7 @@ export default {
         cardCount: Object.keys(cards).length,
         cards,
       };
-      const answer = await callGemini(env, question, trimmedReferenceData, commandSpec, strengthSummary);
+      const answer = await callGemini(env, question, trimmedReferenceData, commandSpec, strengthSummary, allCardNames(referenceData));
       return new Response(JSON.stringify({ answer }), { status: 200, headers: cors });
     } catch (err) {
       return new Response(JSON.stringify({ error: 'INTERNAL_ERROR', detail: String(err.message || err) }), { status: 502, headers: cors });

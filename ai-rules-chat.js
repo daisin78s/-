@@ -106,7 +106,17 @@ window.AiRulesChat = (function () {
   // 週1回、Claude Codeが答えをExcelの「ルール」シートに足し(→ルールAIが次から答えられる)、tools/rule_questions.jsで
   // 掲示板にも答えを書く。
   const UNKNOWN_ANSWER_PATTERN = /確認できません|載っていない|載っておらず|データがありません/;
+  // 表記ゆれの「もしかして」(2026-11-16, per user):AIが「「心配性」はもしかして「心配」ですか？ そうであれば「はい」と
+  // お答えください」と聞き返したら、次に「はい」と答えると、前の質問の名前を置きかえてもう一度聞く(AIは前の会話を
+  // 覚えていないので、こちらで質問を作り直す)。聞き返しはQ&A掲示板には送らない。
+  const DID_YOU_MEAN_PATTERN = /「([^「」]+)」はもしかして「([^「」]+)」ですか/;
+  const YES_PATTERN = /^(はい|ハイ|うん|そう|そうです|yes|y)[。！!．.\s]*$/i;
+  function parseDidYouMean(answer) {
+    const m = DID_YOU_MEAN_PATTERN.exec(String(answer || ''));
+    return m ? { from: m[1], to: m[2] } : null;
+  }
   function isUnknownAnswer(answer) {
+    if (parseDidYouMean(answer)) return false;
     return UNKNOWN_ANSWER_PATTERN.test(String(answer || ''));
   }
   function reportUnknownQuestion(question, answer) {
@@ -178,6 +188,7 @@ window.AiRulesChat = (function () {
     if (!openButton || !overlay || !form || !input || !logEl) return; // このページにチャットUIが無い場合は何もしない
 
     let greeted = false;
+    let pendingDidYouMean = null; // { question, from, to }
 
     const qaToggle = document.getElementById('ai-rules-qa-toggle');
     const qaBoard = document.getElementById('ai-rules-qa-board');
@@ -220,20 +231,29 @@ window.AiRulesChat = (function () {
 
       appendMessage(logEl, 'user', question);
       input.value = '';
+      // 「はい」なら、前の質問の名前を置きかえた質問を送る。
+      let sendText = question;
+      if (pendingDidYouMean && YES_PATTERN.test(question)) {
+        const p = pendingDidYouMean;
+        sendText = p.question.split(p.from).join(p.to);
+      }
+      pendingDidYouMean = null;
       input.disabled = true;
       sendButton.disabled = true;
       const pendingRow = appendMessage(logEl, 'assistant', '考え中...(混雑時は30秒ほどかかることがあります)');
       const pendingBubble = pendingRow.querySelector('.ai-rules-chat-message__bubble');
 
       try {
-        const answer = await sendQuestion(question, (attempt, max) => {
+        const answer = await sendQuestion(sendText, (attempt, max) => {
           pendingBubble.textContent = `考え中...(少し時間がかかっています、再試行中 ${attempt}/${max})`;
         });
         pendingBubble.textContent = answer;
+        const dym = parseDidYouMean(answer);
+        if (dym && sendText.includes(dym.from)) pendingDidYouMean = { question: sendText, from: dym.from, to: dym.to };
         if (isUnknownAnswer(answer)) {
           const noticeRow = appendMessage(logEl, 'assistant', 'この質問をQ&A掲示板に送っています...');
           const noticeBubble = noticeRow.querySelector('.ai-rules-chat-message__bubble');
-          reportUnknownQuestion(question, answer).then(() => {
+          reportUnknownQuestion(sendText, answer).then(() => {
             noticeBubble.textContent = 'この質問はQ&A掲示板に送られました。週に1回、答えを書き足します（右上の「Q&A掲示板」で見られます）。';
           }).catch(() => {
             noticeBubble.textContent = 'Q&A掲示板に送れませんでした（通信状態を確かめてください）。';
