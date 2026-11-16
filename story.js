@@ -3380,6 +3380,12 @@ function ch4Play(rows, i, onDone) {
       const p1 = storyPlayer('P1');
       text = text.replace('〇', String(resourceChoiceStartOrderTotal(STATE, 'P1', ch4ResourceIds(p1))));
     }
+    // 「〇番目だね」(2026-11-16, per user「４章 ２４０行 追加しました」): 〇は皇帝宮殿の次ラウンドの手番順(左から)での
+    // あなたの順番(盤面の表示と同じcomputeNextCastleTurnOrder)。
+    if (/〇番目/.test(text)) {
+      const order = typeof computeNextCastleTurnOrder === 'function' ? computeNextCastleTurnOrder(STATE) : STATE.turnOrder;
+      text = text.replace('〇', String(order.indexOf('P1') + 1));
+    }
     // C列「〇とZはアイコン」: その行の〇を食料(K)のアイコンで出す(Zはいつもアイコン)。
     if (/アイコン/.test(row.event || '')) text = text.replace(/〇/g, 'K');
     // 「「ローマ市民」」: ジョブ選択画面で、アレクがあなたのジョブ(ローマ市民)を選ぶ。
