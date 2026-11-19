@@ -20263,7 +20263,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // (チュートリアル/ウィークリーはpending flag+reloadで戻ってこない、ローカル対戦/オンライン対戦は
   // dismissEntryBannerで裏にある普通のゲーム画面を見せてからそれぞれの処理に入る)。下の3つの小ボタンも
   // 同様にバナーを閉じてから、ゲーム中のボタン列と全く同じ関数を呼ぶ。
-  document.getElementById('entry-banner-tutorial-button').addEventListener('click', openTutorialMode);
+  // チュートリアルのボタンは入口から無くした (2026-11-19) -- ボタンがあれば今まで通り動く。
+  const tutorialEntryButton = document.getElementById('entry-banner-tutorial-button');
+  if (tutorialEntryButton) tutorialEntryButton.addEventListener('click', openTutorialMode);
   updateTutorialCalloutVisibility();
   document.getElementById('entry-banner-local-button').addEventListener('click', dismissEntryBanner);
   // オンライン対戦はオープニングを部屋が開始してから流す (2026-10-27, per user request: "オープニング
