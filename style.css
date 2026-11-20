@@ -6339,9 +6339,13 @@ body:has(#entry-banner:not([hidden])) .card-inst-overlay:not([hidden]) { z-index
   #entry-banner__hero-wrap {
     display: block;
     position: relative;
-    width: 100vw;
-    height: 100vh;
-    height: 100dvh;
+    /* 100vh/100dvhは、iPhoneのホーム画面から開いた時に低く測られることがある(縦→横にすると直る、per user
+       「したにスペースできます 縦にして横にすると消える」2026-11-20)。画面いっぱいに張り付いている#entry-banner
+       (position:fixed; inset:0)の大きさに合わせる。 */
+    width: 100%;
+    height: 100%;
+    flex: 1 1 auto;
+    align-self: stretch;
     overflow: hidden;
   }
   #entry-banner__hero {
