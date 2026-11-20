@@ -12366,7 +12366,10 @@ function saveAchievements(store) {
 function updateTutorialCalloutVisibility() {
   const el = document.getElementById('entry-banner__tutorial-callout');
   if (!el) return;
-  el.hidden = loadAchievements().mode_tutorial !== undefined;
+  // 2026-11-20: チュートリアルのボタンを無くし、吹き出しはストーリーの案内に。ストーリー第1章をクリアするまで出す。
+  let cleared = [];
+  try { cleared = JSON.parse(localStorage.getItem('diceWpStoryChaptersCleared') || '[]'); } catch (e) { cleared = []; }
+  el.hidden = Array.isArray(cleared) && cleared.includes(1);
 }
 
 function recordAchievementIfNew(store, updatedKeys, key, value) {
