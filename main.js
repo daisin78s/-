@@ -252,6 +252,15 @@ function buildAchievementCategories() {
   for (const row of INDEX.raw.CON) categories.push({ key: `con_${row.ID}`, label: `${row.NAME}最高点数`, unit: 'VP' });
   for (const row of INDEX.raw.JOB) categories.push({ key: `job_${row.ID}`, label: `${row.NAME}最高点数`, unit: 'VP' });
   for (const [key, label, unit] of ACHIEVEMENT_PER_GAME_DEFS) categories.push({ key, label, unit });
+  // ストーリーの実績 (2026-11-20, per user が実績解除シートに追加): 「ストーリー第N章クリア」「ストーリー第N章最高点数」
+  // 「フクロウの飾り留め入手」。シートの名前(全角数字でも)から見つける。値はストーリーの記録から作る(mergeStoryAchievements)。
+  for (const row of INDEX.raw['実績解除'] || []) {
+    const name = normalizeFullWidthDigits(String(row.NAME || ''));
+    let m;
+    if ((m = /^ストーリー第(\d)章クリア$/.exec(name))) categories.push({ key: `story_clear_${m[1]}`, label: row.NAME, unit: 'クリア' });
+    else if ((m = /^ストーリー第(\d)章最高点数$/.exec(name))) categories.push({ key: `story_best_${m[1]}`, label: row.NAME, unit: 'VP' });
+    else if (/フクロウの飾り留め/.test(name)) categories.push({ key: 'story_owl', label: row.NAME, unit: '個' });
+  }
   // 2026-10-13, per user request: "実績解除の表示順 エクセルの表示順にして" -- game.xlsxの「実績解除」
   // シートの行順に並び替える。ACHIEVEMENT_POINT_FORMULA_BY_LABELと同じく、キーではなくlabel(NAME列)で
   // 対応付ける(このシートにプログラム用のキー列が無いため)。シートに無いlabelはInfinityで末尾へ(今の
@@ -283,6 +292,8 @@ function normalizeFullWidthDigits(text) {
 function achievementPointsForCategory(label, value) {
   const formula = ACHIEVEMENT_POINT_FORMULA_BY_LABEL.get(label);
   if (!formula) return 0;
+  // 数字だけ(例: 100) = 1回(1個)ごとにその点 (2026-11-20, ストーリー第N章クリア=100、フクロウの飾り留め=1個ごとに50、per user)。
+  if (/^\d+$/.test(normalizeFullWidthDigits(String(formula)))) return value * Number(normalizeFullWidthDigits(String(formula)));
   const rankMatch = /^（(\d+)－順位）\*10$/.exec(normalizeFullWidthDigits(formula));
   if (rankMatch) return (Number(rankMatch[1]) - value) * 10;
   const multiplierMatch = /^\*(\d+)$/.exec(formula);
@@ -12318,6 +12329,7 @@ function achievementLabel(key) {
 function achievementValueText(key, value) {
   const found = ACHIEVEMENT_CATEGORY_BY_KEY.get(key);
   const unit = found ? found.unit : 'VP';
+  if (unit === 'クリア') return 'クリア';
   return unit === '位' ? `${value}位` : `${value}${unit}`;
 }
 
@@ -12337,6 +12349,19 @@ function loadAchievements() {
     migrateConAchievementsToNewLayout(store);
     saveAchievements(store);
   }
+  return mergeStoryAchievements(store);
+}
+
+/** ストーリーの実績 (2026-11-20, per user「入れる」= 今までの記録も数える): ストーリーが自分で覚えている記録
+ * (クリアした章・フクロウの飾り留め・第3章/第4章の最高VP)から作る。実績の記録の方が大きければそちらのまま。 */
+function mergeStoryAchievements(store) {
+  const read = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  const readList = (k) => { try { const v = JSON.parse(read(k) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } };
+  const put = (key, v) => { if (typeof v === 'number' && isFinite(v) && (store[key] === undefined || v > store[key])) store[key] = v; };
+  for (const no of readList('diceWpStoryChaptersCleared')) put(`story_clear_${no}`, 1);
+  const owls = readList('diceWpStorySenecaOwls');
+  if (owls.length) put('story_owl', owls.length);
+  for (const no of [3, 4]) { const v = read(`diceWpStory${no}BestVP`); if (v !== null && v !== '') put(`story_best_${no}`, Number(v)); }
   return store;
 }
 
