@@ -169,7 +169,9 @@ try {
   // 版を1つ上げる (index.htmlの "Ver.1.xxx" と ?v=1.xxx を全部)
   const indexPath = path.join(args.gameDir, 'index.html');
   const html = fs.readFileSync(indexPath, 'utf8');
-  const m = html.match(/id="copyright-notice">[^<]*Ver\.(\d+)\.(\d{3})/); // 画面に出ている版(コメント中の例ではなく)
+  // 1.999の次は1.1000、1.1001…と、桁が増えても全部の数字で読む (2026-11-20, per user「なおして」 -- 前は3桁だけ読んで
+  // 「1.1000」の「1.100」を1.101にしてしまい、画面の版が1.1010、1.1020…と10ずつ増えていた)。
+  const m = html.match(/id="copyright-notice">[^<]*Ver\.(\d+)\.(\d{3,})(?![\d])/); // 画面に出ている版(コメント中の例ではなく)
   if (!m) restore('index.html に版番号が見つかりません');
   const oldVer = `${m[1]}.${m[2]}`;
   const newVer = `${m[1]}.${String(Number(m[2]) + 1).padStart(3, '0')}`;
