@@ -6328,6 +6328,102 @@ body:has(#entry-banner:not([hidden])) .card-inst-overlay:not([hidden]) { z-index
   }
 }
 
+/* スマホ版(横画面)のトップ画面をPC版と同じ形に (2026-11-20, per user「スマホ版 トップ画像をもっとよくしたい」→案A
+   「いったんAで」): 画像を画面いっぱいに敷き、左上にロゴとキャッチコピー、下にボタン7個を横1列、ストーリーの案内の
+   吹き出しも出す。スクロールなしの1画面。上の(max-height: 480px)の縦に積む形を、横画面ではここで上書きする。 */
+@media (max-height: 500px) and (orientation: landscape) {
+  #entry-banner__box {
+    justify-content: center;
+    overflow: hidden;
+  }
+  #entry-banner__hero-wrap {
+    display: block;
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
+  #entry-banner__hero {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    object-fit: cover;
+    object-position: center 40%;
+  }
+  #entry-banner__version {
+    position: absolute;
+    top: 6px;
+    right: calc(8px + env(safe-area-inset-right));
+    margin: 0;
+    bottom: auto;
+    left: auto;
+  }
+  #entry-banner__top-panel {
+    position: absolute;
+    left: 0;
+    right: auto;
+    top: 0;
+    padding: 10px 0 0 calc(14px + env(safe-area-inset-left));
+    background: radial-gradient(ellipse 70% 60% at 0% 0%, rgba(10, 7, 4, 0.55) 0%, rgba(10, 7, 4, 0) 70%);
+  }
+  #entry-banner__tagline {
+    gap: 8px;
+  }
+  #entry-banner__logo {
+    display: block;
+    width: 150px;
+    height: auto;
+    background: linear-gradient(180deg, rgba(28, 20, 12, 0.88) 0%, rgba(5, 4, 2, 0.78) 100%);
+    padding: 6px;
+    margin: 0;
+    border-radius: 8px;
+  }
+  #entry-banner__tagline-title-img {
+    display: block;
+    width: 130px;
+    height: auto;
+    background: linear-gradient(180deg, rgba(28, 20, 12, 0.88) 0%, rgba(5, 4, 2, 0.78) 100%);
+    padding: 6px;
+    margin: 0;
+    border-radius: 8px;
+  }
+  #entry-banner__tagline-title,
+  #entry-banner__tagline-sub {
+    display: none;
+  }
+  #entry-banner__overlay-panel {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    padding: 0 calc(6px + env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) calc(6px + env(safe-area-inset-left));
+  }
+  #entry-banner__button-row {
+    flex-wrap: nowrap;
+    gap: 4px;
+  }
+  .entry-banner__feature-button {
+    flex: 1 1 0;
+    height: 72px;
+  }
+  /* 吹き出しはストーリー(一番左)のボタンの上に小さく。 */
+  .entry-banner__tutorial-callout {
+    display: block !important;
+    left: calc(10px + env(safe-area-inset-left));
+    top: auto;
+    bottom: 80px;
+    width: 170px;
+  }
+  .entry-banner__tutorial-callout[hidden] {
+    display: none !important;
+  }
+}
+
 /* スマホ版: エリア/領地カードの拡大画面では一番上のタイトル(エリア名/カード名)を出さない (2026-10-22,
    per user request「スマホ版 エリアと領地カードの拡大画面 1画面で収まらないので NAMEを表示しない」、
    赤丸で示された左上のタイトル) -- 名前は中のエリア枠・カードにも書いてあるため。×ボタンは右上に残す。 */
