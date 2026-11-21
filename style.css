@@ -8820,3 +8820,49 @@ body.story-pc #round-pass-button { visibility: hidden !important; pointer-events
 /* 押してほしい物(光っている物)が立ち絵の下にある間は立ち絵を薄くする(per user「光っている時だけ薄く」)。 */
 .story-overlay .story-alek { transition: opacity 0.25s; }
 .story-overlay .story-alek.story-alek--faded { opacity: 0.25; }
+
+/* ウィークリーチャレンジの最初の選ぶ画面・スマホ版 (2026-11-21, per user「1人2列で見にくい」→ 案A「カードを少し小さくして、
+   カード6枚とダイスを1段に並べる」): 名前・カード6枚・ダイスを1段に。名前は左の細い列、カードは zoom で縮め、ダイスは縦に積む。
+   PC・タブレットは今のまま。 */
+@media (max-width: 760px), (max-height: 500px) {
+  .weekly-seat-picker__row {
+    flex-wrap: nowrap;
+    gap: 6px;
+    padding: 4px 6px;
+  }
+  .weekly-seat-picker__name {
+    flex: 0 0 40px;
+    font-size: 11px;
+    overflow-wrap: anywhere;
+  }
+  .weekly-seat-picker__cards {
+    flex: 0 1 auto;
+    flex-wrap: nowrap;
+    gap: 4px;
+    zoom: 0.78;
+  }
+  .weekly-seat-picker__side {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+  }
+  .weekly-seat-picker__dice-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+  .weekly-seat-picker__dice-row .die {
+    width: 26px;
+    height: 26px;
+    font-size: 14px;
+    border-radius: 6px;
+  }
+  .weekly-seat-picker__confirm { align-items: center; gap: 4px; }
+  .weekly-seat-picker__confirm-label { font-size: 11px; }
+  .weekly-seat-picker__confirm-buttons { flex-direction: column; gap: 4px; }
+  .weekly-seat-picker__confirm-yes { padding: 6px 14px; font-size: 13px; }
+  .weekly-seat-picker__confirm-no { padding: 4px 10px; }
+}
+/* 幅の狭いスマホ(横で800px未満)は、カードをもう一段小さくして「これで始める」まで1段に入れる。 */
+@media (max-width: 799px) and (max-height: 500px), (max-width: 760px) {
+  .weekly-seat-picker__cards { zoom: 0.66; }
+}
