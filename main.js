@@ -20106,8 +20106,24 @@ function setupIosStandaloneViewportFix() {
       html.style.minHeight = prevMin;
     }));
   };
+  // トップ画面の下の隙間 (2026-11-21, per user「まだ下に隙間が」「試して」): 隙間の色はページの背景色(#eef1f5)と同じで、
+  // iPhoneはそこにもページを描いている。画面に張り付く作り(position:fixed)の物だけが、低く測られた高さで切れている
+  // (Ver.1.1194で fixed のまま高さを伸ばしたら、隙間の所で切れた)。なので低く測られている間だけ、トップ画面を
+  // ページの中に置く作り(position:absolute)にして、画面の縦の長さ(screenの短い辺)に合わせる。直れば元の fixed に戻す。
+  const fitEntryBanner = () => {
+    const banner = document.getElementById('entry-banner');
+    if (!banner) return;
+    const tooShort = looksTooShort() && !banner.hidden;
+    const h = `${Math.min(window.screen.width, window.screen.height)}px`;
+    banner.style.position = tooShort ? 'absolute' : '';
+    banner.style.bottom = tooShort ? 'auto' : '';
+    banner.style.height = tooShort ? h : '';
+    document.documentElement.style.minHeight = tooShort ? h : '';
+    if (tooShort && window.scrollY !== 0) window.scrollTo(window.scrollX, 0);
+  };
   let lastAttemptAt = 0;
   const refresh = () => {
+    fitEntryBanner();
     if (!looksTooShort()) { attempts = 0; return; } // 直っていれば、次にまた低くなった時のために数え直す
     if (refreshing) return;
     // 3回やって直らなければ、あとは10秒に1回だけ試し続ける(以前は3回であきらめていた)。
