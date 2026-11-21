@@ -153,6 +153,17 @@ function simulateOnboardingChoice(state, index, playerId, jobId, face) {
  *   own CLI battle driver) omits this and sees identical behavior to before).
  * @returns {string} the chosen jobId.
  */
+/** 異端者(JOB012)は初期の色ダイスの目が1か2だと弱いので、ジョブを選ぶ時に1・2のダイス1つにつき点数を下げる
+ * (2026-11-21, per user「異端者 ダイス目 1か2 の１つにつき-30」)。ジョブを選ぶ時点で持っているのは初期の色ダイスだけ。
+ * penaltyPerLowDie は調べる用のツールが0にして前と比べられるよう、外から変えられる形にしてある。 */
+const HERETIC_LOW_DICE = { jobId: 'JOB012', penaltyPerLowDie: 30 };
+function hereticLowDicePenalty(state, playerId, jobId) {
+  if (jobId !== HERETIC_LOW_DICE.jobId) return 0;
+  const player = state.players.find((p) => p.id === playerId);
+  const lowCount = (player.dice || []).filter((d) => d.kind === 'COLOR' && d.value <= 2).length;
+  return lowCount * HERETIC_LOW_DICE.penaltyPerLowDie;
+}
+
 function pickJob(state, index, playerId, synergyTable2, moveGenerator, simulator, rngState, excludeFaceIds) {
   let bestValue = -Infinity;
   let bestJobIds = [];
@@ -166,6 +177,7 @@ function pickJob(state, index, playerId, synergyTable2, moveGenerator, simulator
       const value = bestAchievableSynergyValue(clone, index, playerId, jobId, conFaceId, synergyTable2, moveGenerator, simulator);
       if (value > jobValue) jobValue = value;
     }
+    jobValue -= hereticLowDicePenalty(state, playerId, jobId);
     if (jobValue > bestValue) {
       bestValue = jobValue;
       bestJobIds = [jobId];
@@ -193,6 +205,6 @@ function pickConFace(state, index, playerId, jobId, synergyTable2, rngState) {
   return values[0] > values[1] ? 'A' : 'B';
 }
 
-module.exports = { pickResourceCards, pickJob, pickConFace };
+module.exports = { pickResourceCards, pickJob, pickConFace, HERETIC_LOW_DICE };
 
 })();
