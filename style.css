@@ -8830,17 +8830,16 @@ body.story-pc #round-pass-button { visibility: hidden !important; pointer-events
     gap: 6px;
     padding: 4px 6px;
   }
-  .weekly-seat-picker__name {
-    flex: 0 0 40px;
-    font-size: 11px;
-    overflow-wrap: anywhere;
-  }
+  /* 名前は出さない、性格カードは普通の大きさのまま、初期資源カードだけ縮めて合わせる (2026-11-21, per user
+     「名前不要」「性格カードは通常の大きさで 初期資源カードの大きさで調整」)。 */
+  .weekly-seat-picker__name { display: none; }
   .weekly-seat-picker__cards {
     flex: 0 1 auto;
     flex-wrap: nowrap;
+    align-items: center;
     gap: 4px;
-    zoom: 0.78;
   }
+  .weekly-seat-picker__cards > .owned-card-cell { zoom: 0.8; }
   .weekly-seat-picker__side {
     flex-direction: row;
     align-items: center;
@@ -8862,7 +8861,7 @@ body.story-pc #round-pass-button { visibility: hidden !important; pointer-events
   .weekly-seat-picker__confirm-yes { padding: 6px 14px; font-size: 13px; }
   .weekly-seat-picker__confirm-no { padding: 4px 10px; }
 }
-/* 幅の狭いスマホ(横で800px未満)は、カードをもう一段小さくして「これで始める」まで1段に入れる。 */
+/* 幅の狭いスマホ(横で800px未満)は、初期資源カードをもう一段小さくして「これで始める」まで1段に入れる。 */
 @media (max-width: 799px) and (max-height: 500px), (max-width: 760px) {
-  .weekly-seat-picker__cards { zoom: 0.66; }
+  .weekly-seat-picker__cards > .owned-card-cell { zoom: 0.6; }
 }
