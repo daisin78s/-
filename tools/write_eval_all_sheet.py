@@ -44,6 +44,9 @@ FIXED_MAX = -100
 # 「全体の平均より0.1位よいごとに+13点」「自動」「全部の試合」)。1人に性格は1つなので、性格の平均順位の平均は2.5。
 # AIは smart-onboarding.js の pickConFace だけで使う(src/ai/eval-all.js の soloValue)。
 SOLO_BASE_RANK = 2.5
+# 単体の強さの点は、相性の点(POINTS_PER_RANK=130)の半分 (2026-11-21, per user「案2」-- 130だと表と裏の差が60点ほどになり、
+# ジョブとの相性(多くは20〜50点)より大きく、表の面(強欲・几帳面など)がほとんど選ばれなくなったため)。
+SOLO_POINTS_PER_RANK = 65
 SOLO_MIN_GAMES = 300
 D = 'D'
 SHEET = '評価値ALL'
@@ -160,7 +163,7 @@ for i, a in enumerate(order):
         if a == b:
             s_ = ps.solo.get(a)
             if ps.group_of.get(a) == '性格' and s_ and s_['n'] >= SOLO_MIN_GAMES:
-                c = ws.cell(row=2 + i, column=2 + j, value=round(POINTS_PER_RANK * (SOLO_BASE_RANK - s_['rankSum'] / s_['n'])))
+                c = ws.cell(row=2 + i, column=2 + j, value=round(SOLO_POINTS_PER_RANK * (SOLO_BASE_RANK - s_['rankSum'] / s_['n'])))
                 c.fill = PatternFill('solid', fgColor='DDEBF7')
             continue
         if (a, b) in fixed:

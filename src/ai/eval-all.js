@@ -47,7 +47,7 @@ function buildEvalAllTable(raw) {
   }
   const cells = {};
   // 対角のマス(同じ性格どうし)= その性格(CONの面)の単体の強さ (2026-11-21, per user: 表と裏を選ぶ時に「その性格の平均順位の
-  // 良さも点にして足す」「自動」「全部の試合」) -- tools/write_eval_all_sheet.py が 130×(2.5−平均順位) を書く。
+  // 良さも点にして足す」「自動」「全部の試合」) -- tools/write_eval_all_sheet.py が 65×(2.5−平均順位) を書く。
   // 組み合わせの点(byUnit)には入れない(使うのは smart-onboarding.js の pickConFace だけ)。
   const solo = {};
   for (const row of raw['評価値ALL'] || []) {
