@@ -1181,7 +1181,32 @@ function renderWeeklySeatPicker(state) {
     if (confirm) (isMobileLayout() ? row : side).appendChild(confirm);
     rowsContainer.appendChild(row);
   }
+  fitWeeklyTopRows();
   fitWeeklyResourceCards();
+}
+
+/** スマホ版: ジョブの欄とショップの欄を、画面の幅で縮めて1列(折り返さない・はみ出さない)にする (2026-11-21, per user
+ * 「スマホの大きさによってジョブとショップのカードも1列になるように調整して」)。縮めるだけで、普通の大きさより大きくはしない。
+ * zoom は #weekly-seat-picker の変数で渡す(style.css)ので、ショップがゲームの画面に戻れば元の大きさに戻る。 */
+function fitWeeklyTopRows() {
+  const picker = document.getElementById('weekly-seat-picker');
+  if (!picker) return;
+  picker.style.removeProperty('--wk-job-zoom');
+  picker.style.removeProperty('--wk-shop-zoom');
+  if (!isMobileLayout() || picker.hidden) return;
+  const fit = (box, content, varName) => {
+    if (!box || !content || box.clientWidth === 0) return;
+    const st = getComputedStyle(box);
+    const avail = box.clientWidth - parseFloat(st.paddingLeft) - parseFloat(st.paddingRight) - 2;
+    // 横スクロールの箱(.shop-row__combined)の中ではみ出している分も足す。
+    const scroller = content.querySelector && content.querySelector('.shop-row__combined');
+    const need = content.scrollWidth + (scroller ? Math.max(0, scroller.scrollWidth - scroller.clientWidth) : 0);
+    if (need > avail) picker.style.setProperty(varName, String(Math.max(0.4, avail / need)));
+  };
+  const jobs = document.getElementById('weekly-seat-picker__jobs');
+  fit(jobs, jobs, '--wk-job-zoom');
+  const shops = picker.querySelector('#shops');
+  fit(shops, shops && shops.querySelector('.shop-row'), '--wk-shop-zoom');
 }
 
 /** スマホ版: 初期資源カードの大きさを、1段の残りの幅にちょうど収まるように決める (2026-11-21, per user「スマホの画面に
@@ -1211,7 +1236,7 @@ function fitWeeklyResourceCards() {
   zoom = Math.max(0.4, Math.min(1, zoom));
   rows.forEach((row) => cellsOf(row).forEach((c) => { c.style.zoom = String(zoom); }));
 }
-window.addEventListener('resize', () => { if (typeof weeklyChallengeActive !== 'undefined' && weeklyChallengeActive) fitWeeklyResourceCards(); });
+window.addEventListener('resize', () => { if (typeof weeklyChallengeActive !== 'undefined' && weeklyChallengeActive) { fitWeeklyTopRows(); fitWeeklyResourceCards(); } });
 
 /** Commits to playerId as the human seat for this ウィークリーチャレンジ attempt -- every other seat
  * (re)confirms DEFAULT_AI_ROLE, same playerRoles.set(...) pattern the online lobby's own seatIsHuman sync

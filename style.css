@@ -8863,3 +8863,11 @@ body.story-pc #round-pass-button { visibility: hidden !important; pointer-events
   .weekly-seat-picker__confirm-no { padding: 4px 10px; }
 }
 
+
+/* ウィークリーチャレンジの最初の選ぶ画面・スマホ版のジョブとショップ (2026-11-21, per user「スマホの大きさによって ジョブとショップの
+   カードも1列になるように調整して」): main.js の fitWeeklyTopRows が、はみ出す時だけ縮める倍率を変数で渡す。 */
+@media (max-width: 760px), (max-height: 500px) {
+  #weekly-seat-picker__jobs { flex-wrap: nowrap; }
+  #weekly-seat-picker__jobs > * { zoom: var(--wk-job-zoom, 1); }
+  #weekly-seat-picker #shops .shop-row { zoom: var(--wk-shop-zoom, 1); }
+}
