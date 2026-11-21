@@ -20106,19 +20106,8 @@ function setupIosStandaloneViewportFix() {
       html.style.minHeight = prevMin;
     }));
   };
-  // トップ画面は、高さが低く測られている間、画面の本当の縦の長さ(screenの短い辺)に直接合わせる (2026-11-21, per user
-  // 「まだ下に隙間が」 -- Ver.1.1193のiPhoneの写真。下の測り直しやinset:0/100%では、低く測られた高さのままだった。
-  // 隙間の所もページの背景は描かれているので、要素を長くすれば埋まる)。高さが正しい時は何もしない(普段どおり inset:0)。
-  const fitEntryBanner = () => {
-    const banner = document.getElementById('entry-banner');
-    if (!banner) return;
-    const tooShort = looksTooShort();
-    banner.style.bottom = tooShort ? 'auto' : '';
-    banner.style.height = tooShort ? `${Math.min(window.screen.width, window.screen.height)}px` : '';
-  };
   let lastAttemptAt = 0;
   const refresh = () => {
-    fitEntryBanner();
     if (!looksTooShort()) { attempts = 0; return; } // 直っていれば、次にまた低くなった時のために数え直す
     if (refreshing) return;
     // 3回やって直らなければ、あとは10秒に1回だけ試し続ける(以前は3回であきらめていた)。
