@@ -76,5 +76,29 @@ check('An ordinary card (A001A, not a special-shop/extra-monument id) is never b
 check('buildEvalTable forces A202A\'s 1R to exactly 0 even if the sheet somehow had a nonzero value', evalValue(buildEvalTable({ '評価値': [{ ID: 'A202A', '1R': 999, '2R': 5 }] }), 1, 'A202A'), 0);
 check('...while its own 2R (not pinned) passes through unchanged', evalValue(buildEvalTable({ '評価値': [{ ID: 'A202A', '1R': 999, '2R': 5 }] }), 2, 'A202A'), 5);
 
+// 評価値ALLの対角のマス = 性格の単体の強さ (2026-11-21): soloValue で読めて、組み合わせの点には入らず、
+// pickConFace(表と裏を選ぶ)で足される。
+{
+  const evalAll = require('../src/ai/eval-all');
+  const smart = require('../src/ai/smart-onboarding');
+  const { buildDataIndex } = require('../src/data-loader');
+  const raw2 = JSON.parse(JSON.stringify(raw));
+  raw2['評価値ALL'].find((r) => r.NAME === '臆病')['臆病'] = 200;
+  raw2['評価値ALL'].find((r) => r.NAME === '虚栄')['虚栄'] = '';
+  const before = evalAll.buildEvalAllTable(raw);
+  const after = evalAll.buildEvalAllTable(raw2);
+  check('soloValue reads the diagonal cell (臆病 = CON003B)', evalAll.soloValue(after, 'CON003B'), 200);
+  check('soloValue is 0 when the diagonal is blank (虚栄 = CON003A)', evalAll.soloValue(after, 'CON003A'), 0);
+  check('the diagonal is not a pair value', evalAll.pairValue(after, 'CON003B', 'CON003B'), 0);
+  const state = { players: [{ id: 'P1', conPhysicalId: 'CON003' }] };
+  // 虚栄の方がジョブとの相性が良い(ただし差が200より小さい)ジョブ。評価値ALLは自動で変わるので、数字は決め打ちしない。
+  const kyoeiJob = raw.JOB.map((j) => j.ID).find((j) => {
+    const diff = evalAll.pairValueByName(before, '虚栄', j) - evalAll.pairValueByName(before, '臆病', j);
+    return diff > 0 && diff < 200;
+  });
+  check('pickConFace: 虚栄 (A) wins on its job synergy when 臆病 has no solo value', smart.pickConFace(state, buildDataIndex(raw), 'P1', kyoeiJob, evalAll.buildEvalAllTable({ ...raw, '評価値ALL': raw['評価値ALL'].map((r) => ({ ...r, '虚栄': r.NAME === '虚栄' ? '' : r['虚栄'], '臆病': r.NAME === '臆病' ? '' : r['臆病'] })) }), { seed: 1 }), 'A');
+  check('pickConFace: a big solo value flips it to 臆病 (B)', smart.pickConFace(state, buildDataIndex(raw2), 'P1', kyoeiJob, after, { seed: 1 }), 'B');
+}
+
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);

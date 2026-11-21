@@ -29,6 +29,7 @@
 const { getCardRow } = require('../data-loader');
 const { synergyValue } = require('./resource-card-synergy');
 const conJobSynergy = require('./con-job-synergy');
+const evalAll = require('./eval-all');
 const rng = require('../rng');
 const setup = require('../setup');
 const { cloneState } = require('../game-state');
@@ -197,9 +198,11 @@ function pickJob(state, index, playerId, synergyTable2, moveGenerator, simulator
  */
 function pickConFace(state, index, playerId, jobId, synergyTable2, rngState) {
   const conPhysicalId = state.players.find((p) => p.id === playerId).conPhysicalId;
+  // 評価値ALLの性格×ジョブの点 + その性格の単体の強さ(評価値ALLの対角のマス、eval-all.js の soloValue 参照。
+  // 2026-11-21, per user「表と裏を選ぶ時に、その性格の平均順位の良さも点にして足す」)。
   const values = ['A', 'B'].map((face) => {
     const name = getCardRow(index, `${conPhysicalId}${face}`).NAME;
-    return conJobSynergy.synergyValue(synergyTable2, name, jobId);
+    return conJobSynergy.synergyValue(synergyTable2, name, jobId) + evalAll.soloValue(synergyTable2, `${conPhysicalId}${face}`);
   });
   if (values[0] === values[1]) return rng.next(rngState) < 0.5 ? 'A' : 'B';
   return values[0] > values[1] ? 'A' : 'B';

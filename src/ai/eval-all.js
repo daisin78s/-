@@ -46,11 +46,16 @@ function buildEvalAllTable(raw) {
     }
   }
   const cells = {};
+  // 対角のマス(同じ性格どうし)= その性格(CONの面)の単体の強さ (2026-11-21, per user: 表と裏を選ぶ時に「その性格の平均順位の
+  // 良さも点にして足す」「自動」「全部の試合」) -- tools/write_eval_all_sheet.py が 130×(2.5−平均順位) を書く。
+  // 組み合わせの点(byUnit)には入れない(使うのは smart-onboarding.js の pickConFace だけ)。
+  const solo = {};
   for (const row of raw['評価値ALL'] || []) {
     const a = unitByName[row.NAME];
     if (!a) continue;
     for (const [key, value] of Object.entries(row)) {
       const b = unitByName[key];
+      if (b && b === a && typeof value === 'number') solo[a] = value;
       if (key === 'NAME' || !b || b === a || typeof value !== 'number') continue;
       (cells[a] || (cells[a] = {}))[b] = value;
     }
@@ -63,7 +68,12 @@ function buildEvalAllTable(raw) {
       if (typeof mirror !== 'number') (byUnit[b] || (byUnit[b] = {}))[a] = value;
     }
   }
-  return { byUnit, unitByName };
+  return { byUnit, unitByName, solo };
+}
+
+/** 対角のマス(単体の強さ)。無ければ 0。 */
+function soloValue(table, unit) {
+  return (table.solo && table.solo[unit]) || 0;
 }
 
 function pairValue(table, unitA, unitB) {
@@ -105,6 +115,6 @@ function heldPairSum(table, units) {
   return total;
 }
 
-module.exports = { buildEvalAllTable, pairValue, pairValueByName, heldUnits, heldPairSum, COLOR_DICE_NAME };
+module.exports = { buildEvalAllTable, soloValue, pairValue, pairValueByName, heldUnits, heldPairSum, COLOR_DICE_NAME };
 
 })();

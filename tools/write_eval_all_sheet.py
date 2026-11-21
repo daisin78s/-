@@ -40,6 +40,11 @@ PLUS_MIN = 0.10
 MINUS_MAX = -0.30
 MINUS_MIN_GAMES = 300
 FIXED_MAX = -100
+# 性格(CONの面)の単体の強さ = 対角のマス (2026-11-21, per user: 表と裏を選ぶ時に「その性格の平均順位の良さも点にして足す」
+# 「全体の平均より0.1位よいごとに+13点」「自動」「全部の試合」)。1人に性格は1つなので、性格の平均順位の平均は2.5。
+# AIは smart-onboarding.js の pickConFace だけで使う(src/ai/eval-all.js の soloValue)。
+SOLO_BASE_RANK = 2.5
+SOLO_MIN_GAMES = 300
 D = 'D'
 SHEET = '評価値ALL'
 
@@ -153,6 +158,10 @@ for i, a in enumerate(order):
     ws.cell(row=2 + i, column=1, value=label[a]).fill = header_fill
     for j, b in enumerate(order):
         if a == b:
+            s_ = ps.solo.get(a)
+            if ps.group_of.get(a) == '性格' and s_ and s_['n'] >= SOLO_MIN_GAMES:
+                c = ws.cell(row=2 + i, column=2 + j, value=round(POINTS_PER_RANK * (SOLO_BASE_RANK - s_['rankSum'] / s_['n'])))
+                c.fill = PatternFill('solid', fgColor='DDEBF7')
             continue
         if (a, b) in fixed:
             c = ws.cell(row=2 + i, column=2 + j, value=fixed[(a, b)])
