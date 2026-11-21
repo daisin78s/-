@@ -394,6 +394,8 @@ function storyAfterRender(state) {
     if (grid) for (const node of grid.children) if (node.style.gridRow && node.style.gridRow !== '1') node.style.display = 'none';
   }
   if (run.chapter2) story2SoloStandings();
+  // 第1章・第2章(セネカ)は順位表の順位の欄を出さない(「ラウンド ○/4」は残す) (2026-11-21, per user「ストーリー 1 2 章 順位は 不要」)。
+  if (!run.chapter2 && !run.ch4) document.querySelectorAll('.standings-panel__cell').forEach((cell) => cell.remove());
   storyApplyGlow();
   if (run.resourceOverride) storyApplyResourceOverride(run.resourceOverride);
 }
