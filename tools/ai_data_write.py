@@ -292,6 +292,13 @@ for job_face_id, entry in report.get('job', {}).items():
 
 print(f'CONJOB row {TRIAL_TOTAL_ROW} (JOB試行回数合計): wrote {trial_total_written} JOBs')
 
+# 試行回数の表のO列 = その性格(CON)の試行回数の合計、O15 = 全体の合計 (2026-11-21, per user「O列に試合数の合計がほしい」
+# 「これから出てくるものについて合計が表示されるように」)。テンプレートの =SUM(B:N) の式は、openpyxlで保存すると計算結果を
+# 持たないので、開くアプリによっては空に見える -- 式ではなく数字で書く。
+for r in list(count_rows.values()) + [TRIAL_TOTAL_ROW]:
+    ws.cell(row=r, column=n_col).value = sum(
+        v for v in (ws.cell(row=r, column=c).value for c in range(2, last_job_col + 1)) if isinstance(v, (int, float)))
+
 # Per-JOB TRUE weighted average score / QST平均得点 / 平均順位 (2026-08-20, per user request: "この計算式
 # で出る平均は実際の平均とずれると思います...実際の平均にしてもらうことはできますか") -- replaces the
 # sheet's own unweighted "=AVERAGE(12 already-averaged per-CON cells)" formula at these rows with the real
