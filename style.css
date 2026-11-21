@@ -8787,7 +8787,9 @@ body:has(.story-ch4-jobs) .story-overlay .story-alek { bottom: -2%; }
   .story-overlay .story-alek {
     left: auto !important;
     right: 0 !important;
-    bottom: calc(30vh + 64px) !important;
+    /* iPadで頭が見切れるので、セリフ欄を少し低くして、その分キャラを下げる (2026-11-21, per user「セリフの縦幅を少し減らして
+       キャラを少し下に」)。大きさは前と同じ(上に5vhの空き)。 */
+    bottom: calc(25vh + 64px) !important;
     width: 36vw;
     height: calc(70vh - 64px);
     object-fit: contain;
@@ -8798,8 +8800,8 @@ body:has(.story-ch4-jobs) .story-overlay .story-alek { bottom: -2%; }
     right: 12px !important;
     width: calc(36vw - 24px);
     bottom: 64px !important;
-    min-height: 26vh;
-    max-height: 30vh;
+    min-height: 21vh;
+    max-height: 25vh;
     box-sizing: border-box;
     font-size: 22px;
     padding: 22px 22px 14px;
