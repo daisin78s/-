@@ -1120,7 +1120,7 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
 // ---------------------------------------------------------------------------
 {
   const state = freshState();
-  giveCard(state, 'JOB004', 'P1'); // PASSIVE=ON(GET(D),ADD(Z,K));ON(GET(wD),ADD(2K))
+  giveCard(state, 'JOB004', 'P1'); // TAP=ON(GET(D),ADD(Z,K));ON(GET(wD),ADD(2K)), AUTO=A (2026-11-21まではPASSIVE)
   const player = getPlayerRef(state, 'P1');
   const before = player.dice.filter((d) => d.kind === 'COLOR').length;
   const result = executor.runCommand(state, index, { playerId: 'P1' }, { type: 'CHANGE', pay: [], gain: [{ resource: 'D', count: { kind: 'literal', value: 1 } }], times: { kind: 'literal', value: 1 } });
@@ -1134,11 +1134,43 @@ function assertNotUndefined(label, cond) { check(label, !!cond, true); }
   // ONCE=ADD(2wD) only triggered JOB006's ON(GET(wD),ADD(K)) once instead of twice). Mirrors
   // board.placeDiceGroup's own PLACE(mapId), which already emits once per die in a multi-die placement.
   const state = freshState();
-  giveCard(state, 'JOB004', 'P1'); // PASSIVE=ON(GET(D),ADD(Z,K));ON(GET(wD),ADD(2K))
+  giveCard(state, 'JOB004', 'P1'); // TAP=ON(GET(D),ADD(Z,K));ON(GET(wD),ADD(2K)), AUTO=A (2026-11-21まではPASSIVE)
   const player = getPlayerRef(state, 'P1');
   const result = executor.runProgram(state, index, { playerId: 'P1' }, 'ADD(2wD)'); // B004A's real ONCE
   check('ADD(2wD) succeeds and grants both white dice', { success: result.success, wD: player.dice.filter((d) => d.kind === 'WHITE').length }, { success: true, wD: 2 });
-  check('...and 百人隊長 reacted to GET(wD) twice, once per die, granting 2K each (4K) -- 2026-11-02 ADD(K)->ADD(2K)', player.resources.K, 4);
+  // 2026-11-21: 百人隊長はPASSIVEからTAP(自動でタップ、TURNEND=UNTAP)に変わった(per user「🎲を1個以上得たとき〇2」
+  // 「白ダイス２個たときも〇2」)。GET自体は今も1個ごとに出るが、1つ目でタップされるので〇2は1回だけ。
+  check('...and 百人隊長 (now TAP, 2026-11-21) reacts only once to 2 white dice gained at once: 2K', player.resources.K, 2);
+}
+{
+  // 「同時に得たときは両方」(2026-11-21, per user): 1つの効果で色ダイスと白ダイスを得たら、タップ済みでももう一方も出る。
+  const state = freshState();
+  const jobPhysicalId = giveCard(state, 'JOB004', 'P1');
+  const player = getPlayerRef(state, 'P1');
+  executor.runProgram(state, index, { playerId: 'P1' }, 'ADD(D);ADD(2wD)');
+  check('百人隊長: D and 2wD from one effect -> both fire once each (Z1, K1+2)', { Z: player.resources.Z, K: player.resources.K, tapped: state.cards[jobPhysicalId].tapped }, { Z: 1, K: 3, tapped: true });
+  executor.runProgram(state, index, { playerId: 'P1' }, 'ADD(D)');
+  check('...a later, separate effect does not fire again until UNTAP', { Z: player.resources.Z, K: player.resources.K }, { Z: 1, K: 3 });
+}
+{
+  // 別々の効果で得た時は、先に出た方だけ(2026-11-21, per user)。
+  const state = freshState();
+  giveCard(state, 'JOB004', 'P1');
+  const player = getPlayerRef(state, 'P1');
+  executor.runProgram(state, index, { playerId: 'P1' }, 'ADD(wD)');
+  executor.runProgram(state, index, { playerId: 'P1' }, 'ADD(D)');
+  check('百人隊長: wD then D from separate effects -> only the first (K2, no Z)', { Z: player.resources.Z, K: player.resources.K }, { Z: 0, K: 2 });
+}
+{
+  // 初期資源は全部まとめて「同時」(2026-11-21, per user): 別々のカードの効果でも、withGrantBatchの中なら両方。
+  const state = freshState();
+  giveCard(state, 'JOB004', 'P1');
+  const player = getPlayerRef(state, 'P1');
+  executor.withGrantBatch(() => {
+    executor.runProgram(state, index, { playerId: 'P1' }, 'ADD(wD)');
+    executor.runProgram(state, index, { playerId: 'P1' }, 'ADD(D)');
+  });
+  check('百人隊長: wD and D inside one batch (initial resources) -> both (Z1, K3)', { Z: player.resources.Z, K: player.resources.K }, { Z: 1, K: 3 });
 }
 {
   const state = freshState();

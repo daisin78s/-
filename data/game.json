@@ -1515,12 +1515,12 @@
       "COST": "",
       "VP": "",
       "ONCE": "",
-      "TAP": "",
-      "PASSIVE": "ON(GET(D),ADD(Z,K));ON(GET(wD),ADD(2K))",
-      "TURNEND": "",
+      "TAP": "ON(GET(D),ADD(Z,K));ON(GET(wD),ADD(2K))",
+      "PASSIVE": "",
+      "TURNEND": "UNTAP()",
       "START_ORDER": "",
-      "AUTO": "",
-      "INST": "追加色ダイスを得たときZ〇と〇を得る\n🎲を得たときその数だけ〇2を得る\n初期資源含む\n\nラテン名ケントゥリオ"
+      "AUTO": "A",
+      "INST": "追加色ダイスを得たとき自動でタップするZ〇と〇を得る\n🎲を1個以上得たとき自動でタップする〇2を得る\n初期資源含む\n\nラテン名ケントゥリオ"
     },
     {
       "ID": "JOB005",

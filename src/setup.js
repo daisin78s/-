@@ -34,7 +34,7 @@ const {
   INITIAL_COLOR_DICE,
 } = require('./game-state');
 const { getAreaRow, getCardRow } = require('./data-loader');
-const { runProgram, enforceWhiteDiceCap, grantResourceAndEmitGet } = require('./executor');
+const { runProgram, enforceWhiteDiceCap, grantResourceAndEmitGet, withGrantBatch, currentGrantBatchId } = require('./executor');
 const { recordCheckpoint } = require('./undo');
 const board = require('./board');
 
@@ -603,7 +603,12 @@ function chooseConFace(state, index, playerId, face) {
   player.ownedCardPhysicalIds.push(inst.physicalId);
   player.conFace = face;
   const row = getCardRow(index, faceId);
-  const result = runProgram(state, index, { playerId, sourcePhysicalId: inst.physicalId }, row.ONCE);
+  // 性格カードの効果も初期資源なので、すぐ後のreceiveInitialResourcesと同じ「同時」のまとまりにする (2026-11-21, per user
+  // 百人隊長「初期資源は全部まとめて同時」: 例えば憤怒のADD(D)と資源カードのADD(wD)で両方出る)。
+  const result = withGrantBatch(() => {
+    player.initialGrantBatch = currentGrantBatchId();
+    return runProgram(state, index, { playerId, sourcePhysicalId: inst.physicalId }, row.ONCE);
+  });
   // 憤怒/CON005B (2026-08-23, see executor.enforceWhiteDiceCap's own doc): CON is always chosen after
   // JOB during onboarding, so this is the only point a player's WHITE_DICE_CAP passive can newly turn on
   // -- e.g. 道化/JOB003's own ONCE already granted a real wD before this, which must now be discarded if
@@ -632,6 +637,12 @@ function chooseConFace(state, index, playerId, face) {
  * effect -- called by chooseConFace's caller only after chooseJob has already run, so player.jobCardId is
  * already set by this point (needed for the chef-bonus check inside grantResourceAndEmitGet). */
 function receiveInitialResources(state, index, playerId) {
+  // 初期資源は全部まとめて「同時に得た」扱い (2026-11-21, per user 百人隊長「初期資源は全部まとめて同時」) --
+  // executor.withGrantBatchの説明を参照。
+  const player = state.players.find((p) => p.id === playerId);
+  return withGrantBatch(() => receiveInitialResourcesInBatch(state, index, playerId), player.initialGrantBatch);
+}
+function receiveInitialResourcesInBatch(state, index, playerId) {
   const player = state.players.find((p) => p.id === playerId);
   const results = [];
   for (const physicalId of player.ownedCardPhysicalIds) {

@@ -290,6 +290,20 @@ function forceB005ALocation(state, location) {
   check('chooseConFace still succeeds for the A face while only B is locked', result.success, true);
 }
 {
+  // 百人隊長(JOB004、TAP・自動)は初期資源を全部まとめて「同時」に扱う (2026-11-21, per user): 憤怒(CON005A ADD(D))の色ダイスと
+  // 資源カードR001(ADD(wD))の白ダイスで、Z〇・〇と〇2の両方が出る。
+  const state = createEmptyGameState('centurion-initial-batch');
+  setup.createPlayers(state, ['Alice', 'Bob', 'Carol', 'Dan']);
+  setup.dealConCards(state, { P1: 'CON005' });
+  setup.grantResourceCards(state, index, 'P1', ['R001', 'R013']);
+  setup.dealJobPool(state, index, ['JOB004']);
+  setup.chooseJob(state, index, 'P1', 'JOB004');
+  setup.chooseConFace(state, index, 'P1', 'A');
+  setup.receiveInitialResources(state, index, 'P1');
+  const r = state.players[0].resources;
+  check('百人隊長: 憤怒のD + R001のwD (初期資源) -> both fire: Z1, K1+2', { Z: r.Z, K: r.K }, { Z: 1, K: 3 });
+}
+{
   const state = createEmptyGameState('debug-setup-resource');
   setup.createPlayers(state, ['Alice', 'Bob', 'Carol', 'Dan']);
   setup.dealResourceCandidates(state, index, ['P1']); // P1 skipped -- grantResourceCards settles them directly instead

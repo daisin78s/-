@@ -1621,6 +1621,9 @@ function runCommand(state, index, context, cmd) {
  */
 function runProgram(state, index, context, dslText) {
   if (!dslText) return { success: true };
+  return withGrantBatch(() => runProgramInBatch(state, index, context, dslText));
+}
+function runProgramInBatch(state, index, context, dslText) {
   const before = structuredClone(state);
   const commands = lowerProgram(parse(dslText));
   for (const cmd of commands) {
@@ -1891,10 +1894,12 @@ function emit(state, index, playerId, eventName, actualValue, context) {
       fired.push({ physicalId, cmd, result });
       notifyActivation(state, playerId, physicalId, inst.currentFaceId, 'PASSIVE');
     }
-    if (!inst.tapped) {
+    if (!inst.tapped || isSameGrantBatchTap(inst)) {
       for (const cmd of findOnHandlers(row, 'TAP', eventName)) {
         if (!eventArgsMatch(cmd.event.args, actualValue)) continue;
-        availableReactions.push({ physicalId, effect: cmd.effect });
+        const handlerKey = `${eventName}(${cmd.event.args.join(',')})`;
+        if (inst.tapped && (inst.tapBatchKeys || []).includes(handlerKey)) continue;
+        availableReactions.push({ physicalId, effect: cmd.effect, handlerKey });
       }
     }
   }
@@ -1936,15 +1941,44 @@ function notifyActivation(state, playerId, physicalId, faceId, kind, amount = 1)
 }
 
 /** Player elects to tap physicalId to resolve a previously-offered TAP reaction (see emit()). */
-function resolveTapReaction(state, index, context, physicalId, effect) {
+function resolveTapReaction(state, index, context, physicalId, effect, handlerKey) {
   const inst = state.cards[physicalId];
-  if (inst.tapped) return { success: false, reason: 'ALREADY_TAPPED' };
+  const sameBatchOk = handlerKey && isSameGrantBatchTap(inst) && !(inst.tapBatchKeys || []).includes(handlerKey);
+  if (inst.tapped && !sameBatchOk) return { success: false, reason: 'ALREADY_TAPPED' };
   const result = runCommand(state, index, { ...context, sourcePhysicalId: physicalId }, effect);
   if (result.success) {
+    if (!inst.tapped) {
+      inst.tapBatch = grantBatchDepth > 0 ? currentGrantBatch : null;
+      inst.tapBatchKeys = [];
+    }
+    if (handlerKey) inst.tapBatchKeys = [...(inst.tapBatchKeys || []), handlerKey];
     inst.tapped = true;
     notifyActivation(state, context.playerId, physicalId, inst.currentFaceId, 'TAP');
   }
   return result;
+}
+
+/* ---------- 「同時に得た」のまとまり (2026-11-21, per user 百人隊長(JOB004)「同時に得たときは両方」) ----------
+ * TAP欄にON(...)が2つ以上あるカード(今は百人隊長だけ: 色ダイス→Z〇と〇、白ダイス→〇2)は、1つが出るとタップ済みに
+ * なるが、同じまとまりの中で得た「別の種類」の物には、タップ済みでももう一方も出る。同じ種類(白ダイス2個など)は1回だけ。
+ * まとまり = 1つの効果の実行(runProgram 1回 = カードやエリアの効果1回)、初期資源(setup.receiveInitialResources全体)、
+ * それ以外で直接資源を得た1回(grantResourceAndEmitGet)。別々の効果で得た時は、先に出た方だけ(アンタップまで出ない)。
+ * 番号は増えるだけなので、前のまとまりの印が残っていても新しいまとまりと一致しない。 */
+let grantBatchSeq = 0;
+let grantBatchDepth = 0;
+let currentGrantBatch = 0;
+function withGrantBatch(fn, reuseBatchId) {
+  if (grantBatchDepth === 0) currentGrantBatch = reuseBatchId || ++grantBatchSeq;
+  grantBatchDepth++;
+  try { return fn(); } finally { grantBatchDepth--; }
+}
+/** 今のまとまりの番号(withGrantBatchの中だけ意味がある)。初期資源で、性格カードの効果と資源カードの効果を同じまとまりに
+ * するために使う(setup.chooseConFace → receiveInitialResources)。 */
+function currentGrantBatchId() {
+  return grantBatchDepth > 0 ? currentGrantBatch : null;
+}
+function isSameGrantBatchTap(inst) {
+  return !!inst.tapped && grantBatchDepth > 0 && inst.tapBatch === currentGrantBatch;
 }
 
 const MAX_EVENT_CHAIN_DEPTH = 8;
@@ -1972,7 +2006,7 @@ function emitAndResolve(state, index, context, eventName, actualValue) {
   const { fired, availableReactions } = emit(state, index, context.playerId, eventName, actualValue, childContext);
   for (const reaction of availableReactions) {
     if (isCardAutoMode(state, index, context.playerId, reaction.physicalId)) {
-      resolveTapReaction(state, index, childContext, reaction.physicalId, reaction.effect);
+      resolveTapReaction(state, index, childContext, reaction.physicalId, reaction.effect, reaction.handlerKey);
     } else {
       state.pendingChoices.push({
         id: nextPendingChoiceId(),
@@ -1996,6 +2030,9 @@ function emitAndResolve(state, index, context, eventName, actualValue) {
  * GET regardless of count, matching every other card that reacts to those (e.g. JOB005A's
  * ON(GET(K),CHANGE(K,A))), which was never part of this report. */
 function grantResourceAndEmitGet(state, index, context, resource, count) {
+  return withGrantBatch(() => grantResourceAndEmitGetInBatch(state, index, context, resource, count));
+}
+function grantResourceAndEmitGetInBatch(state, index, context, resource, count) {
   const effectiveResource = grantResource(state, index, context.playerId, resource, count, context);
   if (count > 0) {
     if (DICE_KIND_BY_RESOURCE[effectiveResource]) {
@@ -2069,6 +2106,8 @@ module.exports = {
   applyTurnEnd,
   emit,
   emitAndResolve,
+  withGrantBatch,
+  currentGrantBatchId,
   resolveTapReaction,
   resolveUntapChoice,
   setActivationListener,
