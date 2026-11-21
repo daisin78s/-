@@ -20162,22 +20162,56 @@ function setupIosStandaloneViewportFix() {
   let lastAttemptAt = 0;
   const refresh = () => {
     fitEntryBanner();
-    if (!looksTooShort()) { attempts = 0; return; } // 直っていれば、次にまた低くなった時のために数え直す
+    if (!looksTooShort()) { if (attempts) dbg('直った→回数0'); attempts = 0; return; } // 直っていれば、次にまた低くなった時のために数え直す
     if (refreshing) return;
     // 3回やって直らなければ、あとは10秒に1回だけ試し続ける(以前は3回であきらめていた)。
     if (attempts >= 3 && Date.now() - lastAttemptAt < 10000) return;
     attempts++;
     lastAttemptAt = Date.now();
     refreshing = true;
+    dbg(`直す#${attempts} 書換`);
     meta.setAttribute('content', `${original}, maximum-scale=1.0`);
     setTimeout(() => {
       meta.setAttribute('content', original);
       if (document.body.classList.contains('body--overlay-open')) window.scrollTo(window.scrollX, window.scrollY);
       else nudgeScroll();
+      dbg('戻す+1px');
       refreshing = false;
       setTimeout(refresh, 400);
     }, 60);
   };
+  // 【一時的・調べ用】トップ画面の隅に高さと直す処理の記録を出す (2026-11-21, per user「はい」: 隙間のちらつきの原因を
+  // スクリーンショットで調べる)。全画面アプリでトップ画面が出ている時だけ。調べ終わったら消す。
+  const dbgLog = [];
+  const t0 = Date.now();
+  const dbg = (msg) => {
+    dbgLog.push(`${((Date.now() - t0) / 1000).toFixed(1)} ${msg} h${window.innerHeight}`);
+    if (dbgLog.length > 8) dbgLog.shift();
+  };
+  let dbgLastH = window.innerHeight;
+  const dbgBox = document.createElement('div');
+  dbgBox.style.cssText = 'position:absolute;top:4px;left:50%;transform:translateX(-50%);z-index:99999;'
+    + 'background:rgba(0,0,0,.75);color:#fff;font:10px/1.25 monospace;padding:3px 5px;border-radius:4px;'
+    + 'white-space:pre;pointer-events:none;';
+  const dbgUpdate = () => {
+    const banner = document.getElementById('entry-banner');
+    if (!banner) return;
+    if (dbgBox.parentElement !== banner) banner.appendChild(dbgBox);
+    if (window.innerHeight !== dbgLastH) { dbg(`高さ変化 ${dbgLastH}→`); dbgLastH = window.innerHeight; }
+    if (banner.hidden) return;
+    const vv = window.visualViewport;
+    const br = banner.getBoundingClientRect();
+    const de = document.documentElement;
+    dbgBox.textContent = [
+      `調べ用 ${appVersionLabel()}`,
+      `inner ${window.innerWidth}x${window.innerHeight} screen ${window.screen.width}x${window.screen.height}`,
+      `visual ${vv ? `${Math.round(vv.height)} off${Math.round(vv.offsetTop)}` : '-'} client ${de.clientHeight} scrollY ${Math.round(window.scrollY)}`,
+      `banner ${getComputedStyle(banner).position} top${Math.round(br.top)} h${Math.round(br.height)} pinned ${bannerPinned}`,
+      `attempts ${attempts} 低い ${looksTooShort()}`,
+      ...dbgLog,
+    ].join(String.fromCharCode(10));
+  };
+  setInterval(dbgUpdate, 200);
   setTimeout(refresh, 300);
   // 遊んでいる途中で低くなった時も直す (2026-11-15, per user「下に謎の隙間ができる 画面を上下に動かすと消える」--
   // ストーリー第4章の途中で起きた。以前は開いた時・戻ってきた時しか直していなかった)。
