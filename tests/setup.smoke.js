@@ -304,6 +304,20 @@ function forceB005ALocation(state, location) {
   check('百人隊長: 憤怒のD + R001のwD (初期資源) -> both fire: Z1, K1+2', { Z: r.Z, K: r.K }, { Z: 1, K: 3 });
 }
 {
+  // 食料長官(JOB008)は同時に得たVPを合計してから半分(切り上げ) (2026-11-21, per user「QAのとおりに」): 怠惰(CON005B 3VP) +
+  // R010(1VP,3K) は合計4VP -> 〇2 (1回ずつ計算した〇2+〇1=〇3ではない)。
+  const state = createEmptyGameState('chef-initial-batch');
+  setup.createPlayers(state, ['Alice', 'Bob', 'Carol', 'Dan']);
+  setup.dealConCards(state, { P1: 'CON005' });
+  setup.grantResourceCards(state, index, 'P1', ['R010', 'R013']);
+  setup.dealJobPool(state, index, ['JOB008']);
+  setup.chooseJob(state, index, 'P1', 'JOB008');
+  setup.chooseConFace(state, index, 'P1', 'B');
+  setup.receiveInitialResources(state, index, 'P1');
+  const r = state.players[0].resources;
+  check('食料長官: 怠惰3VP + R010 1VP (初期資源) -> VP4, K = R010の3 + 〇2', { VP: r.VP, K: r.K }, { VP: 4, K: 5 });
+}
+{
   const state = createEmptyGameState('debug-setup-resource');
   setup.createPlayers(state, ['Alice', 'Bob', 'Carol', 'Dan']);
   setup.dealResourceCandidates(state, index, ['P1']); // P1 skipped -- grantResourceCards settles them directly instead

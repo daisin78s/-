@@ -2082,7 +2082,15 @@ function grantChefBonusIfEarned(state, index, context, vpCount) {
   // 得たVPの半分(端数切り上げ)のK (2026-10-27, per user request: "食料長官の能力 得たVPの半分の数（端数切り
   // 上げ）の〇を得る 初期資源含む" + 回答「VPを得るたびに半分」) -- VPを得る1回ごとに計算する(1VP→1K、2VP→1K、
   // 3VP→2K)。初期資源カードのVPも、この関数を通る普通のVP獲得なので含まれる(setup.receiveInitialResources)。
-  const kGained = Math.ceil(vpCount / 2);
+  // 同時に得たVPは合計してから半分 (2026-11-21, per user「QAのとおりに」 -- Q「初期資源カードで1VP、性格カードで3VP得た時」
+  // A「同時に得るため〇2」)。同じ grant batch (百人隊長と同じ「同時」、withGrantBatch 参照。初期資源は性格カードの分も
+  // 1つの batch) の中では、VPの合計の半分(切り上げ)から、その batch で既に得た〇を引いた分だけ得る。
+  const batchId = currentGrantBatchId();
+  if (batchId === null || !player.chefBatch || player.chefBatch.id !== batchId) player.chefBatch = { id: batchId, vp: 0, k: 0 };
+  player.chefBatch.vp += vpCount;
+  const kGained = Math.ceil(player.chefBatch.vp / 2) - player.chefBatch.k;
+  player.chefBatch.k += kGained;
+  if (kGained <= 0) return;
   grantResourceAndEmitGet(state, index, context, 'K', kGained);
   // amount = 得た〇の数 (2026-11-03, per user「食料長官は 得たKの合計」 -- AIDATAの使用回数を〇の合計にする)。
   notifyActivation(state, context.playerId, player.jobCardId, player.jobCardId, 'PASSIVE', kGained);
