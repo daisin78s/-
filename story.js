@@ -1070,11 +1070,12 @@ function storyPatraEnters(onDone) {
   const p2 = storyPlayer('P2');
   Object.keys(p2.resources).forEach((r) => { p2.resources[r] = 0; });
   p2.resources.K = 5;
-  // ローマ市街に置かれている目と全部同じ目だと、パトラがANYに置けないので振り直す(まず起きない、2026-11-21)。
+  // パトラのダイスが全部ローマ市街に置かれている目と同じでANYに置けない時は、基礎学問の場面(S055〜S057)になる
+  // (2026-11-21, per user)。ただし置かれている目が1だと、基礎学問で1にしても同じ目で置けないので、その時だけ振り直す。
   const cityValues = STATE.maps[STORY_CITY_MAP_ID].slots.flat().filter((o) => !o.virtual).map((o) => o.value);
   for (let tries = 0; tries < 20; tries++) {
     p2.dice.forEach((d) => { d.passed = false; d.value = 1 + Math.floor(Math.random() * 6); });
-    if (p2.dice.some((d) => !cityValues.includes(d.value))) break;
+    if (!cityValues.includes(1) || p2.dice.some((d) => !cityValues.includes(d.value))) break;
   }
   storyEndTurnOf('P1');
   document.body.classList.add('story-lock-hand'); // パトラのダイスはあなたが動かせない
@@ -1110,9 +1111,8 @@ function storyPatraPlaces(onDone) {
   // 左から順に、置けるダイスを置く (2026-11-21, per user: あなたがEXに2を置くと、パトラの左端の2は同じ目なので
   // 置けず、何も置かなかった)。同じエリアに同じ目は置けない決まりのため。
   const dice = storyPlayer('P2').dice.filter((d) => !d.placedMapId && !d.passed);
-  for (const die of dice) {
-    if (boardMod.placeDice(STATE, INDEX, { playerId: 'P2' }, die.id, STORY_CITY_MAP_ID, anyIdx).success) break;
-  }
+  // どれも置けない(全部同じ目)時は、ANYが埋まっていた時と同じ基礎学問の場面にする (2026-11-21, per user)。
+  if (!dice.some((die) => boardMod.placeDice(STATE, INDEX, { playerId: 'P2' }, die.id, STORY_CITY_MAP_ID, anyIdx).success)) { onDone(true); return; }
   render(STATE);
   storyLater(() => storyWhenVisualsIdle(() => onDone(false)), 200);
 }
