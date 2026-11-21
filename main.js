@@ -1154,8 +1154,9 @@ function renderWeeklySeatPicker(state) {
     side.appendChild(diceRow);
     // 2枚選び終わったときだけ「これで始める」はい/いいえを出す -- それまでは何も表示しない(2026-09-07,
     // per user request: "同じプレイヤーの初期資源カードを２枚タップしたら これで始める Y/N で始まるように")。
+    let confirm = null;
     if (selected.length === 2) {
-      const confirm = el('div', 'weekly-seat-picker__confirm');
+      confirm = el('div', 'weekly-seat-picker__confirm');
       confirm.appendChild(el('div', 'weekly-seat-picker__confirm-label', 'これで始める'));
       const yesBtn = el('button', 'weekly-seat-picker__confirm-yes', 'はい');
       yesBtn.type = 'button';
@@ -1174,12 +1175,43 @@ function renderWeeklySeatPicker(state) {
       buttonsRow.appendChild(yesBtn);
       buttonsRow.appendChild(noBtn);
       confirm.appendChild(buttonsRow);
-      side.appendChild(confirm);
     }
     row.appendChild(side);
+    // スマホ版は「これで始める」をカードの段の下に出す (2026-11-21, per user「右ではなく上か下に出るように」)。PCは右のまま。
+    if (confirm) (isMobileLayout() ? row : side).appendChild(confirm);
     rowsContainer.appendChild(row);
   }
+  fitWeeklyResourceCards();
 }
+
+/** スマホ版: 初期資源カードの大きさを、1段の残りの幅にちょうど収まるように決める (2026-11-21, per user「スマホの画面に
+ * よって大きさかえれますか」)。性格カードは普通の大きさのまま。上限は普通の大きさ。PC・タブレットは何もしない。 */
+function fitWeeklyResourceCards() {
+  const rows = [...document.querySelectorAll('#weekly-seat-picker__rows .weekly-seat-picker__row')];
+  const cellsOf = (row) => [...row.querySelectorAll('.weekly-seat-picker__cards > .owned-card-cell')];
+  rows.forEach((row) => cellsOf(row).forEach((c) => { c.style.zoom = ''; }));
+  if (!isMobileLayout() || !rows.length || rows[0].clientWidth === 0) return; // 隠れている間は測れない
+  let zoom = 1;
+  for (const row of rows) {
+    const cells = cellsOf(row);
+    if (!cells.length) continue;
+    const cards = row.querySelector('.weekly-seat-picker__cards');
+    const side = row.querySelector('.weekly-seat-picker__side');
+    const rowStyle = getComputedStyle(row);
+    const cardsGap = parseFloat(getComputedStyle(cards).columnGap) || 0;
+    const rowGap = parseFloat(rowStyle.columnGap) || 0;
+    const inner = row.clientWidth - parseFloat(rowStyle.paddingLeft) - parseFloat(rowStyle.paddingRight);
+    const fixedCards = [...cards.children].filter((c) => !cells.includes(c));
+    const fixedW = fixedCards.reduce((sum, c) => sum + c.getBoundingClientRect().width, 0) + cardsGap * (cards.children.length - 1);
+    const sideW = side ? side.getBoundingClientRect().width + rowGap : 0;
+    const cellsW = cells.reduce((sum, c) => sum + c.getBoundingClientRect().width, 0);
+    const room = inner - sideW - fixedW - 2; // 2px: 端数で折り返さないための余り
+    if (cellsW > 0) zoom = Math.min(zoom, room / cellsW);
+  }
+  zoom = Math.max(0.4, Math.min(1, zoom));
+  rows.forEach((row) => cellsOf(row).forEach((c) => { c.style.zoom = String(zoom); }));
+}
+window.addEventListener('resize', () => { if (typeof weeklyChallengeActive !== 'undefined' && weeklyChallengeActive) fitWeeklyResourceCards(); });
 
 /** Commits to playerId as the human seat for this ウィークリーチャレンジ attempt -- every other seat
  * (re)confirms DEFAULT_AI_ROLE, same playerRoles.set(...) pattern the online lobby's own seatIsHuman sync

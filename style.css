@@ -8826,7 +8826,7 @@ body.story-pc #round-pass-button { visibility: hidden !important; pointer-events
    PC・タブレットは今のまま。 */
 @media (max-width: 760px), (max-height: 500px) {
   .weekly-seat-picker__row {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     gap: 6px;
     padding: 4px 6px;
   }
@@ -8839,7 +8839,7 @@ body.story-pc #round-pass-button { visibility: hidden !important; pointer-events
     align-items: center;
     gap: 4px;
   }
-  .weekly-seat-picker__cards > .owned-card-cell { zoom: 0.8; }
+  /* 初期資源カードの大きさは main.js の fitWeeklyResourceCards が画面の幅から決める。 */
   .weekly-seat-picker__side {
     flex-direction: row;
     align-items: center;
@@ -8855,13 +8855,11 @@ body.story-pc #round-pass-button { visibility: hidden !important; pointer-events
     font-size: 14px;
     border-radius: 6px;
   }
-  .weekly-seat-picker__confirm { align-items: center; gap: 4px; }
-  .weekly-seat-picker__confirm-label { font-size: 11px; }
-  .weekly-seat-picker__confirm-buttons { flex-direction: column; gap: 4px; }
+  /* 「これで始める」はカードの段の下に1行で (main.js が row の最後に置く)。 */
+  .weekly-seat-picker__confirm { flex: 1 0 100%; flex-direction: row; justify-content: center; align-items: center; gap: 12px; }
+  .weekly-seat-picker__confirm-label { font-size: 13px; }
+  .weekly-seat-picker__confirm-buttons { flex-direction: row; align-items: center; gap: 10px; }
   .weekly-seat-picker__confirm-yes { padding: 6px 14px; font-size: 13px; }
   .weekly-seat-picker__confirm-no { padding: 4px 10px; }
 }
-/* 幅の狭いスマホ(横で800px未満)は、初期資源カードをもう一段小さくして「これで始める」まで1段に入れる。 */
-@media (max-width: 799px) and (max-height: 500px), (max-width: 760px) {
-  .weekly-seat-picker__cards > .owned-card-cell { zoom: 0.6; }
-}
+
