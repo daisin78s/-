@@ -1,6 +1,6 @@
 {
- "gameDataVersion": "013beddf6ee638a4",
- "generatedAt": "2026-11-21T05:02:24.445Z",
+ "gameDataVersion": "d5665c71b5f3f6a9",
+ "generatedAt": "2026-11-21T14:58:04.307Z",
  "commandSpecFile": "dsl-command-spec.json",
  "cardCount": 148,
  "cards": {
@@ -766,7 +766,7 @@
    "sheet": "JOB",
    "name": "食料長官",
    "AUTO": "A",
-   "inst": "得たVPの半分の数（端数切り上げ）の〇を得る\n初期資源含む\nゲーム終了時は得ることができない"
+   "inst": "得たVPの半分の数（端数切り上げ）の〇を得る\n初期資源含む\nゲーム終了時は得ることができない\n\nQ初期資源カードで1VP性格カードで3VP得た時どうなりますか？\nA初期資源カードと性格カードの資源は同時に得るため〇2を得ます"
   },
   "JOB009": {
    "sheet": "JOB",
