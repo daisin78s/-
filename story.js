@@ -1070,7 +1070,12 @@ function storyPatraEnters(onDone) {
   const p2 = storyPlayer('P2');
   Object.keys(p2.resources).forEach((r) => { p2.resources[r] = 0; });
   p2.resources.K = 5;
-  p2.dice.forEach((d) => { d.passed = false; d.value = 1 + Math.floor(Math.random() * 6); });
+  // ローマ市街に置かれている目と全部同じ目だと、パトラがANYに置けないので振り直す(まず起きない、2026-11-21)。
+  const cityValues = STATE.maps[STORY_CITY_MAP_ID].slots.flat().filter((o) => !o.virtual).map((o) => o.value);
+  for (let tries = 0; tries < 20; tries++) {
+    p2.dice.forEach((d) => { d.passed = false; d.value = 1 + Math.floor(Math.random() * 6); });
+    if (p2.dice.some((d) => !cityValues.includes(d.value))) break;
+  }
   storyEndTurnOf('P1');
   document.body.classList.add('story-lock-hand'); // パトラのダイスはあなたが動かせない
   render(STATE);
@@ -1102,8 +1107,12 @@ function storyCityAnySlotIndex() {
 function storyPatraPlaces(onDone) {
   const anyIdx = storyCityAnySlotIndex();
   if (anyIdx < 0 || STATE.maps[STORY_CITY_MAP_ID].slots[anyIdx].length > 0) { onDone(true); return; }
-  const die = storyPlayer('P2').dice.find((d) => !d.placedMapId && !d.passed);
-  boardMod.placeDice(STATE, INDEX, { playerId: 'P2' }, die.id, STORY_CITY_MAP_ID, anyIdx);
+  // 左から順に、置けるダイスを置く (2026-11-21, per user: あなたがEXに2を置くと、パトラの左端の2は同じ目なので
+  // 置けず、何も置かなかった)。同じエリアに同じ目は置けない決まりのため。
+  const dice = storyPlayer('P2').dice.filter((d) => !d.placedMapId && !d.passed);
+  for (const die of dice) {
+    if (boardMod.placeDice(STATE, INDEX, { playerId: 'P2' }, die.id, STORY_CITY_MAP_ID, anyIdx).success) break;
+  }
   render(STATE);
   storyLater(() => storyWhenVisualsIdle(() => onDone(false)), 200);
 }
