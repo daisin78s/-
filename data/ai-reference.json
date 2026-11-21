@@ -1,6 +1,6 @@
 {
- "gameDataVersion": "9ec20d009941dc29",
- "generatedAt": "2026-11-21T04:50:04.913Z",
+ "gameDataVersion": "013beddf6ee638a4",
+ "generatedAt": "2026-11-21T05:02:24.445Z",
  "commandSpecFile": "dsl-command-spec.json",
  "cardCount": 148,
  "cards": {
@@ -766,7 +766,7 @@
    "sheet": "JOB",
    "name": "食料長官",
    "AUTO": "A",
-   "inst": "得たVPの半分の数（端数切り上げ）の〇を得る\n初期資源含む"
+   "inst": "得たVPの半分の数（端数切り上げ）の〇を得る\n初期資源含む\nゲーム終了時は得ることができない"
   },
   "JOB009": {
    "sheet": "JOB",
