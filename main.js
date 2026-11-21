@@ -20142,10 +20142,16 @@ function setupIosStandaloneViewportFix() {
   // iPhoneはそこにもページを描いている。画面に張り付く作り(position:fixed)の物だけが、低く測られた高さで切れている
   // (Ver.1.1194で fixed のまま高さを伸ばしたら、隙間の所で切れた)。なので低く測られている間だけ、トップ画面を
   // ページの中に置く作り(position:absolute)にして、画面の縦の長さ(screenの短い辺)に合わせる。直れば元の fixed に戻す。
+  // 一度低く測られたら、横向きでトップ画面が出ている間は absolute のままにする (2026-11-21, per user の動画: Ver.1.1198では
+  // absolute にすると高さが正しく測られるようになって fixed に戻り、また低くなる…を1.5秒ごとにくり返し、隙間がちらついた)。
+  // 縦向きにした時・トップ画面が消えた時だけ元に戻す。
+  let bannerPinned = false;
   const fitEntryBanner = () => {
     const banner = document.getElementById('entry-banner');
     if (!banner) return;
-    const tooShort = looksTooShort() && !banner.hidden;
+    if (banner.hidden || window.innerWidth <= window.innerHeight) bannerPinned = false;
+    else if (looksTooShort()) bannerPinned = true;
+    const tooShort = bannerPinned;
     const h = `${Math.min(window.screen.width, window.screen.height)}px`;
     banner.style.position = tooShort ? 'absolute' : '';
     banner.style.bottom = tooShort ? 'auto' : '';
