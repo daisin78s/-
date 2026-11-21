@@ -1,6 +1,6 @@
 {
- "gameDataVersion": "eabf0884074f23f1",
- "generatedAt": "2026-11-16T02:46:03.939Z",
+ "gameDataVersion": "9ec20d009941dc29",
+ "generatedAt": "2026-11-21T04:50:04.913Z",
  "commandSpecFile": "dsl-command-spec.json",
  "cardCount": 148,
  "cards": {
@@ -740,8 +740,10 @@
   "JOB004": {
    "sheet": "JOB",
    "name": "百人隊長",
-   "PASSIVE": "ON(GET(D),ADD(Z,K));ON(GET(wD),ADD(2K))",
-   "inst": "追加色ダイスを得たときZ〇と〇を得る\n🎲を得たときその数だけ〇2を得る\n初期資源含む\n\nラテン名ケントゥリオ"
+   "AUTO": "A",
+   "TAP": "ON(GET(D),ADD(Z,K));ON(GET(wD),ADD(2K))",
+   "TURNEND": "UNTAP()",
+   "inst": "追加色ダイスを得たとき自動でタップするZ〇と〇を得る\n 🎲を1個以上得たとき自動でタップする〇2を得る \n初期資源含む\n\n Q初期資源カードと性格カードで追加色ダイスと🎲2個を得るときどうなりますか？ \nA両方の効果が同時に発動しZ〇と〇3を得ることができます "
   },
   "JOB005": {
    "sheet": "JOB",
