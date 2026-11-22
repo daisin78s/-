@@ -3029,18 +3029,55 @@ function buildPlayerNameEntryBox({ title, onDone, autoPassword }) {
   const showPasswordField = (show) => { askPassword = show; pw.style.display = show ? '' : 'none'; };
   showPasswordField(askPassword);
   // 自動のパスワードで登録できた: パスワードを見せて、「OK」で先へ。
-  const revealPassword = (password) => {
+  // 「パスワードはいつでも変更できます」+ その場で変更 (2026-11-22, per user「パスワードはいつでも変更できますと書いて
+  // その場で変更もできるように」): 数字4〜9桁を入れて「変更」。同じ名前のまま、バックアップのパスワードを書き換える。
+  const revealPassword = (name, password) => {
     row.replaceChildren();
     message.textContent = '';
     const shown = el('div', 'story-name-entry__password');
     shown.appendChild(el('div', '', '登録しました。あなたのパスワードは'));
-    shown.appendChild(el('div', 'story-name-entry__password-value', password));
+    const value = el('div', 'story-name-entry__password-value', password);
+    shown.appendChild(value);
     shown.appendChild(el('div', '', 'です。機種変更などでデータを引き継ぐ時に使うので、メモしておいてください（実績の画面でもいつでも見られます）。'));
+    shown.appendChild(el('div', '', 'パスワードはいつでも変更できます。'));
+    const changeRow = el('div', 'story-name-entry__change');
+    const newPw = document.createElement('input');
+    newPw.type = 'text';
+    newPw.className = 'story-name-entry__input story-name-entry__input--pw';
+    newPw.inputMode = 'numeric';
+    newPw.maxLength = 9;
+    newPw.placeholder = '新しいパスワード';
+    const change = el('button', 'story-name-entry__button story-name-entry__button--sub', '変更');
+    change.type = 'button';
+    let changing = false;
+    const doChange = async () => {
+      if (changing) return;
+      const next = newPw.value.trim();
+      if (!ACHIEVEMENT_BACKUP_PASSWORD_PATTERN.test(next)) { message.textContent = 'パスワードは数字4〜9桁で入れてください'; newPw.focus(); shake(); return; }
+      changing = true;
+      change.disabled = true;
+      message.textContent = '変更しています…';
+      const hash = await sha256Hex(next);
+      let failed = !window.OnlineSync;
+      if (!failed) { try { await window.OnlineSync.saveAchievementBackup(name, hash, loadAchievements()); } catch (e) { failed = true; } }
+      changing = false;
+      change.disabled = false;
+      if (failed) { message.textContent = '通信できないため変更できません。通信できる所で、もう一度「変更」を押してください'; shake(); return; }
+      saveAchievementBackupIdentity(name, hash);
+      if (typeof saveAchievementBackupPlainPassword === 'function') saveAchievementBackupPlainPassword(name, next, hash);
+      value.textContent = next;
+      newPw.value = '';
+      message.textContent = 'パスワードを変更しました';
+    };
+    change.addEventListener('click', (e) => { e.stopPropagation(); doChange(); });
+    newPw.addEventListener('keydown', (e) => { if (e.key === 'Enter') doChange(); });
+    changeRow.append(newPw, change);
     const okShown = el('button', 'story-name-entry__button', 'OK');
     okShown.type = 'button';
     okShown.addEventListener('click', (e) => { e.stopPropagation(); finish(); });
-    row.append(shown, okShown);
+    row.append(shown, changeRow, okShown);
     row.classList.add('story-name-entry__row--password');
+    note.style.display = 'none'; // 登録した後は注意書きを隠す(スマホの横画面で、パスワードの欄が画面に収まるように)
   };
   const decide = async () => {
     if (busy) return;
@@ -3071,7 +3108,7 @@ function buildPlayerNameEntryBox({ title, onDone, autoPassword }) {
         return;
       }
       if (typeof saveAchievementBackupPlainPassword === 'function') saveAchievementBackupPlainPassword(name, autoPw, await sha256Hex(autoPw));
-      revealPassword(autoPw);
+      revealPassword(name, autoPw);
       return;
     }
     const password = pw.value.trim();

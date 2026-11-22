@@ -7456,6 +7456,19 @@ body:has(#story-ranking) #story-chapters { visibility: hidden; }
 /* 自動で作ったパスワードを見せる所(第2章の名前の登録、story.jsのrevealPassword)。 */
 .story-name-entry__row--password { flex-direction: column; align-items: center; text-align: center; }
 .story-name-entry__password { color: #f1e8ec; font-size: 18px; line-height: 1.6; }
+.story-name-entry__change { display: flex; gap: 10px; justify-content: center; }
+.story-name-entry__change .story-name-entry__input--pw { flex: 0 1 12em; }
+.story-name-entry__row--password .story-name-entry__button { white-space: nowrap; }
+.story-name-entry:has(.story-name-entry__row--password) .story-name-entry__message { text-align: center; }
+@media (max-height: 500px) {
+  .story-name-entry:has(.story-name-entry__row--password) { gap: 6px; padding-top: 10px; padding-bottom: 10px; }
+  .story-name-entry__row--password { gap: 6px; }
+  .story-name-entry__password { font-size: 15px; line-height: 1.45; }
+  .story-name-entry__password-value { font-size: 30px; margin: 0; }
+  .story-name-entry__row--password .story-name-entry__input { font-size: 16px; padding: 8px 12px; }
+  .story-name-entry__row--password .story-name-entry__button { font-size: 16px; padding: 8px 20px; }
+}
+.story-name-entry .story-name-entry__button--sub { background: #d9d2c4; }
 .story-name-entry__password-value { color: #f3c75a; font-size: 40px; font-weight: 900; letter-spacing: 0.12em; margin: 4px 0; -webkit-user-select: text; user-select: text; }
 .story-name-entry__message { color: #ffd98a; font-size: 16px; min-height: 1em; }
 .story-name-entry__message:empty { display: none; }
