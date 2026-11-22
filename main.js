@@ -20538,6 +20538,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // 引き直す(renderRoundPassConfirmModal同様、専用のモジュール変数を持たずに済む)。
   document.getElementById('resource-confirm-ok-button').addEventListener('click', () => {
     const choice = STATE.pendingChoices.find((c) => c.kind === 'SELECT_RESOURCE_CARDS'
+      && (!onlineRoomCode || c.playerId === localSeatId) // オンラインは自分の席だけ(2026-11-22 バグ報告: ホストの2枚を自分の選択として送っていた)
       && c.context.selected && c.context.selected.length === (c.context.count || 2));
     if (!choice) return;
     // オンライン対戦のホスト以外: 自分の選択だけを送り、反映はホストに任せる(applyOnlineResourcePicks参照)。
@@ -20553,6 +20554,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('resource-confirm-redo-button').addEventListener('click', () => {
     const choice = STATE.pendingChoices.find((c) => c.kind === 'SELECT_RESOURCE_CARDS'
+      && (!onlineRoomCode || c.playerId === localSeatId) // オンラインは自分の席だけ(2026-11-22 バグ報告: ホストの2枚を自分の選択として送っていた)
       && c.context.selected && c.context.selected.length === (c.context.count || 2));
     if (!choice) return;
     choice.context.selected = [];
