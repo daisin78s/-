@@ -2970,8 +2970,15 @@ async function storyRegisterNameAndPassword(name, password) {
 function storyAskPlayerName(onDone) {
   const run = storyRun;
   if (!run) return;
-  const box = buildPlayerNameEntryBox({ onDone: () => { box.remove(); if (storyRun === run) onDone(); } });
+  const box = buildPlayerNameEntryBox({ autoPassword: true, onDone: () => { box.remove(); if (storyRun === run) onDone(); } });
   run.dom.root.appendChild(box);
+}
+
+/** 自動で作るパスワード(数字6桁、第2章の名前の登録)。 */
+function storyRandomPassword() {
+  const n = new Uint32Array(1);
+  (window.crypto || window.msCrypto).getRandomValues(n);
+  return String(100000 + (n[0] % 900000));
 }
 
 /** 名前とパスワードの入力画面(ストーリーの外からも使う、2026-11-15 per user「ランキングに入ったとき…名前の入力画面に
@@ -2991,7 +2998,11 @@ function openPlayerNameEntryOverlay({ title, onDone, onLater }) {
 }
 
 /** 入力欄の箱(storyAskPlayerName / openPlayerNameEntryOverlay)。登録できたら onDone(箱を消すのは呼んだ側)。 */
-function buildPlayerNameEntryBox({ title, onDone }) {
+/* autoPassword (2026-11-22, per user「強制的にランダムなパスワードをつけるのはどう？」→おすすめ案「それでお願い」、
+ * ストーリー第2章の名前の登録だけ): 名前だけ入れてもらい、パスワードは数字6桁を自動で作って登録し、登録した時に
+ * 見せる(実績の画面でもいつでも見られる、main.jsのsaveAchievementBackupPlainPassword)。その名前がもう登録されて
+ * いる時だけ(前に別の端末で登録した本人など)、パスワードの入力欄を出す。名前を書き換えたら、また自動に戻す。 */
+function buildPlayerNameEntryBox({ title, onDone, autoPassword }) {
   const box = el('div', 'story-name-entry');
   if (title) box.appendChild(el('div', 'story-name-entry__title', title));
   const row = el('div', 'story-name-entry__row');
@@ -3014,12 +3025,56 @@ function buildPlayerNameEntryBox({ title, onDone }) {
   const shake = () => box.animate([{ transform: 'translateX(-50%)' }, { transform: 'translateX(calc(-50% - 6px))' }, { transform: 'translateX(calc(-50% + 6px))' }, { transform: 'translateX(-50%)' }], { duration: 250 });
   let busy = false;
   const finish = () => onDone();
+  let askPassword = !autoPassword; // false: パスワードは自動で作る(入力欄を出さない)
+  const showPasswordField = (show) => { askPassword = show; pw.style.display = show ? '' : 'none'; };
+  showPasswordField(askPassword);
+  // 自動のパスワードで登録できた: パスワードを見せて、「OK」で先へ。
+  const revealPassword = (password) => {
+    row.replaceChildren();
+    message.textContent = '';
+    const shown = el('div', 'story-name-entry__password');
+    shown.appendChild(el('div', '', '登録しました。あなたのパスワードは'));
+    shown.appendChild(el('div', 'story-name-entry__password-value', password));
+    shown.appendChild(el('div', '', 'です。機種変更などでデータを引き継ぐ時に使うので、メモしておいてください（実績の画面でもいつでも見られます）。'));
+    const okShown = el('button', 'story-name-entry__button', 'OK');
+    okShown.type = 'button';
+    okShown.addEventListener('click', (e) => { e.stopPropagation(); finish(); });
+    row.append(shown, okShown);
+    row.classList.add('story-name-entry__row--password');
+  };
   const decide = async () => {
     if (busy) return;
     const name = input.value.trim().slice(0, 20);
-    const password = pw.value.trim();
     if (!name) { message.textContent = 'プレイヤーネームを入れてください'; input.focus(); shake(); return; }
     if (name.indexOf('/') !== -1) { message.textContent = '名前に「/」は使えません'; input.focus(); shake(); return; }
+    if (!askPassword) {
+      busy = true;
+      ok.disabled = true;
+      message.textContent = '登録しています…';
+      let existing = null;
+      let offline = !window.OnlineSync;
+      if (!offline) { try { existing = await window.OnlineSync.loadAchievementBackup(name); } catch (e) { offline = true; } }
+      let autoResult = null;
+      const autoPw = storyRandomPassword();
+      if (!offline && !existing) autoResult = await storyRegisterNameAndPassword(name, autoPw);
+      busy = false;
+      ok.disabled = false;
+      if (offline || (autoResult && autoResult.offline)) {
+        message.textContent = '通信できないため登録できません。通信できる所で、もう一度「決定」を押してください';
+        shake();
+        return;
+      }
+      if (existing || (autoResult && autoResult.error)) {
+        showPasswordField(true);
+        message.textContent = 'この名前はもう登録されています。前に登録したパスワードを入れてください（ほかの人の名前なら、別の名前にしてください）';
+        pw.focus();
+        return;
+      }
+      if (typeof saveAchievementBackupPlainPassword === 'function') saveAchievementBackupPlainPassword(name, autoPw, await sha256Hex(autoPw));
+      revealPassword(autoPw);
+      return;
+    }
+    const password = pw.value.trim();
     if (!ACHIEVEMENT_BACKUP_PASSWORD_PATTERN.test(password)) { message.textContent = 'パスワードは数字4〜9桁で入れてください'; pw.focus(); shake(); return; }
     busy = true;
     ok.disabled = true;
@@ -3038,16 +3093,20 @@ function buildPlayerNameEntryBox({ title, onDone }) {
     finish();
   };
   ok.addEventListener('click', (e) => { e.stopPropagation(); decide(); });
-  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') pw.focus(); });
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { if (askPassword) pw.focus(); else decide(); } });
+  // 名前を書き換えたら、パスワードはまた自動に(autoPassword)。
+  if (autoPassword) input.addEventListener('input', () => { if (askPassword) { showPasswordField(false); message.textContent = ''; } });
   pw.addEventListener('keydown', (e) => { if (e.key === 'Enter') decide(); });
   box.addEventListener('click', (e) => e.stopPropagation());
   row.append(input, pw, ok);
   // 注意書き (2026-11-15, per user)。
   const note = el('div', 'story-name-entry__note');
   note.appendChild(el('div', '', 'プレイヤーネームは他のプレイヤーに表示されます。けして本名を入れないでください。'));
-  note.appendChild(el('div', '', 'データはブラウザに記憶されます。キャッシュクリア等でデータがなくなるため、パスワードも一緒に登録してください。データがなくなっても、プレイヤーネームとパスワードがあれば復旧できます。'));
+  note.appendChild(el('div', '', autoPassword
+    ? 'データはブラウザに記憶されます。キャッシュクリア等でデータがなくなっても、プレイヤーネームとパスワードがあれば復旧できます。パスワードは自動で作ります。'
+    : 'データはブラウザに記憶されます。キャッシュクリア等でデータがなくなるため、パスワードも一緒に登録してください。データがなくなっても、プレイヤーネームとパスワードがあれば復旧できます。'));
   box.append(row, message, note);
-  setTimeout(() => (known ? pw : input).focus(), 50);
+  setTimeout(() => (known && askPassword ? pw : input).focus(), 50);
   return box;
 }
 

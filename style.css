@@ -7453,6 +7453,10 @@ body:has(#story-ranking) #story-chapters { visibility: hidden; }
 .ranking-auto-notice__sub { margin-top: 8px; font-size: 15px; }
 .ranking-auto-notice__ok { margin-top: 18px; min-width: 120px; }
 .story-name-entry__input--pw { width: 11em; }
+/* 自動で作ったパスワードを見せる所(第2章の名前の登録、story.jsのrevealPassword)。 */
+.story-name-entry__row--password { flex-direction: column; align-items: center; text-align: center; }
+.story-name-entry__password { color: #f1e8ec; font-size: 18px; line-height: 1.6; }
+.story-name-entry__password-value { color: #f3c75a; font-size: 40px; font-weight: 900; letter-spacing: 0.12em; margin: 4px 0; -webkit-user-select: text; user-select: text; }
 .story-name-entry__message { color: #ffd98a; font-size: 16px; min-height: 1em; }
 .story-name-entry__message:empty { display: none; }
 .story-name-entry__note { color: #f1e8ec; font-size: 16px; line-height: 1.6; }

@@ -12286,6 +12286,21 @@ function loadAchievementBackupIdentity() {
   } catch (e) { return null; }
 }
 
+/** 自動で作ったパスワード(ストーリー第2章の名前の登録、story.jsのbuildPlayerNameEntryBoxのautoPassword、2026-11-22)を
+ * 端末に覚えておき、実績の画面で見せる。今のバックアップ設定(名前とパスワードのハッシュ)と合う時だけ見せる
+ * (別の名前で設定し直した/パスワードを変えた後は見せない)。 */
+const ACHIEVEMENT_BACKUP_PLAIN_PASSWORD_KEY = 'diceWpAchievementBackupAutoPassword';
+function saveAchievementBackupPlainPassword(name, password, passwordHash) {
+  try { localStorage.setItem(ACHIEVEMENT_BACKUP_PLAIN_PASSWORD_KEY, JSON.stringify({ name, password, passwordHash })); } catch (e) { /* ignore */ }
+}
+function loadShownAchievementBackupPassword(identity) {
+  if (!identity) return null;
+  try {
+    const saved = JSON.parse(localStorage.getItem(ACHIEVEMENT_BACKUP_PLAIN_PASSWORD_KEY) || 'null');
+    return saved && saved.name === identity.name && saved.passwordHash === identity.passwordHash ? saved.password : null;
+  } catch (e) { return null; }
+}
+
 function saveAchievementBackupIdentity(name, passwordHash) {
   try {
     localStorage.setItem(ACHIEVEMENT_BACKUP_NAME_KEY, name);
@@ -12657,8 +12672,9 @@ function renderAchievementOverlay() {
   const store = loadAchievements();
   document.getElementById('achievement-total-score').textContent = `実績ポイント: ${achievementTotalPoints(store)}点`;
   const identity = loadAchievementBackupIdentity();
+  const shownPassword = loadShownAchievementBackupPassword(identity);
   document.getElementById('achievement-backup-status').textContent = identity
-    ? `バックアップ設定: ${identity.name}`
+    ? `バックアップ設定: ${identity.name}${shownPassword ? `（パスワード: ${shownPassword}）` : ''}`
     : 'バックアップ未設定(端末のデータが消えると実績ポイントも消えます)';
   document.getElementById('achievement-backup-setup-button').textContent = identity ? '別の名前で設定/復元' : '名前とパスワードを設定/復元';
   document.getElementById('achievement-backup-change-button').hidden = !identity;
