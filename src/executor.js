@@ -184,10 +184,20 @@ function enforceWhiteDiceCap(state, index, playerId) {
   }
 }
 
-let dieIdCounter = 0;
-function nextDieId() {
-  dieIdCounter += 1;
-  return `d${dieIdCounter}`;
+/** ダイスのid (2026-11-22, バグ報告11/21「P1の白ダイス(初期資源カード)とP2の白ダイス(性格)がどちらもid d1」) --
+ * 以前は数える数字がこのファイルの変数(端末ごと)にあり、オンライン対戦で端末ごとに同じidを作っていた。数える数字を
+ * 状態(state.dieIdSeq)に持ち、今あるダイスのいちばん大きい番号よりも必ず大きくする(古い保存データにも対応)。
+ * 一度使った番号は、ダイスが無くなっても使い直さない。 */
+function nextDieId(state) {
+  let max = state.dieIdSeq || 0;
+  for (const player of state.players) {
+    for (const die of player.dice) {
+      const m = /^d(\d+)$/.exec(die.id);
+      if (m) max = Math.max(max, Number(m[1]));
+    }
+  }
+  state.dieIdSeq = max + 1;
+  return `d${state.dieIdSeq}`;
 }
 
 /** Applies a REPLACE_ADD PASSIVE rule (forced substitution) if one is active for `resource`. */
@@ -218,13 +228,13 @@ function applyReplaceAdd(state, index, playerId, resource) {
 function grantResource(state, index, playerId, resource, count, context) {
   const player = getPlayer(state, playerId);
   if (context && context.trainingGroundColorDieCapOnce !== undefined && resource === 'D') {
-    for (let i = 0; i < count; i++) grantOneDie(state, index, player, 'COLOR', nextDieId, context.trainingGroundColorDieCapOnce);
+    for (let i = 0; i < count; i++) grantOneDie(state, index, player, 'COLOR', () => nextDieId(state), context.trainingGroundColorDieCapOnce);
     return 'D';
   }
   const effectiveResource = applyReplaceAdd(state, index, playerId, resource);
   const dieKind = DICE_KIND_BY_RESOURCE[effectiveResource];
   if (dieKind) {
-    for (let i = 0; i < count; i++) grantOneDie(state, index, player, dieKind, nextDieId);
+    for (let i = 0; i < count; i++) grantOneDie(state, index, player, dieKind, () => nextDieId(state));
   } else {
     player.resources[effectiveResource] = (player.resources[effectiveResource] || 0) + count;
   }

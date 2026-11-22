@@ -684,6 +684,7 @@ function resumeSavedSession() {
     isOnlineHost = pendingOnlineSession.isOnlineHost;
     entryBannerDismissed = true;
     sessionResumeChoicePending = false;
+    onlineResumeOpenTurnCheck = true;
     subscribeToOnlineRoom(onlineRoomCode);
     startOnlinePresence(); // 戻ってきた合図 -- AIが代わっていたら、次の手番から本人に戻る
     render(STATE);
@@ -1686,9 +1687,16 @@ function computeChangeDiff(baseline, state) {
  * currentPlayerIndex past the human entirely (they never got to end their own turn), leaving
  * turnActionTaken stuck true forever, which is what made every later round's dice unselectable (see
  * renderPlayers' own `!turnActionTaken` gate). */
+/** 手番の途中で入り直した (2026-11-22, バグ報告11/21「P2が農園に置く→再読み込み→ゲームに戻る→「ターン終了」ボタンが
+ * 出ず、残りのダイスが選べて酒場にも置けた」) -- 「この手番でもう置いた」(turnActionTaken)は端末の変数だけにあり、
+ * 入り直すと消えていた。入り直して最初に届いた部屋の状態の「手番中」の印が自分なら、自分の手番の途中(もう置いた)に
+ * 戻す(render()の手番の切り替わりの所)。入り直した直後の1回だけ見る(ターン終了を押した直後など、印がまだ残っている
+ * 普段の場面では使わない)。 */
+let onlineResumeOpenTurnCheck = false;
 function openTurnPlayerId() {
   const local = localOpenTurnPlayerId();
   if (local) return local;
+  if (onlineResumeOpenTurnCheck && onlineRoomCode && localSeatId && STATE.onlineOpenTurnPlayerId === localSeatId) return localSeatId;
   // オンライン対戦: ほかの端末のプレイヤー(またはホストが動かしているAI)がまだ手番中(STATE.onlineOpenTurnPlayerId、
   // pushOnlineStateIfChanged参照)。
   const remote = onlineRoomCode && STATE.onlineOpenTurnPlayerId;
@@ -1714,7 +1722,9 @@ function onlineOpenTurnMarker(state) {
   if (isOnlineHost && aiOpenTurnPlayerId) return aiOpenTurnPlayerId;
   const current = state.onlineOpenTurnPlayerId || null;
   // ほかの人間の席の印は、その人の端末が下ろすまで残す。自分の席の印/AIの席の印(AIの手番が終わった)は下ろす。
-  if (current && current !== localSeatId && !isAiPlayer(current)) return current;
+  // AIの席の印を下ろすのはホストだけ (2026-11-22, バグ報告11/21「ホストでない端末が、AIの手番中に印だけ外した同じ
+  // 状態を送信し、ホストの送信がSTALE_STATEになってAIが打ち直した」)。
+  if (current && current !== localSeatId && (!isAiPlayer(current) || !isOnlineHost)) return current;
   return null;
 }
 
@@ -3094,6 +3104,11 @@ function rememberOwnPushedOnlineState(json) {
  * ・回線の一時的な切断などで送れなかった時は、少し待って送り直す(以前のupdate()が持っていた「つながったら
  *   送る」の代わり。トランザクションはつながっていないと失敗するため)。 */
 let onlineStateRev = 0;
+/** 古い状態が届き直す (2026-11-22, バグ報告11/21「自分の送信が終わる前に、部屋の古い状態(1つ前か同じrev)がもう一度
+ * 届いて画面に反映され、進行が戻る」) -- 文字列の一致しか見ていなかったため。この端末が見た(受け取った/書いた)
+ * いちばん新しい番号を覚え、それ以下の番号の状態は反映しない(番号は巻き戻しでも増えるだけで、減らない)。 */
+let onlineHighestSeenRev = 0;
+function noteOnlineSeenRev(rev) { if (typeof rev === 'number') onlineHighestSeenRev = Math.max(onlineHighestSeenRev, rev); }
 let onlinePushChain = Promise.resolve();
 let onlinePushEpoch = 0;
 const ONLINE_PUSH_RETRY_MS = 1500;
@@ -3130,6 +3145,7 @@ function queueOnlineStatePush(json) {
       if (code === onlineRoomCode && typeof rev === 'number') {
         onlineLastPushedRev = rev;
         onlineStateRev = Math.max(onlineStateRev, rev);
+        noteOnlineSeenRev(rev);
       }
     }).catch((e) => {
       if (e && e.message === 'STALE_STATE') { handleStaleOnlinePush(e.current, json); return undefined; }
@@ -3159,6 +3175,7 @@ function handleStaleOnlinePush(current, rejectedJson) {
   reportOnlineSyncAnomaly({ reason: 'ONLINE_STALE_PUSH_REJECTED', playerId: localSeatId || null,
     detail: `この端末が送った状態(元の番号${onlineStateRev})より新しい状態(番号${current.stateRev})を、ほかの端末がすでに書いていたため受け付けられなかった` }, rejected, latest);
   noteOnlineStateRev(current.state, current.stateRev);
+  noteOnlineSeenRev(current.stateRev);
   lastIncomingRoomStateJson = current.state;
   applyIncomingRoomState(current.state, null);
 }
@@ -13459,7 +13476,11 @@ function noteOnlineClockOffset(roomData) {
 function onlineSeatConnected(roomData, seatId) {
   if (seatId === localSeatId && !onlineSpectator) return true; // 自分はつながっている
   const t = roomData.presence && roomData.presence[seatId];
-  return typeof t === 'number' && onlineServerNow() - t < ONLINE_DISCONNECT_MS;
+  // 比べる「今」は、自分の合図がサーバーに書かれた最新の時刻 (2026-11-22, バグ報告11/21「接続中の人間の席をAIが打った。
+  // ホストの状態の送信に6.7秒かかっていた」) -- 自分の回線が詰まって部屋の更新が届かない間は、自分の合図の時刻も
+  // 進まないので、相手を切断と見なさない。まだ自分の合図が返ってきていない時だけ、端末の時計(補正つき)で比べる。
+  const now = !onlineSpectator && typeof onlineLastOwnPresence === 'number' ? onlineLastOwnPresence : onlineServerNow();
+  return typeof t === 'number' && now - t < ONLINE_DISCONNECT_MS;
 }
 
 /** 全端末: 各席を人間/AIのどちらとして扱うか(aiTakeoverの席はAI)。変わったらtrue。 */
@@ -13870,6 +13891,8 @@ function handleSpectateRoomSubmit(codeInput) {
  * waiting-room list. */
 function subscribeToOnlineRoom(code) {
   onlineStateRev = 0;
+  onlineHighestSeenRev = 0;
+  onlineLastOwnPresence = null; // 前の部屋の合図の時刻で比べないように(onlineSeatConnected参照)
   onlinePushEpoch++;
   onlineRoomUnsubscribe = OnlineSync.subscribeToRoom(code, (roomData) => {
     onlineLobbyRoomData = roomData;
@@ -13896,18 +13919,23 @@ function subscribeToOnlineRoom(code) {
       if (roomData.timeControl) startOnlineClockTimer();
       // 巻き戻し(全員の同意で全員一緒に戻す) -- 戻した状態はここで反映済み。
       if (handleRewindRoomUpdate(roomData, justStarted)) {
+        noteOnlineSeenRev(roomData.stateRev);
         if (isOnlineHost) applyOnlineResourcePicks(roomData.resourcePicks);
         return;
       }
       // 状態が変わっていない更新(接続の合図など)と、この端末が送った状態が遅れて返ってきたもの
       // (recentOwnPushedOnlineStates)は描き直さない。
-      if (!justStarted && (roomData.state === lastIncomingRoomStateJson || recentOwnPushedOnlineStates.has(roomData.state))) {
+      // 番号が、この端末がもう見た番号以下の状態(古い状態が届き直したもの)も反映しない(onlineHighestSeenRev参照)。
+      const staleRev = !justStarted && typeof roomData.stateRev === 'number' && roomData.stateRev <= onlineHighestSeenRev;
+      if (!justStarted && (staleRev || roomData.state === lastIncomingRoomStateJson || recentOwnPushedOnlineStates.has(roomData.state))) {
         if (isOnlineHost) applyOnlineResourcePicks(roomData.resourcePicks);
         if (rolesChanged) render(STATE);
         return;
       }
       lastIncomingRoomStateJson = roomData.state;
+      noteOnlineSeenRev(roomData.stateRev);
       applyIncomingRoomState(roomData.state, onlineGameStarted ? null : roomData.seatIsHuman);
+      onlineResumeOpenTurnCheck = false; // 入り直して最初の状態の描画で使い終わった
       if (justStarted) applyOnlineSeatRoles(roomData);
       if (justStarted) {
         onlineGameStarted = true;
@@ -18547,6 +18575,8 @@ function renderCore(state) {
       }
       lastTurnPlayerId = next.playerId;
       turnActionTaken = false; // a fresh turn started -- see turnActionTaken's own comment
+      // 手番の途中で入り直した時は、もう置いた手番に戻す(onlineResumeOpenTurnCheck参照)。
+      if (onlineResumeOpenTurnCheck && onlineRoomCode && next.playerId === localSeatId && state.onlineOpenTurnPlayerId === localSeatId) turnActionTaken = true;
       turnJustEnded = false;
       actionCheckpoints = []; // a new turn started -- every prior action is out of scope now
     }
