@@ -5,6 +5,9 @@ const { compareDicePriority } = require('./die-priority');
 const { compareExSlotPreference } = require('./slot-priority');
 const turnFlow = require('../turn-flow');
 const rng = require('../rng');
+const { bareTapKind } = require('./move-generator');
+// ダイスの目を変える/☆にするだけのタップ(基礎学問・高等学問・幾何学)。#isPointlessDieTap参照。
+const DIE_ONLY_TAP_KINDS = new Set(['SET_DICE_ANY', 'SET_DIE_VALUE', 'CHANGE_DIE_VALUE', 'SET_WILDCARD']);
 
 // "AI LV5" cross-round lookahead (see AIPlayer's own crossRoundLookahead option doc): a solo dice-move
 // candidate is exactly one of these 4 move types (matches the same list #rolloutScore's own
@@ -228,6 +231,52 @@ class AIPlayer {
    * @returns {Object|null} the single best legal Move, or null if none exist
    */
   selectMove(state, playerId, context) {
+    const move = this.#selectMoveInner(state, playerId, context, false);
+    // 目を変えるだけのタップを選んだのに、その次に置く手がタップなしでも同じ結果(同じエリア・同じカード)になる
+    // なら、タップはやめて考え直す (2026-11-23, per user「ナビ使っていますが AIが基礎学問 高等学問を全く意味なく
+    // 使おうとします」「☆ダイスにしてANYマスに置いた」)。
+    if (move && this.#isPointlessDieTap(state, playerId, context, move)) {
+      return this.#selectMoveInner(state, playerId, context, true) || move;
+    }
+    return move;
+  }
+
+  /** moveが目を変えるだけのタップで、タップした後に(1手先の一番良い手として)置く手が、タップしなくても同じ
+   * エリアに置けて同じカードが手に入るものならtrue。 */
+  #isPointlessDieTap(state, playerId, context, move) {
+    if (move.type !== 'BARE_TAP' || !move.chosenDieId) return false;
+    const card = state.cards[move.physicalId];
+    const tap = card && bareTapKind(this.index, card.currentFaceId);
+    if (!tap || !DIE_ONLY_TAP_KINDS.has(tap.kind)) return false;
+    const tapped = this.simulator.apply(state, this.index, move);
+    if (!tapped.result.success) return false;
+    const next = this.#greedyMove(tapped.state, playerId, !!(context && context.hasPlacedDieThisTurn));
+    if (!next || (next.type !== 'PLACE_DIE' && next.type !== 'PLACE_WILDCARD_DIE') || next.dieId !== move.chosenDieId) return false;
+    const afterTap = this.simulator.apply(tapped.state, this.index, next);
+    if (!afterTap.result.success) return false;
+    const goal = this.#placementSignature(afterTap.state, playerId);
+    // タップしないで同じダイスを同じエリアのどこかのマスに置き、同じカードを選べるか
+    const map = state.maps[next.mapId];
+    const slotCount = map && map.slots ? map.slots.length : 0;
+    const buildIndexes = next.buildCandidateIndex !== undefined ? [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] : [undefined];
+    for (let slotIndex = 0; slotIndex < slotCount; slotIndex++) {
+      for (const buildCandidateIndex of buildIndexes) {
+        const plain = { type: 'PLACE_DIE', playerId, dieId: move.chosenDieId, mapId: next.mapId, slotIndex, ...(buildCandidateIndex !== undefined ? { buildCandidateIndex } : {}) };
+        let r;
+        try { r = this.simulator.apply(state, this.index, plain); } catch (e) { continue; }
+        if (r.result.success && this.#placementSignature(r.state, playerId) === goal) return true;
+      }
+    }
+    return false;
+  }
+
+  #placementSignature(state, playerId) {
+    const p = state.players.find((x) => x.id === playerId);
+    return p.dice.filter((d) => d.placedMapId).map((d) => `${d.id}@${d.placedMapId}`).sort().join(',') + '|'
+      + p.ownedCardPhysicalIds.map((id) => state.cards[id].currentFaceId).sort().join(',');
+  }
+
+  #selectMoveInner(state, playerId, context, skipDieOnlyTaps) {
     // 宮廷人をタップした直後: その時に決めたダイスで建てる(#chooseCourtierTap参照)。タップ済みで、その手が
     // 今も成功する時だけ(違う局面なら捨てて普通に考える)。
     const planned = this.#plannedCourtierBuild;
@@ -240,7 +289,15 @@ class AIPlayer {
     let forcedAtTop;
     try { forcedAtTop = this.#checkForcedMoves(state, playerId, context); } finally { this.#topLevelDecision = false; }
     if (forcedAtTop) return forcedAtTop;
-    const moves = this.moveGenerator.generateMoves(state, this.index, playerId, context);
+    let moves = this.moveGenerator.generateMoves(state, this.index, playerId, context);
+    if (skipDieOnlyTaps) {
+      moves = moves.filter((m) => {
+        if (m.type !== 'BARE_TAP') return true;
+        const c = state.cards[m.physicalId];
+        const t = c && bareTapKind(this.index, c.currentFaceId);
+        return !(t && DIE_ONLY_TAP_KINDS.has(t.kind));
+      });
+    }
     const scored = [];
     for (const move of moves) {
       const { state: resultState, result } = this.simulator.apply(state, this.index, move);
