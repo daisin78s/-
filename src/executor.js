@@ -950,8 +950,10 @@ function collectVpModifiers(state, index, playerId) {
  * lookahead (see AIPlayer's own doc) naturally reaches once this player's last die is spent, so the AI
  * still correctly values holding K into the true endgame without ever being tempted to fake it early.
  * scoring.computeFinalScore calls this too, for the same value, once the game has actually ended. */
-function collectFinalOnlyVpModifiers(state, index, playerId) {
-  if (state.phase !== 'GAME_END') return 0;
+// asIfEnded (2026-11-23): AIの評価だけが使う。R4の途中でも「今の持ち資源でゲームが終わったら」の値を返す
+// (evaluator.jsのscore参照)。点数の計算(scoring.js)は今までどおりGAME_ENDの時だけ。
+function collectFinalOnlyVpModifiers(state, index, playerId, asIfEnded = false) {
+  if (state.phase !== 'GAME_END' && !asIfEnded) return 0;
   return getPassiveRules(state, index, playerId, 'VP_MODIFIER_FINAL').reduce((sum, r) => {
     const value = evalCountNode(state, index, playerId, r.count);
     return sum + (r.cap !== null ? Math.min(value, r.cap) : value);

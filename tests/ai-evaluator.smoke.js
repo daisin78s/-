@@ -275,7 +275,7 @@ function dominate(state, mapId, playerId) {
   const state = freshState(1);
   giveCard(state, 'A004A', 'P1'); // alone -- no redundancy yet, but still trips the farm synergy
   dominate(state, 'MAP002', 'P1');
-  check('A single GROUP_A card (小麦畑) alone gets no redundancy penalty', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1]['晩餐会食料生産相性']));
+  check('A single GROUP_A card (小麦畑) alone gets no redundancy penalty', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A));
 }
 {
   const state = freshState(1);
@@ -283,7 +283,7 @@ function dominate(state, mapId, playerId) {
   giveCard(state, 'A005A', 'P1'); // 農園 -- 2nd GROUP_A member
   dominate(state, 'MAP001', 'P1');
   dominate(state, 'MAP002', 'P1');
-  check('小麦畑 + 農園 (both GROUP_A) applies a single redundancy penalty', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1].A005A + evalTable[1]['晩餐会食料生産相性'] + evalTable[1]['小麦畑農園歓楽街重複ペナルティ']));
+  check('小麦畑 + 農園 (both GROUP_A) applies a single redundancy penalty', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1].A005A + evalTable[1]['小麦畑農園歓楽街重複ペナルティ']));
 }
 {
   const state = freshState(1);
@@ -292,7 +292,7 @@ function dominate(state, mapId, playerId) {
   giveCard(state, 'A006A', 'P1'); // 歓楽街 -- 3rd GROUP_A member (not itself farm-synergy, nor in any FEE_OPPORTUNITY group)
   dominate(state, 'MAP001', 'P1');
   dominate(state, 'MAP002', 'P1');
-  check('3 GROUP_A cards applies the penalty twice (2 extras beyond the first)', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1].A005A + evalTable[1].A006A + evalTable[1]['晩餐会食料生産相性'] + 2 * evalTable[1]['小麦畑農園歓楽街重複ペナルティ']));
+  check('3 GROUP_A cards applies the penalty twice (2 extras beyond the first)', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1].A005A + evalTable[1].A006A + 2 * evalTable[1]['小麦畑農園歓楽街重複ペナルティ']));
 }
 {
   const state = freshState(1);
@@ -309,7 +309,7 @@ function dominate(state, mapId, playerId) {
   giveCard(state, 'A001A', 'P1'); // 城下町 -- makes GROUP_B have 2 members (歓楽街 + 城下町)
   dominate(state, 'MAP002', 'P1'); // 農園's map -- neutralizes 小麦畑's own FEE_OPPORTUNITY_GROUP_A check
   dominate(state, 'MAP004', 'P1'); // 大聖堂's map -- neutralizes 城下町's own FEE_OPPORTUNITY_GROUP_B check
-  check('歓楽街 stacks both groups\' penalties at once', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A006A + evalTable[1].A004A + evalTable[1].A001A + evalTable[1]['晩餐会食料生産相性'] + evalTable[1]['小麦畑農園歓楽街重複ペナルティ'] + evalTable[1]['城下町大聖堂ギルド重複ペナルティ']));
+  check('歓楽街 stacks both groups\' penalties at once', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A006A + evalTable[1].A004A + evalTable[1].A001A + evalTable[1]['小麦畑農園歓楽街重複ペナルティ'] + evalTable[1]['城下町大聖堂ギルド重複ペナルティ']));
 }
 {
   // A202(訓練場)/A201(孤児院)/A301(元老院) are deliberately excluded from both groups. An unplaced die is
@@ -320,7 +320,7 @@ function dominate(state, mapId, playerId) {
   giveCard(state, 'A202A', 'P1'); // 訓練場 -- NOT in any group
   dominate(state, 'MAP002', 'P1'); // 農園's map -- neutralizes 小麦畑's own FEE_OPPORTUNITY_GROUP_A check
   state.players[0].dice.push(createDie('d1', 'COLOR'));
-  check('訓練場 owned alongside a GROUP_A card triggers no redundancy penalty at all', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1].A202A + evalTable[1].D + evalTable[1]['晩餐会食料生産相性']));
+  check('訓練場 owned alongside a GROUP_A card triggers no redundancy penalty at all', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1].A202A + evalTable[1].D));
 }
 {
   // SAME_ROLE_GROUP_C (2026-09-18, per user request): 始まりの兆し/革命の兆し/移ろいの兆し (B004/B005/
@@ -361,7 +361,7 @@ function dominate(state, mapId, playerId) {
   const state = freshState(1);
   giveCard(state, 'A004A', 'P1'); // 小麦畑, sibling 農園(MAP002) never claimed by anyone in this state
   dominate(state, 'MAP001', 'P1'); // 小麦畑's own map -- doesn't disqualify ITS OWN bonus, only checks OTHERS
-  check('Owning 小麦畑 while 農園 remains unclaimed by anyone credits the fee-opportunity bonus', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1]['晩餐会食料生産相性'] + evalTable[1]['小麦畑農園未支配ボーナス']));
+  check('Owning 小麦畑 while 農園 remains unclaimed by anyone credits the fee-opportunity bonus', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1]['小麦畑農園未支配ボーナス']));
 }
 {
   const state = freshState(2);
@@ -370,7 +370,7 @@ function dominate(state, mapId, playerId) {
   giveCard(state, 'A004A', 'P1'); // 小麦畑
   dominate(state, 'MAP001', 'P1');
   dominate(state, 'MAP002', 'P2'); // 農園 already claimed by an OPPONENT -- the +20 window has closed
-  check('Owning 小麦畑 once an OPPONENT has already claimed 農園 credits no bonus', round6(evaluator.score(state, 'P1')), round6(evalTable[2].A004A + evalTable[2]['晩餐会食料生産相性']));
+  check('Owning 小麦畑 once an OPPONENT has already claimed 農園 credits no bonus', round6(evaluator.score(state, 'P1')), round6(evalTable[2].A004A));
 }
 {
   // Owning BOTH closes the window on itself too (each one's own "is the OTHER still open" check fails,
@@ -381,7 +381,7 @@ function dominate(state, mapId, playerId) {
   giveCard(state, 'A005A', 'P1');
   dominate(state, 'MAP001', 'P1');
   dominate(state, 'MAP002', 'P1');
-  check('Owning BOTH 小麦畑 and 農園 credits no fee-opportunity bonus for either (self-cannibalized)', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1].A005A + evalTable[1]['晩餐会食料生産相性'] + evalTable[1]['小麦畑農園歓楽街重複ペナルティ']));
+  check('Owning BOTH 小麦畑 and 農園 credits no fee-opportunity bonus for either (self-cannibalized)', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1].A005A + evalTable[1]['小麦畑農園歓楽街重複ペナルティ']));
 }
 {
   // 3-member group: owning one requires BOTH others to still be unclaimed, not just one of them. Note
@@ -1076,8 +1076,18 @@ index.raw.QST = [
   state.phase = 'GAME_END';
   const atEndScore = evaluator.score(state, 'P1');
 
-  const bonusVp = 8; // exactly at the 8VP cap
-  check('Reaching the real GAME_END adds exactly 8K -> 8VP, weighted by round 4\'s own VP weight', atEndScore - midGameScore, bonusVp * evalTable[4].VP);
+  // 2026-11-23から: R4の途中でも「今の持ち資源で終わったら」として数える(per user のバグ報告「晩餐会や宝物庫の評価を
+  // きちんとできるように」)。なのでGAME_ENDになっても点は変わらず、R4の途中ですでに8VP分が入っている。
+  check('R4: GAME_END adds nothing more -- the 8VP is already credited mid-round', atEndScore - midGameScore, 0);
+  state.phase = 'ROUND';
+  const noK = structuredClone(state);
+  noK.players[0].resources.K = 0;
+  check('R4 mid-round: holding 8K with 晩餐会 is worth 8K + 8VP', round6(evaluator.score(state, 'P1') - evaluator.score(noK, 'P1')), round6(8 * evalTable[4].K + 8 * evalTable[4].VP));
+  const r3 = structuredClone(state);
+  r3.round = 3;
+  const r3noK = structuredClone(r3);
+  r3noK.players[0].resources.K = 0;
+  check('R3 mid-round: still no 晩餐会 VP credited (only the K themselves)', round6(evaluator.score(r3, 'P1') - evaluator.score(r3noK, 'P1')), round6(8 * evalTable[3].K));
 }
 
 // ---------------------------------------------------------------------------
@@ -1131,14 +1141,16 @@ index.raw.QST = [
   );
 }
 {
-  // 農場主(C201A) owned, 晩餐会(M401) unclaimed (not in state.cards at all) -- credited.
+  // 2026-11-23から: 晩餐会を自分が持っている時に入る。農場主(C201A)だけ(晩餐会はまだショップ)なら入らない。
   const state = freshState(3);
   giveCard(state, 'C201A', 'P1');
-  check(
-    '農場主 owned + 晩餐会 unclaimed credits the synergy bonus (+30)',
-    evaluator.score(state, 'P1'),
-    evaluator.score(freshState(3), 'P1') + evalTable[3].C201A + 30,
-  );
+  check('農場主 owned, 晩餐会 still unclaimed: no synergy bonus any more', evaluator.score(state, 'P1'), evaluator.score(freshState(3), 'P1') + evalTable[3].C201A);
+  const both = freshState(3);
+  giveCard(both, 'C201A', 'P1');
+  giveCard(both, 'M403', 'P1');
+  const onlyBanquet = freshState(3);
+  giveCard(onlyBanquet, 'M403', 'P1');
+  check('農場主 + 晩餐会 both owned by P1 credits the synergy bonus (+30)', evaluator.score(both, 'P1') - evaluator.score(onlyBanquet, 'P1'), evalTable[3].C201A + 30);
 }
 {
   // 晩餐会 already owned (by anyone) -- no longer "unclaimed", no credit.

@@ -48,7 +48,9 @@ const UNTAP_SYNERGY_FACE_IDS = new Set([
 
 /** 小麦畑/農園の支配(A004/A005) + 農場主(C201), either tier -- the user's own K-stockpiling-economy group
  * feeding the 晩餐会(M401) synergy bonus in score(). */
-const FARM_SYNERGY_FACE_IDS = new Set(['A004A', 'A004B', 'A005A', 'A005B', 'C201A', 'C201B']);
+// 2026-11-23, per user「晩餐会が強いのは 農園 小麦畑 元老院 食料長官 いずれか持っているときかな」「農場主も入りそう」:
+// 元老院の支配(A301)と食料長官(JOB008)も足した。
+const FARM_SYNERGY_FACE_IDS = new Set(['A004A', 'A004B', 'A005A', 'A005B', 'C201A', 'C201B', 'A301A', 'A301B', 'JOB008']);
 
 /** 導き(B001-B003, either tier) + 双星の加護(B201, either tier) + 食料長官(JOB008) + 教師(JOB004) +
  * 宮廷人(JOB010) -- the user's own 元老院の支配(A301) synergy group (2026-09-07: "元老院はただとっても
@@ -374,6 +376,12 @@ class Evaluator {
     // so it never rewards hoarding toward this bonus mid-game, but a round-4 rollout's own lookahead
     // (see this class's own doc) still correctly credits it once it actually reaches the true end.
     total += executor.collectFinalOnlyVpModifiers(state, this.index, playerId) * v('VP');
+    // R4(最後のラウンド)の途中では、晩餐会・宝物庫などのゲーム終了時のVPを「今の持ち資源でゲームが終わったら」として
+    // 数える (2026-11-23, per user のバグ報告「晩餐会や宝物庫の評価をきちんとできるように」「城壁を取らずに図書館に行く
+    // 意味がわからない」+「晩餐会と農園LV2を持っている ラウンド4の一番最後の手を農園LV2EXにとっておけば それが点数になる」)
+    // -- それまでは本当にゲームが終わる瞬間まで0で、R4の途中でKを全部Bに替える(晩餐会の9VPを捨てる)手が平気で選ばれた。
+    // R4の持ち資源はほぼそのまま終了時の資源になる。R3までは今までどおり数えない(ためこみすぎてカードを取らなくなるため)。
+    if (state.phase !== 'GAME_END' && state.round >= 4) total += executor.collectFinalOnlyVpModifiers(state, this.index, playerId, true) * v('VP');
 
     // Turn-end lockout risk (2026-08-10, per user report: a greedy AI holding CON005B
     // (TURNEND=RESOURCE_TOTAL_LIMIT((A,B,C),7)) would convert a big pile of K into A/B/C -- A/B/C's
@@ -501,9 +509,13 @@ class Evaluator {
         const inst = state.cards[pid];
         return inst && FARM_SYNERGY_FACE_IDS.has(inst.currentFaceId);
       });
+      // 2026-11-23から: 晩餐会を「自分が持っている」時に入れる(前は「まだ誰も持っていない」間で、自分が晩餐会を買うと
+      // この点が消えるので、むしろ買わない方向に働いていた -- per user「人間の考え方なら 農園LV2を持っている 食料が余る
+      // 晩餐会を買う」)。点の大きさは評価値シートの行(最初はR1〜R3で50、R4で0 -- R4は晩餐会のVPそのものを数えるため)
+      // で、進化AIが動かす(per user「入れた点は動くようにして」)。
       const banquetHallInst = state.cards['M403'];
-      const banquetHallUnclaimed = !banquetHallInst || banquetHallInst.ownerId === null;
-      if (ownsFarmSynergy && banquetHallUnclaimed) {
+      const ownsBanquetHall = !!banquetHallInst && banquetHallInst.ownerId === playerId;
+      if (ownsFarmSynergy && ownsBanquetHall) {
         total += v('晩餐会食料生産相性');
       }
       // 元老院の支配(A301, either tier) x SENATE_SYNERGY_FACE_IDS (see that const's own doc): credited
