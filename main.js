@@ -8880,6 +8880,9 @@ function renderBuildChoiceModal() {
     const cardNode = buildCardVisual(faceId, { showEffect: true, noInteraction: true, req: factsForFaceId(faceId).req });
     // build_candidates_hint(T030)の「光る」演出(ウィンドウ上の獲得可能なカード) (2026-09-29)。
     if (tutorialBuildCandidatesGlowing) cardNode.classList.add('change-highlight');
+    // ナビ: 建築候補を選ぶ画面でも、ナビが選んだカードを光らせる (2026-11-23, per user「ナビ 測量術とオベリスクが
+    // 光っている状態で測量術をタップすると、建築候補のオベリスクが光っていない」)。
+    if (navSuggestedAcquireFaceId && navSuggestedAcquireFaceId === faceId && navSuggestedMove && navSuggestedMove.playerId === pendingBuildChoice.playerId) cardNode.classList.add('nav-highlight');
     const tall = cardNode.classList.contains('shop-card--tall');
     const wrapper = el('div', 'build-choice-item');
     if (candidate.type === 'UPGRADE') wrapper.appendChild(el('div', 'build-choice-label', 'LVアップ'));
