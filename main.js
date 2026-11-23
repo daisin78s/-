@@ -647,6 +647,11 @@ function saveGameSessionIfApplicable(state) {
     // NOT persisted -- restoring every one of those exactly would be impractically fragile, so a resumed
     // tutorial may be missing a highlight here or there, but the actual step/text always lands correctly.
     if (mode === 'tutorial') payload.tutorialSeenStepIds = Array.from(tutorialSeenStepIds);
+    // 手番の途中の画面側の状態 (2026-11-23, per user のバグ報告「ダイスを置いて更新ボタンをおすと、ダイスが置かれた
+    // 状態でなにも発動せず、そのまま次のダイスを置けるようになります」) -- ダイスを置いたか(turnActionTaken)と、
+    // カードを選ぶ画面(pendingBuildChoice)・自動/手動を選ぶ画面(pendingAutoModeChoice)はGameStateの外なので、
+    // 一緒に保存して「ゲームに戻る」で戻す。どの人の手番の話かも(lastTurnPlayerId)。
+    payload.ui = { turnPlayerId: lastTurnPlayerId, turnActionTaken, pendingBuildChoice, pendingAutoModeChoice };
     localStorage.setItem(GAME_SESSION_STORAGE_KEY, JSON.stringify(payload));
   } catch (e) { /* best-effort, ignore */ }
 }
@@ -672,6 +677,14 @@ function resumeSavedSession() {
       tutorialModeActive = true;
       tutorialSeenStepIds.clear();
       for (const id of session.tutorialSeenStepIds || []) tutorialSeenStepIds.add(id);
+    }
+    // 手番の途中で更新した時は、その手番の続きから(saveGameSessionIfApplicableのpayload.ui参照)。lastTurnPlayerIdを
+    // 戻しておくと、render()の「新しい手番が始まった」処理(turnActionTakenをfalseに戻す)が走らない。
+    if (session.ui && session.ui.turnPlayerId) {
+      lastTurnPlayerId = session.ui.turnPlayerId;
+      turnActionTaken = !!session.ui.turnActionTaken;
+      pendingBuildChoice = session.ui.pendingBuildChoice || null;
+      pendingAutoModeChoice = session.ui.pendingAutoModeChoice || null;
     }
     entryBannerDismissed = true;
     sessionResumeChoicePending = false;
