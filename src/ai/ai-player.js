@@ -6,6 +6,8 @@ const { compareExSlotPreference } = require('./slot-priority');
 const turnFlow = require('../turn-flow');
 const rng = require('../rng');
 const executor = require('../executor');
+const scoring = require('../scoring');
+const { applyInPlace } = require('./simulator');
 const { bareTapKind } = require('./move-generator');
 // ダイスの目を変える/☆にするだけのタップ(基礎学問・高等学問・幾何学)。#isPointlessDieTap参照。
 const DIE_ONLY_TAP_KINDS = new Set(['SET_DICE_ANY', 'SET_DIE_VALUE', 'CHANGE_DIE_VALUE', 'SET_WILDCARD']);
@@ -132,6 +134,10 @@ class AIPlayer {
     // well under the default. Checked only inside the rollout loops, never around the cheap top-level
     // 1-ply scoring pass, so selectMove always returns at least that 1-ply-best move no matter what.
     this.maxDecisionTimeMs = opts.maxDecisionTimeMs !== undefined ? opts.maxDecisionTimeMs : 10000;
+    // 終盤の読み切り (2026-11-24, per user「終盤全検索すれば見つけれる順だと思います」): R4では、この時間(ms)だけ
+    // 自分の手を全部調べて(相手は動かない=邪魔なし)、ゲーム終了時の点が一番高い道の最初の手を選ぶ。0なら使わない
+    // (進化AIなど、たくさん試合を打つ所では使わない -- main.jsのナビ・対戦相手のLV3だけが使う)。
+    this.endgameSearchMs = opts.endgameSearchMs || 0;
   }
 
   /** Resolves the base lookaheadExtraTurns/beamWidth/maxRolloutMoves against this.roundOverrides[round]
@@ -235,6 +241,10 @@ class AIPlayer {
    * @returns {Object|null} the single best legal Move, or null if none exist
    */
   selectMove(state, playerId, context) {
+    if (this.endgameSearchMs > 0 && state.round >= 4 && state.phase !== 'GAME_END' && Array.isArray(state.players)) {
+      const r = this.#endgameSearch(state, playerId, !!(context && context.hasPlacedDieThisTurn), this.endgameSearchMs);
+      if (r) { this.#plannedUntap = r.untap; return r.move; }
+    }
     // 考える時は、ログ・進み具合の記録・「ターン開始に戻す」用の控え(盤面の約半分の大きさ)を外した軽い盤面を使う
     // (2026-11-23, per user「これらは可能ならすべてやって」-- AIは盤面をたくさんコピーして手を試すので、要らない物まで毎回
     // コピーしていた。ゲームの決まりはこれらを読まないので、選ぶ手は変わらない)。元のstateは変えない(浅いコピー)。
@@ -680,6 +690,76 @@ class AIPlayer {
    * keeps going for lookaheadExtraTurns more) via #greedyMove, starting from `state` with
    * `hasPlacedDieThisTurn` already known. Stops once the turn actually ends (END_TURN) or maxRolloutMoves
    * (a per-turn cap here, see #deepBeamSearch's own doc) is hit. */
+  #plannedUntap = null;
+
+  /** 終盤の読み切り (endgameSearchMs参照)。最初の手の候補(1手の点の高い順に8つ)ごとに残り時間を均等に分け、それぞれ
+   * 良さそうな手から順に深く調べる(同じ盤面は一度だけ)。ゲーム終了時のP1の点が一番高かった最初の手と、その手で
+   * アンタップを選ぶ時の選び方を返す。何も見つからなければnull(いつもの考え方に戻る)。 */
+  #endgameSearch(state0, playerId, placed0, limitMs) {
+    const t0 = Date.now();
+    const root = { ...structuredClone({ ...state0, log: [], progressLog: [], undoCheckpoint: null }) };
+    for (const p of root.players) if (p.id !== playerId) for (const d of p.dice) if (d.placedMapId === null) d.passed = true;
+    const keyOf = (s, placed) => JSON.stringify([placed, s.players, s.maps, s.cards, s.shops, s.phase, s.round, s.pendingChoices]);
+    const children = (s, placed) => {
+      let moves;
+      try { moves = this.moveGenerator.generateMoves(s, this.index, playerId, { hasPlacedDieThisTurn: placed }); } catch (e) { return []; }
+      const out = [];
+      const seen = new Set();
+      for (const m of moves) {
+        const c = structuredClone(s);
+        let r;
+        try { r = applyInPlace(c, this.index, m); } catch (e) { continue; }
+        if (!r.success || r.pendingBuild) continue;
+        const np = m.type === 'END_TURN' ? false : (placed || DICE_MOVE_TYPES.has(m.type));
+        const uc = (c.pendingChoices || []).find((x) => x.playerId === playerId && x.kind === 'UNTAP_CHOICE');
+        const variants = uc
+          ? AIPlayer.untapSubsets(uc).map((sub) => { const c2 = structuredClone(c); executor.resolveUntapChoice(c2, playerId, sub); return { c: c2, untap: sub }; })
+          : [{ c, untap: null }];
+        for (const v of variants) {
+          const k = keyOf(v.c, np);
+          if (seen.has(k)) continue;
+          seen.add(k);
+          out.push({ m, untap: v.untap, c: v.c, np, h: this.evaluator.score(v.c, playerId) });
+        }
+      }
+      out.sort((a, b) => b.h - a.h);
+      return out;
+    };
+    const memo = new Map();
+    const rootChildren = children(root, placed0).slice(0, 8);
+    if (rootChildren.length === 0) return null;
+    let best = null;
+    for (let i = 0; i < rootChildren.length; i++) {
+      const ch = rootChildren[i];
+      const share = (limitMs - (Date.now() - t0)) / (rootChildren.length - i);
+      const lt0 = Date.now();
+      let timedOut = false;
+      let found = -1;
+      const dfs = (s, placed) => {
+        if (Date.now() - lt0 > share) { timedOut = true; return -1; }
+        if (s.phase === 'GAME_END') {
+          const f = scoring.computeFinalScore(s, this.index, playerId);
+          const v = typeof f === 'number' ? f : f.total;
+          if (v > found) found = v;
+          return v;
+        }
+        const k = keyOf(s, placed);
+        if (memo.has(k)) return memo.get(k);
+        let b = -1;
+        for (const c of children(s, placed)) {
+          const v = dfs(c.c, c.np);
+          if (v > b) b = v;
+          if (timedOut) break;
+        }
+        if (!timedOut) memo.set(k, b);
+        return b;
+      };
+      const v = Math.max(dfs(ch.c, ch.np), found);
+      if (v >= 0 && (!best || v > best.v)) best = { v, move: ch.m, untap: ch.untap };
+    }
+    return best;
+  }
+
   /** アンタップするカードの選び方(重さの合計が上限以内で、これ以上足せない組)を全部挙げる。 */
   static untapSubsets(choice) {
     const { candidates, weights, count } = choice.context;
@@ -721,6 +801,10 @@ class AIPlayer {
   chooseUntapChoice(state, playerId, hasPlacedDieThisTurn) {
     const choice = (state.pendingChoices || []).find((c) => c.playerId === playerId && c.kind === 'UNTAP_CHOICE');
     if (!choice) return [];
+    // 終盤の読み切りで決めておいた選び方があれば、それを使う。
+    const planned = this.#plannedUntap;
+    this.#plannedUntap = null;
+    if (planned && planned.every((id) => choice.context.candidates.includes(id))) return planned;
     const light = { ...state, log: [], progressLog: [], undoCheckpoint: null };
     let best = null;
     let bestScore = -Infinity;

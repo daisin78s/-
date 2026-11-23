@@ -1528,12 +1528,17 @@ function scheduleNavPrefetch(state, playerId) {
 function navSelect(state, playerId, placed) {
   const ai = aiPlayerFor(playerId);
   const prevLimit = ai.maxDecisionTimeMs;
+  const prevEndgame = ai.endgameSearchMs;
   ai.maxDecisionTimeMs = Math.min(prevLimit || NAV_MAX_DECISION_MS, NAV_MAX_DECISION_MS);
+  // ナビだけ、R4は終盤の読み切りを使う(1手3秒まで、2026-11-24, per user「終盤全検索すれば見つけれる順」-- 報告の場面で
+  // あなたと同じ61点の道を見つけた。対戦相手のAIは速さを優先して使わない)。
+  ai.endgameSearchMs = NAV_MAX_DECISION_MS;
   let move;
   try {
     move = ai.selectMove(state, playerId, { hasPlacedDieThisTurn: placed });
   } finally {
     ai.maxDecisionTimeMs = prevLimit;
+    ai.endgameSearchMs = prevEndgame;
   }
   let acquireFaceId = null;
   if (move && move.buildCandidateIndex !== undefined && move.buildCandidateIndex !== null) {
