@@ -231,6 +231,10 @@ class AIPlayer {
    * @returns {Object|null} the single best legal Move, or null if none exist
    */
   selectMove(state, playerId, context) {
+    // 考える時は、ログ・進み具合の記録・「ターン開始に戻す」用の控え(盤面の約半分の大きさ)を外した軽い盤面を使う
+    // (2026-11-23, per user「これらは可能ならすべてやって」-- AIは盤面をたくさんコピーして手を試すので、要らない物まで毎回
+    // コピーしていた。ゲームの決まりはこれらを読まないので、選ぶ手は変わらない)。元のstateは変えない(浅いコピー)。
+    state = { ...state, log: [], progressLog: [], undoCheckpoint: null };
     const move = this.#selectMoveInner(state, playerId, context, false);
     // 目を変えるだけのタップを選んだのに、その次に置く手がタップなしでも同じ結果(同じエリア・同じカード)になる
     // なら、タップはやめて考え直す (2026-11-23, per user「ナビ使っていますが AIが基礎学問 高等学問を全く意味なく
@@ -305,6 +309,7 @@ class AIPlayer {
       scored.push({ move, resultState, score: this.evaluator.score(resultState, playerId) });
     }
     if (scored.length === 0) return null;
+    removeDominatedPlacements(scored, state, playerId);
     // First-max-wins tie-break (no randomness) -- stable sort keeps MoveGenerator's own generation
     // order for equal scores, same guarantee the original pure-1-ply version made. preferExOnOwnTerritory
     // (checked first) and dieScarcityTieBreak (AI LV4) replace that generation-order tie-break with
@@ -328,10 +333,18 @@ class AIPlayer {
     // scores make a genuine tie a good proxy for redundancy, but two merely-close scores could still be
     // real, distinct strategic options worth their own rollout. Computed unconditionally (moved ahead of
     // the lookaheadExtraTurns<=0 early return, 2026-09-13) since #deepBeamSearch needs it too.
+    // 2026-11-23から: 点が同じ手に加えて、「同じ考えの手」(同じカードを取る置き方違い・同じエリアに置くダイス違い・同じ
+    // カードのタップの対象違い)も、一番点の良いものだけを残す (per user のバグ報告「測量術を使って元老院を取って元老院に
+    // 行って皇女をとる手が見えていない」-- 先まで読む3つの枠が全部「黄金宮殿」の置き方違いで埋まり、別の考えの手が読まれな
+    // かった + 「微妙な手を読まなくすることで時間を浮かせて先読みできるようにできない？」)。
     const deduped = [];
     let lastScore = null;
+    const seenIdeas = new Set();
     for (const candidate of scored) {
       if (candidate.score === lastScore) continue;
+      const idea = moveIdeaKey(candidate.move);
+      if (seenIdeas.has(idea)) continue;
+      seenIdeas.add(idea);
       deduped.push(candidate);
       lastScore = candidate.score;
     }
@@ -534,7 +547,8 @@ class AIPlayer {
         if (plannedOwnTurnsThisRound !== null && ownTurnsCompletedThisRound >= plannedOwnTurnsThisRound) {
           const crossedState = this.#forceOpponentsFinishRound(state, playerId, deadline);
           if (crossedState) {
-            state = crossedState;
+            // ラウンドが変わるとゲームの決まりが「ターン開始に戻す」用の控えを作り直すので、また外して軽くする(selectMove参照)。
+            state = { ...crossedState, log: [], progressLog: [], undoCheckpoint: null };
             crossedRoundTurnsRemaining = 1;
             hasPlacedDieThisTurn = false;
             continue;
@@ -699,6 +713,55 @@ class AIPlayer {
     }
     return deduped;
   }
+}
+
+/** 手の「考え」(#selectMoveInnerの読む枠を、考えの違う手で埋めるため): 建築を伴う置き方は取るカード、伴わない置き方は
+ * エリア、カードのタップはそのカード(+建築するカード)。どのダイスを・どのマスに、の違いは同じ考えとみなす。 */
+function moveIdeaKey(move) {
+  if ((move.type === 'PLACE_DIE' || move.type === 'PLACE_WILDCARD_DIE' || move.type === 'PLACE_DICE_GROUP') && move.mapId) {
+    return move.buildCandidateKey ? `build:${move.buildCandidateKey}` : `area:${move.mapId}`;
+  }
+  if (move.type === 'BARE_TAP' && move.physicalId) return `tap:${move.physicalId}:${move.buildCandidateIndex !== undefined ? move.buildCandidateIndex : ''}`;
+  return JSON.stringify(move);
+}
+
+/** 明らかに損な置き方を候補から外す (2026-11-23, per user のバグ報告「ナビ 農園LV2を所有しているにも関わらず 下位互換の
+ * 他人の小麦畑に行こうとする」「1手で9Kと5K」「自分の元老院に置けるのに皇帝宮殿にダイスを置こうとする」)。
+ * 同じダイスを別のエリアに置く手どうしで、置いた後に持っているカードが同じ(=同じカードを取る、または何も取らない)なら、
+ * もらえる資源(使用料を引いた後)がどれも同じか多い方があれば、少ない方を外す。scoredをその場で減らす。 */
+function removeDominatedPlacements(scored, state, playerId) {
+  const before = Array.isArray(state.players) ? state.players.find((p) => p.id === playerId) : null;
+  if (!before) return; // テスト用の仮の盤面など
+  const info = [];
+  for (const entry of scored) {
+    const m = entry.move;
+    if ((m.type !== 'PLACE_DIE' && m.type !== 'PLACE_WILDCARD_DIE') || !m.mapId || !entry.resultState || !Array.isArray(entry.resultState.players)) continue;
+    const after = entry.resultState.players.find((p) => p.id === playerId);
+    if (!after) continue;
+    const cards = after.ownedCardPhysicalIds.map((id) => entry.resultState.cards[id].currentFaceId).sort().join(',');
+    const gain = {};
+    for (const r of new Set([...Object.keys(before.resources), ...Object.keys(after.resources)])) gain[r] = (after.resources[r] || 0) - (before.resources[r] || 0);
+    const fee = after.pendingFee && (!before.pendingFee || before.pendingFee.mapId !== after.pendingFee.mapId) ? after.pendingFee : null;
+    if (fee) gain[fee.resource || 'K'] = (gain[fee.resource || 'K'] || 0) - fee.amount;
+    info.push({ entry, group: `${m.dieId}|${cards}|${after.dice.length}`, mapId: m.mapId, gain });
+  }
+  const dominated = new Set();
+  for (const a of info) {
+    for (const b of info) {
+      if (a === b || a.group !== b.group || a.mapId === b.mapId) continue;
+      let allGe = true;
+      let someGt = false;
+      for (const k of new Set([...Object.keys(a.gain), ...Object.keys(b.gain)])) {
+        const x = b.gain[k] || 0;
+        const y = a.gain[k] || 0;
+        if (x < y) { allGe = false; break; }
+        if (x > y) someGt = true;
+      }
+      if (allGe && someGt) { dominated.add(a.entry); break; }
+    }
+  }
+  if (dominated.size === 0 || dominated.size === scored.length) return;
+  for (let i = scored.length - 1; i >= 0; i--) if (dominated.has(scored[i])) scored.splice(i, 1);
 }
 
 module.exports = { AIPlayer };

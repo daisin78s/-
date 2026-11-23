@@ -291,10 +291,25 @@ class Parser {
   }
 }
 
+// 読んだ結果を文ごとに覚えておく (2026-11-23, per user「(読みを速くする案を)可能ならすべてやって」-- カードの効果の文は
+// 決まった数しかないのに、AIが手を試すたびに何万回も同じ文を読み直していた)。覚えた結果は凍結して、使う側がうっかり
+// 書きかえても壊れないようにする(書きかえようとするとエラーになるので気づける)。
+const parseCache = new Map();
+function deepFreeze(node) {
+  if (node && typeof node === 'object' && !Object.isFrozen(node)) {
+    Object.freeze(node);
+    for (const key of Object.keys(node)) deepFreeze(node[key]);
+  }
+  return node;
+}
 function parse(input) {
+  const cached = parseCache.get(input);
+  if (cached) return cached;
   const tokens = tokenize(input);
   const parser = new Parser(tokens);
-  return parser.parseProgram();
+  const ast = deepFreeze(parser.parseProgram());
+  parseCache.set(input, ast);
+  return ast;
 }
 
 /**
