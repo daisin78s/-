@@ -266,6 +266,25 @@ function evictSlotOccupants(map, occupants) {
   occupants.length = 0;
 }
 
+/** placeDiceが確実に失敗する時だけtrue (2026-11-23, AIの手を挙げる処理を速くするため -- per user「微妙な手を読まなく
+ * することで時間を浮かせて先読みできるようにできない？」)。placeDiceの最初の、盤面を変える前の判定(ダイスが使えるか・
+ * マスの番号・他人のEX・目が合わない・置くべきマスでない)だけをそのまま写したもの。trueなら盤面をコピーして試す必要がない。
+ * falseでも成功するとは限らない(その先の判定はplaceDice本体で)。 */
+function placeDiceQuickReject(state, index, context, dieId, mapId, slotIndex) {
+  const player = state.players.find((p) => p.id === context.playerId);
+  const die = player && player.dice.find((d) => d.id === dieId && d.placedMapId === null && !d.passed);
+  if (!die) return true;
+  const map = state.maps[mapId];
+  if (!map) return false; // placeDice本体に任せる(例外を投げる)
+  const requirements = getSlotRequirements(getAreaRow(index, map.currentAreaId));
+  if (slotIndex < 0 || slotIndex >= requirements.length) return true;
+  const requirement = requirements[slotIndex];
+  if (requirement === 'EX') return map.feeOwnerId !== context.playerId;
+  if (requirement !== 'ANY' && requirement !== die.value) return true;
+  if (!die.placeAnywhereThisTurn && !isAllowedSlotForValue(requirements, map.slots, slotIndex, die.value)) return true;
+  return false;
+}
+
 function placeDice(state, index, context, dieId, mapId, slotIndex) {
   const player = state.players.find((p) => p.id === context.playerId);
   const die = player.dice.find((d) => d.id === dieId && d.placedMapId === null && !d.passed);
@@ -2188,6 +2207,7 @@ module.exports = {
   getSlotRequirements,
   slotAcceptsValue,
   placeDice,
+  placeDiceQuickReject,
   placeDiceGroup,
   placeWildcardDie,
   previewPlaceDice,

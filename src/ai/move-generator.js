@@ -262,6 +262,7 @@ class MoveGenerator {
         const areaRow = getAreaRow(index, state.maps[mapId].currentAreaId);
         const slotCount = board.getSlotRequirements(areaRow).length;
         for (let slotIndex = 0; slotIndex < slotCount; slotIndex++) {
+          if (board.placeDiceQuickReject(state, index, { playerId }, die.id, mapId, slotIndex)) continue; // 確実に置けないマスはコピーせずに飛ばす
           const clone = cloneState(state);
           const result = board.placeDice(clone, index, { playerId }, die.id, mapId, slotIndex);
           if (!result.success) continue;
@@ -433,6 +434,8 @@ class MoveGenerator {
 
   #bareTapMoves(state, index, playerId, player, context) {
     const moves = [];
+    const beforeOutcomesByDie = new Map();
+    const afterOutcomesByDie = new Map();
     for (const physicalId of player.ownedCardPhysicalIds) {
       const cardState = state.cards[physicalId];
       if (!cardState || cardState.tapped) continue;
@@ -552,7 +555,10 @@ class MoveGenerator {
         // gap left the once-per-round tap burnable for nothing.
         const values = bareTap.kind === 'SET_DICE_ANY' ? [1, 2, 3, 4, 5, 6] : bareTap.choices;
         for (const die of unplacedDice) {
-          const outcomesBefore = this.#dieReachableOutcomes(state, index, playerId, die.id);
+          // 同じ目・同じ状態のダイスなら行ける所も同じなので、1回調べた結果を使い回す (2026-11-23、速くするため)。
+          const beforeKey = `${die.kind}|${die.value}|${die.placeAnywhereThisTurn}|${die.isWildcardThisTurn}|${die.passed}`;
+          if (!beforeOutcomesByDie.has(beforeKey)) beforeOutcomesByDie.set(beforeKey, this.#dieReachableOutcomes(state, index, playerId, die.id));
+          const outcomesBefore = beforeOutcomesByDie.get(beforeKey);
           for (const value of values) {
             const tapContext = { playerId, chosenDieId: die.id };
             if (bareTap.kind === 'CHANGE_DIE_VALUE') tapContext.chosenDelta = value;
@@ -560,7 +566,10 @@ class MoveGenerator {
             const clone = cloneState(state);
             const result = board.useBareTapAbility(clone, index, tapContext, physicalId);
             if (!result.success) continue;
-            const outcomesAfter = this.#dieReachableOutcomes(clone, index, playerId, die.id);
+            const changed = clone.players.find((p) => p.id === playerId).dice.find((d) => d.id === die.id);
+            const afterKey = `${physicalId}|${changed.kind}|${changed.value}|${changed.placeAnywhereThisTurn}|${changed.isWildcardThisTurn}`;
+            if (!afterOutcomesByDie.has(afterKey)) afterOutcomesByDie.set(afterKey, this.#dieReachableOutcomes(clone, index, playerId, die.id));
+            const outcomesAfter = afterOutcomesByDie.get(afterKey);
             const hasNewOutcome = [...outcomesAfter].some((o) => !outcomesBefore.has(o));
             if (!hasNewOutcome) continue;
             moves.push({
@@ -985,6 +994,7 @@ class MoveGenerator {
       const areaRow = getAreaRow(index, state.maps[mapId].currentAreaId);
       const slotCount = board.getSlotRequirements(areaRow).length;
       for (let slotIndex = 0; slotIndex < slotCount; slotIndex++) {
+        if (board.placeDiceQuickReject(state, index, { playerId }, dieId, mapId, slotIndex)) continue;
         const clone = cloneState(state);
         const result = board.placeDice(clone, index, { playerId }, dieId, mapId, slotIndex);
         if (!result.success) continue;
