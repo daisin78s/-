@@ -20625,6 +20625,14 @@ document.addEventListener('DOMContentLoaded', () => {
       sfxSelect.addEventListener('change', (e) => { Sfx.setEnabled(e.target.value === 'on'); });
     }
   }
+  {
+    // BGM ON/OFF (2026-11-23) -- bgm.js。
+    const bgmSelect = document.getElementById('bgm-setting-select');
+    if (bgmSelect && window.Bgm) {
+      bgmSelect.value = Bgm.isEnabled() ? 'on' : 'off';
+      bgmSelect.addEventListener('change', (e) => { Bgm.setEnabled(e.target.value === 'on'); });
+    }
+  }
   document.getElementById('rewind-setting-select').addEventListener('change', (e) => {
     rewindAllowed = e.target.value === 'ok';
     try { localStorage.setItem(REWIND_SETTING_STORAGE_KEY, rewindAllowed ? 'ok' : 'ng'); } catch (err) { /* ignore */ }
