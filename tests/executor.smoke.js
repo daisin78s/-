@@ -251,7 +251,7 @@ function getDieRef(state, playerId, dieId) { return getPlayerRef(state, playerId
   check('At the real GAME_END: 7K -> 7VP', executor.collectFinalOnlyVpModifiers(state, index, 'P1'), 7);
 
   player.resources.K = 30;
-  check('Capped at 9VP even though PER(K,1) alone would give 30', executor.collectFinalOnlyVpModifiers(state, index, 'P1'), 9);
+  check('Capped at 10VP (晩餐会 MAX10VP, 2026-11-23) even though PER(K,1) alone would give 30', executor.collectFinalOnlyVpModifiers(state, index, 'P1'), 10);
 
   player.resources.K = 0;
   check('0K -> 0VP', executor.collectFinalOnlyVpModifiers(state, index, 'P1'), 0);

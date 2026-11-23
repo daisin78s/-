@@ -204,11 +204,11 @@
       "VP": "",
       "ONCE": "",
       "TAP": "",
-      "PASSIVE": "VP_MODIFIER_FINAL(PER(K,1),9)",
+      "PASSIVE": "VP_MODIFIER_FINAL(PER(K,1),10)",
       "TURNEND": "",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "ゲーム終了時持っている〇につき1VP\n（MAX9VP)"
+      "INST": "ゲーム終了時持っている〇につき1VP\n（MAX10VP)"
     },
     {
       "ID": "M404",

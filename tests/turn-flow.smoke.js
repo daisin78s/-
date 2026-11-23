@@ -497,7 +497,7 @@ function giveM403(s, playerId) {
   p1.resources.C = 10; // most plentiful of A/B/C -- planFeeConversion prefers this first
   p1.resources.Z = 5;
   turnFlow.endRound(s, index);
-  check('M403 owner auto-converts up to K=9, preferring the most-plentiful ABC first (C)', [p1.resources.K, p1.resources.C], [9, 4]);
+  check('M403 owner auto-converts up to K=10 (MAX10VP, 2026-11-23), preferring the most-plentiful ABC first (C)', [p1.resources.K, p1.resources.C], [10, 3]);
   check('...leaving A/B/Z untouched once C alone covered the shortfall', [p1.resources.A, p1.resources.B, p1.resources.Z], [2, 1, 5]);
 }
 {
