@@ -3139,9 +3139,17 @@ function buildPlayerNameEntryBox({ title, onDone, autoPassword }) {
   // 注意書き (2026-11-15, per user)。
   const note = el('div', 'story-name-entry__note');
   note.appendChild(el('div', '', 'プレイヤーネームは他のプレイヤーに表示されます。けして本名を入れないでください。'));
-  note.appendChild(el('div', '', autoPassword
-    ? 'データはブラウザに記憶されます。キャッシュクリア等でデータがなくなっても、プレイヤーネームとパスワードがあれば復旧できます。パスワードは自動で作ります。'
-    : 'データはブラウザに記憶されます。キャッシュクリア等でデータがなくなるため、パスワードも一緒に登録してください。データがなくなっても、プレイヤーネームとパスワードがあれば復旧できます。'));
+  if (autoPassword) {
+    // 2026-11-23, per user: 登録をお願いする理由を書いた文に変更(行ごとに改行)。
+    for (const line of [
+      'データはブラウザに記憶されます。キャッシュクリア等でデータがなくなってしまうと、これまでの記録が消えてしまいます。',
+      'そのため、プレイヤーネームとパスワードの登録をお願いします。',
+      'プレイヤーネームとパスワードがあれば復旧できます。パスワードは自動で作ります。',
+      'パスワードはいつでも実績解除から確認、変更可能です。',
+    ]) note.appendChild(el('div', '', line));
+  } else {
+    note.appendChild(el('div', '', 'データはブラウザに記憶されます。キャッシュクリア等でデータがなくなるため、パスワードも一緒に登録してください。データがなくなっても、プレイヤーネームとパスワードがあれば復旧できます。'));
+  }
   box.append(row, message, note);
   setTimeout(() => (known && askPassword ? pw : input).focus(), 50);
   return box;
