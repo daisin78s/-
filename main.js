@@ -1441,6 +1441,8 @@ function updateNavSuggestionIfNeeded(state, eligiblePlayerId) {
   }
   if (eligiblePlayerId === navSuggestionPlayerId) {
     // 同じターンで、前に計算した時から盤面が変わっていなければそのまま。
+    // カードを選ぶ画面の途中(ダイスを置いた直後)は、ナビの手(取るカードの光)をそのまま見せる。選び終わった時にまた来る。
+    if (pendingBuildChoice) return;
     const sigNow = navStateSignature(state, eligiblePlayerId);
     if (sigNow === navSuggestionSignature) return;
     // ナビのとおりに動いた時は、先に計算しておいた次の手をすぐ出す (2026-11-23, per user「なびのとおりに行動したら
