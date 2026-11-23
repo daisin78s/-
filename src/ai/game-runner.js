@@ -96,9 +96,14 @@ function setupGame(seed, playerNames, index, evaluator, resourceCardPicker) {
  * iteration and driveTurn broke out immediately, before ever reaching that in-loop resolution code) --
  * called both at driveTurn's own entry (this gap) and after every move it applies (the original case,
  * a choice created mid-turn by the move just taken). */
-function resolveUntapChoiceIfPending(state, playerId) {
+function resolveUntapChoiceIfPending(state, playerId, aiPlayer, hasPlacedDieThisTurn) {
   const untapChoice = state.pendingChoices.find((c) => c.playerId === playerId && c.kind === 'UNTAP_CHOICE');
   if (!untapChoice) return;
+  // AIの手番の中では、AIが選ぶ(AIPlayer.chooseUntapChoice -- 2026-11-23から。前はくじ引き)。
+  if (aiPlayer && aiPlayer.chooseUntapChoice) {
+    executor.resolveUntapChoice(state, playerId, aiPlayer.chooseUntapChoice(state, playerId, hasPlacedDieThisTurn));
+    return;
+  }
   const { candidates, weights, count } = untapChoice.context;
   const picked = [];
   let usedWeight = 0;
@@ -181,7 +186,7 @@ function driveTurn(state, index, playerId, aiPlayer, initialHasPlacedDieThisTurn
   // resolveUntapChoiceIfPending's own doc for how that can happen) -- without this, MoveGenerator
   // refuses to offer any move while it's outstanding, so the loop below would break on its very first
   // iteration (move === null) without ever reaching its own in-loop resolution a few lines down.
-  resolveUntapChoiceIfPending(state, playerId);
+  resolveUntapChoiceIfPending(state, playerId, aiPlayer, hasPlacedDieThisTurn);
   while (movesTaken.length < MAX_MOVES) {
     const move = aiPlayer.selectMove(state, playerId, { hasPlacedDieThisTurn });
     if (!move) break;
@@ -195,7 +200,7 @@ function driveTurn(state, index, playerId, aiPlayer, initialHasPlacedDieThisTurn
     // in this loop (or
     // MoveGenerator's own move list) ever surfaces or gates on it, so it must be resolved right here or
     // it would sit in state.pendingChoices forever, silently never granting its own benefit.
-    resolveUntapChoiceIfPending(state, playerId);
+    resolveUntapChoiceIfPending(state, playerId, aiPlayer, hasPlacedDieThisTurn || move.type === 'PLACE_DIE' || move.type === 'PLACE_WILDCARD_DIE' || move.type === 'PLACE_DICE_GROUP' || move.type === 'PASS_DIE');
     // JOB003/道化 (2026-08-20 fix, per user bug report: "AIが道化を選んだ時...すべてのダイス4個をいきな
     // り使ってスタートしました"): PLACE_WILDCARD_DIE is JOB003's own die-placement move (see
     // move-generator.js's #wildcardPlaceDieMoves), just as much "placed a die this turn" as a plain

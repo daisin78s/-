@@ -121,6 +121,19 @@ function pendingKFee(player) {
 
 const DIE_ONLY_TAP_KINDS = new Set(['SET_DICE_ANY', 'SET_DIE_VALUE', 'CHANGE_DIE_VALUE', 'SET_WILDCARD']);
 
+/** コスト("12K"・"3A,B"など)に資源resが入っているか (使用料のきまり用、2026-11-23)。 */
+function costMentionsResource(cost, res) {
+  return cost.split(/[,/]/).some((part) => part.trim().replace(/^[0-9]+/, '') === res);
+}
+/** エリアのACTIONに、資源resを払うCHANGE(例: CHANGE(K,A,ALL)・CHANGE(2K,3Z))があるか (使用料のきまり用、2026-11-23)。 */
+function changePaysResource(action, res) {
+  for (const m of action.matchAll(/CHANGE[(]([^;]*)/g)) {
+    const first = m[1].startsWith('(') ? m[1].slice(1, m[1].indexOf(')')) : m[1].split(',')[0];
+    if (first.split(',').some((part) => part.trim().replace(/^[0-9]+/, '') === res)) return true;
+  }
+  return false;
+}
+
 class MoveGenerator {
   /**
    * @param {{avoidMapIdFromRound?: {mapId: string, round: number}}} [policy] - optional strategy knob
@@ -234,7 +247,35 @@ class MoveGenerator {
     if (worryNeedsK || executor.canEndTurn(state, index, playerId).violations.length > 0) {
       moves.push(...this.#freeActionMoves(state, index, playerId, player));
     }
-    moves.push(...this.#feeCollectionMoves(state, playerId));
+    // 使用料の回収 (2026-11-23, per user「暴食持っていなければ使用料はすぐにとる / 暴食持っていれば食料の使用料は必要に
+    // なるまで絶対取らない(ローマ市街などにダイスを置く直前にとる)」):
+    //  - その資源に上限(暴食のRESOURCE_LIMITなど)が無い: 候補に入れる。「すぐ取る」はAIの必ずやる手として
+    //    (forcedImmediateFeeMove、AIPlayerの#checkForcedMoves)。ここで回収の手だけを返すと、この一覧を使う
+    //    ショップの「今すぐ取れる」表示(main.jsのcomputeShopAcquirableMoveCache)が消えてしまうため。
+    //  - 上限がある: まだダイスを置いていない手番で、その資源を使う置き方(CHANGEで払うエリア・その資源が要る建築)が
+    //    ある時だけ候補にする(取ってすぐ使う)。ゲーム最後の手番は取ってよい(残しても意味がないため)。
+    const feeMoves = this.#feeCollectionMoves(state, playerId);
+    if (feeMoves.length > 0) {
+      const limits = executor.activeResourceLimits(state, index, playerId);
+      const unplacedCount = player.dice.filter((d) => d.placedMapId === null && !d.passed).length;
+      const lastTurnOfGame = state.round >= 4 && (context.hasPlacedDieThisTurn ? unplacedCount === 0 : unplacedCount <= 1);
+      const usesResource = (res) => moves.some((m) => {
+        if (!m.mapId) return false;
+        if (m.buildCandidateKey) {
+          const faceId = m.buildCandidateKey.startsWith('U:') ? m.buildCandidateKey.slice(2) : m.buildCandidateKey;
+          try { if (costMentionsResource(String(getCardRow(index, faceId).COST || ''), res)) return true; } catch (e) { /* ignore */ }
+        }
+        const action = String(getAreaRow(index, state.maps[m.mapId].currentAreaId).ACTION || '');
+        return changePaysResource(action, res);
+      });
+      const immediate = [];
+      for (const m of feeMoves) {
+        const res = state.maps[m.mapId].accumulatedFeeResource || 'K';
+        if (limits[res] === undefined) immediate.push(m);
+        else if (lastTurnOfGame || (!context.hasPlacedDieThisTurn && usesResource(res))) moves.push(m);
+      }
+      moves.push(...immediate);
+    }
     moves.push(...this.#bareTapMoves(state, index, playerId, player, context));
     moves.push(...this.#tapReactionMoves(state, playerId));
     if (context.hasPlacedDieThisTurn && executor.canEndTurn(state, index, playerId).ok) {
@@ -247,6 +288,7 @@ class MoveGenerator {
     const moves = [];
     const unplacedDice = player.dice.filter((d) => d.placedMapId === null && !d.passed);
     const diceWithAPlacement = new Set();
+    const predictionCache = new Map(); // board.placeDiceのcontext.predictionCache参照(同じ盤面からの確かめを使い回す)
     for (const die of unplacedDice) {
       // JOB003/道化 (2026-08-19) or B001B's SET_WILDCARD (2026-10-19, per-die): a wildcard die never uses
       // placeDice's own slotIndex-based path -- see #wildcardPlaceDieMoves' own doc. Checked per-die
@@ -264,7 +306,7 @@ class MoveGenerator {
         for (let slotIndex = 0; slotIndex < slotCount; slotIndex++) {
           if (board.placeDiceQuickReject(state, index, { playerId }, die.id, mapId, slotIndex)) continue; // 確実に置けないマスはコピーせずに飛ばす
           const clone = cloneState(state);
-          const result = board.placeDice(clone, index, { playerId }, die.id, mapId, slotIndex);
+          const result = board.placeDice(clone, index, { playerId, predictionCache }, die.id, mapId, slotIndex);
           if (!result.success) continue;
           diceWithAPlacement.add(die.id);
           if (result.actionResult && result.actionResult.pendingBuild) {
@@ -420,6 +462,16 @@ class MoveGenerator {
       if (result.success) moves.push({ type: 'FREE_ACTION', playerId, freeActionId });
     }
     return moves;
+  }
+
+  /** 上限(暴食など)の無い資源の使用料があれば、それを取る手(AIは何より先に取る -- generateMovesの使用料の説明参照)。
+   * 選択待ちがある時は取らない。 */
+  forcedImmediateFeeMove(state, index, playerId) {
+    if ((state.pendingChoices || []).some((c) => c.playerId === playerId)) return null;
+    const fees = this.#feeCollectionMoves(state, playerId);
+    if (fees.length === 0) return null;
+    const limits = executor.activeResourceLimits(state, index, playerId);
+    return fees.find((m) => limits[state.maps[m.mapId].accumulatedFeeResource || 'K'] === undefined) || null;
   }
 
   #feeCollectionMoves(state, playerId) {
@@ -989,6 +1041,7 @@ class MoveGenerator {
    * site's own comment on why that case is skipped entirely instead). */
   #dieReachableOutcomes(state, index, playerId, dieId) {
     const outcomes = new Set();
+    const predictionCache = new Map(); // board.placeDiceのcontext.predictionCache参照
     for (const mapId of Object.keys(state.maps)) {
       if (this.#isMapIdAvoided(state, mapId)) continue;
       const areaRow = getAreaRow(index, state.maps[mapId].currentAreaId);
@@ -996,7 +1049,7 @@ class MoveGenerator {
       for (let slotIndex = 0; slotIndex < slotCount; slotIndex++) {
         if (board.placeDiceQuickReject(state, index, { playerId }, dieId, mapId, slotIndex)) continue;
         const clone = cloneState(state);
-        const result = board.placeDice(clone, index, { playerId }, dieId, mapId, slotIndex);
+        const result = board.placeDice(clone, index, { playerId, predictionCache }, dieId, mapId, slotIndex);
         if (!result.success) continue;
         if (result.actionResult && result.actionResult.pendingBuild) {
           for (const candidate of result.actionResult.pendingBuild.candidates) {

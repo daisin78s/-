@@ -28,7 +28,7 @@ check('getLevel("LV1") shares the unified evaluatorOptions', getLevel('LV1').eva
 check('getLevel("LV2") shares the unified evaluatorOptions', getLevel('LV2').evaluatorOptions, UNIFIED_EVALUATOR_OPTIONS);
 check('getLevel("LV3") shares the unified evaluatorOptions', getLevel('LV3').evaluatorOptions, UNIFIED_EVALUATOR_OPTIONS);
 check('getLevel("LV3") uses preferCastleOverSenate moveGeneratorOptions (matching main.js\'s aiPlayerLv3)', getLevel('LV3').moveGeneratorOptions, { preferCastleOverSenate: true });
-check('getLevel("LV3") includes crossRoundLookahead aiOptions', getLevel('LV3').aiOptions.crossRoundLookahead, true);
+check('getLevel("LV3") has crossRoundLookahead turned off (2026-11-24: 切った方が強く速い)', getLevel('LV3').aiOptions.crossRoundLookahead, false);
 check('getLevel("LV3") uses beamWidth 3', getLevel('LV3').aiOptions.beamWidth, 3);
 {
   let threw = false;

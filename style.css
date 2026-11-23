@@ -1318,13 +1318,15 @@ body.desktop-scaled #player-cards .player-role-control__option { padding: 3px 9p
   border-style: solid;
   border-color: var(--nav-highlight);
   background: var(--nav-highlight-soft);
-  box-shadow: 0 0 0 2px var(--nav-highlight-soft), 0 0 6px 1px var(--nav-highlight);
-  animation: nav-highlight-pulse 1.4s ease-in-out infinite;
+  box-shadow: 0 0 0 3px var(--nav-highlight), 0 0 12px 4px var(--nav-highlight);
+  animation: nav-highlight-pulse 1.1s ease-in-out infinite;
 }
 
+/* 2026-11-23, per user のバグ報告「緑に光るのが目立たないため分かりにくい」: 太く・明るく・点滅を大きく(まず強めにして、
+   iPadで見てもらって調整する)。 */
 @keyframes nav-highlight-pulse {
-  0%, 100% { box-shadow: 0 0 0 2px var(--nav-highlight-soft), 0 0 6px 1px var(--nav-highlight); }
-  50% { box-shadow: 0 0 0 3px var(--nav-highlight-soft), 0 0 10px 3px var(--nav-highlight); }
+  0%, 100% { box-shadow: 0 0 0 3px var(--nav-highlight), 0 0 12px 4px var(--nav-highlight); }
+  50% { box-shadow: 0 0 0 5px var(--nav-highlight), 0 0 26px 10px var(--nav-highlight); }
 }
 
 /* JOB003/道化 (2026-08-19): with a single ☆ die selected, the whole tile is clickable (the engine picks
@@ -1359,13 +1361,13 @@ body.desktop-scaled #player-cards .player-role-control__option { padding: 3px 9p
   border-style: solid;
   border-color: var(--nav-highlight);
   background: var(--nav-highlight-soft);
-  box-shadow: 0 0 0 2px var(--nav-highlight-soft), 0 0 6px 1px var(--nav-highlight);
-  animation: nav-highlight-pulse 1.4s ease-in-out infinite;
+  box-shadow: 0 0 0 3px var(--nav-highlight), 0 0 12px 4px var(--nav-highlight);
+  animation: nav-highlight-pulse 1.1s ease-in-out infinite;
 }
 
 /* .change-highlight--pending(ダイス用、形は変えずアニメーションだけ付ける)と同じ考え方の緑版。 */
 .nav-highlight--pending {
-  animation: nav-highlight-pulse 1.4s ease-in-out infinite;
+  animation: nav-highlight-pulse 1.1s ease-in-out infinite;
 }
 
 /* チュートリアル中の「光る」をもっと目立たせる (2026-09-29, per user request: "光るアニメーションもう少し目立つように

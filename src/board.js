@@ -450,7 +450,15 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
     }
     return { success: false, reason: 'LAZY_TRAINING_GROUND' };
   }
-  const prediction = wouldAreaActionHaveEffect(state, index, actionContext, resolvedAreaRow, buildValue);
+  // context.predictionCache (2026-11-23、AIの手を挙げる処理を速くするため): 同じ盤面から同じエリアに同じ目・同じ種類の
+  // ダイスを置く確かめは、どのマスでも・どのダイスでも同じ結果になるので使い回す。地主・開拓者のボーナスで盤面が先に
+  // 変わる時は使わない。渡すのはAI(move-generator.js)だけで、ゲームの本当の操作は今までどおり毎回確かめる。
+  const predictionKey = context.predictionCache && !preJobBonusSnapshot ? `${resolvedAreaRow.ID}|${buildValue}|${die.kind}` : null;
+  let prediction = predictionKey ? context.predictionCache.get(predictionKey) : undefined;
+  if (!prediction) {
+    prediction = wouldAreaActionHaveEffect(state, index, actionContext, resolvedAreaRow, buildValue);
+    if (predictionKey) context.predictionCache.set(predictionKey, prediction);
+  }
   if (!prediction.ok) {
     if (preJobBonusSnapshot) {
       Object.keys(state).forEach((k) => delete state[k]);

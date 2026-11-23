@@ -5,6 +5,7 @@ const { compareDicePriority } = require('./die-priority');
 const { compareExSlotPreference } = require('./slot-priority');
 const turnFlow = require('../turn-flow');
 const rng = require('../rng');
+const executor = require('../executor');
 const { bareTapKind } = require('./move-generator');
 // ダイスの目を変える/☆にするだけのタップ(基礎学問・高等学問・幾何学)。#isPointlessDieTap参照。
 const DIE_ONLY_TAP_KINDS = new Set(['SET_DICE_ANY', 'SET_DIE_VALUE', 'CHANGE_DIE_VALUE', 'SET_WILDCARD']);
@@ -152,6 +153,9 @@ class AIPlayer {
    * the first applicable forced Move, or null if none applies -- see each MoveGenerator#forcedXxx
    * method's own doc for why it exists and why the order matters. */
   #checkForcedMoves(state, playerId, context) {
+    // 使用料はすぐ取る(暴食などで上限のある資源は除く -- move-generator.jsのforcedImmediateFeeMove参照、2026-11-23)。
+    const forcedFee = this.moveGenerator.forcedImmediateFeeMove ? this.moveGenerator.forcedImmediateFeeMove(state, this.index, playerId) : null;
+    if (forcedFee) return forcedFee;
     const forcedPureGainC = this.moveGenerator.forcedPureGainCTap(state, this.index, playerId);
     if (forcedPureGainC) return forcedPureGainC;
     const forcedFeeConversion = this.moveGenerator.forcedFeeConversionMove(state, this.index, playerId);
@@ -304,8 +308,11 @@ class AIPlayer {
     }
     const scored = [];
     for (const move of moves) {
-      const { state: resultState, result } = this.simulator.apply(state, this.index, move);
-      if (!result.success) continue; // defensive -- MoveGenerator should only ever offer legal moves
+      const applied = this.simulator.apply(state, this.index, move);
+      if (!applied.result.success) continue; // defensive -- MoveGenerator should only ever offer legal moves
+      // この手でアンタップするカードを選ぶことになる(軍団長LV2・皇女など)なら、選んだ後の盤面で点をつける(2026-11-23)。
+      const placedNow = !!(context && context.hasPlacedDieThisTurn) || DICE_MOVE_TYPES.has(move.type);
+      const resultState = this.#resolveUntapChoiceQuick(applied.resultState || applied.state, playerId, placedNow);
       scored.push({ move, resultState, score: this.evaluator.score(resultState, playerId) });
     }
     if (scored.length === 0) return null;
@@ -445,9 +452,13 @@ class AIPlayer {
         candidateMoves = [forcedMove];
       } else {
         const moves = this.moveGenerator.generateMoves(state, this.index, opponentId, context);
+        // 使用料をすぐ取るきまり(2026-11-23、move-generator.jsのgenerateMoves参照)で、回収の手だけが返ってくることが
+        // ある -- その時は先に回収する(そうしないと置く手が無くて、ここで止まってしまう)。
+        const feeMoves = moves.filter((m) => m.type === 'COLLECT_FEE');
         const diceMoves = rng.shuffle(state.rng, moves.filter((m) => DICE_MOVE_TYPES.has(m.type)));
         const endTurnMove = moves.find((m) => m.type === 'END_TURN');
-        candidateMoves = endTurnMove ? [...diceMoves, endTurnMove] : diceMoves;
+        candidateMoves = feeMoves.length > 0 && diceMoves.length === 0 && !endTurnMove ? feeMoves
+          : (endTurnMove ? [...diceMoves, endTurnMove] : diceMoves);
       }
       let applied = null;
       for (const candidate of candidateMoves) {
@@ -522,6 +533,7 @@ class AIPlayer {
       // of the GAME_END fix above rather than instead of it.
       if (Date.now() > deadline) break;
       steps++;
+      state = this.#resolveUntapChoiceQuick(state, playerId, hasPlacedDieThisTurn);
       const move = this.#greedyMove(state, playerId, hasPlacedDieThisTurn);
       if (!move) break; // nothing legal (shouldn't normally happen -- canEndTurn eventually frees this up)
       const { state: nextState, result } = this.simulator.apply(state, this.index, move);
@@ -668,10 +680,65 @@ class AIPlayer {
    * keeps going for lookaheadExtraTurns more) via #greedyMove, starting from `state` with
    * `hasPlacedDieThisTurn` already known. Stops once the turn actually ends (END_TURN) or maxRolloutMoves
    * (a per-turn cap here, see #deepBeamSearch's own doc) is hit. */
+  /** アンタップするカードの選び方(重さの合計が上限以内で、これ以上足せない組)を全部挙げる。 */
+  static untapSubsets(choice) {
+    const { candidates, weights, count } = choice.context;
+    const subsets = [];
+    (function rec(i, cur, w) {
+      if (i === candidates.length) {
+        if (candidates.every((id) => cur.includes(id) || w + weights[id] > count)) subsets.push(cur.slice());
+        return;
+      }
+      if (w + weights[candidates[i]] <= count) { cur.push(candidates[i]); rec(i + 1, cur, w + weights[candidates[i]]); cur.pop(); }
+      rec(i + 1, cur, w);
+    })(0, [], 0);
+    return subsets.length > 0 ? subsets : [[]];
+  }
+
+  /** 先読みの中で、アンタップするカードを選ぶ(2026-11-23、per user「このリプレイからAIを強くする方法」-- 前はくじ引き、
+   * 先読みの中では選ばれずに止まっていた)。選び方ごとに、次に打てる一番良い手の点で比べる(軽い版)。 */
+  #resolveUntapChoiceQuick(state, playerId, hasPlacedDieThisTurn) {
+    const choice = (state.pendingChoices || []).find((c) => c.playerId === playerId && c.kind === 'UNTAP_CHOICE');
+    if (!choice) return state;
+    let best = null;
+    let bestScore = -Infinity;
+    for (const subset of AIPlayer.untapSubsets(choice)) {
+      const clone = { ...structuredClone(state) };
+      executor.resolveUntapChoice(clone, playerId, subset);
+      let score = this.evaluator.score(clone, playerId);
+      const next = this.#greedyMove(clone, playerId, hasPlacedDieThisTurn);
+      if (next) {
+        const r = this.simulator.apply(clone, this.index, next);
+        if (r.result.success) score = Math.max(score, this.evaluator.score(r.state, playerId));
+      }
+      if (score > bestScore) { bestScore = score; best = clone; }
+    }
+    return best || state;
+  }
+
+  /** 本番の手番でアンタップするカードを選ぶ(main.js・game-runner.jsから)。選び方ごとに、その手番の残りを打ってみて、
+   * 一番良くなる組を返す(2026-11-23、per user のリプレイ「軍団長LV2で測量術をアンタップしてもう一度使う」)。 */
+  chooseUntapChoice(state, playerId, hasPlacedDieThisTurn) {
+    const choice = (state.pendingChoices || []).find((c) => c.playerId === playerId && c.kind === 'UNTAP_CHOICE');
+    if (!choice) return [];
+    const light = { ...state, log: [], progressLog: [], undoCheckpoint: null };
+    let best = null;
+    let bestScore = -Infinity;
+    for (const subset of AIPlayer.untapSubsets(choice)) {
+      const clone = structuredClone(light);
+      executor.resolveUntapChoice(clone, playerId, subset);
+      const end = this.#finishTurnGreedy(clone, playerId, !!hasPlacedDieThisTurn, 60);
+      const score = this.evaluator.score(end, playerId);
+      if (score > bestScore) { bestScore = score; best = subset; }
+    }
+    return best || [];
+  }
+
   #finishTurnGreedy(state, playerId, hasPlacedDieThisTurn, maxRolloutMoves) {
     let steps = 0;
     while (steps < maxRolloutMoves) {
       steps++;
+      state = this.#resolveUntapChoiceQuick(state, playerId, hasPlacedDieThisTurn);
       const move = this.#greedyMove(state, playerId, hasPlacedDieThisTurn);
       if (!move) break;
       const { state: nextState, result } = this.simulator.apply(state, this.index, move);

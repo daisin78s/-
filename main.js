@@ -1348,7 +1348,7 @@ const aiPlayerLv3 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGeneratorLv3, aiEvalua
   beamWidth: 3,
   dieScarcityTieBreak: true,
   preferExOnOwnTerritory: true,
-  crossRoundLookahead: true,
+  crossRoundLookahead: false, // 2026-11-24: 切った方がはっきり強く速い(今の版と200試合で平均順位2.06、1手0.28秒)。src/ai/levels.jsのLV3と同じ
 });
 // Synergy tables for AI LV3's smart onboarding (see driveOneAiStepInner's RESOURCE_CHOICE/ONBOARDING
 // branches below) -- built once here, same pattern as aiEvalTable above.
@@ -1383,7 +1383,7 @@ if (weeklyChallengeActive) {
       beamWidth: 3,
       dieScarcityTieBreak: true,
       preferExOnOwnTerritory: true,
-      crossRoundLookahead: true,
+      crossRoundLookahead: false, // 上のaiPlayerLv3と同じ(2026-11-24)
     });
   }).catch((err) => {
     console.error('Weekly eval-table snapshot fetch failed, falling back to the live table for this attempt:', err);
@@ -2061,16 +2061,11 @@ function driveOneAiStepInner(state) {
     // 2026-08-17 this is a weighted budget (see executor.untapChoiceWeight's own doc), not a flat count,
     // so candidates are shuffled and greedily added while they still fit the remaining budget, rather
     // than just slicing the first `count` of them.
-    const { candidates, weights, count } = ctx.untapChoice.context;
-    const picked = [];
-    let usedWeight = 0;
-    for (const id of rngMod.shuffle(state.rng, candidates)) {
-      if (usedWeight + weights[id] <= count) {
-        picked.push(id);
-        usedWeight += weights[id];
-      }
-    }
-    executorMod.resolveUntapChoice(state, ctx.untapChoice.playerId, picked);
+    // 2026-11-23から: AIが選ぶ(AIPlayer.chooseUntapChoice -- 選び方ごとにその手番の残りを打ってみて一番良い組)。
+    const untapPlayerId = ctx.untapChoice.playerId;
+    const placedThisTurn = aiOpenTurnPlayerId === untapPlayerId ? aiOpenTurnHasPlacedDie : false;
+    const picked = aiPlayerFor(untapPlayerId).chooseUntapChoice(state, untapPlayerId, placedThisTurn);
+    executorMod.resolveUntapChoice(state, untapPlayerId, picked);
     return true;
   }
 
@@ -8605,9 +8600,31 @@ function renderBzOutcomeChoice() {
   if (!pendingBzOutcomeChoice) return;
   const { candidate, outcomes } = pendingBzOutcomeChoice;
   container.appendChild(el('span', 'build-choice-payment__label', 'どちらの資源で支払いますか？'));
+  // ナビ: このカードがナビの手なら、AIが払うつもりの資源(AIのBZの使い方 = simulator.maxBzDiscount)を光らせる
+  // (2026-11-23, per user のバグ報告「ナビ どの資源で払うかがでない」)。
+  const navFace = candidate.type === 'UPGRADE' ? candidate.toFaceId : candidate.faceId;
+  const navPlayerId = pendingBuildChoice && pendingBuildChoice.playerId;
+  // 支払った後の資源で比べる(同じ払い方でもBZの割り当ての書き方が違うことがあるため)。
+  const paidWith = (discount) => {
+    try {
+      const costFaceId = candidate.type === 'UPGRADE' ? candidate.fromFaceId : candidate.faceId;
+      const items = commandBuilderMod.lowerCostList(dataLoaderMod.getCardRow(INDEX, costFaceId).COST);
+      const d = executorMod.applyBzDiscount(items, discount || {});
+      if (!d) return null;
+      const clone = gameStateMod.cloneState(STATE);
+      const pay = d.bzUsed > 0 ? [...d.items, { resource: 'BZ', count: d.bzUsed }] : d.items;
+      const r = executorMod.payCostList(clone, INDEX, navPlayerId, pay);
+      return r && r.success === false ? null : JSON.stringify(clone.players.find((p) => p.id === navPlayerId).resources);
+    } catch (e) { return null; }
+  };
+  let navDiscountKey = null;
+  if (navSuggestedMove && navSuggestedMove.playerId === navPlayerId && navSuggestedAcquireFaceId === navFace && simulatorMod.maxBzDiscount) {
+    try { navDiscountKey = paidWith(simulatorMod.maxBzDiscount(STATE, INDEX, navPlayerId, candidate)); } catch (e) { navDiscountKey = null; }
+  }
   for (const outcome of outcomes) {
     const btn = el('button', 'build-choice-payment__option');
     btn.type = 'button';
+    if (navDiscountKey !== null && paidWith(outcome.bzDiscount) === navDiscountKey) btn.classList.add('nav-highlight');
     // 同じ資源はまとめて1つの表示に(「Z1 Z1」ではなく「Z2」、2026-11-12 per user)。
     const totals = new Map();
     for (const item of outcome.resolvedItems) {

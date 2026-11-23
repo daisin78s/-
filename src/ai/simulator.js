@@ -216,6 +216,6 @@ class Simulator {
   }
 }
 
-module.exports = { Simulator, SimulationError, applyInPlace };
+module.exports = { Simulator, SimulationError, applyInPlace, maxBzDiscount };
 
 })();
