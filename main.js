@@ -1428,42 +1428,131 @@ function isNavSuggestedMoveStillPossible(state, move) {
  * を更新する。render()の、next確定後・各render*呼び出し前に呼ばれる想定。
  * 再計算は「同じ人間の同じターンが続いている間はしない」(2026-10-19, per user report: 重い/一度だけで
  * 良い) -- eligiblePlayerId自身が前回と変わった時だけ(別の人間に替わった、または一旦nullを経由して
- * 再び同じ人間の番に戻ってきた時)再計算する。navSuggestionPlayerId自身のdocも参照。 */
+ * 再び同じ人間の番に戻ってきた時)再計算する。navSuggestionPlayerId自身のdocも参照。
+ * 2026-11-23から: 同じターンでも、その人が手をして盤面が変わったら(navStateSignature)、裏で計算し直す。 */
 function updateNavSuggestionIfNeeded(state, eligiblePlayerId) {
   if (!navModeEnabled || !eligiblePlayerId) {
     navSuggestedMove = null;
     navSuggestedAcquireFaceId = null;
     navSuggestionPlayerId = null;
+    navSuggestionSignature = null;
+    navPlan.clear();
     return;
   }
   if (eligiblePlayerId === navSuggestionPlayerId) {
-    // 同じターン中でも、フリーアクション等の別の行動で既にできなくなった手は光らせない (2026-10-19,
-    // per user request) -- 再計算(重い)はせず、キャッシュ済みの提案が今も現実に可能かだけ安く確認する。
-    // 不可能になっていたらnullにして、どのハイライト箇所も自然に何も光らせなくなる。
-    if (navSuggestedMove && !isNavSuggestedMoveStillPossible(state, navSuggestedMove)) {
-      navSuggestedMove = null;
-      navSuggestedAcquireFaceId = null;
+    // 同じターンで、前に計算した時から盤面が変わっていなければそのまま。
+    const sigNow = navStateSignature(state, eligiblePlayerId);
+    if (sigNow === navSuggestionSignature) return;
+    // ナビのとおりに動いた時は、先に計算しておいた次の手をすぐ出す (2026-11-23, per user「なびのとおりに行動したら
+    // すぐにでるはず」)。
+    const planned = navPlan.get(sigNow);
+    if (planned) {
+      navSuggestedMove = planned.move;
+      navSuggestedAcquireFaceId = planned.acquireFaceId;
+      navSuggestionSignature = sigNow;
+      scheduleNavPrefetch(state, eligiblePlayerId);
+      return;
     }
-    return; // same human's same turn -- keep (or just-cleared) the cached suggestion, never recompute
+    // 手をした(ダイスを置いた・フリーアクション・タップ等)ので次の手を計算し直す (2026-11-23, per user:
+    // 「ナビ機能で1手しかナビされない」「フリーアクションをしたら次の手が出ない」「なびのとおりに行動しても1てのみ」)。
+    // 10/19の「ナビ機能重いです」を受けて、計算は画面を描いたあとに裏で(setTimeout)行い、ボタンが固まらないようにする。
+    // 計算が終わるまでは前の提案を光らせない(もうずれているため)。
+    navSuggestedMove = null;
+    navSuggestedAcquireFaceId = null;
+    if (!navRecomputeTimer) {
+      navRecomputeTimer = setTimeout(() => {
+        navRecomputeTimer = null;
+        if (!navModeEnabled || navSuggestionPlayerId !== eligiblePlayerId || !STATE) return;
+        if (pendingBuildChoice) return; // カードを選ぶ画面の途中(選び終わった時にまた来る)
+        if (navStateSignature(STATE, eligiblePlayerId) === navSuggestionSignature) return;
+        try { computeNavSuggestion(STATE, eligiblePlayerId); } catch (e) { navSuggestedMove = null; navSuggestionSignature = navStateSignature(STATE, eligiblePlayerId); }
+        render(STATE);
+      }, 60);
+    }
+    return;
   }
   navSuggestionPlayerId = eligiblePlayerId;
-  navSuggestedMove = aiPlayerFor(eligiblePlayerId).selectMove(state, eligiblePlayerId, { hasPlacedDieThisTurn: turnActionTaken });
-  navSuggestedAcquireFaceId = null;
-  if (navSuggestedMove && navSuggestedMove.buildCandidateIndex !== undefined && navSuggestedMove.buildCandidateIndex !== null) {
+  navPlan.clear();
+  computeNavSuggestion(state, eligiblePlayerId);
+}
+
+/** ナビの計算そのもの(LV3のselectMove)。考える時間は1回3秒まで (2026-11-23, per user「3秒なら許容」) --
+ * 相手のAI LV3と同じオブジェクトなので、上限はこの呼び出しの間だけ変えて戻す。 */
+function computeNavSuggestion(state, playerId) {
+  const r = navSelect(state, playerId, turnActionTaken);
+  navSuggestedMove = r.move;
+  navSuggestedAcquireFaceId = r.acquireFaceId;
+  navSuggestionSignature = navStateSignature(state, playerId);
+  scheduleNavPrefetch(state, playerId);
+}
+
+/** 先読み: 今のナビの手をした後の盤面で、次のナビの手を計算しておく(navPlan)。人がナビのとおりに動けば、
+ * render()のupdateNavSuggestionIfNeededがnavPlanから即座に出す。1回に1手先だけ(計算中は画面が止まるので、
+ * 人がナビを見て考えている間に1つずつ)。 */
+function scheduleNavPrefetch(state, playerId) {
+  const move = navSuggestedMove;
+  if (!move || move.type === 'END_TURN') return;
+  const placed = turnActionTaken || ['PLACE_DIE', 'PLACE_WILDCARD_DIE', 'PLACE_DICE_GROUP', 'PASS_DIE'].includes(move.type);
+  let after;
+  try {
+    after = gameStateMod.cloneState(state);
+    const result = simulatorMod.applyInPlace(after, INDEX, move);
+    if (!result.success || result.pendingBuild) return;
+  } catch (e) { return; }
+  const sig = navStateSignature(after, playerId, placed);
+  if (navPlan.has(sig)) return;
+  if (navPrefetchTimer) clearTimeout(navPrefetchTimer);
+  navPrefetchTimer = setTimeout(() => {
+    navPrefetchTimer = null;
+    if (!navModeEnabled || navSuggestionPlayerId !== playerId || navSuggestedMove !== move) return; // もう別の手になった
+    try { navPlan.set(sig, navSelect(after, playerId, placed)); } catch (e) { /* 先読みできなくても普段どおり計算し直す */ }
+  }, 300);
+}
+
+/** LV3でナビの手を1つ選ぶ(考える時間は3秒まで)。BUILDを伴う手なら、獲得/LVアップするカードも。 */
+function navSelect(state, playerId, placed) {
+  const ai = aiPlayerFor(playerId);
+  const prevLimit = ai.maxDecisionTimeMs;
+  ai.maxDecisionTimeMs = Math.min(prevLimit || NAV_MAX_DECISION_MS, NAV_MAX_DECISION_MS);
+  let move;
+  try {
+    move = ai.selectMove(state, playerId, { hasPlacedDieThisTurn: placed });
+  } finally {
+    ai.maxDecisionTimeMs = prevLimit;
+  }
+  let acquireFaceId = null;
+  if (move && move.buildCandidateIndex !== undefined && move.buildCandidateIndex !== null) {
     // The actual acquired/upgraded faceId only exists once the move is really applied (board.placeDice/
     // placeDiceGroup/useBareTapAbility compute pendingBuild.candidates live, not something move-generator.js
     // precomputes -- see src/ai/simulator.js's own buildCandidateIndex handling) -- dry-run on a disposable
     // clone, same "never touches the real state" pattern as board.previewPlaceDice.
     try {
       const clone = gameStateMod.cloneState(state);
-      const result = simulatorMod.applyInPlace(clone, INDEX, navSuggestedMove);
+      const result = simulatorMod.applyInPlace(clone, INDEX, move);
       if (result.success && result.candidate) {
-        navSuggestedAcquireFaceId = result.candidate.faceId || result.candidate.toFaceId || null;
+        acquireFaceId = result.candidate.faceId || result.candidate.toFaceId || null;
       }
     } catch (e) {
       // Defensive only -- a failed dry-run just means no card gets highlighted, never a crash.
     }
   }
+  return { move, acquireFaceId };
+}
+
+/** ナビを計算し直すかどうかの目印: その人が手をすると変わる物(ダイス・資源・カード・タップ・フリーアクション・
+ * 選択待ち・使用料・ダイスを置いたか)をまとめた文字列。 */
+function navStateSignature(state, playerId, placed = turnActionTaken) {
+  const p = state.players.find((x) => x.id === playerId);
+  if (!p) return '';
+  return JSON.stringify([
+    placed,
+    p.resources,
+    p.dice.map((d) => [d.id, d.placedMapId, d.passed, d.value]),
+    p.ownedCardPhysicalIds.map((id) => [id, state.cards[id] && state.cards[id].currentFaceId, state.cards[id] && state.cards[id].tapped]),
+    p.freeActionTaps,
+    (state.pendingChoices || []).length,
+    Object.keys(state.maps).map((m) => state.maps[m].accumulatedFee || 0),
+  ]);
 }
 
 // 'instant' (AI plays out immediately, no visible pause) | 'delayed' (one Move every AI_STEP_DELAY_MS,
@@ -1627,6 +1716,11 @@ let navModeEnabled = false;
 let navSuggestedMove = null;
 let navSuggestedAcquireFaceId = null;
 let navSuggestionPlayerId = null;
+let navSuggestionSignature = null; // 前にナビを計算した時の盤面の目印(navStateSignature)
+let navRecomputeTimer = null;
+const NAV_MAX_DECISION_MS = 3000;
+const navPlan = new Map(); // 盤面の目印(navStateSignature) -> 先に計算しておいたナビの手 {move, acquireFaceId}
+let navPrefetchTimer = null;
 // {dieId, dicePlayerId, slotKeys, cardKeys, resourceKeys, feeMapIds} | null -- リプレイの変化ハイライト
 // (2026-09-09, per user request, revised same day after seeing the first version in action: "進を押して
 // 変わった個所が次のボタン（進むなど）を押すまで光るようにしてほしい 例 獲得したカード／使用料をもらった
