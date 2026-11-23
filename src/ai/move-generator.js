@@ -119,6 +119,8 @@ function pendingKFee(player) {
   return player.pendingFee && (player.pendingFee.resource || 'K') === 'K' ? player.pendingFee.amount : 0;
 }
 
+const DIE_ONLY_TAP_KINDS = new Set(['SET_DICE_ANY', 'SET_DIE_VALUE', 'CHANGE_DIE_VALUE', 'SET_WILDCARD']);
+
 class MoveGenerator {
   /**
    * @param {{avoidMapIdFromRound?: {mapId: string, round: number}}} [policy] - optional strategy knob
@@ -436,6 +438,11 @@ class MoveGenerator {
       if (!cardState || cardState.tapped) continue;
       const bareTap = bareTapKind(index, cardState.currentFaceId);
       if (!bareTap) continue;
+      // ダイスの目を変える/オールマイティにするだけのタップ(基礎学問・高等学問・幾何学)は、この手番でもうダイスを
+      // 置いた後は使わない (2026-11-23, per user「ダイスを置いた後に基礎学問や高等学問を使おうとする 意味がないので
+      // 使わないように」) -- 置かなかったダイスの目はターン終了で元に戻る(executor.jsのvalueChangedThisTurn)ので、
+      // 1ラウンド1回のタップを無駄にするだけ。宮廷人(MONUMENT_CHANGE_DIE_VALUE)は1資源軽減も付くので対象外。
+      if (context && context.hasPlacedDieThisTurn && DIE_ONLY_TAP_KINDS.has(bareTap.kind)) continue;
       const unplacedDice = player.dice.filter((d) => d.placedMapId === null);
       if (bareTap.kind === 'IMMEDIATE') {
         const clone = cloneState(state);
