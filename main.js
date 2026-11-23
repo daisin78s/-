@@ -8954,6 +8954,10 @@ function renderTapChoiceModal() {
   overlay.hidden = false;
   const { playerId, dieId, cardPhysicalId, value, bareTap, skip } = pendingTapChoice;
   const player = STATE.players.find((p) => p.id === playerId);
+  // ナビ: このカードのタップがナビの手なら、どのダイスに・どの目に使うかも光らせる (2026-11-23, per user「ナビ
+  // 基礎学問を使うとき どれに使いたいのかわからない」)。
+  const navTap = navSuggestedMove && navSuggestedMove.type === 'BARE_TAP' && navSuggestedMove.physicalId === pendingTapChoice.physicalId
+    && navSuggestedMove.playerId === playerId ? navSuggestedMove : null;
 
   const diceEl = document.getElementById('tap-choice-dice');
   diceEl.innerHTML = '';
@@ -8961,6 +8965,7 @@ function renderTapChoiceModal() {
     const dieNode = renderDie({ ...die, color: player.color });
     dieNode.classList.add('die--selectable');
     dieNode.classList.toggle('die--selected', die.id === dieId);
+    if (navTap && navTap.chosenDieId === die.id) dieNode.classList.add('nav-highlight--pending'); // ダイスの色は変えずに点滅だけ(盤面のダイスと同じ)
     dieNode.addEventListener('click', () => { pendingTapChoice.dieId = die.id; pendingTapChoice.cardPhysicalId = null; pendingTapChoice.skip = false; render(STATE); });
     diceEl.appendChild(dieNode);
   }
@@ -8995,6 +9000,7 @@ function renderTapChoiceModal() {
     const btn = el('button', 'build-choice-payment__option', `+${typeof bareTap.delta === 'number' ? bareTap.delta : 5}しない`);
     btn.type = 'button';
     btn.classList.toggle('build-choice-payment__option--active', !!skip);
+    if (navTap && navTap.skipDieChange) btn.classList.add('nav-highlight');
     btn.addEventListener('click', () => { pendingTapChoice.skip = true; pendingTapChoice.dieId = null; pendingTapChoice.cardPhysicalId = null; render(STATE); });
     skipEl.appendChild(btn);
   }
@@ -9015,6 +9021,7 @@ function renderTapChoiceModal() {
       const btn = el('button', 'build-choice-payment__option', label);
       btn.type = 'button';
       btn.classList.toggle('build-choice-payment__option--active', option === value);
+      if (navTap && (bareTap.kind === 'CHANGE_DIE_VALUE' ? navTap.chosenDelta : navTap.chosenValue) === option) btn.classList.add('nav-highlight');
       btn.addEventListener('click', () => { pendingTapChoice.value = option; render(STATE); });
       valuesEl.appendChild(btn);
     }
