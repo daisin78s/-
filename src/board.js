@@ -721,6 +721,10 @@ function wouldAreaActionHaveEffect(state, index, context, areaRow, buildValue, m
     const affordable = candidates.some((c) => isCandidateAffordable(evalState, index, context.playerId, c));
     return affordable ? { ok: true } : { ok: false, reason: 'NO_BUILDABLE_CARD' };
   }
+  // 決まった数の資源を足すだけ(例: ADD(3K))なら、必ず資源が変わるので、盤面をコピーして試さずに分かる (2026-11-24, per user
+  // 「(AIを早くする案)すべて」 -- この確かめのコピーがAIの考える時間の1割ほどを使っていた)。ダイスを足す物・数が式の物・
+  // 足す資源を別の物に替えるカード(REPLACE_ADD)を持っている時は、今までどおり試す。
+  if (isPlainResourceAdd(commands) && executor.getPassiveRules(state, index, context.playerId, 'REPLACE_ADD').length === 0) return { ok: true };
   const clone = cloneState(state);
   const result = executor.runProgram(clone, index, context, areaRow.ACTION);
   if (!result.success) return { ok: false, reason: 'NO_EFFECT' };
@@ -728,6 +732,13 @@ function wouldAreaActionHaveEffect(state, index, context, areaRow, buildValue, m
   const after = clone.players.find((p) => p.id === context.playerId);
   const changed = !resourcesEqual(before.resources, after.resources) || before.dice.length !== after.dice.length;
   return changed ? { ok: true } : { ok: false, reason: 'NO_EFFECT' };
+}
+
+const PLAIN_ADD_RESOURCES = new Set(['K', 'A', 'B', 'C', 'Z', 'BZ', 'VP']);
+/** commandsが「決まった数(1以上)の普通の資源を足す」ADDだけならtrue(wouldAreaActionHaveEffect参照)。 */
+function isPlainResourceAdd(commands) {
+  return commands.length > 0 && commands.every((cmd) => cmd.type === 'ADD' && cmd.items.length > 0
+    && cmd.items.every((item) => PLAIN_ADD_RESOURCES.has(item.resource) && item.count && item.count.kind === 'literal' && item.count.value > 0));
 }
 
 /** Pure: are `a`/`b` (PlayerState.resources-shaped objects) the same, treating a missing key as 0. */
