@@ -4618,7 +4618,7 @@ function ch4OnRender(state) {
  * ゲームが終わったら第5章クリア・最高記録・ストーリーのランキング(storyChapterGameEnd)。セリフは後で足す。 */
 function ch5Start() {
   const run = storyRun;
-  run.ch5 = { cleared: false, rankingShown: false };
+  run.ch5 = { cleared: false, rankingShown: false, seatId: null };
   run.normalGame = true;
   run.diceShown = true; // 手のダイスを隠さない(storyAfterRenderがstory-hide-diceを付け直さないように)
   storySetSpeaker('system');
@@ -4637,11 +4637,21 @@ function ch5OnRender(state) {
   if (!run || !run.ch5) return;
   // 盤面のエリアは全部見せる(ストーリーの「見えているエリア」の絞り込みが普段の手に効かないように)。
   run.visibleMapIds = Object.keys(state.maps || {});
+  // 3Rの一番初め(AIが1R・2Rを打ち終えた所): 4人のうち誰の続きをするかを選ぶ(2026-11-24, per user「５章 の3Rから 3Rの
+  // 一番初めに ４人のうち１人を選んで それの続きをする」)。選ぶまでAIは待つ。
+  if (!run.ch5.seatId && state.round >= 3 && state.phase !== 'GAME_END' && typeof round3WatchActive !== 'undefined' && !round3WatchActive) {
+    if (!run.ch5.choosing) {
+      run.ch5.choosing = true;
+      run.holdAi = true;
+      setTimeout(() => { if (storyRun === run) ch5ShowSeatChooser(); }, 0);
+    }
+    return;
+  }
   if (state.phase !== 'GAME_END' || run.ch5.cleared) return;
   run.ch5.cleared = true;
   storyMarkChapterCleared(5);
-  // 第5章の最高記録(あなたの席の最終VP、第4章と同じく同じ点でも更新)。
-  const standing = standingsRows(state).find((r) => r.playerId === 'P1');
+  // 第5章の最高記録(選んだ席の最終VP、第4章と同じく同じ点でも更新)。
+  const standing = standingsRows(state).find((r) => r.playerId === (run.ch5.seatId || 'P1'));
   const vp = standing ? standing.vp : 0;
   let prev = null;
   try { const v = localStorage.getItem(STORY5_BEST_VP_KEY); prev = v === null ? null : Number(v); } catch (err) { /* 読めなければ記録なし */ }
@@ -4649,6 +4659,45 @@ function ch5OnRender(state) {
     try { localStorage.setItem(STORY5_BEST_VP_KEY, String(vp)); } catch (err) { /* 書けなくても続ける */ }
     storyProgressChanged();
   }
+}
+
+/** 第5章: 3Rの始めに、続きをする人を4人から選ぶ画面。名前・「性格＋ジョブ」の呼び名・今のVP。 */
+function ch5ShowSeatChooser() {
+  const run = storyRun;
+  const old = document.getElementById('ch5-seat-chooser');
+  if (old) old.remove();
+  const root = el('div', 'story-chapters');
+  root.id = 'ch5-seat-chooser';
+  const panel = el('div', 'story-chapters__panel');
+  panel.appendChild(el('div', 'story-chapters__heading', 'だれの続きをしますか？'));
+  const vpOf = {};
+  for (const row of standingsRows(STATE)) vpOf[row.playerId] = row.vp;
+  for (const player of STATE.players) {
+    const con = player.conPhysicalId && player.conFace ? `${player.conPhysicalId}${player.conFace}` : null;
+    const title = typeof rankingConJobTitle === 'function' ? rankingConJobTitle(con, player.jobCardId) : '';
+    const button = el('button', 'story-chapters__chapter', `${title}${player.name}`);
+    button.appendChild(el('span', 'story-chapters__record', `${vpOf[player.id] || 0}VP`));
+    button.type = 'button';
+    button.addEventListener('click', () => {
+      root.remove();
+      ch5TakeSeat(player.id);
+    });
+    panel.appendChild(button);
+  }
+  root.appendChild(panel);
+  document.body.appendChild(root);
+  if (run) run.ch5.chooserEl = root;
+}
+
+/** 選んだ席をあなた(人間)に、ほかの3人をAIにして、続きを始める。 */
+function ch5TakeSeat(seatId) {
+  const run = storyRun;
+  if (!run || !run.ch5) return;
+  run.ch5.seatId = seatId;
+  for (const player of STATE.players) playerRoles.set(player.id, player.id === seatId ? 'HUMAN' : DEFAULT_AI_ROLE);
+  run.holdAi = false;
+  turnActionTaken = false;
+  render(STATE);
 }
 
 const STORY_CHAPTERS = [
@@ -4775,9 +4824,10 @@ function storyShowRanking(opts) {
       // 名前が無ければ名前とパスワードの入力画面(openPlayerNameEntryOverlay)のあとで登録する。
       const status = el('span', 'story-ranking__status', '確かめています...');
       register.appendChild(status);
-      const p1 = STATE.players.find((p) => p.id === 'P1');
+      const seatId = opts.playerId || 'P1'; // 第5章は選んだ席
+      const p1 = STATE.players.find((p) => p.id === seatId);
       // 第5章(3Rから)も第4章と同じく4人対戦なので、1位の時だけ。
-      const firstPlace = chapter < 4 || (typeof standingsRows === 'function' && (standingsRows(STATE)[0] || {}).playerId === 'P1');
+      const firstPlace = chapter < 4 || (typeof standingsRows === 'function' && (standingsRows(STATE)[0] || {}).playerId === seatId);
       const save = (rank) => {
         const name = loadRememberedRankingName();
         status.textContent = '登録中...';
@@ -4885,8 +4935,9 @@ function storyChapterGameEnd(state) {
   const ch = run && (run.ch5 || run.ch4);
   if (!ch || ch.rankingShown) return;
   ch.rankingShown = true;
-  const standing = standingsRows(state).find((r) => r.playerId === 'P1');
-  storyShowRanking({ chapter: run.ch5 ? 5 : 4, vp: standing ? standing.vp : 0, onClose: closeStoryMode });
+  const seatId = run.ch5 ? (run.ch5.seatId || 'P1') : 'P1';
+  const standing = standingsRows(state).find((r) => r.playerId === seatId);
+  storyShowRanking({ chapter: run.ch5 ? 5 : 4, vp: standing ? standing.vp : 0, playerId: seatId, onClose: closeStoryMode });
 }
 
 function openStoryChapterSelect() {
