@@ -4643,6 +4643,8 @@ function ch5OnRender(state) {
     if (!run.ch5.choosing) {
       run.ch5.choosing = true;
       run.holdAi = true;
+      // 選ぶまで、誰の席も人間にしない(盤面を見ている間に置けてしまわないように)。AIはholdAiで待つ。
+      for (const player of state.players) playerRoles.set(player.id, DEFAULT_AI_ROLE);
       setTimeout(() => { if (storyRun === run) ch5ShowSeatChooser(); }, 0);
     }
     return;
@@ -4684,9 +4686,36 @@ function ch5ShowSeatChooser() {
     });
     panel.appendChild(button);
   }
+  // 選ぶ前に盤面・獲得カードなどを見られるように(2026-11-24, per user「スマホでもPCでも 選ぶとき 獲得カードなどが見れない
+  // ので 見れるようにしてから 後で選べるように」): この画面を閉じて、画面の上の「続きをする人を選ぶ」ボタンでまた開く。
+  const look = el('button', 'story-end__button', '盤面を見てから選ぶ');
+  look.type = 'button';
+  look.addEventListener('click', () => {
+    root.remove();
+    ch5ShowReopenButton();
+  });
+  const buttons = el('div', 'story-chapters__buttons');
+  buttons.appendChild(look);
+  panel.appendChild(buttons);
   root.appendChild(panel);
   document.body.appendChild(root);
   if (run) run.ch5.chooserEl = root;
+}
+
+/** 盤面を見ている間、画面の上に出しておく「続きをする人を選ぶ」ボタン。 */
+function ch5ShowReopenButton() {
+  let button = document.getElementById('ch5-seat-reopen');
+  if (!button) {
+    button = el('button', 'story-end__button ch5-seat-reopen', '続きをする人を選ぶ');
+    button.id = 'ch5-seat-reopen';
+    button.type = 'button';
+    button.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:10050;box-shadow:0 2px 10px rgba(0,0,0,.3);';
+    button.addEventListener('click', () => {
+      button.remove();
+      ch5ShowSeatChooser();
+    });
+    document.body.appendChild(button);
+  }
 }
 
 /** 選んだ席をあなた(人間)に、ほかの3人をAIにして、続きを始める。 */
@@ -4694,6 +4723,8 @@ function ch5TakeSeat(seatId) {
   const run = storyRun;
   if (!run || !run.ch5) return;
   run.ch5.seatId = seatId;
+  const reopen = document.getElementById('ch5-seat-reopen');
+  if (reopen) reopen.remove();
   // 選んだ人の名前をあなたの名前に(第4章と同じく、この端末で覚えている名前。無ければ「あなた」。2026-11-24, per user「えらんだあとかえて」)。
   const me = STATE.players.find((p) => p.id === seatId);
   if (me) me.name = (loadRememberedRankingName() || '').trim() || 'あなた';
