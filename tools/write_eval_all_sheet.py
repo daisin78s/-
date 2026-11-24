@@ -22,7 +22,11 @@ their 相性 is mostly noise. POINTS_PER_RANK = 130 lines a 0.15 / 0.30 rank edg
     card, see card_pair_synergy.py, and written from data like every other cell.) --seed-fixed copies them once from the old sheets:
     every old cell <= -100 becomes -100, and the old D rows are copied as-is.
 
-Usage: python tools/write_eval_all_sheet.py <statsJson> <gameJson> <xlsx> [--seed-fixed]
+評価値ALL_LV sheet (LV2のカードはLV別の相性を使う (2026-11-24, per user「LVアップ後のカードを別の項目として使う…おねがい」)): the same rules as
+評価値ALL, but from the LV別 data (card_pair_stats_lv.json -- A/B/C counted per face, e.g. 基礎学問LV1 / 基礎学問LV2),
+no fixed cells and no diagonal. The AI uses it only for pairs that include an LV2 card (src/ai/eval-all.js).
+
+Usage: python tools/write_eval_all_sheet.py <statsJson> <gameJson> <xlsx> [--seed-fixed] [--lv-stats=<statsLvJson>]
 """
 
 import json
@@ -50,8 +54,10 @@ SOLO_BASE_RANK = 2.5
 SOLO_POINTS_PER_RANK = 65
 SOLO_MIN_GAMES = 300
 SHEET = '評価値ALL'
+SHEET_LV = '評価値ALL_LV'
 
 args = [a for a in sys.argv[1:] if not a.startswith('--')]
+lv_stats_path = next((a.split('=', 1)[1] for a in sys.argv[1:] if a.startswith('--lv-stats=')), None)
 seed_fixed = '--seed-fixed' in sys.argv
 stats_path, game_path, xlsx_path = args
 with open(stats_path, encoding='utf-8') as f:
@@ -73,7 +79,7 @@ def unit_of(label):
     return unit_by_name.get(re.sub(r'LV\d+$', '', str(label)))
 
 
-def points(a, b):
+def points(a, b, ps=ps):
     """(points, n, adjusted) for a pair, or None if there's no data yet."""
     if a == b:
         return None
@@ -86,8 +92,8 @@ def points(a, b):
     return round(POINTS_PER_RANK * adj), n, adj
 
 
-def ai_points(a, b):
-    p = points(a, b)
+def ai_points(a, b, ps=ps):
+    p = points(a, b, ps)
     if p is None:
         return None
     value, n, adj = p
@@ -181,6 +187,37 @@ for j in range(len(order)):
 ws.row_dimensions[1].height = 110
 
 
+# --- 評価値ALL_LV (LV2のカードはLV別の相性を使う (2026-11-24, per user「LVアップ後のカードを別の項目として使う…おねがい」)) ---
+written_lv = None
+if lv_stats_path:
+    with open(lv_stats_path, encoding='utf-8') as f:
+        ps_lv = PairSynergy(json.load(f), game)
+    ws_lv = wb[SHEET_LV] if SHEET_LV in wb.sheetnames else wb.create_sheet(SHEET_LV, wb.sheetnames.index(SHEET) + 1)
+    ws_lv.delete_rows(1, ws_lv.max_row)
+    order_lv = [uid for uid, _, _ in ps_lv.units]
+    label_lv = {uid: name for uid, _, name in ps_lv.units}
+    ws_lv.cell(row=1, column=1, value='NAME').fill = header_fill
+    for j, b in enumerate(order_lv):
+        c = ws_lv.cell(row=1, column=2 + j, value=label_lv[b])
+        c.fill = header_fill
+        c.alignment = Alignment(text_rotation=90, horizontal='center')
+    written_lv = 0
+    for i, a in enumerate(order_lv):
+        ws_lv.cell(row=2 + i, column=1, value=label_lv[a]).fill = header_fill
+        for j, b in enumerate(order_lv):
+            v = ai_points(a, b, ps_lv)
+            if v is not None:
+                ws_lv.cell(row=2 + i, column=2 + j, value=v)
+                written_lv += 1
+    ws_lv.sheet_view.topLeftCell = 'A1'
+    ws_lv.sheet_view.selection = [Selection()]
+    ws_lv.freeze_panes = 'B2'
+    ws_lv.column_dimensions['A'].width = 20
+    for j in range(len(order_lv)):
+        ws_lv.column_dimensions[openpyxl.utils.get_column_letter(2 + j)].width = 5
+    ws_lv.row_dimensions[1].height = 120
+
+
 # --- 確認用 tables right of 評価値_JOB / 評価値_CON ---
 def write_check_table(sheet_name):
     src = wb[sheet_name]
@@ -213,4 +250,4 @@ def write_check_table(sheet_name):
 
 check_counts = {name: write_check_table(name) for name in ('評価値_JOB', '評価値_CON')}
 wb.save(xlsx_path)
-print(json.dumps({'games': stats.get('games', 0), 'evalAllCells': written, 'fixedCells': len(fixed) // 2, 'check': check_counts}, ensure_ascii=False))
+print(json.dumps({'games': stats.get('games', 0), 'evalAllCells': written, 'evalAllLvCells': written_lv, 'fixedCells': len(fixed) // 2, 'check': check_counts}, ensure_ascii=False))

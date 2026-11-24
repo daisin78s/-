@@ -41,10 +41,13 @@ function parseArgs(argv) {
     stats: path.resolve(opt('stats', cardPairStats.STATS_PATH)),
     push: !argv.includes('--no-push'),
     seedFixed: argv.includes('--seed-fixed'),
+    // 評価値ALL_LV 用のLV別のデータ (LV2のカードはLV別の相性を使う (2026-11-24, per user「LVアップ後のカードを別の項目として使う…おねがい」))。--statsと同じフォルダの card_pair_stats_lv.json。
+    lvStats: path.resolve(opt('lv-stats', path.join(path.dirname(path.resolve(opt('stats', cardPairStats.STATS_PATH))), path.basename(cardPairStats.STATS_PATH_BY_LEVEL)))),
   };
 }
 
 const args = parseArgs(process.argv.slice(2));
+const EVAL_SHEETS = ['評価値ALL', '評価値ALL_LV']; // このツールが書き直すシート
 const relFiles = ['data/game.json', 'data/game.data.js', 'index.html'];
 const xlsxPath = path.join(args.gameDir, 'data', 'game.xlsx');
 const xlsxBackup = path.join(args.gameDir, 'data', 'game.xlsx.backup-before-eval-all');
@@ -91,19 +94,20 @@ try {
   python('xlsx_to_json.py');
   const converted = JSON.parse(fs.readFileSync(gameJsonPath, 'utf8'));
   const unreleased = [...new Set([...Object.keys(committed), ...Object.keys(converted)])]
-    .filter((k) => k !== '評価値ALL' && JSON.stringify(committed[k]) !== JSON.stringify(converted[k]));
+    .filter((k) => !EVAL_SHEETS.includes(k) && JSON.stringify(committed[k]) !== JSON.stringify(converted[k]));
   if (unreleased.length) restore(`game.xlsx にまだゲームに反映していない編集があります (${unreleased.join(', ')})`);
 
   const before = committed;
   fs.copyFileSync(xlsxPath, xlsxBackup);
   xlsxTouched = true;
-  const written = JSON.parse(python('write_eval_all_sheet.py', args.stats, gameJsonPath, xlsxPath, ...(args.seedFixed ? ['--seed-fixed'] : [])).trim().split('\n').pop());
+  const written = JSON.parse(python('write_eval_all_sheet.py', args.stats, gameJsonPath, xlsxPath, ...(args.seedFixed ? ['--seed-fixed'] : []),
+    ...(fs.existsSync(args.lvStats) ? [`--lv-stats=${args.lvStats}`] : [])).trim().split('\n').pop());
   python('xlsx_to_json.py');
   const after = JSON.parse(fs.readFileSync(gameJsonPath, 'utf8'));
   const changedSheets = [...new Set([...Object.keys(before), ...Object.keys(after)])]
     .filter((k) => JSON.stringify(before[k]) !== JSON.stringify(after[k]));
-  if (changedSheets.some((k) => k !== '評価値ALL')) restore(`評価値ALL以外も変わりました: ${changedSheets.join(', ')}`);
-  if (!changedSheets.includes('評価値ALL')) {
+  if (changedSheets.some((k) => !EVAL_SHEETS.includes(k))) restore(`評価値ALL以外も変わりました: ${changedSheets.join(', ')}`);
+  if (!changedSheets.some((k) => EVAL_SHEETS.includes(k))) {
     // 確認用の表だけ書き直した game.xlsx はそのまま残す(game.xlsx はgitに入っていない)
     log(`評価値ALLは前と同じでした (${written.games}試合分)`);
     finish({ updated: false, skippedReason: 'no change', ...written });

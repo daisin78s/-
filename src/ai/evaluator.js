@@ -341,10 +341,8 @@ class Evaluator {
       // 5-die baseline, not their total color-die count outright; confirmed no per-die acquisition
       // tracking is needed -- "何で得た分か追跡不要です" -- so any color die beyond 5, from any source,
       // counts the same): a per-extra-color-die bonus/penalty specific to this CON face.
-      // (2026-11-24: 追加がk個なら「k × D」ではなく「Dk × 性格」の1マス -- D1/D2/D3はデータから自動、eval-all.js参照)
-      const additionalColorDiceCount = Math.max(0, totalColorDiceCount - evalAll.COLOR_DICE_BASELINE);
-      const colorDiceUnit = evalAll.colorDiceUnit(additionalColorDiceCount);
-      if (colorDiceUnit) total += evalAll.pairValue(this.evalAllTable, colorDiceUnit, conBuildFaceUnit);
+      // (2026-11-24: 追加がk個なら「Dk」を1つの項目として、性格だけでなくカード・ジョブとの組み合わせも下の
+      // heldPairSumWithLevels で足す -- eval-all.js の heldUnits 参照。ここでは何もしない。)
     }
 
     for (const physicalId of player.ownedCardPhysicalIds) {
@@ -368,7 +366,7 @@ class Evaluator {
     // above): every pair among the units this player holds -- card x card, card x JOB, card x CON face,
     // JOB x CON face. A/B/C cards count by physical card, so an LV2 upgrade keeps its LV1 pairings (e.g.
     // 憤怒 owning either tier of 基礎学問 gets the same fixed penalty either way).
-    if (this.evalAllTable) total += evalAll.heldPairSum(this.evalAllTable, evalAll.heldUnits(state, this.index, player));
+    if (this.evalAllTable) total += evalAll.heldPairSumWithLevels(this.evalAllTable, state, this.index, player);
 
     total += executor.collectVpModifiers(state, this.index, playerId) * v('VP');
     // 2026-09-01, M401/晩餐会's own "ゲーム終了時持っている2Kにつき1VP(MAX10VP)" -- see

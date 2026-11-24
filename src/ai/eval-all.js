@@ -78,7 +78,34 @@ function buildEvalAllTable(raw) {
       if (typeof mirror !== 'number') (byUnit[b] || (byUnit[b] = {}))[a] = value;
     }
   }
-  return { byUnit, unitByName, solo };
+  return { byUnit, unitByName, solo, lv: buildLvTable(raw) };
+}
+
+// LV2のカードはLV別の相性を使う (2026-11-24, per user「LVアップ後のカードを別の項目として使う…おねがい」):
+// 評価値ALL_LV シート(tools/write_eval_all_sheet.py が LV別の相性のデータから書く)は A/B/C を面ごと(基礎学問LV1 / 基礎学問LV2)
+// に分けた表。LV2のカードを含む組み合わせは、このシートに数があればそれを使い、無ければ評価値ALLの値のまま。
+// 評価値ALLの固定のマス(-100以下)はそのまま優先する。
+function buildLvTable(raw) {
+  const faceByName = {};
+  const lv2Faces = new Set();
+  for (const sheet of UNIT_SHEETS) {
+    for (const row of raw[sheet] || []) {
+      faceByName[row.NAME || row.ID] = row.ID;
+      if ((sheet === 'A' || sheet === 'B' || sheet === 'C') && row.LEVEL === 2) lv2Faces.add(row.ID);
+    }
+  }
+  const byFace = {};
+  for (const row of raw['評価値ALL_LV'] || []) {
+    const a = faceByName[row.NAME];
+    if (!a) continue;
+    for (const [key, value] of Object.entries(row)) {
+      const b = faceByName[key];
+      if (key === 'NAME' || !b || b === a || typeof value !== 'number') continue;
+      (byFace[a] || (byFace[a] = {}))[b] = value;
+      if (!(byFace[b] && typeof byFace[b][a] === 'number')) (byFace[b] || (byFace[b] = {}))[a] = value;
+    }
+  }
+  return { byFace, lv2Faces };
 }
 
 /** 対角のマス(単体の強さ)。無ければ 0。 */
@@ -99,20 +126,54 @@ function pairValueByName(table, nameA, nameB) {
 }
 
 /** Units one player holds right now (initial-resource cards excluded) -- same rule as
- * tools/card_pair_stats.js's holdingUnits, so the table's data and its use line up exactly. */
+ * tools/card_pair_stats.js's holdingUnits, so the table's data and its use line up exactly.
+ * 2026-11-24 (per user「D欄を、性格以外との組み合わせでもゲーム中に使う…おねがい」): 追加色ダイスの D1/D2/D3 も1つの
+ * 項目として入れる(カード・ジョブ・性格すべてとの組み合わせを足す)。 */
 function heldUnits(state, index, player) {
-  const result = new Set();
+  return heldEntries(state, index, player).map((e) => e.unit);
+}
+
+/** heldUnits と同じ並びで {unit, face}(face = LV別の表で引く面。A/B/Cは今の面、それ以外は unit と同じ)。 */
+function heldEntries(state, index, player) {
+  const seen = new Set();
+  const result = [];
+  const add = (unit, face) => { if (!seen.has(unit)) { seen.add(unit); result.push({ unit, face }); } };
   for (const physicalId of player.ownedCardPhysicalIds) {
     const card = state.cards[physicalId];
     const faceId = card ? card.currentFaceId : physicalId;
     const entry = index.byId.get(faceId);
     if (!entry || !UNIT_SHEETS.includes(entry.sheet)) continue;
-    result.add(unitIdOfFace(entry.sheet, faceId));
+    add(unitIdOfFace(entry.sheet, faceId), faceId);
   }
-  if (player.conPhysicalId && player.conFace) result.add(`${player.conPhysicalId}${player.conFace}`);
-  if (player.jobCardId) result.add(player.jobCardId);
-  return [...result];
+  if (player.conPhysicalId && player.conFace) add(`${player.conPhysicalId}${player.conFace}`, `${player.conPhysicalId}${player.conFace}`);
+  if (player.jobCardId) add(player.jobCardId, player.jobCardId);
+  const dice = colorDiceUnit((player.dice || []).filter((d) => d.kind === 'COLOR').length - COLOR_DICE_BASELINE);
+  if (dice) add(dice, dice);
+  return result;
 }
+
+/** 持っているもの全部の組み合わせの点の合計。LV2のカードを含む組み合わせは評価値ALL_LVの数を使う(buildLvTable参照)。 */
+function heldPairSumWithLevels(table, state, index, player) {
+  const entries = heldEntries(state, index, player);
+  const lv = table.lv;
+  let total = 0;
+  for (let i = 0; i < entries.length; i++) {
+    const a = entries[i];
+    const row = table.byUnit[a.unit];
+    for (let j = i + 1; j < entries.length; j++) {
+      const b = entries[j];
+      const base = (row && row[b.unit]) || 0;
+      if (lv && base > FIXED_CELL_MAX && (lv.lv2Faces.has(a.face) || lv.lv2Faces.has(b.face))) {
+        const cell = lv.byFace[a.face] && lv.byFace[a.face][b.face];
+        total += typeof cell === 'number' ? cell : base;
+      } else {
+        total += base;
+      }
+    }
+  }
+  return total;
+}
+const FIXED_CELL_MAX = -100; // 評価値ALLの固定のマス(-100以下、tools/write_eval_all_sheet.pyのFIXED_MAX)
 
 /** Sum of every pair among `units`. */
 function heldPairSum(table, units) {
@@ -125,6 +186,6 @@ function heldPairSum(table, units) {
   return total;
 }
 
-module.exports = { buildEvalAllTable, soloValue, pairValue, pairValueByName, heldUnits, heldPairSum, COLOR_DICE_NAME, COLOR_DICE_UNITS, COLOR_DICE_BASELINE, colorDiceUnit };
+module.exports = { buildEvalAllTable, soloValue, pairValue, pairValueByName, heldUnits, heldPairSum, heldPairSumWithLevels, COLOR_DICE_NAME, COLOR_DICE_UNITS, COLOR_DICE_BASELINE, colorDiceUnit };
 
 })();
