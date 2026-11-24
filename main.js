@@ -1499,7 +1499,8 @@ function aiWorkerRequest(worker, msg) {
 function aiWorkerSelectMove(state, playerId, options) {
   if (!aiWorker) return null;
   const level = aiWorkerLevelFor(playerId);
-  const light = { ...state, log: [], progressLog: [], undoCheckpoint: null }; // AIはこれらを読まない(selectMove参照)
+  // AIはこれらを読まない(ai-player.jsのlightState参照)。人生の記録(lifeStoryLog)も外して、Workerに送る量を減らす。
+  const light = { ...state, log: [], progressLog: [], undoCheckpoint: null, players: state.players.map((p) => (p && Array.isArray(p.lifeStoryLog) && p.lifeStoryLog.length > 0 ? { ...p, lifeStoryLog: [] } : p)) };
   const workers = aiWorkerAll();
   const parallel = workers.length > 1 && state.round >= 4 && state.phase !== 'GAME_END' && (level === 'lv3' || level === 'lv3weekly');
   if (!parallel) return aiWorkerRequest(aiWorker, { type: 'select', level, state: light, playerId, options });

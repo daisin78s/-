@@ -18,6 +18,17 @@ const DIE_ONLY_TAP_KINDS = new Set(['SET_DICE_ANY', 'SET_DIE_VALUE', 'CHANGE_DIE
 // hasPlacedDieThisTurn tracking already checks for).
 const DICE_MOVE_TYPES = new Set(['PLACE_DIE', 'PLACE_WILDCARD_DIE', 'PLACE_DICE_GROUP', 'PASS_DIE']);
 
+/** 考える時に使う軽い盤面(浅いコピー、元のstateは変えない): ログ・進み具合の記録・「ターン開始に戻す」用の控え・各プレイヤーの
+ * 人生の記録(lifeStoryLog、ランキングの「人生」を見る画面用)を外す。ゲームの決まりはどれも読まないので選ぶ手は変わらない。
+ * (lifeStoryLogは2026-11-24から、per user「(AIを早くする案)すべて」 -- 終盤には盤面の約1割5分の大きさになり、AIが盤面を
+ * コピーするたびに一緒に写していた。) */
+function lightState(state) {
+  const players = Array.isArray(state.players)
+    ? state.players.map((p) => (p && Array.isArray(p.lifeStoryLog) && p.lifeStoryLog.length > 0 ? { ...p, lifeStoryLog: [] } : p))
+    : state.players;
+  return { ...state, log: [], progressLog: [], undoCheckpoint: null, players };
+}
+
 /**
  * AIPlayer: picks ONE move at a time. "Generate legal moves -> evaluate -> pick the best" (confirmed
  * 2026-08-01, no randomness anywhere in this loop: ties are broken by move order, first-max wins, so
@@ -275,7 +286,7 @@ class AIPlayer {
     // 考える時は、ログ・進み具合の記録・「ターン開始に戻す」用の控え(盤面の約半分の大きさ)を外した軽い盤面を使う
     // (2026-11-23, per user「これらは可能ならすべてやって」-- AIは盤面をたくさんコピーして手を試すので、要らない物まで毎回
     // コピーしていた。ゲームの決まりはこれらを読まないので、選ぶ手は変わらない)。元のstateは変えない(浅いコピー)。
-    state = { ...state, log: [], progressLog: [], undoCheckpoint: null };
+    state = lightState(state);
     const move = this.#selectMoveInner(state, playerId, context, false);
     // 目を変えるだけのタップを選んだのに、その次に置く手がタップなしでも同じ結果(同じエリア・同じカード)になる
     // なら、タップはやめて考え直す (2026-11-23, per user「ナビ使っていますが AIが基礎学問 高等学問を全く意味なく
@@ -597,7 +608,7 @@ class AIPlayer {
           const crossedState = this.#forceOpponentsFinishRound(state, playerId, deadline);
           if (crossedState) {
             // ラウンドが変わるとゲームの決まりが「ターン開始に戻す」用の控えを作り直すので、また外して軽くする(selectMove参照)。
-            state = { ...crossedState, log: [], progressLog: [], undoCheckpoint: null };
+            state = lightState(crossedState);
             crossedRoundTurnsRemaining = 1;
             hasPlacedDieThisTurn = false;
             continue;
@@ -732,7 +743,7 @@ class AIPlayer {
 
   /** 読み切り用の盤面(軽いコピー、相手のまだ置いていないダイスはパス扱い)。 */
   static #endgameRoot(state0, playerId) {
-    const root = cloneState({ ...state0, log: [], progressLog: [], undoCheckpoint: null });
+    const root = cloneState(lightState(state0));
     for (const p of root.players) if (p.id !== playerId) for (const d of p.dice) if (d.placedMapId === null) d.passed = true;
     return root;
   }
@@ -955,7 +966,7 @@ class AIPlayer {
     const planned = this.#plannedUntap;
     this.#plannedUntap = null;
     if (planned && planned.every((id) => choice.context.candidates.includes(id))) return planned;
-    const light = { ...state, log: [], progressLog: [], undoCheckpoint: null };
+    const light = lightState(state);
     let best = null;
     let bestScore = -Infinity;
     for (const subset of AIPlayer.untapSubsets(choice)) {
