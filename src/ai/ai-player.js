@@ -308,6 +308,22 @@ class AIPlayer {
    * 「推奨の手が変換してから食料を取るになっているため効率が悪い」-- 1Kしか無いのに学者をタップして1Bにし、そのあと小麦畑で6K
    * 取っていた。先に6K取ってからタップすれば7Bに替えられる)。比べるのはこの手番の終わりの盤面だけ(先読みの続きの打ち方の
    * 当たり外れで順番が決まらないように)。そうでなければnull。 */
+  /** 目を変えるだけのタップ(基礎学問・高等学問・幾何学)の後、置く手の中で一番良い点(無ければ-Infinity)。 */
+  #bestPlacementAfterDieTap(state, afterTap, playerId, move) {
+    const card = state.cards && state.cards[move.physicalId];
+    const tap = card && bareTapKind(this.index, card.currentFaceId);
+    if (!tap || !DIE_ONLY_TAP_KINDS.has(tap.kind)) return -Infinity;
+    let best = -Infinity;
+    for (const next of this.moveGenerator.generateMoves(afterTap, this.index, playerId, { hasPlacedDieThisTurn: false })) {
+      if (!DICE_MOVE_TYPES.has(next.type) || next.type === 'PASS_DIE') continue;
+      const r = this.simulator.apply(afterTap, this.index, next);
+      if (!r.result.success) continue;
+      const v = this.evaluator.score(this.#resolveUntapChoiceQuick(r.state, playerId, true), playerId);
+      if (v > best) best = v;
+    }
+    return best;
+  }
+
   #betterToPlaceBeforeConversionTap(state, playerId, context, move) {
     if (move.type !== 'BARE_TAP' || (context && context.hasPlacedDieThisTurn)) return null;
     const card = state.cards && state.cards[move.physicalId];
@@ -398,7 +414,13 @@ class AIPlayer {
       // この手でアンタップするカードを選ぶことになる(軍団長LV2・皇女など)なら、選んだ後の盤面で点をつける(2026-11-23)。
       const placedNow = !!(context && context.hasPlacedDieThisTurn) || DICE_MOVE_TYPES.has(move.type);
       const resultState = this.#resolveUntapChoiceQuick(applied.resultState || applied.state, playerId, placedNow);
-      scored.push({ move, resultState, score: this.evaluator.score(resultState, playerId) });
+      let score = this.evaluator.score(resultState, playerId);
+      // 目を変えるだけのタップは、タップした直後ではなく「変えたダイスで一番良い置き方をした後」の点で比べる
+      // (2026-11-24, per user のナビのバグ報告「ダイス2個で水道橋取れるのに3個で取るのを推奨してくる」-- 幾何学LV2(+4)で
+      // 5を9にすれば2個で水道橋が取れるのに、タップ直後は何も建っていないので点が低く、先読みの候補(上位3つ)に入らなかった)。
+      // 目を変えたダイスは必ず置く(MoveGeneratorのmustUseChangedDie)ので、タップと置く手はひとまとまり。
+      if (!placedNow && move.type === 'BARE_TAP') score = Math.max(score, this.#bestPlacementAfterDieTap(state, resultState, playerId, move));
+      scored.push({ move, resultState, score });
     }
     if (scored.length === 0) return null;
     removeDominatedPlacements(scored, state, playerId);

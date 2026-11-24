@@ -27,9 +27,10 @@
  * Deliberately NOT used by main.js's in-browser play (its LV1/LV2/LV3 human-vs-AI selector stays its
  * own separate, hardcoded construction) -- this file just now tracks the SAME meaning by hand.
  */
+// monumentIncentiveAware: 2026-11-24から使わない(per user「とりあえず この評価値はやめようかと思う」-- 評価値_戦略シートの「後で取れるかも」の点が、払えない場面でも約500つき、幾何学で2個で取れる水道橋を3個で取らせていた)
 const LEVELS = [
-  { name: 'LV1', aiOptions: { lookaheadExtraTurns: 0 }, moveGeneratorOptions: undefined, evaluatorOptions: { qstAware: true, conBuildAware: true, monumentIncentiveAware: true } },
-  { name: 'LV2', aiOptions: { lookaheadExtraTurns: 1 }, moveGeneratorOptions: undefined, evaluatorOptions: { qstAware: true, conBuildAware: true, monumentIncentiveAware: true } },
+  { name: 'LV1', aiOptions: { lookaheadExtraTurns: 0 }, moveGeneratorOptions: undefined, evaluatorOptions: { qstAware: true, conBuildAware: true, monumentIncentiveAware: false } },
+  { name: 'LV2', aiOptions: { lookaheadExtraTurns: 1 }, moveGeneratorOptions: undefined, evaluatorOptions: { qstAware: true, conBuildAware: true, monumentIncentiveAware: false } },
   {
     name: 'LV3',
     aiOptions: {
@@ -40,7 +41,7 @@ const LEVELS = [
       crossRoundLookahead: false, // 2026-11-24: 切った(相手の残りの手をでたらめに進め、次のラウンドの物差しで測るので判断がぶれていた。200試合で平均順位2.06)
     },
     moveGeneratorOptions: { preferCastleOverSenate: true, mustUseChangedDie: true },
-    evaluatorOptions: { qstAware: true, conBuildAware: true, monumentIncentiveAware: true },
+    evaluatorOptions: { qstAware: true, conBuildAware: true, monumentIncentiveAware: false },
   },
 ];
 

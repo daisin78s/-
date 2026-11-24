@@ -23,7 +23,7 @@ check('getLevel("LV2") returns the matching registry entry', getLevel('LV2'), LE
 // 旧LV3→LV2、旧LV5→LV3 -- see levels.js's own doc) -- every level now shares the SAME full evaluator
 // (qstAware+conBuildAware+monumentIncentiveAware, the former LV4/LV5-only table), not just a bare
 // qstAware for the old LV3.
-const UNIFIED_EVALUATOR_OPTIONS = { qstAware: true, conBuildAware: true, monumentIncentiveAware: true };
+const UNIFIED_EVALUATOR_OPTIONS = { qstAware: true, conBuildAware: true, monumentIncentiveAware: false }; // 2026-11-24: 評価値_戦略は使わない
 check('getLevel("LV1") shares the unified evaluatorOptions', getLevel('LV1').evaluatorOptions, UNIFIED_EVALUATOR_OPTIONS);
 check('getLevel("LV2") shares the unified evaluatorOptions', getLevel('LV2').evaluatorOptions, UNIFIED_EVALUATOR_OPTIONS);
 check('getLevel("LV3") shares the unified evaluatorOptions', getLevel('LV3').evaluatorOptions, UNIFIED_EVALUATOR_OPTIONS);
