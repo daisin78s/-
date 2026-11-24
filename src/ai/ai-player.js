@@ -264,6 +264,13 @@ class AIPlayer {
     if (state.round >= 4 && state.phase !== 'GAME_END' && Array.isArray(state.players) && this.moveGenerator.forcedImmediateFeeMove) {
       const fee = this.moveGenerator.forcedImmediateFeeMove(state, this.index, playerId);
       if (fee) return fee;
+      // タダで資源が増えるだけのカード(軍団長・皇女・貴族など、MoveGeneratorのforcedPureGainCTap)も同じく先にタップする
+      // (2026-11-24, per user「同じ局面 軍団長も すぐに使っていいのでは」-- R4の読み切りはこれも最後に回していた。軍団長は
+      // 白ダイスが増えるので、先に使えばこの手番から置けるダイスの選び方が広がる)。
+      if (this.moveGenerator.forcedPureGainCTap) {
+        const gain = this.moveGenerator.forcedPureGainCTap(state, this.index, playerId);
+        if (gain) return gain;
+      }
     }
     if (this.endgameSearchMs > 0 && state.round >= 4 && state.phase !== 'GAME_END' && Array.isArray(state.players)) {
       const placed = !!(context && context.hasPlacedDieThisTurn);
