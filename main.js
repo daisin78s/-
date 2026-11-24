@@ -1337,25 +1337,33 @@ const aiEvalTable = evalTableMod.buildEvalTable(INDEX.raw);
 //   PLAYER_ROLE_OPTIONSは['HUMAN','AI_LV1'..'AI_LV5']の6択、TUTORIAL_AI_ROLEは'AI_LV5'、
 //   usesSmartOnboardingは['AI_LV1','AI_LV4','AI_LV5']、isLv4判定は'AI_LV4'||'AI_LV5'、
 //   ウィークリーチャレンジの評価値スナップショットはaiPlayerLv4Weekly/role==='AI_LV4'判定だった。
-const aiEvaluator = new evaluatorMod.Evaluator(INDEX, aiEvalTable, { qstAware: true, conBuildAware: true, monumentIncentiveAware: true });
-const aiMoveGenerator = new moveGeneratorMod.MoveGenerator();
-const aiMoveGeneratorLv3 = new moveGeneratorMod.MoveGenerator({ preferCastleOverSenate: true });
-const aiSimulator = new simulatorMod.Simulator();
-const aiPlayerLv1 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGenerator, aiEvaluator, aiSimulator, { lookaheadExtraTurns: 0 });
-const aiPlayerLv2 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGenerator, aiEvaluator, aiSimulator, { lookaheadExtraTurns: 1 });
 // ナビと相手のAI LV3の、1手に考える時間の上限(R4の読み切りも同じ時間)。2026-11-23, per user「3秒なら許容ですが10秒は長すぎ」
 const NAV_MAX_DECISION_MS = 3000;
-const aiPlayerLv3 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGeneratorLv3, aiEvaluator, aiSimulator, {
-  lookaheadExtraTurns: 2,
-  beamWidth: 3,
-  dieScarcityTieBreak: true,
-  preferExOnOwnTerritory: true,
-  crossRoundLookahead: false, // 2026-11-24: 切った方がはっきり強く速い(今の版と200試合で平均順位2.06、1手0.28秒)。src/ai/levels.jsのLV3と同じ
-  // 2026-11-24, per user「ナビとAIは同じにして」: ナビと同じ設定(考えるのは1手3秒まで、R4は終盤の読み切り)。
-  // 読み切りは時間で打ち切るので、GA/ツール用のsrc/ai/levels.jsのLV3には入れない(画面のAIだけ)。
-  maxDecisionTimeMs: NAV_MAX_DECISION_MS,
-  endgameSearchMs: NAV_MAX_DECISION_MS,
-});
+// 画面のAIの設定。ai-worker.js(裏で考える用、下のaiWorker参照)にも同じものを送って、同じAIを作る(2026-11-24)。
+const AI_LEVEL_CONFIG = {
+  evaluatorOptions: { qstAware: true, conBuildAware: true, monumentIncentiveAware: true },
+  lv3MoveGeneratorOptions: { preferCastleOverSenate: true },
+  lv1: { lookaheadExtraTurns: 0 },
+  lv2: { lookaheadExtraTurns: 1 },
+  lv3: {
+    lookaheadExtraTurns: 2,
+    beamWidth: 3,
+    dieScarcityTieBreak: true,
+    preferExOnOwnTerritory: true,
+    crossRoundLookahead: false, // 2026-11-24: 切った方がはっきり強く速い(今の版と200試合で平均順位2.06、1手0.28秒)。src/ai/levels.jsのLV3と同じ
+    // 2026-11-24, per user「ナビとAIは同じにして」: ナビと同じ設定(考えるのは1手3秒まで、R4は終盤の読み切り)。
+    // 読み切りは時間で打ち切るので、GA/ツール用のsrc/ai/levels.jsのLV3には入れない(画面のAIだけ)。
+    maxDecisionTimeMs: NAV_MAX_DECISION_MS,
+    endgameSearchMs: NAV_MAX_DECISION_MS,
+  },
+};
+const aiEvaluator = new evaluatorMod.Evaluator(INDEX, aiEvalTable, AI_LEVEL_CONFIG.evaluatorOptions);
+const aiMoveGenerator = new moveGeneratorMod.MoveGenerator();
+const aiMoveGeneratorLv3 = new moveGeneratorMod.MoveGenerator(AI_LEVEL_CONFIG.lv3MoveGeneratorOptions);
+const aiSimulator = new simulatorMod.Simulator();
+const aiPlayerLv1 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGenerator, aiEvaluator, aiSimulator, AI_LEVEL_CONFIG.lv1);
+const aiPlayerLv2 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGenerator, aiEvaluator, aiSimulator, AI_LEVEL_CONFIG.lv2);
+const aiPlayerLv3 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGeneratorLv3, aiEvaluator, aiSimulator, AI_LEVEL_CONFIG.lv3);
 // Synergy tables for AI LV3's smart onboarding (see driveOneAiStepInner's RESOURCE_CHOICE/ONBOARDING
 // branches below) -- built once here, same pattern as aiEvalTable above.
 const aiResourceSynergyTable = resourceCardSynergyMod.buildResourceSynergyTable(INDEX.raw);
@@ -1383,16 +1391,9 @@ const aiConJobSynergyTable = conJobSynergyMod.buildConJobSynergyTable(INDEX.raw)
 let aiPlayerLv3Weekly = null;
 if (weeklyChallengeActive) {
   window.OnlineSync.getOrCreateWeeklyEvalTable(currentWeeklyChallengeId(), aiEvalTable).then((weeklyEvalTable) => {
-    const weeklyEvaluator = new evaluatorMod.Evaluator(INDEX, weeklyEvalTable, { qstAware: true, conBuildAware: true, monumentIncentiveAware: true });
-    aiPlayerLv3Weekly = new aiPlayerMod.AIPlayer(INDEX, aiMoveGeneratorLv3, weeklyEvaluator, aiSimulator, {
-      lookaheadExtraTurns: 2,
-      beamWidth: 3,
-      dieScarcityTieBreak: true,
-      preferExOnOwnTerritory: true,
-      crossRoundLookahead: false, // 上のaiPlayerLv3と同じ(2026-11-24)
-      maxDecisionTimeMs: NAV_MAX_DECISION_MS, // 上のaiPlayerLv3と同じ(ナビと同じ設定)
-      endgameSearchMs: NAV_MAX_DECISION_MS,
-    });
+    const weeklyEvaluator = new evaluatorMod.Evaluator(INDEX, weeklyEvalTable, AI_LEVEL_CONFIG.evaluatorOptions);
+    aiPlayerLv3Weekly = new aiPlayerMod.AIPlayer(INDEX, aiMoveGeneratorLv3, weeklyEvaluator, aiSimulator, AI_LEVEL_CONFIG.lv3); // 上のaiPlayerLv3と同じ設定
+    aiWorkerPost({ type: 'weekly', table: weeklyEvalTable }); // 裏で考える側にも同じ評価値を渡す
   }).catch((err) => {
     console.error('Weekly eval-table snapshot fetch failed, falling back to the live table for this attempt:', err);
   });
@@ -1404,6 +1405,70 @@ function aiPlayerFor(playerId) {
   if (role === 'AI_LV1') return aiPlayerLv1;
   if (role === 'AI_LV2') return aiPlayerLv2;
   return (weeklyChallengeActive && aiPlayerLv3Weekly) || aiPlayerLv3; // AI_LV3 (and any other value, as the strongest/default fallback)
+}
+/** aiPlayerForと同じ選び方で、裏で考える側(ai-worker.js)のAIの名前を返す。 */
+function aiWorkerLevelFor(playerId) {
+  const role = playerRoles.get(playerId);
+  if (role === 'AI_LV1') return 'lv1';
+  if (role === 'AI_LV2') return 'lv2';
+  return (weeklyChallengeActive && aiPlayerLv3Weekly) ? 'lv3weekly' : 'lv3';
+}
+
+// ---------------------------------------------------------------------------
+// AIを裏で考える (Web Worker、2026-11-24, per user「4もおねがい」) -- 考えている間も画面が固まらないように、
+// selectMoveはai-worker.jsの中の同じAI(AI_LEVEL_CONFIG)で計算する。Workerが使えない時(ファイルをダブルクリックで
+// 開いた時など)や、Workerが途中で止まった時は、今までどおりこの画面の中で計算する(aiWorker=null)。
+// ---------------------------------------------------------------------------
+let aiWorker = null;
+let aiWorkerSeq = 0;
+const aiWorkerPending = new Map(); // id -> {resolve, reject}
+function aiWorkerPost(msg) {
+  if (!aiWorker) return;
+  try { aiWorker.postMessage(msg); } catch (e) { aiWorkerDisable(e); }
+}
+function aiWorkerDisable(err) {
+  if (err) console.warn('AI worker disabled, thinking on the main thread instead:', err && (err.message || err));
+  if (aiWorker) { try { aiWorker.terminate(); } catch (e) { /* ignore */ } }
+  aiWorker = null;
+  for (const p of aiWorkerPending.values()) p.reject(new Error('AI worker unavailable'));
+  aiWorkerPending.clear();
+}
+function aiWorkerIsScript(src, tail) {
+  const path = src.split('?')[0];
+  return path.endsWith(tail);
+}
+(function startAiWorker() {
+  if (typeof Worker === 'undefined' || location.protocol === 'file:') return;
+  try {
+    const srcs = [...document.scripts].map((el) => el.src).filter(Boolean);
+    const scripts = srcs.filter((src) => src.split('?')[0].includes('/src/') || aiWorkerIsScript(src, '/data/game.data.js'));
+    const mainSrc = srcs.find((src) => aiWorkerIsScript(src, '/main.js')) || '';
+    const query = mainSrc.includes('?') ? mainSrc.slice(mainSrc.indexOf('?')) : '';
+    aiWorker = new Worker('ai-worker.js' + query);
+    aiWorker.onmessage = (e) => {
+      const msg = e.data || {};
+      if (msg.type === 'fatal') { aiWorkerDisable(msg.error); return; }
+      const p = aiWorkerPending.get(msg.id);
+      if (!p) return;
+      aiWorkerPending.delete(msg.id);
+      if (msg.error) p.reject(new Error(msg.error));
+      else p.resolve(msg);
+    };
+    aiWorker.onerror = (e) => { if (e && e.preventDefault) e.preventDefault(); aiWorkerDisable((e && e.message) || 'worker error'); };
+    aiWorker.postMessage({ type: 'init', scripts, config: AI_LEVEL_CONFIG });
+  } catch (e) {
+    aiWorkerDisable(e);
+  }
+})();
+/** 裏でselectMove。{move, plannedUntap}になるPromiseを返す。Workerが無ければnull(呼ぶ側がこの画面で計算する)。 */
+function aiWorkerSelectMove(state, playerId, options) {
+  if (!aiWorker) return null;
+  const id = ++aiWorkerSeq;
+  const light = { ...state, log: [], progressLog: [], undoCheckpoint: null }; // AIはこれらを読まない(selectMove参照)
+  return new Promise((resolve, reject) => {
+    aiWorkerPending.set(id, { resolve, reject });
+    aiWorkerPost({ type: 'select', id, level: aiWorkerLevelFor(playerId), state: light, playerId, options });
+  });
 }
 
 /** Cheap (no AI search) legality re-check for a cached navSuggestedMove, within the same turn it was
@@ -1502,6 +1567,31 @@ function updateNavSuggestionIfNeeded(state, eligiblePlayerId) {
 /** ナビの計算そのもの(LV3のselectMove)。考える時間は1回3秒まで (2026-11-23, per user「3秒なら許容」) --
  * 相手のAI LV3と同じオブジェクトなので、上限はこの呼び出しの間だけ変えて戻す。 */
 function computeNavSuggestion(state, playerId) {
+  // 裏(ai-worker.js)で考えられる時は、考えている間も画面を動かせるように裏で計算し、終わったら光らせる(2026-11-24)。
+  if (aiWorker) {
+    const sig = navStateSignature(state, playerId);
+    const snapshot = gameStateMod.cloneState(state);
+    const promise = aiWorkerSelectMove(snapshot, playerId, { hasPlacedDieThisTurn: turnActionTaken });
+    if (promise) {
+      navSuggestedMove = null;
+      navSuggestedAcquireFaceId = null;
+      navSuggestionSignature = sig;
+      const stillCurrent = () => navModeEnabled && navSuggestionPlayerId === playerId && STATE && navSuggestionSignature === sig && navStateSignature(STATE, playerId) === sig;
+      promise.then((r) => {
+        if (!stillCurrent()) return;
+        navSuggestedMove = r.move;
+        navSuggestedAcquireFaceId = navAcquireFaceIdFor(snapshot, r.move);
+        render(STATE);
+        scheduleNavPrefetch(STATE, playerId);
+      }).catch(() => {
+        if (!stillCurrent()) return;
+        navSuggestionSignature = null; // 次の描き直しで、この画面の中で計算し直す
+        try { const r = navSelect(STATE, playerId, turnActionTaken); navSuggestedMove = r.move; navSuggestedAcquireFaceId = r.acquireFaceId; navSuggestionSignature = sig; } catch (e) { /* 光らせないだけ */ }
+        render(STATE);
+      });
+      return;
+    }
+  }
   const r = navSelect(state, playerId, turnActionTaken);
   navSuggestedMove = r.move;
   navSuggestedAcquireFaceId = r.acquireFaceId;
@@ -1528,6 +1618,11 @@ function scheduleNavPrefetch(state, playerId) {
   navPrefetchTimer = setTimeout(() => {
     navPrefetchTimer = null;
     if (!navModeEnabled || navSuggestionPlayerId !== playerId || navSuggestedMove !== move) return; // もう別の手になった
+    const promise = aiWorkerSelectMove(after, playerId, { hasPlacedDieThisTurn: placed });
+    if (promise) {
+      promise.then((r) => { navPlan.set(sig, { move: r.move, acquireFaceId: navAcquireFaceIdFor(after, r.move) }); }).catch(() => { /* 先読みできなくても普段どおり計算し直す */ });
+      return;
+    }
     try { navPlan.set(sig, navSelect(after, playerId, placed)); } catch (e) { /* 先読みできなくても普段どおり計算し直す */ }
   }, 300);
 }
@@ -1537,6 +1632,11 @@ function navSelect(state, playerId, placed) {
   // 相手のAI(aiPlayerFor)と全く同じ設定で選ぶ(2026-11-24, per user「ナビとAIは同じにして -- ナビを使ってAIの弱さを直していく
   // ので違うと前提が崩れる」)。3秒上限・R4の読み切りはaiPlayerLv3側の設定。
   const move = aiPlayerFor(playerId).selectMove(state, playerId, { hasPlacedDieThisTurn: placed });
+  return { move, acquireFaceId: navAcquireFaceIdFor(state, move) };
+}
+
+/** ナビの手がカードの獲得/LVアップを伴う時、そのカード(光らせる用)。 */
+function navAcquireFaceIdFor(state, move) {
   let acquireFaceId = null;
   if (move && move.buildCandidateIndex !== undefined && move.buildCandidateIndex !== null) {
     // The actual acquired/upgraded faceId only exists once the move is really applied (board.placeDice/
@@ -1553,7 +1653,7 @@ function navSelect(state, playerId, placed) {
       // Defensive only -- a failed dry-run just means no card gets highlighted, never a crash.
     }
   }
-  return { move, acquireFaceId };
+  return acquireFaceId;
 }
 
 /** ナビを計算し直すかどうかの目印: その人が手をすると変わる物(ダイス・資源・カード・タップ・フリーアクション・
@@ -2260,13 +2360,58 @@ function pumpAiInstant(state) {
  * ・反映: 演出(カードの獲得/LVアップ/タップ/アンタップ、飛んでいるダイス、ダイスを振る演出等)がすべて
  *   終わるまで待ってから盤面に反映する(aiVisualsBusy)。反映時は同じ盤面ならさっき考えた手をそのまま使い、
  *   二重に考えない。 */
-let aiMoveMemo = null; // { key, move }
+let aiMoveMemo = null; // { key, move, plannedUntap?, fromWorker? }
+function aiMoveMemoKey(state, playerId, options) {
+  return `${playerId}|${options.hasPlacedDieThisTurn ? 1 : 0}|${JSON.stringify(state)}`;
+}
 function selectAiMoveMemo(state, playerId, options) {
-  const key = `${playerId}|${options.hasPlacedDieThisTurn ? 1 : 0}|${JSON.stringify(state)}`;
-  if (aiMoveMemo && aiMoveMemo.key === key) return aiMoveMemo.move;
+  const key = aiMoveMemoKey(state, playerId, options);
+  if (aiMoveMemo && aiMoveMemo.key === key) {
+    // 裏(ai-worker.js)で考えた手なら、そこで決めたアンタップの選び方も画面側のAIに渡す(このあとのchooseUntapChoice用)。
+    if (aiMoveMemo.fromWorker) aiPlayerFor(playerId).setPlannedUntap(aiMoveMemo.plannedUntap);
+    return aiMoveMemo.move;
+  }
   const move = aiPlayerFor(playerId).selectMove(state, playerId, options);
   aiMoveMemo = { key, move };
   return move;
+}
+// 裏で考えている途中の手 { key } と、裏で失敗した盤面の目印(その盤面はこの画面で考える)。
+let aiWorkerInFlight = null;
+let aiWorkerFailedKey = null;
+/** この盤面の手を裏(ai-worker.js)で考え始める。考え中(または今始めた)ならtrue。考え済み・Workerが無い・
+ * 裏で失敗した盤面ならfalse(呼ぶ側はselectAiMoveMemoでそのまま進めてよい)。 */
+function requestAiMoveInWorker(state, playerId, options) {
+  if (!aiWorker) return false;
+  const key = aiMoveMemoKey(state, playerId, options);
+  if (aiMoveMemo && aiMoveMemo.key === key) return false;
+  if (key === aiWorkerFailedKey) return false;
+  if (aiWorkerInFlight && aiWorkerInFlight.key === key) return true;
+  const promise = aiWorkerSelectMove(state, playerId, options);
+  if (!promise) return false;
+  const flight = { key };
+  aiWorkerInFlight = flight;
+  promise.then((r) => {
+    if (aiWorkerInFlight === flight) aiWorkerInFlight = null;
+    aiMoveMemo = { key, move: r.move, plannedUntap: r.plannedUntap, fromWorker: true };
+    showAiPreHighlightIfReady();
+  }).catch(() => {
+    if (aiWorkerInFlight === flight) aiWorkerInFlight = null;
+    aiWorkerFailedKey = key;
+  });
+  return true;
+}
+/** 置く直前のダイスを光らせる(下のpumpAiDelayed参照)。次の手がもう決まっている時だけ。 */
+function showAiPreHighlightIfReady() {
+  if (aiPumpTimer === null || !STATE) return;
+  const ctx = resolveAiTurnContext(STATE);
+  if (!ctx || ctx.type !== 'TURN') return;
+  const options = { hasPlacedDieThisTurn: ctx.hasPlacedDieThisTurn };
+  if (!(aiMoveMemo && aiMoveMemo.key === aiMoveMemoKey(STATE, ctx.playerId, options))) return;
+  const move = aiMoveMemo.move;
+  if (move && (move.type === 'PLACE_DIE' || move.type === 'PLACE_WILDCARD_DIE' || move.type === 'PLACE_DICE_GROUP' || move.type === 'PASS_DIE')) {
+    aiPreHighlightMove = { playerId: ctx.playerId, dieId: move.dieId !== undefined ? move.dieId : move.dieIds[0] };
+    render(STATE);
+  }
 }
 function aiVisualsBusy() {
   return mobileAiCardGainPlaying || mobileAiCardGainQueue.length > 0 || diceRollSequenceActive
@@ -2280,6 +2425,12 @@ function pumpAiDelayed() {
     if (!hasAiWorkPending(STATE)) { aiPreHighlightMove = null; return; }
     // 演出中は反映を待つ(次の手はすでに考え済み)。
     if (aiVisualsBusy()) { aiPumpTimer = setTimeout(step, AI_VISUALS_WAIT_POLL_MS); return; }
+    // 裏(ai-worker.js)で次の手を考えている間は待つ(画面は固まらない)。
+    const ctxNow = resolveAiTurnContext(STATE);
+    if (ctxNow && ctxNow.type === 'TURN' && requestAiMoveInWorker(STATE, ctxNow.playerId, { hasPlacedDieThisTurn: ctxNow.hasPlacedDieThisTurn })) {
+      aiPumpTimer = setTimeout(step, 50);
+      return;
+    }
     // ストーリー第4章: この手の前にセリフを言う時は、言い終わるまで待つ(story.jsのstoryBeforeAiStep。言い終わると描き直しでまた動く)。
     if (typeof storyBeforeAiStep === 'function' && storyBeforeAiStep(STATE)) return;
     aiPreHighlightMove = null;
@@ -2290,6 +2441,11 @@ function pumpAiDelayed() {
   setTimeout(() => {
     if (aiPumpTimer === null) return; // fired, or canceled by a mode switch, before this tick ran
     const ctx = resolveAiTurnContext(STATE);
+    // 裏で考えられる時は、考え始めるだけ(終わったらshowAiPreHighlightIfReadyが光らせる)。
+    if (ctx && ctx.type === 'TURN' && aiWorker) {
+      if (!requestAiMoveInWorker(STATE, ctx.playerId, { hasPlacedDieThisTurn: ctx.hasPlacedDieThisTurn })) showAiPreHighlightIfReady();
+      return;
+    }
     if (ctx && ctx.type === 'TURN') {
       const move = selectAiMoveMemo(STATE, ctx.playerId, { hasPlacedDieThisTurn: ctx.hasPlacedDieThisTurn });
       // PLACE_WILDCARD_DIE (2026-08-20) included alongside PLACE_DIE -- see aiOpenTurnHasPlacedDie's own

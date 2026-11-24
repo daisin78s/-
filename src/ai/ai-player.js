@@ -701,6 +701,11 @@ class AIPlayer {
    * (a per-turn cap here, see #deepBeamSearch's own doc) is hit. */
   #plannedUntap = null;
 
+  /** 読み切りで決めておいたアンタップの選び方(次のchooseUntapChoiceで使う)。main.jsの裏で考える仕組み(ai-worker.js)が、
+   * Worker側で決めた選び方を画面側のAIに渡すために使う。 */
+  peekPlannedUntap() { return this.#plannedUntap; }
+  setPlannedUntap(untap) { this.#plannedUntap = untap || null; }
+
   /** 終盤の読み切り (endgameSearchMs参照)。最初の手の候補(1手の点の高い順に8つ)ごとに残り時間を均等に分け、それぞれ
    * 良さそうな手から順に深く調べる(同じ盤面は一度だけ)。ゲーム終了時のP1の点が一番高かった最初の手と、その手で
    * アンタップを選ぶ時の選び方を返す。何も見つからなければnull(いつもの考え方に戻る)。 */
