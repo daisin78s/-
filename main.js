@@ -1419,17 +1419,35 @@ function aiWorkerLevelFor(playerId) {
 // selectMoveはai-worker.jsの中の同じAI(AI_LEVEL_CONFIG)で計算する。Workerが使えない時(ファイルをダブルクリックで
 // 開いた時など)や、Workerが途中で止まった時は、今までどおりこの画面の中で計算する(aiWorker=null)。
 // ---------------------------------------------------------------------------
-let aiWorker = null;
+let aiWorker = null; // 一番目のWorker(いつもはこれ1つで考える)
+// R4の読み切りを手分けする手伝いのWorker (2026-11-24, per user「(iPadの複数のコアで手分けして読む)それを進めて」)。
+// コアの数-1、最大で全部4つ。1つでも止まったら、その手伝いだけ外す(一番目が止まった時は全部やめて画面の中で考える)。
+let aiWorkerHelpers = [];
 let aiWorkerSeq = 0;
-const aiWorkerPending = new Map(); // id -> {resolve, reject}
+const aiWorkerPending = new Map(); // id -> {resolve, reject, worker}
+function aiWorkerAll() {
+  return aiWorker ? [aiWorker, ...aiWorkerHelpers] : [];
+}
 function aiWorkerPost(msg) {
-  if (!aiWorker) return;
-  try { aiWorker.postMessage(msg); } catch (e) { aiWorkerDisable(e); }
+  for (const w of aiWorkerAll()) {
+    try { w.postMessage(msg); } catch (e) { aiWorkerFail(w, e); }
+  }
+}
+function aiWorkerFail(worker, err) {
+  if (worker !== aiWorker) {
+    // 手伝いのWorkerだけ外す
+    aiWorkerHelpers = aiWorkerHelpers.filter((w) => w !== worker);
+    try { worker.terminate(); } catch (e) { /* ignore */ }
+    for (const [id, p] of aiWorkerPending) if (p.worker === worker) { aiWorkerPending.delete(id); p.reject(new Error('AI helper worker unavailable')); }
+    return;
+  }
+  aiWorkerDisable(err);
 }
 function aiWorkerDisable(err) {
   if (err) console.warn('AI worker disabled, thinking on the main thread instead:', err && (err.message || err));
-  if (aiWorker) { try { aiWorker.terminate(); } catch (e) { /* ignore */ } }
+  for (const w of aiWorkerAll()) { try { w.terminate(); } catch (e) { /* ignore */ } }
   aiWorker = null;
+  aiWorkerHelpers = [];
   for (const p of aiWorkerPending.values()) p.reject(new Error('AI worker unavailable'));
   aiWorkerPending.clear();
 }
@@ -1444,30 +1462,57 @@ function aiWorkerIsScript(src, tail) {
     const scripts = srcs.filter((src) => src.split('?')[0].includes('/src/') || aiWorkerIsScript(src, '/data/game.data.js'));
     const mainSrc = srcs.find((src) => aiWorkerIsScript(src, '/main.js')) || '';
     const query = mainSrc.includes('?') ? mainSrc.slice(mainSrc.indexOf('?')) : '';
-    aiWorker = new Worker('ai-worker.js' + query);
-    aiWorker.onmessage = (e) => {
-      const msg = e.data || {};
-      if (msg.type === 'fatal') { aiWorkerDisable(msg.error); return; }
-      const p = aiWorkerPending.get(msg.id);
-      if (!p) return;
-      aiWorkerPending.delete(msg.id);
-      if (msg.error) p.reject(new Error(msg.error));
-      else p.resolve(msg);
+    const total = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1));
+    const make = () => {
+      const w = new Worker('ai-worker.js' + query);
+      w.onmessage = (e) => {
+        const msg = e.data || {};
+        if (msg.type === 'fatal') { aiWorkerFail(w, msg.error); return; }
+        const p = aiWorkerPending.get(msg.id);
+        if (!p) return;
+        aiWorkerPending.delete(msg.id);
+        if (msg.error) p.reject(new Error(msg.error));
+        else p.resolve(msg);
+      };
+      w.onerror = (e) => { if (e && e.preventDefault) e.preventDefault(); aiWorkerFail(w, (e && e.message) || 'worker error'); };
+      w.postMessage({ type: 'init', scripts, config: AI_LEVEL_CONFIG });
+      return w;
     };
-    aiWorker.onerror = (e) => { if (e && e.preventDefault) e.preventDefault(); aiWorkerDisable((e && e.message) || 'worker error'); };
-    aiWorker.postMessage({ type: 'init', scripts, config: AI_LEVEL_CONFIG });
+    aiWorker = make();
+    for (let i = 1; i < total; i++) {
+      try { aiWorkerHelpers.push(make()); } catch (e) { break; }
+    }
   } catch (e) {
     aiWorkerDisable(e);
   }
 })();
-/** 裏でselectMove。{move, plannedUntap}になるPromiseを返す。Workerが無ければnull(呼ぶ側がこの画面で計算する)。 */
+function aiWorkerRequest(worker, msg) {
+  const id = ++aiWorkerSeq;
+  return new Promise((resolve, reject) => {
+    aiWorkerPending.set(id, { resolve, reject, worker });
+    try { worker.postMessage({ ...msg, id }); } catch (e) { aiWorkerPending.delete(id); reject(e); aiWorkerFail(worker, e); }
+  });
+}
+/** 裏でselectMove。{move, plannedUntap}になるPromiseを返す。Workerが無ければnull(呼ぶ側がこの画面で計算する)。
+ * R4のLV3(終盤の読み切りを使う時)は、Workerが複数あれば最初の手の候補を手分けして同時に読み、一番点の高い答えを選んで、
+ * その手順を全員に覚えさせる(次の手の使い回し用)。 */
 function aiWorkerSelectMove(state, playerId, options) {
   if (!aiWorker) return null;
-  const id = ++aiWorkerSeq;
+  const level = aiWorkerLevelFor(playerId);
   const light = { ...state, log: [], progressLog: [], undoCheckpoint: null }; // AIはこれらを読まない(selectMove参照)
-  return new Promise((resolve, reject) => {
-    aiWorkerPending.set(id, { resolve, reject });
-    aiWorkerPost({ type: 'select', id, level: aiWorkerLevelFor(playerId), state: light, playerId, options });
+  const workers = aiWorkerAll();
+  const parallel = workers.length > 1 && state.round >= 4 && state.phase !== 'GAME_END' && (level === 'lv3' || level === 'lv3weekly');
+  if (!parallel) return aiWorkerRequest(aiWorker, { type: 'select', level, state: light, playerId, options });
+  const count = workers.length;
+  const requests = workers.map((w, index) => aiWorkerRequest(w, { type: 'select', level, state: light, playerId, options: { ...options, endgameShard: { index, count } } })
+    .catch(() => null));
+  return Promise.all(requests).then((results) => {
+    const ok = results.filter(Boolean);
+    if (ok.length === 0) throw new Error('AI workers failed');
+    const withEndgame = ok.filter((r) => r.endgame);
+    const win = withEndgame.length > 0 ? withEndgame.reduce((a, b) => (b.endgame.v > a.endgame.v ? b : a)) : ok[0];
+    if (win.endgame) aiWorkerPost({ type: 'adopt', level, playerId, plan: win.endgame.plan });
+    return win;
   });
 }
 

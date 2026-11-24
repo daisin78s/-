@@ -1,7 +1,7 @@
 // AIを裏で考えるためのWeb Worker (2026-11-24, per user「4もおねがい」 -- 考えている間も画面が固まらないように)。
 // main.jsのstartAiWorkerが起動し、index.htmlと同じ順のsrc/*.jsとdata/game.data.jsを読み込んで(index.htmlと同じ
 // require/module.exportsの小さな仕組み)、main.jsと同じ設定(AI_LEVEL_CONFIG)のAIを作る。
-// メッセージ: {type:'init', scripts, config} / {type:'weekly', table} / {type:'select', id, level, state, playerId, options}
+// メッセージ: {type:'init', scripts, config} / {type:'weekly', table} / {type:'adopt', level, playerId, plan} / {type:'select', id, level, state, playerId, options}
 //   -> {id, move, plannedUntap} または {id, error}。読み込みに失敗した時は {type:'fatal', error}(main.jsは画面の中で考える方に戻る)。
 /* eslint-disable no-restricted-globals */
 self.window = self;
@@ -62,12 +62,18 @@ self.onmessage = (e) => {
     ai.lv3weekly = new shared.AIPlayer(shared.index, shared.moveGeneratorLv3, evaluator, shared.simulator, shared.config.lv3);
     return;
   }
+  if (msg.type === 'adopt') {
+    // 手分けして読んだ時の一番良い手順を覚える(次の手の使い回し用)
+    if (ai && ai[msg.level]) ai[msg.level].adoptEndgamePlan(msg.playerId, msg.plan);
+    return;
+  }
   if (msg.type === 'select') {
     try {
       if (!ai) throw new Error('AI worker not initialized');
       const player = ai[msg.level] || ai.lv3;
       const move = player.selectMove(msg.state, msg.playerId, msg.options);
-      self.postMessage({ id: msg.id, move, plannedUntap: player.peekPlannedUntap() });
+      const eg = player.lastEndgame; // 終盤の読み切りの点と手順(手分けして読んだ時にmain.jsが比べる)
+      self.postMessage({ id: msg.id, move, plannedUntap: player.peekPlannedUntap(), endgame: eg ? { v: eg.v, plan: eg.plan } : null });
     } catch (err) {
       self.postMessage({ id: msg.id, error: String(err && (err.stack || err.message) || err) });
     }

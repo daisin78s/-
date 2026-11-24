@@ -242,17 +242,35 @@ class AIPlayer {
    * @returns {Object|null} the single best legal Move, or null if none exist
    */
   selectMove(state, playerId, context) {
+    this.lastEndgame = null; // 終盤の読み切りの結果(点・手順)。読み切りをしなかった時はnull
     if (this.endgameSearchMs > 0 && state.round >= 4 && state.phase !== 'GAME_END' && Array.isArray(state.players)) {
       const placed = !!(context && context.hasPlacedDieThisTurn);
       // 前の読み切りで見つけた手順のとおりに盤面が進んでいれば、読み直さずに次の手を出す(2026-11-24, per user
       // 「1から」-- 自分の手番の間は相手が動かないので、読み切った手順はそのまま使える。R4の待ち時間が1手ごとに最大3秒
       // から、だいたい1手番に1回になる)。
       // 読み切れなかった(時間切れの)手順なら、短い時間(1/3)だけ読み直して、もっと点の高い手順が見つかった時だけ乗り換える。
+      // context.endgameShard {index, count}: 複数のWorkerで手分けして読む時の自分の受け持ち(main.jsのaiWorkerSelectMove参照)。
+      // 結果(点・手順)はlastEndgameに残し、main.jsが一番良いものを選んでadoptEndgamePlanで全員に覚えさせる。
+      const shard = context && context.endgameShard;
       const planned = this.#nextPlannedEndgameStep(state, playerId, placed);
-      if (planned && planned.plan.exact) { this.#plannedUntap = planned.step.untap; return planned.step.m; }
-      const r = this.#endgameSearch(state, playerId, placed, planned ? this.endgameSearchMs / 3 : this.endgameSearchMs);
-      if (planned && !(r && r.v > planned.plan.v)) { this.#plannedUntap = planned.step.untap; return planned.step.m; }
-      if (r) { this.#plannedUntap = r.untap; this.#endgamePlans.set(playerId, { steps: r.plan, v: r.v, exact: r.exact }); return r.move; }
+      if (planned && planned.plan.exact) {
+        this.#plannedUntap = planned.step.untap;
+        this.lastEndgame = { v: planned.plan.v, plan: planned.plan, reused: true };
+        return planned.step.m;
+      }
+      const r = this.#endgameSearch(state, playerId, placed, planned ? this.endgameSearchMs / 3 : this.endgameSearchMs, shard);
+      if (planned && !(r && r.v > planned.plan.v)) {
+        this.#plannedUntap = planned.step.untap;
+        this.lastEndgame = { v: planned.plan.v, plan: planned.plan, reused: true };
+        return planned.step.m;
+      }
+      if (r) {
+        this.#plannedUntap = r.untap;
+        const plan = { steps: r.plan, v: r.v, exact: r.exact };
+        this.#endgamePlans.set(playerId, plan);
+        this.lastEndgame = { v: r.v, plan, reused: false };
+        return r.move;
+      }
     }
     // 考える時は、ログ・進み具合の記録・「ターン開始に戻す」用の控え(盤面の約半分の大きさ)を外した軽い盤面を使う
     // (2026-11-23, per user「これらは可能ならすべてやって」-- AIは盤面をたくさんコピーして手を試すので、要らない物まで毎回
@@ -723,6 +741,12 @@ class AIPlayer {
     return JSON.stringify([placed, s.players, s.maps, s.cards, s.shops, s.phase, s.round, s.pendingChoices]);
   }
 
+  /** 手分けして読んだ時、一番良かった手順をこのAIにも覚えさせる(main.jsから)。 */
+  adoptEndgamePlan(playerId, plan) {
+    if (plan && Array.isArray(plan.steps)) this.#endgamePlans.set(playerId, plan);
+    else this.#endgamePlans.delete(playerId);
+  }
+
   /** 今の盤面が、覚えている手順のどこかの「手を打つ前」と同じなら、その手を返す。違えば手順を捨ててnull。 */
   #nextPlannedEndgameStep(state, playerId, placed) {
     const plan = this.#endgamePlans.get(playerId);
@@ -733,7 +757,8 @@ class AIPlayer {
     return { step, plan };
   }
 
-  #endgameSearch(state0, playerId, placed0, limitMs) {
+  #endgameSearch(state0, playerId, placed0, limitMs, shard = null) {
+    const mine = (i) => !shard || shard.count <= 1 || i % shard.count === shard.index; // 手分けの受け持ち
     const t0 = Date.now();
     const root = AIPlayer.#endgameRoot(state0, playerId);
     const keyOf = AIPlayer.#endgameKey;
@@ -772,8 +797,8 @@ class AIPlayer {
     };
     const rootKey = keyOf(root, placed0);
     const allRoot = children(root, placed0);
-    const rootChildren = allRoot.slice(0, 8);
-    if (rootChildren.length === 0) return null;
+    const rootChildren = allRoot.slice(0, 8).filter((c, i) => mine(i));
+    if (allRoot.length === 0) return null;
     let best = null;
     let anyTimedOut = false;
     // ① 最初の手を「やること」(どのエリアに置いて何を取るか・どのカードをタップするか、とダイスの目)ごとにまとめ、まとまりの
@@ -796,8 +821,9 @@ class AIPlayer {
     const reps = [...groups.values()].map((arr) => arr[0]); // allRootは点の見積もり順なので、先頭がまとまりの代表
     for (const c of reps) c.f0 = finNow(c.c);
     reps.sort((a, b) => b.f0 - a.f0 || b.h - a.h);
+    const myReps = reps.filter((c, i) => mine(i));
     const rolloutDeadline = t0 + limitMs * 0.6;
-    for (const c of reps) {
+    for (const c of myReps) {
       if (Date.now() > rolloutDeadline) { anyTimedOut = true; break; }
       const r = this.#endgameRollout(c, playerId, keyOf);
       if (r && (!best || r.v > best.v)) {
