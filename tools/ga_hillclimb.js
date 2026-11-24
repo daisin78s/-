@@ -57,6 +57,7 @@ const { loadGameData, buildDataIndex } = require('../src/data-loader');
 const { buildEvalTable, isStructurallyBlankRound } = require('../src/ai/eval-table');
 const rng = require('../src/rng');
 const cardPairStats = require('./card_pair_stats');
+const cardAcqStats = require('./card_acq_stats'); // カードを取ったラウンドと順位 (2026-11-24)
 const gaAiData = require('./ga_ai_data');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
@@ -253,6 +254,7 @@ function runGate(state) {
 async function climb(state, raw) {
   const pairStats = args.pairStats ? cardPairStats.load(raw).stats : null;
   const pairStatsLv = args.pairStats ? cardPairStats.load(raw, true).stats : null;
+  const acqStats = args.pairStats ? cardAcqStats.load(raw) : null;
   const aiData = args.aiData ? gaAiData.open(raw, buildDataIndex(raw), args.aiLevel, log) : null;
   const pool = Array.from({ length: WORKER_COUNT }, () => new Worker(WORKER_SCRIPT));
   const idle = [...pool];
@@ -345,6 +347,7 @@ async function climb(state, raw) {
       idle.push(worker);
       if (pairStats) cardPairStats.addGame(pairStats, msg.holdingsByPlayerId, msg.rankByPlayerId);
       if (pairStatsLv && msg.holdingsByLevelByPlayerId) cardPairStats.addGame(pairStatsLv, msg.holdingsByLevelByPlayerId, msg.rankByPlayerId);
+      if (acqStats && msg.acquisitionsByPlayerId) cardAcqStats.addGame(acqStats, msg.acquisitionsByPlayerId, msg.rankByPlayerId);
       if (aiData && msg.aiData) {
         aiData.addPart(msg.aiData);
         if (args.aiDataEvery > 0 && aiData.gamesRun % args.aiDataEvery === 0) { aiData.save(); aiData.writeXlsx(); }
@@ -364,6 +367,7 @@ async function climb(state, raw) {
           saveState(state);
           if (pairStats) cardPairStats.save(pairStats);
           if (pairStatsLv) cardPairStats.save(pairStatsLv);
+          if (acqStats) cardAcqStats.save(acqStats);
           if (aiData) aiData.save();
         }
       }
@@ -386,6 +390,7 @@ async function climb(state, raw) {
     saveState(state);
     if (pairStats) cardPairStats.save(pairStats);
     if (pairStatsLv) cardPairStats.save(pairStatsLv);
+    if (acqStats) cardAcqStats.save(acqStats);
     if (aiData) { aiData.save(); aiData.writeXlsx(); }
   }
 }

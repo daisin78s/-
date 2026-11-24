@@ -35,6 +35,7 @@ const { buildResourceSynergyTable } = require('../src/ai/resource-card-synergy')
 const { buildConJobSynergyTable } = require('../src/ai/con-job-synergy');
 const { pickResourceCards } = require('../src/ai/smart-onboarding');
 const { holdingUnits } = require('./card_pair_stats');
+const { acquisitionsOf } = require('./card_acq_stats'); // カードを取ったラウンド (2026-11-24, tools/card_acq_stats.js)
 const { createAggregate } = require('./ai_data_aggregate');
 const { HIGH_SCORE_THRESHOLD } = require('./ga_ai_data');
 
@@ -76,11 +77,13 @@ parentPort.on('message', (job) => {
     holdingsByPlayerId[player.id] = holdingUnits(state, index, player);
     holdingsByLevelByPlayerId[player.id] = holdingUnits(state, index, player, true);
   }
+  const acquisitionsByPlayerId = {};
+  for (const player of state.players) acquisitionsByPlayerId[player.id] = acquisitionsOf(index, player);
   let aiDataPart;
   if (aiData) {
     const one = createAggregate(index, HIGH_SCORE_THRESHOLD);
     one.addGame(seed, state, result.historyByPlayerId, result.roundDetailByPlayerId, result.activationCounts);
     aiDataPart = one.toJSON();
   }
-  parentPort.postMessage({ jobId, rankByPlayerId, scoreByPlayerId, qstScoreByPlayerId, holdingsByPlayerId, holdingsByLevelByPlayerId, aiData: aiDataPart });
+  parentPort.postMessage({ jobId, rankByPlayerId, scoreByPlayerId, qstScoreByPlayerId, holdingsByPlayerId, holdingsByLevelByPlayerId, acquisitionsByPlayerId, aiData: aiDataPart });
 });
