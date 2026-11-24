@@ -21009,6 +21009,11 @@ document.addEventListener('DOMContentLoaded', () => {
     onProceed();
   });
 
+  {
+    // 下のボタンの列の版の表示 (2026-11-24, per user「ゲーム画面にもバージョンがかくにんできるばしょがほしい」)。
+    const label = document.getElementById('game-version-label');
+    if (label) label.textContent = appVersionLabel() || '';
+  }
   document.getElementById('ai-pacing-select').addEventListener('change', (e) => {
     if (aiPumpTimer !== null) { clearTimeout(aiPumpTimer); aiPumpTimer = null; }
     aiPacingMode = e.target.value;

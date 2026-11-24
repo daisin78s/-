@@ -8890,3 +8890,12 @@ body.story-pc #round-pass-button { visibility: hidden !important; pointer-events
   #weekly-seat-picker__jobs > * { zoom: var(--wk-job-zoom, 1); }
   #weekly-seat-picker #shops .shop-row { zoom: var(--wk-shop-zoom, 1); }
 }
+
+/* 下のボタンの列の版の表示 (2026-11-24) -- ボタンの並びの右端に、読める大きさで。 */
+.game-version-label {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  align-self: center;
+}
