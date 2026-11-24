@@ -7,6 +7,7 @@ const turnFlow = require('../turn-flow');
 const rng = require('../rng');
 const executor = require('../executor');
 const scoring = require('../scoring');
+const { cloneState } = require('../game-state');
 const { applyInPlace } = require('./simulator');
 const { bareTapKind } = require('./move-generator');
 // ダイスの目を変える/☆にするだけのタップ(基礎学問・高等学問・幾何学)。#isPointlessDieTap参照。
@@ -242,8 +243,16 @@ class AIPlayer {
    */
   selectMove(state, playerId, context) {
     if (this.endgameSearchMs > 0 && state.round >= 4 && state.phase !== 'GAME_END' && Array.isArray(state.players)) {
-      const r = this.#endgameSearch(state, playerId, !!(context && context.hasPlacedDieThisTurn), this.endgameSearchMs);
-      if (r) { this.#plannedUntap = r.untap; return r.move; }
+      const placed = !!(context && context.hasPlacedDieThisTurn);
+      // 前の読み切りで見つけた手順のとおりに盤面が進んでいれば、読み直さずに次の手を出す(2026-11-24, per user
+      // 「1から」-- 自分の手番の間は相手が動かないので、読み切った手順はそのまま使える。R4の待ち時間が1手ごとに最大3秒
+      // から、だいたい1手番に1回になる)。
+      // 読み切れなかった(時間切れの)手順なら、短い時間(1/3)だけ読み直して、もっと点の高い手順が見つかった時だけ乗り換える。
+      const planned = this.#nextPlannedEndgameStep(state, playerId, placed);
+      if (planned && planned.plan.exact) { this.#plannedUntap = planned.step.untap; return planned.step.m; }
+      const r = this.#endgameSearch(state, playerId, placed, planned ? this.endgameSearchMs / 3 : this.endgameSearchMs);
+      if (planned && !(r && r.v > planned.plan.v)) { this.#plannedUntap = planned.step.untap; return planned.step.m; }
+      if (r) { this.#plannedUntap = r.untap; this.#endgamePlans.set(playerId, { steps: r.plan, v: r.v, exact: r.exact }); return r.move; }
     }
     // 考える時は、ログ・進み具合の記録・「ターン開始に戻す」用の控え(盤面の約半分の大きさ)を外した軽い盤面を使う
     // (2026-11-23, per user「これらは可能ならすべてやって」-- AIは盤面をたくさんコピーして手を試すので、要らない物まで毎回
@@ -695,68 +704,115 @@ class AIPlayer {
   /** 終盤の読み切り (endgameSearchMs参照)。最初の手の候補(1手の点の高い順に8つ)ごとに残り時間を均等に分け、それぞれ
    * 良さそうな手から順に深く調べる(同じ盤面は一度だけ)。ゲーム終了時のP1の点が一番高かった最初の手と、その手で
    * アンタップを選ぶ時の選び方を返す。何も見つからなければnull(いつもの考え方に戻る)。 */
+  /** playerId -> 読み切りで見つけた一番良い手順 {steps: [{key(その手を打つ前の盤面の目印), m, untap}], v(その手順の点), exact(時間切れなしで読み切れたか)} */
+  #endgamePlans = new Map();
+
+  /** 読み切り用の盤面(軽いコピー、相手のまだ置いていないダイスはパス扱い)。 */
+  static #endgameRoot(state0, playerId) {
+    const root = cloneState({ ...state0, log: [], progressLog: [], undoCheckpoint: null });
+    for (const p of root.players) if (p.id !== playerId) for (const d of p.dice) if (d.placedMapId === null) d.passed = true;
+    return root;
+  }
+
+  static #endgameKey(s, placed) {
+    return JSON.stringify([placed, s.players, s.maps, s.cards, s.shops, s.phase, s.round, s.pendingChoices]);
+  }
+
+  /** 今の盤面が、覚えている手順のどこかの「手を打つ前」と同じなら、その手を返す。違えば手順を捨ててnull。 */
+  #nextPlannedEndgameStep(state, playerId, placed) {
+    const plan = this.#endgamePlans.get(playerId);
+    if (!plan) return null;
+    const key = AIPlayer.#endgameKey(AIPlayer.#endgameRoot(state, playerId), placed);
+    const step = plan.steps.find((st) => st.key === key);
+    if (!step) { this.#endgamePlans.delete(playerId); return null; }
+    return { step, plan };
+  }
+
   #endgameSearch(state0, playerId, placed0, limitMs) {
     const t0 = Date.now();
-    const root = { ...structuredClone({ ...state0, log: [], progressLog: [], undoCheckpoint: null }) };
-    for (const p of root.players) if (p.id !== playerId) for (const d of p.dice) if (d.placedMapId === null) d.passed = true;
-    const keyOf = (s, placed) => JSON.stringify([placed, s.players, s.maps, s.cards, s.shops, s.phase, s.round, s.pendingChoices]);
+    const root = AIPlayer.#endgameRoot(state0, playerId);
+    const keyOf = AIPlayer.#endgameKey;
     const children = (s, placed) => {
       let moves;
       try { moves = this.moveGenerator.generateMoves(s, this.index, playerId, { hasPlacedDieThisTurn: placed }); } catch (e) { return []; }
       const out = [];
       const seen = new Set();
       for (const m of moves) {
-        const c = structuredClone(s);
+        const c = cloneState(s);
         let r;
         try { r = applyInPlace(c, this.index, m); } catch (e) { continue; }
         if (!r.success || r.pendingBuild) continue;
         const np = m.type === 'END_TURN' ? false : (placed || DICE_MOVE_TYPES.has(m.type));
         const uc = (c.pendingChoices || []).find((x) => x.playerId === playerId && x.kind === 'UNTAP_CHOICE');
         const variants = uc
-          ? AIPlayer.untapSubsets(uc).map((sub) => { const c2 = structuredClone(c); executor.resolveUntapChoice(c2, playerId, sub); return { c: c2, untap: sub }; })
+          ? AIPlayer.untapSubsets(uc).map((sub) => { const c2 = cloneState(c); executor.resolveUntapChoice(c2, playerId, sub); return { c: c2, untap: sub }; })
           : [{ c, untap: null }];
         for (const v of variants) {
           const k = keyOf(v.c, np);
           if (seen.has(k)) continue;
           seen.add(k);
-          out.push({ m, untap: v.untap, c: v.c, np, h: this.evaluator.score(v.c, playerId) });
+          out.push({ m, untap: v.untap, c: v.c, np, k, h: this.evaluator.score(v.c, playerId) });
         }
       }
       out.sort((a, b) => b.h - a.h);
       return out;
     };
-    const memo = new Map();
+    const memo = new Map(); // 調べ終わった盤面の目印 -> その先の一番良い点
+    const bestNext = new Map(); // 調べ終わった盤面の目印 -> その点になる次の手 {key, m, untap, childKey}
+    // 盤面の目印から、調べ終わった一番良い手順をたどる
+    const chainFrom = (k) => {
+      const out = [];
+      while (bestNext.has(k) && out.length < 200) { const n = bestNext.get(k); out.push({ key: k, m: n.m, untap: n.untap }); k = n.childKey; }
+      return out;
+    };
+    const rootKey = keyOf(root, placed0);
     const rootChildren = children(root, placed0).slice(0, 8);
     if (rootChildren.length === 0) return null;
     let best = null;
+    let anyTimedOut = false;
     for (let i = 0; i < rootChildren.length; i++) {
       const ch = rootChildren[i];
       const share = (limitMs - (Date.now() - t0)) / (rootChildren.length - i);
       const lt0 = Date.now();
       let timedOut = false;
       let found = -1;
-      const dfs = (s, placed) => {
+      let foundPath = [];
+      const stack = []; // 今たどっている手順(この最初の手の後から)
+      const dfs = (s, placed, k) => {
         if (Date.now() - lt0 > share) { timedOut = true; return -1; }
         if (s.phase === 'GAME_END') {
           const f = scoring.computeFinalScore(s, this.index, playerId);
           const v = typeof f === 'number' ? f : f.total;
-          if (v > found) found = v;
+          if (v > found) { found = v; foundPath = stack.slice(); }
           return v;
         }
-        const k = keyOf(s, placed);
-        if (memo.has(k)) return memo.get(k);
+        if (memo.has(k)) {
+          const v = memo.get(k);
+          if (v > found) { found = v; foundPath = stack.concat(chainFrom(k)); }
+          return v;
+        }
         let b = -1;
+        let bChild = null;
         for (const c of children(s, placed)) {
-          const v = dfs(c.c, c.np);
-          if (v > b) b = v;
+          stack.push({ key: k, m: c.m, untap: c.untap });
+          const v = dfs(c.c, c.np, c.k);
+          stack.pop();
+          if (v > b) { b = v; bChild = c; }
           if (timedOut) break;
         }
-        if (!timedOut) memo.set(k, b);
+        if (!timedOut) {
+          memo.set(k, b);
+          if (bChild) bestNext.set(k, { m: bChild.m, untap: bChild.untap, childKey: bChild.k });
+        }
         return b;
       };
-      const v = Math.max(dfs(ch.c, ch.np), found);
-      if (v >= 0 && (!best || v > best.v)) best = { v, move: ch.m, untap: ch.untap };
+      const v = Math.max(dfs(ch.c, ch.np, ch.k), found);
+      if (timedOut) anyTimedOut = true;
+      if (v >= 0 && (!best || v > best.v)) {
+        best = { v, move: ch.m, untap: ch.untap, plan: [{ key: rootKey, m: ch.m, untap: ch.untap }].concat(foundPath) };
+      }
     }
+    if (best) best.exact = !anyTimedOut;
     return best;
   }
 
@@ -783,7 +839,7 @@ class AIPlayer {
     let best = null;
     let bestScore = -Infinity;
     for (const subset of AIPlayer.untapSubsets(choice)) {
-      const clone = { ...structuredClone(state) };
+      const clone = { ...cloneState(state) };
       executor.resolveUntapChoice(clone, playerId, subset);
       let score = this.evaluator.score(clone, playerId);
       const next = this.#greedyMove(clone, playerId, hasPlacedDieThisTurn);
@@ -809,7 +865,7 @@ class AIPlayer {
     let best = null;
     let bestScore = -Infinity;
     for (const subset of AIPlayer.untapSubsets(choice)) {
-      const clone = structuredClone(light);
+      const clone = cloneState(light);
       executor.resolveUntapChoice(clone, playerId, subset);
       const end = this.#finishTurnGreedy(clone, playerId, !!hasPlacedDieThisTurn, 60);
       const score = this.evaluator.score(end, playerId);

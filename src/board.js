@@ -29,7 +29,7 @@ const {
 } = require('./data-loader');
 const { parse } = require('./dsl-parser');
 const { lowerProgram, lowerCostList, isChoiceCost, lowerChoiceCostOptions } = require('./command-builder');
-const { createCardInstance } = require('./game-state');
+const { createCardInstance, cloneState } = require('./game-state');
 const executor = require('./executor');
 // Only for BLOCK_UPGRADE_UNLESS_QST_RANK (CON004A, see isUpgradeBlockedByQstRank) -- qst.js sits above
 // executor.js in the layering and never requires board.js, so this direction is safe.
@@ -431,7 +431,7 @@ function placeDice(state, index, context, dieId, mapId, slotIndex) {
   // 開拓者 (2026-08-27, reverted back to color-die-only -- see grantPioneerBonusIfEarned's own doc):
   // wD no longer qualifies.
   const pioneerEligible = hasPioneerAbility(state, index, context.playerId) && mapWasEmptyOfDice && die.kind === 'COLOR';
-  const preJobBonusSnapshot = (landlordEligible || pioneerEligible) ? structuredClone(state) : null;
+  const preJobBonusSnapshot = (landlordEligible || pioneerEligible) ? cloneState(state) : null;
   if (landlordEligible) grantLandlordBonusIfEarned(state, index, actionContext, mapId, ownColorDiceAlreadyThere);
   if (pioneerEligible) {
     grantPioneerBonusIfEarned(state, index, actionContext, mapWasEmptyOfDice, [die.value],
@@ -712,7 +712,7 @@ function wouldAreaActionHaveEffect(state, index, context, areaRow, buildValue, m
     const trailingAdds = buildTrailingAdds(commands, 0);
     let evalState = state;
     if (trailingAdds) {
-      evalState = structuredClone(state);
+      evalState = cloneState(state);
       for (const cmd of trailingAdds) executor.runCommand(evalState, index, context, cmd);
     }
     const resolvedBuildValue = buildCmd.buildValue !== null ? buildCmd.buildValue : buildValue;
@@ -721,7 +721,7 @@ function wouldAreaActionHaveEffect(state, index, context, areaRow, buildValue, m
     const affordable = candidates.some((c) => isCandidateAffordable(evalState, index, context.playerId, c));
     return affordable ? { ok: true } : { ok: false, reason: 'NO_BUILDABLE_CARD' };
   }
-  const clone = structuredClone(state);
+  const clone = cloneState(state);
   const result = executor.runProgram(clone, index, context, areaRow.ACTION);
   if (!result.success) return { ok: false, reason: 'NO_EFFECT' };
   const before = state.players.find((p) => p.id === context.playerId);
@@ -744,7 +744,7 @@ function resourcesEqual(a, b) {
  * currently selected die (2026-08-0X, per user feedback: "配置可能SLOTが光るようにして欲しい") without
  * re-deriving any of placeDice's own rules a second time. Never touches the real state. */
 function previewPlaceDice(state, index, context, dieId, mapId, slotIndex) {
-  const clone = structuredClone(state);
+  const clone = cloneState(state);
   const result = placeDice(clone, index, context, dieId, mapId, slotIndex);
   if (!result.success) return false;
   if (result.actionResult && result.actionResult.success === false) return false;
@@ -881,7 +881,7 @@ function excludeOverfundedMonuments(index, candidates, newValues, discount) {
 function groupBuildWouldBeAffordable(candidateState, index, context, playerId, areaTrailingAdds, predictedBuildValue, newValues, monumentDiscount) {
   let checkState = candidateState;
   if (areaTrailingAdds) {
-    checkState = structuredClone(candidateState);
+    checkState = cloneState(candidateState);
     for (const cmd of areaTrailingAdds) executor.runCommand(checkState, index, context, cmd);
   }
   const candidates = excludeOverfundedMonuments(index, getBuildCandidates(checkState, index, playerId, ['M'], predictedBuildValue), newValues, monumentDiscount);
@@ -1036,7 +1036,7 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
   // together grant both 1C and 1Z). Color-die-only again (2026-08-27, see grantPioneerBonusIfEarned's own
   // doc) -- a wD in the group contributes nothing.
   const pioneerEligible = hasPioneerAbility(state, index, playerId) && mapWasEmptyOfDice && dice.some((d) => d.kind === 'COLOR');
-  const preJobBonusSnapshot = pioneerEligible ? structuredClone(state) : null;
+  const preJobBonusSnapshot = pioneerEligible ? cloneState(state) : null;
   if (pioneerEligible) {
     const dieValues = dice.filter((d) => d.kind === 'COLOR').map((d) => d.value);
     grantPioneerBonusIfEarned(state, index, actionContext, mapWasEmptyOfDice, dieValues,
@@ -1127,7 +1127,7 @@ function placeDiceGroup(state, index, context, dieIds, mapId) {
  * the caller doesn't get to pick a slot for a group placement (board.placeDiceGroup auto-assigns), so
  * the UI needs this to know which slots to light up. Never touches the real state. */
 function previewPlaceDiceGroup(state, index, context, dieIds, mapId) {
-  const clone = structuredClone(state);
+  const clone = cloneState(state);
   const result = placeDiceGroup(clone, index, context, dieIds, mapId);
   if (!result.success) return { ok: false, touchedSlots: [] };
   if (result.actionResult && result.actionResult.success === false) return { ok: false, touchedSlots: [] };
@@ -1240,7 +1240,7 @@ function placeWildcardDie(state, index, context, dieId, mapId, preferredSlotInde
   // JOB009 at once), kept only for symmetry with placeDice -- see that function's own comment/
   // grantPioneerBonusIfEarned's own doc for the color-die-only restriction (2026-08-27).
   const pioneerEligible = hasPioneerAbility(state, index, context.playerId) && mapWasEmptyOfDice && die.kind === 'COLOR';
-  const preJobBonusSnapshot = (landlordEligible || pioneerEligible) ? structuredClone(state) : null;
+  const preJobBonusSnapshot = (landlordEligible || pioneerEligible) ? cloneState(state) : null;
   if (landlordEligible) grantLandlordBonusIfEarned(state, index, actionContext, mapId, ownColorDiceAlreadyThere);
   if (pioneerEligible) {
     grantPioneerBonusIfEarned(state, index, actionContext, mapWasEmptyOfDice, [die.value],
@@ -1297,7 +1297,7 @@ function placeWildcardDie(state, index, context, dieId, mapId, preferredSlotInde
  * see placeWildcardDie's own doc -- so the UI needs this to know which slot to light up). Never touches
  * the real state. */
 function previewPlaceWildcardDie(state, index, context, dieId, mapId, preferredSlotIndex) {
-  const clone = structuredClone(state);
+  const clone = cloneState(state);
   const result = placeWildcardDie(clone, index, context, dieId, mapId, preferredSlotIndex);
   if (!result.success) return { ok: false, slotIndex: null };
   if (result.actionResult && result.actionResult.success === false) return { ok: false, slotIndex: null };
@@ -1649,13 +1649,13 @@ const PIONEER_FREE_ACTION_ID = 'C_K';
  * at all), since if the WHOLE placement were about to fail, the caller's own rollback undoes this
  * speculative grant along with everything else. */
 function resolvePioneerGrant(state, index, context, wouldHelp) {
-  const rawClone = structuredClone(state);
+  const rawClone = cloneState(state);
   executor.grantResourceAndEmitGet(rawClone, index, context, PIONEER_RAW_RESOURCE, 1);
   if (wouldHelp(rawClone).ok) {
     executor.grantResourceAndEmitGet(state, index, context, PIONEER_RAW_RESOURCE, 1);
     return;
   }
-  const convertedClone = structuredClone(state);
+  const convertedClone = cloneState(state);
   executor.grantResourceAndEmitGet(convertedClone, index, context, PIONEER_RAW_RESOURCE, 1);
   executor.tryFreeAction(convertedClone, index, context.playerId, PIONEER_FREE_ACTION_ID);
   if (wouldHelp(convertedClone).ok) {

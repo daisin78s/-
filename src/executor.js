@@ -38,7 +38,7 @@
 const { parse } = require('./dsl-parser');
 const { lowerProgram, lowerCall, lowerCostList, isChoiceCost, lowerChoiceCostOptions } = require('./command-builder');
 const { getCardRow, getAreaRow, findCardFace, getCardAutoDefault } = require('./data-loader');
-const { splitCardId, createDie, INITIAL_COLOR_DICE } = require('./game-state');
+const { splitCardId, createDie, INITIAL_COLOR_DICE, cloneState } = require('./game-state');
 const { rollDie } = require('./rng');
 
 class NotImplementedError extends Error {}
@@ -1636,7 +1636,7 @@ function runProgram(state, index, context, dslText) {
   return withGrantBatch(() => runProgramInBatch(state, index, context, dslText));
 }
 function runProgramInBatch(state, index, context, dslText) {
-  const before = structuredClone(state);
+  const before = cloneState(state);
   const commands = lowerProgram(parse(dslText));
   for (const cmd of commands) {
     const result = runCommand(state, index, context, cmd);

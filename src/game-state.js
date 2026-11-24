@@ -493,14 +493,30 @@ function createEmptyGameState(seed) {
 }
 
 /**
- * Deep clone via structuredClone (Node >=17 / modern browsers). Used both for
+ * Deep clone (deepClonePlain below; same result as structuredClone for plain data). Used both for
  * undo checkpoints and for save-data serialization (GameState contains only
  * plain data -- no functions, no class instances -- by design).
  * @param {GameState} state
  * @returns {GameState}
  */
 function cloneState(state) {
-  return structuredClone(state);
+  return deepClonePlain(state);
+}
+
+/** ふつうのオブジェクト・配列・値だけの深いコピー(2026-11-24, per user「1-5 効果がありそうな順番にすべてお願い」-- structuredClone
+ * は何でもコピーできる分遅く、AIの読みの時間の約6割が盤面のコピーだった)。GameStateはふつうのデータだけ(上のコメント
+ * のとおり)なので、結果はstructuredCloneと同じ。 */
+function deepClonePlain(v) {
+  if (v === null || typeof v !== 'object') return v;
+  if (Array.isArray(v)) {
+    const n = v.length;
+    const a = new Array(n);
+    for (let i = 0; i < n; i++) a[i] = deepClonePlain(v[i]);
+    return a;
+  }
+  const o = {};
+  for (const k in v) o[k] = deepClonePlain(v[k]);
+  return o;
 }
 
 module.exports = {
