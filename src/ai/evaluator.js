@@ -27,6 +27,7 @@ const qst = require('../qst');
 const { evalValue } = require('./eval-table');
 const evalAll = require('./eval-all');
 const monumentIncentive = require('./monument-incentive');
+const { cloneState } = require('../game-state');
 
 /** Same regex board.js's own (unexported) parseMonumentThreshold uses, e.g. ">=12" -> 12. Duplicated
  * rather than exported from board.js purely for this one line -- see monumentAtRiskFromOpponents. */
@@ -222,8 +223,36 @@ class Evaluator {
 
   /** @returns {number} playerId's position score in state, at state's current round. */
   score(state, playerId) {
+    // 使用料(食料)が足りなくてターンを終われない盤面でも、変換(B→Kなど、AIが必ず打つforcedFeeConversionMove)で払えるなら、
+    // 払った後の盤面で点をつける (2026-11-24, per user のナビのバグ報告「推奨の手が変換してから食料を取るになっているため効率が
+    // 悪い」-- 小麦畑で6K取ってから学者(CHANGE(K,B,7))をタップすると、Kが0で使用料2Kが払えない一瞬の盤面に
+    // LOCKOUT_PENALTYがつき、1Kしか替えられない「先にタップ」が選ばれていた。実際はB→Kの変換ですぐ払える)。
+    const fixed = this.#stateWithFeeConverted(state, playerId);
     // 評価の間は盤面を変えないので、持っているカードの一覧を使い回す(executor.withReadOnlyOwnedCache参照)。
-    return executor.withReadOnlyOwnedCache(() => this.#scoreInner(state, playerId));
+    return executor.withReadOnlyOwnedCache(() => this.#scoreInner(fixed || state, playerId));
+  }
+
+  /** ターンを終われない理由が「食料(K)の使用料が足りない」だけで、変換で払えるなら、変換した後の盤面(写し)。それ以外はnull。 */
+  #stateWithFeeConverted(state, playerId) {
+    if (!state || !Array.isArray(state.players)) return null;
+    const player = state.players.find((p) => p.id === playerId);
+    if (!player || !player.pendingFee || (player.pendingFee.resource || 'K') !== 'K') return null;
+    if ((player.resources.K || 0) >= player.pendingFee.amount) return null;
+    const check = executor.canEndTurn(state, this.index, playerId);
+    if (check.ok || !check.violations.every((v) => v.type === 'USAGE_FEE')) return null;
+    let clone = null;
+    for (let step = 0; step < 20; step++) {
+      const s = clone || state;
+      const p = s.players.find((x) => x.id === playerId);
+      const shortfall = p.pendingFee.amount - (p.resources.K || 0);
+      if (shortfall <= 0) break;
+      const plan = board.planFeeConversion(p.resources, shortfall);
+      if (plan.length === 0) return null;
+      if (!clone) clone = cloneState(state);
+      const r = executor.tryFreeAction(clone, this.index, playerId, `${plan[0].resource}_K`);
+      if (!r || !r.success) return null;
+    }
+    return clone && executor.canEndTurn(clone, this.index, playerId).ok ? clone : null;
   }
 
   #scoreInner(state, playerId) {

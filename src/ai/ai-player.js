@@ -11,6 +11,9 @@ const scoring = require('../scoring');
 const { cloneStateCow: cloneState, writableCard } = require('../game-state');
 const { applyInPlace } = require('./simulator');
 const { bareTapKind } = require('./move-generator');
+const { getCardRow } = require('../data-loader');
+const { parse } = require('../dsl-parser');
+const { lowerProgram } = require('../command-builder');
 // ダイスの目を変える/☆にするだけのタップ(基礎学問・高等学問・幾何学)。#isPointlessDieTap参照。
 const DIE_ONLY_TAP_KINDS = new Set(['SET_DICE_ANY', 'SET_DIE_VALUE', 'CHANGE_DIE_VALUE', 'SET_WILDCARD']);
 
@@ -295,7 +298,40 @@ class AIPlayer {
     if (move && this.#isPointlessDieTap(state, playerId, context, move)) {
       return this.#selectMoveInner(state, playerId, context, true) || move;
     }
+    const placeFirst = move ? this.#betterToPlaceBeforeConversionTap(state, playerId, context, move) : null;
+    if (placeFirst) return placeFirst;
     return move;
+  }
+
+  /** 資源を替えるタップ(学者のCHANGE(K,B,7)のような、持っている分だけ替えるCHANGE)を、この手番でまだダイスを置く前に選んだ時:
+   * 「先にダイスを置いてからタップ」の方がこの手番の終わりの点が高ければ、その置く手を返す(2026-11-24, per user のナビのバグ報告
+   * 「推奨の手が変換してから食料を取るになっているため効率が悪い」-- 1Kしか無いのに学者をタップして1Bにし、そのあと小麦畑で6K
+   * 取っていた。先に6K取ってからタップすれば7Bに替えられる)。比べるのはこの手番の終わりの盤面だけ(先読みの続きの打ち方の
+   * 当たり外れで順番が決まらないように)。そうでなければnull。 */
+  #betterToPlaceBeforeConversionTap(state, playerId, context, move) {
+    if (move.type !== 'BARE_TAP' || (context && context.hasPlacedDieThisTurn)) return null;
+    const card = state.cards && state.cards[move.physicalId];
+    if (!card) return null;
+    let commands;
+    try { commands = lowerProgram(parse(getCardRow(this.index, card.currentFaceId).TAP || '')); } catch (e) { return null; }
+    if (!commands.length || !commands.every((c) => c.type === 'CHANGE' && c.times && (c.times.kind === 'capped' || c.times.kind === 'all'))) return null;
+    const MAX = 40;
+    const tapFirst = this.simulator.apply(state, this.index, move);
+    if (!tapFirst.result.success) return null;
+    const tapFirstScore = this.evaluator.score(this.#finishTurnGreedy(tapFirst.state, playerId, false, MAX), playerId);
+    // タップを除いた中で一番良い置く手を先に打ち、そのあとタップしてから手番の残りを打つ。
+    const placements = this.moveGenerator.generateMoves(state, this.index, playerId, { hasPlacedDieThisTurn: false })
+      .filter((m) => DICE_MOVE_TYPES.has(m.type) && m.type !== 'PASS_DIE');
+    let best = null;
+    for (const placement of placements) {
+      const placed = this.simulator.apply(state, this.index, placement);
+      if (!placed.result.success) continue;
+      const tapped = this.simulator.apply(placed.state, this.index, { ...move });
+      if (!tapped.result.success) continue;
+      const score = this.evaluator.score(this.#finishTurnGreedy(tapped.state, playerId, true, MAX), playerId);
+      if (!best || score > best.score) best = { placement, score };
+    }
+    return best && best.score > tapFirstScore ? best.placement : null;
   }
 
   /** moveが目を変えるだけのタップで、タップした後に(1手先の一番良い手として)置く手が、タップしなくても同じ
