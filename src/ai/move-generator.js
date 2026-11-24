@@ -301,7 +301,47 @@ class MoveGenerator {
     if (context.hasPlacedDieThisTurn && executor.canEndTurn(state, index, playerId).ok) {
       moves.push({ type: 'END_TURN', playerId });
     }
+    if (this.policy.deferConversionTaps && context.hasPlacedDieThisTurn && !context.noDeferConversion) {
+      moves = this.#withoutDeferrableConversionTaps(state, index, playerId, player, context, moves);
+    }
     return this.policy.mustUseChangedDie && !context.hasPlacedDieThisTurn ? keepChangedDiePlacements(moves, player, state) : moves;
+  }
+
+  /** deferConversionTaps (AI LV3・ナビだけ、2026-11-24, per user のナビのバグ報告「推奨の手が総督をすぐ使うになっている
+   * ここで使う意味はなく次のターンに回した方がいい」→ 案に「OK」): 持っている分だけ替えるタップ(総督CHANGE(K,A,7)・
+   * 学者CHANGE(K,B,7)など、CHANGEのcapped/all)は、ダイスを置いた後は次のどれかの時だけ候補にする。
+   *  1. このラウンドの最後の手番(置いていないダイスが無い) -- 使わないとタップが無駄になる
+   *  2. 替える元の資源がもう上限(7など)以上ある -- 待っても多くは替えられない
+   *  3. 替えると、この手番で取れるカード(建てる手)が増える
+   *  4. 替える元の資源に上限(暴食など)がある -- ターン終了で減る
+   * ダイスを置く前は今までどおり(AIPlayerの#betterToPlaceBeforeConversionTapが先に置くかと比べる)。 */
+  #withoutDeferrableConversionTaps(state, index, playerId, player, context, moves) {
+    const hasDiceLeft = player.dice.some((d) => d.placedMapId === null && !d.passed);
+    if (!hasDiceLeft) return moves;
+    let limits = null;
+    let buildKeysNow = null;
+    return moves.filter((m) => {
+      if (m.type !== 'BARE_TAP') return true;
+      const card = state.cards[m.physicalId];
+      let commands;
+      try { commands = lowerProgram(parse(getCardRow(index, card.currentFaceId).TAP || '')); } catch (e) { return true; }
+      if (!commands.length || !commands.every((c) => c.type === 'CHANGE' && c.times && (c.times.kind === 'capped' || c.times.kind === 'all'))) return true;
+      for (const c of commands) {
+        const pay = c.pay && c.pay[0];
+        if (!pay || !pay.count || pay.count.kind !== 'literal') continue;
+        const have = player.resources[pay.resource] || 0;
+        if (c.times.kind === 'capped' && have >= c.times.value * pay.count.value) return true; // 2
+        if (!limits) limits = executor.activeResourceLimits(state, index, playerId);
+        if (limits[pay.resource] !== undefined) return true; // 4
+      }
+      // 3: 替えた後に、今は無い建てる手が出てくるか
+      if (!buildKeysNow) buildKeysNow = new Set(moves.filter((x) => x.buildCandidateKey).map((x) => x.buildCandidateKey));
+      const clone = cloneState(state);
+      const r = applyInPlace(clone, index, m);
+      if (!r || !r.success) return false;
+      const after = this.generateMoves(clone, index, playerId, { ...context, noDeferConversion: true });
+      return after.some((x) => x.buildCandidateKey && !buildKeysNow.has(x.buildCandidateKey));
+    });
   }
 
   #placeDieMoves(state, index, playerId, player) {
