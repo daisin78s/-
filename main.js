@@ -1343,12 +1343,18 @@ const aiMoveGeneratorLv3 = new moveGeneratorMod.MoveGenerator({ preferCastleOver
 const aiSimulator = new simulatorMod.Simulator();
 const aiPlayerLv1 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGenerator, aiEvaluator, aiSimulator, { lookaheadExtraTurns: 0 });
 const aiPlayerLv2 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGenerator, aiEvaluator, aiSimulator, { lookaheadExtraTurns: 1 });
+// ナビと相手のAI LV3の、1手に考える時間の上限(R4の読み切りも同じ時間)。2026-11-23, per user「3秒なら許容ですが10秒は長すぎ」
+const NAV_MAX_DECISION_MS = 3000;
 const aiPlayerLv3 = new aiPlayerMod.AIPlayer(INDEX, aiMoveGeneratorLv3, aiEvaluator, aiSimulator, {
   lookaheadExtraTurns: 2,
   beamWidth: 3,
   dieScarcityTieBreak: true,
   preferExOnOwnTerritory: true,
   crossRoundLookahead: false, // 2026-11-24: 切った方がはっきり強く速い(今の版と200試合で平均順位2.06、1手0.28秒)。src/ai/levels.jsのLV3と同じ
+  // 2026-11-24, per user「ナビとAIは同じにして」: ナビと同じ設定(考えるのは1手3秒まで、R4は終盤の読み切り)。
+  // 読み切りは時間で打ち切るので、GA/ツール用のsrc/ai/levels.jsのLV3には入れない(画面のAIだけ)。
+  maxDecisionTimeMs: NAV_MAX_DECISION_MS,
+  endgameSearchMs: NAV_MAX_DECISION_MS,
 });
 // Synergy tables for AI LV3's smart onboarding (see driveOneAiStepInner's RESOURCE_CHOICE/ONBOARDING
 // branches below) -- built once here, same pattern as aiEvalTable above.
@@ -1384,6 +1390,8 @@ if (weeklyChallengeActive) {
       dieScarcityTieBreak: true,
       preferExOnOwnTerritory: true,
       crossRoundLookahead: false, // 上のaiPlayerLv3と同じ(2026-11-24)
+      maxDecisionTimeMs: NAV_MAX_DECISION_MS, // 上のaiPlayerLv3と同じ(ナビと同じ設定)
+      endgameSearchMs: NAV_MAX_DECISION_MS,
     });
   }).catch((err) => {
     console.error('Weekly eval-table snapshot fetch failed, falling back to the live table for this attempt:', err);
@@ -1526,20 +1534,9 @@ function scheduleNavPrefetch(state, playerId) {
 
 /** LV3でナビの手を1つ選ぶ(考える時間は3秒まで)。BUILDを伴う手なら、獲得/LVアップするカードも。 */
 function navSelect(state, playerId, placed) {
-  const ai = aiPlayerFor(playerId);
-  const prevLimit = ai.maxDecisionTimeMs;
-  const prevEndgame = ai.endgameSearchMs;
-  ai.maxDecisionTimeMs = Math.min(prevLimit || NAV_MAX_DECISION_MS, NAV_MAX_DECISION_MS);
-  // ナビだけ、R4は終盤の読み切りを使う(1手3秒まで、2026-11-24, per user「終盤全検索すれば見つけれる順」-- 報告の場面で
-  // あなたと同じ61点の道を見つけた。対戦相手のAIは速さを優先して使わない)。
-  ai.endgameSearchMs = NAV_MAX_DECISION_MS;
-  let move;
-  try {
-    move = ai.selectMove(state, playerId, { hasPlacedDieThisTurn: placed });
-  } finally {
-    ai.maxDecisionTimeMs = prevLimit;
-    ai.endgameSearchMs = prevEndgame;
-  }
+  // 相手のAI(aiPlayerFor)と全く同じ設定で選ぶ(2026-11-24, per user「ナビとAIは同じにして -- ナビを使ってAIの弱さを直していく
+  // ので違うと前提が崩れる」)。3秒上限・R4の読み切りはaiPlayerLv3側の設定。
+  const move = aiPlayerFor(playerId).selectMove(state, playerId, { hasPlacedDieThisTurn: placed });
   let acquireFaceId = null;
   if (move && move.buildCandidateIndex !== undefined && move.buildCandidateIndex !== null) {
     // The actual acquired/upgraded faceId only exists once the move is really applied (board.placeDice/
@@ -1738,7 +1735,6 @@ let navSuggestedAcquireFaceId = null;
 let navSuggestionPlayerId = null;
 let navSuggestionSignature = null; // 前にナビを計算した時の盤面の目印(navStateSignature)
 let navRecomputeTimer = null;
-const NAV_MAX_DECISION_MS = 3000;
 const navPlan = new Map(); // 盤面の目印(navStateSignature) -> 先に計算しておいたナビの手 {move, acquireFaceId}
 let navPrefetchTimer = null;
 // {dieId, dicePlayerId, slotKeys, cardKeys, resourceKeys, feeMapIds} | null -- リプレイの変化ハイライト
