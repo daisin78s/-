@@ -1256,9 +1256,51 @@ function requireOwnDie(state, context, dieId) {
  * turn (2026-08-24, per user request: "すべてのダイス目変更はターン終了時に変えた目が元に戻る") -- a
  * 2nd change to the same die later this same turn must not overwrite the snapshot with an already-
  * changed value, or applyTurnEnd's revert would land on the wrong number. Call BEFORE mutating die.value. */
-function markDieValueChanged(die) {
+/** ターン終了: 目を変えた(☆にした)ダイスを置かなかった、または目を変えたカードをこのターンに使わなかった(タップしていない)
+ * 時、目を変えたカードのタップを戻す。宮廷人(JOB010)は戻さない(BZ+1をもらっているため)。戻したカードの面のidを
+ * state.tapRefundEvents に {playerId, faceIds} で残す(画面がショップの下の赤い文で知らせる、main.js参照)。
+ * 印(changedByCards)はここで消す。 (2026-11-24, per user「ダイス目変換をして使わなかったときは ターン終了時 …「基礎学問LV1」のタップを戻します とでて 戻すのはどう」+ 回答: カードの目を変えた時も同じ / 宮廷人は戻さない / ☆ダイスも同じ) */
+const NO_REFUND_TAP_SOURCES = new Set(['JOB010']);
+function refundUnusedValueChangeTaps(state, index, player) {
+  const refund = new Set();
+  for (const die of player.dice) {
+    if (die.changedByCards && die.placedMapId === null) die.changedByCards.forEach((id) => refund.add(id));
+    if (die.changedByCards) die.changedByCards = null;
+  }
+  for (const physicalId of player.ownedCardPhysicalIds) {
+    const inst = state.cards[physicalId];
+    if (!inst || !inst.changedByCards) continue;
+    if (!inst.tapped) inst.changedByCards.forEach((id) => refund.add(id));
+    writableCard(state, physicalId).changedByCards = null;
+  }
+  const faceIds = [];
+  for (const id of refund) {
+    if (NO_REFUND_TAP_SOURCES.has(id)) continue;
+    const card = state.cards[id];
+    if (!card || card.ownerId !== player.id || !card.tapped) continue;
+    writableCard(state, id).tapped = false;
+    faceIds.push(card.currentFaceId);
+  }
+  if (faceIds.length > 0) {
+    if (!Array.isArray(state.tapRefundEvents)) state.tapRefundEvents = [];
+    state.tapRefundEvents.push({ playerId: player.id, faceIds });
+  }
+}
+
+function markDieValueChanged(die, context) {
   if (!die.valueChangedThisTurn) die.valueBeforeChangeThisTurn = die.value;
   die.valueChangedThisTurn = true;
+  rememberChangedBy(die, context);
+}
+
+/* 目を変えたカードを覚える (2026-11-24, per user「ダイス目変換をして使わなかったときは ターン終了時 …「基礎学問LV1」のタップを戻します とでて 戻すのはどう」+ 回答: カードの目を変えた時も同じ / 宮廷人は戻さない / ☆ダイスも同じ):
+ * ダイス(die.changedByCards)・カードの目(card.buildValueChangedBy)に、そのタップのカード(context.sourcePhysicalId)を足す。
+ * ターン終了(applyTurnEnd)で、変えたダイスを置かなかった/目を変えたカードを使わなかった時、そのカードのタップを戻す。 */
+function rememberChangedBy(target, context) {
+  const source = context && context.sourcePhysicalId;
+  if (!source) return;
+  const list = target.changedByCards || [];
+  if (!list.includes(source)) target.changedByCards = [...list, source];
 }
 
 /** The literal buildValue baked into faceId's own TAP field, if (and only if) that TAP resolves to a
@@ -1307,7 +1349,9 @@ function runSetCardBuildValue(state, index, context, choices, physicalId) {
   }
   const target = requireOwnBuildValueCard(state, index, context, physicalId);
   if (!target) return { success: false, reason: 'INVALID_BUILD_VALUE_CARD' };
-  writableCard(state, physicalId).buildValueOverride = context.chosenValue;
+  const changedCard = writableCard(state, physicalId);
+  changedCard.buildValueOverride = context.chosenValue;
+  rememberChangedBy(changedCard, context);
   context.lastTargetedCardPhysicalId = physicalId;
   return { success: true };
 }
@@ -1322,7 +1366,9 @@ function runChangeCardBuildValue(state, index, context, delta, physicalId) {
   const target = requireOwnBuildValueCard(state, index, context, physicalId);
   if (!target) return { success: false, reason: 'INVALID_BUILD_VALUE_CARD' };
   const current = target.inst.buildValueOverride !== null ? target.inst.buildValueOverride : target.baseValue;
-  writableCard(state, physicalId).buildValueOverride = current + delta;
+  const changedCard = writableCard(state, physicalId);
+  changedCard.buildValueOverride = current + delta;
+  rememberChangedBy(changedCard, context);
   context.lastTargetedCardPhysicalId = physicalId;
   return { success: true };
 }
@@ -1332,7 +1378,7 @@ function runSetDiceAny(state, context) {
     return { success: false, reason: 'CHOICE_REQUIRED', need: ['chosenDieId', 'chosenValue (1-6)'] };
   }
   const die = requireOwnDie(state, context, context.chosenDieId);
-  markDieValueChanged(die);
+  markDieValueChanged(die, context);
   die.value = context.chosenValue;
   context.lastTargetedDieId = die.id;
   return { success: true };
@@ -1351,7 +1397,7 @@ function runSetDieValue(state, index, context, cmd) {
     return { success: false, reason: 'INVALID_CHOICE', allowed: cmd.choices };
   }
   const die = requireOwnDie(state, context, context.chosenDieId);
-  markDieValueChanged(die);
+  markDieValueChanged(die, context);
   die.value = context.chosenValue;
   context.lastTargetedDieId = die.id;
   return { success: true };
@@ -1374,7 +1420,7 @@ function runChangeDieValue(state, index, context, cmd) {
     return { success: false, reason: 'INVALID_CHOICE', allowed: cmd.choices };
   }
   const die = requireOwnDie(state, context, context.chosenDieId);
-  markDieValueChanged(die);
+  markDieValueChanged(die, context);
   // No wrap (2026-08-24, per user request: "ダイス目変更循環しない" -- 1-1->0, 6+1->7, 6+2->8, replacing
   // the old modulo-6 cycling). 7+ is displayed as a plain digit (confirmed with the user), same as
   // dieFace()'s existing out-of-1..6 fallback already did for anything unexpected.
@@ -1405,7 +1451,7 @@ function runMonumentChangeDieValue(state, index, context, cmd) {
     return { success: false, reason: 'CHOICE_REQUIRED', need: ['chosenDieId or chosenCardPhysicalId or skipDieChange'] };
   }
   const die = requireOwnDie(state, context, context.chosenDieId);
-  markDieValueChanged(die);
+  markDieValueChanged(die, context);
   die.value = die.value + cmd.delta;
   context.lastTargetedDieId = die.id;
   return { success: true };
@@ -1440,6 +1486,7 @@ function runSetWildcard(state, context, cmd) {
     if (context.chosenDieId === undefined) return { success: false, reason: 'CHOICE_REQUIRED', need: ['chosenDieId'] };
     const die = requireOwnDie(state, context, context.chosenDieId);
     die.isWildcardThisTurn = true;
+    rememberChangedBy(die, context);
     context.lastTargetedDieId = die.id;
     return { success: true };
   }
@@ -1833,6 +1880,7 @@ function applyTurnEnd(state, index, playerId) {
     player.resources.Z -= colorConvertAmount;
     player.resources.K = (player.resources.K || 0) + colorConvertAmount;
   }
+  refundUnusedValueChangeTaps(state, index, player);
   // GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN)'s flag is turn-scoped.
   for (const die of player.dice) die.placeAnywhereThisTurn = false;
   // SET_WILDCARD(THIS_DICE,THIS_TURN)'s flag is turn-scoped too (same lifetime as placeAnywhereThisTurn).

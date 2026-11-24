@@ -135,6 +135,25 @@ function changePaysResource(action, res) {
   return false;
 }
 
+/** mustUseChangedDie (AI LV3・ナビだけ、2026-11-24, per user「ダイス目変換をしたときは その目を 必ず使うにするのはどう」→
+ * 「おねがい」): この手番に目を変えたダイス(valueChangedThisTurn、置かないと手番の終わりに元に戻る)がまだ置かれていなければ、
+ * ダイスを置く手はそのダイスを使うもの(まとめて置く時はその中に入っているもの)だけにする。そのダイスをどこにも置けない時は
+ * 今までどおり全部(止まらないように)。置く手以外(タップ・フリーアクションなど)はそのまま。人のプレイ(ゲームのルール)は変えない。 */
+const DIE_PLACING_MOVE_TYPES = new Set(['PLACE_DIE', 'PLACE_WILDCARD_DIE', 'PLACE_DICE_GROUP', 'PASS_DIE']);
+// 宮廷人(JOB010)をこのターンに使った時は当てはめない (per user「宮廷人以外」-- 宮廷人のタップはBZ+1もあり、目+5を使わなくても
+// 損ではないため)。宮廷人は毎ターン使えるので、タップ済み = このターンに使った。
+function keepChangedDiePlacements(moves, player, state) {
+  const courtier = state.cards && state.cards.JOB010;
+  if (courtier && courtier.ownerId === player.id && courtier.tapped) return moves;
+  // ☆にしたダイス(基礎学問LV2、isWildcardThisTurn)も同じ (2026-11-24, per user「☆にしたダイスを置かなかったときも…はい」)。
+  const changed = new Set(player.dice.filter((d) => (d.valueChangedThisTurn || d.isWildcardThisTurn) && d.placedMapId === null && !d.passed).map((d) => d.id));
+  if (changed.size === 0) return moves;
+  const usesChanged = (m) => (m.dieIds ? m.dieIds.some((id) => changed.has(id)) : changed.has(m.dieId));
+  const placements = moves.filter((m) => DIE_PLACING_MOVE_TYPES.has(m.type));
+  if (!placements.some((m) => m.type !== 'PASS_DIE' && usesChanged(m))) return moves;
+  return moves.filter((m) => !DIE_PLACING_MOVE_TYPES.has(m.type) || (m.type !== 'PASS_DIE' && usesChanged(m)));
+}
+
 class MoveGenerator {
   /**
    * @param {{avoidMapIdFromRound?: {mapId: string, round: number}}} [policy] - optional strategy knob
@@ -282,7 +301,7 @@ class MoveGenerator {
     if (context.hasPlacedDieThisTurn && executor.canEndTurn(state, index, playerId).ok) {
       moves.push({ type: 'END_TURN', playerId });
     }
-    return moves;
+    return this.policy.mustUseChangedDie && !context.hasPlacedDieThisTurn ? keepChangedDiePlacements(moves, player, state) : moves;
   }
 
   #placeDieMoves(state, index, playerId, player) {

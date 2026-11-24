@@ -39,7 +39,7 @@ const LEVELS = [
       preferExOnOwnTerritory: true,
       crossRoundLookahead: false, // 2026-11-24: 切った(相手の残りの手をでたらめに進め、次のラウンドの物差しで測るので判断がぶれていた。200試合で平均順位2.06)
     },
-    moveGeneratorOptions: { preferCastleOverSenate: true },
+    moveGeneratorOptions: { preferCastleOverSenate: true, mustUseChangedDie: true },
     evaluatorOptions: { qstAware: true, conBuildAware: true, monumentIncentiveAware: true },
   },
 ];

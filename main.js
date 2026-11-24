@@ -1344,7 +1344,7 @@ const NAV_MAX_DECISION_MS = 2000;
 // 画面のAIの設定。ai-worker.js(裏で考える用、下のaiWorker参照)にも同じものを送って、同じAIを作る(2026-11-24)。
 const AI_LEVEL_CONFIG = {
   evaluatorOptions: { qstAware: true, conBuildAware: true, monumentIncentiveAware: true },
-  lv3MoveGeneratorOptions: { preferCastleOverSenate: true },
+  lv3MoveGeneratorOptions: { preferCastleOverSenate: true, mustUseChangedDie: true }, // mustUseChangedDie: 2026-11-24 (move-generator.jsのkeepChangedDiePlacements)
   lv1: { lookaheadExtraTurns: 0 },
   lv2: { lookaheadExtraTurns: 1 },
   lv3: {
@@ -19017,6 +19017,17 @@ function renderCore(state) {
     const playerId = state.whiteOverflowEvents[state.whiteOverflowEvents.length - 1];
     whiteOverflowWarning = { playerId, text: whiteOverflowWarningText(state, playerId) };
     state.whiteOverflowEvents = [];
+  }
+  // 目を変えたのに使わなかったカードのタップを戻した時 (executor.refundUnusedValueChangeTaps、2026-11-24, per user
+  // 「…ターン終了時 ダイス目変換をしましたが 使わなかったため「基礎学問LV1」のタップを戻します とでて」「ショップ下の赤い
+  // 警告文の場所」)。人のプレイヤーの分だけ、次に何かするまで出す(placementMessageと同じ出し方)。
+  if (Array.isArray(state.tapRefundEvents) && state.tapRefundEvents.length > 0) {
+    for (const ev of state.tapRefundEvents) {
+      if (isAiPlayer(ev.playerId)) continue;
+      const names = ev.faceIds.map((faceId) => `「${cardDisplayName(faceId)}」`).join('');
+      placementMessage = `使わないダイスには目を変える効果を使えないため、${names}のタップを戻します`; // 2026-11-24, per user「おねがい」(ルールの文とそろえる)
+    }
+    state.tapRefundEvents = [];
   }
   const currentTurnPlayerId = openTurnPlayerId() || (next ? next.playerId : null);
   if (whiteOverflowWarning && currentTurnPlayerId && currentTurnPlayerId !== whiteOverflowWarning.playerId) whiteOverflowWarning = null;

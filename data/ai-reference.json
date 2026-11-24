@@ -1,6 +1,6 @@
 {
- "gameDataVersion": "d5665c71b5f3f6a9",
- "generatedAt": "2026-11-21T14:58:04.307Z",
+ "gameDataVersion": "eff7d8cfc318d249",
+ "generatedAt": "2026-11-24T14:16:47.425Z",
  "commandSpecFile": "dsl-command-spec.json",
  "cardCount": 148,
  "cards": {
@@ -107,8 +107,8 @@
    "name": "晩餐会",
    "DICE": ">=2",
    "COST": "12K",
-   "PASSIVE": "VP_MODIFIER_FINAL(PER(K,1),9)",
-   "inst": "ゲーム終了時持っている〇につき1VP\n（MAX9VP)"
+   "PASSIVE": "VP_MODIFIER_FINAL(PER(K,1),10)",
+   "inst": "ゲーム終了時持っている〇につき1VP\n（MAX10VP)"
   },
   "M404": {
    "sheet": "M",
