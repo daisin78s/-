@@ -4627,7 +4627,7 @@ function ch5Start() {
   run.dom.bugButton.hidden = true; // 対戦中は普段の設定タブのバグ報告を使う
   storySetAllowedTabs([...document.querySelectorAll('.mobile-tab-switcher__btn')].map((b) => b.dataset.tabTarget));
   storySetGlow([]);
-  aiPacingMode = 'delayed';
+  aiPacingMode = 'anim'; // 普段のゲームの最初と同じアニメーションON (2026-11-24, per user「ストーリー 3Rから アニメーションが初期設定で OFFになっている」)
   run.onRender = ch5OnRender;
   handleStartFromRound3Click();
 }
