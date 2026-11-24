@@ -1338,7 +1338,9 @@ const aiEvalTable = evalTableMod.buildEvalTable(INDEX.raw);
 //   usesSmartOnboardingは['AI_LV1','AI_LV4','AI_LV5']、isLv4判定は'AI_LV4'||'AI_LV5'、
 //   ウィークリーチャレンジの評価値スナップショットはaiPlayerLv4Weekly/role==='AI_LV4'判定だった。
 // ナビと相手のAI LV3の、1手に考える時間の上限(R4の読み切りも同じ時間)。2026-11-23, per user「3秒なら許容ですが10秒は長すぎ」
-const NAV_MAX_DECISION_MS = 3000;
+// 2026-11-24から2秒 (per user「(AIを早くする案)すべて」の「考える時間の上限を短くする」-- 2秒と3秒の100試合の打ち比べで
+// 平均順位2.52、弱くならなかった)。
+const NAV_MAX_DECISION_MS = 2000;
 // 画面のAIの設定。ai-worker.js(裏で考える用、下のaiWorker参照)にも同じものを送って、同じAIを作る(2026-11-24)。
 const AI_LEVEL_CONFIG = {
   evaluatorOptions: { qstAware: true, conBuildAware: true, monumentIncentiveAware: true },
