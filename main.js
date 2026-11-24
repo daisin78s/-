@@ -7751,12 +7751,11 @@ function renderBoard(state, next) {
       // tutorialAreaTileGlowMapId's own doc。
       if (tutorialAreaTileGlowMapId === mapId) node.classList.add('change-highlight');
       // ナビ機能 (2026-10-18) -- 個別スロットを特定できない種類の手(グループ配置/スロット自動割り当ての
-      // ☆ダイス配置/使用料回収)は、タイル全体を光らせる形でカバーする(単体PLACE_DIE/PLACE_WILDCARD_DIEの
+      // ☆ダイス配置)は、タイル全体を光らせる形でカバーする(使用料回収は下の使用料のところ)(単体PLACE_DIE/PLACE_WILDCARD_DIEの
       // 個別スロットハイライトは上のslotsEl構築ループ側、slot--nav-highlight参照)。
       if (navSuggestedMove && navSuggestedMove.mapId === mapId
         && (navSuggestedMove.type === 'PLACE_DICE_GROUP'
-          || (navSuggestedMove.type === 'PLACE_WILDCARD_DIE' && navSuggestedMove.slotIndex === undefined)
-          || navSuggestedMove.type === 'COLLECT_FEE')) {
+          || (navSuggestedMove.type === 'PLACE_WILDCARD_DIE' && navSuggestedMove.slotIndex === undefined))) {
         node.classList.add('change-highlight');
       }
 
@@ -8001,6 +8000,9 @@ function renderBoard(state, next) {
         // build_candidate_a005a_fee_hintの「光る」演出(農園の使用料置き場) (2026-09-30, Excel T035) --
         // tutorialAreaFeeGlowMapId's own doc。
         if (tutorialAreaFeeGlowMapId === mapId) feeEl.classList.add('change-highlight');
+        // ナビが使用料の回収を勧める時は、エリア全体ではなく使用料のところを光らせる(2026-11-24, per user「エリアが光るので
+        // わかりにくい 使用料のところを光らせて」)。
+        if (navSuggestedMove && navSuggestedMove.type === 'COLLECT_FEE' && navSuggestedMove.mapId === mapId) feeEl.classList.add('nav-highlight');
         if (mapState.accumulatedFee > 0 && mapState.feeOwnerId) {
           feeEl.dataset.color = colorForPlayer(state, mapState.feeOwnerId);
           if (mapState.feeOwnerId === realTurnPlayerId) {
