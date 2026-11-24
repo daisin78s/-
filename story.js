@@ -4694,6 +4694,9 @@ function ch5TakeSeat(seatId) {
   const run = storyRun;
   if (!run || !run.ch5) return;
   run.ch5.seatId = seatId;
+  // 選んだ人の名前をあなたの名前に(第4章と同じく、この端末で覚えている名前。無ければ「あなた」。2026-11-24, per user「えらんだあとかえて」)。
+  const me = STATE.players.find((p) => p.id === seatId);
+  if (me) me.name = (loadRememberedRankingName() || '').trim() || 'あなた';
   for (const player of STATE.players) playerRoles.set(player.id, player.id === seatId ? 'HUMAN' : DEFAULT_AI_ROLE);
   run.holdAi = false;
   turnActionTaken = false;
