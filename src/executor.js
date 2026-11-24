@@ -38,7 +38,7 @@
 const { parse } = require('./dsl-parser');
 const { lowerProgram, lowerCall, lowerCostList, isChoiceCost, lowerChoiceCostOptions } = require('./command-builder');
 const { getCardRow, getAreaRow, findCardFace, getCardAutoDefault } = require('./data-loader');
-const { splitCardId, createDie, INITIAL_COLOR_DICE, cloneState } = require('./game-state');
+const { splitCardId, createDie, INITIAL_COLOR_DICE, cloneState, writableCard } = require('./game-state');
 const { rollDie } = require('./rng');
 
 class NotImplementedError extends Error {}
@@ -70,8 +70,28 @@ function getPlayer(state, playerId) {
   return player;
 }
 
+/* 盤面を読むだけの間(AIの評価: evaluator.score)は、プレイヤーの持っているカードの一覧を1回だけ作って使い回す
+ * (2026-11-24, per user「(AIを早くする案)おねがい」-- 評価1回でクエストの順位などのために同じ一覧を十数回作っていた)。
+ * withReadOnlyOwnedCache(fn) の中だけ有効で、終わったら捨てる(盤面が書き換わる前に必ず捨てるので古い一覧は使わない)。 */
+let ownedRowsCache = null; // Map(state -> Map(playerId -> rows))
+function withReadOnlyOwnedCache(fn) {
+  if (ownedRowsCache) return fn(); // もう中にいる
+  ownedRowsCache = new Map();
+  try { return fn(); } finally { ownedRowsCache = null; }
+}
+
 /** Cards currently owned by playerId, as {physicalId, cardInstance, row}. */
 function ownedCardRows(state, index, playerId) {
+  if (ownedRowsCache) {
+    let byPlayer = ownedRowsCache.get(state);
+    if (!byPlayer) { byPlayer = new Map(); ownedRowsCache.set(state, byPlayer); }
+    let rows = byPlayer.get(playerId);
+    if (!rows) { rows = ownedCardRowsScan(state, index, playerId); byPlayer.set(playerId, rows); }
+    return rows;
+  }
+  return ownedCardRowsScan(state, index, playerId);
+}
+function ownedCardRowsScan(state, index, playerId) {
   const out = [];
   for (const physicalId of Object.keys(state.cards)) {
     const inst = state.cards[physicalId];
@@ -1071,7 +1091,7 @@ function runChange(state, index, context, cmd) {
 
 function runUntap(state, context, cmd) {
   if (!context.sourcePhysicalId) throw new ExecutionError('UNTAP requires context.sourcePhysicalId');
-  state.cards[context.sourcePhysicalId].tapped = false;
+  writableCard(state, context.sourcePhysicalId).tapped = false;
   return { success: true };
 }
 
@@ -1094,7 +1114,7 @@ function runUntapAll(state, index, context, cmd) {
     const cardState = state.cards[physicalId];
     if (cardState.ownerId !== context.playerId) continue;
     if (SIGN_FAMILY_PHYSICAL_IDS.has(physicalId)) continue;
-    cardState.tapped = false;
+    writableCard(state, physicalId).tapped = false;
   }
   return { success: true };
 }
@@ -1133,7 +1153,7 @@ function runUntapChoice(state, index, context, cmd) {
   for (const id of tappedOwned) weights[id] = untapChoiceWeight(index, state.cards[id].currentFaceId);
   const totalWeight = tappedOwned.reduce((sum, id) => sum + weights[id], 0);
   if (totalWeight <= cmd.count) {
-    for (const id of tappedOwned) state.cards[id].tapped = false;
+    for (const id of tappedOwned) writableCard(state, id).tapped = false;
     return { success: true };
   }
   const cheapestWeight = Math.min(...tappedOwned.map((id) => weights[id]));
@@ -1167,7 +1187,7 @@ function resolveUntapChoice(state, playerId, chosenPhysicalIds) {
   if (chosenWeight > count) {
     return { success: false, reason: 'INVALID_SELECTION' };
   }
-  for (const id of chosenPhysicalIds) state.cards[id].tapped = false;
+  for (const id of chosenPhysicalIds) writableCard(state, id).tapped = false;
   state.pendingChoices.splice(choiceIndex, 1);
   return { success: true };
 }
@@ -1287,7 +1307,7 @@ function runSetCardBuildValue(state, index, context, choices, physicalId) {
   }
   const target = requireOwnBuildValueCard(state, index, context, physicalId);
   if (!target) return { success: false, reason: 'INVALID_BUILD_VALUE_CARD' };
-  target.inst.buildValueOverride = context.chosenValue;
+  writableCard(state, physicalId).buildValueOverride = context.chosenValue;
   context.lastTargetedCardPhysicalId = physicalId;
   return { success: true };
 }
@@ -1302,7 +1322,7 @@ function runChangeCardBuildValue(state, index, context, delta, physicalId) {
   const target = requireOwnBuildValueCard(state, index, context, physicalId);
   if (!target) return { success: false, reason: 'INVALID_BUILD_VALUE_CARD' };
   const current = target.inst.buildValueOverride !== null ? target.inst.buildValueOverride : target.baseValue;
-  target.inst.buildValueOverride = current + delta;
+  writableCard(state, physicalId).buildValueOverride = current + delta;
   context.lastTargetedCardPhysicalId = physicalId;
   return { success: true };
 }
@@ -1791,7 +1811,7 @@ function applyTurnEnd(state, index, playerId) {
         // UNTAP as TURNEND content (e.g. JOB005A) unconditionally untaps that one card.
         if (cmd.type === 'UNTAP') {
           const physicalId = splitCardId(row.ID).physicalId;
-          state.cards[physicalId].tapped = false;
+          writableCard(state, physicalId).tapped = false;
         }
       } else {
         // Ordinary effects in TURNEND (2026-11-07, per user: 巫女/パンとサーカス moved from TAP to
@@ -1853,7 +1873,7 @@ function applyTurnEnd(state, index, playerId) {
   // for why this clears unconditionally (whether the override was ever actually used this turn or not).
   for (const physicalId of player.ownedCardPhysicalIds) {
     const inst = state.cards[physicalId];
-    if (inst) inst.buildValueOverride = null;
+    if (inst && inst.buildValueOverride !== null) writableCard(state, physicalId).buildValueOverride = null;
   }
   // BZ is turn-scoped too (confirmed: "BZはターン終了時に無くなります") -- any left unspent when this
   // turn ends (e.g. generated via JOB004A's CHANGE(3K,2BZ) but never put toward a BUILD before ending
@@ -1966,6 +1986,8 @@ function resolveTapReaction(state, index, context, physicalId, effect, handlerKe
   if (inst.tapped && !sameBatchOk) return { success: false, reason: 'ALREADY_TAPPED' };
   const result = runCommand(state, index, { ...context, sourcePhysicalId: physicalId }, effect);
   if (result.success) {
+    // 効果の中でこのカードが写されているかもしれないので、取り直してから書く(game-state.jsのwritableCard参照)。
+    const inst = writableCard(state, physicalId);
     if (!inst.tapped) {
       inst.tapBatch = grantBatchDepth > 0 ? currentGrantBatch : null;
       inst.tapBatchKeys = [];
@@ -2116,6 +2138,7 @@ function grantChefBonusIfEarned(state, index, context, vpCount) {
 }
 
 module.exports = {
+  withReadOnlyOwnedCache,
   NotImplementedError,
   ExecutionError,
   applyPowerBrokerGameEndTopUp,

@@ -35,7 +35,8 @@ const { lowerCostList, isChoiceCost, lowerChoiceCostOptions } = require('../comm
 const board = require('../board');
 const executor = require('../executor');
 const turnFlow = require('../turn-flow');
-const { cloneState } = require('../game-state');
+// AIの読みの中のコピーは、カードを変わった物だけ写す(game-state.jsのcloneStateCow参照)。
+const { cloneStateCow: cloneState, writableCard } = require('../game-state');
 
 /** Greedily spreads playerId's currently-held BZ across candidate's own COST items (BUILD_NEW's faceId,
  * or UPGRADE's fromFaceId -- the original tier's, per board.resolveUpgrade), up to what each item needs
@@ -178,12 +179,12 @@ function applyInPlace(state, index, move) {
         // that effect could never actually reach it). resolveBuildNew/resolveUpgrade both check
         // affordability and fail atomically *before* any state mutation (see their own code), so it's
         // safe to speculatively tap first and simply revert on failure -- nothing else needs undoing.
-        state.cards[move.physicalId].tapped = true;
+        writableCard(state, move.physicalId).tapped = true;
         const buildResult = board.completeAreaBuild(state, index, { playerId: move.playerId, bzDiscount }, candidate, result.pendingBuild.remainingCommands);
         if (buildResult.success) {
           executor.notifyActivation(state, move.playerId, move.physicalId, state.cards[move.physicalId].currentFaceId, 'TAP');
         } else {
-          state.cards[move.physicalId].tapped = false; // build never actually happened -- the TAP wasn't spent
+          writableCard(state, move.physicalId).tapped = false; // build never actually happened -- the TAP wasn't spent
         }
         return { ...buildResult, candidate }; // see PLACE_DIE's own comment on why candidate is included
       }

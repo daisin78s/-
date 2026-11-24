@@ -53,7 +53,8 @@
 const { getAreaRow, getCardRow } = require('../data-loader');
 const { parse } = require('../dsl-parser');
 const { lowerProgram } = require('../command-builder');
-const { cloneState } = require('../game-state');
+// AIの読みの中のコピーは、カードを変わった物だけ写す(game-state.jsのcloneStateCow参照)。
+const { cloneStateCow: cloneState, writableCard } = require('../game-state');
 const board = require('../board');
 const executor = require('../executor');
 const { applyInPlace, rememberPlacedDryRun } = require('./simulator');

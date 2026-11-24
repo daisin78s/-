@@ -222,6 +222,11 @@ class Evaluator {
 
   /** @returns {number} playerId's position score in state, at state's current round. */
   score(state, playerId) {
+    // 評価の間は盤面を変えないので、持っているカードの一覧を使い回す(executor.withReadOnlyOwnedCache参照)。
+    return executor.withReadOnlyOwnedCache(() => this.#scoreInner(state, playerId));
+  }
+
+  #scoreInner(state, playerId) {
     const round = state.round || 1;
     const player = state.players.find((p) => p.id === playerId);
     if (!player) return 0;

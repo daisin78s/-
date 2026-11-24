@@ -7,7 +7,8 @@ const turnFlow = require('../turn-flow');
 const rng = require('../rng');
 const executor = require('../executor');
 const scoring = require('../scoring');
-const { cloneState } = require('../game-state');
+// AIの読みの中のコピーは、カードを変わった物だけ写す(game-state.jsのcloneStateCow参照)。
+const { cloneStateCow: cloneState, writableCard } = require('../game-state');
 const { applyInPlace } = require('./simulator');
 const { bareTapKind } = require('./move-generator');
 // ダイスの目を変える/☆にするだけのタップ(基礎学問・高等学問・幾何学)。#isPointlessDieTap参照。

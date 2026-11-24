@@ -503,6 +503,54 @@ function cloneState(state) {
   return deepClonePlain(state);
 }
 
+/* カードは変わった物だけ写すコピー (2026-11-24, per user「(AIを早くする案)すべて」 -- AIの考える時間の半分ほどが盤面のコピーで、
+ * その4割がカード(約60枚、ほとんどは読みの間に変わらない)だった)。AIの読みの中だけで使う(ai-player/move-generator/simulator)。
+ * - cloneStateCow: カード以外はふつうの深いコピー。カードは同じ物を共有し、どちらの盤面も「まだ自分の物になっていない」と覚える。
+ * - writableCard(state, id): カードを書き換える前に必ずこれで取る。共有中なら写してから返す(src/の全部の書き換えがこれを使う)。
+ * - 元の盤面が「写したことの無い盤面」(本番の盤面・ふつうのコピー・元に戻した盤面)の時は、最初の1回はふつうの深いコピーにする
+ *   (本番の盤面のカードは、今までどおりその場で書き換えられる)。
+ * 環境変数 COW_CHECK=1 (nodeの確かめ用) では共有中のカードを凍らせ、writableCardを通らない書き換えがあればすぐエラーにする。 */
+const cowOwnedCards = new WeakMap(); // state.cards -> Set(その盤面が自分の物として書き換えてよいカードのid)
+const COW_CHECK = typeof process !== 'undefined' && process.env && process.env.COW_CHECK === '1';
+function cloneStateCow(state) {
+  if (!state || !state.cards || !cowOwnedCards.has(state.cards)) {
+    const deep = deepClonePlain(state);
+    if (deep && deep.cards) cowOwnedCards.set(deep.cards, new Set(Object.keys(deep.cards)));
+    return deep;
+  }
+  const out = {};
+  for (const k in state) {
+    if (k !== 'cards') { out[k] = deepClonePlain(state[k]); continue; }
+    const parentCards = state.cards;
+    cowOwnedCards.get(parentCards).clear(); // ここからは元の盤面のカードも共有中
+    const cards = {};
+    for (const id in parentCards) {
+      const inst = parentCards[id];
+      if (COW_CHECK && inst && typeof inst === 'object') Object.freeze(inst);
+      cards[id] = inst;
+    }
+    cowOwnedCards.set(cards, new Set());
+    out.cards = cards;
+  }
+  return out;
+}
+function writableCard(state, physicalId) {
+  const cards = state.cards;
+  const inst = cards[physicalId];
+  const owned = cowOwnedCards.get(cards);
+  if (!owned || !inst || owned.has(physicalId)) return inst;
+  const copy = { ...inst };
+  cards[physicalId] = copy;
+  owned.add(physicalId);
+  return copy;
+}
+/** 新しいカードを盤面に入れる(その盤面の物として)。 */
+function putCard(state, inst) {
+  state.cards[inst.physicalId] = inst;
+  const owned = cowOwnedCards.get(state.cards);
+  if (owned) owned.add(inst.physicalId);
+}
+
 /** ふつうのオブジェクト・配列・値だけの深いコピー(2026-11-24, per user「1-5 効果がありそうな順番にすべてお願い」-- structuredClone
  * は何でもコピーできる分遅く、AIの読みの時間の約6割が盤面のコピーだった)。GameStateはふつうのデータだけ(上のコメント
  * のとおり)なので、結果はstructuredCloneと同じ。 */
@@ -531,6 +579,9 @@ module.exports = {
   createShopDeck,
   createEmptyGameState,
   cloneState,
+  cloneStateCow,
+  writableCard,
+  putCard,
 };
 
 })();

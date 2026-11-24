@@ -29,7 +29,7 @@ const {
 } = require('./data-loader');
 const { parse } = require('./dsl-parser');
 const { lowerProgram, lowerCostList, isChoiceCost, lowerChoiceCostOptions } = require('./command-builder');
-const { createCardInstance, cloneState } = require('./game-state');
+const { createCardInstance, cloneState, writableCard, putCard } = require('./game-state');
 const executor = require('./executor');
 // Only for BLOCK_UPGRADE_UNLESS_QST_RANK (CON004A, see isUpgradeBlockedByQstRank) -- qst.js sits above
 // executor.js in the layering and never requires board.js, so this direction is safe.
@@ -1486,8 +1486,8 @@ function useBareTapAbility(state, index, context, physicalId) {
   }
   if (!result.success) return result;
   const selfUntaps = lowerProgram(parse(row.TAP)).some((cmd) => cmd.type === 'UNTAP');
-  if (!selfUntaps) inst.tapped = true;
-  executor.notifyActivation(state, context.playerId, physicalId, inst.currentFaceId, 'TAP');
+  if (!selfUntaps) writableCard(state, physicalId).tapped = true;
+  executor.notifyActivation(state, context.playerId, physicalId, state.cards[physicalId].currentFaceId, 'TAP');
   return { success: true };
 }
 
@@ -2018,7 +2018,7 @@ function resolveBuildNew(state, index, context, candidate) {
   const inst = createCardInstance(candidate.faceId);
   inst.ownerId = context.playerId;
   inst.paidChoiceResource = chosenResource;
-  state.cards[inst.physicalId] = inst;
+  putCard(state, inst);
   const player = state.players.find((p) => p.id === context.playerId);
   player.ownedCardPhysicalIds.push(inst.physicalId);
 
@@ -2068,7 +2068,7 @@ function resolveUpgrade(state, index, context, candidate) {
   const payResult = executor.payCostList(state, index, context.playerId, payItems);
   if (!payResult.success) return payResult;
 
-  const inst = state.cards[candidate.physicalId];
+  const inst = writableCard(state, candidate.physicalId);
   inst.currentFaceId = candidate.toFaceId;
 
   const toRow = getCardRow(index, candidate.toFaceId);

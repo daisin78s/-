@@ -33,6 +33,7 @@
 
 const { rollDie } = require('./rng');
 const { getAreaRow, getCardRow } = require('./data-loader');
+const { writableCard } = require('./game-state');
 const { parse } = require('./dsl-parser');
 const { lowerProgram } = require('./command-builder');
 const { getSlotRequirements, restockShop, CASTLE_MAP_ID, revealExtraMonumentsIfAnyShopEmptied, forceRevealExtraMonumentsAtRound4, discardRound2SpecialCardsAtRound3, planFeeConversion } = require('./board');
@@ -277,7 +278,7 @@ function endRound(state, index) {
     map.discardedTurnOrderEntries = [];
   }
   executorApi.resetFreeActionsForNewRound(state);
-  for (const cardState of Object.values(state.cards)) cardState.tapped = false;
+  for (const physicalId of Object.keys(state.cards)) if (state.cards[physicalId].tapped) writableCard(state, physicalId).tapped = false;
   state.currentPlayerIndex = 0;
   if (state.round < 4) rerollDiceForNextRound(state);
   if (state.round >= 4) {

@@ -32,6 +32,7 @@ const {
   splitCardId,
   PLAYER_COLORS,
   INITIAL_COLOR_DICE,
+  writableCard,
 } = require('./game-state');
 const { getAreaRow, getCardRow } = require('./data-loader');
 const { runProgram, enforceWhiteDiceCap, grantResourceAndEmitGet, withGrantBatch, currentGrantBatchId } = require('./executor');
@@ -571,7 +572,7 @@ function resolveJobReplacementChoice(state, index, playerId, chosenFaceId) {
   const player = state.players.find((p) => p.id === playerId);
   const oldJobPhysicalId = splitCardId(player.jobCardId).physicalId;
   player.ownedCardPhysicalIds = player.ownedCardPhysicalIds.filter((id) => id !== oldJobPhysicalId);
-  state.cards[oldJobPhysicalId].ownerId = null;
+  writableCard(state, oldJobPhysicalId).ownerId = null;
 
   const inst = createCardInstance(chosenFaceId);
   inst.ownerId = playerId;
