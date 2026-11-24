@@ -701,14 +701,15 @@ class MoveGenerator {
   forcedPureGainCTap(state, index, playerId) {
     const player = state.players.find((p) => p.id === playerId);
     if (!player) return null;
-    // 農場主LV2(ADD(6K))は、Kに上限がある時(暴食のRESOURCE_LIMIT(K,7)など)は必ずはタップしない (2026-11-24, per user
+    // 農場主(LV1のADD(3K)もLV2のADD(6K)も)は、Kに上限がある時(暴食のRESOURCE_LIMIT(K,7)など)は必ずはタップしない (2026-11-24, per user
     // 「使用料と同じにする：暴食のときは、Kが必要になった(建てる・払う)ときにだけタップし、それ以外は普通の候補として点数で
-    // 比べる 農場主」) -- 普通のタップの候補として点数で比べる(点数は上限を超えたKがターン終了で減ることも入れて見る)。
+    // 比べる 農場主」、LV1も同じに: 「農場主は考えるように」) -- 普通のタップの候補として点数で比べる(点数は上限を超えたKが
+    // ターン終了で減ることも入れて見る)。
     const kLimited = executor.activeResourceLimits(state, index, playerId).K !== undefined;
     for (const physicalId of player.ownedCardPhysicalIds) {
       const cardState = state.cards[physicalId];
       if (!cardState || cardState.tapped || !PURE_GAIN_C_FACES.has(cardState.currentFaceId)) continue;
-      if (kLimited && cardState.currentFaceId === 'C201B') continue;
+      if (kLimited && (cardState.currentFaceId === 'C201A' || cardState.currentFaceId === 'C201B')) continue;
       const clone = cloneState(state);
       const result = board.useBareTapAbility(clone, index, { playerId }, physicalId);
       if (!result.success) continue;
