@@ -11203,6 +11203,45 @@ function renderPlayerStats(container, stats, extraStats) {
  * still deciding among. Leaving `container` empty is enough to hide it -- see .job-pool:empty in
  * style.css -- so this just skips the populate loop below rather than needing a separate visibility
  * toggle. See round1FirstPlayerTurnStartCount's own comment for how the count is tracked. */
+/* ナビ: ゲームの始めの選択(初期資源カード・ジョブ・性格の表裏)も、AI LV3と同じ選び方で光らせる (2026-11-24, per user
+ * 「ナビ機能 初期資源カード や ジョブ 性格も ナビして」)。AIの選び方(smart-onboarding.js)をそのまま使う
+ * (main.jsのdriveOneAiStepのONBOARDINGと同じ呼び方)。同点の時の選び方に乱数を使うので、ゲームの乱数(state.rng)は
+ * 変えないよう写しを渡す。ジョブの計算は重いので、同じ場面では1回だけ計算する。 */
+let navOnboardingCache = { key: null, value: null };
+function navOnboardingPick(state, kind, playerId) {
+  if (!navModeEnabled || !state || !state.rng) return null;
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player) return null;
+  let key;
+  if (kind === 'resource') {
+    const choice = (state.pendingChoices || []).find((c) => c.playerId === playerId && c.kind === 'SELECT_RESOURCE_CARDS');
+    if (!choice) return null;
+    key = `resource|${playerId}|${player.conPhysicalId}|${choice.context.candidates.join(',')}`;
+  } else if (kind === 'job') {
+    key = `job|${playerId}|${state.jobPool.join(',')}|${player.ownedCardPhysicalIds.join(',')}`;
+  } else {
+    key = `con|${playerId}|${player.jobCardId}|${player.conPhysicalId}|${(state.lockedFaceIds || []).join(',')}`;
+  }
+  if (navOnboardingCache.key === key) return navOnboardingCache.value;
+  let value = null;
+  try {
+    const rngCopy = JSON.parse(JSON.stringify(state.rng));
+    if (kind === 'resource') {
+      const choice = state.pendingChoices.find((c) => c.playerId === playerId && c.kind === 'SELECT_RESOURCE_CARDS');
+      value = smartOnboardingMod.pickResourceCards(choice.context.candidates, state, INDEX, aiResourceSynergyTable, player.conPhysicalId);
+    } else if (kind === 'job') {
+      const excluded = tutorialModeActive ? ['JOB001'] : undefined;
+      value = [smartOnboardingMod.pickJob(state, INDEX, playerId, aiConJobSynergyTable, aiMoveGenerator, aiSimulator, rngCopy, excluded)];
+    } else {
+      let face = smartOnboardingMod.pickConFace(state, INDEX, playerId, player.jobCardId, aiConJobSynergyTable, rngCopy);
+      if (face === 'B' && (state.lockedFaceIds || []).includes(`${player.conPhysicalId}B`)) face = 'A'; // AIと同じく、選べない裏面は表に
+      value = [face];
+    }
+  } catch (e) { value = null; }
+  navOnboardingCache = { key, value };
+  return value;
+}
+
 function renderJobPool(state, next) {
   const container = document.getElementById('job-pool');
   container.innerHTML = '';
@@ -11244,6 +11283,7 @@ function renderJobPool(state, next) {
     const canReallyPick = !!draftingPlayerId && !isTutorialLocked;
     if (canReallyPick) cell.classList.add('owned-card-cell--selectable');
     if (tutorialModeActive && draftingPlayerId && faceId === 'JOB001') cell.classList.add('change-highlight');
+    if (canReallyPick && (navOnboardingPick(state, 'job', draftingPlayerId) || []).includes(faceId)) cell.classList.add('nav-highlight');
     attachPickableEnlarge(cardNode, faceId, draftingPlayerId ? (canReallyPick ? {
       label: 'このジョブを選ぶ',
       onPick: () => {
@@ -11441,6 +11481,7 @@ function renderConFacesRow(container, player, onPick) {
     const tall = cardNode.classList.contains('shop-card--tall');
     const cellClass = tall ? 'owned-card-cell owned-card-cell--tall' : 'owned-card-cell';
     const cell = el('div', onPick ? `${cellClass} owned-card-cell--selectable` : cellClass);
+    if (onPick && (navOnboardingPick(STATE, 'con', player.id) || []).includes(face)) cell.classList.add('nav-highlight');
     cell.appendChild(cardNode);
     // 2026-08-0X, per user feedback (CON cards weren't tappable to enlarge at all, in either the
     // read-only preview or the real choice): tapping the card now always opens the enlarge modal;
@@ -11599,6 +11640,7 @@ function renderResourceChoice(container, state, player) {
     const tall = cardNode.classList.contains('shop-card--tall');
     const cell = el('div', tall ? 'owned-card-cell owned-card-cell--tall owned-card-cell--selectable' : 'owned-card-cell owned-card-cell--selectable');
     if (isSelected) cell.classList.add('owned-card-cell--selected');
+    if ((navOnboardingPick(state, 'resource', player.id) || []).includes(faceId)) cell.classList.add('nav-highlight');
     cell.appendChild(cardNode);
     // 2026-08-29, per user request ("タップ→拡大→選択 だったのを タップで色が変わる(選択)→別のをタップして
     // 拡大確認 にしてほしい"): a plain tap now toggles this candidate in/out of the selected set directly
