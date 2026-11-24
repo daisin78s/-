@@ -351,8 +351,24 @@ function lowerStatement(node) {
 }
 
 /** @param {{type:'Program', statements:Object[]}} program */
+// 同じ構文木(dsl-parserのparseは同じ文字列なら同じ凍った木を返す)なら、前に作った命令の並びを使い回す (2026-11-24, per user「(AIを早くする案)両方お願い」 -- AIは同じ効果の文を何百万回も読み直していた)。
+// 命令は凍らせて、誰も書き換えられないようにする(書き換えると使い回した先まで変わってしまうため。'use strict'なので
+// 書き換えようとすればすぐエラーになる)。凍っていない木(テストが手で作った物など)は使い回さない。
+const lowerProgramCache = new WeakMap();
 function lowerProgram(program) {
-  return program.statements.map(lowerStatement);
+  if (!Object.isFrozen(program)) return program.statements.map(lowerStatement);
+  const cached = lowerProgramCache.get(program);
+  if (cached) return cached;
+  const commands = deepFreezeCommands(program.statements.map(lowerStatement));
+  lowerProgramCache.set(program, commands);
+  return commands;
+}
+function deepFreezeCommands(node) {
+  if (node && typeof node === 'object' && !Object.isFrozen(node)) {
+    Object.freeze(node);
+    for (const key of Object.keys(node)) deepFreezeCommands(node[key]);
+  }
+  return node;
 }
 
 /**

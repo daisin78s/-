@@ -320,7 +320,16 @@ function parse(input) {
  * @param {string} input
  * @returns {Object[]} array of arg AST nodes (Quantity/Ident/Group/...)
  */
+// parseArgListも同じ文字列なら前の結果を使い回す (2026-11-24, per user「(AIを早くする案)両方お願い」 -- AIは同じ効果の文を何百万回も読み直していた)。parseと同じく凍らせて、誰も書き換えられないようにする。
+const argListCache = new Map();
 function parseArgList(input) {
+  const cached = argListCache.get(input);
+  if (cached) return cached;
+  const args = deepFreeze(parseArgListUncached(input));
+  argListCache.set(input, args);
+  return args;
+}
+function parseArgListUncached(input) {
   const tokens = tokenize(input);
   const parser = new Parser(tokens);
   const args = [];
