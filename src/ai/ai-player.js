@@ -258,6 +258,13 @@ class AIPlayer {
    */
   selectMove(state, playerId, context) {
     this.lastEndgame = null; // 終盤の読み切りの結果(点・手順)。読み切りをしなかった時はnull
+    // 上限の無い資源の使用料は、R4の読み切りの前でも必ず先に取る (2026-11-24, per user のナビのバグ報告「使用料をすぐ取らない
+    // とった後に推奨の手が変わる」-- R1〜R3は#checkForcedMovesで先に取るが、R4の読み切りはその前に手順を返していたので、
+    // 使用料を後回しにする手順を勧めることがあった。先に取って損をすることは無い)。
+    if (state.round >= 4 && state.phase !== 'GAME_END' && Array.isArray(state.players) && this.moveGenerator.forcedImmediateFeeMove) {
+      const fee = this.moveGenerator.forcedImmediateFeeMove(state, this.index, playerId);
+      if (fee) return fee;
+    }
     if (this.endgameSearchMs > 0 && state.round >= 4 && state.phase !== 'GAME_END' && Array.isArray(state.players)) {
       const placed = !!(context && context.hasPlacedDieThisTurn);
       // 前の読み切りで見つけた手順のとおりに盤面が進んでいれば、読み直さずに次の手を出す(2026-11-24, per user
