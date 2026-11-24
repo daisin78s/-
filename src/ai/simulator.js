@@ -61,14 +61,27 @@ function maxBzDiscount(state, index, playerId, candidate) {
         return [options.find((opt) => opt.resource === resource)];
       })()
     : lowerCostList(row.COST);
+  // 足りない資源の分から先にBZを使う(2026-11-24, per user のバグ報告「元老院でBZをもらって孤児院をLV2に」-- A2・BZ1で
+  // 「A,B」を払う時、前は先頭のAにBZを使ってBが足りず、払えるのに払えない手になっていた)。残りは今までどおり先頭から。
+  const held = (player && player.resources) || {};
+  const used = {};
+  const need = {};
+  for (const item of items) need[item.resource] = (need[item.resource] || 0) + item.count;
+  for (const res of Object.keys(need)) {
+    if (remaining <= 0) break;
+    const short = Math.max(0, need[res] - (held[res] || 0));
+    const use = Math.min(short, remaining);
+    if (use > 0) { used[res] = use; remaining -= use; }
+  }
   for (const item of items) {
     if (remaining <= 0) break;
-    const use = Math.min(item.count, remaining);
+    const use = Math.min(item.count - (used[item.resource] || 0), remaining);
     if (use > 0) {
-      discount[item.resource] = use;
+      used[item.resource] = (used[item.resource] || 0) + use;
       remaining -= use;
     }
   }
+  for (const res of Object.keys(used)) discount[res] = used[res];
   return Object.keys(discount).length > 0 ? discount : undefined;
 }
 

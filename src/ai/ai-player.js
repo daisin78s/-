@@ -771,10 +771,39 @@ class AIPlayer {
       return out;
     };
     const rootKey = keyOf(root, placed0);
-    const rootChildren = children(root, placed0).slice(0, 8);
+    const allRoot = children(root, placed0);
+    const rootChildren = allRoot.slice(0, 8);
     if (rootChildren.length === 0) return null;
     let best = null;
     let anyTimedOut = false;
+    // ① 最初の手を「やること」(どのエリアに置いて何を取るか・どのカードをタップするか、とダイスの目)ごとにまとめ、まとまりの
+    // 代表の手から、いつものAIの手(1手先だけ見る手)で最後まで打って点を数える(2026-11-24, per user「バグ報告 最終62VPとって
+    // 20位」-- 元老院に1を置いて孤児院をLV2に上げる手は、その場では点が増えないので、点の見積もり順に深く読む②だけでは
+    // 3秒で届かなかった。最後まで打ってみると一番良い手だった)。今ゲームが終わったら何点か、の高い順に打ってみる。
+    // 時間の6割まで。残りの時間で②(深く読む)をして、点の高い方を選ぶ。
+    const finNow = (st) => {
+      const f = scoring.computeFinalScore(st, this.index, playerId);
+      return (typeof f === 'number' ? f : f.total) + executor.collectFinalOnlyVpModifiers(st, this.index, playerId, true);
+    };
+    const groups = new Map();
+    const me0 = root.players.find((p) => p.id === playerId);
+    for (const c of allRoot) {
+      const d = c.m.dieId ? me0.dice.find((x) => x.id === c.m.dieId) : null;
+      const g = moveIdeaKey(c.m) + (d ? `|${d.value}` : '');
+      if (!groups.has(g)) groups.set(g, []);
+      groups.get(g).push(c);
+    }
+    const reps = [...groups.values()].map((arr) => arr[0]); // allRootは点の見積もり順なので、先頭がまとまりの代表
+    for (const c of reps) c.f0 = finNow(c.c);
+    reps.sort((a, b) => b.f0 - a.f0 || b.h - a.h);
+    const rolloutDeadline = t0 + limitMs * 0.6;
+    for (const c of reps) {
+      if (Date.now() > rolloutDeadline) { anyTimedOut = true; break; }
+      const r = this.#endgameRollout(c, playerId, keyOf);
+      if (r && (!best || r.v > best.v)) {
+        best = { v: r.v, move: c.m, untap: c.untap, plan: [{ key: rootKey, m: c.m, untap: c.untap }].concat(r.steps), fromRollout: true };
+      }
+    }
     for (let i = 0; i < rootChildren.length; i++) {
       const ch = rootChildren[i];
       const share = (limitMs - (Date.now() - t0)) / (rootChildren.length - i);
@@ -817,8 +846,42 @@ class AIPlayer {
         best = { v, move: ch.m, untap: ch.untap, plan: [{ key: rootKey, m: ch.m, untap: ch.untap }].concat(foundPath) };
       }
     }
-    if (best) best.exact = !anyTimedOut;
+    if (best) best.exact = !anyTimedOut && !best.fromRollout;
     return best;
+  }
+
+  /** 読み切り①: 子の盤面cから、いつものAIの手(#greedyMove)で自分の手を最後まで打ち、ゲーム終了時の点と、その手順
+   * (手を打つ前の盤面の目印つき、覚えておく手順用)を返す。最後まで行けなければnull。 */
+  #endgameRollout(c, playerId, keyOf) {
+    let st = cloneState(c.c);
+    let placed = c.np;
+    const steps = [];
+    for (let i = 0; i < 80 && st.phase !== 'GAME_END'; i++) {
+      const key = keyOf(st, placed);
+      const m = this.#greedyMove(st, playerId, placed);
+      if (!m) return null;
+      let r;
+      try { r = applyInPlace(st, this.index, m); } catch (e) { return null; }
+      if (!r.success || r.pendingBuild) return null;
+      let untap = null;
+      const uc = (st.pendingChoices || []).find((x) => x.playerId === playerId && x.kind === 'UNTAP_CHOICE');
+      if (uc) {
+        // アンタップは選び方ごとに次の一番良い手の点で比べる(軽い版、#resolveUntapChoiceQuickと同じ考え)
+        let bestScore = -Infinity;
+        for (const sub of AIPlayer.untapSubsets(uc)) {
+          const t = cloneState(st);
+          executor.resolveUntapChoice(t, playerId, sub);
+          const sc = this.evaluator.score(t, playerId);
+          if (sc > bestScore) { bestScore = sc; untap = sub; }
+        }
+        executor.resolveUntapChoice(st, playerId, untap);
+      }
+      steps.push({ key, m, untap });
+      placed = m.type === 'END_TURN' ? false : (placed || DICE_MOVE_TYPES.has(m.type));
+    }
+    if (st.phase !== 'GAME_END') return null;
+    const f = scoring.computeFinalScore(st, this.index, playerId); // 終わった盤面なので、晩餐会などの終了時の点も入っている
+    return { v: typeof f === 'number' ? f : f.total, steps };
   }
 
   /** アンタップするカードの選び方(重さの合計が上限以内で、これ以上足せない組)を全部挙げる。 */
