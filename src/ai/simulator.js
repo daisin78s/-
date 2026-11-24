@@ -218,17 +218,53 @@ function applyInPlace(state, index, move) {
   }
 }
 
+// 手の候補を作る時に試しに打った盤面を、点数をつける時に使い回す (2026-11-24, per user「(AIを早くする案)すべて」)。MoveGeneratorの#placeDieMovesが、
+// 置けるか確かめるためにダイスを置いた盤面(コピー)を、手ごとにここへ預ける(move -> {base, state, result})。
+// apply(base, index, move) が同じ盤面(base)・同じ手で呼ばれたら、置くところを打ち直さずにその盤面を使う(1回使ったら捨てる。
+// 同じ盤面を2つの手が書き換えないように、建てる手は置いた後の盤面をコピーしてから建てる)。
+const placedDryRuns = new WeakMap();
+function rememberPlacedDryRun(move, base, placedState, placeResult, shared) {
+  placedDryRuns.set(move, { base, state: placedState, result: placeResult, shared });
+}
+
 class Simulator {
   /** Applies move to a clone of state; the original is never touched.
    * @returns {{state: GameState, result: Object}}
    */
   apply(state, index, move) {
+    const dry = placedDryRuns.get(move);
+    if (dry) {
+      placedDryRuns.delete(move);
+      if (dry.base === state) {
+        const reused = applyFromPlaced(dry, index, move);
+        if (reused) return reused;
+      }
+    }
     const clone = cloneState(state);
     const result = applyInPlace(clone, index, move);
     return { state: clone, result };
   }
 }
 
-module.exports = { Simulator, SimulationError, applyInPlace, maxBzDiscount };
+/** apply の使い回し: dry = ダイスを置いた直後の盤面。PLACE_DIEの残り(建てる)だけをapplyInPlaceと同じ順でする。 */
+function applyFromPlaced(dry, index, move) {
+  if (move.type !== 'PLACE_DIE') return null;
+  const result = dry.result;
+  const pendingBuild = result.actionResult && result.actionResult.pendingBuild;
+  if (!pendingBuild) return dry.shared ? null : { state: dry.state, result };
+  if (move.buildCandidateIndex === undefined || move.buildCandidateIndex === null) {
+    return { state: cloneState(dry.state), result: { success: true, pendingBuild } };
+  }
+  const state = cloneState(dry.state);
+  const candidate = pendingBuild.candidates[move.buildCandidateIndex];
+  if (!candidate) throw new SimulationError(`buildCandidateIndex ${move.buildCandidateIndex} out of range`);
+  const bzDiscount = maxBzDiscount(state, index, move.playerId, candidate);
+  // pendingBuild(候補・残りの命令)は置いた直後の盤面の物。コピーした盤面の中の物ではないが、applyInPlaceと同じく
+  // 読むだけなので同じ結果になる。
+  const buildResult = board.completeAreaBuild(state, index, { playerId: move.playerId, bzDiscount }, candidate, pendingBuild.remainingCommands);
+  return { state, result: { ...buildResult, candidate } };
+}
+
+module.exports = { Simulator, SimulationError, applyInPlace, maxBzDiscount, rememberPlacedDryRun };
 
 })();

@@ -56,7 +56,7 @@ const { lowerProgram } = require('../command-builder');
 const { cloneState } = require('../game-state');
 const board = require('../board');
 const executor = require('../executor');
-const { applyInPlace } = require('./simulator');
+const { applyInPlace, rememberPlacedDryRun } = require('./simulator');
 
 /** The 12 C-tier faces (both LV1/LV2 tiers of 貴族/司教/金貸し/農場主/聖女/王女) whose TAP is a pure
  * ADD(...) resource grant with no cost at all -- see MoveGenerator#forcedPureGainCTap's own doc on why
@@ -309,10 +309,12 @@ class MoveGenerator {
           const result = board.placeDice(clone, index, { playerId, predictionCache }, die.id, mapId, slotIndex);
           if (!result.success) continue;
           diceWithAPlacement.add(die.id);
+          // 試しに置いた盤面(clone)を、点数をつける時に使い回す(simulator.jsのrememberPlacedDryRun参照)。
+          const remember = (move, shared) => { rememberPlacedDryRun(move, state, clone, result, shared); return move; };
           if (result.actionResult && result.actionResult.pendingBuild) {
             const candidates = result.actionResult.pendingBuild.candidates;
             for (let buildCandidateIndex = 0; buildCandidateIndex < candidates.length; buildCandidateIndex++) {
-              moves.push({ type: 'PLACE_DIE', playerId, dieId: die.id, mapId, slotIndex, buildCandidateIndex, buildCandidateKey: buildCandidateKey(candidates[buildCandidateIndex]) });
+              moves.push(remember({ type: 'PLACE_DIE', playerId, dieId: die.id, mapId, slotIndex, buildCandidateIndex, buildCandidateKey: buildCandidateKey(candidates[buildCandidateIndex]) }, true));
             }
             // Always also offer "place the die, leave the build unresolved" -- getBuildCandidates only
             // checks dice/category eligibility, not affordability, so every candidate above can turn out
@@ -320,12 +322,12 @@ class MoveGenerator {
             // with no affordable candidate would have zero legal moves for this slot at all (found via
             // the 2026-07-31 stuck-AI debugging: P4 had 25 candidate moves from MoveGenerator but 0 that
             // Simulator accepted, because none were affordable).
-            moves.push({ type: 'PLACE_DIE', playerId, dieId: die.id, mapId, slotIndex });
+            moves.push(remember({ type: 'PLACE_DIE', playerId, dieId: die.id, mapId, slotIndex }, true));
             // A BUILD trigger with 0 candidates (NO_BUILDABLE_CARD) still placed the die legally --
             // that's just placeDice's success:true/actionResult.success:false case below, already
             // covered since result.actionResult.pendingBuild would be absent then.
           } else {
-            moves.push({ type: 'PLACE_DIE', playerId, dieId: die.id, mapId, slotIndex });
+            moves.push(remember({ type: 'PLACE_DIE', playerId, dieId: die.id, mapId, slotIndex }, false));
           }
         }
       }
