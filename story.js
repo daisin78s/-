@@ -1355,6 +1355,7 @@ function toggleStoryLog() {
 /** 今のストーリーの章(バグ報告に書く)。第3章(スパル)の状態は昔の名残でchapter2という名前。 */
 function storyChapterNo() {
   if (!storyRun) return null;
+  if (storyRun.ch5) return 5;
   if (storyRun.ch4) return 4;
   if (storyRun.chapter2) return 3;
   if (storyRun.seneca) return 2;
@@ -2196,6 +2197,7 @@ function story2Finish() {
 /** 第3章クリア: 次の章へ(第2章→第3章と同じ形、per user回答「次の章へ」)。次の章がまだ無ければ「つづく」。 */
 const STORY3_BEST_VP_KEY = 'diceWpStory3BestVP'; // 第3章の最高記録(VP)
 const STORY4_BEST_VP_KEY = 'diceWpStory4BestVP'; // 第4章の最高記録(VP、あなたの席の最終VP)
+const STORY5_BEST_VP_KEY = 'diceWpStory5BestVP'; // 第5章(3Rから)の最高記録(VP、あなたの席の最終VP)
 
 /** 「歴代最高記録っぽい演出を」: 「〇VP‼ 歴代最高記録‼」(〇は今回のVP)を金色の大きな文字で画面の真ん中に出し、
  * 紙吹雪。3.5秒ほどで消えて次へ。 */
@@ -4608,12 +4610,54 @@ function ch4OnRender(state) {
   }
 }
 
+/* ---------- 第5章: 3Rから (2026-11-24, per user「ストーリー ５章 を 3Rから にしたい セリフは後で入れます ５章が始まったら
+ * 3Rからになる」+ 回答: 相手は普段の3Rからと同じ / 始め方は章を選ぶ画面だけ / 題名「第５章 3Rから」/ 終わったら第4章と
+ * 同じくランキング) ----------
+ * 章を始めたらすぐ、第4章の対戦と同じ「普段のゲーム」の状態(normalGame)にして、main.jsの普段の「3Rから」
+ * (handleStartFromRound3Click: 4人ともAIが1R・2Rを打つのを見せ、3Rからあなたの席を人間にする)をそのまま動かす。
+ * ゲームが終わったら第5章クリア・最高記録・ストーリーのランキング(storyChapterGameEnd)。セリフは後で足す。 */
+function ch5Start() {
+  const run = storyRun;
+  run.ch5 = { cleared: false, rankingShown: false };
+  run.normalGame = true;
+  run.diceShown = true; // 手のダイスを隠さない(storyAfterRenderがstory-hide-diceを付け直さないように)
+  storySetSpeaker('system');
+  document.body.classList.remove('story-mode', 'story-hide-dice', 'story-free-action', 'story-undo-shown', 'story-lock-hand');
+  run.dom.logButton.hidden = true;
+  run.dom.bugButton.hidden = true; // 対戦中は普段の設定タブのバグ報告を使う
+  storySetAllowedTabs([...document.querySelectorAll('.mobile-tab-switcher__btn')].map((b) => b.dataset.tabTarget));
+  storySetGlow([]);
+  aiPacingMode = 'delayed';
+  run.onRender = ch5OnRender;
+  handleStartFromRound3Click();
+}
+
+function ch5OnRender(state) {
+  const run = storyRun;
+  if (!run || !run.ch5) return;
+  // 盤面のエリアは全部見せる(ストーリーの「見えているエリア」の絞り込みが普段の手に効かないように)。
+  run.visibleMapIds = Object.keys(state.maps || {});
+  if (state.phase !== 'GAME_END' || run.ch5.cleared) return;
+  run.ch5.cleared = true;
+  storyMarkChapterCleared(5);
+  // 第5章の最高記録(あなたの席の最終VP、第4章と同じく同じ点でも更新)。
+  const standing = standingsRows(state).find((r) => r.playerId === 'P1');
+  const vp = standing ? standing.vp : 0;
+  let prev = null;
+  try { const v = localStorage.getItem(STORY5_BEST_VP_KEY); prev = v === null ? null : Number(v); } catch (err) { /* 読めなければ記録なし */ }
+  if (prev === null || vp >= prev) {
+    try { localStorage.setItem(STORY5_BEST_VP_KEY, String(vp)); } catch (err) { /* 書けなくても続ける */ }
+    storyProgressChanged();
+  }
+}
+
 const STORY_CHAPTERS = [
   { no: 1, title: '第１章　怠惰なローマ市民アレク', start: openStoryMode },
   // 2026-11-09, per user: セネカの章を第2章に、スパルは第3章に(題名も「傲慢な百人隊長スパル」、伏せ字はやめる)。
   { no: 2, title: '第２章　几帳面な研究者セネカ', start: () => openStoryMode(senecaStart) },
   { no: 3, title: '第３章　傲慢な百人隊長スパル', start: () => openStoryMode(story2Start) },
   { no: 4, title: '第４章　４人対戦', start: () => openStoryMode(ch4Start) },
+  { no: 5, title: '第５章　3Rから', start: () => openStoryMode(ch5Start) },
 ];
 
 function storyClearedChapters() {
@@ -4636,7 +4680,7 @@ function storyLocalProgress() {
   const num = (key) => { try { const v = localStorage.getItem(key); return v === null || v === '' || Number.isNaN(Number(v)) ? null : Number(v); } catch (e) { return null; } };
   let worried = false;
   try { worried = localStorage.getItem(STORY_SENECA_WORRIED_UNLOCK_KEY) === '1'; } catch (e) { /* ignore */ }
-  return { cleared: storyClearedChapters(), owls: senecaOwls(), senecaWorried: worried, best3: num(STORY3_BEST_VP_KEY), best4: num(STORY4_BEST_VP_KEY) };
+  return { cleared: storyClearedChapters(), owls: senecaOwls(), senecaWorried: worried, best3: num(STORY3_BEST_VP_KEY), best4: num(STORY4_BEST_VP_KEY), best5: num(STORY5_BEST_VP_KEY) };
 }
 function storyMergeProgress(a, b) {
   const uniq = (xs) => [...new Set(xs)];
@@ -4647,6 +4691,7 @@ function storyMergeProgress(a, b) {
     senecaWorried: !!(a.senecaWorried || b.senecaWorried),
     best3: max(a.best3, b.best3),
     best4: max(a.best4, b.best4),
+    best5: max(a.best5, b.best5),
   };
 }
 function storyWriteLocalProgress(p) {
@@ -4656,6 +4701,7 @@ function storyWriteLocalProgress(p) {
     if (p.senecaWorried) localStorage.setItem(STORY_SENECA_WORRIED_UNLOCK_KEY, '1');
     if (p.best3 !== null) localStorage.setItem(STORY3_BEST_VP_KEY, String(p.best3));
     if (p.best4 !== null) localStorage.setItem(STORY4_BEST_VP_KEY, String(p.best4));
+    if (p.best5 !== null && p.best5 !== undefined) localStorage.setItem(STORY5_BEST_VP_KEY, String(p.best5));
   } catch (e) { /* 書けなくても続ける */ }
 }
 function storySyncWithBackup() {
@@ -4686,7 +4732,7 @@ document.addEventListener('DOMContentLoaded', () => { setTimeout(() => { storySy
  * 保存先はonline-sync.jsのranking_story(章はchapterで分ける)。章の最後(第3章の記録のセリフのあと、第4章のゲーム
  * 終了)は opts.vp ありで開き、名前を入れて「登録」(リプレイも保存)。章を選ぶ画面の「ランキング」からは見るだけ
  * (上の章のタブで切り替え)。名前はふだんのランキングと同じく、この端末で前に使った名前が最初から入っている。 */
-const STORY_RANKING_CHAPTERS = [3, 4]; // 対戦のある章(章が増えたらここに足す)
+const STORY_RANKING_CHAPTERS = [3, 4, 5]; // 対戦のある章(章が増えたらここに足す)
 /** 章を選ぶ画面から見られる章(クリアした章だけ)。 */
 function storyRankingViewableChapters() {
   const cleared = storyClearedChapters();
@@ -4730,7 +4776,8 @@ function storyShowRanking(opts) {
       const status = el('span', 'story-ranking__status', '確かめています...');
       register.appendChild(status);
       const p1 = STATE.players.find((p) => p.id === 'P1');
-      const firstPlace = chapter !== 4 || (typeof standingsRows === 'function' && (standingsRows(STATE)[0] || {}).playerId === 'P1');
+      // 第5章(3Rから)も第4章と同じく4人対戦なので、1位の時だけ。
+      const firstPlace = chapter < 4 || (typeof standingsRows === 'function' && (standingsRows(STATE)[0] || {}).playerId === 'P1');
       const save = (rank) => {
         const name = loadRememberedRankingName();
         status.textContent = '登録中...';
@@ -4835,10 +4882,11 @@ function storyShowRanking(opts) {
  * ランキング(名前を入れて登録)。閉じたらトップ画面へ。 */
 function storyChapterGameEnd(state) {
   const run = storyRun;
-  if (!run || !run.ch4 || run.ch4.rankingShown) return;
-  run.ch4.rankingShown = true;
+  const ch = run && (run.ch5 || run.ch4);
+  if (!ch || ch.rankingShown) return;
+  ch.rankingShown = true;
   const standing = standingsRows(state).find((r) => r.playerId === 'P1');
-  storyShowRanking({ chapter: 4, vp: standing ? standing.vp : 0, onClose: closeStoryMode });
+  storyShowRanking({ chapter: run.ch5 ? 5 : 4, vp: standing ? standing.vp : 0, onClose: closeStoryMode });
 }
 
 function openStoryChapterSelect() {
@@ -4864,9 +4912,9 @@ function openStoryChapterSelect() {
     }
     // 第3章: 自分の最高記録があれば右側に「最高記録〇VP」(2026-11-14, per user)。
     // 第4章も同じ(2026-11-15, per user「４章も右側に最高得点が出るように」)。
-    if (chapter.no === 3 || chapter.no === 4) {
+    if (chapter.no === 3 || chapter.no === 4 || chapter.no === 5) {
       let best = null;
-      try { best = localStorage.getItem(chapter.no === 3 ? STORY3_BEST_VP_KEY : STORY4_BEST_VP_KEY); } catch (err) { /* 読めなければ出さない */ }
+      try { best = localStorage.getItem({ 3: STORY3_BEST_VP_KEY, 4: STORY4_BEST_VP_KEY, 5: STORY5_BEST_VP_KEY }[chapter.no]); } catch (err) { /* 読めなければ出さない */ }
       if (best !== null) button.appendChild(el('span', 'story-chapters__record', `最高記録${best}VP`));
     }
     button.type = 'button';
