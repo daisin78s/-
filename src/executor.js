@@ -1636,8 +1636,15 @@ function runProgram(state, index, context, dslText) {
   return withGrantBatch(() => runProgramInBatch(state, index, context, dslText));
 }
 function runProgramInBatch(state, index, context, dslText) {
-  const before = cloneState(state);
   const commands = lowerProgram(parse(dslText));
+  // 命令が1つだけの時は、元に戻すための盤面のコピーを取らない (2026-11-24, per user「(AIを早くする案)すすめて」 -- この
+  // コピーがAIの考える時間の2割ほどを使っていた)。1つの命令は失敗する時は何も変えずに失敗する(8試合・失敗12268回で、
+  // 失敗の後に盤面が変わっていたことは一度もなかった)ので、戻す物が無い。2つ以上の時は、前の命令の分を戻すために今までどおり。
+  if (commands.length === 1) {
+    const result = runCommand(state, index, context, commands[0]);
+    return result.success ? { success: true } : result;
+  }
+  const before = cloneState(state);
   for (const cmd of commands) {
     const result = runCommand(state, index, context, cmd);
     if (!result.success) {
