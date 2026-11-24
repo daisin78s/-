@@ -27,7 +27,8 @@ index.byId.set('CON005B', { sheet: 'CON', row: { ...index.byId.get('CON005B').ro
 // run against a fixed synthetic sheet instead of pinning whatever the real one holds today. Only the
 // cells listed here are non-blank.
 raw['評価値ALL'] = [
-  { NAME: 'D', 憤怒: -7 },
+  { NAME: 'D1', 憤怒: -7 },
+  { NAME: 'D2', 憤怒: -11 }, // 2026-11-24: 追加色ダイスは数ごと(D1/D2/D3)の1マス
   { NAME: '天文学', 憤怒: -100 },
   { NAME: '訓練場の支配', 基礎学問: 25 }, // one triangle only -- read symmetrically
   { NAME: '道化師', 訓練場の支配: 12 },
@@ -781,6 +782,16 @@ index.raw.QST = [
   for (let i = 0; i < 6; i++) p1.dice.push(createDie(`cd${i}`, 'COLOR'));
   const plainScore = evaluator.score(state, 'P1');
   check('conBuildAware\'s 追加色ダイス penalty applies only to the 1 die past the 5-die baseline', evaluatorConBuildAware.score(state, 'P1'), plainScore - 7);
+}
+
+{
+  // 7 color dice = 2 additional -> the D2 cell (-11) once, not 2 x D1.
+  const state = freshState(2);
+  const p1 = state.players[0];
+  p1.conPhysicalId = 'CON005';
+  p1.conFace = 'A';
+  for (let i = 0; i < 7; i++) p1.dice.push(createDie(`cd${i}`, 'COLOR'));
+  check('2 additional color dice use the D2 cell once', evaluatorConBuildAware.score(state, 'P1'), evaluator.score(state, 'P1') - 11);
 }
 
 {

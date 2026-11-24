@@ -26,6 +26,15 @@
 
 const UNIT_SHEETS = ['A', 'B', 'C', 'M', 'JOB', 'CON'];
 const COLOR_DICE_NAME = 'D';
+// 追加色ダイスのD欄もデータから自動 (2026-11-24, per user「Dの欄すべて 自動で変わるようにして」「増えた数だけ数える」「すぐ自動に切り替える」):
+// 1つの「D」をやめ、ゲーム終了時の追加色ダイス(ふつうの5個より多い分)の数で D1(1個)/D2(2個)/D3(3個以上) に分けて数える。
+const COLOR_DICE_UNITS = ['D1', 'D2', 'D3'];
+const COLOR_DICE_BASELINE = 5;
+/** 追加色ダイスの数 -> その項目(D1/D2/D3)。0個ならnull。 */
+function colorDiceUnit(extraCount) {
+  if (!(extraCount > 0)) return null;
+  return COLOR_DICE_UNITS[Math.min(extraCount, COLOR_DICE_UNITS.length) - 1];
+}
 
 function unitIdOfFace(sheet, faceId) {
   if (sheet === 'CON' || sheet === 'M' || sheet === 'JOB') return faceId;
@@ -38,7 +47,8 @@ function stripLevel(name) {
 
 /** @returns {{byUnit: Object<string,Object<string,number>>, unitByName: Object<string,string>}} */
 function buildEvalAllTable(raw) {
-  const unitByName = { [COLOR_DICE_NAME]: COLOR_DICE_NAME };
+  const unitByName = {};
+  for (const u of COLOR_DICE_UNITS) unitByName[u] = u;
   for (const sheet of UNIT_SHEETS) {
     for (const row of raw[sheet] || []) {
       const name = stripLevel(row.NAME || row.ID);
@@ -115,6 +125,6 @@ function heldPairSum(table, units) {
   return total;
 }
 
-module.exports = { buildEvalAllTable, soloValue, pairValue, pairValueByName, heldUnits, heldPairSum, COLOR_DICE_NAME };
+module.exports = { buildEvalAllTable, soloValue, pairValue, pairValueByName, heldUnits, heldPairSum, COLOR_DICE_NAME, COLOR_DICE_UNITS, COLOR_DICE_BASELINE, colorDiceUnit };
 
 })();

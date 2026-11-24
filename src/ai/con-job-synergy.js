@@ -21,7 +21,8 @@
 
 const evalAll = require('./eval-all');
 
-const COLOR_DICE_ROW_NAME = evalAll.COLOR_DICE_NAME;
+// 2026-11-24: 「色ダイスを1つ増やせる」= D1 (追加1個) の行 -- eval-all.js の COLOR_DICE_UNITS 参照。
+const COLOR_DICE_ROW_NAME = evalAll.COLOR_DICE_UNITS[0];
 
 /** 2026-10-30: now built from 評価値ALL (see eval-all.js) -- 評価値_JOB itself is no longer read (per user:
  * "c" = everything in one sheet). The row kinds pickJob/pickConFace look up are unchanged (a CON face name,

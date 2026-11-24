@@ -341,9 +341,10 @@ class Evaluator {
       // 5-die baseline, not their total color-die count outright; confirmed no per-die acquisition
       // tracking is needed -- "何で得た分か追跡不要です" -- so any color die beyond 5, from any source,
       // counts the same): a per-extra-color-die bonus/penalty specific to this CON face.
-      const ADDITIONAL_COLOR_DICE_BASELINE = 5;
-      const additionalColorDiceCount = Math.max(0, totalColorDiceCount - ADDITIONAL_COLOR_DICE_BASELINE);
-      total += additionalColorDiceCount * evalAll.pairValue(this.evalAllTable, evalAll.COLOR_DICE_NAME, conBuildFaceUnit);
+      // (2026-11-24: 追加がk個なら「k × D」ではなく「Dk × 性格」の1マス -- D1/D2/D3はデータから自動、eval-all.js参照)
+      const additionalColorDiceCount = Math.max(0, totalColorDiceCount - evalAll.COLOR_DICE_BASELINE);
+      const colorDiceUnit = evalAll.colorDiceUnit(additionalColorDiceCount);
+      if (colorDiceUnit) total += evalAll.pairValue(this.evalAllTable, colorDiceUnit, conBuildFaceUnit);
     }
 
     for (const physicalId of player.ownedCardPhysicalIds) {

@@ -12,6 +12,12 @@ UNIT_SHEETS = ['A', 'B', 'C', 'M', 'JOB', 'CON']
 KIND_LABEL = {'A': 'A', 'B': 'B', 'C': 'C', 'M': 'モニュメント', 'JOB': 'ジョブ', 'CON': '性格'}
 # Pair-type grouping for 補正後の相性: A/B/C are all area cards, one group.
 GROUP_LABEL = {'A': 'エリア', 'B': 'エリア', 'C': 'エリア', 'M': 'モニュメント', 'JOB': 'ジョブ', 'CON': '性格'}
+# 追加色ダイスのD欄もデータから自動 (2026-11-24, per user「Dの欄すべて 自動で変わるようにして」「増えた数だけ数える」「すぐ自動に切り替える」):
+# ゲーム終了時の追加色ダイスの数 D1/D2/D3(3個以上) も1つの項目として相性を数える (tools/card_pair_stats.js の holdingUnits)。
+COLOR_DICE_UNITS = ['D1', 'D2', 'D3']
+COLOR_DICE_SHEET = 'D'
+KIND_LABEL[COLOR_DICE_SHEET] = '色ダイス'
+GROUP_LABEL[COLOR_DICE_SHEET] = '色ダイス'
 
 
 class PairSynergy:
@@ -30,12 +36,16 @@ class PairSynergy:
                 seen.add(uid)
                 name = row.get('NAME') or uid
                 self.units.append((uid, sheet, name if self.per_face else re.sub(r'LV\d$', '', name)))
+        for uid in COLOR_DICE_UNITS:
+            self.units.append((uid, COLOR_DICE_SHEET, uid))
         self.group_of = {uid: GROUP_LABEL[sheet] for uid, sheet, _ in self.units}
         self.name_of = {uid: name for uid, _, name in self.units}
         self.solo = stats.get('solo', {})
         self.pair = stats.get('pair', {})
-        total_n = sum(s['n'] for s in self.solo.values())
-        self.overall = (sum(s['rankSum'] for s in self.solo.values()) / total_n) if total_n else 2.5
+        # 全体の平均にはD1/D2/D3を入れない(入れるとカードどうしのマスの値まで少し動くため)
+        card_solo = [s for u, s in self.solo.items() if u not in COLOR_DICE_UNITS]
+        total_n = sum(s['n'] for s in card_solo)
+        self.overall = (sum(s['rankSum'] for s in card_solo) / total_n) if total_n else 2.5
 
         baseline_sum = {}
         self.baseline_n = {}

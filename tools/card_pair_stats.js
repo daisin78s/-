@@ -52,6 +52,9 @@ const XLSX_SCRIPT = path.join(PROJECT_ROOT, 'tools', 'card_pair_stats_to_xlsx.py
 const DATA_PATH = path.join(PROJECT_ROOT, 'data', 'game.json');
 
 const UNIT_SHEETS = ['A', 'B', 'C', 'M', 'JOB', 'CON'];
+// 追加色ダイスの項目 (src/ai/eval-all.js の COLOR_DICE_UNITS / COLOR_DICE_BASELINE と同じ)
+const COLOR_DICE_UNITS = ['D1', 'D2', 'D3'];
+const COLOR_DICE_BASELINE = 5;
 // Ability-bearing columns only -- NAME/INST/アイコン/WARNING/NOTE are wording, not ability.
 const FINGERPRINT_COLUMNS = ['DICE', 'COST', 'EMBLEM_A', 'EMBLEM_B', 'EMBLEM_C', 'VP', 'LEVEL', 'ONCE', 'TAP', 'PASSIVE', 'TURNEND', 'START_ORDER', 'AUTO'];
 
@@ -91,6 +94,10 @@ function holdingUnits(state, index, player, perFace) {
   }
   if (player.conPhysicalId && player.conFace) result.add(`${player.conPhysicalId}${player.conFace}`);
   if (player.jobCardId) result.add(player.jobCardId);
+  // 追加色ダイスのD欄もデータから自動 (2026-11-24, per user「Dの欄すべて 自動で変わるようにして」「増えた数だけ数える」「すぐ自動に切り替える」):
+  // ゲーム終了時の追加色ダイス(5個より多い分)の数で D1/D2/D3(3個以上) のどれか1つ。
+  const extra = player.dice.filter((d) => d.kind === 'COLOR').length - COLOR_DICE_BASELINE;
+  if (extra > 0) result.add(COLOR_DICE_UNITS[Math.min(extra, COLOR_DICE_UNITS.length) - 1]);
   return [...result].sort();
 }
 

@@ -17,8 +17,9 @@ their 相性 is mostly noise. POINTS_PER_RANK = 130 lines a 0.15 / 0.30 rank edg
 評価値ALL cells:
   - From data: 補正後 >= PLUS_MIN -> the points. 補正後 <= MINUS_MAX with at least MINUS_MIN_GAMES games -> the
     points, but never below -99 (so it can't be mistaken for a fixed cell). Anything else blank.
-  - Fixed (never rewritten, mirrored to both triangles): any cell <= -100, and the whole D row/column (D is
-    追加色ダイス, not a card, so there's no data for it). --seed-fixed copies them once from the old sheets:
+  - Fixed (never rewritten, mirrored to both triangles): any cell <= -100. (2026-11-24: the D row/column is no
+    longer fixed -- per user「Dの欄すべて 自動で変わるようにして」, 追加色ダイス is now tallied as D1/D2/D3 like a
+    card, see card_pair_synergy.py, and written from data like every other cell.) --seed-fixed copies them once from the old sheets:
     every old cell <= -100 becomes -100, and the old D rows are copied as-is.
 
 Usage: python tools/write_eval_all_sheet.py <statsJson> <gameJson> <xlsx> [--seed-fixed]
@@ -48,7 +49,6 @@ SOLO_BASE_RANK = 2.5
 # ジョブとの相性(多くは20〜50点)より大きく、表の面(強欲・几帳面など)がほとんど選ばれなくなったため)。
 SOLO_POINTS_PER_RANK = 65
 SOLO_MIN_GAMES = 300
-D = 'D'
 SHEET = '評価値ALL'
 
 args = [a for a in sys.argv[1:] if not a.startswith('--')]
@@ -61,7 +61,6 @@ with open(game_path, encoding='utf-8') as f:
 
 ps = PairSynergy(stats, game)
 unit_by_name = {name: uid for uid, _, name in ps.units}
-unit_by_name[D] = D
 for row in game.get('CON', []):
     unit_by_name[row['NAME']] = row['ID']
 for row in game.get('JOB', []):
@@ -76,7 +75,7 @@ def unit_of(label):
 
 def points(a, b):
     """(points, n, adjusted) for a pair, or None if there's no data yet."""
-    if D in (a, b) or a == b:
+    if a == b:
         return None
     adj = ps.adjusted_synergy(a, b)
     if adj is None:
@@ -121,7 +120,7 @@ if ws.max_row >= 2:
             b = unit_of(header[idx]) if idx < len(header) else None
             if not b or b == a or not isinstance(cell.value, (int, float)):
                 continue
-            if cell.value <= FIXED_MAX or D in (a, b):
+            if cell.value <= FIXED_MAX:
                 set_fixed(a, b, cell.value)
 
 if seed_fixed:
@@ -141,13 +140,10 @@ if seed_fixed:
                     continue
                 if v <= FIXED_MAX:
                     set_fixed(a, b, FIXED_MAX)
-                elif D in (a, b):
-                    set_fixed(a, b, v)
 
 # --- 評価値ALL ---
-order = [uid for uid, _, _ in ps.units] + [D]
+order = [uid for uid, _, _ in ps.units]
 label = {uid: name for uid, _, name in ps.units}
-label[D] = D
 ws.delete_rows(1, ws.max_row)
 header_fill = PatternFill('solid', fgColor='EEEEEE')
 fixed_font = Font(bold=True, color='C00000')
