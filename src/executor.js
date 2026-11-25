@@ -940,10 +940,11 @@ function activePassiveCommands(state, index, playerId, row) {
 }
 
 /** All currently-active PASSIVE commands of a given type, across every card the player owns. */
-function getPassiveRules(state, index, playerId, type) {
+function getPassiveRules(state, index, playerId, type, ignoreFaceIds = null) {
   const owned = ownedCardRows(state, index, playerId);
   const out = [];
   for (const { row } of owned) {
+    if (ignoreFaceIds && ignoreFaceIds.has(row.ID)) continue;
     for (const cmd of activePassiveCommands(state, index, playerId, row)) {
       if (cmd.type === type) out.push(cmd);
     }
@@ -960,12 +961,13 @@ function getPassiveRules(state, index, playerId, type) {
  * see command-builder.js's own doc) contributes -1 per unit its metric falls short of its threshold, 0
  * once at/above it. VP_PENALTY_PER (2026-08-15, see command-builder.js's own doc) contributes -1 per
  * unit of its metric, no threshold. */
-function collectVpModifiers(state, index, playerId) {
-  const modifierSum = getPassiveRules(state, index, playerId, 'VP_MODIFIER')
+// ignoreFaceIds: AIの評価だけが使う(そのカードのVPの増減を数えない、evaluator.js参照)。点数の計算は渡さない。
+function collectVpModifiers(state, index, playerId, ignoreFaceIds = null) {
+  const modifierSum = getPassiveRules(state, index, playerId, 'VP_MODIFIER', ignoreFaceIds)
     .reduce((sum, r) => sum + evalCountNode(state, index, playerId, r.count), 0);
-  const shortfallSum = getPassiveRules(state, index, playerId, 'VP_PENALTY_IF_BELOW')
+  const shortfallSum = getPassiveRules(state, index, playerId, 'VP_PENALTY_IF_BELOW', ignoreFaceIds)
     .reduce((sum, r) => sum - Math.max(0, r.threshold - evalMetric(state, index, playerId, r.metric)), 0);
-  const perUnitPenaltySum = getPassiveRules(state, index, playerId, 'VP_PENALTY_PER')
+  const perUnitPenaltySum = getPassiveRules(state, index, playerId, 'VP_PENALTY_PER', ignoreFaceIds)
     .reduce((sum, r) => sum - evalMetric(state, index, playerId, r.metric), 0);
   return modifierSum + shortfallSum + perUnitPenaltySum;
 }
