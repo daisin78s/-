@@ -1002,7 +1002,7 @@ class AIPlayer {
     for (const c of myReps) {
       if (Date.now() > rolloutDeadline) { anyTimedOut = true; break; }
       const r = this.#endgameRollout(c, playerId);
-      if (r && (!best || r.v > best.v)) {
+      if (r && (!best || r.v > best.v || (r.v === best.v && buildsEarlier([{ m: c.m }].concat(r.steps), best.plan)))) {
         best = { v: r.v, move: c.m, untap: c.untap, plan: [{ key: rootKey, m: c.m, untap: c.untap }].concat(r.steps), fromRollout: true };
       }
     }
@@ -1044,8 +1044,9 @@ class AIPlayer {
       };
       const v = Math.max(dfs(ch.c, ch.np, ch.k), found);
       if (timedOut) anyTimedOut = true;
-      if (v >= 0 && (!best || v > best.v)) {
-        best = { v, move: ch.m, untap: ch.untap, plan: [{ key: rootKey, m: ch.m, untap: ch.untap }].concat(foundPath) };
+      const chPlan = [{ key: rootKey, m: ch.m, untap: ch.untap }].concat(foundPath);
+      if (v >= 0 && (!best || v > best.v || (v === best.v && buildsEarlier(chPlan, best.plan)))) {
+        best = { v, move: ch.m, untap: ch.untap, plan: chPlan };
       }
     }
     if (best) {
@@ -1197,6 +1198,17 @@ class AIPlayer {
 
 /** 手の「考え」(#selectMoveInnerの読む枠を、考えの違う手で埋めるため): 建築を伴う置き方は取るカード、伴わない置き方は
  * エリア、カードのタップはそのカード(+建築するカード)。どのダイスを・どのマスに、の違いは同じ考えとみなす。 */
+/** 読み切りの手順どうしで最後の点が同じ時、カード(モニュメントも)を早く取る手順を選ぶ (2026-11-25, per user のバグ報告
+ * 「コロッセオが取れるのに孤児院に行こうとする 宮廷人を使うと推奨が変わる」+ 前の回答「(後で取る予定のカードが)確定していて
+ * それの方が点数が高いなら それでもいい」-- 読み切りは相手を動かさないので「今孤児院→次にコロッセオ」と「今コロッセオ→次に
+ * 孤児院」が同じ点になり、先に読んだ方を選んでいた。実際は待つ間に相手に取られることがある)。planA の方が早ければtrue。 */
+function buildsEarlier(planA, planB) {
+  const first = (plan) => (Array.isArray(plan) ? plan.findIndex((st) => st && st.m && st.m.buildCandidateKey) : -1);
+  const a = first(planA);
+  const b = first(planB);
+  return a >= 0 && (b < 0 || a < b);
+}
+
 function moveIdeaKey(move) {
   if ((move.type === 'PLACE_DIE' || move.type === 'PLACE_WILDCARD_DIE' || move.type === 'PLACE_DICE_GROUP') && move.mapId) {
     return move.buildCandidateKey ? `build:${move.buildCandidateKey}` : `area:${move.mapId}`;

@@ -1513,7 +1513,10 @@ function aiWorkerSelectMove(state, playerId, options) {
     const ok = results.filter(Boolean);
     if (ok.length === 0) throw new Error('AI workers failed');
     const withEndgame = ok.filter((r) => r.endgame);
-    const win = withEndgame.length > 0 ? withEndgame.reduce((a, b) => (b.endgame.v > a.endgame.v ? b : a)) : ok[0];
+    // 点が同じなら、カードを早く取る手順の方(ai-player.jsのendgameFirstBuildStep、2026-11-25)。
+    const firstBuild = (r) => (r.endgame.plan && Array.isArray(r.endgame.plan.steps) ? r.endgame.plan.steps.findIndex((st) => st.m && st.m.buildCandidateKey) : -1);
+    const earlier = (b, a) => { const fb = firstBuild(b); const fa = firstBuild(a); return fb >= 0 && (fa < 0 || fb < fa); };
+    const win = withEndgame.length > 0 ? withEndgame.reduce((a, b) => (b.endgame.v > a.endgame.v || (b.endgame.v === a.endgame.v && earlier(b, a)) ? b : a)) : ok[0];
     if (win.endgame) aiWorkerPost({ type: 'adopt', level, playerId, plan: win.endgame.plan });
     return win;
   });
@@ -7018,6 +7021,9 @@ function questRewardVpAmount(rewardDsl) {
  * game really does end, state.qstRewardsGranted holds the settled amount and standingsRows uses that
  * instead (see its own comment), so the number never contradicts what was actually awarded. */
 function projectedQstVpForPlayer(state, playerId) {
+  // 裏切(CON004B)はクエストからVPをもらえないので0 (2026-11-25, per user のバグ報告「裏切はクエストからVPを得ることが
+  // できないので(＋5)ではなく(0)では」-- 点数の計算(qst.resolveEndGameRewards)は0だったが、順位表の見込みだけ数えていた)。
+  if (qstMod.forfeitsQuestRewards(state, playerId)) return 0;
   let total = 0;
   for (const faceId of Object.keys(state.quests || {})) {
     const entry = qstMod.rankPlayersForQuest(state, INDEX, faceId).find((r) => r.playerId === playerId);
