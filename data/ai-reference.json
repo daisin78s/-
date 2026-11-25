@@ -1,6 +1,6 @@
 {
- "gameDataVersion": "67bf02e8129cbdf8",
- "generatedAt": "2026-11-25T14:27:51.037Z",
+ "gameDataVersion": "0916bb83ca13db60",
+ "generatedAt": "2026-11-25T15:20:48.746Z",
  "commandSpecFile": "dsl-command-spec.json",
  "cardCount": 148,
  "cards": {
@@ -1026,7 +1026,8 @@
    "SLOT4": "NONE",
    "SLOT5": "NONE",
    "SLOT6": "NONE",
-   "ACTION": "CHANGE(2K,3Z)"
+   "ACTION": "CHANGE(2ANY,3Z)",
+   "inst": "資源2個を人脈3個に変換する\n〇以外の資源でもよい"
   },
   "AREA007A": {
    "sheet": "AREA",
@@ -1144,7 +1145,8 @@
    "SLOT5": "NONE",
    "SLOT6": "NONE",
    "fee": "K",
-   "ACTION": "CHANGE(2K,5Z)"
+   "ACTION": "CHANGE(2ANY,5Z)",
+   "inst": "資源2個を人脈5個に変換する\n〇以外の資源でもよい"
   },
   "AREA007B": {
    "sheet": "AREA",
@@ -1156,8 +1158,8 @@
    "SLOT5": "NONE",
    "SLOT6": "NONE",
    "fee": "K",
-   "ACTION": "CHANGE(2K,D)",
-   "inst": "色ダイスの上限は5個\nこのエリアにダイスを置くと怠惰の性格は解除される"
+   "ACTION": "CHANGE(2ANY,D)",
+   "inst": "資源2個を追加色ダイスに変換する（〇以外の資源でもよい）\n色ダイスの上限は5個\nこのエリアにダイスを置くと怠惰の性格は解除される"
   },
   "AREA009B": {
    "sheet": "AREA",
@@ -1254,7 +1256,8 @@
    "SLOT5": "NONE",
    "SLOT6": "NONE",
    "fee": "2K",
-   "ACTION": "CHANGE(2K,7Z)"
+   "ACTION": "CHANGE(2ANY,7Z)",
+   "inst": "資源2個を人脈7個に変換する\n〇以外の資源でもよい"
   },
   "AREA007C": {
    "sheet": "AREA",

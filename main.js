@@ -5353,7 +5353,7 @@ function buildAddMultiResourceIcon(actionText) {
  * resourceItemNodes) for both sides, rather than the old single-dot-plus-"×N"-suffix look, since a
  * quantity prefix on *both* sides doesn't reduce to a single "how many times" suffix. */
 function buildChangeQuantityIcon(actionText) {
-  const match = /^CHANGE\((\d*)(K|A|B|C|Z),(\d*)(K|A|B|C|Z)\)$/.exec(actionText || '');
+  const match = /^CHANGE\((\d*)(K|A|B|C|Z|ANY),(\d*)(K|A|B|C|Z)\)$/.exec(actionText || ''); // ANY: どの資源でも(2026-11-26、酒場)
   if (!match) return null;
   const [, payCount, payResource, getCount, getResource] = match;
   const row = actionRow([
@@ -5377,9 +5377,9 @@ function buildChangeQuantityIcon(actionText) {
  * "extra"). Distinct from buildChangeQuantityIcon above: that one requires K/A/B/C/Z on BOTH sides, but
  * "D" (a color die) isn't a plain countable resource the same way, so it needs its own match/wording. */
 function buildChangeToColorDieIcon(actionText) {
-  const match = /^CHANGE\((\d*)K,D\)$/.exec(actionText || '');
+  const match = /^CHANGE\((\d*)(K|ANY),D\)$/.exec(actionText || ''); // ANY: どの資源でも(2026-11-26、訓練場LV1)
   if (!match) return null;
-  return actionRow([...resourceItemNodes(match[1], 'K'), actionArrow(), actionSuffix('追加色ダイス', '追加色D')]);
+  return actionRow([...resourceItemNodes(match[1], match[2]), actionArrow(), actionSuffix('追加色ダイス', '追加色D')]);
 }
 
 /** CHANGE(nX,(item1,item2,...)) -- pay a single resource, gain a fixed GROUP of resources all at once
@@ -8408,14 +8408,14 @@ function placeSelectedDieAfterJob007Check(state, player, dieId, mapId, slotIndex
  * (showAnyPaymentPicker参照) (2026-11-25, per user「パンとサーカス 孤児院 … どんな資源でも払えるように」+ 回答「人間もAIも選べるように」「〇が足りない時だけ」「支払いは強制で」)。 */
 function placeSelectedDieWithAnyPayment(state, player, dieId, mapId, slotIndex) {
   const areaRow = dataLoaderMod.getAreaRow(INDEX, state.maps[mapId].currentAreaId);
-  const cap = anyPayCapOf(areaRow.ACTION);
-  const pick = cap ? anyPaymentPickNeeded(player.resources, cap, executorMod.anyPayPrimary(state, INDEX, player.id)) : null;
+  const info = anyPayInfoOf(areaRow.ACTION, player.resources);
+  const pick = info ? anyPaymentPickNeeded(player.resources, info.need, executorMod.anyPayPrimary(state, INDEX, player.id)) : null;
   if (!pick) { placeSelectedDieCommit(state, player, dieId, mapId, slotIndex); return; }
   const kText = pick.kUse > 0 ? `${anyPayPrimaryName(pick.primary)}${pick.kUse}個と、` : '';
   showAnyPaymentPicker({
     primary: pick.primary,
     title: areaRow.NAME,
-    text: `資源${pick.times}個を${pick.times}VPに変えます。\n${kText}ほかに払う資源を${pick.rest}個選んでください。`,
+    text: `資源${pick.times}個を払って、${info.gainName}にします。\n${kText}ほかに払う資源を${pick.rest}個選んでください。`,
     resources: player.resources,
     rest: pick.rest,
     onConfirm: (choice) => {
@@ -8698,15 +8698,23 @@ function feeConversionPlanForTurnEnd(state, playerId) {
 /** どの資源でも払える支払い(CHANGE(ANY,VP,n)、パンとサーカス・孤児院)で、人が払う資源を選ぶ画面 (2026-11-25, per user「パンとサーカス 孤児院 … どんな資源でも払えるように」+ 回答「人間もAIも選べるように」「〇が足りない時だけ」「支払いは強制で」)。
  * 〇から先に払い、〇が足りない分を赤〇・青〇・黄〇・人脈から選ぶ(初めは一番多い資源から、executor.defaultAnyPayment)。
  * 選べる資源が1種類しか無い時は画面を出さずに自動。支払いは強制(払える分は必ず払う)なので「払わない」は無い。 */
-function anyPayCapOf(dslText) {
-  const m = /^CHANGE\(ANY,VP(?:,(\d+))?\)$/.exec(String(dslText || '').trim());
-  return m ? (m[1] ? Number(m[1]) : 1) : 0;
+// 効果の文字から、払う資源の数と、もらえる物の言い方 (2026-11-26, per user 訓練場LV1・酒場も「どの資源でも」に「おねがい」)。
+function anyPayInfoOf(dslText, resources) {
+  const m = /^CHANGE\((\d*)ANY,(\d*)([A-Z]+)(?:,(\d+))?\)$/.exec(String(dslText || '').trim());
+  if (!m) return null;
+  const need = executorMod.anyPayNeedOfText(dslText, resources);
+  if (need <= 0) return null;
+  const per = m[1] ? Number(m[1]) : 1;
+  const times = need / per;
+  const gainCount = (m[2] ? Number(m[2]) : 1) * times;
+  const gainName = { VP: `${gainCount}VP`, D: '追加色ダイス', Z: `人脈${gainCount}個`, K: `〇${gainCount}個`, A: `赤〇${gainCount}個`, B: `青〇${gainCount}個`, C: `黄〇${gainCount}個` }[m[3]] || m[3];
+  return { need, gainName };
 }
 // primary: 最初に払う資源(ふつうは〇、権力者は赤〇、executor.anyPayPrimary)。primaryで足りない時だけ選ぶ画面を出す。
-function anyPaymentPickNeeded(resources, cap, primary = 'K') {
+// need: 払う資源の数(anyPayInfoOf)。
+function anyPaymentPickNeeded(resources, need, primary = 'K') {
   const others = ['K', 'A', 'B', 'C', 'Z'].filter((r) => r !== primary && (resources[r] || 0) > 0);
-  const total = (resources[primary] || 0) + others.reduce((sum, r) => sum + resources[r], 0);
-  const times = Math.min(cap, total);
+  const times = need;
   const kUse = Math.min(resources[primary] || 0, times);
   const rest = times - kUse;
   if (rest <= 0 || others.length < 2) return null;
@@ -8779,21 +8787,21 @@ function showAnyPaymentPicker({ title, text, resources, rest, primary = 'K', onC
 function turnEndAnyPaymentPick(state, playerId, feeConversionPlan) {
   const player = state.players.find((p) => p.id === playerId);
   if (!player) return null;
-  let cap = 0;
+  const resources = { ...player.resources };
+  for (const { resource, count } of feeConversionPlan || []) { resources[resource] -= count; resources.K = (resources.K || 0) + count; }
+  resources.K = Math.max(0, (resources.K || 0) - pendingKFeeAmount(player));
+  let info = null;
   let cardName = '';
   for (const physicalId of player.ownedCardPhysicalIds) {
     const card = state.cards[physicalId];
     if (!card) continue;
     const row = dataLoaderMod.getCardRow(INDEX, card.currentFaceId);
-    const n = anyPayCapOf(row.TURNEND);
-    if (n > cap) { cap = n; cardName = String(row.NAME || '').replace(/LV\d$/, ''); }
+    const i = anyPayInfoOf(row.TURNEND, resources);
+    if (i && (!info || i.need > info.need)) { info = i; cardName = String(row.NAME || '').replace(/LV\d$/, ''); }
   }
-  if (cap === 0) return null;
-  const resources = { ...player.resources };
-  for (const { resource, count } of feeConversionPlan || []) { resources[resource] -= count; resources.K = (resources.K || 0) + count; }
-  resources.K = Math.max(0, (resources.K || 0) - pendingKFeeAmount(player));
-  const pick = anyPaymentPickNeeded(resources, cap, executorMod.anyPayPrimary(state, INDEX, playerId));
-  return pick ? { ...pick, cap, cardName, resources } : null;
+  if (!info) return null;
+  const pick = anyPaymentPickNeeded(resources, info.need, executorMod.anyPayPrimary(state, INDEX, playerId));
+  return pick ? { ...pick, cardName, resources, gainName: info.gainName } : null;
 }
 /** (旧、今は使わない)パンとサーカス(TURNENDのCHANGE(K,VP,n))で、手番の終わりにVPにする〇が足りない時、ほかの資源から〇に変える案 (2026-11-25, per user「パンとサーカスを持っているとき 人間にも パンとサーカスのためにA→Kの変換をしますか などの警告文が出るように 警告文はもっといいのに変えて」)。
  * 使用料に使う〇・使用料のための変換の分は先に引いておく。変えられる物が無い・足りている時はnull。
@@ -8841,7 +8849,7 @@ function attemptAdvanceTurn(state, playerId, anyPaymentChosen = false) {
     showAnyPaymentPicker({
       primary: anyPick.primary,
       title: anyPick.cardName,
-      text: `手番の終わりに、資源${anyPick.times}個を${anyPick.times}VPに変えます。\n${kText}ほかに払う資源を${anyPick.rest}個選んでください。`,
+      text: `手番の終わりに、資源${anyPick.times}個を払って、${anyPick.gainName}にします。\n${kText}ほかに払う資源を${anyPick.rest}個選んでください。`,
       resources: anyPick.resources,
       rest: anyPick.rest,
       onConfirm: (choice) => {

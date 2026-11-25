@@ -1844,9 +1844,9 @@
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
-      "ACTION": "CHANGE(2K,3Z)",
+      "ACTION": "CHANGE(2ANY,3Z)",
       "fee": "",
-      "INST": ""
+      "INST": "資源2個を人脈3個に変換する\n〇以外の資源でもよい"
     },
     {
       "ID": "AREA007A",
@@ -1974,9 +1974,9 @@
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
-      "ACTION": "CHANGE(2K,5Z)",
+      "ACTION": "CHANGE(2ANY,5Z)",
       "fee": "K",
-      "INST": ""
+      "INST": "資源2個を人脈5個に変換する\n〇以外の資源でもよい"
     },
     {
       "ID": "AREA007B",
@@ -1987,9 +1987,9 @@
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
-      "ACTION": "CHANGE(2K,D)",
+      "ACTION": "CHANGE(2ANY,D)",
       "fee": "K",
-      "INST": "色ダイスの上限は5個\nこのエリアにダイスを置くと怠惰の性格は解除される"
+      "INST": "資源2個を追加色ダイスに変換する（〇以外の資源でもよい）\n色ダイスの上限は5個\nこのエリアにダイスを置くと怠惰の性格は解除される"
     },
     {
       "ID": "AREA009B",
@@ -2091,9 +2091,9 @@
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
-      "ACTION": "CHANGE(2K,7Z)",
+      "ACTION": "CHANGE(2ANY,7Z)",
       "fee": "2K",
-      "INST": ""
+      "INST": "資源2個を人脈7個に変換する\n〇以外の資源でもよい"
     },
     {
       "ID": "AREA007C",

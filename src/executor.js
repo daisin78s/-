@@ -1069,8 +1069,19 @@ function anyPaymentOptions(resources, count, primary = 'K') {
 }
 /** 置くエリアの効果/手番の終わりの効果で、どの資源でも払える支払いの回数(cap)を見る(AI用)。CHANGE(ANY,VP,n)だけ。 */
 function anyPayCapOfText(text) {
-  const m = /^CHANGE\(ANY,VP(?:,(\d+))?\)$/.exec(String(text || '').trim());
-  return m ? (m[1] ? Number(m[1]) : 1) : 0;
+  const m = /^CHANGE\((\d*)ANY,\d*[A-Z]+(?:,(\d+))?\)$/.exec(String(text || '').trim());
+  if (!m) return 0;
+  return (m[1] ? Number(m[1]) : 1) * (m[2] ? Number(m[2]) : 1);
+}
+/** 効果の文字(CHANGE(nANY,X[,上限]))で、今の資源から実際に払う資源の数 (2026-11-26, per user 訓練場LV1・酒場も「どの資源でも」に「おねがい」)。
+ * n個ずつ・上限回まで(上限が無ければ1回だけ、払えなければ0)。CHANGE(ANY,...)でなければ0。 */
+function anyPayNeedOfText(text, resources) {
+  const m = /^CHANGE\((\d*)ANY,\d*[A-Z]+(?:,(\d+))?\)$/.exec(String(text || '').trim());
+  if (!m) return 0;
+  const per = m[1] ? Number(m[1]) : 1;
+  const cap = m[2] ? Number(m[2]) : 1;
+  const total = ANY_PAY_RESOURCES.reduce((sum, r) => sum + (resources[r] || 0), 0);
+  return per * Math.min(cap, Math.floor(total / per));
 }
 
 function resolveAnyPayment(player, count, primary = 'K') {
@@ -2290,6 +2301,7 @@ function grantChefBonusIfEarned(state, index, context, vpCount) {
 module.exports = {
   anyPaymentOptions,
   anyPayCapOfText,
+  anyPayNeedOfText,
   anyPayPrimary,
   ANY_PAY_RESOURCES,
   anyPayAvailable,

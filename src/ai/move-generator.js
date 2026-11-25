@@ -236,22 +236,21 @@ class MoveGenerator {
     let turnEndCap = null;
     for (const m of moves) {
       out.push(m);
-      let cap = 0;
+      let need = 0;
       if (m.type === 'PLACE_DIE' && m.mapId && !m.buildCandidateKey) {
-        cap = executor.anyPayCapOfText(getAreaRow(index, state.maps[m.mapId].currentAreaId).ACTION);
+        need = executor.anyPayNeedOfText(getAreaRow(index, state.maps[m.mapId].currentAreaId).ACTION, player.resources);
       } else if (m.type === 'END_TURN') {
         if (turnEndCap === null) {
           turnEndCap = 0;
           for (const physicalId of player.ownedCardPhysicalIds) {
             const card = state.cards[physicalId];
-            if (card) turnEndCap = Math.max(turnEndCap, executor.anyPayCapOfText(getCardRow(index, card.currentFaceId).TURNEND));
+            if (card) turnEndCap = Math.max(turnEndCap, executor.anyPayNeedOfText(getCardRow(index, card.currentFaceId).TURNEND, player.resources));
           }
         }
-        cap = turnEndCap;
+        need = turnEndCap;
       }
-      if (!cap) continue;
-      const total = executor.ANY_PAY_RESOURCES.reduce((sum, r) => sum + (player.resources[r] || 0), 0);
-      const options = executor.anyPaymentOptions(player.resources, Math.min(cap, total), executor.anyPayPrimary(state, index, playerId));
+      if (!need) continue;
+      const options = executor.anyPaymentOptions(player.resources, need, executor.anyPayPrimary(state, index, playerId));
       for (const option of options.slice(1)) out.push({ ...m, anyPayment: option });
     }
     return out;

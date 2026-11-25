@@ -269,7 +269,7 @@ function getEntertainmentDistrictConversionRatio(index) {
     const row = getAreaRow(index, 'AREA006C');
     const commands = lowerProgram(parse(row.ACTION));
     const changeCmd = commands.find((c) => c.type === 'CHANGE');
-    const payK = changeCmd.pay.find((p) => p.resource === 'K');
+    const payK = changeCmd.pay.find((p) => p.resource === 'K' || p.resource === 'ANY'); // ANY: どの資源でも(2026-11-26、酒場)
     const gainTotal = changeCmd.gain.reduce((sum, g) => sum + g.count.value, 0);
     if (payK && payK.count.kind === 'literal' && gainTotal > 0) {
       cachedEntertainmentConversionRatio = { payK: payK.count.value, gainTotal };
