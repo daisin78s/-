@@ -7358,9 +7358,14 @@ function computeShopAcquirableMoveCache() {
     const actingPlayer = STATE.players.find((p) => p.id === playerId);
     const moveDieIds = move.dieIds || (move.dieId ? [move.dieId] : []);
     const usesChangedDie = moveDieIds.some((id) => { const d = actingPlayer && actingPlayer.dice.find((x) => x.id === id); return !!(d && d.valueChangedThisTurn); });
-    const better = !existing || (usesChangedDie !== existing.usesChangedDie ? usesChangedDie : score > existing.score);
+    // 点が同じなら、使うダイスの目の合計が小さい手(大きい目を残す手)を選ぶ (2026-11-25, per user のバグ報告「水道橋を取る
+    // ときナビだと10と3 カードを獲得だと10と5 違ってくるのはなんで」→「ナビと同じにする」-- 残るダイスの目は点に入らない
+    // ので同点になり、先に見つけた10+5を選んでいた)。
+    const diceSum = moveDieIds.reduce((sum, id) => { const d = actingPlayer && actingPlayer.dice.find((x) => x.id === id); return sum + (d ? d.value : 0); }, 0);
+    const better = !existing || (usesChangedDie !== existing.usesChangedDie ? usesChangedDie
+      : score !== existing.score ? score > existing.score : diceSum < existing.diceSum);
     // physicalId: LVアップするカード(獲得済みカードの拡大画面の「LVアップする」、ownedCardUpgradePickAction)。
-    if (better) bestByFaceId.set(builtFaceId, { playerId, move, score, usesChangedDie, isUpgrade: result.candidate.type === 'UPGRADE', physicalId: result.candidate.type === 'UPGRADE' ? result.candidate.physicalId : null });
+    if (better) bestByFaceId.set(builtFaceId, { playerId, move, score, usesChangedDie, diceSum, isUpgrade: result.candidate.type === 'UPGRADE', physicalId: result.candidate.type === 'UPGRADE' ? result.candidate.physicalId : null });
   }
   return bestByFaceId;
 }
