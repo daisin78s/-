@@ -192,7 +192,7 @@ function monumentSecurableByPlayer(state, index, playerId, monumentFaceId) {
   return !!player && qualifiesForMonumentCost(player, threshold, row.COST);
 }
 
-const R1_IGNORED_VP_PENALTY_FACES = new Set(['CON001A']); // 強欲 (score()の1R参照)
+const BEFORE_R4_IGNORED_VP_PENALTY_FACES = new Set(['CON001A']); // 強欲 (score()のR1〜R3参照)
 
 class Evaluator {
   /** @param {DataIndex} index @param {Object} evalTable - see eval-table.js's buildEvalTable()
@@ -404,9 +404,10 @@ class Evaluator {
     // 憤怒 owning either tier of 基礎学問 gets the same fixed penalty either way).
     if (this.evalAllTable) total += evalAll.heldPairSumWithLevels(this.evalAllTable, state, this.index, player);
 
-    // 1Rは強欲(CON001A、資源7個未満でマイナス)のマイナスを数えない (2026-11-25, per user「1Rで 強欲の マイナス 計算しない
-    // ように」-- 1Rは資源が少ないのが普通で、強欲のマイナスを怖がって資源を払う手(LVアップなど)を避けていた)。
-    total += executor.collectVpModifiers(state, this.index, playerId, round === 1 ? R1_IGNORED_VP_PENALTY_FACES : null) * v('VP');
+    // R1〜R3は強欲(CON001A、資源7個未満でマイナス)のマイナスを数えない、R4だけ数える (2026-11-25, per user「1Rで 強欲の
+    // マイナス 計算しないように」→「R2 R3 も数えなくていい R4だけ」-- 途中は資源が少ないのが普通で、強欲のマイナスを
+    // 怖がって資源を払う手(LVアップなど)を避けていた)。
+    total += executor.collectVpModifiers(state, this.index, playerId, round < 4 ? BEFORE_R4_IGNORED_VP_PENALTY_FACES : null) * v('VP');
     // 2026-09-01, M401/晩餐会's own "ゲーム終了時持っている2Kにつき1VP(MAX10VP)" -- see
     // executor.collectFinalOnlyVpModifiers's own doc for why this is a separate call from
     // collectVpModifiers just above: it's 0 for every state until state.phase is actually 'GAME_END',
