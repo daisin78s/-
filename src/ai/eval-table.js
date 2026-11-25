@@ -71,6 +71,8 @@ function evalValue(table, round, id) {
  * actually query in a real game. */
 function isStructurallyBlankRound(id, round) {
   if (id === 'M401' || id === 'M402' || id === 'M403' || id === 'M404') return round <= 2;
+  // 晩餐会食料生産相性のR3は使わない(R3は晩餐会のVPを今の〇の数で数える、evaluator.js参照) (2026-11-25, per user「消しといて」)。
+  if (id === '晩餐会食料生産相性') return round === 3;
   const match = /^[A-Z]+(\d+)[A-Z]$/.exec(id);
   if (!match) return false;
   const num = Number(match[1]);
