@@ -121,7 +121,8 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
   const moves = moveGenerator.generateMoves(state, index, 'P1', { hasPlacedDieThisTurn: false });
   const castleMoves = moves.filter((m) => m.type === 'PLACE_DIE' && m.mapId === 'MAP008' && m.dieId === die.id && m.slotIndex === 0);
   assertTrue('At least one per-candidate castle PLACE_DIE move exists', castleMoves.some((m) => m.buildCandidateIndex !== undefined));
-  assertTrue('A "leave unresolved" castle PLACE_DIE move also exists (buildCandidateIndex omitted)', castleMoves.some((m) => m.buildCandidateIndex === undefined));
+  // 2026-11-25 (per user「できない手は 候補に入れない」): 人は候補がある時は必ず建てるので、「置くだけ」の手は出さない。
+  assertTrue('No "leave unresolved" castle PLACE_DIE move (every move carries a buildCandidateIndex)', castleMoves.every((m) => m.buildCandidateIndex !== undefined));
 }
 
 // ---------------------------------------------------------------------------
@@ -139,7 +140,7 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
   check('...every PLACE_DICE_GROUP move is scoped to 王宮/元老院 only', groupMoves.every((m) => m.mapId === 'MAP008' || m.mapId === 'MAP009'), true);
   check('...every PLACE_DICE_GROUP move carries exactly this pair\'s 2 dieIds', groupMoves.every((m) => [...m.dieIds].sort().join() === [dieA.id, dieB.id].sort().join()), true);
   assertTrue('At least one per-candidate move exists (buildCandidateIndex set)', groupMoves.some((m) => m.buildCandidateIndex !== undefined));
-  assertTrue('A "leave unresolved" move also exists (buildCandidateIndex omitted)', groupMoves.some((m) => m.buildCandidateIndex === undefined));
+  assertTrue('No "leave unresolved" group move (2026-11-25)', groupMoves.every((m) => m.buildCandidateIndex !== undefined));
 }
 {
   // A pair summing to <=6 never yields a PLACE_DICE_GROUP move at all -- a single die already reaches

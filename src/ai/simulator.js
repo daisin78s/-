@@ -154,8 +154,20 @@ function applyInPlace(state, index, move) {
       }
       return result;
     }
-    case 'PASS_DIE':
+    case 'PASS_DIE': {
+      // allDice: ラウンドパス(画面のラウンドパスボタンと同じ、残りのダイスを全部パス) (2026-11-25, per user「AIラウンドパスはできないの」「ラウンドパスが AIもできるようになれば」「孤児院に置かなくても 解決」「ラウンドパスのほうが まし」)。
+      if (move.allDice) {
+        const player = state.players.find((p) => p.id === move.playerId);
+        const dice = player ? player.dice.filter((d) => d.placedMapId === null && !d.passed) : [];
+        if (dice.length === 0) return { success: false, reason: 'NO_DICE_TO_PASS' };
+        for (const die of dice) {
+          const r = board.passDie(state, index, { playerId: move.playerId }, die.id);
+          if (!r.success) return r;
+        }
+        return { success: true };
+      }
       return board.passDie(state, index, { playerId: move.playerId }, move.dieId);
+    }
     case 'BARE_TAP': {
       const context = { playerId: move.playerId };
       if (move.chosenDieId !== undefined) context.chosenDieId = move.chosenDieId;

@@ -11,7 +11,7 @@
  *   { type:'PLACE_DIE', playerId, dieId, mapId, slotIndex, buildCandidateIndex? }
  *   { type:'PLACE_WILDCARD_DIE', playerId, dieId, mapId, slotIndex?, buildCandidateIndex? }
  *   { type:'PLACE_DICE_GROUP', playerId, dieIds:[id,id] or [id,id,id], mapId, buildCandidateIndex? }
- *   { type:'PASS_DIE', playerId, dieId }
+ *   { type:'PASS_DIE', playerId, dieId, allDice? }  (allDice:true = ラウンドパス、残りのダイスを全部パス)
  *   { type:'BARE_TAP', playerId, physicalId, chosenDieId?, chosenValue?, chosenDelta?, buildCandidateIndex? }
  *   { type:'FREE_ACTION', playerId, freeActionId }
  *   { type:'COLLECT_FEE', playerId, mapId }
@@ -139,6 +139,7 @@ function changePaysResource(action, res) {
  * 「おねがい」): この手番に目を変えたダイス(valueChangedThisTurn、置かないと手番の終わりに元に戻る)がまだ置かれていなければ、
  * ダイスを置く手はそのダイスを使うもの(まとめて置く時はその中に入っているもの)だけにする。そのダイスをどこにも置けない時は
  * 今までどおり全部(止まらないように)。置く手以外(タップ・フリーアクションなど)はそのまま。人のプレイ(ゲームのルール)は変えない。 */
+// PASS_DIE には allDice:true(ラウンドパス、残りのダイスを全部パス)もある(#placeDieMoves参照、2026-11-25)。
 const DIE_PLACING_MOVE_TYPES = new Set(['PLACE_DIE', 'PLACE_WILDCARD_DIE', 'PLACE_DICE_GROUP', 'PASS_DIE']);
 // 宮廷人(JOB010)をこのターンに使った時は当てはめない (per user「宮廷人以外」-- 宮廷人のタップはBZ+1もあり、目+5を使わなくても
 // 損ではないため)。宮廷人は毎ターン使えるので、タップ済み = このターンに使った。
@@ -223,6 +224,13 @@ class MoveGenerator {
   #isMapIdAvoided(state, mapId) {
     const avoid = this.policy.avoidMapIdFromRound;
     return !!avoid && mapId === avoid.mapId && state.round >= avoid.round;
+  }
+
+  /** 方針 noOrphanageEarly: R1・R2は孤児院(AREA010A/B)に置く手を候補に入れない (2026-11-25, per user「孤児院は 1R 2R
+   * では 候補に入れない」「1R 2R に 孤児院に行くのは 効率が悪い」)。そのダイスを置ける所が孤児院しか無い時はパスになる
+   * (「孤児院に置かなくても 解決」)。 */
+  #isOrphanageHeldBack(state, mapId) {
+    return !!this.policy.noOrphanageEarly && state.round <= 2 && /^AREA010/.test(state.maps[mapId].currentAreaId || '');
   }
 
   /** @returns {Object[]} every legal Move for playerId right now. */
@@ -366,6 +374,7 @@ class MoveGenerator {
       const dieIsWildcard = board.isDieWildcard(state, index, playerId, die);
       for (const mapId of Object.keys(state.maps)) {
         if (this.#isMapIdAvoided(state, mapId)) continue;
+        if (this.#isOrphanageHeldBack(state, mapId)) continue;
         if (dieIsWildcard) {
           if (this.#wildcardPlaceDieMoves(state, index, playerId, die, mapId, moves)) diceWithAPlacement.add(die.id);
           continue;
@@ -379,6 +388,9 @@ class MoveGenerator {
           const clone = cloneState(state);
           const result = board.placeDice(clone, index, { playerId, predictionCache }, die.id, mapId, slotIndex);
           if (!result.success) continue;
+          // 建てるカードの候補があるのに1枚も払えない所には置かない(人もできない) (2026-11-25, per user「皇帝宮殿（何も取らない）できるの」→「できない手は 候補に入れない」-- 画面では、建てるカードの候補がある時は必ずどれかを建てる(✖は置いたのを取り消すだけ)。払えるカードが1枚も無い時も、人は取り消すしかない)。
+          const pendingBuildHere = result.actionResult && result.actionResult.pendingBuild;
+          if (pendingBuildHere && !pendingBuildHere.candidates.some((c) => board.isCandidateAffordable(clone, index, playerId, c))) continue;
           diceWithAPlacement.add(die.id);
           if (result.actionResult && result.actionResult.pendingBuild) {
             for (const candidate of result.actionResult.pendingBuild.candidates) outcomes.add(`${mapId}|${slotIndex}|${candidate.faceId || candidate.toFaceId}`);
@@ -392,13 +404,8 @@ class MoveGenerator {
             for (let buildCandidateIndex = 0; buildCandidateIndex < candidates.length; buildCandidateIndex++) {
               moves.push(remember({ type: 'PLACE_DIE', playerId, dieId: die.id, mapId, slotIndex, buildCandidateIndex, buildCandidateKey: buildCandidateKey(candidates[buildCandidateIndex]) }, true));
             }
-            // Always also offer "place the die, leave the build unresolved" -- getBuildCandidates only
-            // checks dice/category eligibility, not affordability, so every candidate above can turn out
-            // unaffordable once Simulator actually tries to pay for it. Without this fallback, a player
-            // with no affordable candidate would have zero legal moves for this slot at all (found via
-            // the 2026-07-31 stuck-AI debugging: P4 had 25 candidate moves from MoveGenerator but 0 that
-            // Simulator accepted, because none were affordable).
-            moves.push(remember({ type: 'PLACE_DIE', playerId, dieId: die.id, mapId, slotIndex }, true));
+            // 「置くだけで建てない」手は出さない (2026-11-25, per user「皇帝宮殿（何も取らない）できるの」→「できない手は 候補に入れない」-- 画面では、建てるカードの候補がある時は必ずどれかを建てる(✖は置いたのを取り消すだけ)。払えるカードが1枚も無い時も、人は取り消すしかない)。2026-07-31の「払えるカードが無くて手が0になる」は、上で
+            // 払えるカードが無い所には置かない(diceWithAPlacementに入れない=どこにも置けなければPASS_DIEが出る)ことで防ぐ。
             // A BUILD trigger with 0 candidates (NO_BUILDABLE_CARD) still placed the die legally --
             // that's just placeDice's success:true/actionResult.success:false case below, already
             // covered since result.actionResult.pendingBuild would be absent then.
@@ -419,6 +426,9 @@ class MoveGenerator {
     for (const die of unplacedDice) {
       if (!diceWithAPlacement.has(die.id)) moves.push({ type: 'PASS_DIE', playerId, dieId: die.id });
     }
+    // ラウンドパス(残りのダイスを全部パス、画面のラウンドパスボタンと同じ)も候補にする (2026-11-25, per user「AIラウンドパスはできないの」「ラウンドパスが AIもできるようになれば」「孤児院に置かなくても 解決」「ラウンドパスのほうが まし」)。
+    // パスしたダイスはラウンドの終わりに1個3Kになる(評価もその値、evaluator.js参照)ので、置いても3Kより得をしない時に選ばれる。
+    if (unplacedDice.length > 0) moves.push({ type: 'PASS_DIE', playerId, dieId: unplacedDice[0].id, allDice: true });
     return moves;
   }
 
@@ -440,6 +450,8 @@ class MoveGenerator {
       const clone = cloneState(state);
       const result = board.placeWildcardDie(clone, index, { playerId }, die.id, mapId, slotIndex);
       if (!result.success) continue;
+      const pendingBuildHere = result.actionResult && result.actionResult.pendingBuild;
+      if (pendingBuildHere && !pendingBuildHere.candidates.some((c) => board.isCandidateAffordable(clone, index, playerId, c))) continue; // #placeDieMoves参照
       placedAny = true;
       const moveBase = { type: 'PLACE_WILDCARD_DIE', playerId, dieId: die.id, mapId, ...(slotIndex !== undefined ? { slotIndex } : {}) };
       if (result.actionResult && result.actionResult.pendingBuild) {
@@ -447,7 +459,6 @@ class MoveGenerator {
         for (let buildCandidateIndex = 0; buildCandidateIndex < candidates.length; buildCandidateIndex++) {
           moves.push({ ...moveBase, buildCandidateIndex, buildCandidateKey: buildCandidateKey(candidates[buildCandidateIndex]) });
         }
-        moves.push({ ...moveBase });
       } else {
         moves.push({ ...moveBase });
       }
@@ -522,9 +533,7 @@ class MoveGenerator {
         for (let buildCandidateIndex = 0; buildCandidateIndex < candidates.length; buildCandidateIndex++) {
           moves.push({ type: 'PLACE_DICE_GROUP', playerId, dieIds, mapId, buildCandidateIndex, buildCandidateKey: buildCandidateKey(candidates[buildCandidateIndex]) });
         }
-        // Same "also offer the build left unresolved" fallback as #placeDieMoves -- see its own comment
-        // for why (candidates aren't affordability-filtered here, only category/dice-value eligible).
-        moves.push({ type: 'PLACE_DICE_GROUP', playerId, dieIds, mapId });
+        // 「置くだけで建てない」手は出さない(#placeDieMoves参照、2026-11-25)。
       } else {
         moves.push({ type: 'PLACE_DICE_GROUP', playerId, dieIds, mapId });
       }
@@ -1131,6 +1140,7 @@ class MoveGenerator {
     const predictionCache = new Map(); // board.placeDiceのcontext.predictionCache参照
     for (const mapId of Object.keys(state.maps)) {
       if (this.#isMapIdAvoided(state, mapId)) continue;
+      if (this.#isOrphanageHeldBack(state, mapId)) continue;
       const areaRow = getAreaRow(index, state.maps[mapId].currentAreaId);
       const slotCount = board.getSlotRequirements(areaRow).length;
       for (let slotIndex = 0; slotIndex < slotCount; slotIndex++) {
@@ -1138,6 +1148,9 @@ class MoveGenerator {
         const clone = cloneState(state);
         const result = board.placeDice(clone, index, { playerId, predictionCache }, dieId, mapId, slotIndex);
         if (!result.success) continue;
+        // #placeDieMovesと同じく、払えるカードが1枚も無い所は行ける所に入れない(2026-11-25)。
+        const pendingBuildHere = result.actionResult && result.actionResult.pendingBuild;
+        if (pendingBuildHere && !pendingBuildHere.candidates.some((c) => board.isCandidateAffordable(clone, index, playerId, c))) continue;
         if (result.actionResult && result.actionResult.pendingBuild) {
           for (const candidate of result.actionResult.pendingBuild.candidates) {
             outcomes.add(`${mapId}|${slotIndex}|${candidate.faceId || candidate.toFaceId}`);

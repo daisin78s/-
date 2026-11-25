@@ -1344,7 +1344,7 @@ const NAV_MAX_DECISION_MS = 2000;
 // 画面のAIの設定。ai-worker.js(裏で考える用、下のaiWorker参照)にも同じものを送って、同じAIを作る(2026-11-24)。
 const AI_LEVEL_CONFIG = {
   evaluatorOptions: { qstAware: true, conBuildAware: true, monumentIncentiveAware: false }, // monumentIncentiveAware: 2026-11-24から使わない(per user「とりあえず この評価値はやめようかと思う」-- 評価値_戦略シートの「後で取れるかも」の点が、払えない場面でも約500つき、幾何学で2個で取れる水道橋を3個で取らせていた)
-  lv3MoveGeneratorOptions: { preferCastleOverSenate: true, mustUseChangedDie: true, deferConversionTaps: true }, // mustUseChangedDie: 2026-11-24 (move-generator.jsのkeepChangedDiePlacements)
+  lv3MoveGeneratorOptions: { preferCastleOverSenate: true, mustUseChangedDie: true, deferConversionTaps: true, noOrphanageEarly: true }, // mustUseChangedDie: 2026-11-24 (move-generator.jsのkeepChangedDiePlacements)
   lv1: { lookaheadExtraTurns: 0 },
   lv2: { lookaheadExtraTurns: 1 },
   lv3: {
