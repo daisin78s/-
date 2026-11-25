@@ -995,6 +995,34 @@ class MoveGenerator {
    * factored out (2026-08-30) so both stay correct together as this amount keeps changing (2026-08-25
    * "訓練場LV1　能力変えました" added CHANGE(K,D); 2026-08-30 "訓練場すこしかえました" raised it to
    * CHANGE(2K,D)). */
+  /** 訓練場がKの要る段階(LV1、CHANGE(nK,D))の時、タップ(研究など、BUILD(U)のタップ)で訓練場の支配をLV1→LV2に上げられる
+   * なら、その手。訓練場の支配LV2を取ると訓練場がLV2(ADD(D)、Kが要らない)になるので、K作り(A/B/C→K)やKを払って置くより
+   * 先にLVを上げる (2026-11-25, per user のナビのバグ報告「B→Kを推奨しているのなぜ」→「先にやる意味はない さらに 研究で LVあげるから意味がない」)。上げられなければnull。 */
+  #trainingGroundUpgradeTap(state, index, playerId) {
+    if (this.#trainingGroundKCost(index, state) === 0) return null;
+    const player = state.players.find((p) => p.id === playerId);
+    if (!player || !player.ownedCardPhysicalIds.some((id) => state.cards[id] && state.cards[id].currentFaceId === 'A202A')) return null;
+    for (const physicalId of player.ownedCardPhysicalIds) {
+      const cardState = state.cards[physicalId];
+      if (!cardState || cardState.tapped) continue;
+      const tap = bareTapKind(index, cardState.currentFaceId);
+      if (!tap || tap.kind !== 'BUILD') continue;
+      const probe = cloneState(state);
+      const result = board.useBareTapAbility(probe, index, { playerId }, physicalId);
+      if (!result.success || !result.pendingBuild) continue;
+      const candidates = result.pendingBuild.candidates;
+      for (let buildCandidateIndex = 0; buildCandidateIndex < candidates.length; buildCandidateIndex++) {
+        const c = candidates[buildCandidateIndex];
+        if (c.type !== 'UPGRADE' || c.fromFaceId !== 'A202A') continue;
+        const move = { type: 'BARE_TAP', playerId, physicalId, buildCandidateIndex, buildCandidateKey: buildCandidateKey(c) };
+        try {
+          if (applyInPlace(cloneState(state), index, move).success) return move;
+        } catch (e) { /* 払えない */ }
+      }
+    }
+    return null;
+  }
+
   #trainingGroundKCost(index, state) {
     const areaRow = getAreaRow(index, state.maps.MAP007.currentAreaId);
     const match = /^CHANGE\((\d*)K,D\)$/.exec(areaRow.ACTION || '');
@@ -1033,6 +1061,8 @@ class MoveGenerator {
       return cardState && (cardState.currentFaceId === 'A202A' || cardState.currentFaceId === 'A202B');
     });
     if (!ownsControl) return null;
+    const upgradeFirst = this.#trainingGroundUpgradeTap(state, index, playerId); // Kを払って置くより先にLVを上げる
+    if (upgradeFirst) return upgradeFirst;
     const kCost = this.#trainingGroundKCost(index, state);
     const reservedK = pendingKFee(player);
     if (kCost > 0 && (player.resources.K || 0) - kCost < reservedK) return null;
@@ -1084,6 +1114,10 @@ class MoveGenerator {
     if (!ownsControl) return null;
     const kNeeded = this.#trainingGroundKCost(index, state);
     if (kNeeded === 0 || (player.resources.K || 0) >= kNeeded) return null;
+    if (!context.hasPlacedDieThisTurn) {
+      const upgradeFirst = this.#trainingGroundUpgradeTap(state, index, playerId); // K作りより先にLVを上げる
+      if (upgradeFirst) return upgradeFirst;
+    }
     // Excludes a B001B-flagged die too -- same reasoning as forcedTrainingGroundMove's own matching doc.
     const unplacedDice = player.dice.filter((d) => d.placedMapId === null && !d.passed && !d.isWildcardThisTurn);
     if (unplacedDice.length === 0) return null;
