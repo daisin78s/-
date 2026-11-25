@@ -376,7 +376,35 @@ class MoveGenerator {
     if (this.policy.deferConversionTaps && context.hasPlacedDieThisTurn && !context.noDeferConversion) {
       moves = this.#withoutDeferrableConversionTaps(state, index, playerId, player, context, moves);
     }
+    moves = this.#withPreConvertedTaps(state, index, player, moves);
     return this.policy.mustUseChangedDie && !context.hasPlacedDieThisTurn ? keepChangedDiePlacements(moves, player, state) : moves;
+  }
+
+  /** 〇を人脈に上限まで変えるタップ(総督・学者・商人のLV2、CHANGE(K,Z,n))で〇が上限より少ない時、「赤〇・青〇・黄〇を〇に
+   * 変えて(フリーアクション)からタップする」手も足す(move.preConvert、simulator.applyInPlaceが先に変換する) (2026-11-26,
+   * per user「K6 A1 のとき 総督LV2で すべてZにできることを理解していますか」→「B」+「A2 B2 K3 のときに すべてCにするのは困る」
+   * 「R1は AB<Cなので」)。変換だけして使わないことが無いように、変換とタップを1つの手にする。人脈に変えるLV2だけ
+   * (色の資源どうしの入れ替えになるLV1は出さない)。足りない分を、多く持っている色の資源から。 */
+  #withPreConvertedTaps(state, index, player, moves) {
+    const out = [];
+    for (const m of moves) {
+      out.push(m);
+      if (m.type !== 'BARE_TAP' || m.chosenDieId || m.buildCandidateIndex !== undefined) continue;
+      const card = state.cards[m.physicalId];
+      if (!card) continue;
+      let row;
+      try { row = getCardRow(index, card.currentFaceId); } catch (e) { continue; }
+      const t = /^CHANGE\((\d*)K,\d*Z,(\d+)\)$/.exec(String(row.TAP || '').trim());
+      if (!t) continue;
+      const shortfall = (t[1] ? Number(t[1]) : 1) * Number(t[2]) - (player.resources.K || 0);
+      if (shortfall <= 0) continue;
+      const colored = { A: player.resources.A || 0, B: player.resources.B || 0, C: player.resources.C || 0 };
+      const amount = Math.min(shortfall, colored.A + colored.B + colored.C);
+      if (amount <= 0) continue;
+      const plan = executor.defaultAnyPayment({ ...colored, K: 0, Z: 0 }, amount);
+      if (plan) out.push({ ...m, preConvert: plan });
+    }
+    return out;
   }
 
   /** deferConversionTaps (AI LV3・ナビだけ、2026-11-24, per user のナビのバグ報告「推奨の手が総督をすぐ使うになっている

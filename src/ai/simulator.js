@@ -95,6 +95,15 @@ class SimulationError extends Error {}
 function applyInPlace(state, index, move) {
   // どの資源でも払える支払いの払い方(move.anyPayment、move-generator.jsの#withAnyPaymentVariants)を、払う直前に置く
   // (executor.resolveAnyPayment が読む。(2026-11-25, per user「どんな資源でも払えるように」「人間もAIも選べるように」))。
+  // 変換してからタップする手(move.preConvert {A:n,...}、move-generator.jsの#withPreConvertedTaps): 先に〇へ変える。
+  if (move.preConvert) {
+    for (const [resource, count] of Object.entries(move.preConvert)) {
+      for (let i = 0; i < count; i++) {
+        const r = executor.tryFreeAction(state, index, move.playerId, `${resource}_K`);
+        if (!r.success) return { success: false, reason: 'PRE_CONVERT_FAILED' };
+      }
+    }
+  }
   if (move.anyPayment) {
     const payer = state.players.find((p) => p.id === move.playerId);
     if (payer) payer.anyPaymentChoice = { ...move.anyPayment };
