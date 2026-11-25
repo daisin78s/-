@@ -250,6 +250,46 @@ class AIPlayer {
   #topLevelDecision = false;
   #plannedCourtierBuild = null;
 
+  /** R4の読み切りの手がモニュメントを建てる手で、宮廷人(JOB010)がアンタップなら、先に宮廷人を使う(1資源軽減だけ、
+   * ダイスの目は変えない=skipDieChange) (2026-11-25, per user のナビのバグ報告「宮廷人を使って軽減できるのに推奨して
+   * いない」→「はい 結果が同じでも 損はない 予定が狂うこともあるかも」-- 宮廷人は毎ターンアンタップするので使って損は
+   * 無い。読み切りは「軽減した資源が点にならない(宝物庫が上限など)」と同じ点だと手数の少ない方を選んでいた。R1〜R3は
+   * #checkForcedMovesのforcedBzConversionMoveで建てられる時は先に使っている)。使った後は読み直す(建てる手が続く)。
+   * 使った後も同じカードを同じダイスで建てられることを確かめてから使う。 */
+  #courtierBeforeMonument(state, playerId, move, untap, placed) {
+    if (!move || typeof move.buildCandidateKey !== 'string' || !/^M/.test(move.buildCandidateKey)) return move;
+    const player = state.players.find((p) => p.id === playerId);
+    if (!player) return move;
+    for (const physicalId of player.ownedCardPhysicalIds) {
+      const card = state.cards[physicalId];
+      if (!card || card.tapped || card.currentFaceId !== 'JOB010') continue;
+      const tap = { type: 'BARE_TAP', playerId, physicalId, skipDieChange: true };
+      try {
+        const tapped = this.simulator.apply(state, this.index, tap);
+        if (!tapped.result.success) continue;
+        // 宮廷人を使うと通常カードを建てられなくなり候補の番号がずれるので、同じカードを同じダイス・同じ所で建てる手を探し直す。
+        const same = (m) => m.type === move.type && m.mapId === move.mapId && m.slotIndex === move.slotIndex && m.buildCandidateKey === move.buildCandidateKey
+          && JSON.stringify(m.dieIds || m.dieId) === JSON.stringify(move.dieIds || move.dieId);
+        const after = this.moveGenerator.generateMoves(tapped.state, this.index, playerId, { hasPlacedDieThisTurn: false }).find(same);
+        if (!after || !this.simulator.apply(tapped.state, this.index, after).result.success) continue;
+        // 使った後は読み直さずにその建てる手を打つ: 読み切りの手順を「宮廷人→建てる」にして覚える(手分けして読む
+        // Workerにもmain.jsがlastEndgameの手順を配る)。読み直すと、軽減を使わない別の手に変わることがあった。
+        const keyOf = (st) => AIPlayer.#endgameKey(AIPlayer.#endgameRoot(st, playerId), placed);
+        const old = this.#endgamePlans.get(playerId);
+        const plan = {
+          steps: [{ key: keyOf(state), m: tap, untap: null }, { key: keyOf(tapped.state), m: after, untap }],
+          v: old ? old.v : (this.lastEndgame ? this.lastEndgame.v : 0),
+          exact: true,
+        };
+        this.#endgamePlans.set(playerId, plan);
+        if (this.lastEndgame) this.lastEndgame = { ...this.lastEndgame, plan };
+        this.#plannedUntap = null;
+      } catch (e) { continue; }
+      return tap;
+    }
+    return move;
+  }
+
   /**
    * @param {GameState} state
    * @param {string} playerId
@@ -285,20 +325,20 @@ class AIPlayer {
       if (planned && planned.plan.exact) {
         this.#plannedUntap = planned.step.untap;
         this.lastEndgame = { v: planned.plan.v, plan: planned.plan, reused: true };
-        return planned.step.m;
+        return this.#courtierBeforeMonument(state, playerId, planned.step.m, planned.step.untap, placed);
       }
       const r = this.#endgameSearch(state, playerId, placed, planned ? this.endgameSearchMs / 3 : this.endgameSearchMs, shard);
       if (planned && !(r && r.v > planned.plan.v)) {
         this.#plannedUntap = planned.step.untap;
         this.lastEndgame = { v: planned.plan.v, plan: planned.plan, reused: true };
-        return planned.step.m;
+        return this.#courtierBeforeMonument(state, playerId, planned.step.m, planned.step.untap, placed);
       }
       if (r) {
         this.#plannedUntap = r.untap;
         const plan = { steps: r.plan, v: r.v, exact: r.exact };
         this.#endgamePlans.set(playerId, plan);
         this.lastEndgame = { v: r.v, plan, reused: false };
-        return r.move;
+        return this.#courtierBeforeMonument(state, playerId, r.move, r.untap, placed);
       }
     }
     // 考える時は、ログ・進み具合の記録・「ターン開始に戻す」用の控え(盤面の約半分の大きさ)を外した軽い盤面を使う
