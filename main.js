@@ -8670,6 +8670,34 @@ function feeConversionPlanForTurnEnd(state, playerId) {
   return boardMod.planFeeConversion(player.resources, shortfall);
 }
 
+/** パンとサーカス(TURNENDのCHANGE(K,VP,n))で、手番の終わりにVPにする〇が足りない時、ほかの資源から〇に変える案 (2026-11-25, per user「パンとサーカスを持っているとき 人間にも パンとサーカスのためにA→Kの変換をしますか などの警告文が出るように 警告文はもっといいのに変えて」)。
+ * 使用料に使う〇・使用料のための変換の分は先に引いておく。変えられる物が無い・足りている時はnull。
+ * @returns {{cardName:string, need:number, have:number, plan:{resource,count}[]}|null} */
+function breadAndCircusPlanForTurnEnd(state, playerId, feeConversionPlan) {
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player) return null;
+  let need = 0;
+  let cardName = '';
+  for (const physicalId of player.ownedCardPhysicalIds) {
+    const card = state.cards[physicalId];
+    if (!card) continue;
+    const row = dataLoaderMod.getCardRow(INDEX, card.currentFaceId);
+    const m = /^CHANGE\(K,VP(?:,(\d+))?\)$/.exec(String(row.TURNEND || '').trim());
+    if (!m) continue;
+    const n = m[1] ? Number(m[1]) : 1;
+    if (n > need) { need = n; cardName = String(row.NAME || '').replace(/LV\d$/, ''); }
+  }
+  if (need === 0) return null;
+  const resources = { ...player.resources };
+  for (const { resource, count } of feeConversionPlan || []) { resources[resource] -= count; resources.K = (resources.K || 0) + count; }
+  const have = Math.max(0, (resources.K || 0) - pendingKFeeAmount(player));
+  if (have >= need) return null;
+  const plan = boardMod.planFeeConversion(resources, need - have);
+  if (plan.length === 0) return null;
+  return { cardName, need, have, plan };
+}
+const TURN_END_CONVERT_NAMES = { A: '赤〇', B: '青〇', C: '黄〇', Z: '人脈' };
+
 /** Entry point for ending a turn (2026-08-01) -- placeSelectedDie/renderBuildChoiceModal/the free-
  * action retry all call this instead of advanceTurnIfPossible directly now. If ending right now would
  * trigger a RESOURCE_LIMIT/FORCE_CONVERT WARNING, and/or would need an automatic usage-fee conversion
@@ -8680,8 +8708,9 @@ function feeConversionPlanForTurnEnd(state, playerId) {
 function attemptAdvanceTurn(state, playerId) {
   const warnings = turnEndWarnings(state, playerId);
   const feeConversionPlan = feeConversionPlanForTurnEnd(state, playerId);
-  if (warnings.length > 0 || (feeConversionPlan && feeConversionPlan.length > 0)) {
-    pendingTurnEndWarning = { playerId, warnings, feeConversionPlan };
+  const breadPlan = breadAndCircusPlanForTurnEnd(state, playerId, feeConversionPlan); // パンとサーカス(上の関数参照)
+  if (warnings.length > 0 || (feeConversionPlan && feeConversionPlan.length > 0) || breadPlan) {
+    pendingTurnEndWarning = { playerId, warnings, feeConversionPlan, breadPlan };
     return;
   }
   advanceTurnIfPossible(state, playerId);
@@ -9322,6 +9351,21 @@ function renderTurnEndWarningModal() {
     for (const { resource, count } of pendingTurnEndWarning.feeConversionPlan) {
       body.appendChild(el('p', 'turn-end-warning__text', `${resource}→Kを${count}回発動します`));
     }
+  }
+  // パンとサーカス: 「変えて終える」「変えずに終える」「戻る」の3つにする (breadAndCircusPlanForTurnEnd参照)。
+  const bread = pendingTurnEndWarning.breadPlan;
+  const yesBtn = document.getElementById('turn-end-warning-yes');
+  const noBtn = document.getElementById('turn-end-warning-no');
+  const skipBtn = document.getElementById('turn-end-warning-skip');
+  skipBtn.hidden = !bread;
+  yesBtn.textContent = bread ? '変えて終える' : 'はい';
+  noBtn.textContent = bread ? '戻る' : 'いいえ';
+  if (bread) {
+    const converted = bread.plan.map(({ resource, count }) => `${TURN_END_CONVERT_NAMES[resource] || resource}${count}個`).join('と');
+    const now = bread.have > 0 ? `今の〇は${bread.have}個なので、${bread.have}VPにしかなりません。` : '今は〇が無いので、VPになりません。';
+    body.appendChild(el('p', 'turn-end-warning__text', `${bread.cardName}：手番の終わりに〇${bread.need}個を${bread.need}VPにします。
+${now}
+${converted}を〇に変えてから終えると、${bread.need}VPになります。`));
   }
 }
 
@@ -21096,9 +21140,21 @@ document.addEventListener('DOMContentLoaded', () => {
     pendingTurnEndWarning = null;
     render(STATE);
   });
-  document.getElementById('turn-end-warning-yes').addEventListener('click', () => {
+  // 「変えずに終える」(パンとサーカス): 使用料のための変換だけして、パンとサーカスの分は変えずに終える。
+  document.getElementById('turn-end-warning-skip').addEventListener('click', () => {
     const { playerId, feeConversionPlan } = pendingTurnEndWarning;
     pendingTurnEndWarning = null;
+    for (const { resource, count } of feeConversionPlan || []) {
+      for (let i = 0; i < count; i++) executorMod.tryFreeAction(STATE, INDEX, playerId, `${resource}_K`);
+    }
+    advanceTurnIfPossible(STATE, playerId);
+    render(STATE);
+  });
+  document.getElementById('turn-end-warning-yes').addEventListener('click', () => {
+    const { playerId, feeConversionPlan, breadPlan } = pendingTurnEndWarning;
+    pendingTurnEndWarning = null;
+    // パンとサーカス: 使用料の変換の後に、〇に変える分(breadAndCircusPlanForTurnEnd)もする。
+    const breadConversions = breadPlan ? breadPlan.plan : [];
     // Applies the confirmed ABC->Z conversion plan (2026-08-31, see feeConversionPlanForTurnEnd's own
     // doc) BEFORE actually ending the turn -- same executor.tryFreeAction every other free-action click
     // in this file already calls, just looped over the plan's own {resource,count} entries instead of
@@ -21107,6 +21163,9 @@ document.addEventListener('DOMContentLoaded', () => {
       for (const { resource, count } of feeConversionPlan) {
         for (let i = 0; i < count; i++) executorMod.tryFreeAction(STATE, INDEX, playerId, `${resource}_K`);
       }
+    }
+    for (const { resource, count } of breadConversions) {
+      for (let i = 0; i < count; i++) executorMod.tryFreeAction(STATE, INDEX, playerId, `${resource}_K`);
     }
     advanceTurnIfPossible(STATE, playerId);
     render(STATE);
