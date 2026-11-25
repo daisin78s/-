@@ -187,14 +187,12 @@ class AIPlayer {
     const forced = this.moveGenerator.forcedBzConversionMove(state, this.index, playerId, context,
       (before, candidates) => this.#chooseCourtierTap(before, playerId, context, candidates));
     if (forced) return forced;
-    const forcedJob004 = this.moveGenerator.forcedJob004ConversionMove(state, this.index, playerId);
-    if (forcedJob004) return forcedJob004;
+    // 料理人(forcedJob004ConversionMove)・訓練場のためのK作り(forcedTrainingGroundKPrepMove)・訓練場に置く
+    // (forcedTrainingGroundMove)の「必ずやる手」は外した (2026-11-25, per user「今なら外してもいいよね」「比較しなくていい」 --
+    // 先読みが無かった頃の決まりで、ほかの手と比べないため、研究で訓練場の支配をLV2に上げる手などを見落としていた。
+    // 今は先読み・読み切りと評価値で選ぶ)。関数はmove-generator.jsに残してある。
     const forcedEndSignLv2 = this.moveGenerator.forcedEndSignLv2Move(state, this.index, playerId);
     if (forcedEndSignLv2) return forcedEndSignLv2;
-    const forcedTrainingGroundKPrep = this.moveGenerator.forcedTrainingGroundKPrepMove(state, this.index, playerId, context);
-    if (forcedTrainingGroundKPrep) return forcedTrainingGroundKPrep;
-    const forcedTrainingGround = this.moveGenerator.forcedTrainingGroundMove(state, this.index, playerId, context);
-    if (forcedTrainingGround) return forcedTrainingGround;
     return null;
   }
 
