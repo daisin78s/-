@@ -1531,6 +1531,15 @@ body.tutorial-mode .change-highlight {
 .action-dot[data-resource="B"] { background: var(--resource-b); }
 .action-dot[data-resource="C"] { background: var(--resource-c); }
 .action-dot[data-resource="Z"] { background: var(--resource-z-gradient); }
+/* どの資源でも(CHANGE(ANY,...)、2026-11-25): 〇・赤〇・青〇・黄〇の4色 */
+/* 払う資源を選ぶ画面 (main.jsのshowAnyPaymentPicker、2026-11-25) */
+.any-payment-list { display: flex; flex-direction: column; gap: 8px; padding: 0 16px 12px; }
+.any-payment-row { display: flex; align-items: center; gap: 10px; }
+.any-payment-row__name { flex: 1; }
+.any-payment-row__btn { min-width: 36px; min-height: 32px; }
+.any-payment-row__count { min-width: 24px; text-align: center; font-weight: bold; }
+#any-payment-overlay { z-index: 3000; }
+.action-dot[data-resource="ANY"] { background: conic-gradient(var(--resource-k-dot) 0deg 90deg, var(--resource-a) 90deg 180deg, var(--resource-b) 180deg 270deg, var(--resource-c) 270deg 360deg); border: 1.5px solid var(--resource-k-dot-border); }
 .action-dot[data-resource="VP"] { background: var(--resource-vp); }
 .action-dot[data-resource="BZ"] { background: var(--resource-bz); }
 

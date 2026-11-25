@@ -1018,6 +1018,64 @@ function runPay(state, index, context, cmd) {
   return payCostList(state, index, context.playerId, items);
 }
 
+/* どの資源でも払える支払い (CHANGE(ANY,...)) (2026-11-25, per user「パンとサーカス 孤児院 食料だけじゃなくて どんな資源でも払えるようにした方が」+ 回答: 〇から先・足りない分は一番多い資源から / 人もAIも選べる / 支払いは強制)。
+ * 払える資源は〇・赤〇・青〇・黄〇・人脈(K/A/B/C/Z)。払う内訳は player.anyPaymentChoice({K:n, A:n, ...}、画面かAIが
+ * 払う直前に置く、1回使ったら消す)があればそれ、無ければ自動: 〇から先、足りない分は一番多く持っている赤〇/青〇/黄〇
+ * から(同じ数なら赤・青・黄の順)、最後に人脈(使用料の変換と同じ順、board.planFeeConversion)。 */
+const ANY_PAY_RESOURCES = ['K', 'A', 'B', 'C', 'Z'];
+function anyPayAvailable(player) {
+  return ANY_PAY_RESOURCES.reduce((sum, r) => sum + (player.resources[r] || 0), 0);
+}
+function defaultAnyPayment(resources, count) {
+  const out = {};
+  let rest = count;
+  const k = Math.min(resources.K || 0, rest);
+  if (k > 0) { out.K = k; rest -= k; }
+  const order = ['A', 'B', 'C']
+    .sort((a, b) => (resources[b] || 0) - (resources[a] || 0) || ['A', 'B', 'C'].indexOf(a) - ['A', 'B', 'C'].indexOf(b))
+    .concat('Z');
+  for (const r of order) {
+    if (rest <= 0) break;
+    const use = Math.min(resources[r] || 0, rest);
+    if (use > 0) { out[r] = use; rest -= use; }
+  }
+  return rest > 0 ? null : out;
+}
+/** AIが比べる払い方 (2026-11-25, per user「どんな資源でも払えるように」「人間もAIも選べるように」): 〇から先(自動と同じ) と 〇を残してほかから先。違いが無ければ1つ。
+ * @returns {Object[]} 払い方({K:n, A:n, ...})の配列 */
+function anyPaymentOptions(resources, count) {
+  const out = [];
+  const kFirst = defaultAnyPayment(resources, count);
+  if (kFirst) out.push(kFirst);
+  const others = defaultAnyPayment({ ...resources, K: 0 }, count);
+  const keepK = others || (() => {
+    // ほかだけでは足りない: ほかを全部使い、残りを〇で
+    const rest = count - ['A', 'B', 'C', 'Z'].reduce((sum, r) => sum + (resources[r] || 0), 0);
+    if (rest > (resources.K || 0)) return null;
+    const o = defaultAnyPayment({ ...resources, K: 0 }, count - rest) || {};
+    return rest > 0 ? { ...o, K: rest } : o;
+  })();
+  if (keepK && JSON.stringify(keepK) !== JSON.stringify(kFirst)) out.push(keepK);
+  return out;
+}
+/** 置くエリアの効果/手番の終わりの効果で、どの資源でも払える支払いの回数(cap)を見る(AI用)。CHANGE(ANY,VP,n)だけ。 */
+function anyPayCapOfText(text) {
+  const m = /^CHANGE\(ANY,VP(?:,(\d+))?\)$/.exec(String(text || '').trim());
+  return m ? (m[1] ? Number(m[1]) : 1) : 0;
+}
+
+function resolveAnyPayment(player, count) {
+  const choice = player.anyPaymentChoice;
+  player.anyPaymentChoice = null;
+  if (choice && typeof choice === 'object') {
+    const total = ANY_PAY_RESOURCES.reduce((sum, r) => sum + (choice[r] || 0), 0);
+    const ok = total === count && ANY_PAY_RESOURCES.every((r) => (choice[r] || 0) >= 0 && (choice[r] || 0) <= (player.resources[r] || 0))
+      && Object.keys(choice).every((r) => ANY_PAY_RESOURCES.includes(r));
+    if (ok) return choice;
+  }
+  return defaultAnyPayment(player.resources, count);
+}
+
 function runChange(state, index, context, cmd) {
   const player = getPlayer(state, context.playerId);
   const pay = cmd.pay.map((item) => ({ resource: item.resource, count: evalCountNode(state, index, context.playerId, item.count) }));
@@ -1030,6 +1088,7 @@ function runChange(state, index, context, cmd) {
   // real combinatorial care to avoid over-counting the same Z twice.
   const maxAffordable = () => Math.min(
     ...pay.map((item) => {
+      if (item.resource === 'ANY') return Math.floor(anyPayAvailable(player) / item.count);
       const dieKind = DICE_KIND_BY_RESOURCE[item.resource];
       const have = dieKind
         ? player.dice.filter((d) => d.kind === dieKind).length
@@ -1083,6 +1142,18 @@ function runChange(state, index, context, cmd) {
 
   if (times <= 0) return { success: true, timesExecuted: 0 };
 
+  // どの資源でも払える支払い(ANY、上のresolveAnyPayment)は、ここで決まった資源で払う。
+  const anyItem = pay.find((item) => item.resource === 'ANY');
+  if (anyItem) {
+    if (pay.length !== 1) throw new ExecutionError('CHANGE(ANY,...) must have ANY as its only pay item');
+    const plan = resolveAnyPayment(player, anyItem.count * times);
+    if (!plan) return { success: false, reason: 'INSUFFICIENT_RESOURCES', resource: 'ANY' };
+    for (const [resource, count] of Object.entries(plan)) {
+      if (count > 0 && !tryPay(state, context.playerId, resource, count)) throw new ExecutionError('ANY payment failed after affordability check passed (bug)');
+    }
+    for (const item of gain) grantResourceAndEmitGet(state, index, context, item.resource, item.count * times);
+    return { success: true, timesExecuted: times, anyPayment: plan };
+  }
   // Substitutes Z for any A/B/C item, and A for K (権力者), per resolvePayment's own doc.
   const scaledPay = pay.map((item) => ({ resource: item.resource, count: item.count * times }));
   const resolution = resolvePayment(state, index, context.playerId, scaledPay);
@@ -1904,6 +1975,7 @@ function applyTurnEnd(state, index, playerId) {
   refundUnusedValueChangeTaps(state, index, player);
   // GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN)'s flag is turn-scoped.
   for (const die of player.dice) die.placeAnywhereThisTurn = false;
+  player.anyPaymentChoice = null; // どの資源でも払える支払いの内訳は、その手番の中だけ(resolveAnyPayment参照)
   // SET_WILDCARD(THIS_DICE,THIS_TURN)'s flag is turn-scoped too (same lifetime as placeAnywhereThisTurn).
   for (const die of player.dice) die.isWildcardThisTurn = false;
   // SET_DICE_ANY/SET_DIE_VALUE/CHANGE_DIE_VALUE's own value change is turn-scoped too (2026-08-24, per
@@ -2207,6 +2279,11 @@ function grantChefBonusIfEarned(state, index, context, vpCount) {
 }
 
 module.exports = {
+  anyPaymentOptions,
+  anyPayCapOfText,
+  ANY_PAY_RESOURCES,
+  anyPayAvailable,
+  defaultAnyPayment,
   withReadOnlyOwnedCache,
   NotImplementedError,
   ExecutionError,

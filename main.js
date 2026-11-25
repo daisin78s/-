@@ -5462,11 +5462,12 @@ function buildUntapAllIcon(actionText) {
  * the count omitted when the DSL's own count is implicit 1 -- same "only show a number when the DSL has
  * one" rule used throughout. */
 function buildChangeToVpIcon(actionText) {
-  const match = /^CHANGE\((\d*)K,(\d*)VP\)$/.exec(actionText || '');
+  // ANY: どの資源でも払える(2026-11-25、executor.jsのresolveAnyPayment参照) -- 4色の丸(.action-dot[data-resource="ANY"])。
+  const match = /^CHANGE\((\d*)(K|ANY),(\d*)VP\)$/.exec(actionText || '');
   if (!match) return null;
-  const [, payCount, gainCount] = match;
+  const [, payCount, payResource, gainCount] = match;
   // VPの数は1でも書く (2026-11-02, per user「パンとサーカスのアイコン ⤵〇→1VP に」)。
-  return actionRow([...resourceItemNodes(payCount, 'K'), actionArrow(), actionSuffix(`${gainCount || 1}VP`)]);
+  return actionRow([...resourceItemNodes(payCount, payResource), actionArrow(), actionSuffix(`${gainCount || 1}VP`)]);
 }
 
 /** CHANGE(K,VP,n): a capped-repeat K->VP conversion, usable up to n times -- now all 3 孤児院 tiers
@@ -5477,9 +5478,9 @@ function buildChangeToVpIcon(actionText) {
  * shape (K/A/B/C/Z pairs only, no VP) -- VP always shows as plain "1VP" text per-use here rather than
  * scaling the shown count to the usage cap. */
 function buildChangeToVpCappedIcon(actionText) {
-  const match = /^CHANGE\(K,VP,(\d+)\)$/.exec(actionText || '');
+  const match = /^CHANGE\((K|ANY),VP,(\d+)\)$/.exec(actionText || '');
   if (!match) return null;
-  return actionRow([actionDot('K'), actionArrow(), actionSuffix('1VP'), actionSuffix(`（MAX${match[1]}）`)]);
+  return actionRow([actionDot(match[1]), actionArrow(), actionSuffix('1VP'), actionSuffix(`（MAX${match[2]}）`)]);
 }
 
 /** CHANGE(X,Y,ALL);ADD(nZ) -- e.g. AREA003B's "CHANGE(K,A,ALL);ADD(2B)" (2026-08-05, per user feedback
@@ -6764,7 +6765,7 @@ function fillCardFace(root, faceId, options, directChildrenOnly) {
       .map((effect) => {
         // パンとサーカスLV2は「2〇→2VP / ターン終了時」 (2026-11-07, per user; 孤児院と共用の「〇→1VP（MAX2）」は使わない)。
         const row = effect.source === 'TURNEND' && faceId === 'B301B'
-          ? (() => { const stack = el('div', 'action-icons-stack'); stack.appendChild(actionRow([...resourceItemNodes('2', 'K'), actionArrow(), actionSuffix('2VP')])); const turnEndRow = actionRow([actionSuffix('ターン終了時')]); turnEndRow.style.position = 'relative'; turnEndRow.style.top = '-4px'; stack.appendChild(turnEndRow); return stack; })()
+          ? (() => { const stack = el('div', 'action-icons-stack'); stack.appendChild(actionRow([...resourceItemNodes('2', 'ANY'), actionArrow(), actionSuffix('2VP')])); /* 2026-11-25: どの資源でも(ANY) */ const turnEndRow = actionRow([actionSuffix('ターン終了時')]); turnEndRow.style.position = 'relative'; turnEndRow.style.top = '-4px'; stack.appendChild(turnEndRow); return stack; })()
           : buildEffectRow(effect, allowTextFallback);
         // 基礎学問・高等学問・幾何学の⚡🎲(ONCE)の行を少し上に (2026-11-02, per user「基礎学問 高等学問 幾何学のアイコンの
         // ⚡🎲 もう少し上に」)。
@@ -8396,17 +8397,40 @@ function placeSelectedDieAfterJob007Check(state, player, dieId, mapId, slotIndex
   // declined confirm leaves selectedDieIds/turnActionTaken/actionCheckpoints untouched, same as if
   // the click never happened. See pendingWhiteOverflowConfirm's own doc.
   if (wouldCauseWhiteOverflow(state, (clone) => boardMod.placeDice(clone, INDEX, { playerId: player.id }, dieId, mapId, slotIndex))) {
-    pendingWhiteOverflowConfirm = { onConfirm: () => placeSelectedDieCommit(state, player, dieId, mapId, slotIndex) };
+    pendingWhiteOverflowConfirm = { onConfirm: () => placeSelectedDieWithAnyPayment(state, player, dieId, mapId, slotIndex) };
     render(STATE);
     return;
   }
-  placeSelectedDieCommit(state, player, dieId, mapId, slotIndex);
+  placeSelectedDieWithAnyPayment(state, player, dieId, mapId, slotIndex);
+}
+
+/** 孤児院など、どの資源でも払えるエリア(CHANGE(ANY,VP,n))に置く時、〇が足りなければ払う資源を選んでもらってから置く
+ * (showAnyPaymentPicker参照) (2026-11-25, per user「パンとサーカス 孤児院 … どんな資源でも払えるように」+ 回答「人間もAIも選べるように」「〇が足りない時だけ」「支払いは強制で」)。 */
+function placeSelectedDieWithAnyPayment(state, player, dieId, mapId, slotIndex) {
+  const areaRow = dataLoaderMod.getAreaRow(INDEX, state.maps[mapId].currentAreaId);
+  const cap = anyPayCapOf(areaRow.ACTION);
+  const pick = cap ? anyPaymentPickNeeded(player.resources, cap) : null;
+  if (!pick) { placeSelectedDieCommit(state, player, dieId, mapId, slotIndex); return; }
+  const kText = pick.kUse > 0 ? `〇${pick.kUse}個と、` : '';
+  showAnyPaymentPicker({
+    title: areaRow.NAME,
+    text: `資源${pick.times}個を${pick.times}VPに変えます。\n${kText}ほかに払う資源を${pick.rest}個選んでください。`,
+    resources: player.resources,
+    rest: pick.rest,
+    onConfirm: (choice) => {
+      player.anyPaymentChoice = { ...(pick.kUse > 0 ? { K: pick.kUse } : {}), ...choice };
+      placeSelectedDieCommit(state, player, dieId, mapId, slotIndex);
+      render(STATE);
+    },
+    onCancel: () => render(STATE),
+  });
 }
 
 function placeSelectedDieCommit(state, player, dieId, mapId, slotIndex) {
   const preSnapshot = gameStateMod.cloneState(state);
   const preTurnActionTaken = turnActionTaken;
   const result = boardMod.placeDice(state, INDEX, { playerId: player.id }, dieId, mapId, slotIndex);
+  player.anyPaymentChoice = null; // 置けなかった時に、選んだ払い方が手番の終わり(パンとサーカス)に残らないように
   selectedDieIds = [];
   if (result.success) actionCheckpoints.push({ state: preSnapshot, turnActionTaken: preTurnActionTaken });
   // kabukicho_placement_introの実クリック操作の完了 (2026-09-28, per user request: "戻ったダイスをつかんで
@@ -8670,7 +8694,102 @@ function feeConversionPlanForTurnEnd(state, playerId) {
   return boardMod.planFeeConversion(player.resources, shortfall);
 }
 
-/** パンとサーカス(TURNENDのCHANGE(K,VP,n))で、手番の終わりにVPにする〇が足りない時、ほかの資源から〇に変える案 (2026-11-25, per user「パンとサーカスを持っているとき 人間にも パンとサーカスのためにA→Kの変換をしますか などの警告文が出るように 警告文はもっといいのに変えて」)。
+/** どの資源でも払える支払い(CHANGE(ANY,VP,n)、パンとサーカス・孤児院)で、人が払う資源を選ぶ画面 (2026-11-25, per user「パンとサーカス 孤児院 … どんな資源でも払えるように」+ 回答「人間もAIも選べるように」「〇が足りない時だけ」「支払いは強制で」)。
+ * 〇から先に払い、〇が足りない分を赤〇・青〇・黄〇・人脈から選ぶ(初めは一番多い資源から、executor.defaultAnyPayment)。
+ * 選べる資源が1種類しか無い時は画面を出さずに自動。支払いは強制(払える分は必ず払う)なので「払わない」は無い。 */
+function anyPayCapOf(dslText) {
+  const m = /^CHANGE\(ANY,VP(?:,(\d+))?\)$/.exec(String(dslText || '').trim());
+  return m ? (m[1] ? Number(m[1]) : 1) : 0;
+}
+function anyPaymentPickNeeded(resources, cap) {
+  const others = ['A', 'B', 'C', 'Z'].filter((r) => (resources[r] || 0) > 0);
+  const total = (resources.K || 0) + others.reduce((sum, r) => sum + resources[r], 0);
+  const times = Math.min(cap, total);
+  const kUse = Math.min(resources.K || 0, times);
+  const rest = times - kUse;
+  if (rest <= 0 || others.length < 2) return null;
+  return { times, kUse, rest };
+}
+function showAnyPaymentPicker({ title, text, resources, rest, onConfirm, onCancel }) {
+  const old = document.getElementById('any-payment-overlay');
+  if (old) old.remove();
+  const overlay = el('div', 'card-inst-overlay');
+  overlay.id = 'any-payment-overlay';
+  const modal = el('div', 'card-inst-modal placement-choice-modal');
+  const header = el('div', 'card-inst-modal__header');
+  header.appendChild(el('span', 'card-inst-modal__title', title));
+  modal.appendChild(header);
+  const body = el('div', 'card-inst-modal__body');
+  body.appendChild(el('p', 'turn-end-warning__text', text));
+  const choice = { ...(executorMod.defaultAnyPayment({ ...resources, K: 0 }, rest) || {}) };
+  const list = el('div', 'any-payment-list');
+  const confirm = el('button', '', '');
+  const pickedCount = () => Object.values(choice).reduce((a, b) => a + b, 0);
+  const refresh = () => {
+    list.innerHTML = '';
+    for (const r of ['A', 'B', 'C', 'Z']) {
+      const have = resources[r] || 0;
+      if (have <= 0) continue;
+      const row = el('div', 'any-payment-row');
+      row.appendChild(el('span', 'any-payment-row__name', `${TURN_END_CONVERT_NAMES[r]}（${have}個）`));
+      const minus = el('button', 'any-payment-row__btn', '−');
+      minus.type = 'button';
+      minus.disabled = !(choice[r] > 0);
+      minus.addEventListener('click', () => { choice[r] = (choice[r] || 0) - 1; refresh(); });
+      const plus = el('button', 'any-payment-row__btn', '＋');
+      plus.type = 'button';
+      plus.disabled = (choice[r] || 0) >= have || pickedCount() >= rest;
+      plus.addEventListener('click', () => { choice[r] = (choice[r] || 0) + 1; refresh(); });
+      row.appendChild(minus);
+      row.appendChild(el('span', 'any-payment-row__count', String(choice[r] || 0)));
+      row.appendChild(plus);
+      list.appendChild(row);
+    }
+    const picked = pickedCount();
+    confirm.textContent = picked === rest ? 'この払い方で払う' : `あと${rest - picked}個選んでください`;
+    confirm.disabled = picked !== rest;
+  };
+  body.appendChild(list);
+  modal.appendChild(body);
+  const actions = el('div', 'placement-choice-actions');
+  const cancel = el('button', '', '戻る');
+  cancel.type = 'button';
+  cancel.addEventListener('click', () => { overlay.remove(); if (onCancel) onCancel(); });
+  confirm.type = 'button';
+  confirm.addEventListener('click', () => {
+    overlay.remove();
+    const out = {};
+    for (const [r, n] of Object.entries(choice)) if (n > 0) out[r] = n;
+    onConfirm(out);
+  });
+  actions.appendChild(cancel);
+  actions.appendChild(confirm);
+  modal.appendChild(actions);
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  refresh();
+}
+/** 手番の終わり(パンとサーカス)に、人が払う資源を選ぶ必要があるか。使用料の〇・使用料のための変換は先に引く。 */
+function turnEndAnyPaymentPick(state, playerId, feeConversionPlan) {
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player) return null;
+  let cap = 0;
+  let cardName = '';
+  for (const physicalId of player.ownedCardPhysicalIds) {
+    const card = state.cards[physicalId];
+    if (!card) continue;
+    const row = dataLoaderMod.getCardRow(INDEX, card.currentFaceId);
+    const n = anyPayCapOf(row.TURNEND);
+    if (n > cap) { cap = n; cardName = String(row.NAME || '').replace(/LV\d$/, ''); }
+  }
+  if (cap === 0) return null;
+  const resources = { ...player.resources };
+  for (const { resource, count } of feeConversionPlan || []) { resources[resource] -= count; resources.K = (resources.K || 0) + count; }
+  resources.K = Math.max(0, (resources.K || 0) - pendingKFeeAmount(player));
+  const pick = anyPaymentPickNeeded(resources, cap);
+  return pick ? { ...pick, cap, cardName, resources } : null;
+}
+/** (旧、今は使わない)パンとサーカス(TURNENDのCHANGE(K,VP,n))で、手番の終わりにVPにする〇が足りない時、ほかの資源から〇に変える案 (2026-11-25, per user「パンとサーカスを持っているとき 人間にも パンとサーカスのためにA→Kの変換をしますか などの警告文が出るように 警告文はもっといいのに変えて」)。
  * 使用料に使う〇・使用料のための変換の分は先に引いておく。変えられる物が無い・足りている時はnull。
  * @returns {{cardName:string, need:number, have:number, plan:{resource,count}[]}|null} */
 function breadAndCircusPlanForTurnEnd(state, playerId, feeConversionPlan) {
@@ -8705,12 +8824,30 @@ const TURN_END_CONVERT_NAMES = { A: '赤〇', B: '青〇', C: '黄〇', Z: '人�
  * instead of ending immediately -- "いいえ" leaves the turn as-is (matches the data's own "TURNENDを取り
  * 消す" NOTE for the warning half), "はい" applies the conversion plan (if any) THEN runs the real
  * advanceTurnIfPossible. */
-function attemptAdvanceTurn(state, playerId) {
+function attemptAdvanceTurn(state, playerId, anyPaymentChosen = false) {
   const warnings = turnEndWarnings(state, playerId);
   const feeConversionPlan = feeConversionPlanForTurnEnd(state, playerId);
-  const breadPlan = breadAndCircusPlanForTurnEnd(state, playerId, feeConversionPlan); // パンとサーカス(上の関数参照)
-  if (warnings.length > 0 || (feeConversionPlan && feeConversionPlan.length > 0) || breadPlan) {
-    pendingTurnEndWarning = { playerId, warnings, feeConversionPlan, breadPlan };
+  // パンとサーカス(どの資源でも払える): 〇が足りない時は、先に払う資源を選んでもらう(turnEndAnyPaymentPick参照)。
+  const anyPick = anyPaymentChosen ? null : turnEndAnyPaymentPick(state, playerId, feeConversionPlan);
+  if (anyPick) {
+    const player = state.players.find((p) => p.id === playerId);
+    const kText = anyPick.kUse > 0 ? `〇${anyPick.kUse}個と、` : '';
+    showAnyPaymentPicker({
+      title: anyPick.cardName,
+      text: `手番の終わりに、資源${anyPick.times}個を${anyPick.times}VPに変えます。\n${kText}ほかに払う資源を${anyPick.rest}個選んでください。`,
+      resources: anyPick.resources,
+      rest: anyPick.rest,
+      onConfirm: (choice) => {
+        player.anyPaymentChoice = { ...(anyPick.kUse > 0 ? { K: anyPick.kUse } : {}), ...choice };
+        attemptAdvanceTurn(state, playerId, true);
+        render(STATE);
+      },
+      onCancel: () => render(STATE),
+    });
+    return;
+  }
+  if (warnings.length > 0 || (feeConversionPlan && feeConversionPlan.length > 0)) {
+    pendingTurnEndWarning = { playerId, warnings, feeConversionPlan };
     return;
   }
   advanceTurnIfPossible(state, playerId);
@@ -9352,14 +9489,7 @@ function renderTurnEndWarningModal() {
       body.appendChild(el('p', 'turn-end-warning__text', `${resource}→Kを${count}回発動します`));
     }
   }
-  // パンとサーカス: 「変えて終える」「変えずに終える」「戻る」の3つにする (breadAndCircusPlanForTurnEnd参照)。
-  const bread = pendingTurnEndWarning.breadPlan;
-  const yesBtn = document.getElementById('turn-end-warning-yes');
-  const noBtn = document.getElementById('turn-end-warning-no');
-  const skipBtn = document.getElementById('turn-end-warning-skip');
-  skipBtn.hidden = !bread;
-  yesBtn.textContent = bread ? '変えて終える' : 'はい';
-  noBtn.textContent = bread ? '戻る' : 'いいえ';
+  const bread = null; // (旧)パンとサーカスの確認は、払う資源を選ぶ画面(showAnyPaymentPicker)に置き換えた (2026-11-25)
   if (bread) {
     const converted = bread.plan.map(({ resource, count }) => `${TURN_END_CONVERT_NAMES[resource] || resource}${count}個`).join('と');
     const now = bread.have > 0 ? `今の〇は${bread.have}個なので、${bread.have}VPにしかなりません。` : '今は〇が無いので、VPになりません。';
@@ -21140,21 +21270,9 @@ document.addEventListener('DOMContentLoaded', () => {
     pendingTurnEndWarning = null;
     render(STATE);
   });
-  // 「変えずに終える」(パンとサーカス): 使用料のための変換だけして、パンとサーカスの分は変えずに終える。
-  document.getElementById('turn-end-warning-skip').addEventListener('click', () => {
+  document.getElementById('turn-end-warning-yes').addEventListener('click', () => {
     const { playerId, feeConversionPlan } = pendingTurnEndWarning;
     pendingTurnEndWarning = null;
-    for (const { resource, count } of feeConversionPlan || []) {
-      for (let i = 0; i < count; i++) executorMod.tryFreeAction(STATE, INDEX, playerId, `${resource}_K`);
-    }
-    advanceTurnIfPossible(STATE, playerId);
-    render(STATE);
-  });
-  document.getElementById('turn-end-warning-yes').addEventListener('click', () => {
-    const { playerId, feeConversionPlan, breadPlan } = pendingTurnEndWarning;
-    pendingTurnEndWarning = null;
-    // パンとサーカス: 使用料の変換の後に、〇に変える分(breadAndCircusPlanForTurnEnd)もする。
-    const breadConversions = breadPlan ? breadPlan.plan : [];
     // Applies the confirmed ABC->Z conversion plan (2026-08-31, see feeConversionPlanForTurnEnd's own
     // doc) BEFORE actually ending the turn -- same executor.tryFreeAction every other free-action click
     // in this file already calls, just looped over the plan's own {resource,count} entries instead of
@@ -21163,9 +21281,6 @@ document.addEventListener('DOMContentLoaded', () => {
       for (const { resource, count } of feeConversionPlan) {
         for (let i = 0; i < count; i++) executorMod.tryFreeAction(STATE, INDEX, playerId, `${resource}_K`);
       }
-    }
-    for (const { resource, count } of breadConversions) {
-      for (let i = 0; i < count; i++) executorMod.tryFreeAction(STATE, INDEX, playerId, `${resource}_K`);
     }
     advanceTurnIfPossible(STATE, playerId);
     render(STATE);

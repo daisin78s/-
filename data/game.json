@@ -628,10 +628,10 @@
       "ONCE": "",
       "TAP": "",
       "PASSIVE": "",
-      "TURNEND": "CHANGE(K,VP)",
+      "TURNEND": "CHANGE(ANY,VP)",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "ターン終了時〇をVPに変換する"
+      "INST": "ターン終了時、資源1個を1VPに変換する\n（〇以外の資源でもよい。払える時は必ず変換する）"
     },
     {
       "ID": "B001B",
@@ -763,10 +763,10 @@
       "ONCE": "",
       "TAP": "",
       "PASSIVE": "",
-      "TURNEND": "CHANGE(K,VP,2)",
+      "TURNEND": "CHANGE(ANY,VP,2)",
       "START_ORDER": "",
       "AUTO": "",
-      "INST": "ターン終了時2〇を2VPに変換する"
+      "INST": "ターン終了時、資源2個を2VPに変換する\n（〇以外の資源でもよい。払える分は必ず変換する）"
     }
   ],
   "C": [
@@ -1896,9 +1896,9 @@
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
-      "ACTION": "CHANGE(K,VP,2)",
+      "ACTION": "CHANGE(ANY,VP,2)",
       "fee": "",
-      "INST": ""
+      "INST": "資源1個を1VPに変換する（MAX2）\n〇以外の資源でもよい。払える分は必ず変換する"
     },
     {
       "ID": "AREA001B",
@@ -2013,9 +2013,9 @@
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
-      "ACTION": "CHANGE(K,VP,4)",
+      "ACTION": "CHANGE(ANY,VP,4)",
       "fee": "K",
-      "INST": ""
+      "INST": "資源1個を1VPに変換する（MAX4）\n〇以外の資源でもよい。払える分は必ず変換する"
     },
     {
       "ID": "AREA001C",
@@ -2130,9 +2130,9 @@
       "SLOT4": "NONE",
       "SLOT5": "NONE",
       "SLOT6": "NONE",
-      "ACTION": "CHANGE(K,VP,6)",
+      "ACTION": "CHANGE(ANY,VP,6)",
       "fee": "2K",
-      "INST": ""
+      "INST": "資源1個を1VPに変換する（MAX6）\n〇以外の資源でもよい。払える分は必ず変換する"
     }
   ],
   "SHOP": [

@@ -93,6 +93,12 @@ class SimulationError extends Error {}
  *   returned, for Evaluator/callers that want the detail; always has `success`.
  */
 function applyInPlace(state, index, move) {
+  // どの資源でも払える支払いの払い方(move.anyPayment、move-generator.jsの#withAnyPaymentVariants)を、払う直前に置く
+  // (executor.resolveAnyPayment が読む。(2026-11-25, per user「どんな資源でも払えるように」「人間もAIも選べるように」))。
+  if (move.anyPayment) {
+    const payer = state.players.find((p) => p.id === move.playerId);
+    if (payer) payer.anyPaymentChoice = { ...move.anyPayment };
+  }
   switch (move.type) {
     case 'PLACE_DIE': {
       const result = board.placeDice(state, index, { playerId: move.playerId }, move.dieId, move.mapId, move.slotIndex);

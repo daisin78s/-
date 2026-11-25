@@ -229,6 +229,34 @@ class MoveGenerator {
   /** 方針 noOrphanageEarly: R1・R2は孤児院(AREA010A/B)に置く手を候補に入れない (2026-11-25, per user「孤児院は 1R 2R
    * では 候補に入れない」「1R 2R に 孤児院に行くのは 効率が悪い」)。そのダイスを置ける所が孤児院しか無い時はパスになる
    * (「孤児院に置かなくても 解決」)。 */
+  /** どの資源でも払える支払い(孤児院のCHANGE(ANY,VP,n)・パンとサーカスの手番の終わり)で、払い方の違う手も足す
+   * (2026-11-25, per user「どんな資源でも払えるように」「人間もAIも選べるように」)。〇から先(自動と同じ、元の手) と 〇を残してほかから先(anyPayment付きの手)。 */
+  #withAnyPaymentVariants(state, index, playerId, player, moves) {
+    const out = [];
+    let turnEndCap = null;
+    for (const m of moves) {
+      out.push(m);
+      let cap = 0;
+      if (m.type === 'PLACE_DIE' && m.mapId && !m.buildCandidateKey) {
+        cap = executor.anyPayCapOfText(getAreaRow(index, state.maps[m.mapId].currentAreaId).ACTION);
+      } else if (m.type === 'END_TURN') {
+        if (turnEndCap === null) {
+          turnEndCap = 0;
+          for (const physicalId of player.ownedCardPhysicalIds) {
+            const card = state.cards[physicalId];
+            if (card) turnEndCap = Math.max(turnEndCap, executor.anyPayCapOfText(getCardRow(index, card.currentFaceId).TURNEND));
+          }
+        }
+        cap = turnEndCap;
+      }
+      if (!cap) continue;
+      const total = executor.ANY_PAY_RESOURCES.reduce((sum, r) => sum + (player.resources[r] || 0), 0);
+      const options = executor.anyPaymentOptions(player.resources, Math.min(cap, total));
+      for (const option of options.slice(1)) out.push({ ...m, anyPayment: option });
+    }
+    return out;
+  }
+
   #isOrphanageHeldBack(state, mapId) {
     return !!this.policy.noOrphanageEarly && state.round <= 2 && /^AREA010/.test(state.maps[mapId].currentAreaId || '');
   }
@@ -307,6 +335,7 @@ class MoveGenerator {
     }
     moves.push(...this.#bareTapMoves(state, index, playerId, player, context));
     this.#placeOutcomes = null;
+    moves = this.#withAnyPaymentVariants(state, index, playerId, player, moves);
     moves.push(...this.#tapReactionMoves(state, playerId));
     if (context.hasPlacedDieThisTurn && executor.canEndTurn(state, index, playerId).ok) {
       moves.push({ type: 'END_TURN', playerId });

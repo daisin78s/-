@@ -1,6 +1,6 @@
 {
- "gameDataVersion": "047f7b6eebe45a03",
- "generatedAt": "2026-11-25T14:11:35.766Z",
+ "gameDataVersion": "67bf02e8129cbdf8",
+ "generatedAt": "2026-11-25T14:27:51.037Z",
  "commandSpecFile": "dsl-command-spec.json",
  "cardCount": 148,
  "cards": {
@@ -363,8 +363,8 @@
    "COST": "3B,1C",
    "VP": 0,
    "LEVEL": 1,
-   "TURNEND": "CHANGE(K,VP)",
-   "inst": "ターン終了時〇をVPに変換する"
+   "TURNEND": "CHANGE(ANY,VP)",
+   "inst": "ターン終了時、資源1個を1VPに変換する\n（〇以外の資源でもよい。払える時は必ず変換する）"
   },
   "B001B": {
    "sheet": "B",
@@ -450,8 +450,8 @@
    "COST": "3B,1C",
    "VP": 1,
    "LEVEL": 2,
-   "TURNEND": "CHANGE(K,VP,2)",
-   "inst": "ターン終了時2〇を2VPに変換する"
+   "TURNEND": "CHANGE(ANY,VP,2)",
+   "inst": "ターン終了時、資源2個を2VPに変換する\n（〇以外の資源でもよい。払える分は必ず変換する）"
   },
   "C001A": {
    "sheet": "C",
@@ -1071,7 +1071,8 @@
    "SLOT4": "NONE",
    "SLOT5": "NONE",
    "SLOT6": "NONE",
-   "ACTION": "CHANGE(K,VP,2)"
+   "ACTION": "CHANGE(ANY,VP,2)",
+   "inst": "資源1個を1VPに変換する（MAX2）\n〇以外の資源でもよい。払える分は必ず変換する"
   },
   "AREA001B": {
    "sheet": "AREA",
@@ -1180,7 +1181,8 @@
    "SLOT5": "NONE",
    "SLOT6": "NONE",
    "fee": "K",
-   "ACTION": "CHANGE(K,VP,4)"
+   "ACTION": "CHANGE(ANY,VP,4)",
+   "inst": "資源1個を1VPに変換する（MAX4）\n〇以外の資源でもよい。払える分は必ず変換する"
   },
   "AREA001C": {
    "sheet": "AREA",
@@ -1289,7 +1291,8 @@
    "SLOT5": "NONE",
    "SLOT6": "NONE",
    "fee": "2K",
-   "ACTION": "CHANGE(K,VP,6)"
+   "ACTION": "CHANGE(ANY,VP,6)",
+   "inst": "資源1個を1VPに変換する（MAX6）\n〇以外の資源でもよい。払える分は必ず変換する"
   }
  },
  "issues": []
