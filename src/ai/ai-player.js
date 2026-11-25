@@ -9,7 +9,6 @@ const executor = require('../executor');
 const scoring = require('../scoring');
 // AIの読みの中のコピーは、カードを変わった物だけ写す(game-state.jsのcloneStateCow参照)。
 const { cloneStateCow: cloneState, writableCard } = require('../game-state');
-const endgameCardKeys = new WeakMap(); // カード -> 目印用の文字 (AIPlayer.#endgameKey)
 const { applyInPlace } = require('./simulator');
 const { bareTapKind } = require('./move-generator');
 const { getCardRow } = require('../data-loader');
@@ -822,23 +821,51 @@ class AIPlayer {
     return root;
   }
 
-  /** 盤面の目印(同じ目印 = 同じ盤面)。cached=true は読み切り②(深く読む)の中だけ: カードは、写さずに共有している物
-   * (cloneStateCow)が多いので、カード1枚ごとの文字をそのカードの物に覚えておき使い回す(2026-11-25, per user「まだ スピード
-   * アップ の案ある？」→「ぜんぶおねがい」-- 目印作りが読みの時間の約9%で、その半分がカード)。②の盤面は目印を作った後に
-   * 書き換えないので覚えた文字は古くならない。その場で打ち進める①(#endgameRollout)と、覚えた手順の照合ではcached=false。
-   * どちらも同じ形の文字になる。 */
-  static #endgameKey(s, placed, cached = false) {
-    let cards = '';
+  /** 盤面の目印(同じ目印 = 同じ盤面)。覚えておく手順の照合用(読みの中は下の#endgameShortKey)。 */
+  static #endgameKey(s, placed) {
+    return JSON.stringify([placed, s.players, s.maps, s.cards, s.shops, s.phase, s.round, s.pendingChoices]);
+  }
+
+  /** 読みの中だけで使う短い目印 (2026-11-25, per user「まだありそうですか」→「すべておねがい」-- 上の目印は1万6千字ほどあり、
+   * 長すぎる文字はJavaScriptの表(Map)でうまく見分けられず(長さだけで仕分けられる)、覚えた局面の照合が遅かった)。
+   * 部分ごとの文字(プレイヤー1人ずつ・エリアなど・カード1枚ずつ)を、その読みの中で通し番号に置き換えて並べる。部分の
+   * 文字が全部同じ時だけ同じ目印になるので、上の目印と同じ見分け方になる。番号は読みごとに違うので、覚えておく手順
+   * (読み終わった後)の目印は上の#endgameKeyで作り直す(#withFullPlanKeys)。
+   * idOf: 文字 -> 番号。cardIds: カードのオブジェクト -> 番号(読みの中ではカードは書き換えないので使い回せる)。 */
+  static #endgameShortKey(s, placed, idOf, cardIds) {
+    let out = placed ? '1' : '0';
+    for (const p of s.players) out += `,${idOf(JSON.stringify(p))}`;
+    out += `|${idOf(JSON.stringify([s.maps, s.shops, s.phase, s.round, s.pendingChoices]))}|`;
     for (const id in s.cards) {
       const c = s.cards[id];
-      let t = cached && c ? endgameCardKeys.get(c) : undefined;
-      if (t === undefined) {
-        t = JSON.stringify(c);
-        if (cached && c) endgameCardKeys.set(c, t);
+      let n = c ? cardIds.get(c) : undefined;
+      if (n === undefined) {
+        n = idOf(`${id}:${JSON.stringify(c)}`);
+        if (c) cardIds.set(c, n);
       }
-      cards += `${id}:${t},`;
+      out += `${n},`;
     }
-    return JSON.stringify([placed, s.players, s.maps, s.shops, s.phase, s.round, s.pendingChoices]) + cards;
+    return out;
+  }
+
+  /** 読み終わった手順の目印を、読みの外でも使える形(#endgameKey)に作り直す: rootから手順の手を順に打ち直して、
+   * 各手の前の盤面の目印を入れる。打ち直せなかった所から先は目印なし(覚えた手順と照合されないだけ)。 */
+  #withFullPlanKeys(root, playerId, placed0, plan) {
+    let st = cloneState(root);
+    let placed = placed0;
+    let ok = true;
+    return plan.map((step) => {
+      if (!ok) return { ...step, key: null };
+      const key = AIPlayer.#endgameKey(st, placed);
+      try {
+        const r = applyInPlace(st, this.index, step.m);
+        if (!r.success || r.pendingBuild) ok = false;
+        const uc = ok && (st.pendingChoices || []).find((x) => x.playerId === playerId && x.kind === 'UNTAP_CHOICE');
+        if (uc) executor.resolveUntapChoice(st, playerId, step.untap || []);
+      } catch (e) { ok = false; }
+      placed = step.m.type === 'END_TURN' ? false : (placed || DICE_MOVE_TYPES.has(step.m.type));
+      return { ...step, key };
+    });
   }
 
   /** 手分けして読んだ時、一番良かった手順をこのAIにも覚えさせる(main.jsから)。 */
@@ -861,8 +888,14 @@ class AIPlayer {
     const mine = (i) => !shard || shard.count <= 1 || i % shard.count === shard.index; // 手分けの受け持ち
     const t0 = Date.now();
     const root = AIPlayer.#endgameRoot(state0, playerId);
-    const keyOf = AIPlayer.#endgameKey;
-    const keyOfCached = (s, placed) => AIPlayer.#endgameKey(s, placed, true);
+    const intern = new Map();
+    const idOf = (str) => {
+      let n = intern.get(str);
+      if (n === undefined) { n = intern.size; intern.set(str, n); }
+      return n;
+    };
+    const cardIds = new WeakMap();
+    const keyOfCached = (s, placed) => AIPlayer.#endgameShortKey(s, placed, idOf, cardIds);
     const children = (s, placed) => {
       let moves;
       try { moves = this.moveGenerator.generateMoves(s, this.index, playerId, { hasPlacedDieThisTurn: placed }); } catch (e) { return []; }
@@ -928,7 +961,7 @@ class AIPlayer {
     const rolloutDeadline = t0 + limitMs * 0.6;
     for (const c of myReps) {
       if (Date.now() > rolloutDeadline) { anyTimedOut = true; break; }
-      const r = this.#endgameRollout(c, playerId, keyOf);
+      const r = this.#endgameRollout(c, playerId);
       if (r && (!best || r.v > best.v)) {
         best = { v: r.v, move: c.m, untap: c.untap, plan: [{ key: rootKey, m: c.m, untap: c.untap }].concat(r.steps), fromRollout: true };
       }
@@ -975,18 +1008,21 @@ class AIPlayer {
         best = { v, move: ch.m, untap: ch.untap, plan: [{ key: rootKey, m: ch.m, untap: ch.untap }].concat(foundPath) };
       }
     }
-    if (best) best.exact = !anyTimedOut && !best.fromRollout;
+    if (best) {
+      best.exact = !anyTimedOut && !best.fromRollout;
+      best.plan = this.#withFullPlanKeys(root, playerId, placed0, best.plan);
+    }
     return best;
   }
 
   /** 読み切り①: 子の盤面cから、いつものAIの手(#greedyMove)で自分の手を最後まで打ち、ゲーム終了時の点と、その手順
    * (手を打つ前の盤面の目印つき、覚えておく手順用)を返す。最後まで行けなければnull。 */
-  #endgameRollout(c, playerId, keyOf) {
+  #endgameRollout(c, playerId) {
     let st = cloneState(c.c);
     let placed = c.np;
     const steps = [];
     for (let i = 0; i < 80 && st.phase !== 'GAME_END'; i++) {
-      const key = keyOf(st, placed);
+      const key = null; // 目印は読み終わった後に#withFullPlanKeysで入れる
       const m = this.#greedyMove(st, playerId, placed);
       if (!m) return null;
       let r;

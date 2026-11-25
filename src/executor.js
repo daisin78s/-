@@ -38,7 +38,7 @@
 const { parse } = require('./dsl-parser');
 const { lowerProgram, lowerCall, lowerCostList, isChoiceCost, lowerChoiceCostOptions } = require('./command-builder');
 const { getCardRow, getAreaRow, findCardFace, getCardAutoDefault } = require('./data-loader');
-const { splitCardId, createDie, INITIAL_COLOR_DICE, cloneState, writableCard } = require('./game-state');
+const { splitCardId, createDie, INITIAL_COLOR_DICE, cloneState, cloneStateCow, writableCard, cardsVersionOf, isCowCards } = require('./game-state');
 const { rollDie } = require('./rng');
 
 class NotImplementedError extends Error {}
@@ -89,8 +89,23 @@ function ownedCardRows(state, index, playerId) {
     if (!rows) { rows = ownedCardRowsScan(state, index, playerId); byPlayer.set(playerId, rows); }
     return rows;
   }
-  return ownedCardRowsScan(state, index, playerId);
+  // 盤面を書き換える間も、カードが書き換わっていない間は同じ一覧を使い回す (2026-11-25, per user「まだありそうですか」→「すべておねがい」) -- AIの終盤読みの約9%が
+  // この一覧作り(クエスト・効果の発動・パッシブを見るたびに全部のカードを調べ直していた)。カードの書き換えは必ず
+  // writableCard/putCardを通り、そこで数が増える(game-state.jsのcardsVersionOf)ので、数が同じなら中身も同じ。
+  // AIの読みの中の盤面だけ(本番の盤面はwritableCardを通さない書き換えがあるので、今までどおり毎回調べる)。
+  const cards = state.cards;
+  if (!isCowCards(cards)) return ownedCardRowsScan(state, index, playerId);
+  const version = cardsVersionOf(cards);
+  let entry = ownedRowsByCards.get(cards);
+  if (!entry || entry.version !== version || entry.index !== index) {
+    entry = { version, index, byPlayer: new Map() };
+    ownedRowsByCards.set(cards, entry);
+  }
+  let rows = entry.byPlayer.get(playerId);
+  if (!rows) { rows = ownedCardRowsScan(state, index, playerId); entry.byPlayer.set(playerId, rows); }
+  return rows;
 }
+const ownedRowsByCards = new WeakMap(); // state.cards -> {version, index, byPlayer: Map(playerId -> rows)}
 function ownedCardRowsScan(state, index, playerId) {
   const out = [];
   for (const physicalId of Object.keys(state.cards)) {
@@ -1711,7 +1726,10 @@ function runProgramInBatch(state, index, context, dslText) {
     const result = runCommand(state, index, context, commands[0]);
     return result.success ? { success: true } : result;
   }
-  const before = cloneState(state);
+  // 戻す用のコピーは、カードを共有するコピー(cloneStateCow)にする (2026-11-25, per user「まだありそうですか」→「すべておねがい」) -- 共有中のカードは書き換える時に
+  // 写される(writableCard)ので、戻す用のカードは変わらない。
+  // 本番の盤面(isCowCardsでない)は今までどおりふつうのコピー。
+  const before = isCowCards(state.cards) ? cloneStateCow(state) : cloneState(state);
   for (const cmd of commands) {
     const result = runCommand(state, index, context, cmd);
     if (!result.success) {

@@ -228,6 +228,7 @@ class MoveGenerator {
   /** @returns {Object[]} every legal Move for playerId right now. */
   generateMoves(state, index, playerId, context) {
     let moves = [];
+    this.#placeOutcomes = null; // 前の呼び出しの物は使わない(同じ盤面のオブジェクトでも中身が変わっていることがある)
     const player = state.players.find((p) => p.id === playerId);
     if (!player) return moves;
 
@@ -297,6 +298,7 @@ class MoveGenerator {
       moves.push(...immediate);
     }
     moves.push(...this.#bareTapMoves(state, index, playerId, player, context));
+    this.#placeOutcomes = null;
     moves.push(...this.#tapReactionMoves(state, playerId));
     if (context.hasPlacedDieThisTurn && executor.canEndTurn(state, index, playerId).ok) {
       moves.push({ type: 'END_TURN', playerId });
@@ -344,8 +346,15 @@ class MoveGenerator {
     });
   }
 
+  // #placeDieMovesで試しに置いた結果(ダイスごとの行ける所)。#bareTapMovesの「目を変える前に行ける所」に使い回す
+  // (2026-11-25, per user「まだありそうですか」→「すべておねがい」-- #dieReachableOutcomesで同じ置き方をもう一度
+  // 試していた)。同じ盤面(state)の時だけ使う。
+  #placeOutcomes = null; // { state, byDie: Map(dieId -> Set) }
+
   #placeDieMoves(state, index, playerId, player) {
     const moves = [];
+    const outcomesByDie = new Map();
+    this.#placeOutcomes = { state, byDie: outcomesByDie };
     const unplacedDice = player.dice.filter((d) => d.placedMapId === null && !d.passed);
     const diceWithAPlacement = new Set();
     const predictionCache = new Map(); // board.placeDiceのcontext.predictionCache参照(同じ盤面からの確かめを使い回す)
@@ -363,12 +372,19 @@ class MoveGenerator {
         }
         const areaRow = getAreaRow(index, state.maps[mapId].currentAreaId);
         const slotCount = board.getSlotRequirements(areaRow).length;
+        if (!outcomesByDie.has(die.id)) outcomesByDie.set(die.id, new Set());
+        const outcomes = outcomesByDie.get(die.id);
         for (let slotIndex = 0; slotIndex < slotCount; slotIndex++) {
           if (board.placeDiceQuickReject(state, index, { playerId }, die.id, mapId, slotIndex)) continue; // 確実に置けないマスはコピーせずに飛ばす
           const clone = cloneState(state);
           const result = board.placeDice(clone, index, { playerId, predictionCache }, die.id, mapId, slotIndex);
           if (!result.success) continue;
           diceWithAPlacement.add(die.id);
+          if (result.actionResult && result.actionResult.pendingBuild) {
+            for (const candidate of result.actionResult.pendingBuild.candidates) outcomes.add(`${mapId}|${slotIndex}|${candidate.faceId || candidate.toFaceId}`);
+          } else {
+            outcomes.add(`${mapId}|${slotIndex}|NONE`);
+          }
           // 試しに置いた盤面(clone)を、点数をつける時に使い回す(simulator.jsのrememberPlacedDryRun参照)。
           const remember = (move, shared) => { rememberPlacedDryRun(move, state, clone, result, shared); return move; };
           if (result.actionResult && result.actionResult.pendingBuild) {
@@ -671,7 +687,10 @@ class MoveGenerator {
         for (const die of unplacedDice) {
           // 同じ目・同じ状態のダイスなら行ける所も同じなので、1回調べた結果を使い回す (2026-11-23、速くするため)。
           const beforeKey = `${die.kind}|${die.value}|${die.placeAnywhereThisTurn}|${die.isWildcardThisTurn}|${die.passed}`;
-          if (!beforeOutcomesByDie.has(beforeKey)) beforeOutcomesByDie.set(beforeKey, this.#dieReachableOutcomes(state, index, playerId, die.id));
+          if (!beforeOutcomesByDie.has(beforeKey)) {
+            const known = this.#placeOutcomes && this.#placeOutcomes.state === state ? this.#placeOutcomes.byDie.get(die.id) : null;
+            beforeOutcomesByDie.set(beforeKey, known || this.#dieReachableOutcomes(state, index, playerId, die.id));
+          }
           const outcomesBefore = beforeOutcomesByDie.get(beforeKey);
           for (const value of values) {
             const tapContext = { playerId, chosenDieId: die.id };
