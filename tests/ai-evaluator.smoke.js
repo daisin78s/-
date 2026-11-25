@@ -1098,7 +1098,13 @@ index.raw.QST = [
   r3.round = 3;
   const r3noK = structuredClone(r3);
   r3noK.players[0].resources.K = 0;
-  check('R3 mid-round: still no 晩餐会 VP credited (only the K themselves)', round6(evaluator.score(r3, 'P1') - evaluator.score(r3noK, 'P1')), round6(8 * evalTable[3].K));
+  // 2026-11-25から: R3も晩餐会のVPを「今の〇の数で終わったら」で数える(per user「ここで晩餐会はなぜ」→案A「これで」)。
+  check('R3 mid-round: 晩餐会 VP credited for the K held (8K + 8VP)', round6(evaluator.score(r3, 'P1') - evaluator.score(r3noK, 'P1')), round6(8 * evalTable[3].K + 8 * evalTable[3].VP));
+  const r2 = structuredClone(state);
+  r2.round = 2;
+  const r2noK = structuredClone(r2);
+  r2noK.players[0].resources.K = 0;
+  check('R2 mid-round: still no 晩餐会 VP credited (only the K themselves)', round6(evaluator.score(r2, 'P1') - evaluator.score(r2noK, 'P1')), round6(8 * evalTable[2].K));
 }
 
 // ---------------------------------------------------------------------------
@@ -1161,7 +1167,14 @@ index.raw.QST = [
   giveCard(both, 'M403', 'P1');
   const onlyBanquet = freshState(3);
   giveCard(onlyBanquet, 'M403', 'P1');
-  check('農場主 + 晩餐会 both owned by P1 credits the synergy bonus (+30)', evaluator.score(both, 'P1') - evaluator.score(onlyBanquet, 'P1'), evalTable[3].C201A + 30);
+  // 2026-11-25から: R3は相性の加点をしない(晩餐会のVPを〇の数で数えるため)。R2は今までどおり加点する。
+  check('R3: 農場主 + 晩餐会 both owned -- no synergy bonus in R3', evaluator.score(both, 'P1') - evaluator.score(onlyBanquet, 'P1'), evalTable[3].C201A);
+  const both2 = freshState(2);
+  giveCard(both2, 'C201A', 'P1');
+  giveCard(both2, 'M403', 'P1');
+  const onlyBanquet2 = freshState(2);
+  giveCard(onlyBanquet2, 'M403', 'P1');
+  check('R2: 農場主 + 晩餐会 both owned by P1 credits the synergy bonus', evaluator.score(both2, 'P1') - evaluator.score(onlyBanquet2, 'P1'), evalTable[2].C201A + evalTable[2]['晩餐会食料生産相性']);
 }
 {
   // 晩餐会 already owned (by anyone) -- no longer "unclaimed", no credit.
