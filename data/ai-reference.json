@@ -1,6 +1,6 @@
 {
- "gameDataVersion": "eff7d8cfc318d249",
- "generatedAt": "2026-11-24T14:16:47.425Z",
+ "gameDataVersion": "05eef54245bf7251",
+ "generatedAt": "2026-11-25T13:28:07.781Z",
  "commandSpecFile": "dsl-command-spec.json",
  "cardCount": 148,
  "cards": {
@@ -902,11 +902,11 @@
   "Q002A": {
    "sheet": "QST",
    "name": "Q002A",
-   "GOAL": "COST_TOTAL",
+   "GOAL": "CARD_COUNT(M)",
    "REWARD1": "ADD(4VP)",
    "REWARD2": "ADD(2VP)",
    "REWARD3": "ADD(VP)",
-   "inst": "あなたが獲得したカードに書かれている必要資源の合計\nLV2カードは片側のみ計算\n獲得時に軽減しても考慮しない"
+   "inst": "モニュメントの枚数の合計\n獲得時に軽減しても考慮しない"
   },
   "Q003A": {
    "sheet": "QST",
