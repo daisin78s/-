@@ -10894,6 +10894,12 @@ function renderFreeActionButtons(container, state, player, canAct) {
       && navSuggestedMove.freeActionId === freeActionId) {
       btn.classList.add('nav-highlight');
     }
+    // 勧める手が「先にA→Kなどをしてからタップ」(move.preConvert、総督/学者/商人LV2)なら、その変換のボタンも光らせる
+    // (2026-11-26, per user「A→K光らないの？ さっきはひかってた」→「はい」)。
+    if (navSuggestedMove && navSuggestedMove.playerId === player.id && navSuggestedMove.preConvert
+      && (navSuggestedMove.preConvert[FREE_ACTION_RESOURCE[freeActionId]] || 0) > 0) {
+      btn.classList.add('nav-highlight');
+    }
     if (tutorialShowDisabled) {
       btn.disabled = true;
       container.appendChild(btn);
