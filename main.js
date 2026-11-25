@@ -8409,16 +8409,17 @@ function placeSelectedDieAfterJob007Check(state, player, dieId, mapId, slotIndex
 function placeSelectedDieWithAnyPayment(state, player, dieId, mapId, slotIndex) {
   const areaRow = dataLoaderMod.getAreaRow(INDEX, state.maps[mapId].currentAreaId);
   const cap = anyPayCapOf(areaRow.ACTION);
-  const pick = cap ? anyPaymentPickNeeded(player.resources, cap) : null;
+  const pick = cap ? anyPaymentPickNeeded(player.resources, cap, executorMod.anyPayPrimary(state, INDEX, player.id)) : null;
   if (!pick) { placeSelectedDieCommit(state, player, dieId, mapId, slotIndex); return; }
-  const kText = pick.kUse > 0 ? `〇${pick.kUse}個と、` : '';
+  const kText = pick.kUse > 0 ? `${anyPayPrimaryName(pick.primary)}${pick.kUse}個と、` : '';
   showAnyPaymentPicker({
+    primary: pick.primary,
     title: areaRow.NAME,
     text: `資源${pick.times}個を${pick.times}VPに変えます。\n${kText}ほかに払う資源を${pick.rest}個選んでください。`,
     resources: player.resources,
     rest: pick.rest,
     onConfirm: (choice) => {
-      player.anyPaymentChoice = { ...(pick.kUse > 0 ? { K: pick.kUse } : {}), ...choice };
+      player.anyPaymentChoice = { ...(pick.kUse > 0 ? { [pick.primary]: pick.kUse } : {}), ...choice };
       placeSelectedDieCommit(state, player, dieId, mapId, slotIndex);
       render(STATE);
     },
@@ -8701,16 +8702,20 @@ function anyPayCapOf(dslText) {
   const m = /^CHANGE\(ANY,VP(?:,(\d+))?\)$/.exec(String(dslText || '').trim());
   return m ? (m[1] ? Number(m[1]) : 1) : 0;
 }
-function anyPaymentPickNeeded(resources, cap) {
-  const others = ['A', 'B', 'C', 'Z'].filter((r) => (resources[r] || 0) > 0);
-  const total = (resources.K || 0) + others.reduce((sum, r) => sum + resources[r], 0);
+// primary: 最初に払う資源(ふつうは〇、権力者は赤〇、executor.anyPayPrimary)。primaryで足りない時だけ選ぶ画面を出す。
+function anyPaymentPickNeeded(resources, cap, primary = 'K') {
+  const others = ['K', 'A', 'B', 'C', 'Z'].filter((r) => r !== primary && (resources[r] || 0) > 0);
+  const total = (resources[primary] || 0) + others.reduce((sum, r) => sum + resources[r], 0);
   const times = Math.min(cap, total);
-  const kUse = Math.min(resources.K || 0, times);
+  const kUse = Math.min(resources[primary] || 0, times);
   const rest = times - kUse;
   if (rest <= 0 || others.length < 2) return null;
-  return { times, kUse, rest };
+  return { times, kUse, rest, primary };
 }
-function showAnyPaymentPicker({ title, text, resources, rest, onConfirm, onCancel }) {
+function anyPayPrimaryName(primary) {
+  return primary === 'A' ? '赤〇' : '〇';
+}
+function showAnyPaymentPicker({ title, text, resources, rest, primary = 'K', onConfirm, onCancel }) {
   const old = document.getElementById('any-payment-overlay');
   if (old) old.remove();
   const overlay = el('div', 'card-inst-overlay');
@@ -8721,13 +8726,14 @@ function showAnyPaymentPicker({ title, text, resources, rest, onConfirm, onCance
   modal.appendChild(header);
   const body = el('div', 'card-inst-modal__body');
   body.appendChild(el('p', 'turn-end-warning__text', text));
-  const choice = { ...(executorMod.defaultAnyPayment({ ...resources, K: 0 }, rest) || {}) };
+  const choice = { ...(executorMod.defaultAnyPayment({ ...resources, [primary]: 0 }, rest, primary) || {}) };
   const list = el('div', 'any-payment-list');
   const confirm = el('button', '', '');
   const pickedCount = () => Object.values(choice).reduce((a, b) => a + b, 0);
   const refresh = () => {
     list.innerHTML = '';
-    for (const r of ['A', 'B', 'C', 'Z']) {
+    for (const r of ['K', 'A', 'B', 'C', 'Z']) {
+      if (r === primary) continue;
       const have = resources[r] || 0;
       if (have <= 0) continue;
       const row = el('div', 'any-payment-row');
@@ -8786,7 +8792,7 @@ function turnEndAnyPaymentPick(state, playerId, feeConversionPlan) {
   const resources = { ...player.resources };
   for (const { resource, count } of feeConversionPlan || []) { resources[resource] -= count; resources.K = (resources.K || 0) + count; }
   resources.K = Math.max(0, (resources.K || 0) - pendingKFeeAmount(player));
-  const pick = anyPaymentPickNeeded(resources, cap);
+  const pick = anyPaymentPickNeeded(resources, cap, executorMod.anyPayPrimary(state, INDEX, playerId));
   return pick ? { ...pick, cap, cardName, resources } : null;
 }
 /** (旧、今は使わない)パンとサーカス(TURNENDのCHANGE(K,VP,n))で、手番の終わりにVPにする〇が足りない時、ほかの資源から〇に変える案 (2026-11-25, per user「パンとサーカスを持っているとき 人間にも パンとサーカスのためにA→Kの変換をしますか などの警告文が出るように 警告文はもっといいのに変えて」)。
@@ -8815,7 +8821,7 @@ function breadAndCircusPlanForTurnEnd(state, playerId, feeConversionPlan) {
   if (plan.length === 0) return null;
   return { cardName, need, have, plan };
 }
-const TURN_END_CONVERT_NAMES = { A: '赤〇', B: '青〇', C: '黄〇', Z: '人脈' };
+const TURN_END_CONVERT_NAMES = { K: '〇', A: '赤〇', B: '青〇', C: '黄〇', Z: '人脈' };
 
 /** Entry point for ending a turn (2026-08-01) -- placeSelectedDie/renderBuildChoiceModal/the free-
  * action retry all call this instead of advanceTurnIfPossible directly now. If ending right now would
@@ -8831,14 +8837,15 @@ function attemptAdvanceTurn(state, playerId, anyPaymentChosen = false) {
   const anyPick = anyPaymentChosen ? null : turnEndAnyPaymentPick(state, playerId, feeConversionPlan);
   if (anyPick) {
     const player = state.players.find((p) => p.id === playerId);
-    const kText = anyPick.kUse > 0 ? `〇${anyPick.kUse}個と、` : '';
+    const kText = anyPick.kUse > 0 ? `${anyPayPrimaryName(anyPick.primary)}${anyPick.kUse}個と、` : '';
     showAnyPaymentPicker({
+      primary: anyPick.primary,
       title: anyPick.cardName,
       text: `手番の終わりに、資源${anyPick.times}個を${anyPick.times}VPに変えます。\n${kText}ほかに払う資源を${anyPick.rest}個選んでください。`,
       resources: anyPick.resources,
       rest: anyPick.rest,
       onConfirm: (choice) => {
-        player.anyPaymentChoice = { ...(anyPick.kUse > 0 ? { K: anyPick.kUse } : {}), ...choice };
+        player.anyPaymentChoice = { ...(anyPick.kUse > 0 ? { [anyPick.primary]: anyPick.kUse } : {}), ...choice };
         attemptAdvanceTurn(state, playerId, true);
         render(STATE);
       },

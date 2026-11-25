@@ -1026,12 +1026,19 @@ const ANY_PAY_RESOURCES = ['K', 'A', 'B', 'C', 'Z'];
 function anyPayAvailable(player) {
   return ANY_PAY_RESOURCES.reduce((sum, r) => sum + (player.resources[r] || 0), 0);
 }
-function defaultAnyPayment(resources, count) {
+// primary: 最初に払う資源。ふつうは〇(K)、権力者は赤〇(A)で、その次が〇 (2026-11-25, per user「権力者だけは権力から払うようにした方がいいかな」→「赤〇→〇→ほかの多い資源」に「はい」)。
+function anyPayPrimary(state, index, playerId) {
+  return hasPowerBrokerAbility(state, index, playerId) ? 'A' : 'K';
+}
+function defaultAnyPayment(resources, count, primary = 'K') {
   const out = {};
   let rest = count;
-  const k = Math.min(resources.K || 0, rest);
-  if (k > 0) { out.K = k; rest -= k; }
-  const order = ['A', 'B', 'C']
+  const head = primary === 'A' ? ['A', 'K'] : ['K'];
+  for (const r of head) {
+    const use = Math.min(resources[r] || 0, rest);
+    if (use > 0) { out[r] = use; rest -= use; }
+  }
+  const order = ['A', 'B', 'C'].filter((r) => !head.includes(r))
     .sort((a, b) => (resources[b] || 0) - (resources[a] || 0) || ['A', 'B', 'C'].indexOf(a) - ['A', 'B', 'C'].indexOf(b))
     .concat('Z');
   for (const r of order) {
@@ -1043,10 +1050,12 @@ function defaultAnyPayment(resources, count) {
 }
 /** AIが比べる払い方 (2026-11-25, per user「どんな資源でも払えるように」「人間もAIも選べるように」): 〇から先(自動と同じ) と 〇を残してほかから先。違いが無ければ1つ。
  * @returns {Object[]} 払い方({K:n, A:n, ...})の配列 */
-function anyPaymentOptions(resources, count) {
+function anyPaymentOptions(resources, count, primary = 'K') {
   const out = [];
+  const primaryFirst = defaultAnyPayment(resources, count, primary);
+  if (primaryFirst) out.push(primaryFirst);
   const kFirst = defaultAnyPayment(resources, count);
-  if (kFirst) out.push(kFirst);
+  if (kFirst && !out.some((o) => JSON.stringify(o) === JSON.stringify(kFirst))) out.push(kFirst);
   const others = defaultAnyPayment({ ...resources, K: 0 }, count);
   const keepK = others || (() => {
     // ほかだけでは足りない: ほかを全部使い、残りを〇で
@@ -1055,7 +1064,7 @@ function anyPaymentOptions(resources, count) {
     const o = defaultAnyPayment({ ...resources, K: 0 }, count - rest) || {};
     return rest > 0 ? { ...o, K: rest } : o;
   })();
-  if (keepK && JSON.stringify(keepK) !== JSON.stringify(kFirst)) out.push(keepK);
+  if (keepK && !out.some((o) => JSON.stringify(o) === JSON.stringify(keepK))) out.push(keepK);
   return out;
 }
 /** 置くエリアの効果/手番の終わりの効果で、どの資源でも払える支払いの回数(cap)を見る(AI用)。CHANGE(ANY,VP,n)だけ。 */
@@ -1064,7 +1073,7 @@ function anyPayCapOfText(text) {
   return m ? (m[1] ? Number(m[1]) : 1) : 0;
 }
 
-function resolveAnyPayment(player, count) {
+function resolveAnyPayment(player, count, primary = 'K') {
   const choice = player.anyPaymentChoice;
   player.anyPaymentChoice = null;
   if (choice && typeof choice === 'object') {
@@ -1073,7 +1082,7 @@ function resolveAnyPayment(player, count) {
       && Object.keys(choice).every((r) => ANY_PAY_RESOURCES.includes(r));
     if (ok) return choice;
   }
-  return defaultAnyPayment(player.resources, count);
+  return defaultAnyPayment(player.resources, count, primary);
 }
 
 function runChange(state, index, context, cmd) {
@@ -1146,7 +1155,7 @@ function runChange(state, index, context, cmd) {
   const anyItem = pay.find((item) => item.resource === 'ANY');
   if (anyItem) {
     if (pay.length !== 1) throw new ExecutionError('CHANGE(ANY,...) must have ANY as its only pay item');
-    const plan = resolveAnyPayment(player, anyItem.count * times);
+    const plan = resolveAnyPayment(player, anyItem.count * times, anyPayPrimary(state, index, context.playerId));
     if (!plan) return { success: false, reason: 'INSUFFICIENT_RESOURCES', resource: 'ANY' };
     for (const [resource, count] of Object.entries(plan)) {
       if (count > 0 && !tryPay(state, context.playerId, resource, count)) throw new ExecutionError('ANY payment failed after affordability check passed (bug)');
@@ -2281,6 +2290,7 @@ function grantChefBonusIfEarned(state, index, context, vpCount) {
 module.exports = {
   anyPaymentOptions,
   anyPayCapOfText,
+  anyPayPrimary,
   ANY_PAY_RESOURCES,
   anyPayAvailable,
   defaultAnyPayment,

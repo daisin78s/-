@@ -251,7 +251,7 @@ class MoveGenerator {
       }
       if (!cap) continue;
       const total = executor.ANY_PAY_RESOURCES.reduce((sum, r) => sum + (player.resources[r] || 0), 0);
-      const options = executor.anyPaymentOptions(player.resources, Math.min(cap, total));
+      const options = executor.anyPaymentOptions(player.resources, Math.min(cap, total), executor.anyPayPrimary(state, index, playerId));
       for (const option of options.slice(1)) out.push({ ...m, anyPayment: option });
     }
     return out;
