@@ -257,6 +257,39 @@ class MoveGenerator {
     return out;
   }
 
+  /** 研究LV2(B005B、BUILD(U);ADD(2BZ))がアンタップで今LVを上げられるカード(払える物)の、LVアップ先の面のid。 (2026-11-25, per user「レベルを上げるとき研究LV2があったらダイス置くより研究LV2を使うの優先にするのはどう それから研究LV2をもっていて あとでLVUPしても先にしてもいっしょなら先にする 理由 分岐が減り計算が早くなる 支配系のLVを先にあげることによって使用料が増える」→「はい」)
+   * 研究が無い・タップ済み・上げられる物が無い時は空。研究のタップの手(BARE_TAP、buildCandidateIndex付き)も返す。 */
+  researchUpgrades(state, index, playerId) {
+    const player = state.players.find((p) => p.id === playerId);
+    const out = { faces: new Set(), moves: [] };
+    if (!player) return out;
+    for (const physicalId of player.ownedCardPhysicalIds) {
+      const card = state.cards[physicalId];
+      if (!card || card.tapped || card.currentFaceId !== 'B005B') continue;
+      const probe = cloneState(state);
+      const result = board.useBareTapAbility(probe, index, { playerId }, physicalId);
+      if (!result.success || !result.pendingBuild) continue;
+      result.pendingBuild.candidates.forEach((c, buildCandidateIndex) => {
+        if (c.type !== 'UPGRADE') return;
+        const move = { type: 'BARE_TAP', playerId, physicalId, buildCandidateIndex, buildCandidateKey: buildCandidateKey(c) };
+        try {
+          if (!applyInPlace(cloneState(state), index, move).success) return;
+        } catch (e) { return; }
+        out.faces.add(c.toFaceId);
+        out.moves.push(move);
+      });
+    }
+    return out;
+  }
+
+  /** 研究LV2で上げられるカードを、ダイスを置いてLVアップする手は出さない(研究ならダイスを使わず軽減も付く) (2026-11-25, per user「レベルを上げるとき研究LV2があったらダイス置くより研究LV2を使うの優先にするのはどう それから研究LV2をもっていて あとでLVUPしても先にしてもいっしょなら先にする 理由 分岐が減り計算が早くなる 支配系のLVを先にあげることによって使用料が増える」→「はい」)。 */
+  #withoutDieUpgradesResearchCanDo(state, index, playerId, moves) {
+    if (!moves.some((m) => typeof m.buildCandidateKey === 'string' && m.buildCandidateKey.startsWith('U:') && m.type !== 'BARE_TAP')) return moves;
+    const { faces } = this.researchUpgrades(state, index, playerId);
+    if (faces.size === 0) return moves;
+    return moves.filter((m) => !(m.type !== 'BARE_TAP' && typeof m.buildCandidateKey === 'string' && m.buildCandidateKey.startsWith('U:') && faces.has(m.buildCandidateKey.slice(2))));
+  }
+
   #isOrphanageHeldBack(state, mapId) {
     return !!this.policy.noOrphanageEarly && state.round <= 2 && /^AREA010/.test(state.maps[mapId].currentAreaId || '');
   }
@@ -336,6 +369,7 @@ class MoveGenerator {
     moves.push(...this.#bareTapMoves(state, index, playerId, player, context));
     this.#placeOutcomes = null;
     moves = this.#withAnyPaymentVariants(state, index, playerId, player, moves);
+    moves = this.#withoutDieUpgradesResearchCanDo(state, index, playerId, moves);
     moves.push(...this.#tapReactionMoves(state, playerId));
     if (context.hasPlacedDieThisTurn && executor.canEndTurn(state, index, playerId).ok) {
       moves.push({ type: 'END_TURN', playerId });
@@ -654,7 +688,8 @@ class MoveGenerator {
           // ai-batch-5 looped on B006A's BUILD-kind TAP indefinitely, since a no-op move ties every
           // other move's score and this one sorted before END_TURN).
           for (let buildCandidateIndex = 0; buildCandidateIndex < result.pendingBuild.candidates.length; buildCandidateIndex++) {
-            moves.push({ type: 'BARE_TAP', playerId, physicalId, buildCandidateIndex });
+            // buildCandidateKey: R4の読み切りの「同じ点ならカードを早く取る(LVアップも)」が研究などのタップも数えるように (2026-11-25)
+            moves.push({ type: 'BARE_TAP', playerId, physicalId, buildCandidateIndex, buildCandidateKey: buildCandidateKey(result.pendingBuild.candidates[buildCandidateIndex]) });
           }
         }
       } else if (bareTap.kind === 'MONUMENT_CHANGE_DIE_VALUE') {

@@ -536,12 +536,17 @@ class AIPlayer {
 
     let best = scored[0].move;
     let bestDeepScore = -Infinity;
-    for (const candidate of deduped.slice(0, beamWidth)) {
+    // 研究LV2(B005B)のタップは、上位に入っていなくても必ず先読みする。先読みの点が同じなら研究を先に使う手を選ぶ
+    // (2026-11-25, per user「レベルを上げるとき研究LV2があったらダイス置くより研究LV2を使うの優先にするのはどう それから研究LV2をもっていて あとでLVUPしても先にしてもいっしょなら先にする 理由 分岐が減り計算が早くなる 支配系のLVを先にあげることによって使用料が増える」→「はい」) + 「ダイスを置く前と置いた後どちらで使うか考えれる(同じなら先に使う)」。
+    const isResearchTap = (m) => m.type === 'BARE_TAP' && state.cards[m.physicalId] && state.cards[m.physicalId].currentFaceId === 'B005B';
+    const beam = deduped.slice(0, beamWidth);
+    for (const c of scored) if (isResearchTap(c.move) && !beam.includes(c)) beam.push(c);
+    for (const candidate of beam) {
       // Once the time budget is already spent, don't start yet another candidate's rollout -- keep
       // whichever candidate (rolled-out or, worst case, the plain 1-ply best) is already `best`.
       if (Date.now() > deadline) break;
       const deepScore = this.#rolloutScore(candidate.resultState, playerId, candidate.move, lookaheadExtraTurns, maxRolloutMoves, deadline, plannedOwnTurnsThisRound);
-      if (deepScore > bestDeepScore) {
+      if (deepScore > bestDeepScore || (deepScore === bestDeepScore && isResearchTap(candidate.move) && !isResearchTap(best))) {
         bestDeepScore = deepScore;
         best = candidate.move;
       }
