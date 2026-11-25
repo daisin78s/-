@@ -1110,6 +1110,9 @@ class MoveGenerator {
       }
       return null;
     }
+    // この手番にもうダイスを置いた後は、次に訓練場へ置けるのは次の手番なので、今Kを作らない (2026-11-25, per user のナビの
+    // バグ報告「B→Kを推奨しているのなぜ」-- 訓練場でもらった新しい色ダイスを「最後の1個」と見て、置いた後にまたA/B→Kをしていた)。
+    if (context.hasPlacedDieThisTurn) return null;
     const candidates = ['A', 'B', 'C'].filter((r) => (player.resources[r] || 0) > 0);
     if (candidates.length === 0) return null;
     candidates.sort((a, b) => player.resources[b] - player.resources[a]);
