@@ -379,8 +379,20 @@ function deepFreezeCommands(node) {
  * {kind,value} shape lowerResourceList produces -- payCostList expects
  * plain numbers.
  */
+// 同じ必要資源の文字を何度も読み直さないように覚えておく(2026-11-25, per user「まだ スピードアップ の案ある？」→
+// 「ぜんぶおねがい」-- AIの終盤読みの約5%がここ。クエストの判定・モニュメントの判定で毎回読み直していた)。
+// 呼ぶ側が書き換えても困らないよう、返すのは毎回新しいコピー。
+const lowerCostListCache = new Map();
 function lowerCostList(costString) {
   if (!costString) return [];
+  let cached = lowerCostListCache.get(costString);
+  if (!cached) {
+    cached = lowerCostListUncached(costString);
+    lowerCostListCache.set(costString, cached);
+  }
+  return cached.map((item) => ({ resource: item.resource, count: item.count }));
+}
+function lowerCostListUncached(costString) {
   return parseArgList(costString)
     .flatMap(lowerResourceList)
     .map((item) => {

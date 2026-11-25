@@ -9,6 +9,7 @@ const executor = require('../executor');
 const scoring = require('../scoring');
 // AIの読みの中のコピーは、カードを変わった物だけ写す(game-state.jsのcloneStateCow参照)。
 const { cloneStateCow: cloneState, writableCard } = require('../game-state');
+const endgameCardKeys = new WeakMap(); // カード -> 目印用の文字 (AIPlayer.#endgameKey)
 const { applyInPlace } = require('./simulator');
 const { bareTapKind } = require('./move-generator');
 const { getCardRow } = require('../data-loader');
@@ -821,8 +822,23 @@ class AIPlayer {
     return root;
   }
 
-  static #endgameKey(s, placed) {
-    return JSON.stringify([placed, s.players, s.maps, s.cards, s.shops, s.phase, s.round, s.pendingChoices]);
+  /** 盤面の目印(同じ目印 = 同じ盤面)。cached=true は読み切り②(深く読む)の中だけ: カードは、写さずに共有している物
+   * (cloneStateCow)が多いので、カード1枚ごとの文字をそのカードの物に覚えておき使い回す(2026-11-25, per user「まだ スピード
+   * アップ の案ある？」→「ぜんぶおねがい」-- 目印作りが読みの時間の約9%で、その半分がカード)。②の盤面は目印を作った後に
+   * 書き換えないので覚えた文字は古くならない。その場で打ち進める①(#endgameRollout)と、覚えた手順の照合ではcached=false。
+   * どちらも同じ形の文字になる。 */
+  static #endgameKey(s, placed, cached = false) {
+    let cards = '';
+    for (const id in s.cards) {
+      const c = s.cards[id];
+      let t = cached && c ? endgameCardKeys.get(c) : undefined;
+      if (t === undefined) {
+        t = JSON.stringify(c);
+        if (cached && c) endgameCardKeys.set(c, t);
+      }
+      cards += `${id}:${t},`;
+    }
+    return JSON.stringify([placed, s.players, s.maps, s.shops, s.phase, s.round, s.pendingChoices]) + cards;
   }
 
   /** 手分けして読んだ時、一番良かった手順をこのAIにも覚えさせる(main.jsから)。 */
@@ -846,15 +862,18 @@ class AIPlayer {
     const t0 = Date.now();
     const root = AIPlayer.#endgameRoot(state0, playerId);
     const keyOf = AIPlayer.#endgameKey;
+    const keyOfCached = (s, placed) => AIPlayer.#endgameKey(s, placed, true);
     const children = (s, placed) => {
       let moves;
       try { moves = this.moveGenerator.generateMoves(s, this.index, playerId, { hasPlacedDieThisTurn: placed }); } catch (e) { return []; }
       const out = [];
       const seen = new Set();
       for (const m of moves) {
-        const c = cloneState(s);
+        // 手の候補を作る時にダイスを置いてみた盤面を使い回す(Simulator.apply、2026-11-25 上の#endgameKeyと同じ依頼 --
+        // 写して置き直すのが読みの時間の約25%だった)。
+        let c;
         let r;
-        try { r = applyInPlace(c, this.index, m); } catch (e) { continue; }
+        try { ({ state: c, result: r } = this.simulator.apply(s, this.index, m)); } catch (e) { continue; }
         if (!r.success || r.pendingBuild) continue;
         const np = m.type === 'END_TURN' ? false : (placed || DICE_MOVE_TYPES.has(m.type));
         const uc = (c.pendingChoices || []).find((x) => x.playerId === playerId && x.kind === 'UNTAP_CHOICE');
@@ -862,7 +881,7 @@ class AIPlayer {
           ? AIPlayer.untapSubsets(uc).map((sub) => { const c2 = cloneState(c); executor.resolveUntapChoice(c2, playerId, sub); return { c: c2, untap: sub }; })
           : [{ c, untap: null }];
         for (const v of variants) {
-          const k = keyOf(v.c, np);
+          const k = keyOfCached(v.c, np);
           if (seen.has(k)) continue;
           seen.add(k);
           out.push({ m, untap: v.untap, c: v.c, np, k, h: this.evaluator.score(v.c, playerId) });
@@ -879,7 +898,7 @@ class AIPlayer {
       while (bestNext.has(k) && out.length < 200) { const n = bestNext.get(k); out.push({ key: k, m: n.m, untap: n.untap }); k = n.childKey; }
       return out;
     };
-    const rootKey = keyOf(root, placed0);
+    const rootKey = keyOfCached(root, placed0);
     const allRoot = children(root, placed0);
     const rootChildren = allRoot.slice(0, 8).filter((c, i) => mine(i));
     if (allRoot.length === 0) return null;
