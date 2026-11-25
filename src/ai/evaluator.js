@@ -257,6 +257,22 @@ class Evaluator {
     return clone && executor.canEndTurn(clone, this.index, playerId).ok ? clone : null;
   }
 
+  /** 強欲(CON001A)と宝物庫(M401)を両方持っている時、宝物庫のVPの上限(PASSIVEのVP_MODIFIER_FINALのMAX、今は7)。それ以外は0。 */
+  #greedTreasuryVp(state, player) {
+    const faces = player.ownedCardPhysicalIds.map((id) => state.cards[id] && state.cards[id].currentFaceId);
+    if (!faces.includes('CON001A') || !faces.includes('M401')) return 0;
+    if (this.#treasuryCap === undefined) {
+      this.#treasuryCap = 0;
+      try {
+        for (const cmd of lowerProgram(parse(getCardRow(this.index, 'M401').PASSIVE || ''))) {
+          if (cmd.type === 'VP_MODIFIER_FINAL' && typeof cmd.cap === 'number') this.#treasuryCap = cmd.cap;
+        }
+      } catch (e) { /* 読めなければ0 */ }
+    }
+    return this.#treasuryCap;
+  }
+  #treasuryCap = undefined;
+
   #scoreInner(state, playerId) {
     const round = state.round || 1;
     const player = state.players.find((p) => p.id === playerId);
@@ -420,6 +436,10 @@ class Evaluator {
     // -- それまでは本当にゲームが終わる瞬間まで0で、R4の途中でKを全部Bに替える(晩餐会の9VPを捨てる)手が平気で選ばれた。
     // R4の持ち資源はほぼそのまま終了時の資源になる。R3までは今までどおり数えない(ためこみすぎてカードを取らなくなるため)。
     if (state.phase !== 'GAME_END' && state.round >= 4) total += executor.collectFinalOnlyVpModifiers(state, this.index, playerId, true) * v('VP');
+    // 強欲(CON001A)を持っている時は、R1〜R3でも宝物庫(M401)を最大のVP(7VP)として数える (2026-11-25, per user のバグ報告
+    // 「強欲を持っているので宝物庫を取りたい」→「強欲は 宝物庫なしでも 最後に 資源7個ためるので 宝物庫は 強欲にとって 7VPだと
+    // 思っています」)。R4は上のとおり実際の資源で数える(R4は強欲のマイナスも数えるので7個残す)。
+    if (round < 4 && state.phase !== 'GAME_END') total += this.#greedTreasuryVp(state, player) * v('VP');
 
     // Turn-end lockout risk (2026-08-10, per user report: a greedy AI holding CON005B
     // (TURNEND=RESOURCE_TOTAL_LIMIT((A,B,C),7)) would convert a big pile of K into A/B/C -- A/B/C's
