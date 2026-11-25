@@ -221,7 +221,8 @@ const ACHIEVEMENT_PER_GAME_DEFS = [
   // 改名(QST Q003A「LEVEL_COUNT(2)」のINST文言に合わせた統一 -- 定義は変わらず、所有カードのうち現在
   // B面(tier===LV2)のものの枚数)。
   ['lv2_card_count', 'レベルアップ数', '枚'],
-  ['monument_count', 'モニュメント獲得枚数（１ゲーム）', '枚'],
+  // 「モニュメント獲得枚数（１ゲーム）」(monument_count、毎ゲーム記録)は消した (2026-11-25, per user のgame.xlsx「実績解除」の変更(クエストQ002Aを「モニュメントの枚数」にしたのに合わせて): シートから削除し、
+  // クエストQ002Aと対応する「モニュメント枚数」(monument_count_q、下)にまとめた)。
   ['monument_vp', 'モニュメント獲得点数（１ゲーム）', 'VP'],
   ['orphanage_vp', 'メインアクションでの獲得点数（１ゲーム）', 'VP'],
   // 2026-10-05, per user request: "ダイス3個で終わったゲーム（追加ダイスなし）の最高得点" -- 他の
@@ -235,13 +236,14 @@ const ACHIEVEMENT_PER_GAME_DEFS = [
   // 2026-11-02, クエスト変更に合わせて4つを入れ替え (per user「新しいクエストに合わせて、名前と数え方を変える」
   // 「前の記録 消して」): 最多エンブレムの数/通常カード枚数+追加色ダイス/天地人セット数/エンブレム総数 ->
   // 下の新しい4つ。キーも新しくしたので前の記録は数えない(合計ポイントからも外れる)。
-  ['cost_total', 'カードの必要資源', '個'], // Q002AのGOAL=COST_TOTALと同じメトリクス
+  // 「カードの必要資源」(cost_total)は、Q002Aが「モニュメントの枚数」になったので入れ替え(2026-11-25, per user のgame.xlsx「実績解除」の変更(クエストQ002Aを「モニュメントの枚数」にしたのに合わせて))。前の記録は数えない。
+  ['monument_count_q', 'モニュメント枚数', '枚'], // Q002AのGOAL=CARD_COUNT(M)と同じメトリクス(強化モニュメントも数える)
   ['area_count', '所有エリア数', '個'], // Q004AのGOAL=AREA_COUNTと同じメトリクス
   // 2026-10-13, per user request ("A29からA36まで クエスト同じです" -- 実績解除シートのこの並びはQSTの
   // Q001A〜Q004A,Q001B〜Q004Bの8個と1:1対応しており、このカテゴリだけ未実装だった) -- Q001BのGOAL=
   // EXTRA_D_PLUS_ABC_COUNTと同じメトリクス(既にdice3_score算出のコメントでも触れている既存の評価軸)。
   ['extra_d_count', '追加色ダイス数', '個'], // Q001BのGOAL=EXTRA_D_COUNTと同じメトリクス
-  ['monument_cost_total', 'モニュメントの必要資源', '個'], // Q002BのGOAL=COST_TOTAL(M)と同じメトリクス
+  ['monument_cost_total', 'モニュメント必要資源', '個'], // Q002BのGOAL=COST_TOTAL(M)と同じメトリクス(表示名は2026-11-25, per user のgame.xlsx「実績解除」の変更(クエストQ002Aを「モニュメントの枚数」にしたのに合わせて)で「の」を削除)
   ['normal_card_count', '通常カード枚数', '枚'], // Q003BのGOAL=NORMAL_CARD_COUNTと同じメトリクス
   ['lv2_area_count', '所有LV2エリア数', '個'], // Q004BのGOAL=AREA_COUNT(2)と同じメトリクス
 ];
@@ -12931,7 +12933,6 @@ function maybeRecordAchievements(state) {
     recordAchievementIfNew(store, updatedKeys, modeKey, c.totalScore);
     if (c.conFaceId) recordAchievementIfNew(store, updatedKeys, `con_${c.conFaceId}`, c.totalScore);
     if (c.jobCardId) recordAchievementIfNew(store, updatedKeys, `job_${c.jobCardId}`, c.totalScore);
-    recordAchievementIfNew(store, updatedKeys, 'monument_count', monumentRows.length);
     recordAchievementIfNew(store, updatedKeys, 'monument_vp', monumentRows.reduce((sum, r) => sum + (typeof r.row.VP === 'number' ? r.row.VP : 0), 0));
     recordAchievementIfNew(store, updatedKeys, 'orphanage_vp', player.orphanageVpGained || 0);
     // ダイス3個最高得点 (2026-10-05) -- 色ダイスは一度増えたら減ることがなく(player.dice自体に一度
@@ -12955,7 +12956,7 @@ function maybeRecordAchievements(state) {
     // 変更。
     const qstGatedAchievements = [
       ['Q001A', 'card_count', () => executorMod.evalMetric(state, INDEX, c.playerId, { name: 'CARD_COUNT', args: [] })],
-      ['Q002A', 'cost_total', () => executorMod.evalMetric(state, INDEX, c.playerId, { name: 'COST_TOTAL', args: [] })],
+      ['Q002A', 'monument_count_q', () => executorMod.evalMetric(state, INDEX, c.playerId, { name: 'CARD_COUNT', args: ['M'] })],
       ['Q003A', 'lv2_card_count', () => executorMod.evalMetric(state, INDEX, c.playerId, { name: 'LEVEL_COUNT', args: [2] })],
       ['Q004A', 'area_count', () => executorMod.evalMetric(state, INDEX, c.playerId, { name: 'AREA_COUNT', args: [] })],
       ['Q001B', 'extra_d_count', () => executorMod.evalMetric(state, INDEX, c.playerId, { name: 'EXTRA_D_COUNT', args: [] })],

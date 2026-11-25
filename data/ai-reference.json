@@ -1,6 +1,6 @@
 {
- "gameDataVersion": "05eef54245bf7251",
- "generatedAt": "2026-11-25T13:28:07.781Z",
+ "gameDataVersion": "2304126efcd177ff",
+ "generatedAt": "2026-11-25T13:37:52.291Z",
  "commandSpecFile": "dsl-command-spec.json",
  "cardCount": 148,
  "cards": {
@@ -906,7 +906,7 @@
    "REWARD1": "ADD(4VP)",
    "REWARD2": "ADD(2VP)",
    "REWARD3": "ADD(VP)",
-   "inst": "モニュメントの枚数の合計\n獲得時に軽減しても考慮しない"
+   "inst": "モニュメントの枚数の合計"
   },
   "Q003A": {
    "sheet": "QST",
