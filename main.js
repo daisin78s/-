@@ -3845,6 +3845,9 @@ function renderReplayFrame() {
     renderPlayers(snapshot, next);
     renderJobPool(snapshot, next);
     renderPlayerCards(snapshot, next);
+    // 選ぶ欄の置き場(#onboard-stage)もこの場面に合わせて作り直す (2026-11-25, per user のバグ報告「ナビ機能ONのままで リプレイを
+    // 読むと 初期資源カードと性格カードが出っぱなし」-- ゲームの最初の選ぶ画面で移した欄が、リプレイ中も片付けられずに残っていた)。
+    placeOnboardStage();
     fitDesktopOwnedCards();
     document.getElementById('board-message').textContent = '';
     renderReplayControls();
