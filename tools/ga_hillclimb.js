@@ -31,11 +31,13 @@
  *
  * Usage: node tools/ga_hillclimb.js <outDir> [--ai-level=LV3] [--game-dir=<ゲームのフォルダ>] [--parallel=4]
  *        [--gate-every=3] [--gate-boards=100] [--no-gate] [--no-push] [--no-pair-stats] [--eval-all-every=500]
- *        [--no-ai-data] [--ai-data-every=100] [--only=K,A,B,C,Z]
+ *        [--no-ai-data] [--ai-data-every=100] [--only=K,A,B,C,Z] [--only-until=2026-11-30]
  *
  * --only=K,A,B,C,Z (2026-11-25, per user「R1234のABCKZに絞ってしばらく進化AIをやるのはどう」→「幅は今のままで チャンピオンが決まるまで」): 挑戦者が動かす項目をこれだけに絞る(動かし幅は同じ)。挑戦者が1体採用される(チャンピオンが
  * 決まる)と自動で全項目に戻る。絞っている間かどうかは state.json の onlyIds に残るので、止めて動かし直しても続く
  * (--only無しで動かし直しても、まだ採用が無ければ絞ったまま)。絞り始める時、途中の挑戦者(全項目から作った物)は捨てる。
+ * --only-until=YYYY-MM-DD (2026-11-26, per user「今週は資源に絞ってやります」): --onlyと一緒に。採用があっても戻さず、
+ * その日の0時(日本時間)まで絞ったまま。過ぎたら全項目に戻る(state.json の onlyUntil)。日付が過ぎた後に動かし直しても絞り直さない。
  *
  * 評価値ALLの自動更新 (2026-10-30, per user request "500ごとに更新"): 通算試合数が eval-all-every の倍数を
  * 越えるたびに、カード相性のデータを保存して tools/eval_all_update.js を裏で動かす(game.xlsx の評価値ALLを
@@ -99,6 +101,7 @@ function parseArgs(argv) {
     aiData: !argv.includes('--no-ai-data'),
     aiDataEvery: Number(opt('ai-data-every', 100)),
     only: opt('only', '') ? opt('only', '').split(',').map((x) => x.trim()).filter(Boolean) : null,
+    onlyUntil: opt('only-until', '') ? Date.parse(`${opt('only-until', '')}T00:00:00+09:00`) : null,
   };
 }
 
@@ -207,7 +210,18 @@ function loadState(raw) {
   }
   // --only: 絞り始める(前と違う項目の時だけ。同じなら続き)
   // 同じ--onlyでもう採用まで終わった(onlyDone)なら、起動し直しても絞り直さない(起動のコマンドに--onlyが残っていても全項目のまま)。
-  if (args.only && JSON.stringify(state.onlyIds || null) !== JSON.stringify(args.only) && JSON.stringify(state.onlyDone || null) !== JSON.stringify(args.only)) {
+  if (args.only && args.onlyUntil) {
+    // --only-until: 期限付きで絞る。期限が今より先で、まだその期限で絞っていなければ絞り始める。
+    if (args.onlyUntil > Date.now() && state.onlyUntil !== args.onlyUntil) {
+      log(`動かす項目を ${args.only.join(',')} に絞ります(${new Date(args.onlyUntil).toISOString()}まで。採用があっても戻しません)。`);
+      if (JSON.stringify(state.onlyIds || null) !== JSON.stringify(args.only)) {
+        log('途中の挑戦者は捨てます。');
+        state.challengers = [];
+      }
+      state.onlyIds = args.only;
+      state.onlyUntil = args.onlyUntil;
+    }
+  } else if (args.only && JSON.stringify(state.onlyIds || null) !== JSON.stringify(args.only) && JSON.stringify(state.onlyDone || null) !== JSON.stringify(args.only)) {
     log(`動かす項目を ${args.only.join(',')} に絞ります(挑戦者が1体採用されたら全項目に戻します)。途中の挑戦者は捨てます。`);
     state.onlyIds = args.only;
     state.challengers = [];
@@ -294,6 +308,12 @@ async function climb(state, raw) {
     }
   };
   const newChallenger = () => {
+    if (state.onlyIds && state.onlyUntil && Date.now() >= state.onlyUntil) {
+      log(`絞り込みの期限が来たので、動かす項目の絞り込み(${state.onlyIds.join(',')})をやめて全項目に戻します。`);
+      state.onlyDone = state.onlyIds;
+      state.onlyIds = null;
+      state.onlyUntil = null;
+    }
     const id = state.nextId++;
     const c = makeChallenger(state.champion, id, `${md5(JSON.stringify(state.champion)).slice(0, 8)}-${id}`, state.onlyIds || null);
     state.challengers.push(c);
@@ -323,7 +343,7 @@ async function climb(state, raw) {
       state.champion = c.genome;
       state.championFrom = `challenger${c.id}`;
       state.acceptsSinceGate++;
-      if (state.onlyIds) {
+      if (state.onlyIds && !state.onlyUntil) {
         log(`チャンピオンが決まったので、動かす項目の絞り込み(${state.onlyIds.join(',')})をやめて全項目に戻します。`);
         state.onlyDone = state.onlyIds;
         state.onlyIds = null;
