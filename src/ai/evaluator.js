@@ -192,6 +192,7 @@ function monumentSecurableByPlayer(state, index, playerId, monumentFaceId) {
   return !!player && qualifiesForMonumentCost(player, threshold, row.COST);
 }
 
+const BANQUET_FACE_IDS = new Set(['M403']); // 晩餐会 (score()のR3参照)
 const BEFORE_R4_IGNORED_VP_PENALTY_FACES = new Set(['CON001A']); // 強欲 (score()のR1〜R3参照)
 
 class Evaluator {
@@ -440,6 +441,13 @@ class Evaluator {
     // 「強欲を持っているので宝物庫を取りたい」→「強欲は 宝物庫なしでも 最後に 資源7個ためるので 宝物庫は 強欲にとって 7VPだと
     // 思っています」)。R4は上のとおり実際の資源で数える(R4は強欲のマイナスも数えるので7個残す)。
     if (round < 4 && state.phase !== 'GAME_END') total += this.#greedTreasuryVp(state, player) * v('VP');
+    // R3は晩餐会(M403)も「今の〇の数でゲームが終わったら何VPか」で数える(下の「晩餐会食料生産相性」の加点はR3ではしない) (2026-11-25, per user のナビのバグ報告「ここで晩餐会はなぜ 食料もそんなにないし」→「相性の加点大きすぎかな」→ 案A「R3も今の〇の数で終わったら何VPかで数え、相性の加点はやめる」に「これで」)。
+    // 晩餐会のVPだけ = 全部 - 晩餐会を除いた分(宝物庫などほかのカードはR3では今までどおり数えない)。
+    if (round === 3 && state.phase !== 'GAME_END') {
+      const allFinal = executor.collectFinalOnlyVpModifiers(state, this.index, playerId, true);
+      const withoutBanquet = executor.collectFinalOnlyVpModifiers(state, this.index, playerId, true, BANQUET_FACE_IDS);
+      total += (allFinal - withoutBanquet) * v('VP');
+    }
 
     // Turn-end lockout risk (2026-08-10, per user report: a greedy AI holding CON005B
     // (TURNEND=RESOURCE_TOTAL_LIMIT((A,B,C),7)) would convert a big pile of K into A/B/C -- A/B/C's
@@ -573,7 +581,8 @@ class Evaluator {
       // で、進化AIが動かす(per user「入れた点は動くようにして」)。
       const banquetHallInst = state.cards['M403'];
       const ownsBanquetHall = !!banquetHallInst && banquetHallInst.ownerId === playerId;
-      if (ownsFarmSynergy && ownsBanquetHall) {
+      // R3はしない(上で晩餐会のVPを今の〇の数で数える) (2026-11-25, per user のナビのバグ報告「ここで晩餐会はなぜ 食料もそんなにないし」→「相性の加点大きすぎかな」→ 案A「R3も今の〇の数で終わったら何VPかで数え、相性の加点はやめる」に「これで」)。
+      if (ownsFarmSynergy && ownsBanquetHall && round !== 3) {
         total += v('晩餐会食料生産相性');
       }
       // 元老院の支配(A301, either tier) x SENATE_SYNERGY_FACE_IDS (see that const's own doc): credited

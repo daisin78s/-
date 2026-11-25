@@ -989,9 +989,10 @@ function collectVpModifiers(state, index, playerId, ignoreFaceIds = null) {
  * scoring.computeFinalScore calls this too, for the same value, once the game has actually ended. */
 // asIfEnded (2026-11-23): AIの評価だけが使う。R4の途中でも「今の持ち資源でゲームが終わったら」の値を返す
 // (evaluator.jsのscore参照)。点数の計算(scoring.js)は今までどおりGAME_ENDの時だけ。
-function collectFinalOnlyVpModifiers(state, index, playerId, asIfEnded = false) {
+// ignoreFaceIds: AIの評価だけが使う(そのカードの分を数えない、evaluator.jsのR3の晩餐会参照)。
+function collectFinalOnlyVpModifiers(state, index, playerId, asIfEnded = false, ignoreFaceIds = null) {
   if (state.phase !== 'GAME_END' && !asIfEnded) return 0;
-  return getPassiveRules(state, index, playerId, 'VP_MODIFIER_FINAL').reduce((sum, r) => {
+  return getPassiveRules(state, index, playerId, 'VP_MODIFIER_FINAL', ignoreFaceIds).reduce((sum, r) => {
     const value = evalCountNode(state, index, playerId, r.count);
     return sum + (r.cap !== null ? Math.min(value, r.cap) : value);
   }, 0);
