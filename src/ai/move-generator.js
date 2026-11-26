@@ -974,7 +974,10 @@ class MoveGenerator {
       // 巫女を持っている時の農場主(LV1もLV2も)も同じ(必ずはタップしない) (2026-11-26 Ver.1.1750, per user「巫女か暴食以外は農場主LV2は
       // すぐ使うでいい」) -- 巫女はターン終了に〇が5以上だと〇2→青〇になるので、〇6を早くもらうと損。普通の候補として比べ、
       // ダイスを置いた後は#withoutDeferrableConversionTapsの決まり(ラウンド最後の手番・建てる手が増える時だけ)。
-      if ((cardState.currentFaceId === 'C201B' || cardState.currentFaceId === 'C201A') && player.ownedCardPhysicalIds.some((id) => state.cards[id] && state.cards[id].currentFaceId === 'JOB002')) continue;
+      // ただしラウンドの最後の手番(置けるダイスがもう無い)では、使わないよりは使う(2026-11-26 Ver.1.1753, per user「使わないよりは
+      // つかう」) -- ここで使わないとラウンドの初めにアンタップされて無駄になる。
+      if ((cardState.currentFaceId === 'C201B' || cardState.currentFaceId === 'C201A') && player.ownedCardPhysicalIds.some((id) => state.cards[id] && state.cards[id].currentFaceId === 'JOB002')
+        && player.dice.some((d) => d.placedMapId === null && !d.passed)) continue;
       const clone = cloneState(state);
       const result = board.useBareTapAbility(clone, index, { playerId }, physicalId);
       if (!result.success) continue;
