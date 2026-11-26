@@ -636,7 +636,11 @@ class Evaluator {
         const affordable = costItems.every((item) => (player.resources[item.resource] || 0) >= item.count);
         if (!affordable) continue;
         const vp = typeof row.VP === 'number' ? row.VP : 0;
-        const nextRoundValue = evalValue(this.evalTable, round + 1, faceId) + vp * evalValue(this.evalTable, round + 1, 'VP');
+        // 払う資源の値打ちを引く (2026-11-26, per user「根本的にカードやダイスをとる＜資源をとる なのが問題」→「何パターンか
+        // 試して」→「このまま「差し引き」を入れる」)。満額だと、資源を持っているだけでカード1枚分の点が付き、今のラウンドの
+        // カードを取る手が軽く見られていた。200試合: 満額3席に対して2.425位(消す2.485位、使い切った時だけ2.545位)。
+        const nextRoundValue = evalValue(this.evalTable, round + 1, faceId) + vp * evalValue(this.evalTable, round + 1, 'VP')
+          - costItems.reduce((sum, item) => sum + item.count * v(item.resource), 0);
         bestNextRoundCredit = Math.max(bestNextRoundCredit, nextRoundValue);
       }
       total += bestNextRoundCredit;
