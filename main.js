@@ -8642,7 +8642,10 @@ function turnEndWarnings(state, playerId) {
   // 心配 (CON006A, 2026-11-02) -- ターン終了時に〇が0なら-1VP(turn-flow.applyWorryPenalty)。使用料を払った後の〇で
   // 判定するので、払える使用料はここでも先に引く(足りない分は自動変換で埋まって払うので、その場合も0になる)。
   const worryInst = player.ownedCardPhysicalIds.map((id) => state.cards[id]).find((c) => c && c.currentFaceId === turnFlowMod.WORRY_CON_FACE_ID);
-  if (worryInst && !player.worryAbilityDisabled) {
+  // 巫女(JOB002、ターン終了時〇が4以下なら〇を得る)を持っていれば、心配の判定の前に〇が1個増えるので警告は出さない
+  // (2026-11-26, per user「巫女を持っているのに心配の警告文もです」。turn-flow.jsでapplyTurnEndの後にapplyWorryPenalty)。
+  const ownsMiko = player.ownedCardPhysicalIds.some((id) => state.cards[id] && state.cards[id].currentFaceId === 'JOB002');
+  if (worryInst && !player.worryAbilityDisabled && !ownsMiko) {
     const kAfterFee = Math.max(0, (player.resources.K || 0) - pendingKFeeAmount(player) - feeShortfallPaidWithK(state, player));
     const row = dataLoaderMod.getCardRow(INDEX, turnFlowMod.WORRY_CON_FACE_ID);
     if (kAfterFee === 0 && row.WARNING) warnings.push({ physicalId: worryInst.physicalId, warningText: row.WARNING, kind: 'WORRY' });
