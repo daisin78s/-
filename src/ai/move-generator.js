@@ -371,7 +371,13 @@ class MoveGenerator {
     const bareTaps = this.#bareTapMoves(state, index, playerId, player, context);
     moves.push(...bareTaps);
     this.#placeOutcomes = null;
-    if (!context.hasPlacedDieThisTurn) moves.push(...this.#tapThenPlaceMoves(state, index, playerId, player, bareTaps));
+    if (!context.hasPlacedDieThisTurn) {
+      moves.push(...this.#tapThenPlaceMoves(state, index, playerId, player, bareTaps));
+      // 目を変えるだけのタップ(ダイスを選ぶタップ)は、置く手とセットの物だけにする (2026-11-26 Ver.1.1748, per user
+      // 「「タップだけの手」を外しますか？」→「はずして」)。タップだけして置かない無駄うちを無くす。宮廷人の「目を変えない」
+      // タップ(skipDieChange、BZだけ)と、カードを取るタップ(研究など)はそのまま。
+      moves = moves.filter((m) => !(m.type === 'BARE_TAP' && m.chosenDieId && m.buildCandidateIndex === undefined));
+    }
     this.#placeOutcomes = null;
     moves = this.#withAnyPaymentVariants(state, index, playerId, player, moves);
     moves = this.#withoutDieUpgradesResearchCanDo(state, index, playerId, moves);
@@ -411,7 +417,7 @@ class MoveGenerator {
       if (!r.success) continue;
       const tappedPlayer = tapped.players.find((p) => p.id === playerId);
       for (const m of this.#placeDieMoves(tapped, index, playerId, tappedPlayer)) {
-        if (m.type !== 'PLACE_DIE' || m.dieId !== spare) continue;
+        if ((m.type !== 'PLACE_DIE' && m.type !== 'PLACE_WILDCARD_DIE') || m.dieId !== spare) continue;
         out.push({ ...m, preTap });
       }
       this.#placeOutcomes = null;

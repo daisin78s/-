@@ -384,7 +384,8 @@ function movesOfType(moves, type) { return moves.filter((m) => m.type === type);
 
   const moves = moveGenerator.generateMoves(state, index, 'P1', { hasPlacedDieThisTurn: false });
   const bareTapMoves = moves.filter((m) => m.type === 'BARE_TAP' && m.physicalId === jobInst.physicalId);
-  assertTrue('A per-die BARE_TAP candidate (chosenDieId) still exists alongside the skip option', bareTapMoves.some((m) => m.chosenDieId !== undefined));
+  // 2026-11-26 Ver.1.1748: ダイスを選ぶタップは、置く手とセット(move.preTap)でだけ出る。
+  assertTrue('A per-die tap (as a tap-then-place move with preTap) still exists alongside the skip option', moves.some((m) => m.preTap && m.preTap.physicalId === jobInst.physicalId));
   assertTrue('A skipDieChange:true BARE_TAP candidate is ALSO offered, even though a real die exists', bareTapMoves.some((m) => m.skipDieChange === true));
 }
 {
@@ -759,7 +760,9 @@ function giveB003A(state, playerId) {
   player(state, playerId).ownedCardPhysicalIds.push(cardInst.physicalId);
   return cardInst;
 }
-const offersB003ATap = (moves, cardInst, die) => moves.some((m) => m.type === 'BARE_TAP' && m.physicalId === cardInst.physicalId && m.chosenDieId === die.id && m.chosenDelta === 2);
+// 2026-11-26 Ver.1.1748: 目を変えるだけのタップは、置く手とセット(move.preTap)でだけ出る。
+const offersB003ATap = (moves, cardInst, die) => moves.some((m) => (m.type === 'BARE_TAP' && m.physicalId === cardInst.physicalId && m.chosenDieId === die.id && m.chosenDelta === 2)
+  || (m.preTap && m.preTap.physicalId === cardInst.physicalId && m.preTap.chosenDieId === die.id && m.preTap.chosenDelta === 2));
 {
   // Positive case: even with 0 resources, MAP001's own tier-A area happens to give every exact die value
   // its own uniquely-reachable free slot (empirically confirmed) -- so 1->3 genuinely opens a NEW slot
