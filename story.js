@@ -612,7 +612,7 @@ function storyFanfare(mapId, onDone) {
 
 /** 「何もしない場合N秒ごとにhintLineIdのセリフが出てきてすぐ消える」の繰り返し。画面を触ると数え直す。
  * 戻り値のstop()で止める。 */
-function storyStartHint(hintLineId, idleMs) {
+function storyStartHint(hintLineId, idleMs, hintText) {
   const run = storyRun;
   let stopped = false;
   let timer = null;
@@ -627,7 +627,7 @@ function storyStartHint(hintLineId, idleMs) {
           storyHideDialog();
           arm();
         }, STORY_HINT_SHOW_MS);
-      });
+      }, hintText);
     }, idleMs || STORY_HINT_IDLE_MS);
   };
   run.onTap = arm;
@@ -661,16 +661,17 @@ function storyP1DiceCount(state, mapIds) {
  * 場合はhintLineIdのセリフを出してすぐ消す。P1のダイスがmapIds(省略時は見えている全エリア)のどこかに
  * 置かれたらonPlaced(mapId)。extraDetect(state)がtrueでも置いた扱い(皇帝宮殿のカードを選ぶ画面が開いた等)。
  * 1ターンに置けるダイスは1個(turnActionTaken)なので、場面ごとに置ける状態に戻す。 */
-function storyWaitForPlacement({ mapIds, dieValues, goalText, hintLineId, hintIdleMs, extraDetect, onPlaced }) {
+function storyWaitForPlacement({ mapIds, dieValues, goalText, hintLineId, hintIdleMs, hintText, extraDetect, onPlaced, onEachRender }) {
   const run = storyRun;
   const targets = mapIds || run.visibleMapIds.slice();
   // 比べる基準は「前の場面が終わった時」の数(run.placementBaseline)。セリフが出ている途中に先に置いても
   // 見逃さないように(このあとのrender()ですぐ「置いた」と判定される)。
   const beforeByMap = Object.fromEntries(targets.map((m) => [m, run.placementBaseline[m] || 0]));
   let placed = false;
-  const stopHint = hintLineId ? storyStartHint(hintLineId, hintIdleMs) : () => {};
+  const stopHint = hintLineId ? storyStartHint(hintLineId, hintIdleMs, hintText) : () => {};
   run.onRender = (state) => {
     if (placed) return;
+    if (onEachRender) onEachRender(state);
     const placedMap = targets.find((m) => storyP1DiceCount(state, [m]) > beforeByMap[m]);
     if (!placedMap && !(extraDetect && extraDetect(state))) return;
     placed = true;
@@ -2376,6 +2377,8 @@ function senecaBlocks() {
   let current = blocks.intro;
   (window.STORY_SENECA_SCRIPT || []).forEach((row, index) => {
     const e = row.event && story2NormalizeEvent(row.event);
+    // 「基礎学問」を使って私に会いに来て…ダイスを置かないと5秒ごとに出る(2026-11-26, Excelの新しい行): 流れの外のヒント。
+    if (e && /5秒ごとに出る/.test(e) && /基礎学問/.test(e)) { blocks.kickOutHint = row; return; }
     const trigger = e && !/セネカが/.test(e) && SENECA_TRIGGERS.find((t) => t.test(e));
     if (trigger) {
       current = blocks[trigger.key] = [];
@@ -3335,9 +3338,26 @@ function senecaTryNegotiation(row, rest, onDone, snap) {
     const cardsBefore = storyPlayer('P1').ownedCardPhysicalIds.length;
     run.placementBaseline = storyPlacementCounts(STATE);
     storySetAllowedTabs([...run.allowedTabs, 'shop', 'cards']);
+    // 「「基礎学問」を使って私に会いに来て」のあと(図書館で会うのを待っている間)(2026-11-26, per user「基礎学問を使ってダイス目を
+    // 変えたときに ANYますに置けることが 初めての人にわからない」→「1と2両方」):
+    //  1. 基礎学問で目を変えたダイス(どこにでも置ける)ができたら、そのダイスを選んだ状態にする(置ける図書館のマスが光る)。
+    //  2. ダイスを置かないと5秒ごとに「「基礎学問」の効果で変更されたダイスは…追い出して置くことができるのよ」(Excelの行)。
+    const awaitingLibrary = !!run.seneca.libraryBefore;
+    const kickOutHint = awaitingLibrary ? senecaBlocks().kickOutHint : null;
+    const autoSelected = new Set();
     storyWaitForPlacement({
       mapIds: run.visibleMapIds.slice(),
       goalText: '',
+      hintLineId: kickOutHint && kickOutHint.text ? 'SENECA_KICKOUT_HINT' : null,
+      hintText: kickOutHint ? kickOutHint.text : undefined,
+      onEachRender: () => {
+        if (!awaitingLibrary) return;
+        const die = storyPlayer('P1').dice.find((d) => !d.placedMapId && !d.passed && d.placeAnywhereThisTurn && !autoSelected.has(d.id));
+        if (!die) return;
+        autoSelected.add(die.id);
+        const dieId = die.id;
+        storyLater(() => { const d = storyRun && storyPlayer('P1').dice.find((x) => x.id === dieId); if (d && !d.placedMapId && !d.passed) { selectedDieIds = [dieId]; render(STATE); } }, 0);
+      },
       // カードの獲得(ショートカットでタップを使った時など、ダイスを置かない獲得も)でも見直す。
       extraDetect: () => (typeof pendingBuildChoice !== 'undefined' && !!pendingBuildChoice) || storyPlayer('P1').ownedCardPhysicalIds.length !== cardsBefore
         || (!!run.seneca.libraryBefore && libraryDieIds().some((id) => !run.seneca.libraryBefore.includes(id)))
@@ -4094,6 +4114,9 @@ function ch4FindActionLine(enemy, move, state, allActions) {
     const get = /(領地|学問|人材)カードを(獲得か[LV]{2}UP|獲得|[LV]{2}UP)/.exec(a.event);
     if (get) {
       if (kind !== get[1]) return false;
+      // 「ネロが皇女以外の人材カードを獲得かLVUPする」(2026-11-26 Excel更新): 「○○以外の」のカードは当てはめない。
+      const except = /(?:^|が)([^が]+?)以外の(?:領地|学問|人材)カード/.exec(a.event);
+      if (except && cardName.replace(/LV\d+$/, '') === except[1].trim()) return false;
       if (/UP/.test(get[2]) && /獲得/.test(get[2])) return true; // 獲得かLVUP(「VLUP」の書き間違いも)
       return /UP/.test(get[2]) ? upgrade : !upgrade;
     }
