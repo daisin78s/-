@@ -19508,9 +19508,13 @@ function renderRoundPassButton(state, next) {
   // チュートリアル中は押せない (2026-09-29, per user request: "チュートリアル中ラウンドパスを押せないように")。
   // 2026-09-30: 制約カードを選んだ以降は解放する(tutorialGuidedDemoActive's own doc)。
   const blockedByTutorial = tutorialModeActive && tutorialGuidedDemoActive;
-  btn.disabled = !hasDiceLeftThisRound || blockedByTutorial;
-  btn.title = blockedByTutorial ? 'チュートリアル中は使えません' : '';
-  btn.dataset.playerId = hasDiceLeftThisRound && !blockedByTutorial ? playerId : '';
+  // その手番でもうダイスを置いた後は押せない (2026-11-26, per user「ラウンドパスは ダイスを置いていないときだけにしようか」
+  // →「ゲームのルールにする（人も）」)。置いた後は手番終わりにして、次の手番でラウンドパスする。AIは元々置いた後に
+  // ラウンドパスの手を出さない(move-generator.jsのhasPlacedDieThisTurn)。
+  const placedThisTurn = turnActionTaken && lastTurnPlayerId === playerId;
+  btn.disabled = !hasDiceLeftThisRound || blockedByTutorial || placedThisTurn;
+  btn.title = blockedByTutorial ? 'チュートリアル中は使えません' : placedThisTurn ? 'ダイスを置いた手番では使えません' : '';
+  btn.dataset.playerId = hasDiceLeftThisRound && !blockedByTutorial && !placedThisTurn ? playerId : '';
   // round_pass_leftover_dice_hintの「光る」演出 (2026-10-02, per user request: "このときラウンドパス
   // ボタンを光らせて") -- tutorialRoundPassButtonGlowing's own doc。
   // 2026-10-16, per user spec: "ダイスを置けるエリアが0か1になったらラウンドパスボタンを光らせる"(全ての
