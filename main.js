@@ -1589,7 +1589,7 @@ function updateNavSuggestionIfNeeded(state, eligiblePlayerId) {
     // すぐにでるはず」)。
     const planned = navPlan.get(sigNow);
     if (planned) {
-      navSuggestedMove = planned.move;
+      navSuggestedMove = navStep(planned.move);
       navSuggestedAcquireFaceId = planned.acquireFaceId;
       navSuggestionSignature = sigNow;
       scheduleNavPrefetch(state, eligiblePlayerId);
@@ -1633,21 +1633,21 @@ function computeNavSuggestion(state, playerId) {
       const stillCurrent = () => navModeEnabled && navSuggestionPlayerId === playerId && STATE && navSuggestionSignature === sig && navStateSignature(STATE, playerId) === sig;
       promise.then((r) => {
         if (!stillCurrent()) return;
-        navSuggestedMove = r.move;
+        navSuggestedMove = navStep(r.move);
         navSuggestedAcquireFaceId = navAcquireFaceIdFor(snapshot, r.move);
         render(STATE);
         scheduleNavPrefetch(STATE, playerId);
       }).catch(() => {
         if (!stillCurrent()) return;
         navSuggestionSignature = null; // 次の描き直しで、この画面の中で計算し直す
-        try { const r = navSelect(STATE, playerId, turnActionTaken); navSuggestedMove = r.move; navSuggestedAcquireFaceId = r.acquireFaceId; navSuggestionSignature = sig; } catch (e) { /* 光らせないだけ */ }
+        try { const r = navSelect(STATE, playerId, turnActionTaken); navSuggestedMove = navStep(r.move); navSuggestedAcquireFaceId = r.acquireFaceId; navSuggestionSignature = sig; } catch (e) { /* 光らせないだけ */ }
         render(STATE);
       });
       return;
     }
   }
   const r = navSelect(state, playerId, turnActionTaken);
-  navSuggestedMove = r.move;
+  navSuggestedMove = navStep(r.move);
   navSuggestedAcquireFaceId = r.acquireFaceId;
   navSuggestionSignature = navStateSignature(state, playerId);
   scheduleNavPrefetch(state, playerId);
@@ -1679,6 +1679,14 @@ function scheduleNavPrefetch(state, playerId) {
     }
     try { navPlan.set(sig, navSelect(after, playerId, placed)); } catch (e) { /* 先読みできなくても普段どおり計算し直す */ }
   }, 300);
+}
+
+/** タップしてから置く手(move.preTap {physicalId, chosenDieId, chosenValue?, chosenDelta?}、move-generator.jsの
+ * #tapThenPlaceMoves、2026-11-26 Ver.1.1747)の、最初の1歩(カードのタップ)。ナビはまずタップするカード・ダイス・目を光らせ、
+ * タップした後の盤面でもう一度置く手を出す。AIも画面ではタップと置くを別々に打つ。preTapの無い手はそのまま。 */
+function navStep(move) {
+  if (!move || !move.preTap) return move;
+  return { type: 'BARE_TAP', playerId: move.playerId, ...move.preTap };
 }
 
 /** LV3でナビの手を1つ選ぶ(考える時間は3秒まで)。BUILDを伴う手なら、獲得/LVアップするカードも。 */
@@ -2334,7 +2342,9 @@ function driveOneAiStepInner(state) {
     return false;
   }
   noteActiveTurnPlayerForJobPool(state, ctx.playerId, forceNewTurn);
-  const move = selectAiMoveMemo(state, ctx.playerId, { hasPlacedDieThisTurn: ctx.hasPlacedDieThisTurn });
+  const chosen = selectAiMoveMemo(state, ctx.playerId, { hasPlacedDieThisTurn: ctx.hasPlacedDieThisTurn });
+  // タップしてから置く手(move.preTap、2026-11-26 Ver.1.1747)は、画面ではまずタップだけ打つ(次の1歩でAIが置く手を選び直す)。
+  const move = navStep(chosen);
   if (!move) return false; // defensive -- canEndTurn should always eventually free this up
   const result = simulatorMod.applyInPlace(state, INDEX, move);
   // 2026-08-30, per user bug report (AI froze the browser tab): unlike game-runner.js's own driveTurn

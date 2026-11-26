@@ -58,6 +58,7 @@ const { cloneStateCow: cloneState, writableCard } = require('../game-state');
 const board = require('../board');
 const executor = require('../executor');
 const { applyInPlace, rememberPlacedDryRun } = require('./simulator');
+const { compareDicePriority } = require('./die-priority');
 
 /** The 12 C-tier faces (both LV1/LV2 tiers of 貴族/司教/金貸し/農場主/聖女/王女) whose TAP is a pure
  * ADD(...) resource grant with no cost at all -- see MoveGenerator#forcedPureGainCTap's own doc on why
@@ -367,7 +368,10 @@ class MoveGenerator {
       }
       moves.push(...immediate);
     }
-    moves.push(...this.#bareTapMoves(state, index, playerId, player, context));
+    const bareTaps = this.#bareTapMoves(state, index, playerId, player, context);
+    moves.push(...bareTaps);
+    this.#placeOutcomes = null;
+    if (!context.hasPlacedDieThisTurn) moves.push(...this.#tapThenPlaceMoves(state, index, playerId, player, bareTaps));
     this.#placeOutcomes = null;
     moves = this.#withAnyPaymentVariants(state, index, playerId, player, moves);
     moves = this.#withoutDieUpgradesResearchCanDo(state, index, playerId, moves);
@@ -380,6 +384,39 @@ class MoveGenerator {
     }
     moves = this.#withPreConvertedTaps(state, index, player, moves);
     return this.policy.mustUseChangedDie && !context.hasPlacedDieThisTurn ? keepChangedDiePlacements(moves, player, state) : moves;
+  }
+
+  /** 目を変えるカード(基礎学問・高等学問・幾何学・宮廷人)をタップしてから置く手を、1つの手として足す (2026-11-26 Ver.1.1747,
+   * per user「基礎学問 高等学問を持っていたら AIはそのスロットに置けるようになる(置いた結果タップする)という風に考える」
+   * 「基本的に一番いらない目(場に多い目)に使う」「宮廷人も+5して置けるところが増えるならそれでいい」)。先読みの中では1手ずつ
+   * その場の点で選ぶので、タップだけの手は点が上がらず「タップしてから訓練場に置く」を打てなかった。move.preTapを
+   * simulator.applyInPlaceが先にタップする。目を変えるのは、まだ置いていないダイスのうち一番いらないダイス
+   * (die-priority.jsの決まり: 場に多く残っている目 → R1・R2は大きい目/R3・R4は小さい目 → 色ダイス)の1個だけ。
+   * タップの手(#bareTapMoves)が出ている(=目を変えると新しい置き方ができる)時だけ作る。 */
+  #tapThenPlaceMoves(state, index, playerId, player, bareTaps) {
+    const dieTaps = bareTaps.filter((m) => m.type === 'BARE_TAP' && m.chosenDieId && m.buildCandidateIndex === undefined && !m.skipDieChange);
+    if (dieTaps.length === 0) return [];
+    const unplaced = player.dice.filter((d) => d.placedMapId === null && !d.passed);
+    if (unplaced.length === 0) return [];
+    const cmp = compareDicePriority(state, state.round || 1);
+    const spare = unplaced.map((d) => ({ dieId: d.id })).sort(cmp)[0].dieId;
+    const out = [];
+    for (const tap of dieTaps) {
+      if (tap.chosenDieId !== spare) continue;
+      const tapped = cloneState(state);
+      const preTap = { physicalId: tap.physicalId, chosenDieId: tap.chosenDieId };
+      if (tap.chosenValue !== undefined) preTap.chosenValue = tap.chosenValue;
+      if (tap.chosenDelta !== undefined) preTap.chosenDelta = tap.chosenDelta;
+      const r = applyInPlace(tapped, index, { type: 'BARE_TAP', playerId, ...preTap });
+      if (!r.success) continue;
+      const tappedPlayer = tapped.players.find((p) => p.id === playerId);
+      for (const m of this.#placeDieMoves(tapped, index, playerId, tappedPlayer)) {
+        if (m.type !== 'PLACE_DIE' || m.dieId !== spare) continue;
+        out.push({ ...m, preTap });
+      }
+      this.#placeOutcomes = null;
+    }
+    return out;
   }
 
   /** 〇を人脈に上限まで変えるタップ(総督・学者・商人のLV2、CHANGE(K,Z,n))で〇が上限より少ない時、「赤〇・青〇・黄〇を〇に

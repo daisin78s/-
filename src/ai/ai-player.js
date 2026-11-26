@@ -505,7 +505,8 @@ class AIPlayer {
     // `|| 0 || 0` keeps this identical to the original single-line sort.
     const exSlotTieBreak = this.preferExOnOwnTerritory ? compareExSlotPreference(state, this.index, playerId) : null;
     const dieTieBreak = this.dieScarcityTieBreak ? compareDicePriority(state, state.round) : null;
-    scored.sort((a, b) => (b.score - a.score)
+    // 同じ点なら、タップしてから置く手(move.preTap)よりタップしない手を先に(無駄うちしない、2026-11-26 Ver.1.1747)。
+    scored.sort((a, b) => (b.score - a.score) || ((a.move.preTap ? 1 : 0) - (b.move.preTap ? 1 : 0))
       || (exSlotTieBreak ? exSlotTieBreak(a.move, b.move) : 0)
       || (dieTieBreak ? dieTieBreak(a.move, b.move) : 0));
 
