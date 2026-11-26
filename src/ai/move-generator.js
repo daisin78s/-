@@ -470,8 +470,12 @@ class MoveGenerator {
       const card = state.cards[m.physicalId];
       let commands;
       try { commands = lowerProgram(parse(getCardRow(index, card.currentFaceId).TAP || '')); } catch (e) { return true; }
-      if (!commands.length || !commands.every((c) => c.type === 'CHANGE' && c.times && (c.times.kind === 'capped' || c.times.kind === 'all'))) return true;
-      for (const c of commands) {
+      // 農場主LV2(ADD(6K))も、巫女か暴食を持っている時は同じ扱い(すぐ使わない) (2026-11-26 Ver.1.1750, per user のナビのバグ報告
+      // 「ここでも農場主使うように勧めてきますが後で使った方がいいのでは」→「巫女か暴食以外は農場主LV2はすぐ使うでいい」)。
+      // 巫女はターン終了に〇が5以上だと〇2→青〇、暴食は〇の上限7でターン終了に減るので、〇を早く持つと損をする。
+      const deferFarmer = card.currentFaceId === 'C201B' && player.ownedCardPhysicalIds.some((id) => state.cards[id] && (state.cards[id].currentFaceId === 'JOB002' || state.cards[id].currentFaceId === 'CON006B'));
+      if (!deferFarmer && (!commands.length || !commands.every((c) => c.type === 'CHANGE' && c.times && (c.times.kind === 'capped' || c.times.kind === 'all')))) return true;
+      if (!deferFarmer) for (const c of commands) {
         const pay = c.pay && c.pay[0];
         if (!pay || !pay.count || pay.count.kind !== 'literal') continue;
         const have = player.resources[pay.resource] || 0;
@@ -936,6 +940,10 @@ class MoveGenerator {
       const cardState = state.cards[physicalId];
       if (!cardState || cardState.tapped || !PURE_GAIN_C_FACES.has(cardState.currentFaceId)) continue;
       if (kLimited && (cardState.currentFaceId === 'C201A' || cardState.currentFaceId === 'C201B')) continue;
+      // 巫女を持っている時の農場主LV2も同じ(必ずはタップしない) (2026-11-26 Ver.1.1750, per user「巫女か暴食以外は農場主LV2は
+      // すぐ使うでいい」) -- 巫女はターン終了に〇が5以上だと〇2→青〇になるので、〇6を早くもらうと損。普通の候補として比べ、
+      // ダイスを置いた後は#withoutDeferrableConversionTapsの決まり(ラウンド最後の手番・建てる手が増える時だけ)。
+      if (cardState.currentFaceId === 'C201B' && player.ownedCardPhysicalIds.some((id) => state.cards[id] && state.cards[id].currentFaceId === 'JOB002')) continue;
       const clone = cloneState(state);
       const result = board.useBareTapAbility(clone, index, { playerId }, physicalId);
       if (!result.success) continue;
