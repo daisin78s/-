@@ -2827,6 +2827,18 @@ let historyCursor = -1;
  * (spec item 11). If historyCursor isn't already at the end -- i.e. the player jumped back to an earlier
  * point and then took a genuinely new action that led to a new turn boundary -- the old "future" beyond
  * that point is discarded first (spec item 9: a new branch replaces it, it doesn't get appended after). */
+/** ゲームの初め(初期資源カードを誰もまだ選んでいない時)の盤面を、巻き戻しの一覧の一番前に「準備」として記録する (2026-11-26,
+ * per user「巻き戻しOKの時 初期資源カード選択前まで戻れますか」→「初期資源カードを選ぶ前だけでいい」)。戻すと、全員が初期資源
+ * カードを選び直す(AIの席も選び直すので、前と違うカードになることがある)。restoreHistoryPointはplayerIdがnullの記録
+ * (この記録)を「手番の始まり」として数えない。履歴がまだ空の時だけ。 */
+function seedSetupHistoryIfNeeded(state) {
+  if (turnHistory.length > 0 || state.round !== 0) return;
+  const resourceChoices = state.pendingChoices.filter((c) => c.kind === 'SELECT_RESOURCE_CARDS').length;
+  if (resourceChoices === 0 || resourceChoices < state.players.length) return;
+  turnHistory.push({ round: 0, playerId: null, snapshot: structuredClone(state) });
+  historyCursor = 0;
+}
+
 function recordTurnHistorySnapshot(state, playerId) {
   // GAME_END guard (found via headless testing): turnFlow.getNextTurn keeps returning a normal
   // {type:'TURN', playerId} even once state.phase is 'GAME_END' (nothing about "whose turn is next"
@@ -2840,7 +2852,7 @@ function recordTurnHistorySnapshot(state, playerId) {
   if (historyCursor < turnHistory.length - 1) turnHistory = turnHistory.slice(0, historyCursor + 1);
   turnHistory.push({ round: state.round, playerId, snapshot: structuredClone(state) });
   historyCursor = turnHistory.length - 1;
-  if (turnHistory.length === 1) shownTurnBannerKeys.clear(); // 新しいゲームの最初の手番
+  if (turnHistory.length === 1 || (turnHistory.length === 2 && !turnHistory[0].playerId)) shownTurnBannerKeys.clear(); // 新しいゲームの最初の手番(前に「準備」の記録があっても)
   // 番号は手番の始まりの時点で決める(この時点では前の手番までが進捗に載っていて、この手番の分はまだ)。
   pendingTurnBanner = { playerId, round: state.round, nth: progressNextTurnNumber(state, playerId) };
 }
@@ -2937,6 +2949,7 @@ function restoreHistoryPoint(idx, restored, turnPlayerId) {
  * -- ラウンド-そのラウンドでのその人の何回目の手番か/手番のプレイヤー(以前のTurnNは、ゲーム全体の通し番号だった)。 */
 function historyTurnLabel(state, idx) {
   const entry = turnHistory[idx];
+  if (!entry.playerId && entry.round === 0) return '準備'; // 初期資源カードを選ぶ前(seedSetupHistoryIfNeeded)
   // 番号は「そのラウンドで、その人の何回目の手番か」 (2026-10-28, per user: "R1-1 R1-1 R1-1 R1-1 R1-2のように
   // なると思ってた" + "進捗と巻き戻しおなじになるようにして" -- 以前はラウンド内の通し番号)。
   let nth = 0;
@@ -19185,6 +19198,7 @@ function renderCore(state) {
     undoMod.recordCheckpoint(state);
     onboardingCheckpointPlayerId = next.playerId;
   }
+  seedSetupHistoryIfNeeded(state);
   const activePlayer = next ? state.players.find((p) => p.id === next.playerId) : null;
   if (activePlayer && hasFinishedOnboarding(activePlayer)) {
     noteActiveTurnPlayerForJobPool(state, next.playerId, turnJustEnded);
