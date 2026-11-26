@@ -335,19 +335,20 @@ for job_face_id, entry in report.get('job', {}).items():
     job_avg_written += 1
 
 print(f'CONJOB rows {job_score_row}/{job_qst_score_row}/{job_rank_row} (JOBの真の加重平均: 平均得点/QST平均得点/平均順位): wrote {job_avg_written} JOBs, skipped {len(job_avg_skipped)}: {job_avg_skipped}')
-# 全AIの平均 (2026-11-26, per user「すべてのAIの獲得平均点が欲しい」「素点とクエストも」): 平均得点の表のJOBごとの行
-# (job_score_row)の右、CONごとの列と同じ並び -- N=クエスト、O=素点、P=合計(=N+O)。全部の試合の全員(CONごとの数で重み付け)。
+# 全AIの平均 (2026-11-26, per user「すべてのAIの獲得平均点が欲しい」「素点とクエストも」→「N17-P17」): 平均得点の表の見出しの行
+# (avg_header_row)のN〜P、CONごとの列と同じ並び -- N=クエスト、O=素点、P=合計(=N+O)。全部の試合の全員(CONごとの数で重み付け)。
 overall_count = sum((e.get('count') or 0) for e in report.get('con', {}).values() if e.get('avgScore') is not None)
 for c in (j_col, n_col, n_col + 1):
-    ws.cell(row=job_score_row, column=c).value = None
+    ws.cell(row=job_score_row, column=c).value = None  # 前に一度ここ(31行目)に書いていた分を消す
+    ws.cell(row=avg_header_row, column=c).value = None
 if overall_count > 0:
     overall_score = sum(e['avgScore'] * e['count'] for e in report['con'].values() if e.get('avgScore') is not None) / overall_count
     overall_qst = sum((e.get('avgQstScore') or 0) * e['count'] for e in report['con'].values() if e.get('avgScore') is not None) / overall_count
-    ws.cell(row=job_score_row, column=j_col, value=round(overall_qst, 2))
-    ws.cell(row=job_score_row, column=n_col, value=round(overall_score, 2))
+    ws.cell(row=avg_header_row, column=j_col, value=round(overall_qst, 2))
+    ws.cell(row=avg_header_row, column=n_col, value=round(overall_score, 2))
     jl = get_column_letter(j_col); nlc = get_column_letter(n_col)
-    ws.cell(row=job_score_row, column=n_col + 1, value=f'={jl}{job_score_row}+{nlc}{job_score_row}')
-    print(f'CONJOB 全AIの平均(行{job_score_row}): クエスト {overall_qst:.2f} / 素点 {overall_score:.2f} / 合計 {overall_qst + overall_score:.2f} ({overall_count}人分)')
+    ws.cell(row=avg_header_row, column=n_col + 1, value=f'={jl}{avg_header_row}+{nlc}{avg_header_row}')
+    print(f'CONJOB 全AIの平均(行{avg_header_row}): クエスト {overall_qst:.2f} / 素点 {overall_score:.2f} / 合計 {overall_qst + overall_score:.2f} ({overall_count}人分)')
 
 # ---------------------------------------------------------------------------
 # ABCM sheet
