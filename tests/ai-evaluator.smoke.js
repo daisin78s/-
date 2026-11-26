@@ -95,7 +95,7 @@ function freshState(round) {
   const whiteDie = createDie('d2', 'WHITE');
   p1.dice.push(colorDie, whiteDie);
 
-  const expected = 2 * evalTable[1].K + 1 * evalTable[1].A + 1 * evalTable[1].VP + 1 * evalTable[1].D + 1 * evalTable[1].wD; // K + A + VP + unplaced D + unplaced wD
+  const expected = 2 * evalTable[1].K + 1 * evalTable[1].A + 1 * evalTable[1].VP + 1 * evalTable[1].D + 1 * evalTable[1].wD + 3 * evalTable[1].K; // K + A + VP + 色ダイスの数×D + unplaced wD + 置いていない色ダイスの〇3 (2026-11-26)
   check('Score sums resources + unplaced dice using round-1 eval-table weights', evaluator.score(state, 'P1'), expected);
 }
 
@@ -115,7 +115,7 @@ function freshState(round) {
   const passedDie = createDie('d2', 'COLOR');
   passedDie.passed = true;
   p1.dice.push(unplacedDie, passedDie);
-  const expected = 1 * evalTable[1].D + 1 * (3 * evalTable[1].K); // still-placeable D + passed die's guaranteed-3K-equivalent value
+  const expected = 2 * evalTable[1].D + 2 * (3 * evalTable[1].K); // 色ダイス2個×D + 置いていない/パスした色ダイスどちらも〇3 (2026-11-26)
   check('A passed color die scores at its guaranteed round-end 3K value, not the full unplaced D weight', evaluator.score(state, 'P1'), expected);
 }
 {
@@ -136,7 +136,7 @@ function freshState(round) {
   const placedDie = createDie('d1', 'COLOR');
   placedDie.placedMapId = 'MAP001';
   p1.dice.push(placedDie);
-  check('A placed die does not add to the score', evaluator.score(state, 'P1'), 0);
+  check('A placed color die still counts D (it comes back next round) but not the round-end 3K (2026-11-26)', evaluator.score(state, 'P1'), evalTable[1].D);
 }
 
 // ---------------------------------------------------------------------------
@@ -191,7 +191,7 @@ function giveCard(state, faceId, playerId) {
   // The unplaced die itself contributes its own 'D'-weight score too (see the unplacedColor line just
   // above this whole block in evaluator.js) -- unrelated to A202, just an unavoidable side effect of
   // giving this player a die at all to prove one is available.
-  check('Owning A202A with an unplaced die left does NOT apply the timing tax', evaluator.score(state, 'P1'), evalTable[1].A202A + evalTable[1].D);
+  check('Owning A202A with an unplaced die left does NOT apply the timing tax', evaluator.score(state, 'P1'), evalTable[1].A202A + evalTable[1].D + 3 * evalTable[1].K);
 }
 {
   const state = freshState(1);
@@ -203,7 +203,7 @@ function giveCard(state, faceId, playerId) {
   state.players[0].dice.push(placed1, placed2); // both already placed (not merely passed -- see the
   // passedColor-vs-placed distinction just above) -- neither the unplacedColor nor passedColor lines add
   // anything for these, keeping this case a clean isolated check of just the timing tax.
-  check('Owning A202A with every die already placed applies the timing tax the same way', evaluator.score(state, 'P1'), evalTable[1].A202A - 100);
+  check('Owning A202A with every die already placed applies the timing tax the same way', evaluator.score(state, 'P1'), evalTable[1].A202A - 100 + 2 * evalTable[1].D);
 }
 {
   // totalColorDiceCount===3 no longer means anything special on its own (the +1000 "go get it" bonus at
@@ -215,7 +215,7 @@ function giveCard(state, faceId, playerId) {
     d.placedMapId = 'MAP001'; // all 3 placed -- 0 unplaced (the -100 tax fires), still under the -1000 penalty's own >=4 threshold
     state.players[0].dice.push(d);
   }
-  check('3 total color dice (all placed) no longer gets any special bonus -- just the plain timing tax', evaluator.score(state, 'P1'), evalTable[1].A202A - 100);
+  check('3 total color dice (all placed) no longer gets any special bonus -- just the plain timing tax', evaluator.score(state, 'P1'), evalTable[1].A202A - 100 + 3 * evalTable[1].D);
 }
 {
   const state = freshState(1);
@@ -226,7 +226,7 @@ function giveCard(state, faceId, playerId) {
     d.placedMapId = 'MAP001'; // all 4 placed -- totalColorDiceCount>=4 (the -1000 penalty) AND 0 unplaced (the -100 tax) at once
     state.players[0].dice.push(d);
   }
-  check('The -1000 domination penalty and -100 timing tax stack independently at 4+ color dice', evaluator.score(state, 'P1'), evalTable[1].A202A - 1000 - 100);
+  check('The -1000 domination penalty and -100 timing tax stack independently at 4+ color dice', evaluator.score(state, 'P1'), evalTable[1].A202A - 1000 - 100 + 4 * evalTable[1].D);
 }
 // 2026-09-17 fix (per user bug report watching AI LV5): the -1000 penalty must NOT re-fire just because
 // the player's CURRENT dice count is now >=4, if trainingGroundDominationOk was set true at the real
@@ -242,7 +242,7 @@ function giveCard(state, faceId, playerId) {
     d.placedMapId = 'MAP001'; // now at 4 total color dice, presumably via 訓練場's own ADD(D) -- no penalty
     state.players[0].dice.push(d);
   }
-  check('No -1000 penalty when dice grew past the threshold AFTER a legitimate acquisition (trainingGroundDominationOk:true)', evaluator.score(state, 'P1'), evalTable[1].A202A - 100);
+  check('No -1000 penalty when dice grew past the threshold AFTER a legitimate acquisition (trainingGroundDominationOk:true)', evaluator.score(state, 'P1'), evalTable[1].A202A - 100 + 4 * evalTable[1].D);
 }
 
 // ---------------------------------------------------------------------------
@@ -321,7 +321,7 @@ function dominate(state, mapId, playerId) {
   giveCard(state, 'A202A', 'P1'); // 訓練場 -- NOT in any group
   dominate(state, 'MAP002', 'P1'); // 農園's map -- neutralizes 小麦畑's own FEE_OPPORTUNITY_GROUP_A check
   state.players[0].dice.push(createDie('d1', 'COLOR'));
-  check('訓練場 owned alongside a GROUP_A card triggers no redundancy penalty at all', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1].A202A + evalTable[1].D));
+  check('訓練場 owned alongside a GROUP_A card triggers no redundancy penalty at all', round6(evaluator.score(state, 'P1')), round6(evalTable[1].A004A + evalTable[1].A202A + evalTable[1].D + 3 * evalTable[1].K));
 }
 {
   // SAME_ROLE_GROUP_C (2026-09-18, per user request): 始まりの兆し/革命の兆し/移ろいの兆し (B004/B005/
