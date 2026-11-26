@@ -331,8 +331,10 @@ class MoveGenerator {
     // 心配 (CON006A)を持っていて〇が0個の時も交換を選べるようにする (2026-11-05, per user「AIは心配を持っているとき
     // a→Kで-1VPされないことを理解していますか」→「1(評価値で比べる) 心配を持っているときのみ」): ターン終了時の-1VPを
     // 避けるかどうかは、END_TURN(-1VP込み)と交換後の状態を評価値で比べて決める。
-    const worryNeedsK = (player.resources.K || 0) === 0
-      && player.ownedCardPhysicalIds.some((id) => state.cards[id] && state.cards[id].currentFaceId === 'CON006A');
+    // 巫女(JOB002、ターン終了時〇が4以下なら〇を得る)を持っていれば、心配の判定の前に〇が1個増えるので交換は要らない
+    // (2026-11-26, per user のナビのバグ報告「巫女があるのにA→Kを推奨してくる」。turn-flow.jsでapplyTurnEndの後にapplyWorryPenalty)。
+    const ownsFace = (faceId) => player.ownedCardPhysicalIds.some((id) => state.cards[id] && state.cards[id].currentFaceId === faceId);
+    const worryNeedsK = (player.resources.K || 0) === 0 && ownsFace('CON006A') && !ownsFace('JOB002');
     if (worryNeedsK || executor.canEndTurn(state, index, playerId).violations.length > 0) {
       moves.push(...this.#freeActionMoves(state, index, playerId, player));
     }
