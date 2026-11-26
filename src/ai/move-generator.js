@@ -377,6 +377,11 @@ class MoveGenerator {
       // 「「タップだけの手」を外しますか？」→「はずして」)。タップだけして置かない無駄うちを無くす。宮廷人の「目を変えない」
       // タップ(skipDieChange、BZだけ)と、カードを取るタップ(研究など)はそのまま。
       moves = moves.filter((m) => !(m.type === 'BARE_TAP' && m.chosenDieId && m.buildCandidateIndex === undefined));
+      const farmer = this.#farmerBeforeKConversionMoves(state, index, playerId, player);
+      if (farmer) {
+        moves = moves.filter((m) => !(m.type === 'BARE_TAP' && m.physicalId === farmer.physicalId));
+        moves.push(...farmer.moves);
+      }
     }
     this.#placeOutcomes = null;
     moves = this.#withAnyPaymentVariants(state, index, playerId, player, moves);
@@ -390,6 +395,32 @@ class MoveGenerator {
     }
     moves = this.#withPreConvertedTaps(state, index, player, moves);
     return this.policy.mustUseChangedDie && !context.hasPlacedDieThisTurn ? keepChangedDiePlacements(moves, player, state) : moves;
+  }
+
+  /** 巫女か暴食を持っている時の農場主(LV2のADD(6K)もLV1のADD(3K)も、per user「LV1も…LV2も」)は、〇を全部変えるエリア(ローマ市街・図書館・市場、ACTIONがCHANGE(K,…,ALL))に
+   * 置く直前に使う (2026-11-26 Ver.1.1752, per user「ローマ市街 図書館 市場 の直前が望ましい」)。巫女はターン終了に〇が5以上だと
+   * 〇2→青〇、暴食は〇の上限7でターン終了に減るので、もらった〇6をすぐ黄〇・青〇・赤〇に変えれば損が無い。「農場主をタップして
+   * からそこに置く」を1つの手(move.preTap {physicalId})にし、ダイスを置く前の農場主だけのタップは出さない。ダイスを置いた後は
+   * #withoutDeferrableConversionTapsの決まり(ラウンド最後の手番・建てる手が増える時だけ)。当てはまらない時はnull。 */
+  #farmerBeforeKConversionMoves(state, index, playerId, player) {
+    const owns = (faceId) => player.ownedCardPhysicalIds.some((id) => state.cards[id] && state.cards[id].currentFaceId === faceId);
+    if (!owns('JOB002') && !owns('CON006B')) return null;
+    const physicalId = player.ownedCardPhysicalIds.find((id) => state.cards[id] && (state.cards[id].currentFaceId === 'C201B' || state.cards[id].currentFaceId === 'C201A') && !state.cards[id].tapped);
+    if (!physicalId) return null;
+    const tapped = cloneState(state);
+    const r = applyInPlace(tapped, index, { type: 'BARE_TAP', playerId, physicalId });
+    if (!r.success) return { physicalId, moves: [] };
+    const isKConversionArea = (mapId) => {
+      try { return /^CHANGE\(K,[ABC],ALL\)/.test(String(getAreaRow(index, tapped.maps[mapId].currentAreaId).ACTION || '').trim()); } catch (e) { return false; }
+    };
+    const tappedPlayer = tapped.players.find((p) => p.id === playerId);
+    const preTap = { physicalId };
+    const out = [];
+    for (const m of this.#placeDieMoves(tapped, index, playerId, tappedPlayer)) {
+      if (m.type === 'PLACE_DIE' && isKConversionArea(m.mapId)) out.push({ ...m, preTap });
+    }
+    this.#placeOutcomes = null;
+    return { physicalId, moves: out };
   }
 
   /** 目を変えるカード(基礎学問・高等学問・幾何学・宮廷人)をタップしてから置く手を、1つの手として足す (2026-11-26 Ver.1.1747,
@@ -470,10 +501,10 @@ class MoveGenerator {
       const card = state.cards[m.physicalId];
       let commands;
       try { commands = lowerProgram(parse(getCardRow(index, card.currentFaceId).TAP || '')); } catch (e) { return true; }
-      // 農場主LV2(ADD(6K))も、巫女か暴食を持っている時は同じ扱い(すぐ使わない) (2026-11-26 Ver.1.1750, per user のナビのバグ報告
+      // 農場主(LV2のADD(6K)・LV1のADD(3K))も、巫女か暴食を持っている時は同じ扱い(すぐ使わない) (2026-11-26 Ver.1.1750, per user のナビのバグ報告
       // 「ここでも農場主使うように勧めてきますが後で使った方がいいのでは」→「巫女か暴食以外は農場主LV2はすぐ使うでいい」)。
       // 巫女はターン終了に〇が5以上だと〇2→青〇、暴食は〇の上限7でターン終了に減るので、〇を早く持つと損をする。
-      const deferFarmer = card.currentFaceId === 'C201B' && player.ownedCardPhysicalIds.some((id) => state.cards[id] && (state.cards[id].currentFaceId === 'JOB002' || state.cards[id].currentFaceId === 'CON006B'));
+      const deferFarmer = (card.currentFaceId === 'C201B' || card.currentFaceId === 'C201A') && player.ownedCardPhysicalIds.some((id) => state.cards[id] && (state.cards[id].currentFaceId === 'JOB002' || state.cards[id].currentFaceId === 'CON006B'));
       if (!deferFarmer && (!commands.length || !commands.every((c) => c.type === 'CHANGE' && c.times && (c.times.kind === 'capped' || c.times.kind === 'all')))) return true;
       if (!deferFarmer) for (const c of commands) {
         const pay = c.pay && c.pay[0];
@@ -940,10 +971,10 @@ class MoveGenerator {
       const cardState = state.cards[physicalId];
       if (!cardState || cardState.tapped || !PURE_GAIN_C_FACES.has(cardState.currentFaceId)) continue;
       if (kLimited && (cardState.currentFaceId === 'C201A' || cardState.currentFaceId === 'C201B')) continue;
-      // 巫女を持っている時の農場主LV2も同じ(必ずはタップしない) (2026-11-26 Ver.1.1750, per user「巫女か暴食以外は農場主LV2は
+      // 巫女を持っている時の農場主(LV1もLV2も)も同じ(必ずはタップしない) (2026-11-26 Ver.1.1750, per user「巫女か暴食以外は農場主LV2は
       // すぐ使うでいい」) -- 巫女はターン終了に〇が5以上だと〇2→青〇になるので、〇6を早くもらうと損。普通の候補として比べ、
       // ダイスを置いた後は#withoutDeferrableConversionTapsの決まり(ラウンド最後の手番・建てる手が増える時だけ)。
-      if (cardState.currentFaceId === 'C201B' && player.ownedCardPhysicalIds.some((id) => state.cards[id] && state.cards[id].currentFaceId === 'JOB002')) continue;
+      if ((cardState.currentFaceId === 'C201B' || cardState.currentFaceId === 'C201A') && player.ownedCardPhysicalIds.some((id) => state.cards[id] && state.cards[id].currentFaceId === 'JOB002')) continue;
       const clone = cloneState(state);
       const result = board.useBareTapAbility(clone, index, { playerId }, physicalId);
       if (!result.success) continue;

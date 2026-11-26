@@ -107,7 +107,8 @@ function applyInPlace(state, index, move) {
   // 目を変えるカードをタップしてから置く手(move.preTap {physicalId, chosenDieId, chosenValue?, chosenDelta?}、
   // move-generator.jsの#tapThenPlaceMoves) (2026-11-26 Ver.1.1747): 先にタップしてダイスの目を変える。
   if (move.preTap) {
-    const tapContext = { playerId: move.playerId, chosenDieId: move.preTap.chosenDieId };
+    const tapContext = { playerId: move.playerId };
+    if (move.preTap.chosenDieId !== undefined) tapContext.chosenDieId = move.preTap.chosenDieId;
     if (move.preTap.chosenValue !== undefined) tapContext.chosenValue = move.preTap.chosenValue;
     if (move.preTap.chosenDelta !== undefined) tapContext.chosenDelta = move.preTap.chosenDelta;
     const r = board.useBareTapAbility(state, index, tapContext, move.preTap.physicalId);
