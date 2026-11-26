@@ -8890,6 +8890,15 @@ function attemptAdvanceTurn(state, playerId, anyPaymentChosen = false) {
  * the last unplaced die this round. Only ever called after attemptAdvanceTurn's own WARNING gate (or
  * directly, once already confirmed) -- see renderTurnEndWarningModal's confirm handler. */
 function advanceTurnIfPossible(state, playerId) {
+  // ダイスを置かずに(パスもせずに)手番を終えられないようにする (2026-11-26 Ver.1.1751, per user のバグ報告「内部関数で操作すると、
+  // ダイスをおかずにターン終了することができてしまう」)。画面ではターン終了ボタンが置いた後にしか出ないが、関数を直接呼ぶと
+  // 通っていた。人の手番の本物のターン終了は必ずここを通るので、ここで止める(この手番で置いた/パスした = turnActionTaken)。
+  // まだ置ける(置いていない・パスしていない)ダイスが無い時は今まで通り。
+  const endingPlayer = state.players.find((p) => p.id === playerId);
+  if (endingPlayer && !turnActionTaken && endingPlayer.dice.some((d) => d.placedMapId === null && !d.passed)) {
+    placementMessage = 'ターンを終了できません（ダイスを置くか、ラウンドパスしてください）';
+    return;
+  }
   const result = turnFlowMod.endTurn(state, INDEX, playerId);
   if (!result.success) {
     // result.violations mixes RESOURCE_TOTAL_LIMIT entries (executor.canEndTurn) with at most one
