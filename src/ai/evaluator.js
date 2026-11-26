@@ -644,7 +644,12 @@ class Evaluator {
     // current round would always credit 0), so holding onto those resources scores at least as well as
     // spending them on a lesser immediate option. Only the single best such candidate is credited, not
     // summed across every affordable slot at once -- the same resources can't buy more than one.
-    if (state.shops && state.shops.SPECIAL) {
+    // そのラウンドのダイスを使い切った時だけ足す (2026-11-26 Ver.1.1745, per user「ダイスが少なくなってきてから足されるという
+    // 認識でした」→「ダイスを使い切った時だけ 本来はこれだと思います」)。今までR1の1手目から資源さえあれば足していたので、
+    // 資源を取る手に約80〜94点が上乗せされ、訓練場やカードを取る手が軽く見られていた。この点の目的は「ラウンドの終わりに
+    // 資源を使い切ってR2のカードが取れない」を防ぐことなので、ラウンドの終わり(置けるダイスが無い)だけで十分。
+    const noDiceLeftThisRound = !player.dice.some((d) => d.placedMapId === null && !d.passed);
+    if (noDiceLeftThisRound && state.shops && state.shops.SPECIAL) {
       let bestNextRoundCredit = 0;
       for (const faceId of Object.values(state.shops.SPECIAL.slots)) {
         if (!faceId) continue;
