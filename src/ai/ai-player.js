@@ -419,6 +419,17 @@ class AIPlayer {
     // タップしないで同じダイスを同じエリアのどこかのマスに置き、同じカードを選べるか
     const map = state.maps[next.mapId];
     const slotCount = map && map.slots ? map.slots.length : 0;
+    // 同じカードを取る(同じbuildCandidateKey)置き方が、タップしなくても出ているか。下の番号を試す方法は0〜9番までなので、
+    // 候補が10個以上ある時(皇帝宮殿で高等学問LV2にする手が10番だった)に見落としていた (2026-11-26, per user のナビのバグ報告
+    // 「ここでも意味なく高等学問使うように勧めてくる」)。
+    if (next.buildCandidateKey) {
+      const plainMoves = this.moveGenerator.generateMoves(state, this.index, playerId, context)
+        .filter((m) => m.type === 'PLACE_DIE' && m.dieId === move.chosenDieId && m.mapId === next.mapId && m.buildCandidateKey === next.buildCandidateKey);
+      for (const plain of plainMoves) {
+        const r = this.simulator.apply(state, this.index, plain);
+        if (r.result.success && this.#placementSignature(r.state, playerId) === goal) return true;
+      }
+    }
     const buildIndexes = next.buildCandidateIndex !== undefined ? [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] : [undefined];
     for (let slotIndex = 0; slotIndex < slotCount; slotIndex++) {
       for (const buildCandidateIndex of buildIndexes) {
