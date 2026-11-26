@@ -319,9 +319,19 @@ class Evaluator {
     // パスした色ダイスはDに数えない(〇3だけ) (2026-11-26 Ver.1.1743): 1.1741でパスした物もDに数えたら、パスが「何も
     // 失わずに〇3」に見えて、ナビがR1からラウンドパスを勧めた。パスはメインアクションをあきらめるので、前の版と同じく大きな損。
     const totalColor = player.dice.filter((d) => d.kind === 'COLOR' && !d.passed).length;
+    // 白ダイスも色ダイスと同じに (2026-11-26 Ver.1.1744, per user「基本方針は 色から使っても 白から使ってもいい」
+    // 「最後に白ダイスが残ったとき 123Rは 3K以上の勝ちがあるならおく」「メインアクション１回で3Kは最低線」):
+    //  - R1〜R3: 白ダイスは置いた物も含めて「数 × wD」、残した(置いていない/パスした)白ダイスには〇3を足す。残した白ダイスは
+    //    次のラウンドにメインアクション1回分になるので、その最低線の〇3。置いた時に減るのは色ダイスと同じ〇3だけになり、
+    //    同じエリアなら色でも白でも同じ点(どちらを使うかは同じ点の時の決まり=die-priority.jsで、最後は色ダイスから)。
+    //    白ダイスだけ残った時は、〇3より得をする置き方がなければパス(持ち越し)の方が高く出る。
+    //  - R4: 残った白ダイスは何にもならない(色ダイスは〇3になる)ので白ダイスには点を付けない。R4は白ダイスから使う。
+    // 〇3の分は色と白をまとめて1回で掛ける(別々に掛けると小数の誤差で同じ点にならず、同じ点の時の決まりが効かない)。
     total += totalColor * v('D');
-    total += (unplacedColor + passedColor) * v('K') * 3;
-    total += unplacedWhite * v('wD');
+    const allWhite = player.dice.filter((d) => d.kind === 'WHITE').length;
+    const keptDice = unplacedColor + passedColor + (round < 4 ? unplacedWhite : 0);
+    total += keptDice * v('K') * 3;
+    if (round < 4) total += allWhite * v('wD');
 
     // 訓練場の支配 (A202A/A202B) -- color-dice-count-conditioned valuation (2026-08-26, per user spec:
     // "色ダイス3個（置いたのも含む）なら訓練場の支配を取りに行く+1000くらい 逆に色ダイス4個なら一切取り

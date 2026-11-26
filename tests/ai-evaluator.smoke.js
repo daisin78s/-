@@ -95,7 +95,7 @@ function freshState(round) {
   const whiteDie = createDie('d2', 'WHITE');
   p1.dice.push(colorDie, whiteDie);
 
-  const expected = 2 * evalTable[1].K + 1 * evalTable[1].A + 1 * evalTable[1].VP + 1 * evalTable[1].D + 1 * evalTable[1].wD + 3 * evalTable[1].K; // K + A + VP + 色ダイスの数×D + unplaced wD + 置いていない色ダイスの〇3 (2026-11-26)
+  const expected = 2 * evalTable[1].K + 1 * evalTable[1].A + 1 * evalTable[1].VP + 1 * evalTable[1].D + 1 * evalTable[1].wD + 2 * 3 * evalTable[1].K; // K + A + VP + 色ダイスの数×D + 白ダイスの数×wD + 残した色・白ダイスの〇3 (2026-11-26 Ver.1.1744)
   check('Score sums resources + unplaced dice using round-1 eval-table weights', evaluator.score(state, 'P1'), expected);
 }
 
@@ -124,7 +124,7 @@ function freshState(round) {
   const passedWhiteDie = createDie('d1', 'WHITE');
   passedWhiteDie.passed = true;
   p1.dice.push(passedWhiteDie);
-  check('A passed white die keeps the normal wD weight (no guaranteed round-end conversion exists for it)', evaluator.score(state, 'P1'), evalTable[1].wD);
+  check('A passed white die (R1-R3) is wD + 3K: it carries over to next round as one more main action (2026-11-26 Ver.1.1744)', evaluator.score(state, 'P1'), evalTable[1].wD + 3 * evalTable[1].K);
 }
 
 // ---------------------------------------------------------------------------

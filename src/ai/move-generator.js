@@ -520,7 +520,9 @@ class MoveGenerator {
     }
     // ラウンドパス(残りのダイスを全部パス、画面のラウンドパスボタンと同じ)も候補にする (2026-11-25, per user「AIラウンドパスはできないの」「ラウンドパスが AIもできるようになれば」「孤児院に置かなくても 解決」「ラウンドパスのほうが まし」)。
     // パスしたダイスはラウンドの終わりに1個3Kになる(評価もその値、evaluator.js参照)ので、置いても3Kより得をしない時に選ばれる。
-    if (unplacedDice.length > 0) moves.push({ type: 'PASS_DIE', playerId, dieId: unplacedDice[0].id, allDice: true });
+    // R4は置ける所があればラウンドパスしない (2026-11-26 Ver.1.1744, per user「R4は ラウンドパスしない (何もできないとき除く)」)。
+    // ゲームの最後なので〇3を取っておく理由がない。
+    if (unplacedDice.length > 0 && ((state.round || 1) < 4 || diceWithAPlacement.size === 0)) moves.push({ type: 'PASS_DIE', playerId, dieId: unplacedDice[0].id, allDice: true });
     return moves;
   }
 
