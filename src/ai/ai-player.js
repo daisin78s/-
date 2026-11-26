@@ -770,6 +770,13 @@ class AIPlayer {
       if (!move) break; // nothing legal (shouldn't normally happen -- canEndTurn eventually frees this up)
       const { state: nextState, result } = this.simulator.apply(state, this.index, move);
       if (!result.success) break; // defensive, same as selectMove's own loop
+      // 自分の手番終わりでラウンドが終わってしまったら、そこで止めて終わる直前の盤面で採点する (2026-11-26 Ver.1.1746, per user
+      // 「本来は ありえないはず」)。先読みはほかの人を打たないので、ほかの3人がもうダイスを使い切っていると、END_TURNでゲームの
+      // 処理がそのまま次のラウンドを始め、ラウンドをまたぐ先読み(crossRoundLookahead)がオフなのに次のラウンドのダイスで続きを
+      // 打って次のラウンドの評価値で採点していた(評価値はラウンドごとに違い、置いたダイスも全部戻るので点がふくらむ)。
+      // 例: R1の5手目、訓練場(R1の中で終わる道)より農園LV1(白4をパス→R2の初めに訓練場)が高く出た。ゲームの終わり(R4)は今まで通り。
+      if (crossedRoundTurnsRemaining === null && plannedOwnTurnsThisRound === null && nextState.phase !== 'GAME_END'
+        && (nextState.round || 0) > (state.round || 0)) break;
       state = nextState;
       if (move.type === 'PLACE_DIE' || move.type === 'PLACE_WILDCARD_DIE' || move.type === 'PLACE_DICE_GROUP' || move.type === 'PASS_DIE') hasPlacedDieThisTurn = true;
       if (move.type === 'END_TURN') {
