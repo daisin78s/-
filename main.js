@@ -20930,7 +20930,27 @@ function renderMobileQuestStandings(state) {
   }
 }
 
+/** スマホは必ず横画面 (2026-11-26, per user「スマホ版 縦画面 にしないようにして 必ず 横画面になるようにできる？」
+ * →「①②③を合わせる…対象はスマホだけ」)。スマホ = 画面の短い辺が500px以下(iPadは744px以上なのでならない)。
+ *  - htmlにphone-deviceを付ける。縦向きの時はstyle.cssの#portrait-block-overlayが全面に出る(iPhone/Android両方)。
+ *  - Androidなどscreen.orientation.lockが使える所では横に固定する(全画面/ホーム画面のアプリの時だけ効く。
+ *    iPhoneは使えないので失敗を無視)。押した時にも試す(全画面に入った後で効くことがあるため)。 */
+function setupPhoneLandscapeLock() {
+  const isPhone = Math.min(window.screen.width, window.screen.height) <= 500;
+  if (!isPhone) return;
+  document.documentElement.classList.add('phone-device');
+  const tryLock = () => {
+    try {
+      if (screen.orientation && typeof screen.orientation.lock === 'function') screen.orientation.lock('landscape').catch(() => {});
+    } catch (e) { /* 使えない端末 */ }
+  };
+  tryLock();
+  document.addEventListener('pointerdown', tryLock, { passive: true });
+  document.addEventListener('fullscreenchange', tryLock);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  setupPhoneLandscapeLock();
   seedDebugHistoryIfNeeded();
   // チュートリアル中だけ「光る」を強調する(style.cssのbody.tutorial-mode .change-highlight参照)。
   if (tutorialModeActive) document.body.classList.add('tutorial-mode');
