@@ -1355,6 +1355,7 @@ const AI_LEVEL_CONFIG = {
     dieScarcityTieBreak: true,
     preferExOnOwnTerritory: true,
     crossRoundLookahead: false, // 2026-11-24: 切った方がはっきり強く速い(今の版と200試合で平均順位2.06、1手0.28秒)。src/ai/levels.jsのLV3と同じ
+    mainActionTieBreak: true, // 2026-11-26: 先読みの点が同じならダイスを置く手はその場の点が高い方 + 順番の入れ替え(src/ai/ai-player.js参照)。levels.jsのLV3と同じ
     // 2026-11-24, per user「ナビとAIは同じにして」: ナビと同じ設定(考えるのは1手3秒まで、R4は終盤の読み切り)。
     // 読み切りは時間で打ち切るので、GA/ツール用のsrc/ai/levels.jsのLV3には入れない(画面のAIだけ)。
     maxDecisionTimeMs: NAV_MAX_DECISION_MS,

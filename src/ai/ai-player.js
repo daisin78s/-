@@ -72,6 +72,11 @@ function lightState(state) {
  * setting (2026-08-03, per user feedback: "先程のAIをLV1 新しく作ったAIをLV2として...選べるように").
  */
 
+/** メインアクション(ダイスを置く手)か。mainActionNearTieMargin用 (2026-11-26, per user のナビのバグ報告「初手小麦畑の意味」→「順番の差 実際訓練場が埋る可能性はある」→「同じ点数なら(誤差程度も含む)さきに点数が上がる方を優先でどう？ これはメインアクションで」)。 */
+function isMainAction(move) {
+  return !!move && (move.type === 'PLACE_DIE' || move.type === 'PLACE_WILDCARD_DIE' || move.type === 'PLACE_DICE_GROUP');
+}
+
 class AIPlayer {
   /** @param {DataIndex} index
    *  @param {import('./move-generator').MoveGenerator} moveGenerator
@@ -139,6 +144,12 @@ class AIPlayer {
     this.dieScarcityTieBreak = !!opts.dieScarcityTieBreak;
     this.preferExOnOwnTerritory = !!opts.preferExOnOwnTerritory;
     this.crossRoundLookahead = !!opts.crossRoundLookahead;
+    // mainActionTieBreak (2026-11-26, per user のナビのバグ報告「初手小麦畑の意味」→「順番の差 実際訓練場が埋る可能性はある」→「10点幅はやめて 同点なら さきに点数が上がる方」。10点幅は200試合中189試合で平均2.65位と弱かった):
+    // 先読みは自分の手番だけを並べるので、「後で行けばいい」場所が相手に埋められることを数えていない。メインアクション(ダイスを置く手)で
+    //  - 先読みの点が同じなら、その場の点(1手先の点)が高い方
+    //  - 一番良い道の「次の手番のダイスを置く手」と今の手を入れ替えた道も打ってみて、点が同じ以上で、その場の点が高ければそちら
+    // を選ぶ(先に点が上がる方を取る)。全ラウンド。R4の終盤の読み切りは別の仕組みでそのまま。
+    this.mainActionTieBreak = !!opts.mainActionTieBreak;
     // Hard wall-clock cap on one selectMove() call's own-turns-only rollout (2026-09-14, per user
     // report: a replay showed 40-56s decisions in round 4). Root cause found and fixed separately
     // (see #rolloutScore's own GAME_END check below) -- this is a safety net on TOP of that fix, not
@@ -552,17 +563,52 @@ class AIPlayer {
     const isResearchTap = (m) => m.type === 'BARE_TAP' && state.cards[m.physicalId] && state.cards[m.physicalId].currentFaceId === 'B005B';
     const beam = deduped.slice(0, beamWidth);
     for (const c of scored) if (isResearchTap(c.move) && !beam.includes(c)) beam.push(c);
+    let bestEntry = null;
     for (const candidate of beam) {
       // Once the time budget is already spent, don't start yet another candidate's rollout -- keep
       // whichever candidate (rolled-out or, worst case, the plain 1-ply best) is already `best`.
       if (Date.now() > deadline) break;
-      const deepScore = this.#rolloutScore(candidate.resultState, playerId, candidate.move, lookaheadExtraTurns, maxRolloutMoves, deadline, plannedOwnTurnsThisRound);
-      if (deepScore > bestDeepScore || (deepScore === bestDeepScore && isResearchTap(candidate.move) && !isResearchTap(best))) {
+      const trace = this.mainActionTieBreak ? { path: [] } : null;
+      const deepScore = this.#rolloutScore(candidate.resultState, playerId, candidate.move, lookaheadExtraTurns, maxRolloutMoves, deadline, plannedOwnTurnsThisRound, trace);
+      // 同点なら: 研究のタップを先に(上の研究のコメント)。メインアクション同士ならその場の点が高い方 (mainActionTieBreak)。
+      const tieWins = deepScore === bestDeepScore && bestEntry && (
+        (isResearchTap(candidate.move) && !isResearchTap(best))
+        || (this.mainActionTieBreak && isMainAction(candidate.move) && isMainAction(best) && !best.buildCandidateKey && candidate.score > bestEntry.candidate.score));
+      if (deepScore > bestDeepScore || tieWins) {
         bestDeepScore = deepScore;
         best = candidate.move;
+        bestEntry = { candidate, trace };
       }
     }
+    if (this.mainActionTieBreak && bestEntry && bestEntry.trace && best.type === 'PLACE_DIE' && Date.now() <= deadline) {
+      const swapped = this.#swappedOrderMove(state, playerId, context, best, bestEntry, bestDeepScore, lookaheadExtraTurns, maxRolloutMoves, deadline, plannedOwnTurnsThisRound);
+      if (swapped) best = swapped;
+    }
     return best;
+  }
+
+  /** mainActionTieBreak の入れ替え (2026-11-26, per user のナビのバグ報告「初手小麦畑の意味」→「順番の差 実際訓練場が埋る可能性はある」→「10点幅はやめて 同点なら さきに点数が上がる方」。10点幅は200試合中189試合で平均2.65位と弱かった)。一番良い道で次の手番に置く手(エリアB)と、今の手(エリアA)を入れ替えた道
+   * (今: Bに今のダイス → 次の手番: Aにその時のダイス → あとはいつもの先読み)を打つ。点が一番良い道と同じ以上で、その場の点が
+   * 今の手より高ければ、入れ替えた今の手を返す。それ以外はnull。 */
+  #swappedOrderMove(state, playerId, context, best, bestEntry, bestDeepScore, lookaheadExtraTurns, maxRolloutMoves, deadline, plannedOwnTurnsThisRound) {
+    // カードを取る手(皇帝宮殿・元老院の建築など)は後回しにしない -- 相手に取られることがあるので、入れ替えるのは今の手が
+    // カードを取らない時だけ(2026-11-26, per user「皇帝宮殿や元老院でカードをとる手が軽視される」)。
+    if (best.buildCandidateKey) return null;
+    const later = bestEntry.trace.path.find((p) => p.turn === 1 && p.move.type === 'PLACE_DIE');
+    if (!later || later.move.mapId === best.mapId) return null;
+    const keyOf = (m) => m.buildCandidateKey || null;
+    const now = this.moveGenerator.generateMoves(state, this.index, playerId, context)
+      .find((m) => m.type === 'PLACE_DIE' && m.mapId === later.move.mapId && m.dieId === best.dieId && keyOf(m) === keyOf(later.move));
+    if (!now) return null;
+    const applied = this.simulator.apply(state, this.index, now);
+    if (!applied.result.success) return null;
+    const resultState = this.#resolveUntapChoiceQuick(applied.resultState || applied.state, playerId, true);
+    const nowScore = this.evaluator.score(resultState, playerId);
+    if (nowScore <= bestEntry.candidate.score) return null;
+    const swap = { turn: 1, mapId: best.mapId, dieId: later.move.dieId, buildCandidateKey: keyOf(best) };
+    const deep = this.#rolloutScore(resultState, playerId, now, lookaheadExtraTurns, maxRolloutMoves, deadline, plannedOwnTurnsThisRound, swap);
+    if (!swap.done || swap.failed || deep < bestDeepScore) return null;
+    return now;
   }
 
   /** AI LV5 only (crossRoundLookahead): randomly fast-forwards every player OTHER than playerId through
@@ -669,7 +715,10 @@ class AIPlayer {
    * -- never more than 1, regardless of how much of the original lookaheadExtraTurns budget is left
    * unspent (confirmed with the user: "残りダイス1個でも追加ターンは1つだけ"). Left null, this parameter
    * changes nothing -- #rolloutScore behaves exactly as it did before this option existed. */
-  #rolloutScore(state, playerId, firstMove, lookaheadExtraTurns, maxRolloutMoves, deadline, plannedOwnTurnsThisRound = null) {
+  // trace (mainActionTieBreak): {path:[]} なら打った手を {turn, move} で記録する(turn: 0=今の手番、1=次の手番…)。
+  // {turn, mapId, dieId, buildCandidateKey} なら、その手番の最初のダイスを置く手をそれに替える(無ければ trace.failed)。
+  #rolloutScore(state, playerId, firstMove, lookaheadExtraTurns, maxRolloutMoves, deadline, plannedOwnTurnsThisRound = null, trace = null) {
+    let ownTurnIndex = 0;
     // JOB003/道化 (2026-08-20 fix, per user bug report -- see game-runner.js driveTurn's matching comment
     // for the full story): PLACE_WILDCARD_DIE counts as "placed a die this turn" too, both here and below.
     let hasPlacedDieThisTurn = firstMove.type === 'PLACE_DIE' || firstMove.type === 'PLACE_WILDCARD_DIE' || firstMove.type === 'PLACE_DICE_GROUP' || firstMove.type === 'PASS_DIE';
@@ -709,13 +758,22 @@ class AIPlayer {
       if (Date.now() > deadline) break;
       steps++;
       state = this.#resolveUntapChoiceQuick(state, playerId, hasPlacedDieThisTurn);
-      const move = this.#greedyMove(state, playerId, hasPlacedDieThisTurn);
+      let move = this.#greedyMove(state, playerId, hasPlacedDieThisTurn);
+      if (trace && trace.turn === ownTurnIndex && !trace.done && move && !hasPlacedDieThisTurn && (DICE_MOVE_TYPES.has(move.type) || move.type === 'END_TURN')) {
+        trace.done = true;
+        const forced = this.moveGenerator.generateMoves(state, this.index, playerId, { hasPlacedDieThisTurn })
+          .find((m) => m.type === 'PLACE_DIE' && m.mapId === trace.mapId && m.dieId === trace.dieId && (m.buildCandidateKey || null) === trace.buildCandidateKey);
+        if (!forced) { trace.failed = true; break; }
+        move = forced;
+      }
+      if (trace && trace.path) trace.path.push({ turn: ownTurnIndex, move });
       if (!move) break; // nothing legal (shouldn't normally happen -- canEndTurn eventually frees this up)
       const { state: nextState, result } = this.simulator.apply(state, this.index, move);
       if (!result.success) break; // defensive, same as selectMove's own loop
       state = nextState;
       if (move.type === 'PLACE_DIE' || move.type === 'PLACE_WILDCARD_DIE' || move.type === 'PLACE_DICE_GROUP' || move.type === 'PASS_DIE') hasPlacedDieThisTurn = true;
       if (move.type === 'END_TURN') {
+        ownTurnIndex++;
         // AI LV5's post-crossing turn: exactly crossedRoundTurnsRemaining more turns, full stop after
         // that regardless of turnsLeft or dice state (see this method's own doc -- "残りダイス1個でも
         // 追加ターンは1つだけ").
@@ -938,7 +996,7 @@ class AIPlayer {
     return { step, plan };
   }
 
-  #endgameSearch(state0, playerId, placed0, limitMs, shard = null) {
+  #endgameSearch(state0, playerId, placed0, limitMs, shard = null) {
     const mine = (i) => !shard || shard.count <= 1 || i % shard.count === shard.index; // 手分けの受け持ち
     const t0 = Date.now();
     const root = AIPlayer.#endgameRoot(state0, playerId);

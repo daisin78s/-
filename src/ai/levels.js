@@ -39,6 +39,7 @@ const LEVELS = [
       dieScarcityTieBreak: true,
       preferExOnOwnTerritory: true,
       crossRoundLookahead: false, // 2026-11-24: 切った(相手の残りの手をでたらめに進め、次のラウンドの物差しで測るので判断がぶれていた。200試合で平均順位2.06)
+      mainActionTieBreak: true, // 2026-11-26: 先読みの点が同じならダイスを置く手はその場の点が高い方 + 順番の入れ替え(ai-player.js参照)
     },
     moveGeneratorOptions: { preferCastleOverSenate: true, mustUseChangedDie: true, deferConversionTaps: true, noOrphanageEarly: true }, // noOrphanageEarly: 2026-11-25「孤児院は 1R 2R では 候補に入れない」
     evaluatorOptions: { qstAware: true, conBuildAware: true, monumentIncentiveAware: false },
