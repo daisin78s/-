@@ -8550,6 +8550,35 @@ body.online-spectator #online-spectator-badge {
   box-shadow: var(--shadow);
 }
 .onboard-stage[hidden] { display: none; }
+/* 「エリアを見る」/「選ぶ画面に戻る」(2026-11-26, main.jsのonboardStagePeek参照)。選ぶ欄の空いている所に少し大きめに。 */
+.onboard-stage__peek-button {
+  white-space: nowrap;
+  margin-top: 8px;
+  padding: 18px 44px;
+  font-size: 28px;
+  font-weight: bold;
+  border-radius: var(--radius-lg);
+  border: 2px solid var(--accent);
+  background: var(--surface);
+  color: var(--accent);
+  cursor: pointer;
+}
+.onboard-stage__back-button {
+  white-space: nowrap;
+  position: absolute;
+  z-index: 6;
+  transform: translateX(-100%);
+  padding: 14px 30px;
+  font-size: 24px;
+  font-weight: bold;
+  border-radius: var(--radius-lg);
+  border: 2px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+.onboard-stage__back-button[hidden] { display: none; }
 
 /* 名前の後ろのAIのレベル(main.jsのappendPlayerRoleBadge) -- 人間/AI切り替えの選んでいる時のボタンと同じ見た目を小さく。 */
 .player-role-badge {

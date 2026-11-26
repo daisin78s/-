@@ -20555,6 +20555,10 @@ function placeDesktopControls(state, next) {
   }
 }
 
+// 「エリアを見る」で選ぶ欄を一時的に隠している間 true (2026-11-26 Ver.1.1765, per user「ジョブを選ぶとき エリアが全く見えなく
+// なる 隙間に エリアを見る というボタンを作って」「すべて 例えば2人目は1人目が置いたダイスを確認できない」「少し大きめ」)。
+// 選ぶ欄が無くなったら(選び終わったら)falseに戻す。
+let onboardStagePeek = false;
 function placeOnboardStage() {
   const boardArea = document.getElementById('board-area');
   const board = document.getElementById('board');
@@ -20573,6 +20577,8 @@ function placeOnboardStage() {
   }
   stage.innerHTML = '';
   stage.hidden = true;
+  let backBtn = document.getElementById('onboard-stage-back-button');
+  if (backBtn) backBtn.hidden = true;
   if (isMobileLayout() || tutorialModeActive || (typeof storyRun !== 'undefined' && storyRun)) return;
   const moving = [];
   if (jobPool.classList.contains('onboard-panel--active') && jobPool.children.length > 0) moving.push(jobPool);
@@ -20583,14 +20589,33 @@ function placeOnboardStage() {
     if (con && con.children.length > 0 && (con.classList.contains('onboard-panel--active') || resActive)) moving.push(con);
     if (resActive) moving.push(res);
   });
-  if (moving.length === 0) return;
+  if (moving.length === 0) { onboardStagePeek = false; return; }
   moving.forEach((node) => stage.appendChild(node));
+  // 「エリアを見る」: 押すと選ぶ欄を隠してエリアを見せ、エリアの上に「選ぶ画面に戻る」を出す。
+  const peekBtn = el('button', 'onboard-stage__peek-button', 'エリアを見る');
+  peekBtn.type = 'button';
+  // 押した瞬間に(pointerdown): AIが選んでいる間などは描き直しが多く、clickだとボタンが作り直されて取りこぼす。
+  peekBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); onboardStagePeek = true; render(STATE); });
+  stage.appendChild(peekBtn);
+  if (!backBtn) {
+    backBtn = el('button', 'onboard-stage__back-button', '選ぶ画面に戻る');
+    backBtn.type = 'button';
+    backBtn.id = 'onboard-stage-back-button';
+    backBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); onboardStagePeek = false; render(STATE); });
+    boardArea.appendChild(backBtn);
+  }
   stage.style.top = `${board.offsetTop}px`;
   stage.style.left = `${board.offsetLeft}px`;
   stage.style.width = `${board.offsetWidth}px`;
   // 高さはエリアと同じまで(はみ出す分は欄の中でスクロール) -- 下のダイス置き場(#players)のダイス目を隠さない
   // (per user「エリアは見えなくてもいいが ダイス目は見えないと困る」)。
   stage.style.height = `${board.offsetHeight}px`;
+  if (onboardStagePeek) {
+    backBtn.style.top = `${board.offsetTop + 8}px`;
+    backBtn.style.left = `${board.offsetLeft + board.offsetWidth - 8}px`;
+    backBtn.hidden = false;
+    return;
+  }
   stage.hidden = false;
 }
 
