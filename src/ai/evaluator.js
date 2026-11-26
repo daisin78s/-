@@ -316,7 +316,9 @@ class Evaluator {
     // 置いた色ダイスはラウンドの終わりに戻るので、置いた時に減るのは使わずに残した時の〇3の分だけ。今までは置くと
     // Dが丸ごと消えた(R1で-115、白ダイスは-7.5)ので、同じエリアなら白ダイスの手が約108点高く出て、色ダイスの手が
     // 先読みの候補に入らなかった。200試合: 2.510位(今まで通りの3席に対して、強さは同じ)。
-    const totalColor = player.dice.filter((d) => d.kind === 'COLOR').length;
+    // パスした色ダイスはDに数えない(〇3だけ) (2026-11-26 Ver.1.1743): 1.1741でパスした物もDに数えたら、パスが「何も
+    // 失わずに〇3」に見えて、ナビがR1からラウンドパスを勧めた。パスはメインアクションをあきらめるので、前の版と同じく大きな損。
+    const totalColor = player.dice.filter((d) => d.kind === 'COLOR' && !d.passed).length;
     total += totalColor * v('D');
     total += (unplacedColor + passedColor) * v('K') * 3;
     total += unplacedWhite * v('wD');

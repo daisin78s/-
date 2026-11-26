@@ -115,7 +115,7 @@ function freshState(round) {
   const passedDie = createDie('d2', 'COLOR');
   passedDie.passed = true;
   p1.dice.push(unplacedDie, passedDie);
-  const expected = 2 * evalTable[1].D + 2 * (3 * evalTable[1].K); // 色ダイス2個×D + 置いていない/パスした色ダイスどちらも〇3 (2026-11-26)
+  const expected = 1 * evalTable[1].D + 2 * (3 * evalTable[1].K); // パスしていない色ダイスだけ×D + 置いていない/パスした色ダイスどちらも〇3 (2026-11-26 Ver.1.1743)
   check('A passed color die scores at its guaranteed round-end 3K value, not the full unplaced D weight', evaluator.score(state, 'P1'), expected);
 }
 {
