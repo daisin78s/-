@@ -767,7 +767,9 @@ class AIPlayer {
         if (!forced) { trace.failed = true; break; }
         move = forced;
       }
-      if (trace && trace.path) trace.path.push({ turn: ownTurnIndex, move });
+      // 手が無い時(null)は記録しない(2026-11-26: nullを記録して#swappedOrderMoveのp.move.typeで止まっていた -- 進化AIが「Cannot read
+      // properties of null (reading 'type')」で止まった)。
+      if (move && trace && trace.path) trace.path.push({ turn: ownTurnIndex, move });
       if (!move) break; // nothing legal (shouldn't normally happen -- canEndTurn eventually frees this up)
       const { state: nextState, result } = this.simulator.apply(state, this.index, move);
       if (!result.success) break; // defensive, same as selectMove's own loop
