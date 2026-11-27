@@ -203,6 +203,14 @@ class MoveGenerator {
     const CASTLE = board.CASTLE_MAP_ID;
     const SENATE = board.AREA009_MAP_ID;
     if (!moves.some((m) => m.mapId === CASTLE) || !moves.some((m) => m.mapId === SENATE)) return moves;
+    // 異端者: 支配者のいない元老院に3〜6の色ダイスを置くと元老院LV1の効果(建築+〇2、使用料〇1)になり、皇帝宮殿と同じではない。
+    // その時は元老院の手を外さず、どちらが得かは評価値で比べる (2026-11-27, per user のバグ報告「どうして皇帝宮殿ではなく元老院？」
+    // →「元老院のほうが得なら それがただしい」)。
+    const senateDiceIds = new Set(moves.filter((m) => m.mapId === SENATE).flatMap((m) => m.dieIds || [m.dieId]));
+    const player = state.players.find((p) => p.id === playerId);
+    const hereticOnSenate = player.dice.some((d) => senateDiceIds.has(d.id) && d.kind === 'COLOR' && d.value >= 3)
+      && !!board.hereticBorrowedAreaRow(state, index, { playerId }, state.maps[SENATE]);
+    if (hereticOnSenate) return moves;
     let dropMapId = SENATE;
     if (board.hasPioneerAbility(state, index, playerId)) {
       const castleEmpty = board.isMapEmptyOfDice(state.maps[CASTLE]);

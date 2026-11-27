@@ -2251,6 +2251,7 @@ module.exports = {
   hasWildcardDice,
   isDieWildcard,
   hasPioneerAbility,
+  hereticBorrowedAreaRow,
   isMapEmptyOfDice,
   isCandidateAffordable,
   canAffordFee,

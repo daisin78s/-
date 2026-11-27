@@ -918,6 +918,22 @@ function offersMapId(moves, dieId, mapId) { return moves.some((m) => m.dieId ===
   assertTrue('Round 3+: 元老院 is NOT dropped -- the preference no longer applies', offersMapId(moves, die.id, 'MAP009'));
 }
 
+{
+  // 異端者 (JOB012) + 支配者のいない元老院 + 3〜6の色ダイス: 元老院LV1の効果(建築+〇2)になるので元老院も残す
+  // (2026-11-27, バグ報告「どうして皇帝宮殿ではなく元老院？」)。2以下の目なら今まで通り皇帝宮殿だけ。
+  const state = freshStateWithShops();
+  const p1 = player(state, 'P1');
+  p1.jobCardId = 'JOB012';
+  p1.resources.BZ = 20;
+  const die = giveDie(state, 'P1', 5);
+  let moves = moveGeneratorLv4.generateMoves(state, index, 'P1', { hasPlacedDieThisTurn: false });
+  assertTrue('異端者, die 5: 元老院 is kept', offersMapId(moves, die.id, 'MAP009'));
+  assertTrue('異端者, die 5: 王宮 is kept too', offersMapId(moves, die.id, 'MAP008'));
+  die.value = 2;
+  moves = moveGeneratorLv4.generateMoves(state, index, 'P1', { hasPlacedDieThisTurn: false });
+  assertTrue('異端者, die 2: 元老院 is dropped as before', !offersMapId(moves, die.id, 'MAP009'));
+}
+
 // ---------------------------------------------------------------------------
 // #wildcardPlaceDieMoves' EX-vs-ANY choice (2026-08-28, see board.wildcardExAnyChoice's own doc): a ☆
 // die offers BOTH slots as separate Moves when the player's own empty EX slot and an empty non-EX slot
