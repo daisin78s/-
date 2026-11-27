@@ -20678,7 +20678,13 @@ function setupMobileTabSystem() {
   let touchStartY = null;
   let touchStartAtTop = false;
   let touchStartAtBottom = false;
-  swipeTarget.addEventListener('touchstart', (e) => {
+  // リプレイ中は#appが.replay-locked(pointer-events:none)で指の操作を受けないので、documentで受ける。ふだんは今まで通り
+  // #appの中の操作だけ (2026-11-27, per user「スマホ版でリプレイを見ると…フリックもできない」)。リプレイの操作バーの上は除く。
+  const swipeEventAllowed = (e) => (replayMode
+    ? isMobileLayout() && !(e.target && e.target.closest && e.target.closest('#replay-controls'))
+    : swipeTarget.contains(e.target));
+  document.addEventListener('touchstart', (e) => {
+    if (!swipeEventAllowed(e)) { touchStartX = null; return; }
     if (e.touches.length !== 1) { touchStartX = null; return; }
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
@@ -20689,8 +20695,8 @@ function setupMobileTabSystem() {
     touchStartAtTop = window.scrollY <= 1;
     touchStartAtBottom = window.innerHeight + window.scrollY >= doc.scrollHeight - 2;
   }, { passive: true });
-  swipeTarget.addEventListener('touchend', (e) => {
-    if (touchStartX === null) return;
+  document.addEventListener('touchend', (e) => {
+    if (touchStartX === null || !swipeEventAllowed(e)) { touchStartX = null; return; }
     const touch = e.changedTouches[0];
     const dx = touch.clientX - touchStartX;
     const dy = touch.clientY - touchStartY;

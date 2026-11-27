@@ -8949,3 +8949,14 @@ body.story-pc #round-pass-button { visibility: hidden !important; pointer-events
   html.phone-device #portrait-block-overlay .portrait-block-icon { font-size: 56px; }
   html.phone-device #portrait-block-overlay .portrait-block-text { font-size: 20px; font-weight: bold; }
 }
+
+/* スマホ版のリプレイ (2026-11-27, per user「スマホ版でリプレイを見ると下の画面が重なってエリア画面やショップ画面が見れない
+   フリックもできない」): 操作バーを下のタブバーの上へ出し、タブバーはリプレイ中(#appの.replay-locked)も押せるように。 */
+@media (max-width: 760px), (max-height: 500px) {
+  .replay-controls {
+    bottom: calc(48px + env(safe-area-inset-bottom));
+  }
+  #app.replay-locked #mobile-tab-switcher {
+    pointer-events: auto;
+  }
+}
