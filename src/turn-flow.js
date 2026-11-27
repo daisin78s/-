@@ -131,11 +131,13 @@ function getNextTurn(state) {
 /** 心配 (CON006A, 2026-11-02, per user INST「ターン終了時〇がないと-1VP」 + answers: own turn end only, judged on K
  * after every fee/turn-end effect is paid) -- -1VP when K is 0 at the end of this player's own turn. */
 const WORRY_CON_FACE_ID = 'CON006A';
-function applyWorryPenalty(state, playerId) {
+// kForJudge: 判定に使う〇の数。パンとサーカスで払う前の〇(executor.applyTurnEndの戻り値 kBeforeAnyPay)
+// (2026-11-27, per user QA「心配はパンとサーカスで変換する前に判定します」)。無ければ今の〇。
+function applyWorryPenalty(state, playerId, kForJudge) {
   const player = state.players.find((p) => p.id === playerId);
   if (player.worryAbilityDisabled) return; // ストーリー第1章のパトラだけ (story.js, per user「第１章では 能力止めて」)
   if (!player.ownedCardPhysicalIds.some((id) => state.cards[id] && state.cards[id].currentFaceId === WORRY_CON_FACE_ID)) return;
-  if ((player.resources.K || 0) > 0) return;
+  if ((kForJudge !== undefined ? kForJudge : (player.resources.K || 0)) > 0) return;
   player.resources.VP = (player.resources.VP || 0) - 1;
   player.liveConVpPenalty = (player.liveConVpPenalty || 0) - 1; // 人生の「性格」・AIDATAのVPペナルティ平均用の記録(表示だけ)
   executorApi.notifyActivation(state, playerId, 'CON006', WORRY_CON_FACE_ID, 'PASSIVE');
@@ -145,9 +147,9 @@ function endTurn(state, index, playerId) {
   const gate = executorApi.canEndTurn(state, index, playerId);
   if (!gate.ok) return { success: false, reason: 'BLOCKED_BY_RESOURCE_TOTAL_LIMIT', violations: gate.violations };
 
-  executorApi.applyTurnEnd(state, index, playerId);
+  const turnEndResult = executorApi.applyTurnEnd(state, index, playerId);
   // 巫女's old emblem bonus removed 2026-11-02 (emblems abolished; 巫女 is now a plain TAP card).
-  applyWorryPenalty(state, playerId); // 心配 (2026-11-02), after applyTurnEnd has paid every fee
+  applyWorryPenalty(state, playerId, turnEndResult && turnEndResult.kBeforeAnyPay); // 心配 (2026-11-02), after applyTurnEnd has paid every fee (パンとサーカスの前の〇で判定)
   setup.replaceResearcherIfResearchTaken(state, index); // 研究者 (2026-11-02), see its own doc
   restockShop(state, 'M');
   restockShop(state, 'NORMAL');

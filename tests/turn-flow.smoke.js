@@ -610,6 +610,20 @@ function giveM403(s, playerId) {
   turnFlow.endTurn(s, index, 'P1');
   check('心配: with K left -> no penalty', p1.resources.VP, 4);
   check('心配: penalty recorded in liveConVpPenalty (人生の性格/AIDATA)', p1.liveConVpPenalty, -1);
+  // 心配 + パンとサーカス (2026-11-27, QA「心配はパンとサーカスで変換する前に判定します」): パンとサーカスで〇が0になっても-1VPされない。
+  const { createCardInstance: mkCard } = require('../src/game-state');
+  const bread = mkCard('B301B');
+  bread.ownerId = 'P1';
+  s.cards[bread.physicalId] = bread;
+  p1.ownedCardPhysicalIds.push(bread.physicalId);
+  p1.resources = { ...p1.resources, K: 2, A: 0, B: 0, C: 0, Z: 0, VP: 10 };
+  turnFlow.endTurn(s, index, 'P2');
+  turnFlow.endTurn(s, index, 'P1');
+  check('心配+パンとサーカス: 〇2→2VP, 〇0 but no -1VP', [p1.resources.K, p1.resources.VP], [0, 12]);
+  p1.resources = { ...p1.resources, K: 0, A: 2, VP: 10 };
+  turnFlow.endTurn(s, index, 'P2');
+  turnFlow.endTurn(s, index, 'P1');
+  check('心配+パンとサーカス: 〇0 before 変換 -> 赤〇2→2VP and -1VP', [p1.resources.A, p1.resources.VP], [0, 11]);
 }
 
 console.log(`\n${passCount} passed, ${failCount} failed`);

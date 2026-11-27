@@ -1946,8 +1946,13 @@ function applyTurnEnd(state, index, playerId) {
     map.accumulatedFeeResource = resource; // 回収するとその資源のまま受け取る (per user回答)
     player.pendingFee = null;
   }
+  // パンとサーカス(TURNENDがCHANGE(nANY,...))は、ほかのターン終了時の効果の後・心配の判定の後に払う
+  // (2026-11-27, per user 案2 + QA「Q.「心配」と「パンとサーカス」を両方持っている時、パンとサーカスで〇が0になったらどうなりますか？
+  // A.-1VPされません（心配はパンとサーカスで変換する前に判定します）」)。心配の判定に使う〇は戻り値の kBeforeAnyPay。
+  const deferredAnyPayRows = [];
   for (const { row } of ownedCardRows(state, index, playerId)) {
     if (!row.TURNEND) continue;
+    if (/^CHANGE\(\d*ANY,/.test(String(row.TURNEND).trim())) { deferredAnyPayRows.push(row); continue; }
     for (const cmd of lowerProgram(parse(row.TURNEND))) {
       if (cmd.type === 'RESOURCE_LIMIT') {
         // Decrease by exactly 1, not clamp straight down to the limit (2026-09-14, per user request:
@@ -1991,6 +1996,16 @@ function applyTurnEnd(state, index, playerId) {
   if (colorConvertAmount > 0) {
     player.resources.Z -= colorConvertAmount;
     player.resources.K = (player.resources.K || 0) + colorConvertAmount;
+  }
+  const kBeforeAnyPay = player.resources.K || 0;
+  for (const row of deferredAnyPayRows) {
+    const physicalId = splitCardId(row.ID).physicalId;
+    for (const cmd of lowerProgram(parse(row.TURNEND))) {
+      const result = runCommand(state, index, { playerId, sourcePhysicalId: physicalId }, cmd);
+      if (result.success && !result.skipped && result.timesExecuted !== 0) {
+        notifyActivation(state, playerId, physicalId, row.ID, 'PASSIVE');
+      }
+    }
   }
   refundUnusedValueChangeTaps(state, index, player);
   // GRANT_PLACE_ANYWHERE(THIS_DICE,THIS_TURN)'s flag is turn-scoped.
@@ -2046,6 +2061,7 @@ function applyTurnEnd(state, index, playerId) {
   player.blockedBuildCategoriesThisTurn = [];
   // MONUMENT_DICE_DISCOUNT(n,THIS_TURN) is turn-scoped too (see runMonumentDiceDiscount).
   player.monumentDiceDiscountThisTurn = 0;
+  return { kBeforeAnyPay };
 }
 
 // ---------------------------------------------------------------------------
