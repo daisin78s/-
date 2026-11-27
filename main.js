@@ -4934,7 +4934,9 @@ function instForId(id) {
 function actionDot(resource) {
   const dot = document.createElement('span');
   dot.className = 'action-dot';
-  dot.dataset.resource = resource;
+  // どの資源でも(ANY)のアイコンは、虹色をやめて元の〇に戻す(見た目だけ。ルール・AIは「どの資源でも」のまま)
+  // (2026-11-27, per user「虹アイコンを元のアイコンに戻す ただしAI的にはアイコンの見た目は変えない」)。
+  dot.dataset.resource = resource === 'ANY' ? 'K' : resource;
   return dot;
 }
 
@@ -8431,24 +8433,9 @@ function placeSelectedDieAfterJob007Check(state, player, dieId, mapId, slotIndex
 /** 孤児院など、どの資源でも払えるエリア(CHANGE(ANY,VP,n))に置く時、〇が足りなければ払う資源を選んでもらってから置く
  * (showAnyPaymentPicker参照) (2026-11-25, per user「パンとサーカス 孤児院 … どんな資源でも払えるように」+ 回答「人間もAIも選べるように」「〇が足りない時だけ」「支払いは強制で」)。 */
 function placeSelectedDieWithAnyPayment(state, player, dieId, mapId, slotIndex) {
-  const areaRow = dataLoaderMod.getAreaRow(INDEX, state.maps[mapId].currentAreaId);
-  const info = anyPayInfoOf(areaRow.ACTION, player.resources);
-  const pick = info ? anyPaymentPickNeeded(player.resources, info.need, executorMod.anyPayPrimary(state, INDEX, player.id)) : null;
-  if (!pick) { placeSelectedDieCommit(state, player, dieId, mapId, slotIndex); return; }
-  const kText = pick.kUse > 0 ? `${anyPayPrimaryName(pick.primary)}${pick.kUse}個と、` : '';
-  showAnyPaymentPicker({
-    primary: pick.primary,
-    title: areaRow.NAME,
-    text: `資源${pick.times}個を払って、${info.gainName}にします。\n${kText}ほかに払う資源を${pick.rest}個選んでください。`,
-    resources: player.resources,
-    rest: pick.rest,
-    onConfirm: (choice) => {
-      player.anyPaymentChoice = { ...(pick.kUse > 0 ? { [pick.primary]: pick.kUse } : {}), ...choice };
-      placeSelectedDieCommit(state, player, dieId, mapId, slotIndex);
-      render(STATE);
-    },
-    onCancel: () => render(STATE),
-  });
+  // 酒場・孤児院・訓練場LV1は、人にも選ぶ画面を出さずに自動で払う(〇から先、足りない分は一番多い資源から、executor.defaultAnyPayment)
+  // (2026-11-27, per user「酒場と孤児院では、人間に選ぶ画面を出しません。足りない分は確認なしで自動で変換して払います」「訓練場LV1も」)。
+  placeSelectedDieCommit(state, player, dieId, mapId, slotIndex);
 }
 
 function placeSelectedDieCommit(state, player, dieId, mapId, slotIndex) {
@@ -8827,8 +8814,13 @@ function turnEndAnyPaymentPick(state, playerId, feeConversionPlan) {
     if (i && (!info || i.need > info.need)) { info = i; cardName = String(row.NAME || '').replace(/LV\d$/, ''); }
   }
   if (!info) return null;
-  const pick = anyPaymentPickNeeded(resources, info.need, executorMod.anyPayPrimary(state, INDEX, playerId));
-  return pick ? { ...pick, cardName, resources, gainName: info.gainName } : null;
+  // パンとサーカスは、〇(権力者は赤〇)が足りなくて変換がある時だけ確認を出す。払い方は自動(executor.defaultAnyPayment)
+  // (2026-11-27, per user「パンとサーカスは 2A→2K→2VP 資源を自動変換して支払います よろしいですか？ の警告文」)。
+  const primary = executorMod.anyPayPrimary(state, INDEX, playerId);
+  if ((resources[primary] || 0) >= info.need) return null;
+  const payment = executorMod.defaultAnyPayment(resources, info.need, primary);
+  if (!payment) return null;
+  return { cardName, need: info.need, gainName: info.gainName, payment };
 }
 /** (旧、今は使わない)パンとサーカス(TURNENDのCHANGE(K,VP,n))で、手番の終わりにVPにする〇が足りない時、ほかの資源から〇に変える案 (2026-11-25, per user「パンとサーカスを持っているとき 人間にも パンとサーカスのためにA→Kの変換をしますか などの警告文が出るように 警告文はもっといいのに変えて」)。
  * 使用料に使う〇・使用料のための変換の分は先に引いておく。変えられる物が無い・足りている時はnull。
@@ -8865,28 +8857,18 @@ const TURN_END_CONVERT_NAMES = { K: '〇', A: '赤〇', B: '青〇', C: '黄〇'
  * instead of ending immediately -- "いいえ" leaves the turn as-is (matches the data's own "TURNENDを取り
  * 消す" NOTE for the warning half), "はい" applies the conversion plan (if any) THEN runs the real
  * advanceTurnIfPossible. */
-function attemptAdvanceTurn(state, playerId, anyPaymentChosen = false) {
+function attemptAdvanceTurn(state, playerId) {
   const warnings = turnEndWarnings(state, playerId);
   const feeConversionPlan = feeConversionPlanForTurnEnd(state, playerId);
-  // パンとサーカス(どの資源でも払える): 〇が足りない時は、先に払う資源を選んでもらう(turnEndAnyPaymentPick参照)。
-  const anyPick = anyPaymentChosen ? null : turnEndAnyPaymentPick(state, playerId, feeConversionPlan);
+  // パンとサーカス(どの資源でも払える): 変換がある時は「2A→2K→2VP 資源を自動変換して支払います よろしいですか？」(turnEndAnyPaymentPick参照)。
+  // 「いいえ」(戻る)なら手番に戻る。
+  const anyPick = turnEndAnyPaymentPick(state, playerId, feeConversionPlan);
   if (anyPick) {
-    const player = state.players.find((p) => p.id === playerId);
-    const kText = anyPick.kUse > 0 ? `${anyPayPrimaryName(anyPick.primary)}${anyPick.kUse}個と、` : '';
-    showAnyPaymentPicker({
-      primary: anyPick.primary,
-      title: anyPick.cardName,
-      text: `手番の終わりに、資源${anyPick.times}個を払って、${anyPick.gainName}にします。\n${kText}ほかに払う資源を${anyPick.rest}個選んでください。`,
-      resources: anyPick.resources,
-      rest: anyPick.rest,
-      onConfirm: (choice) => {
-        player.anyPaymentChoice = { ...(anyPick.kUse > 0 ? { [anyPick.primary]: anyPick.kUse } : {}), ...choice };
-        attemptAdvanceTurn(state, playerId, true);
-        render(STATE);
-      },
-      onCancel: () => render(STATE),
-    });
-    return;
+    const payText = ['K', 'A', 'B', 'C', 'Z'].filter((r) => anyPick.payment[r] > 0)
+      .map((r) => `${anyPick.payment[r] > 1 ? anyPick.payment[r] : ''}${r}`).join('+');
+    warnings.push({ kind: 'ANY_PAY', warningText: `${anyPick.cardName}：${payText}→${anyPick.need}K→${anyPick.gainName}
+資源を自動変換して支払います
+よろしいですか？` });
   }
   if (warnings.length > 0 || (feeConversionPlan && feeConversionPlan.length > 0)) {
     pendingTurnEndWarning = { playerId, warnings, feeConversionPlan };
