@@ -3867,6 +3867,10 @@ function renderReplayFrame() {
     document.getElementById('game-end-overlay').hidden = true;
     relocateShopsBackToBoardArea(); // defensive: in case #shops was left inside #weekly-seat-picker
     renderShops(snapshot);
+    // ショップのカードを列の幅に合わせて大きくする(ふだんのrenderと同じ) (2026-11-27, per user のバグ報告「バグ報告から
+    // リプレイを見ると ショップのカードが小さい ipad」-- 描き直すたびに元の小さい大きさに戻っていた)。
+    fitMobileShopWidth();
+    fitDesktopShopCards();
     renderBoard(snapshot, next);
     renderPlayers(snapshot, next);
     renderJobPool(snapshot, next);
