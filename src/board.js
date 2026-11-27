@@ -1890,8 +1890,9 @@ function isWrathPenaltyPlacement(state, map, playerId) {
 }
 function applyWrathPenalty(state, playerId) {
   const player = state.players.find((p) => p.id === playerId);
-  player.resources.VP = (player.resources.VP || 0) - 2;
-  player.liveConVpPenalty = (player.liveConVpPenalty || 0) - 2; // 人生の「性格」・AIDATAのVPペナルティ平均用の記録(表示だけ)
+  // -2VP → -1VP (2026-11-27, per user「憤怒 かえました」: INST「…置くたびに-1VP」)
+  player.resources.VP = (player.resources.VP || 0) - 1;
+  player.liveConVpPenalty = (player.liveConVpPenalty || 0) - 1; // 人生の「性格」・AIDATAのVPペナルティ平均用の記録(表示だけ)
   executor.notifyActivation(state, playerId, splitCardId(WRATH_CON_FACE_ID).physicalId, WRATH_CON_FACE_ID, 'PASSIVE');
 }
 

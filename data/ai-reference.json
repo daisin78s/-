@@ -1,6 +1,6 @@
 {
- "gameDataVersion": "589f4de693b7e500",
- "generatedAt": "2026-11-27T01:32:40.689Z",
+ "gameDataVersion": "a60dbc87bcc23531",
+ "generatedAt": "2026-11-27T01:37:24.330Z",
  "commandSpecFile": "dsl-command-spec.json",
  "cardCount": 148,
  "cards": {
@@ -666,9 +666,9 @@
   "CON005A": {
    "sheet": "CON",
    "name": "憤怒",
-   "WARNING": "自分の色ダイスのあるエリアに置くと-2VPされます\nよろしいですか？",
+   "WARNING": "自分の色ダイスのあるエリアに置くと-1VPされます\nよろしいですか？",
    "ONCE": "ADD(D)",
-   "inst": "自分の色ダイスのあるエリアにダイスを置くたびに-2VP"
+   "inst": "自分の色ダイスのあるエリアにダイスを置くたびに-1VP"
   },
   "CON006A": {
    "sheet": "CON",

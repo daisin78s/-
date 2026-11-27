@@ -2965,7 +2965,7 @@ function withWildcardOwner(state) {
   check('SHOP106 (DICE_MIN=1,MAX=1) IS offered -- ☆ counts as only 1 for the A/B/C check, not 6', candidates.some((c) => c.slotId === 'SHOP106'), true);
 }
 {
-  // 憤怒 (CON005A, 2026-11-02 redesign, per user INST「自分の色ダイスのあるエリアにダイスを置くたびに-2VP」): a 2nd own
+  // 憤怒 (CON005A, 2026-11-02 redesign, per user INST「自分の色ダイスのあるエリアにダイスを置くたびに-2VP」、2026-11-27に-1VP): a 2nd own
   // die onto an AREA already holding this player's own COLOR die is allowed but costs 2VP -- ☆ included.
   const state = freshStateWithShops();
   withWildcardOwner(state);
@@ -2981,7 +2981,7 @@ function withWildcardOwner(state) {
   const d2 = giveDie(state, 'P1', 2);
   const result = board.placeWildcardDie(state, index, { playerId: 'P1' }, d2.id, 'MAP001');
   check('憤怒: ☆ die onto the same AREA is allowed', result.success, true);
-  check('...and costs 2VP', p1.resources.VP, 8);
+  check('...and costs 1VP', p1.resources.VP, 9);
 }
 {
   // 憤怒 without ☆: normal 2nd placement is allowed now (no more block), -2VP; own WHITE dice already there don't count.
@@ -2997,7 +2997,7 @@ function withWildcardOwner(state) {
   const d2 = giveDie(state, 'P1', 2);
   const result = board.placeDice(state, index, { playerId: 'P1' }, d2.id, 'MAP001', 1);
   check('憤怒: a 2nd own die on the same AREA is no longer blocked', result.success, true);
-  check('...but costs 2VP', p1.resources.VP, 8);
+  check('...but costs 1VP', p1.resources.VP, 9);
 
   const wDie = createDie('test-wd-wrath', 'WHITE');
   wDie.value = 3;
@@ -3005,8 +3005,8 @@ function withWildcardOwner(state) {
   board.placeDice(state, index, { playerId: 'P1' }, wDie.id, 'MAP002', 0);
   const d3 = giveDie(state, 'P1', 5);
   board.placeDice(state, index, { playerId: 'P1' }, d3.id, 'MAP002', 1);
-  check('憤怒: only an own WHITE die in the AREA -> no penalty', p1.resources.VP, 8);
-  check('憤怒: penalty recorded in liveConVpPenalty (人生の性格/AIDATA)', p1.liveConVpPenalty, -2);
+  check('憤怒: only an own WHITE die in the AREA -> no penalty', p1.resources.VP, 9);
+  check('憤怒: penalty recorded in liveConVpPenalty (人生の性格/AIDATA)', p1.liveConVpPenalty, -1);
 }
 {
   // A 2-☆-die group placement is refused the same way regardless of what's in the shop (2026-08-20, same
