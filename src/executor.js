@@ -1912,6 +1912,22 @@ function canEndTurn(state, index, playerId) {
 }
 
 /** Applies RESOURCE_LIMIT (auto-discard) and FORCE_CONVERT rules. Call after canEndTurn().ok is true. */
+/** 心配(CON006A)とパンとサーカス(TURNENDがCHANGE(nANY,...))を両方持っていて、心配の判定の時に〇が0なら、パンとサーカスで払う
+ * 資源のうち1個を先に〇へ変える(〇から払うので、払う数・もらうVPは変わらない) (2026-11-27, per user「その時も自動変換して
+ * -1VPされないように」)。resources: 心配の判定の直前の資源(使用料・ほかのターン終了時の効果の後)。変える資源(A/B/C/Z)かnull。 */
+const WORRY_FACE_ID_FOR_ANY_PAY = 'CON006A';
+function worryAnyPayAutoConvertResource(state, index, playerId, resources) {
+  const player = getPlayer(state, playerId);
+  if (player.worryAbilityDisabled || (resources.K || 0) > 0) return null;
+  if (!player.ownedCardPhysicalIds.some((id) => state.cards[id] && state.cards[id].currentFaceId === WORRY_FACE_ID_FOR_ANY_PAY)) return null;
+  const anyPays = ownedCardRows(state, index, playerId)
+    .filter(({ row }) => row.TURNEND && /^CHANGE\(\d*ANY,/.test(String(row.TURNEND).trim()))
+    .some(({ row }) => anyPayNeedOfText(row.TURNEND, resources) > 0);
+  if (!anyPays) return null;
+  const pay = defaultAnyPayment({ ...resources, K: 0 }, 1, anyPayPrimary(state, index, playerId));
+  return pay ? Object.keys(pay)[0] : null;
+}
+
 function applyTurnEnd(state, index, playerId) {
   const player = getPlayer(state, playerId);
   // Usage fee first, before RESOURCE_LIMIT/FORCE_CONVERT below (2026-08-11, per user report on CON001A:
@@ -1996,6 +2012,13 @@ function applyTurnEnd(state, index, playerId) {
   if (colorConvertAmount > 0) {
     player.resources.Z -= colorConvertAmount;
     player.resources.K = (player.resources.K || 0) + colorConvertAmount;
+  }
+  // 心配+パンとサーカスで〇が0の時は、パンとサーカスで払う資源を1個先に〇へ自動変換して、心配の-1VPを避ける
+  // (2026-11-27, per user「食料なし A2 の時 心配とパンとサーカスを持っていたら」→「その時も自動変換して-1VPされないように」)。
+  const worryConvert = worryAnyPayAutoConvertResource(state, index, playerId, player.resources);
+  if (worryConvert) {
+    player.resources[worryConvert] -= 1;
+    player.resources.K = (player.resources.K || 0) + 1;
   }
   const kBeforeAnyPay = player.resources.K || 0;
   for (const row of deferredAnyPayRows) {
@@ -2322,6 +2345,7 @@ module.exports = {
   ANY_PAY_RESOURCES,
   anyPayAvailable,
   defaultAnyPayment,
+  worryAnyPayAutoConvertResource,
   withReadOnlyOwnedCache,
   NotImplementedError,
   ExecutionError,

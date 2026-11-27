@@ -623,7 +623,15 @@ function giveM403(s, playerId) {
   p1.resources = { ...p1.resources, K: 0, A: 2, VP: 10 };
   turnFlow.endTurn(s, index, 'P2');
   turnFlow.endTurn(s, index, 'P1');
-  check('心配+パンとサーカス: 〇0 before 変換 -> 赤〇2→2VP and -1VP', [p1.resources.A, p1.resources.VP], [0, 11]);
+  check('心配+パンとサーカス: 〇0・赤〇2 -> 赤〇1を〇に自動変換して-1VPなし、2VP', [p1.resources.K, p1.resources.A, p1.resources.VP], [0, 0, 12]);
+  p1.resources = { ...p1.resources, K: 0, A: 1, VP: 10 };
+  turnFlow.endTurn(s, index, 'P2');
+  turnFlow.endTurn(s, index, 'P1');
+  check('心配+パンとサーカス: 〇0・赤〇1 -> 1VP、-1VPなし', [p1.resources.A, p1.resources.VP], [0, 11]);
+  p1.resources = { ...p1.resources, K: 0, A: 0, B: 0, C: 0, Z: 0, VP: 10 };
+  turnFlow.endTurn(s, index, 'P2');
+  turnFlow.endTurn(s, index, 'P1');
+  check('心配+パンとサーカス: 資源なし -> -1VP', p1.resources.VP, 9);
 }
 
 console.log(`\n${passCount} passed, ${failCount} failed`);

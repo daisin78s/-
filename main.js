@@ -8659,7 +8659,10 @@ function turnEndWarnings(state, playerId) {
   if (worryInst && !player.worryAbilityDisabled && !ownsMiko) {
     const kAfterFee = Math.max(0, (player.resources.K || 0) - pendingKFeeAmount(player) - feeShortfallPaidWithK(state, player));
     const row = dataLoaderMod.getCardRow(INDEX, turnFlowMod.WORRY_CON_FACE_ID);
-    if (kAfterFee === 0 && row.WARNING) warnings.push({ physicalId: worryInst.physicalId, warningText: row.WARNING, kind: 'WORRY' });
+    // パンとサーカスも持っていれば、払う資源を1個〇に自動変換するので-1VPされない(executor.worryAnyPayAutoConvertResource、2026-11-27)。
+    const worryAvoidedByAnyPay = kAfterFee === 0
+      && !!executorMod.worryAnyPayAutoConvertResource(state, INDEX, playerId, { ...player.resources, K: 0 });
+    if (kAfterFee === 0 && !worryAvoidedByAnyPay && row.WARNING) warnings.push({ physicalId: worryInst.physicalId, warningText: row.WARNING, kind: 'WORRY' });
   }
   const colorConvertAmount = executorMod.colorConvertLastTurnAmount(state, playerId);
   if (colorConvertAmount > 0) {
